@@ -35,7 +35,8 @@ import {
   TrendingUp, Building2, Briefcase, Timer, ShieldAlert,
   CheckCircle2, XCircle, ArrowRight, Loader2, X, Ban,
   Wallet, Receipt, BarChart3, ArrowLeft, Flame, UserMinus2,
-  ArrowUp, ArrowDown, ArrowUpDown, Info, Printer } from "lucide-react";
+  ArrowUp, ArrowDown, ArrowUpDown, Info, Printer,
+  Calculator, Stethoscope, ListChecks } from "lucide-react";
 import { Link } from "wouter";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -134,6 +135,17 @@ export default function DashAvisoPrevio() {
   // O TAMANHO PARA PODER VER MELHOR.. QUEM É O COLABORADOR."). Modal simples
   // sobre toda a tela, fecha clicando fora.
   const [fotoAmpliada, setFotoAmpliada] = useState<{ url: string; nome: string } | null>(null);
+  // Rev. 1967 — Modal "Detalhe do Cálculo do Aviso" (clique no nome do funcionário).
+  // Substitui o trigger antigo (Rev. 1935: nome → Raio-X) por uma visão da QUEBRA
+  // DE VERBAS rescisórias daquela linha. Raio-X continua acessível via ícone
+  // (Stethoscope) ao lado do nome.
+  const [detalheCalc, setDetalheCalc] = useState<any | null>(null);
+  // Rev. 1967 — Seleção em massa para gerar o "Combo de Demissões" (fluxo de caixa
+  // consolidado). Set<number> de IDs de funcionários selecionados. User pediu:
+  // "quero poder selecionar vários e fazer um combo de demissões para ver o fluxo
+  // de caixa que vai acontecer".
+  const [selecionados, setSelecionados] = useState<Set<number>>(new Set());
+  const [comboOpen, setComboOpen] = useState(false);
   // Rev. 1937 — Larguras redimensionáveis das colunas de TEXTO da tabela CDM
   // (Funcionário, Função, Obra) — persistidas em localStorage. User 16/05/2026:
   // "quero pode clicar e aumentar a largura da tabela para ajustar o texto..".
@@ -227,6 +239,93 @@ export default function DashAvisoPrevio() {
       ? <ArrowUp className="inline h-3 w-3 ml-0.5 text-blue-600" />
       : <ArrowDown className="inline h-3 w-3 ml-0.5 text-blue-600" />;
   };
+
+  // Rev. 1967 — Combo de Demissões: helpers de seleção e agregados.
+  // Data prevista de pagamento da rescisão:
+  //  - Indenizado: até 10 dias corridos após a comunicação (Art. 477 §6 CLT / Lei 7.855/89, item b).
+  //  - Trabalhado: 1º dia útil seguinte ao fim do aviso (Art. 477 §6 'a'). Aproximamos
+  //    como `cdmData + diasAvisoTotal + 1` (ignora finais de semana — basta pra
+  //    estimar fluxo de caixa mensal). Detalhe individual mostra a data exata.
+  function computeDataPagamento(cdmDataStr: string, tipo: string, diasAviso: number): Date {
+    const d = new Date(cdmDataStr + 'T00:00:00');
+    if (tipo === 'empregador_indenizado' || tipo === 'empregado_indenizado') {
+      d.setDate(d.getDate() + 10);
+    } else {
+      d.setDate(d.getDate() + (diasAviso || 0) + 1);
+    }
+    return d;
+  }
+  function fmtDataBR(d: Date) {
+    return d.toLocaleDateString('pt-BR');
+  }
+  const toggleSelecionado = (id: number) => setSelecionados(prev => {
+    const next = new Set(prev);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
+  const todosVisiveisSelecionados = useMemo(() => {
+    if (!cdmLinhasOrdenadas.length) return false;
+    return cdmLinhasOrdenadas.every((l: any) => selecionados.has(l.id));
+  }, [cdmLinhasOrdenadas, selecionados]);
+  const algumVisivelSelecionado = useMemo(() => {
+    return cdmLinhasOrdenadas.some((l: any) => selecionados.has(l.id));
+  }, [cdmLinhasOrdenadas, selecionados]);
+  const toggleSelecionarTodos = () => {
+    setSelecionados(prev => {
+      if (todosVisiveisSelecionados) {
+        const next = new Set(prev);
+        for (const l of cdmLinhasOrdenadas as any[]) next.delete(l.id);
+        return next;
+      }
+      const next = new Set(prev);
+      for (const l of cdmLinhasOrdenadas as any[]) next.add(l.id);
+      return next;
+    });
+  };
+  const linhasSelecionadas = useMemo(() => {
+    return (cdm?.linhas || []).filter((l: any) => selecionados.has(l.id));
+  }, [cdm, selecionados]);
+  // Agregado consolidado das linhas selecionadas — alimenta o modal Combo.
+  const comboAgregado = useMemo(() => {
+    const base = {
+      qtd: linhasSelecionadas.length,
+      saldoSalario: 0, decimoTerceiro: 0, feriasProporcional: 0, feriasVencidas: 0,
+      avisoOficial: 0, avisoComplementar: 0, multaFGTS: 0, fgtsEstimado: 0,
+      totalOficialBruto: 0, totalDescontos: 0, totalOficialLiquido: 0,
+      totalComplementar: 0, total: 0, salarioBaseSoma: 0,
+    };
+    for (const l of linhasSelecionadas as any[]) {
+      base.saldoSalario += Number(l.saldoSalario) || 0;
+      base.decimoTerceiro += Number(l.decimoTerceiro) || 0;
+      base.feriasProporcional += Number(l.feriasProporcional) || 0;
+      base.feriasVencidas += Number(l.feriasVencidas) || 0;
+      base.avisoOficial += Number(l.avisoOficial) || 0;
+      base.avisoComplementar += Number(l.avisoComplementar) || 0;
+      base.multaFGTS += Number(l.multaFGTS) || 0;
+      base.fgtsEstimado += Number(l.fgtsEstimado) || 0;
+      base.totalOficialBruto += Number(l.totalOficialBruto ?? l.totalOficial) || 0;
+      base.totalDescontos += Number(l.totalDescontos) || 0;
+      base.totalOficialLiquido += Number(l.totalOficialLiquido ?? l.totalOficial) || 0;
+      base.totalComplementar += Number(l.totalComplementar) || 0;
+      base.total += Number(l.total) || 0;
+      base.salarioBaseSoma += Number(l.salarioBase) || 0;
+    }
+    return base;
+  }, [linhasSelecionadas]);
+  // Agrupa pagamentos por data prevista (cronograma de fluxo de caixa).
+  const cronogramaPagamentos = useMemo(() => {
+    const grupos = new Map<string, { data: Date; qtd: number; total: number; itens: any[] }>();
+    for (const l of linhasSelecionadas as any[]) {
+      const dt = computeDataPagamento(cdmData, cdmTipo, l.diasAvisoTotal || 0);
+      const key = dt.toISOString().slice(0, 10);
+      const g = grupos.get(key) || { data: dt, qtd: 0, total: 0, itens: [] };
+      g.qtd += 1;
+      g.total += Number(l.total) || 0;
+      g.itens.push(l);
+      grupos.set(key, g);
+    }
+    return Array.from(grupos.values()).sort((a, b) => a.data.getTime() - b.data.getTime());
+  }, [linhasSelecionadas, cdmData, cdmTipo]);
 
   // Filtra avisos pelo drill-down selecionado
   const drillDownAvisos = useMemo(() => {
@@ -568,6 +667,18 @@ export default function DashAvisoPrevio() {
                               do cabeçalho com bg-muted/50 ao rolar). */}
                           <thead className="sticky top-0 z-20">
                             <tr className="text-left">
+                              {/* Rev. 1967 — Checkbox de seleção em massa. Header marca/desmarca
+                                  todas as linhas atualmente VISÍVEIS (respeita ordenação atual). */}
+                              <th className="py-2 px-2 font-semibold text-muted-foreground bg-slate-100 border-b border-slate-300 shadow-sm text-center w-8">
+                                <input
+                                  type="checkbox"
+                                  checked={todosVisiveisSelecionados}
+                                  ref={(el) => { if (el) el.indeterminate = !todosVisiveisSelecionados && algumVisivelSelecionado; }}
+                                  onChange={toggleSelecionarTodos}
+                                  className="h-3.5 w-3.5 accent-blue-600 cursor-pointer"
+                                  title={todosVisiveisSelecionados ? "Desmarcar todos visíveis" : "Selecionar todos visíveis"}
+                                />
+                              </th>
                               <th className="py-2 px-2 font-semibold text-muted-foreground bg-slate-100 border-b border-slate-300 shadow-sm">#</th>
                               {/* Rev. 1939 — Colunas de texto redimensionáveis estilo EXCEL.
                                   Handle inline (sem subcomponente p/ não remontar durante drag);
@@ -609,7 +720,17 @@ export default function DashAvisoPrevio() {
                           </thead>
                           <tbody>
                             {cdmLinhasOrdenadas.map((l: any, idx: number) => (
-                              <tr key={l.id} className={`hover:bg-muted/30 ${cdmSort.key === 'total' && cdmSort.dir === 'desc' && idx < 3 ? 'bg-red-50/40' : 'bg-white'}`}>
+                              <tr key={l.id} className={`hover:bg-muted/30 ${selecionados.has(l.id) ? 'bg-blue-50/60' : cdmSort.key === 'total' && cdmSort.dir === 'desc' && idx < 3 ? 'bg-red-50/40' : 'bg-white'}`}>
+                                {/* Rev. 1967 — checkbox de seleção individual. */}
+                                <td className="py-1.5 px-2 text-center border-b border-border/50">
+                                  <input
+                                    type="checkbox"
+                                    checked={selecionados.has(l.id)}
+                                    onChange={() => toggleSelecionado(l.id)}
+                                    className="h-3.5 w-3.5 accent-blue-600 cursor-pointer"
+                                    title={selecionados.has(l.id) ? "Remover da seleção" : "Incluir no combo de demissões"}
+                                  />
+                                </td>
                                 <td className="py-1.5 px-2 text-muted-foreground tabular-nums border-b border-border/50">{idx + 1}</td>
                                 {/* Rev. 1935 — Clicar no nome abre o Raio-X do funcionário (mesmo modal usado em Colaboradores/AvisoPrevio/Ferias/etc.). */}
                                 <td style={{ width: cdmColW.nome, minWidth: cdmColW.nome, maxWidth: cdmColW.nome }} className="py-1.5 px-2 font-medium truncate border-b border-border/50">
@@ -633,13 +754,26 @@ export default function DashAvisoPrevio() {
                                         {(l.nomeCompleto || '?').charAt(0).toUpperCase()}
                                       </div>
                                     )}
+                                    {/* Rev. 1967 — Clique no nome agora abre o "Detalhe do Cálculo do
+                                        Aviso" (quebra completa de verbas + descontos + data de pagamento).
+                                        Raio-X foi movido para o ícone Stethoscope ao lado. User: "Quero
+                                        poder clicar no nome do funcionário e ver todo cálculo pertinente
+                                        ao aviso". */}
+                                    <button
+                                      type="button"
+                                      onClick={() => setDetalheCalc(l)}
+                                      className="text-left text-blue-700 hover:text-blue-900 hover:underline truncate flex-1 min-w-0"
+                                      title={`Ver detalhe do cálculo do aviso de ${l.nomeCompleto}`}
+                                    >
+                                      {l.nomeCompleto}
+                                    </button>
                                     <button
                                       type="button"
                                       onClick={() => setRaioXEmployeeId(l.id)}
-                                      className="text-left text-blue-700 hover:text-blue-900 hover:underline truncate flex-1 min-w-0"
+                                      className="shrink-0 p-1 rounded hover:bg-blue-100 text-slate-400 hover:text-blue-700 transition-colors"
                                       title={`Abrir Raio-X de ${l.nomeCompleto}`}
                                     >
-                                      {l.nomeCompleto}
+                                      <Stethoscope className="h-3.5 w-3.5" />
                                     </button>
                                     {/* Rev. 1936 — Tag CIPA (estabilidade — CF Art. 10 II 'a' ADCT).
                                         User 16/05/2026: "marque uma tag de quem faz parte da cipa e não
@@ -696,12 +830,34 @@ export default function DashAvisoPrevio() {
                           {/* Rev. 1924 — bg sólido per-cell (mesma razão do thead) + top-shadow */}
                           <tfoot className="sticky bottom-0 z-20">
                             <tr>
-                              {/* Rev. 1931 — +1 col "Idade" → colSpan 10→11. */}
-                              <td colSpan={11} className="py-2 px-2 text-right font-bold text-red-800 uppercase text-[11px] bg-red-50 border-t-2 border-red-300 shadow-[0_-2px_4px_-1px_rgba(0,0,0,0.08)]">TOTAL GERAL</td>
+                              {/* Rev. 1967 — +1 col checkbox → colSpan 11→12. */}
+                              <td colSpan={12} className="py-2 px-2 text-right font-bold text-red-800 uppercase text-[11px] bg-red-50 border-t-2 border-red-300 shadow-[0_-2px_4px_-1px_rgba(0,0,0,0.08)]">TOTAL GERAL</td>
                               <td className="py-2 px-2 text-right tabular-nums font-bold text-red-800 bg-red-50 border-t-2 border-red-300 shadow-[0_-2px_4px_-1px_rgba(0,0,0,0.08)]">{fmtBRL(cdm.grandTotal)}</td>
                             </tr>
                           </tfoot>
                         </table>
+                      </div>
+                    )}
+
+                    {/* Rev. 1967 — Barra flutuante de seleção: aparece quando há >0 selecionados.
+                        Mostra contagem + total consolidado + botão "Gerar Combo" que abre o modal
+                        com a quebra de verbas e o cronograma de pagamentos (fluxo de caixa). */}
+                    {selecionados.size > 0 && (
+                      <div className="sticky bottom-0 z-30 mt-3 flex items-center justify-between gap-3 px-4 py-2.5 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg shadow-lg border border-blue-800">
+                        <div className="flex items-center gap-3 text-sm">
+                          <ListChecks className="h-5 w-5" />
+                          <span className="font-semibold">{selecionados.size} funcionário{selecionados.size > 1 ? 's' : ''} selecionado{selecionados.size > 1 ? 's' : ''}</span>
+                          <span className="opacity-80">·</span>
+                          <span className="tabular-nums">Custo total: <strong>{fmtBRL(comboAgregado.total)}</strong></span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Button size="sm" variant="ghost" className="h-8 text-white hover:bg-white/10" onClick={() => setSelecionados(new Set())}>
+                            <X className="h-3.5 w-3.5 mr-1" /> Limpar
+                          </Button>
+                          <Button size="sm" variant="secondary" className="h-8 bg-white text-blue-700 hover:bg-blue-50 font-semibold" onClick={() => setComboOpen(true)}>
+                            <Calculator className="h-3.5 w-3.5 mr-1.5" /> Gerar Combo de Demissões
+                          </Button>
+                        </div>
                       </div>
                     )}
 
@@ -1252,7 +1408,209 @@ export default function DashAvisoPrevio() {
         )}
       </div>
           <PrintFooterLGPD />
-      {/* Rev. 1935 — Modal Raio-X do funcionário (abre ao clicar no nome na tabela CDM). */}
+      {/* Rev. 1967 — Modal "Detalhe do Cálculo do Aviso" (abre ao clicar no nome
+          do funcionário). Quebra completa das verbas usadas pra compor o Custo
+          Total daquela linha + descontos legais + data prevista de pagamento. */}
+      {detalheCalc && (
+        <Dialog open={!!detalheCalc} onOpenChange={(o) => !o && setDetalheCalc(null)}>
+          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-base">
+                <Calculator className="h-5 w-5 text-blue-600" />
+                Detalhe do Cálculo do Aviso — {detalheCalc.nomeCompleto}
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4 text-sm">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 p-3 bg-slate-50 rounded-md text-xs">
+                <div><span className="text-muted-foreground">Função:</span> <span className="font-medium">{detalheCalc.funcao || detalheCalc.cargo || '—'}</span></div>
+                <div><span className="text-muted-foreground">Obra:</span> <span className="font-medium">{detalheCalc.obra || '—'}</span></div>
+                <div><span className="text-muted-foreground">Admissão:</span> <span className="font-medium">{detalheCalc.dataAdmissao ? new Date(detalheCalc.dataAdmissao + 'T00:00:00').toLocaleDateString('pt-BR') : '—'}</span></div>
+                <div><span className="text-muted-foreground">Tempo:</span> <span className="font-medium">{(detalheCalc.tempoAnos ?? 0)}a {(detalheCalc.tempoMeses ?? 0)}m {(detalheCalc.tempoDias ?? 0)}d</span></div>
+                <div><span className="text-muted-foreground">Dias aviso:</span> <span className="font-medium tabular-nums">{detalheCalc.diasAvisoTotal}</span></div>
+                <div><span className="text-muted-foreground">Salário:</span> <span className="font-medium tabular-nums">{fmtBRL(detalheCalc.salarioBase)}</span></div>
+              </div>
+
+              <div className="border rounded-md overflow-hidden">
+                <div className="px-3 py-2 bg-green-50 border-b font-semibold text-green-800 text-xs uppercase tracking-wide">Verbas Rescisórias (a pagar)</div>
+                <table className="w-full text-xs">
+                  <tbody>
+                    <tr className="border-b"><td className="py-1.5 px-3 text-muted-foreground">Saldo de salário</td><td className="py-1.5 px-3 text-right tabular-nums">{fmtBRL(detalheCalc.saldoSalario)}</td></tr>
+                    <tr className="border-b">
+                      <td className="py-1.5 px-3 text-muted-foreground">Aviso prévio indenizado <span className="text-[10px] opacity-60">(Lei 12.506/2011)</span></td>
+                      <td className="py-1.5 px-3 text-right tabular-nums">
+                        {fmtBRL(detalheCalc.avisoOficial)}
+                        {(detalheCalc.avisoComplementar ?? 0) > 0 && <div className="text-[10px] text-violet-700">+compl {fmtBRL(detalheCalc.avisoComplementar)}</div>}
+                      </td>
+                    </tr>
+                    <tr className="border-b"><td className="py-1.5 px-3 text-muted-foreground">13º proporcional</td><td className="py-1.5 px-3 text-right tabular-nums">{fmtBRL(detalheCalc.decimoTerceiro)}</td></tr>
+                    <tr className="border-b"><td className="py-1.5 px-3 text-muted-foreground">Férias proporcionais + 1/3</td><td className="py-1.5 px-3 text-right tabular-nums">{fmtBRL(detalheCalc.feriasProporcional)}</td></tr>
+                    {detalheCalc.feriasVencidas > 0 && (
+                      <tr className="border-b"><td className="py-1.5 px-3 text-red-700 font-medium">Férias vencidas + 1/3 <span className="text-[10px] opacity-60">(Art. 137 CLT)</span></td><td className="py-1.5 px-3 text-right tabular-nums text-red-700 font-medium">{fmtBRL(detalheCalc.feriasVencidas)}</td></tr>
+                    )}
+                    <tr className="border-b"><td className="py-1.5 px-3 text-muted-foreground">Multa 40% FGTS</td><td className="py-1.5 px-3 text-right tabular-nums">{fmtBRL(detalheCalc.multaFGTS)}</td></tr>
+                    <tr className="bg-slate-50"><td className="py-2 px-3 font-semibold">Total bruto</td><td className="py-2 px-3 text-right tabular-nums font-semibold">{fmtBRL(detalheCalc.totalOficialBruto ?? detalheCalc.totalOficial)}</td></tr>
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="border rounded-md overflow-hidden">
+                <div className="px-3 py-2 bg-rose-50 border-b font-semibold text-rose-800 text-xs uppercase tracking-wide">Descontos Legais</div>
+                <table className="w-full text-xs">
+                  <tbody>
+                    <tr><td className="py-1.5 px-3 text-muted-foreground">INSS + IRRF + pensão alimentícia + contribuição sindical</td><td className="py-1.5 px-3 text-right tabular-nums text-rose-700">− {fmtBRL(detalheCalc.totalDescontos ?? 0)}</td></tr>
+                  </tbody>
+                </table>
+                <p className="text-[10px] text-muted-foreground px-3 py-1.5 italic bg-rose-50/30 border-t">Não inclui ajustes operacionais variáveis (vales, EPI, convênios, faltas) — aparecem só no detalhe individual do módulo Aviso Prévio.</p>
+              </div>
+
+              <div className="border-2 border-red-300 rounded-md overflow-hidden">
+                <table className="w-full text-xs">
+                  <tbody>
+                    <tr className="bg-slate-50"><td className="py-1.5 px-3 text-muted-foreground">Oficial líquido (bruto − descontos)</td><td className="py-1.5 px-3 text-right tabular-nums">{fmtBRL(detalheCalc.totalOficialLiquido ?? detalheCalc.totalOficial)}</td></tr>
+                    {(detalheCalc.totalComplementar ?? 0) > 0 && (
+                      <tr className="bg-violet-50/50"><td className="py-1.5 px-3 text-violet-700">+ Complementar (verbas sobre complemento "por fora")</td><td className="py-1.5 px-3 text-right tabular-nums text-violet-700">{fmtBRL(detalheCalc.totalComplementar)}</td></tr>
+                    )}
+                    <tr className="bg-red-50"><td className="py-2 px-3 font-bold text-red-800 uppercase">Custo Total</td><td className="py-2 px-3 text-right tabular-nums font-bold text-red-800 text-base">{fmtBRL(detalheCalc.total)}</td></tr>
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="flex items-start gap-2 p-3 bg-blue-50 border border-blue-200 rounded-md text-xs">
+                <CalendarDays className="h-4 w-4 text-blue-700 shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-semibold text-blue-900">Data prevista de pagamento: {fmtDataBR(computeDataPagamento(cdmData, cdmTipo, detalheCalc.diasAvisoTotal || 0))}</p>
+                  <p className="text-blue-700 mt-0.5">
+                    {cdmTipo === 'empregador_indenizado'
+                      ? 'Aviso indenizado: até 10 dias corridos após a comunicação (Art. 477 §6 b CLT).'
+                      : `Aviso trabalhado: 1º dia útil após o fim do aviso (${detalheCalc.diasAvisoTotal} dias). Aproximação +1d.`}
+                  </p>
+                  <p className="text-[10px] text-blue-600 mt-1">FGTS estimado (informativo, depositado mensalmente): {fmtBRL(detalheCalc.fgtsEstimado)}</p>
+                </div>
+              </div>
+
+              <div className="flex justify-between items-center gap-2 pt-2 border-t">
+                <Button variant="outline" size="sm" onClick={() => { const id = detalheCalc.id; setDetalheCalc(null); setRaioXEmployeeId(id); }}>
+                  <Stethoscope className="h-3.5 w-3.5 mr-1.5" /> Abrir Raio-X
+                </Button>
+                <Button size="sm" variant="default" onClick={() => setDetalheCalc(null)}>Fechar</Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* Rev. 1967 — Modal "Combo de Demissões" — fluxo de caixa consolidado dos
+          funcionários selecionados. Mostra totais por verba + cronograma de
+          pagamentos agrupado por data prevista. User: "quero poder selecionar
+          vários e fazer um combo de demissões para ver o fluxo de caixa que vai
+          acontecer". */}
+      {comboOpen && (
+        <Dialog open={comboOpen} onOpenChange={setComboOpen}>
+          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-base">
+                <Calculator className="h-5 w-5 text-blue-600" />
+                Combo de Demissões — Fluxo de Caixa Consolidado
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4 text-sm">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className="rounded-lg border-2 border-blue-200 bg-blue-50 p-3 text-center">
+                  <p className="text-2xl font-bold text-blue-700 tabular-nums">{comboAgregado.qtd}</p>
+                  <p className="text-[10px] text-blue-600 font-medium">Funcionários</p>
+                </div>
+                <div className="rounded-lg border-2 border-purple-200 bg-purple-50 p-3 text-center">
+                  <p className="text-lg font-bold text-purple-700 tabular-nums">{fmtBRL(comboAgregado.salarioBaseSoma)}</p>
+                  <p className="text-[10px] text-purple-600 font-medium">Folha mensal</p>
+                </div>
+                <div className="rounded-lg border-2 border-amber-200 bg-amber-50 p-3 text-center">
+                  <p className="text-lg font-bold text-amber-700 tabular-nums">{fmtBRL(comboAgregado.totalOficialBruto)}</p>
+                  <p className="text-[10px] text-amber-600 font-medium">Bruto oficial</p>
+                </div>
+                <div className="rounded-lg border-2 border-red-300 bg-red-50 p-3 text-center">
+                  <p className="text-lg font-bold text-red-700 tabular-nums">{fmtBRL(comboAgregado.total)}</p>
+                  <p className="text-[10px] text-red-600 font-medium">Custo total</p>
+                </div>
+              </div>
+
+              <div className="border rounded-md overflow-hidden">
+                <div className="px-3 py-2 bg-slate-100 border-b font-semibold text-slate-800 text-xs uppercase tracking-wide">Quebra por Verba (somatórios)</div>
+                <table className="w-full text-xs">
+                  <tbody>
+                    <tr className="border-b"><td className="py-1.5 px-3 text-muted-foreground">Saldo de salário</td><td className="py-1.5 px-3 text-right tabular-nums">{fmtBRL(comboAgregado.saldoSalario)}</td></tr>
+                    <tr className="border-b">
+                      <td className="py-1.5 px-3 text-muted-foreground">Aviso prévio indenizado</td>
+                      <td className="py-1.5 px-3 text-right tabular-nums">{fmtBRL(comboAgregado.avisoOficial)}
+                        {comboAgregado.avisoComplementar > 0 && <div className="text-[10px] text-violet-700">+compl {fmtBRL(comboAgregado.avisoComplementar)}</div>}
+                      </td>
+                    </tr>
+                    <tr className="border-b"><td className="py-1.5 px-3 text-muted-foreground">13º proporcional</td><td className="py-1.5 px-3 text-right tabular-nums">{fmtBRL(comboAgregado.decimoTerceiro)}</td></tr>
+                    <tr className="border-b"><td className="py-1.5 px-3 text-muted-foreground">Férias proporcionais + 1/3</td><td className="py-1.5 px-3 text-right tabular-nums">{fmtBRL(comboAgregado.feriasProporcional)}</td></tr>
+                    {comboAgregado.feriasVencidas > 0 && (
+                      <tr className="border-b"><td className="py-1.5 px-3 text-red-700 font-medium">Férias vencidas + 1/3</td><td className="py-1.5 px-3 text-right tabular-nums text-red-700 font-medium">{fmtBRL(comboAgregado.feriasVencidas)}</td></tr>
+                    )}
+                    <tr className="border-b"><td className="py-1.5 px-3 text-muted-foreground">Multa 40% FGTS</td><td className="py-1.5 px-3 text-right tabular-nums">{fmtBRL(comboAgregado.multaFGTS)}</td></tr>
+                    <tr className="border-b bg-slate-50"><td className="py-1.5 px-3 font-semibold">Total bruto</td><td className="py-1.5 px-3 text-right tabular-nums font-semibold">{fmtBRL(comboAgregado.totalOficialBruto)}</td></tr>
+                    <tr className="border-b"><td className="py-1.5 px-3 text-rose-700">− Descontos legais (INSS+IRRF+pensão+sindical)</td><td className="py-1.5 px-3 text-right tabular-nums text-rose-700">− {fmtBRL(comboAgregado.totalDescontos)}</td></tr>
+                    <tr className="border-b bg-slate-50"><td className="py-1.5 px-3 font-semibold">Oficial líquido</td><td className="py-1.5 px-3 text-right tabular-nums font-semibold">{fmtBRL(comboAgregado.totalOficialLiquido)}</td></tr>
+                    {comboAgregado.totalComplementar > 0 && (
+                      <tr className="border-b bg-violet-50/50"><td className="py-1.5 px-3 text-violet-700">+ Complementar</td><td className="py-1.5 px-3 text-right tabular-nums text-violet-700">{fmtBRL(comboAgregado.totalComplementar)}</td></tr>
+                    )}
+                    <tr className="bg-red-50"><td className="py-2 px-3 font-bold text-red-800 uppercase">Custo total a desembolsar</td><td className="py-2 px-3 text-right tabular-nums font-bold text-red-800 text-base">{fmtBRL(comboAgregado.total)}</td></tr>
+                  </tbody>
+                </table>
+                <p className="text-[10px] text-muted-foreground px-3 py-1.5 italic bg-slate-50/50 border-t">FGTS estimado (depositado mensalmente, separado das verbas rescisórias): {fmtBRL(comboAgregado.fgtsEstimado)}.</p>
+              </div>
+
+              <div className="border rounded-md overflow-hidden">
+                <div className="px-3 py-2 bg-blue-50 border-b font-semibold text-blue-900 text-xs uppercase tracking-wide flex items-center gap-2">
+                  <CalendarDays className="h-3.5 w-3.5" /> Cronograma de Pagamentos (fluxo de caixa)
+                </div>
+                {cronogramaPagamentos.length === 0 ? (
+                  <p className="text-xs text-muted-foreground p-3 italic">Sem pagamentos.</p>
+                ) : (
+                  <div className="divide-y">
+                    {cronogramaPagamentos.map((g) => (
+                      <details key={g.data.toISOString()} className="group">
+                        <summary className="flex items-center justify-between gap-3 px-3 py-2 cursor-pointer hover:bg-slate-50 list-none">
+                          <div className="flex items-center gap-3">
+                            <ChevronRight className="h-3.5 w-3.5 text-slate-400 transition-transform group-open:rotate-90" />
+                            <span className="font-semibold text-slate-800">{fmtDataBR(g.data)}</span>
+                            <span className="text-[11px] text-muted-foreground">· {g.qtd} pagamento{g.qtd > 1 ? 's' : ''}</span>
+                          </div>
+                          <span className="font-bold tabular-nums text-red-700">{fmtBRL(g.total)}</span>
+                        </summary>
+                        <div className="bg-slate-50/60 px-3 py-2">
+                          <table className="w-full text-[11px]">
+                            <tbody>
+                              {g.itens.map((it: any) => (
+                                <tr key={it.id} className="border-b border-slate-200 last:border-0">
+                                  <td className="py-1 pr-2 truncate">{it.nomeCompleto}</td>
+                                  <td className="py-1 px-2 text-muted-foreground truncate">{it.funcao || it.cargo || '—'}</td>
+                                  <td className="py-1 pl-2 text-right tabular-nums font-medium text-red-700 whitespace-nowrap">{fmtBRL(it.total)}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </details>
+                    ))}
+                  </div>
+                )}
+                <p className="text-[10px] text-muted-foreground px-3 py-1.5 italic bg-blue-50/30 border-t">
+                  Estimativas baseadas em <strong>Art. 477 §6 CLT</strong>: indenizado → 10 dias corridos; trabalhado → 1º dia útil após fim do aviso (aproximado +1d). FGTS+multa 40% segue o cronograma da rescisão (mesma data).
+                </p>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2 border-t">
+                <Button size="sm" variant="default" onClick={() => setComboOpen(false)}>Fechar</Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* Rev. 1935 — Modal Raio-X do funcionário (abre via ícone Stethoscope ao lado do nome). */}
       <RaioXFuncionario employeeId={raioXEmployeeId} open={!!raioXEmployeeId} onClose={() => setRaioXEmployeeId(null)} />
       {/* Rev. 1941 — Modal de foto ampliada. Fundo escuro semi-transparente,
           clique fora fecha. Padrão idêntico ao do RaioXFuncionario L3752+. */}
