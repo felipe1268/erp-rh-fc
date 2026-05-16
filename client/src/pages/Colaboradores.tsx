@@ -2119,6 +2119,10 @@ h2{text-align:center;font-size:13pt;margin-top:0;margin-bottom:24px;font-weight:
                       onCheckedChange={(checked) => {
                         set("cargoConfianca", checked ? "1" : "0");
                         if (!checked) { set("cargoConfiancaInciso", ""); }
+                        // Default sensato: se já tem inciso II e grat vazia, semeia 40 (mín. legal)
+                        if (checked && form.cargoConfiancaInciso === "II" && !form.cargoConfiancaGratificacao) {
+                          set("cargoConfiancaGratificacao", "40");
+                        }
                       }}
                     />
                     <Label className="text-xs text-muted-foreground cursor-pointer">
@@ -2137,7 +2141,13 @@ h2{text-align:center;font-size:13pt;margin-top:0;margin-bottom:24px;font-weight:
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div className="sm:col-span-2">
                         <Label className="text-xs font-medium">Inciso de enquadramento <span className="text-red-500">*</span></Label>
-                        <Select value={form.cargoConfiancaInciso || ""} onValueChange={(v) => set("cargoConfiancaInciso", v)}>
+                        <Select value={form.cargoConfiancaInciso || ""} onValueChange={(v) => {
+                          set("cargoConfiancaInciso", v);
+                          // Inciso II exige grat ≥ 40% — semeia o mínimo legal se vazio.
+                          if (v === "II" && !form.cargoConfiancaGratificacao) {
+                            set("cargoConfiancaGratificacao", "40");
+                          }
+                        }}>
                           <SelectTrigger className="bg-white mt-1"><SelectValue placeholder="Selecione o inciso do Art. 62" /></SelectTrigger>
                           <SelectContent>
                             <SelectItem value="I">I — Atividade externa incompatível com controle de horário (exige anotação CTPS)</SelectItem>
@@ -2153,7 +2163,7 @@ h2{text-align:center;font-size:13pt;margin-top:0;margin-bottom:24px;font-weight:
                       {form.cargoConfiancaInciso === "II" && (
                         <div>
                           <Label className="text-xs">Gratificação de função (%) <span className="text-red-500">*</span></Label>
-                          <Input type="text" inputMode="numeric" value={form.cargoConfiancaGratificacao ?? "40"} onChange={e => set("cargoConfiancaGratificacao", e.target.value.replace(/[^0-9.,]/g, ''))} className="bg-white mt-1" placeholder="Mín. 40% (CLT)" />
+                          <Input type="text" inputMode="numeric" value={form.cargoConfiancaGratificacao ?? ""} onChange={e => set("cargoConfiancaGratificacao", e.target.value.replace(/[^0-9.,]/g, ''))} className="bg-white mt-1" placeholder="Mín. 40% (CLT)" />
                           <span className="text-[10px] text-muted-foreground">Mínimo legal: 40% sobre o salário efetivo (Parágrafo único Art. 62)</span>
                         </div>
                       )}
