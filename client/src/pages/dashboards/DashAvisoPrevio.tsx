@@ -672,12 +672,20 @@ export default function DashAvisoPrevio() {
                                 </td>
                                 <td className="py-1.5 px-2 text-center tabular-nums border-b border-border/50">{l.diasAvisoTotal}</td>
                                 <td className="py-1.5 px-2 text-right tabular-nums border-b border-border/50">{fmtBRL(l.salarioBase)}</td>
-                                <td className="py-1.5 px-2 text-right tabular-nums text-muted-foreground border-b border-border/50">{fmtBRL(l.avisoPrevioIndenizado)}</td>
+                                {/* Rev. 1964 — Aviso Indeniz. mostra oficial primário + "+compl" abaixo (pattern Custo Total). */}
+                                <td className="py-1.5 px-2 text-right tabular-nums text-muted-foreground border-b border-border/50">
+                                  {fmtBRL((l as any).avisoOficial ?? l.avisoPrevioIndenizado)}
+                                  {((l as any).avisoComplementar ?? 0) > 0 && (
+                                    <div className="text-[9px] font-normal text-violet-700 mt-0.5" title={`Oficial: ${fmtBRL((l as any).avisoOficial)} + Complementar: ${fmtBRL((l as any).avisoComplementar)}`}>
+                                      +compl {fmtBRL((l as any).avisoComplementar)}
+                                    </div>
+                                  )}
+                                </td>
                                 <td className="py-1.5 px-2 text-right tabular-nums text-muted-foreground border-b border-border/50">{fmtBRL(l.multaFGTS)}</td>
-                                <td className="py-1.5 px-2 text-right tabular-nums font-bold text-red-700 border-b border-border/50">
+                                <td className="py-1.5 px-2 text-right tabular-nums font-bold text-red-700 border-b border-border/50" title={(l as any).totalOficialBruto != null ? `Oficial bruto: ${fmtBRL((l as any).totalOficialBruto)} − Descontos legais (INSS+IRRF+pensão+sindical): ${fmtBRL((l as any).totalDescontos ?? 0)} = Oficial líquido: ${fmtBRL((l as any).totalOficialLiquido ?? l.totalOficial)}${l.totalComplementar > 0 ? ` + Complementar: ${fmtBRL(l.totalComplementar)}` : ''}` : undefined}>
                                   {fmtBRL(l.total)}
                                   {l.totalComplementar > 0 && (
-                                    <div className="text-[9px] font-normal text-violet-700 mt-0.5" title={`Oficial: ${fmtBRL(l.totalOficial)} + Complementar: ${fmtBRL(l.totalComplementar)}`}>
+                                    <div className="text-[9px] font-normal text-violet-700 mt-0.5">
                                       +compl {fmtBRL(l.totalComplementar)}
                                     </div>
                                   )}
@@ -698,7 +706,7 @@ export default function DashAvisoPrevio() {
                     )}
 
                     <p className="text-[10px] text-muted-foreground mt-3 italic">
-                      <strong>Composição da estimativa:</strong> Oficial (saldo de salário + férias proporcionais + 1/3 + férias vencidas + 13º proporcional + aviso prévio indenizado Lei 12.506 + multa 40% FGTS) <strong>+ Complementar</strong> (mesmas verbas sobre complemento "por fora", quando aplicável — paridade com módulo Aviso Prévio: TOTAL GERAL = Oficial + Complementar). <strong>Não inclui</strong> VR/VA, descontos (INSS/IRRF, adiantamentos, EPI), nem médias de adicionais — para o cálculo completo individual, abra o módulo Aviso Prévio.
+                      <strong>Composição da estimativa (Rev. 1964 — bate 1:1 com o modal Aviso Prévio):</strong> Oficial bruto (saldo de salário + férias proporcionais + 1/3 + férias vencidas + 13º proporcional + aviso prévio indenizado Lei 12.506 + multa 40% FGTS) <strong>− Descontos legais</strong> (INSS + IRRF + pensão alimentícia + contribuição sindical) <strong>= Oficial líquido</strong>. <strong>+ Complementar</strong> (mesmas verbas sobre complemento "por fora", quando aplicável). Passe o mouse sobre o valor pra ver o detalhe. <strong>Não inclui</strong> VR/VA, ajustes operacionais variáveis por mês (vales, EPI, convênios, faltas/atrasos, outros) — esses aparecem só no detalhe individual do módulo Aviso Prévio.
                     </p>
                   </>
                 )}

@@ -1,6 +1,26 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 1964 — RH · Dashboard Aviso Prévio · CDM (Custo de Demissão em Massa) agora calcula DESCONTOS LEGAIS (INSS+IRRF+pensão+sindical) e bate 1:1 com o modal "Novo Aviso Prévio".
+ * User (16/05/2026, contexto pós-Rev. 1963, opção A): "Sim retorne" — recalcular descontos pra bater com o modal.
+ * Diagnóstico: Anderson aparecia R$ 74.507,71 na lista CDM (bruto, sem INSS/IRRF) vs R$ 71.281,82 no modal (líquido + complementar). Diferença ≈ R$ 3.226 = descontos legais não aplicados. Lista também agregava aviso oficial + complementar numa única coluna "Aviso Indeniz." (R$ 5.821,20 + R$ 6.647,93 = R$ 12.469,13) sem distinguir — modal mostra separado.
+ * Mudança em 2 arquivos:
+ *   (1) `server/routers/dashboards.ts`:
+ *     - Import `calcularDescontosRescisao` + tipo `DescontosRescisaoContext` de `../utils/rescisaoCalc`.
+ *     - SELECT do `getDashCustoDemissaoMassa` ganha 7 cols pra montar ctx de descontos: `dependentesIR`, `pensaoAlimenticia`, `pensaoTipo`, `pensaoValor`, `pensaoPercentual`, `pensaoBase`, `contribuicaoSindical` (mesmas cols lidas pelo `buildDescontosContextRescisao` em avisoPrevioFerias.ts L44-67).
+ *     - Após `calcularRescisaoCompleta`, monta `descontosCtx` lightweight: `numDependentes=0` (espelha L50 do modal — `emp.numDependentes` inexistente no schema cai em fallback 0), `pensaoConfig` mapeada da row, `salarioMinimo=1621` (fallback default do modal), e ZEROS para faltas/convênios/EPIs/vales/outros — esses ajustes OPERACIONAIS variam por mês de competência e ficam só no detalhe individual.
+ *     - Chama `calcularDescontosRescisao(previsao, ctx)` → obtém `totalDescontos` e `totalLiquido`.
+ *     - Novos campos no objeto retornado: `avisoOficial` (separado do `avisoComplementar`, antes vinham agregados em `avisoPrevioIndenizado`), `totalOficialBruto` (pre-descontos, espelha `totalOficial` legado), `totalOficialLiquido` (pos-descontos — é o que o modal exibe), `totalDescontos`. `total` agora = `totalOficialLiquido + totalComplementar` (antes = bruto + complementar) — é o "custo total exibido" e bate 1:1 com o modal.
+ *     - Backwards-compat preservada: `totalOficial` mantém semântica BRUTA legada (= `totalOficialBruto`) — consumidores antigos não quebram. `avisoPrevioIndenizado` continua agregado (oficial + complementar). Frontend prioriza `totalOficialLiquido` no tooltip com fallback p/ `totalOficial` em payloads antigos.
+ *   (2) `client/src/pages/dashboards/DashAvisoPrevio.tsx`:
+ *     - Coluna "Aviso Indeniz." da tabela CDM: agora mostra `avisoOficial` como valor principal + linha pequena `+compl {valor}` em violeta abaixo quando `avisoComplementar > 0` (mesmo pattern já usado em "Custo Total" L678-683). Fallback `?? l.avisoPrevioIndenizado` mantém comportamento antigo caso payload antigo chegue.
+ *     - Coluna "Custo Total": tooltip enriquecido detalhando a composição — `Oficial bruto − Descontos legais (INSS+IRRF+pensão+sindical) = Oficial líquido + Complementar`.
+ *     - Texto explicativo abaixo da tabela atualizado: troca "Não inclui descontos (INSS/IRRF...)" por descrição correta da nova composição + nota que ajustes operacionais (vales/EPI/convênios/faltas) ficam só no detalhe.
+ *   version → 1964.
+ * Resultado: Anderson na lista CDM agora aparece R$ 71.281,82 (idêntico ao modal — R$ 45.428,76 oficial líquido + R$ 25.853,06 complementar). Diretoria vê "número do caixa real" sem precisar abrir cada modal individualmente. Coluna "Aviso Indeniz." imediatamente mostra que dos R$ 12.469,13 totais, R$ 5.821,20 são oficiais (Lei 12.506) e R$ 6.647,93 são complementares — paridade 1:1 com modal.
+ * Premissa documentada: ajustes OPERACIONAIS (vales, EPI, convênios, faltas/atrasos, outros descontos) NÃO entram na simulação CDM — esses dependem do mês de competência da rescisão e variam linha-a-linha. Em funcionários SEM esses ajustes (caso típico — Anderson), CDM bate 1:1 com modal. Em funcionários COM esses ajustes, CDM fica LIGEIRAMENTE superior ao modal — semanticamente correto pra uma provisão de caixa "pior cenário".
+ * Preservado: Rev. 1963 (badge Nº Per. drill Vencidas) e anteriores INTACTAS. Schema INTACTO (zero ADD COLUMN — apenas SELECT de cols já existentes). Backend `avisoPrevioFerias.ts` (modal) INTACTO — só o CDM (dashboard) foi alinhado ao modal. Campos `avisoPrevioIndenizado` e `totalOficial` mantidos com semântica compatível (líquido em vez de bruto, mas mesmo nome). Zero ALTER/DROP/DELETE. R-001/R-007/R-010 OK. Reversível em 5 hunks.
+ *
  * Rev. 1963 — RH · Dashboard de Férias · Drill "Vencidas" · Badge "Nº do período aquisitivo" agora aparece SEMPRE (não só 2º+).
  * User (16/05/2026, screenshot IMG_0817 às 20:13): "Informe se é primeiro ou segundo período".
  * Diagnóstico: no drill "Férias — Vencidas" (`DashFerias.tsx` L853-855), o badge `{numeroPeriodo}º Per.` só renderizava quando `np >= 2`. Resultado: EMERSON (1º período) não tinha badge nenhum, ANA BEATRIZ (11º) tinha "11º Per." âmbar — usuário não conseguia distinguir 1º de 2º só pelo card.

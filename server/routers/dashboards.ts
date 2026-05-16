@@ -14,7 +14,7 @@ import {
 } from "../../drizzle/schema";
 import { eq, and, sql, gte, lte, desc, count, asc, isNull, inArray } from "drizzle-orm";
 import { parseBRL } from "../utils/parseBRL";
-import { calcularRescisaoCompleta, calcularRescisaoComplementar, calcularDiasAvisoTotal } from "../utils/rescisaoCalc";
+import { calcularRescisaoCompleta, calcularRescisaoComplementar, calcularDiasAvisoTotal, calcularDescontosRescisao, type DescontosRescisaoContext } from "../utils/rescisaoCalc";
 import { invokeLLM } from "../_core/llm";
 
 const DESLIGADO_STATUSES = ['Desligado', 'Lista_Negra'];
@@ -2295,6 +2295,18 @@ async function getDashCustoDemissaoMassa(
     status: employees.status,
     recebeComplemento: employees.recebeComplemento,
     valorComplemento: employees.valorComplemento,
+    // Rev. 1964 — Cols pra cálculo de descontos legais (INSS+IRRF+pensão+sindical)
+    // espelhando `buildDescontosContextRescisao` em avisoPrevioFerias.ts L44-67.
+    // Permite que o CDM bata 1:1 com o modal "Novo Aviso Prévio" → "TOTAL GERAL".
+    // Ajustes operacionais (faltas/vales/EPI/convênios/outros) NÃO entram aqui —
+    // são variáveis por mês de competência e ficam só no detalhe individual.
+    dependentesIR: employees.dependentesIR,
+    pensaoAlimenticia: employees.pensaoAlimenticia,
+    pensaoTipo: employees.pensaoTipo,
+    pensaoValor: employees.pensaoValor,
+    pensaoPercentual: employees.pensaoPercentual,
+    pensaoBase: employees.pensaoBase,
+    contribuicaoSindical: employees.contribuicaoSindical,
   }).from(employees).where(activeWhere);
 
   // Rev. 1921 — Datas espelham EXATAMENTE o módulo Aviso Prévio oficial
@@ -2566,7 +2578,43 @@ async function getDashCustoDemissaoMassa(
           avisoComplementar = parseFloat(compl.avisoPrevioIndenizado);
         }
       }
-      const totalOficial = parseFloat(previsao.total);
+      const totalOficialBruto = parseFloat(previsao.total);
+      // Rev. 1964 — Descontos legais (INSS+IRRF+pensão+sindical) replicando o
+      // engine do modal "Novo Aviso Prévio" (avisoPrevioFerias.ts L547-553).
+      // Ajustes operacionais (faltas/vales/EPI/convênios/outros) ficam ZERADOS
+      // — esses dependem do mês de competência e variam linha-a-linha, então
+      // só aparecem no detalhe individual. Em funcionários SEM esses ajustes
+      // (caso típico — Anderson IMG_0814), CDM passa a bater 1:1 com o modal.
+      const descontosCtx: DescontosRescisaoContext = {
+        // numDependentes=0 INTENCIONAL pra paridade 1:1 com o modal: o helper
+        // `buildDescontosContextRescisao` (avisoPrevioFerias.ts L50) lê de
+        // `emp.numDependentes` que NÃO existe no schema (coluna real é
+        // `dependentesIR`/`dependentes_ir`). Resultado: modal sempre cai em
+        // fallback 0. Aqui replicamos exatamente esse comportamento — usar
+        // `dependentesIR` daria mais precisão mas DIVERGIRIA do modal (que é
+        // a fonte de verdade pedida pelo user pra esta tela CDM). Quando o
+        // bug do modal for corrigido lá, corrige aqui também.
+        numDependentes: 0,
+        contribuicaoSindical: parseBRL(r.contribuicaoSindical),
+        pensaoConfig: r.pensaoAlimenticia
+          ? {
+              ativa: true,
+              tipo: (r.pensaoTipo as any) || "valor_fixo",
+              valor: parseBRL(r.pensaoValor),
+              percentual: parseFloat(String(r.pensaoPercentual || "0").replace(",", ".")) || 0,
+              base: (r.pensaoBase as any) || "bruto",
+            }
+          : null,
+        salarioMinimo: 1621,
+        faltasAtrasosValor: 0,
+        conveniosValor: 0,
+        episValor: 0,
+        valesValor: 0,
+        outrosDescontosValor: 0,
+      };
+      const descontosLegais = calcularDescontosRescisao(previsao, descontosCtx);
+      const totalDescontos = parseFloat(descontosLegais.totalDescontos);
+      const totalOficialLiquido = parseFloat(descontosLegais.totalLiquido);
       // Rev. 1931 — idade real calculada da dataNascimento (anos completos
       // até a dataRef do dashboard, não até HOJE — coerente com o resto da
       // simulação que projeta sobre dtRef).
@@ -2642,12 +2690,26 @@ async function getDashCustoDemissaoMassa(
         feriasProporcional: parseFloat(previsao.totalFerias),
         feriasVencidas: parseFloat(previsao.feriasVencidas),
         decimoTerceiro: parseFloat(previsao.decimoTerceiroProporcional),
+        // Rev. 1964 — Aviso oficial e complementar SEPARADOS (antes vinham
+        // somados num único campo `avisoPrevioIndenizado` — frontend não
+        // sabia distinguir). Mantém o campo agregado pra compat.
+        avisoOficial: parseFloat(previsao.avisoPrevioIndenizado),
+        avisoComplementar,
         avisoPrevioIndenizado: parseFloat(previsao.avisoPrevioIndenizado) + avisoComplementar,
         multaFGTS: parseFloat(previsao.multaFGTS),
         fgtsEstimado: parseFloat(previsao.fgtsEstimado),
-        totalOficial,
+        // Rev. 1964 — `totalOficial` PRESERVADO com semântica BRUTA (legado —
+        // consumidores antigos esperavam o valor pré-descontos). Novo campo
+        // `totalOficialLiquido` expõe o valor após descontos legais (= o que
+        // o modal mostra). `total` (custo total exibido) usa o líquido pra
+        // bater 1:1 com modal. `totalOficialBruto` repete `totalOficial` pra
+        // semântica explícita em tooltip/auditoria.
+        totalOficial: totalOficialBruto,
+        totalOficialBruto,
+        totalOficialLiquido,
+        totalDescontos,
         totalComplementar,
-        total: totalOficial + totalComplementar,
+        total: totalOficialLiquido + totalComplementar,
       };
     })
     .sort((a, b) => b.total - a.total);
