@@ -1,6 +1,24 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 1961 — RH · Dashboard de Férias · Repaginação de cores (Concluídas = VERDE).
+ * User (16/05/2026, screenshot IMG_0812): "Mude as cores da legenda quero os concluídos fiquem na cor verde o resto pode ajustar no que for melhor".
+ * Motivação: estado "Concluída" é semanticamente POSITIVO (ciclo de férias fechado, passivo trabalhista zerado) mas estava em CINZA `#6B7280` em 2 lugares (donut Distribuição por Status + barra Colaboradores em Férias por Mês). Verde já estava sendo usado em "Em Gozo" no donut e em "Iniciando" no bar chart — conflitos.
+ * Decisão de cores (paleta `chartColors.ts` mantida):
+ *   - Concluídas/Concluído → VERDE `#10B981` (em TODOS os 3 gráficos do dashboard de férias).
+ *   - Em Gozo → TURQUESA `#5CC5CF` (no donut + barra "Proporção Financeira"). Antes era `#10B981` no donut e `#3B82F6` na barra — agora padronizado.
+ *   - Iniciando (timeline mensal) → LAVANDA `#A78BDB` (antes verde menta CHART_PALETTE[1], conflitava com Concluídas).
+ *   - Em Férias (azul `#5B8DEF`), Finalizando (pêssego `#F5A962`), Vencidas (vermelho `#EF4444`), Agendadas (azul `#3B82F6`), Férias a Vencer (amber `#F59E0B`) — INTACTAS.
+ * Mudança (2 arquivos):
+ *   (1) `server/routers/dashboards.ts` L3042-3047 (statusDist do donut): troca de cor de "Em Gozo" e "Concluídas".
+ *   (2) `client/src/pages/dashboards/DashFerias.tsx`:
+ *       - L454-457 (timeline mensal): Iniciando vira `#A78BDB`, Concluídas vira `#10B981`.
+ *       - L415 (barra "Proporção Financeira" — fatia Em Gozo): `bg-[#3B82F6]` → `bg-[#5CC5CF]`.
+ *       - L438 (legenda da Proporção Financeira — bolinha Em Gozo): mesma troca.
+ *   - version → 1961.
+ * Resultado: nos 3 gráficos, "Concluída" lê visualmente como sucesso (verde) e "Em Gozo" mantém destaque sem disputar a cor positiva.
+ * Preservado: Rev. 1960 (área temática DDS) e todas as anteriores. Zero backend além da troca de 2 strings hex. Zero schema, zero tRPC novo, zero comportamento. Reversível em 4 hunks. R-001/R-007/R-010 OK.
+ *
  * Rev. 1960 — SST · DDS Guia · Classificação automática por ÁREA TEMÁTICA via IA + filtros de chip nas abas Biblioteca e Uso por Obra.
  * User (16/05/2026, após Rev. 1959): "Já classifica cada DDS automaticamente por ia quando fizer o roteiro por categoria e faças filtros separando por categoria fica mais fácil escolher os temas".
  * Motivação: `categoria` (NR | CAMPANHA | VACINACAO | LIVRE) é grossa demais — 252+ temas dentro de "NR" vira pajadão. Usuário precisa de dimensão ortogonal pra navegar (ex.: "me mostra só os de Altura" ou "Elétrica + Espaço confinado").

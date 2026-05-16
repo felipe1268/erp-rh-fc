@@ -3043,8 +3043,10 @@ async function getDashFerias(companyId: number, ano?: number, companyIds?: numbe
     { label: 'Férias a Vencer', value: pendentes, color: '#F59E0B' },
     { label: 'Agendadas', value: agendadas, color: '#3B82F6' },
     { label: 'Vencidas', value: vencidas, color: '#EF4444' },
-    { label: 'Em Gozo', value: emGozo, color: '#10B981' },
-    { label: 'Concluídas', value: concluidas, color: '#6B7280' },
+    // Rev. 1961 — Concluídas agora é VERDE (estado positivo "ciclo completo").
+    // Em Gozo passa a TURQUESA pra continuar distinto (antes era verde, conflitava).
+    { label: 'Em Gozo', value: emGozo, color: '#5CC5CF' },
+    { label: 'Concluídas', value: concluidas, color: '#10B981' },
   ].filter(s => s.value > 0);
 
   // Timeline mensal: quantos colaboradores em férias por mês no ano

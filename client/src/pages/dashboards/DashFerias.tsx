@@ -412,7 +412,7 @@ export default function DashFerias() {
                 </div>
               )}
               {financeiro.custoEmGozo > 0 && (
-                <div className="bg-[#3B82F6] flex items-center justify-center text-[10px] text-white font-bold transition-all"
+                <div className="bg-[#5CC5CF] flex items-center justify-center text-[10px] text-white font-bold transition-all"
                   style={{ width: `${(financeiro.custoEmGozo / financeiro.custoTotalEstimado * 100).toFixed(1)}%` }}
                   title={`Em Gozo: ${fmtBRL(financeiro.custoEmGozo)}`}>
                   {(financeiro.custoEmGozo / financeiro.custoTotalEstimado * 100) > 8 ? `${(financeiro.custoEmGozo / financeiro.custoTotalEstimado * 100).toFixed(0)}%` : ""}
@@ -435,7 +435,7 @@ export default function DashFerias() {
             </div>
             <div className="flex flex-wrap gap-4 mt-2 text-xs">
               <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-[#10B981]" /> Concluído</span>
-              <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-[#3B82F6]" /> Em Gozo</span>
+              <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-[#5CC5CF]" /> Em Gozo</span>
               <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-[#F59E0B]" /> Pendente/Agendada</span>
               <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-[#EF4444]" /> Vencidas</span>
             </div>
@@ -451,10 +451,11 @@ export default function DashFerias() {
             type="bar"
             labels={MESES}
             datasets={[
+              // Rev. 1961 — Concluídas = VERDE (estado positivo). Iniciando vira lavanda pra evitar conflito com verde.
               { label: "Em Férias", data: timelineMensal.map(t => t.emFerias), backgroundColor: CHART_PALETTE[0] },
-              { label: "Iniciando", data: timelineMensal.map(t => t.iniciando), backgroundColor: CHART_PALETTE[1] },
+              { label: "Iniciando", data: timelineMensal.map(t => t.iniciando), backgroundColor: "#A78BDB" },
               { label: "Finalizando", data: timelineMensal.map(t => t.finalizando), backgroundColor: CHART_PALETTE[2] },
-              { label: "Concluídas", data: timelineMensal.map(t => (t as any).concluidas ?? 0), backgroundColor: "#6B7280" },
+              { label: "Concluídas", data: timelineMensal.map(t => (t as any).concluidas ?? 0), backgroundColor: "#10B981" },
             ]}
             height={300}
             onChartClick={(info) => drillByChart(info, "timeline")}
