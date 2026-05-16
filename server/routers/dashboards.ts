@@ -2285,6 +2285,9 @@ async function getDashCustoDemissaoMassa(
     funcao: employees.funcao,
     setor: employees.setor,
     dataAdmissao: employees.dataAdmissao,
+    // Rev. 1941 — `fotoUrl` p/ exibir avatar do funcionário na tabela CDM
+    // (user 16/05/2026: "COLOCA A FOTO DO FUNCIONARIO AO LADO DO NOME").
+    fotoUrl: employees.fotoUrl,
     // Rev. 1931 — `dataNascimento` p/ exibir idade real do funcionário na
     // tabela (user 16/05/2026: "coloca outra coluna com a idade real").
     dataNascimento: employees.dataNascimento,

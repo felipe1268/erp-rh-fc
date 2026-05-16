@@ -130,6 +130,10 @@ export default function DashAvisoPrevio() {
   const [cdmSort, setCdmSort] = useState<{ key: CdmSortKey; dir: 'asc' | 'desc' }>({ key: 'total', dir: 'desc' });
   // Rev. 1935 — Raio-X do funcionário ao clicar no nome (mesma UX dos demais módulos RH).
   const [raioXEmployeeId, setRaioXEmployeeId] = useState<number | null>(null);
+  // Rev. 1941 — Foto ampliada (user: "QUANDO EU CLICAR NA FOTO, QUERO QUE AUMENTE
+  // O TAMANHO PARA PODER VER MELHOR.. QUEM É O COLABORADOR."). Modal simples
+  // sobre toda a tela, fecha clicando fora.
+  const [fotoAmpliada, setFotoAmpliada] = useState<{ url: string; nome: string } | null>(null);
   // Rev. 1937 — Larguras redimensionáveis das colunas de TEXTO da tabela CDM
   // (Funcionário, Função, Obra) — persistidas em localStorage. User 16/05/2026:
   // "quero pode clicar e aumentar a largura da tabela para ajustar o texto..".
@@ -507,6 +511,25 @@ export default function DashAvisoPrevio() {
                                 {/* Rev. 1935 — Clicar no nome abre o Raio-X do funcionário (mesmo modal usado em Colaboradores/AvisoPrevio/Ferias/etc.). */}
                                 <td style={{ width: cdmColW.nome, minWidth: cdmColW.nome, maxWidth: cdmColW.nome }} className="py-1.5 px-2 font-medium truncate border-b border-border/50">
                                   <div className="flex items-center gap-1.5 min-w-0">
+                                    {/* Rev. 1941 — Avatar 28px à esquerda do nome; clique amplia
+                                        em modal. Sem foto → bolinha cinza com inicial. */}
+                                    {l.fotoUrl ? (
+                                      <button
+                                        type="button"
+                                        onClick={() => setFotoAmpliada({ url: l.fotoUrl, nome: l.nomeCompleto })}
+                                        className="shrink-0 w-7 h-7 rounded-full overflow-hidden border border-slate-300 hover:border-blue-500 hover:ring-2 hover:ring-blue-200 transition-all"
+                                        title="Clique para ampliar a foto"
+                                      >
+                                        <img src={l.fotoUrl} alt="" className="w-full h-full object-cover object-top" />
+                                      </button>
+                                    ) : (
+                                      <div
+                                        className="shrink-0 w-7 h-7 rounded-full bg-slate-200 text-slate-500 flex items-center justify-center text-[10px] font-bold border border-slate-300"
+                                        title="Sem foto cadastrada"
+                                      >
+                                        {(l.nomeCompleto || '?').charAt(0).toUpperCase()}
+                                      </div>
+                                    )}
                                     <button
                                       type="button"
                                       onClick={() => setRaioXEmployeeId(l.id)}
@@ -1008,6 +1031,33 @@ export default function DashAvisoPrevio() {
           <PrintFooterLGPD />
       {/* Rev. 1935 — Modal Raio-X do funcionário (abre ao clicar no nome na tabela CDM). */}
       <RaioXFuncionario employeeId={raioXEmployeeId} open={!!raioXEmployeeId} onClose={() => setRaioXEmployeeId(null)} />
+      {/* Rev. 1941 — Modal de foto ampliada. Fundo escuro semi-transparente,
+          clique fora fecha. Padrão idêntico ao do RaioXFuncionario L3752+. */}
+      {fotoAmpliada && (
+        <div
+          onClick={() => setFotoAmpliada(null)}
+          className="fixed inset-0 z-[100] bg-black/80 flex items-center justify-center p-4 cursor-zoom-out"
+        >
+          <div className="relative max-w-[90vw] max-h-[90vh] flex flex-col items-center gap-3" onClick={(e) => e.stopPropagation()}>
+            <img
+              src={fotoAmpliada.url}
+              alt={fotoAmpliada.nome}
+              className="max-w-full max-h-[80vh] object-contain rounded-lg shadow-2xl border-4 border-white"
+            />
+            <div className="bg-white/95 px-4 py-2 rounded-lg shadow-lg">
+              <p className="font-bold text-slate-800 text-center">{fotoAmpliada.nome}</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setFotoAmpliada(null)}
+              className="absolute -top-2 -right-2 w-9 h-9 rounded-full bg-white text-slate-800 shadow-lg hover:bg-slate-100 flex items-center justify-center text-lg font-bold border border-slate-300"
+              title="Fechar (ou clique no fundo)"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
     </DashboardLayout>
   );
 }

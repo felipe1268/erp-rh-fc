@@ -1,6 +1,21 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 1941 — RH · Dash Aviso Prévio · Tabela CDM · Foto do funcionário ao lado do nome + modal de ampliação ao clicar.
+ * User (16/05/2026, 2 mensagens encadeadas): "COLOCA A FOTO DO FUNCIONARIO AO LADO DO NOME.." + "QUANDO EU CLICAR NA FOTO, QUERO QUE AUMENTE O TAMANHO PARA PODER VER MELHOR.. QUEM É O COLABORADOR.".
+ * Motivação: identificação visual rápida na tabela de provisão de demissão — engenheiro/RH lê 100+ nomes mas reconhece rostos. Padrão idêntico ao RaioXFuncionario (que já tem foto ampliável L3752+).
+ * Mudança server (`dashboards.ts` getDashCustoDemissaoMassa SELECT):
+ *   (a) Adicionado `fotoUrl: employees.fotoUrl` ao `db.select({...})` (zero impacto em outras queries — campo já existe na tabela `employees`).
+ * Mudança client (`DashAvisoPrevio.tsx`):
+ *   (a) Novo state `fotoAmpliada: { url, nome } | null` p/ controlar modal.
+ *   (b) Célula do nome ganha avatar 28×28px round à esquerda do botão de nome (dentro do mesmo flex existente Rev. 1936 que abriga a tag CIPA).
+ *   (c) Com foto: `<button>` redondo com `<img object-cover object-top>` (object-top porque foto de funcionário corta no rosto, não no centro). Hover azul ring. Click → seta `fotoAmpliada`.
+ *   (d) Sem foto: bolinha cinza com a inicial do nome (fallback elegante, não quebra layout).
+ *   (e) Modal: `fixed inset-0 bg-black/80 z-[100]`, imagem `max-w-full max-h-[80vh] object-contain`, nome em card branco abaixo, botão ✕ no canto superior direito. Clique fora OU no ✕ fecha (`cursor-zoom-out` no backdrop, `stopPropagation` no card).
+ * version → 1941.
+ * Resultado: tabela ganha identificação visual instantânea sem aumentar altura da linha significativamente (28px cabe na `py-1.5`). Modal preenche tela inteira pra reconhecimento facial confiável. Fallback gracioso pra funcionários sem foto cadastrada.
+ * Preservado: tag CIPA Rev. 1936, clique no nome abre Raio-X Rev. 1935, tempo a/m/d Rev. 1934, idade Rev. 1931, sticky Rev. 1924, sort Rev. 1909, redim. colunas Rev. 1939, filtros Rev. 1915/1923, queries Rev. 1911/1927. Zero ALTER/DROP/DELETE. Reversível em 4 hunks. R-001/R-007/R-010 OK.
+ *
  * Rev. 1940 — Planejamento · ProgramacaoSemanalLotus · Excel · Coluna TAREFA (D) com largura AUTO-AJUSTÁVEL ao texto mais longo.
  * User (16/05/2026, screenshots Sem.04 Santuário N.S. Conceição Aparecida): "precisia ter uma regra para a coluna TAREFA, que a largura dela é variavel em função do texto que esta dentro dela, para que ele não fique oculto na tela.. arrume isso..".
  * Comparação dos 2 screenshots: o primeiro mostra TAREFA truncada ("MOBILIZAÇÃO DE EQUIPES, EQUIPAMENTOS...", "TAPUMES METÁLICOS PARA ISOLAMENTO D...", "Saúde e segurança do trabalho - ASO, EPI's e EPC's, con..."); o segundo mostra o mesmo Excel com a col D alargada e todos os textos visíveis ("MOBILIZAÇÃO DE EQUIPES, EQUIPAMENTOS E FERRAMENTAS", "TAPUMES METÁLICOS PARA ISOLAMENTO DAS ÁREAS DE ATUAÇÃO DE APOIO - PADRÃO SANTUÁRIO", etc).
