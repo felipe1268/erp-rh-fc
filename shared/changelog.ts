@@ -25,6 +25,22 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1856,
+    titulo: "Planejamento · Desconsolidar Cutoff — substitui window.prompt por modal interno (sem 'xxx.replit.dev diz' no iOS)",
+    descricao: "User (15/05/2026, screenshot QIU 2 - FASE 4 com popup do iOS Safari): popup nativo mostrava 'b41aedae-6288-4323-b9df-52455950f9d8-00-1frshksuex6ym.picard.replit.dev diz' como cabeçalho gigante, atravancando o texto do prompt e dando aparência amadora. Pedido: 'Arrume a mensagem'.\n\n" +
+      "Causa-raiz: client/src/pages/planejamento/PlanejamentoDetalhe.tsx L825 — botão 'Desconsolidar' (admin-only) ainda usava `window.prompt(...)` nativo para coletar o motivo. iOS Safari (e Chrome desktop) renderizam o domínio completo do site no header desse popup, o que com URLs longas de Replit (.picard.replit.dev) ocupa metade do balão. A Rev. 1652 já tinha resolvido isso para `window.confirm` (criou `askConfirm` + AlertDialog), mas `window.prompt` ficou pendente.\n\n" +
+      "Fix (1 arquivo, 3 hunks em PlanejamentoDetalhe.tsx):\n" +
+      "1. L472-487: novo state `promptCfg` + `promptValor` + helper `askPrompt({ title, description, placeholder?, minLen?, confirmLabel?, onConfirm: (v)=>void })`. Mesmo padrão de `askConfirm`.\n" +
+      "2. L843-851: trocado `window.prompt(...)` por `askPrompt({...})` com title/description/placeholder/minLen=5/confirmLabel='Desconsolidar'. Lógica de validação (mín. 5 chars, trim) preservada.\n" +
+      "3. L1634-1681: novo bloco `<AlertDialog>` para o prompt — title/description + textarea (autoFocus, 3 rows, focus ring emerald) + contador 'Mínimo N caracteres (X/N)' que vira ✓ verde quando atingido + footer Cancelar/Action. Botão Action fica `disabled` enquanto não atinge minLen, com fallback toast.error caso o usuário burle.\n\n" +
+      "Esperado: clique em Desconsolidar → modal centralizado limpo (sem URL no header) → admin digita motivo → botão habilita aos 5 chars → mutation roda igual antes. Auditoria backend (motivo registrado no audit log) intacta.\n\n" +
+      "Preservado: ZERO mudança em backend/contrato tRPC/schema; `desconsolidarCutoffMut.mutate({ projetoId, motivo })` chamado com mesma assinatura; outras chamadas a `askConfirm` (consolidar/fechar semana/setDiaCorte) intactas. Reusável em futuras telas via `askPrompt`. Reversível em 3 hunks. R-001/R-007 OK.",
+    tipo: 'ux',
+    modulos: 'Planejamento',
+    criadoPor: 'agent',
+    dataPublicacao: '2026-05-15 23:55:00',
+  },
+  {
     version: 1855,
     titulo: "Painel RH · Avisos Prévios — 'Xd restantes' agora conta até o último dia trabalhado (não até o fim contratual)",
     descricao: "User (15/05/2026, screenshot Painel RH card 'Avisos Prévios em Andamento'): 'No caso do aviso nos dias restantes. Deve contar quantos dias faltam para ele parar de trabalhar efetivamente.. e deve aparecer a data do último dia trabalhado'.\n\n" +

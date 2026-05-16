@@ -466,6 +466,22 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
   // do navegador). Uso: `askConfirm({ title, description, onConfirm })`.
   const [confirmCfg, setConfirmCfg] = useState<{ title: string; description: string; onConfirm: () => void } | null>(null);
   const askConfirm = (cfg: { title: string; description: string; onConfirm: () => void }) => setConfirmCfg(cfg);
+  // Rev. 1856 — Modal de prompt interno (substitui `window.prompt`, que no
+  // iOS/Safari mostra a URL gigante "xxx.replit.dev diz" no topo do popup).
+  // Uso: askPrompt({ title, description, placeholder?, minLen?, onConfirm: (motivo) => {...} })
+  const [promptCfg, setPromptCfg] = useState<{
+    title: string;
+    description: string;
+    placeholder?: string;
+    minLen?: number;
+    confirmLabel?: string;
+    onConfirm: (valor: string) => void;
+  } | null>(null);
+  const [promptValor, setPromptValor] = useState("");
+  const askPrompt = (cfg: {
+    title: string; description: string; placeholder?: string; minLen?: number; confirmLabel?: string;
+    onConfirm: (valor: string) => void;
+  }) => { setPromptValor(""); setPromptCfg(cfg); };
   const fecharSemanaMutation = trpc.planejamento.fecharSemana.useMutation({
     onSuccess: (r) => { toast.success(`Semana fechada — cutoff oficial: ${(r.dataCorte || "").split("-").reverse().join("/")}`); refetchDataCorte(); utils.planejamento.getProjetoById.invalidate({ id: projetoId }); },
     onError: (e) => toast.error(e.message || "Falha ao fechar semana"),
@@ -822,17 +838,14 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
                         disabled={desconsolidarCutoffMut.isPending}
                         title="Desconsolidar (admin) — destrava a premissa para troca do dia. Ação registrada no audit log."
                         onClick={() => {
-                          const motivo = window.prompt(
-                            "Tem certeza que deseja DESCONSOLIDAR o cutoff?\n\n" +
-                            "Após desconsolidar, o dia da semana poderá ser alterado novamente — o que pode rebagunçar a Programação Semanal.\n\n" +
-                            "Informe o motivo (mín. 5 caracteres):"
-                          );
-                          if (!motivo) return;
-                          if (motivo.trim().length < 5) {
-                            toast.error("Motivo precisa ter pelo menos 5 caracteres.");
-                            return;
-                          }
-                          desconsolidarCutoffMut.mutate({ projetoId, motivo: motivo.trim() });
+                          askPrompt({
+                            title: "Desconsolidar cutoff?",
+                            description: "Após desconsolidar, o dia da semana poderá ser alterado novamente — o que pode rebagunçar a Programação Semanal. Informe o motivo (mín. 5 caracteres):",
+                            placeholder: "Ex.: ajuste de premissa por mudança de escopo",
+                            minLen: 5,
+                            confirmLabel: "Desconsolidar",
+                            onConfirm: (motivo) => desconsolidarCutoffMut.mutate({ projetoId, motivo: motivo.trim() }),
+                          });
                         }}
                         className="text-[10px] font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded px-1.5 py-0.5">
                         🔓 Desconsolidar
@@ -1611,6 +1624,58 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction onClick={() => { confirmCfg?.onConfirm(); setConfirmCfg(null); }}>Confirmar</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Rev. 1856 — Modal de prompt interno (substitui window.prompt do iOS,
+          que mostrava a URL gigante "xxx.replit.dev diz"). Aceita motivo com
+          mínimo configurável; valida antes de chamar onConfirm. */}
+      <AlertDialog open={!!promptCfg} onOpenChange={(open) => { if (!open) { setPromptCfg(null); setPromptValor(""); } }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{promptCfg?.title}</AlertDialogTitle>
+            <AlertDialogDescription>{promptCfg?.description}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <textarea
+            autoFocus
+            id="askprompt-motivo"
+            aria-label={promptCfg?.title || "Motivo"}
+            aria-describedby="askprompt-help"
+            value={promptValor}
+            onChange={(e) => setPromptValor(e.target.value)}
+            placeholder={promptCfg?.placeholder || ""}
+            rows={3}
+            className="w-full text-sm border border-slate-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500 resize-none"
+          />
+          <div id="askprompt-help" className="text-[11px] text-slate-500 -mt-2">
+            {(() => {
+              const min = promptCfg?.minLen ?? 0;
+              const len = promptValor.trim().length;
+              if (min <= 0) return null;
+              return len >= min
+                ? <span className="text-emerald-600">✓ {len} caracteres</span>
+                : <span>Mínimo {min} caracteres ({len}/{min})</span>;
+            })()}
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={(promptCfg?.minLen ?? 0) > 0 && promptValor.trim().length < (promptCfg?.minLen ?? 0)}
+              onClick={() => {
+                const v = promptValor.trim();
+                const min = promptCfg?.minLen ?? 0;
+                if (min > 0 && v.length < min) {
+                  toast.error(`Mínimo ${min} caracteres.`);
+                  return;
+                }
+                const cb = promptCfg?.onConfirm;
+                setPromptCfg(null);
+                setPromptValor("");
+                cb?.(v);
+              }}>
+              {promptCfg?.confirmLabel || "Confirmar"}
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
