@@ -2285,6 +2285,9 @@ async function getDashCustoDemissaoMassa(
     funcao: employees.funcao,
     setor: employees.setor,
     dataAdmissao: employees.dataAdmissao,
+    // Rev. 1931 — `dataNascimento` p/ exibir idade real do funcionário na
+    // tabela (user 16/05/2026: "coloca outra coluna com a idade real").
+    dataNascimento: employees.dataNascimento,
     salarioBase: employees.salarioBase,
     status: employees.status,
     recebeComplemento: employees.recebeComplemento,
@@ -2530,6 +2533,19 @@ async function getDashCustoDemissaoMassa(
         }
       }
       const totalOficial = parseFloat(previsao.total);
+      // Rev. 1931 — idade real calculada da dataNascimento (anos completos
+      // até a dataRef do dashboard, não até HOJE — coerente com o resto da
+      // simulação que projeta sobre dtRef).
+      let idade: number | null = null;
+      if (r.dataNascimento) {
+        const dtNasc = new Date(r.dataNascimento + 'T00:00:00');
+        if (!isNaN(dtNasc.getTime())) {
+          let i = dtRef.getFullYear() - dtNasc.getFullYear();
+          const mDiff = dtRef.getMonth() - dtNasc.getMonth();
+          if (mDiff < 0 || (mDiff === 0 && dtRef.getDate() < dtNasc.getDate())) i--;
+          idade = Math.max(0, i);
+        }
+      }
       return {
         id: r.id,
         nomeCompleto: r.nomeCompleto,
@@ -2539,6 +2555,8 @@ async function getDashCustoDemissaoMassa(
         setor: r.setor || '',
         obra: obraByEmp.get(r.id) || '',
         dataAdmissao: r.dataAdmissao!,
+        dataNascimento: r.dataNascimento,
+        idade,
         salarioBase: salario,
         anosServico: previsao.anosServico,
         // Rev. 1930 — Devolve `diasAvisoEstimado` (que respeita o `tipo` —

@@ -125,7 +125,7 @@ export default function DashAvisoPrevio() {
     { enabled: isConstrutoras ? companyIds.length > 0 : companyId > 0 }
   );
   // Rev. 1909 — ordenação clicável da tabela de custo de demissão em massa
-  type CdmSortKey = 'nomeCompleto' | 'cargo' | 'funcao' | 'obra' | 'dataAdmissao' | 'anosServico' | 'diasAvisoTotal' | 'salarioBase' | 'avisoPrevioIndenizado' | 'multaFGTS' | 'total';
+  type CdmSortKey = 'nomeCompleto' | 'cargo' | 'funcao' | 'obra' | 'dataAdmissao' | 'anosServico' | 'idade' | 'diasAvisoTotal' | 'salarioBase' | 'avisoPrevioIndenizado' | 'multaFGTS' | 'total';
   const [cdmSort, setCdmSort] = useState<{ key: CdmSortKey; dir: 'asc' | 'desc' }>({ key: 'total', dir: 'desc' });
   const toggleCdmSort = (key: CdmSortKey) => setCdmSort(s => s.key === key ? { key, dir: s.dir === 'desc' ? 'asc' : 'desc' } : { key, dir: (key === 'nomeCompleto' || key === 'cargo' || key === 'funcao' || key === 'obra' || key === 'dataAdmissao') ? 'asc' : 'desc' });
   const cdmLinhasOrdenadas = useMemo(() => {
@@ -392,7 +392,11 @@ export default function DashAvisoPrevio() {
                               <th className="py-2 px-2 font-semibold text-muted-foreground bg-slate-100 border-b border-slate-300 shadow-sm cursor-pointer select-none hover:text-blue-700" onClick={() => toggleCdmSort('funcao')}>Função<SortIcon k="funcao" /></th>
                               <th className="py-2 px-2 font-semibold text-muted-foreground bg-slate-100 border-b border-slate-300 shadow-sm cursor-pointer select-none hover:text-blue-700" onClick={() => toggleCdmSort('obra')}>Obra<SortIcon k="obra" /></th>
                               <th className="py-2 px-2 font-semibold text-muted-foreground bg-slate-100 border-b border-slate-300 shadow-sm text-right cursor-pointer select-none hover:text-blue-700" onClick={() => toggleCdmSort('dataAdmissao')}>Admissão<SortIcon k="dataAdmissao" /></th>
-                              <th className="py-2 px-2 font-semibold text-muted-foreground bg-slate-100 border-b border-slate-300 shadow-sm text-center cursor-pointer select-none hover:text-blue-700" onClick={() => toggleCdmSort('anosServico')}>Anos<SortIcon k="anosServico" /></th>
+                              {/* Rev. 1931 — "Anos" renomeado p/ "Tempo de empresa" (mais claro p/ leigo) + nova coluna "Idade" (anos completos
+                                  do funcionário até a data-base do dash). User 16/05/2026: "melhore o texto onde ta escrito idade, coloque
+                                  tempo de empresa.. e coloca outra coluna com a idade real do funcionario". */}
+                              <th className="py-2 px-2 font-semibold text-muted-foreground bg-slate-100 border-b border-slate-300 shadow-sm text-center cursor-pointer select-none hover:text-blue-700" onClick={() => toggleCdmSort('anosServico')} title="Anos completos desde a admissão (tempo de casa)">Tempo de empresa<SortIcon k="anosServico" /></th>
+                              <th className="py-2 px-2 font-semibold text-muted-foreground bg-slate-100 border-b border-slate-300 shadow-sm text-center cursor-pointer select-none hover:text-blue-700" onClick={() => toggleCdmSort('idade')} title="Idade real do funcionário na data-base">Idade<SortIcon k="idade" /></th>
                               <th className="py-2 px-2 font-semibold text-muted-foreground bg-slate-100 border-b border-slate-300 shadow-sm text-center cursor-pointer select-none hover:text-blue-700" onClick={() => toggleCdmSort('diasAvisoTotal')} title="Dias de aviso prévio (Lei 12.506/2011)">Dias Aviso<SortIcon k="diasAvisoTotal" /></th>
                               <th className="py-2 px-2 font-semibold text-muted-foreground bg-slate-100 border-b border-slate-300 shadow-sm text-right cursor-pointer select-none hover:text-blue-700" onClick={() => toggleCdmSort('salarioBase')}>Salário<SortIcon k="salarioBase" /></th>
                               <th className="py-2 px-2 font-semibold text-muted-foreground bg-slate-100 border-b border-slate-300 shadow-sm text-right cursor-pointer select-none hover:text-blue-700" onClick={() => toggleCdmSort('avisoPrevioIndenizado')}>Aviso Indeniz.<SortIcon k="avisoPrevioIndenizado" /></th>
@@ -409,6 +413,10 @@ export default function DashAvisoPrevio() {
                                 <td className="py-1.5 px-2 text-muted-foreground truncate max-w-[160px] border-b border-border/50" title={l.obra}>{l.obra || <span className="italic text-muted-foreground/60">sem alocação</span>}</td>
                                 <td className="py-1.5 px-2 text-right tabular-nums border-b border-border/50">{l.dataAdmissao ? new Date(l.dataAdmissao + 'T00:00:00').toLocaleDateString('pt-BR') : '-'}</td>
                                 <td className="py-1.5 px-2 text-center tabular-nums border-b border-border/50">{l.anosServico}</td>
+                                {/* Rev. 1931 — Idade real. Funcionários sem dataNascimento mostram "—" em itálico (não inferimos). */}
+                                <td className="py-1.5 px-2 text-center tabular-nums border-b border-border/50" title={l.dataNascimento ? `Nascimento: ${new Date(l.dataNascimento + 'T00:00:00').toLocaleDateString('pt-BR')}` : 'Data de nascimento não cadastrada'}>
+                                  {l.idade != null ? l.idade : <span className="italic text-muted-foreground/60">—</span>}
+                                </td>
                                 <td className="py-1.5 px-2 text-center tabular-nums border-b border-border/50">{l.diasAvisoTotal}</td>
                                 <td className="py-1.5 px-2 text-right tabular-nums border-b border-border/50">{fmtBRL(l.salarioBase)}</td>
                                 <td className="py-1.5 px-2 text-right tabular-nums text-muted-foreground border-b border-border/50">{fmtBRL(l.avisoPrevioIndenizado)}</td>
@@ -427,7 +435,8 @@ export default function DashAvisoPrevio() {
                           {/* Rev. 1924 — bg sólido per-cell (mesma razão do thead) + top-shadow */}
                           <tfoot className="sticky bottom-0 z-20">
                             <tr>
-                              <td colSpan={10} className="py-2 px-2 text-right font-bold text-red-800 uppercase text-[11px] bg-red-50 border-t-2 border-red-300 shadow-[0_-2px_4px_-1px_rgba(0,0,0,0.08)]">TOTAL GERAL</td>
+                              {/* Rev. 1931 — +1 col "Idade" → colSpan 10→11. */}
+                              <td colSpan={11} className="py-2 px-2 text-right font-bold text-red-800 uppercase text-[11px] bg-red-50 border-t-2 border-red-300 shadow-[0_-2px_4px_-1px_rgba(0,0,0,0.08)]">TOTAL GERAL</td>
                               <td className="py-2 px-2 text-right tabular-nums font-bold text-red-800 bg-red-50 border-t-2 border-red-300 shadow-[0_-2px_4px_-1px_rgba(0,0,0,0.08)]">{fmtBRL(cdm.grandTotal)}</td>
                             </tr>
                           </tfoot>

@@ -1,6 +1,20 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 1931 — RH · Dash Aviso Prévio · Tabela CDM · Renomeia "Anos" → "Tempo de empresa" + nova coluna "Idade" (idade real do funcionário).
+ * User (16/05/2026, screenshot CDM com header "Anos"): "melhore o texto onde ta escrito idade, coloque tempo de empresa.. e coloca outra coluna com a idade real do funcionario.. quero saber".
+ * (NOTA: user falou "onde ta escrito idade" — na verdade o header era "Anos" referindo-se a anos de serviço. Renomeação p/ "Tempo de empresa" remove a ambiguidade. Adiciona Idade como coluna ao lado.)
+ * Mudança server (`dashboards.ts` `getDashCustoDemissaoMassa`): SELECT ganha `dataNascimento: employees.dataNascimento` (campo já existia no schema, só não estava sendo puxado p/ esta tabela); cálculo local de `idade` (anos completos do funcionário até a `dtRef` do dashboard — NÃO até HOJE — pra coerência com o resto da simulação que projeta sobre dataReferência); fallback `null` quando dataNascimento NULL. Retorno ganha `dataNascimento` (ISO) + `idade` (number|null).
+ * Mudança client (`DashAvisoPrevio.tsx`):
+ *   (a) `CdmSortKey` ganha `'idade'`.
+ *   (b) Header "Anos" → "Tempo de empresa" (mesma key `anosServico`, tooltip "Anos completos desde a admissão (tempo de casa)").
+ *   (c) Nova `<th>` "Idade" (key `idade`, tooltip "Idade real do funcionário na data-base") entre Tempo de empresa e Dias Aviso.
+ *   (d) Nova `<td>` correspondente no tbody: mostra `l.idade` quando não-nulo, "—" itálico caso contrário; `title` mostra data de nascimento formatada pt-BR quando disponível.
+ *   (e) `colSpan` do TOTAL GERAL no tfoot: 10 → 11 (nova coluna entrou antes de "Custo Total").
+ * version → 1931.
+ * Resultado: header agora diz "Tempo de empresa" (claro p/ diretoria) e nova coluna "Idade" mostra idade real (ex.: 47, 38, 25). Funcionários sem dataNascimento cadastrado aparecem "—" (não inferimos). Ordenável por idade (asc/desc) clicando no header. Sort original por `total` desc preservado como default.
+ * Preservado: filtros PJ/Sócio Rev. 1915 + Recluso/Afastado Rev. 1923, query batch obra Rev. 1916 + vacation_periods (vencidas Rev. 1911 + agendadas Rev. 1927) + meal_benefit_configs Rev. 1927, projeção dataFimAviso Rev. 1909-fix, vrDiario/diasTrabMes Rev. 1927, complementar Rev. 1919, diasAvisoEstimado retornado Rev. 1930, sort/top-3 Rev. 1909, seletor TIPO Rev. 1921, KPIs, disclaimer, date picker. Zero ALTER/DROP/DELETE — 1 campo a mais no SELECT, 1 col a mais no UI. Reversível em 5 hunks. R-001/R-007/R-010 OK.
+ *
  * Rev. 1930 — RH · Dash Aviso Prévio · Tabela CDM · FIX coluna "Dias Aviso" não respondia ao toggle Trabalhado/Indenizado (mostrava sempre cálculo legal completo).
  * User (16/05/2026, screenshot CDM com toggle "Trabalhado" ativo e coluna mostrando 60/66/45/69/60/69/60/57/72/36/69/60/54): "os dias de aviso não deveria mudar se simularmos trabalhado ou indenizado?".
  * Causa-raiz: o retorno ao client (`dashboards.ts` L2544 do CDM) usava `previsao.diasAvisoTotal` — que vem de `calcularRescisaoCompleta` (`rescisaoCalc.ts` L330/L387 e L460/L499) e SEMPRE calcula `calcularDiasAvisoTotal(anosServico)` = 30+3·ano (Lei 12.506/2011), independente do `tipo` passado. O `tipo` só altera internamente a aplicação de `avisoPrevioIndenizado` (= 0 se trabalhado), nunca o campo `diasAvisoTotal` informativo. Resultado: toggle no client trocava todos os VALORES R$ (porque dataFimAviso projetada e parâmetros internos mudavam corretamente na L2476/L2502), mas a COLUNA "Dias Aviso" persistia no cálculo legal full — Anderson sempre 60 mesmo em modo Trabalhado, onde deveria mostrar 30.
