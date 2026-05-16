@@ -149,14 +149,14 @@ export default function FerramentasTerceiros() {
             </TabsTrigger>
             <TabsTrigger
               value="SAIDA"
-              className="group data-[state=active]:bg-blue-600 data-[state=active]:text-white h-12 text-sm font-semibold gap-2"
+              className="group data-[state=active]:bg-red-600 data-[state=active]:text-white h-12 text-sm font-semibold gap-2"
             >
               <ArrowUpCircle className="h-5 w-5" />
               SAÍDAS / DEVOLUÇÕES
               {typeof kpis.data?.saidasHoje === "number" && kpis.data.saidasHoje > 0 && (
                 <Badge
                   variant="secondary"
-                  className="ml-1 border-0 bg-blue-100 text-blue-800 group-data-[state=active]:bg-white/25 group-data-[state=active]:text-white"
+                  className="ml-1 border-0 bg-red-100 text-red-800 group-data-[state=active]:bg-white/25 group-data-[state=active]:text-white"
                 >
                   {kpis.data.saidasHoje} hoje
                 </Badge>
@@ -209,22 +209,22 @@ export default function FerramentasTerceiros() {
 
           {/* ───── ABA SAÍDAS ───── */}
           <TabsContent value="SAIDA" className="space-y-4 mt-4">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-blue-50/50 border border-blue-200 rounded-lg p-3">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-red-50/50 border border-red-200 rounded-lg p-3">
               <div className="flex items-start gap-2">
-                <ArrowUpCircle className="h-5 w-5 text-blue-700 mt-0.5 shrink-0" />
+                <ArrowUpCircle className="h-5 w-5 text-red-700 mt-0.5 shrink-0" />
                 <div>
-                  <div className="font-semibold text-blue-900 text-sm">Devolução de ferramentas pela portaria</div>
-                  <div className="text-xs text-blue-800/80">Selecione a ENTRADA correspondente e marque o que está SAINDO da obra (devolvido / danificado / perda).</div>
+                  <div className="font-semibold text-red-900 text-sm">Devolução de ferramentas pela portaria</div>
+                  <div className="text-xs text-red-800/80">Selecione a ENTRADA correspondente e marque o que está SAINDO da obra (devolvido / danificado / perda).</div>
                 </div>
               </div>
-              <Button onClick={() => setOpenSaida(true)} className="bg-blue-600 hover:bg-blue-700 shrink-0">
+              <Button onClick={() => setOpenSaida(true)} className="bg-red-600 hover:bg-red-700 shrink-0">
                 <ArrowUpCircle className="h-4 w-4 mr-1.5" /> Registrar Saída
               </Button>
             </div>
 
             {/* KPIs específicos da aba SAÍDAS */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              <KpiCard icon={<ArrowUpCircle className="h-5 w-5" />} label="Saídas Hoje" value={kpis.data?.saidasHoje ?? "—"} cor="blue" />
+              <KpiCard icon={<ArrowUpCircle className="h-5 w-5" />} label="Saídas Hoje" value={kpis.data?.saidasHoje ?? "—"} cor="red" />
               <KpiCard icon={<CheckCircle2 className="h-5 w-5" />} label="Itens Devolvidos" value={kpis.data?.itensDevolvidos ?? "—"} cor="emerald" />
               <KpiCard icon={<AlertTriangle className="h-5 w-5" />} label="Problemas" value={kpis.data?.itensProblema ?? "—"} cor="red" />
               <KpiCard icon={<Package className="h-5 w-5" />} label="Aguardando Devolução" value={kpis.data?.itensNaObra ?? "—"} cor="amber" />
@@ -310,7 +310,7 @@ function TabelaRegistros({ loading, data, tipo, onAbrirCTA, onVer }: {
   onVer: (id: number) => void;
 }) {
   const ctaLabel = tipo === "ENTRADA" ? "Nova Entrada" : "Registrar Saída";
-  const ctaCls = tipo === "ENTRADA" ? "bg-emerald-600 hover:bg-emerald-700" : "bg-blue-600 hover:bg-blue-700";
+  const ctaCls = tipo === "ENTRADA" ? "bg-emerald-600 hover:bg-emerald-700" : "bg-red-600 hover:bg-red-700";
   const emptyMsg = tipo === "ENTRADA"
     ? "Nenhuma entrada registrada nesta empresa."
     : "Nenhuma saída registrada nesta empresa.";
