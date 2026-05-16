@@ -717,40 +717,52 @@ export const planejamentoRouter = router({
         .where(eq(planejamentoAtividades.revisaoId, input.revisaoId))
         .orderBy(asc(planejamentoAtividades.ordem), asc(planejamentoAtividades.eapCodigo));
 
-      // Rev. 1818 — Hardening multi-tenant (achado de code review):
-      // bloqueia IDOR via enumeração de revisaoId. Mesma regra das outras
-      // procedures (getDataCorte/setRealDates/kpiResponsavelPorProjeto):
-      // companyId da revisão deve bater com o do usuário; admin/admin_master
-      // pode atravessar (suporte/diagnóstico).
-      if (rows.length > 0) {
-        const projCompany = rows[0].companyId as number;
-        const userCompany = (ctx.user as any).companyId;
-        const role = (ctx.user as any).role;
-        const isAdmin = role === "admin" || role === "admin_master";
-        if (!isAdmin && String(projCompany) !== String(userCompany)) {
-          console.warn(`[listarAtividades] FORBIDDEN revisaoId=${input.revisaoId} projCompany=${projCompany} userCompany=${userCompany} role=${role}`);
-          throw new Error("Sem permissão para esta revisão.");
-        }
-      }
-
-      // Rev. 1666 — Busca a `dataCorteAtual` do projeto para limitar o realFim
-      // derivado: realizado nunca pode passar do cutoff oficial PMBOK (status
-      // date), senão o LOTUS pintaria de verde dias futuros que ainda nem
-      // aconteceram. Ex.: se hoje é Seg 11/05 mas o cutoff oficial é Qui 07/05,
-      // uma atividade com avanço lançado na semana 04-10 não deve "vazar" Real
-      // Fim para 10/05 — o oficialmente medido é só até 07/05.
+      // Rev. 1666/1818/1891 — UM ÚNICO lookup do projeto traz (a) cutoff PMBOK
+      // p/ limitar realFim derivado; (b) companyId p/ guard multi-tenant; (c)
+      // companyId p/ resolverResponsaveisBatch logo abaixo.
+      // Rev. 1891 — BUG FIX: planejamento_atividades NÃO tem company_id —
+      // `rows[0].companyId` era SEMPRE undefined. Resultado: `if (projetoId
+      // && companyId)` em L795 nunca disparava e `respMap` ficava vazio →
+      // PSEM exibia placeholder "FC" em vez do responsável digitado no
+      // cronograma (responsavelLotus). Buscar companyId via planejamento_projetos.
       let cutoffISO: string | null = null;
+      let projetoCompanyId: number | null = null;
+      let projetoIdAtual: number | null = null;
       if (rows.length > 0) {
         const [rev] = await db.select({ projetoId: planejamentoRevisoes.projetoId })
           .from(planejamentoRevisoes)
           .where(eq(planejamentoRevisoes.id, input.revisaoId))
           .limit(1);
         if (rev?.projetoId) {
-          const [proj] = await db.select({ dataCorteAtual: planejamentoProjetos.dataCorteAtual })
+          projetoIdAtual = Number(rev.projetoId);
+          const [proj] = await db.select({
+            dataCorteAtual: planejamentoProjetos.dataCorteAtual,
+            companyId:      planejamentoProjetos.companyId,
+          })
             .from(planejamentoProjetos)
             .where(eq(planejamentoProjetos.id, rev.projetoId))
             .limit(1);
           if (proj?.dataCorteAtual) cutoffISO = toDateStr(proj.dataCorteAtual as any);
+          if (proj?.companyId != null) projetoCompanyId = Number(proj.companyId);
+        }
+
+        // Rev. 1818/1891 — Hardening multi-tenant (bloqueia IDOR via enumeração
+        // de revisaoId). admin/admin_master atravessa. Rev. 1891: FAIL-CLOSED
+        // — se projetoCompanyId não pôde ser resolvido (dado inconsistente,
+        // revisão órfã), bloqueia não-admin em vez de liberar (caveat
+        // apontado pelo architect).
+        const userCompany = (ctx.user as any).companyId;
+        const role = (ctx.user as any).role;
+        const isAdmin = role === "admin" || role === "admin_master";
+        if (!isAdmin) {
+          if (projetoCompanyId == null) {
+            console.warn(`[listarAtividades] FORBIDDEN (fail-closed) revisaoId=${input.revisaoId} projCompany=null userCompany=${userCompany} role=${role}`);
+            throw new Error("Sem permissão para esta revisão.");
+          }
+          if (String(projetoCompanyId) !== String(userCompany)) {
+            console.warn(`[listarAtividades] FORBIDDEN revisaoId=${input.revisaoId} projCompany=${projetoCompanyId} userCompany=${userCompany} role=${role}`);
+            throw new Error("Sem permissão para esta revisão.");
+          }
         }
       }
 
@@ -790,8 +802,11 @@ export const planejamentoRouter = router({
       // pra LOTUS, Padrão FC, Avanço Semanal, REFIS e exportações.
       let respMap = new Map<number, ResponsavelInfo>();
       try {
-        const projetoId = rows[0]?.projetoId as number | undefined;
-        const companyId = rows[0]?.companyId as number | undefined;
+        // Rev. 1891 — usa projetoIdAtual + projetoCompanyId obtidos via lookup
+        // de planejamento_projetos (planejamento_atividades não tem company_id).
+        // Fallback p/ rows[0].projetoId garante compat caso o lookup acima falhe.
+        const projetoId = projetoIdAtual ?? ((rows[0] as any)?.projetoId as number | undefined);
+        const companyId = projetoCompanyId ?? undefined;
         if (projetoId && companyId) {
           respMap = await resolverResponsaveisBatch(
             db,
@@ -804,6 +819,8 @@ export const planejamentoRouter = router({
             projetoId,
             companyId,
           );
+        } else {
+          console.warn(`[listarAtividades resolverResponsaveis] SKIP — projetoId=${projetoId} companyId=${companyId} (revisaoId=${input.revisaoId})`);
         }
       } catch (e: any) {
         console.error("[listarAtividades resolverResponsaveis]", e?.message || e);
@@ -877,8 +894,16 @@ export const planejamentoRouter = router({
         count: number;
         pesoPct: number;
       }>;
-      const projetoId = rows[0].projetoId as number;
-      const companyId = rows[0].companyId as number;
+      const projetoId = (rows[0] as any).projetoId as number;
+      // Rev. 1891 — BUG FIX: planejamento_atividades NÃO tem company_id.
+      // Buscar via planejamento_projetos (mesma correção da listarAtividades).
+      // Sem isso, o guard multi-tenant abaixo sempre bloqueava não-admins e o
+      // resolverResponsaveisBatch recebia companyId=undefined → respMap vazio.
+      const [projInfo] = await db.select({ companyId: planejamentoProjetos.companyId })
+        .from(planejamentoProjetos)
+        .where(eq(planejamentoProjetos.id, projetoId))
+        .limit(1);
+      const companyId = projInfo?.companyId != null ? Number(projInfo.companyId) : null;
       // Rev. 1817 — Hardening multi-tenant (segue padrão das demais
       // procedures do router: getDataCorte/setRealDates/etc): exige que
       // o companyId da revisão pertença ao usuário autenticado.
@@ -886,9 +911,13 @@ export const planejamentoRouter = router({
       const userCompany = (ctx.user as any).companyId;
       const role = (ctx.user as any).role;
       const isAdmin = role === "admin" || role === "admin_master";
-      if (!isAdmin && String(companyId) !== String(userCompany)) {
+      if (!isAdmin && companyId != null && String(companyId) !== String(userCompany)) {
         console.warn(`[kpiResponsavelPorProjeto] FORBIDDEN revisaoId=${input.revisaoId} projCompany=${companyId} userCompany=${userCompany} role=${role}`);
         throw new Error("Sem permissão para esta revisão.");
+      }
+      if (companyId == null) {
+        console.warn(`[kpiResponsavelPorProjeto] companyId não encontrado p/ projetoId=${projetoId} (revisaoId=${input.revisaoId})`);
+        return [];
       }
       const respMap = await resolverResponsaveisBatch(
         db,
