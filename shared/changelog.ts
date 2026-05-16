@@ -25,6 +25,18 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1857,
+    titulo: "Planejamento · Histórico de REFIs — coluna Semana em padrão BR (dd/MM/aaaa)",
+    descricao: "User (15/05/2026, screenshot Visão Geral do projeto QIU 2 - FASE 4, tabela 'Histórico de REFIs'): coluna Semana mostrava datas no formato ISO '2026-04-27', '2026-04-20', '2026-04-13' etc. Pedido: 'Arrumai a data no padrão brasileiro'.\n\n" +
+      "Causa-raiz: client/src/pages/planejamento/PlanejamentoDetalhe.tsx L2254 — célula renderizava `{r.semana}` cru (vem como YYYY-MM-DD direto do banco). Fora de paridade com o resto do app (ex.: modal de visualização do REFIS L2284 já usa `fmtBR(r.semana)` no header).\n\n" +
+      "Fix (1 arquivo, 1 hunk em PlanejamentoDetalhe.tsx L2254): trocado `{r.semana}` por `{fmtBR(r.semana)}`. `fmtBR` (definido L75-79) aceita string ISO e retorna 'dd/mm/aaaa' via regex (iOS-safe, sem `new Date()`).\n\n" +
+      "Preservado: ZERO mudança em backend/contrato/schema/sort; o sort da tabela continua por `r.semana` ISO (lexical = cronológico em YYYY-MM-DD). Modal de visualização e demais consumidores intactos. Reversível em 1 hunk. R-001 OK.",
+    tipo: 'ux',
+    modulos: 'Planejamento',
+    criadoPor: 'agent',
+    dataPublicacao: '2026-05-15 23:05:00',
+  },
+  {
     version: 1856,
     titulo: "Planejamento · Desconsolidar Cutoff — substitui window.prompt por modal interno (sem 'xxx.replit.dev diz' no iOS)",
     descricao: "User (15/05/2026, screenshot QIU 2 - FASE 4 com popup do iOS Safari): popup nativo mostrava 'b41aedae-6288-4323-b9df-52455950f9d8-00-1frshksuex6ym.picard.replit.dev diz' como cabeçalho gigante, atravancando o texto do prompt e dando aparência amadora. Pedido: 'Arrume a mensagem'.\n\n" +

@@ -2251,7 +2251,7 @@ function VisaoGeral({ proj, atividades, avancos, avancoAtual, avancoPrevistoDia,
                   title="Clique para visualizar este REFIS"
                 >
                   <td className="py-1.5 px-3 font-mono text-slate-600">{String(r.numero ?? i+1).padStart(3, "0")}</td>
-                  <td className="py-1.5 px-3 text-slate-700">{r.semana}</td>
+                  <td className="py-1.5 px-3 text-slate-700">{fmtBR(r.semana)}</td>
                   <td className="py-1.5 px-3 text-right text-slate-600">{fPct(n(r.avancoPrevisto))}</td>
                   <td className="py-1.5 px-3 text-right font-semibold text-emerald-700">{fPct(n(r.avancoRealizado))}</td>
                   <td className={`py-1.5 px-3 text-right font-bold ${n(r.avancoPrevisto) === 0 ? "text-slate-400" : n(r.spi) >= 1 ? "text-emerald-700" : "text-red-600"}`}>
