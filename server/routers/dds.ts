@@ -9,6 +9,7 @@ import { eq, and, sql, desc, isNull, inArray, notInArray, gte, lte, or } from "d
 import { TRPCError } from "@trpc/server";
 import { invokeLLM } from "../_core/llm";
 import { TEMAS_BIBLIOTECA, buildRoteiroLib } from "../_shared/temasBiblioteca";
+import { TEMAS_BIBLIOTECA_EXTRA } from "../_shared/temasBibliotecaExtra";
 
 function assertCompanyAccess(ctx: any, companyId: number) {
   if (ctx.user?.companyId && String(ctx.user.companyId) !== String(companyId)) {
@@ -994,6 +995,27 @@ export const ddsRouter = router({
       // restantes, atividades de obra, equipamentos, EPI específico, saúde
       // física/mental, riscos, emergência, trânsito, documentação, cultura).
       for (const t of TEMAS_BIBLIOTECA) {
+        if (codigosExistentes.has(t.codigo)) continue;
+        await db.insert(ddsTemas).values({
+          companyId: input.companyId,
+          codigo: t.codigo,
+          titulo: t.titulo,
+          descricao: t.descricao,
+          conteudoMd: buildRoteiroLib(t),
+          normaReferencia: t.norma,
+          categoria: t.categoria,
+          duracaoMin: 15,
+          createdBy: (ctx.user as any)?.id ?? null,
+        } as any);
+        inseridos++;
+      }
+      // Rev. 1954 — Pacote EXTRA (80 temas curados de construção civil real:
+      // atividades de obra, escavação/fundação, acabamento, riscos físicos
+      // específicos, elétrica, ferramentas manuais, químicos, saúde
+      // ocupacional, trânsito, condições do canteiro, liderança, emergências
+      // específicas). User: "Cria já mais itens, salva na biblioteca e deixa
+      // salvo, vários temas importantes da construção civil".
+      for (const t of TEMAS_BIBLIOTECA_EXTRA) {
         if (codigosExistentes.has(t.codigo)) continue;
         await db.insert(ddsTemas).values({
           companyId: input.companyId,

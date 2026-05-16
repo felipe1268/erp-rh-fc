@@ -1,6 +1,28 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 1954 — SST · DDS Guia · Biblioteca de Temas · Pacote EXTRA de 80 temas curados salvos PERMANENTEMENTE como seed estático (NÃO via IA em runtime).
+ * User (16/05/2026, logo após Rev. 1953): "Cria já mais itens né, salva na biblioteca e deixa salvo, vários temas importantes da construção civil".
+ * Contexto: Rev. 1953 deu ao usuário o BOTÃO de gerar mais temas via IA sob demanda — mas o usuário queria também já receber um pacote pronto, curado por engenheiro de segurança humano, salvo no seed para QUALQUER company nova já ter +80 temas relevantes sem precisar rodar IA. IA gasta tokens; seed é grátis e determinístico.
+ * Mudança (novo arquivo `server/_shared/temasBibliotecaExtra.ts` ~430 linhas):
+ *   80 temas distribuídos em 12 famílias com prefixos NOVOS para zero colisão com os 172 existentes (TEMAS_BIBLIOTECA Rev. 1861):
+ *   (a) OBRA-* (15): atividades específicas — lançamento e vibração de concreto, desforma, montagem de formas, corte e dobra de ferragem, alvenaria, reboco, contrapiso, revestimento cerâmico, cobertura, impermeabilização, demolição, espaço confinado, solda elétrica em estrutura, movimentação manual de carga.
+ *   (b) ESC-* (5): escavação e fundação — vala profunda (>1,25m), estaca hélice/Strauss, bate-estaca pré-moldada, fundação direta, cortina atirantada.
+ *   (c) ACAB-* (5): acabamento — gesso, pintura interna, pintura de fachada (NR-35), instalação de vidro, hidráulica.
+ *   (d) RISCO-* (9): riscos físicos — queda no mesmo nível, queda de objeto, projeção de partícula, prensamento, ruído contínuo, calor ocupacional (IBUTG), frio, raio/tempestade, chuva, laje exposta.
+ *   (e) ELET-* (5): elétrica — choque indireto, LOTO (lock-out/tag-out), proximidade de rede, quadro de obra, extensões e cabos.
+ *   (f) FERR-* (5): ferramentas manuais — martelo, chaves, faca/estilete, serrote, pistola finca-pino.
+ *   (g) QUI-* (4): químicos — cimento/cal (queimadura química), desmoldante/solvente, aditivos de concreto, resina epóxi (sensibilização).
+ *   (h) SAUDE-* (6): saúde ocupacional física — lombalgia/hérnia, LER/DORT, silicose, dermatite, desidratação, perda auditiva.
+ *   (i) TRAN-* (4): trânsito — caminhão no canteiro, betoneira em via, moto deslocamento, carona em carroceria (PROIBIDA).
+ *   (j) COND-* (4): condições — água potável, banheiro/vestiário, refeitório, alojamento (todos NR-24).
+ *   (k) LIDER-* (6): liderança e cultura — líder como exemplo, DDS efetivo, direito de recusa (CLT 161), canal de denúncia, integração 6h NR-18.28, feedback positivo BBS.
+ *   (l) EMERG-* (5): emergências específicas — afogamento, soterramento, amputação, convulsão, picada de cobra/aranha/escorpião.
+ * Cada tema segue o formato `TemaBiblioteca` existente (codigo/titulo/descricao/norma/categoria/pontosChave[]/reforco) e gera roteiro completo via `buildRoteiroLib` Rev. 1861 (Objetivo / Por que importa / Pontos-chave / Aplicação / Perguntas / Reforço final). Plugado em `seedTemasPadrao` (router dds.ts L1015) logo após o loop TEMAS_BIBLIOTECA com mesmo guard `codigosExistentes.has(...)` — idempotente. NÃO altera lógica de Rev. 1953 (botão "Gerar mais com IA") — esta complementa: usuário já recebe 252 temas (172+80) no seed e ainda pode gerar +infinitos via IA depois.
+ * Para inserir os 80 novos na empresa: usuário roda o botão "Inicializar/atualizar temas padrão" (que dispara `dds.seedTemasPadrao`) — temas existentes são pulados, novos entram. Companies novas já recebem tudo automaticamente.
+ * version → 1954. Resultado: biblioteca cresce de 172 para 252 temas curados + ilimitados via IA (Rev. 1953). Cobertura agora real e profunda em atividades de construção civil (não só NRs/campanhas).
+ * Preservado: TEMAS_BIBLIOTECA Rev. 1861 (172 temas) + CAMPANHAS_GOV (12) + NRS_CONSTRUCAO (13) + VACINACAO_PNI (8) — todos inalterados. `buildRoteiroLib` reusado sem modificação. `seedTemasPadrao` ganha 1 loop adicional após o existente (não substitui). Botão Rev. 1953 "✨ Gerar mais temas com IA" intacto. Calendário, sessões, modal categoria Rev. 1876 — intactos. Zero ALTER/DROP/DELETE em schema (usa colunas existentes da tabela `dds_temas`). Zero risco a companies existentes (guard por código). Reversível em 3 hunks (delete arquivo novo + remover import + remover loop). R-001/R-007/R-010 OK.
+ *
  * Rev. 1953 — SST · DDS Guia · Biblioteca de Temas · Novo botão "✨ Gerar mais temas com IA" + modal (quantidade 10/20/25/30 + foco opcional) + nova mutation `dds.gerarMaisTemasIA` que cria LOTE de N temas novos via Anthropic/Gemini evitando duplicar títulos já cadastrados.
  * User (16/05/2026, screenshot da aba Biblioteca de Temas com 33 temas — NRs+Campanhas): "Coloca um botão para gerar mais assuntos quero uma biblioteca com mais 200 temas pertinentes a construção civil....".
  * Contexto: a biblioteca já tinha seeds estáticos (CAMPANHAS_GOV 12 + NRS_CONSTRUCAO 13 + VACINACAO_PNI + TEMAS_BIBLIOTECA Rev. 1861 172 itens), totalizando ~210 temas — mas o usuário queria poder GERAR MAIS sob demanda, especialmente focado em construção civil real (atividades de obra, equipamentos, EPI específico, saúde física/mental). O botão `gerarTemaIA` Rev. 1864 só criava 1 tema a partir de prompt curto; faltava gerar em LOTE.
