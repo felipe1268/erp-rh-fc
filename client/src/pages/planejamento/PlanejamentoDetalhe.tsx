@@ -4585,13 +4585,31 @@ function Cronograma({ projetoId, revisaoAtiva, atividades, loadingAtiv, avancos,
                         {/* Rev. 1823 — Input do responsável manual; Rev. 1860 — cascata para descendentes */}
                         {(!!a._respManual || (a.responsavelLotus !== null && a.responsavelLotus !== undefined)) && !a.isExterna && (
                           <div className={a.isGrupo ? "flex items-stretch gap-1 mt-1" : "contents"}>
+                          {/* Rev. 1952 — PERF: input UNCONTROLLED (defaultValue + key) ao invés
+                              de controlled (value + onChange→setLinhas). Cada keystroke antes
+                              disparava setLinhas → re-render de todas as ~600 linhas do componente
+                              de 18k linhas → travava 1-2s por letra (user: "ESTA EXTREMAMENTE LENTO
+                              A TELA, NAÕ QUERO ISSO"). Agora o DOM mantém o texto em digitação
+                              localmente; commit no estado React só acontece no onBlur (que já fazia
+                              toda a cascata p/ descendentes — Rev. 1860/1865/1892/1902). `key`
+                              composta força remount quando o valor mudar externamente (cascata
+                              de grupo, save+reload, replicar) — assim o defaultValue novo é
+                              respeitado. Zero mudança de comportamento funcional. */}
                           <Input
-                            value={a.responsavelLotus ?? ""}
-                            onChange={e => updateLinha(idx, "responsavelLotus", e.target.value)}
-                            onFocus={() => { respOriginalRef.current[idx] = a.responsavelLotus ?? ""; }}
+                            key={`resp-${a.id ?? idx}-${a.responsavelLotus ?? ""}`}
+                            defaultValue={a.responsavelLotus ?? ""}
+                            onFocus={(e) => { respOriginalRef.current[idx] = e.currentTarget.value ?? ""; }}
                             onBlur={(e) => {
                               const valorAtual = (e.target.value ?? "").trim();
                               const original = (respOriginalRef.current[idx] ?? "").trim();
+                              // Rev. 1952 — como o input agora é UNCONTROLLED (sem onChange),
+                              // a própria linha precisa ser commitada aqui também (antes só os
+                              // descendentes eram tocados no bloco abaixo). Se o valor for igual
+                              // ao já presente em state, o map vira no-op estrutural — React
+                              // reconcilia normalmente.
+                              setLinhas(prev => prev.map((l, i) => i === idx
+                                ? { ...l, responsavelLotus: valorAtual || null, _respManual: !!valorAtual || !!l._respManual }
+                                : l));
                               if (!valorAtual || valorAtual === original) return;
                               // Rev. 1865 — Detecção robusta de descendentes:
                               // walk forward por idx+1 enquanto a linha pertencer ao subárvore
