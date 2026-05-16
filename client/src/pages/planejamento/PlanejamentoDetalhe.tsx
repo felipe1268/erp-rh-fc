@@ -2128,6 +2128,13 @@ function VisaoGeral({ proj, atividades, avancos, avancoAtual, avancoPrevistoDia,
                   // em branco. Sempre 2 colunas (mesmo em retrato), padding
                   // mínimo, fonte compacta, DESVIO box reduzido, header em
                   // 1 linha. Margens A4 enxutas.
+                  // Rev. 1903 — REGRA DE OURO: isolamento por DISPLAY:NONE em JS
+                  // (não mais visibility:hidden no CSS). Motivo: `visibility:hidden`
+                  // só esconde, MANTÉM dimensões do layout — qualquer conteúdo
+                  // abaixo/ao redor do modal continuava reservando altura, gerando
+                  // 2ª página fantasma com tail-text leakage. Com `display:none`
+                  // o layout colapsa de verdade: zero página fantasma, conteúdo
+                  // sempre centralizado, sempre cabendo dentro da @page.
                   const margins = atrasosOrient === "landscape" ? "8mm 8mm 10mm 8mm" : "10mm 8mm 12mm 8mm";
                   // 2 cols SEMPRE no print — em retrato dá ~2 cards por página
                   // de altura, em paisagem dá 4-6. Em portrait usa 2-cols mais
@@ -2141,17 +2148,28 @@ function VisaoGeral({ proj, atividades, avancos, avancoAtual, avancoPrevistoDia,
                   style.textContent = `
                     @media print {
                       @page { size: A4 ${atrasosOrient}; margin: ${margins}; }
-                      html, body { background: white !important; height: auto !important; overflow: visible !important; }
-                      body * { visibility: hidden !important; }
-                      #atrasos-print-area, #atrasos-print-area * { visibility: visible !important; }
+                      html, body {
+                        background: white !important;
+                        height: auto !important;
+                        overflow: visible !important;
+                        margin: 0 !important;
+                        padding: 0 !important;
+                      }
+                      /* Rev. 1903 — print area centralizada e contida na @page.
+                         Não usa mais position:absolute (que descolava do flow
+                         e podia gerar overflow vertical). Bloco fluido + margin
+                         auto = centralizado e nunca vaza. */
                       #atrasos-print-area {
-                        position: absolute !important;
-                        left: 0; top: 0; right: 0;
-                        width: 100% !important; max-width: none !important;
-                        padding: 0 !important; margin: 0 !important;
+                        position: static !important;
+                        display: block !important;
+                        width: 100% !important;
+                        max-width: 100% !important;
+                        margin: 0 auto !important;
+                        padding: 0 !important;
                         background: white !important;
                         font-size: ${cardFs} !important;
                         line-height: 1.25 !important;
+                        box-sizing: border-box !important;
                       }
                       /* Word-break defensivo (architect hint Rev. 1899). */
                       #atrasos-print-area, #atrasos-print-area * {
@@ -2226,9 +2244,67 @@ function VisaoGeral({ proj, atividades, avancos, avancoAtual, avancoPrevistoDia,
                   `;
                   document.head.appendChild(style);
                   document.body.setAttribute("data-print-orientation", atrasosOrient);
+                  // Rev. 1903 — ISOLAMENTO DEFINITIVO: walk de ancestrais a
+                  // partir de #atrasos-print-area até <body>, setando inline
+                  // `display:none` em todos os SIBLINGS de cada nível. Isso
+                  // colapsa por completo o layout fora do print area — não
+                  // sobra NENHUM nó com dimensões reservadas que possa gerar
+                  // página fantasma ou vazamento de texto residual (bug
+                  // observado no rodapé da pág. 2 antes desta rev.). Cada
+                  // alteração inline é registrada em `restoreList` pra
+                  // restauração 1:1 no afterprint.
+                  // Snapshot 1:1 do attribute "style" inteiro pra cada nó
+                  // tocado — restauração trivial via setAttribute. `hadStyle`
+                  // permite limpar o atributo inteiro quando o nó não tinha
+                  // style inline antes (evita deixar style="" residual).
+                  const restoreList: Array<{ el: HTMLElement; prev: string | null }> = [];
+                  const snapshot = (el: HTMLElement) => {
+                    restoreList.push({ el, prev: el.getAttribute("style") });
+                  };
+                  const printArea = document.getElementById("atrasos-print-area");
+                  if (printArea) {
+                    let cur: HTMLElement | null = printArea;
+                    while (cur && cur.parentElement && cur !== document.body) {
+                      const parent = cur.parentElement;
+                      for (let i = 0; i < parent.children.length; i++) {
+                        const sib = parent.children[i] as HTMLElement;
+                        if (sib === cur) continue;
+                        // Ignora <script>/<style>/<link>/<meta> (não afetam layout)
+                        const tag = sib.tagName;
+                        if (tag === "SCRIPT" || tag === "STYLE" || tag === "LINK" || tag === "META") continue;
+                        snapshot(sib);
+                        sib.style.display = "none";
+                      }
+                      // Garante que o próprio ancestral fique fluido (sem
+                      // height fixa, overflow oculto ou position:fixed que
+                      // pudesse cortar/empurrar conteúdo).
+                      snapshot(cur);
+                      cur.style.position = "static";
+                      cur.style.overflow = "visible";
+                      cur.style.height = "auto";
+                      cur.style.maxHeight = "none";
+                      cur.style.width = "auto";
+                      cur.style.maxWidth = "none";
+                      cur.style.margin = "0";
+                      cur.style.padding = "0";
+                      cur.style.background = "white";
+                      cur = parent;
+                    }
+                  }
+                  let cleaned = false;
                   const cleanup = () => {
+                    if (cleaned) return;
+                    cleaned = true;
                     document.getElementById("__atrasos_print__")?.remove();
                     document.body.removeAttribute("data-print-orientation");
+                    // Restaura em ordem REVERSA (último alterado = primeiro
+                    // restaurado), garantindo que mutações empilhadas no
+                    // mesmo nó voltem ao estado inicial limpo.
+                    for (let i = restoreList.length - 1; i >= 0; i--) {
+                      const { el, prev } = restoreList[i];
+                      if (prev === null) el.removeAttribute("style");
+                      else el.setAttribute("style", prev);
+                    }
                   };
                   window.addEventListener("afterprint", cleanup, { once: true });
                   setTimeout(cleanup, 60_000);
