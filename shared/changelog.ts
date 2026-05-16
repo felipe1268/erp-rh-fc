@@ -1,6 +1,19 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 1926 — Planejamento · ProgramacaoSemanalLotus · FIX export Excel pintando Sáb/Dom mesmo sem atividade no ERP — mapeamento data→coluna por DIA DA SEMANA real.
+ * User (16/05/2026, screenshots Sem.08 [19-25/jun] ERP cinza vs Excel exportado azul em Sáb/Dom): "O ERRO PERCISTE, VEJA A SEMANA 08 COM EXEMPLO NO ERP ELE NÃO TEM ATIVIDADES PREVISTAS NO SABADO E DOMINGO, MAS NO EXCEL EXPORTADO ESTA SENDO PREENCHIDO NÃO PODE ISSO.. GARANTE QUE SERÁ RESPEITADO DOS DADOS QUE ESTIVER NO ERP, MANTENDO A FORMATAÇÃO DO CLIENTE".
+ * Causa-raiz: o template Excel do cliente tem cabeçalhos FIXOS "Segunda|Terça|Quarta|Quinta|Sexta|Sábado|Domingo" nas cols J(10)→P(16). O handleExportExcel escrevia datas + pintava células sequencialmente (`cIdx = 10 + di`), assumindo que `dias` sempre começa na segunda. Mas projetos com cutoff toda quinta usam semanas Sex→Qui — então di=0 (Sex 19/jun) ia pra J (rotulada "Segunda"), di=5 (Qua 24/jun) ia pra O (rotulada "Sábado") e di=6 (Qui 25/jun) ia pra P (rotulada "Domingo"). Wed/Thu com previsto azul "vazavam" pras cols Sáb/Dom, sobrescrevendo o cinza_fds aplicado pela Rev. 1893. Bug visível: usuário vê cols rotuladas "Sábado/Domingo" pintadas de azul mesmo o ERP não tendo nada no sáb/dom real.
+ * Mudança (`ProgramacaoSemanalLotus.tsx`):
+ *   (a) Novo helper top-level `dowToExcelCol(dow)`: mapa dia-da-semana → col Excel (Sun→16, Mon→10, ... Sat→15) espelhando o cabeçalho fixo do template.
+ *   (b) L1222-1225 (preenchimento de datas em L9): substituído loop `for i=0..6: cell(9, 10+i) = dias[i]` por `for cada d in dias: cell(9, dowToExcelCol(d.getDay())) = fmtBR(d)`. Resultado: 22/jun (Seg) vai pra J, 19/jun (Sex) vai pra N, 20/jun (Sáb) vai pra O, etc.
+ *   (c) L1462 (loop de pintura): `dias.forEach((d, di) => { cIdx = 10 + di; ... })` → `dias.forEach((d, _di) => { cIdx = dowToExcelCol(d.getDay()); ... })`. Pintura azul/verde/vermelho/laranja/amarelo agora vai pra col correta. Cols 15-16 (Sáb/Dom) ficam intactas quando o sáb/dom real não tem previsto/realizado — preservando o cinza_fds da Rev. 1893.
+ * Compatibilidade: semanas Seg→Dom (caso histórico) continuam funcionando — Mon→10, Sun→16, idêntico ao antes. Apenas semanas com offset (Fri→Thu, Sat→Fri, etc.) param de embaralhar dados.
+ * Validação no caso reportado: Sem.08 Sex 19/06 → Sex col, Sáb 20/06 → Sáb col (sem previsto, fica cinza), Dom 21/06 → Dom col (sem previsto, fica cinza), Seg 22/06 → Seg col, ..., Qui 25/06 → Qui col.
+ * version → 1926.
+ * Resultado: cabeçalho fixo do template (Seg-Dom) passa a casar com a data real impressa logo abaixo + com a pintura — semana Sex→Qui mostra J/K (Seg/Ter) vazios, dados em N (Sex 19/jun) + O (Sáb vazio) + P (Dom vazio) + J-M com dados da semana seguinte (Seg-Qui 22-25).
+ * Preservado: cinza_fds Rev. 1893 (cols 15-16 sempre cinza quando sem trabalho), reset BRANCO Rev. 1904, migração ehUtilCal Rev. 1914, diasExtras Rev. 1875 (override manual de fds trabalhado), cutoff Rev. 1913, faixa azul topo + status baixo Rev. 1895, todo o styling 4-rows-per-task Rev. 1897, template Lotus do cliente intacto (zero alteração no xlsx). Zero backend/DB/schema/tRPC. Reversível em 3 hunks. R-001/R-007/R-010 OK.
+ *
  * Rev. 1925 — RH · Aviso Prévio · Base Legal expandível no formulário "Novo Aviso Prévio" (CLT Art. 487-491 + Lei 12.506/2011).
  * User (16/05/2026, após explicação da diferença Trabalhado=30 fixos vs Indenizado=30+3/ano até 90): "QUAL LEI FALA SOBRE ISSO, QUERO QUE DEIXE REGISTRADO NO MODULO".
  * Demanda: registrar in-app, sempre disponível e auditável, a fundamentação legal das regras de dias de aviso — pra que qualquer pessoa do RH/Diretoria que abrir o módulo entenda a diferença sem precisar perguntar ou consultar advogado.

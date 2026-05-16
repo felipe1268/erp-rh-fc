@@ -94,6 +94,16 @@ const DIAS_SEMANA = ["Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-fe
 // Indexado por Date.getDay() (0=dom, 1=seg, ..., 6=sáb).
 const DIAS_ABREV = ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"];
 function abrevDia(d: Date): string { return DIAS_ABREV[d.getDay()]; }
+
+// Rev. 1926 — Mapa dia-da-semana → coluna do template Excel (cabeçalho FIXO
+// do cliente: J=Segunda, K=Terça, L=Quarta, M=Quinta, N=Sexta, O=Sábado,
+// P=Domingo). Usado pelo handleExportExcel pra alinhar cada data à coluna
+// correta independente da ordem do array `dias` (semanas Fri→Thu, Sat→Fri,
+// etc.). Sun(0)→16, Mon(1)→10, Tue(2)→11, Wed(3)→12, Thu(4)→13, Fri(5)→14,
+// Sat(6)→15.
+function dowToExcelCol(dow: number): number {
+  return dow === 0 ? 16 : 9 + dow;
+}
 const MESES_ABREV = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
 
 function fmtBR(s?: string | null) {
@@ -1219,9 +1229,22 @@ export default function ProgramacaoSemanalLotus(props: Props) {
 
         // 10b. Faixa "PERÍODO" (J7:P7 merged) e datas dos dias (L9 J:P)
         ws.getCell("J7").value = `PERÍODO: ${fmtBRDate(sem.ini)} a ${fmtBRDate(sem.fim)}`;
+        // Rev. 1926 — Mapeamento por DIA DA SEMANA real (não por ordem).
+        // Template do cliente tem cabeçalhos FIXOS Seg|Ter|Qua|Qui|Sex|Sáb|Dom
+        // nas cols J(10)→P(16). Quando o projeto usa semanas Sex→Qui (corte
+        // na quinta, comum em obras com PSEM toda quinta), o código antigo
+        // (`cIdx = 10 + di`) escrevia 19/jun(Sex)→J(Seg), 24/jun(Qua)→O(Sáb),
+        // 25/jun(Qui)→P(Dom) — desalinhando data×rótulo e fazendo Wed/Thu
+        // com previsto azul "vazar" pras cols rotuladas Sáb/Dom (que deveriam
+        // ficar cinza vazio). User (16/05/2026, screenshots Sem.08 19-25/jun
+        // ERP cinza vs Excel azul em Sáb/Dom): "GARANTE QUE SERÁ RESPEITADO
+        // DOS DADOS QUE ESTIVER NO ERP, MANTENDO A FORMATAÇÃO DO CLIENTE".
+        // Fix: cada dia vai pro col que casa com seu getDay() — Sat sempre
+        // em O(15), Sun sempre em P(16), independente da ordem em `dias`.
         for (let i = 0; i < 7; i++) {
           const d = dias[i];
-          ws.getCell(9, 10 + i).value = d ? fmtBRDate(d).slice(0, 5) : "";
+          if (!d) continue;
+          ws.getCell(9, dowToExcelCol(d.getDay())).value = fmtBRDate(d).slice(0, 5);
         }
 
         // 10c. Limpa as 13 slots de tarefas do template (mantém styling)
@@ -1459,8 +1482,12 @@ export default function ProgramacaoSemanalLotus(props: Props) {
                 } as any;
               }
             }
-            dias.forEach((d, di) => {
-              const cIdx = 10 + di; // J=10
+            dias.forEach((d, _di) => {
+              // Rev. 1926 — cIdx por DIA DA SEMANA real (espelha L9 header).
+              // Antes: `10 + di` (sequencial) desalinhava semanas que não
+              // começam na seg (ex: Sex→Qui), fazendo Wed/Thu vazar pra
+              // cols Sáb/Dom e sobrescrever o cinza_fds.
+              const cIdx = dowToExcelCol(d.getDay());
               const f = faixasCelula(
                 d, a.dataInicio, a.dataFim, a.dataInicioReal, a.dataFimReal, hoje, calMSP,
                 m?.aderenciaPct ?? null, m?.metaPct ?? 0, temAvSemX, acumAteSemX, inicioSemanaCorrente,
