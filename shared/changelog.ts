@@ -1,6 +1,21 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 1919 — RH · Dash Aviso Prévio · Tabela CDM · FIX divergência com módulo Aviso Prévio oficial — agora soma RESCISÃO COMPLEMENTAR ("por fora") ao total, garantindo paridade com TOTAL GERAL = Oficial + Complementar.
+ * User (16/05/2026, screenshots Anderson — CDM mostra R$ 53.256,22 vs detalhe oficial mostra TOTAL GERAL R$ 71.281,82 = Oficial R$ 45.428,76 + Complementar R$ 25.853,06): "O ANDERSON ESTA DIVERGENTE.. O SISTEMA PRECISA CONSIDERAR, TOTAL GERAL (Oficial + Complementar) SEGUINDO O MESMO CALCULO ADOTADO NO MODULO DE AVISO PREVIO.. NÃO PODE DAR DIFERENÇA.. A INFORMAÇÃO DEVE SER A MESMA". Causa-raiz: `getDashCustoDemissaoMassa` (Rev. 1908+1911+1915+1916) chamava APENAS `calcularRescisaoCompleta` (oficial CLT) e ignorava `calcularRescisaoComplementar` — a rescisão complementar é calculada sobre o complemento salarial cadastrado em `employees.valorComplemento` quando `recebeComplemento=true`. O módulo Aviso Prévio (`avisoPrevioFerias.ts` L269-281 `buildPrevisaoComplementar`) sempre soma os dois e exibe TOTAL GERAL no detalhe individual.
+ * Mudança (server `server/routers/dashboards.ts`):
+ *   • L20: import `calcularRescisaoComplementar` adicionado ao import existente de `rescisaoCalc`.
+ *   • L2248-2263: SELECT ganha `recebeComplemento` + `valorComplemento` do `employees`.
+ *   • L2355-2378: dentro do `.map` por funcionário, novo bloco — se `r.recebeComplemento && valorComplemento>0`, chama `calcularRescisaoComplementar` com os MESMOS parâmetros temporais usados na oficial (`dataFimAviso`, `periodosVencidosOverride`, `diasTrabalhadosMes`) — garante consistência: mesma janela de aviso, mesma contagem real de férias vencidas do `vacation_periods` Rev. 1911.
+ *   • Retorno da linha ganha 2 campos: `totalOficial` (alias do antigo `total`) + `totalComplementar`; campo `total` passa a ser `totalOficial + totalComplementar` (mesma fórmula do `TOTAL GERAL` do módulo oficial L1738 `AvisoPrevio.tsx`). `avisoPrevioIndenizado` exibido na coluna passa a somar oficial+complementar pra coerência visual.
+ *   • Sort por `b.total - a.total` continua válido — agora ordena pelo total combinado.
+ * Mudança (client `client/src/pages/dashboards/DashAvisoPrevio.tsx`):
+ *   • Coluna "Custo Total": quando `l.totalComplementar > 0`, exibe pequena linha violet abaixo `+compl R$ X` com tooltip "Oficial: X + Complementar: Y" — assim o user vê IMEDIATAMENTE quais funcionários têm complemento, sem perder o número agregado que prevalece.
+ *   • Disclaimer atualizado: agora menciona "Oficial + Complementar" e cita paridade com módulo Aviso Prévio.
+ *   version → 1919.
+ * Resultado: Anderson na tabela CDM passa a mostrar R$ 71.281,82 (mesmo que o detalhe oficial). Funcionários sem complemento (`recebeComplemento=false` ou `valorComplemento=0`) seguem com apenas o oficial — `totalComplementar=0` e nenhuma linha "+compl" aparece. KPI "Custo Total Estimado" agora reflete a provisão real de caixa pra rescisão de todos os funcionários (CLT + complemento "por fora").
+ * Preservado: filtro PJ/Socio Rev. 1915, query batch obra_funcionarios Rev. 1916, query batch vacation_periods Rev. 1911, projeção dataFimAviso Rev. 1909-fix, sort default por total desc, ordenação clicável Rev. 1909 (key 'total' agora ordena pelo combinado), destaque top-3, KPIs topo, demais colunas, layout. Zero ALTER/DROP/DELETE — apenas 2 SELECT colunas adicionais e 1 chamada extra de função pura. Reversível em 5 hunks. R-001/R-007/R-010 OK.
+ *
  * Rev. 1918 — Planejamento · PlanejamentoDetalhe · Cascata automática ao MARCAR isGrupo (ativa _respManual + replica responsavelLotus nos descendentes).
  * User (16/05/2026, screenshot grupo 03.03 marcado, filhas 03.03 sem responsável, com input "Responsável manual (ex.: EMPRESA XYZ LTDA)" só na linha do grupo): "QUANDO MARCAR A TAREFA QUE É A TAREFA DE GRUPO, TODAS ATIVIDADES ABAIXO DELA DEVE SER ATIVADAS AUTOMATICAMENTE E SEGUIR O MESMO NOME QUE ESTIVER NA ATIVIDADE GRUPO". Antes desta rev., a cascata Rev. 1860/1865/1892/1902 só rodava no onBlur do input de responsável — se o usuário marcava isGrupo DEPOIS de digitar o responsável, ou marcava o grupo numa linha vazia esperando digitar depois, as filhas ficavam sem _respManual=true (o input cyan não ficava ativado) e sem o nome.
  * Mudança (em `client/src/pages/planejamento/PlanejamentoDetalhe.tsx`):

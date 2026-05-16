@@ -387,7 +387,14 @@ export default function DashAvisoPrevio() {
                                 <td className="py-1.5 px-2 text-right tabular-nums">{fmtBRL(l.salarioBase)}</td>
                                 <td className="py-1.5 px-2 text-right tabular-nums text-muted-foreground">{fmtBRL(l.avisoPrevioIndenizado)}</td>
                                 <td className="py-1.5 px-2 text-right tabular-nums text-muted-foreground">{fmtBRL(l.multaFGTS)}</td>
-                                <td className="py-1.5 px-2 text-right tabular-nums font-bold text-red-700">{fmtBRL(l.total)}</td>
+                                <td className="py-1.5 px-2 text-right tabular-nums font-bold text-red-700">
+                                  {fmtBRL(l.total)}
+                                  {l.totalComplementar > 0 && (
+                                    <div className="text-[9px] font-normal text-violet-700 mt-0.5" title={`Oficial: ${fmtBRL(l.totalOficial)} + Complementar: ${fmtBRL(l.totalComplementar)}`}>
+                                      +compl {fmtBRL(l.totalComplementar)}
+                                    </div>
+                                  )}
+                                </td>
                               </tr>
                             ))}
                           </tbody>
@@ -402,7 +409,7 @@ export default function DashAvisoPrevio() {
                     )}
 
                     <p className="text-[10px] text-muted-foreground mt-3 italic">
-                      <strong>Composição da estimativa:</strong> saldo de salário (dias trab. no mês) + férias proporcionais + 1/3 + férias vencidas + 13º proporcional + aviso prévio indenizado (Lei 12.506) + multa 40% sobre FGTS. <strong>Não inclui</strong> VR/VA, descontos (INSS/IRRF, adiantamentos, EPI), nem médias de adicionais — para o cálculo completo individual, abra o módulo Aviso Prévio.
+                      <strong>Composição da estimativa:</strong> Oficial (saldo de salário + férias proporcionais + 1/3 + férias vencidas + 13º proporcional + aviso prévio indenizado Lei 12.506 + multa 40% FGTS) <strong>+ Complementar</strong> (mesmas verbas sobre complemento "por fora", quando aplicável — paridade com módulo Aviso Prévio: TOTAL GERAL = Oficial + Complementar). <strong>Não inclui</strong> VR/VA, descontos (INSS/IRRF, adiantamentos, EPI), nem médias de adicionais — para o cálculo completo individual, abra o módulo Aviso Prévio.
                     </p>
                   </>
                 )}

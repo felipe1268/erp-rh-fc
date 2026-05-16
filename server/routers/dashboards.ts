@@ -14,7 +14,7 @@ import {
 } from "../../drizzle/schema";
 import { eq, and, sql, gte, lte, desc, count, asc, isNull, inArray } from "drizzle-orm";
 import { parseBRL } from "../utils/parseBRL";
-import { calcularRescisaoCompleta, calcularDiasAvisoTotal } from "../utils/rescisaoCalc";
+import { calcularRescisaoCompleta, calcularRescisaoComplementar, calcularDiasAvisoTotal } from "../utils/rescisaoCalc";
 import { invokeLLM } from "../_core/llm";
 
 const DESLIGADO_STATUSES = ['Desligado', 'Lista_Negra'];
@@ -2255,6 +2255,8 @@ async function getDashCustoDemissaoMassa(companyId: number, dataReferencia?: str
     dataAdmissao: employees.dataAdmissao,
     salarioBase: employees.salarioBase,
     status: employees.status,
+    recebeComplemento: employees.recebeComplemento,
+    valorComplemento: employees.valorComplemento,
   }).from(employees).where(activeWhere);
 
   const dtFimAviso = new Date(dataRef + 'T00:00:00');
@@ -2347,6 +2349,31 @@ async function getDashCustoDemissaoMassa(companyId: number, dataReferencia?: str
         diasTrabalhadosMes: diasTrabMes,
         periodosVencidosOverride: periodosVencidosReal,
       });
+      // Rev. 1919 — Rescisão COMPLEMENTAR ("por fora" / uso interno).
+      // O módulo oficial Aviso Prévio mostra TOTAL GERAL = Oficial + Complementar
+      // pra funcionários com `recebeComplemento=true` e `valorComplemento>0`.
+      // Sem este bloco, a tabela CDM ficava DIVERGENTE do detalhe oficial
+      // (ex.: Anderson — CDM R$ 53.256,22 vs oficial R$ 71.281,82 = 45.428 + 25.853).
+      // Espelha `buildPrevisaoComplementar` em avisoPrevioFerias.ts L269-281.
+      const valorComplemento = parseBRL(r.valorComplemento);
+      let totalComplementar = 0;
+      let avisoComplementar = 0;
+      if (r.recebeComplemento && valorComplemento > 0) {
+        const compl = calcularRescisaoComplementar({
+          valorComplemento,
+          dataAdmissao: r.dataAdmissao!,
+          dataDesligamento: dataRef,
+          dataFimAviso: dataFimProjetada,
+          tipo: 'empregador_indenizado',
+          diasTrabalhadosMes: diasTrabMes,
+          periodosVencidosOverride: periodosVencidosReal,
+        });
+        if (compl) {
+          totalComplementar = parseFloat(compl.total);
+          avisoComplementar = parseFloat(compl.avisoPrevioIndenizado);
+        }
+      }
+      const totalOficial = parseFloat(previsao.total);
       return {
         id: r.id,
         nomeCompleto: r.nomeCompleto,
@@ -2363,10 +2390,12 @@ async function getDashCustoDemissaoMassa(companyId: number, dataReferencia?: str
         feriasProporcional: parseFloat(previsao.totalFerias),
         feriasVencidas: parseFloat(previsao.feriasVencidas),
         decimoTerceiro: parseFloat(previsao.decimoTerceiroProporcional),
-        avisoPrevioIndenizado: parseFloat(previsao.avisoPrevioIndenizado),
+        avisoPrevioIndenizado: parseFloat(previsao.avisoPrevioIndenizado) + avisoComplementar,
         multaFGTS: parseFloat(previsao.multaFGTS),
         fgtsEstimado: parseFloat(previsao.fgtsEstimado),
-        total: parseFloat(previsao.total),
+        totalOficial,
+        totalComplementar,
+        total: totalOficial + totalComplementar,
       };
     })
     .sort((a, b) => b.total - a.total);
