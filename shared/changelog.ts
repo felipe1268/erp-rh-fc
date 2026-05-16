@@ -25,6 +25,23 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1860,
+    titulo: "Cronograma · Responsável Manual em pai → cascata para descendentes (com confirmação)",
+    descricao: "User (16/05/2026, screenshot Cronograma QIU 2 - FASE 4 mostrando coluna Responsável manual com checkbox cyan): 'caso o usuário preencher o nome de algum atividade que seja pai e tenha filhos abaixo dela, todas elas assumem que o responsável será o nome que foi informado automaticamente'. Antes: planejador tinha que abrir cada filho/neta um a um para repetir o mesmo responsável (ex.: 'Rohr' em 5° pavimento → ESGOTO → INFRA → 30 atividades-folha = 30 cliques manuais).\n\n" +
+      "Decisões de UX (perguntadas ao user):\n" +
+      "  - Quando filhos já têm valor: PERGUNTAR na hora (modal com 3 ações: Cancelar / Só vazios / Sobrescrever todos).\n" +
+      "  - Profundidade: cascata até as FOLHAS (filhos, netas, bisnetas — todos os descendentes recursivos).\n\n" +
+      "Fix client (client/src/pages/planejamento/PlanejamentoDetalhe.tsx, 3 hunks no editor de Cronograma):\n" +
+      "  (1) State novo `cascadeResp: { parentIdx, parentNome, valor, descIdxs, semValorIdxs, comValorIdxs } | null` + ref `respOriginalRef` para snapshotar valor no foco e detectar mudança real no blur (evita falso-positivo se user só clicou e saiu).\n" +
+      "  (2) Input do responsável manual ganha `onFocus` (snapshot) + `onBlur` (detecção). Algoritmo: scan forward em `linhas` a partir de `idx+1`; descendente = qualquer linha com `(nivel ?? 1) > parent.nivel`, parando na primeira `<= parent.nivel` (irmão ou tio). Particiona descendentes em `semValor` (vazios) e `comValor` (preenchidos com algo diferente). Se houver pelo menos um alvo, abre modal.\n" +
+      "  (3) AlertDialog com 3 ações: 'Cancelar' (mantém só no pai), 'Só os N vazios' (cyan claro, condicional), 'Sobrescrever todos os N' (cyan sólido). Aplica via `setLinhas(prev.map((l,i) => alvos.has(i) ? {...l, responsavelLotus: valor, _respManual: true} : l))` — também marca `_respManual=true` para o checkbox aparecer ativo nos filhos. Toast informa quantos foram afetados.\n\n" +
+      "Preservado: ZERO mudança em backend/schema/contrato; cascata acontece SÓ no client (igual a outras edições do cronograma — só persiste ao clicar 'Salvar'); user pode reverter linha-a-linha antes de salvar; usuário planejador continua dono do save final. Outros campos do Input (onChange para keystroke imediato) intactos. Usa `linhas` snapshot do render (consistente com `idx` da iteração). Reversível em 3 hunks. R-001 OK.",
+    tipo: 'feat',
+    modulos: 'Planejamento',
+    criadoPor: 'agent',
+    dataPublicacao: '2026-05-16 09:00:00',
+  },
+  {
     version: 1859,
     titulo: "Visão Geral · Histórico de REFIs — seleção múltipla para exclusão em lote (admin)",
     descricao: "User (16/05/2026, screenshot Visão Geral pós-Rev. 1858 mostrando coluna 'Ações' com lixeira por linha): 'Faz seleção múltipla para apagar várias juntas'. A Rev. 1858 já permitia delete um-a-um, mas para zerar o histórico (14 REFIs no caso do projeto QIU 2 - FASE 4) o usuário teria que confirmar 14 modais. Pedido legítimo de UX para operação em lote.\n\n" +

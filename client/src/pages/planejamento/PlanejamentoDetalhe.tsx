@@ -482,6 +482,17 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
     title: string; description: string; placeholder?: string; minLen?: number; confirmLabel?: string;
     onConfirm: (valor: string) => void;
   }) => { setPromptValor(""); setPromptCfg(cfg); };
+  // Rev. 1860 — Cascata de Responsável Manual: quando preenche em pai com filhos,
+  // pergunta se aplica nos descendentes (e se sobrescreve os que já têm valor).
+  const [cascadeResp, setCascadeResp] = useState<{
+    parentIdx: number;
+    parentNome: string;
+    valor: string;
+    descIdxs: number[];   // todos os descendentes (recursivo até folhas)
+    semValorIdxs: number[]; // descendentes vazios
+    comValorIdxs: number[]; // descendentes já preenchidos com outro valor
+  } | null>(null);
+  const respOriginalRef = useRef<Record<number, string | null>>({});
   const fecharSemanaMutation = trpc.planejamento.fecharSemana.useMutation({
     onSuccess: (r) => { toast.success(`Semana fechada — cutoff oficial: ${(r.dataCorte || "").split("-").reverse().join("/")}`); refetchDataCorte(); utils.planejamento.getProjetoById.invalidate({ id: projetoId }); },
     onError: (e) => toast.error(e.message || "Falha ao fechar semana"),
@@ -1615,6 +1626,73 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
 
       {/* Rev. 1652 — Modal de confirmação interno (sem o domínio gigante do
           window.confirm). Compartilhado entre cutoff/consolidar/fechar semana. */}
+      {/* Rev. 1860 — Cascata de Responsável Manual para descendentes */}
+      <AlertDialog open={!!cascadeResp} onOpenChange={(o) => { if (!o) setCascadeResp(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Aplicar responsável aos descendentes?</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-2">
+                <div>
+                  Você definiu <strong>"{cascadeResp?.valor}"</strong> como responsável de <strong>{cascadeResp?.parentNome}</strong>.
+                </div>
+                <div>
+                  Esta atividade tem <strong>{cascadeResp?.descIdxs.length}</strong> descendente{(cascadeResp?.descIdxs.length ?? 0) > 1 ? "s" : ""} (filhos, netas etc.):
+                </div>
+                <ul className="list-disc pl-5 text-xs space-y-0.5">
+                  {(cascadeResp?.semValorIdxs.length ?? 0) > 0 && (
+                    <li><strong>{cascadeResp?.semValorIdxs.length}</strong> sem responsável definido</li>
+                  )}
+                  {(cascadeResp?.comValorIdxs.length ?? 0) > 0 && (
+                    <li><strong>{cascadeResp?.comValorIdxs.length}</strong> já com outro responsável preenchido</li>
+                  )}
+                </ul>
+                <div className="text-[11px] text-slate-500 pt-1">
+                  Escolha como aplicar (ou cancele para manter só na atividade-pai):
+                </div>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="flex-col sm:flex-row gap-2">
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            {(cascadeResp?.semValorIdxs.length ?? 0) > 0 && (
+              <button
+                type="button"
+                onClick={() => {
+                  if (!cascadeResp) return;
+                  const alvos = new Set(cascadeResp.semValorIdxs);
+                  const valor = cascadeResp.valor;
+                  setLinhas(prev => prev.map((l, i) => alvos.has(i)
+                    ? { ...l, responsavelLotus: valor, _respManual: true }
+                    : l));
+                  toast.success(`Responsável aplicado a ${alvos.size} descendente${alvos.size > 1 ? "s" : ""} sem valor.`);
+                  setCascadeResp(null);
+                }}
+                className="inline-flex items-center justify-center rounded-md text-xs font-medium border border-cyan-300 bg-cyan-50 text-cyan-800 hover:bg-cyan-100 px-3 py-2"
+              >
+                Só os {cascadeResp?.semValorIdxs.length} vazios
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => {
+                if (!cascadeResp) return;
+                const alvos = new Set(cascadeResp.descIdxs);
+                const valor = cascadeResp.valor;
+                setLinhas(prev => prev.map((l, i) => alvos.has(i)
+                  ? { ...l, responsavelLotus: valor, _respManual: true }
+                  : l));
+                toast.success(`Responsável aplicado aos ${alvos.size} descendente${alvos.size > 1 ? "s" : ""} (sobrescrito).`);
+                setCascadeResp(null);
+              }}
+              className="inline-flex items-center justify-center rounded-md text-xs font-medium bg-cyan-600 text-white hover:bg-cyan-700 px-3 py-2"
+            >
+              Sobrescrever todos os {cascadeResp?.descIdxs.length}
+            </button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       <AlertDialog open={!!confirmCfg} onOpenChange={(open) => { if (!open) setConfirmCfg(null); }}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -3957,11 +4035,40 @@ function Cronograma({ projetoId, revisaoAtiva, atividades, loadingAtiv, avancos,
                             placeholder="Responsável externo (ex.: Concessionária CPFL)"
                           />
                         )}
-                        {/* Rev. 1823 — Input do responsável manual */}
+                        {/* Rev. 1823 — Input do responsável manual; Rev. 1860 — cascata para descendentes */}
                         {(!!a._respManual || (a.responsavelLotus !== null && a.responsavelLotus !== undefined)) && !a.isExterna && (
                           <Input
                             value={a.responsavelLotus ?? ""}
                             onChange={e => updateLinha(idx, "responsavelLotus", e.target.value)}
+                            onFocus={() => { respOriginalRef.current[idx] = a.responsavelLotus ?? ""; }}
+                            onBlur={(e) => {
+                              const valorAtual = (e.target.value ?? "").trim();
+                              const original = (respOriginalRef.current[idx] ?? "").trim();
+                              if (!valorAtual || valorAtual === original) return;
+                              // Detecta descendentes (recursivo até folhas) via nivel/ordem
+                              const parentNivel = a.nivel ?? 1;
+                              const descIdxs: number[] = [];
+                              for (let i = idx + 1; i < linhas.length; i++) {
+                                const l = linhas[i];
+                                if ((l.nivel ?? 1) <= parentNivel) break;
+                                descIdxs.push(i);
+                              }
+                              if (descIdxs.length === 0) return; // não é pai — segue o jogo
+                              const semValorIdxs: number[] = [];
+                              const comValorIdxs: number[] = [];
+                              descIdxs.forEach((i) => {
+                                const v = (linhas[i].responsavelLotus ?? "").trim();
+                                if (!v) semValorIdxs.push(i);
+                                else if (v !== valorAtual) comValorIdxs.push(i);
+                              });
+                              if (semValorIdxs.length === 0 && comValorIdxs.length === 0) return;
+                              setCascadeResp({
+                                parentIdx: idx,
+                                parentNome: a.nome ?? `(linha ${idx + 1})`,
+                                valor: valorAtual,
+                                descIdxs, semValorIdxs, comValorIdxs,
+                              });
+                            }}
                             className="h-6 text-[11px] w-full mt-1 bg-cyan-50 border-cyan-300 placeholder:text-cyan-500"
                             placeholder="Responsável manual (ex.: EMPRESA XYZ LTDA)"
                           />
