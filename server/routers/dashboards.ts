@@ -2546,6 +2546,29 @@ async function getDashCustoDemissaoMassa(
           idade = Math.max(0, i);
         }
       }
+      // Rev. 1934 — Tempo de empresa em anos/meses/dias (não só anos).
+      // User (16/05/2026): "quero anos, meses e dias..". Cálculo do
+      // calendário civil até dtRef (mesma data-base das outras métricas
+      // do dashboard, NÃO até HOJE). Algoritmo: diferença ano→ano,
+      // ajustando mês e dia com empréstimo (borrow) — mesma técnica usada
+      // p/ idade humana.
+      let tempoAnos = 0, tempoMeses = 0, tempoDias = 0;
+      if (!isNaN(dtAdm.getTime()) && dtAdm <= dtRef) {
+        tempoAnos = dtRef.getFullYear() - dtAdm.getFullYear();
+        tempoMeses = dtRef.getMonth() - dtAdm.getMonth();
+        tempoDias = dtRef.getDate() - dtAdm.getDate();
+        if (tempoDias < 0) {
+          // Empresta dias do mês anterior (último dia desse mês).
+          const prevMonth = new Date(dtRef.getFullYear(), dtRef.getMonth(), 0);
+          tempoDias += prevMonth.getDate();
+          tempoMeses--;
+        }
+        if (tempoMeses < 0) {
+          tempoMeses += 12;
+          tempoAnos--;
+        }
+        if (tempoAnos < 0) { tempoAnos = 0; tempoMeses = 0; tempoDias = 0; }
+      }
       return {
         id: r.id,
         nomeCompleto: r.nomeCompleto,
@@ -2559,6 +2582,9 @@ async function getDashCustoDemissaoMassa(
         idade,
         salarioBase: salario,
         anosServico: previsao.anosServico,
+        tempoAnos,
+        tempoMeses,
+        tempoDias,
         // Rev. 1930 — Devolve `diasAvisoEstimado` (que respeita o `tipo` —
         // 30 fixos no Trabalhado / 30+3·ano no Indenizado conforme L2476),
         // não `previsao.diasAvisoTotal` (que SEMPRE retorna o cálculo legal

@@ -1,6 +1,15 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 1934 — RH · Dash Aviso Prévio · Tabela CDM · Coluna "Tempo de empresa" agora exibe anos/meses/dias (não só anos).
+ * User (16/05/2026, screenshot coluna mostrando "14 / 13 / 13 / 12 / 10..."): "quero anos, meses e dias..".
+ * Motivação: Rev. 1931 renomeou "Anos" → "Tempo de empresa" mas o valor continuava sendo só `anosServico` (anos completos truncados via Math.floor). Diretoria/RH precisa do detalhe pra decisões de aviso prévio proporcional (Lei 12.506) e estabilidade (1 ano + 1 dia troca a faixa indenizatória).
+ * Mudança server (`dashboards.ts` `getDashCustoDemissaoMassa`): novo bloco calcula `tempoAnos`/`tempoMeses`/`tempoDias` a partir de `dtAdm`→`dtRef` (data-base do dash, coerente com idade/projeção rescisão — NÃO HOJE). Algoritmo: diff ano-a-ano + ajuste mês/dia com borrow (último dia do mês anterior quando `dia < 0`), mesma técnica clássica usada p/ idade humana. Caso degenerado (admissão futura → negativo): zera os 3. Retorno ganha os 3 campos.
+ * Mudança client (`DashAvisoPrevio.tsx`): célula da coluna Tempo de empresa renderiza "Xa Ym Zd" condicionalmente (omite "Xa" se anos=0, omite "Ym" se anos=0 e meses=0 — mostra só "Zd" pra recém-admitidos). Texto reduzido p/ `text-[11px]` + `whitespace-nowrap` (impede quebra). Sort key continua `anosServico` (base legal da rescisão usa anos completos — Lei 12.506: 30+3·ano).
+ * version → 1934.
+ * Resultado: coluna mostra precisão real (ex.: "10a 2m 15d" em vez de só "10") — RH visualiza estabilidade/faixa Lei 12.506/proximidade do próximo ano sem abrir o cadastro.
+ * Preservado: filtros Rev. 1915/1923, query vacation_periods Rev. 1911/1927, meal_benefit_configs Rev. 1927, projeção dataFimAviso Rev. 1909-fix, vrDiario Rev. 1927, diasAvisoEstimado Rev. 1930, complementar Rev. 1919, idade Rev. 1931, sort Rev. 1909, tipo Rev. 1921, top-3, KPIs, disclaimer. Zero ALTER/DROP/DELETE. Reversível em 3 hunks. R-001/R-007/R-010 OK.
+ *
  * Rev. 1933 — Planejamento · PlanejamentoDetalhe · FIX botão "✕ Cancelar" (Rev. 1928) não persistia após Salvar — cascata no save re-propagava o responsável do grupo.
  * User (16/05/2026, screenshot pós-Salvar com Mosaico ainda mostrando FELIPE nos 4 Ajudantes): "cliquei em cancelar salvei mas ele ainda continua como se não houvesse cancelado... arrume isso".
  * Causa-raiz: o Cancelar (Rev. 1928 / `clearRespFromDescendants`) limpava apenas os DESCENDENTES (`_respManual: false` + `responsavelLotus: ""`), mas DELIBERADAMENTE mantinha o `responsavelLotus` do GRUPO intacto — a intenção original era permitir re-replicar com o mesmo nome sem ter que redigitar. No fluxo de Salvar (L4033), o handler chama `aplicarCascataResponsavelGrupos(linhas)` (L3617) que varre todos os grupos e RE-PROPAGA o `responsavelLotus` do grupo aos descendentes (cascata Rev. 1892 — semantica "grupo = cascata total/sobrescreve"). Como o grupo ainda tinha "FELIPE", a cascata do save reverteu o cancelamento e os filhos voltaram com FELIPE — exatamente o efeito reportado. A intenção de "preservar pra re-replicar" não justificava perder a operação que o user explicitamente fez (cancelar).

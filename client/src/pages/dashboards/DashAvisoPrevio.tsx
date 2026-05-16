@@ -412,7 +412,14 @@ export default function DashAvisoPrevio() {
                                 <td className="py-1.5 px-2 text-muted-foreground truncate max-w-[140px] border-b border-border/50" title={l.funcao || l.cargo}>{l.funcao || l.cargo || '-'}</td>
                                 <td className="py-1.5 px-2 text-muted-foreground truncate max-w-[160px] border-b border-border/50" title={l.obra}>{l.obra || <span className="italic text-muted-foreground/60">sem alocação</span>}</td>
                                 <td className="py-1.5 px-2 text-right tabular-nums border-b border-border/50">{l.dataAdmissao ? new Date(l.dataAdmissao + 'T00:00:00').toLocaleDateString('pt-BR') : '-'}</td>
-                                <td className="py-1.5 px-2 text-center tabular-nums border-b border-border/50">{l.anosServico}</td>
+                                {/* Rev. 1934 — Tempo de empresa em anos/meses/dias (não só anos).
+                                    User 16/05/2026: "quero anos, meses e dias..". Mostra o detalhe;
+                                    sort permanece por `anosServico` (rescisão usa anos completos). */}
+                                <td className="py-1.5 px-2 text-center tabular-nums border-b border-border/50 whitespace-nowrap text-[11px]" title={`${l.anosServico} ano(s) completo(s) — base de cálculo da rescisão`}>
+                                  {(l.tempoAnos ?? 0) > 0 && <span>{l.tempoAnos}a </span>}
+                                  {((l.tempoAnos ?? 0) > 0 || (l.tempoMeses ?? 0) > 0) && <span>{l.tempoMeses ?? 0}m </span>}
+                                  <span>{l.tempoDias ?? 0}d</span>
+                                </td>
                                 {/* Rev. 1931 — Idade real. Funcionários sem dataNascimento mostram "—" em itálico (não inferimos). */}
                                 <td className="py-1.5 px-2 text-center tabular-nums border-b border-border/50" title={l.dataNascimento ? `Nascimento: ${new Date(l.dataNascimento + 'T00:00:00').toLocaleDateString('pt-BR')}` : 'Data de nascimento não cadastrada'}>
                                   {l.idade != null ? l.idade : <span className="italic text-muted-foreground/60">—</span>}
