@@ -121,9 +121,9 @@ export default function DashAvisoPrevio() {
     { enabled: isConstrutoras ? companyIds.length > 0 : companyId > 0 }
   );
   // Rev. 1909 — ordenação clicável da tabela de custo de demissão em massa
-  type CdmSortKey = 'nomeCompleto' | 'cargo' | 'funcao' | 'obra' | 'setor' | 'dataAdmissao' | 'anosServico' | 'diasAvisoTotal' | 'salarioBase' | 'avisoPrevioIndenizado' | 'multaFGTS' | 'total';
+  type CdmSortKey = 'nomeCompleto' | 'cargo' | 'funcao' | 'obra' | 'dataAdmissao' | 'anosServico' | 'diasAvisoTotal' | 'salarioBase' | 'avisoPrevioIndenizado' | 'multaFGTS' | 'total';
   const [cdmSort, setCdmSort] = useState<{ key: CdmSortKey; dir: 'asc' | 'desc' }>({ key: 'total', dir: 'desc' });
-  const toggleCdmSort = (key: CdmSortKey) => setCdmSort(s => s.key === key ? { key, dir: s.dir === 'desc' ? 'asc' : 'desc' } : { key, dir: (key === 'nomeCompleto' || key === 'cargo' || key === 'funcao' || key === 'obra' || key === 'setor' || key === 'dataAdmissao') ? 'asc' : 'desc' });
+  const toggleCdmSort = (key: CdmSortKey) => setCdmSort(s => s.key === key ? { key, dir: s.dir === 'desc' ? 'asc' : 'desc' } : { key, dir: (key === 'nomeCompleto' || key === 'cargo' || key === 'funcao' || key === 'obra' || key === 'dataAdmissao') ? 'asc' : 'desc' });
   const cdmLinhasOrdenadas = useMemo(() => {
     if (!cdm?.linhas) return [];
     const arr = [...cdm.linhas];
@@ -365,7 +365,6 @@ export default function DashAvisoPrevio() {
                               <th className="py-2 px-2 font-semibold text-muted-foreground cursor-pointer select-none hover:text-blue-700" onClick={() => toggleCdmSort('nomeCompleto')}>Funcionário<SortIcon k="nomeCompleto" /></th>
                               <th className="py-2 px-2 font-semibold text-muted-foreground cursor-pointer select-none hover:text-blue-700" onClick={() => toggleCdmSort('funcao')}>Função<SortIcon k="funcao" /></th>
                               <th className="py-2 px-2 font-semibold text-muted-foreground cursor-pointer select-none hover:text-blue-700" onClick={() => toggleCdmSort('obra')}>Obra<SortIcon k="obra" /></th>
-                              <th className="py-2 px-2 font-semibold text-muted-foreground cursor-pointer select-none hover:text-blue-700" onClick={() => toggleCdmSort('setor')}>Setor<SortIcon k="setor" /></th>
                               <th className="py-2 px-2 font-semibold text-muted-foreground text-right cursor-pointer select-none hover:text-blue-700" onClick={() => toggleCdmSort('dataAdmissao')}>Admissão<SortIcon k="dataAdmissao" /></th>
                               <th className="py-2 px-2 font-semibold text-muted-foreground text-center cursor-pointer select-none hover:text-blue-700" onClick={() => toggleCdmSort('anosServico')}>Anos<SortIcon k="anosServico" /></th>
                               <th className="py-2 px-2 font-semibold text-muted-foreground text-center cursor-pointer select-none hover:text-blue-700" onClick={() => toggleCdmSort('diasAvisoTotal')} title="Dias de aviso prévio (Lei 12.506/2011)">Dias Aviso<SortIcon k="diasAvisoTotal" /></th>
@@ -382,7 +381,6 @@ export default function DashAvisoPrevio() {
                                 <td className="py-1.5 px-2 font-medium truncate max-w-[200px]" title={l.nomeCompleto}>{l.nomeCompleto}</td>
                                 <td className="py-1.5 px-2 text-muted-foreground truncate max-w-[140px]" title={l.funcao || l.cargo}>{l.funcao || l.cargo || '-'}</td>
                                 <td className="py-1.5 px-2 text-muted-foreground truncate max-w-[160px]" title={l.obra}>{l.obra || <span className="italic text-muted-foreground/60">sem alocação</span>}</td>
-                                <td className="py-1.5 px-2 text-muted-foreground truncate max-w-[140px]" title={l.setor}>{l.setor || '-'}</td>
                                 <td className="py-1.5 px-2 text-right tabular-nums">{l.dataAdmissao ? new Date(l.dataAdmissao + 'T00:00:00').toLocaleDateString('pt-BR') : '-'}</td>
                                 <td className="py-1.5 px-2 text-center tabular-nums">{l.anosServico}</td>
                                 <td className="py-1.5 px-2 text-center tabular-nums">{l.diasAvisoTotal}</td>
@@ -395,7 +393,7 @@ export default function DashAvisoPrevio() {
                           </tbody>
                           <tfoot className="bg-red-50 sticky bottom-0">
                             <tr className="border-t-2 border-red-300">
-                              <td colSpan={11} className="py-2 px-2 text-right font-bold text-red-800 uppercase text-[11px]">TOTAL GERAL</td>
+                              <td colSpan={10} className="py-2 px-2 text-right font-bold text-red-800 uppercase text-[11px]">TOTAL GERAL</td>
                               <td className="py-2 px-2 text-right tabular-nums font-bold text-red-800">{fmtBRL(cdm.grandTotal)}</td>
                             </tr>
                           </tfoot>

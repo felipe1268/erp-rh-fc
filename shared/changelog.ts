@@ -1,6 +1,16 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 1917 — RH · Dash Aviso Prévio · Tabela CDM · Remover coluna SETOR.
+ * User (16/05/2026, logo após Rev. 1916): "Pode tirar a coluna setor". Setor era redundante com Obra (escritório central / obras de campo já fica claro pelo nome da obra). Mudança SOMENTE no client (`client/src/pages/dashboards/DashAvisoPrevio.tsx`):
+ *   • `CdmSortKey` perde `'setor'`; `toggleCdmSort` deixa de listar `setor` no conjunto de chaves text-default-asc.
+ *   • Header: removido `<th>` "Setor" (entre Obra e Admissão).
+ *   • Body: removida `<td>` com `l.setor`.
+ *   • Tfoot: `colSpan={11}` → `colSpan={10}` pra acompanhar nova largura.
+ *   version → 1917.
+ * Resultado: tabela mais enxuta — # | Funcionário | Função | Obra | Admissão | Anos | Dias Aviso | Salário | Aviso Indeniz. | Multa 40% | Custo Total (10 cols + TOTAL GERAL). Server inalterado — campo `setor` continua sendo retornado pelo endpoint (zero breaking pra outros possíveis consumers).
+ * Preservado: colunas Função/Obra Rev. 1916, filtro PJ/Socio Rev. 1915, query batch obra_funcionarios + vacation_periods Rev. 1916/1911, projeção dataFimAviso Rev. 1909-fix, sort default por total desc, ordenação clicável Rev. 1909, destaque top-3 bg-red-50/40, KPIs topo, disclaimer composição. Zero backend/DB/schema. Reversível em 4 hunks. R-001/R-007/R-010 OK.
+ *
  * Rev. 1916 — RH · Dash Aviso Prévio · Tabela CDM · Adicionar colunas FUNÇÃO e OBRA (alocação ativa mais recente).
  * User (16/05/2026): "Quero o nome, função e qual obra ele está a trabalhando". A tabela CDM exibia Funcionário, Cargo e Setor mas não a OBRA atual de alocação — info crítica pra dimensionar custo de demissão por frente de trabalho. Mudança no server (`server/routers/dashboards.ts` getDashCustoDemissaoMassa):
  *   • Nova query batch SINGLE com `DISTINCT ON (of."employeeId")` + INNER JOIN `obras` filtrada por `isActive=1`, ordenada por `dataInicio DESC NULLS LAST, id DESC` (alocação mais recente vence em caso de múltiplas frentes simultâneas — comum em encarregados/engenheiros que cobrem várias obras). Map `obraByEmp` populado em O(N).
