@@ -580,8 +580,16 @@ export default function AvisoPrevio({ mode = "aviso_previo" }: { mode?: AvisoPre
     if (isTrabalhado) {
       const html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Aviso Prévio Trabalhado — ${escapeHtml(empNome)}</title>
 <style>
-  @media print { body { margin: 0; } @page { margin: 0 0 20mm 0; size: A4; } .no-print { display: none !important; } }
-  body { font-family: "Times New Roman", Times, serif; font-size: 12pt; color: #000; margin: 0; line-height: 1.5; }
+  /* Rev. 1907 — force print of background colors (header azul + logo box branco + faixa amarela).
+     Sem print-color-adjust:exact, Chrome/Edge/Firefox/Safari REMOVEM backgrounds e
+     gradients por default (economia de tinta) → o cabeçalho azul some na impressão. */
+  @media print {
+    body { margin: 0; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-adjust: exact !important; }
+    @page { margin: 0 0 20mm 0; size: A4; }
+    .no-print { display: none !important; }
+    .doc-header, .doc-header * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-adjust: exact !important; }
+  }
+  body { font-family: "Times New Roman", Times, serif; font-size: 12pt; color: #000; margin: 0; line-height: 1.5; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .doc { max-width: 760px; margin: 0 auto; padding: 0 32px 32px 32px; }
   /* Cabeçalho azul padrão dos demais documentos do ERP */
   .doc-header { background: linear-gradient(135deg, #1e3a8a 0%, #2563eb 100%); color: #fff; padding: 18px 32px; display: flex; align-items: center; gap: 18px; margin-bottom: 28px; border-bottom: 4px solid #fbbf24; }
@@ -670,8 +678,14 @@ export default function AvisoPrevio({ mode = "aviso_previo" }: { mode?: AvisoPre
     // ============================== INDENIZADO ==============================
     const html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Aviso Prévio Indenizado — ${escapeHtml(empNome)}</title>
 <style>
-  @media print { body { margin: 0; } @page { margin: 0 0 22mm 0; size: A4; } .no-print { display: none !important; } }
-  body { font-family: "Times New Roman", Times, serif; font-size: 12pt; color: #000; margin: 0; line-height: 1.6; }
+  /* Rev. 1907 — force print of background colors (header azul + logo box branco + faixa amarela). */
+  @media print {
+    body { margin: 0; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-adjust: exact !important; }
+    @page { margin: 0 0 22mm 0; size: A4; }
+    .no-print { display: none !important; }
+    .doc-header, .doc-header * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-adjust: exact !important; }
+  }
+  body { font-family: "Times New Roman", Times, serif; font-size: 12pt; color: #000; margin: 0; line-height: 1.6; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .doc { max-width: 760px; margin: 0 auto; padding: 0 32px 32px 32px; }
   /* Cabeçalho azul padrão dos demais documentos do ERP */
   .doc-header { background: linear-gradient(135deg, #1e3a8a 0%, #2563eb 100%); color: #fff; padding: 18px 32px; display: flex; align-items: center; gap: 18px; margin-bottom: 32px; border-bottom: 4px solid #fbbf24; }

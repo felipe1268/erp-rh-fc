@@ -1,6 +1,20 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 1907 — RH · Aviso Prévio · Documento impresso preserva o cabeçalho azul + logo + faixa amarela (force print-color-adjust:exact).
+ * User (16/05/2026, screenshot image_1778951485772.png — preview do "Aviso Prévio do Empregador" do colaborador ALEX ALESSANDRO com header azul gradiente + box branco do logo + faixa amarela inferior + botão "Imprimir / Salvar PDF"): "GARANTA QUE A TELA AZUL COM O LOGO DA EMPRESA, SAIA NA IMPRESSÃO.. QUERO A TELA EXATAMENTE IGUAL..".
+ * Causa-raiz (em client/src/pages/AvisoPrevio.tsx L583 e L673 — `@media print` dos templates HTML Trabalhado e Indenizado):
+ *   • A regra `@media print` original era curta: `body { margin: 0; } @page { margin: ...; size: A4; } .no-print { display: none !important; }`. SEM nenhuma diretiva de `print-color-adjust` / `-webkit-print-color-adjust`.
+ *   • Por default, todos os navegadores modernos (Chrome/Edge/Brave/Opera + Firefox + Safari) DESLIGAM a impressão de `background-color`, `background-image` e `linear-gradient` em `@media print` pra economizar tinta. Esta é a configuração "Background graphics: OFF" no diálogo de impressão.
+ *   • Resultado: o `.doc-header` (gradient azul `#1e3a8a→#2563eb` + `border-bottom: 4px solid #fbbf24` amarelo) saía completamente BRANCO no PDF/papel — perdia toda a identidade visual do documento corporativo. Logo box `background:#fff` também perdia o contraste.
+ * Mudança (em L585-595 [Trabalhado] e L675-684 [Indenizado] dos templates HTML inline gerados via `window.open + document.write`):
+ *   • `@media print` expandida pra incluir, no `body` e em `.doc-header, .doc-header *`, a tripla `-webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-adjust: exact !important;`. As 3 propriedades cobrem todos os navegadores (-webkit- p/ Chrome/Edge/Safari; sem prefixo p/ Firefox + standard; `color-adjust` legacy).
+ *   • `!important` necessário porque alguns browsers aplicam reset agressivo em `@media print`.
+ *   • Também adicionada a diretiva (sem !important, sem media query) no seletor `body` global, p/ que o preview na tela também respeite ao pré-renderizar antes do diálogo de impressão (alguns viewers de PDF salvos via "Salvar como PDF" pegam essa diretiva).
+ *   version → 1907.
+ * Resultado: o PDF / impressão física do Aviso Prévio agora sai 100% idêntico ao preview na tela: header azul gradiente + box branco do logo + texto branco + faixa amarela inferior + corpo do documento em Times New Roman preto sobre branco. "QUERO A TELA EXATAMENTE IGUAL" atendido pra ambas as variantes (Trabalhado e Indenizado).
+ * Preservado: HTML structure intacta; lógica `escapeHtml` Rev. 1727 intacta; ambas as variantes Trabalhado/Indenizado idênticas no tratamento; CSS de tipografia, margens A4, dimensões do logo, alinhamentos, blocos De/Para/Corpo/Destaque/Assinaturas, opções de exercício 2h/7d (CLT Art. 488 Rev. 1727 → opcional Rev. 1794), assinaturas finais — tudo inalterado. O `window.open` continua disparando popup independente; `window.print()` continua sendo chamado pelo botão da `.no-print`. Zero backend/DB/schema/tRPC. Reversível em 2 hunks + version bump. R-001/R-007/R-010 OK.
+ *
  * Rev. 1906 — RH · Aviso Prévio · Filtro de pesquisa de colaborador agora faz match por SUBSTRING (case-insensitive + sem acentos), não fuzzy.
  * User (16/05/2026, screenshot image_1778951170831.png — combobox "Colaborador" do form "Dados do Aviso Prévio" com search "ANA" mostrando ANA BEATRIZ + ANDERSON DOS ANJOS ALKMIN + ANDERSON DOS ANJOS ALKMIN JUNIOR + ANDRE FIGUEIREDO + ALEXANDRO GONCALVES, ou seja, TODOS que contém A...N...A em ordem fuzzy): "ARRUME TBM ESTE FILTRO DE PESQUISA QUANDO DIGITAR O NOME DO COLABORADOR ELE VAI FILTRANDO SOMENTE O TEXTO QUE FOR PERTINENTE.. HOJE FICA APARECENDO TUDO SEM NESCESSIDADE..".
  * Causa-raiz (em client/src/pages/AvisoPrevio.tsx L2243 — `<Command>` do shadcn/cmdk):
