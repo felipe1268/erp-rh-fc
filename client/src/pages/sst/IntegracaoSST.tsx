@@ -45,33 +45,81 @@ export default function IntegracaoSST() {
   const companyId = selectedCompanyId ?? 0;
   const [tab, setTab] = useState("dashboard");
 
+  // Rev. 2005 — Tabs alinhadas à regra de ouro: chip emerald, gradient header
+  const tabs: { value: string; label: string; icon: any; desc: string }[] = [
+    { value: "dashboard", label: "Dashboard", icon: LayoutDashboard, desc: "Visão geral" },
+    { value: "videos", label: "Vídeos", icon: Film, desc: "Conteúdo de treinamento" },
+    { value: "config", label: "Configurações", icon: Settings, desc: "Regras e fluxo" },
+    { value: "pendentes", label: "Pendentes", icon: Clock, desc: "A concluir" },
+    { value: "historico", label: "Histórico", icon: History, desc: "Concluídos" },
+    { value: "sessoes", label: "Sessões", icon: Users, desc: "Turmas presenciais" },
+  ];
+
   return (
-    <div className="space-y-4">
-      <div className="flex items-center gap-3">
-        <GraduationCap className="h-7 w-7 text-emerald-600" />
-        <div>
-          <h1 className="text-2xl font-bold">Integração de Segurança</h1>
-          <p className="text-sm text-muted-foreground">Treinamento de novos colaboradores — vídeos, questionários e certificados</p>
+    <div className="min-h-screen bg-slate-50/40">
+      {/* Header gradient full-width — regra de ouro */}
+      <div className="bg-gradient-to-r from-emerald-700 via-emerald-600 to-teal-600 text-white shadow-md">
+        <div className="px-4 sm:px-6 py-4 sm:py-5 flex items-center gap-3 sm:gap-4">
+          <div className="h-12 w-12 sm:h-14 sm:w-14 rounded-2xl bg-white/15 ring-2 ring-white/30 backdrop-blur flex items-center justify-center shrink-0">
+            <GraduationCap className="h-6 w-6 sm:h-7 sm:w-7" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <h1 className="text-xl sm:text-2xl font-bold leading-tight">Integração de Segurança</h1>
+            <p className="text-xs sm:text-sm text-emerald-50/90 leading-snug">
+              Treinamento de novos colaboradores · vídeos, questionários e certificados
+            </p>
+          </div>
         </div>
       </div>
 
-      <Tabs value={tab} onValueChange={setTab}>
-        <TabsList className="flex flex-wrap">
-          <TabsTrigger value="dashboard"><LayoutDashboard className="h-4 w-4 mr-1" />Dashboard</TabsTrigger>
-          <TabsTrigger value="videos"><Film className="h-4 w-4 mr-1" />Vídeos</TabsTrigger>
-          <TabsTrigger value="config"><Settings className="h-4 w-4 mr-1" />Configurações</TabsTrigger>
-          <TabsTrigger value="pendentes"><Clock className="h-4 w-4 mr-1" />Pendentes</TabsTrigger>
-          <TabsTrigger value="historico"><History className="h-4 w-4 mr-1" />Histórico</TabsTrigger>
-          <TabsTrigger value="sessoes"><Users className="h-4 w-4 mr-1" />Sessões</TabsTrigger>
-        </TabsList>
+      {/* Tabs em chip — barra horizontal scroll em mobile */}
+      <div className="bg-white border-b border-slate-200 sticky top-0 z-10 shadow-sm">
+        <div className="px-2 sm:px-4 overflow-x-auto">
+          <Tabs value={tab} onValueChange={setTab}>
+            <TabsList className="bg-transparent h-auto p-0 gap-1 sm:gap-2 flex flex-nowrap justify-start">
+              {tabs.map((t) => {
+                const Icon = t.icon;
+                const active = tab === t.value;
+                return (
+                  <TabsTrigger
+                    key={t.value}
+                    value={t.value}
+                    className={`group rounded-lg px-3 sm:px-4 py-2.5 text-sm font-medium transition-all whitespace-nowrap data-[state=active]:shadow-none border-b-2 ${
+                      active
+                        ? "border-emerald-600 text-emerald-700 bg-emerald-50/60"
+                        : "border-transparent text-slate-600 hover:text-slate-900 hover:bg-slate-50"
+                    }`}
+                  >
+                    <span className={`inline-flex items-center justify-center h-6 w-6 rounded-md mr-1.5 ring-1 transition-colors ${
+                      active ? "bg-white ring-emerald-200 text-emerald-600" : "bg-slate-100 ring-slate-200 text-slate-500 group-hover:bg-white"
+                    }`}>
+                      <Icon className="h-3.5 w-3.5" />
+                    </span>
+                    {t.label}
+                  </TabsTrigger>
+                );
+              })}
+            </TabsList>
+            <div className="hidden sm:block pt-1.5 pb-2 px-1">
+              <p className="text-[11px] text-slate-500">
+                {tabs.find((t) => t.value === tab)?.desc}
+              </p>
+            </div>
+          </Tabs>
+        </div>
+      </div>
 
-        <TabsContent value="dashboard"><DashboardTab companyId={companyId} /></TabsContent>
-        <TabsContent value="videos"><VideosTab companyId={companyId} /></TabsContent>
-        <TabsContent value="config"><ConfigTab companyId={companyId} /></TabsContent>
-        <TabsContent value="pendentes"><PendentesTab companyId={companyId} /></TabsContent>
-        <TabsContent value="historico"><HistoricoTab companyId={companyId} /></TabsContent>
-        <TabsContent value="sessoes"><SessoesTab companyId={companyId} /></TabsContent>
-      </Tabs>
+      {/* Conteúdo */}
+      <div className="p-3 sm:p-5">
+        <Tabs value={tab} onValueChange={setTab}>
+          <TabsContent value="dashboard" className="mt-0"><DashboardTab companyId={companyId} /></TabsContent>
+          <TabsContent value="videos" className="mt-0"><VideosTab companyId={companyId} /></TabsContent>
+          <TabsContent value="config" className="mt-0"><ConfigTab companyId={companyId} /></TabsContent>
+          <TabsContent value="pendentes" className="mt-0"><PendentesTab companyId={companyId} /></TabsContent>
+          <TabsContent value="historico" className="mt-0"><HistoricoTab companyId={companyId} /></TabsContent>
+          <TabsContent value="sessoes" className="mt-0"><SessoesTab companyId={companyId} /></TabsContent>
+        </Tabs>
+      </div>
     </div>
   );
 }
@@ -80,60 +128,129 @@ function DashboardTab({ companyId }: { companyId: number }) {
   const kpis = trpc.integracaoSST.dashboardKpis.useQuery({ companyId }, { enabled: companyId > 0 });
   const alertas = trpc.integracaoSST.alertas.useQuery({ companyId }, { enabled: companyId > 0 });
 
-  if (!companyId) return <p className="text-muted-foreground p-4">Selecione uma empresa.</p>;
-  if (kpis.isLoading) return <div className="flex items-center gap-2 p-8"><Loader2 className="h-5 w-5 animate-spin" />Carregando...</div>;
+  if (!companyId) return (
+    <div className="rounded-xl border-2 border-dashed border-slate-300 bg-white p-10 text-center">
+      <Users className="h-10 w-10 text-slate-300 mx-auto mb-2" />
+      <p className="text-sm text-slate-500">Selecione uma empresa para visualizar os indicadores.</p>
+    </div>
+  );
+  if (kpis.isLoading) return <div className="flex items-center gap-2 p-8 text-slate-500"><Loader2 className="h-5 w-5 animate-spin" />Carregando indicadores...</div>;
 
   const k = kpis.data;
+  const taxa = k?.taxaAprovacao ?? 0;
+  const taxaCor = taxa >= 80 ? "from-emerald-500 to-green-600" : taxa >= 60 ? "from-amber-500 to-orange-500" : "from-red-500 to-rose-600";
+
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-3">
-        <KpiCard label="Total" value={k?.total ?? 0} icon={<BarChart3 className="h-5 w-5 text-blue-500" />} />
-        <KpiCard label="Aprovados" value={k?.aprovados ?? 0} icon={<CheckCircle className="h-5 w-5 text-green-500" />} color="text-green-700" />
-        <KpiCard label="Pendentes" value={k?.pendentes ?? 0} icon={<Clock className="h-5 w-5 text-yellow-500" />} color="text-yellow-700" />
-        <KpiCard label="Reprovados" value={k?.reprovados ?? 0} icon={<XCircle className="h-5 w-5 text-red-500" />} color="text-red-700" />
-        <KpiCard label="Vencendo (30d)" value={k?.vencendoEm30Dias ?? 0} icon={<AlertTriangle className="h-5 w-5 text-orange-500" />} color="text-orange-700" />
+      {/* KPIs principais — cards coloridos com chip de ícone */}
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2.5 sm:gap-3">
+        <KpiCard label="Total"          value={k?.total ?? 0}            icon={BarChart3}     accent="blue" />
+        <KpiCard label="Aprovados"      value={k?.aprovados ?? 0}        icon={CheckCircle}   accent="emerald" />
+        <KpiCard label="Pendentes"      value={k?.pendentes ?? 0}        icon={Clock}         accent="amber" />
+        <KpiCard label="Reprovados"     value={k?.reprovados ?? 0}       icon={XCircle}       accent="red" />
+        <KpiCard label="Vencendo (30d)" value={k?.vencendoEm30Dias ?? 0} icon={AlertTriangle} accent="orange" />
       </div>
-      <div className="grid md:grid-cols-2 gap-3">
-        <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-base">Indicadores</CardTitle></CardHeader>
-          <CardContent className="space-y-2">
-            <div className="flex justify-between"><span className="text-sm text-muted-foreground">Taxa de Aprovação</span><span className="font-semibold">{k?.taxaAprovacao ?? 0}%</span></div>
-            <div className="w-full bg-gray-200 rounded-full h-2"><div className="bg-emerald-500 rounded-full h-2 transition-all" style={{ width: `${k?.taxaAprovacao ?? 0}%` }} /></div>
-            <div className="flex justify-between"><span className="text-sm text-muted-foreground">Média de Nota</span><span className="font-semibold">{k?.mediaNota ?? "-"}</span></div>
-            <div className="flex justify-between"><span className="text-sm text-muted-foreground">Em Andamento</span><span className="font-semibold">{k?.emAndamento ?? 0}</span></div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-base flex items-center gap-2"><AlertTriangle className="h-4 w-4 text-orange-500" />Alertas</CardTitle></CardHeader>
-          <CardContent>
-            {alertas.isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : (
-              <div className="space-y-2 max-h-60 overflow-y-auto">
-                {(alertas.data?.length ?? 0) === 0 && <p className="text-sm text-muted-foreground">Nenhum alerta</p>}
-                {alertas.data?.map((a, i) => (
-                  <div key={i} className="flex items-start gap-2 text-sm border-b last:border-0 pb-2">
-                    <Badge variant="outline" className={a.tipo === "advertencia" ? "bg-red-50 text-red-700" : a.tipo === "vencendo" ? "bg-orange-50 text-orange-700" : a.tipo === "reprovado" ? "bg-red-50 text-red-700" : "bg-yellow-50 text-yellow-700"}>
-                      {a.tipo}
-                    </Badge>
-                    <span>{a.mensagem}</span>
-                  </div>
-                ))}
+
+      <div className="grid md:grid-cols-2 gap-3 sm:gap-4">
+        {/* Indicadores */}
+        <div className="rounded-xl border border-slate-200 bg-white overflow-hidden shadow-sm">
+          <div className="bg-gradient-to-r from-slate-50 to-white px-4 py-3 border-b border-slate-200 flex items-center gap-2">
+            <div className="h-8 w-8 rounded-lg bg-emerald-50 ring-1 ring-emerald-200 flex items-center justify-center">
+              <TrendingUp className="h-4 w-4 text-emerald-600" />
+            </div>
+            <div>
+              <h3 className="font-bold text-sm text-slate-800">Indicadores</h3>
+              <p className="text-[11px] text-slate-500">Performance da integração</p>
+            </div>
+          </div>
+          <div className="p-4 space-y-4">
+            {/* Taxa de aprovação destacada */}
+            <div>
+              <div className="flex justify-between items-baseline mb-1.5">
+                <span className="text-xs text-slate-600 uppercase tracking-wider font-semibold">Taxa de Aprovação</span>
+                <span className="text-2xl font-extrabold tabular-nums text-slate-900">{taxa}<span className="text-sm text-slate-500">%</span></span>
+              </div>
+              <div className="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden">
+                <div className={`bg-gradient-to-r ${taxaCor} rounded-full h-full transition-all`} style={{ width: `${taxa}%` }} />
+              </div>
+            </div>
+            {/* Dois KPIs secundários */}
+            <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-100">
+              <div className="rounded-lg bg-indigo-50/60 p-3">
+                <div className="text-[10px] text-indigo-600 uppercase tracking-wider font-semibold">Média de Nota</div>
+                <div className="text-lg font-bold text-indigo-900 tabular-nums">{k?.mediaNota ?? "—"}</div>
+              </div>
+              <div className="rounded-lg bg-blue-50/60 p-3">
+                <div className="text-[10px] text-blue-600 uppercase tracking-wider font-semibold">Em Andamento</div>
+                <div className="text-lg font-bold text-blue-900 tabular-nums">{k?.emAndamento ?? 0}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Alertas */}
+        <div className="rounded-xl border border-slate-200 bg-white overflow-hidden shadow-sm">
+          <div className="bg-gradient-to-r from-orange-50 to-white px-4 py-3 border-b border-slate-200 flex items-center gap-2">
+            <div className="h-8 w-8 rounded-lg bg-orange-50 ring-1 ring-orange-200 flex items-center justify-center">
+              <AlertTriangle className="h-4 w-4 text-orange-600" />
+            </div>
+            <div className="flex-1">
+              <h3 className="font-bold text-sm text-slate-800">Alertas</h3>
+              <p className="text-[11px] text-slate-500">{alertas.data?.length ?? 0} pendência{(alertas.data?.length ?? 0) === 1 ? "" : "s"}</p>
+            </div>
+          </div>
+          <div className="p-2 max-h-72 overflow-y-auto">
+            {alertas.isLoading ? (
+              <div className="p-4 flex items-center gap-2 text-slate-500"><Loader2 className="h-4 w-4 animate-spin" /> Carregando...</div>
+            ) : (alertas.data?.length ?? 0) === 0 ? (
+              <div className="p-6 text-center">
+                <CheckCircle className="h-8 w-8 text-emerald-300 mx-auto mb-1.5" />
+                <p className="text-sm text-slate-500">Nenhum alerta — tudo em dia!</p>
+              </div>
+            ) : (
+              <div className="divide-y divide-slate-100">
+                {alertas.data?.map((a, i) => {
+                  const cor = a.tipo === "advertencia" || a.tipo === "reprovado" ? "red" : a.tipo === "vencendo" ? "orange" : "amber";
+                  return (
+                    <div key={i} className="flex items-start gap-2 p-2.5">
+                      <Badge variant="outline" className={`shrink-0 text-[10px] capitalize ${cor === "red" ? "bg-red-50 text-red-700 border-red-200" : cor === "orange" ? "bg-orange-50 text-orange-700 border-orange-200" : "bg-amber-50 text-amber-700 border-amber-200"}`}>
+                        {a.tipo}
+                      </Badge>
+                      <span className="text-xs text-slate-700 leading-snug">{a.mensagem}</span>
+                    </div>
+                  );
+                })}
               </div>
             )}
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </div>
     </div>
   );
 }
 
-function KpiCard({ label, value, icon, color }: { label: string; value: number; icon: React.ReactNode; color?: string }) {
+function KpiCard({ label, value, icon: Icon, accent }: { label: string; value: number; icon: any; accent: "blue" | "emerald" | "amber" | "red" | "orange" }) {
+  const accents: Record<string, { bg: string; chip: string; ring: string; icon: string; num: string; bar: string }> = {
+    blue:    { bg: "bg-blue-50/40",    chip: "bg-blue-100",    ring: "ring-blue-200",    icon: "text-blue-600",    num: "text-blue-900",    bar: "bg-blue-500" },
+    emerald: { bg: "bg-emerald-50/40", chip: "bg-emerald-100", ring: "ring-emerald-200", icon: "text-emerald-600", num: "text-emerald-900", bar: "bg-emerald-500" },
+    amber:   { bg: "bg-amber-50/40",   chip: "bg-amber-100",   ring: "ring-amber-200",   icon: "text-amber-600",   num: "text-amber-900",   bar: "bg-amber-500" },
+    red:     { bg: "bg-red-50/40",     chip: "bg-red-100",     ring: "ring-red-200",     icon: "text-red-600",     num: "text-red-900",     bar: "bg-red-500" },
+    orange:  { bg: "bg-orange-50/40",  chip: "bg-orange-100",  ring: "ring-orange-200",  icon: "text-orange-600",  num: "text-orange-900",  bar: "bg-orange-500" },
+  };
+  const a = accents[accent];
   return (
-    <Card>
-      <CardContent className="pt-4 pb-3 px-4">
-        <div className="flex items-center gap-2 mb-1">{icon}<span className="text-xs text-muted-foreground">{label}</span></div>
-        <p className={`text-2xl font-bold ${color || ""}`}>{value}</p>
-      </CardContent>
-    </Card>
+    <div className={`relative rounded-xl border border-slate-200 bg-white overflow-hidden shadow-sm hover:shadow-md transition-shadow`}>
+      <div className={`absolute inset-x-0 top-0 h-1 ${a.bar}`} />
+      <div className={`${a.bg} px-3 pt-3.5 pb-3`}>
+        <div className="flex items-center justify-between gap-2 mb-1.5">
+          <span className="text-[10px] sm:text-[11px] text-slate-600 uppercase tracking-wider font-semibold truncate">{label}</span>
+          <span className={`inline-flex items-center justify-center h-7 w-7 rounded-lg ${a.chip} ring-1 ${a.ring} shrink-0`}>
+            <Icon className={`h-3.5 w-3.5 ${a.icon}`} />
+          </span>
+        </div>
+        <p className={`text-2xl sm:text-3xl font-extrabold tabular-nums ${a.num}`}>{value}</p>
+      </div>
+    </div>
   );
 }
 

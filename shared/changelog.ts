@@ -1,6 +1,20 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2005 — SST · Integração de Segurança · Tela repaginada na regra de ouro.
+ * Pedido direto do usuário (17/05/2026, img IMG_0850): "Quero a tela de integração repaginada conforme a regra de ouro e fácil usabilidade". A tela `/sst/integracao` tinha cabeçalho cinza só com ícone solto, abas chapadas sem hierarquia visual, KPIs em cards brancos genéricos (Total/Aprovados/Pendentes/Reprovados/Vencendo 30d todos iguais), e cards Indicadores/Alertas sem destaque do número principal. Visual quebrava o padrão estabelecido em Fechamento Ponto, Terceiros, Compras (gradient header + chip de ícone + KPIs coloridos).
+ * Mudança em 1 arquivo: `client/src/pages/sst/IntegracaoSST.tsx`:
+ *   (1) **Header full-width** (substitui flex inline): gradient `from-emerald-700 via-emerald-600 to-teal-600`, chip 12-14 redondo com `GraduationCap` em ring branco, h1 + descrição em branco translúcido. Padrão idêntico ao Terceiros/FechamentoPonto.
+ *   (2) **Tabs reescritas**: array `tabs` declarativo com `{value, label, icon, desc}` (Dashboard, Vídeos, Configurações, Pendentes, Histórico, Sessões); barra sticky branca shadow-sm; cada TabsTrigger usa chip 6x6 com ícone lucide ring-1 (ativo: fundo branco + ring emerald; inativo: fundo slate); borda inferior 2px emerald no ativo + bg emerald-50/60; horizontal scroll em mobile via `overflow-x-auto flex-nowrap`. Subtítulo dinâmico exibe `desc` da aba ativa.
+ *   (3) **KpiCard reescrito** (mesma assinatura preservada — chamadas inalteradas): cada card ganha barra superior 1px colorida (`bar`), background levemente tingido (`bg-{accent}-50/40`), chip 7x7 com ícone à direita + label uppercase tracking-wider à esquerda, número 3xl extrabold tabular-nums. 5 accents disponíveis (blue/emerald/amber/red/orange). Hover ganha shadow-md.
+ *   (4) **Bloco Indicadores reescrito**: header com chip `TrendingUp` emerald + título + subtítulo "Performance da integração". Taxa de Aprovação ganha destaque (número 2xl à direita, barra gradiente verde≥80% / amber≥60% / vermelho<60%). Média de Nota e Em Andamento viram 2 mini-cards (indigo / blue) abaixo.
+ *   (5) **Bloco Alertas reescrito**: header chip `AlertTriangle` orange + contador dinâmico. Empty-state com CheckCircle verde "Nenhum alerta — tudo em dia!". Lista divide-y com badge contextual (vermelho/laranja/amber) + mensagem snug. Max-height 72 com overflow-y-auto.
+ *   (6) Estado "sem empresa" virou card border-dashed com ícone Users centralizado.
+ *   (7) `shared/version.ts` → 2005.
+ * Resultado: tela alinhada à regra de ouro (gradient header, chips, hierarquia clara), responsiva em iPad/mobile (header `sm:` + tabs scroll horizontal), KPIs visualmente distintos por cor, indicadores/alertas com header iconizado e empty-state amigável.
+ * Preservado: TODAS as 6 sub-abas (DashboardTab/VideosTab/ConfigTab/PendentesTab/HistoricoTab/SessoesTab) INTACTAS — só o wrapper/header/dashboard mudaram; queries tRPC INTACTAS (`integracaoSST.dashboardKpis`/`alertas`); assinatura `KpiCard(label, value, icon, accent)` consumida só dentro deste arquivo. Rev. 2004 INTACTA. Schema INTACTO. R-001/R-007/R-010 OK. Reversível em 1 arquivo (3 hunks).
+ * Follow-up natural: aplicar mesma regra de ouro às sub-abas Vídeos/Configurações/Pendentes/Histórico/Sessões (uma rev por aba pra manter PRs pequenos).
+ *
  * Rev. 2004 — Terceiros · Funcionários · Controle de DDS (Diálogo Diário de Segurança).
  * Pedido direto do usuário (17/05/2026): "Controle de DDS tbm... quando ele participar do DDS da nossa construtora". Diferente da integração admissional (1x na contratação), DDS é RECORRENTE — todo terceiro precisa participar dos DDS realizados pela Construtora (FC), e a empresa precisa COMPROVAR essa participação (auditorias, exigências de clientes, requisitos legais SST).
  * Mudança em 4 arquivos:
