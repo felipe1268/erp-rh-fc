@@ -4,8 +4,9 @@
 > O detalhamento completo (causa-raiz, stack traces, arquivos tocados, comentários longos) de TODAS as revisões — incluindo as listadas abaixo — vive em `shared/changelog.ts`.
 > Movido aqui na Rev. 2028 (faxina) — revisões 1903 → 2012.
 
+- ~~Rev. 2035~~ — SST Integração: pontuação vai pro Raio-X do Funcionário + certificado de aprovação em PDF (público e re-emissão no Raio-X). Ver `shared/changelog.ts`. (movida da Rev. 2050)
 - ~~Rev. 2034~~ — SST Integração aba Pendentes: novo bloco "Sem integração válida" listando TODOS CLT/PJ/Terceiros que precisam fazer/renovar (24 meses). Ver `shared/changelog.ts`. (movida da Rev. 2049)
-> Atualizado na Rev. 2037 — revisões 2021 e 2022 movidas pra cá.
+> Atualizado na Rev. 2050 — Rev. 2035 movida pra cá.
 > Atualizado em 17/05/2026 (faxina) — revisões 2026 a 2030 movidas pra cá.
 
 ## Revisão 2030

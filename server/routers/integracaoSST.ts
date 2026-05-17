@@ -26,7 +26,7 @@ function gerarToken(): string {
 // Linguagem simples (público alvo: servente/ajudante, baixa escolaridade).
 // Cobre: pontualidade, ausência, celular, uniforme, materiais, insubordinação,
 // assédio sexual/moral, intolerância, agressão, álcool/drogas, furto, EPI.
-const PERGUNTAS_REGRAS_OURO: { texto: string; alternativas: { texto: string; correta: boolean }[] }[] = [
+export const PERGUNTAS_REGRAS_OURO: { texto: string; alternativas: { texto: string; correta: boolean }[] }[] = [
   {
     texto: "Cheguei atrasado no trabalho. O que pode acontecer?",
     alternativas: [

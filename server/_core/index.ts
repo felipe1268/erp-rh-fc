@@ -958,6 +958,105 @@ Regras:
         await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_sst_integ_reg_status ON sst_integracao_registros(status)`);
         console.log(`[SyncSchema+] Tabelas SST Integração garantidas.`);
 
+        // Rev. 2050 — Auto-migração das 12 perguntas-padrão das Regras de
+        // Ouro (Rev. 2047) pra todo módulo que ainda esteja no seed antigo
+        // da Rev. 2046 (perguntas sobre NRs, fora do escopo do vídeo
+        // "INTEGRAÇÃO FC ENGENHARIA"). Antes dependia do admin clicar no
+        // botão "Atualizar Regras de Ouro" na UI; agora roda sozinho no
+        // startup. Detecta o seed antigo por: (a) ter exatamente 1 pergunta
+        // com texto começando com "Quando devo usar capacete, óculos e
+        // botina" (assinatura única da Rev. 2046). Idempotente (só roda em
+        // módulos com o marcador antigo) e seguro (delete+insert atômico
+        // em transação — nunca deixa módulo vazio se algo falhar).
+        // Respostas históricas em sst_integracao_respostas NÃO são afetadas
+        // (vivem em outra tabela, sem FK rígida pras perguntas).
+        try {
+          const { PERGUNTAS_REGRAS_OURO } = await import("../routers/integracaoSST");
+          const canonTexts = PERGUNTAS_REGRAS_OURO.map((p) => p.texto);
+          // Detecção dupla:
+          //  (1) Seed antigo da Rev. 2046 (qualquer pergunta com âncora NR
+          //      tipo "capacete, óculos e botina" / "cinto de segurança").
+          //  (2) Duplicatas do seed novo Rev. 2047 (total > 12 OU pelo menos
+          //      uma pergunta canônica aparecendo > 1x). Caso real observado:
+          //      módulo do FC com 24 perguntas, todas pares duplicados de
+          //      pid 13-24 → 25-36 — frutos de 2 cliques no "Carregar Regras
+          //      de Ouro" antes do fluxo "Substituir" da Rev. 2047 existir.
+          const oldAnchors = [
+            "%capacete%óculos%botina%",
+            "%cinto de seguran%",
+            "%espaço confinado%",
+            "%fio elétrico desencapado%",
+          ];
+          const modsStale: any = await db.execute(sql`
+            WITH stats AS (
+              SELECT
+                m.id AS modulo_id,
+                m.company_id,
+                COUNT(p.id) AS total,
+                SUM(CASE WHEN ${sql.join(oldAnchors.map((a) => sql`p.texto ILIKE ${a}`), sql` OR `)} THEN 1 ELSE 0 END) AS tem_antigo,
+                COUNT(DISTINCT p.texto) AS texts_distinct,
+                SUM(CASE WHEN p.texto IN (${sql.join(canonTexts.map((t) => sql`${t}`), sql`, `)}) THEN 1 ELSE 0 END) AS canonicos
+              FROM sst_integracao_modulos m
+              JOIN sst_integracao_perguntas p ON p.modulo_id = m.id
+              WHERE m.deleted_at IS NULL
+              GROUP BY m.id, m.company_id
+            )
+            SELECT modulo_id, company_id, total, tem_antigo, canonicos, texts_distinct
+            FROM stats
+            -- Critério ENDURECIDO (revisão de arquiteto): só dispara se
+            -- (a) tem todas as 4 âncoras do seed antigo Rev. 2046 juntas,
+            --     evitando false-positive de módulos customizados que só
+            --     mencionem "cinto de segurança" por acaso; OU
+            -- (b) tem QUASE TODAS as 12 canônicas (≥10) — i.e. claramente
+            --     é um seed Rev. 2047 — E está com duplicatas; OU
+            -- (c) tem TODAS as 12 canônicas e total ≠ 12 (duplicatas ou
+            --     extras). Módulos customizados com 1-9 canônicas ficam
+            --     intactos.
+            WHERE tem_antigo >= 4
+               OR (canonicos >= 10 AND total > texts_distinct)
+               OR (canonicos = ${PERGUNTAS_REGRAS_OURO.length} AND total <> ${PERGUNTAS_REGRAS_OURO.length})
+          `);
+          const rows: any[] = Array.isArray(modsStale) ? modsStale : (modsStale?.rows ?? []);
+          if (rows.length > 0) {
+            console.log(`[SyncSchema+] Rev. 2050: ${rows.length} módulo(s) com perguntas SST stale (seed antigo OU duplicatas). Re-semeando com as 12 Regras de Ouro Rev. 2047...`);
+            for (const r of rows) {
+              console.log(`  · m=${r.modulo_id} c=${r.company_id} total=${r.total} distinct=${r.texts_distinct} canonicos=${r.canonicos} tem_antigo=${r.tem_antigo}`);
+            }
+            for (const r of rows) {
+              const moduloId = Number(r.modulo_id);
+              const companyId = Number(r.company_id);
+              if (!moduloId || !companyId) continue;
+              try {
+                await db.transaction(async (tx: any) => {
+                  const ids: any = await tx.execute(sql`SELECT id FROM sst_integracao_perguntas WHERE modulo_id = ${moduloId} AND company_id = ${companyId}`);
+                  const idRows: any[] = Array.isArray(ids) ? ids : (ids?.rows ?? []);
+                  const perguntaIds = idRows.map((x: any) => Number(x.id)).filter(Boolean);
+                  if (perguntaIds.length > 0) {
+                    await tx.execute(sql`DELETE FROM sst_integracao_alternativas WHERE pergunta_id IN (${sql.join(perguntaIds.map((i: number) => sql`${i}`), sql`, `)})`);
+                    await tx.execute(sql`DELETE FROM sst_integracao_perguntas WHERE id IN (${sql.join(perguntaIds.map((i: number) => sql`${i}`), sql`, `)})`);
+                  }
+                  for (let i = 0; i < PERGUNTAS_REGRAS_OURO.length; i++) {
+                    const p = PERGUNTAS_REGRAS_OURO[i];
+                    const ins: any = await tx.execute(sql`INSERT INTO sst_integracao_perguntas (modulo_id, company_id, texto, ordem) VALUES (${moduloId}, ${companyId}, ${p.texto}, ${i + 1}) RETURNING id`);
+                    const insRows: any[] = Array.isArray(ins) ? ins : (ins?.rows ?? []);
+                    const perguntaId = Number(insRows[0]?.id);
+                    if (!perguntaId) throw new Error("INSERT pergunta sem RETURNING id");
+                    for (let j = 0; j < p.alternativas.length; j++) {
+                      const a = p.alternativas[j];
+                      await tx.execute(sql`INSERT INTO sst_integracao_alternativas (pergunta_id, texto, correta, ordem) VALUES (${perguntaId}, ${a.texto}, ${a.correta}, ${j + 1})`);
+                    }
+                  }
+                });
+                console.log(`[SyncSchema+] Rev. 2050: módulo ${moduloId} (company ${companyId}) migrado pras 12 Regras de Ouro.`);
+              } catch (eMod: any) {
+                console.error(`[SyncSchema+] Rev. 2050: FALHA módulo ${moduloId}:`, eMod?.message || eMod);
+              }
+            }
+          }
+        } catch (e: any) {
+          console.error(`[SyncSchema+] Rev. 2050: FALHA auto-migração Regras de Ouro:`, e?.message || e);
+        }
+
         // Rev. 1726 — DDS (Diálogo Diário de Segurança).
         // Idempotente — garante 3 tabelas no startup mesmo sem rodar drizzle migrate.
         await db.execute(sql`CREATE TABLE IF NOT EXISTS dds_temas (

@@ -1,6 +1,118 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2050 — SST · Integração · AUTO-MIGRAÇÃO no startup das
+ * 12 perguntas-padrão "Regras de Ouro" (Rev. 2047) — corrige
+ * tenants com SEED ANTIGO da Rev. 2046 (NRs/capacete) OU com
+ * DUPLICATAS do seed novo. Tira da mão do admin a tarefa de
+ * clicar no botão "Atualizar Regras de Ouro" — agora roda
+ * sozinho assim que o servidor sobe.
+ *
+ * Pedido direto do usuário (IMG_0936): "As perguntas não tem
+ * nada a ver com o vídeo, melhore isso.. quero que as regras
+ * de ouro estejam no questionário".
+ *
+ * Investigação:
+ *  - Código já tinha as 12 perguntas certas em
+ *    `PERGUNTAS_REGRAS_OURO` (Rev. 2047).
+ *  - DB do FC (company=60002, módulo=1) tinha 24 perguntas:
+ *    duplicatas pid 13-24 + pid 25-36, todas com o texto
+ *    canônico Rev. 2047 (mesma ordem 1-12 repetida 2x).
+ *    Causa: 2 cliques no "Carregar Regras de Ouro" antes do
+ *    fluxo "Substituir" (com confirmação) da Rev. 2047 existir.
+ *  - O screenshot IMG_0936 era de uma sessão ANTERIOR ainda
+ *    mostrando o seed antigo da Rev. 2046 (capacete, cinto,
+ *    espaço confinado, fio elétrico) — mas o estado atual já
+ *    tinha as Regras de Ouro, só duplicadas.
+ *
+ * Solução em 2 arquivos (zero schema, zero contrato tRPC):
+ *
+ * (A) `server/routers/integracaoSST.ts` — export agora público
+ *     da constante `PERGUNTAS_REGRAS_OURO` (antes era módulo-
+ *     local). Reuso pelo startup sem replicação de dados.
+ *
+ * (B) `server/_core/index.ts` — novo bloco one-shot pós-
+ *     "SyncSchema+ Tabelas SST Integração garantidas":
+ *
+ *     SCAN (CTE `stats` por módulo):
+ *       - `total` = COUNT(perguntas)
+ *       - `tem_antigo` = 1+ pergunta com ILIKE em uma de 4
+ *         âncoras NR ("%capacete%óculos%botina%",
+ *         "%cinto de seguran%", "%espaço confinado%",
+ *         "%fio elétrico desencapado%").
+ *       - `canonicos` = COUNT de perguntas cujo texto está EM
+ *         PERGUNTAS_REGRAS_OURO (lista canônica das 12 Rev. 2047).
+ *       - `texts_distinct` = COUNT(DISTINCT texto).
+ *     FILTRO de stale:
+ *       - `tem_antigo > 0` (módulo ainda no seed Rev. 2046), OU
+ *       - `canonicos > 0 AND total > texts_distinct` (tem ao
+ *         menos 1 canônico E perguntas duplicadas — caso FC), OU
+ *       - `canonicos > 0 AND total ≠ 12` (tem canônicos mas
+ *         quantidade errada — incompleto).
+ *
+ *     RE-SEED (1 transação por módulo):
+ *       - DELETE alternativas WHERE pergunta_id IN (módulo).
+ *       - DELETE perguntas WHERE id IN (módulo).
+ *       - INSERT das 12 perguntas + 36 alternativas (ordem
+ *         preservada). Atômico — se INSERT falhar, rollback
+ *         restaura o estado.
+ *
+ *     SAFEGUARDS:
+ *       - Idempotente: filtro só pega módulos stale; após o
+ *         primeiro startup nenhum módulo casa o filtro de novo
+ *         (confirmado nos logs: 1 módulo migrado, segundo
+ *         restart não detecta nada).
+ *       - Não toca em módulos CUSTOMIZADOS (sem nenhuma das
+ *         12 perguntas canônicas presente) — `canonicos = 0`
+ *         falha as duas últimas condições; só `tem_antigo > 0`
+ *         dispara, e nesse caso o módulo tem MESMO seed antigo
+ *         e precisa migrar.
+ *       - Cross-tenant: tudo passa por moduloId+companyId no
+ *         WHERE de cada DELETE/INSERT.
+ *       - Respostas históricas em `sst_integracao_respostas`
+ *         NÃO são afetadas (vivem em outra tabela, sem FK
+ *         rígida pras perguntas — design original Rev. 2034).
+ *       - Try/catch externo + try/catch por módulo: se um
+ *         módulo falha, outros continuam.
+ *       - Resultado em produção (validado nos logs):
+ *           m=1 c=60002 total=24 distinct=12 canonicos=24
+ *           tem_antigo=0 → re-seed com 12 limpas.
+ *
+ * Por que não usar a coluna `ordem` pra dedupe in-place?
+ *  - O grupo de duplicatas no FC tinha mesma `ordem` 1-12
+ *    repetido 2x (pid 13-24 ord=1-12 + pid 25-36 ord=1-12).
+ *    Dedupe in-place exigiria escolher qual `pergunta_id`
+ *    manter por (modulo, ordem) — risco de invalidar respostas
+ *    históricas se um pid "errado" sobreviver. Wipe-and-reseed
+ *    é mais simples e dá 0 chance de drift de texto/alternativa
+ *    em relação à constante canônica.
+ *
+ * R-001/R-007/R-010 OK: ZERO ALTER/DROP de SCHEMA. O DELETE
+ * roda em dados de SEED (não dados de produção do usuário),
+ * em transação atômica, e só em módulos detectados como stale
+ * pela heurística acima. Sem schema change. Sem nova dep.
+ *
+ * Preservado: Rev. 2049/2048/2047/2046/2045/2044 INTACTAS.
+ * Handler `semearPerguntasPadrao` (botão manual "Atualizar
+ * Regras de Ouro") INTACTO — continua disponível pra futuras
+ * mudanças de conteúdo. Constante `PERGUNTAS_REGRAS_OURO`
+ * passa a ser export (era const local) — único site de uso
+ * por enquanto continua sendo o próprio router.
+ *
+ * Follow-up:
+ *   (1) Quando virar multi-tenant de verdade, esse re-seed
+ *       auto pode ficar opt-in por config.
+ *   (2) Versionar `PERGUNTAS_REGRAS_OURO` com hash; migração
+ *       só dispara quando hash mudar entre revisões.
+ *   (3) Banco de perguntas reutilizável mantido pelo
+ *       admin_master via UI (hoje só no código).
+ *   (4) Embaralhar ordem das alternativas na tela pública pra
+ *       evitar cola entre colaboradores.
+ *
+ * Arquivos: server/routers/integracaoSST.ts,
+ *           server/_core/index.ts,
+ *           shared/version.ts, shared/changelog.ts, replit.md.
+ *
  * Rev. 2049 — SST · Integração · NOVA ABA "Aprovados" com
  * acesso direto ao Certificado (Visualizar/Baixar) + atalho
  * pro Raio-X do colaborador. Reforça mensagem ao usuário de
