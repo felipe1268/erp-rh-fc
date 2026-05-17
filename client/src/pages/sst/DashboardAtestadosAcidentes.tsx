@@ -28,6 +28,75 @@ function truncate(s: string, n = 22) {
   return s.length > n ? s.slice(0, n - 1) + "…" : s;
 }
 
+// Rev. 1979 — Tempo de empresa em "Xa Ym Zd" (ex: "5a 3m 12d"). Null → "—".
+function fmtTempoEmpresa(dataAdmissao: string | null | undefined): string {
+  if (!dataAdmissao) return "—";
+  const ini = new Date(String(dataAdmissao).slice(0, 10) + "T00:00:00");
+  if (isNaN(ini.getTime())) return "—";
+  const hoje = new Date();
+  let anos = hoje.getFullYear() - ini.getFullYear();
+  let meses = hoje.getMonth() - ini.getMonth();
+  let dias = hoje.getDate() - ini.getDate();
+  if (dias < 0) {
+    meses -= 1;
+    const ultDia = new Date(hoje.getFullYear(), hoje.getMonth(), 0).getDate();
+    dias += ultDia;
+  }
+  if (meses < 0) { anos -= 1; meses += 12; }
+  const parts: string[] = [];
+  if (anos > 0) parts.push(`${anos}a`);
+  if (meses > 0) parts.push(`${meses}m`);
+  parts.push(`${dias}d`);
+  return parts.join(" ");
+}
+
+// Rev. 1979 — Idade em anos completos. Null → null (não renderiza).
+function fmtIdade(dataNascimento: string | null | undefined): string | null {
+  if (!dataNascimento) return null;
+  const ini = new Date(String(dataNascimento).slice(0, 10) + "T00:00:00");
+  if (isNaN(ini.getTime())) return null;
+  const hoje = new Date();
+  let anos = hoje.getFullYear() - ini.getFullYear();
+  const m = hoje.getMonth() - ini.getMonth();
+  if (m < 0 || (m === 0 && hoje.getDate() < ini.getDate())) anos -= 1;
+  return `${anos} anos`;
+}
+
+// Rev. 1979 — Badge CIPA: Ativo (verde sólido) ou Estabilidade até DD/MM/YYYY (âmbar). null → nada.
+function CipaBadge({ ativo, estabilidade, fim }: { ativo: boolean; estabilidade: boolean; fim: string | null }) {
+  if (ativo) {
+    return (
+      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-green-100 text-green-800 border border-green-300" title="Membro ativo da CIPA">
+        CIPA
+      </span>
+    );
+  }
+  if (estabilidade) {
+    const fmt = fim ? new Date(String(fim).slice(0, 10) + "T00:00:00").toLocaleDateString("pt-BR") : "—";
+    return (
+      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-100 text-amber-800 border border-amber-300" title={`Ex-membro com estabilidade CIPA até ${fmt}`}>
+        CIPA · estab. {fmt}
+      </span>
+    );
+  }
+  return null;
+}
+
+// Rev. 1979 — Bloco compacto de metadados (tempo / idade / obra / CIPA) sob o nome.
+function EmployeeMeta({ f }: { f: any }) {
+  const tempo = fmtTempoEmpresa(f.dataAdmissao);
+  const idade = fmtIdade(f.dataNascimento);
+  const obra = f.obraAtual as string | null;
+  return (
+    <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-gray-500 mt-0.5">
+      <span title="Tempo de empresa">⏱ {tempo}</span>
+      {idade && <span title="Idade">· 🎂 {idade}</span>}
+      <span title="Obra atual">· 🏗 {obra || "Sem alocação"}</span>
+      <CipaBadge ativo={!!f.cipaAtivo} estabilidade={!!f.cipaEstabilidade} fim={f.cipaFimEstabilidade || null} />
+    </div>
+  );
+}
+
 // Rev. 1976 — Avatar do funcionário (miniatura clicável que abre modal de zoom).
 // Mostra foto se houver fotoUrl; senão, círculo com iniciais sobre fundo cinza.
 function EmployeeAvatar({ fotoUrl, nome, onZoom }: { fotoUrl: string | null | undefined; nome: string; onZoom: (url: string, nome: string) => void }) {
@@ -695,11 +764,11 @@ export default function DashboardAtestadosAcidentes() {
                         )}
                         {d.atestados.topFuncionarios.map((f, i) => (
                           <tr key={f.employeeId} className="hover:bg-gray-50">
-                            <td className="px-3 py-2 text-gray-500">{i + 1}</td>
-                            <td className="px-3 py-2 font-medium">
-                              <div className="flex items-center gap-2">
+                            <td className="px-3 py-2 text-gray-500 align-top">{i + 1}</td>
+                            <td className="px-3 py-2 font-medium align-top">
+                              <div className="flex items-start gap-2">
                                 <EmployeeAvatar fotoUrl={(f as any).fotoUrl} nome={f.nome} onZoom={(url, nome) => setFotoZoom({ url, nome })} />
-                                <div className="min-w-0">
+                                <div className="min-w-0 flex-1">
                                   <button
                                     type="button"
                                     className="text-left text-blue-700 hover:underline hover:text-blue-900"
@@ -709,6 +778,7 @@ export default function DashboardAtestadosAcidentes() {
                                     {f.nome}
                                   </button>
                                   {f.codigoInterno ? <span className="text-xs text-gray-400 ml-1">#{f.codigoInterno}</span> : (f.matricula ? <span className="text-xs text-gray-400 ml-1">#{f.matricula}</span> : null)}
+                                  <EmployeeMeta f={f} />
                                 </div>
                               </div>
                             </td>
@@ -847,11 +917,11 @@ export default function DashboardAtestadosAcidentes() {
                         )}
                         {d.acidentes.topFuncionarios.map((f, i) => (
                           <tr key={f.employeeId} className="hover:bg-gray-50">
-                            <td className="px-3 py-2 text-gray-500">{i + 1}</td>
-                            <td className="px-3 py-2 font-medium">
-                              <div className="flex items-center gap-2">
+                            <td className="px-3 py-2 text-gray-500 align-top">{i + 1}</td>
+                            <td className="px-3 py-2 font-medium align-top">
+                              <div className="flex items-start gap-2">
                                 <EmployeeAvatar fotoUrl={(f as any).fotoUrl} nome={f.nome} onZoom={(url, nome) => setFotoZoom({ url, nome })} />
-                                <div className="min-w-0">
+                                <div className="min-w-0 flex-1">
                                   <button
                                     type="button"
                                     className="text-left text-blue-700 hover:underline hover:text-blue-900"
@@ -861,6 +931,7 @@ export default function DashboardAtestadosAcidentes() {
                                     {f.nome}
                                   </button>
                                   {f.codigoInterno ? <span className="text-xs text-gray-400 ml-1">#{f.codigoInterno}</span> : (f.matricula ? <span className="text-xs text-gray-400 ml-1">#{f.matricula}</span> : null)}
+                                  <EmployeeMeta f={f} />
                                 </div>
                               </div>
                             </td>

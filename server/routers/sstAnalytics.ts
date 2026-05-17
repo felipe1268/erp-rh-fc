@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
-import { atestados, accidents, employees, obras, employeeSiteHistory } from "../../drizzle/schema";
+import { atestados, accidents, employees, obras, employeeSiteHistory, obraFuncionarios, cipaMembers } from "../../drizzle/schema";
 import { and, eq, gte, lte, isNull, sql, desc, inArray } from "drizzle-orm";
 import { companyFilter } from "../companyHelper";
 
@@ -80,6 +80,8 @@ export const sstAnalyticsRouter = router({
           employeeFuncao: employees.funcao,
           employeeCargo: employees.cargo,
           employeeFotoUrl: employees.fotoUrl,
+          employeeDataAdmissao: employees.dataAdmissao,
+          employeeDataNascimento: employees.dataNascimento,
         })
         .from(atestados)
         .leftJoin(employees, eq(atestados.employeeId, employees.id))
@@ -134,9 +136,10 @@ export const sstAnalyticsRouter = router({
       const atestadosSemCID = totalAtestados - atestadosComCID;
 
       // top funcionários (atestados)
+      // Rev. 1979 — type estendido: + dataAdmissao/dataNascimento (do SELECT) + obraAtual/cipa* (preenchidos pós-slice via enrich).
       const funcMap = new Map<
         number,
-        { employeeId: number; nome: string; matricula: string | null; codigoInterno: string | null; funcao: string | null; fotoUrl: string | null; quantidade: number; dias: number }
+        { employeeId: number; nome: string; matricula: string | null; codigoInterno: string | null; funcao: string | null; fotoUrl: string | null; dataAdmissao: string | null; dataNascimento: string | null; obraAtual: string | null; cipaAtivo: boolean; cipaEstabilidade: boolean; cipaFimEstabilidade: string | null; quantidade: number; dias: number }
       >();
       for (const r of atRows) {
         const cur = funcMap.get(r.employeeId) ?? {
@@ -146,6 +149,12 @@ export const sstAnalyticsRouter = router({
           codigoInterno: r.employeeCodigoInterno || null,
           funcao: r.employeeFuncao || r.employeeCargo || null,
           fotoUrl: r.employeeFotoUrl || null,
+          dataAdmissao: r.employeeDataAdmissao || null,
+          dataNascimento: r.employeeDataNascimento || null,
+          obraAtual: null,
+          cipaAtivo: false,
+          cipaEstabilidade: false,
+          cipaFimEstabilidade: null,
           quantidade: 0,
           dias: 0,
         };
@@ -184,6 +193,8 @@ export const sstAnalyticsRouter = router({
           employeeFuncao: employees.funcao,
           employeeCargo: employees.cargo,
           employeeFotoUrl: employees.fotoUrl,
+          employeeDataAdmissao: employees.dataAdmissao,
+          employeeDataNascimento: employees.dataNascimento,
         })
         .from(accidents)
         .leftJoin(employees, eq(accidents.employeeId, employees.id))
@@ -518,7 +529,7 @@ export const sstAnalyticsRouter = router({
       // top funcionários (acidentes)
       const funcAcMap = new Map<
         number,
-        { employeeId: number; nome: string; matricula: string | null; codigoInterno: string | null; funcao: string | null; fotoUrl: string | null; quantidade: number; dias: number }
+        { employeeId: number; nome: string; matricula: string | null; codigoInterno: string | null; funcao: string | null; fotoUrl: string | null; dataAdmissao: string | null; dataNascimento: string | null; obraAtual: string | null; cipaAtivo: boolean; cipaEstabilidade: boolean; cipaFimEstabilidade: string | null; quantidade: number; dias: number }
       >();
       for (const r of acRows) {
         const cur = funcAcMap.get(r.employeeId) ?? {
@@ -528,6 +539,12 @@ export const sstAnalyticsRouter = router({
           codigoInterno: r.employeeCodigoInterno || null,
           funcao: r.employeeFuncao || r.employeeCargo || null,
           fotoUrl: r.employeeFotoUrl || null,
+          dataAdmissao: r.employeeDataAdmissao || null,
+          dataNascimento: r.employeeDataNascimento || null,
+          obraAtual: null,
+          cipaAtivo: false,
+          cipaEstabilidade: false,
+          cipaFimEstabilidade: null,
           quantidade: 0,
           dias: 0,
         };
@@ -538,6 +555,59 @@ export const sstAnalyticsRouter = router({
       const topFuncionariosAcidentes = Array.from(funcAcMap.values())
         .sort((a, b) => b.quantidade - a.quantidade || b.dias - a.dias)
         .slice(0, 10);
+
+      // Rev. 1979 — Enriquecimento dos top-10 com obra atual + CIPA (lookup em batch só dos IDs dos top-10).
+      const topIds = Array.from(new Set([
+        ...topFuncionariosAtestados.map((f) => f.employeeId),
+        ...topFuncionariosAcidentes.map((f) => f.employeeId),
+      ]));
+      if (topIds.length > 0) {
+        // Obra atual (alocação ativa)
+        const ofRows = await db
+          .select({ employeeId: obraFuncionarios.employeeId, obraNome: obras.nome })
+          .from(obraFuncionarios)
+          .leftJoin(obras, eq(obras.id, obraFuncionarios.obraId))
+          .where(and(inArray(obraFuncionarios.employeeId, topIds), eq(obraFuncionarios.isActive, 1)));
+        const obraMap = new Map<number, string>();
+        for (const r of ofRows) if (r.obraNome) obraMap.set(r.employeeId, r.obraNome);
+
+        // CIPA: pega o registro mais relevante por funcionário —
+        // prioridade: Ativo > Estabilidade (fimEstabilidade >= hoje) > nada.
+        const today = new Date().toISOString().slice(0, 10);
+        const cipaRows = await db
+          .select({
+            employeeId: cipaMembers.employeeId,
+            statusMembro: cipaMembers.statusMembro,
+            fimEstabilidade: cipaMembers.fimEstabilidade,
+          })
+          .from(cipaMembers)
+          .where(inArray(cipaMembers.employeeId, topIds));
+        const cipaMap = new Map<number, { ativo: boolean; estabilidade: boolean; fim: string | null }>();
+        for (const r of cipaRows) {
+          const ativo = r.statusMembro === "Ativo";
+          const estabilidade = !ativo && !!r.fimEstabilidade && r.fimEstabilidade >= today;
+          const prev = cipaMap.get(r.employeeId);
+          if (!prev) {
+            cipaMap.set(r.employeeId, { ativo, estabilidade, fim: r.fimEstabilidade });
+          } else if (ativo && !prev.ativo) {
+            cipaMap.set(r.employeeId, { ativo: true, estabilidade: false, fim: r.fimEstabilidade });
+          } else if (!prev.ativo && estabilidade && (!prev.fim || (r.fimEstabilidade && r.fimEstabilidade > prev.fim))) {
+            cipaMap.set(r.employeeId, { ativo: false, estabilidade: true, fim: r.fimEstabilidade });
+          }
+        }
+
+        const enrich = (f: typeof topFuncionariosAtestados[number]) => {
+          f.obraAtual = obraMap.get(f.employeeId) || null;
+          const ci = cipaMap.get(f.employeeId);
+          if (ci) {
+            f.cipaAtivo = ci.ativo;
+            f.cipaEstabilidade = ci.estabilidade;
+            f.cipaFimEstabilidade = ci.fim;
+          }
+        };
+        topFuncionariosAtestados.forEach(enrich);
+        topFuncionariosAcidentes.forEach(enrich);
+      }
 
       // ---- Atestados por dia da semana ----
       const dowAtMap = new Map<number, { diaIdx: number; dia: string; qtd: number; dias: number }>();
