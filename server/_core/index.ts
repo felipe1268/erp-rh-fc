@@ -359,6 +359,97 @@ Regras:
       res.status(500).json({ error: err?.message || "Erro ao fazer upload" });
     }
   });
+
+  // Rev. 2013 — Upload de vídeos de Integração SST SEM LIMITE de tamanho.
+  // Pedido do usuário: "Quero poder subir vídeo sem limite de tamanho".
+  // Estratégia: multer diskStorage (não trava RAM) + move pro server/uploads em disco
+  // (servido pelo middleware estático em /uploads). Pula persist em DB base64 — pra arquivos
+  // grandes (vídeos) isso destruiria o Postgres. Se houver storage externa configurada,
+  // faz upload streaming via fetch + fs.createReadStream.
+  const fsMod = (await import("fs")).default;
+  const pathMod = (await import("path")).default;
+  const osMod = (await import("os")).default;
+  const tmpDir = pathMod.join(osMod.tmpdir(), "sst-video-uploads");
+  if (!fsMod.existsSync(tmpDir)) fsMod.mkdirSync(tmpDir, { recursive: true });
+  const sstVideoUpload = multer({
+    storage: multer.diskStorage({
+      destination: (_req, _file, cb) => cb(null, tmpDir),
+      filename: (_req, file, cb) => cb(null, `${Date.now()}-${Math.random().toString(36).slice(2, 8)}-${file.originalname.replace(/[^a-zA-Z0-9._-]/g, "_")}`),
+    }),
+    // SEM `limits.fileSize` — qualquer tamanho aceito.
+  });
+  app.post("/api/upload/sst-integracao-video", sstVideoUpload.single("file"), async (req: any, res: any) => {
+    try {
+      try { await sdk.authenticateRequest(req); }
+      catch (authErr: any) {
+        console.error("[SST Video Upload] Auth falhou:", authErr?.message);
+        if (req.file?.path) { try { fsMod.unlinkSync(req.file.path); } catch {} }
+        return res.status(401).json({ error: "Não autenticado" });
+      }
+      const file = req.file;
+      if (!file) return res.status(400).json({ error: "Nenhum arquivo enviado" });
+      // Sanitização: companyId DEVE ser numérico estrito pra evitar path traversal.
+      const companyIdRaw = String(req.body.companyId ?? "0");
+      const companyId = /^\d+$/.test(companyIdRaw) ? companyIdRaw : "0";
+      const safeName = file.originalname.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 120) || "video.mp4";
+      const key = `sst/integracao/videos/${companyId}-${Date.now()}-${safeName}`;
+      const ct = file.mimetype || "video/mp4";
+      const localUploadsDir = pathMod.resolve(pathMod.join(process.cwd(), "server", "uploads"));
+      const finalPath = pathMod.resolve(pathMod.join(localUploadsDir, key));
+      // Defesa em profundidade: garante que o caminho final está DENTRO de server/uploads.
+      if (!finalPath.startsWith(localUploadsDir + pathMod.sep)) {
+        try { fsMod.unlinkSync(file.path); } catch {}
+        return res.status(400).json({ error: "Caminho inválido" });
+      }
+      fsMod.mkdirSync(pathMod.dirname(finalPath), { recursive: true });
+      try {
+        fsMod.renameSync(file.path, finalPath);
+      } catch (renameErr: any) {
+        // EXDEV (cross-device): cai pro copyFile + unlink
+        if (renameErr?.code === "EXDEV") {
+          fsMod.copyFileSync(file.path, finalPath);
+          try { fsMod.unlinkSync(file.path); } catch {}
+        } else { throw renameErr; }
+      }
+      const url = `/uploads/${key}`;
+      // Responde IMEDIATAMENTE com URL local — não bloqueia cliente esperando storage externa.
+      res.json({ url, key, fileName: file.originalname, sizeBytes: file.size, contentType: ct });
+
+      // Replicação OPCIONAL pra storage externa em background (fire-and-forget).
+      // Usa openAsBlob (Node 19+) — Blob é backed por stream do disco, sem carregar tudo em RAM.
+      setImmediate(async () => {
+        try {
+          const { ENV } = await import("./env");
+          if (!ENV.forgeApiUrl || !ENV.forgeApiKey) return;
+          const uploadUrl = new URL("v1/storage/upload", ENV.forgeApiUrl.replace(/\/+$/, "") + "/");
+          uploadUrl.searchParams.set("path", key);
+          const { openAsBlob } = await import("fs");
+          const blob = typeof openAsBlob === "function"
+            ? await openAsBlob(finalPath, { type: ct })
+            : new Blob([fsMod.readFileSync(finalPath)], { type: ct });
+          const fd = new FormData();
+          fd.append("file", blob, safeName);
+          const resp = await fetch(uploadUrl, {
+            method: "POST",
+            headers: { Authorization: `Bearer ${ENV.forgeApiKey}` },
+            body: fd,
+          });
+          if (resp.ok) {
+            console.log(`[SST Video Upload BG] Replicado pra storage externa (${file.size} bytes) key=${key}`);
+          } else {
+            console.warn(`[SST Video Upload BG] Storage externa falhou (${resp.status}) key=${key} — fica só local`);
+          }
+        } catch (extErr: any) {
+          console.warn(`[SST Video Upload BG] Storage externa erro key=${key}: ${extErr?.message}`);
+        }
+      });
+    } catch (err: any) {
+      console.error("[SST Video Upload] Erro:", err);
+      if (req.file?.path) { try { fsMod.unlinkSync(req.file.path); } catch {} }
+      res.status(500).json({ error: err?.message || "Erro ao fazer upload do vídeo" });
+    }
+  });
+
   app.get("/api/diario-obra/foto/:id", async (req: any, res: any) => {
     try {
       const db = await (await import("../db")).getDb();

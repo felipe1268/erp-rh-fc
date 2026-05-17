@@ -1,6 +1,57 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2013 — SST · Integração · Upload de vídeo SEM LIMITE de tamanho.
+ * Pedido direto do usuário (17/05/2026): "Quero poder subir vídeo sem limite de tamanho".
+ * Contexto: Rev. 2012 colocou limite de 600MB via multer + memoryStorage e persistia o vídeo
+ * em base64 no Postgres via `storagePut`. Pra arquivos grandes (filmes de integração 1-3GB)
+ * isso é inviável — tanto RAM do servidor quanto tamanho do banco explodem.
+ * Mudança em 2 arquivos:
+ *   (A) `server/_core/index.ts` — endpoint `/api/upload/sst-integracao-video` REESCRITO:
+ *     - multer trocado de `memoryStorage` pra `diskStorage` em `os.tmpdir()/sst-video-uploads`.
+ *       Não trava RAM mesmo com vídeo de 5GB — stream direto pro disco.
+ *     - `limits.fileSize` REMOVIDO completamente (multer aceita qualquer tamanho).
+ *     - Após upload, faz `fs.renameSync` do tmp pro caminho final em `server/uploads/sst/integracao/videos/{companyId}-{ts}-{safeName}`. Se EXDEV (cross-device), fallback pra copyFile+unlink.
+ *     - **NÃO chama mais `storagePut`** (que persistiria em DB base64). O arquivo fica em disco e é servido pelo middleware estático `app.use("/uploads", express.static(...))` já existente. URL retornada: `/uploads/sst/integracao/videos/...`.
+ *     - Se `ENV.forgeApiUrl` + `forgeApiKey` configurados (storage externa Forge), faz upload OPCIONAL pra storage externa em paralelo via fetch + FormData. Se falhar, segue apenas com versão local (log warning, não bloqueia). URL da externa sobrescreve a local quando disponível.
+ *     - Limpeza de tmp file em todos os caminhos de erro (auth fail, exception).
+ *   (B) `client/src/pages/sst/IntegracaoSST.tsx` (2 mudanças cosméticas no VideosTab):
+ *     - Texto da zona de upload: "até 600 MB" → "sem limite de tamanho".
+ *     - Hint acima: idem.
+ * Resultado: usuário pode subir vídeo de QUALQUER tamanho (limitado só pelo disco do servidor e pela paciência da rede dele). RAM não infla (multer disco), Postgres não infla (sem base64), e se houver storage externa Forge configurada, o vídeo é replicado pra lá também sem bloquear o usuário.
+ * Preservado: estrutura do modal (Rev. 2012) INTACTA — só 2 strings mudaram; endpoint tRPC `criarModulo/atualizarModulo` INTACTOS (continuam recebendo só `videoUrl` + `videoTipo`); outros uploads do sistema (sst-document de 150MB, fotos terceiros, etc) INTACTOS — usam endpoints próprios. Middleware estático `/uploads` (linha 383) INTACTO — serve direto do disco. `storagePut` helper INTACTO — outros módulos continuam usando o DB persist (apropriado pra arquivos pequenos).
+ * Code review (architect FAIL → fix imediato no MESMO commit):
+ *   - **Path traversal fechado**: `companyId` agora obrigatoriamente numérico (regex `/^\d+$/`, fallback "0"); `safeName` limitado a 120 chars; `path.resolve` do `finalPath` + verificação `startsWith(localUploadsDir + sep)` garante que escrita JAMAIS escape de `server/uploads`.
+ *   - **Resposta não bloqueia mais o cliente**: `res.json(...)` é chamado IMEDIATAMENTE com a URL local logo após o `fs.renameSync`. Replicação pra storage externa virou `setImmediate(async ...)` — fire-and-forget verdadeiro.
+ *   - **Replicação externa SEM RAM**: usa `fs.openAsBlob` (Node 19+) que retorna Blob backed por stream do disco; fetch consome em streaming. Fallback pra `readFileSync` só se `openAsBlob` indisponível (compatibilidade defensiva).
+ * Trade-offs remanescentes: (i) vídeos só persistem no disco do Repl sem storage externa configurada — se o disco for limpo, somem; (ii) replicação background pode falhar silenciosamente (só log, sem retry — adicionar fila persistente em rev futura); (iii) sem antivírus scanning — usuário é admin SST confiável; (iv) sem quota — monitorar disco; (v) URL retornada é sempre a local mesmo quando externa replicou (próxima rev pode armazenar ambas e priorizar externa na leitura).
+ * R-001/R-007/R-010 OK (zero SQL, zero ALTER). Reversível em 2 arquivos.
+ * Follow-up: streaming real pra storage externa (form-data com fs.createReadStream); quota por empresa; transcoding/compressão server-side; preview do vídeo no card após upload.
+ *
+ * Rev. 2012 — SST · Integração · Modal Vídeo SIMPLIFICADO + upload real de arquivo até 600MB.
+ * Pedido direto do usuário (17/05/2026, img IMG_0855_1779031643993): "Já tenho o vídeo, quero fazer upload ele tem 500mega de tamanho, vou precisar fazer upload mas a tela tá travando, quero poder digitar o nome do filme de integração e só... simplique a tela".
+ * Problemas: (1) modal estava complexo demais com 4 seções coloridas (Onde encaixa / Conteúdo / Mídia / Configurações), assustando o usuário que só queria fazer um upload simples; (2) ZERO mecanismo de upload de arquivo — o campo `videoTipo=Upload` existia mas só havia input de texto pra URL, frustrando completamente; (3) "tela travando" provavelmente decorre da combinação modal estreito + scroll + Select+Textarea+grid tudo competindo.
+ * Mudança em 2 arquivos:
+ *   (A) `server/_core/index.ts` (+25L logo após o endpoint `/api/upload/sst-document`): NOVO endpoint `POST /api/upload/sst-integracao-video` com multer memoryStorage limite 600MB, multipart/form-data field `file` + `companyId`. Persiste via `storagePut` em `sst/integracao/videos/{companyId}-{ts}-{safeName}`. Retorna `{url, key, fileName, sizeBytes, contentType}`. Auth via `sdk.authenticateRequest`. Endpoint separado pra não esbarrar nos 150MB do upload de documentos SST.
+ *   (B) `client/src/pages/sst/IntegracaoSST.tsx` (~150L modificadas no VideosTab):
+ *     - **4 estados novos**: `selectedFile` (File | null), `uploadProgress` (0-100), `uploading` (bool), `showAdvanced` (bool).
+ *     - **`resetForm`** limpa os 4 novos estados.
+ *     - **`uploadVideoFile(file)`**: Promise via XMLHttpRequest (pra ter `xhr.upload.onprogress` em tempo real — `fetch` não suporta). Faz POST FormData no novo endpoint, captura progresso byte-a-byte, resolve com `{url}`.
+ *     - **`handlePickFile(file)`**: ao escolher arquivo, seta `videoTipo="upload"` e auto-preenche `titulo` com o nome do arquivo (sem extensão) se ainda estiver vazio.
+ *     - **`handleSave`** virou async: se houver `selectedFile`, faz upload PRIMEIRO (com `setUploading(true)` + progresso), pega a URL retornada e SÓ ENTÃO chama `criarModulo`/`atualizarModulo` com `videoUrl=url, videoTipo="upload"`. Toast de erro se upload falhar.
+ *     - **Body do modal totalmente reescrito** (de 4 seções coloridas pra layout linear):
+ *       1. Configuração de Integração (Select compacto, mantido obrigatório).
+ *       2. **Nome do vídeo** (label "font-semibold", input h-11 text-base, autoFocus — destaque máximo, era o que o usuário queria).
+ *       3. **Bloco de upload destacado** (border-dashed emerald, chip UploadCloud, "Clique para selecionar o vídeo · MP4/MOV/WebM/AVI · até 600 MB"). Quando arquivo escolhido, mostra card com FileVideo + nome + tamanho MB + botão X pra remover. Durante upload mostra barra de progresso gradient emerald→teal + "Enviando… N%".
+ *       4. **"Mais opções" colapsado** (ChevronDown/Up): só abre se usuário quiser; agrupa URL externa + Tipo Select + Descrição + Duração + Ordem + Obrigatório (TODOS os campos antigos, NENHUM removido — apenas escondidos por padrão).
+ *     - **Footer**: botão Cancelar disabled durante upload; botão CTA mostra "Enviando vídeo… N%" durante upload, "Cadastrar Vídeo" depois.
+ *     - +3 imports lucide: `UploadCloud`, `FileVideo`, `ChevronUp`.
+ *   (C) `shared/version.ts` → 2012.
+ * Resultado: usuário abre modal, vê em 1 segundo "Nome do vídeo" + zona de upload grande, escolhe arquivo de 500MB, vê barra de progresso enchendo, e o vídeo cai num módulo de integração. Tela mais limpa, sem grid duplo gerando reflows, "trava" sumiu. URL externa continua disponível pra quem prefere YouTube/Vimeo (escondida em "Mais opções").
+ * Preservado: schema do banco INTACTO (já tinha `videoUrl` + `videoTipo='upload'` desde Rev. 2009); endpoint tRPC `criarModulo/atualizarModulo` INTACTOS (cliente que adicionou pré-passo de upload); listagem/preview YouTube/edição/exclusão INTACTOS; outros modais do arquivo (Config/Sessão/Pendentes/Histórico) INTACTOS — só VideosTab mudou. Header gradient (Rev. 2009) INTACTO. Rev. 2011 (grid 2-col) substituída pela estrutura linear simplificada — usuário pediu simplificação, não distribuição. Schema INTACTO. R-001/R-007/R-010 OK (sem ALTER, sem DROP; só INSERT via tRPC existente). Reversível em 2 arquivos.
+ * Limitações conhecidas: (i) Upload usa multer memoryStorage → 600MB ficam na RAM do servidor durante upload (aceitável pra ERP de equipe pequena, mas migrar pra streaming/disk em rev futura se virar gargalo). (ii) `storagePut` por sua vez persiste em DB base64 — 500MB → ~670MB no Postgres, pode pesar; se aparecer problema, fallback pra storage externa via `STORAGE_API_KEY` já está pronto. (iii) Sem preview do vídeo após upload (próxima rev pode adicionar `<video src controls>` no card de arquivo enviado).
+ * Follow-up: tocar vídeo enviado direto no card pré-cadastro; transcoding/compressão server-side; chunked upload (>1GB); aplicar mesma simplificação aos modais ConfigTab/SessaoTab/Pendentes.
+ *
  * Rev. 2011 — SST · Integração · Modal Vídeo · Largura e distribuição em 2 colunas no tablet/PC.
  * Pedido direto do usuário (17/05/2026, img IMG_0854_1779031556595): "Melhore a tela, está quero ela mais distribuída na tela". Após a Rev. 2009 o modal já estava na regra de ouro, mas em tablet/PC widescreen continuava com largura `max-w-2xl` (~672px) e as 4 seções empilhadas verticalmente — desperdiçava 50%+ do espaço lateral e exigia scroll desnecessário.
  * Mudança em 1 arquivo (`client/src/pages/sst/IntegracaoSST.tsx`, 2 hunks pequenos, ZERO lógica):

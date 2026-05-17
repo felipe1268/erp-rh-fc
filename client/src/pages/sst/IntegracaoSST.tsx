@@ -16,6 +16,7 @@ import {
   CheckCircle, XCircle, AlertTriangle, TrendingUp, GraduationCap, Eye, Video,
   ChevronDown, ChevronRight, Loader2, ClipboardList, BarChart3, RefreshCw, Search,
   Play, ExternalLink, Save, X, Film, UserPlus, Send, Link, Share2, MessageSquare,
+  UploadCloud, FileVideo, ChevronUp,
 } from "lucide-react";
 
 function formatDate(d: string | null | undefined) {
@@ -278,6 +279,11 @@ function VideosTab({ companyId }: { companyId: number }) {
   const [obrigatorio, setObrigatorio] = useState(true);
   const [previewId, setPreviewId] = useState<number | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
+  // Rev. 2012 — Upload de arquivo de vídeo (até 600MB)
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploading, setUploading] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(false);
 
   const resetForm = () => {
     setShowForm(false);
@@ -290,6 +296,46 @@ function VideosTab({ companyId }: { companyId: number }) {
     setConfigId("");
     setOrdem("1");
     setObrigatorio(true);
+    setSelectedFile(null);
+    setUploadProgress(0);
+    setUploading(false);
+    setShowAdvanced(false);
+  };
+
+  // Upload via XHR pra ter progresso em tempo real
+  const uploadVideoFile = (file: File): Promise<{ url: string }> => {
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("companyId", String(companyId));
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable) setUploadProgress(Math.round((e.loaded / e.total) * 100));
+      };
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          try { resolve(JSON.parse(xhr.responseText)); }
+          catch { reject(new Error("Resposta inválida do servidor")); }
+        } else {
+          let msg = `Falha no upload (HTTP ${xhr.status})`;
+          try { msg = JSON.parse(xhr.responseText).error || msg; } catch {}
+          reject(new Error(msg));
+        }
+      };
+      xhr.onerror = () => reject(new Error("Erro de rede durante o upload"));
+      xhr.open("POST", "/api/upload/sst-integracao-video");
+      xhr.send(fd);
+    });
+  };
+
+  const handlePickFile = (file: File | null) => {
+    if (!file) return;
+    setSelectedFile(file);
+    setVideoTipo("upload");
+    if (!titulo.trim()) {
+      const nameNoExt = file.name.replace(/\.[^/.]+$/, "");
+      setTitulo(nameNoExt);
+    }
   };
 
   const startEdit = (mod: any) => {
@@ -305,9 +351,28 @@ function VideosTab({ companyId }: { companyId: number }) {
     setShowForm(true);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!titulo.trim()) { toast.error("Informe o título do vídeo"); return; }
     if (!configId) { toast.error("Selecione a configuração de integração"); return; }
+
+    // Rev. 2012: se houver arquivo selecionado, faz upload primeiro e usa a URL retornada
+    let finalVideoUrl = videoUrl.trim() || undefined;
+    let finalVideoTipo = videoTipo;
+    if (selectedFile) {
+      try {
+        setUploading(true);
+        setUploadProgress(0);
+        const { url } = await uploadVideoFile(selectedFile);
+        finalVideoUrl = url;
+        finalVideoTipo = "upload";
+        setUploadProgress(100);
+      } catch (e: any) {
+        setUploading(false);
+        toast.error(e?.message || "Falha no upload do vídeo");
+        return;
+      }
+      setUploading(false);
+    }
 
     if (editingId) {
       atualizarModulo.mutate({
@@ -315,8 +380,8 @@ function VideosTab({ companyId }: { companyId: number }) {
         companyId,
         titulo: titulo.trim(),
         descricao: descricao.trim() || undefined,
-        videoUrl: videoUrl.trim() || undefined,
-        videoTipo,
+        videoUrl: finalVideoUrl,
+        videoTipo: finalVideoTipo,
         duracaoMinutos: duracaoMinutos ? Number(duracaoMinutos) : null,
         ordem: Number(ordem) || 1,
         obrigatorio,
@@ -327,8 +392,8 @@ function VideosTab({ companyId }: { companyId: number }) {
         companyId,
         titulo: titulo.trim(),
         descricao: descricao.trim() || undefined,
-        videoUrl: videoUrl.trim() || undefined,
-        videoTipo,
+        videoUrl: finalVideoUrl,
+        videoTipo: finalVideoTipo,
         duracaoMinutos: duracaoMinutos ? Number(duracaoMinutos) : undefined,
         ordem: Number(ordem) || (modulos.data?.filter(m => m.configId === Number(configId)).length || 0) + 1,
         obrigatorio,
@@ -481,17 +546,10 @@ function VideosTab({ companyId }: { companyId: number }) {
             </div>
           </DialogHeader>
 
-          <div className="px-6 py-4 max-h-[calc(100vh-220px)] overflow-y-auto">
-            {/* Rev. 2011 — Grid 2 cols em lg+: (Onde encaixa | Conteúdo) + (Mídia | Configurações) */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            {/* SEÇÃO 1 — Onde encaixa */}
-            <section className="rounded-xl border-2 border-indigo-200 bg-gradient-to-r from-indigo-50/60 to-white p-3">
-              <div className="flex items-center gap-2 mb-2">
-                <span className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-indigo-100 ring-1 ring-indigo-200">
-                  <Settings className="h-3 w-3 text-indigo-700" />
-                </span>
-                <span className="text-[11px] font-bold text-indigo-900 uppercase tracking-wide">1 · Onde encaixa</span>
-              </div>
+          {/* Rev. 2012 — Modal SIMPLIFICADO: foco em Título + Upload. Resto vai pra "Mais opções". */}
+          <div className="px-6 py-5 max-h-[calc(100vh-220px)] overflow-y-auto space-y-4">
+            {/* Configuração (obrigatória, mas compacta) */}
+            <div>
               <Label className="text-xs text-slate-600">Configuração de Integração <span className="text-red-500">*</span></Label>
               <Select value={configId} onValueChange={setConfigId} disabled={!!editingId}>
                 <SelectTrigger><SelectValue placeholder="Selecione a configuração ativa" /></SelectTrigger>
@@ -501,111 +559,135 @@ function VideosTab({ companyId }: { companyId: number }) {
                   ))}
                 </SelectContent>
               </Select>
-              {editingId && <p className="text-[10px] text-amber-700 mt-1">A configuração não pode ser alterada após cadastro.</p>}
-            </section>
+            </div>
 
-            {/* SEÇÃO 2 — Conteúdo */}
-            <section className="rounded-xl border-2 border-slate-200 bg-white p-3">
-              <div className="flex items-center gap-2 mb-2">
-                <span className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-slate-100 ring-1 ring-slate-200">
-                  <GraduationCap className="h-3 w-3 text-slate-700" />
-                </span>
-                <span className="text-[11px] font-bold text-slate-900 uppercase tracking-wide">2 · Conteúdo do módulo</span>
-              </div>
-              <div className="space-y-3">
-                <div>
-                  <Label className="text-xs text-slate-600">Título do Vídeo / Módulo <span className="text-red-500">*</span></Label>
-                  <Input value={titulo} onChange={e => setTitulo(e.target.value)} placeholder="Ex: Uso de EPIs na Obra" />
-                </div>
-                <div>
-                  <Label className="text-xs text-slate-600">Descrição <span className="text-slate-400 font-normal">(opcional)</span></Label>
-                  <Textarea value={descricao} onChange={e => setDescricao(e.target.value)} placeholder="Breve descrição do conteúdo do vídeo..." rows={2} />
-                </div>
-              </div>
-            </section>
+            {/* Título — destaque */}
+            <div>
+              <Label className="text-sm font-semibold text-slate-800">Nome do vídeo <span className="text-red-500">*</span></Label>
+              <Input
+                value={titulo}
+                onChange={e => setTitulo(e.target.value)}
+                placeholder="Ex: Uso de EPIs na Obra"
+                className="mt-1 text-base h-11"
+                autoFocus
+              />
+            </div>
 
-            {/* SEÇÃO 3 — Mídia */}
-            <section className="rounded-xl border-2 border-blue-200 bg-gradient-to-r from-blue-50/60 to-white p-3">
-              <div className="flex items-center gap-2 mb-2">
-                <span className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-blue-100 ring-1 ring-blue-200">
-                  <Video className="h-3 w-3 text-blue-700" />
-                </span>
-                <span className="text-[11px] font-bold text-blue-900 uppercase tracking-wide">3 · Mídia do vídeo</span>
-              </div>
-              <div className="grid grid-cols-3 gap-3">
-                <div className="col-span-2">
-                  <Label className="text-xs text-slate-600">URL do Vídeo</Label>
-                  <Input value={videoUrl} onChange={e => setVideoUrl(e.target.value)} placeholder="https://youtube.com/watch?v=..." />
-                </div>
-                <div>
-                  <Label className="text-xs text-slate-600">Tipo</Label>
-                  <Select value={videoTipo} onValueChange={(v: any) => setVideoTipo(v)}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="youtube">YouTube</SelectItem>
-                      <SelectItem value="vimeo">Vimeo</SelectItem>
-                      <SelectItem value="url">URL Direta</SelectItem>
-                      <SelectItem value="upload">Upload</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              {videoUrl && videoTipo === "youtube" && ytPreviewUrl && (
-                <div className="mt-3 rounded-lg overflow-hidden border-2 border-blue-300 bg-black aspect-video relative group">
-                  <img src={`https://img.youtube.com/vi/${ytPreviewUrl}/mqdefault.jpg`} alt="Preview" className="w-full h-full object-cover" />
-                  <div className="absolute inset-0 flex items-center justify-center bg-black/0 group-hover:bg-black/30 transition-colors">
-                    <span className="inline-flex h-12 w-12 items-center justify-center rounded-full bg-white/90 shadow-lg">
-                      <Play className="h-5 w-5 text-blue-700 ml-0.5" />
+            {/* Upload — destaque visual grande */}
+            <div>
+              <Label className="text-sm font-semibold text-slate-800">Arquivo de vídeo</Label>
+              <p className="text-[11px] text-slate-500 mb-2">Envie um vídeo do seu computador, sem limite de tamanho — ou preencha uma URL externa em "Mais opções".</p>
+              {!selectedFile ? (
+                <label className="flex flex-col items-center justify-center gap-2 cursor-pointer rounded-xl border-2 border-dashed border-emerald-300 bg-emerald-50/40 hover:bg-emerald-50 hover:border-emerald-400 transition-colors py-8 px-4">
+                  <span className="inline-flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 ring-2 ring-emerald-200">
+                    <UploadCloud className="h-6 w-6 text-emerald-700" />
+                  </span>
+                  <span className="text-sm font-semibold text-emerald-800">Clique para selecionar o vídeo</span>
+                  <span className="text-[11px] text-slate-500">MP4, MOV, WebM, AVI · sem limite de tamanho</span>
+                  <input
+                    type="file"
+                    accept="video/*"
+                    className="hidden"
+                    onChange={e => handlePickFile(e.target.files?.[0] ?? null)}
+                  />
+                </label>
+              ) : (
+                <div className="rounded-xl border-2 border-emerald-300 bg-emerald-50/40 p-3">
+                  <div className="flex items-center gap-3">
+                    <span className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-100 ring-1 ring-emerald-200 shrink-0">
+                      <FileVideo className="h-5 w-5 text-emerald-700" />
                     </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold text-slate-800 truncate">{selectedFile.name}</p>
+                      <p className="text-[11px] text-slate-500">{(selectedFile.size / 1024 / 1024).toFixed(1)} MB</p>
+                    </div>
+                    {!uploading && (
+                      <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-red-600 hover:bg-red-50 shrink-0" onClick={() => { setSelectedFile(null); setUploadProgress(0); }}>
+                        <X className="h-4 w-4" />
+                      </Button>
+                    )}
                   </div>
-                  <span className="absolute top-2 left-2 px-2 py-0.5 rounded-md bg-white/90 text-[10px] font-semibold text-blue-700">Preview YouTube</span>
+                  {uploading && (
+                    <div className="mt-3">
+                      <div className="h-2 rounded-full bg-emerald-100 overflow-hidden">
+                        <div className="h-full bg-gradient-to-r from-emerald-500 to-teal-500 transition-all" style={{ width: `${uploadProgress}%` }} />
+                      </div>
+                      <p className="text-[11px] text-emerald-700 mt-1 text-center font-medium">Enviando… {uploadProgress}%</p>
+                    </div>
+                  )}
                 </div>
               )}
-            </section>
+            </div>
 
-            {/* SEÇÃO 4 — Configurações de exibição */}
-            <section className="rounded-xl border-2 border-amber-200 bg-gradient-to-r from-amber-50/60 to-white p-3">
-              <div className="flex items-center gap-2 mb-2">
-                <span className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-amber-100 ring-1 ring-amber-200">
-                  <Clock className="h-3 w-3 text-amber-700" />
-                </span>
-                <span className="text-[11px] font-bold text-amber-900 uppercase tracking-wide">4 · Configurações de exibição</span>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div>
-                  <Label className="text-xs text-slate-600">Duração (min)</Label>
-                  <Input type="number" value={duracaoMinutos} onChange={e => setDuracaoMinutos(e.target.value)} placeholder="10" min={1} />
+            {/* Mais opções — colapsado */}
+            <div className="border-t pt-3">
+              <button
+                type="button"
+                onClick={() => setShowAdvanced(v => !v)}
+                className="flex items-center gap-2 text-xs font-semibold text-slate-600 hover:text-slate-900 transition-colors"
+              >
+                {showAdvanced ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                Mais opções (URL externa, descrição, duração, ordem, obrigatoriedade)
+              </button>
+              {showAdvanced && (
+                <div className="mt-3 space-y-3 rounded-lg bg-slate-50/60 p-3 border border-slate-200">
+                  <div>
+                    <Label className="text-xs text-slate-600">URL externa (YouTube / Vimeo / link direto)</Label>
+                    <div className="grid grid-cols-3 gap-2">
+                      <div className="col-span-2">
+                        <Input value={videoUrl} onChange={e => setVideoUrl(e.target.value)} placeholder="https://youtube.com/watch?v=..." />
+                      </div>
+                      <Select value={videoTipo} onValueChange={(v: any) => setVideoTipo(v)}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="youtube">YouTube</SelectItem>
+                          <SelectItem value="vimeo">Vimeo</SelectItem>
+                          <SelectItem value="url">URL Direta</SelectItem>
+                          <SelectItem value="upload">Upload</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <p className="text-[10px] text-slate-500 mt-1">Se você selecionou um arquivo acima, esta URL é ignorada.</p>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-slate-600">Descrição (opcional)</Label>
+                    <Textarea value={descricao} onChange={e => setDescricao(e.target.value)} placeholder="Breve descrição do conteúdo..." rows={2} />
+                  </div>
+                  <div className="grid grid-cols-3 gap-3">
+                    <div>
+                      <Label className="text-xs text-slate-600">Duração (min)</Label>
+                      <Input type="number" value={duracaoMinutos} onChange={e => setDuracaoMinutos(e.target.value)} placeholder="10" min={1} />
+                    </div>
+                    <div>
+                      <Label className="text-xs text-slate-600">Ordem</Label>
+                      <Input type="number" value={ordem} onChange={e => setOrdem(e.target.value)} placeholder="1" min={1} />
+                    </div>
+                    <div>
+                      <Label className="text-xs text-slate-600">Obrigatório?</Label>
+                      <label className={`flex items-center gap-2 cursor-pointer rounded-md border-2 px-2 py-1.5 transition-colors ${obrigatorio ? "border-emerald-300 bg-emerald-50" : "border-slate-200 bg-white hover:bg-slate-50"}`}>
+                        <input type="checkbox" checked={obrigatorio} onChange={e => setObrigatorio(e.target.checked)} className="accent-emerald-600 w-4 h-4" />
+                        <span className={`text-xs font-medium ${obrigatorio ? "text-emerald-800" : "text-slate-700"}`}>
+                          {obrigatorio ? "Sim" : "Não"}
+                        </span>
+                      </label>
+                    </div>
+                  </div>
                 </div>
-                <div>
-                  <Label className="text-xs text-slate-600">Ordem de exibição</Label>
-                  <Input type="number" value={ordem} onChange={e => setOrdem(e.target.value)} placeholder="1" min={1} />
-                </div>
-                <div className="sm:col-span-1">
-                  <Label className="text-xs text-slate-600 invisible sm:visible">Obrigatório</Label>
-                  <label className={`flex items-center gap-2 cursor-pointer rounded-md border-2 px-3 py-1.5 transition-colors ${obrigatorio ? "border-emerald-300 bg-emerald-50" : "border-slate-200 bg-white hover:bg-slate-50"}`}>
-                    <input type="checkbox" checked={obrigatorio} onChange={e => setObrigatorio(e.target.checked)} className="accent-emerald-600 w-4 h-4" />
-                    <span className={`text-sm font-medium ${obrigatorio ? "text-emerald-800" : "text-slate-700"}`}>
-                      {obrigatorio ? "Obrigatório" : "Opcional"}
-                    </span>
-                  </label>
-                </div>
-              </div>
-              <p className="text-[10px] text-amber-700/80 mt-2">Vídeos obrigatórios bloqueiam a conclusão da integração até serem assistidos integralmente.</p>
-            </section>
+              )}
             </div>
           </div>
 
           <DialogFooter className="px-6 py-3 border-t bg-slate-50/60 gap-2">
-            <Button variant="outline" onClick={resetForm}>
+            <Button variant="outline" onClick={resetForm} disabled={uploading}>
               <X className="h-4 w-4 mr-1" /> Cancelar
             </Button>
             <Button
-              disabled={!titulo.trim() || !configId || criarModulo.isPending || atualizarModulo.isPending}
+              disabled={!titulo.trim() || !configId || uploading || criarModulo.isPending || atualizarModulo.isPending}
               onClick={handleSave}
               className="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white shadow-md"
             >
-              {(criarModulo.isPending || atualizarModulo.isPending) ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Save className="h-4 w-4 mr-1" />}
-              {editingId ? "Salvar Alterações" : "Cadastrar Vídeo"}
+              {(uploading || criarModulo.isPending || atualizarModulo.isPending) ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Save className="h-4 w-4 mr-1" />}
+              {uploading ? `Enviando vídeo… ${uploadProgress}%` : editingId ? "Salvar Alterações" : "Cadastrar Vídeo"}
             </Button>
           </DialogFooter>
         </DialogContent>
