@@ -3607,6 +3607,10 @@ export const funcionariosTerceiros = pgTable("funcionarios_terceiros", {
   // Rev. 2003 — Integração admissional é DUPLA: na Construtora (FC) E no Cliente final.
   // `integracaoDocUrl` (legacy) passa a representar Construtora; `integracaoClienteDocUrl` é o novo doc do cliente.
   integracaoClienteDocUrl: varchar("integracao_cliente_doc_url", { length: 500 }),
+  // Rev. 2017 — Documentos Trabalhistas obrigatórios (Ficha de EPI NR-06, OS de SST NR-01, Registro de Empregado CLT art. 41)
+  fichaEpiUrl: varchar("ficha_epi_url", { length: 500 }),
+  ordemServicoUrl: varchar("ordem_servico_url", { length: 500 }),
+  registroFuncionarioUrl: varchar("registro_funcionario_url", { length: 500 }),
   // Aprovação
   observacaoAprovacao: text("observacao_aprovacao"),
   aprovadoPor: varchar("aprovado_por", { length: 255 }),

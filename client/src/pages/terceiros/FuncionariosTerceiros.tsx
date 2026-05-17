@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Users, Plus, Search, Edit, Trash2, Upload, FileText, CheckCircle, XCircle, Clock, ShieldCheck, Building2, HardHat, Camera, BadgeCheck, User as UserIcon, X, Heart, Award, BookOpen, ClipboardCheck, AlertTriangle, Calendar, Phone } from "lucide-react";
+import { Users, Plus, Search, Edit, Trash2, Upload, FileText, CheckCircle, XCircle, Clock, ShieldCheck, Building2, HardHat, Camera, BadgeCheck, User as UserIcon, X, Heart, Award, BookOpen, ClipboardCheck, AlertTriangle, Calendar, Phone, Briefcase } from "lucide-react";
 
 export default function FuncionariosTerceiros() {
   const { user } = useAuth();
@@ -490,6 +490,20 @@ export default function FuncionariosTerceiros() {
                   docs: [
                     { label: "Integração na Construtora (FC)", urlField: "integracaoDocUrl", validadeField: null, obrigatorio: true, descricao: "Ata/lista de presença da integração admissional realizada pela Construtora contratante" },
                     { label: "Integração no Cliente / Obra", urlField: "integracaoClienteDocUrl", validadeField: null, obrigatorio: true, descricao: "Ata/lista da integração realizada pelo Cliente final ou pela própria obra (regras locais, DDS específicos)" },
+                  ],
+                },
+                {
+                  // Rev. 2017 — Documentos Trabalhistas obrigatórios por lei (NR-06, NR-01, CLT art. 41)
+                  titulo: "Documentos Trabalhistas",
+                  descricao: "Comprovantes legais que devem ficar disponíveis pra fiscalização do MTE",
+                  icone: Briefcase,
+                  cor: "text-emerald-700",
+                  bgCor: "bg-emerald-50",
+                  corBorda: "border-emerald-200",
+                  docs: [
+                    { label: "Ficha de EPI", urlField: "fichaEpiUrl", validadeField: null, obrigatorio: true, descricao: "Ficha de Entrega de EPI assinada pelo trabalhador (NR-06) — registra os EPIs recebidos, datas e devoluções" },
+                    { label: "Ordem de Serviço (OS de SST)", urlField: "ordemServicoUrl", validadeField: null, obrigatorio: true, descricao: "OS exigida pela NR-01 — descreve a função, os riscos do ambiente, as medidas de prevenção e as obrigações do trabalhador" },
+                    { label: "Registro de Funcionário", urlField: "registroFuncionarioUrl", validadeField: null, obrigatorio: true, descricao: "Ficha/livro de registro de empregado (CLT art. 41) — comprova o vínculo formal junto à empresa terceira" },
                   ],
                 },
                 {

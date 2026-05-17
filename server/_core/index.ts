@@ -610,6 +610,14 @@ Regras:
           console.log(`[SyncSchema+] Coluna numero_interno garantida em funcionarios_terceiros.`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA funcionarios_terceiros numero_interno:`, e?.message || e); }
 
+        // Rev. 2017 — Documentos Trabalhistas (Ficha de EPI NR-06, OS de SST NR-01, Registro de Empregado CLT art. 41)
+        try {
+          await db.execute(sql`ALTER TABLE funcionarios_terceiros ADD COLUMN IF NOT EXISTS ficha_epi_url VARCHAR(500)`);
+          await db.execute(sql`ALTER TABLE funcionarios_terceiros ADD COLUMN IF NOT EXISTS ordem_servico_url VARCHAR(500)`);
+          await db.execute(sql`ALTER TABLE funcionarios_terceiros ADD COLUMN IF NOT EXISTS registro_funcionario_url VARCHAR(500)`);
+          console.log(`[SyncSchema+] Colunas Documentos Trabalhistas garantidas em funcionarios_terceiros.`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA funcionarios_terceiros docs trabalhistas:`, e?.message || e); }
+
         // Rev. 1592: bloco Escritório Central na avaliação anônima do Portal do Cliente.
         // Garantido aqui (e não só em ColFix) porque o version guard do ColFix pode
         // pular as migrations quando a versão já estiver aplicada.

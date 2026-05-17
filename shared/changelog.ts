@@ -1,6 +1,103 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2017 — Terceiros · Aba Documentos · Nova seção "Documentos Trabalhistas"
+ * com 3 uploads obrigatórios: Ficha de EPI (NR-06), Ordem de Serviço (NR-01) e
+ * Registro de Funcionário (CLT art. 41).
+ *
+ * Pedido direto do usuário (17/05/2026, img IMG_0862_1779033859818, aba Documentos
+ * de "Editar Funcionário Terceiro"): "No módulo terceiros preciso incluir campos
+ * para subir estes documentos. Abas para Upload de: Ficha de EPI, Ordem de serviço,
+ * Registro de funcionário".
+ *
+ * Contexto: a aba já tinha 4 seções (Saúde Ocupacional, Treinamentos NR, Integração
+ * de Segurança, Identificação e Qualificação) com motor genérico de upload (urlField)
+ * + cálculo automático de % de integração baseado em `obrigatorio === true`. Faltava
+ * a categoria de comprovantes legais trabalhistas, que são exigidos em fiscalização
+ * do MTE e em auditorias de contratantes (especialmente em obras com OEA/Empresa
+ * Tomadora). Sem esses 3 docs, o terceiro está em situação irregular ainda que
+ * tenha ASO, NR e Integração.
+ *
+ * Mudança em 3 arquivos:
+ *
+ * (A) `drizzle/schema.ts` (+3 colunas em `funcionariosTerceiros`, todas nullable):
+ *     - fichaEpiUrl: varchar("ficha_epi_url", 500)
+ *     - ordemServicoUrl: varchar("ordem_servico_url", 500)
+ *     - registroFuncionarioUrl: varchar("registro_funcionario_url", 500)
+ *     Todas nullable pra preservar registros existentes — terceiros já cadastrados
+ *     continuam funcionando, só passam a contar com mais 3 obrigatórios pendentes
+ *     no % de integração.
+ *
+ * (B) `server/_core/index.ts` (+1 bloco bootstrap idempotente após bloco numero_interno
+ *     da Rev. 1998, ~6L):
+ *     - try/catch com 3 `ALTER TABLE funcionarios_terceiros ADD COLUMN IF NOT EXISTS`
+ *       pra cada coluna. Idempotente (IF NOT EXISTS), seguro pra rodar em todo boot.
+ *     - Falha não derruba o boot (try/catch com console.error).
+ *
+ * (C) `client/src/pages/terceiros/FuncionariosTerceiros.tsx`:
+ *     - Imports: +1 ícone lucide (Briefcase) usado no header da nova seção.
+ *     - Array `secoes` ganha nova entrada ENTRE "Integração de Segurança" e
+ *       "Identificação e Qualificação":
+ *         titulo: "Documentos Trabalhistas"
+ *         descricao: "Comprovantes legais que devem ficar disponíveis pra fiscalização do MTE"
+ *         icone: Briefcase, cor: emerald-700, bgCor: emerald-50, corBorda: emerald-200
+ *         docs: [
+ *           { label: "Ficha de EPI",                urlField: "fichaEpiUrl",            obrigatorio: true, descricao: "Ficha de Entrega de EPI assinada (NR-06) — registra os EPIs recebidos, datas e devoluções" },
+ *           { label: "Ordem de Serviço (OS de SST)", urlField: "ordemServicoUrl",        obrigatorio: true, descricao: "OS exigida pela NR-01 — descreve função, riscos, medidas de prevenção e obrigações do trabalhador" },
+ *           { label: "Registro de Funcionário",      urlField: "registroFuncionarioUrl", obrigatorio: true, descricao: "Ficha/livro de registro de empregado (CLT art. 41) — comprova o vínculo formal" },
+ *         ]
+ *     - Os 3 docs NÃO têm validadeField (não são treinamentos que vencem — são
+ *       comprovantes de cadastro/entrega que permanecem válidos enquanto o vínculo
+ *       e os EPIs entregues forem aqueles).
+ *
+ * Decisões de design:
+ * - Cor emerald escolhida pra distinguir da Saúde (rose), Treinamentos NR (amber),
+ *   Integração (indigo), Identificação (blue) e ainda manter feedback "positivo" —
+ *   estes são docs de compliance, não de risco/alerta.
+ * - Ícone Briefcase (maleta) reforça a natureza "trabalhista/RH" — diferente de
+ *   ClipboardCheck (Integração), BookOpen (Treinamentos), Heart (Saúde).
+ * - Os 3 marcados como `obrigatorio: true` impactam o KPI "% de integração" e o
+ *   painel "Status de Integração" (Integrado / Parcial / Não Integrado). Numa
+ *   migração de tenant com 50 terceiros já cadastrados, todos passam de 100% pra
+ *   X% até subirem os novos docs — comportamento esperado e desejável (sinaliza
+ *   gap de compliance que existia mas estava invisível).
+ * - Por que reusar o motor genérico em vez de criar 3 inputs novos? Porque a UI já
+ *   suporta validação visual (CheckCircle/AlertTriangle/Clock), % automático,
+ *   alerta de vencidos, popover de cada doc e o handler `handleUpload` único. ZERO
+ *   linha de lógica nova — só dados de configuração.
+ *
+ * Limitações conhecidas / follow-up:
+ * - Validade dos EPIs entregues (NR-06): a ficha em si não vence, mas cada EPI
+ *   tem CA com validade. Não modelamos itens — fica como follow-up "EPIs entregues
+ *   por terceiro" (tabela filha tipo `terceiros_epis_entregues`).
+ * - Backfill: terceiros com nomes/funções específicas (eletricista, soldador, etc.)
+ *   poderiam ter Ficha de EPI/OS pré-preenchida automaticamente — fica como
+ *   follow-up. Hoje cada um precisa subir manualmente.
+ * - Não há OCR/parsing dos PDFs — eventualmente extrair número da OS, EPIs listados
+ *   e datas via IA pra cruzar com cadastro central de itens SST.
+ *
+ * R-001/R-007/R-010 OK:
+ * - R-001 (sem DELETE/DROP): só ADD COLUMN IF NOT EXISTS.
+ * - R-007 (sem migração destrutiva): colunas nullable, retrocompat 100%.
+ * - R-010 (sem ALTER em produção sem feature flag): bootstrap idempotente é o
+ *   padrão estabelecido pra adição de colunas opcionais — mesmo padrão das Revs.
+ *   1998, 2003, 2008. Falha não derruba boot.
+ *
+ * Reversível em 3 arquivos (drop dos 3 ADD COLUMN, remoção da entrada do array
+ * `secoes` e dos 3 imports lucide).
+ *
+ * Preservado:
+ * - Painel "Status de Integração" INTACTO (recalcula automaticamente com os novos
+ *   obrigatórios via `secoes.flatMap(s => s.docs).filter(d => d.obrigatorio)`).
+ * - 4 seções anteriores INTACTAS na ordem.
+ * - Motor de upload `handleUpload(urlField, editingId)` INTACTO.
+ * - Aba Dados Pessoais e Aba DDS INTACTAS.
+ * - Outras leituras de funcionariosTerceiros (warnings/obrigações/portal externo)
+ *   continuam funcionando — colunas nullable não quebram SELECT *.
+ * - Rev. 2016 (modal vídeo SST Integração) e anteriores INTACTAS.
+ * - shared/version.ts → 2017. Entrada detalhada no topo deste changelog.
+ *   replit.md atualizado (Rev. 2012 colapsada pra liberar espaço do top-5).
+ *
  * Rev. 2016 — SST · Integração · Modal Vídeo destrava cadastro quando NÃO há configuração ativa
  * + auto-seleção quando há exatamente 1 + empty-state explicativo no aviso amarelo.
  *
