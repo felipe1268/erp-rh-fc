@@ -85,11 +85,20 @@ class ErrorBoundary extends Component<Props, State> {
 
             <h2 className="text-xl mb-4">Ocorreu um erro inesperado.</h2>
 
-            <div className="p-4 w-full rounded bg-muted overflow-auto mb-6">
-              <pre className="text-sm text-muted-foreground whitespace-break-spaces">
+            {this.state.error?.message && (
+              <div className="p-3 w-full rounded bg-destructive/10 border border-destructive/30 mb-4">
+                <p className="text-sm font-semibold text-destructive break-words">
+                  {this.state.error.name || "Error"}: {this.state.error.message}
+                </p>
+              </div>
+            )}
+
+            <details className="p-4 w-full rounded bg-muted overflow-auto mb-6">
+              <summary className="text-sm text-muted-foreground cursor-pointer mb-2">Stack técnico (para suporte)</summary>
+              <pre className="text-xs text-muted-foreground whitespace-break-spaces mt-2">
                 {this.state.error?.stack}
               </pre>
-            </div>
+            </details>
 
             <button
               onClick={() => window.location.reload()}
