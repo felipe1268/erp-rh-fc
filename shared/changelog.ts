@@ -1,6 +1,66 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2025 — Terceiros · aba DDS · READ-ONLY (remove formulário de
+ * "Registrar Participação em DDS").
+ *
+ * Pedido direto do usuário (img IMG_0869): "Não quero precisar lançar
+ * DDS por aqui, quero que apenas fique o registro quando ele participar".
+ * Depois da Rev. 2024 (que ligou a sessão coletiva de DDS aos terceiros
+ * via `sessao_id`), o formulário manual ficou redundante — pior, virou
+ * fonte de inconsistência (registro avulso aqui vs registro com vínculo
+ * de sessão lá). Solução: a aba DDS do terceiro vira só relatório.
+ *
+ * Mudança em 1 arquivo:
+ *
+ * (A) `client/src/pages/terceiros/FuncionariosTerceiros.tsx`:
+ *   - REMOVE o bloco JSX "Form de novo DDS" inteiro (~52L) — card
+ *     indigo com Data/Tema/Instrutor/Obra/Observações + botão "Anexar
+ *     lista de presença" + botão "Registrar DDS".
+ *   - SUBSTITUI por banner indigo-50/40 read-only explicando que o
+ *     fluxo agora é via SST › DDS › Nova Sessão (com o terceiro
+ *     marcado na lista de presença coletiva).
+ *   - Empty-state do histórico ajustado: era "Use o formulário acima"
+ *     agora é "Quando este terceiro participar de uma sessão criada
+ *     em SST › DDS, aparece aqui automaticamente".
+ *   - Hooks/state/mutations (form, listaPayload, handleSubmit,
+ *     createMut, handlePickLista) PRESERVADOS no componente — não dão
+ *     erro de unused (TypeScript não fail em unused). Manter é mais
+ *     seguro caso queiramos reativar pra admin/import futuro; a próxima
+ *     limpeza pode removê-los se ficarem realmente sem uso por tempo.
+ *
+ * + shared/version.ts → 2025.
+ *
+ * R-001/R-007/R-010 OK: zero SQL, zero mudança de schema, zero mudança
+ * de routers. Reversível em 1 arquivo (puramente UI).
+ *
+ * Preservado:
+ *   - Painel "Frequência em DDS" (cards Últimos 30/60d, Último DDS,
+ *     Há quantos dias) INTACTO — continua calculando do mesmo array.
+ *   - Histórico de Participações INTACTO — mostra TODOS os registros
+ *     (avulsos antigos da Rev. 2021 com sessaoId NULL E novos com
+ *     vínculo de sessão da Rev. 2024).
+ *   - Backend `dds.criarParticipacaoTerceiro` (ou equivalente do
+ *     formulário) INTACTO no router — pode ser usado por scripts de
+ *     migração/import; só não é mais chamado pela UI.
+ *   - Rev. 2024 (terceiros no detalhe da sessão + transferência)
+ *     INTACTA — é o fluxo substituto.
+ *   - Outras abas (Dados Pessoais / Documentos) INTACTAS.
+ *
+ * Limitação conhecida: registros avulsos antigos cadastrados antes da
+ * Rev. 2024 (sessaoId NULL) continuam visíveis no histórico SEM badge
+ * "Sessão #N", o que é correto — eles realmente não vieram de sessão.
+ * Daqui pra frente todos os novos vêm de sessão, então a diferença
+ * desaparece naturalmente.
+ *
+ * Follow-up:
+ *   - Adicionar coluna "Origem" no histórico (badge "Sessão #N" vs
+ *     "Avulso" pros antigos) clicável que leva pra sessão.
+ *   - Faxina dos hooks/mutations órfãos (form/listaPayload/createMut)
+ *     depois de algumas revisões confirmando que nada chama.
+ *   - Considerar mesma diretriz pra outras abas que ficaram redundantes
+ *     com fluxos centralizados (ex: integração admissional).
+ *
  * Rev. 2024 — SST · DDS · Terceiros aparecem no detalhe da sessão +
  * "Transferir colaborador" aceita terceiros (vincula direto à obra).
  *

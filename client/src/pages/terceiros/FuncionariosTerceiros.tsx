@@ -827,57 +827,21 @@ function DdsTabContent({ companyId, funcTerceiroId, obras, form, setForm, listaP
         </div>
       </div>
 
-      {/* Form de novo DDS */}
-      <div className="rounded-xl border border-indigo-200 overflow-hidden">
-        <div className="bg-indigo-50 px-4 py-2.5 border-b border-indigo-200 flex items-center gap-2">
-          <div className="h-8 w-8 rounded-lg bg-white ring-1 ring-indigo-200 flex items-center justify-center">
-            <Plus className="h-4 w-4 text-indigo-700" />
-          </div>
-          <div>
-            <h4 className="font-bold text-sm text-indigo-700">Registrar Participação em DDS</h4>
-            <p className="text-[11px] text-slate-600">DDS realizado pela Construtora (FC) — anexe a lista de presença assinada</p>
-          </div>
+      {/* Rev. 2025 — Aba DDS do Terceiro virou READ-ONLY (pedido direto do usuário).
+          Formulário "Registrar Participação em DDS" foi removido. Esta tela agora é
+          só o histórico de participações que vieram via sessão coletiva (SST › DDS ›
+          Nova Sessão, com o terceiro marcado na lista). Pra registrar nova
+          participação, vá em SST › DDS e crie a sessão lá. */}
+      <div className="rounded-xl border border-indigo-200 bg-indigo-50/40 px-4 py-3 flex items-start gap-3">
+        <div className="h-8 w-8 rounded-lg bg-white ring-1 ring-indigo-200 flex items-center justify-center shrink-0">
+          <BookOpen className="h-4 w-4 text-indigo-700" />
         </div>
-        <div className="p-4 bg-white space-y-3">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <Label className="text-xs">Data do DDS *</Label>
-              <Input type="date" value={form.dataDds || ""} onChange={(e) => setForm({ ...form, dataDds: e.target.value })} />
-            </div>
-            <div>
-              <Label className="text-xs">Tema *</Label>
-              <Input placeholder="Ex: Uso correto de EPI, Trabalho em altura..." value={form.tema || ""} onChange={(e) => setForm({ ...form, tema: e.target.value })} />
-            </div>
-            <div>
-              <Label className="text-xs">Instrutor / Responsável</Label>
-              <Input placeholder="Nome do técnico de segurança" value={form.instrutor || ""} onChange={(e) => setForm({ ...form, instrutor: e.target.value })} />
-            </div>
-            <div>
-              <Label className="text-xs">Obra (opcional)</Label>
-              <Select value={form.obraId ? String(form.obraId) : "none"} onValueChange={(v) => setForm({ ...form, obraId: v === "none" ? undefined : Number(v) })}>
-                <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">— Nenhuma —</SelectItem>
-                  {obras.map((o: any) => (<SelectItem key={o.id} value={String(o.id)}>{o.nome}</SelectItem>))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          <div>
-            <Label className="text-xs">Observações</Label>
-            <Input placeholder="Notas adicionais" value={form.observacoes || ""} onChange={(e) => setForm({ ...form, observacoes: e.target.value })} />
-          </div>
-          <div className="flex items-center justify-between gap-2 flex-wrap pt-1">
-            <div className="flex items-center gap-2">
-              <Button type="button" variant="outline" size="sm" onClick={handlePickLista}>
-                <Upload className="h-3.5 w-3.5 mr-1" /> {listaPayload ? "Trocar lista" : "Anexar lista de presença"}
-              </Button>
-              {listaPayload && <span className="text-xs text-emerald-600 truncate max-w-[200px]">✓ {listaPayload.fileName}</span>}
-            </div>
-            <Button onClick={handleSubmit} className="bg-indigo-600 hover:bg-indigo-700" disabled={createMut.isPending}>
-              {createMut.isPending ? "Salvando..." : "Registrar DDS"}
-            </Button>
-          </div>
+        <div className="text-xs text-slate-700">
+          <p className="font-semibold text-indigo-800">Aba somente leitura</p>
+          <p>
+            Registros aparecem automaticamente sempre que este terceiro for marcado em uma
+            sessão de DDS criada em <strong>SST › DDS › Nova Sessão</strong>. Não há cadastro manual aqui.
+          </p>
         </div>
       </div>
 
@@ -894,7 +858,9 @@ function DdsTabContent({ companyId, funcTerceiroId, obras, form, setForm, listaP
         </div>
         <div className="divide-y bg-white">
           {ddsList.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-8">Nenhum DDS registrado ainda. Use o formulário acima.</p>
+            <p className="text-sm text-muted-foreground text-center py-8">
+              Nenhum DDS registrado ainda. Quando este terceiro participar de uma sessão criada em SST › DDS, aparece aqui automaticamente.
+            </p>
           ) : (
             ddsList.map((d: any) => (
               <div key={d.id} className="p-3 hover:bg-slate-50/60 flex items-start gap-3">
