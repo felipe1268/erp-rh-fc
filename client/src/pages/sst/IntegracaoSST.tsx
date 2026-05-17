@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -266,6 +266,15 @@ function VideosTab({ companyId }: { companyId: number }) {
   const criarModulo = trpc.integracaoSST.criarModulo.useMutation({ onSuccess: () => { modulos.refetch(); resetForm(); toast.success("Vídeo cadastrado com sucesso"); } });
   const atualizarModulo = trpc.integracaoSST.atualizarModulo.useMutation({ onSuccess: () => { modulos.refetch(); setEditingId(null); toast.success("Vídeo atualizado"); } });
   const excluirModulo = trpc.integracaoSST.excluirModulo.useMutation({ onSuccess: () => { modulos.refetch(); toast.success("Vídeo excluído"); } });
+  // Rev. 2016 — criar config padrão de dentro do modal de vídeo (UX: usuário não fica travado)
+  const criarConfigInline = trpc.integracaoSST.criarConfig.useMutation({
+    onSuccess: (cfg: any) => {
+      configs.refetch();
+      if (cfg?.id) setConfigId(String(cfg.id));
+      toast.success("Configuração padrão criada — já selecionada");
+    },
+    onError: (err) => toast.error(err?.message || "Falha ao criar configuração padrão"),
+  });
 
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -284,6 +293,13 @@ function VideosTab({ companyId }: { companyId: number }) {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploading, setUploading] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
+
+  // Rev. 2016 — auto-selecionar quando há exatamente 1 configuração (caso mais comum)
+  useEffect(() => {
+    if (!configId && !editingId && configs.data && configs.data.length === 1) {
+      setConfigId(String(configs.data[0].id));
+    }
+  }, [configs.data, configId, editingId]);
 
   const resetForm = () => {
     setShowForm(false);
@@ -431,12 +447,23 @@ function VideosTab({ companyId }: { companyId: number }) {
 
       {(configs.data?.length ?? 0) === 0 && (
         <Card className="border-dashed border-yellow-300 bg-yellow-50/50">
-          <CardContent className="p-4 flex items-center gap-3">
+          <CardContent className="p-4 flex items-center gap-3 flex-wrap">
             <AlertTriangle className="h-5 w-5 text-yellow-600 flex-shrink-0" />
-            <div>
+            <div className="flex-1 min-w-[200px]">
               <p className="text-sm font-medium text-yellow-800">Nenhuma configuração criada</p>
-              <p className="text-xs text-yellow-700">Crie uma configuração na aba "Configurações" antes de cadastrar vídeos.</p>
+              <p className="text-xs text-yellow-700">
+                Toda integração precisa de 1 configuração (nota mínima do questionário + validade do treinamento). Crie a padrão num clique ou ajuste na aba "Configurações".
+              </p>
             </div>
+            <Button
+              size="sm"
+              className="bg-yellow-600 hover:bg-yellow-700 text-white"
+              disabled={criarConfigInline.isPending || companyId <= 0}
+              onClick={() => criarConfigInline.mutate({ companyId, titulo: "Integração Geral", notaMinima: 70, validadeMeses: 12 })}
+            >
+              {criarConfigInline.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Plus className="h-4 w-4 mr-1" />}
+              Criar configuração padrão
+            </Button>
           </CardContent>
         </Card>
       )}
@@ -550,15 +577,48 @@ function VideosTab({ companyId }: { companyId: number }) {
           <div className="px-6 py-5 max-h-[calc(100vh-220px)] overflow-y-auto space-y-4">
             {/* Configuração (obrigatória, mas compacta) */}
             <div>
-              <Label className="text-xs text-slate-600">Configuração de Integração <span className="text-red-500">*</span></Label>
-              <Select value={configId} onValueChange={setConfigId} disabled={!!editingId}>
-                <SelectTrigger><SelectValue placeholder="Selecione a configuração ativa" /></SelectTrigger>
-                <SelectContent>
-                  {configs.data?.map(c => (
-                    <SelectItem key={c.id} value={String(c.id)}>{c.titulo}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <div className="flex items-center justify-between gap-2 mb-1">
+                <Label className="text-xs text-slate-600">
+                  Configuração de Integração <span className="text-red-500">*</span>
+                  <span className="ml-1 text-[10px] font-normal text-slate-400">(nota mínima + validade do treinamento)</span>
+                </Label>
+              </div>
+              {/* Rev. 2016 — Empty-state inline: cria config padrão sem sair do modal */}
+              {(configs.data?.length ?? 0) === 0 && !editingId ? (
+                <div className="rounded-lg border-2 border-dashed border-amber-300 bg-amber-50/60 p-3 flex items-start gap-3">
+                  <AlertTriangle className="h-5 w-5 text-amber-600 flex-shrink-0 mt-0.5" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-medium text-amber-900 leading-snug">
+                      Você ainda não tem nenhuma configuração ativa.
+                    </p>
+                    <p className="text-[11px] text-amber-800/80 leading-snug mt-0.5">
+                      Posso criar a padrão "Integração Geral" (nota mínima 70%, validade 12 meses). Você pode ajustar depois na aba <strong>Configurações</strong>.
+                    </p>
+                    <Button
+                      type="button"
+                      size="sm"
+                      className="mt-2 h-7 bg-amber-600 hover:bg-amber-700 text-white text-xs"
+                      disabled={criarConfigInline.isPending}
+                      onClick={() => criarConfigInline.mutate({ companyId, titulo: "Integração Geral", notaMinima: 70, validadeMeses: 12 })}
+                    >
+                      {criarConfigInline.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : <Plus className="h-3.5 w-3.5 mr-1" />}
+                      Criar configuração padrão agora
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <Select value={configId} onValueChange={setConfigId} disabled={!!editingId || (configs.data?.length ?? 0) === 0}>
+                  <SelectTrigger><SelectValue placeholder={(configs.data?.length ?? 0) === 0 ? "Nenhuma configuração ativa" : "Selecione a configuração ativa"} /></SelectTrigger>
+                  <SelectContent>
+                    {configs.data?.map(c => (
+                      <SelectItem key={c.id} value={String(c.id)}>{c.titulo}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+              {(configs.data?.length ?? 0) === 1 && !editingId && configId && (
+                <p className="text-[10px] text-emerald-700 mt-1">✓ Configuração única auto-selecionada.</p>
+              )}
             </div>
 
             {/* Título — destaque */}

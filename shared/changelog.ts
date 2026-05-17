@@ -1,6 +1,94 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2016 — SST · Integração · Modal Vídeo destrava cadastro quando NÃO há configuração ativa
+ * + auto-seleção quando há exatamente 1 + empty-state explicativo no aviso amarelo.
+ *
+ * Pedido direto do usuário (17/05/2026, img IMG_0858_1779032928798): "O que é esta configuração
+ * de integração? Não aparece nada quando clico e não me deixa cadastrar o vídeo". Imagem mostrava:
+ * (i) aviso amarelo "Nenhuma configuração criada — Crie uma configuração na aba 'C...'" cortado,
+ * (ii) dropdown "Selecione a configuração ativa" VAZIO no modal de novo vídeo, (iii) botão
+ * "Cadastrar Vídeo" desabilitado mesmo com arquivo de 139.7 MB já selecionado.
+ *
+ * Causa-raiz: o modelo do módulo SST Integração tem hierarquia obrigatória
+ * Config(1) → Modulos(N). Sem nenhuma config, nada de vídeo pode ser criado (FK + handleSave
+ * trava com `if (!configId) toast.error(...)`). Mas a UX punia o usuário deixando ele descobrir
+ * sozinho que precisa abrir OUTRA aba ("Configurações"), preencher 3 campos numéricos (Título,
+ * Nota mínima, Validade) e voltar — só então o dropdown enchia. Pior: a maioria absoluta dos
+ * tenants tem 1 só config "Integração Geral" 70%/12m — o seletor virou trabalho repetitivo.
+ *
+ * Solução em 3 frentes (frontend-only, ZERO backend):
+ *
+ * (1) Auto-seleção quando há exatamente 1 config (caso mais comum):
+ *     - Novo useEffect em VideosTab dispara `setConfigId(String(configs.data[0].id))` quando
+ *       configs.data.length === 1 && !configId && !editingId.
+ *     - Hint visual em emerald-700: "✓ Configuração única auto-selecionada." abaixo do select.
+ *
+ * (2) Empty-state INLINE dentro do próprio modal:
+ *     - Quando configs.data.length === 0 e !editingId, o Select é substituído por um card
+ *       border-dashed amber-300 com:
+ *       · Ícone AlertTriangle âmbar
+ *       · Texto explicativo: "Você ainda não tem nenhuma configuração ativa. Posso criar a
+ *         padrão 'Integração Geral' (nota mínima 70%, validade 12 meses). Você pode ajustar
+ *         depois na aba Configurações."
+ *       · Botão âmbar h-7 "Criar configuração padrão agora" que dispara
+ *         `criarConfigInline.mutate({companyId, titulo:'Integração Geral', notaMinima:70, validadeMeses:12})`.
+ *     - onSuccess: refetch configs + setConfigId(novaId) + toast "Configuração padrão criada —
+ *       já selecionada". O usuário continua o cadastro do vídeo sem fechar nem reabrir o modal.
+ *     - onError: toast com mensagem do servidor.
+ *
+ * (3) Card de aviso EXTERNO (fora do modal) ganhou o mesmo botão "Criar configuração padrão"
+ *     pra usuário que ainda nem abriu o modal de vídeo poder destravar com 1 clique.
+ *
+ * Bônus de microcopia: o Label do select ganhou subtítulo "(nota mínima + validade do
+ * treinamento)" — assim quem ainda não sabe o que é "Configuração de Integração" entende sem
+ * abrir ajuda. O placeholder do Select também muda condicionalmente ("Nenhuma configuração
+ * ativa" vs "Selecione a configuração ativa").
+ *
+ * Decisões de design:
+ * - Por que NÃO auto-criar a config silenciosa na 1ª vez? Porque seria magia escondida —
+ *   tenants multi-empresa precisam saber que aquela config existe pra depois trocar nota/validade.
+ *   O botão explícito mantém o controle do usuário, mas reduz o atrito de 5+ cliques pra 1.
+ * - Por que título fixo "Integração Geral" e não pedir? Porque é exatamente o que o usuário
+ *   queria fazer (cadastrar UM vídeo de integração) — o nome é apenas um rótulo interno que
+ *   pode ser renomeado na aba Configurações. Pedir mais um campo no caminho rápido derrota o
+ *   propósito.
+ * - Por que 70%/12m? Padrões mais comuns na indústria de treinamento SST corporativo —
+ *   batem com o default já existente no schema do criarConfig (z.number().default(70/12)).
+ * - editingId guard: ao editar um vídeo existente, NÃO mostramos o empty-state nem
+ *   auto-selecionamos — o configId vem do `mod.configId` original.
+ *
+ * Mudança em 1 arquivo:
+ * - client/src/pages/sst/IntegracaoSST.tsx:
+ *   · imports: + useEffect (já tinha useState/useMemo)
+ *   · VideosTab: + criarConfigInline mutation + useEffect de auto-seleção
+ *   · Card de aviso amarelo externo: + botão "Criar configuração padrão" (yellow-600)
+ *   · Modal "Novo Vídeo": Select renderizado condicionalmente — empty-state card amber com
+ *     CTA quando configs.length===0; senão Select normal. Hint emerald quando length===1.
+ *
+ * R-001/R-007/R-010 OK: ZERO SQL, ZERO DDL, ZERO mudança de schema. Apenas uso da mutation
+ * tRPC `integracaoSST.criarConfig` que já existia (linha 35 de server/routers/integracaoSST.ts)
+ * com defaults nota=70/validade=12. assertCompanyAccess já garante isolamento multi-tenant.
+ * Reversível em 1 arquivo.
+ *
+ * Preservado:
+ * - Backend `integracaoSST.criarConfig` INTACTO.
+ * - ConfigTab (aba "Configurações") INTACTA — continua funcionando exatamente igual pra quem
+ *   quer criar configs customizadas (notas/validades diferentes, multi-obra).
+ * - ModulosEditor INTACTO (editor dentro do drawer da ConfigTab).
+ * - handleSave do vídeo INTACTO — apenas recebe um configId já preenchido pelo novo fluxo.
+ * - Upload de vídeo (Rev. 2013) INTACTO.
+ * - shared/version.ts → 2016. Entrada detalhada no topo deste changelog. replit.md atualizado
+ *   (Rev. 2011 colapsada pra liberar espaço do top-5).
+ *
+ * Follow-up:
+ * - Aplicar a mesma micro-UX (auto-select + empty-state inline) ao modal de Sessão e
+ *   Pendentes — possivelmente sofrem do mesmo problema.
+ * - Renomear inline da config: clicar no nome no Select abre tooltip "renomear" sem precisar
+ *   ir pra ConfigTab.
+ * - Aviso quando há config inativa: hoje só listamos as ativas — se o usuário tinha 1 config
+ *   e desativou, vê o empty-state. Adicionar opção "reativar uma existente?".
+ *
  * Rev. 2015 — DP · Fechamento de Ponto · Avatar circular ("fofinha") por colaborador (clique amplia) + selo CIPA (ativo/estabilidade).
  * Pedido direto do usuário (17/05/2026, img IMG_0857_1779032348562, modal "Mais Horas Extras"):
  * "Coloque a fofinha em todos os nomes, pegue no cadastro de cada um, e quando clicar deve ampliar,
