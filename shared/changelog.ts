@@ -1,6 +1,100 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2044 — SST · Integração de Segurança · aba Histórico ·
+ * editar/apagar registros + múltipla seleção; ao excluir, o
+ * colaborador volta automaticamente para "Pendentes".
+ *
+ * Pedido direto do usuário (img IMG_0891): "Quero poder editar,
+ * apagar e múltipla seleção, e quando eu apagar o usuário,
+ * volta a ficar pendente. Para refazer a integração". A aba
+ * Histórico mostrava só leitura — sem ações por linha.
+ *
+ * Solução em 2 camadas:
+ *
+ *   - Server (`server/routers/integracaoSST.ts`, 2 novos handlers):
+ *     · `excluirRegistros` (protectedProcedure): aceita
+ *       `{companyId, ids[]}` (até 500), soft-delete via
+ *       `deletedAt=NOW()` + guard de companyId via
+ *       `assertCompanyAccess` + ON CONFLICT vs já-deletados
+ *       (filtro `isNull(deletedAt)` no WHERE). Retorna
+ *       `{count}` (linhas afetadas). Try/catch com console.error
+ *       + INTERNAL_SERVER_ERROR genérico (não vaza err.message
+ *       cru — OWASP A03, lição da Rev. 2042 follow-up #4).
+ *     · `atualizarRegistro` (protectedProcedure): permite editar
+ *       só `obraId` (status/nota/respostas imutáveis pelo cliente
+ *       — pra "refazer" o usuário exclui). Valida que a obra
+ *       pertence à mesma company (defesa contra ID cross-tenant)
+ *       e atualiza `obraNome` denormalizado pro snapshot histórico.
+ *
+ *   - Client (`client/src/pages/sst/IntegracaoSST.tsx` ·
+ *     `HistoricoTab` reescrito ~150L):
+ *     · Coluna de checkbox antes de "Colaborador" + checkbox
+ *       master no header com estado `indeterminate` via ref
+ *       (parcialmente selecionado). Filtro/status zera seleção.
+ *     · Botão "Excluir N selecionado(s)" aparece quando há
+ *       seleção, variant destructive, com `window.confirm`
+ *       avisando que volta pra Pendentes.
+ *     · Botão Trash2 por linha (delete individual) também com
+ *       confirm + mensagem clara.
+ *     · Botão Edit por linha abre Dialog com Select de obras
+ *       (`trpc.obras.listActive`) + opção "— Sem obra —".
+ *     · Toast de sucesso explica: "Colaborador(es) voltam para
+ *       'Pendentes' pra refazer a integração".
+ *     · Linha selecionada ganha highlight `bg-emerald-50/60`.
+ *     · Tabela ganha `overflow-x-auto` (mais colunas no iPad).
+ *
+ *   - + `shared/version.ts` → 2044.
+ *
+ * "Volta a ficar pendente" — como funciona:
+ *   Não precisou de código novo no `listarPendentesAuto` (Rev.
+ *   2034) — ele já lista TODOS os colaboradores SEM registro
+ *   válido (filtra por `isNull(deletedAt)`). Como o delete é
+ *   soft-delete, o registro deletado deixa de contar como
+ *   "integração existente" e o colaborador reaparece
+ *   automaticamente na aba Pendentes. Zero alteração no
+ *   handler de pendentes.
+ *
+ * Mudança em 3 arquivos:
+ *   1. `server/routers/integracaoSST.ts` (~80L) — import `obras`,
+ *      `excluirRegistros`, `atualizarRegistro`.
+ *   2. `client/src/pages/sst/IntegracaoSST.tsx` (~150L) —
+ *      HistoricoTab reescrito.
+ *   3. `shared/version.ts` → 2044.
+ *
+ * R-001/R-007/R-010 OK:
+ *   - ZERO ALTER TABLE / DROP TABLE / DELETE físico.
+ *   - "Excluir" é soft-delete (UPDATE deletedAt=NOW). Reversível
+ *     manualmente via SQL (UPDATE ... SET deleted_at = NULL).
+ *   - Multi-tenant: cada handler valida companyId via
+ *     assertCompanyAccess; UPDATE faz INNER JOIN implícito por
+ *     companyId no WHERE.
+ *
+ * Preservado:
+ *   - Rev. 2043 (auto-skip CPF) INTACTA.
+ *   - Rev. 2042 (FIX nomeCompleto) INTACTA.
+ *   - Rev. 2041/2040/2039/2038/2034 INTACTAS.
+ *   - listarRegistros INTACTO (continua excluindo soft-deleted
+ *     via isNull(deletedAt)) — registros excluídos somem da UI.
+ *   - listarPendentesAuto INTACTA — reaparição automática.
+ *
+ * Segurança:
+ *   - Soft-delete preserva auditoria: nada perdido no banco.
+ *   - assertCompanyAccess bloqueia delete cross-tenant.
+ *   - atualizarRegistro valida obra ∈ mesma company antes de
+ *     gravar (defesa contra ID forjado).
+ *   - Erros sanitizados (INTERNAL_SERVER_ERROR genérico).
+ *
+ * Follow-up:
+ *   1. AlertDialog do shadcn em vez de `window.confirm` (Safari
+ *      iPad às vezes bloqueia confirm de sites em iframe).
+ *   2. "Restaurar" registros excluídos (lista soft-deleted nos
+ *      últimos 30d com botão undo).
+ *   3. Permitir editar mais campos: observação, origem manual,
+ *      data de realização (com auditoria de quem mudou).
+ *   4. Botão "Refazer agora" direto na linha (combina exclusão
+ *      + abertura imediata da tela pública).
+ *
  * Rev. 2043 — SST · Integração de Segurança · "Iniciar agora" ·
  * pula passo de identificação por CPF quando RH já clicou no
  * nome do colaborador.

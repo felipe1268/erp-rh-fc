@@ -4,7 +4,7 @@ import { getDb } from "../db";
 import {
   sstIntegracaoConfig, sstIntegracaoModulos, sstIntegracaoPerguntas,
   sstIntegracaoAlternativas, sstIntegracaoRegistros, sstIntegracaoRespostas,
-  sstIntegracaoSessoes, employees, warnings, funcionariosTerceiros,
+  sstIntegracaoSessoes, employees, warnings, funcionariosTerceiros, obras,
 } from "../../drizzle/schema";
 import { eq, and, sql, desc, asc, isNull, inArray, lte, gte } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
@@ -320,6 +320,72 @@ export const integracaoSSTRouter = router({
       return db.select().from(sstIntegracaoRegistros)
         .where(and(...conds))
         .orderBy(desc(sstIntegracaoRegistros.createdAt));
+    }),
+
+  // Rev. 2044 — Excluir registros do Histórico (soft-delete via deletedAt).
+  // Como `listarPendentesAuto` filtra colaboradores SEM registro válido,
+  // após o soft-delete o colaborador volta a aparecer em "Pendentes" pra
+  // refazer a integração — exatamente o pedido do usuário (IMG_0891).
+  excluirRegistros: protectedProcedure
+    .input(z.object({
+      companyId: z.number().int().positive(),
+      ids: z.array(z.number().int().positive()).min(1).max(500),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      assertCompanyAccess(ctx, input.companyId);
+      const db = (await getDb())!;
+      try {
+        const result = await db.update(sstIntegracaoRegistros)
+          .set({ deletedAt: sql`NOW()`, updatedAt: sql`NOW()` })
+          .where(and(
+            eq(sstIntegracaoRegistros.companyId, input.companyId),
+            inArray(sstIntegracaoRegistros.id, input.ids),
+            isNull(sstIntegracaoRegistros.deletedAt),
+          ))
+          .returning({ id: sstIntegracaoRegistros.id });
+        return { count: result.length };
+      } catch (err: any) {
+        console.error("[excluirRegistros] FAIL", { input, userId: ctx.user?.id, err: err?.message });
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Falha ao excluir registros" });
+      }
+    }),
+
+  // Rev. 2044 — Editar registro (somente metadados que fazem sentido pós-criação:
+  // obra associada). Status/nota/respostas seguem imutáveis pelo cliente —
+  // pra "refazer" o usuário exclui e o colaborador volta pra pendentes.
+  atualizarRegistro: protectedProcedure
+    .input(z.object({
+      companyId: z.number().int().positive(),
+      id: z.number().int().positive(),
+      obraId: z.number().int().positive().nullable(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      assertCompanyAccess(ctx, input.companyId);
+      const db = (await getDb())!;
+      try {
+        let obraNome: string | null = null;
+        if (input.obraId) {
+          const [o] = await db.select({ nome: obras.nome })
+            .from(obras)
+            .where(and(eq(obras.id, input.obraId), eq(obras.companyId, input.companyId)));
+          if (!o) throw new TRPCError({ code: "NOT_FOUND", message: "Obra não encontrada nesta empresa" });
+          obraNome = o.nome || null;
+        }
+        const result = await db.update(sstIntegracaoRegistros)
+          .set({ obraId: input.obraId, obraNome, updatedAt: sql`NOW()` })
+          .where(and(
+            eq(sstIntegracaoRegistros.companyId, input.companyId),
+            eq(sstIntegracaoRegistros.id, input.id),
+            isNull(sstIntegracaoRegistros.deletedAt),
+          ))
+          .returning({ id: sstIntegracaoRegistros.id });
+        if (result.length === 0) throw new TRPCError({ code: "NOT_FOUND", message: "Registro não encontrado" });
+        return { success: true };
+      } catch (err: any) {
+        if (err instanceof TRPCError) throw err;
+        console.error("[atualizarRegistro] FAIL", { input, userId: ctx.user?.id, err: err?.message });
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Falha ao atualizar registro" });
+      }
     }),
 
   // Rev. 2034 — Lista TODOS os colaboradores ativos (CLT/PJ via `employees`,

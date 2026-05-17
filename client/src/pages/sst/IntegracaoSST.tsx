@@ -1546,11 +1546,76 @@ function HistoricoTab({ companyId }: { companyId: number }) {
     { companyId, status: statusFiltro as any },
     { enabled: companyId > 0 }
   );
+  // Rev. 2044 — obras pra edição do registro
+  const obrasQuery = trpc.obras.listActive.useQuery({ companyId }, { enabled: companyId > 0 });
   const [searchTerm, setSearchTerm] = useState("");
+  // Rev. 2044 — múltipla seleção
+  const [selecionados, setSelecionados] = useState<Set<number>>(new Set());
+  // Rev. 2044 — edição de obra
+  const [editando, setEditando] = useState<{ id: number; nome: string; obraId: number | null } | null>(null);
+  const [editObraId, setEditObraId] = useState<string>("none");
+
+  const refetchAll = () => {
+    registros.refetch();
+    setSelecionados(new Set());
+  };
+
+  const excluirMut = trpc.integracaoSST.excluirRegistros.useMutation({
+    onSuccess: (data) => {
+      toast.success(`${data.count} registro(s) excluído(s). Colaborador(es) voltam para "Pendentes" pra refazer a integração.`);
+      refetchAll();
+    },
+    onError: (err: any) => toast.error(err?.message || "Erro ao excluir registros"),
+  });
+
+  const atualizarMut = trpc.integracaoSST.atualizarRegistro.useMutation({
+    onSuccess: () => {
+      toast.success("Registro atualizado");
+      setEditando(null);
+      registros.refetch();
+    },
+    onError: (err: any) => toast.error(err?.message || "Erro ao atualizar"),
+  });
 
   const filtered = searchTerm
     ? (registros.data || []).filter(r => r.employeeNome?.toLowerCase().includes(searchTerm.toLowerCase()) || r.employeeCpf?.includes(searchTerm))
     : (registros.data || []);
+
+  const allSelected = filtered.length > 0 && filtered.every(r => selecionados.has(r.id));
+  const someSelected = filtered.some(r => selecionados.has(r.id));
+
+  const toggleAll = () => {
+    if (allSelected) setSelecionados(new Set());
+    else setSelecionados(new Set(filtered.map(r => r.id)));
+  };
+  const toggleOne = (id: number) => {
+    const next = new Set(selecionados);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    setSelecionados(next);
+  };
+
+  const excluirSelecionados = () => {
+    const ids = Array.from(selecionados);
+    if (ids.length === 0) return;
+    if (!window.confirm(`Excluir ${ids.length} registro(s)? Os colaboradores voltam para "Pendentes" pra refazer a integração. Esta ação não pode ser desfeita.`)) return;
+    excluirMut.mutate({ companyId, ids });
+  };
+  const excluirUm = (id: number, nome: string) => {
+    if (!window.confirm(`Excluir registro de ${nome}? O colaborador volta para "Pendentes" pra refazer a integração.`)) return;
+    excluirMut.mutate({ companyId, ids: [id] });
+  };
+  const abrirEdicao = (r: any) => {
+    setEditando({ id: r.id, nome: r.employeeNome || "Colaborador", obraId: r.obraId ?? null });
+    setEditObraId(r.obraId ? String(r.obraId) : "none");
+  };
+  const salvarEdicao = () => {
+    if (!editando) return;
+    atualizarMut.mutate({
+      companyId,
+      id: editando.id,
+      obraId: editObraId === "none" ? null : Number(editObraId),
+    });
+  };
 
   if (!companyId) return <p className="text-muted-foreground p-4">Selecione uma empresa.</p>;
 
@@ -1558,12 +1623,23 @@ function HistoricoTab({ companyId }: { companyId: number }) {
     <div className="space-y-4">
       <div className="flex justify-between items-center flex-wrap gap-2">
         <h3 className="font-semibold">Histórico de Integrações</h3>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
+          {selecionados.size > 0 && (
+            <Button
+              size="sm"
+              variant="destructive"
+              onClick={excluirSelecionados}
+              disabled={excluirMut.isPending}
+            >
+              {excluirMut.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Trash2 className="h-4 w-4 mr-1" />}
+              Excluir {selecionados.size} selecionado{selecionados.size > 1 ? "s" : ""}
+            </Button>
+          )}
           <div className="relative">
             <Search className="h-4 w-4 absolute left-2 top-2.5 text-muted-foreground" />
             <Input value={searchTerm} onChange={e => setSearchTerm(e.target.value)} placeholder="Buscar..." className="pl-8 w-48" />
           </div>
-          <Select value={statusFiltro} onValueChange={setStatusFiltro}>
+          <Select value={statusFiltro} onValueChange={(v) => { setStatusFiltro(v); setSelecionados(new Set()); }}>
             <SelectTrigger className="w-40"><SelectValue placeholder="Status" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="todos">Todos</SelectItem>
@@ -1578,9 +1654,19 @@ function HistoricoTab({ companyId }: { companyId: number }) {
       </div>
 
       {registros.isLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : (
-        <div className="rounded-md border">
+        <div className="rounded-md border overflow-x-auto">
           <table className="w-full text-sm">
             <thead><tr className="border-b bg-muted/50">
+              <th className="p-2 text-left w-10">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 cursor-pointer"
+                  checked={allSelected}
+                  ref={el => { if (el) el.indeterminate = !allSelected && someSelected; }}
+                  onChange={toggleAll}
+                  aria-label="Selecionar todos"
+                />
+              </th>
               <th className="p-2 text-left">Colaborador</th>
               <th className="p-2 text-left">CPF</th>
               <th className="p-2 text-left">Função</th>
@@ -1591,11 +1677,21 @@ function HistoricoTab({ companyId }: { companyId: number }) {
               <th className="p-2 text-left">Origem</th>
               <th className="p-2 text-left">Realização</th>
               <th className="p-2 text-left">Validade</th>
+              <th className="p-2 text-left w-24">Ações</th>
             </tr></thead>
             <tbody>
-              {filtered.length === 0 && <tr><td colSpan={10} className="p-4 text-center text-muted-foreground">Nenhum registro encontrado</td></tr>}
+              {filtered.length === 0 && <tr><td colSpan={12} className="p-4 text-center text-muted-foreground">Nenhum registro encontrado</td></tr>}
               {filtered.map(r => (
-                <tr key={r.id} className="border-b hover:bg-muted/20">
+                <tr key={r.id} className={`border-b hover:bg-muted/20 ${selecionados.has(r.id) ? "bg-emerald-50/60" : ""}`}>
+                  <td className="p-2">
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 cursor-pointer"
+                      checked={selecionados.has(r.id)}
+                      onChange={() => toggleOne(r.id)}
+                      aria-label={`Selecionar ${r.employeeNome || "registro"}`}
+                    />
+                  </td>
                   <td className="p-2 font-medium">{r.employeeNome || "-"}</td>
                   <td className="p-2 text-xs">{r.employeeCpf || "-"}</td>
                   <td className="p-2 text-xs">{r.employeeFuncao || "-"}</td>
@@ -1606,12 +1702,67 @@ function HistoricoTab({ companyId }: { companyId: number }) {
                   <td className="p-2"><Badge variant="outline" className="text-xs">{origemLabels[r.origem] || r.origem}</Badge></td>
                   <td className="p-2 text-xs">{formatDate(r.dataRealizacao)}</td>
                   <td className="p-2 text-xs">{formatDate(r.dataValidade)}</td>
+                  <td className="p-2">
+                    <div className="flex gap-1">
+                      <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => abrirEdicao(r)} title="Editar obra">
+                        <Edit className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-7 w-7 p-0"
+                        onClick={() => excluirUm(r.id, r.employeeNome || "Colaborador")}
+                        disabled={excluirMut.isPending}
+                        title="Excluir — colaborador volta para Pendentes"
+                      >
+                        <Trash2 className="h-3.5 w-3.5 text-red-500" />
+                      </Button>
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
       )}
+
+      <Dialog open={!!editando} onOpenChange={(o) => !o && setEditando(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Editar Registro</DialogTitle>
+          </DialogHeader>
+          {editando && (
+            <div className="space-y-3">
+              <div>
+                <Label className="text-xs text-muted-foreground">Colaborador</Label>
+                <p className="font-medium">{editando.nome}</p>
+              </div>
+              <div>
+                <Label>Obra</Label>
+                <Select value={editObraId} onValueChange={setEditObraId}>
+                  <SelectTrigger><SelectValue placeholder="Sem obra" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">— Sem obra —</SelectItem>
+                    {(obrasQuery.data || []).map((o: any) => (
+                      <SelectItem key={o.id} value={String(o.id)}>{o.nome}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Para refazer a integração deste colaborador, exclua o registro — ele volta automaticamente para a aba "Pendentes".
+              </p>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditando(null)}>Cancelar</Button>
+            <Button onClick={salvarEdicao} disabled={atualizarMut.isPending}>
+              {atualizarMut.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : null}
+              Salvar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
