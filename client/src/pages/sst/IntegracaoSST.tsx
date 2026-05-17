@@ -801,11 +801,41 @@ function ConfigTab({ companyId }: { companyId: number }) {
   const configs = trpc.integracaoSST.listarConfigs.useQuery({ companyId }, { enabled: companyId > 0 });
   const criarConfig = trpc.integracaoSST.criarConfig.useMutation({ onSuccess: () => { configs.refetch(); setShowNew(false); toast.success("Configuração criada"); } });
   const excluirConfig = trpc.integracaoSST.excluirConfig.useMutation({ onSuccess: () => { configs.refetch(); toast.success("Configuração excluída"); } });
+  // Rev. 2056 — pedido do usuário (IMG_0943): "Quero poder editar a validade".
+  // Backend já tem `atualizarConfig` (suporta titulo/notaMinima/validadeMeses/
+  // ativo) — só faltava UI. Modal de edição reusa o padrão do criarConfig.
+  const atualizarConfig = trpc.integracaoSST.atualizarConfig.useMutation({
+    onSuccess: () => { configs.refetch(); setEditingConfig(null); toast.success("Configuração atualizada"); },
+    onError: (err: any) => toast.error(err?.message || "Erro ao atualizar configuração"),
+  });
   const [showNew, setShowNew] = useState(false);
   const [titulo, setTitulo] = useState("");
   const [notaMinima, setNotaMinima] = useState(70);
   const [validadeMeses, setValidadeMeses] = useState(12);
   const [expandedConfig, setExpandedConfig] = useState<number | null>(null);
+  // Rev. 2056 — estado do modal de edição
+  const [editingConfig, setEditingConfig] = useState<{ id: number; titulo: string; notaMinima: number; validadeMeses: number; ativo: boolean } | null>(null);
+
+  const abrirEdicao = (cfg: any) => {
+    setEditingConfig({
+      id: cfg.id,
+      titulo: cfg.titulo || "",
+      notaMinima: Number(cfg.notaMinima ?? 70),
+      validadeMeses: Number(cfg.validadeMeses ?? 12),
+      ativo: !!cfg.ativo,
+    });
+  };
+  const salvarEdicao = () => {
+    if (!editingConfig) return;
+    atualizarConfig.mutate({
+      companyId,
+      id: editingConfig.id,
+      titulo: editingConfig.titulo.trim() || undefined,
+      notaMinima: editingConfig.notaMinima,
+      validadeMeses: editingConfig.validadeMeses,
+      ativo: editingConfig.ativo,
+    });
+  };
 
   if (!companyId) return <p className="text-muted-foreground p-4">Selecione uma empresa.</p>;
 
@@ -830,9 +860,15 @@ function ConfigTab({ companyId }: { companyId: number }) {
                       <p className="text-xs text-muted-foreground">Nota mínima: {cfg.notaMinima}% · Validade: {cfg.validadeMeses} meses · {cfg.ativo ? "Ativa" : "Inativa"}</p>
                     </div>
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 items-center">
                     <Badge variant={cfg.ativo ? "default" : "secondary"}>{cfg.ativo ? "Ativa" : "Inativa"}</Badge>
-                    <Button variant="ghost" size="sm" onClick={() => excluirConfig.mutate({ id: cfg.id, companyId })}><Trash2 className="h-4 w-4 text-red-500" /></Button>
+                    {/* Rev. 2056 — botão Editar (nota mínima, validade, título, ativo) */}
+                    <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); abrirEdicao(cfg); }} title="Editar configuração">
+                      <Edit className="h-4 w-4 text-blue-600" />
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); excluirConfig.mutate({ id: cfg.id, companyId }); }} title="Excluir configuração">
+                      <Trash2 className="h-4 w-4 text-red-500" />
+                    </Button>
                   </div>
                 </div>
                 {expandedConfig === cfg.id && <ModulosEditor configId={cfg.id} companyId={companyId} />}
@@ -856,6 +892,72 @@ function ConfigTab({ companyId }: { companyId: number }) {
             <Button variant="outline" onClick={() => setShowNew(false)}>Cancelar</Button>
             <Button disabled={!titulo.trim() || criarConfig.isPending} onClick={() => criarConfig.mutate({ companyId, titulo, notaMinima, validadeMeses })}>
               {criarConfig.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}Criar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Rev. 2056 — Modal de edição (validade, nota mínima, título, ativo) */}
+      <Dialog open={!!editingConfig} onOpenChange={(o) => !o && !atualizarConfig.isPending && setEditingConfig(null)}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Editar Configuração de Integração</DialogTitle></DialogHeader>
+          {editingConfig && (
+            <div className="space-y-3">
+              <div>
+                <Label>Título</Label>
+                <Input
+                  value={editingConfig.titulo}
+                  onChange={(e) => setEditingConfig({ ...editingConfig, titulo: e.target.value })}
+                  placeholder="Ex: Integração Geral"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label>Nota Mínima (%)</Label>
+                  <Input
+                    type="number"
+                    value={editingConfig.notaMinima}
+                    onChange={(e) => setEditingConfig({ ...editingConfig, notaMinima: Number(e.target.value) })}
+                    min={1}
+                    max={100}
+                  />
+                  <p className="text-[11px] text-muted-foreground mt-1">% mínimo pra ser aprovado.</p>
+                </div>
+                <div>
+                  <Label>Validade (meses)</Label>
+                  <Input
+                    type="number"
+                    value={editingConfig.validadeMeses}
+                    onChange={(e) => setEditingConfig({ ...editingConfig, validadeMeses: Number(e.target.value) })}
+                    min={1}
+                    max={60}
+                  />
+                  <p className="text-[11px] text-muted-foreground mt-1">Quanto tempo o certificado é válido.</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 pt-1">
+                <input
+                  id="cfg-ativo"
+                  type="checkbox"
+                  className="h-4 w-4 cursor-pointer"
+                  checked={editingConfig.ativo}
+                  onChange={(e) => setEditingConfig({ ...editingConfig, ativo: e.target.checked })}
+                />
+                <Label htmlFor="cfg-ativo" className="cursor-pointer text-sm">Configuração ativa</Label>
+              </div>
+              <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded p-2">
+                Mudanças valem para <strong>novas integrações</strong>. Certificados já emitidos preservam a validade calculada no momento da aprovação.
+              </p>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditingConfig(null)} disabled={atualizarConfig.isPending}>Cancelar</Button>
+            <Button
+              disabled={!editingConfig?.titulo.trim() || atualizarConfig.isPending}
+              onClick={salvarEdicao}
+            >
+              {atualizarConfig.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Save className="h-4 w-4 mr-1" />}
+              Salvar alterações
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1871,25 +1973,17 @@ function AprovadosTab({ companyId }: { companyId: number }) {
 // Rev. 2055 — Aba "Reprovados" — pedido do usuário (IMG_0942): "Liste os
 // reprovados também". Espelha AprovadosTab (Rev. 2049) mas SEM certificado/
 // assinatura/raio-x-de-certificado: reprovado não recebe certificado.
-// Mostra nota (vermelho), tentativas, datas + 2 ações: (a) liberar pra
-// refazer (exclui o registro → colaborador volta pra Pendentes via fluxo
-// excluirRegistros da Rev. 2044); (b) abrir Raio-X do colaborador.
+// Mostra nota (vermelho), tentativas, datas + badge "Pendente · refazer"
+// + atalho Raio-X. Rev. 2056: removi botão "Liberar" porque o servidor
+// já considera só status='aprovado' como integração válida — reprovado
+// já reaparece automaticamente em Pendentes (esta aba virou só
+// consulta/histórico das reprovações).
 function ReprovadosTab({ companyId }: { companyId: number }) {
   const registros = trpc.integracaoSST.listarRegistros.useQuery(
     { companyId, status: "reprovado" },
     { enabled: companyId > 0 }
   );
   const [searchTerm, setSearchTerm] = useState("");
-  const [confirmExcluir, setConfirmExcluir] = useState<{ ids: number[]; titulo: string; descricao: string } | null>(null);
-
-  const excluirMut = trpc.integracaoSST.excluirRegistros.useMutation({
-    onSuccess: (data) => {
-      toast.success(`${data.count} reprovação(ões) liberada(s) · colaborador(es) voltam para "Pendentes" pra refazer.`);
-      registros.refetch();
-      setConfirmExcluir(null);
-    },
-    onError: (err: any) => toast.error(err?.message || "Erro ao liberar para refazer"),
-  });
 
   const filtered = useMemo(() => {
     const list = registros.data || [];
@@ -1902,28 +1996,24 @@ function ReprovadosTab({ companyId }: { companyId: number }) {
     );
   }, [registros.data, searchTerm]);
 
-  const liberarUm = (r: any) => {
-    setConfirmExcluir({
-      ids: [r.id],
-      titulo: `Liberar ${r.employeeNome || "colaborador"} para refazer?`,
-      descricao: `Este registro de reprovação será apagado e o colaborador volta para "Pendentes". O histórico de tentativas anteriores se perde — use com cautela.`,
-    });
-  };
-
   if (!companyId) return <p className="text-muted-foreground p-4">Selecione uma empresa.</p>;
 
   const total = (registros.data || []).length;
 
   return (
     <div className="space-y-4">
-      {/* Banner explicativo vermelho */}
+      {/* Banner explicativo vermelho — Rev. 2056: reprovado volta AUTOMATICAMENTE
+          pra Pendentes (a regra de "última integração válida" no servidor só
+          considera status=aprovado, então quem reprovou já reaparece sozinho
+          na fila de Pendentes pra refazer). Esta aba virou consulta/histórico. */}
       <div className="rounded-lg border border-red-200 bg-red-50/60 p-3 flex gap-3 items-start">
         <XCircle className="h-5 w-5 text-red-600 mt-0.5 shrink-0" />
         <div className="text-sm text-red-900">
           <p className="font-semibold">Colaboradores reprovados</p>
           <p className="text-red-800/90">
-            Não atingiram a nota mínima do questionário. Reprovados <strong>não recebem certificado</strong> e precisam refazer a integração.
-            Use "Liberar para refazer" pra devolver o colaborador à fila de Pendentes.
+            Não atingiram a nota mínima do questionário. Reprovados <strong>não recebem certificado</strong> e
+            <strong> voltam automaticamente para "Pendentes"</strong> para refazer a integração — não é preciso liberar manualmente.
+            Esta aba é a consulta/histórico de quem reprovou.
           </p>
         </div>
       </div>
@@ -1959,11 +2049,12 @@ function ReprovadosTab({ companyId }: { companyId: number }) {
               <th className="p-2 text-center">Mínima</th>
               <th className="p-2 text-center">Tentativas</th>
               <th className="p-2 text-left">Reprovação</th>
-              <th className="p-2 text-left w-44">Ações</th>
+              <th className="p-2 text-left">Status</th>
+              <th className="p-2 text-left w-24">Raio-X</th>
             </tr></thead>
             <tbody>
               {filtered.length === 0 && (
-                <tr><td colSpan={9} className="p-6 text-center text-muted-foreground">
+                <tr><td colSpan={10} className="p-6 text-center text-muted-foreground">
                   {searchTerm ? "Nenhum reprovado encontrado para a busca." : "Nenhum colaborador reprovado. Bom sinal!"}
                 </td></tr>
               )}
@@ -1987,25 +2078,20 @@ function ReprovadosTab({ companyId }: { companyId: number }) {
                     </td>
                     <td className="p-2 text-xs">{formatDate(r.dataRealizacao)}</td>
                     <td className="p-2">
-                      <div className="flex gap-1">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="h-7 border-amber-300 text-amber-700 hover:bg-amber-50"
-                          onClick={() => liberarUm(r)}
-                          disabled={excluirMut.isPending}
-                          title="Apaga o registro de reprovação e devolve o colaborador para Pendentes"
-                        >
-                          <RefreshCw className="h-3.5 w-3.5 mr-1" /> Liberar
-                        </Button>
-                        {r.employeeId ? (
-                          <WouterLink href={`/raio-x/${r.employeeId}`}>
-                            <Button size="sm" variant="ghost" className="h-7 text-xs" title="Abrir Raio-X do colaborador">
-                              <FileText className="h-3.5 w-3.5 mr-1" /> Raio-X
-                            </Button>
-                          </WouterLink>
-                        ) : null}
-                      </div>
+                      <Badge className="bg-amber-100 text-amber-800 border-amber-300 gap-1 text-[10px]">
+                        <Clock className="h-3 w-3" /> Pendente · refazer
+                      </Badge>
+                    </td>
+                    <td className="p-2">
+                      {r.employeeId ? (
+                        <WouterLink href={`/raio-x/${r.employeeId}`}>
+                          <Button size="sm" variant="ghost" className="h-7 text-xs" title="Abrir Raio-X do colaborador">
+                            <FileText className="h-3.5 w-3.5 mr-1" /> Abrir
+                          </Button>
+                        </WouterLink>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">-</span>
+                      )}
                     </td>
                   </tr>
                 );
@@ -2014,30 +2100,6 @@ function ReprovadosTab({ companyId }: { companyId: number }) {
           </table>
         </div>
       )}
-
-      <AlertDialog open={!!confirmExcluir} onOpenChange={(o) => !o && !excluirMut.isPending && setConfirmExcluir(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>{confirmExcluir?.titulo}</AlertDialogTitle>
-            <AlertDialogDescription>{confirmExcluir?.descricao}</AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={excluirMut.isPending}>Cancelar</AlertDialogCancel>
-            <AlertDialogAction
-              className="bg-amber-600 hover:bg-amber-700 text-white"
-              disabled={excluirMut.isPending}
-              onClick={(e) => {
-                e.preventDefault();
-                if (!confirmExcluir) return;
-                excluirMut.mutate({ companyId, ids: confirmExcluir.ids });
-              }}
-            >
-              {excluirMut.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-1" />}
-              Liberar para refazer
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   );
 }

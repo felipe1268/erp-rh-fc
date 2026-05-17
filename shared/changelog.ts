@@ -1,6 +1,112 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2056 — SST · Integração · 2 ajustes pedidos pelo usuário em
+ * sequência: (A) reprovado volta AUTOMATICAMENTE pra Pendentes (sem
+ * precisar de botão "Liberar"); (B) configuração de integração agora
+ * tem botão de editar (título, nota mínima, validade, ativo).
+ *
+ * (A) Reprovado → Pendentes automático.
+ *
+ * Pedido (escolha múltipla): "AUTOMÁTICO — assim que reprovar, o nome
+ * já aparece em Pendentes pra refazer (a aba Reprovados vira só
+ * consulta/histórico)".
+ *
+ * Investigação: na verdade, JÁ FUNCIONA assim no backend. O
+ * `listarPendentesAuto` em `server/routers/integracaoSST.ts` (L753)
+ * monta o conjunto `lastApproved` filtrando `status='aprovado'`
+ * apenas (L773) — registros com status `reprovado` NÃO entram nem em
+ * `lastMap` (estado "nunca_fez" fica como default) nem em
+ * `inProgressSet` (esse só pega `pendente`/`em_andamento` — L789).
+ * Resultado: colaborador reprovado JÁ reaparece na fila de Pendentes
+ * sozinho assim que o registro recebe status='reprovado'. ZERO
+ * mudança de servidor.
+ *
+ * Solução só na UI da ReprovadosTab (Rev. 2055):
+ *   - Botão "Liberar" REMOVIDO (era redundante — agora confundiria o
+ *     RH sugerindo ação obrigatória).
+ *   - AlertDialog âmbar de confirmação REMOVIDO.
+ *   - Mutation `excluirRegistros` REMOVIDA da tab (registro fica vivo
+ *     pra histórico — agora preserva a métrica de N tentativas que o
+ *     dashboard precisa).
+ *   - Nova coluna "Status" com badge âmbar "Pendente · refazer" (com
+ *     ícone Clock) — sinaliza visualmente que o colaborador JÁ está na
+ *     fila de Pendentes.
+ *   - Banner do topo reescrito: "voltam automaticamente para
+ *     'Pendentes' para refazer — não é preciso liberar manualmente".
+ *   - Coluna "Raio-X" preservada (consulta útil).
+ *   - colSpan do empty-state ajustado 9→10.
+ *
+ * (B) Editar configuração de Integração (validade, nota, título).
+ *
+ * Pedido direto (IMG_0943): "Quero poder editar a validade".
+ *
+ * Investigação: backend `atualizarConfig` (server/routers/integracaoSST.ts
+ * L239) JÁ EXISTIA e aceita titulo/notaMinima/validadeMeses/ativo —
+ * só faltava UI no ConfigTab (antes só dava pra criar nova ou
+ * excluir; pra mudar de 12 pra 24 meses o RH precisava criar nova,
+ * desativar a antiga, etc).
+ *
+ * Solução em 1 arquivo (zero schema, zero novo procedure):
+ *
+ * `client/src/pages/sst/IntegracaoSST.tsx` ConfigTab:
+ *   - Novo state `editingConfig` (id/titulo/notaMinima/validadeMeses/
+ *     ativo) + hook `atualizarConfig` (toast onSuccess/onError).
+ *   - Botão `Edit` (azul) ao lado do `Trash2` no card de cada config
+ *     (com `e.stopPropagation()` pra não toggle a expansão dos
+ *     módulos). Trash2 também ganhou `stopPropagation` (já tinha o
+ *     bug latente da Rev. 2046+ — clicar no Trash2 expandia o card).
+ *   - Novo `<Dialog>` modal de edição reusa visual do "Nova
+ *     Configuração": Título / Nota Mínima (% 1-100) / Validade (meses
+ *     1-60, com helper text "Quanto tempo o certificado é válido") /
+ *     checkbox "Configuração ativa". Banner âmbar: "Mudanças valem pra
+ *     NOVAS integrações. Certificados já emitidos preservam a validade
+ *     calculada no momento da aprovação".
+ *   - Botão "Salvar alterações" desabilita se título vazio ou mutation
+ *     pendente; usa ícone Save (já importado L23).
+ *
+ * + `shared/version.ts` → 2056.
+ *
+ * Por que NÃO criei `liberarParaRefazer` no servidor: na opção
+ * AUTOMÁTICO escolhida pelo usuário, nada precisa acontecer no
+ * servidor (já estava certo). Adicionar mutation seria criar
+ * complexidade sem propósito. A ação "Liberar" da Rev. 2055 foi
+ * desfeita porque o usuário escolheu o automatismo total.
+ *
+ * Por que NÃO toquei nos certificados já emitidos quando muda
+ * validade: dataValidade é GRAVADA na linha do registro no momento
+ * da aprovação (L1432 `validade.setMonth(...)`), então certificados
+ * antigos ficam com a validade calculada na época — preservar
+ * regra/contrato é fundamental pra auditoria fiscal/RH. Banner
+ * âmbar deixa isso explícito pro RH.
+ *
+ * R-001/R-007/R-010 OK: ZERO ALTER/DROP/SQL direto; `atualizarConfig`
+ * faz UPDATE cross-tenant (assertCompanyAccess + WHERE companyId).
+ *
+ * Preservado: Rev. 2055 (aba Reprovados estrutura) preservada — só
+ * mudou conteúdo da tab (sem botão Liberar); Rev. 2054 (filtro
+ * férias) INTACTA; Rev. 2049 (AprovadosTab) INTACTA; backend
+ * `excluirRegistros` continua disponível pra HistoricoTab usar.
+ *
+ * Arquivos tocados:
+ *   - client/src/pages/sst/IntegracaoSST.tsx (ReprovadosTab + ConfigTab)
+ *   - shared/version.ts → 2056
+ *   - shared/changelog.ts (este bloco)
+ *   - replit.md (rotação Top-5: 2056 entra, 2051 desce, 2041 sai)
+ *
+ * Follow-up:
+ *   (1) Auditoria: log "quem editou config X e quando" (hoje sem
+ *       trilha — `atualizarConfig` faz UPDATE direto);
+ *   (2) Recalcular `dataValidade` opcionalmente pros certificados
+ *       já emitidos quando RH muda validade (opt-in com warning);
+ *   (3) "Bloqueio configurável após N reprovações" (já era follow-up
+ *       da Rev. 2055 — escalar pra RH/TST presencial em vez de
+ *       auto-pendentes infinito);
+ *   (4) Histórico de mudanças de config (vencedora/perdedora);
+ *   (5) Importar config de outra empresa (pra setup novo de tenant).
+ */
+
+/**
  * Rev. 2055 — SST · Integração · Nova aba "Reprovados" no menu de
  * navegação (entre Aprovados e Histórico), espelhando o padrão da aba
  * Aprovados (Rev. 2049) mas adaptada pro fluxo de reprovação.
