@@ -1582,6 +1582,8 @@ export const fechamentoPontoRouter = router({
         employeeFuncao: employees.funcao,
         employeeStatus: employees.status,
         employeeCargoConfianca: employees.cargoConfianca,
+        // Rev. 2015 — foto pra avatar circular ao lado do nome
+        employeeFotoUrl: employees.fotoUrl,
         obraId: timeRecords.obraId,
         data: timeRecords.data,
         horasTrabalhadas: timeRecords.horasTrabalhadas,
@@ -1606,6 +1608,7 @@ export const fechamentoPontoRouter = router({
             employeeFuncao: r.employeeFuncao,
             employeeStatus: r.employeeStatus,
             cargoConfianca: !!(r as any).employeeCargoConfianca,
+            employeeFotoUrl: (r as any).employeeFotoUrl || null,
             obraId: r.obraId,
             obraIds: new Set<number>(),
             datesSet: new Set<string>(),
@@ -1654,6 +1657,49 @@ export const fechamentoPontoRouter = router({
       );
       const avisoPrevioEmployeeIds = new Set(activeAvisos.map(a => a.employeeId));
 
+      // Rev. 2015 — CIPA: identifica quem é membro ATIVO ou está em ESTABILIDADE pós-mandato.
+      // Pula tudo se não há nenhum employee na lista (range vazio).
+      const allEmployeeIdsArr = Object.keys(byEmployee).map(Number);
+      const cipaInfoByEmp: Record<number, { status: 'ativo' | 'estabilidade'; cargoCipa: string | null; fimEstabilidade: string | null }> = {};
+      if (allEmployeeIdsArr.length > 0) {
+        try {
+          const { cipaMembers } = await import("../../drizzle/schema");
+          const hojeStr = new Date().toISOString().slice(0, 10);
+          const cipaRows = await db.select({
+            employeeId: cipaMembers.employeeId,
+            cargoCipa: cipaMembers.cargoCipa,
+            statusMembro: cipaMembers.statusMembro,
+            inicioEstabilidade: cipaMembers.inicioEstabilidade,
+            fimEstabilidade: cipaMembers.fimEstabilidade,
+          })
+            .from(cipaMembers)
+            .where(and(
+              companyFilter(cipaMembers.companyId, input),
+              inArray(cipaMembers.employeeId, allEmployeeIdsArr),
+            ));
+          // Pode haver várias linhas por employee (mandatos antigos). Decide a "melhor":
+          // 1º Ativo (statusMembro=Ativo); 2º Estabilidade vigente (hoje <= fimEstabilidade)
+          // Mantém também o cargoCipa pra exibir tooltip.
+          for (const row of cipaRows) {
+            const empId = row.employeeId;
+            const existing = cipaInfoByEmp[empId];
+            // Ativo tem prioridade
+            if (String(row.statusMembro || '').trim().toLowerCase() === 'ativo') {
+              cipaInfoByEmp[empId] = { status: 'ativo', cargoCipa: row.cargoCipa, fimEstabilidade: row.fimEstabilidade };
+              continue;
+            }
+            // Estabilidade vigente? Só se ainda não tiver nada OU o existing for outra estabilidade mais antiga
+            if (row.fimEstabilidade && row.fimEstabilidade >= hojeStr) {
+              if (!existing || (existing.status === 'estabilidade' && (existing.fimEstabilidade ?? '') < row.fimEstabilidade)) {
+                cipaInfoByEmp[empId] = { status: 'estabilidade', cargoCipa: row.cargoCipa, fimEstabilidade: row.fimEstabilidade };
+              }
+            }
+          }
+        } catch (err: any) {
+          console.warn('[getSummary] CIPA lookup falhou:', err?.message);
+        }
+      }
+
       // Fetch obra names
       const allObraIds = new Set<number>();
       for (const emp of Object.values(byEmployee)) {
@@ -1671,6 +1717,7 @@ export const fechamentoPontoRouter = router({
       return Object.values(byEmployee).map((emp: any) => {
         const obraIdsArr = Array.from(emp.obraIds) as number[];
         const statusInativo = STATUS_INATIVOS.includes(emp.employeeStatus);
+        const cipa = cipaInfoByEmp[emp.employeeId] || null;
         return {
           ...emp,
           obraIds: obraIdsArr,
@@ -1681,6 +1728,10 @@ export const fechamentoPontoRouter = router({
           atrasos: minutesToHHMM(emp.totalMinutosAtrasos),
           emAvisoPrevio: avisoPrevioEmployeeIds.has(emp.employeeId),
           alertaInativo: statusInativo,
+          // Rev. 2015 — CIPA marker
+          cipaStatus: cipa?.status || null,           // 'ativo' | 'estabilidade' | null
+          cipaCargo: cipa?.cargoCipa || null,         // "Presidente", "Vice", "Secretário", "Membro Titular" etc.
+          cipaFimEstabilidade: cipa?.fimEstabilidade || null, // YYYY-MM-DD
         };
       });
     }),

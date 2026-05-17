@@ -1,6 +1,82 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2015 — DP · Fechamento de Ponto · Avatar circular ("fofinha") por colaborador (clique amplia) + selo CIPA (ativo/estabilidade).
+ * Pedido direto do usuário (17/05/2026, img IMG_0857_1779032348562, modal "Mais Horas Extras"):
+ * "Coloque a fofinha em todos os nomes, pegue no cadastro de cada um, e quando clicar deve ampliar,
+ * quero tbm que marque quem é da cipa ou já foi e tá no período de estabilidade".
+ *
+ * Motivação: tabela do Fechamento mostrava só nome de colaborador — difícil identificação visual
+ * em equipes grandes (79 colaboradores na img). Além disso, membros da CIPA (e ex-membros em
+ * estabilidade pós-mandato — CLT art. 165) não eram sinalizados visualmente nesta tela, levando a
+ * decisões sobre advertências/dispensas sem aviso da proteção legal.
+ *
+ * Mudança em 2 arquivos:
+ *
+ * (A) `server/routers/fechamentoPonto.ts` (~50L adicionadas em `getSummary`, ZERO ALTER/DROP):
+ *     - SELECT do leftJoin com `employees` ganhou `fotoUrl` → propagado pro byEmployee como
+ *       `employeeFotoUrl` (nullable).
+ *     - Após montar `byEmployee`, novo bloco (envolvido em try/catch resiliente — falhas no CIPA
+ *       NUNCA quebram getSummary) faz UMA query batch em `cipa_members`:
+ *         SELECT employeeId, cargoCipa, statusMembro, inicioEstabilidade, fimEstabilidade
+ *         FROM cipa_members
+ *         WHERE companyFilter(input) AND employeeId IN (...allEmployeeIdsArr)
+ *     - Reduz pra `cipaInfoByEmp` por employee com prioridade:
+ *         (i)  statusMembro = 'Ativo' → status='ativo' (mandato vigente)
+ *         (ii) fimEstabilidade >= hoje → status='estabilidade' (já foi, em proteção pós-mandato)
+ *         — empata pelo fimEstabilidade mais futuro
+ *     - Mapper final injeta 3 campos nullable por colaborador:
+ *         cipaStatus: 'ativo' | 'estabilidade' | null
+ *         cipaCargo: string | null  (ex: "Presidente", "Vice", "Membro Titular")
+ *         cipaFimEstabilidade: 'YYYY-MM-DD' | null
+ *
+ * (B) `client/src/pages/FechamentoPonto.tsx` (~110L adicionadas, todas aditivas):
+ *     - Imports: `Avatar`, `AvatarFallback`, `AvatarImage` (shadcn já existente); ícones
+ *       `HardHat` (CIPA ativo) + `ImageOff` (placeholder).
+ *     - State `fotoZoom: { url, nome } | null` + helper `getInitials(nome)` pra fallback (1ª do 1º +
+ *       1ª do último nome).
+ *     - `rankings` useMemo (linha 1012): mapeamento agora propaga `fotoUrl`/`cipaStatus`/`cipaCargo`/
+ *       `cipaFimEstabilidade` pros 4 modais de ranking (Mais Pontuais, Mais Atrasados, Mais Horas
+ *       Extras, Menos Dias) — assim o selo CIPA aparece em TODOS os lugares que listam nomes.
+ *     - **Tabela "Resumo por Colaborador"** (linha ~2674): cell do nome reestruturado em flex —
+ *       Avatar circular `size-9` (ring-2 branco, hover ring-blue + scale-110) clicável → abre o modal
+ *       de zoom. AvatarFallback com gradient blue→indigo + iniciais. Ao lado, nome + badges existentes
+ *       (Inativo/Ajuste/Aviso Prévio/Confiança) — todas INTACTAS — + 2 selos novos:
+ *         · CIPA Ativo: Badge sólido emerald + HardHat + tooltip com cargo
+ *         · CIPA Estabilidade: Badge outline âmbar + ShieldCheck + "Ex-CIPA · estab. DD/MM/YYYY"
+ *           com tooltip mencionando CLT art. 165 (proteção contra dispensa imotivada).
+ *     - **Modal de Ranking** (linha ~2403): mesma estrutura, Avatar `size-8` + selos CIPA.
+ *     - **Modal de zoom de foto** (~30L antes do `</DashboardLayout>`): Dialog max-w-2xl com fundo
+ *       gradient slate dark, header com nome do colaborador + UserCheck, body centra `<img>`
+ *       max-h-[70vh] com ring-4 branco translúcido. Se sem foto cadastrada: card centralizado com
+ *       ImageOff + texto "Sem foto cadastrada" + CTA explicativo orientando cadastro no módulo de
+ *       Funcionários.
+ *
+ * Decisão de design:
+ * - Avatar pequeno na tabela (size-9 / size-8) pra não competir com o conteúdo numérico — clique
+ *   amplia pra full size (70vh) com qualidade. Atende ambos os mundos.
+ * - Selo CIPA ATIVO em verde sólido (alta atenção: pessoa sob proteção AGORA).
+ * - Selo CIPA ESTABILIDADE em âmbar outline (atenção intermediária: ex-membro ainda protegido —
+ *   data de fim mostrada inline pra cálculo visual imediato).
+ * - Tooltip do âmbar cita explicitamente CLT art. 165 — gestor que clicar pra abrir advertência
+ *   ou rescisão recebe o contexto legal sem precisar abrir outro módulo.
+ *
+ * Limitações conhecidas / follow-up:
+ * - Aplicada SÓ no resumo principal + 4 rankings. Outras tabelas que listam colaboradores na mesma
+ *   tela (Conflitos linha ~3234, Inconsistências linha ~2937, Não Identificados ~4061, Dixi mapping
+ *   ~4290) NÃO ganharam avatar nesta rev — esperar feedback se usuário quer expandir.
+ * - getSummary é o único endpoint enriquecido — listInconsistencies/getRanking dedicado NÃO foram
+ *   tocados (rankings da home da tela usam `summary.data` via useMemo, então herdaram automaticamente).
+ * - `cipa_members.statusMembro` é string livre ('Ativo', 'Suplente', 'Afastado', etc.) — fazemos
+ *   case-insensitive contra 'ativo'. Outros valores caem no branch de estabilidade se data válida.
+ * - Foto vem de `employees.fotoUrl` — pode estar nula (maioria dos casos no início), aí mostra
+ *   iniciais coloridas como fallback (o que já é "uma fofinha" estética).
+ * - Não há tela centralizada pra cadastrar foto em massa — fica como follow-up (módulo Funcionários
+ *   já permite upload individual via cadastro).
+ *
+ * R-001/R-007/R-010 OK: zero DDL, zero DELETE/UPDATE/INSERT — só SELECT no novo bloco CIPA + adição
+ * de coluna ao SELECT existente. Reversível em 2 arquivos. `shared/version.ts` → 2015.
+ *
  * Rev. 2014 — DP · Fechamento de Ponto · Feriados (federais, estaduais e municipais) deixam de gerar falta indevida.
  * Pedido direto do usuário (17/05/2026, img IMG_0856_1779031904262): "O ERP precisa saber quando é
  * feriado e desconsiderar (federais, estaduais e municipais) para não gerar falta equivocadamente,

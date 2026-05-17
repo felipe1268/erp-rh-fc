@@ -12,6 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { trpc } from "@/lib/trpc";
 import { formatCPF, fmtNum } from "@/lib/formatters";
 import { formatDateTime, nowBrasilia } from "@/lib/dateUtils";
@@ -21,7 +22,8 @@ import {
   PenLine, Eye, ChevronLeft, ChevronRight, CheckCircle, CheckCircle2, XCircle, Shield, Search,
   Trash2, Building2, AlertCircle, MapPin, Info, Wifi, Lock, Unlock, UserCheck, Printer, FileDown, ArrowLeft,
   ListChecks, Filter, ChevronDown, ChevronUp, Zap, ArrowRightLeft, ArrowRight, FileText, Copy,
-  ChevronsUpDown, Check, Plus, X, ClipboardList, UserX, CalendarX, Timer, LogOut, ExternalLink, ShieldCheck
+  ChevronsUpDown, Check, Plus, X, ClipboardList, UserX, CalendarX, Timer, LogOut, ExternalLink, ShieldCheck,
+  HardHat, ImageOff
 } from "lucide-react";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -1018,6 +1020,11 @@ export default function FechamentoPonto() {
       atrasosStr: e.atrasos || "0:00",
       obraNomes: (e.obraNomes || []) as string[],
       obraIds: (e.obraIds || []) as number[],
+      // Rev. 2015 — propaga foto + CIPA pros rankings (Mais Pontuais/Atrasados/HE/Faltosos)
+      fotoUrl: e.employeeFotoUrl || null,
+      cipaStatus: e.cipaStatus || null,
+      cipaCargo: e.cipaCargo || null,
+      cipaFimEstabilidade: e.cipaFimEstabilidade || null,
     }));
     // Top 5 mais pontuais (menos atrasos, mais dias)
     const allPontuais = [...data].filter(e => e.dias > 0).sort((a, b) => a.atrasos - b.atrasos || b.dias - a.dias);
@@ -1344,6 +1351,21 @@ export default function FechamentoPonto() {
 
   const openPontoDetalhe = (empId: number) => { setSelectedEmployeeId(empId); setViewMode("detalhe"); };
   const openRaioX = (empId: number) => setRaioXEmployeeId(empId);
+
+  // Rev. 2015 — Modal "ampliar foto" do colaborador
+  const [fotoZoom, setFotoZoom] = useState<{ url: string | null; nome: string } | null>(null);
+  // Rev. 2015 — Flag pra placeholder quando a img tem URL mas falha (404, link quebrado, etc.)
+  const [fotoLoadError, setFotoLoadError] = useState(false);
+  useEffect(() => { setFotoLoadError(false); }, [fotoZoom?.url]);
+
+  // Rev. 2015 — Iniciais p/ fallback do avatar (1ª letra do 1º + 1ª letra do último nome)
+  const getInitials = (nome: string): string => {
+    if (!nome) return "?";
+    const parts = nome.trim().split(/\s+/).filter(Boolean);
+    if (parts.length === 0) return "?";
+    if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+  };
 
   // ===== PRINT / PDF =====
   const handlePrint = () => {
@@ -2379,9 +2401,36 @@ export default function FechamentoPonto() {
                                 <tr key={e.id} className={`border-b border-slate-100 hover:bg-blue-50/40 transition-colors ${rowBg}`}>
                                   <td className="px-3 py-2 text-slate-400 font-mono text-center">{i + 1}</td>
                                   <td className="px-3 py-2">
-                                    <div className="flex items-center gap-1.5">
-                                      <button className="font-semibold text-blue-700 hover:underline text-left leading-tight" onClick={() => { setRankingModal(null); openPontoDetalhe(e.id); }}>{e.nome}</button>
-                                      <EmpStatusBadge status={e.status} />
+                                    <div className="flex items-center gap-2">
+                                      {/* Rev. 2015 — avatar clicável + selo CIPA também no ranking */}
+                                      <button
+                                        type="button"
+                                        aria-label={`Ampliar foto de ${e.nome || 'colaborador'}`}
+                                        className="shrink-0 rounded-full ring-2 ring-white hover:ring-blue-300 hover:scale-110 transition-all shadow-sm"
+                                        title={e.fotoUrl ? "Clique para ampliar a foto" : "Sem foto cadastrada"}
+                                        onClick={(ev) => { ev.stopPropagation(); setFotoZoom({ url: e.fotoUrl || null, nome: e.nome || "" }); }}
+                                      >
+                                        <Avatar className="size-8">
+                                          {e.fotoUrl && <AvatarImage src={e.fotoUrl} alt={e.nome} />}
+                                          <AvatarFallback className="bg-gradient-to-br from-blue-100 to-indigo-200 text-blue-900 text-[10px] font-bold">
+                                            {getInitials(e.nome || "")}
+                                          </AvatarFallback>
+                                        </Avatar>
+                                      </button>
+                                      <div className="flex items-center gap-1.5 flex-wrap min-w-0">
+                                        <button className="font-semibold text-blue-700 hover:underline text-left leading-tight" onClick={() => { setRankingModal(null); openPontoDetalhe(e.id); }}>{e.nome}</button>
+                                        <EmpStatusBadge status={e.status} />
+                                        {e.cipaStatus === 'ativo' && (
+                                          <Badge className="text-[10px] bg-emerald-600 text-white border-0 px-1.5 py-0 h-5" title={`CIPA · ${e.cipaCargo || 'Membro'}`}>
+                                            <HardHat className="h-3 w-3 mr-0.5" /> CIPA
+                                          </Badge>
+                                        )}
+                                        {e.cipaStatus === 'estabilidade' && (
+                                          <Badge variant="outline" className="text-[10px] text-amber-700 border-amber-300 bg-amber-50 px-1.5 py-0 h-5" title={`Ex-CIPA — estabilidade até ${fmtPeriodo(e.cipaFimEstabilidade || '')}`}>
+                                            <ShieldCheck className="h-3 w-3 mr-0.5" /> Ex-CIPA
+                                          </Badge>
+                                        )}
+                                      </div>
                                     </div>
                                   </td>
                                   <td className="px-3 py-2 text-slate-500 leading-tight">{e.funcao}</td>
@@ -2650,21 +2699,53 @@ export default function FechamentoPonto() {
                               return (
                                 <tr key={emp.employeeId} className={`border-b last:border-0 hover:bg-muted/30 ${emp.alertaInativo ? "bg-rose-50 border-l-4 border-l-rose-400" : emp.temAjusteManual ? "bg-purple-50" : ""} ${hasConflict ? "bg-orange-50" : emp.multiplasObras && !emp.alertaInativo ? "bg-red-50" : ""}`}>
                                   <td className="p-2">
-                                    <button className="font-medium text-blue-700 hover:underline text-left" onClick={() => openPontoDetalhe(emp.employeeId)}>
-                                      {emp.employeeName}
-                                    </button>
-                                    {emp.alertaInativo && (
-                                      <Badge className="ml-2 text-xs bg-rose-600 text-white border-0"><AlertCircle className="h-3 w-3 mr-1" /> {emp.employeeStatus || "Inativo"}</Badge>
-                                    )}
-                                    {!emp.alertaInativo && emp.temAjusteManual && (
-                                      <Badge variant="outline" className="ml-2 text-xs text-purple-600 border-purple-300"><PenLine className="h-3 w-3 mr-1" /> Ajuste</Badge>
-                                    )}
-                                    {!emp.alertaInativo && emp.emAvisoPrevio && (
-                                      <Badge variant="outline" className="ml-2 text-xs text-amber-600 border-amber-300 bg-amber-50">⚠ Aviso Prévio</Badge>
-                                    )}
-                                    {emp.cargoConfianca && (
-                                      <Badge variant="outline" className="ml-2 text-xs text-indigo-600 border-indigo-300 bg-indigo-50">Art.62 — Confiança</Badge>
-                                    )}
+                                    <div className="flex items-center gap-2">
+                                      {/* Rev. 2015 — Avatar circular clicável → amplia foto */}
+                                      <button
+                                        type="button"
+                                        aria-label={`Ampliar foto de ${emp.employeeName || 'colaborador'}`}
+                                        className="shrink-0 rounded-full ring-2 ring-white hover:ring-blue-300 hover:scale-110 transition-all shadow-sm focus:outline-none focus:ring-blue-400"
+                                        title={emp.employeeFotoUrl ? "Clique para ampliar a foto" : "Sem foto cadastrada — clique pra abrir o cadastro"}
+                                        onClick={(ev) => { ev.stopPropagation(); setFotoZoom({ url: emp.employeeFotoUrl || null, nome: emp.employeeName || "" }); }}
+                                      >
+                                        <Avatar className="size-9">
+                                          {emp.employeeFotoUrl && <AvatarImage src={emp.employeeFotoUrl} alt={emp.employeeName} />}
+                                          <AvatarFallback className="bg-gradient-to-br from-blue-100 to-indigo-200 text-blue-900 text-[11px] font-bold">
+                                            {getInitials(emp.employeeName || "")}
+                                          </AvatarFallback>
+                                        </Avatar>
+                                      </button>
+                                      <div className="flex flex-col min-w-0">
+                                        <div className="flex items-center gap-1.5 flex-wrap">
+                                          <button className="font-medium text-blue-700 hover:underline text-left" onClick={() => openPontoDetalhe(emp.employeeId)}>
+                                            {emp.employeeName}
+                                          </button>
+                                          {/* Rev. 2015 — Selo CIPA (ativo OU em estabilidade pós-mandato) */}
+                                          {emp.cipaStatus === 'ativo' && (
+                                            <Badge className="text-[10px] bg-emerald-600 text-white border-0 px-1.5 py-0 h-5" title={`CIPA · ${emp.cipaCargo || 'Membro'}${emp.cipaFimEstabilidade ? ` · Estabilidade até ${fmtPeriodo(emp.cipaFimEstabilidade)}` : ''}`}>
+                                              <HardHat className="h-3 w-3 mr-0.5" /> CIPA
+                                            </Badge>
+                                          )}
+                                          {emp.cipaStatus === 'estabilidade' && (
+                                            <Badge variant="outline" className="text-[10px] text-amber-700 border-amber-300 bg-amber-50 px-1.5 py-0 h-5" title={`Ex-membro CIPA${emp.cipaCargo ? ` (${emp.cipaCargo})` : ''} em ESTABILIDADE pós-mandato até ${fmtPeriodo(emp.cipaFimEstabilidade || '')} — proteção contra dispensa imotivada (CLT art. 165)`}>
+                                              <ShieldCheck className="h-3 w-3 mr-0.5" /> Ex-CIPA · estab. {emp.cipaFimEstabilidade ? fmtPeriodo(emp.cipaFimEstabilidade) : ''}
+                                            </Badge>
+                                          )}
+                                          {emp.alertaInativo && (
+                                            <Badge className="text-xs bg-rose-600 text-white border-0"><AlertCircle className="h-3 w-3 mr-1" /> {emp.employeeStatus || "Inativo"}</Badge>
+                                          )}
+                                          {!emp.alertaInativo && emp.temAjusteManual && (
+                                            <Badge variant="outline" className="text-xs text-purple-600 border-purple-300"><PenLine className="h-3 w-3 mr-1" /> Ajuste</Badge>
+                                          )}
+                                          {!emp.alertaInativo && emp.emAvisoPrevio && (
+                                            <Badge variant="outline" className="text-xs text-amber-600 border-amber-300 bg-amber-50">⚠ Aviso Prévio</Badge>
+                                          )}
+                                          {emp.cargoConfianca && (
+                                            <Badge variant="outline" className="text-xs text-indigo-600 border-indigo-300 bg-indigo-50">Art.62 — Confiança</Badge>
+                                          )}
+                                        </div>
+                                      </div>
+                                    </div>
                                   </td>
                                   <td className="p-2 text-muted-foreground">{formatCPF(emp.employeeCpf || "")}</td>
                                   <td className="p-2 text-muted-foreground">{emp.employeeFuncao || "-"}</td>
@@ -5480,6 +5561,41 @@ export default function FechamentoPonto() {
       />
 
           <PrintFooterLGPD />
+      {/* Rev. 2015 — Modal de foto ampliada do colaborador */}
+      <Dialog open={!!fotoZoom} onOpenChange={(open) => { if (!open) setFotoZoom(null); }}>
+        <DialogContent className="max-w-2xl p-0 overflow-hidden bg-gradient-to-br from-slate-900 to-slate-800 border-slate-700">
+          <DialogHeader className="px-6 py-4 border-b border-slate-700">
+            <DialogTitle className="text-white flex items-center gap-2">
+              <UserCheck className="h-5 w-5 text-blue-300" />
+              {fotoZoom?.nome || "Colaborador"}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="flex items-center justify-center p-8 min-h-[400px]">
+            {fotoZoom?.url && !fotoLoadError ? (
+              <img
+                src={fotoZoom.url}
+                alt={fotoZoom.nome}
+                className="max-w-full max-h-[70vh] rounded-xl shadow-2xl ring-4 ring-white/20 object-contain"
+                onError={() => setFotoLoadError(true)}
+              />
+            ) : (
+              <div className="flex flex-col items-center gap-3 text-slate-300">
+                <div className="rounded-full bg-slate-700/50 p-6 ring-4 ring-slate-600/40">
+                  <ImageOff className="h-16 w-16 text-slate-400" />
+                </div>
+                <p className="text-sm font-medium">
+                  {fotoZoom?.url && fotoLoadError ? "Falha ao carregar a foto" : "Sem foto cadastrada"}
+                </p>
+                <p className="text-xs text-slate-400 max-w-xs text-center">
+                  {fotoZoom?.url && fotoLoadError
+                    ? "O link da foto está quebrado ou inacessível. Reenvie a foto no módulo de Funcionários."
+                    : "Cadastre a foto deste colaborador no módulo de Funcionários para facilitar a identificação visual."}
+                </p>
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   );
 }
