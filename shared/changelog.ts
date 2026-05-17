@@ -1,6 +1,21 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 1989 — Cotações · UX · Header da tabela de mapa + cell de saldo orçamentário condensados.
+ * Pedido direto do usuário ("layout está muito confuso, está sobrepondo informações, preciso ser prático e objetivo") sobre a tela `/compras/cotacoes/<id>` (mapa de cotações em fullscreen).
+ * Problema: cada coluna de fornecedor empilhava verticalmente: nome+score+badges, chip Vencedor, botão Anexar (com texto + nome do arquivo), botão Ler com IA (com texto), botão Propostas (com texto), botão Editar Preços (com texto). Largura útil de ~200px / 5+ blocos = wrap, sobreposição visual, scroll horizontal interno. Cell de item embaixo da barra de progresso tinha 4 spans separados (Orç: X, Esta SC: Y, Outras: Z, Falta: W) que ocupavam 2 linhas em vendor frequência alta.
+ * Mudança em 1 arquivo (`client/src/pages/compras/Cotacoes.tsx`, 5 hunks, ZERO mudança de lógica):
+ *   (1) L3468-3469: wrapper do toolbar de ações trocado de `flex flex-wrap gap-1 justify-center` → `flex gap-0.5 justify-center` (sem wrap, gap mínimo). Comentário "Rev. 1989 — Toolbar compacto".
+ *   (2) L3545-3550: botão "Anexar" — removido texto + nome do arquivo truncado; virou icon-only h-7 w-7 com `title` mostrando nome do arquivo (se houver) ou "Anexar arquivo ou link". Ícone Paperclip 3.5x3.5.
+ *   (3) L3601-3605: botão "Ler com IA" — removido texto "Ler com IA"; virou icon-only h-7 w-7 com `title` "Ler documento com IA e preencher preços automaticamente". Ícone Sparkles 3.5x3.5. Mantida lógica de disabled/violet styling.
+ *   (4) L3608-3614: botão "Propostas" — removido texto; virou icon-only h-7 w-7 com `title`. Ícone FileText 3.5x3.5. Mantido styling ativo/inativo (indigo highlight quando aberto).
+ *   (5) L3647-3653: botão "Editar Preços" — removido texto; virou Button h-7 w-7 p-0 com `title` "Editar preços deste fornecedor". Ícone Pencil 3.5x3.5. Modo de edição (Salvar/Desconto/Acréscimo/Cancelar) INTACTO — esses mantêm texto porque são ações destrutivas/contextuais.
+ *   (6) L3963-3975: Linha de breakdown de saldo orçamentário condensada de 4 spans empilhados ("Orç: X" + "Esta SC: Y" + "Outras: Z" + "Falta: W") pra uma única linha com `truncate` ("Esta SC: Y de X · falta W") + `title` com breakdown completo. Mantida lógica condicional dos 3 estados (estouro/total/parcial).
+ * version → 1989.
+ * Resultado: largura do header da coluna de fornecedor diminui ~50% (4 botões com texto × ~80px → 4 botões icon × ~32px). Saldo orçamentário sai de 2 linhas pra 1 linha. Tela cabe sem scroll horizontal interno em monitores 1366+. Hover/tooltip preserva 100% da informação que estava no texto.
+ * Validação: workflow restartou via HMR sem erros; HMR aplicou client/src/pages/compras/Cotacoes.tsx limpo; banco dev sem dados de cotação ativa pra screenshot — validação por leitura.
+ * Preservado: TODA a lógica (handlers de click, popovers, mutations) INTACTA — só CSS/markup tocado. Modo edição (Salvar/Desconto/Acréscimo) INTACTO. Anexo popover (upload + URL + IA select) INTACTO. Vencedor chip/botão INTACTO. Score/Rec/Atenção badges INTACTOS. Cabeçalho COBERTURA DO ORÇAMENTO + TOTAL row INTACTOS. Lógica de barra de progresso (cores/percentual/breakdown) INTACTA. Rev. 1988 e anteriores INTACTAS. Schema INTACTO. R-001/R-007/R-010 OK. Reversível em 5 hunks.
+ *
  * Rev. 1988 — Lote 1 · Pós-revisão arquitetural · 2 correções de profundidade nos fixes anteriores.
  * Origem: code review do architect identificou 2 falhas residuais após Rev. 1985-1987:
  *   (i) C1 estava incompleto pra OC de MATERIAL: `gerarProximoNumeroOC` quando `ordemTipo === "compra"` usava `COUNT(*) FROM compras_ordens` dentro do lock mas NÃO persistia contador. Como o INSERT da OC acontece DEPOIS, fora da transação, duas chamadas concorrentes liam o mesmo COUNT antes do primeiro insert e retornavam o mesmo OC-YYYY-NNNN. Apenas o branch OS/Pacote (que usava `ocNumberConfig.proximoNumeroOs`) estava de fato serializado.

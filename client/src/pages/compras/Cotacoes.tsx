@@ -3462,7 +3462,8 @@ export default function Cotacoes() {
                                           </a>
                                         )}
                                       </div>
-                                      <div className="flex items-center gap-1 flex-wrap justify-center">
+                                      {/* Rev. 1989 — Toolbar compacto: icon-only, sem wrap, gap mínimo. */}
+                                      <div className="flex items-center gap-0.5 justify-center">
                                       <div className="relative">
                                         {showAnexoInput === p.fornecedorId ? (
                                           <div className="absolute z-50 top-full left-0 mt-1 w-72 bg-white border border-gray-200 rounded-xl shadow-xl p-3 space-y-3" onClick={e => e.stopPropagation()}>
@@ -3540,10 +3541,10 @@ export default function Cotacoes() {
                                         ) : null}
                                         <button
                                           onClick={() => setShowAnexoInput(showAnexoInput === p.fornecedorId ? null : p.fornecedorId)}
-                                          className={`flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium transition-colors ${(p as any).arquivoUrl ? "bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100" : "bg-gray-50 text-gray-500 border border-gray-200 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200"}`}
-                                          title="Anexar arquivo ou link da cotação">
-                                          <Paperclip className="h-4 w-4" />
-                                          {(p as any).arquivoNome ? (p as any).arquivoNome.slice(0, 14) + (((p as any).arquivoNome?.length ?? 0) > 14 ? "…" : "") : "Anexar"}
+                                          className={`flex items-center justify-center h-7 w-7 rounded-lg transition-colors ${(p as any).arquivoUrl ? "bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100" : "bg-gray-50 text-gray-500 border border-gray-200 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200"}`}
+                                          aria-label={(p as any).arquivoNome ? `Anexo: ${(p as any).arquivoNome}` : "Anexar arquivo ou link da cotação"}
+                                          title={(p as any).arquivoNome ? `Anexo: ${(p as any).arquivoNome}` : "Anexar arquivo ou link da cotação"}>
+                                          <Paperclip className="h-3.5 w-3.5" />
                                         </button>
                                         {((p as any).arquivoUrl || (iaFileBuffer && iaFileBuffer.fornecedorId === p.fornecedorId)) && (
                                           <select
@@ -3596,20 +3597,21 @@ export default function Cotacoes() {
                                               }
                                             }}
                                             disabled={extrairIA.isPending || !!iaJobId}
-                                            className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium bg-violet-50 text-violet-700 border border-violet-200 hover:bg-violet-100 transition-colors disabled:opacity-50"
+                                            className="flex items-center justify-center h-7 w-7 rounded-lg bg-violet-50 text-violet-700 border border-violet-200 hover:bg-violet-100 transition-colors disabled:opacity-50"
+                                            aria-label="Ler documento com IA e preencher preços automaticamente"
                                             title="Ler documento com IA e preencher preços automaticamente">
                                             <Sparkles className="h-3.5 w-3.5" />
-                                            Ler com IA
                                           </button>
                                           )
                                         )}
                                         <button
                                           onClick={() => setShowPropostas(showPropostas === p.fornecedorId ? null : p.fornecedorId)}
-                                          className={`flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium transition-colors ${showPropostas === p.fornecedorId ? "bg-indigo-100 text-indigo-700 border border-indigo-300" : "bg-gray-50 text-gray-500 border border-gray-200 hover:bg-indigo-50 hover:text-indigo-600"}`}
+                                          className={`flex items-center justify-center h-7 w-7 rounded-lg transition-colors ${showPropostas === p.fornecedorId ? "bg-indigo-100 text-indigo-700 border border-indigo-300" : "bg-gray-50 text-gray-500 border border-gray-200 hover:bg-indigo-50 hover:text-indigo-600"}`}
+                                          aria-label="Ver propostas enviadas por este fornecedor"
+                                          aria-pressed={showPropostas === p.fornecedorId}
                                           title="Ver propostas enviadas por este fornecedor"
                                         >
                                           <FileText className="h-3.5 w-3.5" />
-                                          Propostas
                                         </button>
                                       </div>
                                       {detalheFullscreen?.status !== "aprovada" && (
@@ -3645,8 +3647,10 @@ export default function Cotacoes() {
                                             </>
                                           ) : (
                                             <Button size="sm" variant="outline" onClick={() => setEditingFornId(p.fornecedorId)}
-                                              className="h-6 text-[10px] border-blue-200 text-blue-600 hover:bg-blue-50 gap-1 px-2">
-                                              <Pencil className="h-3 w-3" /> Editar Preços
+                                              className="h-7 w-7 p-0 border-blue-200 text-blue-600 hover:bg-blue-50"
+                                              aria-label="Editar preços deste fornecedor"
+                                              title="Editar preços deste fornecedor">
+                                              <Pencil className="h-3.5 w-3.5" />
                                             </Button>
                                           )}
                                           </div>
@@ -3958,18 +3962,17 @@ export default function Cotacoes() {
                                                   {Math.round(((totalSolic) / orcada) * 100)}%
                                                 </span>
                                               </div>
-                                              <div className="flex gap-2 text-[9px] text-gray-400">
+                                              {/* Rev. 1989 — Linha condensada: 1 frase resumida + tooltip com breakdown completo. */}
+                                              <div
+                                                className="text-[9px] text-gray-400 truncate"
+                                                title={`Orçado: ${orcada} · Esta SC: ${estaSC}${outrasSC > 0 ? ` · Outras SCs: ${outrasSC}` : ""} · Saldo: ${saldoRestante.toFixed(1)}`}
+                                              >
                                                 {isEstouro ? (
-                                                  <span className="text-red-600 font-medium">Saldo: {saldoRestante.toFixed(1)} (estouro de {Math.abs(saldoRestante).toFixed(1)})</span>
+                                                  <span className="text-red-600 font-medium">Estouro de {Math.abs(saldoRestante).toFixed(1)} {it.unidade || "un"}</span>
                                                 ) : isTotal ? (
                                                   <span className="text-emerald-600 font-medium">Compra total do orçamento</span>
                                                 ) : (
-                                                  <>
-                                                    <span>Orç: {orcada}</span>
-                                                    <span className="text-amber-600">Esta SC: {estaSC}</span>
-                                                    {outrasSC > 0 && <span className="text-blue-500">Outras: {outrasSC}</span>}
-                                                    <span className="text-gray-500">Falta: {Math.max(0, saldoRestante)}</span>
-                                                  </>
+                                                  <span><span className="text-amber-600 font-medium">Esta SC: {estaSC}</span> de {orcada} · falta {Math.max(0, saldoRestante)}</span>
                                                 )}
                                               </div>
                                             </div>
