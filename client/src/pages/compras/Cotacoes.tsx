@@ -3417,7 +3417,7 @@ export default function Cotacoes() {
                                 const isRecomendado = scoreVal >= 4.0 && sc && sc.totalOCs >= 1;
                                 const isAtencao = scoreVal > 0 && scoreVal < 2.5 && sc && sc.totalOCs >= 1;
                                 return (
-                                  <th key={p.fornecedorId} colSpan={3} className={`text-center text-xs font-semibold uppercase px-2 py-2 border-r border-gray-200 align-top ${isMelhor ? "text-emerald-700 bg-emerald-50/60" : "text-gray-500"}`}>
+                                  <th key={p.fornecedorId} colSpan={4} className={`text-center text-xs font-semibold uppercase px-2 py-2 border-r border-gray-200 align-top ${isMelhor ? "text-emerald-700 bg-emerald-50/60" : "text-gray-500"}`}>
                                     <div className="flex flex-col items-center gap-0.5">
                                       <div className="flex items-center gap-1">
                                         {isMelhor && <Trophy className="h-3 w-3 text-emerald-500" />}
@@ -3692,20 +3692,7 @@ export default function Cotacoes() {
                                   </th>
                                 );
                               })}
-                              {/* Rev. 1990 — Coluna Saldo destacada e vinculada visualmente ao Vencedor */}
-                              <th rowSpan={2} className="text-center text-xs font-semibold text-emerald-700 uppercase px-3 py-2 min-w-28 bg-emerald-50/60 border-l-2 border-emerald-300">
-                                <div className="flex flex-col items-center gap-0.5">
-                                  <div className="flex items-center gap-1 justify-center">
-                                    <Trophy className="h-3 w-3 text-emerald-500" />
-                                    <span>Saldo</span>
-                                  </div>
-                                  {melhorForn?.fornecedor && (
-                                    <span className="text-[9px] font-medium text-emerald-600 normal-case truncate max-w-[110px]" title={`Saldo calculado vs. fornecedor vencedor: ${melhorForn.fornecedor.nomeFantasia || melhorForn.fornecedor.razaoSocial}`}>
-                                      vs. {melhorForn.fornecedor.nomeFantasia || melhorForn.fornecedor.razaoSocial}
-                                    </span>
-                                  )}
-                                </div>
-                              </th>
+                              {/* Rev. 1991 — Coluna SALDO solitária REMOVIDA; saldo agora aparece dentro de cada fornecedor (4ª sub-coluna). */}
                             </tr>
                             {/* Linha 2: sub-headers */}
                             <tr className="border-b border-gray-300 bg-gray-50">
@@ -3716,12 +3703,13 @@ export default function Cotacoes() {
                                 const isMelhor = melhorForn?.fornecedorId === p.fornecedorId;
                                 const baseCls = isMelhor ? "text-emerald-600 bg-emerald-50/40" : "text-gray-500";
                                 return (
-                                  <th key={p.fornecedorId} colSpan={3} className="p-0">
-                                    {/* Prazo/cond sub-row inside header */}
+                                  <th key={p.fornecedorId} colSpan={4} className="p-0">
+                                    {/* Prazo/cond sub-row inside header · Rev. 1991: +1 col "Saldo" */}
                                     <div className={`flex border-r border-gray-200 ${isMelhor ? "bg-emerald-50/40" : ""}`}>
                                       <div className={`flex-1 text-right text-xs font-medium px-2 py-2 ${baseCls} border-r border-gray-100`}>QTD</div>
                                       <div className={`flex-1 text-right text-xs font-medium px-2 py-2 ${baseCls} border-r border-gray-100`}>Preço Unit.</div>
-                                      <div className={`flex-1 text-right text-xs font-medium px-2 py-2 ${baseCls}`}>Total</div>
+                                      <div className={`flex-1 text-right text-xs font-medium px-2 py-2 ${baseCls} border-r border-gray-100`}>Total</div>
+                                      <div className={`flex-1 text-center text-xs font-semibold px-2 py-2 ${isMelhor ? "text-emerald-700 bg-emerald-50/60" : "text-emerald-600 bg-emerald-50/30"}`} title="Saldo deste fornecedor vs. Meta (Orçamento)">Saldo</div>
                                     </div>
                                     {/* Prazo/cond/frete row */}
                                     <div className={`border-t border-gray-100 border-r border-gray-200 text-xs text-gray-400 bg-blue-50/20 ${isMelhor ? "bg-emerald-50/20" : ""}`}>
@@ -3853,7 +3841,7 @@ export default function Cotacoes() {
                               const hasComposicao = !it._grouped && ((it as any).composicaoInsumos ?? []).length > 0;
                               const hasPacoteExpand = it._isPacoteGroup && (it._childItems ?? []).length > 0;
                               const isExpanded = expandedComposicao[it.id] ?? false;
-                              const numFornCols = (mapa?.participantes ?? []).length * 3;
+                              const numFornCols = (mapa?.participantes ?? []).length * 4; // Rev. 1991: +1 col Saldo por fornecedor
                               return (
                                 <React.Fragment key={it.id}>
                                 <tr className={`border-b border-gray-100 hover:bg-gray-50/60 ${it._isPacoteGroup ? "bg-indigo-50/30" : ""} ${mapaItemsChecked.has(it.id) ? "bg-blue-50/40" : ""}`}>
@@ -4110,7 +4098,7 @@ export default function Cotacoes() {
                                             </span>
                                           )}
                                         </td>
-                                        <td key={`tot_${p.fornecedorId}`} className={`px-2 py-1 text-right border-r border-gray-200 ${rowCls} ${isBest ? "bg-emerald-50" : ""} ${vencedorPorItem[it.id] === p.fornecedorId ? "ring-1 ring-inset ring-emerald-400" : ""}`}>
+                                        <td key={`tot_${p.fornecedorId}`} className={`px-2 py-1 text-right border-r border-gray-100 ${rowCls} ${isBest ? "bg-emerald-50" : ""} ${vencedorPorItem[it.id] === p.fornecedorId ? "ring-1 ring-inset ring-emerald-400" : ""}`}>
                                           <div className="flex items-center justify-end gap-1">
                                             <span className={`text-xs font-semibold ${isMelhor ? "text-emerald-700" : "text-gray-700"}`}>
                                               {displayTotal > 0 ? displayTotal.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : <span className="text-gray-300">—</span>}
@@ -4137,17 +4125,22 @@ export default function Cotacoes() {
                                             )}
                                           </div>
                                         </td>
+                                        {/* Rev. 1991 — Saldo por fornecedor por item: metaTot - displayTotal */}
+                                        <td key={`sld_${p.fornecedorId}`} className={`px-2 py-1 text-center border-r border-gray-200 ${rowCls}`}>
+                                          {(() => {
+                                            if (!(metaTot > 0 && displayTotal > 0)) return <span className="text-gray-300 text-xs">—</span>;
+                                            const saldoForn = metaTot - displayTotal;
+                                            return (
+                                              <span className={`text-[11px] font-bold px-1.5 py-0.5 rounded-full whitespace-nowrap ${saldoForn >= 0 ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"}`}
+                                                title={`Meta: ${metaTot.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}\nFornecedor: ${displayTotal.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}\nSaldo: ${saldoForn.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}`}>
+                                                {saldoForn >= 0 ? "+" : ""}{saldoForn.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+                                              </span>
+                                            );
+                                          })()}
+                                        </td>
                                       </>
                                     );
                                   })}
-                                  {/* Saldo · Rev. 1990 — bg + borda esquerda emerald pra vincular ao header Vencedor */}
-                                  <td className="px-3 py-2 text-center bg-emerald-50/30 border-l-2 border-emerald-200">
-                                    {hasMeta && melhorForn && metaTot > 0 ? (
-                                      <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${saldo >= 0 ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"}`}>
-                                        {saldo >= 0 ? "+" : ""}{saldo.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
-                                      </span>
-                                    ) : <span className="text-gray-300 text-xs">—</span>}
-                                  </td>
                                 </tr>
                                 {isExpanded && hasComposicao && (() => {
                                   const allInsumos = (it as any).composicaoInsumos as Array<{ insumoCodigo: string; descricao: string; unidade: string; coeficiente: number; precoUnitario: number; alocacaoMat: number; alocacaoMdo: number; alocacaoEquip?: number; custoTotal: number }>;
@@ -4191,7 +4184,7 @@ export default function Cotacoes() {
                                   }
                                   return (
                                     <tr className="bg-slate-50/80">
-                                      <td colSpan={6 + numFornCols + 1} className="px-0 py-0 sticky left-0 z-10">
+                                      <td colSpan={6 + numFornCols} className="px-0 py-0 sticky left-0 z-10">
                                         <div className="ml-8 mr-4 my-2 border border-slate-200 rounded-lg overflow-hidden bg-white shadow-sm">
                                           <div className="px-3 py-1.5 bg-slate-100 border-b border-slate-200 flex items-center justify-between">
                                             <span className="text-[10px] font-bold text-slate-600 uppercase tracking-wider">
@@ -4249,7 +4242,7 @@ export default function Cotacoes() {
                                   const childItems = it._childItems as any[];
                                   return (
                                     <tr className="bg-indigo-50/20">
-                                      <td colSpan={6 + numFornCols + 1} className="px-0 py-0 sticky left-0 z-10">
+                                      <td colSpan={6 + numFornCols} className="px-0 py-0 sticky left-0 z-10">
                                         <div className="ml-8 mr-4 my-2 border border-indigo-200 rounded-lg overflow-hidden bg-white shadow-sm">
                                           <div className="px-3 py-1.5 bg-indigo-50 border-b border-indigo-200">
                                             <span className="text-[10px] font-bold text-indigo-600 uppercase tracking-wider">
@@ -4335,20 +4328,25 @@ export default function Cotacoes() {
                                         </div>
                                       )}
                                     </td>
-                                    <td key={`tftot_${p.fornecedorId}`} className={`px-3 py-3 text-right text-sm border-r border-gray-200 ${isMelhor ? "text-emerald-700 bg-emerald-50" : "text-gray-900"}`}>
+                                    <td key={`tftot_${p.fornecedorId}`} className={`px-3 py-3 text-right text-sm border-r border-gray-100 ${isMelhor ? "text-emerald-700 bg-emerald-50" : "text-gray-900"}`}>
                                       {totalForn > 0 ? totalForn.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : "—"}
+                                    </td>
+                                    {/* Rev. 1991 — Saldo total por fornecedor: metaGrandTotal - totalForn */}
+                                    <td key={`tfsld_${p.fornecedorId}`} className={`px-3 py-3 text-center border-r border-gray-200 ${isMelhor ? "bg-emerald-50" : ""}`}>
+                                      {(() => {
+                                        if (!(metaGrandTotal > 0 && totalForn > 0)) return <span className="text-gray-300">—</span>;
+                                        const saldoFornTot = metaGrandTotal - totalForn;
+                                        return (
+                                          <span className={`text-sm font-bold px-2 py-1 rounded-full whitespace-nowrap ${saldoFornTot >= 0 ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"}`}
+                                            title={`Meta total: ${metaGrandTotal.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}\nFornecedor: ${totalForn.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}\nSaldo: ${saldoFornTot.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}`}>
+                                            {saldoFornTot >= 0 ? "+" : ""}{saldoFornTot.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+                                          </span>
+                                        );
+                                      })()}
                                     </td>
                                   </>
                                 );
                               })}
-                              {/* Saldo total · Rev. 1990 — bg + borda esquerda emerald */}
-                              <td className="px-3 py-3 text-center bg-emerald-50/40 border-l-2 border-emerald-300">
-                                {metaGrandTotal > 0 && melhorForn ? (
-                                  <span className={`text-sm font-bold px-2 py-1 rounded-full ${saldoTotal >= 0 ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"}`}>
-                                    {saldoTotal >= 0 ? "+" : ""}{saldoTotal.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
-                                  </span>
-                                ) : "—"}
-                              </td>
                             </tr>
                             {/* Botões de edição */}
                             <tr className="bg-white border-t border-gray-100">
@@ -4359,9 +4357,10 @@ export default function Cotacoes() {
                                   <td key={`bpreco_${p.fornecedorId}`}></td>
                                   <td key={`btot_${p.fornecedorId}`} className="px-2 py-2 text-center border-r border-gray-100">
                                   </td>
+                                  {/* Rev. 1991 — célula vazia da nova coluna Saldo */}
+                                  <td key={`bsld_${p.fornecedorId}`} className="px-2 py-2 border-r border-gray-200"></td>
                                 </>
                               ))}
-                              <td></td>
                             </tr>
                           </tfoot>
                         </table>

@@ -1,6 +1,24 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 1991 — Cotações · UX · Saldo agora aparece DENTRO de cada coluna de fornecedor (não mais isolado no final).
+ * Pedido direto do usuário (3ª iteração nesta UX): "PRECISA APARECER EM CADA COLUNA DO FORNECEDOR, O SALDO COMPARADO COM O QUE TEMOS PARA GASTAR". A coluna SALDO solitária no final (Revs. 1990 e anteriores) sempre comparava com o Vencedor — confundia porque o saldo positivo de R$ 5.460,56 não correspondia ao último fornecedor visualmente adjacente, e havia apenas UM saldo (do Vencedor) em vez de um por fornecedor.
+ * Mudança em 1 arquivo (`client/src/pages/compras/Cotacoes.tsx`, 8 hunks, lógica de cálculo TRIVIAL adicionada — `metaTot - displayTotal` e `metaGrandTotal - totalForn`):
+ *   (1) L3423 thead linha 1: `<th>` de cada fornecedor passa de `colSpan={3}` → `colSpan={4}`.
+ *   (2) L3698-3711: `<th>` SALDO solitário (criado em Rev. 1990) REMOVIDO.
+ *   (3) L3709-3716: `<th>` linha 2 de cada fornecedor passa de `colSpan={3}` → `colSpan={4}` + nova 4ª `<div>` interna "Saldo" (text-emerald, fundo emerald-50/30 ou /60 se vencedor).
+ *   (4) L4131-4143 body: dentro do `.map(participantes)` adicionada nova `<td>` por item com badge emerald/red mostrando `metaTot - displayTotal` (só renderiza se `metaTot > 0 && displayTotal > 0`); tooltip mostra Meta/Fornecedor/Saldo formatados em BRL.
+ *   (5) L4143 body anterior: `<td>` Saldo solitário do item (Rev. 1990) REMOVIDO.
+ *   (6) L4337-4349 footer: dentro do `.map(participantes)` adicionada nova `<td>` total por fornecedor com badge mostrando `metaGrandTotal - totalForn`.
+ *   (7) L4344 footer anterior: `<td>` Saldo total solitário (Rev. 1990) REMOVIDO.
+ *   (8) L4363-4364 botões de edição: nova `<td>` vazia por fornecedor; `<td></td>` solitário no fim REMOVIDO.
+ *   (9) L3844: `numFornCols` atualizado de `* 3` → `* 4`.
+ *   (10) L4187+L4245: `colSpan={6 + numFornCols + 1}` (linhas de composição expandida) → `colSpan={6 + numFornCols}` (o +1 era da col solitária removida).
+ * version → 1991.
+ * Resultado: cada coluna de fornecedor agora tem 4 sub-colunas (QTD/Preço Unit/Total/Saldo). O comprador vê de relance qual fornecedor está acima/abaixo da meta orçada, fornecedor por fornecedor. Coluna SALDO solitária no extremo direito eliminada. Total no rodapé também ganha saldo por fornecedor.
+ * Validação: HMR aplicou Cotacoes.tsx limpo (10+ updates sem erro); workflow estável.
+ * Preservado: badge interna emerald/red INTACTA. Cálculo de Meta (`metaTot = metaUnit * metaQtdVal`) INTACTO. Cálculo de total fornecedor (`getFornTotal`) INTACTO. Vencedor chip + ranking + COBERTURA header + Pin item + ring vencedor + modo edição (Salvar/Desconto/Acréscimo/Condições) INTACTOS. Rev. 1990 (destaque visual emerald da col solitária) REVERTIDA pois a col foi removida. Rev. 1989 INTACTA. Schema INTACTO. R-001/R-007/R-010 OK. Reversível em 8 hunks (mas restaura visão anterior só de Vencedor).
+ *
  * Rev. 1990 — Cotações · UX · Coluna SALDO vinculada visualmente ao Vencedor.
  * Pedido direto do usuário ("o saldo positivo de 5k é do primeiro concorrente e o layout está confuso e jogando para o final, dando uma impressão de erro"). Tela `/compras/cotacoes/<id>`: coluna SALDO ficava no extremo direito DEPOIS de todas as colunas de fornecedores (Promatel, Renato Garcia, Mario Auto Elétrica no caso), mas seu valor é calculado SEMPRE em relação ao Vencedor (primeiro fornecedor). Visualmente parecia colada ao ÚLTIMO fornecedor da lista, dando sensação de erro.
  * Mudança em 1 arquivo (`client/src/pages/compras/Cotacoes.tsx`, 3 hunks, ZERO mudança de lógica):
