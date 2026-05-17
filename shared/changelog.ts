@@ -1,6 +1,17 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 1990 — Cotações · UX · Coluna SALDO vinculada visualmente ao Vencedor.
+ * Pedido direto do usuário ("o saldo positivo de 5k é do primeiro concorrente e o layout está confuso e jogando para o final, dando uma impressão de erro"). Tela `/compras/cotacoes/<id>`: coluna SALDO ficava no extremo direito DEPOIS de todas as colunas de fornecedores (Promatel, Renato Garcia, Mario Auto Elétrica no caso), mas seu valor é calculado SEMPRE em relação ao Vencedor (primeiro fornecedor). Visualmente parecia colada ao ÚLTIMO fornecedor da lista, dando sensação de erro.
+ * Mudança em 1 arquivo (`client/src/pages/compras/Cotacoes.tsx`, 3 hunks, ZERO mudança de lógica):
+ *   (1) L3695-3711: `<th>` da coluna SALDO recebeu fundo `bg-emerald-50/60`, texto `text-emerald-700`, `border-l-2 border-emerald-300`, ícone `<Trophy>` antes do label, e nova linha condensada "vs. <Nome do Vencedor>" (text-[9px] emerald-600 truncate max-w-[110px]) quando há `melhorForn?.fornecedor`. Tooltip completo no `title`.
+ *   (2) L4131-4137: `<td>` da cell de SALDO por item recebeu `bg-emerald-50/30 border-l-2 border-emerald-200`. Badge interna emerald/red INTACTA.
+ *   (3) L4332-4338: `<td>` da linha TOTAL recebeu `bg-emerald-50/40 border-l-2 border-emerald-300`. Badge interna INTACTA.
+ * version → 1990.
+ * Resultado: coluna SALDO agora se destaca visualmente da última coluna de fornecedor (borda esquerda + tinta emerald sutil), e o subtítulo "vs. <Nome>" no header torna explícito de qual fornecedor é o saldo. Elimina a impressão de "valor perdido no final da tabela" reportada pelo usuário.
+ * Validação: workflow restartou via HMR sem erros; HMR aplicou `client/src/pages/compras/Cotacoes.tsx` limpo.
+ * Preservado: TODA a lógica (`hasMeta`/`melhorForn`/`metaTot`/`saldo`/`saldoTotal`/`metaGrandTotal`) INTACTA — só CSS/markup tocado. Badge emerald/red interna INTACTA (mantém leitura de positivo/negativo). Demais 6 colunas da tabela (ITEM/UN/Meta Orçamento×3/Saldo Orç./Fornecedores×N×3) INTACTAS. Rev. 1989 e anteriores INTACTAS. Schema INTACTO. R-001/R-007/R-010 OK. Reversível em 3 hunks.
+ *
  * Rev. 1989 — Cotações · UX · Header da tabela de mapa + cell de saldo orçamentário condensados.
  * Pedido direto do usuário ("layout está muito confuso, está sobrepondo informações, preciso ser prático e objetivo") sobre a tela `/compras/cotacoes/<id>` (mapa de cotações em fullscreen).
  * Problema: cada coluna de fornecedor empilhava verticalmente: nome+score+badges, chip Vencedor, botão Anexar (com texto + nome do arquivo), botão Ler com IA (com texto), botão Propostas (com texto), botão Editar Preços (com texto). Largura útil de ~200px / 5+ blocos = wrap, sobreposição visual, scroll horizontal interno. Cell de item embaixo da barra de progresso tinha 4 spans separados (Orç: X, Esta SC: Y, Outras: Z, Falta: W) que ocupavam 2 linhas em vendor frequência alta.

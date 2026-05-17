@@ -3692,7 +3692,20 @@ export default function Cotacoes() {
                                   </th>
                                 );
                               })}
-                              <th rowSpan={2} className="text-center text-xs font-semibold text-gray-500 uppercase px-3 py-3 min-w-24">Saldo</th>
+                              {/* Rev. 1990 — Coluna Saldo destacada e vinculada visualmente ao Vencedor */}
+                              <th rowSpan={2} className="text-center text-xs font-semibold text-emerald-700 uppercase px-3 py-2 min-w-28 bg-emerald-50/60 border-l-2 border-emerald-300">
+                                <div className="flex flex-col items-center gap-0.5">
+                                  <div className="flex items-center gap-1 justify-center">
+                                    <Trophy className="h-3 w-3 text-emerald-500" />
+                                    <span>Saldo</span>
+                                  </div>
+                                  {melhorForn?.fornecedor && (
+                                    <span className="text-[9px] font-medium text-emerald-600 normal-case truncate max-w-[110px]" title={`Saldo calculado vs. fornecedor vencedor: ${melhorForn.fornecedor.nomeFantasia || melhorForn.fornecedor.razaoSocial}`}>
+                                      vs. {melhorForn.fornecedor.nomeFantasia || melhorForn.fornecedor.razaoSocial}
+                                    </span>
+                                  )}
+                                </div>
+                              </th>
                             </tr>
                             {/* Linha 2: sub-headers */}
                             <tr className="border-b border-gray-300 bg-gray-50">
@@ -4127,8 +4140,8 @@ export default function Cotacoes() {
                                       </>
                                     );
                                   })}
-                                  {/* Saldo */}
-                                  <td className="px-3 py-2 text-center">
+                                  {/* Saldo · Rev. 1990 — bg + borda esquerda emerald pra vincular ao header Vencedor */}
+                                  <td className="px-3 py-2 text-center bg-emerald-50/30 border-l-2 border-emerald-200">
                                     {hasMeta && melhorForn && metaTot > 0 ? (
                                       <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${saldo >= 0 ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"}`}>
                                         {saldo >= 0 ? "+" : ""}{saldo.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
@@ -4328,8 +4341,8 @@ export default function Cotacoes() {
                                   </>
                                 );
                               })}
-                              {/* Saldo total */}
-                              <td className="px-3 py-3 text-center">
+                              {/* Saldo total · Rev. 1990 — bg + borda esquerda emerald */}
+                              <td className="px-3 py-3 text-center bg-emerald-50/40 border-l-2 border-emerald-300">
                                 {metaGrandTotal > 0 && melhorForn ? (
                                   <span className={`text-sm font-bold px-2 py-1 rounded-full ${saldoTotal >= 0 ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"}`}>
                                     {saldoTotal >= 0 ? "+" : ""}{saldoTotal.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
