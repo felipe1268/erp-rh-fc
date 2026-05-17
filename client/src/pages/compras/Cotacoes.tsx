@@ -1133,6 +1133,52 @@ export default function Cotacoes() {
 
   useEffect(() => { setLocalItensEmOC([]); itensPendentesOCRef.current = []; }, [showDetalhe]);
 
+  // Ao abrir o modal de Condições de Pagamento, pré-carrega os campos a partir do
+  // participante persistido (somente para chaves vazias — preserva edições não salvas).
+  useEffect(() => {
+    if (condModalFornId === null) return;
+    const fId = condModalFornId;
+    const p: any = (mapaQ.data?.participantes ?? []).find((x: any) => x.fornecedorId === fId);
+    if (!p) return;
+
+    const persistedPrazo = p.prazoEntregaDias ? String(p.prazoEntregaDias) : "";
+    const persistedCond = p.condicaoPagamento ?? "";
+    const persistedTipo = p.tipoPagamento ?? "";
+    const persistedForma = p.formaPagamento ?? "";
+    const persistedFreteTipo = p.freteTipo ?? "cif";
+    const persistedValorFrete = p.valorFrete ? String(parseFloat(p.valorFrete)) : "0";
+    const persistedTransp = p.transportadora ?? "";
+    const persistedModulo = p.moduloMedicao ?? "";
+    const persistedNumParc = p.numeroParcelas ? Number(p.numeroParcelas) : 0;
+
+    // Seed estritamente quando a chave está `undefined` (nunca foi inicializada nesta sessão).
+    // String vazia "" é tratada como intenção do usuário de limpar o campo — não sobrescreve.
+    setEditPrazo(prev => prev[fId] !== undefined ? prev : { ...prev, [fId]: persistedPrazo });
+    setEditCondPag(prev => prev[fId] !== undefined ? prev : { ...prev, [fId]: persistedCond });
+    setEditTipoPag(prev => prev[fId] !== undefined ? prev : { ...prev, [fId]: persistedTipo });
+    setEditFormaPag(prev => prev[fId] !== undefined ? prev : { ...prev, [fId]: persistedForma });
+    setEditFreteTipo(prev => prev[fId] !== undefined ? prev : { ...prev, [fId]: persistedFreteTipo });
+    setEditValorFrete(prev => prev[fId] !== undefined ? prev : { ...prev, [fId]: persistedValorFrete });
+    setEditTransportadora(prev => prev[fId] !== undefined ? prev : { ...prev, [fId]: persistedTransp });
+    setEditModuloMedicao(prev => prev[fId] !== undefined ? prev : { ...prev, [fId]: persistedModulo });
+
+    // Inferência de modo "custom": só dispara quando há indício real de parcelamento custom —
+    // numeroParcelas > 1 SEM tipoPagamento persistido (porque tipoPagamento define um plano
+    // Padrão conhecido, ex. "30_60", cujas parcelas o modo Padrão já calcula a partir dele).
+    if (persistedNumParc > 1 && !persistedTipo && condModo[fId] === undefined && !condCustomParcelas[fId]?.length) {
+      const totalForn = parseFloat(p.totalOrcado ?? "0") || 0;
+      const valorBase = totalForn > 0 ? (totalForn / persistedNumParc) : 0;
+      const hoje = new Date();
+      const parcelas = Array.from({ length: persistedNumParc }, (_, i) => {
+        const dt = new Date(hoje);
+        dt.setDate(dt.getDate() + (i * 30));
+        return { valor: valorBase.toFixed(2), data: dt.toISOString().split("T")[0] };
+      });
+      setCondModo(prev => ({ ...prev, [fId]: "custom" }));
+      setCondCustomParcelas(prev => ({ ...prev, [fId]: parcelas }));
+    }
+  }, [condModalFornId, mapaQ.data]);
+
   function resetForm() {
     setForm({ descricao: "", obraId: "", solicitacaoId: "", fornecedorId: "", dataValidade: "", condicaoPagamento: "", tipoPagamento: "", numeroParcelas: "", prazoEntregaDias: "", observacoes: "", tipo: "material" });
     setItens([newItem()]);
