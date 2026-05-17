@@ -1,6 +1,23 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 1993 — Compras · Cotações · Modal "Informações obrigatórias faltando" redesenhado em regras de ouro.
+ * Pedido direto do usuário (17/05/2026, `image_1779023971515`): "AJUSTE O LAYOUT.. CONFORME NOSSA REGRA DE OURO" sobre o modal que aparece ao tentar Aprovar e Gerar Contrato de Serviço sem condições preenchidas. Modal antigo era um Dialog `max-w-md` (~448px) com lista de bullets misturada em parágrafos planos, header só com ícone pequeno red-500 + título red-700, footer simples sem hierarquia, botão primário pálido bg-blue-600.
+ * Mudança em 1 arquivo (`client/src/pages/compras/Cotacoes.tsx`, 1 hunk grande de ~130 linhas no bloco `<Dialog open={showValidacaoErroDialog}>` L5404-5429):
+ *   (1) `DialogContent` agora `max-w-2xl rounded-2xl shadow-2xl border-0 p-0 overflow-hidden`.
+ *   (2) Parse local da `mensagem` separa: nome do fornecedor (regex do título "— Fulano"), intro (1ª linha), campos faltantes (linhas com "•"), bloco "Como corrigir".
+ *   (3) Header: faixa gradient `from-amber-500 via-orange-500 to-red-500`, ícone `<AlertTriangle>` h-6 em chip h-12 w-12 rounded-2xl ring-4 white/15, título xl bold, badge "Trophy + Fornecedor: X" + badge "N pendência(s)" em chip red-900/40.
+ *   (4) Body em `max-h-[60vh] overflow-y-auto` com 3 blocos:
+ *       (a) Intro em parágrafo simples.
+ *       (b) "Campos pendentes" em grid sm:grid-cols-2 de cards com ícone roteado por keyword (Forma/Pagamento→CreditCard, Prazo/Entrega→Clock, Frete→Truck, Medi→BarChart3, fallback→AlertTriangle), texto "Obrigatório" abaixo.
+ *       (c) "Como corrigir em 4 passos" em ol numerada com bullets circulares azuis, passos reescritos contextualmente usando `nomeForn`.
+ *   (5) Footer sticky `bg-gray-50 border-t` com Button outline "Fechar" + Button gradient blue "Ir para o Mapa de Cotação" (só quando `irParaMapa=true`), ordem invertida em mobile.
+ *   (6) Ícones lucide reusados (CreditCard/Clock/Truck/BarChart3/AlertTriangle/Trophy/CheckCircle) — todos já importados via Rev. 1992 e anteriores, ZERO import novo.
+ * version → 1993.
+ * Resultado: modal passa de "alerta plano de 448px" pra "experiência guiada de 672px" com hierarquia visual clara (problema → o que falta → como resolver), respeitando o mesmo padrão das Revs. 1992/1983/1970 (header gradient + cards + passo-a-passo + footer sticky).
+ * Validação: HMR aplicou Cotacoes.tsx limpo sem erro; workflow estável.
+ * Preservado: lógica de validação INTACTA (L2049-2061 que detecta `!condPag` + `!prazo` e chama `setValidacaoErroInfo({...})` segue idêntica). API do modal INTACTA (mesmas keys `titulo`/`mensagem`/`irParaMapa` no state). 3 callers do `setShowValidacaoErroDialog(true)` (L851, L2037, L2059) INTACTOS — funcionam pra qualquer combinação de campos faltantes. Outros modais (showCancelarAprovacao, showGerarOCMode, condModalPortal, FD modais) INTACTOS. Rev. 1992 INTACTA. Schema INTACTO. R-001/R-007/R-010 OK. Reversível em 1 hunk.
+ *
  * Rev. 1992 — Compras · Cotações · Modal "Condições de Pagamento" redesenhado em full-screen seguindo regras de ouro.
  * Pós-rebase: renumerado de Rev. 1984 → 1992 porque o main avançou de 1984 → 1989 enquanto esta task estava em andamento.
  * User (17/05/2026, image_1779021843980): pediu para refazer o lay-out do modal de Condições de Pagamento (acessível a partir do card de cada fornecedor no Mapa de Cotação) que aparecia como pop-up estreito (max-w-2xl, ~640px), com seções espremidas em grids de 2-3 colunas pequenas, header pequeno, footer colado, botão primário pálido. Em desktop sobrava muita área lateral preta; em iPad ficava difícil de operar.

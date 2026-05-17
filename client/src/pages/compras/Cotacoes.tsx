@@ -5401,30 +5401,132 @@ export default function Cotacoes() {
       </DialogContent>
     </Dialog>
 
+    {/* Rev. 1993 — Modal Validação Erro redesenhado em regras de ouro: header gradient amber→red, lista de campos faltantes em cards com ícone, passo-a-passo, footer sticky. */}
     <Dialog open={showValidacaoErroDialog} onOpenChange={v => { if (!v) setShowValidacaoErroDialog(false); }}>
-      <DialogContent className="border-red-200 max-w-md" style={{ background: "#fff", color: "#111827" }}>
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-red-700">
-            <AlertTriangle className="h-5 w-5 text-red-500" />
-            {validacaoErroInfo?.titulo ?? "Ação necessária"}
-          </DialogTitle>
-        </DialogHeader>
-        <div className="py-2 space-y-3">
-          {(validacaoErroInfo?.mensagem ?? "").split("\n").map((line, i) => (
-            <p key={i} className={`text-sm ${line.startsWith("•") ? "pl-3 text-red-700 font-medium" : line.startsWith("Como corrigir") ? "text-gray-500 text-xs italic" : "text-gray-700"}`}>{line}</p>
-          ))}
-        </div>
-        <DialogFooter className="flex gap-2">
-          {validacaoErroInfo?.irParaMapa && (
-            <Button onClick={() => { setShowValidacaoErroDialog(false); setAbaAtiva("mapa"); }}
-              className="bg-blue-600 hover:bg-blue-500 text-white gap-2">
-              <BarChart3 className="h-4 w-4" /> Ir para o Mapa de Cotação
-            </Button>
-          )}
-          <Button variant="outline" onClick={() => setShowValidacaoErroDialog(false)} className="text-gray-600">
-            Fechar
-          </Button>
-        </DialogFooter>
+      <DialogContent className="border-0 p-0 max-w-2xl overflow-hidden rounded-2xl shadow-2xl" style={{ background: "#fff", color: "#111827" }}>
+        {(() => {
+          const titulo = validacaoErroInfo?.titulo ?? "Ação necessária";
+          const mensagem = validacaoErroInfo?.mensagem ?? "";
+          // Parse: extrai nome do fornecedor do título "Informações obrigatórias faltando — Fulano"
+          const nomeFornMatch = titulo.match(/—\s*(.+)$/);
+          const nomeForn = nomeFornMatch ? nomeFornMatch[1] : null;
+          const tituloLimpo = nomeForn ? titulo.replace(/\s*—\s*.+$/, "") : titulo;
+          // Parse: extrai lista de campos (linhas começando com "•") e "Como corrigir"
+          const linhas = mensagem.split("\n").map(l => l.trim()).filter(Boolean);
+          const campos = linhas.filter(l => l.startsWith("•")).map(l => l.replace(/^•\s*/, ""));
+          const intro = linhas.find(l => !l.startsWith("•") && !l.startsWith("Como corrigir"));
+          const comoCorrigir = linhas.find(l => l.startsWith("Como corrigir"));
+          const iconePorCampo = (c: string) => {
+            const lc = c.toLowerCase();
+            if (lc.includes("forma") || lc.includes("pagamento")) return CreditCard;
+            if (lc.includes("prazo") || lc.includes("entrega")) return Clock;
+            if (lc.includes("frete")) return Truck;
+            if (lc.includes("medi")) return BarChart3;
+            return AlertTriangle;
+          };
+          return (
+            <>
+              {/* Header gradient amber→red */}
+              <DialogHeader className="p-0 space-y-0">
+                <div className="bg-gradient-to-br from-amber-500 via-orange-500 to-red-500 text-white px-6 py-5">
+                  <div className="flex items-start gap-4">
+                    <div className="shrink-0 h-12 w-12 rounded-2xl bg-white/20 ring-4 ring-white/15 flex items-center justify-center">
+                      <AlertTriangle className="h-6 w-6 text-white" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <DialogTitle className="text-lg font-bold text-white leading-tight">
+                        {tituloLimpo}
+                      </DialogTitle>
+                      {nomeForn && (
+                        <div className="mt-1.5 flex items-center gap-2 flex-wrap">
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-white/20 text-white border border-white/30">
+                            <Trophy className="h-3 w-3" /> Fornecedor: {nomeForn}
+                          </span>
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-900/40 text-white uppercase tracking-wider">
+                            {campos.length} pendência{campos.length === 1 ? "" : "s"}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </DialogHeader>
+
+              {/* Body */}
+              <div className="px-6 py-5 space-y-4 max-h-[60vh] overflow-y-auto">
+                {/* Intro */}
+                {intro && (
+                  <p className="text-sm text-gray-700 leading-relaxed">{intro}</p>
+                )}
+
+                {/* Cards de campos faltantes */}
+                {campos.length > 0 && (
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2 text-[11px] font-bold text-red-700 uppercase tracking-wider">
+                      <span className="h-px flex-1 bg-red-200" />
+                      Campos pendentes
+                      <span className="h-px flex-1 bg-red-200" />
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {campos.map((campo, i) => {
+                        const Icon = iconePorCampo(campo);
+                        return (
+                          <div key={i} className="flex items-center gap-3 p-3 rounded-xl border-2 border-red-200 bg-red-50/60">
+                            <div className="shrink-0 h-9 w-9 rounded-lg bg-white border border-red-200 flex items-center justify-center">
+                              <Icon className="h-4 w-4 text-red-600" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-semibold text-red-800 truncate">{campo}</p>
+                              <p className="text-[10px] text-red-500 uppercase tracking-wider font-medium">Obrigatório</p>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Como corrigir — passo a passo */}
+                {comoCorrigir && (
+                  <div className="rounded-xl border border-blue-200 bg-blue-50/60 p-4">
+                    <div className="flex items-center gap-2 mb-3">
+                      <div className="h-7 w-7 rounded-full bg-blue-600 text-white flex items-center justify-center">
+                        <CheckCircle className="h-4 w-4" />
+                      </div>
+                      <p className="text-sm font-bold text-blue-900">Como corrigir em 4 passos</p>
+                    </div>
+                    <ol className="space-y-1.5 pl-1">
+                      {[
+                        "Clique em \"Ir para o Mapa de Cotação\" abaixo",
+                        nomeForn ? `Localize o card de ${nomeForn}` : "Localize o card do fornecedor",
+                        "Clique em \"Editar\" e preencha os campos pendentes",
+                        "Clique em \"Salvar\" e tente aprovar novamente",
+                      ].map((step, i) => (
+                        <li key={i} className="flex items-start gap-2.5 text-xs text-blue-900">
+                          <span className="shrink-0 inline-flex items-center justify-center h-5 w-5 rounded-full bg-blue-600 text-white text-[10px] font-bold">{i + 1}</span>
+                          <span className="pt-0.5 leading-snug">{step}</span>
+                        </li>
+                      ))}
+                    </ol>
+                  </div>
+                )}
+              </div>
+
+              {/* Footer sticky */}
+              <DialogFooter className="px-6 py-4 bg-gray-50 border-t border-gray-200 flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
+                <Button variant="outline" onClick={() => setShowValidacaoErroDialog(false)} className="text-gray-700 border-gray-300 hover:bg-gray-100">
+                  Fechar
+                </Button>
+                {validacaoErroInfo?.irParaMapa && (
+                  <Button onClick={() => { setShowValidacaoErroDialog(false); setAbaAtiva("mapa"); }}
+                    className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600 text-white gap-2 shadow-md font-semibold">
+                    <BarChart3 className="h-4 w-4" /> Ir para o Mapa de Cotação
+                  </Button>
+                )}
+              </DialogFooter>
+            </>
+          );
+        })()}
       </DialogContent>
     </Dialog>
 
