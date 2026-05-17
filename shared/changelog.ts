@@ -1,6 +1,104 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2053 — SST · Integração · +10 perguntas sobre NRs e Segurança
+ * APPENDADAS ao banco-padrão (Regras de Ouro continuam intactas).
+ *
+ * Pedido direto do usuário: "Quanto aos questionamentos, mantenha as
+ * que já tem, e faça mais 10 perguntas sobre a NR... e segurança".
+ *
+ * Decisão arquitetural: a constante `PERGUNTAS_REGRAS_OURO` em
+ * server/routers/integracaoSST.ts deixa de ser SÓ as 12 Regras de
+ * Ouro de conduta da Rev. 2047 e passa a englobar TAMBÉM 10
+ * perguntas técnicas de segurança (NRs). As 12 originais NÃO mudam
+ * — só são apendadas 10 novas no fim do array. Nome da constante
+ * preservado pra não quebrar imports (`server/_core/index.ts`
+ * importa pra auto-migração; `salvarPerguntas` referencia em
+ * INTERNAL_SERVER_ERROR mensagens).
+ *
+ * Os 10 temas novos cobrem:
+ *  1. NR-6 — Responsabilidade do trabalhador sobre o EPI
+ *  2. NR-35 — Trabalho em altura (cinto paraquedista + treinamento + AR)
+ *  3. NR-33 — Espaço confinado (PET, vigia, medição de atmosfera)
+ *  4. NR-10 — Segurança em instalações elétricas (não tocar, avisar
+ *             eletricista habilitado, isolar a área)
+ *  5. NR-12 — Máquinas e equipamentos (treinamento + autorização +
+ *             proteções)
+ *  6. NR-17/NR-11 — Ergonomia e movimentação de carga (joelhos
+ *                   dobrados, coluna reta, pedir ajuda/carrinho)
+ *  7. Acidente de trabalho — comunicar IMEDIATAMENTE + CAT (todo
+ *     acidente, mesmo pequeno, deve ser registrado)
+ *  8. NR-5 — CIPA (todo trabalhador pode/deve levar dúvidas e
+ *            sugestões de segurança)
+ *  9. DDS (Diálogo Diário de Segurança) — obrigatório, prevenção
+ *  10. Bônus: reforço da Regra de Ouro de EPI numa redação técnica
+ *      (item 13 do array original já cobre EPI em altura — não
+ *      duplicamos; o item NR-6 é sobre CONSERVAÇÃO/cuidado, ângulo
+ *      diferente).
+ *
+ * Todas em linguagem simples (NR-1.7 — colaboradores semi-
+ * alfabetizados): 3 alternativas, 1 correta, com sigla da NR citada
+ * apenas na alternativa correta pra reforço (não na pergunta — não
+ * exigir leitura técnica).
+ *
+ * Auto-migração da Rev. 2050 em `server/_core/index.ts` continua
+ * funcionando SEM mudança: usa `PERGUNTAS_REGRAS_OURO.length` (não
+ * literal 12) — após este bump, tenants que tinham 12 perguntas
+ * canônicas serão detectados como stale (`canonicos=12 AND total=12
+ * ≠ 22`) no próximo startup e re-seedados pras 22 atuais. O wipe-
+ * and-reseed transacional é seguro: respostas históricas em
+ * `sst_integracao_respostas` NÃO são afetadas (sem FK rígida, design
+ * Rev. 2034) — só a tabela de perguntas/alternativas é reescrita.
+ *
+ * Tenants que NÃO têm canônicas (módulos customizados pelo cliente
+ * via UI) continuam INTOCADOS pelo filtro `canonicos>0` da auto-
+ * migração — só perdem o seed antigo da Rev. 2046 (NRs/capacete)
+ * se houver, padrão Rev. 2050.
+ *
+ * UI do `ModulosEditor` (`client/src/pages/sst/IntegracaoSST.tsx`,
+ * Rev. 2047): botão "🔄 Atualizar Regras de Ouro" continua
+ * funcionando — após este bump, o AlertDialog vai avisar que as 12
+ * perguntas atuais serão substituídas pelas 22 novas (o handler
+ * `semearPerguntasPadrao({substituir:true})` faz wipe + reinsert
+ * sempre lê o `PERGUNTAS_REGRAS_OURO` atual). Mensagem inalterada
+ * (genérica — não fala em número fixo).
+ *
+ * Pontuação: cada pergunta vale 1 ponto na nota final do
+ * colaborador. Acertar 16 das 22 = 72.7% (acima da `notaMinima`
+ * default 70). RH pode subir `notaMinima` por módulo (até 100) na
+ * config do módulo se quiser blindar a nota mínima após o aumento
+ * — handler `criarConfig`/`atualizarConfig` aceita 1-100.
+ *
+ * R-001/R-007/R-010 OK: ZERO ALTER/DROP de SCHEMA; ZERO SQL direto;
+ * o re-seed roda em SEED (não dados do usuário) em transação
+ * atômica e só em módulos `canonicos>0` (já marcados como
+ * "Carregar Regras de Ouro").
+ *
+ * Preservado: Rev. 2052 (assinatura TST) INTACTA; Rev. 2051/2050/
+ * 2049/2048/2047/2046 INTACTAS estruturalmente — só o array
+ * `PERGUNTAS_REGRAS_OURO` cresceu de 12 → 22.
+ *
+ * Follow-up:
+ *  (1) Embaralhar ordem das 22 perguntas na tela pública (hoje todo
+ *      colaborador vê na mesma ordem — facilita "cola");
+ *  (2) Categorizar perguntas por tema (conduta / segurança técnica)
+ *      e permitir RH escolher quantas de cada;
+ *  (3) Banco de perguntas reutilizável mantido pelo admin_master via
+ *      UI (hoje só edição no código);
+ *  (4) Adicionar perguntas específicas por função (eletricista,
+ *      soldador, operador de empilhadeira) — variações por
+ *      `funcaoId`/`cbo` do colaborador.
+ *
+ * Arquivos tocados:
+ *  - server/routers/integracaoSST.ts (array PERGUNTAS_REGRAS_OURO
+ *    cresce de 12 → 22 itens — append no final, sem reordenação)
+ *  - shared/version.ts → 2053
+ *  - shared/changelog.ts (esta entrada no topo)
+ *  - replit.md (Rev. 2053 entra no Top-5 detalhado; Rev. 2048 desce
+ *    pra one-liner; Rev. 2038 sai pra replit-history.md)
+ *
+ * ════════════════════════════════════════════════════════════════
+ *
  * Rev. 2052 — SST · Integração · Assinatura DIGITAL do TST no
  * certificado (FCSign canvas inline) — desenha no canvas, salva
  * base64 PNG no registro, embute imagem no PDF sobre a linha de

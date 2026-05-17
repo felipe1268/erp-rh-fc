@@ -123,6 +123,78 @@ export const PERGUNTAS_REGRAS_OURO: { texto: string; alternativas: { texto: stri
       { texto: "Sim, se ninguém da segurança estiver olhando", correta: false },
     ],
   },
+  {
+    texto: "Recebi um EPI novo (capacete, luva, botina). De quem é a responsabilidade de cuidar dele?",
+    alternativas: [
+      { texto: "Da empresa — se quebrar, é só pedir outro a qualquer momento", correta: false },
+      { texto: "Minha. Devo usar, conservar, guardar e devolver quando trocar. A empresa fornece e treina, eu cuido (NR-6)", correta: true },
+      { texto: "Do almoxarife", correta: false },
+    ],
+  },
+  {
+    texto: "Vou subir num andaime ou trabalhar acima de 2 metros do chão. O que é OBRIGATÓRIO?",
+    alternativas: [
+      { texto: "Só capacete e bota basta", correta: false },
+      { texto: "Cinto de segurança tipo paraquedista ANCORADO em ponto firme + treinamento de NR-35 válido + Análise de Risco do serviço", correta: true },
+      { texto: "Cinto preso em qualquer cano ou parafuso da estrutura", correta: false },
+    ],
+  },
+  {
+    texto: "Vou entrar num espaço confinado (caixa d'água, poço, silo, galeria). O que NÃO posso fazer?",
+    alternativas: [
+      { texto: "Entrar sem Permissão de Entrada e Trabalho (PET), sem vigia do lado de fora e sem medição da atmosfera", correta: true },
+      { texto: "Avisar o vigia antes de entrar", correta: false },
+      { texto: "Usar cinto e linha de vida pra resgate", correta: false },
+    ],
+  },
+  {
+    texto: "Vi um fio elétrico desencapado ou um quadro de energia aberto na obra. O que faço?",
+    alternativas: [
+      { texto: "Tento consertar eu mesmo pra adiantar o serviço", correta: false },
+      { texto: "Isolo a área, NÃO toco e aviso imediatamente o encarregado ou o eletricista habilitado (NR-10)", correta: true },
+      { texto: "Ignoro — não é meu serviço", correta: false },
+    ],
+  },
+  {
+    texto: "Vou operar betoneira, serra circular, esmerilhadeira ou qualquer máquina da obra. O que preciso?",
+    alternativas: [
+      { texto: "Nada, é só ligar e usar", correta: false },
+      { texto: "Treinamento específico, autorização do encarregado e a máquina precisa ter proteção (capa, botão de emergência) — NR-12", correta: true },
+      { texto: "Só usar se outro colega já ensinou rapidinho", correta: false },
+    ],
+  },
+  {
+    texto: "Preciso erguer ou carregar carga pesada manualmente. Qual é a forma correta?",
+    alternativas: [
+      { texto: "Curvar a coluna pra pegar do chão — é mais rápido", correta: false },
+      { texto: "Dobrar os joelhos, manter a coluna reta, pedir ajuda se for muito pesado ou usar carrinho/empilhadeira (NR-17/NR-11)", correta: true },
+      { texto: "Pegar sozinho de qualquer jeito pra mostrar serviço", correta: false },
+    ],
+  },
+  {
+    texto: "Eu me machuquei na obra, mesmo um corte pequeno. O que fazer?",
+    alternativas: [
+      { texto: "Esconder pra não dar trabalho e seguir trabalhando", correta: false },
+      { texto: "Avisar IMEDIATAMENTE o encarregado, ir ao ambulatório/posto e abrir a CAT — todo acidente, por menor que seja, precisa ser registrado", correta: true },
+      { texto: "Resolver em casa com remédio meu", correta: false },
+    ],
+  },
+  {
+    texto: "Tenho uma dúvida ou sugestão sobre segurança no meu setor. Pra quem levo?",
+    alternativas: [
+      { texto: "Pra ninguém — não é problema meu", correta: false },
+      { texto: "Pra meu encarregado, pro TST/Engenheiro de Segurança ou pro meu representante da CIPA — todo trabalhador pode (e deve) participar da segurança (NR-5)", correta: true },
+      { texto: "Só pra um colega de confiança", correta: false },
+    ],
+  },
+  {
+    texto: "O DDS (Diálogo Diário de Segurança) começou. O que faço?",
+    alternativas: [
+      { texto: "Saio escondido pra adiantar o serviço — DDS é perda de tempo", correta: false },
+      { texto: "Participo, presto atenção e assino a lista. O DDS é OBRIGATÓRIO e serve pra prevenir acidente no dia", correta: true },
+      { texto: "Fico mexendo no celular durante a conversa", correta: false },
+    ],
+  },
 ];
 
 export const integracaoSSTRouter = router({
