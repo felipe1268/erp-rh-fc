@@ -1298,10 +1298,12 @@ function PendentesTab({ companyId }: { companyId: number }) {
                   </Label>
                   <Select value={selectedObraId} onValueChange={setSelectedObraId}>
                     <SelectTrigger className="h-10"><SelectValue placeholder="Selecione a obra" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">Sem obra específica</SelectItem>
+                    {/* Rev. 2033 — popover com largura controlada (não estoura à esquerda em viewports estreitos);
+                        items com whitespace-normal pra nomes longos de obra quebrarem em 2 linhas em vez de serem cortados. */}
+                    <SelectContent className="max-w-[min(92vw,480px)]">
+                      <SelectItem value="none" className="whitespace-normal break-words pr-2">Sem obra específica</SelectItem>
                       {(obras.data as any[])?.map((o: any) => (
-                        <SelectItem key={o.id} value={String(o.id)}>{o.nome}</SelectItem>
+                        <SelectItem key={o.id} value={String(o.id)} className="whitespace-normal break-words pr-2">{o.nome}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -1316,10 +1318,11 @@ function PendentesTab({ companyId }: { companyId: number }) {
                   </Label>
                   <Select value={selectedConfigId} onValueChange={setSelectedConfigId}>
                     <SelectTrigger className="h-10"><SelectValue placeholder="Automática" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="auto">Automática (padrão)</SelectItem>
+                    {/* Rev. 2033 — mesmo tratamento de largura/quebra do dropdown de Obra. */}
+                    <SelectContent className="max-w-[min(92vw,480px)]">
+                      <SelectItem value="auto" className="whitespace-normal break-words pr-2">Automática (padrão)</SelectItem>
                       {configs.data?.map(c => (
-                        <SelectItem key={c.id} value={String(c.id)}>{c.titulo}</SelectItem>
+                        <SelectItem key={c.id} value={String(c.id)} className="whitespace-normal break-words pr-2">{c.titulo}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>

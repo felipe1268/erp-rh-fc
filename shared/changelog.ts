@@ -1,6 +1,48 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2033 — SST · Integração de Segurança · Modal "Iniciar
+ * Integração" · BUGFIX: dropdowns de Obra e Configuração cortavam
+ * a primeira letra dos nomes em viewports estreitos (iPad/mobile).
+ *
+ * Pedido direto do usuário (img IMG_0876_1779038296528): "Não está
+ * aparecendo o nome das obras, fica escondido, arrume isso". No
+ * print do iPad portrait (768px), o popover do Select renderizava
+ * "ARAMURU - HH...", "HLORUM PE...", "SCRITÓRIO CENTRAL", "OTEL DO
+ * PAPA..." — faltava exatamente a 1ª letra de cada obra porque o
+ * popover Radix portalizado estourava o viewport à esquerda e o
+ * conteúdo era clipado pela borda.
+ *
+ * Causa: `SelectContent` sem `max-w` e `SelectItem` sem quebra de
+ * linha (`white-space: nowrap` padrão). Em viewports onde o nome
+ * da obra ultrapassa a largura do trigger, o Radix expandia o
+ * popover seguindo o conteúdo até estourar a tela.
+ *
+ * Mudança em 1 arquivo (`client/src/pages/sst/IntegracaoSST.tsx`,
+ * ~8L em 2 hunks idênticos):
+ *   - `SelectContent` ganhou `className="max-w-[min(92vw,480px)]"` —
+ *     trava em no máx. 480px no desktop e 92% do viewport no
+ *     mobile/tablet, garantindo que o popover NUNCA estoura a tela.
+ *   - Cada `SelectItem` ganhou `className="whitespace-normal
+ *     break-words pr-2"` — nomes longos quebram em 2 linhas em vez
+ *     de serem cortados; `pr-2` evita colisão com o check icon do
+ *     Radix Select.
+ *   - Aplicado nos 2 dropdowns do modal: Obra e Configuração.
+ *
+ * + `shared/version.ts` → 2033.
+ *
+ * Compliance R-001 / R-007 / R-010: ZERO SQL/schema/router. Puramente
+ * visual (Tailwind). Reversível em 1 arquivo / 2 hunks.
+ *
+ * Preservado: Revs. 2018/2020/2023/2026 (modal SST Integração)
+ * INTACTAS; Rev. 2032 (Fechamento de Ponto) INTACTA; lógica de
+ * `selectedObraId`/`obras.data` INTACTA — só estilo dos
+ * SelectContent/SelectItem mudou.
+ *
+ * Follow-up: aplicar o mesmo pattern em outros Selects do app que
+ * listam obras/colaboradores/projetos com nomes longos (DDS,
+ * Lançamento Manual, transferência, etc).
+ *
  * Rev. 2032 — DP · Fechamento de Ponto · Modal "Memória de cálculo ·
  * Atraso Acumulado" agora mostra a EQUAÇÃO COMPLETA por dia (4 batidas
  * + total trabalhado + jornada esperada + déficit = atraso).
