@@ -1,6 +1,73 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2042 — SST · Integração de Segurança · "Iniciar agora" ·
+ * CAUSA-RAIZ encontrada: SELECT usava coluna inexistente
+ * `employees.nome` (correto é `employees.nomeCompleto`),
+ * fazendo drizzle receber `undefined` ao construir a query
+ * → "Cannot convert undefined or null to object" no driver.
+ *
+ * Pedido direto do usuário (img IMG_0889 — graças à tela de
+ * erro inline da Rev. 2041 ficou visível): "Não foi possível
+ * iniciar a integração — Cannot convert undefined or null to
+ * object". Servidor não logava erro (engolido pelo tRPC error
+ * formatter).
+ *
+ * Causa-raiz (1 letra de diferença que custou 3 revisões):
+ * o handler `criarRegistro` em `server/routers/integracaoSST.ts`
+ * tinha `nome: employees.nome` no SELECT, mas a coluna real do
+ * schema (drizzle/schema.ts) é `nomeCompleto` (varchar). Como
+ * `employees.nome` é `undefined` no objeto drizzle, ao construir
+ * o objeto `{ id, nome: undefined, cpf, funcao }` o
+ * `db.select({...})` lançava "Cannot convert undefined or null
+ * to object" internamente. A query `listarPendentesAuto` da
+ * Rev. 2034 já usava `employees.nomeCompleto` corretamente —
+ * só o `criarRegistro` ficou com o nome errado desde a versão
+ * original do módulo.
+ *
+ * Mudança em 1 arquivo (`server/routers/integracaoSST.ts`,
+ * ~32L em 3 hunks):
+ *
+ *   - SELECT em `criarRegistro` (L505): `employees.nome` →
+ *     `employees.nomeCompleto` (FIX da causa-raiz)
+ *   - SELECT em `criarRegistrosEmLote` (L563): mesmo fix —
+ *     bug latente flagrado pelo code-review/architect (ia
+ *     explodir o lote inteiro com o mesmo erro)
+ *   - SELECT em `listarRegistrosParaLote` (L790): mesmo fix —
+ *     bug latente flagrado pelo code-review/architect
+ *   - Wrap em try/catch que loga `console.error("[criarRegistro]
+ *     FAIL", {input, userId, err, stack})` pra debug futuro sem
+ *     depender de print do usuário
+ *   - TRPCErrors re-throwed (preserva código original); outros
+ *     erros viram INTERNAL_SERVER_ERROR com mensagem real
+ *   - Coerção explícita de tipos no `values` do insert (defesa
+ *     em profundidade): `Number()` em ids, `String()` em nome,
+ *     `?? null` em opcionais, evita undefined chegar no driver
+ *
+ * + `shared/version.ts` → 2042.
+ *
+ * R-001/R-007/R-010 OK: ZERO ALTER TABLE / DROP / DELETE.
+ * 1 arquivo / 1 hunk server-side. Sem novas deps. Reversível.
+ *
+ * Preservado:
+ *   - Rev. 2041 (tela de erro inline na janela) INTACTA —
+ *     graças a ela achamos a causa
+ *   - Rev. 2040 (hardening client-side) INTACTA
+ *   - Rev. 2039 (open-blank-then-redirect) INTACTA
+ *   - Rev. 2038 (boas-vindas + atalho) INTACTA
+ *   - Esquema do banco INTACTO
+ *
+ * Follow-up:
+ *   1. Auditar TODOS os SELECTs em `server/routers/` que usam
+ *      `employees.nome` (pode ter outros lugares com o mesmo
+ *      bug latente) — `rg "employees\.nome\b"`
+ *   2. Renomear `nomeCompleto` → `nome` no schema (com migration)
+ *      OU adicionar alias `nome` no drizzle pra não cair nesse
+ *      gremlin de novo
+ *   3. Validação de tipo TypeScript estrito no campo (hoje
+ *      drizzle aceita qualquer chave indexada de `employees`,
+ *      `undefined` passa)
+ *
  * Rev. 2041 — SST · Integração de Segurança · "Iniciar agora" ·
  * BUGFIX "abre e fecha sozinho": janela de splash agora mostra
  * mensagem de erro DENTRO dela em vez de fechar.

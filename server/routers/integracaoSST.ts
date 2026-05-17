@@ -495,34 +495,51 @@ export const integracaoSSTRouter = router({
       smoId: z.number().int().positive().optional(),
     }))
     .mutation(async ({ input, ctx }) => {
-      assertCompanyAccess(ctx, input.companyId);
-      const db = (await getDb())!;
+      try {
+        assertCompanyAccess(ctx, input.companyId);
+        const db = (await getDb())!;
 
-      const [emp] = await db.select({
-        id: employees.id,
-        nome: employees.nome,
-        cpf: employees.cpf,
-        funcao: employees.funcao,
-      }).from(employees).where(and(eq(employees.id, input.employeeId), eq(employees.companyId, input.companyId)));
-      if (!emp) throw new TRPCError({ code: "NOT_FOUND", message: "Colaborador não encontrado nesta empresa" });
+        const [emp] = await db.select({
+          id: employees.id,
+          nome: employees.nomeCompleto,
+          cpf: employees.cpf,
+          funcao: employees.funcao,
+        }).from(employees).where(and(eq(employees.id, input.employeeId), eq(employees.companyId, input.companyId)));
+        if (!emp) throw new TRPCError({ code: "NOT_FOUND", message: "Colaborador não encontrado nesta empresa" });
 
-      const token = gerarToken();
-      const [row] = await db.insert(sstIntegracaoRegistros).values({
-        companyId: input.companyId,
-        employeeId: input.employeeId,
-        employeeNome: emp.nome,
-        employeeCpf: emp.cpf,
-        employeeFuncao: emp.funcao,
-        configId: input.configId ?? null,
-        obraId: input.obraId ?? null,
-        obraNome: input.obraNome?.trim() || null,
-        origem: input.origem,
-        smoId: input.smoId ?? null,
-        token,
-        responsavel: ctx.user.name ?? "Sistema",
-        responsavelId: ctx.user.id,
-      }).returning();
-      return row;
+        const token = gerarToken();
+        // Rev. 2042 — coerção explícita pra evitar undefined no insert
+        // (causa de "Cannot convert undefined or null to object" no driver).
+        const values = {
+          companyId: Number(input.companyId),
+          employeeId: Number(input.employeeId),
+          employeeNome: emp.nome ?? null,
+          employeeCpf: emp.cpf ?? null,
+          employeeFuncao: emp.funcao ?? null,
+          configId: input.configId != null ? Number(input.configId) : null,
+          obraId: input.obraId != null ? Number(input.obraId) : null,
+          obraNome: input.obraNome?.trim() || null,
+          origem: input.origem || "manual",
+          smoId: input.smoId != null ? Number(input.smoId) : null,
+          token,
+          responsavel: (ctx.user?.name ? String(ctx.user.name) : "Sistema"),
+          responsavelId: ctx.user?.id != null ? Number(ctx.user.id) : null,
+        };
+        const [row] = await db.insert(sstIntegracaoRegistros).values(values).returning();
+        return row;
+      } catch (e: any) {
+        console.error("[criarRegistro] FAIL", {
+          input,
+          userId: ctx.user?.id,
+          err: e?.message || String(e),
+          stack: e?.stack,
+        });
+        if (e instanceof TRPCError) throw e;
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: `Falha ao criar integração: ${e?.message || String(e)}`,
+        });
+      }
     }),
 
   criarRegistrosEmLote: protectedProcedure
@@ -540,7 +557,7 @@ export const integracaoSSTRouter = router({
       const db = (await getDb())!;
 
       const emps = await db.select({
-        id: employees.id, nome: employees.nome, cpf: employees.cpf, funcao: employees.funcao,
+        id: employees.id, nome: employees.nomeCompleto, cpf: employees.cpf, funcao: employees.funcao,
       }).from(employees).where(and(inArray(employees.id, input.employeeIds), eq(employees.companyId, input.companyId)));
 
       const registros = emps.map(emp => ({
@@ -767,7 +784,7 @@ export const integracaoSSTRouter = router({
       const db = (await getDb())!;
 
       const [emp] = await db.select({
-        id: employees.id, nome: employees.nome, cpf: employees.cpf, funcao: employees.funcao,
+        id: employees.id, nome: employees.nomeCompleto, cpf: employees.cpf, funcao: employees.funcao,
       }).from(employees).where(and(eq(employees.id, input.employeeId), eq(employees.companyId, input.companyId)));
       if (!emp) throw new TRPCError({ code: "NOT_FOUND", message: "Colaborador não encontrado nesta empresa" });
 
