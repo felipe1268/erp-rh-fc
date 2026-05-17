@@ -50,18 +50,18 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 2065** — **Fechamento de Ponto · botão "Voltar ao ranking" nos 3 modais de memória de cálculo.** Pedido IMG_0965: "Coloca um botão para voltar e ver a tela anterior". Os modais (Atraso/HE/Faltas) já preservavam o ranking embaixo, mas o único affordance era o X minúsculo do shadcn — confundia. Fix em `client/src/pages/FechamentoPonto.tsx` (3 edits idênticos): adiciona `<Button>← Voltar ao ranking</Button>` no topo de cada `DialogHeader`, handler = mesmo do X. ZERO lógica, ZERO schema.
-- **Rev. 2064** — **SST badge do menu lateral REALMENTE funciona agora · bug crítico de serialização de array Drizzle.** Pedido IMG_0963/0964. `refresh_all_logs` revelou que `getBadgeCounts` falhava desde a Rev. 2058: `malformed array literal: "60002"` — `sql\`ANY(${ids})\`` do Drizzle não serializa array JS; `useQuery` silenciava o erro. Fix em `server/routers/integracaoSST.ts` L319: 4 ocorrências passam pra `sql.raw(\`ANY(ARRAY[${idsList}]::int[])\`)` com lista validada por Zod. Bônus: `alertas` (L1380) também consertada (colunas reais camelCase quoted: `"employeeId"`/`"companyId"`/`"deletedAt"`; `employees` usa `"nomeCompleto"`).
+- **Rev. 2066** — **Raio-X do Funcionário · Timeline Cronológica agora inclui TODAS as movimentações.** Pedido IMG_0966: "Preciso que a time line parar de tudoooo, não deixa passar nenhuma movimentação". O print mostrava só 4 eventos mesmo a tela tendo "Férias 12"/"Ponto 4"/"Folha"/etc. Bug raiz: forEach de Férias (L1736) só pushava se `f.dataInicio` setado (períodos aquisitivos abertos sem gozo nunca apareciam). + 8 fontes consultadas eram devolvidas mas NUNCA pushadas pra timeline. Fix em `server/routers/controleDocumentos.ts` L1738-1865: Férias emite 3 eventos (período aquisitivo/início gozo/retorno) + push de Folha/VR/Adiantamentos/Rateio Obra/Insumos/Desc Almox/Atrasos/PJ Pagamentos. Schemas conferidos contra `\d` (lição Rev. 2064: `v.valorTotal` não `v.valor`, `a.valorLiquido` não `a.valor`, `d.valorDesconto`, `i.createdAt` não `dataSaida`). ZERO schema, ZERO query nova.
+- **Rev. 2065** — **Fechamento de Ponto · botão "Voltar ao ranking" nos 3 modais de memória de cálculo.** Pedido IMG_0965. Os modais (Atraso/HE/Faltas) já preservavam o ranking embaixo, mas o único affordance era o X minúsculo do shadcn — confundia. Fix em `client/src/pages/FechamentoPonto.tsx` (3 edits idênticos): adiciona `<Button>← Voltar ao ranking</Button>` no topo de cada `DialogHeader`, handler = mesmo do X.
 
 ### Revisões recentes (one-liners)
 
+- ~~Rev. 2064~~ — SST badge do menu lateral REALMENTE funciona · `sql\`ANY(${ids})\`` do Drizzle não serializa array JS; fix em `getBadgeCounts` com `sql.raw(\`ANY(ARRAY[...]::int[])\`)` validado por Zod. Bônus: `alertas` corrigida com colunas camelCase quoted. Ver `shared/changelog.ts`.
 - ~~Rev. 2063~~ — SST badge do menu lateral: contagem passa a incluir terceiros (`funcionarios_terceiros` SEM `integracaoDocUrl`). Ver `shared/changelog.ts`. (Nota: só passou a funcionar de fato com a Rev. 2064.)
 - ~~Rev. 2062~~ — Faxina do `replit.md`: convenção mudou de 5+10 pra 2+5 (compactos). Ver `shared/changelog.ts`.
 - ~~Rev. 2061~~ — Raio-X · card SST · coluna Certificado ganha botões Ver + PDF para aprovados (cert gerado on-the-fly via `generateCertificadoIntegracaoSstPdf`). Ver `shared/changelog.ts`.
 - ~~Rev. 2060~~ — Fechamento de Ponto: bug crítico de verificação de HE aprovada — ciclo 16→15 perdia HEs de mês anterior + contador não checava `status === "aprovada"`. Fix: BETWEEN no server + filtro de status no client. Ver `shared/changelog.ts`.
-- ~~Rev. 2059~~ — SST Integração: +13 perguntas sobre Segurança na Obra (total 35) + botão "Editar Perguntas" com label visível. Ver `shared/changelog.ts`.
 
-> Revisões 2058 → 2044 e anteriores: ver [`replit-history.md`](./replit-history.md) e `shared/changelog.ts` (detalhe completo).
+> Revisões 2059 → 2044 e anteriores: ver [`replit-history.md`](./replit-history.md) e `shared/changelog.ts` (detalhe completo).
 
 
 ## User preferences

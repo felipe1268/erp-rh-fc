@@ -1,6 +1,56 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2066 — **Raio-X do Funcionário · Timeline Cronológica agora
+ * inclui TODAS as movimentações do funcionário (8 novas fontes + bug
+ * crítico de Férias).** Pedido do usuário (IMG_0966): "Preciso que a
+ * time line parar de tudoooo, não deixa passar nenhuma movimentação
+ * do funcionário ok". O print mostrava só 4 eventos (ASO + 2 compras
+ * em parceiro + admissão), mesmo a tela tendo cards com "Férias 12",
+ * "Ponto 4", "Folha", "HE", etc. Bug raiz de Férias: o forEach em
+ * `empFerias` no `controleDocumentos.raioX` (L1736) só fazia push se
+ * `f.dataInicio` estivesse preenchido, mas grande parte dos períodos
+ * de férias só tem `periodoAquisitivoInicio` (período aquisitivo
+ * aberto, sem gozo agendado ainda) — esses 12 períodos nunca
+ * apareciam. Além disso, o procedure consultava 8 fontes inteiras
+ * (`empPayroll`/`empVR`/`empAdiantamentos`/`empRateio`/`empInsumos`/
+ * `empDescontosAlmox`/`atrasosDetalhados`/`empPjPagamentos`) que
+ * eram devolvidas pro frontend nos campos `folhaPagamento`/`vr`/
+ * etc., mas NUNCA empurradas pra `timeline`. Fix em
+ * `server/routers/controleDocumentos.ts` L1738-1865 (Rev. 2066):
+ *   1) Férias: agora emite até 3 eventos por período — "Período
+ *      Aquisitivo" (sempre, usa `periodoAquisitivoInicio`), "Início
+ *      Gozo" (se `dataInicio` setado) e "Retorno" (se `dataFim`).
+ *      Isso garante que os 12 períodos da Ana Beatriz apareçam, com
+ *      ou sem gozo agendado.
+ *   2) 8 novas fontes empurradas pra timeline:
+ *      - Folha de pagamento (mensal, usa `dataPagamento` ou
+ *        `mesReferencia-05`, mostra líquido/bruto)
+ *      - VR/Vale Alimentação (mensal, usa `mesReferencia-01`, mostra
+ *        valor total + dias úteis + operadora + status)
+ *      - Adiantamentos (`dataPagamento` ou `mes-15`, mostra
+ *        `valorLiquido` || `valorAdiantamento` + status `aprovado`)
+ *      - Rateio de horas por obra (mensal, usa `mesAno-01`, mostra
+ *        obra + dias trab + horas normais/extras/total)
+ *      - Insumos/consumíveis recebidos do almoxarifado (usa
+ *        `createdAt`, mostra item + qtd + unidade + obra + motivo)
+ *      - Descontos almoxarifado por item perdido (usa `criadoEm`,
+ *        mostra item + `valorDesconto` + status + descricao)
+ *      - Atrasos detalhados — 1 evento por dia atrasado (separado
+ *        do "Falta" que já existia)
+ *      - Pagamentos PJ (`dataPagamento` || `dataPrevista` ||
+ *        `mesReferencia-05`, mostra tipo + valor + status)
+ *   3) Cada nova fonte usa Drizzle inferindo camelCase: nomes de
+ *      coluna conferidos contra `\\d <tabela>` para evitar repetir o
+ *      bug Rev. 2064 (`v.valor` vs `v.valorTotal`, `a.valor` vs
+ *      `a.valorLiquido`, `d.valor` vs `d.valorDesconto`, `i.dataSaida`
+ *      que não existe → `i.createdAt`).
+ *   4) Cor/ícone únicos por tipo pra timeline ficar legível
+ *      (green/lime/yellow/blue/orange/red/amber/indigo/cyan/sky/teal).
+ * + `shared/version.ts` → 2066. ZERO schema, ZERO query nova
+ * (apenas reaproveita queries que já existiam mas eram ignoradas
+ * pela timeline).
+ *
  * Rev. 2065 — **Fechamento de Ponto · botão "Voltar ao ranking" nos
  * 3 modais de memória de cálculo (Atraso, HE, Faltas).** Pedido do
  * usuário (IMG_0965): "Coloca um botão para voltar e ver a tela

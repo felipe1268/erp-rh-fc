@@ -1732,12 +1732,133 @@ export const controleDocumentosRouter = router({
           timeline.push({ data: a.updatedAt ? new Date(a.updatedAt).toISOString().split('T')[0] : a.dataInicio, tipo: 'Aviso Prévio Cancelado', descricao: `Aviso prévio cancelado (${quem})`, cor: 'red', icone: 'x-circle' });
         }
       });
-      // FÉRIAS - com período completo
+      // FÉRIAS - Rev. 2066: emite até 3 eventos (período aquisitivo, gozo, retorno)
       empFerias.forEach(f => {
-        if (f.dataInicio) {
-          const desc = `${f.diasGozo || 30} dias${f.abonoPecuniario ? ' + abono pecuniário' : ''}${f.dataFim ? ` (até ${f.dataFim})` : ''}`;
-          timeline.push({ data: f.dataInicio, tipo: 'Férias', descricao: desc, cor: 'cyan', icone: 'palmtree' });
+        // 1) Abertura do período aquisitivo (sempre preenchido) — mostra mesmo quando ainda não houve gozo
+        if (f.periodoAquisitivoInicio) {
+          timeline.push({
+            data: f.periodoAquisitivoInicio,
+            tipo: 'Férias — Período Aquisitivo',
+            descricao: `Iniciou período aquisitivo (concessivo até ${f.periodoConcessivoFim || '-'})`,
+            cor: 'sky',
+            icone: 'calendar',
+          });
         }
+        // 2) Início do gozo (se já agendado)
+        if (f.dataInicio) {
+          const desc = `${f.diasGozo || 30} dias${f.abonoPecuniario ? ' + abono pecuniário' : ''}${f.dataFim ? ` (até ${f.dataFim})` : ''} — Status: ${f.status || 'pendente'}`;
+          timeline.push({ data: f.dataInicio, tipo: 'Férias — Início Gozo', descricao: desc, cor: 'cyan', icone: 'palmtree' });
+        }
+        // 3) Retorno (fim do gozo)
+        if (f.dataFim) {
+          timeline.push({ data: f.dataFim, tipo: 'Férias — Retorno', descricao: `Retornou das férias`, cor: 'teal', icone: 'check-circle' });
+        }
+      });
+
+      // Rev. 2066 — FOLHA DE PAGAMENTO (mensal)
+      empPayroll.forEach((p: any) => {
+        const data = p.dataPagamento || (p.mesReferencia ? `${p.mesReferencia}-05` : null);
+        if (!data) return;
+        const liq = p.salarioLiquido ? `R$ ${p.salarioLiquido}` : (p.salarioBruto ? `R$ ${p.salarioBruto} (bruto)` : '-');
+        timeline.push({
+          data,
+          tipo: 'Folha de Pagamento',
+          descricao: `Competência ${p.mesReferencia || '-'} — Líquido: ${liq}`,
+          cor: 'green',
+          icone: 'dollar-sign',
+        });
+      });
+
+      // Rev. 2066 — VALE ALIMENTAÇÃO / VR (mensal)
+      empVR.forEach((v: any) => {
+        const data = v.mesReferencia ? `${v.mesReferencia}-01` : (v.createdAt ? new Date(v.createdAt).toISOString().split('T')[0] : null);
+        if (!data) return;
+        const operadora = v.operadora ? ` · ${v.operadora}` : '';
+        timeline.push({
+          data,
+          tipo: 'VR / Vale Alimentação',
+          descricao: `Competência ${v.mesReferencia || '-'} — Total: R$ ${v.valorTotal || '0'} (${v.diasUteis || 0} dias úteis${operadora}) — ${v.status || 'pendente'}`,
+          cor: 'lime',
+          icone: 'shopping-cart',
+        });
+      });
+
+      // Rev. 2066 — ADIANTAMENTOS
+      empAdiantamentos.forEach((a: any) => {
+        const data = a.dataPagamento || (a.mesReferencia ? `${a.mesReferencia}-15` : null);
+        if (!data) return;
+        const valor = a.valorLiquido || a.valorAdiantamento || '0';
+        timeline.push({
+          data,
+          tipo: 'Adiantamento',
+          descricao: `Competência ${a.mesReferencia || '-'} — Valor: R$ ${valor}${a.aprovado ? ` (${a.aprovado})` : ''}`,
+          cor: 'yellow',
+          icone: 'wallet',
+        });
+      });
+
+      // Rev. 2066 — RATEIO HORAS POR OBRA (mensal)
+      empRateio.forEach((r: any) => {
+        const data = r.mesAno ? `${r.mesAno}-01` : null;
+        if (!data) return;
+        timeline.push({
+          data,
+          tipo: 'Rateio Horas/Obra',
+          descricao: `${r.nomeObra || `Obra #${r.obraId}`} — ${r.diasTrabalhados || 0} dias · ${r.horasNormais || '0'}h normais + ${r.horasExtras || '0'}h extras (total ${r.totalHoras || '0'}h)`,
+          cor: 'blue',
+          icone: 'building',
+        });
+      });
+
+      // Rev. 2066 — INSUMOS / CONSUMÍVEIS entregues
+      empInsumos.forEach((i: any) => {
+        const data = i.createdAt ? new Date(i.createdAt).toISOString().split('T')[0] : null;
+        if (!data) return;
+        timeline.push({
+          data,
+          tipo: 'Insumo',
+          descricao: `Recebeu: ${i.itemNome || 'Insumo'} — Qtd: ${parseFloat(i.quantidade as any) || 1}${i.unidade ? ` ${i.unidade}` : ''}${i.obraNome ? ` — Obra: ${i.obraNome}` : ''}${i.motivo ? ` (${i.motivo})` : ''}`,
+          cor: 'orange',
+          icone: 'package',
+        });
+      });
+
+      // Rev. 2066 — DESCONTOS ALMOXARIFADO (itens perdidos)
+      empDescontosAlmox.forEach((d: any) => {
+        const data = d.criadoEm ? new Date(d.criadoEm).toISOString().split('T')[0] : null;
+        if (!data) return;
+        timeline.push({
+          data,
+          tipo: 'Desconto Almoxarifado',
+          descricao: `${d.itemNome || 'Item'} — R$ ${d.valorDesconto || '0'} — ${d.status || 'Pendente'}${d.descricao ? ` (${d.descricao})` : ''}`,
+          cor: 'red',
+          icone: 'minus-circle',
+        });
+      });
+
+      // Rev. 2066 — ATRASOS DETALHADOS (1 evento por dia com atraso)
+      atrasosDetalhados.forEach((a: any) => {
+        if (!a.data) return;
+        timeline.push({
+          data: a.data,
+          tipo: 'Atraso',
+          descricao: `Atraso de ${a.atraso}${a.entrada1 ? ` (entrada ${a.entrada1})` : ''}`,
+          cor: 'amber',
+          icone: 'clock',
+        });
+      });
+
+      // Rev. 2066 — PJ PAGAMENTOS
+      empPjPagamentos.forEach((p: any) => {
+        const data = p.dataPagamento || p.dataPrevista || (p.mesReferencia ? `${p.mesReferencia}-05` : null);
+        if (!data) return;
+        timeline.push({
+          data,
+          tipo: 'Pagamento PJ',
+          descricao: `${p.tipo || 'Pagamento'} · ${p.mesReferencia || '-'} — R$ ${p.valor || '0'} (${p.status || 'pendente'})${p.descricao ? ` — ${p.descricao}` : ''}`,
+          cor: 'indigo',
+          icone: 'file-text',
+        });
       });
       // DDS na timeline (Rev. 1768) — 1 evento por sessão
       empDdsRows.forEach((d: any) => {
