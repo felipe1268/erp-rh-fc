@@ -1,6 +1,86 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2034 — SST · Integração de Segurança · aba Pendentes ganha
+ * bloco "Sem integração válida" listando TODOS os colaboradores
+ * (CLT/PJ via `employees` + Terceiros via `funcionariosTerceiros`)
+ * que precisam fazer ou renovar a integração admissional.
+ *
+ * Pedido direto do usuário (img IMG_0877_1779038900760): "Precisa
+ * aparecer a lista de todos funcionários PJ, CLT, terceiros que
+ * estão sem integração, ela vale por 24 meses, depois precisa
+ * renovar.. quando alguém for contratada, a integração é
+ * obrigatória". A aba Pendentes só mostrava registros já criados
+ * manualmente — colaboradores recém-contratados ou com integração
+ * vencida ficavam invisíveis até alguém abrir "Iniciar Integração"
+ * e digitar o CPF.
+ *
+ * Regra de validade (alinhada à Rev. 2025/CLT NR-1): 24 meses a
+ * partir da realização aprovada. `dataValidade` é gravada no
+ * próprio registro pela engine (com base em `config.validadeMeses`);
+ * quando faltar, fallback é +730 dias sobre `dataRealizacao`.
+ *
+ * Mudança em 2 arquivos:
+ *   (A) `server/routers/integracaoSST.ts` — nova query
+ *       `listarPendentesAuto({ companyId })` (~145L):
+ *         - SELECT MAX(dataValidade, dataRealizacao) por employeeId
+ *           em `sstIntegracaoRegistros` WHERE status='aprovado'.
+ *         - SELECT employeeId em `sstIntegracaoRegistros` WHERE
+ *           status IN ('pendente','em_andamento') — para EXCLUIR
+ *           (já aparecem na seção "Em processo" existente).
+ *         - SELECT employees ativos (status='Ativo') + tipoContrato
+ *           (CLT vs PJ).
+ *         - SELECT funcionariosTerceiros ativos (status='ativo',
+ *           deletedAt IS NULL) — sem `integracaoDocUrl` = pendente
+ *           (schema não tem timestamp de upload pra calcular 24m).
+ *         - Classificação por colaborador: "nunca_fez" | "vencido"
+ *           (dataValidade < NOW) | "vencendo" (≤60d até vencer).
+ *           Colaboradores com integração válida por >60d são
+ *           filtrados fora.
+ *         - Ordenação: vencido > nunca_fez > vencendo, depois por
+ *           dias até vencer, depois por nome.
+ *         - Import: `funcionariosTerceiros` adicionado.
+ *   (B) `client/src/pages/sst/IntegracaoSST.tsx` — `PendentesTab`
+ *       reescrito com 2 seções (~140L):
+ *         - Nova `Card` "Sem integração válida" com header
+ *           gradient amber + 3 badges contadores (vencidas, nunca
+ *           realizou, ≤60d).
+ *         - Cada item: avatar (fotoUrl), nome + função + CPF +
+ *           obra (terceiros) + última realização (employees);
+ *           badge de tipo (CLT/PJ/Terceiro com cores distintas) +
+ *           badge de estado (vermelho/âmbar/amarelo).
+ *         - Botão "Iniciar agora" pra CLT/PJ pré-seleciona o
+ *           colaborador no modal já existente (via novo helper
+ *           `iniciarParaEmployee`).
+ *         - Pra Terceiros, botão "Cadastrar doc" redireciona pra
+ *           `/terceiros/funcionarios` (integração de terceiros é
+ *           via upload de PDF, não fluxo digital).
+ *         - Empty-state amigável quando todos estão OK ("Todos
+ *           os colaboradores estão com integração em dia").
+ *         - Contador no header mudou: "X em processo · Y sem
+ *           integração válida (24 meses)".
+ *         - Refetch de `pendentesAuto` adicionado em `criarRegistro`
+ *           e `criarLote` (onSuccess).
+ *         - Busca (`searchTerm`) filtra ambas as seções.
+ *
+ * + `shared/version.ts` → 2034.
+ *
+ * Compliance R-001 / R-007 / R-010: ZERO ALTER TABLE, ZERO mudança
+ * de schema. Apenas SELECT + render. Reversível em 2 arquivos.
+ *
+ * Preservado: Rev. 2033 (dropdown wrap) INTACTA; modal "Iniciar
+ * Integração" (Revs. 2026/2020) INTACTO; `criarRegistro`/
+ * `criarRegistrosEmLote` INTACTAS; seção "Em processo" (lista
+ * antiga) INTACTA — só ganhou um subtítulo separador acima.
+ *
+ * Follow-up: (1) suportar integração digital pra terceiros (hoje só
+ * via upload PDF); (2) timestamp em `funcionariosTerceiros.
+ * integracaoUploadedAt` pra calcular vencimento 24m também em
+ * terceiros; (3) ação em lote "Iniciar para todos vencidos"; (4)
+ * filtrar por obra/empresa terceira; (5) tornar 24m configurável
+ * por config (hoje config padrão é 12m, mas a regra de "renovar a
+ * cada 24m" foi explicitada pelo usuário).
+ *
  * Rev. 2033 — SST · Integração de Segurança · Modal "Iniciar
  * Integração" · BUGFIX: dropdowns de Obra e Configuração cortavam
  * a primeira letra dos nomes em viewports estreitos (iPad/mobile).

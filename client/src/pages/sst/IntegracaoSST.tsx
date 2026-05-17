@@ -994,6 +994,8 @@ function ModulosEditor({ configId, companyId }: { configId: number; companyId: n
 function PendentesTab({ companyId }: { companyId: number }) {
   const registros = trpc.integracaoSST.listarRegistros.useQuery({ companyId, status: "pendente" }, { enabled: companyId > 0 });
   const emAndamento = trpc.integracaoSST.listarRegistros.useQuery({ companyId, status: "em_andamento" }, { enabled: companyId > 0 });
+  // Rev. 2034 — Lista TODOS CLT/PJ/Terceiros sem integração válida (24m).
+  const pendentesAuto = trpc.integracaoSST.listarPendentesAuto.useQuery({ companyId }, { enabled: companyId > 0 });
   const empList = trpc.employees.list.useQuery({ companyId, status: "Ativo" }, { enabled: companyId > 0 });
   const obras = trpc.obras.listActive.useQuery({ companyId }, { enabled: companyId > 0 });
   const configs = trpc.integracaoSST.listarConfigs.useQuery({ companyId }, { enabled: companyId > 0 });
@@ -1001,6 +1003,7 @@ function PendentesTab({ companyId }: { companyId: number }) {
     onSuccess: (data) => {
       registros.refetch();
       emAndamento.refetch();
+      pendentesAuto.refetch();
       const link = `${window.location.origin}/integracao/${data.token}`;
       setCreatedLink(link);
       setCreatedEmployee(data.employeeNome || "");
@@ -1011,6 +1014,7 @@ function PendentesTab({ companyId }: { companyId: number }) {
     onSuccess: (data) => {
       registros.refetch();
       emAndamento.refetch();
+      pendentesAuto.refetch();
       setShowNew(false);
       resetForm();
       toast.success(`${data.count} integração(ões) criada(s) com sucesso!`);
@@ -1098,6 +1102,21 @@ function PendentesTab({ companyId }: { companyId: number }) {
   const allPending = [...(registros.data || []), ...(emAndamento.data || [])];
   const filtered = searchTerm ? allPending.filter(r => r.employeeNome?.toLowerCase().includes(searchTerm.toLowerCase()) || r.employeeCpf?.includes(searchTerm)) : allPending;
 
+  // Rev. 2034 — Lista de colaboradores SEM integração válida (24m).
+  const pendentesAutoData = pendentesAuto.data || [];
+  const filteredAuto = searchTerm
+    ? pendentesAutoData.filter(p => p.nome?.toLowerCase().includes(searchTerm.toLowerCase()) || p.cpf?.includes(searchTerm))
+    : pendentesAutoData;
+  const countVencido = pendentesAutoData.filter(p => p.estado === "vencido").length;
+  const countNunca = pendentesAutoData.filter(p => p.estado === "nunca_fez").length;
+  const countVencendo = pendentesAutoData.filter(p => p.estado === "vencendo").length;
+
+  const iniciarParaEmployee = (emp: { id: number; nome: string; cpf: string | null; funcao: string | null }) => {
+    resetForm();
+    setSelectedEmps([{ id: emp.id, nome: emp.nome, cpf: emp.cpf || "", funcao: emp.funcao || "" }]);
+    setShowNew(true);
+  };
+
   if (!companyId) return <p className="text-muted-foreground p-4">Selecione uma empresa.</p>;
 
   return (
@@ -1105,7 +1124,7 @@ function PendentesTab({ companyId }: { companyId: number }) {
       <div className="flex justify-between items-center flex-wrap gap-2">
         <div>
           <h3 className="font-semibold">Integrações Pendentes</h3>
-          <p className="text-xs text-muted-foreground">{allPending.length} colaborador(es) aguardando integração</p>
+          <p className="text-xs text-muted-foreground">{allPending.length} em processo · {pendentesAutoData.length} sem integração válida (24 meses)</p>
         </div>
         <div className="flex gap-2">
           <div className="relative">
@@ -1118,12 +1137,94 @@ function PendentesTab({ companyId }: { companyId: number }) {
         </div>
       </div>
 
+      {/* Rev. 2034 — Bloco "Sem integração válida": CLT/PJ/Terceiros que nunca
+          fizeram OU vencidos OU vencem em ≤60d. Cada item tem botão de ação
+          direta para abrir o modal com o colaborador pré-selecionado. */}
+      <Card className="border-amber-200">
+        <CardHeader className="bg-gradient-to-r from-amber-50 to-orange-50 border-b border-amber-200 py-3 px-4">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <div className="h-8 w-8 rounded-lg bg-amber-100 flex items-center justify-center">
+                <AlertTriangle className="h-4 w-4 text-amber-700" />
+              </div>
+              <div>
+                <h4 className="font-semibold text-sm text-amber-900">Sem integração válida</h4>
+                <p className="text-xs text-amber-800/80">A integração tem validade de 24 meses · Renove ou inicie quando for nova contratação</p>
+              </div>
+            </div>
+            <div className="flex gap-1.5 flex-wrap">
+              {countVencido > 0 && <Badge className="bg-red-100 text-red-800 border-red-200">{countVencido} vencida(s)</Badge>}
+              {countNunca > 0 && <Badge className="bg-amber-100 text-amber-800 border-amber-200">{countNunca} nunca realizou</Badge>}
+              {countVencendo > 0 && <Badge className="bg-yellow-100 text-yellow-800 border-yellow-200">{countVencendo} vence(m) em ≤60d</Badge>}
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="p-3">
+          {pendentesAuto.isLoading ? (
+            <div className="flex justify-center py-6"><Loader2 className="h-5 w-5 animate-spin text-amber-600" /></div>
+          ) : filteredAuto.length === 0 ? (
+            <div className="text-center py-6">
+              <CheckCircle className="h-10 w-10 mx-auto text-emerald-500 mb-2" />
+              <p className="text-sm font-medium text-emerald-700">Todos os colaboradores estão com integração em dia</p>
+              <p className="text-xs text-muted-foreground mt-1">Nenhuma renovação ou nova integração pendente</p>
+            </div>
+          ) : (
+            <div className="space-y-1.5 max-h-[480px] overflow-y-auto">
+              {filteredAuto.map(p => {
+                const estadoMeta =
+                  p.estado === "vencido" ? { label: "Vencida", cls: "bg-red-100 text-red-800 border-red-200", ring: "ring-red-200" }
+                  : p.estado === "vencendo" ? { label: `Vence em ${p.diasParaVencer}d`, cls: "bg-yellow-100 text-yellow-800 border-yellow-200", ring: "ring-yellow-200" }
+                  : { label: "Nunca realizou", cls: "bg-amber-100 text-amber-800 border-amber-200", ring: "ring-amber-200" };
+                const tipoMeta =
+                  p.kind === "terceiro" ? { label: "Terceiro", cls: "bg-purple-100 text-purple-800 border-purple-200" }
+                  : p.tipoContrato?.toLowerCase().includes("pj") ? { label: "PJ", cls: "bg-indigo-100 text-indigo-800 border-indigo-200" }
+                  : { label: "CLT", cls: "bg-sky-100 text-sky-800 border-sky-200" };
+                return (
+                  <div key={`${p.kind}-${p.id}`} className={`flex items-center justify-between gap-2 flex-wrap rounded-lg border bg-white px-3 py-2 ring-1 ${estadoMeta.ring}`}>
+                    <div className="flex items-center gap-3 min-w-0 flex-1">
+                      <div className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center flex-shrink-0 overflow-hidden">
+                        {p.fotoUrl ? <img src={p.fotoUrl} alt={p.nome} className="w-full h-full object-cover" /> : <Users className="h-4 w-4 text-slate-500" />}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="font-medium text-sm truncate">{p.nome}</p>
+                        <p className="text-xs text-muted-foreground truncate">
+                          {p.funcao || "—"} · CPF: {p.cpf || "—"}
+                          {p.obraNome && <> · <span className="text-slate-700">{p.obraNome}</span></>}
+                          {p.ultimaRealizacao && <> · Última: {formatDate(p.ultimaRealizacao)}</>}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <Badge variant="outline" className={`text-xs ${tipoMeta.cls}`}>{tipoMeta.label}</Badge>
+                      <Badge className={`text-xs ${estadoMeta.cls}`}>{estadoMeta.label}</Badge>
+                      {p.kind === "employee" ? (
+                        <Button size="sm" className="h-7 text-xs bg-emerald-600 hover:bg-emerald-700" onClick={() => iniciarParaEmployee({ id: p.id, nome: p.nome, cpf: p.cpf, funcao: p.funcao })}>
+                          <UserPlus className="h-3 w-3 mr-1" />Iniciar agora
+                        </Button>
+                      ) : (
+                        <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => { window.location.href = "/terceiros/funcionarios"; }}>
+                          <ExternalLink className="h-3 w-3 mr-1" />Cadastrar doc
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <div className="pt-2">
+        <h4 className="font-semibold text-sm text-slate-700 mb-2">Em processo · Aguardando colaborador concluir</h4>
+      </div>
+
       {registros.isLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : filtered.length === 0 ? (
         <Card className="border-dashed">
           <CardContent className="p-8 text-center">
             <Clock className="h-12 w-12 mx-auto text-muted-foreground/40 mb-3" />
-            <p className="text-muted-foreground">Nenhuma integração pendente</p>
-            <p className="text-xs text-muted-foreground mt-1">Clique em "Iniciar Integração" para criar uma nova</p>
+            <p className="text-muted-foreground">Nenhuma integração em processo</p>
+            <p className="text-xs text-muted-foreground mt-1">Clique em "Iniciar agora" acima ou em "Iniciar Integração" para criar uma nova</p>
           </CardContent>
         </Card>
       ) : (

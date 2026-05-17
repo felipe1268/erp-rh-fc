@@ -4,7 +4,7 @@ import { getDb } from "../db";
 import {
   sstIntegracaoConfig, sstIntegracaoModulos, sstIntegracaoPerguntas,
   sstIntegracaoAlternativas, sstIntegracaoRegistros, sstIntegracaoRespostas,
-  sstIntegracaoSessoes, employees, warnings,
+  sstIntegracaoSessoes, employees, warnings, funcionariosTerceiros,
 } from "../../drizzle/schema";
 import { eq, and, sql, desc, asc, isNull, inArray, lte, gte } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
@@ -320,6 +320,159 @@ export const integracaoSSTRouter = router({
       return db.select().from(sstIntegracaoRegistros)
         .where(and(...conds))
         .orderBy(desc(sstIntegracaoRegistros.createdAt));
+    }),
+
+  // Rev. 2034 — Lista TODOS os colaboradores ativos (CLT/PJ via `employees`,
+  // terceiros via `funcionariosTerceiros`) que precisam de Integração de
+  // Segurança: nunca fizeram OU integração vencida OU vence em ≤60 dias.
+  // Regra: integração vale 24 meses (registro grava `dataValidade` explícita;
+  // fallback +730d sobre `dataRealizacao` se faltar). Excluímos quem já tem
+  // registro em andamento (eles aparecem na seção "Em processo" existente).
+  listarPendentesAuto: protectedProcedure
+    .input(z.object({ companyId: z.number().int().positive() }))
+    .query(async ({ input, ctx }) => {
+      assertCompanyAccess(ctx, input.companyId);
+      const db = (await getDb())!;
+
+      // 1) Última integração aprovada por employeeId.
+      // Code-review/architect (Rev. 2034): usar DISTINCT ON pra pegar
+      // dataValidade + dataRealizacao do MESMO registro (mais recente).
+      // O MAX separado misturaria datas de registros diferentes quando
+      // o funcionário tem múltiplos aprovados → validade incorreta.
+      const lastApprovedRaw = await db.execute<{
+        employee_id: number;
+        data_validade: string | null;
+        data_realizacao: string | null;
+      }>(sql`
+        SELECT DISTINCT ON (employee_id)
+          employee_id, data_validade, data_realizacao
+        FROM sst_integracao_registros
+        WHERE company_id = ${input.companyId}
+          AND status = 'aprovado'
+          AND deleted_at IS NULL
+        ORDER BY employee_id,
+          COALESCE(data_realizacao, created_at) DESC
+      `);
+      const lastApproved = (lastApprovedRaw as any).rows ?? lastApprovedRaw;
+      const lastMap = new Map<number, { dv: string | null; dr: string | null }>();
+      for (const r of lastApproved as any[]) {
+        lastMap.set(r.employee_id, { dv: r.data_validade, dr: r.data_realizacao });
+      }
+
+      // 2) Registros em processo (pendente/em_andamento) — excluir
+      const inProgress = await db.select({ employeeId: sstIntegracaoRegistros.employeeId })
+        .from(sstIntegracaoRegistros)
+        .where(and(
+          eq(sstIntegracaoRegistros.companyId, input.companyId),
+          inArray(sstIntegracaoRegistros.status, ["pendente", "em_andamento"]),
+          isNull(sstIntegracaoRegistros.deletedAt),
+        ));
+      const inProgressSet = new Set(inProgress.map(r => r.employeeId));
+
+      // 3) Employees ativos (CLT/PJ)
+      const emps = await db.select({
+        id: employees.id,
+        nome: employees.nomeCompleto,
+        cpf: employees.cpf,
+        funcao: employees.funcao,
+        tipoContrato: employees.tipoContrato,
+        dataAdmissao: employees.dataAdmissao,
+        fotoUrl: employees.fotoUrl,
+      })
+        .from(employees)
+        .where(and(eq(employees.companyId, input.companyId), eq(employees.status, "Ativo")));
+
+      // 4) Terceiros ativos
+      const ters = await db.select({
+        id: funcionariosTerceiros.id,
+        nome: funcionariosTerceiros.nome,
+        cpf: funcionariosTerceiros.cpf,
+        funcao: funcionariosTerceiros.funcao,
+        obraNome: funcionariosTerceiros.obraNome,
+        integracaoDocUrl: funcionariosTerceiros.integracaoDocUrl,
+        fotoUrl: funcionariosTerceiros.fotoUrl,
+      })
+        .from(funcionariosTerceiros)
+        .where(and(
+          eq(funcionariosTerceiros.companyId, input.companyId),
+          eq(funcionariosTerceiros.status, "ativo"),
+          isNull(funcionariosTerceiros.deletedAt),
+        ));
+
+      const now = Date.now();
+      const D60 = 60 * 24 * 3600 * 1000;
+      const D730 = 730 * 24 * 3600 * 1000; // 24 meses
+
+      type Estado = "nunca_fez" | "vencido" | "vencendo";
+      type Item = {
+        kind: "employee" | "terceiro";
+        id: number;
+        nome: string;
+        cpf: string | null;
+        funcao: string | null;
+        tipoContrato: string | null;
+        obraNome: string | null;
+        fotoUrl: string | null;
+        estado: Estado;
+        ultimaRealizacao: string | null;
+        dataValidade: string | null;
+        diasParaVencer: number | null;
+        dataAdmissao: string | null;
+      };
+      const out: Item[] = [];
+
+      for (const e of emps) {
+        if (inProgressSet.has(e.id)) continue;
+        const last = lastMap.get(e.id);
+        let estado: Estado = "nunca_fez";
+        let dv: string | null = null;
+        let dr: string | null = null;
+        let diasParaVencer: number | null = null;
+        if (last) {
+          dr = last.dr;
+          dv = last.dv
+            ?? (last.dr ? new Date(new Date(last.dr).getTime() + D730).toISOString() : null);
+          if (dv) {
+            const t = new Date(dv).getTime();
+            diasParaVencer = Math.ceil((t - now) / (24 * 3600 * 1000));
+            if (t < now) estado = "vencido";
+            else if (t - now <= D60) estado = "vencendo";
+            else continue; // válido por > 60d, fora da lista
+          }
+        }
+        out.push({
+          kind: "employee",
+          id: e.id, nome: e.nome, cpf: e.cpf, funcao: e.funcao,
+          tipoContrato: e.tipoContrato, obraNome: null, fotoUrl: e.fotoUrl,
+          estado, ultimaRealizacao: dr, dataValidade: dv, diasParaVencer,
+          dataAdmissao: e.dataAdmissao,
+        });
+      }
+
+      // Terceiros: critério simplificado — sem `integracaoDocUrl` = pendente.
+      // (Schema não guarda timestamp do upload pra calcular 24m; renovação
+      // visual fica no cadastro do terceiro.)
+      for (const t of ters) {
+        if (t.integracaoDocUrl) continue;
+        out.push({
+          kind: "terceiro",
+          id: t.id, nome: t.nome, cpf: t.cpf, funcao: t.funcao,
+          tipoContrato: "terceiro", obraNome: t.obraNome, fotoUrl: t.fotoUrl,
+          estado: "nunca_fez", ultimaRealizacao: null, dataValidade: null, diasParaVencer: null,
+          dataAdmissao: null,
+        });
+      }
+
+      // Ordenar: vencido → nunca_fez → vencendo; depois por dias e nome.
+      const order: Record<Estado, number> = { vencido: 0, nunca_fez: 1, vencendo: 2 };
+      out.sort((a, b) => {
+        const d = order[a.estado] - order[b.estado];
+        if (d) return d;
+        if (a.diasParaVencer !== null && b.diasParaVencer !== null) return a.diasParaVencer - b.diasParaVencer;
+        return (a.nome || "").localeCompare(b.nome || "");
+      });
+
+      return out;
     }),
 
   criarRegistro: protectedProcedure
