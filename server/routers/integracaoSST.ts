@@ -781,6 +781,42 @@ export const integracaoSSTRouter = router({
         lastMap.set(r.employee_id, { dv: r.data_validade, dr: r.data_realizacao });
       }
 
+      // 1.5) Rev. 2057 — Tentativas anteriores: conta reprovações POSTERIORES
+      // à última aprovação (ou todas, quando nunca houve aprovação). Se houver
+      // 1 reprovado, o próximo passo é a 2ª tentativa; 2 reprovados → 3ª; etc.
+      const reprovadosRaw = await db.execute<{
+        employee_id: number;
+        tentativas: number;
+      }>(sql`
+        SELECT
+          r.employee_id,
+          COUNT(*)::int AS tentativas
+        FROM sst_integracao_registros r
+        LEFT JOIN LATERAL (
+          SELECT COALESCE(data_realizacao, created_at) AS ts, id
+          FROM sst_integracao_registros
+          WHERE company_id = ${input.companyId}
+            AND employee_id = r.employee_id
+            AND status = 'aprovado'
+            AND deleted_at IS NULL
+          ORDER BY COALESCE(data_realizacao, created_at) DESC, id DESC
+          LIMIT 1
+        ) ap ON TRUE
+        WHERE r.company_id = ${input.companyId}
+          AND r.status = 'reprovado'
+          AND r.deleted_at IS NULL
+          AND (
+            ap.ts IS NULL
+            OR (COALESCE(r.data_realizacao, r.created_at), r.id) > (ap.ts, ap.id)
+          )
+        GROUP BY r.employee_id
+      `);
+      const reprovadosRows = (reprovadosRaw as any).rows ?? reprovadosRaw;
+      const tentativasMap = new Map<number, number>();
+      for (const r of reprovadosRows as any[]) {
+        tentativasMap.set(Number(r.employee_id), Number(r.tentativas) || 0);
+      }
+
       // 2) Registros em processo (pendente/em_andamento) — excluir
       const inProgress = await db.select({ employeeId: sstIntegracaoRegistros.employeeId })
         .from(sstIntegracaoRegistros)
@@ -849,6 +885,7 @@ export const integracaoSSTRouter = router({
         dataValidade: string | null;
         diasParaVencer: number | null;
         dataAdmissao: string | null;
+        tentativasAnteriores: number;
       };
       const out: Item[] = [];
 
@@ -877,6 +914,7 @@ export const integracaoSSTRouter = router({
           tipoContrato: e.tipoContrato, obraNome: null, fotoUrl: e.fotoUrl,
           estado, ultimaRealizacao: dr, dataValidade: dv, diasParaVencer,
           dataAdmissao: e.dataAdmissao,
+          tentativasAnteriores: tentativasMap.get(e.id) ?? 0,
         });
       }
 
@@ -891,6 +929,7 @@ export const integracaoSSTRouter = router({
           tipoContrato: "terceiro", obraNome: t.obraNome, fotoUrl: t.fotoUrl,
           estado: "nunca_fez", ultimaRealizacao: null, dataValidade: null, diasParaVencer: null,
           dataAdmissao: null,
+          tentativasAnteriores: 0,
         });
       }
 

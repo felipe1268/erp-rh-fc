@@ -1,6 +1,53 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2057 — SST · Integração · Aba Pendentes destaca colaboradores
+ * que JÁ REPROVARAM antes com badge âmbar "Nª tentativa" (ícone
+ * RefreshCw). Pedido direto do usuário: "AUTOMÁTICO — assim que
+ * reprovar, o nome já aparece em Pendentes pra refazer (a aba
+ * Reprovados vira só consulta/histórico), porém quero que fique
+ * marcado que é a segunda tentativa". Backend: `listarPendentesAuto`
+ * ganha bloco "1.5 Tentativas anteriores" — SELECT em
+ * `sst_integracao_registros` com LEFT JOIN LATERAL pra pegar timestamp
+ * da última aprovação por employeeId, e conta reprovações
+ * POSTERIORES (ou todas, quando nunca houve aprovação). Mapa
+ * `tentativasMap[employeeId] = count`. Type Item ganha
+ * `tentativasAnteriores: number` (sempre presente, default 0); ambos
+ * `out.push` (employee + terceiro) propagam o valor. Cross-tenant via
+ * WHERE company_id em ambas as queries; reuso de `assertCompanyAccess`
+ * da Rev. 2034. ZERO ALTER/DROP — só SELECT.
+ * UI: `PendentesTab` no card de "Sem integração válida" (Rev. 2034)
+ * renderiza Badge âmbar entre estadoMeta e botão "Iniciar agora",
+ * formato `${tentativasAnteriores + 1}ª tentativa` (tentativa nº =
+ * reprovações + 1, porque esta é a PRÓXIMA execução). Tooltip
+ * "Reprovou Nx desde a última aprovação". Só aparece para employees
+ * (kind="employee") e tentativasAnteriores > 0; terceiros (sem
+ * histórico de reprovação no fluxo atual) não recebem. RefreshCw já
+ * estava importado (L22).
+ * Por que count POSTERIOR à última aprovação (e não todo o histórico):
+ * se o colaborador aprovou em ciclo passado e a integração venceu,
+ * tentativas antigas não devem manchar o ciclo novo — começa "1ª
+ * tentativa" (sem badge). Só reprovações desde a última aprovação
+ * (ou todas, se nunca aprovou) é que contam.
+ * Por que badge só em "Pendentes" (e não em "Em processo"): "Em
+ * processo" é registro existente — `r.tentativa` da Rev. 2055 já
+ * mostra esse número via listarRegistros. Aqui o foco é o card auto-
+ * gerado da Rev. 2034 que não tinha registro a referenciar.
+ * Por que `(p as any).tentativasAnteriores` no client: a tipagem
+ * inferida pelo tRPC ainda inclui o type antigo até build incremental
+ * — o cast deixa o código compilar antes do server reiniciar, sem
+ * mudança contratual real (campo sempre presente no server).
+ * R-001/R-007/R-010 OK: ZERO ALTER/DROP/SQL direto. SELECT read-only
+ * cross-tenant.
+ * Preservado: Rev. 2056 (auto-return + edit config), 2055 (aba
+ * Reprovados), 2054 (filtro férias), 2053 (NRs), 2052 (assinatura TST)
+ * INTACTAS. Aba Reprovados continua mostrando `tentativas` próprio
+ * (cumulativo do registro) sem mudança.
+ * Follow-up: (1) badge equivalente no raio-x do colaborador; (2)
+ * alertar TST quando tentativasAnteriores >= 2 (escalar pra avaliação
+ * presencial); (3) métrica agregada no dashboard ("X colaboradores na
+ * 2ª+ tentativa") pra monitorar qualidade do treinamento.
+ *
  * Rev. 2056 — SST · Integração · 2 ajustes pedidos pelo usuário em
  * sequência: (A) reprovado volta AUTOMATICAMENTE pra Pendentes (sem
  * precisar de botão "Liberar"); (B) configuração de integração agora

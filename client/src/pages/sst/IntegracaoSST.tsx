@@ -1455,6 +1455,15 @@ function PendentesTab({ companyId }: { companyId: number }) {
                     <div className="flex items-center gap-2 flex-wrap">
                       <Badge variant="outline" className={`text-xs ${tipoMeta.cls}`}>{tipoMeta.label}</Badge>
                       <Badge className={`text-xs ${estadoMeta.cls}`}>{estadoMeta.label}</Badge>
+                      {/* Rev. 2057 — Badge "Nª tentativa" quando o colaborador
+                          já reprovou antes da última aprovação. Tentativa N
+                          significa "N-1 reprovações anteriores"; aqui é o
+                          próximo passo, então N = reprovações + 1. */}
+                      {p.kind === "employee" && (p as any).tentativasAnteriores > 0 && (
+                        <Badge variant="outline" className="text-xs bg-orange-50 text-orange-800 border-orange-300" title={`Reprovou ${(p as any).tentativasAnteriores}× desde a última aprovação`}>
+                          <RefreshCw className="h-3 w-3 mr-1" />{((p as any).tentativasAnteriores + 1)}ª tentativa
+                        </Badge>
+                      )}
                       {p.kind === "employee" ? (
                         <Button size="sm" className="h-7 text-xs bg-emerald-600 hover:bg-emerald-700" disabled={criarRegistro.isPending} onClick={() => iniciarAgora({ id: p.id, nome: p.nome, cpf: p.cpf, funcao: p.funcao })}>
                           {criarRegistro.isPending ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <UserPlus className="h-3 w-3 mr-1" />}Iniciar agora
