@@ -1,6 +1,21 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 1983 — Compras · Solicitações · Modal "Itens sem verba orçamentária" redesenhado seguindo regras de ouro.
+ * User (17/05/2026, image_1779020975571): "MELHORE ESTE LAY-OUT SEGUINDO NOSSAS REGRAS DE OURO". Print mostrava o modal com (a) barra de scroll horizontal vazia na base (DialogContent sem overflow-x-hidden), (b) padding apertado, (c) lista de itens em vermelho saturado dificultando leitura, (d) header pequeno sem subtítulo, (e) footer colado nos campos sem separação visual, (f) botão "Criar mesmo sem verba" rosa pálido competindo mal com Cancelar branco.
+ * Mudança em 1 arquivo (`client/src/pages/compras/Solicitacoes.tsx`, 2 hunks):
+ *   (1) Import `Info` do lucide-react.
+ *   (2) Reescrita do bloco `<Dialog open={!!showSemVerba}>` (~80 linhas):
+ *     - DialogContent: `w-[min(92vw,560px)] p-0 overflow-hidden gap-0 flex flex-col max-h-[90vh]` → mata scroll horizontal, contém tudo, limita altura no iPad.
+ *     - Header: faixa `bg-gradient-to-b from-red-50 to-white border-b border-red-100` + ícone com ring duplo (`ring-4 ring-red-50`) + título bold + subtítulo "Esta solicitação contém itens sem cobertura no orçamento da obra".
+ *     - Lista: card branco com sub-header `bg-red-50 uppercase tracking-wide` + badge contador `N item(ns)` em pill branca; itens em `<ul divide-y>` com `hover:bg-red-50/60`, texto `text-red-900` (legível, não saturado), `XCircle` text-red-500. `max-h-[150px] overflow-y-auto` só quando estoura.
+ *     - Aviso âmbar: trocado pra layout flex com `<Info>` à esquerda + texto à direita, mais enxuto, `<strong>sem verba</strong>` destacado.
+ *     - Form: labels uppercase tracking-wide com asterisco vermelho separado; Select/Textarea ganham `focus:ring-2 focus:ring-red-200 focus:border-red-400`; contador de caracteres ao lado do label Justificativa; helper text com exemplos abaixo.
+ *     - Footer sticky: `border-t bg-gray-50/80` separando visualmente; botão primário `flex-[1.4]` (60/40) com `bg-red-600 hover:bg-red-700 active:bg-red-800` + `shadow-sm shadow-red-200`; estado loading com texto "Criando..."; `disabled:cursor-not-allowed`.
+ * Funcionalidade INTACTA: state `showSemVerba`/`semVerbaMotivo`/`semVerbaObs`, handler `handleConfirmSemVerba`, validação obrigatória de motivo+justificativa, lista de motivos (quebra_dano/furto/erro_orcamento/qtd_insuficiente/retrabalho/aditivo/outro), botão Cancelar reseta. Mutation `criar.isPending` continua bloqueando duplo-click.
+ * Resultado: modal ganha hierarquia clara (problema → aviso → form → ação), respira melhor, scroll horizontal eliminado, botão de risco visualmente dominante mas elegante, conta caracteres na justificativa.
+ * Preservado: Rev. 1982/1981/1980/1979 INTACTAS. Outros dialogs do arquivo (detalhe SC, etc.) INTACTOS. Backend/schema INTACTOS. Zero novo tRPC. R-001/R-007/R-010 OK.
+ *
  * Rev. 1982 — RH · Dashboard Aviso Prévio · CDM (Custo de Demissão em Massa) · campo de busca incremental por nome/função/obra/código.
  * User (17/05/2026, IMG_0843 iPad 08:47): "Coloca um campo de busca para digitar e ir filtrando o nome do funcionário". Tabela CDM tinha 98 funcionários ativos sem como pesquisar — só ordenação por cabeçalho. Usuário tinha que rolar pra achar alguém específico.
  * Mudança em 1 arquivo (`client/src/pages/dashboards/DashAvisoPrevio.tsx`, 4 hunks):

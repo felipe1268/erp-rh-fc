@@ -19,6 +19,7 @@ import {
   CheckCircle2, XCircle, Clock, Building2, ListTree, CalendarDays, ShoppingCart, AlertTriangle, Zap, FileText, Package,
   Camera, ImageIcon, X, Briefcase, History, ShoppingBag, Pencil, Copy, CheckSquare, FileDown,
   UserCircle, ShieldCheck, FileSearch, Truck, Users, Layers, ArrowRightLeft, Sparkles, RotateCw, Car, Link2, Film, Paperclip,
+  Info,
 } from "lucide-react";
 
 const STATUS_CFG: Record<string, { label: string; cls: string }> = {
@@ -4350,84 +4351,141 @@ ${sc.observacoes ? `<div class="obs"><b>Observações da SC:</b><br>${esc(sc.obs
         </DialogContent>
       </Dialog>
 
+      {/* ── Rev. 1983 — Modal "Itens sem verba" redesenhado ──────────
+          Antes: padding apertado, scroll horizontal vazio embaixo, lista
+          vermelha "spam", botões pretos competindo. Agora:
+          - header com faixa vermelha clara + título grande + subtítulo
+          - badge contador "N item(s) sem verba"
+          - lista em cards brancos com chip XCircle (legível, sem fundo
+            vermelho saturado), scroll vertical só quando passa de ~150px
+          - aviso âmbar com ícone Info, texto enxuto
+          - form com labels claros + asterisco vermelho + helper opcional
+          - footer sticky com borda superior e botão de ação destacado
+          - overflow-x-hidden no DialogContent (mata a barra horizontal
+            que aparecia na print original) */}
       <Dialog open={!!showSemVerba} onOpenChange={v => { if (!v) setShowSemVerba(null); }}>
-        <DialogContent className="border-red-200 max-w-lg" style={{ background: '#ffffff', color: '#111827' }}>
-          <DialogHeader>
-            <div className="flex items-center gap-3 mb-1">
-              <div className="p-2 rounded-full bg-red-100">
+        <DialogContent
+          className="border-red-200 w-[min(92vw,560px)] max-w-[560px] p-0 overflow-hidden gap-0 flex flex-col max-h-[90vh]"
+          style={{ background: '#ffffff', color: '#111827' }}
+        >
+          {/* Header com faixa vermelha sutil */}
+          <DialogHeader className="px-5 py-4 bg-gradient-to-b from-red-50 to-white border-b border-red-100 space-y-0">
+            <div className="flex items-start gap-3">
+              <div className="p-2 rounded-full bg-red-100 ring-4 ring-red-50 shrink-0">
                 <AlertTriangle className="h-5 w-5 text-red-600" />
               </div>
-              <DialogTitle className="text-red-800 text-base">Itens sem verba orçamentária</DialogTitle>
+              <div className="min-w-0 flex-1">
+                <DialogTitle className="text-red-900 text-base font-bold leading-tight">
+                  Itens sem verba orçamentária
+                </DialogTitle>
+                <p className="text-[11px] text-red-700/80 mt-0.5 leading-snug">
+                  Esta solicitação contém itens sem cobertura no orçamento da obra.
+                </p>
+              </div>
             </div>
           </DialogHeader>
 
-          <div className="space-y-4">
-            <div className="bg-red-50 border border-red-200 rounded-lg p-3">
-              <p className="text-xs font-semibold text-red-700 mb-2">
-                Os seguintes itens não possuem verba suficiente ou não foram previstos no orçamento:
-              </p>
-              <ul className="space-y-1 max-h-32 overflow-y-auto">
+          {/* Corpo rolável */}
+          <div className="px-5 py-4 space-y-4 overflow-y-auto overflow-x-hidden flex-1">
+            {/* Lista de problemas */}
+            <div className="rounded-lg border border-red-200 bg-red-50/40 overflow-hidden">
+              <div className="px-3 py-2 bg-red-50 border-b border-red-200 flex items-center justify-between">
+                <p className="text-[11px] font-semibold text-red-800 uppercase tracking-wide">
+                  Itens sinalizados
+                </p>
+                <span className="text-[10px] font-bold text-red-700 bg-white border border-red-200 rounded-full px-2 py-0.5 tabular-nums">
+                  {showSemVerba?.problemas.length || 0} item(ns)
+                </span>
+              </div>
+              <ul className="max-h-[150px] overflow-y-auto divide-y divide-red-100">
                 {showSemVerba?.problemas.map((p, i) => (
-                  <li key={i} className="text-xs text-red-600 flex items-start gap-1.5">
-                    <XCircle className="h-3 w-3 mt-0.5 shrink-0" />
-                    <span>{p}</span>
+                  <li key={i} className="px-3 py-2 flex items-start gap-2 hover:bg-red-50/60">
+                    <XCircle className="h-3.5 w-3.5 mt-0.5 shrink-0 text-red-500" />
+                    <span className="text-xs text-red-900 leading-snug break-words min-w-0">{p}</span>
                   </li>
                 ))}
               </ul>
             </div>
 
-            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
-              <p className="text-xs font-semibold text-amber-800 mb-1">
-                Deseja realmente prosseguir com esta solicitação?
-              </p>
-              <p className="text-xs text-amber-700">
-                A solicitação será marcada como "sem verba" e precisará de aprovação especial.
-                Informe abaixo o motivo e a justificativa.
-              </p>
+            {/* Aviso âmbar */}
+            <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 flex gap-2.5">
+              <Info className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+              <div className="min-w-0">
+                <p className="text-xs font-semibold text-amber-900 leading-snug">
+                  Deseja realmente prosseguir?
+                </p>
+                <p className="text-[11px] text-amber-800 mt-0.5 leading-snug">
+                  A solicitação será marcada como <strong>sem verba</strong> e exigirá aprovação especial.
+                  Informe abaixo o motivo e a justificativa.
+                </p>
+              </div>
             </div>
 
-            <div>
-              <Label className="text-xs font-semibold text-gray-700 mb-1">Motivo *</Label>
-              <Select value={semVerbaMotivo} onValueChange={setSemVerbaMotivo}>
-                <SelectTrigger className="h-9 text-sm border-gray-300">
-                  <SelectValue placeholder="Selecione o motivo..." />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="quebra_dano">Quebra / Dano em obra</SelectItem>
-                  <SelectItem value="furto">Furto / Roubo</SelectItem>
-                  <SelectItem value="erro_orcamento">Erro de orçamento (qtd subestimada)</SelectItem>
-                  <SelectItem value="qtd_insuficiente">Quantidade insuficiente no orçamento</SelectItem>
-                  <SelectItem value="retrabalho">Retrabalho / Refação de serviço</SelectItem>
-                  <SelectItem value="aditivo">Aditivo contratual / Escopo novo</SelectItem>
-                  <SelectItem value="outro">Outro motivo</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+            {/* Form */}
+            <div className="space-y-3">
+              <div className="space-y-1">
+                <Label className="text-[11px] font-semibold text-gray-700 uppercase tracking-wide flex items-center gap-1">
+                  Motivo <span className="text-red-600">*</span>
+                </Label>
+                <Select value={semVerbaMotivo} onValueChange={setSemVerbaMotivo}>
+                  <SelectTrigger className="h-9 text-sm border-gray-300 focus:ring-2 focus:ring-red-200 focus:border-red-400">
+                    <SelectValue placeholder="Selecione o motivo..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="quebra_dano">Quebra / Dano em obra</SelectItem>
+                    <SelectItem value="furto">Furto / Roubo</SelectItem>
+                    <SelectItem value="erro_orcamento">Erro de orçamento (qtd subestimada)</SelectItem>
+                    <SelectItem value="qtd_insuficiente">Quantidade insuficiente no orçamento</SelectItem>
+                    <SelectItem value="retrabalho">Retrabalho / Refação de serviço</SelectItem>
+                    <SelectItem value="aditivo">Aditivo contratual / Escopo novo</SelectItem>
+                    <SelectItem value="outro">Outro motivo</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
 
-            <div>
-              <Label className="text-xs font-semibold text-gray-700 mb-1">Justificativa *</Label>
-              <Textarea
-                value={semVerbaObs}
-                onChange={e => setSemVerbaObs(e.target.value)}
-                placeholder="Descreva por que esta compra é necessária mesmo sem verba prevista no orçamento..."
-                className="text-sm min-h-[80px] border-gray-300 resize-none"
-              />
+              <div className="space-y-1">
+                <div className="flex items-center justify-between">
+                  <Label className="text-[11px] font-semibold text-gray-700 uppercase tracking-wide flex items-center gap-1">
+                    Justificativa <span className="text-red-600">*</span>
+                  </Label>
+                  <span className="text-[10px] text-gray-500 tabular-nums">
+                    {semVerbaObs.length} caractere(s)
+                  </span>
+                </div>
+                <Textarea
+                  value={semVerbaObs}
+                  onChange={e => setSemVerbaObs(e.target.value)}
+                  placeholder="Descreva por que esta compra é necessária mesmo sem verba prevista no orçamento..."
+                  className="text-sm min-h-[90px] border-gray-300 resize-none focus:ring-2 focus:ring-red-200 focus:border-red-400"
+                />
+                <p className="text-[10px] text-gray-500 leading-snug">
+                  Detalhe o cenário (ex.: aditivo contratual, retrabalho não previsto, item esquecido no escopo).
+                </p>
+              </div>
             </div>
           </div>
 
-          <div className="flex gap-2 pt-2">
+          {/* Footer sticky */}
+          <div className="px-5 py-3 border-t border-gray-200 bg-gray-50/80 flex gap-2">
             <button
+              type="button"
               onClick={() => setShowSemVerba(null)}
-              className="flex-1 h-9 text-sm border border-gray-300 rounded-md bg-white text-gray-600 hover:bg-gray-50 font-medium transition"
+              className="flex-1 h-9 text-sm border border-gray-300 rounded-md bg-white text-gray-700 hover:bg-gray-100 font-medium transition"
             >
               Cancelar
             </button>
             <button
+              type="button"
               onClick={handleConfirmSemVerba}
               disabled={!semVerbaMotivo || !semVerbaObs.trim() || criar.isPending}
-              className="flex-1 h-9 text-sm rounded-md bg-red-600 hover:bg-red-500 text-white font-semibold transition disabled:opacity-50 flex items-center justify-center gap-2"
+              className="flex-[1.4] h-9 text-sm rounded-md bg-red-600 hover:bg-red-700 active:bg-red-800 text-white font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-sm shadow-red-200"
             >
-              {criar.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : (
+              {criar.isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Criando...
+                </>
+              ) : (
                 <>
                   <AlertTriangle className="h-3.5 w-3.5" />
                   Criar mesmo sem verba
