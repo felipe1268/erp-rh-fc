@@ -50,18 +50,18 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 2062** — **Faxina do `replit.md`**: convenção mudou de 5+10 (~200 linhas, parágrafos enormes) pra **2+5** (compactos). Top-5 detalhado anterior (Rev. 2059..2055) virou one-liner; one-liners antigos (Rev. 2054..2044) foram movidos pra `replit-history.md`. Conteúdo completo intacto em `shared/changelog.ts` (zero perda). Reduz ruído no contexto da IA + evita alertas recorrentes de "arquivo grande". Pedido direto do usuário ("zere tudo que puder para não aparecer mais, sem apagar os dados").
-- **Rev. 2061** — **Raio-X · card SST · coluna Certificado ganha botões Ver + PDF para aprovados** (pedido IMG_0960: coluna mostrava só "-"). Desde Rev. 2049 o cert é gerado on-the-fly via `generateCertificadoIntegracaoSstPdf` — célula em `client/src/components/RaioXFuncionario.tsx` L2660 só checava `r.certificadoUrl`. Fix: import do gerador + lógica condicional `r.status === "aprovado"` → 2 botões pequenos (Ver azul `mode:"preview"` + PDF verde download). Gate `&& emp` no wrapper evita race com `raioX?.funcionario`. ZERO server-side.
+- **Rev. 2063** — **SST Integração · badge vermelho do menu lateral · BUG de contagem corrigido** (pedido IMG_1189: badge não aparecia mesmo com terceiros pendentes). `getBadgeCounts` da Rev. 2058 (`server/routers/integracaoSST.ts` L316) só replicou a lógica do loop CLT/PJ do `listarPendentesAuto` — terceiros (`funcionariosTerceiros` SEM `integracaoDocUrl`, L1084) ficaram fora do COUNT. Fix: novo SELECT em `funcionarios_terceiros` (mesmos filtros do L1084), retorno passa de `{pendentesAuto}` pra `{pendentesAuto, pendentesEmployees, pendentesTerceiros}` (somados). UI lê `pendentesAuto` (backward-compat). ZERO schema.
+- **Rev. 2062** — **Faxina do `replit.md`**: convenção mudou de 5+10 (~200 linhas) pra **2+5** (compactos). Top-5 detalhado anterior (Rev. 2059..2055) virou one-liner; one-liners antigos (Rev. 2054..2044) foram movidos pra `replit-history.md`. Conteúdo completo intacto em `shared/changelog.ts`.
 
 ### Revisões recentes (one-liners)
 
-- ~~Rev. 2060~~ — Fechamento de Ponto: bug crítico de verificação de HE aprovada — ciclo 16→15 perdia HEs de mês anterior (`LIKE 'mesReferencia%'`) + contador não checava `status === "aprovada"`. Fix: BETWEEN no server + filtro de status no client. Ver `shared/changelog.ts`.
-- ~~Rev. 2059~~ — SST Integração: +13 perguntas sobre Segurança na Obra (total 35) + botão "Editar Perguntas" com label visível + nota sobre assinatura TST. Ver `shared/changelog.ts`.
+- ~~Rev. 2061~~ — Raio-X · card SST · coluna Certificado ganha botões Ver + PDF para aprovados (cert gerado on-the-fly via `generateCertificadoIntegracaoSstPdf`). Ver `shared/changelog.ts`.
+- ~~Rev. 2060~~ — Fechamento de Ponto: bug crítico de verificação de HE aprovada — ciclo 16→15 perdia HEs de mês anterior + contador não checava `status === "aprovada"`. Fix: BETWEEN no server + filtro de status no client. Ver `shared/changelog.ts`.
+- ~~Rev. 2059~~ — SST Integração: +13 perguntas sobre Segurança na Obra (total 35) + botão "Editar Perguntas" com label visível. Ver `shared/changelog.ts`.
 - ~~Rev. 2058~~ — SST Integração: badge vermelho piscante no menu lateral quando há colaboradores sem integração válida (procedure `getBadgeCounts` multi-company). Ver `shared/changelog.ts`.
 - ~~Rev. 2057~~ — SST Integração aba Pendentes: badge âmbar "Nª tentativa" pra quem já reprovou antes (count POSTERIOR à última aprovação). Ver `shared/changelog.ts`.
-- ~~Rev. 2056~~ — SST Integração: reprovado volta AUTOMATICAMENTE pra Pendentes + botão de editar configuração (título/nota mínima/validade/ativo). Ver `shared/changelog.ts`.
 
-> Revisões 2055 → 2044 e anteriores: ver [`replit-history.md`](./replit-history.md) e `shared/changelog.ts` (detalhe completo).
+> Revisões 2056 → 2044 e anteriores: ver [`replit-history.md`](./replit-history.md) e `shared/changelog.ts` (detalhe completo).
 
 
 ## User preferences

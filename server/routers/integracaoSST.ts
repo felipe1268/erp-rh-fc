@@ -354,9 +354,27 @@ export const integracaoSSTRouter = router({
           AND (lo.dv IS NULL OR lo.dv <= NOW() + INTERVAL '60 days')
       `);
       const semIntegracaoRows = (semIntegracaoRaw as any).rows ?? semIntegracaoRaw;
-      const pendentesAuto = Number(semIntegracaoRows?.[0]?.total ?? 0);
+      const pendentesEmployees = Number(semIntegracaoRows?.[0]?.total ?? 0);
 
-      return { pendentesAuto };
+      // Rev. 2063 — Bug Rev. 2058: contava só CLT/PJ. listarPendentesAuto
+      // L1084 também inclui terceiros SEM `integracaoDocUrl`. Se o tenant
+      // só tem terceiros pendentes, badge ficava zerado. Mesmo critério
+      // simplificado do listarPendentesAuto (schema não guarda timestamp
+      // do upload pra calcular 24 meses — só presença/ausência do doc).
+      const terceirosRaw = await db.execute<{ total: number }>(sql`
+        SELECT COUNT(*)::int AS total
+        FROM funcionarios_terceiros t
+        WHERE t."companyId" = ANY(${ids})
+          AND t.status = 'ativo'
+          AND t.deleted_at IS NULL
+          AND t.integracao_doc_url IS NULL
+      `);
+      const terceirosRows = (terceirosRaw as any).rows ?? terceirosRaw;
+      const pendentesTerceiros = Number(terceirosRows?.[0]?.total ?? 0);
+
+      const pendentesAuto = pendentesEmployees + pendentesTerceiros;
+
+      return { pendentesAuto, pendentesEmployees, pendentesTerceiros };
     }),
 
   listarConfigs: protectedProcedure

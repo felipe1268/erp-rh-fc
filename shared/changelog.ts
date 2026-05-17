@@ -1,6 +1,49 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2063 — **SST Integração · badge vermelho do menu lateral · BUG
+ * de contagem corrigido — `getBadgeCounts` (Rev. 2058) só somava
+ * CLT/PJ da tabela `employees`, ignorando completamente os
+ * terceiros.** Pedido direto do usuário (IMG_1189): "A barra de
+ * comando lateral não está mostrando que tem funcionários para
+ * fazer integração, quero que mostre alerta em vermelho, igual
+ * fizemos na solicitação hora extra e de mão de obra". **Causa**:
+ * o `listarPendentesAuto` (server/routers/integracaoSST.ts L913)
+ * monta a lista da aba Pendentes em DOIS loops — (1) CLT/PJ de
+ * `employees` com integração vencida/ausente, (2) terceiros de
+ * `funcionariosTerceiros` SEM `integracaoDocUrl` (L1084). Mas o
+ * `getBadgeCounts` da Rev. 2058 só replicou a lógica de (1) num
+ * COUNT — terceiros pendentes não entravam no contador, então o
+ * tenant que só tinha terceiros pendentes via badge zerado. **Fix
+ * em 1 arquivo (zero schema, zero novo procedure)**:
+ * `server/routers/integracaoSST.ts` getBadgeCounts (L316) — após
+ * o COUNT de `pendentesEmployees`, novo `db.execute` SELECT em
+ * `funcionarios_terceiros` (critério idêntico ao L1084: `company_id
+ * = ANY($1)`, `status = 'ativo'`, `deleted_at IS NULL`,
+ * `integracao_doc_url IS NULL`) → `pendentesTerceiros`. Retorno
+ * passa de `{pendentesAuto}` para `{pendentesAuto, pendentesEmployees,
+ * pendentesTerceiros}` (pendentesAuto = soma dos 2) — backward-compat
+ * preservada (UI L1426 lê só `pendentesAuto`). + `shared/version.ts`
+ * → 2063. **Por que NÃO usar COUNT no mesmo CTE**: as duas tabelas
+ * têm critérios diferentes (employees usa janela de 60d + filtro
+ * fantasma + em_processo; terceiros é só "doc presente ou não"
+ * porque schema não guarda timestamp do upload). Misturar num
+ * UNION ALL ficaria menos legível e idêntico em performance.
+ * **Por que retornar os dois sub-totais**: futuro pode quebrar
+ * badge por tipo (ex: badge âmbar pra terceiros sem doc vs.
+ * vermelho pra CLT vencido) sem novo procedure. **R-001/R-007/
+ * R-010 OK**: ZERO ALTER/DROP/DELETE. SELECT puro. **Preservado**:
+ * Rev. 2058 (UI binding em DashboardLayout L1421-1432) INTACTA —
+ * lê `pendentesAuto` somado. Rev. 2057 (badge "Nª tentativa")
+ * INTACTA. **Follow-up**: (1) extrair função `pendentesIntegracao
+ * SstQuery` compartilhada por `listarPendentesAuto` + `getBadgeCounts`
+ * pra eliminar drift futuro; (2) considerar adicionar timestamp
+ * `integracaoDocUploadedAt` em `funcionariosTerceiros` pra renovar
+ * doc após 24m (hoje doc presente = válido p/ sempre); (3) badge
+ * separado terceiros vs. CLT na UI se RH pedir; (4) snapshot test
+ * que compara contagem do badge vs. tamanho da lista do
+ * `listarPendentesAuto` (regressão).
+ *
  * Rev. 2062 — **Faxina do `replit.md` · convenção mudou de 5+10 pra 2+5**
  * (Top-2 detalhado + Top-5 one-liner). Pedido direto do usuário: "Esta
  * mensagem [alerta de arquivo grande] tem aparecido muito, zere tudo

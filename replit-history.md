@@ -4,6 +4,8 @@
 > O detalhamento completo (causa-raiz, stack traces, arquivos tocados, comentários longos) de TODAS as revisões — incluindo as listadas abaixo — vive em `shared/changelog.ts`.
 > Movido aqui na Rev. 2028 (faxina) — revisões 1903 → 2012.
 
+- ~~Rev. 2056~~ — SST Integração: reprovado volta AUTOMATICAMENTE pra Pendentes + botão de editar configuração (título/nota mínima/validade/ativo). Ver `shared/changelog.ts`. (movida na Rev. 2063)
+- ~~Rev. 2055~~ — SST Integração: nova aba "Reprovados" no menu (entre Aprovados e Histórico) com badge vermelho da nota e botão Raio-X. Ver `shared/changelog.ts`. (movida na Rev. 2063)
 - ~~Rev. 2054~~ — Fechamento de Ponto: ranking "Menos Dias Trabalhados" exclui colaboradores em gozo de férias no período. Ver `shared/changelog.ts`. (movida na Rev. 2062)
 - ~~Rev. 2053~~ — SST Integração: +10 perguntas sobre NRs e Segurança APPENDADAS ao banco-padrão (total 22). Ver `shared/changelog.ts`. (movida na Rev. 2062)
 - ~~Rev. 2052~~ — SST Integração: assinatura digital do TST no certificado (canvas inline, PNG embutido no PDF). Ver `shared/changelog.ts`. (movida na Rev. 2062)
