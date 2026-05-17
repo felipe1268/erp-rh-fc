@@ -1688,23 +1688,101 @@ ${input.foco ? `Foco solicitado pelo usuário: "${input.foco}". Priorize temas d
         notInArray(employees.id, jaNaObra),
         notInArray(employees.status, ["Desligado", "Lista_Negra", "ListaNegra"] as any),
       )).orderBy(employees.nomeCompleto);
-      return rows;
+      const cltOut = rows.map((r: any) => ({ ...r, tipo: "clt" as const, funcTerceiroId: null, obraAtualNome: null }));
+      // Rev. 2024 — anexa terceiros disponíveis pra transferência. Critério:
+      // terceiros ativos da empresa que NÃO estão vinculados a NENHUMA das
+      // obras consolidadas (`ids`) hoje — podem ser:
+      //   (a) sem obra alguma (obraId IS NULL), ou
+      //   (b) vinculados a OUTRA obra (gestor pode "mover" pra esta).
+      // try/catch defensivo: módulo Terceiros opcional, falha não quebra CLT.
+      try {
+        const terc = await db.select({
+          funcTerceiroId: funcionariosTerceiros.id,
+          nome: funcionariosTerceiros.nome,
+          cpf: funcionariosTerceiros.cpf,
+          funcao: funcionariosTerceiros.funcao,
+          status: funcionariosTerceiros.status,
+          obraIdAtual: funcionariosTerceiros.obraId,
+          obraAtualNome: funcionariosTerceiros.obraNome,
+          empresaTerceiraId: funcionariosTerceiros.empresaTerceiraId,
+        }).from(funcionariosTerceiros).where(and(
+          eq(funcionariosTerceiros.companyId, input.companyId),
+          isNull(funcionariosTerceiros.deletedAt),
+        )).orderBy(funcionariosTerceiros.nome);
+        const tercOut = terc
+          .filter((t: any) => !["inativo", "desligado"].includes(String(t.status).toLowerCase()))
+          .filter((t: any) => !t.obraIdAtual || !ids.includes(t.obraIdAtual))
+          .map((t: any) => ({
+            tipo: "terceiro" as const,
+            id: t.funcTerceiroId,
+            funcTerceiroId: t.funcTerceiroId,
+            nome: t.nome,
+            cpf: t.cpf,
+            funcao: t.funcao,
+            status: t.status,
+            obraAtualNome: t.obraAtualNome ?? null,
+            empresaTerceiraId: t.empresaTerceiraId,
+          }));
+        return [...cltOut, ...tercOut];
+      } catch (e: any) {
+        console.warn("[dds.colaboradoresParaTransferir] terceiros falhou (seguindo só CLT):", e?.message);
+        return cltOut;
+      }
     }),
 
   // Rev. 1731 — Vincula colaborador à obra (cria/reativa registro em obra_funcionarios).
+  // Rev. 2024 — aceita também terceiros (tipo:"terceiro" + funcTerceiroId) via
+  // UPDATE direto em funcionariosTerceiros.obraId (terceiros não usam tabela
+  // n:n obra_funcionarios — cada terceiro está em 0 ou 1 obra por vez).
   transferirParaObra: protectedProcedure
     .input(z.object({
       companyId: z.number().int().positive(),
       obraId: z.number().int().positive(),
-      employeeId: z.number().int().positive(),
+      tipo: z.enum(["clt", "terceiro"]).default("clt"),
+      employeeId: z.number().int().positive().optional(),
+      funcTerceiroId: z.number().int().positive().optional(),
     }))
     .mutation(async ({ input, ctx }) => {
       assertCompanyAccess(ctx, input.companyId);
       const db = (await getDb())!;
       // Rev. 1731 fix (architect): valida ownership da obra (id + companyId) antes de qualquer escrita
-      const [obraOk] = await db.select({ id: obras.id }).from(obras)
+      const [obraOk] = await db.select({ id: obras.id, nome: obras.nome }).from(obras)
         .where(and(eq(obras.id, input.obraId), eq(obras.companyId, input.companyId))).limit(1);
       if (!obraOk) throw new TRPCError({ code: "FORBIDDEN", message: "Obra não pertence a esta empresa." });
+
+      // Rev. 2024 — Branch TERCEIRO: UPDATE direto em funcionariosTerceiros.
+      if (input.tipo === "terceiro") {
+        if (!input.funcTerceiroId) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "funcTerceiroId é obrigatório para tipo=terceiro." });
+        }
+        const [terc] = await db.select({
+          id: funcionariosTerceiros.id,
+          status: funcionariosTerceiros.status,
+          obraIdAtual: funcionariosTerceiros.obraId,
+        }).from(funcionariosTerceiros).where(and(
+          eq(funcionariosTerceiros.id, input.funcTerceiroId),
+          eq(funcionariosTerceiros.companyId, input.companyId),
+          isNull(funcionariosTerceiros.deletedAt),
+        )).limit(1);
+        if (!terc) throw new TRPCError({ code: "FORBIDDEN", message: "Terceiro não pertence a esta empresa." });
+        if (["inativo", "desligado"].includes(String(terc.status).toLowerCase())) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Terceiro inativo não pode ser vinculado." });
+        }
+        if (terc.obraIdAtual === input.obraId) return { ok: true, reativado: false, tipo: "terceiro" as const, ja: true };
+        await db.update(funcionariosTerceiros)
+          .set({
+            obraId: input.obraId,
+            obraNome: obraOk.nome ?? null,
+            updatedAt: new Date().toISOString(),
+          } as any)
+          .where(eq(funcionariosTerceiros.id, input.funcTerceiroId));
+        return { ok: true, reativado: false, tipo: "terceiro" as const, ja: false };
+      }
+
+      // Branch CLT (comportamento original)
+      if (!input.employeeId) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "employeeId é obrigatório para tipo=clt." });
+      }
       // Confere se o colaborador é da MESMA empresa
       const [emp] = await db.select({ id: employees.id, status: employees.status })
         .from(employees).where(and(
@@ -1724,11 +1802,11 @@ ${input.foco ? `Foco solicitado pelo usuário: "${input.foco}". Priorize temas d
           eq(obraFuncionarios.employeeId, input.employeeId),
         )).limit(1);
       if (exist) {
-        if (exist.isActive === 1) return { ok: true, reativado: false };
+        if (exist.isActive === 1) return { ok: true, reativado: false, tipo: "clt" as const };
         await db.update(obraFuncionarios)
           .set({ isActive: 1, dataFim: null as any })
           .where(eq(obraFuncionarios.id, exist.id));
-        return { ok: true, reativado: true };
+        return { ok: true, reativado: true, tipo: "clt" as const };
       }
       const hoje = new Date().toISOString().slice(0, 10);
       await db.insert(obraFuncionarios).values({
@@ -1738,7 +1816,7 @@ ${input.foco ? `Foco solicitado pelo usuário: "${input.foco}". Priorize temas d
         dataInicio: hoje,
         isActive: 1,
       } as any);
-      return { ok: true, reativado: false };
+      return { ok: true, reativado: false, tipo: "clt" as const };
     }),
 
   // Rev. 1731 — Acidentes recentes (default últimos 7 dias) que potencialmente exigem DDS de análise (Lei art. 157 CLT, NR-1).
@@ -2117,7 +2195,36 @@ ${input.foco ? `Foco solicitado pelo usuário: "${input.foco}". Priorize temas d
         }).from(ddsSessaoFuncionarios)
           .where(eq(ddsSessaoFuncionarios.sessaoId, input.id))
           .orderBy(ddsSessaoFuncionarios.nome);
-        return { ...s, funcionarios: funcs ?? [] };
+        // Rev. 2024 — anexa terceiros participantes (ddsParticipacoesTerceiros
+        // filtrado por sessaoId). Faz LEFT JOIN com funcionariosTerceiros pra
+        // pegar dados atualizados (nome/cpf/foto). try/catch defensivo: se
+        // falhar (módulo Terceiros não migrado, coluna sessao_id ainda não
+        // garantida em tenant antigo, etc.), retorna lista vazia — getSessao
+        // NUNCA pode quebrar por causa de terceiros.
+        let terceiros: any[] = [];
+        try {
+          terceiros = await db.select({
+            id: ddsParticipacoesTerceiros.id,
+            funcTerceiroId: ddsParticipacoesTerceiros.funcTerceiroId,
+            nome: funcionariosTerceiros.nome,
+            cpf: funcionariosTerceiros.cpf,
+            funcao: funcionariosTerceiros.funcao,
+            empresaTerceiraId: funcionariosTerceiros.empresaTerceiraId,
+            fotoUrl: funcionariosTerceiros.fotoUrl,
+            createdAt: ddsParticipacoesTerceiros.createdAt,
+            observacoes: ddsParticipacoesTerceiros.observacoes,
+          }).from(ddsParticipacoesTerceiros)
+            .leftJoin(funcionariosTerceiros, eq(funcionariosTerceiros.id, ddsParticipacoesTerceiros.funcTerceiroId))
+            .where(and(
+              eq(ddsParticipacoesTerceiros.companyId, input.companyId),
+              eq(ddsParticipacoesTerceiros.sessaoId, input.id),
+              isNull(ddsParticipacoesTerceiros.deletedAt),
+            ))
+            .orderBy(funcionariosTerceiros.nome);
+        } catch (e: any) {
+          console.warn("[dds.getSessao] terceiros falhou (seguindo só CLT):", e?.message);
+        }
+        return { ...s, funcionarios: funcs ?? [], terceiros };
       } catch (e: any) {
         if (e instanceof TRPCError) throw e;
         console.error("[dds.getSessao] erro detalhado", { id: input.id, companyId: input.companyId, msg: e?.message, name: e?.name, stack: e?.stack });
@@ -2235,6 +2342,9 @@ ${input.foco ? `Foco solicitado pelo usuário: "${input.foco}". Priorize temas d
               tercs.map((t: any) => ({
                 companyId: input.companyId,
                 funcTerceiroId: t.id,
+                // Rev. 2024 — vincula participação à sessão coletiva pro
+                // detalhe da sessão listar os terceiros direto, sem heurística.
+                sessaoId: sessao.id,
                 dataDds: input.data,
                 tema: input.tituloTema,
                 instrutor: input.instrutor ?? null,

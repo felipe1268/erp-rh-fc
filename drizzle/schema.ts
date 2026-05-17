@@ -3630,6 +3630,12 @@ export const ddsParticipacoesTerceiros = pgTable("dds_participacoes_terceiros", 
   id: serial().primaryKey(),
   companyId: integer("company_id").notNull(),
   funcTerceiroId: integer("func_terceiro_id").notNull(),
+  // Rev. 2024 — vínculo opcional com a sessão coletiva (ddsSessoes.id). Quando
+  // a participação foi registrada via "Nova Sessão" (DDS coletivo), aponta pra
+  // sessão. Quando foi cadastrada manualmente na tela do terceiro (DDS avulso),
+  // fica NULL. Isso permite ao detalhe da sessão listar terceiros participantes
+  // sem heurística por data/tema/obra.
+  sessaoId: integer("sessao_id"),
   dataDds: date("data_dds", { mode: "string" }).notNull(),
   tema: varchar({ length: 255 }).notNull(),
   instrutor: varchar({ length: 255 }),

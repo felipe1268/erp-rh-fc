@@ -582,6 +582,9 @@ Regras:
             )
           `);
           await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_dds_func_terc ON dds_participacoes_terceiros(company_id, func_terceiro_id, data_dds DESC)`);
+          // Rev. 2024 — sessao_id (opcional) para vincular participação à sessão coletiva.
+          await db.execute(sql`ALTER TABLE dds_participacoes_terceiros ADD COLUMN IF NOT EXISTS sessao_id INTEGER`);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_dds_part_terc_sessao ON dds_participacoes_terceiros(sessao_id) WHERE sessao_id IS NOT NULL`);
           console.log(`[SyncSchema+] Tabela dds_participacoes_terceiros garantida.`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA dds_participacoes_terceiros:`, e?.message || e); }
 

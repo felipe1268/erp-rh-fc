@@ -2902,30 +2902,56 @@ export default function DDSGuia() {
               }
               return (
                 <div className="divide-y divide-slate-100">
-                  {filtrados.map((c: any) => (
-                    <div key={c.id} className="flex items-center gap-3 py-2">
-                      <div className="flex-1 min-w-0">
-                        <div className="text-sm font-semibold text-slate-800 truncate">{c.nome}</div>
-                        <div className="text-[11px] text-slate-500 truncate">
-                          {c.funcao ?? "—"}
-                          {c.cpf && <> · CPF {maskCpf(c.cpf)}</>}
-                          {c.status && c.status !== "Ativo" && (
-                            <span className="ml-1 px-1 rounded bg-amber-100 text-amber-800 font-semibold">{c.status}</span>
-                          )}
+                  {filtrados.map((c: any) => {
+                    // Rev. 2024 — itens podem ser CLT ou TERCEIRO. Mesma UI,
+                    // chip laranja diferencia + mostra obra atual se houver.
+                    const isTerc = c.tipo === "terceiro";
+                    const itemKey = `${c.tipo ?? "clt"}-${c.id ?? c.funcTerceiroId}`;
+                    return (
+                      <div key={itemKey} className="flex items-center gap-3 py-2">
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm font-semibold text-slate-800 truncate flex items-center gap-1.5">
+                            {c.nome}
+                            {isTerc && (
+                              <span
+                                className="text-[9px] font-bold uppercase tracking-wide bg-orange-100 text-orange-800 px-1.5 py-0.5 rounded"
+                                title="Funcionário terceirizado — vinculado por obra"
+                              >
+                                Terceiro
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-[11px] text-slate-500 truncate">
+                            {c.funcao ?? "—"}
+                            {c.cpf && <> · CPF {maskCpf(c.cpf)}</>}
+                            {isTerc && c.obraAtualNome && (
+                              <span className="ml-1 px-1 rounded bg-slate-100 text-slate-700">
+                                hoje em: {c.obraAtualNome}
+                              </span>
+                            )}
+                            {c.status && c.status !== "Ativo" && c.status !== "ativo" && (
+                              <span className="ml-1 px-1 rounded bg-amber-100 text-amber-800 font-semibold">{c.status}</span>
+                            )}
+                          </div>
                         </div>
+                        <Button size="sm" variant="outline"
+                          onClick={() => {
+                            // Rev. 1733 — transfere para o ID canônico (primeiro da lista consolidada)
+                            // Rev. 2024 — payload muda conforme tipo (clt vs terceiro).
+                            const target = obrasIdsSel[0];
+                            if (!target) { toast.error("Selecione uma obra"); return; }
+                            if (isTerc) {
+                              transferirMut.mutate({ companyId, obraId: target, tipo: "terceiro", funcTerceiroId: c.funcTerceiroId });
+                            } else {
+                              transferirMut.mutate({ companyId, obraId: target, tipo: "clt", employeeId: c.id });
+                            }
+                          }}
+                          disabled={transferirMut.isPending}>
+                          {isTerc && c.obraAtualNome ? "Mover →" : "Transferir →"}
+                        </Button>
                       </div>
-                      <Button size="sm" variant="outline"
-                        onClick={() => {
-                          // Rev. 1733 — transfere para o ID canônico (primeiro da lista consolidada)
-                          const target = obrasIdsSel[0];
-                          if (!target) { toast.error("Selecione uma obra"); return; }
-                          transferirMut.mutate({ companyId, obraId: target, employeeId: c.id });
-                        }}
-                        disabled={transferirMut.isPending}>
-                        Transferir →
-                      </Button>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               );
             })()}
@@ -3128,7 +3154,7 @@ function SessaoDetalhe({
           )}
         </div>
 
-        {funcs.length === 0 ? (
+        {funcs.length === 0 && (((sessao as any).terceiros ?? []).length === 0) ? (
           <p className="text-sm text-slate-400 italic text-center py-8">Nenhum funcionário adicionado ainda.</p>
         ) : (
           <table className="w-full text-sm">
@@ -3144,7 +3170,7 @@ function SessaoDetalhe({
             </thead>
             <tbody>
               {funcs.map((f: any) => (
-                <tr key={f.id} className="border-t">
+                <tr key={`clt-${f.id}`} className="border-t">
                   <td className="py-2 font-medium">{f.nome}</td>
                   <td className="py-2 text-slate-600">{f.cpf ?? "—"}</td>
                   <td className="py-2 text-slate-600">{f.funcao ?? "—"}</td>
@@ -3194,6 +3220,39 @@ function SessaoDetalhe({
                       </button>
                     </td>
                   )}
+                </tr>
+              ))}
+              {/* Rev. 2024 — Terceiros participantes (read-only nesta sessão).
+                  Não têm presença/assinatura via essa tela porque seu fluxo é
+                  separado (cada terceiro tem aba DDS no próprio cadastro pra
+                  histórico individual). Aparecem aqui pra dar visibilidade
+                  total da equipe que participou do DDS. */}
+              {((sessao as any).terceiros ?? []).map((t: any) => (
+                <tr key={`terc-${t.id}`} className="border-t bg-orange-50/30">
+                  <td className="py-2 font-medium">
+                    <div className="flex items-center gap-1.5">
+                      <span>{t.nome ?? <span className="italic text-slate-400">Terceiro removido</span>}</span>
+                      <span
+                        className="text-[9px] font-bold uppercase tracking-wide bg-orange-100 text-orange-800 px-1.5 py-0.5 rounded"
+                        title="Funcionário terceirizado — histórico individual em Terceiros › aba DDS"
+                      >
+                        Terceiro
+                      </span>
+                    </div>
+                  </td>
+                  <td className="py-2 text-slate-600">{t.cpf ?? "—"}</td>
+                  <td className="py-2 text-slate-600">{t.funcao ?? "—"}</td>
+                  <td className="py-2 text-center">
+                    <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800" title="Terceiros entram só como presentes; presença individual é registrada no cadastro do terceiro.">
+                      <Check className="h-3 w-3 inline mr-1" />Sim
+                    </span>
+                  </td>
+                  <td className="py-2 text-center">
+                    <span className="text-[11px] text-slate-400 italic" title="Assinatura digital é só pra CLT nesta versão. Lista de presença física pode ser anexada no cadastro do terceiro.">
+                      n/a (terceiro)
+                    </span>
+                  </td>
+                  {sessao.status === "aberta" && <td className="py-2 text-right" />}
                 </tr>
               ))}
             </tbody>

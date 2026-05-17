@@ -1,6 +1,149 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2024 — SST · DDS · Terceiros aparecem no detalhe da sessão +
+ * "Transferir colaborador" aceita terceiros (vincula direto à obra).
+ *
+ * Pedido direto do usuário (limitações da Rev. 2021 que viraram
+ * trabalho prioritário): "vão como follow-up: o Detalhe da sessão
+ * ainda não lista os terceiros que participaram — eles ficam visíveis
+ * só no cadastro do próprio terceiro (aba DDS). O botão Transferir
+ * colaborador continua só pra CLT — pra vincular terceiro a uma obra,
+ * usa o cadastro de Terceiros. Já crie isso, vamos usar bastante".
+ *
+ * Decisão arquitetural: pra ligar uma participação de terceiro a uma
+ * sessão coletiva de DDS, adicionamos uma coluna OPCIONAL
+ * `sessao_id` em `dds_participacoes_terceiros` (Rev. 2004). Quando NULL,
+ * é DDS avulso (cadastrado direto no terceiro); quando preenchido,
+ * aponta pra `dds_sessoes.id`. Isso preserva participações antigas
+ * (criadas na Rev. 2021 sem sessaoId continuam funcionando) e dá rastro
+ * limpo pra novas, sem precisar heurística por data+tema+obra.
+ *
+ * Mudança em 4 arquivos:
+ *
+ * (A) `drizzle/schema.ts`:
+ *   - `ddsParticipacoesTerceiros` ganha coluna `sessaoId: integer
+ *     ("sessao_id")` (NULLABLE — retrocompat com participações da
+ *     Rev. 2021 sem vínculo de sessão).
+ *
+ * (B) `server/_core/index.ts` (bloco SyncSchema+ Rev. 2004):
+ *   - `ALTER TABLE dds_participacoes_terceiros ADD COLUMN IF NOT
+ *     EXISTS sessao_id INTEGER` (idempotente).
+ *   - Índice parcial `idx_dds_part_terc_sessao ON ... (sessao_id)
+ *     WHERE sessao_id IS NOT NULL` — getSessao filtra por sessaoId.
+ *
+ * (C) `server/routers/dds.ts`:
+ *
+ *   c1) `getSessao` — anexa novo array `terceiros: []` no retorno.
+ *       SELECT em `ddsParticipacoesTerceiros LEFT JOIN
+ *       funcionariosTerceiros` filtrado por `companyId + sessaoId +
+ *       deletedAt IS NULL`. LEFT JOIN porque o terceiro pode ter sido
+ *       soft-deleted depois da sessão (mostra "Terceiro removido"
+ *       em vez de quebrar). try/catch defensivo: falha não derruba o
+ *       detalhe da sessão CLT (módulo Terceiros opcional).
+ *
+ *   c2) `criarSessao` (insert em ddsParticipacoesTerceiros da Rev.
+ *       2021) — agora popula `sessaoId: sessao.id` no values, pra que
+ *       getSessao consiga listar.
+ *
+ *   c3) `colaboradoresParaTransferir` — passa a retornar união CLT +
+ *       Terceiros. Critério de elegibilidade pro terceiro:
+ *       - companyId bate, deletedAt IS NULL
+ *       - status != inativo/desligado
+ *       - obraId IS NULL OU obraId NOT IN (ids consolidadas) — ou seja:
+ *         terceiro sem obra (livre) OU em outra obra (gestor pode
+ *         "mover" pra esta)
+ *       - retorna campo extra `obraAtualNome` pra UI mostrar de onde
+ *         tá vindo. Tipo discriminado `tipo: "clt" | "terceiro"`.
+ *       try/catch defensivo: falha não quebra a query CLT.
+ *
+ *   c4) `transferirParaObra` — input ganha campos opcionais
+ *       `tipo: "clt" | "terceiro"` (default "clt"), `funcTerceiroId`.
+ *       Validação runtime: branch terceiro EXIGE funcTerceiroId; branch
+ *       CLT EXIGE employeeId. Branch terceiro: UPDATE em
+ *       funcionariosTerceiros.obraId/obraNome (terceiros NÃO usam tabela
+ *       n:n obraFuncionarios — cada terceiro está em 0 ou 1 obra por
+ *       vez, modelo do schema Rev. 2004). Se já está na obra, retorna
+ *       early com `ja: true`. Validações de authz idênticas ao CLT
+ *       (companyId scope + status terminal bloqueia + ownership da
+ *       obra checado antes de qualquer escrita).
+ *
+ * (D) `client/src/pages/sst/DDSGuia.tsx`:
+ *
+ *   d1) Modal "Transferir colaborador para a obra":
+ *       - itens da lista renderizam chip laranja "TERCEIRO" quando
+ *         `c.tipo === "terceiro"` (mesma cor da Rev. 2021 pro modal
+ *         Nova Sessão — consistência visual).
+ *       - se terceiro já está em OUTRA obra, mostra chip cinza
+ *         "hoje em: {obraAtualNome}" pra evitar mover por engano.
+ *       - botão muda texto: "Transferir →" pra CLT e terceiro livre,
+ *         "Mover →" quando terceiro já está em outra obra (semântica
+ *         mais correta).
+ *       - mutation payload muda conforme tipo (tipo + employeeId ou
+ *         tipo + funcTerceiroId).
+ *       - `key` única por linha: `clt-{id}` / `terceiro-{id}` (evita
+ *         colisão de id entre as duas listas).
+ *
+ *   d2) `SessaoDetalhe` (sub-componente do detalhe da sessão):
+ *       - tabela "Lista de Presença" agora renderiza CLT (linhas
+ *         brancas, com toggle de presença + assinatura) E terceiros
+ *         (linhas com fundo orange-50/30, badge laranja "TERCEIRO",
+ *         presente=Sim fixo, assinatura "n/a (terceiro)").
+ *       - terceiros são READ-ONLY nesta sessão — gestor adiciona/remove
+ *         eles na criação da sessão (modal Nova Sessão da Rev. 2021).
+ *         Pra registrar ato avulso de assinatura/lista física, ainda
+ *         se usa o cadastro do terceiro › aba DDS.
+ *       - empty-state ajustado pra só aparecer quando CLT E terceiros
+ *         estão vazios.
+ *
+ * + shared/version.ts → 2024.
+ *
+ * R-001/R-007/R-010 OK:
+ *   - Única alteração de schema é ADD COLUMN IF NOT EXISTS (NULLABLE,
+ *     sem default, sem CHECK) — padrão idempotente já usado nas Revs.
+ *     1998/2003/2008/2017.
+ *   - ZERO DROP/DELETE de dados existentes.
+ *   - Reversível: bastaria rollback dos 4 arquivos (a coluna fica no
+ *     banco mas sem uso — não atrapalha nada).
+ *
+ * Preservado:
+ *   - Participações antigas da Rev. 2021 (sem sessaoId): aparecem em
+ *     Terceiros › aba DDS exatamente como antes; não aparecem em
+ *     getSessao do detalhe porque sessaoId é NULL (esperado).
+ *   - Tela `FuncionariosTerceiros > aba DDS` INTACTA — mesma tabela.
+ *   - Modal Nova Sessão da Rev. 2021 (checkbox terceiros + badge
+ *     laranja + selecionar todos) INTACTO.
+ *   - Tabela `obraFuncionarios` (CLT) INTACTA — só CLT continua usando.
+ *   - Branch CLT de transferirParaObra INTACTO (mesma lógica de
+ *     reativação + insert).
+ *   - Rev. 2023 (player inline) INTACTA.
+ *   - Rev. 2022 (companyIdNum) INTACTA.
+ *
+ * Limitações conhecidas:
+ *   - Terceiros na lista de presença são read-only nesta versão. Pra
+ *     remover um terceiro da sessão depois de criada, o gestor precisa
+ *     ir em Terceiros › aba DDS e soft-deletar a participação avulsa.
+ *     Próximo passo natural seria adicionar botão "remover" também
+ *     nessa tela (mesma trash que CLT já tem).
+ *   - Não há toggle de presença para terceiro (sempre Sim) — assumimos
+ *     que se foi marcado na criação da sessão, esteve presente.
+ *   - Não há assinatura digital para terceiro nesta tela — segue
+ *     padrão de lista de presença física separada do fluxo CLT.
+ *   - Histórico em Terceiros › aba DDS ainda não distingue origem
+ *     (manual vs sessão coletiva) — todos aparecem juntos. Com a
+ *     coluna sessaoId nova, dá pra mostrar badge "Sessão #N" daqui em
+ *     diante (follow-up trivial).
+ *
+ * Follow-up:
+ *   - Adicionar botão de remover terceiro do detalhe da sessão
+ *     (mutation soft-delete em ddsParticipacoesTerceiros).
+ *   - Adicionar terceiro depois da sessão criada (combobox dual em
+ *     SessaoDetalhe — hoje só CLT).
+ *   - Em Terceiros › aba DDS, mostrar badge "Sessão #N" quando
+ *     sessaoId existir (vira link clicável pra abrir a sessão).
+ *   - Validar ASO/NR válidos antes de aceitar terceiro no DDS (ou na
+ *     transferência pra obra) — guard pra compliance NR-1.
+ *
  * Rev. 2023 — SST · Integração · Card de vídeo agora reproduz arquivos
  * upload (mp4/mov/webm/etc) inline com player HTML5 nativo. Sem download.
  *
