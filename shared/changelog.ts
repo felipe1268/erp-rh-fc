@@ -1,6 +1,60 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2036 — SST · Integração de Segurança · aba Pendentes
+ * (Rev. 2034) agora filtra "funcionários fantasma" — exclui
+ * soft-delete, lista negra e demitidos com status inconsistente.
+ *
+ * Pedido direto do usuário (img IMG_0880): "Nesta lista deve
+ * estar somente os ativos, tem funcionário fantasma aí". A
+ * aba "Sem integração válida" mostrava 108 colaboradores, mas
+ * havia entradas indevidas (CPFs de teste, possíveis demitidos
+ * com status="Ativo" residual, soft-deleted).
+ *
+ * Causa-raiz: o SELECT em `listarPendentesAuto` (Rev. 2034)
+ * filtrava apenas `status = 'Ativo'`. NÃO checava:
+ *   - `deletedAt IS NULL` (soft-delete canônico do ERP, usado
+ *     em outros routers como `seguroVida`/`processosTrabalhistas`);
+ *   - `listaNegra = 0` (defesa em profundidade — quem é movido
+ *     pra Lista Negra também tem status mudado pra "Lista_Negra",
+ *     mas registros legados podem ter `listaNegra=1` com status
+ *     ainda "Ativo");
+ *   - `dataDemissao IS NULL` (defesa em profundidade — em tese
+ *     todo demitido vira status="Desligado", mas casos antigos
+ *     têm `dataDemissao` gravada com status ainda "Ativo").
+ *
+ * Mudança em 1 arquivo (`server/routers/integracaoSST.ts`,
+ * ~8L em 1 hunk): SELECT em `employees` ganhou 3 condições
+ * extras no `and(...)`:
+ *   - `${employees.deletedAt} IS NULL`
+ *   - `COALESCE(${employees.listaNegra}, 0) = 0`
+ *   - `${employees.dataDemissao} IS NULL`
+ *
+ * Terceiros já estavam OK desde a Rev. 2034 (filtros
+ * `status='ativo'` + `deletedAt IS NULL`).
+ *
+ * + `shared/version.ts` → 2036.
+ *
+ * R-001/R-007/R-010 OK: ZERO ALTER TABLE, ZERO mudança de
+ * schema. Reversível em 1 arquivo / 1 hunk.
+ *
+ * Preservado: Rev. 2035 (SstIntegracaoCard + certificado PDF)
+ * INTACTA; Rev. 2034 (aba Pendentes, DISTINCT ON, badge de
+ * tipo) INTACTA; demais filtros do `listarPendentesAuto`
+ * (inProgressSet, lastApproved DISTINCT ON, ordenação por
+ * estado/dias/nome) INTACTOS.
+ *
+ * Follow-up:
+ *   (1) registros TESTE (CPFs fake 111/123/747) precisam ser
+ *       deletados manualmente do módulo Funcionários — filtro
+ *       não consegue adivinhar nomes inválidos;
+ *   (2) considerar aplicar mesmo trio de filtros em outros
+ *       lugares que ainda dependem só de `status='Ativo'`
+ *       (auditoria pendente — pelo menos `smo.ts` L74);
+ *   (3) validação no cadastro de Funcionário rejeitando CPFs
+ *       inválidos (dígito verificador) pra evitar entrada de
+ *       "TESTE" no futuro.
+ *
  * Rev. 2035 — SST · Integração de Segurança · pontuação do
  * colaborador agora aparece no Raio-X + certificado de aprovação
  * gerado em PDF (client-side) tanto na tela pública quanto no

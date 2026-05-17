@@ -370,6 +370,9 @@ export const integracaoSSTRouter = router({
       const inProgressSet = new Set(inProgress.map(r => r.employeeId));
 
       // 3) Employees ativos (CLT/PJ)
+      // Rev. 2036: filtro robusto contra "fantasmas" — exclui soft-delete
+      // (deletedAt), lista negra e qualquer registro com dataDemissao gravada
+      // (mesmo se status ainda estiver "Ativo" por inconsistência).
       const emps = await db.select({
         id: employees.id,
         nome: employees.nomeCompleto,
@@ -380,7 +383,13 @@ export const integracaoSSTRouter = router({
         fotoUrl: employees.fotoUrl,
       })
         .from(employees)
-        .where(and(eq(employees.companyId, input.companyId), eq(employees.status, "Ativo")));
+        .where(and(
+          eq(employees.companyId, input.companyId),
+          eq(employees.status, "Ativo"),
+          sql`${employees.deletedAt} IS NULL`,
+          sql`COALESCE(${employees.listaNegra}, 0) = 0`,
+          sql`${employees.dataDemissao} IS NULL`,
+        ));
 
       // 4) Terceiros ativos
       const ters = await db.select({
