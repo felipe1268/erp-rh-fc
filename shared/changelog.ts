@@ -1,6 +1,14 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 1999 — DP · Fechamento de Ponto · Separador de milhar pt-BR nas horas totais.
+ * Pedido direto do usuário (17/05/2026, attached_assets/IMG_0844_1779027154673.png): "Melhore. Número acima de mil com ponto e vírgula se for o caso." Na imagem (modal "Mais Atrasados" com 26 colaboradores), o KPI "TOTAL DE HORAS" mostrava `1896h40min` — leitura difícil. Em pt-BR o padrão é `1.896h40min` (ponto como separador de milhar). Mesma falha no rodapé do modal ("Total horas: 1896h40min").
+ * Mudança em 2 arquivos:
+ *   (1) `client/src/pages/FechamentoPonto.tsx` — dentro do IIFE do `rankingModalPortal` (já existente desde Rev. 1997), criado helper local `fmtHMpt(mins) => "${Math.floor(mins/60).toLocaleString('pt-BR')}h${String(mins%60).padStart(2,'0')}min"`. As 3 variáveis `totalHorasStr`/`totalAtrasoStr`/`totalHEStr` (L2096-2106) passaram a usar o helper em vez do template-string manual. No rodapé (L2351-2360), as 4 IIFEs inline foram substituídas por chamadas diretas a `fmtHMpt(...)`. Resultado: `1896` vira `1.896`; `999` segue como `999`; `12340` vira `12.340`. Não afeta valores < 1000.
+ *   (2) `shared/version.ts` → 1999.
+ * Resultado: KPIs do hero e totais do rodapé agora exibem horas com separador de milhar pt-BR consistente. Atende ao padrão visual brasileiro de "1.896,00" (parte decimal aqui usa `h` e `min`, mas a parte da milhar agora respeita o padrão).
+ * Preservado: tabela individual de colaboradores INTACTA (valores `67:29`, `2:40` por linha — sempre < 1000h, não precisa formatador); função `fmtHM` global de outras partes da página INTACTA; `handlePrintRanking`/`handleExportRankingCSV` INTACTOS (mantém formato puro pra parseamento downstream); Rev. 1998 INTACTA. Schema INTACTO. Zero risco. R-001/R-007/R-010 OK (sem migração). Reversível em 1 arquivo (2 hunks).
+ *
  * Rev. 1998 — Terceiros · Funcionários · Foto + Número Interno auto-gerado.
  * Pedido direto do usuário (17/05/2026, image_1779026783535): na tela "Novo Funcionário Terceiro" precisava (a) poder cadastrar foto do funcionário pra facilitar identificação visual; (b) que o ERP criasse automaticamente um número interno no formato `[INICIAIS_EMPRESA_TERCEIRA]-[SEQ_GLOBAL]` (sequencial único pra TODOS os terceiros do tenant — só a sigla muda por empresa). Antes: form só tinha 8 campos texto (Empresa, Nome, CPF, RG, DataNasc, Função, Telefone, Email, Obra), nenhum recurso visual; foto só aparecia na aba Documentos APÓS salvar (3 cliques pra preview); nenhum identificador único legível por humano (só `id` SERIAL interno).
  * Mudança em 4 arquivos:

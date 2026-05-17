@@ -2092,13 +2092,15 @@ export default function FechamentoPonto() {
                   const totalColab = filteredRankingRows.length;
                   const totalDiasSum = filteredRankingRows.reduce((s: number, e: any) => s + e.dias, 0);
                   const mediaDias = totalColab ? Math.round(totalDiasSum / totalColab) : 0;
+                  // Formata minutos como "1.896h40min" — separador de milhar pt-BR nas horas
+                  const fmtHMpt = (mins: number) => `${Math.floor(mins / 60).toLocaleString("pt-BR")}h${String(mins % 60).padStart(2, "0")}min`;
                   const totalHorasMin = filteredRankingRows.reduce((s: number, e: any) => s + e.horasTrab, 0);
-                  const totalHorasStr = `${Math.floor(totalHorasMin / 60)}h${String(totalHorasMin % 60).padStart(2, "0")}min`;
+                  const totalHorasStr = fmtHMpt(totalHorasMin);
                   const presencaPct = (diasUteisNoPeriodo && totalColab) ? Math.round((totalDiasSum / totalColab / diasUteisNoPeriodo) * 100) : null;
                   const totalAtrasoMin = filteredRankingRows.reduce((s: number, e: any) => s + (e.atrasos || 0), 0);
-                  const totalAtrasoStr = `${Math.floor(totalAtrasoMin / 60)}h${String(totalAtrasoMin % 60).padStart(2, "0")}min`;
+                  const totalAtrasoStr = fmtHMpt(totalAtrasoMin);
                   const totalHEMin = filteredRankingRows.reduce((s: number, e: any) => s + (e.horasExtras || 0), 0);
-                  const totalHEStr = `${Math.floor(totalHEMin / 60)}h${String(totalHEMin % 60).padStart(2, "0")}min`;
+                  const totalHEStr = fmtHMpt(totalHEMin);
                   const semSolicHE = !heSolicitacoesMes.isLoading ? filteredRankingRows.filter((e: any) => !(heSolicitacoesMes.data || []).some((sol: any) => sol.funcionarios?.some((f: any) => f.employeeId === e.id))).length : 0;
                   const justificadas = filteredRankingRows.filter((e: any) => (atestadosMes.data || []).some((a: any) => a.employeeId === e.id)).length;
                   const naoJustificadas = totalColab - justificadas;
@@ -2348,16 +2350,16 @@ export default function FechamentoPonto() {
                           <span className="font-semibold text-slate-800">{filteredRankingRows.length} colaboradores</span>
                           <span>Média de dias: <strong>{Math.round(filteredRankingRows.reduce((s: number, e: any) => s + e.dias, 0) / filteredRankingRows.length)}</strong>{diasUteisNoPeriodo ? ` de ${diasUteisNoPeriodo} úteis` : ""}</span>
                           {diasUteisNoPeriodo && <span className="text-indigo-700">Presença média: <strong>{Math.round((filteredRankingRows.reduce((s: number, e: any) => s + e.dias, 0) / filteredRankingRows.length / diasUteisNoPeriodo) * 100)}%</strong></span>}
-                          <span>Total horas: <strong className="font-mono">{(() => { const t = filteredRankingRows.reduce((s: number, e: any) => s + e.horasTrab, 0); return `${Math.floor(t/60)}h${String(t%60).padStart(2,"0")}min`; })()}</strong></span>
+                          <span>Total horas: <strong className="font-mono">{fmtHMpt(filteredRankingRows.reduce((s: number, e: any) => s + e.horasTrab, 0))}</strong></span>
                           {rankingModal === "pontuais" && <>
                             <span className="text-green-700">{filteredRankingRows.filter((e: any) => e.atrasos === 0).length} sem nenhum atraso</span>
-                            <span className="text-red-600">Total acum. atraso: <strong>{(() => { const t = filteredRankingRows.reduce((s: number, e: any) => s + e.atrasos, 0); return `${Math.floor(t/60)}h${String(t%60).padStart(2,"0")}min`; })()}</strong></span>
+                            <span className="text-red-600">Total acum. atraso: <strong>{fmtHMpt(filteredRankingRows.reduce((s: number, e: any) => s + e.atrasos, 0))}</strong></span>
                           </>}
                           {rankingModal === "atrasados" && (
-                            <span className="text-red-600">Total acum. atraso: <strong>{(() => { const t = filteredRankingRows.reduce((s: number, e: any) => s + e.atrasos, 0); return `${Math.floor(t/60)}h${String(t%60).padStart(2,"0")}min`; })()}</strong></span>
+                            <span className="text-red-600">Total acum. atraso: <strong>{fmtHMpt(filteredRankingRows.reduce((s: number, e: any) => s + e.atrasos, 0))}</strong></span>
                           )}
                           {rankingModal === "extras" && <>
-                            <span className="text-emerald-700">Total HE: <strong>{(() => { const t = filteredRankingRows.reduce((s: number, e: any) => s + e.horasExtras, 0); return `${Math.floor(t/60)}h${String(t%60).padStart(2,"0")}min`; })()}</strong></span>
+                            <span className="text-emerald-700">Total HE: <strong>{fmtHMpt(filteredRankingRows.reduce((s: number, e: any) => s + e.horasExtras, 0))}</strong></span>
                             {!heSolicitacoesMes.isLoading && <span className="text-orange-700">{filteredRankingRows.filter((e: any) => !(heSolicitacoesMes.data || []).some((sol: any) => sol.funcionarios?.some((f: any) => f.employeeId === e.id))).length} sem solicitação</span>}
                           </>}
                           {rankingModal === "faltosos" && <>
