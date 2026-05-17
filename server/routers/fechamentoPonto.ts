@@ -5156,4 +5156,131 @@ export const fechamentoPontoRouter = router({
 
       return { dias: all, totalTrabalhados: Object.keys(byDate).length };
     }),
+
+  // ===========================================================
+  // Rev. 2019 — Memória de cálculo do "Atraso Acumulado" por dia
+  // Devolve, pra UM colaborador no período, todos os dias em que houve atraso
+  // (entrada após a esperada + tolerância CLT). Inclui: data, dow, entrada
+  // esperada, entrada real, minutos de atraso, acumulado e tolerância aplicada.
+  // ===========================================================
+  getAtrasoDetalhe: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      companyIds: z.array(z.number()).optional(),
+      employeeId: z.number(),
+      dataInicio: z.string(), // YYYY-MM-DD
+      dataFim: z.string(),    // YYYY-MM-DD
+    }))
+    .query(async ({ input }) => {
+      const db = (await getDb())!;
+      const cids = resolveCompanyIds(input);
+
+      // 1) Funcionário (jornadaTrabalho pra derivar entrada esperada por dia)
+      const empRows = await db.select({
+        id: employees.id,
+        nomeCompleto: employees.nomeCompleto,
+        jornadaTrabalho: employees.jornadaTrabalho,
+      }).from(employees).where(eq(employees.id, input.employeeId)).limit(1);
+      const emp = empRows[0];
+      if (!emp) {
+        return { dias: [], totalMinutos: 0, tolerancia: 5, nome: "", entradaPadrao: null as string | null };
+      }
+
+      // 2) Registros de ponto do período
+      const recs = await db.select({
+        data: timeRecords.data,
+        entrada1: timeRecords.entrada1,
+        atrasos: timeRecords.atrasos,
+      }).from(timeRecords).where(and(
+        inArray(timeRecords.companyId, cids),
+        eq(timeRecords.employeeId, input.employeeId),
+        sql`${timeRecords.data} >= ${input.dataInicio}`,
+        sql`${timeRecords.data} <= ${input.dataFim}`,
+      )).orderBy(timeRecords.data);
+
+      // 3) Tolerância (Art. 58 §1º CLT — padrão 5 min)
+      const criteria = await getCriteriaMap(input.companyId);
+      const tolAtraso = criteria.pontoToleranciaAtraso;
+
+      // 4) Helper inline: entrada esperada por dia (jornadaTrabalho JSON)
+      let jornadaParsed: any = null;
+      if (emp.jornadaTrabalho) {
+        try { jornadaParsed = typeof emp.jornadaTrabalho === "string" ? JSON.parse(emp.jornadaTrabalho) : emp.jornadaTrabalho; } catch {}
+      }
+      const keysDow = ["dom","seg","ter","qua","qui","sex","sab"];
+      function getEntradaEsperada(ds: string): string | null {
+        const dow = new Date(ds + "T12:00:00Z").getUTCDay();
+        if (jornadaParsed && typeof jornadaParsed === "object" && !Array.isArray(jornadaParsed)) {
+          const day = jornadaParsed[keysDow[dow]];
+          if (day && day.entrada) return String(day.entrada);
+        }
+        return null;
+      }
+      // Entrada padrão pra exibir no cabeçalho (pega seg como referência se houver)
+      const entradaPadrao = jornadaParsed && jornadaParsed.seg && jornadaParsed.seg.entrada ? String(jornadaParsed.seg.entrada) : null;
+
+      const toMins = (t: string | null | undefined) => {
+        if (!t) return 0;
+        const [h, m] = String(t).split(":").map(Number);
+        return (h || 0) * 60 + (m || 0);
+      };
+
+      // 5) Itera registros e monta linhas de atraso
+      type DiaAtraso = {
+        data: string;
+        dow: number;
+        entradaEsperada: string | null;
+        entradaReal: string | null;
+        minutos: number;     // atraso em minutos (já descontada tolerância na decisão de inclusão)
+        acumulado: number;   // soma corrida desde o início do período
+        observacao: string | null;
+      };
+      const dias: DiaAtraso[] = [];
+      let acumulado = 0;
+
+      for (const r of recs) {
+        const ds = String(r.data);
+        const dow = new Date(ds + "T12:00:00Z").getUTCDay();
+        const esperada = getEntradaEsperada(ds);
+        const real = r.entrada1 || null;
+
+        // Estratégia: prioriza o que o motor de cálculo já gravou (timeRecords.atrasos),
+        // mas só inclui se passar da tolerância — pra coerência com a regra CLT.
+        let minutos = 0;
+        let observacao: string | null = null;
+
+        if (esperada && real) {
+          const diff = toMins(real) - toMins(esperada);
+          if (diff > tolAtraso) {
+            minutos = diff;
+          }
+        } else if (r.atrasos && r.atrasos !== "0:00") {
+          // Fallback: dia sem jornada configurada mas com atraso já calculado por outro caminho.
+          const [h, m] = String(r.atrasos).split(":").map(Number);
+          minutos = (h || 0) * 60 + (m || 0);
+          if (!esperada) observacao = "Jornada do dia não configurada no cadastro — atraso vindo do registro consolidado.";
+        }
+
+        if (minutos > 0) {
+          acumulado += minutos;
+          dias.push({
+            data: ds,
+            dow,
+            entradaEsperada: esperada,
+            entradaReal: real,
+            minutos,
+            acumulado,
+            observacao,
+          });
+        }
+      }
+
+      return {
+        nome: emp.nomeCompleto,
+        tolerancia: tolAtraso,
+        entradaPadrao,
+        totalMinutos: acumulado,
+        dias,
+      };
+    }),
 });

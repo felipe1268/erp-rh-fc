@@ -699,6 +699,8 @@ export default function FechamentoPonto() {
   const [rankingSearch, setRankingSearch] = useState("");
   const [rankingObraFilter, setRankingObraFilter] = useState("all");
   const [diasDetalhe, setDiasDetalhe] = useState<{ employeeId: number; nome: string } | null>(null);
+  // Rev. 2019 — Memória de cálculo do "Atraso Acumulado" por colaborador
+  const [atrasoDetalhe, setAtrasoDetalhe] = useState<{ employeeId: number; nome: string; totalStr: string } | null>(null);
   // Memória DIXI
   const [addMappingOpen, setAddMappingOpen] = useState(false);
   const [newMappingDixiName, setNewMappingDixiName] = useState("");
@@ -1057,6 +1059,12 @@ export default function FechamentoPonto() {
   const diasEmployeeQuery = trpc.fechamentoPonto.getDiasEmployee.useQuery(
     { companyId, companyIds, employeeId: diasDetalhe?.employeeId ?? 0, dataInicio: periodoIni ?? "", dataFim: periodoFim ?? "" },
     { enabled: !!diasDetalhe && !!periodoIni && !!periodoFim && (companyId > 0 || companyIds.length > 0) }
+  );
+
+  // Rev. 2019 — Memória de cálculo do atraso acumulado por dia
+  const atrasoDetalheQuery = trpc.fechamentoPonto.getAtrasoDetalhe.useQuery(
+    { companyId, companyIds, employeeId: atrasoDetalhe?.employeeId ?? 0, dataInicio: periodoIni ?? "", dataFim: periodoFim ?? "" },
+    { enabled: !!atrasoDetalhe && !!periodoIni && !!periodoFim && (companyId > 0 || companyIds.length > 0) }
   );
 
   // Rev. 2014 — Calendário de feriados (federais fixos + Páscoa-derivados + estaduais/municipais
@@ -2457,11 +2465,27 @@ export default function FechamentoPonto() {
                                     <td className="px-3 py-2 text-center">
                                       {e.atrasos === 0
                                         ? <span className="inline-flex items-center gap-1 text-green-700 font-semibold"><CheckCircle className="h-3 w-3" /> Pontual</span>
-                                        : <span className="font-mono font-bold text-red-600">{e.atrasosStr}</span>}
+                                        : <button
+                                            className="font-mono font-bold text-red-600 hover:text-red-800 hover:underline cursor-pointer inline-flex items-center gap-1"
+                                            title="Ver memória de cálculo do atraso (dia a dia)"
+                                            onClick={() => setAtrasoDetalhe({ employeeId: e.id, nome: e.nome, totalStr: e.atrasosStr })}
+                                          >
+                                            {e.atrasosStr}
+                                            <Info className="h-3 w-3 opacity-60" />
+                                          </button>}
                                     </td>
                                   )}
                                   {rankingModal === "atrasados" && (
-                                    <td className="px-3 py-2 text-center font-mono font-bold text-red-600">{e.atrasosStr}</td>
+                                    <td className="px-3 py-2 text-center">
+                                      <button
+                                        className="font-mono font-bold text-red-600 hover:text-red-800 hover:underline cursor-pointer inline-flex items-center gap-1"
+                                        title="Ver memória de cálculo do atraso (dia a dia)"
+                                        onClick={() => setAtrasoDetalhe({ employeeId: e.id, nome: e.nome, totalStr: e.atrasosStr })}
+                                      >
+                                        {e.atrasosStr}
+                                        <Info className="h-3 w-3 opacity-60" />
+                                      </button>
+                                    </td>
                                   )}
                                   {rankingModal === "extras" && <>
                                     <td className="px-3 py-2 text-center font-mono font-bold text-emerald-700">{e.horasExtrasStr}</td>
@@ -2613,6 +2637,149 @@ export default function FechamentoPonto() {
                               <p className="text-[11px] text-muted-foreground mt-3 text-center">
                                 "Falta provável" = dia útil sem nenhuma batida de ponto registrada no sistema. Pode ser falta, home office sem lançamento, ou dado ainda não importado.
                                 Feriados (federais, estaduais e municipais) NÃO contam como falta e são excluídos do denominador do % de presença.
+                              </p>
+                            </>
+                          );
+                        })()}
+                      </div>
+                    </DialogContent>
+                  </Dialog>
+                )}
+
+                {/* ===== Rev. 2019 — MODAL Memória de cálculo do Atraso Acumulado ===== */}
+                {atrasoDetalhe && (
+                  <Dialog open={true} onOpenChange={(open) => { if (!open) setAtrasoDetalhe(null); }}>
+                    <DialogContent resizable={false} className="flex flex-col p-0 gap-0 w-[820px] max-w-[95vw] max-h-[88vh]">
+                      {/* Header gradient vermelho (regra de ouro — coerente com modal "Mais Atrasados") */}
+                      <DialogHeader className="shrink-0 px-5 py-3.5 border-b bg-gradient-to-r from-red-600 via-rose-500 to-pink-500 text-white relative overflow-hidden">
+                        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.18),transparent_60%)] pointer-events-none" />
+                        <div className="relative flex items-start gap-3">
+                          <span className="inline-flex items-center justify-center h-10 w-10 rounded-xl bg-white/15 backdrop-blur-sm ring-2 ring-white/30 shrink-0">
+                            <AlertTriangle className="h-5 w-5" />
+                          </span>
+                          <div className="flex-1 min-w-0">
+                            <DialogTitle className="text-base font-bold flex items-center gap-2 flex-wrap">
+                              Memória de cálculo · Atraso Acumulado
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/20 backdrop-blur-sm text-[11px] font-semibold ring-1 ring-white/30">
+                                {atrasoDetalhe.totalStr}
+                              </span>
+                            </DialogTitle>
+                            <p className="text-xs text-white/90 mt-0.5">
+                              <strong>{atrasoDetalhe.nome}</strong>
+                              {periodoIni && periodoFim && (
+                                <span className="text-white/75"> · {fmtPeriodo(periodoIni)} → {fmtPeriodo(periodoFim)}</span>
+                              )}
+                            </p>
+                          </div>
+                        </div>
+                      </DialogHeader>
+
+                      <div className="flex-1 overflow-auto px-5 py-4 bg-slate-50/40">
+                        {atrasoDetalheQuery.isLoading && (
+                          <div className="flex items-center justify-center py-16 text-muted-foreground text-sm">
+                            <span className="animate-pulse">Carregando memória de cálculo...</span>
+                          </div>
+                        )}
+                        {atrasoDetalheQuery.data && (() => {
+                          const { dias, totalMinutos, tolerancia, entradaPadrao } = atrasoDetalheQuery.data;
+                          const fmtHM = (mins: number) => `${Math.floor(mins / 60)}h${String(mins % 60).padStart(2, "0")}min`;
+                          const DIAS_SEMANA = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+                          if (dias.length === 0) {
+                            return (
+                              <div className="flex flex-col items-center justify-center py-12 text-center">
+                                <CheckCircle className="h-10 w-10 text-emerald-500 mb-2" />
+                                <p className="text-sm font-semibold text-slate-700">Nenhum atraso registrado no período.</p>
+                                <p className="text-xs text-muted-foreground mt-1">
+                                  Pode acontecer se a tolerância de {tolerancia} min absorveu todas as entradas tardias,
+                                  ou se a jornada do colaborador não está cadastrada.
+                                </p>
+                              </div>
+                            );
+                          }
+                          return (
+                            <>
+                              {/* Faixa explicativa */}
+                              <div className="mb-3 rounded-lg border bg-white p-3 flex items-start gap-2.5">
+                                <Info className="h-4 w-4 text-indigo-600 shrink-0 mt-0.5" />
+                                <div className="text-[12px] text-slate-700 leading-snug">
+                                  <strong>Como o atraso é calculado:</strong> para cada dia com batida, comparamos
+                                  a <strong>1ª entrada real</strong> com a <strong>entrada esperada</strong> da
+                                  jornada do colaborador. Só conta como atraso o que ultrapassa
+                                  a tolerância de <strong className="text-red-700">{tolerancia} min</strong>
+                                  {" "}(Art. 58 §1º da CLT).
+                                  {entradaPadrao && (
+                                    <span> A jornada de seg-sex desse colaborador começa às <strong className="font-mono">{entradaPadrao}</strong>.</span>
+                                  )}
+                                </div>
+                              </div>
+
+                              {/* Resumo */}
+                              <div className="flex items-center gap-4 mb-3 p-3 bg-white rounded-lg border text-sm flex-wrap">
+                                <span className="flex items-center gap-1.5 text-red-700 font-semibold">
+                                  <AlertTriangle className="h-4 w-4" /> {dias.length} {dias.length === 1 ? "dia" : "dias"} com atraso
+                                </span>
+                                <span className="flex items-center gap-1.5 text-slate-700">
+                                  <Clock className="h-4 w-4" /> Total: <strong className="font-mono text-red-700">{fmtHM(totalMinutos)}</strong>
+                                </span>
+                                <span className="flex items-center gap-1.5 text-slate-600 ml-auto">
+                                  Média/dia atrasado:
+                                  <strong className="font-mono text-slate-800">
+                                    {dias.length > 0 ? fmtHM(Math.round(totalMinutos / dias.length)) : "—"}
+                                  </strong>
+                                </span>
+                              </div>
+
+                              {/* Tabela dia a dia */}
+                              <div className="rounded-lg border bg-white overflow-hidden">
+                                <table className="w-full text-xs">
+                                  <thead className="bg-slate-100 border-b">
+                                    <tr>
+                                      <th className="px-3 py-2 text-left font-semibold text-slate-700">Data</th>
+                                      <th className="px-3 py-2 text-center font-semibold text-slate-700">Esperado</th>
+                                      <th className="px-3 py-2 text-center font-semibold text-slate-700">Real</th>
+                                      <th className="px-3 py-2 text-center font-semibold text-red-700">Atraso</th>
+                                      <th className="px-3 py-2 text-right font-semibold text-slate-700">Acumulado</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {dias.map((d: any, idx: number) => {
+                                      const [, mes, dia] = d.data.split("-");
+                                      const label = `${dia}/${mes} · ${DIAS_SEMANA[d.dow]}`;
+                                      return (
+                                        <tr key={d.data} className={`border-b last:border-0 ${idx % 2 === 0 ? "bg-white" : "bg-slate-50/60"} hover:bg-red-50/40`}>
+                                          <td className="px-3 py-2 font-medium text-slate-800">{label}</td>
+                                          <td className="px-3 py-2 text-center font-mono text-slate-600">
+                                            {d.entradaEsperada ?? <span className="text-slate-400 italic text-[10px]">não cadastrada</span>}
+                                          </td>
+                                          <td className="px-3 py-2 text-center font-mono text-slate-800">
+                                            {d.entradaReal ?? <span className="text-slate-400">—</span>}
+                                          </td>
+                                          <td className="px-3 py-2 text-center">
+                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-100 text-red-800 text-[11px] font-bold font-mono">
+                                              +{fmtHM(d.minutos)}
+                                            </span>
+                                            {d.observacao && (
+                                              <div className="text-[10px] text-amber-700 mt-0.5" title={d.observacao}>⚠ ver obs.</div>
+                                            )}
+                                          </td>
+                                          <td className="px-3 py-2 text-right font-mono font-semibold text-slate-700">{fmtHM(d.acumulado)}</td>
+                                        </tr>
+                                      );
+                                    })}
+                                  </tbody>
+                                  <tfoot className="bg-red-50 border-t-2 border-red-200">
+                                    <tr>
+                                      <td colSpan={3} className="px-3 py-2 text-right text-[11px] font-semibold text-slate-700 uppercase">Total no período</td>
+                                      <td className="px-3 py-2 text-center font-mono font-bold text-red-700">{fmtHM(totalMinutos)}</td>
+                                      <td className="px-3 py-2 text-right font-mono font-bold text-red-700">{fmtHM(totalMinutos)}</td>
+                                    </tr>
+                                  </tfoot>
+                                </table>
+                              </div>
+
+                              <p className="text-[10px] text-muted-foreground mt-3 text-center">
+                                A coluna "Esperado" vem da <strong>jornada cadastrada</strong> em cada colaborador (RH → Funcionários → Jornada).
+                                Se aparecer "não cadastrada", a jornada daquele dia da semana está vazia — o atraso pode ainda ter sido contado pelo motor consolidado.
                               </p>
                             </>
                           );

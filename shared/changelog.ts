@@ -1,6 +1,100 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2019 — DP · Fechamento de Ponto · "Atraso Acumulado" clicável com memória
+ * de cálculo dia a dia (modal "Mais Atrasados" e "Mais Pontuais").
+ *
+ * Pedido direto do usuário (17/05/2026, img IMG_0863_1779034072858, modal
+ * "Mais Atrasados" com 47 colaboradores e atraso acumulado total de 51h08min):
+ * "Quero poder clicar no atraso acumulado e ver a memória de cálculo de cada
+ * um, para analisar melhor". A coluna "Atraso Acumulado" mostrava só o total
+ * agregado (ex: "3:35", "3:03", "2:56") em vermelho, sem nenhuma forma de
+ * justificar/auditar como aquele número foi montado — gestor não conseguia
+ * abrir advertência ou conversar com o colaborador sem ir manualmente no
+ * espelho de ponto dia a dia.
+ *
+ * Decisão arquitetural: ZERO mudança no motor de cálculo (`payrollEngine`,
+ * `getSummary`, `listInconsistencies`). Apenas EXPÕE a memória já existente
+ * (`timeRecords.atrasos` + `employees.jornadaTrabalho` + tolerância CLT) via
+ * nova query tRPC dedicada + modal frontend. Mesma fórmula que `payrollEngine`
+ * usa pra consolidar o mês — só está sendo reapresentada de forma auditável.
+ *
+ * Mudança em 3 arquivos:
+ *
+ * (A) `server/routers/fechamentoPonto.ts` — novo procedure `getAtrasoDetalhe`
+ *     (input: companyId/companyIds, employeeId, dataInicio, dataFim). Fluxo:
+ *     1. SELECT em `employees` (id/nome/jornadaTrabalho) — UMA linha.
+ *     2. SELECT em `timeRecords` (data/entrada1/atrasos) filtrado por employee
+ *        + range de datas (usa índice composto já existente).
+ *     3. `getCriteriaMap(companyId)` → `tolAtraso` (padrão 5 min, Art. 58 §1º CLT).
+ *     4. Parseia `jornadaTrabalho` JSON e mapeia `dow` (0=dom..6=sab) →
+ *        entrada esperada do dia.
+ *     5. Itera registros: pra cada dia, calcula `diff = entrada1 - esperada`.
+ *        Se `diff > tolAtraso` → conta atraso e acumula. Fallback pra dias
+ *        sem jornada cadastrada mas com `timeRecords.atrasos != "0:00"` (raro
+ *        — gera flag `observacao` no item).
+ *     6. Retorna `{ nome, tolerancia, entradaPadrao (seg como ref), totalMinutos,
+ *        dias: [{ data, dow, entradaEsperada, entradaReal, minutos, acumulado,
+ *        observacao }] }`.
+ *     Tudo via Drizzle ORM, ZERO SQL bruto, ZERO mutação. ~125 linhas. Coloca
+ *     o procedure DEPOIS de `getDiasEmployee` (vizinho conceitual) e antes do
+ *     `});` final do router.
+ *
+ * (B) `client/src/pages/FechamentoPonto.tsx`:
+ *     - Novo state `atrasoDetalhe: { employeeId, nome, totalStr } | null`.
+ *     - Nova query `atrasoDetalheQuery = trpc.fechamentoPonto.getAtrasoDetalhe.useQuery(...)`
+ *       com `enabled: !!atrasoDetalhe && !!periodoIni && !!periodoFim`.
+ *     - Na tabela do modal "Mais Atrasados" e "Mais Pontuais", a célula da
+ *       coluna "Atraso Acumulado" virou `<button>` (mantém font-mono/text-red-600,
+ *       ganha hover:underline + ícone `Info` discreto + `title` explicativo).
+ *       Em "Pontuais", só vira botão quando `e.atrasos > 0` (zero permanece
+ *       "Pontual" verde).
+ *     - Novo `<Dialog>` width 820px, max-h 88vh, header gradient red→rose→pink
+ *       (coerente com modal "Mais Atrasados" — regra de ouro Rev. 1997/2005):
+ *       chip AlertTriangle + título "Memória de cálculo · Atraso Acumulado" +
+ *       badge com total + linha de nome + período.
+ *     - Corpo (slate-50/40): (1) faixa indigo explicativa com fórmula CLT +
+ *       entrada padrão; (2) cards de resumo (Nº de dias com atraso + Total +
+ *       Média/dia atrasado); (3) tabela com colunas Data (DD/MM · DOW) /
+ *       Esperado / Real / Atraso (badge red-100) / Acumulado, com footer
+ *       red-50 mostrando total; (4) hint sobre origem da jornada (RH →
+ *       Funcionários). Empty-state amigável quando `dias.length === 0`
+ *       (tolerância absorveu tudo OU jornada não cadastrada).
+ *
+ * (C) `shared/version.ts` → 2019.
+ *
+ * Preservado:
+ * - `getSummary`, `listInconsistencies`, `getDiasEmployee` — INTACTOS.
+ * - Modal `diasDetalhe` (% Presença + dias trabalhados) — INTACTO.
+ * - Avatar + selo CIPA da Rev. 2015 — INTACTOS.
+ * - Faixa "Como é calculado" da Rev. 2006 + exclusão de feriados Rev. 2014
+ *   — INTACTOS (escopo é só atraso, não faltas).
+ * - Modais Conflitos/Inconsistências/Não Identificados/Dixi — INTACTOS.
+ * - Rev. 2018 (DashboardLayout em IntegracaoSST) — INTACTA.
+ *
+ * R-001/R-007/R-010 OK: ZERO SQL bruto, ZERO ALTER/DROP/DELETE, ZERO mudança
+ * de schema. Apenas SELECT via Drizzle.
+ *
+ * Reversível em 3 arquivos.
+ *
+ * Limitações conhecidas:
+ * - Quando `jornadaTrabalho` não está cadastrada pra um dia da semana, o
+ *   modal mostra "não cadastrada" em itálico. O cálculo cai no fallback de
+ *   `timeRecords.atrasos` (consolidado), sinalizado com chip âmbar "ver obs."
+ *   na linha. Solução real: pedir ao RH cadastrar a jornada do colaborador.
+ * - Saídas antecipadas NÃO aparecem aqui (escopo é "atraso na entrada"). Se
+ *   o usuário pedir, virar uma aba dentro do mesmo modal numa próxima rev.
+ * - Sábado meio-período ainda depende do critério da empresa (`sabadoTipo`)
+ *   mas como o helper só lê `jornadaTrabalho.sab`, fica coerente com o que
+ *   o RH cadastrou.
+ *
+ * Follow-up:
+ * - Botão "Exportar CSV" do detalhe (pra anexar em advertência).
+ * - Aba "Saídas antecipadas" no mesmo modal.
+ * - Link direto pro Espelho de Ponto do dia clicando na linha.
+ * - Aplicar mesmo padrão "clicar pra ver memória" na coluna "H. Total" e
+ *   "% Presença".
+ *
  * Rev. 2018 — SST · Integração de Segurança · Barra lateral (DashboardLayout) restaurada.
  *
  * Pedido direto do usuário (17/05/2026, imgs IMG_0860 + IMG_0861): "Quero que
