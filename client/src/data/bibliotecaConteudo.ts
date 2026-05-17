@@ -1361,6 +1361,8 @@ Faltas injustificadas causam perda do DSR (Descanso Semanal Remunerado) da seman
 
 **Base Legal**: Art. 6 da Lei 605/1949
 
+> 📘 **Atrasos isolados NÃO tiram DSR** pela regra interna da FC (Rev. 1194). Veja o artigo completo "**DSR — Regras de Desconto e CCT Vale do Paraíba**" na categoria Memoriais.
+
 ---
 
 ### Impacto nas Férias
@@ -1402,6 +1404,128 @@ O dashboard de Cartão de Ponto exibe o **Ranking de Faltas — Top 10**, mostra
     tags: ["falta", "desconto", "DSR", "férias", "justificada", "ranking"],
     icone: "Calculator",
     ordemCategoria: 5,
+  },
+
+  {
+    id: "memorial-dsr",
+    categoria: "memoriais",
+    titulo: "Memorial de Cálculo — DSR (Descanso Semanal Remunerado)",
+    subtitulo: "Regras de desconto, CCT Vale do Paraíba e política interna FC",
+    resumo: "Quando o DSR é descontado, base legal, jurisprudência TST, decisão interna da FC e o que a CCT do Vale do Paraíba define sobre atrasos e faltas.",
+    conteudo: `## Memorial de Cálculo — DSR (Descanso Semanal Remunerado)
+
+### O que é o DSR
+
+O **DSR** é o dia de descanso pago semanalmente (geralmente o domingo) e os feriados. Compõe a remuneração mensal do trabalhador mensalista de forma embutida no salário.
+
+**Fórmula do valor de 1 dia de DSR**:
+> Valor-DSR = Salário ÷ Dias úteis do mês
+
+---
+
+### Base Legal Federal
+
+| Norma | O que diz |
+|---|---|
+| **Lei 605/1949, Art. 6º** | *"Não será devida a remuneração [do DSR] quando, sem motivo justificado, o empregado não tiver trabalhado durante toda a semana anterior, cumprindo integralmente o seu horário de trabalho."* |
+| **Lei 605/1949, Art. 6º §1º** | Lista motivos justificados (atestado médico, casamento, falecimento, etc.) |
+| **Súmula 172 TST** | HE habituais integram o cálculo do DSR (reflexo positivo) |
+| **CLT Art. 473** | Faltas justificadas que não descontam (rol completo) |
+| **CLT Art. 58 §1º** | Tolerância de 5 minutos por marcação (FC adota 5min desde Rev. 1194) |
+
+---
+
+### Quando o DSR É descontado (PERDA do DSR)
+
+✅ **O DSR da semana É perdido quando**:
+1. **Falta integral injustificada** num dia útil da semana.
+2. **Atraso ≥ 2h** num único dia (FC equipara a falta integral — descaracteriza o dia). Configurável em Critérios da empresa via \`pontoFaltaAposAtraso\`.
+
+❌ **O DSR da semana NÃO é perdido quando**:
+1. **Atraso isolado < 2h** (ex.: 15min, 30min, 1h). Só desconta as horas atrasadas proporcionalmente: \`(min ÷ 60) × valor-hora\`.
+2. **Falta justificada** (atestado médico, casamento, falecimento, doação de sangue, alistamento eleitoral, serviço militar, vestibular, comparecimento em juízo — Art. 473 CLT).
+3. **Atraso por causa do empregador** (transporte da empresa atrasou, obra interditada, etc.).
+
+---
+
+### Decisão interna FC (Rev. 1194)
+
+A FC adotou uma regra **mais protetiva pro trabalhador** do que a letra fria da Lei 605/49:
+
+> *"O DSR passa a ser perdido APENAS por falta injustificada na semana — atrasos isolados não tiram mais o DSR. Atraso ≥ 2h continua virando falta e, portanto, perde DSR."*
+
+**Por quê:** a jurisprudência majoritária do TST entende que perder 1 dia de salário (~R$ 100-200) por causa de 10-30 minutos de atraso é **desproporcional** e gera passivo trabalhista em reclamatórias. A regra interna afasta esse risco.
+
+**Toggle na folha:** o RH pode desligar o desconto de DSR-Falta em casos excepcionais (botão "Descontar DSR Falta" em Folha de Pagamento → Toggles).
+
+---
+
+### O que a CCT do Vale do Paraíba (Guaratinguetá × SindusCon-SP 2024/2025) diz
+
+**Sobre desconto de DSR**: a CCT é **SILENTE**. Não há cláusula criando desconto adicional de DSR. Vale 100% a regra da Lei 605/49 + decisão interna FC.
+
+**Sobre o reflexo POSITIVO no DSR** (Cláusula 4ª, IV):
+> *"O valor das horas extras habituais integrará o valor da remuneração para efeito de pagamento de férias, 13º, **Repousos Semanais Remunerados**, Aviso Prévio e depósito do FGTS."*
+
+> **Fórmula do reflexo**: Reflexo DSR = (Total HE no mês ÷ Dias úteis) × Domingos e Feriados
+
+---
+
+### Banco de Horas Anual (Cláusula 23ª da CCT) — quando estiver implementado
+
+A CCT do Vale do Paraíba **prevê e estimula** o Banco de Horas Anual. Hoje a FC **não opera** com banco de horas — atrasos viram desconto direto no mês. Quando o banco for ativado, mudam as regras:
+
+| Item | Regra CCT |
+|---|---|
+| Atraso/falta/saída antecipada | Vira **DÉBITO** no banco (não desconto imediato) |
+| 1h trabalhada além | Vira **1h30 de crédito** (bônus 50%) |
+| Prazo de compensação | **12 meses** do fato gerador |
+| Saldo credor pode | Abonar atrasos e faltas não justificadas |
+| Saldo devedor após 12m | Vira desconto na remuneração |
+| Não compensado em 12m | Vira HE com **+70%** sobre salário-base |
+| Rescisão com saldo devedor | Desconta das verbas rescisórias |
+
+> ⚠️ Enquanto a FC não tiver banco de horas operando, o atraso é descontado direto no mês — caminho legal único disponível.
+
+---
+
+### Caso prático: ISABELA (exemplo real)
+
+8 dias com atrasos no mês, total 2h56min, maior atraso isolado = 40min.
+
+| Pergunta | Resposta |
+|---|---|
+| Perdeu DSR de alguma semana? | ❌ **Não** — nenhum atraso ≥ 2h, e nenhuma falta injustificada |
+| Sofreu desconto? | ✅ **Sim** — desconto proporcional: \`(176min ÷ 60) × valor-hora\` |
+| Se descontássemos o DSR? | ⚠️ **Risco trabalhista** — fora da regra interna FC e fora da jurisprudência TST |
+
+---
+
+### Resumo visual
+
+\`\`\`
+Atraso/Falta detectado?
+    ↓
+É falta justificada (atestado, etc.)?
+    ├─ SIM → não desconta nada
+    └─ NÃO ↓
+            
+        É falta integral OU atraso ≥ 2h?
+            ├─ SIM → Desconta o dia (Sal÷30) + perde DSR da semana
+            └─ NÃO → Desconta só os minutos: (min÷60) × valor-hora
+                     [DSR preservado]
+\`\`\`
+
+**Onde isso vive no código**:
+- Motor de DSR: \`server/routers/pontoDescontos.ts\` (L250-665)
+- Aplicação na folha: \`server/routers/payrollEngine.ts\` (L3148-3410)
+- Toggle "Descontar DSR Falta": \`client/src/pages/FolhaPagamento.tsx\` (L3751)
+- Memória de cálculo: \`client/src/pages/FechamentoPonto.tsx\` (modal Atraso Acumulado)
+
+**Base Legal consolidada**: Lei 605/49 Art. 6º + Súmula 172 TST + CLT Arts. 58 §1º, 473 + CCT Guaratinguetá×SindusCon-SP 2024/2025 (Cláusulas 4ª e 23ª).`,
+    tags: ["DSR", "descanso semanal", "Lei 605", "atraso", "falta", "CCT", "Vale do Paraíba", "banco de horas", "Guaratinguetá", "SindusCon"],
+    icone: "Calculator",
+    ordemCategoria: 6,
   },
 
   // ============================================================

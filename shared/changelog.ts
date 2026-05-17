@@ -1,6 +1,79 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2037 — DP · Biblioteca · NOVO artigo "Memorial de Cálculo
+ * — DSR (Descanso Semanal Remunerado)" documentando regras de
+ * desconto, base legal, decisão interna FC (Rev. 1194) e o que
+ * a CCT do Vale do Paraíba (SINTRACOM Guaratinguetá × SindusCon-SP
+ * 2024/2025) define sobre atrasos, faltas e banco de horas.
+ *
+ * Pedido direto do usuário: depois de análise extensa em chat
+ * sobre desconto de DSR por atraso (caso ISABELA, 8 dias com
+ * atrasos / 2h56min total / máx 40min isolado), usuário pediu:
+ * "Sim eu quero" (documentar formalmente na biblioteca).
+ *
+ * Mudança em 3 arquivos:
+ *
+ *   (A) `client/src/data/bibliotecaConteudo.ts`:
+ *     - NOVO artigo `memorial-dsr` (categoria "memoriais",
+ *       ordemCategoria 6, ~110L de conteúdo Markdown) cobrindo:
+ *         * O que é o DSR + fórmula de 1 dia
+ *         * Base legal federal (Lei 605/49 Art. 6º + §1º,
+ *           Súmula 172 TST, CLT 473 e 58§1º)
+ *         * Quando o DSR É descontado (falta integral OU
+ *           atraso ≥ 2h)
+ *         * Quando o DSR NÃO é descontado (atraso isolado
+ *           < 2h, falta justificada, causa do empregador)
+ *         * Decisão interna FC Rev. 1194 (atraso isolado
+ *           não tira DSR; toggle "Descontar DSR Falta")
+ *         * CCT Vale do Paraíba — silente para desconto de
+ *           DSR; reflexo POSITIVO de HE no DSR (Cláusula 4ª
+ *           IV); Banco de Horas Anual (Cláusula 23ª) NÃO
+ *           operado hoje pela FC
+ *         * Tabela explicando o que muda quando o banco
+ *           for implementado (1h=1h30, prazo 12m,
+ *           +70% se não compensado, abono via saldo credor)
+ *         * Caso prático ISABELA com decisão e risco
+ *         * Fluxograma visual (ASCII) do raciocínio
+ *         * Mapa de onde a regra vive no código
+ *         * Base legal consolidada citando a CCT
+ *     - EDIÇÃO em `memorial-faltas`: adicionado callout 📘
+ *       no fim da seção "Impacto no DSR" apontando para o
+ *       novo artigo `memorial-dsr` (cross-link).
+ *
+ *   (B) `shared/version.ts` → 2037.
+ *
+ *   (C) `replit.md` + `replit-history.md` conforme convenção
+ *       Top-5 detalhado + 10 one-liners (Rev. 2031 vira
+ *       one-liner; Rev. 2021 sai dos recentes pra história).
+ *
+ * R-001/R-007/R-010 OK: ZERO ALTER TABLE, ZERO mudança de
+ * schema, ZERO mudança em motor de cálculo. Apenas conteúdo
+ * estático (documentação). Reversível em 3 arquivos.
+ *
+ * Preservado: Rev. 2036 (filtro fantasma SST Pendentes)
+ * INTACTA; Rev. 2035 (certificado SST PDF) INTACTA; motor
+ * `pontoDescontos.ts` INTACTO; motor `payrollEngine.ts`
+ * INTACTO; nenhum cálculo de folha foi alterado.
+ *
+ * Decisão de design: o artigo vive na categoria "memoriais"
+ * (ordemCategoria 6, depois de memorial-faltas que é 5)
+ * pra ficar fisicamente próximo do conteúdo correlato; o
+ * cross-link em memorial-faltas evita que o leitor perca o
+ * detalhamento se entrar primeiro pelo artigo de faltas.
+ *
+ * Follow-up:
+ *   (1) Implementar Banco de Horas Anual operacional
+ *       conforme Cláusula 23ª da CCT (hoje atrasos viram
+ *       desconto direto no mês, ferindo a CCT no rigor);
+ *   (2) Cadastrar a CCT estruturalmente no módulo
+ *       `convenções` (hoje só temos o índice metadados);
+ *   (3) Adicionar microcopy no modal "Atraso Acumulado"
+ *       confirmando "Estes atrasos NÃO afetam o DSR porque
+ *       nenhum atingiu 2h" quando aplicável;
+ *   (4) Replicar a documentação para outras CCTs (Araraquara,
+ *       Termo Aditivo Pavimentação) quando confirmadas.
+ *
  * Rev. 2036 — SST · Integração de Segurança · aba Pendentes
  * (Rev. 2034) agora filtra "funcionários fantasma" — exclui
  * soft-delete, lista negra e demitidos com status inconsistente.
