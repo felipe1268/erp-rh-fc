@@ -1,6 +1,23 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 1995 — Compras · Cotações · Modal de Condições de Pagamento bloqueia salvar quando soma das parcelas Personalizadas não bate.
+ * Pedido direto do usuário (task #48): no modo "Personalizado" do modal o card de totalização já mostrava "Faltam R$ X" / "Excede R$ Y" quando `Math.abs(fornTotal - somaParcelas) >= 0.01`, mas o botão "Confirmar e Salvar" continuava habilitado — o usuário podia salvar com a soma errada e gerar inconsistência financeira (parcelas que somam diferente do total do fornecedor). Modos "Padrão" (1 parcela à vista) e "Fechamento" (data única) NÃO sofriam disso pois não envolvem distribuição de valores.
+ * Mudança em 2 arquivos:
+ *   (1) `client/src/pages/compras/Cotacoes.tsx` (~25 linhas, 2 hunks no `condModalPortal` IIFE):
+ *     (a) Logo após o cálculo de `tipoBadge` (L1521), computa `modoAtual`/`parcListAtual`/`totalCustomAtual`/`diffCustom`/`customInvalid` (= `modoAtual === "custom" && parcListAtual.length > 0 && Math.abs(diffCustom) >= 0.01`) e a string `customMotivo` ("Faltam R$ X — ajuste para somar R$ Y" / "Excede R$ X — ajuste para somar R$ Y").
+ *     (b) `handleSalvar` ganha early-return com `toast.error(customMotivo)` quando `customInvalid` (defesa em profundidade caso o disable seja contornado).
+ *     (c) Footer: bloco de info à esquerda passa a renderizar, quando `customInvalid`, um hint amber inline com `<AlertTriangle>` + "Ajuste as parcelas para R$ Y".
+ *     (d) Botão "Confirmar e Salvar" recebe `disabled={... || customInvalid}`, `title={customMotivo}` (tooltip nativo), `aria-disabled` e classes `disabled:opacity-60 disabled:cursor-not-allowed`.
+ *   (2) `shared/version.ts` → Rev. 1995 (1994 → 1995).
+ * Comportamento garantido:
+ *   • Em modo Personalizado com soma divergente >R$ 0,01: botão fica desabilitado com tooltip explicativo + hint visual no footer.
+ *   • Em modo Personalizado com soma OK (diff < R$ 0,01): botão habilitado normalmente.
+ *   • Em modos Padrão/Fechamento: `customInvalid = false` sempre (guard `modoAtual === "custom"`) — botão segue habilitando como antes.
+ *   • Custom com 0 parcelas: TAMBÉM bloqueia (motivo "Adicione pelo menos uma parcela somando R$ Y") — antes deixava passar, hoje exige ≥1 parcela com soma certa.
+ *   • Tooltip do motivo envolto em `<span title=...>` em torno do `<Button>` (botão desabilitado nem sempre dispara `title` no Chromium).
+ * Preservado: card de totalização interno (L1851-1867 com "Faltam"/"Excede"/"Valores batem") INTACTO. Cálculo de `fornTotal` (L1488-1499) com handling de `editingFornId` INTACTO. `salvarCondicoesComerciais.mutate` payload INTACTO. Imports (`AlertTriangle`, `toast`) já existiam — ZERO import novo. Rev. 1994 (pré-carregamento) INTACTA. Schema INTACTO. R-001/R-007/R-010 OK. Reversível em 2 arquivos.
+ *
  * Rev. 1994 — Compras · Cotações · Modal de Condições de Pagamento agora pré-carrega campos persistidos ao reabrir.
  * Pedido direto do usuário (task #47): hoje os estados do modal (forma, tipo, condição, prazo, frete, transportadora, módulo de medição, parcelas) só eram inicializados a partir dos valores persistidos quando `mapaQ.data` mudava (useEffect L1071 com deps `[mapaQ.data, abaAtiva]`). Em cenários como (a) refetch parcial após mutate ou (b) edits feitos sem salvar e modal fechado/reaberto, os campos podiam aparecer vazios ao reabrir o card do fornecedor mesmo havendo dados persistidos no participante. Além disso `condModo`/`condCustomParcelas`/`condFech*` NUNCA eram pré-inicializados — abrir um fornecedor que já tinha `numeroParcelas > 1` salvo mostrava o modo "Padrão" sem nenhuma parcela na tela.
  * Mudança em 2 arquivos:

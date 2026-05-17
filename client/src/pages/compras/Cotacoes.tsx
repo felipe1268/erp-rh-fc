@@ -1515,8 +1515,25 @@ export default function Cotacoes() {
         ? { label: "Pacote", cls: "bg-purple-100 text-purple-700 border-purple-200" }
         : { label: "Material", cls: "bg-emerald-100 text-emerald-700 border-emerald-200" };
 
+    const modoAtual = condModo[fId] ?? "padrao";
+    const parcListAtual = condCustomParcelas[fId] ?? [];
+    const totalCustomAtual = parcListAtual.reduce((s, p) => s + (parseFloat(p.valor) || 0), 0);
+    const diffCustom = fornTotal - totalCustomAtual;
+    const customInvalid = modoAtual === "custom" && (parcListAtual.length === 0 || Math.abs(diffCustom) >= 0.01);
+    const customMotivo = customInvalid
+      ? (parcListAtual.length === 0
+        ? `Adicione pelo menos uma parcela somando ${formatCurrency(fornTotal)}.`
+        : diffCustom > 0
+          ? `Faltam ${formatCurrency(diffCustom)} nas parcelas — ajuste para somar ${formatCurrency(fornTotal)}.`
+          : `Excede ${formatCurrency(Math.abs(diffCustom))} nas parcelas — ajuste para somar ${formatCurrency(fornTotal)}.`)
+      : "";
+
     const handleSalvar = () => {
       if (!showDetalhe) return;
+      if (customInvalid) {
+        toast.error(customMotivo);
+        return;
+      }
       const prazoVal = editPrazo[fId] ? parseInt(editPrazo[fId]) : undefined;
       const parcList = condCustomParcelas[fId] ?? [];
       const modo = condModo[fId] ?? "padrao";
@@ -1996,19 +2013,30 @@ export default function Cotacoes() {
 
           {/* Footer sticky */}
           <div className="flex-shrink-0 border-t border-gray-200 bg-gray-50/90 backdrop-blur px-5 lg:px-8 py-3.5 lg:py-4 flex items-center justify-between gap-3 flex-wrap">
-            <div className="text-xs text-gray-500 min-w-0 truncate">
+            <div className="text-xs min-w-0 truncate flex items-center gap-2">
               <span className="font-medium text-gray-700 truncate">{fornNome}</span>
-              <span className="mx-2 text-gray-300">·</span>
+              <span className="text-gray-300">·</span>
               <span className="font-semibold text-violet-700 tabular-nums">Total: {formatCurrency(fornTotal)}</span>
+              {customInvalid && (
+                <>
+                  <span className="text-gray-300">·</span>
+                  <span className="inline-flex items-center gap-1 text-amber-700 font-semibold">
+                    <AlertTriangle className="w-3.5 h-3.5" />
+                    Ajuste as parcelas para {formatCurrency(fornTotal)}
+                  </span>
+                </>
+              )}
             </div>
             <div className="flex items-center gap-2">
               <Button variant="ghost" onClick={() => setCondModalFornId(null)} className="h-10 px-5 text-gray-600">
                 Fechar
               </Button>
+              <span title={customInvalid ? customMotivo : undefined} className="inline-flex">
               <Button
-                disabled={salvarCondicoesComerciais.isPending}
+                disabled={salvarCondicoesComerciais.isPending || customInvalid}
                 onClick={handleSalvar}
-                className="h-10 px-6 bg-violet-600 hover:bg-violet-700 text-white font-semibold shadow-sm shadow-violet-200 gap-2"
+                aria-disabled={customInvalid || salvarCondicoesComerciais.isPending}
+                className="h-10 px-6 bg-violet-600 hover:bg-violet-700 text-white font-semibold shadow-sm shadow-violet-200 gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 {salvarCondicoesComerciais.isPending ? (
                   <><Loader2 className="w-4 h-4 animate-spin" /> Salvando…</>
@@ -2016,6 +2044,7 @@ export default function Cotacoes() {
                   <><Save className="w-4 h-4" /> Confirmar e Salvar</>
                 )}
               </Button>
+              </span>
             </div>
           </div>
         </div>
