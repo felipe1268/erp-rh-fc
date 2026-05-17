@@ -1,6 +1,37 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2064 — **SST Integração · badge do menu lateral REALMENTE
+ * funciona agora · bug crítico de serialização de array Drizzle.**
+ * Pedido do usuário (IMG_0963/IMG_0964): "quero que o campo de
+ * integração fique igual ao apontamento e campo, com alertas claros"
+ * — apesar da Rev. 2063 ter "consertado" a contagem incluindo
+ * terceiros, o badge continuava NÃO aparecendo. **Causa raiz
+ * (descoberta via `refresh_all_logs`)**: o procedure inteiro estava
+ * falhando desde a Rev. 2058 com `[tRPC Error] integracaoSST.getBadgeCounts:
+ * DB error: malformed array literal: "60002"`. O template do Drizzle
+ * `sql\`ANY(${ids})\`` (onde `ids` é `number[]`) NÃO serializa o array
+ * JS como literal Postgres — ele passa o número escalar e o PG
+ * tenta interpretar "60002" como array literal, falhando. O erro
+ * era silenciado pelo `useQuery` (sstBadgeQ.data ficava undefined →
+ * `if (sstBadgeQ.data)` curtocircuitava → nenhum badge), então
+ * nenhuma das revisões 2058/2063 foi efetivamente validada em
+ * runtime — só em psql isolado. **Fix em 1 arquivo (zero schema)**:
+ * `server/routers/integracaoSST.ts` getBadgeCounts (L319) —
+ * substitui as 4 ocorrências de `ANY(${ids})` por
+ * `sql.raw(\`ANY(ARRAY[\${idsList}]::int[])\`)` onde `idsList` é a
+ * lista de inteiros já validada pelo Zod (`z.array(z.number().int().positive())`),
+ * portanto SEM risco de SQL injection. **Bônus do mesmo log**:
+ * corrigida também a procedure `alertas` (L1380) que falhava com
+ * `column w.employee_id does not exist` — colunas reais em
+ * `warnings` são `"employeeId"`/`"companyId"`/`"deletedAt"`
+ * (camelCase quoted, herança do Drizzle sem mapping snake_case);
+ * `employees` usa `"nomeCompleto"` (não `nome`). + `shared/version.ts`
+ * → 2064. **Lição**: smoke-test via `refresh_all_logs` (não só
+ * psql) deveria ser etapa obrigatória de qualquer revisão que
+ * mexa em router server-side. Validação isolada em psql NÃO
+ * captura bugs no template SQL do Drizzle.
+ *
  * Rev. 2063 — **SST Integração · badge vermelho do menu lateral · BUG
  * de contagem corrigido — `getBadgeCounts` (Rev. 2058) só somava
  * CLT/PJ da tabela `employees`, ignorando completamente os

@@ -318,7 +318,13 @@ export const integracaoSSTRouter = router({
     .query(async ({ input, ctx }) => {
       for (const cid of input.companyIds) assertCompanyAccess(ctx, cid);
       const db = (await getDb())!;
-      const ids = input.companyIds;
+      // Rev. 2064 — Bug crítico Rev. 2058: `ANY(${ids})` no template Drizzle
+      // não serializa array JS como PG array literal — query falhava com
+      // "malformed array literal" e badge NUNCA renderizou desde Rev. 2058
+      // (erro silenciado pelo useQuery). Fix: inline da lista validada
+      // (Zod já garante int positivo) via sql.raw — sem risco de injection.
+      const idsList = input.companyIds.map(n => Number(n)).filter(Number.isFinite).join(",");
+      const idsAny = sql.raw(`ANY(ARRAY[${idsList}]::int[])`);
 
       // (A) Colaboradores SEM integração válida (CLT/PJ ativos, não fantasma,
       // sem aprovação vigente). Lógica espelha listarPendentesAuto (Rev. 2034+
@@ -330,7 +336,7 @@ export const integracaoSSTRouter = router({
             COALESCE(data_validade,
                      COALESCE(data_realizacao, created_at) + INTERVAL '730 days') AS dv
           FROM sst_integracao_registros
-          WHERE company_id = ANY(${ids})
+          WHERE company_id = ${idsAny}
             AND status = 'aprovado'
             AND deleted_at IS NULL
           ORDER BY employee_id, COALESCE(data_realizacao, created_at) DESC
@@ -338,14 +344,14 @@ export const integracaoSSTRouter = router({
         em_processo AS (
           SELECT DISTINCT employee_id
           FROM sst_integracao_registros
-          WHERE company_id = ANY(${ids})
+          WHERE company_id = ${idsAny}
             AND status IN ('pendente', 'em_andamento')
             AND deleted_at IS NULL
         )
         SELECT COUNT(*)::int AS total
         FROM employees e
         LEFT JOIN last_ok lo ON lo.employee_id = e.id
-        WHERE e."companyId" = ANY(${ids})
+        WHERE e."companyId" = ${idsAny}
           AND e.status = 'Ativo'
           AND e."deletedAt" IS NULL
           AND COALESCE(e."listaNegra", 0) = 0
@@ -358,13 +364,11 @@ export const integracaoSSTRouter = router({
 
       // Rev. 2063 — Bug Rev. 2058: contava só CLT/PJ. listarPendentesAuto
       // L1084 também inclui terceiros SEM `integracaoDocUrl`. Se o tenant
-      // só tem terceiros pendentes, badge ficava zerado. Mesmo critério
-      // simplificado do listarPendentesAuto (schema não guarda timestamp
-      // do upload pra calcular 24 meses — só presença/ausência do doc).
+      // só tem terceiros pendentes, badge ficava zerado.
       const terceirosRaw = await db.execute<{ total: number }>(sql`
         SELECT COUNT(*)::int AS total
         FROM funcionarios_terceiros t
-        WHERE t."companyId" = ANY(${ids})
+        WHERE t."companyId" = ${idsAny}
           AND t.status = 'ativo'
           AND t.deleted_at IS NULL
           AND t.integracao_doc_url IS NULL
@@ -1377,12 +1381,14 @@ export const integracaoSSTRouter = router({
         alertas.push({ tipo: "reprovado", mensagem: `${r.employeeNome} reprovado (${r.tentativas} tentativa(s))`, registroId: r.id, employeeNome: r.employeeNome ?? undefined });
       }
 
+      // Rev. 2064 — Fix: colunas reais são camelCase quoted ("employeeId",
+      // "companyId", "deletedAt"); employees usa "nomeCompleto".
       const advertenciasRows = await db.execute(sql`
-        SELECT e.id as employee_id, e.nome as employee_nome, count(w.id)::int as total_advertencias
+        SELECT e.id as employee_id, e."nomeCompleto" as employee_nome, count(w.id)::int as total_advertencias
         FROM employees e
-        JOIN warnings w ON w.employee_id = e.id AND w.company_id = e.company_id AND w.deleted_at IS NULL
-        WHERE e.company_id = ${input.companyId} AND e.status = 'Ativo' AND e.deleted_at IS NULL
-        GROUP BY e.id, e.nome
+        JOIN warnings w ON w."employeeId" = e.id AND w."companyId" = e."companyId" AND w."deletedAt" IS NULL
+        WHERE e."companyId" = ${input.companyId} AND e.status = 'Ativo' AND e."deletedAt" IS NULL
+        GROUP BY e.id, e."nomeCompleto"
         HAVING count(w.id) >= 2
       `);
       const advRows = Array.isArray(advertenciasRows) ? advertenciasRows : advertenciasRows?.rows ?? [];
