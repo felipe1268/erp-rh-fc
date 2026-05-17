@@ -1,6 +1,48 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2020 — SST · Integração de Segurança · companyId coercion (Zod
+ * "expected number, received string" travava abas Vídeos/Configurações/
+ * Pendentes/Histórico/Sessões).
+ *
+ * Erro reportado pelo usuário (17/05/2026, imgs IMG_0864 e IMG_0867 em
+ * dispositivos diferentes): toasts no rodapé com `[ { "expected":
+ * "number", "code": "invalid_type", "path": [ "companyId" ], "message":
+ * "Invalid input: expected number, received string" } ]` e "The string
+ * did not match the expected pattern." A página `/sst/integracao`
+ * carregava o cabeçalho e as tabs mas todas as queries falhavam — nada
+ * de vídeos, nada de KPIs, nada de configurações.
+ *
+ * Causa-raiz: `useCompany()` (em `client/src/contexts/CompanyContext.tsx`)
+ * tipa `selectedCompanyId: string` (vem do localStorage como `"12"`).
+ * Em `IntegracaoSST.tsx` L47 a linha `const companyId = selectedCompanyId
+ * ?? 0` passava a string adiante. Todos os routers do `integracaoSST.*`
+ * (criados na Rev. 2007) declaram `z.object({ companyId: z.number(), ... })`
+ * — Zod estoura no input. Outras páginas SST (DDS, Acidentes) ou usam
+ * o number direto via Number() ou rodam contextos diferentes; só essa
+ * página estava com o bug.
+ *
+ * Mudança em 1 arquivo (cirúrgica):
+ * - `client/src/pages/sst/IntegracaoSST.tsx` L47: `selectedCompanyId ?? 0`
+ *   → `Number(selectedCompanyId) || 0`. O resto do arquivo (que já passa
+ *   `companyId` adiante via prop) fica intacto — a correção na raiz
+ *   propaga pra DashboardTab, VideosTab, ConfigTab, PendentesTab,
+ *   HistoricoTab e SessoesTab automaticamente.
+ *
+ * + shared/version.ts → 2020.
+ *
+ * R-001/R-007/R-010 OK: ZERO SQL/DDL, ZERO mudança de schema, ZERO
+ * mudança de routers. Apenas coerção tipográfica no frontend.
+ *
+ * Reversível em 1 linha. Preservado: TODO o resto (modal Rev. 2016,
+ * upload Rev. 2013, DashboardLayout Rev. 2018, header gradient Rev. 2005,
+ * Rev. 2019 INTACTA).
+ *
+ * Follow-up: padronizar `useCompany()` pra também expor `companyIdNum`
+ * (number já coerced), evitando esse bug se outras páginas crescerem;
+ * auditoria geral de páginas que chamam routers tipados como number
+ * sem coerção.
+ *
  * Rev. 2019 — DP · Fechamento de Ponto · "Atraso Acumulado" clicável com memória
  * de cálculo dia a dia (modal "Mais Atrasados" e "Mais Pontuais").
  *

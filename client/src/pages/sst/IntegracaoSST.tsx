@@ -44,7 +44,10 @@ const origemLabels: Record<string, string> = {
 
 export default function IntegracaoSST() {
   const { selectedCompanyId } = useCompany();
-  const companyId = selectedCompanyId ?? 0;
+  // Rev. 2020 — CompanyContext entrega string ("12"); routers integracaoSST esperam number.
+  // Sem coerção, Zod estoura "Invalid input: expected number, received string" e a aba
+  // Vídeos fica travada com toast de erro.
+  const companyId = Number(selectedCompanyId) || 0;
   const [tab, setTab] = useState("dashboard");
 
   // Rev. 2005 — Tabs alinhadas à regra de ouro: chip emerald, gradient header
