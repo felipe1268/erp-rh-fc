@@ -5,6 +5,10 @@
 > Movido aqui na Rev. 2028 (faxina) — revisões 1903 → 2012.
 > Atualizado na Rev. 2037 — revisões 2021 e 2022 movidas pra cá.
 
+## Revisão 2023
+
+- ~~Rev. 2023~~ — SST Integração: card de vídeo reproduz upload (mp4/mov/webm) inline com player HTML5 nativo, sem download. Ver `shared/changelog.ts`.
+
 ## Revisão 2022
 
 - ~~Rev. 2022~~ — Infra: CompanyContext expõe `companyIdNum: number` + faxina do replit.md + auditoria de bug latente. Ver `shared/changelog.ts`.

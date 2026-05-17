@@ -1,6 +1,106 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2038 — SST · Integração de Segurança · aba Pendentes ·
+ * botão "Iniciar agora" agora INICIA a integração de fato:
+ * cria o registro e abre direto a tela pública em nova aba,
+ * com NOVA tela de Boas-vindas antes dos vídeos.
+ *
+ * Pedido direto do usuário (imgs IMG_0883/IMG_0884): "Quando
+ * clicar em iniciar agora deve começar a integração, com o
+ * texto de boas vindas, e depois, abrir o vídeo, [parar]
+ * assistir, depois disso o questionário". Antes (Rev. 2034),
+ * o botão só pré-selecionava o colaborador no modal "Iniciar
+ * Integração de Segurança" — o RH ainda tinha que escolher
+ * obra/config, clicar "Criar Integração", copiar o link e
+ * abrir manualmente em outra aba. Fluxo de 4 cliques pra 1.
+ *
+ * Mudança em 3 arquivos:
+ *
+ *   (A) `client/src/pages/sst/IntegracaoSST.tsx` (~12L):
+ *     - import `useRef` adicionado
+ *     - novo `autoOpenRef` (useRef<boolean>) sinaliza pro
+ *       `onSuccess` do `criarRegistro` que veio do "Iniciar
+ *       agora" → em vez de mostrar o modal com o link
+ *       criado, abre `window.open(link, "_blank", "noopener,
+ *       noreferrer")` direto e toasta "Integração de NOME
+ *       iniciada em nova aba"
+ *     - nova função `iniciarAgora(emp)` chama
+ *       `criarRegistro.mutate({ companyId, employeeId })`
+ *       sem config/obra (usa config "Automática" da empresa)
+ *     - botão "Iniciar agora" trocado de `iniciarParaEmployee`
+ *       (que abria o modal) pra `iniciarAgora`; ganha
+ *       `disabled={criarRegistro.isPending}` + spinner
+ *       (`Loader2` animado) durante o request pra evitar
+ *       duplo clique
+ *     - função `iniciarParaEmployee` PRESERVADA (não é mais
+ *       chamada, mas mantida pra retomada manual via modal
+ *       caso o RH queira escolher obra/config específica
+ *       no futuro)
+ *
+ *   (B) `client/src/pages/sst/IntegracaoPublica.tsx` (~75L):
+ *     - tipo do `step` ganha `"boasvindas"`: cpf →
+ *       boasvindas → modulos → quiz → resultado (5 passos)
+ *     - imports `Sparkles, BookOpen, Clock` adicionados
+ *     - `handleBuscarCpf`: ao validar CPF e carregar dados,
+ *       vai pra `setStep("boasvindas")` em vez de
+ *       `setStep("modulos")`
+ *     - stepper visual: array atualizado pra 5 passos,
+ *       índice de stroke pra ≤4
+ *     - NOVO bloco `step === "boasvindas"`:
+ *         * Card max-w-2xl com header gradient
+ *           emerald-600 → teal-700, ícone Sparkles em
+ *           círculo glass, saudação "Bem-vindo(a), {NOME}!"
+ *         * texto introdutório de 3 linhas explicando que
+ *           a integração é obrigatória + objetivo
+ *         * box "Como funciona" com 3 passos numerados
+ *           (1: Assista aos vídeos, 2: Responda ao
+ *           questionário, 3: Tire seu certificado de
+ *           aprovação válido por {validadeMeses} meses)
+ *         * grid 2-col: contagem de vídeos (azul, ícone
+ *           Video) + contagem de perguntas (roxo, ícone
+ *           GraduationCap)
+ *         * callout âmbar com ícone Clock: "Reserve um
+ *           tempo tranquilo — você precisa de {notaMinima}%
+ *           de acertos para ser aprovado"
+ *         * CTA pleno emerald h-12 "Começar Treinamento
+ *           →" → `setStep("modulos")`
+ *
+ *   (C) `shared/version.ts` → 2038.
+ *
+ * R-001/R-007/R-010 OK: ZERO ALTER TABLE, ZERO mudança de
+ * schema, ZERO mudança de router (server intacto — só usa
+ * `criarRegistro` que já existe). Reversível em 3 arquivos.
+ *
+ * Preservado:
+ *   - Rev. 2037 (artigo Memorial DSR) INTACTA
+ *   - Rev. 2036 (filtro fantasma SST) INTACTA
+ *   - Rev. 2035 (certificado PDF) INTACTA
+ *   - Rev. 2034 (aba Pendentes, listarPendentesAuto) INTACTA
+ *   - Modal "Iniciar Integração de Segurança" (Revs. 2018/
+ *     2020/2023/2026/2033) INTACTO — ainda funciona pelo
+ *     header "Iniciar Integração" pra criação em lote
+ *     ou com obra/config específica
+ *   - `criarRegistro.mutate` server-side INTACTO
+ *   - Botão "Cadastrar doc" pra terceiros INTACTO
+ *   - Fluxo CPF da tela pública (autoload, validação 11
+ *     dígitos, ja_aprovado, sem_config) INTACTO
+ *   - Step modulos/quiz/resultado INTACTOS
+ *
+ * Follow-up:
+ *   1. Auto-preencher CPF na URL (`/integracao/{token}?
+ *      cpf={cpf}`) pra pular a etapa de CPF quando o
+ *      próprio RH inicia em nome do colaborador
+ *   2. Modal de confirmação opcional "Vai iniciar agora
+ *      em nova aba" antes do `window.open` (pop-up
+ *      blockers podem bloquear em alguns navegadores)
+ *   3. Botão "Reenviar link por e-mail" na lista pendentes
+ *      pra colaboradores que precisem fazer remotamente
+ *   4. Botão "WhatsApp" também no item de pendente (hoje
+ *      só existe no modal de link criado)
+ *   5. Configurar timeout de auto-fechamento da janela
+ *      após "Aprovado" pra abrir novamente o ERP do RH
+ *
  * Rev. 2037 — DP · Biblioteca · NOVO artigo "Memorial de Cálculo
  * — DSR (Descanso Semanal Remunerado)" documentando regras de
  * desconto, base legal, decisão interna FC (Rev. 1194) e o que

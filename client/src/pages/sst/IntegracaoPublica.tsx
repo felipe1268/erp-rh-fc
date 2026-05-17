@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import {
   GraduationCap, User, Video, CheckCircle, XCircle, ArrowRight, ArrowLeft,
-  Loader2, ShieldCheck, RefreshCw, Award, AlertTriangle, Download,
+  Loader2, ShieldCheck, RefreshCw, Award, AlertTriangle, Download, Sparkles, BookOpen, Clock,
 } from "lucide-react";
 import { generateCertificadoIntegracaoSstPdf } from "@/lib/certificadoIntegracaoSstPdf";
 
@@ -23,7 +23,7 @@ function formatCPF(v: string) {
 export default function IntegracaoPublica() {
   const params = useParams<{ token: string }>();
   const token = params?.token || "";
-  const [step, setStep] = useState<"cpf" | "modulos" | "quiz" | "resultado">("cpf");
+  const [step, setStep] = useState<"cpf" | "boasvindas" | "modulos" | "quiz" | "resultado">("cpf");
   const [cpf, setCpf] = useState("");
   const [data, setData] = useState<any>(null);
   const [currentModulo, setCurrentModulo] = useState(0);
@@ -51,7 +51,8 @@ export default function IntegracaoPublica() {
         } else if (result.data.status === "sem_config") {
           toast.error("Nenhuma configuração de integração encontrada para esta empresa.");
         } else {
-          setStep("modulos");
+          // Rev. 2038 — passa por tela de Boas-vindas antes dos vídeos.
+          setStep("boasvindas");
         }
       }
     } catch (err: any) {
@@ -102,14 +103,18 @@ export default function IntegracaoPublica() {
         </div>
 
         <div className="flex items-center justify-center gap-2 mb-6">
-          {["cpf", "modulos", "quiz", "resultado"].map((s, i) => (
-            <div key={s} className="flex items-center gap-1">
-              <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${step === s ? "bg-emerald-600 text-white" : i < ["cpf", "modulos", "quiz", "resultado"].indexOf(step) ? "bg-emerald-200 text-emerald-800" : "bg-gray-200 text-gray-500"}`}>
-                {i + 1}
+          {["cpf", "boasvindas", "modulos", "quiz", "resultado"].map((s, i) => {
+            const stepsOrder = ["cpf", "boasvindas", "modulos", "quiz", "resultado"];
+            const currentIdx = stepsOrder.indexOf(step);
+            return (
+              <div key={s} className="flex items-center gap-1">
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${step === s ? "bg-emerald-600 text-white" : i < currentIdx ? "bg-emerald-200 text-emerald-800" : "bg-gray-200 text-gray-500"}`}>
+                  {i + 1}
+                </div>
+                {i < 4 && <div className={`w-6 h-0.5 ${i < currentIdx ? "bg-emerald-400" : "bg-gray-200"}`} />}
               </div>
-              {i < 3 && <div className={`w-8 h-0.5 ${i < ["cpf", "modulos", "quiz", "resultado"].indexOf(step) ? "bg-emerald-400" : "bg-gray-200"}`} />}
-            </div>
-          ))}
+            );
+          })}
         </div>
 
         {step === "cpf" && (
@@ -131,6 +136,68 @@ export default function IntegracaoPublica() {
               <Button className="w-full bg-emerald-600 hover:bg-emerald-700" onClick={handleBuscarCpf} disabled={buscarQuery.isFetching}>
                 {buscarQuery.isFetching ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <ArrowRight className="h-4 w-4 mr-2" />}
                 Iniciar
+              </Button>
+            </CardContent>
+          </Card>
+        )}
+
+        {step === "boasvindas" && data && (
+          <Card className="max-w-2xl mx-auto overflow-hidden">
+            <div className="bg-gradient-to-br from-emerald-600 to-teal-700 text-white p-6 text-center">
+              <div className="inline-flex items-center justify-center w-16 h-16 bg-white/20 rounded-full mb-3 backdrop-blur-sm">
+                <Sparkles className="h-8 w-8" />
+              </div>
+              <h2 className="text-2xl font-bold mb-1">Bem-vindo(a){data?.registro?.employeeNome ? `, ${data.registro.employeeNome.split(" ")[0]}` : ""}!</h2>
+              <p className="text-emerald-50 text-sm">Integração de Segurança do Trabalho</p>
+            </div>
+            <CardContent className="p-6 space-y-5">
+              <p className="text-sm text-gray-700 leading-relaxed">
+                Esta é a sua <strong>Integração de Segurança</strong>, um treinamento obrigatório para todos os colaboradores antes de iniciar as atividades. Aqui você vai conhecer as regras de segurança, os riscos da nossa operação e como se proteger no dia a dia da obra.
+              </p>
+
+              <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4 space-y-3">
+                <h3 className="font-semibold text-emerald-800 text-sm flex items-center gap-2">
+                  <BookOpen className="h-4 w-4" /> Como funciona
+                </h3>
+                <div className="space-y-2.5 text-sm text-emerald-900">
+                  <div className="flex gap-3">
+                    <div className="flex-shrink-0 w-6 h-6 rounded-full bg-emerald-600 text-white font-bold text-xs flex items-center justify-center">1</div>
+                    <div><strong>Assista aos vídeos</strong> de treinamento com atenção. Cada vídeo aborda um tema essencial de segurança.</div>
+                  </div>
+                  <div className="flex gap-3">
+                    <div className="flex-shrink-0 w-6 h-6 rounded-full bg-emerald-600 text-white font-bold text-xs flex items-center justify-center">2</div>
+                    <div><strong>Responda ao questionário</strong> ao final, com base no conteúdo dos vídeos.</div>
+                  </div>
+                  <div className="flex gap-3">
+                    <div className="flex-shrink-0 w-6 h-6 rounded-full bg-emerald-600 text-white font-bold text-xs flex items-center justify-center">3</div>
+                    <div><strong>Tire seu certificado de aprovação</strong>, com validade de {data?.config?.validadeMeses || 24} meses.</div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 text-center">
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                  <Video className="h-5 w-5 mx-auto text-blue-600 mb-1" />
+                  <p className="text-xs text-blue-700 font-medium">Vídeos</p>
+                  <p className="text-lg font-bold text-blue-800">{data?.modulos?.filter((m: any) => m.videoUrl).length || 0}</p>
+                </div>
+                <div className="bg-purple-50 border border-purple-200 rounded-lg p-3">
+                  <GraduationCap className="h-5 w-5 mx-auto text-purple-600 mb-1" />
+                  <p className="text-xs text-purple-700 font-medium">Perguntas</p>
+                  <p className="text-lg font-bold text-purple-800">{totalPerguntas}</p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-3">
+                <Clock className="h-4 w-4 flex-shrink-0" />
+                <span>Reserve um tempo tranquilo — você precisa de <strong>{data?.config?.notaMinima || 70}%</strong> de acertos para ser aprovado.</span>
+              </div>
+
+              <Button
+                className="w-full bg-emerald-600 hover:bg-emerald-700 h-12 text-base font-semibold"
+                onClick={() => setStep("modulos")}
+              >
+                Começar Treinamento <ArrowRight className="h-5 w-5 ml-2" />
               </Button>
             </CardContent>
           </Card>

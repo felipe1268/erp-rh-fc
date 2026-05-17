@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
 import DashboardLayout from "@/components/DashboardLayout";
@@ -999,12 +999,20 @@ function PendentesTab({ companyId }: { companyId: number }) {
   const empList = trpc.employees.list.useQuery({ companyId, status: "Ativo" }, { enabled: companyId > 0 });
   const obras = trpc.obras.listActive.useQuery({ companyId }, { enabled: companyId > 0 });
   const configs = trpc.integracaoSST.listarConfigs.useQuery({ companyId }, { enabled: companyId > 0 });
+  // Rev. 2038 — quando true, ao criar o registro abre a tela pública em nova aba (vindo do "Iniciar agora").
+  const autoOpenRef = useRef(false);
   const criarRegistro = trpc.integracaoSST.criarRegistro.useMutation({
     onSuccess: (data) => {
       registros.refetch();
       emAndamento.refetch();
       pendentesAuto.refetch();
       const link = `${window.location.origin}/integracao/${data.token}`;
+      if (autoOpenRef.current) {
+        autoOpenRef.current = false;
+        window.open(link, "_blank", "noopener,noreferrer");
+        toast.success(`Integração de ${data.employeeNome || "colaborador"} iniciada em nova aba`);
+        return;
+      }
       setCreatedLink(link);
       setCreatedEmployee(data.employeeNome || "");
       toast.success("Integração criada com sucesso!");
@@ -1117,6 +1125,13 @@ function PendentesTab({ companyId }: { companyId: number }) {
     setShowNew(true);
   };
 
+  // Rev. 2038 — "Iniciar agora" cria registro e abre direto a tela pública (boas-vindas → vídeos → quiz).
+  const iniciarAgora = (emp: { id: number; nome: string; cpf: string | null; funcao: string | null }) => {
+    if (criarRegistro.isPending) return;
+    autoOpenRef.current = true;
+    criarRegistro.mutate({ companyId, employeeId: emp.id });
+  };
+
   if (!companyId) return <p className="text-muted-foreground p-4">Selecione uma empresa.</p>;
 
   return (
@@ -1198,8 +1213,8 @@ function PendentesTab({ companyId }: { companyId: number }) {
                       <Badge variant="outline" className={`text-xs ${tipoMeta.cls}`}>{tipoMeta.label}</Badge>
                       <Badge className={`text-xs ${estadoMeta.cls}`}>{estadoMeta.label}</Badge>
                       {p.kind === "employee" ? (
-                        <Button size="sm" className="h-7 text-xs bg-emerald-600 hover:bg-emerald-700" onClick={() => iniciarParaEmployee({ id: p.id, nome: p.nome, cpf: p.cpf, funcao: p.funcao })}>
-                          <UserPlus className="h-3 w-3 mr-1" />Iniciar agora
+                        <Button size="sm" className="h-7 text-xs bg-emerald-600 hover:bg-emerald-700" disabled={criarRegistro.isPending} onClick={() => iniciarAgora({ id: p.id, nome: p.nome, cpf: p.cpf, funcao: p.funcao })}>
+                          {criarRegistro.isPending ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <UserPlus className="h-3 w-3 mr-1" />}Iniciar agora
                         </Button>
                       ) : (
                         <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => { window.location.href = "/terceiros/funcionarios"; }}>
