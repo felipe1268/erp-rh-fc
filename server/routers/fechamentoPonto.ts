@@ -1641,6 +1641,48 @@ export const fechamentoPontoRouter = router({
         if (r.ajusteManual) emp.temAjusteManual = true;
       }
 
+      // Rev. 2054 — Férias no período: detecta colaboradores que estiveram em gozo de
+      // férias em qualquer dia do ciclo, pra excluir do ranking "Menos Dias Trabalhados"
+      // (injusto contar quem estava de férias como "pouco trabalho"). Suporta 3 fracionamentos.
+      const periodoIniBound = input.dataInicio || `${input.mesReferencia}-01`;
+      const [yyB, mmB] = input.mesReferencia.split("-").map(Number);
+      const periodoFimBound = input.dataFim || `${input.mesReferencia}-${String(new Date(yyB, mmB, 0).getDate()).padStart(2, "0")}`;
+      const feriasNoCiclo = await db.select({
+        employeeId: vacationPeriods.employeeId,
+        dataInicio: vacationPeriods.dataInicio,
+        dataFim: vacationPeriods.dataFim,
+        periodo2Inicio: vacationPeriods.periodo2Inicio,
+        periodo2Fim: vacationPeriods.periodo2Fim,
+        periodo3Inicio: vacationPeriods.periodo3Inicio,
+        periodo3Fim: vacationPeriods.periodo3Fim,
+      }).from(vacationPeriods).where(
+        and(
+          companyFilter(vacationPeriods.companyId, input),
+          sql`${vacationPeriods.status} NOT IN ('cancelada', 'pendente')`,
+          isNull(vacationPeriods.deletedAt),
+        )
+      );
+      const overlap = (ini: string | null, fim: string | null) =>
+        !!ini && !!fim && !(fim < periodoIniBound || ini > periodoFimBound);
+      const overlapDays = (ini: string | null, fim: string | null): number => {
+        if (!overlap(ini, fim)) return 0;
+        const a = (ini! < periodoIniBound) ? periodoIniBound : ini!;
+        const b = (fim! > periodoFimBound) ? periodoFimBound : fim!;
+        const ms = new Date(b + "T12:00:00").getTime() - new Date(a + "T12:00:00").getTime();
+        return Math.max(0, Math.round(ms / 86400000) + 1);
+      };
+      const feriasByEmp: Record<number, { emFerias: boolean; diasFerias: number }> = {};
+      for (const f of feriasNoCiclo) {
+        const dias =
+          overlapDays(f.dataInicio, f.dataFim) +
+          overlapDays(f.periodo2Inicio, f.periodo2Fim) +
+          overlapDays(f.periodo3Inicio, f.periodo3Fim);
+        if (dias > 0) {
+          const cur = feriasByEmp[f.employeeId] || { emFerias: false, diasFerias: 0 };
+          feriasByEmp[f.employeeId] = { emFerias: true, diasFerias: cur.diasFerias + dias };
+        }
+      }
+
       // Fetch active termination notices for this company/month
       const activeAvisos = await db.select({
         employeeId: terminationNotices.employeeId,
@@ -1728,6 +1770,9 @@ export const fechamentoPontoRouter = router({
           atrasos: minutesToHHMM(emp.totalMinutosAtrasos),
           emAvisoPrevio: avisoPrevioEmployeeIds.has(emp.employeeId),
           alertaInativo: statusInativo,
+          // Rev. 2054 — Férias no ciclo (pra excluir do ranking "Menos Dias Trabalhados")
+          emFerias: !!feriasByEmp[emp.employeeId]?.emFerias,
+          diasFerias: feriasByEmp[emp.employeeId]?.diasFerias || 0,
           // Rev. 2015 — CIPA marker
           cipaStatus: cipa?.status || null,           // 'ativo' | 'estabilidade' | null
           cipaCargo: cipa?.cargoCipa || null,         // "Presidente", "Vice", "Secretário", "Membro Titular" etc.

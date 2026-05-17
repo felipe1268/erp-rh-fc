@@ -1,6 +1,79 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2054 — Fechamento de Ponto · Ranking "Menos Dias Trabalhados"
+ * agora EXCLUI colaboradores que estavam em gozo de férias no período.
+ *
+ * Pedido direto do usuário (IMG_0941): "Quem tava em gozo de férias,
+ * não deveria estar na lista de menos dias trabalhados, não é injusto
+ * colocar este funcionário nesta lista?" — sim, é injusto. Quem está
+ * de férias por definição NÃO está trabalhando; rankeá-lo como pouco
+ * produtivo é erro conceitual e gera viés contra o colaborador.
+ *
+ * Caso concreto no print: MARCELO DE LIMA FELISBERTO (PEDREIRO II)
+ * aparece no top-7 com 3 dias trabalhados + badge "Férias" + "Não
+ * justificada" — confusão visual e injustiça evidente.
+ *
+ * Solução em 2 arquivos (zero schema):
+ *
+ * (A) `server/routers/fechamentoPonto.ts` — getSummary novo bloco
+ *     "Rev. 2054 Férias no período" antes do fetch de termination
+ *     notices. SELECT em `vacationPeriods` (status NOT IN cancelada/
+ *     pendente, deletedAt IS NULL, cross-tenant via companyFilter).
+ *     Pra cada férias overlapping os bounds do ciclo (input.dataInicio/
+ *     dataFim quando presentes, senão fallback pra mes calendário),
+ *     conta dias overlap em até 3 fracionamentos (dataInicio/Fim,
+ *     periodo2Inicio/Fim, periodo3Inicio/Fim) usando aritmética de
+ *     timestamps em UTC-meio-dia (evita drift de DST). Mapa
+ *     `feriasByEmp[employeeId] = {emFerias, diasFerias}`. 2 props
+ *     novas no return: `emFerias: boolean` + `diasFerias: number`
+ *     (ambas opt-out — clientes antigos ignoram silenciosamente).
+ *
+ * (B) `client/src/pages/FechamentoPonto.tsx` — useMemo `rankings`:
+ *     (1) propaga `emFerias`/`diasFerias` no objeto data spread (pareado
+ *     com cipaStatus/fotoUrl da Rev. 2015); (2) `allFaltosos` ganha
+ *     `&& !e.emFerias` no filtro — colaboradores em férias somem do
+ *     ranking E do CSV/PDF/contadores (filteredRankingRows deriva de
+ *     allFaltosos). Pontuais/Atrasados/Extras NÃO mudam — quem está
+ *     de férias geralmente não tem atrasos nem HE registrados, então
+ *     o filtro implícito já cuida (`e.atrasos > 0` / `e.horasExtras > 0`).
+ *
+ * Por que não esconder com badge "🏖 Férias" e manter na lista:
+ * o usuário foi explícito ("não deveria ESTAR na lista"). Manter
+ * com badge mantém o viés visual (TST/RH ainda lê como "esse cara
+ * trabalhou pouco") e polui a contagem de faltas no rodapé.
+ * Excluir é a decisão correta. A coluna "Férias" continua existindo
+ * no resumo geral (linha 351, tela principal) — quem quiser ver dias
+ * de gozo continua tendo.
+ *
+ * Por que detectar overlap (e não exigir gozo no dia exato): férias
+ * fracionadas podem cair em apenas parte do ciclo (ex: 11 dias só na
+ * primeira metade do mês); ainda assim é injusto cobrar produtividade
+ * normal — quem usou metade do ciclo em férias por definição trabalhou
+ * menos. Se virar problema futuro, fácil endurecer pra "≥ N dias úteis
+ * em gozo" via threshold no filtro client-side.
+ *
+ * R-001/R-007/R-010 OK: ZERO ALTER/DROP/DELETE. Read-only SELECT em
+ * vacationPeriods. ZERO nova dependência. ZERO mudança de schema.
+ *
+ * Preservado: Rev. 2053/2052/2051/2050 INTACTAS. CSV/PDF do ranking
+ * (Rev. 2031) deriva de filteredRankingRows → herda o filtro de graça.
+ * Modal de detalhe de falta da Rev. 2051 INTACTO (já enxergava férias
+ * como categoria separada — agora consistente: colaborador em gozo
+ * não aparece no ranking, mas se aparecer por outro motivo a categoria
+ * "ferias" continua tratada).
+ *
+ * Follow-up: (1) badge sutil "🏖 N dias de férias no ciclo" no resumo
+ * geral (não no ranking); (2) ranking dedicado "Em férias no período"
+ * (positivo, pra RH conferir gozo); (3) threshold configurável de dias
+ * mínimos de férias pra excluir do ranking (hoje 1 dia já exclui — RH
+ * pode querer "≥5 dias úteis"); (4) excluir também de pontuais quando
+ * férias cobre >50% do ciclo (ranking de pontualidade pode ficar
+ * enviesado por base muito pequena); (5) marcar "Afastado por INSS"
+ * com mesma lógica (auxílio doença ≠ falta — schema já tem dados).
+ *
+ * --------------------------------------------------------------------
+ *
  * Rev. 2053 — SST · Integração · +10 perguntas sobre NRs e Segurança
  * APPENDADAS ao banco-padrão (Regras de Ouro continuam intactas).
  *

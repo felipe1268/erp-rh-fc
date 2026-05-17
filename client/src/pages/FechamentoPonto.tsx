@@ -1030,6 +1030,9 @@ export default function FechamentoPonto() {
       cipaStatus: e.cipaStatus || null,
       cipaCargo: e.cipaCargo || null,
       cipaFimEstabilidade: e.cipaFimEstabilidade || null,
+      // Rev. 2054 — Férias no ciclo (pra excluir do ranking "Menos Dias Trabalhados")
+      emFerias: !!e.emFerias,
+      diasFerias: e.diasFerias || 0,
     }));
     // Top 5 mais pontuais (menos atrasos, mais dias)
     const allPontuais = [...data].filter(e => e.dias > 0).sort((a, b) => a.atrasos - b.atrasos || b.dias - a.dias);
@@ -1040,8 +1043,9 @@ export default function FechamentoPonto() {
     // Top 5 mais horas extras
     const allExtras = [...data].filter(e => e.horasExtras > 0).sort((a, b) => b.horasExtras - a.horasExtras);
     const extras = allExtras.slice(0, 5);
-    // Top 5 menos dias (possíveis faltas)
-    const allFaltosos = [...data].filter(e => e.dias >= 0).sort((a, b) => a.dias - b.dias);
+    // Top 5 menos dias (possíveis faltas) — Rev. 2054: EXCLUI colaboradores em
+    // gozo de férias no período (é injusto rankeá-los como "menos trabalhados").
+    const allFaltosos = [...data].filter(e => e.dias >= 0 && !e.emFerias).sort((a, b) => a.dias - b.dias);
     const faltosos = allFaltosos.slice(0, 5);
     return { pontuais, atrasados, extras, faltosos, allPontuais, allAtrasados, allExtras, allFaltosos, fmtHM };
   }, [summary.data]);
