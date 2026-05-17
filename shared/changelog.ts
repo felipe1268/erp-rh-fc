@@ -1,6 +1,67 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2029 — DP · Fechamento de Ponto · Modal "Memória de cálculo ·
+ * Atraso Acumulado" em FULL SCREEN com fontes maiores.
+ *
+ * Pedido direto do usuário (img image_1779037696863): "AUMENTE A TELA,
+ * FALA EM TELA FULL SCREEM E TEXTOS MAIORES EU NÃO CONSIGO ENXERGAR
+ * DESTE TAMANHO". O modal vinha com `w-[820px] max-w-[95vw]
+ * max-h-[88vh]` e fontes pequenas (text-xs/text-[12px]/text-[10px])
+ * que ficavam ilegíveis em desktops de alta resolução.
+ *
+ * Mudança em 1 arquivo: `client/src/pages/FechamentoPonto.tsx`
+ * (modal Rev. 2019, ~140L em 1 hunk no JSX, ZERO mudança de lógica).
+ *
+ *   - DialogContent: `w-[820px] max-w-[95vw] max-h-[88vh]` →
+ *     `w-screen h-screen max-w-none rounded-none border-0` (mesmo
+ *     padrão fullscreen já usado em outros modais do arquivo).
+ *   - Header gradient: padding px-5 py-3.5 → px-8 py-5; ícone
+ *     AlertTriangle h-5/w-10 → h-7/w-14; título text-base → text-2xl;
+ *     subtítulo text-xs → text-base com nome em text-lg.
+ *   - Conteúdo: padding px-5 py-4 → px-8 py-6 + `max-w-7xl mx-auto`
+ *     wrapper pra não esticar tabela em monitores ultrawide.
+ *   - Faixa explicativa: text-[12px] → text-base, ícone Info h-4 →
+ *     h-6, padding p-3 → p-5, leading-snug → leading-relaxed.
+ *   - Resumo: text-sm → text-lg, ícones h-4 → h-6, valores fmtHM em
+ *     text-xl.
+ *   - Tabela dia a dia: text-xs → text-base, padding px-3 py-2 →
+ *     px-5 py-4 em todas as células (thead/tbody/tfoot), valores
+ *     fmtHM no rodapé em text-lg.
+ *   - Badge "+Xh:YYmin" do atraso: text-[11px] px-2 py-0.5 →
+ *     text-base px-3 py-1.5.
+ *   - Observação por linha: text-[10px] "⚠ ver obs." (precisava
+ *     hover pra ver o texto) → text-sm com observação INLINE visível
+ *     ("⚠ {observacao}") — sem mais tooltip escondido.
+ *   - Empty-state: ícone CheckCircle h-10 → h-16, título text-sm →
+ *     text-xl, descrição text-xs → text-base.
+ *   - Rodapé didático: text-[10px] → text-sm em max-w-3xl mx-auto
+ *     com leading-relaxed.
+ *
+ * + `shared/version.ts` → 2029.
+ *
+ * R-001/R-007/R-010 OK: ZERO SQL/schema, ZERO mudança de router,
+ * ZERO mudança de lógica. Puramente visual (classes Tailwind +
+ * markup do JSX). Reversível em 1 arquivo / 1 hunk.
+ *
+ * Preservado:
+ *   - getAtrasoDetalhe (router Rev. 2027) INTACTO — mesma fonte
+ *     única de verdade.
+ *   - Princípio "SOMA(dias[].minutos) === tabela" INTACTO.
+ *   - Modal Rev. 2019 (estrutura header/conteúdo/empty-state) —
+ *     mesma anatomia, só re-escalada.
+ *   - Microcopy "De onde vem o número" da Rev. 2027 INTACTA.
+ *   - Fluxo de abertura (onClick na linha "Atraso Acumulado" da
+ *     tabela "Mais Atrasados") INTACTO.
+ *   - Tolerância CLT Rev. 2006 INTACTA.
+ *
+ * Follow-up:
+ *   - Aplicar mesma escalada de fontes aos outros modais "Memória
+ *     de cálculo" (H. Total, % Presença) se o usuário pedir.
+ *   - Considerar tema escuro para o modal full-screen.
+ *   - Botão "Imprimir / PDF" desse modal específico (já tem na
+ *     tabela-mãe, mas seria útil daqui também).
+ *
  * Rev. 2028 — Faxina do `replit.md` (manutenção, ZERO mudança de
  * comportamento de aplicação). O arquivo havia crescido pra ~13k
  * tokens (180 linhas, 144 bullets), com vários blocos detalhados
