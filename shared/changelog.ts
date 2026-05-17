@@ -1,6 +1,76 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2026 — SST · Integração de Segurança · Modal "Iniciar Integração"
+ * refeito sob a regra de ouro (header gradient + microcopy + CTA).
+ *
+ * Pedido direto do usuário (img IMG_0870): "Melhore esta tela conforme
+ * a nossa regra de ouro". O modal estava chapado: header simples com
+ * só o ícone UserPlus em verde, dois Selects lado a lado em max-w-lg
+ * (estreito demais — dropdown da Obra cortava pra fora do modal na
+ * tela do iPad), campo Configuração sem explicação do que "Automática"
+ * significa, CTA "Criar Integração" verde sólido sem destaque.
+ *
+ * Mudança em 1 arquivo:
+ *
+ * (A) `client/src/pages/sst/IntegracaoSST.tsx` (PendentesTab,
+ *   ~150L reescritas no Dialog `showNew`):
+ *   - DialogContent: max-w-lg → max-w-2xl, p-0 + gap-0 +
+ *     overflow-hidden pro header colorido encostar nas bordas.
+ *   - Header gradient `from-emerald-600 via-teal-600 to-emerald-700`
+ *     px-5 py-4, ícone ShieldCheck (ou CheckCircle no success state)
+ *     em badge branco h-11 w-11 rounded-xl ring-1, título em texto
+ *     branco bold + subtítulo em emerald-50/90 explicando o passo a
+ *     passo ("Selecione colaborador(es), defina obra e configuração,
+ *     e gere o link de acesso ao treinamento").
+ *   - Body p-5 com 2 blocos rounded-xl bordered:
+ *       (1) "Colaborador(es) *" com header slate-50 + ícone Users +
+ *           contador Badge emerald no canto direito; busca com input
+ *           h-10 autoFocus; dropdown de sugestões mostra AVATAR com
+ *           iniciais em gradient emerald→teal; cards de selecionados
+ *           com avatar gradient sólido + nome + função + X em hover
+ *           vermelho.
+ *       (2) Grid 2-col "Obra" (HardHat amber) + "Configuração"
+ *           (Sparkles emerald), cada um com helper text Info-ícone
+ *           explicando ("Vincula a integração à obra (aparece no
+ *           histórico…)" / "Define vídeos, nota mínima e validade…").
+ *   - CTA: botão gradient `from-emerald-600 to-teal-600` h-10 px-5
+ *     com Send + texto dinâmico ("Criar Integração" vs "Criar N
+ *     Integrações").
+ *   - Success state (`createdLink`) também usa o header gradient (com
+ *     CheckCircle); link agora aparece em card emerald-50 com label
+ *     uppercase + ícone Link; botões h-11 maiores.
+ *   - +5 ícones lucide: ShieldCheck, Building2 (reservado), Sparkles,
+ *     HardHat, Info.
+ *
+ * + shared/version.ts → 2026.
+ *
+ * R-001/R-007/R-010 OK: zero SQL, zero schema, zero router. Mudança
+ * puramente visual em 1 arquivo (~150L em 1 hunk). Reversível.
+ *
+ * Preservado:
+ *   - Toda a lógica (selectedEmps/selectedObraId/selectedConfigId/
+ *     handleCriar/criarRegistro/criarLote) INTACTA — só substituí
+ *     o JSX.
+ *   - Aba Pendentes (header verde, botão "Iniciar Integração", lista
+ *     de pendentes, busca) INTACTA.
+ *   - Rev. 2025 (DDS terceiro read-only) INTACTA.
+ *   - Rev. 2024 (DDS terceiros no detalhe + transferência) INTACTA.
+ *   - Rev. 2023 (vídeo inline) INTACTA.
+ *   - Rev. 2020 (companyId coercion) INTACTA.
+ *   - DashboardLayout Rev. 2018 INTACTO.
+ *
+ * Follow-up:
+ *   - Aplicar mesma regra de ouro aos demais modais SST/Integração
+ *     (Nova Sessão de DDS já está bom desde Rev. 2021; modal de Config
+ *     da Integração e Nova Sessão de Integração precisam do mesmo
+ *     tratamento).
+ *   - Avatar real (fotoUrl) no dropdown de sugestões e nos cards de
+ *     selecionados (hoje só iniciais — Rev. 2015 já popula fotoUrl
+ *     em outras telas).
+ *   - Pré-filtrar colaboradores que JÁ têm integração ativa pra
+ *     evitar duplicata.
+ *
  * Rev. 2025 — Terceiros · aba DDS · READ-ONLY (remove formulário de
  * "Registrar Participação em DDS").
  *

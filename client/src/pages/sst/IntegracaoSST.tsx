@@ -17,7 +17,7 @@ import {
   CheckCircle, XCircle, AlertTriangle, TrendingUp, GraduationCap, Eye, Video,
   ChevronDown, ChevronRight, Loader2, ClipboardList, BarChart3, RefreshCw, Search,
   Play, ExternalLink, Save, X, Film, UserPlus, Send, Link, Share2, MessageSquare,
-  UploadCloud, FileVideo, ChevronUp,
+  UploadCloud, FileVideo, ChevronUp, ShieldCheck, Building2, Sparkles, HardHat, Info,
 } from "lucide-react";
 
 function formatDate(d: string | null | undefined) {
@@ -1165,105 +1165,139 @@ function PendentesTab({ companyId }: { companyId: number }) {
       )}
 
       <Dialog open={showNew} onOpenChange={(v) => { if (!v) { setShowNew(false); resetForm(); } }}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <UserPlus className="h-5 w-5 text-emerald-600" />
-              Iniciar Integração de Segurança
-            </DialogTitle>
+        <DialogContent className="max-w-2xl p-0 gap-0 overflow-hidden">
+          {/* Rev. 2026 — Regra de ouro: header gradient emerald + ícone em badge branco,
+              microcopy explicativa, body p-5, CTA destacado. */}
+          <DialogHeader className="bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 px-5 py-4 border-b border-emerald-800/20">
+            <div className="flex items-center gap-3">
+              <div className="h-11 w-11 rounded-xl bg-white/95 ring-1 ring-white/40 shadow-sm flex items-center justify-center shrink-0">
+                {createdLink ? <CheckCircle className="h-6 w-6 text-emerald-600" /> : <ShieldCheck className="h-6 w-6 text-emerald-700" />}
+              </div>
+              <div className="min-w-0 flex-1">
+                <DialogTitle className="text-white text-lg font-bold leading-tight">
+                  {createdLink ? "Integração Criada!" : "Iniciar Integração de Segurança"}
+                </DialogTitle>
+                <p className="text-emerald-50/90 text-xs mt-0.5">
+                  {createdLink
+                    ? <>Envie o link para <strong className="text-white">{createdEmployee}</strong> realizar a integração</>
+                    : "Selecione colaborador(es), defina obra e configuração, e gere o link de acesso ao treinamento"}
+                </p>
+              </div>
+            </div>
           </DialogHeader>
 
           {createdLink ? (
-            <div className="space-y-4">
-              <div className="text-center p-4">
-                <div className="w-16 h-16 rounded-full bg-emerald-100 mx-auto mb-3 flex items-center justify-center">
-                  <CheckCircle className="h-8 w-8 text-emerald-600" />
-                </div>
-                <h3 className="font-semibold text-lg">Integração Criada!</h3>
-                <p className="text-sm text-muted-foreground mt-1">Envie o link abaixo para <strong>{createdEmployee}</strong> realizar a integração</p>
-              </div>
-
-              <div className="bg-muted rounded-lg p-3">
-                <Label className="text-xs text-muted-foreground mb-1 block">Link da Integração</Label>
+            <div className="p-5 space-y-4 bg-white">
+              <div className="rounded-xl border border-emerald-200 bg-gradient-to-br from-emerald-50 to-teal-50/60 p-4">
+                <Label className="text-[11px] uppercase tracking-wider text-emerald-700 font-bold mb-2 block flex items-center gap-1.5">
+                  <Link className="h-3.5 w-3.5" /> Link da Integração
+                </Label>
                 <div className="flex gap-2">
-                  <Input value={createdLink} readOnly className="text-xs bg-white" />
-                  <Button size="sm" variant="outline" onClick={() => { navigator.clipboard.writeText(createdLink); toast.success("Link copiado!"); }}>
+                  <Input value={createdLink} readOnly className="text-xs bg-white font-mono" />
+                  <Button size="sm" variant="outline" className="border-emerald-300 text-emerald-700 hover:bg-emerald-50" onClick={() => { navigator.clipboard.writeText(createdLink); toast.success("Link copiado!"); }}>
                     <Copy className="h-4 w-4" />
                   </Button>
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-2">
-                <Button variant="outline" className="text-green-700 border-green-300 hover:bg-green-50" onClick={() => {
+                <Button variant="outline" className="h-11 text-green-700 border-green-300 hover:bg-green-50 hover:border-green-400" onClick={() => {
                   const msg = encodeURIComponent(`Olá ${createdEmployee}! Segue o link para realizar sua Integração de Segurança:\n\n${createdLink}\n\nAcesse o link e siga as instruções.`);
                   window.open(`https://wa.me/?text=${msg}`, "_blank");
                 }}>
                   <MessageSquare className="h-4 w-4 mr-2" />Enviar WhatsApp
                 </Button>
-                <Button variant="outline" onClick={() => { resetForm(); }}>
+                <Button variant="outline" className="h-11" onClick={() => { resetForm(); }}>
                   <Plus className="h-4 w-4 mr-2" />Nova Integração
                 </Button>
               </div>
 
-              <DialogFooter>
-                <Button onClick={() => { setShowNew(false); resetForm(); }}>Fechar</Button>
+              <DialogFooter className="pt-2 border-t">
+                <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={() => { setShowNew(false); resetForm(); }}>Fechar</Button>
               </DialogFooter>
             </div>
           ) : (
-            <div className="space-y-4">
-              <div>
-                <Label>Buscar Colaborador *</Label>
-                <div className="relative">
-                  <Search className="h-4 w-4 absolute left-2.5 top-2.5 text-muted-foreground" />
-                  <Input
-                    value={empSearchTerm}
-                    onChange={e => setEmpSearchTerm(e.target.value)}
-                    placeholder="Digite o nome ou CPF do colaborador..."
-                    className="pl-8"
-                  />
-                </div>
-                {filteredEmps.length > 0 && (
-                  <div className="border rounded-md mt-1 max-h-40 overflow-y-auto bg-white shadow-lg">
-                    {filteredEmps.map((emp: any) => (
-                      <div key={emp.id} className="flex items-center justify-between px-3 py-2 hover:bg-muted/50 cursor-pointer border-b last:border-0" onClick={() => addEmployee(emp)}>
-                        <div>
-                          <p className="text-sm font-medium">{emp.nomeCompleto || emp.nome}</p>
-                          <p className="text-xs text-muted-foreground">{emp.funcao || "-"} · CPF: {emp.cpf || "-"}</p>
-                        </div>
-                        <Plus className="h-4 w-4 text-emerald-600" />
-                      </div>
-                    ))}
+            <div className="p-5 space-y-5 bg-white">
+              {/* Bloco 1 — Buscar colaborador */}
+              <div className="rounded-xl border border-slate-200 overflow-hidden">
+                <div className="bg-slate-50 px-4 py-2.5 border-b border-slate-200 flex items-center gap-2">
+                  <div className="h-8 w-8 rounded-lg bg-white ring-1 ring-slate-200 flex items-center justify-center">
+                    <Users className="h-4 w-4 text-emerald-700" />
                   </div>
-                )}
-                {empSearchTerm.length >= 2 && filteredEmps.length === 0 && !empList.isLoading && (
-                  <p className="text-xs text-muted-foreground mt-1">Nenhum colaborador encontrado</p>
-                )}
+                  <div className="flex-1">
+                    <h4 className="font-bold text-sm text-slate-800">Colaborador(es) *</h4>
+                    <p className="text-[11px] text-slate-600">Pode marcar vários — criamos 1 integração por pessoa</p>
+                  </div>
+                  {selectedEmps.length > 0 && (
+                    <Badge className="bg-emerald-600 text-white text-xs">{selectedEmps.length}</Badge>
+                  )}
+                </div>
+                <div className="p-3 space-y-2.5">
+                  <div className="relative">
+                    <Search className="h-4 w-4 absolute left-3 top-3 text-muted-foreground" />
+                    <Input
+                      value={empSearchTerm}
+                      onChange={e => setEmpSearchTerm(e.target.value)}
+                      placeholder="Digite o nome ou CPF do colaborador..."
+                      className="pl-9 h-10"
+                      autoFocus
+                    />
+                  </div>
+                  {filteredEmps.length > 0 && (
+                    <div className="border rounded-md max-h-44 overflow-y-auto bg-white shadow-sm">
+                      {filteredEmps.map((emp: any) => (
+                        <div key={emp.id} className="flex items-center justify-between px-3 py-2 hover:bg-emerald-50/60 cursor-pointer border-b last:border-0 transition-colors" onClick={() => addEmployee(emp)}>
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <div className="h-8 w-8 rounded-full bg-gradient-to-br from-emerald-100 to-teal-100 ring-1 ring-emerald-200 flex items-center justify-center text-[11px] font-bold text-emerald-700 shrink-0">
+                              {(emp.nomeCompleto || emp.nome || "?").split(" ").slice(0, 2).map((s: string) => s[0]).join("").toUpperCase()}
+                            </div>
+                            <div className="min-w-0">
+                              <p className="text-sm font-medium truncate">{emp.nomeCompleto || emp.nome}</p>
+                              <p className="text-xs text-muted-foreground truncate">{emp.funcao || "—"} · CPF: {emp.cpf || "—"}</p>
+                            </div>
+                          </div>
+                          <div className="h-7 w-7 rounded-full bg-emerald-100 ring-1 ring-emerald-300 flex items-center justify-center shrink-0">
+                            <Plus className="h-3.5 w-3.5 text-emerald-700" />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {empSearchTerm.length >= 2 && filteredEmps.length === 0 && !empList.isLoading && (
+                    <p className="text-xs text-muted-foreground italic">Nenhum colaborador encontrado para "{empSearchTerm}"</p>
+                  )}
+
+                  {selectedEmps.length > 0 && (
+                    <div className="space-y-1.5 max-h-40 overflow-y-auto pt-1">
+                      {selectedEmps.map(emp => (
+                        <div key={emp.id} className="flex items-center justify-between gap-2 bg-gradient-to-r from-emerald-50 to-teal-50/40 rounded-lg px-2.5 py-1.5 border border-emerald-200">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <div className="h-7 w-7 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 text-white flex items-center justify-center text-[10px] font-bold shrink-0">
+                              {emp.nome.split(" ").slice(0, 2).map(s => s[0]).join("").toUpperCase()}
+                            </div>
+                            <div className="min-w-0">
+                              <div className="text-sm font-semibold text-slate-800 truncate">{emp.nome}</div>
+                              <div className="text-[11px] text-slate-600 truncate">{emp.funcao || "—"}</div>
+                            </div>
+                          </div>
+                          <Button size="sm" variant="ghost" className="h-7 w-7 p-0 hover:bg-red-100 shrink-0" onClick={() => removeEmployee(emp.id)}>
+                            <X className="h-3.5 w-3.5 text-red-500" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
 
-              {selectedEmps.length > 0 && (
+              {/* Bloco 2 — Obra e Configuração */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <Label className="text-xs text-muted-foreground">{selectedEmps.length} colaborador(es) selecionado(s)</Label>
-                  <div className="space-y-1 mt-1 max-h-32 overflow-y-auto">
-                    {selectedEmps.map(emp => (
-                      <div key={emp.id} className="flex items-center justify-between bg-emerald-50 rounded px-3 py-1.5 border border-emerald-200">
-                        <div>
-                          <span className="text-sm font-medium">{emp.nome}</span>
-                          <span className="text-xs text-muted-foreground ml-2">{emp.funcao}</span>
-                        </div>
-                        <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={() => removeEmployee(emp.id)}>
-                          <X className="h-3 w-3 text-red-500" />
-                        </Button>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <Label>Obra (opcional)</Label>
+                  <Label className="text-xs font-semibold text-slate-700 flex items-center gap-1.5 mb-1.5">
+                    <HardHat className="h-3.5 w-3.5 text-amber-600" /> Obra <span className="text-slate-400 font-normal">(opcional)</span>
+                  </Label>
                   <Select value={selectedObraId} onValueChange={setSelectedObraId}>
-                    <SelectTrigger><SelectValue placeholder="Selecione a obra" /></SelectTrigger>
+                    <SelectTrigger className="h-10"><SelectValue placeholder="Selecione a obra" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="none">Sem obra específica</SelectItem>
                       {(obras.data as any[])?.map((o: any) => (
@@ -1271,11 +1305,17 @@ function PendentesTab({ companyId }: { companyId: number }) {
                       ))}
                     </SelectContent>
                   </Select>
+                  <p className="text-[11px] text-slate-500 mt-1 flex items-start gap-1">
+                    <Info className="h-3 w-3 mt-0.5 shrink-0" />
+                    Vincula a integração à obra (aparece no histórico e relatórios).
+                  </p>
                 </div>
                 <div>
-                  <Label>Configuração</Label>
+                  <Label className="text-xs font-semibold text-slate-700 flex items-center gap-1.5 mb-1.5">
+                    <Sparkles className="h-3.5 w-3.5 text-emerald-600" /> Configuração
+                  </Label>
                   <Select value={selectedConfigId} onValueChange={setSelectedConfigId}>
-                    <SelectTrigger><SelectValue placeholder="Automática" /></SelectTrigger>
+                    <SelectTrigger className="h-10"><SelectValue placeholder="Automática" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="auto">Automática (padrão)</SelectItem>
                       {configs.data?.map(c => (
@@ -1283,17 +1323,21 @@ function PendentesTab({ companyId }: { companyId: number }) {
                       ))}
                     </SelectContent>
                   </Select>
+                  <p className="text-[11px] text-slate-500 mt-1 flex items-start gap-1">
+                    <Info className="h-3 w-3 mt-0.5 shrink-0" />
+                    Define vídeos, nota mínima e validade. "Automática" usa a config padrão da empresa.
+                  </p>
                 </div>
               </div>
 
-              <DialogFooter>
+              <DialogFooter className="pt-3 border-t flex-row justify-end gap-2">
                 <Button variant="outline" onClick={() => { setShowNew(false); resetForm(); }}>Cancelar</Button>
                 <Button
-                  className="bg-emerald-600 hover:bg-emerald-700"
+                  className="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white shadow-sm h-10 px-5"
                   disabled={selectedEmps.length === 0 || criarRegistro.isPending || criarLote.isPending}
                   onClick={handleCriar}
                 >
-                  {(criarRegistro.isPending || criarLote.isPending) ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Send className="h-4 w-4 mr-1" />}
+                  {(criarRegistro.isPending || criarLote.isPending) ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> : <Send className="h-4 w-4 mr-1.5" />}
                   {selectedEmps.length > 1 ? `Criar ${selectedEmps.length} Integrações` : "Criar Integração"}
                 </Button>
               </DialogFooter>
