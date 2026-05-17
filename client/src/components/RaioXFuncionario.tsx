@@ -21,6 +21,7 @@ import {
 import { useEffect, useState, useCallback } from "react";
 import { useLocation } from "wouter";
 import DocumentPreviewDialog, { canPreviewFile } from "@/components/DocumentPreviewDialog";
+import { generateCertificadoIntegracaoSstPdf } from "@/lib/certificadoIntegracaoSstPdf";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -2625,7 +2626,11 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                   )}
                 </div>
 
-                {integracoesSST.length > 0 && (
+                {/* Rev. 2061 — gate adicional `emp` (de raioX?.funcionario) p/
+                    evitar crash quando integracoesSSTQ resolve antes do raioX
+                    e o usuário clica em Ver/PDF — params do gerador exigem
+                    emp.nomeCompleto/cpf/funcao. */}
+                {integracoesSST.length > 0 && emp && (
                   <div className="bg-white rounded-xl border p-6 mt-4">
                     <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2 mb-4">
                       <GraduationCap className="h-5 w-5 text-emerald-500" />
@@ -2657,7 +2662,90 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                                 <td className="p-2 text-center font-bold">{r.nota ? `${r.nota}%` : "-"}</td>
                                 <td className="p-2 text-xs">{r.dataRealizacao ? new Date(r.dataRealizacao).toLocaleDateString("pt-BR") : "-"}</td>
                                 <td className="p-2 text-xs">{r.dataValidade ? new Date(r.dataValidade).toLocaleDateString("pt-BR") : "-"}</td>
-                                <td className="p-2 text-xs">{r.certificadoUrl ? <a href={r.certificadoUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">Ver</a> : "-"}</td>
+                                <td className="p-2 text-xs">
+                                  {/* Rev. 2061 — Aprovados: gera o certificado SST on-the-fly
+                                      (mesmo motor da aba Aprovados / IntegracaoSST.tsx) com 2 botões:
+                                      Visualizar (nova aba p/ imprimir) + Baixar (PDF). Antes, este
+                                      slot só mostrava `certificadoUrl` (legado) — mas a Rev. 2049
+                                      passou a gerar o PDF dinamicamente a partir dos dados do
+                                      registro, então o link "-" aparecia mesmo p/ aprovados. */}
+                                  {r.status === "aprovado" ? (
+                                    <div className="flex items-center gap-1">
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        className="h-7 px-2 text-[11px] text-blue-700 border-blue-300 hover:bg-blue-50"
+                                        title="Visualizar / imprimir certificado"
+                                        onClick={async () => {
+                                          const winRef = window.open("about:blank", "_blank");
+                                          try {
+                                            await generateCertificadoIntegracaoSstPdf({
+                                              registroId: r.id,
+                                              employeeNome: emp?.nomeCompleto ?? "",
+                                              employeeCpf: emp?.cpf ?? "",
+                                              employeeFuncao: emp?.funcao ?? null,
+                                              obraNome: r.obraNome ?? null,
+                                              configNome: r.configNome ?? null,
+                                              dataRealizacao: r.dataRealizacao ?? null,
+                                              dataValidade: r.dataValidade ?? null,
+                                              nota: Number(r.nota || 0),
+                                              notaMinima: Number(r.configNotaMinima ?? 70),
+                                              acertos: null,
+                                              totalPerguntas: null,
+                                              tentativa: r.tentativas ?? null,
+                                              assinaturaTstBase64: r.assinaturaTstBase64 ?? null,
+                                              assinaturaTstNome: r.assinaturaTstNome ?? null,
+                                              assinaturaTstAssinadaEm: r.assinaturaTstAssinadaEm ?? null,
+                                              mode: "preview",
+                                              winRef,
+                                            });
+                                          } catch (e: any) {
+                                            try { winRef?.close(); } catch {}
+                                            toast.error(e?.message || "Erro ao gerar certificado");
+                                          }
+                                        }}
+                                      >
+                                        <Eye className="h-3 w-3 mr-1" /> Ver
+                                      </Button>
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        className="h-7 px-2 text-[11px] text-emerald-700 border-emerald-300 hover:bg-emerald-50"
+                                        title="Baixar certificado em PDF"
+                                        onClick={async () => {
+                                          try {
+                                            await generateCertificadoIntegracaoSstPdf({
+                                              registroId: r.id,
+                                              employeeNome: emp?.nomeCompleto ?? "",
+                                              employeeCpf: emp?.cpf ?? "",
+                                              employeeFuncao: emp?.funcao ?? null,
+                                              obraNome: r.obraNome ?? null,
+                                              configNome: r.configNome ?? null,
+                                              dataRealizacao: r.dataRealizacao ?? null,
+                                              dataValidade: r.dataValidade ?? null,
+                                              nota: Number(r.nota || 0),
+                                              notaMinima: Number(r.configNotaMinima ?? 70),
+                                              acertos: null,
+                                              totalPerguntas: null,
+                                              tentativa: r.tentativas ?? null,
+                                              assinaturaTstBase64: r.assinaturaTstBase64 ?? null,
+                                              assinaturaTstNome: r.assinaturaTstNome ?? null,
+                                              assinaturaTstAssinadaEm: r.assinaturaTstAssinadaEm ?? null,
+                                            });
+                                          } catch (e: any) {
+                                            toast.error(e?.message || "Erro ao gerar certificado");
+                                          }
+                                        }}
+                                      >
+                                        <FileDown className="h-3 w-3 mr-1" /> PDF
+                                      </Button>
+                                    </div>
+                                  ) : r.certificadoUrl ? (
+                                    <a href={r.certificadoUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">Ver</a>
+                                  ) : (
+                                    <span className="text-gray-400">-</span>
+                                  )}
+                                </td>
                               </tr>
                             );
                           })}

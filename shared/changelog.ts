@@ -1,6 +1,55 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2061 — Raio-X do Colaborador · card "Integração de Segurança
+ * (SST)" · coluna "Certificado" ganha botões **Ver** + **PDF** para
+ * registros aprovados. Pedido direto do usuário (IMG_0960): "O PDF
+ * da integração precisa ficar aqui para baixar e visualizar"
+ * (apontando pra coluna Certificado que mostrava só "-"). **Causa**:
+ * desde a Rev. 2049, o certificado SST passou a ser gerado
+ * dinamicamente via `generateCertificadoIntegracaoSstPdf` (a partir
+ * dos dados do registro + assinatura TST Rev. 2052 + config Rev. 2056)
+ * — não existe mais `certificadoUrl` armazenada. A célula da tabela
+ * no Raio-X (`client/src/components/RaioXFuncionario.tsx` L2660) só
+ * checava `r.certificadoUrl`, então sempre caía no fallback "-"
+ * mesmo p/ registros aprovados visíveis com nota 92%. **Fix em 1
+ * arquivo (zero schema, zero novo procedure)**: import do
+ * `generateCertificadoIntegracaoSstPdf` no topo + lógica condicional
+ * na célula: (a) `r.status === "aprovado"` → 2 botões pequenos
+ * (`h-7 px-2 text-[11px]`): **Ver** (azul, ícone Eye, abre nova aba
+ * em `mode: "preview"` p/ imprimir) e **PDF** (verde, ícone FileDown,
+ * baixa direto); (b) fallback p/ `certificadoUrl` legado preservado
+ * (caso registros antigos ainda tenham URL); (c) `<span>` "-" cinza
+ * p/ não-aprovados (pendente/reprovado/em_andamento/vencido — coerente
+ * com regra do motor: só aprovado tem certificado). Params do PDF
+ * espelham `certParamsFromRegistro` da `IntegracaoSST.tsx`: dados do
+ * empregado vêm de `emp` (já em scope L271 = `raioX?.funcionario`,
+ * com `nomeCompleto/cpf/funcao`); dados da config/assinatura/nota
+ * vêm do registro (enriquecido pelo `historicoColaborador` da
+ * Rev. 2035 + colunas assinatura da Rev. 2052). + `shared/version.ts`
+ * → 2061. **Por que NÃO mover pra um helper compartilhado**: 2
+ * callers só (IntegracaoSST.tsx + RaioXFuncionario.tsx); helper
+ * adicionaria overhead de prop-drilling de `emp` vs. `r.employeeNome`
+ * (estruturas diferentes). Quando houver 3º caller, fatorar. **Por
+ * que botão "Ver" abre janela ANTES do await**: evita pop-up blocker
+ * do Safari/Chrome (gesture-bound). Mesmo padrão da Rev. 2049
+ * (AprovadosTab). **Por que `r.status === "aprovado"` (e não `r.nota
+ * >= notaMinima`)**: status é a verdade autoritativa do motor (Rev.
+ * 2046+) — nota só vira aprovado depois de passar pelas validações
+ * de tentativas/expiração. Renderizar pela nota daria falso-positivo
+ * em registros em_andamento ou anulados. **R-001/R-007/R-010 OK**:
+ * ZERO ALTER/DROP/DELETE. ZERO mudança server-side. **Preservado**:
+ * Rev. 2060 (BETWEEN ciclo HE) INTACTA; Rev. 2059/2058/2057/2056
+ * (SST stack) INTACTAS; aba Aprovados da Rev. 2049 INTACTA (botões
+ * lá continuam funcionando — mesma fonte). **Follow-up**: (1) helper
+ * `<CertificadoSstButtons registro={r} employee={emp}/>` quando
+ * surgir 3º caller; (2) cachear PDF gerado por sessão (re-gerar é
+ * O(1) mas custa CPU client); (3) mostrar tooltip "Assinado por
+ * {nome TST}" no botão quando `assinaturaTstBase64` presente; (4)
+ * permitir RH baixar lote ("baixar todos os certificados deste mês")
+ * — hoje 1-a-1 só; (5) link p/ raio-x do colaborador na coluna
+ * Origem quando origem === "smo" / "reciclagem" (rastreabilidade).
+ *
  * Rev. 2060 — Fechamento de Ponto · Ranking "Mais Horas Extras" · BUG
  * CRÍTICO de verificação de aprovação corrigido. Pedido direto do
  * usuário (IMG_0959/0958/0957/0956/0955/0954/0953/0952): "A verificação
