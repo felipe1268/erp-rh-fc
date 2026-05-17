@@ -4993,6 +4993,8 @@ Responda EXATAMENTE no formato JSON abaixo:`;
           e.funcao as "employeeRole",
           e."codigoInterno",
           e."codigoInterno" as "employeeCode",
+          e."obraAtual" as "obraAtualId",
+          oa.nome as "obraAtualNome",
           COUNT(DISTINCT td."data") as "totalDias",
           SUM(CASE WHEN td."isFalta" = 1 AND td."tipoDia" = 'util' THEN 1 ELSE 0 END) as "totalFaltas",
           SUM(CASE WHEN td."isAtraso" = 1 THEN 1 ELSE 0 END) as "totalAtrasos",
@@ -5009,18 +5011,30 @@ Responda EXATAMENTE no formato JSON abaixo:`;
         FROM timecard_daily td
         LEFT JOIN employees e ON td."employeeId" = e.id
         LEFT JOIN obras o ON td."obraId" = o.id
+        LEFT JOIN obras oa ON e."obraAtual" = oa.id
         WHERE td."companyId" IN (${sql.join(resolveCompanyIds(input).map(id => sql`${id}`), sql`,`)}) AND td."mesCompetencia" = ${input.mesReferencia}
-        GROUP BY td."employeeId", e."nomeCompleto", e.cpf, e.funcao, e."codigoInterno"
+        GROUP BY td."employeeId", e."nomeCompleto", e.cpf, e.funcao, e."codigoInterno", e."obraAtual", oa.nome
         ORDER BY e.nomeCompleto
       `)) as any).rows || [];
       
       // Parse the GROUP_CONCAT fields
-      return (rows || []).map((r: any) => ({
-        ...r,
-        obraIds: r.obraIds ? r.obraIds.split(',').map(Number).filter((n: number) => !isNaN(n)) : [],
-        obraNomes: r.obraNomes ? r.obraNomes.split(',').filter(Boolean) : [],
-        multiplasObras: r.obraIds ? new Set(r.obraIds.split(',')).size > 1 : false,
-      }));
+      // Rev. 2001: se NENHUMA batida do mês trouxe obraId (raro mas comum pra funções
+      // administrativas: mestre de obras, comprador, RH etc. que batem ponto no
+      // escritório/QR-Code geral), faz fallback pra employees.obraAtual cadastrada.
+      // Isso evita a coluna "Obra(s)" aparecer como "—" quando o funcionário ESTÁ sim
+      // alocado a uma obra no cadastro — só não bateu ponto nela.
+      return (rows || []).map((r: any) => {
+        const obraIdsFromTd = r.obraIds ? r.obraIds.split(',').map(Number).filter((n: number) => !isNaN(n)) : [];
+        const obraNomesFromTd = r.obraNomes ? r.obraNomes.split(',').filter(Boolean) : [];
+        const useFallback = obraIdsFromTd.length === 0 && r.obraAtualId;
+        return {
+          ...r,
+          obraIds: useFallback ? [Number(r.obraAtualId)] : obraIdsFromTd,
+          obraNomes: useFallback && r.obraAtualNome ? [r.obraAtualNome] : obraNomesFromTd,
+          obraFromCadastro: useFallback, // flag pra UI sinalizar origem (opcional)
+          multiplasObras: obraIdsFromTd.length > 1,
+        };
+      });
     }),
 
   // ============================================================

@@ -1,6 +1,19 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2001 — DP · Fechamento de Ponto · Coluna "Obra(s)" usa employees.obraAtual como fallback.
+ * Pedido direto do usuário (17/05/2026, image IMG_0847_1779027664972.png): "Enivaldo e Anderson tem obra sim, veja o cadastro e corrija isso". Na imagem, no modal "Mais Pontuais", as linhas 1 (Anderson Dos Anjos Alkmin — Mestre de Obras) e 2 (Enivaldo Da Silva Andrioni — Comprador) apareciam com "—" na coluna Obra(s), mas o cadastro deles tem obra atribuída.
+ * Causa-raiz: a query `resumoPontoPorFuncionario` (server/routers/payrollEngine.ts L4990-5015) agrega obras EXCLUSIVAMENTE via `STRING_AGG(td."obraId")` em `timecard_daily`. Funções administrativas (mestre de obras, comprador, RH, engenheiro de escritório) costumam bater ponto em QR-Code geral ou via leitor sem informar obra — então `td.obraId` fica NULL e a coluna mostra "—" mesmo com `employees.obraAtual` preenchido no cadastro.
+ * Mudança em 2 arquivos:
+ *   (1) `server/routers/payrollEngine.ts` (resumoPontoPorFuncionario, ~15 linhas alteradas):
+ *     • SELECT ganha `e."obraAtual" as "obraAtualId"` + `oa.nome as "obraAtualNome"`.
+ *     • Novo LEFT JOIN: `LEFT JOIN obras oa ON e."obraAtual" = oa.id`.
+ *     • GROUP BY estendido pra incluir `e."obraAtual"` + `oa.nome` (necessário porque agora aparecem no SELECT).
+ *     • Bloco `.map()` reescrito: separa `obraIdsFromTd`/`obraNomesFromTd` do parsing antigo; computa `useFallback = obraIdsFromTd.length === 0 && r.obraAtualId`; se fallback, retorna `obraIds=[obraAtualId]` + `obraNomes=[obraAtualNome]`; senão, retorna o que o STRING_AGG deu. `multiplasObras` agora é calculado SÓ a partir das obras de timecard (regra de negócio: alguém é "múltiplas obras" se realmente bateu ponto em mais de uma no mês — o cadastro padrão não conta). Adicionada flag opcional `obraFromCadastro` pra UI poder sinalizar origem.
+ *   (2) `shared/version.ts` → 2001.
+ * Resultado: Anderson/Enivaldo (e qualquer outro funcionário admin com obra de cadastro mas sem batidas com obraId) param de aparecer com "—" e mostram a obra de alocação. Funcionários que batem ponto normalmente em obra continuam mostrando exatamente o que sempre mostraram (fallback só ativa quando timecard não trouxer NADA).
+ * Preservado: `multiplasObras` continua usando só timecard (sem alterar a lógica de "conflito" da Rev. 1965+); `cardFilter === "multiplasObras"` INTACTO; filtro de obra L960-964 do client funciona com ambos os casos (ID válido em qualquer cenário); `espelhoPontoFuncionario` (L5034) INTACTO (drill-down ainda mostra obra por dia, vinda só de timecard — correto, pois é por batida); query `conflitosObra` (L5056) INTACTA. Rev. 2000 INTACTA. Schema INTACTO (sem ALTER). R-001/R-007/R-010 OK. Reversível em 1 arquivo (1 hunk).
+ *
  * Rev. 2000 — DP · Fechamento de Ponto · Modal totalmente responsivo + cálculo correto de Dias Úteis.
  * Pedidos diretos do usuário (17/05/2026):
  *   (A) image IMG_0845_1779027439449.png + resposta de query: "A % Presença / Média de dias — denominador deveria ser dias úteis reais (~22) e não 30". Bug: `diasUteisNoPeriodo` (L1043) contava dias CORRIDOS no ciclo de fechamento (16/04→15/05 = 30) mas exibia como "dias úteis", inflando o denominador. Resultado: colaborador que trabalhou 10 dias de 22 úteis reais aparecia como 33% (10/30) em vez de ~45% (10/22).
