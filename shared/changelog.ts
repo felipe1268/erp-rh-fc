@@ -1,6 +1,96 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2055 — SST · Integração · Nova aba "Reprovados" no menu de
+ * navegação (entre Aprovados e Histórico), espelhando o padrão da aba
+ * Aprovados (Rev. 2049) mas adaptada pro fluxo de reprovação.
+ *
+ * Pedido direto do usuário (IMG_0942): "Liste os reprovados também".
+ * Contexto: a Rev. 2049 criou aba dedicada pra Aprovados (com botões
+ * de certificado/assinatura/raio-x); reprovados ficavam diluídos no
+ * Histórico junto com pendentes/aprovados/vencidos, exigindo filtro
+ * manual no Select de status. Aba dedicada dá visibilidade direta de
+ * quem precisa refazer.
+ *
+ * Solução em 1 arquivo (zero schema, zero novo procedure):
+ *
+ * `client/src/pages/sst/IntegracaoSST.tsx`:
+ *   (1) Tabs config L70 — nova entrada `reprovados` entre `aprovados`
+ *       e `historico`, ícone XCircle (já importado L21), descrição
+ *       "Colaboradores que não atingiram a nota mínima · precisam refazer".
+ *   (2) TabsContent L138 — `<ReprovadosTab companyId={companyId} />`.
+ *   (3) Novo componente `ReprovadosTab` (~170 LOC) inserido após o
+ *       AlertDialog de remover assinatura da AprovadosTab e antes da
+ *       declaração de AssinarTstDialog. Reusa `trpc.integracaoSST.
+ *       listarRegistros({status:"reprovado"})` (procedure existente já
+ *       aceita filtro) e `excluirRegistros` (Rev. 2044 — soft-delete
+ *       via deletedAt; colaborador volta automaticamente pra Pendentes).
+ *
+ * UI/UX:
+ *   - Banner explicativo vermelho no topo: "Reprovados NÃO recebem
+ *     certificado e precisam refazer a integração".
+ *   - Header "Reprovados · N" + busca por nome/CPF/obra (mesmo padrão
+ *     da AprovadosTab).
+ *   - Tabela 9 colunas: Colaborador · CPF · Função · Obra · Nota (badge
+ *     vermelho) · Mínima · Tentativas (badge outline) · Reprovação
+ *     (data) · Ações.
+ *   - 2 ações por linha: (a) "Liberar" (botão âmbar outline com
+ *     RefreshCw — apaga o registro via excluirRegistros; AlertDialog
+ *     âmbar pra confirmar — devolve colaborador pra Pendentes); (b)
+ *     "Raio-X" (Link wouter pra `/raio-x/{employeeId}`).
+ *   - Estados padrão: loading (Loader2), erro com retry (AlertTriangle
+ *     + botão Tentar novamente), vazio motivacional ("Nenhum
+ *     colaborador reprovado. Bom sinal!"), busca vazia.
+ *
+ * Por que NÃO inclui botões de certificado/assinatura/raio-x-de-
+ * certificado: por definição reprovado NÃO TEM certificado emitido
+ * (regra do motor da Rev. 2046+). Mostrar esses botões seria mentir
+ * pro RH.
+ *
+ * Por que ação "Liberar" e não "Aprovar manualmente": liberar é
+ * pedagogicamente correto — o colaborador refaz o questionário, vê
+ * onde errou, reforça aprendizado. Aprovação manual burlaria o sistema
+ * de avaliação e o vídeo de integração (NR-1.7). Se RH quiser
+ * aprovação manual em casos específicos, ainda pode editar via
+ * Histórico (mas é pista falsa).
+ *
+ * Por que reusar `excluirRegistros` (soft-delete) em vez de criar
+ * `liberarParaRefazer`: o efeito é idêntico — o filtro IS NULL em
+ * `deletedAt` faz o registro sumir das listagens; o colaborador volta
+ * a aparecer em Pendentes automaticamente (via fluxo da Rev. 2044).
+ * Toast diferenciado ("liberada(s)" em vez de "excluído(s)") deixa a
+ * semântica clara pro RH. ZERO nova procedure = ZERO superfície de
+ * ataque + ZERO chance de drift entre os dois fluxos.
+ *
+ * R-001/R-007/R-010 OK: ZERO ALTER/DROP/SQL direto; `excluirRegistros`
+ * faz soft-delete cross-tenant (já validado na Rev. 2044/2045/2052).
+ *
+ * Preservado: Rev. 2054 (filtro férias no ranking) INTACTA; AprovadosTab
+ * INTACTA (apenas adicionei componente novo no mesmo arquivo);
+ * HistoricoTab INTACTO (continua mostrando reprovados via filtro
+ * "reprovado" — agora redundante mas inofensivo); KPI Card "Reprovados"
+ * do DashboardTab (L166) continua mostrando contador.
+ *
+ * Arquivos tocados:
+ *   - client/src/pages/sst/IntegracaoSST.tsx
+ *   - shared/version.ts → 2055
+ *   - shared/changelog.ts (este bloco)
+ *   - replit.md (rotação Top-5)
+ *
+ * Follow-up:
+ *   (1) Exibir motivo detalhado da reprovação (quais perguntas errou
+ *       — exige join com sst_integracao_respostas);
+ *   (2) Bulk-liberar (selecionar várias reprovações de uma vez,
+ *       padrão da Rev. 2044);
+ *   (3) E-mail/WhatsApp automático pro colaborador reprovado com link
+ *       direto pra refazer;
+ *   (4) Histórico de tentativas anteriores (hoje some quando libera —
+ *       talvez manter como `dataAnularReprovacao` em vez de soft-delete);
+ *   (5) Bloqueio configurável após N reprovações (escalar pra RH/TST
+ *       presencial em vez de auto-liberar infinitamente).
+ */
+
+/**
  * Rev. 2054 — Fechamento de Ponto · Ranking "Menos Dias Trabalhados"
  * agora EXCLUI colaboradores que estavam em gozo de férias no período.
  *

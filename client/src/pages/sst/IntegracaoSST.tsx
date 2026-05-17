@@ -64,6 +64,7 @@ export default function IntegracaoSST() {
     { value: "config", label: "Configurações", icon: Settings, desc: "Regras e fluxo" },
     { value: "pendentes", label: "Pendentes", icon: Clock, desc: "A concluir" },
     { value: "aprovados", label: "Aprovados", icon: Award, desc: "Certificados emitidos · ficam salvos no Raio-X do colaborador" },
+    { value: "reprovados", label: "Reprovados", icon: XCircle, desc: "Colaboradores que não atingiram a nota mínima · precisam refazer" },
     { value: "historico", label: "Histórico", icon: History, desc: "Concluídos" },
     { value: "sessoes", label: "Sessões", icon: Users, desc: "Turmas presenciais" },
   ];
@@ -131,6 +132,7 @@ export default function IntegracaoSST() {
           <TabsContent value="config" className="mt-0"><ConfigTab companyId={companyId} /></TabsContent>
           <TabsContent value="pendentes" className="mt-0"><PendentesTab companyId={companyId} /></TabsContent>
           <TabsContent value="aprovados" className="mt-0"><AprovadosTab companyId={companyId} /></TabsContent>
+          <TabsContent value="reprovados" className="mt-0"><ReprovadosTab companyId={companyId} /></TabsContent>
           <TabsContent value="historico" className="mt-0"><HistoricoTab companyId={companyId} /></TabsContent>
           <TabsContent value="sessoes" className="mt-0"><SessoesTab companyId={companyId} /></TabsContent>
         </Tabs>
@@ -1858,6 +1860,180 @@ function AprovadosTab({ companyId }: { companyId: number }) {
               className="bg-red-600 hover:bg-red-700"
             >
               {removerAssMut.isPending ? "Removendo..." : "Remover"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  );
+}
+
+// Rev. 2055 — Aba "Reprovados" — pedido do usuário (IMG_0942): "Liste os
+// reprovados também". Espelha AprovadosTab (Rev. 2049) mas SEM certificado/
+// assinatura/raio-x-de-certificado: reprovado não recebe certificado.
+// Mostra nota (vermelho), tentativas, datas + 2 ações: (a) liberar pra
+// refazer (exclui o registro → colaborador volta pra Pendentes via fluxo
+// excluirRegistros da Rev. 2044); (b) abrir Raio-X do colaborador.
+function ReprovadosTab({ companyId }: { companyId: number }) {
+  const registros = trpc.integracaoSST.listarRegistros.useQuery(
+    { companyId, status: "reprovado" },
+    { enabled: companyId > 0 }
+  );
+  const [searchTerm, setSearchTerm] = useState("");
+  const [confirmExcluir, setConfirmExcluir] = useState<{ ids: number[]; titulo: string; descricao: string } | null>(null);
+
+  const excluirMut = trpc.integracaoSST.excluirRegistros.useMutation({
+    onSuccess: (data) => {
+      toast.success(`${data.count} reprovação(ões) liberada(s) · colaborador(es) voltam para "Pendentes" pra refazer.`);
+      registros.refetch();
+      setConfirmExcluir(null);
+    },
+    onError: (err: any) => toast.error(err?.message || "Erro ao liberar para refazer"),
+  });
+
+  const filtered = useMemo(() => {
+    const list = registros.data || [];
+    if (!searchTerm) return list;
+    const q = searchTerm.toLowerCase();
+    return list.filter((r: any) =>
+      r.employeeNome?.toLowerCase().includes(q) ||
+      r.employeeCpf?.includes(searchTerm) ||
+      r.obraNome?.toLowerCase().includes(q)
+    );
+  }, [registros.data, searchTerm]);
+
+  const liberarUm = (r: any) => {
+    setConfirmExcluir({
+      ids: [r.id],
+      titulo: `Liberar ${r.employeeNome || "colaborador"} para refazer?`,
+      descricao: `Este registro de reprovação será apagado e o colaborador volta para "Pendentes". O histórico de tentativas anteriores se perde — use com cautela.`,
+    });
+  };
+
+  if (!companyId) return <p className="text-muted-foreground p-4">Selecione uma empresa.</p>;
+
+  const total = (registros.data || []).length;
+
+  return (
+    <div className="space-y-4">
+      {/* Banner explicativo vermelho */}
+      <div className="rounded-lg border border-red-200 bg-red-50/60 p-3 flex gap-3 items-start">
+        <XCircle className="h-5 w-5 text-red-600 mt-0.5 shrink-0" />
+        <div className="text-sm text-red-900">
+          <p className="font-semibold">Colaboradores reprovados</p>
+          <p className="text-red-800/90">
+            Não atingiram a nota mínima do questionário. Reprovados <strong>não recebem certificado</strong> e precisam refazer a integração.
+            Use "Liberar para refazer" pra devolver o colaborador à fila de Pendentes.
+          </p>
+        </div>
+      </div>
+
+      <div className="flex justify-between items-center flex-wrap gap-2">
+        <h3 className="font-semibold">Reprovados {total > 0 && <span className="text-muted-foreground font-normal">· {total}</span>}</h3>
+        <div className="relative">
+          <Search className="h-4 w-4 absolute left-2 top-2.5 text-muted-foreground" />
+          <Input value={searchTerm} onChange={e => setSearchTerm(e.target.value)} placeholder="Buscar nome, CPF, obra..." className="pl-8 w-64" />
+        </div>
+      </div>
+
+      {registros.isError ? (
+        <div className="rounded-lg border border-red-200 bg-red-50 p-4 flex items-start gap-3">
+          <AlertTriangle className="h-5 w-5 text-red-600 mt-0.5 shrink-0" />
+          <div className="flex-1">
+            <p className="font-semibold text-red-900">Falha ao carregar reprovados</p>
+            <p className="text-sm text-red-800/90">{(registros.error as any)?.message || "Erro desconhecido."}</p>
+          </div>
+          <Button size="sm" variant="outline" onClick={() => registros.refetch()}>
+            <RefreshCw className="h-4 w-4 mr-1" /> Tentar novamente
+          </Button>
+        </div>
+      ) : registros.isLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : (
+        <div className="rounded-md border overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead><tr className="border-b bg-muted/50">
+              <th className="p-2 text-left">Colaborador</th>
+              <th className="p-2 text-left">CPF</th>
+              <th className="p-2 text-left">Função</th>
+              <th className="p-2 text-left">Obra</th>
+              <th className="p-2 text-center">Nota</th>
+              <th className="p-2 text-center">Mínima</th>
+              <th className="p-2 text-center">Tentativas</th>
+              <th className="p-2 text-left">Reprovação</th>
+              <th className="p-2 text-left w-44">Ações</th>
+            </tr></thead>
+            <tbody>
+              {filtered.length === 0 && (
+                <tr><td colSpan={9} className="p-6 text-center text-muted-foreground">
+                  {searchTerm ? "Nenhum reprovado encontrado para a busca." : "Nenhum colaborador reprovado. Bom sinal!"}
+                </td></tr>
+              )}
+              {filtered.map((r: any) => {
+                const notaMin = Number(r.configNotaMinima ?? 70);
+                const nota = Number(r.nota || 0);
+                return (
+                  <tr key={r.id} className="border-b hover:bg-red-50/30">
+                    <td className="p-2 font-medium">{r.employeeNome || "-"}</td>
+                    <td className="p-2 text-xs">{r.employeeCpf || "-"}</td>
+                    <td className="p-2 text-xs">{r.employeeFuncao || "-"}</td>
+                    <td className="p-2 text-xs">{r.obraNome || "-"}</td>
+                    <td className="p-2 text-center">
+                      <Badge className="bg-red-100 text-red-800 border-red-300">
+                        {r.nota != null ? `${nota}%` : "-"}
+                      </Badge>
+                    </td>
+                    <td className="p-2 text-center text-xs text-muted-foreground">{notaMin}%</td>
+                    <td className="p-2 text-center">
+                      <Badge variant="outline" className="text-xs">{r.tentativas ?? 0}</Badge>
+                    </td>
+                    <td className="p-2 text-xs">{formatDate(r.dataRealizacao)}</td>
+                    <td className="p-2">
+                      <div className="flex gap-1">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 border-amber-300 text-amber-700 hover:bg-amber-50"
+                          onClick={() => liberarUm(r)}
+                          disabled={excluirMut.isPending}
+                          title="Apaga o registro de reprovação e devolve o colaborador para Pendentes"
+                        >
+                          <RefreshCw className="h-3.5 w-3.5 mr-1" /> Liberar
+                        </Button>
+                        {r.employeeId ? (
+                          <WouterLink href={`/raio-x/${r.employeeId}`}>
+                            <Button size="sm" variant="ghost" className="h-7 text-xs" title="Abrir Raio-X do colaborador">
+                              <FileText className="h-3.5 w-3.5 mr-1" /> Raio-X
+                            </Button>
+                          </WouterLink>
+                        ) : null}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      <AlertDialog open={!!confirmExcluir} onOpenChange={(o) => !o && !excluirMut.isPending && setConfirmExcluir(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{confirmExcluir?.titulo}</AlertDialogTitle>
+            <AlertDialogDescription>{confirmExcluir?.descricao}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={excluirMut.isPending}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-amber-600 hover:bg-amber-700 text-white"
+              disabled={excluirMut.isPending}
+              onClick={(e) => {
+                e.preventDefault();
+                if (!confirmExcluir) return;
+                excluirMut.mutate({ companyId, ids: confirmExcluir.ids });
+              }}
+            >
+              {excluirMut.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-1" />}
+              Liberar para refazer
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
