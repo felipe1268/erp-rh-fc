@@ -1959,148 +1959,214 @@ export default function FechamentoPonto() {
                   </Card>
                 )}
 
-                {/* ===== RANKINGS DE PONTUALIDADE ===== */}
-                {!cardFilter && rankings && (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
-                    {/* Mais Pontuais */}
-                    <Card className="border-t-4 border-t-green-500">
-                      <CardHeader className="pb-2 pt-3 px-4">
-                        <CardTitle className="text-xs font-semibold flex items-center justify-between text-green-700">
-                          <button onClick={() => { setRankingModal("pontuais"); setRankingSearch(""); setRankingObraFilter("all"); }} className="flex items-center gap-1.5 hover:underline cursor-pointer">
-                            <CheckCircle className="h-3.5 w-3.5" /> Mais Pontuais
-                          </button>
-                          <span className="text-[10px] font-normal text-muted-foreground">{rankings.allPontuais.length} colab.</span>
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent className="px-4 pb-3">
-                        <div className="space-y-1">
-                          {rankings.pontuais.map((e: any, i: number) => (
-                            <div key={e.id} className="flex items-center justify-between text-xs py-1 border-b last:border-0">
-                              <div className="flex items-center gap-2">
-                                <span className={`font-bold w-4 text-center ${i === 0 ? "text-green-600" : "text-muted-foreground"}`}>{i + 1}</span>
-                                <button className="text-blue-700 hover:underline text-left truncate max-w-[120px]" onClick={() => openPontoDetalhe(e.id)}>{e.nome}</button>
-                                <EmpStatusBadge status={e.status} />
+                {/* ===== RANKINGS DE PONTUALIDADE — Rev. 1997 (regras de ouro) ===== */}
+                {!cardFilter && rankings && (() => {
+                  // Helper inline — gera config visual por tipo (mantém lógica de dados INTACTA)
+                  const cards: Array<{
+                    key: "pontuais" | "atrasados" | "extras" | "faltosos";
+                    title: string;
+                    Icon: typeof CheckCircle;
+                    hint: string;
+                    fromHex: string;     // gradient start
+                    toHex: string;       // gradient end
+                    chipBg: string;
+                    chipText: string;
+                    borderColor: string;
+                    metricColor: string;
+                    list: any[];
+                    allList: any[];
+                    metricFor: (e: any) => string;
+                    emptyMsg: string;
+                    rankColor: string;
+                  }> = [
+                    { key: "pontuais",  title: "Mais Pontuais",          Icon: CheckCircle,  hint: "Top sem atrasos",          fromHex: "from-emerald-50",  toHex: "to-white", chipBg: "bg-emerald-100", chipText: "text-emerald-700", borderColor: "border-emerald-200 hover:border-emerald-400", metricColor: "text-emerald-700", list: rankings.pontuais,  allList: rankings.allPontuais,  emptyMsg: "Sem dados", rankColor: "text-emerald-600", metricFor: (e: any) => e.atrasosStr === "0:00" ? "Sem atraso" : e.atrasosStr },
+                    { key: "atrasados", title: "Mais Atrasados",         Icon: XCircle,      hint: "Atenção crítica",          fromHex: "from-red-50",      toHex: "to-white", chipBg: "bg-red-100",     chipText: "text-red-700",     borderColor: "border-red-200 hover:border-red-400",         metricColor: "text-red-700",     list: rankings.atrasados, allList: rankings.allAtrasados, emptyMsg: "Nenhum atraso", rankColor: "text-red-600", metricFor: (e: any) => e.atrasosStr },
+                    { key: "extras",    title: "Mais Horas Extras",      Icon: Zap,          hint: "Volume de HE no mês",      fromHex: "from-amber-50",    toHex: "to-white", chipBg: "bg-amber-100",   chipText: "text-amber-700",   borderColor: "border-amber-200 hover:border-amber-400",     metricColor: "text-amber-700",   list: rankings.extras,    allList: rankings.allExtras,    emptyMsg: "Sem extras", rankColor: "text-amber-600", metricFor: (e: any) => e.horasExtrasStr },
+                    { key: "faltosos",  title: "Menos Dias Trabalhados", Icon: CalendarDays, hint: "Possíveis faltas/escala",  fromHex: "from-slate-100",   toHex: "to-white", chipBg: "bg-slate-200",   chipText: "text-slate-700",   borderColor: "border-slate-200 hover:border-slate-400",     metricColor: "text-slate-700",   list: rankings.faltosos,  allList: rankings.allFaltosos,  emptyMsg: "Sem dados", rankColor: "text-slate-600", metricFor: (e: any) => `${e.dias} dia${e.dias !== 1 ? "s" : ""}` },
+                  ];
+                  return (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+                      {cards.map(c => {
+                        const Icon = c.Icon;
+                        return (
+                          <div key={c.key} className={`group relative rounded-xl border-2 ${c.borderColor} bg-gradient-to-br ${c.fromHex} ${c.toHex} shadow-sm hover:shadow-md transition-all overflow-hidden`}>
+                            {/* Header clicável */}
+                            <button
+                              onClick={() => { setRankingModal(c.key); setRankingSearch(""); setRankingObraFilter("all"); }}
+                              className="w-full px-4 pt-3 pb-2 flex items-start justify-between gap-2 cursor-pointer text-left"
+                              title={`Abrir detalhamento completo — ${c.allList.length} colaboradores`}
+                            >
+                              <div className="flex items-center gap-2 min-w-0">
+                                <span className={`inline-flex items-center justify-center h-7 w-7 rounded-lg ${c.chipBg} ${c.chipText} ring-2 ring-white shadow-sm shrink-0`}>
+                                  <Icon className="h-3.5 w-3.5" />
+                                </span>
+                                <div className="min-w-0">
+                                  <div className={`text-xs font-bold ${c.chipText} truncate`}>{c.title}</div>
+                                  <div className="text-[10px] text-slate-500 truncate">{c.hint}</div>
+                                </div>
                               </div>
-                              <span className="text-green-600 font-mono">{e.atrasosStr === "0:00" ? "Sem atraso" : e.atrasosStr}</span>
-                            </div>
-                          ))}
-                          {rankings.pontuais.length === 0 && <p className="text-xs text-muted-foreground text-center py-2">Sem dados</p>}
-                        </div>
-                      </CardContent>
-                    </Card>
-
-                    {/* Mais Atrasados */}
-                    <Card className="border-t-4 border-t-red-500">
-                      <CardHeader className="pb-2 pt-3 px-4">
-                        <CardTitle className="text-xs font-semibold flex items-center justify-between text-red-700">
-                          <button onClick={() => { setRankingModal("atrasados"); setRankingSearch(""); setRankingObraFilter("all"); }} className="flex items-center gap-1.5 hover:underline cursor-pointer">
-                            <XCircle className="h-3.5 w-3.5" /> Mais Atrasados
-                          </button>
-                          <span className="text-[10px] font-normal text-muted-foreground">{rankings.allAtrasados.length} colab.</span>
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent className="px-4 pb-3">
-                        <div className="space-y-1">
-                          {rankings.atrasados.map((e: any, i: number) => (
-                            <div key={e.id} className="flex items-center justify-between text-xs py-1 border-b last:border-0">
-                              <div className="flex items-center gap-2">
-                                <span className={`font-bold w-4 text-center ${i === 0 ? "text-red-600" : "text-muted-foreground"}`}>{i + 1}</span>
-                                <button className="text-blue-700 hover:underline text-left truncate max-w-[120px]" onClick={() => openPontoDetalhe(e.id)}>{e.nome}</button>
-                                <EmpStatusBadge status={e.status} />
+                              <div className="text-right shrink-0">
+                                <div className={`text-lg font-extrabold leading-none ${c.metricColor}`}>{c.allList.length}</div>
+                                <div className="text-[9px] text-slate-500 uppercase tracking-wide">colab.</div>
                               </div>
-                              <span className="text-red-600 font-mono">{e.atrasosStr}</span>
-                            </div>
-                          ))}
-                          {rankings.atrasados.length === 0 && <p className="text-xs text-muted-foreground text-center py-2">Nenhum atraso</p>}
-                        </div>
-                      </CardContent>
-                    </Card>
+                            </button>
 
-                    {/* Mais Horas Extras */}
-                    <Card className="border-t-4 border-t-amber-500">
-                      <CardHeader className="pb-2 pt-3 px-4">
-                        <CardTitle className="text-xs font-semibold flex items-center justify-between text-amber-700">
-                          <button onClick={() => { setRankingModal("extras"); setRankingSearch(""); setRankingObraFilter("all"); }} className="flex items-center gap-1.5 hover:underline cursor-pointer">
-                            <Zap className="h-3.5 w-3.5" /> Mais Horas Extras
-                          </button>
-                          <span className="text-[10px] font-normal text-muted-foreground">{rankings.allExtras.length} colab.</span>
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent className="px-4 pb-3">
-                        <div className="space-y-1">
-                          {rankings.extras.map((e: any, i: number) => (
-                            <div key={e.id} className="flex items-center justify-between text-xs py-1 border-b last:border-0">
-                              <div className="flex items-center gap-2">
-                                <span className={`font-bold w-4 text-center ${i === 0 ? "text-amber-600" : "text-muted-foreground"}`}>{i + 1}</span>
-                                <button className="text-blue-700 hover:underline text-left truncate max-w-[120px]" onClick={() => openPontoDetalhe(e.id)}>{e.nome}</button>
-                                <EmpStatusBadge status={e.status} />
+                            {/* Lista top-5 */}
+                            <div className="px-3 pb-2">
+                              <div className="space-y-0.5">
+                                {c.list.map((e: any, i: number) => (
+                                  <div key={e.id} className="flex items-center justify-between text-xs py-1 px-1 rounded hover:bg-white/70 transition-colors">
+                                    <div className="flex items-center gap-1.5 min-w-0">
+                                      <span className={`font-bold w-4 text-center text-[11px] ${i === 0 ? c.rankColor : "text-slate-400"}`}>{i + 1}</span>
+                                      <button className="text-blue-700 hover:underline text-left truncate max-w-[120px]" onClick={() => openPontoDetalhe(e.id)}>{e.nome}</button>
+                                      <EmpStatusBadge status={e.status} />
+                                    </div>
+                                    <span className={`${c.metricColor} font-mono text-[11px] font-semibold shrink-0`}>{c.metricFor(e)}</span>
+                                  </div>
+                                ))}
+                                {c.list.length === 0 && <p className="text-xs text-muted-foreground text-center py-2">{c.emptyMsg}</p>}
                               </div>
-                              <span className="text-amber-600 font-mono">{e.horasExtrasStr}</span>
                             </div>
-                          ))}
-                          {rankings.extras.length === 0 && <p className="text-xs text-muted-foreground text-center py-2">Sem extras</p>}
-                        </div>
-                      </CardContent>
-                    </Card>
 
-                    {/* Menos Dias (Faltas) */}
-                    <Card className="border-t-4 border-t-slate-500">
-                      <CardHeader className="pb-2 pt-3 px-4">
-                        <CardTitle className="text-xs font-semibold flex items-center justify-between text-slate-700">
-                          <button onClick={() => { setRankingModal("faltosos"); setRankingSearch(""); setRankingObraFilter("all"); }} className="flex items-center gap-1.5 hover:underline cursor-pointer">
-                            <CalendarDays className="h-3.5 w-3.5" /> Menos Dias Trabalhados
-                          </button>
-                          <span className="text-[10px] font-normal text-muted-foreground">{rankings.allFaltosos.length} colab.</span>
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent className="px-4 pb-3">
-                        <div className="space-y-1">
-                          {rankings.faltosos.map((e: any, i: number) => (
-                            <div key={e.id} className="flex items-center justify-between text-xs py-1 border-b last:border-0">
-                              <div className="flex items-center gap-2">
-                                <span className={`font-bold w-4 text-center ${i === 0 ? "text-slate-600" : "text-muted-foreground"}`}>{i + 1}</span>
-                                <button className="text-blue-700 hover:underline text-left truncate max-w-[120px]" onClick={() => openPontoDetalhe(e.id)}>{e.nome}</button>
-                                <EmpStatusBadge status={e.status} />
-                              </div>
-                              <span className="text-slate-600 font-mono">{e.dias} dia{e.dias !== 1 ? "s" : ""}</span>
-                            </div>
-                          ))}
-                          {rankings.faltosos.length === 0 && <p className="text-xs text-muted-foreground text-center py-2">Sem dados</p>}
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </div>
-                )}
+                            {/* Footer "ver todos" */}
+                            <button
+                              onClick={() => { setRankingModal(c.key); setRankingSearch(""); setRankingObraFilter("all"); }}
+                              className={`w-full border-t ${c.borderColor.replace("hover:", "")} px-3 py-1.5 text-[11px] font-semibold ${c.chipText} bg-white/40 hover:bg-white/80 transition-colors flex items-center justify-center gap-1 cursor-pointer`}
+                            >
+                              Ver todos ({c.allList.length}) <ArrowRight className="h-3 w-3" />
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
 
-                {/* ===== MODAL DETALHADO DE RANKING ===== */}
-                {rankingModal && rankings && (
+                {/* ===== MODAL DETALHADO DE RANKING — Rev. 1997 (regras de ouro) ===== */}
+                {rankingModal && rankings && (() => {
+                  // Config visual + legenda + KPIs por tipo (sem alterar lógica)
+                  const cfg = (() => {
+                    if (rankingModal === "pontuais") return {
+                      title: "Mais Pontuais", Icon: CheckCircle, subtitle: "Colaboradores sem ou com menor atraso acumulado no período",
+                      gradient: "from-emerald-600 via-emerald-500 to-green-500", ringColor: "ring-emerald-200/60",
+                      legendItems: [
+                        { Icon: CheckCircle2, label: "Atraso Acum.", desc: "Soma de todos os minutos de atraso. Zero = sempre pontual.", color: "text-emerald-700 bg-emerald-50 border-emerald-200" },
+                        { Icon: CalendarDays, label: "Dias Trabalhados", desc: "Dias em que o colaborador bateu ponto no período.", color: "text-slate-700 bg-slate-50 border-slate-200" },
+                        { Icon: Timer, label: "% Presença", desc: "Dias com ponto ÷ dias corridos do período.", color: "text-indigo-700 bg-indigo-50 border-indigo-200" },
+                        { Icon: Clock, label: "H. Total", desc: "Soma das horas trabalhadas (entrada → saída).", color: "text-slate-700 bg-slate-50 border-slate-200" },
+                      ],
+                    } as const;
+                    if (rankingModal === "atrasados") return {
+                      title: "Mais Atrasados", Icon: XCircle, subtitle: "Atenção crítica — colaboradores com maior atraso acumulado",
+                      gradient: "from-red-600 via-rose-500 to-pink-500", ringColor: "ring-red-200/60",
+                      legendItems: [
+                        { Icon: AlertTriangle, label: "Atraso Acum.", desc: "Soma total dos atrasos do período em h/min — quanto maior, pior.", color: "text-red-700 bg-red-50 border-red-200" },
+                        { Icon: CalendarDays, label: "Dias Trabalhados", desc: "Dias em que o colaborador bateu ponto no período.", color: "text-slate-700 bg-slate-50 border-slate-200" },
+                        { Icon: Timer, label: "% Presença", desc: "Dias com ponto ÷ dias corridos do período.", color: "text-indigo-700 bg-indigo-50 border-indigo-200" },
+                        { Icon: Clock, label: "H. Total", desc: "Soma das horas trabalhadas (entrada → saída).", color: "text-slate-700 bg-slate-50 border-slate-200" },
+                      ],
+                    } as const;
+                    if (rankingModal === "extras") return {
+                      title: "Mais Horas Extras", Icon: Zap, subtitle: "Volume de HE no mês — verifique se há solicitação formal aprovada",
+                      gradient: "from-amber-500 via-orange-500 to-yellow-500", ringColor: "ring-amber-200/60",
+                      legendItems: [
+                        { Icon: Zap, label: "Total HE", desc: "Horas trabalhadas além do contratado no período.", color: "text-amber-700 bg-amber-50 border-amber-200" },
+                        { Icon: ShieldCheck, label: "Solicitação HE", desc: "Se foi aberta (e aprovada) uma solicitação formal de hora extra.", color: "text-orange-700 bg-orange-50 border-orange-200" },
+                        { Icon: CalendarDays, label: "Dias Trabalhados", desc: "Dias em que o colaborador bateu ponto no período.", color: "text-slate-700 bg-slate-50 border-slate-200" },
+                        { Icon: Clock, label: "H. Total", desc: "Soma das horas trabalhadas (entrada → saída).", color: "text-slate-700 bg-slate-50 border-slate-200" },
+                      ],
+                    } as const;
+                    return {
+                      title: "Menos Dias Trabalhados", Icon: CalendarDays, subtitle: "Possíveis faltas, afastamentos ou escala reduzida — analise atestados",
+                      gradient: "from-slate-600 via-slate-500 to-zinc-500", ringColor: "ring-slate-200/60",
+                      legendItems: [
+                        { Icon: CalendarX, label: "Menos dias", desc: "Colaboradores com menor presença — pode indicar faltas, afastamento ou escala reduzida.", color: "text-slate-700 bg-slate-50 border-slate-200" },
+                        { Icon: ShieldCheck, label: "Justificada", desc: "Possui atestado médico registrado no período.", color: "text-emerald-700 bg-emerald-50 border-emerald-200" },
+                        { Icon: Timer, label: "% Presença", desc: "Dias com ponto ÷ dias corridos do período.", color: "text-indigo-700 bg-indigo-50 border-indigo-200" },
+                        { Icon: Clock, label: "H. Total", desc: "Soma das horas trabalhadas (entrada → saída).", color: "text-slate-700 bg-slate-50 border-slate-200" },
+                      ],
+                    } as const;
+                  })();
+                  const HeaderIcon = cfg.Icon;
+                  // KPIs derivados (mesmas fórmulas do footer original — apenas elevadas pra hero)
+                  const totalColab = filteredRankingRows.length;
+                  const totalDiasSum = filteredRankingRows.reduce((s: number, e: any) => s + e.dias, 0);
+                  const mediaDias = totalColab ? Math.round(totalDiasSum / totalColab) : 0;
+                  const totalHorasMin = filteredRankingRows.reduce((s: number, e: any) => s + e.horasTrab, 0);
+                  const totalHorasStr = `${Math.floor(totalHorasMin / 60)}h${String(totalHorasMin % 60).padStart(2, "0")}min`;
+                  const presencaPct = (diasUteisNoPeriodo && totalColab) ? Math.round((totalDiasSum / totalColab / diasUteisNoPeriodo) * 100) : null;
+                  const totalAtrasoMin = filteredRankingRows.reduce((s: number, e: any) => s + (e.atrasos || 0), 0);
+                  const totalAtrasoStr = `${Math.floor(totalAtrasoMin / 60)}h${String(totalAtrasoMin % 60).padStart(2, "0")}min`;
+                  const totalHEMin = filteredRankingRows.reduce((s: number, e: any) => s + (e.horasExtras || 0), 0);
+                  const totalHEStr = `${Math.floor(totalHEMin / 60)}h${String(totalHEMin % 60).padStart(2, "0")}min`;
+                  const semSolicHE = !heSolicitacoesMes.isLoading ? filteredRankingRows.filter((e: any) => !(heSolicitacoesMes.data || []).some((sol: any) => sol.funcionarios?.some((f: any) => f.employeeId === e.id))).length : 0;
+                  const justificadas = filteredRankingRows.filter((e: any) => (atestadosMes.data || []).some((a: any) => a.employeeId === e.id)).length;
+                  const naoJustificadas = totalColab - justificadas;
+                  const semAtraso = filteredRankingRows.filter((e: any) => e.atrasos === 0).length;
+                  // KPI cards por tipo
+                  const kpis: Array<{ label: string; value: string | number; sub?: string; tone: string; Icon: typeof Clock }> = (() => {
+                    if (rankingModal === "pontuais") return [
+                      { label: "Colaboradores", value: totalColab, sub: "no filtro atual", tone: "bg-emerald-50 text-emerald-700 border-emerald-200", Icon: Users },
+                      { label: "Sem nenhum atraso", value: semAtraso, sub: `de ${totalColab} colab.`, tone: "bg-green-50 text-green-700 border-green-200", Icon: CheckCircle2 },
+                      { label: "Atraso acumulado", value: totalAtrasoStr, sub: "soma do grupo", tone: "bg-rose-50 text-rose-700 border-rose-200", Icon: Timer },
+                      { label: "Média de dias", value: mediaDias, sub: diasUteisNoPeriodo ? `de ${diasUteisNoPeriodo} úteis · ${presencaPct ?? "—"}% presença` : "por colaborador", tone: "bg-indigo-50 text-indigo-700 border-indigo-200", Icon: CalendarDays },
+                    ];
+                    if (rankingModal === "atrasados") return [
+                      { label: "Colaboradores", value: totalColab, sub: "no filtro atual", tone: "bg-red-50 text-red-700 border-red-200", Icon: Users },
+                      { label: "Atraso acumulado", value: totalAtrasoStr, sub: "total do grupo", tone: "bg-rose-50 text-rose-700 border-rose-200", Icon: AlertTriangle },
+                      { label: "Total de horas", value: totalHorasStr, sub: "trabalhadas", tone: "bg-slate-50 text-slate-700 border-slate-200", Icon: Clock },
+                      { label: "Média de dias", value: mediaDias, sub: diasUteisNoPeriodo ? `de ${diasUteisNoPeriodo} úteis · ${presencaPct ?? "—"}% presença` : "por colaborador", tone: "bg-indigo-50 text-indigo-700 border-indigo-200", Icon: CalendarDays },
+                    ];
+                    if (rankingModal === "extras") return [
+                      { label: "Colaboradores", value: totalColab, sub: "no filtro atual", tone: "bg-amber-50 text-amber-700 border-amber-200", Icon: Users },
+                      { label: "Total HE", value: totalHEStr, sub: "soma do grupo", tone: "bg-emerald-50 text-emerald-700 border-emerald-200", Icon: Zap },
+                      { label: "Sem solicitação", value: semSolicHE, sub: "atenção: irregular", tone: "bg-orange-50 text-orange-700 border-orange-200", Icon: AlertCircle },
+                      { label: "Total de horas", value: totalHorasStr, sub: "trabalhadas no mês", tone: "bg-slate-50 text-slate-700 border-slate-200", Icon: Clock },
+                    ];
+                    return [
+                      { label: "Colaboradores", value: totalColab, sub: "no filtro atual", tone: "bg-slate-50 text-slate-700 border-slate-200", Icon: Users },
+                      { label: "Justificadas", value: justificadas, sub: "com atestado", tone: "bg-emerald-50 text-emerald-700 border-emerald-200", Icon: ShieldCheck },
+                      { label: "Não justificadas", value: naoJustificadas, sub: "sem atestado", tone: "bg-red-50 text-red-700 border-red-200", Icon: XCircle },
+                      { label: "Média de dias", value: mediaDias, sub: diasUteisNoPeriodo ? `de ${diasUteisNoPeriodo} úteis · ${presencaPct ?? "—"}% presença` : "por colaborador", tone: "bg-indigo-50 text-indigo-700 border-indigo-200", Icon: CalendarDays },
+                    ];
+                  })();
+                  return (
                   <Dialog open={true} onOpenChange={(open) => { if (!open) { setRankingModal(null); setRankingSearch(""); setRankingObraFilter("all"); } }}>
                     <DialogContent resizable={false} className="flex flex-col p-0 gap-0 w-screen h-screen max-w-none sm:max-w-none rounded-none border-0">
 
-                      {/* ── Cabeçalho ── */}
-                      <DialogHeader className="shrink-0 px-6 py-3 border-b bg-white">
-                        <div className="flex items-center gap-4">
-                          <DialogTitle className="text-lg font-bold flex items-center gap-2 shrink-0">
-                            {rankingModal === "pontuais"  && <><CheckCircle className="h-5 w-5 text-green-600" />  Mais Pontuais</>}
-                            {rankingModal === "atrasados" && <><XCircle    className="h-5 w-5 text-red-600" />     Mais Atrasados</>}
-                            {rankingModal === "extras"    && <><Zap         className="h-5 w-5 text-amber-600" />  Mais Horas Extras</>}
-                            {rankingModal === "faltosos"  && <><CalendarDays className="h-5 w-5 text-slate-600" /> Menos Dias Trabalhados</>}
-                          </DialogTitle>
-                          <span className="text-sm text-muted-foreground shrink-0">Referência: <strong>{mesAno?.replace("-", "/")}</strong></span>
-                          {periodoIni && periodoFim && (
-                            <span className="text-xs text-muted-foreground bg-slate-100 border rounded px-2 py-0.5 shrink-0">
-                              Período: <strong>{fmtPeriodo(periodoIni)}</strong> → <strong>{fmtPeriodo(periodoFim)}</strong>
-                              {diasUteisNoPeriodo && <span className="ml-1 text-slate-500">({diasUteisNoPeriodo} dias úteis Seg–Sáb)</span>}
-                            </span>
-                          )}
-                          <div className="flex-1" />
-                          <Button variant="outline" size="sm" onClick={handlePrintRanking} className="h-8 text-xs">
-                            <Printer className="h-3.5 w-3.5 mr-1.5" /> Imprimir / PDF
-                          </Button>
-                          <Button variant="outline" size="sm" onClick={handleExportRankingCSV} className="h-8 text-xs">
-                            <FileDown className="h-3.5 w-3.5 mr-1.5" /> Exportar CSV
-                          </Button>
-                          <div className="w-6" />
+                      {/* ── Header gradient (regras de ouro) ── */}
+                      <DialogHeader className={`shrink-0 px-6 py-4 border-b bg-gradient-to-r ${cfg.gradient} text-white relative overflow-hidden`}>
+                        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.18),transparent_60%)] pointer-events-none" />
+                        <div className="relative flex items-start gap-4">
+                          <span className={`inline-flex items-center justify-center h-12 w-12 rounded-xl bg-white/15 backdrop-blur-sm ring-4 ${cfg.ringColor} shrink-0`}>
+                            <HeaderIcon className="h-6 w-6" />
+                          </span>
+                          <div className="flex-1 min-w-0">
+                            <DialogTitle className="text-xl font-bold flex items-center gap-3 flex-wrap">
+                              {cfg.title}
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/20 backdrop-blur-sm text-[11px] font-semibold ring-1 ring-white/30">
+                                <Users className="h-3 w-3" /> {filteredRankingRows.length} colaborador{filteredRankingRows.length !== 1 ? "es" : ""}
+                              </span>
+                            </DialogTitle>
+                            <p className="text-sm text-white/90 mt-0.5">{cfg.subtitle}</p>
+                            <div className="flex items-center gap-3 mt-1.5 text-xs text-white/85 flex-wrap">
+                              <span className="inline-flex items-center gap-1"><CalendarDays className="h-3 w-3" /> Referência: <strong className="text-white">{mesAno?.replace("-", "/")}</strong></span>
+                              {periodoIni && periodoFim && (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-white/15 ring-1 ring-white/25">
+                                  <Clock className="h-3 w-3" /> {fmtPeriodo(periodoIni)} → {fmtPeriodo(periodoFim)}
+                                  {diasUteisNoPeriodo && <span className="text-white/80 ml-1">· {diasUteisNoPeriodo} dias úteis</span>}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0">
+                            <Button variant="outline" size="sm" onClick={handlePrintRanking} className="h-8 text-xs bg-white/95 hover:bg-white text-slate-800 border-0">
+                              <Printer className="h-3.5 w-3.5 mr-1.5" /> Imprimir / PDF
+                            </Button>
+                            <Button variant="outline" size="sm" onClick={handleExportRankingCSV} className="h-8 text-xs bg-white/95 hover:bg-white text-slate-800 border-0">
+                              <FileDown className="h-3.5 w-3.5 mr-1.5" /> Exportar CSV
+                            </Button>
+                          </div>
                         </div>
                       </DialogHeader>
 
@@ -2115,8 +2181,27 @@ export default function FechamentoPonto() {
                         </div>
                       )}
 
+                      {/* ── KPIs (indicadores importantes) ── */}
+                      <div className="shrink-0 px-6 py-3 border-b bg-slate-50/70 grid grid-cols-2 md:grid-cols-4 gap-2.5">
+                        {kpis.map((k, ki) => {
+                          const KI = k.Icon;
+                          return (
+                            <div key={ki} className={`rounded-lg border ${k.tone} px-3 py-2 flex items-center gap-2.5 shadow-sm`}>
+                              <span className="inline-flex items-center justify-center h-8 w-8 rounded-md bg-white/70 shrink-0">
+                                <KI className="h-4 w-4" />
+                              </span>
+                              <div className="min-w-0">
+                                <div className="text-[10px] font-semibold uppercase tracking-wide opacity-75 truncate">{k.label}</div>
+                                <div className="text-base font-bold leading-tight truncate">{k.value}</div>
+                                {k.sub && <div className="text-[10px] opacity-70 truncate">{k.sub}</div>}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+
                       {/* ── Barra de filtros ── */}
-                      <div className="shrink-0 flex items-center gap-3 px-6 py-2.5 border-b bg-muted/20">
+                      <div className="shrink-0 flex items-center gap-3 px-6 py-2.5 border-b bg-white">
                         <div className="relative w-72">
                           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
                           <Input placeholder="Buscar nome ou função..." value={rankingSearch} onChange={e => setRankingSearch(e.target.value)} className="pl-9 h-8 text-xs bg-white" />
@@ -2140,17 +2225,26 @@ export default function FechamentoPonto() {
                         </div>
                       </div>
 
-                      {/* ── Legenda ── */}
-                      <div className="shrink-0 px-6 py-2 border-b bg-blue-50/60 flex flex-wrap items-center gap-x-5 gap-y-1 text-[11px] text-slate-600">
-                        <span className="font-semibold text-blue-800 mr-1">Legenda:</span>
-                        <span><strong className="text-slate-800">Dias Trabalhados</strong> = dias que o colaborador bateu ponto no período de fechamento (NÃO são dias úteis esperados)</span>
-                        <span><strong className="text-slate-800">% Presença</strong> = dias com ponto ÷ dias corridos do período{diasUteisNoPeriodo ? ` (${diasUteisNoPeriodo} dias corridos)` : ""} — 100% = trabalhou todos os dias do período (incluindo domingos se aplicável)</span>
-                        <span><strong className="text-slate-800">H. Total</strong> = soma das horas trabalhadas (entrada → saída)</span>
-                        {rankingModal === "pontuais"  && <span><strong className="text-green-800">Atraso Acum.</strong> = soma de todos os minutos de atraso no período (zero = sempre pontual)</span>}
-                        {rankingModal === "atrasados" && <span><strong className="text-red-800">Atraso Acum.</strong> = soma total dos atrasos do período em h/min — quanto maior, pior</span>}
-                        {rankingModal === "extras"    && <><span><strong className="text-emerald-800">Total HE</strong> = horas trabalhadas além do contratado no período</span><span><strong className="text-orange-800">Solicitação HE</strong> = se foi aberta (e aprovada) uma solicitação formal de hora extra</span></>}
-                        {rankingModal === "faltosos"  && <span><strong className="text-red-800">Atenção:</strong> colaboradores com menos dias de presença no período — pode indicar faltas, afastamento ou escala reduzida</span>}
-                        {rankingModal === "faltosos"  && <span><strong className="text-green-800">Justificada</strong> = possui atestado médico registrado no período</span>}
+                      {/* ── Legenda (card visual por indicador) ── */}
+                      <div className="shrink-0 px-6 py-2.5 border-b bg-blue-50/40">
+                        <div className="flex items-center gap-1.5 mb-1.5">
+                          <Info className="h-3.5 w-3.5 text-blue-700" />
+                          <span className="text-[11px] font-bold text-blue-900 uppercase tracking-wide">Legenda — como interpretar cada coluna</span>
+                        </div>
+                        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
+                          {cfg.legendItems.map((it, li) => {
+                            const LI = it.Icon;
+                            return (
+                              <div key={li} className={`rounded-md border ${it.color} px-2.5 py-1.5 flex items-start gap-2`}>
+                                <LI className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                                <div className="min-w-0">
+                                  <div className="text-[11px] font-bold leading-tight">{it.label}</div>
+                                  <div className="text-[10px] opacity-80 leading-snug">{it.desc}</div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
                       </div>
 
                       {/* ── Tabela ── */}
@@ -2275,7 +2369,8 @@ export default function FechamentoPonto() {
 
                     </DialogContent>
                   </Dialog>
-                )}
+                  );
+                })()}
 
                 {/* ===== SUB-MODAL: CALENDÁRIO DE DIAS DO COLABORADOR ===== */}
                 {diasDetalhe && (

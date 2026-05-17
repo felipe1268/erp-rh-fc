@@ -1,6 +1,30 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 1997 — DP · Fechamento de Ponto · Cards de Ranking + Modal Drill-Down redesenhados em regras de ouro.
+ * Pedido direto do usuário (17/05/2026, image_1779026555326/633610/653802): os 4 cards de resumo (Mais Pontuais / Mais Atrasados / Mais Horas Extras / Menos Dias Trabalhados) e o modal de drill-down associado precisavam virar uma experiência altamente intuitiva para reuniões de alinhamento mensal — com indicadores importantes, legenda de fácil entendimento e layout responsivo. Antes: cards eram `<Card>` simples com border-t colorido + título minúsculo + top-5 + contagem; modal full-screen tinha header chapado bg-white, legenda em parágrafo plano de texto corrido difícil de ler em reunião, e nenhum bloco de KPIs no topo (números só apareciam no rodapé).
+ * Mudança em 1 arquivo de aplicação + bookkeeping:
+ *   (1) `client/src/pages/FechamentoPonto.tsx`:
+ *     (a) **4 cards do topo (L1965-2046, ~80L reescritas)**: viraram divs custom com gradient sutil `bg-gradient-to-br from-{cor}-50 to-white`, border-2 com hover (`border-{cor}-200 hover:border-{cor}-400`), shadow-sm → hover:shadow-md. Header com ícone lucide em chip h-7 w-7 rounded-lg ring-2 ring-white + título bold + hint contextual ("Top sem atrasos" / "Atenção crítica" / "Volume de HE no mês" / "Possíveis faltas/escala") + contador grande à direita (text-lg font-extrabold). Lista top-5 INTACTA (mesmos dados, mesmo `openPontoDetalhe`, mesmo `EmpStatusBadge`). NOVO: footer "Ver todos (N) →" clicável que abre o modal. Loop sobre array `cards` (tipo explícito) evita duplicação dos 4 blocos JSX.
+ *     (b) **Modal header gradient (L2138-2173)**: bg-gradient-to-r por tipo (emerald/red+rose+pink/amber+orange+yellow/slate+zinc), text-white, com overlay radial sutil. Ícone em chip h-12 w-12 rounded-xl bg-white/15 ring-4 colorido. Título + badge "N colaboradores" (bg-white/20 backdrop-blur) + subtítulo descritivo + linha de meta com referência + período. Botões Imprimir/Exportar movidos pra dentro do header com fundo white/95.
+ *     (c) **NOVO: bloco KPIs (L2185-2199)** logo após alerta de período incompleto — grid 2/4 colunas com 4 mini-cards de indicadores que MUDAM POR TIPO. Pontuais: Colaboradores + Sem nenhum atraso + Atraso acumulado + Média de dias. Atrasados: Colaboradores + Atraso acumulado + Total de horas + Média de dias. Extras: Colaboradores + Total HE + Sem solicitação + Total de horas. Faltosos: Colaboradores + Justificadas + Não justificadas + Média de dias. Cada KPI: ícone em chip h-8 w-8 + label uppercase + valor bold + sublabel contextual. Cores temáticas por significado (verde positivo, vermelho atenção, etc). Fórmulas IDÊNTICAS às do rodapé (apenas elevadas pra hero — rodapé continua intacto).
+ *     (d) **Legenda redesenhada (L2228-2247)**: virou card visual bg-blue-50/40 com título "LEGENDA — como interpretar cada coluna" (uppercase, ícone Info). Conteúdo passou de parágrafo corrido pra grid 2/4 de mini-cards, cada um com ícone lucide + label bold + descrição curta — cor temática por significado (Atraso=red, % Presença=indigo, Justificada=emerald, Total HE=amber, Solicitação=orange). Itens variam por tipo: Pontuais (4 itens com foco em pontualidade) / Atrasados (foco em atraso crítico) / Extras (foco em HE + solicitação) / Faltosos (foco em justificativa + presença).
+ *     (e) **IIFE wrapper**: modal envolto em `(() => { const cfg = ...; const kpis = ...; return (<Dialog>...</Dialog>); })()` pra concentrar derivações por tipo num único ponto.
+ *   (2) `shared/version.ts` → Rev. 1997 (1996 → 1997).
+ * Comportamento garantido:
+ *   • Cards do topo: clique em qualquer parte (header, item, "Ver todos") abre o modal do tipo correspondente — mesmo `setRankingModal` de antes.
+ *   • Clique no nome de colaborador continua chamando `openPontoDetalhe(e.id)` (preserva navegação pro raio-X individual).
+ *   • Modal: filtros (busca + obra), tabela detalhada, sub-modal de calendário de dias, rodapé de totais, prints e CSV — TODOS INTACTOS. Apenas hero/KPIs/legenda mudaram visualmente.
+ *   • Responsividade: cards `grid-cols-1 md:grid-cols-2 lg:grid-cols-4`; KPIs `grid-cols-2 md:grid-cols-4`; legenda `grid-cols-2 lg:grid-cols-4`; header com `flex-wrap` em metadados.
+ * Preservado:
+ *   • `rankings` (allPontuais/allAtrasados/allExtras/allFaltosos + slice top-5) INTACTO (L1009-1020).
+ *   • `filteredRankingRows` (busca + filtro obra) INTACTO (L1056-1067).
+ *   • `handlePrintRanking` / `handleExportRankingCSV` INTACTOS (L1070-1178).
+ *   • Sub-modal de calendário (`diasDetalhe`) INTACTO (L2378+).
+ *   • Schema/tRPC INTACTOS — zero ALTER/DROP/DELETE.
+ *   • R-001/R-007/R-010 OK. Rev. 1996 (modal Condições MDO/PACOTE) INTACTA.
+ * Reversível em 1 arquivo de aplicação (2 hunks grandes).
+ *
  * Rev. 1996 — Compras · Cotações · Modal de Condições de Pagamento agora se adapta ao TIPO da cotação (Material / Mão de Obra pura / Pacote).
  * Pedido direto do usuário: o modal mostrava as 4 seções fixas (Forma + Parcelamento + Entrega/Frete + Módulo de Medição) pra qualquer tipo de cotação. Em cotação de MATERIAL pedia "Módulo de Medição" (que não faz sentido); em MÃO DE OBRA pura pedia CIF/FOB e prazo de entrega (que não faz sentido — serviço não tem frete); em PACOTE (mistura material+MDO) misturava tudo sem indicar o que era de cada lado. Resultado: comprador preenchia campos errados, deixava campos certos vazios e gerava inconsistência nas aprovações/contratos.
  * Mudança em 2 arquivos (cirúrgica, só `Cotacoes.tsx` + version):
