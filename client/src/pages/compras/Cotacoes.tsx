@@ -17,7 +17,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { toast } from "sonner";
 import { normalizarTexto } from "@shared/textNormalization";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Plus, Search, Trash2, FileText, ChevronRight, ChevronDown, Loader2, CheckCircle, X, XCircle, Building2, Trophy, UserPlus, Save, BarChart3, ChevronsUpDown, Paperclip, ExternalLink, AlertTriangle, TrendingDown, TrendingUp, Package, Undo2, History, Link2, RefreshCw, Phone, Mail, User, Smartphone, Sparkles, Star, ShieldCheck, ShieldAlert, Settings, DollarSign, Pencil, Check, ClipboardList, FileSearch, ShoppingCart, RotateCcw, Pin, GitBranch } from "lucide-react";
+import { Plus, Search, Trash2, FileText, ChevronRight, ChevronDown, Loader2, CheckCircle, X, XCircle, Building2, Trophy, UserPlus, Save, BarChart3, ChevronsUpDown, Paperclip, ExternalLink, AlertTriangle, TrendingDown, TrendingUp, Package, Undo2, History, Link2, RefreshCw, Phone, Mail, User, Smartphone, Sparkles, Star, ShieldCheck, ShieldAlert, Settings, DollarSign, Pencil, Check, ClipboardList, FileSearch, ShoppingCart, RotateCcw, Pin, GitBranch, Zap, PenTool, CreditCard, Banknote, Calendar, Truck, Target, BarChart2, Clock, Wallet, Layers, type LucideIcon } from "lucide-react";
 import { TIPOS_PAGAMENTO, getTipoPagamentoInfo, calcularParcelas, formatCurrency } from "../../../../shared/paymentConditions";
 import { PurchaseTimeline, TimelineBadge } from "@/components/compras/PurchaseTimeline";
 
@@ -1452,421 +1452,525 @@ export default function Cotacoes() {
       return totalItens + frete;
     })() : parseFloat(fornP?.totalOrcado ?? "0");
 
-    const FORMAS = [
-      { v: "boleto", l: "Boleto", icon: "📄", sel: "bg-blue-100 text-blue-700 border-blue-300 ring-blue-200", def: "bg-white text-gray-500 border-gray-200" },
-      { v: "pix", l: "PIX", icon: "⚡", sel: "bg-green-100 text-green-700 border-green-300 ring-green-200", def: "bg-white text-gray-500 border-gray-200" },
-      { v: "transferencia", l: "Transferência", icon: "🏦", sel: "bg-indigo-100 text-indigo-700 border-indigo-300 ring-indigo-200", def: "bg-white text-gray-500 border-gray-200" },
-      { v: "cheque", l: "Cheque", icon: "📝", sel: "bg-amber-100 text-amber-700 border-amber-300 ring-amber-200", def: "bg-white text-gray-500 border-gray-200" },
-      { v: "cartao", l: "Cartão", icon: "💳", sel: "bg-purple-100 text-purple-700 border-purple-300 ring-purple-200", def: "bg-white text-gray-500 border-gray-200" },
-      { v: "deposito", l: "Depósito", icon: "💰", sel: "bg-gray-200 text-gray-700 border-gray-400 ring-gray-200", def: "bg-white text-gray-500 border-gray-200" },
+    const FORMAS: { v: string; l: string; Icon: LucideIcon; sel: string }[] = [
+      { v: "boleto", l: "Boleto", Icon: FileText, sel: "bg-blue-50 text-blue-700 border-blue-400 ring-blue-200" },
+      { v: "pix", l: "PIX", Icon: Zap, sel: "bg-green-50 text-green-700 border-green-400 ring-green-200" },
+      { v: "transferencia", l: "Transferência", Icon: Building2, sel: "bg-indigo-50 text-indigo-700 border-indigo-400 ring-indigo-200" },
+      { v: "cheque", l: "Cheque", Icon: PenTool, sel: "bg-amber-50 text-amber-700 border-amber-400 ring-amber-200" },
+      { v: "cartao", l: "Cartão", Icon: CreditCard, sel: "bg-purple-50 text-purple-700 border-purple-400 ring-purple-200" },
+      { v: "deposito", l: "Depósito", Icon: Banknote, sel: "bg-gray-100 text-gray-700 border-gray-400 ring-gray-200" },
     ];
 
+    const mapaData = mapaQ.data as ({ tipoEfetivo?: string; cotacao?: { tipo?: string } } | undefined);
+    const cotTipoEfetivo = mapaData?.tipoEfetivo ?? mapaData?.cotacao?.tipo;
+    const tipoBadge = cotTipoEfetivo === "servico"
+      ? { label: "Serviço", cls: "bg-blue-100 text-blue-700 border-blue-200" }
+      : cotTipoEfetivo === "pacote"
+        ? { label: "Pacote", cls: "bg-purple-100 text-purple-700 border-purple-200" }
+        : { label: "Material", cls: "bg-emerald-100 text-emerald-700 border-emerald-200" };
+
+    const handleSalvar = () => {
+      if (!showDetalhe) return;
+      const prazoVal = editPrazo[fId] ? parseInt(editPrazo[fId]) : undefined;
+      const parcList = condCustomParcelas[fId] ?? [];
+      const modo = condModo[fId] ?? "padrao";
+      const numParcelas = modo === "custom" && parcList.length > 0 ? parcList.length : undefined;
+      salvarCondicoesComerciais.mutate({
+        cotacaoId: showDetalhe,
+        fornecedorId: fId,
+        companyId,
+        formaPagamento: editFormaPag[fId] || "",
+        tipoPagamento: editTipoPag[fId] || "",
+        condicaoPagamento: editCondPag[fId] || "",
+        prazoEntregaDias: prazoVal,
+        numeroParcelas: numParcelas,
+        moduloMedicao: editModuloMedicao[fId] || undefined,
+      }, {
+        onSuccess: () => {
+          setCondModalFornId(null);
+          toast.success("Condições salvas com sucesso!");
+        },
+      });
+    };
+
+    const SectionHeader = ({ Icon, color, title, hint }: { Icon: LucideIcon; color: string; title: string; hint?: string }) => (
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2.5">
+          <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${color}`}>
+            <Icon className="w-4 h-4" />
+          </div>
+          <h4 className="text-[11px] font-bold text-gray-700 uppercase tracking-[0.12em]">{title}</h4>
+        </div>
+        {hint && <span className="text-[10px] text-gray-400 uppercase tracking-wider">{hint}</span>}
+      </div>
+    );
+
     return (
-      <div className="fixed inset-0 z-[9999] flex items-center justify-center" onClick={() => setCondModalFornId(null)}>
-        <div className="absolute inset-0 bg-black/40" />
-        <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-          <div className="sticky top-0 bg-white border-b border-gray-100 px-6 py-4 rounded-t-2xl flex items-center justify-between">
-            <div>
-              <h3 className="text-base font-bold text-gray-900">Condições de Pagamento</h3>
-              <p className="text-xs text-gray-500 mt-0.5">{fornNome} — Total: {formatCurrency(fornTotal)}</p>
+      <div className="fixed inset-0 z-[9999] flex items-stretch lg:items-center justify-center" onClick={() => setCondModalFornId(null)}>
+        <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" />
+        <div
+          className="relative bg-white shadow-2xl flex flex-col w-[100vw] h-[100vh] lg:w-[96vw] lg:h-[94vh] lg:max-w-[1400px] lg:rounded-2xl overflow-hidden"
+          onClick={e => e.stopPropagation()}
+        >
+          {/* Header */}
+          <div className="flex-shrink-0 bg-gradient-to-r from-violet-50 via-white to-violet-50 border-b border-violet-100 px-6 lg:px-8 py-4 lg:py-5 flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3 lg:gap-4 min-w-0 flex-1">
+              <div className="w-11 h-11 lg:w-12 lg:h-12 rounded-xl bg-violet-600 text-white flex items-center justify-center ring-4 ring-violet-100 flex-shrink-0">
+                <Wallet className="w-5 h-5 lg:w-6 lg:h-6" />
+              </div>
+              <div className="min-w-0">
+                <h3 className="text-lg lg:text-xl font-bold text-gray-900 truncate">Condições de Pagamento</h3>
+                <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                  <span className="text-sm text-gray-600 truncate max-w-[260px] lg:max-w-none" title={fornNome}>{fornNome}</span>
+                  <span className="text-gray-300">·</span>
+                  <span className="text-sm font-semibold text-violet-700 tabular-nums">{formatCurrency(fornTotal)}</span>
+                  <span className={`text-[10px] uppercase tracking-wider font-bold px-2 py-0.5 rounded-full border ${tipoBadge.cls}`}>{tipoBadge.label}</span>
+                </div>
+              </div>
             </div>
-            <button onClick={() => setCondModalFornId(null)} className="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
+            <Button variant="ghost" size="icon" onClick={() => setCondModalFornId(null)} className="flex-shrink-0 h-10 w-10 rounded-full hover:bg-violet-100 text-gray-500">
+              <X className="w-5 h-5" />
+            </Button>
           </div>
 
-          <div className="px-6 py-5 space-y-5">
-            <div>
-              <p className="text-xs font-semibold text-gray-600 uppercase tracking-wider mb-2">Forma de Pagamento</p>
-              <div className="grid grid-cols-3 gap-2">
-                {FORMAS.map(fp => (
-                  <button key={fp.v} type="button" onClick={() => setEditFormaPag(prev => ({ ...prev, [fId]: prev[fId] === fp.v ? "" : fp.v }))}
-                    className={`flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm font-medium border-2 transition-all ${editFormaPag[fId] === fp.v ? `${fp.sel} ring-2` : `${fp.def} hover:bg-gray-50`}`}>
-                    <span className="text-lg">{fp.icon}</span> {fp.l}
-                  </button>
-                ))}
-              </div>
-            </div>
+          {/* Body */}
+          <div className="flex-1 overflow-y-auto bg-gray-50/40">
+            <div className="grid lg:grid-cols-[1.2fr_1fr] gap-5 lg:gap-6 p-5 lg:p-8">
+              {/* Coluna ESQUERDA — Forma + Parcelamento */}
+              <div className="space-y-5 lg:space-y-6 min-w-0">
+                {/* Forma de Pagamento */}
+                <section className="rounded-xl border border-gray-200 bg-white p-5 lg:p-6 shadow-sm">
+                  <SectionHeader Icon={Wallet} color="bg-violet-100 text-violet-700" title="Forma de Pagamento" hint={editFormaPag[fId] ? "Selecionado" : "Opcional"} />
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                    {FORMAS.map(fp => {
+                      const sel = editFormaPag[fId] === fp.v;
+                      return (
+                        <button key={fp.v} type="button"
+                          onClick={() => setEditFormaPag(prev => ({ ...prev, [fId]: prev[fId] === fp.v ? "" : fp.v }))}
+                          className={`flex items-center gap-2.5 px-3 h-14 rounded-xl text-sm font-medium border-2 transition-all ${sel ? `${fp.sel} ring-2 shadow-sm` : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50 hover:border-gray-300"}`}>
+                          <fp.Icon className="w-5 h-5 flex-shrink-0" />
+                          <span className="truncate">{fp.l}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </section>
 
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <p className="text-xs font-semibold text-gray-600 uppercase tracking-wider">Parcelamento</p>
-                <div className="flex bg-gray-100 rounded-lg p-0.5">
-                  {([["padrao", "Padrão"], ["fechamento", "Fechamento"], ["custom", "Personalizado"]] as const).map(([mode, label]) => (
-                    <button key={mode} type="button" onClick={() => {
-                      setCondModo(prev => ({ ...prev, [fId]: mode }));
-                      if (mode === "custom" && !condCustomParcelas[fId]?.length) {
-                        const hoje = new Date().toISOString().split("T")[0];
-                        setCondCustomParcelas(prev => ({ ...prev, [fId]: [{ valor: fornTotal.toFixed(2), data: hoje }] }));
-                      }
-                    }}
-                      className={`px-3 py-1 text-xs font-medium rounded-md transition-all ${(condModo[fId] ?? "padrao") === mode ? "bg-white text-violet-700 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>
-                      {label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {(condModo[fId] ?? "padrao") === "padrao" ? (
-                <>
-                  <div className="grid grid-cols-3 gap-1.5">
-                    {TIPOS_PAGAMENTO.map(t => (
-                      <button key={t.value} type="button" onClick={() => {
-                        const newVal = editTipoPag[fId] === t.value ? "" : t.value;
-                        setEditTipoPag(prev => ({ ...prev, [fId]: newVal }));
-                        setEditCondPag(prev => ({ ...prev, [fId]: newVal ? t.label : "" }));
-                      }}
-                        className={`px-2 py-2 rounded-lg text-xs font-medium border-2 transition-all text-center ${editTipoPag[fId] === t.value ? "bg-violet-100 text-violet-700 border-violet-400 ring-2 ring-violet-200" : "bg-white text-gray-500 border-gray-200 hover:bg-gray-50"}`}>
-                        {t.label}
-                      </button>
-                    ))}
+                {/* Parcelamento */}
+                <section className="rounded-xl border border-gray-200 bg-white p-5 lg:p-6 shadow-sm">
+                  <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-8 h-8 rounded-lg bg-violet-100 text-violet-700 flex items-center justify-center">
+                        <Layers className="w-4 h-4" />
+                      </div>
+                      <h4 className="text-[11px] font-bold text-gray-700 uppercase tracking-[0.12em]">Parcelamento</h4>
+                    </div>
+                    <div role="tablist" className="flex bg-gray-100 rounded-lg p-1">
+                      {([["padrao", "Padrão"], ["fechamento", "Fechamento"], ["custom", "Personalizado"]] as const).map(([mode, label]) => (
+                        <button key={mode} role="tab" type="button"
+                          aria-selected={(condModo[fId] ?? "padrao") === mode}
+                          onClick={() => {
+                            setCondModo(prev => ({ ...prev, [fId]: mode }));
+                            if (mode === "custom" && !condCustomParcelas[fId]?.length) {
+                              const hoje = new Date().toISOString().split("T")[0];
+                              setCondCustomParcelas(prev => ({ ...prev, [fId]: [{ valor: fornTotal.toFixed(2), data: hoje }] }));
+                            }
+                          }}
+                          className={`px-3.5 h-9 text-xs font-semibold rounded-md transition-all ${(condModo[fId] ?? "padrao") === mode ? "bg-white text-violet-700 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>
+                          {label}
+                        </button>
+                      ))}
+                    </div>
                   </div>
 
-                  {editTipoPag[fId] && (() => {
-                    const today = new Date().toISOString().split("T")[0];
-                    const parcelas = calcularParcelas(editTipoPag[fId], fornTotal, today);
-                    return parcelas.length > 0 ? (
-                      <div className="bg-violet-50 border border-violet-200 rounded-xl p-4 mt-3">
-                        <p className="text-xs font-bold text-violet-700 mb-2">Prévia das Parcelas ({parcelas.length}x)</p>
-                        <div className="space-y-1.5">
-                          {parcelas.map((parc, idx) => (
-                            <div key={idx} className="flex items-center justify-between bg-white rounded-lg px-3 py-2 border border-violet-100">
-                              <span className="text-xs text-violet-600 font-medium w-24">{parc.descricao}</span>
-                              <span className="text-sm text-violet-800 font-bold">{formatCurrency(parc.valor)}</span>
-                              <span className="text-xs text-violet-500 bg-violet-50 px-2 py-0.5 rounded">{new Date(parc.dataVencimento + "T12:00:00").toLocaleDateString("pt-BR")}</span>
-                            </div>
-                          ))}
-                        </div>
-                        <div className="mt-2 pt-2 border-t border-violet-200 flex justify-between text-xs font-bold text-violet-800">
-                          <span>Total</span>
-                          <span>{formatCurrency(fornTotal)}</span>
-                        </div>
-                      </div>
-                    ) : null;
-                  })()}
-                </>
-              ) : (condModo[fId] ?? "padrao") === "fechamento" ? (
-                <div className="space-y-4">
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Ciclo de Fechamento</p>
-                      <div className="grid grid-cols-2 gap-1.5">
-                        {[{ v: "7", l: "7 dias" }, { v: "15", l: "15 dias" }, { v: "30", l: "30 dias" }, { v: "fixo", l: "Dias fixos" }].map(c => (
-                          <button key={c.v} type="button" onClick={() => setCondFechCiclo(prev => ({ ...prev, [fId]: prev[fId] === c.v ? "" : c.v }))}
-                            className={`px-2 py-1.5 rounded-lg text-xs font-medium border-2 transition-all text-center ${condFechCiclo[fId] === c.v ? "bg-blue-100 text-blue-700 border-blue-400" : "bg-white text-gray-500 border-gray-200 hover:bg-gray-50"}`}>
-                            {c.l}
+                  {(condModo[fId] ?? "padrao") === "padrao" ? (
+                    <>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+                        {TIPOS_PAGAMENTO.map(t => (
+                          <button key={t.value} type="button" onClick={() => {
+                            const newVal = editTipoPag[fId] === t.value ? "" : t.value;
+                            setEditTipoPag(prev => ({ ...prev, [fId]: newVal }));
+                            setEditCondPag(prev => ({ ...prev, [fId]: newVal ? t.label : "" }));
+                          }}
+                            className={`px-2 h-10 rounded-lg text-xs font-medium border-2 transition-all text-center ${editTipoPag[fId] === t.value ? "bg-violet-100 text-violet-700 border-violet-400 ring-2 ring-violet-200 shadow-sm" : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50 hover:border-gray-300"}`}>
+                            {t.label}
                           </button>
                         ))}
                       </div>
-                      {condFechCiclo[fId] === "fixo" && (
-                        <input type="text" placeholder="Ex: 1, 15" value={condFechDiaFixo[fId] ?? ""}
-                          onChange={e => setCondFechDiaFixo(prev => ({ ...prev, [fId]: e.target.value }))}
-                          className="w-full h-8 text-sm border border-gray-300 rounded-lg px-3 bg-white text-gray-900 mt-1.5 focus:ring-1 focus:ring-blue-300 outline-none" />
-                      )}
-                    </div>
-                    <div>
-                      <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Prazo após Fechamento</p>
-                      <div className="grid grid-cols-2 gap-1.5">
-                        {["7", "14", "21", "28", "30", "60"].map(d => (
-                          <button key={d} type="button" onClick={() => setCondFechPrazo(prev => ({ ...prev, [fId]: prev[fId] === d ? "" : d }))}
-                            className={`px-2 py-1.5 rounded-lg text-xs font-medium border-2 transition-all text-center ${condFechPrazo[fId] === d ? "bg-blue-100 text-blue-700 border-blue-400" : "bg-white text-gray-500 border-gray-200 hover:bg-gray-50"}`}>
-                            {d} dias
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
 
-                  <div className="flex items-center gap-3 flex-wrap">
-                    <div className="flex items-center gap-1">
-                      <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider mr-1">Parcelas</p>
-                      <button type="button" onClick={() => {
-                        const curr = parseInt(condFechParc[fId] ?? "1") || 1;
-                        if (curr > 1) setCondFechParc(prev => ({ ...prev, [fId]: String(curr - 1) }));
-                      }} className="w-7 h-7 flex items-center justify-center rounded-md border border-gray-300 text-gray-500 hover:bg-gray-100 font-bold">-</button>
-                      <input type="number" min="1" max="60" value={condFechParc[fId] ?? "1"}
-                        onChange={e => { const v = parseInt(e.target.value); if (v > 0 && v <= 60) setCondFechParc(prev => ({ ...prev, [fId]: String(v) })); }}
-                        className="w-11 h-7 text-center text-sm font-bold border border-gray-300 rounded-md bg-white text-gray-900 outline-none focus:ring-1 focus:ring-blue-300" />
-                      <button type="button" onClick={() => {
-                        const curr = parseInt(condFechParc[fId] ?? "1") || 1;
-                        if (curr < 60) setCondFechParc(prev => ({ ...prev, [fId]: String(curr + 1) }));
-                      }} className="w-7 h-7 flex items-center justify-center rounded-md border border-gray-300 text-gray-500 hover:bg-gray-100 font-bold">+</button>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <label className="text-[11px] text-gray-500 whitespace-nowrap">1ª parcela:</label>
-                      <input type="date" value={condFechDataIni[fId] ?? ""}
-                        onChange={e => setCondFechDataIni(prev => ({ ...prev, [fId]: e.target.value }))}
-                        className="h-7 text-sm border border-gray-300 rounded-md px-2 bg-white text-gray-900 outline-none focus:ring-1 focus:ring-blue-300" />
-                    </div>
-                  </div>
-
-                  {(() => {
-                    const numParc = parseInt(condFechParc[fId] ?? "1") || 1;
-                    const dataIni = condFechDataIni[fId];
-                    if (!dataIni && !condFechPrazo[fId]) return null;
-
-                    let primeiroVenc: Date;
-                    if (dataIni) {
-                      primeiroVenc = new Date(dataIni + "T12:00:00");
-                    } else {
-                      const hoje = new Date();
-                      const ciclo = condFechCiclo[fId];
-                      const prazo = parseInt(condFechPrazo[fId] ?? "30");
-                      let proximoFech: Date;
-                      if (ciclo === "fixo") {
-                        const dias = (condFechDiaFixo[fId] ?? "1,15").split(",").map(d => parseInt(d.trim())).filter(d => !isNaN(d) && d >= 1 && d <= 31).sort((a, b) => a - b);
-                        if (dias.length === 0) return null;
-                        const proximo = dias.find(d => d > hoje.getDate());
-                        proximoFech = new Date(hoje.getFullYear(), hoje.getMonth(), proximo ?? dias[0]);
-                        if (!proximo) proximoFech.setMonth(proximoFech.getMonth() + 1);
-                      } else if (ciclo) {
-                        const cicloDias = parseInt(ciclo);
-                        proximoFech = new Date(hoje);
-                        proximoFech.setDate(proximoFech.getDate() + (cicloDias - (hoje.getDate() % cicloDias)));
-                      } else {
-                        proximoFech = new Date(hoje);
-                      }
-                      primeiroVenc = new Date(proximoFech);
-                      primeiroVenc.setDate(primeiroVenc.getDate() + prazo);
-                    }
-
-                    const valorParcela = fornTotal / numParc;
-                    const parcelas = Array.from({ length: numParc }, (_, i) => {
-                      const dt = new Date(primeiroVenc);
-                      dt.setDate(dt.getDate() + (i * 30));
-                      return { num: i + 1, valor: valorParcela, data: dt };
-                    });
-
-                    return (
-                      <div className="bg-blue-50 border border-blue-200 rounded-xl overflow-hidden">
-                        <div className="px-3 py-2 bg-blue-100 border-b border-blue-200 flex justify-between items-center">
-                          <span className="text-xs font-bold text-blue-700">Total: {formatCurrency(fornTotal)}</span>
-                          <span className="text-[11px] text-blue-600">{numParc}x de {formatCurrency(valorParcela)}</span>
-                        </div>
-                        <div className="divide-y divide-blue-100">
-                          {parcelas.map(p => (
-                            <div key={p.num} className="flex items-center justify-between px-3 py-1.5">
-                              <span className="text-xs text-blue-600 w-16">{p.num}ª parcela</span>
-                              <span className="text-xs font-bold text-blue-800">{formatCurrency(p.valor)}</span>
-                              <span className="text-xs text-blue-500">{p.data.toLocaleDateString("pt-BR")}</span>
+                      {editTipoPag[fId] && (() => {
+                        const today = new Date().toISOString().split("T")[0];
+                        const parcelas = calcularParcelas(editTipoPag[fId], fornTotal, today);
+                        return parcelas.length > 0 ? (
+                          <div className="bg-gradient-to-br from-violet-50 to-white border border-violet-200 rounded-xl p-4 mt-4">
+                            <div className="flex items-center justify-between mb-3">
+                              <p className="text-xs font-bold text-violet-700 uppercase tracking-wider">Prévia das Parcelas</p>
+                              <span className="text-[11px] font-semibold text-violet-600 bg-white border border-violet-200 px-2 py-0.5 rounded-full">{parcelas.length}x</span>
                             </div>
-                          ))}
+                            <div className="space-y-1.5">
+                              {parcelas.map((parc, idx) => (
+                                <div key={idx} className="flex items-center justify-between bg-white rounded-lg px-3 py-2 border border-violet-100">
+                                  <span className="text-xs text-violet-600 font-semibold w-28">{parc.descricao}</span>
+                                  <span className="text-sm text-violet-900 font-bold tabular-nums">{formatCurrency(parc.valor)}</span>
+                                  <span className="text-[11px] text-violet-500 bg-violet-50 px-2 py-0.5 rounded tabular-nums">{new Date(parc.dataVencimento + "T12:00:00").toLocaleDateString("pt-BR")}</span>
+                                </div>
+                              ))}
+                            </div>
+                            <div className="mt-3 pt-3 border-t border-violet-200 flex justify-between text-sm font-bold text-violet-900">
+                              <span>Total</span>
+                              <span className="tabular-nums">{formatCurrency(fornTotal)}</span>
+                            </div>
+                          </div>
+                        ) : null;
+                      })()}
+                    </>
+                  ) : (condModo[fId] ?? "padrao") === "fechamento" ? (
+                    <div className="space-y-4">
+                      <div className="grid sm:grid-cols-2 gap-4">
+                        <div>
+                          <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2">Ciclo de Fechamento</p>
+                          <div className="grid grid-cols-2 gap-1.5">
+                            {[{ v: "7", l: "7 dias" }, { v: "15", l: "15 dias" }, { v: "30", l: "30 dias" }, { v: "fixo", l: "Dias fixos" }].map(c => (
+                              <button key={c.v} type="button" onClick={() => setCondFechCiclo(prev => ({ ...prev, [fId]: prev[fId] === c.v ? "" : c.v }))}
+                                className={`px-2 h-10 rounded-lg text-xs font-medium border-2 transition-all text-center ${condFechCiclo[fId] === c.v ? "bg-blue-100 text-blue-700 border-blue-400 ring-2 ring-blue-200" : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50"}`}>
+                                {c.l}
+                              </button>
+                            ))}
+                          </div>
+                          {condFechCiclo[fId] === "fixo" && (
+                            <input type="text" placeholder="Ex: 1, 15" value={condFechDiaFixo[fId] ?? ""}
+                              onChange={e => setCondFechDiaFixo(prev => ({ ...prev, [fId]: e.target.value }))}
+                              className="w-full h-10 text-sm border border-gray-300 rounded-lg px-3 bg-white text-gray-900 mt-2 focus:ring-2 focus:ring-blue-200 focus:border-blue-400 outline-none" />
+                          )}
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2">Prazo após Fechamento</p>
+                          <div className="grid grid-cols-3 gap-1.5">
+                            {["7", "14", "21", "28", "30", "60"].map(d => (
+                              <button key={d} type="button" onClick={() => setCondFechPrazo(prev => ({ ...prev, [fId]: prev[fId] === d ? "" : d }))}
+                                className={`px-2 h-10 rounded-lg text-xs font-medium border-2 transition-all text-center ${condFechPrazo[fId] === d ? "bg-blue-100 text-blue-700 border-blue-400 ring-2 ring-blue-200" : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50"}`}>
+                                {d}d
+                              </button>
+                            ))}
+                          </div>
                         </div>
                       </div>
-                    );
-                  })()}
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  <div className="flex items-center gap-3">
-                    <div className="flex-1">
-                      <label className="text-[11px] text-gray-500 mb-1 block">Qtd. Parcelas</label>
-                      <div className="flex items-center gap-1">
-                        <button type="button" onClick={() => {
-                          const curr = condCustomParcelas[fId] ?? [];
-                          if (curr.length > 1) setCondCustomParcelas(prev => ({ ...prev, [fId]: curr.slice(0, -1) }));
-                        }} className="w-8 h-8 flex items-center justify-center rounded-lg border border-gray-300 text-gray-500 hover:bg-gray-100 text-lg font-bold">-</button>
-                        <span className="w-10 text-center text-sm font-bold text-gray-800">{(condCustomParcelas[fId] ?? []).length}</span>
-                        <button type="button" onClick={() => {
-                          const curr = condCustomParcelas[fId] ?? [];
-                          const lastDate = curr.length > 0 ? curr[curr.length - 1].data : new Date().toISOString().split("T")[0];
-                          const nextDate = new Date(lastDate + "T12:00:00");
-                          nextDate.setDate(nextDate.getDate() + 30);
-                          const restante = fornTotal - curr.reduce((s, p) => s + (parseFloat(p.valor) || 0), 0);
-                          setCondCustomParcelas(prev => ({ ...prev, [fId]: [...curr, { valor: Math.max(0, restante).toFixed(2), data: nextDate.toISOString().split("T")[0] }] }));
-                        }} className="w-8 h-8 flex items-center justify-center rounded-lg border border-gray-300 text-gray-500 hover:bg-gray-100 text-lg font-bold">+</button>
-                      </div>
-                    </div>
-                    <div className="flex-1">
-                      <label className="text-[11px] text-gray-500 mb-1 block">Dividir igual</label>
-                      <button type="button" onClick={() => {
-                        const curr = condCustomParcelas[fId] ?? [];
-                        if (curr.length === 0) return;
-                        const valorIgual = (fornTotal / curr.length).toFixed(2);
-                        setCondCustomParcelas(prev => ({ ...prev, [fId]: curr.map(p => ({ ...p, valor: valorIgual })) }));
-                      }} className="h-8 px-3 text-xs font-medium bg-violet-100 text-violet-700 rounded-lg hover:bg-violet-200 transition-colors">
-                        Dividir R$ {formatCurrency(fornTotal)}
-                      </button>
-                    </div>
-                  </div>
 
-                  <div className="space-y-2 max-h-[200px] overflow-y-auto">
-                    {(condCustomParcelas[fId] ?? []).map((parc, idx) => (
-                      <div key={idx} className="flex items-center gap-2 bg-gray-50 rounded-lg px-3 py-2 border border-gray-200">
-                        <span className="text-xs font-bold text-violet-600 w-6">{idx + 1}.</span>
-                        <div className="flex-1">
-                          <label className="text-[10px] text-gray-400">Valor</label>
-                          <input type="number" step="0.01" min="0" value={parc.valor}
-                            onChange={e => {
-                              const updated = [...(condCustomParcelas[fId] ?? [])];
-                              updated[idx] = { ...updated[idx], valor: e.target.value };
-                              setCondCustomParcelas(prev => ({ ...prev, [fId]: updated }));
-                            }}
-                            className="w-full h-7 text-sm border border-gray-300 rounded px-2 bg-white text-gray-900 focus:ring-1 focus:ring-violet-300 outline-none" />
+                      <div className="flex items-end gap-4 flex-wrap pt-2 border-t border-gray-100">
+                        <div>
+                          <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2">Parcelas</p>
+                          <div className="flex items-center gap-1">
+                            <button type="button" onClick={() => {
+                              const curr = parseInt(condFechParc[fId] ?? "1") || 1;
+                              if (curr > 1) setCondFechParc(prev => ({ ...prev, [fId]: String(curr - 1) }));
+                            }} className="w-9 h-9 flex items-center justify-center rounded-md border border-gray-300 text-gray-600 hover:bg-gray-100 font-bold">−</button>
+                            <input type="number" min="1" max="60" value={condFechParc[fId] ?? "1"}
+                              onChange={e => { const v = parseInt(e.target.value); if (v > 0 && v <= 60) setCondFechParc(prev => ({ ...prev, [fId]: String(v) })); }}
+                              className="w-14 h-9 text-center text-sm font-bold border border-gray-300 rounded-md bg-white text-gray-900 outline-none focus:ring-2 focus:ring-blue-200" />
+                            <button type="button" onClick={() => {
+                              const curr = parseInt(condFechParc[fId] ?? "1") || 1;
+                              if (curr < 60) setCondFechParc(prev => ({ ...prev, [fId]: String(curr + 1) }));
+                            }} className="w-9 h-9 flex items-center justify-center rounded-md border border-gray-300 text-gray-600 hover:bg-gray-100 font-bold">+</button>
+                          </div>
                         </div>
-                        <div className="flex-1">
-                          <label className="text-[10px] text-gray-400">Vencimento</label>
-                          <input type="date" value={parc.data}
-                            onChange={e => {
-                              const updated = [...(condCustomParcelas[fId] ?? [])];
-                              updated[idx] = { ...updated[idx], data: e.target.value };
-                              setCondCustomParcelas(prev => ({ ...prev, [fId]: updated }));
-                            }}
-                            className="w-full h-7 text-sm border border-gray-300 rounded px-2 bg-white text-gray-900 focus:ring-1 focus:ring-violet-300 outline-none" />
+                        <div>
+                          <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2">1ª Parcela</p>
+                          <input type="date" value={condFechDataIni[fId] ?? ""}
+                            onChange={e => setCondFechDataIni(prev => ({ ...prev, [fId]: e.target.value }))}
+                            className="h-9 text-sm border border-gray-300 rounded-md px-3 bg-white text-gray-900 outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-400" />
                         </div>
-                        <button type="button" onClick={() => {
-                          const updated = (condCustomParcelas[fId] ?? []).filter((_, i) => i !== idx);
-                          setCondCustomParcelas(prev => ({ ...prev, [fId]: updated }));
-                        }} className="text-red-400 hover:text-red-600 mt-3 text-sm">✕</button>
                       </div>
-                    ))}
-                  </div>
 
-                  {(() => {
-                    const parcList = condCustomParcelas[fId] ?? [];
-                    const totalCustom = parcList.reduce((s, p) => s + (parseFloat(p.valor) || 0), 0);
-                    const diff = fornTotal - totalCustom;
-                    return (
-                      <div className={`flex justify-between items-center px-3 py-2 rounded-lg border ${Math.abs(diff) < 0.01 ? "bg-green-50 border-green-200" : "bg-amber-50 border-amber-200"}`}>
-                        <span className="text-xs font-medium text-gray-700">Total parcelas: <strong>{formatCurrency(totalCustom)}</strong></span>
-                        {Math.abs(diff) >= 0.01 && (
-                          <span className={`text-xs font-bold ${diff > 0 ? "text-amber-600" : "text-red-600"}`}>
-                            {diff > 0 ? `Faltam ${formatCurrency(diff)}` : `Excede ${formatCurrency(Math.abs(diff))}`}
-                          </span>
-                        )}
-                        {Math.abs(diff) < 0.01 && <span className="text-xs font-bold text-green-600">Valores batem</span>}
-                      </div>
-                    );
-                  })()}
-                </div>
-              )}
-            </div>
+                      {(() => {
+                        const numParc = parseInt(condFechParc[fId] ?? "1") || 1;
+                        const dataIni = condFechDataIni[fId];
+                        if (!dataIni && !condFechPrazo[fId]) return null;
 
-            {(() => {
-              const cotTipoEntrega = (mapaQ.data as any)?.tipoEfetivo ?? (mapaQ.data?.cotacao as any)?.tipo;
-              const isMdoMedicao = (cotTipoEntrega === "servico" || cotTipoEntrega === "pacote") && (editTipoPag[fId] === "medicao" || (editCondPag[fId] ?? "").toLowerCase().includes("medição"));
-              return (
-            <div>
-              <p className="text-xs font-semibold text-gray-600 uppercase tracking-wider mb-2">{isMdoMedicao ? "Mobilização & Frete" : "Entrega & Frete"}</p>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-[11px] text-gray-500 mb-1 block">{isMdoMedicao ? "Prazo para Mobilização" : "Prazo de Entrega"}</label>
-                  <div className="relative">
-                    <input type="number" placeholder={isMdoMedicao ? "Ex: 7" : "Ex: 15"} value={editPrazo[fId] ?? ""} onChange={e => {
-                        const dias = e.target.value;
-                        setEditPrazo(prev => ({ ...prev, [fId]: dias }));
-                        if (dias && parseInt(dias) > 0) {
-                          const dt = new Date();
-                          dt.setDate(dt.getDate() + parseInt(dias));
-                          setEditDataEntrega(prev => ({ ...prev, [fId]: dt.toISOString().split("T")[0] }));
+                        let primeiroVenc: Date;
+                        if (dataIni) {
+                          primeiroVenc = new Date(dataIni + "T12:00:00");
+                        } else {
+                          const hoje = new Date();
+                          const ciclo = condFechCiclo[fId];
+                          const prazo = parseInt(condFechPrazo[fId] ?? "30");
+                          let proximoFech: Date;
+                          if (ciclo === "fixo") {
+                            const dias = (condFechDiaFixo[fId] ?? "1,15").split(",").map(d => parseInt(d.trim())).filter(d => !isNaN(d) && d >= 1 && d <= 31).sort((a, b) => a - b);
+                            if (dias.length === 0) return null;
+                            const proximo = dias.find(d => d > hoje.getDate());
+                            proximoFech = new Date(hoje.getFullYear(), hoje.getMonth(), proximo ?? dias[0]);
+                            if (!proximo) proximoFech.setMonth(proximoFech.getMonth() + 1);
+                          } else if (ciclo) {
+                            const cicloDias = parseInt(ciclo);
+                            proximoFech = new Date(hoje);
+                            proximoFech.setDate(proximoFech.getDate() + (cicloDias - (hoje.getDate() % cicloDias)));
+                          } else {
+                            proximoFech = new Date(hoje);
+                          }
+                          primeiroVenc = new Date(proximoFech);
+                          primeiroVenc.setDate(primeiroVenc.getDate() + prazo);
                         }
-                      }}
-                      className="w-full h-9 text-sm border border-gray-300 rounded-lg px-3 pr-12 bg-white text-gray-900 focus:ring-2 focus:ring-violet-200 focus:border-violet-400 outline-none" />
-                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400">dias</span>
-                  </div>
-                </div>
-                <div>
-                  <label className="text-[11px] text-gray-500 mb-1 block">{isMdoMedicao ? "Data Início Mobilização" : "Data Prevista Entrega"}</label>
-                  <input type="date" value={editDataEntrega[fId] ?? ""} onChange={e => {
-                      const dataStr = e.target.value;
-                      setEditDataEntrega(prev => ({ ...prev, [fId]: dataStr }));
-                      if (dataStr) {
-                        const hoje = new Date();
-                        hoje.setHours(0, 0, 0, 0);
-                        const dt = new Date(dataStr + "T00:00:00");
-                        const diffMs = dt.getTime() - hoje.getTime();
-                        const diffDias = Math.max(0, Math.round(diffMs / (1000 * 60 * 60 * 24)));
-                        setEditPrazo(prev => ({ ...prev, [fId]: String(diffDias) }));
-                      }
-                    }}
-                    className="w-full h-9 text-sm border border-gray-300 rounded-lg px-3 bg-white text-gray-900 focus:ring-2 focus:ring-violet-200 focus:border-violet-400 outline-none" />
-                </div>
-                <div>
-                  <label className="text-[11px] text-gray-500 mb-1 block">Tipo de Frete</label>
-                  <select value={editFreteTipo[fId] ?? "cif"} onChange={e => setEditFreteTipo(prev => ({ ...prev, [fId]: e.target.value }))}
-                    className="w-full h-9 text-sm border border-gray-300 rounded-lg px-3 bg-white text-gray-900 focus:ring-2 focus:ring-violet-200 focus:border-violet-400 outline-none">
-                    <option value="cif">CIF (incluso)</option>
-                    <option value="fob">FOB (por conta)</option>
-                  </select>
-                </div>
-                {(editFreteTipo[fId] ?? "cif") === "fob" && (
-                  <div>
-                    <label className="text-[11px] text-gray-500 mb-1 block">Valor do Frete</label>
-                    <input type="number" step="0.01" min="0" placeholder="R$ 0,00" value={editValorFrete[fId] ?? "0"} onChange={e => setEditValorFrete(prev => ({ ...prev, [fId]: e.target.value }))}
-                      className="w-full h-9 text-sm border border-gray-300 rounded-lg px-3 bg-white text-gray-900 focus:ring-2 focus:ring-violet-200 focus:border-violet-400 outline-none" />
-                  </div>
-                )}
-              </div>
-              {(editFreteTipo[fId] ?? "cif") === "fob" && (
-                <div className="mt-3">
-                  <label className="text-[11px] text-gray-500 mb-1 block">Transportadora</label>
-                  <input type="text" placeholder="Nome da transportadora" value={editTransportadora[fId] ?? ""} onChange={e => setEditTransportadora(prev => ({ ...prev, [fId]: e.target.value }))}
-                    className="w-full h-9 text-sm border border-gray-300 rounded-lg px-3 bg-white text-gray-900 focus:ring-2 focus:ring-violet-200 focus:border-violet-400 outline-none" />
-                </div>
-              )}
-            </div>
-              ); })()}
 
-            {(() => {
-              const MODULOS = [
-                { v: "medicao_mensal", l: "Medição Mensal", desc: "Pagamento mensal por medição de serviço executado", icon: "📅", sel: "bg-purple-100 text-purple-700 border-purple-300 ring-purple-200" },
-                { v: "medicao_avanco", l: "Medição por Avanço", desc: "Pagamento baseado no % de avanço físico", icon: "📊", sel: "bg-blue-100 text-blue-700 border-blue-300 ring-blue-200" },
-                { v: "medicao_etapa", l: "Medição por Etapa", desc: "Pagamento ao concluir etapas/marcos definidos", icon: "🎯", sel: "bg-green-100 text-green-700 border-green-300 ring-green-200" },
-                { v: "empreitada", l: "Empreitada Global", desc: "Preço fechado para o escopo total do serviço", icon: "📋", sel: "bg-amber-100 text-amber-700 border-amber-300 ring-amber-200" },
-                { v: "administracao", l: "Administração", desc: "Custo por hora/dia + materiais aplicados", icon: "⏱️", sel: "bg-indigo-100 text-indigo-700 border-indigo-300 ring-indigo-200" },
-              ];
-              return (
-                <div>
-                  <p className="text-xs font-semibold text-purple-600 uppercase tracking-wider mb-2">Módulo de Medição</p>
-                  <div className="grid grid-cols-2 gap-2">
-                    {MODULOS.map(m => (
-                      <button key={m.v} type="button" onClick={() => setEditModuloMedicao(prev => ({ ...prev, [fId]: prev[fId] === m.v ? "" : m.v }))}
-                        className={`flex flex-col items-start gap-0.5 px-3 py-2.5 rounded-xl text-left border-2 transition-all ${editModuloMedicao[fId] === m.v ? `${m.sel} ring-2` : "bg-white text-gray-500 border-gray-200 hover:bg-gray-50"}`}>
-                        <span className="flex items-center gap-1.5 text-sm font-medium"><span>{m.icon}</span> {m.l}</span>
-                        <span className="text-[10px] opacity-70 leading-tight">{m.desc}</span>
-                      </button>
-                    ))}
-                  </div>
-                  {editModuloMedicao[fId] && (
-                    <div className="mt-2 px-3 py-2 bg-purple-50 border border-purple-200 rounded-lg">
-                      <p className="text-xs text-purple-700 font-medium">
-                        {MODULOS.find(m => m.v === editModuloMedicao[fId])?.icon} Módulo selecionado: <strong>{MODULOS.find(m => m.v === editModuloMedicao[fId])?.l}</strong>
-                      </p>
+                        const valorParcela = fornTotal / numParc;
+                        const parcelas = Array.from({ length: numParc }, (_, i) => {
+                          const dt = new Date(primeiroVenc);
+                          dt.setDate(dt.getDate() + (i * 30));
+                          return { num: i + 1, valor: valorParcela, data: dt };
+                        });
+
+                        return (
+                          <div className="bg-gradient-to-br from-blue-50 to-white border border-blue-200 rounded-xl overflow-hidden mt-3">
+                            <div className="px-4 py-2.5 bg-blue-100/60 border-b border-blue-200 flex justify-between items-center">
+                              <span className="text-xs font-bold text-blue-700 tabular-nums">Total: {formatCurrency(fornTotal)}</span>
+                              <span className="text-[11px] text-blue-600 tabular-nums">{numParc}x de {formatCurrency(valorParcela)}</span>
+                            </div>
+                            <div className="divide-y divide-blue-100 max-h-[260px] overflow-y-auto">
+                              {parcelas.map(p => (
+                                <div key={p.num} className="flex items-center justify-between px-4 py-2">
+                                  <span className="text-xs text-blue-600 font-semibold w-20">{p.num}ª parcela</span>
+                                  <span className="text-sm font-bold text-blue-900 tabular-nums">{formatCurrency(p.valor)}</span>
+                                  <span className="text-xs text-blue-500 tabular-nums">{p.data.toLocaleDateString("pt-BR")}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      <div className="flex items-end gap-4 flex-wrap">
+                        <div>
+                          <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2">Qtd. Parcelas</p>
+                          <div className="flex items-center gap-1">
+                            <button type="button" onClick={() => {
+                              const curr = condCustomParcelas[fId] ?? [];
+                              if (curr.length > 1) setCondCustomParcelas(prev => ({ ...prev, [fId]: curr.slice(0, -1) }));
+                            }} className="w-9 h-9 flex items-center justify-center rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-100 text-lg font-bold">−</button>
+                            <span className="w-10 text-center text-sm font-bold text-gray-800">{(condCustomParcelas[fId] ?? []).length}</span>
+                            <button type="button" onClick={() => {
+                              const curr = condCustomParcelas[fId] ?? [];
+                              const lastDate = curr.length > 0 ? curr[curr.length - 1].data : new Date().toISOString().split("T")[0];
+                              const nextDate = new Date(lastDate + "T12:00:00");
+                              nextDate.setDate(nextDate.getDate() + 30);
+                              const restante = fornTotal - curr.reduce((s, p) => s + (parseFloat(p.valor) || 0), 0);
+                              setCondCustomParcelas(prev => ({ ...prev, [fId]: [...curr, { valor: Math.max(0, restante).toFixed(2), data: nextDate.toISOString().split("T")[0] }] }));
+                            }} className="w-9 h-9 flex items-center justify-center rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-100 text-lg font-bold">+</button>
+                          </div>
+                        </div>
+                        <button type="button" onClick={() => {
+                          const curr = condCustomParcelas[fId] ?? [];
+                          if (curr.length === 0) return;
+                          const valorIgual = (fornTotal / curr.length).toFixed(2);
+                          setCondCustomParcelas(prev => ({ ...prev, [fId]: curr.map(p => ({ ...p, valor: valorIgual })) }));
+                        }} className="h-9 px-3 text-xs font-semibold bg-violet-100 text-violet-700 rounded-lg hover:bg-violet-200 transition-colors">
+                          Dividir igual ({formatCurrency(fornTotal)})
+                        </button>
+                      </div>
+
+                      <div className="space-y-2 max-h-[280px] overflow-y-auto pr-1">
+                        {(condCustomParcelas[fId] ?? []).map((parc, idx) => (
+                          <div key={idx} className="flex items-end gap-2 bg-gray-50 rounded-lg px-3 py-2.5 border border-gray-200">
+                            <span className="text-sm font-bold text-violet-600 w-6 pb-2">{idx + 1}.</span>
+                            <div className="flex-1">
+                              <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">Valor</label>
+                              <input type="number" step="0.01" min="0" value={parc.valor}
+                                onChange={e => {
+                                  const updated = [...(condCustomParcelas[fId] ?? [])];
+                                  updated[idx] = { ...updated[idx], valor: e.target.value };
+                                  setCondCustomParcelas(prev => ({ ...prev, [fId]: updated }));
+                                }}
+                                className="w-full h-9 text-sm border border-gray-300 rounded-md px-2 bg-white text-gray-900 focus:ring-2 focus:ring-violet-200 focus:border-violet-400 outline-none tabular-nums" />
+                            </div>
+                            <div className="flex-1">
+                              <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">Vencimento</label>
+                              <input type="date" value={parc.data}
+                                onChange={e => {
+                                  const updated = [...(condCustomParcelas[fId] ?? [])];
+                                  updated[idx] = { ...updated[idx], data: e.target.value };
+                                  setCondCustomParcelas(prev => ({ ...prev, [fId]: updated }));
+                                }}
+                                className="w-full h-9 text-sm border border-gray-300 rounded-md px-2 bg-white text-gray-900 focus:ring-2 focus:ring-violet-200 focus:border-violet-400 outline-none" />
+                            </div>
+                            <button type="button" onClick={() => {
+                              const updated = (condCustomParcelas[fId] ?? []).filter((_, i) => i !== idx);
+                              setCondCustomParcelas(prev => ({ ...prev, [fId]: updated }));
+                            }} className="h-9 w-9 flex items-center justify-center rounded-md text-red-400 hover:text-red-600 hover:bg-red-50 transition-colors">
+                              <X className="w-4 h-4" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+
+                      {(() => {
+                        const parcList = condCustomParcelas[fId] ?? [];
+                        const totalCustom = parcList.reduce((s, p) => s + (parseFloat(p.valor) || 0), 0);
+                        const diff = fornTotal - totalCustom;
+                        const ok = Math.abs(diff) < 0.01;
+                        return (
+                          <div className={`flex justify-between items-center px-4 py-3 rounded-lg border-2 ${ok ? "bg-green-50 border-green-300" : "bg-amber-50 border-amber-300"}`}>
+                            <span className="text-sm font-semibold text-gray-700">Total parcelas: <strong className="tabular-nums">{formatCurrency(totalCustom)}</strong></span>
+                            {!ok && (
+                              <span className={`text-sm font-bold tabular-nums ${diff > 0 ? "text-amber-700" : "text-red-700"}`}>
+                                {diff > 0 ? `Faltam ${formatCurrency(diff)}` : `Excede ${formatCurrency(Math.abs(diff))}`}
+                              </span>
+                            )}
+                            {ok && <span className="text-sm font-bold text-green-700 flex items-center gap-1"><CheckCircle className="w-4 h-4" /> Valores batem</span>}
+                          </div>
+                        );
+                      })()}
                     </div>
                   )}
-                </div>
-              );
-            })()}
+                </section>
+              </div>
+
+              {/* Coluna DIREITA — Entrega + Módulo */}
+              <div className="space-y-5 lg:space-y-6 min-w-0">
+                {(() => {
+                  const isMdoMedicao = (cotTipoEfetivo === "servico" || cotTipoEfetivo === "pacote") && (editTipoPag[fId] === "medicao" || (editCondPag[fId] ?? "").toLowerCase().includes("medição"));
+                  const isFob = (editFreteTipo[fId] ?? "cif") === "fob";
+                  return (
+                    <section className="rounded-xl border border-gray-200 bg-white p-5 lg:p-6 shadow-sm">
+                      <SectionHeader Icon={Truck} color="bg-amber-100 text-amber-700" title={isMdoMedicao ? "Mobilização & Frete" : "Entrega & Frete"} />
+                      <div className="grid sm:grid-cols-2 gap-4">
+                        <div>
+                          <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1.5 block">{isMdoMedicao ? "Prazo p/ Mobilização" : "Prazo de Entrega"}</label>
+                          <div className="relative">
+                            <Clock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                            <input type="number" placeholder={isMdoMedicao ? "Ex: 7" : "Ex: 15"} value={editPrazo[fId] ?? ""}
+                              onChange={e => {
+                                const dias = e.target.value;
+                                setEditPrazo(prev => ({ ...prev, [fId]: dias }));
+                                if (dias && parseInt(dias) > 0) {
+                                  const dt = new Date();
+                                  dt.setDate(dt.getDate() + parseInt(dias));
+                                  setEditDataEntrega(prev => ({ ...prev, [fId]: dt.toISOString().split("T")[0] }));
+                                }
+                              }}
+                              className="w-full h-10 text-sm border border-gray-300 rounded-lg pl-9 pr-12 bg-white text-gray-900 focus:ring-2 focus:ring-violet-200 focus:border-violet-400 outline-none" />
+                            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400 font-medium">dias</span>
+                          </div>
+                        </div>
+                        <div>
+                          <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1.5 block">{isMdoMedicao ? "Data Início" : "Data Prevista"}</label>
+                          <div className="relative">
+                            <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                            <input type="date" value={editDataEntrega[fId] ?? ""}
+                              onChange={e => {
+                                const dataStr = e.target.value;
+                                setEditDataEntrega(prev => ({ ...prev, [fId]: dataStr }));
+                                if (dataStr) {
+                                  const hoje = new Date();
+                                  hoje.setHours(0, 0, 0, 0);
+                                  const dt = new Date(dataStr + "T00:00:00");
+                                  const diffMs = dt.getTime() - hoje.getTime();
+                                  const diffDias = Math.max(0, Math.round(diffMs / (1000 * 60 * 60 * 24)));
+                                  setEditPrazo(prev => ({ ...prev, [fId]: String(diffDias) }));
+                                }
+                              }}
+                              className="w-full h-10 text-sm border border-gray-300 rounded-lg pl-9 pr-3 bg-white text-gray-900 focus:ring-2 focus:ring-violet-200 focus:border-violet-400 outline-none" />
+                          </div>
+                        </div>
+                        <div className="sm:col-span-2">
+                          <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1.5 block">Tipo de Frete</label>
+                          <div className="grid grid-cols-2 gap-2">
+                            {([["cif", "CIF (incluso)"], ["fob", "FOB (por conta)"]] as const).map(([v, l]) => (
+                              <button key={v} type="button" onClick={() => setEditFreteTipo(prev => ({ ...prev, [fId]: v }))}
+                                className={`h-10 rounded-lg text-sm font-medium border-2 transition-all ${(editFreteTipo[fId] ?? "cif") === v ? "bg-amber-50 text-amber-700 border-amber-400 ring-2 ring-amber-200" : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50"}`}>
+                                {l}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                        {isFob && (
+                          <>
+                            <div>
+                              <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1.5 block">Valor do Frete</label>
+                              <input type="number" step="0.01" min="0" placeholder="R$ 0,00" value={editValorFrete[fId] ?? "0"}
+                                onChange={e => setEditValorFrete(prev => ({ ...prev, [fId]: e.target.value }))}
+                                className="w-full h-10 text-sm border border-gray-300 rounded-lg px-3 bg-white text-gray-900 focus:ring-2 focus:ring-amber-200 focus:border-amber-400 outline-none tabular-nums" />
+                            </div>
+                            <div>
+                              <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1.5 block">Transportadora</label>
+                              <input type="text" placeholder="Nome da transportadora" value={editTransportadora[fId] ?? ""}
+                                onChange={e => setEditTransportadora(prev => ({ ...prev, [fId]: e.target.value }))}
+                                className="w-full h-10 text-sm border border-gray-300 rounded-lg px-3 bg-white text-gray-900 focus:ring-2 focus:ring-amber-200 focus:border-amber-400 outline-none" />
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    </section>
+                  );
+                })()}
+
+                {/* Módulo de Medição */}
+                {(() => {
+                  const MODULOS: { v: string; l: string; desc: string; Icon: LucideIcon; selRing: string; selBg: string; iconColor: string }[] = [
+                    { v: "medicao_mensal", l: "Medição Mensal", desc: "Pagamento mensal por medição de serviço executado", Icon: Calendar, selRing: "ring-purple-200 border-purple-400", selBg: "bg-purple-50 text-purple-700", iconColor: "bg-purple-100 text-purple-600" },
+                    { v: "medicao_avanco", l: "Medição por Avanço", desc: "Pagamento baseado no % de avanço físico", Icon: BarChart2, selRing: "ring-blue-200 border-blue-400", selBg: "bg-blue-50 text-blue-700", iconColor: "bg-blue-100 text-blue-600" },
+                    { v: "medicao_etapa", l: "Medição por Etapa", desc: "Pagamento ao concluir etapas / marcos definidos", Icon: Target, selRing: "ring-green-200 border-green-400", selBg: "bg-green-50 text-green-700", iconColor: "bg-green-100 text-green-600" },
+                    { v: "empreitada", l: "Empreitada Global", desc: "Preço fechado para o escopo total do serviço", Icon: ClipboardList, selRing: "ring-amber-200 border-amber-400", selBg: "bg-amber-50 text-amber-700", iconColor: "bg-amber-100 text-amber-600" },
+                    { v: "administracao", l: "Administração", desc: "Custo por hora / dia + materiais aplicados", Icon: Clock, selRing: "ring-indigo-200 border-indigo-400", selBg: "bg-indigo-50 text-indigo-700", iconColor: "bg-indigo-100 text-indigo-600" },
+                  ];
+                  const selecionado = MODULOS.find(m => m.v === editModuloMedicao[fId]);
+                  return (
+                    <section className="rounded-xl border border-gray-200 bg-white p-5 lg:p-6 shadow-sm">
+                      <SectionHeader Icon={BarChart2} color="bg-purple-100 text-purple-700" title="Módulo de Medição" hint={selecionado ? "Selecionado" : "Opcional"} />
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                        {MODULOS.map(m => {
+                          const sel = editModuloMedicao[fId] === m.v;
+                          return (
+                            <button key={m.v} type="button"
+                              onClick={() => setEditModuloMedicao(prev => ({ ...prev, [fId]: prev[fId] === m.v ? "" : m.v }))}
+                              className={`flex items-start gap-3 p-3 rounded-xl text-left border-2 transition-all ${sel ? `${m.selBg} ${m.selRing} ring-2 shadow-sm` : "bg-white border-gray-200 hover:bg-gray-50 hover:border-gray-300"}`}>
+                              <div className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${sel ? "bg-white/80" : m.iconColor}`}>
+                                <m.Icon className="w-4 h-4" />
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <div className={`text-sm font-semibold ${sel ? "" : "text-gray-700"}`}>{m.l}</div>
+                                <div className={`text-[11px] mt-0.5 leading-snug ${sel ? "opacity-80" : "text-gray-500"}`}>{m.desc}</div>
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                      {selecionado && (
+                        <div className={`mt-3 px-4 py-2.5 rounded-lg border ${selecionado.selBg} ${selecionado.selRing.replace("ring-", "border-").split(" ")[1]}`}>
+                          <p className="text-sm font-medium">
+                            <span className="opacity-70">Módulo selecionado:</span> <strong>{selecionado.l}</strong>
+                          </p>
+                        </div>
+                      )}
+                    </section>
+                  );
+                })()}
+              </div>
+            </div>
           </div>
 
-          <div className="sticky bottom-0 bg-white border-t border-gray-100 px-6 py-4 rounded-b-2xl flex justify-end gap-2">
-            <button onClick={() => setCondModalFornId(null)} className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">Fechar</button>
-            <button
-              disabled={salvarCondicoesComerciais.isPending}
-              onClick={() => {
-                if (!showDetalhe) return;
-                const prazoVal = editPrazo[fId] ? parseInt(editPrazo[fId]) : undefined;
-                const parcList = condCustomParcelas[fId] ?? [];
-                const modo = condModo[fId] ?? "padrao";
-                const numParcelas = modo === "custom" && parcList.length > 0 ? parcList.length : undefined;
-                salvarCondicoesComerciais.mutate({
-                  cotacaoId: showDetalhe,
-                  fornecedorId: fId,
-                  companyId,
-                  formaPagamento: editFormaPag[fId] || "",
-                  tipoPagamento: editTipoPag[fId] || "",
-                  condicaoPagamento: editCondPag[fId] || "",
-                  prazoEntregaDias: prazoVal,
-                  numeroParcelas: numParcelas,
-                  moduloMedicao: editModuloMedicao[fId] || undefined,
-                }, {
-                  onSuccess: () => {
-                    setCondModalFornId(null);
-                    toast.success("Condições salvas com sucesso!");
-                  },
-                });
-              }}
-              className="px-5 py-2 text-sm font-semibold bg-violet-600 text-white rounded-lg hover:bg-violet-700 transition-colors disabled:opacity-60">
-              {salvarCondicoesComerciais.isPending ? "Salvando..." : "Confirmar e Salvar"}
-            </button>
+          {/* Footer sticky */}
+          <div className="flex-shrink-0 border-t border-gray-200 bg-gray-50/90 backdrop-blur px-5 lg:px-8 py-3.5 lg:py-4 flex items-center justify-between gap-3 flex-wrap">
+            <div className="text-xs text-gray-500 min-w-0 truncate">
+              <span className="font-medium text-gray-700 truncate">{fornNome}</span>
+              <span className="mx-2 text-gray-300">·</span>
+              <span className="font-semibold text-violet-700 tabular-nums">Total: {formatCurrency(fornTotal)}</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button variant="ghost" onClick={() => setCondModalFornId(null)} className="h-10 px-5 text-gray-600">
+                Fechar
+              </Button>
+              <Button
+                disabled={salvarCondicoesComerciais.isPending}
+                onClick={handleSalvar}
+                className="h-10 px-6 bg-violet-600 hover:bg-violet-700 text-white font-semibold shadow-sm shadow-violet-200 gap-2"
+              >
+                {salvarCondicoesComerciais.isPending ? (
+                  <><Loader2 className="w-4 h-4 animate-spin" /> Salvando…</>
+                ) : (
+                  <><Save className="w-4 h-4" /> Confirmar e Salvar</>
+                )}
+              </Button>
+            </div>
           </div>
         </div>
       </div>
