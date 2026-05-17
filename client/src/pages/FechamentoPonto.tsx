@@ -701,6 +701,9 @@ export default function FechamentoPonto() {
   const [diasDetalhe, setDiasDetalhe] = useState<{ employeeId: number; nome: string } | null>(null);
   // Rev. 2019 — Memória de cálculo do "Atraso Acumulado" por colaborador
   const [atrasoDetalhe, setAtrasoDetalhe] = useState<{ employeeId: number; nome: string; totalStr: string } | null>(null);
+  // Rev. 2051 — Memória de cálculo de HE e Faltas (drill-down dos modais de ranking)
+  const [heDetalhe, setHeDetalhe] = useState<{ employeeId: number; nome: string; totalStr: string } | null>(null);
+  const [faltaDetalhe, setFaltaDetalhe] = useState<{ employeeId: number; nome: string; totalDias: number } | null>(null);
   // Memória DIXI
   const [addMappingOpen, setAddMappingOpen] = useState(false);
   const [newMappingDixiName, setNewMappingDixiName] = useState("");
@@ -1065,6 +1068,16 @@ export default function FechamentoPonto() {
   const atrasoDetalheQuery = trpc.fechamentoPonto.getAtrasoDetalhe.useQuery(
     { companyId, companyIds, employeeId: atrasoDetalhe?.employeeId ?? 0, dataInicio: periodoIni ?? "", dataFim: periodoFim ?? "" },
     { enabled: !!atrasoDetalhe && !!periodoIni && !!periodoFim && (companyId > 0 || companyIds.length > 0) }
+  );
+
+  // Rev. 2051 — Memória de cálculo de HE e Faltas (drill-down)
+  const heDetalheQuery = trpc.fechamentoPonto.getHeDetalhe.useQuery(
+    { companyId, companyIds, employeeId: heDetalhe?.employeeId ?? 0, dataInicio: periodoIni ?? "", dataFim: periodoFim ?? "" },
+    { enabled: !!heDetalhe && !!periodoIni && !!periodoFim && (companyId > 0 || companyIds.length > 0) }
+  );
+  const faltaDetalheQuery = trpc.fechamentoPonto.getFaltaDetalhe.useQuery(
+    { companyId, companyIds, employeeId: faltaDetalhe?.employeeId ?? 0, dataInicio: periodoIni ?? "", dataFim: periodoFim ?? "" },
+    { enabled: !!faltaDetalhe && !!periodoIni && !!periodoFim && (companyId > 0 || companyIds.length > 0) }
   );
 
   // Rev. 2014 — Calendário de feriados (federais fixos + Páscoa-derivados + estaduais/municipais
@@ -2488,7 +2501,18 @@ export default function FechamentoPonto() {
                                     </td>
                                   )}
                                   {rankingModal === "extras" && <>
-                                    <td className="px-3 py-2 text-center font-mono font-bold text-emerald-700">{e.horasExtrasStr}</td>
+                                    <td className="px-3 py-2 text-center">
+                                      {e.horasExtras === 0
+                                        ? <span className="font-mono text-slate-400">{e.horasExtrasStr}</span>
+                                        : <button
+                                            className="font-mono font-bold text-emerald-700 hover:text-emerald-900 hover:underline cursor-pointer inline-flex items-center gap-1"
+                                            title="Ver memória de cálculo da HE (dia a dia)"
+                                            onClick={() => setHeDetalhe({ employeeId: e.id, nome: e.nome, totalStr: e.horasExtrasStr })}
+                                          >
+                                            {e.horasExtrasStr}
+                                            <Info className="h-3 w-3 opacity-60" />
+                                          </button>}
+                                    </td>
                                     <td className="px-3 py-2 text-center">
                                       {heStatus === "aprovada"  && <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-green-100  text-green-800  text-[11px] font-semibold">✅ Aprovada</span>}
                                       {heStatus === "pendente"  && <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-800 text-[11px] font-semibold">⏳ Pendente</span>}
@@ -2499,9 +2523,14 @@ export default function FechamentoPonto() {
                                   </>}
                                   {rankingModal === "faltosos" && (
                                     <td className="px-3 py-2 text-center">
-                                      {hasAtestado
-                                        ? <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-green-100 text-green-800 text-[11px] font-semibold">✅ Justificada</span>
-                                        : <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-100   text-red-800   text-[11px] font-semibold">❌ Não justificada</span>}
+                                      <button
+                                        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold hover:opacity-80 cursor-pointer ${hasAtestado ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"}`}
+                                        title="Ver memória de cálculo das faltas (dia a dia)"
+                                        onClick={() => setFaltaDetalhe({ employeeId: e.id, nome: e.nome, totalDias: diasUteisNoPeriodo ? Math.max(0, diasUteisNoPeriodo - e.dias) : 0 })}
+                                      >
+                                        {hasAtestado ? "✅ Justificada" : "❌ Não justificada"}
+                                        <Info className="h-3 w-3 opacity-70" />
+                                      </button>
                                     </td>
                                   )}
                                 </tr>
@@ -2824,6 +2853,316 @@ export default function FechamentoPonto() {
 
                               <p className="text-sm text-muted-foreground mt-5 text-center max-w-3xl mx-auto leading-relaxed">
                                 <strong>Como ler cada linha</strong>: "Trabalhou <em>Trabalhado</em> de <em>Esperado</em> → déficit = <strong>Esperado − Trabalhado</strong>, que é o atraso descontado." A jornada esperada vem da <strong>jornada cadastrada</strong> do colaborador (RH → Funcionários → Jornada), já <em>líquida</em> do intervalo de almoço. Se aparecer "jornada não cadastrada", o motor ainda pode ter gravado atraso por outro caminho (ajuste manual, motor consolidado).
+                              </p>
+                            </div>
+                          );
+                        })()}
+                      </div>
+                    </DialogContent>
+                  </Dialog>
+                )}
+
+                {/* ===== Rev. 2051 — MODAL Memória de cálculo de HORAS EXTRAS ===== */}
+                {heDetalhe && (
+                  <Dialog open={true} onOpenChange={(open) => { if (!open) setHeDetalhe(null); }}>
+                    <DialogContent resizable={false} className="flex flex-col p-0 gap-0 w-screen h-screen max-w-none sm:max-w-none rounded-none border-0">
+                      <DialogHeader className="shrink-0 px-4 sm:px-8 py-4 sm:py-5 border-b bg-gradient-to-r from-emerald-600 via-teal-500 to-green-500 text-white relative overflow-hidden">
+                        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.18),transparent_60%)] pointer-events-none" />
+                        <div className="relative flex items-start gap-3 sm:gap-4">
+                          <span className="inline-flex items-center justify-center h-12 w-12 sm:h-14 sm:w-14 rounded-2xl bg-white/15 backdrop-blur-sm ring-2 ring-white/30 shrink-0">
+                            <Zap className="h-6 w-6 sm:h-7 sm:w-7" />
+                          </span>
+                          <div className="flex-1 min-w-0">
+                            <DialogTitle className="text-lg sm:text-2xl font-bold flex items-center gap-2 sm:gap-3 flex-wrap">
+                              Memória de cálculo · Horas Extras
+                              <span className="inline-flex items-center gap-1 px-2 sm:px-3 py-0.5 sm:py-1 rounded-full bg-white/20 backdrop-blur-sm text-sm sm:text-base font-semibold ring-1 ring-white/30">
+                                {heDetalhe.totalStr}
+                              </span>
+                            </DialogTitle>
+                            <p className="text-sm sm:text-base text-white/90 mt-1 sm:mt-1.5">
+                              <strong className="text-base sm:text-lg">{heDetalhe.nome}</strong>
+                              {periodoIni && periodoFim && (
+                                <span className="text-white/75 block sm:inline"> · {fmtPeriodo(periodoIni)} → {fmtPeriodo(periodoFim)}</span>
+                              )}
+                            </p>
+                          </div>
+                        </div>
+                      </DialogHeader>
+
+                      <div className="flex-1 overflow-auto px-3 sm:px-8 py-4 sm:py-6 bg-slate-50/40">
+                        {heDetalheQuery.isLoading && (
+                          <div className="flex items-center justify-center py-24 text-muted-foreground text-base sm:text-lg">
+                            <span className="animate-pulse">Carregando memória de cálculo...</span>
+                          </div>
+                        )}
+                        {heDetalheQuery.data && (() => {
+                          const { dias, totalMinutos } = heDetalheQuery.data;
+                          const fmtHM = (mins: number) => `${Math.floor(mins / 60)}h${String(mins % 60).padStart(2, "0")}min`;
+                          const DIAS_SEMANA = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+                          if (dias.length === 0) {
+                            return (
+                              <div className="flex flex-col items-center justify-center py-24 text-center">
+                                <CheckCircle className="h-16 w-16 text-emerald-500 mb-3" />
+                                <p className="text-xl font-semibold text-slate-700">Nenhuma hora extra registrada no período.</p>
+                                <p className="text-base text-muted-foreground mt-2 max-w-xl">
+                                  O motor não gravou HE em nenhum dia. Pode ser que o total exibido na tabela venha de banco de horas ou ajuste manual no consolidado.
+                                </p>
+                              </div>
+                            );
+                          }
+                          return (
+                            <div className="max-w-7xl mx-auto">
+                              {/* Faixa explicativa */}
+                              <div className="mb-4 rounded-xl border bg-white p-4 sm:p-5 flex items-start gap-3 shadow-sm">
+                                <Info className="h-5 w-5 sm:h-6 sm:w-6 text-emerald-600 shrink-0 mt-0.5" />
+                                <div className="text-sm sm:text-base text-slate-700 leading-relaxed">
+                                  <strong>Como ler:</strong> pra cada dia mostramos as <strong>4 batidas</strong>, quanto o colaborador <strong>trabalhou no total</strong>, quanto era <strong>esperado pela jornada</strong>, e o <strong className="text-emerald-700">excedente</strong> (= HE registrada pelo motor). Domingos e sábados fora da jornada têm <em>toda</em> a hora trabalhada como HE. A soma do excedente bate com o total da coluna "Horas Extras" da tabela principal.
+                                </div>
+                              </div>
+
+                              {/* Resumo */}
+                              <div className="flex items-center gap-3 sm:gap-6 mb-4 p-3 sm:p-5 bg-white rounded-xl border text-sm sm:text-lg flex-wrap shadow-sm">
+                                <span className="flex items-center gap-2 text-emerald-700 font-semibold">
+                                  <Zap className="h-5 w-5 sm:h-6 sm:w-6" /> {dias.length} {dias.length === 1 ? "dia" : "dias"} com HE
+                                </span>
+                                <span className="flex items-center gap-2 text-slate-700">
+                                  <Clock className="h-5 w-5 sm:h-6 sm:w-6" /> Total: <strong className="font-mono text-emerald-700 text-base sm:text-xl">{fmtHM(totalMinutos)}</strong>
+                                </span>
+                                <span className="flex items-center gap-2 text-slate-600 sm:ml-auto">
+                                  Média/dia c/ HE:
+                                  <strong className="font-mono text-slate-800 text-base sm:text-xl">
+                                    {dias.length > 0 ? fmtHM(Math.round(totalMinutos / dias.length)) : "—"}
+                                  </strong>
+                                </span>
+                              </div>
+
+                              {/* MOBILE: cards empilhados */}
+                              <div className="md:hidden space-y-3">
+                                {dias.map((d: any) => {
+                                  const [, mes, dia] = d.data.split("-");
+                                  const punch = (v: string | null) => v || "—";
+                                  const trabMin = d.horasTrabalhadasMin;
+                                  const expMin = d.jornadaEsperadaMin;
+                                  return (
+                                    <div key={d.data} className="bg-white rounded-xl border shadow-sm p-3">
+                                      <div className="flex items-center justify-between mb-2">
+                                        <div className="font-semibold text-slate-800">{dia}/{mes} · {DIAS_SEMANA[d.dow]}</div>
+                                        <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 font-bold font-mono text-sm">
+                                          + {fmtHM(d.heMin)}
+                                        </span>
+                                      </div>
+                                      <div className="grid grid-cols-2 gap-2 text-xs">
+                                        <div className="col-span-2 font-mono text-slate-600 bg-slate-50 rounded p-2">
+                                          <strong className="text-emerald-700">{punch(d.entrada1)}</strong> → <strong className="text-amber-700">{punch(d.saida1)}</strong> · <strong className="text-amber-700">{punch(d.entrada2)}</strong> → <strong className="text-rose-700">{punch(d.saida2)}</strong>
+                                        </div>
+                                        <div><span className="text-slate-500">Trabalhado:</span> <strong className="font-mono text-emerald-700">{d.horasTrabalhadas || (trabMin !== null ? fmtHM(trabMin) : "—")}</strong></div>
+                                        <div><span className="text-slate-500">Esperado:</span> <strong className="font-mono">{expMin !== null && expMin > 0 ? fmtHM(expMin) : "—"}</strong></div>
+                                        <div className="col-span-2"><span className="text-slate-500">Acumulado:</span> <strong className="font-mono">{fmtHM(d.acumulado)}</strong></div>
+                                      </div>
+                                      {d.observacao && <div className="text-[11px] text-amber-700 mt-2">⚠ {d.observacao}</div>}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+
+                              {/* DESKTOP: tabela */}
+                              <div className="hidden md:block rounded-xl border bg-white overflow-x-auto shadow-sm">
+                                <table className="w-full text-base min-w-[800px]">
+                                  <thead className="bg-slate-100 border-b">
+                                    <tr>
+                                      <th className="px-4 py-4 text-left font-semibold text-slate-700">Data</th>
+                                      <th className="px-4 py-4 text-center font-semibold text-slate-700">Batidas do dia</th>
+                                      <th className="px-4 py-4 text-center font-semibold text-emerald-700">Trabalhado</th>
+                                      <th className="px-4 py-4 text-center font-semibold text-slate-700">Esperado</th>
+                                      <th className="px-4 py-4 text-center font-semibold text-emerald-700">Excedente (= HE)</th>
+                                      <th className="px-4 py-4 text-right font-semibold text-slate-700">Acumulado</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {dias.map((d: any, idx: number) => {
+                                      const [, mes, dia] = d.data.split("-");
+                                      const label = `${dia}/${mes} · ${DIAS_SEMANA[d.dow]}`;
+                                      const punch = (v: string | null) => v || "—";
+                                      const trabMin = d.horasTrabalhadasMin;
+                                      const expMin = d.jornadaEsperadaMin;
+                                      return (
+                                        <tr key={d.data} className={`border-b last:border-0 ${idx % 2 === 0 ? "bg-white" : "bg-slate-50/60"} hover:bg-emerald-50/40 align-top`}>
+                                          <td className="px-4 py-4 font-semibold text-slate-800">{label}</td>
+                                          <td className="px-4 py-4 text-center font-mono text-slate-700 text-sm leading-relaxed">
+                                            <div className="flex flex-col gap-0.5 items-center">
+                                              <span><strong className="text-emerald-700">{punch(d.entrada1)}</strong> → <strong className="text-amber-700">{punch(d.saida1)}</strong></span>
+                                              <span><strong className="text-amber-700">{punch(d.entrada2)}</strong> → <strong className="text-rose-700">{punch(d.saida2)}</strong></span>
+                                            </div>
+                                          </td>
+                                          <td className="px-4 py-4 text-center font-mono font-bold text-emerald-700 text-lg">
+                                            {d.horasTrabalhadas || (trabMin !== null ? fmtHM(trabMin) : "—")}
+                                          </td>
+                                          <td className="px-4 py-4 text-center font-mono text-slate-800 text-lg">
+                                            {expMin !== null && expMin > 0
+                                              ? fmtHM(expMin)
+                                              : <span className="text-slate-400 italic text-sm">{d.dow === 0 ? "domingo" : d.dow === 6 ? "sábado" : "sem jornada"}</span>}
+                                          </td>
+                                          <td className="px-4 py-4 text-center">
+                                            <span className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full bg-emerald-100 text-emerald-800 text-base font-bold font-mono">
+                                              + {fmtHM(d.heMin)}
+                                            </span>
+                                            {d.observacao && (
+                                              <div className="text-xs text-amber-700 mt-1.5 max-w-xs mx-auto leading-snug">⚠ {d.observacao}</div>
+                                            )}
+                                          </td>
+                                          <td className="px-4 py-4 text-right font-mono font-semibold text-slate-700">{fmtHM(d.acumulado)}</td>
+                                        </tr>
+                                      );
+                                    })}
+                                  </tbody>
+                                  <tfoot className="bg-emerald-50 border-t-2 border-emerald-200">
+                                    <tr>
+                                      <td colSpan={4} className="px-4 py-4 text-right text-base font-semibold text-slate-700 uppercase">Total de HE no período</td>
+                                      <td className="px-4 py-4 text-center font-mono font-bold text-emerald-700 text-lg">{fmtHM(totalMinutos)}</td>
+                                      <td className="px-4 py-4 text-right font-mono font-bold text-emerald-700 text-lg">{fmtHM(totalMinutos)}</td>
+                                    </tr>
+                                  </tfoot>
+                                </table>
+                              </div>
+
+                              <p className="text-xs sm:text-sm text-muted-foreground mt-5 text-center max-w-3xl mx-auto leading-relaxed">
+                                <strong>Como ler cada linha</strong>: HE = max(0, <em>Trabalhado − Esperado</em>) em dias úteis; em domingos e sábados fora da jornada, HE = <em>Trabalhado</em> integral. A jornada esperada vem da <strong>jornada cadastrada</strong> do colaborador (RH → Funcionários → Jornada), líquida do almoço. Adicional noturno, banco de horas e DSR podem ajustar o número final gravado pelo motor.
+                              </p>
+                            </div>
+                          );
+                        })()}
+                      </div>
+                    </DialogContent>
+                  </Dialog>
+                )}
+
+                {/* ===== Rev. 2051 — MODAL Memória de cálculo de FALTAS ===== */}
+                {faltaDetalhe && (
+                  <Dialog open={true} onOpenChange={(open) => { if (!open) setFaltaDetalhe(null); }}>
+                    <DialogContent resizable={false} className="flex flex-col p-0 gap-0 w-screen h-screen max-w-none sm:max-w-none rounded-none border-0">
+                      <DialogHeader className="shrink-0 px-4 sm:px-8 py-4 sm:py-5 border-b bg-gradient-to-r from-slate-700 via-slate-600 to-slate-500 text-white relative overflow-hidden">
+                        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.15),transparent_60%)] pointer-events-none" />
+                        <div className="relative flex items-start gap-3 sm:gap-4">
+                          <span className="inline-flex items-center justify-center h-12 w-12 sm:h-14 sm:w-14 rounded-2xl bg-white/15 backdrop-blur-sm ring-2 ring-white/30 shrink-0">
+                            <CalendarX className="h-6 w-6 sm:h-7 sm:w-7" />
+                          </span>
+                          <div className="flex-1 min-w-0">
+                            <DialogTitle className="text-lg sm:text-2xl font-bold flex items-center gap-2 sm:gap-3 flex-wrap">
+                              Memória de cálculo · Faltas e Dias do Período
+                            </DialogTitle>
+                            <p className="text-sm sm:text-base text-white/90 mt-1 sm:mt-1.5">
+                              <strong className="text-base sm:text-lg">{faltaDetalhe.nome}</strong>
+                              {periodoIni && periodoFim && (
+                                <span className="text-white/75 block sm:inline"> · {fmtPeriodo(periodoIni)} → {fmtPeriodo(periodoFim)}</span>
+                              )}
+                            </p>
+                          </div>
+                        </div>
+                      </DialogHeader>
+
+                      <div className="flex-1 overflow-auto px-3 sm:px-8 py-4 sm:py-6 bg-slate-50/40">
+                        {faltaDetalheQuery.isLoading && (
+                          <div className="flex items-center justify-center py-24 text-muted-foreground text-base sm:text-lg">
+                            <span className="animate-pulse">Carregando memória de cálculo...</span>
+                          </div>
+                        )}
+                        {faltaDetalheQuery.data && (() => {
+                          const { dias, totais } = faltaDetalheQuery.data;
+                          const DIAS_SEMANA = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+                          const STATUS_META: Record<string, { label: string; cor: string; emoji: string }> = {
+                            trabalhado:             { label: "Trabalhado",          cor: "bg-green-100 text-green-800 ring-1 ring-green-200",       emoji: "✅" },
+                            falta_nao_justificada:  { label: "Falta não justificada", cor: "bg-red-100 text-red-800 ring-1 ring-red-200",            emoji: "❌" },
+                            atestado:               { label: "Atestado",            cor: "bg-blue-100 text-blue-800 ring-1 ring-blue-200",          emoji: "🏥" },
+                            ferias:                 { label: "Férias",              cor: "bg-sky-100 text-sky-800 ring-1 ring-sky-200",             emoji: "🏖" },
+                            feriado:                { label: "Feriado",             cor: "bg-amber-100 text-amber-800 ring-1 ring-amber-200",       emoji: "🎉" },
+                            fds:                    { label: "Fim de semana",       cor: "bg-slate-100 text-slate-600 ring-1 ring-slate-200",       emoji: "—" },
+                            futuro:                 { label: "Ainda não chegou",    cor: "bg-violet-100 text-violet-700 ring-1 ring-violet-200",   emoji: "⏳" },
+                            dispensa:               { label: "Aviso prévio",        cor: "bg-orange-100 text-orange-800 ring-1 ring-orange-200",    emoji: "📄" },
+                          };
+                          return (
+                            <div className="max-w-7xl mx-auto">
+                              {/* Faixa explicativa */}
+                              <div className="mb-4 rounded-xl border bg-white p-4 sm:p-5 flex items-start gap-3 shadow-sm">
+                                <Info className="h-5 w-5 sm:h-6 sm:w-6 text-slate-600 shrink-0 mt-0.5" />
+                                <div className="text-sm sm:text-base text-slate-700 leading-relaxed">
+                                  <strong>Como ler:</strong> mostramos <strong>cada dia do período</strong> com seu status. <strong className="text-red-700">Falta não justificada</strong> = dia útil sem batida de ponto, sem atestado, sem férias e sem feriado. <strong className="text-blue-700">Atestado</strong> aparece com o tipo/CID/motivo (justifica a ausência). Feriados e fins de semana NÃO contam como falta. Dias em <strong className="text-violet-700">"Ainda não chegou"</strong> também não.
+                                </div>
+                              </div>
+
+                              {/* Resumo (chips coloridos por status) */}
+                              <div className="flex flex-wrap gap-2 sm:gap-3 mb-4 p-3 sm:p-5 bg-white rounded-xl border shadow-sm">
+                                {([
+                                  ["trabalhado", totais.trabalhados],
+                                  ["falta_nao_justificada", totais.faltas_nao_justificadas],
+                                  ["atestado", totais.atestados],
+                                  ["ferias", totais.ferias],
+                                  ["feriado", totais.feriados],
+                                  ["fds", totais.fds],
+                                  ["dispensa", totais.dispensa],
+                                  ["futuro", totais.futuros],
+                                ] as const).filter(([, n]) => n > 0).map(([k, n]) => {
+                                  const m = STATUS_META[k];
+                                  return (
+                                    <span key={k} className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-semibold ${m.cor}`}>
+                                      <span>{m.emoji}</span> {n} {m.label}
+                                    </span>
+                                  );
+                                })}
+                              </div>
+
+                              {/* Grid de dias (responsivo: 2 cols mobile, 3-4 md/lg) */}
+                              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-3">
+                                {dias.map((d: any) => {
+                                  const [, mes, dia] = d.data.split("-");
+                                  const m = STATUS_META[d.status];
+                                  return (
+                                    <div key={d.data} className={`rounded-lg border shadow-sm p-3 ${m.cor} bg-white`}>
+                                      <div className="flex items-center justify-between mb-1">
+                                        <div className="font-bold text-slate-800 text-base">
+                                          {dia}/{mes} <span className="text-xs font-normal text-slate-500">· {DIAS_SEMANA[d.dow]}</span>
+                                        </div>
+                                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold ${m.cor}`}>
+                                          <span>{m.emoji}</span> {m.label}
+                                        </span>
+                                      </div>
+                                      {d.status === "trabalhado" && d.horasTrabalhadas && (
+                                        <div className="text-xs font-mono text-slate-700"><CheckCircle className="inline h-3 w-3 text-green-600 mr-1" />{d.horasTrabalhadas}</div>
+                                      )}
+                                      {d.status === "atestado" && d.atestadoInfo && (
+                                        <div className="text-xs text-slate-700 leading-relaxed">
+                                          <div><strong>{d.atestadoInfo.tipo}</strong>{d.atestadoInfo.cid ? ` · CID ${d.atestadoInfo.cid}` : ""}</div>
+                                          {d.atestadoInfo.motivo && <div className="text-slate-500 truncate" title={d.atestadoInfo.motivo}>{d.atestadoInfo.motivo}</div>}
+                                          <div className="text-[11px] text-slate-500">
+                                            Emitido {d.atestadoInfo.dataEmissao.split("-").reverse().join("/")}
+                                            {d.atestadoInfo.dataRetorno && ` · retorno ${d.atestadoInfo.dataRetorno.split("-").reverse().join("/")}`}
+                                          </div>
+                                        </div>
+                                      )}
+                                      {d.status === "feriado" && d.feriadoNome && (
+                                        <div className="text-xs text-amber-800 italic">{d.feriadoNome}</div>
+                                      )}
+                                      {d.status === "ferias" && (
+                                        <div className="text-xs text-sky-700">Em gozo de férias</div>
+                                      )}
+                                      {d.status === "dispensa" && (
+                                        <div className="text-xs text-orange-700">Em aviso prévio (rescisão em andamento)</div>
+                                      )}
+                                      {d.status === "fds" && (
+                                        <div className="text-xs text-slate-500">{d.dow === 0 ? "Domingo" : "Sábado"} sem batida</div>
+                                      )}
+                                      {d.status === "futuro" && (
+                                        <div className="text-xs text-violet-700">Dia ainda não chegou</div>
+                                      )}
+                                      {d.status === "falta_nao_justificada" && (
+                                        <div className="text-xs text-red-700"><XCircle className="inline h-3 w-3 mr-1" />Sem ponto, sem atestado, sem justificativa</div>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+
+                              <p className="text-xs sm:text-sm text-muted-foreground mt-5 text-center max-w-3xl mx-auto leading-relaxed">
+                                "Falta não justificada" = dia útil sem nenhuma batida E sem atestado/férias/feriado/aviso prévio cobrindo o dia. Pode ser falta real, home office sem lançamento, ou ponto ainda não importado. Atestados vêm de DP → Atestados; férias vêm de DP → Férias; aviso prévio vem de DP → Rescisões.
                               </p>
                             </div>
                           );

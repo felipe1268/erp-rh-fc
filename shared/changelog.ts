@@ -1,6 +1,155 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2051 — Fechamento de Ponto · Modais de Ranking (Mais
+ * Pontuais / Mais Horas Extras / Menos Dias Trabalhados) ganham
+ * MEMÓRIA DE CÁLCULO clicável pra TODAS as colunas + responsivo
+ * em mobile.
+ *
+ * Pedido direto do usuário (IMG_0937/0938/0939): "Quero clicar
+ * em cada informação e poder ver a memória de cálculo de cada
+ * item — falta, atrasos, HE... pra mapeamento. Quero ter acesso
+ * a tudo de forma clara e objetiva. Deixa tudo responsivo."
+ *
+ * Investigação:
+ *  - Modal "Mais Pontuais" (Rev. 2032) já tinha drill-down do
+ *    "Atraso Acumulado" via setAtrasoDetalhe.
+ *  - Modal "Mais Horas Extras": coluna "Total HE" era texto
+ *    estático — sem drill-down do excedente dia a dia.
+ *  - Modal "Menos Dias Trabalhados": badge "Justificada / Não
+ *    justificada" era texto estático — não dava pra ver QUAIS
+ *    dias eram falta, quais cobertos por atestado, férias,
+ *    feriado, dispensa de rescisão.
+ *  - Modal de atraso (Rev. 2032) já clicava em "atrasados" e
+ *    "pontuais" — OK.
+ *
+ * Solução em 2 arquivos (zero schema, zero contrato quebrado):
+ *
+ * (A) `server/routers/fechamentoPonto.ts` — 2 novos procedures
+ *     (espelham padrão da Rev. 2032 `getAtrasoDetalhe`):
+ *
+ *     1. `getHeDetalhe({companyId, employeeId, dataInicio,
+ *        dataFim})` — pra cada `timeRecords` com `horasExtras
+ *        > 0`, devolve: data, dow, 4 batidas, horasTrabalhadas
+ *        (string + min), jornadaEsperadaMin (via helper
+ *        `getExpectedMinsFromJornada` líquido do almoço),
+ *        heMin (do motor), acumulado, observacao (heurística:
+ *        "Domingo trabalhado — adicional 100% CLT Art. 67",
+ *        "Sábado fora da jornada — toda hora é HE", ou
+ *        "Motor registrou HE diferente de trabalhado−esperado
+ *        — provável adicional noturno/DSR/banco/abono parcial"
+ *        quando diverge ≥ 2 min). Total = soma dos heMin.
+ *
+ *     2. `getFaltaDetalhe({companyId, employeeId, dataInicio,
+ *        dataFim})` — devolve TODOS os dias do período
+ *        classificados por status:
+ *          - "trabalhado" (tem ponto em timeRecords)
+ *          - "atestado" (coberto por atestados.dataEmissao +
+ *            diasAfastamento; vem com tipo/CID/motivo/datas)
+ *          - "ferias" (coberto por vacationPeriods, 3
+ *            fracionamentos possíveis)
+ *          - "feriado" (federal/estadual/municipal — global OU
+ *            da company; expande recorrentes pro ano do período)
+ *          - "fds" (sábado/domingo sem batida)
+ *          - "dispensa" (em aviso prévio rescisão em_andamento)
+ *          - "futuro" (dia > hoje — não conta como falta)
+ *          - "falta_nao_justificada" (dia útil sem nada disso)
+ *        Cross-tenant: todos os SELECTs usam
+ *        `inArray(companyId, cids)` via `resolveCompanyIds` —
+ *        INCLUSIVE o SELECT do próprio `employees` (and(eq(id,
+ *        input.employeeId), inArray(companyId, cids))) pra
+ *        evitar IDOR/enumeração de employeeId de outro tenant
+ *        (fix de code review architect antes do merge).
+ *        Retorna `dias[]` + `totais` por categoria.
+ *
+ * (B) `client/src/pages/FechamentoPonto.tsx`:
+ *     - 2 novos states `heDetalhe` / `faltaDetalhe` + 2 queries
+ *       useQuery (enabled gated pelo state).
+ *     - Modal "Mais Horas Extras": coluna "Total HE" agora é
+ *       botão clicável (verde com Info icon) que abre o modal
+ *       de memória de cálculo da HE.
+ *     - Modal "Menos Dias Trabalhados": badge "Justificada /
+ *       Não justificada" agora é botão clicável (mantém cor
+ *       verde/vermelha) que abre o modal de memória de cálculo
+ *       das faltas.
+ *     - 2 novos modais full-screen (mesmo padrão da Rev. 2032
+ *       `atrasoDetalhe`):
+ *         * MODAL HE — header gradient emerald→teal→green, ícone
+ *           Zap, faixa explicativa "Como ler", chips de resumo
+ *           (dias com HE, total, média/dia). Body:
+ *             - MOBILE (<md): cards empilhados verticais, 1 por
+ *               dia, com batidas em mono, trabalhado/esperado em
+ *               grid 2-col, badge "+ Xh Ymin" no topo.
+ *             - DESKTOP (md+): tabela horizontal scrollável com
+ *               Data · Batidas · Trabalhado · Esperado · Excedente
+ *               · Acumulado + tfoot com totais.
+ *           Observações inline em âmbar quando o motor diverge.
+ *
+ *         * MODAL FALTAS — header gradient slate, ícone
+ *           CalendarX, faixa explicativa, chips coloridos por
+ *           status (só renderiza chips com count > 0). Body: grid
+ *           responsivo (1 col mobile, 2 sm, 3 lg) com 1 card por
+ *           dia mostrando data/dia da semana + badge de status +
+ *           detalhes contextuais (CID/motivo/datas pra atestado;
+ *           nome pra feriado; texto explicativo pros demais).
+ *
+ *     - Mobile-first: ambos os modais usam `px-3 sm:px-8`,
+ *       `text-sm sm:text-base`, `h-12 sm:h-14` etc; títulos e
+ *       chips encolhem em <sm pra caber no iPad portrait sem
+ *       overflow horizontal.
+ *
+ * R-001/R-007/R-010 OK: ZERO ALTER/DROP/DELETE de schema ou
+ * dados. Os 2 procedures são read-only (apenas SELECT). Zero
+ * nova dependência. Reuso integral dos helpers existentes
+ * (`resolveCompanyIds`, `getExpectedMinsFromJornada`,
+ * `getCriteriaMap` — não usado aqui mas convive bem).
+ *
+ * Preservado:
+ *   - Rev. 2050 (auto-migração SST) INTACTA.
+ *   - Rev. 2032 (`getAtrasoDetalhe` + modal de atraso) INTACTO.
+ *   - Rev. 2030 (férias no cálculo de dias) INTACTO.
+ *   - Coluna "Total HE" pra colaboradores com `horasExtras === 0`
+ *     fica como span cinza (não é botão) — evita click sem dado.
+ *
+ * Por que não cliquei nos KPI cards do topo (filtros)?
+ *   Eles JÁ filtram a tabela quando clicados — comportamento da
+ *   Rev. 2015. Não preciso de drill-down separado neles porque
+ *   o drill-down é por LINHA (colaborador específico). Os KPIs
+ *   continuam servindo como filtros macro.
+ *
+ * Por que escolhi "Excedente" pra HE em vez de só "HE"?
+ *   Pra ficar simétrico com "Déficit" usado no modal de atraso
+ *   (Rev. 2032 — "Déficit = Esperado − Trabalhado = Atraso").
+ *   Linguagem consistente entre os 3 drill-downs do RH.
+ *
+ * Por que cards no mobile e tabela no desktop?
+ *   Tabela com 6 colunas (Data, Batidas, Trabalhado, Esperado,
+ *   Excedente, Acumulado) com min-w 800px em iPad portrait
+ *   (768px) força scroll horizontal incômodo. Cards verticais
+ *   com info hierarquizada cabem natural no touch.
+ *
+ * Arquivos: server/routers/fechamentoPonto.ts (+2 procedures
+ *           getHeDetalhe/getFaltaDetalhe ao final do router),
+ *           client/src/pages/FechamentoPonto.tsx (+2 states,
+ *           +2 queries, +2 modais, click handlers nas colunas
+ *           HE/badge faltas),
+ *           shared/version.ts → 2051,
+ *           shared/changelog.ts (este bloco),
+ *           replit.md.
+ *
+ * Follow-up:
+ *   1. Adicionar drill-down nos KPI cards do topo (Total Atrasos,
+ *      Total HE, etc) abrindo lista ranqueada por colaborador —
+ *      hoje só filtram a tabela.
+ *   2. Exportar memória de cálculo (HE e Faltas) em CSV/XLSX
+ *      pra auditoria fiscal trabalhista.
+ *   3. Cross-check da HE com `heSolicitacoes` (mostrar status
+ *      "✅ Aprovada / ⏳ Pendente / ❌ Rejeitada / ⚠ Sem
+ *      solicitação" inline em cada dia com HE no modal — útil
+ *      pra cobrança de solicitação retroativa).
+ *   4. Permitir editar batidas direto do modal HE (atalho pra
+ *      ManualEntryDialog passando data + employeeId).
+ *
  * Rev. 2050 — SST · Integração · AUTO-MIGRAÇÃO no startup das
  * 12 perguntas-padrão "Regras de Ouro" (Rev. 2047) — corrige
  * tenants com SEED ANTIGO da Rev. 2046 (NRs/capacete) OU com

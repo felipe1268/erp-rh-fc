@@ -5379,4 +5379,291 @@ export const fechamentoPontoRouter = router({
         dias,
       };
     }),
+
+  // ===========================================================
+  // Rev. 2051 — Memória de cálculo de Horas Extras (dia a dia)
+  // Devolve TODOS os dias do período em que o motor gravou HE > 0
+  // pra um colaborador, com batidas, total trabalhado, jornada
+  // esperada e o excedente (= HE). Permite ao RH conferir "de
+  // onde vieram as Xh de HE acumuladas no mês".
+  // ===========================================================
+  getHeDetalhe: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      companyIds: z.array(z.number()).optional(),
+      employeeId: z.number(),
+      dataInicio: z.string(),
+      dataFim: z.string(),
+    }))
+    .query(async ({ input }) => {
+      const db = (await getDb())!;
+      const cids = resolveCompanyIds(input);
+      const empRows = await db.select({
+        id: employees.id,
+        nomeCompleto: employees.nomeCompleto,
+        jornadaTrabalho: employees.jornadaTrabalho,
+      }).from(employees).where(and(
+        eq(employees.id, input.employeeId),
+        inArray(employees.companyId, cids),
+      )).limit(1);
+      const emp = empRows[0];
+      if (!emp) return { nome: "", dias: [], totalMinutos: 0, entradaPadrao: null as string | null };
+
+      const recs = await db.select({
+        data: timeRecords.data,
+        entrada1: timeRecords.entrada1,
+        saida1: timeRecords.saida1,
+        entrada2: timeRecords.entrada2,
+        saida2: timeRecords.saida2,
+        horasTrabalhadas: timeRecords.horasTrabalhadas,
+        horasExtras: timeRecords.horasExtras,
+        atrasos: timeRecords.atrasos,
+        obraId: timeRecords.obraId,
+      }).from(timeRecords).where(and(
+        inArray(timeRecords.companyId, cids),
+        eq(timeRecords.employeeId, input.employeeId),
+        sql`${timeRecords.data} >= ${input.dataInicio}`,
+        sql`${timeRecords.data} <= ${input.dataFim}`,
+      )).orderBy(timeRecords.data);
+
+      const jornadaStr = typeof emp.jornadaTrabalho === "string"
+        ? emp.jornadaTrabalho
+        : (emp.jornadaTrabalho ? JSON.stringify(emp.jornadaTrabalho) : null);
+      let jornadaParsed: any = null;
+      if (jornadaStr) { try { jornadaParsed = JSON.parse(jornadaStr); } catch {} }
+      const entradaPadrao = jornadaParsed && jornadaParsed.seg && jornadaParsed.seg.entrada ? String(jornadaParsed.seg.entrada) : null;
+
+      const toMins = (t: string | null | undefined) => {
+        if (!t) return 0;
+        const [h, m] = String(t).split(":").map(Number);
+        return (h || 0) * 60 + (m || 0);
+      };
+
+      type DiaHE = {
+        data: string;
+        dow: number;
+        entrada1: string | null;
+        saida1: string | null;
+        entrada2: string | null;
+        saida2: string | null;
+        horasTrabalhadas: string | null;
+        horasTrabalhadasMin: number | null;
+        jornadaEsperadaMin: number | null;
+        heMin: number;
+        acumulado: number;
+        observacao: string | null;
+      };
+      const dias: DiaHE[] = [];
+      let acumulado = 0;
+      for (const r of recs) {
+        const ds = String(r.data);
+        let heMin = 0;
+        if (r.horasExtras && r.horasExtras !== "0:00") {
+          const [h, m] = String(r.horasExtras).split(":").map(Number);
+          heMin = (h || 0) * 60 + (m || 0);
+        }
+        if (heMin <= 0) continue;
+        const dow = new Date(ds + "T12:00:00Z").getUTCDay();
+        const horasTrabMin = r.horasTrabalhadas ? toMins(r.horasTrabalhadas) : null;
+        const jornadaEsperadaMin = getExpectedMinsFromJornada(jornadaStr, ds);
+        let observacao: string | null = null;
+        if (dow === 0) observacao = "Domingo trabalhado — adicional 100% (CLT Art. 67).";
+        else if (dow === 6 && (jornadaEsperadaMin === 0 || jornadaEsperadaMin === null)) observacao = "Sábado fora da jornada — toda a hora trabalhada é HE.";
+        else if (horasTrabMin !== null && jornadaEsperadaMin !== null && jornadaEsperadaMin > 0) {
+          const excedenteSugerido = Math.max(0, horasTrabMin - jornadaEsperadaMin);
+          if (Math.abs(excedenteSugerido - heMin) >= 2) {
+            if (excedenteSugerido > heMin) observacao = "Motor registrou HE menor que (trabalhado − esperado) — provável abono parcial ou ajuste manual.";
+            else observacao = "Motor registrou HE maior que (trabalhado − esperado) — provável adicional noturno, DSR ou compensação de banco.";
+          }
+        }
+        acumulado += heMin;
+        dias.push({
+          data: ds, dow,
+          entrada1: r.entrada1 || null, saida1: r.saida1 || null,
+          entrada2: r.entrada2 || null, saida2: r.saida2 || null,
+          horasTrabalhadas: r.horasTrabalhadas || null,
+          horasTrabalhadasMin: horasTrabMin,
+          jornadaEsperadaMin,
+          heMin, acumulado, observacao,
+        });
+      }
+      return { nome: emp.nomeCompleto, entradaPadrao, totalMinutos: acumulado, dias };
+    }),
+
+  // ===========================================================
+  // Rev. 2051 — Memória de cálculo de Faltas / Dias Trabalhados
+  // Devolve TODOS os dias do período, classificando cada um:
+  //   trabalhado / falta_nao_justificada / atestado / ferias /
+  //   feriado / fim_de_semana / futuro / dispensa_rescisao.
+  // Permite ao RH ver exatamente quais dias contam como "falta"
+  // e quais foram cobertos por atestado/férias/dispensa.
+  // ===========================================================
+  getFaltaDetalhe: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      companyIds: z.array(z.number()).optional(),
+      employeeId: z.number(),
+      dataInicio: z.string(),
+      dataFim: z.string(),
+    }))
+    .query(async ({ input }) => {
+      const db = (await getDb())!;
+      const cids = resolveCompanyIds(input);
+      const empRows = await db.select({
+        id: employees.id,
+        nomeCompleto: employees.nomeCompleto,
+      }).from(employees).where(and(
+        eq(employees.id, input.employeeId),
+        inArray(employees.companyId, cids),
+      )).limit(1);
+      const emp = empRows[0];
+      if (!emp) return { nome: "", dias: [], totais: { trabalhados: 0, faltas_nao_justificadas: 0, atestados: 0, ferias: 0, feriados: 0, fds: 0, futuros: 0, dispensa: 0 } };
+
+      const recs = await db.select({
+        data: timeRecords.data,
+        horasTrabalhadas: timeRecords.horasTrabalhadas,
+      }).from(timeRecords).where(and(
+        inArray(timeRecords.companyId, cids),
+        eq(timeRecords.employeeId, input.employeeId),
+        sql`${timeRecords.data} >= ${input.dataInicio}`,
+        sql`${timeRecords.data} <= ${input.dataFim}`,
+      ));
+      const byDate: Record<string, string | null> = {};
+      for (const r of recs) byDate[String(r.data)] = r.horasTrabalhadas || null;
+
+      const ats = await db.select({
+        id: atestados.id,
+        tipo: atestados.tipo,
+        dataEmissao: atestados.dataEmissao,
+        diasAfastamento: atestados.diasAfastamento,
+        dataRetorno: atestados.dataRetorno,
+        cid: atestados.cid,
+        motivo: atestados.motivo,
+      }).from(atestados).where(and(
+        inArray(atestados.companyId, cids),
+        eq(atestados.employeeId, input.employeeId),
+        sql`${atestados.deletedAt} IS NULL`,
+      ));
+      type AtInfo = { tipo: string; cid: string | null; motivo: string | null; dataEmissao: string; dataRetorno: string | null };
+      const atestadoByDate: Record<string, AtInfo> = {};
+      for (const a of ats) {
+        if (!a.dataEmissao) continue;
+        const ini = a.dataEmissao;
+        const ndias = Math.max(1, Number(a.diasAfastamento) || 1);
+        const start = new Date(ini + "T12:00:00Z");
+        for (let i = 0; i < ndias; i++) {
+          const d = new Date(start); d.setUTCDate(start.getUTCDate() + i);
+          const ds = d.toISOString().slice(0, 10);
+          if (ds < input.dataInicio || ds > input.dataFim) continue;
+          if (!atestadoByDate[ds]) {
+            atestadoByDate[ds] = { tipo: a.tipo || "Atestado", cid: a.cid, motivo: a.motivo, dataEmissao: a.dataEmissao, dataRetorno: a.dataRetorno };
+          }
+        }
+      }
+
+      const vacs = await db.select({
+        dataInicio: vacationPeriods.dataInicio, dataFim: vacationPeriods.dataFim,
+        periodo2Inicio: vacationPeriods.periodo2Inicio, periodo2Fim: vacationPeriods.periodo2Fim,
+        periodo3Inicio: vacationPeriods.periodo3Inicio, periodo3Fim: vacationPeriods.periodo3Fim,
+      }).from(vacationPeriods).where(and(
+        inArray(vacationPeriods.companyId, cids),
+        eq(vacationPeriods.employeeId, input.employeeId),
+      ));
+      const feriasSet = new Set<string>();
+      const addRangeTo = (ini: any, fim: any, set: Set<string>) => {
+        if (!ini || !fim) return;
+        const sd = new Date(String(ini) + "T12:00:00Z"); const ed = new Date(String(fim) + "T12:00:00Z");
+        for (let d = new Date(sd); d <= ed; d.setUTCDate(d.getUTCDate() + 1)) {
+          const ds = d.toISOString().slice(0, 10);
+          if (ds < input.dataInicio || ds > input.dataFim) continue;
+          set.add(ds);
+        }
+      };
+      for (const v of vacs) {
+        addRangeTo(v.dataInicio, v.dataFim, feriasSet);
+        addRangeTo(v.periodo2Inicio, v.periodo2Fim, feriasSet);
+        addRangeTo(v.periodo3Inicio, v.periodo3Fim, feriasSet);
+      }
+
+      const dispRows = await db.select({
+        dataInicio: terminationNotices.dataInicio,
+        dataFim: terminationNotices.dataFim,
+      }).from(terminationNotices).where(and(
+        inArray(terminationNotices.companyId, cids),
+        eq(terminationNotices.employeeId, input.employeeId),
+        eq(terminationNotices.status, 'em_andamento'),
+        sql`${terminationNotices.deletedAt} IS NULL`,
+      ));
+      const dispensaSet = new Set<string>();
+      for (const d of dispRows) addRangeTo(d.dataInicio, d.dataFim, dispensaSet);
+
+      const ferRows = await db.select({ data: feriados.data, nome: feriados.nome, recorrente: feriados.recorrente })
+        .from(feriados).where(and(
+          eq(feriados.ativo, 1),
+          or(isNull(feriados.companyId), inArray(feriados.companyId, cids)) as any,
+        ));
+      const feriadoMap = new Map<string, string>();
+      const yIni = Number(input.dataInicio.slice(0, 4));
+      const yFim = Number(input.dataFim.slice(0, 4));
+      for (const f of ferRows) {
+        if (!f.data) continue;
+        if (f.recorrente === 1) {
+          for (let y = yIni; y <= yFim; y++) {
+            const ds = `${y}-${String(f.data).slice(5)}`;
+            if (ds >= input.dataInicio && ds <= input.dataFim) feriadoMap.set(ds, String(f.nome || "Feriado"));
+          }
+        } else {
+          const ds = String(f.data);
+          if (ds >= input.dataInicio && ds <= input.dataFim) feriadoMap.set(ds, String(f.nome || "Feriado"));
+        }
+      }
+
+      type Status = "trabalhado" | "falta_nao_justificada" | "atestado" | "ferias" | "feriado" | "fds" | "futuro" | "dispensa";
+      type Dia = {
+        data: string; dow: number; status: Status;
+        horasTrabalhadas: string | null;
+        atestadoInfo: AtInfo | null;
+        feriadoNome: string | null;
+      };
+      const dias: Dia[] = [];
+      const hoje = new Date().toISOString().slice(0, 10);
+      const cur = new Date(input.dataInicio + "T12:00:00Z");
+      const end = new Date(input.dataFim + "T12:00:00Z");
+      while (cur <= end) {
+        const ds = cur.toISOString().slice(0, 10);
+        const dow = cur.getUTCDay();
+        const isWeekend = dow === 0 || dow === 6;
+        const isFeriado = feriadoMap.has(ds);
+        const trab = ds in byDate;
+        let status: Status;
+        if (ds > hoje) status = "futuro";
+        else if (trab) status = "trabalhado";
+        else if (atestadoByDate[ds]) status = "atestado";
+        else if (feriasSet.has(ds)) status = "ferias";
+        else if (isFeriado) status = "feriado";
+        else if (isWeekend) status = "fds";
+        else if (dispensaSet.has(ds)) status = "dispensa";
+        else status = "falta_nao_justificada";
+        dias.push({
+          data: ds, dow, status,
+          horasTrabalhadas: byDate[ds] || null,
+          atestadoInfo: atestadoByDate[ds] || null,
+          feriadoNome: feriadoMap.get(ds) || null,
+        });
+        cur.setUTCDate(cur.getUTCDate() + 1);
+      }
+
+      const totais = {
+        trabalhados: dias.filter(d => d.status === "trabalhado").length,
+        faltas_nao_justificadas: dias.filter(d => d.status === "falta_nao_justificada").length,
+        atestados: dias.filter(d => d.status === "atestado").length,
+        ferias: dias.filter(d => d.status === "ferias").length,
+        feriados: dias.filter(d => d.status === "feriado").length,
+        fds: dias.filter(d => d.status === "fds").length,
+        futuros: dias.filter(d => d.status === "futuro").length,
+        dispensa: dias.filter(d => d.status === "dispensa").length,
+      };
+
+      return { nome: emp.nomeCompleto, dias, totais };
+    }),
 });
