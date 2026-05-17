@@ -1038,14 +1038,24 @@ export default function FechamentoPonto() {
     { enabled: !!diasDetalhe && !!periodoIni && !!periodoFim && (companyId > 0 || companyIds.length > 0) }
   );
 
-  // Total de dias corridos no período (numerador = dias com ponto, denominador = dias corridos)
-  // Usamos dias corridos (e não só úteis) para evitar >100%: quem trabalha domingo também conta
+  // Dias ÚTEIS reais no período (segunda a sexta, exclui sábado/domingo).
+  // Rev. 2000: antes contava dias CORRIDOS (pra evitar >100% se trabalhasse fim de semana),
+  // mas isso distorcia a % Presença (denominador inflado). Agora conta úteis reais e o
+  // display dos percentuais aplica Math.min(100, ...) pra absorver eventual trabalho extra.
+  // Feriados ainda NÃO são excluídos (não há fonte de calendário de feriados nesta tela).
   const diasUteisNoPeriodo = useMemo(() => {
     if (!periodoIni || !periodoFim) return null;
     const ini = new Date(periodoIni + "T12:00:00Z");
     const fim = new Date(periodoFim + "T12:00:00Z");
-    const diff = Math.round((fim.getTime() - ini.getTime()) / 86400000) + 1; // +1 inclusive
-    return diff > 0 ? diff : null;
+    if (fim < ini) return null;
+    let count = 0;
+    const cur = new Date(ini);
+    while (cur <= fim) {
+      const dow = cur.getUTCDay(); // 0=dom, 6=sab
+      if (dow !== 0 && dow !== 6) count++;
+      cur.setUTCDate(cur.getUTCDate() + 1);
+    }
+    return count > 0 ? count : null;
   }, [periodoIni, periodoFim]);
 
   // Formata data YYYY-MM-DD para DD/MM/YYYY
@@ -2096,7 +2106,7 @@ export default function FechamentoPonto() {
                   const fmtHMpt = (mins: number) => `${Math.floor(mins / 60).toLocaleString("pt-BR")}h${String(mins % 60).padStart(2, "0")}min`;
                   const totalHorasMin = filteredRankingRows.reduce((s: number, e: any) => s + e.horasTrab, 0);
                   const totalHorasStr = fmtHMpt(totalHorasMin);
-                  const presencaPct = (diasUteisNoPeriodo && totalColab) ? Math.round((totalDiasSum / totalColab / diasUteisNoPeriodo) * 100) : null;
+                  const presencaPct = (diasUteisNoPeriodo && totalColab) ? Math.min(100, Math.round((totalDiasSum / totalColab / diasUteisNoPeriodo) * 100)) : null;
                   const totalAtrasoMin = filteredRankingRows.reduce((s: number, e: any) => s + (e.atrasos || 0), 0);
                   const totalAtrasoStr = fmtHMpt(totalAtrasoMin);
                   const totalHEMin = filteredRankingRows.reduce((s: number, e: any) => s + (e.horasExtras || 0), 0);
@@ -2139,9 +2149,9 @@ export default function FechamentoPonto() {
                       {/* ── Header gradient (regras de ouro) ── */}
                       <DialogHeader className={`shrink-0 px-6 py-4 border-b bg-gradient-to-r ${cfg.gradient} text-white relative overflow-hidden`}>
                         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.18),transparent_60%)] pointer-events-none" />
-                        <div className="relative flex items-start gap-4">
-                          <span className={`inline-flex items-center justify-center h-12 w-12 rounded-xl bg-white/15 backdrop-blur-sm ring-4 ${cfg.ringColor} shrink-0`}>
-                            <HeaderIcon className="h-6 w-6" />
+                        <div className="relative flex flex-col sm:flex-row sm:items-start gap-3 sm:gap-4">
+                          <span className={`inline-flex items-center justify-center h-10 w-10 sm:h-12 sm:w-12 rounded-xl bg-white/15 backdrop-blur-sm ring-4 ${cfg.ringColor} shrink-0`}>
+                            <HeaderIcon className="h-5 w-5 sm:h-6 sm:w-6" />
                           </span>
                           <div className="flex-1 min-w-0">
                             <DialogTitle className="text-xl font-bold flex items-center gap-3 flex-wrap">
@@ -2161,12 +2171,12 @@ export default function FechamentoPonto() {
                               )}
                             </div>
                           </div>
-                          <div className="flex items-center gap-2 shrink-0">
+                          <div className="flex flex-wrap items-center gap-2 sm:shrink-0">
                             <Button variant="outline" size="sm" onClick={handlePrintRanking} className="h-8 text-xs bg-white/95 hover:bg-white text-slate-800 border-0">
-                              <Printer className="h-3.5 w-3.5 mr-1.5" /> Imprimir / PDF
+                              <Printer className="h-3.5 w-3.5 sm:mr-1.5" /> <span className="hidden sm:inline">Imprimir / PDF</span>
                             </Button>
                             <Button variant="outline" size="sm" onClick={handleExportRankingCSV} className="h-8 text-xs bg-white/95 hover:bg-white text-slate-800 border-0">
-                              <FileDown className="h-3.5 w-3.5 mr-1.5" /> Exportar CSV
+                              <FileDown className="h-3.5 w-3.5 sm:mr-1.5" /> <span className="hidden sm:inline">Exportar CSV</span>
                             </Button>
                           </div>
                         </div>
@@ -2184,7 +2194,7 @@ export default function FechamentoPonto() {
                       )}
 
                       {/* ── KPIs (indicadores importantes) ── */}
-                      <div className="shrink-0 px-6 py-3 border-b bg-slate-50/70 grid grid-cols-2 md:grid-cols-4 gap-2.5">
+                      <div className="shrink-0 px-3 sm:px-6 py-3 border-b bg-slate-50/70 grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-2.5">
                         {kpis.map((k, ki) => {
                           const KI = k.Icon;
                           return (
@@ -2202,14 +2212,14 @@ export default function FechamentoPonto() {
                         })}
                       </div>
 
-                      {/* ── Barra de filtros ── */}
-                      <div className="shrink-0 flex items-center gap-3 px-6 py-2.5 border-b bg-white">
-                        <div className="relative w-72">
+                      {/* ── Barra de filtros (responsiva) ── */}
+                      <div className="shrink-0 flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 px-3 sm:px-6 py-2.5 border-b bg-white">
+                        <div className="relative w-full sm:w-72">
                           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
                           <Input placeholder="Buscar nome ou função..." value={rankingSearch} onChange={e => setRankingSearch(e.target.value)} className="pl-9 h-8 text-xs bg-white" />
                         </div>
                         <Select value={rankingObraFilter} onValueChange={setRankingObraFilter}>
-                          <SelectTrigger className="w-52 h-8 text-xs bg-white">
+                          <SelectTrigger className="w-full sm:w-52 h-8 text-xs bg-white">
                             <SelectValue placeholder="Todas as obras" />
                           </SelectTrigger>
                           <SelectContent>
@@ -2222,13 +2232,13 @@ export default function FechamentoPonto() {
                         {rankingModal === "extras" && heSolicitacoesMes.isLoading && (
                           <span className="text-xs text-muted-foreground animate-pulse">Carregando HE...</span>
                         )}
-                        <div className="ml-auto flex items-center gap-1.5 text-xs text-muted-foreground">
+                        <div className="sm:ml-auto flex items-center gap-1.5 text-xs text-muted-foreground">
                           <span className="font-bold text-sm text-foreground">{filteredRankingRows.length}</span> colaboradores
                         </div>
                       </div>
 
                       {/* ── Legenda (card visual por indicador) ── */}
-                      <div className="shrink-0 px-6 py-2.5 border-b bg-blue-50/40">
+                      <div className="shrink-0 px-3 sm:px-6 py-2.5 border-b bg-blue-50/40">
                         <div className="flex items-center gap-1.5 mb-1.5">
                           <Info className="h-3.5 w-3.5 text-blue-700" />
                           <span className="text-[11px] font-bold text-blue-900 uppercase tracking-wide">Legenda — como interpretar cada coluna</span>
@@ -2249,9 +2259,9 @@ export default function FechamentoPonto() {
                         </div>
                       </div>
 
-                      {/* ── Tabela ── */}
+                      {/* ── Tabela (scroll horizontal em telas estreitas) ── */}
                       <div className="flex-1 overflow-auto">
-                        <table className="w-full text-xs border-collapse">
+                        <table className="w-full min-w-[900px] text-xs border-collapse">
                           <thead className="sticky top-0 z-10 bg-slate-50 border-b-2 border-slate-200">
                             <tr>
                               <th className="px-3 py-2.5 font-semibold text-slate-600 w-9 text-center">#</th>
@@ -2302,7 +2312,7 @@ export default function FechamentoPonto() {
                                     <button className="font-bold text-slate-700 hover:text-blue-700 hover:underline cursor-pointer" onClick={() => setDiasDetalhe({ employeeId: e.id, nome: e.nome })}>{e.dias}</button>
                                   </td>
                                   {diasUteisNoPeriodo && (() => {
-                                    const pct = Math.round((e.dias / diasUteisNoPeriodo) * 100);
+                                    const pct = Math.min(100, Math.round((e.dias / diasUteisNoPeriodo) * 100));
                                     const cor = pct >= 90 ? "text-green-700 bg-green-50" : pct >= 70 ? "text-yellow-700 bg-yellow-50" : "text-red-700 bg-red-50";
                                     return <td className="px-3 py-2 text-center"><button className={`inline-block px-2 py-0.5 rounded-full font-bold text-[11px] hover:opacity-80 cursor-pointer ${cor}`} onClick={() => setDiasDetalhe({ employeeId: e.id, nome: e.nome })}>{pct}%</button></td>;
                                   })()}
@@ -2344,12 +2354,12 @@ export default function FechamentoPonto() {
                         </table>
                       </div>
 
-                      {/* ── Rodapé de totais ── */}
+                      {/* ── Rodapé de totais (responsivo: wrap em telas pequenas) ── */}
                       {filteredRankingRows.length > 0 && (
-                        <div className="shrink-0 border-t bg-slate-50 px-6 py-2.5 flex items-center gap-6 text-xs text-slate-600">
+                        <div className="shrink-0 border-t bg-slate-50 px-3 sm:px-6 py-2 sm:py-2.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-600">
                           <span className="font-semibold text-slate-800">{filteredRankingRows.length} colaboradores</span>
                           <span>Média de dias: <strong>{Math.round(filteredRankingRows.reduce((s: number, e: any) => s + e.dias, 0) / filteredRankingRows.length)}</strong>{diasUteisNoPeriodo ? ` de ${diasUteisNoPeriodo} úteis` : ""}</span>
-                          {diasUteisNoPeriodo && <span className="text-indigo-700">Presença média: <strong>{Math.round((filteredRankingRows.reduce((s: number, e: any) => s + e.dias, 0) / filteredRankingRows.length / diasUteisNoPeriodo) * 100)}%</strong></span>}
+                          {diasUteisNoPeriodo && <span className="text-indigo-700">Presença média: <strong>{Math.min(100, Math.round((filteredRankingRows.reduce((s: number, e: any) => s + e.dias, 0) / filteredRankingRows.length / diasUteisNoPeriodo) * 100))}%</strong></span>}
                           <span>Total horas: <strong className="font-mono">{fmtHMpt(filteredRankingRows.reduce((s: number, e: any) => s + e.horasTrab, 0))}</strong></span>
                           {rankingModal === "pontuais" && <>
                             <span className="text-green-700">{filteredRankingRows.filter((e: any) => e.atrasos === 0).length} sem nenhum atraso</span>

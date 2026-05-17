@@ -1,6 +1,25 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2000 — DP · Fechamento de Ponto · Modal totalmente responsivo + cálculo correto de Dias Úteis.
+ * Pedidos diretos do usuário (17/05/2026):
+ *   (A) image IMG_0845_1779027439449.png + resposta de query: "A % Presença / Média de dias — denominador deveria ser dias úteis reais (~22) e não 30". Bug: `diasUteisNoPeriodo` (L1043) contava dias CORRIDOS no ciclo de fechamento (16/04→15/05 = 30) mas exibia como "dias úteis", inflando o denominador. Resultado: colaborador que trabalhou 10 dias de 22 úteis reais aparecia como 33% (10/30) em vez de ~45% (10/22).
+ *   (B) image IMG_0846_1779027587772.png: "Quero tudo responsivo, para facilitar a análise e filtro" — modal "Menos Dias Trabalhados" em iPad/mobile tinha header com botões cortados, filtros inline empurrando contador pra fora, tabela com colunas espremidas, rodapé não-wrappável.
+ * Mudança em 2 arquivos:
+ *   (1) `client/src/pages/FechamentoPonto.tsx`:
+ *     • [A] `diasUteisNoPeriodo` (L1043-1062) reescrito: agora itera dia-a-dia do período e conta apenas seg-sex via `getUTCDay() !== 0 && !== 6`. Comentário explícito sobre exclusão de fim de semana e ressalva de que feriados ainda NÃO são removidos (sem fonte de calendário aqui — fica como follow-up).
+ *     • [A] Aplicado `Math.min(100, ...)` em 3 lugares onde % Presença é calculada (KPI hero `presencaPct` L2112; célula individual da tabela L2318; rodapé presença média L2365) pra absorver casos onde colaborador trabalha sábado/feriado e estoura denominador.
+ *     • [B] Header do modal (L2145): `flex flex-col sm:flex-row` em vez de fixo; ícone shrink 10→12; ações Imprimir/CSV viram icon-only em <sm (textos `hidden sm:inline`).
+ *     • [B] KPIs (L2190): `px-3 sm:px-6` + `gap-2 sm:gap-2.5` (já era grid-cols-2 md:4).
+ *     • [B] Barra de filtros (L2208-2231): `flex flex-col sm:flex-row`, busca e select viram `w-full sm:w-72/w-52`, contador ganha `sm:ml-auto`.
+ *     • [B] Legenda (L2234): `px-3 sm:px-6`.
+ *     • [B] Tabela (L2267): `min-w-[900px]` força scroll horizontal limpo em telas estreitas (o container já tem `overflow-auto`).
+ *     • [B] Rodapé (L2362): `flex flex-wrap items-center gap-x-4 gap-y-1` + `px-3 sm:px-6 py-2 sm:py-2.5` — totais quebram em múltiplas linhas em vez de cortar.
+ *   (2) `shared/version.ts` → 2000.
+ * Resultado: em iPad/iPhone o modal usa toda a largura útil, filtros empilham acessíveis, tabela rola horizontalmente sem comprimir colunas, rodapé wrappa. Em desktop visual idêntico (todos os ajustes são `sm:`+). % Presença passa a refletir realidade (10 de 22 dias úteis = 45%, não mais 33% sobre 30 corridos).
+ * Preservado: lógica de rankings (Rev. 1997) INTACTA; helper `fmtHMpt` da Rev. 1999 INTACTO; export CSV/Print INTACTOS; `EmpStatusBadge` INTACTO; modal de drill-down individual INTACTO; barra de progresso de presença em outras telas (L2415) já tinha `Math.min(100)` por conta própria. Schema INTACTO. R-001/R-007/R-010 OK (sem migração). Reversível em 1 arquivo (~9 hunks).
+ * Follow-up natural: integrar calendário de feriados (tabela `feriados` já existe no projeto?) pra excluí-los do cálculo de dias úteis — ficou de fora pra manter scope enxuto.
+ *
  * Rev. 1999 — DP · Fechamento de Ponto · Separador de milhar pt-BR nas horas totais.
  * Pedido direto do usuário (17/05/2026, attached_assets/IMG_0844_1779027154673.png): "Melhore. Número acima de mil com ponto e vírgula se for o caso." Na imagem (modal "Mais Atrasados" com 26 colaboradores), o KPI "TOTAL DE HORAS" mostrava `1896h40min` — leitura difícil. Em pt-BR o padrão é `1.896h40min` (ponto como separador de milhar). Mesma falha no rodapé do modal ("Total horas: 1896h40min").
  * Mudança em 2 arquivos:
