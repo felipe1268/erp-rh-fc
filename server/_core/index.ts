@@ -471,6 +471,29 @@ Regras:
         await db.execute(sql`ALTER TABLE curriculos ADD COLUMN IF NOT EXISTS historico_status_json TEXT`);
         console.log(`[SyncSchema+] Coluna historico_status_json garantida na tabela curriculos.`);
 
+        // Rev. 2004 — Tabela de participações em DDS (Diálogo Diário de Segurança)
+        try {
+          await db.execute(sql`
+            CREATE TABLE IF NOT EXISTS dds_participacoes_terceiros (
+              id SERIAL PRIMARY KEY,
+              company_id INTEGER NOT NULL,
+              func_terceiro_id INTEGER NOT NULL,
+              data_dds DATE NOT NULL,
+              tema VARCHAR(255) NOT NULL,
+              instrutor VARCHAR(255),
+              obra_id INTEGER,
+              obra_nome VARCHAR(255),
+              lista_presenca_url VARCHAR(500),
+              observacoes TEXT,
+              created_at TIMESTAMP DEFAULT NOW() NOT NULL,
+              created_by VARCHAR(255),
+              deleted_at TIMESTAMP
+            )
+          `);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_dds_func_terc ON dds_participacoes_terceiros(company_id, func_terceiro_id, data_dds DESC)`);
+          console.log(`[SyncSchema+] Tabela dds_participacoes_terceiros garantida.`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA dds_participacoes_terceiros:`, e?.message || e); }
+
         // Rev. 2003 — integracao_cliente_doc_url em funcionarios_terceiros (controle separado de integração no cliente)
         try {
           await db.execute(sql`ALTER TABLE funcionarios_terceiros ADD COLUMN IF NOT EXISTS integracao_cliente_doc_url VARCHAR(500)`);

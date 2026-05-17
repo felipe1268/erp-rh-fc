@@ -53,6 +53,7 @@ async function _assertCompanyAccess(ctxUser: any, input: { companyId: number; co
 import {
   empresasTerceiras,
   funcionariosTerceiros,
+  ddsParticipacoesTerceiros,
   obrigacoesMensaisTerceiros,
   alertasTerceiros,
   obras,
@@ -602,6 +603,60 @@ export const terceirosRouter = router({
         const inaptos = all.filter((f: any) => f.statusAptidaoTerceiro === "inapto").length;
         const pendentes = all.filter((f: any) => f.statusAptidaoTerceiro === "pendente").length;
         return { total: all.length, aptos, inaptos, pendentes };
+      }),
+  }),
+
+  // ============================================================
+  // Rev. 2004 — DDS (Diálogo Diário de Segurança)
+  // Registra cada participação do funcionário terceiro em DDS da Construtora.
+  // ============================================================
+  dds: router({
+    list: protectedProcedure
+      .input(z.object({ companyId: z.number(), funcTerceiroId: z.number().optional() }))
+      .query(async ({ input }) => {
+        const db = (await getDb())!;
+        const conditions: any[] = [eq(ddsParticipacoesTerceiros.companyId, input.companyId), isNull(ddsParticipacoesTerceiros.deletedAt)];
+        if (input.funcTerceiroId) conditions.push(eq(ddsParticipacoesTerceiros.funcTerceiroId, input.funcTerceiroId));
+        return db.select().from(ddsParticipacoesTerceiros).where(and(...conditions)).orderBy(desc(ddsParticipacoesTerceiros.dataDds));
+      }),
+    create: protectedProcedure
+      .input(z.object({
+        companyId: z.number(),
+        funcTerceiroId: z.number(),
+        dataDds: z.string(),
+        tema: z.string().min(1),
+        instrutor: z.string().optional(),
+        obraId: z.number().optional(),
+        obraNome: z.string().optional(),
+        observacoes: z.string().optional(),
+        listaPresencaBase64: z.string().optional(),
+        listaPresencaFileName: z.string().optional(),
+        listaPresencaContentType: z.string().optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const db = (await getDb())!;
+        const { listaPresencaBase64, listaPresencaFileName, listaPresencaContentType, ...rest } = input;
+        let listaPresencaUrl: string | undefined;
+        if (listaPresencaBase64 && listaPresencaFileName) {
+          const buf = Buffer.from(listaPresencaBase64, "base64");
+          const safeName = listaPresencaFileName.replace(/[^a-zA-Z0-9._-]/g, "_");
+          const key = `terceiros/dds/${input.funcTerceiroId}/${Date.now()}-${safeName}`;
+          const up = await storagePut(key, buf, listaPresencaContentType || "application/pdf");
+          listaPresencaUrl = up.url;
+        }
+        const [row] = await db.insert(ddsParticipacoesTerceiros).values({
+          ...rest,
+          listaPresencaUrl,
+          createdBy: (ctx as any)?.user?.email || (ctx as any)?.user?.nome || null,
+        } as any).returning({ id: ddsParticipacoesTerceiros.id });
+        return { id: row.id };
+      }),
+    delete: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input }) => {
+        const db = (await getDb())!;
+        await db.update(ddsParticipacoesTerceiros).set({ deletedAt: new Date().toISOString() }).where(eq(ddsParticipacoesTerceiros.id, input.id));
+        return { success: true };
       }),
   }),
 

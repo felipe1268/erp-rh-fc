@@ -1,6 +1,32 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2004 — Terceiros · Funcionários · Controle de DDS (Diálogo Diário de Segurança).
+ * Pedido direto do usuário (17/05/2026): "Controle de DDS tbm... quando ele participar do DDS da nossa construtora". Diferente da integração admissional (1x na contratação), DDS é RECORRENTE — todo terceiro precisa participar dos DDS realizados pela Construtora (FC), e a empresa precisa COMPROVAR essa participação (auditorias, exigências de clientes, requisitos legais SST).
+ * Mudança em 4 arquivos:
+ *   (1) `drizzle/schema.ts` (+18L, antes de warningsTerceiros): nova tabela `ddsParticipacoesTerceiros` (`dds_participacoes_terceiros`) — id, companyId, funcTerceiroId, dataDds (date), tema (varchar 255), instrutor, obraId/obraNome, listaPresencaUrl (anexo), observacoes (text), createdAt/createdBy/deletedAt. Soft-delete padrão.
+ *   (2) `server/_core/index.ts` (+22L, antes do bloco integracao_cliente_doc_url): bootstrap `CREATE TABLE IF NOT EXISTS dds_participacoes_terceiros (...)` + `CREATE INDEX IF NOT EXISTS idx_dds_func_terc ON (company_id, func_terceiro_id, data_dds DESC)`. Try/catch idempotente.
+ *   (3) `server/routers/terceiros.ts`:
+ *     • Import `ddsParticipacoesTerceiros` adicionado ao bloco de imports.
+ *     • Novo subrouter `dds` com 3 procedures:
+ *       - `list({ companyId, funcTerceiroId? })`: retorna participações ordenadas por dataDds DESC, com soft-delete.
+ *       - `create({ companyId, funcTerceiroId, dataDds, tema*, instrutor?, obraId?, obraNome?, observacoes?, listaPresencaBase64?/fileName?/contentType? })`: aceita upload opcional do PDF/imagem da lista de presença assinada (max 10MB, vai pra `terceiros/dds/{funcId}/{ts}-{name}`); INSERT com `createdBy` extraído do contexto.
+ *       - `delete({ id })`: soft-delete via deletedAt.
+ *   (4) `client/src/pages/terceiros/FuncionariosTerceiros.tsx`:
+ *     • Tipo do `activeTab` ganha `| "dds"`; array do map atualizado pra `["dados", "documentos", "dds"]`; label "DDS".
+ *     • 2 novos states `ddsForm` (com data inicializada com hoje) e `ddsListaPayload`.
+ *     • Bloco `activeTab === "dds" && !editingId` → fallback "Salve primeiro" (consistente com aba documentos).
+ *     • Bloco `activeTab === "dds" && editingId` → renderiza componente isolado `<DdsTabContent>`.
+ *     • Novo COMPONENTE `DdsTabContent` (~190 linhas) no fim do arquivo:
+ *       - Hook `useQuery` da nova procedure `dds.list` + mutations `create`/`delete`.
+ *       - **Painel topo**: status agregado de frequência ("Em dia" ≤7d, "Atenção" ≤30d, "Atrasado" >30d, "Sem registros") c/ gradient colorido; KPIs: total, últimos 30d, últimos 60d, data do último, dias desde último.
+ *       - **Form de novo DDS** (card indigo): data (obrigatória, default hoje), tema (obrigatório), instrutor, obra (Select), observações, botão "Anexar lista de presença" (PDF/JPG/PNG max 10MB), botão "Registrar DDS".
+ *       - **Histórico** (card slate): lista com calendário visual (mês+dia em chip indigo), tema, link pra lista, metadados (data extensa, instrutor, obra), observações em itálico, botão remover (com confirm).
+ *   (5) `shared/version.ts` → 2004.
+ * Resultado: gestor abre aba **DDS** do funcionário e: (a) vê IMEDIATAMENTE há quantos dias foi o último DDS (verde/amber/vermelho); (b) registra novo DDS em 30s com lista de presença anexada; (c) consulta histórico completo cronológico; (d) atende auditoria/compliance comprovando frequência.
+ * Preservado: `funcionariosTerceiros` INTACTA (DDS vive em tabela separada — relação 1:N); `uploadDoc` INTACTO; abas Dados Pessoais e Documentos INTACTAS; Rev. 2003 INTACTA. R-001/R-007/R-010 OK (CREATE TABLE IF NOT EXISTS é aditivo). Reversível em 4 arquivos.
+ * Follow-up natural: (a) bloquear acesso à obra se DDS atrasado >30d; (b) campanha em massa "Registrar DDS em N funcionários" (pra DDS coletivos); (c) tela agregada de DDS por empresa terceira; (d) integração com lembretes/notificações.
+ *
  * Rev. 2003 — Terceiros · Funcionários · Integração de Segurança dividida em Construtora + Cliente.
  * Pedido direto do usuário (17/05/2026, image IMG_0849_1779028929295.png): "Tem a integração na construtora e tbm tem a integração no cliente precisa ter este controle". Na Rev. 2002 a seção "Integração de Segurança" tinha apenas 1 documento (Integração Admissional/DDS) — mas no fluxo real do setor terceirizado em construção civil, o funcionário passa por DUAS integrações distintas:
  *   (a) Integração na Construtora contratante (FC Engenharia) — regras corporativas, EPI padrão, política SST geral.

@@ -3611,6 +3611,25 @@ export const funcionariosTerceiros = pgTable("funcionarios_terceiros", {
   deletedAt: timestamp("deleted_at", { mode: "string" }),
 });
 
+// Rev. 2004 — Controle de DDS (Diálogo Diário de Segurança) dos funcionários terceiros.
+// Registra cada participação do funcionário terceiro em DDS da Construtora (FC).
+// Diferente da integração admissional (1x), DDS é recorrente — várias vezes por mês/ano.
+export const ddsParticipacoesTerceiros = pgTable("dds_participacoes_terceiros", {
+  id: serial().primaryKey(),
+  companyId: integer("company_id").notNull(),
+  funcTerceiroId: integer("func_terceiro_id").notNull(),
+  dataDds: date("data_dds", { mode: "string" }).notNull(),
+  tema: varchar({ length: 255 }).notNull(),
+  instrutor: varchar({ length: 255 }),
+  obraId: integer("obra_id"),
+  obraNome: varchar("obra_nome", { length: 255 }),
+  listaPresencaUrl: varchar("lista_presenca_url", { length: 500 }),
+  observacoes: text(),
+  createdAt: timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
+  createdBy: varchar("created_by", { length: 255 }),
+  deletedAt: timestamp("deleted_at", { mode: "string" }),
+});
+
 export const warningsTerceiros = pgTable("warnings_terceiros", {
   id: serial().primaryKey(),
   companyId: integer("company_id").notNull(),

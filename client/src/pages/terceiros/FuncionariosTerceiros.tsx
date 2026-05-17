@@ -21,7 +21,10 @@ export default function FuncionariosTerceiros() {
   const [filterAptidao, setFilterAptidao] = useState<string>("all");
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
-  const [activeTab, setActiveTab] = useState<"dados" | "documentos">("dados");
+  const [activeTab, setActiveTab] = useState<"dados" | "documentos" | "dds">("dados");
+  // Rev. 2004 — Form de novo DDS
+  const [ddsForm, setDdsForm] = useState<any>({ dataDds: new Date().toISOString().slice(0, 10) });
+  const [ddsListaPayload, setDdsListaPayload] = useState<{ base64: string; fileName: string; contentType: string } | null>(null);
   const [form, setForm] = useState<any>({});
   // Rev. 1998 — foto preview no momento do cadastro (antes de existir id no banco)
   const [fotoPreview, setFotoPreview] = useState<string | null>(null);
@@ -308,13 +311,13 @@ export default function FuncionariosTerceiros() {
           <div className="max-w-4xl mx-auto p-4 space-y-6">
             {/* Tabs */}
             <div className="flex gap-2 border-b pb-2">
-              {(["dados", "documentos"] as const).map((tab) => (
+              {(["dados", "documentos", "dds"] as const).map((tab) => (
                 <button
                   key={tab}
                   onClick={() => setActiveTab(tab)}
                   className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${activeTab === tab ? "bg-orange-500 text-white" : "text-muted-foreground hover:bg-muted"}`}
                 >
-                  {tab === "dados" ? "Dados Pessoais" : "Documentos"}
+                  {tab === "dados" ? "Dados Pessoais" : tab === "documentos" ? "Documentos" : "DDS"}
                 </button>
               ))}
             </div>
@@ -643,6 +646,22 @@ export default function FuncionariosTerceiros() {
               <p className="text-sm text-muted-foreground text-center py-8">Salve o funcionário primeiro para gerenciar documentos.</p>
             )}
 
+            {activeTab === "dds" && !editingId && (
+              <p className="text-sm text-muted-foreground text-center py-8">Salve o funcionário primeiro para registrar participações em DDS.</p>
+            )}
+
+            {activeTab === "dds" && editingId && (
+              <DdsTabContent
+                companyId={companyId!}
+                funcTerceiroId={editingId}
+                obras={obras}
+                form={ddsForm}
+                setForm={setDdsForm}
+                listaPayload={ddsListaPayload}
+                setListaPayload={setDdsListaPayload}
+              />
+            )}
+
             {/* Save Button */}
             <div className="flex justify-end gap-3 pt-4 border-t">
               <Button variant="outline" onClick={() => setShowForm(false)}>Cancelar</Button>
@@ -654,5 +673,223 @@ export default function FuncionariosTerceiros() {
         </FullScreenDialog>
       )}
     </DashboardLayout>
+  );
+}
+
+// Rev. 2004 — Aba DDS isolada (própria query/mutations pra não interferir com restante)
+function DdsTabContent({ companyId, funcTerceiroId, obras, form, setForm, listaPayload, setListaPayload }: any) {
+  const utils = trpc.useUtils();
+  const { data: ddsList = [], refetch } = trpc.terceiros.dds.list.useQuery(
+    { companyId, funcTerceiroId },
+    { enabled: !!companyId && !!funcTerceiroId }
+  );
+  const createMut = trpc.terceiros.dds.create.useMutation({
+    onSuccess: () => {
+      refetch();
+      setForm({ dataDds: new Date().toISOString().slice(0, 10) });
+      setListaPayload(null);
+      toast.success("DDS registrado!");
+    },
+    onError: (err: any) => toast.error(err?.message || "Erro ao registrar DDS"),
+  });
+  const deleteMut = trpc.terceiros.dds.delete.useMutation({
+    onSuccess: () => { refetch(); toast.success("Registro removido"); },
+  });
+
+  const handlePickLista = () => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = ".pdf,.jpg,.jpeg,.png";
+    input.onchange = (e: any) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      if (file.size > 10 * 1024 * 1024) { toast.error("Arquivo muito grande (máx 10MB)"); return; }
+      const reader = new FileReader();
+      reader.onload = () => {
+        const base64 = (reader.result as string).split(",")[1] || "";
+        setListaPayload({ base64, fileName: file.name, contentType: file.type || "application/pdf" });
+      };
+      reader.readAsDataURL(file);
+    };
+    input.click();
+  };
+
+  const handleSubmit = () => {
+    if (!form.dataDds || !form.tema?.trim()) {
+      toast.error("Data e Tema são obrigatórios");
+      return;
+    }
+    createMut.mutate({
+      companyId,
+      funcTerceiroId,
+      dataDds: form.dataDds,
+      tema: form.tema,
+      instrutor: form.instrutor || undefined,
+      obraId: form.obraId ? Number(form.obraId) : undefined,
+      obraNome: form.obraId ? (obras.find((o: any) => o.id === Number(form.obraId))?.nome) : undefined,
+      observacoes: form.observacoes || undefined,
+      ...(listaPayload ? {
+        listaPresencaBase64: listaPayload.base64,
+        listaPresencaFileName: listaPayload.fileName,
+        listaPresencaContentType: listaPayload.contentType,
+      } : {}),
+    });
+  };
+
+  // KPIs
+  const hoje = new Date();
+  const trintaDiasAtras = new Date(hoje.getTime() - 30 * 86400000);
+  const sessentaDiasAtras = new Date(hoje.getTime() - 60 * 86400000);
+  const ultimos30 = ddsList.filter((d: any) => new Date(d.dataDds) >= trintaDiasAtras).length;
+  const ultimos60 = ddsList.filter((d: any) => new Date(d.dataDds) >= sessentaDiasAtras).length;
+  const ultimoDds = ddsList[0];
+  const diasDesdeUltimo = ultimoDds ? Math.ceil((hoje.getTime() - new Date(ultimoDds.dataDds).getTime()) / 86400000) : null;
+  const statusFreq = diasDesdeUltimo === null
+    ? { label: "Sem registros", cor: "from-slate-400 to-slate-500", bgCor: "bg-slate-50", borda: "border-slate-300", icone: AlertTriangle }
+    : diasDesdeUltimo <= 7
+      ? { label: "Em dia", cor: "from-emerald-500 to-green-600", bgCor: "bg-emerald-50", borda: "border-emerald-300", icone: CheckCircle }
+      : diasDesdeUltimo <= 30
+        ? { label: "Atenção", cor: "from-amber-500 to-orange-500", bgCor: "bg-amber-50", borda: "border-amber-300", icone: Clock }
+        : { label: "Atrasado", cor: "from-red-500 to-rose-600", bgCor: "bg-red-50", borda: "border-red-300", icone: AlertTriangle };
+
+  return (
+    <div className="space-y-5">
+      {/* Painel de status de frequência */}
+      <div className={`rounded-xl border-2 ${statusFreq.borda} overflow-hidden shadow-sm`}>
+        <div className={`bg-gradient-to-r ${statusFreq.cor} px-4 py-3 text-white flex items-center justify-between gap-3 flex-wrap`}>
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="h-10 w-10 rounded-full bg-white/20 ring-2 ring-white/30 flex items-center justify-center shrink-0">
+              <statusFreq.icone className="h-5 w-5" />
+            </div>
+            <div className="min-w-0">
+              <div className="text-[11px] uppercase tracking-wider opacity-90 font-semibold">Frequência em DDS</div>
+              <div className="text-base font-bold truncate">{statusFreq.label}</div>
+            </div>
+          </div>
+          <div className="text-right shrink-0">
+            <div className="text-2xl font-extrabold leading-none tabular-nums">{ddsList.length}</div>
+            <div className="text-[11px] opacity-90">{ddsList.length === 1 ? "participação total" : "participações totais"}</div>
+          </div>
+        </div>
+        <div className="bg-white px-4 py-3 grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px]">
+          <div className="bg-emerald-50 rounded p-2">
+            <div className="text-emerald-600 uppercase font-semibold tracking-wider">Últimos 30 dias</div>
+            <div className="text-emerald-900 font-bold text-base">{ultimos30}</div>
+          </div>
+          <div className="bg-blue-50 rounded p-2">
+            <div className="text-blue-600 uppercase font-semibold tracking-wider">Últimos 60 dias</div>
+            <div className="text-blue-900 font-bold text-base">{ultimos60}</div>
+          </div>
+          <div className="bg-indigo-50 rounded p-2">
+            <div className="text-indigo-600 uppercase font-semibold tracking-wider">Último DDS</div>
+            <div className="text-indigo-900 font-bold text-base">{ultimoDds ? new Date(ultimoDds.dataDds).toLocaleDateString("pt-BR") : "—"}</div>
+          </div>
+          <div className={`rounded p-2 ${diasDesdeUltimo !== null && diasDesdeUltimo > 30 ? "bg-red-50" : "bg-slate-50"}`}>
+            <div className={`uppercase font-semibold tracking-wider ${diasDesdeUltimo !== null && diasDesdeUltimo > 30 ? "text-red-600" : "text-slate-500"}`}>Há quantos dias</div>
+            <div className={`font-bold text-base ${diasDesdeUltimo !== null && diasDesdeUltimo > 30 ? "text-red-900" : "text-slate-900"}`}>{diasDesdeUltimo !== null ? `${diasDesdeUltimo}d` : "—"}</div>
+          </div>
+        </div>
+      </div>
+
+      {/* Form de novo DDS */}
+      <div className="rounded-xl border border-indigo-200 overflow-hidden">
+        <div className="bg-indigo-50 px-4 py-2.5 border-b border-indigo-200 flex items-center gap-2">
+          <div className="h-8 w-8 rounded-lg bg-white ring-1 ring-indigo-200 flex items-center justify-center">
+            <Plus className="h-4 w-4 text-indigo-700" />
+          </div>
+          <div>
+            <h4 className="font-bold text-sm text-indigo-700">Registrar Participação em DDS</h4>
+            <p className="text-[11px] text-slate-600">DDS realizado pela Construtora (FC) — anexe a lista de presença assinada</p>
+          </div>
+        </div>
+        <div className="p-4 bg-white space-y-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <Label className="text-xs">Data do DDS *</Label>
+              <Input type="date" value={form.dataDds || ""} onChange={(e) => setForm({ ...form, dataDds: e.target.value })} />
+            </div>
+            <div>
+              <Label className="text-xs">Tema *</Label>
+              <Input placeholder="Ex: Uso correto de EPI, Trabalho em altura..." value={form.tema || ""} onChange={(e) => setForm({ ...form, tema: e.target.value })} />
+            </div>
+            <div>
+              <Label className="text-xs">Instrutor / Responsável</Label>
+              <Input placeholder="Nome do técnico de segurança" value={form.instrutor || ""} onChange={(e) => setForm({ ...form, instrutor: e.target.value })} />
+            </div>
+            <div>
+              <Label className="text-xs">Obra (opcional)</Label>
+              <Select value={form.obraId ? String(form.obraId) : "none"} onValueChange={(v) => setForm({ ...form, obraId: v === "none" ? undefined : Number(v) })}>
+                <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">— Nenhuma —</SelectItem>
+                  {obras.map((o: any) => (<SelectItem key={o.id} value={String(o.id)}>{o.nome}</SelectItem>))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div>
+            <Label className="text-xs">Observações</Label>
+            <Input placeholder="Notas adicionais" value={form.observacoes || ""} onChange={(e) => setForm({ ...form, observacoes: e.target.value })} />
+          </div>
+          <div className="flex items-center justify-between gap-2 flex-wrap pt-1">
+            <div className="flex items-center gap-2">
+              <Button type="button" variant="outline" size="sm" onClick={handlePickLista}>
+                <Upload className="h-3.5 w-3.5 mr-1" /> {listaPayload ? "Trocar lista" : "Anexar lista de presença"}
+              </Button>
+              {listaPayload && <span className="text-xs text-emerald-600 truncate max-w-[200px]">✓ {listaPayload.fileName}</span>}
+            </div>
+            <Button onClick={handleSubmit} className="bg-indigo-600 hover:bg-indigo-700" disabled={createMut.isPending}>
+              {createMut.isPending ? "Salvando..." : "Registrar DDS"}
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      {/* Histórico de DDS */}
+      <div className="rounded-xl border border-slate-200 overflow-hidden">
+        <div className="bg-slate-50 px-4 py-2.5 border-b border-slate-200 flex items-center gap-2">
+          <div className="h-8 w-8 rounded-lg bg-white ring-1 ring-slate-200 flex items-center justify-center">
+            <BookOpen className="h-4 w-4 text-slate-700" />
+          </div>
+          <div className="flex-1">
+            <h4 className="font-bold text-sm text-slate-700">Histórico de Participações</h4>
+            <p className="text-[11px] text-slate-600">{ddsList.length} {ddsList.length === 1 ? "registro" : "registros"} — ordem cronológica (mais recente primeiro)</p>
+          </div>
+        </div>
+        <div className="divide-y bg-white">
+          {ddsList.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-8">Nenhum DDS registrado ainda. Use o formulário acima.</p>
+          ) : (
+            ddsList.map((d: any) => (
+              <div key={d.id} className="p-3 hover:bg-slate-50/60 flex items-start gap-3">
+                <div className="h-10 w-10 rounded-lg bg-indigo-50 ring-1 ring-indigo-200 flex flex-col items-center justify-center shrink-0">
+                  <div className="text-[9px] text-indigo-600 uppercase font-semibold leading-none">{new Date(d.dataDds).toLocaleDateString("pt-BR", { month: "short" }).replace(".", "")}</div>
+                  <div className="text-sm font-bold text-indigo-900 leading-tight">{new Date(d.dataDds).getUTCDate()}</div>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h5 className="font-semibold text-sm">{d.tema}</h5>
+                    {d.listaPresencaUrl && (
+                      <a href={d.listaPresencaUrl} target="_blank" rel="noreferrer" className="text-[10px] text-blue-600 hover:underline inline-flex items-center gap-0.5">
+                        <FileText className="h-3 w-3" /> Lista
+                      </a>
+                    )}
+                  </div>
+                  <div className="text-[11px] text-slate-600 flex items-center gap-2 flex-wrap mt-0.5">
+                    <span>{new Date(d.dataDds).toLocaleDateString("pt-BR", { weekday: "short", day: "2-digit", month: "2-digit", year: "numeric" })}</span>
+                    {d.instrutor && <span>· Instrutor: <strong className="text-slate-700">{d.instrutor}</strong></span>}
+                    {d.obraNome && <span>· Obra: <strong className="text-slate-700">{d.obraNome}</strong></span>}
+                  </div>
+                  {d.observacoes && <p className="text-[11px] text-slate-500 mt-1 italic">{d.observacoes}</p>}
+                </div>
+                <Button variant="ghost" size="sm" className="text-red-600 hover:bg-red-50 h-7 px-2 shrink-0" onClick={() => { if (confirm("Remover este registro de DDS?")) deleteMut.mutate({ id: d.id }); }}>
+                  <Trash2 className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+    </div>
   );
 }
