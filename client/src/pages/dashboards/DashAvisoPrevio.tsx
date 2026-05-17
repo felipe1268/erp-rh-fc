@@ -1627,9 +1627,9 @@ function DetalheCalculoModal({
 
   return (
     <Dialog open={true} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-4xl max-h-[92vh] overflow-y-auto p-0 gap-0">
+      <DialogContent className="!top-0 !left-0 !translate-x-0 !translate-y-0 !w-screen !h-[100dvh] !max-w-none !max-h-none !rounded-none !border-0 !p-0 !gap-0 !flex !flex-col !overflow-hidden">
         {/* Header colorido fixo */}
-        <div className="bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600 px-5 py-4 sticky top-0 z-10 shadow-md">
+        <div className="bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600 px-4 sm:px-6 py-3 sm:py-4 shadow-md shrink-0">
           <DialogHeader className="space-y-1">
             <DialogTitle className="flex items-center gap-2 text-white text-base font-semibold">
               <div className="h-9 w-9 rounded-lg bg-white/15 backdrop-blur flex items-center justify-center">
@@ -1643,7 +1643,7 @@ function DetalheCalculoModal({
           </DialogHeader>
         </div>
 
-        <div id={`detalhe-calc-print-${row.id}`} className="p-5">
+        <div id={`detalhe-calc-print-${row.id}`} className="p-4 sm:p-6 flex-1 overflow-y-auto overscroll-contain max-w-6xl w-full mx-auto">
           {isLoading && (
             <div className="flex items-center justify-center py-16 text-sm text-muted-foreground gap-2">
               <Loader2 className="h-5 w-5 animate-spin" /> Calculando rescisão (procedure oficial)…
@@ -1899,7 +1899,7 @@ function DetalheCalculoModal({
 
         {/* Rodapé sticky */}
         {calc && (
-          <div className="border-t bg-slate-50 px-5 py-3 sticky bottom-0 flex flex-wrap justify-between items-center gap-2">
+          <div className="border-t bg-slate-50 px-4 sm:px-6 py-3 shrink-0 flex flex-wrap justify-between items-center gap-2">
             <Button variant="outline" size="sm" onClick={() => onAbrirRaioX(row.id)}>
               <Stethoscope className="h-3.5 w-3.5 mr-1.5" /> Abrir Raio-X
             </Button>

@@ -1,6 +1,18 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 1973 — RH · DashAvisoPrevio · Modal "Detalhe do Cálculo" FULL SCREEN + 100% responsivo (mobile/iPad/desktop).
+ * User (17/05/2026 às 21:05, IMG_0829 iPad portrait 768px): "Quero a tela full screem quero q tela 100% responsivo". Print mostra o modal Rev. 1970/1969 abrindo como dialog centralizado pequeno (max-w-4xl) sobre a tabela CDM — em iPad portrait fica espremido, deixa contexto inútil atrás, dificulta leitura dos cards verde/roxo/preto.
+ * Mudança em 1 arquivo (`client/src/pages/dashboards/DashAvisoPrevio.tsx`, único alvo — `DetalheCalculoModal`):
+ *   (1) `DialogContent` reescrito pra FULL SCREEN. O shadcn aplica por padrão `fixed top-[50%] left-[50%] translate-x-[-50%] translate-y-[-50%] max-h-[92dvh] rounded-lg p-4 sm:p-6 grid gap-4` — qualquer classe nova competiria por especificidade. Solução: classes com `!important` Tailwind: `!top-0 !left-0 !translate-x-0 !translate-y-0 !w-screen !h-[100dvh] !max-w-none !max-h-none !rounded-none !border-0 !p-0 !gap-0 !flex !flex-col !overflow-hidden`. Resultado: ocupa 100% da viewport, sem bordas, sem cantos arredondados, sem padding externo, com flex column pra header sticky / scroll área / footer sticky.
+ *   (2) Header colorido (gradient blue→indigo→violet com ícone Calculator + título): trocado `sticky top-0 z-10` por `shrink-0` (flex column já garante posição); paddings responsivos `px-4 sm:px-6 py-3 sm:py-4` (mobile mais compacto, desktop mais respirado).
+ *   (3) Conteúdo principal: virou `flex-1 overflow-y-auto overscroll-contain` (preenche o espaço entre header e footer e rola só ele) + `max-w-6xl w-full mx-auto` (em monitores grandes o conteúdo centraliza com 1152px — não estica indefinidamente perdendo leitura). Paddings `p-4 sm:p-6`.
+ *   (4) Rodapé: `sticky bottom-0` → `shrink-0` (mesma lógica do header), padding responsivo `px-4 sm:px-6 py-3`.
+ * version → 1973.
+ * Resultado em iPad portrait 768px (caso da IMG_0829): modal abre cobrindo toda a tela; usuário lê os 3 KPIs hero (Líquido/Complementar/Total Geral) sem distração; cards verbas/descontos/verde/roxo/preto ganham largura suficiente. Em mobile ≤640px continua usável (paddings menores). Em desktop grande (≥1280px) o conteúdo respira até 1152px com fundo branco nas laterais. Toda a arquitetura interna (3 KPIs hero, dados base, composição barra stacked, verbas, descontos, cards verde/roxo/preto, FGTS informativo) preservada da Rev. 1970 — só o container externo mudou.
+ * Print/PDF: o id `detalhe-calc-print-${row.id}` mantido — o estilo `@media print` da Rev. 1950 (`client/src/index.css` L323) continua funcionando porque alvo é o mesmo bloco interno.
+ * Preservado: Rev. 1972 (IDOR fix Avaliação), Rev. 1971 (módulo Avaliação Inteligente), Rev. 1970/1969 (estrutura interna do modal — todos os 3 KPIs hero, cards, composição), Rev. 1968 (DashAtest/Acid) INTACTAS. Backend tRPC `avisoPrevio.calcular` INTACTO. Schema INTACTO. Outros modais do arquivo (Combo de Demissões L1221, raio-x L1435) INTACTOS — só `DetalheCalculoModal` mudou. Zero ALTER/DROP/DELETE. R-001/R-007/R-010 OK. Reversível em 4 hunks (1 className DialogContent + 3 wrappers de filho).
+ *
  * Rev. 1972 — RH · Avaliação Inteligente · HARDENING pós-revisão arquitetural (IDOR fix + bug DDS).
  * Pós-Rev. 1971: code review (architect) apontou 2 issues ALTOS no novo módulo. Correções aplicadas sem alterar semântica do engine nem layout do dashboard.
  * Issue 1 (SEGURANÇA — IDOR por companyId): as 3 procedures de `server/routers/avaliacaoFuncionarios.ts` usavam apenas `protectedProcedure` (autenticado) e aceitavam `companyId` direto do payload, sem validar se o usuário pertence à empresa. Um usuário podia trocar o `companyId` e ler ranking/scores de OUTRA empresa.
