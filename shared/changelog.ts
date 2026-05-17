@@ -1,6 +1,84 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2022 — Infra · CompanyContext expõe `companyIdNum: number` +
+ * faxina do replit.md (Revs. 1988/1989/1990 colapsadas) + auditoria de
+ * bug latente (passar string crua de companyId pra router z.number()).
+ *
+ * Follow-up direto da Rev. 2020 (em que `IntegracaoSST.tsx` quebrou ao
+ * passar `selectedCompanyId` cru — string vinda do localStorage — pra
+ * um router tRPC que valida `companyId: z.number()`). A correção pontual
+ * foi aplicada lá, mas a raiz era estrutural: o context só expõe
+ * `selectedCompanyId: string`, então TODO consumidor precisa lembrar de
+ * fazer `Number()`/`parseInt()` antes de usar em input numérico — fácil
+ * de esquecer, fácil de regressar.
+ *
+ * Mudança em 1 arquivo:
+ *
+ * (A) `client/src/contexts/CompanyContext.tsx`:
+ *   - Interface `CompanyContextType` ganha campo NOVO
+ *     `companyIdNum: number`.
+ *   - Provider calcula `parseInt(validCompanyId || "0") || 0` (lógica
+ *     idêntica ao que `client/src/hooks/useCompany.ts` já fazia há
+ *     revisões — mantém paridade total).
+ *   - Campo incluído no `value` do Provider; consumidores podem fazer
+ *     `const { companyIdNum } = useCompany()` e passar direto pra
+ *     mutation/query sem coerção.
+ *
+ * ZERO breaking change: `selectedCompanyId: string` segue exposto
+ * exatamente como antes. Os ~60 consumidores existentes que já fazem
+ * coerção local continuam funcionando. A partir desta rev, novas
+ * páginas (e refactors graduais) devem preferir `companyIdNum`.
+ *
+ * Auditoria de bug latente (grep do padrão problemático
+ * `companyId: selectedCompanyId` sem coerção em todo `client/src/`):
+ *   - Único hit suspeito: `Oraculo.tsx` L309/L340/L382 que parecia
+ *     passar string crua nas mutations `createM`/`sendM`.
+ *   - Análise: FALSO POSITIVO. L148 faz
+ *     `const selectedCompanyId = parseInt(selStr) || undefined;`
+ *     (shadowing local da variável vinda do context), então o valor
+ *     que chega na mutation já é number/undefined.
+ *   - Demais 58 hits do grep usam `parseInt()`/`Number()` corretamente.
+ *
+ * Veredito: nenhum bug ativo encontrado no momento. Rev. 2020 foi
+ * outlier real (a única página que esqueceu de coercir). O novo
+ * `companyIdNum` serve como prevenção pra páginas futuras e
+ * pra eventual refactor gradual.
+ *
+ * Faxina replit.md:
+ *   - 3 blocos de Revs. antigas (1988, 1989, 1990) ainda estavam
+ *     detalhados FORA do top-5 (gerando ~4500 chars desnecessários
+ *     no "Recent changes").
+ *   - Colapsados pro padrão canônico
+ *     `- ~~Rev. NNNN~~ — ver \`shared/changelog.ts\`.`
+ *   - Detalhe completo permanece em `shared/changelog.ts`, INTACTO.
+ *
+ * + shared/version.ts → 2022.
+ *
+ * R-001/R-007/R-010 OK: ZERO SQL, ZERO mudança de schema, ZERO mudança
+ * de routers/endpoints. Apenas adiciona um campo derivado no context.
+ * Reversível em 1 arquivo + alguns hunks de documentação.
+ *
+ * Preservado:
+ *   - Shape original do CompanyContext (todos os 6 campos anteriores)
+ *     INTACTO.
+ *   - `client/src/hooks/useCompany.ts` (wrapper que já expunha
+ *     `companyId: number`) INTACTO — agora é redundante mas continua
+ *     funcionando.
+ *   - Rev. 2021 (DDS Terceiros) INTACTA.
+ *   - Pages que consomem `useCompany()` INTACTAS (ninguém precisa
+ *     mudar pra continuar funcionando).
+ *
+ * Follow-up (não urgente):
+ *   - Migrar gradualmente as ~50 ocorrências de
+ *     `parseInt(selectedCompanyId, 10) || 0` espalhadas em pages pra
+ *     `companyIdNum` direto (só ergonomia/legibilidade — não conserta
+ *     bug porque não há bug ativo).
+ *   - Considerar `companyIdNumOrUndefined` pra páginas como `PainelRH`
+ *     que usam `undefined` em vez de `0` quando não há empresa
+ *     selecionada (passam pra routers que tratam como "todas").
+ *   - Deprecar `client/src/hooks/useCompany.ts` (wrapper) eventualmente.
+ *
  * Rev. 2021 — SST · DDS · Funcionários TERCEIROS vinculados à obra agora
  * aparecem na lista "Equipe da obra" do modal "Nova Sessão DDS" com badge
  * laranja "Terceiro"; participação gravada em `ddsParticipacoesTerceiros`.

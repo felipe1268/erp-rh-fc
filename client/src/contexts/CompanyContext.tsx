@@ -5,6 +5,12 @@ const STORAGE_KEY = "erp-rh-fc-default-company";
 
 interface CompanyContextType {
   selectedCompanyId: string;
+  // Rev. 2022 — companyIdNum: coerção pronta pra inputs `z.number()` dos
+  // routers tRPC. Evita o bug da Rev. 2020 (Zod estourando "expected number,
+  // received string") quando a página esquece de fazer `Number(...)`. Usar
+  // preferencialmente este em vez de `selectedCompanyId` quando o destino
+  // for input numérico.
+  companyIdNum: number;
   setSelectedCompanyId: (id: string) => void;
   companies: any[] | undefined;
   isLoading: boolean;
@@ -58,10 +64,15 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
     };
   }, [validCompanyId]);
 
+  // Rev. 2022 — número já coerced. Usa parseInt pra ser idêntico ao que
+  // `hooks/useCompany.ts` já fazia (mantém retrocompatibilidade total).
+  const companyIdNum = parseInt(validCompanyId || "0") || 0;
+
   return (
     <CompanyContext.Provider
       value={{
         selectedCompanyId: validCompanyId,
+        companyIdNum,
         setSelectedCompanyId,
         companies,
         isLoading,
