@@ -994,6 +994,48 @@ export default function EspelhoPonto() {
           </div>
         )}
 
+        {/* Rev. 1980 — Estado de ERRO: query falhou (rede, permissão, server). Sem isso a tela ficava em branco. */}
+        {queryParams && !espelhoQ.isLoading && espelhoQ.isError && (
+          <div className="flex flex-col items-center py-16 text-center bg-red-50 border border-red-200 rounded-xl">
+            <div className="w-14 h-14 rounded-2xl bg-red-100 flex items-center justify-center mb-3">
+              <span className="text-red-600 text-2xl">⚠</span>
+            </div>
+            <p className="text-sm text-red-700 font-semibold">Erro ao carregar espelho de ponto</p>
+            <p className="text-xs text-red-600 mt-1 max-w-xl px-4">
+              {String((espelhoQ.error as any)?.message || espelhoQ.error || "Falha desconhecida")}
+            </p>
+            <button
+              type="button"
+              onClick={() => espelhoQ.refetch()}
+              className="mt-3 px-3 py-1.5 text-xs font-semibold rounded-lg bg-red-600 text-white hover:bg-red-700"
+            >Tentar de novo</button>
+          </div>
+        )}
+
+        {/* Rev. 1980 — Query habilitada mas desligada por falta de empresa selecionada. Antes ficava em branco. */}
+        {queryParams && !espelhoQ.isLoading && !espelhoQ.isError && !espelhoQ.fetchStatus && queryCompanyId <= 0 && companyIds.length === 0 && (
+          <div className="flex flex-col items-center py-16 text-center bg-amber-50 border border-amber-200 rounded-xl">
+            <div className="w-14 h-14 rounded-2xl bg-amber-100 flex items-center justify-center mb-3">
+              <span className="text-amber-600 text-2xl">🏢</span>
+            </div>
+            <p className="text-sm text-amber-800 font-semibold">Selecione uma empresa no topo da página</p>
+            <p className="text-xs text-amber-700 mt-1">O espelho de ponto precisa de uma empresa ativa pra carregar.</p>
+          </div>
+        )}
+
+        {/* Rev. 1980 — Query rodou, sem erro, mas funcionário não encontrado pra essa empresa/período. Antes ficava em branco. */}
+        {queryParams && !espelhoQ.isLoading && !espelhoQ.isError && espelhoQ.data !== undefined && !empData && (queryCompanyId > 0 || companyIds.length > 0) && (
+          <div className="flex flex-col items-center py-16 text-center bg-slate-50 border border-slate-200 rounded-xl">
+            <div className="w-14 h-14 rounded-2xl bg-slate-100 flex items-center justify-center mb-3">
+              <span className="text-slate-500 text-2xl">🔎</span>
+            </div>
+            <p className="text-sm text-slate-700 font-semibold">Funcionário não encontrado nesta empresa</p>
+            <p className="text-xs text-slate-500 mt-1 max-w-md px-4">
+              O funcionário selecionado não pertence à empresa ativa no topo da página, ou foi removido. Confira o seletor de empresa ou escolha outro funcionário.
+            </p>
+          </div>
+        )}
+
         {hasData && (
           <>
             {/* ── CABEÇALHO DO FUNCIONÁRIO ─────────────────────────── */}
