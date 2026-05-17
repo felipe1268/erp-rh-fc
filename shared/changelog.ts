@@ -1,6 +1,95 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2032 — DP · Fechamento de Ponto · Modal "Memória de cálculo ·
+ * Atraso Acumulado" agora mostra a EQUAÇÃO COMPLETA por dia (4 batidas
+ * + total trabalhado + jornada esperada + déficit = atraso).
+ *
+ * Pedido direto do usuário: "SIM FAÇA ESTA REVISÃO DE FORMA QUE NÃO
+ * GERE DUVIDAS.. DO JEITO QUE ESTA, DEIXA TUDO DUVIDOSO". A Rev. 2027
+ * eliminou a divergência entre tabela e modal (SOMA(dias[].minutos)
+ * === tabela), e a Rev. 2029 deixou o modal em full screen com fonte
+ * maior, mas a UI ainda mostrava só "Esperado (entrada)" vs "Real
+ * (entrada)" e o número do atraso — sem explicar de onde vem. O
+ * usuário tinha que adivinhar: "atrasou 1h07? mas a entrada bateu
+ * no horário, como assim?" — sem nunca ver que o atraso vinha de
+ * SAÍDA antecipada, intervalo estendido, ou falta parcial de
+ * batidas.
+ *
+ * Princípio aplicado: tornar a equação visível. O atraso é simplesmente
+ *   DÉFICIT = JORNADA_ESPERADA − TOTAL_TRABALHADO
+ * (já líquido de intervalo, com tolerância de 5 min absorvida pelo
+ * motor). Mostrar todos os termos elimina a dúvida.
+ *
+ * Mudança em 2 arquivos:
+ *
+ * (A) `server/routers/fechamentoPonto.ts` (getAtrasoDetalhe,
+ *     ~25L adicionadas):
+ *       - SELECT em `timeRecords` agora puxa também `saida1`,
+ *         `entrada2`, `saida2`, `horasTrabalhadas` (antes só
+ *         `entrada1` e `atrasos`).
+ *       - Tipo `DiaAtraso` enriquecido com `entrada1/saida1/entrada2/
+ *         saida2/horasTrabalhadas` (strings cruas do banco),
+ *         `horasTrabalhadasMin` (parseado) e `jornadaEsperadaMin`
+ *         (calculado via `getExpectedMinsFromJornada(jornadaStr, ds)`
+ *         — helper já existente em fechamentoPonto.ts L126 que parseia
+ *         o JSON `jornadaTrabalho` do dia da semana, faz
+ *         `(saida − entrada) − intervalo`, retorna minutos líquidos).
+ *       - Cada item de `dias[]` agora carrega todo o contexto.
+ *       - Fonte de verdade do atraso CONTINUA `r.atrasos` (motor) —
+ *         princípio da Rev. 2027 INTACTO; jornadaEsperadaMin/horas
+ *         TrabalhadasMin são exibidos como CONTEXTO didático.
+ *
+ * (B) `client/src/pages/FechamentoPonto.tsx` (modal Memória de cálculo,
+ *     ~80L reescritas em 1 hunk):
+ *       - Faixa explicativa reescrita: "Como ler esta tabela: pra
+ *         cada dia mostramos as 4 batidas reais, quanto o colaborador
+ *         trabalhou no total, quanto era esperado pela jornada
+ *         daquele dia, e o déficit (esperado − trabalhado)..."
+ *       - Tabela: colunas antigas eram Data | Esperado | Real |
+ *         Atraso | Acumulado (5 col). Agora: Data | Batidas do dia
+ *         | Trabalhado | Esperado | Déficit (= Atraso) | Acumulado
+ *         (6 col).
+ *       - Coluna "Batidas do dia": render em 2 linhas pequenas com
+ *         cores semânticas — linha 1 `entrada1 → saida1` (emerald
+ *         + amber), linha 2 `entrada2 → saida2` (amber + rose). Bateu
+ *         null vira "—".
+ *       - Coluna "Trabalhado": número grande emerald-700 com
+ *         `horasTrabalhadas` (string crua do banco, fallback pra
+ *         fmtHM(trabMin)).
+ *       - Coluna "Esperado": número grande com `fmtHM(jornadaEsperadaMin)`
+ *         (já líquido de intervalo). Quando jornada não cadastrada,
+ *         texto cinza itálico "jornada não cadastrada".
+ *       - Coluna "Déficit": badge red-100 com o número do MOTOR
+ *         (mantém Rev. 2027 — SOMA bate com a tabela). Logo abaixo,
+ *         linha cinza pequena `(Esperado − Trabalhado)` confirmando
+ *         o cálculo quando bate. Quando o motor diverge ≥2 min do
+ *         cálculo simples, linha âmbar "cálculo sugere {x}" + a
+ *         `observacao` herdada da Rev. 2027 explicando por quê.
+ *       - Rodapé didático atualizado: "Como ler cada linha: 'Trabalhou
+ *         X de Y esperadas → déficit = X − Y, que é o atraso
+ *         descontado.' A jornada esperada vem da jornada cadastrada,
+ *         já líquida do intervalo de almoço."
+ *
+ * (C) `shared/version.ts` → 2032.
+ *
+ * Compliance R-001 / R-007 / R-010: ZERO SQL/schema/router novo.
+ * Só adicionei colunas ao SELECT existente e enriqueci o tipo de
+ * retorno. Reversível em 2 arquivos.
+ *
+ * Preservado: princípio "SOMA(dias[].minutos) === tabela" da Rev. 2027
+ * INTACTO (motor continua fonte da verdade); modal full screen da
+ * Rev. 2029 INTACTO (DialogContent w-screen h-screen, fontes grandes);
+ * férias da Rev. 2030 INTACTAS; Rev. 2031 (docs extras) INTACTA;
+ * `observacao` da Rev. 2027 continua aparecendo quando há divergência.
+ *
+ * Follow-up: (1) aplicar mesma equação visível nos modais H. Total e
+ * Faltas (mesmo padrão "trabalhado vs esperado"); (2) destacar
+ * visualmente onde está o gap (saída antecipada vs entrada atrasada
+ * vs intervalo estendido) — análise por intervalo entre batidas;
+ * (3) botão "Imprimir/PDF" direto no modal; (4) link da observação
+ * pro ajuste manual / abono que originou.
+ *
  * Rev. 2031 — Terceiros · Editar Funcionário · aba Documentos · botão
  * "+ Adicionar documento" em CADA categoria, pra cadastrar quantos
  * documentos avulsos o usuário quiser, além dos campos fixos.

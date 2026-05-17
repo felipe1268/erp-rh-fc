@@ -2715,15 +2715,15 @@ export default function FechamentoPonto() {
                           }
                           return (
                             <div className="max-w-7xl mx-auto">
-                              {/* Faixa explicativa */}
+                              {/* Faixa explicativa — Rev. 2032: foco na equação completa */}
                               <div className="mb-4 rounded-xl border bg-white p-5 flex items-start gap-3 shadow-sm">
                                 <Info className="h-6 w-6 text-indigo-600 shrink-0 mt-0.5" />
                                 <div className="text-base text-slate-700 leading-relaxed">
-                                  <strong>De onde vem o número:</strong> os valores abaixo vêm do <strong>mesmo registro de ponto que alimenta a tabela</strong> (campo Atraso de cada dia, gravado pelo motor de cálculo com tolerância de <strong className="text-red-700">{tolerancia} min</strong> — Art. 58 §1º da CLT). A soma dos dias bate exatamente com o total da tabela.
+                                  <strong>Como ler esta tabela:</strong> pra cada dia mostramos as <strong>4 batidas reais</strong>, quanto o colaborador <strong>trabalhou no total</strong>, quanto era <strong>esperado pela jornada</strong> daquele dia da semana, e o <strong className="text-red-700">déficit</strong> (esperado − trabalhado). O déficit é exatamente o <strong className="text-red-700">atraso registrado pelo motor</strong> (tolerância de {tolerancia} min — Art. 58 §1º da CLT). A soma dos déficits bate com o total da tabela principal.
                                   {entradaPadrao && (
-                                    <span> Jornada padrão seg-sex: <strong className="font-mono">{entradaPadrao}</strong>.</span>
+                                    <span> Jornada padrão seg-sex começa às <strong className="font-mono">{entradaPadrao}</strong>.</span>
                                   )}
-                                  <span className="block mt-2 text-sm text-slate-500">As colunas "Esperado" e "Real" são <em>contexto</em> pra auditoria; quando elas não baterem com o valor do motor, uma observação aparece na linha explicando por quê (abono, ajuste manual, jornada alterada depois etc).</span>
+                                  <span className="block mt-2 text-sm text-slate-500">Quando o déficit calculado (esperado − trabalhado) não bater com o que o motor registrou, uma observação aparece explicando o porquê (abono, ajuste manual, jornada alterada depois, falta parcial).</span>
                                 </div>
                               </div>
 
@@ -2743,57 +2743,87 @@ export default function FechamentoPonto() {
                                 </span>
                               </div>
 
-                              {/* Tabela dia a dia */}
+                              {/* Tabela dia a dia — Rev. 2032: equação completa visível */}
                               <div className="rounded-xl border bg-white overflow-hidden shadow-sm">
                                 <table className="w-full text-base">
                                   <thead className="bg-slate-100 border-b">
                                     <tr>
-                                      <th className="px-5 py-4 text-left font-semibold text-slate-700 text-base">Data</th>
-                                      <th className="px-5 py-4 text-center font-semibold text-slate-700 text-base">Esperado</th>
-                                      <th className="px-5 py-4 text-center font-semibold text-slate-700 text-base">Real</th>
-                                      <th className="px-5 py-4 text-center font-semibold text-red-700 text-base">Atraso</th>
-                                      <th className="px-5 py-4 text-right font-semibold text-slate-700 text-base">Acumulado</th>
+                                      <th className="px-4 py-4 text-left font-semibold text-slate-700">Data</th>
+                                      <th className="px-4 py-4 text-center font-semibold text-slate-700">Batidas do dia</th>
+                                      <th className="px-4 py-4 text-center font-semibold text-emerald-700">Trabalhado</th>
+                                      <th className="px-4 py-4 text-center font-semibold text-slate-700">Esperado</th>
+                                      <th className="px-4 py-4 text-center font-semibold text-red-700">Déficit (= Atraso)</th>
+                                      <th className="px-4 py-4 text-right font-semibold text-slate-700">Acumulado</th>
                                     </tr>
                                   </thead>
                                   <tbody>
                                     {dias.map((d: any, idx: number) => {
                                       const [, mes, dia] = d.data.split("-");
                                       const label = `${dia}/${mes} · ${DIAS_SEMANA[d.dow]}`;
+                                      const punch = (v: string | null) => v || "—";
+                                      const trabMin = d.horasTrabalhadasMin;
+                                      const expMin = d.jornadaEsperadaMin;
+                                      const deficitCalc = (typeof trabMin === "number" && typeof expMin === "number" && expMin > 0)
+                                        ? Math.max(0, expMin - trabMin)
+                                        : null;
+                                      // Diverge se o déficit calculado bater diferente do motor (≥2 min de tolerância)
+                                      const diverge = deficitCalc !== null && Math.abs(deficitCalc - d.minutos) >= 2;
                                       return (
-                                        <tr key={d.data} className={`border-b last:border-0 ${idx % 2 === 0 ? "bg-white" : "bg-slate-50/60"} hover:bg-red-50/40`}>
-                                          <td className="px-5 py-4 font-semibold text-slate-800 text-base">{label}</td>
-                                          <td className="px-5 py-4 text-center font-mono text-slate-600 text-base">
-                                            {d.entradaEsperada ?? <span className="text-slate-400 italic text-sm">não cadastrada</span>}
+                                        <tr key={d.data} className={`border-b last:border-0 ${idx % 2 === 0 ? "bg-white" : "bg-slate-50/60"} hover:bg-red-50/40 align-top`}>
+                                          <td className="px-4 py-4 font-semibold text-slate-800">{label}</td>
+                                          {/* 4 batidas (entrada1 → saída1 // entrada2 → saída2) */}
+                                          <td className="px-4 py-4 text-center font-mono text-slate-700 text-sm leading-relaxed">
+                                            <div className="flex flex-col gap-0.5 items-center">
+                                              <span><strong className="text-emerald-700">{punch(d.entrada1)}</strong> → <strong className="text-amber-700">{punch(d.saida1)}</strong></span>
+                                              <span><strong className="text-amber-700">{punch(d.entrada2)}</strong> → <strong className="text-rose-700">{punch(d.saida2)}</strong></span>
+                                            </div>
                                           </td>
-                                          <td className="px-5 py-4 text-center font-mono text-slate-800 text-base">
-                                            {d.entradaReal ?? <span className="text-slate-400">—</span>}
+                                          {/* Total trabalhado */}
+                                          <td className="px-4 py-4 text-center font-mono font-bold text-emerald-700 text-lg">
+                                            {d.horasTrabalhadas || (trabMin !== null ? fmtHM(trabMin) : "—")}
                                           </td>
-                                          <td className="px-5 py-4 text-center">
+                                          {/* Esperado pela jornada */}
+                                          <td className="px-4 py-4 text-center font-mono text-slate-800 text-lg">
+                                            {expMin !== null && expMin > 0
+                                              ? fmtHM(expMin)
+                                              : <span className="text-slate-400 italic text-sm">jornada não cadastrada</span>}
+                                          </td>
+                                          {/* Déficit = atraso (mesmo número do motor; mostra cálculo entre parênteses se diverge) */}
+                                          <td className="px-4 py-4 text-center">
                                             <span className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full bg-red-100 text-red-800 text-base font-bold font-mono">
-                                              +{fmtHM(d.minutos)}
+                                              {fmtHM(d.minutos)}
                                             </span>
+                                            {deficitCalc !== null && !diverge && (
+                                              <div className="text-[11px] text-slate-500 mt-1 font-mono">
+                                                ({fmtHM(expMin)} − {fmtHM(trabMin)})
+                                              </div>
+                                            )}
+                                            {diverge && (
+                                              <div className="text-[11px] text-amber-700 mt-1 font-mono" title="Motor registrou diferente do cálculo simples — ver observação abaixo.">
+                                                cálculo sugere {fmtHM(deficitCalc)}
+                                              </div>
+                                            )}
                                             {d.observacao && (
-                                              <div className="text-sm text-amber-700 mt-1.5" title={d.observacao}>⚠ {d.observacao}</div>
+                                              <div className="text-xs text-amber-700 mt-1.5 max-w-xs mx-auto leading-snug">⚠ {d.observacao}</div>
                                             )}
                                           </td>
-                                          <td className="px-5 py-4 text-right font-mono font-semibold text-slate-700 text-base">{fmtHM(d.acumulado)}</td>
+                                          <td className="px-4 py-4 text-right font-mono font-semibold text-slate-700">{fmtHM(d.acumulado)}</td>
                                         </tr>
                                       );
                                     })}
                                   </tbody>
                                   <tfoot className="bg-red-50 border-t-2 border-red-200">
                                     <tr>
-                                      <td colSpan={3} className="px-5 py-4 text-right text-base font-semibold text-slate-700 uppercase">Total no período</td>
-                                      <td className="px-5 py-4 text-center font-mono font-bold text-red-700 text-lg">{fmtHM(totalMinutos)}</td>
-                                      <td className="px-5 py-4 text-right font-mono font-bold text-red-700 text-lg">{fmtHM(totalMinutos)}</td>
+                                      <td colSpan={4} className="px-4 py-4 text-right text-base font-semibold text-slate-700 uppercase">Total de déficit no período</td>
+                                      <td className="px-4 py-4 text-center font-mono font-bold text-red-700 text-lg">{fmtHM(totalMinutos)}</td>
+                                      <td className="px-4 py-4 text-right font-mono font-bold text-red-700 text-lg">{fmtHM(totalMinutos)}</td>
                                     </tr>
                                   </tfoot>
                                 </table>
                               </div>
 
                               <p className="text-sm text-muted-foreground mt-5 text-center max-w-3xl mx-auto leading-relaxed">
-                                A coluna "Esperado" vem da <strong>jornada cadastrada</strong> em cada colaborador (RH → Funcionários → Jornada).
-                                Se aparecer "não cadastrada", a jornada daquele dia da semana está vazia — o atraso pode ainda ter sido contado pelo motor consolidado.
+                                <strong>Como ler cada linha</strong>: "Trabalhou <em>Trabalhado</em> de <em>Esperado</em> → déficit = <strong>Esperado − Trabalhado</strong>, que é o atraso descontado." A jornada esperada vem da <strong>jornada cadastrada</strong> do colaborador (RH → Funcionários → Jornada), já <em>líquida</em> do intervalo de almoço. Se aparecer "jornada não cadastrada", o motor ainda pode ter gravado atraso por outro caminho (ajuste manual, motor consolidado).
                               </p>
                             </div>
                           );

@@ -5218,9 +5218,15 @@ export const fechamentoPontoRouter = router({
       }
 
       // 2) Registros de ponto do período
+      // Rev. 2032 — agora também trazemos as 4 batidas e horasTrabalhadas pra
+      // mostrar no modal: "Trabalhou X de Y esperadas → déficit Z".
       const recs = await db.select({
         data: timeRecords.data,
         entrada1: timeRecords.entrada1,
+        saida1: timeRecords.saida1,
+        entrada2: timeRecords.entrada2,
+        saida2: timeRecords.saida2,
+        horasTrabalhadas: timeRecords.horasTrabalhadas,
         atrasos: timeRecords.atrasos,
       }).from(timeRecords).where(and(
         inArray(timeRecords.companyId, cids),
@@ -5271,17 +5277,37 @@ export const fechamentoPontoRouter = router({
       // sempre. Entrada esperada/real continuam exibidas como CONTEXTO
       // pra ajudar a auditoria; observação aparece quando o motor
       // gravou diferente do que a entrada esperada/real sugeririam.
+      // Rev. 2032 — DiaAtraso enriquecido: além de entrada esperada/real e
+      // atraso (vindo do motor), agora carrega as 4 batidas, total trabalhado
+      // e jornada esperada do dia. Assim o modal mostra a equação completa:
+      //   "Trabalhou Xh de Yh esperadas → déficit Zh = atraso"
       type DiaAtraso = {
         data: string;
         dow: number;
         entradaEsperada: string | null;
         entradaReal: string | null;
+        // batidas completas do dia (podem ser null se não bateu)
+        entrada1: string | null;
+        saida1: string | null;
+        entrada2: string | null;
+        saida2: string | null;
+        // total trabalhado no dia (string HH:MM, vem do timeRecords)
+        horasTrabalhadas: string | null;
+        // jornada esperada em minutos (líquida — descontando intervalo de almoço)
+        jornadaEsperadaMin: number | null;
+        // total trabalhado em minutos (parseado de horasTrabalhadas)
+        horasTrabalhadasMin: number | null;
         minutos: number;     // atraso em minutos — vem de timeRecords.atrasos (motor)
         acumulado: number;   // soma corrida desde o início do período
         observacao: string | null;
       };
       const dias: DiaAtraso[] = [];
       let acumulado = 0;
+      // Rev. 2032 — jornada (string JSON) já parseada em `jornadaParsed`,
+      // mas `getExpectedMinsFromJornada` espera a string; serializamos uma vez.
+      const jornadaStr = typeof emp.jornadaTrabalho === "string"
+        ? emp.jornadaTrabalho
+        : (emp.jornadaTrabalho ? JSON.stringify(emp.jornadaTrabalho) : null);
 
       for (const r of recs) {
         const ds = String(r.data);
@@ -5297,6 +5323,10 @@ export const fechamentoPontoRouter = router({
         }
 
         if (minutos <= 0) continue;
+
+        // Rev. 2032 — total trabalhado em minutos e jornada esperada líquida.
+        const horasTrabMin = r.horasTrabalhadas ? toMins(r.horasTrabalhadas) : null;
+        const jornadaEsperadaMin = getExpectedMinsFromJornada(jornadaStr, ds);
 
         // Observação só quando o motor gravou algo mas o esperada/real
         // sugerem outro valor (ajuda a auditoria sem mudar o número).
@@ -5327,6 +5357,14 @@ export const fechamentoPontoRouter = router({
           dow,
           entradaEsperada: esperada,
           entradaReal: real,
+          // Rev. 2032 — payload enriquecido pro modal "sem mistério":
+          entrada1: r.entrada1 || null,
+          saida1: r.saida1 || null,
+          entrada2: r.entrada2 || null,
+          saida2: r.saida2 || null,
+          horasTrabalhadas: r.horasTrabalhadas || null,
+          jornadaEsperadaMin,
+          horasTrabalhadasMin: horasTrabMin,
           minutos,
           acumulado,
           observacao,
