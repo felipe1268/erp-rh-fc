@@ -771,8 +771,13 @@ export default function FechamentoPonto() {
   const monthStatuses = trpc.fechamentoPonto.getMonthStatuses.useQuery({ companyId, companyIds, ano: anoSelecionado }, { enabled: companyId > 0 || companyIds.length > 0 });
   const conflitos = trpc.fechamentoPonto.getConflitosObraDia.useQuery({ companyId, companyIds, mesReferencia: mesAno }, { enabled: companyId > 0 || companyIds.length > 0 });
   const atestadosMes = trpc.pontoDescontos.atestadosMes.useQuery({ companyId, companyIds, mesReferencia: mesAno }, { enabled: companyId > 0 || companyIds.length > 0 });
+  // Rev. 2060 — passa os bounds do CICLO (16→15) pra incluir HEs do mês
+  // anterior quando o ciclo cruza virada de mês. Sem isso, mesReferencia
+  // sozinho (ex: '2026-05' pra ciclo 16/04→15/05) deixava todas as HEs
+  // aprovadas de abril FORA do match — efeito: 79/79 viravam "Sem solicitação".
   const heSolicitacoesMes = trpc.heSolicitacoes.list.useQuery(
-    { companyId, companyIds, mesReferencia: mesAno, status: "todas" },
+    { companyId, companyIds, mesReferencia: mesAno, status: "todas",
+      dataInicio: cicloRangeFallback.ini, dataFim: cicloRangeFallback.fim },
     { enabled: rankingModal === "extras" && (companyId > 0 || companyIds.length > 0) }
   );
   const unmatchedData = trpc.fechamentoPonto.getUnmatchedRecords.useQuery(
@@ -2208,7 +2213,11 @@ export default function FechamentoPonto() {
                   const totalAtrasoStr = fmtHMpt(totalAtrasoMin);
                   const totalHEMin = filteredRankingRows.reduce((s: number, e: any) => s + (e.horasExtras || 0), 0);
                   const totalHEStr = fmtHMpt(totalHEMin);
-                  const semSolicHE = !heSolicitacoesMes.isLoading ? filteredRankingRows.filter((e: any) => !(heSolicitacoesMes.data || []).some((sol: any) => sol.funcionarios?.some((f: any) => f.employeeId === e.id))).length : 0;
+                  // Rev. 2060 — "sem solicitação" agora exige SOLICITAÇÃO
+                  // APROVADA (pedido do usuário: "a verificação se a hora
+                  // extra foi aprovada ou não não está sendo feita"). Pendente
+                  // ou rejeitada NÃO conta como cobertura formal das HEs.
+                  const semSolicHE = !heSolicitacoesMes.isLoading ? filteredRankingRows.filter((e: any) => !(heSolicitacoesMes.data || []).some((sol: any) => sol.status === "aprovada" && sol.funcionarios?.some((f: any) => f.employeeId === e.id))).length : 0;
                   const justificadas = filteredRankingRows.filter((e: any) => (atestadosMes.data || []).some((a: any) => a.employeeId === e.id)).length;
                   const naoJustificadas = totalColab - justificadas;
                   const semAtraso = filteredRankingRows.filter((e: any) => e.atrasos === 0).length;
@@ -2563,7 +2572,7 @@ export default function FechamentoPonto() {
                           )}
                           {rankingModal === "extras" && <>
                             <span className="text-emerald-700">Total HE: <strong>{fmtHMpt(filteredRankingRows.reduce((s: number, e: any) => s + e.horasExtras, 0))}</strong></span>
-                            {!heSolicitacoesMes.isLoading && <span className="text-orange-700">{filteredRankingRows.filter((e: any) => !(heSolicitacoesMes.data || []).some((sol: any) => sol.funcionarios?.some((f: any) => f.employeeId === e.id))).length} sem solicitação</span>}
+                            {!heSolicitacoesMes.isLoading && <span className="text-orange-700">{filteredRankingRows.filter((e: any) => !(heSolicitacoesMes.data || []).some((sol: any) => sol.status === "aprovada" && sol.funcionarios?.some((f: any) => f.employeeId === e.id))).length} sem solicitação aprovada</span>}
                           </>}
                           {rankingModal === "faltosos" && <>
                             <span className="text-green-700">{filteredRankingRows.filter((e: any) => (atestadosMes.data || []).some((a: any) => a.employeeId === e.id)).length} justificadas</span>

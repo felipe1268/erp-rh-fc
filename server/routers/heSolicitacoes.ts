@@ -107,7 +107,13 @@ export const heSolicitacoesRouter = router({
 
   // ===================== LISTAR SOLICITAÇÕES =====================
   list: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), status: z.enum(["pendente", "aprovada", "rejeitada", "cancelada", "todas"]).optional(),
-    mesReferencia: z.string().optional(), // YYYY-MM
+    mesReferencia: z.string().optional(), // YYYY-MM (fallback quando dataInicio/dataFim ausentes)
+    // Rev. 2060 — bounds do CICLO de fechamento (16→15). Quando informados,
+    // têm prioridade sobre `mesReferencia LIKE`, evitando perder HEs de mes
+    // anterior em ciclos que cruzam virada de mês (ex: 16/04→15/05 perdia
+    // todas as HEs de abril porque mesAno='2026-05').
+    dataInicio: z.string().optional(), // YYYY-MM-DD
+    dataFim: z.string().optional(),    // YYYY-MM-DD
   })).query(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) return [];
@@ -116,7 +122,10 @@ export const heSolicitacoesRouter = router({
     if (input.status && input.status !== "todas") {
       conditions.push(eq(heSolicitacoes.status, input.status));
     }
-    if (input.mesReferencia) {
+    if (input.dataInicio && input.dataFim) {
+      // Rev. 2060 — filtro por bounds do ciclo (preferido)
+      conditions.push(sql`${heSolicitacoes.dataSolicitacao} BETWEEN ${input.dataInicio} AND ${input.dataFim}`);
+    } else if (input.mesReferencia) {
       conditions.push(sql`${heSolicitacoes.dataSolicitacao} LIKE ${input.mesReferencia + '%'}`);
     }
 

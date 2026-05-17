@@ -1,6 +1,71 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2060 — Fechamento de Ponto · Ranking "Mais Horas Extras" · BUG
+ * CRÍTICO de verificação de aprovação corrigido. Pedido direto do
+ * usuário (IMG_0959/0958/0957/0956/0955/0954/0953/0952): "A verificação
+ * se a hora extra foi aprovada ou não, não está sendo feita, precisa
+ * arrumar esta lógica". **Sintoma**: no modal "Mais Horas Extras" do
+ * período 16/04→15/05, todos os 79 colaboradores apareciam com badge
+ * âmbar "Sem solicitação" mesmo havendo 14 HEs APROVADAS visíveis em
+ * Solicitação de Hora Extra (HE-120001..HE-120019, todas com lista de
+ * colaboradores e status verde "Aprovada"). **Causa raiz** (duas
+ * camadas): (1) `server/routers/heSolicitacoes.ts` `list` filtrava
+ * por `dataSolicitacao LIKE '${mesReferencia}%'` (ex: `'2026-05%'`)
+ * mas o ciclo de fechamento da FC é 16→15 — quando cruza virada de
+ * mês (16/04→15/05), `mesAno='2026-05'` e TODAS as HEs com data em
+ * abril (04/04, 05/04, 06/04, 07/04, 08/04, 13/04, 18/04, 24/04,
+ * 29/04, 30/04 — 10 das 14 aprovadas) eram filtradas FORA da resposta
+ * antes mesmo de chegar no client. (2) `client/src/pages/FechamentoPonto.tsx`
+ * contadores `semSolicHE` (L2211 KPI card laranja) e badge inferior
+ * (L2566) usavam `sol.funcionarios.some(f => f.employeeId === e.id)`
+ * sem checar `sol.status` — então uma HE pendente/rejeitada contava
+ * como "tem solicitação" (semanticamente errado: cobertura formal
+ * exige APROVAÇÃO, não só pedido aberto). **Fix em 2 camadas**:
+ * **(A) Server** (`server/routers/heSolicitacoes.ts` L109+): novos
+ * inputs opcionais `dataInicio`/`dataFim` (YYYY-MM-DD). Quando ambos
+ * presentes, têm prioridade sobre `mesReferencia LIKE`, usando
+ * `BETWEEN $1 AND $2`. Fallback p/ `LIKE` preservado pra clientes
+ * que ainda não passam bounds (backward-compat). **(B) Client**: L774
+ * passa `dataInicio: cicloRangeFallback.ini, dataFim: cicloRangeFallback.fim`
+ * (mesmo valor já usado no `getSummary` desde Rev. 2010 — fallback
+ * 16→15 quando consolidação não foi feita). L2211/L2566: filtro
+ * ganhou `sol.status === "aprovada" &&` antes do `funcionarios.some`.
+ * Badge inferior renomeado de "sem solicitação" pra "sem solicitação
+ * APROVADA" pra deixar semântica explícita. Badge por linha (L1180/
+ * L1256/L2521-2524) NÃO mudou — já diferenciava aprovada/pendente/
+ * rejeitada/sem corretamente (bug era só no contador agregado).
+ * + `shared/version.ts` → 2060. **Por que `BETWEEN` (e não filtrar
+ * só pelo `cicloFim`)**: `dataSolicitacao` pode ser anterior ao
+ * `cicloInicio` (HE solicitada com antecedência pra evento futuro);
+ * ainda assim deve aparecer no ciclo em que a HE foi REALIZADA. Como
+ * o modelo atual usa `dataSolicitacao` como proxy de "dia da HE", o
+ * `BETWEEN` casa exatamente o universo correto. Se virar problema,
+ * adicionar `dataExecucao` em rev futura. **Por que NÃO mudar `LIKE`
+ * por `BETWEEN` no caso `mesReferencia` (sem bounds)**: chamadas
+ * antigas (módulo HR pode listar "todas as HEs de maio") continuam
+ * com semântica de mês calendário — não mexer no contrato. **Por
+ * que NÃO criar procedure nova `listInCycle`**: 1 caller (Fechamento
+ * Ponto) — adicionar params opcionais é trivial e backward-compat.
+ * Criar segunda procedure dobraria código de listagem de funcionários
+ * + obraNome (loop interno repetido). **R-001/R-007/R-010 OK**: ZERO
+ * ALTER/DROP/DELETE. Read-only SELECT. **Preservado**: Rev. 2059/
+ * 2058/2057/2056/2055 INTACTAS. Badge por linha do ranking INTACTO.
+ * KPI cards do header (Pontuais/Atrasados/Faltosos) INTACTOS — só
+ * o cálculo do `semSolicHE` do modal Extras mudou. CSV/PDF do
+ * ranking (Rev. 2031) deriva de `filteredRankingRows` + heSols
+ * (mesmo dado fixed) — herda fix de graça, sem mudança ali. **Follow-
+ * up**: (1) badge por linha tb deveria considerar "horasRealizadas"
+ * da solicitação vs. `horasExtras` registradas no ponto (hoje basta
+ * estar vinculado, não checa volume); (2) campo `dataExecucao` na
+ * solicitação (separado de `dataSolicitacao`) pra cobrir HE
+ * solicitada-em-adiantamento; (3) procedure agregada
+ * `heSolicitacoes.countCoverageByCycle({companyIds,dataInicio,dataFim})`
+ * pra reduzir payload (hoje vem a lista inteira pro client filtrar);
+ * (4) alertar diretor quando >X% do ranking está "sem aprovada" no
+ * fechamento; (5) deep-link do badge "Sem solicitação aprovada" pra
+ * abrir Solicitação de HE filtrada pelo colaborador.
+ *
  * Rev. 2059 — SST · Integração · 3 melhorias em sequência pedidas pelo
  * usuário (IMG_0947/0948/0949): (A) +13 perguntas sobre SEGURANÇA NA
  * OBRA appendadas ao banco-padrão (total agora: 35); (B) botão de
