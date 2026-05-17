@@ -1,6 +1,14 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 1978 — RH · Espelho de Ponto · Busca automática ao selecionar funcionário + datas (sem precisar clicar "Buscar") + empty state mais informativo.
+ * User (17/05/2026, IMG_0839 iPad 08:22): "Cadê os dados de ponto?". Print mostra a tela com ALEX DA SILVA DOMINGOS selecionado + período 01/jan/2026 → 31/mai/2026 + botão "Buscar" intacto, mas área abaixo do form completamente em branco. Diagnóstico: `queryParams` só é setado quando o user clica "Buscar" manualmente (handleBuscar L757). O empty state "Selecione um funcionário e o período" estava sendo renderizado mas com texto cinza-claro (slate-500) + ícone slate-300 — quase invisível no iPad. User não percebeu a instrução e ficou esperando os dados.
+ * Mudança em 1 arquivo (`client/src/pages/EspelhoPonto.tsx`, 2 hunks):
+ *   (1) Novo useEffect L758-771 logo após `handleBuscar`: dispara `setQueryParams({employeeId, dataInicio, dataFim})` automaticamente quando os 3 estão preenchidos e `dataInicio <= dataFim`, com debounce de 250ms (evita query a cada keystroke em <input type=date>). Guard: se queryParams atual já é igual ao alvo (mesmo employeeId+datas), skip — evita re-fetch desnecessário e loop. Cleanup do timeout no return do useEffect.
+ *   (2) Empty state L962-971: texto principal slate-500 → slate-700 (mais legível), texto condicional ("Selecione um funcionário e o período" quando faltam, "Aguardando funcionário e datas válidas…" quando employeeId já está mas datas faltam/inválidas) + linha auxiliar slate-400 abaixo dizendo "A busca dispara automaticamente — ou clique em **Buscar**".
+ * Resultado: ALEX seleccionado + datas → busca dispara em 250ms → tabela aparece sem clique adicional. Botão "Buscar" continua disponível pra refresh manual / força. Se user mudar data, debounce reseta — só dispara após 250ms estabilizados. Empty state agora é nítido e explica o comportamento.
+ * Preservado: `handleBuscar` INTACTO (botão funcionando), `espelhoQ`/`feriadosQ` enabled/payload INTACTOS, todos os outros memos/handlers INTACTOS. Cargo confiança, aviso prévio, manual entry, recalc, limpar — tudo intacto. Rev. 1977/1976/1975 INTACTAS. Backend INTACTO. Schema INTACTO. Zero novo tRPC. R-001/R-007/R-010 OK. Reversível em 2 hunks.
+ *
  * Rev. 1977 — SST · Dashboard Atestados & Acidentes · Legenda clicável na "Evolução Mensal" — toggle on/off por série (Atestados/Acidentes/Dias Atestado/Dias Acidente).
  * User (17/05/2026, IMG_0837 iPad 08:12): "Quero poder ativar e desativar os indicadores". Print mostra o ComposedChart "Evolução Mensal — Atestados x Acidentes" com 4 séries (bar verde Atestados, bar vermelho Acidentes, linha azul Dias Atestado, linha laranja Dias Acidente). User quer poder esconder/mostrar série por série pra focar leitura (ex: ver só atestados sem o ruído das linhas de dias).
  * Mudança em 1 arquivo (`client/src/pages/sst/DashboardAtestadosAcidentes.tsx`, 2 hunks):

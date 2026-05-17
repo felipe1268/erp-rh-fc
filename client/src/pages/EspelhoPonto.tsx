@@ -755,6 +755,22 @@ export default function EspelhoPonto() {
 
   function handleSelectEmp(emp: any) { setEmployeeId(Number(emp.id)); setSearchQuery(""); setShowDropdown(false); }
   function handleBuscar() { if (!employeeId || !dataInicio || !dataFim) return; setQueryParams({ employeeId, dataInicio, dataFim }); }
+
+  // Rev. 1978 — Busca automática: dispara assim que funcionário+datas estão preenchidos.
+  // User reclamou (IMG_0839): selecionou ALEX + 01/jan→31/mai mas nada aparecia (precisava clicar Buscar).
+  // Debounce 250ms evita disparos a cada keystroke em <input type=date>. Botão Buscar continua disponível.
+  useEffect(() => {
+    if (!employeeId || !dataInicio || !dataFim) return;
+    if (dataInicio > dataFim) return;
+    if (queryParams
+      && queryParams.employeeId === employeeId
+      && queryParams.dataInicio === dataInicio
+      && queryParams.dataFim === dataFim) return;
+    const t = setTimeout(() => {
+      setQueryParams({ employeeId, dataInicio, dataFim });
+    }, 250);
+    return () => clearTimeout(t);
+  }, [employeeId, dataInicio, dataFim]);
   function handleEditSaved() { espelhoQ.refetch(); }
   function openEdit(dateStr: string, record: any | null) { setEditDate(dateStr); setEditRecord(record); }
 
@@ -964,7 +980,10 @@ export default function EspelhoPonto() {
             <div className="w-16 h-16 rounded-2xl bg-slate-100 flex items-center justify-center mb-3">
               <FileText className="h-7 w-7 text-slate-300" />
             </div>
-            <p className="text-sm text-slate-500 font-medium">Selecione um funcionário e o período</p>
+            <p className="text-sm text-slate-700 font-medium">
+              {!employeeId ? "Selecione um funcionário e o período" : "Aguardando funcionário e datas válidas…"}
+            </p>
+            <p className="text-xs text-slate-400 mt-1">A busca dispara automaticamente — ou clique em <strong>Buscar</strong>.</p>
           </div>
         )}
 
