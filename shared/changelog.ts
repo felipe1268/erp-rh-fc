@@ -1,6 +1,23 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2009 — SST · Integração · Modal "Novo/Editar Vídeo" repaginado na regra de ouro.
+ * Pedido direto do usuário (17/05/2026, img IMG_0851_1779031346140): "Melhore isso seguindo nossa regra de ouro". O modal de cadastro de vídeo de integração estava chapado: DialogHeader cinza padrão, campos empilhados sem hierarquia, sem ícones, sem agrupamento, sem indicação de etapas, botão emerald sólido sem destaque, preview do YouTube básico (apenas thumbnail). Quebrava o padrão estabelecido nas outras telas (header gradient + chip ring + seções coloridas + CTA gradient).
+ * Mudança em 1 arquivo: `client/src/pages/sst/IntegracaoSST.tsx` (1 hunk grande no modal de VideosTab, ~150L reescritas):
+ *   (1) **Largura**: `max-w-lg` → `max-w-2xl` (mais espaço pra agrupar campos). `p-0 gap-0 overflow-hidden` no DialogContent pra controlar padding interno.
+ *   (2) **Header gradient** emerald→teal full-width com chip Film ring-2 + título + subtítulo explicando "Cadastre um módulo de treinamento — YouTube, Vimeo, URL direta ou upload".
+ *   (3) **4 seções numeradas e coloridas**, cada uma com chip de ícone lucide + título uppercase:
+ *       (a) "1 · Onde encaixa" (indigo, Settings) — Select de configuração + nota se editing.
+ *       (b) "2 · Conteúdo do módulo" (slate, GraduationCap) — Título * + Descrição (opcional).
+ *       (c) "3 · Mídia do vídeo" (blue, Video) — URL + Tipo + **preview rico do YouTube** com overlay Play hover + badge "Preview YouTube".
+ *       (d) "4 · Configurações de exibição" (amber, Clock) — Duração + Ordem + toggle "Obrigatório/Opcional" estilo card com bg verde quando ativo + hint explicando consequência ("bloqueiam conclusão até serem assistidos integralmente").
+ *   (4) **Container scroll** `max-h-[calc(100vh-220px)] overflow-y-auto` pra modal não estourar em mobile/tablet pequeno.
+ *   (5) **Footer** com borda + bg slate-50 + botões iconizados (X cancelar + CTA gradient emerald→teal com sombra).
+ *   (6) `shared/version.ts` → 2009.
+ * Resultado: modal alinhado à regra de ouro estabelecida em Fechamento Ponto/Terceiros/Compras/SST IntegracaoSST (Rev. 2005). Fluxo claro em 4 etapas numeradas, preview rico, CTA destacado, hint de obrigatoriedade reforça consequência da decisão.
+ * Preservado: TODOS os estados (`configId`/`titulo`/`descricao`/`videoUrl`/`videoTipo`/`duracaoMinutos`/`ordem`/`obrigatorio`/`ytPreviewUrl`) INTACTOS; mutations `criarModulo`/`atualizarModulo` INTACTAS; `resetForm`/`handleSave` INTACTOS; lógica de disable do Select quando editing INTACTA; lista de tipos (YouTube/Vimeo/URL/Upload) INTACTA. Schema INTACTO. tRPC INTACTO. Outros modais do arquivo (Config/Sessão/Pendentes) INTACTOS — só o de VideosTab mudou. Rev. 2008 INTACTA. R-001/R-007/R-010 OK (CSS+markup-only). Reversível em 1 hunk.
+ * Follow-up: aplicar mesma regra aos outros modais do `IntegracaoSST.tsx` (ConfigTab, SessaoTab/PendentesTab, drill-down de Histórico); render real do iframe do YouTube/Vimeo no preview em vez de só thumbnail; suporte a upload direto na opção "Upload" (atualmente exige URL externa).
+ *
  * Rev. 2008 — Terceiros · Funcionários · Endereço residencial + bloco "Contato & Endereço" destacado.
  * Pedido direto do usuário (17/05/2026): "coloque mais dados, como endereço.. para controlar de onde nossos terceiros são.. telefone tbm seria importante". O cadastro tinha apenas Telefone e E-mail soltos no grid genérico, sem ENDEREÇO algum — impossibilitando saber de onde o terceiro vem (logística de transporte, vale-transporte, mapa de origem, relatórios SST por região).
  * Mudança em 4 arquivos:

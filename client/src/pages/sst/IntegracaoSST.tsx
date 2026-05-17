@@ -463,78 +463,143 @@ function VideosTab({ companyId }: { companyId: number }) {
       )}
 
       <Dialog open={showForm} onOpenChange={(v) => { if (!v) resetForm(); }}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>{editingId ? "Editar Vídeo" : "Novo Vídeo de Integração"}</DialogTitle>
+        <DialogContent className="max-w-2xl p-0 gap-0 overflow-hidden">
+          {/* Rev. 2009 — Header gradient (regra de ouro) */}
+          <DialogHeader className="px-6 py-4 bg-gradient-to-r from-emerald-600 via-emerald-500 to-teal-500 text-white space-y-1">
+            <div className="flex items-center gap-3">
+              <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-white/20 ring-2 ring-white/40 backdrop-blur shrink-0">
+                <Film className="h-5 w-5 text-white" />
+              </span>
+              <div className="min-w-0">
+                <DialogTitle className="text-white text-base sm:text-lg font-semibold leading-tight">
+                  {editingId ? "Editar Vídeo de Integração" : "Novo Vídeo de Integração"}
+                </DialogTitle>
+                <p className="text-[12px] text-white/85 leading-snug mt-0.5">
+                  Cadastre um módulo de treinamento — YouTube, Vimeo, URL direta ou upload. Os colaboradores assistirão na ordem definida.
+                </p>
+              </div>
+            </div>
           </DialogHeader>
-          <div className="space-y-3">
-            <div>
-              <Label>Configuração de Integração *</Label>
+
+          <div className="px-6 py-4 space-y-4 max-h-[calc(100vh-220px)] overflow-y-auto">
+            {/* SEÇÃO 1 — Onde encaixa */}
+            <section className="rounded-xl border-2 border-indigo-200 bg-gradient-to-r from-indigo-50/60 to-white p-3">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-indigo-100 ring-1 ring-indigo-200">
+                  <Settings className="h-3 w-3 text-indigo-700" />
+                </span>
+                <span className="text-[11px] font-bold text-indigo-900 uppercase tracking-wide">1 · Onde encaixa</span>
+              </div>
+              <Label className="text-xs text-slate-600">Configuração de Integração <span className="text-red-500">*</span></Label>
               <Select value={configId} onValueChange={setConfigId} disabled={!!editingId}>
-                <SelectTrigger><SelectValue placeholder="Selecione a configuração" /></SelectTrigger>
+                <SelectTrigger><SelectValue placeholder="Selecione a configuração ativa" /></SelectTrigger>
                 <SelectContent>
                   {configs.data?.map(c => (
                     <SelectItem key={c.id} value={String(c.id)}>{c.titulo}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
-            </div>
-            <div>
-              <Label>Título do Vídeo / Módulo *</Label>
-              <Input value={titulo} onChange={e => setTitulo(e.target.value)} placeholder="Ex: Uso de EPIs na Obra" />
-            </div>
-            <div>
-              <Label>Descrição</Label>
-              <Textarea value={descricao} onChange={e => setDescricao(e.target.value)} placeholder="Breve descrição do conteúdo do vídeo..." rows={2} />
-            </div>
-            <div className="grid grid-cols-3 gap-3">
-              <div className="col-span-2">
-                <Label>URL do Vídeo</Label>
-                <Input value={videoUrl} onChange={e => setVideoUrl(e.target.value)} placeholder="https://youtube.com/watch?v=..." />
-              </div>
-              <div>
-                <Label>Tipo</Label>
-                <Select value={videoTipo} onValueChange={(v: any) => setVideoTipo(v)}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="youtube">YouTube</SelectItem>
-                    <SelectItem value="vimeo">Vimeo</SelectItem>
-                    <SelectItem value="url">URL Direta</SelectItem>
-                    <SelectItem value="upload">Upload</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
+              {editingId && <p className="text-[10px] text-amber-700 mt-1">A configuração não pode ser alterada após cadastro.</p>}
+            </section>
 
-            {videoUrl && videoTipo === "youtube" && ytPreviewUrl && (
-              <div className="rounded-lg overflow-hidden border bg-black aspect-video">
-                <img src={`https://img.youtube.com/vi/${ytPreviewUrl}/mqdefault.jpg`} alt="Preview" className="w-full h-full object-cover" />
+            {/* SEÇÃO 2 — Conteúdo */}
+            <section className="rounded-xl border-2 border-slate-200 bg-white p-3">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-slate-100 ring-1 ring-slate-200">
+                  <GraduationCap className="h-3 w-3 text-slate-700" />
+                </span>
+                <span className="text-[11px] font-bold text-slate-900 uppercase tracking-wide">2 · Conteúdo do módulo</span>
               </div>
-            )}
+              <div className="space-y-3">
+                <div>
+                  <Label className="text-xs text-slate-600">Título do Vídeo / Módulo <span className="text-red-500">*</span></Label>
+                  <Input value={titulo} onChange={e => setTitulo(e.target.value)} placeholder="Ex: Uso de EPIs na Obra" />
+                </div>
+                <div>
+                  <Label className="text-xs text-slate-600">Descrição <span className="text-slate-400 font-normal">(opcional)</span></Label>
+                  <Textarea value={descricao} onChange={e => setDescricao(e.target.value)} placeholder="Breve descrição do conteúdo do vídeo..." rows={2} />
+                </div>
+              </div>
+            </section>
 
-            <div className="grid grid-cols-3 gap-3">
-              <div>
-                <Label>Duração (min)</Label>
-                <Input type="number" value={duracaoMinutos} onChange={e => setDuracaoMinutos(e.target.value)} placeholder="10" min={1} />
+            {/* SEÇÃO 3 — Mídia */}
+            <section className="rounded-xl border-2 border-blue-200 bg-gradient-to-r from-blue-50/60 to-white p-3">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-blue-100 ring-1 ring-blue-200">
+                  <Video className="h-3 w-3 text-blue-700" />
+                </span>
+                <span className="text-[11px] font-bold text-blue-900 uppercase tracking-wide">3 · Mídia do vídeo</span>
               </div>
-              <div>
-                <Label>Ordem</Label>
-                <Input type="number" value={ordem} onChange={e => setOrdem(e.target.value)} placeholder="1" min={1} />
+              <div className="grid grid-cols-3 gap-3">
+                <div className="col-span-2">
+                  <Label className="text-xs text-slate-600">URL do Vídeo</Label>
+                  <Input value={videoUrl} onChange={e => setVideoUrl(e.target.value)} placeholder="https://youtube.com/watch?v=..." />
+                </div>
+                <div>
+                  <Label className="text-xs text-slate-600">Tipo</Label>
+                  <Select value={videoTipo} onValueChange={(v: any) => setVideoTipo(v)}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="youtube">YouTube</SelectItem>
+                      <SelectItem value="vimeo">Vimeo</SelectItem>
+                      <SelectItem value="url">URL Direta</SelectItem>
+                      <SelectItem value="upload">Upload</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
-              <div className="flex items-end pb-1">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input type="checkbox" checked={obrigatorio} onChange={e => setObrigatorio(e.target.checked)} className="accent-emerald-600 w-4 h-4" />
-                  <span className="text-sm">Obrigatório</span>
-                </label>
+              {videoUrl && videoTipo === "youtube" && ytPreviewUrl && (
+                <div className="mt-3 rounded-lg overflow-hidden border-2 border-blue-300 bg-black aspect-video relative group">
+                  <img src={`https://img.youtube.com/vi/${ytPreviewUrl}/mqdefault.jpg`} alt="Preview" className="w-full h-full object-cover" />
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/0 group-hover:bg-black/30 transition-colors">
+                    <span className="inline-flex h-12 w-12 items-center justify-center rounded-full bg-white/90 shadow-lg">
+                      <Play className="h-5 w-5 text-blue-700 ml-0.5" />
+                    </span>
+                  </div>
+                  <span className="absolute top-2 left-2 px-2 py-0.5 rounded-md bg-white/90 text-[10px] font-semibold text-blue-700">Preview YouTube</span>
+                </div>
+              )}
+            </section>
+
+            {/* SEÇÃO 4 — Configurações de exibição */}
+            <section className="rounded-xl border-2 border-amber-200 bg-gradient-to-r from-amber-50/60 to-white p-3">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-amber-100 ring-1 ring-amber-200">
+                  <Clock className="h-3 w-3 text-amber-700" />
+                </span>
+                <span className="text-[11px] font-bold text-amber-900 uppercase tracking-wide">4 · Configurações de exibição</span>
               </div>
-            </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <Label className="text-xs text-slate-600">Duração (min)</Label>
+                  <Input type="number" value={duracaoMinutos} onChange={e => setDuracaoMinutos(e.target.value)} placeholder="10" min={1} />
+                </div>
+                <div>
+                  <Label className="text-xs text-slate-600">Ordem de exibição</Label>
+                  <Input type="number" value={ordem} onChange={e => setOrdem(e.target.value)} placeholder="1" min={1} />
+                </div>
+                <div className="sm:col-span-1">
+                  <Label className="text-xs text-slate-600 invisible sm:visible">Obrigatório</Label>
+                  <label className={`flex items-center gap-2 cursor-pointer rounded-md border-2 px-3 py-1.5 transition-colors ${obrigatorio ? "border-emerald-300 bg-emerald-50" : "border-slate-200 bg-white hover:bg-slate-50"}`}>
+                    <input type="checkbox" checked={obrigatorio} onChange={e => setObrigatorio(e.target.checked)} className="accent-emerald-600 w-4 h-4" />
+                    <span className={`text-sm font-medium ${obrigatorio ? "text-emerald-800" : "text-slate-700"}`}>
+                      {obrigatorio ? "Obrigatório" : "Opcional"}
+                    </span>
+                  </label>
+                </div>
+              </div>
+              <p className="text-[10px] text-amber-700/80 mt-2">Vídeos obrigatórios bloqueiam a conclusão da integração até serem assistidos integralmente.</p>
+            </section>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={resetForm}>Cancelar</Button>
+
+          <DialogFooter className="px-6 py-3 border-t bg-slate-50/60 gap-2">
+            <Button variant="outline" onClick={resetForm}>
+              <X className="h-4 w-4 mr-1" /> Cancelar
+            </Button>
             <Button
               disabled={!titulo.trim() || !configId || criarModulo.isPending || atualizarModulo.isPending}
               onClick={handleSave}
-              className="bg-emerald-600 hover:bg-emerald-700"
+              className="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white shadow-md"
             >
               {(criarModulo.isPending || atualizarModulo.isPending) ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Save className="h-4 w-4 mr-1" />}
               {editingId ? "Salvar Alterações" : "Cadastrar Vídeo"}
