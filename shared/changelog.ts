@@ -1,6 +1,29 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2002 — Terceiros · Funcionários · Aba Documentos completa + Painel de Status de Integração.
+ * Pedido direto do usuário (17/05/2026, image IMG_0848_1779028116848.png): "Precisa ter todos os documentos de um funcionário terceiro, controle de integração tbm para garantir que todos estão integrados". A aba "Documentos" da tela `/terceiros/funcionarios` tinha apenas 4 docs genéricos (ASO, Treinamentos NR, Certificados, Foto 3x4) listados em cards chapados — sem categorização, sem checklist de integração, sem alerta de vencimento, sem distinguir obrigatório de opcional. O schema já tinha 7 campos não-utilizados pela UI (nr10/nr33/nr35 url+validade, integracaoDocUrl).
+ * Mudança em 2 arquivos:
+ *   (1) `client/src/pages/terceiros/FuncionariosTerceiros.tsx`:
+ *     • Imports: +6 ícones lucide (`Heart`, `Award`, `BookOpen`, `ClipboardCheck`, `AlertTriangle`, `Calendar`).
+ *     • Bloco da aba "documentos" (~40 linhas) reescrito num IIFE com ~165 linhas:
+ *       - Tipos locais `Doc` e `Secao` pra documentar shape.
+ *       - Array `secoes` com 4 categorias (cor + ícone + descrição cada):
+ *         · **Saúde Ocupacional** (rose) — ASO (obrigatório, c/ validade)
+ *         · **Treinamentos NR** (amber) — NR genérico (obrigatório), NR-10 / NR-33 / NR-35 (opcionais por função, todos c/ validade)
+ *         · **Integração de Segurança** (indigo) — `integracaoDocUrl` (obrigatório, DDS/integração admissional)
+ *         · **Identificação e Qualificação** (blue) — Foto 3x4 (obrigatório), Certificados (opcional)
+ *       - Cálculo de status: `pctIntegracao` (obrigatoriosPreenchidos / todosObrigatorios), `vencidos` (validade < hoje), `proxVencimento` (≤30d).
+ *       - Status agregado em 4 níveis: "Integrado" (100%, verde) > "Integração Parcial" (≥50%, amber) > "Não Integrado" (<50%, slate) > "Documento Vencido" (qualquer vencido, vermelho — overrides tudo).
+ *       - **Painel topo**: card border-2 com header gradient colorido (cor varia conforme status), ícone em chip h-10 w-10 ring-2, "% Integração" tabular-nums grande à direita, "X de Y obrigatórios" subtítulo. Body branco com barra de progresso (h-2, gradient) + grid 2/4 de mini-cards (Total docs, Obrigatórios OK, Vencidos, Vencem ≤30d) cada um com cor própria. Alertas inline (vermelho pra vencidos, amber pra próx. venc.) listando docs específicos.
+ *       - **Seções de documentos**: cada uma é card com header colorido (icone+título+descrição+contador), divide-y de linhas. Cada linha: ícone de status (CheckCircle/AlertTriangle/Clock), título, badges contextuais (Obrigatório/Vencido/"Vence em Xd"), descrição em ml-6, link "Ver documento" OU "Nenhum documento". Direita: campo de validade (com bg vermelho/amber se vencido/próximo) + botão Upload (label muda pra "Trocar" se já existe).
+ *     • Handler `handleUpload` (L149) INTACTO — todos os novos campos (`nr10DocUrl`/`nr33DocUrl`/`nr35DocUrl`/`integracaoDocUrl`) já são aceitos pela mutation `uploadDoc` no servidor (passa o `field` direto pra UPDATE).
+ *     • Validade de NR-10/33/35 funciona via `updateMut.mutate({ id, [validadeField]: ... })` igual ASO/NR genérico.
+ *   (2) `shared/version.ts` → 2002.
+ * Resultado: gestor abre aba Documentos e vê IMEDIATAMENTE se o funcionário está "Integrado / Parcial / Não Integrado / Vencido"; barra de progresso e contadores claros; cada NR específica (10/33/35) tem espaço próprio; documentos vencidos disparam alerta vermelho; próximos vencimentos (30d) disparam alerta amber. Tudo responsivo (grid 2/4 colapsa em mobile, header wrappa).
+ * Preservado: schema INTACTO (todos os campos já existiam — Rev. 1998 e anteriores); mutation `uploadDoc` INTACTA (passa field arbitrário pra UPDATE); aba "Dados Pessoais" INTACTA; lista filtrada/aptidão badges INTACTOS; flux de cadastro inicial (createMut) INTACTO. Rev. 2001 INTACTA. R-001/R-007/R-010 OK. Reversível em 2 arquivos (1 hunk grande no client).
+ * Follow-up natural: (a) configurar quais NRs são obrigatórias por função no cadastro da empresa terceira (ex: eletricistas → NR-10 obrigatório); (b) bloquear acesso à obra se "Documento Vencido"; (c) job de notificação por email pra docs vencendo em 30/15/7 dias.
+ *
  * Rev. 2001 — DP · Fechamento de Ponto · Coluna "Obra(s)" usa employees.obraAtual como fallback.
  * Pedido direto do usuário (17/05/2026, image IMG_0847_1779027664972.png): "Enivaldo e Anderson tem obra sim, veja o cadastro e corrija isso". Na imagem, no modal "Mais Pontuais", as linhas 1 (Anderson Dos Anjos Alkmin — Mestre de Obras) e 2 (Enivaldo Da Silva Andrioni — Comprador) apareciam com "—" na coluna Obra(s), mas o cadastro deles tem obra atribuída.
  * Causa-raiz: a query `resumoPontoPorFuncionario` (server/routers/payrollEngine.ts L4990-5015) agrega obras EXCLUSIVAMENTE via `STRING_AGG(td."obraId")` em `timecard_daily`. Funções administrativas (mestre de obras, comprador, RH, engenheiro de escritório) costumam bater ponto em QR-Code geral ou via leitor sem informar obra — então `td.obraId` fica NULL e a coluna mostra "—" mesmo com `employees.obraAtual` preenchido no cadastro.
