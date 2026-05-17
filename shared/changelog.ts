@@ -1,6 +1,121 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2048 — SST · Integração · Certificado de Aprovação
+ * ganha LOGO da FC + cores da marca + headline "Parabéns!" +
+ * destaque na data de validade + botão "Visualizar / Imprimir"
+ * (PDF abre numa aba, navegador imprime nativo) ao lado de
+ * "Baixar PDF". Mesma melhoria no Raio-X do Funcionário.
+ *
+ * Pedido direto do usuário (IMG_0933/0934): "Quero a opção de
+ * visualizar o certificado e opção de imprimir ou gerar PDF,
+ * quero que o certificado tenha o logo da construtora, nas
+ * cores nossas tbm... e já saia com a data de validade e
+ * dando os parabéns".
+ *
+ * Mudanças:
+ *
+ * (A) `client/src/lib/certificadoIntegracaoSstPdf.ts`
+ *     - Função AGORA é async (caller pode await; quem não
+ *       await continua funcionando com fire-and-forget).
+ *     - Novo loader `loadLogo()` busca `/logo-fc.jpg` (asset
+ *       público em `client/public/`), converte pra base64 e
+ *       lê dimensões pra preservar proporção. Cache em
+ *       módulo (1 fetch por sessão).
+ *     - Logo embutida no canto superior esquerdo abaixo da
+ *       faixa verde (18mm de altura, largura proporcional,
+ *       máx 50mm).
+ *     - Headline "Parabéns!" em verde grande (FC_GREEN 18pt
+ *       bold) ANTES do "Certificamos que".
+ *     - Faixa superior alargada (14→16mm) pra acomodar a
+ *       logo logo abaixo sem colisão.
+ *     - Texto principal inclui "...e às Regras de Ouro da FC
+ *       Engenharia" (amarra o certificado ao programa da
+ *       Rev. 2047).
+ *     - "Válido até" agora em VERDE BOLD (destaque solicitado
+ *       — antes estava só em cinza).
+ *     - Novo parâmetro `mode: 'save' | 'preview'` (default
+ *       'save'). Em 'preview' gera blob URL via
+ *       `pdf.output('bloburl')` e abre numa janela; aceita
+ *       `winRef` (Window aberta sincronamente pelo caller —
+ *       defesa contra pop-up blocker do Safari/iPad, lição
+ *       Rev. 2039). Se a winRef sumir/blocker mata, fallback
+ *       graceful pra `save()` (usuário nunca fica sem nada).
+ *     - Constantes de cor centralizadas (FC_GREEN, FC_GREEN_LIGHT,
+ *       FC_NAVY) — facilita rebrand futuro.
+ *
+ * (B) `client/src/pages/sst/IntegracaoPublica.tsx` (tela
+ *     pública pós-aprovação)
+ *     - Botão único "Baixar Certificado de Aprovação"
+ *       substituído por DOIS: "Visualizar / Imprimir
+ *       Certificado" (outline emerald + ícone Eye, abre PDF
+ *       em nova aba — usuário usa Cmd+P / Share→Print do
+ *       navegador) e "Baixar Certificado em PDF" (sólido
+ *       emerald + Download).
+ *     - O botão Visualizar abre `window.open('about:blank',
+ *       '_blank')` SINCRONAMENTE antes do await pra evitar
+ *       que Safari/iPad bloqueie o pop-up; passa winRef
+ *       pra função.
+ *     - Try/catch fecha a winRef órfã + toast em caso de
+ *       erro.
+ *     - Parâmetros do certificado extraídos pra const
+ *       `certParams` (DRY entre os dois botões).
+ *     - Ícone `Eye` adicionado aos imports lucide.
+ *
+ * (C) `client/src/pages/avaliacao/RaioXFuncionario.tsx`
+ *     (re-emissão do certificado pelo RH/gestor)
+ *     - Mesmo split: botão "Visualizar" + "Baixar" lado a
+ *       lado (size sm, ambos outline emerald). `Eye` já
+ *       existia no import.
+ *     - Mesma defesa contra pop-up blocker.
+ *     - DRY com `certParams` const.
+ *
+ * (D) `shared/version.ts` → 2048.
+ *
+ * Multi-tenant: o logo `/logo-fc.jpg` é fixo (este ERP é
+ * mono-cliente FC Engenharia per replit.md "ERP RH & DP — FC
+ * Engenharia"). Se virar multi-tenant futuro, basta ler
+ * `selectedCompany.logoUrl` no caller e passar pra função
+ * (já é assíncrona e suporta data URL/URL — mudança trivial).
+ *
+ * Acessibilidade/impressão: o PDF em aba aberta pelo
+ * navegador permite ao usuário usar o controle nativo de
+ * impressão (Cmd+P / Ctrl+P / Share→Print no iOS) — mais
+ * confiável que tentar `window.print()` num iframe (que
+ * falha intermitentemente em Safari iOS com PDFs embarcados).
+ *
+ * R-001/R-007/R-010 OK: ZERO mudança server-side, ZERO SQL,
+ * ZERO schema, ZERO ALTER/DROP/DELETE. Apenas client + um
+ * asset estático já existente.
+ *
+ * Preservado:
+ *   - Rev. 2047 (perguntas FC), Rev. 2046 (semear), Rev. 2045
+ *     (AlertDialog), Rev. 2044 (editar/apagar), Rev. 2043
+ *     (skip-CPF auto), Rev. 2042..2034 INTACTAS.
+ *   - Contrato server INTACTO (certificado é 100% client-side).
+ *   - Fallback para download se pop-up bloqueado.
+ *
+ * Arquivos tocados:
+ *   - client/src/lib/certificadoIntegracaoSstPdf.ts
+ *   - client/src/pages/sst/IntegracaoPublica.tsx
+ *   - client/src/pages/avaliacao/RaioXFuncionario.tsx
+ *   - shared/version.ts, shared/changelog.ts, replit.md
+ *
+ * Follow-up:
+ *   1. Quando virar multi-tenant, ler logo da empresa
+ *      (companies.logoUrl) e passar pro caller.
+ *   2. Logo PNG com transparência (logo-fc-branco-amarelo.png
+ *      já existe em client/public) ficaria melhor sobre a
+ *      faixa verde — testar como segunda variante no header.
+ *   3. Botão "Imprimir agora" que dispara
+ *      `iframe.contentWindow.print()` num Dialog interno
+ *      (mais 1-clique que Cmd+P).
+ *   4. QR Code com URL de validação pública do certificado
+ *      (consulta o registroId + hash do nome → JSON com
+ *      status/nota/validade pra auditoria de cliente externo).
+ *   5. Assinatura digital do TST (upload de imagem PNG na
+ *      config) — hoje só linha em branco.
+ *
  * Rev. 2047 — SST · Integração · 12 perguntas-padrão REESCRITAS
  * pra serem FIÉIS ao vídeo "INTEGRAÇÃO FC ENGENHARIA" (cultura
  * corporativa + 10 Regras de Ouro de conduta) + botão

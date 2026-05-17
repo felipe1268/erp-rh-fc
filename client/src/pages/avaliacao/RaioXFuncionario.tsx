@@ -241,36 +241,57 @@ function SstIntegracaoCard({ employeeId, companyId, employeeNome, employeeFuncao
                       </div>
                     </div>
                   </div>
-                  {aprovado && (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="text-emerald-700 hover:text-emerald-800 hover:bg-emerald-50 border-emerald-200"
-                      onClick={() => {
-                        try {
-                          generateCertificadoIntegracaoSstPdf({
-                            registroId: r.id,
-                            employeeNome: r.employeeNome || employeeNome,
-                            employeeCpf: r.employeeCpf,
-                            employeeFuncao: r.employeeFuncao || employeeFuncao || null,
-                            obraNome: r.obraNome,
-                            configNome: r.configNome,
-                            dataRealizacao: r.dataRealizacao,
-                            dataValidade: r.dataValidade,
-                            nota,
-                            notaMinima: Number(r.configNotaMinima ?? 70),
-                            acertos: null,
-                            totalPerguntas: null,
-                            tentativa: r.tentativas,
-                          });
-                        } catch (e: any) {
-                          toast.error(e?.message || "Erro ao gerar certificado");
-                        }
-                      }}
-                    >
-                      <Download className="w-3 h-3 mr-1" /> Certificado
-                    </Button>
-                  )}
+                  {aprovado && (() => {
+                    const certParams = {
+                      registroId: r.id,
+                      employeeNome: r.employeeNome || employeeNome,
+                      employeeCpf: r.employeeCpf,
+                      employeeFuncao: r.employeeFuncao || employeeFuncao || null,
+                      obraNome: r.obraNome,
+                      configNome: r.configNome,
+                      dataRealizacao: r.dataRealizacao,
+                      dataValidade: r.dataValidade,
+                      nota,
+                      notaMinima: Number(r.configNotaMinima ?? 70),
+                      acertos: null,
+                      totalPerguntas: null,
+                      tentativa: r.tentativas,
+                    };
+                    return (
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="text-emerald-700 hover:text-emerald-800 hover:bg-emerald-50 border-emerald-200"
+                          onClick={async () => {
+                            const winRef = window.open("about:blank", "_blank");
+                            try {
+                              await generateCertificadoIntegracaoSstPdf({ ...certParams, mode: "preview", winRef });
+                            } catch (e: any) {
+                              try { winRef?.close(); } catch {}
+                              toast.error(e?.message || "Erro ao visualizar certificado");
+                            }
+                          }}
+                        >
+                          <Eye className="w-3 h-3 mr-1" /> Visualizar
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="text-emerald-700 hover:text-emerald-800 hover:bg-emerald-50 border-emerald-200"
+                          onClick={async () => {
+                            try {
+                              await generateCertificadoIntegracaoSstPdf(certParams);
+                            } catch (e: any) {
+                              toast.error(e?.message || "Erro ao gerar certificado");
+                            }
+                          }}
+                        >
+                          <Download className="w-3 h-3 mr-1" /> Baixar
+                        </Button>
+                      </div>
+                    );
+                  })()}
                 </div>
               );
             })}
