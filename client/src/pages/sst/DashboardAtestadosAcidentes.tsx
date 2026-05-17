@@ -157,6 +157,15 @@ export default function DashboardAtestadosAcidentes() {
   const [diaSemanaDetalhe, setDiaSemanaDetalhe] = useState<{ tipo: "atestado" | "acidente"; diaIdx: number; dia: string } | null>(null);
   // Rev. 1976 — Modal de foto ampliada do funcionário (clique na miniatura)
   const [fotoZoom, setFotoZoom] = useState<{ url: string; nome: string } | null>(null);
+  // Rev. 1977 — Toggle de séries da "Evolução Mensal" via click na legenda (Set de dataKeys ocultas)
+  const [evolHidden, setEvolHidden] = useState<Set<string>>(new Set());
+  const toggleEvolSeries = (dk: string) => {
+    setEvolHidden((prev) => {
+      const next = new Set(prev);
+      if (next.has(dk)) next.delete(dk); else next.add(dk);
+      return next;
+    });
+  };
 
   const diaSemanaQuery = trpc.sstAnalytics.funcionariosPorDiaSemana.useQuery(
     {
@@ -487,11 +496,25 @@ export default function DashboardAtestadosAcidentes() {
                       <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 11 }} allowDecimals={false}
                         label={{ value: "Dias", angle: 90, position: "insideRight", style: { fontSize: 11, fill: "#6b7280" }, offset: -2 }} />
                       <Tooltip cursor={{ fill: "rgba(59,130,246,0.05)" }} content={<TooltipPtBR hideZeros valueSuffix={{ diasAtestado: " d", diasAcidente: " d" }} />} />
-                      <Legend iconType="circle" wrapperStyle={{ fontSize: 12, paddingTop: 8 }} />
-                      <Bar yAxisId="left" dataKey="atestados" name="Atestados" fill="#10b981" radius={[4, 4, 0, 0]} maxBarSize={48} />
-                      <Bar yAxisId="left" dataKey="acidentes" name="Acidentes" fill="#ef4444" radius={[4, 4, 0, 0]} maxBarSize={48} />
-                      <Line yAxisId="right" type="monotone" dataKey="diasAtestado" name="Dias Atestado" stroke="#3b82f6" strokeWidth={2.5} dot={{ r: 3, strokeWidth: 2 }} activeDot={{ r: 5 }} />
-                      <Line yAxisId="right" type="monotone" dataKey="diasAcidente" name="Dias Acidente" stroke="#f59e0b" strokeWidth={2.5} dot={{ r: 3, strokeWidth: 2 }} activeDot={{ r: 5 }} />
+                      {/* Rev. 1977 — Legenda clicável: toggle on/off de cada série. Item oculto fica cinza+riscado. */}
+                      <Legend
+                        iconType="circle"
+                        wrapperStyle={{ fontSize: 12, paddingTop: 8, cursor: "pointer", userSelect: "none" }}
+                        onClick={(o: any) => { if (o?.dataKey) toggleEvolSeries(String(o.dataKey)); }}
+                        formatter={(value: string, entry: any) => {
+                          const dk = String(entry?.dataKey ?? "");
+                          const off = evolHidden.has(dk);
+                          return (
+                            <span style={{ color: off ? "#9ca3af" : "#374151", textDecoration: off ? "line-through" : "none" }}>
+                              {value}
+                            </span>
+                          );
+                        }}
+                      />
+                      <Bar yAxisId="left" dataKey="atestados" name="Atestados" fill="#10b981" radius={[4, 4, 0, 0]} maxBarSize={48} hide={evolHidden.has("atestados")} />
+                      <Bar yAxisId="left" dataKey="acidentes" name="Acidentes" fill="#ef4444" radius={[4, 4, 0, 0]} maxBarSize={48} hide={evolHidden.has("acidentes")} />
+                      <Line yAxisId="right" type="monotone" dataKey="diasAtestado" name="Dias Atestado" stroke="#3b82f6" strokeWidth={2.5} dot={{ r: 3, strokeWidth: 2 }} activeDot={{ r: 5 }} hide={evolHidden.has("diasAtestado")} />
+                      <Line yAxisId="right" type="monotone" dataKey="diasAcidente" name="Dias Acidente" stroke="#f59e0b" strokeWidth={2.5} dot={{ r: 3, strokeWidth: 2 }} activeDot={{ r: 5 }} hide={evolHidden.has("diasAcidente")} />
                     </ComposedChart>
                   </ResponsiveContainer>
                 )}

@@ -1,6 +1,15 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 1977 — SST · Dashboard Atestados & Acidentes · Legenda clicável na "Evolução Mensal" — toggle on/off por série (Atestados/Acidentes/Dias Atestado/Dias Acidente).
+ * User (17/05/2026, IMG_0837 iPad 08:12): "Quero poder ativar e desativar os indicadores". Print mostra o ComposedChart "Evolução Mensal — Atestados x Acidentes" com 4 séries (bar verde Atestados, bar vermelho Acidentes, linha azul Dias Atestado, linha laranja Dias Acidente). User quer poder esconder/mostrar série por série pra focar leitura (ex: ver só atestados sem o ruído das linhas de dias).
+ * Mudança em 1 arquivo (`client/src/pages/sst/DashboardAtestadosAcidentes.tsx`, 2 hunks):
+ *   (1) Novo state `evolHidden: Set<string>` + helper `toggleEvolSeries(dataKey)` que adiciona/remove dataKey do Set imutavelmente.
+ *   (2) ComposedChart L490+: `<Legend>` ganha `onClick={(o) => toggleEvolSeries(o.dataKey)}` + `formatter` custom que renderiza o texto da série em cinza+`line-through` quando hidden, ou cinza-escuro normal quando ativa; `wrapperStyle` ganha `cursor: "pointer", userSelect: "none"` (feedback visual de clicabilidade + previne seleção acidental no tap mobile). Bar/Line de cada série ganha prop `hide={evolHidden.has("<dataKey>")}` — Recharts esconde a série do canvas e re-escala os eixos automaticamente.
+ * UX: tap em "Dias Acidente" na legenda → linha laranja some + texto fica cinza riscado; novo tap → reaparece. Funciona com qualquer combinação (esconder todas as 4 = chart vazio sem erro). Tooltip continua mostrando só séries visíveis (TooltipPtBR + hideZeros já filtravam séries com valor 0; séries com `hide=true` não chegam no payload do Tooltip).
+ * Resultado: User pode isolar séries — ex: tap em "Acidentes" + "Dias Atestado" + "Dias Acidente" pra ver SÓ a barra verde de Atestados isolada. Eixos esquerdo/direito re-escalam automaticamente conforme as séries visíveis.
+ * Preservado: dados (`evolucaoData`), formatação pt-BR, cores, ordem de séries, drill-table abaixo INTACTOS. Rev. 1976/1975/1974/1973/1972 INTACTAS. Outros gráficos do dashboard SST sem mudança. Backend INTACTO. Schema INTACTO. Zero novo tRPC. R-001/R-007/R-010 OK. Reversível em 2 hunks.
+ *
  * Rev. 1976 — SST · Dashboard Atestados & Acidentes · Avatar do funcionário ao lado do nome nas tabelas "Top 10 Funcionários" + lightbox de zoom ao clicar na foto.
  * User (17/05/2026, IMG_0836 iPad 08:09): (1) "Coloca a foto do funcionário ao lado do nome, tem no cadastro dos funcionários"; (2) "Quero poder clicar e ela aumentar de tamanho tbm".
  * Diagnóstico: cadastro de funcionários já tem `employees.fotoUrl` (text) preenchido. As 2 tabelas "Top 10 Funcionários — Atestados" e "Top 10 Funcionários — Acidentes" do dashboard SST mostravam apenas nome+código+função, sem identidade visual. Backend `sstAnalytics.atestadosAcidentes` (sstAnalytics.ts) já agregava nome/matricula/codigoInterno/funcao no funcMap/funcAcMap mas NÃO incluía fotoUrl.
