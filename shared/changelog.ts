@@ -1,6 +1,25 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 1976 — SST · Dashboard Atestados & Acidentes · Avatar do funcionário ao lado do nome nas tabelas "Top 10 Funcionários" + lightbox de zoom ao clicar na foto.
+ * User (17/05/2026, IMG_0836 iPad 08:09): (1) "Coloca a foto do funcionário ao lado do nome, tem no cadastro dos funcionários"; (2) "Quero poder clicar e ela aumentar de tamanho tbm".
+ * Diagnóstico: cadastro de funcionários já tem `employees.fotoUrl` (text) preenchido. As 2 tabelas "Top 10 Funcionários — Atestados" e "Top 10 Funcionários — Acidentes" do dashboard SST mostravam apenas nome+código+função, sem identidade visual. Backend `sstAnalytics.atestadosAcidentes` (sstAnalytics.ts) já agregava nome/matricula/codigoInterno/funcao no funcMap/funcAcMap mas NÃO incluía fotoUrl.
+ * Mudança em 2 arquivos:
+ *   (1) `server/routers/sstAnalytics.ts` — 4 hunks:
+ *       - L85 e L188: adicionado `employeeFotoUrl: employees.fotoUrl` nos 2 SELECTs (atestados/acidentes).
+ *       - L142+L151: type do funcMap + init `fotoUrl: r.employeeFotoUrl || null`.
+ *       - L524+L533: idem para funcAcMap.
+ *       Payload `topFuncionarios` agora carrega `fotoUrl: string | null`.
+ *   (2) `client/src/pages/sst/DashboardAtestadosAcidentes.tsx` — 5 hunks:
+ *       - Import: adicionado `User as UserIcon, X as XIcon` em lucide-react (Lock-style cuidado pra evitar conflito com window.X nativa, mas X NÃO é global em Safari — verificado).
+ *       - Novo componente local `EmployeeAvatar({ fotoUrl, nome, onZoom })`: miniatura 36×36 (w-9 h-9) rounded-full. Se tem foto → `<button>` com `<img object-cover>` e hover ring azul (`ring-2 ring-blue-400 ring-offset-1`) + click chama `onZoom(url, nome)`. Se NÃO tem foto → div com gradiente cinza + iniciais (até 2 letras do nome) — não-clicável. Inclui onError no img que esconde a tag (failsafe pra URLs quebradas).
+ *       - Novo state `fotoZoom: { url, nome } | null` (Rev. 1976).
+ *       - 2 tabelas Top 10 (atestados L640-654 + acidentes L792-806): wrapper `<div className="flex items-center gap-2">` com avatar à esquerda + bloco nome/código à direita (`<div className="min-w-0">` pra truncar bem em mobile). Mantém o nome como button clicável que abre `EmployeeDetailDialog` (raio-x) — duas ações independentes: clica avatar → zoom, clica nome → raio-x.
+ *       - Novo lightbox `<Dialog open={fotoZoom !== null}>` antes do dialog "Custo Estimado": fundo `bg-black/95` ocupando 90vw×90vh (tela cheia no mobile), img `object-contain` centralizada, botão X no canto superior direito (`absolute top-3 right-3`), nome do funcionário em barra inferior com gradiente preto. Fecha por: ESC (Radix default), botão X, click no overlay (Radix default), `onOpenChange(false)`.
+ * Resultado: lista "Top 10 Funcionários — Atestados" agora mostra WALMIR/SILVIO/ACACIO com a foto do crachá; click na miniatura abre tela cheia preta com a foto ampliada centralizada + nome em baixo; click no nome continua abrindo o raio-x (EmployeeDetailDialog) como antes. Funcionários sem foto cadastrada mostram iniciais (ex: "WS" pra Walmir Jose da Silva).
+ * Acessibilidade: `aria-label` em ambos os modos (foto/iniciais), `title` tooltip, focus ring no botão da miniatura, DialogTitle sr-only no lightbox pra leitores de tela. Imagens com `loading="lazy"` pra não baixar 10 fotos de uma vez no scroll.
+ * Preservado: backend filtros/agregação/sort INTACTOS; clique no nome continua abrindo raio-x; 8 outros gráficos do dashboard INTACTOS. Rev. 1975/1974/1973/1972/1971 INTACTAS. Schema INTACTO (zero ALTER — só SELECT de col existente fotoUrl). Zero novo tRPC. Zero ALTER/DROP/DELETE. R-001/R-007/R-010 OK. Reversível em 9 hunks.
+ *
  * Rev. 1975 — RH · RaioXFuncionario · BUGFIX CRÍTICO iOS Safari · Import faltante de `Lock` (lucide-react) causava `TypeError: Illegal constructor` no iPad.
  * User (17/05/2026 às 07:55, IMG_0835 iPad WebView): print mostra tela de erro do ErrorBoundary com mensagem "TypeError: Illegal constructor" + componentStack "Lock@[native code] / div / div / div / div / RaioXFuncionario:179". Erro NÃO acontecia no Chrome desktop — apenas no Safari iOS / WebView Replit no iPad.
  * Diagnóstico (após melhoria do ErrorBoundary capturar componentStack + reportar para `/api/diag/client-error`):

@@ -79,6 +79,7 @@ export const sstAnalyticsRouter = router({
           employeeCodigoInterno: employees.codigoInterno,
           employeeFuncao: employees.funcao,
           employeeCargo: employees.cargo,
+          employeeFotoUrl: employees.fotoUrl,
         })
         .from(atestados)
         .leftJoin(employees, eq(atestados.employeeId, employees.id))
@@ -135,7 +136,7 @@ export const sstAnalyticsRouter = router({
       // top funcionários (atestados)
       const funcMap = new Map<
         number,
-        { employeeId: number; nome: string; matricula: string | null; codigoInterno: string | null; funcao: string | null; quantidade: number; dias: number }
+        { employeeId: number; nome: string; matricula: string | null; codigoInterno: string | null; funcao: string | null; fotoUrl: string | null; quantidade: number; dias: number }
       >();
       for (const r of atRows) {
         const cur = funcMap.get(r.employeeId) ?? {
@@ -144,6 +145,7 @@ export const sstAnalyticsRouter = router({
           matricula: r.employeeMatricula || null,
           codigoInterno: r.employeeCodigoInterno || null,
           funcao: r.employeeFuncao || r.employeeCargo || null,
+          fotoUrl: r.employeeFotoUrl || null,
           quantidade: 0,
           dias: 0,
         };
@@ -181,6 +183,7 @@ export const sstAnalyticsRouter = router({
           employeeCodigoInterno: employees.codigoInterno,
           employeeFuncao: employees.funcao,
           employeeCargo: employees.cargo,
+          employeeFotoUrl: employees.fotoUrl,
         })
         .from(accidents)
         .leftJoin(employees, eq(accidents.employeeId, employees.id))
@@ -515,7 +518,7 @@ export const sstAnalyticsRouter = router({
       // top funcionários (acidentes)
       const funcAcMap = new Map<
         number,
-        { employeeId: number; nome: string; matricula: string | null; codigoInterno: string | null; funcao: string | null; quantidade: number; dias: number }
+        { employeeId: number; nome: string; matricula: string | null; codigoInterno: string | null; funcao: string | null; fotoUrl: string | null; quantidade: number; dias: number }
       >();
       for (const r of acRows) {
         const cur = funcAcMap.get(r.employeeId) ?? {
@@ -524,6 +527,7 @@ export const sstAnalyticsRouter = router({
           matricula: r.employeeMatricula || null,
           codigoInterno: r.employeeCodigoInterno || null,
           funcao: r.employeeFuncao || r.employeeCargo || null,
+          fotoUrl: r.employeeFotoUrl || null,
           quantidade: 0,
           dias: 0,
         };

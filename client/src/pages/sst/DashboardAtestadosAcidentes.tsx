@@ -13,7 +13,7 @@ import {
   HeartPulse, AlertTriangle, FileWarning, Activity, Users, Clock,
   TrendingUp, TrendingDown, Stethoscope, ShieldAlert, FileCheck2, Calendar, RefreshCw,
   BarChart3, ArrowDown, ArrowUp, Layers, MapPin, AlarmClock, DollarSign,
-  CalendarClock, Repeat, CalendarDays,
+  CalendarClock, Repeat, CalendarDays, User as UserIcon, X as XIcon,
 } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -26,6 +26,45 @@ import { EmployeeDetailDialog } from "@/components/sst/EmployeeDetailDialog";
 function truncate(s: string, n = 22) {
   if (!s) return "";
   return s.length > n ? s.slice(0, n - 1) + "…" : s;
+}
+
+// Rev. 1976 — Avatar do funcionário (miniatura clicável que abre modal de zoom).
+// Mostra foto se houver fotoUrl; senão, círculo com iniciais sobre fundo cinza.
+function EmployeeAvatar({ fotoUrl, nome, onZoom }: { fotoUrl: string | null | undefined; nome: string; onZoom: (url: string, nome: string) => void }) {
+  const iniciais = (nome || "?")
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((p) => p[0]?.toUpperCase() || "")
+    .join("") || "?";
+  if (!fotoUrl) {
+    return (
+      <div
+        className="flex-shrink-0 w-9 h-9 rounded-full bg-gradient-to-br from-slate-200 to-slate-300 flex items-center justify-center text-[11px] font-semibold text-slate-600 border border-slate-300"
+        title={nome}
+        aria-label={`Sem foto cadastrada para ${nome}`}
+      >
+        {iniciais}
+      </div>
+    );
+  }
+  return (
+    <button
+      type="button"
+      className="flex-shrink-0 w-9 h-9 rounded-full overflow-hidden border border-slate-300 hover:ring-2 hover:ring-blue-400 hover:ring-offset-1 transition-all focus:outline-none focus:ring-2 focus:ring-blue-500"
+      onClick={(e) => { e.stopPropagation(); onZoom(fotoUrl, nome); }}
+      title={`Ampliar foto de ${nome}`}
+      aria-label={`Ampliar foto de ${nome}`}
+    >
+      <img
+        src={fotoUrl}
+        alt={nome}
+        className="w-full h-full object-cover"
+        loading="lazy"
+        onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
+      />
+    </button>
+  );
 }
 
 const COLORS = ["#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#ec4899", "#06b6d4", "#84cc16", "#f97316", "#6366f1"];
@@ -116,6 +155,8 @@ export default function DashboardAtestadosAcidentes() {
   const [indicadorDetalhe, setIndicadorDetalhe] = useState<{ titulo: string; descricao: string; lista: any[] } | null>(null);
   const [reincidenciaDetalhe, setReincidenciaDetalhe] = useState(false);
   const [diaSemanaDetalhe, setDiaSemanaDetalhe] = useState<{ tipo: "atestado" | "acidente"; diaIdx: number; dia: string } | null>(null);
+  // Rev. 1976 — Modal de foto ampliada do funcionário (clique na miniatura)
+  const [fotoZoom, setFotoZoom] = useState<{ url: string; nome: string } | null>(null);
 
   const diaSemanaQuery = trpc.sstAnalytics.funcionariosPorDiaSemana.useQuery(
     {
@@ -633,15 +674,20 @@ export default function DashboardAtestadosAcidentes() {
                           <tr key={f.employeeId} className="hover:bg-gray-50">
                             <td className="px-3 py-2 text-gray-500">{i + 1}</td>
                             <td className="px-3 py-2 font-medium">
-                              <button
-                                type="button"
-                                className="text-left text-blue-700 hover:underline hover:text-blue-900"
-                                onClick={() => setSelectedEmployeeId(f.employeeId)}
-                                title="Ver todos os atestados deste funcionário"
-                              >
-                                {f.nome}
-                              </button>
-                              {f.codigoInterno ? <span className="text-xs text-gray-400 ml-1">#{f.codigoInterno}</span> : (f.matricula ? <span className="text-xs text-gray-400 ml-1">#{f.matricula}</span> : null)}
+                              <div className="flex items-center gap-2">
+                                <EmployeeAvatar fotoUrl={(f as any).fotoUrl} nome={f.nome} onZoom={(url, nome) => setFotoZoom({ url, nome })} />
+                                <div className="min-w-0">
+                                  <button
+                                    type="button"
+                                    className="text-left text-blue-700 hover:underline hover:text-blue-900"
+                                    onClick={() => setSelectedEmployeeId(f.employeeId)}
+                                    title="Ver todos os atestados deste funcionário"
+                                  >
+                                    {f.nome}
+                                  </button>
+                                  {f.codigoInterno ? <span className="text-xs text-gray-400 ml-1">#{f.codigoInterno}</span> : (f.matricula ? <span className="text-xs text-gray-400 ml-1">#{f.matricula}</span> : null)}
+                                </div>
+                              </div>
                             </td>
                             <td className="px-3 py-2 text-gray-600">{f.funcao || "—"}</td>
                             <td className="px-3 py-2 text-right font-semibold text-emerald-700">{f.quantidade}</td>
@@ -780,15 +826,20 @@ export default function DashboardAtestadosAcidentes() {
                           <tr key={f.employeeId} className="hover:bg-gray-50">
                             <td className="px-3 py-2 text-gray-500">{i + 1}</td>
                             <td className="px-3 py-2 font-medium">
-                              <button
-                                type="button"
-                                className="text-left text-blue-700 hover:underline hover:text-blue-900"
-                                onClick={() => setSelectedEmployeeId(f.employeeId)}
-                                title="Ver todos os acidentes deste funcionário"
-                              >
-                                {f.nome}
-                              </button>
-                              {f.codigoInterno ? <span className="text-xs text-gray-400 ml-1">#{f.codigoInterno}</span> : (f.matricula ? <span className="text-xs text-gray-400 ml-1">#{f.matricula}</span> : null)}
+                              <div className="flex items-center gap-2">
+                                <EmployeeAvatar fotoUrl={(f as any).fotoUrl} nome={f.nome} onZoom={(url, nome) => setFotoZoom({ url, nome })} />
+                                <div className="min-w-0">
+                                  <button
+                                    type="button"
+                                    className="text-left text-blue-700 hover:underline hover:text-blue-900"
+                                    onClick={() => setSelectedEmployeeId(f.employeeId)}
+                                    title="Ver todos os acidentes deste funcionário"
+                                  >
+                                    {f.nome}
+                                  </button>
+                                  {f.codigoInterno ? <span className="text-xs text-gray-400 ml-1">#{f.codigoInterno}</span> : (f.matricula ? <span className="text-xs text-gray-400 ml-1">#{f.matricula}</span> : null)}
+                                </div>
+                              </div>
                             </td>
                             <td className="px-3 py-2 text-gray-600">{f.funcao || "—"}</td>
                             <td className="px-3 py-2 text-right font-semibold text-red-700">{f.quantidade}</td>
@@ -1275,6 +1326,41 @@ export default function DashboardAtestadosAcidentes() {
           dataInicio={dataInicio}
           dataFim={dataFim}
         />
+
+        {/* Rev. 1976 — Modal de foto ampliada (lightbox). Clica no fundo ou ESC fecha. */}
+        <Dialog open={fotoZoom !== null} onOpenChange={(v) => { if (!v) setFotoZoom(null); }}>
+          <DialogContent
+            resizable={false}
+            className="max-w-none w-screen h-screen sm:w-auto sm:h-auto sm:max-w-[90vw] sm:max-h-[90vh] p-0 overflow-hidden bg-black/95 sm:rounded-xl border-0 flex flex-col items-center justify-center"
+          >
+            <DialogHeader className="sr-only">
+              <DialogTitle>{fotoZoom?.nome || "Foto do funcionário"}</DialogTitle>
+            </DialogHeader>
+            <button
+              type="button"
+              onClick={() => setFotoZoom(null)}
+              className="absolute top-3 right-3 z-10 w-10 h-10 rounded-full bg-white/10 hover:bg-white/25 text-white flex items-center justify-center transition-colors"
+              aria-label="Fechar"
+            >
+              <XIcon className="w-5 h-5" />
+            </button>
+            {fotoZoom && (
+              <>
+                <img
+                  src={fotoZoom.url}
+                  alt={fotoZoom.nome}
+                  className="max-w-full max-h-[calc(100vh-80px)] sm:max-h-[80vh] object-contain"
+                />
+                <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent px-6 py-4 text-white text-center">
+                  <div className="flex items-center justify-center gap-2 text-sm font-medium">
+                    <UserIcon className="w-4 h-4" />
+                    {fotoZoom.nome}
+                  </div>
+                </div>
+              </>
+            )}
+          </DialogContent>
+        </Dialog>
 
         {/* Memória de cálculo do Custo Estimado de Afastamento */}
         <Dialog open={showCustoDetalhe} onOpenChange={setShowCustoDetalhe}>
