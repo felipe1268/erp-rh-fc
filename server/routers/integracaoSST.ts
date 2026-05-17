@@ -494,9 +494,32 @@ export const integracaoSSTRouter = router({
         conds.push(eq(sstIntegracaoRegistros.status, input.status));
       }
       if (input.obraId) conds.push(eq(sstIntegracaoRegistros.obraId, input.obraId));
-      return db.select().from(sstIntegracaoRegistros)
+      // Rev. 2049 — leftJoin com config pra trazer `notaMinima` real
+      // (usado pelo certificado em AprovadosTab; antes era hardcoded 70).
+      const rows = await db
+        .select({
+          r: sstIntegracaoRegistros,
+          configNotaMinima: sstIntegracaoConfig.notaMinima,
+          configTitulo: sstIntegracaoConfig.titulo,
+        })
+        .from(sstIntegracaoRegistros)
+        .leftJoin(sstIntegracaoConfig, and(
+          eq(sstIntegracaoConfig.id, sstIntegracaoRegistros.configId),
+          // Rev. 2049 hardening: amarra o join por companyId pra evitar
+          // qualquer acoplamento cruzado entre tenants em caso de dados
+          // inconsistentes (defesa em profundidade — `assertCompanyAccess`
+          // acima já valida acesso à empresa do registro).
+          eq(sstIntegracaoConfig.companyId, sstIntegracaoRegistros.companyId),
+        ))
         .where(and(...conds))
         .orderBy(desc(sstIntegracaoRegistros.createdAt));
+      // Achata pra manter compatibilidade com chamadores existentes
+      // (HistoricoTab/AprovadosTab acessam r.id, r.employeeNome, etc.).
+      return rows.map((row) => ({
+        ...row.r,
+        configNotaMinima: row.configNotaMinima ?? null,
+        configTitulo: row.configTitulo ?? null,
+      }));
     }),
 
   // Rev. 2044 — Excluir registros do Histórico (soft-delete via deletedAt).

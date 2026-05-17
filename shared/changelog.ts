@@ -1,6 +1,97 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2049 — SST · Integração · NOVA ABA "Aprovados" com
+ * acesso direto ao Certificado (Visualizar/Baixar) + atalho
+ * pro Raio-X do colaborador. Reforça mensagem ao usuário de
+ * que o certificado FICA registrado no Raio-X.
+ *
+ * Pedido direto do usuário (IMG_0935): "Coloca um campo de
+ * aprovados tbm e quero que o certificado fique salvo no
+ * raio x do funcionário para registro".
+ *
+ * Contexto: a aba Histórico já tinha filtro de status, mas
+ * misturava aprovados com reprovados/vencidos/em andamento.
+ * O usuário queria uma vitrine LIMPA dos aprovados (com a
+ * sensação clara de "aqui estão os certificados emitidos") +
+ * confirmação visual de que o certificado fica salvo/registrado.
+ *
+ * Sobre "ficar salvo no Raio-X": o certificado é REGENERÁVEL
+ * 100% client-side (Rev. 2048) a partir do próprio registro
+ * (employeeNome, CPF, função, obra, nota, datas) — que é a
+ * fonte da verdade no banco. Logo, o certificado JÁ é
+ * persistente (todo aprovado pode emitir o PDF idêntico a
+ * qualquer momento, do Raio-X via Rev. 2035/2048 ou agora
+ * direto desta aba). Não é necessário (nem desejável) subir
+ * o PDF pra storage — economiza I/O, evita drift de versão
+ * de template, e mantém custo zero (R-001/R-007/R-010 OK).
+ * A coluna `sstIntegracaoRegistros.certificadoUrl` no schema
+ * fica reservada pra evolução futura caso queira assinatura
+ * digital ou QR code de validação externa.
+ *
+ * Mudanças (1 arquivo client + version):
+ *
+ * (A) `client/src/pages/sst/IntegracaoSST.tsx`
+ *     - Imports: ícones Award/Download/FileText do lucide;
+ *       Link as WouterLink do wouter (rota /raio-x/:id);
+ *       `generateCertificadoIntegracaoSstPdf` (Rev. 2048).
+ *     - Nova entrada de tab "aprovados" (Award icon, label
+ *       "Aprovados", desc "Certificados emitidos · ficam
+ *       salvos no Raio-X do colaborador") posicionada ENTRE
+ *       Pendentes e Histórico — fluxo natural: pendente →
+ *       fez → aprovado.
+ *     - Novo `<TabsContent value="aprovados">` renderizando
+ *       o novo componente `AprovadosTab`.
+ *     - Componente `AprovadosTab(companyId)`:
+ *       * Query `listarRegistros({status:'aprovado'})` — já
+ *         existia no router, sem mudança server.
+ *       * Banner emerald no topo com ícone Award explicando
+ *         que "todo colaborador aprovado ganha um certificado
+ *         que fica registrado no Raio-X do colaborador e pode
+ *         ser visualizado/impresso/baixado a qualquer momento".
+ *       * Busca client-side por nome/CPF/obra.
+ *       * Tabela: Colaborador · CPF · Função · Obra · Nota
+ *         (badge verde) · Realização · Validade (vermelho
+ *         bold se vencido) · Certificado (botões Ver/PDF
+ *         lado a lado, mesmas cores da Rev. 2048) · Raio-X
+ *         (link direto pra /raio-x/{employeeId} com ícone
+ *         FileText).
+ *       * `certParamsFromRegistro(r)` factory DRY que mapeia
+ *         registro → params do gerador de PDF.
+ *       * Botão "Ver": abre `window.open('about:blank')`
+ *         SÍNCRONO antes do await (lição Rev. 2039 — defesa
+ *         contra pop-up blocker Safari/iPad) e passa winRef
+ *         pra gerar PDF em modo preview.
+ *       * Botão "PDF": baixa direto via mode 'save' default.
+ *       * `overflow-x-auto` na tabela (iPad).
+ *
+ * (B) `shared/version.ts` → 2049.
+ *
+ * R-001/R-007/R-010 OK: ZERO mudança server, ZERO SQL, ZERO
+ * schema, ZERO nova dependência. Pure client + reuso de
+ * router/handler existente (`listarRegistros`).
+ *
+ * Preservado: Rev. 2048/2047/2046/2045/2044/2043 INTACTAS.
+ * HistoricoTab INTACTO (continua com TODOS os status; quem
+ * quiser ver reprovados/vencidos continua usando o filtro
+ * lá). RaioXFuncionario INTACTO (botões Ver/Baixar da
+ * Rev. 2048 continuam funcionando).
+ *
+ * Follow-up:
+ *   1. Botão "Reciclar agora" direto na aba Aprovados pra
+ *      colaboradores com integração vencida (hoje só some
+ *      pra Pendentes via job, mas seria útil 1-click reset).
+ *   2. Exportar CSV/XLSX da lista de aprovados (filtros
+ *      ativos) — útil pra auditoria SST e fiscal trabalhista.
+ *   3. Enviar certificado por e-mail ao colaborador pelo
+ *      botão direto na linha (anexo PDF).
+ *   4. QR Code no certificado com URL pública de validação
+ *      (registroId + hash → JSON status/nota/validade pra
+ *      cliente externo auditar) — já listado na Rev. 2048.
+ *   5. Quando virar multi-tenant de verdade (hoje mono-FC),
+ *      ler logo dinâmico de `companies.logoUrl` em vez do
+ *      `/logo-fc.jpg` fixo.
+ *
  * Rev. 2048 — SST · Integração · Certificado de Aprovação
  * ganha LOGO da FC + cores da marca + headline "Parabéns!" +
  * destaque na data de validade + botão "Visualizar / Imprimir"

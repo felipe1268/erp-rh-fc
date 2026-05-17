@@ -22,7 +22,10 @@ import {
   ChevronDown, ChevronRight, Loader2, ClipboardList, BarChart3, RefreshCw, Search,
   Play, ExternalLink, Save, X, Film, UserPlus, Send, Link, Share2, MessageSquare,
   UploadCloud, FileVideo, ChevronUp, ShieldCheck, Building2, Sparkles, HardHat, Info,
+  Award, Download, FileText,
 } from "lucide-react";
+import { Link as WouterLink } from "wouter";
+import { generateCertificadoIntegracaoSstPdf } from "@/lib/certificadoIntegracaoSstPdf";
 
 function formatDate(d: string | null | undefined) {
   if (!d) return "-";
@@ -60,6 +63,7 @@ export default function IntegracaoSST() {
     { value: "videos", label: "Vídeos", icon: Film, desc: "Conteúdo de treinamento" },
     { value: "config", label: "Configurações", icon: Settings, desc: "Regras e fluxo" },
     { value: "pendentes", label: "Pendentes", icon: Clock, desc: "A concluir" },
+    { value: "aprovados", label: "Aprovados", icon: Award, desc: "Certificados emitidos · ficam salvos no Raio-X do colaborador" },
     { value: "historico", label: "Histórico", icon: History, desc: "Concluídos" },
     { value: "sessoes", label: "Sessões", icon: Users, desc: "Turmas presenciais" },
   ];
@@ -126,6 +130,7 @@ export default function IntegracaoSST() {
           <TabsContent value="videos" className="mt-0"><VideosTab companyId={companyId} /></TabsContent>
           <TabsContent value="config" className="mt-0"><ConfigTab companyId={companyId} /></TabsContent>
           <TabsContent value="pendentes" className="mt-0"><PendentesTab companyId={companyId} /></TabsContent>
+          <TabsContent value="aprovados" className="mt-0"><AprovadosTab companyId={companyId} /></TabsContent>
           <TabsContent value="historico" className="mt-0"><HistoricoTab companyId={companyId} /></TabsContent>
           <TabsContent value="sessoes" className="mt-0"><SessoesTab companyId={companyId} /></TabsContent>
         </Tabs>
@@ -1598,6 +1603,188 @@ function PendentesTab({ companyId }: { companyId: number }) {
           )}
         </DialogContent>
       </Dialog>
+    </div>
+  );
+}
+
+// Rev. 2049 — Nova aba "Aprovados" dedicada aos certificados emitidos.
+// Pedido do usuário (IMG_0935): "Coloca um campo de aprovados tbm e quero que
+// o certificado fique salvo no raio x do funcionário para registro".
+// O certificado é gerado client-side (Rev. 2048) e é REGENERÁVEL a partir do
+// próprio registro (mesma fonte da verdade) — já fica "salvo" no Raio-X do
+// colaborador via botões da Rev. 2035/2048. Esta aba expõe os mesmos botões
+// (Visualizar/Baixar) lado a lado e oferece atalho direto pro Raio-X.
+function AprovadosTab({ companyId }: { companyId: number }) {
+  const registros = trpc.integracaoSST.listarRegistros.useQuery(
+    { companyId, status: "aprovado" },
+    { enabled: companyId > 0 }
+  );
+  const [searchTerm, setSearchTerm] = useState("");
+
+  const filtered = useMemo(() => {
+    const list = registros.data || [];
+    if (!searchTerm) return list;
+    const q = searchTerm.toLowerCase();
+    return list.filter((r: any) =>
+      r.employeeNome?.toLowerCase().includes(q) ||
+      r.employeeCpf?.includes(searchTerm) ||
+      r.obraNome?.toLowerCase().includes(q)
+    );
+  }, [registros.data, searchTerm]);
+
+  const certParamsFromRegistro = (r: any) => ({
+    registroId: r.id,
+    employeeNome: r.employeeNome ?? "",
+    employeeCpf: r.employeeCpf ?? "",
+    employeeFuncao: r.employeeFuncao ?? null,
+    obraNome: r.obraNome ?? null,
+    // Rev. 2049 follow-up architect: usa título/notaMinima reais da
+    // configuração (server faz leftJoin em listarRegistros) — antes
+    // notaMinima era 70 hardcoded e o título ficava null.
+    configNome: r.configTitulo ?? null,
+    dataRealizacao: r.dataRealizacao ?? null,
+    dataValidade: r.dataValidade ?? null,
+    nota: Number(r.nota || 0),
+    notaMinima: Number(r.configNotaMinima ?? 70),
+    acertos: null,
+    totalPerguntas: null,
+    tentativa: r.tentativas ?? null,
+  });
+
+  const visualizar = async (r: any) => {
+    const winRef = window.open("about:blank", "_blank");
+    try {
+      await generateCertificadoIntegracaoSstPdf({ ...certParamsFromRegistro(r), mode: "preview", winRef });
+    } catch (e: any) {
+      try { winRef?.close(); } catch {}
+      toast.error(e?.message || "Erro ao gerar certificado");
+    }
+  };
+  const baixar = async (r: any) => {
+    try {
+      await generateCertificadoIntegracaoSstPdf(certParamsFromRegistro(r));
+    } catch (e: any) {
+      toast.error(e?.message || "Erro ao gerar certificado");
+    }
+  };
+
+  if (!companyId) return <p className="text-muted-foreground p-4">Selecione uma empresa.</p>;
+
+  const total = (registros.data || []).length;
+
+  return (
+    <div className="space-y-4">
+      {/* Banner explicativo */}
+      <div className="rounded-lg border border-emerald-200 bg-emerald-50/60 p-3 flex gap-3 items-start">
+        <Award className="h-5 w-5 text-emerald-600 mt-0.5 shrink-0" />
+        <div className="text-sm text-emerald-900">
+          <p className="font-semibold">Certificados emitidos</p>
+          <p className="text-emerald-800/90">
+            Todo colaborador aprovado ganha um certificado, que fica registrado no <strong>Raio-X do colaborador</strong> e pode ser
+            visualizado / impresso / baixado a qualquer momento (também direto aqui).
+          </p>
+        </div>
+      </div>
+
+      <div className="flex justify-between items-center flex-wrap gap-2">
+        <h3 className="font-semibold">Aprovados {total > 0 && <span className="text-muted-foreground font-normal">· {total}</span>}</h3>
+        <div className="relative">
+          <Search className="h-4 w-4 absolute left-2 top-2.5 text-muted-foreground" />
+          <Input value={searchTerm} onChange={e => setSearchTerm(e.target.value)} placeholder="Buscar nome, CPF, obra..." className="pl-8 w-64" />
+        </div>
+      </div>
+
+      {/* Rev. 2049 follow-up architect: estado de erro explícito (com retry)
+          pra não mascarar falha operacional como "lista vazia". */}
+      {registros.isError ? (
+        <div className="rounded-lg border border-red-200 bg-red-50 p-4 flex items-start gap-3">
+          <AlertTriangle className="h-5 w-5 text-red-600 mt-0.5 shrink-0" />
+          <div className="flex-1">
+            <p className="font-semibold text-red-900">Falha ao carregar aprovados</p>
+            <p className="text-sm text-red-800/90">{(registros.error as any)?.message || "Erro desconhecido."}</p>
+          </div>
+          <Button size="sm" variant="outline" onClick={() => registros.refetch()}>
+            <RefreshCw className="h-4 w-4 mr-1" /> Tentar novamente
+          </Button>
+        </div>
+      ) : registros.isLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : (
+        <div className="rounded-md border overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead><tr className="border-b bg-muted/50">
+              <th className="p-2 text-left">Colaborador</th>
+              <th className="p-2 text-left">CPF</th>
+              <th className="p-2 text-left">Função</th>
+              <th className="p-2 text-left">Obra</th>
+              <th className="p-2 text-center">Nota</th>
+              <th className="p-2 text-left">Realização</th>
+              <th className="p-2 text-left">Validade</th>
+              <th className="p-2 text-left">Certificado</th>
+              <th className="p-2 text-left w-24">Raio-X</th>
+            </tr></thead>
+            <tbody>
+              {filtered.length === 0 && (
+                <tr><td colSpan={9} className="p-6 text-center text-muted-foreground">
+                  {searchTerm ? "Nenhum aprovado encontrado para a busca." : "Nenhuma integração aprovada ainda."}
+                </td></tr>
+              )}
+              {filtered.map((r: any) => {
+                const venceu = r.dataValidade && new Date(r.dataValidade) < new Date();
+                return (
+                  <tr key={r.id} className="border-b hover:bg-emerald-50/30">
+                    <td className="p-2 font-medium">{r.employeeNome || "-"}</td>
+                    <td className="p-2 text-xs">{r.employeeCpf || "-"}</td>
+                    <td className="p-2 text-xs">{r.employeeFuncao || "-"}</td>
+                    <td className="p-2 text-xs">{r.obraNome || "-"}</td>
+                    <td className="p-2 text-center">
+                      <Badge className="bg-emerald-100 text-emerald-800">{r.nota ? `${r.nota}%` : "-"}</Badge>
+                    </td>
+                    <td className="p-2 text-xs">{formatDate(r.dataRealizacao)}</td>
+                    <td className="p-2 text-xs">
+                      {r.dataValidade ? (
+                        <span className={venceu ? "text-red-600 font-semibold" : "text-emerald-700"}>
+                          {formatDate(r.dataValidade)}{venceu ? " (vencido)" : ""}
+                        </span>
+                      ) : "-"}
+                    </td>
+                    <td className="p-2">
+                      <div className="flex gap-1">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 border-emerald-300 text-emerald-700 hover:bg-emerald-50"
+                          onClick={() => visualizar(r)}
+                          title="Visualizar / Imprimir certificado"
+                        >
+                          <Eye className="h-3.5 w-3.5 mr-1" /> Ver
+                        </Button>
+                        <Button
+                          size="sm"
+                          className="h-7 bg-emerald-600 hover:bg-emerald-700"
+                          onClick={() => baixar(r)}
+                          title="Baixar certificado em PDF"
+                        >
+                          <Download className="h-3.5 w-3.5 mr-1" /> PDF
+                        </Button>
+                      </div>
+                    </td>
+                    <td className="p-2">
+                      {r.employeeId ? (
+                        <WouterLink href={`/raio-x/${r.employeeId}`}>
+                          <Button size="sm" variant="ghost" className="h-7 text-xs" title="Abrir Raio-X do colaborador">
+                            <FileText className="h-3.5 w-3.5 mr-1" /> Abrir
+                          </Button>
+                        </WouterLink>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">-</span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }
