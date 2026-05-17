@@ -21,6 +21,11 @@ export interface CertificadoIntegracaoSstParams {
    *  save() se for bloqueado. */
   mode?: "save" | "preview";
   winRef?: Window | null;
+  // Rev. 2052 — Assinatura digital do TST (FCSign). Quando presente, embute a
+  // imagem sobre a linha de assinatura e usa o nome do assinante + data abaixo.
+  assinaturaTstBase64?: string | null;
+  assinaturaTstNome?: string | null;
+  assinaturaTstAssinadaEm?: string | null;
 }
 
 function fmtDate(iso?: string | null): string {
@@ -210,13 +215,43 @@ export async function generateCertificadoIntegracaoSstPdf(p: CertificadoIntegrac
   pdf.setTextColor(...FC_GREEN);
   pdf.text(`Válido até: ${fmtDate(p.dataValidade)}`, W / 2 + 70, 156, { align: "center" });
 
-  // Linha de assinatura
+  // Linha de assinatura (Rev. 2052 — se houver assinatura do TST, embute imagem
+  // sobre a linha + nome do assinante + data; senão mantém linha em branco)
+  const sigCX = W / 2;
+  const sigLineY = 175;
+  if (p.assinaturaTstBase64 && p.assinaturaTstBase64.startsWith("data:image/png;base64,")) {
+    try {
+      // Caixa de assinatura 70mm x 18mm centrada sobre a linha (canvas ~600x180 px)
+      const sigW = 70;
+      const sigH = 18;
+      pdf.addImage(p.assinaturaTstBase64, "PNG", sigCX - sigW / 2, sigLineY - sigH - 1, sigW, sigH, undefined, "FAST");
+    } catch {
+      // se addImage falhar, ignora e mantém só a linha
+    }
+  }
   pdf.setDrawColor(150, 150, 150);
-  pdf.line(W / 2 - 50, 175, W / 2 + 50, 175);
-  pdf.setFont("helvetica", "normal");
+  pdf.line(sigCX - 50, sigLineY, sigCX + 50, sigLineY);
+  pdf.setFont("helvetica", "bold");
   pdf.setFontSize(9);
-  pdf.setTextColor(80, 80, 80);
-  pdf.text("Técnico de Segurança do Trabalho (TST)", W / 2, 180, { align: "center" });
+  pdf.setTextColor(...FC_NAVY);
+  const nomeTst = (p.assinaturaTstNome || "").trim();
+  if (nomeTst) {
+    pdf.text(nomeTst.toUpperCase(), sigCX, sigLineY + 5, { align: "center" });
+    pdf.setFont("helvetica", "normal");
+    pdf.setFontSize(8);
+    pdf.setTextColor(80, 80, 80);
+    pdf.text("Técnico de Segurança do Trabalho (TST)", sigCX, sigLineY + 10, { align: "center" });
+    if (p.assinaturaTstAssinadaEm) {
+      pdf.setFontSize(7);
+      pdf.setTextColor(120, 120, 120);
+      pdf.text(`Assinado eletronicamente em ${fmtDateTime(p.assinaturaTstAssinadaEm)}`, sigCX, sigLineY + 14, { align: "center" });
+    }
+  } else {
+    pdf.setFont("helvetica", "normal");
+    pdf.setFontSize(9);
+    pdf.setTextColor(80, 80, 80);
+    pdf.text("Técnico de Segurança do Trabalho (TST)", sigCX, sigLineY + 5, { align: "center" });
+  }
 
   // Rodapé
   pdf.setFont("helvetica", "italic");

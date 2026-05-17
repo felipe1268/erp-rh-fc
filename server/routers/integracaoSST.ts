@@ -550,6 +550,90 @@ export const integracaoSSTRouter = router({
       }
     }),
 
+  // Rev. 2052 — Assinatura digital do TST (FCSign canvas) no certificado de aprovação.
+  // Só permite assinar registros aprovados desta empresa (cross-tenant).
+  // Valida base64 PNG (prefixo data:image/png) e tamanho (<=2MB compactado).
+  assinarComoTst: protectedProcedure
+    .input(z.object({
+      companyId: z.number().int().positive(),
+      registroId: z.number().int().positive(),
+      assinaturaBase64: z.string().min(100).max(3_000_000), // ~2.2MB base64 (1.6MB binário)
+      nomeTst: z.string().trim().min(2).max(255),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      assertCompanyAccess(ctx, input.companyId);
+      if (!input.assinaturaBase64.startsWith("data:image/png;base64,")) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Assinatura inválida (deve ser PNG base64)" });
+      }
+      const db = (await getDb())!;
+      try {
+        const [reg] = await db
+          .select({ id: sstIntegracaoRegistros.id, status: sstIntegracaoRegistros.status })
+          .from(sstIntegracaoRegistros)
+          .where(and(
+            eq(sstIntegracaoRegistros.id, input.registroId),
+            eq(sstIntegracaoRegistros.companyId, input.companyId),
+            isNull(sstIntegracaoRegistros.deletedAt),
+          ));
+        if (!reg) throw new TRPCError({ code: "NOT_FOUND", message: "Registro não encontrado nesta empresa" });
+        if (reg.status !== "aprovado") {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Apenas integrações aprovadas podem ser assinadas pelo TST" });
+        }
+        // Rev. 2052 follow-up architect: repete `isNull(deletedAt)` no UPDATE
+        // pra blindar contra race condition (registro deletado entre SELECT e
+        // UPDATE não deve ser tocado).
+        await db.update(sstIntegracaoRegistros)
+          .set({
+            assinaturaTstBase64: input.assinaturaBase64,
+            assinaturaTstNome: input.nomeTst,
+            assinaturaTstAssinadaEm: sql`NOW()`,
+            updatedAt: sql`NOW()`,
+          })
+          .where(and(
+            eq(sstIntegracaoRegistros.id, input.registroId),
+            eq(sstIntegracaoRegistros.companyId, input.companyId),
+            isNull(sstIntegracaoRegistros.deletedAt),
+          ));
+        return { success: true };
+      } catch (err: any) {
+        if (err instanceof TRPCError) throw err;
+        console.error("[assinarComoTst] FAIL", { input: { ...input, assinaturaBase64: `<${input.assinaturaBase64.length} chars>` }, userId: ctx.user?.id, err: err?.message });
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Falha ao salvar assinatura" });
+      }
+    }),
+
+  // Rev. 2052 — Remove a assinatura do TST (caso TST errou, queira reassinar).
+  removerAssinaturaTst: protectedProcedure
+    .input(z.object({
+      companyId: z.number().int().positive(),
+      registroId: z.number().int().positive(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      assertCompanyAccess(ctx, input.companyId);
+      const db = (await getDb())!;
+      try {
+        const result = await db.update(sstIntegracaoRegistros)
+          .set({
+            assinaturaTstBase64: null,
+            assinaturaTstNome: null,
+            assinaturaTstAssinadaEm: null,
+            updatedAt: sql`NOW()`,
+          })
+          .where(and(
+            eq(sstIntegracaoRegistros.id, input.registroId),
+            eq(sstIntegracaoRegistros.companyId, input.companyId),
+            isNull(sstIntegracaoRegistros.deletedAt),
+          ))
+          .returning({ id: sstIntegracaoRegistros.id });
+        if (result.length === 0) throw new TRPCError({ code: "NOT_FOUND", message: "Registro não encontrado" });
+        return { success: true };
+      } catch (err: any) {
+        if (err instanceof TRPCError) throw err;
+        console.error("[removerAssinaturaTst] FAIL", { input, userId: ctx.user?.id, err: err?.message });
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Falha ao remover assinatura" });
+      }
+    }),
+
   // Rev. 2044 — Editar registro (somente metadados que fazem sentido pós-criação:
   // obra associada). Status/nota/respostas seguem imutáveis pelo cliente —
   // pra "refazer" o usuário exclui e o colaborador volta pra pendentes.

@@ -22,7 +22,7 @@ import {
   ChevronDown, ChevronRight, Loader2, ClipboardList, BarChart3, RefreshCw, Search,
   Play, ExternalLink, Save, X, Film, UserPlus, Send, Link, Share2, MessageSquare,
   UploadCloud, FileVideo, ChevronUp, ShieldCheck, Building2, Sparkles, HardHat, Info,
-  Award, Download, FileText,
+  Award, Download, FileText, PenLine, CheckCircle2,
 } from "lucide-react";
 import { Link as WouterLink } from "wouter";
 import { generateCertificadoIntegracaoSstPdf } from "@/lib/certificadoIntegracaoSstPdf";
@@ -1620,6 +1620,17 @@ function AprovadosTab({ companyId }: { companyId: number }) {
     { enabled: companyId > 0 }
   );
   const [searchTerm, setSearchTerm] = useState("");
+  // Rev. 2052 — modal de assinatura digital do TST (FCSign canvas)
+  const [assinandoReg, setAssinandoReg] = useState<any | null>(null);
+  const [confirmRemoverAss, setConfirmRemoverAss] = useState<any | null>(null);
+  const removerAssMut = trpc.integracaoSST.removerAssinaturaTst.useMutation({
+    onSuccess: () => {
+      toast.success("Assinatura removida");
+      registros.refetch();
+      setConfirmRemoverAss(null);
+    },
+    onError: (e) => toast.error(e.message),
+  });
 
   const filtered = useMemo(() => {
     const list = registros.data || [];
@@ -1649,6 +1660,11 @@ function AprovadosTab({ companyId }: { companyId: number }) {
     acertos: null,
     totalPerguntas: null,
     tentativa: r.tentativas ?? null,
+    // Rev. 2052 — assinatura digital do TST (FCSign) — quando presente, embute
+    // a imagem PNG sobre a linha de assinatura no PDF + nome + data.
+    assinaturaTstBase64: r.assinaturaTstBase64 ?? null,
+    assinaturaTstNome: r.assinaturaTstNome ?? null,
+    assinaturaTstAssinadaEm: r.assinaturaTstAssinadaEm ?? null,
   });
 
   const visualizar = async (r: any) => {
@@ -1718,12 +1734,13 @@ function AprovadosTab({ companyId }: { companyId: number }) {
               <th className="p-2 text-center">Nota</th>
               <th className="p-2 text-left">Realização</th>
               <th className="p-2 text-left">Validade</th>
+              <th className="p-2 text-left">Assinatura TST</th>
               <th className="p-2 text-left">Certificado</th>
               <th className="p-2 text-left w-24">Raio-X</th>
             </tr></thead>
             <tbody>
               {filtered.length === 0 && (
-                <tr><td colSpan={9} className="p-6 text-center text-muted-foreground">
+                <tr><td colSpan={10} className="p-6 text-center text-muted-foreground">
                   {searchTerm ? "Nenhum aprovado encontrado para a busca." : "Nenhuma integração aprovada ainda."}
                 </td></tr>
               )}
@@ -1745,6 +1762,34 @@ function AprovadosTab({ companyId }: { companyId: number }) {
                           {formatDate(r.dataValidade)}{venceu ? " (vencido)" : ""}
                         </span>
                       ) : "-"}
+                    </td>
+                    <td className="p-2">
+                      {r.assinaturaTstBase64 ? (
+                        <div className="flex items-center gap-1.5">
+                          <Badge className="bg-emerald-100 text-emerald-800 border-emerald-300 gap-1">
+                            <CheckCircle2 className="h-3 w-3" /> Assinado
+                          </Badge>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-6 w-6 p-0 text-red-600 hover:bg-red-50"
+                            onClick={() => setConfirmRemoverAss(r)}
+                            title="Remover assinatura (reassinar)"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      ) : (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 border-blue-300 text-blue-700 hover:bg-blue-50"
+                          onClick={() => setAssinandoReg(r)}
+                          title="Assinar digitalmente como TST"
+                        >
+                          <PenLine className="h-3.5 w-3.5 mr-1" /> Assinar
+                        </Button>
+                      )}
                     </td>
                     <td className="p-2">
                       <div className="flex gap-1">
@@ -1785,7 +1830,201 @@ function AprovadosTab({ companyId }: { companyId: number }) {
           </table>
         </div>
       )}
+
+      {/* Rev. 2052 — Modal de assinatura digital do TST (FCSign canvas) */}
+      {assinandoReg && (
+        <AssinarTstDialog
+          registro={assinandoReg}
+          companyId={companyId}
+          onClose={() => setAssinandoReg(null)}
+          onSigned={() => { setAssinandoReg(null); registros.refetch(); }}
+        />
+      )}
+
+      <AlertDialog open={!!confirmRemoverAss} onOpenChange={(open) => !open && !removerAssMut.isPending && setConfirmRemoverAss(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remover assinatura?</AlertDialogTitle>
+            <AlertDialogDescription>
+              A assinatura digital de <strong>{confirmRemoverAss?.assinaturaTstNome || "—"}</strong> em "{confirmRemoverAss?.employeeNome}" será apagada.
+              Você poderá assinar novamente. Esta ação não afeta a aprovação nem a nota do colaborador.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={removerAssMut.isPending}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={removerAssMut.isPending}
+              onClick={() => confirmRemoverAss && removerAssMut.mutate({ companyId, registroId: confirmRemoverAss.id })}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              {removerAssMut.isPending ? "Removendo..." : "Remover"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
+  );
+}
+
+// Rev. 2052 — Modal de captura de assinatura digital do TST (FCSign).
+// Reusa o padrão de canvas signature pad de EpiAssinatura.tsx: HTML5 Canvas
+// com handlers de touch+mouse, exporta PNG base64 via canvas.toDataURL.
+function AssinarTstDialog({ registro, companyId, onClose, onSigned }: {
+  registro: any; companyId: number; onClose: () => void; onSigned: () => void;
+}) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [isDrawing, setIsDrawing] = useState(false);
+  const [hasSignature, setHasSignature] = useState(false);
+  const [nomeTst, setNomeTst] = useState("");
+
+  const assinarMut = trpc.integracaoSST.assinarComoTst.useMutation({
+    onSuccess: () => {
+      toast.success("Assinatura registrada no certificado!");
+      onSigned();
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    const rect = canvas.getBoundingClientRect();
+    canvas.width = rect.width * 2;
+    canvas.height = rect.height * 2;
+    ctx.scale(2, 2);
+    ctx.strokeStyle = "#1a1a2e";
+    ctx.lineWidth = 2;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+  }, []);
+
+  const getPos = (e: React.TouchEvent | React.MouseEvent) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return { x: 0, y: 0 };
+    const rect = canvas.getBoundingClientRect();
+    if ("touches" in e) {
+      return { x: e.touches[0].clientX - rect.left, y: e.touches[0].clientY - rect.top };
+    }
+    return { x: (e as React.MouseEvent).clientX - rect.left, y: (e as React.MouseEvent).clientY - rect.top };
+  };
+
+  const startDraw = (e: React.TouchEvent | React.MouseEvent) => {
+    e.preventDefault();
+    const ctx = canvasRef.current?.getContext("2d");
+    if (!ctx) return;
+    setIsDrawing(true);
+    const pos = getPos(e);
+    ctx.beginPath();
+    ctx.moveTo(pos.x, pos.y);
+  };
+  const draw = (e: React.TouchEvent | React.MouseEvent) => {
+    e.preventDefault();
+    if (!isDrawing) return;
+    const ctx = canvasRef.current?.getContext("2d");
+    if (!ctx) return;
+    const pos = getPos(e);
+    ctx.lineTo(pos.x, pos.y);
+    ctx.stroke();
+    setHasSignature(true);
+  };
+  const stopDraw = () => setIsDrawing(false);
+
+  const clearCanvas = () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    setHasSignature(false);
+  };
+
+  const handleSave = () => {
+    const canvas = canvasRef.current;
+    if (!canvas || !hasSignature) return toast.error("Assine antes de confirmar");
+    if (nomeTst.trim().length < 2) return toast.error("Informe o nome do TST");
+    const dataUrl = canvas.toDataURL("image/png");
+    assinarMut.mutate({
+      companyId,
+      registroId: registro.id,
+      assinaturaBase64: dataUrl,
+      nomeTst: nomeTst.trim(),
+    });
+  };
+
+  return (
+    <Dialog open onOpenChange={(o) => !o && !assinarMut.isPending && onClose()}>
+      <DialogContent className="max-w-2xl">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <PenLine className="h-5 w-5 text-blue-600" />
+            Assinatura Digital do TST
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-4">
+          <div className="rounded-lg border border-blue-200 bg-blue-50/60 p-3 text-sm">
+            <p className="font-semibold text-blue-900">{registro.employeeNome}</p>
+            <p className="text-blue-800/90 text-xs">
+              CPF {registro.employeeCpf || "—"} · Nota {registro.nota || 0}% · Realização {formatDate(registro.dataRealizacao)}
+            </p>
+            <p className="text-blue-800/80 text-xs mt-1">
+              Sua assinatura será embutida no certificado e ficará disponível no Raio-X do colaborador.
+            </p>
+          </div>
+
+          <div>
+            <Label htmlFor="nomeTst">Nome do Técnico de Segurança do Trabalho *</Label>
+            <Input
+              id="nomeTst"
+              value={nomeTst}
+              onChange={(e) => setNomeTst(e.target.value)}
+              placeholder="Ex: João da Silva — TST 12345"
+              maxLength={255}
+              disabled={assinarMut.isPending}
+              className="mt-1"
+            />
+          </div>
+
+          <div>
+            <Label>Assinatura *</Label>
+            <div className="mt-1 border-2 border-dashed border-slate-300 rounded-lg bg-white">
+              <canvas
+                ref={canvasRef}
+                className="w-full h-48 touch-none rounded-lg cursor-crosshair"
+                onMouseDown={startDraw}
+                onMouseMove={draw}
+                onMouseUp={stopDraw}
+                onMouseLeave={stopDraw}
+                onTouchStart={startDraw}
+                onTouchMove={draw}
+                onTouchEnd={stopDraw}
+              />
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              Desenhe sua assinatura com o mouse ou dedo (iPad/celular).
+            </p>
+          </div>
+        </div>
+
+        <DialogFooter className="flex-col sm:flex-row gap-2">
+          <Button variant="outline" onClick={clearCanvas} disabled={assinarMut.isPending} className="sm:mr-auto">
+            <RefreshCw className="h-4 w-4 mr-1" /> Limpar
+          </Button>
+          <Button variant="outline" onClick={onClose} disabled={assinarMut.isPending}>
+            Cancelar
+          </Button>
+          <Button
+            onClick={handleSave}
+            disabled={assinarMut.isPending || !hasSignature || nomeTst.trim().length < 2}
+            className="bg-blue-600 hover:bg-blue-700"
+          >
+            {assinarMut.isPending ? <><Loader2 className="h-4 w-4 mr-1 animate-spin" /> Salvando...</> : <><CheckCircle2 className="h-4 w-4 mr-1" /> Confirmar Assinatura</>}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 

@@ -8212,6 +8212,12 @@ export const sstIntegracaoRegistros = pgTable("sst_integracao_registros", {
   sessaoId: integer("sessao_id"),
   responsavel: varchar({ length: 255 }),
   responsavelId: integer("responsavel_id"),
+  // Rev. 2052 — Assinatura digital do TST (FCSign inline canvas)
+  // base64 PNG da assinatura desenhada no canvas + nome do TST que assinou
+  // + timestamp da assinatura. Embutida no PDF do certificado.
+  assinaturaTstBase64: text("assinatura_tst_base64"),
+  assinaturaTstNome: varchar("assinatura_tst_nome", { length: 255 }),
+  assinaturaTstAssinadaEm: timestamp("assinatura_tst_assinada_em", { mode: "string" }),
   createdAt: timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow().notNull(),
   deletedAt: timestamp("deleted_at", { mode: "string" }),

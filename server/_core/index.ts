@@ -956,6 +956,11 @@ Regras:
         await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_sst_integ_reg_employee ON sst_integracao_registros(employee_id)`);
         await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_sst_integ_reg_token ON sst_integracao_registros(token)`);
         await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_sst_integ_reg_status ON sst_integracao_registros(status)`);
+        // Rev. 2052 — assinatura digital do TST no certificado (FCSign inline canvas).
+        // 3 colunas: imagem base64, nome do assinante e timestamp da assinatura.
+        await db.execute(sql`ALTER TABLE sst_integracao_registros ADD COLUMN IF NOT EXISTS assinatura_tst_base64 TEXT`);
+        await db.execute(sql`ALTER TABLE sst_integracao_registros ADD COLUMN IF NOT EXISTS assinatura_tst_nome VARCHAR(255)`);
+        await db.execute(sql`ALTER TABLE sst_integracao_registros ADD COLUMN IF NOT EXISTS assinatura_tst_assinada_em TIMESTAMP`);
         console.log(`[SyncSchema+] Tabelas SST Integração garantidas.`);
 
         // Rev. 2050 — Auto-migração das 12 perguntas-padrão das Regras de

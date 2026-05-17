@@ -184,3 +184,5 @@
 - ~~Rev. 1903~~ — ver `shared/changelog.ts`.
 
 > Revisões anteriores à 1903: ver `shared/changelog.ts` (histórico completo).
+
+- ~~Rev. 2037~~ — DP Biblioteca: NOVO artigo "Memorial de Cálculo — DSR". Ver `shared/changelog.ts`.

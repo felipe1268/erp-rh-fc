@@ -1,6 +1,154 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2052 — SST · Integração · Assinatura DIGITAL do TST no
+ * certificado (FCSign canvas inline) — desenha no canvas, salva
+ * base64 PNG no registro, embute imagem no PDF sobre a linha de
+ * assinatura, com nome do TST e data assinada eletronicamente.
+ *
+ * Pedido direto do usuário (IMG_0940 — tela "Aprovado!" com 83%
+ * e botões Visualizar/Baixar Certificado): "Quero assinatura do
+ * tst online.., vamos usar o fcsing que criamos".
+ *
+ * Investigação:
+ *  - "FCSign" = sistema IntegraSign (envelopes/multi-signatário
+ *    externo com token URL + e-mail + ordem de assinatura +
+ *    audit log). Overkill pro caso de uso: TST é interno (RH)
+ *    assinando MUITOS certificados de integração de uma vez.
+ *  - Padrão alternativo já no projeto: EpiAssinatura.tsx
+ *    (HTML5 Canvas, touch+mouse, toDataURL PNG) — usado pra
+ *    coletar assinatura de EPI em campo. Mais leve, mesma base
+ *    técnica do IntegraSign (canvas é canvas).
+ *  - Decisão: reusar o PADRÃO de canvas signature pad inline no
+ *    modal de assinatura. Mantém UX simples (1 clique → desenha
+ *    → confirma) e arquitetura mono-tenant.
+ *  - Certificado SST já era 100% client-side (Rev. 2048): linha
+ *    de assinatura em branco com texto "Técnico de Segurança do
+ *    Trabalho (TST)" abaixo. Faltava só embutir a imagem.
+ *
+ * Solução em 5 partes:
+ *
+ * (A) Schema `drizzle/schema.ts` (sstIntegracaoRegistros) — 3
+ *     colunas novas: `assinaturaTstBase64` (TEXT — PNG base64),
+ *     `assinaturaTstNome` (VARCHAR 255 — nome do TST que
+ *     assinou) e `assinaturaTstAssinadaEm` (TIMESTAMP — quando
+ *     assinou). Coluna existente `certificadoUrl` continua
+ *     reservada pra evolução futura (Rev. 2049 design — não
+ *     usar).
+ *
+ * (B) Auto-migração `server/_core/index.ts` — 3 ALTER TABLE ADD
+ *     COLUMN IF NOT EXISTS logo após o bloco "Tabelas SST
+ *     Integração garantidas" (linha 961). Idempotente — roda em
+ *     toda startup sem efeito após primeira execução.
+ *
+ * (C) Server `server/routers/integracaoSST.ts` — 2 procedures
+ *     novas:
+ *     1. `assinarComoTst({companyId, registroId, assinaturaBase64,
+ *        nomeTst})` — validations: base64 prefix
+ *        "data:image/png;base64,", tamanho ≤3MB (limit de Zod),
+ *        nome ≥2 chars. Cross-tenant (assertCompanyAccess +
+ *        SELECT registro com WHERE companyId). Só permite assinar
+ *        se status='aprovado' (faz sentido — certificado de
+ *        aprovação só existe pra aprovados; reprovados não geram
+ *        certificado). Update set base64+nome+NOW()+updatedAt
+ *        NOW(). try/catch com console.error que NÃO loga o
+ *        base64 cru (loga só tamanho — economia de log + LGPD).
+ *     2. `removerAssinaturaTst({companyId, registroId})` — pra
+ *        caso TST errou na assinatura ou quer reassinar. Set
+ *        as 3 colunas pra null + updatedAt NOW(). Cross-tenant.
+ *
+ *     `listarRegistros` (Rev. 2049) já espalha `...r` no map
+ *     final, então as 3 colunas novas vêm automaticamente no
+ *     response — ZERO mudança no procedure.
+ *
+ * (D) PDF `client/src/lib/certificadoIntegracaoSstPdf.ts` —
+ *     interface ganha 3 params opcionais (assinaturaTstBase64
+ *     + assinaturaTstNome + assinaturaTstAssinadaEm). Bloco da
+ *     linha de assinatura (L213-219 da Rev. 2048) reescrito:
+ *     se base64 presente E começa com "data:image/png;base64,",
+ *     desenha imagem 70mm x 18mm centrada sobre a linha via
+ *     `pdf.addImage(..., "PNG", ...)`. Linha cinza embaixo
+ *     continua aparecendo (visual de assinatura formal). Se
+ *     nome presente: nome em UPPERCASE em FC_NAVY bold +
+ *     "Técnico de Segurança do Trabalho (TST)" abaixo +
+ *     "Assinado eletronicamente em DD/MM/YYYY HH:mm" em cinza
+ *     menor. Se sem assinatura: comportamento antigo intacto
+ *     (linha em branco + só o texto "TST" abaixo).
+ *
+ * (E) UI `client/src/pages/sst/IntegracaoSST.tsx`
+ *     (AprovadosTab + AssinarTstDialog):
+ *     - imports: +PenLine, +CheckCircle2 (lucide).
+ *     - `certParamsFromRegistro` propaga as 3 novas props pro
+ *       PDF (botões Ver/Baixar já enviam a assinatura
+ *       automaticamente).
+ *     - Nova coluna "Assinatura TST" na tabela (entre Validade
+ *       e Certificado). Se assinado: Badge verde "✓ Assinado" +
+ *       botão lixeira pra remover (abre AlertDialog de
+ *       confirmação). Se não assinado: botão outline azul
+ *       "Assinar" (ícone PenLine) abre `AssinarTstDialog`.
+ *     - `AssinarTstDialog` (novo componente inline ~150 LOC):
+ *       useRef<HTMLCanvasElement>, useEffect inicializa canvas
+ *       (devicePixelRatio 2x), handlers startDraw/draw/stopDraw
+ *       suportando mouse + touch (`touch-none`, e.preventDefault
+ *       evita scroll do iPad), botão Limpar reseta canvas,
+ *       input Nome do TST (obrigatório, min 2 chars), botão
+ *       Confirmar chama `assinarComoTst` mutation. Banner azul
+ *       no topo mostra nome do colaborador + CPF + nota + data
+ *       realização + texto "Sua assinatura será embutida no
+ *       certificado e ficará disponível no Raio-X do
+ *       colaborador". DialogContent max-w-2xl pra caber bem em
+ *       iPad portrait sem ficar gigante em desktop.
+ *
+ * R-001/R-007/R-010 OK: ZERO ALTER/DROP destrutivos. Os 3 ADD
+ * COLUMN IF NOT EXISTS são aditivos. A mutation
+ * `removerAssinaturaTst` faz UPDATE SET NULL (não DELETE) e só
+ * em registros desta empresa (cross-tenant validado).
+ *
+ * Preservado: Rev. 2051 (drill-down HE/Faltas) INTACTA;
+ * Rev. 2050 (auto-migração das Regras de Ouro) INTACTA;
+ * Rev. 2049 (aba Aprovados) INTACTA estruturalmente — só
+ * ganhou 1 coluna nova na tabela + 2 states + 2 mutations + 2
+ * dialogs; Rev. 2048 (PDF com logo+Parabéns) INTACTA — linha de
+ * assinatura preserva fallback quando sem TST assinado;
+ * Rev. 2034..2047 INTACTAS.
+ *
+ * Por que reusar canvas inline e não montar fluxo IntegraSign
+ * completo: IntegraSign tem envelope multi-signatário + token
+ * URL público + e-mail + audit log — útil pra CONTRATOS que
+ * exigem rastreabilidade externa; TST do certificado interno é
+ * 1 só signatário, dono do sistema, alta frequência (centenas
+ * de aprovações). Modal inline ganha de longe em UX.
+ *
+ * Por que `removerAssinaturaTst` em vez de "reassinar
+ * (substituir)" direto: dois passos explícitos evitam que o
+ * usuário sobrescreva acidentalmente uma assinatura legítima.
+ * O AlertDialog mostra qual TST assinou antes — auditoria
+ * visual.
+ *
+ * Follow-up: (1) capturar IP + UserAgent + geo (defesa em
+ * profundidade pra auditoria — padrão IntegraSign tem); (2)
+ * hash SHA-256 da imagem PNG armazenado pra detectar
+ * adulteração; (3) opção de upload de assinatura escaneada
+ * (PNG transparente) em vez de desenhar no canvas (TSTs que
+ * não conseguem desenhar bem no trackpad/mouse); (4) quando
+ * virar multi-tenant, exigir que o TST tenha role específica
+ * (sst_tst) pra assinar; (5) bulk-sign (assinar várias
+ * aprovações pendentes de uma vez com a mesma assinatura
+ * registrada como padrão do TST).
+ *
+ * Arquivos tocados:
+ *  - drizzle/schema.ts (sstIntegracaoRegistros +3 cols)
+ *  - server/_core/index.ts (3 ALTER TABLE)
+ *  - server/routers/integracaoSST.ts (assinarComoTst +
+ *    removerAssinaturaTst)
+ *  - client/src/lib/certificadoIntegracaoSstPdf.ts (interface
+ *    + embed imagem + nome + data)
+ *  - client/src/pages/sst/IntegracaoSST.tsx (coluna +
+ *    AssinarTstDialog + remoção)
+ *  - shared/version.ts → 2052
+ *  - shared/changelog.ts (este bloco)
+ *  - replit.md (top-5 + rotação)
+ *
  * Rev. 2051 — Fechamento de Ponto · Modais de Ranking (Mais
  * Pontuais / Mais Horas Extras / Menos Dias Trabalhados) ganham
  * MEMÓRIA DE CÁLCULO clicável pra TODAS as colunas + responsivo
