@@ -1296,8 +1296,8 @@ export const integracaoSSTRouter = router({
         .groupBy(sstIntegracaoRegistros.status);
 
       const statusMap: Record<string, number> = {};
-      let total = 0;
-      for (const r of rows) { statusMap[r.status] = r.count; total += r.count; }
+      let totalRegistros = 0;
+      for (const r of rows) { statusMap[r.status] = r.count; totalRegistros += r.count; }
 
       const mediaRows = await db.select({
         media: sql<number>`avg(${sstIntegracaoRegistros.nota}::numeric)`,
@@ -1316,16 +1316,88 @@ export const integracaoSSTRouter = router({
           gte(sstIntegracaoRegistros.dataValidade, agora),
         ));
 
+      // Rev. 2070 — Pedido do usuário (IMG_0970): "Arrume os cards, está
+      // dizendo que tem 0 pendências e não verdade tem várias". Bug raiz:
+      // `pendentes` contava só rows em `sst_integracao_registros` com
+      // `status='pendente'` (campo legado, raramente populado). A aba
+      // Pendentes e o badge do menu (Rev. 2063/2064) já usam lógica
+      // correta: colaboradores ATIVOS sem aprovação válida (CLT/PJ +
+      // terceiros sem integracao_doc_url). Espelho a mesma query do
+      // `getBadgeCounts` (L332-377) aqui pra alinhar o KPI com o que o
+      // usuário vê na aba.
+      //
+      // NOTA (architect): `obraId` não filtra aqui pois (a) employees não
+      // têm FK direta pra obra (vínculo é via tabelas auxiliares) e (b) o
+      // `DashboardTab` (client L146) nunca passa `obraId` — sempre chama
+      // `{ companyId }`. Se algum dia a UI passar obraId, os contadores
+      // de pendentes ficam company-wide enquanto aprovados/reprovados
+      // ficam por obra; nesse caso reabrir esta query. Hoje, não-bug.
+      const semIntegracaoRaw = await db.execute<{ total: number }>(sql`
+        WITH last_ok AS (
+          SELECT DISTINCT ON (employee_id)
+            employee_id,
+            COALESCE(data_validade,
+                     COALESCE(data_realizacao, created_at) + INTERVAL '730 days') AS dv
+          FROM sst_integracao_registros
+          WHERE company_id = ${input.companyId}
+            AND status = 'aprovado'
+            AND deleted_at IS NULL
+          ORDER BY employee_id, COALESCE(data_realizacao, created_at) DESC
+        ),
+        em_processo AS (
+          SELECT DISTINCT employee_id
+          FROM sst_integracao_registros
+          WHERE company_id = ${input.companyId}
+            AND status IN ('pendente', 'em_andamento')
+            AND deleted_at IS NULL
+        )
+        SELECT COUNT(*)::int AS total
+        FROM employees e
+        LEFT JOIN last_ok lo ON lo.employee_id = e.id
+        WHERE e."companyId" = ${input.companyId}
+          AND e.status = 'Ativo'
+          AND e."deletedAt" IS NULL
+          AND COALESCE(e."listaNegra", 0) = 0
+          AND e."dataDemissao" IS NULL
+          AND e.id NOT IN (SELECT employee_id FROM em_processo)
+          AND (lo.dv IS NULL OR lo.dv <= NOW() + INTERVAL '60 days')
+      `);
+      const semIntegracaoRows = (semIntegracaoRaw as any).rows ?? semIntegracaoRaw;
+      const pendentesEmployees = Number(semIntegracaoRows?.[0]?.total ?? 0);
+
+      const terceirosRaw = await db.execute<{ total: number }>(sql`
+        SELECT COUNT(*)::int AS total
+        FROM funcionarios_terceiros t
+        WHERE t."companyId" = ${input.companyId}
+          AND t.status = 'ativo'
+          AND t.deleted_at IS NULL
+          AND t.integracao_doc_url IS NULL
+      `);
+      const terceirosRows = (terceirosRaw as any).rows ?? terceirosRaw;
+      const pendentesTerceiros = Number(terceirosRows?.[0]?.total ?? 0);
+
+      const emProcessoCount = (statusMap["pendente"] || 0) + (statusMap["em_andamento"] || 0);
+      const pendentesAuto = pendentesEmployees + pendentesTerceiros + emProcessoCount;
+
       return {
-        total,
-        pendentes: statusMap["pendente"] || 0,
+        // Rev. 2070 — `total` agora soma o universo real (aprovados ativos +
+        // pendentes-auto), não apenas registros gravados. Antes o "Total: 1"
+        // contradizia o usuário que via vários pendentes.
+        total: (statusMap["aprovado"] || 0) + pendentesAuto + (statusMap["reprovado"] || 0),
+        pendentes: pendentesAuto,
         emAndamento: statusMap["em_andamento"] || 0,
         aprovados: statusMap["aprovado"] || 0,
         reprovados: statusMap["reprovado"] || 0,
         vencidos: statusMap["vencido"] || 0,
         vencendoEm30Dias: vencendo?.count || 0,
         mediaNota: mediaRows[0]?.media ? Number(Number(mediaRows[0].media).toFixed(1)) : null,
-        taxaAprovacao: total > 0 ? Math.round(((statusMap["aprovado"] || 0) / total) * 100) : 0,
+        // Rev. 2070 — Taxa baseada em todos os colaboradores que precisam
+        // de integração (aprovados + pendentes + reprovados). Reprovados
+        // pesam contra a taxa.
+        taxaAprovacao: (() => {
+          const denom = (statusMap["aprovado"] || 0) + pendentesAuto + (statusMap["reprovado"] || 0);
+          return denom > 0 ? Math.round(((statusMap["aprovado"] || 0) / denom) * 100) : 0;
+        })(),
       };
     }),
 

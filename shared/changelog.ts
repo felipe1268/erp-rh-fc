@@ -1,6 +1,37 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2070 — **SST Integração · cards do Dashboard mostravam 0
+ * pendentes mesmo havendo vários.** Pedido do usuário (IMG_0970):
+ * "Arrume os cards, está dizendo que tem 0 pendências e não verdade
+ * tem várias". O card "Pendentes" do Dashboard contava só linhas em
+ * `sst_integracao_registros` com `status='pendente'` (campo legado,
+ * raramente populado desde que o fluxo passou a só criar row em
+ * `aprovado`/`reprovado`). A aba **Pendentes** e o badge do menu lateral
+ * (Rev. 2058/2063/2064) já usam a lógica correta: colaboradores ATIVOS
+ * (CLT/PJ + terceiros) **sem aprovação válida vigente**. Esse
+ * desencontro causava "Total: 1, Aprovados: 1, Pendentes: 0" no print
+ * do usuário mesmo havendo vários a integrar. Fix em
+ * `server/routers/integracaoSST.ts` L1286+ (`dashboardKpis`): espelho
+ * 100% a query do `getBadgeCounts` (L316-382 — Rev. 2063+2064) dentro
+ * do KPI:
+ *   - CTE `last_ok` (`DISTINCT ON employee_id`, `status='aprovado'`,
+ *     usa `data_validade` ou fallback `data_realizacao + 730 days`).
+ *   - CTE `em_processo` (status `pendente`/`em_andamento`).
+ *   - Empregados ativos com filtro anti-fantasma (deletedAt + listaNegra
+ *     + dataDemissao + status='Ativo') que NÃO estão em processo E cuja
+ *     última aprovação venceu ou vence em até 60 dias (`<= NOW() + 60d`).
+ *   - + terceiros ativos sem `integracao_doc_url`.
+ *   - + colaboradores que TÊM row mas em estado `pendente`/`em_andamento`
+ *     (soma `emProcessoCount` pra cobrir os 2 casos: 'fluxo iniciado mas
+ *     não terminado' VS 'colaborador novo sem nenhum registro').
+ * Como bônus: `total` recalculado pra somar o universo real
+ * (aprovados+pendentesAuto+reprovados) em vez de só count de rows, e
+ * `taxaAprovacao` denominador atualizado pra refletir os novos
+ * `pendentes` (denom = aprovados + pendentes + reprovados). Sem
+ * mexer no Frontend — `KpiCard` consome `k.pendentes`/`k.total`/
+ * `k.taxaAprovacao` direto. ZERO migration, ZERO schema.
+ *
  * Rev. 2069 — **SST Integração · multiseleção + select-all + bulk
  * delete nas abas Aprovados e Reprovados.** Pedido do usuário
  * (IMG_0971 + IMG_0972): "faltou a multi seleção para apagar tudo,
