@@ -9,8 +9,10 @@ import PrintFooterLGPD from "@/components/PrintFooterLGPD";
 import { removeAccents } from "@/lib/searchUtils";
 import {
   ArrowLeft, User, TrendingUp, TrendingDown, Calendar, Clock, Search,
-  Share2, Printer, Eye, ChevronRight
+  Share2, Printer, Eye, ChevronRight, ShieldCheck, Download, AlertTriangle,
 } from "lucide-react";
+import { generateCertificadoIntegracaoSstPdf } from "@/lib/certificadoIntegracaoSstPdf";
+import { toast } from "sonner";
 
 const PILARES = [
   {
@@ -163,6 +165,122 @@ function EvolutionTable({ evaluations }: { evaluations: any[] }) {
   );
 }
 
+// ─── SST Integração Card (Rev. 2035) ───
+function SstIntegracaoCard({ employeeId, companyId, employeeNome, employeeFuncao }: {
+  employeeId: number; companyId: number; employeeNome: string; employeeFuncao?: string;
+}) {
+  const hist = trpc.integracaoSST.historicoColaborador.useQuery(
+    { companyId, employeeId },
+    { enabled: companyId > 0 && employeeId > 0 }
+  );
+  const registros = (hist.data || []) as any[];
+  const aprovados = registros.filter(r => r.status === "aprovado");
+  const ultimoAprovado = aprovados[0]; // ordenado desc por createdAt no backend
+  // Comparação por dia (00:00 local) pra evitar off-by-one por horário/timezone.
+  const hojeYmd = (() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), d.getDate()); })();
+  const validadeYmd = ultimoAprovado?.dataValidade
+    ? (() => { const d = new Date(ultimoAprovado.dataValidade); return new Date(d.getFullYear(), d.getMonth(), d.getDate()); })()
+    : null;
+  const isVencido = validadeYmd ? validadeYmd < hojeYmd : false;
+  const diasParaVencer = validadeYmd
+    ? Math.round((validadeYmd.getTime() - hojeYmd.getTime()) / (1000*60*60*24))
+    : null;
+  const venceEmBreve = !isVencido && diasParaVencer != null && diasParaVencer <= 60;
+
+  return (
+    <Card className="border-0 shadow-sm">
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base flex items-center justify-between">
+          <span className="flex items-center gap-2">
+            <ShieldCheck className="w-4 h-4 text-emerald-600" /> Integração de Segurança (SST)
+          </span>
+          {ultimoAprovado && (
+            <Badge
+              variant="secondary"
+              className={isVencido ? "bg-red-100 text-red-700" : venceEmBreve ? "bg-amber-100 text-amber-700" : "bg-emerald-100 text-emerald-700"}
+            >
+              {isVencido ? "Vencida" : venceEmBreve ? `Vence em ${diasParaVencer}d` : "Em dia"}
+            </Badge>
+          )}
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        {hist.isLoading ? (
+          <div className="flex items-center justify-center py-6">
+            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-emerald-600" />
+          </div>
+        ) : registros.length === 0 ? (
+          <div className="flex items-center gap-2 text-sm text-[#94A3B8] py-4">
+            <AlertTriangle className="w-4 h-4 text-amber-500" />
+            <span>Nenhuma integração registrada para este colaborador.</span>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {registros.map((r: any) => {
+              const nota = Number(r.nota || 0);
+              const aprovado = r.status === "aprovado";
+              const corStatus = aprovado ? "bg-emerald-600" : r.status === "reprovado" ? "bg-red-500" : "bg-slate-400";
+              const labelStatus: Record<string, string> = {
+                aprovado: "Aprovado", reprovado: "Reprovado", em_andamento: "Em andamento", pendente: "Pendente", vencido: "Vencido",
+              };
+              return (
+                <div key={r.id} className="flex items-center justify-between p-3 rounded-lg bg-[#F8FAFC] hover:bg-[#F1F5F9] transition-colors">
+                  <div className="flex items-center gap-3">
+                    <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white text-xs font-bold ${corStatus}`}>
+                      {aprovado ? `${nota}%` : "—"}
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold text-[#0F172A]">
+                        {r.configNome || "Integração"} <span className="text-[10px] font-normal text-[#94A3B8]">· {labelStatus[r.status] || r.status}</span>
+                      </p>
+                      <div className="flex items-center gap-2 text-xs text-[#94A3B8] flex-wrap">
+                        {r.dataRealizacao && <span>Realizado em {new Date(r.dataRealizacao).toLocaleDateString("pt-BR")}</span>}
+                        {r.dataValidade && <span>· Válido até {new Date(r.dataValidade).toLocaleDateString("pt-BR")}</span>}
+                        {r.tentativas != null && <span>· {r.tentativas} tent.</span>}
+                        {r.obraNome && <span>· {r.obraNome}</span>}
+                      </div>
+                    </div>
+                  </div>
+                  {aprovado && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="text-emerald-700 hover:text-emerald-800 hover:bg-emerald-50 border-emerald-200"
+                      onClick={() => {
+                        try {
+                          generateCertificadoIntegracaoSstPdf({
+                            registroId: r.id,
+                            employeeNome: r.employeeNome || employeeNome,
+                            employeeCpf: r.employeeCpf,
+                            employeeFuncao: r.employeeFuncao || employeeFuncao || null,
+                            obraNome: r.obraNome,
+                            configNome: r.configNome,
+                            dataRealizacao: r.dataRealizacao,
+                            dataValidade: r.dataValidade,
+                            nota,
+                            notaMinima: Number(r.configNotaMinima ?? 70),
+                            acertos: null,
+                            totalPerguntas: null,
+                            tentativa: r.tentativas,
+                          });
+                        } catch (e: any) {
+                          toast.error(e?.message || "Erro ao gerar certificado");
+                        }
+                      }}
+                    >
+                      <Download className="w-3 h-3 mr-1" /> Certificado
+                    </Button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 // ─── Raio-X Detail View ───
 function RaioXDetail({ employeeId, onBack }: { employeeId: number; onBack: () => void }) {
   const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery} = useCompany();
@@ -282,6 +400,9 @@ function RaioXDetail({ employeeId, onBack }: { employeeId: number; onBack: () =>
             </CardHeader>
             <CardContent><EvolutionTable evaluations={avaliacoes} /></CardContent>
           </Card>
+
+          {/* Integração de Segurança (SST) — Rev. 2035 */}
+          <SstIntegracaoCard employeeId={(employee as any).id} companyId={companyId} employeeNome={(employee as any).nomeCompleto} employeeFuncao={(employee as any).funcao} />
 
           {/* History */}
           <Card className="border-0 shadow-sm">

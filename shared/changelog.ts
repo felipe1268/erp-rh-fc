@@ -1,6 +1,109 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2035 — SST · Integração de Segurança · pontuação do
+ * colaborador agora aparece no Raio-X + certificado de aprovação
+ * gerado em PDF (client-side) tanto na tela pública quanto no
+ * Raio-X.
+ *
+ * Pedido direto do usuário: "Após o funcionário finalizar a
+ * integração sua pontuação deve ser registrada no raiox, e ele
+ * deve ter um certificado de aprovação". Hoje a tela pública só
+ * mostrava "Aprovado" + nota e dizia que o certificado "seria
+ * gerado" — nada era de fato baixável. O Raio-X do Funcionário
+ * (em Avaliação de Desempenho) não tinha QUALQUER referência à
+ * integração de segurança.
+ *
+ * Mudança em 4 arquivos:
+ *
+ * (A) `server/routers/integracaoSST.ts` (~30L):
+ *     - `submeterQuestionario` agora retorna também
+ *       `dataRealizacao`, `dataValidade`, `validadeMeses`,
+ *       `employeeNome`, `employeeCpf`, `employeeFuncao`,
+ *       `obraNome` — pra geração do certificado client-side
+ *       não precisar de query extra.
+ *     - `historicoColaborador` ganhou LEFT JOIN em
+ *       `sst_integracao_config` retornando `configNome`,
+ *       `configNotaMinima`, `configValidadeMeses` em cada
+ *       registro (pra renderização rica no Raio-X e re-emissão
+ *       de certificado de tentativas antigas).
+ *
+ * (B) `client/src/lib/certificadoIntegracaoSstPdf.ts` (NOVO,
+ *     ~170L): gerador de certificado A4 landscape com jspdf
+ *     (mesmo pattern do `epiReceiptPdf.ts`). Moldura emerald,
+ *     header "CERTIFICADO DE INTEGRAÇÃO DE SEGURANÇA DO
+ *     TRABALHO", nome em caixa-alta navy + CPF/função, corpo
+ *     "concluiu com aproveitamento... na obra X, no programa
+ *     Y... atendendo às NRs aplicáveis", quadro central com 3
+ *     KPIs (nota %, acertos X/Y, tentativa Nª), data de
+ *     realização + validade, linha de assinatura do TST e
+ *     rodapé com número do certificado (registroId padded) +
+ *     data/hora de emissão. ZERO uso de servidor — tudo
+ *     compõe a partir dos campos passados.
+ *
+ * (C) `client/src/pages/sst/IntegracaoPublica.tsx` (~40L em 1
+ *     hunk): tela de resultado pós-aprovação ganhou bloco
+ *     "Sua pontuação foi registrada no Raio-X do colaborador"
+ *     + "Válido até DD/MM/YYYY" + botão pleno emerald "Baixar
+ *     Certificado de Aprovação" (Download icon) que chama o
+ *     gerador com os campos retornados pelo
+ *     `submeterQuestionario` (fallback pro `data.registro` em
+ *     caso de jaAprovado). Microcopy antiga ("será gerado e
+ *     assinado digitalmente") substituída por confirmação real.
+ *
+ * (D) `client/src/pages/avaliacao/RaioXFuncionario.tsx`
+ *     (~115L): novo componente `SstIntegracaoCard` inserido
+ *     entre "Evolução Item a Item" e "Histórico de Avaliações"
+ *     no `RaioXDetail`. Mostra badge global no header (Em dia
+ *     / Vence em Nd / Vencida — calculado em cima do último
+ *     aprovado), lista cronológica de TODAS as tentativas
+ *     (avatar circular com nota%, nome da config, data,
+ *     validade, nº tentativas, obra), e botão "Certificado"
+ *     pra cada registro aprovado (re-emite o PDF a qualquer
+ *     momento). Empty-state amber "Nenhuma integração
+ *     registrada para este colaborador".
+ *
+ * + `shared/version.ts` → 2035.
+ *
+ * R-001/R-007/R-010 OK: ZERO ALTER TABLE, ZERO mudança de
+ * schema. Reversível em 4 arquivos (1 novo + 3 editados).
+ *
+ * Preservado:
+ *   - Rev. 2034 (aba Pendentes "Sem integração válida")
+ *     INTACTA — refetch no `criarRegistro`/`criarLote` segue
+ *     funcionando.
+ *   - Rev. 2033 (dropdown wrap iPad) INTACTA.
+ *   - Fluxo de `submeterQuestionario` INTACTO — só adiciona
+ *     campos no return; clientes antigos ignoram silentemente.
+ *   - `historicoColaborador`: contrato de retorno expandido
+ *     (não breaking — antes era array de registros; agora é
+ *     array de registros + 3 campos extras de config).
+ *   - `obterResultado` (token+cpf) NÃO foi mexido — segue só
+ *     com os campos essenciais. Só `submeterQuestionario`
+ *     ganhou enrichment porque é o caminho onde o usuário
+ *     baixa o certificado pela 1ª vez.
+ *   - Função `assertCompanyAccess` em `historicoColaborador`
+ *     INTACTA — endpoint segue protected.
+ *
+ * Follow-up:
+ *   1) Persistir o PDF gerado em storage (S3/Replit Object
+ *      Storage) e gravar `certificadoUrl` no
+ *      `sst_integracao_registros` pra histórico imutável +
+ *      assinatura digital real (hoje é geração on-demand).
+ *   2) Adicionar QR-Code no certificado linkando pra
+ *      `/integracao/verify/{id}` (verificação pública por
+ *      terceiros).
+ *   3) Botão "Reenviar certificado por e-mail" no Raio-X.
+ *   4) Card SST do Raio-X mostrar também integrações
+ *     "vencidas" / "vencendo" como alerta vermelho/âmbar com
+ *     CTA "Iniciar nova integração" (espelhando a aba
+ *     Pendentes da Rev. 2034).
+ *   5) Mesma seção SST no perfil/cadastro de Terceiros —
+ *     hoje só CLT/PJ têm Raio-X.
+ *   6) Trazer companyName/logo real no PDF (hoje hardcoded
+ *      "FC Engenharia"; usar VITE_APP_TITLE/LOGO ou query
+ *      em `companies`).
+ *
  * Rev. 2034 — SST · Integração de Segurança · aba Pendentes ganha
  * bloco "Sem integração válida" listando TODOS os colaboradores
  * (CLT/PJ via `employees` + Terceiros via `funcionariosTerceiros`)

@@ -8,8 +8,9 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import {
   GraduationCap, User, Video, CheckCircle, XCircle, ArrowRight, ArrowLeft,
-  Loader2, ShieldCheck, RefreshCw, Award, AlertTriangle,
+  Loader2, ShieldCheck, RefreshCw, Award, AlertTriangle, Download,
 } from "lucide-react";
+import { generateCertificadoIntegracaoSstPdf } from "@/lib/certificadoIntegracaoSstPdf";
 
 function formatCPF(v: string) {
   const d = v.replace(/\D/g, "").slice(0, 11);
@@ -252,9 +253,41 @@ export default function IntegracaoPublica() {
                       </div>
                     </>
                   )}
-                  <div className="bg-emerald-50 p-3 rounded-lg">
-                    <p className="text-sm text-emerald-700">Seu certificado será gerado e assinado digitalmente.</p>
+                  <div className="bg-emerald-50 p-3 rounded-lg space-y-2">
+                    <p className="text-sm text-emerald-700">Sua pontuação foi registrada no Raio-X do colaborador.</p>
+                    {resultado.dataValidade && (
+                      <p className="text-xs text-emerald-700/80">
+                        Válido até <strong>{new Date(resultado.dataValidade).toLocaleDateString("pt-BR")}</strong>
+                      </p>
+                    )}
                   </div>
+                  <Button
+                    className="w-full bg-emerald-600 hover:bg-emerald-700"
+                    onClick={() => {
+                      try {
+                        const reg = data?.registro || {};
+                        generateCertificadoIntegracaoSstPdf({
+                          registroId: resultado.registroId ?? reg.id ?? 0,
+                          employeeNome: resultado.employeeNome ?? reg.employeeNome ?? "",
+                          employeeCpf: resultado.employeeCpf ?? reg.employeeCpf ?? cpf,
+                          employeeFuncao: resultado.employeeFuncao ?? reg.employeeFuncao ?? null,
+                          obraNome: resultado.obraNome ?? reg.obraNome ?? null,
+                          configNome: data?.config?.titulo ?? null,
+                          dataRealizacao: resultado.dataRealizacao ?? reg.dataRealizacao ?? null,
+                          dataValidade: resultado.dataValidade ?? reg.dataValidade ?? null,
+                          nota: Number(resultado.nota || 0),
+                          notaMinima: Number(resultado.notaMinima ?? data?.config?.notaMinima ?? 70),
+                          acertos: resultado.acertos ?? null,
+                          totalPerguntas: resultado.totalPerguntas ?? null,
+                          tentativa: resultado.tentativa ?? null,
+                        });
+                      } catch (e: any) {
+                        toast.error(e?.message || "Erro ao gerar certificado");
+                      }
+                    }}
+                  >
+                    <Download className="h-4 w-4 mr-2" /> Baixar Certificado de Aprovação
+                  </Button>
                 </>
               ) : (
                 <>

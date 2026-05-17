@@ -990,6 +990,8 @@ export const integracaoSSTRouter = router({
       await db.update(sstIntegracaoRegistros).set(updates)
         .where(eq(sstIntegracaoRegistros.id, registro.id));
 
+      // Rev. 2035: retornar campos do registro pós-update pra
+      // geração do certificado client-side (jspdf) sem nova query.
       return {
         aprovado,
         nota,
@@ -998,6 +1000,13 @@ export const integracaoSSTRouter = router({
         tentativa,
         notaMinima,
         registroId: registro.id,
+        dataRealizacao: aprovado ? (updates.dataRealizacao as string) : null,
+        dataValidade: aprovado ? (updates.dataValidade as string) : null,
+        validadeMeses,
+        employeeNome: registro.employeeNome,
+        employeeCpf: registro.employeeCpf,
+        employeeFuncao: registro.employeeFuncao,
+        obraNome: registro.obraNome,
       };
     }),
 
@@ -1034,12 +1043,26 @@ export const integracaoSSTRouter = router({
     .query(async ({ input, ctx }) => {
       assertCompanyAccess(ctx, input.companyId);
       const db = (await getDb())!;
-      return db.select().from(sstIntegracaoRegistros)
+      // Rev. 2035: enriquece com nome da configuração pro card SST do Raio-X.
+      const rows = await db.select({
+        registro: sstIntegracaoRegistros,
+        configNome: sstIntegracaoConfig.titulo,
+        configNotaMinima: sstIntegracaoConfig.notaMinima,
+        configValidadeMeses: sstIntegracaoConfig.validadeMeses,
+      })
+        .from(sstIntegracaoRegistros)
+        .leftJoin(sstIntegracaoConfig, eq(sstIntegracaoConfig.id, sstIntegracaoRegistros.configId))
         .where(and(
           eq(sstIntegracaoRegistros.companyId, input.companyId),
           eq(sstIntegracaoRegistros.employeeId, input.employeeId),
           isNull(sstIntegracaoRegistros.deletedAt),
         ))
         .orderBy(desc(sstIntegracaoRegistros.createdAt));
+      return rows.map(r => ({
+        ...r.registro,
+        configNome: r.configNome,
+        configNotaMinima: r.configNotaMinima,
+        configValidadeMeses: r.configValidadeMeses,
+      }));
     }),
 });
