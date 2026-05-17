@@ -733,11 +733,25 @@ export default function FechamentoPonto() {
   const cicloInicio: string | null = consolidacaoData?.dataInicioCiclo ?? null;
   const cicloFim: string | null = consolidacaoData?.dataFimCiclo ?? null;
 
+  // Rev. 2010: fallback de ciclo 16→15 quando consolidação ainda não foi feita (cicloInicio/Fim null).
+  // ANTES: summary caía em `mesReferencia = "YYYY-MM"` (mês calendário) e perdia 11 dias do mês anterior,
+  // gerando discrepância: tabela mostrava 10 dias / 45% enquanto modal mostrava 21 dias / 95%.
+  // AGORA: sempre passa o range real do ciclo (16/mês-ant → 15/mês-atual) p/ getSummary querying coincidir
+  // 100% com getDiasEmployee usado no drill-down.
+  const cicloRangeFallback = useMemo(() => {
+    if (cicloInicio && cicloFim) return { ini: cicloInicio, fim: cicloFim };
+    if (!mesAno) return { ini: undefined, fim: undefined };
+    const [ano, mes] = mesAno.split("-").map(Number);
+    const anoAnt = mes === 1 ? ano - 1 : ano;
+    const mesAnt = mes === 1 ? 12 : mes - 1;
+    return { ini: `${anoAnt}-${String(mesAnt).padStart(2, "0")}-16`, fim: `${ano}-${String(mes).padStart(2, "0")}-15` };
+  }, [cicloInicio, cicloFim, mesAno]);
+
   const stats = trpc.fechamentoPonto.getStats.useQuery({ companyId, companyIds, mesReferencia: mesAno }, { enabled: companyId > 0 || companyIds.length > 0 });
   // Quando o ciclo não coincide com o mês calendário (ex: 16/03–15/04), passar o range real
   // para que o backend busque registros de AMBOS os meses e os dias trabalhados fiquem corretos.
   const summary = trpc.fechamentoPonto.getSummary.useQuery(
-    { companyId, companyIds, mesReferencia: mesAno, dataInicio: cicloInicio ?? undefined, dataFim: cicloFim ?? undefined },
+    { companyId, companyIds, mesReferencia: mesAno, dataInicio: cicloRangeFallback.ini, dataFim: cicloRangeFallback.fim },
     { enabled: companyId > 0 || companyIds.length > 0 }
   );
   const inconsistencies = trpc.fechamentoPonto.listInconsistencies.useQuery({ companyId, companyIds, mesReferencia: mesAno }, { enabled: companyId > 0 || companyIds.length > 0 });

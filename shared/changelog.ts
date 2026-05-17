@@ -1,6 +1,22 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2010 — DP · Fechamento de Ponto · BUG-FIX · Discrepância % Presença tabela vs. drill-down.
+ * Reportado pelo usuário (17/05/2026, img IMG_0852 + IMG_0853): "veja o caso da Isabela, veio todos os dias basicamente, só tem 1 falta e tem um % de 43%, não entendi o pq". Isabela aparecia na tabela com 10 dias trabalhados / 45% presença, mas o drill-down (modal calendário) mostrava 21 dias trabalhados / 1 falta provável / 95% de presença. Os dois cálculos discordavam completamente.
+ * Causa-raiz: dois endpoints diferentes com filtros divergentes:
+ *   - **Tabela** usa `fechamentoPonto.getSummary` (`server/routers/fechamentoPonto.ts:1558`). O endpoint tem branch: SE `dataInicio && dataFim` → filtra por range; SENÃO → filtra por `mesReferencia` (mês calendário).
+ *   - **Modal** usa `fechamentoPonto.getDiasEmployee` (mesmo router, L5059) que SEMPRE filtra por range `data >= dataInicio AND data <= dataFim`.
+ * No cliente (`FechamentoPonto.tsx:739`), o range só era passado a `getSummary` quando `consolidacaoStatus.data.dataInicioCiclo/dataFimCiclo` estavam preenchidos (= consolidação do ciclo já feita). Quando o mês ainda não estava consolidado (caso comum em ciclo aberto/em-andamento), o range caía pra `undefined` → backend filtrava por `mesReferencia = "2026-05"` → só via os 10 dias de MAIO de Isabela e ignorava os 11 dias de ABRIL (tagged `mesReferencia = "2026-04"`). O drill-down, por contraste, recebia `periodoIni/periodoFim` calculados como fallback 16→15 mesmo sem consolidação → via os 21 dias completos.
+ * Sintoma: usuário olhava header da página dizendo "16/04/2026 → 15/05/2026 · 22 dias úteis · 42% presença média", abria drill-down de Isabela vendo 21 dias / 95% e ficava perplexo. Pior: presença média do grupo (42%) também estava errada pela mesma razão.
+ * Mudança em 1 arquivo (`client/src/pages/FechamentoPonto.tsx`, 1 hunk lógico):
+ *   (1) Nova useMemo `cicloRangeFallback` antes da query `summary`: retorna `{ini, fim}` priorizando `cicloInicio/cicloFim` da consolidação; quando ausentes, calcula fallback `${anoAnt}-${mesAnt}-16` → `${ano}-${mes}-15` a partir de `mesAno` (mesma fórmula que `periodoIni/periodoFim` já usavam pra display, agora compartilhada).
+ *   (2) Chamada de `getSummary` muda de `dataInicio: cicloInicio ?? undefined, dataFim: cicloFim ?? undefined` → `dataInicio: cicloRangeFallback.ini, dataFim: cicloRangeFallback.fim` — agora o range é SEMPRE enviado.
+ *   (3) Comentário detalhado in-loco (ANTES/AGORA) pra explicar o fix.
+ *   (4) `shared/version.ts` → 2010.
+ * Resultado: tabela e drill-down agora consultam o MESMO range de datas → Isabela aparece com 21 dias / 95% nos dois lugares; presença média do grupo deixa de ficar inflacionadamente baixa; KPI "Média de dias" do header bate com `getDiasEmployee`.
+ * Preservado: endpoints backend INTACTOS (branch `if (dataInicio && dataFim)` continua igual — o cliente é que agora sempre envia o range); `periodoIni/periodoFim` (linha 1024+) INTACTOS — continuam calculando ciclo pro display; `getDiasEmployee` INTACTO; outras queries (`stats`, `inconsistencies`, `monthStatuses`, `atestadosMes`) continuam usando `mesReferencia` (correto — elas SÃO por mês calendário). Schema INTACTO. tRPC INTACTO. R-001/R-007/R-010 OK (CSS+SELECT-only). Reversível em 1 hunk.
+ * Follow-up: aplicar mesmo fallback de range pra `inconsistencies` (verificar se ela sofre do mesmo problema; legendas sugerem que pode também), e auditar `getStats` (caso a "presença média" do header venha dela e não do summary). Integrar calendário de feriados (aberto desde Rev. 2000).
+ *
  * Rev. 2009 — SST · Integração · Modal "Novo/Editar Vídeo" repaginado na regra de ouro.
  * Pedido direto do usuário (17/05/2026, img IMG_0851_1779031346140): "Melhore isso seguindo nossa regra de ouro". O modal de cadastro de vídeo de integração estava chapado: DialogHeader cinza padrão, campos empilhados sem hierarquia, sem ícones, sem agrupamento, sem indicação de etapas, botão emerald sólido sem destaque, preview do YouTube básico (apenas thumbnail). Quebrava o padrão estabelecido nas outras telas (header gradient + chip ring + seções coloridas + CTA gradient).
  * Mudança em 1 arquivo: `client/src/pages/sst/IntegracaoSST.tsx` (1 hunk grande no modal de VideosTab, ~150L reescritas):
