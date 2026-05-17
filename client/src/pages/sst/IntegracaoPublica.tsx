@@ -23,8 +23,16 @@ function formatCPF(v: string) {
 export default function IntegracaoPublica() {
   const params = useParams<{ token: string }>();
   const token = params?.token || "";
-  const [step, setStep] = useState<"cpf" | "boasvindas" | "modulos" | "quiz" | "resultado">("cpf");
-  const [cpf, setCpf] = useState("");
+  // Rev. 2043 — se vier ?cpf= na URL (RH iniciou pelo botão "Iniciar agora"),
+  // pula a tela de identificação e auto-busca dados.
+  const urlSearch = typeof window !== "undefined" ? window.location.search : "";
+  const urlCpf = (() => {
+    try { return new URLSearchParams(urlSearch).get("cpf")?.replace(/\D/g, "") || ""; }
+    catch { return ""; }
+  })();
+  const autoStart = urlCpf.length === 11;
+  const [step, setStep] = useState<"cpf" | "boasvindas" | "modulos" | "quiz" | "resultado">(autoStart ? "boasvindas" : "cpf");
+  const [cpf, setCpf] = useState(autoStart ? formatCPF(urlCpf) : "");
   const [data, setData] = useState<any>(null);
   const [currentModulo, setCurrentModulo] = useState(0);
   const [videoWatched, setVideoWatched] = useState<Set<number>>(new Set());
@@ -38,6 +46,34 @@ export default function IntegracaoPublica() {
   );
 
   const submeterMutation = trpc.integracaoSST.submeterQuestionario.useMutation();
+
+  // Rev. 2043 — auto-busca quando RH passou o CPF na URL.
+  // Em caso de "ja_aprovado", cai naturalmente na tela de resultado.
+  // Em caso de "sem_config", volta pro step "cpf" pra mostrar o erro inline.
+  const autoTriggered = useRef(false);
+  useEffect(() => {
+    if (!autoStart || autoTriggered.current || !token) return;
+    autoTriggered.current = true;
+    (async () => {
+      try {
+        const result = await buscarQuery.refetch();
+        if (!result.data) return;
+        setData(result.data);
+        if (result.data.status === "ja_aprovado") {
+          setResultado({ aprovado: true, nota: Number(result.data.registro.nota || 0), jaAprovado: true });
+          setStep("resultado");
+        } else if (result.data.status === "sem_config") {
+          setStep("cpf");
+          toast.error("Nenhuma configuração de integração encontrada para esta empresa.");
+        }
+        // status "pronto" → permanece em "boasvindas" (já é o estado inicial)
+      } catch (err: any) {
+        setStep("cpf");
+        toast.error(err?.message || "Não foi possível carregar a integração — digite o CPF novamente.");
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token, autoStart]);
 
   const handleBuscarCpf = async () => {
     if (cpf.replace(/\D/g, "").length < 11) { toast.error("CPF deve ter 11 dígitos"); return; }

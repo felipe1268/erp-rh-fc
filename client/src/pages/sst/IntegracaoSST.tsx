@@ -1006,7 +1006,13 @@ function PendentesTab({ companyId }: { companyId: number }) {
       registros.refetch();
       emAndamento.refetch();
       pendentesAuto.refetch();
-      const link = `${window.location.origin}/integracao/${data.token}`;
+      // Rev. 2043 — se RH iniciou (janela pré-aberta), passa CPF na URL
+      // pra tela pública pular o passo de identificação.
+      const cpfLimpo = (data.employeeCpf || "").replace(/\D/g, "");
+      const linkBase = `${window.location.origin}/integracao/${data.token}`;
+      const link = pendingWindowRef.current && cpfLimpo
+        ? `${linkBase}?cpf=${cpfLimpo}&auto=1`
+        : linkBase;
       if (pendingWindowRef.current) {
         const w = pendingWindowRef.current;
         pendingWindowRef.current = null;

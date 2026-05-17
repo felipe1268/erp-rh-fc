@@ -1,6 +1,88 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2043 — SST · Integração de Segurança · "Iniciar agora" ·
+ * pula passo de identificação por CPF quando RH já clicou no
+ * nome do colaborador.
+ *
+ * Pedido direto do usuário (img IMG_0890): "Se eu já cliquei no
+ * nome do funcionário não precisa pedir os dados de novo, pq o
+ * ERP já deveria saber". Após Rev. 2042 corrigir o servidor, o
+ * fluxo passou a chegar até a tela pública — mas mostrando o
+ * passo "1/5 · Identificação · Digite seu CPF". Redundante:
+ * o RH selecionou ANA na aba Pendentes, criou o registro com
+ * o CPF dela, e a próxima tela perguntou o CPF de novo.
+ *
+ * Solução (sem nova rota / sem mudar contrato público):
+ *
+ *   - `IntegracaoSST.tsx` (onSuccess do criarRegistro): quando
+ *     a janela foi pré-aberta pelo "Iniciar agora" (RH iniciou),
+ *     o link agora vira `/integracao/{token}?cpf={cpf}&auto=1`
+ *     em vez de só `/integracao/{token}`. Para o modal de criar
+ *     normal (RH gera link pra mandar via WhatsApp), link continua
+ *     SEM o CPF — colaborador segue digitando (correto, é dele
+ *     que a gente quer a confirmação de identidade).
+ *
+ *   - `IntegracaoPublica.tsx` (mount): lê `URLSearchParams`,
+ *     se vier `?cpf=<11 dígitos>` define `autoStart=true`, abre
+ *     já no step "boasvindas" (em vez de "cpf") com o CPF
+ *     pré-preenchido, e dispara `buscarPorCpf.refetch()` num
+ *     `useEffect` guardado por `useRef` pra rodar uma vez só.
+ *     Cobre 3 cenários do retorno:
+ *       · `pronto`: fica em "boasvindas" (estado inicial)
+ *       · `ja_aprovado`: pula direto pra "resultado"
+ *       · `sem_config`: volta pro step "cpf" + toast erro
+ *     Em caso de exceção, volta pro step "cpf" + toast com a
+ *     mensagem real (graceful degradation — RH ou colaborador
+ *     digita de novo).
+ *
+ * + `shared/version.ts` → 2043.
+ *
+ * Mudança em 3 arquivos (~50L em 3 hunks, ZERO servidor):
+ *
+ *   1. `client/src/pages/sst/IntegracaoSST.tsx` (~7L) — link
+ *      condicional com `?cpf=...&auto=1` quando `pendingWindowRef`
+ *      ativa (escopo: só "Iniciar agora").
+ *   2. `client/src/pages/sst/IntegracaoPublica.tsx` (~40L) —
+ *      parse de URL, estado inicial autodetect, useEffect com
+ *      ref-guard de single-fire.
+ *   3. `shared/version.ts` → 2043.
+ *
+ * R-001/R-007/R-010 OK: ZERO ALTER/DROP/DELETE, ZERO mudança de
+ * schema, ZERO mudança de contrato do servidor (publicProcedure
+ * `buscarPorCpf` continua aceitando `cpf` obrigatório — só passamos
+ * automaticamente). Reversível em 3 arquivos.
+ *
+ * Preservado:
+ *   - Rev. 2042 (FIX employees.nomeCompleto) INTACTA
+ *   - Rev. 2041 (tela de erro inline) INTACTA
+ *   - Rev. 2040/2039/2038 INTACTAS
+ *   - Fluxo "colaborador recebe link via WhatsApp" INTACTO —
+ *     continua exigindo CPF (defesa contra link compartilhado
+ *     pra pessoa errada)
+ *   - Validação CPF↔token no servidor INTACTA — defesa em
+ *     profundidade contra alguém adivinhar token sem saber o CPF
+ *
+ * Segurança:
+ *   - CPF na URL: vaza no histórico do navegador do dispositivo
+ *     do RH e em logs de proxy intermediário. Aceitável pq:
+ *     (a) RH já vê o CPF na tela; (b) link é one-shot pra esta
+ *     integração; (c) token continua sendo a chave secreta —
+ *     CPF sozinho não destrava NADA sem o token correspondente.
+ *
+ * Follow-up:
+ *   1. Esconder o `?cpf=` da barra de endereços via
+ *      `window.history.replaceState` logo após o mount (limpa
+ *      o histórico).
+ *   2. Considerar `?auto=1` SEM CPF: criar endpoint público
+ *      `obterPorToken` que devolve dados sem precisar de CPF
+ *      quando o registro veio do "Iniciar agora" (origem RH).
+ *      Trade-off: token vaza → qualquer um abre. Manter CPF é
+ *      mais seguro.
+ *   3. Adicionar QR Code com esse link auto-iniciado no modal
+ *      de "Criar integração" pra escanear no celular do
+ *      colaborador presencialmente.
+ *
  * Rev. 2042 — SST · Integração de Segurança · "Iniciar agora" ·
  * CAUSA-RAIZ encontrada: SELECT usava coluna inexistente
  * `employees.nome` (correto é `employees.nomeCompleto`),
