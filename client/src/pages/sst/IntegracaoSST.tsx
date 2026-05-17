@@ -463,7 +463,7 @@ function VideosTab({ companyId }: { companyId: number }) {
       )}
 
       <Dialog open={showForm} onOpenChange={(v) => { if (!v) resetForm(); }}>
-        <DialogContent className="max-w-2xl p-0 gap-0 overflow-hidden">
+        <DialogContent className="max-w-2xl lg:max-w-4xl xl:max-w-5xl p-0 gap-0 overflow-hidden">
           {/* Rev. 2009 — Header gradient (regra de ouro) */}
           <DialogHeader className="px-6 py-4 bg-gradient-to-r from-emerald-600 via-emerald-500 to-teal-500 text-white space-y-1">
             <div className="flex items-center gap-3">
@@ -481,7 +481,9 @@ function VideosTab({ companyId }: { companyId: number }) {
             </div>
           </DialogHeader>
 
-          <div className="px-6 py-4 space-y-4 max-h-[calc(100vh-220px)] overflow-y-auto">
+          <div className="px-6 py-4 max-h-[calc(100vh-220px)] overflow-y-auto">
+            {/* Rev. 2011 — Grid 2 cols em lg+: (Onde encaixa | Conteúdo) + (Mídia | Configurações) */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             {/* SEÇÃO 1 — Onde encaixa */}
             <section className="rounded-xl border-2 border-indigo-200 bg-gradient-to-r from-indigo-50/60 to-white p-3">
               <div className="flex items-center gap-2 mb-2">
@@ -590,6 +592,7 @@ function VideosTab({ companyId }: { companyId: number }) {
               </div>
               <p className="text-[10px] text-amber-700/80 mt-2">Vídeos obrigatórios bloqueiam a conclusão da integração até serem assistidos integralmente.</p>
             </section>
+            </div>
           </div>
 
           <DialogFooter className="px-6 py-3 border-t bg-slate-50/60 gap-2">

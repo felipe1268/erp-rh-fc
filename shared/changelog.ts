@@ -1,6 +1,15 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2011 — SST · Integração · Modal Vídeo · Largura e distribuição em 2 colunas no tablet/PC.
+ * Pedido direto do usuário (17/05/2026, img IMG_0854_1779031556595): "Melhore a tela, está quero ela mais distribuída na tela". Após a Rev. 2009 o modal já estava na regra de ouro, mas em tablet/PC widescreen continuava com largura `max-w-2xl` (~672px) e as 4 seções empilhadas verticalmente — desperdiçava 50%+ do espaço lateral e exigia scroll desnecessário.
+ * Mudança em 1 arquivo (`client/src/pages/sst/IntegracaoSST.tsx`, 2 hunks pequenos, ZERO lógica):
+ *   (1) DialogContent: `max-w-2xl` → `max-w-2xl lg:max-w-4xl xl:max-w-5xl` (mobile/iPad portrait mantém 2xl; lg ≥1024px sobe pra 4xl ~896px; xl ≥1280px sobe pra 5xl ~1024px).
+ *   (2) Container interno: envoltório `<div class="grid grid-cols-1 lg:grid-cols-2 gap-4">` agrupa as 4 seções → mobile/iPad portrait empilha (1 col), tablet landscape/PC distribui em 2 colunas: (Onde encaixa | Conteúdo) na linha 1 e (Mídia | Configurações) na linha 2.
+ *   (3) `shared/version.ts` → 2011.
+ * Resultado: PC widescreen mostra modal compacto em 2 colunas usando o espaço disponível, sem scroll vertical interno na maioria dos casos; tablet portrait/mobile continuam empilhados (1 col) como antes; preview do YouTube (em Mídia) cabe inteiro na coluna direita sem cortar.
+ * Preservado: TODA a estrutura interna das 4 seções (chips, labels, inputs, preview, toggle Obrigatório) INTACTA; header gradient (Rev. 2009) INTACTO; footer + CTA gradient INTACTOS; mutations/states/handleSave/resetForm INTACTOS; outros modais do arquivo (Config/Sessão/Pendentes/Histórico) INTACTOS — só este modal de VideosTab mudou. Rev. 2010 INTACTA. Schema INTACTO. R-001/R-007/R-010 OK (CSS-only). Reversível em 2 hunks. Follow-up: aplicar mesma distribuição 2-col aos outros modais do `IntegracaoSST.tsx` (ConfigTab/SessaoTab) na mesma propagação "para todas as telas" da Rev. 2007.
+ *
  * Rev. 2010 — DP · Fechamento de Ponto · BUG-FIX · Discrepância % Presença tabela vs. drill-down.
  * Reportado pelo usuário (17/05/2026, img IMG_0852 + IMG_0853): "veja o caso da Isabela, veio todos os dias basicamente, só tem 1 falta e tem um % de 43%, não entendi o pq". Isabela aparecia na tabela com 10 dias trabalhados / 45% presença, mas o drill-down (modal calendário) mostrava 21 dias trabalhados / 1 falta provável / 95% de presença. Os dois cálculos discordavam completamente.
  * Causa-raiz: dois endpoints diferentes com filtros divergentes:
