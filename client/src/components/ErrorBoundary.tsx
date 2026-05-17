@@ -9,13 +9,14 @@ interface Props {
 interface State {
   hasError: boolean;
   error: Error | null;
+  componentStack: string | null;
   retryCount: number;
 }
 
 class ErrorBoundary extends Component<Props, State> {
   constructor(props: Props) {
     super(props);
-    this.state = { hasError: false, error: null, retryCount: 0 };
+    this.state = { hasError: false, error: null, componentStack: null, retryCount: 0 };
   }
 
   static getDerivedStateFromError(error: Error): Partial<State> {
@@ -71,6 +72,17 @@ class ErrorBoundary extends Component<Props, State> {
     }
     
     console.error('[ErrorBoundary] Erro capturado:', error, errorInfo);
+    this.setState({ componentStack: errorInfo.componentStack || null });
+
+    try {
+      const reporter = (window as any).__reportClientError;
+      if (typeof reporter === 'function') {
+        reporter('react-error-boundary', error, {
+          componentStack: errorInfo.componentStack?.substring(0, 4000) || null,
+          errorName: error.name,
+        });
+      }
+    } catch { /* nunca quebrar dentro do boundary */ }
   }
 
   render() {
@@ -90,6 +102,15 @@ class ErrorBoundary extends Component<Props, State> {
                 <p className="text-sm font-semibold text-destructive break-words">
                   {this.state.error.name || "Error"}: {this.state.error.message}
                 </p>
+              </div>
+            )}
+
+            {this.state.componentStack && (
+              <div className="p-3 w-full rounded bg-amber-50 border border-amber-200 mb-4">
+                <p className="text-xs font-semibold text-amber-900 mb-1">Componente que falhou:</p>
+                <pre className="text-xs text-amber-900 whitespace-break-spaces font-mono">
+                  {this.state.componentStack.split('\n').slice(0, 6).join('\n')}
+                </pre>
               </div>
             )}
 
