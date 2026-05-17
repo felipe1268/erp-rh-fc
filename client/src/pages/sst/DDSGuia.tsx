@@ -577,6 +577,8 @@ export default function DDSGuia() {
     temaId: "", tituloTema: "", conteudoMd: "",
     instrutor: "", instrutorCpf: "", instrutorCodigoInterno: "", local: "", observacoes: "",
     funcionarioIds: [] as number[],
+    // Rev. 2021 — IDs dos funcionários TERCEIROS marcados como presentes no DDS.
+    funcTerceiroIds: [] as number[],
   });
   // Rev. 1730 — abrir modal já preenchendo instrutor (usuário logado), data hoje, hora 07:30
   // Se nenhum tema vier, sugere o tema do mês atual (campanha ou vacinação) automaticamente.
@@ -611,6 +613,7 @@ export default function DDSGuia() {
       local: "",
       observacoes: "",
       funcionarioIds: [] as number[],
+      funcTerceiroIds: [] as number[],
     });
     setShowSessao(true);
   };
@@ -691,6 +694,8 @@ export default function DDSGuia() {
       local: sessaoForm.local || undefined,
       observacoes: sessaoForm.observacoes || undefined,
       funcionarioIds: sessaoForm.funcionarioIds,
+      // Rev. 2021 — envia terceiros marcados pra gravar em ddsParticipacoesTerceiros.
+      funcTerceiroIds: sessaoForm.funcTerceiroIds ?? [],
     });
   };
 
@@ -2198,8 +2203,12 @@ export default function DDSGuia() {
             const ontem = (() => { const d = new Date(); d.setDate(d.getDate() - 1); return d.toISOString().slice(0, 10); })();
             const recentLocais = getRecentLocais(companyId);
             const equipeObra = (funcsObraQ.data as any[]) ?? [];
+            // Rev. 2021 — equipe agora vem com CLT + Terceiros misturados (campo `tipo`).
+            const totalMarcados = sessaoForm.funcionarioIds.length + (sessaoForm.funcTerceiroIds?.length ?? 0);
             const todosSelecionados = equipeObra.length > 0 && equipeObra.every((e: any) =>
-              sessaoForm.funcionarioIds.includes(e.employeeId)
+              e.tipo === "terceiro"
+                ? (sessaoForm.funcTerceiroIds ?? []).includes(e.funcTerceiroId)
+                : sessaoForm.funcionarioIds.includes(e.employeeId)
             );
             const equipeFiltrada = buscaFunc
               ? equipeObra.filter((e: any) =>
@@ -2719,20 +2728,27 @@ export default function DDSGuia() {
                           <label className="text-sm font-bold text-emerald-900 flex items-center gap-1.5">
                             <Users className="h-4 w-4" /> Equipe da obra
                             {funcsObraQ.isLoading && <span className="text-[11px] font-normal text-slate-500 italic">(carregando...)</span>}
-                            {!funcsObraQ.isLoading && (
-                              <span className="text-[11px] font-normal text-slate-600">
-                                ({sessaoForm.funcionarioIds.length} de {equipeObra.length} marcado(s) como presente)
-                              </span>
-                            )}
+                            {!funcsObraQ.isLoading && (() => {
+                              const qtdTerc = equipeObra.filter((e: any) => e.tipo === "terceiro").length;
+                              return (
+                                <span className="text-[11px] font-normal text-slate-600">
+                                  ({totalMarcados} de {equipeObra.length} marcado(s) como presente
+                                  {qtdTerc > 0 && <> · inclui <strong className="text-orange-700">{qtdTerc} terceiro(s)</strong></>})
+                                </span>
+                              );
+                            })()}
                           </label>
                           <div className="flex items-center gap-2">
                             {equipeObra.length > 0 && (
                               <button type="button"
                                 onClick={() => {
                                   if (todosSelecionados) {
-                                    setSessaoForm({ ...sessaoForm, funcionarioIds: [] });
+                                    setSessaoForm({ ...sessaoForm, funcionarioIds: [], funcTerceiroIds: [] });
                                   } else {
-                                    setSessaoForm({ ...sessaoForm, funcionarioIds: equipeObra.map((e: any) => e.employeeId) });
+                                    // Rev. 2021 — separa CLT (employeeId) de Terceiros (funcTerceiroId).
+                                    const clts = equipeObra.filter((e: any) => e.tipo !== "terceiro").map((e: any) => e.employeeId).filter(Boolean);
+                                    const tercs = equipeObra.filter((e: any) => e.tipo === "terceiro").map((e: any) => e.funcTerceiroId).filter(Boolean);
+                                    setSessaoForm({ ...sessaoForm, funcionarioIds: clts, funcTerceiroIds: tercs });
                                   }
                                 }}
                                 className="text-[11px] font-semibold text-emerald-700 hover:underline">
@@ -2765,26 +2781,48 @@ export default function DDSGuia() {
                             </div>
                             <div className="max-h-72 overflow-y-auto bg-white rounded-lg border border-slate-200 divide-y divide-slate-100">
                               {equipeFiltrada.map((e: any) => {
-                                const sel = sessaoForm.funcionarioIds.includes(e.employeeId);
+                                // Rev. 2021 — chave única (CLT usa employeeId; Terceiro usa funcTerceiroId).
+                                const isTerc = e.tipo === "terceiro";
+                                const key = isTerc ? `t-${e.funcTerceiroId}` : `c-${e.employeeId}`;
+                                const sel = isTerc
+                                  ? (sessaoForm.funcTerceiroIds ?? []).includes(e.funcTerceiroId)
+                                  : sessaoForm.funcionarioIds.includes(e.employeeId);
                                 return (
-                                  <label key={e.employeeId}
+                                  <label key={key}
                                     className={`flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-emerald-50 ${sel ? "bg-emerald-50" : ""}`}>
                                     <input type="checkbox" checked={sel}
                                       onChange={() => {
-                                        const ids = sessaoForm.funcionarioIds;
-                                        setSessaoForm({
-                                          ...sessaoForm,
-                                          funcionarioIds: sel
-                                            ? ids.filter((x: number) => x !== e.employeeId)
-                                            : [...ids, e.employeeId],
-                                        });
+                                        if (isTerc) {
+                                          const ids = sessaoForm.funcTerceiroIds ?? [];
+                                          setSessaoForm({
+                                            ...sessaoForm,
+                                            funcTerceiroIds: sel
+                                              ? ids.filter((x: number) => x !== e.funcTerceiroId)
+                                              : [...ids, e.funcTerceiroId],
+                                          });
+                                        } else {
+                                          const ids = sessaoForm.funcionarioIds;
+                                          setSessaoForm({
+                                            ...sessaoForm,
+                                            funcionarioIds: sel
+                                              ? ids.filter((x: number) => x !== e.employeeId)
+                                              : [...ids, e.employeeId],
+                                          });
+                                        }
                                       }}
                                       className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 h-4 w-4" />
                                     <div className="flex-1 min-w-0">
-                                      <div className="text-sm font-medium text-slate-800 truncate">{e.nome}</div>
+                                      <div className="text-sm font-medium text-slate-800 truncate flex items-center gap-1.5">
+                                        {e.nome}
+                                        {isTerc && (
+                                          <span className="inline-flex items-center px-1.5 py-0.5 rounded-full bg-orange-100 text-orange-800 text-[9px] font-bold uppercase tracking-wide" title="Funcionário Terceiro vinculado a esta obra">
+                                            Terceiro
+                                          </span>
+                                        )}
+                                      </div>
                                       <div className="text-[11px] text-slate-500 truncate">
                                         {e.funcaoNaObra ?? e.funcao ?? "—"}
-                                        {e.status && e.status !== "Ativo" && (
+                                        {!isTerc && e.status && e.status !== "Ativo" && (
                                           <span className="ml-1 px-1 rounded bg-amber-100 text-amber-800 font-semibold">{e.status}</span>
                                         )}
                                       </div>

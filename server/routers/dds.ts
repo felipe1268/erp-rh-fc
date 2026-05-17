@@ -4,6 +4,8 @@ import { getDb } from "../db";
 import {
   ddsTemas, ddsSessoes, ddsSessaoFuncionarios,
   employees, obras, accidents, obraFuncionarios,
+  // Rev. 2021 — DDS pode incluir funcionários terceiros vinculados à obra.
+  funcionariosTerceiros, ddsParticipacoesTerceiros,
 } from "../../drizzle/schema";
 import { eq, and, sql, desc, isNull, inArray, notInArray, gte, lte, or } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
@@ -1608,7 +1610,45 @@ ${input.foco ? `Foco solicitado pelo usuário: "${input.foco}". Priorize temas d
           seen.add(r.employeeId);
           return true;
         });
-        return dedup.filter((r: any) => !["Desligado", "Lista_Negra", "ListaNegra"].includes(r.status));
+        const cltFinal = dedup
+          .filter((r: any) => !["Desligado", "Lista_Negra", "ListaNegra"].includes(r.status))
+          .map((r: any) => ({ ...r, tipo: "clt" as const, funcTerceiroId: null }));
+        // Rev. 2021 — anexa funcionários terceiros vinculados às mesmas obras (funcionariosTerceiros.obraId).
+        // try/catch defensivo: se a query falhar (ex: módulo Terceiros não migrado num tenant antigo),
+        // mantém o comportamento original (só CLT) — DDS NÃO pode quebrar por causa de Terceiros.
+        try {
+          const terc = await db.select({
+            funcTerceiroId: funcionariosTerceiros.id,
+            nome: funcionariosTerceiros.nome,
+            cpf: funcionariosTerceiros.cpf,
+            funcao: funcionariosTerceiros.funcao,
+            status: funcionariosTerceiros.status,
+            empresaTerceiraId: funcionariosTerceiros.empresaTerceiraId,
+            fotoUrl: funcionariosTerceiros.fotoUrl,
+          }).from(funcionariosTerceiros).where(and(
+            eq(funcionariosTerceiros.companyId, input.companyId),
+            inArray(funcionariosTerceiros.obraId, ids),
+            isNull(funcionariosTerceiros.deletedAt),
+          )).orderBy(funcionariosTerceiros.nome);
+          const tercFinal = terc
+            .filter((t: any) => !["inativo", "desligado"].includes(String(t.status).toLowerCase()))
+            .map((t: any) => ({
+              tipo: "terceiro" as const,
+              employeeId: null,
+              funcTerceiroId: t.funcTerceiroId,
+              nome: t.nome,
+              cpf: t.cpf,
+              funcao: t.funcao,
+              funcaoNaObra: null,
+              status: t.status,
+              empresaTerceiraId: t.empresaTerceiraId,
+              fotoUrl: t.fotoUrl,
+            }));
+          return [...cltFinal, ...tercFinal];
+        } catch (e: any) {
+          console.warn("[DDS funcionariosDaObra] terceiros falhou (seguindo só CLT):", e?.message);
+          return cltFinal;
+        }
       } catch (e: any) {
         console.error("[DDS funcionariosDaObra] FAIL", { input, msg: e?.message, stack: e?.stack });
         throw e;
@@ -2122,6 +2162,8 @@ ${input.foco ? `Foco solicitado pelo usuário: "${input.foco}". Priorize temas d
       local: z.string().max(255).optional(),
       observacoes: z.string().optional(),
       funcionarioIds: z.array(z.number().int().positive()).optional(),
+      // Rev. 2021 — Terceiros vinculados à obra também participam do DDS.
+      funcTerceiroIds: z.array(z.number().int().positive()).optional(),
     }))
     .mutation(async ({ input, ctx }) => {
       assertCompanyAccess(ctx, input.companyId);
@@ -2172,6 +2214,39 @@ ${input.foco ? `Foco solicitado pelo usuário: "${input.foco}". Priorize temas d
               presente: 1,
             } as any))
           );
+        }
+      }
+      // Rev. 2021 — grava participação dos terceiros marcados na tabela
+      // dedicada `ddsParticipacoesTerceiros` (criada na Rev. 2004). Mesmas
+      // proteções: dedupe, scope por companyId, só ativos não soft-deleted.
+      // Falha não propaga (terceiros é módulo opcional) — toast separado avisa.
+      if (input.funcTerceiroIds && input.funcTerceiroIds.length > 0) {
+        try {
+          const tercIds = Array.from(new Set(input.funcTerceiroIds));
+          const tercs = await db.select({
+            id: funcionariosTerceiros.id,
+          }).from(funcionariosTerceiros).where(and(
+            inArray(funcionariosTerceiros.id, tercIds),
+            eq(funcionariosTerceiros.companyId, input.companyId),
+            isNull(funcionariosTerceiros.deletedAt),
+          ));
+          if (tercs.length > 0) {
+            await db.insert(ddsParticipacoesTerceiros).values(
+              tercs.map((t: any) => ({
+                companyId: input.companyId,
+                funcTerceiroId: t.id,
+                dataDds: input.data,
+                tema: input.tituloTema,
+                instrutor: input.instrutor ?? null,
+                obraId: input.obraId ?? null,
+                obraNome,
+                observacoes: input.observacoes ?? null,
+                createdBy: (ctx.user as any)?.id ?? null,
+              } as any))
+            );
+          }
+        } catch (e: any) {
+          console.warn("[DDS criarSessao] gravação de terceiros falhou:", e?.message);
         }
       }
       return sessao;

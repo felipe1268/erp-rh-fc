@@ -1,6 +1,108 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2021 — SST · DDS · Funcionários TERCEIROS vinculados à obra agora
+ * aparecem na lista "Equipe da obra" do modal "Nova Sessão DDS" com badge
+ * laranja "Terceiro"; participação gravada em `ddsParticipacoesTerceiros`.
+ *
+ * Pedido direto do usuário (17/05/2026, imgs IMG_0865 + IMG_0866):
+ * "Os funcionários do terceiros poderia tbm parti do DDS, então precisamos
+ * que os nomes do funcionários terceiros apareçam aqui tbm quando ele
+ * estiver na obra que o DDS está sendo feita". O modal só listava CLT —
+ * técnico de segurança fazia o DDS na obra REVTE-CIVIL com a equipe inteira
+ * presente, mas os pedreiros/serventes terceirizados ficavam fora do
+ * controle, sem registro em lugar nenhum.
+ *
+ * Decisão arquitetural: REUSAR `ddsParticipacoesTerceiros` (tabela já
+ * criada na Rev. 2004 pra registrar DDS individual de terceiro na tela
+ * `FuncionariosTerceiros > aba DDS`). Não criar tabela nova; não duplicar
+ * em `ddsSessaoFuncionarios` (essa é específica de CLT — FK pra employees).
+ * Resultado: o histórico de DDS do terceiro fica unificado em uma única
+ * fonte, seja a participação criada manualmente OU disparada por uma
+ * sessão coletiva.
+ *
+ * Mudança em 2 arquivos:
+ *
+ * (A) `server/routers/dds.ts`:
+ *   - Imports: `funcionariosTerceiros, ddsParticipacoesTerceiros`.
+ *   - Procedure `funcionariosDaObra` — após dedup/filtro de CLT, novo
+ *     try/catch que faz SELECT em `funcionariosTerceiros` WHERE
+ *     `companyId` + `obraId IN (ids expandidos)` + `deletedAt IS NULL`,
+ *     filtra status != inativo/desligado, mapeia pro shape unificado
+ *     `{ tipo: "terceiro", employeeId: null, funcTerceiroId, nome, cpf,
+ *     funcao, funcaoNaObra: null, status, empresaTerceiraId, fotoUrl }`.
+ *     CLT existente ganha `tipo: "clt", funcTerceiroId: null`. Retorno
+ *     final = `[...cltFinal, ...tercFinal]`. Try/catch defensivo: se
+ *     terceiros falhar, retorna só CLT (DDS não pode quebrar por causa
+ *     do módulo Terceiros).
+ *   - Procedure `criarSessao` — input ganha
+ *     `funcTerceiroIds: z.array(z.number()).optional()`. Após inserir
+ *     CLT em `ddsSessaoFuncionarios`, novo bloco try/catch valida
+ *     terceiros (`inArray(id) + eq(companyId) + isNull(deletedAt)`) e
+ *     insere em `ddsParticipacoesTerceiros` com `{ companyId,
+ *     funcTerceiroId, dataDds: input.data, tema: input.tituloTema,
+ *     instrutor, obraId, obraNome, observacoes, createdBy }`. Dedupe
+ *     via Set, scope rígido por tenant.
+ *
+ * (B) `client/src/pages/sst/DDSGuia.tsx`:
+ *   - `sessaoForm` ganha `funcTerceiroIds: number[]` (init `[]` no
+ *     state inicial E no `abrirNovaSessao`).
+ *   - `handleSalvarSessao` envia `funcTerceiroIds` no payload.
+ *   - `totalMarcados = funcionarioIds.length + funcTerceiroIds.length`
+ *     pra contador global.
+ *   - `todosSelecionados` agora trata cada item conforme `e.tipo`
+ *     (terceiro lê `funcTerceiroIds`, CLT lê `funcionarioIds`).
+ *   - "Selecionar todos" separa CLT (employeeId) de Terceiros
+ *     (funcTerceiroId) e popula os 2 arrays.
+ *   - Cabeçalho mostra "(N de M marcado(s) … · inclui K terceiro(s))"
+ *     em laranja quando há terceiros na lista.
+ *   - Cada `<label>` da equipe: key única (`c-{id}` ou `t-{id}`); se
+ *     `isTerc`, mexe em `funcTerceiroIds`; chip laranja `bg-orange-100
+ *     text-orange-800 uppercase` ao lado do nome com tooltip
+ *     "Funcionário Terceiro vinculado a esta obra". Status badge
+ *     (Aviso Prévio etc.) só aparece pra CLT.
+ *
+ * + shared/version.ts → 2021.
+ *
+ * R-001/R-007/R-010 OK: ZERO SQL bruto, ZERO ALTER/DROP/CREATE, ZERO
+ * mudança de schema. Apenas SELECT/INSERT via Drizzle em tabelas que
+ * já existem (`funcionariosTerceiros` desde Rev. 1985 e
+ * `ddsParticipacoesTerceiros` desde Rev. 2004). Reversível em 2 arquivos.
+ *
+ * Preservado:
+ * - `obraFuncionarios`, `employees`, `ddsSessaoFuncionarios` INTACTOS.
+ * - `colaboradoresParaTransferir` + `transferirParaObra` INTACTOS (só
+ *   CLT — terceiro vincula pela tela de cadastro de Terceiros).
+ * - Tela `FuncionariosTerceiros > aba DDS` da Rev. 2004 INTACTA — agora
+ *   passa a refletir participações geradas pela sessão coletiva (mesma
+ *   tabela).
+ * - Modal de Nova Sessão: BLOCO 6 (Equipe da Obra) é o único alterado;
+ *   BLOCOS 1-5 + 7 (Local/Observações) intactos.
+ * - Rev. 2020 (companyId coercion) INTACTA.
+ *
+ * Limitações:
+ * - `colaboradoresParaTransferir` (botão "Transferir colaborador") ainda
+ *   só lista CLT — pra vincular terceiro à obra, usar o cadastro de
+ *   Terceiros (campo `obraId` lá). Adicionar terceiros no transferir
+ *   é follow-up óbvio.
+ * - `getSessao` (detalhe da sessão) ainda não lista terceiros
+ *   participantes — eles ficam visíveis só na tela do Terceiro (aba DDS).
+ *   Follow-up: trazer terceiros pro detalhe da sessão.
+ * - Pré-seleção visual da equipe (bloco 6 funcs) não considera terceiros
+ *   pra gerar lista de funções no roteiro IA (campo `funcoes`). OK por
+ *   ora — terceiros geralmente têm funções operacionais já cobertas
+ *   pelo CLT.
+ *
+ * Follow-up:
+ * - Detalhe da sessão (`getSessao`/UI) listar terceiros participantes
+ *   misturados com CLT, mesmo padrão de badge laranja.
+ * - "Transferir colaborador" aceitar terceiros (criar/atualizar `obraId`
+ *   em `funcionariosTerceiros`).
+ * - Histórico em `FuncionariosTerceiros > aba DDS` mostrar origem da
+ *   participação (manual vs sessão coletiva).
+ * - Validar se terceiro tem ASO/NR válidos antes de aceitar marcação
+ *   no DDS (warning amarelo, igual a CLT).
+ *
  * Rev. 2020 — SST · Integração de Segurança · companyId coercion (Zod
  * "expected number, received string" travava abas Vídeos/Configurações/
  * Pendentes/Histórico/Sessões).
