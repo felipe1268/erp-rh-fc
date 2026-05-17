@@ -500,6 +500,18 @@ Regras:
           console.log(`[SyncSchema+] Coluna integracao_cliente_doc_url garantida em funcionarios_terceiros.`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA funcionarios_terceiros integracao_cliente_doc_url:`, e?.message || e); }
 
+        // Rev. 2008 — Endereço residencial em funcionarios_terceiros (saber de onde vem o terceiro)
+        try {
+          await db.execute(sql`ALTER TABLE funcionarios_terceiros ADD COLUMN IF NOT EXISTS cep VARCHAR(10)`);
+          await db.execute(sql`ALTER TABLE funcionarios_terceiros ADD COLUMN IF NOT EXISTS logradouro VARCHAR(255)`);
+          await db.execute(sql`ALTER TABLE funcionarios_terceiros ADD COLUMN IF NOT EXISTS numero_endereco VARCHAR(20)`);
+          await db.execute(sql`ALTER TABLE funcionarios_terceiros ADD COLUMN IF NOT EXISTS complemento VARCHAR(100)`);
+          await db.execute(sql`ALTER TABLE funcionarios_terceiros ADD COLUMN IF NOT EXISTS bairro VARCHAR(100)`);
+          await db.execute(sql`ALTER TABLE funcionarios_terceiros ADD COLUMN IF NOT EXISTS cidade VARCHAR(100)`);
+          await db.execute(sql`ALTER TABLE funcionarios_terceiros ADD COLUMN IF NOT EXISTS uf VARCHAR(2)`);
+          console.log(`[SyncSchema+] Colunas de endereço garantidas em funcionarios_terceiros.`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA funcionarios_terceiros endereço:`, e?.message || e); }
+
         // Rev. 1998 — Número interno auto-gerado em funcionarios_terceiros
         try {
           await db.execute(sql`ALTER TABLE funcionarios_terceiros ADD COLUMN IF NOT EXISTS numero_interno VARCHAR(30)`);

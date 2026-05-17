@@ -1,6 +1,28 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2008 — Terceiros · Funcionários · Endereço residencial + bloco "Contato & Endereço" destacado.
+ * Pedido direto do usuário (17/05/2026): "coloque mais dados, como endereço.. para controlar de onde nossos terceiros são.. telefone tbm seria importante". O cadastro tinha apenas Telefone e E-mail soltos no grid genérico, sem ENDEREÇO algum — impossibilitando saber de onde o terceiro vem (logística de transporte, vale-transporte, mapa de origem, relatórios SST por região).
+ * Mudança em 4 arquivos:
+ *   (1) `drizzle/schema.ts` (+7 colunas em `funcionariosTerceiros`): `cep` varchar(10), `logradouro` varchar(255), `numeroEndereco`→`numero_endereco` varchar(20), `complemento` varchar(100), `bairro` varchar(100), `cidade` varchar(100), `uf` varchar(2). Todas nullable (retrocompat 100%).
+ *   (2) `server/_core/index.ts` (+13L): bootstrap idempotente `ALTER TABLE funcionarios_terceiros ADD COLUMN IF NOT EXISTS …` pras 7 colunas, dentro de try/catch. Confirmado em log: "Colunas de endereço garantidas em funcionarios_terceiros."
+ *   (3) `server/routers/terceiros.ts`: input zod de `funcionarios.create` e `funcionarios.update` ganharam as 7 chaves opcionais (cep/logradouro/numeroEndereco/complemento/bairro/cidade/uf). Persistência via spread INTACTA — funciona automaticamente.
+ *   (4) `client/src/pages/terceiros/FuncionariosTerceiros.tsx`: Telefone+E-mail+endereço extraídos do grid genérico pra um **bloco destacado emerald "Contato & Endereço Residencial"** ocupando toda a largura (`md:col-span-2 lg:col-span-3 xl:col-span-4`) com header (chip Phone + título + subtítulo explicando o porquê: "logística, comunicação rápida, relatórios de origem"). Layout interno em grid 1/2/4/6 cols com spans inteligentes: Telefone (marcado obrigatório com asterisco vermelho)+E-mail (2 cols cada lg) | CEP+Logradouro (3 cols)+Número | Complemento+Bairro+Cidade (2 cols cada)+UF (maxLength=2 auto-uppercase). +1 import `Phone` em lucide-react.
+ *   (5) `shared/version.ts` → 2008.
+ * Resultado: gestor cadastra/edita endereço completo do terceiro em segundos, vê de onde vêm (origem por cidade/UF), pode calcular logística de transporte. Bloco visual destacado emerald evita que o endereço seja esquecido como detalhe perdido entre os outros campos.
+ * Preservado: `funcionariosTerceiros` colunas existentes INTACTAS; `numeroInterno` (Rev. 1998), foto (Rev. 1998), integração Construtora/Cliente (Rev. 2003), DDS (Rev. 2004), documentos (Rev. 2002), grid responsivo (Rev. 2007) — TODOS INTACTOS. Rev. 2007 INTACTA. R-001/R-007/R-010 OK (somente `ADD COLUMN IF NOT EXISTS` aditivo, sem destrutivo). Reversível em 4 arquivos.
+ * Follow-up: integração com API de CEP (ViaCEP) pra autopreencher logradouro/bairro/cidade/UF; relatório agregado de origem (mapa de funcionários terceiros por cidade); cálculo de distância casa→obra pra vale-transporte.
+ *
+ * Rev. 2007 — Terceiros · Modal Editar/Novo Funcionário · Aproveita largura em PC widescreen.
+ * Pedido direto do usuário (17/05/2026, img image_1779030288131): "Melhorou esta tela, no tablet ficou perfeito, no PC ficou estranho.. isso para todas as telas." O FullScreenDialog usa header full-width laranja, mas o conteúdo interno tinha `max-w-4xl mx-auto` (≈896px) — em monitor widescreen sobrava 50%+ de espaço cinza lateral e os campos ficavam em apenas 2 colunas estreitas, dando sensação de "modal pequeno perdido no meio". No tablet (largura ≈1024px) o `max-w-4xl` casava bem e tudo cabia naturalmente.
+ * Mudança em 1 arquivo: `client/src/pages/terceiros/FuncionariosTerceiros.tsx` (2 hunks, ZERO lógica):
+ *   (1) Container do modal: `max-w-4xl mx-auto p-4` → `max-w-4xl lg:max-w-6xl xl:max-w-7xl mx-auto p-4 lg:px-6`. Tablet/abaixo mantém comportamento atual; lg (≥1024px) cresce pra 6xl (≈1152px); xl (≥1280px) usa 7xl (≈1280px).
+ *   (2) Grid de campos da aba Dados Pessoais: `grid-cols-1 md:grid-cols-2` → `grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4`. Mobile 1 coluna, tablet 2, desktop médio 3, desktop wide 4 colunas.
+ *   (3) `shared/version.ts` → 2007.
+ * Resultado: em PC widescreen, o formulário ocupa a tela toda sem espaço morto; em vez de 2 colunas estreitas, mostra 3-4 colunas e mantém a leitura natural. Tablet/iPad/mobile permanecem visualmente IDÊNTICOS (breakpoints `lg:`/`xl:` só ativam em ≥1024px).
+ * Preservado: header laranja `headerColor="bg-orange-500"`, hero foto + número interno (Rev. 1998), tabs internas (Dados/Documentos/DDS), DdsTabContent (Rev. 2004), abas Documentos (Rev. 2002+2003) — TODAS INTACTAS. Rev. 2006 INTACTA. Schema INTACTO. R-001/R-007/R-010 OK (CSS-only). Reversível em 2 hunks.
+ * Nota: o pedido "isso para todas as telas" será tratado em revisões subsequentes — esta rev escopo enxuto pra validar o padrão num modal real antes de propagar (próximos candidatos: modais de Compras/SC, Fechamento Ponto edit, Curriculos edit).
+ *
  * Rev. 2006 — DP · Fechamento de Ponto · Modal de ranking · Transparência total do cálculo de % Presença.
  * Pedido direto do usuário (17/05/2026, img image_1779030037258): "Ainda não ficou claro, falta legenda. Preciso saber o que é % Presença, como é calculado, de que dia a que dia ele está considerando — pq acredito que tenha algum equívoco aí, o % está muito baixo pra realidade". O modal "Mais Atrasados/Pontuais/Faltosos" tinha % Presença com descrição na legenda DESATUALIZADA ("dias corridos") desde a Rev. 2000 que mudou o cálculo pra dias úteis (seg-sex). Sem indicação clara do PERÍODO (data início/fim), do número de dias úteis considerados, nem da fórmula. Usuário ficou desconfiado do número (45% médio quando esperava ~80%).
  * Mudança em 1 arquivo: `client/src/pages/FechamentoPonto.tsx` (4 hunks):

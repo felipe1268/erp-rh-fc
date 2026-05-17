@@ -3573,6 +3573,14 @@ export const funcionariosTerceiros = pgTable("funcionarios_terceiros", {
   funcao: varchar({ length: 100 }),
   telefone: varchar({ length: 30 }),
   email: varchar({ length: 255 }),
+  // Rev. 2008 — Endereço residencial do terceiro (saber de onde vêm pra logística/RH/SST)
+  cep: varchar({ length: 10 }),
+  logradouro: varchar({ length: 255 }),
+  numeroEndereco: varchar("numero_endereco", { length: 20 }),
+  complemento: varchar({ length: 100 }),
+  bairro: varchar({ length: 100 }),
+  cidade: varchar({ length: 100 }),
+  uf: varchar({ length: 2 }),
   // Documentos
   asoUrl: varchar("aso_url", { length: 500 }),
   asoValidade: timestamp("aso_validade", { mode: "string" }),

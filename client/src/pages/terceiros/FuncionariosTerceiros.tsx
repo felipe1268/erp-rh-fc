@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Users, Plus, Search, Edit, Trash2, Upload, FileText, CheckCircle, XCircle, Clock, ShieldCheck, Building2, HardHat, Camera, BadgeCheck, User as UserIcon, X, Heart, Award, BookOpen, ClipboardCheck, AlertTriangle, Calendar } from "lucide-react";
+import { Users, Plus, Search, Edit, Trash2, Upload, FileText, CheckCircle, XCircle, Clock, ShieldCheck, Building2, HardHat, Camera, BadgeCheck, User as UserIcon, X, Heart, Award, BookOpen, ClipboardCheck, AlertTriangle, Calendar, Phone } from "lucide-react";
 
 export default function FuncionariosTerceiros() {
   const { user } = useAuth();
@@ -381,8 +381,30 @@ export default function FuncionariosTerceiros() {
                   <div><Label>RG</Label><Input value={form.rg || ""} onChange={(e) => setForm({ ...form, rg: e.target.value })} /></div>
                   <div><Label>Data de Nascimento</Label><Input type="date" value={form.dataNascimento?.split("T")[0] || ""} onChange={(e) => setForm({ ...form, dataNascimento: e.target.value })} /></div>
                   <div><Label>Função</Label><Input value={form.funcao || ""} onChange={(e) => setForm({ ...form, funcao: e.target.value })} /></div>
-                  <div><Label>Telefone</Label><Input value={form.telefone || ""} onChange={(e) => setForm({ ...form, telefone: e.target.value })} /></div>
-                  <div><Label>E-mail</Label><Input value={form.email || ""} onChange={(e) => setForm({ ...form, email: e.target.value })} /></div>
+                  <div className="md:col-span-2 lg:col-span-3 xl:col-span-4">
+                    <div className="rounded-xl border-2 border-emerald-200 bg-gradient-to-r from-emerald-50/70 to-teal-50/40 p-3 sm:p-4">
+                      <div className="flex items-center gap-2 mb-3">
+                        <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-100 ring-1 ring-emerald-200">
+                          <Phone className="h-3.5 w-3.5 text-emerald-700" />
+                        </span>
+                        <div>
+                          <div className="text-sm font-semibold text-emerald-900">Contato & Endereço Residencial</div>
+                          <div className="text-[11px] text-emerald-700/80">Importante p/ logística (transporte/vale-transporte), comunicação rápida e relatórios de origem dos terceiros.</div>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6 gap-3">
+                        <div className="lg:col-span-2"><Label>Telefone <span className="text-red-500">*</span></Label><Input placeholder="(11) 99999-9999" value={form.telefone || ""} onChange={(e) => setForm({ ...form, telefone: e.target.value })} /></div>
+                        <div className="lg:col-span-2"><Label>E-mail</Label><Input type="email" placeholder="nome@exemplo.com" value={form.email || ""} onChange={(e) => setForm({ ...form, email: e.target.value })} /></div>
+                        <div><Label>CEP</Label><Input placeholder="00000-000" value={form.cep || ""} onChange={(e) => setForm({ ...form, cep: e.target.value })} /></div>
+                        <div className="lg:col-span-3"><Label>Logradouro (Rua/Av.)</Label><Input placeholder="Rua, Avenida, Estrada..." value={form.logradouro || ""} onChange={(e) => setForm({ ...form, logradouro: e.target.value })} /></div>
+                        <div><Label>Número</Label><Input placeholder="123" value={form.numeroEndereco || ""} onChange={(e) => setForm({ ...form, numeroEndereco: e.target.value })} /></div>
+                        <div className="lg:col-span-2"><Label>Complemento</Label><Input placeholder="Casa, Apto, Bloco..." value={form.complemento || ""} onChange={(e) => setForm({ ...form, complemento: e.target.value })} /></div>
+                        <div className="lg:col-span-2"><Label>Bairro</Label><Input value={form.bairro || ""} onChange={(e) => setForm({ ...form, bairro: e.target.value })} /></div>
+                        <div className="lg:col-span-2"><Label>Cidade</Label><Input value={form.cidade || ""} onChange={(e) => setForm({ ...form, cidade: e.target.value })} /></div>
+                        <div><Label>UF</Label><Input maxLength={2} placeholder="SP" value={form.uf || ""} onChange={(e) => setForm({ ...form, uf: e.target.value.toUpperCase() })} /></div>
+                      </div>
+                    </div>
+                  </div>
                   <div>
                     <Label>Obra Alocada</Label>
                     <Select value={form.obraId ? String(form.obraId) : "none"} onValueChange={(v) => {
