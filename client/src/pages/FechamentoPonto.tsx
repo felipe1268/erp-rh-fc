@@ -1052,11 +1052,44 @@ export default function FechamentoPonto() {
     { enabled: !!diasDetalhe && !!periodoIni && !!periodoFim && (companyId > 0 || companyIds.length > 0) }
   );
 
-  // Dias ÚTEIS reais no período (segunda a sexta, exclui sábado/domingo).
-  // Rev. 2000: antes contava dias CORRIDOS (pra evitar >100% se trabalhasse fim de semana),
-  // mas isso distorcia a % Presença (denominador inflado). Agora conta úteis reais e o
-  // display dos percentuais aplica Math.min(100, ...) pra absorver eventual trabalho extra.
-  // Feriados ainda NÃO são excluídos (não há fonte de calendário de feriados nesta tela).
+  // Rev. 2014 — Calendário de feriados (federais fixos + Páscoa-derivados + estaduais/municipais
+  // cadastrados em /configuracoes/feriados). É a mesma fonte que o EspelhoPonto/payrollEngine
+  // usam, evitando divergência de definição de "dia útil".
+  const feriadosPeriodoQuery = trpc.feriados.listarPeriodo.useQuery(
+    { companyId, companyIds, dataInicio: periodoIni ?? "", dataFim: periodoFim ?? "" },
+    { enabled: !!periodoIni && !!periodoFim && (companyId > 0 || companyIds.length > 0) }
+  );
+  const feriadosSet = useMemo(() => {
+    return new Set<string>(feriadosPeriodoQuery.data ?? []);
+  }, [feriadosPeriodoQuery.data]);
+  // Buscar nomes pra exibir no drill-down (ano inteiro do início do período cobre os casos comuns).
+  const feriadosNomesQuery = trpc.feriados.listar.useQuery(
+    { companyId, companyIds, ano: periodoIni ? parseInt(periodoIni.slice(0, 4), 10) : new Date().getFullYear() },
+    { enabled: !!periodoIni && (companyId > 0 || companyIds.length > 0) }
+  );
+  const feriadosNomesQuery2 = trpc.feriados.listar.useQuery(
+    { companyId, companyIds, ano: periodoFim ? parseInt(periodoFim.slice(0, 4), 10) : new Date().getFullYear() },
+    { enabled: !!periodoFim && (companyId > 0 || companyIds.length > 0) && periodoIni?.slice(0, 4) !== periodoFim?.slice(0, 4) }
+  );
+  const feriadoNomeMap = useMemo(() => {
+    const m = new Map<string, string>();
+    const push = (list: any[] | undefined) => {
+      if (!list) return;
+      for (const f of list) {
+        // Normaliza pra YYYY-MM-DD (banco pode ter MM-DD pra recorrentes mas listar já expande)
+        const d = String(f.data || "");
+        if (/^\d{4}-\d{2}-\d{2}$/.test(d)) m.set(d, f.nome);
+      }
+    };
+    push(feriadosNomesQuery.data as any[] | undefined);
+    push(feriadosNomesQuery2.data as any[] | undefined);
+    return m;
+  }, [feriadosNomesQuery.data, feriadosNomesQuery2.data]);
+
+  // Dias ÚTEIS reais no período (segunda a sexta, exclui sábado/domingo E feriados em dia útil).
+  // Rev. 2000: antes contava dias CORRIDOS — corrigido pra úteis reais com clamp 100%.
+  // Rev. 2014: agora também subtrai feriados (federais/estaduais/municipais) que caem em Seg-Sex,
+  // pra não inflar o denominador com dias em que ninguém deveria ter batido o ponto.
   const diasUteisNoPeriodo = useMemo(() => {
     if (!periodoIni || !periodoFim) return null;
     const ini = new Date(periodoIni + "T12:00:00Z");
@@ -1066,11 +1099,14 @@ export default function FechamentoPonto() {
     const cur = new Date(ini);
     while (cur <= fim) {
       const dow = cur.getUTCDay(); // 0=dom, 6=sab
-      if (dow !== 0 && dow !== 6) count++;
+      if (dow !== 0 && dow !== 6) {
+        const ds = cur.toISOString().slice(0, 10);
+        if (!feriadosSet.has(ds)) count++;
+      }
       cur.setUTCDate(cur.getUTCDate() + 1);
     }
     return count > 0 ? count : null;
-  }, [periodoIni, periodoFim]);
+  }, [periodoIni, periodoFim, feriadosSet]);
 
   // Formata data YYYY-MM-DD para DD/MM/YYYY
   const fmtPeriodo = (d: string | null) => d ? d.split("-").reverse().join("/") : "";
@@ -2262,7 +2298,7 @@ export default function FechamentoPonto() {
                               <div className="text-[11px] font-bold text-indigo-900 uppercase tracking-wide leading-tight">Como é calculado o % de Presença</div>
                               <div className="text-[11px] text-indigo-900/80 leading-snug mt-0.5">
                                 <strong>Dias com batida de ponto</strong> ÷ <strong>dias úteis (seg-sex)</strong> do período de fechamento.
-                                Sábado, domingo e datas após hoje <em>não</em> entram. Feriados ainda <em>não</em> são excluídos (em estudo).
+                                Sábado, domingo, datas após hoje e <strong>feriados</strong> (federais, estaduais e municipais) <em>não</em> entram.
                               </div>
                             </div>
                             <div className="flex items-center gap-1.5 flex-wrap">
@@ -2463,16 +2499,22 @@ export default function FechamentoPonto() {
                         {diasEmployeeQuery.data && (() => {
                           const { dias, totalTrabalhados } = diasEmployeeQuery.data;
                           const DIAS_SEMANA = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
-                          // Apenas dias úteis (Seg-Sex) sem batida = falta provável
-                          const totalFaltas = dias.filter(d => d.dow >= 1 && d.dow <= 5 && !d.trabalhado).length;
+                          // Rev. 2014 — feriados (federais/estaduais/municipais) NÃO são falta provável
+                          const isFeriado = (ds: string) => feriadosSet.has(ds);
+                          // Apenas dias úteis (Seg-Sex), NÃO feriados, sem batida = falta provável
+                          const totalFaltas = dias.filter(d => d.dow >= 1 && d.dow <= 5 && !d.trabalhado && !isFeriado(d.data)).length;
                           const totalFDS = dias.filter(d => (d.dow === 0 || d.dow === 6) && !d.trabalhado).length;
+                          const totalFeriados = dias.filter(d => isFeriado(d.data) && d.dow >= 1 && d.dow <= 5).length;
                           return (
                             <>
                               {/* Resumo */}
-                              <div className="flex items-center gap-4 mb-4 p-3 bg-slate-50 rounded-lg border text-sm">
+                              <div className="flex items-center gap-4 mb-4 p-3 bg-slate-50 rounded-lg border text-sm flex-wrap">
                                 <span className="flex items-center gap-1.5 text-green-700 font-semibold"><CheckCircle className="h-4 w-4" /> {totalTrabalhados} dias trabalhados</span>
                                 <span className="flex items-center gap-1.5 text-red-600 font-semibold"><XCircle className="h-4 w-4" /> {totalFaltas} faltas prováveis</span>
                                 <span className="flex items-center gap-1.5 text-slate-400"><span className="text-base">—</span> {totalFDS} fins de semana</span>
+                                {totalFeriados > 0 && (
+                                  <span className="flex items-center gap-1.5 text-amber-700 font-semibold">🎉 {totalFeriados} {totalFeriados === 1 ? "feriado" : "feriados"}</span>
+                                )}
                                 {diasUteisNoPeriodo && <span className="ml-auto text-indigo-700 font-semibold">{Math.min(100, Math.round((totalTrabalhados / diasUteisNoPeriodo) * 100))}% de presença</span>}
                               </div>
 
@@ -2481,18 +2523,35 @@ export default function FechamentoPonto() {
                                 {dias.map((d) => {
                                   const [, mes, dia] = d.data.split("-");
                                   const label = `${dia}/${mes} (${DIAS_SEMANA[d.dow]})`;
-                                  // Fim de semana sem batida = folga (cinza); com batida = verde (trabalhou)
-                                  const isWeekendFolga = (d.dow === 0 || d.dow === 6) && !d.trabalhado;
+                                  const isWeekend = d.dow === 0 || d.dow === 6;
+                                  const isWeekendFolga = isWeekend && !d.trabalhado;
+                                  const dayIsFeriado = isFeriado(d.data);
+                                  const feriadoNome = feriadoNomeMap.get(d.data);
+                                  // Rev. 2014 — feriado em dia útil: âmbar (não conta falta); feriado trabalhado: verde com badge
+                                  const cls = dayIsFeriado && !isWeekend
+                                    ? (d.trabalhado ? "text-green-800 bg-green-50 ring-1 ring-amber-300" : "text-amber-800 bg-amber-50")
+                                    : isWeekendFolga
+                                      ? "text-slate-400 bg-slate-50"
+                                      : d.trabalhado
+                                        ? "text-green-800 bg-green-50"
+                                        : "text-red-700 bg-red-50";
                                   return (
-                                    <div key={d.data} className={`flex items-center justify-between py-1.5 px-2 rounded ${isWeekendFolga ? "text-slate-400 bg-slate-50" : d.trabalhado ? "text-green-800 bg-green-50" : "text-red-700 bg-red-50"}`}>
+                                    <div key={d.data} className={`flex items-center justify-between py-1.5 px-2 rounded ${cls}`} title={dayIsFeriado && feriadoNome ? `Feriado: ${feriadoNome}` : undefined}>
                                       <span className="font-medium">{label}</span>
                                       <span className="flex items-center gap-1">
-                                        {isWeekendFolga && <span>— {d.dow === 0 ? "Domingo" : "Sábado"}</span>}
-                                        {!isWeekendFolga && d.trabalhado && <>
+                                        {dayIsFeriado && !isWeekend && (
+                                          <>
+                                            <span>🎉</span>
+                                            <span className="truncate max-w-[140px]">{feriadoNome ? `Feriado · ${feriadoNome}` : "Feriado"}</span>
+                                            {d.trabalhado && <CheckCircle className="h-3 w-3 text-green-600 ml-1" />}
+                                          </>
+                                        )}
+                                        {!dayIsFeriado && isWeekendFolga && <span>— {d.dow === 0 ? "Domingo" : "Sábado"}</span>}
+                                        {!dayIsFeriado && !isWeekendFolga && d.trabalhado && <>
                                           <CheckCircle className="h-3 w-3 text-green-600" />
                                           <span className="font-mono">{d.horasTrabalhadas ?? ""}</span>
                                         </>}
-                                        {!isWeekendFolga && !d.trabalhado && <>
+                                        {!dayIsFeriado && !isWeekendFolga && !d.trabalhado && <>
                                           <XCircle className="h-3 w-3 text-red-500" />
                                           <span>Falta provável</span>
                                         </>}
@@ -2504,6 +2563,7 @@ export default function FechamentoPonto() {
 
                               <p className="text-[11px] text-muted-foreground mt-3 text-center">
                                 "Falta provável" = dia útil sem nenhuma batida de ponto registrada no sistema. Pode ser falta, home office sem lançamento, ou dado ainda não importado.
+                                Feriados (federais, estaduais e municipais) NÃO contam como falta e são excluídos do denominador do % de presença.
                               </p>
                             </>
                           );

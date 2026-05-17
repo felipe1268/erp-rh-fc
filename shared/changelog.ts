@@ -1,6 +1,79 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2014 — DP · Fechamento de Ponto · Feriados (federais, estaduais e municipais) deixam de gerar falta indevida.
+ * Pedido direto do usuário (17/05/2026, img IMG_0856_1779031904262): "O ERP precisa saber quando é
+ * feriado e desconsiderar (federais, estaduais e municipais) para não gerar falta equivocadamente,
+ * e marcar como feriado". Caso reportado: drill-down do Anderson dos Anjos mostrava 21/04 (Tiradentes)
+ * e 01/05 (Dia do Trabalho) como "Falta provável" — vermelho — quando na verdade eram feriados nacionais.
+ * Isso (i) dava impressão de absenteísmo onde não havia, (ii) reduzia artificialmente o % de presença,
+ * (iii) atrapalhava a tomada de decisão sobre advertências/descontos.
+ *
+ * Decisão arquitetural: NÃO duplicar lógica de feriados. O módulo `server/routers/feriados.ts` já tem
+ * `listarPeriodo(companyId, companyIds?, dataInicio, dataFim) → string[]` que mescla:
+ *   (a) feriados cadastrados em banco (escopos nacional/estadual/municipal/ponto_facultativo/compensado),
+ *       expandindo recorrentes pra todos os anos do range;
+ *   (b) feriados nacionais FIXOS (Confraternização, Tiradentes, Trabalho, Independência, N.Sra. Aparecida,
+ *       Finados, Proclamação, Natal) — caso o tenant ainda não tenha rodado `seedNacionais`;
+ *   (c) feriados móveis derivados da Páscoa (Carnaval, Sexta Santa, Corpus Christi) calculados via Meeus.
+ * O `payrollEngine.ts` e o `EspelhoPonto` já consomem essa mesma fonte — usar a mesma evita divergência
+ * de definição de "dia útil" entre telas.
+ *
+ * Mudança em 1 arquivo (`client/src/pages/FechamentoPonto.tsx`, ~70L úteis adicionadas, ZERO backend):
+ *   (1) Nova `feriadosPeriodoQuery = trpc.feriados.listarPeriodo` ao lado da `diasEmployeeQuery` — retorna
+ *       Set de YYYY-MM-DD feriados no período de fechamento (16/MM-1 → 15/MM). Habilitada quando
+ *       periodoIni/Fim e (companyId>0 || companyIds.length>0) — segue o padrão existente.
+ *   (2) Pra exibir o NOME do feriado no drill-down, 2 queries adicionais `trpc.feriados.listar` (uma
+ *       por ano do período — cobre casos onde o ciclo cruza fronteira de ano tipo dez/jan). Os resultados
+ *       são reduzidos pra `feriadoNomeMap: Map<YYYY-MM-DD, nome>`.
+ *   (3) `diasUteisNoPeriodo` useMemo agora subtrai feriados que caem em Seg-Sex (sáb/dom já estavam fora).
+ *       Dependência do useMemo expandida pra incluir `feriadosSet`. Resultado: denominador do % presença
+ *       deixa de inflar com feriados.
+ *   (4) Drill-down (modal Detalhe por colaborador):
+ *       - Novo helper `isFeriado(ds)` consulta o Set.
+ *       - `totalFaltas` agora exclui dias que sejam feriado (mesmo Seg-Sex).
+ *       - Novo `totalFeriados` (dia útil que caiu em feriado) — mostra chip âmbar "🎉 N feriado(s)" no resumo.
+ *       - Por dia da grade: se for feriado em dia útil, render âmbar com "🎉 Feriado · {nome}" no lugar
+ *         de "Falta provável"; se trabalhou no feriado, mantém verde com ring âmbar + check verde
+ *         (sinaliza presença em feriado — pode virar HE 100% no payroll, conforme `payrollEngine`).
+ *       - Hint do rodapé do modal atualizado: "Feriados (federais, estaduais e municipais) NÃO contam
+ *         como falta e são excluídos do denominador do % de presença".
+ *   (5) Faixa "Como é calculado o % de Presença" (Rev. 2006): trecho "Feriados ainda não são excluídos
+ *       (em estudo)" trocado por "feriados (federais, estaduais e municipais) NÃO entram" — alinha o
+ *       texto à nova realidade.
+ *   (6) `shared/version.ts` → 2014.
+ *
+ * Resultado: o caso da imagem (Anderson, 21/04 e 01/05) deixa de aparecer como "Falta provável" e passa
+ * a mostrar "🎉 Feriado · Tiradentes" e "🎉 Feriado · Dia do Trabalho" em âmbar. As 4 faltas prováveis
+ * caem pras reais (provavelmente 2). O % de presença sobe porque o denominador some 2 dias úteis (os 2
+ * feriados) e o numerador é o mesmo. A tabela-pai do "Resumo por Colaborador" também recebe o benefício
+ * porque usa o mesmo `diasUteisNoPeriodo`.
+ *
+ * Preservado: backend `getDiasEmployee` e `getSummary` INTACTOS — todo o trabalho é no cliente,
+ * consumindo dados que já existem. Router `feriados.*` INTACTO. Schema INTACTO. Outras telas que usam
+ * feriados (EspelhoPonto, payrollEngine) INTACTAS — continuam puxando da mesma fonte. Lógica de fim
+ * de semana INTACTA. Modal de drill-down INTACTO em seu layout — apenas ramificação adicional pra
+ * feriado dentro do mesmo padrão visual. Rev. 2013 INTACTA. R-001/R-007/R-010 OK (zero SQL, zero
+ * ALTER, frontend-only). Reversível em 1 arquivo.
+ *
+ * Trade-offs / limitações:
+ *   (a) Pra feriados ESTADUAIS/MUNICIPAIS o usuário precisa cadastrar no módulo /configuracoes/feriados
+ *       (UI já existe via `feriados.criar` mutation). Os NACIONAIS já vêm automáticos via fonte (b)+(c)
+ *       do `listarPeriodo`.
+ *   (b) `feriados.listar` filtra por `companyId` apenas — não respeita `companyIds` no contexto multi-empresa
+ *       (gap antigo do router). Pra o caso comum (1 empresa selecionada) funciona perfeito. Quando o
+ *       usuário troca pra multi-empresa, o NOME do feriado pode não aparecer se for cadastro de outra
+ *       empresa, mas o Set de DATAS via `listarPeriodo` (que suporta companyIds) continua correto —
+ *       então o dia AINDA é excluído de falta, só fica como "🎉 Feriado" sem nome específico.
+ *   (c) Não trato "ponto facultativo" diferente de feriado — usuário vai querer essa diferenciação em
+ *       rev futura (ex: cor amarela pra facultativo vs. âmbar pra obrigatório).
+ *
+ * Follow-up:
+ *   - Link rápido "Cadastrar feriado" no drill-down quando não houver feriado mapeado pro dia.
+ *   - Aplicar mesma exclusão de feriados em getStats/listInconsistencies (gap mencionado em Rev. 2010).
+ *   - Suporte a companyIds em `feriados.listar` pra cobrir multi-empresa com nomes corretos.
+ *   - Tela de gestão de feriados estaduais/municipais com presets por UF.
+ *
  * Rev. 2013 — SST · Integração · Upload de vídeo SEM LIMITE de tamanho.
  * Pedido direto do usuário (17/05/2026): "Quero poder subir vídeo sem limite de tamanho".
  * Contexto: Rev. 2012 colocou limite de 600MB via multer + memoryStorage e persistia o vídeo
