@@ -489,9 +489,19 @@ function VideosTab({ companyId }: { companyId: number }) {
           {filtered.map(mod => {
             const ytId = mod.videoUrl ? getYoutubeId(mod.videoUrl) : null;
             const isExpanded = previewId === mod.id;
+            // Rev. 2023 — detecta vídeo arquivo (upload direto OU URL terminando em
+            // mp4/mov/webm/etc) pra renderizar <video> nativo no card, sem download.
+            // Pega tanto `videoTipo === "upload"` quanto links externos diretos.
+            const isFileVideo = !ytId && !!mod.videoUrl && (
+              mod.videoTipo === "upload" ||
+              /\.(mp4|mov|webm|avi|mkv|m4v|ogv)(\?|#|$)/i.test(mod.videoUrl)
+            );
             return (
               <Card key={mod.id} className="overflow-hidden group hover:shadow-md transition-shadow">
-                <div className="relative aspect-video bg-gray-900 cursor-pointer" onClick={() => setPreviewId(isExpanded ? null : mod.id)}>
+                <div
+                  className={`relative aspect-video bg-gray-900 ${ytId ? "cursor-pointer" : ""}`}
+                  onClick={ytId ? () => setPreviewId(isExpanded ? null : mod.id) : undefined}
+                >
                   {ytId ? (
                     isExpanded ? (
                       <iframe
@@ -510,6 +520,20 @@ function VideosTab({ companyId }: { companyId: number }) {
                         </div>
                       </>
                     )
+                  ) : isFileVideo ? (
+                    // Rev. 2023 — player HTML5 nativo: controles, fullscreen, sem download.
+                    // preload="metadata" pra não baixar o vídeo inteiro só por listar o card.
+                    // controlsList="nodownload" + onContextMenu desabilitam o menu "Salvar como".
+                    <video
+                      src={mod.videoUrl!}
+                      controls
+                      preload="metadata"
+                      controlsList="nodownload"
+                      onContextMenu={(e) => e.preventDefault()}
+                      className="w-full h-full object-contain bg-black"
+                    >
+                      Seu navegador não suporta a tag de vídeo HTML5.
+                    </video>
                   ) : (
                     <div className="w-full h-full flex items-center justify-center">
                       <div className="text-center">

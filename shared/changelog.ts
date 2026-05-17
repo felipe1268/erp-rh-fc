@@ -1,6 +1,83 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2023 — SST · Integração · Card de vídeo agora reproduz arquivos
+ * upload (mp4/mov/webm/etc) inline com player HTML5 nativo. Sem download.
+ *
+ * Pedido direto do usuário (17/05/2026, img IMG_0868): "Quero poder
+ * assistir o vídeo por aqui mesmo, sem precisar fazer download". Após
+ * o upload da Rev. 2013 (vídeo de 500MB+ subido sem limite), o card
+ * mostrava só o placeholder "Vídeo externo" com botão de abrir externo
+ * — o usuário precisava baixar o arquivo ou abrir em outra aba pra
+ * conferir o conteúdo.
+ *
+ * Causa: o branch de preview do card só tratava YouTube (via `ytId`
+ * extraído com `getYoutubeId`). Pra qualquer outro `videoUrl`
+ * (incluindo uploads servidos via `/uploads/sst/integracao/videos/...`
+ * da Rev. 2013), caía no placeholder "Vídeo externo".
+ *
+ * Mudança em 1 arquivo:
+ *
+ * (A) `client/src/pages/sst/IntegracaoSST.tsx` (VideosTab, render do
+ *     card):
+ *   - Nova flag `isFileVideo` calculada per-card: `!ytId && !!videoUrl
+ *     && (videoTipo === "upload" || regex /\.(mp4|mov|webm|avi|mkv|
+ *     m4v|ogv)(\?|#|$)/i.test(videoUrl))`. Pega tanto uploads internos
+ *     quanto URLs externas que apontem direto pro arquivo.
+ *   - Novo branch entre `ytId` e fallback: renderiza `<video controls
+ *     preload="metadata" controlsList="nodownload" onContextMenu={e
+ *     => e.preventDefault()}>` com `src={mod.videoUrl}` e classes
+ *     `w-full h-full object-contain bg-black`. Controles HTML5 nativos
+ *     (play/pause/seek/fullscreen/volume) — funciona em iOS/Android/
+ *     Desktop sem dependência adicional.
+ *   - `preload="metadata"` evita baixar o vídeo inteiro só pra listar
+ *     o card; só quando o usuário clica em "Play" o stream começa.
+ *   - `controlsList="nodownload"` + `onContextMenu` desabilitam o
+ *     menu "Salvar vídeo como…" do browser (segurança/UX — o usuário
+ *     pediu "sem download").
+ *   - Wrapper `<div>` do preview perdeu `cursor-pointer` + `onClick`
+ *     QUANDO não é YouTube — pra não conflitar com os controles
+ *     nativos do `<video>` (clique no player faria toggle de previewId
+ *     antes). YouTube continua com o comportamento atual de
+ *     thumb→iframe ao clicar.
+ *
+ * + shared/version.ts → 2023.
+ *
+ * R-001/R-007/R-010 OK: ZERO SQL/DDL, ZERO mudança de schema, ZERO
+ * mudança de routers/endpoints. Apenas markup/comportamento do card.
+ * Reversível em 1 arquivo (1 hunk).
+ *
+ * Preservado:
+ *   - Branch YouTube (thumb → iframe ao clicar) INTACTO.
+ *   - Botão "Abrir externo" no rodapé do card INTACTO — segue
+ *     funcionando pra abrir o vídeo em nova aba quando o usuário
+ *     preferir.
+ *   - Botões Editar/Excluir INTACTOS.
+ *   - Modal de cadastro/edição da Rev. 2016 INTACTO.
+ *   - Upload sem limite da Rev. 2013 INTACTO.
+ *   - DashboardLayout da Rev. 2018 INTACTO.
+ *   - companyId coercion da Rev. 2020 INTACTA.
+ *   - Rev. 2022 (CompanyContext.companyIdNum) INTACTA.
+ *
+ * Limitações:
+ *   - `controlsList="nodownload"` é suportado em Chrome/Edge/Safari
+ *     mas alguns browsers (Firefox antigo) podem ignorar e ainda
+ *     mostrar a opção. Não é proteção de DRM — usuário com DevTools
+ *     consegue baixar o arquivo da rede (esperado, conteúdo
+ *     interno).
+ *   - Vimeo ainda cai no placeholder "Vídeo externo" (não tem player
+ *     embed implementado). Follow-up óbvio.
+ *   - Card não mostra duração do vídeo do upload — só YouTube
+ *     (`mod.duracaoMinutos` é manual no cadastro). Pra autopopular
+ *     duração de upload, precisaria ler metadata no `onLoadedMetadata`.
+ *
+ * Follow-up:
+ *   - Suporte a Vimeo (iframe embed).
+ *   - Auto-preencher `duracaoMinutos` ao subir arquivo (HTML5
+ *     `video.duration` no `onLoadedMetadata`).
+ *   - Marcar progresso de visualização (pra "completou o vídeo?").
+ *   - Modo "fullscreen on card" pra player maior sem abrir modal.
+ *
  * Rev. 2022 — Infra · CompanyContext expõe `companyIdNum: number` +
  * faxina do replit.md (Revs. 1988/1989/1990 colapsadas) + auditoria de
  * bug latente (passar string crua de companyId pra router z.number()).
