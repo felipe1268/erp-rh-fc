@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { router, protectedProcedure } from "../_core/trpc";
 import { getDb } from "../db";
-import { triggerFinancialSync } from "../services/financialEventTrigger";
+import { triggerFinancialSync, triggerFinancialSyncAwaited } from "../services/financialEventTrigger";
 import { eq, and, desc, inArray, sql, asc } from "drizzle-orm";
 import {
   terceiroContratos,
@@ -1271,26 +1271,46 @@ export const terceiroContratosRouter = router({
     .input(z.object({ id: z.number(), companyId: z.number(), aprovadoPor: z.string() }))
     .mutation(async ({ input }) => {
       const db = await getDb();
-      const [existing] = await db.select().from(terceiroMedicoes).where(and(eq(terceiroMedicoes.id, input.id), eq(terceiroMedicoes.companyId, input.companyId)));
-      if (!existing) throw new Error("Medição não encontrada");
-      if (existing.status !== "aguardando_aprovacao") throw new Error(`Medição não pode ser aprovada (status: ${existing.status})`);
-      const [medicao] = await db.update(terceiroMedicoes)
-        .set({ status: "aprovada", aprovadoPor: input.aprovadoPor, aprovadoEm: new Date().toISOString(), atualizadoEm: new Date().toISOString() })
-        .where(eq(terceiroMedicoes.id, input.id))
-        .returning();
+      // Rev. 1987 — BUGFIX A1 · Toda a aprovação agora roda em TRANSAÇÃO ATÔMICA.
+      // Bug anterior: update medicao → loop update itens. Se o loop falhasse no
+      // meio, a medição ficava "aprovada" mas itens do contrato meio-atualizados
+      // → percentuais acumulados inconsistentes (passivo de re-aprovação manual).
+      // Agora: tudo dentro de db.transaction → falha em qualquer item → rollback total.
+      const medicao = await db.transaction(async (tx: any) => {
+        const [existing] = await tx.select().from(terceiroMedicoes).where(and(eq(terceiroMedicoes.id, input.id), eq(terceiroMedicoes.companyId, input.companyId)));
+        if (!existing) throw new Error("Medição não encontrada");
+        if (existing.status !== "aguardando_aprovacao") throw new Error(`Medição não pode ser aprovada (status: ${existing.status})`);
+        const [med] = await tx.update(terceiroMedicoes)
+          .set({ status: "aprovada", aprovadoPor: input.aprovadoPor, aprovadoEm: new Date().toISOString(), atualizadoEm: new Date().toISOString() })
+          .where(eq(terceiroMedicoes.id, input.id))
+          .returning();
 
-      // Atualiza percentual acumulado nos itens do contrato
-      const itensMedicao = await db.select().from(terceiroMedicaoItens).where(eq(terceiroMedicaoItens.medicaoId, input.id));
-      for (const im of itensMedicao) {
-        await db.update(terceiroContratoItens)
-          .set({
-            percentualMedidoAcumulado: im.percentualAvancoFisico,
-            valorMedidoAcumulado: im.valorAcumulado,
-          })
-          .where(eq(terceiroContratoItens.id, im.contratoItemId));
+        // Atualiza percentual acumulado nos itens do contrato (dentro do tx → atomicidade)
+        const itensMedicao = await tx.select().from(terceiroMedicaoItens).where(eq(terceiroMedicaoItens.medicaoId, input.id));
+        for (const im of itensMedicao) {
+          await tx.update(terceiroContratoItens)
+            .set({
+              percentualMedidoAcumulado: im.percentualAvancoFisico,
+              valorMedidoAcumulado: im.valorAcumulado,
+            })
+            .where(eq(terceiroContratoItens.id, im.contratoItemId));
+        }
+        return med;
+      });
+
+      // Rev. 1987 — BUGFIX A2 · Gatilho financeiro AWAITED + try/catch (não mais silencioso).
+      // Bug anterior: triggerFinancialSync era fire-and-forget — erro de sync
+      // (ex: bridge indisponível, mês fechado, dados inconsistentes) era engolido
+      // silenciosamente e a medição aprovada NUNCA virava lançamento financeiro
+      // → contas a pagar não apareciam, conciliação quebrava.
+      // Agora: awaited, falhas logadas no console com contexto. A aprovação
+      // permanece bem-sucedida mesmo se o sync falhar (medição já está commitada),
+      // mas o erro fica VISÍVEL pra operação investigar e re-disparar manualmente.
+      try {
+        await triggerFinancialSyncAwaited(input.companyId);
+      } catch (syncErr: any) {
+        console.error(`[aprovarMedicao] FALHA no sync financeiro pós-aprovação da medição #${input.id} (companyId=${input.companyId}):`, syncErr?.message || syncErr);
       }
-      // Gatilho financeiro — medição aprovada gera lançamento imediatamente
-      triggerFinancialSync(input.companyId);
       return medicao;
     }),
 

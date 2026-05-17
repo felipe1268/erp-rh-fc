@@ -19,6 +19,21 @@ async function syncNow(companyId: number, mes: string): Promise<void> {
   ]);
 }
 
+/**
+ * Rev. 1988 — Versão STRICT de syncNow (sem swallow de erro).
+ * Diferente de `syncNow`: NÃO usa `.catch(() => {})` nos imports.
+ * Se qualquer um dos imports falhar, a exceção é propagada pra cima.
+ * Usar SOMENTE no caminho `triggerFinancialSyncAwaited` — fire-and-forget
+ * mantém o comportamento silencioso original (compatibilidade com 8 callers).
+ */
+async function syncNowStrict(companyId: number, mes: string): Promise<void> {
+  const { runAllDespesasImport, runAllReceitasImport } = await import("./financialIntegrationBridge");
+  await Promise.all([
+    runAllDespesasImport(companyId, mes),
+    runAllReceitasImport(companyId, mes),
+  ]);
+}
+
 // Dispara sincronização para o mês corrente (ou mês do evento).
 // Fire-and-forget: não lança exceção, não bloqueia o caller.
 export function triggerFinancialSync(companyId: number, eventDateStr?: string): void {
@@ -31,6 +46,22 @@ export function triggerFinancialSync(companyId: number, eventDateStr?: string): 
       // silencioso — não impacta o módulo de origem
     }
   });
+}
+
+/**
+ * Rev. 1987 — Versão SÍNCRONA do gatilho financeiro.
+ * Diferente de `triggerFinancialSync` (fire-and-forget): essa AWAITA o sync
+ * e propaga falhas pro caller, permitindo log/observabilidade.
+ * Usar SOMENTE em ações críticas (ex: aprovarMedicao) onde silenciar erro
+ * de sync = bug invisível em produção. Custo: aumenta latência da resposta
+ * HTTP em ~100-2000ms dependendo do volume de despesas/receitas do mês.
+ */
+export async function triggerFinancialSyncAwaited(companyId: number, eventDateStr?: string): Promise<void> {
+  if (!companyId) return;
+  const mes = getMes(eventDateStr);
+  // Rev. 1988 — usa syncNowStrict (sem swallow) pra que falhas reais propaguem
+  // pro try/catch do caller (ex: aprovarMedicao). Antes era syncNow que mascarava tudo.
+  await syncNowStrict(companyId, mes);
 }
 
 // Retroação completa N meses: chamada no startup para mapear dados históricos.

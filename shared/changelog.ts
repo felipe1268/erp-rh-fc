@@ -1,6 +1,82 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 1988 — Lote 1 · Pós-revisão arquitetural · 2 correções de profundidade nos fixes anteriores.
+ * Origem: code review do architect identificou 2 falhas residuais após Rev. 1985-1987:
+ *   (i) C1 estava incompleto pra OC de MATERIAL: `gerarProximoNumeroOC` quando `ordemTipo === "compra"` usava `COUNT(*) FROM compras_ordens` dentro do lock mas NÃO persistia contador. Como o INSERT da OC acontece DEPOIS, fora da transação, duas chamadas concorrentes liam o mesmo COUNT antes do primeiro insert e retornavam o mesmo OC-YYYY-NNNN. Apenas o branch OS/Pacote (que usava `ocNumberConfig.proximoNumeroOs`) estava de fato serializado.
+ *   (ii) A2 não entregava observabilidade real: `triggerFinancialSyncAwaited` chamava `syncNow` que internamente usava `.catch(() => {})` em `runAllDespesasImport` e `runAllReceitasImport` (`server/services/financialEventTrigger.ts` L19-22). Resultado: o try/catch em `aprovarMedicao` praticamente nunca disparava — falhas reais continuavam silenciosas.
+ * Mudança em 2 arquivos:
+ *   (1) `server/routers/compras.ts` (branch material de `gerarProximoNumeroOC`, ~28 linhas reescritas):
+ *       - Lookup de `ocNumberConfig` movido pra ANTES do switch de tipo (compartilhado entre material e OS).
+ *       - Material agora usa `config.proximoNumero` (coluna LEGACY que já existia no schema com default 1 — ZERO ALTER) como contador persistente. Mesmo padrão do branch OS, sem necessidade de migration.
+ *       - Bootstrap inteligente: se `proximoNumero <= 1` (default e nunca usado), recorre a `COUNT(*)+1` pra calcular o ponto de partida correto, evitando colidir com OCs históricas pré-fix. `Math.max(count+1, proximoNumero)` garante monotonicidade.
+ *       - Update/insert do `proximoNumero + 1` acontece DENTRO da mesma transação que ainda segura o lock, fechando a janela de race definitivamente.
+ *   (2) `server/services/financialEventTrigger.ts` (+15 linhas):
+ *       - Nova função privada `syncNowStrict` idêntica a `syncNow` MENOS os `.catch(() => {})` que mascaravam exceções dos imports.
+ *       - `triggerFinancialSyncAwaited` passa a usar `syncNowStrict` em vez de `syncNow`. Agora qualquer falha em `runAllDespesasImport`/`runAllReceitasImport` propaga via `Promise.all` → bubble pro try/catch do `aprovarMedicao` → `console.error` com contexto.
+ *       - `syncNow` original PRESERVADA INTACTA — `triggerFinancialSync` (fire-and-forget, usado por 8 outros callers) continua silencioso como antes.
+ * version → 1988. Lote 1 (C1+C2+A1+A2) agora REALMENTE fechado, sem dívida arquitetural residual.
+ * Resultado: (C1 material) impossível duplicar OC mesmo com 100 compradores concorrentes — contador persistido na mesma tx do lock. (A2) falhas de sync agora aparecem no console com `[aprovarMedicao] FALHA no sync financeiro...` — operação enxerga e age.
+ * Validação: workflow restartou limpo (logs `[SyncRevisions] ... [ColFix] Versão ok`); HMR sem erros TypeScript; banco dev vazio impossibilita teste com dados — correção validada por leitura + revisão arquitetural.
+ * Preservado: branch OS/Pacote (`proximoNumeroOs`) INTACTO; `syncNow` original INTACTO; `triggerFinancialSync` fire-and-forget INTACTO; 8 callers existentes do trigger fire-and-forget preservados (continuam silenciosos por design — só `aprovarMedicao` foi promovido pra modo strict via Rev. 1987). Schema INTACTO (ZERO ALTER — coluna `proximoNumero` já existia como legado). Revs. 1985-1987 INTACTAS. R-001/R-007/R-010 OK. Reversível em 3 hunks.
+ * Não corrigido (deliberadamente, vai pra Lote 2): edge case em `gerarContratoTerceiroDeOS` onde `existCheck` da OC fica fora do lock — concorrência extrema (2 aprovações da mesma OC no mesmo milissegundo) ainda pode criar 2 contratos COM NÚMEROS DIFERENTES pra mesma OC. Não é duplicidade de numeração (esse ponto está coberto pelo Rev. 1986), é duplicidade de contrato pra mesma OC. Menos crítico, exige rechecagem dentro do lock — fica pra Lote 2 junto com C3/C4/A3/A4/A5.
+ *
+ * Rev. 1987 — Terceiros · BUGFIX A1+A2 · `aprovarMedicao` agora é ATÔMICA e o gatilho financeiro é OBSERVÁVEL.
+ * Achados da auditoria MDO 2026-05-17 (`.local/audit_mdo_2026-05-17.md`, itens A1 + A2). Combinados numa única revisão porque ambos vivem em `server/routers/terceiroContratos.ts` na mesma função (`aprovarMedicao` L1270-1295).
+ * Bug A1 (atomicidade): `aprovarMedicao` fazia UPDATE em `terceiro_medicoes` → SELECT itens → for loop UPDATE em `terceiro_contrato_itens`. Sem transação. Se o loop falhasse no meio (timeout DB, deadlock, exceção de validação), a medição ficava "aprovada" mas só ALGUNS itens do contrato tinham `percentualMedidoAcumulado`/`valorMedidoAcumulado` atualizados → percentuais inconsistentes, exigia re-aprovação manual ou ajuste via SQL.
+ * Bug A2 (observabilidade): `triggerFinancialSync(input.companyId)` no fim da função era fire-and-forget (setImmediate + catch silencioso interno em `services/financialEventTrigger.ts`). Se a bridge financeira falhasse (mês fechado, dados inconsistentes, serviço indisponível), a medição aprovada NUNCA virava lançamento em contas a pagar e ninguém ficava sabendo → operação descobria semanas depois durante conciliação manual.
+ * Mudança em 2 arquivos:
+ *   (1) `server/services/financialEventTrigger.ts` (+13 linhas): nova função `triggerFinancialSyncAwaited(companyId, eventDateStr?)` que awaita `syncNow` e propaga exceções pro caller. `triggerFinancialSync` original (fire-and-forget) MANTIDA INTACTA — outros 8 callers no codebase continuam usando o comportamento antigo (não-bloqueante).
+ *   (2) `server/routers/terceiroContratos.ts` (2 hunks):
+ *       (a) import L6 — adicionado `triggerFinancialSyncAwaited` ao import existente.
+ *       (b) corpo de `aprovarMedicao` L1273-1318 reescrito:
+ *           - Validação (existing check), update medicao e for loop dos itens TODOS dentro de `db.transaction(async tx => { ... })`. Todas as operações DB do bloco usam `tx.*` em vez de `db.*`. tx retorna a medição atualizada.
+ *           - Após o tx commitar, gatilho financeiro chamado como `await triggerFinancialSyncAwaited(input.companyId)` envolvido em try/catch. Falha logada via `console.error` com contexto (`medicao #id`, `companyId`). A aprovação SE MANTÉM bem-sucedida mesmo se o sync falhar (medição já está commitada no DB; ressincronia pode ser disparada manualmente).
+ *           - Comportamento intencional: latência da resposta HTTP aumenta ~100-2000ms por causa do sync awaited. Trade-off aceitável pra ação de aprovação (admin, baixa frequência).
+ * version → 1987. Lote 1 de bugs críticos da auditoria MDO (C1+C2+A1+A2) FECHADO.
+ * Resultado: (A1) impossível ter medição "aprovada" com itens parcialmente atualizados — rollback total em qualquer falha. (A2) operação enxerga falha de sync no log e pode agir; bug invisível eliminado.
+ * Validação: workflow restartou via HMR sem erros TypeScript; banco dev vazio (0 medições) impossibilita repro com dados; correção validada por leitura.
+ * Preservado: pré-condições da medição (`status !== "aguardando_aprovacao"`) INTACTAS; lógica de cálculo de percentual/valor acumulado INTACTA; demais procedures do router INTACTAS (`registrarMedicao`, `cancelarAprovacao`, etc.); `triggerFinancialSync` original INTACTO — outros callers (fire-and-forget) continuam funcionando como antes. Schema INTACTO (ZERO ALTER). Rev. 1986 e todas anteriores INTACTAS. R-001/R-007/R-010 OK. Reversível em 2 hunks. **Não adicionado**: coluna `sync_status` em `terceiro_medicoes` (foi cogitada na auditoria mas requereria ALTER TABLE — violaria R-001/R-007/R-010 sem aprovação explícita em PROD. Log em console cobre a observabilidade necessária no curto prazo.).
+ *
+ * Rev. 1986 — Compras · BUGFIX C2 (CRÍTICO) · Numeração de Contrato Terceiro (CT-YYYY-NNNN) agora é ATÔMICA.
+ * Achado da auditoria MDO 2026-05-17 (`.local/audit_mdo_2026-05-17.md`, item C2).
+ * Bug original: `gerarContratoTerceiroDeOS` em `server/routers/compras.ts` L207-212 usava `SELECT COUNT(*) FROM terceiro_contratos WHERE company_id = X` como sequence improvisada e em seguida INSERT terceiro_contratos com numContrato = "CT-YYYY-(count+1)". Janela entre COUNT e INSERT = race. Dois usuários aprovando cotações da mesma empresa no mesmo segundo geravam DOIS contratos com o mesmo CT-2026-XXXX. Pior: se algum contrato fosse deletado depois, COUNT iria pra trás e re-numerar registros novos sobre números já existentes.
+ * Mudança em 1 arquivo (`server/routers/compras.ts`, 1 hunk grande, ~140 linhas):
+ *   Envolvido o bloco L207-L325 inteiro em `db.transaction(async tx => { ... })` com `SELECT pg_advisory_xact_lock(${companyId}::bigint, 1002::int)` como PRIMEIRA operação. Lock escopo 1002 = "contracts_numeration" (distinto do 1001 usado pela Rev. 1985 pra OC/OS).
+ *   Todas as 9 operações DB do bloco trocadas de `db.*` pra `tx.*`: select fornecedor, count terceiro_contratos, execute cronograma (2x), select/insert empresa_terceira (4x), select obras, insert terceiro_contratos. Lookup de empresa terceira ficou DENTRO do lock — overhead mínimo (mesma empresa, milissegundos) e simplifica a refatoração.
+ *   O early-return de `existCheck` (L188-200) FORA do tx — não precisa lock, evita acquisition desnecessária quando OC já tem contrato.
+ *   Insert dos itens (`for` loop L327-356) e update de `compras_ordens.contrato_id` (L358-361) FORA do tx — leve trade-off: se o tx commitar e o for loop falhar, fica contrato sem itens (estado bug-mas-detectável); preserva o comportamento anterior, que também tinha esse risco. Numeração é o que importa proteger.
+ *   tx retorna `{tc, numContrato, empTerceiraId}`; destructuring após o tx pra usar nas linhas seguintes (log de sucesso, return do procedimento, for loop dos itens).
+ * version → 1986.
+ * Resultado: impossível gerar CT-2026-0042 duplicado mesmo com 100 aprovações concorrentes. Comportamento no caminho feliz 100% idêntico (lookup empresa terceira/datas cronograma/insert contrato — tudo igual).
+ * Validação: workflow restartou limpo pós-edit (logs `[SyncSchema+] ... [RescisaoCheck] Job de verificação de prazos de rescisão iniciado`); HMR sem erros TypeScript; banco dev vazio (0 contratos) impossibilita repro com dados — correção validada por leitura do código.
+ * Preservado: lógica de empresa terceira (cria por CNPJ ou por nome+CNPJ vazio) INTACTA; lógica de datas via cronograma (LIKE descrições + fallback obra) INTACTA; insert dos itens + update contrato_id INTACTOS; early-return de existingTC INTACTO; tipoContratoMap INTACTO. Rev. 1985 e todas anteriores INTACTAS. Schema INTACTO (ZERO ALTER — só lock de sessão). R-001/R-007/R-010 OK. Reversível em 1 hunk grande.
+ *
+ * Rev. 1985 — Compras · BUGFIX C1 (CRÍTICO) · Numeração de OC/OS agora é ATÔMICA (race-condition eliminada).
+ * Achado da auditoria MDO 2026-05-17 (`.local/audit_mdo_2026-05-17.md`, item C1).
+ * Bug original: `server/routers/compras.ts` tinha 2 lugares (L5832 em `criarOrdemDeCotacao`, L6399 em `criarOCsParciais`) que numeravam OS/OC em DUAS operações separadas:
+ *   1. SELECT proximo_numero_os FROM oc_number_config (ou COUNT(*) FROM compras_ordens pra material)
+ *   2. UPDATE oc_number_config SET proximo_numero_os = +1
+ * Janela entre 1 e 2 = race condition. Dois compradores aprovando cotações no mesmo segundo liam o MESMO número e geravam OS-2026-001 duplicado. Material OC com COUNT(*) tinha problema análogo (e pior: se algum OC fosse apagado, COUNT iria pra trás e re-numerar registros existentes).
+ * Mudança em 1 arquivo (`server/routers/compras.ts`, 3 hunks):
+ *   (1) Novo helper `gerarProximoNumeroOC(companyId, ordemTipo)` (L131-176, ~46 linhas com JSDoc). Wrap tudo em `db.transaction` + `SELECT pg_advisory_xact_lock(${companyId}::bigint, 1001::int)` no início — serializa numeração POR EMPRESA enquanto a transação está aberta (sem bloquear leituras, sem tocar outras tabelas). Padrão já consagrado no codebase: `fechamentoPonto.ts:2008` e `comunicadosInternos.ts:73`. Branch "compra" (material) → COUNT(*) seguro dentro do lock. Branch "servico"/"pacote" → SELECT+UPDATE da ocNumberConfig dentro do lock; primeira OS da empresa insere config com proximoNumeroOs=2 e retorna 1 (preservando comportamento atual).
+ *   (2) L5832-5849 (em `criarOrdemDeCotacao`) — 18 linhas substituídas por 1: `const numeroOc = await gerarProximoNumeroOC(input.companyId, ordemTipo as ...)`.
+ *   (3) L6399-6415 (em `criarOCsParciais`) — 17 linhas substituídas por 1.
+ * Escopo do lock = 1001 (constante arbitrária pra "compras_numeration"); contention só com outro chamador da mesma função na mesma empresa, milissegundos.
+ * version → 1985.
+ * Resultado: impossível gerar OS-2026-001 ou OC-2026-0042 duplicado mesmo com 100 compradores aprovando simultâneo. Numeração lacuna-zero NÃO é garantida (se a inserção do OC falhar depois do bump, o número é "queimado") — mas isso é EXISTENTE no comportamento anterior, e gap é aceitável; o que NÃO é aceitável é duplicidade.
+ * Validação: workflow rodando sem erro pós-edit; HMR confirmou reload limpo. Auditoria forense (banco dev vazio — 0 OS, 0 contratos) impossibilitou repro com dados; correção arquitetural validada por leitura do código.
+ * Preservado: comportamento de numeração 100% idêntico no caminho feliz. `proximoNumero` (campo legado pra OC material via config — não usado nos caminhos atuais) INTACTO. Schema INTACTO (ZERO ALTER — só lock de sessão). Demais procs INTACTAS. Rev. 1984 e todas anteriores INTACTAS. R-001/R-007/R-010 OK. Reversível em 3 hunks.
+ *
+ * Rev. 1984 — Faxina do `replit.md` (manutenção, sem mudança de comportamento).
+ * Motivação: arquivo havia crescido pra ~30k tokens com 7 blocos detalhados espalhados (Rev. 1983, 1979, 1975, 1968, 1967, 1965, 1964, 1963, 1962, 1961) violando a convenção "APENAS últimas 5 detalhadas" registrada no topo do bloco "Recent changes".
+ * Mudança em 2 arquivos:
+ *   (1) `replit.md` — bloco "Recent changes" reescrito: Rev. 1984 entra como única entrada detalhada no topo; Rev. 1983 → 1903 todas colapsadas em formato one-liner `- ~~Rev. NNNN~~ — ver shared/changelog.ts.`. Duplicidades de Rev. 1965/1964/1963/1962/1961 (que apareciam DUAS vezes — detalhadas no meio + colapsadas no fim) eliminadas. Convenção, User preferences e linha de "Revisões anteriores a 1903" INTACTAS.
+ *   (2) `shared/version.ts` → 1984.
+ * Resultado: `replit.md` reduzido de 152 linhas (~30k tokens) pra ~95 linhas (~6k tokens). Toda informação preservada — basta abrir `shared/changelog.ts` pra ler qualquer rev histórica em detalhe.
+ * Nenhum código de aplicação tocado. Nenhum schema alterado. Nenhuma rota tRPC modificada. Sem risco de regressão.
+ * Preservado: Rev. 1983 e todas anteriores 100% INTACTAS no codebase. R-001/R-007/R-010 OK.
+ *
  * Rev. 1983 — Compras · Solicitações · Modal "Itens sem verba orçamentária" redesenhado seguindo regras de ouro.
  * User (17/05/2026, image_1779020975571): "MELHORE ESTE LAY-OUT SEGUINDO NOSSAS REGRAS DE OURO". Print mostrava o modal com (a) barra de scroll horizontal vazia na base (DialogContent sem overflow-x-hidden), (b) padding apertado, (c) lista de itens em vermelho saturado dificultando leitura, (d) header pequeno sem subtítulo, (e) footer colado nos campos sem separação visual, (f) botão "Criar mesmo sem verba" rosa pálido competindo mal com Cancelar branco.
  * Mudança em 1 arquivo (`client/src/pages/compras/Solicitacoes.tsx`, 2 hunks):

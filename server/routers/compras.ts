@@ -125,6 +125,76 @@ setInterval(() => {
   }
 }, 60000);
 
+/**
+ * Rev. 1985 — Gera próximo número de OC/OS de forma ATÔMICA (fix race C1).
+ *
+ * Bug original (Rev. <=1984): código fazia read-then-write em duas operações
+ * separadas (SELECT proximo_numero_os → UPDATE +1). Dois compradores
+ * simultâneos liam o mesmo valor e gravavam o mesmo número → duplicidade.
+ * Material usava COUNT(*) — mesmo problema, agravado se algum OC fosse
+ * apagado no histórico.
+ *
+ * Solução: pg_advisory_xact_lock por companyId+escopo dentro de transação.
+ * Lock serializa apenas a numeração — não toca outras tabelas, não bloqueia
+ * leituras. Padrão já usado em `fechamentoPonto.ts` e `comunicadosInternos.ts`.
+ *
+ * Escopo 1001 = "compras_numeration" (compartilhado entre OS e OC material
+ * por simplicidade — disputa só com outro chamador desta mesma função na
+ * mesma empresa, milissegundos).
+ */
+async function gerarProximoNumeroOC(companyId: number, ordemTipo: "compra" | "servico" | "pacote"): Promise<string> {
+  const db = await getDb();
+  return await db.transaction(async (tx: any) => {
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(${companyId}::bigint, 1001::int)`);
+    const year = new Date().getFullYear();
+
+    // Rev. 1988 — Pós-revisão arquitetural: contador agora é PERSISTIDO dentro
+    // do lock pra TODOS os tipos (material/servico/pacote). Lock + COUNT(*)
+    // sozinhos não bastam porque o INSERT da OC acontece DEPOIS, fora da
+    // transação — duas chamadas concorrentes liam o mesmo COUNT antes do
+    // primeiro insert e duplicavam. Solução: usar coluna `proximoNumero` do
+    // `ocNumberConfig` (que já existia como legado/default 1) como contador
+    // persistente pra OC material. Schema INTACTO (zero ALTER — coluna já
+    // existe). Bootstrap por COUNT(*) só na PRIMEIRA chamada (ou se
+    // proximoNumero estiver no valor padrão 1 e já houver OCs históricas).
+    const [config] = await tx.select().from(ocNumberConfig).where(eq(ocNumberConfig.companyId, companyId)).limit(1);
+
+    if (ordemTipo === "compra") {
+      const prefMat = "OC";
+      const digitos = config?.digitosSequencial ?? 4;
+      // Bootstrap: se proximoNumero é o default (1) e já existem OCs, calcula a partir do count atual.
+      let proxMat = config?.proximoNumero ?? 1;
+      if (proxMat <= 1) {
+        const count = await tx.select({ c: sql<number>`count(*)` }).from(comprasOrdens).where(eq(comprasOrdens.companyId, companyId));
+        const atual = parseInt(String(count[0]?.c ?? 0));
+        proxMat = Math.max(atual + 1, proxMat);
+      }
+      if (!config) {
+        await tx.insert(ocNumberConfig).values({ companyId, proximoNumero: proxMat + 1, prefixo: prefMat } as any);
+      } else {
+        await tx.update(ocNumberConfig)
+          .set({ proximoNumero: proxMat + 1, updatedAt: new Date().toISOString() } as any)
+          .where(eq(ocNumberConfig.companyId, companyId));
+      }
+      return `${prefMat}-${year}-${String(proxMat).padStart(digitos, "0")}`;
+    }
+
+    // Serviço/Pacote: numeração via tabela de configuração.
+    if (!config) {
+      // Primeira OS desta empresa: insere config com próximo=2, retorna 1.
+      await tx.insert(ocNumberConfig).values({ companyId, proximoNumeroOs: 2, prefixoOs: "OS" } as any);
+      return `OS-${year}-${"1".padStart(3, "0")}`;
+    }
+    const proxOs = config.proximoNumeroOs ?? 1;
+    const prefOs = config.prefixoOs ?? "OS";
+    const digitos = config.digitosSequencial ?? 3;
+    await tx.update(ocNumberConfig)
+      .set({ proximoNumeroOs: proxOs + 1, updatedAt: new Date().toISOString() } as any)
+      .where(eq(ocNumberConfig.companyId, companyId));
+    return `${prefOs}-${year}-${String(proxOs).padStart(digitos, "0")}`;
+  });
+}
+
 async function gerarContratoTerceiroDeOS(params: {
   ocId: number;
   companyId: number;
@@ -152,130 +222,149 @@ async function gerarContratoTerceiroDeOS(params: {
       return { id: existingTC.id, numeroContrato: existingTC.numeroContrato, terceiroContratoId: existingTC.id };
     }
 
-    const [forn] = await db.select().from(fornecedores).where(and(eq(fornecedores.id, params.fornecedorId), eq(fornecedores.companyId, params.companyId)));
-    const cnpjRaw = forn?.cnpj?.trim() || "";
-    const cnpj = cnpjRaw.replace(/\D/g, "").length >= 11 ? cnpjRaw : "";
-    const razaoSocial = forn?.razaoSocial ?? params.fornecedorNome ?? "";
+    // Rev. 1986 — BUGFIX C2 · numeração de contrato CT-YYYY-NNNN agora ATÔMICA.
+    // Bug original: COUNT(*) + INSERT em operações separadas → 2 contratos
+    // simultâneos pra mesma empresa recebiam o MESMO número.
+    // Solução: pg_advisory_xact_lock(companyId, 1002) dentro de transação
+    // envolvendo TODO o fluxo (lookup empresa terceira + count + insert).
+    // Escopo 1002 = "contracts_numeration" (distinto do 1001 de OC/OS).
+    const txResult = await db.transaction(async (tx: any) => {
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(${params.companyId}::bigint, 1002::int)`);
 
-    const ano = new Date().getFullYear();
-    const countContratos = await db.execute(sql`
-      SELECT COUNT(*) as c FROM terceiro_contratos WHERE company_id = ${params.companyId}
-    `);
-    const seqC = (parseInt(String((countContratos as any).rows?.[0]?.c ?? "0")) + 1).toString().padStart(4, "0");
-    const numContrato = `CT-${ano}-${seqC}`;
+      const [forn] = await tx.select().from(fornecedores).where(and(eq(fornecedores.id, params.fornecedorId), eq(fornecedores.companyId, params.companyId)));
+      const cnpjRaw = forn?.cnpj?.trim() || "";
+      const cnpj = cnpjRaw.replace(/\D/g, "").length >= 11 ? cnpjRaw : "";
+      const razaoSocial = forn?.razaoSocial ?? params.fornecedorNome ?? "";
 
-    let hoje = new Date().toISOString().slice(0, 10);
-    let dataFim = new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString().slice(0, 10);
-
-    if (params.obraId) {
-      try {
-        const descricoes = params.itensOS
-          .map(it => {
-            let d = it.descricao || "";
-            d = d.replace(/^\[[^\]]+\]\s*/, "").trim().toLowerCase();
-            return d;
-          })
-          .filter(d => d.length > 5);
-
-        let found = false;
-        if (descricoes.length > 0) {
-          const escapeLike = (s: string) => s.replace(/[%_\\]/g, c => "\\" + c);
-          const likeClauses = descricoes.map(d => sql`LOWER(pa.nome) LIKE ${"%" + escapeLike(d.slice(0, 40)) + "%"} ESCAPE '\\'`);
-          const cronoDates = await db.execute(sql`
-            SELECT MIN(pa.data_inicio) as primeiro_inicio, MAX(pa.data_fim) as ultimo_termino
-            FROM planejamento_projetos pp
-            JOIN planejamento_atividades pa ON pa.projeto_id = pp.id
-            WHERE pp.obra_id = ${params.obraId}
-              AND pa.data_inicio IS NOT NULL
-              AND (${sql.join(likeClauses, sql` OR `)})
-          `);
-          const row = (cronoDates as any).rows?.[0];
-          if (row?.primeiro_inicio) { hoje = String(row.primeiro_inicio).slice(0, 10); found = true; }
-          if (row?.ultimo_termino) { dataFim = String(row.ultimo_termino).slice(0, 10); found = true; }
-          if (found) console.log(`[gerarContratoTerceiroDeOS] Datas do cronograma (por nome): ${hoje} a ${dataFim}`);
-        }
-
-        if (!found) {
-          const fallback = await db.execute(sql`
-            SELECT MIN(pa.data_inicio) as primeiro_inicio, MAX(pa.data_fim) as ultimo_termino
-            FROM planejamento_projetos pp
-            JOIN planejamento_atividades pa ON pa.projeto_id = pp.id
-            WHERE pp.obra_id = ${params.obraId} AND pa.data_inicio IS NOT NULL
-          `);
-          const fbRow = (fallback as any).rows?.[0];
-          if (fbRow?.primeiro_inicio) hoje = String(fbRow.primeiro_inicio).slice(0, 10);
-          if (fbRow?.ultimo_termino) dataFim = String(fbRow.ultimo_termino).slice(0, 10);
-          console.log(`[gerarContratoTerceiroDeOS] Datas do cronograma (fallback obra): ${hoje} a ${dataFim}`);
-        }
-      } catch (e: any) {
-        console.error(`[gerarContratoTerceiroDeOS] Erro ao buscar datas cronograma:`, e?.message);
-      }
-    }
-
-    let empTerceiraId: number | null = null;
-    if (cnpj) {
-      const [existEmp] = await db.select({ id: empresasTerceiras.id }).from(empresasTerceiras)
-        .where(and(eq(empresasTerceiras.companyId, params.companyId), eq(empresasTerceiras.cnpj, cnpj))).limit(1);
-      if (existEmp) {
-        empTerceiraId = existEmp.id;
-      } else {
-        const [novaEmp] = await db.insert(empresasTerceiras).values({
-          companyId: params.companyId,
-          razaoSocial: razaoSocial || params.fornecedorNome || "Empresa Terceira",
-          cnpj,
-          responsavelNome: razaoSocial || params.fornecedorNome || "",
-          status: "ativa",
-          fornecedorId: params.fornecedorId,
-        } as any).returning();
-        empTerceiraId = novaEmp.id;
-      }
-    } else {
-      const nomeEmpresa = razaoSocial || params.fornecedorNome || "Empresa Terceira";
-      const existEmpByName = await db.execute(sql`
-        SELECT id FROM empresas_terceiras WHERE "companyId" = ${params.companyId} AND razao_social = ${nomeEmpresa} AND (cnpj IS NULL OR cnpj = '') LIMIT 1
+      const ano = new Date().getFullYear();
+      const countContratos = await tx.execute(sql`
+        SELECT COUNT(*) as c FROM terceiro_contratos WHERE company_id = ${params.companyId}
       `);
-      if ((existEmpByName as any).rows?.length > 0) {
-        empTerceiraId = (existEmpByName as any).rows[0].id;
-      } else {
-        const insertEmpRes = await db.execute(sql`
-          INSERT INTO empresas_terceiras ("companyId", razao_social, cnpj, responsavel_nome, status, fornecedor_id, created_at, updated_at)
-          VALUES (${params.companyId}, ${nomeEmpresa}, '', ${nomeEmpresa}, 'ativa', ${params.fornecedorId}, NOW(), NOW())
-          RETURNING id
-        `);
-        empTerceiraId = (insertEmpRes as any).rows[0].id;
-      }
-    }
+      const seqC = (parseInt(String((countContratos as any).rows?.[0]?.c ?? "0")) + 1).toString().padStart(4, "0");
+      const numContrato = `CT-${ano}-${seqC}`;
 
-    if (!empTerceiraId) {
-      console.error(`[gerarContratoTerceiroDeOS] Não foi possível criar/encontrar empresa terceira para OC #${params.ocId}`);
+      let hoje = new Date().toISOString().slice(0, 10);
+      let dataFim = new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString().slice(0, 10);
+
+      if (params.obraId) {
+        try {
+          const descricoes = params.itensOS
+            .map(it => {
+              let d = it.descricao || "";
+              d = d.replace(/^\[[^\]]+\]\s*/, "").trim().toLowerCase();
+              return d;
+            })
+            .filter(d => d.length > 5);
+
+          let found = false;
+          if (descricoes.length > 0) {
+            const escapeLike = (s: string) => s.replace(/[%_\\]/g, c => "\\" + c);
+            const likeClauses = descricoes.map(d => sql`LOWER(pa.nome) LIKE ${"%" + escapeLike(d.slice(0, 40)) + "%"} ESCAPE '\\'`);
+            const cronoDates = await tx.execute(sql`
+              SELECT MIN(pa.data_inicio) as primeiro_inicio, MAX(pa.data_fim) as ultimo_termino
+              FROM planejamento_projetos pp
+              JOIN planejamento_atividades pa ON pa.projeto_id = pp.id
+              WHERE pp.obra_id = ${params.obraId}
+                AND pa.data_inicio IS NOT NULL
+                AND (${sql.join(likeClauses, sql` OR `)})
+            `);
+            const row = (cronoDates as any).rows?.[0];
+            if (row?.primeiro_inicio) { hoje = String(row.primeiro_inicio).slice(0, 10); found = true; }
+            if (row?.ultimo_termino) { dataFim = String(row.ultimo_termino).slice(0, 10); found = true; }
+            if (found) console.log(`[gerarContratoTerceiroDeOS] Datas do cronograma (por nome): ${hoje} a ${dataFim}`);
+          }
+
+          if (!found) {
+            const fallback = await tx.execute(sql`
+              SELECT MIN(pa.data_inicio) as primeiro_inicio, MAX(pa.data_fim) as ultimo_termino
+              FROM planejamento_projetos pp
+              JOIN planejamento_atividades pa ON pa.projeto_id = pp.id
+              WHERE pp.obra_id = ${params.obraId} AND pa.data_inicio IS NOT NULL
+            `);
+            const fbRow = (fallback as any).rows?.[0];
+            if (fbRow?.primeiro_inicio) hoje = String(fbRow.primeiro_inicio).slice(0, 10);
+            if (fbRow?.ultimo_termino) dataFim = String(fbRow.ultimo_termino).slice(0, 10);
+            console.log(`[gerarContratoTerceiroDeOS] Datas do cronograma (fallback obra): ${hoje} a ${dataFim}`);
+          }
+        } catch (e: any) {
+          console.error(`[gerarContratoTerceiroDeOS] Erro ao buscar datas cronograma:`, e?.message);
+        }
+      }
+
+      let empTerceiraId: number | null = null;
+      if (cnpj) {
+        const [existEmp] = await tx.select({ id: empresasTerceiras.id }).from(empresasTerceiras)
+          .where(and(eq(empresasTerceiras.companyId, params.companyId), eq(empresasTerceiras.cnpj, cnpj))).limit(1);
+        if (existEmp) {
+          empTerceiraId = existEmp.id;
+        } else {
+          const [novaEmp] = await tx.insert(empresasTerceiras).values({
+            companyId: params.companyId,
+            razaoSocial: razaoSocial || params.fornecedorNome || "Empresa Terceira",
+            cnpj,
+            responsavelNome: razaoSocial || params.fornecedorNome || "",
+            status: "ativa",
+            fornecedorId: params.fornecedorId,
+          } as any).returning();
+          empTerceiraId = novaEmp.id;
+        }
+      } else {
+        const nomeEmpresa = razaoSocial || params.fornecedorNome || "Empresa Terceira";
+        const existEmpByName = await tx.execute(sql`
+          SELECT id FROM empresas_terceiras WHERE "companyId" = ${params.companyId} AND razao_social = ${nomeEmpresa} AND (cnpj IS NULL OR cnpj = '') LIMIT 1
+        `);
+        if ((existEmpByName as any).rows?.length > 0) {
+          empTerceiraId = (existEmpByName as any).rows[0].id;
+        } else {
+          const insertEmpRes = await tx.execute(sql`
+            INSERT INTO empresas_terceiras ("companyId", razao_social, cnpj, responsavel_nome, status, fornecedor_id, created_at, updated_at)
+            VALUES (${params.companyId}, ${nomeEmpresa}, '', ${nomeEmpresa}, 'ativa', ${params.fornecedorId}, NOW(), NOW())
+            RETURNING id
+          `);
+          empTerceiraId = (insertEmpRes as any).rows[0].id;
+        }
+      }
+
+      if (!empTerceiraId) {
+        console.error(`[gerarContratoTerceiroDeOS] Não foi possível criar/encontrar empresa terceira para OC #${params.ocId}`);
+        return null;
+      }
+
+      const obraNome = params.obraId ? (await tx.select({ nome: obras.nome }).from(obras).where(eq(obras.id, params.obraId)).limit(1))?.[0]?.nome ?? null : null;
+      const itensDescr = params.itensOS.map(it => `${it.descricao} — ${it.quantidade} ${it.unidade || "un"}`).join("; ");
+      const tipoContratoMap: Record<string, string> = {
+        medicao_mensal: "preco_unitario",
+        medicao_avanco: "preco_unitario",
+        medicao_etapa: "preco_unitario",
+        empreitada: "empreitada_global",
+        administracao: "administracao",
+      };
+      const tipoContratoTC = tipoContratoMap[params.moduloMedicao ?? ""] ?? "empreitada_global";
+
+      const [tcInner] = await tx.insert(terceiroContratos).values({
+        companyId: params.companyId,
+        empresaTerceiraId: empTerceiraId,
+        obraId: params.obraId,
+        obraNome: obraNome,
+        numeroContrato: numContrato,
+        descricao: `Prestação de serviços — OS ${params.ocId}: ${itensDescr}`.slice(0, 500),
+        tipoContrato: tipoContratoTC,
+        valorTotal: String(params.total.toFixed(2)),
+        dataInicio: hoje,
+        dataTermino: dataFim,
+        status: "ativo",
+        criadoPor: params.userName,
+      }).returning();
+      return { tc: tcInner, numContrato, empTerceiraId };
+    });
+
+    if (!txResult || !txResult.tc) {
+      // empresa terceira não pôde ser criada — abortar contrato
       return null;
     }
-
-    const obraNome = params.obraId ? (await db.select({ nome: obras.nome }).from(obras).where(eq(obras.id, params.obraId)).limit(1))?.[0]?.nome ?? null : null;
-    const itensDescr = params.itensOS.map(it => `${it.descricao} — ${it.quantidade} ${it.unidade || "un"}`).join("; ");
-    const tipoContratoMap: Record<string, string> = {
-      medicao_mensal: "preco_unitario",
-      medicao_avanco: "preco_unitario",
-      medicao_etapa: "preco_unitario",
-      empreitada: "empreitada_global",
-      administracao: "administracao",
-    };
-    const tipoContratoTC = tipoContratoMap[params.moduloMedicao ?? ""] ?? "empreitada_global";
-
-    const [tc] = await db.insert(terceiroContratos).values({
-      companyId: params.companyId,
-      empresaTerceiraId: empTerceiraId,
-      obraId: params.obraId,
-      obraNome: obraNome,
-      numeroContrato: numContrato,
-      descricao: `Prestação de serviços — OS ${params.ocId}: ${itensDescr}`.slice(0, 500),
-      tipoContrato: tipoContratoTC,
-      valorTotal: String(params.total.toFixed(2)),
-      dataInicio: hoje,
-      dataTermino: dataFim,
-      status: "ativo",
-      criadoPor: params.userName,
-    }).returning();
+    const tc = txResult.tc;
+    const numContrato = txResult.numContrato;
+    const empTerceiraId = txResult.empTerceiraId;
 
     for (let i = 0; i < params.itensOS.length; i++) {
       const it = params.itensOS[i];
@@ -5829,24 +5918,8 @@ Retorne APENAS um JSON válido neste formato:
       const isServico = scTipo === "servico" || scTipo === "pacote";
       const ordemTipo = scTipo === "pacote" ? "pacote" : (scTipo === "servico" ? "servico" : "compra");
 
-      let numeroOc: string;
-      if (isServico) {
-        const configOS = await db.select().from(ocNumberConfig).where(eq(ocNumberConfig.companyId, input.companyId)).limit(1);
-        if (!configOS[0]) {
-          await db.insert(ocNumberConfig).values({ companyId: input.companyId, proximoNumeroOs: 1, prefixoOs: "OS" } as any);
-        }
-        const proxOs = (configOS[0] as any)?.proximoNumeroOs ?? 1;
-        const prefOs = (configOS[0] as any)?.prefixoOs ?? "OS";
-        const digitos = configOS[0]?.digitosSequencial ?? 3;
-        const seqOs = String(proxOs).padStart(digitos, "0");
-        numeroOc = `${prefOs}-${new Date().getFullYear()}-${seqOs}`;
-        await db.update(ocNumberConfig).set({ proximoNumeroOs: proxOs + 1, updatedAt: new Date().toISOString() } as any)
-          .where(eq(ocNumberConfig.companyId, input.companyId));
-      } else {
-        const count = await db.select({ c: sql<number>`count(*)` }).from(comprasOrdens).where(eq(comprasOrdens.companyId, input.companyId));
-        const seq = (parseInt(String(count[0]?.c ?? 0)) + 1).toString().padStart(4, "0");
-        numeroOc = `OC-${new Date().getFullYear()}-${seq}`;
-      }
+      // Rev. 1985 — numeração atômica via advisory lock (fix race C1)
+      const numeroOc = await gerarProximoNumeroOC(input.companyId, ordemTipo as "compra" | "servico" | "pacote");
 
       const subtotalItens = n(cot.total) - freteParaTotal;
       const subtotal = Math.max(subtotalItens, 0);
@@ -6396,23 +6469,8 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
           dataEntregaPrevista = d.toISOString().slice(0, 10);
         }
 
-        let numeroOc: string;
-        if (ordemTipo === "servico" || ordemTipo === "pacote") {
-          const configOS = await db.select().from(ocNumberConfig).where(eq(ocNumberConfig.companyId, input.companyId)).limit(1);
-          if (!configOS[0]) {
-            await db.insert(ocNumberConfig).values({ companyId: input.companyId, proximoNumeroOs: 1, prefixoOs: "OS" } as any);
-          }
-          const proxOs = (configOS[0] as any)?.proximoNumeroOs ?? 1;
-          const prefOs = (configOS[0] as any)?.prefixoOs ?? "OS";
-          const digitos = configOS[0]?.digitosSequencial ?? 3;
-          const seqOs = String(proxOs).padStart(digitos, "0");
-          numeroOc = `${prefOs}-${new Date().getFullYear()}-${seqOs}`;
-          await db.update(ocNumberConfig).set({ proximoNumeroOs: proxOs + 1, updatedAt: new Date().toISOString() } as any).where(eq(ocNumberConfig.companyId, input.companyId));
-        } else {
-          const count = await db.select({ c: sql<number>`count(*)` }).from(comprasOrdens).where(eq(comprasOrdens.companyId, input.companyId));
-          const seq = (parseInt(String(count[0]?.c ?? 0)) + 1).toString().padStart(4, "0");
-          numeroOc = `OC-${new Date().getFullYear()}-${seq}`;
-        }
+        // Rev. 1985 — numeração atômica via advisory lock (fix race C1)
+        const numeroOc = await gerarProximoNumeroOC(input.companyId, ordemTipo as "compra" | "servico" | "pacote");
 
         const [fornData] = await db.select({ nome: fornecedores.nomeFantasia, razao: fornecedores.razaoSocial }).from(fornecedores).where(eq(fornecedores.id, grupo.fornecedorId));
         const fornNome = fornData?.nome || fornData?.razao || null;
