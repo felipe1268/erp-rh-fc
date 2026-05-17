@@ -2574,10 +2574,13 @@ export default function FechamentoPonto() {
                           const DIAS_SEMANA = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
                           // Rev. 2014 — feriados (federais/estaduais/municipais) NÃO são falta provável
                           const isFeriado = (ds: string) => feriadosSet.has(ds);
-                          // Apenas dias úteis (Seg-Sex), NÃO feriados, sem batida = falta provável
-                          const totalFaltas = dias.filter(d => d.dow >= 1 && d.dow <= 5 && !d.trabalhado && !isFeriado(d.data)).length;
+                          // Rev. 2030 — dia em GOZO de férias (vem do backend cruzando vacation_periods) NÃO é falta provável
+                          const isFerias = (d: any) => !!d.ferias;
+                          // Apenas dias úteis (Seg-Sex), NÃO feriados, NÃO em férias e sem batida = falta provável
+                          const totalFaltas = dias.filter(d => d.dow >= 1 && d.dow <= 5 && !d.trabalhado && !isFeriado(d.data) && !isFerias(d)).length;
                           const totalFDS = dias.filter(d => (d.dow === 0 || d.dow === 6) && !d.trabalhado).length;
                           const totalFeriados = dias.filter(d => isFeriado(d.data) && d.dow >= 1 && d.dow <= 5).length;
+                          const totalFerias = dias.filter(d => isFerias(d) && d.dow >= 1 && d.dow <= 5).length;
                           return (
                             <>
                               {/* Resumo */}
@@ -2587,6 +2590,9 @@ export default function FechamentoPonto() {
                                 <span className="flex items-center gap-1.5 text-slate-400"><span className="text-base">—</span> {totalFDS} fins de semana</span>
                                 {totalFeriados > 0 && (
                                   <span className="flex items-center gap-1.5 text-amber-700 font-semibold">🎉 {totalFeriados} {totalFeriados === 1 ? "feriado" : "feriados"}</span>
+                                )}
+                                {totalFerias > 0 && (
+                                  <span className="flex items-center gap-1.5 text-sky-700 font-semibold">🏖 {totalFerias} {totalFerias === 1 ? "dia em férias" : "dias em férias"}</span>
                                 )}
                                 {diasUteisNoPeriodo && <span className="ml-auto text-indigo-700 font-semibold">{Math.min(100, Math.round((totalTrabalhados / diasUteisNoPeriodo) * 100))}% de presença</span>}
                               </div>
@@ -2599,17 +2605,21 @@ export default function FechamentoPonto() {
                                   const isWeekend = d.dow === 0 || d.dow === 6;
                                   const isWeekendFolga = isWeekend && !d.trabalhado;
                                   const dayIsFeriado = isFeriado(d.data);
+                                  const dayIsFerias  = isFerias(d);
                                   const feriadoNome = feriadoNomeMap.get(d.data);
+                                  // Rev. 2030 — férias tem prioridade sobre falta provável (mas não sobre feriado/trabalhado)
                                   // Rev. 2014 — feriado em dia útil: âmbar (não conta falta); feriado trabalhado: verde com badge
                                   const cls = dayIsFeriado && !isWeekend
                                     ? (d.trabalhado ? "text-green-800 bg-green-50 ring-1 ring-amber-300" : "text-amber-800 bg-amber-50")
-                                    : isWeekendFolga
-                                      ? "text-slate-400 bg-slate-50"
-                                      : d.trabalhado
-                                        ? "text-green-800 bg-green-50"
-                                        : "text-red-700 bg-red-50";
+                                    : dayIsFerias && !d.trabalhado
+                                      ? "text-sky-800 bg-sky-50 ring-1 ring-sky-200"
+                                      : isWeekendFolga
+                                        ? "text-slate-400 bg-slate-50"
+                                        : d.trabalhado
+                                          ? "text-green-800 bg-green-50"
+                                          : "text-red-700 bg-red-50";
                                   return (
-                                    <div key={d.data} className={`flex items-center justify-between py-1.5 px-2 rounded ${cls}`} title={dayIsFeriado && feriadoNome ? `Feriado: ${feriadoNome}` : undefined}>
+                                    <div key={d.data} className={`flex items-center justify-between py-1.5 px-2 rounded ${cls}`} title={dayIsFeriado && feriadoNome ? `Feriado: ${feriadoNome}` : (dayIsFerias ? "Em gozo de férias" : undefined)}>
                                       <span className="font-medium">{label}</span>
                                       <span className="flex items-center gap-1">
                                         {dayIsFeriado && !isWeekend && (
@@ -2619,12 +2629,18 @@ export default function FechamentoPonto() {
                                             {d.trabalhado && <CheckCircle className="h-3 w-3 text-green-600 ml-1" />}
                                           </>
                                         )}
-                                        {!dayIsFeriado && isWeekendFolga && <span>— {d.dow === 0 ? "Domingo" : "Sábado"}</span>}
+                                        {!dayIsFeriado && dayIsFerias && !d.trabalhado && (
+                                          <>
+                                            <span>🏖</span>
+                                            <span className="font-semibold">Férias</span>
+                                          </>
+                                        )}
+                                        {!dayIsFeriado && !dayIsFerias && isWeekendFolga && <span>— {d.dow === 0 ? "Domingo" : "Sábado"}</span>}
                                         {!dayIsFeriado && !isWeekendFolga && d.trabalhado && <>
                                           <CheckCircle className="h-3 w-3 text-green-600" />
                                           <span className="font-mono">{d.horasTrabalhadas ?? ""}</span>
                                         </>}
-                                        {!dayIsFeriado && !isWeekendFolga && !d.trabalhado && <>
+                                        {!dayIsFeriado && !dayIsFerias && !isWeekendFolga && !d.trabalhado && <>
                                           <XCircle className="h-3 w-3 text-red-500" />
                                           <span>Falta provável</span>
                                         </>}
@@ -2637,6 +2653,7 @@ export default function FechamentoPonto() {
                               <p className="text-[11px] text-muted-foreground mt-3 text-center">
                                 "Falta provável" = dia útil sem nenhuma batida de ponto registrada no sistema. Pode ser falta, home office sem lançamento, ou dado ainda não importado.
                                 Feriados (federais, estaduais e municipais) NÃO contam como falta e são excluídos do denominador do % de presença.
+                                Dias em <strong className="text-sky-700">🏖 Férias</strong> (em gozo no período) também NÃO contam como falta.
                               </p>
                             </>
                           );

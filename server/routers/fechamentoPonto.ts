@@ -5139,8 +5139,38 @@ export const fechamentoPontoRouter = router({
         if (r.obraId) byDate[r.data].obraIds.push(r.obraId);
       }
 
+      // Rev. 2030 — Cruza com vacation_periods (3 fracionamentos possíveis) pra
+      // marcar dias em GOZO de férias. Esses dias NÃO devem ser "falta provável".
+      const vacs = await db.select({
+        dataInicio: vacationPeriods.dataInicio,
+        dataFim:    vacationPeriods.dataFim,
+        periodo2Inicio: vacationPeriods.periodo2Inicio,
+        periodo2Fim:    vacationPeriods.periodo2Fim,
+        periodo3Inicio: vacationPeriods.periodo3Inicio,
+        periodo3Fim:    vacationPeriods.periodo3Fim,
+      }).from(vacationPeriods).where(and(
+        inArray(vacationPeriods.companyId, cids),
+        eq(vacationPeriods.employeeId, input.employeeId),
+      ));
+      const feriasSet = new Set<string>();
+      const addRange = (ini?: string | null, fim?: string | null) => {
+        if (!ini || !fim) return;
+        const sd = new Date(ini + "T12:00:00Z");
+        const ed = new Date(fim + "T12:00:00Z");
+        for (let d = new Date(sd); d <= ed; d.setUTCDate(d.getUTCDate() + 1)) {
+          const ds = d.toISOString().slice(0, 10);
+          if (ds < input.dataInicio || ds > input.dataFim) continue;
+          feriasSet.add(ds);
+        }
+      };
+      for (const v of vacs) {
+        addRange(v.dataInicio, v.dataFim);
+        addRange(v.periodo2Inicio, v.periodo2Fim);
+        addRange(v.periodo3Inicio, v.periodo3Fim);
+      }
+
       // Gera todos os dias do período
-      const all: { data: string; dow: number; trabalhado: boolean; horasTrabalhadas: string | null }[] = [];
+      const all: { data: string; dow: number; trabalhado: boolean; horasTrabalhadas: string | null; ferias: boolean }[] = [];
       const cur = new Date(input.dataInicio + "T12:00:00Z");
       const end = new Date(input.dataFim + "T12:00:00Z");
       while (cur <= end) {
@@ -5150,6 +5180,7 @@ export const fechamentoPontoRouter = router({
           dow: cur.getUTCDay(), // 0=Dom,1=Seg…6=Sáb
           trabalhado: !!byDate[ds],
           horasTrabalhadas: byDate[ds]?.horasTrabalhadas ?? null,
+          ferias: feriasSet.has(ds),
         });
         cur.setUTCDate(cur.getUTCDate() + 1);
       }

@@ -1,6 +1,80 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2030 — DP · Fechamento de Ponto · Calendário do colaborador
+ * (drill-down "Dias Trabalhados") passa a reconhecer FÉRIAS em gozo
+ * e NÃO contar como "Falta provável".
+ *
+ * Pedido direto do usuário (img image_1779037756992): "O SISTEMA
+ * PRECISA VALIDAR TBM.. TODOS OS FUNCIONARIOS QUE ESTAVAM DE FERIAS
+ * NO PERIODO DE ANALISE, E FAZER UM AJUSTES, NÃO PODE COLOCAR FALTA
+ * NESTE PERIODO PQ ELE ESTAVA DE FERIAS, NO CARTÃO DE PONTO DELE,
+ * DEVERIA APARECER UM AVISO DE FERIAS EM TODOS OS DIAS UTEIS QUE
+ * ELES ESTEVE EM GOZO DE FERIAS".
+ *
+ * Caso da imagem: MARIANA CASTILHO DE LIMA, período 16/04 a 15/05,
+ * estava em GOZO de férias e o calendário mostrava 19 "Faltas
+ * prováveis" em dias úteis, com 5% de presença. Comportamento
+ * correto: esses dias devem aparecer como "🏖 Férias", não como
+ * falta, e devem ser excluídos do cálculo de presença.
+ *
+ * Mudança em 2 arquivos:
+ *
+ * (A) `server/routers/fechamentoPonto.ts` — procedure `getDiasEmployee`
+ *     (drill-down do calendário) ganha cruzamento com `vacationPeriods`:
+ *       - SELECT dos 3 fracionamentos possíveis (dataInicio/dataFim,
+ *         periodo2Inicio/Fim, periodo3Inicio/Fim) do funcionário.
+ *       - Helper `addRange(ini, fim)` expande cada intervalo dia a dia
+ *         e popula um `Set<string>` `feriasSet` recortado ao período
+ *         consultado (mesma técnica já usada em outros pontos do
+ *         arquivo, ex. linha ~4898 do próprio router).
+ *       - Cada item retornado em `dias[]` ganha campo novo
+ *         `ferias: boolean` (vem do `feriasSet.has(ds)`).
+ *       - ZERO mudança de schema. ZERO ALTER TABLE.
+ *
+ * (B) `client/src/pages/FechamentoPonto.tsx` — modal "Calendário de
+ *     dias do colaborador" (`diasDetalhe` / `diasEmployeeQuery`):
+ *       - `isFerias(d)` = `!!d.ferias` (vem do backend).
+ *       - `totalFaltas` agora exclui dias em férias E feriados E sem
+ *         batida (antes só excluía feriados).
+ *       - Resumo ganha chip novo cyan "🏖 N dia(s) em férias" quando
+ *         houver dias em gozo no período.
+ *       - Lista de dias: classe `sky-50/sky-800/ring-sky-200` para
+ *         dias em férias (não trabalhados); badge "🏖 Férias" inline
+ *         em vez de "× Falta provável".
+ *       - Prioridade: trabalhado > feriado > férias > fim de semana
+ *         > falta provável (férias não sobrepõe quando há batida, pra
+ *         não esconder home office num dia inicialmente marcado como
+ *         férias).
+ *       - Microcopy do rodapé estendido: "Dias em 🏖 Férias (em gozo
+ *         no período) também NÃO contam como falta".
+ *
+ * + `shared/version.ts` → 2030.
+ *
+ * R-001/R-007/R-010 OK: ZERO SQL destrutivo, ZERO ALTER TABLE, ZERO
+ * mudança de schema. Apenas SELECT cruzado + render. Reversível em
+ * 2 arquivos.
+ *
+ * Preservado:
+ *   - Lógica de feriados (Rev. 2014) INTACTA — mesma prioridade.
+ *   - Cálculo de `totalTrabalhados` INTACTO.
+ *   - Modal "Memória de cálculo · Atraso Acumulado" (Rev. 2029)
+ *     INTACTO — esta revisão mexe em modal DIFERENTE.
+ *   - Estado `diasDetalhe`/`diasEmployeeQuery` INTACTO.
+ *   - Outros modais que já usavam vacationPeriods (getDrillDown,
+ *     etc.) INTACTOS.
+ *
+ * Follow-up:
+ *   - Aplicar mesma lógica de exclusão de férias no cálculo de
+ *     "Falta provável" da TABELA-MÃE (getSummary) se também estiver
+ *     com mesmo viés (provavelmente o motor já desconta via
+ *     vacation_periods quando consolida pagamento, mas o drill-down
+ *     visual aqui era independente).
+ *   - Avaliar afastamentos (atestados longos, INSS, licença
+ *     maternidade) — mesmo padrão de exclusão pode ser necessário.
+ *   - "Falta provável" do drill-down ainda não cruza com `atestados`
+ *     — quando o usuário pedir, herdar o mesmo padrão.
+ *
  * Rev. 2029 — DP · Fechamento de Ponto · Modal "Memória de cálculo ·
  * Atraso Acumulado" em FULL SCREEN com fontes maiores.
  *
