@@ -1024,12 +1024,29 @@ function PendentesTab({ companyId }: { companyId: number }) {
       setCreatedEmployee(data.employeeNome || "");
       toast.success("Integração criada com sucesso!");
     },
-    onError: (err) => {
+    onError: (err: any) => {
+      // Rev. 2041 — não fecha mais a janela; mostra o erro DENTRO dela
+      // (no Safari iPad fechar dava impressão de "abre e fecha sozinho").
+      const msg = err?.message || err?.data?.message || "Erro ao criar integração";
+      console.error("[criarRegistro] erro:", err);
       if (pendingWindowRef.current) {
-        try { pendingWindowRef.current.close(); } catch { /* ignore */ }
+        const w = pendingWindowRef.current;
         pendingWindowRef.current = null;
+        try {
+          if (!w.closed) {
+            w.document.open();
+            w.document.write(
+              `<!doctype html><meta charset="utf-8"><title>Erro</title>` +
+              `<style>body{font-family:system-ui,-apple-system,sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;background:#fef2f2;color:#7f1d1d;padding:24px}.box{max-width:480px;text-align:center;background:#fff;border:1px solid #fecaca;border-radius:12px;padding:24px;box-shadow:0 4px 12px rgba(0,0,0,0.06)}.ico{font-size:48px;line-height:1;margin-bottom:12px}h2{margin:0 0 8px;font-size:18px;color:#991b1b}p{margin:0 0 16px;color:#7f1d1d;font-size:14px}button{background:#dc2626;color:#fff;border:0;padding:10px 20px;border-radius:8px;font-size:14px;cursor:pointer}button:hover{background:#b91c1c}</style>` +
+              `<div class="box"><div class="ico">⚠️</div><h2>Não foi possível iniciar a integração</h2><p>${String(msg).replace(/[<>&]/g, "")}</p><button onclick="window.close()">Fechar</button></div>`
+            );
+            w.document.close();
+          }
+        } catch (e) {
+          console.warn("[criarRegistro] falha ao escrever erro na janela:", e);
+        }
       }
-      toast.error(err?.message || "Erro ao criar integração");
+      toast.error(msg);
     }
   });
   const criarLote = trpc.integracaoSST.criarRegistrosEmLote.useMutation({

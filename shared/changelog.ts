@@ -1,6 +1,60 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2041 — SST · Integração de Segurança · "Iniciar agora" ·
+ * BUGFIX "abre e fecha sozinho": janela de splash agora mostra
+ * mensagem de erro DENTRO dela em vez de fechar.
+ *
+ * Pedido direto do usuário (img IMG_0888): após Rev. 2040, ao
+ * clicar "Iniciar agora" a janela abria com o splash
+ * "Preparando a integracao de ANA..." e depois fechava sozinha
+ * em ~1-2s, sem o usuário ver o motivo. Causa: o `onError` do
+ * `criarRegistro.useMutation` chamava `w.close()` na janela
+ * pendente, deixando o usuário sem feedback visível (o toast
+ * de erro fica na aba ORIGINAL, mas o usuário tá olhando pra
+ * aba NOVA que acaba de fechar — parece bug aleatório).
+ *
+ * Mudança em 1 arquivo (`client/src/pages/sst/IntegracaoSST.tsx`,
+ * ~25L em 1 hunk):
+ *
+ *   - `onError` reescrito: em vez de `w.close()`, faz
+ *     `w.document.open() + write()` com tela de ERRO inline
+ *     (caixa branca, ícone ⚠️, mensagem real do servidor,
+ *     botão "Fechar" que chama `window.close()`)
+ *   - `msg` extraído de `err.message || err.data.message ||
+ *     fallback` (cobre tanto erros JS quanto TRPCError)
+ *   - `console.error("[criarRegistro] erro:", err)` adicionado
+ *     pra debug no DevTools sem depender do usuário reportar
+ *   - sanitização básica `[<>&]` na mensagem pra evitar
+ *     injeção HTML acidental
+ *   - try/catch no document.write (se a janela morreu antes,
+ *     loga warning e segue com toast)
+ *   - toast.error continua sendo disparado na aba original
+ *     (defesa em profundidade)
+ *
+ * + `shared/version.ts` → 2041.
+ *
+ * R-001/R-007/R-010 OK: ZERO SQL/schema/router. 1 arquivo /
+ * 1 hunk client-side. Sem novas deps. Reversível.
+ *
+ * Preservado:
+ *   - Rev. 2040 (hardening try/catch no iniciarAgora) INTACTA
+ *   - Rev. 2039 (open-blank-then-redirect) INTACTA
+ *   - Rev. 2038 (boas-vindas + atalho) INTACTA
+ *   - `onSuccess` INTACTO (segue navegando w.location.href)
+ *   - Modal "Iniciar Integração" do header INTACTO
+ *
+ * Follow-up:
+ *   1. Capturar o `err.message` real que está disparando o
+ *      onError — provavelmente "Colaborador não encontrado
+ *      nesta empresa" (ANA pode estar em outra company que
+ *      não a selecionada), ou algum constraint violation
+ *      no insert
+ *   2. Pré-validar companyId/employeeId no client antes de
+ *      mutar (ZOD-style) pra evitar round-trip
+ *   3. Botão "Reportar problema" na tela de erro que envia
+ *      o stack pro RH automaticamente
+ *
  * Rev. 2040 — SST · Integração de Segurança · "Iniciar agora" ·
  * BUGFIX hardening: erro genérico "Cannot convert undefined or
  * null to object" silencioso.
