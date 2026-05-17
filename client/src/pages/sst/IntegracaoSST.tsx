@@ -1139,22 +1139,46 @@ function PendentesTab({ companyId }: { companyId: number }) {
     setShowNew(true);
   };
 
-  // Rev. 2038/2039 — "Iniciar agora": ABRE a janela SÍNCRONA no click (escapa pop-up blocker
-  // Safari/iPad), depois cria o registro e seta a URL no onSuccess.
-  const iniciarAgora = (emp: { id: number; nome: string; cpf: string | null; funcao: string | null }) => {
-    if (criarRegistro.isPending) return;
-    const w = window.open("about:blank", "_blank");
-    if (w) {
+  // Rev. 2038/2039/2040 — "Iniciar agora": ABRE a janela SÍNCRONA no click (escapa pop-up
+  // blocker Safari/iPad), depois cria o registro e seta a URL no onSuccess.
+  // Rev. 2040: blindado contra emp null/undefined e try/catch geral pra logar erro real.
+  const iniciarAgora = (emp: { id: number; nome: string | null; cpf: string | null; funcao: string | null } | null | undefined) => {
+    try {
+      if (!emp || !emp.id) {
+        toast.error("Colaborador inválido");
+        return;
+      }
+      if (criarRegistro.isPending) return;
+      const nome = String(emp.nome || "Colaborador").trim();
+      const primeiroNome = (nome.split(" ")[0] || nome).replace(/[<>&"]/g, "");
+
+      let w: Window | null = null;
       try {
-        w.document.write(
-          `<!doctype html><meta charset="utf-8"><title>Iniciando integração…</title>` +
-          `<style>body{font-family:system-ui,-apple-system,sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;background:linear-gradient(180deg,#ecfdf5,#fff);color:#065f46}.box{text-align:center}.spin{width:48px;height:48px;border:4px solid #d1fae5;border-top-color:#059669;border-radius:50%;animation:s 1s linear infinite;margin:0 auto 16px}@keyframes s{to{transform:rotate(360deg)}}</style>` +
-          `<div class="box"><div class="spin"></div><h2>Preparando a integração de ${emp.nome.split(" ")[0]}…</h2><p>Aguarde um instante.</p></div>`
-        );
-      } catch { /* algumas janelas about:blank não aceitam document.write */ }
-      pendingWindowRef.current = w;
+        w = window.open("about:blank", "_blank");
+      } catch (e) {
+        console.warn("[iniciarAgora] window.open falhou:", e);
+      }
+      if (w) {
+        try {
+          w.document.write(
+            `<!doctype html><meta charset="utf-8"><title>Iniciando integracao</title>` +
+            `<style>body{font-family:system-ui,-apple-system,sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;background:linear-gradient(180deg,#ecfdf5,#fff);color:#065f46}.box{text-align:center}.spin{width:48px;height:48px;border:4px solid #d1fae5;border-top-color:#059669;border-radius:50%;animation:s 1s linear infinite;margin:0 auto 16px}@keyframes s{to{transform:rotate(360deg)}}</style>` +
+            `<div class="box"><div class="spin"></div><h2>Preparando a integracao de ${primeiroNome}...</h2><p>Aguarde um instante.</p></div>`
+          );
+        } catch (e) {
+          console.warn("[iniciarAgora] document.write falhou:", e);
+        }
+        pendingWindowRef.current = w;
+      }
+      criarRegistro.mutate({ companyId, employeeId: emp.id });
+    } catch (e: any) {
+      console.error("[iniciarAgora] erro:", e);
+      toast.error(`Erro ao iniciar: ${e?.message || String(e)}`);
+      if (pendingWindowRef.current) {
+        try { pendingWindowRef.current.close(); } catch { /* ignore */ }
+        pendingWindowRef.current = null;
+      }
     }
-    criarRegistro.mutate({ companyId, employeeId: emp.id });
   };
 
   if (!companyId) return <p className="text-muted-foreground p-4">Selecione uma empresa.</p>;

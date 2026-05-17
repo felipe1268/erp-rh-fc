@@ -5,6 +5,10 @@
 > Movido aqui na Rev. 2028 (faxina) — revisões 1903 → 2012.
 > Atualizado na Rev. 2037 — revisões 2021 e 2022 movidas pra cá.
 
+## Revisão 2025
+
+- ~~Rev. 2025~~ — Terceiros aba DDS: READ-ONLY (remove formulário manual; registros vêm só de sessões coletivas via `sessao_id`). Ver `shared/changelog.ts`.
+
 ## Revisão 2024
 
 - ~~Rev. 2024~~ — SST DDS: terceiros no detalhe da sessão + "Transferir colaborador" aceita terceiros. Ver `shared/changelog.ts`.

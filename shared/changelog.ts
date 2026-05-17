@@ -1,6 +1,72 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2040 — SST · Integração de Segurança · "Iniciar agora" ·
+ * BUGFIX hardening: erro genérico "Cannot convert undefined or
+ * null to object" silencioso.
+ *
+ * Pedido do usuário (img IMG_0887): toast "Cannot convert
+ * undefined or null to object" ao clicar "Iniciar agora".
+ * Mensagem genérica do JS engine sem stack — não dava pra
+ * saber se era `Object.keys(null)`, `Object.assign(undefined,
+ * ...)`, etc. Provavelmente disparado em algum item de
+ * `pendentesAuto` com campo nulo não tratado, ou no
+ * `emp.nome.split(" ")[0]` quando `nome` é null/undefined.
+ *
+ * Mudança em 1 arquivo (`client/src/pages/sst/IntegracaoSST.tsx`,
+ * ~25L em 1 hunk):
+ *
+ *   - tipo do parâmetro `emp` de `iniciarAgora` afrouxado:
+ *     aceita `nome: string|null` e o próprio `emp` pode ser
+ *     `null|undefined` (defesa em profundidade)
+ *   - try/catch GERAL envolve toda a função; em caso de erro,
+ *     `console.error` com stack + `toast.error` com a
+ *     mensagem real (em vez do toast genérico do servidor) +
+ *     fecha janela pendente pra não deixar órfã
+ *   - early-return com `toast.error("Colaborador inválido")`
+ *     se `!emp || !emp.id`
+ *   - `nome` normalizado: `String(emp.nome || "Colaborador")
+ *     .trim()` → nunca null/undefined
+ *   - `primeiroNome` extraído com fallback e sanitizado
+ *     removendo `[<>&"]` pra evitar quebrar o
+ *     `document.write` do splash
+ *   - `window.open` envolvido em try/catch separado (alguns
+ *     contextos restritos lançam direto)
+ *   - `document.write` em try/catch separado (algumas WebViews
+ *     ou pop-ups bloqueados lançam ao escrever)
+ *   - aspas tipográficas removidas do splash (… → ...,
+ *     "integração" → "integracao" no document.write pra
+ *     evitar problemas de charset em about:blank que ainda
+ *     não tem `<meta charset>` declarado quando o write
+ *     começa — embora declaremos no template, é mais
+ *     defensivo)
+ *
+ * + `shared/version.ts` → 2040.
+ *
+ * R-001/R-007/R-010 OK: ZERO SQL/schema/router. 1 arquivo /
+ * 1 hunk client-side. Sem novas deps. Reversível.
+ *
+ * Preservado:
+ *   - Rev. 2039 (open-blank-then-redirect) INTACTA — só
+ *     blindada
+ *   - Rev. 2038 (boas-vindas + atalho) INTACTA
+ *   - Rev. 2037 (Memorial DSR) INTACTA
+ *   - Modal "Iniciar Integração" do header INTACTO
+ *   - `criarRegistro` server-side INTACTO
+ *
+ * Follow-up:
+ *   1. Investigar item específico de `pendentesAuto` que
+ *      causou o erro original (provavelmente CPF de teste
+ *      "TESTE" ou colaborador com `nome IS NULL`) — caça
+ *      ao gremlin com `nome` faltando no SELECT do
+ *      `listarPendentesAuto`
+ *   2. Adicionar Sentry/log centralizado pra capturar
+ *      console.error desses guards e evitar dependência
+ *      do usuário reportar
+ *   3. Validar Zod no client antes do mutate pra dar
+ *      mensagem de erro amigável em vez de erro do
+ *      servidor
+ *
  * Rev. 2039 — SST · Integração de Segurança · "Iniciar agora" ·
  * BUGFIX pop-up blocker (Safari/iPad): "Clico em iniciar e
  * não acontece nada".
