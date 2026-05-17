@@ -4,6 +4,17 @@
 > O detalhamento completo (causa-raiz, stack traces, arquivos tocados, comentários longos) de TODAS as revisões — incluindo as listadas abaixo — vive em `shared/changelog.ts`.
 > Movido aqui na Rev. 2028 (faxina) — revisões 1903 → 2012.
 
+- ~~Rev. 2054~~ — Fechamento de Ponto: ranking "Menos Dias Trabalhados" exclui colaboradores em gozo de férias no período. Ver `shared/changelog.ts`. (movida na Rev. 2062)
+- ~~Rev. 2053~~ — SST Integração: +10 perguntas sobre NRs e Segurança APPENDADAS ao banco-padrão (total 22). Ver `shared/changelog.ts`. (movida na Rev. 2062)
+- ~~Rev. 2052~~ — SST Integração: assinatura digital do TST no certificado (canvas inline, PNG embutido no PDF). Ver `shared/changelog.ts`. (movida na Rev. 2062)
+- ~~Rev. 2051~~ — Fechamento de Ponto: modais de Ranking ganham memória de cálculo clicável + responsivo mobile (2 procedures novos). Ver `shared/changelog.ts`. (movida na Rev. 2062)
+- ~~Rev. 2050~~ — SST Integração: AUTO-MIGRAÇÃO no startup das 12 perguntas-padrão "Regras de Ouro" (idempotente, cross-tenant). Ver `shared/changelog.ts`. (movida na Rev. 2062)
+- ~~Rev. 2049~~ — SST Integração: nova aba "Aprovados" com Visualizar/Baixar Certificado + atalho pro Raio-X. Ver `shared/changelog.ts`. (movida na Rev. 2062)
+- ~~Rev. 2048~~ — SST Integração: certificado ganha logo da FC + cores da marca + headline "Parabéns!" + botão "Visualizar / Imprimir". Ver `shared/changelog.ts`. (movida na Rev. 2062)
+- ~~Rev. 2047~~ — SST Integração: 12 perguntas-padrão REESCRITAS fiéis ao vídeo (cultura + 10 Regras de Ouro) + botão "🔄 Atualizar Regras de Ouro". Ver `shared/changelog.ts`. (movida na Rev. 2062)
+- ~~Rev. 2046~~ — SST Integração: botão "Carregar Regras de Ouro" + 12 perguntas-padrão semeadas no módulo (cross-tenant idempotente). Ver `shared/changelog.ts`. (movida na Rev. 2062)
+- ~~Rev. 2045~~ — SST Integração aba Histórico: confirmação de exclusão via AlertDialog (substitui window.confirm). Ver `shared/changelog.ts`. (movida na Rev. 2062)
+- ~~Rev. 2044~~ — SST Integração aba Histórico: bulk-delete + soft-delete via `deletedAt` (preserva trilha de auditoria). Ver `shared/changelog.ts`. (movida na Rev. 2062)
 - ~~Rev. 2043~~ — SST Integração "Iniciar agora": pula passo de CPF quando RH já selecionou o colaborador (link `?cpf=...&auto=1`). Ver `shared/changelog.ts`. (movida na Rev. 2058)
 - ~~Rev. 2042~~ — SST Integração "Iniciar agora": CAUSA-RAIZ — SELECT usava `employees.nome` (correto é `nomeCompleto`); fix em 3 handlers + try/catch. Ver `shared/changelog.ts`. (movida na Rev. 2057)
 - ~~Rev. 2041~~ — SST Integração "Iniciar agora": BUGFIX "abre e fecha sozinho" — janela de splash agora mostra mensagem de erro DENTRO dela em vez de fechar. Ver `shared/changelog.ts`. (movida na Rev. 2056)

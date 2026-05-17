@@ -1,6 +1,40 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2062 — **Faxina do `replit.md` · convenção mudou de 5+10 pra 2+5**
+ * (Top-2 detalhado + Top-5 one-liner). Pedido direto do usuário: "Esta
+ * mensagem [alerta de arquivo grande] tem aparecido muito, zere tudo
+ * que puder para não aparecer mais, sem apagar os dados do sistema ou
+ * perder arquivos". **Antes**: 5 detalhadas (cada uma com 1500-2000
+ * chars de parágrafo) + 10 one-liners = ~200 linhas, ~25KB. **Depois**:
+ * 2 compactas (~400 chars cada) + 5 one-liners curtas = ~75 linhas,
+ * ~6KB (-75%). **Mudanças**: (1) `replit.md` reescrito — convenção
+ * atualizada no topo (texto da regra também ficou mais curto); Top-2
+ * = Rev. 2062 (esta) + Rev. 2061; one-liners = Rev. 2060..2056. (2)
+ * `replit-history.md` recebeu Rev. 2054..2044 (11 one-liners movidos
+ * antes do bloco existente da Rev. 2043). (3) Seção "Where things
+ * live" também enxugada (de 10 sub-bullets pra 5). **ZERO dado
+ * perdido**: detalhe completo de TODAS as 12 revisões movidas
+ * continua em `shared/changelog.ts` (que é a fonte autoritativa
+ * desde sempre). + `shared/version.ts` → 2062. **Por que reduzir
+ * pra 2+5 (e não 3+7)**: 2 detalhadas cobrem o ciclo de iteração
+ * típico do usuário (última + penúltima); 5 one-liners cobrem ~1
+ * semana de revisões — suficiente p/ contexto sem virar enciclopédia.
+ * **Por que NÃO deletar `replit.md` inteiro**: docstring/setup
+ * (run/build/stack/env) é referência viva pro onboarding e pra
+ * próxima IA — só o histórico inflado precisava ir. **Por que NÃO
+ * comprimir `shared/changelog.ts`**: é a fonte autoritativa e não
+ * dispara o warning de tamanho (não é lido por padrão pelo agente).
+ * **R-001/R-007/R-010 OK**: ZERO mudança de código de produção;
+ * só docs. **Preservado**: todos os blocos detalhados de TODAS as
+ * revisões antigas continuam neste arquivo, e os one-liners
+ * continuam em `replit-history.md`. **Follow-up**: (1) revisitar a
+ * convenção daqui a 20 revisões — se o changelog.ts em si crescer
+ * demais (>500KB), criar `shared/changelog-archive.ts`; (2) script
+ * `pnpm changelog:trim` que automatiza a rotação de `replit.md`
+ * (hoje é manual); (3) considerar versionar `replit.md` por release
+ * tag pra retomar contexto histórico sem poluir HEAD.
+ *
  * Rev. 2061 — Raio-X do Colaborador · card "Integração de Segurança
  * (SST)" · coluna "Certificado" ganha botões **Ver** + **PDF** para
  * registros aprovados. Pedido direto do usuário (IMG_0960): "O PDF
