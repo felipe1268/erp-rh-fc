@@ -862,6 +862,11 @@ function ModulosEditor({ configId, companyId }: { configId: number; companyId: n
   const criarModulo = trpc.integracaoSST.criarModulo.useMutation({ onSuccess: () => { modulos.refetch(); setShowNew(false); toast.success("Módulo criado"); } });
   const excluirModulo = trpc.integracaoSST.excluirModulo.useMutation({ onSuccess: () => { modulos.refetch(); toast.success("Módulo excluído"); } });
   const salvarPerguntas = trpc.integracaoSST.salvarPerguntas.useMutation({ onSuccess: () => { modulos.refetch(); toast.success("Perguntas salvas"); } });
+  // Rev. 2046 — botão "Carregar Regras de Ouro" para módulos sem perguntas
+  const semearPadrao = trpc.integracaoSST.semearPerguntasPadrao.useMutation({
+    onSuccess: (res) => { modulos.refetch(); toast.success(`${res.total} perguntas-padrão carregadas`); },
+    onError: (err) => { toast.error(err.message || "Falha ao carregar perguntas-padrão"); },
+  });
 
   const [showNew, setShowNew] = useState(false);
   const [newTitulo, setNewTitulo] = useState("");
@@ -923,6 +928,18 @@ function ModulosEditor({ configId, companyId }: { configId: number; companyId: n
                     </div>
                   </div>
                   <div className="flex gap-1">
+                    {(mod.perguntas?.length || 0) === 0 && (
+                      <Button
+                        size="sm" variant="outline"
+                        className="text-xs h-8 border-emerald-300 text-emerald-700 hover:bg-emerald-50"
+                        disabled={semearPadrao.isPending}
+                        onClick={() => semearPadrao.mutate({ companyId, moduloId: mod.id })}
+                        title="Carregar 12 perguntas-padrão das Regras de Ouro de segurança em obra"
+                      >
+                        {semearPadrao.isPending ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : "🎯 "}
+                        Carregar Regras de Ouro
+                      </Button>
+                    )}
                     <Button size="sm" variant="ghost" onClick={() => startEditPerguntas(mod)}><ClipboardList className="h-4 w-4" /></Button>
                     <Button size="sm" variant="ghost" onClick={() => excluirModulo.mutate({ id: mod.id, companyId })}><Trash2 className="h-4 w-4 text-red-500" /></Button>
                   </div>

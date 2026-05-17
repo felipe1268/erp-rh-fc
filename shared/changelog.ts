@@ -1,6 +1,79 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2046 — SST · Integração de Segurança · Configurações ·
+ * botão "Carregar Regras de Ouro" + 12 perguntas-padrão semeadas
+ * no único módulo existente.
+ *
+ * Pedido direto do usuário (img IMG_0893 + vídeo INTEGRAÇÃO FC
+ * ENGENHARIA): "Faça as perguntas... quero perguntas simples
+ * para um servente responder... mas as regras de ouro devem ter
+ * perguntas". A tela pública mostrava o card "Questionário —
+ * Nota mínima: 70% — 0/0 respondidas" e o botão "Enviar
+ * Respostas" ficava sempre desabilitado (módulo sem perguntas).
+ *
+ * Solução em 3 partes:
+ *
+ *   1. Server `server/routers/integracaoSST.ts`:
+ *      - Constante `PERGUNTAS_REGRAS_OURO` com 12 perguntas em
+ *        linguagem simples (servente, baixa escolaridade), 3
+ *        alternativas cada (1 correta). Cobre: NR-6 (EPI), NR-35
+ *        (altura/cinto/ancoragem), NR-33 (confinado), NR-10
+ *        (elétrica), NR-18 (escavação), NR-11/12 (içamento/
+ *        bloqueio LOTO), álcool/drogas, sinalização (fita
+ *        zebrada), quase-acidente e comportamento (brincadeira).
+ *      - Novo handler `semearPerguntasPadrao({companyId,
+ *        moduloId})` que insere as 12 perguntas + 36
+ *        alternativas. Idempotente: TRPCError CONFLICT se módulo
+ *        já tem perguntas (evita duplicação acidental).
+ *        Cross-tenant: assertCompanyAccess + WHERE no
+ *        sstIntegracaoModulos.companyId. Try/catch com
+ *        INTERNAL_SERVER_ERROR genérico (sem vazar err.message
+ *        — lição da Rev. 2042).
+ *
+ *   2. Client `client/src/pages/sst/IntegracaoSST.tsx`:
+ *      - Mutation `semearPadrao` no `ModulosEditor`.
+ *      - Botão "🎯 Carregar Regras de Ouro" (border emerald,
+ *        outline) aparece ao lado do card do módulo APENAS
+ *        quando `mod.perguntas?.length === 0`. Tooltip explica
+ *        as 12 perguntas-padrão. Loader2 durante mutation.
+ *        Toast com contagem em sucesso, mensagem do server em
+ *        erro.
+ *
+ *   3. SQL DML (INSERT, não destrutivo — R-001/R-007/R-010 OK):
+ *      executado direto no único módulo existente
+ *      (company_id=60002, modulo_id=1, "Integração FC
+ *      ENGENHARIA") para resolver o caso imediato do print do
+ *      usuário. 12 perguntas + 36 alternativas inseridas via
+ *      CTE com UNNEST WITH ORDINALITY (preserva ordem das
+ *      alternativas).
+ *
+ *   4. `shared/version.ts` → 2046.
+ *
+ * R-001/R-007/R-010 OK: ZERO ALTER/DROP/DELETE. Só INSERT
+ * (DML não destrutivo, reversível via DELETE WHERE modulo_id=1
+ * se necessário). Multi-tenant: handler exige companyId +
+ * assertCompanyAccess + valida que módulo pertence à company.
+ * Sem novas deps. Sem mudança de schema.
+ *
+ * Preservado: Rev. 2045 (AlertDialog) INTACTA; Rev. 2044
+ * (excluir/editar/multi-seleção) INTACTA; handler
+ * `salvarPerguntas` original INTACTO (continua editando
+ * perguntas existentes); UI de edição manual de perguntas
+ * INTACTA — botão "Carregar Regras de Ouro" apenas adiciona
+ * uma forma rápida pra módulos vazios.
+ *
+ * Follow-up:
+ *   1. Variações regionais/por função (perguntas específicas
+ *      para eletricista, soldador, operador de máquina) em vez
+ *      de um único conjunto genérico.
+ *   2. Adicionar imagens/ícones em cada alternativa (UX melhor
+ *      para semi-alfabetizados — atende NR-1.7 capacitação).
+ *   3. Banco de perguntas reutilizável (admin_master mantém
+ *      catálogo, RH escolhe quais usar em cada módulo).
+ *   4. Embaralhar ordem das alternativas na tela pública pra
+ *      evitar cola entre colaboradores.
+ *
  * Rev. 2045 — SST · Integração de Segurança · aba Histórico ·
  * confirmação de exclusão via AlertDialog (substitui window.confirm).
  *

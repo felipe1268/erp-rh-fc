@@ -20,6 +20,110 @@ function gerarToken(): string {
   return crypto.randomBytes(32).toString("hex");
 }
 
+// Rev. 2046 — Perguntas-padrão "Regras de Ouro" de segurança em obra
+// Linguagem simples (público alvo: servente/ajudante de obra, baixa escolaridade)
+// Cobre NR-6 (EPI), NR-35 (altura), NR-33 (confinado), NR-10 (elétrica),
+// NR-18 (obras), NR-11/12 (içamento/máquinas), álcool/drogas, sinalização,
+// quase-acidente e comportamento.
+const PERGUNTAS_REGRAS_OURO: { texto: string; alternativas: { texto: string; correta: boolean }[] }[] = [
+  {
+    texto: "Quando devo usar capacete, óculos e botina dentro da obra?",
+    alternativas: [
+      { texto: "O tempo todo, em qualquer área da obra", correta: true },
+      { texto: "Só quando o engenheiro ou o encarregado estiver olhando", correta: false },
+      { texto: "Só quando eu subir em altura", correta: false },
+    ],
+  },
+  {
+    texto: "A partir de qual altura é obrigatório usar cinto de segurança?",
+    alternativas: [
+      { texto: "Só acima de 5 metros", correta: false },
+      { texto: "A partir de 2 metros do chão", correta: true },
+      { texto: "Não precisa, basta tomar cuidado", correta: false },
+    ],
+  },
+  {
+    texto: "Onde devo prender o gancho do cinto de segurança?",
+    alternativas: [
+      { texto: "Em qualquer cano ou madeira que estiver perto", correta: false },
+      { texto: "No cinto do colega de trabalho", correta: false },
+      { texto: "Na linha de vida ou ponto de ancoragem aprovado pelo técnico de segurança", correta: true },
+    ],
+  },
+  {
+    texto: "Posso entrar sozinho num espaço confinado (caixa d'água, valeta funda, tanque)?",
+    alternativas: [
+      { texto: "Sim, se for rápido", correta: false },
+      { texto: "Não. Só com Permissão de Entrada e Trabalho (PET) e vigia do lado de fora", correta: true },
+      { texto: "Sim, se eu segurar a respiração", correta: false },
+    ],
+  },
+  {
+    texto: "Encontrei um fio elétrico desencapado na obra. O que devo fazer?",
+    alternativas: [
+      { texto: "Conserto eu mesmo com fita isolante", correta: false },
+      { texto: "Isolo a área e chamo um eletricista habilitado (NR-10)", correta: true },
+      { texto: "Aviso depois, quando lembrar", correta: false },
+    ],
+  },
+  {
+    texto: "A grua ou guindaste está levantando uma carga. O que devo fazer?",
+    alternativas: [
+      { texto: "Fico embaixo para ajudar a guiar a carga", correta: false },
+      { texto: "Saio da área isolada e nunca passo embaixo da carga suspensa", correta: true },
+      { texto: "Continuo trabalhando perto, é seguro", correta: false },
+    ],
+  },
+  {
+    texto: "Vou fazer manutenção numa máquina ou equipamento. O que faço primeiro?",
+    alternativas: [
+      { texto: "Ligo a máquina pra testar antes de começar", correta: false },
+      { texto: "Desligo, bloqueio a fonte de energia e coloco a etiqueta com meu nome (bloqueio/LOTO)", correta: true },
+      { texto: "Peço pro colega segurar o botão de desliga", correta: false },
+    ],
+  },
+  {
+    texto: "Vou trabalhar dentro de uma vala de 1,5m de profundidade. O que olho primeiro?",
+    alternativas: [
+      { texto: "A cor da terra", correta: false },
+      { texto: "Se tem escoramento, sinalização e saída de emergência (escada)", correta: true },
+      { texto: "Se tem sombra para descansar", correta: false },
+    ],
+  },
+  {
+    texto: "Quase caí de um andaime, mas não me machuquei. O que devo fazer?",
+    alternativas: [
+      { texto: "Não conto pra ninguém, ninguém viu", correta: false },
+      { texto: "Aviso o encarregado ou o SESMT pra evitar que outro colega se machuque (quase-acidente)", correta: true },
+      { texto: "Vou embora pra casa mais cedo", correta: false },
+    ],
+  },
+  {
+    texto: "Posso trabalhar na obra depois de tomar bebida alcoólica no almoço?",
+    alternativas: [
+      { texto: "Sim, se for só uma latinha", correta: false },
+      { texto: "Sim, desde que eu não opere máquina", correta: false },
+      { texto: "Não. Álcool e drogas são proibidos na obra", correta: true },
+    ],
+  },
+  {
+    texto: "Vi uma fita zebrada (preto e amarelo) ou cones bloqueando uma área. O que isso significa?",
+    alternativas: [
+      { texto: "Que tem festa ali", correta: false },
+      { texto: "Risco — não posso entrar nessa área sem autorização", correta: true },
+      { texto: "Que posso passar normalmente com cuidado", correta: false },
+    ],
+  },
+  {
+    texto: "Posso fazer brincadeira de empurrar ou assustar o colega dentro da obra?",
+    alternativas: [
+      { texto: "Sim, se for amigo de longa data", correta: false },
+      { texto: "Sim, desde que longe das máquinas", correta: false },
+      { texto: "Não. Brincadeira na obra pode causar acidente grave ou morte", correta: true },
+    ],
+  },
+];
+
 export const integracaoSSTRouter = router({
 
   listarConfigs: protectedProcedure
@@ -301,6 +405,64 @@ export const integracaoSSTRouter = router({
       }
 
       return { success: true };
+    }),
+
+  // Rev. 2046 — Perguntas-padrão "Regras de Ouro" de segurança em obra
+  // Linguagem simples (público alvo: servente/ajudante de obra)
+  // Baseado em NR-6 (EPI), NR-35 (altura), NR-33 (confinado), NR-10 (elétrica),
+  // NR-18 (obras), NR-11 (içamento), NR-12 (máquinas)
+  semearPerguntasPadrao: protectedProcedure
+    .input(z.object({
+      companyId: z.number().int().positive(),
+      moduloId: z.number().int().positive(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      assertCompanyAccess(ctx, input.companyId);
+      const db = (await getDb())!;
+      try {
+        // Idempotência: só semeia se o módulo não tem perguntas
+        const existentes = await db.select({ id: sstIntegracaoPerguntas.id })
+          .from(sstIntegracaoPerguntas)
+          .where(and(
+            eq(sstIntegracaoPerguntas.moduloId, input.moduloId),
+            eq(sstIntegracaoPerguntas.companyId, input.companyId),
+          ));
+        if (existentes.length > 0) {
+          throw new TRPCError({ code: "CONFLICT", message: `Este módulo já tem ${existentes.length} pergunta(s). Apague-as antes de carregar o padrão.` });
+        }
+        // Confirma que o módulo pertence à company (defesa cross-tenant)
+        const [mod] = await db.select({ id: sstIntegracaoModulos.id })
+          .from(sstIntegracaoModulos)
+          .where(and(
+            eq(sstIntegracaoModulos.id, input.moduloId),
+            eq(sstIntegracaoModulos.companyId, input.companyId),
+          )).limit(1);
+        if (!mod) throw new TRPCError({ code: "NOT_FOUND", message: "Módulo não encontrado nesta empresa." });
+
+        const PADRAO = PERGUNTAS_REGRAS_OURO;
+        for (let i = 0; i < PADRAO.length; i++) {
+          const p = PADRAO[i];
+          const [row] = await db.insert(sstIntegracaoPerguntas).values({
+            moduloId: input.moduloId,
+            companyId: input.companyId,
+            texto: p.texto,
+            ordem: i + 1,
+          }).returning();
+          await db.insert(sstIntegracaoAlternativas).values(
+            p.alternativas.map((a, j) => ({
+              perguntaId: row.id,
+              texto: a.texto,
+              correta: a.correta,
+              ordem: j + 1,
+            }))
+          );
+        }
+        return { success: true, total: PADRAO.length };
+      } catch (err: any) {
+        if (err instanceof TRPCError) throw err;
+        console.error("[semearPerguntasPadrao] FAIL", { input, err, stack: err?.stack });
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Falha ao carregar perguntas-padrão." });
+      }
     }),
 
   listarRegistros: protectedProcedure
