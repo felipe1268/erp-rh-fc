@@ -130,6 +130,7 @@ import { sstDocumentsRouter } from "./routers/sstDocuments";
 import { integracaoSSTRouter } from "./routers/integracaoSST";
 import { sstAnalyticsRouter } from "./routers/sstAnalytics";
 import { acidentesRouter } from "./routers/acidentes";
+import { avaliacaoFuncionariosRouter } from "./routers/avaliacaoFuncionarios";
 import { storagePut } from "./storage";
 import { dispararNotificacao, mapStatusToTipoMovimentacao, getMotivoAfastamento } from "./services/emailNotification";
 
@@ -203,6 +204,7 @@ export const appRouter = router({
   integracaoSST: integracaoSSTRouter,
   sstAnalytics: sstAnalyticsRouter,
   acidentes: acidentesRouter,
+  avaliacaoFuncionarios: avaliacaoFuncionariosRouter,
   auth: router({
     me: publicProcedure.query(opts => {
       if (!opts.ctx.user) return null;

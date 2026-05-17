@@ -38,7 +38,7 @@ import {
   Warehouse, Wrench, Calculator, Target, Package, ShoppingCart, Truck, ArrowRightLeft, Gauge,
   Home, Tag, GripVertical, Network, ScanFace, PackageCheck, PenLine, ChevronLeft,
   Camera, Blocks, CheckSquare, FileCheck2, Milestone, Fuel,
-  UserMinus, Search, X, GraduationCap, Sparkles, HeartPulse,
+  UserMinus, Search, X, GraduationCap, Sparkles, HeartPulse, Award,
 } from "lucide-react";
 import { CSSProperties, useEffect, useMemo, useRef, useState } from "react";
 import { trpc } from "@/lib/trpc";
@@ -138,6 +138,7 @@ const menuSectionsRHDP: MenuSection[] = [
       { icon: ShieldCheck, label: "Controle de Documentos", path: "/dashboards/controle-documentos" },
       { icon: ClipboardList, label: "Apontamentos de Campo", path: "/dashboards/apontamentos" },
       { icon: Wrench, label: "Habilidades", path: "/dashboards/habilidades" },
+      { icon: Award, label: "Avaliação Inteligente", path: "/dashboards/avaliacao-funcionarios" },
     ],
   },
   {

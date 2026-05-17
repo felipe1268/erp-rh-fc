@@ -181,6 +181,7 @@ const DashJuridicoGeral = lazy(() => import("./pages/dashboards/DashJuridicoGera
 const DashTributario = lazy(() => import("./pages/dashboards/DashTributario"));
 const DashCivil = lazy(() => import("./pages/dashboards/DashCivil"));
 const DashAvisoPrevio = lazy(() => import("./pages/dashboards/DashAvisoPrevio"));
+const DashAvaliacaoFuncionarios = lazy(() => import("./pages/dashboards/DashAvaliacaoFuncionarios"));
 const DashFerias = lazy(() => import("./pages/dashboards/DashFerias"));
 const VisaoPanoramica = lazy(() => import("./pages/dashboards/VisaoPanoramica"));
 const DashEfetivoObra = lazy(() => import("./pages/dashboards/DashEfetivoObra"));
@@ -441,6 +442,7 @@ function Router() {
         <Route path={"/dashboards/tributario"} component={() => <RouteGuard component={DashTributario} route="/dashboards/tributario" />} />
         <Route path={"/dashboards/civil"} component={() => <RouteGuard component={DashCivil} route="/dashboards/civil" />} />
         <Route path={"/dashboards/aviso-previo"} component={() => <RouteGuard component={DashAvisoPrevio} route="/dashboards/aviso-previo" />} />
+        <Route path={"/dashboards/avaliacao-funcionarios"} component={() => <RouteGuard component={DashAvaliacaoFuncionarios} route="/dashboards/avaliacao-funcionarios" />} />
         <Route path={"/dashboards/ferias"} component={() => <RouteGuard component={DashFerias} route="/dashboards/ferias" />} />
         <Route path={"/dashboards/efetivo-obra"} component={() => <RouteGuard component={DashEfetivoObra} route="/dashboards/efetivo-obra" />} />
         <Route path={"/dashboards/visao-panoramica"} component={() => <RouteGuard component={VisaoPanoramica} route="/dashboards" />} />
