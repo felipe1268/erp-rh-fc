@@ -1,6 +1,27 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2065 — **Fechamento de Ponto · botão "Voltar ao ranking" nos
+ * 3 modais de memória de cálculo (Atraso, HE, Faltas).** Pedido do
+ * usuário (IMG_0965): "Coloca um botão para voltar e ver a tela
+ * anterior, isso para todos os cards, quando clico na memória é só
+ * deixa eu fechar não voltar a tela anterior". Apesar dos 3 modais
+ * de drill-down (Rev. 2019 Atraso, Rev. 2051 HE+Faltas) já
+ * preservarem o ranking modal embaixo (só limpam o state de
+ * `*Detalhe`, sem mexer em `rankingModal`), o único affordance pra
+ * sair era o X minúsculo no canto superior direito do DialogContent
+ * shadcn — visualmente invisível em telas grandes (fullscreen) e
+ * confundia o usuário com "fechar tudo". Fix em
+ * `client/src/pages/FechamentoPonto.tsx`: 3 edits idênticos
+ * adicionando `<Button>← Voltar ao ranking</Button>` no topo de
+ * cada `DialogHeader` (acima do ícone gigante + título), reusando
+ * estilo branco/translúcido dos botões Imprimir/CSV do ranking
+ * (`bg-white/95 hover:bg-white text-slate-800 border-0`). Handler
+ * = mesmo do X (`set*Detalhe(null)`) — fecha só o memória, ranking
+ * permanece. `ArrowLeft` já estava importado (L23). data-testid:
+ * `button-voltar-atraso/he/faltas`. + `shared/version.ts` → 2065.
+ * ZERO mudança de lógica, ZERO schema.
+ *
  * Rev. 2064 — **SST Integração · badge do menu lateral REALMENTE
  * funciona agora · bug crítico de serialização de array Drizzle.**
  * Pedido do usuário (IMG_0963/IMG_0964): "quero que o campo de

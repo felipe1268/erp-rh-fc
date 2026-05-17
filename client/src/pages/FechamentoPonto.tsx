@@ -2712,6 +2712,12 @@ export default function FechamentoPonto() {
                       {/* Header gradient vermelho (regra de ouro — coerente com modal "Mais Atrasados") */}
                       <DialogHeader className="shrink-0 px-8 py-5 border-b bg-gradient-to-r from-red-600 via-rose-500 to-pink-500 text-white relative overflow-hidden">
                         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.18),transparent_60%)] pointer-events-none" />
+                        {/* Rev. 2065 — Botão Voltar pro ranking (modal de ranking continua aberto embaixo) */}
+                        <div className="relative mb-3">
+                          <Button variant="outline" size="sm" onClick={() => setAtrasoDetalhe(null)} className="h-8 text-xs bg-white/95 hover:bg-white text-slate-800 border-0 shadow-sm" data-testid="button-voltar-atraso">
+                            <ArrowLeft className="h-3.5 w-3.5 mr-1.5" /> Voltar ao ranking
+                          </Button>
+                        </div>
                         <div className="relative flex items-start gap-4">
                           <span className="inline-flex items-center justify-center h-14 w-14 rounded-2xl bg-white/15 backdrop-blur-sm ring-2 ring-white/30 shrink-0">
                             <AlertTriangle className="h-7 w-7" />
@@ -2881,6 +2887,12 @@ export default function FechamentoPonto() {
                     <DialogContent resizable={false} className="flex flex-col p-0 gap-0 w-screen h-screen max-w-none sm:max-w-none rounded-none border-0">
                       <DialogHeader className="shrink-0 px-4 sm:px-8 py-4 sm:py-5 border-b bg-gradient-to-r from-emerald-600 via-teal-500 to-green-500 text-white relative overflow-hidden">
                         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.18),transparent_60%)] pointer-events-none" />
+                        {/* Rev. 2065 — Botão Voltar pro ranking */}
+                        <div className="relative mb-3">
+                          <Button variant="outline" size="sm" onClick={() => setHeDetalhe(null)} className="h-8 text-xs bg-white/95 hover:bg-white text-slate-800 border-0 shadow-sm" data-testid="button-voltar-he">
+                            <ArrowLeft className="h-3.5 w-3.5 mr-1.5" /> Voltar ao ranking
+                          </Button>
+                        </div>
                         <div className="relative flex items-start gap-3 sm:gap-4">
                           <span className="inline-flex items-center justify-center h-12 w-12 sm:h-14 sm:w-14 rounded-2xl bg-white/15 backdrop-blur-sm ring-2 ring-white/30 shrink-0">
                             <Zap className="h-6 w-6 sm:h-7 sm:w-7" />
@@ -3055,6 +3067,12 @@ export default function FechamentoPonto() {
                     <DialogContent resizable={false} className="flex flex-col p-0 gap-0 w-screen h-screen max-w-none sm:max-w-none rounded-none border-0">
                       <DialogHeader className="shrink-0 px-4 sm:px-8 py-4 sm:py-5 border-b bg-gradient-to-r from-slate-700 via-slate-600 to-slate-500 text-white relative overflow-hidden">
                         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.15),transparent_60%)] pointer-events-none" />
+                        {/* Rev. 2065 — Botão Voltar pro ranking */}
+                        <div className="relative mb-3">
+                          <Button variant="outline" size="sm" onClick={() => setFaltaDetalhe(null)} className="h-8 text-xs bg-white/95 hover:bg-white text-slate-800 border-0 shadow-sm" data-testid="button-voltar-faltas">
+                            <ArrowLeft className="h-3.5 w-3.5 mr-1.5" /> Voltar ao ranking
+                          </Button>
+                        </div>
                         <div className="relative flex items-start gap-3 sm:gap-4">
                           <span className="inline-flex items-center justify-center h-12 w-12 sm:h-14 sm:w-14 rounded-2xl bg-white/15 backdrop-blur-sm ring-2 ring-white/30 shrink-0">
                             <CalendarX className="h-6 w-6 sm:h-7 sm:w-7" />

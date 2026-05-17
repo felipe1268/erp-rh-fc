@@ -50,18 +50,18 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 2064** — **SST badge do menu lateral REALMENTE funciona agora · bug crítico de serialização de array Drizzle.** Pedido IMG_0963/0964: "quero que o campo de integração fique igual ao apontamento e campo, com alertas claros". A Rev. 2063 não validou em runtime — `refresh_all_logs` revelou que o procedure inteiro estava falhando desde a Rev. 2058: `[tRPC Error] integracaoSST.getBadgeCounts: DB error: malformed array literal: "60002"`. `sql\`ANY(${ids})\`` no Drizzle NÃO serializa array JS como PG array literal; `useQuery` silenciava o erro → badge nunca apareceu. Fix em `server/routers/integracaoSST.ts` L319: 4 ocorrências passam pra `sql.raw(\`ANY(ARRAY[${idsList}]::int[])\`)` com lista já validada por Zod. Bônus do mesmo log: `alertas` (L1380) também consertada — colunas reais são `"employeeId"`/`"companyId"`/`"deletedAt"` (camelCase quoted) e `employees` usa `"nomeCompleto"` (não `nome`).
-- **Rev. 2063** — **SST Integração · badge vermelho do menu lateral · BUG de contagem corrigido** (pedido IMG_1189: badge não aparecia mesmo com terceiros pendentes). `getBadgeCounts` da Rev. 2058 (`server/routers/integracaoSST.ts` L316) só replicou a lógica do loop CLT/PJ do `listarPendentesAuto` — terceiros (`funcionariosTerceiros` SEM `integracaoDocUrl`, L1084) ficaram fora do COUNT. Fix: novo SELECT em `funcionarios_terceiros`, retorno passa de `{pendentesAuto}` pra `{pendentesAuto, pendentesEmployees, pendentesTerceiros}` (somados). UI lê `pendentesAuto` (backward-compat). ZERO schema. **NOTA**: este fix isolado não funcionou em runtime — ver Rev. 2064.
+- **Rev. 2065** — **Fechamento de Ponto · botão "Voltar ao ranking" nos 3 modais de memória de cálculo.** Pedido IMG_0965: "Coloca um botão para voltar e ver a tela anterior". Os modais (Atraso/HE/Faltas) já preservavam o ranking embaixo, mas o único affordance era o X minúsculo do shadcn — confundia. Fix em `client/src/pages/FechamentoPonto.tsx` (3 edits idênticos): adiciona `<Button>← Voltar ao ranking</Button>` no topo de cada `DialogHeader`, handler = mesmo do X. ZERO lógica, ZERO schema.
+- **Rev. 2064** — **SST badge do menu lateral REALMENTE funciona agora · bug crítico de serialização de array Drizzle.** Pedido IMG_0963/0964. `refresh_all_logs` revelou que `getBadgeCounts` falhava desde a Rev. 2058: `malformed array literal: "60002"` — `sql\`ANY(${ids})\`` do Drizzle não serializa array JS; `useQuery` silenciava o erro. Fix em `server/routers/integracaoSST.ts` L319: 4 ocorrências passam pra `sql.raw(\`ANY(ARRAY[${idsList}]::int[])\`)` com lista validada por Zod. Bônus: `alertas` (L1380) também consertada (colunas reais camelCase quoted: `"employeeId"`/`"companyId"`/`"deletedAt"`; `employees` usa `"nomeCompleto"`).
 
 ### Revisões recentes (one-liners)
 
+- ~~Rev. 2063~~ — SST badge do menu lateral: contagem passa a incluir terceiros (`funcionarios_terceiros` SEM `integracaoDocUrl`). Ver `shared/changelog.ts`. (Nota: só passou a funcionar de fato com a Rev. 2064.)
 - ~~Rev. 2062~~ — Faxina do `replit.md`: convenção mudou de 5+10 pra 2+5 (compactos). Ver `shared/changelog.ts`.
 - ~~Rev. 2061~~ — Raio-X · card SST · coluna Certificado ganha botões Ver + PDF para aprovados (cert gerado on-the-fly via `generateCertificadoIntegracaoSstPdf`). Ver `shared/changelog.ts`.
 - ~~Rev. 2060~~ — Fechamento de Ponto: bug crítico de verificação de HE aprovada — ciclo 16→15 perdia HEs de mês anterior + contador não checava `status === "aprovada"`. Fix: BETWEEN no server + filtro de status no client. Ver `shared/changelog.ts`.
 - ~~Rev. 2059~~ — SST Integração: +13 perguntas sobre Segurança na Obra (total 35) + botão "Editar Perguntas" com label visível. Ver `shared/changelog.ts`.
-- ~~Rev. 2058~~ — SST Integração: badge vermelho piscante no menu lateral quando há colaboradores sem integração válida (procedure `getBadgeCounts` multi-company). Ver `shared/changelog.ts`.
 
-> Revisões 2057 → 2044 e anteriores: ver [`replit-history.md`](./replit-history.md) e `shared/changelog.ts` (detalhe completo).
+> Revisões 2058 → 2044 e anteriores: ver [`replit-history.md`](./replit-history.md) e `shared/changelog.ts` (detalhe completo).
 
 
 ## User preferences
