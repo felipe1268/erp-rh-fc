@@ -471,6 +471,13 @@ Regras:
         await db.execute(sql`ALTER TABLE curriculos ADD COLUMN IF NOT EXISTS historico_status_json TEXT`);
         console.log(`[SyncSchema+] Coluna historico_status_json garantida na tabela curriculos.`);
 
+        // Rev. 1998 — Número interno auto-gerado em funcionarios_terceiros
+        try {
+          await db.execute(sql`ALTER TABLE funcionarios_terceiros ADD COLUMN IF NOT EXISTS numero_interno VARCHAR(30)`);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_func_terc_numero_interno ON funcionarios_terceiros("companyId", numero_interno)`);
+          console.log(`[SyncSchema+] Coluna numero_interno garantida em funcionarios_terceiros.`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA funcionarios_terceiros numero_interno:`, e?.message || e); }
+
         // Rev. 1592: bloco Escritório Central na avaliação anônima do Portal do Cliente.
         // Garantido aqui (e não só em ColFix) porque o version guard do ColFix pode
         // pular as migrations quando a versão já estiver aplicada.

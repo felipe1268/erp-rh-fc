@@ -3560,6 +3560,10 @@ export const funcionariosTerceiros = pgTable("funcionarios_terceiros", {
   id: serial().primaryKey(),
   empresaTerceiraId: integer().notNull(),
   companyId: integer().notNull(),
+  // Rev. 1998 — Número interno auto-gerado no formato [SIGLA_EMPRESA]-[SEQ_GLOBAL]
+  // SIGLA: 3 primeiras letras do nomeFantasia/razaoSocial (sem acentos, A-Z)
+  // SEQ: sequencial global por tenant (companyId), padded em 5 dígitos
+  numeroInterno: varchar("numero_interno", { length: 30 }),
   // Dados pessoais
   nome: varchar({ length: 255 }).notNull(),
   cpf: varchar({ length: 14 }),

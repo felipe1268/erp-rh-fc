@@ -487,11 +487,55 @@ export const terceirosRouter = router({
         email: z.string().optional(),
         obraId: z.number().optional(),
         obraNome: z.string().optional(),
+        // Rev. 1998 — upload de foto direto no cadastro (opcional)
+        fotoBase64: z.string().optional(),
+        fotoFileName: z.string().optional(),
+        fotoContentType: z.string().optional(),
       }))
       .mutation(async ({ input }) => {
         const db = (await getDb())!;
-        const [result] = await db.insert(funcionariosTerceiros).values(input);
-        return { id: result[0].id };
+        const { fotoBase64, fotoFileName, fotoContentType, ...rest } = input;
+
+        // Rev. 1998 — Gerar número interno [SIGLA_EMPRESA]-[SEQ_GLOBAL]
+        // 1) buscar empresa pra extrair sigla das iniciais
+        const [emp] = await db.select({
+          nomeFantasia: empresasTerceiras.nomeFantasia,
+          razaoSocial: empresasTerceiras.razaoSocial,
+        }).from(empresasTerceiras).where(eq(empresasTerceiras.id, input.empresaTerceiraId));
+        const empNome = (emp?.nomeFantasia || emp?.razaoSocial || "").toString();
+        const siglaRaw = empNome
+          .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+          .toUpperCase()
+          .replace(/[^A-Z]/g, "")
+          .slice(0, 3);
+        // Se nome da empresa não tem letras válidas, usa fallback "TER".
+        // Se tem 1-2 letras, completa com "X" pra manter formato [3 letras]-[seq].
+        const sigla = siglaRaw.length === 0 ? "TER" : siglaRaw.padEnd(3, "X");
+
+        // 2) próximo seq GLOBAL por tenant — MAX da parte numérica após o "-"
+        const seqRows = await db.execute(sql`
+          SELECT COALESCE(MAX(NULLIF(regexp_replace(numero_interno, '^.*-', ''), '')::INTEGER), 0) AS max_seq
+          FROM funcionarios_terceiros
+          WHERE "companyId" = ${input.companyId} AND numero_interno IS NOT NULL
+        `);
+        const maxSeq = Number((seqRows as any).rows?.[0]?.max_seq ?? (seqRows as any)[0]?.max_seq ?? 0);
+        const nextSeq = (isFinite(maxSeq) ? maxSeq : 0) + 1;
+        const numeroInterno = `${sigla}-${String(nextSeq).padStart(5, "0")}`;
+
+        // 3) upload de foto se enviada
+        let fotoUrl: string | undefined;
+        if (fotoBase64 && fotoFileName) {
+          const buf = Buffer.from(fotoBase64, "base64");
+          const safeName = fotoFileName.replace(/[^a-zA-Z0-9._-]/g, "_");
+          const key = `terceiros/funcionarios/_novos/${Date.now()}-${safeName}`;
+          const up = await storagePut(key, buf, fotoContentType || "image/jpeg");
+          fotoUrl = up.url;
+        }
+
+        const values: any = { ...rest, numeroInterno };
+        if (fotoUrl) values.fotoUrl = fotoUrl;
+        const [result] = await db.insert(funcionariosTerceiros).values(values).returning({ id: funcionariosTerceiros.id });
+        return { id: result.id, numeroInterno };
       }),
 
     update: protectedProcedure

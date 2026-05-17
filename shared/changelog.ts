@@ -1,6 +1,42 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 1998 — Terceiros · Funcionários · Foto + Número Interno auto-gerado.
+ * Pedido direto do usuário (17/05/2026, image_1779026783535): na tela "Novo Funcionário Terceiro" precisava (a) poder cadastrar foto do funcionário pra facilitar identificação visual; (b) que o ERP criasse automaticamente um número interno no formato `[INICIAIS_EMPRESA_TERCEIRA]-[SEQ_GLOBAL]` (sequencial único pra TODOS os terceiros do tenant — só a sigla muda por empresa). Antes: form só tinha 8 campos texto (Empresa, Nome, CPF, RG, DataNasc, Função, Telefone, Email, Obra), nenhum recurso visual; foto só aparecia na aba Documentos APÓS salvar (3 cliques pra preview); nenhum identificador único legível por humano (só `id` SERIAL interno).
+ * Mudança em 4 arquivos:
+ *   (1) `drizzle/schema.ts` — `funcionariosTerceiros` ganhou coluna `numeroInterno varchar(30)` (nullable pra retrocompat com registros históricos).
+ *   (2) `server/_core/index.ts` (+5L após `historico_status_json`) — bootstrap idempotente `ALTER TABLE funcionarios_terceiros ADD COLUMN IF NOT EXISTS numero_interno VARCHAR(30)` + índice `idx_func_terc_numero_interno (company_id, numero_interno)` pra acelerar busca por número. Mesmo padrão das migrations anteriores (try/catch + console).
+ *   (3) `server/routers/terceiros.ts` (`funcionarios.create`, ~60L reescritas) — input ganhou 3 campos opcionais: `fotoBase64`, `fotoFileName`, `fotoContentType`. Fluxo do create:
+ *     • Busca `empresasTerceiras.{nomeFantasia, razaoSocial}` por `empresaTerceiraId`.
+ *     • Gera sigla: `nomeFantasia ?? razaoSocial → NFD remove acentos → toUpperCase → /[^A-Z]/ strip → slice(0,3) → padEnd(3,'X')` (fallback "TER" se vazio). Ex: "Construtora XPTO Ltda" → "CON", "ABC Engenharia" → "ABC", "Z" → "ZXX".
+ *     • Próximo seq GLOBAL por tenant via SQL: `MAX(NULLIF(regexp_replace(numero_interno,'^.*-',''),'')::INTEGER) + 1` filtrado por `company_id`. Race condition aceitável pra esta escala (cadastro de funcionário terceiro é op rara, manual, low-throughput) — se virar problema, migrar pra advisory lock no Lote 2.
+ *     • Monta `numeroInterno = `${sigla}-${String(nextSeq).padStart(5, "0")}\``. Ex: `CON-00001`, `ABC-00042`.
+ *     • Se `fotoBase64` enviado: `storagePut` em `terceiros/funcionarios/_novos/{timestamp}-{safeName}` (sanitização nome arquivo) → grava `fotoUrl` junto no INSERT.
+ *     • INSERT usa `.returning({ id })` (Drizzle/postgres) — substitui o destructure anterior `[result] = ...; result[0].id` (que era pattern MySQL).
+ *     • Retorna `{ id, numeroInterno }` (antes: só `{ id }`).
+ *   (4) `client/src/pages/terceiros/FuncionariosTerceiros.tsx`:
+ *     • 2 states novos: `fotoPreview` (data URL pra preview imediato) + `fotoPayload` (base64+nome+mime pra envio no create).
+ *     • 2 handlers: `handlePickFotoNovo` (FileReader → seta preview+payload, 5MB cap, accept image/*) e `handlePickFotoEdit` (faz upload imediato via `uploadDoc` no campo `fotoUrl` — preserva pattern já existente de docs).
+ *     • `openNew`/`openEdit` resetam fotoPreview/fotoPayload (open edit pré-carrega `func.fotoUrl`).
+ *     • `handleSave` no create injeta os 3 campos `fotoBase64`/`fotoFileName`/`fotoContentType` quando `fotoPayload` presente.
+ *     • Aba "Dados Pessoais" ganhou **hero card no topo** (gradient blue→indigo, border dashed): avatar circular h-24 w-24 ring-4 com Camera placeholder OU `<img>` do preview, botão X vermelho pra remover (no edit também dispara `updateMut` com `fotoUrl: ""`); à direita título "Foto do funcionário" + badge azul com `numeroInterno` (em edit) OU badge amber "Nº interno será gerado ao salvar" (em new); botão "Selecionar foto" / "Trocar foto" com ícone Upload.
+ *     • Item da lista: substitui `flex-1 min-w-0` por avatar circular h-12 w-12 + nome + **badge azul mono `BadgeCheck numeroInterno`** ao lado do nome + aptidaoBadge. CPF/Função/Empresa/Obra preservados na linha de baixo.
+ *   (5) `shared/version.ts` → Rev. 1998.
+ * Comportamento garantido:
+ *   • Tela "Novo Funcionário": ao escolher foto (≤5MB) → preview aparece imediato; ao clicar Cadastrar → upload + INSERT atômicos, número interno calculado server-side; toast "Funcionário cadastrado!" + modal fecha + lista refetch já mostra avatar + número.
+ *   • Tela "Editar Funcionário": foto pré-carregada no hero; trocar foto faz upload imediato (não precisa Salvar); número interno fica visível em badge azul ao lado do título.
+ *   • Lista: avatar circular + nome + badge azul "[SIGLA]-NNNNN" + aptidão na primeira linha; CPF/função/empresa/obra na segunda.
+ *   • Backward-compat: funcionários cadastrados antes da Rev. 1998 têm `numeroInterno=NULL` → badge simplesmente não renderiza (condicional `&&`); avatar fallback Camera icon se sem foto.
+ * Preservado:
+ *   • Update mutation INTACTA (já aceitava `fotoUrl`).
+ *   • uploadDoc INTACTO (continua sendo o canal pra ASO/NR/Certificados/Foto-em-edição).
+ *   • Filtros (empresa/aptidão/busca) INTACTOS.
+ *   • Stats (Aptos/Inaptos/Pendentes) INTACTOS.
+ *   • Aba Documentos INTACTA (a entrada "Foto 3x4" lá continua funcionando, agora redundante mas não removida pra evitar quebrar quem já usava).
+ *   • Schema: zero ALTER destrutivo, só ADD COLUMN IF NOT EXISTS + CREATE INDEX IF NOT EXISTS — R-001/R-007/R-010 OK.
+ *   • Outros routers que leem `funcionariosTerceiros` (warnings, obrigacoes, portal externo) — coluna nova é nullable, queries SELECT * seguem funcionando.
+ * Reversível em 4 arquivos (drop da coluna + rollback dos hunks; dados de foto/numero ficam órfãos mas sem quebra).
+ *
  * Rev. 1997 — DP · Fechamento de Ponto · Cards de Ranking + Modal Drill-Down redesenhados em regras de ouro.
  * Pedido direto do usuário (17/05/2026, image_1779026555326/633610/653802): os 4 cards de resumo (Mais Pontuais / Mais Atrasados / Mais Horas Extras / Menos Dias Trabalhados) e o modal de drill-down associado precisavam virar uma experiência altamente intuitiva para reuniões de alinhamento mensal — com indicadores importantes, legenda de fácil entendimento e layout responsivo. Antes: cards eram `<Card>` simples com border-t colorido + título minúsculo + top-5 + contagem; modal full-screen tinha header chapado bg-white, legenda em parágrafo plano de texto corrido difícil de ler em reunião, e nenhum bloco de KPIs no topo (números só apareciam no rodapé).
  * Mudança em 1 arquivo de aplicação + bookkeeping:

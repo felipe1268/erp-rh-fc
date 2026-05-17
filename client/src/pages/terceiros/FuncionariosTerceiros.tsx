@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Users, Plus, Search, Edit, Trash2, Upload, FileText, CheckCircle, XCircle, Clock, ShieldCheck, Building2, HardHat } from "lucide-react";
+import { Users, Plus, Search, Edit, Trash2, Upload, FileText, CheckCircle, XCircle, Clock, ShieldCheck, Building2, HardHat, Camera, BadgeCheck, User as UserIcon, X } from "lucide-react";
 
 export default function FuncionariosTerceiros() {
   const { user } = useAuth();
@@ -23,6 +23,9 @@ export default function FuncionariosTerceiros() {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [activeTab, setActiveTab] = useState<"dados" | "documentos">("dados");
   const [form, setForm] = useState<any>({});
+  // Rev. 1998 — foto preview no momento do cadastro (antes de existir id no banco)
+  const [fotoPreview, setFotoPreview] = useState<string | null>(null);
+  const [fotoPayload, setFotoPayload] = useState<{ base64: string; fileName: string; contentType: string } | null>(null);
 
   const { data: funcionarios = [], refetch } = trpc.terceiros.funcionarios.list.useQuery(
     { companyId: companyId ?? 0, empresaTerceiraId: filterEmpresa !== "all" ? parseInt(filterEmpresa) : undefined },
@@ -57,6 +60,8 @@ export default function FuncionariosTerceiros() {
     setForm({ companyId: companyId ?? 0 });
     setEditingId(null);
     setActiveTab("dados");
+    setFotoPreview(null);
+    setFotoPayload(null);
     setShowForm(true);
   };
 
@@ -64,6 +69,8 @@ export default function FuncionariosTerceiros() {
     setForm({ ...func });
     setEditingId(func.id);
     setActiveTab("dados");
+    setFotoPreview(func.fotoUrl || null);
+    setFotoPayload(null);
     setShowForm(true);
   };
 
@@ -72,8 +79,71 @@ export default function FuncionariosTerceiros() {
     if (editingId) {
       updateMut.mutate({ id: editingId, ...form });
     } else {
-      createMut.mutate(form);
+      createMut.mutate({
+        ...form,
+        ...(fotoPayload ? {
+          fotoBase64: fotoPayload.base64,
+          fotoFileName: fotoPayload.fileName,
+          fotoContentType: fotoPayload.contentType,
+        } : {}),
+      });
     }
+  };
+
+  // Rev. 1998 — captura foto do funcionário (antes do cadastro)
+  const handlePickFotoNovo = () => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "image/*";
+    input.onchange = (e: any) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      if (file.size > 5 * 1024 * 1024) { toast.error("Foto muito grande (máx 5MB)"); return; }
+      const reader = new FileReader();
+      reader.onload = () => {
+        const dataUrl = reader.result as string;
+        setFotoPreview(dataUrl);
+        setFotoPayload({
+          base64: dataUrl.split(",")[1] || "",
+          fileName: file.name,
+          contentType: file.type || "image/jpeg",
+        });
+      };
+      reader.readAsDataURL(file);
+    };
+    input.click();
+  };
+
+  // Rev. 1998 — troca foto no modo edição (faz upload imediato via uploadDoc)
+  const handlePickFotoEdit = () => {
+    if (!editingId) return;
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "image/*";
+    input.onchange = (e: any) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      if (file.size > 5 * 1024 * 1024) { toast.error("Foto muito grande (máx 5MB)"); return; }
+      const reader = new FileReader();
+      reader.onload = () => {
+        const dataUrl = reader.result as string;
+        setFotoPreview(dataUrl);
+        const base64 = dataUrl.split(",")[1] || "";
+        uploadMut.mutate(
+          { funcTerceiroId: editingId, field: "fotoUrl", fileName: file.name, fileBase64: base64, contentType: file.type || "image/jpeg" },
+          {
+            // Preserva onSuccess global (refetch + toast) e ainda atualiza estado local
+            onSuccess: (r: any) => {
+              setForm((f: any) => ({ ...f, fotoUrl: r?.url || f.fotoUrl }));
+              refetch();
+              toast.success("Foto atualizada!");
+            },
+          }
+        );
+      };
+      reader.readAsDataURL(file);
+    };
+    input.click();
   };
 
   const handleUpload = (field: string, funcId: number) => {
@@ -183,16 +253,31 @@ export default function FuncionariosTerceiros() {
             filtered.map((func: any) => (
               <div key={func.id} className="bg-card rounded-xl border p-4 hover:shadow-sm transition-shadow">
                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <h3 className="font-semibold text-foreground">{func.nome}</h3>
-                      {aptidaoBadge(func.statusAptidaoTerceiro)}
+                  {/* Rev. 1998 — Avatar + número interno pra identificação visual rápida */}
+                  <div className="flex items-center gap-3 flex-1 min-w-0">
+                    <div className="h-12 w-12 rounded-full overflow-hidden bg-muted ring-2 ring-white shadow-sm flex items-center justify-center flex-shrink-0">
+                      {func.fotoUrl ? (
+                        <img src={func.fotoUrl} alt={func.nome} className="h-full w-full object-cover" />
+                      ) : (
+                        <UserIcon className="h-6 w-6 text-muted-foreground" />
+                      )}
                     </div>
-                    <div className="flex flex-wrap gap-3 mt-1 text-xs text-muted-foreground">
-                      {func.cpf && <span>CPF: {func.cpf}</span>}
-                      {func.funcao && <span>| {func.funcao}</span>}
-                      <span className="flex items-center gap-0.5"><Building2 className="h-3 w-3" />{getEmpresaNome(func.empresaTerceiraId)}</span>
-                      {func.obraNome && <span className="flex items-center gap-0.5"><HardHat className="h-3 w-3" />{func.obraNome}</span>}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h3 className="font-semibold text-foreground">{func.nome}</h3>
+                        {func.numeroInterno && (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-mono font-semibold bg-blue-50 text-blue-700 border border-blue-200" title="Número interno do funcionário">
+                            <BadgeCheck className="h-3 w-3" />{func.numeroInterno}
+                          </span>
+                        )}
+                        {aptidaoBadge(func.statusAptidaoTerceiro)}
+                      </div>
+                      <div className="flex flex-wrap gap-3 mt-1 text-xs text-muted-foreground">
+                        {func.cpf && <span>CPF: {func.cpf}</span>}
+                        {func.funcao && <span>| {func.funcao}</span>}
+                        <span className="flex items-center gap-0.5"><Building2 className="h-3 w-3" />{getEmpresaNome(func.empresaTerceiraId)}</span>
+                        {func.obraNome && <span className="flex items-center gap-0.5"><HardHat className="h-3 w-3" />{func.obraNome}</span>}
+                      </div>
                     </div>
                   </div>
                   <div className="flex gap-2">
@@ -236,6 +321,48 @@ export default function FuncionariosTerceiros() {
 
             {activeTab === "dados" && (
               <div className="space-y-4">
+                {/* Rev. 1998 — Hero com Foto + Número Interno */}
+                <div className="rounded-2xl border-2 border-dashed border-blue-200 bg-gradient-to-r from-blue-50/60 to-indigo-50/40 p-4 flex items-center gap-4">
+                  <div className="relative group">
+                    <div className="h-24 w-24 rounded-full overflow-hidden bg-white ring-4 ring-white shadow-md flex items-center justify-center">
+                      {fotoPreview ? (
+                        <img src={fotoPreview} alt="Foto" className="h-full w-full object-cover" />
+                      ) : (
+                        <Camera className="h-8 w-8 text-blue-300" />
+                      )}
+                    </div>
+                    {fotoPreview && (
+                      <button
+                        type="button"
+                        title="Remover foto"
+                        onClick={() => { setFotoPreview(null); setFotoPayload(null); if (editingId) { setForm((f: any) => ({ ...f, fotoUrl: null })); updateMut.mutate({ id: editingId, fotoUrl: null } as any); } }}
+                        className="absolute -top-1 -right-1 h-6 w-6 rounded-full bg-red-500 text-white shadow-md flex items-center justify-center hover:bg-red-600"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h3 className="text-sm font-semibold text-blue-900">Foto do funcionário</h3>
+                      {editingId && form.numeroInterno && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-mono font-semibold bg-blue-100 text-blue-800 border border-blue-300">
+                          <BadgeCheck className="h-3 w-3" />{form.numeroInterno}
+                        </span>
+                      )}
+                      {!editingId && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium bg-amber-50 text-amber-700 border border-amber-200">
+                          Nº interno será gerado ao salvar
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-blue-700/80 mt-1">JPG/PNG até 5MB. Facilita a identificação rápida no app e nos crachás.</p>
+                    <Button type="button" size="sm" variant="outline" className="mt-2 border-blue-300 text-blue-700 hover:bg-blue-100" onClick={editingId ? handlePickFotoEdit : handlePickFotoNovo}>
+                      <Upload className="h-3.5 w-3.5 mr-1" /> {fotoPreview ? "Trocar foto" : "Selecionar foto"}
+                    </Button>
+                  </div>
+                </div>
+
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <Label>Empresa Terceira *</Label>
