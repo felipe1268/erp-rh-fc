@@ -2062,7 +2062,7 @@ export default function FechamentoPonto() {
                       legendItems: [
                         { Icon: CheckCircle2, label: "Atraso Acum.", desc: "Soma de todos os minutos de atraso. Zero = sempre pontual.", color: "text-emerald-700 bg-emerald-50 border-emerald-200" },
                         { Icon: CalendarDays, label: "Dias Trabalhados", desc: "Dias em que o colaborador bateu ponto no período.", color: "text-slate-700 bg-slate-50 border-slate-200" },
-                        { Icon: Timer, label: "% Presença", desc: "Dias com ponto ÷ dias corridos do período.", color: "text-indigo-700 bg-indigo-50 border-indigo-200" },
+                        { Icon: Timer, label: "% Presença", desc: `Dias com ponto ÷ dias úteis (seg-sex)${diasUteisNoPeriodo ? ` do período (${diasUteisNoPeriodo}d)` : ""}. Ex: 10÷${diasUteisNoPeriodo ?? 22} = ${Math.round((10 / (diasUteisNoPeriodo ?? 22)) * 100)}%.`, color: "text-indigo-700 bg-indigo-50 border-indigo-200" },
                         { Icon: Clock, label: "H. Total", desc: "Soma das horas trabalhadas (entrada → saída).", color: "text-slate-700 bg-slate-50 border-slate-200" },
                       ],
                     } as const;
@@ -2072,7 +2072,7 @@ export default function FechamentoPonto() {
                       legendItems: [
                         { Icon: AlertTriangle, label: "Atraso Acum.", desc: "Soma total dos atrasos do período em h/min — quanto maior, pior.", color: "text-red-700 bg-red-50 border-red-200" },
                         { Icon: CalendarDays, label: "Dias Trabalhados", desc: "Dias em que o colaborador bateu ponto no período.", color: "text-slate-700 bg-slate-50 border-slate-200" },
-                        { Icon: Timer, label: "% Presença", desc: "Dias com ponto ÷ dias corridos do período.", color: "text-indigo-700 bg-indigo-50 border-indigo-200" },
+                        { Icon: Timer, label: "% Presença", desc: `Dias com ponto ÷ dias úteis (seg-sex)${diasUteisNoPeriodo ? ` do período (${diasUteisNoPeriodo}d)` : ""}. Ex: 10÷${diasUteisNoPeriodo ?? 22} = ${Math.round((10 / (diasUteisNoPeriodo ?? 22)) * 100)}%.`, color: "text-indigo-700 bg-indigo-50 border-indigo-200" },
                         { Icon: Clock, label: "H. Total", desc: "Soma das horas trabalhadas (entrada → saída).", color: "text-slate-700 bg-slate-50 border-slate-200" },
                       ],
                     } as const;
@@ -2092,7 +2092,7 @@ export default function FechamentoPonto() {
                       legendItems: [
                         { Icon: CalendarX, label: "Menos dias", desc: "Colaboradores com menor presença — pode indicar faltas, afastamento ou escala reduzida.", color: "text-slate-700 bg-slate-50 border-slate-200" },
                         { Icon: ShieldCheck, label: "Justificada", desc: "Possui atestado médico registrado no período.", color: "text-emerald-700 bg-emerald-50 border-emerald-200" },
-                        { Icon: Timer, label: "% Presença", desc: "Dias com ponto ÷ dias corridos do período.", color: "text-indigo-700 bg-indigo-50 border-indigo-200" },
+                        { Icon: Timer, label: "% Presença", desc: `Dias com ponto ÷ dias úteis (seg-sex)${diasUteisNoPeriodo ? ` do período (${diasUteisNoPeriodo}d)` : ""}. Ex: 10÷${diasUteisNoPeriodo ?? 22} = ${Math.round((10 / (diasUteisNoPeriodo ?? 22)) * 100)}%.`, color: "text-indigo-700 bg-indigo-50 border-indigo-200" },
                         { Icon: Clock, label: "H. Total", desc: "Soma das horas trabalhadas (entrada → saída).", color: "text-slate-700 bg-slate-50 border-slate-200" },
                       ],
                     } as const;
@@ -2237,6 +2237,36 @@ export default function FechamentoPonto() {
                         </div>
                       </div>
 
+                      {/* ── Faixa de "Como é calculado" — Rev. 2006 (transparência da fórmula) ── */}
+                      {diasUteisNoPeriodo && periodoIni && periodoFim && (
+                        <div className="shrink-0 px-3 sm:px-6 py-2 border-b bg-gradient-to-r from-indigo-50 via-indigo-50/60 to-white">
+                          <div className="flex items-start gap-2.5 flex-wrap">
+                            <span className="inline-flex items-center justify-center h-7 w-7 rounded-lg bg-indigo-100 ring-1 ring-indigo-200 shrink-0">
+                              <Timer className="h-3.5 w-3.5 text-indigo-700" />
+                            </span>
+                            <div className="flex-1 min-w-[260px]">
+                              <div className="text-[11px] font-bold text-indigo-900 uppercase tracking-wide leading-tight">Como é calculado o % de Presença</div>
+                              <div className="text-[11px] text-indigo-900/80 leading-snug mt-0.5">
+                                <strong>Dias com batida de ponto</strong> ÷ <strong>dias úteis (seg-sex)</strong> do período de fechamento.
+                                Sábado, domingo e datas após hoje <em>não</em> entram. Feriados ainda <em>não</em> são excluídos (em estudo).
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-white ring-1 ring-indigo-200 text-[11px] text-slate-700">
+                                <CalendarDays className="h-3 w-3 text-indigo-600" />
+                                Período: <strong className="text-indigo-900">{fmtPeriodo(periodoIni)}</strong> → <strong className="text-indigo-900">{fmtPeriodo(periodoFim)}</strong>
+                              </span>
+                              <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-indigo-600 text-white text-[11px] font-bold">
+                                = {diasUteisNoPeriodo} dias úteis
+                              </span>
+                              <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-white ring-1 ring-indigo-200 text-[11px] text-slate-700">
+                                Fórmula: <code className="font-mono text-indigo-700">dias÷{diasUteisNoPeriodo}×100</code>
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
                       {/* ── Legenda (card visual por indicador) ── */}
                       <div className="shrink-0 px-3 sm:px-6 py-2.5 border-b bg-blue-50/40">
                         <div className="flex items-center gap-1.5 mb-1.5">
@@ -2269,7 +2299,14 @@ export default function FechamentoPonto() {
                               <th className="px-3 py-2.5 font-semibold text-slate-600 text-left min-w-[130px]">Função</th>
                               <th className="px-3 py-2.5 font-semibold text-slate-600 text-left">Obra(s)</th>
                               <th className="px-3 py-2.5 font-semibold text-slate-600 text-center w-24">Dias Trabalhados</th>
-                              {diasUteisNoPeriodo && <th className="px-3 py-2.5 font-semibold text-indigo-700 text-center w-24">% Presença</th>}
+                              {diasUteisNoPeriodo && (
+                                <th className="px-3 py-2.5 font-semibold text-indigo-700 text-center w-28" title={`Dias com ponto ÷ ${diasUteisNoPeriodo} dias úteis (seg-sex) do período ${periodoIni ? fmtPeriodo(periodoIni) : ""} → ${periodoFim ? fmtPeriodo(periodoFim) : ""}. Ex: 10÷${diasUteisNoPeriodo} = ${Math.round((10/diasUteisNoPeriodo)*100)}%.`}>
+                                  <span className="inline-flex items-center gap-1 cursor-help underline decoration-dotted decoration-indigo-300 underline-offset-2">
+                                    % Presença <Info className="h-3 w-3 text-indigo-500" />
+                                  </span>
+                                  <div className="text-[9px] font-normal text-indigo-500/80 normal-case mt-0.5">de {diasUteisNoPeriodo} úteis</div>
+                                </th>
+                              )}
                               <th className="px-3 py-2.5 font-semibold text-slate-600 text-center w-24">H. Total no Mês</th>
                               {rankingModal === "pontuais"  && <th className="px-3 py-2.5 font-semibold text-slate-600 text-center w-32">Atraso Acumulado</th>}
                               {rankingModal === "atrasados" && <th className="px-3 py-2.5 font-semibold text-red-600   text-center w-32">Atraso Acumulado</th>}

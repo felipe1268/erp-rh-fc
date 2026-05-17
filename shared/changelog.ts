@@ -1,6 +1,18 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2006 — DP · Fechamento de Ponto · Modal de ranking · Transparência total do cálculo de % Presença.
+ * Pedido direto do usuário (17/05/2026, img image_1779030037258): "Ainda não ficou claro, falta legenda. Preciso saber o que é % Presença, como é calculado, de que dia a que dia ele está considerando — pq acredito que tenha algum equívoco aí, o % está muito baixo pra realidade". O modal "Mais Atrasados/Pontuais/Faltosos" tinha % Presença com descrição na legenda DESATUALIZADA ("dias corridos") desde a Rev. 2000 que mudou o cálculo pra dias úteis (seg-sex). Sem indicação clara do PERÍODO (data início/fim), do número de dias úteis considerados, nem da fórmula. Usuário ficou desconfiado do número (45% médio quando esperava ~80%).
+ * Mudança em 1 arquivo: `client/src/pages/FechamentoPonto.tsx` (4 hunks):
+ *   (1) Legenda atualizada nos 3 modais ("pontuais", "atrasados", "faltosos") — `desc` do item "% Presença" agora diz: "Dias com ponto ÷ dias úteis (seg-sex) do período (Xd). Ex: 10÷X = N%." (X interpolado dinamicamente de `diasUteisNoPeriodo`).
+ *   (2) **Faixa nova "Como é calculado o % de Presença"** inserida entre filtros e legenda — gradient indigo→white, chip Timer, título uppercase, explicação curta ("Dias com batida de ponto ÷ dias úteis (seg-sex) do período de fechamento. Sábado, domingo e datas após hoje não entram. Feriados ainda não excluídos."), + 3 chips à direita: (a) período DD/MM/YYYY → DD/MM/YYYY, (b) badge indigo destacado "= N dias úteis", (c) fórmula `dias÷N×100` em `<code>` monospace.
+ *   (3) Header da coluna "% Presença" na tabela ganhou: underline pontilhado + ícone Info (cursor-help), `title` HTML nativo com fórmula completa + período + exemplo, e subtítulo "de N úteis" pequeno abaixo. Largura aumentada de w-24 → w-28 pra caber o subtítulo.
+ *   (4) `shared/version.ts` → 2006.
+ * Resultado: usuário vê IMEDIATAMENTE (a) qual período está sendo considerado, (b) quantos dias úteis tem nesse período, (c) a fórmula explícita, (d) explicação do que NÃO entra (sáb/dom/datas futuras) e do que ainda É limitação (feriados). Hover na coluna mostra exemplo numérico. Cálculo segue idêntico à Rev. 2000 — só transparência foi adicionada.
+ * Por que 45% pode ser correto: período 16/04 → 15/05 tem 22 dias úteis; um funcionário com 10 batidas = 10/22 = 45%. Realidade: faltas + atestados + admissões mid-período + dias sem batida válida. A faixa nova torna isso óbvio antes do usuário desconfiar do número.
+ * Preservado: cálculo `diasUteisNoPeriodo` (L1046) INTACTO, filtros INTACTOS, ordenação INTACTA, KPIs INTACTOS, header gradient (Rev. 1997+2000) INTACTO, tabela/rodapé INTACTOS, Math.min(100,...) INTACTO. Rev. 2005 INTACTA. Schema INTACTO. R-001/R-007/R-010 OK (CSS-only + texto). Reversível em 1 arquivo (4 hunks).
+ * Follow-up natural: integrar calendário de feriados nacionais/locais pra excluí-los do denominador (continua aberto desde Rev. 2000).
+ *
  * Rev. 2005 — SST · Integração de Segurança · Tela repaginada na regra de ouro.
  * Pedido direto do usuário (17/05/2026, img IMG_0850): "Quero a tela de integração repaginada conforme a regra de ouro e fácil usabilidade". A tela `/sst/integracao` tinha cabeçalho cinza só com ícone solto, abas chapadas sem hierarquia visual, KPIs em cards brancos genéricos (Total/Aprovados/Pendentes/Reprovados/Vencendo 30d todos iguais), e cards Indicadores/Alertas sem destaque do número principal. Visual quebrava o padrão estabelecido em Fechamento Ponto, Terceiros, Compras (gradient header + chip de ícone + KPIs coloridos).
  * Mudança em 1 arquivo: `client/src/pages/sst/IntegracaoSST.tsx`:
