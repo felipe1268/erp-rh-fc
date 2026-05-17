@@ -195,6 +195,116 @@ export const PERGUNTAS_REGRAS_OURO: { texto: string; alternativas: { texto: stri
       { texto: "Fico mexendo no celular durante a conversa", correta: false },
     ],
   },
+  // Rev. 2059 — +13 perguntas sobre SEGURANÇA NA OBRA (pedido do usuário:
+  // "mantenha estas no questionário e faça mais 13 perguntas sobre segurança
+  // na obra"). Append ao fim — não mexe nas 22 anteriores. Total agora: 35.
+  // Cobre: sinalização, ASO, andaime, escada portátil, trabalho a quente,
+  // empilhamento, trânsito interno, químicos/FISPQ, higiene/NR-24, sanitário,
+  // saída de emergência, calçado de segurança, incêndio.
+  {
+    texto: "Vi placas, fitas zebradas (preto e amarelo) ou cones isolando uma área da obra. O que faço?",
+    alternativas: [
+      { texto: "Passo por cima — é só pra enfeitar", correta: false },
+      { texto: "Respeito a sinalização: aquela área está interditada por causa de risco. Faço o desvio mesmo que demore mais", correta: true },
+      { texto: "Tiro a fita pra atravessar e ponho de volta depois", correta: false },
+    ],
+  },
+  {
+    texto: "Pra começar a trabalhar na obra, preciso ter:",
+    alternativas: [
+      { texto: "Só vontade de trabalhar e EPI", correta: false },
+      { texto: "ASO (Atestado de Saúde Ocupacional) válido feito pelo médico do trabalho — sem ASO, ninguém entra na obra (PCMSO/NR-7)", correta: true },
+      { texto: "Só carteira de trabalho assinada", correta: false },
+    ],
+  },
+  {
+    texto: "Vou subir num andaime. O que devo verificar ANTES?",
+    alternativas: [
+      { texto: "Subo direto, se aguentou ontem aguenta hoje", correta: false },
+      { texto: "Confiro a tag/cartão de liberação (verde = liberado), guarda-corpo, rodapé, piso completo e estabilidade — andaime sem tag verde NÃO PODE SER USADO", correta: true },
+      { texto: "Só olho se está tremendo muito", correta: false },
+    ],
+  },
+  {
+    texto: "Preciso usar uma escada portátil pra alcançar um ponto alto. Como uso com segurança?",
+    alternativas: [
+      { texto: "Encosto de qualquer jeito e subo correndo", correta: false },
+      { texto: "Apoio firme nos dois pés, amarro no topo, fico abaixo dos 2 últimos degraus e NUNCA subo carregando material pesado nas mãos (uso bolsa/içamento)", correta: true },
+      { texto: "Subo de costas pra olhar a obra", correta: false },
+    ],
+  },
+  {
+    texto: "Vou fazer solda, oxicorte ou esmerilhar (serviço a quente). O que é OBRIGATÓRIO?",
+    alternativas: [
+      { texto: "Só acender e começar", correta: false },
+      { texto: "Permissão de Trabalho a Quente (PT) emitida, extintor de incêndio do lado, área isolada de material inflamável e EPI específico (máscara de solda, avental, perneira)", correta: true },
+      { texto: "Avisar um colega e começar", correta: false },
+    ],
+  },
+  {
+    texto: "Vou empilhar sacos de cimento, tijolos ou tábuas. Como faço com segurança?",
+    alternativas: [
+      { texto: "Empilho o mais alto possível pra ocupar menos espaço", correta: false },
+      { texto: "Respeito a altura máxima recomendada, uso calços/paletes pra base ficar firme e nunca empilho em local de passagem ou perto de fiação elétrica", correta: true },
+      { texto: "Encosto na parede e vou subindo sem parar", correta: false },
+    ],
+  },
+  {
+    texto: "Vou andar a pé dentro da obra onde passam caminhão, retroescavadeira ou empilhadeira. O que faço?",
+    alternativas: [
+      { texto: "Ando no meio da pista pra ir mais rápido", correta: false },
+      { texto: "Uso o caminho de pedestre demarcado, mantenho contato visual com o operador, NÃO passo por baixo de carga suspensa e respeito a velocidade reduzida da obra", correta: true },
+      { texto: "Atravesso correndo na frente do veículo", correta: false },
+    ],
+  },
+  {
+    texto: "Vou manusear produto químico (tinta, solvente, ácido, óleo). O que devo fazer?",
+    alternativas: [
+      { texto: "Misturar com outro produto pra render mais", correta: false },
+      { texto: "Consultar a FISPQ (Ficha de Segurança), usar o EPI específico indicado (luva, óculos, máscara), nunca misturar produtos diferentes e armazenar em local ventilado e identificado", correta: true },
+      { texto: "Cheirar pra ver o que é antes de usar", correta: false },
+    ],
+  },
+  {
+    texto: "Antes de ir pro refeitório ou comer qualquer coisa na obra, devo:",
+    alternativas: [
+      { texto: "Comer direto, mão suja é mais saudável", correta: false },
+      { texto: "Lavar bem as mãos com água e sabão — obra tem poeira de cimento, tinta, óleo e produtos químicos que NÃO podem ir pra dentro do corpo (NR-24)", correta: true },
+      { texto: "Só passar a mão no uniforme", correta: false },
+    ],
+  },
+  {
+    texto: "Sobre o sanitário/banheiro químico da obra:",
+    alternativas: [
+      { texto: "Posso fazer minhas necessidades em qualquer canto da obra", correta: false },
+      { texto: "Sempre uso o sanitário/banheiro químico da obra, mantenho limpo e descarrego — fazer necessidade fora é falta grave e risco de doença pra todos (NR-24)", correta: true },
+      { texto: "Uso só se estiver perto", correta: false },
+    ],
+  },
+  {
+    texto: "As saídas de emergência e os corredores da obra devem estar:",
+    alternativas: [
+      { texto: "Cheios de material empilhado pra aproveitar o espaço", correta: false },
+      { texto: "SEMPRE LIVRES, desobstruídas e sinalizadas — em caso de incêndio ou desabamento, é por ali que todo mundo sai. Bloquear é crime", correta: true },
+      { texto: "Podem ficar trancadas pra ninguém fugir do serviço", correta: false },
+    ],
+  },
+  {
+    texto: "Sobre o calçado de segurança (botina) na obra:",
+    alternativas: [
+      { texto: "Posso trabalhar de chinelo ou tênis se a botina apertar", correta: false },
+      { texto: "Uso SEMPRE a botina de segurança fechada, com biqueira e solado antiderrapante, mesmo no calor — protege de prego, queda de material, choque e escorregão", correta: true },
+      { texto: "Tiro a botina no almoço e volto descalço pra obra", correta: false },
+    ],
+  },
+  {
+    texto: "Começou um incêndio na obra. O que NÃO devo fazer?",
+    alternativas: [
+      { texto: "Acionar a brigada de incêndio, usar o extintor mais próximo se souber operar, evacuar pela saída de emergência e ir pro ponto de encontro", correta: false },
+      { texto: "Pegar o elevador pra descer mais rápido, voltar pra buscar pertences ou tentar apagar fogo grande sozinho", correta: true },
+      { texto: "Avisar os colegas e o encarregado", correta: false },
+    ],
+  },
 ];
 
 export const integracaoSSTRouter = router({

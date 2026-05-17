@@ -1,6 +1,82 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2059 — SST · Integração · 3 melhorias em sequência pedidas pelo
+ * usuário (IMG_0947/0948/0949): (A) +13 perguntas sobre SEGURANÇA NA
+ * OBRA appendadas ao banco-padrão (total agora: 35); (B) botão de
+ * editar/incluir perguntas no ModulosEditor ganhou LABEL VISÍVEL
+ * (antes era só ícone ClipboardList — usuário não encontrava); (C)
+ * resposta em chat sobre ONDE o TST assina o certificado (botão azul
+ * "Assinar" na coluna Assinatura da aba Aprovados — Rev. 2052 já
+ * existia, falha era só de descoberta). **(A) +13 perguntas**
+ * (`server/routers/integracaoSST.ts`): APPEND ao fim de
+ * `PERGUNTAS_REGRAS_OURO` (não toca nas 22 anteriores — preserva
+ * ordem do vídeo "INTEGRAÇÃO FC ENGENHARIA"). Temas: (1) sinalização
+ * (fitas zebradas/cones/placas — respeitar); (2) ASO/PCMSO/NR-7
+ * obrigatório antes de entrar; (3) andaime — tag verde, guarda-corpo,
+ * rodapé, estabilidade; (4) escada portátil — amarrar, 2 últimos
+ * degraus, não carregar; (5) trabalho a quente — PT, extintor, EPI
+ * específico, área isolada; (6) empilhamento — altura máx, calços,
+ * longe de passagem/fiação; (7) trânsito interno — pedestre demarcado,
+ * contato visual, não passar sob carga; (8) químicos — FISPQ, EPI,
+ * não misturar, armazenar identificado; (9) higiene/NR-24 — lavar
+ * mãos antes de comer; (10) sanitário/banheiro químico — usar e
+ * manter limpo; (11) saídas de emergência sempre LIVRES; (12) calçado
+ * de segurança SEMPRE fechado com biqueira e antiderrapante; (13)
+ * incêndio — o que NÃO fazer (elevador, voltar, fogo grande sozinho).
+ * Linguagem simples (NR-1.7 — público alvo: servente/ajudante).
+ * **Auto-migração da Rev. 2050 propaga automaticamente**: usa
+ * `PERGUNTAS_REGRAS_OURO.length` (35 agora) — tenants com 22 canônicas
+ * serão detectados como stale no próximo startup e re-seedados. **(B)
+ * Botão Editar/Incluir Perguntas** (`client/src/pages/sst/IntegracaoSST.tsx`
+ * ModulosEditor L1069): antes era `<Button variant="ghost">` só com
+ * ícone `ClipboardList` (1 clique abre `startEditPerguntas` que já
+ * permite criar/editar/remover perguntas+alternativas e SALVAR via
+ * `salvarPerguntas`). Agora vira `variant="outline"` azul com texto
+ * "Adicionar Perguntas" (quando módulo vazio) ou "Editar Perguntas"
+ * (quando tem perguntas) + ícone + tooltip "Editar ou incluir novas
+ * perguntas neste módulo". ZERO mudança no backend (`salvarPerguntas`
+ * já fazia upsert+insert+delete cross-tenant desde Rev. 2046). Trash2
+ * de exclusão de módulo ganhou `title="Excluir módulo"`. Tooltips
+ * do "Carregar Regras de Ouro" e "Atualizar Regras de Ouro" ajustados
+ * pra refletir "Regras de Ouro + Segurança na Obra" (sem mais o
+ * literal "12"). **(C) Assinatura TST**: descobri que o botão JÁ
+ * existe (`AssinarTstDialog` da Rev. 2052 + botão "Assinar" L1896-
+ * 1904 na coluna Assinatura da aba Aprovados — só aparece quando
+ * `r.assinaturaTstBase64` é null). Quando assina, coluna mostra badge
+ * verde "Assinado" + botão Trash2 vermelho pra remover (devolvendo
+ * pro estado "Assinar"). Resposta dada no chat sem nova mudança de
+ * código. + `shared/version.ts` → 2059. **Por que NÃO renomear
+ * "Regras de Ouro"**: a constante `PERGUNTAS_REGRAS_OURO` é importada
+ * em `server/_core/index.ts` (auto-migração) e referenciada em
+ * mensagens de `salvarPerguntas` — renomear quebra imports. O conceito
+ * "Regras de Ouro" também é o termo cultural da FC (vídeo de
+ * integração) — segurança técnica veio como complemento, não
+ * substituição. **Por que append (e não intercalado)**: ordem 1..12
+ * das Regras de Ouro de CONDUTA é coluna vertebral do vídeo (Rev.
+ * 2047); manter preserva narrativa pra quem assistiu + facilita
+ * auditoria visual de qual seed o tenant está rodando. **Pontuação**:
+ * cada pergunta vale 1 ponto — acertar 25 de 35 = 71.4% (acima de 70
+ * default). RH pode ajustar `notaMinima` por módulo (Rev. 2056). **Por
+ * que NÃO criar UI nova pra "configurações da integração"**: a UI já
+ * existia há 13 revisões mas escondida atrás de 1 ícone sem label.
+ * Adicionar 2 palavras resolve sem reescrever fluxo (que está estável
+ * desde Rev. 2046). **R-001/R-007/R-010 OK**: ZERO ALTER/DROP. SQL
+ * destrutivo só no `salvarPerguntas` (DELETE de perguntas/alternativas
+ * removidas pelo usuário no editor — comportamento esperado e já
+ * existente desde Rev. 2046, cross-tenant + scoped por moduloId).
+ * **Preservado**: Rev. 2058/2057/2056/2055/2054 INTACTAS. Auto-
+ * migração Rev. 2050 INTACTA — só o input array que cresceu de 22
+ * pra 35. AssinarTstDialog (Rev. 2052) INTACTO. **Follow-up**:
+ * (1) onboarding tooltip "primeira vez aqui?" apontando pra "Editar
+ * Perguntas" + "Assinar"; (2) categorizar perguntas por tema
+ * (conduta/segurança técnica/operacional) com filtro RH; (3)
+ * embaralhar ordem das 35 perguntas na tela pública (anti-cola);
+ * (4) banco de perguntas reutilizável editável via UI pelo
+ * admin_master; (5) variações por função/CBO (eletricista, soldador,
+ * operador de empilhadeira); (6) assinatura digital opcional do
+ * colaborador (hoje só o TST assina — ITP da OAB sugere ambas).
+ *
  * Rev. 2058 — SST · Integração · Badge VERMELHO PISCANTE no item de
  * menu lateral "Integração SST" (módulo SST) quando há colaboradores
  * sem integração válida — padrão igual ao "17" em Apontamentos de

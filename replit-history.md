@@ -194,3 +194,5 @@
 - ~~Rev. 2038~~ — SST Integração aba Pendentes: botão "Iniciar agora" inicia direto (cria registro + abre tela pública) + nova tela de Boas-vindas antes dos vídeos. Ver `shared/changelog.ts`.
 
 - **Rev. 2039** — SST Integração "Iniciar agora": BUGFIX pop-up blocker Safari/iPad — window.open síncrono + splash inline + redirect no onSuccess. Detalhe completo em `shared/changelog.ts`.
+
+- ~~Rev. 2044~~ — SST Integração aba Histórico: editar/apagar registros + múltipla seleção; ao excluir, colaborador volta automaticamente para "Pendentes" (soft-delete via deletedAt). Ver `shared/changelog.ts`.

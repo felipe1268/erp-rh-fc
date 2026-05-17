@@ -1050,7 +1050,7 @@ function ModulosEditor({ configId, companyId }: { configId: number; companyId: n
                         className="text-xs h-8 border-emerald-300 text-emerald-700 hover:bg-emerald-50"
                         disabled={semearPadrao.isPending}
                         onClick={() => semearPadrao.mutate({ companyId, moduloId: mod.id, substituir: false })}
-                        title="Carregar 12 perguntas-padrão das Regras de Ouro da FC"
+                        title="Carregar perguntas-padrão (Regras de Ouro + Segurança na Obra)"
                       >
                         {semearPadrao.isPending ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : "🎯 "}
                         Carregar Regras de Ouro
@@ -1061,13 +1061,25 @@ function ModulosEditor({ configId, companyId }: { configId: number; companyId: n
                         className="text-xs h-8 border-amber-300 text-amber-700 hover:bg-amber-50"
                         disabled={semearPadrao.isPending}
                         onClick={() => setConfirmSubstituir({ moduloId: mod.id, titulo: mod.titulo, atual: mod.perguntas?.length || 0 })}
-                        title="Substituir perguntas atuais pelas 12 perguntas-padrão das Regras de Ouro da FC"
+                        title="Substituir perguntas atuais pelas perguntas-padrão atualizadas (Regras de Ouro + Segurança na Obra)"
                       >
                         🔄 Atualizar Regras de Ouro
                       </Button>
                     )}
-                    <Button size="sm" variant="ghost" onClick={() => startEditPerguntas(mod)}><ClipboardList className="h-4 w-4" /></Button>
-                    <Button size="sm" variant="ghost" onClick={() => excluirModulo.mutate({ id: mod.id, companyId })}><Trash2 className="h-4 w-4 text-red-500" /></Button>
+                    {/* Rev. 2059 — botão de editar/incluir perguntas com label
+                        visível (antes era só o ícone ClipboardList — usuário
+                        não achava). Texto muda conforme tem perguntas ou não
+                        pra deixar a ação clara. */}
+                    <Button
+                      size="sm" variant="outline"
+                      className="text-xs h-8 border-blue-300 text-blue-700 hover:bg-blue-50"
+                      onClick={() => startEditPerguntas(mod)}
+                      title="Editar ou incluir novas perguntas neste módulo"
+                    >
+                      <ClipboardList className="h-3.5 w-3.5 mr-1" />
+                      {(mod.perguntas?.length || 0) === 0 ? "Adicionar Perguntas" : "Editar Perguntas"}
+                    </Button>
+                    <Button size="sm" variant="ghost" onClick={() => excluirModulo.mutate({ id: mod.id, companyId })} title="Excluir módulo"><Trash2 className="h-4 w-4 text-red-500" /></Button>
                   </div>
                 </div>
 
