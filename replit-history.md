@@ -4,6 +4,27 @@
 > O detalhamento completo (causa-raiz, stack traces, arquivos tocados, comentários longos) de TODAS as revisões — incluindo as listadas abaixo — vive em `shared/changelog.ts`.
 > Movido aqui na Rev. 2028 (faxina) — revisões 1903 → 2012.
 > Atualizado na Rev. 2037 — revisões 2021 e 2022 movidas pra cá.
+> Atualizado em 17/05/2026 (faxina) — revisões 2026 a 2030 movidas pra cá.
+
+## Revisão 2030
+
+- ~~Rev. 2030~~ — DP Fechamento de Ponto: calendário reconhece FÉRIAS em gozo e não conta como "Falta provável" (badge sky). Ver `shared/changelog.ts`.
+
+## Revisão 2029
+
+- ~~Rev. 2029~~ — DP Fechamento de Ponto: modal "Memória de cálculo · Atraso Acumulado" em FULL SCREEN com fontes maiores. Ver `shared/changelog.ts`.
+
+## Revisão 2028
+
+- ~~Rev. 2028~~ — Faxina do `replit.md`: cria `replit-history.md` (one-liners 1903→2012) + nova convenção top-5 + 10 one-liners. Ver `shared/changelog.ts`.
+
+## Revisão 2027
+
+- ~~Rev. 2027~~ — DP Fechamento de Ponto: BUGFIX divergência tabela vs modal — `getAtrasoDetalhe` agora soma `r.atrasos` (motor); garantia `SOMA(dias)===tabela`. Ver `shared/changelog.ts`.
+
+## Revisão 2026
+
+- ~~Rev. 2026~~ — SST Integração: Modal "Iniciar Integração" refeito sob a regra de ouro (header gradient emerald/teal, dropdown com avatares, 2-col Obra/Configuração). Ver `shared/changelog.ts`.
 
 ## Revisão 2025
 
