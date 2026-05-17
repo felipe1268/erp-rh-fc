@@ -36,7 +36,7 @@ import {
   CheckCircle2, XCircle, ArrowRight, Loader2, X, Ban,
   Wallet, Receipt, BarChart3, ArrowLeft, Flame, UserMinus2,
   ArrowUp, ArrowDown, ArrowUpDown, Info, Printer,
-  Calculator, Stethoscope, ListChecks } from "lucide-react";
+  Calculator, Stethoscope, ListChecks, Search, X as XIcon } from "lucide-react";
 import { Link } from "wouter";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -129,6 +129,9 @@ export default function DashAvisoPrevio() {
   // Rev. 1909 — ordenação clicável da tabela de custo de demissão em massa
   type CdmSortKey = 'nomeCompleto' | 'cargo' | 'funcao' | 'obra' | 'dataAdmissao' | 'anosServico' | 'idade' | 'diasAvisoTotal' | 'salarioBase' | 'avisoPrevioIndenizado' | 'multaFGTS' | 'total';
   const [cdmSort, setCdmSort] = useState<{ key: CdmSortKey; dir: 'asc' | 'desc' }>({ key: 'total', dir: 'desc' });
+  // Rev. 1982 — Busca incremental por nome/função/obra/código (digite e vai filtrando).
+  // Normaliza acentos pra não tropeçar em "JOSE" vs "JOSÉ".
+  const [cdmSearch, setCdmSearch] = useState<string>("");
   // Rev. 1935 — Raio-X do funcionário ao clicar no nome (mesma UX dos demais módulos RH).
   const [raioXEmployeeId, setRaioXEmployeeId] = useState<number | null>(null);
   // Rev. 1941 — Foto ampliada (user: "QUANDO EU CLICAR NA FOTO, QUERO QUE AUMENTE
@@ -220,7 +223,20 @@ export default function DashAvisoPrevio() {
   const toggleCdmSort = (key: CdmSortKey) => setCdmSort(s => s.key === key ? { key, dir: s.dir === 'desc' ? 'asc' : 'desc' } : { key, dir: (key === 'nomeCompleto' || key === 'cargo' || key === 'funcao' || key === 'obra' || key === 'dataAdmissao') ? 'asc' : 'desc' });
   const cdmLinhasOrdenadas = useMemo(() => {
     if (!cdm?.linhas) return [];
-    const arr = [...cdm.linhas];
+    let arr = [...cdm.linhas];
+    // Rev. 1982 — filtra ANTES de ordenar. Busca em nome/função/obra/código,
+    // normalizada (sem acento, lower) pra ser tolerante. Tokens separados por
+    // espaço viram AND (ex: "jose pedreiro" casa "JOSÉ DA SILVA / PEDREIRO").
+    const q = cdmSearch.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    if (q) {
+      const tokens = q.split(/\s+/).filter(Boolean);
+      arr = arr.filter((l: any) => {
+        const hay = [l.nomeCompleto, l.funcao, l.obra, l.codigoInterno]
+          .map(v => String(v ?? '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, ''))
+          .join(' | ');
+        return tokens.every(t => hay.includes(t));
+      });
+    }
     const k = cdmSort.key;
     const mul = cdmSort.dir === 'asc' ? 1 : -1;
     arr.sort((a: any, b: any) => {
@@ -232,7 +248,7 @@ export default function DashAvisoPrevio() {
       return sa.localeCompare(sb, 'pt-BR') * mul;
     });
     return arr;
-  }, [cdm, cdmSort]);
+  }, [cdm, cdmSort, cdmSearch]);
   const SortIcon = ({ k }: { k: CdmSortKey }) => {
     if (cdmSort.key !== k) return <ArrowUpDown className="inline h-3 w-3 ml-0.5 opacity-30" />;
     return cdmSort.dir === 'asc'
@@ -653,8 +669,44 @@ export default function DashAvisoPrevio() {
                       </div>
                     </div>
 
+                    {/* Rev. 1982 — Campo de busca incremental (filtra a tabela ao digitar). */}
+                    {cdm.linhas.length > 0 && (
+                      <div className="mb-2 flex items-center gap-2 flex-wrap">
+                        <div className="relative flex-1 min-w-[220px] max-w-md">
+                          <Search className="h-4 w-4 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                          <input
+                            type="text"
+                            value={cdmSearch}
+                            onChange={(e) => setCdmSearch(e.target.value)}
+                            placeholder="Buscar por nome, função, obra ou código…"
+                            className="w-full h-9 pl-8 pr-8 text-xs rounded-md border border-slate-300 bg-white focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-blue-400"
+                            aria-label="Buscar funcionário"
+                          />
+                          {cdmSearch && (
+                            <button
+                              type="button"
+                              onClick={() => setCdmSearch("")}
+                              className="absolute right-1.5 top-1/2 -translate-y-1/2 p-0.5 rounded hover:bg-slate-100 text-slate-500"
+                              title="Limpar busca"
+                              aria-label="Limpar busca"
+                            >
+                              <XIcon className="h-3.5 w-3.5" />
+                            </button>
+                          )}
+                        </div>
+                        {cdmSearch && (
+                          <span className="text-[11px] text-slate-600">
+                            <strong className="tabular-nums">{cdmLinhasOrdenadas.length}</strong>
+                            {' '}de{' '}
+                            <strong className="tabular-nums">{cdm.linhas.length}</strong> funcionário(s)
+                          </span>
+                        )}
+                      </div>
+                    )}
                     {cdm.linhas.length === 0 ? (
                       <p className="text-sm text-muted-foreground py-6 text-center">Nenhum funcionário ativo com salário e admissão informados.</p>
+                    ) : cdmLinhasOrdenadas.length === 0 ? (
+                      <p className="text-sm text-muted-foreground py-6 text-center">Nenhum funcionário encontrado para "<strong>{cdmSearch}</strong>". <button type="button" onClick={() => setCdmSearch("")} className="text-blue-600 hover:underline">Limpar busca</button></p>
                     ) : (
                       <div className="overflow-x-auto max-h-[480px] overflow-y-auto rounded-md border">
                         <table className="w-full text-xs border-separate border-spacing-0">
