@@ -2702,14 +2702,11 @@ export default function FechamentoPonto() {
                               <div className="mb-3 rounded-lg border bg-white p-3 flex items-start gap-2.5">
                                 <Info className="h-4 w-4 text-indigo-600 shrink-0 mt-0.5" />
                                 <div className="text-[12px] text-slate-700 leading-snug">
-                                  <strong>Como o atraso é calculado:</strong> para cada dia com batida, comparamos
-                                  a <strong>1ª entrada real</strong> com a <strong>entrada esperada</strong> da
-                                  jornada do colaborador. Só conta como atraso o que ultrapassa
-                                  a tolerância de <strong className="text-red-700">{tolerancia} min</strong>
-                                  {" "}(Art. 58 §1º da CLT).
+                                  <strong>De onde vem o número:</strong> os valores abaixo vêm do <strong>mesmo registro de ponto que alimenta a tabela</strong> (campo Atraso de cada dia, gravado pelo motor de cálculo com tolerância de <strong className="text-red-700">{tolerancia} min</strong> — Art. 58 §1º da CLT). A soma dos dias bate exatamente com o total da tabela.
                                   {entradaPadrao && (
-                                    <span> A jornada de seg-sex desse colaborador começa às <strong className="font-mono">{entradaPadrao}</strong>.</span>
+                                    <span> Jornada padrão seg-sex: <strong className="font-mono">{entradaPadrao}</strong>.</span>
                                   )}
+                                  <span className="block mt-1 text-[11px] text-slate-500">As colunas "Esperado" e "Real" são <em>contexto</em> pra auditoria; quando elas não baterem com o valor do motor, uma observação aparece na linha explicando por quê (abono, ajuste manual, jornada alterada depois etc).</span>
                                 </div>
                               </div>
 

@@ -1,6 +1,97 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2027 — DP · Fechamento de Ponto · BUGFIX: divergência entre
+ * tabela e modal "Memória de cálculo · Atraso Acumulado".
+ *
+ * Pedido direto do usuário (imgs IMG_0871/0872/0873/0874/0875):
+ * "Tem algum bug ainda, na tela principal mostra muitos com atrasos,
+ * mas quando clico na memória diz que não tem atraso, em alguns
+ * casos os valores informados na tabela inicial não converge com o
+ * número externo da tabela e os valores devem sempre convergir".
+ *
+ * Casos observados:
+ *   - WALMIR: tabela 3:35, modal "Nenhum atraso registrado".
+ *   - CLAUDIO: tabela 1:38, modal "Nenhum atraso registrado".
+ *   - FRANCISCO: tabela 2:55, modal mostra 5h24min num único dia 16/04
+ *     (com Esperado=07:00, Real=12:24 → diff=5:24, ignorando o que
+ *     o motor gravou).
+ *
+ * Causa-raiz: o getSummary (tabela) SOMA o campo `timeRecords.atrasos`
+ * (já gravado pelo motor de cálculo, com toda a lógica do payroll
+ * engine — tolerância CLT, abonos, ajuste manual, jornada vigente no
+ * dia). Já o getAtrasoDetalhe (Rev. 2019) RECALCULAVA do zero:
+ * `entrada1 - jornada.entrada > tolerância`, IGNORANDO o que o motor
+ * tinha gravado. Resultado: sempre que o motor tivesse aplicado algo
+ * diferente do simples "real-esperada" (abono, justificativa, jornada
+ * alterada depois, ajuste manual), os números divergiam — pra mais
+ * (FRANCISCO) ou pra menos/zero (WALMIR/CLAUDIO, casos em que o
+ * recalculo dava 0 mas o motor gravou atraso por outro caminho).
+ *
+ * Princípio violado: "tabela e detalhe devem sempre convergir" —
+ * fonte única de verdade.
+ *
+ * Mudança em 2 arquivos:
+ *
+ * (A) `server/routers/fechamentoPonto.ts` (getAtrasoDetalhe, ~55L
+ *   reescritas no loop): agora o `minutos` de cada dia vem
+ *   DIRETAMENTE de `r.atrasos` (mesma fonte que getSummary). Linhas
+ *   com `r.atrasos === "0:00"` são puladas. Entrada esperada e real
+ *   continuam consultadas e exibidas — mas só como CONTEXTO para
+ *   auditoria. Quando o que o motor gravou diverge ≥2 min do que a
+ *   simples diff "real - esperada - tolerância" sugeriria, uma
+ *   `observacao` aparece na linha explicando o motivo provável:
+ *     - "Motor registrou MENOS atraso que real-esperada sugere —
+ *        provável abono/justificativa parcial." (caso comum)
+ *     - "Real está dentro da tolerância vs jornada cadastrada —
+ *        atraso pode ter vindo de jornada alterada depois ou ajuste
+ *        manual." (caso WALMIR — entrada hoje 07:00 mas em 16/04
+ *        valia outra jornada)
+ *     - "Motor registrou MAIS atraso que real-esperada sugere —
+ *        provável jornada cadastrada diferente do dia ou ajuste
+ *        manual."
+ *     - "Jornada do dia não configurada..." / "Sem entrada1
+ *        registrada..." (fallbacks).
+ *   Garantia matemática: `SOMA(dias[].minutos) === tabela "Atraso
+ *   Acumulado"` SEMPRE — porque vêm exatamente do mesmo campo.
+ *
+ * (B) `client/src/pages/FechamentoPonto.tsx` (faixa explicativa no
+ *   modal): microcopy reescrita para refletir a nova realidade. Antes:
+ *   "Como o atraso é calculado: comparamos a 1ª entrada real com a
+ *   entrada esperada da jornada... só conta o que ultrapassa 5 min"
+ *   — texto enganoso porque o motor NÃO faz só isso. Depois: "De onde
+ *   vem o número: os valores abaixo vêm do mesmo registro de ponto
+ *   que alimenta a tabela (campo Atraso de cada dia, gravado pelo
+ *   motor de cálculo... A soma dos dias bate exatamente com o total
+ *   da tabela." + sub-linha explicando que Esperado/Real são contexto
+ *   de auditoria e que a observação na linha aparece quando divergem
+ *   do motor (abono, ajuste, jornada alterada).
+ *
+ * + shared/version.ts → 2027.
+ *
+ * R-001/R-007/R-010 OK: zero SQL, zero schema, zero ALTER/DROP. Só
+ * mudança de cálculo num único procedure (defensivo, com fallbacks).
+ * Reversível em 2 arquivos.
+ *
+ * Preservado:
+ *   - getSummary INTACTO — fonte única continua sendo a tabela.
+ *   - payrollEngine/listInconsistencies/getDiasEmployee INTACTOS.
+ *   - Modal Rev. 2019 (header gradient, tabela dia a dia, resumo,
+ *     empty-state) INTACTO — só o conteúdo do número e a microcopy
+ *     mudaram.
+ *   - Avatar/CIPA Rev. 2015 INTACTOS.
+ *   - Tolerância CLT Rev. 2006 INTACTA.
+ *   - Feriados Rev. 2014 INTACTOS.
+ *   - Rev. 2026 (modal Integração SST) INTACTA.
+ *
+ * Follow-up:
+ *   - Idem aplicar princípio "fonte única" aos outros detalhes
+ *     clicáveis (H. Total, % Presença) — auditar se também recalculam.
+ *   - Pre-filtrar `dias` no front e mostrar linhas com observação em
+ *     cor diferente (atualmente amber funciona, mas pode ficar mais
+ *     destacado).
+ *   - Exportar a memória pra CSV pra anexar em advertência.
+ *
  * Rev. 2026 — SST · Integração de Segurança · Modal "Iniciar Integração"
  * refeito sob a regra de ouro (header gradient + microcopy + CTA).
  *

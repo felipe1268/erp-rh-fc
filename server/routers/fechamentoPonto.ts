@@ -5225,13 +5225,27 @@ export const fechamentoPontoRouter = router({
         return (h || 0) * 60 + (m || 0);
       };
 
-      // 5) Itera registros e monta linhas de atraso
+      // 5) Itera registros e monta linhas de atraso.
+      //
+      // Rev. 2027 — CORREÇÃO DE BUG (divergência tabela vs detalhe):
+      // a fonte de verdade do atraso é o campo `timeRecords.atrasos`
+      // gravado pelo motor de cálculo (mesmo campo que `getSummary` soma
+      // pra montar a coluna "Atraso Acumulado" da tabela). Antes, este
+      // procedure RECALCULAVA do zero (entrada1 vs jornada cadastrada
+      // com tolerância) — o que divergia da tabela sempre que houvesse
+      // (a) jornada alterada depois, (b) abono/justificativa, (c) ajuste
+      // manual no registro, (d) regra de cálculo do motor diferente do
+      // simples "real - esperada > 5min". A garantia agora é:
+      //   SOMA(dias[].minutos) === tabela "Atraso Acumulado"
+      // sempre. Entrada esperada/real continuam exibidas como CONTEXTO
+      // pra ajudar a auditoria; observação aparece quando o motor
+      // gravou diferente do que a entrada esperada/real sugeririam.
       type DiaAtraso = {
         data: string;
         dow: number;
         entradaEsperada: string | null;
         entradaReal: string | null;
-        minutos: number;     // atraso em minutos (já descontada tolerância na decisão de inclusão)
+        minutos: number;     // atraso em minutos — vem de timeRecords.atrasos (motor)
         acumulado: number;   // soma corrida desde o início do período
         observacao: string | null;
       };
@@ -5244,35 +5258,48 @@ export const fechamentoPontoRouter = router({
         const esperada = getEntradaEsperada(ds);
         const real = r.entrada1 || null;
 
-        // Estratégia: prioriza o que o motor de cálculo já gravou (timeRecords.atrasos),
-        // mas só inclui se passar da tolerância — pra coerência com a regra CLT.
+        // Fonte primária: o campo já gravado pelo motor (mesmo que a tabela).
         let minutos = 0;
-        let observacao: string | null = null;
-
-        if (esperada && real) {
-          const diff = toMins(real) - toMins(esperada);
-          if (diff > tolAtraso) {
-            minutos = diff;
-          }
-        } else if (r.atrasos && r.atrasos !== "0:00") {
-          // Fallback: dia sem jornada configurada mas com atraso já calculado por outro caminho.
+        if (r.atrasos && r.atrasos !== "0:00") {
           const [h, m] = String(r.atrasos).split(":").map(Number);
           minutos = (h || 0) * 60 + (m || 0);
-          if (!esperada) observacao = "Jornada do dia não configurada no cadastro — atraso vindo do registro consolidado.";
         }
 
-        if (minutos > 0) {
-          acumulado += minutos;
-          dias.push({
-            data: ds,
-            dow,
-            entradaEsperada: esperada,
-            entradaReal: real,
-            minutos,
-            acumulado,
-            observacao,
-          });
+        if (minutos <= 0) continue;
+
+        // Observação só quando o motor gravou algo mas o esperada/real
+        // sugerem outro valor (ajuda a auditoria sem mudar o número).
+        let observacao: string | null = null;
+        if (esperada && real) {
+          const diffSugerido = toMins(real) - toMins(esperada);
+          const diffEsperadoComTol = diffSugerido > tolAtraso ? diffSugerido : 0;
+          const delta = Math.abs(diffEsperadoComTol - minutos);
+          if (delta >= 2) {
+            // 2 min de margem pra arredondamento.
+            if (diffEsperadoComTol > minutos) {
+              observacao = "Motor registrou menos atraso que real-esperada sugere — provável abono/justificativa parcial.";
+            } else if (diffEsperadoComTol === 0 && minutos > 0) {
+              observacao = "Real está dentro da tolerância CLT vs jornada cadastrada — atraso pode ter vindo de jornada alterada depois ou ajuste manual.";
+            } else {
+              observacao = "Motor registrou mais atraso que real-esperada sugere — provável jornada cadastrada diferente do dia ou ajuste manual.";
+            }
+          }
+        } else if (!esperada) {
+          observacao = "Jornada do dia não configurada no cadastro — atraso vindo do registro consolidado.";
+        } else if (!real) {
+          observacao = "Sem entrada1 registrada — atraso vindo do registro consolidado (provável falta parcial).";
         }
+
+        acumulado += minutos;
+        dias.push({
+          data: ds,
+          dow,
+          entradaEsperada: esperada,
+          entradaReal: real,
+          minutos,
+          acumulado,
+          observacao,
+        });
       }
 
       return {
