@@ -50,18 +50,18 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 2069** — **SST Integração · multiseleção + select-all + bulk delete nas abas Aprovados e Reprovados.** Pedido IMG_0971+0972: "faltou a multi seleção para apagar tudo, selecionado todos de uma vez nas duas abas". Até a Rev. 2068 só Pendentes tinha o padrão (Rev. 2045). Fix em `client/src/pages/sst/IntegracaoSST.tsx` espelhando 100% da Pendentes nas duas abas: `selecionados:Set<number>` + `confirmExcluir` + `excluirMut = trpc.integracaoSST.excluirRegistros` (endpoint já existe, soft-delete, scope por companyId), coluna checkbox no header (com `indeterminate`) e por linha (com highlight), coluna "Ações" com Trash2 por linha, botão bulk "Excluir N selecionado(s)" que aparece condicionalmente, AlertDialog de confirmação. Aprovados verde, Reprovados vermelho. ZERO backend, ZERO migration — endpoint já não filtrava status. Como servidor só considera `status='aprovado' AND deletedAt IS NULL` como integração válida, excluir um aprovado naturalmente devolve o colaborador pra Pendentes (comportamento documentado no AlertDialog).
 - **Rev. 2068** — **Fechamento de Ponto · botão "Voltar ao ranking" parou de fechar a tela toda (regressão da Rev. 2065).** Pedido IMG_0968+0969: "quando eu clico no voltar ao ranking ele tá fechando a tela...não voltando". Bug raiz: os modais de detalhe (Atraso/HE/Faltas) são **irmãos** do Dialog do ranking (não filhos), e o Radix porta cada um na raiz do DOM. No iPad, ao tocar no botão, o inner fecha mas o evento bubble continua e o Radix do ranking interpreta como "tap fora" → dispara `onInteractOutside` → fecha o ranking também. Fix em `client/src/pages/FechamentoPonto.tsx` L2256-2261: adicionar `onInteractOutside={e.preventDefault()}` + `onPointerDownOutside={e.preventDefault()}` no `DialogContent` do ranking. Como ele já é `w-screen h-screen`, não tem "área fora" relevante mesmo — só fecha via X embutido ou Escape. ZERO lógica.
-- **Rev. 2067** — **Raio-X · fix de corte no rodapé no iPad (cards de Integração inacessíveis).** Pedido IMG_0967: "a tela tem um limite de rolagem aí corta a informação". Bug raiz: overlay full-screen em `client/src/components/RaioXFuncionario.tsx` L770 usava `height: "100vh"` — em iOS Safari o `100vh` ignora a barra de URL/tabs, fazendo o container ficar mais alto que a viewport real e jogando os últimos cards (SST, Registrar Integração) fora do alcance do scroll. Fix: `100vh` → `100dvh` (dynamic viewport height respeita a barra do navegador). 1 char trocado, ZERO lógica.
 
 ### Revisões recentes (one-liners)
 
+- ~~Rev. 2067~~ — Raio-X · fix `100vh`→`100dvh` no overlay (cards SST/Integração cortados no iPad Safari). Ver `shared/changelog.ts`.
 - ~~Rev. 2066~~ — Raio-X · Timeline agora inclui TODAS as movimentações (Folha/VR/Adiantamentos/Rateio/Insumos/Desc Almox/Atrasos/PJ Pagamentos + Férias com 3 eventos por período). Ver `shared/changelog.ts`.
 - ~~Rev. 2065~~ — Fechamento de Ponto: botão "Voltar ao ranking" nos 3 modais de memória (Atraso/HE/Faltas). Ver `shared/changelog.ts`. (introduziu bug — fixado na Rev. 2068.)
 - ~~Rev. 2064~~ — SST badge do menu lateral REALMENTE funciona · `sql\`ANY(${ids})\`` do Drizzle não serializa array JS; fix em `getBadgeCounts` com `sql.raw(\`ANY(ARRAY[...]::int[])\`)` validado por Zod. Ver `shared/changelog.ts`.
 - ~~Rev. 2063~~ — SST badge do menu lateral: contagem passa a incluir terceiros (`funcionarios_terceiros` SEM `integracaoDocUrl`). Ver `shared/changelog.ts`.
-- ~~Rev. 2062~~ — Faxina do `replit.md`: convenção mudou de 5+10 pra 2+5 (compactos). Ver `shared/changelog.ts`.
 
-> Revisões 2061 → 2044 e anteriores: ver [`replit-history.md`](./replit-history.md) e `shared/changelog.ts` (detalhe completo).
+> Revisões 2062 → 2044 e anteriores: ver [`replit-history.md`](./replit-history.md) e `shared/changelog.ts` (detalhe completo).
 
 
 ## User preferences

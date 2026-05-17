@@ -1,6 +1,53 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2069 — **SST Integração · multiseleção + select-all + bulk
+ * delete nas abas Aprovados e Reprovados.** Pedido do usuário
+ * (IMG_0971 + IMG_0972): "faltou a multi seleção para apagar tudo,
+ * selecionado todos de uma vez nas duas abas". Até a Rev. 2068 só a
+ * aba **Pendentes** tinha o padrão de multiseleção (Rev. 2045): coluna
+ * de checkbox por linha, header com checkbox "Selecionar todos"
+ * (com estado `indeterminate` quando parcial), botão destrutivo
+ * "Excluir N selecionado(s)" que aparece quando `selecionados.size > 0`,
+ * e `AlertDialog` de confirmação. Aprovados e Reprovados só tinham
+ * visualização — pra apagar um certificado vencido/errado o usuário
+ * teria que ir registro a registro (e nem isso tinha botão). Fix em
+ * `client/src/pages/sst/IntegracaoSST.tsx` espelhando o padrão da
+ * Pendentes nas duas abas:
+ *
+ *   1. `AprovadosTab` (L1745+): adicionado `selecionados:Set<number>`,
+ *      `confirmExcluir`, `excluirMut = trpc.integracaoSST.excluirRegistros`
+ *      (mesmo endpoint da Pendentes — `inArray` + companyId-scope,
+ *      funciona pra qualquer status), helpers `toggleAll/toggleOne/
+ *      excluirSelecionados/excluirUm`, coluna checkbox no header e em
+ *      cada `<tr>` (com highlight `bg-emerald-50/60` na linha
+ *      selecionada), coluna "Ações" com Trash2 por linha, botão bulk
+ *      "Excluir N selecionado(s)" no toolbar (lado esquerdo do
+ *      `<Input>` de busca, aparece condicionalmente), AlertDialog de
+ *      confirmação ao final. colSpan do empty-state ajustado 10→12.
+ *      Toast onSuccess: "N certificado(s) excluído(s). Colaborador(es)
+ *      voltam para Pendentes pra refazer a integração".
+ *
+ *   2. `ReprovadosTab` (L2116+): mesma estrutura, com cor `bg-red-50/60`
+ *      no highlight da linha, textos adaptados pra "reprovação(ões)".
+ *      colSpan 10→12.
+ *
+ * O endpoint `excluirRegistros` (server/routers/integracaoSST.ts L783)
+ * já fazia soft-delete (`deletedAt = NOW()`) sem filtrar status, então
+ * NÃO precisei tocar no backend. Como o servidor já considera apenas
+ * `status='aprovado'` E `deletedAt IS NULL` como integração válida
+ * (regra mantida desde Rev. 2056), excluir um aprovado naturalmente
+ * faz o colaborador reaparecer em Pendentes pra refazer — comportamento
+ * desejado e documentado no AlertDialog. ZERO migration, ZERO schema.
+ *
+ * Follow-up architect: `companyId` vem por prop e pode mudar sem
+ * remount do componente (o seletor de empresa fica fora desta página).
+ * Sem reset, o `selecionados:Set<number>` poderia persistir com IDs
+ * de uma empresa anterior e o botão bulk continuaria habilitado,
+ * potencialmente disparando exclusão de IDs órfãos. Adicionado
+ * `useEffect(() => setSelecionados(new Set()), [companyId])` nas duas
+ * abas pra zerar a seleção sempre que a empresa mudar.
+ *
  * Rev. 2068 — **Fechamento de Ponto · botão "Voltar ao ranking" parou
  * de fechar a tela toda (regressão da Rev. 2065).** Pedido do usuário
  * (IMG_0968 + IMG_0969): "Não deu certo, quando eu clico no voltar ao

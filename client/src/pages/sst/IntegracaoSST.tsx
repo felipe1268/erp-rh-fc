@@ -1756,6 +1756,24 @@ function AprovadosTab({ companyId }: { companyId: number }) {
     },
     onError: (e) => toast.error(e.message),
   });
+  // Rev. 2069 — multiseleção + bulk delete (espelha Pendentes/Reprovados).
+  // Pedido do usuário (IMG_0971+0972): "faltou a multi seleção para apagar
+  // tudo, selecionado todos de uma vez nas duas abas".
+  const [selecionados, setSelecionados] = useState<Set<number>>(new Set());
+  const [confirmExcluir, setConfirmExcluir] = useState<{ ids: number[]; titulo: string; descricao: string } | null>(null);
+  // Rev. 2069 follow-up architect: reset seleção em troca de empresa
+  // (companyId vem por prop e pode mudar sem remount) pra evitar
+  // exclusão indevida de IDs órfãos.
+  useEffect(() => { setSelecionados(new Set()); }, [companyId]);
+  const excluirMut = trpc.integracaoSST.excluirRegistros.useMutation({
+    onSuccess: (data) => {
+      toast.success(`${data.count} certificado(s) excluído(s). Colaborador(es) voltam para "Pendentes" pra refazer a integração.`);
+      registros.refetch();
+      setSelecionados(new Set());
+      setConfirmExcluir(null);
+    },
+    onError: (err: any) => toast.error(err?.message || "Erro ao excluir registros"),
+  });
 
   const filtered = useMemo(() => {
     const list = registros.data || [];
@@ -1812,6 +1830,33 @@ function AprovadosTab({ companyId }: { companyId: number }) {
   if (!companyId) return <p className="text-muted-foreground p-4">Selecione uma empresa.</p>;
 
   const total = (registros.data || []).length;
+  const allSelected = filtered.length > 0 && filtered.every((r: any) => selecionados.has(r.id));
+  const someSelected = filtered.some((r: any) => selecionados.has(r.id));
+  const toggleAll = () => {
+    if (allSelected) setSelecionados(new Set());
+    else setSelecionados(new Set(filtered.map((r: any) => r.id)));
+  };
+  const toggleOne = (id: number) => {
+    const next = new Set(selecionados);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    setSelecionados(next);
+  };
+  const excluirSelecionados = () => {
+    const ids = Array.from(selecionados);
+    if (ids.length === 0) return;
+    setConfirmExcluir({
+      ids,
+      titulo: `Excluir ${ids.length} certificado${ids.length > 1 ? "s" : ""}?`,
+      descricao: `${ids.length === 1 ? "O colaborador volta" : "Os colaboradores voltam"} para "Pendentes" pra refazer a integração. O certificado emitido será removido. Esta ação não pode ser desfeita.`,
+    });
+  };
+  const excluirUm = (id: number, nome: string) => {
+    setConfirmExcluir({
+      ids: [id],
+      titulo: `Excluir certificado de ${nome}?`,
+      descricao: `O colaborador volta para "Pendentes" pra refazer a integração. O certificado emitido será removido.`,
+    });
+  };
 
   return (
     <div className="space-y-4">
@@ -1829,9 +1874,22 @@ function AprovadosTab({ companyId }: { companyId: number }) {
 
       <div className="flex justify-between items-center flex-wrap gap-2">
         <h3 className="font-semibold">Aprovados {total > 0 && <span className="text-muted-foreground font-normal">· {total}</span>}</h3>
-        <div className="relative">
-          <Search className="h-4 w-4 absolute left-2 top-2.5 text-muted-foreground" />
-          <Input value={searchTerm} onChange={e => setSearchTerm(e.target.value)} placeholder="Buscar nome, CPF, obra..." className="pl-8 w-64" />
+        <div className="flex gap-2 flex-wrap items-center">
+          {selecionados.size > 0 && (
+            <Button
+              size="sm"
+              variant="destructive"
+              onClick={excluirSelecionados}
+              disabled={excluirMut.isPending}
+            >
+              {excluirMut.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Trash2 className="h-4 w-4 mr-1" />}
+              Excluir {selecionados.size} selecionado{selecionados.size > 1 ? "s" : ""}
+            </Button>
+          )}
+          <div className="relative">
+            <Search className="h-4 w-4 absolute left-2 top-2.5 text-muted-foreground" />
+            <Input value={searchTerm} onChange={e => setSearchTerm(e.target.value)} placeholder="Buscar nome, CPF, obra..." className="pl-8 w-64" />
+          </div>
         </div>
       </div>
 
@@ -1852,6 +1910,16 @@ function AprovadosTab({ companyId }: { companyId: number }) {
         <div className="rounded-md border overflow-x-auto">
           <table className="w-full text-sm">
             <thead><tr className="border-b bg-muted/50">
+              <th className="p-2 text-left w-10">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 cursor-pointer"
+                  checked={allSelected}
+                  ref={el => { if (el) el.indeterminate = !allSelected && someSelected; }}
+                  onChange={toggleAll}
+                  aria-label="Selecionar todos"
+                />
+              </th>
               <th className="p-2 text-left">Colaborador</th>
               <th className="p-2 text-left">CPF</th>
               <th className="p-2 text-left">Função</th>
@@ -1862,17 +1930,27 @@ function AprovadosTab({ companyId }: { companyId: number }) {
               <th className="p-2 text-left">Assinatura TST</th>
               <th className="p-2 text-left">Certificado</th>
               <th className="p-2 text-left w-24">Raio-X</th>
+              <th className="p-2 text-left w-16">Ações</th>
             </tr></thead>
             <tbody>
               {filtered.length === 0 && (
-                <tr><td colSpan={10} className="p-6 text-center text-muted-foreground">
+                <tr><td colSpan={12} className="p-6 text-center text-muted-foreground">
                   {searchTerm ? "Nenhum aprovado encontrado para a busca." : "Nenhuma integração aprovada ainda."}
                 </td></tr>
               )}
               {filtered.map((r: any) => {
                 const venceu = r.dataValidade && new Date(r.dataValidade) < new Date();
                 return (
-                  <tr key={r.id} className="border-b hover:bg-emerald-50/30">
+                  <tr key={r.id} className={`border-b hover:bg-emerald-50/30 ${selecionados.has(r.id) ? "bg-emerald-50/60" : ""}`}>
+                    <td className="p-2">
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 cursor-pointer"
+                        checked={selecionados.has(r.id)}
+                        onChange={() => toggleOne(r.id)}
+                        aria-label={`Selecionar ${r.employeeNome || "registro"}`}
+                      />
+                    </td>
                     <td className="p-2 font-medium">{r.employeeNome || "-"}</td>
                     <td className="p-2 text-xs">{r.employeeCpf || "-"}</td>
                     <td className="p-2 text-xs">{r.employeeFuncao || "-"}</td>
@@ -1948,6 +2026,18 @@ function AprovadosTab({ companyId }: { companyId: number }) {
                         <span className="text-xs text-muted-foreground">-</span>
                       )}
                     </td>
+                    <td className="p-2">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-7 w-7 p-0"
+                        onClick={() => excluirUm(r.id, r.employeeNome || "Colaborador")}
+                        disabled={excluirMut.isPending}
+                        title="Excluir certificado — colaborador volta para Pendentes"
+                      >
+                        <Trash2 className="h-3.5 w-3.5 text-red-500" />
+                      </Button>
+                    </td>
                   </tr>
                 );
               })}
@@ -1955,6 +2045,31 @@ function AprovadosTab({ companyId }: { companyId: number }) {
           </table>
         </div>
       )}
+
+      {/* Rev. 2069 — confirmação de exclusão (multi/single) */}
+      <AlertDialog open={!!confirmExcluir} onOpenChange={(o) => !o && !excluirMut.isPending && setConfirmExcluir(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{confirmExcluir?.titulo}</AlertDialogTitle>
+            <AlertDialogDescription>{confirmExcluir?.descricao}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={excluirMut.isPending}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-red-600 hover:bg-red-700 text-white"
+              disabled={excluirMut.isPending}
+              onClick={(e) => {
+                e.preventDefault();
+                if (!confirmExcluir) return;
+                excluirMut.mutate({ companyId, ids: confirmExcluir.ids });
+              }}
+            >
+              {excluirMut.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Trash2 className="h-4 w-4 mr-1" />}
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Rev. 2052 — Modal de assinatura digital do TST (FCSign canvas) */}
       {assinandoReg && (
@@ -2005,6 +2120,21 @@ function ReprovadosTab({ companyId }: { companyId: number }) {
     { enabled: companyId > 0 }
   );
   const [searchTerm, setSearchTerm] = useState("");
+  // Rev. 2069 — multiseleção + bulk delete (espelha Pendentes/Aprovados).
+  // Pedido IMG_0971+0972: "faltou a multi seleção para apagar tudo".
+  const [selecionados, setSelecionados] = useState<Set<number>>(new Set());
+  const [confirmExcluir, setConfirmExcluir] = useState<{ ids: number[]; titulo: string; descricao: string } | null>(null);
+  // Rev. 2069 follow-up architect: reset seleção em troca de empresa.
+  useEffect(() => { setSelecionados(new Set()); }, [companyId]);
+  const excluirMut = trpc.integracaoSST.excluirRegistros.useMutation({
+    onSuccess: (data) => {
+      toast.success(`${data.count} reprovação(ões) excluída(s). Colaborador(es) voltam para "Pendentes" pra refazer a integração.`);
+      registros.refetch();
+      setSelecionados(new Set());
+      setConfirmExcluir(null);
+    },
+    onError: (err: any) => toast.error(err?.message || "Erro ao excluir registros"),
+  });
 
   const filtered = useMemo(() => {
     const list = registros.data || [];
@@ -2020,6 +2150,33 @@ function ReprovadosTab({ companyId }: { companyId: number }) {
   if (!companyId) return <p className="text-muted-foreground p-4">Selecione uma empresa.</p>;
 
   const total = (registros.data || []).length;
+  const allSelected = filtered.length > 0 && filtered.every((r: any) => selecionados.has(r.id));
+  const someSelected = filtered.some((r: any) => selecionados.has(r.id));
+  const toggleAll = () => {
+    if (allSelected) setSelecionados(new Set());
+    else setSelecionados(new Set(filtered.map((r: any) => r.id)));
+  };
+  const toggleOne = (id: number) => {
+    const next = new Set(selecionados);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    setSelecionados(next);
+  };
+  const excluirSelecionados = () => {
+    const ids = Array.from(selecionados);
+    if (ids.length === 0) return;
+    setConfirmExcluir({
+      ids,
+      titulo: `Excluir ${ids.length} reprovação${ids.length > 1 ? "ões" : ""}?`,
+      descricao: `${ids.length === 1 ? "O registro de reprovação será apagado" : "Os registros de reprovação serão apagados"}. ${ids.length === 1 ? "O colaborador continua" : "Os colaboradores continuam"} em "Pendentes" pra refazer. Esta ação não pode ser desfeita.`,
+    });
+  };
+  const excluirUm = (id: number, nome: string) => {
+    setConfirmExcluir({
+      ids: [id],
+      titulo: `Excluir reprovação de ${nome}?`,
+      descricao: `O registro será apagado. O colaborador continua em "Pendentes" pra refazer a integração.`,
+    });
+  };
 
   return (
     <div className="space-y-4">
@@ -2041,9 +2198,22 @@ function ReprovadosTab({ companyId }: { companyId: number }) {
 
       <div className="flex justify-between items-center flex-wrap gap-2">
         <h3 className="font-semibold">Reprovados {total > 0 && <span className="text-muted-foreground font-normal">· {total}</span>}</h3>
-        <div className="relative">
-          <Search className="h-4 w-4 absolute left-2 top-2.5 text-muted-foreground" />
-          <Input value={searchTerm} onChange={e => setSearchTerm(e.target.value)} placeholder="Buscar nome, CPF, obra..." className="pl-8 w-64" />
+        <div className="flex gap-2 flex-wrap items-center">
+          {selecionados.size > 0 && (
+            <Button
+              size="sm"
+              variant="destructive"
+              onClick={excluirSelecionados}
+              disabled={excluirMut.isPending}
+            >
+              {excluirMut.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Trash2 className="h-4 w-4 mr-1" />}
+              Excluir {selecionados.size} selecionado{selecionados.size > 1 ? "s" : ""}
+            </Button>
+          )}
+          <div className="relative">
+            <Search className="h-4 w-4 absolute left-2 top-2.5 text-muted-foreground" />
+            <Input value={searchTerm} onChange={e => setSearchTerm(e.target.value)} placeholder="Buscar nome, CPF, obra..." className="pl-8 w-64" />
+          </div>
         </div>
       </div>
 
@@ -2062,6 +2232,16 @@ function ReprovadosTab({ companyId }: { companyId: number }) {
         <div className="rounded-md border overflow-x-auto">
           <table className="w-full text-sm">
             <thead><tr className="border-b bg-muted/50">
+              <th className="p-2 text-left w-10">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 cursor-pointer"
+                  checked={allSelected}
+                  ref={el => { if (el) el.indeterminate = !allSelected && someSelected; }}
+                  onChange={toggleAll}
+                  aria-label="Selecionar todos"
+                />
+              </th>
               <th className="p-2 text-left">Colaborador</th>
               <th className="p-2 text-left">CPF</th>
               <th className="p-2 text-left">Função</th>
@@ -2072,10 +2252,11 @@ function ReprovadosTab({ companyId }: { companyId: number }) {
               <th className="p-2 text-left">Reprovação</th>
               <th className="p-2 text-left">Status</th>
               <th className="p-2 text-left w-24">Raio-X</th>
+              <th className="p-2 text-left w-16">Ações</th>
             </tr></thead>
             <tbody>
               {filtered.length === 0 && (
-                <tr><td colSpan={10} className="p-6 text-center text-muted-foreground">
+                <tr><td colSpan={12} className="p-6 text-center text-muted-foreground">
                   {searchTerm ? "Nenhum reprovado encontrado para a busca." : "Nenhum colaborador reprovado. Bom sinal!"}
                 </td></tr>
               )}
@@ -2083,7 +2264,16 @@ function ReprovadosTab({ companyId }: { companyId: number }) {
                 const notaMin = Number(r.configNotaMinima ?? 70);
                 const nota = Number(r.nota || 0);
                 return (
-                  <tr key={r.id} className="border-b hover:bg-red-50/30">
+                  <tr key={r.id} className={`border-b hover:bg-red-50/30 ${selecionados.has(r.id) ? "bg-red-50/60" : ""}`}>
+                    <td className="p-2">
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 cursor-pointer"
+                        checked={selecionados.has(r.id)}
+                        onChange={() => toggleOne(r.id)}
+                        aria-label={`Selecionar ${r.employeeNome || "registro"}`}
+                      />
+                    </td>
                     <td className="p-2 font-medium">{r.employeeNome || "-"}</td>
                     <td className="p-2 text-xs">{r.employeeCpf || "-"}</td>
                     <td className="p-2 text-xs">{r.employeeFuncao || "-"}</td>
@@ -2114,6 +2304,18 @@ function ReprovadosTab({ companyId }: { companyId: number }) {
                         <span className="text-xs text-muted-foreground">-</span>
                       )}
                     </td>
+                    <td className="p-2">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-7 w-7 p-0"
+                        onClick={() => excluirUm(r.id, r.employeeNome || "Colaborador")}
+                        disabled={excluirMut.isPending}
+                        title="Excluir reprovação"
+                      >
+                        <Trash2 className="h-3.5 w-3.5 text-red-500" />
+                      </Button>
+                    </td>
                   </tr>
                 );
               })}
@@ -2121,6 +2323,31 @@ function ReprovadosTab({ companyId }: { companyId: number }) {
           </table>
         </div>
       )}
+
+      {/* Rev. 2069 — confirmação de exclusão (multi/single) */}
+      <AlertDialog open={!!confirmExcluir} onOpenChange={(o) => !o && !excluirMut.isPending && setConfirmExcluir(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{confirmExcluir?.titulo}</AlertDialogTitle>
+            <AlertDialogDescription>{confirmExcluir?.descricao}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={excluirMut.isPending}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-red-600 hover:bg-red-700 text-white"
+              disabled={excluirMut.isPending}
+              onClick={(e) => {
+                e.preventDefault();
+                if (!confirmExcluir) return;
+                excluirMut.mutate({ companyId, ids: confirmExcluir.ids });
+              }}
+            >
+              {excluirMut.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Trash2 className="h-4 w-4 mr-1" />}
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
