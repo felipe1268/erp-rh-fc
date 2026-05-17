@@ -9,6 +9,10 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
@@ -1554,6 +1558,8 @@ function HistoricoTab({ companyId }: { companyId: number }) {
   // Rev. 2044 — edição de obra
   const [editando, setEditando] = useState<{ id: number; nome: string; obraId: number | null } | null>(null);
   const [editObraId, setEditObraId] = useState<string>("none");
+  // Rev. 2045 — confirmação de exclusão via AlertDialog (sem URL do replit.dev no window.confirm)
+  const [confirmExcluir, setConfirmExcluir] = useState<{ ids: number[]; titulo: string; descricao: string } | null>(null);
 
   const refetchAll = () => {
     registros.refetch();
@@ -1597,12 +1603,18 @@ function HistoricoTab({ companyId }: { companyId: number }) {
   const excluirSelecionados = () => {
     const ids = Array.from(selecionados);
     if (ids.length === 0) return;
-    if (!window.confirm(`Excluir ${ids.length} registro(s)? Os colaboradores voltam para "Pendentes" pra refazer a integração. Esta ação não pode ser desfeita.`)) return;
-    excluirMut.mutate({ companyId, ids });
+    setConfirmExcluir({
+      ids,
+      titulo: `Excluir ${ids.length} registro${ids.length > 1 ? "s" : ""}?`,
+      descricao: `${ids.length === 1 ? "O colaborador volta" : "Os colaboradores voltam"} para "Pendentes" pra refazer a integração. Esta ação não pode ser desfeita.`,
+    });
   };
   const excluirUm = (id: number, nome: string) => {
-    if (!window.confirm(`Excluir registro de ${nome}? O colaborador volta para "Pendentes" pra refazer a integração.`)) return;
-    excluirMut.mutate({ companyId, ids: [id] });
+    setConfirmExcluir({
+      ids: [id],
+      titulo: `Excluir registro de ${nome}?`,
+      descricao: `O colaborador volta para "Pendentes" pra refazer a integração.`,
+    });
   };
   const abrirEdicao = (r: any) => {
     setEditando({ id: r.id, nome: r.employeeNome || "Colaborador", obraId: r.obraId ?? null });
@@ -1725,6 +1737,33 @@ function HistoricoTab({ companyId }: { companyId: number }) {
           </table>
         </div>
       )}
+
+      <AlertDialog open={!!confirmExcluir} onOpenChange={(o) => !o && !excluirMut.isPending && setConfirmExcluir(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{confirmExcluir?.titulo}</AlertDialogTitle>
+            <AlertDialogDescription>{confirmExcluir?.descricao}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={excluirMut.isPending}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-red-600 hover:bg-red-700 text-white"
+              disabled={excluirMut.isPending}
+              onClick={(e) => {
+                e.preventDefault();
+                if (!confirmExcluir) return;
+                excluirMut.mutate(
+                  { companyId, ids: confirmExcluir.ids },
+                  { onSettled: () => setConfirmExcluir(null) }
+                );
+              }}
+            >
+              {excluirMut.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Trash2 className="h-4 w-4 mr-1" />}
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <Dialog open={!!editando} onOpenChange={(o) => !o && setEditando(null)}>
         <DialogContent className="max-w-md">

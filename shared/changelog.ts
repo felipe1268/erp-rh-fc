@@ -1,6 +1,64 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2045 — SST · Integração de Segurança · aba Histórico ·
+ * confirmação de exclusão via AlertDialog (substitui window.confirm).
+ *
+ * Pedido direto do usuário (img IMG_0892): "Arrume a mensagem".
+ * O `window.confirm` nativo mostrava o domínio completo do
+ * Replit (`b41aedae-...-1frshksuex6ym.picard.replit.dev diz`)
+ * antes da mensagem, deixando o popup feio e pouco confiável —
+ * principalmente no Safari/iPad onde o domínio quebra em 3 linhas
+ * e domina o popup. Já era o follow-up #1 da Rev. 2044.
+ *
+ * Solução: AlertDialog do shadcn (já existia em
+ * `client/src/components/ui/alert-dialog.tsx`) controlado por
+ * estado local `confirmExcluir: {ids, titulo, descricao} | null`.
+ * Ambos os fluxos (excluir 1 / excluir N selecionados) abrem o
+ * mesmo dialog passando `ids[]` + textos contextuais.
+ *
+ * Mudança em 2 arquivos:
+ *
+ *   1. `client/src/pages/sst/IntegracaoSST.tsx` (~40L):
+ *      - Imports `AlertDialog*` adicionados.
+ *      - Novo state `confirmExcluir`.
+ *      - `excluirSelecionados` e `excluirUm` agora só SETAM o
+ *        state (não chamam mutate diretamente) — pluralização
+ *        correta no título ("1 registro" vs "N registros") e na
+ *        descrição ("O colaborador volta" vs "Os colaboradores
+ *        voltam").
+ *      - Novo `<AlertDialog>` controlado: AlertDialogAction
+ *        (vermelho) dispara `excluirMut.mutate` com
+ *        `onSettled: () => setConfirmExcluir(null)` (fecha em
+ *        sucesso E em erro — UX melhor que fechar só no
+ *        success); `onOpenChange` bloqueado enquanto pending pra
+ *        evitar fechar mid-mutation; Cancel/Action `disabled`
+ *        durante pending + spinner Loader2.
+ *      - Removidos os 2 `window.confirm`.
+ *
+ *   2. `shared/version.ts` → 2045.
+ *
+ * R-001/R-007/R-010 OK: ZERO mudança server-side, ZERO SQL/schema,
+ * ZERO mudança de contrato tRPC. Só client. Sem novas deps
+ * (AlertDialog já estava instalado via shadcn).
+ *
+ * Preservado:
+ *   - Rev. 2044 (excluir + editar + multi-seleção) INTACTA — só
+ *     a CAMADA de confirmação mudou (window.confirm → AlertDialog).
+ *   - Handlers server `excluirRegistros` e `atualizarRegistro`
+ *     INTACTOS.
+ *   - Soft-delete + reaparição em Pendentes INTACTOS.
+ *   - Dialog de edição de obra (Rev. 2044) INTACTO.
+ *
+ * Follow-up:
+ *   1. Code-review (Rev. 2044) sugeriu fatiar `ids` em lotes
+ *      <=500 no client pra alinhar com o limite Zod — ainda
+ *      pendente.
+ *   2. Restaurar registros excluídos (lista soft-deleted dos
+ *      últimos 30d com botão undo).
+ *   3. Botão "Refazer agora" direto na linha (delete + abre
+ *      tela pública num clique).
+ *
  * Rev. 2044 — SST · Integração de Segurança · aba Histórico ·
  * editar/apagar registros + múltipla seleção; ao excluir, o
  * colaborador volta automaticamente para "Pendentes".
