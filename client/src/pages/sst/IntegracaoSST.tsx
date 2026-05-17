@@ -862,11 +862,18 @@ function ModulosEditor({ configId, companyId }: { configId: number; companyId: n
   const criarModulo = trpc.integracaoSST.criarModulo.useMutation({ onSuccess: () => { modulos.refetch(); setShowNew(false); toast.success("Módulo criado"); } });
   const excluirModulo = trpc.integracaoSST.excluirModulo.useMutation({ onSuccess: () => { modulos.refetch(); toast.success("Módulo excluído"); } });
   const salvarPerguntas = trpc.integracaoSST.salvarPerguntas.useMutation({ onSuccess: () => { modulos.refetch(); toast.success("Perguntas salvas"); } });
-  // Rev. 2046 — botão "Carregar Regras de Ouro" para módulos sem perguntas
+  // Rev. 2047 — botão "Carregar/Atualizar Regras de Ouro" (substitui via AlertDialog)
   const semearPadrao = trpc.integracaoSST.semearPerguntasPadrao.useMutation({
-    onSuccess: (res) => { modulos.refetch(); toast.success(`${res.total} perguntas-padrão carregadas`); },
+    onSuccess: (res) => {
+      modulos.refetch();
+      setConfirmSubstituir(null);
+      toast.success(res.substituido > 0
+        ? `${res.total} perguntas atualizadas (${res.substituido} antigas substituídas)`
+        : `${res.total} perguntas-padrão carregadas`);
+    },
     onError: (err) => { toast.error(err.message || "Falha ao carregar perguntas-padrão"); },
   });
+  const [confirmSubstituir, setConfirmSubstituir] = useState<{ moduloId: number; titulo: string; atual: number } | null>(null);
 
   const [showNew, setShowNew] = useState(false);
   const [newTitulo, setNewTitulo] = useState("");
@@ -928,16 +935,26 @@ function ModulosEditor({ configId, companyId }: { configId: number; companyId: n
                     </div>
                   </div>
                   <div className="flex gap-1">
-                    {(mod.perguntas?.length || 0) === 0 && (
+                    {(mod.perguntas?.length || 0) === 0 ? (
                       <Button
                         size="sm" variant="outline"
                         className="text-xs h-8 border-emerald-300 text-emerald-700 hover:bg-emerald-50"
                         disabled={semearPadrao.isPending}
-                        onClick={() => semearPadrao.mutate({ companyId, moduloId: mod.id })}
-                        title="Carregar 12 perguntas-padrão das Regras de Ouro de segurança em obra"
+                        onClick={() => semearPadrao.mutate({ companyId, moduloId: mod.id, substituir: false })}
+                        title="Carregar 12 perguntas-padrão das Regras de Ouro da FC"
                       >
                         {semearPadrao.isPending ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : "🎯 "}
                         Carregar Regras de Ouro
+                      </Button>
+                    ) : (
+                      <Button
+                        size="sm" variant="outline"
+                        className="text-xs h-8 border-amber-300 text-amber-700 hover:bg-amber-50"
+                        disabled={semearPadrao.isPending}
+                        onClick={() => setConfirmSubstituir({ moduloId: mod.id, titulo: mod.titulo, atual: mod.perguntas?.length || 0 })}
+                        title="Substituir perguntas atuais pelas 12 perguntas-padrão das Regras de Ouro da FC"
+                      >
+                        🔄 Atualizar Regras de Ouro
                       </Button>
                     )}
                     <Button size="sm" variant="ghost" onClick={() => startEditPerguntas(mod)}><ClipboardList className="h-4 w-4" /></Button>
@@ -1008,6 +1025,30 @@ function ModulosEditor({ configId, companyId }: { configId: number; companyId: n
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={!!confirmSubstituir} onOpenChange={(o) => !o && !semearPadrao.isPending && setConfirmSubstituir(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Atualizar Regras de Ouro?</AlertDialogTitle>
+            <AlertDialogDescription>
+              O módulo <strong>{confirmSubstituir?.titulo}</strong> tem <strong>{confirmSubstituir?.atual} pergunta(s)</strong> cadastrada(s).
+              Elas serão <strong>apagadas e substituídas</strong> pelas 12 perguntas-padrão das Regras de Ouro da FC ENGENHARIA.
+              <br /><br />
+              <span className="text-muted-foreground text-xs">Respostas e pontuações dos colaboradores que já fizeram a integração NÃO são afetadas (essas ficam no histórico do registro).</span>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={semearPadrao.isPending}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={semearPadrao.isPending}
+              className="bg-amber-600 hover:bg-amber-700"
+              onClick={() => confirmSubstituir && semearPadrao.mutate({ companyId, moduloId: confirmSubstituir.moduloId, substituir: true })}
+            >
+              {semearPadrao.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}Substituir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

@@ -1,6 +1,117 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2047 — SST · Integração · 12 perguntas-padrão REESCRITAS
+ * pra serem FIÉIS ao vídeo "INTEGRAÇÃO FC ENGENHARIA" (cultura
+ * corporativa + 10 Regras de Ouro de conduta) + botão
+ * "🔄 Atualizar Regras de Ouro" com AlertDialog pra substituir
+ * perguntas existentes (substitui as NRs genéricas da Rev. 2046).
+ *
+ * Pedido direto do usuário (20 prints do vídeo em 2 lotes —
+ * IMG_0894 a IMG_0932): "As perguntas devem ser fiéis ao vídeo,
+ * são sobre cultura e regras de conduta da FC, não sobre normas
+ * técnicas de segurança em obra". A Rev. 2046 tinha semeado 12
+ * perguntas sobre NRs (NR-6/35/33/10/18/11/12) — tecnicamente
+ * corretas, mas não casavam com o conteúdo real do vídeo da
+ * integração corporativa.
+ *
+ * Temas capturados nos prints (cobertos por 1 pergunta cada):
+ *
+ *   - Pontualidade (atrasos → advertência / perde dia)
+ *     [IMG_0898/0899]
+ *   - Faltas (comunicar gestor antes; atestado) [IMG_0900/0901]
+ *   - Celular (uso restrito + autorização prévia; mau uso pode
+ *     gerar advertência → suspensão → demissão) [IMG_0904/0905]
+ *   - Uniforme fora do trabalho é proibido [IMG_0910]
+ *   - Materiais/equipamentos: vedado comércio e uso pessoal
+ *     [IMG_0911]
+ *   - 10 Regras de Ouro — "NÃO TOLERAMOS" [IMG_0916–0931]:
+ *       insubordinação, assédio sexual, assédio moral,
+ *       intolerância racial/sexual/religiosa, agressões físicas
+ *       e/ou verbais, motins/tumultos, álcool e drogas no
+ *       horário, furto/roubo, divulgar info confidencial, usar
+ *       equipamento sem autorização, NÃO usar EPI.
+ *     → Infração = desligamento imediato [IMG_0931]
+ *
+ * Solução em 3 partes:
+ *
+ *   1. Server `server/routers/integracaoSST.ts`:
+ *      - Constante `PERGUNTAS_REGRAS_OURO` REESCRITA: 12
+ *        perguntas em linguagem simples (servente, baixa
+ *        escolaridade), 3 alternativas cada (1 correta).
+ *        Cada pergunta cobre um tema do vídeo (mapeamento acima).
+ *      - Handler `semearPerguntasPadrao` ganhou parâmetro
+ *        `substituir: z.boolean().optional().default(false)`.
+ *        Quando false (padrão): comportamento da Rev. 2046 —
+ *        TRPCError CONFLICT se módulo já tem perguntas.
+ *        Quando true: apaga TODAS as perguntas/alternativas
+ *        atuais via `db.delete(sstIntegracaoAlternativas
+ *        ).where(inArray(perguntaId, ids))` + `db.delete(
+ *        sstIntegracaoPerguntas).where(inArray(id, ids))` antes
+ *        de inserir as 12 novas. Cross-tenant preservado
+ *        (assertCompanyAccess + SELECT do módulo com WHERE
+ *        companyId). Try/catch com console.error +
+ *        INTERNAL_SERVER_ERROR genérico (sem vazar err.message).
+ *        Retorna `{success, total, substituido}` — UI usa
+ *        `substituido > 0` pra escolher entre "carregadas" e
+ *        "atualizadas (N substituídas)".
+ *
+ *   2. Client `client/src/pages/sst/IntegracaoSST.tsx`:
+ *      - Novo state `confirmSubstituir: {moduloId, titulo,
+ *        atual} | null` no `ModulosEditor`.
+ *      - Botão condicional no card do módulo:
+ *          (a) Sem perguntas → "🎯 Carregar Regras de Ouro"
+ *              (border emerald) chama mutation direta
+ *              `substituir: false`.
+ *          (b) Com perguntas → "🔄 Atualizar Regras de Ouro"
+ *              (border amber) abre AlertDialog de confirmação.
+ *      - AlertDialog (shadcn — já importado na Rev. 2045)
+ *        controlado por `confirmSubstituir`: título "Atualizar
+ *        Regras de Ouro?", descrição explica que as N perguntas
+ *        atuais serão APAGADAS e substituídas pelas 12 novas,
+ *        com nota tranquilizadora de que respostas e pontuações
+ *        de colaboradores que já fizeram a integração NÃO são
+ *        afetadas (essas ficam no histórico do registro, em
+ *        outra tabela). AlertDialogAction âmbar
+ *        (bg-amber-600) dispara `mutate({substituir: true})`.
+ *        `onOpenChange` bloqueado enquanto pending.
+ *
+ *   3. `shared/version.ts` → 2047.
+ *
+ * IMPORTANTE — produção (company 60002, módulo 1): NÃO foi
+ * executado SQL direto. O usuário deve usar o próprio botão
+ * "🔄 Atualizar Regras de Ouro" na UI pra substituir as 12 NRs
+ * da Rev. 2046 pelas novas 12 da FC — mesma operação, com
+ * confirmação visível e auditável.
+ *
+ * R-001/R-007/R-010 OK: ZERO ALTER TABLE / DROP de schema. O
+ * DELETE no handler é sobre dados de seed do PRÓPRIO módulo
+ * (não dados de produção do usuário) e só roda mediante flag
+ * explícita `substituir: true` enviada pela UI após confirmação
+ * AlertDialog. Multi-tenant preservado em todos os handlers.
+ *
+ * Preservado: Rev. 2046 (handler+UI base) INTACTA estruturalmente
+ * — só o conteúdo das 12 perguntas + 1 flag opcional mudaram;
+ * Rev. 2045 (AlertDialog Histórico) INTACTA; Rev. 2044 (editar/
+ * apagar Histórico) INTACTA; handler `salvarPerguntas` (edição
+ * manual livre) INTACTO.
+ *
+ * Follow-up:
+ *   1. Variações por função (eletricista, soldador, operador de
+ *      máquina) — banco de perguntas reutilizável por cargo.
+ *   2. Imagens/ícones nas alternativas (NR-1.7 — capacitação de
+ *      semi-alfabetizados).
+ *   3. Embaralhar ordem das alternativas na tela pública pra
+ *      evitar cola entre colaboradores.
+ *   4. Histórico de versões das perguntas (quando, quem, qual
+ *      conjunto estava ativo) — hoje a tabela `respostas` guarda
+ *      o `perguntaId` que pode ter mudado de texto.
+ *   5. Permitir admin_master editar `PERGUNTAS_REGRAS_OURO` via
+ *      UI (hoje só no código) — banco de perguntas-padrão por
+ *      empresa.
+ *
+ * ──────────────────────────────────────────────────────────────
+ *
  * Rev. 2046 — SST · Integração de Segurança · Configurações ·
  * botão "Carregar Regras de Ouro" + 12 perguntas-padrão semeadas
  * no único módulo existente.
