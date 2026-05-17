@@ -1,6 +1,35 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2068 — **Fechamento de Ponto · botão "Voltar ao ranking" parou
+ * de fechar a tela toda (regressão da Rev. 2065).** Pedido do usuário
+ * (IMG_0968 + IMG_0969): "Não deu certo, quando eu clico no voltar ao
+ * ranking ele tá fechando a tela...não voltando". Bug raiz: na Rev.
+ * 2065 adicionei o botão "← Voltar ao ranking" nos 3 modais de
+ * memória de cálculo (Atraso/HE/Faltas) com handler
+ * `setAtrasoDetalhe(null)` (idem HE/Falta). O problema é que esses
+ * modais de detalhe são renderizados como **irmãos** do Dialog do
+ * ranking (não filhos), e o Radix Dialog porta cada um pra raiz do
+ * DOM. No iOS Safari/iPad, quando o usuário toca no botão:
+ *   1) O onClick fecha o modal interno (`setAtrasoDetalhe(null)`).
+ *   2) React desmonta o inner.
+ *   3) O evento de toque continua propagando.
+ *   4) O Radix do Dialog de ranking detecta isso como "tap fora" no
+ *      seu overlay e dispara `onInteractOutside` → fecha o ranking
+ *      também → o usuário cai na tela de Fechamento de Ponto, não no
+ *      ranking que deveria reaparecer.
+ * Fix em `client/src/pages/FechamentoPonto.tsx` L2256-2261: adicionar
+ * `onInteractOutside={(e) => e.preventDefault()}` +
+ * `onPointerDownOutside={(e) => e.preventDefault()}` no `DialogContent`
+ * do ranking (Dialog externo em L2255). Isso impede que taps fora
+ * (ou bubbled através do portal de um Dialog filho fechando) feche o
+ * ranking — ele só fecha via o X embutido do shadcn ou via Escape ou
+ * via o handler explícito do clique em uma linha do ranking que
+ * navega pro detalhe do funcionário. Como já era full-screen (`w-screen
+ * h-screen`), não tem "área fora" pra clicar mesmo — só perde a
+ * possibilidade de fechar tocando no overlay (que é irrelevante em
+ * full-screen). ZERO lógica de negócio, ZERO schema.
+ *
  * Rev. 2067 — **Raio-X do Funcionário · fix de corte no rodapé em
  * iPad/iOS Safari (cards "Integração de Pessoal" e "Integração de
  * Segurança SST" inacessíveis).** Pedido do usuário (IMG_0967):

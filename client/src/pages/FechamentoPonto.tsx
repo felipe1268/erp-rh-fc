@@ -2250,7 +2250,12 @@ export default function FechamentoPonto() {
                   })();
                   return (
                   <Dialog open={true} onOpenChange={(open) => { if (!open) { setRankingModal(null); setRankingSearch(""); setRankingObraFilter("all"); } }}>
-                    <DialogContent resizable={false} className="flex flex-col p-0 gap-0 w-screen h-screen max-w-none sm:max-w-none rounded-none border-0">
+                    <DialogContent
+                      resizable={false}
+                      className="flex flex-col p-0 gap-0 w-screen h-screen max-w-none sm:max-w-none rounded-none border-0"
+                      onInteractOutside={(e) => e.preventDefault()}
+                      onPointerDownOutside={(e) => e.preventDefault()}
+                    >
 
                       {/* ── Header gradient (regras de ouro) ── */}
                       <DialogHeader className={`shrink-0 px-6 py-4 border-b bg-gradient-to-r ${cfg.gradient} text-white relative overflow-hidden`}>
