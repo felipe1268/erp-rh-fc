@@ -657,6 +657,8 @@ export default function Cotacoes() {
   const [editFormaPag, setEditFormaPag] = useState<Record<number, string>>({});
   const [condModalFornId, setCondModalFornId] = useState<number | null>(null);
   const [condModo, setCondModo] = useState<Record<number, "padrao" | "custom" | "fechamento">>({});
+  // Rev. 1996 — MDO pura: usuário escolhe explicitamente entre "medicao" (>30d) ou "parcelado" (≤30d).
+  const [mdoTab, setMdoTab] = useState<Record<number, "" | "medicao" | "parcelado">>({});
   const [condCustomParcelas, setCondCustomParcelas] = useState<Record<number, { valor: string; data: string }[]>>({});
   const [condFechCiclo, setCondFechCiclo] = useState<Record<number, string>>({});
   const [condFechDiaFixo, setCondFechDiaFixo] = useState<Record<number, string>>({});
@@ -1515,6 +1517,47 @@ export default function Cotacoes() {
         ? { label: "Pacote", cls: "bg-purple-100 text-purple-700 border-purple-200" }
         : { label: "Material", cls: "bg-emerald-100 text-emerald-700 border-emerald-200" };
 
+    // Rev. 1996 — Modo do modal por tipo de cotação:
+    //   "material" → Forma + Parcelamento + Entrega/Frete (esconde Módulo Medição)
+    //   "mdo"      → Forma simplificada + (Parcelamento OU Módulo Medição via hero toggle) (esconde Entrega/Frete)
+    //   "pacote"   → 2 colunas: Material (esq) + Mão de Obra (dir)
+    const modoModal: "material" | "mdo" | "pacote" =
+      cotTipoEfetivo === "servico" ? "mdo" : cotTipoEfetivo === "pacote" ? "pacote" : "material";
+    // Boot: se já tem dados salvos (Rev. 1994 pré-carga), pré-seleciona o tab certo
+    const mdoModoEfetivo: "" | "medicao" | "parcelado" = mdoTab[fId]
+      ?? (editModuloMedicao[fId] ? "medicao"
+        : (editTipoPag[fId] && editTipoPag[fId] !== "medicao") ? "parcelado"
+        : "");
+    // MDO normalmente não usa Cheque/Cartão — contrato de serviço é boleto/PIX/TED/depósito.
+    const FORMAS_RENDER = modoModal === "mdo"
+      ? FORMAS.filter(f => !["cheque", "cartao"].includes(f.v))
+      : FORMAS;
+    const showParcelamento  = modoModal !== "mdo" || mdoModoEfetivo === "parcelado";
+    const showEntregaFrete  = modoModal !== "mdo";
+    const showModuloMedicao = modoModal === "pacote" || (modoModal === "mdo" && mdoModoEfetivo === "medicao");
+    const mdoSemModo = modoModal === "mdo" && mdoModoEfetivo === "";
+
+    const handleMdoTabChange = (novo: "medicao" | "parcelado") => {
+      setMdoTab(prev => ({ ...prev, [fId]: novo }));
+      // MDO nunca usa frete CIF/FOB — limpa qualquer valor legado pra não vazar em totais/OC
+      setEditValorFrete(prev => ({ ...prev, [fId]: "0" }));
+      setEditFreteTipo(prev => ({ ...prev, [fId]: "cif" }));
+      setEditTransportadora(prev => ({ ...prev, [fId]: "" }));
+      if (novo === "medicao") {
+        // Marca `tipoPagamento="medicao"` (token que valida no backend/compras.ts L5885 e frontend L2239/2267)
+        setEditTipoPag(prev => ({ ...prev, [fId]: "medicao" }));
+        setEditCondPag(prev => ({ ...prev, [fId]: "" }));
+        setCondModo(prev => ({ ...prev, [fId]: "padrao" }));
+        setCondCustomParcelas(prev => ({ ...prev, [fId]: [] }));
+      } else {
+        // Parcelado: limpa módulo + zera marker de medição
+        setEditModuloMedicao(prev => ({ ...prev, [fId]: "" }));
+        if (editTipoPag[fId] === "medicao") {
+          setEditTipoPag(prev => ({ ...prev, [fId]: "" }));
+        }
+      }
+    };
+
     const modoAtual = condModo[fId] ?? "padrao";
     const parcListAtual = condCustomParcelas[fId] ?? [];
     const totalCustomAtual = parcListAtual.reduce((s, p) => s + (parseFloat(p.valor) || 0), 0);
@@ -1532,6 +1575,10 @@ export default function Cotacoes() {
       if (!showDetalhe) return;
       if (customInvalid) {
         toast.error(customMotivo);
+        return;
+      }
+      if (mdoSemModo) {
+        toast.error("Escolha Medição ou Parcelado para continuar.");
         return;
       }
       const prazoVal = editPrazo[fId] ? parseInt(editPrazo[fId]) : undefined;
@@ -1598,14 +1645,82 @@ export default function Cotacoes() {
 
           {/* Body */}
           <div className="flex-1 overflow-y-auto bg-gray-50/40">
-            <div className="grid lg:grid-cols-[1.2fr_1fr] gap-5 lg:gap-6 p-5 lg:p-8">
+            {/* Rev. 1996 — Header de contexto pra PACOTE explicando estrutura mista */}
+            {modoModal === "pacote" && (
+              <div className="px-5 lg:px-8 pt-5 lg:pt-6">
+                <div className="rounded-xl border border-purple-200 bg-gradient-to-r from-purple-50 via-white to-blue-50 p-4 flex items-start gap-3">
+                  <div className="w-9 h-9 rounded-lg bg-purple-100 text-purple-700 flex items-center justify-center flex-shrink-0">
+                    <Layers className="w-4 h-4" />
+                  </div>
+                  <div className="text-sm text-gray-700">
+                    <strong className="text-purple-700">Cotação mista (Pacote).</strong> Defina as condições do <strong>material</strong> (esquerda) e da <strong>mão de obra</strong> (direita) separadamente.
+                  </div>
+                </div>
+              </div>
+            )}
+            {/* Rev. 1996 — Hero toggle MDO pura: escolha obrigatória entre Medição (>30d) ou Parcelado (≤30d) */}
+            {modoModal === "mdo" && (
+              <div className="px-5 lg:px-8 pt-5 lg:pt-6">
+                <section className="rounded-2xl border-2 border-violet-200 bg-gradient-to-br from-violet-50 via-white to-violet-50 p-5 lg:p-6 shadow-sm">
+                  <div className="flex items-start gap-3 mb-4">
+                    <div className="w-10 h-10 rounded-xl bg-violet-600 text-white flex items-center justify-center flex-shrink-0">
+                      <Wallet className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-bold text-gray-900">Como será o pagamento desta Mão de Obra?</h4>
+                      <p className="text-xs text-gray-500 mt-0.5">Escolha de acordo com a duração do serviço. Esta escolha define o que aparece abaixo.</p>
+                    </div>
+                  </div>
+                  <div className="grid sm:grid-cols-2 gap-3">
+                    {([
+                      { v: "medicao", l: "Por Medição", desc: "Obras longas (> 30 dias)", hint: "Mensal · Avanço · Etapa · Empreitada · Administração", Icon: BarChart2, bg: "from-purple-500 to-purple-600", ring: "ring-purple-300", selBorder: "border-purple-500", selBg: "bg-purple-50" },
+                      { v: "parcelado", l: "Parcelado", desc: "Obras curtas (≤ 30 dias)", hint: "À Vista · 7/14/21/28 DDL · Personalizado", Icon: Layers, bg: "from-blue-500 to-blue-600", ring: "ring-blue-300", selBorder: "border-blue-500", selBg: "bg-blue-50" },
+                    ] as const).map(opt => {
+                      const sel = mdoModoEfetivo === opt.v;
+                      return (
+                        <button key={opt.v} type="button" onClick={() => handleMdoTabChange(opt.v)}
+                          className={`relative text-left p-4 rounded-xl border-2 transition-all ${sel ? `${opt.selBorder} ${opt.selBg} ring-4 ${opt.ring} shadow-md` : "border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50"}`}>
+                          <div className="flex items-center gap-3 mb-2">
+                            <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${opt.bg} text-white flex items-center justify-center shadow-sm flex-shrink-0`}>
+                              <opt.Icon className="w-5 h-5" />
+                            </div>
+                            <div className="min-w-0">
+                              <div className="text-base font-bold text-gray-900">{opt.l}</div>
+                              <div className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider">{opt.desc}</div>
+                            </div>
+                          </div>
+                          <p className="text-xs text-gray-600 leading-snug">{opt.hint}</p>
+                          {sel && (
+                            <span className="absolute top-2 right-2 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-violet-600 text-white">
+                              <CheckCircle className="w-3 h-3" /> Selecionado
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {mdoSemModo && (
+                    <p className="mt-3 text-xs text-amber-700 font-semibold flex items-center gap-1.5">
+                      <AlertTriangle className="w-3.5 h-3.5" /> Escolha uma das opções acima para continuar.
+                    </p>
+                  )}
+                </section>
+              </div>
+            )}
+            <div className={`grid gap-5 lg:gap-6 p-5 lg:p-8 ${modoModal === "mdo" ? "lg:grid-cols-1 lg:max-w-3xl lg:mx-auto" : "lg:grid-cols-[1.2fr_1fr]"}`}>
               {/* Coluna ESQUERDA — Forma + Parcelamento */}
               <div className="space-y-5 lg:space-y-6 min-w-0">
-                {/* Forma de Pagamento */}
+                {modoModal === "pacote" && (
+                  <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-wider bg-emerald-100 text-emerald-700 border border-emerald-200 w-fit">
+                    <FileText className="w-3 h-3" /> Material
+                  </div>
+                )}
+                {/* Forma de Pagamento — esconder quando MDO sem modo escolhido */}
+                {!mdoSemModo && (
                 <section className="rounded-xl border border-gray-200 bg-white p-5 lg:p-6 shadow-sm">
                   <SectionHeader Icon={Wallet} color="bg-violet-100 text-violet-700" title="Forma de Pagamento" hint={editFormaPag[fId] ? "Selecionado" : "Opcional"} />
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
-                    {FORMAS.map(fp => {
+                    {FORMAS_RENDER.map(fp => {
                       const sel = editFormaPag[fId] === fp.v;
                       return (
                         <button key={fp.v} type="button"
@@ -1618,8 +1733,10 @@ export default function Cotacoes() {
                     })}
                   </div>
                 </section>
+                )}
 
-                {/* Parcelamento */}
+                {/* Parcelamento — escondido em MDO pura quando modo escolhido for "medicao" */}
+                {showParcelamento && (
                 <section className="rounded-xl border border-gray-200 bg-white p-5 lg:p-6 shadow-sm">
                   <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
                     <div className="flex items-center gap-2.5">
@@ -1885,11 +2002,64 @@ export default function Cotacoes() {
                     </div>
                   )}
                 </section>
+                )}
+
+                {/* Rev. 1996 — MDO+Parcelado precisa de Prazo (validação aprovação/OC L2242). Mini-card SEM CIF/FOB nem frete. */}
+                {modoModal === "mdo" && mdoModoEfetivo === "parcelado" && (
+                  <section className="rounded-xl border border-gray-200 bg-white p-5 lg:p-6 shadow-sm">
+                    <SectionHeader Icon={Clock} color="bg-amber-100 text-amber-700" title="Prazo de Execução" hint={editPrazo[fId] ? `${editPrazo[fId]} dias` : "Obrigatório"} />
+                    <div className="grid sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1.5 block">Prazo (dias)</label>
+                        <div className="relative">
+                          <Clock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                          <input type="number" placeholder="Ex: 15" value={editPrazo[fId] ?? ""}
+                            onChange={e => {
+                              const dias = e.target.value;
+                              setEditPrazo(prev => ({ ...prev, [fId]: dias }));
+                              if (dias && parseInt(dias) > 0) {
+                                const dt = new Date();
+                                dt.setDate(dt.getDate() + parseInt(dias));
+                                setEditDataEntrega(prev => ({ ...prev, [fId]: dt.toISOString().split("T")[0] }));
+                              }
+                            }}
+                            className="w-full h-10 text-sm border border-gray-300 rounded-lg pl-9 pr-12 bg-white text-gray-900 focus:ring-2 focus:ring-violet-200 focus:border-violet-400 outline-none" />
+                          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400 font-medium">dias</span>
+                        </div>
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1.5 block">Data Prevista</label>
+                        <div className="relative">
+                          <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                          <input type="date" value={editDataEntrega[fId] ?? ""}
+                            onChange={e => {
+                              const dataStr = e.target.value;
+                              setEditDataEntrega(prev => ({ ...prev, [fId]: dataStr }));
+                              if (dataStr) {
+                                const hoje = new Date();
+                                hoje.setHours(0, 0, 0, 0);
+                                const dt = new Date(dataStr + "T00:00:00");
+                                const diffMs = dt.getTime() - hoje.getTime();
+                                const diffDias = Math.max(0, Math.round(diffMs / (1000 * 60 * 60 * 24)));
+                                setEditPrazo(prev => ({ ...prev, [fId]: String(diffDias) }));
+                              }
+                            }}
+                            className="w-full h-10 text-sm border border-gray-300 rounded-lg pl-9 pr-3 bg-white text-gray-900 focus:ring-2 focus:ring-violet-200 focus:border-violet-400 outline-none" />
+                        </div>
+                      </div>
+                    </div>
+                  </section>
+                )}
               </div>
 
-              {/* Coluna DIREITA — Entrega + Módulo */}
-              <div className="space-y-5 lg:space-y-6 min-w-0">
-                {(() => {
+              {/* Coluna DIREITA — Entrega + Módulo (escondida inteira em MDO+parcelado e MDO sem modo) */}
+              <div className={`space-y-5 lg:space-y-6 min-w-0 ${!showEntregaFrete && !showModuloMedicao ? "hidden" : ""}`}>
+                {modoModal === "pacote" && (
+                  <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-wider bg-blue-100 text-blue-700 border border-blue-200 w-fit">
+                    <Wallet className="w-3 h-3" /> Mão de Obra
+                  </div>
+                )}
+                {showEntregaFrete && (() => {
                   const isMdoMedicao = (cotTipoEfetivo === "servico" || cotTipoEfetivo === "pacote") && (editTipoPag[fId] === "medicao" || (editCondPag[fId] ?? "").toLowerCase().includes("medição"));
                   const isFob = (editFreteTipo[fId] ?? "cif") === "fob";
                   return (
@@ -1966,8 +2136,8 @@ export default function Cotacoes() {
                   );
                 })()}
 
-                {/* Módulo de Medição */}
-                {(() => {
+                {/* Módulo de Medição — só MDO+medicao ou PACOTE */}
+                {showModuloMedicao && (() => {
                   const MODULOS: { v: string; l: string; desc: string; Icon: LucideIcon; selRing: string; selBg: string; iconColor: string }[] = [
                     { v: "medicao_mensal", l: "Medição Mensal", desc: "Pagamento mensal por medição de serviço executado", Icon: Calendar, selRing: "ring-purple-200 border-purple-400", selBg: "bg-purple-50 text-purple-700", iconColor: "bg-purple-100 text-purple-600" },
                     { v: "medicao_avanco", l: "Medição por Avanço", desc: "Pagamento baseado no % de avanço físico", Icon: BarChart2, selRing: "ring-blue-200 border-blue-400", selBg: "bg-blue-50 text-blue-700", iconColor: "bg-blue-100 text-blue-600" },
@@ -2011,7 +2181,7 @@ export default function Cotacoes() {
             </div>
           </div>
 
-          {/* Footer sticky */}
+          {/* Footer sticky */ /* Rev. 1996 — mdoSemModo também desabilita Salvar */}
           <div className="flex-shrink-0 border-t border-gray-200 bg-gray-50/90 backdrop-blur px-5 lg:px-8 py-3.5 lg:py-4 flex items-center justify-between gap-3 flex-wrap">
             <div className="text-xs min-w-0 truncate flex items-center gap-2">
               <span className="font-medium text-gray-700 truncate">{fornNome}</span>
@@ -2031,11 +2201,11 @@ export default function Cotacoes() {
               <Button variant="ghost" onClick={() => setCondModalFornId(null)} className="h-10 px-5 text-gray-600">
                 Fechar
               </Button>
-              <span title={customInvalid ? customMotivo : undefined} className="inline-flex">
+              <span title={customInvalid ? customMotivo : mdoSemModo ? "Escolha Medição ou Parcelado para continuar" : undefined} className="inline-flex">
               <Button
-                disabled={salvarCondicoesComerciais.isPending || customInvalid}
+                disabled={salvarCondicoesComerciais.isPending || customInvalid || mdoSemModo}
                 onClick={handleSalvar}
-                aria-disabled={customInvalid || salvarCondicoesComerciais.isPending}
+                aria-disabled={customInvalid || mdoSemModo || salvarCondicoesComerciais.isPending}
                 className="h-10 px-6 bg-violet-600 hover:bg-violet-700 text-white font-semibold shadow-sm shadow-violet-200 gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 {salvarCondicoesComerciais.isPending ? (
