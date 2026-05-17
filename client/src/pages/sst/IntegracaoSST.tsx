@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
+import DashboardLayout from "@/components/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -57,6 +58,7 @@ export default function IntegracaoSST() {
   ];
 
   return (
+    <DashboardLayout>
     <div className="min-h-screen bg-slate-50/40">
       {/* Header gradient full-width — regra de ouro */}
       <div className="bg-gradient-to-r from-emerald-700 via-emerald-600 to-teal-600 text-white shadow-md">
@@ -122,6 +124,7 @@ export default function IntegracaoSST() {
         </Tabs>
       </div>
     </div>
+    </DashboardLayout>
   );
 }
 

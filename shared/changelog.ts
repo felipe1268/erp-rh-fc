@@ -1,6 +1,62 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2018 — SST · Integração de Segurança · Barra lateral (DashboardLayout) restaurada.
+ *
+ * Pedido direto do usuário (17/05/2026, imgs IMG_0860 + IMG_0861): "Quero que
+ * coloque a barra de comando lateral aqui, do módulo SST… arrume isso de vez".
+ * Tela `/sst/integracao` abria o conteúdo (header verde + tabs Dashboard/Vídeos/
+ * Configurações/Pendentes/Histórico/Sessões) SEM o sidebar de navegação (menu
+ * "PRINCIPAL · SEGURANÇA DO TRABALHO · INCIDENTES · PROGRAMAS LEGAIS · etc.")
+ * — o usuário ficava preso na tela sem conseguir navegar pros outros itens do
+ * módulo SST sem voltar pelo browser.
+ *
+ * Causa-raiz: `client/src/pages/sst/IntegracaoSST.tsx` (criado/refeito em revs
+ * recentes 2005-2016) nunca foi envolto em `<DashboardLayout>`. As outras pages
+ * SST (`DDSDashboard`, `DDSGuia`, `RegistroAcidentes`, `DashboardAtestadosAcidentes`,
+ * `ControleEpis`) usam o padrão `import DashboardLayout from "@/components/DashboardLayout"`
+ * + `<DashboardLayout>...</DashboardLayout>` envolvendo o conteúdo, mas
+ * IntegracaoSST renderizava direto `<div className="min-h-screen bg-slate-50/40">`
+ * sem o layout — daí o sidebar/topbar não apareciam.
+ *
+ * Mudança em 2 arquivos:
+ *
+ * (A) `client/src/pages/sst/IntegracaoSST.tsx` (3 hunks aditivos, ZERO lógica):
+ *     - Import: `+import DashboardLayout from "@/components/DashboardLayout"`.
+ *     - Return do componente raiz: envolve `<div className="min-h-screen ...">`
+ *       com `<DashboardLayout>...</DashboardLayout>`.
+ *     - Header gradient, tabs, conteúdo, mutations, modais, formulários — TUDO
+ *       intacto. Só o wrapper externo mudou.
+ *
+ * (B) `shared/version.ts` → 2018.
+ *
+ * Decisões:
+ * - Mantemos o header gradient emerald→teal interno (regra de ouro da Rev. 2005)
+ *   APESAR do DashboardLayout já ter topbar próprio — porque a regra de ouro
+ *   define identidade visual por página e está consistente com Compras, RH, etc.
+ *   que também têm header colorido dentro do DashboardLayout.
+ * - Não tocamos em nenhum dos tabs internos (Dashboard/Vídeos/Config/Pendentes/
+ *   Histórico/Sessões) — eles renderizam dentro do `<TabsContent>` que continua
+ *   inalterado.
+ *
+ * R-001/R-007/R-010 OK: ZERO SQL, ZERO mutação de dados, ZERO mudança de schema.
+ * Puramente layout/wrapper.
+ *
+ * Reversível em 1 arquivo (remover import + remover wrapper).
+ *
+ * Preservado:
+ * - Header gradient + tabs sticky INTACTOS.
+ * - 6 sub-componentes (DashboardTab, VideosTab, ConfigTab, PendentesTab,
+ *   HistoricoTab, SessoesTab) INTACTOS.
+ * - Modal de novo vídeo da Rev. 2016 (auto-select + criar config padrão) INTACTO.
+ * - Upload sem limite da Rev. 2013 INTACTO.
+ * - Outras pages SST INTACTAS (já tinham DashboardLayout).
+ * - Rev. 2017 (Documentos Trabalhistas em Terceiros) INTACTA.
+ *
+ * Follow-up: auditar se outras pages do app abrem sem sidebar (ex: páginas
+ * recém-criadas) e padronizar via wrapper de rota no App.tsx pra evitar
+ * regressão futura.
+ *
  * Rev. 2017 — Terceiros · Aba Documentos · Nova seção "Documentos Trabalhistas"
  * com 3 uploads obrigatórios: Ficha de EPI (NR-06), Ordem de Serviço (NR-01) e
  * Registro de Funcionário (CLT art. 41).
