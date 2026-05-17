@@ -609,6 +609,73 @@ export const terceirosRouter = router({
         return { url };
       }),
 
+    // Rev. 2031 — adiciona documento avulso em uma categoria (não substitui campos fixos).
+    addDocExtra: protectedProcedure
+      .input(z.object({
+        funcTerceiroId: z.number(),
+        categoria: z.string().min(1),
+        label: z.string().min(1).max(200),
+        validade: z.string().optional().nullable(),
+        fileName: z.string(),
+        fileBase64: z.string(),
+        contentType: z.string(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const db = (await getDb())!;
+        // Rev. 2031 (hotfix) — tenant guard (IDOR): valida companyId ANTES do upload.
+        const [row] = await db.select().from(funcionariosTerceiros).where(eq(funcionariosTerceiros.id, input.funcTerceiroId));
+        if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "Funcionário terceiro não encontrado." });
+        await _assertCompanyAccess(ctx.user, { companyId: (row as any).companyId });
+        const buf = Buffer.from(input.fileBase64, "base64");
+        const key = `terceiros/funcionarios/${input.funcTerceiroId}/extras/${Date.now()}-${input.fileName}`;
+        const { url } = await storagePut(key, buf, input.contentType);
+        const current: any[] = Array.isArray((row as any)?.documentosExtras) ? (row as any).documentosExtras : [];
+        const novo = {
+          id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          categoria: input.categoria,
+          label: input.label,
+          url,
+          validade: input.validade || null,
+          uploadedAt: new Date().toISOString(),
+        };
+        await db.update(funcionariosTerceiros)
+          .set({ documentosExtras: [...current, novo] as any })
+          .where(eq(funcionariosTerceiros.id, input.funcTerceiroId));
+        return { doc: novo };
+      }),
+
+    // Rev. 2031 — remove documento avulso.
+    removeDocExtra: protectedProcedure
+      .input(z.object({ funcTerceiroId: z.number(), docId: z.string() }))
+      .mutation(async ({ input, ctx }) => {
+        const db = (await getDb())!;
+        const [row] = await db.select().from(funcionariosTerceiros).where(eq(funcionariosTerceiros.id, input.funcTerceiroId));
+        if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "Funcionário terceiro não encontrado." });
+        await _assertCompanyAccess(ctx.user, { companyId: (row as any).companyId });
+        const current: any[] = Array.isArray((row as any)?.documentosExtras) ? (row as any).documentosExtras : [];
+        const next = current.filter((d: any) => d.id !== input.docId);
+        await db.update(funcionariosTerceiros)
+          .set({ documentosExtras: next as any })
+          .where(eq(funcionariosTerceiros.id, input.funcTerceiroId));
+        return { success: true };
+      }),
+
+    // Rev. 2031 — atualiza validade de doc avulso (edição inline da data).
+    updateDocExtraValidade: protectedProcedure
+      .input(z.object({ funcTerceiroId: z.number(), docId: z.string(), validade: z.string().nullable() }))
+      .mutation(async ({ input, ctx }) => {
+        const db = (await getDb())!;
+        const [row] = await db.select().from(funcionariosTerceiros).where(eq(funcionariosTerceiros.id, input.funcTerceiroId));
+        if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "Funcionário terceiro não encontrado." });
+        await _assertCompanyAccess(ctx.user, { companyId: (row as any).companyId });
+        const current: any[] = Array.isArray((row as any)?.documentosExtras) ? (row as any).documentosExtras : [];
+        const next = current.map((d: any) => d.id === input.docId ? { ...d, validade: input.validade || null } : d);
+        await db.update(funcionariosTerceiros)
+          .set({ documentosExtras: next as any })
+          .where(eq(funcionariosTerceiros.id, input.funcTerceiroId));
+        return { success: true };
+      }),
+
     stats: protectedProcedure
       .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() }))
       .query(async ({ input }) => {

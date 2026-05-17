@@ -1,6 +1,114 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2031 — Terceiros · Editar Funcionário · aba Documentos · botão
+ * "+ Adicionar documento" em CADA categoria, pra cadastrar quantos
+ * documentos avulsos o usuário quiser, além dos campos fixos.
+ *
+ * Pedido direto do usuário (img image_1779037833119): "QUERO TER A
+ * OPÇÃO DE ADICIONAR MAIS DOCUMENTOS.. EM CADA CATEGORIA, O USUÁRIO
+ * PRECISA TER ESTA OPÇÃO PARA FACILITAR O DIA A DIA". O modelo atual
+ * (Rev. 2002/2017) listava só os campos fixos pré-definidos por coluna
+ * (ASO, NR-10/33/35, Integração FC, Integração Cliente, Ficha de EPI,
+ * OS, Registro, Foto, Certificados). Quando aparecia um documento
+ * complementar (carteira de vacinação, comprovante de curso extra,
+ * licença específica de cliente, etc.), o usuário não tinha como
+ * arquivar — só restava forçar no campo "Certificados profissionais"
+ * ou deixar fora do sistema.
+ *
+ * Decisão de arquitetura: em vez de criar uma coluna pra cada novo
+ * tipo de documento (engessa o schema e exige migração toda vez),
+ * UMA coluna JSONB `documentos_extras` em `funcionarios_terceiros`
+ * guarda um array de `{ id, categoria, label, url, validade?,
+ * uploadedAt }`. Cada entrada referencia uma categoria pela sua
+ * `key` ("saude_ocupacional", "treinamentos_nr",
+ * "integracao_seguranca", "documentos_trabalhistas",
+ * "identificacao_qualificacao") e o usuário define livremente o
+ * `label`. Vantagens: zero ALTER TABLE futuro pra novos tipos,
+ * fica auditável (uploadedAt), reversível (basta limpar a coluna).
+ *
+ * Mudança em 5 arquivos:
+ *
+ * (A) `drizzle/schema.ts` — `funcionariosTerceiros.documentosExtras:
+ *     jsonb("documentos_extras")` (NULLABLE; default null).
+ *
+ * (B) `server/_core/index.ts` — `ALTER TABLE funcionarios_terceiros
+ *     ADD COLUMN IF NOT EXISTS documentos_extras JSONB` idempotente,
+ *     logo após o bloco da Rev. 2017 (Documentos Trabalhistas).
+ *
+ * (C) `server/routers/terceiros.ts` — 3 novas mutations no router
+ *     `terceiros.funcionarios`:
+ *       - `addDocExtra({ funcTerceiroId, categoria, label, validade?,
+ *         fileName, fileBase64, contentType })` — faz upload pra
+ *         `terceiros/funcionarios/<id>/extras/` via storagePut e
+ *         APPEND no array `documentosExtras` com id gerado
+ *         (`${Date.now()}-${rand}`).
+ *       - `removeDocExtra({ funcTerceiroId, docId })` — filtra
+ *         o array pelo `id` e salva.
+ *       - `updateDocExtraValidade({ funcTerceiroId, docId, validade })`
+ *         — map preservando demais campos, pra edição inline da data.
+ *
+ * (D) `client/src/pages/terceiros/FuncionariosTerceiros.tsx`:
+ *       - Cada item do array `secoes[]` ganha campo `key` (slug da
+ *         categoria) usado pra filtrar os avulsos.
+ *       - 3 mutations + 4 pieces de state (`extraModal`, `extraLabel`,
+ *         `extraValidade`, `extraFile`) + handler `handlePickExtraFile`
+ *         (input file invisível, valida 10MB) + handler `handleSalvarExtra`.
+ *       - No render de cada categoria, após os docs fixos, renderiza
+ *         `extrasByCategoria(secao.key)` com mesmo layout (chip cinza
+ *         "Avulso", date picker inline, botão lixeira pra remover).
+ *       - Botão pleno-largura "+ Adicionar documento" no rodapé de
+ *         cada categoria (border-dashed na cor da seção).
+ *       - Modal Dialog (shadcn) com 3 campos: Nome do documento
+ *         (obrigatório, autoFocus), Validade (opcional), Arquivo
+ *         (botão Selecionar + indicador verde com nome do arquivo).
+ *         Header gradient slate, footer com Cancelar/Adicionar.
+ *       - Painel de Status: contadores "Total docs", "Vencidos" e
+ *         "Vencem ≤30d" agora INCLUEM os avulsos. Pct integração e
+ *         "Obrigatórios OK" permanecem só com os fixos (avulsos não
+ *         são obrigatórios por definição). Contador por categoria
+ *         vira `(fixosOk + extras) / (fixosTotal + extras)`.
+ *
+ * (E) `shared/version.ts` → APP_VERSION_NUMBER 2031.
+ *
+ * Compliance R-001 / R-007 / R-010: a única mudança de schema é
+ * `ADD COLUMN IF NOT EXISTS documentos_extras JSONB` em
+ * `funcionarios_terceiros` — coluna NOVA, NULLABLE, default null,
+ * sem `DROP`/`DELETE`/conversão de tipo. Idempotente. Reversível
+ * (basta `UPDATE funcionarios_terceiros SET documentos_extras = NULL`
+ * pra zerar; coluna NULL não quebra nada). Resto é puramente código
+ * de aplicação (router + UI). 5 arquivos.
+ *
+ * Preservado: TODOS os campos fixos (asoUrl, nr10DocUrl, etc.) e
+ * seus comportamentos INTACTOS — `uploadDoc` (Rev. 1998) continua
+ * funcionando idêntico, os date pickers dos fixos seguem usando
+ * `updateMut.mutate` normal; lógica de `statusAptidao`, `vencidos`,
+ * `proxVencimento` e painel de status só ganhou OR sobre os avulsos.
+ * DDS (Rev. 2024/2025), Foto, fluxo de Salvar/Atualizar/Excluir,
+ * abas — INTACTOS. Rev. 2030 (calendário com férias) INTACTA.
+ *
+ * Hotfix pós code-review (mesma Rev. 2031): (a) **IDOR fix** — as
+ * 3 novas mutations (`addDocExtra`/`removeDocExtra`/
+ * `updateDocExtraValidade`) agora carregam o registro e chamam
+ * `_assertCompanyAccess(ctx.user, { companyId: row.companyId })`
+ * ANTES de qualquer upload/update (sem isso, um usuário autenticado
+ * podia mexer em docs de outro tenant via `funcTerceiroId` numérico).
+ * (b) **Vazamento entre funcionários** — `editingIdRef` segue o
+ * `editingId` atual via `useEffect`; nos `onSuccess` de add/remove,
+ * só aplica `setForm` se `editingIdRef.current === vars.funcTerceiroId`
+ * (se o usuário trocou de funcionário antes da resposta voltar, o
+ * `refetch` da lista basta — o setForm stale é ignorado).
+ * Follow-up restante: substituir o read-modify-write do array JSON
+ * por update atômico SQL (`jsonb_set`/append) pra eliminar race
+ * condition em uploads simultâneos no mesmo funcionário.
+ *
+ * Follow-up: (1) trazer mesma feature pro CLT (`funcionarios` da
+ * Construtora) — outra coluna `documentos_extras` lá; (2) permitir
+ * editar o `label` ou trocar arquivo do avulso (hoje só remove e
+ * recria); (3) usar `documentosExtras` no `controle de documentos`
+ * pra alertas globais de vencimento; (4) bulk import de avulsos
+ * por CSV; (5) anexar metadados (quem enviou, observação).
+ *
  * Rev. 2030 — DP · Fechamento de Ponto · Calendário do colaborador
  * (drill-down "Dias Trabalhados") passa a reconhecer FÉRIAS em gozo
  * e NÃO contar como "Falta provável".

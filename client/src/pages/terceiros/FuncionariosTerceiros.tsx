@@ -1,10 +1,11 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import { DraggableCommandBar } from "@/components/DraggableCommandBar";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useCompany } from "@/contexts/CompanyContext";
 import { trpc } from "@/lib/trpc";
 import DashboardLayout from "@/components/DashboardLayout";
 import FullScreenDialog from "@/components/FullScreenDialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -46,6 +47,75 @@ export default function FuncionariosTerceiros() {
   const updateMut = trpc.terceiros.funcionarios.update.useMutation({ onSuccess: () => { refetch(); setShowForm(false); toast.success("Funcionário atualizado!"); } });
   const deleteMut = trpc.terceiros.funcionarios.delete.useMutation({ onSuccess: () => { refetch(); toast.success("Funcionário excluído!"); } });
   const uploadMut = trpc.terceiros.funcionarios.uploadDoc.useMutation({ onSuccess: () => { refetch(); toast.success("Documento enviado!"); } });
+  // Rev. 2031 — Documentos avulsos por categoria
+  // Rev. 2031 (hotfix) — ref pra evitar vazamento de extras entre funcionários:
+  // se o usuário trocar de funcionário antes do callback voltar, NÃO aplicamos
+  // o setForm (o refetch já garante a hidratação correta na próxima abertura).
+  const editingIdRef = useRef<number | null>(null);
+  useEffect(() => { editingIdRef.current = editingId; }, [editingId]);
+  const addDocExtraMut = trpc.terceiros.funcionarios.addDocExtra.useMutation({
+    onSuccess: (res: any, vars: any) => {
+      refetch();
+      if (editingIdRef.current === vars.funcTerceiroId) {
+        setForm((f: any) => ({ ...f, documentosExtras: [...(Array.isArray(f.documentosExtras) ? f.documentosExtras : []), res.doc] }));
+      }
+      toast.success("Documento adicionado!");
+      setExtraModal(null);
+      setExtraLabel("");
+      setExtraValidade("");
+      setExtraFile(null);
+    },
+    onError: (e: any) => toast.error(e?.message || "Falha ao adicionar documento"),
+  });
+  const removeDocExtraMut = trpc.terceiros.funcionarios.removeDocExtra.useMutation({
+    onSuccess: (_r: any, vars: any) => {
+      refetch();
+      if (editingIdRef.current === vars.funcTerceiroId) {
+        setForm((f: any) => ({ ...f, documentosExtras: (Array.isArray(f.documentosExtras) ? f.documentosExtras : []).filter((d: any) => d.id !== vars.docId) }));
+      }
+      toast.success("Documento removido");
+    },
+  });
+  const updateDocExtraValidadeMut = trpc.terceiros.funcionarios.updateDocExtraValidade.useMutation({
+    onSuccess: () => { refetch(); },
+  });
+  const [extraModal, setExtraModal] = useState<{ categoria: string; categoriaLabel: string } | null>(null);
+  const [extraLabel, setExtraLabel] = useState("");
+  const [extraValidade, setExtraValidade] = useState("");
+  const [extraFile, setExtraFile] = useState<{ base64: string; fileName: string; contentType: string } | null>(null);
+
+  const handlePickExtraFile = () => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = ".pdf,.jpg,.jpeg,.png";
+    input.onchange = (e: any) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      if (file.size > 10 * 1024 * 1024) { toast.error("Arquivo muito grande (máx 10MB)"); return; }
+      const reader = new FileReader();
+      reader.onload = () => {
+        const base64 = (reader.result as string).split(",")[1] || "";
+        setExtraFile({ base64, fileName: file.name, contentType: file.type || "application/octet-stream" });
+      };
+      reader.readAsDataURL(file);
+    };
+    input.click();
+  };
+
+  const handleSalvarExtra = () => {
+    if (!editingId || !extraModal) return;
+    if (!extraLabel.trim()) { toast.error("Dê um nome ao documento"); return; }
+    if (!extraFile) { toast.error("Selecione o arquivo"); return; }
+    addDocExtraMut.mutate({
+      funcTerceiroId: editingId,
+      categoria: extraModal.categoria,
+      label: extraLabel.trim(),
+      validade: extraValidade || null,
+      fileName: extraFile.fileName,
+      fileBase64: extraFile.base64,
+      contentType: extraFile.contentType,
+    });
+  };
 
   const filtered = useMemo(() => {
     let list = funcionarios;
@@ -453,9 +523,10 @@ export default function FuncionariosTerceiros() {
               // Rev. 2002 — Lista completa de documentos exigidos pra funcionário terceiro
               // + Painel de Integração que calcula % de conformidade em tempo real
               type Doc = { label: string; urlField: string; validadeField: string | null; obrigatorio: boolean; descricao?: string };
-              type Secao = { titulo: string; descricao: string; icone: any; cor: string; bgCor: string; corBorda: string; docs: Doc[] };
+              type Secao = { key: string; titulo: string; descricao: string; icone: any; cor: string; bgCor: string; corBorda: string; docs: Doc[] };
               const secoes: Secao[] = [
                 {
+                  key: "saude_ocupacional",
                   titulo: "Saúde Ocupacional",
                   descricao: "Atestado médico que comprova aptidão pra função",
                   icone: Heart,
@@ -467,6 +538,7 @@ export default function FuncionariosTerceiros() {
                   ],
                 },
                 {
+                  key: "treinamentos_nr",
                   titulo: "Treinamentos NR",
                   descricao: "Normas Regulamentadoras conforme função e exposição a risco",
                   icone: BookOpen,
@@ -481,6 +553,7 @@ export default function FuncionariosTerceiros() {
                   ],
                 },
                 {
+                  key: "integracao_seguranca",
                   titulo: "Integração de Segurança",
                   descricao: "Integração admissional na Construtora E no Cliente final (ambas obrigatórias)",
                   icone: ClipboardCheck,
@@ -494,6 +567,7 @@ export default function FuncionariosTerceiros() {
                 },
                 {
                   // Rev. 2017 — Documentos Trabalhistas obrigatórios por lei (NR-06, NR-01, CLT art. 41)
+                  key: "documentos_trabalhistas",
                   titulo: "Documentos Trabalhistas",
                   descricao: "Comprovantes legais que devem ficar disponíveis pra fiscalização do MTE",
                   icone: Briefcase,
@@ -507,6 +581,7 @@ export default function FuncionariosTerceiros() {
                   ],
                 },
                 {
+                  key: "identificacao_qualificacao",
                   titulo: "Identificação e Qualificação",
                   descricao: "Foto pra crachá e certificados profissionais complementares",
                   icone: Award,
@@ -520,19 +595,34 @@ export default function FuncionariosTerceiros() {
                 },
               ];
 
+              // Rev. 2031 — Documentos avulsos por categoria (jsonb)
+              const allExtras: any[] = Array.isArray(form.documentosExtras) ? form.documentosExtras : [];
+              const extrasByCategoria = (k: string) => allExtras.filter((d: any) => d.categoria === k);
+
               // Cálculo do status de integração
               const todosObrigatorios = secoes.flatMap(s => s.docs).filter(d => d.obrigatorio);
               const obrigatoriosPreenchidos = todosObrigatorios.filter(d => !!form[d.urlField]);
-              const totalDocs = secoes.flatMap(s => s.docs);
-              const todosPreenchidos = totalDocs.filter(d => !!form[d.urlField]);
+              const totalDocsFixos = secoes.flatMap(s => s.docs);
+              const fixosPreenchidos = totalDocsFixos.filter(d => !!form[d.urlField]);
+              const totalDocsCount = totalDocsFixos.length + allExtras.length;
+              const totalPreenchidosCount = fixosPreenchidos.length + allExtras.length; // extras só existem se foram upados
               const pctIntegracao = todosObrigatorios.length > 0 ? Math.round((obrigatoriosPreenchidos.length / todosObrigatorios.length) * 100) : 100;
               const hoje = new Date().toISOString().slice(0, 10);
-              const vencidos = totalDocs.filter(d => d.validadeField && form[d.validadeField] && form[d.validadeField].slice(0, 10) < hoje);
-              const proxVencimento = totalDocs
+              const vencidosFixos = totalDocsFixos.filter(d => d.validadeField && form[d.validadeField] && form[d.validadeField].slice(0, 10) < hoje);
+              const vencidosExtras = allExtras.filter((d: any) => d.validade && d.validade.slice(0, 10) < hoje);
+              const vencidos = [
+                ...vencidosFixos.map(d => ({ label: d.label })),
+                ...vencidosExtras.map((d: any) => ({ label: d.label })),
+              ];
+              const proxVencimentoFixos = totalDocsFixos
                 .filter(d => d.validadeField && form[d.validadeField])
-                .map(d => ({ label: d.label, dataStr: form[d.validadeField!].slice(0, 10), diasRest: Math.ceil((new Date(form[d.validadeField!]).getTime() - Date.now()) / 86400000) }))
-                .filter(d => d.diasRest >= 0 && d.diasRest <= 30)
-                .sort((a, b) => a.diasRest - b.diasRest);
+                .map(d => ({ label: d.label, diasRest: Math.ceil((new Date(form[d.validadeField!]).getTime() - Date.now()) / 86400000) }))
+                .filter(d => d.diasRest >= 0 && d.diasRest <= 30);
+              const proxVencimentoExtras = allExtras
+                .filter((d: any) => d.validade)
+                .map((d: any) => ({ label: d.label, diasRest: Math.ceil((new Date(d.validade).getTime() - Date.now()) / 86400000) }))
+                .filter((d: any) => d.diasRest >= 0 && d.diasRest <= 30);
+              const proxVencimento = [...proxVencimentoFixos, ...proxVencimentoExtras].sort((a, b) => a.diasRest - b.diasRest);
 
               const statusIntegracao = vencidos.length > 0
                 ? { label: "Documento Vencido", cor: "from-red-500 to-rose-600", textCor: "text-red-700", bgCor: "bg-red-50", borda: "border-red-300", icone: XCircle }
@@ -569,7 +659,7 @@ export default function FuncionariosTerceiros() {
                       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px]">
                         <div className="bg-slate-50 rounded p-2">
                           <div className="text-slate-500 uppercase font-semibold tracking-wider">Total docs</div>
-                          <div className="text-slate-900 font-bold text-base">{todosPreenchidos.length}/{totalDocs.length}</div>
+                          <div className="text-slate-900 font-bold text-base">{totalPreenchidosCount}/{totalDocsCount}</div>
                         </div>
                         <div className="bg-emerald-50 rounded p-2">
                           <div className="text-emerald-600 uppercase font-semibold tracking-wider">Obrigatórios OK</div>
@@ -605,7 +695,10 @@ export default function FuncionariosTerceiros() {
                   </div>
 
                   {/* Seções de Documentos */}
-                  {secoes.map((secao) => (
+                  {secoes.map((secao) => {
+                    const extrasDaSecao = extrasByCategoria(secao.key);
+                    const fixosOk = secao.docs.filter(d => !!form[d.urlField]).length;
+                    return (
                     <div key={secao.titulo} className={`rounded-xl border ${secao.corBorda} overflow-hidden`}>
                       <div className={`${secao.bgCor} px-4 py-2.5 flex items-center gap-2 border-b ${secao.corBorda}`}>
                         <div className={`h-8 w-8 rounded-lg bg-white ring-1 ${secao.corBorda} flex items-center justify-center shrink-0`}>
@@ -616,7 +709,7 @@ export default function FuncionariosTerceiros() {
                           <p className="text-[11px] text-slate-600 truncate">{secao.descricao}</p>
                         </div>
                         <div className="text-[11px] text-slate-500 shrink-0">
-                          {secao.docs.filter(d => !!form[d.urlField]).length}/{secao.docs.length}
+                          {fixosOk + extrasDaSecao.length}/{secao.docs.length + extrasDaSecao.length}
                         </div>
                       </div>
                       <div className="divide-y bg-white">
@@ -672,9 +765,83 @@ export default function FuncionariosTerceiros() {
                             </div>
                           );
                         })}
+                        {/* Rev. 2031 — Documentos avulsos da categoria */}
+                        {extrasDaSecao.map((doc: any) => {
+                          const venceEm = doc.validade ? Math.ceil((new Date(doc.validade).getTime() - Date.now()) / 86400000) : null;
+                          const vencido = venceEm !== null && venceEm < 0;
+                          const proximoVenc = venceEm !== null && venceEm >= 0 && venceEm <= 30;
+                          return (
+                            <div key={doc.id} className="p-3 hover:bg-slate-50/60 bg-slate-50/30">
+                              <div className="flex items-start justify-between flex-wrap gap-2">
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <FileText className="h-4 w-4 text-slate-500 shrink-0" />
+                                    <h5 className="font-medium text-sm">{doc.label}</h5>
+                                    <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-slate-200 text-slate-700 font-semibold">Avulso</span>
+                                    {vencido && <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-red-100 text-red-700 font-semibold">Vencido</span>}
+                                    {proximoVenc && <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 font-semibold">Vence em {venceEm}d</span>}
+                                  </div>
+                                  <div className="ml-6 mt-1">
+                                    <a href={doc.url} target="_blank" rel="noreferrer" className="text-xs text-blue-600 hover:underline inline-flex items-center gap-1">
+                                      <FileText className="h-3 w-3" /> Ver documento
+                                    </a>
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-2 shrink-0">
+                                  <div className="flex flex-col">
+                                    <Label className="text-[10px] text-muted-foreground mb-0.5">Validade</Label>
+                                    <Input
+                                      type="date"
+                                      className={`w-36 text-xs h-8 ${vencido ? "border-red-300 bg-red-50" : proximoVenc ? "border-amber-300 bg-amber-50" : ""}`}
+                                      value={doc.validade?.split("T")[0] || ""}
+                                      onChange={(e) => {
+                                        const novaValidade = e.target.value || null;
+                                        setForm((f: any) => ({
+                                          ...f,
+                                          documentosExtras: (Array.isArray(f.documentosExtras) ? f.documentosExtras : []).map((x: any) => x.id === doc.id ? { ...x, validade: novaValidade } : x),
+                                        }));
+                                        if (editingId) updateDocExtraValidadeMut.mutate({ funcTerceiroId: editingId, docId: doc.id, validade: novaValidade });
+                                      }}
+                                    />
+                                  </div>
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="h-8 text-red-600 hover:text-red-700 hover:bg-red-50"
+                                    onClick={() => {
+                                      if (!editingId) return;
+                                      if (!confirm(`Remover "${doc.label}"?`)) return;
+                                      removeDocExtraMut.mutate({ funcTerceiroId: editingId, docId: doc.id });
+                                    }}
+                                    title="Remover documento"
+                                  >
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                  </Button>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                        {/* Botão Adicionar documento avulso na categoria */}
+                        <div className="p-2 bg-slate-50/40">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className={`w-full h-9 border border-dashed ${secao.corBorda} ${secao.cor} hover:bg-slate-100`}
+                            onClick={() => {
+                              setExtraLabel("");
+                              setExtraValidade("");
+                              setExtraFile(null);
+                              setExtraModal({ categoria: secao.key, categoriaLabel: secao.titulo });
+                            }}
+                          >
+                            <Plus className="h-3.5 w-3.5 mr-1" /> Adicionar documento
+                          </Button>
+                        </div>
                       </div>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               );
             })()}
@@ -708,6 +875,68 @@ export default function FuncionariosTerceiros() {
           </div>
         </FullScreenDialog>
       )}
+
+      {/* Rev. 2031 — Modal "Adicionar documento" avulso */}
+      <Dialog open={!!extraModal} onOpenChange={(o) => { if (!o) setExtraModal(null); }}>
+        <DialogContent className="max-w-md p-0 gap-0 overflow-hidden">
+          <DialogHeader className="bg-gradient-to-r from-slate-700 to-slate-800 px-5 py-4 text-white">
+            <DialogTitle className="text-white flex items-center gap-2">
+              <Plus className="h-5 w-5" /> Adicionar documento
+            </DialogTitle>
+            <DialogDescription className="text-slate-200 text-xs">
+              {extraModal ? `Categoria: ${extraModal.categoriaLabel}` : ""}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="p-5 space-y-4">
+            <div>
+              <Label className="text-xs">Nome do documento *</Label>
+              <Input
+                value={extraLabel}
+                onChange={(e) => setExtraLabel(e.target.value)}
+                placeholder="Ex: Carteira de Vacinação, ASO 2024..."
+                className="h-10 mt-1"
+                autoFocus
+                maxLength={200}
+              />
+            </div>
+            <div>
+              <Label className="text-xs">Validade (opcional)</Label>
+              <Input
+                type="date"
+                value={extraValidade}
+                onChange={(e) => setExtraValidade(e.target.value)}
+                className="h-10 mt-1"
+              />
+              <p className="text-[11px] text-muted-foreground mt-1">Deixe vazio se o documento não vence</p>
+            </div>
+            <div>
+              <Label className="text-xs">Arquivo *</Label>
+              <div className="mt-1 flex items-center gap-2">
+                <Button type="button" variant="outline" onClick={handlePickExtraFile} className="h-10">
+                  <Upload className="h-4 w-4 mr-2" /> {extraFile ? "Trocar arquivo" : "Selecionar arquivo"}
+                </Button>
+                {extraFile && (
+                  <span className="text-xs text-emerald-700 flex items-center gap-1 min-w-0">
+                    <CheckCircle className="h-4 w-4 shrink-0" />
+                    <span className="truncate">{extraFile.fileName}</span>
+                  </span>
+                )}
+              </div>
+              <p className="text-[11px] text-muted-foreground mt-1">PDF, JPG ou PNG (máx 10MB)</p>
+            </div>
+          </div>
+          <DialogFooter className="bg-slate-50 px-5 py-3 border-t">
+            <Button variant="outline" onClick={() => setExtraModal(null)} disabled={addDocExtraMut.isPending}>Cancelar</Button>
+            <Button
+              onClick={handleSalvarExtra}
+              disabled={addDocExtraMut.isPending || !extraLabel.trim() || !extraFile}
+              className="bg-slate-800 hover:bg-slate-900 text-white"
+            >
+              {addDocExtraMut.isPending ? "Enviando..." : "Adicionar"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   );
 }

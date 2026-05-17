@@ -621,6 +621,12 @@ Regras:
           console.log(`[SyncSchema+] Colunas Documentos Trabalhistas garantidas em funcionarios_terceiros.`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA funcionarios_terceiros docs trabalhistas:`, e?.message || e); }
 
+        // Rev. 2031 — Documentos avulsos por categoria (JSONB)
+        try {
+          await db.execute(sql`ALTER TABLE funcionarios_terceiros ADD COLUMN IF NOT EXISTS documentos_extras JSONB`);
+          console.log(`[SyncSchema+] Coluna documentos_extras garantida em funcionarios_terceiros.`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA funcionarios_terceiros documentos_extras:`, e?.message || e); }
+
         // Rev. 1592: bloco Escritório Central na avaliação anônima do Portal do Cliente.
         // Garantido aqui (e não só em ColFix) porque o version guard do ColFix pode
         // pular as migrations quando a versão já estiver aplicada.

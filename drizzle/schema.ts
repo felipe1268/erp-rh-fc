@@ -3611,6 +3611,10 @@ export const funcionariosTerceiros = pgTable("funcionarios_terceiros", {
   fichaEpiUrl: varchar("ficha_epi_url", { length: 500 }),
   ordemServicoUrl: varchar("ordem_servico_url", { length: 500 }),
   registroFuncionarioUrl: varchar("registro_funcionario_url", { length: 500 }),
+  // Rev. 2031 — Documentos avulsos por categoria (além dos campos fixos acima).
+  // Array de { id: string, categoria: "saude_ocupacional"|"treinamentos_nr"|"integracao_seguranca"|"documentos_trabalhistas"|"identificacao_qualificacao", label: string, url: string, validade?: string, uploadedAt: string }
+  // Permite que o usuário cadastre quantos documentos quiser em cada categoria sem precisar alterar schema.
+  documentosExtras: jsonb("documentos_extras"),
   // Aprovação
   observacaoAprovacao: text("observacao_aprovacao"),
   aprovadoPor: varchar("aprovado_por", { length: 255 }),
