@@ -15,7 +15,8 @@ import {
   History, Zap, Scale, Car, TrendingUp, ChevronRight, Activity,
   Palmtree, Shield, FileSignature, Ban, Star, Eye, ScrollText, Wrench,
   Package, PackageX, CheckCircle, XCircle, ShoppingCart,
-  Trash2, Camera, Video, ImageIcon, Upload, ShieldCheck, Plus, Loader2, Pencil, RotateCcw, UserCheck, Handshake, Receipt, ExternalLink, MessageSquare
+  Trash2, Camera, Video, ImageIcon, Upload, ShieldCheck, Plus, Loader2, Pencil, RotateCcw, UserCheck, Handshake, Receipt, ExternalLink, MessageSquare,
+  Lock,
 } from "lucide-react";
 import { useEffect, useState, useCallback } from "react";
 import { useLocation } from "wouter";
