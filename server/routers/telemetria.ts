@@ -498,6 +498,7 @@ export const telemetriaRouter = router({
       periodo: z.string().optional(),
     }))
     .query(async ({ ctx, input }) => {
+      requireAdminMaster(ctx);
       const cid = resolveCompanyId(ctx, input.companyId);
       if (!cid) throw new TRPCError({ code: "BAD_REQUEST", message: "companyId obrigatório" });
       const db = await getDb();

@@ -146,6 +146,32 @@ export const auditLogs = pgTable("audit_logs", {
         createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
 });
 
+export const userActivityLog = pgTable("user_activity_log", {
+        id: serial().primaryKey().notNull(),
+        companyId: integer("company_id").notNull(),
+        userId: integer("user_id").notNull(),
+        userName: varchar("user_name", { length: 255 }),
+        tipo: varchar({ length: 20 }).notNull(),
+        pagina: varchar({ length: 500 }).notNull(),
+        acao: varchar({ length: 500 }),
+        modulo: varchar({ length: 100 }),
+        detalhes: text(),
+        duracaoSegundos: integer("duracao_segundos"),
+        criadoEm: timestamp("criado_em", { mode: 'string' }).defaultNow().notNull(),
+});
+
+export const iaModuloConversas = pgTable("ia_modulo_conversas", {
+        id: serial().primaryKey().notNull(),
+        companyId: integer("company_id").notNull(),
+        userId: integer("user_id").notNull(),
+        userName: varchar("user_name", { length: 255 }),
+        modulo: varchar({ length: 100 }).notNull(),
+        pergunta: text().notNull(),
+        resposta: text(),
+        projetoId: integer("projeto_id"),
+        criadoEm: timestamp("criado_em", { mode: 'string' }).defaultNow().notNull(),
+});
+
 export const audits = pgTable("audits", {
         id: serial().notNull(),
         companyId: integer().notNull(),
