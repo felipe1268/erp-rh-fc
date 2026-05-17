@@ -199,6 +199,56 @@ export const PERGUNTAS_REGRAS_OURO: { texto: string; alternativas: { texto: stri
 
 export const integracaoSSTRouter = router({
 
+  // Rev. 2058 — Badge do menu lateral (DashboardLayout). Conta colaboradores
+  // SEM integração válida + registros pendente/em_andamento parados. Multi-
+  // company (badge agrega todas as empresas que o usuário enxerga). Read-only,
+  // leve, refetch a cada 60s.
+  getBadgeCounts: protectedProcedure
+    .input(z.object({ companyIds: z.array(z.number().int().positive()).min(1) }))
+    .query(async ({ input, ctx }) => {
+      for (const cid of input.companyIds) assertCompanyAccess(ctx, cid);
+      const db = (await getDb())!;
+      const ids = input.companyIds;
+
+      // (A) Colaboradores SEM integração válida (CLT/PJ ativos, não fantasma,
+      // sem aprovação vigente). Lógica espelha listarPendentesAuto (Rev. 2034+
+      // Rev. 2036 filtro fantasma) condensada num COUNT.
+      const semIntegracaoRaw = await db.execute<{ total: number }>(sql`
+        WITH last_ok AS (
+          SELECT DISTINCT ON (employee_id)
+            employee_id,
+            COALESCE(data_validade,
+                     COALESCE(data_realizacao, created_at) + INTERVAL '730 days') AS dv
+          FROM sst_integracao_registros
+          WHERE company_id = ANY(${ids})
+            AND status = 'aprovado'
+            AND deleted_at IS NULL
+          ORDER BY employee_id, COALESCE(data_realizacao, created_at) DESC
+        ),
+        em_processo AS (
+          SELECT DISTINCT employee_id
+          FROM sst_integracao_registros
+          WHERE company_id = ANY(${ids})
+            AND status IN ('pendente', 'em_andamento')
+            AND deleted_at IS NULL
+        )
+        SELECT COUNT(*)::int AS total
+        FROM employees e
+        LEFT JOIN last_ok lo ON lo.employee_id = e.id
+        WHERE e."companyId" = ANY(${ids})
+          AND e.status = 'Ativo'
+          AND e."deletedAt" IS NULL
+          AND COALESCE(e."listaNegra", 0) = 0
+          AND e."dataDemissao" IS NULL
+          AND e.id NOT IN (SELECT employee_id FROM em_processo)
+          AND (lo.dv IS NULL OR lo.dv <= NOW() + INTERVAL '60 days')
+      `);
+      const semIntegracaoRows = (semIntegracaoRaw as any).rows ?? semIntegracaoRaw;
+      const pendentesAuto = Number(semIntegracaoRows?.[0]?.total ?? 0);
+
+      return { pendentesAuto };
+    }),
+
   listarConfigs: protectedProcedure
     .input(z.object({ companyId: z.number().int().positive() }))
     .query(async ({ input, ctx }) => {

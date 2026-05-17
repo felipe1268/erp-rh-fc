@@ -947,6 +947,13 @@ function DashboardLayoutContent({
     { companyId: cId, companyIds: badgeCompanyIds },
     { enabled: cId > 0 || badgeCompanyIds.length > 0, refetchInterval: 60_000, staleTime: 30_000 }
   );
+  // Rev. 2058 — Badge vermelho piscante no menu "Integração SST" do módulo SST,
+  // padrão Apontamentos de Campo (Rev. 1277). Conta colaboradores sem
+  // integração válida pra dar visibilidade direta ao TST.
+  const sstBadgeQ = trpc.integracaoSST.getBadgeCounts.useQuery(
+    { companyIds: badgeCompanyIds },
+    { enabled: badgeCompanyIds.length > 0, refetchInterval: 60_000, staleTime: 30_000 }
+  );
   const { activeModule, setActiveModule } = useModule();
   const { isModuleEnabled, isPageEnabled } = useModuleConfig();
   const hubToConfigKey: Record<string, string> = {
@@ -1410,6 +1417,20 @@ function DashboardLayoutContent({
       }));
     }
 
+    // Rev. 2058 — Badge vermelho piscante em "Integração SST" do módulo SST.
+    if (activeModule === "sst" && sstBadgeQ.data) {
+      const sb = sstBadgeQ.data;
+      sections = sections.map(s => ({
+        ...s,
+        items: s.items.map(item => {
+          if (item.path === "/sst/integracao" && sb.pendentesAuto > 0) {
+            return { ...item, badge: sb.pendentesAuto, badgePulse: true };
+          }
+          return item;
+        }),
+      }));
+    }
+
     if (activeModule === "compras" && comprasBadgeQ.data) {
       const bd = comprasBadgeQ.data;
       sections = sections.map(s => ({
@@ -1427,7 +1448,7 @@ function DashboardLayoutContent({
     }
 
     return sections.filter(s => s.items.length > 0);
-  }, [activeModule, location, isAdminUser, isMasterUser, permIsAdminMaster, canAccessFeature, accessibleModules, hasGroup, groupCanAccessRoute, canViewPage, savedMenuConfig, comprasBadgeQ.data, requestsBadgeQ.data]);
+  }, [activeModule, location, isAdminUser, isMasterUser, permIsAdminMaster, canAccessFeature, accessibleModules, hasGroup, groupCanAccessRoute, canViewPage, savedMenuConfig, comprasBadgeQ.data, requestsBadgeQ.data, sstBadgeQ.data]);
 
   const orderedSections = useMemo(() => {
     const pinned   = effectiveSections.filter(s => s.title === PINNED_LAST);

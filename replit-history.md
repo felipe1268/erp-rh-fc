@@ -4,6 +4,7 @@
 > O detalhamento completo (causa-raiz, stack traces, arquivos tocados, comentários longos) de TODAS as revisões — incluindo as listadas abaixo — vive em `shared/changelog.ts`.
 > Movido aqui na Rev. 2028 (faxina) — revisões 1903 → 2012.
 
+- ~~Rev. 2043~~ — SST Integração "Iniciar agora": pula passo de CPF quando RH já selecionou o colaborador (link `?cpf=...&auto=1`). Ver `shared/changelog.ts`. (movida na Rev. 2058)
 - ~~Rev. 2042~~ — SST Integração "Iniciar agora": CAUSA-RAIZ — SELECT usava `employees.nome` (correto é `nomeCompleto`); fix em 3 handlers + try/catch. Ver `shared/changelog.ts`. (movida na Rev. 2057)
 - ~~Rev. 2041~~ — SST Integração "Iniciar agora": BUGFIX "abre e fecha sozinho" — janela de splash agora mostra mensagem de erro DENTRO dela em vez de fechar. Ver `shared/changelog.ts`. (movida na Rev. 2056)
 - ~~Rev. 2040~~ — SST Integração "Iniciar agora": hardening try/catch + console.error pra capturar "Cannot convert undefined or null to object" no iniciarAgora. Ver `shared/changelog.ts`. (movida na Rev. 2055)

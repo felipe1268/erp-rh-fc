@@ -1,6 +1,66 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2058 — SST · Integração · Badge VERMELHO PISCANTE no item de
+ * menu lateral "Integração SST" (módulo SST) quando há colaboradores
+ * sem integração válida — padrão igual ao "17" em Apontamentos de
+ * Campo (Rev. 1277). Pedido direto do usuário: "Quando tiver um
+ * funcionário sem integração deve ter um alerta vermelho piscando
+ * igual usamos no módulo RH, para facilitar a visualização do TST".
+ * Backend (`server/routers/integracaoSST.ts`): novo procedure
+ * `getBadgeCounts({companyIds})` — input multi-company (badge agrega
+ * todas as empresas que o usuário enxerga via `getCompanyIdsForQuery`,
+ * espelho do `getComprasBadgeCounts`). SELECT condensado em SQL puro
+ * (`db.execute`) com 2 CTEs: `last_ok` (DISTINCT ON employee_id da
+ * última aprovação, com fallback de 730 dias quando `data_validade`
+ * IS NULL — espelha lógica do `listarPendentesAuto` L753+) e
+ * `em_processo` (employees com registro pendente/em_andamento ativo —
+ * excluídos do badge pra não duplicar visualização do `r.tentativa` da
+ * Rev. 2055). COUNT(*) em `employees` com filtros idênticos ao
+ * `listarPendentesAuto`: status='Ativo', deleted_at IS NULL,
+ * lista_negra=0, data_demissao IS NULL, NOT IN em_processo, e
+ * (dv IS NULL OR dv <= NOW()+60days) — janela de vencimento de 60d
+ * casa com o threshold "vencendo" da PendentesTab. Retorna
+ * `{pendentesAuto: number}`. Cross-tenant: `assertCompanyAccess` em
+ * cada companyId do input (loop) + `ANY($1)` no SQL. **UI**
+ * (`client/src/components/DashboardLayout.tsx`): novo
+ * `sstBadgeQ = trpc.integracaoSST.getBadgeCounts.useQuery({companyIds:
+ * badgeCompanyIds}, {refetchInterval:60_000, staleTime:30_000})` ao
+ * lado de `comprasBadgeQ`/`requestsBadgeQ` (L956). Novo bloco no
+ * `effectiveSections` useMemo (L1423) entre o bloco RH/DP (Rev. 1271)
+ * e Compras: `if activeModule==="sst" && sstBadgeQ.data` → mapeia
+ * `/sst/integracao` setando `badge=pendentesAuto`+`badgePulse=true`
+ * (renderiza pill `bg-red-500 text-white animate-pulse` no L1817-1826
+ * — código de render JÁ existente, ZERO mudança no componente). Deps
+ * do useMemo ganham `sstBadgeQ.data`. + `shared/version.ts` → 2058.
+ * **Por que multi-company (e não cId só)**: usuário enxerga várias
+ * empresas simultaneamente no menu (mesmo padrão do badge de Compras)
+ * — TST que cuida de holding precisa ver pendência agregada sem
+ * trocar empresa. **Por que excluir em_processo do COUNT**: registros
+ * em_andamento têm seu próprio indicador visual (Rev. 2055 tentativa
+ * + badge no card); contar duplicado infla número e desfoca alerta
+ * crítico (quem ainda nem começou). **Por que `<= NOW()+60days` (e
+ * não só vencidos)**: PendentesTab da Rev. 2034 já mostra "Vencendo"
+ * em laranja — badge no menu deve antecipar pra TST agendar
+ * proativamente, não esperar vencer e virar acidente. **Por que SQL
+ * puro (e não Drizzle query builder)**: COUNT com CTE+LEFT JOIN+NOT
+ * IN é verboso no QB; `db.execute` com tagged template é seguro
+ * (params bindados), legível, e replica padrão já usado em outros
+ * lugares do projeto. **Por que `(raw as any).rows ?? raw`**: pg
+ * driver retorna `{rows:[]}` em modo padrão; alguns wrappers do
+ * Drizzle achatam pra array — guarda contra ambos. **R-001/R-007/
+ * R-010 OK**: ZERO ALTER/DROP/SQL destrutivo. READ-ONLY SELECT
+ * cross-tenant. **Preservado**: Rev. 2057/2056/2055/2054/2053
+ * INTACTAS. Bolinhas Apontamentos/HE/MO/Compras INTACTAS — só
+ * adicionei terceiro bloco no mesmo useMemo. **Follow-up**:
+ * (1) clique no badge → navega direto pra aba Pendentes (deep-link
+ * `?tab=pendentes`); (2) tooltip no badge ("12 sem integração ·
+ * 3 vencendo · 9 nunca fizeram"); (3) replicar padrão pra ASO/CIPA
+ * vencidos (módulo SST tem +5 menus que podiam ter badge similar);
+ * (4) som/notificação desktop quando count cruza threshold (>20);
+ * (5) badge no hub-level (ícone "SST" da home) agregando todos os
+ * sub-alertas do módulo (não só Integração).
+ *
  * Rev. 2057 — SST · Integração · Aba Pendentes destaca colaboradores
  * que JÁ REPROVARAM antes com badge âmbar "Nª tentativa" (ícone
  * RefreshCw). Pedido direto do usuário: "AUTOMÁTICO — assim que
