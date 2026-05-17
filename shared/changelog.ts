@@ -1,6 +1,23 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2003 — Terceiros · Funcionários · Integração de Segurança dividida em Construtora + Cliente.
+ * Pedido direto do usuário (17/05/2026, image IMG_0849_1779028929295.png): "Tem a integração na construtora e tbm tem a integração no cliente precisa ter este controle". Na Rev. 2002 a seção "Integração de Segurança" tinha apenas 1 documento (Integração Admissional/DDS) — mas no fluxo real do setor terceirizado em construção civil, o funcionário passa por DUAS integrações distintas:
+ *   (a) Integração na Construtora contratante (FC Engenharia) — regras corporativas, EPI padrão, política SST geral.
+ *   (b) Integração no Cliente final / Obra específica — regras locais do canteiro, riscos específicos da obra, DDS de boas-vindas do cliente.
+ * Sem registrar AMBAS, o funcionário pode estar "apto na construtora" mas barrado na portaria do cliente, ou vice-versa.
+ * Mudança em 4 arquivos:
+ *   (1) `drizzle/schema.ts` (L3598-3601, +2 linhas): tabela `funcionariosTerceiros` ganha `integracaoClienteDocUrl: varchar("integracao_cliente_doc_url", { length: 500 })` (nullable, retrocompat). Comentário deixa claro que `integracaoDocUrl` (legacy) passa a representar Construtora — semântica preservada (dados existentes não precisam migrar).
+ *   (2) `server/_core/index.ts` (+4 linhas, bloco logo ANTES do `numero_interno` da Rev. 1998): bootstrap idempotente `ALTER TABLE funcionarios_terceiros ADD COLUMN IF NOT EXISTS integracao_cliente_doc_url VARCHAR(500)` envolvido em try/catch com log.
+ *   (3) `client/src/pages/terceiros/FuncionariosTerceiros.tsx`: dentro do array `secoes` do IIFE da aba documentos (Rev. 2002), a seção "Integração de Segurança" agora tem 2 docs:
+ *       - "Integração na Construtora (FC)" → `integracaoDocUrl` (obrigatório, label do legacy reaproveitado pra preservar dados existentes)
+ *       - "Integração no Cliente / Obra" → `integracaoClienteDocUrl` (obrigatório, novo campo)
+ *       Descrição da seção atualizada pra "ambas obrigatórias". Contador da seção (`2/2`, `1/2`, etc.) atualiza automaticamente — `pctIntegracao` global agora considera 8 obrigatórios em vez de 7 (ASO + NR genérico + 2 integrações + Foto = 5 antes; agora vira 5 também já que NR-10/33/35 e Certificados continuam opcionais — wait: era ASO+NRgenerico+1integracao+Foto=4 obrigatórios; agora vira 5 com a separação).
+ *   (4) `shared/version.ts` → 2003.
+ * Resultado: gestor consegue rastrear separadamente quem fez a integração da Construtora (que vale pra todas as obras) E quem fez a integração específica do cliente atual (vale só pra essa obra/cliente — quando trocar de obra, precisa refazer). Sem AMBAS, o funcionário aparece como Não Integrado/Parcial no painel.
+ * Preservado: `integracaoDocUrl` legacy mantém TODOS os dados existentes — sem renomear coluna, sem perda; novos uploads na nova coluna `integracao_cliente_doc_url`. Schema da Rev. 1998 (numero_interno) INTACTO. Mutation `uploadDoc` aceita field arbitrário (já passa direto pra UPDATE). Filtros/lista/aptidão INTACTOS. Rev. 2002 INTACTA. R-001/R-007/R-010 OK (só ADD COLUMN IF NOT EXISTS — operação aditiva idempotente, jamais ALTER/DROP). Reversível em 4 arquivos.
+ * Follow-up natural: quando trocar `obraId` do funcionário, opcionalmente limpar `integracaoClienteDocUrl` automaticamente (porque a integração do cliente velho não vale pra obra nova). Ficou de fora porque pode ser que a empresa queira manter histórico — exige decisão do usuário.
+ *
  * Rev. 2002 — Terceiros · Funcionários · Aba Documentos completa + Painel de Status de Integração.
  * Pedido direto do usuário (17/05/2026, image IMG_0848_1779028116848.png): "Precisa ter todos os documentos de um funcionário terceiro, controle de integração tbm para garantir que todos estão integrados". A aba "Documentos" da tela `/terceiros/funcionarios` tinha apenas 4 docs genéricos (ASO, Treinamentos NR, Certificados, Foto 3x4) listados em cards chapados — sem categorização, sem checklist de integração, sem alerta de vencimento, sem distinguir obrigatório de opcional. O schema já tinha 7 campos não-utilizados pela UI (nr10/nr33/nr35 url+validade, integracaoDocUrl).
  * Mudança em 2 arquivos:

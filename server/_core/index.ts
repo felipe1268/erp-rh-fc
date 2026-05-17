@@ -471,6 +471,12 @@ Regras:
         await db.execute(sql`ALTER TABLE curriculos ADD COLUMN IF NOT EXISTS historico_status_json TEXT`);
         console.log(`[SyncSchema+] Coluna historico_status_json garantida na tabela curriculos.`);
 
+        // Rev. 2003 — integracao_cliente_doc_url em funcionarios_terceiros (controle separado de integração no cliente)
+        try {
+          await db.execute(sql`ALTER TABLE funcionarios_terceiros ADD COLUMN IF NOT EXISTS integracao_cliente_doc_url VARCHAR(500)`);
+          console.log(`[SyncSchema+] Coluna integracao_cliente_doc_url garantida em funcionarios_terceiros.`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA funcionarios_terceiros integracao_cliente_doc_url:`, e?.message || e); }
+
         // Rev. 1998 — Número interno auto-gerado em funcionarios_terceiros
         try {
           await db.execute(sql`ALTER TABLE funcionarios_terceiros ADD COLUMN IF NOT EXISTS numero_interno VARCHAR(30)`);

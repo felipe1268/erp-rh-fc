@@ -457,13 +457,14 @@ export default function FuncionariosTerceiros() {
                 },
                 {
                   titulo: "Integração de Segurança",
-                  descricao: "Comprovante de integração admissional na obra (DDS, regras locais)",
+                  descricao: "Integração admissional na Construtora E no Cliente final (ambas obrigatórias)",
                   icone: ClipboardCheck,
                   cor: "text-indigo-700",
                   bgCor: "bg-indigo-50",
                   corBorda: "border-indigo-200",
                   docs: [
-                    { label: "Integração Admissional (DDS)", urlField: "integracaoDocUrl", validadeField: null, obrigatorio: true, descricao: "Ata/lista de presença da integração de segurança da obra" },
+                    { label: "Integração na Construtora (FC)", urlField: "integracaoDocUrl", validadeField: null, obrigatorio: true, descricao: "Ata/lista de presença da integração admissional realizada pela Construtora contratante" },
+                    { label: "Integração no Cliente / Obra", urlField: "integracaoClienteDocUrl", validadeField: null, obrigatorio: true, descricao: "Ata/lista da integração realizada pelo Cliente final ou pela própria obra (regras locais, DDS específicos)" },
                   ],
                 },
                 {
