@@ -1,6 +1,22 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 1970 — RH · DashAvisoPrevio · Modal "Detalhe do Cálculo" ELABORADO conforme regra de ouro (hero summary + barra de composição + ícones nos headers + impressão).
+ * User (16/05/2026 pós-Rev. 1969, screenshot IMG_0824): "Quero uma tela mais elaborada conforme nossa regra de ouro" — escolheu "AMBOS modal + dashboard".
+ * Decisão: refazer o modal Rev. 1969 com 6 melhorias visuais (impacto máximo, único arquivo). Dashboard de fundo já segue convenção `md:grid-cols-*` desde Rev. 1968 (grids responsivos OK em iPad portrait 768px).
+ * Mudança em 1 arquivo (`client/src/pages/dashboards/DashAvisoPrevio.tsx` — só o componente `DetalheCalculoModal`):
+ *   (1) Header colorido sticky no topo (gradient blue-600→indigo-600→violet-600, ícone Calculator em chip white/15 backdrop-blur, título + nome em 2 linhas, sombra). DialogContent agora `max-w-4xl` (era 3xl) + `p-0 gap-0` pra ocupar melhor a tela.
+ *   (2) NOVO Hero Summary: 3 KPIs at-a-glance no topo do body (verde Total Líquido + roxo Complementar + slate-900 Total Geral) — usuário vê os 3 números chave imediatamente sem precisar rolar.
+ *   (3) Bloco "Dados Base" reformatado em card com ícone Users + grid 2/3 colunas + 2 campos novos (Modalidade colorida + Data desligamento). Antes era um banner cinza simples.
+ *   (4) NOVA "Composição das Verbas Brutas": barra horizontal stacked com 6 segmentos coloridos (Saldo verde, Aviso azul, 13º lavanda, Férias prop âmbar, Férias vencidas vermelho, FGTS turquesa) — cada um proporcional ao valor; legenda flex-wrap embaixo com swatch+label+pct%. Tooltip nativo nos hover de cada segmento. Visualização instantânea de "para onde vai o dinheiro".
+ *   (5) Cards Verbas/Descontos reestruturados com header colorido (gradient + ícone TrendingUp/ArrowDown em chip) + total no canto direito + divisores. Linha "Férias vencidas" agora tem fundo destaque red-50/50 + ícone AlertTriangle pra triagem visual instantânea do passivo Art. 137 CLT.
+ *   (6) Cards VERDE/ROXO/PRETO repaginados: sombra colorida (shadow-green-600/20, shadow-violet-300/20, shadow-slate-900/30), badges com ícones (CheckCircle2 "Oficial — TRCT" / ShieldAlert "Uso Interno" / Flame amber-400 "Custo Total da Saída"), prazo no Verde agora em rodapé com border-t e CalendarDays icon, Preto ganhou padrão de pontos radial branco 4% (texture sutil) + breakdown em grid 2 cols com bolinhas verde/violeta.
+ *   (7) NOVO banner FGTS informativo (Info icon + bg-blue-50) abaixo dos 3 cards.
+ *   (8) Rodapé sticky com Border-t bg-slate-50, novo botão "Imprimir / PDF" (Printer icon — reusa padrão `print-only` do css L323 já existente desde Rev. 1950) ao lado do Fechar; "Abrir Raio-X" segue à esquerda.
+ * version → 1970.
+ * Resultado: modal passa de "lista monolítica densa" pra "página resumo executiva" — hero KPIs (1 olhada), composição percentual (entendimento), detalhes (drilling), 3 totais (decisão), ação (imprimir/raio-x). Layout escala bem mobile→desktop (md:grid-cols-3 hero, sm:grid-cols-3 dados, flex-wrap nas legendas).
+ * Preservado: Rev. 1969 (procedure tRPC oficial mantido — só JSX mudou), Rev. 1968 (Dash SST) e anteriores INTACTAS. Backend INTACTO. Schema INTACTO. Mesmos campos do payload `calc.*`/`pv.*`/`pc.*`. Zero tRPC novo. Zero ALTER/DROP/DELETE. R-001/R-007/R-010 OK. Reversível em 1 hunk.
+ *
  * Rev. 1969 — RH · DashAvisoPrevio · Modal "Detalhe do Cálculo" REFEITO usando o MESMO procedure tRPC `avisoPrevio.calcular` da tela oficial + layout 3-cards (verde TOTAL LÍQUIDO / roxo USO INTERNO line-by-line / preto TOTAL GERAL) idêntico ao "Novo Aviso Prévio".
  * User (16/05/2026 às 20:46, IMG_0824 vs IMG_0826): "Está mais próximo, mas ainda não está 100% igual pq?".
  * Diagnóstico: meu modal Rev. 1967 chamava o engine via `dashboards.custoDemissaoMassa` (Rev. 1964), que por design EXCLUI ajustes operacionais (vales, EPI, convênios, faltas) — Anderson: meu R$ 73.902,97 vs oficial R$ 73.781,95 = diff R$ 121,02 (= descontoVales/EPI/etc) + datas divergentes (16/07 vs 25/07 — recalculo dinâmico no procedure oficial leva em conta dia útil + reduções). Além disso o layout era diferente do oficial (1 tabela monolítica vs 3 cards distintos).

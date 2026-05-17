@@ -1603,169 +1603,309 @@ function DetalheCalculoModal({
   const complTot = parseFloat(String(pc?.total ?? '0')) || 0;
   const totalGeral = oficialLiq + complTot;
 
+  // Rev. 1970 — Composição percentual das verbas (mini-barra horizontal stacked).
+  const totalBruto = parseFloat(String(pv?.totalBruto ?? pv?.total ?? '0')) || 0;
+  const composicao = pv ? [
+    { key: 'saldo', label: 'Saldo Salário', value: parseFloat(String(pv.saldoSalario || '0')) || 0, color: '#10B981' },
+    { key: 'aviso', label: 'Aviso Indenizado', value: parseFloat(String(pv.avisoPrevioIndenizado || '0')) || 0, color: '#3B82F6' },
+    { key: '13o', label: '13º Proporcional', value: parseFloat(String(pv.decimoTerceiroProporcional || '0')) || 0, color: '#A78BDB' },
+    { key: 'ferias', label: 'Férias Prop. + 1/3', value: parseFloat(String(pv.totalFerias || '0')) || 0, color: '#F59E0B' },
+    { key: 'fv', label: 'Férias Vencidas + 1/3', value: parseFloat(String(pv.feriasVencidas || '0')) || 0, color: '#EF4444' },
+    { key: 'fgts', label: 'Multa 40% FGTS', value: parseFloat(String(pv.multaFGTS || '0')) || 0, color: '#5CC5CF' },
+  ].filter(c => c.value > 0) : [];
+
+  // Rev. 1970 — Imprimir / PDF do cálculo individual.
+  const handlePrint = () => {
+    const el = document.getElementById(`detalhe-calc-print-${row.id}`);
+    if (!el) return;
+    el.classList.add('print-only');
+    const cleanup = () => { el.classList.remove('print-only'); window.removeEventListener('afterprint', cleanup); };
+    window.addEventListener('afterprint', cleanup);
+    setTimeout(cleanup, 5000);
+    window.print();
+  };
+
   return (
     <Dialog open={true} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-3xl max-h-[92vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-base">
-            <Calculator className="h-5 w-5 text-blue-600" />
-            Detalhe do Cálculo do Aviso — {row.nomeCompleto}
-          </DialogTitle>
-        </DialogHeader>
+      <DialogContent className="max-w-4xl max-h-[92vh] overflow-y-auto p-0 gap-0">
+        {/* Header colorido fixo */}
+        <div className="bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600 px-5 py-4 sticky top-0 z-10 shadow-md">
+          <DialogHeader className="space-y-1">
+            <DialogTitle className="flex items-center gap-2 text-white text-base font-semibold">
+              <div className="h-9 w-9 rounded-lg bg-white/15 backdrop-blur flex items-center justify-center">
+                <Calculator className="h-5 w-5 text-white" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="truncate">Detalhe do Cálculo do Aviso</div>
+                <div className="text-[11px] font-normal text-blue-100 truncate">{row.nomeCompleto}</div>
+              </div>
+            </DialogTitle>
+          </DialogHeader>
+        </div>
 
-        {isLoading && (
-          <div className="flex items-center justify-center py-12 text-sm text-muted-foreground gap-2">
-            <Loader2 className="h-5 w-5 animate-spin" /> Calculando rescisão (procedure oficial)…
-          </div>
-        )}
-        {error && (
-          <div className="p-4 text-sm text-red-700 bg-red-50 border border-red-200 rounded">
-            Erro ao calcular: {String((error as any)?.message || error)}
-          </div>
-        )}
-
-        {calc && (
-          <div className="space-y-4 text-sm">
-            {/* Header com dados base */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 p-3 bg-slate-50 rounded-md text-xs">
-              <div><span className="text-muted-foreground">Função:</span> <span className="font-medium">{row.funcao || row.cargo || '—'}</span></div>
-              <div><span className="text-muted-foreground">Obra:</span> <span className="font-medium">{row.obra || '—'}</span></div>
-              <div><span className="text-muted-foreground">Admissão:</span> <span className="font-medium">{fmtData(calc.dataAdmissao)}</span></div>
-              <div><span className="text-muted-foreground">Tempo:</span> <span className="font-medium">{calc.anosServico ?? '—'}</span></div>
-              <div><span className="text-muted-foreground">Dias aviso:</span> <span className="font-medium tabular-nums">{calc.diasAviso ?? 0}{calc.diasExtras ? ` (+${calc.diasExtras})` : ''}</span></div>
-              <div><span className="text-muted-foreground">Salário:</span> <span className="font-medium tabular-nums">{fmt(calc.salarioBase)}</span></div>
+        <div id={`detalhe-calc-print-${row.id}`} className="p-5">
+          {isLoading && (
+            <div className="flex items-center justify-center py-16 text-sm text-muted-foreground gap-2">
+              <Loader2 className="h-5 w-5 animate-spin" /> Calculando rescisão (procedure oficial)…
             </div>
+          )}
+          {error && (
+            <div className="p-4 text-sm text-red-700 bg-red-50 border border-red-200 rounded">
+              Erro ao calcular: {String((error as any)?.message || error)}
+            </div>
+          )}
 
-            {/* Bloco verbas a pagar (resumido — só rubricas principais) */}
-            {pv && (
-              <div className="bg-white rounded-lg border border-green-200 p-4">
-                <p className="text-xs font-bold text-green-700 uppercase tracking-wide mb-3">Verbas Rescisórias (a pagar)</p>
-                <div className="space-y-0 text-sm">
-                  <div className="flex justify-between py-1.5 border-b border-green-50"><span className="text-gray-700">Saldo de salário <span className="text-[10px] text-gray-400 ml-1">({pv.diasTrabalhadosMes}/{pv.diasReaisMes || 30}d)</span></span><span className="font-semibold">{fmt(pv.saldoSalario)}</span></div>
-                  {parseFloat(pv.avisoPrevioIndenizado || '0') > 0 && (
-                    <div className="flex justify-between py-1.5 border-b border-green-50"><span className="text-gray-700">Aviso prévio indenizado <span className="text-[10px] text-gray-400">(Lei 12.506)</span></span><span className="font-semibold">{fmt(pv.avisoPrevioIndenizado)}</span></div>
-                  )}
-                  <div className="flex justify-between py-1.5 border-b border-green-50"><span className="text-gray-700">13º proporcional <span className="text-[10px] text-gray-400">({pv.meses13o}/12)</span></span><span className="font-semibold">{fmt(pv.decimoTerceiroProporcional)}</span></div>
-                  <div className="flex justify-between py-1.5 border-b border-green-50"><span className="text-gray-700">Férias proporcionais + 1/3 <span className="text-[10px] text-gray-400">({pv.mesesFerias}/12)</span></span><span className="font-semibold">{fmt(pv.totalFerias)}</span></div>
-                  {parseFloat(pv.feriasVencidas || '0') > 0 && (
-                    <div className="flex justify-between py-1.5 border-b border-green-50"><span className="text-red-700 font-medium">Férias vencidas + 1/3 <span className="text-[10px] text-red-400">(Art. 137 CLT — {pv.periodosVencidos} per.)</span></span><span className="font-semibold text-red-700">{fmt(parseFloat(pv.feriasVencidas || '0') + parseFloat(pv.tercoFeriasVencidas || '0'))}</span></div>
-                  )}
-                  {parseFloat(pv.multaFGTS || '0') > 0 && (
-                    <div className="flex justify-between py-1.5 border-b border-green-50"><span className="text-gray-700">Multa 40% FGTS</span><span className="font-semibold">{fmt(pv.multaFGTS)}</span></div>
-                  )}
-                  <div className="flex justify-between py-2 border-t border-green-200 mt-1"><span className="font-bold text-green-800">Total bruto</span><span className="font-bold text-green-800">{fmt(pv.totalBruto ?? pv.total)}</span></div>
+          {calc && (
+            <div className="space-y-5 text-sm">
+              {/* HERO SUMMARY: 3 KPIs at-a-glance */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div className="rounded-xl border-2 border-emerald-200 bg-gradient-to-br from-emerald-50 to-green-50 p-3 sm:p-4">
+                  <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase text-emerald-700 tracking-wide">
+                    <CheckCircle2 className="h-3.5 w-3.5" /> Total Líquido
+                  </div>
+                  <p className="text-xl sm:text-2xl font-extrabold text-emerald-700 tabular-nums mt-1">{fmt(oficialLiq)}</p>
+                  <p className="text-[10px] text-emerald-600 mt-0.5">Bruto − Descontos (oficial TRCT)</p>
+                </div>
+                <div className="rounded-xl border-2 border-violet-200 bg-gradient-to-br from-violet-50 to-fuchsia-50 p-3 sm:p-4">
+                  <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase text-violet-700 tracking-wide">
+                    <Wallet className="h-3.5 w-3.5" /> Complementar
+                  </div>
+                  <p className="text-xl sm:text-2xl font-extrabold text-violet-700 tabular-nums mt-1">{fmt(complTot)}</p>
+                  <p className="text-[10px] text-violet-600 mt-0.5">{pc ? `Sobre ${fmt(pc.baseComplemento)}/mês — uso interno` : 'Sem complemento cadastrado'}</p>
+                </div>
+                <div className="rounded-xl border-2 border-slate-700 bg-gradient-to-br from-slate-800 to-slate-900 p-3 sm:p-4">
+                  <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase text-slate-300 tracking-wide">
+                    <DollarSign className="h-3.5 w-3.5" /> Total Geral
+                  </div>
+                  <p className="text-xl sm:text-2xl font-extrabold text-white tabular-nums mt-1">{fmt(totalGeral)}</p>
+                  <p className="text-[10px] text-slate-300 mt-0.5">Oficial + Complementar</p>
                 </div>
               </div>
-            )}
 
-            {/* Bloco descontos legais line-by-line (como na tela oficial) */}
-            {pv && parseFloat(pv.totalDescontos || '0') > 0 && (
-              <div className="bg-white rounded-lg border border-red-200 p-4">
-                <p className="text-xs font-bold text-red-500 uppercase tracking-wide mb-3">Descontos Legais e da Folha</p>
-                <div className="space-y-0 text-sm">
-                  {([
-                    ['descontoINSS', 'INSS (sobre saldo + 13º)'],
-                    ['descontoIRRF', 'IRRF (sobre saldo + 13º)'],
-                    ['descontoPensao', 'Pensão Alimentícia'],
-                    ['descontoSindical', 'Contribuição Sindical'],
-                    ['descontoFaltasAtrasos', 'Faltas / Atrasos do mês'],
-                    ['descontoConvenios', 'Convênios (aprovados)'],
-                    ['descontoEpis', 'EPIs (aprovados)'],
-                    ['descontoVales', 'Vales / Adiantamentos'],
-                    ['descontoOutros', 'Outros (aprovados RH)'],
-                  ] as const).map(([k, label]) => {
-                    const v = parseFloat(String((pv as any)[k] || '0'));
-                    if (v <= 0) return null;
-                    return (
-                      <div key={k} className="flex justify-between py-1.5 border-b border-red-50">
-                        <span className="text-red-700">{label}</span>
-                        <span className="font-semibold text-red-700">– {fmt(v)}</span>
+              {/* Header com dados base do funcionário (ícone + grid) */}
+              <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="h-7 w-7 rounded-md bg-slate-200/70 flex items-center justify-center"><Users className="h-3.5 w-3.5 text-slate-600" /></div>
+                  <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wide">Dados Base</h4>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-2 text-xs">
+                  <div><span className="text-muted-foreground">Função:</span> <span className="font-medium text-slate-800">{row.funcao || row.cargo || '—'}</span></div>
+                  <div className="sm:col-span-2"><span className="text-muted-foreground">Obra:</span> <span className="font-medium text-slate-800">{row.obra || '—'}</span></div>
+                  <div><span className="text-muted-foreground">Admissão:</span> <span className="font-medium text-slate-800 tabular-nums">{fmtData(calc.dataAdmissao)}</span></div>
+                  <div><span className="text-muted-foreground">Tempo:</span> <span className="font-medium text-slate-800">{calc.anosServico ?? '—'}</span></div>
+                  <div><span className="text-muted-foreground">Dias aviso:</span> <span className="font-medium text-slate-800 tabular-nums">{calc.diasAviso ?? 0}{calc.diasExtras ? ` (+${calc.diasExtras})` : ''}</span></div>
+                  <div><span className="text-muted-foreground">Salário:</span> <span className="font-medium text-slate-800 tabular-nums">{fmt(calc.salarioBase)}</span></div>
+                  <div><span className="text-muted-foreground">Modalidade:</span> <span className={`font-semibold ${tipo === 'empregador_indenizado' ? 'text-red-700' : 'text-blue-700'}`}>{fmtTipoLabel(tipo)}</span></div>
+                  <div className="sm:col-span-1"><span className="text-muted-foreground">Data desligamento:</span> <span className="font-medium text-slate-800 tabular-nums">{fmtData(dataDesligamento)}</span></div>
+                </div>
+              </div>
+
+              {/* COMPOSIÇÃO PERCENTUAL — barra horizontal stacked */}
+              {composicao.length > 0 && totalBruto > 0 && (
+                <div className="rounded-xl border border-slate-200 bg-white p-4">
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className="h-7 w-7 rounded-md bg-blue-100 flex items-center justify-center"><BarChart3 className="h-3.5 w-3.5 text-blue-600" /></div>
+                    <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wide">Composição das Verbas Brutas</h4>
+                    <span className="ml-auto text-[10px] text-muted-foreground tabular-nums">Total: {fmt(totalBruto)}</span>
+                  </div>
+                  <div className="flex h-7 rounded-md overflow-hidden border border-slate-200 shadow-inner">
+                    {composicao.map(c => {
+                      const pct = (c.value / totalBruto) * 100;
+                      return (
+                        <div
+                          key={c.key}
+                          style={{ width: `${pct}%`, backgroundColor: c.color }}
+                          className="h-full transition-all hover:brightness-110"
+                          title={`${c.label}: ${fmt(c.value)} (${pct.toFixed(1)}%)`}
+                        />
+                      );
+                    })}
+                  </div>
+                  <div className="flex flex-wrap gap-x-3 gap-y-1.5 mt-2.5 text-[10px]">
+                    {composicao.map(c => {
+                      const pct = (c.value / totalBruto) * 100;
+                      return (
+                        <div key={c.key} className="flex items-center gap-1.5">
+                          <span className="h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: c.color }} />
+                          <span className="text-slate-700">{c.label}</span>
+                          <span className="text-slate-400 tabular-nums">{pct.toFixed(1)}%</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Bloco verbas a pagar (com ícone no header) */}
+              {pv && (
+                <div className="rounded-xl border-2 border-emerald-200 bg-white overflow-hidden">
+                  <div className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-emerald-50 to-green-50 border-b border-emerald-200">
+                    <div className="h-7 w-7 rounded-md bg-emerald-500/15 flex items-center justify-center"><TrendingUp className="h-3.5 w-3.5 text-emerald-700" /></div>
+                    <h4 className="text-xs font-bold text-emerald-800 uppercase tracking-wide">Verbas Rescisórias (a pagar)</h4>
+                    <span className="ml-auto text-xs font-bold text-emerald-700 tabular-nums">{fmt(pv.totalBruto ?? pv.total)}</span>
+                  </div>
+                  <div className="divide-y divide-emerald-50/80 text-sm">
+                    <div className="flex justify-between px-4 py-2"><span className="text-slate-700">Saldo de salário <span className="text-[10px] text-slate-400 ml-1">({pv.diasTrabalhadosMes}/{pv.diasReaisMes || 30}d)</span></span><span className="font-semibold tabular-nums">{fmt(pv.saldoSalario)}</span></div>
+                    {parseFloat(pv.avisoPrevioIndenizado || '0') > 0 && (
+                      <div className="flex justify-between px-4 py-2"><span className="text-slate-700">Aviso prévio indenizado <span className="text-[10px] text-slate-400">(Lei 12.506)</span></span><span className="font-semibold tabular-nums">{fmt(pv.avisoPrevioIndenizado)}</span></div>
+                    )}
+                    <div className="flex justify-between px-4 py-2"><span className="text-slate-700">13º proporcional <span className="text-[10px] text-slate-400">({pv.meses13o}/12)</span></span><span className="font-semibold tabular-nums">{fmt(pv.decimoTerceiroProporcional)}</span></div>
+                    <div className="flex justify-between px-4 py-2"><span className="text-slate-700">Férias proporcionais + 1/3 <span className="text-[10px] text-slate-400">({pv.mesesFerias}/12)</span></span><span className="font-semibold tabular-nums">{fmt(pv.totalFerias)}</span></div>
+                    {parseFloat(pv.feriasVencidas || '0') > 0 && (
+                      <div className="flex justify-between px-4 py-2 bg-red-50/50"><span className="text-red-700 font-medium flex items-center gap-1"><AlertTriangle className="h-3 w-3" /> Férias vencidas + 1/3 <span className="text-[10px] text-red-500">(Art. 137 CLT — {pv.periodosVencidos} per.)</span></span><span className="font-semibold text-red-700 tabular-nums">{fmt(pv.feriasVencidas)}</span></div>
+                    )}
+                    {parseFloat(pv.multaFGTS || '0') > 0 && (
+                      <div className="flex justify-between px-4 py-2"><span className="text-slate-700">Multa 40% FGTS</span><span className="font-semibold tabular-nums">{fmt(pv.multaFGTS)}</span></div>
+                    )}
+                    <div className="flex justify-between px-4 py-2.5 bg-emerald-50 border-t-2 border-emerald-200"><span className="font-bold text-emerald-800">Total bruto</span><span className="font-bold text-emerald-800 tabular-nums">{fmt(pv.totalBruto ?? pv.total)}</span></div>
+                  </div>
+                </div>
+              )}
+
+              {/* Bloco descontos legais (com ícone) */}
+              {pv && parseFloat(pv.totalDescontos || '0') > 0 && (
+                <div className="rounded-xl border-2 border-red-200 bg-white overflow-hidden">
+                  <div className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-red-50 to-rose-50 border-b border-red-200">
+                    <div className="h-7 w-7 rounded-md bg-red-500/15 flex items-center justify-center"><ArrowDown className="h-3.5 w-3.5 text-red-700" /></div>
+                    <h4 className="text-xs font-bold text-red-800 uppercase tracking-wide">Descontos Legais e da Folha</h4>
+                    <span className="ml-auto text-xs font-bold text-red-700 tabular-nums">– {fmt(pv.totalDescontos)}</span>
+                  </div>
+                  <div className="divide-y divide-red-50/80 text-sm">
+                    {([
+                      ['descontoINSS', 'INSS', 'sobre saldo + 13º'],
+                      ['descontoIRRF', 'IRRF', 'sobre saldo + 13º'],
+                      ['descontoPensao', 'Pensão Alimentícia', null],
+                      ['descontoSindical', 'Contribuição Sindical', null],
+                      ['descontoFaltasAtrasos', 'Faltas / Atrasos', 'do mês'],
+                      ['descontoConvenios', 'Convênios', 'aprovados'],
+                      ['descontoEpis', 'EPIs', 'aprovados'],
+                      ['descontoVales', 'Vales / Adiantamentos', null],
+                      ['descontoOutros', 'Outros', 'aprovados RH'],
+                    ] as const).map(([k, label, sub]) => {
+                      const v = parseFloat(String((pv as any)[k] || '0'));
+                      if (v <= 0) return null;
+                      return (
+                        <div key={k} className="flex justify-between px-4 py-2">
+                          <span className="text-red-700">{label}{sub && <span className="text-[10px] text-red-400 ml-1">({sub})</span>}</span>
+                          <span className="font-semibold text-red-700 tabular-nums">– {fmt(v)}</span>
+                        </div>
+                      );
+                    })}
+                    <div className="flex justify-between px-4 py-2.5 bg-red-50 border-t-2 border-red-200"><span className="font-bold text-red-800">Subtotal Descontos</span><span className="font-bold text-red-800 tabular-nums">– {fmt(pv.totalDescontos)}</span></div>
+                  </div>
+                </div>
+              )}
+
+              {/* Card VERDE: TOTAL LÍQUIDO RESCISÃO (com badge prazo) */}
+              <div className="bg-gradient-to-r from-green-600 to-emerald-600 rounded-xl p-5 shadow-lg shadow-green-600/20">
+                <div className="flex justify-between items-start gap-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase text-green-100 tracking-wider">
+                      <CheckCircle2 className="h-3.5 w-3.5" /> Oficial — TRCT
+                    </div>
+                    <h3 className="text-base sm:text-lg font-bold text-white mt-0.5">TOTAL LÍQUIDO RESCISÃO</h3>
+                    <p className="text-[10px] text-green-100/80 mt-0.5">Verbas Brutas − Descontos Legais (inclui ajustes operacionais)</p>
+                  </div>
+                  <span className="text-2xl sm:text-3xl font-extrabold text-white tabular-nums whitespace-nowrap">{fmt(oficialLiq)}</span>
+                </div>
+                {pv?.dataLimitePagamento && (
+                  <div className="mt-3 pt-3 border-t border-white/20 flex items-center gap-1.5 text-[11px] text-white">
+                    <CalendarDays className="h-3.5 w-3.5 text-green-100" />
+                    <span className="font-semibold">Prazo pagamento:</span>
+                    <span className="tabular-nums">{fmtData(pv.dataLimitePagamento)}</span>
+                    <span className="text-green-100/80 ml-1">(Art. 477 §6º CLT)</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Card ROXO: RESCISÃO COMPLEMENTAR */}
+              {pc && (
+                <div className="rounded-xl border-2 border-violet-300 bg-gradient-to-br from-violet-50 to-fuchsia-50 overflow-hidden shadow-md shadow-violet-300/20">
+                  <div className="flex items-start justify-between gap-3 p-4 border-b border-violet-200 bg-white/40">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase text-violet-700 tracking-wider">
+                        <ShieldAlert className="h-3.5 w-3.5" /> Uso Interno
                       </div>
-                    );
-                  })}
-                  <div className="flex justify-between py-2 mt-1 border-t border-red-200"><span className="text-sm font-bold text-red-700">Subtotal Descontos Legais</span><span className="font-bold text-sm text-red-700">– {fmt(pv.totalDescontos)}</span></div>
+                      <h3 className="text-sm sm:text-base font-bold text-violet-900 mt-0.5">Rescisão Complementar</h3>
+                      <p className="text-[10px] text-violet-700/90 mt-0.5">
+                        Calculada sobre o complemento de {fmt(pc.baseComplemento)}/mês — não inclui FGTS, multa 40%, VR ou médias. Não substitui o TRCT.
+                      </p>
+                    </div>
+                    <span className="text-xl sm:text-2xl font-extrabold text-violet-700 whitespace-nowrap tabular-nums">{fmt(pc.total)}</span>
+                  </div>
+                  <div className="p-3">
+                    <div className="bg-white rounded-md border border-violet-200 divide-y divide-violet-100 text-xs">
+                      {parseFloat(pc.saldoSalario || '0') > 0 && (
+                        <div className="flex justify-between px-3 py-1.5"><span className="text-violet-900">Saldo de Salário ({pc.diasTrabalhadosMes || '?'}d)</span><span className="font-semibold text-violet-800 tabular-nums">{fmt(pc.saldoSalario)}</span></div>
+                      )}
+                      {parseFloat(pc.feriasProporcional || '0') > 0 && (
+                        <div className="flex justify-between px-3 py-1.5"><span className="text-violet-900">Férias Proporcionais ({pc.mesesFerias}/12)</span><span className="font-semibold text-violet-800 tabular-nums">{fmt(pc.feriasProporcional)}</span></div>
+                      )}
+                      {parseFloat(pc.tercoConstitucional || '0') > 0 && (
+                        <div className="flex justify-between px-3 py-1.5"><span className="text-violet-900">1/3 Constitucional</span><span className="font-semibold text-violet-800 tabular-nums">{fmt(pc.tercoConstitucional)}</span></div>
+                      )}
+                      {parseFloat(pc.feriasVencidas || '0') > 0 && (
+                        <div className="flex justify-between px-3 py-1.5"><span className="text-violet-900">Férias Vencidas{pc.periodosVencidos ? ` (${pc.periodosVencidos})` : ''}</span><span className="font-semibold text-violet-800 tabular-nums">{fmt(pc.feriasVencidas)}</span></div>
+                      )}
+                      {parseFloat(pc.feriasVencidasTerco || '0') > 0 && (
+                        <div className="flex justify-between px-3 py-1.5"><span className="text-violet-900">1/3 Férias Vencidas</span><span className="font-semibold text-violet-800 tabular-nums">{fmt(pc.feriasVencidasTerco)}</span></div>
+                      )}
+                      {parseFloat(pc.decimoTerceiroProporcional || '0') > 0 && (
+                        <div className="flex justify-between px-3 py-1.5"><span className="text-violet-900">13º Proporcional ({pc.meses13o}/12)</span><span className="font-semibold text-violet-800 tabular-nums">{fmt(pc.decimoTerceiroProporcional)}</span></div>
+                      )}
+                      {parseFloat(pc.avisoPrevioIndenizado || '0') > 0 && (
+                        <div className="flex justify-between px-3 py-1.5"><span className="text-violet-900">Aviso Prévio Indenizado</span><span className="font-semibold text-violet-800 tabular-nums">{fmt(pc.avisoPrevioIndenizado)}</span></div>
+                      )}
+                      <div className="flex justify-between px-3 py-2 bg-violet-100 font-bold">
+                        <span className="text-violet-900">TOTAL COMPLEMENTAR</span>
+                        <span className="text-violet-900 tabular-nums">{fmt(pc.total)}</span>
+                      </div>
+                    </div>
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
 
-            {/* Card 1 (VERDE): TOTAL LÍQUIDO RESCISÃO — réplica AvisoPrevio.tsx L3006 */}
-            <div className="bg-gradient-to-r from-green-600 to-emerald-600 rounded-lg p-5">
-              <div className="flex justify-between items-center">
-                <div>
-                  <span className="text-lg font-bold text-white">TOTAL LÍQUIDO RESCISÃO</span>
-                  <p className="text-[10px] text-green-200">Verbas Brutas – Descontos Legais – Outros (oficial)</p>
+              {/* Card PRETO: TOTAL GERAL (Oficial + Complementar) */}
+              {pc && (
+                <div className="bg-gradient-to-br from-slate-800 via-slate-900 to-black rounded-xl p-5 border-2 border-slate-700 shadow-xl shadow-slate-900/30 relative overflow-hidden">
+                  <div className="absolute inset-0 opacity-[0.04] pointer-events-none" style={{ backgroundImage: 'radial-gradient(circle at 20% 20%, white 1px, transparent 1px)', backgroundSize: '24px 24px' }} />
+                  <div className="relative flex justify-between items-start gap-3">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase text-amber-400 tracking-wider">
+                        <Flame className="h-3.5 w-3.5" /> Custo Total da Saída
+                      </div>
+                      <h3 className="text-base sm:text-lg font-bold text-white mt-0.5">TOTAL GERAL (Oficial + Complementar)</h3>
+                      <p className="text-[10px] text-slate-400 mt-0.5">Soma do TRCT oficial com o cálculo interno sobre o complemento</p>
+                    </div>
+                    <span className="text-2xl sm:text-3xl font-extrabold text-white tabular-nums whitespace-nowrap">{fmt(totalGeral)}</span>
+                  </div>
+                  <div className="relative mt-3 pt-3 border-t border-white/10 grid grid-cols-2 gap-3 text-[11px]">
+                    <div className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-green-400" /><span className="text-slate-300">Oficial:</span><span className="text-white font-semibold tabular-nums ml-auto">{fmt(oficialLiq)}</span></div>
+                    <div className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-violet-400" /><span className="text-slate-300">Complementar:</span><span className="text-white font-semibold tabular-nums ml-auto">{fmt(complTot)}</span></div>
+                  </div>
                 </div>
-                <span className="text-3xl font-bold text-white tabular-nums">{fmt(oficialLiq)}</span>
-              </div>
-              {pv?.dataLimitePagamento && (
-                <p className="text-[10px] text-green-200 mt-2 text-right">Prazo pagamento: {fmtData(pv.dataLimitePagamento)} (Art. 477 §6º CLT)</p>
+              )}
+
+              {/* FGTS estimado (informativo) */}
+              {pv?.fgtsEstimado && parseFloat(String(pv.fgtsEstimado)) > 0 && (
+                <div className="flex items-center gap-2 px-3 py-2 bg-blue-50 border border-blue-200 rounded-md text-[11px] text-blue-800">
+                  <Info className="h-3.5 w-3.5 shrink-0" />
+                  <span>FGTS estimado no período ({pv.mesesTotais || 0} meses): <span className="font-bold tabular-nums">{fmt(pv.fgtsEstimado)}</span> — informativo, depositado mensalmente.</span>
+                </div>
               )}
             </div>
+          )}
+        </div>
 
-            {/* Card 2 (ROXO): RESCISÃO COMPLEMENTAR (USO INTERNO) line-by-line — réplica L3020 */}
-            {pc && (
-              <div className="rounded-xl border-2 border-violet-300 bg-gradient-to-br from-violet-50 to-fuchsia-50 p-4">
-                <div className="flex items-start justify-between gap-3 mb-3">
-                  <div>
-                    <p className="text-[10px] font-bold uppercase text-violet-700 tracking-wider">USO INTERNO</p>
-                    <h4 className="text-sm font-bold text-violet-900 mt-0.5">Rescisão Complementar</h4>
-                    <p className="text-[10px] text-violet-700 mt-0.5">
-                      Calculada apenas sobre o complemento de {fmt(pc.baseComplemento)}/mês — não inclui FGTS, multa 40%, VR ou médias. Não substitui o TRCT.
-                    </p>
-                  </div>
-                  <span className="text-xl font-extrabold text-violet-700 whitespace-nowrap tabular-nums">{fmt(pc.total)}</span>
-                </div>
-                <div className="bg-white/60 rounded border border-violet-200 divide-y divide-violet-100 text-xs">
-                  {parseFloat(pc.saldoSalario || '0') > 0 && (
-                    <div className="flex justify-between px-3 py-1.5"><span className="text-violet-900">Saldo de Salário ({pc.diasTrabalhadosMes || '?'}d)</span><span className="font-semibold text-violet-800 tabular-nums">{fmt(pc.saldoSalario)}</span></div>
-                  )}
-                  {parseFloat(pc.feriasProporcional || '0') > 0 && (
-                    <div className="flex justify-between px-3 py-1.5"><span className="text-violet-900">Férias Proporcionais ({pc.mesesFerias}/12)</span><span className="font-semibold text-violet-800 tabular-nums">{fmt(pc.feriasProporcional)}</span></div>
-                  )}
-                  {parseFloat(pc.tercoConstitucional || '0') > 0 && (
-                    <div className="flex justify-between px-3 py-1.5"><span className="text-violet-900">1/3 Constitucional</span><span className="font-semibold text-violet-800 tabular-nums">{fmt(pc.tercoConstitucional)}</span></div>
-                  )}
-                  {parseFloat(pc.feriasVencidas || '0') > 0 && (
-                    <div className="flex justify-between px-3 py-1.5"><span className="text-violet-900">Férias Vencidas{pc.periodosVencidos ? ` (${pc.periodosVencidos})` : ''}</span><span className="font-semibold text-violet-800 tabular-nums">{fmt(pc.feriasVencidas)}</span></div>
-                  )}
-                  {parseFloat(pc.feriasVencidasTerco || '0') > 0 && (
-                    <div className="flex justify-between px-3 py-1.5"><span className="text-violet-900">1/3 Férias Vencidas</span><span className="font-semibold text-violet-800 tabular-nums">{fmt(pc.feriasVencidasTerco)}</span></div>
-                  )}
-                  {parseFloat(pc.decimoTerceiroProporcional || '0') > 0 && (
-                    <div className="flex justify-between px-3 py-1.5"><span className="text-violet-900">13º Proporcional ({pc.meses13o}/12)</span><span className="font-semibold text-violet-800 tabular-nums">{fmt(pc.decimoTerceiroProporcional)}</span></div>
-                  )}
-                  {parseFloat(pc.avisoPrevioIndenizado || '0') > 0 && (
-                    <div className="flex justify-between px-3 py-1.5"><span className="text-violet-900">Aviso Prévio Indenizado</span><span className="font-semibold text-violet-800 tabular-nums">{fmt(pc.avisoPrevioIndenizado)}</span></div>
-                  )}
-                  <div className="flex justify-between px-3 py-2 bg-violet-100 font-bold">
-                    <span className="text-violet-900">TOTAL COMPLEMENTAR</span>
-                    <span className="text-violet-900 tabular-nums">{fmt(pc.total)}</span>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Card 3 (PRETO): TOTAL GERAL (Oficial + Complementar) — réplica L3066 */}
-            {pc && (
-              <div className="bg-gradient-to-r from-slate-800 to-slate-900 rounded-lg p-5 border-2 border-slate-700">
-                <div className="flex justify-between items-center">
-                  <div>
-                    <span className="text-lg font-bold text-white">TOTAL GERAL (Oficial + Complementar)</span>
-                    <p className="text-[10px] text-slate-300">Soma do TRCT oficial com o cálculo interno sobre o complemento</p>
-                  </div>
-                  <span className="text-3xl font-extrabold text-white tabular-nums">{fmt(totalGeral)}</span>
-                </div>
-                <div className="flex justify-end gap-4 mt-2 text-[10px] text-slate-300">
-                  <span>Oficial: {fmt(oficialLiq)}</span>
-                  <span>Complementar: {fmt(complTot)}</span>
-                </div>
-              </div>
-            )}
-
-            {/* Rodapé com botão raio-x */}
-            <div className="flex justify-between items-center gap-2 pt-2 border-t">
-              <Button variant="outline" size="sm" onClick={() => onAbrirRaioX(row.id)}>
-                <Stethoscope className="h-3.5 w-3.5 mr-1.5" /> Abrir Raio-X
+        {/* Rodapé sticky */}
+        {calc && (
+          <div className="border-t bg-slate-50 px-5 py-3 sticky bottom-0 flex flex-wrap justify-between items-center gap-2">
+            <Button variant="outline" size="sm" onClick={() => onAbrirRaioX(row.id)}>
+              <Stethoscope className="h-3.5 w-3.5 mr-1.5" /> Abrir Raio-X
+            </Button>
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={handlePrint}>
+                <Printer className="h-3.5 w-3.5 mr-1.5" /> Imprimir / PDF
               </Button>
               <Button size="sm" variant="default" onClick={onClose}>Fechar</Button>
             </div>
