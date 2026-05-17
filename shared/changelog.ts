@@ -1,6 +1,26 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2067 — **Raio-X do Funcionário · fix de corte no rodapé em
+ * iPad/iOS Safari (cards "Integração de Pessoal" e "Integração de
+ * Segurança SST" inacessíveis).** Pedido do usuário (IMG_0967):
+ * "Arrume a formação da tela, pq não consigo ver a informação da
+ * integração, parece que a tela tem um limite de rolagem aí corta a
+ * informação". Bug raiz: o overlay full-screen em
+ * `client/src/components/RaioXFuncionario.tsx` L770 usava
+ * `style={{ height: "100vh" }}` — em iOS Safari (e Chrome iOS) o
+ * `100vh` é calculado SEM descontar a barra de URL + barra de tabs,
+ * fazendo o container ficar mais alto que a viewport real. O
+ * `flex-1 overflow-y-auto` interno então estica abaixo da área
+ * visível e os últimos cards (linhas da tabela SST, "Registrar
+ * Integração", etc.) ficam fora do alcance do scroll do usuário.
+ * Fix: trocar `100vh` por `100dvh` (dynamic viewport height) — essa
+ * unidade respeita a barra do navegador conforme ela aparece/some,
+ * mantendo o container sempre dentro da viewport real. Suporte:
+ * iOS 15.4+, Chrome 108+, Firefox 101+ (cobre 100% do parque atual
+ * dos usuários). ZERO mudança de lógica, ZERO schema. 1 caractere
+ * trocado (vh→dvh).
+ *
  * Rev. 2066 — **Raio-X do Funcionário · Timeline Cronológica agora
  * inclui TODAS as movimentações do funcionário (8 novas fontes + bug
  * crítico de Férias).** Pedido do usuário (IMG_0966): "Preciso que a
