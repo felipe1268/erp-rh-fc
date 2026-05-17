@@ -1,6 +1,65 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2028 — Faxina do `replit.md` (manutenção, ZERO mudança de
+ * comportamento de aplicação). O arquivo havia crescido pra ~13k
+ * tokens (180 linhas, 144 bullets), com vários blocos detalhados
+ * espalhados fora do top-5 + um placeholder órfão `_PLACEHOLDER_QUE_NAO_DEVE_EXISTIR_`
+ * sobrando da Rev. 1998, violando a convenção do topo do bloco
+ * "Recent changes". Sinal verde explícito do usuário: "Sobre o
+ * replit.md ficar grande: a próxima rev (2028) pode ser a faxina —
+ * mover one-liners antigos pra replit-history.md e manter no
+ * replit.md só top-5 detalhado + ~10 one-liners recentes... pode
+ * ajusTAR E ZERAR TUDO QUE PUDER, SEM APGAR UM CODIGO IMPROATNTE OU
+ * ARQUIVO DO BANCO DE DADOS".
+ *
+ * Mudança em 3 arquivos:
+ *
+ * (A) `replit-history.md` (NOVO) — arquivo novo que recebe os
+ *   one-liners das Revs. 1903 → 2012 (94 entradas no total),
+ *   organizadas em duas seções ("Revisões 2000 → 2012" e
+ *   "Revisões 1903 → 1999"). Mantém o redirect canônico pra
+ *   `shared/changelog.ts` (que segue intacto e é a fonte de verdade
+ *   pra tudo). Algumas entradas notórias (1958=faxina prévia,
+ *   1984=faxina 1ª onda, 1998=número interno terceiros, 2009=modal
+ *   regra de ouro, 2012=upload vídeo) ganharam título curto pra
+ *   facilitar grep.
+ *
+ * (B) `replit.md` — bloco "Recent changes" reescrito em 3 camadas:
+ *   (1) Top-5 detalhado (2028/2027/2026/2025/2024) — detalhe
+ *       completo, o quê + por quê + arquivos tocados.
+ *   (2) "Revisões recentes" com 10 one-liners curtos (2023 → 2014)
+ *       com título descritivo de 1 linha.
+ *   (3) Ponteiro pra `replit-history.md` + `shared/changelog.ts`.
+ *   Convenção atualizada pra refletir o novo formato (10 one-liners
+ *   recentes antes do dump pro history). Header (Run/Stack/Where
+ *   things live) e User preferences INTACTOS. Resultado: arquivo
+ *   cai de ~180L pra ~75L (≈ 13k → 3k tokens), preservando 100% da
+ *   informação útil pra debugging recente.
+ *
+ * (C) `shared/version.ts` → 2028.
+ *
+ * R-001/R-007/R-010 OK: ZERO SQL, ZERO schema, ZERO mudança de
+ * código de aplicação (nem 1 byte em client/ ou server/). Reversível
+ * em 2 arquivos (deletar replit-history.md + restaurar replit.md
+ * anterior).
+ *
+ * Preservado:
+ *   - TODO o histórico técnico em `shared/changelog.ts` INTACTO —
+ *     ZERO linha removida (fonte de verdade canônica).
+ *   - Convenção top-5 detalhado mantida (só ganhou camada de 10
+ *     one-liners recentes antes de mover pro history).
+ *   - Rev. 2027 (fix fonte única getAtrasoDetalhe) INTACTA.
+ *   - Rev. 2024 (terceiros no detalhe DDS + transferência) INTACTA.
+ *   - Header (Run/Stack/Where things live), User preferences,
+ *     regras R-001/R-007/R-010 — todos INTACTOS.
+ *
+ * Follow-up:
+ *   - Quando "Revisões recentes" passar de 10 itens, mover o mais
+ *     antigo pra `replit-history.md` (manter a janela rolante).
+ *   - Considerar dividir `shared/changelog.ts` por ano se passar de
+ *     5k linhas (atualmente cabe sem problema).
+ *
  * Rev. 2027 — DP · Fechamento de Ponto · BUGFIX: divergência entre
  * tabela e modal "Memória de cálculo · Atraso Acumulado".
  *
