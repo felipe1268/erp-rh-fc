@@ -999,23 +999,37 @@ function PendentesTab({ companyId }: { companyId: number }) {
   const empList = trpc.employees.list.useQuery({ companyId, status: "Ativo" }, { enabled: companyId > 0 });
   const obras = trpc.obras.listActive.useQuery({ companyId }, { enabled: companyId > 0 });
   const configs = trpc.integracaoSST.listarConfigs.useQuery({ companyId }, { enabled: companyId > 0 });
-  // Rev. 2038 — quando true, ao criar o registro abre a tela pública em nova aba (vindo do "Iniciar agora").
-  const autoOpenRef = useRef(false);
+  // Rev. 2038/2039 — janela pré-aberta no click pra escapar do pop-up blocker do Safari.
+  const pendingWindowRef = useRef<Window | null>(null);
   const criarRegistro = trpc.integracaoSST.criarRegistro.useMutation({
     onSuccess: (data) => {
       registros.refetch();
       emAndamento.refetch();
       pendentesAuto.refetch();
       const link = `${window.location.origin}/integracao/${data.token}`;
-      if (autoOpenRef.current) {
-        autoOpenRef.current = false;
-        window.open(link, "_blank", "noopener,noreferrer");
-        toast.success(`Integração de ${data.employeeNome || "colaborador"} iniciada em nova aba`);
+      if (pendingWindowRef.current) {
+        const w = pendingWindowRef.current;
+        pendingWindowRef.current = null;
+        try { w.location.href = link; } catch { /* janela fechada antes */ }
+        if (w.closed) {
+          setCreatedLink(link);
+          setCreatedEmployee(data.employeeNome || "");
+          toast.warning("Pop-up bloqueado — copie o link abaixo pra abrir manualmente");
+        } else {
+          toast.success(`Integração de ${data.employeeNome || "colaborador"} iniciada em nova aba`);
+        }
         return;
       }
       setCreatedLink(link);
       setCreatedEmployee(data.employeeNome || "");
       toast.success("Integração criada com sucesso!");
+    },
+    onError: (err) => {
+      if (pendingWindowRef.current) {
+        try { pendingWindowRef.current.close(); } catch { /* ignore */ }
+        pendingWindowRef.current = null;
+      }
+      toast.error(err?.message || "Erro ao criar integração");
     }
   });
   const criarLote = trpc.integracaoSST.criarRegistrosEmLote.useMutation({
@@ -1125,10 +1139,21 @@ function PendentesTab({ companyId }: { companyId: number }) {
     setShowNew(true);
   };
 
-  // Rev. 2038 — "Iniciar agora" cria registro e abre direto a tela pública (boas-vindas → vídeos → quiz).
+  // Rev. 2038/2039 — "Iniciar agora": ABRE a janela SÍNCRONA no click (escapa pop-up blocker
+  // Safari/iPad), depois cria o registro e seta a URL no onSuccess.
   const iniciarAgora = (emp: { id: number; nome: string; cpf: string | null; funcao: string | null }) => {
     if (criarRegistro.isPending) return;
-    autoOpenRef.current = true;
+    const w = window.open("about:blank", "_blank");
+    if (w) {
+      try {
+        w.document.write(
+          `<!doctype html><meta charset="utf-8"><title>Iniciando integração…</title>` +
+          `<style>body{font-family:system-ui,-apple-system,sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;background:linear-gradient(180deg,#ecfdf5,#fff);color:#065f46}.box{text-align:center}.spin{width:48px;height:48px;border:4px solid #d1fae5;border-top-color:#059669;border-radius:50%;animation:s 1s linear infinite;margin:0 auto 16px}@keyframes s{to{transform:rotate(360deg)}}</style>` +
+          `<div class="box"><div class="spin"></div><h2>Preparando a integração de ${emp.nome.split(" ")[0]}…</h2><p>Aguarde um instante.</p></div>`
+        );
+      } catch { /* algumas janelas about:blank não aceitam document.write */ }
+      pendingWindowRef.current = w;
+    }
     criarRegistro.mutate({ companyId, employeeId: emp.id });
   };
 

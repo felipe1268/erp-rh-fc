@@ -1,6 +1,90 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2039 — SST · Integração de Segurança · "Iniciar agora" ·
+ * BUGFIX pop-up blocker (Safari/iPad): "Clico em iniciar e
+ * não acontece nada".
+ *
+ * Pedido direto do usuário (img IMG_0886): após Rev. 2038 o
+ * botão parecia inerte no Safari do iPad. Causa-raiz: o
+ * `window.open(link, "_blank")` rodava dentro do `onSuccess`
+ * (callback ASSÍNCRONO da mutation tRPC), fora da pilha de
+ * gesto do usuário — Safari/iPad bloqueia silenciosamente
+ * todo `window.open` que não esteja na pilha direta de
+ * clique. Code review da 2038 já previu (follow-up #2).
+ *
+ * Solução (padrão clássico "open-blank-then-redirect"):
+ *
+ *   1. No CLICK (sincronicamente), `iniciarAgora(emp)` abre
+ *      uma janela `about:blank` IMEDIATA e guarda a
+ *      referência em `pendingWindowRef`. Esse `window.open`
+ *      acontece DENTRO da pilha de gesto → navegador
+ *      autoriza.
+ *   2. Pra UX, a janela já mostra um spinner inline
+ *      ("Preparando a integração de NOME…") via
+ *      `document.write` com CSS embutido (verde emerald,
+ *      mesmo idioma visual do app).
+ *   3. Imediatamente dispara `criarRegistro.mutate(...)`.
+ *   4. No `onSuccess`, se `pendingWindowRef.current`
+ *      existe, faz `w.location.href = link` — a janela
+ *      pré-aberta navega pro fluxo público da integração.
+ *      Se `w.closed` (usuário fechou antes), cai no
+ *      fallback do modal com link copiável + warning
+ *      "Pop-up bloqueado".
+ *   5. No `onError` adicionado, fecha a janela pendente
+ *      (não deixa órfã com spinner) e toasta o erro.
+ *
+ * Mudança em 2 arquivos:
+ *
+ *   (A) `client/src/pages/sst/IntegracaoSST.tsx` (~30L em 2
+ *       hunks):
+ *     - `autoOpenRef` (boolean) substituído por
+ *       `pendingWindowRef` (`useRef<Window|null>`)
+ *     - `criarRegistro.useMutation` ganha:
+ *         * onSuccess: checa `pendingWindowRef.current`
+ *           e seta `w.location.href` (try/catch pra
+ *           janela fechada); fallback pro modal de link
+ *           quando `w.closed` com toast.warning
+ *         * onError: fecha janela pendente + toast.error
+ *     - `iniciarAgora(emp)` reescrita:
+ *         * `window.open("about:blank", "_blank")`
+ *           DENTRO do handler de clique (sincronicamente)
+ *         * `document.write` de splash inline (spinner
+ *           CSS, fundo gradient emerald, texto
+ *           personalizado com primeiro nome)
+ *         * guarda no `pendingWindowRef` e dispara
+ *           `criarRegistro.mutate`
+ *
+ *   (B) `shared/version.ts` → 2039.
+ *
+ * R-001/R-007/R-010 OK: ZERO SQL/schema/router. Reversível
+ * em 2 arquivos / 2 hunks. Apenas client-side. Sem
+ * dependências novas.
+ *
+ * Preservado:
+ *   - Rev. 2038 (boas-vindas + atalho "Iniciar agora")
+ *     INTACTA — só o mecanismo de abrir janela mudou
+ *   - Rev. 2037 (Memorial DSR) INTACTA
+ *   - Modal "Iniciar Integração" do header continua
+ *     gerando link e mostrando UI de cópia/WhatsApp
+ *   - `iniciarParaEmployee` preservada
+ *   - `criarRegistro.mutate` server-side INTACTO
+ *   - Botão "Iniciar agora" para terceiros INTACTO
+ *     (redireciona pra `/terceiros/funcionarios`)
+ *
+ * Follow-up:
+ *   1. Considerar mover splash inline pra um arquivo
+ *      `/public/integracao-loading.html` em vez de
+ *      `document.write` (alguns navegadores corporativos
+ *      são restritivos)
+ *   2. Detectar quando o pop-up foi bloqueado ANTES do
+ *      mutate.mutate (verificar `w === null`
+ *      imediatamente) e oferecer modal de confirmação
+ *      pra abrir em mesma aba como fallback
+ *   3. Persistir preferência do usuário: se o pop-up foi
+ *      bloqueado uma vez, próximo "Iniciar agora" pode
+ *      navegar na própria aba (com confirmação)
+ *
  * Rev. 2038 — SST · Integração de Segurança · aba Pendentes ·
  * botão "Iniciar agora" agora INICIA a integração de fato:
  * cria o registro e abre direto a tela pública em nova aba,

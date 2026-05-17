@@ -5,6 +5,10 @@
 > Movido aqui na Rev. 2028 (faxina) — revisões 1903 → 2012.
 > Atualizado na Rev. 2037 — revisões 2021 e 2022 movidas pra cá.
 
+## Revisão 2024
+
+- ~~Rev. 2024~~ — SST DDS: terceiros no detalhe da sessão + "Transferir colaborador" aceita terceiros. Ver `shared/changelog.ts`.
+
 ## Revisão 2023
 
 - ~~Rev. 2023~~ — SST Integração: card de vídeo reproduz upload (mp4/mov/webm) inline com player HTML5 nativo, sem download. Ver `shared/changelog.ts`.
