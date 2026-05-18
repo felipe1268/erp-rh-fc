@@ -17,7 +17,7 @@ import {
   Plus, Search, X, CheckCircle, AlertTriangle, TrendingUp, TrendingDown, Filter,
   Repeat, Pause, Play, Edit2, Calendar, Zap, ArrowUpRight, ArrowDownRight,
   Building2, CreditCard, FileText, ChevronDown, ChevronUp, RefreshCw,
-  ArrowLeftRight, Landmark,
+  ArrowLeftRight, Landmark, PlusCircle, Tag, Loader2,
 } from "lucide-react";
 
 function formatBRL(v: number) {
@@ -95,6 +95,10 @@ export default function FinanceiroLancamentos() {
   const [showObs, setShowObs] = useState(false);
   const [form, setForm] = useState({ ...INITIAL_FORM });
 
+  // Rev. 2082 — Cadastro inline de categoria sem sair do modal "Novo Lançamento".
+  const [showNewCat, setShowNewCat] = useState(false);
+  const [catForm, setCatForm] = useState({ nome: "", natureza: "variavel" as string, centroCustoId: "" as string });
+
   const { data, isLoading, refetch } = (trpc as any).financial.getEntries.useQuery(
     { companyId, mesCompetencia: mes, tipo: tipo !== "all" ? tipo : undefined, status: statusFilter !== "all" ? statusFilter : undefined, limit: 200, offset: 0 },
     { enabled: !!companyId }
@@ -137,6 +141,62 @@ export default function FinanceiroLancamentos() {
     onSuccess: () => { toast({ title: "Status atualizado!" }); refetch(); },
     onError: (e: any) => toast({ title: "Erro", description: e.message, variant: "destructive" }),
   });
+
+  // Rev. 2082 — Categorias (financial_accounts) + Centros de Custo + Mutation cadastro inline.
+  const { data: accounts, refetch: refetchAccounts } = (trpc as any).financial.getAccounts.useQuery(
+    { companyId, ativo: true },
+    { enabled: !!companyId },
+  );
+  const { data: costCenters } = (trpc as any).financial.getCostCenters.useQuery(
+    { companyId },
+    { enabled: !!companyId },
+  );
+  const createAccountMut = (trpc as any).financial.createAccount.useMutation({
+    // Rev. 2082 — lemos `vars.nome` (input enviado na mutation) ao invés de `catForm.nome` do state,
+    // pra evitar leitura de state stale caso o usuário altere/limpe o sub-dialog antes do retorno.
+    onSuccess: (res: any, vars: any) => {
+      const nome = String(vars?.nome ?? "").trim();
+      toast({ title: res?.alreadyExists ? "Categoria já existia — vinculada" : "Categoria cadastrada!" });
+      if (nome) setForm(f => ({ ...f, contaNome: nome }));
+      setShowNewCat(false);
+      setCatForm({ nome: "", natureza: "variavel", centroCustoId: "" });
+      refetchAccounts();
+    },
+    onError: (e: any) => toast({ title: "Erro ao cadastrar categoria", description: e.message, variant: "destructive" }),
+  });
+
+  // Categorias filtradas pelo tipo do lançamento atual (despesa/receita/imposto/transferência → conta_natureza correspondente).
+  // Mostra TODAS se nenhum filtro fizer sentido, e dedup por nome (case-insensitive) para evitar duplicatas visuais.
+  const categoriasFiltradas: { id: number; nome: string; centroCustoId: number | null }[] = (() => {
+    const list: any[] = Array.isArray(accounts) ? accounts : [];
+    const dedupSeen = new Set<string>();
+    const out: any[] = [];
+    for (const a of list) {
+      // Filtra por tipo quando aplicável: lançamento de receita → financial_accounts.tipo='receita', despesa/imposto → 'despesa'
+      const tipoFiltro = form.tipo === "receita" ? "receita" : (form.tipo === "transferencia" ? null : "despesa");
+      if (tipoFiltro && String(a.tipo) !== tipoFiltro) continue;
+      const k = String(a.nome || "").trim().toLowerCase();
+      if (!k || dedupSeen.has(k)) continue;
+      dedupSeen.add(k);
+      out.push({ id: a.id, nome: a.nome, centroCustoId: a.centroCustoId ?? null });
+    }
+    return out;
+  })();
+
+  function handleCadastrarCategoria() {
+    const nome = catForm.nome.trim();
+    if (nome.length < 2) {
+      toast({ title: "Informe o nome da categoria (mín. 2 caracteres)", variant: "destructive" });
+      return;
+    }
+    createAccountMut.mutate({
+      companyId,
+      nome,
+      tipo: form.tipo === "receita" ? "receita" : "despesa",
+      natureza: catForm.natureza || "variavel",
+      centroCustoId: catForm.centroCustoId ? Number(catForm.centroCustoId) : undefined,
+    });
+  }
 
   function resetForm() {
     setForm({ ...INITIAL_FORM });
@@ -660,7 +720,40 @@ export default function FinanceiroLancamentos() {
                 <div className="grid grid-cols-2 gap-3 mt-1">
                   <div>
                     <p className="text-[11px] text-gray-400 mb-1">Conta / Categoria</p>
-                    <Input value={form.contaNome} onChange={e => setForm(f => ({ ...f, contaNome: e.target.value }))} placeholder="Ex: Salários, Aluguel..." className="h-9" />
+                    {/* Rev. 2082 — autocomplete (datalist) + botão "Cadastrar" inline (sem sair do modal). */}
+                    <div className="flex gap-1.5">
+                      <div className="flex-1 relative">
+                        <Input
+                          value={form.contaNome}
+                          onChange={e => setForm(f => ({ ...f, contaNome: e.target.value }))}
+                          placeholder="Ex: Salários, Aluguel..."
+                          className="h-9 pr-8"
+                          list="categorias-financeiras-datalist"
+                        />
+                        <Tag className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-300 pointer-events-none" />
+                        <datalist id="categorias-financeiras-datalist">
+                          {categoriasFiltradas.map(c => (
+                            <option key={c.id} value={c.nome} />
+                          ))}
+                        </datalist>
+                      </div>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => { setCatForm({ nome: form.contaNome.trim(), natureza: form.natureza || "variavel", centroCustoId: "" }); setShowNewCat(true); }}
+                        className="h-9 px-2.5 shrink-0 border-blue-200 text-blue-700 hover:bg-blue-50 hover:text-blue-800"
+                        title="Cadastrar nova categoria"
+                      >
+                        <PlusCircle className="w-3.5 h-3.5 mr-1" />
+                        <span className="text-xs font-semibold">Cadastrar</span>
+                      </Button>
+                    </div>
+                    {categoriasFiltradas.length > 0 && (
+                      <p className="text-[10px] text-gray-400 mt-1">
+                        {categoriasFiltradas.length} categoria{categoriasFiltradas.length !== 1 ? "s" : ""} cadastrada{categoriasFiltradas.length !== 1 ? "s" : ""} — digite pra autocompletar
+                      </p>
+                    )}
                   </div>
                   <div>
                     <p className="text-[11px] text-gray-400 mb-1">Obra (opcional)</p>
@@ -754,6 +847,82 @@ export default function FinanceiroLancamentos() {
         </Dialog>
 
         {/* Modal cancelar */}
+        {/* Rev. 2082 — Sub-dialog "Cadastrar Categoria" (sem sair do modal Novo Lançamento). */}
+        <Dialog open={showNewCat} onOpenChange={(v) => { if (!v) setShowNewCat(false); }}>
+          <DialogContent className="max-w-md p-0 overflow-hidden">
+            <div className="px-5 pt-4 pb-3 bg-gradient-to-br from-blue-600 to-indigo-600 text-white">
+              <div className="flex items-center gap-2">
+                <div className="w-9 h-9 rounded-lg bg-white/15 ring-2 ring-white/30 flex items-center justify-center">
+                  <Tag className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-semibold">Cadastrar Categoria</h3>
+                  <p className="text-[11px] text-blue-100">
+                    {form.tipo === "receita" ? "Categoria de receita" : "Categoria de despesa"} · empresa atual
+                  </p>
+                </div>
+              </div>
+            </div>
+            <div className="px-5 py-4 space-y-3">
+              <div>
+                <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Nome da categoria *</label>
+                <Input
+                  autoFocus
+                  value={catForm.nome}
+                  onChange={e => setCatForm(c => ({ ...c, nome: e.target.value }))}
+                  placeholder="Ex: Material de escritório, Combustível..."
+                  className="mt-1 h-9"
+                  onKeyDown={(e) => { if (e.key === "Enter" && !createAccountMut.isPending) handleCadastrarCategoria(); }}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Natureza</label>
+                  <select
+                    value={catForm.natureza}
+                    onChange={e => setCatForm(c => ({ ...c, natureza: e.target.value }))}
+                    className="mt-1 h-9 w-full rounded-md border border-gray-200 px-2 text-sm bg-white"
+                  >
+                    <option value="variavel">Variável</option>
+                    <option value="fixo">Fixa</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Centro de Custo</label>
+                  <select
+                    value={catForm.centroCustoId}
+                    onChange={e => setCatForm(c => ({ ...c, centroCustoId: e.target.value }))}
+                    className="mt-1 h-9 w-full rounded-md border border-gray-200 px-2 text-sm bg-white"
+                  >
+                    <option value="">— Nenhum (vincular depois) —</option>
+                    {(Array.isArray(costCenters) ? costCenters : []).map((cc: any) => (
+                      <option key={cc.id} value={cc.id}>
+                        {cc.codigo ? `${cc.codigo} · ` : ""}{cc.nome}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <div className="bg-blue-50 border border-blue-100 rounded-lg p-2.5 text-[11px] text-blue-700 leading-relaxed">
+                <strong>Dica:</strong> o código contábil é gerado automaticamente. Você pode editar a categoria depois em Financeiro → Plano de Contas.
+              </div>
+            </div>
+            <DialogFooter className="px-5 pb-4">
+              <Button type="button" variant="outline" onClick={() => setShowNewCat(false)} disabled={createAccountMut.isPending}>
+                Cancelar
+              </Button>
+              <Button
+                type="button"
+                onClick={handleCadastrarCategoria}
+                disabled={createAccountMut.isPending || catForm.nome.trim().length < 2}
+                className="bg-blue-600 hover:bg-blue-700 text-white"
+              >
+                {createAccountMut.isPending ? <><Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />Salvando...</> : <><PlusCircle className="w-3.5 h-3.5 mr-1.5" />Cadastrar</>}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
         <Dialog open={!!showCancel} onOpenChange={() => setShowCancel(null)}>
           <DialogContent className="max-w-sm">
             <DialogHeader>

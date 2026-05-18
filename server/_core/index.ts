@@ -1547,6 +1547,22 @@ Regras:
           console.log(`[SyncSchema+] Rev. 2079: tabela comunicado_assinaturas garantida.`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.2079 comunicado_assinaturas:`, e?.message || e); }
 
+        // Rev. 2082 — link Categoria (financial_accounts) → Centro de Custo (financial_cost_centers).
+        // Coluna opcional; permite que ao cadastrar a categoria inline no modal "Novo Lançamento" o
+        // usuário já associe a um centro de custo existente.
+        try {
+          await db.execute(sql`ALTER TABLE financial_accounts ADD COLUMN IF NOT EXISTS centro_custo_id INTEGER`);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_fa_centro_custo ON financial_accounts (centro_custo_id)`);
+          // Unique parcial — bloqueia duplicatas case-insensitive por empresa (apenas categorias ativas).
+          // Tolerante a dados legados duplicados: cai pro WARNING se já existir conflito (não quebra startup).
+          try {
+            await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS uq_fa_company_lower_nome_ativo ON financial_accounts (company_id, LOWER(nome)) WHERE ativo = 1`);
+          } catch (e: any) {
+            console.warn(`[SyncSchema+] Rev. 2082 unique idx falhou (provavelmente duplicatas legadas):`, e?.message || e);
+          }
+          console.log(`[SyncSchema+] Rev. 2082: coluna centro_custo_id garantida em financial_accounts.`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.2082 financial_accounts.centro_custo_id:`, e?.message || e); }
+
       } catch (e: any) { console.error(`[SyncSchema+] ERROR:`, e?.message || e); }
     }).catch(e => console.error("[SyncSchema] Falha ao iniciar:", e));
     // Garantir colunas críticas adicionadas recentemente que o SyncSchema possa ter ignorado

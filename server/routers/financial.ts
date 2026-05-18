@@ -80,6 +80,7 @@ export const financialRouter = router({
     const res = await dbExecute(db, 
       `SELECT id, company_id AS "companyId", codigo, nome, tipo, natureza, nivel,
               conta_pai_id AS "contaPaiId", classificacao_dre AS "classificacaoDRE",
+              centro_custo_id AS "centroCustoId",
               ativo, ordem
        FROM financial_accounts
        WHERE company_id IN (${inlineIds(ids)}) ${ativoPart} ${tipoPart}
@@ -89,28 +90,67 @@ export const financialRouter = router({
     return rows(res);
   }),
 
+  // Rev. 2082 — `codigo` agora é opcional; o servidor gera automaticamente
+  // (`AUTO-{maxId+1}`) quando o usuário cadastra uma categoria inline pelo
+  // modal "Novo Lançamento" sem precisar pensar em código contábil. Também
+  // aceita `centroCustoId` opcional pra já vincular a categoria a um centro
+  // de custo existente.
   createAccount: protectedProcedure.input(z.object({
     companyId: z.number(),
-    codigo: z.string().min(1),
+    codigo: z.string().optional(),
     nome: z.string().min(2),
     tipo: z.string(),
     natureza: z.string(),
     nivel: z.number().default(1),
     contaPaiId: z.number().optional(),
     classificacaoDRE: z.string().optional(),
+    centroCustoId: z.number().optional(),
     ordem: z.number().default(0),
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-    const res = await dbExecute(db, 
-      `INSERT INTO financial_accounts (company_id, codigo, nome, tipo, natureza, nivel, conta_pai_id, classificacao_dre, ativo, ordem)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,1,$9) RETURNING id`,
-      [input.companyId, input.codigo, input.nome, input.tipo, input.natureza,
-       input.nivel, input.contaPaiId ?? null, input.classificacaoDRE ?? null, input.ordem]
-    );
-    const id = rows(res)[0]?.id;
-    await createAuditLog({ action: "financial_account_created", userId: ctx.user?.id, companyId: input.companyId, details: `Conta ${input.codigo} - ${input.nome}` });
-    return { id };
+    // Dedup: se já existe categoria com mesmo nome (case-insensitive) na empresa, devolve a existente.
+    const dupe = rows(await dbExecute(db,
+      `SELECT id FROM financial_accounts WHERE company_id=$1 AND LOWER(nome)=LOWER($2) AND ativo=1 LIMIT 1`,
+      [input.companyId, input.nome]
+    ));
+    if (dupe[0]?.id) return { id: dupe[0].id, alreadyExists: true };
+
+    // Auto-gera código se não informado: `AUTO-{próximo}`.
+    let codigo = (input.codigo || "").trim();
+    if (!codigo) {
+      const maxRes = rows(await dbExecute(db,
+        `SELECT COALESCE(MAX(CAST(REGEXP_REPLACE(codigo,'[^0-9]','','g') AS INTEGER)),0) + 1 AS nxt
+         FROM financial_accounts WHERE company_id=$1 AND codigo LIKE 'AUTO-%'`,
+        [input.companyId]
+      ));
+      const nxt = Number(maxRes[0]?.nxt ?? 1);
+      codigo = `AUTO-${String(nxt).padStart(4, "0")}`;
+    }
+
+    // Mesmo com o SELECT-dedup acima, INSERT pode ainda colidir com o índice único
+    // parcial `uq_fa_company_lower_nome_ativo` em corrida concorrente — captura o
+    // 23505 e devolve a categoria existente (idempotente, sem expor erro ao usuário).
+    try {
+      const res = await dbExecute(db,
+        `INSERT INTO financial_accounts (company_id, codigo, nome, tipo, natureza, nivel, conta_pai_id, classificacao_dre, centro_custo_id, ativo, ordem)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,1,$10) RETURNING id`,
+        [input.companyId, codigo, input.nome, input.tipo, input.natureza,
+         input.nivel, input.contaPaiId ?? null, input.classificacaoDRE ?? null, input.centroCustoId ?? null, input.ordem]
+      );
+      const id = rows(res)[0]?.id;
+      await createAuditLog({ action: "financial_account_created", userId: ctx.user?.id, companyId: input.companyId, details: `Conta ${codigo} - ${input.nome}` });
+      return { id };
+    } catch (e: any) {
+      if (String(e?.code) === "23505" || /duplicate key|unique constraint/i.test(e?.message || "")) {
+        const again = rows(await dbExecute(db,
+          `SELECT id FROM financial_accounts WHERE company_id=$1 AND LOWER(nome)=LOWER($2) AND ativo=1 LIMIT 1`,
+          [input.companyId, input.nome]
+        ));
+        if (again[0]?.id) return { id: again[0].id, alreadyExists: true };
+      }
+      throw e;
+    }
   }),
 
   updateAccount: protectedProcedure.input(z.object({

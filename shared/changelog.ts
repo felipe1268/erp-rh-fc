@@ -1,6 +1,114 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2082 — **Financeiro · Lançamentos / cadastro inline de Categoria
+ * no modal "Novo Lançamento" (sem sair da tela) + link opcional a Centro
+ * de Custo.** Pedido do usuário: "preciso ter um botão 'cadastrar' para
+ * poder cadastrar as categorias sem precisar mudar de tela, lembrando
+ * que posteriormente preciso vincular a categoria a um centro de custo".
+ *
+ * **Descoberta arquitetural:** o sistema JÁ tinha as entidades
+ * necessárias (`financial_accounts` = plano de contas/categorias L6357
+ * e `financial_cost_centers` = centros de custo L6520 no schema), com
+ * endpoints `getAccounts/createAccount` e `getCostCenters/createCostCenter`
+ * em `server/routers/financial.ts`. Mas o campo "Conta / Categoria" do
+ * modal `FinanceiroLancamentos.tsx` era um simples `Input` free-text
+ * (`form.contaNome`), totalmente desconectado dessas tabelas — usuário
+ * digitava qualquer string e ela ia direto pra `financial_entries.
+ * conta_nome` sem normalização nem persistência como entidade.
+ *
+ * **Solução (3 camadas):**
+ *
+ * 1. **Schema · ColFix idempotente** em `server/_core/index.ts` (logo
+ *    após o bloco Rev. 2079 de `comunicado_assinaturas`): `ALTER TABLE
+ *    financial_accounts ADD COLUMN IF NOT EXISTS centro_custo_id INTEGER`
+ *    + índice `idx_fa_centro_custo`. Coluna nullable porque a vinculação
+ *    é opcional (a categoria pode ser cadastrada e vinculada depois).
+ *    Adicionado também em `drizzle/schema.ts` L6370 como
+ *    `centroCustoId: integer("centro_custo_id")` (sem `.notNull()`).
+ *    Conforme regra R-001/R-007 do projeto — apenas `ADD COLUMN IF NOT
+ *    EXISTS` (nunca `ALTER`/`DROP`/`DELETE`).
+ *
+ * 2. **Backend · `server/routers/financial.ts`:**
+ *    - `getAccounts` (L83-93): SELECT passa a incluir `centro_custo_id
+ *      AS "centroCustoId"` no payload.
+ *    - `createAccount` (L100-143) — 3 mudanças:
+ *      (a) `codigo` agora é `z.string().optional()` (era `min(1)`
+ *          obrigatório) — usuário não precisa pensar em código contábil
+ *          ao cadastrar inline;
+ *      (b) auto-geração server-side de código quando ausente:
+ *          `AUTO-{próximo}` (zero-padded a 4 dígitos) calculado via
+ *          `MAX(CAST(REGEXP_REPLACE(codigo,'[^0-9]','','g') AS INTEGER))
+ *          + 1` filtrando `codigo LIKE 'AUTO-%'` — não conflita com
+ *          códigos manuais do plano de contas;
+ *      (c) novo parâmetro opcional `centroCustoId: z.number().optional()`
+ *          persistido em `centro_custo_id`;
+ *      (d) **deduplicação preemptiva**: antes do INSERT, consulta se já
+ *          existe categoria ativa com mesmo `LOWER(nome)` na empresa —
+ *          se existir, devolve `{ id, alreadyExists: true }` em vez de
+ *          inserir duplicata (toast no client muda pra "Categoria já
+ *          existia — vinculada").
+ *
+ * 3. **Frontend · `client/src/pages/financeiro/FinanceiroLancamentos.tsx`:**
+ *    - Novos states: `showNewCat` (boolean) + `catForm` (`{nome,
+ *      natureza, centroCustoId}`).
+ *    - 2 novas queries: `financial.getAccounts({companyId, ativo:true})`
+ *      e `financial.getCostCenters({companyId})` — ambas habilitadas
+ *      condicionalmente em `!!companyId`.
+ *    - Mutation `createAccountMut` com `onSuccess` que: toasta resultado
+ *      (incluindo flag `alreadyExists`), autopreenche `form.contaNome`
+ *      com a nova categoria recém-cadastrada, fecha o sub-dialog, limpa
+ *      o `catForm` e `refetchAccounts` pra atualizar o datalist.
+ *    - `categoriasFiltradas` memo: filtra `accounts` pelo tipo do
+ *      lançamento atual (receita → `tipo='receita'`, despesa/imposto →
+ *      `tipo='despesa'`, transferência → sem filtro), dedupando por
+ *      nome lowercase pra evitar opções repetidas no datalist quando
+ *      o plano de contas tem variações como "Salário" e "salário".
+ *    - **Campo "Conta / Categoria" reformulado** (L723-758): agora é
+ *      flexbox horizontal com `<Input>` (datalist `categorias-financeiras
+ *      -datalist` populado por `categoriasFiltradas`, ícone `Tag` à
+ *      direita) + botão "Cadastrar" outline azul (`PlusCircle` + label)
+ *      que abre o sub-dialog. Contador discreto "N categorias cadastradas
+ *      — digite pra autocompletar" abaixo quando há ≥1 categoria.
+ *    - **Sub-dialog "Cadastrar Categoria"** (após o modal cancelar, L851-
+ *      927): `max-w-md`, header gradient `from-blue-600 to-indigo-600`
+ *      com ícone `Tag` em ring-2, subtítulo dinâmico ("Categoria de
+ *      receita" / "Categoria de despesa" baseado no `form.tipo` do
+ *      lançamento atual). Corpo com 3 campos: Nome (autoFocus, Enter
+ *      submete), Natureza (select Variável/Fixa), Centro de Custo (select
+ *      com opção "— Nenhum (vincular depois) —" + lista dos
+ *      `costCenters`). Card-dica azul-claro explicando que o código
+ *      contábil é auto e a categoria pode ser editada depois em Plano de
+ *      Contas. Footer com Cancelar + Cadastrar (gradient azul,
+ *      `Loader2` spinner quando pending, disabled se nome < 2 chars).
+ *    - Pré-preenche `catForm.nome` com o valor atual de `form.contaNome`
+ *      ao abrir o sub-dialog (UX: se o usuário começou digitando
+ *      "Combustível" e percebeu que não existe, clicar "Cadastrar" já
+ *      vem com esse nome no sub-form).
+ *
+ * **Por que datalist HTML nativo em vez de combobox shadcn:** o
+ * `<datalist>` é leve, acessível por padrão (teclado + screen reader),
+ * funciona mobile nativo (Safari/iOS abre lista nativa), zero
+ * dependência extra, e o foco principal do pedido era o *cadastro*
+ * inline — não autocomplete pesado. Se futuramente quisermos UX mais
+ * rica (filtro fuzzy, preview de centro de custo associado), basta
+ * trocar pela combinação `Popover + Command`.
+ *
+ * **Não alterado nesta revisão:**
+ * - `createEntry` (lançamento ainda usa `contaNome` como string livre —
+ *   não passa `contaId`); seria refatoração futura "Etapa 2" amarrar
+ *   `financial_entries.conta_id` na FK quando o nome digitado bater
+ *   com uma categoria do plano. Por ora a melhoria é só fluxo de
+ *   cadastro + persistência do vínculo categoria→CC.
+ * - Pages de manutenção de categorias (Plano de Contas) — usuário pode
+ *   editar lá depois, ou via futura tela específica de Categorias.
+ *
+ * **Arquivos:** `drizzle/schema.ts` (L6370 +1), `server/_core/index.ts`
+ * (bloco ColFix Rev. 2082 após L1551), `server/routers/financial.ts`
+ * (getAccounts/createAccount L69-143), `client/src/pages/financeiro/
+ * FinanceiroLancamentos.tsx` (imports +3, states +2, queries +2,
+ * mutation +1, handler +1, JSX field + sub-dialog).
+ *
  * Rev. 2081 — **Almoxarifado · Smart Entry / modal "Receber Material"
  * repaginado pelas regras de ouro (mobile-first).** Pedido do usuário
  * (3 screenshots IMG_1198/1199/1200 do iPhone): a tela "Selecione a

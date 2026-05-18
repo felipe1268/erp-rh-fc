@@ -6364,6 +6364,8 @@ export const financialAccounts = pgTable("financial_accounts", {
   nivel: integer().default(1).notNull(),
   contaPaiId: integer("conta_pai_id"),
   classificacaoDRE: varchar("classificacao_dre", { length: 50 }),
+  // Rev. 2082 — link categoria → centro de custo (FK opcional p/ financial_cost_centers.id).
+  centroCustoId: integer("centro_custo_id"),
   ativo: smallint().default(1).notNull(),
   ordem: integer().default(0),
   createdAt: timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
