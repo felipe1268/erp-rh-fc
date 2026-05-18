@@ -1,6 +1,67 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2089 — **Compras · Solicitações: ordenação clicável por coluna
+ * (default = mais recentes primeiro).**
+ *
+ * Pedido do user (screenshot da tela `/compras/solicitacoes` mostrando
+ * a lista em ordem aparentemente aleatória e setinhas decorativas ao
+ * lado de alguns headers): "as solicitações que aparecem na home, não
+ * estão por ordem de data postada. Sugiro colocar aquela setinha
+ * lateral como filtro, onde eu possa ter a liberdade de selecionar se
+ * quero ver por ordem de data, por ordem de solicitação e etc".
+ *
+ * **Diagnóstico:** o array `listaFiltradaObra` (derivado em 3 etapas
+ * de filtros: obra → status → classificação → breakdown) era usado
+ * diretamente no `.map()` da tabela sem nenhum `sort`, então a ordem
+ * vinha do que o backend devolvia (que não garante ordenação por data
+ * de criação consistente). As "setinhas" ao lado de Aprovação / Status
+ * / Título / Obra eram visualmente lembradas do screenshot mas na real
+ * não existiam no código — os headers eram só `<TableHead>` com texto
+ * puro.
+ *
+ * **Frontend (`client/src/pages/compras/Solicitacoes.tsx`):**
+ *   1. Novo estado `sortKey` + `sortDir` (default = `criadoEm` /
+ *      `desc`) com função `toggleSort(k)`: clicar na mesma coluna
+ *      inverte direção, clicar em outra coluna seta o default
+ *      sensato (datas/número → DESC, textos → ASC).
+ *   2. Novo `useMemo` `listaFiltradaObra` (renomeado o array
+ *      pré-sort para `listaFiltradaObraPreSort`) aplica `.sort()`
+ *      com getter por coluna — datas viram timestamp, textos viram
+ *      lowercase. Tie-break sempre por `criadoEm DESC` pra mantenção
+ *      estabilidade temporal nas duplicatas.
+ *   3. Headers (Aprovação / Status / Número / Título / Obra /
+ *      Necessidade) viraram `<button>` com ícone lucide ao lado:
+ *      `ArrowUpDown` (inativa, opacity-40) → `ArrowUp` /
+ *      `ArrowDown` (ativa, opacity-100, cor `amber-700`). Hover
+ *      `text-amber-700` pra dar feedback de clicável.
+ *   4. Imports: adicionados `ArrowDown / ArrowUp / ArrowUpDown` do
+ *      lucide-react.
+ *   5. **Pill indicador acima da tabela** ("Ordenado por: X ↓") com
+ *      botão "↻ mais recentes" que aparece SÓ quando o sort atual
+ *      não é o default — clique restaura `criadoEm DESC`. Resolve o
+ *      gap apontado no code review: sem o controle, depois de clicar
+ *      em outra coluna o usuário não tinha como voltar pra "ordem
+ *      de data postada" sem reload.
+ *   6. **Comparador de strings via `localeCompare(..., { numeric:
+ *      true })`** — corrige ordenação lexicográfica errada de
+ *      `numeroSc` (ex.: `SC-2026-100` agora vem depois de
+ *      `SC-2026-20`, e não antes). Também melhora ordenação de
+ *      título / obra com acentuação (sensitivity: base).
+ *
+ * **Por quê desse design (e não dropdown de filtro):**
+ *   - Padrão consagrado de tabelas (Excel/Notion/Linear): cabeçalho
+ *     clicável com ícone direcional é mais rápido que abrir popover
+ *     pra cada ordenação.
+ *   - Tooltip no `title` do botão deixa explícito qual direção vai
+ *     ser aplicada no próximo clique.
+ *   - Default `criadoEm DESC` resolve o pedido principal ("ver por
+ *     ordem de data postada") sem o user precisar interagir.
+ *
+ * **Sem mudança de schema, sem mudança de backend.** Pura UI/UX.
+ *
+ * ---
+ *
  * Rev. 2088 — **Financeiro · Centros de Custo agora tem editar /
  * inativar / reativar (igual Categorias).**
  *

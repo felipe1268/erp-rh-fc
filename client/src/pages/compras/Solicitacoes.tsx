@@ -19,7 +19,7 @@ import {
   CheckCircle2, XCircle, Clock, Building2, ListTree, CalendarDays, ShoppingCart, AlertTriangle, Zap, FileText, Package,
   Camera, ImageIcon, X, Briefcase, History, ShoppingBag, Pencil, Copy, CheckSquare, FileDown,
   UserCircle, ShieldCheck, FileSearch, Truck, Users, Layers, ArrowRightLeft, Sparkles, RotateCw, Car, Link2, Film, Paperclip,
-  Info,
+  Info, ArrowDown, ArrowUp, ArrowUpDown,
 } from "lucide-react";
 
 const STATUS_CFG: Record<string, { label: string; cls: string }> = {
@@ -1102,6 +1102,19 @@ export default function Solicitacoes() {
   const [filtroBreakdown, setFiltroBreakdown] = useState<string | null>(null);
   const [filtroObra, setFiltroObra] = useState("todas");
   const [filtroClassificacao, setFiltroClassificacao] = useState("todas");
+  // Rev. 2089 — Ordenação clicável por coluna. Default: criadoEm DESC (mais recentes primeiro).
+  type SortKey = "criadoEm" | "aprovacaoStatus" | "status" | "numeroSc" | "titulo" | "obra" | "dataNecessidade";
+  const [sortKey, setSortKey] = useState<SortKey>("criadoEm");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+  function toggleSort(k: SortKey) {
+    if (sortKey === k) {
+      setSortDir(d => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortKey(k);
+      // Defaults sensatos: datas/número DESC (mais recente/maior primeiro), textos ASC.
+      setSortDir(["criadoEm", "numeroSc", "dataNecessidade"].includes(k) ? "desc" : "asc");
+    }
+  }
   const [showNova, setShowNova] = useState(false);
   const [confirmFecharNova, setConfirmFecharNova] = useState(false);
   const [showDisciplinas, setShowDisciplinas] = useState(false);
@@ -2252,9 +2265,43 @@ ${sc.observacoes ? `<div class="obs"><b>Observações da SC:</b><br>${esc(sc.obs
     recusadas: (r) => r.status === "recusado" || ["recusada", "recusado"].includes(r.aprovacaoStatus ?? ""),
     canceladas: (r) => r.status === "cancelado",
   };
-  const listaFiltradaObra = filtroBreakdown && breakdownPredicates[filtroBreakdown]
+  const listaFiltradaObraPreSort = filtroBreakdown && breakdownPredicates[filtroBreakdown]
     ? listaFiltradaObraSemBreakdown.filter(breakdownPredicates[filtroBreakdown])
     : listaFiltradaObraSemBreakdown;
+  // Rev. 2089 — Ordenação ativa (default: criadoEm DESC). Sempre tie-break por criadoEm DESC.
+  const listaFiltradaObra = useMemo(() => {
+    const dir = sortDir === "asc" ? 1 : -1;
+    const getVal = (r: any): string | number => {
+      switch (sortKey) {
+        case "criadoEm": return r.criadoEm ? new Date(r.criadoEm).getTime() : 0;
+        case "dataNecessidade": return r.dataNecessidade ? new Date(r.dataNecessidade + "T00:00:00").getTime() : 0;
+        case "numeroSc": return String(r.numeroSc ?? "");  // ordenado via localeCompare numeric abaixo
+        case "titulo": return String(r.titulo ?? "").toLowerCase();
+        case "aprovacaoStatus": return String(r.aprovacaoStatus ?? "aguardando").toLowerCase();
+        case "status": return String(r.status ?? "").toLowerCase();
+        case "obra": return (nomeObra(r.obraId) ?? "").toLowerCase();
+        default: return 0;
+      }
+    };
+    const arr = [...listaFiltradaObraPreSort];
+    arr.sort((a, b) => {
+      const va = getVal(a), vb = getVal(b);
+      let cmp = 0;
+      if (typeof va === "string" && typeof vb === "string") {
+        // localeCompare com numeric: true → ordena "SC-2026-100" depois de "SC-2026-20" corretamente.
+        cmp = va.localeCompare(vb, "pt-BR", { numeric: true, sensitivity: "base" });
+      } else {
+        if (va < vb) cmp = -1;
+        else if (va > vb) cmp = 1;
+      }
+      if (cmp !== 0) return cmp * dir;
+      // Tie-break: mais recentes primeiro
+      const ta = a.criadoEm ? new Date(a.criadoEm).getTime() : 0;
+      const tb = b.criadoEm ? new Date(b.criadoEm).getTime() : 0;
+      return tb - ta;
+    });
+    return arr;
+  }, [listaFiltradaObraPreSort, sortKey, sortDir, obras]);
   const todasSCs = filtroStatus !== "todos" ? (qTodas.data ?? lista) : lista;
   const urgentesAtivos = useMemo(() => todasSCs.filter((r: any) => r.prioridade === "urgente" && !["aprovado", "cancelado", "recusado"].includes(r.status) && !r._hasOC), [todasSCs]);
   // KPIs sempre calculados a partir do total sem filtro de status (apenas filtro de obra aplicado)
@@ -2473,6 +2520,32 @@ ${sc.observacoes ? `<div class="obs"><b>Observações da SC:</b><br>${esc(sc.obs
       )}
 
       {/* Tabela */}
+      {/* Rev. 2089 — Indicador de ordenação ativa + reset rápido pro default (criadoEm DESC). */}
+      <div className="flex items-center justify-end gap-2 text-xs text-gray-500">
+        <span>Ordenado por:</span>
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-50 border border-amber-200 text-amber-700 font-medium">
+          {({
+            criadoEm: "Data postada",
+            aprovacaoStatus: "Aprovação",
+            status: "Status",
+            numeroSc: "Número",
+            titulo: "Título",
+            obra: "Obra",
+            dataNecessidade: "Necessidade",
+          } as Record<SortKey, string>)[sortKey]}
+          {sortDir === "asc" ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />}
+        </span>
+        {!(sortKey === "criadoEm" && sortDir === "desc") && (
+          <button
+            type="button"
+            onClick={() => { setSortKey("criadoEm"); setSortDir("desc"); }}
+            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md hover:bg-gray-100 text-gray-500 hover:text-gray-700 transition-colors"
+            title="Voltar para ordem por data postada (mais recentes primeiro)"
+          >
+            <RotateCw className="h-3 w-3" /> mais recentes
+          </button>
+        )}
+      </div>
       <div className="rounded-xl border border-gray-200 overflow-hidden bg-white shadow-sm">
         <Table>
           <TableHeader>
@@ -2489,12 +2562,30 @@ ${sc.observacoes ? `<div class="obs"><b>Observações da SC:</b><br>${esc(sc.obs
                   }}
                 />
               </TableHead>
-              <TableHead className="text-gray-500 text-xs font-semibold uppercase tracking-wider">Aprovação</TableHead>
-              <TableHead className="text-gray-500 text-xs font-semibold uppercase tracking-wider">Status</TableHead>
-              <TableHead className="text-gray-500 text-xs font-semibold uppercase tracking-wider">Número</TableHead>
-              <TableHead className="text-gray-500 text-xs font-semibold uppercase tracking-wider">Título / Setor</TableHead>
-              <TableHead className="text-gray-500 text-xs font-semibold uppercase tracking-wider">Obra</TableHead>
-              <TableHead className="text-gray-500 text-xs font-semibold uppercase tracking-wider">Necessidade</TableHead>
+              {([
+                { k: "aprovacaoStatus", label: "Aprovação" },
+                { k: "status", label: "Status" },
+                { k: "numeroSc", label: "Número" },
+                { k: "titulo", label: "Título / Setor" },
+                { k: "obra", label: "Obra" },
+                { k: "dataNecessidade", label: "Necessidade" },
+              ] as { k: SortKey; label: string }[]).map(col => {
+                const active = sortKey === col.k;
+                const Icon = active ? (sortDir === "asc" ? ArrowUp : ArrowDown) : ArrowUpDown;
+                return (
+                  <TableHead key={col.k} className="text-gray-500 text-xs font-semibold uppercase tracking-wider">
+                    <button
+                      type="button"
+                      onClick={() => toggleSort(col.k)}
+                      title={`Ordenar por ${col.label}${active ? (sortDir === "asc" ? " (crescente)" : " (decrescente)") : ""}`}
+                      className={`inline-flex items-center gap-1 hover:text-amber-700 transition-colors ${active ? "text-amber-700" : ""}`}
+                    >
+                      {col.label}
+                      <Icon className={`h-3 w-3 ${active ? "opacity-100" : "opacity-40"}`} />
+                    </button>
+                  </TableHead>
+                );
+              })}
               <TableHead className="text-gray-500 text-xs font-semibold uppercase tracking-wider">Recebido</TableHead>
               <TableHead className="w-8"></TableHead>
             </TableRow>
