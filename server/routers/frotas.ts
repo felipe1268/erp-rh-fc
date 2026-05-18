@@ -5424,23 +5424,47 @@ Seja preciso com valores monetários, datas e identificação de veículos por p
 Sempre retorne JSON válido, sem markdown.`;
 
       const { invokeAnthropicVision } = await import("../_core/llm");
+      // Rev. 2097 — maxTokens=8192 (default 1024 truncava o JSON em PDFs com
+      // várias passagens — fatura Sem Parar mensal facilmente passa de 30
+      // itens, e cada item ~150-200 tokens; 1024 não cabia).
       const rawResponse = await invokeAnthropicVision({
         base64: input.base64,
         mimeType: input.mimeType as any,
         prompt,
         systemPrompt,
+        maxTokens: 8192,
       });
 
+      // Rev. 2097 — parse robusto: tenta JSON puro, depois remove markdown,
+      // depois extrai 1º bloco { ... } de dentro do texto (Claude às vezes
+      // prepende "Aqui está o JSON:" ou similar mesmo com instrução).
       let parsed: any;
-      try {
-        const cleaned = rawResponse.replace(/```json\s*/g, "").replace(/```/g, "").trim();
-        parsed = JSON.parse(cleaned);
-      } catch {
-        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Erro ao interpretar resposta da IA." });
+      const tryParse = (s: string) => { try { return JSON.parse(s); } catch { return null; } };
+      const cleaned = rawResponse.replace(/```json\s*/g, "").replace(/```/g, "").trim();
+      parsed = tryParse(cleaned);
+      if (!parsed) {
+        // Extrai 1ª ocorrência de objeto JSON { ... } (matching brace simples)
+        const firstBrace = cleaned.indexOf("{");
+        const lastBrace = cleaned.lastIndexOf("}");
+        if (firstBrace >= 0 && lastBrace > firstBrace) {
+          parsed = tryParse(cleaned.slice(firstBrace, lastBrace + 1));
+        }
+      }
+      if (!parsed) {
+        console.error("[parseTollPdf] JSON inválido. Resposta bruta (primeiros 500 chars):",
+          rawResponse.slice(0, 500));
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: `Não consegui interpretar a resposta da IA. ${rawResponse.length >= 8000 ? "Resposta parece ter sido cortada — tente um PDF menor ou divida em partes. " : ""}Verifique se o documento é legível (texto/imagem clara) e tente novamente.`,
+        });
       }
 
       if (!parsed?.items || !Array.isArray(parsed.items)) {
-        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Nenhum item encontrado no documento." });
+        console.error("[parseTollPdf] Resposta sem items. Estrutura recebida:", JSON.stringify(parsed).slice(0, 300));
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "A IA não conseguiu extrair lançamentos deste documento. Verifique se é uma fatura/comprovante de pedágio legível.",
+        });
       }
 
       for (const item of parsed.items) {

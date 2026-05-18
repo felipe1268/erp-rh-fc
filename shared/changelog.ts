@@ -1,6 +1,62 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2097 — **Frota · `parseTollPdf` — fix "Erro ao interpretar
+ * resposta da IA" (JSON truncado por `maxTokens: 1024` default) +
+ * parser robusto + mensagens de erro úteis.**
+ *
+ * Pedido do user (screenshot do modal Rev. 2096 com toast vermelho
+ * inferior esquerdo "Erro ao interpretar resposta da IA" depois de
+ * clicar Analisar com IA no PDF `2664869326.pdf` 317 KB — fatura
+ * Sem Parar): "esta dando erro .. arrume isso".
+ *
+ * **Causa-raiz:** `server/routers/frotas.ts → parseTollPdf` chamava
+ * `invokeAnthropicVision({...})` sem passar `maxTokens`, então caía
+ * no default de 1024 tokens (em `server/_core/llm.ts:449`). Uma
+ * fatura Sem Parar mensal típica tem 15-40 passagens, cada item do
+ * JSON ocupa ~150-200 tokens (`vehicleId`, `vehiclePlaca`, `data`,
+ * `categoria`, `descricao`, `pracaPedagio`, `rodovia`, `valor`,
+ * `tagId`, `eixos`, `observacoes`), então o JSON de 15+ itens
+ * facilmente passa de 3000 tokens. O Claude cortava a resposta no
+ * meio de um item (ex: `"praca": "MOREI`), o JSON.parse falhava,
+ * e o catch genérico mostrava "Erro ao interpretar resposta da
+ * IA" sem dar pista do problema real.
+ *
+ * **Fixes (`server/routers/frotas.ts → parseTollPdf` ~L5429-5471):**
+ *
+ *   1. **`maxTokens: 8192`** — dá folga pra ~50-60 passagens com
+ *      todos os campos. 8192 é o limite seguro do Claude Sonnet 4
+ *      pra esse tipo de extração estruturada (acima disso latência
+ *      sobe muito; se ainda truncar, user precisa quebrar o PDF).
+ *
+ *   2. **Parser em 3 etapas (`tryParse` helper):**
+ *      (a) tenta `JSON.parse(cleaned)` direto (cleaned = sem
+ *      markdown ```json...```);
+ *      (b) se falhar, extrai o trecho entre `cleaned.indexOf("{")`
+ *      e `cleaned.lastIndexOf("}")` — pega o objeto JSON mesmo se o
+ *      Claude prependeu/apendeu texto extra apesar do system prompt
+ *      "Sempre retorne JSON válido, sem markdown";
+ *      (c) se ainda falhar, loga os primeiros 500 chars da resposta
+ *      bruta no console (`[parseTollPdf] JSON inválido…`) pra
+ *      diagnóstico futuro sem precisar reproduzir.
+ *
+ *   3. **Mensagens de erro úteis:** o catch agora detecta resposta
+ *      `>= 8000 chars` (provável truncamento mesmo com 8192) e
+ *      adiciona "Resposta parece ter sido cortada — tente um PDF
+ *      menor ou divida em partes" à mensagem do toast. O erro
+ *      "sem items" também ganha texto explicativo ("Verifique se
+ *      é uma fatura/comprovante de pedágio legível").
+ *
+ * **Não-mudanças:** prompt do Claude, modelo (claude-sonnet-4-6),
+ * estrutura de retorno, frontend (`Pedagios.tsx` Rev. 2096), schema,
+ * fluxo de `saveIAItems`. Apenas robustez do parsing server-side e
+ * UX de erro.
+ *
+ * **R-001/R-007:** N/A — apenas backend (tRPC mutation). Zero
+ * ALTER/DROP/DELETE. Zero schema.
+ *
+ * ---
+ *
  * Rev. 2096 — **Frota · modal "Importar Pedágio/Sem Parar com IA"
  * redesenhado nas regras de ouro (Rev. 2094): header gradient
  * violet→fuchsia, card de arquivo com preview, KPI bar de detecção
