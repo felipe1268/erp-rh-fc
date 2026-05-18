@@ -243,7 +243,7 @@ export default function FCSignSendDialog({ open, onOpenChange, companyId, employ
               <Button
                 type="button"
                 onClick={handleSubmit}
-                disabled={createMut.isPending || !t1Nome.trim() || !t2Nome.trim()}
+                disabled={createMut.isPending}
                 className="bg-gradient-to-r from-blue-600 to-indigo-700 hover:from-blue-700 hover:to-indigo-800"
               >
                 {createMut.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Send className="h-4 w-4 mr-2" />}
