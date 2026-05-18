@@ -1038,6 +1038,8 @@ export default function FechamentoPonto() {
       // Rev. 2054 — Férias no ciclo (pra excluir do ranking "Menos Dias Trabalhados")
       emFerias: !!e.emFerias,
       diasFerias: e.diasFerias || 0,
+      // Rev. 2077 — propaga Aviso Prévio pros rankings (selo amber em todos os cards)
+      emAvisoPrevio: !!e.emAvisoPrevio,
     }));
     // Top 5 mais pontuais (menos atrasos, mais dias)
     const allPontuais = [...data].filter(e => e.dias > 0).sort((a, b) => a.atrasos - b.atrasos || b.dias - a.dias);
@@ -2467,6 +2469,12 @@ export default function FechamentoPonto() {
                                         {e.cipaStatus === 'estabilidade' && (
                                           <Badge variant="outline" className="text-[10px] text-amber-700 border-amber-300 bg-amber-50 px-1.5 py-0 h-5" title={`Ex-CIPA — estabilidade até ${fmtPeriodo(e.cipaFimEstabilidade || '')}`}>
                                             <ShieldCheck className="h-3 w-3 mr-0.5" /> Ex-CIPA
+                                          </Badge>
+                                        )}
+                                        {/* Rev. 2077 — Aviso Prévio também nos rankings (Pontuais/Atrasados/HE/Faltosos) */}
+                                        {e.emAvisoPrevio && (
+                                          <Badge variant="outline" className="text-[10px] text-amber-700 border-amber-300 bg-amber-50 px-1.5 py-0 h-5" title="Colaborador em aviso prévio — DP / Rescisões">
+                                            ⚠ Aviso Prévio
                                           </Badge>
                                         )}
                                       </div>

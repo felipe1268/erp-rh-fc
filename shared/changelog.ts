@@ -1,6 +1,57 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2077 — **Fechamento de Ponto · selo "⚠ Aviso Prévio" também nos
+ * cards/rankings (Pontuais, Atrasados, HE, Menos Dias Trabalhados).**
+ * Pedido do usuário (IMG_0986): "Marquem quem está de aviso prévio tbm
+ * em todos os cards".
+ *
+ * Diagnóstico: o backend `server/routers/fechamentoPonto.ts` L1779 já
+ * devolvia `emAvisoPrevio: boolean` por colaborador em `getSummary`
+ * (montado a partir de `activeAvisos` L1708 — Set de employeeIds com
+ * aviso prévio ativo no ciclo). O selo "⚠ Aviso Prévio" amber já era
+ * renderizado na TABELA PRINCIPAL (`FechamentoPonto.tsx` L3382 — Rev.
+ * antiga não documentada), mas a propagação pros rankings parou no
+ * meio: o map de transformação em L1020-1041 copiava foto/CIPA/férias
+ * (Rev. 2015/2054) mas NÃO copiava `emAvisoPrevio`. Resultado: a flag
+ * chegava do backend mas era descartada antes de virar prop dos cards.
+ *
+ * Fix em 2 hunks em `client/src/pages/FechamentoPonto.tsx`:
+ *   (1) L1044-1045 — adiciona `emAvisoPrevio: !!e.emAvisoPrevio` ao
+ *       objeto do map (após `diasFerias`). Boolean coercion porque
+ *       `e.emAvisoPrevio` vem como `true|false` mas sem o `!!` o TS
+ *       poderia inferir wide type em alguns rows.
+ *   (2) L2477-2482 — render do badge no modal de ranking, logo após
+ *       o bloco CIPA (estabilidade). Mesma classe do badge da tabela
+ *       principal (amber-700 / border-amber-300 / bg-amber-50 / px-1.5
+ *       py-0 h-5 + tamanho text-[10px] pra caber no header denso do
+ *       ranking). `title` explica origem ("DP / Rescisões") pra ajudar
+ *       quem ainda não entende o fluxo.
+ *
+ * Por que o selo amber e não vermelho/cinza: aviso prévio é um ESTADO
+ * (não alerta crítico, não desligamento ainda) — mesma escala visual
+ * já usada na tabela principal evita inconsistência cognitiva. CIPA
+ * estabilidade também é amber (proteção pós-mandato), Aviso Prévio é
+ * amber (proteção/atenção pré-desligamento) — fica coerente.
+ *
+ * O modal "Menos Dias Trabalhados" da IMG_0986 (fullscreen com KPIs
+ * "Colaboradores/Justificadas/Não Justificadas/Média de Dias") usa o
+ * MESMO render row do ranking modal (`filteredRankingRows.map` em
+ * L2440+ — único componente compartilhado pelos 4 rankings via
+ * `rankingModal` state). Logo, 1 hunk no render + 1 no map cobre os 4
+ * cards/rankings simultaneamente, sem duplicação de código.
+ *
+ * Arquivos:
+ *   - `client/src/pages/FechamentoPonto.tsx` L1044-1045 (propagação) +
+ *     L2477-2482 (render do badge)
+ *   - `shared/version.ts` → Rev. 2077
+ *   - `shared/changelog.ts` (esta entrada)
+ *   - `replit.md` rotacionado (2076 vira top-2, 2075 vira one-liner,
+ *     2070 vai pra `replit-history.md`)
+ *
+ * ZERO mudança no backend (campo `emAvisoPrevio` já existia em
+ * `getSummary` desde antes). ZERO migration. ZERO schema change.
+ *
  * Rev. 2076 — **Contratos de Terceiros · alerta nativo do navegador
  * ("...replit.dev diz / Excluir 1 contrato(s)?") substituído por modal
  * AlertDialog estilizado (regra de ouro).** Pedido do usuário (IMG_0985):
