@@ -191,7 +191,7 @@ export default function FCSignSendDialog({ open, onOpenChange, companyId, employ
               </div>
 
               <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 flex items-start gap-2 text-xs text-blue-900">
-                <AlertTriangle className="h-4 w-4 mt-0.5 flex-shrink-0 text-blue-700" />
+                <ShieldCheck className="h-4 w-4 mt-0.5 flex-shrink-0 text-blue-700" />
                 <div>Ao criar a sessão, o sistema gera <b>4 links únicos</b> (um para cada signatário). Você copia e envia manualmente por WhatsApp. Quando todos assinarem, o contrato vai automaticamente para o RAIO-X do colaborador.</div>
               </div>
             </div>
