@@ -1937,21 +1937,21 @@ body .destaque{font-weight:700;color:#0f172a}
 @media print{body{padding:0}*{-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important}}
 </style>
 <div class="fcsign-document-body">
-<div class="header" style="margin:0 0 22px 0;border-bottom:3px solid #1B2A4A;padding-bottom:14px">
-  <table class="header-table" style="width:100%;border-collapse:collapse;margin-bottom:12px"><tbody><tr>
-    <td class="logo-cell" style="width:110px;padding:0 18px 0 0;vertical-align:middle">
-      <img class="logo" src="${esc(logoSrc)}" alt="${esc(comp?.razaoSocial || 'FC Engenharia')}" style="display:block;height:80px;width:auto;max-width:100px;object-fit:contain" />
-    </td>
-    <td style="vertical-align:middle;padding:0;text-align:left">
-      <h2 class="nome" style="font-family:'Helvetica','Arial',sans-serif;font-size:15pt;font-weight:800;color:#1B2A4A;margin:0 0 4px 0;letter-spacing:.3px;line-height:1.15;text-align:left">${esc(comp?.razaoSocial || 'FC Engenharia')}</h2>
-      ${comp?.cnpj ? `<p class="cnpj" style="font-family:'Helvetica','Arial',sans-serif;font-size:9.5pt;color:#475569;margin:2px 0 0 0;line-height:1.35;text-align:left">CNPJ: ${esc(comp.cnpj)}</p>` : ''}
-      ${comp?.endereco ? `<p class="end" style="font-family:'Helvetica','Arial',sans-serif;font-size:9.5pt;color:#475569;margin:2px 0 0 0;line-height:1.35;text-align:left">${esc(comp.endereco)}${comp?.cidade ? ' — ' + esc(comp.cidade) + '/' + esc(comp?.estado || '') : ''}</p>` : ''}
-    </td>
-  </tr></tbody></table>
-  <div class="title-bar" style="background-color:#1B2A4A;color:#fff;padding:12px 18px;text-align:center;border-radius:3px;margin:10px 0 0 0;-webkit-print-color-adjust:exact;print-color-adjust:exact">
-    <span class="titulo" style="font-family:'Helvetica','Arial',sans-serif;font-size:13pt;font-weight:700;letter-spacing:2px;text-transform:uppercase;display:block;color:#fff">Contrato de Trabalho por Prazo Determinado</span>
-    <span class="sub" style="font-family:'Helvetica','Arial',sans-serif;font-size:9pt;font-weight:400;display:block;margin-top:4px;letter-spacing:.3px;color:#fff">Contrato de Experiência — Art. 443, §2º, alínea “c” da CLT</span>
+<!-- REGRA DE OURO: cabeçalho institucional FC centralizado (logo + nome + CNPJ + endereço + faixa azul + meta) -->
+<div class="header" style="margin:0 0 24px 0;text-align:center">
+  <div style="text-align:center;margin-bottom:8px">
+    <img src="${esc(logoSrc)}" alt="${esc(comp?.razaoSocial || 'FC Engenharia')}" style="display:inline-block;height:88px;width:auto;max-width:200px;object-fit:contain" />
   </div>
+  <h1 style="font-family:'Helvetica','Arial',sans-serif;font-size:16pt;font-weight:800;color:#0f172a;margin:6px 0 4px 0;letter-spacing:.6px;text-transform:uppercase;text-align:center;line-height:1.15">${esc(comp?.razaoSocial || 'FC Engenharia')}</h1>
+  ${comp?.cnpj ? `<p style="font-family:'Helvetica','Arial',sans-serif;font-size:9.5pt;color:#475569;margin:0;letter-spacing:.3px;text-align:center">CNPJ: ${esc(comp.cnpj)}</p>` : ''}
+  ${comp?.endereco ? `<p style="font-family:'Helvetica','Arial',sans-serif;font-size:9pt;color:#64748b;margin:2px 0 0 0;letter-spacing:.2px;text-align:center;text-transform:uppercase">${esc(comp.endereco)}${comp?.cidade ? ' — ' + esc(comp.cidade) + ' - ' + esc(comp?.estado || '') : ''}</p>` : ''}
+  <div style="background-color:#1B2A4A;color:#fff;padding:14px 18px;text-align:center;border-radius:4px;margin:16px 0 0 0;border:2px solid #ffffff;box-shadow:0 0 0 1px #1B2A4A;-webkit-print-color-adjust:exact;print-color-adjust:exact">
+    <span style="font-family:'Helvetica','Arial',sans-serif;font-size:13pt;font-weight:700;letter-spacing:3px;text-transform:uppercase;display:block;color:#fff">Contrato de Experiência</span>
+  </div>
+  <table style="width:100%;border-collapse:collapse;margin-top:10px"><tbody><tr>
+    <td style="text-align:left;font-family:'Helvetica','Arial',sans-serif;font-size:9pt;color:#64748b;padding:0">Nº ${String((editingId || 0)).padStart(3,'0')}/${new Date().getFullYear()}</td>
+    <td style="text-align:right;font-family:'Helvetica','Arial',sans-serif;font-size:9pt;color:#64748b;padding:0">Data de Emissão: ${new Date().toLocaleDateString('pt-BR')}</td>
+  </tr></tbody></table>
 </div>
 
 <p>Pelo presente instrumento particular de <strong>CONTRATO DE TRABALHO POR PRAZO DETERMINADO (EXPERIÊNCIA)</strong>, que entre si fazem:</p>

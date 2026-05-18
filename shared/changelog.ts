@@ -1,6 +1,111 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2106 — **RH · Documentos institucionais FC — cabeçalho centralizado
+ * vira REGRA DE OURO + fix renderização Contrato de Experiência no FCSign.**
+ *
+ * Pedido do user (3 mensagens em sequência sobre o Contrato de Experiência
+ * renderizado em `/assinar/:token` — FCSign viewer):
+ * 1. "não apareceu o logo da FC, e a formatação não esta conforme, quero
+ *    todo texto ajustado na função (justificado). onde as duas laterais
+ *    fiquem alinhadas."
+ * 2. "erro" (screenshot: backend rejeitou HTML com mensagem "Documento
+ *    contém conteúdo não permitido (script/handler/javascript)" — o
+ *    `onerror="this.style.display='none'"` no `<img>` casava com filtro
+ *    anti-XSS do `signatures.create`).
+ * 3. "o texto não esta formatado corretamente, quero que o topo fique o
+ *    logo, com a tarja azul.. e crie uma estrutura de formatação mais
+ *    equalizada.. hoje esta tudo amontoado"
+ * 4. Anexou screenshot do Comunicado Interno (logo CENTRALIZADO + nome em
+ *    caixa alta + CNPJ + endereço + faixa azul navy + Nº/Data embaixo):
+ *    "este e o padrão que estamos adotando.. faça isso como regra de ouro."
+ *
+ * **Causa-raiz da falha visual original:**
+ * (a) Logo: usava `${comp?.logoUrl}` que vinha vazio (companies não tinha
+ *     URL pública cadastrada). Sem fallback → tag `<img>` ficava sem src.
+ * (b) Estilos: `<style>` estava DENTRO do `<head>` mas o DOMPurify do
+ *     `AssinarDocumento.tsx` por default descarta `<html>` e `<head>` —
+ *     só preserva conteúdo de `<body>`. Resultado: TODA a folha de
+ *     estilos sumia, texto ficava sem justify, sem faixa azul, sem header
+ *     estilizado (visual "amontoado" do screenshot).
+ * (c) Print preview: mesmo com estilos OK, navegadores por default
+ *     IMPRIMEM SEM cores de fundo (background graphics off) — faixa azul
+ *     sumia mesmo na popup `window.open + write`.
+ * (d) Tentativa intermediária com `onerror="..."` no `<img>` casou com o
+ *     regex `/\son\w+\s*=/i` do filtro anti-XSS de `signatures.create`,
+ *     bloqueando a criação da sessão.
+ *
+ * **Fix técnico em 3 camadas de redundância:**
+ *
+ * 1. **`client/src/pages/Colaboradores.tsx` ~L1914-1958 — contratoHtml:**
+ *    - `logoSrc` com fallback: `comp?.logoUrl` (se URL absoluta) OU
+ *      `${window.location.origin}/logo-fc.jpg` (público em `client/public/`,
+ *      5.4kb, sempre disponível).
+ *    - **Inline styles** em TODOS os elementos críticos (`<table>`, `<h1>`,
+ *      `<div class="title-bar">`, `<img>`, `<span>`) — funcionam mesmo
+ *      sem `<style>` externo.
+ *    - **`<style>` interno migrado pra DENTRO do `<body>`** (sobrevive ao
+ *      DOMPurify) com regras de fallback pra `.clausula`, `.clausula-title`,
+ *      `.assinaturas`, `.assinaturas .linha`, etc.
+ *    - `body` ganha inline style com `font-family:'Times New Roman'…serif`,
+ *      `font-size:11.5pt`, `line-height:1.65`, `text-align:justify`,
+ *      `-webkit-print-color-adjust:exact;print-color-adjust:exact`.
+ *    - Removido `onerror=` do `<img>` (filtro anti-XSS).
+ *    - **Layout do topo em `<table>`** (mais robusto que flex pra
+ *      impressão) — descartado depois pela REGRA DE OURO centralizada.
+ *
+ * 2. **`client/src/pages/AssinarDocumento.tsx` L246-285 — CSS scopado:**
+ *    - Bloco `<style>` injetado no JSX da própria página (não dentro do
+ *      HTML sanitizado!) com seletores `.fcsign-document-body *` cobrindo
+ *      tipografia, header, faixa azul, cláusulas, assinaturas.
+ *    - `#fcsign-pdf-page, #fcsign-pdf-page * { print-color-adjust: exact }`
+ *      força cores de fundo na impressão em todos os browsers.
+ *
+ * 3. **REGRA DE OURO — cabeçalho institucional centralizado FC:**
+ *    Aplicar em TODOS os documentos oficiais (Contrato de Experiência,
+ *    Aviso Prévio, Termo de Rescisão, Comunicado Interno, Carta MDO,
+ *    Advertência, etc):
+ *    ```
+ *    [logo centralizado, ~88px]
+ *    [RAZÃO SOCIAL em caixa alta, 16pt, bold, centralizado]
+ *    [CNPJ: xx.xxx.xxx/xxxx-xx, 9.5pt, centralizado, cinza]
+ *    [endereço completo em uppercase, 9pt, centralizado, cinza mais claro]
+ *    [faixa azul navy #1B2A4A full-width, border branco 2px, padding 14px,
+ *     TÍTULO DO DOC em caixa alta, 13pt, letter-spacing 3px, branco]
+ *    [linha meta: Nº NNN/AAAA  (esquerda) ───── Data de Emissão: DD/MM/AAAA (direita)]
+ *    ```
+ *    Características da regra de ouro:
+ *    - Logo SEMPRE com fallback `${window.location.origin}/logo-fc.jpg`.
+ *    - Faixa azul #1B2A4A com `print-color-adjust:exact` inline + border
+ *      branco 2px (efeito "tarja" do screenshot do Comunicado Interno).
+ *    - JAMAIS usar `onerror=` ou outros handlers (filtro XSS do backend).
+ *    - Estilos críticos SEMPRE inline + `<style>` interno no body (não no
+ *      head) pra sobreviver ao DOMPurify do FCSign viewer.
+ *    - Texto do corpo justificado (text-align:justify + hyphens:auto).
+ *    - Cláusulas com barra azul vertical à esquerda no título (border-left
+ *      3px #1B2A4A).
+ *
+ * **Arquivos tocados:**
+ * - `client/src/pages/Colaboradores.tsx` (contratoHtml refatorado L1914-1958
+ *   + remoção `onerror`).
+ * - `client/src/pages/AssinarDocumento.tsx` (bloco `<style>` scopado L246-285).
+ * - `shared/version.ts` (Rev. 2105 → 2106).
+ *
+ * **Não-mudanças:** backend `signatures.create` intacto (filtro XSS mantido),
+ * schema DB intacto, regra de negócio "Felipe único sócio autorizado"
+ * intacta, modal `FCSignSendDialog.tsx` intacto.
+ *
+ * **Follow-ups:** aplicar o padrão da REGRA DE OURO nos demais docs
+ * institucionais (Carta MDO, Comunicado Interno já estavam parecidos mas
+ * podem ser unificados; Aviso Prévio, Termo de Rescisão, Advertência ainda
+ * usam header antigo). Idealmente extrair pra helper `fcDocumentHeader.ts`
+ * em `client/src/lib/` que aceita `{ comp, titulo, numero?, data? }` e
+ * retorna o HTML do cabeçalho.
+ *
+ * **R-001/R-007/R-010:** N/A — só frontend.
+ *
+ * ---
+ *
  * Rev. 2105 — **RH · FCSign — ajuste de layout do modal "Enviar
  * para Assinatura" pra formato wide/2-colunas (regras de ouro).**
  *
