@@ -1,6 +1,36 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2101 — **Frota · `parseTollPdf` — fix "require is not defined"
+ * ao analisar PDF com IA.**
+ *
+ * Pedido do user (screenshot do modal IA aberto com `2664869326.pdf`
+ * 317KB carregado + toast preto "require is not defined" no canto):
+ * "ESTA COM ERRO..".
+ *
+ * **Causa-raiz:** `package.json` declara `"type": "module"` (ESM),
+ * mas a Rev. 2099 introduziu `const pdfParse = require("pdf-parse")`
+ * dentro de `parseTollPdf` (server/routers/frotas.ts:5458). Em ESM
+ * puro `require` não é global — só existe se você criar via
+ * `createRequire(import.meta.url)`. O erro era lançado em runtime
+ * dentro da mutation tRPC e propagado pro frontend como toast.
+ *
+ * **Fix em `server/routers/frotas.ts` (~L5460-5464):**
+ * trocado `require("pdf-parse")` por
+ * `const pdfParseMod = await import("pdf-parse"); const pdfParse =
+ * pdfParseMod.default || pdfParseMod`. Dynamic import é ESM-nativo
+ * e o `.default || mod` cobre o interop com pdf-parse que é CJS.
+ *
+ * **Não-mudanças:** lógica de chunking, prompt, frontend, modal,
+ * botão dedicado da Rev. 2100. R-001/R-007: N/A.
+ *
+ * **Nota:** `server/routers/folhaPagamento.ts:49` também usa
+ * `require('pdf-parse')` — provavelmente nunca foi exercitado em
+ * runtime ESM ou tsx-watch fez interop silencioso. Não toquei
+ * (fora do escopo do bug reportado), mas é candidato a fix futuro.
+ *
+ * ---
+ *
  * Rev. 2100 — **Frota · Pedágios / botão DEDICADO "Importar PDF"
  * na barra superior (rose) ao lado de "Importar (IA)".**
  *

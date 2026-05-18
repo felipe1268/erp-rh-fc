@@ -5454,8 +5454,11 @@ Sempre retorne JSON válido, sem markdown.`;
         // 100+ passagens) estouram o budget do Vision. Solução: extrair
         // texto com pdf-parse e mandar TEXTO pro Claude (≈10× mais barato
         // em tokens de input). Se texto for muito grande, chunkar por placa.
-        // eslint-disable-next-line @typescript-eslint/no-var-requires
-        const pdfParse = require("pdf-parse");
+        // Rev. 2101 — package.json é ESM ("type": "module"), require() não
+        // existe. Usar dynamic import. pdf-parse exporta default CJS, então
+        // pega `.default` se presente.
+        const pdfParseMod: any = await import("pdf-parse");
+        const pdfParse = pdfParseMod.default || pdfParseMod;
         const buffer = Buffer.from(input.base64, "base64");
         let pdfText = "";
         try {
