@@ -83,7 +83,7 @@ export default function FCSignSendDialog({ open, onOpenChange, companyId, employ
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="w-[100vw] h-[100dvh] max-w-none sm:w-[96vw] sm:h-auto sm:max-h-[92dvh] sm:max-w-[680px] p-0 overflow-hidden flex flex-col gap-0">
+      <DialogContent className="w-[100vw] h-[100dvh] max-w-none sm:w-[96vw] sm:h-auto sm:max-h-[92dvh] sm:max-w-[960px] p-0 overflow-hidden flex flex-col gap-0">
         <DialogHeader className="sr-only">
           <DialogTitle>Enviar para Assinatura (FCSign)</DialogTitle>
         </DialogHeader>
@@ -103,61 +103,64 @@ export default function FCSignSendDialog({ open, onOpenChange, companyId, employ
         {/* Body */}
         <div className="flex-1 overflow-y-auto p-6 bg-slate-50">
           {!result ? (
-            <div className="max-w-xl mx-auto space-y-4">
-              {/* Card EMPREGADO (read-only) */}
-              <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
-                <div className="bg-emerald-50 border-b border-emerald-100 px-4 py-2 flex items-center gap-2">
-                  <Users className="h-4 w-4 text-emerald-700" />
-                  <span className="text-xs font-bold uppercase tracking-wide text-emerald-800">Empregado(a)</span>
+            <div className="space-y-4">
+              {/* Linha 1: Empregado + Empregador lado a lado (2 cols no desktop) */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                {/* Card EMPREGADO (read-only) */}
+                <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
+                  <div className="bg-emerald-50 border-b border-emerald-100 px-4 py-2 flex items-center gap-2">
+                    <Users className="h-4 w-4 text-emerald-700" />
+                    <span className="text-xs font-bold uppercase tracking-wide text-emerald-800">Empregado(a)</span>
+                  </div>
+                  <div className="p-4 text-sm">
+                    <label className="text-[11px] font-bold uppercase tracking-wide text-slate-600 mb-1.5 block">Nome completo</label>
+                    <Input value={empregadoNome} disabled className="h-9 bg-slate-100" />
+                    <label className="text-[11px] font-bold uppercase tracking-wide text-slate-600 mb-1.5 block mt-3">CPF</label>
+                    <Input value={empregadoCpf || ""} disabled className="h-9 bg-slate-100" placeholder="—" />
+                  </div>
                 </div>
-                <div className="p-4 text-sm">
-                  <div className="font-semibold text-slate-900">{empregadoNome}</div>
-                  {empregadoCpf && <div className="text-xs text-slate-600 mt-0.5">CPF: {empregadoCpf}</div>}
-                </div>
-              </div>
 
-              {/* Card EMPREGADOR (sócio fixo) */}
-              <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
-                <div className="bg-blue-50 border-b border-blue-100 px-4 py-2 flex items-center gap-2">
-                  <ShieldCheck className="h-4 w-4 text-blue-700" />
-                  <span className="text-xs font-bold uppercase tracking-wide text-blue-800">Empregador (FC Engenharia)</span>
-                </div>
-                <div className="p-4 grid grid-cols-1 sm:grid-cols-[1fr_180px] gap-3">
-                  <div>
+                {/* Card EMPREGADOR (sócio fixo) */}
+                <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
+                  <div className="bg-blue-50 border-b border-blue-100 px-4 py-2 flex items-center gap-2">
+                    <ShieldCheck className="h-4 w-4 text-blue-700" />
+                    <span className="text-xs font-bold uppercase tracking-wide text-blue-800">Empregador (FC Engenharia)</span>
+                  </div>
+                  <div className="p-4">
                     <label className="text-[11px] font-bold uppercase tracking-wide text-slate-600 mb-1.5 block">Sócio responsável</label>
                     <Input value={SOCIO_FELIPE.nome} disabled className="h-9 bg-slate-100" />
-                  </div>
-                  <div>
-                    <label className="text-[11px] font-bold uppercase tracking-wide text-slate-600 mb-1.5 block">CPF (opcional)</label>
+                    <label className="text-[11px] font-bold uppercase tracking-wide text-slate-600 mb-1.5 block mt-3">CPF <span className="text-slate-400 normal-case font-normal">(opcional)</span></label>
                     <Input value={empregadorCpf} onChange={(e) => setEmpregadorCpf(e.target.value)} placeholder="___.___.___-__" className="h-9 bg-white" />
                   </div>
                 </div>
               </div>
 
-              {/* Card TESTEMUNHAS */}
+              {/* Card TESTEMUNHAS (full width, 2 cols internas) */}
               <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
                 <div className="bg-amber-50 border-b border-amber-100 px-4 py-2 flex items-center gap-2">
                   <Users className="h-4 w-4 text-amber-700" />
                   <span className="text-xs font-bold uppercase tracking-wide text-amber-800">Testemunhas</span>
                 </div>
-                <div className="p-4 space-y-3">
-                  <div className="grid grid-cols-1 sm:grid-cols-[1fr_180px] gap-3">
+                <div className="p-4 grid grid-cols-1 lg:grid-cols-2 gap-4">
+                  <div className="space-y-2 lg:border-r lg:border-slate-100 lg:pr-4">
+                    <div className="text-[11px] font-bold uppercase tracking-wide text-amber-700">Testemunha 1</div>
                     <div>
-                      <label htmlFor="fcs-t1-nome" className="text-[11px] font-bold uppercase tracking-wide text-slate-600 mb-1.5 block">Testemunha 1 — Nome *</label>
-                      <Input id="fcs-t1-nome" value={t1Nome} onChange={(e) => setT1Nome(e.target.value)} placeholder="Nome completo" className="h-9 bg-white" />
+                      <label htmlFor="fcs-t1-nome" className="text-[11px] font-bold uppercase tracking-wide text-slate-600 mb-1.5 block">Nome completo *</label>
+                      <Input id="fcs-t1-nome" value={t1Nome} onChange={(e) => setT1Nome(e.target.value)} placeholder="Ex.: João da Silva" className="h-9 bg-white" />
                     </div>
                     <div>
-                      <label htmlFor="fcs-t1-cpf" className="text-[11px] font-bold uppercase tracking-wide text-slate-600 mb-1.5 block">CPF</label>
+                      <label htmlFor="fcs-t1-cpf" className="text-[11px] font-bold uppercase tracking-wide text-slate-600 mb-1.5 block">CPF <span className="text-slate-400 normal-case font-normal">(opcional)</span></label>
                       <Input id="fcs-t1-cpf" value={t1Cpf} onChange={(e) => setT1Cpf(e.target.value)} placeholder="___.___.___-__" className="h-9 bg-white" />
                     </div>
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-[1fr_180px] gap-3">
+                  <div className="space-y-2">
+                    <div className="text-[11px] font-bold uppercase tracking-wide text-amber-700">Testemunha 2</div>
                     <div>
-                      <label htmlFor="fcs-t2-nome" className="text-[11px] font-bold uppercase tracking-wide text-slate-600 mb-1.5 block">Testemunha 2 — Nome *</label>
-                      <Input id="fcs-t2-nome" value={t2Nome} onChange={(e) => setT2Nome(e.target.value)} placeholder="Nome completo" className="h-9 bg-white" />
+                      <label htmlFor="fcs-t2-nome" className="text-[11px] font-bold uppercase tracking-wide text-slate-600 mb-1.5 block">Nome completo *</label>
+                      <Input id="fcs-t2-nome" value={t2Nome} onChange={(e) => setT2Nome(e.target.value)} placeholder="Ex.: Maria Souza" className="h-9 bg-white" />
                     </div>
                     <div>
-                      <label htmlFor="fcs-t2-cpf" className="text-[11px] font-bold uppercase tracking-wide text-slate-600 mb-1.5 block">CPF</label>
+                      <label htmlFor="fcs-t2-cpf" className="text-[11px] font-bold uppercase tracking-wide text-slate-600 mb-1.5 block">CPF <span className="text-slate-400 normal-case font-normal">(opcional)</span></label>
                       <Input id="fcs-t2-cpf" value={t2Cpf} onChange={(e) => setT2Cpf(e.target.value)} placeholder="___.___.___-__" className="h-9 bg-white" />
                     </div>
                   </div>
@@ -171,7 +174,7 @@ export default function FCSignSendDialog({ open, onOpenChange, companyId, employ
             </div>
           ) : (
             /* SUCCESS — mostrar links */
-            <div className="max-w-xl mx-auto space-y-3">
+            <div className="space-y-3">
               <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4 flex items-start gap-3">
                 <CheckCircle2 className="h-5 w-5 text-emerald-700 mt-0.5" />
                 <div>
@@ -179,6 +182,7 @@ export default function FCSignSendDialog({ open, onOpenChange, companyId, employ
                   <div className="text-xs text-emerald-800 mt-1">Copie cada link abaixo e envie pelo WhatsApp para o signatário correspondente.</div>
                 </div>
               </div>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
               {result.signers.map((s) => {
                 const fullUrl = `${window.location.origin}${s.link}`;
                 const isCopied = copied === s.role;
@@ -202,6 +206,7 @@ export default function FCSignSendDialog({ open, onOpenChange, companyId, employ
                   </div>
                 );
               })}
+              </div>
             </div>
           )}
         </div>

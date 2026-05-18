@@ -1,6 +1,39 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2105 — **RH · FCSign — ajuste de layout do modal "Enviar
+ * para Assinatura" pra formato wide/2-colunas (regras de ouro).**
+ *
+ * Pedido do user (screenshot do modal Rev. 2104 com 680px estreito
+ * vertical, 3 cards empilhados Empregado/Empregador/Testemunhas):
+ * "ajuste o layout de forma que respeite as regras de ouro.. não
+ * gosto dele retangular como esta". O modal estava tecnicamente OK
+ * (header gradient, body slate-50, cards) mas com proporção
+ * desconfortável — alto e estreito, cards apertados.
+ *
+ * **Mudanças em `client/src/components/FCSignSendDialog.tsx`:**
+ * (1) Largura `sm:max-w-[680px]` → `sm:max-w-[960px]`.
+ * (2) **Linha 1: Empregado + Empregador lado a lado** em
+ *     `grid grid-cols-1 lg:grid-cols-2 gap-4`. Empregado agora tem
+ *     2 inputs labeled (Nome / CPF) disabled `bg-slate-100` em vez
+ *     de só texto plain — visual consistente com Empregador.
+ * (3) **Linha 2: Card Testemunhas full-width** com grid interno
+ *     `lg:grid-cols-2` separado por `lg:border-r lg:border-slate-100`
+ *     — Testemunha 1 e Testemunha 2 lado a lado, cada uma com sub-
+ *     título amber + Nome (label *) + CPF (label opcional). Placeholders
+ *     mais úteis: "Ex.: João da Silva".
+ * (4) Tela de sucesso (4 links) agora também é `grid lg:grid-cols-2`
+ *     — 4 cards 2x2 em vez de empilhados. URL fica visível em mais
+ *     espaço.
+ * (5) Hints "(opcional)" padronizados em `text-slate-400 normal-case
+ *     font-normal` ao lado de "CPF" — antes era "CPF (OPCIONAL)" em
+ *     uppercase no Empregador.
+ *
+ * **Não-mudanças:** header gradient blue→indigo→purple, footer
+ * pill, backend, validações Felipe hardcoded.
+ *
+ * **R-001/R-007/R-010:** N/A — só layout frontend.
+ *
  * Rev. 2104 — **RH · FCSign — sistema interno de assinatura digital
  * eletrônica (MP 2.200-2/2001) com canvas, distribuição manual de
  * links e arquivamento automático no RAIO-X.**
