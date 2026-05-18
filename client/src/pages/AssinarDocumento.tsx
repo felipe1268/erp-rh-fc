@@ -140,7 +140,7 @@ export default function AssinarDocumento() {
                 style={{
                   width: "210mm",
                   minHeight: "297mm",
-                  padding: "20mm 18mm",
+                  padding: "10mm 18mm 20mm 18mm",
                   transform: `scale(${zoom})`,
                   transformOrigin: "top center",
                   marginBottom: zoom > 1 ? `${(zoom - 1) * 297}mm` : 0,

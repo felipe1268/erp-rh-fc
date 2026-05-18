@@ -1922,7 +1922,7 @@ ${obs ? `<div class="box"><strong>Observações / Justificativa do Enquadramento
                     //  2) FCSign /assinar/:token: AssinarDocumento.tsx tem CSS de fallback scopado
                     //  3) PDF final FCSign: mesmo HTML, mesmas inline rules
                     // Layout do topo: <table> (mais robusto que flex pra impressão).
-                    const contratoHtml = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Contrato de Experiência - ${empNome}</title></head><body style="font-family:'Times New Roman','Liberation Serif',Georgia,serif;font-size:11.5pt;line-height:1.65;color:#0f172a;max-width:21cm;margin:0 auto;padding:1.8cm;text-align:justify;-webkit-print-color-adjust:exact;print-color-adjust:exact">
+                    const contratoHtml = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Contrato de Experiência - ${empNome}</title></head><body style="font-family:'Times New Roman','Liberation Serif',Georgia,serif;font-size:11.5pt;line-height:1.65;color:#0f172a;max-width:21cm;margin:0 auto;padding:0.8cm 1.8cm 1.8cm 1.8cm;text-align:justify;-webkit-print-color-adjust:exact;print-color-adjust:exact">
 <style>
 @page{size:A4;margin:2cm}
 body p{margin:0 0 10px 0;text-align:justify;hyphens:auto;-webkit-hyphens:auto}
