@@ -1,6 +1,65 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2078 — **Aviso Prévio (tela `AvisoPrevio.tsx`) · foto do
+ * colaborador ao lado do nome + clique amplia em modal.** Pedido do
+ * usuário (IMG_0988): "Coloca a foto do funcionário ao lado do nome,
+ * e quando clicar quero que a foto aumente".
+ *
+ * Diagnóstico: a tela `client/src/pages/AvisoPrevio.tsx` (rotas
+ * /aviso-previo, /pedidos-demissao) renderizava apenas o nome do
+ * colaborador na coluna "Colaborador" (L1112) — sem avatar. Já existe
+ * o padrão consagrado em FechamentoPonto.tsx (Rev. 2015): Avatar
+ * shadcn 32-36px com AvatarImage src=fotoUrl + AvatarFallback com
+ * iniciais coloridas + click handler que abre Dialog em fundo
+ * gradient slate-900→slate-800 com a foto ampliada (max-h-70vh,
+ * ring branco), incluindo placeholder com `ImageOff` quando não há
+ * foto cadastrada ou o link está quebrado.
+ *
+ * O backend `server/routers/avisoPrevioFerias.ts` L364-367 (listar)
+ * já fazia JOIN com employees mas devolvia só `nomeCompleto/cpf/cargo`
+ * — `fotoUrl` ficou de fora. Fix backend: adicionar
+ * `employeeFotoUrl: employees.fotoUrl` no SELECT principal + no
+ * mapper de resultados (L458) com fallback `|| null` pra cobrir
+ * o caso de "Funcionário excluído" (left join NULL).
+ *
+ * Fix em 5 hunks no client (`AvisoPrevio.tsx`):
+ *   (1) L18 — `import { Avatar, AvatarFallback, AvatarImage } from
+ *       "@/components/ui/avatar"`.
+ *   (2) L29 — adiciona `UserCheck, ImageOff` ao import lucide-react
+ *       (mesmos ícones do modal de FechamentoPonto pra coerência).
+ *   (3) L87-97 — estado: `fotoZoom` ({url, nome}|null), `fotoLoadError`
+ *       boolean (placeholder quando img falha), `useEffect` reseta o
+ *       erro ao trocar URL, `getInitials` helper (1ª letra do 1º +
+ *       1ª letra do último nome).
+ *   (4) L1121-1162 — restructure da `<td>` da coluna Colaborador:
+ *       de `<td>{nome + badges}</td>` para `<td><div flex><button
+ *       foto/><div col><button name/>{badges}</div></div></td>`. O
+ *       `<button>` da foto tem `stopPropagation` + abre fotoZoom; o
+ *       `<button>` do nome mantém o handler original (open detail
+ *       dialog + getById fetch). Fechamento ajustado pra 3
+ *       `</div></div></div></td>` (badges, col-name, flex).
+ *   (5) L3755-3789 — modal de foto ampliada antes do
+ *       `</DashboardLayout>`. Cópia 1:1 do pattern Rev. 2015 (Dialog
+ *       max-w-2xl gradient escuro + img max-h-70vh ring branco +
+ *       placeholder com `ImageOff` quando sem foto ou link quebrado).
+ *
+ * Arquivos:
+ *   - `server/routers/avisoPrevioFerias.ts` L367 (SELECT) + L458 (mapper)
+ *   - `client/src/pages/AvisoPrevio.tsx` (5 hunks)
+ *   - `shared/version.ts` → Rev. 2078
+ *   - `shared/changelog.ts` (esta entrada)
+ *   - `replit.md` rotacionado (2077 vira top-2, 2076 vira one-liner,
+ *     2071 vai pra `replit-history.md`)
+ *
+ * Modal de zoom funciona pros 3 status (Em Andamento/Aguardando
+ * Baixa/Concluídos/Cancelados) porque é o MESMO render. Padrão pode
+ * ser portado pra `DashAvisoPrevio.tsx` em revisão futura caso o
+ * usuário peça (já há fotoUrl propagada lá desde Rev. 1942).
+ *
+ * ZERO ALTER/DROP/DELETE. R-001/R-007/R-010 OK. Reversível em 7
+ * hunks (5 client + 2 backend).
+ *
  * Rev. 2077 — **Fechamento de Ponto · selo "⚠ Aviso Prévio" também nos
  * cards/rankings (Pontuais, Atrasados, HE, Menos Dias Trabalhados).**
  * Pedido do usuário (IMG_0986): "Marquem quem está de aviso prévio tbm

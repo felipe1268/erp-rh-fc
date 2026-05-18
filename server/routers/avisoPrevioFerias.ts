@@ -361,6 +361,7 @@ export const avisoPrevioFeriasRouter = router({
           employeeName: employees.nomeCompleto,
           employeeCpf: employees.cpf,
           employeeCargo: employees.cargo,
+          employeeFotoUrl: employees.fotoUrl,
         })
         .from(terminationNotices)
         .leftJoin(employees, eq(terminationNotices.employeeId, employees.id))
@@ -451,6 +452,7 @@ export const avisoPrevioFeriasRouter = router({
             employeeName: r.employeeName || 'Funcionário excluído',
             employeeCpf: r.employeeCpf || '-',
             employeeCargo: r.employeeCargo || '-',
+            employeeFotoUrl: r.employeeFotoUrl || null,
           });
         }
         return results;

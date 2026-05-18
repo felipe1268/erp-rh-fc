@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { toast } from "sonner";
 import FullScreenDialog from "@/components/FullScreenDialog";
 import RaioXFuncionario from "@/components/RaioXFuncionario";
@@ -22,6 +23,7 @@ import {
   Users, Trash2, Pencil, Eye, X, FileText, ArrowRight,
   CheckCircle2, XCircle, Timer, Ban, ChevronsUpDown, Check, Download, Printer, RefreshCw, RotateCcw,
   UserX, ShieldAlert, Edit2, Briefcase, Save, MinusCircle, PlusCircle, Link, Upload, Loader2, FileCheck, TrendingUp,
+  UserCheck, ImageOff,
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { useState, useMemo, useEffect, useCallback, useRef } from "react";
@@ -79,6 +81,17 @@ export default function AvisoPrevio({ mode = "aviso_previo" }: { mode?: AvisoPre
   const [confirmExcluir, setConfirmExcluir] = useState<{ open: boolean; avisoId: number | null }>({ open: false, avisoId: null });
   const [confirmCancelar, setConfirmCancelar] = useState<{ open: boolean; avisoId: number | null; nomeFunc: string }>({ open: false, avisoId: null, nomeFunc: '' });
   const [cancelarMotivo, setCancelarMotivo] = useState('');
+  // Rev. 2078 — Foto do colaborador ao lado do nome + modal de ampliação ao clicar
+  const [fotoZoom, setFotoZoom] = useState<{ url: string | null; nome: string } | null>(null);
+  const [fotoLoadError, setFotoLoadError] = useState(false);
+  useEffect(() => { setFotoLoadError(false); }, [fotoZoom?.url]);
+  const getInitials = (nome: string): string => {
+    if (!nome) return "?";
+    const parts = nome.trim().split(/\s+/).filter(Boolean);
+    if (parts.length === 0) return "?";
+    if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+  };
 
   // Modal "Dar Baixa"
   const [darBaixaModal, setDarBaixaModal] = useState<{ open: boolean; avisoId: number | null; funcionarioNome: string; avisoData: any }>({ open: false, avisoId: null, funcionarioNome: '', avisoData: null });
@@ -1102,21 +1115,46 @@ export default function AvisoPrevio({ mode = "aviso_previo" }: { mode?: AvisoPre
                     const reducaoShort = a.reducaoJornada === '2h_dia' ? '2 HORAS' : a.reducaoJornada === '7_dias_corridos' ? '7 DIAS' : '-';
                     return (
                       <tr key={a.id} className="border-b last:border-0 hover:bg-muted/20 transition-colors">
-                        <td className="p-3 font-medium text-blue-700 cursor-pointer hover:underline" onClick={async () => {
-                              setSelectedItem(a);
-                              setShowDetailDialog(true);
-                              setAcertoForm({ descontosAcerto: (a as any).descontosAcerto || '', descontosAcertoDesc: (a as any).descontosAcertoDesc || '', acrescimosAcerto: (a as any).acrescimosAcerto || '', acrescimosAcertoDesc: (a as any).acrescimosAcertoDesc || '', mediaInsalubridade: (a as any).mediaInsalubridade || '', mediaHorasExtras: (a as any).mediaHorasExtras || '' });
-                              setNovoEmpregoForm({ ativo: !!(a as any).novoEmpregoAtivo, comunicadoEm: (a as any).novoEmpregoComunicadoEm || '', cartaUrl: (a as any).novoEmpregoCartaUrl || '' });
-                              try { const detail = await utils.avisoPrevio.avisoPrevio.getById.fetch({ id: a.id }); if (detail) { setSelectedItem(detail); setAcertoForm({ descontosAcerto: (detail as any).descontosAcerto || '', descontosAcertoDesc: (detail as any).descontosAcertoDesc || '', acrescimosAcerto: (detail as any).acrescimosAcerto || '', acrescimosAcertoDesc: (detail as any).acrescimosAcertoDesc || '', mediaInsalubridade: (detail as any).mediaInsalubridade || '', mediaHorasExtras: (detail as any).mediaHorasExtras || '' }); setNovoEmpregoForm({ ativo: !!(detail as any).novoEmpregoAtivo, comunicadoEm: (detail as any).novoEmpregoComunicadoEm || '', cartaUrl: (detail as any).novoEmpregoCartaUrl || '' }); } } catch(e) { console.error('Erro ao buscar detalhes:', e); }
-                        }}>
-                          {a.employeeName}
-                          <div className="flex gap-1 mt-0.5 flex-wrap">
+                        <td className="p-3">
+                          <div className="flex items-center gap-2.5">
+                            {/* Rev. 2078 — Foto clicável (amplia ao clicar) */}
+                            <button
+                              type="button"
+                              aria-label={`Ampliar foto de ${a.employeeName || 'colaborador'}`}
+                              className="shrink-0 rounded-full ring-2 ring-white hover:ring-blue-300 hover:scale-110 transition-all shadow-sm"
+                              title={(a as any).employeeFotoUrl ? "Clique para ampliar a foto" : "Sem foto cadastrada"}
+                              onClick={(ev) => { ev.stopPropagation(); setFotoZoom({ url: (a as any).employeeFotoUrl || null, nome: a.employeeName || "" }); }}
+                            >
+                              <Avatar className="size-9">
+                                {(a as any).employeeFotoUrl && <AvatarImage src={(a as any).employeeFotoUrl} alt={a.employeeName} />}
+                                <AvatarFallback className="bg-gradient-to-br from-blue-100 to-indigo-200 text-blue-900 text-[11px] font-bold">
+                                  {getInitials(a.employeeName || "")}
+                                </AvatarFallback>
+                              </Avatar>
+                            </button>
+                            <div className="min-w-0 flex-1">
+                              <button
+                                type="button"
+                                className="font-medium text-blue-700 text-left hover:underline cursor-pointer"
+                                onClick={async () => {
+                                  setSelectedItem(a);
+                                  setShowDetailDialog(true);
+                                  setAcertoForm({ descontosAcerto: (a as any).descontosAcerto || '', descontosAcertoDesc: (a as any).descontosAcertoDesc || '', acrescimosAcerto: (a as any).acrescimosAcerto || '', acrescimosAcertoDesc: (a as any).acrescimosAcertoDesc || '', mediaInsalubridade: (a as any).mediaInsalubridade || '', mediaHorasExtras: (a as any).mediaHorasExtras || '' });
+                                  setNovoEmpregoForm({ ativo: !!(a as any).novoEmpregoAtivo, comunicadoEm: (a as any).novoEmpregoComunicadoEm || '', cartaUrl: (a as any).novoEmpregoCartaUrl || '' });
+                                  try { const detail = await utils.avisoPrevio.avisoPrevio.getById.fetch({ id: a.id }); if (detail) { setSelectedItem(detail); setAcertoForm({ descontosAcerto: (detail as any).descontosAcerto || '', descontosAcertoDesc: (detail as any).descontosAcertoDesc || '', acrescimosAcerto: (detail as any).acrescimosAcerto || '', acrescimosAcertoDesc: (detail as any).acrescimosAcertoDesc || '', mediaInsalubridade: (detail as any).mediaInsalubridade || '', mediaHorasExtras: (detail as any).mediaHorasExtras || '' }); setNovoEmpregoForm({ ativo: !!(detail as any).novoEmpregoAtivo, comunicadoEm: (detail as any).novoEmpregoComunicadoEm || '', cartaUrl: (detail as any).novoEmpregoCartaUrl || '' }); } } catch(e) { console.error('Erro ao buscar detalhes:', e); }
+                                }}
+                              >
+                                {a.employeeName}
+                              </button>
+                              <div className="flex gap-1 mt-0.5 flex-wrap">
                             {isPedidoDemissao && (() => {
                               const tp = TIPO_LABELS_PEDIDO[a.tipo];
                               return tp ? <span className={`text-[9px] ${a.tipo === 'empregado_indenizado' ? 'bg-red-600' : 'bg-blue-600'} text-white px-1.5 py-0.5 rounded-full font-semibold`}>{tp.label}</span> : null;
                             })()}
                             {!isPedidoDemissao && (a as any).novoEmpregoAtivo ? <span className="text-[9px] bg-orange-600 text-white px-1.5 py-0.5 rounded-full font-semibold">Novo Emprego · Súmula 276</span> : null}
                             {(a as any).fgtsEditadoManualmente ? <span className="text-[9px] bg-amber-500 text-white px-1.5 py-0.5 rounded-full font-semibold">FGTS Real</span> : null}
+                              </div>
+                            </div>
                           </div>
                         </td>
                         <td className="p-3 text-xs">{formatCPF(a.employeeCpf)}</td>
@@ -3711,6 +3749,41 @@ ${pdfData.aviso.observacoes ? '<div class="section"><div class="section-title">O
       </Dialog>
 
           <PrintFooterLGPD />
+      {/* Rev. 2078 — Modal de foto ampliada do colaborador */}
+      <Dialog open={!!fotoZoom} onOpenChange={(open) => { if (!open) setFotoZoom(null); }}>
+        <DialogContent className="max-w-2xl p-0 overflow-hidden bg-gradient-to-br from-slate-900 to-slate-800 border-slate-700">
+          <DialogHeader className="px-6 py-4 border-b border-slate-700">
+            <DialogTitle className="text-white flex items-center gap-2">
+              <UserCheck className="h-5 w-5 text-blue-300" />
+              {fotoZoom?.nome || "Colaborador"}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="flex items-center justify-center p-8 min-h-[400px]">
+            {fotoZoom?.url && !fotoLoadError ? (
+              <img
+                src={fotoZoom.url}
+                alt={fotoZoom.nome}
+                className="max-w-full max-h-[70vh] rounded-xl shadow-2xl ring-4 ring-white/20 object-contain"
+                onError={() => setFotoLoadError(true)}
+              />
+            ) : (
+              <div className="flex flex-col items-center gap-3 text-slate-300">
+                <div className="rounded-full bg-slate-700/50 p-6 ring-4 ring-slate-600/40">
+                  <ImageOff className="h-16 w-16 text-slate-400" />
+                </div>
+                <p className="text-sm font-medium">
+                  {fotoZoom?.url && fotoLoadError ? "Falha ao carregar a foto" : "Sem foto cadastrada"}
+                </p>
+                <p className="text-xs text-slate-400 max-w-xs text-center">
+                  {fotoZoom?.url && fotoLoadError
+                    ? "O link da foto está quebrado ou inacessível. Reenvie a foto no módulo de Funcionários."
+                    : "Cadastre a foto deste colaborador no módulo de Funcionários para facilitar a identificação visual."}
+                </p>
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   );
 }
