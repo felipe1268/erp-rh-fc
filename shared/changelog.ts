@@ -1,6 +1,62 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2080 — **HOTFIX PROD · Cotação Parcial / Geração de OC quebrada
+ * com erro "function pg_advisory_xact_lock(bigint, integer) does not
+ * exist".** Screenshot do usuário (08:32) ao tentar confirmar uma
+ * cotação parcial mostrava toast vermelho:
+ * `Failed query: SELECT pg_advisory_xact_lock($1::bigint, 1001::int)
+ * params: 60002`. Logs de produção (`compras.criarOCsParciais`)
+ * confirmavam o mesmo erro repetido.
+ *
+ * **Causa raiz**: o Postgres tem 2 overloads de `pg_advisory_xact_lock`:
+ *   - `pg_advisory_xact_lock(bigint)` — chave única 64-bit.
+ *   - `pg_advisory_xact_lock(int, int)` — par de chaves 32-bit cada.
+ * **NÃO existe** overload `(bigint, int)`. As Rev. 1985 e 1986
+ * (numeração atômica de OC/OS e CT) chamavam
+ * `pg_advisory_xact_lock(${companyId}::bigint, 1001::int)` —
+ * combinação inexistente. Postgres rejeitava com `42883 function does
+ * not exist`, e como o lock é a PRIMEIRA operação dentro do
+ * `db.transaction`, a transação inteira abortava ANTES de qualquer
+ * tentativa de INSERT da OC. Resultado: nenhuma OC era criada.
+ *
+ * **Por que não detectado até agora**: o erro não aparece em testes
+ * sem múltiplos compradores simultâneos — em desenvolvimento o fluxo
+ * de cotação parcial não era exercitado. Os outros 2 usos do mesmo
+ * pattern no codebase (`fechamentoPonto.ts:2112` com
+ * `(${input.employeeId}, ${dateKey})` SEM cast — Postgres infere int,
+ * ambos int → overload correto; e `comunicadosInternos.ts:73` com
+ * `${lockKey1}::int, ${lockKey2}::int` — cast explícito CORRETO)
+ * estavam funcionando. Apenas o `compras.ts` tinha o `::bigint` errado.
+ *
+ * **Fix**: 2 hunks em `server/routers/compras.ts`:
+ *   - L148: `pg_advisory_xact_lock(${companyId}::int, 1001::int)` (era
+ *     `::bigint, ::int`) — usado em `gerarProximoNumeroOC`.
+ *   - L232: `pg_advisory_xact_lock(${params.companyId}::int, 1002::int)`
+ *     (era `::bigint, ::int`) — usado em `gerarContratoTerceiroDeOS`.
+ *
+ * **Segurança do cast**: companyId em produção é serial INTEGER (max
+ * 2³¹-1 ≈ 2.1B). Empresas ativas: 60002, 60001, etc. — caberiam mesmo
+ * num smallint. Zero risco de overflow.
+ *
+ * **Comportamento esperado pós-fix**:
+ *   - Cotação Parcial → "Confirmar diretamente" gera OC com número
+ *     atômico (sem race condition).
+ *   - Cotação completa → "Aprovar e Gerar OC/Contrato" também volta a
+ *     funcionar (mesmo helper).
+ *   - Lock continua serializando numeração por (empresa, escopo) —
+ *     dois compradores simultâneos da mesma empresa nunca recebem o
+ *     mesmo número.
+ *
+ * Arquivos:
+ *   - `server/routers/compras.ts` L148 + L232 (2 hunks de 1 linha cada,
+ *     comentários explicativos prepended)
+ *   - `shared/version.ts` → Rev. 2080
+ *   - `shared/changelog.ts` (esta entrada)
+ *   - `replit.md` rotacionado
+ *
+ * ZERO schema change. ZERO ALTER/DROP/DELETE. R-001/R-007/R-010 OK.
+ *
  * Rev. 2079 — **Comunicados Internos · novo botão "Lista para
  * Assinatura" com dois modos: assinatura digital (canvas inline)
  * OU impressão com espaço para colher assinatura manual.** Pedido

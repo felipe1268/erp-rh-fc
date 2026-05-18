@@ -145,7 +145,10 @@ setInterval(() => {
 async function gerarProximoNumeroOC(companyId: number, ordemTipo: "compra" | "servico" | "pacote"): Promise<string> {
   const db = await getDb();
   return await db.transaction(async (tx: any) => {
-    await tx.execute(sql`SELECT pg_advisory_xact_lock(${companyId}::bigint, 1001::int)`);
+    // Rev. 2080 — cast `::int` em AMBOS os args. Postgres não tem overload
+    // `pg_advisory_xact_lock(bigint, int)` — só `(bigint)` ou `(int, int)`.
+    // O cast errado quebrava criação de OC em produção ("function does not exist").
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(${companyId}::int, 1001::int)`);
     const year = new Date().getFullYear();
 
     // Rev. 1988 — Pós-revisão arquitetural: contador agora é PERSISTIDO dentro
@@ -229,7 +232,8 @@ async function gerarContratoTerceiroDeOS(params: {
     // envolvendo TODO o fluxo (lookup empresa terceira + count + insert).
     // Escopo 1002 = "contracts_numeration" (distinto do 1001 de OC/OS).
     const txResult = await db.transaction(async (tx: any) => {
-      await tx.execute(sql`SELECT pg_advisory_xact_lock(${params.companyId}::bigint, 1002::int)`);
+      // Rev. 2080 — cast `::int` em AMBOS os args (era `::bigint` errado).
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(${params.companyId}::int, 1002::int)`);
 
       const [forn] = await tx.select().from(fornecedores).where(and(eq(fornecedores.id, params.fornecedorId), eq(fornecedores.companyId, params.companyId)));
       const cnpjRaw = forn?.cnpj?.trim() || "";
