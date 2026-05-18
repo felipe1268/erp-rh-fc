@@ -1917,45 +1917,40 @@ ${obs ? `<div class="box"><strong>Observações / Justificativa do Enquadramento
                     // IMPORTANTE: <style> precisa ficar DENTRO do <body> porque o DOMPurify
                     // do /assinar/:token (FCSign) descarta tudo fora do body (default).
                     // Também encapsulamos as regras em .fcsign-doc pra não vazar pra fora do contrato.
-                    const contratoHtml = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Contrato de Experiência - ${empNome}</title></head><body>
+                    // Estratégia: inline styles em CADA elemento crítico. Funciona em 3 cenários:
+                    //  1) window.open + write() (popup imprimir): inline styles aplicam direto
+                    //  2) FCSign /assinar/:token: AssinarDocumento.tsx tem CSS de fallback scopado
+                    //  3) PDF final FCSign: mesmo HTML, mesmas inline rules
+                    // Layout do topo: <table> (mais robusto que flex pra impressão).
+                    const contratoHtml = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Contrato de Experiência - ${empNome}</title></head><body style="font-family:'Times New Roman','Liberation Serif',Georgia,serif;font-size:11.5pt;line-height:1.65;color:#0f172a;max-width:21cm;margin:0 auto;padding:1.8cm;text-align:justify;-webkit-print-color-adjust:exact;print-color-adjust:exact">
 <style>
 @page{size:A4;margin:2cm}
-.fcsign-doc{font-family:'Times New Roman','Liberation Serif',Georgia,serif;font-size:11.5pt;line-height:1.65;color:#0f172a;text-align:justify;text-justify:inter-word;hyphens:auto;-webkit-hyphens:auto}
-.fcsign-doc *{box-sizing:border-box}
-.fcsign-doc p{margin:0 0 10px 0;text-align:justify;text-justify:inter-word}
-.fcsign-doc .clausula{margin-top:14px}
-.fcsign-doc .clausula-title{font-weight:bold;text-transform:uppercase;margin-bottom:6px;color:#1B2A4A;font-size:11.5pt;letter-spacing:.3px;border-left:3px solid #1B2A4A;padding-left:8px;text-align:left}
-.fcsign-doc .assinaturas{margin-top:55px;display:flex;justify-content:space-between;gap:40px;page-break-inside:avoid;text-align:center}
-.fcsign-doc .assinatura{text-align:center;flex:1}
-.fcsign-doc .assinatura .linha{border-top:1px solid #0f172a;padding-top:6px;margin-top:60px;font-size:10.5pt;font-weight:600;text-align:center}
-.fcsign-doc .assinatura .linha small{display:block;font-weight:400;color:#475569;margin-top:2px}
-.fcsign-doc .destaque{font-weight:bold;color:#0f172a}
-.fcsign-doc strong{color:#0f172a}
-.fcsign-doc .header{margin-bottom:18px;border-bottom:3px solid #1B2A4A;padding-bottom:14px;text-align:left}
-.fcsign-doc .header-top{display:flex;align-items:center;gap:18px;margin-bottom:10px}
-.fcsign-doc .header-top img.logo{height:72px;width:auto;max-width:170px;object-fit:contain;flex-shrink:0}
-.fcsign-doc .header-top .empresa{flex:1;text-align:left}
-.fcsign-doc .header-top .empresa .nome{font-family:'Helvetica','Arial',sans-serif;font-size:15pt;font-weight:800;color:#1B2A4A;margin:0;letter-spacing:.4px;line-height:1.15;text-align:left}
-.fcsign-doc .header-top .empresa .cnpj{font-family:'Helvetica','Arial',sans-serif;font-size:9.5pt;color:#475569;margin:4px 0 0 0;letter-spacing:.2px;text-align:left}
-.fcsign-doc .header-top .empresa .end{font-family:'Helvetica','Arial',sans-serif;font-size:9pt;color:#64748b;margin:1px 0 0 0;text-align:left}
-.fcsign-doc .title-bar{background:#1B2A4A;background:linear-gradient(90deg,#1B2A4A 0%,#2c4373 100%);color:#fff;padding:11px 18px;text-align:center;border-radius:3px;margin-top:10px}
-.fcsign-doc .title-bar .titulo{font-family:'Helvetica','Arial',sans-serif;font-size:13pt;font-weight:700;letter-spacing:2.5px;text-transform:uppercase;display:block;color:#fff}
-.fcsign-doc .title-bar .sub{font-family:'Helvetica','Arial',sans-serif;font-size:9pt;font-weight:400;display:block;margin-top:4px;letter-spacing:.4px;opacity:.92;color:#fff}
-@media print{body{padding:0}.fcsign-doc .header{break-inside:avoid}}
+body p{margin:0 0 10px 0;text-align:justify;hyphens:auto;-webkit-hyphens:auto}
+body strong{font-weight:700;color:#0f172a}
+body .clausula{margin-top:16px}
+body .clausula-title{font-weight:700;text-transform:uppercase;margin:0 0 6px 0;color:#1B2A4A;font-size:11.5pt;letter-spacing:.3px;border-left:3px solid #1B2A4A;padding-left:8px;text-align:left}
+body .assinaturas{margin-top:50px;display:table;width:100%;table-layout:fixed;page-break-inside:avoid}
+body .assinaturas .assinatura{display:table-cell;text-align:center;padding:0 18px;vertical-align:top}
+body .assinaturas .linha{border-top:1px solid #0f172a;padding-top:6px;margin-top:56px;font-size:10.5pt;font-weight:600;text-align:center}
+body .assinaturas .linha small{display:block;font-weight:400;color:#475569;margin-top:2px;font-size:9pt}
+body .destaque{font-weight:700;color:#0f172a}
+@media print{body{padding:0}*{-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important}}
 </style>
-<div class="fcsign-doc">
-<div class="header">
-  <div class="header-top">
-    <img class="logo" src="${esc(logoSrc)}" alt="${esc(comp?.razaoSocial || 'FC Engenharia')}" />
-    <div class="empresa">
-      <h2 class="nome">${esc(comp?.razaoSocial || 'FC Engenharia')}</h2>
-      ${comp?.cnpj ? `<p class="cnpj">CNPJ: ${esc(comp.cnpj)}</p>` : ''}
-      ${comp?.endereco ? `<p class="end">${esc(comp.endereco)}${comp?.cidade ? ' — ' + esc(comp.cidade) + '/' + esc(comp?.estado || '') : ''}</p>` : ''}
-    </div>
-  </div>
-  <div class="title-bar">
-    <span class="titulo">Contrato de Trabalho por Prazo Determinado</span>
-    <span class="sub">Contrato de Experiência — Art. 443, §2º, alínea “c” da CLT</span>
+<div class="fcsign-document-body">
+<div class="header" style="margin:0 0 22px 0;border-bottom:3px solid #1B2A4A;padding-bottom:14px">
+  <table class="header-table" style="width:100%;border-collapse:collapse;margin-bottom:12px"><tbody><tr>
+    <td class="logo-cell" style="width:110px;padding:0 18px 0 0;vertical-align:middle">
+      <img class="logo" src="${esc(logoSrc)}" alt="${esc(comp?.razaoSocial || 'FC Engenharia')}" style="display:block;height:80px;width:auto;max-width:100px;object-fit:contain" />
+    </td>
+    <td style="vertical-align:middle;padding:0;text-align:left">
+      <h2 class="nome" style="font-family:'Helvetica','Arial',sans-serif;font-size:15pt;font-weight:800;color:#1B2A4A;margin:0 0 4px 0;letter-spacing:.3px;line-height:1.15;text-align:left">${esc(comp?.razaoSocial || 'FC Engenharia')}</h2>
+      ${comp?.cnpj ? `<p class="cnpj" style="font-family:'Helvetica','Arial',sans-serif;font-size:9.5pt;color:#475569;margin:2px 0 0 0;line-height:1.35;text-align:left">CNPJ: ${esc(comp.cnpj)}</p>` : ''}
+      ${comp?.endereco ? `<p class="end" style="font-family:'Helvetica','Arial',sans-serif;font-size:9.5pt;color:#475569;margin:2px 0 0 0;line-height:1.35;text-align:left">${esc(comp.endereco)}${comp?.cidade ? ' — ' + esc(comp.cidade) + '/' + esc(comp?.estado || '') : ''}</p>` : ''}
+    </td>
+  </tr></tbody></table>
+  <div class="title-bar" style="background-color:#1B2A4A;color:#fff;padding:12px 18px;text-align:center;border-radius:3px;margin:10px 0 0 0;-webkit-print-color-adjust:exact;print-color-adjust:exact">
+    <span class="titulo" style="font-family:'Helvetica','Arial',sans-serif;font-size:13pt;font-weight:700;letter-spacing:2px;text-transform:uppercase;display:block;color:#fff">Contrato de Trabalho por Prazo Determinado</span>
+    <span class="sub" style="font-family:'Helvetica','Arial',sans-serif;font-size:9pt;font-weight:400;display:block;margin-top:4px;letter-spacing:.3px;color:#fff">Contrato de Experiência — Art. 443, §2º, alínea “c” da CLT</span>
   </div>
 </div>
 

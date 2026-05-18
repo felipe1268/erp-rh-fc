@@ -240,8 +240,33 @@ export default function AssinarDocumento() {
         FCSign · FC Engenharia · Sistema interno de assinatura eletrônica · {new Date().getFullYear()}
       </footer>
 
-      {/* Estilos de impressão: imprime SOMENTE a página A4 do documento */}
+      {/* Estilos do documento FCSign — scopados a .fcsign-document-body.
+          IMPORTANTE: aplicamos AQUI no JSX (não dentro do HTML sanitizado) pra garantir
+          que o DOMPurify não interfira. Cobre tipografia + layout do header + faixa azul. */}
       <style>{`
+        .fcsign-document-body { color: #0f172a; }
+        .fcsign-document-body p { margin: 0 0 10px 0; text-align: justify; text-justify: inter-word; hyphens: auto; -webkit-hyphens: auto; }
+        .fcsign-document-body strong, .fcsign-document-body .destaque { font-weight: 700; color: #0f172a; }
+        .fcsign-document-body .header { margin: 0 0 22px 0; border-bottom: 3px solid #1B2A4A; padding-bottom: 14px; }
+        .fcsign-document-body .header-table { width: 100%; border-collapse: collapse; margin-bottom: 12px; }
+        .fcsign-document-body .header-table td { vertical-align: middle; padding: 0; }
+        .fcsign-document-body .header-table td.logo-cell { width: 110px; padding-right: 18px; }
+        .fcsign-document-body .header-table img.logo { display: block; height: 80px; width: auto; max-width: 100px; object-fit: contain; }
+        .fcsign-document-body .header-table .nome { font-family: 'Helvetica', 'Arial', sans-serif; font-size: 15pt; font-weight: 800; color: #1B2A4A; margin: 0 0 4px 0; letter-spacing: .3px; line-height: 1.15; }
+        .fcsign-document-body .header-table .cnpj, .fcsign-document-body .header-table .end { font-family: 'Helvetica', 'Arial', sans-serif; font-size: 9.5pt; color: #475569; margin: 2px 0 0 0; line-height: 1.35; }
+        .fcsign-document-body .title-bar { background: #1B2A4A !important; color: #fff !important; padding: 12px 18px; text-align: center; border-radius: 3px; margin: 10px 0 4px 0; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+        .fcsign-document-body .title-bar .titulo { font-family: 'Helvetica', 'Arial', sans-serif; font-size: 13pt; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; display: block; color: #fff; }
+        .fcsign-document-body .title-bar .sub { font-family: 'Helvetica', 'Arial', sans-serif; font-size: 9pt; font-weight: 400; display: block; margin-top: 4px; letter-spacing: .3px; opacity: .92; color: #fff; }
+        .fcsign-document-body .clausula { margin-top: 16px; }
+        .fcsign-document-body .clausula-title { font-weight: 700; text-transform: uppercase; margin: 0 0 6px 0; color: #1B2A4A; font-size: 11.5pt; letter-spacing: .3px; border-left: 3px solid #1B2A4A; padding-left: 8px; text-align: left; }
+        .fcsign-document-body .assinaturas { margin-top: 50px; display: table; width: 100%; table-layout: fixed; page-break-inside: avoid; }
+        .fcsign-document-body .assinaturas .assinatura { display: table-cell; text-align: center; padding: 0 18px; vertical-align: top; }
+        .fcsign-document-body .assinaturas .linha { border-top: 1px solid #0f172a; padding-top: 6px; margin-top: 56px; font-size: 10.5pt; font-weight: 600; text-align: center; }
+        .fcsign-document-body .assinaturas .linha small { display: block; font-weight: 400; color: #475569; margin-top: 2px; font-size: 9pt; }
+
+        /* Garante cores de fundo no print (faixa azul) em todos os browsers */
+        #fcsign-pdf-page, #fcsign-pdf-page * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+
         @media print {
           body * { visibility: hidden !important; }
           #fcsign-pdf-page, #fcsign-pdf-page * { visibility: visible !important; }
