@@ -1,6 +1,35 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2086 — **Painel RH / Home · Aniversariantes do Mês +
+ * Aniversários de Empresa: ordem cronológica relativa ao dia atual
+ * (HOJE primeiro → próximos do mês → já passados no fim).**
+ *
+ * Pedido do user (screenshot do card "Aniversariantes do Mês" em
+ * 18/maio mostrando "Dia 10, Dia 12, Dia 12" — todos riscados/já
+ * passados — e um badge "1 hoje!" mas o aniversariante de hoje
+ * estava AFOGADO no meio): "Faz aparecer primeiro o aniversariante
+ * do dia... conforme vai passando os dias, o próximo vai entrando".
+ *
+ * **Causa-raiz:** o sort em `server/routers/homeData.ts` era simples
+ * `a.dia - b.dia` (ascendente por dia do mês). Logo, no dia 18 a
+ * lista começava no dia 10 (já passado, riscado) e o aniversariante
+ * de hoje (dia 18) só aparecia depois de scroll. Mesma quebra em
+ * `aniversariosEmpresa` (anos de casa).
+ *
+ * **Fix:** sort em 3 buckets, com tie-break por dia ascendente:
+ * - bucket 0: `isHoje` (sempre no topo)
+ * - bucket 1: futuros do mês (`!jaPassou && !isHoje`) em ordem
+ * - bucket 2: já passados (`jaPassou`) em ordem (fica no rodapé,
+ *   ainda riscado pelo CSS existente)
+ *
+ * Conforme o relógio avança, o `isHoje` de amanhã vira `true` e
+ * naturalmente "sobe" pro topo, exatamente como pedido. Zero schema
+ * change, zero impacto no client (campos `isHoje`/`jaPassou` já
+ * existiam e o render do card já tratava ambos visualmente).
+ *
+ * **Arquivos:** `server/routers/homeData.ts` (2 sorts trocados).
+ *
  * Rev. 2085 — **Almoxarifado · Smart Entry / modal "Receber Material":
  * largura aumentada (max-w-lg → max-w-2xl) + KPI cards superiores
  * (Total / Pendentes / Parciais / Atrasadas) viraram BOTÕES que filtram
