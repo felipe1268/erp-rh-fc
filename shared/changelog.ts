@@ -1,6 +1,61 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2107 — **RH · Contrato de Experiência alinhado 100% ao modelo de ouro
+ * do Comunicado Interno (PDF de referência enviado pelo user).**
+ *
+ * Pedido do user (sequência: confirmou regra de ouro Rev. 2106 → mandou PDF
+ * `Comunicado_002_2026_-_BANCO_DE_HORAS.pdf` pra validação do conceito →
+ * "ja faça a correção do contrato de experiencia então, conforme o modelo em
+ * anexo"). O PDF revelou DOIS elementos do padrão que faltavam no Contrato
+ * de Experiência da Rev. 2106 mesmo após a aplicação do cabeçalho:
+ *
+ * (1) **Bloco "ASSUNTO"** logo abaixo da linha meta Nº/Data — fundo cinza
+ *     `#f1f5f9`, border-left azul navy `#1B2A4A` 4px, label uppercase pequeno
+ *     ("ASSUNTO:" no Comunicado / "EMPREGADO(A):" no Contrato) e valor
+ *     destacado em caixa alta 11pt bold (ex: "BANCO DE HORAS" no Comunicado /
+ *     "NOME COMPLETO — FUNÇÃO" no Contrato). Serve como "índice visual"
+ *     rápido do que o documento trata.
+ *
+ * (2) **Rodapé institucional** ao final — linha horizontal cinza 1px, padding
+ *     superior 6px, texto 8pt cinza claro `#94a3b8` em 2 colunas: à esquerda
+ *     "Documento gerado pelo ERP - Gestão Integrada", à direita "Emitido em:
+ *     DD/MM/AAAA às HH:mm". (Removi o "| Por: Nome" porque no contexto do
+ *     Contrato de Experiência ainda não temos contexto de usuário logado
+ *     dentro do `contratoHtml` — pode entrar em revisão futura quando
+ *     integrarmos `currentUser` no escopo do componente.)
+ *
+ * **Mudanças em `client/src/pages/Colaboradores.tsx`:**
+ * - L1960-1964: bloco ASSUNTO inserido entre a tabela meta (Nº/Data) e o
+ *   parágrafo "Pelo presente instrumento particular...". Inline styles em
+ *   TODOS elementos (DOMPurify safe), `print-color-adjust: exact` no fundo
+ *   slate-50 + border navy pra preservar no print.
+ * - L2033-2037: tabela de rodapé inserida após o bloco de testemunhas, com
+ *   `border-top:1px solid #e2e8f0` separando do corpo. Layout `<table>` de
+ *   2 colunas (mais robusto que flex pra impressão A4 multi-page).
+ *
+ * **Não-mudanças intencionais:**
+ * - Cabeçalho institucional (logo + razão social + CNPJ + endereço + faixa
+ *   azul + meta) permanece IDÊNTICO ao da Rev. 2106 — já estava no padrão.
+ * - Cláusulas (1ª-8ª) intactas: estrutura jurídica, fontes Times serif 11.5pt,
+ *   `text-align:justify; hyphens:auto`, border-left navy nos títulos.
+ * - Backend `signatures.create` / DOMPurify do `AssinarDocumento.tsx`
+ *   inalterados (continuam barrando handlers `on*` e tags perigosas).
+ * - Modal `FCSignSendDialog`, schema DB, regra "Felipe sócio único" — nada
+ *   tocado.
+ *
+ * **Follow-up sugerido (re-enfatizado da Rev. 2106):** o template está
+ * maduro o suficiente pra virar helper único `client/src/lib/fcDocumentHeader.ts`
+ * com 3 funções exportadas: `fcDocumentHeader({ comp, titulo, numero, data })`,
+ * `fcDocumentAssunto({ label, valor })` e `fcDocumentFooter({ userName? })`.
+ * Aplicar em Contrato CLT, Aviso Prévio, Termo de Rescisão, Advertência,
+ * Carta MDO, Comunicado Interno, Recibo de EPI etc — eliminar duplicação
+ * HTML inline que hoje vive espalhada em 6+ arquivos.
+ *
+ * **R-001/R-007/R-010:** N/A — alteração 100% frontend.
+ *
+ * ---
+ *
  * Rev. 2106 — **RH · Documentos institucionais FC — cabeçalho centralizado
  * vira REGRA DE OURO + fix renderização Contrato de Experiência no FCSign.**
  *

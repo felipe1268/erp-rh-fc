@@ -1954,6 +1954,12 @@ body .destaque{font-weight:700;color:#0f172a}
   </tr></tbody></table>
 </div>
 
+<!-- Bloco ASSUNTO no padrão do Comunicado Interno (modelo de ouro Rev. 2107) -->
+<div style="background-color:#f1f5f9;border-left:4px solid #1B2A4A;padding:10px 14px;margin:0 0 22px 0;-webkit-print-color-adjust:exact;print-color-adjust:exact">
+  <div style="font-family:'Helvetica','Arial',sans-serif;font-size:8.5pt;color:#64748b;letter-spacing:1.5px;text-transform:uppercase;font-weight:700;margin-bottom:3px">EMPREGADO(A):</div>
+  <div style="font-family:'Helvetica','Arial',sans-serif;font-size:11pt;color:#0f172a;font-weight:700;text-transform:uppercase;letter-spacing:.3px">${empNome}${empFuncao ? ' — ' + empFuncao : ''}</div>
+</div>
+
 <p>Pelo presente instrumento particular de <strong>CONTRATO DE TRABALHO POR PRAZO DETERMINADO (EXPERIÊNCIA)</strong>, que entre si fazem:</p>
 
 <div class="clausula">
@@ -2020,6 +2026,12 @@ body .destaque{font-weight:700;color:#0f172a}
 <div class="assinatura"><div class="linha">Testemunha 1<br><small>Nome: _________________ CPF: _______________</small></div></div>
 <div class="assinatura"><div class="linha">Testemunha 2<br><small>Nome: _________________ CPF: _______________</small></div></div>
 </div>
+
+<!-- Rodapé institucional FC (regra de ouro Rev. 2107) -->
+<table style="width:100%;border-collapse:collapse;margin-top:36px;border-top:1px solid #e2e8f0;padding-top:8px"><tbody><tr>
+  <td style="text-align:left;font-family:'Helvetica','Arial',sans-serif;font-size:8pt;color:#94a3b8;padding:6px 0 0 0">Documento gerado pelo ERP - Gestão Integrada</td>
+  <td style="text-align:right;font-family:'Helvetica','Arial',sans-serif;font-size:8pt;color:#94a3b8;padding:6px 0 0 0">Emitido em: ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}</td>
+</tr></tbody></table>
 </div>
 
 </body></html>`;
