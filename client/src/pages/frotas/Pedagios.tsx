@@ -56,6 +56,7 @@ export default function Pedagios() {
   const [iaSelectedItems, setIaSelectedItems] = useState<Set<number>>(new Set());
   const [iaSaving, setIaSaving] = useState(false);
   const iaFileRef = useRef<HTMLInputElement>(null);
+  const pdfFileRef = useRef<HTMLInputElement>(null);
 
   const [clearMonthDialogOpen, setClearMonthDialogOpen] = useState(false);
   const [clearMonthPassword, setClearMonthPassword] = useState("");
@@ -404,6 +405,11 @@ export default function Pedagios() {
             <Button variant="outline" size="sm" className="bg-violet-50 text-violet-700 border-violet-200 hover:bg-violet-100"
               onClick={() => iaFileRef.current?.click()}>
               <Sparkles className="h-4 w-4 mr-1" /> Importar (IA)
+            </Button>
+            <input type="file" accept="application/pdf" ref={pdfFileRef} className="hidden" onChange={handleIaFileSelect} />
+            <Button variant="outline" size="sm" className="bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100"
+              onClick={() => pdfFileRef.current?.click()}>
+              <FileText className="h-4 w-4 mr-1" /> Importar PDF
             </Button>
             <Button size="sm" onClick={openNew}><Plus className="h-4 w-4 mr-1" /> Novo</Button>
           </div>

@@ -4,6 +4,7 @@
 > O detalhamento completo (causa-raiz, stack traces, arquivos tocados, comentários longos) de TODAS as revisões — incluindo as listadas abaixo — vive em `shared/changelog.ts`.
 > Movido aqui na Rev. 2028 (faxina) — revisões 1903 → 2012.
 
+- ~~Rev. 2093~~ — Financeiro · Configurações / modal "Novo Sócio" puxa sócios já cadastrados em Colaboradores. Backend `listSociosFromEmployees` com dedup CPF normalizado. Frontend com `<optgroup>` disabled "✓ já cadastrado". Ver `shared/changelog.ts`. (movida na Rev. 2100)
 - ~~Rev. 2092~~ — Financeiro · Centros de Custo / modal Novo/Editar redesenhado no padrão Categorias (DialogContent `p-0 overflow-hidden`, header gradient + ícone Building2, labels uppercase, Input h-9, `<select>` nativo). Ver `shared/changelog.ts`. (movida na Rev. 2099)
 - ~~Rev. 2091~~ — Compras · "Atender pelo Estoque" agora pergunta a OBRA DE ORIGEM. Modal `TransferenciaEstoqueDialog` com saldo na origem + badges; `criarOrdemDeCotacao` ganha `obraOrigemId` opcional. Ver `shared/changelog.ts`. (movida na Rev. 2098)
 - ~~Rev. 2090~~ — Compras · Ordens (OC/OS) ganha filtro por Obra. Novo `<Select>` Building2 com "Todas/Sem obra/lista ordenada", reusa `obrasQ`. Botão X limpa, pill de resultados conta o novo filtro. Ver `shared/changelog.ts`. (movida na Rev. 2097)

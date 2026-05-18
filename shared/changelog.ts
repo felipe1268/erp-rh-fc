@@ -1,6 +1,28 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2100 — **Frota · Pedágios / botão DEDICADO "Importar PDF"
+ * na barra superior (rose) ao lado de "Importar (IA)".**
+ *
+ * Pedido do user (screenshot da tela `/frotas/pedagios` Mai/2026
+ * após Rev. 2099): "cade o botão de importar PDF..". Apesar da
+ * Rev. 2099 ter feito o backend aceitar PDFs grandes via "Importar
+ * (IA)" (violet), o user não percebeu que esse botão também aceita
+ * PDF — esperava um botão explícito.
+ *
+ * **Mudanças em `client/src/pages/frotas/Pedagios.tsx`:**
+ * (1) novo `pdfFileRef` ao lado de `iaFileRef` (~L62);
+ * (2) novo `<input type="file" accept="application/pdf" />`
+ *     + Button rose "Importar PDF" com ícone `FileText` (já
+ *     importado, ~L412-416) — reusa o mesmo `handleIaFileSelect`
+ *     e abre o mesmo modal Rev. 2096; (3) input do botão IA mantém
+ *     accept misto (`image/* + application/pdf`) pra retrocompat.
+ *
+ * **Não-mudanças:** backend `parseTollPdf` Rev. 2099, modal,
+ * lógica de chunking. Zero refator. R-001/R-007: N/A — só JSX.
+ *
+ * ---
+ *
  * Rev. 2099 — **Frota · `parseTollPdf` agora aceita PDFs grandes
  * (faturas Sem Parar/Caixa mensais com 100+ passagens) via extração
  * de texto no servidor + chunking por placa.**
