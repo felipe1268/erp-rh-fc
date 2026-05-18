@@ -50,18 +50,18 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 2071** — **Cotações · "Prazo de Entrega" obrigatório mesmo em MDO+Medição + badge "0 PENDÊNCIAS" com erro visível.** Pedido IMG_0976+0977: "Todas informações estão corretas, não falta nada e o erro ainda persiste". Dois bugs no mesmo fluxo: (1) modal Condições de Pagamento mostrava "Por Medição" visualmente selecionado (via `moduloMedicao` persistido), mas `editTipoPag` carregava `tipoPagamento=null` de registros antigos — usuário não tocava na aba, `handleSalvar` enviava `tipoPagamento=""`, server gravava NULL, validação `isMdoMedicao` (client L2293 / server L5885) virava false e exigia Prazo de Entrega (campo inexistente no fluxo). (2) Dialog `ValidacaoErro` parseava `mensagem.split("\n").filter(l => l.startsWith("•"))` mas o template `"...preencher: • Prazo de Entrega"` deixava o bullet inline → `campos.length=0` → badge `"0 pendência"`. Fix em `client/src/pages/compras/Cotacoes.tsx`: derivar `tipoPagamentoFinal` de `mdoModoEfetivo` (fonte da verdade visível) + `\n` antes do primeiro bullet. ZERO backend.
 - **Rev. 2070** — **SST Integração · cards do Dashboard mostravam 0 pendentes mesmo havendo vários.** Pedido IMG_0970: "Arrume os cards, está dizendo que tem 0 pendências e não verdade tem várias". O card "Pendentes" contava só rows com `status='pendente'` (campo legado, raramente populado), enquanto a aba Pendentes e o badge do menu (Rev. 2063/2064) já usam lógica correta: colaboradores ativos sem aprovação válida (CLT/PJ + terceiros sem doc). Fix em `server/routers/integracaoSST.ts` L1286+ (`dashboardKpis`): espelho 100% da query do `getBadgeCounts` — CTEs `last_ok` + `em_processo`, filtro anti-fantasma (`deletedAt`+`listaNegra`+`dataDemissao`), terceiros sem `integracao_doc_url`, +`emProcessoCount` pra cobrir rows pendente/em_andamento. Bônus: `total` agora soma o universo real e `taxaAprovacao` denominador atualizado. ZERO frontend, ZERO migration.
-- **Rev. 2069** — **SST Integração · multiseleção + select-all + bulk delete nas abas Aprovados e Reprovados.** Pedido IMG_0971+0972: "faltou a multi seleção para apagar tudo, selecionado todos de uma vez nas duas abas". Até a Rev. 2068 só Pendentes tinha o padrão (Rev. 2045). Fix em `client/src/pages/sst/IntegracaoSST.tsx` espelhando 100% da Pendentes nas duas abas: `selecionados:Set<number>` + `confirmExcluir` + `excluirMut = trpc.integracaoSST.excluirRegistros` (endpoint já existe, soft-delete, scope por companyId), coluna checkbox no header (com `indeterminate`) e por linha (com highlight), coluna "Ações" com Trash2 por linha, botão bulk "Excluir N selecionado(s)" que aparece condicionalmente, AlertDialog de confirmação. Follow-up architect: `useEffect` que reseta `selecionados` em troca de `companyId` (prop vem de fora, pode mudar sem remount). ZERO backend, ZERO migration.
 
 ### Revisões recentes (one-liners)
 
+- ~~Rev. 2069~~ — SST Integração · multiseleção + select-all + bulk delete nas abas Aprovados e Reprovados (espelha padrão da Pendentes, reusa endpoint `excluirRegistros`). Ver `shared/changelog.ts`.
 - ~~Rev. 2068~~ — Fechamento de Ponto · fix "Voltar ao ranking" fechava a tela toda no iPad · `onInteractOutside={e.preventDefault()}` no Dialog externo. Ver `shared/changelog.ts`.
 - ~~Rev. 2067~~ — Raio-X · fix `100vh`→`100dvh` no overlay (cards SST/Integração cortados no iPad Safari). Ver `shared/changelog.ts`.
 - ~~Rev. 2066~~ — Raio-X · Timeline agora inclui TODAS as movimentações (Folha/VR/Adiantamentos/Rateio/Insumos/Desc Almox/Atrasos/PJ Pagamentos + Férias com 3 eventos por período). Ver `shared/changelog.ts`.
 - ~~Rev. 2065~~ — Fechamento de Ponto: botão "Voltar ao ranking" nos 3 modais de memória (Atraso/HE/Faltas). Ver `shared/changelog.ts`. (introduziu bug — fixado na Rev. 2068.)
-- ~~Rev. 2064~~ — SST badge do menu lateral REALMENTE funciona · `sql\`ANY(${ids})\`` do Drizzle não serializa array JS; fix em `getBadgeCounts` com `sql.raw(\`ANY(ARRAY[...]::int[])\`)` validado por Zod. Ver `shared/changelog.ts`.
 
-> Revisões 2063 → 2044 e anteriores: ver [`replit-history.md`](./replit-history.md) e `shared/changelog.ts` (detalhe completo).
+> Revisões 2064 → 2044 e anteriores: ver [`replit-history.md`](./replit-history.md) e `shared/changelog.ts` (detalhe completo).
 
 
 ## User preferences

@@ -1585,12 +1585,30 @@ export default function Cotacoes() {
       const parcList = condCustomParcelas[fId] ?? [];
       const modo = condModo[fId] ?? "padrao";
       const numParcelas = modo === "custom" && parcList.length > 0 ? parcList.length : undefined;
+      // Rev. 2071 — Pedido do usuário (IMG_0976+0977): "Todas informações
+      // estão corretas, não falta nada e o erro ainda persiste". Bug raiz:
+      // o modal mostrava "Por Medição" + módulo pré-selecionados a partir
+      // do `moduloMedicao` persistido (linha 1527 `mdoModoEfetivo` deriva
+      // de `editModuloMedicao` se truthy). Mas `editTipoPag` carregava o
+      // `tipoPagamento` persistido — que podia estar null em registros
+      // antigos. Se o usuário só conferia visualmente e clicava
+      // "Confirmar e Salvar" sem TOCAR na aba "Por Medição"
+      // (handleMdoTabChange é quem seta editTipoPag="medicao"), o save
+      // enviava tipoPagamento="" → server gravava null. Aí validação
+      // L2293 / server L5885 não detectavam isMdoMedicao e exigiam
+      // Prazo de Entrega (que não existe nesse fluxo). Fix: derivar
+      // tipoPagamento da fonte da verdade visível (mdoModoEfetivo),
+      // não do editTipoPag stale.
+      let tipoPagamentoFinal = editTipoPag[fId] || "";
+      if (modoModal === "mdo" && mdoModoEfetivo === "medicao") {
+        tipoPagamentoFinal = "medicao";
+      }
       salvarCondicoesComerciais.mutate({
         cotacaoId: showDetalhe,
         fornecedorId: fId,
         companyId,
         formaPagamento: editFormaPag[fId] || "",
-        tipoPagamento: editTipoPag[fId] || "",
+        tipoPagamento: tipoPagamentoFinal,
         condicaoPagamento: editCondPag[fId] || "",
         prazoEntregaDias: prazoVal,
         numeroParcelas: numParcelas,
@@ -2298,7 +2316,12 @@ export default function Cotacoes() {
         const nomeForn = (fornParaSaldo as any).fornecedor?.nomeFantasia || (fornParaSaldo as any).fornecedor?.razaoSocial || "do fornecedor vencedor";
         setValidacaoErroInfo({
           titulo: `Informações obrigatórias faltando — ${nomeForn}`,
-          mensagem: `Para gerar a Ordem de Compra, é necessário preencher: ${erros.map(e => `• ${e}`).join("\n")}\n\nComo corrigir: acesse o Mapa de Cotação, localize o card de ${nomeForn}, clique em "Editar", preencha os campos indicados e clique em "Salvar".`,
+          // Rev. 2071 — Formato com bullets em linha própria. Antes, com
+          // 1 erro só, a string ficava "...preencher: • Prazo de Entrega"
+          // numa única linha — o parser do dialog (L5661) filtra linhas
+          // que COMEÇAM com "•" e não pegava nenhuma → badge mostrava
+          // "0 PENDÊNCIAS" mesmo com erro visível.
+          mensagem: `Para gerar a Ordem de Compra, é necessário preencher:\n${erros.map(e => `• ${e}`).join("\n")}\n\nComo corrigir: acesse o Mapa de Cotação, localize o card de ${nomeForn}, clique em "Editar", preencha os campos indicados e clique em "Salvar".`,
           irParaMapa: true,
         });
         setShowValidacaoErroDialog(true);

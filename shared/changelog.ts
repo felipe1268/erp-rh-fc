@@ -1,6 +1,50 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2071 — **Cotações · "Informações obrigatórias faltando — Prazo
+ * de Entrega" mesmo com MDO+Medição configurada + badge "0 PENDÊNCIAS"
+ * com erro visível.** Pedido do usuário (IMG_0976 + IMG_0977): "Todas
+ * informações estão corretas, não falta nada e o erro ainda persiste".
+ * Print mostrava modal Condições de Pagamento com "Por Medição" e
+ * "Medição por Avanço" SELECIONADOS, Forma=PIX, e ainda assim ao
+ * clicar "Aprovar e Gerar Contrato" o dialog amber-red disparava
+ * exigindo Prazo de Entrega. Dois bugs distintos no mesmo fluxo:
+ *
+ *   **Bug 1 — persistência silenciosa de `tipoPagamento`:** o modal
+ *   carrega o estado inicial em `editTipoPag[fId]` a partir do
+ *   `tipoPagamento` persistido (L1160). Em registros antigos esse
+ *   campo era null. Mesmo assim a UI mostrava "Por Medição" visualmente
+ *   selecionado porque `mdoModoEfetivo` (L1527) deriva de
+ *   `editModuloMedicao` quando truthy (`moduloMedicao` PERSISTIDO sim,
+ *   `tipoPagamento` não). `setEditTipoPag("medicao")` só dispara dentro
+ *   de `handleMdoTabChange` — ou seja, só quando o usuário CLICA na
+ *   aba. Se ele só conferia visualmente e clicava "Confirmar e Salvar"
+ *   direto, `handleSalvar` (L1577) enviava `tipoPagamento: ""` → server
+ *   gravava NULL → validações `isMdoMedicao` no client (L2293) e
+ *   server (`compras.ts` L5885) retornavam false e exigiam Prazo de
+ *   Entrega (campo que nem aparece no fluxo MDO+medição). Fix:
+ *   `handleSalvar` agora deriva `tipoPagamentoFinal` da fonte da
+ *   verdade visível (`mdoModoEfetivo`): se `modoModal === "mdo" &&
+ *   mdoModoEfetivo === "medicao"`, força `tipoPagamento: "medicao"`
+ *   no payload, ignorando `editTipoPag` stale.
+ *
+ *   **Bug 2 — badge "0 PENDÊNCIAS" mesmo com erro:** o `ValidacaoErro`
+ *   Dialog (L5650) parseia a `mensagem` quebrando por `\n` e filtrando
+ *   linhas que COMEÇAM com `•` para extrair `campos[]`. A mensagem
+ *   gerada em `validarCondicoesVencedor` (L2327) era
+ *   `"Para gerar... preencher: ${erros.map(e => "• " + e).join("\n")}..."`
+ *   — com 1 único erro, o template ficava `"...preencher: • Prazo de
+ *   Entrega"` numa única linha que NÃO começa com `•`. Resultado:
+ *   `campos.length === 0` → badge `"0 pendência{s}"` (L5691). Fix:
+ *   colocar `\n` antes do primeiro bullet:
+ *   `"...preencher:\n${erros.map(...).join("\n")}..."`. Agora cada
+ *   bullet está na própria linha e o parser conta certo.
+ *
+ * Arquivos: `client/src/pages/compras/Cotacoes.tsx` L1591-1608
+ * (handleSalvar) + L2322-2327 (mensagem formatada). ZERO backend,
+ * ZERO migration — server já aceita `tipoPagamento="medicao"` (L5885)
+ * e bug era no payload do save.
+ *
  * Rev. 2070 — **SST Integração · cards do Dashboard mostravam 0
  * pendentes mesmo havendo vários.** Pedido do usuário (IMG_0970):
  * "Arrume os cards, está dizendo que tem 0 pendências e não verdade
