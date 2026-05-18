@@ -1,6 +1,57 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2092 — **Financeiro · Centros de Custo / modal Novo/Editar redesenhado
+ * no padrão Categorias (header com gradiente, inputs compactos, sem scroll
+ * horizontal).**
+ *
+ * Pedido do user (screenshot do modal "Editar Centro de Custo" mostrando
+ * scrollbar horizontal aparecendo na base do dialog + layout 2-col com
+ * inputs muito altos): "refaça o layout, deixando ela mais ajustadas com
+ * tamanho e regras de ouro".
+ *
+ * **Problema:** o modal de Rev. 2088 ficou destoante do padrão estabelecido
+ * pela tela Categorias (também Financeiro). DialogContent `max-w-md` sem
+ * `overflow-hidden` + Inputs em altura default (h-10) + `Label` shadcn
+ * sem o estilo uppercase compacto + `Select` shadcn (com SelectTrigger
+ * que tem padding maior) causavam um conteúdo ligeiramente mais largo
+ * que o container, gerando scrollbar horizontal visível na base. Visual
+ * também estava "frio" — sem header de cor identificando o módulo.
+ *
+ * **Regras de ouro aplicadas (espelhadas de `FinanceiroCategorias.tsx`):**
+ *   - `DialogContent` ganhou `p-0 overflow-hidden` (zera padding interno
+ *     do shadcn pra controlarmos as seções nós mesmos, e mata o overflow
+ *     horizontal residual).
+ *   - **Header com gradiente** (`from-blue-600 to-indigo-600`) + ícone
+ *     `Building2` em pill `w-9 h-9 bg-white/15 ring-2 ring-white/30` +
+ *     título `text-sm font-semibold` + subtítulo `text-[11px]` com cópia
+ *     contextual ("Atualize os dados…" vs "Cadastre um novo…").
+ *   - **Labels uppercase** (`text-xs font-medium text-gray-500
+ *     uppercase tracking-wide`) ao invés de `<Label>` shadcn — mais
+ *     compactas e alinhadas ao padrão Categorias.
+ *   - **Inputs `h-9`** (vs default h-10) com `mt-1` consistente.
+ *   - **`<select>` nativo** ao invés de `<Select>` shadcn nos campos
+ *     Tipo e Obra Vinculada — economiza ~6px de altura cada e elimina
+ *     o trigger button do shadcn (que era o principal culpado do
+ *     overflow horizontal em telas estreitas).
+ *   - **Gaps de grid menores** (`gap-3` vs `gap-4`) + `space-y-3` no
+ *     corpo do form.
+ *   - **autoFocus + Enter-to-save** no campo Nome.
+ *   - **Footer com padding controlado** (`px-5 pb-4`) + botão Cadastrar
+ *     com ícone `PlusCircle` quando é criação.
+ *   - **Dica contextual em pill azul** (apenas na criação) explicando
+ *     auto-código + vínculo de obra — mesmo padrão da dica que aparece
+ *     em `FinanceiroCategorias` quando se cria categoria nova.
+ *
+ * **Arquivos:** `client/src/pages/financeiro/FinanceiroCentrosCusto.tsx`,
+ * `shared/version.ts`, `shared/changelog.ts`, `replit.md`,
+ * `replit-history.md`.
+ *
+ * **R-001/R-007:** zero backend, zero schema, zero migrations. Pura
+ * mudança de markup/estilo no modal.
+ *
+ * ----------------------------------------------------------------------
+ *
  * Rev. 2091 — **Compras · "Atender pelo Estoque" agora pergunta a OBRA DE ORIGEM
  * (modal de Transferência) antes de baixar o almoxarifado.**
  *

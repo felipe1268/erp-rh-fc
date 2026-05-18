@@ -307,74 +307,111 @@ export default function FinanceiroCentrosCusto() {
           ))
         )}
 
-        {/* Modal criar/editar */}
+        {/* Modal criar/editar — Rev. 2092: padrão Categorias (header gradient, h-9, labels uppercase) */}
         <Dialog open={showForm} onOpenChange={(v) => { if (!v) { setShowForm(false); setForm({ ...INITIAL_FORM }); } }}>
-          <DialogContent className="max-w-md">
-            <DialogHeader>
-              <DialogTitle>{form.id ? "Editar Centro de Custo" : "Novo Centro de Custo"}</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label>Código</Label>
-                  <Input
-                    value={form.codigo}
-                    onChange={e => setForm(f => ({ ...f, codigo: e.target.value }))}
-                    placeholder="Gerado automaticamente"
-                    disabled={!!form.id}
-                  />
-                  {!form.id && (
-                    <p className="text-[10px] text-gray-400 mt-1">Deixe em branco para gerar CC-0001, CC-0002...</p>
-                  )}
+          <DialogContent className="max-w-md p-0 overflow-hidden">
+            <div className="px-5 pt-4 pb-3 bg-gradient-to-br from-blue-600 to-indigo-600 text-white">
+              <div className="flex items-center gap-2">
+                <div className="w-9 h-9 rounded-lg bg-white/15 ring-2 ring-white/30 flex items-center justify-center">
+                  <Building2 className="w-4 h-4" />
                 </div>
                 <div>
-                  <Label>Tipo</Label>
-                  <Select value={form.tipo} onValueChange={v => setForm(f => ({ ...f, tipo: v }))}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="obra">Obra</SelectItem>
-                      <SelectItem value="administrativo">Administrativo</SelectItem>
-                      <SelectItem value="comercial">Comercial</SelectItem>
-                      <SelectItem value="financeiro">Financeiro</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              <div>
-                <Label>Nome *</Label>
-                <Input value={form.nome} onChange={e => setForm(f => ({ ...f, nome: e.target.value }))} placeholder="Nome do centro de custo" />
-              </div>
-              {form.tipo === "obra" && (
-                <div>
-                  <Label>Obra Vinculada</Label>
-                  <Select value={form.obraId || "__none__"} onValueChange={v => setForm(f => ({ ...f, obraId: v === "__none__" ? "" : v }))}>
-                    <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__none__">— Nenhuma —</SelectItem>
-                      {(obras ?? []).map((o: any) => <SelectItem key={o.id} value={String(o.id)}>{o.nome}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label>Responsável</Label>
-                  <Input value={form.responsavelNome} onChange={e => setForm(f => ({ ...f, responsavelNome: e.target.value }))} />
-                </div>
-                <div>
-                  <Label>Orçamento Mensal (R$)</Label>
-                  <Input type="number" step="0.01" value={form.orcamentoMensal} onChange={e => setForm(f => ({ ...f, orcamentoMensal: e.target.value }))} />
+                  <h3 className="text-sm font-semibold">{form.id ? "Editar Centro de Custo" : "Novo Centro de Custo"}</h3>
+                  <p className="text-[11px] text-blue-100">
+                    {form.id ? "Atualize os dados do centro de custo" : "Cadastre um novo centro de custo"}
+                  </p>
                 </div>
               </div>
             </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => { setShowForm(false); setForm({ ...INITIAL_FORM }); }} disabled={isPending}>Cancelar</Button>
+            <div className="px-5 py-4 space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Código</label>
+                  <Input
+                    value={form.codigo}
+                    onChange={e => setForm(f => ({ ...f, codigo: e.target.value }))}
+                    placeholder="Auto (CC-0001…)"
+                    disabled={!!form.id}
+                    className="mt-1 h-9"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Tipo</label>
+                  <select
+                    value={form.tipo}
+                    onChange={(e) => setForm((f) => ({ ...f, tipo: e.target.value }))}
+                    className="mt-1 h-9 w-full rounded-md border border-gray-200 px-2 text-sm bg-white"
+                  >
+                    <option value="obra">Obra</option>
+                    <option value="administrativo">Administrativo</option>
+                    <option value="comercial">Comercial</option>
+                    <option value="financeiro">Financeiro</option>
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Nome *</label>
+                <Input
+                  autoFocus
+                  value={form.nome}
+                  onChange={e => setForm(f => ({ ...f, nome: e.target.value }))}
+                  placeholder="Nome do centro de custo"
+                  className="mt-1 h-9"
+                  onKeyDown={(e) => { if (e.key === "Enter" && !isPending && form.nome.trim().length >= 2) handleSave(); }}
+                />
+              </div>
+              {form.tipo === "obra" && (
+                <div>
+                  <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Obra Vinculada</label>
+                  <select
+                    value={form.obraId || ""}
+                    onChange={(e) => setForm((f) => ({ ...f, obraId: e.target.value }))}
+                    className="mt-1 h-9 w-full rounded-md border border-gray-200 px-2 text-sm bg-white"
+                  >
+                    <option value="">— Nenhuma —</option>
+                    {(obras ?? []).map((o: any) => <option key={o.id} value={String(o.id)}>{o.nome}</option>)}
+                  </select>
+                </div>
+              )}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Responsável</label>
+                  <Input
+                    value={form.responsavelNome}
+                    onChange={e => setForm(f => ({ ...f, responsavelNome: e.target.value }))}
+                    placeholder="Nome do responsável"
+                    className="mt-1 h-9"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Orçamento (R$/mês)</label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    value={form.orcamentoMensal}
+                    onChange={e => setForm(f => ({ ...f, orcamentoMensal: e.target.value }))}
+                    placeholder="0,00"
+                    className="mt-1 h-9"
+                  />
+                </div>
+              </div>
+              {!form.id && (
+                <div className="bg-blue-50 border border-blue-100 rounded-lg p-2.5 text-[11px] text-blue-700 leading-relaxed">
+                  <strong>Dica:</strong> deixe o código em branco para gerar automaticamente (CC-0001, CC-0002…). Se o tipo for <strong>Obra</strong>, vincule a obra para que lançamentos herdem o centro de custo.
+                </div>
+              )}
+            </div>
+            <DialogFooter className="px-5 pb-4">
+              <Button type="button" variant="outline" onClick={() => { setShowForm(false); setForm({ ...INITIAL_FORM }); }} disabled={isPending}>
+                Cancelar
+              </Button>
               <Button
+                type="button"
                 onClick={handleSave}
                 disabled={isPending || form.nome.trim().length < 2}
                 className="bg-blue-600 hover:bg-blue-700 text-white"
               >
-                {isPending ? <><Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />Salvando...</> : (form.id ? "Salvar Alterações" : "Salvar")}
+                {isPending ? <><Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />Salvando...</> : <><PlusCircle className="w-3.5 h-3.5 mr-1.5" />{form.id ? "Salvar Alterações" : "Cadastrar"}</>}
               </Button>
             </DialogFooter>
           </DialogContent>
