@@ -1861,9 +1861,11 @@ export const financialRouter = router({
     return rows(res);
   }),
 
+  // Rev. 2084 — `codigo` agora opcional; se ausente, gera `CC-{nnnn}` via MAX
+  // (mesmo padrão de createAccount/AUTO-{nnnn} introduzido na Rev. 2082).
   createCostCenter: protectedProcedure.input(z.object({
     companyId: z.number(),
-    codigo: z.string().min(1),
+    codigo: z.string().optional(),
     nome: z.string().min(2),
     tipo: z.string(),
     obraId: z.number().optional(),
@@ -1872,13 +1874,24 @@ export const financialRouter = router({
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-    const res = await dbExecute(db, 
+    let codigo = (input.codigo ?? "").trim();
+    if (!codigo) {
+      const maxRes = await dbExecute(db,
+        `SELECT COALESCE(MAX(CAST(REGEXP_REPLACE(codigo, '\\D', '', 'g') AS INTEGER)), 0) AS m
+         FROM financial_cost_centers
+         WHERE company_id=$1 AND codigo ~ '^CC-[0-9]+$'`,
+        [input.companyId]
+      );
+      const next = (rows(maxRes)[0]?.m ?? 0) + 1;
+      codigo = `CC-${String(next).padStart(4, "0")}`;
+    }
+    const res = await dbExecute(db,
       `INSERT INTO financial_cost_centers (company_id, codigo, nome, tipo, obra_id, responsavel_nome, orcamento_mensal, ativo)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,1) RETURNING id`,
-      [input.companyId, input.codigo, input.nome, input.tipo, input.obraId ?? null,
+       VALUES ($1,$2,$3,$4,$5,$6,$7,1) RETURNING id, codigo`,
+      [input.companyId, codigo, input.nome, input.tipo, input.obraId ?? null,
        input.responsavelNome ?? null, input.orcamentoMensal ?? null]
     );
-    return { id: rows(res)[0]?.id };
+    return { id: rows(res)[0]?.id, codigo: rows(res)[0]?.codigo };
   }),
 
   // ─────────────────── MEDIÇÕES DE OBRA ───────────────────

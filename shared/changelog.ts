@@ -1,6 +1,47 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2084 — **Financeiro · Centro de Custo / código auto-gerado
+ * (`CC-{nnnn}`) — campo Código deixa de ser obrigatório no modal
+ * "Novo Centro de Custo".**
+ *
+ * Pedido do user (screenshot do modal "Novo Centro de Custo" com
+ * placeholder "Ex: CC-001"): "o código das categorias e centro de
+ * custo precisam preencher automaticamente". Categorias já gerava
+ * código automático desde a Rev. 2082 (padrão `AUTO-{nnnn}` em
+ * `createAccount`); faltava replicar pra Centros de Custo.
+ *
+ * **Backend** (`server/routers/financial.ts` L1867-1898): em
+ * `createCostCenter`, `codigo` virou `z.string().optional()`. Se
+ * ausente ou vazio, mesma estratégia do `createAccount`: `SELECT
+ * COALESCE(MAX(CAST(REGEXP_REPLACE(codigo, '\\D', '', 'g') AS
+ * INTEGER)), 0) FROM financial_cost_centers WHERE company_id=$1
+ * AND codigo ~ '^CC-[0-9]+$'` → próximo número padded em 4 dígitos
+ * → `CC-${nnnn}`. Filtro regex `^CC-[0-9]+$` garante que códigos
+ * legados manuais (ex: "OBRA-X", "ADM-2024") não interfiram na
+ * sequência auto. `INSERT ... RETURNING id, codigo` (antes só id)
+ * pra cliente saber o código que ficou.
+ *
+ * **Frontend** (`client/src/pages/financeiro/FinanceiroCentrosCusto.tsx`):
+ * Label "Código *" → "Código" (sem asterisco), placeholder "Ex: CC-001"
+ * → "Gerado automaticamente", + hint cinza "Deixe em branco para
+ * gerar CC-0001, CC-0002...". Botão Salvar agora envia
+ * `codigo: form.codigo.trim() || undefined` (vazio → undefined → backend
+ * gera) e bloqueia se `nome.trim().length < 2` (validação que faltava).
+ *
+ * **Reuso do padrão Rev. 2082:** mesma fórmula `MAX(REGEXP_REPLACE)`,
+ * mesma semântica de "vazio = gere você", mesmo padding de 4 dígitos.
+ * Não há ColFix nem schema change — só lógica de geração.
+ *
+ * **Limitação conhecida (aceita):** geração é best-effort sem advisory
+ * lock; em criação concorrente pode haver colisão (UNIQUE constraint
+ * em `financial_cost_centers (company_id, codigo)` se existir, fará
+ * 23505). Como cadastro de CC é raro/manual, não vale complicar com
+ * lock. Se ocorrer, user vê erro e re-tenta.
+ *
+ * **Arquivos:** `server/routers/financial.ts` (createCostCenter),
+ * `client/src/pages/financeiro/FinanceiroCentrosCusto.tsx`.
+ *
  * Rev. 2083 — **Financeiro · Nova tela "Categorias" no sidebar (Cadastros)
  * para CRUD completo de categorias financeiras (financial_accounts).**
  * Continuação direta da Rev. 2082 — usuário pediu: "também preciso de

@@ -122,8 +122,13 @@ export default function FinanceiroCentrosCusto() {
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label>Código *</Label>
-                  <Input value={form.codigo} onChange={e => setForm(f => ({ ...f, codigo: e.target.value }))} placeholder="Ex: CC-001" />
+                  <Label>Código</Label>
+                  <Input
+                    value={form.codigo}
+                    onChange={e => setForm(f => ({ ...f, codigo: e.target.value }))}
+                    placeholder="Gerado automaticamente"
+                  />
+                  <p className="text-[10px] text-gray-400 mt-1">Deixe em branco para gerar CC-0001, CC-0002...</p>
                 </div>
                 <div>
                   <Label>Tipo</Label>
@@ -166,7 +171,7 @@ export default function FinanceiroCentrosCusto() {
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setShowNew(false)}>Cancelar</Button>
-              <Button onClick={() => createMut.mutate({ companyId, codigo: form.codigo, nome: form.nome, tipo: form.tipo, obraId: parseInt(form.obraId) || undefined, responsavelNome: form.responsavelNome || undefined, orcamentoMensal: parseFloat(form.orcamentoMensal) || undefined })} disabled={createMut.isPending} className="bg-blue-600 hover:bg-blue-700 text-white">
+              <Button onClick={() => createMut.mutate({ companyId, codigo: form.codigo.trim() || undefined, nome: form.nome, tipo: form.tipo, obraId: parseInt(form.obraId) || undefined, responsavelNome: form.responsavelNome || undefined, orcamentoMensal: parseFloat(form.orcamentoMensal) || undefined })} disabled={createMut.isPending || form.nome.trim().length < 2} className="bg-blue-600 hover:bg-blue-700 text-white">
                 {createMut.isPending ? "Salvando..." : "Salvar"}
               </Button>
             </DialogFooter>
