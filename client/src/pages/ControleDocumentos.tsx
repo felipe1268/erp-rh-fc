@@ -1414,6 +1414,9 @@ function DocumentosPanel({ companyId, companyIds, employees, onClickEmployee, Em
           className="w-[100vw] h-[100dvh] max-w-none sm:w-[96vw] sm:h-auto sm:max-h-[92dvh] sm:max-w-[760px] p-0 overflow-hidden flex flex-col gap-0"
           resizable={false}
         >
+          <DialogHeader className="sr-only">
+            <DialogTitle>Novo Documento do Colaborador</DialogTitle>
+          </DialogHeader>
           {/* Header gradient */}
           <div className="bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-700 text-white px-6 py-5 shadow-md">
             <div className="flex items-center gap-3">
@@ -1467,8 +1470,9 @@ function DocumentosPanel({ companyId, companyIds, employees, onClickEmployee, Em
                     </Select>
                   </div>
                   <div>
-                    <label className="text-[11px] font-bold uppercase tracking-wide text-slate-600 mb-1.5 block">Descrição</label>
+                    <label htmlFor="doc-descricao" className="text-[11px] font-bold uppercase tracking-wide text-slate-600 mb-1.5 block">Descrição</label>
                     <Input
+                      id="doc-descricao"
                       value={docForm.descricao || ""}
                       onChange={e => setDocForm({ ...docForm, descricao: e.target.value })}
                       placeholder="Ex.: ASO admissional, certificado NR-35, atestado de 3 dias..."
@@ -1476,12 +1480,13 @@ function DocumentosPanel({ companyId, companyIds, employees, onClickEmployee, Em
                     />
                   </div>
                   <div>
-                    <label className="text-[11px] font-bold uppercase tracking-wide text-slate-600 mb-1.5 block flex items-center gap-1.5">
+                    <label htmlFor="doc-validade" className="text-[11px] font-bold uppercase tracking-wide text-slate-600 mb-1.5 block flex items-center gap-1.5">
                       <Calendar className="h-3.5 w-3.5 text-slate-500" />
                       Data de Validade
                       <span className="text-[10px] font-normal text-slate-500 normal-case tracking-normal ml-1">(opcional — só para ASO, NR e similares)</span>
                     </label>
                     <Input
+                      id="doc-validade"
                       type="date"
                       value={docForm.dataValidade || ""}
                       onChange={e => setDocForm({ ...docForm, dataValidade: e.target.value })}
@@ -1501,7 +1506,14 @@ function DocumentosPanel({ companyId, companyIds, employees, onClickEmployee, Em
                 <div className="p-4">
                   <label
                     htmlFor="doc-file-upload"
-                    className={`block border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors ${
+                    tabIndex={0}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        (document.getElementById("doc-file-upload") as HTMLInputElement | null)?.click();
+                      }
+                    }}
+                    className={`block border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 ${
                       docForm._file
                         ? "border-emerald-300 bg-emerald-50/50 hover:bg-emerald-50"
                         : "border-slate-300 bg-slate-50/50 hover:border-emerald-400 hover:bg-emerald-50/30"
@@ -1525,7 +1537,7 @@ function DocumentosPanel({ companyId, companyIds, employees, onClickEmployee, Em
                           <Upload className="h-6 w-6 text-slate-500" />
                         </div>
                         <p className="text-sm font-medium text-slate-700">Clique para selecionar o arquivo</p>
-                        <p className="text-[11px] text-slate-500">Ou arraste e solte aqui</p>
+                        <p className="text-[11px] text-slate-500">PDF, JPG ou PNG até 10 MB</p>
                       </div>
                     )}
                     <Input
