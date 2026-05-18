@@ -115,7 +115,16 @@ export const homeDataRouter = router({
             jaPassou,
           };
         })
-        .sort((a, b) => a.dia - b.dia);
+        // Rev. 2086 — Ordem cronológica relativa ao dia atual:
+        // 1º) aniversariante de HOJE, 2º) próximos do mês (dia asc),
+        // 3º) já passados no fim (dia asc). Conforme o dia passa, o
+        // próximo aniversariante naturalmente "sobe" para o topo.
+        .sort((a, b) => {
+          const ra = a.isHoje ? 0 : a.jaPassou ? 2 : 1;
+          const rb = b.isHoje ? 0 : b.jaPassou ? 2 : 1;
+          if (ra !== rb) return ra - rb;
+          return a.dia - b.dia;
+        });
 
       // ============================================================
       // 2B. ANIVERSÁRIOS DE EMPRESA (anos de casa)
@@ -148,7 +157,14 @@ export const homeDataRouter = router({
           };
         })
         .filter(e => e.anosEmpresa >= 1) // só quem tem pelo menos 1 ano
-        .sort((a, b) => a.dia - b.dia);
+        // Rev. 2086 — Mesma regra dos aniversariantes de mês:
+        // hoje primeiro, próximos no meio, já passados no fim.
+        .sort((a, b) => {
+          const ra = a.isHoje ? 0 : a.jaPassou ? 2 : 1;
+          const rb = b.isHoje ? 0 : b.jaPassou ? 2 : 1;
+          if (ra !== rb) return ra - rb;
+          return a.dia - b.dia;
+        });
 
       // ============================================================
       // 3. ASOs VENCENDO (próximos 60 dias) ou VENCIDOS
