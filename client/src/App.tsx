@@ -331,6 +331,7 @@ const QuestionarioPortalAdmin = lazy(() => import("./pages/QuestionarioPortalAdm
 const VerificarAptidao = lazy(() => import("./pages/VerificarAptidao"));
 const PortalTrocarSenha = lazy(() => import("./pages/portal/PortalTrocarSenha"));
 const PortalDashboard = lazy(() => import("./pages/portal/PortalDashboard"));
+const AssinarDocumento = lazy(() => import("./pages/AssinarDocumento"));
 
 // ============================================================
 function Router() {
@@ -338,6 +339,8 @@ function Router() {
     <Suspense fallback={<PageLoader />}>
       <Switch>
         <Route path={"/login"} component={Login} />
+        {/* FCSign — rota PÚBLICA (sem auth) p/ signatários externos */}
+        <Route path={"/assinar/:token"} component={AssinarDocumento} />
         {/* Hub de Módulos - Tela Inicial */}
         <Route path={"/"} component={ModuleHub} />
         {/* Painéis por Módulo (possuem checagem interna de permissão por widget) */}

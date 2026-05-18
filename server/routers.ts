@@ -118,6 +118,7 @@ import { masControleRouter } from "./routers/masControle";
 import { moAlocacaoRouter } from "./routers/moAlocacao";
 import { gestaoDocumentosRouter } from "./routers/gestaodocumentos";
 import { telemetriaRouter } from "./routers/telemetria";
+import { signaturesRouter } from "./routers/signatures";
 import { portalServicoRouter } from "./routers/portalServico";
 import { integrasignRouter } from "./routers/integrasign";
 import { ddsRouter } from "./routers/dds";
@@ -183,6 +184,7 @@ export const appRouter = router({
   moAlocacao: moAlocacaoRouter,
   gestaoDocumentos: gestaoDocumentosRouter,
   telemetria: telemetriaRouter,
+  signatures: signaturesRouter,
   portalServico: portalServicoRouter,
   integrasign: integrasignRouter,
   dds: ddsRouter,

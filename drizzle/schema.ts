@@ -8404,3 +8404,47 @@ export const ferramentasTerceirosItens = pgTable("ferramentas_terceiros_itens", 
   statusItem: varchar("status_item", { length: 20 }).default('na_obra').notNull(),
   createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
 });
+
+// ============================================================
+// FCSign — Assinatura digital interna (Rev. 2104)
+// MP 2200-2: assinatura eletronica simples com evidencia
+// ============================================================
+export const signatureSessions = pgTable("signature_sessions", {
+  id: serial().primaryKey().notNull(),
+  companyId: integer("company_id").notNull(),
+  employeeId: integer("employee_id").notNull(),
+  tipo: varchar({ length: 50 }).notNull(),                 // 'contrato_experiencia' | 'comunicado' | 'epi' | 'outros'
+  documentTitle: varchar("document_title", { length: 255 }).notNull(),
+  documentHtml: text("document_html").notNull(),           // HTML do documento (snapshot imutavel)
+  documentHash: varchar("document_hash", { length: 64 }).notNull(), // SHA-256 hex do HTML
+  finalDocumentUrl: text("final_document_url"),            // URL do HTML final assinado (storage)
+  finalEmployeeDocumentId: integer("final_employee_document_id"), // FK p/ employeeDocuments quando completo
+  status: varchar({ length: 20 }).default('pendente').notNull(), // pendente | em_andamento | completo | cancelado
+  createdByUserId: integer("created_by_user_id").notNull(),
+  createdByName: varchar("created_by_name", { length: 255 }).notNull(),
+  createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
+  completedAt: timestamp("completed_at", { mode: 'string' }),
+  cancelledAt: timestamp("cancelled_at", { mode: 'string' }),
+  observacoes: text(),
+});
+
+export const signatureSigners = pgTable("signature_signers", {
+  id: serial().primaryKey().notNull(),
+  sessionId: integer("session_id").notNull(),
+  role: varchar({ length: 20 }).notNull(),                 // 'empregado' | 'empregador' | 'testemunha_1' | 'testemunha_2'
+  ordem: integer().default(1).notNull(),
+  nome: varchar({ length: 255 }).notNull(),
+  cpf: varchar({ length: 20 }),
+  email: varchar({ length: 255 }),
+  token: varchar({ length: 64 }).notNull(),                // hex 32 bytes (64 chars)
+  signedAt: timestamp("signed_at", { mode: 'string' }),
+  signatureDataUrl: text("signature_data_url"),            // PNG base64 do canvas
+  signatureHash: varchar("signature_hash", { length: 64 }),// SHA-256 do dataUrl
+  ip: varchar({ length: 45 }),
+  userAgent: text("user_agent"),
+  geoCidade: varchar("geo_cidade", { length: 100 }),
+  geoEstado: varchar("geo_estado", { length: 50 }),
+  createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("signature_signers_token_unique").on(table.token),
+]);

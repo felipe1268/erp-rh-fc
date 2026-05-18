@@ -26,6 +26,7 @@ import { nowBrasilia } from "@/lib/dateUtils";
 import RaioXFuncionario from "@/components/RaioXFuncionario";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { TimeCombobox, ENTRADA_OPTIONS, INTERVALO_OPTIONS, SAIDA_OPTIONS } from "@/components/TimeCombobox";
+import FCSignSendDialog from "@/components/FCSignSendDialog";
 
 const statusColors: Record<string, string> = {
   Ativo: "bg-green-400/10 text-green-400",
@@ -205,6 +206,13 @@ export default function Colaboradores() {
   const pendingFotoRef = useRef<{ base64: string; mimeType: string; fileName: string } | null>(null);
   const [desligamentoDialogOpen, setDesligamentoDialogOpen] = useState(false);
   const [previousStatus, setPreviousStatus] = useState<string>("");
+
+  // === FCSign — assinatura digital interna (Rev. 2104) ===
+  const [fcsignOpen, setFcsignOpen] = useState(false);
+  const [fcsignPayload, setFcsignPayload] = useState<{
+    companyId: number; employeeId: number; tipo: string; documentTitle: string;
+    documentHtml: string; empregadoNome: string; empregadoCpf?: string;
+  } | null>(null);
 
   // Seleção múltipla
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
@@ -1872,41 +1880,35 @@ ${obs ? `<div class="box"><strong>Observações / Justificativa do Enquadramento
                     <Label className="text-xs font-medium text-muted-foreground">Observações da Experiência</Label>
                     <Input value={(form as any).experienciaObs ?? ''} onChange={e => set('experienciaObs' as any, e.target.value)} placeholder="Observações sobre o período de experiência..." className="bg-input mt-1" />
                   </div>
-                  {(form as any).experienciaTipo && (form as any).experienciaTipo !== 'none' && (
-                    <div className="mt-3 flex justify-end">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        className="border-orange-300 text-orange-700 hover:bg-orange-50"
-                        onClick={() => {
-                          const comp = companies?.find(c => String(c.id) === selectedCompanyId);
-                          const empNome = form.nomeCompleto || 'Funcionário';
-                          const empCpf = form.cpf || '';
-                          const empRg = form.rg || '';
-                          const empCtps = form.ctps || '';
-                          const empFuncao = form.funcao || '';
-                          const empSalario = form.salarioBase || '0,00';
-                          const empEndereco = form.endereco || '';
-                          const empCidade = form.cidade || '';
-                          const empEstado = form.estado || '';
-                          const inicio = (form as any).experienciaInicio || form.dataAdmissao || '';
-                          const fim1 = (form as any).experienciaFim1 || '';
-                          const fim2 = (form as any).experienciaFim2 || '';
-                          const tipo = (form as any).experienciaTipo;
-                          const dias1 = tipo === '30_30' ? 30 : 45;
-                          const dias2 = tipo === '30_30' ? 60 : 90;
-                          const fmtDate = (d: string) => d ? new Date(d + 'T12:00:00').toLocaleDateString('pt-BR') : '___/___/______';
-                          const jornadaDesc = (() => {
-                            const j = form as any;
-                            if (j.jornada_seg_entrada && j.jornada_seg_saida) {
-                              return `Segunda a Sexta: ${j.jornada_seg_entrada} às ${j.jornada_seg_saida} (intervalo ${j.jornada_seg_intervalo || '1h'})${j.jornada_sab_entrada ? `, Sábado: ${j.jornada_sab_entrada} às ${j.jornada_sab_saida}` : ''}`;
-                            }
-                            return '44 horas semanais, conforme escala definida pelo empregador';
-                          })();
-                          const w = window.open('', '_blank');
-                          if (!w) return toast.error('Popup bloqueado');
-                          w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Contrato de Experiência - ${empNome}</title>
+                  {(form as any).experienciaTipo && (form as any).experienciaTipo !== 'none' && (() => {
+                    // XSS hardening — escapa qualquer dado de form antes de interpolar no template HTML
+                    const esc = (v: any) => String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+                    const comp = companies?.find(c => String(c.id) === selectedCompanyId);
+                    const empNomeRaw = form.nomeCompleto || 'Funcionário';
+                    const empNome = esc(empNomeRaw);
+                    const empCpf = form.cpf || '';
+                    const empRg = esc(form.rg || '');
+                    const empCtps = esc(form.ctps || '');
+                    const empFuncao = esc(form.funcao || '');
+                    const empSalario = esc(form.salarioBase || '0,00');
+                    const empEndereco = esc(form.endereco || '');
+                    const empCidade = esc(form.cidade || '');
+                    const empEstado = esc(form.estado || '');
+                    const inicio = (form as any).experienciaInicio || form.dataAdmissao || '';
+                    const fim1 = (form as any).experienciaFim1 || '';
+                    const fim2 = (form as any).experienciaFim2 || '';
+                    const tipo = (form as any).experienciaTipo;
+                    const dias1 = tipo === '30_30' ? 30 : 45;
+                    const dias2 = tipo === '30_30' ? 60 : 90;
+                    const fmtDate = (d: string) => d ? new Date(d + 'T12:00:00').toLocaleDateString('pt-BR') : '___/___/______';
+                    const jornadaDesc = (() => {
+                      const j = form as any;
+                      if (j.jornada_seg_entrada && j.jornada_seg_saida) {
+                        return `Segunda a Sexta: ${j.jornada_seg_entrada} às ${j.jornada_seg_saida} (intervalo ${j.jornada_seg_intervalo || '1h'})${j.jornada_sab_entrada ? `, Sábado: ${j.jornada_sab_entrada} às ${j.jornada_sab_saida}` : ''}`;
+                      }
+                      return '44 horas semanais, conforme escala definida pelo empregador';
+                    })();
+                    const contratoHtml = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Contrato de Experiência - ${empNome}</title>
 <style>
 @page{size:A4;margin:2cm}
 body{font-family:'Times New Roman',serif;font-size:12pt;line-height:1.6;color:#000;max-width:21cm;margin:0 auto;padding:2cm}
@@ -1929,10 +1931,10 @@ body{font-family:'Times New Roman',serif;font-size:12pt;line-height:1.6;color:#0
 </style></head><body>
 <div class="header">
   <div class="header-top">
-    ${comp?.logoUrl ? `<img src="${comp.logoUrl}" alt="${comp?.razaoSocial || 'Empresa'}" />` : ''}
-    <h2 class="nome">${comp?.razaoSocial || 'Empresa'}</h2>
-    ${comp?.cnpj ? `<p class="cnpj">CNPJ: ${comp.cnpj}</p>` : ''}
-    ${comp?.endereco ? `<p class="end">${comp.endereco}${comp?.cidade ? ' — ' + comp.cidade + '/' + (comp?.estado || '') : ''}</p>` : ''}
+    ${comp?.logoUrl && /^https?:\/\//.test(comp.logoUrl) ? `<img src="${esc(comp.logoUrl)}" alt="${esc(comp?.razaoSocial || 'Empresa')}" />` : ''}
+    <h2 class="nome">${esc(comp?.razaoSocial || 'Empresa')}</h2>
+    ${comp?.cnpj ? `<p class="cnpj">CNPJ: ${esc(comp.cnpj)}</p>` : ''}
+    ${comp?.endereco ? `<p class="end">${esc(comp.endereco)}${comp?.cidade ? ' — ' + esc(comp.cidade) + '/' + esc(comp?.estado || '') : ''}</p>` : ''}
   </div>
   <div class="title-bar">
     <span class="titulo">Contrato de Trabalho por Prazo Determinado</span>
@@ -1943,11 +1945,11 @@ body{font-family:'Times New Roman',serif;font-size:12pt;line-height:1.6;color:#0
 <p>Pelo presente instrumento particular de <strong>CONTRATO DE TRABALHO POR PRAZO DETERMINADO (EXPERIÊNCIA)</strong>, que entre si fazem:</p>
 
 <div class="clausula">
-<p><span class="destaque">EMPREGADOR:</span> ${comp?.razaoSocial || '________________________________'}, inscrita no CNPJ sob nº ${comp?.cnpj || '___.___.___/____-__'}, com sede em ${comp?.endereco || '________________'}, ${comp?.cidade || '________'}/${comp?.estado || '__'}, doravante denominada simplesmente <strong>EMPREGADOR</strong>.</p>
+<p><span class="destaque">EMPREGADOR:</span> ${esc(comp?.razaoSocial || '________________________________')}, inscrita no CNPJ sob nº ${esc(comp?.cnpj || '___.___.___/____-__')}, com sede em ${esc(comp?.endereco || '________________')}, ${esc(comp?.cidade || '________')}/${esc(comp?.estado || '__')}, doravante denominada simplesmente <strong>EMPREGADOR</strong>.</p>
 </div>
 
 <div class="clausula">
-<p><span class="destaque">EMPREGADO(A):</span> ${empNome}, portador(a) do CPF nº ${formatCPF(empCpf) || '___.___.___-__'}, RG nº ${empRg || '____________'}, CTPS nº ${empCtps || '____________'}, residente em ${empEndereco ? empEndereco + ', ' + empCidade + '/' + empEstado : '________________________________'}, doravante denominado(a) simplesmente <strong>EMPREGADO(A)</strong>.</p>
+<p><span class="destaque">EMPREGADO(A):</span> ${empNome}, portador(a) do CPF nº ${esc(formatCPF(empCpf)) || '___.___.___-__'}, RG nº ${empRg || '____________'}, CTPS nº ${empCtps || '____________'}, residente em ${empEndereco ? empEndereco + ', ' + empCidade + '/' + empEstado : '________________________________'}, doravante denominado(a) simplesmente <strong>EMPREGADO(A)</strong>.</p>
 </div>
 
 <p>Têm entre si justo e contratado o seguinte:</p>
@@ -1990,16 +1992,16 @@ body{font-family:'Times New Roman',serif;font-size:12pt;line-height:1.6;color:#0
 
 <div class="clausula">
 <p class="clausula-title">Cláusula 8ª — Das Disposições Gerais</p>
-<p>As partes elegem o foro da Comarca de ${comp?.cidade || '________'}/${comp?.estado || '__'} para dirimir quaisquer dúvidas oriundas do presente contrato. Fica assegurado ao(a) EMPREGADO(A) todos os direitos previstos na CLT e legislação trabalhista vigente.</p>
+<p>As partes elegem o foro da Comarca de ${esc(comp?.cidade || '________')}/${esc(comp?.estado || '__')} para dirimir quaisquer dúvidas oriundas do presente contrato. Fica assegurado ao(a) EMPREGADO(A) todos os direitos previstos na CLT e legislação trabalhista vigente.</p>
 </div>
 
 <p style="margin-top:24px">E por estarem assim justos e contratados, firmam o presente instrumento em 2 (duas) vias de igual teor e forma, na presença de 2 (duas) testemunhas.</p>
 
-<p style="text-align:center;margin-top:24px">${comp?.cidade || '________'}/${comp?.estado || '__'}, ${fmtDate(inicio)}</p>
+<p style="text-align:center;margin-top:24px">${esc(comp?.cidade || '________')}/${esc(comp?.estado || '__')}, ${fmtDate(inicio)}</p>
 
 <div class="assinaturas">
-<div class="assinatura"><div class="linha">${comp?.razaoSocial || 'EMPREGADOR'}<br><small>CNPJ: ${comp?.cnpj || ''}</small></div></div>
-<div class="assinatura"><div class="linha">${empNome}<br><small>CPF: ${formatCPF(empCpf)}</small></div></div>
+<div class="assinatura"><div class="linha">${esc(comp?.razaoSocial || 'EMPREGADOR')}<br><small>CNPJ: ${esc(comp?.cnpj || '')}</small></div></div>
+<div class="assinatura"><div class="linha">${empNome}<br><small>CPF: ${esc(formatCPF(empCpf))}</small></div></div>
 </div>
 
 <div class="assinaturas" style="margin-top:40px">
@@ -2007,15 +2009,50 @@ body{font-family:'Times New Roman',serif;font-size:12pt;line-height:1.6;color:#0
 <div class="assinatura"><div class="linha">Testemunha 2<br><small>Nome: _________________ CPF: _______________</small></div></div>
 </div>
 
-</body></html>`);
-                          w.document.close();
-                          setTimeout(() => w.print(), 500);
-                        }}
-                      >
-                        <FileText className="h-4 w-4 mr-1" /> Imprimir Contrato de Experiência
-                      </Button>
-                    </div>
-                  )}
+</body></html>`;
+                    const empCpfFmt = formatCPF(empCpf);
+                    return (
+                      <div className="mt-3 flex flex-wrap justify-end gap-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="border-orange-300 text-orange-700 hover:bg-orange-50"
+                          onClick={() => {
+                            const w = window.open('', '_blank');
+                            if (!w) return toast.error('Popup bloqueado');
+                            w.document.write(contratoHtml);
+                            w.document.close();
+                            setTimeout(() => w.print(), 500);
+                          }}
+                        >
+                          <FileText className="h-4 w-4 mr-1" /> Imprimir Contrato de Experiência
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          className="bg-gradient-to-r from-blue-700 to-indigo-700 hover:from-blue-800 hover:to-indigo-800 text-white border-0"
+                          onClick={() => {
+                            const empId = editingId;
+                            const compId = comp?.id;
+                            if (!empId || !compId) { toast.error('Salve o cadastro do colaborador antes de enviar para assinatura.'); return; }
+                            setFcsignPayload({
+                              companyId: Number(compId),
+                              employeeId: Number(empId),
+                              tipo: 'contrato_experiencia',
+                              documentTitle: `Contrato de Experiência - ${empNome}`,
+                              documentHtml: contratoHtml,
+                              empregadoNome: empNome,
+                              empregadoCpf: empCpfFmt || undefined,
+                            });
+                            setFcsignOpen(true);
+                          }}
+                        >
+                          <ShieldCheck className="h-4 w-4 mr-1" /> Enviar para Assinatura (FCSign)
+                        </Button>
+                      </div>
+                    );
+                  })()}
                 </div>
               )}
 
@@ -3435,6 +3472,21 @@ body{font-family:'Times New Roman',serif;font-size:12pt;line-height:1.6;color:#0
             </div>
           </div>
         </div>
+      )}
+
+      {/* FCSign — modal de envio para assinatura digital (Rev. 2104) */}
+      {fcsignPayload && (
+        <FCSignSendDialog
+          open={fcsignOpen}
+          onOpenChange={(v) => { setFcsignOpen(v); if (!v) setFcsignPayload(null); }}
+          companyId={fcsignPayload.companyId}
+          employeeId={fcsignPayload.employeeId}
+          tipo={fcsignPayload.tipo}
+          documentTitle={fcsignPayload.documentTitle}
+          documentHtml={fcsignPayload.documentHtml}
+          empregadoNome={fcsignPayload.empregadoNome}
+          empregadoCpf={fcsignPayload.empregadoCpf}
+        />
       )}
     </DashboardLayout>
   );

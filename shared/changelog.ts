@@ -1,6 +1,167 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2104 — **RH · FCSign — sistema interno de assinatura digital
+ * eletrônica (MP 2.200-2/2001) com canvas, distribuição manual de
+ * links e arquivamento automático no RAIO-X.**
+ *
+ * Pedido do user (sessão anterior, após Rev. 2102 do Contrato de
+ * Experiência ganhar header institucional): "AGORA QUERO TER UMA
+ * PLATAFORMA INTERNA PARA QUE FACAMOS ASSINATURAS INTERNAS, EU
+ * VOU FAZER UMA ESPECIE DE FC SIGN, NOSSO PROPRIO SISTEMA DE
+ * ASSINATURA…" + especificações: empregador = Felipe Costa Alves
+ * (sócio), 2 testemunhas digitadas manualmente, distribuição manual
+ * de link (sem e-mail SMTP), assinatura por desenho em canvas,
+ * arquivamento automático no RAIO-X quando todas as 4 partes
+ * assinarem. Autorização "PODE FAZER" recebida nesta rev.
+ *
+ * **Por que não DocuSign/D4Sign/ClickSign:** custo R$ 5-15 por
+ * envelope (FC envia 50-80/mês = ~R$ 800/mês), dependência de SMTP
+ * externo, dados de funcionários trafegando por terceiros e LGPD,
+ * curva de configuração. MP 2.200-2 (ICP-Brasil) reconhece
+ * assinatura eletrônica simples com evidência (IP + hash + timestamp
+ * + aceite expresso) como válida no foro trabalhista — basta haver
+ * vínculo entre o signatário e o documento, o que captamos via
+ * token único + IP + user-agent + hash SHA-256 da assinatura.
+ *
+ * **Arquitetura (zero dependências externas):**
+ * (1) **Schema novo (drizzle/schema.ts ao final):**
+ *     - `signature_sessions` (id, company_id, employee_id, tipo,
+ *       document_title, document_html, document_hash sha-256,
+ *       status pendente|em_andamento|completo|cancelado,
+ *       final_document_url, final_employee_document_id, created_by_*,
+ *       created_at, completed_at, cancelled_at, observacoes).
+ *     - `signature_signers` (id, session_id, role
+ *       empregado|empregador|testemunha_1|testemunha_2, ordem, nome,
+ *       cpf, email, **token varchar(64) UNIQUE** = 32 bytes hex
+ *       crypto.randomBytes, signed_at, signature_data_url PNG base64,
+ *       signature_hash sha-256, ip varchar(45), user_agent text,
+ *       geo_cidade/estado opcional, created_at).
+ *     - Índices: `signature_signers_token_unique` (lookup público),
+ *       `signature_signers_session_idx`, `signature_sessions_employee_idx`.
+ *     - **R-001/R-007/R-010:** apenas `CREATE TABLE IF NOT EXISTS`
+ *       em Neon prod (permitido). Nenhum ALTER/DROP/DELETE.
+ *
+ * (2) **Backend `server/routers/signatures.ts` (novo, 5 procedures):**
+ *     - `create` (protected) — recebe employeeId + companyId + tipo +
+ *       documentTitle + documentHtml + signers[1..10]. Calcula
+ *       SHA-256 do HTML (`document_hash`), gera token de 64 chars
+ *       hex pra cada signer, insere session+signers, retorna
+ *       `{ sessionId, signers: [{ role, nome, token, link: "/assinar/<token>" }] }`.
+ *     - `getByToken` (**public** — sem auth) — lookup pelo token,
+ *       retorna dados do signer + session + employee + company +
+ *       allSigners (status de todos). Throw NOT_FOUND se token
+ *       inválido. Usado pela página pública.
+ *     - `sign` (**public**) — recebe token + signatureDataUrl
+ *       (regex valida `^data:image/(png|jpeg);base64,`) + userAgent.
+ *       Captura IP de `x-forwarded-for` ou `req.socket.remoteAddress`.
+ *       Bloqueia: signer já assinado, session cancelada/completa.
+ *       Salva `signed_at`, `signature_data_url`, `signature_hash`
+ *       (sha256 do dataUrl), ip, userAgent.
+ *       **Quando todos os signers assinam:** chama `renderFinalHtml`
+ *       que appenda bloco `<div>...assinaturas digitais — FCSign</div>`
+ *       com cada `<img src=dataUrl>` + nome + CPF + data + IP + hash
+ *       truncado (16 chars). Salva HTML final via `storagePut` em
+ *       `fcsign/<companyId>/<employeeId>/sessao-<id>-assinado.html`
+ *       (mimeType text/html). Insere em `employeeDocuments`
+ *       (tipo `contrato_trabalho`, descrição "FCSign #<id> · N
+ *       assinaturas · hash <16chars>…") e atualiza session com
+ *       `status=completo`, `completed_at`, `final_document_url`,
+ *       `final_employee_document_id`.
+ *     - `listByEmployee` (protected) — lista sessions do funcionário
+ *       com signers aninhados pra futuro painel de status.
+ *     - `cancel` (protected) — soft-cancel (status=cancelado).
+ *     - Registro em `server/routers.ts` ~L124+L190 como
+ *       `signatures: signaturesRouter`.
+ *
+ * (3) **Frontend público — `client/src/pages/AssinarDocumento.tsx`
+ *     (novo) + rota `<Route path="/assinar/:token">` em App.tsx
+ *     ~L344 ANTES do `/` (Hub).** Como Wouter pega a primeira rota
+ *     que casa e o `/login` + `/` não são wrapados em auth check
+ *     fora do componente, a rota pública funciona sem JWT.
+ *     - Header institucional FC (#1B2A4A com ShieldCheck pill).
+ *     - Layout 2-cols (lg): documento (max-h 70vh scroll) | painel
+ *       lateral com 3 cards: Identificação (role + nome + CPF +
+ *       colaborador + empresa+CNPJ), Status assinaturas (lista com
+ *       CheckCircle2 verde / circle vazio cinza), Área de assinatura
+ *       (canvas + checkbox declaração legal MP 2200-2 + CTA gradient
+ *       emerald→teal).
+ *     - **`<SignaturePad>`** novo (`client/src/components/SignaturePad.tsx`):
+ *       canvas HTMLCanvasElement + dpr scaling pra retina, eventos
+ *       `onPointerDown/Move/Up/Leave` (suporta mouse + touch + caneta),
+ *       `setPointerCapture` pra arrastar fora do canvas, `lineWidth 2.2
+ *       round cap/join` cor `#111827`. `toDataURL()` compõe canvas
+ *       branco + assinatura preta em PNG (economiza bytes vs
+ *       transparente). `clear()` zera. Forwarded ref tipo
+ *       `SignaturePadHandle` expõe toDataURL/clear/isEmpty.
+ *     - Estados pós-assinatura: 3 caminhos — `sessionCancelled`
+ *       (alerta vermelho), `alreadySigned` (alerta emerald + texto
+ *       muda se session completa ou aguardando), formulário ativo
+ *       (canvas + checkbox + CTA).
+ *
+ * (4) **Integração no Contrato de Experiência (`Colaboradores.tsx`):**
+ *     - **Refatoração da geração do contrato:** o callback gigante
+ *       do botão "Imprimir Contrato de Experiência" (~L1875-2017,
+ *       130 linhas com `w.document.write(...)`) virou IIFE que
+ *       calcula uma vez todos os dados + monta `const contratoHtml`
+ *       e retorna `<div>` com 2 botões.
+ *     - **Botão 1 (Imprimir, mantido):** abre window + write +
+ *       print — mesma UX antiga, agora consumindo `contratoHtml`.
+ *     - **Botão 2 (novo, gradient blue→indigo):** "Enviar para
+ *       Assinatura (FCSign)" — bloqueia se `editingId == null`
+ *       (toast "Salve o cadastro antes…"), preenche `fcsignPayload`
+ *       e abre `<FCSignSendDialog>`.
+ *     - **`<FCSignSendDialog>` (novo, `client/src/components/`):**
+ *       padrão regras de ouro — header gradient blue→indigo→purple
+ *       com ShieldCheck, body slate-50, 3 cards: Empregado(a)
+ *       (read-only verde, vem do form), Empregador (FC) com **nome
+ *       Felipe Costa Alves hardcoded** + input CPF opcional, e
+ *       Testemunhas (2 grids 1fr/180px com nome obrigatório + CPF
+ *       opcional). Após `create`: tela success com 4 cards de link
+ *       (role label + nome + botões "Abrir" / "Copiar link" toast
+ *       + url completa em monospace truncada).
+ *
+ * (5) **Decisão de armazenamento:** salvar HTML em vez de PDF
+ *     binário porque (a) sem dependência puppeteer/wkhtmltopdf no
+ *     servidor, (b) HTML embedded com `<img>` base64 abre direto no
+ *     browser e o user manda imprimir/salvar como PDF se quiser
+ *     papel — mesma UX do Imprimir Contrato Rev. 2102, e (c)
+ *     diff/audit do HTML é trivial. Trade-off aceito: arquivos
+ *     ficam maiores (PNG base64 inflado), mas pra 4 assinaturas
+ *     de canvas pequeno fica em ~100KB.
+ *
+ * (6) **Captura de evidência (compliance MP 2.200-2):** cada signer
+ *     deixa rastro de IP (header `x-forwarded-for` priorizado pra
+ *     trabalhar atrás de proxy Replit/Cloudflare), user-agent,
+ *     timestamp UTC, hash SHA-256 da assinatura (32 chars exibidos
+ *     no PDF final). Hash do documento original também fica em
+ *     `document_hash` — se alguém tentar modificar o HTML pós-assinatura,
+ *     o hash muda e a inconsistência fica visível.
+ *
+ * **Não-mudanças:**
+ * - Schema antigo de `employeeDocuments` (FCSign anexa documento
+ *   com tipo `contrato_trabalho` reusando o sink existente).
+ * - `storagePut` (S3 Forge ou local — funciona em ambos).
+ * - Auth/JWT (FCSign expõe endpoints novos `publicProcedure` —
+ *   segurança baseada em token de 64 chars hex unguessable).
+ * - UI do Contrato de Experiência (header FC, 8 cláusulas, footer)
+ *   — só o callback do botão foi refatorado.
+ *
+ * **Follow-ups conhecidos (próximas revisões):**
+ * - Painel "Sessões FCSign" no menu RH listando todas sessões com
+ *   status (pendente/em_andamento/completo) — backend
+ *   `listByEmployee` já pronto, falta `list` por empresa + tela.
+ * - Integração com WhatsApp Cloud API pra envio automático dos links
+ *   (hoje user copia manualmente).
+ * - Botão "Enviar para Assinatura" também em Aviso Prévio, Pedido
+ *   de Demissão, Termo de Rescisão (Colaboradores tem outros 5
+ *   templates HTML que se beneficiariam).
+ * - Página de admin `/admin/fcsign` listando sessions por empresa,
+ *   com filtro de status e ações de cancel/reenvio.
+ *
+ * **R-001 / R-007 / R-010:** Apenas CREATE TABLE (permitido).
+ * Nenhum ALTER/DROP/DELETE em produção.
+ *
  * Rev. 2103 — **RH · Controle de Documentos / modal "Novo Documento
  * do Colaborador" redesenhada nas regras de ouro.**
  *
