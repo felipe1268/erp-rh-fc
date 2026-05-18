@@ -73,6 +73,8 @@ export default function SmartEntry({ companyId, obraId, obraNome, itens, onClose
   const [manualMotivo, setManualMotivo] = useState("");
   // Rev. 2081 — Busca para a lista de OCs pendentes (regras de ouro)
   const [ocSearch, setOcSearch] = useState("");
+  // Rev. 2085 — filtro de status acionado por clique nos KPI cards superiores.
+  const [ocFilter, setOcFilter] = useState<"all" | "pendentes" | "parciais" | "atrasadas">("all");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const queryClient = useQueryClient();
 
@@ -375,12 +377,23 @@ export default function SmartEntry({ companyId, obraId, obraNome, itens, onClose
   }, [pendingOCs.data, todayIso]);
   const filteredOCs = useMemo(() => {
     const q = ocSearch.trim().toLowerCase();
-    if (!q) return pendingOCs.data || [];
-    return (pendingOCs.data || []).filter((o: any) =>
-      String(o.numeroOc || "").toLowerCase().includes(q) ||
-      String(o.fornecedorNome || "").toLowerCase().includes(q)
-    );
-  }, [pendingOCs.data, ocSearch]);
+    const all = pendingOCs.data || [];
+    return all.filter((o: any) => {
+      // filtro por status do KPI (Rev. 2085)
+      if (ocFilter === "pendentes" && (o as any).status === "parcial") return false;
+      if (ocFilter === "parciais" && (o as any).status !== "parcial") return false;
+      if (ocFilter === "atrasadas") {
+        const dp = (o as any).dataEntregaPrevista;
+        if (!dp || String(dp).slice(0, 10) >= todayIso) return false;
+      }
+      // filtro por busca textual
+      if (q && !(
+        String(o.numeroOc || "").toLowerCase().includes(q) ||
+        String(o.fornecedorNome || "").toLowerCase().includes(q)
+      )) return false;
+      return true;
+    });
+  }, [pendingOCs.data, ocSearch, ocFilter, todayIso]);
   function diasAteEntrega(dataIso?: string | null): { dias: number; label: string; cor: string } | null {
     if (!dataIso) return null;
     const d = String(dataIso).slice(0, 10);
@@ -401,7 +414,7 @@ export default function SmartEntry({ companyId, obraId, obraNome, itens, onClose
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50">
-      <div className="w-full max-w-lg bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl overflow-hidden max-h-[95vh] flex flex-col" style={{ background: "#ffffff", color: "#111827" }}>
+      <div className="w-full max-w-2xl bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl overflow-hidden max-h-[95vh] flex flex-col" style={{ background: "#ffffff", color: "#111827" }}>
 
         {/* Rev. 2081 — Header gradient emerald (regras de ouro) */}
         <div className="shrink-0 px-4 py-3.5 border-b bg-gradient-to-r from-emerald-600 via-emerald-600 to-teal-600 text-white relative overflow-hidden">
@@ -534,21 +547,28 @@ export default function SmartEntry({ companyId, obraId, obraNome, itens, onClose
 
           {step === "capture" && mode === "ordem_compra" && (
             <div className="space-y-3">
-              {/* Rev. 2081 — KPIs de OCs pendentes (regras de ouro) */}
+              {/* Rev. 2081/2085 — KPIs clicáveis (filtram a lista) */}
               <div className="grid grid-cols-4 gap-1.5">
-                {[
-                  { label: "Total", value: ocStats.total, Icon: ClipboardList, tone: "bg-slate-50 text-slate-700 ring-slate-200" },
-                  { label: "Pendentes", value: ocStats.pendentes, Icon: Truck, tone: "bg-blue-50 text-blue-700 ring-blue-200" },
-                  { label: "Parciais", value: ocStats.parciais, Icon: AlertTriangle, tone: "bg-amber-50 text-amber-700 ring-amber-200" },
-                  { label: "Atrasadas", value: ocStats.atrasadas, Icon: Clock, tone: `${ocStats.atrasadas > 0 ? "bg-red-50 text-red-700 ring-red-200" : "bg-slate-50 text-slate-500 ring-slate-200"}` },
-                ].map((k) => {
+                {([
+                  { key: "all" as const,        label: "Total",     value: ocStats.total,     Icon: ClipboardList, tone: "bg-slate-50 text-slate-700 ring-slate-200",  activeTone: "bg-slate-700 text-white ring-slate-700" },
+                  { key: "pendentes" as const,  label: "Pendentes", value: ocStats.pendentes, Icon: Truck,         tone: "bg-blue-50 text-blue-700 ring-blue-200",     activeTone: "bg-blue-600 text-white ring-blue-600" },
+                  { key: "parciais" as const,   label: "Parciais",  value: ocStats.parciais,  Icon: AlertTriangle, tone: "bg-amber-50 text-amber-700 ring-amber-200",  activeTone: "bg-amber-500 text-white ring-amber-500" },
+                  { key: "atrasadas" as const,  label: "Atrasadas", value: ocStats.atrasadas, Icon: Clock,         tone: `${ocStats.atrasadas > 0 ? "bg-red-50 text-red-700 ring-red-200" : "bg-slate-50 text-slate-500 ring-slate-200"}`, activeTone: "bg-red-600 text-white ring-red-600" },
+                ]).map((k) => {
                   const KI = k.Icon;
+                  const isActive = ocFilter === k.key;
                   return (
-                    <div key={k.label} className={`rounded-xl ring-1 ${k.tone} px-2 py-2 flex flex-col items-center gap-0.5 shadow-sm`}>
+                    <button
+                      type="button"
+                      key={k.label}
+                      onClick={() => setOcFilter(isActive && k.key !== "all" ? "all" : k.key)}
+                      className={`rounded-xl ring-1 px-2 py-2 flex flex-col items-center gap-0.5 shadow-sm transition active:scale-95 hover:brightness-105 ${isActive ? k.activeTone : k.tone}`}
+                      title={isActive && k.key !== "all" ? "Clique para limpar filtro" : `Filtrar: ${k.label}`}
+                    >
                       <KI className="h-4 w-4 opacity-80" />
                       <div className="text-lg font-bold leading-none">{k.value}</div>
                       <div className="text-[10px] font-semibold uppercase tracking-wide opacity-80">{k.label}</div>
-                    </div>
+                    </button>
                   );
                 })}
               </div>

@@ -1,6 +1,54 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2085 — **Almoxarifado · Smart Entry / modal "Receber Material":
+ * largura aumentada (max-w-lg → max-w-2xl) + KPI cards superiores
+ * (Total / Pendentes / Parciais / Atrasadas) viraram BOTÕES que filtram
+ * a lista de OCs.**
+ *
+ * Pedido do user (screenshot do iPad mostrando o modal estreito com os
+ * 4 KPIs estáticos): "Quero que ajuste a largura da tela e quando
+ * clicar no card superior, filtre o que for pertinente". A tela em
+ * iPad 768px ficava com ~480px de conteúdo (max-w-lg = 32rem = 512px),
+ * deixando muito espaço lateral preto sobrando.
+ *
+ * **Mudanças** em `client/src/pages/almoxarifado/SmartEntry.tsx`:
+ *
+ * 1. **Largura**: `max-w-lg` (512px) → `max-w-2xl` (672px). Cresce ~31%
+ *    em tablets, sem afetar mobile (`w-full` cobre <672px) nem desktop
+ *    grande (era e segue centralizado).
+ *
+ * 2. **Estado novo** `ocFilter` (`"all" | "pendentes" | "parciais" |
+ *    "atrasadas"`) ao lado de `ocSearch`. Default "all".
+ *
+ * 3. **`filteredOCs` (useMemo)** reescrito: agora aplica AMBOS os
+ *    filtros (status do KPI + busca textual). Lógica de status:
+ *    - `pendentes`: exclui OCs com status === "parcial" (i.e. só não-parciais)
+ *    - `parciais`: só status === "parcial"
+ *    - `atrasadas`: `dataEntregaPrevista` < todayIso (mesma comparação
+ *      lex usada em `ocStats`)
+ *    - `all`: sem filtro de status
+ *    Dependências do useMemo atualizadas pra incluir `ocFilter` e
+ *    `todayIso`.
+ *
+ * 4. **KPI cards viraram `<button>`** (eram `<div>` estáticos): cada
+ *    um tem `tone` (cor pastel default) + `activeTone` (cor sólida
+ *    branca quando filtrado). Click toggle: clicar no card ativo
+ *    volta pra "all" (exceto o próprio "Total" que sempre seta "all").
+ *    Adicionados `active:scale-95`, `hover:brightness-105`, `title`
+ *    dinâmico ("Filtrar: X" ou "Clique para limpar filtro").
+ *
+ * 5. **Cores ativas:** Total slate-700, Pendentes blue-600, Parciais
+ *    amber-500, Atrasadas red-600 — todas com texto branco pra
+ *    contraste forte indicando "este filtro está ATIVO".
+ *
+ * **Compat:** estado de busca/status reseta naturalmente ao fechar o
+ * modal (componente desmonta — `SmartEntry` é controlado por `open`
+ * externo). Empty state existente "Nenhuma OC corresponde a {busca}"
+ * continua válido (mostra quando o resultado filtrado é vazio).
+ *
+ * **Arquivos:** `client/src/pages/almoxarifado/SmartEntry.tsx`.
+ *
  * Rev. 2084 — **Financeiro · Centro de Custo / código auto-gerado
  * (`CC-{nnnn}`) — campo Código deixa de ser obrigatório no modal
  * "Novo Centro de Custo".**
