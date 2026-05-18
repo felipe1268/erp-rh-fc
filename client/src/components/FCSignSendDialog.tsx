@@ -1,8 +1,8 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { ShieldCheck, Users, Loader2, Copy, CheckCircle2, ExternalLink, Send, AlertTriangle } from "lucide-react";
+import { ShieldCheck, Users, Loader2, Copy, CheckCircle2, ExternalLink, Send, Lock } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 
@@ -18,6 +18,11 @@ type Props = {
   empregadoCpf?: string;
 };
 
+// REGRA DE NEGÓCIO (definida pelo user em 2026-05-18):
+// Felipe Costa Alves é o ÚNICO sócio autorizado a assinar QUALQUER documento da FC Engenharia.
+// Nome e CPF são travados — não editáveis pelo usuário.
+const FELIPE_SOCIO = { nome: "FELIPE COSTA ALVES", cpf: "362.506.888-54" } as const;
+
 // Máscara CPF: 000.000.000-00 — recebe qualquer string, devolve só dígitos formatados (max 11)
 function maskCpf(v: string): string {
   const d = (v || "").replace(/\D/g, "").slice(0, 11);
@@ -32,30 +37,12 @@ export default function FCSignSendDialog({ open, onOpenChange, companyId, employ
   const [t1Cpf, setT1Cpf] = useState("");
   const [t2Nome, setT2Nome] = useState("");
   const [t2Cpf, setT2Cpf] = useState("");
-  const [empregadorNome, setEmpregadorNome] = useState("");
-  const [empregadorCpf, setEmpregadorCpf] = useState("");
   const [result, setResult] = useState<{ sessionId: number; signers: Array<{ id: number; role: string; nome: string; link: string }> } | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
   const createMut = trpc.signatures.create.useMutation();
 
-  // Busca sócios cadastrados em Colaboradores com tipo_contrato='Socio' (RAIO-X do funcionário)
-  // — pré-preenche o primeiro sócio (ou o que contém "Felipe" se houver vários).
-  // Usuário pode editar/trocar manualmente.
-  const partnersQ = trpc.financial.listSociosFromEmployees.useQuery({ companyId }, { enabled: open && !!companyId });
-  const defaultPartner = (() => {
-    const list = partnersQ.data as Array<{ nomeCompleto: string; cpf: string | null }> | undefined;
-    if (!list || list.length === 0) return null;
-    return list.find((p) => /felipe/i.test(p.nomeCompleto || "")) || list[0];
-  })();
-
-  useEffect(() => {
-    if (defaultPartner && !empregadorNome) setEmpregadorNome(defaultPartner.nomeCompleto || "");
-    if (defaultPartner && !empregadorCpf && defaultPartner.cpf) setEmpregadorCpf(maskCpf(defaultPartner.cpf));
-  }, [defaultPartner]);
-
   const reset = () => {
     setT1Nome(""); setT1Cpf(""); setT2Nome(""); setT2Cpf("");
-    setEmpregadorNome(""); setEmpregadorCpf("");
     setResult(null); setCopied(null);
   };
 
@@ -65,10 +52,6 @@ export default function FCSignSendDialog({ open, onOpenChange, companyId, employ
   };
 
   const handleSubmit = async () => {
-    if (!empregadorNome.trim()) {
-      toast.error("Informe o nome do sócio responsável.");
-      return;
-    }
     if (!t1Nome.trim() || !t2Nome.trim()) {
       toast.error("Informe o nome das duas testemunhas.");
       return;
@@ -82,7 +65,7 @@ export default function FCSignSendDialog({ open, onOpenChange, companyId, employ
         documentHtml,
         signers: [
           { role: "empregado", nome: empregadoNome, cpf: empregadoCpf || null },
-          { role: "empregador", nome: empregadorNome.trim(), cpf: empregadorCpf || null },
+          { role: "empregador", nome: FELIPE_SOCIO.nome, cpf: FELIPE_SOCIO.cpf },
           { role: "testemunha_1", nome: t1Nome.trim(), cpf: t1Cpf || null },
           { role: "testemunha_2", nome: t2Nome.trim(), cpf: t2Cpf || null },
         ],
@@ -154,21 +137,23 @@ export default function FCSignSendDialog({ open, onOpenChange, companyId, employ
                     <ShieldCheck className="h-4 w-4 text-blue-700" />
                     <span className="text-xs font-bold uppercase tracking-wide text-blue-800">Empregador (FC Engenharia)</span>
                   </div>
-                  <div className="p-4">
-                    <label className="text-[11px] font-bold uppercase tracking-wide text-slate-600 mb-1.5 block">
-                      Sócio responsável
-                      {partnersQ.isLoading && <span className="text-slate-400 normal-case font-normal ml-1">carregando…</span>}
-                      {defaultPartner && <span className="text-emerald-600 normal-case font-normal ml-1">· auto-preenchido do cadastro</span>}
-                    </label>
-                    <Input value={empregadorNome} onChange={(e) => setEmpregadorNome(e.target.value)} placeholder="Nome do sócio" className="h-9 bg-white" />
-                    <label className="text-[11px] font-bold uppercase tracking-wide text-slate-600 mb-1.5 block mt-3">CPF</label>
-                    <Input value={empregadorCpf} onChange={(e) => setEmpregadorCpf(maskCpf(e.target.value))} placeholder="000.000.000-00" inputMode="numeric" maxLength={14} className="h-9 bg-white" />
-                    {!partnersQ.isLoading && !defaultPartner && (
-                      <p className="text-[11px] text-amber-700 mt-2 leading-tight">
-                        <AlertTriangle className="h-3 w-3 inline mr-1" />
-                        Nenhum sócio cadastrado em Colaboradores (tipo de contrato = <b>Sócio</b>) para esta empresa.
-                      </p>
-                    )}
+                  <div className="p-4 space-y-3">
+                    <div>
+                      <label className="text-[11px] font-bold uppercase tracking-wide text-slate-600 mb-1.5 flex items-center gap-1">
+                        Sócio responsável
+                        <Lock className="h-3 w-3 text-slate-400" />
+                        <span className="text-slate-400 normal-case font-normal ml-1">· fixo (única assinatura autorizada)</span>
+                      </label>
+                      <Input value={FELIPE_SOCIO.nome} disabled className="h-9 bg-slate-100 font-medium" />
+                    </div>
+                    <div>
+                      <label className="text-[11px] font-bold uppercase tracking-wide text-slate-600 mb-1.5 block">CPF</label>
+                      <Input value={FELIPE_SOCIO.cpf} disabled className="h-9 bg-slate-100" />
+                    </div>
+                    <p className="text-[11px] text-blue-700 bg-blue-50 border border-blue-100 rounded-md px-2.5 py-2 leading-tight">
+                      <ShieldCheck className="h-3 w-3 inline mr-1" />
+                      Por política da FC Engenharia, <b>somente Felipe Costa Alves</b> pode assinar como sócio responsável em qualquer documento.
+                    </p>
                   </div>
                 </div>
               </div>
