@@ -38,17 +38,18 @@ export default function FCSignSendDialog({ open, onOpenChange, companyId, employ
   const [copied, setCopied] = useState<string | null>(null);
   const createMut = trpc.signatures.create.useMutation();
 
-  // Busca sócios cadastrados em Financeiro › Sócios (company_partners) — pré-preenche o primeiro
-  // sócio ativo (ou o que contém "Felipe" se houver vários). Usuário pode editar/trocar.
-  const partnersQ = trpc.financial.getPartners.useQuery({ companyId }, { enabled: open && !!companyId });
+  // Busca sócios cadastrados em Colaboradores com tipo_contrato='Socio' (RAIO-X do funcionário)
+  // — pré-preenche o primeiro sócio (ou o que contém "Felipe" se houver vários).
+  // Usuário pode editar/trocar manualmente.
+  const partnersQ = trpc.financial.listSociosFromEmployees.useQuery({ companyId }, { enabled: open && !!companyId });
   const defaultPartner = (() => {
-    const list = partnersQ.data as Array<{ nome: string; cpf: string | null }> | undefined;
+    const list = partnersQ.data as Array<{ nomeCompleto: string; cpf: string | null }> | undefined;
     if (!list || list.length === 0) return null;
-    return list.find((p) => /felipe/i.test(p.nome || "")) || list[0];
+    return list.find((p) => /felipe/i.test(p.nomeCompleto || "")) || list[0];
   })();
 
   useEffect(() => {
-    if (defaultPartner && !empregadorNome) setEmpregadorNome(defaultPartner.nome || "");
+    if (defaultPartner && !empregadorNome) setEmpregadorNome(defaultPartner.nomeCompleto || "");
     if (defaultPartner && !empregadorCpf && defaultPartner.cpf) setEmpregadorCpf(maskCpf(defaultPartner.cpf));
   }, [defaultPartner]);
 
@@ -165,7 +166,7 @@ export default function FCSignSendDialog({ open, onOpenChange, companyId, employ
                     {!partnersQ.isLoading && !defaultPartner && (
                       <p className="text-[11px] text-amber-700 mt-2 leading-tight">
                         <AlertTriangle className="h-3 w-3 inline mr-1" />
-                        Nenhum sócio cadastrado para esta empresa. Cadastre em <b>Financeiro › Sócios</b> pra vir pré-preenchido nas próximas vezes.
+                        Nenhum sócio cadastrado em Colaboradores (tipo de contrato = <b>Sócio</b>) para esta empresa.
                       </p>
                     )}
                   </div>
