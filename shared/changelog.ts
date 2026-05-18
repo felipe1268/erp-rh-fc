@@ -1,6 +1,107 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2079 — **Comunicados Internos · novo botão "Lista para
+ * Assinatura" com dois modos: assinatura digital (canvas inline)
+ * OU impressão com espaço para colher assinatura manual.** Pedido
+ * do usuário: "nos comunicados, preciso de um botão 'gerar lista
+ * para assinatura'. Nessa lista preciso ter a opção de assinar
+ * digitalmente ou poder imprimir e colher a assinatura impressa.
+ * A lista deve conter todos os funcionários ativos da empresa".
+ *
+ * Diagnóstico: a tela `client/src/pages/ComunicadosInternos.tsx`
+ * tinha apenas Visualizar/Imprimir/Anexar/Concluir — nenhum
+ * mecanismo de coleta de ciência. Padrão típico em comunicados de
+ * RH (mudança de horário, registro de ponto, normas) é gerar uma
+ * lista nominal de TODOS os colaboradores ativos da empresa
+ * selecionada para que cada um declare ciência via assinatura.
+ *
+ * Solução em 4 camadas:
+ *
+ * 1) **Schema** (`drizzle/schema.ts` L8045-8061) — nova tabela
+ *    `comunicado_assinaturas` (id, comunicadoId, companyId,
+ *    employeeId, assinaturaBase64 TEXT, assinadoEm, registradoPor).
+ *    Unique index (comunicadoId, employeeId) garante 1 assinatura
+ *    por colaborador por comunicado.
+ *
+ * 2) **Startup ensure** (`server/_core/index.ts` L1533-1551) —
+ *    `CREATE TABLE IF NOT EXISTS` + 3 índices (comunicado, company,
+ *    unique comunicado+employee) seguindo padrão SyncSchema+
+ *    existente (ex: cliente_comentarios, dds_sessoes). Permite
+ *    deploy direto sem `drizzle migrate`. R-001/R-007 OK: CREATE
+ *    IF NOT EXISTS é idempotente e seguro.
+ *
+ * 3) **Backend router** (`server/routers/comunicadosInternos.ts`
+ *    L239-352) — 3 novos endpoints:
+ *    - `listarFuncionariosParaAssinatura({ comunicadoId, companyId })`
+ *      devolve TODOS os employees ATIVOS da empresa (filtro
+ *      `status='Ativo'` + `deletedAt IS NULL`) ordenados por nome,
+ *      com `assinatura: {id, assinaturaBase64, assinadoEm,
+ *      registradoPor} | null` por colaborador. KPIs:
+ *      `totalAtivos`, `totalAssinados`.
+ *    - `assinar({ comunicadoId, companyId, employeeId,
+ *      assinaturaBase64 })` valida formato data:image/, tamanho
+ *      ≤500KB, ownership do comunicado, employee pertence à
+ *      empresa E está ativo. UPSERT via delete+insert (sempre
+ *      atualiza assinadoEm).
+ *    - `removerAssinatura({ comunicadoId, companyId, employeeId })`
+ *      delete por composite key.
+ *
+ * 4) **Frontend** (`client/src/pages/ComunicadosInternos.tsx`):
+ *    - `SignaturePad` component inline (L25-110) — canvas HTML5
+ *      com pointer events (mouse + touch via touch-action:none),
+ *      DPR-aware (retina/4K), botões Limpar/Cancelar/Salvar,
+ *      devolve PNG data URL. Zero libs externas.
+ *    - State `listaAssinaturaId` + `assinaturaMode` (digital/
+ *      imprimir) + `signingFuncionario` (modal aberto) +
+ *      `searchFunc` (busca por nome/matrícula/cargo).
+ *    - Botão "Lista para Assinatura" na toolbar do viewComunicado
+ *      (entre Imprimir e Anexar) — indigo outline.
+ *    - Nova sub-view (early return ANTES do viewComunicado) com:
+ *      toolbar (voltar + título + tabs digital/imprimir + botão
+ *      Imprimir Lista), 3 KPI cards (ativos, assinados, % com
+ *      barra de progresso), input de busca, e a tabela
+ *      "lista-assinatura-print" (área imprimível) com cabeçalho
+ *      institucional (logo + CNPJ + nº comunicado + assunto +
+ *      declaração de ciência) e tabela # | Matrícula | Nome |
+ *      Cargo | Assinatura | Data.
+ *    - Modo "imprimir": coluna Assinatura = linha em branco
+ *      (border-b-2 h-10) pra assinar manualmente.
+ *    - Modo "digital": coluna Assinatura = botão "Assinar" (sem
+ *      assinatura) OU preview da img + botões Re-assinar/Remover
+ *      (com assinatura). Em print, mesmo no modo digital, células
+ *      sem assinatura mostram linha em branco (fallback).
+ *    - Print CSS via `@media print` inline: esconde tudo exceto
+ *      `.lista-assinatura-print`, page A4 portrait, evita
+ *      page-break dentro de linhas, repete thead em cada página.
+ *    - Modal SignaturePad abre via `signingFuncionario` state e
+ *      chama `assinarMut` (mutation) ao salvar.
+ *
+ * Arquivos:
+ *   - `drizzle/schema.ts` L8045-8061 (nova tabela)
+ *   - `server/_core/index.ts` L1533-1551 (ensure table startup)
+ *   - `server/routers/comunicadosInternos.ts` (imports + 3 endpoints)
+ *   - `client/src/pages/ComunicadosInternos.tsx` (SignaturePad +
+ *     state + botão + sub-view + print CSS + modal)
+ *   - `shared/version.ts` → Rev. 2079
+ *   - `shared/changelog.ts` (esta entrada)
+ *   - `replit.md` rotacionado (2078 vira top-2, 2076 vai pra
+ *     `replit-history.md`)
+ *
+ * Casos cobertos:
+ *   - Empresa com 0 ativos → mensagem "Nenhum funcionário ativo".
+ *   - Funcionário desligado depois de assinar → continua aparecendo
+ *     APENAS se ainda estiver ativo (filtro `status='Ativo'`); a
+ *     assinatura órfã permanece em banco mas não é exibida (futuro
+ *     follow-up: badge "ex-funcionário" se quiser).
+ *   - Mesmo colaborador re-assinando → upsert sobrescreve com nova
+ *     data/hora.
+ *   - Print no modo digital com assinaturas mistas → imagens
+ *     aparecem; espaços vazios viram linha em branco pra colher.
+ *
+ * ZERO ALTER/DROP/DELETE. CREATE TABLE IF NOT EXISTS é idempotente.
+ * R-001/R-007/R-010 OK.
+ *
  * Rev. 2078 — **Aviso Prévio (tela `AvisoPrevio.tsx`) · foto do
  * colaborador ao lado do nome + clique amplia em modal.** Pedido do
  * usuário (IMG_0988): "Coloca a foto do funcionário ao lado do nome,

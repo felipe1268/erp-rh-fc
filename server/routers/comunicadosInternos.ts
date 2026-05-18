@@ -1,8 +1,8 @@
 import { router, protectedProcedure } from "../_core/trpc";
 import { z } from "zod";
 import { getDb } from "../db";
-import { comunicadosInternos } from "../../drizzle/schema";
-import { eq, and, sql, desc, isNull } from "drizzle-orm";
+import { comunicadosInternos, comunicadoAssinaturas, employees } from "../../drizzle/schema";
+import { eq, and, sql, desc, isNull, asc, inArray, ne } from "drizzle-orm";
 import { storagePut } from "../storage";
 import { TRPCError } from "@trpc/server";
 
@@ -230,6 +230,127 @@ export const comunicadosInternosRouter = router({
         deletedBy: ctx.user.name ?? "Sistema",
         deletedByUserId: ctx.user.id,
       } as any).where(eq(comunicadosInternos.id, input.id));
+      return { success: true };
+    }),
+
+  // Rev. 2079 — Lista para Assinatura: devolve TODOS os funcionários ATIVOS da empresa
+  // com o status de assinatura (presente/ausente) pra este comunicado.
+  listarFuncionariosParaAssinatura: protectedProcedure
+    .input(z.object({
+      comunicadoId: z.number().int().positive(),
+      companyId: z.number().int().positive(),
+    }))
+    .query(async ({ input }) => {
+      const db = (await getDb())!;
+      await ensureOwnership(db, input.comunicadoId, input.companyId);
+      // Funcionários ATIVOS da empresa (exclui Desligado/Inativo + soft-deleted).
+      const ativos = await db.select({
+        id: employees.id,
+        matricula: employees.matricula,
+        nomeCompleto: employees.nomeCompleto,
+        cpf: employees.cpf,
+        cargo: employees.cargo,
+        funcao: employees.funcao,
+        setor: employees.setor,
+        fotoUrl: employees.fotoUrl,
+      })
+        .from(employees)
+        .where(and(
+          eq(employees.companyId, input.companyId),
+          eq(employees.status, "Ativo"),
+          isNull((employees as any).deletedAt),
+        ))
+        .orderBy(asc(employees.nomeCompleto));
+      // Assinaturas registradas pra este comunicado
+      const assinaturas = await db.select({
+        id: comunicadoAssinaturas.id,
+        employeeId: comunicadoAssinaturas.employeeId,
+        assinaturaBase64: comunicadoAssinaturas.assinaturaBase64,
+        assinadoEm: comunicadoAssinaturas.assinadoEm,
+        registradoPor: comunicadoAssinaturas.registradoPor,
+      })
+        .from(comunicadoAssinaturas)
+        .where(and(
+          eq(comunicadoAssinaturas.comunicadoId, input.comunicadoId),
+          eq(comunicadoAssinaturas.companyId, input.companyId),
+        ));
+      const mapAssin = new Map<number, any>(assinaturas.map(a => [a.employeeId, a]));
+      // Conta APENAS assinaturas de funcionários atualmente ATIVOS (mantém KPI
+      // consistente com a tabela exibida — assinaturas órfãs de desligados ficam
+      // no banco mas não entram no percentual).
+      const ativoIds = new Set(ativos.map(a => a.id));
+      const totalAssinadosAtivos = assinaturas.filter(a => ativoIds.has(a.employeeId)).length;
+      return {
+        funcionarios: ativos.map(f => ({
+          ...f,
+          assinatura: mapAssin.get(f.id) || null,
+        })),
+        totalAtivos: ativos.length,
+        totalAssinados: totalAssinadosAtivos,
+      };
+    }),
+
+  // Rev. 2079 — Registra (ou substitui) a assinatura digital de um colaborador
+  // para um comunicado. assinaturaBase64 = PNG data URL ("data:image/png;base64,...").
+  assinar: protectedProcedure
+    .input(z.object({
+      comunicadoId: z.number().int().positive(),
+      companyId: z.number().int().positive(),
+      employeeId: z.number().int().positive(),
+      assinaturaBase64: z.string().min(50), // canvas vazio gera ~200 bytes; assinatura real bem maior
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = (await getDb())!;
+      await ensureOwnership(db, input.comunicadoId, input.companyId);
+      // Validar tamanho do payload (limita a 500KB pra evitar abuso)
+      const maxLen = 500 * 1024;
+      if (input.assinaturaBase64.length > maxLen) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Assinatura muito grande (máx. 500 KB)." });
+      }
+      // Validar que é uma data URL de imagem
+      if (!input.assinaturaBase64.startsWith("data:image/")) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Formato de assinatura inválido (esperado data:image/...)." });
+      }
+      // Validar que o employee pertence à empresa e está ativo
+      const [emp] = await db.select({ id: employees.id, status: employees.status, companyId: employees.companyId })
+        .from(employees).where(eq(employees.id, input.employeeId));
+      if (!emp || emp.companyId !== input.companyId) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Funcionário não encontrado nesta empresa." });
+      }
+      if (emp.status !== "Ativo") {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Apenas funcionários ATIVOS podem assinar." });
+      }
+      // Upsert: deleta existente + insere nova (mantém auditoria via assinadoEm sempre atual)
+      await db.delete(comunicadoAssinaturas).where(and(
+        eq(comunicadoAssinaturas.comunicadoId, input.comunicadoId),
+        eq(comunicadoAssinaturas.employeeId, input.employeeId),
+      ));
+      const [row] = await db.insert(comunicadoAssinaturas).values({
+        comunicadoId: input.comunicadoId,
+        companyId: input.companyId,
+        employeeId: input.employeeId,
+        assinaturaBase64: input.assinaturaBase64,
+        registradoPor: ctx.user.name ?? "Sistema",
+        registradoPorUserId: ctx.user.id,
+      }).returning();
+      return row;
+    }),
+
+  // Rev. 2079 — Remove a assinatura digital de um colaborador para um comunicado.
+  removerAssinatura: protectedProcedure
+    .input(z.object({
+      comunicadoId: z.number().int().positive(),
+      companyId: z.number().int().positive(),
+      employeeId: z.number().int().positive(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = (await getDb())!;
+      await ensureOwnership(db, input.comunicadoId, input.companyId);
+      await db.delete(comunicadoAssinaturas).where(and(
+        eq(comunicadoAssinaturas.comunicadoId, input.comunicadoId),
+        eq(comunicadoAssinaturas.companyId, input.companyId),
+        eq(comunicadoAssinaturas.employeeId, input.employeeId),
+      ));
       return { success: true };
     }),
 });

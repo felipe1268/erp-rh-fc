@@ -8039,6 +8039,24 @@ export const comunicadosInternos = pgTable("comunicados_internos", {
   uniqueIndex("uq_comunicados_company_ano_seq").on(t.companyId, t.ano, t.sequencia),
 ]);
 
+// Rev. 2079 — Assinaturas digitais coletadas em listas de assinatura de Comunicados Internos.
+// 1 linha por (comunicadoId, employeeId). assinaturaBase64 guarda PNG data URL do canvas.
+export const comunicadoAssinaturas = pgTable("comunicado_assinaturas", {
+  id: serial().primaryKey(),
+  comunicadoId: integer("comunicado_id").notNull(),
+  companyId: integer("company_id").notNull(),
+  employeeId: integer("employee_id").notNull(),
+  assinaturaBase64: text("assinatura_base64").notNull(),
+  assinadoEm: timestamp("assinado_em", { mode: "string" }).defaultNow().notNull(),
+  ip: varchar({ length: 64 }),
+  registradoPor: varchar("registrado_por", { length: 255 }),
+  registradoPorUserId: integer("registrado_por_user_id"),
+}, (t) => [
+  index("idx_com_assin_comunicado").on(t.comunicadoId),
+  index("idx_com_assin_company").on(t.companyId),
+  uniqueIndex("uq_com_assin_comunicado_emp").on(t.comunicadoId, t.employeeId),
+]);
+
 export const curriculoFuncoes = pgTable("curriculo_funcoes", {
   id: serial().primaryKey(),
   companyId: integer("company_id").notNull(),

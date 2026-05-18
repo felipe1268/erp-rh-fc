@@ -1527,6 +1527,26 @@ Regras:
           console.log(`[PJConformidade] Tabela pj_conformidade garantida.`);
         } catch (e: any) { console.log(`[PJConformidade] Skipped:`, e?.message || e); }
 
+        // Rev. 2079 — Assinaturas de Comunicados Internos (lista de assinatura digital).
+        // Garantida idempotentemente no startup para evitar quebra em deploys diretos.
+        try {
+          await db.execute(sql`CREATE TABLE IF NOT EXISTS comunicado_assinaturas (
+            id SERIAL PRIMARY KEY,
+            comunicado_id INTEGER NOT NULL,
+            company_id INTEGER NOT NULL,
+            employee_id INTEGER NOT NULL,
+            assinatura_base64 TEXT NOT NULL,
+            assinado_em TIMESTAMP NOT NULL DEFAULT NOW(),
+            ip VARCHAR(64),
+            registrado_por VARCHAR(255),
+            registrado_por_user_id INTEGER
+          )`);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_com_assin_comunicado ON comunicado_assinaturas (comunicado_id)`);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_com_assin_company ON comunicado_assinaturas (company_id)`);
+          await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS uq_com_assin_comunicado_emp ON comunicado_assinaturas (comunicado_id, employee_id)`);
+          console.log(`[SyncSchema+] Rev. 2079: tabela comunicado_assinaturas garantida.`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.2079 comunicado_assinaturas:`, e?.message || e); }
+
       } catch (e: any) { console.error(`[SyncSchema+] ERROR:`, e?.message || e); }
     }).catch(e => console.error("[SyncSchema] Falha ao iniciar:", e));
     // Garantir colunas críticas adicionadas recentemente que o SyncSchema possa ter ignorado
