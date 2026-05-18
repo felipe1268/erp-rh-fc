@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useMemo } from "react";
 import { trpc } from "@/lib/trpc";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -6,6 +6,7 @@ import {
   Camera, FileText, Package, X, Loader2, CheckCircle2,
   AlertTriangle, XCircle, ArrowDownCircle, ChevronRight,
   ImagePlus, Mic, MicOff, RefreshCw,
+  Search, CalendarClock, Truck, ClipboardList, Clock, Building2,
 } from "lucide-react";
 import { inferirCategoria, CATEGORIA_KEYWORDS } from "./categoriaUtils";
 
@@ -70,6 +71,8 @@ export default function SmartEntry({ companyId, obraId, obraNome, itens, onClose
   const [manualItemId, setManualItemId] = useState(0);
   const [manualQtd, setManualQtd] = useState("");
   const [manualMotivo, setManualMotivo] = useState("");
+  // Rev. 2081 — Busca para a lista de OCs pendentes (regras de ouro)
+  const [ocSearch, setOcSearch] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const queryClient = useQueryClient();
 
@@ -347,16 +350,86 @@ export default function SmartEntry({ companyId, obraId, obraNome, itens, onClose
     }
   };
 
+  // Rev. 2081 — KPIs e filtragem de OCs (regras de ouro: header gradient + KPI cards)
+  // IMPORTANTE: usa data LOCAL do navegador (não UTC). Em fuso BR (UTC-3),
+  // toISOString() à noite vira o dia em UTC antes da meia-noite local e
+  // marcaria OCs como "atrasadas" prematuramente. Por isso montamos
+  // YYYY-MM-DD a partir de getFullYear/Month/Date (todos LOCAIS).
+  function toLocalIsoDate(d: Date): string {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const dd = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${dd}`;
+  }
+  const todayIso = toLocalIsoDate(new Date());
+  const ocStats = useMemo(() => {
+    const all = pendingOCs.data || [];
+    let pendentes = 0, parciais = 0, atrasadas = 0;
+    for (const o of all) {
+      if ((o as any).status === "parcial") parciais++;
+      else pendentes++;
+      const dp = (o as any).dataEntregaPrevista;
+      if (dp && String(dp).slice(0, 10) < todayIso) atrasadas++;
+    }
+    return { total: all.length, pendentes, parciais, atrasadas };
+  }, [pendingOCs.data, todayIso]);
+  const filteredOCs = useMemo(() => {
+    const q = ocSearch.trim().toLowerCase();
+    if (!q) return pendingOCs.data || [];
+    return (pendingOCs.data || []).filter((o: any) =>
+      String(o.numeroOc || "").toLowerCase().includes(q) ||
+      String(o.fornecedorNome || "").toLowerCase().includes(q)
+    );
+  }, [pendingOCs.data, ocSearch]);
+  function diasAteEntrega(dataIso?: string | null): { dias: number; label: string; cor: string } | null {
+    if (!dataIso) return null;
+    const d = String(dataIso).slice(0, 10);
+    const [y, m, dd] = d.split("-").map(Number);
+    if (!y || !m || !dd) return null;
+    // Comparação em data LOCAL — `dataEntregaPrevista` é date "civil"
+    // (YYYY-MM-DD sem hora), então não há fuso pra aplicar.
+    const alvo = new Date(y, m - 1, dd);
+    const agora = new Date();
+    const hojeLocal = new Date(agora.getFullYear(), agora.getMonth(), agora.getDate());
+    const diff = Math.round((alvo.getTime() - hojeLocal.getTime()) / 86400000);
+    const dataBR = `${String(dd).padStart(2, "0")}/${String(m).padStart(2, "0")}/${y}`;
+    if (diff < 0) return { dias: diff, label: `Atrasada há ${-diff} dia${-diff !== 1 ? "s" : ""} (${dataBR})`, cor: "text-red-600 bg-red-50 ring-red-200" };
+    if (diff === 0) return { dias: 0, label: `Entrega HOJE (${dataBR})`, cor: "text-amber-700 bg-amber-50 ring-amber-200" };
+    if (diff <= 3) return { dias: diff, label: `Em ${diff} dia${diff !== 1 ? "s" : ""} (${dataBR})`, cor: "text-amber-700 bg-amber-50 ring-amber-200" };
+    return { dias: diff, label: `Em ${diff} dias (${dataBR})`, cor: "text-slate-600 bg-slate-50 ring-slate-200" };
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50">
       <div className="w-full max-w-lg bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl overflow-hidden max-h-[95vh] flex flex-col" style={{ background: "#ffffff", color: "#111827" }}>
 
-        <div className="flex items-center justify-between p-4 border-b shrink-0">
-          <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-            <ArrowDownCircle className="w-5 h-5 text-emerald-500" />
-            {step === "success" ? "Recebimento Concluído" : "Receber Material"}
-          </h2>
-          <button onClick={onClose}><X className="w-6 h-6 text-gray-400" /></button>
+        {/* Rev. 2081 — Header gradient emerald (regras de ouro) */}
+        <div className="shrink-0 px-4 py-3.5 border-b bg-gradient-to-r from-emerald-600 via-emerald-600 to-teal-600 text-white relative overflow-hidden">
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.18),transparent_60%)] pointer-events-none" />
+          <div className="relative flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3 min-w-0">
+              <span className="inline-flex items-center justify-center h-10 w-10 rounded-xl bg-white/15 backdrop-blur-sm ring-4 ring-white/20 shrink-0">
+                <ArrowDownCircle className="h-5 w-5" />
+              </span>
+              <div className="min-w-0">
+                <h2 className="text-base sm:text-lg font-bold leading-tight truncate">
+                  {step === "success" ? "Recebimento Concluído" : "Receber Material"}
+                </h2>
+                <p className="text-[11px] text-white/85 truncate">
+                  {step === "mode" && "Escolha o método de entrada"}
+                  {step === "capture" && mode === "ordem_compra" && "Confirme o material recebido por OC"}
+                  {step === "capture" && mode === "foto_nf" && "Foto da NF — IA preenche tudo"}
+                  {step === "capture" && mode === "manual" && "Entrada manual de item"}
+                  {step === "analyzing" && "Analisando documento..."}
+                  {(step === "review" || step === "confirm") && (obraNome || "Conferindo itens")}
+                  {step === "success" && "Entrada registrada com sucesso"}
+                </p>
+              </div>
+            </div>
+            <button onClick={onClose} className="h-9 w-9 rounded-lg hover:bg-white/15 flex items-center justify-center transition shrink-0" aria-label="Fechar">
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         <div className="overflow-y-auto flex-1 p-4">
@@ -461,64 +534,128 @@ export default function SmartEntry({ companyId, obraId, obraNome, itens, onClose
 
           {step === "capture" && mode === "ordem_compra" && (
             <div className="space-y-3">
-              <p className="text-sm text-gray-500 text-center mb-2">Selecione a Ordem de Compra</p>
+              {/* Rev. 2081 — KPIs de OCs pendentes (regras de ouro) */}
+              <div className="grid grid-cols-4 gap-1.5">
+                {[
+                  { label: "Total", value: ocStats.total, Icon: ClipboardList, tone: "bg-slate-50 text-slate-700 ring-slate-200" },
+                  { label: "Pendentes", value: ocStats.pendentes, Icon: Truck, tone: "bg-blue-50 text-blue-700 ring-blue-200" },
+                  { label: "Parciais", value: ocStats.parciais, Icon: AlertTriangle, tone: "bg-amber-50 text-amber-700 ring-amber-200" },
+                  { label: "Atrasadas", value: ocStats.atrasadas, Icon: Clock, tone: `${ocStats.atrasadas > 0 ? "bg-red-50 text-red-700 ring-red-200" : "bg-slate-50 text-slate-500 ring-slate-200"}` },
+                ].map((k) => {
+                  const KI = k.Icon;
+                  return (
+                    <div key={k.label} className={`rounded-xl ring-1 ${k.tone} px-2 py-2 flex flex-col items-center gap-0.5 shadow-sm`}>
+                      <KI className="h-4 w-4 opacity-80" />
+                      <div className="text-lg font-bold leading-none">{k.value}</div>
+                      <div className="text-[10px] font-semibold uppercase tracking-wide opacity-80">{k.label}</div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Busca */}
+              {(pendingOCs.data?.length || 0) > 3 && (
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                  <input
+                    type="text"
+                    inputMode="search"
+                    placeholder="Buscar por número ou fornecedor..."
+                    value={ocSearch}
+                    onChange={e => setOcSearch(e.target.value)}
+                    className="w-full pl-9 pr-3 py-2.5 text-sm rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400"
+                  />
+                </div>
+              )}
+
               {pendingOCs.isLoading ? (
-                <div className="py-8 text-center"><Loader2 className="w-8 h-8 animate-spin mx-auto text-blue-500" /></div>
+                <div className="py-8 text-center"><Loader2 className="w-8 h-8 animate-spin mx-auto text-emerald-500" /></div>
               ) : !pendingOCs.data?.length ? (
-                <div className="py-8 text-center text-gray-400">
+                <div className="py-10 text-center text-slate-400 bg-slate-50 rounded-xl border border-slate-200">
                   <FileText className="w-12 h-12 mx-auto mb-2 opacity-50" />
-                  <p>Nenhuma OC pendente</p>
+                  <p className="font-semibold text-slate-500">Nenhuma OC pendente</p>
+                  <p className="text-xs">Todas as ordens já foram recebidas{obraNome ? ` em ${obraNome}` : ""}.</p>
+                </div>
+              ) : filteredOCs.length === 0 ? (
+                <div className="py-8 text-center text-slate-400">
+                  <Search className="w-10 h-10 mx-auto mb-2 opacity-50" />
+                  <p className="text-sm">Nenhuma OC corresponde a "{ocSearch}"</p>
                 </div>
               ) : (
-                pendingOCs.data.map(oc => (
-                  <button
-                    key={oc.id}
-                    onClick={() => { handleOCSelect(oc.id); }}
-                    className={`w-full text-left p-4 rounded-xl border-2 transition ${
-                      selectedOcId === oc.id ? "border-blue-500 bg-blue-50" : "border-gray-200 hover:border-blue-300"
-                    }`}
-                  >
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <p className="font-bold text-gray-900">{oc.numeroOc}</p>
-                        <p className="text-sm text-gray-600">{oc.fornecedorNome}</p>
-                      </div>
-                      <span className={`text-xs px-2 py-1 rounded-full font-semibold ${
-                        oc.status === "parcial" ? "bg-amber-100 text-amber-700" : "bg-blue-100 text-blue-700"
-                      }`}>
-                        {oc.status === "parcial" ? "PARCIAL" : oc.status}
-                      </span>
-                    </div>
-                    {oc.status === "parcial" && oc.totalItens > 0 && (
-                      <div className="mt-2">
-                        <div className="flex items-center gap-2 text-xs text-amber-700">
-                          <AlertTriangle className="w-3 h-3" />
-                          <span>{oc.itensEntregues} de {oc.totalItens} itens entregues — faltam {oc.itensPendentes}</span>
+                <div className="space-y-2.5 max-h-[55vh] overflow-y-auto -mx-1 px-1">
+                  {filteredOCs.map((oc: any) => {
+                    const isSelected = selectedOcId === oc.id;
+                    const entrega = diasAteEntrega(oc.dataEntregaPrevista);
+                    const pct = oc.totalItens > 0 ? Math.round((oc.itensEntregues / oc.totalItens) * 100) : 0;
+                    return (
+                      <button
+                        key={oc.id}
+                        onClick={() => { handleOCSelect(oc.id); }}
+                        className={`w-full text-left p-3.5 rounded-2xl border-2 transition shadow-sm ${
+                          isSelected
+                            ? "border-emerald-500 bg-emerald-50/70 ring-2 ring-emerald-200"
+                            : "border-slate-200 bg-white hover:border-emerald-300 hover:bg-emerald-50/30"
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <p className="font-bold text-slate-900 text-base leading-tight">{oc.numeroOc}</p>
+                              {isSelected && <CheckCircle2 className="w-4 h-4 text-emerald-600" />}
+                            </div>
+                            <div className="flex items-center gap-1.5 mt-1 text-sm text-slate-600 min-w-0">
+                              <Building2 className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                              <span className="truncate">{oc.fornecedorNome || "Fornecedor não informado"}</span>
+                            </div>
+                          </div>
+                          <span className={`text-[10px] px-2 py-1 rounded-full font-bold uppercase tracking-wide whitespace-nowrap ${
+                            oc.status === "parcial"
+                              ? "bg-amber-100 text-amber-800 ring-1 ring-amber-200"
+                              : oc.status === "aprovada"
+                              ? "bg-emerald-100 text-emerald-800 ring-1 ring-emerald-200"
+                              : "bg-blue-100 text-blue-800 ring-1 ring-blue-200"
+                          }`}>
+                            {oc.status === "parcial" ? "Parcial" : oc.status}
+                          </span>
                         </div>
-                        <div className="mt-1 w-full bg-gray-200 rounded-full h-1.5">
-                          <div
-                            className="bg-amber-500 h-1.5 rounded-full"
-                            style={{ width: `${Math.round((oc.itensEntregues / oc.totalItens) * 100)}%` }}
-                          />
-                        </div>
-                      </div>
-                    )}
-                    {oc.dataEntregaPrevista && (
-                      <p className="text-xs text-gray-400 mt-1">Entrega prevista: {oc.dataEntregaPrevista}</p>
-                    )}
-                  </button>
-                ))
+
+                        {oc.status === "parcial" && oc.totalItens > 0 && (
+                          <div className="mt-2.5">
+                            <div className="flex items-center justify-between gap-2 text-[11px] mb-1">
+                              <span className="text-amber-800 font-semibold flex items-center gap-1">
+                                <AlertTriangle className="w-3 h-3" />
+                                {oc.itensEntregues} de {oc.totalItens} entregues
+                              </span>
+                              <span className="text-amber-700 font-bold">{pct}%</span>
+                            </div>
+                            <div className="w-full bg-amber-100 rounded-full h-1.5 overflow-hidden">
+                              <div className="bg-gradient-to-r from-amber-400 to-amber-500 h-full rounded-full transition-all" style={{ width: `${pct}%` }} />
+                            </div>
+                          </div>
+                        )}
+
+                        {entrega && (
+                          <div className={`mt-2.5 inline-flex items-center gap-1.5 text-[11px] px-2 py-1 rounded-md ring-1 font-semibold ${entrega.cor}`}>
+                            <CalendarClock className="w-3 h-3" />
+                            {entrega.label}
+                          </div>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
               )}
+
               {selectedOcId && (
                 <button
                   onClick={handleOCItemsLoaded}
                   disabled={ocItems.isLoading}
-                  className="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-4 rounded-2xl text-lg transition flex items-center justify-center gap-2"
+                  className="w-full bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white font-bold py-4 rounded-2xl text-base transition flex items-center justify-center gap-2 shadow-lg disabled:opacity-60"
                 >
-                  {ocItems.isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : "VER ITENS DA OC"}
+                  {ocItems.isLoading ? <><Loader2 className="w-5 h-5 animate-spin" /> Carregando itens...</> : <><Package className="w-5 h-5" /> VER ITENS DA OC</>}
                 </button>
               )}
-              <button onClick={() => { setStep("mode"); setSelectedOcId(null); }} className="text-sm text-gray-400 underline block mx-auto">Voltar</button>
+              <button onClick={() => { setStep("mode"); setSelectedOcId(null); setOcSearch(""); }} className="text-sm text-slate-500 underline block mx-auto py-1">Voltar</button>
             </div>
           )}
 

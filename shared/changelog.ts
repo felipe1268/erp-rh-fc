@@ -1,6 +1,93 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2081 — **Almoxarifado · Smart Entry / modal "Receber Material"
+ * repaginado pelas regras de ouro (mobile-first).** Pedido do usuário
+ * (3 screenshots IMG_1198/1199/1200 do iPhone): a tela "Selecione a
+ * Ordem de Compra" estava genérica — header simples branco, lista
+ * vertical de cards minimalistas (apenas número da OC, fornecedor,
+ * "Entrega prevista: 2026-05-XX" em cinza, badge azul "aprovada" ou
+ * "pendente"). Sem KPIs, sem busca, sem indicador de atraso, sem
+ * gradient — fora do padrão visual estabelecido nas Rev. 1997/2015/
+ * 2072 (FechamentoPonto rankings + sub-modal calendário).
+ *
+ * **Solução** em `client/src/pages/almoxarifado/SmartEntry.tsx`:
+ *
+ * 1. **Header gradient emerald** (substitui o `flex p-4 border-b`
+ *    branco): `bg-gradient-to-r from-emerald-600 via-emerald-600
+ *    to-teal-600` com radial overlay branco no canto superior direito,
+ *    ícone `ArrowDownCircle` dentro de `rounded-xl bg-white/15
+ *    backdrop-blur-sm ring-4 ring-white/20`, título + subtítulo
+ *    contextual (muda por step/mode: "Escolha o método de entrada" /
+ *    "Confirme o material recebido por OC" / "Foto da NF — IA preenche
+ *    tudo" / "Analisando documento..." / "Entrada registrada com
+ *    sucesso"), e botão X mais alvo de toque (h-9 w-9).
+ *
+ * 2. **KPI bar (4 cards) acima da lista de OCs**: Total /
+ *    Pendentes (slate/blue) / Parciais (amber) / Atrasadas (vermelho
+ *    se > 0). Compactos para mobile (`grid-cols-4 gap-1.5`, ícone
+ *    `h-4 w-4` + número `text-lg` + label uppercase `text-[10px]` —
+ *    bumpados após review do architect pra melhorar legibilidade).
+ *    KPI "Atrasadas" calculado comparando `dataEntregaPrevista` (slice
+ *    0-10) com `todayIso` em ordem lexicográfica (YYYY-MM-DD).
+ *
+ *    **Correção pós-review (fuso BR):** `todayIso` agora vem de
+ *    `toLocalIsoDate(new Date())` (helper interno usando
+ *    `getFullYear/Month/Date` LOCAIS), NÃO de
+ *    `toISOString().slice(0,10)`. Motivo: em UTC-3, depois das 21h
+ *    locais o `toISOString()` já retorna o dia seguinte, o que
+ *    marcaria OCs com entrega "hoje" como atrasadas prematuramente.
+ *    Mesma correção em `diasAteEntrega()` — agora usa `new Date(y,
+ *    m-1, dd)` (construtor LOCAL) e `hojeLocal` LOCAL, em vez de
+ *    `Date.UTC()`. Como `dataEntregaPrevista` é varchar(10)
+ *    YYYY-MM-DD ("date civil" sem hora), comparar em local é o
+ *    correto operacionalmente.
+ *
+ * 3. **Busca por número/fornecedor**: input com ícone `Search` (só
+ *    aparece se há > 3 OCs pra evitar poluição). Filtragem em-memória
+ *    via `useMemo`, case-insensitive em `numeroOc` + `fornecedorNome`.
+ *
+ * 4. **Cards de OC repaginados**: borda mais grossa (`border-2
+ *    rounded-2xl`), shadow-sm, hover emerald, selecionado ganha
+ *    `ring-2 ring-emerald-200` + bg emerald-50/70 + ícone CheckCircle2.
+ *    Fornecedor agora vem com ícone `Building2` (em vez de só texto
+ *    cinza), status badge pintado por tipo (parcial=amber/aprovada=
+ *    emerald/outros=azul) em uppercase ring-1. Barra de progresso
+ *    para PARCIAL agora é `bg-gradient-to-r from-amber-400 to-amber-
+ *    500` em altura 1.5 com texto "X de Y entregues" + %.
+ *
+ * 5. **Indicador de atraso colorido** (substitui o "Entrega prevista:
+ *    YYYY-MM-DD" cinza): função `diasAteEntrega()` retorna chip
+ *    contextual:
+ *    - Atrasada → vermelho ("Atrasada há N dias (DD/MM/YYYY)")
+ *    - Hoje ou ≤ 3 dias → âmbar ("Entrega HOJE" / "Em N dias")
+ *    - > 3 dias → cinza neutro ("Em N dias (DD/MM/YYYY)")
+ *    Ícone `CalendarClock`, data agora em formato BR DD/MM/YYYY.
+ *
+ * 6. **CTA "VER ITENS DA OC"**: agora `bg-gradient-to-r from-emerald
+ *    -500 to-teal-600` com ícone `Package`, shadow-lg, e estado de
+ *    loading explícito ("Carregando itens...").
+ *
+ * 7. **Estados vazios melhorados**: "Nenhuma OC pendente" agora vem
+ *    em bloco com fundo slate-50 e mensagem contextualizada com nome
+ *    da obra. "Sem resultados para busca X" como estado separado.
+ *
+ * **Arquivos**: `client/src/pages/almoxarifado/SmartEntry.tsx`
+ * (header + step ordem_compra reescritos; novos icons importados:
+ * Search, CalendarClock, Truck, ClipboardList, Clock, Building2;
+ * useMemo importado; novo state `ocSearch`; helpers `todayIso`,
+ * `ocStats`, `filteredOCs`, `diasAteEntrega`).
+ *
+ * **Validações**: TS OK (campos `numeroOc`/`fornecedorNome`/`status`/
+ * `dataEntregaPrevista`/`totalItens`/`itensEntregues`/`itensPendentes`
+ * vêm de `warehouse.listPendingOCs` L1332-1381 — todos confirmados no
+ * router). Mantida toda a lógica de seleção/handlers
+ * (`handleOCSelect`, `handleOCItemsLoaded`). Zero alteração nos outros
+ * steps (foto_nf, manual, analyzing, review, confirm, success) —
+ * intencional, pra escopo controlado.
+ *
+ * **R-001/R-007/R-010**: zero schema/SQL/dados. Apenas frontend.
+ *
  * Rev. 2080 — **HOTFIX PROD · Cotação Parcial / Geração de OC quebrada
  * com erro "function pg_advisory_xact_lock(bigint, integer) does not
  * exist".** Screenshot do usuário (08:32) ao tentar confirmar uma
