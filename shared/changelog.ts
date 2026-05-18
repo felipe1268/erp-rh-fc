@@ -1,6 +1,101 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2096 — **Frota · modal "Importar Pedágio/Sem Parar com IA"
+ * redesenhado nas regras de ouro (Rev. 2094): header gradient
+ * violet→fuchsia, card de arquivo com preview, KPI bar de detecção
+ * pós-análise, footer pill com contador de seleção.**
+ *
+ * Pedido do user (screenshot do modal antigo aberto sobre o calendário
+ * mensal de Pedágios em `/frotas/pedagios` — tela "Abr/2026" com KPIs
+ * roxos R$130,86 e 15/0 pedágios; o modal aparecia como
+ * `DialogContent max-w-3xl` plano, sem gradient no título — só
+ * `<Sparkles>` violet + "Importar Pedágio/Sem Parar com IA", arquivo
+ * mostrado em `bg-muted/30 rounded-lg p-3` cinzão, botão
+ * `bg-violet-600 hover:bg-violet-700` retangular sem dica/contexto):
+ * "melhore este layout seguindo as regras de ouro".
+ *
+ * **Problema:** o modal de IA era a única peça do fluxo de Pedágios
+ * que ainda usava o padrão antigo (header chapado, card de arquivo
+ * em cinza neutro, botão CTA sem gradient/sem dica didática, sem
+ * KPI bar de detecção, footer com `pt-2 border-t` sem destaque).
+ * Destoava do resto do ERP (FinanceiroConfiguracoes Rev. 2094,
+ * Centros de Custo Rev. 2092, Sócios Rev. 2093 — todos já no
+ * padrão DialogContent `p-0 overflow-hidden flex flex-col` com
+ * header gradient + ícone em pill + body padronizado + footer pill).
+ *
+ * **Mudanças (`client/src/pages/frotas/Pedagios.tsx` ~L676-940):**
+ *
+ *   1. **DialogContent** virou `p-0 overflow-hidden flex flex-col`,
+ *      com largura adaptativa: `max-w-lg` antes de analisar (modal
+ *      compacto com só arquivo + CTA) e `max-w-3xl max-h-[90vh]`
+ *      após análise (precisa do espaço pros itens detectados).
+ *
+ *   2. **Header gradient** `from-violet-600 via-purple-600 to-fuchsia-600`,
+ *      px-6 py-4, com ícone `<Sparkles>` em pill `bg-white/15 p-2.5
+ *      rounded-xl ring-4 ring-white/20`. Título h2 bold + subtítulo
+ *      contextual que muda conforme estado: pré-análise mostra "Envie
+ *      comprovante (PDF/imagem) e a IA extrai os lançamentos
+ *      automaticamente"; pós-análise mostra "{N} lançamento(s)
+ *      detectado(s) — revise antes de importar".
+ *
+ *   3. **Card de arquivo** redesenhado: `rounded-xl border-2
+ *      border-violet-200 bg-gradient-to-br from-violet-50 to-purple-50/40
+ *      p-4`, ícone `<FileText>` violet em pill branco com ring,
+ *      nome truncate em violet-900 bold, badge KB violet, label "PDF /
+ *      Imagem" inferido do mime-type, botão `<X>` ghost violet pra
+ *      remover (oculto durante análise). Preview da imagem (quando há)
+ *      em `rounded-lg overflow-hidden border border-violet-200 bg-white`
+ *      com `bg-slate-50` no img pra dar moldura.
+ *
+ *   4. **Estado pré-análise — didática:** novo banner
+ *      `border-amber-200 bg-amber-50/60` com `<Lightbulb>` explicando
+ *      "Como funciona: a IA lê o comprovante, identifica placa, data,
+ *      valor, praça e rodovia, e tenta vincular ao veículo cadastrado.
+ *      Você revisa item-a-item antes de importar." Botão CTA virou
+ *      `bg-gradient-to-r from-violet-600 to-fuchsia-600` h-11 com
+ *      `<Wand2>` (ícone mais expressivo que `<Eye>` pra ação de IA);
+ *      fica `disabled={!iaFile}` (não dá pra analisar sem arquivo).
+ *
+ *   5. **Estado pós-análise — KPI bar de 3 cards:** Detectados (violet,
+ *      total de lançamentos), Sem veículo (emerald se 0, rose se >0,
+ *      com sub-label "todos vinculados ✓" / "cadastre antes"), Total
+ *      geral (slate, soma de R$ + bolinha colorida com nível de
+ *      confiança alta/media/baixa = emerald/amber/rose).
+ *
+ *   6. **Toolbar de seleção rápida:** novos botões "Marcar todos"
+ *      (`<CheckCheck>` violet) e "Limpar" (`<X>` slate) — fluxo que
+ *      antes exigia clicar item por item.
+ *
+ *   7. **Cards de item** com border-2 mais marcado: selecionado fica
+ *      `border-violet-300 bg-gradient-to-br from-violet-50/80 to-purple-50/40
+ *      shadow-sm`, não-selecionado `border-slate-200 bg-slate-50/50
+ *      opacity-60 hover:opacity-90`. Checkbox custom violet
+ *      (`data-[state=checked]:bg-violet-600 data-[state=checked]:border-violet-600`).
+ *      Valor passa a ficar `ml-auto` em font-bold tabular-nums (alinha
+ *      à direita). Praça+rodovia agrupados em uma linha com `<MapPin>`
+ *      + separador ` · ` (antes ocupavam 2 linhas).
+ *
+ *   8. **Footer pill:** `bg-gradient-to-r from-slate-50 to-violet-50/40
+ *      px-6 py-3`, contador `{N}/{Total}` em pill violet bold com
+ *      tabular-nums, total em R$ em destaque slate-900. Botão importar
+ *      virou gradient violet→fuchsia com shadow-md e mostra a contagem
+ *      no label ("Importar 5 Selecionado(s)"). Cancelar reseta
+ *      `iaSelectedItems` também (antes ficava lixo pro próximo abrir).
+ *
+ * **Estado preservado:** toda a lógica de `parseMut`, `saveIAItems`,
+ * `iaParsed`, `iaSelectedItems`, `processIA` — zero refator de
+ * controller / mutation / backend. Apenas JSX + Tailwind. Novos
+ * ícones importados: `Lightbulb`, `MapPin`, `FileText`, `Wand2` (já
+ * existiam outros: Sparkles, CheckCheck, X, Check, Car, Loader2,
+ * FileUp — `FileUp` agora não-usado mas mantido no import pra não
+ * mexer em outros lugares do arquivo).
+ *
+ * **R-001/R-007:** N/A — apenas frontend (Tailwind/JSX). Zero
+ * ALTER/DROP/DELETE. Zero schema.
+ *
+ * ---
+ *
  * Rev. 2095 — **UX global · scrollbars sempre visíveis e mais grossas em
  * todo o ERP (12px) para facilitar navegação em telas longas / dialogs
  * full-screen.**

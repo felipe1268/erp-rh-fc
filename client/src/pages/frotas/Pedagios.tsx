@@ -17,6 +17,7 @@ import {
   Milestone, Plus, Pencil, Trash2, Search, ChevronLeft, ChevronRight,
   CheckCircle2, Loader2, Sparkles, FileUp, Eye, X, Check, DollarSign, AlertTriangle, Car,
   FileSpreadsheet, Upload, CheckCheck, AlertCircle, Lock,
+  Lightbulb, MapPin, FileText, Wand2,
 } from "lucide-react";
 import { useState, useRef, useCallback, useEffect } from "react";
 import { toast } from "sonner";
@@ -670,53 +671,163 @@ export default function Pedagios() {
         </Dialog>
 
         <Dialog open={iaDialogOpen} onOpenChange={(o) => { if (!parseMut.isPending && !iaSaving) setIaDialogOpen(o); }}>
-          <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <Sparkles className="h-5 w-5 text-violet-600" /> Importar Pedágio/Sem Parar com IA
-              </DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4">
+          <DialogContent className={`p-0 overflow-hidden flex flex-col ${iaParsed ? "max-w-3xl max-h-[90vh]" : "max-w-lg"}`}>
+            {/* HEADER gradient violet→fuchsia (regra de ouro Rev. 2094) */}
+            <div className="bg-gradient-to-r from-violet-600 via-purple-600 to-fuchsia-600 text-white px-6 py-4 shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="bg-white/15 p-2.5 rounded-xl ring-4 ring-white/20 shrink-0">
+                  <Sparkles className="h-5 w-5" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h2 className="text-lg font-bold tracking-tight">Importar Pedágio/Sem Parar com IA</h2>
+                  <p className="text-xs text-white/80 mt-0.5">
+                    {!iaParsed
+                      ? "Envie comprovante (PDF/imagem) e a IA extrai os lançamentos automaticamente."
+                      : `${iaParsed.items?.length || 0} lançamento(s) detectado(s) — revise antes de importar.`}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* BODY */}
+            <div className={`${iaParsed ? "flex-1 overflow-y-auto" : ""} px-6 py-5 space-y-4`}>
+              {/* CARD do arquivo enviado */}
               {iaFile && (
-                <div className="bg-muted/30 rounded-lg p-3">
-                  <div className="flex items-center gap-2 text-sm">
-                    <FileUp className="h-4 w-4 text-violet-500" />
-                    <span className="font-medium">{iaFile.name}</span>
-                    <Badge variant="outline" className="text-xs">{(iaFile.size / 1024).toFixed(0)} KB</Badge>
+                <div className="rounded-xl border-2 border-violet-200 bg-gradient-to-br from-violet-50 to-purple-50/40 p-4">
+                  <div className="flex items-center gap-3">
+                    <div className="bg-white p-2.5 rounded-lg shadow-sm ring-1 ring-violet-200 shrink-0">
+                      <FileText className="h-5 w-5 text-violet-600" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-semibold text-sm text-violet-900 truncate">{iaFile.name}</div>
+                      <div className="flex items-center gap-2 mt-1">
+                        <Badge className="bg-violet-100 text-violet-700 border-violet-200 text-[10px] font-semibold">
+                          {(iaFile.size / 1024).toFixed(0)} KB
+                        </Badge>
+                        <span className="text-[10.5px] text-violet-600/70">
+                          {iaFile.type?.includes("pdf") ? "Documento PDF" : "Imagem"}
+                        </span>
+                      </div>
+                    </div>
+                    {!iaParsed && !parseMut.isPending && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-violet-600 hover:bg-violet-100 shrink-0"
+                        onClick={() => { setIaFile(null); setIaPreview(null); if (iaFileRef.current) iaFileRef.current.value = ""; }}
+                        title="Remover arquivo"
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    )}
                   </div>
                   {iaPreview && (
-                    <img src={iaPreview} alt="Preview" className="mt-2 max-h-[200px] rounded-md border object-contain" />
+                    <div className="mt-3 rounded-lg overflow-hidden border border-violet-200 bg-white">
+                      <img src={iaPreview} alt="Preview" className="max-h-[200px] w-full object-contain bg-slate-50" />
+                    </div>
                   )}
                 </div>
               )}
 
+              {/* Estado pré-análise: dica didática + botão CTA grande */}
               {!iaParsed && (
-                <Button className="w-full bg-violet-600 hover:bg-violet-700" onClick={processIA} disabled={parseMut.isPending}>
-                  {parseMut.isPending ? <><Loader2 className="h-4 w-4 mr-1 animate-spin" /> Analisando documento...</> : <><Eye className="h-4 w-4 mr-1" /> Analisar com IA</>}
-                </Button>
-              )}
-
-              {iaParsed && (
                 <>
-                  <div className="flex items-center gap-2 mb-2">
-                    <CheckCircle2 className="h-5 w-5 text-green-600" />
-                    <span className="font-medium text-sm">
-                      {iaParsed.items?.length || 0} lançamento(s) encontrado(s)
-                    </span>
-                    <Badge variant="outline" className={
-                      iaParsed.confidence === "alta" ? "border-green-300 text-green-700" :
-                      iaParsed.confidence === "media" ? "border-amber-300 text-amber-700" :
-                      "border-red-300 text-red-700"
-                    }>Confiança: {iaParsed.confidence}</Badge>
+                  <div className="rounded-lg border border-amber-200 bg-amber-50/60 px-3 py-2.5 flex items-start gap-2">
+                    <Lightbulb className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
+                    <div className="text-[11.5px] text-amber-900 leading-relaxed">
+                      <span className="font-semibold">Como funciona:</span> a IA lê o comprovante, identifica
+                      placa, data, valor, praça e rodovia, e <span className="font-semibold">tenta vincular
+                      ao veículo cadastrado</span>. Você revisa item-a-item antes de importar.
+                    </div>
                   </div>
 
-                  <div className="space-y-2 max-h-[350px] overflow-y-auto">
+                  <Button
+                    className="w-full bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-700 hover:to-fuchsia-700 h-11 text-sm font-semibold shadow-md"
+                    onClick={processIA}
+                    disabled={parseMut.isPending || !iaFile}
+                  >
+                    {parseMut.isPending
+                      ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Analisando documento...</>
+                      : <><Wand2 className="h-4 w-4 mr-2" /> Analisar com IA</>}
+                  </Button>
+                </>
+              )}
+
+              {/* Estado pós-análise: KPI bar + lista de itens */}
+              {iaParsed && (
+                <>
+                  {/* KPI bar de detecção */}
+                  {(() => {
+                    const total = iaParsed.items?.length || 0;
+                    const semVeic = (iaParsed.items || []).filter((it: any) => !it.vehicleId).length;
+                    const totalValor = (iaParsed.items || []).reduce((s: number, it: any) => s + (it.valor || 0), 0);
+                    const confColor =
+                      iaParsed.confidence === "alta" ? "from-emerald-500 to-green-600" :
+                      iaParsed.confidence === "media" ? "from-amber-500 to-orange-600" :
+                      "from-rose-500 to-red-600";
+                    return (
+                      <div className="grid grid-cols-3 gap-2">
+                        <div className="rounded-lg border border-violet-200 bg-violet-50/60 p-3">
+                          <div className="text-[10px] uppercase tracking-wider text-violet-700/80 font-semibold">Detectados</div>
+                          <div className="text-xl font-bold text-violet-900 mt-0.5">{total}</div>
+                          <div className="text-[10.5px] text-violet-600/80">lançamento(s)</div>
+                        </div>
+                        <div className={`rounded-lg border p-3 ${semVeic === 0 ? "border-emerald-200 bg-emerald-50/60" : "border-rose-200 bg-rose-50/60"}`}>
+                          <div className={`text-[10px] uppercase tracking-wider font-semibold ${semVeic === 0 ? "text-emerald-700/80" : "text-rose-700/80"}`}>Sem veículo</div>
+                          <div className={`text-xl font-bold mt-0.5 ${semVeic === 0 ? "text-emerald-900" : "text-rose-900"}`}>{semVeic}</div>
+                          <div className={`text-[10.5px] ${semVeic === 0 ? "text-emerald-600/80" : "text-rose-600/80"}`}>
+                            {semVeic === 0 ? "todos vinculados ✓" : "cadastre antes"}
+                          </div>
+                        </div>
+                        <div className="rounded-lg border border-slate-200 bg-white p-3">
+                          <div className="text-[10px] uppercase tracking-wider text-slate-600 font-semibold">Total geral</div>
+                          <div className="text-xl font-bold text-slate-900 mt-0.5">{fmt(totalValor)}</div>
+                          <div className="flex items-center gap-1 mt-0.5">
+                            <span className={`inline-block h-1.5 w-1.5 rounded-full bg-gradient-to-r ${confColor}`}></span>
+                            <span className="text-[10.5px] text-slate-600">Confiança: <span className="font-semibold capitalize">{iaParsed.confidence}</span></span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  {/* Toolbar de seleção rápida */}
+                  <div className="flex items-center justify-between gap-2 px-1">
+                    <div className="text-[11.5px] text-slate-600">
+                      Clique nos itens pra (des)selecionar
+                    </div>
+                    <div className="flex gap-1">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 text-[11px] text-violet-700 hover:bg-violet-50"
+                        onClick={() => setIaSelectedItems(new Set((iaParsed.items || []).map((_: any, i: number) => i)))}
+                      >
+                        <CheckCheck className="h-3.5 w-3.5 mr-1" /> Marcar todos
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 text-[11px] text-slate-600 hover:bg-slate-100"
+                        onClick={() => setIaSelectedItems(new Set())}
+                      >
+                        <X className="h-3.5 w-3.5 mr-1" /> Limpar
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
                     {iaParsed.items?.map((item: any, idx: number) => {
                       const isSelected = iaSelectedItems.has(idx);
                       const veh = (vehicles.data || []).find((v: any) => v.id === item.vehicleId);
+                      const catInfo = CATEGORIAS[item.categoria] || { label: item.categoria || "Pedágio", color: "bg-gray-100 text-gray-700" };
                       return (
                         <div key={idx}
-                          className={`rounded-lg border p-3 cursor-pointer transition-colors ${isSelected ? "border-violet-300 bg-violet-50/50" : "border-muted bg-muted/20 opacity-60"}`}
+                          className={`rounded-xl border-2 p-3 cursor-pointer transition-all ${
+                            isSelected
+                              ? "border-violet-300 bg-gradient-to-br from-violet-50/80 to-purple-50/40 shadow-sm"
+                              : "border-slate-200 bg-slate-50/50 opacity-60 hover:opacity-90"
+                          }`}
                           onClick={() => {
                             const next = new Set(iaSelectedItems);
                             if (next.has(idx)) next.delete(idx); else next.add(idx);
@@ -724,44 +835,79 @@ export default function Pedagios() {
                           }}
                         >
                           <div className="flex items-start gap-3">
-                            <Checkbox checked={isSelected} className="mt-0.5" />
-                            <div className="flex-1 space-y-1">
+                            <Checkbox checked={isSelected} className="mt-1 data-[state=checked]:bg-violet-600 data-[state=checked]:border-violet-600" />
+                            <div className="flex-1 min-w-0 space-y-1.5">
                               <div className="flex items-center gap-2 flex-wrap">
-                                <Badge className={CATEGORIAS[item.categoria]?.color || "bg-gray-100 text-gray-700"}>
-                                  {CATEGORIAS[item.categoria]?.label || item.categoria || "Pedágio"}
+                                <Badge className={`${catInfo.color} text-[10px] font-semibold`}>
+                                  {catInfo.label}
                                 </Badge>
-                                <span className="text-xs text-muted-foreground">{item.data}</span>
-                                <span className="font-semibold">{fmt(item.valor)}</span>
+                                <span className="text-[11px] text-slate-500">{item.data}</span>
+                                <span className="ml-auto font-bold text-sm text-slate-900 tabular-nums">{fmt(item.valor)}</span>
                               </div>
-                              <div className="text-sm">
-                                <span className="font-medium">{veh ? `${veh.placa} — ${veh.marca} ${veh.modelo}` : item.vehiclePlaca || "Veículo não identificado"}</span>
-                                {!item.vehicleId && <Badge className="ml-2 bg-red-100 text-red-700 text-[10px]">Sem veículo</Badge>}
+                              <div className="flex items-center gap-1.5 text-sm">
+                                <Car className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                                <span className="font-medium text-slate-800 truncate">
+                                  {veh ? `${veh.placa} — ${veh.marca} ${veh.modelo}` : item.vehiclePlaca || "Veículo não identificado"}
+                                </span>
+                                {!item.vehicleId && (
+                                  <Badge className="bg-rose-100 text-rose-700 border-rose-200 text-[10px] font-semibold shrink-0">
+                                    Sem veículo
+                                  </Badge>
+                                )}
                               </div>
-                              {item.pracaPedagio && <div className="text-xs text-muted-foreground">Praça: {item.pracaPedagio}</div>}
-                              {item.rodovia && <div className="text-xs text-muted-foreground">Rodovia: {item.rodovia}</div>}
-                              {item.descricao && <div className="text-xs">{item.descricao}</div>}
+                              {(item.pracaPedagio || item.rodovia) && (
+                                <div className="flex items-center gap-1.5 text-[11.5px] text-slate-600">
+                                  <MapPin className="h-3 w-3 text-slate-400 shrink-0" />
+                                  <span className="truncate">
+                                    {[item.pracaPedagio, item.rodovia].filter(Boolean).join(" · ")}
+                                  </span>
+                                </div>
+                              )}
+                              {item.descricao && (
+                                <div className="text-[11px] text-slate-500 italic truncate">{item.descricao}</div>
+                              )}
                             </div>
                           </div>
                         </div>
                       );
                     })}
                   </div>
-
-                  <div className="flex gap-2 justify-between items-center pt-2 border-t">
-                    <div className="text-sm text-muted-foreground">
-                      {iaSelectedItems.size} de {iaParsed.items?.length || 0} selecionado(s) ·
-                      Total: {fmt(iaParsed.items?.filter((_: any, i: number) => iaSelectedItems.has(i)).reduce((s: number, it: any) => s + (it.valor || 0), 0))}
-                    </div>
-                    <div className="flex gap-2">
-                      <Button variant="outline" onClick={() => { setIaDialogOpen(false); setIaParsed(null); setIaFile(null); }}>Cancelar</Button>
-                      <Button className="bg-violet-600 hover:bg-violet-700" onClick={saveIAItems} disabled={iaSaving || iaSelectedItems.size === 0}>
-                        {iaSaving ? <><Loader2 className="h-4 w-4 mr-1 animate-spin" /> Salvando...</> : <><Check className="h-4 w-4 mr-1" /> Importar Selecionados</>}
-                      </Button>
-                    </div>
-                  </div>
                 </>
               )}
             </div>
+
+            {/* FOOTER pill (regra de ouro Rev. 2094) */}
+            {iaParsed && (
+              <div className="shrink-0 border-t bg-gradient-to-r from-slate-50 to-violet-50/40 px-6 py-3 flex items-center justify-between gap-3 flex-wrap">
+                <div className="flex items-center gap-2 text-[12px] text-slate-700">
+                  <div className="bg-violet-100 text-violet-700 font-bold px-2 py-0.5 rounded-md text-[11px] tabular-nums">
+                    {iaSelectedItems.size}/{iaParsed.items?.length || 0}
+                  </div>
+                  <span>selecionado(s) ·</span>
+                  <span className="font-semibold text-slate-900">
+                    {fmt(iaParsed.items?.filter((_: any, i: number) => iaSelectedItems.has(i)).reduce((s: number, it: any) => s + (it.valor || 0), 0))}
+                  </span>
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    onClick={() => { setIaDialogOpen(false); setIaParsed(null); setIaFile(null); setIaSelectedItems(new Set()); }}
+                    className="h-9"
+                  >
+                    Cancelar
+                  </Button>
+                  <Button
+                    className="h-9 bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-700 hover:to-fuchsia-700 shadow-md font-semibold"
+                    onClick={saveIAItems}
+                    disabled={iaSaving || iaSelectedItems.size === 0}
+                  >
+                    {iaSaving
+                      ? <><Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> Salvando...</>
+                      : <><Check className="h-4 w-4 mr-1.5" /> Importar {iaSelectedItems.size} Selecionado(s)</>}
+                  </Button>
+                </div>
+              </div>
+            )}
           </DialogContent>
         </Dialog>
         <Dialog open={excelDialogOpen} onOpenChange={(o) => { if (!parseExcelMut.isPending && !excelSaving) setExcelDialogOpen(o); }}>
