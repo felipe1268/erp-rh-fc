@@ -17,7 +17,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { toast } from "sonner";
 import { normalizarTexto } from "@shared/textNormalization";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Plus, Search, Trash2, FileText, ChevronRight, ChevronDown, Loader2, CheckCircle, X, XCircle, Building2, Trophy, UserPlus, Save, BarChart3, ChevronsUpDown, Paperclip, ExternalLink, AlertTriangle, TrendingDown, TrendingUp, Package, Undo2, History, Link2, RefreshCw, Phone, Mail, User, Smartphone, Sparkles, Star, ShieldCheck, ShieldAlert, Settings, DollarSign, Pencil, Check, ClipboardList, FileSearch, ShoppingCart, RotateCcw, Pin, GitBranch, Zap, PenTool, CreditCard, Banknote, Calendar, Truck, Target, BarChart2, Clock, Wallet, Layers, type LucideIcon } from "lucide-react";
+import { Plus, Search, Trash2, FileText, ChevronRight, ChevronDown, Loader2, CheckCircle, X, XCircle, Building2, Trophy, UserPlus, Save, BarChart3, ChevronsUpDown, Paperclip, ExternalLink, AlertTriangle, TrendingDown, TrendingUp, Package, Undo2, History, Link2, RefreshCw, Phone, Mail, User, Smartphone, Sparkles, Star, ShieldCheck, ShieldAlert, Settings, DollarSign, Pencil, Check, ClipboardList, FileSearch, ShoppingCart, RotateCcw, Pin, GitBranch, Zap, PenTool, CreditCard, Banknote, Calendar, Truck, Target, BarChart2, Clock, Wallet, Layers, ArrowLeftRight, Warehouse, type LucideIcon } from "lucide-react";
 import { TIPOS_PAGAMENTO, getTipoPagamentoInfo, calcularParcelas, formatCurrency } from "../../../../shared/paymentConditions";
 import { PurchaseTimeline, TimelineBadge } from "@/components/compras/PurchaseTimeline";
 
@@ -598,6 +598,194 @@ const calcTotal = (it: ItemForm) => {
   return tot * (1 - desc);
 };
 
+// Rev. 2091 — Modal "Transferir do Estoque" usado quando o vencedor da cotação é o Almoxarifado.
+// Substitui o flow direto: pergunta de QUAL obra/almoxarifado vai sair o material antes de baixar.
+// Mostra os itens da SC + saldo na obra-origem escolhida + flag de insuficiência por item.
+function TransferenciaEstoqueDialog({
+  open, onOpenChange, companyId, obraDestinoId, obraDestinoNome,
+  itensSC, obras, obraOrigemId, onChangeObraOrigem, onConfirmar, isPending,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  companyId: number;
+  obraDestinoId: number | null;
+  obraDestinoNome: string | null;
+  itensSC: any[];
+  obras: any[];
+  obraOrigemId: number | null | undefined;
+  onChangeObraOrigem: (v: number | null | undefined) => void;
+  onConfirmar: () => void;
+  isPending: boolean;
+}) {
+  // Carrega itens do almox da obra origem selecionada (null = central).
+  const almoxQ = trpc.compras.listarItens.useQuery(
+    { companyId, obraId: obraOrigemId === undefined ? undefined : obraOrigemId },
+    { enabled: open && obraOrigemId !== undefined && companyId > 0 },
+  );
+
+  const norm = (x: string | null | undefined) => (x ?? "").toLowerCase().trim().replace(/\s+/g, " ");
+  const findAlmox = (descricao: string, codigo?: string | null) => {
+    const list = almoxQ.data ?? [];
+    const c = norm(codigo);
+    if (c) {
+      const byCodigo = list.find((a: any) => norm(a.codigoInterno) === c);
+      if (byCodigo) return byCodigo;
+    }
+    const d = norm(descricao);
+    let m = list.find((a: any) => norm(a.nome) === d);
+    if (m) return m;
+    if (d.length >= 4) {
+      m = list.find((a: any) => norm(a.nome).includes(d) || d.includes(norm(a.nome))) ?? null;
+    }
+    return m ?? null;
+  };
+
+  const obrasSorted = [...(obras ?? [])].sort((a, b) =>
+    String(a.nome ?? "").localeCompare(String(b.nome ?? ""), "pt-BR", { sensitivity: "base" })
+  );
+
+  const linhas = (itensSC ?? []).map((it: any) => {
+    const qtdPedida = parseFloat(String(it.quantidade ?? it.metaQtd ?? "0")) || 0;
+    // Rev. 2091 — Backend ignora itens com qty <= 0 no plano de baixa; espelhar aqui pra
+    // não bloquear o "Confirmar" por linha que o backend nem vai processar.
+    const ignorado = qtdPedida <= 0;
+    const match = obraOrigemId !== undefined && !ignorado ? findAlmox(it.descricao ?? "", it.insumoCodigo) : null;
+    const saldo = match ? parseFloat(String(match.quantidadeAtual ?? "0")) || 0 : null;
+    const insuficiente = !ignorado && saldo !== null && saldo + 1e-6 < qtdPedida;
+    const semMatch = !ignorado && obraOrigemId !== undefined && !match;
+    return { id: it.id, descricao: it.descricao ?? `Item #${it.id}`, unidade: it.unidade ?? "un", qtdPedida, saldo, insuficiente, semMatch, ignorado };
+  });
+
+  const totalErros = linhas.filter(l => l.insuficiente || l.semMatch).length;
+  const podeConfirmar = obraOrigemId !== undefined && linhas.length > 0 && totalErros === 0 && !almoxQ.isLoading;
+
+  const labelOrigem = obraOrigemId === undefined
+    ? null
+    : obraOrigemId === null
+      ? "Almoxarifado Central"
+      : (obras.find((o: any) => o.id === obraOrigemId)?.nome ?? `Obra #${obraOrigemId}`);
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-3xl border-gray-200" style={{ background: "#fff", color: "#111827" }}>
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-gray-900">
+            <ArrowLeftRight className="h-5 w-5 text-violet-600" /> Transferir do Estoque
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-4 py-2">
+          {/* Destino (readonly) + Origem (select) */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
+              <div className="text-[11px] uppercase tracking-wide text-gray-500 font-semibold flex items-center gap-1">
+                <Building2 className="h-3 w-3" /> Destino (obra da SC)
+              </div>
+              <div className="mt-1 text-sm font-medium text-gray-900">
+                {obraDestinoNome ?? (obraDestinoId ? `Obra #${obraDestinoId}` : "— Sem obra vinculada —")}
+              </div>
+            </div>
+            <div className="rounded-lg border border-violet-200 bg-violet-50 p-3">
+              <label className="text-[11px] uppercase tracking-wide text-violet-700 font-semibold flex items-center gap-1">
+                <Warehouse className="h-3 w-3" /> Origem (sai daqui)
+              </label>
+              <select
+                className="mt-1 w-full bg-white border border-violet-300 rounded-md px-2 py-1.5 text-sm text-gray-900"
+                value={obraOrigemId === undefined ? "" : obraOrigemId === null ? "central" : String(obraOrigemId)}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  if (v === "") onChangeObraOrigem(undefined);
+                  else if (v === "central") onChangeObraOrigem(null);
+                  else onChangeObraOrigem(parseInt(v));
+                }}
+              >
+                <option value="">— Selecione a obra de origem —</option>
+                <option value="central">Almoxarifado Central</option>
+                {obrasSorted.map((o: any) => (
+                  <option key={o.id} value={o.id}>{o.nome}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* Lista de itens com saldo */}
+          <div className="rounded-lg border border-gray-200 overflow-hidden">
+            <div className="px-3 py-2 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
+              <span className="text-xs font-semibold text-gray-700 uppercase tracking-wide">Itens da SC ({linhas.length})</span>
+              {obraOrigemId !== undefined && (
+                <span className="text-xs text-gray-500">
+                  {almoxQ.isLoading ? "Carregando saldos..." : labelOrigem ? `Saldos em: ${labelOrigem}` : ""}
+                </span>
+              )}
+            </div>
+            <div className="max-h-72 overflow-y-auto">
+              {linhas.length === 0 ? (
+                <div className="px-3 py-6 text-sm text-gray-500 text-center">Nenhum item nesta cotação.</div>
+              ) : (
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-50 text-[11px] uppercase tracking-wide text-gray-500">
+                    <tr>
+                      <th className="px-3 py-1.5 text-left">Item</th>
+                      <th className="px-3 py-1.5 text-right whitespace-nowrap">Pedido</th>
+                      <th className="px-3 py-1.5 text-right whitespace-nowrap">Saldo na origem</th>
+                      <th className="px-3 py-1.5 text-center">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {linhas.map((l) => (
+                      <tr key={l.id} className="border-t border-gray-100">
+                        <td className="px-3 py-2 text-gray-900">{l.descricao}</td>
+                        <td className="px-3 py-2 text-right text-gray-700 whitespace-nowrap">{l.qtdPedida.toLocaleString("pt-BR", { maximumFractionDigits: 3 })} {l.unidade}</td>
+                        <td className="px-3 py-2 text-right whitespace-nowrap">
+                          {obraOrigemId === undefined
+                            ? <span className="text-gray-400">—</span>
+                            : almoxQ.isLoading
+                              ? <Loader2 className="h-3.5 w-3.5 animate-spin inline text-gray-400" />
+                              : l.saldo === null
+                                ? <span className="text-amber-600">sem cadastro</span>
+                                : <span className={l.insuficiente ? "text-red-600 font-semibold" : "text-emerald-700 font-semibold"}>{l.saldo.toLocaleString("pt-BR", { maximumFractionDigits: 3 })}</span>}
+                        </td>
+                        <td className="px-3 py-2 text-center">
+                          {obraOrigemId === undefined ? <span className="text-gray-300 text-xs">—</span>
+                            : almoxQ.isLoading ? <span className="text-gray-300 text-xs">…</span>
+                            : l.semMatch ? <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 text-[11px] font-semibold"><AlertTriangle className="h-3 w-3" />sem item</span>
+                            : l.insuficiente ? <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-100 text-red-700 text-[11px] font-semibold"><XCircle className="h-3 w-3" />insuficiente</span>
+                            : <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 text-[11px] font-semibold"><CheckCircle className="h-3 w-3" />ok</span>}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
+
+          {obraOrigemId !== undefined && !almoxQ.isLoading && totalErros > 0 && (
+            <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700 flex items-start gap-2">
+              <AlertTriangle className="h-4 w-4 flex-shrink-0 mt-0.5" />
+              <span>
+                {totalErros} item(ns) sem saldo suficiente ou sem cadastro nessa origem. Escolha outra obra de origem ou ajuste o cadastro do almoxarifado.
+              </span>
+            </div>
+          )}
+        </div>
+
+        <DialogFooter className="gap-2">
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isPending}>Cancelar</Button>
+          <Button
+            onClick={onConfirmar}
+            disabled={!podeConfirmar || isPending}
+            className="bg-violet-600 hover:bg-violet-500 text-white gap-2"
+          >
+            {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowLeftRight className="h-4 w-4" />}
+            Confirmar Transferência
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export default function Cotacoes() {
   const { selectedCompanyId } = useCompany();
   const companyId = parseInt(selectedCompanyId || "0");
@@ -623,6 +811,11 @@ export default function Cotacoes() {
   const [fechamentoParcialItens, setFechamentoParcialItens] = useState<{ itemId: number; fornecedorId: number; incluir: boolean; descricao: string }[]>([]);
   const [showValidacaoErroDialog, setShowValidacaoErroDialog] = useState(false);
   const [validacaoErroInfo, setValidacaoErroInfo] = useState<{ titulo: string; mensagem: string; irParaMapa?: boolean } | null>(null);
+  // Rev. 2091 — Modal "Transferir do Estoque" (substitui o flow direto quando o vencedor é o Almoxarifado).
+  // Usa pendingGerarOCParams como bridge — após escolher a obra de origem, dispara gerarOC com obraOrigemId.
+  const [showTransferenciaDialog, setShowTransferenciaDialog] = useState(false);
+  // obraOrigemId: null = "Almoxarifado Central" (obra_id IS NULL); número = obra específica; undefined = ainda não escolhido.
+  const [transfObraOrigemId, setTransfObraOrigemId] = useState<number | null | undefined>(undefined);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -2412,6 +2605,24 @@ export default function Cotacoes() {
         cotacaoId,
         ...(semVerbaAutorizado ? { autorizacaoSemVerba: semVerbaAutorizado } : {}),
       });
+      // Rev. 2091 — Quando o vencedor é o Almoxarifado (Atender pelo Estoque), abrir o modal
+      // de Transferência (escolher obra de ORIGEM) ao invés do flow normal de OC.
+      // Replica a regra do backend (`criarOrdemDeCotacao`): vencedor é o `selecionado`,
+      // senão fallback pro participante de menor `totalOrcado` > 0. Sem isso, casos
+      // sem `selecionado` explícito (fallback do backend) cairiam no flow antigo.
+      const participantes: any[] = (mapa?.participantes ?? []) as any[];
+      const vencSelecionado = participantes.find(p => p.selecionado === true);
+      const fallback = melhorForn ?? participantes.filter(p => parseFloat(p.totalOrcado ?? "0") > 0).reduce((b, c) => {
+        if (!b) return c;
+        return (parseFloat(c.totalOrcado ?? "0") < parseFloat(b.totalOrcado ?? "0")) ? c : b;
+      }, null as any);
+      const vencForBackend = vencSelecionado ?? fallback;
+      const vencEst = !!vencForBackend?.isEstoque;
+      if (vencEst) {
+        setTransfObraOrigemId(undefined);
+        setShowTransferenciaDialog(true);
+        return;
+      }
       setShowConfirmarTipoCotDialog(true);
     }
 
@@ -5864,6 +6075,28 @@ export default function Cotacoes() {
         </DialogFooter>
       </DialogContent>
     </Dialog>
+
+    {/* Rev. 2091 — Modal "Transferir do Estoque" (substitui o flow normal quando o vencedor é o Almoxarifado). */}
+    <TransferenciaEstoqueDialog
+      open={showTransferenciaDialog}
+      onOpenChange={(v) => { if (!v) { setShowTransferenciaDialog(false); setPendingGerarOCParams(null); setTransfObraOrigemId(undefined); } }}
+      companyId={companyId}
+      obraDestinoId={(detalheFullscreen as any)?.obraId ?? null}
+      obraDestinoNome={(detalheFullscreen as any)?.obraNome ?? null}
+      itensSC={(mapa?.itens ?? []) as any[]}
+      obras={(obrasQ.data ?? []) as any[]}
+      obraOrigemId={transfObraOrigemId}
+      onChangeObraOrigem={setTransfObraOrigemId}
+      onConfirmar={() => {
+        if (!pendingGerarOCParams) return;
+        if (transfObraOrigemId === undefined) { toast.error("Selecione a obra de origem do material."); return; }
+        gerarOC.mutate({ companyId, userId: user?.id, userName: user?.name, ...pendingGerarOCParams, obraOrigemId: transfObraOrigemId });
+        setShowTransferenciaDialog(false);
+        setPendingGerarOCParams(null);
+        setTransfObraOrigemId(undefined);
+      }}
+      isPending={gerarOC.isPending}
+    />
       </DashboardLayout>
     );
   }

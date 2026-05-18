@@ -1,6 +1,119 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2091 — **Compras · "Atender pelo Estoque" agora pergunta a OBRA DE ORIGEM
+ * (modal de Transferência) antes de baixar o almoxarifado.**
+ *
+ * Pedido do user (screenshot `/almoxarifado` com o dropdown "Por Obra"
+ * mostrando Almoxarifado Central + lista de obras tipo HOTEL DO PAPA,
+ * ESCRITÓRIO CENTRAL, etc): "teria que fazer a lógica de quando eu
+ * apertasse atender pelo estoque, ir no estoque e me deixasse selecionar
+ * a obra e o material que quero... por exemplo quero transferir umas
+ * folha de sulfite pro hotel do papa".
+ *
+ * **Contexto / problema:** Até a Rev. 1640 o botão "Atender pelo Estoque"
+ * (cotação cujo vencedor é o fornecedor virtual "Estoque/Almoxarifado")
+ * disparava `criarOrdemDeCotacao` direto. O backend escolhia
+ * automaticamente de qual `almoxarifado_itens` baixar via `findAlmox()`,
+ * que filtrava por `obraId IS NULL OR obraId = oc.obraId` (Almoxarifado
+ * Central OU a obra de destino da SC). Resultado: o user não tinha
+ * controle de QUAL almoxarifado/obra sediava a saída do material —
+ * impossível transferir, por exemplo, "sulfite do Escritório Central
+ * pro Hotel do Papa" porque o sistema simplesmente baixava do primeiro
+ * match encontrado (e podia errar para o Hotel do Papa, sem estoque,
+ * abortando com "saldo insuficiente").
+ *
+ * **Decisão de UX:** ao invés de redirecionar pra `/almoxarifado`
+ * (perderia contexto da cotação e exigiria refazer navegação), abrir
+ * um MODAL "Transferir do Estoque" direto na tela de Cotações que
+ * encapsula a mesma funcionalidade: destino fixo na obra da SC, user
+ * só escolhe a origem + vê o saldo dos itens nessa origem.
+ *
+ * **Backend (`server/routers/compras.ts`):**
+ *   1. `criarOrdemDeCotacao` ganha input opcional `obraOrigemId:
+ *      z.number().nullable().optional()` — `null` = Almoxarifado
+ *      Central (`obra_id IS NULL`), número = obra específica,
+ *      `undefined` = comportamento legado (compat com chamadas antigas).
+ *   2. No bloco `isEstoqueWinner` (~L6152), o filtro `almoxConds` passa
+ *      a respeitar `obraOrigemId` quando definido:
+ *      - `obraOrigemId === null` → `isNull(almoxarifadoItens.obraId)`;
+ *      - número → `eq(almoxarifadoItens.obraId, obraOrigemId)`;
+ *      - `undefined` → mantém o `OR (null, oc.obraId)` antigo.
+ *      Assim a `findAlmox()` só enxerga itens daquela origem específica,
+ *      eliminando a ambiguidade de qual almoxarifado baixar.
+ *   3. `motivo` da movimentação de saída ganha trecho "origem: X →
+ *      destino: Y" quando `obraOrigemId` é passado, pra deixar a
+ *      transferência rastreável no histórico de movimentações.
+ *
+ * **Frontend (`client/src/pages/compras/Cotacoes.tsx`):**
+ *   1. Novos estados: `showTransferenciaDialog` (boolean) e
+ *      `transfObraOrigemId: number | null | undefined`.
+ *   2. `handleAprovarGerarOC` agora checa se o vencedor tem
+ *      `isEstoque === true`. Se sim, abre o modal de transferência
+ *      (`setShowTransferenciaDialog(true)`) e NÃO chama o
+ *      `showConfirmarTipoCotDialog`. Para vencedores não-estoque o
+ *      flow continua exatamente igual.
+ *   3. Novo componente `TransferenciaEstoqueDialog` (module-scope,
+ *      antes do `export default Cotacoes`):
+ *      - Header: "Transferir do Estoque" (ícone `ArrowLeftRight`
+ *        violeta — mesma paleta do fornecedor virtual de estoque).
+ *      - Card "Destino" (readonly, cinza) com a obra da SC +
+ *        card "Origem" (violeta, editável) com `<select>` listando
+ *        "Almoxarifado Central" + obras ordenadas via
+ *        `localeCompare("pt-BR", { sensitivity: "base" })`.
+ *      - Tabela de itens da SC com colunas Item / Pedido /
+ *        Saldo na origem / Status. Saldo carregado via
+ *        `trpc.compras.listarItens` filtrado pela `obraOrigemId`
+ *        (queryEnabled gated em `obraOrigemId !== undefined`).
+ *        Match item↔almox replica a lógica do backend (`findAlmox`):
+ *        primeiro por `codigoInterno`, depois por nome normalizado
+ *        exato, depois `includes` em ambos os sentidos (>= 4 chars).
+ *      - Por item: badge OK (verde) / "insuficiente" (vermelho) /
+ *        "sem item" (âmbar — não cadastrado nessa origem).
+ *      - Banner vermelho agregando N erros se houver, sugerindo
+ *        trocar a origem ou cadastrar o item.
+ *      - Botão "Confirmar Transferência" desabilitado enquanto
+ *        houver `totalErros > 0`, `obraOrigemId === undefined`, ou
+ *        a query estiver carregando. Ao confirmar, dispara
+ *        `gerarOC.mutate({ ..., obraOrigemId })`.
+ *   4. Imports `lucide-react` ganham `ArrowLeftRight` e `Warehouse`.
+ *
+ * **Por que não redirect pra /almoxarifado:** apesar do user ter
+ * sinalizado preferência por "ir no estoque", o redirect quebraria o
+ * fluxo de aprovação da cotação (perde a SC selecionada, contexto do
+ * mapa, breadcrumb). O modal alcança o mesmo objetivo (ver saldos +
+ * escolher origem + confirmar transferência) sem sair da tela. Caso
+ * o user queira mesmo navegar pro almoxarifado, pode fechar o modal
+ * e ir pelo menu lateral normalmente.
+ *
+ * **Compat:** chamadas antigas a `criarOrdemDeCotacao` (sem
+ * `obraOrigemId`) continuam funcionando idênticas à Rev. 1640 — a
+ * lógica nova só entra quando o param é explicitamente passado.
+ *
+ * **Fixes pós-code-review:**
+ *   - **Broken access control (sério):** `criarOrdemDeCotacao` agora
+ *     valida `obraOrigemId` (quando não-null) contra
+ *     `getEffectiveAllowedObraIds(ctx.user.id, ctx.user.role)` —
+ *     espelha a regra de `listarItens` pra impedir que um cliente
+ *     malicioso baixe estoque de obra fora da sua alçada. Retorna
+ *     `FORBIDDEN` + reverte a OC ghost (mesma compensação do
+ *     fail-fast).
+ *   - **Gatilho do modal alinhado ao backend:** `handleAprovarGerarOC`
+ *     agora replica a regra de "vencedor" do backend (selecionado OU
+ *     fallback `melhorForn` com `totalOrcado > 0`). Antes, casos sem
+ *     `selecionado` explícito caíam no flow antigo enviando
+ *     `obraOrigemId=undefined`, regredindo o objetivo.
+ *   - **Itens com qty ≤ 0 ignorados no frontend:** alinhado ao
+ *     backend (`if (qty <= 0) continue` no plano de baixa). Sem isso,
+ *     uma linha com 0 pedido sem cadastro travaria o "Confirmar".
+ *
+ * **R-001/R-007:** zero `ALTER`/`DROP`/`DELETE` em produção. Apenas
+ * mudança de filtro `WHERE` em SELECT existente + novo input opcional.
+ *
+ * **Arquivos:** `server/routers/compras.ts`,
+ * `client/src/pages/compras/Cotacoes.tsx`, `shared/version.ts`,
+ * `shared/changelog.ts`, `replit.md`, `replit-history.md`.
+ *
  * Rev. 2090 — **Compras · Ordens (OC/OS): novo filtro por Obra.**
  *
  * Pedido do user (screenshot da tela `/compras/ordens` com filtros

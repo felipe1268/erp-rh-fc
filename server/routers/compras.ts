@@ -5827,6 +5827,9 @@ Retorne APENAS um JSON válido neste formato:
       companyId: z.number(), cotacaoId: z.number(), userId: z.number().optional(), userName: z.string().optional(),
       autorizacaoSemVerba: z.object({ adminId: z.number(), adminNome: z.string(), justificativa: z.string() }).optional(),
       comoRascunho: z.boolean().optional(),
+      // Rev. 2091 — Atender pelo Estoque: obra de ORIGEM escolhida pelo user (de qual almoxarifado sai o material).
+      // null/undefined => comportamento legado (busca em obraId IS NULL OR obraId = obraDestino da SC).
+      obraOrigemId: z.number().nullable().optional(),
     }))
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
@@ -6136,6 +6139,18 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
       // já PAGO (transferência interna), pulando parcelas tradicionais.
       // Pre-check (fail-fast) e decremento ATÔMICO (CAS) para evitar race + ghost OC.
       if (isEstoqueWinner && !extraAprovacaoRequerida) {
+        // Rev. 2091 — Validação de autorização: se o user escolheu uma obra de ORIGEM específica
+        // (não null = central), garantir que essa obra esteja nas obras permitidas dele.
+        // Espelha a regra de `listarItens` pra evitar broken access control (baixar estoque
+        // de uma obra fora da alçada do usuário). Central (null) é sempre acessível.
+        if (input.obraOrigemId !== undefined && input.obraOrigemId !== null) {
+          const allowedOrigem = await getEffectiveAllowedObraIds(ctx.user.id, ctx.user.role);
+          if (allowedOrigem !== null && !allowedOrigem.includes(input.obraOrigemId)) {
+            await db.delete(comprasOrdensItens).where(eq(comprasOrdensItens.ordemId, oc.id));
+            await db.delete(comprasOrdens).where(eq(comprasOrdens.id, oc.id));
+            throw new TRPCError({ code: "FORBIDDEN", message: "Você não tem permissão para usar essa obra como origem da transferência de estoque." });
+          }
+        }
         const obraNomeRow = oc.obraId
           ? (await db.execute(sql`SELECT nome FROM obras WHERE id = ${oc.obraId} LIMIT 1`) as any).rows?.[0]?.nome
           : null;
@@ -6144,7 +6159,15 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
           ? await db.select().from(comprasSolicitacoesItens).where(inArray(comprasSolicitacoesItens.id, scIdsForLink))
           : [];
         const almoxConds: any[] = [eq(almoxarifadoItens.companyId, input.companyId), eq(almoxarifadoItens.ativo, true)];
-        if (oc.obraId) almoxConds.push(or(isNull(almoxarifadoItens.obraId), eq(almoxarifadoItens.obraId, oc.obraId))!);
+        // Rev. 2091 — Se o user escolheu obra de ORIGEM no modal "Transferir do Estoque",
+        // filtramos estritamente por aquela obra (=null trata "Almoxarifado Central"). Caso contrário,
+        // mantém comportamento legado (central OR destino).
+        if (input.obraOrigemId !== undefined) {
+          if (input.obraOrigemId === null) almoxConds.push(isNull(almoxarifadoItens.obraId));
+          else almoxConds.push(eq(almoxarifadoItens.obraId, input.obraOrigemId));
+        } else if (oc.obraId) {
+          almoxConds.push(or(isNull(almoxarifadoItens.obraId), eq(almoxarifadoItens.obraId, oc.obraId))!);
+        }
         const almoxList = await db.select().from(almoxarifadoItens).where(and(...almoxConds));
         const norm = (x: string|null|undefined) => (x ?? "").toLowerCase().trim().replace(/\s+/g," ");
         const findAlmox = (descricao: string, scItemId: number|null) => {
@@ -6201,7 +6224,7 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
               quantidade: String(linha.qty),
               obraId: oc.obraId ?? null,
               obraNome: obraNomeRow ?? null,
-              motivo: `OC #${numeroOc} (Atendimento pelo Estoque) — Cot. #${input.cotacaoId}`,
+              motivo: `OC #${numeroOc} (Atendimento pelo Estoque${input.obraOrigemId !== undefined ? ` — origem: ${input.obraOrigemId === null ? "Almoxarifado Central" : `obra #${input.obraOrigemId}`}${oc.obraId ? ` → destino: ${obraNomeRow ?? `obra #${oc.obraId}`}` : ""}` : ""}) — Cot. #${input.cotacaoId}`,
               usuarioId: input.userId ?? null,
               usuarioNome: input.userName ?? "Sistema",
             } as any);
