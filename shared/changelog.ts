@@ -1,6 +1,52 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2088 — **Financeiro · Centros de Custo agora tem editar /
+ * inativar / reativar (igual Categorias).**
+ *
+ * Pedido do user (screenshot da tela `/financeiro/centros-de-custo`
+ * com apenas "Novo Centro de Custo" + lista estática, sem nenhuma
+ * ação por linha): "preciso ter a opção de editar, excluir ou
+ * inativar, tanto as CATEGORIAS, quanto o CENTRO DE CUSTO".
+ *
+ * **Diagnóstico:** Categorias (`FinanceiroCategorias.tsx`, Rev. 2083)
+ * já tinha editar + inativar/reativar com AlertDialog. Faltava só
+ * Centros de Custo, que estava no estado original (Rev. 2059) só
+ * com listagem agrupada por tipo + botão criar.
+ *
+ * **Backend (`server/routers/financial.ts`):**
+ *   1. `getCostCenters` ganhou input opcional `includeInactive`
+ *      (default false). Quando true retorna ATIVOS + INATIVOS para
+ *      a tela de gestão. Default preserva selects/comboboxes de
+ *      Lançamentos e Categorias que esperam só ativos.
+ *   2. Novo endpoint `updateCostCenter` aceita `nome / tipo / obraId
+ *      / responsavelNome / orcamentoMensal / ativo` — todos
+ *      opcionais, SET dinâmico no UPDATE. Sem DELETE (R-007):
+ *      inativação é soft (`ativo=0`). 404 se o id+companyId não
+ *      casar.
+ *
+ * **Frontend (`FinanceiroCentrosCusto.tsx` — reescrita completa):**
+ *   - Header gradient blue/indigo + KPI bar 4 cards (Total Ativos
+ *     / Obras / Adm./Outros / Inativos) — padrão visual idêntico ao
+ *     Categorias.
+ *   - Linha de filtros: busca por nome/código/responsável + toggle
+ *     "Só ativos / Mostrando inativos" (Eye/EyeOff).
+ *   - Cada item da lista agora tem dois botões à direita:
+ *     `Edit2` (abre o modal pré-preenchido) e `Power` (laranja se
+ *     ativo, verde se inativo) que abre `AlertDialog` confirmando
+ *     a ação. Itens inativos ficam com `opacity-60` + badge "inativo".
+ *   - Modal unificado para criar/editar — código bloqueado em edit
+ *     (read-only) pra preservar o auto-gerado `CC-{nnnn}`. Mudanças
+ *     em edit usam `updateCostCenter`, novo usa `createCostCenter`.
+ *   - Texto do AlertDialog explica que lançamentos já criados não
+ *     são afetados pela inativação.
+ *
+ * **Arquivos:**
+ * - `server/routers/financial.ts` (getCostCenters +
+ *   `includeInactive`, novo `updateCostCenter`)
+ * - `client/src/pages/financeiro/FinanceiroCentrosCusto.tsx`
+ *   (reescrita completa pra padrão Categorias com edit/inativar)
+ *
  * Rev. 2087 — **Permissões · menu "Categorias" (Financeiro) não
  * aparecia para usuários de grupo sem `level=admin/viewer`.**
  *

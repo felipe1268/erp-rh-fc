@@ -1848,14 +1848,19 @@ export const financialRouter = router({
   getCostCenters: protectedProcedure.input(z.object({
     companyId: z.number(),
     companyIds: z.array(z.number()).optional(),
+    // Rev. 2088 — quando true, retorna ATIVOS + INATIVOS (tela de gestão).
+    // Default false p/ preservar comportamento de selects/comboboxes existentes
+    // (lançamentos, categorias etc.) que esperam só ativos.
+    includeInactive: z.boolean().optional(),
   })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     const ids = resolveCompanyIds(input);
+    const ativoFilter = input.includeInactive ? "" : "AND ativo=1";
     const res = await dbExecute(db, 
       `SELECT id, company_id AS "companyId", codigo, nome, tipo, obra_id AS "obraId",
               responsavel_nome AS "responsavelNome", orcamento_mensal AS "orcamentoMensal", ativo
-       FROM financial_cost_centers WHERE company_id IN (${inlineIds(ids)}) AND ativo=1 ORDER BY codigo ASC`,
+       FROM financial_cost_centers WHERE company_id IN (${inlineIds(ids)}) ${ativoFilter} ORDER BY codigo ASC`,
       []
     );
     return rows(res);
@@ -1892,6 +1897,40 @@ export const financialRouter = router({
        input.responsavelNome ?? null, input.orcamentoMensal ?? null]
     );
     return { id: rows(res)[0]?.id, codigo: rows(res)[0]?.codigo };
+  }),
+
+  // Rev. 2088 — Editar / inativar / reativar Centro de Custo.
+  // Sem DELETE (R-007): inativação é soft (ativo=0). Campos opcionais —
+  // só atualiza o que vier no input, igual ao updateAccount.
+  updateCostCenter: protectedProcedure.input(z.object({
+    id: z.number(),
+    companyId: z.number(),
+    nome: z.string().min(2).optional(),
+    tipo: z.string().optional(),
+    obraId: z.number().nullable().optional(),
+    responsavelNome: z.string().nullable().optional(),
+    orcamentoMensal: z.number().nullable().optional(),
+    ativo: z.boolean().optional(),
+  })).mutation(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    const sets: string[] = [];
+    const vals: any[] = [];
+    let i = 1;
+    if (input.nome !== undefined)             { sets.push(`nome=$${i++}`);              vals.push(input.nome); }
+    if (input.tipo !== undefined)             { sets.push(`tipo=$${i++}`);              vals.push(input.tipo); }
+    if (input.obraId !== undefined)           { sets.push(`obra_id=$${i++}`);           vals.push(input.obraId); }
+    if (input.responsavelNome !== undefined)  { sets.push(`responsavel_nome=$${i++}`);  vals.push(input.responsavelNome); }
+    if (input.orcamentoMensal !== undefined)  { sets.push(`orcamento_mensal=$${i++}`);  vals.push(input.orcamentoMensal); }
+    if (input.ativo !== undefined)            { sets.push(`ativo=$${i++}`);             vals.push(input.ativo ? 1 : 0); }
+    if (sets.length === 0) return { ok: true, noop: true };
+    vals.push(input.id, input.companyId);
+    const res = await dbExecute(db,
+      `UPDATE financial_cost_centers SET ${sets.join(", ")} WHERE id=$${i++} AND company_id=$${i++} RETURNING id`,
+      vals
+    );
+    if (rows(res).length === 0) throw new TRPCError({ code: "NOT_FOUND", message: "Centro de custo não encontrado" });
+    return { ok: true };
   }),
 
   // ─────────────────── MEDIÇÕES DE OBRA ───────────────────
