@@ -34,6 +34,13 @@
  *
  * **R-001/R-007/R-010:** N/A — só layout frontend.
  *
+ * **Hotfix Rev. 2105.1** — máscara de CPF aplicada nos 3 inputs
+ * de CPF do FCSignSendDialog (Empregador, Testemunha 1,
+ * Testemunha 2). Helper `maskCpf()` formata como `000.000.000-00`
+ * conforme o usuário digita; `inputMode="numeric"` + `maxLength=14`.
+ * Pedido do user com screenshot: "quero CPF fique com os ponto
+ * separdos conforme o numero do CPF".
+ *
  * Rev. 2104 — **RH · FCSign — sistema interno de assinatura digital
  * eletrônica (MP 2.200-2/2001) com canvas, distribuição manual de
  * links e arquivamento automático no RAIO-X.**

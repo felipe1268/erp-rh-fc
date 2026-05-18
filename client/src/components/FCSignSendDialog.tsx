@@ -20,6 +20,15 @@ type Props = {
 
 const SOCIO_FELIPE = { nome: "Felipe Costa Alves", cpf: "" };
 
+// Máscara CPF: 000.000.000-00 — recebe qualquer string, devolve só dígitos formatados (max 11)
+function maskCpf(v: string): string {
+  const d = (v || "").replace(/\D/g, "").slice(0, 11);
+  if (d.length <= 3) return d;
+  if (d.length <= 6) return `${d.slice(0, 3)}.${d.slice(3)}`;
+  if (d.length <= 9) return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6)}`;
+  return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-${d.slice(9)}`;
+}
+
 export default function FCSignSendDialog({ open, onOpenChange, companyId, employeeId, tipo, documentTitle, documentHtml, empregadoNome, empregadoCpf }: Props) {
   const [t1Nome, setT1Nome] = useState("");
   const [t1Cpf, setT1Cpf] = useState("");
@@ -130,7 +139,7 @@ export default function FCSignSendDialog({ open, onOpenChange, companyId, employ
                     <label className="text-[11px] font-bold uppercase tracking-wide text-slate-600 mb-1.5 block">Sócio responsável</label>
                     <Input value={SOCIO_FELIPE.nome} disabled className="h-9 bg-slate-100" />
                     <label className="text-[11px] font-bold uppercase tracking-wide text-slate-600 mb-1.5 block mt-3">CPF <span className="text-slate-400 normal-case font-normal">(opcional)</span></label>
-                    <Input value={empregadorCpf} onChange={(e) => setEmpregadorCpf(e.target.value)} placeholder="___.___.___-__" className="h-9 bg-white" />
+                    <Input value={empregadorCpf} onChange={(e) => setEmpregadorCpf(maskCpf(e.target.value))} placeholder="000.000.000-00" inputMode="numeric" maxLength={14} className="h-9 bg-white" />
                   </div>
                 </div>
               </div>
@@ -150,7 +159,7 @@ export default function FCSignSendDialog({ open, onOpenChange, companyId, employ
                     </div>
                     <div>
                       <label htmlFor="fcs-t1-cpf" className="text-[11px] font-bold uppercase tracking-wide text-slate-600 mb-1.5 block">CPF <span className="text-slate-400 normal-case font-normal">(opcional)</span></label>
-                      <Input id="fcs-t1-cpf" value={t1Cpf} onChange={(e) => setT1Cpf(e.target.value)} placeholder="___.___.___-__" className="h-9 bg-white" />
+                      <Input id="fcs-t1-cpf" value={t1Cpf} onChange={(e) => setT1Cpf(maskCpf(e.target.value))} placeholder="000.000.000-00" inputMode="numeric" maxLength={14} className="h-9 bg-white" />
                     </div>
                   </div>
                   <div className="space-y-2">
@@ -161,7 +170,7 @@ export default function FCSignSendDialog({ open, onOpenChange, companyId, employ
                     </div>
                     <div>
                       <label htmlFor="fcs-t2-cpf" className="text-[11px] font-bold uppercase tracking-wide text-slate-600 mb-1.5 block">CPF <span className="text-slate-400 normal-case font-normal">(opcional)</span></label>
-                      <Input id="fcs-t2-cpf" value={t2Cpf} onChange={(e) => setT2Cpf(e.target.value)} placeholder="___.___.___-__" className="h-9 bg-white" />
+                      <Input id="fcs-t2-cpf" value={t2Cpf} onChange={(e) => setT2Cpf(maskCpf(e.target.value))} placeholder="000.000.000-00" inputMode="numeric" maxLength={14} className="h-9 bg-white" />
                     </div>
                   </div>
                 </div>
