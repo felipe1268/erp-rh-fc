@@ -1,6 +1,51 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2076 — **Contratos de Terceiros · alerta nativo do navegador
+ * ("...replit.dev diz / Excluir 1 contrato(s)?") substituído por modal
+ * AlertDialog estilizado (regra de ouro).** Pedido do usuário (IMG_0985):
+ * "Arrume o ALERTA conforme regra de ouro".
+ *
+ * Diagnóstico: `client/src/pages/terceiros/contratos/ContratosList.tsx`
+ * tinha 2 chamadas a `confirm()` nativo do browser — o popup feio com o
+ * domínio replit no topo, sem branding, quebra fluxo no iPad:
+ *   - L154: bulk delete "Excluir Selecionados" (X contratos de uma vez)
+ *   - L246: trash icon por linha (1 contrato específico)
+ *
+ * Fix: ambos refatorados pra `AlertDialog` (shadcn/radix), seguindo o
+ * padrão já usado em `OrcamentoLista.tsx` (L293-321). Adicionado import
+ * do componente + ícone `AlertTriangle` da lucide. Estrutura visual:
+ *   - Header com círculo vermelho 40px contendo ícone AlertTriangle
+ *   - Título "Excluir N contrato(s)?" em destaque
+ *   - Description com texto explicativo (irreversível em negrito vermelho,
+ *     menções a medições/itens/documentos em negrito)
+ *   - Footer com [Cancelar] (variant secundário) + [Sim, excluir N
+ *     contrato(s)] (bg-red-600 hover:bg-red-700) — botão de confirmação
+ *     com label CONTEXTUAL (não genérico "OK")
+ *
+ * Detalhes:
+ *   - Para o trash por linha (dentro do `.map`): `AlertDialogTrigger
+ *     asChild` envolve o `<button>` original; `onClick={(e) =>
+ *     e.stopPropagation()}` mantido pra não disparar o card-click que
+ *     navega pra detalhe. Mesmo `stopPropagation` no `AlertDialogContent`
+ *     pra Radix não bubblear cliques dentro do modal.
+ *   - Para o bulk delete: AlertDialog simples, sem state externo (Radix
+ *     já gerencia open/close internamente).
+ *   - Labels CONTEXTUAIS no botão action ("Sim, excluir 3 contrato(s)" vs
+ *     "Sim, excluir") confirmam a destrutividade — padrão moderno de UX,
+ *     evita cliques acidentais.
+ *
+ * Arquivos:
+ *   - `client/src/pages/terceiros/contratos/ContratosList.tsx`
+ *     L14 (import AlertTriangle), L16-20 (import AlertDialog*),
+ *     L160-189 (bulk delete refactor), L276-308 (per-row delete refactor)
+ *   - `shared/version.ts` → Rev. 2076
+ *   - `shared/changelog.ts` (esta entrada)
+ *   - `replit.md` rotacionado (2075 vira top-2, 2074 vira one-liner,
+ *     2069 vai pra `replit-history.md`)
+ *
+ * ZERO migration, ZERO schema change, ZERO mudança de backend.
+ *
  * Rev. 2075 — **Fechamento de Ponto · PJ aparecia indevidamente nos rankings
  * (Pontuais/Atrasados/HE/Faltosos) e nos KPIs do header.** Pedido do usuário
  * (IMG_0984): "Atenção PJ, não tem controle de ponto, revise todo o ERP,

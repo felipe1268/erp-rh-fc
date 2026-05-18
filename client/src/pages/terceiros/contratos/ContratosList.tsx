@@ -8,8 +8,13 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, FileText, Search, Building2, Calendar, TrendingUp, TrendingDown, ChevronRight, Trash2, Pencil, X, CheckSquare, Square, Save } from "lucide-react";
+import { Plus, FileText, Search, Building2, Calendar, TrendingUp, TrendingDown, ChevronRight, Trash2, Pencil, X, CheckSquare, Square, Save, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel,
+  AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
+  AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 const BRL = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
 const fmtDate = (d: string | null | undefined) => {
@@ -149,11 +154,36 @@ export default function ContratosList() {
             <Button size="sm" variant="outline" className="gap-1 text-xs" onClick={() => setSelecionados(new Set())}>
               <X className="w-3 h-3" /> Cancelar
             </Button>
-            <Button size="sm" variant="outline" className="gap-1 text-xs text-red-600 border-red-200 hover:bg-red-50"
-              disabled={excluirLoteMut.isPending}
-              onClick={() => { if (confirm(`Excluir ${selecionados.size} contrato(s)? Todas as medições, itens e documentos serão removidos.`)) excluirLoteMut.mutate({ ids: [...selecionados], companyId }); }}>
-              <Trash2 className="w-3 h-3" /> {excluirLoteMut.isPending ? "Excluindo..." : "Excluir Selecionados"}
-            </Button>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button size="sm" variant="outline" className="gap-1 text-xs text-red-600 border-red-200 hover:bg-red-50"
+                  disabled={excluirLoteMut.isPending}>
+                  <Trash2 className="w-3 h-3" /> {excluirLoteMut.isPending ? "Excluindo..." : "Excluir Selecionados"}
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent className="max-w-md">
+                <AlertDialogHeader>
+                  <div className="flex items-center gap-3 mb-1">
+                    <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
+                      <AlertTriangle className="w-5 h-5 text-red-600" />
+                    </div>
+                    <AlertDialogTitle className="text-lg">Excluir {selecionados.size} contrato(s)?</AlertDialogTitle>
+                  </div>
+                  <AlertDialogDescription className="text-sm text-gray-600 leading-relaxed">
+                    Esta ação é <strong className="text-red-700">irreversível</strong>. Todas as <strong>medições</strong>, <strong>itens</strong> e <strong>documentos</strong> vinculados aos contratos selecionados serão removidos permanentemente.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                  <AlertDialogAction
+                    className="bg-red-600 hover:bg-red-700 focus:ring-red-600"
+                    onClick={() => excluirLoteMut.mutate({ ids: [...selecionados], companyId })}
+                  >
+                    Sim, excluir {selecionados.size} contrato(s)
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
           </div>
         )}
 
@@ -240,17 +270,39 @@ export default function ContratosList() {
                     >
                       <Pencil className="w-4 h-4" />
                     </button>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (confirm(`Excluir contrato ${c.numeroContrato || c.descricao}? Todas as medições, itens e documentos serão removidos.`))
-                          excluirMut.mutate({ id: c.id, companyId });
-                      }}
-                      className="p-1.5 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-600 transition-colors"
-                      title="Excluir contrato"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <button
+                          onClick={(e) => e.stopPropagation()}
+                          className="p-1.5 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-600 transition-colors"
+                          title="Excluir contrato"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent className="max-w-md" onClick={(e) => e.stopPropagation()}>
+                        <AlertDialogHeader>
+                          <div className="flex items-center gap-3 mb-1">
+                            <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
+                              <AlertTriangle className="w-5 h-5 text-red-600" />
+                            </div>
+                            <AlertDialogTitle className="text-lg">Excluir contrato?</AlertDialogTitle>
+                          </div>
+                          <AlertDialogDescription className="text-sm text-gray-600 leading-relaxed">
+                            O contrato <strong className="text-gray-900">{c.numeroContrato || c.descricao}</strong> será excluído permanentemente. Esta ação é <strong className="text-red-700">irreversível</strong> e remove todas as <strong>medições</strong>, <strong>itens</strong> e <strong>documentos</strong> vinculados.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                          <AlertDialogAction
+                            className="bg-red-600 hover:bg-red-700 focus:ring-red-600"
+                            onClick={() => excluirMut.mutate({ id: c.id, companyId })}
+                          >
+                            Sim, excluir
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
                   </div>
 
                   <ChevronRight
