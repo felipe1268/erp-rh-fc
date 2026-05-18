@@ -1,6 +1,109 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2094 — **Financeiro · Configurações / página inteira redesenhada nas
+ * regras de ouro + tributação didática com auto-preenchimento de alíquotas
+ * por regime + KPI bar de sócios com alerta de % alocado.**
+ *
+ * Pedido do user (após Rev. 2093 entregar só o modal): "revise o layout das
+ * telas tbm, conforme a nossa regra de ouro... deixando mais didatico, e o
+ * mais automatizado possivel". Screenshot anexado mostrava ainda o header
+ * antigo (apenas `Settings` + título cinza) e o form de tributação como uma
+ * grade plana de 8 inputs idênticos `aliquotaXxx`, sem explicação do que
+ * cada tributo significa, sem agrupamento federal/municipal/trabalhista, e
+ * sem qualquer auto-fill — o user precisava saber de cor que ISS é 5%,
+ * FGTS é 8%, RAT pra construção civil é 3% etc. A aba "Sócios" também
+ * era apenas uma lista crua sem indicador de % alocado nem total de
+ * pró-labore mensal.
+ *
+ * **Decisões de UX (regras de ouro espelhadas de FinanceiroCategorias e
+ * FinanceiroCentrosCusto):**
+ *   1. **Header gradient** `from-blue-600 via-indigo-600 to-blue-700` com
+ *      ícone Settings em pill `w-12 h-12 rounded-xl bg-white/15 ring-4
+ *      ring-white/20` + blur decorativo no canto. Botão "Auto-Importar"
+ *      sai do `variant=outline` (que sumia no fundo cinza) pra
+ *      `bg-white text-blue-700 shadow-md` (alto contraste sobre o gradient).
+ *   2. **TabsList** com `bg-white border p-1` e `data-[state=active]` em
+ *      azul-claro + ícones (Calculator / Users) nas trigger labels.
+ *   3. **Container `max-w-4xl` → `max-w-6xl`** pra acomodar o grid 4-col
+ *      dos cards de regime e o grid 4-col da KPI bar de sócios.
+ *
+ * **ABA TRIBUTÁRIA — automação:**
+ *   - **REGIME_CARDS**: 4 cards visuais clicáveis (Simples / Presumido /
+ *     Real / MEI) substituem o `<Select>` antigo. Cada card tem ícone
+ *     dedicado (PiggyBank / Calculator / TrendingUp / Briefcase),
+ *     descrição curta ("DAS unificado, ideal pra micro/pequenas
+ *     empresas" etc.), e estado ativo com `ring-2 ring-{color}-500` +
+ *     CheckCircle2. Classes Tailwind são **estáticas** (não dinâmicas
+ *     via template string) — cada card carrega `activeRing`, `activeIcon`,
+ *     `activeText`, `activeCheck` no objeto pra evitar purge.
+ *   - **REGIME_DEFAULTS**: tabela de alíquotas brasileiras típicas por
+ *     regime. Ex. Lucro Presumido (serviços): PIS=0.65, COFINS=3, IRPJ=4.8,
+ *     CSLL=2.88, INSS=20, FGTS=8, RAT=3, ISS=5. Lucro Real: PIS=1.65,
+ *     COFINS=7.6, IRPJ=15, CSLL=9 (alíquotas cheias, não-cumulativo).
+ *     Simples zera tributos individuais (tudo no DAS) e sugere
+ *     aliquotaSimples=10% (faixa típica de construção). MEI zera tudo.
+ *   - **`handleChangeRegime(newRegime)`**: ao clicar num card, varre
+ *     todos os campos do `REGIME_DEFAULTS[newRegime]`. **Só preenche
+ *     campos vazios/zerados** (`"" | "0" | "0.00" | "0,00"`) —
+ *     preserva qualquer ajuste manual feito antes. Dispara toast
+ *     informando quantos campos foram tocados ("3 campos foram
+ *     preenchidos com valores típicos do regime lucro presumido.
+ *     Revise antes de salvar.").
+ *   - **Card Alíquota Simples** (só visível p/ Simples Nacional): sai do
+ *     grid normal e vira card destacado azul com `BadgePercent` + dica
+ *     inline ("Alíquota DAS efetiva — anexos III/IV, construção civil
+ *     normalmente 6%–18%").
+ *
+ * **ABA TRIBUTÁRIA — didática:**
+ *   - **TAX_GROUPS**: 3 cards separados (não mais grid plano), cada um
+ *     com header colorido em gradient + ícone temático:
+ *     - **Tributos Federais** (Landmark, blue→indigo): PIS, COFINS, IRPJ, CSLL.
+ *     - **Tributos Municipais** (Receipt, amber→orange): ISS.
+ *     - **Encargos Trabalhistas** (Wallet, emerald→teal): INSS Empresa,
+ *       FGTS, RAT.
+ *   - Cada input tem **help inline** abaixo (`text-[10.5px]` com ícone
+ *     Info) explicando o tributo — ex. "RAT: Riscos Ambientais do
+ *     Trabalho (1% leve · 2% médio · 3% grave — construção civil
+ *     normalmente 3%)". User não precisa mais sair pra Google saber o
+ *     que cada sigla significa.
+ *   - **Footer salvar** virou pill própria com dica (Lightbulb amarelo)
+ *     reforçando "troque o regime acima pra preencher as alíquotas com
+ *     valores típicos automaticamente".
+ *
+ * **ABA SÓCIOS — KPI bar didática:**
+ *   - 4 cards no topo: Sócios cadastrados (count), **% Sociedade
+ *     alocado** (soma de `percentualSociedade`), Total Pró-labore/mês
+ *     (soma BRL), Custo anual estimado (pró-labore × 13 — 12 meses + 13º).
+ *   - Card "% alocado" fica **amarelo** quando soma ≠ 100% (tolerância
+ *     0.01). Abaixo, banner amber explicando "Quadro societário
+ *     incompleto — a soma é X% — o ideal é 100,00%".
+ *   - **Lista de sócios redesenhada**: cada item ganha avatar circular
+ *     `gradient-to-br from-blue-500 to-indigo-600` com iniciais (2
+ *     primeiras palavras do nome em UPPERCASE), badge indigo
+ *     `BadgePercent` pra %, pró-labore em verde-bold com "/mês"
+ *     menor, PIX com bullet azul. Hover `bg-gray-100/70`.
+ *   - **Empty state** redesenhado: pill azul com `UserCheck` + texto
+ *     "Os sócios já existem no módulo Colaboradores (tipo 'Sócio')
+ *     — basta importá-los aqui" + CTA "Cadastrar primeiro sócio"
+ *     (reforça o fluxo de auto-importação implementado na Rev. 2093).
+ *
+ * **Arquivo único:** `client/src/pages/financeiro/FinanceiroConfiguracoes.tsx`.
+ * Zero backend / zero schema / zero migração. Apenas redesign + helpers
+ * client-side (`REGIME_DEFAULTS`, `REGIME_CARDS`, `TAX_GROUPS`,
+ * `handleChangeRegime`, cálculo de `totalPercent` / `totalProLabore` /
+ * `percentOk`).
+ *
+ * **Imports adicionados (lucide-react):** Calculator, Receipt, Landmark,
+ * Briefcase, Info, AlertCircle, TrendingUp, Wallet, Lightbulb,
+ * PiggyBank, BadgePercent, Sparkles. `Select`/`SelectTrigger`/etc.
+ * preservados (ainda usados no modal Auto-Importar).
+ *
+ * **R-001/R-007:** zero ALTER/DROP/DELETE — defaults de alíquotas são
+ * client-side e não afetam o schema. Mantém auditabilidade total.
+ *
+ * ---
+ *
  * Rev. 2093 — **Financeiro · Configurações / modal "Novo Sócio" agora puxa sócios
  * já cadastrados em Colaboradores (módulo RH) + regras de ouro aplicadas.**
  *

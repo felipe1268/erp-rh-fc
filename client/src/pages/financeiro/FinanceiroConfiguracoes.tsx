@@ -10,11 +10,95 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/hooks/useCompany";
 import { useToast } from "@/hooks/use-toast";
-import { Settings, Users, Plus, Save, RefreshCw, UserCheck, CheckCircle2, Edit3, Loader2 } from "lucide-react";
+import { Settings, Users, Plus, Save, RefreshCw, UserCheck, CheckCircle2, Edit3, Loader2,
+  Calculator, Receipt, Landmark, Briefcase, Info, AlertCircle, TrendingUp, Wallet, Lightbulb,
+  PiggyBank, BadgePercent, Sparkles } from "lucide-react";
 
 function formatBRL(v: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
 }
+
+// Rev. 2094 — Defaults brasileiros típicos por regime tributário.
+// Valores aproximados pra economia / serviços de engenharia; user pode ajustar.
+// Simples Nacional: alíquota efetiva no DAS substitui PIS/COFINS/IRPJ/CSLL/INSS individuais.
+// Lucro Presumido: serviços (presunção 32%), alíquotas sobre receita bruta.
+// Lucro Real: alíquotas cheias.
+// MEI: tudo zerado (DAS-MEI fixo mensal, fora do escopo deste form).
+const REGIME_DEFAULTS: Record<string, Record<string, string>> = {
+  simples_nacional: {
+    aliquotaSimples: "10.00",
+    aliquotaISS: "0", aliquotaPIS: "0", aliquotaCOFINS: "0",
+    aliquotaIRPJ: "0", aliquotaCSLL: "0", aliquotaINSSEmpresa: "0",
+    aliquotaFGTS: "8.00", aliquotaRAT: "3.00",
+  },
+  lucro_presumido: {
+    aliquotaSimples: "0",
+    aliquotaISS: "5.00", aliquotaPIS: "0.65", aliquotaCOFINS: "3.00",
+    aliquotaIRPJ: "4.80", aliquotaCSLL: "2.88", aliquotaINSSEmpresa: "20.00",
+    aliquotaFGTS: "8.00", aliquotaRAT: "3.00",
+  },
+  lucro_real: {
+    aliquotaSimples: "0",
+    aliquotaISS: "5.00", aliquotaPIS: "1.65", aliquotaCOFINS: "7.60",
+    aliquotaIRPJ: "15.00", aliquotaCSLL: "9.00", aliquotaINSSEmpresa: "20.00",
+    aliquotaFGTS: "8.00", aliquotaRAT: "3.00",
+  },
+  mei: {
+    aliquotaSimples: "0",
+    aliquotaISS: "0", aliquotaPIS: "0", aliquotaCOFINS: "0",
+    aliquotaIRPJ: "0", aliquotaCSLL: "0", aliquotaINSSEmpresa: "0",
+    aliquotaFGTS: "0", aliquotaRAT: "0",
+  },
+};
+
+// Classes Tailwind precisam ser estáticas pra não serem purgadas — por isso o map literal.
+const REGIME_CARDS = [
+  { v: "simples_nacional", label: "Simples Nacional", desc: "DAS unificado, ideal pra micro/pequenas empresas",       icon: PiggyBank,
+    activeRing: "ring-2 ring-blue-500 border-blue-300 bg-blue-50/60",
+    activeIcon: "bg-blue-100 text-blue-700",    activeText: "text-blue-700",    activeCheck: "text-blue-600" },
+  { v: "lucro_presumido",  label: "Lucro Presumido",  desc: "Presunção de lucro fixa (32% serviços / 8% comércio)",   icon: Calculator,
+    activeRing: "ring-2 ring-indigo-500 border-indigo-300 bg-indigo-50/60",
+    activeIcon: "bg-indigo-100 text-indigo-700", activeText: "text-indigo-700", activeCheck: "text-indigo-600" },
+  { v: "lucro_real",       label: "Lucro Real",       desc: "Apuração sobre lucro contábil real (grandes empresas)",  icon: TrendingUp,
+    activeRing: "ring-2 ring-purple-500 border-purple-300 bg-purple-50/60",
+    activeIcon: "bg-purple-100 text-purple-700", activeText: "text-purple-700", activeCheck: "text-purple-600" },
+  { v: "mei",              label: "MEI",              desc: "Microempreendedor individual (DAS-MEI mensal fixo)",     icon: Briefcase,
+    activeRing: "ring-2 ring-emerald-500 border-emerald-300 bg-emerald-50/60",
+    activeIcon: "bg-emerald-100 text-emerald-700", activeText: "text-emerald-700", activeCheck: "text-emerald-600" },
+] as const;
+
+// Agrupamento didático das alíquotas + tooltip curto por tributo.
+const TAX_GROUPS = [
+  {
+    title: "Tributos Federais",
+    icon: Landmark,
+    color: "from-blue-500 to-indigo-500",
+    fields: [
+      { key: "aliquotaPIS",    label: "PIS",    help: "Contribuição ao Programa de Integração Social (cumulativo: 0,65% · não-cumulativo: 1,65%)" },
+      { key: "aliquotaCOFINS", label: "COFINS", help: "Contribuição p/ Financiamento da Seguridade Social (cumulativo: 3% · não-cumulativo: 7,6%)" },
+      { key: "aliquotaIRPJ",   label: "IRPJ",   help: "Imposto de Renda Pessoa Jurídica (presumido: 4,8% rec · real: 15% lucro)" },
+      { key: "aliquotaCSLL",   label: "CSLL",   help: "Contribuição Social sobre o Lucro Líquido (presumido: 2,88% rec · real: 9% lucro)" },
+    ],
+  },
+  {
+    title: "Tributos Municipais",
+    icon: Receipt,
+    color: "from-amber-500 to-orange-500",
+    fields: [
+      { key: "aliquotaISS", label: "ISS", help: "Imposto Sobre Serviços (varia por município, normalmente 2% a 5%)" },
+    ],
+  },
+  {
+    title: "Encargos Trabalhistas",
+    icon: Wallet,
+    color: "from-emerald-500 to-teal-500",
+    fields: [
+      { key: "aliquotaINSSEmpresa", label: "INSS Empresa", help: "Contribuição patronal ao INSS sobre a folha (geralmente 20%)" },
+      { key: "aliquotaFGTS",        label: "FGTS",         help: "Fundo de Garantia do Tempo de Serviço (8% da folha)" },
+      { key: "aliquotaRAT",         label: "RAT",          help: "Riscos Ambientais do Trabalho (1% leve · 2% médio · 3% grave — construção civil normalmente 3%)" },
+    ],
+  },
+] as const;
 
 export default function FinanceiroConfiguracoes() {
   const { companyId } = useCompany();
@@ -113,127 +197,278 @@ export default function FinanceiroConfiguracoes() {
     });
   }
 
-  const taxFields = [
-    { label: "ISS (%)", key: "aliquotaISS" },
-    { label: "PIS (%)", key: "aliquotaPIS" },
-    { label: "COFINS (%)", key: "aliquotaCOFINS" },
-    { label: "IRPJ (%)", key: "aliquotaIRPJ" },
-    { label: "CSLL (%)", key: "aliquotaCSLL" },
-    { label: "INSS Empresa (%)", key: "aliquotaINSSEmpresa" },
-    { label: "FGTS (%)", key: "aliquotaFGTS" },
-    { label: "RAT (%)", key: "aliquotaRAT" },
-  ];
+  // Rev. 2094 — Auto-preenche alíquotas com defaults brasileiros ao trocar o regime tributário.
+  // Só aplica se a alíquota atual estiver vazia/zerada — preserva ajustes manuais do user.
+  function handleChangeRegime(newRegime: string) {
+    const defaults = REGIME_DEFAULTS[newRegime] ?? {};
+    setTaxForm((f: any) => {
+      const next = { ...f, regimeTributario: newRegime };
+      let touched = 0;
+      for (const k of Object.keys(defaults)) {
+        const cur = String(f[k] ?? "").trim();
+        if (cur === "" || cur === "0" || cur === "0.00" || cur === "0,00") {
+          next[k] = defaults[k];
+          touched++;
+        }
+      }
+      if (touched > 0) {
+        toast({
+          title: "Alíquotas sugeridas preenchidas",
+          description: `${touched} campo(s) foram preenchidos com valores típicos do regime ${newRegime.replace("_", " ")}. Revise antes de salvar.`,
+        });
+      }
+      return next;
+    });
+  }
+
+  // Métricas didáticas pra aba Sócios.
+  const totalPercent = (partners ?? []).reduce(
+    (acc: number, p: any) => acc + (parseFloat(p.percentualSociedade ?? "0") || 0), 0
+  );
+  const totalProLabore = (partners ?? []).reduce(
+    (acc: number, p: any) => acc + (parseFloat(p.valorProLabore ?? "0") || 0), 0
+  );
+  const percentOk = Math.abs(totalPercent - 100) < 0.01;
 
   return (
     <DashboardLayout>
-      <div className="max-w-4xl mx-auto p-6 space-y-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-              <Settings className="w-6 h-6 text-blue-600" />Configurações Financeiras
-            </h1>
-            <p className="text-sm text-gray-500 mt-1">Regime tributário, alíquotas e sócios</p>
+      <div className="max-w-6xl mx-auto p-6 space-y-5">
+
+        {/* Header gradient — padrão regras de ouro */}
+        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 px-6 py-5 text-white shadow-lg">
+          <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none" />
+          <div className="relative flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-xl bg-white/15 ring-4 ring-white/20 backdrop-blur-sm flex items-center justify-center">
+                <Settings className="w-6 h-6" />
+              </div>
+              <div>
+                <h1 className="text-2xl font-bold tracking-tight">Configurações Financeiras</h1>
+                <p className="text-sm text-blue-100">Regime tributário, alíquotas e quadro societário</p>
+              </div>
+            </div>
+            <Button onClick={() => setShowAutoImport(true)} className="bg-white text-blue-700 hover:bg-blue-50 font-semibold h-10 shadow-md">
+              <RefreshCw className="w-4 h-4 mr-2" />Auto-Importar Dados
+            </Button>
           </div>
-          <Button variant="outline" onClick={() => setShowAutoImport(true)}>
-            <RefreshCw className="w-4 h-4 mr-2" />Auto-Importar Dados
-          </Button>
         </div>
 
         <Tabs defaultValue="tributario">
-          <TabsList>
-            <TabsTrigger value="tributario">Configuração Tributária</TabsTrigger>
-            <TabsTrigger value="socios">Sócios / Pró-labore</TabsTrigger>
+          <TabsList className="bg-white border border-gray-200 p-1 h-auto">
+            <TabsTrigger value="tributario" className="data-[state=active]:bg-blue-50 data-[state=active]:text-blue-700 gap-1.5">
+              <Calculator className="w-4 h-4" />Configuração Tributária
+            </TabsTrigger>
+            <TabsTrigger value="socios" className="data-[state=active]:bg-blue-50 data-[state=active]:text-blue-700 gap-1.5">
+              <Users className="w-4 h-4" />Sócios / Pró-labore
+            </TabsTrigger>
           </TabsList>
 
-          {/* Aba Tributário */}
-          <TabsContent value="tributario" className="mt-4">
+          {/* ============================== ABA TRIBUTÁRIA ============================== */}
+          <TabsContent value="tributario" className="mt-4 space-y-5">
+
+            {/* Cards visuais de Regime Tributário (auto-preenche alíquotas ao trocar) */}
             <Card className="border-0 shadow-sm">
-              <CardHeader>
-                <CardTitle className="text-base">Regime Tributário</CardTitle>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-blue-600" />Regime Tributário
+                </CardTitle>
+                <p className="text-xs text-gray-500 mt-0.5">Escolha o regime — as alíquotas serão sugeridas automaticamente.</p>
               </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="grid grid-cols-2 gap-6">
-                  <div>
-                    <Label>Regime Tributário</Label>
-                    <Select value={taxForm.regimeTributario ?? "simples_nacional"} onValueChange={v => setTaxForm((f: any) => ({ ...f, regimeTributario: v }))}>
-                      <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="simples_nacional">Simples Nacional</SelectItem>
-                        <SelectItem value="lucro_presumido">Lucro Presumido</SelectItem>
-                        <SelectItem value="lucro_real">Lucro Real</SelectItem>
-                        <SelectItem value="mei">MEI</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  {taxForm.regimeTributario === "simples_nacional" && (
-                    <div>
-                      <Label>Alíquota Simples (%)</Label>
-                      <Input type="number" step="0.01" className="mt-1" value={taxForm.aliquotaSimples ?? ""} onChange={e => setTaxForm((f: any) => ({ ...f, aliquotaSimples: e.target.value }))} />
-                    </div>
-                  )}
+              <CardContent>
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                  {REGIME_CARDS.map((r) => {
+                    const { v, label, desc, icon: Icon, activeRing, activeIcon, activeText, activeCheck } = r;
+                    const active = (taxForm.regimeTributario ?? "simples_nacional") === v;
+                    const ringCls = active ? activeRing : "border-gray-200 hover:border-gray-300 bg-white";
+                    return (
+                      <button
+                        key={v}
+                        type="button"
+                        onClick={() => handleChangeRegime(v)}
+                        className={`text-left rounded-xl border p-3 transition shadow-sm hover:shadow ${ringCls}`}
+                      >
+                        <div className="flex items-start gap-2">
+                          <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${active ? activeIcon : "bg-gray-100 text-gray-500"}`}>
+                            <Icon className="w-4 h-4" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-1">
+                              <p className={`text-sm font-semibold ${active ? activeText : "text-gray-800"}`}>{label}</p>
+                              {active && <CheckCircle2 className={`w-3.5 h-3.5 ${activeCheck}`} />}
+                            </div>
+                            <p className="text-[11px] text-gray-500 leading-snug mt-0.5">{desc}</p>
+                          </div>
+                        </div>
+                      </button>
+                    );
+                  })}
                 </div>
 
-                <div>
-                  <p className="text-sm font-semibold text-gray-700 mb-3">Alíquotas de Tributos</p>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                    {taxFields.map(({ label, key }) => (
+                {taxForm.regimeTributario === "simples_nacional" && (
+                  <div className="mt-4 rounded-lg border border-blue-200 bg-blue-50/60 p-3 flex items-start gap-3">
+                    <BadgePercent className="w-4 h-4 text-blue-600 mt-0.5 shrink-0" />
+                    <div className="flex-1">
+                      <label className="text-xs font-medium text-blue-900 uppercase tracking-wide">Alíquota Simples Efetiva (%)</label>
+                      <div className="flex items-end gap-3 mt-1">
+                        <Input
+                          type="number" step="0.01"
+                          className="h-9 max-w-[140px] bg-white"
+                          value={taxForm.aliquotaSimples ?? ""}
+                          onChange={e => setTaxForm((f: any) => ({ ...f, aliquotaSimples: e.target.value }))}
+                        />
+                        <p className="text-[11px] text-blue-800 leading-tight pb-1.5">
+                          Alíquota DAS efetiva (anexos III/IV — construção civil normalmente 6%–18%, varia por faixa de receita).
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Grupos de alíquotas */}
+            {TAX_GROUPS.map(({ title, icon: GIcon, color, fields }) => (
+              <Card key={title} className="border-0 shadow-sm overflow-hidden">
+                <div className={`bg-gradient-to-r ${color} text-white px-5 py-2.5 flex items-center gap-2`}>
+                  <GIcon className="w-4 h-4" />
+                  <h3 className="text-sm font-semibold">{title}</h3>
+                </div>
+                <CardContent className="p-5">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    {fields.map(({ key, label, help }) => (
                       <div key={key}>
-                        <Label className="text-xs">{label}</Label>
-                        <Input type="number" step="0.01" className="mt-1" value={taxForm[key] ?? ""} onChange={e => setTaxForm((f: any) => ({ ...f, [key]: e.target.value }))} />
+                        <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">{label} (%)</label>
+                        <Input
+                          type="number" step="0.01"
+                          className="h-9 mt-1"
+                          value={taxForm[key] ?? ""}
+                          onChange={e => setTaxForm((f: any) => ({ ...f, [key]: e.target.value }))}
+                        />
+                        <p className="text-[10.5px] text-gray-500 mt-1 leading-snug flex items-start gap-1">
+                          <Info className="w-3 h-3 mt-0.5 shrink-0 text-gray-400" />
+                          <span>{help}</span>
+                        </p>
                       </div>
                     ))}
                   </div>
-                </div>
+                </CardContent>
+              </Card>
+            ))}
 
-                <div className="flex justify-end">
-                  <Button onClick={handleSaveTax} disabled={updateTaxMut.isPending} className="bg-blue-600 hover:bg-blue-700 text-white">
-                    <Save className="w-4 h-4 mr-2" />
-                    {updateTaxMut.isPending ? "Salvando..." : "Salvar Configuração"}
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
+            {/* Footer salvar */}
+            <div className="flex items-center justify-between gap-3 bg-white border border-gray-200 rounded-xl px-5 py-3 shadow-sm">
+              <p className="text-xs text-gray-500 flex items-center gap-1.5">
+                <Lightbulb className="w-3.5 h-3.5 text-amber-500" />
+                Dica: troque o regime acima pra preencher as alíquotas com valores típicos automaticamente.
+              </p>
+              <Button onClick={handleSaveTax} disabled={updateTaxMut.isPending} className="bg-blue-600 hover:bg-blue-700 text-white h-10 shadow-md">
+                {updateTaxMut.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
+                {updateTaxMut.isPending ? "Salvando..." : "Salvar Configuração"}
+              </Button>
+            </div>
           </TabsContent>
 
-          {/* Aba Sócios */}
-          <TabsContent value="socios" className="mt-4">
+          {/* ============================== ABA SÓCIOS ============================== */}
+          <TabsContent value="socios" className="mt-4 space-y-4">
+
+            {/* KPI bar didática */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+              <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
+                <div className="flex items-center gap-2 text-gray-500 text-[11px] uppercase tracking-wide font-medium">
+                  <Users className="w-3.5 h-3.5" />Sócios cadastrados
+                </div>
+                <p className="text-2xl font-bold text-gray-800 mt-1">{partners?.length ?? 0}</p>
+              </div>
+              <div className={`border rounded-xl p-4 shadow-sm ${percentOk ? "bg-white border-gray-200" : "bg-amber-50 border-amber-200"}`}>
+                <div className={`flex items-center gap-2 text-[11px] uppercase tracking-wide font-medium ${percentOk ? "text-gray-500" : "text-amber-700"}`}>
+                  <BadgePercent className="w-3.5 h-3.5" />% Sociedade alocado
+                </div>
+                <p className={`text-2xl font-bold mt-1 ${percentOk ? "text-gray-800" : "text-amber-700"}`}>{totalPercent.toFixed(2)}%</p>
+              </div>
+              <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
+                <div className="flex items-center gap-2 text-gray-500 text-[11px] uppercase tracking-wide font-medium">
+                  <Wallet className="w-3.5 h-3.5" />Total Pró-labore / mês
+                </div>
+                <p className="text-2xl font-bold text-green-700 mt-1">{formatBRL(totalProLabore)}</p>
+              </div>
+              <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
+                <div className="flex items-center gap-2 text-gray-500 text-[11px] uppercase tracking-wide font-medium">
+                  <TrendingUp className="w-3.5 h-3.5" />Custo anual estimado
+                </div>
+                <p className="text-2xl font-bold text-gray-800 mt-1">{formatBRL(totalProLabore * 13)}</p>
+                <p className="text-[10px] text-gray-400">12 meses + 13º</p>
+              </div>
+            </div>
+
+            {/* Alerta se % ≠ 100% */}
+            {(partners?.length ?? 0) > 0 && !percentOk && (
+              <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50/70 px-4 py-3">
+                <AlertCircle className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
+                <div className="text-xs text-amber-800">
+                  <p className="font-semibold">Quadro societário incompleto</p>
+                  <p>A soma dos percentuais dos sócios é <strong>{totalPercent.toFixed(2)}%</strong> — o ideal é 100,00%. Ajuste o % de cada sócio editando o cadastro.</p>
+                </div>
+              </div>
+            )}
+
             <Card className="border-0 shadow-sm">
               <CardHeader className="flex flex-row items-center justify-between pb-2">
                 <CardTitle className="text-base flex items-center gap-2">
-                  <Users className="w-4 h-4" />Sócios e Pró-labore
+                  <Users className="w-4 h-4 text-blue-600" />Quadro Societário
                 </CardTitle>
-                <Button size="sm" onClick={() => setShowNewPartner(true)} className="bg-blue-600 hover:bg-blue-700 text-white">
+                <Button size="sm" onClick={() => setShowNewPartner(true)} className="bg-blue-600 hover:bg-blue-700 text-white h-9 shadow-sm">
                   <Plus className="w-4 h-4 mr-1" />Novo Sócio
                 </Button>
               </CardHeader>
               <CardContent>
                 {!partners || partners.length === 0 ? (
-                  <div className="py-8 text-center text-gray-400">
-                    <Users className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-                    <p>Nenhum sócio cadastrado.</p>
+                  <div className="py-10 text-center">
+                    <div className="w-14 h-14 rounded-full bg-blue-50 mx-auto mb-3 flex items-center justify-center">
+                      <UserCheck className="w-7 h-7 text-blue-400" />
+                    </div>
+                    <p className="text-sm font-medium text-gray-700">Nenhum sócio cadastrado ainda.</p>
+                    <p className="text-xs text-gray-500 mt-1">Os sócios já existem no módulo Colaboradores (tipo "Sócio") — basta importá-los aqui.</p>
+                    <Button size="sm" onClick={() => setShowNewPartner(true)} className="mt-4 bg-blue-600 hover:bg-blue-700 text-white">
+                      <Plus className="w-4 h-4 mr-1" />Cadastrar primeiro sócio
+                    </Button>
                   </div>
                 ) : (
-                  <div className="space-y-3">
-                    {partners.map((p: any) => (
-                      <div key={p.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                        <div>
-                          <p className="font-medium text-gray-800">{p.nome}</p>
-                          <p className="text-xs text-gray-500">
-                            {p.cargo ?? "Sócio"} • {p.cpf ?? "CPF não informado"}
-                          </p>
-                          {p.pixChave && <p className="text-xs text-blue-600">PIX: {p.pixChave}</p>}
+                  <div className="space-y-2">
+                    {partners.map((p: any) => {
+                      const initials = (p.nome ?? "?").split(" ").slice(0, 2).map((s: string) => s[0]).join("").toUpperCase();
+                      const pct = parseFloat(p.percentualSociedade ?? "0") || 0;
+                      return (
+                        <div key={p.id} className="flex items-center justify-between gap-3 p-3.5 bg-gray-50 hover:bg-gray-100/70 rounded-lg border border-gray-100 transition">
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 text-white flex items-center justify-center text-xs font-bold shrink-0">
+                              {initials || "S"}
+                            </div>
+                            <div className="min-w-0">
+                              <p className="font-medium text-gray-800 truncate">{p.nome}</p>
+                              <p className="text-xs text-gray-500 truncate">
+                                {p.cargo ?? "Sócio"} • {p.cpf ?? "CPF não informado"}
+                              </p>
+                              {p.pixChave && (
+                                <p className="text-[11px] text-blue-600 truncate flex items-center gap-1 mt-0.5">
+                                  <span className="inline-block w-1.5 h-1.5 rounded-full bg-blue-500" />PIX: {p.pixChave}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                          <div className="text-right shrink-0">
+                            {pct > 0 && (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 text-[11px] font-semibold">
+                                <BadgePercent className="w-3 h-3" />{pct.toFixed(2)}%
+                              </span>
+                            )}
+                            {p.valorProLabore && (
+                              <p className="text-sm text-green-700 font-semibold mt-1">{formatBRL(Number(p.valorProLabore))}<span className="text-[10px] text-green-600/70 font-normal">/mês</span></p>
+                            )}
+                            <p className="text-[10px] text-gray-400 mt-0.5">Venc. dia {p.diaVencimento ?? 5}</p>
+                          </div>
                         </div>
-                        <div className="text-right">
-                          {p.percentualSociedade && (
-                            <p className="text-sm font-semibold text-gray-700">{p.percentualSociedade}% sociedade</p>
-                          )}
-                          {p.valorProLabore && (
-                            <p className="text-sm text-green-700 font-medium">{formatBRL(Number(p.valorProLabore))}/mês</p>
-                          )}
-                          <p className="text-xs text-gray-400">Venc. dia {p.diaVencimento ?? 5}</p>
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </CardContent>
