@@ -1,6 +1,91 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2098 — **RH · alerta "Início de Férias" virou GLOBAL no módulo
+ * RH/DP (não só em `/ferias`) + redesenho completo nas regras de
+ * ouro.**
+ *
+ * Pedido do user (screenshot do modal antigo "Início de Férias"
+ * sobre a tela de Férias do colaborador ALEXANDRO GONCALVES DO
+ * NASCIMENTO, modal chapado max-w-md com Palmtree azul plano,
+ * caixa cinza bg-muted/40 com período/dias em texto pequeno,
+ * botões Não/Sim retangulares): "preciso que faça dois ajustes..
+ * primeiro que ajuste o layout conforme as nossas regras de ouro,
+ * e quero que este alerta apareça assim que eu abrir o modulo RH,
+ * hoje o alerta aparece somente se eu acessar o menu FERIAS,
+ * porem o alerta precisa ser instantaneo".
+ *
+ * **Problemas:**
+ *   1. O auto-prompt (lógica + Dialog) vivia DENTRO de
+ *      `client/src/pages/Ferias.tsx` (~L662-704 + ~L3100-3193),
+ *      então só disparava quando o RH entrava no menu Férias. Se a
+ *      pessoa abria o módulo RH em qualquer outra tela
+ *      (/colaboradores, /folha-pagamento, /painel/rh, etc.) nunca
+ *      via o aviso e podia esquecer férias agendadas pra hoje
+ *      (risco de multa em dobro Art. 137 CLT).
+ *   2. Visual antigo (max-w-md, Palmtree blue-600 plano, bg-muted/40
+ *      cinza, botões emerald/red chapados) destoava do padrão
+ *      Rev. 2094+ (DialogContent p-0 overflow-hidden, header
+ *      gradient, KPI cards, footer pill).
+ *
+ * **Mudanças:**
+ *
+ * (a) **Novo componente `client/src/components/FeriasGozoPrompt.tsx`**
+ * — standalone, com:
+ *   - query `trpc.avisoPrevio.ferias.list` (mesma que Ferias.tsx
+ *     usa, sem nova rota); filtra `status==="agendada" &&
+ *     dataInicio <= hoje` em useMemo
+ *   - sessionStorage `feriasGozoSkip:<companyId>` (key
+ *     `<id>:<dataInicio>`) — se reagendar, volta a perguntar
+ *   - 2 estágios: `confirm` (header gradient
+ *     `from-blue-600 via-sky-600 to-cyan-600` com Palmtree em pill
+ *     `bg-white/15 ring-4 ring-white/20`, subtítulo dinâmico
+ *     "agendadas para hoje" vs "atrasadas X dias", badge
+ *     "N colaboradores aguardando" se candidatos>1, card
+ *     colaborador border-2 violet/blue gradient com Briefcase pro
+ *     cargo, **KPI bar de 2 cards** Período/Duração, footer pill
+ *     gradient com CTA emerald→teal `Sim, iniciar gozo`) e
+ *     `naoOptions` (header gradient slate com AlertTriangle,
+ *     **3 botões-card** border-2 ao invés de footer chato:
+ *     Cancelar agendamento rose, Reagendar data blue navega pra
+ *     /ferias, Agora não slate; footer com botão "← Voltar"
+ *     volta pro estágio confirm + recap período/dias)
+ *
+ * (b) **Mount global em `client/src/components/DashboardLayout.tsx`
+ * ~L913-925**: novo `<FeriasGozoPromptGlobal />` adicionado ao lado
+ * do `<ReservasAlertModalGlobal />` (padrão Rev. 1386). Wrapper
+ * lê `useModule().activeModule` e só renderiza o
+ * `<FeriasGozoPrompt />` se `activeModule === "rh-dp"`. Como o
+ * `ModuleContext` já mapeia rotas → módulo automaticamente
+ * (`/painel/rh`, `/colaboradores`, `/folha-pagamento`,
+ * `/ferias`, etc.), o modal aparece instantaneamente em qualquer
+ * tela RH.
+ *
+ * (c) **Limpeza em `client/src/pages/Ferias.tsx`**: removidos os 2
+ * blocos duplicados — state `gozoPromptItem`/`gozoPromptStage`,
+ * useEffect do auto-prompt, helpers `getSkipped`/`addSkipped`/
+ * `fecharGozoPrompt` (~L630-704) e o `<Dialog>` inteiro
+ * (~L3060-3193). Substituídos por comentários "movido pra
+ * FeriasGozoPrompt global em DashboardLayout".
+ *
+ * **Não-mudanças:** procedure backend
+ * `trpc.avisoPrevio.ferias.list` (mesma query), mutation
+ * `ferias.update` (status em_gozo / cancelada), schema, demais
+ * dialogs de Ferias.tsx (conclusão, reverter, cancelar). Zero
+ * refator backend.
+ *
+ * **Trade-off conhecido:** "Reagendar data" no modal global
+ * navega pra `/ferias` (em vez de abrir inline o
+ * `handleDefinirData`) — `handleDefinirData` é fechado dentro de
+ * Ferias.tsx e depende de muito state local
+ * (selectedItem/empList/etc), então duplicá-lo aqui seria
+ * complicar muito o componente standalone. Pra MVP funciona: user
+ * é levado pra tela certa e pode reagendar lá.
+ *
+ * **R-001/R-007:** N/A — só frontend. Zero ALTER/DROP/DELETE.
+ *
+ * ---
+ *
  * Rev. 2097 — **Frota · `parseTollPdf` — fix "Erro ao interpretar
  * resposta da IA" (JSON truncado por `maxTokens: 1024` default) +
  * parser robusto + mensagens de erro úteis.**

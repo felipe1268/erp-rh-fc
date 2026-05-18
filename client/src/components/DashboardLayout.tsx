@@ -45,6 +45,7 @@ import { trpc } from "@/lib/trpc";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
 import { ReservasAlertModal } from './compras/ReservasAlertModal';
+import FeriasGozoPrompt from './FeriasGozoPrompt';
 import { Button } from "./ui/button";
 import { toast } from "sonner";
 import { useCompany } from "@/contexts/CompanyContext";
@@ -908,8 +909,17 @@ export default function DashboardLayout({
         {children}
       </DashboardLayoutContent>
       <ReservasAlertModalGlobal />
+      <FeriasGozoPromptGlobal />
     </SidebarProvider>
   );
+}
+
+// Rev. 2098 — Modal global de início de gozo de férias (RH/DP). Aparece em
+// QUALQUER tela do módulo RH, não só em /ferias.
+function FeriasGozoPromptGlobal() {
+  const { activeModule } = useModule();
+  if (activeModule !== "rh-dp") return null;
+  return <FeriasGozoPrompt />;
 }
 
 // Rev. 1386 — Modal global de aviso de Reservas Preventivas pendentes (perfis Compras).
