@@ -5883,11 +5883,19 @@ Retorne APENAS um JSON válido neste formato:
       const prazoEntrega = fornInfoCheck.prazoEntregaDias;
       const tipoPagCheck = fornInfoCheck.tipoPagamento ?? "";
       const isMdoMedicao = ((cot as any).tipo === "servico" || (cot as any).tipo === "pacote") && (tipoPagCheck === "medicao" || (condPag ?? "").toLowerCase().includes("medição"));
+      // Rev. 2073 — MDO puro (tipo='servico') NUNCA tem prazo de entrega.
+      // O modal de cotação esconde o campo em modo MDO; a validação tem
+      // que espelhar isso. Antes só dispensava MDO+medicao, deixando MDO
+      // parcelado pedindo um campo que não existe no fluxo. Pacote
+      // (material+MDO) continua exigindo prazo pro material (exceto em
+      // medição → mobilização).
+      const isServicoPuro = (cot as any).tipo === "servico";
+      const dispensaPrazo = isServicoPuro || isMdoMedicao;
       // Rev. 1640 — Atendimento pelo Estoque dispensa condição/prazo (transferência interna imediata)
       const isEstoqueWinner = (fornInfoCheck as any).isEstoque === true;
       if (!isEstoqueWinner) {
         if (!condPag && !formaPag) throw new TRPCError({ code: "BAD_REQUEST", message: "Defina a Condição de Pagamento antes de gerar a OC. No Mapa de Cotação, edite o card do fornecedor vencedor e preencha a Forma de Pagamento." });
-        if (!isMdoMedicao && (!prazoEntrega || Number(prazoEntrega) <= 0)) throw new TRPCError({ code: "BAD_REQUEST", message: "Defina o Prazo de Entrega antes de gerar a OC. No Mapa de Cotação, edite o card do fornecedor vencedor e preencha o Prazo de Entrega." });
+        if (!dispensaPrazo && (!prazoEntrega || Number(prazoEntrega) <= 0)) throw new TRPCError({ code: "BAD_REQUEST", message: "Defina o Prazo de Entrega antes de gerar a OC. No Mapa de Cotação, edite o card do fornecedor vencedor e preencha o Prazo de Entrega." });
       }
 
       const itens = await db.select().from(comprasCotacoesItens).where(eq(comprasCotacoesItens.cotacaoId, input.cotacaoId));

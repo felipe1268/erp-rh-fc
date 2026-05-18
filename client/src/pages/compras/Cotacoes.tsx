@@ -2308,10 +2308,18 @@ export default function Cotacoes() {
       const prazo = (fornParaSaldo as any).prazoEntregaDias ?? (detalheFullscreen as any)?.prazoEntregaDias;
       const tipoPag = (fornParaSaldo as any).tipoPagamento ?? (detalheFullscreen as any)?.tipoPagamento ?? "";
       const cotTipoVal = (detalheFullscreen as any)?.tipo ?? (mapaQ.data as any)?.tipoEfetivo ?? (mapaQ.data?.cotacao as any)?.tipo;
+      // Rev. 2073 — Pedido do usuário (IMG_0979): "mão de obra não tem
+      // prazo de entrega, arrume a lógica, somente material tem isso".
+      // MDO puro (tipo='servico') NUNCA tem prazo de entrega — o modal
+      // já esconde o campo (L1536 `showEntregaFrete = modoModal !== "mdo"`).
+      // Pacote (material+MDO) continua exigindo prazo pro material, exceto
+      // no modo medição (mobilização ao invés de prazo).
+      const isServicoPuro = cotTipoVal === "servico";
       const isMdoMedicao = (cotTipoVal === "servico" || cotTipoVal === "pacote") && (tipoPag === "medicao" || (condPag ?? "").toLowerCase().includes("medição"));
+      const dispensaPrazo = isServicoPuro || isMdoMedicao;
       const erros: string[] = [];
       if (!condPag) erros.push("Forma de Pagamento");
-      if (!isMdoMedicao && (!prazo || Number(prazo) <= 0)) erros.push("Prazo de Entrega");
+      if (!dispensaPrazo && (!prazo || Number(prazo) <= 0)) erros.push("Prazo de Entrega");
       if (erros.length > 0) {
         const nomeForn = (fornParaSaldo as any).fornecedor?.nomeFantasia || (fornParaSaldo as any).fornecedor?.razaoSocial || "do fornecedor vencedor";
         setValidacaoErroInfo({
@@ -2341,8 +2349,11 @@ export default function Cotacoes() {
       : true;
     const cotTipoVencedor = (mapaQ.data as any)?.tipoEfetivo ?? (mapaQ.data?.cotacao as any)?.tipo;
     const tipoPagVencedor = fornParaSaldo ? ((fornParaSaldo as any).tipoPagamento ?? "") : "";
+    const isServicoPuroVencedor = cotTipoVencedor === "servico";
     const isMdoMedicaoVencedor = (cotTipoVencedor === "servico" || cotTipoVencedor === "pacote") && (tipoPagVencedor === "medicao" || (condPagVencedor ?? "").toLowerCase?.().includes("medição"));
-    const condicoesIncompletas = detalheFullscreen?.status === "pendente" && fornParaSaldo && (!condPagVencedor || (!isMdoMedicaoVencedor && (!prazoVencedor || Number(prazoVencedor) <= 0)));
+    // Rev. 2073 — MDO puro (servico) nunca exige prazo de entrega.
+    const dispensaPrazoVencedor = isServicoPuroVencedor || isMdoMedicaoVencedor;
+    const condicoesIncompletas = detalheFullscreen?.status === "pendente" && fornParaSaldo && (!condPagVencedor || (!dispensaPrazoVencedor && (!prazoVencedor || Number(prazoVencedor) <= 0)));
 
     function handleAbrirCotacaoParcial(cotacaoId: number) {
       const itensDoMapa: any[] = mapa?.itens ?? [];
@@ -2983,8 +2994,17 @@ export default function Cotacoes() {
                   <AlertTriangle className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
                   <div className="text-xs text-amber-800">
                     <span className="font-semibold">Ação necessária antes de aprovar: </span>
-                    preencha a <strong>Forma de Pagamento</strong> e o <strong>Prazo de Entrega</strong> do fornecedor vencedor.
-                    Na aba <em>Mapa de Cotação</em>, clique em <strong>"Editar"</strong> no card do fornecedor, preencha os campos e clique em <strong>"Salvar"</strong>.
+                    {/* Rev. 2073 — texto dinâmico: MDO puro/medição não pede Prazo de Entrega */}
+                    {(() => {
+                      const faltaForma = !condPagVencedor;
+                      const faltaPrazo = !dispensaPrazoVencedor && (!prazoVencedor || Number(prazoVencedor) <= 0);
+                      const itens: string[] = [];
+                      if (faltaForma) itens.push("<strong>Forma de Pagamento</strong>");
+                      if (faltaPrazo) itens.push("<strong>Prazo de Entrega</strong>");
+                      const lista = itens.length === 2 ? `${itens[0]} e o ${itens[1]}` : itens[0] ?? "";
+                      return <span dangerouslySetInnerHTML={{ __html: `preencha a ${lista} do fornecedor vencedor.` }} />;
+                    })()}
+                    {" "}Na aba <em>Mapa de Cotação</em>, clique em <strong>"Editar"</strong> no card do fornecedor, preencha os campos e clique em <strong>"Salvar"</strong>.
                   </div>
                 </div>
               )}

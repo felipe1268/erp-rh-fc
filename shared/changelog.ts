@@ -1,6 +1,44 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2073 — **Cotações · "Prazo de Entrega" obrigatório em MDO puro
+ * (cotação tipo='servico') mesmo o campo não existindo no fluxo.**
+ * Pedido do usuário (IMG_0979): "Ainda tá com erro, mão de obra não
+ * tem prazo de entrega, arrume a lógica, somente material tem isso".
+ *
+ * Cenário: COT-2026-0166 (Contrato Teste, badge MDO, status Pendente,
+ * vencedor Promatel/PIX). O fix da Rev. 2071 cobriu MDO+Medição, mas
+ * MDO+Parcelado continuava exigindo Prazo de Entrega — campo que NEM
+ * EXISTE no modal de Condições de Pagamento quando `modoModal==="mdo"`
+ * (L1536: `showEntregaFrete = modoModal !== "mdo"`). O usuário não tem
+ * como preencher, e a validação trava aprovação eternamente.
+ *
+ * Regra correta (semântica de negócio):
+ *   - tipo='material' → SEMPRE exige Prazo de Entrega.
+ *   - tipo='pacote' (material+MDO) → exige (tem material físico), exceto
+ *     em medição (vira mobilização).
+ *   - tipo='servico' (MDO puro) → NUNCA exige (não há entrega física).
+ *
+ * Fix em 3 lugares espelhados:
+ *   1. `client/src/pages/compras/Cotacoes.tsx` L2293-2331
+ *      (`validarCondicoesVencedor`): nova const `isServicoPuro =
+ *      cotTipoVal === "servico"` + `dispensaPrazo = isServicoPuro ||
+ *      isMdoMedicao`. Check trocado de `!isMdoMedicao` →
+ *      `!dispensaPrazo`.
+ *   2. `client/src/pages/compras/Cotacoes.tsx` L2354-2359 (banner de
+ *      alerta visual `condicoesIncompletas`): mesmas vars
+ *      `isServicoPuroVencedor` + `dispensaPrazoVencedor`. Banner amber
+ *      "Ação necessária antes de aprovar" agora também tem texto
+ *      DINÂMICO (L2998-3009) — antes hardcoded "preencha a Forma de
+ *      Pagamento e o Prazo de Entrega", agora monta lista só com o
+ *      que realmente falta (faltaForma/faltaPrazo).
+ *   3. `server/routers/compras.ts` L5885-5901 (validação de geração de
+ *      OC): mesma derivação `isServicoPuro` + `dispensaPrazo`. Server
+ *      é o gate final — sem isso, fix do client é decorativo.
+ *
+ * ZERO mudança em schema, ZERO migration, ZERO alteração na lógica de
+ * `tipoPagamento` (Rev. 2071 continua válida pra parcelado/medicao).
+ *
  * Rev. 2072 — **Fechamento de Ponto · sub-modal "Menos Dias Trabalhados"
  * (calendário do colaborador) repaginado pelas regras de ouro.** Pedido
  * do usuário (IMG_0978): "Melhore o layout conforme as regras de ouro".
