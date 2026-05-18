@@ -92,7 +92,7 @@ export default function FCSignSendDialog({ open, onOpenChange, companyId, employ
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="w-[100vw] h-[100dvh] max-w-none sm:w-[96vw] sm:h-auto sm:max-h-[92dvh] sm:max-w-[960px] p-0 overflow-hidden flex flex-col gap-0">
+      <DialogContent className="w-screen h-[100dvh] max-w-none sm:max-w-none sm:rounded-none p-0 overflow-hidden flex flex-col gap-0 top-0 left-0 translate-x-0 translate-y-0">
         <DialogHeader className="sr-only">
           <DialogTitle>Enviar para Assinatura (FCSign)</DialogTitle>
         </DialogHeader>
@@ -112,7 +112,7 @@ export default function FCSignSendDialog({ open, onOpenChange, companyId, employ
         {/* Body */}
         <div className="flex-1 overflow-y-auto p-6 bg-slate-50">
           {!result ? (
-            <div className="space-y-4">
+            <div className="space-y-4 max-w-5xl mx-auto">
               {/* Linha 1: Empregado + Empregador lado a lado (2 cols no desktop) */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 {/* Card EMPREGADO (read-only) */}
@@ -183,7 +183,7 @@ export default function FCSignSendDialog({ open, onOpenChange, companyId, employ
             </div>
           ) : (
             /* SUCCESS — mostrar links */
-            <div className="space-y-3">
+            <div className="space-y-3 max-w-5xl mx-auto">
               <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4 flex items-start gap-3">
                 <CheckCircle2 className="h-5 w-5 text-emerald-700 mt-0.5" />
                 <div>
