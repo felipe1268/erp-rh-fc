@@ -1,6 +1,47 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2090 — **Compras · Ordens (OC/OS): novo filtro por Obra.**
+ *
+ * Pedido do user (screenshot da tela `/compras/ordens` com filtros
+ * de Número / Fornecedor / Valor / Data, mas sem opção de obra):
+ * "em ordem de compra, fazer um ajuste que me permita filtrar por
+ * obra".
+ *
+ * **Frontend (`client/src/pages/compras/Ordens.tsx`):**
+ *   1. Novo estado `filtroObra` (default `"todas"`).
+ *   2. `filt` (lista filtrada de OCs) ganha branch para `filtroObra`:
+ *      - `"todas"` → não filtra;
+ *      - `"sem_obra"` → mostra apenas OCs sem `obraId`;
+ *      - id numérico (string) → bate exatamente em `o.obraId`.
+ *   3. Novo `<Select>` na linha 2 dos filtros (após data),
+ *      `min-w-56` com ícone `Building2`. Opções: "Todas as obras",
+ *      "— Sem obra vinculada —", e a lista de `obras` ordenada
+ *      alfabeticamente via `localeCompare(..., { sensitivity: "base" })`.
+ *   4. Botão `X` ao lado pra limpar o filtro rapidamente.
+ *   5. Pill "N resultados" no fim da linha agora também considera
+ *      `filtroObra !== "todas"` como ativo.
+ *   6. **Reset do `filtroObra` no toggle da aba OC** (linha ~637)
+ *      pra manter simetria com os outros filtros que já eram
+ *      resetados ao voltar pra aba OC. Sem isso o filtro ficava
+ *      "invisivelmente ativo" após navegar OC↔OS. (Fix code review.)
+ *   7. **"Sem obra vinculada" usa checagem explícita de nulidade**
+ *      (`obraId !== null && obraId !== undefined`) em vez de
+ *      truthiness, pra não classificar erroneamente um `obraId === 0`
+ *      (caso de dado inconsistente) como órfão. (Fix code review.)
+ *
+ * **Por quê desse design:**
+ *   - `obrasQ` (já existia, `trpc.obras.listActive`) é reusado — sem
+ *     nova query.
+ *   - "Sem obra vinculada" é entry explícita (não derivada de filtro
+ *     textual) pra permitir auditoria de OCs órfãs.
+ *   - Sort `localeCompare` evita problemas com acentuação portuguesa
+ *     em nomes de obras (ex.: "São Paulo" perto de "Sao").
+ *
+ * **Sem mudança de schema, sem mudança de backend.** Pura UI.
+ *
+ * ---
+ *
  * Rev. 2089 — **Compras · Solicitações: ordenação clicável por coluna
  * (default = mais recentes primeiro).**
  *

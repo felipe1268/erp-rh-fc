@@ -129,6 +129,7 @@ export default function Ordens() {
   const [abaAtiva, setAbaAtiva] = useState<"oc" | "os">("oc");
   const [busca, setBusca] = useState("");
   const [filtroFornecedor, setFiltroFornecedor] = useState("");
+  const [filtroObra, setFiltroObra] = useState("todas"); // Rev. 2090 — filtro por obra
   const [filtroValorMin, setFiltroValorMin] = useState("");
   const [filtroValorMax, setFiltroValorMax] = useState("");
   const [filtroDataInicio, setFiltroDataInicio] = useState("");
@@ -547,6 +548,17 @@ export default function Ordens() {
       const nome = forn?.nomeFantasia || forn?.razaoSocial || "";
       if (!normalizarTexto(nome).includes(normalizarTexto(filtroFornecedor))) return false;
     }
+    // Rev. 2090 — filtro por obra (centro de custo).
+    // "sem_obra" usa checagem explícita de nulidade (não truthiness) pra não
+    // classificar erroneamente um obraId === 0 como órfão.
+    if (filtroObra !== "todas") {
+      const obraId = (o as any).obraId;
+      if (filtroObra === "sem_obra") {
+        if (obraId !== null && obraId !== undefined) return false;
+      } else if (String(obraId ?? "") !== filtroObra) {
+        return false;
+      }
+    }
     const total = parseFloat((o as any).total ?? "0");
     if (filtroValorMin && !isNaN(parseFloat(filtroValorMin)) && total < parseFloat(filtroValorMin)) return false;
     if (filtroValorMax && !isNaN(parseFloat(filtroValorMax)) && total > parseFloat(filtroValorMax)) return false;
@@ -622,7 +634,7 @@ export default function Ordens() {
       {/* Tabs OC / OS */}
       <div className="flex gap-1 bg-white rounded-xl border border-gray-200 p-1 shadow-sm w-fit">
         <button
-          onClick={() => { setAbaAtiva("oc"); setBusca(""); setFiltroFornecedor(""); setFiltroValorMin(""); setFiltroValorMax(""); setFiltroDataInicio(""); setFiltroDataFim(""); setFiltroStatus("todos"); setFiltroAtrasadas(false); }}
+          onClick={() => { setAbaAtiva("oc"); setBusca(""); setFiltroFornecedor(""); setFiltroObra("todas"); setFiltroValorMin(""); setFiltroValorMax(""); setFiltroDataInicio(""); setFiltroDataFim(""); setFiltroStatus("todos"); setFiltroAtrasadas(false); }}
           className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${abaAtiva === "oc" ? "bg-emerald-600 text-white shadow-sm" : "text-gray-600 hover:bg-gray-100"}`}>
           <ShoppingBag className="h-4 w-4" />
           Ordens de Compra (Material)
@@ -736,7 +748,31 @@ export default function Ordens() {
               </button>
             )}
           </div>
-          {(filtroFornecedor || filtroValorMin || filtroValorMax || filtroDataInicio || filtroDataFim) && (
+          {/* Rev. 2090 — filtro por Obra */}
+          <div className="flex items-center gap-1.5 min-w-56">
+            <Select value={filtroObra} onValueChange={setFiltroObra}>
+              <SelectTrigger className="h-9 text-sm bg-white border-gray-300 text-gray-900 w-56">
+                <Building2 className="h-4 w-4 text-gray-400 shrink-0 mr-1" />
+                <SelectValue placeholder="Todas as obras" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todas">Todas as obras</SelectItem>
+                <SelectItem value="sem_obra">— Sem obra vinculada —</SelectItem>
+                {obras
+                  .slice()
+                  .sort((a: any, b: any) => String(a.nome ?? "").localeCompare(String(b.nome ?? ""), "pt-BR", { sensitivity: "base" }))
+                  .map((ob: any) => (
+                    <SelectItem key={ob.id} value={String(ob.id)}>{ob.nome}</SelectItem>
+                  ))}
+              </SelectContent>
+            </Select>
+            {filtroObra !== "todas" && (
+              <button onClick={() => setFiltroObra("todas")} className="text-gray-400 hover:text-gray-600" title="Limpar filtro de obra">
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
+          {(filtroFornecedor || filtroObra !== "todas" || filtroValorMin || filtroValorMax || filtroDataInicio || filtroDataFim) && (
             <span className="text-[11px] text-emerald-600 font-medium bg-emerald-50 border border-emerald-200 rounded-full px-2 py-0.5">
               {filt.length} resultado{filt.length !== 1 ? "s" : ""}
             </span>
