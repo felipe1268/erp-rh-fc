@@ -1,6 +1,79 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2093 — **Financeiro · Configurações / modal "Novo Sócio" agora puxa sócios
+ * já cadastrados em Colaboradores (módulo RH) + regras de ouro aplicadas.**
+ *
+ * Pedido do user (screenshot do modal "Novo Sócio" em `/financeiro/configuracoes`
+ * aba "Sócios / Pró-labore" mostrando inputs livres de Nome/CPF/Cargo + a mesma
+ * scrollbar horizontal residual do dialog antigo): "o ERP já tem o cadastro dos
+ * sócios no ERP, módulo colaboradores, procure lá todos que são sócios para
+ * organizar isso ok".
+ *
+ * **Contexto / problema:** o modal Novo Sócio em `FinanceiroConfiguracoes.tsx`
+ * pedia pra DIGITAR nome/CPF/cargo do zero — duplicando informação que já
+ * existe em `employees` quando o funcionário tem `tipoContrato='Socio'`
+ * (opção que aparece no select de Colaboradores, linhas 985 e 1785 de
+ * `client/src/pages/Colaboradores.tsx`). Resultado: mesma pessoa cadastrada
+ * 2x (uma em `employees`, outra em `company_partners`), com risco de CPF
+ * diferente, cargo dessincronizado, e re-trabalho do user.
+ *
+ * **Decisão de modelagem:** NÃO adicionar coluna `employee_id` em
+ * `company_partners` (R-001/R-007 — sem ALTER em prod). Usar **CPF
+ * normalizado (só dígitos)** como chave natural de dedup — robusto a
+ * variações de formatação (com/sem pontos/traço).
+ *
+ * **Backend (`server/routers/financial.ts`):**
+ *   - Novo `listSociosFromEmployees({ companyId })` retorna funcionários
+ *     com `tipo_contrato='Socio'` (id, nomeCompleto, cpf, cargo,
+ *     tipoContrato, jaCadastrado).
+ *   - `jaCadastrado` calculado via subquery EXISTS contra `company_partners`
+ *     usando `regexp_replace(cpf, '[^0-9]', '', 'g')` em ambos os lados +
+ *     guarda contra CPF vazio (não dedupa sócios sem CPF).
+ *   - Sem schema/migration. Sem ALTER. Pura SELECT.
+ *
+ * **Frontend (`client/src/pages/financeiro/FinanceiroConfiguracoes.tsx`):**
+ *   - Novo estado `partnerOrigin` (id do funcionário OU "manual" OU "").
+ *   - Query `listSociosFromEmployees` (lazy — `enabled: showNewPartner`).
+ *   - Handler `onSelectEmployeeSocio(value)` auto-preenche nome/CPF/cargo
+ *     ao escolher um funcionário, ou limpa quando "Digitar manualmente".
+ *   - **Modal completamente redesenhado nas regras de ouro** (espelha o
+ *     padrão Categorias/Centros de Custo da Rev. 2092):
+ *       - `DialogContent max-w-md p-0 overflow-hidden` (mata o scroll
+ *         horizontal residual).
+ *       - Header gradient `from-blue-600 to-indigo-600` + ícone `UserCheck`
+ *         em pill `bg-white/15 ring-2 ring-white/30`.
+ *       - Labels uppercase compactas + Inputs `h-9`.
+ *       - **Seletor "Origem do Sócio"** com `<optgroup>` "Sócios cadastrados
+ *         (Colaboradores)" listando funcionários sócios — itens já em
+ *         `company_partners` ficam **disabled** com sufixo "✓ já cadastrado"
+ *         pra evitar dupla inserção. `<optgroup>` "Outros" com "Digitar
+ *         manualmente…" como fallback.
+ *       - Pill verde "Dados puxados do cadastro em Colaboradores" quando
+ *         seleciona funcionário; pill âmbar "Cadastro manual" quando opta
+ *         por digitar.
+ *       - Campos Nome/CPF **disabled** quando origem ≠ manual (não deixar
+ *         editar dados que vieram do Colaboradores — preserva integridade).
+ *       - Footer `px-5 pb-4` + botão "Cadastrar Sócio" com ícone Plus +
+ *         botão `disabled` quando nome.trim().length < 2.
+ *       - Dica em pill azul explicando o fluxo de dedup.
+ *   - `resetPartnerForm()` invocado no Cancel/onSuccess/onOpenChange(false)
+ *     pra limpar estado.
+ *   - `refetchSociosColab()` no `onSuccess` do `createPartnerMut` pra
+ *     atualizar o flag `jaCadastrado` em tempo real (linha que acabou de
+ *     ser cadastrada vira disabled na próxima abertura do modal).
+ *   - Imports adicionados: `UserCheck`, `CheckCircle2`, `Edit3`, `Loader2`.
+ *
+ * **Arquivos:** `server/routers/financial.ts`,
+ * `client/src/pages/financeiro/FinanceiroConfiguracoes.tsx`,
+ * `shared/version.ts`, `shared/changelog.ts`, `replit.md`,
+ * `replit-history.md`.
+ *
+ * **R-001/R-007:** zero `ALTER`/`DROP`/`DELETE`. Sem migration. Apenas
+ * nova procedure SELECT + redesign de UI.
+ *
+ * ----------------------------------------------------------------------
+ *
  * Rev. 2092 — **Financeiro · Centros de Custo / modal Novo/Editar redesenhado
  * no padrão Categorias (header com gradiente, inputs compactos, sem scroll
  * horizontal).**

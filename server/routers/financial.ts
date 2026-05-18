@@ -2021,6 +2021,38 @@ export const financialRouter = router({
     return rows(res);
   }),
 
+  // Rev. 2093 — Lista funcionários com tipoContrato='Socio' (módulo Colaboradores)
+  // para popular o seletor do modal "Novo Sócio" (evita re-digitar dados que já
+  // existem). Marca `jaCadastrado=true` quando o CPF já está em company_partners
+  // (matching com CPF normalizado: só dígitos). Sem ALTER/ADD — usa o CPF como
+  // chave natural (R-001/R-007).
+  listSociosFromEmployees: protectedProcedure.input(z.object({
+    companyId: z.number(),
+  })).query(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    const res = await dbExecute(db, 
+      `SELECT
+         e.id, e.nome_completo AS "nomeCompleto", e.cpf, e.cargo,
+         e.tipo_contrato AS "tipoContrato",
+         (
+           SELECT 1 FROM company_partners cp
+           WHERE cp.company_id = $1
+             AND cp.ativo = 1
+             AND regexp_replace(COALESCE(cp.cpf,''), '[^0-9]', '', 'g')
+               = regexp_replace(COALESCE(e.cpf,''),  '[^0-9]', '', 'g')
+             AND regexp_replace(COALESCE(e.cpf,''),  '[^0-9]', '', 'g') <> ''
+           LIMIT 1
+         ) IS NOT NULL AS "jaCadastrado"
+       FROM employees e
+       WHERE e.company_id = $1
+         AND e.tipo_contrato = 'Socio'
+       ORDER BY e.nome_completo ASC`,
+      [input.companyId]
+    );
+    return rows(res);
+  }),
+
   createPartner: protectedProcedure.input(z.object({
     companyId: z.number(),
     nome: z.string().min(2),
