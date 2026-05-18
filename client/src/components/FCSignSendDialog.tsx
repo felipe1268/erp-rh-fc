@@ -94,7 +94,10 @@ export default function FCSignSendDialog({ open, onOpenChange, companyId, employ
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="w-screen h-[100dvh] max-w-none sm:max-w-none sm:rounded-none p-0 overflow-hidden flex flex-col gap-0 top-0 left-0 translate-x-0 translate-y-0">
+      <DialogContent
+        resizable={false}
+        className="!w-[100vw] !max-w-none !h-[100dvh] !max-h-[100dvh] !rounded-none !p-0 !top-0 !left-0 !translate-x-0 !translate-y-0 overflow-hidden flex flex-col gap-0"
+      >
         <DialogHeader className="sr-only">
           <DialogTitle>Enviar para Assinatura (FCSign)</DialogTitle>
         </DialogHeader>
