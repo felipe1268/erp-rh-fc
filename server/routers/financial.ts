@@ -153,10 +153,14 @@ export const financialRouter = router({
     }
   }),
 
+  // Rev. 2083 — `tipo`, `natureza` e `centroCustoId` agora editáveis pela tela "Categorias".
   updateAccount: protectedProcedure.input(z.object({
     id: z.number(),
     companyId: z.number(),
     nome: z.string().optional(),
+    tipo: z.string().optional(),
+    natureza: z.string().optional(),
+    centroCustoId: z.number().nullable().optional(),
     classificacaoDRE: z.string().optional(),
     ativo: z.boolean().optional(),
     ordem: z.number().optional(),
@@ -167,6 +171,9 @@ export const financialRouter = router({
     const vals: any[] = [];
     let i = 1;
     if (input.nome !== undefined) { parts.push(`nome=$${i++}`); vals.push(input.nome); }
+    if (input.tipo !== undefined) { parts.push(`tipo=$${i++}`); vals.push(input.tipo); }
+    if (input.natureza !== undefined) { parts.push(`natureza=$${i++}`); vals.push(input.natureza); }
+    if (input.centroCustoId !== undefined) { parts.push(`centro_custo_id=$${i++}`); vals.push(input.centroCustoId); }
     if (input.classificacaoDRE !== undefined) { parts.push(`classificacao_dre=$${i++}`); vals.push(input.classificacaoDRE); }
     if (input.ativo !== undefined) { parts.push(`ativo=$${i++}`); vals.push(input.ativo ? 1 : 0); }
     if (input.ordem !== undefined) { parts.push(`ordem=$${i++}`); vals.push(input.ordem); }

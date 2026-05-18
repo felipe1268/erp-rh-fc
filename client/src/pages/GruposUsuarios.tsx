@@ -126,6 +126,7 @@ const ALL_ROUTES = [
     { path: "/financeiro/fluxo-de-caixa", label: "Fluxo de Caixa", icon: "LineChart" },
     { path: "/financeiro/obrigacoes-fiscais", label: "Obrigações Fiscais", icon: "FileText" },
     { path: "/financeiro/plano-de-contas", label: "Plano de Contas", icon: "ListChecks" },
+    { path: "/financeiro/categorias", label: "Categorias", icon: "Tag" },
     { path: "/financeiro/centros-de-custo", label: "Centros de Custo", icon: "Layers" },
     { path: "/financeiro/conciliacao", label: "Conciliação Bancária", icon: "Scale" },
     { path: "/financeiro/recorrentes", label: "Recorrentes", icon: "Repeat" },

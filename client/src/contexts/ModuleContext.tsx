@@ -120,6 +120,7 @@ const ROUTE_MODULE_MAP: Record<string, ModuleId> = {
   "/financeiro/fluxo-de-caixa":       "financeiro" as ModuleId,
   "/financeiro/obrigacoes-fiscais":   "financeiro" as ModuleId,
   "/financeiro/plano-de-contas":      "financeiro" as ModuleId,
+  "/financeiro/categorias":           "financeiro" as ModuleId,
   "/financeiro/centros-de-custo":     "financeiro" as ModuleId,
   "/financeiro/configuracoes":        "financeiro" as ModuleId,
   "/financeiro/conciliacao":          "financeiro" as ModuleId,

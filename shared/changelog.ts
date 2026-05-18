@@ -1,6 +1,93 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2083 — **Financeiro · Nova tela "Categorias" no sidebar (Cadastros)
+ * para CRUD completo de categorias financeiras (financial_accounts).**
+ * Continuação direta da Rev. 2082 — usuário pediu: "também preciso de
+ * um menu CATEGORIAS, para poder [editar] cada categoria" (screenshot
+ * mostrava o submenu Cadastros do Financeiro com Plano de Contas /
+ * Centros de Custo / Conciliação / Configurações — faltava Categorias
+ * como item dedicado).
+ *
+ * **Por que tela própria em vez de só usar Plano de Contas:** o Plano
+ * de Contas tradicional foca em estrutura contábil hierárquica
+ * (códigos, níveis, conta-pai, DRE) — pesado pro usuário de chão de
+ * fábrica que só quer "criar a categoria Combustível e vincular ao CC
+ * Frota". A tela Categorias é uma visão FLAT, focada em listar/criar/
+ * editar/inativar com filtros simples (tipo, centro de custo, busca).
+ *
+ * **Backend** (`server/routers/financial.ts` L159-187): `updateAccount`
+ * estendido para aceitar `tipo`, `natureza` e `centroCustoId`
+ * (nullable) — antes só permitia `nome`, `classificacaoDRE`, `ativo`,
+ * `ordem`. Validação Zod usa `z.number().nullable().optional()` em
+ * `centroCustoId` para permitir DESvincular (passar null) e manter
+ * compat (omitir não toca o campo). Pattern de UPDATE dinâmico (parts
+ * array + valores parametrizados) preservado.
+ *
+ * **Frontend** — nova página `client/src/pages/financeiro/
+ * FinanceiroCategorias.tsx` (~450 linhas):
+ *
+ * 1. **Header gradient** `from-blue-600 via-indigo-600 to-blue-700`
+ *    com radial overlay branco + ícone `Tag` em `ring-4 ring-white/20`
+ *    + CTA "Nova Categoria" branco com texto azul (alto contraste).
+ *
+ * 2. **KPI bar** (4 cards `grid-cols-2 sm:grid-cols-4`): Total Ativas
+ *    (azul), Receitas (verde), Despesas (vermelho), Sem CC Vinculado
+ *    (âmbar se > 0 / cinza se 0 — destaca falta de organização).
+ *
+ * 3. **Filtros** (Card único): busca por nome/código (ícone Search) +
+ *    3 pills de tipo (Todos/Receitas/Despesas, com cores) + select de
+ *    centro de custo (incluindo opção "Sem CC" pra encontrar
+ *    pendências) + toggle Eye/EyeOff "Só ativas / Mostrando inativas".
+ *
+ * 4. **Lista** ordenada alfabeticamente por nome (locale pt-BR):
+ *    ícone colorido por tipo (verde ArrowUpRight receita / vermelho
+ *    ArrowDownRight despesa) + nome + código em fonte mono cinza +
+ *    badge "inativa" se aplicável + linha secundária com badge
+ *    natureza (Fixa roxo / Variável cinza) + label do CC vinculado
+ *    (ou "—"). Botões Edit2 + Power (laranja inativa / verde reativa)
+ *    no canto direito. Itens inativos com `opacity-60`.
+ *
+ * 5. **Modal criar/editar** (max-w-md, header gradient blue-indigo):
+ *    Nome (autoFocus, Enter submete), Tipo (2 botões grandes
+ *    despesa/receita com ícones + cores), Natureza (select), Centro de
+ *    Custo (select com opção "— Nenhum —"). Card-dica azul "código
+ *    contábil gerado automaticamente" só aparece no modo CRIAR.
+ *
+ * 6. **AlertDialog confirmar inativar/reativar** (sem DELETE — R-007):
+ *    texto contextual explicando que lançamentos antigos não são
+ *    afetados; botão laranja pra inativar / verde pra reativar.
+ *
+ * **Reuso máximo de infra existente:** todas as 3 queries/mutations
+ * já existiam — `financial.getAccounts`, `financial.createAccount`
+ * (Rev. 2082 já aceita codigo opcional + dedup + centroCustoId),
+ * `financial.updateAccount` (estendido aqui). `getCostCenters` reusado
+ * pra popular o select. Zero schema change nesta revisão (centro_custo_id
+ * já existe desde Rev. 2082).
+ *
+ * **Registros de navegação** (todos os pontos que mapeiam rotas):
+ * - `client/src/App.tsx`: import lazy + `<Route path="/financeiro/
+ *   categorias">` entre plano-de-contas e centros-de-custo.
+ * - `client/src/components/DashboardLayout.tsx` L490: novo item
+ *   `{ icon: Tag, label: "Categorias", path: "/financeiro/categorias" }`
+ *   na seção Cadastros do menu Financeiro (Tag já importado).
+ * - `client/src/contexts/ModuleContext.tsx` L126: mapeia rota →
+ *   módulo "financeiro" (pra `useCurrentModule` carregar o sidebar
+ *   correto).
+ * - `client/src/components/ActivityTracker.tsx` L54: label PT-BR pra
+ *   tracking de uso.
+ * - `client/src/pages/Configuracoes.tsx` L2391: registro na lista de
+ *   permissões/configuração de menus.
+ * - `client/src/pages/GruposUsuarios.tsx` L132: registro pra controle
+ *   de acesso por grupo.
+ *
+ * **Arquivos:** `server/routers/financial.ts` (updateAccount), novo
+ * `client/src/pages/financeiro/FinanceiroCategorias.tsx`,
+ * `client/src/App.tsx`, `client/src/components/DashboardLayout.tsx`,
+ * `client/src/contexts/ModuleContext.tsx`, `client/src/components/
+ * ActivityTracker.tsx`, `client/src/pages/Configuracoes.tsx`,
+ * `client/src/pages/GruposUsuarios.tsx`.
+ *
  * Rev. 2082 — **Financeiro · Lançamentos / cadastro inline de Categoria
  * no modal "Novo Lançamento" (sem sair da tela) + link opcional a Centro
  * de Custo.** Pedido do usuário: "preciso ter um botão 'cadastrar' para

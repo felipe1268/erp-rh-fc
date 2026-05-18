@@ -2385,6 +2385,7 @@ const MODULE_PAGES: Record<string, ModPageItem[]> = {
     { section: "Análise", label: "Fluxo de Caixa", path: "/financeiro/fluxo-de-caixa" },
     { section: "Análise", label: "Obrigações Fiscais", path: "/financeiro/obrigacoes-fiscais" },
     { section: "Cadastros", label: "Plano de Contas", path: "/financeiro/plano-de-contas" },
+    { section: "Cadastros", label: "Categorias", path: "/financeiro/categorias" },
     { section: "Cadastros", label: "Centros de Custo", path: "/financeiro/centros-de-custo" },
     { section: "Cadastros", label: "Conciliação Bancária", path: "/financeiro/conciliacao" },
     { section: "Movimentações", label: "Recorrentes", path: "/financeiro/recorrentes" },
