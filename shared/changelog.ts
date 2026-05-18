@@ -1,6 +1,87 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2099 — **Frota · `parseTollPdf` agora aceita PDFs grandes
+ * (faturas Sem Parar/Caixa mensais com 100+ passagens) via extração
+ * de texto no servidor + chunking por placa.**
+ *
+ * Pedido do user (anexou 2 PDFs modelo `2664869326.pdf` 4 páginas
+ * Mar/2026 e `2688160736.pdf` 6 páginas Abr/2026 — faturas Caixa
+ * Pré-Pagos da FC Engenharia com 11 placas e ~150 passagens cada):
+ * "preciso poder ter a opção de subir o PDF tbm .. este é o
+ * arquivo em PDF modelo ,, faça este ajustes para que eu posa
+ * fazer o upload".
+ *
+ * **Diagnóstico:** O botão "Importar (IA)" Rev. 2096 já aceitava
+ * `application/pdf`, mas o backend `parseTollPdf` mandava o PDF
+ * inteiro como imagem pra Claude Vision. Pra esses PDFs de fatura
+ * mensal (4-6 páginas, 100-150 passagens), o Vision precisa "ler"
+ * cada página inteira — cada página ~2-3K tokens de input, e a
+ * resposta JSON precisaria de ~22500 tokens só pros items.
+ * Mesmo após Rev. 2097 bumpar `maxTokens` pra 8192, ainda
+ * truncava no meio. Solução de fundo: extrair texto do PDF no
+ * servidor (≈10× mais barato em tokens) e processar em chunks.
+ *
+ * **Mudanças em `server/routers/frotas.ts → parseTollPdf`
+ * (~L5369-5520, reescrita completa da implementação):**
+ *
+ * 1. **Fork por mimeType:**
+ *    - `application/pdf` → nova rota com pdf-parse + texto.
+ *    - imagens (jpeg/png/webp) → mantém Vision (caminho original).
+ *
+ * 2. **Rota PDF — extração + chunking:**
+ *    - `require("pdf-parse")` (já instalado, v1.1.1, usado em
+ *      `folhaPagamento.ts`). Buffer = `Buffer.from(base64, "base64")`.
+ *    - Se `pdfText.length < 50` (PDF scaneado sem texto), cai pra
+ *      Vision com `maxTokens: 16384`.
+ *    - Senão: detecta marcadores `Descritivo:\s*([A-Z0-9]{6,8})\s*-`
+ *      (padrão das faturas Caixa/Sem Parar — cada placa tem sua
+ *      seção). Se ≥2 placas E texto > 60K chars, **chunka por
+ *      placa**: header (preâmbulo antes do 1º descritivo) +
+ *      cada bloco placa-por-placa.
+ *    - Processa chunks em paralelo com `CONCURRENCY=3` (rate-limit
+ *      Anthropic). Cada chunk vai pra `invokeLLM` (text, não vision)
+ *      com `maxTokens: 16384`.
+ *    - Concatena `items` de todos os chunks, escolhe `confidence`
+ *      mais conservadora.
+ *
+ * 3. **Prompt refinado** (`buildPrompt(corpo, contexto)`):
+ *    - Regra explícita: "Um item por PASSAGEM (não agrupe). Em
+ *      faturas Sem Parar/Caixa/ConectCar há blocos 'Detalhamento
+ *      das Passagens por Pedágios' com Data/Hora/.../Valor — cada
+ *      linha é um item."
+ *    - "IGNORE Resumo da Sua Fatura, Plano Contratado, Encargos
+ *      e totais." (evita Claude criar items spurious de planos
+ *      mensais R$ 21,90).
+ *    - "Se a fatura tiver 'Descritivo: PLACA - Plano:', use ESSA
+ *      placa para todos os itens da seção até o próximo
+ *      descritivo." (chunking já faz isso por construção, mas
+ *      reforço pro modelo).
+ *
+ * 4. **Match de veículo por placa em fallback:** depois do loop
+ *    original (`item.vehicleId` → procura no DB), adicionei
+ *    re-tentativa: se IA não bateu ID mas tem `vehiclePlaca`,
+ *    normaliza (`[^A-Z0-9]/gi`) e procura na lista. Aumenta
+ *    drasticamente o hit-rate em chunks paralelos onde o contexto
+ *    de placa pode ter sido perdido.
+ *
+ * 5. **Parser JSON robusto** (helper `parseJsonResponse`): mesmo
+ *    pipeline da Rev. 2097 (strip markdown → 1º `{` ao último `}`)
+ *    extraído pra função reusada em ambos os caminhos.
+ *
+ * 6. **Limite frontend** (`client/src/pages/frotas/Pedagios.tsx`
+ *    ~L131): `file.size > 10MB` → `15MB`. PDFs Caixa mensais
+ *    completos rondam 5-8MB, mas dou margem.
+ *
+ * **Não-mudanças:** schema do tRPC (entrada+saída idênticos),
+ * `parseTollExcel`, frontend (modal Rev. 2096 funciona igual,
+ * processIA não mudou — só faz upload base64). Vision continua
+ * disponível pra imagens e fallback de PDFs sem texto.
+ *
+ * **R-001/R-007:** N/A — só backend + 1 line frontend (limite).
+ *
+ * ---
+ *
  * Rev. 2098 — **RH · alerta "Início de Férias" virou GLOBAL no módulo
  * RH/DP (não só em `/ferias`) + redesenho completo nas regras de
  * ouro.**

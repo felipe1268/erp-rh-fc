@@ -128,7 +128,7 @@ export default function Pedagios() {
     if (!file) return;
     const allowedTypes = ["image/jpeg", "image/png", "image/webp", "application/pdf"];
     if (!allowedTypes.includes(file.type)) { toast.error("Formato inválido. Use JPG, PNG, WebP ou PDF."); return; }
-    if (file.size > 10 * 1024 * 1024) { toast.error("Arquivo muito grande (máx 10MB)."); return; }
+    if (file.size > 15 * 1024 * 1024) { toast.error("Arquivo muito grande (máx 15MB)."); return; }
     setIaFile(file);
     setIaParsed(null);
     setIaSelectedItems(new Set());

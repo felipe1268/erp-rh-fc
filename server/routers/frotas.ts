@@ -5387,9 +5387,9 @@ IMPORTANTE:
         `ID:${v.id} | Placa: ${v.placa || "S/P"} | ${v.marca} ${v.modelo} (${v.tipoVeiculo})`
       ).join("\n");
 
-      const prompt = `Analise este documento de pedágio/Sem Parar e extraia TODOS os lançamentos.
+      const buildPrompt = (corpo: string, contexto: string) => `Analise este ${contexto} de pedágio/Sem Parar e extraia TODOS os lançamentos.
 
-VEÍCULOS CADASTRADOS NA FROTA (use o ID correspondente):
+VEÍCULOS CADASTRADOS NA FROTA (use o ID correspondente; case por PLACA exata):
 ${listaVeiculos}
 
 Retorne APENAS um JSON válido (sem markdown, sem \`\`\`) com esta estrutura:
@@ -5397,84 +5397,214 @@ Retorne APENAS um JSON válido (sem markdown, sem \`\`\`) com esta estrutura:
   "success": true,
   "items": [
     {
-      "vehicleId": <number - ID do veículo da lista acima>,
+      "vehicleId": <number - ID do veículo da lista acima ou null>,
       "vehiclePlaca": "<placa do veículo>",
-      "data": "<data no formato YYYY-MM-DD>",
+      "data": "<YYYY-MM-DD>",
       "categoria": "pedagio" | "sem_parar" | "estacionamento" | "recarga_tag",
       "descricao": "<descrição do lançamento>",
-      "pracaPedagio": "<nome da praça de pedágio>",
+      "pracaPedagio": "<nome da praça>",
       "rodovia": "<nome da rodovia>",
-      "valor": <number - valor em R$>,
+      "valor": <number em R$>,
       "tagId": "<ID do tag se houver>",
-      "eixos": <number ou null - quantidade de eixos>,
+      "eixos": <number ou null>,
       "observacoes": "<detalhes extras>"
     }
   ],
-  "rawText": "<resumo do que foi lido>",
+  "rawText": "<resumo>",
   "confidence": "alta" | "media" | "baixa"
 }
 
-Se houver múltiplos lançamentos, crie um item para cada.
-Se não encontrar o veículo na lista, coloque vehicleId: null e preencha placa encontrada.
-Se a data não estiver clara, use hoje: ${new Date().toISOString().slice(0, 10)}.`;
+Regras:
+- Um item por PASSAGEM (não agrupe). Em faturas Sem Parar/Caixa/ConectCar há blocos "Detalhamento das Passagens por Pedágios" com Data/Hora/Concessionária/Praça/Valor — cada linha é um item.
+- IGNORE linhas de "Resumo da Sua Fatura", "Plano Contratado", "Encargos" e totais.
+- Se a fatura tiver seções por placa ("Descritivo: PLACA - Plano:"), use ESSA placa para todos os itens da seção até o próximo descritivo.
+- categoria: "pedagio" pra passagem em praça, "sem_parar" só se for menção genérica sem praça.
+- Se data não estiver clara, use hoje: ${new Date().toISOString().slice(0, 10)}.
+
+CONTEÚDO:
+${corpo}`;
 
       const systemPrompt = `Você é um assistente especialista em gestão de frotas veiculares no Brasil.
-Analise extratos de pedágio, faturas Sem Parar/ConectCar/Veloe e extraia dados de cada passagem.
-Seja preciso com valores monetários, datas e identificação de veículos por placa.
+Analise extratos de pedágio, faturas Sem Parar/ConectCar/Veloe/Caixa Pré-Pagos e extraia dados de cada passagem.
+Seja preciso com valores monetários, datas (DD/MM/AA → YYYY-MM-DD) e identificação de veículos por placa.
 Sempre retorne JSON válido, sem markdown.`;
 
-      const { invokeAnthropicVision } = await import("../_core/llm");
-      // Rev. 2097 — maxTokens=8192 (default 1024 truncava o JSON em PDFs com
-      // várias passagens — fatura Sem Parar mensal facilmente passa de 30
-      // itens, e cada item ~150-200 tokens; 1024 não cabia).
-      const rawResponse = await invokeAnthropicVision({
-        base64: input.base64,
-        mimeType: input.mimeType as any,
-        prompt,
-        systemPrompt,
-        maxTokens: 8192,
-      });
+      const { invokeAnthropicVision, invokeLLM } = await import("../_core/llm");
 
-      // Rev. 2097 — parse robusto: tenta JSON puro, depois remove markdown,
-      // depois extrai 1º bloco { ... } de dentro do texto (Claude às vezes
-      // prepende "Aqui está o JSON:" ou similar mesmo com instrução).
-      let parsed: any;
       const tryParse = (s: string) => { try { return JSON.parse(s); } catch { return null; } };
-      const cleaned = rawResponse.replace(/```json\s*/g, "").replace(/```/g, "").trim();
-      parsed = tryParse(cleaned);
-      if (!parsed) {
-        // Extrai 1ª ocorrência de objeto JSON { ... } (matching brace simples)
-        const firstBrace = cleaned.indexOf("{");
-        const lastBrace = cleaned.lastIndexOf("}");
-        if (firstBrace >= 0 && lastBrace > firstBrace) {
-          parsed = tryParse(cleaned.slice(firstBrace, lastBrace + 1));
+      const parseJsonResponse = (rawResponse: string): any => {
+        const cleaned = rawResponse.replace(/```json\s*/g, "").replace(/```/g, "").trim();
+        let parsed = tryParse(cleaned);
+        if (!parsed) {
+          const firstBrace = cleaned.indexOf("{");
+          const lastBrace = cleaned.lastIndexOf("}");
+          if (firstBrace >= 0 && lastBrace > firstBrace) {
+            parsed = tryParse(cleaned.slice(firstBrace, lastBrace + 1));
+          }
         }
-      }
-      if (!parsed) {
-        console.error("[parseTollPdf] JSON inválido. Resposta bruta (primeiros 500 chars):",
-          rawResponse.slice(0, 500));
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: `Não consegui interpretar a resposta da IA. ${rawResponse.length >= 8000 ? "Resposta parece ter sido cortada — tente um PDF menor ou divida em partes. " : ""}Verifique se o documento é legível (texto/imagem clara) e tente novamente.`,
+        return parsed;
+      };
+
+      let allItems: any[] = [];
+      let confidence: "alta" | "media" | "baixa" = "alta";
+      let rawTextSummary = "";
+
+      if (input.mimeType === "application/pdf") {
+        // Rev. 2098 — PDFs grandes (faturas Sem Parar/Caixa mensais com
+        // 100+ passagens) estouram o budget do Vision. Solução: extrair
+        // texto com pdf-parse e mandar TEXTO pro Claude (≈10× mais barato
+        // em tokens de input). Se texto for muito grande, chunkar por placa.
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const pdfParse = require("pdf-parse");
+        const buffer = Buffer.from(input.base64, "base64");
+        let pdfText = "";
+        try {
+          const data = await pdfParse(buffer);
+          pdfText = (data?.text || "").trim();
+        } catch (e: any) {
+          console.error("[parseTollPdf] pdf-parse falhou:", e?.message);
+        }
+
+        if (pdfText.length < 50) {
+          // PDF sem texto extraível (scan de imagem) → cai pro Vision.
+          console.log("[parseTollPdf] PDF sem texto; usando Vision.");
+          const rawResponse = await invokeAnthropicVision({
+            base64: input.base64,
+            mimeType: "application/pdf",
+            prompt: buildPrompt("(ver documento anexo)", "documento"),
+            systemPrompt,
+            maxTokens: 16384,
+          });
+          const parsed = parseJsonResponse(rawResponse);
+          if (!parsed) {
+            console.error("[parseTollPdf] JSON inválido (vision). Bruto:", rawResponse.slice(0, 500));
+            throw new TRPCError({
+              code: "INTERNAL_SERVER_ERROR",
+              message: `Não consegui interpretar a resposta da IA. ${rawResponse.length >= 14000 ? "Resposta cortada — tente um PDF menor ou divida em partes. " : ""}Verifique se o documento é legível.`,
+            });
+          }
+          allItems = Array.isArray(parsed.items) ? parsed.items : [];
+          confidence = parsed.confidence || "media";
+          rawTextSummary = parsed.rawText || "";
+        } else {
+          // Chunking por placa: se houver ≥2 marcadores "Descritivo: PLACA"
+          // e o texto for grande, processa por placa em paralelo (limitado).
+          const MAX_SINGLE_CHARS = 60_000;
+          const descRegex = /Descritivo:\s*([A-Z0-9]{6,8})\s*-/g;
+          const matches: Array<{ placa: string; idx: number }> = [];
+          let m: RegExpExecArray | null;
+          while ((m = descRegex.exec(pdfText)) !== null) matches.push({ placa: m[1], idx: m.index });
+
+          const chunks: Array<{ label: string; text: string }> = [];
+          if (matches.length >= 2 && pdfText.length > MAX_SINGLE_CHARS) {
+            // Header = trecho antes do 1º descritivo
+            const header = pdfText.slice(0, matches[0].idx);
+            for (let i = 0; i < matches.length; i++) {
+              const start = matches[i].idx;
+              const end = i + 1 < matches.length ? matches[i + 1].idx : pdfText.length;
+              const body = pdfText.slice(start, end);
+              chunks.push({
+                label: `placa ${matches[i].placa}`,
+                text: `${header}\n\n${body}`,
+              });
+            }
+            console.log(`[parseTollPdf] Chunking em ${chunks.length} placas (texto total ${pdfText.length} chars).`);
+          } else {
+            chunks.push({ label: "documento inteiro", text: pdfText });
+          }
+
+          // Processa chunks em paralelo (no máx 3 por vez pra não estourar rate-limit)
+          const CONCURRENCY = 3;
+          const results: any[] = [];
+          for (let i = 0; i < chunks.length; i += CONCURRENCY) {
+            const batch = chunks.slice(i, i + CONCURRENCY);
+            const batchResults = await Promise.all(batch.map(async (chunk) => {
+              try {
+                const rawResponse = await invokeLLM({
+                  messages: [
+                    { role: "system", content: systemPrompt },
+                    { role: "user", content: buildPrompt(chunk.text, "trecho de fatura") },
+                  ],
+                  maxTokens: 16384,
+                });
+                const text = typeof rawResponse === "string"
+                  ? rawResponse
+                  : (rawResponse as any)?.text || (rawResponse as any)?.content || "";
+                const parsed = parseJsonResponse(text);
+                if (!parsed || !Array.isArray(parsed.items)) {
+                  console.error(`[parseTollPdf] Chunk "${chunk.label}" sem items. Bruto:`, String(text).slice(0, 300));
+                  return { items: [], confidence: "baixa", rawText: "" };
+                }
+                return parsed;
+              } catch (e: any) {
+                console.error(`[parseTollPdf] Erro em chunk "${chunk.label}":`, e?.message);
+                return { items: [], confidence: "baixa", rawText: "" };
+              }
+            }));
+            results.push(...batchResults);
+          }
+          for (const r of results) {
+            if (Array.isArray(r.items)) allItems.push(...r.items);
+            if (r.confidence === "baixa") confidence = "baixa";
+            else if (r.confidence === "media" && confidence === "alta") confidence = "media";
+          }
+          rawTextSummary = `PDF processado em ${chunks.length} parte(s); ${allItems.length} lançamento(s) extraído(s).`;
+          if (allItems.length === 0) {
+            throw new TRPCError({
+              code: "INTERNAL_SERVER_ERROR",
+              message: "A IA não conseguiu extrair lançamentos deste PDF. Verifique se é uma fatura/comprovante de pedágio legível.",
+            });
+          }
+        }
+      } else {
+        // Imagem → Vision (caminho original).
+        const rawResponse = await invokeAnthropicVision({
+          base64: input.base64,
+          mimeType: input.mimeType as any,
+          prompt: buildPrompt("(ver imagem anexa)", "comprovante"),
+          systemPrompt,
+          maxTokens: 8192,
         });
+        const parsed = parseJsonResponse(rawResponse);
+        if (!parsed) {
+          console.error("[parseTollPdf] JSON inválido (imagem). Bruto:", rawResponse.slice(0, 500));
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "Não consegui interpretar a resposta da IA. Verifique se a imagem está nítida e tente novamente.",
+          });
+        }
+        if (!parsed?.items || !Array.isArray(parsed.items)) {
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "A IA não conseguiu extrair lançamentos. Verifique se é um comprovante de pedágio legível.",
+          });
+        }
+        allItems = parsed.items;
+        confidence = parsed.confidence || "media";
+        rawTextSummary = parsed.rawText || "";
       }
 
-      if (!parsed?.items || !Array.isArray(parsed.items)) {
-        console.error("[parseTollPdf] Resposta sem items. Estrutura recebida:", JSON.stringify(parsed).slice(0, 300));
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: "A IA não conseguiu extrair lançamentos deste documento. Verifique se é uma fatura/comprovante de pedágio legível.",
-        });
-      }
-
-      for (const item of parsed.items) {
+      for (const item of allItems) {
         if (item.vehicleId) {
           const found = veiculos.find((v: any) => v.id === item.vehicleId);
           if (!found) item.vehicleId = null;
         }
+        // Re-tentativa por placa se IA não encontrou ID
+        if (!item.vehicleId && item.vehiclePlaca) {
+          const placaNorm = String(item.vehiclePlaca).replace(/[^A-Z0-9]/gi, "").toUpperCase();
+          const found = veiculos.find((v: any) =>
+            String(v.placa || "").replace(/[^A-Z0-9]/gi, "").toUpperCase() === placaNorm
+          );
+          if (found) item.vehicleId = found.id;
+        }
       }
 
-      return parsed;
+      return {
+        success: true,
+        items: allItems,
+        confidence,
+        rawText: rawTextSummary,
+      };
     }),
 
   parseTollExcel: protectedProcedure
