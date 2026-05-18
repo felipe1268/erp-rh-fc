@@ -1946,7 +1946,7 @@ ${obs ? `<div class="box"><strong>Observações / Justificativa do Enquadramento
 <div class="fcsign-doc">
 <div class="header">
   <div class="header-top">
-    <img class="logo" src="${esc(logoSrc)}" alt="${esc(comp?.razaoSocial || 'FC Engenharia')}" onerror="this.style.display='none'" />
+    <img class="logo" src="${esc(logoSrc)}" alt="${esc(comp?.razaoSocial || 'FC Engenharia')}" />
     <div class="empresa">
       <h2 class="nome">${esc(comp?.razaoSocial || 'FC Engenharia')}</h2>
       ${comp?.cnpj ? `<p class="cnpj">CNPJ: ${esc(comp.cnpj)}</p>` : ''}
