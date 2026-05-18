@@ -1,6 +1,69 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2108 — **RH · FCSign — viewer mais largo + modo "Leitura em Tela Cheia"
+ * com CTA "Ir para Assinatura" no fim do documento.**
+ *
+ * Pedido do user (após validar Rev. 2107 com nova sessão da Lilian, viu que o
+ * preview do documento ficou estreito demais — razão social truncada em 2
+ * linhas mesmo com o cabeçalho centralizado): "quero a tela mais larga.. e ou
+ * tire a tela e coloque um botão de olho para o usuário clicar, ler em tela
+ * full screem e depois no final clicar na assinatura de assinar.. pode ser?".
+ *
+ * **Solução híbrida (fez AS DUAS coisas, não uma OU outra):**
+ *
+ * (1) **Viewer principal mais largo** — `max-w-5xl` (1024px) → `max-w-[1400px]`
+ *     no header, main e footer. Sidebar de 360px → 340px. Resultado: coluna
+ *     do documento ganhou ~340px extras, agora cabe a página A4 (210mm ≈ 794px)
+ *     com margens confortáveis em telas 1440p+. Também aumentei `maxHeight`
+ *     da área scrollável de 75vh → 82vh.
+ *
+ * (2) **Modal "Leitura em Tela Cheia"** — botão `<Eye/>` azul "Ler em tela
+ *     cheia" na toolbar (entre os controles de zoom e o de imprimir). Ao
+ *     clicar, abre overlay `fixed inset-0 z-50 bg-slate-900/95` com:
+ *       - Header navy `#1B2A4A` com título do documento, subtítulo "Modo
+ *         Leitura · Role até o fim para assinar" e botões Imprimir + Fechar.
+ *       - Documento A4 centralizado em fundo slate-700, padding generoso
+ *         (`py-8 px-4`), mesma tipografia do viewer principal pra consistência
+ *         visual entre o "preview" e o "modo leitura".
+ *       - **CTA orgânico no FIM do documento** (após o rodapé do contrato):
+ *         border tracejado slate-300, texto "Você leu o documento até o
+ *         final. Clique abaixo para registrar sua assinatura." + botão grande
+ *         emerald→teal "Ir para Assinatura" com ícone `<PenLine/>`. Ao
+ *         clicar, fecha o modal (`setReaderOpen(false)`) e o user cai de
+ *         volta na tela normal onde o `<SignaturePad>` está visível.
+ *       - **Sticky footer** branco com mesmo botão "Ir para Assinatura"
+ *         pra quem não rolar até o fim do conteúdo (UX safety net).
+ *       - **Estados guardados:** se `sessionCancelled` ou `alreadySigned`,
+ *         o CTA + sticky footer somem (substituídos por badge verde
+ *         "Documento já assinado por você").
+ *
+ * **Mudanças em `client/src/pages/AssinarDocumento.tsx`:**
+ * - L5: import dos ícones `Eye`, `X`, `PenLine`.
+ * - L28: novo state `const [readerOpen, setReaderOpen] = useState(false)`.
+ * - L79, L90, L252: max-width bump nos 3 containers (`max-w-5xl` → `max-w-[1400px]`).
+ * - L90: sidebar 360px → 340px.
+ * - L127-135: botão azul "Ler em tela cheia" inserido entre zoom e print.
+ * - L148: maxHeight da preview area 75vh → 82vh.
+ * - L256-356: bloco inteiro do modal de leitura adicionado (~100 linhas).
+ *
+ * **Não-mudanças:**
+ * - DOMPurify config L34-38: continua barrando script/iframe/onerror/etc.
+ * - Backend `signatures.create`, schema DB, lógica de assinatura
+ *   (`handleSign`/`signMut`), `<SignaturePad>` — nada tocado.
+ * - HTML do contrato em `Colaboradores.tsx` permanece da Rev. 2107.
+ *
+ * **UX rationale:** o modo dual respeita 2 perfis de usuário — quem quer
+ * só "dar uma olhada" usa o preview lateral; quem quer LER de fato com
+ * calma (contrato tem 8 cláusulas + clausulas legais densas em Times 11.5pt)
+ * abre o fullscreen. O CTA no FIM do documento é o ponto chave: induz o
+ * fluxo correto "leu → entendeu → assinou" exigido pela MP 2.200-2/2001
+ * (manifestação de vontade informada).
+ *
+ * **R-001/R-007/R-010:** N/A — alteração 100% frontend.
+ *
+ * ---
+ *
  * Rev. 2107 — **RH · Contrato de Experiência alinhado 100% ao modelo de ouro
  * do Comunicado Interno (PDF de referência enviado pelo user).**
  *

@@ -2,7 +2,7 @@ import { useRoute } from "wouter";
 import { useRef, useState, useMemo } from "react";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
-import { Loader2, ShieldCheck, AlertTriangle, CheckCircle2, FileText, Users, Building2, ZoomIn, ZoomOut, Printer, Maximize2 } from "lucide-react";
+import { Loader2, ShieldCheck, AlertTriangle, CheckCircle2, FileText, Users, Building2, ZoomIn, ZoomOut, Printer, Maximize2, Eye, X, PenLine } from "lucide-react";
 import SignaturePad, { type SignaturePadHandle } from "@/components/SignaturePad";
 import { toast } from "sonner";
 import DOMPurify from "dompurify";
@@ -22,6 +22,7 @@ export default function AssinarDocumento() {
   const [submitting, setSubmitting] = useState(false);
   const [justSigned, setJustSigned] = useState(false);
   const [zoom, setZoom] = useState(1);
+  const [readerOpen, setReaderOpen] = useState(false);
 
   const q = trpc.signatures.getByToken.useQuery({ token }, { enabled: token.length === 64, retry: false });
   const signMut = trpc.signatures.sign.useMutation();
@@ -72,7 +73,7 @@ export default function AssinarDocumento() {
     <div className="min-h-screen bg-slate-100">
       {/* Header institucional FC */}
       <header className="bg-[#1B2A4A] text-white">
-        <div className="max-w-5xl mx-auto px-4 py-4 flex items-center gap-3">
+        <div className="max-w-[1400px] mx-auto px-4 py-4 flex items-center gap-3">
           <div className="bg-white/10 p-2 rounded-lg">
             <ShieldCheck className="h-6 w-6" />
           </div>
@@ -83,7 +84,7 @@ export default function AssinarDocumento() {
         </div>
       </header>
 
-      <main className="max-w-5xl mx-auto px-4 py-6 grid lg:grid-cols-[1fr_360px] gap-6">
+      <main className="max-w-[1400px] mx-auto px-4 py-6 grid lg:grid-cols-[1fr_340px] gap-6">
         {/* Documento — visualização tipo PDF (página A4 com toolbar) */}
         <section className="bg-slate-700 rounded-lg shadow-lg border border-slate-300 overflow-hidden flex flex-col">
           {/* Toolbar tipo viewer de PDF */}
@@ -122,6 +123,15 @@ export default function AssinarDocumento() {
             </div>
             <button
               type="button"
+              onClick={() => setReaderOpen(true)}
+              className="flex items-center gap-1 bg-blue-600 hover:bg-blue-500 text-white rounded-md px-2.5 py-1 transition font-medium"
+              title="Abrir em tela cheia para leitura completa"
+            >
+              <Eye className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Ler em tela cheia</span>
+            </button>
+            <button
+              type="button"
               onClick={() => window.print()}
               className="flex items-center gap-1 bg-slate-700 hover:bg-slate-600 rounded-md px-2 py-1 transition"
               title="Imprimir ou salvar PDF"
@@ -132,7 +142,7 @@ export default function AssinarDocumento() {
           </div>
 
           {/* Área de visualização — fundo escuro, página A4 branca centralizada */}
-          <div className="bg-slate-600 overflow-auto" style={{ maxHeight: "75vh" }}>
+          <div className="bg-slate-600 overflow-auto" style={{ maxHeight: "82vh" }}>
             <div className="flex justify-center py-6 px-4 print:p-0 print:bg-white" style={{ minHeight: "100%" }}>
               <div
                 id="fcsign-pdf-page"
@@ -236,9 +246,106 @@ export default function AssinarDocumento() {
         </aside>
       </main>
 
-      <footer className="max-w-5xl mx-auto px-4 py-6 text-center text-[11px] text-slate-500 print:hidden">
+      <footer className="max-w-[1400px] mx-auto px-4 py-6 text-center text-[11px] text-slate-500 print:hidden">
         FCSign · FC Engenharia · Sistema interno de assinatura eletrônica · {new Date().getFullYear()}
       </footer>
+
+      {/* Modal de Leitura em Tela Cheia — documento ocupa toda a tela pra leitura confortável.
+          Ao final, botão grande "Ir para Assinatura" fecha o modal e foca a área de assinatura.
+          Botão de assinatura desabilitado se sessão cancelada/já assinada. */}
+      {readerOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/95 backdrop-blur-sm flex flex-col print:hidden">
+          {/* Header do reader */}
+          <div className="bg-[#1B2A4A] text-white px-4 py-3 flex items-center gap-3 shadow-lg">
+            <FileText className="h-5 w-5 text-blue-200 flex-shrink-0" />
+            <div className="flex-1 min-w-0">
+              <h2 className="font-semibold text-sm truncate">{session.documentTitle}</h2>
+              <p className="text-[11px] text-blue-200">Modo Leitura · Role até o fim para assinar</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => window.print()}
+              className="flex items-center gap-1 bg-white/10 hover:bg-white/20 rounded-md px-2.5 py-1.5 transition text-xs"
+              title="Imprimir ou salvar PDF"
+            >
+              <Printer className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Imprimir</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setReaderOpen(false)}
+              className="flex items-center gap-1 bg-white/10 hover:bg-white/20 rounded-md px-2.5 py-1.5 transition text-xs"
+              title="Fechar modo leitura"
+            >
+              <X className="h-4 w-4" />
+              <span className="hidden sm:inline">Fechar</span>
+            </button>
+          </div>
+
+          {/* Área de leitura — página A4 centralizada com mais respiro */}
+          <div className="flex-1 overflow-auto bg-slate-700">
+            <div className="flex justify-center py-8 px-4">
+              <div
+                className="bg-white shadow-2xl"
+                style={{
+                  width: "210mm",
+                  maxWidth: "100%",
+                  minHeight: "297mm",
+                  padding: "10mm 18mm 20mm 18mm",
+                  fontFamily: "'Times New Roman', Times, Georgia, serif",
+                  fontSize: "12pt",
+                  lineHeight: 1.5,
+                  color: "#111",
+                }}
+              >
+                <div
+                  className="fcsign-document-body"
+                  dangerouslySetInnerHTML={{ __html: safeHtml }}
+                />
+
+                {/* Call-to-action no final do documento — fluxo "leu → assinou" */}
+                {!sessionCancelled && !alreadySigned && (
+                  <div className="mt-12 pt-6 border-t-2 border-dashed border-slate-300 text-center">
+                    <p className="text-sm text-slate-600 mb-3" style={{ fontFamily: "'Helvetica','Arial',sans-serif" }}>
+                      Você leu o documento até o final. Clique abaixo para registrar sua assinatura.
+                    </p>
+                    <Button
+                      onClick={() => setReaderOpen(false)}
+                      className="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white px-8 py-6 text-base font-semibold shadow-lg"
+                    >
+                      <PenLine className="h-5 w-5 mr-2" />
+                      Ir para Assinatura
+                    </Button>
+                  </div>
+                )}
+                {alreadySigned && (
+                  <div className="mt-12 pt-6 border-t-2 border-dashed border-emerald-300 text-center">
+                    <div className="inline-flex items-center gap-2 text-emerald-700 font-semibold">
+                      <CheckCircle2 className="h-5 w-5" /> Documento já assinado por você.
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Footer sticky com botão grande de assinar */}
+          {!sessionCancelled && !alreadySigned && (
+            <div className="bg-white border-t-2 border-slate-200 px-4 py-3 shadow-2xl flex items-center justify-between gap-3">
+              <div className="text-xs text-slate-600 hidden sm:block">
+                Após fechar a leitura, desenhe sua assinatura no painel direito.
+              </div>
+              <Button
+                onClick={() => setReaderOpen(false)}
+                className="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-semibold px-6"
+              >
+                <PenLine className="h-4 w-4 mr-2" />
+                Ir para Assinatura
+              </Button>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Estilos do documento FCSign — scopados a .fcsign-document-body.
           IMPORTANTE: aplicamos AQUI no JSX (não dentro do HTML sanitizado) pra garantir
