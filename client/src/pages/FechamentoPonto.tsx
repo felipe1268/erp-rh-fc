@@ -2591,28 +2591,43 @@ export default function FechamentoPonto() {
                   );
                 })()}
 
-                {/* ===== SUB-MODAL: CALENDÁRIO DE DIAS DO COLABORADOR ===== */}
+                {/* ===== Rev. 2072 — SUB-MODAL: CALENDÁRIO DE DIAS — regras de ouro ===== */}
+                {/* Antes: dialog estreito 700px, resumo apertado em linha única, grid 2 cols. */}
+                {/* Agora: fullscreen + header gradient indigo→slate + botão Voltar + 6 KPI cards + */}
+                {/* card explicativo + grid responsivo até 4 cols. Espelha padrão Atraso/HE/Faltas. */}
                 {diasDetalhe && (
                   <Dialog open={true} onOpenChange={(open) => { if (!open) setDiasDetalhe(null); }}>
-                    <DialogContent resizable={false} className="flex flex-col p-0 gap-0 w-[700px] max-w-[95vw] max-h-[85vh]">
-                      <DialogHeader className="px-5 py-3 border-b shrink-0">
-                        <div className="flex items-center gap-3">
-                          <DialogTitle className="text-base font-bold flex items-center gap-2">
-                            <CalendarDays className="h-4 w-4 text-indigo-600" />
-                            {diasDetalhe.nome}
-                          </DialogTitle>
-                          {periodoIni && periodoFim && (
-                            <span className="text-xs text-muted-foreground bg-slate-100 border rounded px-2 py-0.5">
-                              {fmtPeriodo(periodoIni)} → {fmtPeriodo(periodoFim)}
-                            </span>
-                          )}
-                          <div className="w-6" />
+                    <DialogContent resizable={false} className="flex flex-col p-0 gap-0 w-screen h-screen max-w-none sm:max-w-none rounded-none border-0">
+                      {/* Header gradient indigo→slate (regra de ouro — coerente com card "Menos Dias Trabalhados" slate) */}
+                      <DialogHeader className="shrink-0 px-8 py-5 border-b bg-gradient-to-r from-indigo-600 via-slate-600 to-slate-500 text-white relative overflow-hidden">
+                        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.18),transparent_60%)] pointer-events-none" />
+                        {/* Rev. 2065/2072 — Botão Voltar pro ranking (modal de ranking continua aberto embaixo) */}
+                        <div className="relative mb-3">
+                          <Button variant="outline" size="sm" onClick={() => setDiasDetalhe(null)} className="h-8 text-xs bg-white/95 hover:bg-white text-slate-800 border-0 shadow-sm" data-testid="button-voltar-dias">
+                            <ArrowLeft className="h-3.5 w-3.5 mr-1.5" /> Voltar ao ranking
+                          </Button>
+                        </div>
+                        <div className="relative flex items-start gap-4">
+                          <span className="inline-flex items-center justify-center h-14 w-14 rounded-2xl bg-white/15 backdrop-blur-sm ring-2 ring-white/30 shrink-0">
+                            <CalendarDays className="h-7 w-7" />
+                          </span>
+                          <div className="flex-1 min-w-0">
+                            <DialogTitle className="text-2xl font-bold flex items-center gap-3 flex-wrap">
+                              Memória de cálculo · Menos Dias Trabalhados
+                            </DialogTitle>
+                            <p className="text-base text-white/90 mt-1.5">
+                              <strong className="text-lg">{diasDetalhe.nome}</strong>
+                              {periodoIni && periodoFim && (
+                                <span className="text-white/75"> · {fmtPeriodo(periodoIni)} → {fmtPeriodo(periodoFim)}</span>
+                              )}
+                            </p>
+                          </div>
                         </div>
                       </DialogHeader>
 
-                      <div className="flex-1 overflow-auto px-5 py-4">
+                      <div className="flex-1 overflow-auto px-8 py-6 bg-slate-50/40">
                         {diasEmployeeQuery.isLoading && (
-                          <div className="flex items-center justify-center py-12 text-muted-foreground text-sm">
+                          <div className="flex items-center justify-center py-24 text-muted-foreground text-lg">
                             <span className="animate-pulse">Carregando dias...</span>
                           </div>
                         )}
@@ -2628,81 +2643,122 @@ export default function FechamentoPonto() {
                           const totalFDS = dias.filter(d => (d.dow === 0 || d.dow === 6) && !d.trabalhado).length;
                           const totalFeriados = dias.filter(d => isFeriado(d.data) && d.dow >= 1 && d.dow <= 5).length;
                           const totalFerias = dias.filter(d => isFerias(d) && d.dow >= 1 && d.dow <= 5).length;
+                          const pctPresenca = diasUteisNoPeriodo ? Math.min(100, Math.round((totalTrabalhados / diasUteisNoPeriodo) * 100)) : null;
                           return (
-                            <>
-                              {/* Resumo */}
-                              <div className="flex items-center gap-4 mb-4 p-3 bg-slate-50 rounded-lg border text-sm flex-wrap">
-                                <span className="flex items-center gap-1.5 text-green-700 font-semibold"><CheckCircle className="h-4 w-4" /> {totalTrabalhados} dias trabalhados</span>
-                                <span className="flex items-center gap-1.5 text-red-600 font-semibold"><XCircle className="h-4 w-4" /> {totalFaltas} faltas prováveis</span>
-                                <span className="flex items-center gap-1.5 text-slate-400"><span className="text-base">—</span> {totalFDS} fins de semana</span>
-                                {totalFeriados > 0 && (
-                                  <span className="flex items-center gap-1.5 text-amber-700 font-semibold">🎉 {totalFeriados} {totalFeriados === 1 ? "feriado" : "feriados"}</span>
-                                )}
-                                {totalFerias > 0 && (
-                                  <span className="flex items-center gap-1.5 text-sky-700 font-semibold">🏖 {totalFerias} {totalFerias === 1 ? "dia em férias" : "dias em férias"}</span>
-                                )}
-                                {diasUteisNoPeriodo && <span className="ml-auto text-indigo-700 font-semibold">{Math.min(100, Math.round((totalTrabalhados / diasUteisNoPeriodo) * 100))}% de presença</span>}
+                            <div className="max-w-7xl mx-auto space-y-5">
+                              {/* KPI cards — Rev. 2072: 6 cards coloridos, cada métrica com seu peso visual */}
+                              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+                                <div className="rounded-xl border border-emerald-200 bg-white p-4 shadow-sm">
+                                  <div className="flex items-center gap-2 text-emerald-700 text-xs font-semibold uppercase tracking-wide">
+                                    <CheckCircle className="h-4 w-4" /> Trabalhados
+                                  </div>
+                                  <div className="mt-1.5 text-3xl font-bold text-emerald-700 tabular-nums">{totalTrabalhados}</div>
+                                  <div className="text-[11px] text-slate-500 mt-0.5">{totalTrabalhados === 1 ? "dia" : "dias"} com batida</div>
+                                </div>
+                                <div className="rounded-xl border border-red-200 bg-white p-4 shadow-sm">
+                                  <div className="flex items-center gap-2 text-red-700 text-xs font-semibold uppercase tracking-wide">
+                                    <XCircle className="h-4 w-4" /> Faltas prováveis
+                                  </div>
+                                  <div className="mt-1.5 text-3xl font-bold text-red-700 tabular-nums">{totalFaltas}</div>
+                                  <div className="text-[11px] text-slate-500 mt-0.5">dias úteis sem batida</div>
+                                </div>
+                                <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                                  <div className="flex items-center gap-2 text-slate-500 text-xs font-semibold uppercase tracking-wide">
+                                    <span>—</span> Fins de semana
+                                  </div>
+                                  <div className="mt-1.5 text-3xl font-bold text-slate-600 tabular-nums">{totalFDS}</div>
+                                  <div className="text-[11px] text-slate-500 mt-0.5">sáb/dom de folga</div>
+                                </div>
+                                <div className="rounded-xl border border-amber-200 bg-white p-4 shadow-sm">
+                                  <div className="flex items-center gap-2 text-amber-700 text-xs font-semibold uppercase tracking-wide">
+                                    <span>🎉</span> Feriados
+                                  </div>
+                                  <div className="mt-1.5 text-3xl font-bold text-amber-700 tabular-nums">{totalFeriados}</div>
+                                  <div className="text-[11px] text-slate-500 mt-0.5">em dia útil</div>
+                                </div>
+                                <div className="rounded-xl border border-sky-200 bg-white p-4 shadow-sm">
+                                  <div className="flex items-center gap-2 text-sky-700 text-xs font-semibold uppercase tracking-wide">
+                                    <span>🏖</span> Férias
+                                  </div>
+                                  <div className="mt-1.5 text-3xl font-bold text-sky-700 tabular-nums">{totalFerias}</div>
+                                  <div className="text-[11px] text-slate-500 mt-0.5">dias em gozo</div>
+                                </div>
+                                <div className="rounded-xl border border-indigo-200 bg-gradient-to-br from-indigo-50 to-white p-4 shadow-sm">
+                                  <div className="flex items-center gap-2 text-indigo-700 text-xs font-semibold uppercase tracking-wide">
+                                    <CalendarDays className="h-4 w-4" /> Presença
+                                  </div>
+                                  <div className="mt-1.5 text-3xl font-bold text-indigo-700 tabular-nums">{pctPresenca !== null ? `${pctPresenca}%` : "—"}</div>
+                                  <div className="text-[11px] text-slate-500 mt-0.5">{diasUteisNoPeriodo ? `${totalTrabalhados}/${diasUteisNoPeriodo} dias úteis` : "sem base"}</div>
+                                </div>
                               </div>
 
-                              {/* Lista de dias */}
-                              <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
-                                {dias.map((d) => {
-                                  const [, mes, dia] = d.data.split("-");
-                                  const label = `${dia}/${mes} (${DIAS_SEMANA[d.dow]})`;
-                                  const isWeekend = d.dow === 0 || d.dow === 6;
-                                  const isWeekendFolga = isWeekend && !d.trabalhado;
-                                  const dayIsFeriado = isFeriado(d.data);
-                                  const dayIsFerias  = isFerias(d);
-                                  const feriadoNome = feriadoNomeMap.get(d.data);
-                                  // Rev. 2030 — férias tem prioridade sobre falta provável (mas não sobre feriado/trabalhado)
-                                  // Rev. 2014 — feriado em dia útil: âmbar (não conta falta); feriado trabalhado: verde com badge
-                                  const cls = dayIsFeriado && !isWeekend
-                                    ? (d.trabalhado ? "text-green-800 bg-green-50 ring-1 ring-amber-300" : "text-amber-800 bg-amber-50")
-                                    : dayIsFerias && !d.trabalhado
-                                      ? "text-sky-800 bg-sky-50 ring-1 ring-sky-200"
-                                      : isWeekendFolga
-                                        ? "text-slate-400 bg-slate-50"
-                                        : d.trabalhado
-                                          ? "text-green-800 bg-green-50"
-                                          : "text-red-700 bg-red-50";
-                                  return (
-                                    <div key={d.data} className={`flex items-center justify-between py-1.5 px-2 rounded ${cls}`} title={dayIsFeriado && feriadoNome ? `Feriado: ${feriadoNome}` : (dayIsFerias ? "Em gozo de férias" : undefined)}>
-                                      <span className="font-medium">{label}</span>
-                                      <span className="flex items-center gap-1">
-                                        {dayIsFeriado && !isWeekend && (
-                                          <>
-                                            <span>🎉</span>
-                                            <span className="truncate max-w-[140px]">{feriadoNome ? `Feriado · ${feriadoNome}` : "Feriado"}</span>
-                                            {d.trabalhado && <CheckCircle className="h-3 w-3 text-green-600 ml-1" />}
-                                          </>
-                                        )}
-                                        {!dayIsFeriado && dayIsFerias && !d.trabalhado && (
-                                          <>
-                                            <span>🏖</span>
-                                            <span className="font-semibold">Férias</span>
-                                          </>
-                                        )}
-                                        {!dayIsFeriado && !dayIsFerias && isWeekendFolga && <span>— {d.dow === 0 ? "Domingo" : "Sábado"}</span>}
-                                        {!dayIsFeriado && !isWeekendFolga && d.trabalhado && <>
-                                          <CheckCircle className="h-3 w-3 text-green-600" />
-                                          <span className="font-mono">{d.horasTrabalhadas ?? ""}</span>
-                                        </>}
-                                        {!dayIsFeriado && !dayIsFerias && !isWeekendFolga && !d.trabalhado && <>
-                                          <XCircle className="h-3 w-3 text-red-500" />
-                                          <span>Falta provável</span>
-                                        </>}
-                                      </span>
-                                    </div>
-                                  );
-                                })}
+                              {/* Card explicativo — regra de ouro */}
+                              <div className="rounded-xl border bg-white p-5 flex items-start gap-3 shadow-sm">
+                                <Info className="h-6 w-6 text-indigo-600 shrink-0 mt-0.5" />
+                                <div className="text-sm text-slate-700 leading-relaxed">
+                                  <strong>Como ler esta tela:</strong> cada quadradinho abaixo representa um dia do período. <strong className="text-red-700">Falta provável</strong> = dia útil sem nenhuma batida de ponto registrada (pode ser falta real, home office sem lançamento ou dado ainda não importado).
+                                  <span className="block mt-2 text-sm text-slate-500">Feriados (federais, estaduais e municipais) e <strong className="text-sky-700">🏖 Férias</strong> em gozo NÃO contam como falta e são excluídos do denominador do % de presença.</span>
+                                </div>
                               </div>
 
-                              <p className="text-[11px] text-muted-foreground mt-3 text-center">
-                                "Falta provável" = dia útil sem nenhuma batida de ponto registrada no sistema. Pode ser falta, home office sem lançamento, ou dado ainda não importado.
-                                Feriados (federais, estaduais e municipais) NÃO contam como falta e são excluídos do denominador do % de presença.
-                                Dias em <strong className="text-sky-700">🏖 Férias</strong> (em gozo no período) também NÃO contam como falta.
-                              </p>
-                            </>
+                              {/* Grid dia a dia — agora em card branco, responsivo até 4 colunas */}
+                              <div className="rounded-xl border bg-white p-5 shadow-sm">
+                                <h3 className="text-sm font-semibold text-slate-700 mb-3 flex items-center gap-2 uppercase tracking-wide">
+                                  <CalendarDays className="h-4 w-4 text-indigo-600" /> Dia a dia · {dias.length} dia{dias.length === 1 ? "" : "s"} no período
+                                </h3>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-3 gap-y-1.5 text-sm">
+                                  {dias.map((d) => {
+                                    const [, mes, dia] = d.data.split("-");
+                                    const label = `${dia}/${mes} (${DIAS_SEMANA[d.dow]})`;
+                                    const isWeekend = d.dow === 0 || d.dow === 6;
+                                    const isWeekendFolga = isWeekend && !d.trabalhado;
+                                    const dayIsFeriado = isFeriado(d.data);
+                                    const dayIsFerias  = isFerias(d);
+                                    const feriadoNome = feriadoNomeMap.get(d.data);
+                                    // Rev. 2030 — férias tem prioridade sobre falta provável (mas não sobre feriado/trabalhado)
+                                    // Rev. 2014 — feriado em dia útil: âmbar (não conta falta); feriado trabalhado: verde com badge
+                                    const cls = dayIsFeriado && !isWeekend
+                                      ? (d.trabalhado ? "text-green-800 bg-green-50 ring-1 ring-amber-300" : "text-amber-800 bg-amber-50 ring-1 ring-amber-200")
+                                      : dayIsFerias && !d.trabalhado
+                                        ? "text-sky-800 bg-sky-50 ring-1 ring-sky-200"
+                                        : isWeekendFolga
+                                          ? "text-slate-400 bg-slate-50 ring-1 ring-slate-200"
+                                          : d.trabalhado
+                                            ? "text-green-800 bg-green-50 ring-1 ring-green-200"
+                                            : "text-red-700 bg-red-50 ring-1 ring-red-200";
+                                    return (
+                                      <div key={d.data} className={`flex items-center justify-between py-2 px-3 rounded-lg ${cls}`} title={dayIsFeriado && feriadoNome ? `Feriado: ${feriadoNome}` : (dayIsFerias ? "Em gozo de férias" : undefined)}>
+                                        <span className="font-semibold tabular-nums">{label}</span>
+                                        <span className="flex items-center gap-1 text-xs">
+                                          {dayIsFeriado && !isWeekend && (
+                                            <>
+                                              <span>🎉</span>
+                                              <span className="truncate max-w-[140px]">{feriadoNome ? `Feriado · ${feriadoNome}` : "Feriado"}</span>
+                                              {d.trabalhado && <CheckCircle className="h-3 w-3 text-green-600 ml-1" />}
+                                            </>
+                                          )}
+                                          {!dayIsFeriado && dayIsFerias && !d.trabalhado && (
+                                            <>
+                                              <span>🏖</span>
+                                              <span className="font-semibold">Férias</span>
+                                            </>
+                                          )}
+                                          {!dayIsFeriado && !dayIsFerias && isWeekendFolga && <span>— {d.dow === 0 ? "Domingo" : "Sábado"}</span>}
+                                          {!dayIsFeriado && !isWeekendFolga && d.trabalhado && <>
+                                            <CheckCircle className="h-3 w-3 text-green-600" />
+                                            <span className="font-mono">{d.horasTrabalhadas ?? ""}</span>
+                                          </>}
+                                          {!dayIsFeriado && !dayIsFerias && !isWeekendFolga && !d.trabalhado && <>
+                                            <XCircle className="h-3 w-3 text-red-500" />
+                                            <span className="font-semibold">Falta provável</span>
+                                          </>}
+                                        </span>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            </div>
                           );
                         })()}
                       </div>

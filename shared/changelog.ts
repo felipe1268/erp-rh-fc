@@ -1,6 +1,58 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2072 — **Fechamento de Ponto · sub-modal "Menos Dias Trabalhados"
+ * (calendário do colaborador) repaginado pelas regras de ouro.** Pedido
+ * do usuário (IMG_0978): "Melhore o layout conforme as regras de ouro".
+ * O sub-modal de detalhe do calendário (que abre clicando num
+ * colaborador dentro do ranking "Menos Dias Trabalhados") era o único
+ * dos três modais de memória de cálculo que NÃO seguia o padrão de
+ * regra de ouro estabelecido nas Rev. 2019/2032 (Atraso) e
+ * 2050/2065/2068 (HE/Faltas):
+ *
+ *   - Antes: `DialogContent` estreito (`w-[700px] max-w-[95vw]
+ *     max-h-[85vh]`), header compacto sem gradiente, resumo apertado
+ *     numa única linha flex-wrap (`flex items-center gap-4 mb-4 p-3
+ *     bg-slate-50`), grid de dias em 2 colunas com texto `text-xs`,
+ *     legenda solta no rodapé como `<p>` cinza pequeno. Sem botão
+ *     "Voltar ao ranking".
+ *
+ *   - Agora (regras de ouro): fullscreen (`w-screen h-screen
+ *     max-w-none rounded-none`), header gradient `from-indigo-600 via-
+ *     slate-600 to-slate-500` com radial-spotlight, ícone `CalendarDays`
+ *     em badge 14×14 com ring branco, título "Memória de cálculo ·
+ *     Menos Dias Trabalhados" + nome do colaborador e período no
+ *     subtítulo. Botão `Voltar ao ranking` com `ArrowLeft` no topo
+ *     (padrão Rev. 2065 — mantém modal de ranking aberto embaixo).
+ *     Corpo `max-w-7xl mx-auto space-y-5` em fundo `bg-slate-50/40`
+ *     com 3 blocos:
+ *       1) Grid de 6 KPI cards (Trabalhados/Faltas/FDS/Feriados/
+ *          Férias/Presença) — cada um com border colorido por tema,
+ *          number `text-3xl tabular-nums`, label uppercase tracking-wide
+ *          e linha de contexto (`text-[11px]`). Responsivo
+ *          `grid-cols-2 sm:3 lg:6`.
+ *       2) Card explicativo `Info`+texto (regra de ouro — "Como ler
+ *          esta tela"), explicando o que é "Falta provável" e por que
+ *          feriados/férias não contam.
+ *       3) Card branco "Dia a dia · N dias no período" com grid
+ *          responsivo `1/2/3/4 cols` (antes só 2), cada dia em pílula
+ *          `rounded-lg ring-1` com texto `text-sm` (antes xs),
+ *          tabular-nums, e label de status (Falta provável / Férias /
+ *          Sábado etc.) em font-semibold.
+ *
+ *   ZERO mudança de lógica — todos os cálculos (`totalTrabalhados`,
+ *   `totalFaltas`, `totalFDS`, `totalFeriados`, `totalFerias`,
+ *   `pctPresenca` com `Math.min(100, ...)`) e regras de classificação
+ *   por dia (`dayIsFeriado`, `dayIsFerias`, `isWeekendFolga`,
+ *   `d.trabalhado`) foram preservadas idênticas. A única extração foi
+ *   `pctPresenca` como const única (antes inline na linha do header)
+ *   pra mostrar `X/Y dias úteis` no rodapé do card de Presença.
+ *
+ * Arquivos: `client/src/pages/FechamentoPonto.tsx` L2597-2768
+ * (substituição completa do sub-modal `diasDetalhe`). ZERO backend,
+ * ZERO migration, ZERO mudança em imports (`ArrowLeft`, `Info`,
+ * `CalendarDays`, `CheckCircle`, `XCircle` já importados).
+ *
  * Rev. 2071 — **Cotações · "Informações obrigatórias faltando — Prazo
  * de Entrega" mesmo com MDO+Medição configurada + badge "0 PENDÊNCIAS"
  * com erro visível.** Pedido do usuário (IMG_0976 + IMG_0977): "Todas
