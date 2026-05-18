@@ -2,7 +2,7 @@ import { useRoute } from "wouter";
 import { useRef, useState, useMemo } from "react";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
-import { Loader2, ShieldCheck, AlertTriangle, CheckCircle2, FileText, Users, Building2 } from "lucide-react";
+import { Loader2, ShieldCheck, AlertTriangle, CheckCircle2, FileText, Users, Building2, ZoomIn, ZoomOut, Printer, Maximize2 } from "lucide-react";
 import SignaturePad, { type SignaturePadHandle } from "@/components/SignaturePad";
 import { toast } from "sonner";
 import DOMPurify from "dompurify";
@@ -21,6 +21,7 @@ export default function AssinarDocumento() {
   const [agreed, setAgreed] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [justSigned, setJustSigned] = useState(false);
+  const [zoom, setZoom] = useState(1);
 
   const q = trpc.signatures.getByToken.useQuery({ token }, { enabled: token.length === 64, retry: false });
   const signMut = trpc.signatures.sign.useMutation();
@@ -83,13 +84,79 @@ export default function AssinarDocumento() {
       </header>
 
       <main className="max-w-5xl mx-auto px-4 py-6 grid lg:grid-cols-[1fr_360px] gap-6">
-        {/* Documento */}
-        <section className="bg-white rounded-lg shadow border border-slate-200 overflow-hidden">
-          <div className="bg-slate-50 border-b border-slate-200 px-4 py-3 flex items-center gap-2">
-            <FileText className="h-4 w-4 text-slate-600" />
-            <h2 className="font-semibold text-slate-800 text-sm">{session.documentTitle}</h2>
+        {/* Documento — visualização tipo PDF (página A4 com toolbar) */}
+        <section className="bg-slate-700 rounded-lg shadow-lg border border-slate-300 overflow-hidden flex flex-col">
+          {/* Toolbar tipo viewer de PDF */}
+          <div className="bg-slate-800 text-slate-100 px-4 py-2 flex items-center gap-3 text-xs">
+            <FileText className="h-4 w-4 text-slate-300 flex-shrink-0" />
+            <h2 className="font-medium truncate flex-1">{session.documentTitle}</h2>
+            <div className="flex items-center gap-1 bg-slate-700 rounded-md px-1 py-0.5">
+              <button
+                type="button"
+                onClick={() => setZoom((z) => Math.max(0.6, +(z - 0.1).toFixed(2)))}
+                className="p-1 hover:bg-slate-600 rounded transition"
+                aria-label="Diminuir zoom"
+                title="Diminuir zoom"
+              >
+                <ZoomOut className="h-3.5 w-3.5" />
+              </button>
+              <span className="px-1.5 text-[11px] tabular-nums w-10 text-center">{Math.round(zoom * 100)}%</span>
+              <button
+                type="button"
+                onClick={() => setZoom((z) => Math.min(2, +(z + 0.1).toFixed(2)))}
+                className="p-1 hover:bg-slate-600 rounded transition"
+                aria-label="Aumentar zoom"
+                title="Aumentar zoom"
+              >
+                <ZoomIn className="h-3.5 w-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setZoom(1)}
+                className="p-1 hover:bg-slate-600 rounded transition"
+                aria-label="Resetar zoom"
+                title="Tamanho real"
+              >
+                <Maximize2 className="h-3.5 w-3.5" />
+              </button>
+            </div>
+            <button
+              type="button"
+              onClick={() => window.print()}
+              className="flex items-center gap-1 bg-slate-700 hover:bg-slate-600 rounded-md px-2 py-1 transition"
+              title="Imprimir ou salvar PDF"
+            >
+              <Printer className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Imprimir / PDF</span>
+            </button>
           </div>
-          <div className="p-6 max-h-[70vh] overflow-y-auto prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: safeHtml }} />
+
+          {/* Área de visualização — fundo escuro, página A4 branca centralizada */}
+          <div className="bg-slate-600 overflow-auto" style={{ maxHeight: "75vh" }}>
+            <div className="flex justify-center py-6 px-4 print:p-0 print:bg-white" style={{ minHeight: "100%" }}>
+              <div
+                id="fcsign-pdf-page"
+                className="bg-white shadow-2xl print:shadow-none origin-top"
+                style={{
+                  width: "210mm",
+                  minHeight: "297mm",
+                  padding: "20mm 18mm",
+                  transform: `scale(${zoom})`,
+                  transformOrigin: "top center",
+                  marginBottom: zoom > 1 ? `${(zoom - 1) * 297}mm` : 0,
+                  fontFamily: "'Times New Roman', Times, Georgia, serif",
+                  fontSize: "12pt",
+                  lineHeight: 1.5,
+                  color: "#111",
+                }}
+              >
+                <div
+                  className="fcsign-document-body"
+                  dangerouslySetInnerHTML={{ __html: safeHtml }}
+                />
+              </div>
+            </div>
+          </div>
         </section>
 
         {/* Painel lateral */}
@@ -169,9 +236,27 @@ export default function AssinarDocumento() {
         </aside>
       </main>
 
-      <footer className="max-w-5xl mx-auto px-4 py-6 text-center text-[11px] text-slate-500">
+      <footer className="max-w-5xl mx-auto px-4 py-6 text-center text-[11px] text-slate-500 print:hidden">
         FCSign · FC Engenharia · Sistema interno de assinatura eletrônica · {new Date().getFullYear()}
       </footer>
+
+      {/* Estilos de impressão: imprime SOMENTE a página A4 do documento */}
+      <style>{`
+        @media print {
+          body * { visibility: hidden !important; }
+          #fcsign-pdf-page, #fcsign-pdf-page * { visibility: visible !important; }
+          #fcsign-pdf-page {
+            position: absolute !important;
+            top: 0 !important; left: 0 !important;
+            transform: none !important;
+            box-shadow: none !important;
+            margin: 0 !important;
+            width: 100% !important; min-height: auto !important;
+            padding: 15mm !important;
+          }
+          @page { size: A4; margin: 0; }
+        }
+      `}</style>
     </div>
   );
 }
