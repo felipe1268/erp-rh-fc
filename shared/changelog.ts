@@ -1,6 +1,45 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2087 — **Permissões · menu "Categorias" (Financeiro) não
+ * aparecia para usuários de grupo sem `level=admin/viewer`.**
+ *
+ * Pedido do user (screenshot da Lilian "Usuário" no módulo Financeiro
+ * mostrando o sidebar com Plano de Contas / Centros de Custo /
+ * Conciliação / Configurações — mas SEM "Categorias"): "no usuário
+ * da Lilian não está aparecendo o menu CATEGORIAS".
+ *
+ * **Causa-raiz:** A rota `/financeiro/categorias` foi adicionada na
+ * Rev. 2083 ao `DashboardLayout`, `App.tsx`, `ModuleContext`,
+ * `Configuracoes`, `ActivityTracker` e `GruposUsuarios` — mas
+ * faltou registrar nos DOIS mapas compartilhados de permissão:
+ *   1. `shared/modules.ts` → array `features` do módulo `financeiro`
+ *      (não tinha `financeiro-categorias`).
+ *   2. `shared/modulePages.ts` → mapa `ROUTE_TO_PAGEID.financeiro`
+ *      (não tinha `/financeiro/categorias`).
+ *
+ * Resultado: em `PermissionsContext.groupCanAccessRoute()` (sistema
+ * NOVO de `module_access`), o `MODULE_DEFINITIONS.find()` que
+ * procura quem é dono da rota retornava `null` → cai no `return
+ * false` da linha ~345 → menu filtrado fora pelo
+ * `filterWithChildren(groupCheck)` em `DashboardLayout`. Para grupos
+ * com `level === "admin"` ou `"viewer"` o curto-circuito da linha
+ * 351 (`return true`) ainda funcionava por sorte, mas para grupos
+ * com permissões granulares por página (caso da Lilian) o menu nunca
+ * aparecia.
+ *
+ * **Fix:** Registrar a rota nos dois mapas, com Categorias
+ * **herdando o pageId `plano_contas`** (são irmãs em "Cadastros" —
+ * quem já tem acesso a Plano de Contas vê Categorias automaticamente,
+ * sem precisar re-salvar grupo). Isso evita migration de dados e
+ * preserva o intent original: ambas mexem em `financial_accounts`.
+ *
+ * **Arquivos:**
+ * - `shared/modules.ts` (feature `financeiro-categorias` adicionada
+ *   entre Plano de Contas e Centros de Custo)
+ * - `shared/modulePages.ts` (`/financeiro/categorias → plano_contas`
+ *   com comentário explicando o aliasing intencional)
+ *
  * Rev. 2086 — **Painel RH / Home · Aniversariantes do Mês +
  * Aniversários de Empresa: ordem cronológica relativa ao dia atual
  * (HOJE primeiro → próximos do mês → já passados no fim).**

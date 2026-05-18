@@ -623,6 +623,10 @@ export const ROUTE_TO_PAGEID: Record<string, Record<string, string>> = {
     "/financeiro/fluxo-de-caixa":   "fluxo_caixa",
     "/financeiro/obrigacoes-fiscais":"obrigacoes_fiscais",
     "/financeiro/plano-de-contas":  "plano_contas",
+    // Rev. 2087 — Categorias herda o pageId do Plano de Contas
+    // (são irmãs em "Cadastros" — quem tem acesso a uma, vê a outra
+    // automaticamente, sem precisar re-salvar grupo).
+    "/financeiro/categorias":       "plano_contas",
     "/financeiro/centros-de-custo": "centros_custo",
     "/financeiro/conciliacao":      "conciliacao",
     "/financeiro/recorrentes":      "recorrentes",

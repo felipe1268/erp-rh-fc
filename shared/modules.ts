@@ -428,6 +428,7 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
       { key: "financeiro-dre",               label: "DRE",                  route: "/financeiro/dre",                    icon: "BarChart3" },
       { key: "financeiro-fluxo",             label: "Fluxo de Caixa",       route: "/financeiro/fluxo-de-caixa",         icon: "TrendingUp" },
       { key: "financeiro-plano-contas",      label: "Plano de Contas",      route: "/financeiro/plano-de-contas",        icon: "ListTree" },
+      { key: "financeiro-categorias",        label: "Categorias",           route: "/financeiro/categorias",             icon: "Tag" },
       { key: "financeiro-centros-custo",     label: "Centros de Custo",     route: "/financeiro/centros-de-custo",       icon: "Layers" },
       { key: "financeiro-obrigacoes-fiscais",label: "Obrigações Fiscais",   route: "/financeiro/obrigacoes-fiscais",     icon: "FileText" },
       { key: "financeiro-conciliacao",       label: "Conciliação Bancária", route: "/financeiro/conciliacao",            icon: "GitMerge" },
