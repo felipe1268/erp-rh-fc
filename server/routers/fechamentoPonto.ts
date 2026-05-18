@@ -1536,6 +1536,11 @@ export const fechamentoPontoRouter = router({
       const conditions: any[] = [
         companyFilter(timeRecords.companyId, input),
         eq(timeRecords.mesReferencia, input.mesReferencia),
+        // Rev. 2075 — RH controla ponto APENAS de CLT. PJ não bate ponto.
+        // COALESCE garante que linhas legadas com tipoContrato NULL (defaults
+        // antigos CLT) continuem visíveis. Filtro defensivo em todos os
+        // endpoints de Fechamento de Ponto pra evitar leak de PJ no futuro.
+        sql`COALESCE(${employees.tipoContrato}, 'CLT') <> 'PJ'`,
       ];
       if (input.obraId) conditions.push(eq(timeRecords.obraId, input.obraId));
       if (input.employeeId) conditions.push(eq(timeRecords.employeeId, input.employeeId));
@@ -1565,6 +1570,9 @@ export const fechamentoPontoRouter = router({
       const db = (await getDb())!;
       const conditions: any[] = [
         companyFilter(timeRecords.companyId, input),
+        // Rev. 2075 — RH controla ponto APENAS de CLT. PJ não bate ponto.
+        // Filtra rankings (Pontuais/Atrasados/HE/Faltosos) + KPIs derivados.
+        sql`COALESCE(${employees.tipoContrato}, 'CLT') <> 'PJ'`,
       ];
       // Quando o ciclo não coincide com o mês calendário (ex: 16/03–15/04),
       // usar range de datas para pegar registros dos dois meses envolvidos.
@@ -2297,6 +2305,9 @@ export const fechamentoPontoRouter = router({
       const conditions = [
         companyFilter(timeRecords.companyId, input),
         eq(timeRecords.mesReferencia, input.mesReferencia),
+        // Rev. 2075 — Excluir PJ dos KPIs (RH só controla ponto de CLT).
+        // EXISTS guard pra não exigir JOIN explícito em cada SELECT COUNT.
+        sql`NOT EXISTS (SELECT 1 FROM employees e WHERE e.id = ${timeRecords.employeeId} AND e."tipoContrato" = 'PJ')`,
       ];
 
       const [totalRecs] = await db.select({ count: sql<number>`COUNT(*)` })
@@ -2311,6 +2322,9 @@ export const fechamentoPontoRouter = router({
           companyFilter(timeInconsistencies.companyId, input),
           eq(timeInconsistencies.mesReferencia, input.mesReferencia),
           eq(timeInconsistencies.status, "pendente"),
+          // Rev. 2075 — Excluir PJ também aqui (4ª KPI). PJ não bate ponto,
+          // logo qualquer inconsistência associada a employeeId PJ é ruído.
+          sql`NOT EXISTS (SELECT 1 FROM employees e WHERE e.id = ${timeInconsistencies.employeeId} AND e."tipoContrato" = 'PJ')`,
         ));
 
       const [totalManual] = await db.select({ count: sql<number>`COUNT(*)` })

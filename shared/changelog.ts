@@ -1,6 +1,65 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2075 — **Fechamento de Ponto · PJ aparecia indevidamente nos rankings
+ * (Pontuais/Atrasados/HE/Faltosos) e nos KPIs do header.** Pedido do usuário
+ * (IMG_0984): "Atenção PJ, não tem controle de ponto, revise todo o ERP,
+ * para não ter este erro... rh só controla o ponto de quem é CLT".
+ *
+ * Diagnóstico: o módulo Fechamento de Ponto não tinha guarda contra
+ * `tipoContrato='PJ'` em 3 endpoints centrais — `getSummary` (alimenta os
+ * 4 rankings + KPIs do modal "Menos Dias Trabalhados"), `listRecords`
+ * (visão detalhe por funcionário) e `getStats` (KPIs do topo: Total
+ * Registros, Colaboradores, Inconsistências, Ajustes Manuais). Hoje o
+ * banco tem 5 employees todos CLT, então o leak não estava ativo, mas
+ * QUALQUER cadastro futuro com tipoContrato='PJ' viraria entrada nos
+ * rankings (injusto: PJ trabalha por entrega, não bate ponto).
+ *
+ * Fix defensivo em 3 endpoints (`server/routers/fechamentoPonto.ts`):
+ *   1. `listRecords` L1542-1546: adicionado
+ *      `sql\`COALESCE(\${employees.tipoContrato}, 'CLT') <> 'PJ'\`` ao
+ *      array `conditions`. COALESCE preserva legados NULL (default CLT
+ *      histórico) — exclui APENAS quem é explicitamente 'PJ'.
+ *   2. `getSummary` L1576-1578: mesmo filtro no array `conditions`,
+ *      aplicado no JOIN `timeRecords ⨝ employees`. Resolve o screenshot
+ *      (modal "Menos Dias Trabalhados") + reflete nos 4 rankings que
+ *      derivam de `summary.data` (Pontuais, Atrasados, HE, Faltosos)
+ *      e nos KPIs computados client-side (10 colaboradores, média de
+ *      dias, presença, justificadas/não justificadas).
+ *   3. `getStats` L2311-2313: guard via EXISTS subquery
+ *      (`NOT EXISTS (SELECT 1 FROM employees e WHERE e.id = ... AND
+ *      e."tipoContrato" = 'PJ')`) — KPIs `totalRegistros`,
+ *      `totalColaboradores`, `totalInconsistencias`, `totalAjustesManuais`
+ *      excluem registros de PJ sem precisar JOIN explícito em cada COUNT.
+ *
+ * Por que EXISTS no getStats: as 4 COUNT queries reaproveitam o mesmo
+ * array `conditions` sem JOIN com employees — adicionar JOIN inflaria
+ * 4× a query e ainda mudaria a cardinalidade do COUNT(*). EXISTS é
+ * surgical, indexado pela PK de employees, e idempotente.
+ *
+ * Convenção CLT vs PJ: optei por `<> 'PJ'` (exclude PJ) em vez de
+ * `= 'CLT'` (include CLT) pra preservar futuros tipos (estagiário,
+ * temporário, aprendiz) que também controlam ponto. Único excluído é
+ * PJ — fiel à fala do usuário "rh só controla ponto de quem é CLT"
+ * lida como "PJ não bate ponto".
+ *
+ * Não toquei em `getEmployeeDetail`, `getDiasEmployee`, `getAtrasoDetalhe`,
+ * `getHeDetalhe`, `getFaltaDetalhe` (drill-down por employee específico:
+ * usuário só acessa via clique no nome, então se chegou lá é porque já
+ * está exibido no ranking — e ranking agora filtra PJ na origem).
+ * Tampouco toquei em `getFaltasReport` / `recalcularPeriodo` (já têm
+ * `eq(employees.tipoContrato, 'CLT')` explícito desde Rev. mais antiga).
+ *
+ * Arquivos:
+ *   - `server/routers/fechamentoPonto.ts` L1542-1546, L1576-1578,
+ *     L2311-2313
+ *   - `shared/version.ts` → Rev. 2075
+ *   - `shared/changelog.ts` (esta entrada)
+ *   - `replit.md` rotacionado (2074 vira top-2, 2073 vira one-liner,
+ *     2068 vai pra `replit-history.md`)
+ *
+ * ZERO migration, ZERO schema change.
+ *
  * Rev. 2074 — **Cotações · botão "Aprovar e Gerar Contrato de Serviço"
  * ainda travava com toast "Defina o Prazo de Entrega" em MDO puro +
  * cards de header/lateral mostravam "PRAZO ENTREGA: —" inutilmente.**
