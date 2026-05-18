@@ -52,23 +52,21 @@ export default function FCSignSendDialog({ open, onOpenChange, companyId, employ
   };
 
   const handleSubmit = async () => {
-    if (!t1Nome.trim() || !t2Nome.trim()) {
-      toast.error("Informe o nome das duas testemunhas.");
-      return;
-    }
     try {
+      // Testemunhas são OPCIONAIS — só anexa ao array se nome foi preenchido.
+      const signers: Array<{ role: "empregado" | "empregador" | "testemunha_1" | "testemunha_2"; nome: string; cpf: string | null }> = [
+        { role: "empregado", nome: empregadoNome, cpf: empregadoCpf || null },
+        { role: "empregador", nome: FELIPE_SOCIO.nome, cpf: FELIPE_SOCIO.cpf },
+      ];
+      if (t1Nome.trim()) signers.push({ role: "testemunha_1", nome: t1Nome.trim(), cpf: t1Cpf || null });
+      if (t2Nome.trim()) signers.push({ role: "testemunha_2", nome: t2Nome.trim(), cpf: t2Cpf || null });
       const r = await createMut.mutateAsync({
         companyId,
         employeeId,
         tipo,
         documentTitle,
         documentHtml,
-        signers: [
-          { role: "empregado", nome: empregadoNome, cpf: empregadoCpf || null },
-          { role: "empregador", nome: FELIPE_SOCIO.nome, cpf: FELIPE_SOCIO.cpf },
-          { role: "testemunha_1", nome: t1Nome.trim(), cpf: t1Cpf || null },
-          { role: "testemunha_2", nome: t2Nome.trim(), cpf: t2Cpf || null },
-        ],
+        signers,
       });
       setResult(r);
       toast.success("Sessão FCSign criada! Copie os links e envie pelo WhatsApp.");
@@ -171,7 +169,7 @@ export default function FCSignSendDialog({ open, onOpenChange, companyId, employ
                   <div className="space-y-2 lg:border-r lg:border-slate-100 lg:pr-4">
                     <div className="text-[11px] font-bold uppercase tracking-wide text-amber-700">Testemunha 1</div>
                     <div>
-                      <label htmlFor="fcs-t1-nome" className="text-[11px] font-bold uppercase tracking-wide text-slate-600 mb-1.5 block">Nome completo *</label>
+                      <label htmlFor="fcs-t1-nome" className="text-[11px] font-bold uppercase tracking-wide text-slate-600 mb-1.5 block">Nome completo <span className="text-slate-400 normal-case font-normal">(opcional)</span></label>
                       <Input id="fcs-t1-nome" value={t1Nome} onChange={(e) => setT1Nome(e.target.value)} placeholder="Ex.: João da Silva" className="h-9 bg-white" />
                     </div>
                     <div>
@@ -182,7 +180,7 @@ export default function FCSignSendDialog({ open, onOpenChange, companyId, employ
                   <div className="space-y-2">
                     <div className="text-[11px] font-bold uppercase tracking-wide text-amber-700">Testemunha 2</div>
                     <div>
-                      <label htmlFor="fcs-t2-nome" className="text-[11px] font-bold uppercase tracking-wide text-slate-600 mb-1.5 block">Nome completo *</label>
+                      <label htmlFor="fcs-t2-nome" className="text-[11px] font-bold uppercase tracking-wide text-slate-600 mb-1.5 block">Nome completo <span className="text-slate-400 normal-case font-normal">(opcional)</span></label>
                       <Input id="fcs-t2-nome" value={t2Nome} onChange={(e) => setT2Nome(e.target.value)} placeholder="Ex.: Maria Souza" className="h-9 bg-white" />
                     </div>
                     <div>
