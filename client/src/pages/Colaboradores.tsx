@@ -1922,115 +1922,105 @@ ${obs ? `<div class="box"><strong>Observações / Justificativa do Enquadramento
                     //  2) FCSign /assinar/:token: AssinarDocumento.tsx tem CSS de fallback scopado
                     //  3) PDF final FCSign: mesmo HTML, mesmas inline rules
                     // Layout do topo: <table> (mais robusto que flex pra impressão).
-                    const contratoHtml = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Contrato de Experiência - ${empNome}</title></head><body style="font-family:'Times New Roman','Liberation Serif',Georgia,serif;font-size:11.5pt;line-height:1.65;color:#0f172a;max-width:21cm;margin:0 auto;padding:0.8cm 1.8cm 1.8cm 1.8cm;text-align:justify;-webkit-print-color-adjust:exact;print-color-adjust:exact">
+                    // Rev. 2109: refatoração 100% fiel ao PDF modelo do Comunicado Interno.
+                    // - Fonte do CORPO: Helvetica/Arial 10.5pt (como o PDF; nada de Times serif).
+                    // - Faixa azul: full-width edge-to-edge (margin lateral negativo -1.8cm),
+                    //   sem border-radius, sem border branco, sem box-shadow.
+                    // - Bloco ASSUNTO: sem fundo, sem border, apenas indent 1cm + label/valor uppercase.
+                    // - Cláusulas: título bold simples (sem border-left navy, sem painel).
+                    // - Rodapé: inclui "| Por: NomeUsuario" (vem de `user?.nome` via useAuth).
+                    // - Sem `class="header"` (que ativaria border-bottom do CSS scopado).
+                    const userName = esc((user as any)?.nome || (user as any)?.name || 'Sistema');
+                    const dataHoje = new Date().toLocaleDateString('pt-BR');
+                    const horaAgora = new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+                    const contratoHtml = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Contrato de Experiência - ${empNome}</title></head><body style="font-family:'Helvetica','Arial','Liberation Sans',sans-serif;font-size:10.5pt;line-height:1.5;color:#1a1a1a;max-width:21cm;margin:0 auto;padding:1.5cm 1.8cm 1.5cm 1.8cm;text-align:justify;-webkit-print-color-adjust:exact;print-color-adjust:exact">
 <style>
-@page{size:A4;margin:2cm}
-body p{margin:0 0 10px 0;text-align:justify;hyphens:auto;-webkit-hyphens:auto}
-body strong{font-weight:700;color:#0f172a}
-body .clausula{margin-top:16px}
-body .clausula-title{font-weight:700;text-transform:uppercase;margin:0 0 6px 0;color:#1B2A4A;font-size:11.5pt;letter-spacing:.3px;border-left:3px solid #1B2A4A;padding-left:8px;text-align:left}
-body .assinaturas{margin-top:50px;display:table;width:100%;table-layout:fixed;page-break-inside:avoid}
-body .assinaturas .assinatura{display:table-cell;text-align:center;padding:0 18px;vertical-align:top}
-body .assinaturas .linha{border-top:1px solid #0f172a;padding-top:6px;margin-top:56px;font-size:10.5pt;font-weight:600;text-align:center}
-body .assinaturas .linha small{display:block;font-weight:400;color:#475569;margin-top:2px;font-size:9pt}
-body .destaque{font-weight:700;color:#0f172a}
+@page{size:A4;margin:1.5cm}
+body p{margin:0 0 8px 0;text-align:justify;hyphens:auto;-webkit-hyphens:auto}
+body strong{font-weight:700;color:#1a1a1a}
+body .destaque{font-weight:700;color:#1a1a1a}
 @media print{body{padding:0}*{-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important}}
 </style>
 <div class="fcsign-document-body">
-<!-- REGRA DE OURO: cabeçalho institucional FC centralizado (logo + nome + CNPJ + endereço + faixa azul + meta) -->
-<div class="header" style="margin:0 0 24px 0;text-align:center">
-  <div style="text-align:center;margin-bottom:8px">
-    <img src="${esc(logoSrc)}" alt="${esc(comp?.razaoSocial || 'FC Engenharia')}" style="display:inline-block;height:88px;width:auto;max-width:200px;object-fit:contain" />
-  </div>
-  <h1 style="font-family:'Helvetica','Arial',sans-serif;font-size:16pt;font-weight:800;color:#0f172a;margin:6px 0 4px 0;letter-spacing:.6px;text-transform:uppercase;text-align:center;line-height:1.15">${esc(comp?.razaoSocial || 'FC Engenharia')}</h1>
-  ${comp?.cnpj ? `<p style="font-family:'Helvetica','Arial',sans-serif;font-size:9.5pt;color:#475569;margin:0;letter-spacing:.3px;text-align:center">CNPJ: ${esc(comp.cnpj)}</p>` : ''}
-  ${comp?.endereco ? `<p style="font-family:'Helvetica','Arial',sans-serif;font-size:9pt;color:#64748b;margin:2px 0 0 0;letter-spacing:.2px;text-align:center;text-transform:uppercase">${esc(comp.endereco)}${comp?.cidade ? ' — ' + esc(comp.cidade) + ' - ' + esc(comp?.estado || '') : ''}</p>` : ''}
-  <div style="background-color:#1B2A4A;color:#fff;padding:14px 18px;text-align:center;border-radius:4px;margin:16px 0 0 0;border:2px solid #ffffff;box-shadow:0 0 0 1px #1B2A4A;-webkit-print-color-adjust:exact;print-color-adjust:exact">
-    <span style="font-family:'Helvetica','Arial',sans-serif;font-size:13pt;font-weight:700;letter-spacing:3px;text-transform:uppercase;display:block;color:#fff">Contrato de Experiência</span>
-  </div>
-  <table style="width:100%;border-collapse:collapse;margin-top:10px"><tbody><tr>
-    <td style="text-align:left;font-family:'Helvetica','Arial',sans-serif;font-size:9pt;color:#64748b;padding:0">Nº ${String((editingId || 0)).padStart(3,'0')}/${new Date().getFullYear()}</td>
-    <td style="text-align:right;font-family:'Helvetica','Arial',sans-serif;font-size:9pt;color:#64748b;padding:0">Data de Emissão: ${new Date().toLocaleDateString('pt-BR')}</td>
-  </tr></tbody></table>
+<!-- REGRA DE OURO Rev. 2109: cabeçalho FC EXATAMENTE como o PDF modelo (Comunicado Interno) -->
+<div style="text-align:center;margin:0 0 14px 0">
+  <img src="${esc(logoSrc)}" alt="${esc(comp?.razaoSocial || 'FC Engenharia')}" style="display:inline-block;height:72px;width:auto;max-width:180px;object-fit:contain;margin-bottom:6px" />
+  <div style="font-family:'Helvetica','Arial',sans-serif;font-size:13pt;font-weight:700;color:#1a1a1a;letter-spacing:.4px;text-transform:uppercase;line-height:1.2;margin:4px 0 2px 0">${esc(comp?.razaoSocial || 'FC Engenharia')}</div>
+  ${comp?.cnpj ? `<div style="font-family:'Helvetica','Arial',sans-serif;font-size:9.5pt;color:#333;margin:0;line-height:1.3">CNPJ: ${esc(comp.cnpj)}</div>` : ''}
+  ${comp?.endereco ? `<div style="font-family:'Helvetica','Arial',sans-serif;font-size:9pt;color:#333;margin:1px 0 0 0;text-transform:uppercase;line-height:1.3">${esc(comp.endereco)}${comp?.cidade ? ' - ' + esc(comp.cidade) + ' - ' + esc(comp?.estado || '') : ''}</div>` : ''}
 </div>
 
-<!-- Bloco ASSUNTO no padrão do Comunicado Interno (modelo de ouro Rev. 2107) -->
-<div style="background-color:#f1f5f9;border-left:4px solid #1B2A4A;padding:10px 14px;margin:0 0 22px 0;-webkit-print-color-adjust:exact;print-color-adjust:exact">
-  <div style="font-family:'Helvetica','Arial',sans-serif;font-size:8.5pt;color:#64748b;letter-spacing:1.5px;text-transform:uppercase;font-weight:700;margin-bottom:3px">EMPREGADO(A):</div>
-  <div style="font-family:'Helvetica','Arial',sans-serif;font-size:11pt;color:#0f172a;font-weight:700;text-transform:uppercase;letter-spacing:.3px">${empNome}${empFuncao ? ' — ' + empFuncao : ''}</div>
+<!-- Faixa azul edge-to-edge (sem border-radius, sem border, full-width via margem negativa) -->
+<div style="background-color:#1B2A4A;color:#fff;padding:11px 18px;text-align:center;margin:18px -1.8cm 0 -1.8cm;-webkit-print-color-adjust:exact;print-color-adjust:exact">
+  <span style="font-family:'Helvetica','Arial',sans-serif;font-size:12pt;font-weight:700;letter-spacing:3px;text-transform:uppercase;display:block;color:#fff">Contrato de Experiência</span>
+</div>
+
+<!-- Linha meta Nº/Data (logo abaixo da faixa, 10pt cinza) -->
+<table style="width:100%;border-collapse:collapse;margin:14px 0 6px 0"><tbody><tr>
+  <td style="text-align:left;font-family:'Helvetica','Arial',sans-serif;font-size:10pt;color:#333;padding:0">Nº ${String((editingId || 0)).padStart(3,'0')}/${new Date().getFullYear()}</td>
+  <td style="text-align:right;font-family:'Helvetica','Arial',sans-serif;font-size:10pt;color:#333;padding:0">Data de Emissão: ${dataHoje}</td>
+</tr></tbody></table>
+
+<!-- Bloco ASSUNTO no padrão EXATO do PDF: sem fundo, sem border, indent 1cm, label + valor uppercase -->
+<div style="margin:22px 0 18px 1cm;text-align:left">
+  <div style="font-family:'Helvetica','Arial',sans-serif;font-size:10.5pt;color:#1a1a1a;font-weight:700;text-transform:uppercase;margin-bottom:2px">ASSUNTO:</div>
+  <div style="font-family:'Helvetica','Arial',sans-serif;font-size:10.5pt;color:#1a1a1a;font-weight:700;text-transform:uppercase">CONTRATO DE EXPERIÊNCIA — ${empNome}${empFuncao ? ' (' + empFuncao + ')' : ''}</div>
 </div>
 
 <p>Pelo presente instrumento particular de <strong>CONTRATO DE TRABALHO POR PRAZO DETERMINADO (EXPERIÊNCIA)</strong>, que entre si fazem:</p>
 
-<div class="clausula">
-<p><span class="destaque">EMPREGADOR:</span> ${esc(comp?.razaoSocial || '________________________________')}, inscrita no CNPJ sob nº ${esc(comp?.cnpj || '___.___.___/____-__')}, com sede em ${esc(comp?.endereco || '________________')}, ${esc(comp?.cidade || '________')}/${esc(comp?.estado || '__')}, doravante denominada simplesmente <strong>EMPREGADOR</strong>.</p>
-</div>
+<p style="margin-top:10px"><span class="destaque">EMPREGADOR:</span> ${esc(comp?.razaoSocial || '________________________________')}, inscrita no CNPJ sob nº ${esc(comp?.cnpj || '___.___.___/____-__')}, com sede em ${esc(comp?.endereco || '________________')}, ${esc(comp?.cidade || '________')}/${esc(comp?.estado || '__')}, doravante denominada simplesmente <strong>EMPREGADOR</strong>.</p>
 
-<div class="clausula">
-<p><span class="destaque">EMPREGADO(A):</span> ${empNome}, portador(a) do CPF nº ${esc(formatCPF(empCpf)) || '___.___.___-__'}, RG nº ${empRg || '____________'}, CTPS nº ${empCtps || '____________'}, residente em ${empEndereco ? empEndereco + ', ' + empCidade + '/' + empEstado : '________________________________'}, doravante denominado(a) simplesmente <strong>EMPREGADO(A)</strong>.</p>
-</div>
+<p style="margin-top:10px"><span class="destaque">EMPREGADO(A):</span> ${empNome}, portador(a) do CPF nº ${esc(formatCPF(empCpf)) || '___.___.___-__'}, RG nº ${empRg || '____________'}, CTPS nº ${empCtps || '____________'}, residente em ${empEndereco ? empEndereco + ', ' + empCidade + '/' + empEstado : '________________________________'}, doravante denominado(a) simplesmente <strong>EMPREGADO(A)</strong>.</p>
 
-<p>Têm entre si justo e contratado o seguinte:</p>
+<p style="margin-top:10px">Têm entre si justo e contratado o seguinte:</p>
 
-<div class="clausula">
-<p class="clausula-title">Cláusula 1ª — Da Função</p>
-<p>O(A) EMPREGADO(A) é admitido(a) para exercer a função de <strong>${empFuncao || '________________'}</strong>, obrigando-se a executar as tarefas inerentes à função para a qual foi contratado(a), bem como as que forem compatíveis com a sua condição pessoal.</p>
-</div>
+<p style="margin-top:14px"><strong>CLÁUSULA 1ª — DA FUNÇÃO.</strong> O(A) EMPREGADO(A) é admitido(a) para exercer a função de <strong>${empFuncao || '________________'}</strong>, obrigando-se a executar as tarefas inerentes à função para a qual foi contratado(a), bem como as que forem compatíveis com a sua condição pessoal.</p>
 
-<div class="clausula">
-<p class="clausula-title">Cláusula 2ª — Da Remuneração</p>
-<p>O(A) EMPREGADO(A) receberá a título de remuneração mensal o valor de <strong>R$ ${empSalario}</strong> (${empSalario} reais), pagos até o 5º dia útil do mês subsequente ao trabalhado, com os descontos legais previstos em lei.</p>
-</div>
+<p style="margin-top:10px"><strong>CLÁUSULA 2ª — DA REMUNERAÇÃO.</strong> O(A) EMPREGADO(A) receberá a título de remuneração mensal o valor de <strong>R$ ${empSalario}</strong>, pago até o 5º dia útil do mês subsequente ao trabalhado, com os descontos legais previstos em lei.</p>
 
-<div class="clausula">
-<p class="clausula-title">Cláusula 3ª — Da Jornada de Trabalho</p>
-<p>A jornada de trabalho do(a) EMPREGADO(A) será de <strong>${jornadaDesc}</strong>, respeitados os intervalos legais para repouso e alimentação, nos termos do Art. 71 da CLT.</p>
-</div>
+<p style="margin-top:10px"><strong>CLÁUSULA 3ª — DA JORNADA DE TRABALHO.</strong> A jornada de trabalho do(a) EMPREGADO(A) será de <strong>${jornadaDesc}</strong>, respeitados os intervalos legais para repouso e alimentação, nos termos do Art. 71 da CLT.</p>
 
-<div class="clausula">
-<p class="clausula-title">Cláusula 4ª — Do Prazo</p>
-<p>O presente contrato é firmado por prazo determinado de <strong>${dias1} (${dias1 === 30 ? 'trinta' : 'quarenta e cinco'}) dias</strong>, com início em <strong>${fmtDate(inicio)}</strong> e término previsto em <strong>${fmtDate(fim1)}</strong>, podendo ser prorrogado por mais <strong>${dias1} dias</strong>, totalizando <strong>${dias2} dias</strong>, com término final em <strong>${fmtDate(fim2)}</strong>, conforme Art. 445 da CLT.</p>
-</div>
+<p style="margin-top:10px"><strong>CLÁUSULA 4ª — DO PRAZO.</strong> O presente contrato é firmado por prazo determinado de <strong>${dias1} (${dias1 === 30 ? 'trinta' : 'quarenta e cinco'}) dias</strong>, com início em <strong>${fmtDate(inicio)}</strong> e término previsto em <strong>${fmtDate(fim1)}</strong>, podendo ser prorrogado por mais <strong>${dias1} dias</strong>, totalizando <strong>${dias2} dias</strong>, com término final em <strong>${fmtDate(fim2)}</strong>, conforme Art. 445 da CLT.</p>
 
-<div class="clausula">
-<p class="clausula-title">Cláusula 5ª — Da Rescisão Antecipada</p>
-<p>Caso o EMPREGADOR rescinda o contrato antes do prazo estipulado, sem justa causa, ficará obrigado a pagar ao EMPREGADO(A), a título de indenização, metade da remuneração a que teria direito até o término do contrato, conforme <strong>Art. 479 da CLT</strong>.</p>
-<p>Caso o(a) EMPREGADO(A) se desligue antes do prazo, poderá ser obrigado(a) a indenizar o EMPREGADOR nos termos do <strong>Art. 480 da CLT</strong>, limitada a indenização àquela a que teria direito o empregado em idênticas condições (§1º).</p>
-</div>
+<p style="margin-top:10px"><strong>CLÁUSULA 5ª — DA RESCISÃO ANTECIPADA.</strong> Caso o EMPREGADOR rescinda o contrato antes do prazo estipulado, sem justa causa, ficará obrigado a pagar ao EMPREGADO(A), a título de indenização, metade da remuneração a que teria direito até o término do contrato, conforme <strong>Art. 479 da CLT</strong>. Caso o(a) EMPREGADO(A) se desligue antes do prazo, poderá ser obrigado(a) a indenizar o EMPREGADOR nos termos do <strong>Art. 480 da CLT</strong>, limitada a indenização àquela a que teria direito o empregado em idênticas condições (§1º).</p>
 
-<div class="clausula">
-<p class="clausula-title">Cláusula 6ª — Das Obrigações</p>
-<p>O(A) EMPREGADO(A) se obriga a cumprir o regulamento interno da empresa, manter sigilo sobre informações confidenciais e zelar pelos equipamentos e materiais que lhe forem confiados.</p>
-</div>
+<p style="margin-top:10px"><strong>CLÁUSULA 6ª — DAS OBRIGAÇÕES.</strong> O(A) EMPREGADO(A) se obriga a cumprir o regulamento interno da empresa, manter sigilo sobre informações confidenciais e zelar pelos equipamentos e materiais que lhe forem confiados.</p>
 
-<div class="clausula">
-<p class="clausula-title">Cláusula 7ª — Do Local de Trabalho</p>
-<p>O(A) EMPREGADO(A) prestará serviços nas dependências do EMPREGADOR ou em obras/projetos por ele designados, podendo ser transferido(a) conforme necessidade do serviço.</p>
-</div>
+<p style="margin-top:10px"><strong>CLÁUSULA 7ª — DO LOCAL DE TRABALHO.</strong> O(A) EMPREGADO(A) prestará serviços nas dependências do EMPREGADOR ou em obras/projetos por ele designados, podendo ser transferido(a) conforme necessidade do serviço.</p>
 
-<div class="clausula">
-<p class="clausula-title">Cláusula 8ª — Das Disposições Gerais</p>
-<p>As partes elegem o foro da Comarca de ${esc(comp?.cidade || '________')}/${esc(comp?.estado || '__')} para dirimir quaisquer dúvidas oriundas do presente contrato. Fica assegurado ao(a) EMPREGADO(A) todos os direitos previstos na CLT e legislação trabalhista vigente.</p>
-</div>
+<p style="margin-top:10px"><strong>CLÁUSULA 8ª — DAS DISPOSIÇÕES GERAIS.</strong> As partes elegem o foro da Comarca de ${esc(comp?.cidade || '________')}/${esc(comp?.estado || '__')} para dirimir quaisquer dúvidas oriundas do presente contrato. Fica assegurado ao(a) EMPREGADO(A) todos os direitos previstos na CLT e legislação trabalhista vigente.</p>
 
-<p style="margin-top:24px">E por estarem assim justos e contratados, firmam o presente instrumento em 2 (duas) vias de igual teor e forma, na presença de 2 (duas) testemunhas.</p>
+<p style="margin-top:18px">E por estarem assim justos e contratados, firmam o presente instrumento em 2 (duas) vias de igual teor e forma, na presença de 2 (duas) testemunhas.</p>
 
-<p style="text-align:center;margin-top:24px">${esc(comp?.cidade || '________')}/${esc(comp?.estado || '__')}, ${fmtDate(inicio)}</p>
+<p style="text-align:center;margin-top:22px">${esc(comp?.cidade || '________')}/${esc(comp?.estado || '__')}, ${fmtDate(inicio)}</p>
 
-<div class="assinaturas">
-<div class="assinatura"><div class="linha">${esc(comp?.razaoSocial || 'EMPREGADOR')}<br><small>CNPJ: ${esc(comp?.cnpj || '')}</small></div></div>
-<div class="assinatura"><div class="linha">${empNome}<br><small>CPF: ${esc(formatCPF(empCpf))}</small></div></div>
-</div>
+<table style="margin-top:42px;width:100%;border-collapse:collapse;table-layout:fixed;page-break-inside:avoid"><tbody><tr>
+  <td style="text-align:center;padding:42px 18px 0 18px;vertical-align:top">
+    <div style="border-top:1px solid #1a1a1a;padding-top:5px;font-family:'Helvetica','Arial',sans-serif;font-size:10pt;font-weight:600">${esc(comp?.razaoSocial || 'EMPREGADOR')}</div>
+    <div style="font-family:'Helvetica','Arial',sans-serif;font-size:8.5pt;color:#555;margin-top:2px">CNPJ: ${esc(comp?.cnpj || '')}</div>
+  </td>
+  <td style="text-align:center;padding:42px 18px 0 18px;vertical-align:top">
+    <div style="border-top:1px solid #1a1a1a;padding-top:5px;font-family:'Helvetica','Arial',sans-serif;font-size:10pt;font-weight:600">${empNome}</div>
+    <div style="font-family:'Helvetica','Arial',sans-serif;font-size:8.5pt;color:#555;margin-top:2px">CPF: ${esc(formatCPF(empCpf))}</div>
+  </td>
+</tr></tbody></table>
 
-<div class="assinaturas" style="margin-top:40px">
-<div class="assinatura"><div class="linha">Testemunha 1<br><small>Nome: _________________ CPF: _______________</small></div></div>
-<div class="assinatura"><div class="linha">Testemunha 2<br><small>Nome: _________________ CPF: _______________</small></div></div>
-</div>
+<table style="margin-top:30px;width:100%;border-collapse:collapse;table-layout:fixed;page-break-inside:avoid"><tbody><tr>
+  <td style="text-align:center;padding:32px 18px 0 18px;vertical-align:top">
+    <div style="border-top:1px solid #1a1a1a;padding-top:5px;font-family:'Helvetica','Arial',sans-serif;font-size:9.5pt;font-weight:600">Testemunha 1</div>
+    <div style="font-family:'Helvetica','Arial',sans-serif;font-size:8.5pt;color:#555;margin-top:2px">Nome: ____________________________ CPF: __________________</div>
+  </td>
+  <td style="text-align:center;padding:32px 18px 0 18px;vertical-align:top">
+    <div style="border-top:1px solid #1a1a1a;padding-top:5px;font-family:'Helvetica','Arial',sans-serif;font-size:9.5pt;font-weight:600">Testemunha 2</div>
+    <div style="font-family:'Helvetica','Arial',sans-serif;font-size:8.5pt;color:#555;margin-top:2px">Nome: ____________________________ CPF: __________________</div>
+  </td>
+</tr></tbody></table>
 
-<!-- Rodapé institucional FC (regra de ouro Rev. 2107) -->
-<table style="width:100%;border-collapse:collapse;margin-top:36px;border-top:1px solid #e2e8f0;padding-top:8px"><tbody><tr>
-  <td style="text-align:left;font-family:'Helvetica','Arial',sans-serif;font-size:8pt;color:#94a3b8;padding:6px 0 0 0">Documento gerado pelo ERP - Gestão Integrada</td>
-  <td style="text-align:right;font-family:'Helvetica','Arial',sans-serif;font-size:8pt;color:#94a3b8;padding:6px 0 0 0">Emitido em: ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}</td>
+<!-- Rodapé EXATO do PDF: "Documento gerado pelo ERP - Gestão Integrada" + "Emitido em: ... | Por: Nome" -->
+<table style="width:100%;border-collapse:collapse;margin-top:36px"><tbody><tr>
+  <td style="text-align:left;font-family:'Helvetica','Arial',sans-serif;font-size:8pt;color:#666;padding:0">Documento gerado pelo ERP - Gestão Integrada</td>
+  <td style="text-align:right;font-family:'Helvetica','Arial',sans-serif;font-size:8pt;color:#666;padding:0">Emitido em: ${dataHoje} às ${horaAgora} | Por: ${userName}</td>
 </tr></tbody></table>
 </div>
 

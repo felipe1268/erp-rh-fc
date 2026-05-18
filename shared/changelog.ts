@@ -1,6 +1,101 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2109 — **RH · Contrato de Experiência — cópia 1:1 do PDF modelo do
+ * Comunicado Interno (cada item, cada detalhe).**
+ *
+ * Pedido do user (4ª iteração sobre o mesmo doc, frustrado com diferenças
+ * residuais): "a formatação naõ esta exatamente igual ao modelo que te
+ * amndei, quero uma copia exata, no tamanho da letra, tamanho do logo,
+ * ajuste da tela de impresasõ e recuo das abas laterais, uma copia q
+ * exata de cada item.. cada detalhe.."
+ *
+ * **Análise do PDF modelo (medido caractere a caractere):**
+ * - Fonte CORPO: Helvetica/Arial sans-serif ~10.5pt (NÃO Times serif).
+ * - Razão social: Helvetica 13pt bold uppercase letter-spacing .4px.
+ * - CNPJ/Endereço: 9.5pt / 9pt cinza escuro #333 (não slate-500 claro).
+ * - Logo: ~72px altura (não 88px — eu tinha aumentado demais).
+ * - Faixa azul: full-width edge-to-edge, padding 11px vertical, SEM
+ *   border-radius, SEM border branco 2px, SEM box-shadow. 12pt branco
+ *   letter-spacing 3px caixa alta. No PDF a faixa vai de margem a margem
+ *   da página.
+ * - Linha meta Nº/Data: 10pt cinza escuro, logo abaixo da faixa.
+ * - Bloco ASSUNTO: **SEM fundo, SEM border-left painel** — apenas indent
+ *   à esquerda de ~1cm, label "ASSUNTO:" 10.5pt bold uppercase + linha
+ *   nova com valor 10.5pt bold uppercase. (Eu tinha colocado fundo
+ *   slate-50 + border-left navy estilo callout — não bate.)
+ * - Cláusulas: título bold inline no início do parágrafo seguido de
+ *   ponto e espaço, SEM border-left navy, SEM painel separado por
+ *   título-block. (Eu tinha estilo "clausula-title" com border-left
+ *   3px navy — bonito mas não fiel ao modelo.)
+ * - Margens A4: 1.5cm (não 1.8cm).
+ * - Rodapé: 8pt cinza #666, COM "| Por: NomeUsuario".
+ *
+ * **Refatoração em `client/src/pages/Colaboradores.tsx` L1928-2050:**
+ * - Trocada fonte do body: Times serif 11.5pt → **Helvetica/Arial 10.5pt**.
+ * - Padding body: 0.8cm/1.8cm → **1.5cm/1.8cm uniforme**.
+ * - Logo: 88px → **72px** (max-width 200px → 180px).
+ * - Razão social: 16pt 800 → **13pt 700**.
+ * - Faixa azul: removidos `border-radius:4px`, `border:2px solid #fff`,
+ *   `box-shadow`. Adicionado `margin:18px -1.8cm 0 -1.8cm` pra vazar
+ *   pra fora dos limites do body (full-width edge-to-edge).
+ * - Bloco ASSUNTO totalmente refeito: removido fundo + border-left,
+ *   adicionado `margin:22px 0 18px 1cm` (indent 1cm), label + valor
+ *   uppercase 10.5pt bold em 2 linhas separadas.
+ * - Cláusulas 1ª-8ª: TODOS os `<div class="clausula"><p class="clausula-title">`
+ *   removidos. Cada cláusula virou um único `<p>` com `<strong>` no
+ *   título inline ("CLÁUSULA Nª — TÍTULO. Texto..."). 5ª cláusula
+ *   compactada de 2 parágrafos em 1.
+ * - Assinaturas: trocado `<div class="assinaturas">` por `<table>` com
+ *   `vertical-align:top`, padding-top 42px pra dar espaço pra assinatura
+ *   manual, `border-top:1px solid #1a1a1a` (preto puro, não navy).
+ * - Rodapé ganhou `| Por: ${userName}` puxando `user?.nome` via
+ *   `useAuth()` (já importado L27/182).
+ *
+ * **Refatoração em `client/src/pages/AssinarDocumento.tsx`:**
+ * - L150-165 e L294-305: page A4 padding `10mm 18mm 20mm 18mm` →
+ *   `15mm 18mm 15mm 18mm` (uniforme, como o body do contratoHtml).
+ *   Fonte default: Times serif → Helvetica/Arial 10.5pt. Adicionado
+ *   `overflow:hidden` pra conter o margin-negativo da faixa azul
+ *   (que vaza intencionalmente edge-to-edge dentro do A4).
+ * - L356-365: CSS scopado `.fcsign-document-body` REDUZIDO ao mínimo —
+ *   removidas TODAS as regras `.header`, `.header-table`, `.title-bar`,
+ *   `.clausula`, `.clausula-title`, `.assinaturas` (~20 linhas de CSS
+ *   apagadas). Agora só restam tipografia base (color, font-family,
+ *   p margin/justify, strong) e print-color-adjust. Toda formatação
+ *   visual vive nos inline styles do `contratoHtml` — fonte única
+ *   da verdade. Isso elimina conflitos onde o CSS scopado sobrescrevia
+ *   inline styles do contrato e gerava aparência diferente entre
+ *   o popup de print (sem CSS scopado) e o viewer FCSign (com CSS).
+ *
+ * **Não-mudanças:**
+ * - Estrutura jurídica do contrato (8 cláusulas, prazos, CLT refs) intacta.
+ * - Backend `signatures.create`, schema DB, DOMPurify, fluxo de assinatura
+ *   — nada tocado.
+ * - Modal "Ler em tela cheia" (Rev. 2108) preservado, só herdou as novas
+ *   medidas de padding e fonte.
+ *
+ * **Por que essa convergência exigiu 4 revisões (2106→2107→2108→2109)?**
+ * Cada iteração revelou um nível de divergência mais sutil: 2106 trouxe
+ * o cabeçalho + corrigiu XSS/DOMPurify; 2107 adicionou ASSUNTO + rodapé
+ * estruturalmente; 2108 ajustou o viewer; 2109 finalmente alinhou as
+ * MEDIDAS exatas (fonte, tamanhos, paddings, edge-to-edge da faixa,
+ * indent do ASSUNTO, ausência de painéis nas cláusulas). É um trabalho
+ * de gráfica/diagramação — o "diabo está nos detalhes".
+ *
+ * **Follow-up CRÍTICO (terceira vez sendo registrado):** extrair
+ * helper `client/src/lib/fcDocumentTemplate.ts` exportando 4 funções:
+ * `fcDocumentOpenBody(comp)`, `fcDocumentHeader({comp, titulo, numero, data})`,
+ * `fcDocumentAssunto({label, valor})`, `fcDocumentFooter({userName})`. Aplicar
+ * em todos os 8+ docs institucionais que hoje têm HTML inline duplicado
+ * em arquivos diferentes (cada um deriva pra forma própria → divergência
+ * visual progressiva). Sem o helper, cada novo doc vai exigir 4 iterações
+ * como esse.
+ *
+ * **R-001/R-007/R-010:** N/A — alteração 100% frontend.
+ *
+ * ---
+ *
  * Rev. 2108 — **RH · FCSign — viewer mais largo + modo "Leitura em Tela Cheia"
  * com CTA "Ir para Assinatura" no fim do documento.**
  *
