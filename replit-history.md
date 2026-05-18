@@ -4,6 +4,7 @@
 > O detalhamento completo (causa-raiz, stack traces, arquivos tocados, comentários longos) de TODAS as revisões — incluindo as listadas abaixo — vive em `shared/changelog.ts`.
 > Movido aqui na Rev. 2028 (faxina) — revisões 1903 → 2012.
 
+- ~~Rev. 2095~~ — UX global · scrollbars sempre visíveis (12px) em todo o ERP. `scrollbar-gutter: stable` no html, `*::-webkit-scrollbar` slate-400/slate-100, `.scrollbar-thin`/`.scrollbar-none` re-declarados com `!important`. Único arquivo: `client/src/index.css`. Ver `shared/changelog.ts`. (movida na Rev. 2102)
 - ~~Rev. 2094~~ — Financeiro · Configurações / página inteira redesenhada (header gradient blue→indigo + Settings pill; 4 cards de regime com auto-fill `REGIME_DEFAULTS`; 3 cards didáticos Federais/Municipais/Trabalhistas; KPI bar de sócios com alerta de % ≠ 100). Ver `shared/changelog.ts`. (movida na Rev. 2101)
 - ~~Rev. 2093~~ — Financeiro · Configurações / modal "Novo Sócio" puxa sócios já cadastrados em Colaboradores. Backend `listSociosFromEmployees` com dedup CPF normalizado. Frontend com `<optgroup>` disabled "✓ já cadastrado". Ver `shared/changelog.ts`. (movida na Rev. 2100)
 - ~~Rev. 2092~~ — Financeiro · Centros de Custo / modal Novo/Editar redesenhado no padrão Categorias (DialogContent `p-0 overflow-hidden`, header gradient + ícone Building2, labels uppercase, Input h-9, `<select>` nativo). Ver `shared/changelog.ts`. (movida na Rev. 2099)

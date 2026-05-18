@@ -1910,20 +1910,35 @@ ${obs ? `<div class="box"><strong>Observações / Justificativa do Enquadramento
 <style>
 @page{size:A4;margin:2cm}
 body{font-family:'Times New Roman',serif;font-size:12pt;line-height:1.6;color:#000;max-width:21cm;margin:0 auto;padding:2cm}
-h1{text-align:center;font-size:16pt;margin-bottom:8px;text-transform:uppercase}
-h2{text-align:center;font-size:13pt;margin-top:0;margin-bottom:24px;font-weight:normal}
 .clausula{margin-top:16px}
 .clausula-title{font-weight:bold;text-transform:uppercase;margin-bottom:4px}
 .assinaturas{margin-top:60px;display:flex;justify-content:space-between;gap:40px}
 .assinatura{text-align:center;flex:1}
 .assinatura .linha{border-top:1px solid #000;padding-top:4px;margin-top:60px}
-.header-info{text-align:center;margin-bottom:20px;font-size:10pt;color:#333}
 .destaque{font-weight:bold}
+.header{margin-bottom:24px}
+.header-top{display:flex;flex-direction:column;align-items:center;justify-content:center;margin-bottom:12px}
+.header-top img{max-height:64px;max-width:200px;object-fit:contain;margin-bottom:8px}
+.header-top .nome{font-size:14pt;font-weight:bold;color:#1B2A4A;text-align:center;margin:0;letter-spacing:0.5px}
+.header-top .cnpj{font-size:9pt;color:#555;margin:2px 0 0 0;text-align:center}
+.header-top .end{font-size:9pt;color:#555;margin:1px 0 0 0;text-align:center}
+.title-bar{background:#1B2A4A;color:#fff;padding:10px 16px;text-align:center;border-radius:2px;margin-top:8px}
+.title-bar .titulo{font-size:13pt;font-weight:bold;letter-spacing:2px;text-transform:uppercase;display:block}
+.title-bar .sub{font-size:9pt;font-weight:normal;display:block;margin-top:4px;letter-spacing:0.5px;opacity:.92}
 @media print{body{padding:0}}
 </style></head><body>
-<h1>Contrato de Trabalho por Prazo Determinado</h1>
-<h2>Contrato de Experiência — Art. 443, §2º, alínea “c” da CLT</h2>
-<div class="header-info">${comp?.razaoSocial || 'Empresa'} — CNPJ: ${comp?.cnpj || '___'}</div>
+<div class="header">
+  <div class="header-top">
+    ${comp?.logoUrl ? `<img src="${comp.logoUrl}" alt="${comp?.razaoSocial || 'Empresa'}" />` : ''}
+    <h2 class="nome">${comp?.razaoSocial || 'Empresa'}</h2>
+    ${comp?.cnpj ? `<p class="cnpj">CNPJ: ${comp.cnpj}</p>` : ''}
+    ${comp?.endereco ? `<p class="end">${comp.endereco}${comp?.cidade ? ' — ' + comp.cidade + '/' + (comp?.estado || '') : ''}</p>` : ''}
+  </div>
+  <div class="title-bar">
+    <span class="titulo">Contrato de Trabalho por Prazo Determinado</span>
+    <span class="sub">Contrato de Experiência — Art. 443, §2º, alínea “c” da CLT</span>
+  </div>
+</div>
 
 <p>Pelo presente instrumento particular de <strong>CONTRATO DE TRABALHO POR PRAZO DETERMINADO (EXPERIÊNCIA)</strong>, que entre si fazem:</p>
 

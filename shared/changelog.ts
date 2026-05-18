@@ -1,6 +1,38 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2102 — **RH · Contrato de Experiência (Art. 443 §2º c CLT)
+ * ganha cabeçalho institucional FC com LOGO + faixa azul #1B2A4A.**
+ *
+ * Pedido do user (screenshot do contrato impresso de LILIAN OLIVEIRA
+ * VELOSO DO AMARAL — Aux. Administrativo, salário R$ 3.200, jornada
+ * Seg-Sex 8h-18h, recém-cadastrada): "AJUSTE ESTE TERMO, COLOCANDO
+ * NOSSO LOGO, E MANTENDO O CABEÇARIO COM A Faixa azul que adotamos
+ * ok..". O template antigo tinha só `<h1>` e `<h2>` centralizados,
+ * sem identidade visual da FC — destoava de Carta de Encaminhamento
+ * (`SolicitacaoMDO.tsx`) e Comunicado Interno (`ComunicadosInternos.tsx`)
+ * que já usam o padrão `#1B2A4A` com logo + title-bar.
+ *
+ * **Mudanças em `client/src/pages/Colaboradores.tsx` (~L1909-1944):**
+ * (1) Removidos `h1` (centralizado uppercase) e `h2` (sub texto plano)
+ *     + `.header-info` antigo (CNPJ centralizado em cinza); (2) Novo
+ *     bloco `<div class="header">`: `header-top` com `comp.logoUrl`
+ *     (max 64×200, object-contain), nome empresa em `#1B2A4A` 14pt
+ *     bold, CNPJ 9pt cinza e endereço opcional; (3) `title-bar`
+ *     fundo `#1B2A4A` com `Contrato de Trabalho por Prazo
+ *     Determinado` em uppercase letter-spacing 2px + sub "Contrato
+ *     de Experiência — Art. 443, §2º, alínea c da CLT" 9pt opacity
+ *     .92 — mesmo padrão Comunicado Interno. (4) CSS novo cobre
+ *     `.header`, `.header-top img/.nome/.cnpj/.end`, `.title-bar
+ *     .titulo/.sub` (~L1922-1930). Se a empresa não tiver `logoUrl`
+ *     cadastrado, oculta `<img>` graciosamente (fallback no `?:`).
+ *
+ * **Não-mudanças:** todas as 8 cláusulas, blocos de assinaturas,
+ * lógica de prazos 30+30/45+45, `fmtDate`, `jornadaDesc`. R-001/R-007
+ * N/A — só template HTML client-side.
+ *
+ * ---
+ *
  * Rev. 2101 — **Frota · `parseTollPdf` — fix "require is not defined"
  * ao analisar PDF com IA.**
  *
