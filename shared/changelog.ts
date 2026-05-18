@@ -1,6 +1,61 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2095 — **UX global · scrollbars sempre visíveis e mais grossas em
+ * todo o ERP (12px) para facilitar navegação em telas longas / dialogs
+ * full-screen.**
+ *
+ * Pedido do user (screenshot do FullScreenDialog "Mais Horas Extras" em
+ * `/fechamento-de-ponto` — drill-down do ranking laranja com header
+ * gradient, KPI bar de 4 cards, busca, legenda e tabela de 9
+ * colaboradores; a scrollbar vertical à direita aparecia como uma
+ * linha fina quase invisível): "coloque a barra de rolagem. geral.
+ * para que eu possa ter uma navegabilidade".
+ *
+ * **Contexto / problema:** o ERP usava as scrollbars default do browser
+ * (Chrome no macOS / iOS as renderiza como overlay fininho que só
+ * aparece ao scrollar). Em telas com `overflow-y-auto` interno
+ * (`FullScreenDialog` content area, drawers, tabelas longas em
+ * `/almoxarifado/movimentacoes`, `/financeiro/lancamentos` etc.) o
+ * user perdia a referência visual de "tem conteúdo abaixo" e não
+ * conseguia agarrar facilmente o thumb pra navegar rápido.
+ *
+ * **Solução (CSS global em `client/src/index.css`):**
+ *   1. **`scrollbar-gutter: stable` no `html`** — reserva o espaço da
+ *      barra mesmo quando ela não está ativa, eliminando o "pulo" do
+ *      layout que acontecia ao abrir/fechar dialogs.
+ *   2. **`html, body, *`** ganham `scrollbar-width: auto` (não thin,
+ *      no Firefox) + `scrollbar-color: #94a3b8 #f1f5f9` (slate-400
+ *      thumb / slate-100 track).
+ *   3. **WebKit/Blink** (Chrome/Edge/Safari): `*::-webkit-scrollbar`
+ *      com `width: 12px; height: 12px;` (confortável p/ mouse), track
+ *      slate-100 arredondado (radius 8px), thumb slate-400 com
+ *      `border: 2px solid #f1f5f9` (efeito inset que dá respiro
+ *      visual entre thumb e track) e hover slate-500. `scrollbar-corner`
+ *      slate-100 pra não ficar quadrado preto no canto onde h+v se
+ *      encontram.
+ *
+ * **Preservação de utilitárias (.scrollbar-thin / .scrollbar-none):**
+ * como o override global é mais específico que as classes utilitárias
+ * (ambas são `.classe::pseudo` com mesma especificidade, mas as
+ * utilitárias estão ANTES no arquivo), foi necessário **re-declarar
+ * as utilitárias DEPOIS do bloco global com `!important`** em todas
+ * as props (width, height, scrollbar-width, scrollbar-color, background,
+ * border) pra garantir que continuem funcionando — usadas em tab bars
+ * (.scrollbar-none) e em painéis compactos como Almoxarifado smart
+ * entry, calendários, etc. (.scrollbar-thin com height: 3px pra h-scroll
+ * de chips de tab).
+ *
+ * **Arquivo único:** `client/src/index.css` (linhas 644-712).
+ * Zero JS / zero refator de componente — apenas CSS cascade. Funciona
+ * em Chrome, Edge, Safari (com `::-webkit-scrollbar`) e Firefox (via
+ * `scrollbar-width`/`scrollbar-color`). Não afeta mobile (touch devices
+ * não renderizam scrollbar) — apenas desktop.
+ *
+ * **R-001/R-007:** N/A — mudança puramente cosmética em CSS global.
+ *
+ * ---
+ *
  * Rev. 2094 — **Financeiro · Configurações / página inteira redesenhada nas
  * regras de ouro + tributação didática com auto-preenchimento de alíquotas
  * por regime + KPI bar de sócios com alerta de % alocado.**

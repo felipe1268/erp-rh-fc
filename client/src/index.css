@@ -638,6 +638,76 @@ img, video {
   scrollbar-color: #cbd5e1 transparent;
 }
 
+/* ──────────────────────────────────────────────────────────────────────
+   Rev. 2095 — Scrollbars GLOBAIS sempre visíveis + mais grossas.
+   Pedido do user (screenshot do FullScreenDialog "Mais Horas Extras"
+   com scrollbar fininha mal visível): "coloque a barra de rolagem.
+   geral. para que eu possa ter uma navegabilidade".
+   - Firefox: scrollbar-width:auto (não thin) + cor visível.
+   - WebKit/Blink: track cinza-claro, thumb cinza-médio arredondado,
+     hover mais escuro, 12px de largura/altura — confortável p/ mouse.
+   - scrollbar-gutter:stable evita "pulo" da página quando barra
+     aparece/some.
+   - Classes utilitárias (.scrollbar-thin / .scrollbar-none) acima
+     continuam funcionando com !important nas regras delas se
+     necessário — mas como cascade, as utilitárias vencem por
+     especificidade igual + ordem (estão antes; precisamos garantir).
+   ────────────────────────────────────────────────────────────────────── */
+html {
+  scrollbar-gutter: stable;
+}
+
+html, body, * {
+  scrollbar-width: auto;
+  scrollbar-color: #94a3b8 #f1f5f9; /* thumb / track — slate-400 / slate-100 */
+}
+
+*::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+*::-webkit-scrollbar-track {
+  background: #f1f5f9; /* slate-100 */
+  border-radius: 8px;
+}
+*::-webkit-scrollbar-thumb {
+  background: #94a3b8; /* slate-400 */
+  border-radius: 8px;
+  border: 2px solid #f1f5f9; /* "inset" effect — afasta visualmente do track */
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: #64748b; /* slate-500 */
+}
+*::-webkit-scrollbar-corner {
+  background: #f1f5f9;
+}
+
+/* Re-aplica utilitárias com prioridade (depois do override global). */
+.scrollbar-none {
+  scrollbar-width: none !important;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+.scrollbar-thin {
+  scrollbar-width: thin !important;
+  scrollbar-color: #cbd5e1 transparent !important;
+}
+.scrollbar-thin::-webkit-scrollbar {
+  width: 6px !important;
+  height: 3px !important;
+}
+.scrollbar-thin::-webkit-scrollbar-track {
+  background: transparent !important;
+}
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background: #cbd5e1 !important;
+  border: none !important;
+  border-radius: 3px !important;
+}
+
 .tiptap.ProseMirror {
   outline: none;
 }
