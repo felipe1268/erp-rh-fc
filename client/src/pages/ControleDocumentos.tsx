@@ -1410,57 +1410,166 @@ function DocumentosPanel({ companyId, companyIds, employees, onClickEmployee, Em
 
       {/* Dialog de Upload */}
       <Dialog open={showUpload} onOpenChange={setShowUpload}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader><DialogTitle>Novo Documento do Colaborador</DialogTitle></DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <label className="text-sm font-medium">Colaborador *</label>
-              {EmployeeSelect ? (
-                <EmployeeSelect value={docForm.employeeId} onChange={(id: number) => setDocForm({ ...docForm, employeeId: id })} />
-              ) : (
-                <Select value={docForm.employeeId?.toString() || ""} onValueChange={v => setDocForm({ ...docForm, employeeId: parseInt(v) })}>
-                  <SelectTrigger><SelectValue placeholder="Selecione o colaborador" /></SelectTrigger>
-                  <SelectContent>
-                    {employees.map((e: any) => <SelectItem key={e.id} value={e.id.toString()}>{e.nomeCompleto}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              )}
-            </div>
-            <div>
-              <label className="text-sm font-medium">Tipo de Documento *</label>
-              <Select value={docForm.tipo || ""} onValueChange={v => setDocForm({ ...docForm, tipo: v })}>
-                <SelectTrigger><SelectValue placeholder="Selecione o tipo" /></SelectTrigger>
-                <SelectContent>
-                  {Object.entries(TIPOS_DOC_LABELS).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <label className="text-sm font-medium">Descrição</label>
-              <Input value={docForm.descricao || ""} onChange={e => setDocForm({ ...docForm, descricao: e.target.value })} placeholder="Descrição opcional" />
-            </div>
-            <div>
-              <label className="text-sm font-medium">Data de Validade</label>
-              <Input type="date" value={docForm.dataValidade || ""} onChange={e => setDocForm({ ...docForm, dataValidade: e.target.value })} />
-            </div>
-            <div>
-              <label className="text-sm font-medium">Arquivo * (PDF/Imagem, máx 10MB)</label>
-              <Input type="file" accept=".pdf,.jpg,.jpeg,.png" onChange={e => {
-                const file = e.target.files?.[0];
-                if (file) {
-                  if (file.size > 10 * 1024 * 1024) { toast.error("Arquivo muito grande (máx 10MB)"); return; }
-                  setDocForm({ ...docForm, _file: file });
-                }
-              }} />
-              {docForm._file && <p className="text-xs text-green-600 mt-1 flex items-center gap-1"><Paperclip className="h-3 w-3" /> {docForm._file.name}</p>}
+        <DialogContent
+          className="w-[100vw] h-[100dvh] max-w-none sm:w-[96vw] sm:h-auto sm:max-h-[92dvh] sm:max-w-[760px] p-0 overflow-hidden flex flex-col gap-0"
+          resizable={false}
+        >
+          {/* Header gradient */}
+          <div className="bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-700 text-white px-6 py-5 shadow-md">
+            <div className="flex items-center gap-3">
+              <div className="bg-white/20 p-2.5 rounded-lg">
+                <FileUp className="h-6 w-6" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h2 className="text-xl font-bold leading-tight">Novo Documento do Colaborador</h2>
+                <p className="text-emerald-50 text-sm mt-0.5">
+                  Anexe ASOs, atestados, treinamentos, advertências e demais documentos do RAIO-X.
+                </p>
+              </div>
             </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowUpload(false)}>Cancelar</Button>
-            <Button onClick={handleUploadSubmit} disabled={uploadDoc.isPending}>
-              {uploadDoc.isPending ? "Enviando..." : "Enviar Documento"}
-            </Button>
-          </DialogFooter>
+
+          {/* Body */}
+          <div className="flex-1 overflow-y-auto p-6 bg-slate-50">
+            <div className="max-w-2xl mx-auto space-y-5">
+
+              {/* Card: Identificação */}
+              <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
+                <div className="bg-slate-50 border-b border-slate-200 px-4 py-2.5 flex items-center gap-2">
+                  <Users className="h-4 w-4 text-slate-600" />
+                  <span className="text-xs font-bold uppercase tracking-wide text-slate-700">Identificação</span>
+                </div>
+                <div className="p-4 space-y-4">
+                  <div>
+                    <label className="text-[11px] font-bold uppercase tracking-wide text-slate-600 mb-1.5 block">
+                      Colaborador <span className="text-rose-600">*</span>
+                    </label>
+                    {EmployeeSelect ? (
+                      <EmployeeSelect value={docForm.employeeId} onChange={(id: number) => setDocForm({ ...docForm, employeeId: id })} />
+                    ) : (
+                      <Select value={docForm.employeeId?.toString() || ""} onValueChange={v => setDocForm({ ...docForm, employeeId: parseInt(v) })}>
+                        <SelectTrigger className="h-9 bg-white"><SelectValue placeholder="Selecione o colaborador" /></SelectTrigger>
+                        <SelectContent>
+                          {employees.map((e: any) => <SelectItem key={e.id} value={e.id.toString()}>{e.nomeCompleto}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    )}
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-bold uppercase tracking-wide text-slate-600 mb-1.5 block">
+                      Tipo de Documento <span className="text-rose-600">*</span>
+                    </label>
+                    <Select value={docForm.tipo || ""} onValueChange={v => setDocForm({ ...docForm, tipo: v })}>
+                      <SelectTrigger className="h-9 bg-white"><SelectValue placeholder="Selecione o tipo" /></SelectTrigger>
+                      <SelectContent>
+                        {Object.entries(TIPOS_DOC_LABELS).map(([k, v]) => <SelectItem key={k} value={k}>{v as string}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-bold uppercase tracking-wide text-slate-600 mb-1.5 block">Descrição</label>
+                    <Input
+                      value={docForm.descricao || ""}
+                      onChange={e => setDocForm({ ...docForm, descricao: e.target.value })}
+                      placeholder="Ex.: ASO admissional, certificado NR-35, atestado de 3 dias..."
+                      className="h-9 bg-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-bold uppercase tracking-wide text-slate-600 mb-1.5 block flex items-center gap-1.5">
+                      <Calendar className="h-3.5 w-3.5 text-slate-500" />
+                      Data de Validade
+                      <span className="text-[10px] font-normal text-slate-500 normal-case tracking-normal ml-1">(opcional — só para ASO, NR e similares)</span>
+                    </label>
+                    <Input
+                      type="date"
+                      value={docForm.dataValidade || ""}
+                      onChange={e => setDocForm({ ...docForm, dataValidade: e.target.value })}
+                      className="h-9 bg-white"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Card: Arquivo */}
+              <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
+                <div className="bg-slate-50 border-b border-slate-200 px-4 py-2.5 flex items-center gap-2">
+                  <Paperclip className="h-4 w-4 text-slate-600" />
+                  <span className="text-xs font-bold uppercase tracking-wide text-slate-700">Arquivo</span>
+                  <span className="text-[10px] text-slate-500 ml-auto">PDF, JPG ou PNG — máx 10 MB</span>
+                </div>
+                <div className="p-4">
+                  <label
+                    htmlFor="doc-file-upload"
+                    className={`block border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors ${
+                      docForm._file
+                        ? "border-emerald-300 bg-emerald-50/50 hover:bg-emerald-50"
+                        : "border-slate-300 bg-slate-50/50 hover:border-emerald-400 hover:bg-emerald-50/30"
+                    }`}
+                  >
+                    {docForm._file ? (
+                      <div className="flex items-center justify-center gap-3">
+                        <div className="bg-emerald-100 p-2.5 rounded-full">
+                          <CheckCircle2 className="h-5 w-5 text-emerald-700" />
+                        </div>
+                        <div className="text-left min-w-0">
+                          <p className="text-sm font-semibold text-emerald-800 truncate max-w-[400px]">{docForm._file.name}</p>
+                          <p className="text-[11px] text-emerald-700">
+                            {(docForm._file.size / 1024).toFixed(0)} KB · clique para trocar
+                          </p>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-center gap-2">
+                        <div className="bg-slate-100 p-3 rounded-full">
+                          <Upload className="h-6 w-6 text-slate-500" />
+                        </div>
+                        <p className="text-sm font-medium text-slate-700">Clique para selecionar o arquivo</p>
+                        <p className="text-[11px] text-slate-500">Ou arraste e solte aqui</p>
+                      </div>
+                    )}
+                    <Input
+                      id="doc-file-upload"
+                      type="file"
+                      accept=".pdf,.jpg,.jpeg,.png"
+                      className="hidden"
+                      onChange={e => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          if (file.size > 10 * 1024 * 1024) { toast.error("Arquivo muito grande (máx 10MB)"); return; }
+                          setDocForm({ ...docForm, _file: file });
+                        }
+                      }}
+                    />
+                  </label>
+                </div>
+              </div>
+
+            </div>
+          </div>
+
+          {/* Footer pill */}
+          <div className="border-t border-slate-200 bg-white px-6 py-3 flex items-center justify-between gap-3">
+            <div className="text-[11px] text-slate-500 flex items-center gap-1.5">
+              <Shield className="h-3.5 w-3.5 text-slate-400" />
+              Documento ficará vinculado ao RAIO-X do colaborador.
+            </div>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" onClick={() => setShowUpload(false)} className="h-9">Cancelar</Button>
+              <Button
+                size="sm"
+                onClick={handleUploadSubmit}
+                disabled={uploadDoc.isPending || !docForm.employeeId || !docForm.tipo || !docForm._file}
+                className="h-9 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-semibold shadow-sm"
+              >
+                {uploadDoc.isPending ? (
+                  <><Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> Enviando...</>
+                ) : (
+                  <><Upload className="h-4 w-4 mr-1.5" /> Enviar Documento</>
+                )}
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
 

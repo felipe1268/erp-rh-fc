@@ -1,6 +1,61 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2103 — **RH · Controle de Documentos / modal "Novo Documento
+ * do Colaborador" redesenhada nas regras de ouro.**
+ *
+ * Pedido do user (screenshot do modal antigo `max-w-lg` plano —
+ * DialogTitle padrão preto, labels `text-sm font-medium`, `<Input
+ * type="file">` nativo cinza, footer com botões shadcn default
+ * azul): "ajuste o layout da pagina, conforme as regras de ouro..".
+ * Padrão antigo destoava de Editar Documento (`ControleDocumentos.tsx`
+ * ~L1469) que já usa header gradient blue→indigo + body slate-50 +
+ * footer pill, e dos demais modais Rev. 2094+ (Categorias, Centros
+ * de Custo, Importar Pedágio etc).
+ *
+ * **Mudanças em `client/src/pages/ControleDocumentos.tsx` (~L1411-1576):**
+ * (1) **DialogContent** trocado `max-w-lg` por padrão full-screen
+ *     mobile + desktop centrado (`sm:max-w-[760px] sm:max-h-[92dvh]
+ *     p-0 overflow-hidden flex flex-col gap-0`, `resizable={false}`).
+ * (2) **Header gradient** `from-emerald-600 via-teal-600 to-cyan-700`
+ *     com ícone `FileUp` em pill `bg-white/20`, título h2 xl bold,
+ *     subtítulo emerald-50 "Anexe ASOs, atestados, treinamentos…
+ *     RAIO-X".
+ * (3) **Body bg-slate-50** com 2 cards brancos:
+ *     - **Card Identificação** (header Users + título uppercase
+ *       slate-700) — labels uppercase 11px slate-600, `*` em rose-600,
+ *       Selects h-9 bg-white, Input descrição com placeholder útil,
+ *       Data de Validade com Calendar ícone + hint "(opcional — só
+ *       para ASO, NR e similares)".
+ *     - **Card Arquivo** (header Paperclip + hint "PDF, JPG ou PNG
+ *       — máx 10 MB" no canto direito) — substituído `<Input
+ *       type="file">` nativo por DROPZONE label clicável com border
+ *       dashed que alterna estado: vazio (slate, Upload ícone, "Clique
+ *       para selecionar") vs preenchido (emerald, CheckCircle2, nome
+ *       + tamanho em KB + "clique para trocar"). `<input
+ *       id="doc-file-upload">` escondido recebe clique via `<label
+ *       htmlFor>`.
+ * (4) **Footer pill** com hint Shield "Documento ficará vinculado ao
+ *     RAIO-X do colaborador" à esquerda + Cancel outline h-9 + CTA
+ *     gradient emerald→teal h-9 com Upload ícone + Loader2 spin no
+ *     pending. CTA `disabled` agora também quando faltar
+ *     `employeeId`/`tipo`/`_file` (UX explícita — antes só
+ *     `isPending` mas `handleUploadSubmit` já validava).
+ *
+ * **Não-mudanças:** `handleUploadSubmit`, mutation `uploadDoc`, schema,
+ * `EmployeeSelect`, `TIPOS_DOC_LABELS`, validação de 10MB, trigger
+ * button `<Plus/>` (L1333). Imports todos já existiam (FileUp, Upload,
+ * Users, Paperclip, Calendar, CheckCircle2, Shield, Loader2).
+ *
+ * **Pendente (sinalizado em pergunta separada):** integração com
+ * "FCSign" (assinatura digital interna) — empregador = sócio Felipe
+ * Costa Alves, testemunhas manuais. Feature grande, vai virar Rev.
+ * própria com schema + backend + UI dedicada.
+ *
+ * **R-001/R-007:** N/A — só frontend.
+ *
+ * ---
+ *
  * Rev. 2102 — **RH · Contrato de Experiência (Art. 443 §2º c CLT)
  * ganha cabeçalho institucional FC com LOGO + faixa azul #1B2A4A.**
  *
