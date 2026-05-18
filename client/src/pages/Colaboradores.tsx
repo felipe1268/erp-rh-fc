@@ -1908,33 +1908,46 @@ ${obs ? `<div class="box"><strong>Observações / Justificativa do Enquadramento
                       }
                       return '44 horas semanais, conforme escala definida pelo empregador';
                     })();
+                    // Logo: usa comp.logoUrl se for URL absoluta, senão fallback para o logo público da FC.
+                    // Para HTML renderizado dentro do app (FCSign /assinar/:token) e na impressão,
+                    // SEMPRE serializa com URL absoluta pra funcionar mesmo em window.open() vazio.
+                    const logoSrc = (comp?.logoUrl && /^https?:\/\//.test(comp.logoUrl))
+                      ? comp.logoUrl
+                      : `${window.location.origin}/logo-fc.jpg`;
                     const contratoHtml = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Contrato de Experiência - ${empNome}</title>
 <style>
 @page{size:A4;margin:2cm}
-body{font-family:'Times New Roman',serif;font-size:12pt;line-height:1.6;color:#000;max-width:21cm;margin:0 auto;padding:2cm}
-.clausula{margin-top:16px}
-.clausula-title{font-weight:bold;text-transform:uppercase;margin-bottom:4px}
-.assinaturas{margin-top:60px;display:flex;justify-content:space-between;gap:40px}
+body{font-family:'Times New Roman','Liberation Serif',Georgia,serif;font-size:11.5pt;line-height:1.65;color:#0f172a;max-width:21cm;margin:0 auto;padding:1.6cm 1.8cm;text-align:justify;hyphens:auto}
+p{margin:0 0 10px 0}
+.clausula{margin-top:14px}
+.clausula-title{font-weight:bold;text-transform:uppercase;margin-bottom:6px;color:#1B2A4A;font-size:11.5pt;letter-spacing:.3px;border-left:3px solid #1B2A4A;padding-left:8px}
+.assinaturas{margin-top:55px;display:flex;justify-content:space-between;gap:40px;page-break-inside:avoid}
 .assinatura{text-align:center;flex:1}
-.assinatura .linha{border-top:1px solid #000;padding-top:4px;margin-top:60px}
-.destaque{font-weight:bold}
-.header{margin-bottom:24px}
-.header-top{display:flex;flex-direction:column;align-items:center;justify-content:center;margin-bottom:12px}
-.header-top img{max-height:64px;max-width:200px;object-fit:contain;margin-bottom:8px}
-.header-top .nome{font-size:14pt;font-weight:bold;color:#1B2A4A;text-align:center;margin:0;letter-spacing:0.5px}
-.header-top .cnpj{font-size:9pt;color:#555;margin:2px 0 0 0;text-align:center}
-.header-top .end{font-size:9pt;color:#555;margin:1px 0 0 0;text-align:center}
-.title-bar{background:#1B2A4A;color:#fff;padding:10px 16px;text-align:center;border-radius:2px;margin-top:8px}
-.title-bar .titulo{font-size:13pt;font-weight:bold;letter-spacing:2px;text-transform:uppercase;display:block}
-.title-bar .sub{font-size:9pt;font-weight:normal;display:block;margin-top:4px;letter-spacing:0.5px;opacity:.92}
-@media print{body{padding:0}}
+.assinatura .linha{border-top:1px solid #0f172a;padding-top:6px;margin-top:60px;font-size:10.5pt;font-weight:600}
+.assinatura .linha small{display:block;font-weight:400;color:#475569;margin-top:2px}
+.destaque{font-weight:bold;color:#0f172a}
+strong{color:#0f172a}
+.header{margin-bottom:18px;border-bottom:3px solid #1B2A4A;padding-bottom:14px}
+.header-top{display:flex;align-items:center;gap:18px;margin-bottom:10px}
+.header-top img.logo{height:72px;width:auto;max-width:160px;object-fit:contain;flex-shrink:0}
+.header-top .empresa{flex:1;text-align:left}
+.header-top .empresa .nome{font-family:'Helvetica','Arial',sans-serif;font-size:15pt;font-weight:800;color:#1B2A4A;margin:0;letter-spacing:.4px;line-height:1.15}
+.header-top .empresa .cnpj{font-family:'Helvetica','Arial',sans-serif;font-size:9.5pt;color:#475569;margin:4px 0 0 0;letter-spacing:.2px}
+.header-top .empresa .end{font-family:'Helvetica','Arial',sans-serif;font-size:9pt;color:#64748b;margin:1px 0 0 0}
+.title-bar{background:linear-gradient(90deg,#1B2A4A 0%,#2c4373 100%);color:#fff;padding:11px 18px;text-align:center;border-radius:3px;margin-top:10px;box-shadow:0 1px 3px rgba(27,42,74,.18)}
+.title-bar .titulo{font-family:'Helvetica','Arial',sans-serif;font-size:13pt;font-weight:700;letter-spacing:2.5px;text-transform:uppercase;display:block}
+.title-bar .sub{font-family:'Helvetica','Arial',sans-serif;font-size:9pt;font-weight:400;display:block;margin-top:4px;letter-spacing:.4px;opacity:.92}
+.preambulo{margin-top:14px;background:#f8fafc;border-left:3px solid #1B2A4A;padding:10px 14px;font-style:italic;color:#334155}
+@media print{body{padding:0}.header{break-inside:avoid}}
 </style></head><body>
 <div class="header">
   <div class="header-top">
-    ${comp?.logoUrl && /^https?:\/\//.test(comp.logoUrl) ? `<img src="${esc(comp.logoUrl)}" alt="${esc(comp?.razaoSocial || 'Empresa')}" />` : ''}
-    <h2 class="nome">${esc(comp?.razaoSocial || 'Empresa')}</h2>
-    ${comp?.cnpj ? `<p class="cnpj">CNPJ: ${esc(comp.cnpj)}</p>` : ''}
-    ${comp?.endereco ? `<p class="end">${esc(comp.endereco)}${comp?.cidade ? ' — ' + esc(comp.cidade) + '/' + esc(comp?.estado || '') : ''}</p>` : ''}
+    <img class="logo" src="${esc(logoSrc)}" alt="${esc(comp?.razaoSocial || 'FC Engenharia')}" onerror="this.style.display='none'" />
+    <div class="empresa">
+      <h2 class="nome">${esc(comp?.razaoSocial || 'FC Engenharia')}</h2>
+      ${comp?.cnpj ? `<p class="cnpj">CNPJ: ${esc(comp.cnpj)}</p>` : ''}
+      ${comp?.endereco ? `<p class="end">${esc(comp.endereco)}${comp?.cidade ? ' — ' + esc(comp.cidade) + '/' + esc(comp?.estado || '') : ''}</p>` : ''}
+    </div>
   </div>
   <div class="title-bar">
     <span class="titulo">Contrato de Trabalho por Prazo Determinado</span>
