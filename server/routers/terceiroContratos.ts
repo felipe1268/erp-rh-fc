@@ -2579,8 +2579,16 @@ export const terceiroContratosRouter = router({
       const prazoEntrega = (fornInfoCheck as any)?.prazoEntregaDias;
       const tipoPagCheck = (fornInfoCheck as any)?.tipoPagamento ?? "";
       const isMdoMedicao = (tipoPagCheck === "medicao" || (condPag ?? "").toLowerCase().includes("medição"));
+      // Rev. 2074 — Pedido do usuário (IMG_0980): "Não tem prazo nem
+      // endereço de entrega quando é mão de obra, arruma esta lógica".
+      // Este endpoint só é chamado para cotações tipo='servico' (guard
+      // logo acima). Para MDO puro não existe entrega física — espelha
+      // Rev. 2073 (compras.ts). Mantemos dispensaPrazo composto pra
+      // ficar consistente com a semântica usada em todos os fluxos.
+      const isServicoPuro = (cot as any).tipo === "servico";
+      const dispensaPrazo = isServicoPuro || isMdoMedicao;
       if (!condPag && !formaPag) throw new Error("Defina a Forma de Pagamento antes de aprovar. Edite as condições do vencedor na cotação.");
-      if (!isMdoMedicao && (!prazoEntrega || Number(prazoEntrega) <= 0)) throw new Error("Defina o Prazo de Entrega antes de aprovar. Edite as condições do vencedor na cotação.");
+      if (!dispensaPrazo && (!prazoEntrega || Number(prazoEntrega) <= 0)) throw new Error("Defina o Prazo de Entrega antes de aprovar. Edite as condições do vencedor na cotação.");
 
       // 4. Find-or-create empresa terceira vinculada ao fornecedor
       const existing = await db.select().from(empresasTerceiras)

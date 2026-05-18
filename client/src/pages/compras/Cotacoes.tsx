@@ -3105,7 +3105,13 @@ export default function Cotacoes() {
                       { label: "Obra", value: nomeObra((detalheFullscreen as any).obraId) ?? "—" },
                       { label: "Fornecedor Vencedor", value: forn?.nomeFantasia || forn?.razaoSocial || "—" },
                       { label: "Cond. Pagamento", value: (() => { const info = getTipoPagamentoInfo((detalheFullscreen as any).tipoPagamento); return info ? info.label : detalheFullscreen.condicaoPagamento || "—"; })() },
-                      { label: (() => { const tp = (detalheFullscreen as any).tipoPagamento ?? ""; const cp = detalheFullscreen.condicaoPagamento ?? ""; const t = (detalheFullscreen as any).tipo; return ((t === "servico" || t === "pacote") && (tp === "medicao" || cp.toLowerCase().includes("medição"))) ? "Mobilização" : "Prazo Entrega"; })(), value: detalheFullscreen.prazoEntregaDias ? `${detalheFullscreen.prazoEntregaDias} dias` : "—" },
+                      // Rev. 2074 — MDO puro (tipo='servico') NÃO tem entrega física,
+                      // então o card "Prazo Entrega" é omitido. Para pacote/material
+                      // (com material físico) o card aparece normalmente, virando
+                      // "Mobilização" quando o pagamento é por medição.
+                      ...((detalheFullscreen as any).tipo === "servico"
+                        ? []
+                        : [{ label: (() => { const tp = (detalheFullscreen as any).tipoPagamento ?? ""; const cp = detalheFullscreen.condicaoPagamento ?? ""; const t = (detalheFullscreen as any).tipo; return (t === "pacote" && (tp === "medicao" || cp.toLowerCase().includes("medição"))) ? "Mobilização" : "Prazo Entrega"; })(), value: detalheFullscreen.prazoEntregaDias ? `${detalheFullscreen.prazoEntregaDias} dias` : "—" }]),
                       { label: "Validade", value: detalheFullscreen.dataValidade ? new Date(detalheFullscreen.dataValidade + "T00:00:00").toLocaleDateString("pt-BR") : "—" },
                       { label: "SC Vinculada", value: detalheFullscreen.solicitacaoId ? `SC #${detalheFullscreen.solicitacaoId}` : "—" },
                     ].map(f => (
@@ -6260,7 +6266,10 @@ export default function Cotacoes() {
                   <div><span className="text-gray-400 text-xs">Status</span><p><span className={`inline-flex px-2 py-0.5 rounded text-xs border ${st.cls}`}>{st.label}</span></p></div>
                   <div><span className="text-gray-400 text-xs">Fornecedor</span><p className="text-gray-900 font-medium">{forn?.nomeFantasia || forn?.razaoSocial || "—"}</p></div>
                   <div><span className="text-gray-400 text-xs">Cond. Pagamento</span><p className="text-gray-900 font-medium">{(() => { const info = getTipoPagamentoInfo((detalhe as any).tipoPagamento); return info ? info.label : detalhe.condicaoPagamento || "—"; })()}</p></div>
-                  <div><span className="text-gray-400 text-xs">{(() => { const tp = (detalhe as any).tipoPagamento ?? ""; const cp = detalhe.condicaoPagamento ?? ""; const t = (detalhe as any).tipo; return ((t === "servico" || t === "pacote") && (tp === "medicao" || cp.toLowerCase().includes("medição"))) ? "Mobilização" : "Prazo Entrega"; })()}</span><p className="text-gray-900 font-medium">{detalhe.prazoEntregaDias ? `${detalhe.prazoEntregaDias} dias` : "—"}</p></div>
+                  {/* Rev. 2074 — Esconde Prazo Entrega quando MDO puro (não há entrega física) */}
+                  {(detalhe as any).tipo !== "servico" && (
+                    <div><span className="text-gray-400 text-xs">{(() => { const tp = (detalhe as any).tipoPagamento ?? ""; const cp = detalhe.condicaoPagamento ?? ""; const t = (detalhe as any).tipo; return (t === "pacote" && (tp === "medicao" || cp.toLowerCase().includes("medição"))) ? "Mobilização" : "Prazo Entrega"; })()}</span><p className="text-gray-900 font-medium">{detalhe.prazoEntregaDias ? `${detalhe.prazoEntregaDias} dias` : "—"}</p></div>
+                  )}
                   <div><span className="text-gray-400 text-xs">Validade</span><p className="text-gray-900 font-medium">{detalhe.dataValidade ? new Date(detalhe.dataValidade + "T00:00:00").toLocaleDateString("pt-BR") : "—"}</p></div>
                   <div><span className="text-gray-400 text-xs">Total</span><p className="text-emerald-700 font-bold">{parseFloat(detalhe.total ?? "0").toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p></div>
                   {(detalhe as any).modalidadeFd && (detalhe as any).modalidadeFd !== "normal" && (

@@ -1,6 +1,49 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2074 — **Cotações · botão "Aprovar e Gerar Contrato de Serviço"
+ * ainda travava com toast "Defina o Prazo de Entrega" em MDO puro +
+ * cards de header/lateral mostravam "PRAZO ENTREGA: —" inutilmente.**
+ * Pedido do usuário (IMG_0980): "Não tem prazo nem endereço de entrega
+ * quando é mão de obra, arruma esta lógica".
+ *
+ * Continuação direta da Rev. 2073: o fix anterior cobriu a validação
+ * de geração de OC (`comprasRouter.gerarOC`), mas o fluxo MDO da
+ * COT-2026-0166 NÃO passa por gerarOC — passa pelo endpoint
+ * `terceiroContratos.aprovarEgerarContrato` (botão roxo "Aprovar e
+ * Gerar Contrato de Serviço"). Esse endpoint tinha o MESMO bug em
+ * `server/routers/terceiroContratos.ts` L2581-2583: só dispensava
+ * `isMdoMedicao`, deixando MDO+Parcelado preso pedindo Prazo de
+ * Entrega que não existe no fluxo (toast no canto inferior esquerdo
+ * da tela, IMG_0980).
+ *
+ * Fix em 3 lugares:
+ *   1. `server/routers/terceiroContratos.ts` L2581-2589: novas const
+ *      `isServicoPuro = (cot as any).tipo === "servico"` +
+ *      `dispensaPrazo = isServicoPuro || isMdoMedicao`. Check trocado
+ *      de `!isMdoMedicao` → `!dispensaPrazo`, espelhando 100% a
+ *      semântica adotada em compras.ts (Rev. 2073).
+ *   2. `client/src/pages/compras/Cotacoes.tsx` L3103-3116 (grid header
+ *      da aba Detalhes em tela fullscreen): card "PRAZO ENTREGA" é
+ *      OMITIDO via spread condicional `...(tipo === "servico" ? [] :
+ *      [{ ... }])` quando tipo='servico'. Antes mostrava "—" pra MDO,
+ *      sugerindo que faltava preencher.
+ *   3. `client/src/pages/compras/Cotacoes.tsx` L6258-6266 (painel
+ *      lateral de detalhe rápido): mesmo tratamento, agora envolto em
+ *      `{(detalhe as any).tipo !== "servico" && (<div>...)}`.
+ *
+ * O label "Mobilização" (quando é pacote+medição) foi mantido — agora
+ * só aplica a `tipo === "pacote"` na expressão de label, já que
+ * `tipo === "servico"` nunca chega no card (mais simples e correto).
+ *
+ * Sobre "endereço de entrega" do pedido: não existe campo dedicado de
+ * endereço de entrega no schema de cotações (apenas no cadastro de
+ * fornecedor); a queixa do usuário é conceitual — "MDO não tem
+ * entrega" — e foi atendida garantindo que NENHUM campo relacionado a
+ * entrega seja mostrado/exigido pra `tipo='servico'`.
+ *
+ * ZERO migration, ZERO schema change.
+ *
  * Rev. 2073 — **Cotações · "Prazo de Entrega" obrigatório em MDO puro
  * (cotação tipo='servico') mesmo o campo não existindo no fluxo.**
  * Pedido do usuário (IMG_0979): "Ainda tá com erro, mão de obra não
