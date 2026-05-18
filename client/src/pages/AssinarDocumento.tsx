@@ -26,6 +26,15 @@ export default function AssinarDocumento() {
   const signMut = trpc.signatures.sign.useMutation();
   const utils = trpc.useUtils();
 
+  // XSS hardening — sanitiza HTML do documento antes de renderizar (defense in depth).
+  // IMPORTANTE: useMemo deve vir ANTES de qualquer early return pra manter a ordem dos hooks
+  // estável entre renders (regra dos hooks). Por isso usamos optional chaining no input.
+  const safeHtml = useMemo(() => DOMPurify.sanitize(q.data?.session?.documentHtml || "", {
+    FORBID_TAGS: ["script", "iframe", "object", "embed", "form", "input", "button", "link", "meta", "base"],
+    FORBID_ATTR: ["onerror", "onload", "onclick", "onmouseover", "onfocus", "onblur", "onchange", "onsubmit", "formaction"],
+    ALLOW_DATA_ATTR: false,
+  }), [q.data?.session?.documentHtml]);
+
   const handleSign = async () => {
     const dataUrl = padRef.current?.toDataURL();
     if (!dataUrl) { toast.error("Desenhe sua assinatura antes de confirmar."); return; }
@@ -55,12 +64,6 @@ export default function AssinarDocumento() {
 
   const { signer, session, employee, company, allSigners } = q.data;
   const alreadySigned = !!signer.signedAt || justSigned;
-  // XSS hardening — sanitiza HTML do documento antes de renderizar (defense in depth)
-  const safeHtml = useMemo(() => DOMPurify.sanitize(session.documentHtml, {
-    FORBID_TAGS: ["script", "iframe", "object", "embed", "form", "input", "button", "link", "meta", "base"],
-    FORBID_ATTR: ["onerror", "onload", "onclick", "onmouseover", "onfocus", "onblur", "onchange", "onsubmit", "formaction"],
-    ALLOW_DATA_ATTR: false,
-  }), [session.documentHtml]);
   const sessionDone = session.status === "completo";
   const sessionCancelled = session.status === "cancelado";
 
