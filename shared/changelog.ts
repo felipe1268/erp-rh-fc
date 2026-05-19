@@ -1,6 +1,45 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2149 — **NOVA FEATURE · Multi-seleção + exclusão em lote no painel
+ * "Termo de Recebimento" (gestão centralizada das Rev. 2146/2147/2148).**
+ *
+ * User: "quero tbm poder fazer multselcao para apagar tudo de uma vez".
+ *
+ * Antes era preciso clicar na lixeira termo a termo (com confirm() em
+ * cada um), o que ficava inviável quando o usuário queria limpar vários
+ * de uma vez (ex.: testes/duplicatas).
+ *
+ * **Mudanças em `client/src/components/controleDocumentos/TermosResponsabilidadePanel.tsx`:**
+ *
+ * 1. Estado `selectedIds: Set<number>` + helpers `toggleSelect` e
+ *    `clearSelection`.
+ * 2. Coluna nova de checkbox à esquerda na tabela:
+ *    - Header: "select all visíveis" com tristate (marca/desmarca TODOS
+ *      os IDs do array `filtrados`, ou seja, respeitando os filtros
+ *      atuais de busca/status).
+ *    - Linha: checkbox individual; linha ganha fundo `bg-indigo-50/40`
+ *      quando selecionada pra dar feedback visual claro.
+ * 3. Barra de ação em lote acima da tabela (só aparece se `size > 0`):
+ *    - "N termo(s) selecionado(s)" + botão "Limpar" + botão destrutivo
+ *      "Excluir selecionados" (variant=destructive, vermelho).
+ * 4. `bulkDelete()`: valida `isAdminMaster`, exibe `confirm()` único com
+ *    a contagem ("Excluir N termo(s)..."), faz loop sequencial chamando
+ *    `adminDeleteMut.mutateAsync` pra cada ID, contabiliza ok/fail e
+ *    mostra toast final com o resumo. Sequencial (não Promise.all) pra
+ *    evitar contention no `signatures.adminDelete` que escreve em duas
+ *    tabelas (`signatures` + `employee_documents`).
+ * 5. Botão fica disabled enquanto `bulkBusy=true` ou se o user não for
+ *    admin_master.
+ *
+ * **Backend**: nenhum procedure novo — reusa o `signatures.adminDelete`
+ * existente que já faz soft-cancel + soft-delete do employee_document.
+ *
+ * **R-001/R-007/R-010**: OK — todas as exclusões continuam soft (status
+ * 'cancelado' + `deletedAt`), nenhum DELETE/DROP/ALTER em prod.
+ *
+ * --------------------------------------------------------------------
+ *
  * Rev. 2148 — **HOTFIX UX² · Tabs de Controle de Documentos sobrepondo em
  * iPad Pro 12.9" portrait (Integrações + Termo de Recebimento amassadas).**
  *

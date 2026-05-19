@@ -12,7 +12,8 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
-import { FileText, Plus, Search, Eye, Download, Trash2, Loader2, ShieldAlert, ChevronRight } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { FileText, Plus, Search, Eye, Download, Trash2, Loader2, ShieldAlert, ChevronRight, X } from "lucide-react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import FCSignSendDialog from "@/components/FCSignSendDialog";
 import TermoResponsabilidadeDialog from "@/components/TermoResponsabilidadeDialog";
@@ -130,6 +131,41 @@ export default function TermosResponsabilidadePanel({ companyId, companyIds, onC
     },
     onError: (e) => toast.error(e.message || "Falha ao remover."),
   });
+
+  // Rev. 2149 — Multi-seleção + exclusão em lote
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
+
+  const toggleSelect = (id: number) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+  const clearSelection = () => setSelectedIds(new Set());
+
+  async function bulkDelete() {
+    if (!isAdminMaster) { toast.error("Apenas o ADM Master pode excluir termos."); return; }
+    if (selectedIds.size === 0) return;
+    const alvos = (termos as SessionRow[]).filter(r => selectedIds.has(r.id));
+    if (!confirm(`Excluir ${alvos.length} termo(s) selecionado(s)? Esta ação cancela as sessões FCSign e remove os documentos do RAIO-X dos colaboradores.`)) return;
+    setBulkBusy(true);
+    let ok = 0, fail = 0;
+    for (const r of alvos) {
+      try {
+        await adminDeleteMut.mutateAsync({ id: r.id, companyId: r.companyId });
+        ok++;
+      } catch {
+        fail++;
+      }
+    }
+    setBulkBusy(false);
+    clearSelection();
+    utils.signatures.listByTipo.invalidate();
+    if (fail === 0) toast.success(`${ok} termo(s) removido(s).`);
+    else toast.error(`${ok} removido(s), ${fail} falharam.`);
+  }
 
   // Fluxo de criação: 1) escolher colaborador → 2) abrir TermoResponsabilidadeDialog
   const [novoOpen, setNovoOpen] = useState(false);
@@ -259,6 +295,31 @@ export default function TermosResponsabilidadePanel({ companyId, companyIds, onC
         </Button>
       </div>
 
+      {/* Rev. 2149 — Barra de ação em lote (aparece quando há seleção) */}
+      {selectedIds.size > 0 && (
+        <div className="flex flex-wrap items-center gap-2 rounded-lg border border-indigo-200 bg-indigo-50 p-2.5 px-3">
+          <span className="text-sm font-medium text-indigo-800">
+            {selectedIds.size} termo(s) selecionado(s)
+          </span>
+          <div className="ml-auto flex gap-2">
+            <Button size="sm" variant="ghost" onClick={clearSelection} className="text-indigo-700 hover:bg-indigo-100">
+              <X className="h-4 w-4 mr-1" /> Limpar
+            </Button>
+            <Button
+              size="sm"
+              variant="destructive"
+              onClick={bulkDelete}
+              disabled={!isAdminMaster || bulkBusy}
+              title={isAdminMaster ? "Excluir selecionados" : "Somente admin_master pode excluir"}
+              className="gap-1.5"
+            >
+              {bulkBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+              Excluir selecionados
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* Tabela */}
       <Card>
         <CardContent className="p-0">
@@ -275,6 +336,21 @@ export default function TermosResponsabilidadePanel({ companyId, companyIds, onC
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b bg-muted/30 text-xs">
+                    <th className="p-3 w-10 text-left font-medium">
+                      {/* Rev. 2149 — Select all visíveis */}
+                      <Checkbox
+                        aria-label="Selecionar todos visíveis"
+                        checked={filtrados.length > 0 && filtrados.every(r => selectedIds.has(r.id))}
+                        onCheckedChange={(v) => {
+                          setSelectedIds(prev => {
+                            const next = new Set(prev);
+                            if (v) filtrados.forEach(r => next.add(r.id));
+                            else filtrados.forEach(r => next.delete(r.id));
+                            return next;
+                          });
+                        }}
+                      />
+                    </th>
                     <th className="p-3 text-left font-medium">Colaborador</th>
                     <th className="p-3 text-left font-medium">Termo</th>
                     <th className="p-3 text-left font-medium">Status</th>
@@ -286,7 +362,14 @@ export default function TermosResponsabilidadePanel({ companyId, companyIds, onC
                 </thead>
                 <tbody>
                   {filtrados.map(r => (
-                    <tr key={r.id} className="border-b hover:bg-muted/20 transition-colors">
+                    <tr key={r.id} className={`border-b hover:bg-muted/20 transition-colors ${selectedIds.has(r.id) ? "bg-indigo-50/40" : ""}`}>
+                      <td className="p-3">
+                        <Checkbox
+                          aria-label={`Selecionar termo ${r.documentTitle}`}
+                          checked={selectedIds.has(r.id)}
+                          onCheckedChange={() => toggleSelect(r.id)}
+                        />
+                      </td>
                       <td className="p-3">
                         <button
                           onClick={() => onClickEmployee(r.employeeId)}
