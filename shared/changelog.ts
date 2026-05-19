@@ -1,6 +1,36 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2147 — **HOTFIX UX · Tabs de Controle de Documentos com layout
+ * responsivo de verdade (a nova aba "Termo de Recebimento" da Rev. 2146
+ * sumia abaixo do fold no iPad).**
+ *
+ * User (screenshot iPad portrait): "o texto ficou bagunçado, preciso que
+ * ajuste melhor o layout, e não achei a aba 'Termo de Recebimento'".
+ *
+ * Causa: a Rev. 2146 mudou o grid das 9 tabs de `grid-cols-4 sm:grid-cols-8`
+ * pra `grid-cols-3 sm:grid-cols-9`. No iPad portrait (~768px) o
+ * `sm:grid-cols-9` produzia tabs amassadas/cortadas, e em telas onde o
+ * sm não casava ainda mostrava só `grid-cols-3` — empilhando 3 linhas e
+ * a 3ª (Sem ASO / Integrações / Termo de Recebimento) ficava abaixo do
+ * fold, dando a impressão de que a aba não tinha sido criada.
+ *
+ * **Fix em `client/src/pages/ControleDocumentos.tsx`** (uma única linha,
+ * o `className` do `TabsList`):
+ * `grid-cols-3 sm:grid-cols-9 h-auto sm:h-12` →
+ * `grid-cols-2 sm:grid-cols-3 md:grid-cols-5 lg:grid-cols-9 h-auto lg:h-12`
+ *
+ * Resultado: mobile estreito 2 cols (5 linhas), sm 3 cols (3 linhas),
+ * iPad portrait (md ≥768px) 5 cols (2 linhas) — TODAS as 9 tabs visíveis
+ * sem scroll, e desktop (lg ≥1024px) volta pra linha única com altura
+ * fixa h-12 igual antes.
+ *
+ * **Arquivo tocado**: `client/src/pages/ControleDocumentos.tsx` (1 linha).
+ *
+ * **R-001/R-007/R-010**: OK — só client-side.
+ *
+ * --------------------------------------------------------------------
+ *
  * Rev. 2146 — **Termo de Responsabilidade migrado da ficha do colaborador
  * para nova aba "Termo de Recebimento" em Controle de Documentos
  * (gestão centralizada + fix do bug "tela não atualiza pós-assinatura").**

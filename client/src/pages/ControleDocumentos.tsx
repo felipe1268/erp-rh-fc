@@ -2436,7 +2436,10 @@ export default function ControleDocumentos() {
 
         {/* TABS */}
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="grid w-full grid-cols-3 sm:grid-cols-9 h-auto sm:h-12 gap-1 bg-transparent p-0">
+          {/* Rev. 2146 — grid responsivo: 2 cols (mobile) → 3 (sm) → 5 (md) → 9 (lg).
+              Evita os 9 tabs amassados no iPad ou escondidos numa 2ª linha sem
+              destaque. Em iPad portrait (~768px = md) ficam 5×2 confortável. */}
+          <TabsList className="grid w-full grid-cols-2 sm:grid-cols-3 md:grid-cols-5 lg:grid-cols-9 h-auto lg:h-12 gap-1 bg-transparent p-0">
             <TabsTrigger value="validade" className={`gap-1.5 rounded-lg border-2 transition-all duration-200 font-medium ${activeTab === "validade" ? "border-red-500 bg-red-50 text-red-700 shadow-sm" : "border-transparent bg-muted/50 text-muted-foreground hover:bg-red-50/50 hover:text-red-600"}`}>
               <AlertTriangle className="h-4 w-4" /> Validade
             </TabsTrigger>
