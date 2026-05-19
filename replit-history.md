@@ -4,6 +4,8 @@
 > O detalhamento completo (causa-raiz, stack traces, arquivos tocados, comentários longos) de TODAS as revisões — incluindo as listadas abaixo — vive em `shared/changelog.ts`.
 > Movido aqui na Rev. 2028 (faxina) — revisões 1903 → 2012.
 
+- Rev. 2127 — FCSign · backfill de `signature_signers.email` (empregado via `employees.email`, demais via `users.name`-match) — pré-requisito da Rev. 2128 e ainda útil pro email-match de empregados/testemunhas. (movida na Rev. 2134)
+
 - Rev. 2126 — RH · Contrato de Experiência HOTFIX: numeração reinicia em 001/2026 (removido seed=33 + UPDATE one-shot zerando counter + NULL no employee=34). (movida na Rev. 2133)
 
 - Rev. 2125 — RH · Contrato de Experiência: numeração automática NNN/AAAA sequencial, atômica, idempotente por empresa (`contract_counters` + UPSERT + `allocateContratoExperienciaNumero` + closure builder client). (movida na Rev. 2132)

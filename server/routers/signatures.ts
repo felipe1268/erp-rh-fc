@@ -252,6 +252,47 @@ export const signaturesRouter = router({
       }));
       const createdSigners = await db.insert(signatureSigners).values(signersToInsert).returning();
 
+      // Rev. 2134 — Contrato de Experiência: persiste registro em
+      // `employee_contracts` JÁ NA CRIAÇÃO da sessão FCSign (não espera o
+      // último signer). Isso garante que o contrato aparece na aba
+      // "Contratos CLT" do RAIO-X imediatamente após o envio para assinatura,
+      // mesmo antes de todas as partes assinarem. Quando a sessão completar,
+      // o branch UPDATE da Rev. 2133 (em `sign`) anexa
+      // `contratoAssinadoUrl + contratoAssinadoKey`.
+      // Idempotente: só cria se não houver contrato_experiencia ATIVO.
+      if (input.tipo === "contrato_experiencia") {
+        try {
+          const ativos = await db.select({ id: employeeContracts.id })
+            .from(employeeContracts)
+            .where(and(
+              eq(employeeContracts.employeeId, input.employeeId),
+              eq(employeeContracts.tipo, "experiencia"),
+              sql`${employeeContracts.status} NOT IN ('encerrado', 'rescindido')`,
+            ));
+          if (ativos.length === 0) {
+            const [empFull] = await db.select().from(employees)
+              .where(eq(employees.id, input.employeeId)).limit(1);
+            const dataInicio = empFull?.dataAdmissao || new Date().toISOString().split("T")[0];
+            await db.insert(employeeContracts).values({
+              companyId: input.companyId,
+              employeeId: input.employeeId,
+              tipo: "experiencia",
+              status: "vigente",
+              dataInicio,
+              funcao: empFull?.funcao || empFull?.cargo || null,
+              salarioBase: empFull?.salarioBase || null,
+              valorHora: empFull?.valorHora || null,
+              jornadaTrabalho: empFull?.jornadaTrabalho || null,
+              conteudoGerado: input.documentHtml,
+              criadoPor: "FCSign",
+              criadoPorUserId: ctx.user.id,
+            });
+          }
+        } catch (e) {
+          console.error("[FCSign.create] falha ao persistir employeeContracts:", e);
+        }
+      }
+
       return {
         sessionId: session.id,
         documentHash: hash,

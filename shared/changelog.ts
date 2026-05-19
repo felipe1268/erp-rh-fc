@@ -1,6 +1,73 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2134 — **FCSign · Contrato de Experiência agora aparece em "Contratos
+ * CLT" do RAIO-X JÁ NA CRIAÇÃO da sessão FCSign (não espera o último
+ * signer) + backfill SQL p/ sessões pré-existentes (caso Lilian).**
+ *
+ * User (após Rev. 2133, ainda vendo "Nenhum contrato CLT registrado" na
+ * RAIO-X de Lilian): "Já temos o campo contratos e preciso que o contrato
+ * de experiência entre ali tbm.. para ficar salvo aqui no raio x do
+ * funcionário".
+ *
+ * **Contexto:** Rev. 2133 só inseria em `employee_contracts` quando a
+ * sessão FCSign COMPLETAVA (último signer assinou). Sessão da Lilian
+ * está pendente aguardando Felipe — então o registro nunca foi criado
+ * e a aba "Contratos CLT" continuava vazia. Usuário quer o contrato
+ * visível DESDE o envio para assinatura.
+ *
+ * **Fix dividido em 2 partes:**
+ *
+ * **(1) `server/routers/signatures.ts → create` (after `signers` insert):**
+ * Quando `input.tipo === "contrato_experiencia"`, INSERT em
+ * `employeeContracts` IMEDIATAMENTE (mesmo SELECT idempotente da Rev. 2133:
+ * `employeeId + tipo='experiencia' + status NOT IN encerrado/rescindido`).
+ * `status='vigente'`, `dataInicio=emp.dataAdmissao`, demais campos puxados
+ * do empregado, `conteudoGerado=input.documentHtml` (HTML pré-assinatura,
+ * será sobrescrito pela Rev. 2133 UPDATE quando completar com o
+ * `finalHtml` estampado), `criadoPor='FCSign'`. Sem `contratoAssinadoUrl`
+ * ainda — esse campo é anexado pelo UPDATE da Rev. 2133 quando todos
+ * assinarem. Try/catch isolado: falha aqui não bloqueia retorno da
+ * sessão.
+ *
+ * **(2) `server/_core/index.ts` (após Rev. 2127 backfill):** SQL idempotente
+ * `INSERT INTO employee_contracts ... SELECT ... FROM signature_sessions sess
+ * JOIN employees emp WHERE sess.tipo='contrato_experiencia' AND sess.status
+ * <> 'cancelado' AND NOT EXISTS (SELECT 1 FROM employee_contracts ec WHERE
+ * ec.employee_id=sess.employee_id AND ec.tipo='experiencia' AND ec.status
+ * NOT IN ('encerrado','rescindido'))`. Pega `sess.final_document_url` como
+ * `contrato_assinado_url` quando a sessão já está completa. Loga
+ * `[SyncSchema+] Rev. 2134: backfill ... inseridos=N`. Roda 1x em cada
+ * boot mas idempotente via NOT EXISTS — re-runs caem 0.
+ *
+ * **Cuidado com `salvarContrato`:** a regra "não duplicar experiencia
+ * ativo" continua valendo. Se o user clicar "Salvar Contrato" no gerador
+ * antigo APÓS já ter enviado pra FCSign, vai dar `BAD_REQUEST` (correto
+ * — só pode existir 1 experiencia ativo).
+ *
+ * **Fluxo final pro caso Lilian:**
+ * 1. Após restart do server, backfill SQL cria a linha em
+ *    employee_contracts (status='vigente', sem URL assinada).
+ * 2. RAIO-X → Contratos CLT já mostra o contrato (com botões Visualizar
+ *    do `conteudoGerado` que tem o HTML pré-assinatura).
+ * 3. Quando Felipe assinar (último signer), Rev. 2133 entra no branch
+ *    UPDATE e anexa `contratoAssinadoUrl + contratoAssinadoKey` =
+ *    link "Contrato Assinado" verde aparece na lista.
+ *
+ * **R-001/R-007/R-010:** OK — só INSERT idempotente, zero ALTER/DROP/DELETE.
+ * Backfill protegido por NOT EXISTS, seguro p/ rodar em prod.
+ *
+ * **Arquivos tocados:**
+ * - `server/routers/signatures.ts → create` — bloco try/catch INSERT
+ *   employeeContracts após signers insert.
+ * - `server/_core/index.ts` — bloco SQL backfill Rev. 2134 após Rev. 2127.
+ * - `shared/version.ts` → 2134.
+ * - `shared/changelog.ts` — esta entrada no topo.
+ * - `replit.md` — promove 2134/2133 top-2; 2132 → one-liner; 2127 demovida
+ *   p/ `replit-history.md`.
+ *
+ * ---
+ *
  * Rev. 2133 — **FCSign · Contrato de Experiência assinado agora também é
  * persistido em `employee_contracts` p/ aparecer na lista "Contratos CLT"
  * do RAIO-X do colaborador (com link "Contrato Assinado" p/ visualizar/

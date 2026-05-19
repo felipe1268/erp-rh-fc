@@ -1643,6 +1643,50 @@ Regras:
           console.log(`[SyncSchema+] Rev. 2127: backfill email em signature_signers pendentes — empregado=${(r1 as any)?.rowCount ?? '?'} / outros=${(r2 as any)?.rowCount ?? '?'}.`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.2127 backfill signers.email:`, e?.message || e); }
 
+        // Rev. 2134 — Backfill de employee_contracts pra sessões FCSign de
+        // contrato_experiencia já existentes (criadas antes da Rev. 2134).
+        // Insere uma linha em employee_contracts pra cada sessão NÃO-cancelada
+        // de tipo='contrato_experiencia' cujo employee NÃO tenha contrato
+        // experiencia ativo. Se a sessão já está completa, anexa também
+        // finalDocumentUrl como contratoAssinadoUrl. Idempotente.
+        try {
+          // Nota: employee_contracts e employees usam colunas camelCase quoted
+          // (convenção Drizzle sem explicit name), enquanto signature_sessions
+          // usa snake_case explicit. Mesma armadilha que pegou users em 2127.
+          const rBf = await db.execute(sql`
+            INSERT INTO employee_contracts (
+              "companyId", "employeeId", tipo, status, "dataInicio",
+              funcao, "salarioBase", "valorHora", "jornadaTrabalho",
+              "conteudoGerado", "contratoAssinadoUrl", "criadoPor", "criadoPorUserId"
+            )
+            SELECT
+              sess.company_id,
+              sess.employee_id,
+              'experiencia',
+              'vigente',
+              COALESCE(emp."dataAdmissao", CURRENT_DATE),
+              COALESCE(emp.funcao, emp.cargo),
+              emp."salarioBase",
+              emp."valorHora",
+              emp."jornadaTrabalho",
+              sess.document_html,
+              sess.final_document_url,
+              'FCSign',
+              sess.created_by_user_id
+            FROM signature_sessions sess
+            JOIN employees emp ON emp.id = sess.employee_id
+            WHERE sess.tipo = 'contrato_experiencia'
+              AND sess.status <> 'cancelado'
+              AND NOT EXISTS (
+                SELECT 1 FROM employee_contracts ec
+                WHERE ec."employeeId" = sess.employee_id
+                  AND ec.tipo = 'experiencia'
+                  AND ec.status NOT IN ('encerrado', 'rescindido')
+              )
+          `);
+          console.log(`[SyncSchema+] Rev. 2134: backfill employee_contracts p/ sessões FCSign contrato_experiencia — inseridos=${(rBf as any)?.rowCount ?? '?'}.`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.2134 backfill employee_contracts:`, e?.message || e); }
+
       } catch (e: any) { console.error(`[SyncSchema+] ERROR:`, e?.message || e); }
     }).catch(e => console.error("[SyncSchema] Falha ao iniciar:", e));
     // Garantir colunas críticas adicionadas recentemente que o SyncSchema possa ter ignorado
