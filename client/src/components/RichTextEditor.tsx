@@ -8,6 +8,7 @@
  */
 
 import { useEditor, EditorContent, type Editor } from "@tiptap/react";
+import DOMPurify from "dompurify";
 import StarterKit from "@tiptap/starter-kit";
 import Underline from "@tiptap/extension-underline";
 import TextAlign from "@tiptap/extension-text-align";
@@ -168,5 +169,41 @@ const RichTextEditor = forwardRef<RichTextEditorHandle, Props>(function RichText
     </div>
   );
 });
+
+
+// Rev. 2154 — Helpers exportados para uso em listas/visualizações de
+// conteúdo rich-text (ComunicadosInternos etc.). Mantidos aqui pra
+// ficarem ao lado do editor que produz o HTML.
+
+/** Detecta se a string contém HTML estruturado (tags) em vez de texto puro. */
+export function isHtmlContent(s: string | null | undefined): boolean {
+  if (!s) return false;
+  return /<\/?[a-z][\s\S]*?>/i.test(s);
+}
+
+/** Remove todas as tags HTML e devolve só o texto plano (entidades decodificadas). */
+export function stripHtml(s: string | null | undefined): string {
+  if (!s) return "";
+  if (typeof document === "undefined") {
+    return s.replace(/<[^>]+>/g, "").replace(/&nbsp;/g, " ").replace(/\s+/g, " ").trim();
+  }
+  const tmp = document.createElement("div");
+  tmp.innerHTML = s;
+  return (tmp.textContent || tmp.innerText || "").replace(/\s+/g, " ").trim();
+}
+
+/** Sanitiza HTML via DOMPurify com a configuração padrão usada no app. */
+export function sanitizeHtml(s: string | null | undefined): string {
+  if (!s) return "";
+  return DOMPurify.sanitize(s, {
+    ALLOWED_TAGS: [
+      "p","br","strong","em","u","s","b","i","span","div",
+      "ul","ol","li","blockquote","pre","code",
+      "h1","h2","h3","h4","h5","h6","hr",
+      "a","img","table","thead","tbody","tr","td","th",
+    ],
+    ALLOWED_ATTR: ["href","target","rel","src","alt","title","style","class","colspan","rowspan"],
+  });
+}
 
 export default RichTextEditor;

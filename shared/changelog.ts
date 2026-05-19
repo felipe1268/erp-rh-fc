@@ -1,6 +1,43 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2154 — **HOTFIX BUILD · Deploy quebrando porque
+ * `RichTextEditor.tsx` não exportava `stripHtml/sanitizeHtml/isHtmlContent`
+ * usados pelo `ComunicadosInternos.tsx`.**
+ *
+ * Erro de produção:
+ *   `"isHtmlContent" is not exported by
+ *    "client/src/components/RichTextEditor.tsx"` (Rollup, build do Vite).
+ *
+ * **Causa raiz:** o `RichTextEditor` foi criado na Rev. 2141 para a aba
+ * Templates de Documentos e exportou apenas o componente default. O
+ * `ComunicadosInternos.tsx` (criado depois) importou três helpers
+ * (`stripHtml`, `sanitizeHtml`, `isHtmlContent`) supondo que estariam ali,
+ * mas eles nunca foram criados em lugar nenhum. Em dev/HMR o app não
+ * quebrava porque as referências aparecem em paths condicionais que o
+ * Vite resolve lazy; no build de produção, o Rollup faz análise
+ * estática e falha imediato.
+ *
+ * **Fix em `client/src/components/RichTextEditor.tsx`:**
+ *
+ * 1. `import DOMPurify from "dompurify";` no topo (top-level, ESM-safe —
+ *    dompurify já era dep usada em `TemplatesDocsTab` e
+ *    `AssinarDocumento`).
+ * 2. Novo `export function isHtmlContent(s)` — regex `/<\/?[a-z]/i`.
+ * 3. Novo `export function stripHtml(s)` — usa `document.createElement`
+ *    no browser pra decodificar entidades; fallback regex pra SSR.
+ * 4. Novo `export function sanitizeHtml(s)` — `DOMPurify.sanitize` com
+ *    a mesma whitelist usada em outros pontos do app (tags estruturais
+ *    + tabelas; attrs `href/target/rel/src/alt/title/style/class/colspan/
+ *    rowspan`).
+ *
+ * **Validação:** `pnpm build` agora completa
+ * (✓ 4570 modules transformed, built in 1m 24s) + esbuild OK
+ * (`dist/index.js` 8.2MB, `dist/public/index.html` gerado). Deploy
+ * desbloqueado.
+ *
+ * **R-001/R-007/R-010:** N/A — só client-side / sem mudança de schema.
+ *
  * Rev. 2153 — **NOVA AÇÃO ADM Master · Botão "Zerar Termos" no Raio-X
  * do funcionário (aba "Termos Assinados"), pra limpar testes em bulk.**
  *

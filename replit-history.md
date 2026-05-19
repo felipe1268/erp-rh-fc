@@ -4,6 +4,8 @@
 > O detalhamento completo (causa-raiz, stack traces, arquivos tocados, comentários longos) de TODAS as revisões — incluindo as listadas abaixo — vive em `shared/changelog.ts`.
 > Movido aqui na Rev. 2028 (faxina) — revisões 1903 → 2012.
 
+- Rev. 2147 — HOTFIX UX · Tabs de Controle de Documentos com grid responsivo `grid-cols-2 sm:3 md:5 lg:9` (depois refinado na Rev. 2148 trocando `lg:` por `xl:`). (movida na Rev. 2154)
+
 - Rev. 2146 — Termo de Responsabilidade movido da ficha do colaborador pra nova aba "Termo de Recebimento" em Controle de Documentos (gestão centralizada + fix bug "tela não atualiza pós-assinatura"). (movida na Rev. 2153)
 
 - Rev. 2145 — Documentos institucionais FC (buildFcDocument) · margens padronizadas 2,5cm topo / 1,5cm laterais / 2,5cm rodapé + aproveitamento máximo da área útil A4. (movida na Rev. 2152)
