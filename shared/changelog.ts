@@ -1,6 +1,58 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2110 — **RH · Contrato de Experiência — cabeçalho aumentado pra bater
+ * PROPORCIONALMENTE com o Comunicado Interno (5ª iteração).**
+ *
+ * Pedido do user (anexou screenshot do contrato atual vs. screenshot do
+ * Comunicado lado a lado): "veja que cabeçario, o tamanho do logo e ate a
+ * moldura não esta igual, preciso que deixae exatamente igual ao
+ * comunicado de interno..".
+ *
+ * **Diagnóstico:** na Rev. 2109 eu MEDI o PDF text-only (sem visual) e
+ * acabei subdimensionando tudo achando que era "mais limpo". Mas o user
+ * referenciava o renderizado VISUAL do Comunicado Interno (HTML+CSS) que
+ * é bem MAIOR. Comparando os 2 prints:
+ *   - Logo Comunicado: ~120px de altura | Contrato atual: 72px (40% menor)
+ *   - Razão social Comunicado: ~18-20pt bold | Atual: 13pt (35% menor)
+ *   - Faixa azul Comunicado: ~18-20px padding vertical | Atual: 11px
+ *   - Texto da faixa Comunicado: ~14pt letter-spacing 4px | Atual: 12pt 3px
+ *
+ * **Ajustes em `client/src/pages/Colaboradores.tsx` L1948-1972** (apenas
+ * o bloco cabeçalho + faixa + meta + ASSUNTO):
+ * - Logo: `height:72px;max-width:180px` → **`height:115px;max-width:260px`**
+ *   + margin-bottom 6→10px pra dar respiro.
+ * - Razão social: `13pt/.4px` → **`19pt/.5px`** (caps mais densas, line-height 1.15).
+ * - CNPJ: `9.5pt color:#333` → **`11pt color:#1a1a1a font-weight:600`**.
+ * - Endereço: `9pt color:#333` → **`10pt color:#333 letter-spacing:.2px`**.
+ * - Faixa azul: padding `11px 18px` → **`18px 24px`**; texto `12pt 3px` →
+ *   **`14pt 4px`**; margin-top 18px → 22px.
+ * - Linha meta Nº/Data: `10pt color:#333` → **`11pt color:#1a1a1a font-weight:600`**,
+ *   COM indent lateral de 1cm pra alinhar com o bloco ASSUNTO abaixo.
+ * - Bloco ASSUNTO: label e valor `10.5pt` → **`11pt`** com letter-spacing
+ *   .5px/.3px (mais "respiro" tipográfico). Margin-bottom 18→20px.
+ *
+ * **Não-mudanças:**
+ * - Cláusulas 1ª-8ª (Rev. 2109 inline-bold) — intactas.
+ * - Assinaturas + Rodapé "| Por: ${userName}" — intactos.
+ * - `AssinarDocumento.tsx` viewer + modal Rev. 2108 — intactos.
+ * - Backend, DOMPurify, schema — nada tocado.
+ *
+ * **Padrão fixado pra próximos docs institucionais (definitivo, alinhado
+ * ao Comunicado Interno renderizado):**
+ *   logo 115px, razão social 19pt bold uppercase, CNPJ 11pt bold,
+ *   endereço 10pt uppercase, faixa azul padding 18px texto 14pt 4px,
+ *   meta 11pt indent 1cm, ASSUNTO 11pt 2 linhas indent 1cm.
+ *
+ * **Follow-up CRÍTICO (4ª vez registrado — agora REALMENTE urgente):**
+ * extrair `client/src/lib/fcDocumentTemplate.ts` com helpers
+ * (`fcHeader`, `fcAssunto`, `fcFooter`) ANTES de criar qualquer novo
+ * doc institucional (Aviso Prévio, Termo Rescisão, Advertência, etc.).
+ *
+ * **R-001/R-007/R-010:** N/A — frontend.
+ *
+ * ---
+ *
  * Rev. 2109 — **RH · Contrato de Experiência — cópia 1:1 do PDF modelo do
  * Comunicado Interno (cada item, cada detalhe).**
  *

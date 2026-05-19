@@ -1942,29 +1942,29 @@ body .destaque{font-weight:700;color:#1a1a1a}
 @media print{body{padding:0}*{-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important}}
 </style>
 <div class="fcsign-document-body">
-<!-- REGRA DE OURO Rev. 2109: cabeçalho FC EXATAMENTE como o PDF modelo (Comunicado Interno) -->
-<div style="text-align:center;margin:0 0 14px 0">
-  <img src="${esc(logoSrc)}" alt="${esc(comp?.razaoSocial || 'FC Engenharia')}" style="display:inline-block;height:72px;width:auto;max-width:180px;object-fit:contain;margin-bottom:6px" />
-  <div style="font-family:'Helvetica','Arial',sans-serif;font-size:13pt;font-weight:700;color:#1a1a1a;letter-spacing:.4px;text-transform:uppercase;line-height:1.2;margin:4px 0 2px 0">${esc(comp?.razaoSocial || 'FC Engenharia')}</div>
-  ${comp?.cnpj ? `<div style="font-family:'Helvetica','Arial',sans-serif;font-size:9.5pt;color:#333;margin:0;line-height:1.3">CNPJ: ${esc(comp.cnpj)}</div>` : ''}
-  ${comp?.endereco ? `<div style="font-family:'Helvetica','Arial',sans-serif;font-size:9pt;color:#333;margin:1px 0 0 0;text-transform:uppercase;line-height:1.3">${esc(comp.endereco)}${comp?.cidade ? ' - ' + esc(comp.cidade) + ' - ' + esc(comp?.estado || '') : ''}</div>` : ''}
+<!-- REGRA DE OURO Rev. 2110: cabeçalho FC PROPORCIONALMENTE EXATO ao Comunicado Interno -->
+<div style="text-align:center;margin:8px 0 18px 0">
+  <img src="${esc(logoSrc)}" alt="${esc(comp?.razaoSocial || 'FC Engenharia')}" style="display:inline-block;height:115px;width:auto;max-width:260px;object-fit:contain;margin-bottom:10px" />
+  <div style="font-family:'Helvetica','Arial',sans-serif;font-size:19pt;font-weight:700;color:#1a1a1a;letter-spacing:.5px;text-transform:uppercase;line-height:1.15;margin:6px 0 4px 0">${esc(comp?.razaoSocial || 'FC Engenharia')}</div>
+  ${comp?.cnpj ? `<div style="font-family:'Helvetica','Arial',sans-serif;font-size:11pt;color:#1a1a1a;margin:2px 0 0 0;line-height:1.3;font-weight:600">CNPJ: ${esc(comp.cnpj)}</div>` : ''}
+  ${comp?.endereco ? `<div style="font-family:'Helvetica','Arial',sans-serif;font-size:10pt;color:#333;margin:2px 0 0 0;text-transform:uppercase;line-height:1.3;letter-spacing:.2px">${esc(comp.endereco)}${comp?.cidade ? ' - ' + esc(comp.cidade) + ' - ' + esc(comp?.estado || '') : ''}</div>` : ''}
 </div>
 
-<!-- Faixa azul edge-to-edge (sem border-radius, sem border, full-width via margem negativa) -->
-<div style="background-color:#1B2A4A;color:#fff;padding:11px 18px;text-align:center;margin:18px -1.8cm 0 -1.8cm;-webkit-print-color-adjust:exact;print-color-adjust:exact">
-  <span style="font-family:'Helvetica','Arial',sans-serif;font-size:12pt;font-weight:700;letter-spacing:3px;text-transform:uppercase;display:block;color:#fff">Contrato de Experiência</span>
+<!-- Faixa azul edge-to-edge — padding 18px vertical, texto 14pt (como Comunicado) -->
+<div style="background-color:#1B2A4A;color:#fff;padding:18px 24px;text-align:center;margin:22px -1.8cm 0 -1.8cm;-webkit-print-color-adjust:exact;print-color-adjust:exact">
+  <span style="font-family:'Helvetica','Arial',sans-serif;font-size:14pt;font-weight:700;letter-spacing:4px;text-transform:uppercase;display:block;color:#fff">Contrato de Experiência</span>
 </div>
 
-<!-- Linha meta Nº/Data (logo abaixo da faixa, 10pt cinza) -->
-<table style="width:100%;border-collapse:collapse;margin:14px 0 6px 0"><tbody><tr>
-  <td style="text-align:left;font-family:'Helvetica','Arial',sans-serif;font-size:10pt;color:#333;padding:0">Nº ${String((editingId || 0)).padStart(3,'0')}/${new Date().getFullYear()}</td>
-  <td style="text-align:right;font-family:'Helvetica','Arial',sans-serif;font-size:10pt;color:#333;padding:0">Data de Emissão: ${dataHoje}</td>
+<!-- Linha meta Nº/Data (logo abaixo da faixa, 11pt cinza, indent 1cm pra alinhar com ASSUNTO) -->
+<table style="width:100%;border-collapse:collapse;margin:18px 0 6px 0"><tbody><tr>
+  <td style="text-align:left;font-family:'Helvetica','Arial',sans-serif;font-size:11pt;color:#1a1a1a;padding:0 0 0 1cm;font-weight:600">Nº ${String((editingId || 0)).padStart(3,'0')}/${new Date().getFullYear()}</td>
+  <td style="text-align:right;font-family:'Helvetica','Arial',sans-serif;font-size:11pt;color:#1a1a1a;padding:0 1cm 0 0;font-weight:600">Data de Emissão: ${dataHoje}</td>
 </tr></tbody></table>
 
-<!-- Bloco ASSUNTO no padrão EXATO do PDF: sem fundo, sem border, indent 1cm, label + valor uppercase -->
-<div style="margin:22px 0 18px 1cm;text-align:left">
-  <div style="font-family:'Helvetica','Arial',sans-serif;font-size:10.5pt;color:#1a1a1a;font-weight:700;text-transform:uppercase;margin-bottom:2px">ASSUNTO:</div>
-  <div style="font-family:'Helvetica','Arial',sans-serif;font-size:10.5pt;color:#1a1a1a;font-weight:700;text-transform:uppercase">CONTRATO DE EXPERIÊNCIA — ${empNome}${empFuncao ? ' (' + empFuncao + ')' : ''}</div>
+<!-- Bloco ASSUNTO: indent 1cm, label + valor uppercase 11pt -->
+<div style="margin:24px 0 20px 1cm;text-align:left">
+  <div style="font-family:'Helvetica','Arial',sans-serif;font-size:11pt;color:#1a1a1a;font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">ASSUNTO:</div>
+  <div style="font-family:'Helvetica','Arial',sans-serif;font-size:11pt;color:#1a1a1a;font-weight:700;text-transform:uppercase;letter-spacing:.3px">CONTRATO DE EXPERIÊNCIA — ${empNome}${empFuncao ? ' (' + empFuncao + ')' : ''}</div>
 </div>
 
 <p>Pelo presente instrumento particular de <strong>CONTRATO DE TRABALHO POR PRAZO DETERMINADO (EXPERIÊNCIA)</strong>, que entre si fazem:</p>
