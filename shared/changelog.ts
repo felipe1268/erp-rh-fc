@@ -1,6 +1,68 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2127 — **FCSign · alerta global de assinatura pendente agora dispara
+ * pro EMPREGADOR — bug: signers eram criados SEM email, e o match do alerta é
+ * `signers.email == user.email`.**
+ *
+ * User: "após assinatura do documento do contrato de experiência não está
+ * aparecendo o alerta na minha tela para que eu lembre de assinar este
+ * documento" — screenshot: Lilian (EMPREGADO) assinou 19/05 03:36, Felipe
+ * (EMPREGADOR) ficou pendente, mas ao logar como Felipe NÃO aparece o toast
+ * persistente "Documento aguardando sua assinatura" criado na Rev. 2121.
+ *
+ * **Causa-raiz:** `client/src/components/FCSignSendDialog.tsx` linha 85-89
+ * monta o array de signers contendo só `{role, nome, cpf}` — **sem campo
+ * email**. O `signatures.create` (server) salvava `email: null` na coluna.
+ * O `pendingForCurrentUser` (Rev. 2121, L453) faz
+ * `WHERE LOWER(signers.email) = LOWER(ctx.user.email)` → não casa nada → array
+ * vazio → toast não aparece. O fluxo de assinatura em si funciona (link manual
+ * via WhatsApp), mas o aviso automático fica capenga.
+ *
+ * **Fix em 2 camadas (`server/routers/signatures.ts` + `server/_core/index.ts`):**
+ *
+ * 1. **`signatures.create` (server/routers/signatures.ts) — resolução
+ *    automática de email no INSERT.** Mantém precedência se o cliente já
+ *    enviou `email` (não-quebra). Senão:
+ *    - `role='empregado'` → busca `employees.email` via `employeeId` da sessão
+ *      (1 query antes do loop, reaproveitada).
+ *    - `role IN ('empregador','testemunha_*')` → busca `users.email` por
+ *      match `LOWER(users.name) = LOWER(signers.nome)` filtrando
+ *      `deleted_at IS NULL AND email IS NOT NULL`. Adicionado import de
+ *      `users` no top do arquivo. Tudo dentro de `try/catch` pra não derrubar
+ *      a criação da sessão se o lookup falhar.
+ *
+ * 2. **Backfill retroativo (`server/_core/index.ts` SyncSchema+ Rev. 2127).**
+ *    Pra Felipe poder receber o alerta na sessão ATUAL (já criada sem email)
+ *    sem precisar reemitir o contrato:
+ *    - UPDATE 1: `signature_signers SET email = LOWER(TRIM(e.email))
+ *      FROM signature_sessions sess JOIN employees e ON e.id = sess.employee_id
+ *      WHERE ss.role='empregado' AND ss.email IS NULL AND ss.signed_at IS NULL`.
+ *    - UPDATE 2: `signature_signers SET email = LOWER(TRIM(u.email))
+ *      FROM users u WHERE ss.role <> 'empregado' AND ss.email IS NULL
+ *      AND ss.signed_at IS NULL AND LOWER(u.name) = LOWER(ss.nome)
+ *      AND u.deleted_at IS NULL AND u.email IS NOT NULL`.
+ *    - **Idempotente** por `email IS NULL AND signed_at IS NULL`: roda só
+ *      sobre signers ainda pendentes que perderam o email original.
+ *
+ * **Por que match por NOME e não CPF?** O `FCSignSendDialog` envia CPF do
+ * empregador travado em FELIPE_SOCIO (`362.506.888-54`) mas a tabela `users`
+ * não tem coluna CPF — só `name`, `email`, `openId`. Match por nome é o que o
+ * schema permite hoje sem migração. Se houver duplicidade de nome (raríssimo
+ * num ERP corporativo + filtro `deleted_at IS NULL`), o LIMIT 1 escolhe a
+ * primeira; pior caso = signer fica sem email (mesmo estado de antes do fix).
+ *
+ * **R-001/R-007/R-010:** OK — só `UPDATE` em coluna existente (sem ALTER/DROP/
+ * DELETE). Idempotente, seguro pra rodar a cada boot.
+ *
+ * **Arquivos:** `server/routers/signatures.ts` (import `users` + bloco de
+ * resolução de email antes do INSERT em `signersToInsert`),
+ * `server/_core/index.ts` (bloco Rev. 2127 SyncSchema+), `shared/version.ts`
+ * (bump 2126 → 2127), `shared/changelog.ts` (esta entrada),
+ * `replit.md` (one-liner shift).
+ *
+ * --------------------------------------------------------------------------
+ *
  * Rev. 2126 — **RH · Contrato de Experiência: HOTFIX — numeração reinicia em
  * 001/2026 (eu havia interpretado errado o pedido original na Rev. 2125 e
  * seedado o counter com 33).**

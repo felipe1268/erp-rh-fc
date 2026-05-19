@@ -1,7 +1,7 @@
 import { router, protectedProcedure, publicProcedure } from "../_core/trpc";
 import { z } from "zod";
 import { getDb, getCompaniesForUser } from "../db";
-import { signatureSessions, signatureSigners, employees, companies, employeeDocuments } from "../../drizzle/schema";
+import { signatureSessions, signatureSigners, employees, companies, employeeDocuments, users } from "../../drizzle/schema";
 import { eq, and, desc, sql, isNull } from "drizzle-orm";
 import { resolveCompanyIds, companyFilter } from "../companyHelper";
 import { TRPCError } from "@trpc/server";
@@ -204,14 +204,51 @@ export const signaturesRouter = router({
         observacoes: input.observacoes || null,
       }).returning();
 
-      const signersToInsert = input.signers.map((s, i) => ({
-        sessionId: session.id,
-        role: s.role,
-        ordem: i + 1,
-        nome: s.nome,
-        cpf: s.cpf || null,
-        email: s.email || null,
-        token: genToken(),
+      // Rev. 2127 — resolução automática de email do signer quando o cliente
+      // não envia (caso do FCSignSendDialog que só manda role/nome/cpf).
+      // Sem email, o alerta global Rev. 2121 (`pendingForCurrentUser`) NÃO
+      // consegue casar com o user logado → assinante não recebe o aviso pra
+      // assinar. Fallback em 2 camadas:
+      //   1) role='empregado' → email do colaborador (employees.email).
+      //   2) outros roles    → users.email por match case-insensitive de NOME.
+      // Mantém o email recebido do cliente se já vier preenchido (precedência).
+      let empregadoEmail: string | null = null;
+      try {
+        const [empRow] = await db.select({ email: employees.email })
+          .from(employees).where(eq(employees.id, input.employeeId)).limit(1);
+        empregadoEmail = (empRow?.email || "").trim() || null;
+      } catch {}
+      const signersToInsert = await Promise.all(input.signers.map(async (s, i) => {
+        let email: string | null = (s.email || "").trim() || null;
+        if (!email) {
+          if (s.role === "empregado") {
+            email = empregadoEmail;
+          } else {
+            const nomeNorm = (s.nome || "").trim();
+            if (nomeNorm) {
+              try {
+                const [u] = await db.select({ email: users.email })
+                  .from(users)
+                  .where(and(
+                    sql`LOWER(${users.name}) = LOWER(${nomeNorm})`,
+                    sql`${users.deletedAt} IS NULL`,
+                    sql`${users.email} IS NOT NULL`,
+                  ))
+                  .limit(1);
+                email = (u?.email || "").trim() || null;
+              } catch {}
+            }
+          }
+        }
+        return {
+          sessionId: session.id,
+          role: s.role,
+          ordem: i + 1,
+          nome: s.nome,
+          cpf: s.cpf || null,
+          email,
+          token: genToken(),
+        };
       }));
       const createdSigners = await db.insert(signatureSigners).values(signersToInsert).returning();
 

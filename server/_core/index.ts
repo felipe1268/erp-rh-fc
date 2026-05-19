@@ -1604,6 +1604,45 @@ Regras:
           console.log(`[SyncSchema+] Rev. 2125+2126: contract_counters + employees.numero_contrato_experiencia(+_ano) garantidos (counter zerado, próxima alocação = 001).`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.2125/2126 contract_counters:`, e?.message || e); }
 
+        // Rev. 2127 — Backfill de email em signature_signers pendentes.
+        // Sessões criadas antes da Rev. 2127 não tinham email (FCSignSendDialog
+        // só mandava role/nome/cpf) → alerta global `pendingForCurrentUser`
+        // não conseguia casar com user logado → assinante não recebia aviso.
+        // Aqui resolve retroativamente:
+        //  - role='empregado' → employees.email via signatureSessions.employeeId
+        //  - demais roles → users.email por match LOWER(name)
+        // Idempotente: só atualiza linhas onde email IS NULL E signedAt IS NULL.
+        try {
+          const r1 = await db.execute(sql`
+            UPDATE signature_signers ss
+            SET email = LOWER(TRIM(e.email))
+            FROM signature_sessions sess
+            JOIN employees e ON e.id = sess.employee_id
+            WHERE ss.session_id = sess.id
+              AND ss.role = 'empregado'
+              AND ss.email IS NULL
+              AND ss.signed_at IS NULL
+              AND e.email IS NOT NULL
+              AND TRIM(e.email) <> ''
+          `);
+          // Nota: tabela `users` usa colunas camelCase quoted (`"deletedAt"`,
+          // não `deleted_at`) — convenção Drizzle. Mesma armadilha que
+          // pegou companies na Rev. 2125.
+          const r2 = await db.execute(sql`
+            UPDATE signature_signers ss
+            SET email = LOWER(TRIM(u.email))
+            FROM users u
+            WHERE ss.role <> 'empregado'
+              AND ss.email IS NULL
+              AND ss.signed_at IS NULL
+              AND LOWER(u.name) = LOWER(ss.nome)
+              AND u."deletedAt" IS NULL
+              AND u.email IS NOT NULL
+              AND TRIM(u.email) <> ''
+          `);
+          console.log(`[SyncSchema+] Rev. 2127: backfill email em signature_signers pendentes — empregado=${(r1 as any)?.rowCount ?? '?'} / outros=${(r2 as any)?.rowCount ?? '?'}.`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.2127 backfill signers.email:`, e?.message || e); }
+
       } catch (e: any) { console.error(`[SyncSchema+] ERROR:`, e?.message || e); }
     }).catch(e => console.error("[SyncSchema] Falha ao iniciar:", e));
     // Garantir colunas críticas adicionadas recentemente que o SyncSchema possa ter ignorado
