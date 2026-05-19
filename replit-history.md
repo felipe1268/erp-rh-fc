@@ -4,6 +4,8 @@
 > O detalhamento completo (causa-raiz, stack traces, arquivos tocados, comentários longos) de TODAS as revisões — incluindo as listadas abaixo — vive em `shared/changelog.ts`.
 > Movido aqui na Rev. 2028 (faxina) — revisões 1903 → 2012.
 
+- Rev. 2144 — Termo de Responsabilidade · campo Quantidade agora permite apagar livremente (Input type=text inputMode=numeric, clamp movido pro onBlur). Fix UX da Rev. 2143. (movida na Rev. 2151)
+
 - Rev. 2143 — Termo de Responsabilidade · novo campo "Quantidade" por item entregue (Input + coluna Qtd. na tabela HTML do termo FCSign, colspan fotos 3→4). (movida na Rev. 2150)
 
 - Rev. 2142 — SECURITY/CONCORRÊNCIA · Hardening Templates Docs (Rev. 2141): race condition em save/restoreVersion (db.transaction + pg_advisory_xact_lock + SELECT FOR UPDATE) + XSS no preview (DOMPurify.sanitize). (movida na Rev. 2149)

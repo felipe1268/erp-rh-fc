@@ -413,49 +413,98 @@ export default function TermosResponsabilidadePanel({ companyId, companyIds, onC
         </CardContent>
       </Card>
 
-      {/* ===== Dialog: Escolher colaborador para Novo Termo ===== */}
+      {/* ===== Dialog: Escolher colaborador para Novo Termo (Rev. 2151 — FC look) ===== */}
       <Dialog open={novoOpen && !novoEmpId} onOpenChange={(v) => { if (!v) setNovoOpen(false); }}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>Novo Termo de Recebimento</DialogTitle>
-            <DialogDescription>
-              Escolha o colaborador para emitir o termo. Cada colaborador pode ter vários termos
-              (entregas diferentes em datas diferentes).
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-3">
+        <DialogContent className="max-w-2xl p-0 gap-0 overflow-hidden">
+          <div
+            className="px-6 py-4 border-b-2 border-white"
+            style={{ backgroundColor: "#1B2A4A", printColorAdjust: "exact" as any }}
+          >
+            <DialogHeader className="space-y-1 text-left">
+              <DialogTitle
+                className="text-white text-base font-bold uppercase flex items-center gap-2"
+                style={{ letterSpacing: "3px" }}
+              >
+                <Plus className="h-4 w-4" />
+                Novo Termo de Recebimento
+              </DialogTitle>
+              <DialogDescription className="text-indigo-100 text-xs leading-relaxed">
+                Escolha o colaborador para emitir o termo. Cada colaborador pode ter
+                vários termos (entregas diferentes em datas diferentes).
+              </DialogDescription>
+            </DialogHeader>
+          </div>
+
+          <div className="px-6 py-4 space-y-3 bg-slate-50">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
                 placeholder="Buscar por nome, CPF ou matrícula..."
                 value={empSearchNovo}
                 onChange={(e) => setEmpSearchNovo(e.target.value)}
-                className="pl-10"
+                className="pl-10 bg-white"
                 autoFocus
               />
             </div>
-            <div className="border rounded-lg max-h-[420px] overflow-y-auto divide-y">
+
+            <div className="flex items-center justify-between px-1">
+              <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
+                Colaboradores ativos
+              </p>
+              <Badge variant="secondary" className="text-[10px] bg-indigo-100 text-indigo-800 border border-indigo-200">
+                {empsFiltradosNovo.length} {empsFiltradosNovo.length === 1 ? "resultado" : "resultados"}
+              </Badge>
+            </div>
+
+            <div className="border border-slate-200 rounded-lg max-h-[420px] overflow-y-auto divide-y divide-slate-100 bg-white shadow-sm">
               {empsFiltradosNovo.length === 0 ? (
-                <div className="p-6 text-center text-sm text-muted-foreground">Nenhum colaborador ativo encontrado.</div>
-              ) : empsFiltradosNovo.map((e: any) => (
-                <button
-                  key={e.id}
-                  onClick={() => setNovoEmpId(e.id)}
-                  className="w-full text-left p-3 hover:bg-muted/40 flex items-center justify-between gap-2 transition-colors"
-                >
-                  <div className="min-w-0">
-                    <div className="font-medium truncate">{e.nomeCompleto}</div>
-                    <div className="text-[11px] text-muted-foreground truncate">
-                      {e.cpf && `CPF ${formatCPF(e.cpf)} · `}
-                      {e.funcao || "—"}
+                <div className="p-8 text-center text-sm text-muted-foreground">
+                  <Search className="h-8 w-8 mx-auto mb-2 opacity-30" />
+                  Nenhum colaborador ativo encontrado.
+                </div>
+              ) : empsFiltradosNovo.map((e: any) => {
+                const iniciais = (e.nomeCompleto || "?")
+                  .split(/\s+/)
+                  .filter(Boolean)
+                  .slice(0, 2)
+                  .map((p: string) => p[0]?.toUpperCase() || "")
+                  .join("");
+                return (
+                  <button
+                    key={e.id}
+                    onClick={() => setNovoEmpId(e.id)}
+                    className="w-full text-left p-3 hover:bg-indigo-50/60 flex items-center gap-3 transition-colors group"
+                  >
+                    <div
+                      className="h-10 w-10 rounded-full flex items-center justify-center text-xs font-bold text-white shrink-0 shadow-sm"
+                      style={{ backgroundColor: "#1B2A4A" }}
+                    >
+                      {iniciais}
                     </div>
-                  </div>
-                  <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
-                </button>
-              ))}
+                    <div className="min-w-0 flex-1">
+                      <div className="font-semibold text-sm text-slate-800 truncate group-hover:text-indigo-900">
+                        {e.nomeCompleto}
+                      </div>
+                      <div className="text-[11px] text-muted-foreground truncate flex items-center gap-2 mt-0.5">
+                        {e.cpf && (
+                          <span className="font-mono">CPF {formatCPF(e.cpf)}</span>
+                        )}
+                        {e.funcao && (
+                          <>
+                            <span className="text-slate-300">·</span>
+                            <span className="uppercase tracking-wide font-medium text-slate-600">{e.funcao}</span>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                    <ChevronRight className="h-4 w-4 text-slate-400 shrink-0 group-hover:text-indigo-600 group-hover:translate-x-0.5 transition-all" />
+                  </button>
+                );
+              })}
             </div>
           </div>
-          <DialogFooter>
+
+          <DialogFooter className="px-6 py-3 bg-white border-t">
             <Button variant="outline" onClick={() => setNovoOpen(false)}>Cancelar</Button>
           </DialogFooter>
         </DialogContent>

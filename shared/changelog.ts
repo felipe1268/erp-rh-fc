@@ -1,6 +1,42 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2151 — **UX POLISH · Dialog "Novo Termo de Recebimento" repaginado
+ * com a identidade visual FC (Regra de Ouro — faixa azul #1B2A4A,
+ * tipografia uppercase letter-spacing 3px, avatar com iniciais).**
+ *
+ * User: "Melhore o layout conforme nossas regras de ouro" (referência ao
+ * cabeçalho institucional FC documentado em replit.md). O modal de
+ * escolha de colaborador estava com o estilo padrão genérico do
+ * shadcn/ui (DialogHeader cinza, lista chapada sem hierarquia),
+ * destoando do resto do app que adota a paleta FC.
+ *
+ * Mudanças em client/src/components/controleDocumentos/TermosResponsabilidadePanel.tsx
+ * (apenas o dialog de Novo Termo, ~L419-510):
+ *
+ * 1. DialogContent agora usa p-0 gap-0 overflow-hidden pra permitir
+ *    uma faixa de header full-width.
+ * 2. Faixa azul FC (#1B2A4A) com border-b-2 border-white e
+ *    printColorAdjust:exact inline. Título uppercase com
+ *    letterSpacing 3px (Regra de Ouro), ícone Plus + texto branco.
+ *    Subtítulo em text-indigo-100.
+ * 3. Corpo bg-slate-50 com search no topo (bg-white no input pra
+ *    contrastar) + linha de meta com label "COLABORADORES ATIVOS" e
+ *    badge contador "N resultados".
+ * 4. Lista: cada linha agora tem avatar circular 40px com iniciais
+ *    (primeiras 2 palavras) em fundo #1B2A4A; nome em
+ *    font-semibold text-slate-800 (vira indigo-900 no hover); meta
+ *    linha com CPF mono + função uppercase tracking-wide; chevron
+ *    desliza 2px à direita e muda pra indigo no hover; hover
+ *    indigo-50/60 (consistente com o highlight da Rev. 2149).
+ * 5. Empty state ganhou ícone Search 32px opacity-30.
+ * 6. Footer bg-white border-t separando claramente do corpo.
+ *
+ * Zero mudanças funcionais — setNovoEmpId(e.id) continua disparando
+ * o TermoResponsabilidadeDialog. Backend: zero.
+ *
+ * R-001/R-007/R-010: OK — pure client-side cosmético.
+ *
  * Rev. 2150 — **NOVA FEATURE · Termos & Documentos Assinados (FCSign)
  * agora aparecem no Raio-X do funcionário, com Visualizar + Baixar.**
  *
