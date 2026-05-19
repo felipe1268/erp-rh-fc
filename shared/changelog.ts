@@ -1,6 +1,54 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2129 — **HOTFIX iOS Safari · `FCSignContratoExperienciaPanel`
+ * quebrava com "The string did not match the expected pattern" ao
+ * renderizar timestamps `createdAt`/`completedAt`/`signedAt` da sessão
+ * FCSign.**
+ *
+ * User: screenshot iPad mostrando toast vermelho "Erro ao alocar número
+ * do contrato: The string did not match the expected pattern." na página
+ * Editar Colaborador (Contrato de Experiência Nº 001/2026 já alocado).
+ *
+ * **Causa-raiz:** clássica armadilha iOS Safari WebKit (recorrente — ver
+ * Rev. 1848/1839/1745). Drizzle/superjson às vezes devolve TIMESTAMP do
+ * Postgres como string crua `"YYYY-MM-DD HH:MM:SS.fff"` (espaço, não T).
+ * iOS Safari rejeita esse formato com RangeError, enquanto Chrome/Firefox
+ * aceitam. `FCSignContratoExperienciaPanel.tsx` linhas 95/159/192 faziam
+ * `new Date(sess.completedAt).toLocaleString("pt-BR")` direto. Quando o
+ * painel renderizava (após o `getById.invalidate()` da mutation de
+ * alocação refazer fetch), o render quebrava no iPad. O erro subia pelo
+ * boundary global e o toast aparecia com o prefixo da última mutation
+ * pendente (a `allocateContratoExpMut.onError`), dando a falsa impressão
+ * de que a alocação falhou (quando na verdade ela tinha ido bem — o
+ * próprio botão mostra "Nº 001/2026" alocado).
+ *
+ * **Fix em `client/src/components/FCSignContratoExperienciaPanel.tsx`:**
+ * - Novo helper `fmtTs(ts)` no topo do arquivo — replace " "→"T" antes
+ *   de `new Date()`, com guarda `isNaN(d.getTime())` e try/catch que
+ *   devolve a string crua em caso de falha (mesmo padrão de
+ *   `FinanceiroContasAPagar.tsx` L154 e `PlanejamentoDetalhe.tsx` L83).
+ * - 3 ocorrências de `new Date(x).toLocaleString("pt-BR")` substituídas
+ *   por `fmtTs(x)`: `sess.completedAt` (L95), `sess.createdAt` (L159) e
+ *   `s.signedAt` (L192).
+ *
+ * **Por que o toast prefixava com "Erro ao alocar"?** Porque a mutation
+ * `allocateContratoExperienciaNumero` chama `utils.employees.getById.invalidate()`
+ * no `onSuccess`, que dispara um refetch SÍNCRONO durante o resolve da
+ * promise da mutation. Se o componente que consome esse refetch (o painel
+ * FCSign acima do botão) crashar no render por causa do `new Date()`
+ * defeituoso, o erro do React render às vezes vaza pro contexto da
+ * mutation no iOS Safari, fazendo o `onError` da mutation receber a
+ * RangeError ao invés do `onSuccess` ser invocado. Em Chrome o erro do
+ * render fica isolado e a mutation termina como sucesso.
+ *
+ * **R-001/R-007/R-010:** OK — só patch defensivo client-side, zero DDL.
+ *
+ * **Arquivos:** `client/src/components/FCSignContratoExperienciaPanel.tsx`,
+ * `shared/version.ts`, `shared/changelog.ts`, `replit.md`.
+ *
+ * --------------------------------------------------------------------------
+ *
  * Rev. 2128 — **FCSign · alerta global agora dispara por PAPEL (role) do
  * user logado, não por email do signer. Se você é `admin_master`/`admin`,
  * recebe alerta de TODO pendente de `empregador` nas suas empresas.**

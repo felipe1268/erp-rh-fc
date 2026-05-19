@@ -4,6 +4,25 @@ import { Button } from "@/components/ui/button";
 import { ShieldCheck, CheckCircle2, Clock, Copy, ExternalLink, Eye, Download, Trash2, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
+// Rev. 2129 — Helper defensivo de parsing de timestamp do Postgres p/ iOS
+// Safari. Drizzle/superjson às vezes devolve TIMESTAMP como string crua
+// "YYYY-MM-DD HH:MM:SS.fff" (espaço, não T). iOS Safari rejeita esse
+// formato com "RangeError: The string did not match the expected pattern"
+// e o erro sobe até o toast global (parecendo erro da última mutation).
+// Padrão idêntico ao usado em FinanceiroContasAPagar.tsx L154 e
+// PlanejamentoDetalhe.tsx L83 (Rev. 1848+).
+function fmtTs(ts: string | null | undefined): string {
+  if (!ts) return "—";
+  try {
+    const safe = typeof ts === "string" ? ts.replace(" ", "T") : ts;
+    const d = new Date(safe);
+    if (isNaN(d.getTime())) return String(ts);
+    return d.toLocaleString("pt-BR");
+  } catch {
+    return String(ts);
+  }
+}
+
 type Props = {
   companyId: number;
   employeeId: number;
@@ -92,7 +111,7 @@ export default function FCSignContratoExperienciaPanel({ companyId, employeeId, 
               <div className="text-xs text-emerald-700 dark:text-emerald-400 mt-0.5">
                 Todas as partes assinaram. Documento arquivado na RAIO-X do colaborador.
                 {sess.completedAt && (
-                  <> · Concluído em {new Date(sess.completedAt).toLocaleString("pt-BR")}</>
+                  <> · Concluído em {fmtTs(sess.completedAt)}</>
                 )}
               </div>
             </div>
@@ -156,7 +175,7 @@ export default function FCSignContratoExperienciaPanel({ companyId, employeeId, 
             <div className="text-xs text-amber-700 dark:text-amber-400 mt-0.5">
               Já existe uma sessão FCSign em andamento p/ este contrato. Não é possível reemitir enquanto ela estiver ativa.
               {sess.createdAt && (
-                <> · Criada em {new Date(sess.createdAt).toLocaleString("pt-BR")}</>
+                <> · Criada em {fmtTs(sess.createdAt)}</>
               )}
             </div>
           </div>
@@ -189,7 +208,7 @@ export default function FCSignContratoExperienciaPanel({ companyId, employeeId, 
                     {s.nome}
                   </div>
                   <div className="text-[10px] text-muted-foreground">
-                    {done ? `Assinou em ${new Date(s.signedAt!).toLocaleString("pt-BR")}` : "Pendente"}
+                    {done ? `Assinou em ${fmtTs(s.signedAt)}` : "Pendente"}
                   </div>
                 </div>
               </div>
