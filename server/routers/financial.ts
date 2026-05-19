@@ -71,19 +71,28 @@ export const financialRouter = router({
     companyIds: z.array(z.number()).optional(),
     tipo: z.string().optional(),
     ativo: z.boolean().optional(),
+    escopo: z.enum(["plano","categoria","all"]).optional(),
   })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     const ids = resolveCompanyIds(input);
     const ativoPart = input.ativo !== undefined ? `AND ativo = ${input.ativo ? 1 : 0}` : "";
     const tipoPart = input.tipo ? `AND tipo = '${input.tipo.replace(/'/g, "''")}'` : "";
+    // Rev. 2157 — escopo separa Plano de Contas (contábil, ex.: "3.3") de
+    // Categorias operacionais (AUTO-NNNN). 'all' mantém compatibilidade
+    // com lugares que ainda misturam (dropdowns de lançamentos, DRE etc).
+    const escopoPart = input.escopo === "plano"
+      ? "AND codigo NOT LIKE 'AUTO-%'"
+      : input.escopo === "categoria"
+      ? "AND codigo LIKE 'AUTO-%'"
+      : "";
     const res = await dbExecute(db, 
       `SELECT id, company_id AS "companyId", codigo, nome, tipo, natureza, nivel,
               conta_pai_id AS "contaPaiId", classificacao_dre AS "classificacaoDRE",
               centro_custo_id AS "centroCustoId",
               ativo, ordem
        FROM financial_accounts
-       WHERE company_id IN (${inlineIds(ids)}) ${ativoPart} ${tipoPart}
+       WHERE company_id IN (${inlineIds(ids)}) ${ativoPart} ${tipoPart} ${escopoPart}
               ORDER BY ordem ASC, codigo ASC`,
       []
     );
@@ -106,9 +115,24 @@ export const financialRouter = router({
     classificacaoDRE: z.string().optional(),
     centroCustoId: z.number().optional(),
     ordem: z.number().default(0),
+    // Rev. 2157 — escopo informa de qual tela veio o insert. 'plano' valida
+    // formato contábil (N.N…) e bloqueia AUTO-*; 'categoria' força AUTO-NNNN
+    // mesmo se o usuário digitar algo no campo. Sem escopo: comportamento
+    // legado (back-compat com modal inline de lançamento).
+    escopo: z.enum(["plano","categoria"]).optional(),
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    // Rev. 2157 — gate de escopo
+    if (input.escopo === "plano") {
+      const codigo = (input.codigo || "").trim();
+      if (!codigo) throw new TRPCError({ code: "BAD_REQUEST", message: "Plano de Contas exige código contábil (ex.: 3.1, 4.2.1)." });
+      if (/^AUTO-/i.test(codigo)) throw new TRPCError({ code: "BAD_REQUEST", message: "Plano de Contas não aceita códigos AUTO-*; use formato contábil (ex.: 3.1, 4.2.1)." });
+      if (!/^[0-9]+(\.[0-9]+){0,4}$/.test(codigo)) throw new TRPCError({ code: "BAD_REQUEST", message: `Código contábil inválido: "${codigo}". Use formato N.N (ex.: 3.1, 4.2.1).` });
+    } else if (input.escopo === "categoria") {
+      // categorias sempre auto-geram AUTO-NNNN; ignora qualquer codigo enviado.
+      input.codigo = undefined;
+    }
     // Dedup: se já existe categoria com mesmo nome (case-insensitive) na empresa, devolve a existente.
     const dupe = rows(await dbExecute(db,
       `SELECT id FROM financial_accounts WHERE company_id=$1 AND LOWER(nome)=LOWER($2) AND ativo=1 LIMIT 1`,

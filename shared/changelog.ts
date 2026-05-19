@@ -1,6 +1,76 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2157 — **Separação Plano de Contas × Categorias (Opção C —
+ * filtro por escopo + seed do plano contábil padrão).**
+ *
+ * User: "em CATEGORIAS e PLANO DE CONTAS, estão interligadas, quando
+ * eu crio uma categoria nova, ele projeta em plano contas, porém isso
+ * não deve ocorrer! ... Pode seguir com a opção C".
+ *
+ * **Diagnóstico:** não havia espelhamento — Plano de Contas e
+ * Categorias compartilhavam fisicamente a mesma tabela
+ * `financial_accounts`. Ambas as telas chamavam o mesmo
+ * `financial.getAccounts`/`createAccount`. Categorias inseriam
+ * `codigo='AUTO-NNNN' nivel=1`; conta contábil "de verdade" tinha
+ * `codigo='3.3' nivel=2`. Resultado: 37 categorias "vazavam" pra tela
+ * de Plano de Contas (mesmo n=38 nas duas telas).
+ *
+ * **Backend — `server/routers/financial.ts`:**
+ *
+ * 1. `getAccounts` ganha input opcional `escopo: 'plano' | 'categoria'
+ *    | 'all'`. Constrói WHERE adicional:
+ *    - `plano`  → `AND codigo NOT LIKE 'AUTO-%'`
+ *    - `categoria` → `AND codigo LIKE 'AUTO-%'`
+ *    - omisso → comportamento legado (back-compat com dropdowns de
+ *      lançamentos e DRE que ainda misturam).
+ * 2. `createAccount` ganha gate `escopo: 'plano' | 'categoria'`:
+ *    - `plano`: exige `codigo` informado, valida regex
+ *      `^[0-9]+(\.[0-9]+){0,4}$` e bloqueia explicitamente
+ *      `AUTO-*` → mensagem de erro clara pro usuário.
+ *    - `categoria`: ignora qualquer `codigo` enviado pelo cliente e
+ *      força o auto-gerador `AUTO-NNNN` (idempotente, com dedup).
+ *
+ * **Backend — `server/services/financialSeedAccounts.ts`:**
+ *
+ * Guard do `seedPlanoDeConta` muda de `COUNT(*) > 0` para
+ * `COUNT(*) WHERE codigo NOT LIKE 'AUTO-%' > 0`. Antes, qualquer
+ * empresa com pelo menos 1 categoria já pulava o seed do plano
+ * contábil padrão (51 contas em formato `N.N.N`) e ficava sem plano
+ * contábil real — exatamente o caso de FC ENGENHARIA PROJETOS (1
+ * conta contábil `3.3` + 37 categorias AUTO-*). Agora o botão
+ * "Carregar Padrão" funciona mesmo com categorias preexistentes.
+ *
+ * **Frontend — `client/src/pages/financeiro/FinanceiroPlanoDeConta.tsx`:**
+ *
+ * `useQuery` e `createMut.mutate` passam `escopo: 'plano'`. Tela passa
+ * a mostrar SÓ contas contábeis (`3.3` é a única hoje em FC). Botão
+ * "Carregar Padrão" continua disponível e agora popula `1…8` com
+ * `RECEITAS BRUTAS → IMPOSTOS SOBRE O RESULTADO`.
+ *
+ * **Frontend — `client/src/pages/financeiro/FinanceiroCategorias.tsx`:**
+ *
+ * `useQuery` e `createMut.mutate` passam `escopo: 'categoria'`. Tela
+ * lista as 37 categorias `AUTO-*` (mesmas de antes — zero linha
+ * movida/apagada). Criar nova categoria não afeta mais o Plano de
+ * Contas, mesmo que o usuário tente burlar passando `codigo`
+ * customizado (servidor descarta).
+ *
+ * **Dados:** zero ALTER, zero DELETE, zero INSERT automático em prod.
+ * As 37 linhas `AUTO-*` continuam em `financial_accounts`,
+ * preservando todos os `financial_entries` (`conta_id → AUTO-*`)
+ * intactos. Quando o user clicar "Carregar Padrão" na tela de Plano
+ * de Contas, aí sim entram as 51 contas contábeis padrão da
+ * construtora (mesmo seed da Rev. 2080).
+ *
+ * **R-001/R-007/R-010:** 100% OK — só filtros de leitura + validação
+ * de input + ajuste de guard. Reversível removendo o `escopo` dos
+ * dois clients.
+ *
+ * **Próxima etapa (Rev. 2158, sob demanda):** adicionar dropdown
+ * "Plano de Contas (pai)" no form de Categoria, populando o
+ * `conta_pai_id` (coluna já existe), pra DRE agrupar pelo pai.
+ *
  * Rev. 2156 — **NOVA AÇÃO ADM Master · Botão "Excluir" em Centros de
  * Custo (hard-delete com guarda de referências).**
  *

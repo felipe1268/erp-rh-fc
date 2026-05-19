@@ -75,14 +75,19 @@ export async function seedPlanoDeConta(companyId: number): Promise<void> {
   const db = await getDb();
   if (!db) return;
 
+  // Rev. 2157 — conta só contas contábeis "de verdade" (codigo NOT LIKE 'AUTO-%').
+  // Linhas AUTO-* são categorias operacionais (Categorias) e NÃO contam como
+  // plano de contas existente — sem esse filtro o seed era pulado por causa
+  // das 37 categorias espelhadas, e a empresa ficava sem plano contábil real.
   const existing = await db.execute(
-    `SELECT COUNT(*) AS count FROM financial_accounts WHERE company_id = $1`,
+    `SELECT COUNT(*) AS count FROM financial_accounts
+     WHERE company_id = $1 AND codigo NOT LIKE 'AUTO-%'`,
     [companyId]
   );
   const rows = (existing as any)?.rows ?? (existing as any) ?? [];
   const count = Number(rows[0]?.count ?? 0);
   if (count > 0) {
-    console.log(`[FinancialSeed] Plano de contas já existente para company ${companyId} (${count} contas)`);
+    console.log(`[FinancialSeed] Plano de contas já existente para company ${companyId} (${count} contas contábeis)`);
     return;
   }
 

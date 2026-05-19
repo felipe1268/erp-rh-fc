@@ -4,6 +4,7 @@
 > O detalhamento completo (causa-raiz, stack traces, arquivos tocados, comentários longos) de TODAS as revisões — incluindo as listadas abaixo — vive em `shared/changelog.ts`.
 > Movido aqui na Rev. 2028 (faxina) — revisões 1903 → 2012.
 
+- Rev. 2150 — Termos & Documentos Assinados (FCSign) no Raio-X do funcionário com Visualizar+Baixar (nova tab "Termos Assinados"). (movida na Rev. 2157)
 - Rev. 2149 — Multi-seleção + exclusão em lote no painel "Termo de Recebimento" (checkbox col + barra de ação + bulkDelete sequencial via signatures.adminDelete; gate isAdminMaster). (movida na Rev. 2156)
 
 - Rev. 2148 — HOTFIX UX² · Tabs de Controle de Documentos em iPad Pro 12.9" portrait — troca `lg:grid-cols-9` por `xl:grid-cols-9` (linha única só ≥1280px). (movida na Rev. 2155)

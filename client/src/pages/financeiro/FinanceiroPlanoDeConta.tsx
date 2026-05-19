@@ -45,8 +45,9 @@ export default function FinanceiroPlanoDeConta() {
     classificacaoDRE: "", ordem: "0",
   });
 
+  // Rev. 2157 — escopo='plano' filtra fora as categorias operacionais (AUTO-*)
   const { data: contas, isLoading, refetch } = (trpc as any).financial.getAccounts.useQuery(
-    { companyId, tipo: tipoFilter !== "all" ? tipoFilter : undefined },
+    { companyId, escopo: "plano", tipo: tipoFilter !== "all" ? tipoFilter : undefined },
     { enabled: !!companyId }
   );
 
@@ -201,7 +202,7 @@ export default function FinanceiroPlanoDeConta() {
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setShowNew(false)}>Cancelar</Button>
-              <Button onClick={() => createMut.mutate({ companyId, codigo: form.codigo, nome: form.nome, tipo: form.tipo, natureza: form.natureza, nivel: parseInt(form.nivel) || 1, classificacaoDRE: form.classificacaoDRE || undefined, ordem: parseInt(form.ordem) || 0 })} disabled={createMut.isPending} className="bg-blue-600 hover:bg-blue-700 text-white">
+              <Button onClick={() => createMut.mutate({ companyId, escopo: "plano", codigo: form.codigo, nome: form.nome, tipo: form.tipo, natureza: form.natureza, nivel: parseInt(form.nivel) || 1, classificacaoDRE: form.classificacaoDRE || undefined, ordem: parseInt(form.ordem) || 0 })} disabled={createMut.isPending} className="bg-blue-600 hover:bg-blue-700 text-white">
                 {createMut.isPending ? "Salvando..." : "Salvar"}
               </Button>
             </DialogFooter>

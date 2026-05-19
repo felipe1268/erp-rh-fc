@@ -64,8 +64,10 @@ export default function FinanceiroCategorias() {
   const [form, setForm] = useState<FormState>({ ...INITIAL_FORM });
   const [confirmInactivate, setConfirmInactivate] = useState<Categoria | null>(null);
 
+  // Rev. 2157 — escopo='categoria' lista só categorias operacionais (AUTO-*),
+  // sem misturar com as contas contábeis do Plano de Contas (que ficam em outra tela).
   const { data: accounts, isLoading, refetch } = (trpc as any).financial.getAccounts.useQuery(
-    { companyId },
+    { companyId, escopo: "categoria" },
     { enabled: !!companyId },
   );
   const { data: costCenters } = (trpc as any).financial.getCostCenters.useQuery(
@@ -149,8 +151,7 @@ export default function FinanceiroCategorias() {
         nome,
         tipo: form.tipo,
         natureza: form.natureza,
-        centroCustoId: centroCustoId ?? undefined,
-      });
+        centroCustoId: centroCustoId ?? undefined,, escopo: "categoria"});
     }
   }
 
