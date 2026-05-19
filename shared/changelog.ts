@@ -32,6 +32,13 @@
  * idempotente, clicar duas vezes não duplica nada — apenas mostra
  * "0 novas, 51 já existentes" no log do servidor.
  *
+ * **Armadilha encontrada durante validação:** primeira tentativa
+ * usou `db.execute(string, [params])` — Drizzle/Neon DESCARTA o
+ * array silenciosamente e dispara "params:" vazio. Fix: usar
+ * `sql\`...${var}...\`` template tag (mesmo padrão já documentado
+ * em `server/routers/financial.ts` L44, "dbExecute helper"). Toda
+ * a função `seedPlanoDeConta` + `ensureTaxConfig` migradas.
+ *
  * **Dados em prod:** zero ALTER/DELETE. Seed só faz INSERT
  * idempotente quando o user clicar. R-001/R-007/R-010: OK.
  *

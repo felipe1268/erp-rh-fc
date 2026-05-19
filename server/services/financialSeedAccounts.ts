@@ -1,4 +1,5 @@
 import { getDb } from "../db";
+import { sql } from "drizzle-orm";
 
 export const PLANO_DE_CONTAS_PADRAO = [
   // ────────────────── RECEITAS BRUTAS ──────────────────
@@ -80,26 +81,30 @@ export async function seedPlanoDeConta(companyId: number): Promise<void> {
   // nome). Antes (Rev. 2157) bastava UMA conta contábil pra pular o seed
   // inteiro — agora cada conta é testada isoladamente, permitindo
   // "completar" um plano de contas iniciado manualmente.
+  // Rev. 2158.1 — IMPORTANTE: `db.execute(string, [params])` no Drizzle/Neon
+  // silenciosamente DESCARTA o array de params. Tem que usar `sql\`...\`` template
+  // tag (ver server/routers/financial.ts L44 — mesma armadilha já mapeada lá).
   let inserted = 0;
   let skipped = 0;
   for (const conta of PLANO_DE_CONTAS_PADRAO) {
-    const dupRes = await db.execute(
-      `SELECT id FROM financial_accounts
-       WHERE company_id = $1 AND (codigo = $2 OR LOWER(nome) = LOWER($3))
-       LIMIT 1`,
-      [companyId, conta.codigo, conta.nome]
-    );
-    const dupRows = (dupRes as any)?.rows ?? (dupRes as any) ?? [];
+    const dupRes: any = await db.execute(sql`
+      SELECT id FROM financial_accounts
+      WHERE company_id = ${companyId}
+        AND (codigo = ${conta.codigo} OR LOWER(nome) = LOWER(${conta.nome}))
+      LIMIT 1
+    `);
+    const dupRows = dupRes?.rows ?? (Array.isArray(dupRes) ? dupRes : []);
     if (dupRows.length > 0) { skipped++; continue; }
     try {
-      await db.execute(
-        `INSERT INTO financial_accounts (company_id, codigo, nome, tipo, natureza, nivel, classificacao_dre, ativo, ordem)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, 1, $8)`,
-        [companyId, conta.codigo, conta.nome, conta.tipo, conta.natureza, conta.nivel, conta.classificacaoDRE, conta.ordem]
-      );
+      await db.execute(sql`
+        INSERT INTO financial_accounts
+          (company_id, codigo, nome, tipo, natureza, nivel, classificacao_dre, ativo, ordem)
+        VALUES
+          (${companyId}, ${conta.codigo}, ${conta.nome}, ${conta.tipo},
+           ${conta.natureza}, ${conta.nivel}, ${conta.classificacaoDRE}, 1, ${conta.ordem})
+      `);
       inserted++;
     } catch (e: any) {
-      // unique violation (índice uq_fa_company_lower_nome_ativo) — trata como já existente
       if (String(e?.code) === "23505") { skipped++; continue; }
       throw e;
     }
@@ -110,17 +115,20 @@ export async function seedPlanoDeConta(companyId: number): Promise<void> {
 export async function ensureTaxConfig(companyId: number): Promise<void> {
   const db = await getDb();
   if (!db) return;
-  const existing = await db.execute(
-    `SELECT id FROM financial_tax_config WHERE company_id = $1 LIMIT 1`,
-    [companyId]
-  );
-  const rows = (existing as any)?.rows ?? (existing as any) ?? [];
+  const existing: any = await db.execute(sql`
+    SELECT id FROM financial_tax_config WHERE company_id = ${companyId} LIMIT 1
+  `);
+  const rows = existing?.rows ?? (Array.isArray(existing) ? existing : []);
   if (rows.length > 0) return;
 
-  await db.execute(
-    `INSERT INTO financial_tax_config (company_id, regime_tributario, aliquota_simples, aliquota_iss, aliquota_pis, aliquota_cofins, aliquota_irpj, aliquota_csll, aliquota_inss_empresa, aliquota_fgts, aliquota_rat, ativo)
-     VALUES ($1, 'simples_nacional', 6.00, 3.00, 0.65, 3.00, 15.00, 9.00, 20.00, 8.00, 3.00, 1)`,
-    [companyId]
-  );
+  await db.execute(sql`
+    INSERT INTO financial_tax_config
+      (company_id, regime_tributario, aliquota_simples, aliquota_iss, aliquota_pis,
+       aliquota_cofins, aliquota_irpj, aliquota_csll, aliquota_inss_empresa,
+       aliquota_fgts, aliquota_rat, ativo)
+    VALUES
+      (${companyId}, 'simples_nacional', 6.00, 3.00, 0.65, 3.00, 15.00, 9.00,
+       20.00, 8.00, 3.00, 1)
+  `);
   console.log(`[FinancialSeed] Configuração tributária padrão criada para company ${companyId}`);
 }
