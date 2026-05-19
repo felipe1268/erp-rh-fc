@@ -1933,6 +1933,56 @@ export const financialRouter = router({
     return { ok: true };
   }),
 
+  // Rev. 2156 — Excluir definitivamente Centro de Custo (ADM Master).
+  // Pedido user: "preciso ter um botao para excluir (apenas para login
+  // adm master)". Hard-delete gated em ctx.user.role==='admin_master',
+  // com checagem prévia de referências em financial_recurring_entries e
+  // financial_accounts (centro_custo_id). Se houver vínculo, recusa
+  // com mensagem explicativa pedindo pra inativar (Power) em vez de
+  // excluir — preserva integridade referencial em prod.
+  deleteCostCenter: protectedProcedure.input(z.object({
+    id: z.number(),
+    companyId: z.number(),
+  })).mutation(async ({ ctx, input }) => {
+    if ((ctx as any).user?.role !== 'admin_master') {
+      throw new TRPCError({ code: 'FORBIDDEN', message: 'Apenas ADM Master pode excluir centros de custo.' });
+    }
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    // Confirma escopo de empresa
+    const ccRes = await dbExecute(db,
+      `SELECT id, nome, codigo FROM financial_cost_centers WHERE id=$1 AND company_id=$2`,
+      [input.id, input.companyId]
+    );
+    const cc = rows(ccRes)[0];
+    if (!cc) throw new TRPCError({ code: "NOT_FOUND", message: "Centro de custo não encontrado nesta empresa." });
+    // Checa referências
+    const refRecRes = await dbExecute(db,
+      `SELECT COUNT(*)::int AS n FROM financial_recurring_entries WHERE centro_custo_id=$1`,
+      [input.id]
+    );
+    const refAccRes = await dbExecute(db,
+      `SELECT COUNT(*)::int AS n FROM financial_accounts WHERE centro_custo_id=$1`,
+      [input.id]
+    );
+    const nRec = rows(refRecRes)[0]?.n ?? 0;
+    const nAcc = rows(refAccRes)[0]?.n ?? 0;
+    if (nRec > 0 || nAcc > 0) {
+      const partes: string[] = [];
+      if (nAcc > 0) partes.push(`${nAcc} lançamento(s) financeiro(s)`);
+      if (nRec > 0) partes.push(`${nRec} recorrência(s)`);
+      throw new TRPCError({
+        code: 'BAD_REQUEST',
+        message: `Não foi possível excluir "${cc.codigo} — ${cc.nome}": ainda existem ${partes.join(' e ')} vinculados. Inative o centro (botão "Power") em vez de excluir.`,
+      });
+    }
+    await dbExecute(db,
+      `DELETE FROM financial_cost_centers WHERE id=$1 AND company_id=$2`,
+      [input.id, input.companyId]
+    );
+    return { ok: true, id: input.id, codigo: cc.codigo, nome: cc.nome };
+  }),
+
   // ─────────────────── MEDIÇÕES DE OBRA ───────────────────
 
   getMedicoes: protectedProcedure.input(z.object({

@@ -1,6 +1,50 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2156 — **NOVA AÇÃO ADM Master · Botão "Excluir" em Centros de
+ * Custo (hard-delete com guarda de referências).**
+ *
+ * User: "Em Centro de Custo, preciso ter um botão para excluir
+ * (apenas para login adm master)". Até a Rev. 2088 só existia
+ * inativar/reativar (soft via `ativo=0`) — o user agora precisa
+ * remover centros de custo de teste de vez.
+ *
+ * **Backend — nova procedure `financial.deleteCostCenter` em
+ * `server/routers/financial.ts` (após `updateCostCenter`):**
+ *
+ * 1. Gate forte `ctx.user.role === 'admin_master'` → 403 caso
+ *    contrário.
+ * 2. SELECT prévio do CC pra confirmar escopo de empresa (404 se
+ *    não encontrado em `company_id` do input).
+ * 3. Checagem de referências em duas tabelas que possuem
+ *    `centro_custo_id` (confirmado via information_schema):
+ *    `financial_recurring_entries` e `financial_accounts`. Se houver
+ *    qualquer vínculo, throw `BAD_REQUEST` com mensagem detalhada
+ *    (`"Não foi possível excluir 'CC-0001 — Nome': existem N
+ *    lançamento(s) financeiro(s) e M recorrência(s) vinculados.
+ *    Inative em vez de excluir."`).
+ * 4. Só se não houver vínculos: `DELETE FROM financial_cost_centers
+ *    WHERE id=$1 AND company_id=$2` (hard-delete real).
+ *
+ * **Frontend — `client/src/pages/financeiro/FinanceiroCentrosCusto.tsx`:**
+ *
+ * 1. Import `Trash2` do lucide + `usePermissions` do
+ *    `@/contexts/PermissionsContext`.
+ * 2. State `confirmDelete: CC | null` + mutation
+ *    `(trpc as any).financial.deleteCostCenter.useMutation` com
+ *    onSuccess toast + refetch + close dialog; onError toast
+ *    "Não foi possível excluir" com a mensagem do servidor.
+ * 3. Botão ghost com `<Trash2 className="text-red-500">` na linha de
+ *    cada centro, **logo após o botão Power**, renderizado SOMENTE
+ *    se `isAdminMaster`. Hover `bg-red-50`.
+ * 4. Novo `<AlertDialog>` "Excluir centro de custo?" com warning de
+ *    irreversibilidade + ação destrutiva vermelha.
+ *
+ * **R-001/R-007/R-010:** o R-007 proíbe DELETE em produção via
+ * ALTER/migrações; permite DELETE controlado a partir do app, gated
+ * por admin_master com guarda de integridade (padrão idêntico ao
+ * `signatures.adminDelete` da Rev. 2135). Sem ALTER/DROP/migração.
+ *
  * Rev. 2155 — **HOTFIX · Validação do "Imprimir Contrato de Experiência"
  * pedindo Endereço mesmo com aba Endereço preenchida.**
  *

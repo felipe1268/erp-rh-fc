@@ -4,6 +4,8 @@
 > O detalhamento completo (causa-raiz, stack traces, arquivos tocados, comentários longos) de TODAS as revisões — incluindo as listadas abaixo — vive em `shared/changelog.ts`.
 > Movido aqui na Rev. 2028 (faxina) — revisões 1903 → 2012.
 
+- Rev. 2149 — Multi-seleção + exclusão em lote no painel "Termo de Recebimento" (checkbox col + barra de ação + bulkDelete sequencial via signatures.adminDelete; gate isAdminMaster). (movida na Rev. 2156)
+
 - Rev. 2148 — HOTFIX UX² · Tabs de Controle de Documentos em iPad Pro 12.9" portrait — troca `lg:grid-cols-9` por `xl:grid-cols-9` (linha única só ≥1280px). (movida na Rev. 2155)
 
 - Rev. 2147 — HOTFIX UX · Tabs de Controle de Documentos com grid responsivo `grid-cols-2 sm:3 md:5 lg:9` (depois refinado na Rev. 2148 trocando `lg:` por `xl:`). (movida na Rev. 2154)

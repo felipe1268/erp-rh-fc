@@ -20,8 +20,9 @@ import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/hooks/useCompany";
 import { useToast } from "@/hooks/use-toast";
 import {
-  Plus, Layers, Building2, Edit2, Power, Loader2, PlusCircle, Eye, EyeOff, Search,
+  Plus, Layers, Building2, Edit2, Power, Loader2, PlusCircle, Eye, EyeOff, Search, Trash2,
 } from "lucide-react";
+import { usePermissions } from "@/contexts/PermissionsContext";
 
 function formatBRL(v: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
@@ -94,6 +95,18 @@ export default function FinanceiroCentrosCusto() {
       setShowForm(false); setForm({ ...INITIAL_FORM }); setConfirmInactivate(null); refetch();
     },
     onError: (e: any) => toast({ title: "Erro", description: e.message, variant: "destructive" }),
+  });
+
+  // Rev. 2156 — exclusão definitiva (apenas ADM Master), com checagem
+  // de vínculos no backend (lançamentos / recorrências).
+  const { isAdminMaster } = usePermissions();
+  const [confirmDelete, setConfirmDelete] = useState<CC | null>(null);
+  const deleteMut = (trpc as any).financial.deleteCostCenter.useMutation({
+    onSuccess: (r: any) => {
+      toast({ title: "Centro de custo excluído", description: `${r?.codigo ?? ""} — ${r?.nome ?? ""}` });
+      setConfirmDelete(null); refetch();
+    },
+    onError: (e: any) => toast({ title: "Não foi possível excluir", description: e.message, variant: "destructive" }),
   });
 
   const isPending = createMut.isPending || updateMut.isPending;
@@ -297,6 +310,17 @@ export default function FinanceiroCentrosCusto() {
                           >
                             <Power className={`w-3.5 h-3.5 ${c.ativo === 1 ? "text-orange-500" : "text-green-600"}`} />
                           </Button>
+                          {isAdminMaster && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 w-8 p-0 hover:bg-red-50"
+                              onClick={() => setConfirmDelete(c)}
+                              title="Excluir (ADM Master)"
+                            >
+                              <Trash2 className="w-3.5 h-3.5 text-red-500" />
+                            </Button>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -442,6 +466,37 @@ export default function FinanceiroCentrosCusto() {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+
+        {/* Rev. 2156 — Confirmação de exclusão DEFINITIVA (ADM Master) */}
+        <AlertDialog open={!!confirmDelete} onOpenChange={(v) => { if (!v) setConfirmDelete(null); }}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle className="text-red-700">Excluir centro de custo?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Você está prestes a <strong>excluir definitivamente</strong> o centro de custo{" "}
+                <strong>{confirmDelete?.codigo}</strong> — {confirmDelete?.nome}.
+                <br /><br />
+                Esta ação <strong>não pode ser desfeita</strong>. Se o centro estiver vinculado a lançamentos
+                ou recorrências, a exclusão será recusada pelo servidor — nesse caso, inative em vez de excluir.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={deleteMut.isPending}>Cancelar</AlertDialogCancel>
+              <AlertDialogAction
+                disabled={deleteMut.isPending}
+                onClick={() => {
+                  if (!confirmDelete || !companyId) return;
+                  deleteMut.mutate({ id: confirmDelete.id, companyId });
+                }}
+                className="bg-red-600 hover:bg-red-700 text-white"
+              >
+                {deleteMut.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Trash2 className="w-4 h-4 mr-2" />}
+                Excluir definitivamente
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
       </div>
     </DashboardLayout>
   );
