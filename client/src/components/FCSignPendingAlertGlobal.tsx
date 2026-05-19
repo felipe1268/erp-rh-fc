@@ -25,8 +25,14 @@ export function FCSignPendingAlertGlobal() {
   const { user, isAuthenticated } = useAuth();
   const toastIdsRef = useRef<Map<number, string | number>>(new Map());
 
+  // Rev. 2130 — gate relaxado: admin_master/admin recebem alerta por PAPEL
+  // (Rev. 2128), então a query deve rodar mesmo sem email cadastrado no
+  // `users`. Bug original: Felipe é admin_master mas `user.email` vinha
+  // vazio do Manus OAuth → `enabled=false` → query nunca disparava → toast
+  // jamais aparecia.
+  const isAdminLike = user?.role === "admin_master" || user?.role === "admin";
   const { data } = trpc.signatures.pendingForCurrentUser.useQuery(undefined, {
-    enabled: isAuthenticated && !!user?.email,
+    enabled: isAuthenticated && (!!user?.email || isAdminLike),
     refetchInterval: 60_000,
     refetchOnWindowFocus: true,
     staleTime: 30_000,

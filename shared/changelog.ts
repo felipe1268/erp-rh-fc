@@ -1,6 +1,37 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2130 — **FCSign · alerta global · gate `enabled` do client
+ * relaxado: admin_master/admin agora disparam a query mesmo sem email
+ * cadastrado em `users` (complementa Rev. 2128).**
+ *
+ * User: "E o alerta de assinatura não estou recebendo no meu usuário,
+ * o usuário Felipe Alves e o sócio adm.. ele está como adm master..
+ * precisa vincular isso".
+ *
+ * **Causa-raiz:** a Rev. 2128 fez o server (`signatures.pendingForCurrentUser`)
+ * casar pendências de `role='empregador'` por PAPEL do user logado
+ * (admin_master/admin), independente de email. PORÉM, em
+ * `FCSignPendingAlertGlobal.tsx` L29 o gate era:
+ *   `enabled: isAuthenticated && !!user?.email`
+ * Se o user logou via Manus OAuth sem email populado em `users.email`
+ * (caso do Felipe — perfil herdado do SSO), `!!user.email === false` →
+ * a query NUNCA era disparada client-side → o procedure da Rev. 2128
+ * nunca era chamado → nenhum toast aparecia.
+ *
+ * **Fix em `client/src/components/FCSignPendingAlertGlobal.tsx`:**
+ * - Calcular `isAdminLike = user?.role === 'admin_master' || 'admin'`.
+ * - Trocar gate para `enabled: isAuthenticated && (!!user?.email || isAdminLike)`.
+ * - O server (Rev. 2128) já trata o caso `email vazio && isAdminLike` —
+ *   retorna pendências por PAPEL sem precisar de email.
+ *
+ * **R-001/R-007/R-010:** OK — só mudança de gate client-side, zero DDL.
+ *
+ * **Arquivos:** `client/src/components/FCSignPendingAlertGlobal.tsx`,
+ * `shared/version.ts`, `shared/changelog.ts`, `replit.md`.
+ *
+ * --------------------------------------------------------------------------
+ *
  * Rev. 2129 — **HOTFIX iOS Safari · `FCSignContratoExperienciaPanel`
  * quebrava com "The string did not match the expected pattern" ao
  * renderizar timestamps `createdAt`/`completedAt`/`signedAt` da sessão
