@@ -4,6 +4,7 @@
 > O detalhamento completo (causa-raiz, stack traces, arquivos tocados, comentários longos) de TODAS as revisões — incluindo as listadas abaixo — vive em `shared/changelog.ts`.
 > Movido aqui na Rev. 2028 (faxina) — revisões 1903 → 2012.
 
+- Rev. 2162 — NOVO CAMPO · Vincular Categoria ao Plano de Contas via `conta_pai_id` (reaproveitamento da coluna self-FK existente); update `financial.updateAccount` ganha `contaPaiId` no Zod; frontend novo select indentado por nível + badge indigo na lista. (movida na Rev. 2169)
 - Rev. 2161 — HOTFIX BUILD · syntax error em `FinanceiroCategorias.tsx` (vírgula dupla `,,` no `createMut.mutate` depois da Rev. 2157). Quebra do objeto em múltiplas linhas + remoção da vírgula extra. (movida na Rev. 2168)
 - Rev. 2160 — HOTFIX continuação da Rev. 2159 · filtrar contas inativas (`ativo:true`) na query de Plano de Contas (a órfã 3.3 soft-deletada continuava aparecendo). 1 linha em `FinanceiroPlanoDeConta.tsx`. (movida na Rev. 2167)
 - Rev. 2159 — DATA-FIX · 219 lançamentos migrados de `3.3 DESPESAS COM MATERIAIS` (órfã) → `3.2 Materiais de Construção` (padrão); órfã soft-deletada (`ativo=0`). Aprovado pelo user. (movida na Rev. 2166)

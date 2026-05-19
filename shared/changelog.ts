@@ -1,6 +1,51 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2169 — **MELHORIA UX · Campo "Função" no cadastro de Colaboradores
+ * (aba Pessoal) virou combobox pesquisável.**
+ *
+ * User: "NAS FUNÇÕES PRECISO QUE A BARRA FIQUE ABERTA PARA DIGITAR,
+ * FACILITANDO A PESQUISA DAS FUNCÇOES" (print: dropdown da Função
+ * com "AJUDANTE DE BOMBA DE CONCRETO / ALMOXARIFE / ANALISTA DE
+ * DADOS / ARMADOR / ARQUITETO URBANISTA / ASSISTENTE ADMINISTRATIVO /
+ * AUXILIAR ADMINISTRATIVO ..."). A lista de funções é grande e
+ * o `<Select>` nativo do shadcn obrigava scroll cego sem busca.
+ *
+ * **Frontend** (`client/src/pages/Colaboradores.tsx`):
+ *  - Novo componente local `FuncaoCombobox` (final do arquivo) —
+ *    mesmo padrão do `PlanoDeContaCombobox` (Rev. 2165): Popover +
+ *    `Command`/`CommandInput`/`CommandList`/`CommandItem`.
+ *  - `Command.filter` normaliza acentos via NFD + regex
+ *    `\u0300-\u036f`, busca case/acento-insensitive.
+ *  - Largura do PopoverContent herda do trigger via
+ *    `w-[var(--radix-popover-trigger-width)]`.
+ *  - Trigger custom mostra a função selecionada + "×" inline pra
+ *    limpar sem abrir o popover.
+ *  - Item "— Selecione a função —" no topo do dropdown pra
+ *    desselecionar (equivalente ao `<SelectItem value="none">`
+ *    do código antigo).
+ *  - Lista ordenada `localeCompare("pt-BR")`.
+ *  - Imports novos: `Popover*`, `Command*`, `ChevronsUpDown`,
+ *    `Check`, `cn`.
+ *
+ * Escopo enxuto deliberado: o user pediu só Função, NÃO Setor.
+ * Setor continua como `<Select>` (lista menor; se reclamar,
+ * vira follow-up de 5 min).
+ *
+ * **Backend:** zero mudanças. `jobFunctions.list` já existia.
+ *
+ * **R-001/R-007/R-010:** OK — só client-side.
+ *
+ * Arquivos tocados:
+ *  - `client/src/pages/Colaboradores.tsx` (imports + substituição
+ *    do Select + novo FuncaoCombobox no final)
+ *  - `shared/version.ts` → "Rev. 2169"
+ *  - `shared/changelog.ts` (esta entrada)
+ *  - `replit.md` (top-2 + demote)
+ *  - `replit-history.md` (one-liner da Rev. 2162)
+ *
+ * ---
+ *
  * Rev. 2168 — **HOTFIX BLOQUEANTE · Cadastro de colaborador (Pessoal →
  * Salvar) falhava com toast "Failed query: SELECT COALESCE(MAX(CAST(
  * REGEXP_REPLACE(codigoInterno, \\D, '', 'g') AS INTEGER)), 0) AS

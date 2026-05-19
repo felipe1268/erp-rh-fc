@@ -15,7 +15,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { trpc } from "@/lib/trpc";
 import { buildFcDocument } from "@/lib/fcDocumentTemplate";
 import { formatBRL, valorPorExtenso } from "@/lib/numeroExtenso";
-import { Users, Plus, Search, Pencil, Trash2, Eye, Ban, GraduationCap, ShieldCheck, Shield, ShieldX, Scale, FileText, Building2, AlertTriangle, Upload, HardHat, Download, Printer, ArrowLeft, Hash, Lock, Camera, X as XIcon, Wrench, Star, Award, CalendarDays, UserCheck, UserX, Palmtree, HeartPulse, Clock, Save } from "lucide-react";
+import { Users, Plus, Search, Pencil, Trash2, Eye, Ban, GraduationCap, ShieldCheck, Shield, ShieldX, Scale, FileText, Building2, AlertTriangle, Upload, HardHat, Download, Printer, ArrowLeft, Hash, Lock, Camera, X as XIcon, Wrench, Star, Award, CalendarDays, UserCheck, UserX, Palmtree, HeartPulse, Clock, Save, ChevronsUpDown, Check } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { cn } from "@/lib/utils";
 import FullScreenDialog from "@/components/FullScreenDialog";
 import { Badge } from "@/components/ui/badge";
 import { useState, useEffect, useMemo, useRef, type ReactNode } from "react";
@@ -1739,15 +1742,13 @@ ${obs ? `<div class="box"><strong>Observações / Justificativa do Enquadramento
                 )}
                 <div>
                   <Label className="text-xs font-medium text-muted-foreground">Função</Label>
-                  <Select value={form.funcao || "none"} onValueChange={v => set("funcao", v === "none" ? "" : v)}>
-                    <SelectTrigger className="bg-input mt-1"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">Selecione a função</SelectItem>
-                      {(funcoesList ?? []).filter((f: any) => f.isActive !== false).map((f: any) => (
-                        <SelectItem key={f.id} value={f.nome}>{f.nome}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  {/* Rev. 2169 — combobox pesquisável (Popover + cmdk) substitui o Select
+                      pra facilitar busca em listas longas. Mesmo padrão do PlanoDeContaCombobox. */}
+                  <FuncaoCombobox
+                    value={form.funcao || ""}
+                    onChange={(v) => set("funcao", v)}
+                    options={(funcoesList ?? []).filter((f: any) => f.isActive !== false)}
+                  />
                 </div>
                 <div>
                   <Label className="text-xs font-medium text-muted-foreground">Setor</Label>
@@ -4093,5 +4094,93 @@ function HistoricoAlteracoesTab({ employeeId }: { employeeId: number }) {
         })}
       </div>
     </div>
+  );
+}
+
+// Rev. 2169 — Combobox pesquisável de Função (substitui o Select nativo no form
+// de Pessoal). Padrão idêntico ao PlanoDeContaCombobox: Popover + cmdk com
+// filtro case/acento-insensitive, largura herdada do trigger, item "—" pra limpar.
+function FuncaoCombobox({
+  value,
+  onChange,
+  options,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  options: any[];
+}) {
+  const [open, setOpen] = useState(false);
+  const sorted = useMemo(
+    () => options.slice().sort((a: any, b: any) => String(a.nome).localeCompare(String(b.nome), "pt-BR")),
+    [options],
+  );
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          role="combobox"
+          aria-expanded={open}
+          className={cn(
+            "mt-1 h-9 w-full flex items-center justify-between rounded-md border px-3 text-sm bg-input transition-colors",
+            open ? "border-blue-400 ring-2 ring-blue-100" : "border-input hover:border-gray-300",
+          )}
+        >
+          <span className={cn("truncate text-left", !value && "text-muted-foreground")}>
+            {value || "Selecione a função"}
+          </span>
+          <div className="flex items-center gap-1 shrink-0">
+            {value && (
+              <span
+                className="text-gray-400 hover:text-red-500 px-1"
+                role="button"
+                tabIndex={-1}
+                onClick={(e) => { e.stopPropagation(); e.preventDefault(); onChange(""); setOpen(false); }}
+              >
+                ×
+              </span>
+            )}
+            <ChevronsUpDown className="w-3.5 h-3.5 text-gray-400" />
+          </div>
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start" sideOffset={4}>
+        <Command
+          filter={(itemValue, search) => {
+            const s = search.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+            const v = itemValue.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+            return v.includes(s) ? 1 : 0;
+          }}
+        >
+          <CommandInput placeholder="Buscar função..." />
+          <CommandList className="max-h-72">
+            <CommandEmpty className="py-6 text-center text-sm text-muted-foreground">
+              Nenhuma função encontrada.
+            </CommandEmpty>
+            <CommandGroup>
+              <CommandItem
+                value="--limpar--"
+                onSelect={() => { onChange(""); setOpen(false); }}
+                className="text-xs text-muted-foreground italic"
+              >
+                <Check className={cn("w-3.5 h-3.5 mr-2", !value ? "opacity-100" : "opacity-0")} />
+                — Selecione a função —
+              </CommandItem>
+              {sorted.map((f: any) => (
+                <CommandItem
+                  key={f.id}
+                  value={String(f.nome)}
+                  onSelect={() => { onChange(String(f.nome)); setOpen(false); }}
+                  className="text-xs"
+                >
+                  <Check className={cn("w-3.5 h-3.5 mr-2", f.nome === value ? "opacity-100" : "opacity-0")} />
+                  {f.nome}
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
   );
 }
