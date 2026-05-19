@@ -1950,8 +1950,8 @@ body .destaque{font-weight:700;color:#1a1a1a}
   ${comp?.endereco ? `<div style="font-family:'Helvetica','Arial',sans-serif;font-size:10pt;color:#333;margin:2px 0 0 0;text-transform:uppercase;line-height:1.3;letter-spacing:.2px">${esc(comp.endereco)}${comp?.cidade ? ' - ' + esc(comp.cidade) + ' - ' + esc(comp?.estado || '') : ''}</div>` : ''}
 </div>
 
-<!-- Faixa azul edge-to-edge — padding 18px vertical, texto 14pt (como Comunicado) -->
-<div style="background-color:#1B2A4A;color:#fff;padding:18px 24px;text-align:center;margin:22px -1.8cm 0 -1.8cm;-webkit-print-color-adjust:exact;print-color-adjust:exact">
+<!-- Faixa azul DENTRO do corpo (como Comunicado): border-radius leve 4px, padding 18px, texto 14pt -->
+<div style="background-color:#1B2A4A;color:#fff;padding:18px 24px;text-align:center;margin:22px 0 0 0;border-radius:4px;-webkit-print-color-adjust:exact;print-color-adjust:exact">
   <span style="font-family:'Helvetica','Arial',sans-serif;font-size:14pt;font-weight:700;letter-spacing:4px;text-transform:uppercase;display:block;color:#fff">Contrato de Experiência</span>
 </div>
 

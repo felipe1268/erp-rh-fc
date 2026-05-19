@@ -1,6 +1,45 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2111 — **RH · Contrato de Experiência — faixa azul de volta DENTRO do
+ * corpo (não edge-to-edge) com border-radius leve, como o Comunicado.**
+ *
+ * Pedido do user (anexou print do contrato impresso pós-Rev. 2110): "ainda
+ * não esta correto..".
+ *
+ * **Diagnóstico:** comparando o print atual com o Comunicado Interno
+ * renderizado, a única divergência visual restante é a faixa azul: na
+ * Rev. 2109 forcei edge-to-edge (margin lateral negativo -1.8cm) baseado
+ * na minha leitura incorreta do PDF text-only. Mas no Comunicado VISUAL
+ * a faixa fica DENTRO do body com border-radius leve (~4px), respeitando
+ * o padding lateral da página. Reverto:
+ *
+ * **`Colaboradores.tsx` L1956-1958 (apenas a faixa):**
+ * - `margin:22px -1.8cm 0 -1.8cm` → **`margin:22px 0 0 0`** (sem sangrar).
+ * - Adicionado **`border-radius:4px`** (cantos suavemente arredondados).
+ * - Padding interno, fonte 14pt letter-spacing 4px, texto e cor — TUDO
+ *   preservado da Rev. 2110.
+ *
+ * **Não-mudanças:** Logo 115px, razão social 19pt, CNPJ 11pt, endereço
+ * 10pt, linha meta 11pt indent 1cm, bloco ASSUNTO 11pt — todas as medidas
+ * da Rev. 2110 mantidas. Cláusulas 1ª-8ª (Rev. 2109) intactas.
+ * Assinaturas, rodapé `| Por: userName`, `AssinarDocumento.tsx`, backend,
+ * DOMPurify, schema — nada tocado.
+ *
+ * **Padrão FINAL (atualizado) pra próximos docs institucionais:** logo
+ * 115px, razão social 19pt, CNPJ 11pt, endereço 10pt, **faixa azul DENTRO
+ * do body com border-radius 4px** (NÃO edge-to-edge), padding 18px texto
+ * 14pt letter-spacing 4px, meta 11pt indent 1cm, ASSUNTO 11pt indent 1cm.
+ *
+ * **Lição aprendida (6ª iteração no mesmo doc):** quando o user manda
+ * "ficar igual ao X", a referência é SEMPRE o renderizado VISUAL (não
+ * o PDF text-only nem a estrutura semântica). PDF text-only descarta
+ * border-radius, paddings, sombras, colors — toda informação visual.
+ *
+ * **R-001/R-007/R-010:** N/A — frontend.
+ *
+ * ---
+ *
  * Rev. 2110 — **RH · Contrato de Experiência — cabeçalho aumentado pra bater
  * PROPORCIONALMENTE com o Comunicado Interno (5ª iteração).**
  *
