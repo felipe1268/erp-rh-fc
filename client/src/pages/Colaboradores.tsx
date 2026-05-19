@@ -29,6 +29,7 @@ import RaioXFuncionario from "@/components/RaioXFuncionario";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { TimeCombobox, ENTRADA_OPTIONS, INTERVALO_OPTIONS, SAIDA_OPTIONS } from "@/components/TimeCombobox";
 import FCSignSendDialog from "@/components/FCSignSendDialog";
+import FCSignContratoExperienciaPanel from "@/components/FCSignContratoExperienciaPanel";
 
 const statusColors: Record<string, string> = {
   Ativo: "bg-green-400/10 text-green-400",
@@ -2044,28 +2045,33 @@ ${obs ? `<div class="box"><strong>Observações / Justificativa do Enquadramento
                         >
                           <FileText className="h-4 w-4 mr-1" /> Imprimir Contrato de Experiência
                         </Button>
-                        <Button
-                          type="button"
-                          size="sm"
-                          className="bg-gradient-to-r from-blue-700 to-indigo-700 hover:from-blue-800 hover:to-indigo-800 text-white border-0"
-                          onClick={() => {
-                            const empId = editingId;
-                            const compId = comp?.id;
-                            if (!empId || !compId) { toast.error('Salve o cadastro do colaborador antes de enviar para assinatura.'); return; }
-                            setFcsignPayload({
-                              companyId: Number(compId),
-                              employeeId: Number(empId),
-                              tipo: 'contrato_experiencia',
-                              documentTitle: `Contrato de Experiência - ${empNome}`,
-                              documentHtml: contratoHtml,
-                              empregadoNome: empNome,
-                              empregadoCpf: empCpfFmt || undefined,
-                            });
-                            setFcsignOpen(true);
-                          }}
-                        >
-                          <ShieldCheck className="h-4 w-4 mr-1" /> Enviar para Assinatura (FCSign)
-                        </Button>
+                        {editingId && comp?.id ? (
+                          <FCSignContratoExperienciaPanel
+                            companyId={Number(comp.id)}
+                            employeeId={Number(editingId)}
+                            empNome={empNome}
+                            isAdminMaster={isAdminMaster}
+                            onEnviar={() => {
+                              setFcsignPayload({
+                                companyId: Number(comp!.id),
+                                employeeId: Number(editingId),
+                                tipo: 'contrato_experiencia',
+                                documentTitle: `Contrato de Experiência - ${empNome}`,
+                                documentHtml: contratoHtml,
+                                empregadoNome: empNome,
+                                empregadoCpf: empCpfFmt || undefined,
+                              });
+                              setFcsignOpen(true);
+                            }}
+                          />
+                        ) : (
+                          <Button
+                            type="button" size="sm" disabled
+                            className="bg-gradient-to-r from-blue-700 to-indigo-700 text-white border-0 opacity-60"
+                          >
+                            <ShieldCheck className="h-4 w-4 mr-1" /> Enviar para Assinatura (FCSign)
+                          </Button>
+                        )}
                       </div>
                     );
                   })()}
@@ -3494,7 +3500,14 @@ ${obs ? `<div class="box"><strong>Observações / Justificativa do Enquadramento
       {fcsignPayload && (
         <FCSignSendDialog
           open={fcsignOpen}
-          onOpenChange={(v) => { setFcsignOpen(v); if (!v) setFcsignPayload(null); }}
+          onOpenChange={(v) => {
+            setFcsignOpen(v);
+            if (!v) {
+              setFcsignPayload(null);
+              // Rev. 2122 — ao fechar dialog, invalida status FCSign p/ painel refletir
+              utils.signatures.getForEmployeeTipo.invalidate();
+            }
+          }}
           companyId={fcsignPayload.companyId}
           employeeId={fcsignPayload.employeeId}
           tipo={fcsignPayload.tipo}

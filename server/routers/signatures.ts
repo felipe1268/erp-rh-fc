@@ -2,7 +2,7 @@ import { router, protectedProcedure, publicProcedure } from "../_core/trpc";
 import { z } from "zod";
 import { getDb, getCompaniesForUser } from "../db";
 import { signatureSessions, signatureSigners, employees, companies, employeeDocuments } from "../../drizzle/schema";
-import { eq, and, desc, sql } from "drizzle-orm";
+import { eq, and, desc, sql, isNull } from "drizzle-orm";
 import { resolveCompanyIds, companyFilter } from "../companyHelper";
 import { TRPCError } from "@trpc/server";
 import { storagePut } from "../storage";
@@ -167,6 +167,28 @@ export const signaturesRouter = router({
       // Hardening contra XSS armazenado: rejeita HTML com scripts/handlers (defense-in-depth)
       if (/<\s*script\b/i.test(input.documentHtml) || /\son\w+\s*=/i.test(input.documentHtml) || /javascript:/i.test(input.documentHtml)) {
         throw new TRPCError({ code: "BAD_REQUEST", message: "Documento contém conteúdo não permitido (script/handler/javascript:)." });
+      }
+      // Rev. 2122 — bloqueia duplicidade: já existir sessão NÃO-cancelada
+      // pro mesmo employeeId+tipo. Espelha a regra do painel
+      // FCSignContratoExperienciaPanel no front, mas como autoridade final
+      // server-side (evita 2 abas/clientes criarem sessões concorrentes).
+      const [dup] = await db.select({ id: signatureSessions.id, status: signatureSessions.status })
+        .from(signatureSessions)
+        .where(and(
+          eq(signatureSessions.companyId, input.companyId),
+          eq(signatureSessions.employeeId, input.employeeId),
+          eq(signatureSessions.tipo, input.tipo),
+          sql`${signatureSessions.status} <> 'cancelado'`,
+        ))
+        .orderBy(desc(signatureSessions.createdAt))
+        .limit(1);
+      if (dup) {
+        throw new TRPCError({
+          code: "CONFLICT",
+          message: dup.status === "completo"
+            ? "Já existe um documento deste tipo assinado pra este colaborador. Apague o anterior (admin master) pra emitir um novo."
+            : "Já existe uma sessão FCSign em andamento pra este documento.",
+        });
       }
       const hash = sha256(input.documentHtml);
       const [session] = await db.insert(signatureSessions).values({
@@ -517,11 +539,106 @@ export const signaturesRouter = router({
       return result;
     }),
 
+  // Rev. 2122: retorna a sessão MAIS RECENTE não-cancelada de um colaborador
+  // para um `tipo` específico (ex: 'contrato_experiencia'). Usado pelo card
+  // de Contrato de Experiência pra alternar entre "Enviar para Assinatura",
+  // "Aguardando assinaturas" e "Documento assinado" sem permitir duplicar
+  // a emissão enquanto houver sessão ativa/completa.
+  getForEmployeeTipo: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      companyIds: z.array(z.number()).optional(),
+      employeeId: z.number(),
+      tipo: z.string().min(1).max(50),
+    }))
+    .query(async ({ ctx, input }) => {
+      const db = (await getDb())!;
+      // Rev. 2122 — ACL server-side: companyId vindo do cliente NÃO é confiável,
+      // valida contra empresas permitidas do user logado (espelha pattern de
+      // `pendingForCurrentUser` Rev. 2121).
+      const allowed = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+      const allowedIds = (allowed as any[]).map(c => typeof c === 'number' ? c : c?.id).filter((v: any) => typeof v === 'number');
+      if (!allowedIds.includes(input.companyId)) return null;
+      const rows = await db.select().from(signatureSessions)
+        .where(and(
+          companyFilter(signatureSessions.companyId, input),
+          eq(signatureSessions.employeeId, input.employeeId),
+          eq(signatureSessions.tipo, input.tipo),
+          sql`${signatureSessions.status} <> 'cancelado'`,
+        ))
+        .orderBy(desc(signatureSessions.createdAt))
+        .limit(1);
+      if (rows.length === 0) return null;
+      const s = rows[0];
+      const sgn = await db.select({
+        id: signatureSigners.id, role: signatureSigners.role, ordem: signatureSigners.ordem,
+        nome: signatureSigners.nome, cpf: signatureSigners.cpf, email: signatureSigners.email,
+        token: signatureSigners.token, signedAt: signatureSigners.signedAt,
+      }).from(signatureSigners)
+        .where(eq(signatureSigners.sessionId, s.id))
+        .orderBy(signatureSigners.ordem);
+      return { ...s, signers: sgn };
+    }),
+
+  // Rev. 2122: admin_master EXCLUSIVAMENTE pode "apagar" uma sessão FCSign
+  // (pendente OU completa) pra liberar nova emissão do mesmo documento.
+  // Soft-delete: marca sessão como 'cancelado' + zera deletedAt do
+  // employeeDocument associado (se existir). Cumpre R-001/R-007/R-010
+  // (sem DELETE físico / sem ALTER).
+  adminDelete: protectedProcedure
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), id: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      if (ctx.user.role !== 'admin_master') {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Apenas o ADM Master pode apagar uma sessão FCSign." });
+      }
+      const db = (await getDb())!;
+      // Rev. 2122 — ACL: confirma que master tem a empresa no escopo
+      const allowed = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+      const allowedIds = (allowed as any[]).map(c => typeof c === 'number' ? c : c?.id).filter((v: any) => typeof v === 'number');
+      if (!allowedIds.includes(input.companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Empresa fora do escopo do usuário." });
+      }
+      const [sess] = await db.select().from(signatureSessions)
+        .where(and(
+          companyFilter(signatureSessions.companyId, input),
+          eq(signatureSessions.id, input.id),
+        )).limit(1);
+      if (!sess) throw new TRPCError({ code: "NOT_FOUND", message: "Sessão não encontrada." });
+      const nowIso = new Date().toISOString();
+      const actor = ctx.user.name || ctx.user.email || `user#${ctx.user.id}`;
+      // Soft-cancel sessão
+      await db.update(signatureSessions).set({
+        status: "cancelado",
+        cancelledAt: nowIso,
+      }).where(eq(signatureSessions.id, sess.id));
+      // Soft-delete employeeDocument se a sessão já tinha sido finalizada
+      if (sess.finalEmployeeDocumentId) {
+        await db.update(employeeDocuments).set({
+          deletedAt: nowIso,
+          deletedBy: actor,
+        }).where(and(
+          eq(employeeDocuments.id, sess.finalEmployeeDocumentId),
+          isNull(employeeDocuments.deletedAt),
+        ));
+      }
+      return { success: true };
+    }),
+
   // Cancelar sessao
   cancel: protectedProcedure
     .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), id: z.number() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ ctx, input }) => {
+      // Rev. 2122 — alinha com regra explícita do user: SOMENTE ADM Master
+      // pode cancelar/apagar uma sessão FCSign.
+      if (ctx.user.role !== 'admin_master') {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Apenas o ADM Master pode cancelar uma sessão FCSign." });
+      }
       const db = (await getDb())!;
+      const allowed = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+      const allowedIds = (allowed as any[]).map(c => typeof c === 'number' ? c : c?.id).filter((v: any) => typeof v === 'number');
+      if (!allowedIds.includes(input.companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Empresa fora do escopo do usuário." });
+      }
       await db.update(signatureSessions).set({
         status: "cancelado",
         cancelledAt: new Date().toISOString(),

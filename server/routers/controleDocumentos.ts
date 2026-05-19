@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
-import { asos, atestados, trainings, warnings, employees, timeRecords, payroll, epiDeliveries, epis, vrBenefits, advances, obraHorasRateio, obras, documentTemplates, extraPayments, employeeHistory, accidents, processosTrabalhistas, processosAndamentos, jobFunctions, terminationNotices, vacationPeriods, cipaMeetings, cipaMembers, cipaElections, pjContracts, pjPayments, epiDiscountAlerts, customExams, obraFuncionarios, warehouseLoans, almoxarifadoDescontoFolha, almoxarifadoSaidasInsumo, heSolicitacaoConfirmacoes, heSolicitacoes, pontoDescontos, notificationLogs, notificationRecipients, lancamentosParceiros, parceirosConveniados, ddsSessoes, ddsSessaoFuncionarios } from "../../drizzle/schema";
+import { asos, atestados, trainings, warnings, employees, timeRecords, payroll, epiDeliveries, epis, vrBenefits, advances, obraHorasRateio, obras, documentTemplates, extraPayments, employeeHistory, accidents, processosTrabalhistas, processosAndamentos, jobFunctions, terminationNotices, vacationPeriods, cipaMeetings, cipaMembers, cipaElections, pjContracts, pjPayments, epiDiscountAlerts, customExams, obraFuncionarios, warehouseLoans, almoxarifadoDescontoFolha, almoxarifadoSaidasInsumo, heSolicitacaoConfirmacoes, heSolicitacoes, pontoDescontos, notificationLogs, notificationRecipients, lancamentosParceiros, parceirosConveniados, ddsSessoes, ddsSessaoFuncionarios, signatureSessions, signatureSigners } from "../../drizzle/schema";
 import { eq, and, desc, sql, ne, isNull, inArray, gte, lte } from "drizzle-orm";
 import { resolveCompanyIds, companyFilter } from "../companyHelper";
 import { storagePut } from "../storage";
@@ -1993,6 +1993,96 @@ export const controleDocumentosRouter = router({
         });
       });
 
+      // Rev. 2122 — FCSign sessões na timeline (criação + assinaturas individuais + finalização/cancelamento)
+      const fcsignRows = await db.select({
+        id: signatureSessions.id,
+        tipo: signatureSessions.tipo,
+        documentTitle: signatureSessions.documentTitle,
+        status: signatureSessions.status,
+        createdAt: signatureSessions.createdAt,
+        createdByName: signatureSessions.createdByName,
+        completedAt: signatureSessions.completedAt,
+        cancelledAt: signatureSessions.cancelledAt,
+        finalDocumentUrl: signatureSessions.finalDocumentUrl,
+      })
+        .from(signatureSessions)
+        .where(and(
+          eq(signatureSessions.employeeId, input.employeeId),
+          eq(signatureSessions.companyId, emp.companyId),
+        ))
+        .orderBy(desc(signatureSessions.createdAt));
+
+      const fcsignSignersRows = fcsignRows.length === 0 ? [] : await db.select({
+        sessionId: signatureSigners.sessionId,
+        role: signatureSigners.role,
+        ordem: signatureSigners.ordem,
+        nome: signatureSigners.nome,
+        signedAt: signatureSigners.signedAt,
+      })
+        .from(signatureSigners)
+        .where(inArray(signatureSigners.sessionId, fcsignRows.map(r => r.id)))
+        .orderBy(signatureSigners.signedAt);
+
+      const fcsignSignersBySession = new Map<number, typeof fcsignSignersRows>();
+      for (const sg of fcsignSignersRows) {
+        if (!fcsignSignersBySession.has(sg.sessionId)) fcsignSignersBySession.set(sg.sessionId, [] as any);
+        fcsignSignersBySession.get(sg.sessionId)!.push(sg);
+      }
+
+      const fcsignSessions = fcsignRows.map(s => ({
+        ...s,
+        signers: fcsignSignersBySession.get(s.id) || [],
+      }));
+
+      fcsignRows.forEach(s => {
+        const dCriou = String(s.createdAt || '').slice(0, 10);
+        if (dCriou) {
+          timeline.push({
+            data: dCriou,
+            tipo: 'FCSign · Documento enviado',
+            descricao: `${s.documentTitle} — enviado p/ assinatura por ${s.createdByName}`,
+            cor: 'blue',
+            icone: 'file-text',
+          });
+        }
+        for (const sg of (fcsignSignersBySession.get(s.id) || [])) {
+          if (!sg.signedAt) continue;
+          const dSig = String(sg.signedAt).slice(0, 10);
+          if (!dSig) continue;
+          timeline.push({
+            data: dSig,
+            tipo: 'FCSign · Assinatura',
+            descricao: `${sg.nome} (${sg.role}) assinou: ${s.documentTitle}`,
+            cor: 'emerald',
+            icone: 'check',
+          });
+        }
+        if (s.status === 'completo' && s.completedAt) {
+          const dComp = String(s.completedAt).slice(0, 10);
+          if (dComp) {
+            timeline.push({
+              data: dComp,
+              tipo: 'FCSign · Concluído',
+              descricao: `${s.documentTitle} — todas as partes assinaram`,
+              cor: 'emerald',
+              icone: 'check-circle',
+            });
+          }
+        }
+        if (s.status === 'cancelado' && s.cancelledAt) {
+          const dCanc = String(s.cancelledAt).slice(0, 10);
+          if (dCanc) {
+            timeline.push({
+              data: dCanc,
+              tipo: 'FCSign · Cancelado',
+              descricao: `${s.documentTitle} — sessão cancelada`,
+              cor: 'red',
+              icone: 'x-circle',
+            });
+          }
+        }
+      });
+
       // Re-sort timeline
       timeline.sort((a, b) => (b.data || "").localeCompare(a.data || ""));
 
@@ -2023,6 +2113,7 @@ export const controleDocumentosRouter = router({
         ferias: empFerias,
         cipa: empCipa,
         dds: empDdsRows,
+        fcsignSessions,
         pjContratos: empPjContratos,
         pjPagamentos: empPjPagamentos,
         pjConformidade: empPjConformidade,

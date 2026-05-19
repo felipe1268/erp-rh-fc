@@ -1,6 +1,122 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2122 — **FCSign · painel de status do Contrato de Experiência +
+ * timeline na RAIO-X + admin_master pode apagar p/ nova emissão.**
+ *
+ * Contexto / pedido do user: "depois que TODOS assinarem o documento,
+ * preciso que ao abrir aquela tela ja tenha um status mostrando que o
+ * documento esta assinado, com a opcao para baixar ou abrir o doc.. e nao
+ * permitindo mais o reenvio dos links pois ja estao assinados.. e neste
+ * mesmo local, o ADM master, pode cancelar ou apagar o documento para
+ * nova emisão.. somente o master pode fazer isso. e o documento assinado
+ * deve aparecer no raio-x do colaborador."
+ *
+ * Antes, o botão "Enviar para Assinatura (FCSign)" em
+ * `client/src/pages/Colaboradores.tsx` SEMPRE abria o FCSignSendDialog
+ * vazio, permitindo o usuário CRIAR uma nova sessão FCSign mesmo se já
+ * existisse uma sessão em andamento OU completa pro mesmo contrato — o
+ * que gerava duplicação. Também não havia um indicador visual de status
+ * na tela do colaborador (status só era visível na RAIO-X via
+ * `signatures.listByEmployee`), e o `docs.raioX` (timeline) não registrava
+ * eventos FCSign.
+ *
+ * Solução em 4 partes:
+ *
+ * (A) Backend — `server/routers/signatures.ts`:
+ *
+ *   `signatures.getForEmployeeTipo` (protected): retorna a sessão MAIS
+ *   RECENTE não-cancelada de um colaborador para um `tipo` específico
+ *   (ex: 'contrato_experiencia'), enriquecida com os signers (id, role,
+ *   ordem, nome, email, token, signedAt). Filtra `status <> 'cancelado'`
+ *   e ordena por `createdAt DESC LIMIT 1`. Cumpre ACL por
+ *   `companyFilter` (Rev. 2121).
+ *
+ *   `signatures.adminDelete` (protected, com guard `role === 'admin_master'`):
+ *   permite EXCLUSIVAMENTE ao admin_master "apagar" uma sessão FCSign
+ *   (pendente OU completa). Implementado como SOFT-DELETE pra cumprir
+ *   R-001/R-007/R-010 (jamais DELETE físico / ALTER): marca sessão como
+ *   `status='cancelado'` + `cancelledAt=now()`, e se a sessão já tinha
+ *   sido finalizada (havia `finalEmployeeDocumentId`), seta `deletedAt`
+ *   + `deletedBy` no employee_document associado. Throws FORBIDDEN se
+ *   `ctx.user.role !== 'admin_master'`.
+ *
+ * (B) Backend — `server/routers/controleDocumentos.ts::raioX`:
+ *
+ *   Adiciona query de `signatureSessions` filtrando por
+ *   `employeeId + companyId` (ordenadas `createdAt DESC`) + join com
+ *   `signatureSigners` (todas as sessões em UMA query via `inArray`).
+ *   Retorno do raioX ganha `fcsignSessions: Array<{...session, signers:[]}>`.
+ *
+ *   Timeline ganha 4 tipos de eventos FCSign por sessão:
+ *     - "FCSign · Documento enviado" (createdAt, azul, file-text)
+ *     - "FCSign · Assinatura" (signedAt de cada signer, emerald, check)
+ *     - "FCSign · Concluído" (completedAt, emerald, check-circle)
+ *     - "FCSign · Cancelado" (cancelledAt, red, x-circle)
+ *
+ * (C) Frontend — novo componente
+ *   `client/src/components/FCSignContratoExperienciaPanel.tsx`:
+ *
+ *   Recebe `{companyId, employeeId, empNome, isAdminMaster, onEnviar}`
+ *   e renderiza 3 estados mutuamente exclusivos baseados em
+ *   `trpc.signatures.getForEmployeeTipo`:
+ *
+ *     1. SEM SESSÃO ATIVA (data === null) → botão "Enviar para
+ *        Assinatura (FCSign)" delegando ao parent via `onEnviar()`.
+ *
+ *     2. PENDENTE/EM_ANDAMENTO → card âmbar "Aguardando assinaturas
+ *        (X/N)" com lista de signers (cada um com nome+role+ordem,
+ *        ícone Clock/CheckCircle conforme `signedAt`, e pros pendentes:
+ *        botões Copiar Link e Abrir em nova aba). admin_master vê
+ *        botão "Cancelar sessão" (chama adminDelete com confirm).
+ *
+ *     3. COMPLETO → card emerald "Contrato de Experiência assinado",
+ *        com data de conclusão, botões "Visualizar" e "Baixar" (abrem
+ *        `finalDocumentUrl`), e p/ admin_master botão "Apagar p/ nova
+ *        emissão" (chama adminDelete com confirm explicando que vai
+ *        liberar nova emissão).
+ *
+ * (D) Frontend — `client/src/pages/Colaboradores.tsx`:
+ *
+ *   Substitui o botão estático no card de Contrato de Experiência
+ *   pelo novo `FCSignContratoExperienciaPanel`, passando o callback
+ *   `onEnviar` que monta o payload e abre o `FCSignSendDialog`
+ *   existente. `onOpenChange` do dialog invalida
+ *   `utils.signatures.getForEmployeeTipo` ao fechar pra refletir
+ *   imediatamente a nova sessão criada.
+ *
+ * Por que soft-delete e não DELETE físico no adminDelete? R-001/R-007/R-010
+ * proíbe DELETE em prod. Soft-delete preserva auditoria (quem cancelou,
+ * quando) e segue o padrão do `employeeDocuments.deletedAt/deletedBy`.
+ * A query do RAIO-X já filtra `isNull(deletedAt)` em employee_documents
+ * → documento "apagado" some da UI mas permanece no DB.
+ *
+ * Hardening pós code-review (mesma rev.):
+ *   - `signatures.create` agora REJEITA criação se já existir sessão
+ *     não-cancelada pro mesmo (companyId, employeeId, tipo) → CONFLICT
+ *     com mensagem direcionando ao admin master. Antes a prevenção
+ *     existia só no frontend → 2 abas podiam criar sessões concorrentes.
+ *   - `signatures.cancel` também restrito a `admin_master` (antes era
+ *     `protectedProcedure` puro → qualquer user logado podia cancelar).
+ *   - `getForEmployeeTipo`, `adminDelete` e `cancel` validam companyId
+ *     contra `getCompaniesForUser(ctx.user.id, ctx.user.role)` (server-
+ *     side ACL forte, não confia no companyId vindo do cliente). Mesmo
+ *     pattern usado em `pendingForCurrentUser` na Rev. 2121.
+ *
+ * Limitação conhecida: só o tipo `contrato_experiencia` ganhou painel
+ * de status visual; outros tipos (comunicado, epi, outros) continuam
+ * disponíveis via `signatures.listByEmployee` na RAIO-X mas sem o card
+ * de status na tela de origem. Quando houver botão FCSign em outros
+ * lugares, repetir o padrão usando o mesmo componente parametrizado.
+ *
+ * Files: server/routers/signatures.ts,
+ *   server/routers/controleDocumentos.ts,
+ *   client/src/components/FCSignContratoExperienciaPanel.tsx (NEW),
+ *   client/src/pages/Colaboradores.tsx, shared/version.ts.
+ *
+ * R-001/R-007/R-010: OK — soft-delete via UPDATE; sem ALTER/DROP/DELETE
+ * físico; nenhuma mudança de schema.
+ *
  * Rev. 2121 — **FCSign · alerta global automático de documentos pendentes
  * pra assinatura ao logar no ERP.**
  *
