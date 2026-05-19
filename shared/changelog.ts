@@ -1,6 +1,44 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2131 — **FCSign · alerta global agora é um POPUP MODAL bloqueante
+ * que reabre a cada navegação enquanto houver assinatura pendente —
+ * substitui (complementa) o toast no canto da tela.**
+ *
+ * User: "Liliam assinou mas não recebi Alerta quando entrei na tela, pq?
+ * Precisa ter um popup na hora que entrar para não deixar passar nada".
+ * E depois: "Isso em qualquer tela de acesso ao ERP meu usuário precisa
+ * ter alerta se assinatura for da minha responsabilidade".
+ *
+ * **Causa-raiz UX:** o toast Sonner no canto inferior direito (Rev. 2121)
+ * é fácil de perder — animação curta, cor discreta, fora da área de
+ * foco principal. Mesmo com a Rev. 2130 disparando a query corretamente
+ * pro Felipe (admin_master), o user reportou não ter visto o aviso ao
+ * entrar na tela "Editar Colaborador" da Lilian (que ela acabou de
+ * assinar como 1ª signataria, deixando Felipe como 2º pendente).
+ *
+ * **Fix em `client/src/components/FCSignPendingAlertGlobal.tsx`:**
+ * - Adicionado componente `<Dialog>` (shadcn/Radix) que abre
+ *   automaticamente sempre que `data.length > 0`.
+ * - **Reabre a cada NAVEGAÇÃO** (via `useLocation` do wouter): se o user
+ *   fechar com "Lembrar mais tarde" e navegar pra outra rota, o modal
+ *   reabre — garante que "em qualquer tela do ERP" o aviso volta.
+ * - `dismissedAtLocationRef` evita reabrir a cada refetch de 60s na
+ *   mesma rota (não fica perseguindo o user infinitamente na mesma tela).
+ * - Lista todos os docs pendentes com botão "Assinar agora" individual
+ *   (abre `/assinar/:token` em nova aba). Conta no título: "1 documento"
+ *   vs "N documentos aguardando".
+ * - Toast Sonner continua ativo como redundância (caso o user feche o
+ *   modal e prefira não navegar — o toast permanece visível).
+ * - Cleanup: ao deslogar, fecha modal + limpa `dismissedAtLocationRef`.
+ *
+ * **R-001/R-007/R-010:** OK — só client-side, zero DDL.
+ *
+ * **Arquivos:** `client/src/components/FCSignPendingAlertGlobal.tsx`,
+ * `shared/version.ts`, `shared/changelog.ts`, `replit.md`.
+ *
+ * --------------------------------------------------------------------------
+ *
  * Rev. 2130 — **FCSign · alerta global · gate `enabled` do client
  * relaxado: admin_master/admin agora disparam a query mesmo sem email
  * cadastrado em `users` (complementa Rev. 2128).**
