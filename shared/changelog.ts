@@ -1,6 +1,38 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2140 — **Documentos institucionais FC (`buildFcDocument`) ·
+ * margens laterais padronizadas em 1,5cm (15mm) para melhor distribuição
+ * do texto e respiro tipográfico em A4.**
+ *
+ * User (após screenshot do Termo de Responsabilidade renderizado no
+ * preview FCSign): "Arrume a margem lateral deixando 1,5cm como padrão
+ * fica uma distribuição melhor."
+ *
+ * **Fix em `client/src/lib/fcDocumentTemplate.ts`:**
+ *   - `@page` (todas as páginas exceto a 1ª): `margin: 25mm 10mm 14mm 10mm`
+ *     → `25mm 15mm 14mm 15mm` (laterais 10mm → 15mm).
+ *   - `@page :first` (primeira página com cabeçalho): `margin: 14mm 10mm`
+ *     → `14mm 15mm`.
+ *   - `.fc-doc` (container tela): `padding: 32px` → `padding: 32px 1.5cm`
+ *     — mantém topo/base em 32px mas força laterais em 1,5cm para que o
+ *     preview na tela espelhe o que sai no PDF/impressão.
+ *   - `@media print .fc-doc`: `padding: 8px` → `padding: 8px 0` para evitar
+ *     soma de padding com a margem `@page` (que já tem os 15mm laterais).
+ *
+ * Aplica-se a TODOS os documentos institucionais FC que usam
+ * `buildFcDocument`: Comunicado Interno, Contrato de Experiência, Aviso
+ * Prévio, Termo de Rescisão, Termo de Responsabilidade, Advertência,
+ * Carta MDO etc. — mantém a "regra de ouro" do cabeçalho e ainda melhora
+ * a leitura ao dar mais respiro horizontal nos parágrafos longos.
+ *
+ * **R-001/R-007/R-010:** OK — puramente client-side (template HTML).
+ *
+ * **Arquivos tocados:**
+ *   - `client/src/lib/fcDocumentTemplate.ts`
+ *
+ * ---
+ *
  * Rev. 2139 — **Termo de Responsabilidade · corpo do documento reescrito FIEL
  * ao modelo institucional .docx aprovado pelo user + hardening de fotos
  * (rejeita HEIC + valida toDataURL) para eliminar erro "The string did not
