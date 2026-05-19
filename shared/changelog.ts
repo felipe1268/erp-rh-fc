@@ -1,6 +1,61 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2115 — **RH · Contrato de Experiência · CLÁUSULA 2ª (REMUNERAÇÃO) —
+ * valor com formato BR (R$ X.XXX,XX) + valor por extenso entre parênteses.**
+ *
+ * Pedido do user: "quero o valor separado por ponto e virgula, e o valor
+ * escrito por extenso..". Print anexo mostrava "R$ 3200.00" (formato US,
+ * sem extenso) — visual amador para um contrato trabalhista.
+ *
+ * **Implementação:**
+ *
+ * - **NOVO `client/src/lib/numeroExtenso.ts`** com 3 helpers:
+ *     • `parseValor(v)` — normaliza string "3200.00" / "3.200,00" /
+ *       number / "R$ 1.234,56" para number (detecta formato BR vs US).
+ *     • `formatBRL(v)` — formata em real brasileiro via
+ *       `toLocaleString("pt-BR", {minimumFractionDigits:2})` →
+ *       "3.200,00".
+ *     • `valorPorExtenso(v)` — converte número para extenso pt-BR
+ *       seguindo regras gramaticais (cobre 0 → 999.999.999.999,99).
+ *       Trios separados por vírgula, exceto último (precedido de "e"
+ *       quando trio < 100 ou múltiplo de 100). Tratamento especial:
+ *       100 → "cem" (não "cento"), 1000 → "mil" (não "um mil"),
+ *       singular/plural reais/centavos (1 real / 2 reais).
+ *       Ex: 3200 → "três mil e duzentos reais",
+ *           1234.56 → "um mil, duzentos e trinta e quatro reais e
+ *                     cinquenta e seis centavos",
+ *           1 → "um real", 0.50 → "cinquenta centavos",
+ *           0 → "zero real".
+ *
+ * - **`client/src/pages/Colaboradores.tsx`:**
+ *     • L20: import `formatBRL, valorPorExtenso`.
+ *     • L1907-1908: substituído `empSalario = esc(form.salarioBase ||
+ *       '0,00')` por `empSalarioBRL = formatBRL(form.salarioBase)` +
+ *       `empSalarioExtenso = valorPorExtenso(form.salarioBase)`.
+ *     • L1955 (CLÁUSULA 2ª): de `R$ ${empSalario}` para
+ *       `R$ ${empSalarioBRL} (${empSalarioExtenso})`. Ambos passam por
+ *       `esc()` (XSS safe — Rev. 2114).
+ *
+ * **Exemplo do resultado:**
+ *   Antes: "valor de R$ 3200.00, pago até o 5º dia útil..."
+ *   Depois: "valor de R$ 3.200,00 (três mil e duzentos reais), pago até
+ *           o 5º dia útil..."
+ *
+ * **Não-mudanças:** template `buildFcDocument`, schema, backend,
+ * `signatures.create`, `AssinarDocumento.tsx`, demais cláusulas,
+ * assinaturas, rodapé. Outras telas que mostram salário (FolhaPagamento,
+ * lista de Colaboradores) seguem com sua formatação própria — não
+ * tocadas para evitar regressão.
+ *
+ * **Reuso futuro:** `formatBRL` e `valorPorExtenso` ficam disponíveis
+ * para Aviso Prévio, Termo de Rescisão, Recibo de Pagamento, Carta MDO,
+ * qualquer documento que mostre valor monetário.
+ *
+ * **R-001/R-007/R-010:** N/A — frontend (apenas client/).
+ *
+ * ---
+ *
  * Rev. 2114 — **Documentos institucionais FC · refatoração estrutural com
  * template ÚNICO (`buildFcDocument`). Fim das 10 micro-revisões no
  * Contrato de Experiência.**

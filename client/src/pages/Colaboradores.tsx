@@ -14,6 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { trpc } from "@/lib/trpc";
 import { buildFcDocument } from "@/lib/fcDocumentTemplate";
+import { formatBRL, valorPorExtenso } from "@/lib/numeroExtenso";
 import { Users, Plus, Search, Pencil, Trash2, Eye, Ban, GraduationCap, ShieldCheck, Shield, ShieldX, Scale, FileText, Building2, AlertTriangle, Upload, HardHat, Download, Printer, ArrowLeft, Hash, Lock, Camera, X as XIcon, Wrench, Star, Award, CalendarDays, UserCheck, UserX, Palmtree, HeartPulse, Clock, Save } from "lucide-react";
 import FullScreenDialog from "@/components/FullScreenDialog";
 import { Badge } from "@/components/ui/badge";
@@ -1900,7 +1901,8 @@ ${obs ? `<div class="box"><strong>Observações / Justificativa do Enquadramento
                     const empRg = esc(form.rg || '');
                     const empCtps = esc(form.ctps || '');
                     const empFuncao = esc(form.funcao || '');
-                    const empSalario = esc(form.salarioBase || '0,00');
+                    const empSalarioBRL = formatBRL(form.salarioBase);
+                    const empSalarioExtenso = valorPorExtenso(form.salarioBase);
                     const empEndereco = esc(form.endereco || '');
                     const empCidade = esc(form.cidade || '');
                     const empEstado = esc(form.estado || '');
@@ -1947,7 +1949,7 @@ ${obs ? `<div class="box"><strong>Observações / Justificativa do Enquadramento
 
 <p style="margin-top:14px"><strong>CLÁUSULA 1ª — DA FUNÇÃO.</strong> O(A) EMPREGADO(A) é admitido(a) para exercer a função de <strong>${esc(empFuncao || '________________')}</strong>, obrigando-se a executar as tarefas inerentes à função para a qual foi contratado(a), bem como as que forem compatíveis com a sua condição pessoal.</p>
 
-<p style="margin-top:8px"><strong>CLÁUSULA 2ª — DA REMUNERAÇÃO.</strong> O(A) EMPREGADO(A) receberá a título de remuneração mensal o valor de <strong>R$ ${esc(empSalario)}</strong>, pago até o 5º dia útil do mês subsequente ao trabalhado, com os descontos legais previstos em lei.</p>
+<p style="margin-top:8px"><strong>CLÁUSULA 2ª — DA REMUNERAÇÃO.</strong> O(A) EMPREGADO(A) receberá a título de remuneração mensal o valor de <strong>R$ ${esc(empSalarioBRL)}</strong> (${esc(empSalarioExtenso)}), pago até o 5º dia útil do mês subsequente ao trabalhado, com os descontos legais previstos em lei.</p>
 
 <p style="margin-top:8px"><strong>CLÁUSULA 3ª — DA JORNADA DE TRABALHO.</strong> A jornada de trabalho do(a) EMPREGADO(A) será de <strong>${esc(jornadaDesc)}</strong>, respeitados os intervalos legais para repouso e alimentação, nos termos do Art. 71 da CLT.</p>
 
