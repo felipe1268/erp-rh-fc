@@ -775,6 +775,23 @@ export const signaturesRouter = router({
           isNull(employeeDocuments.deletedAt),
         ));
       }
+      // Rev. 2135 — quando a sessão cancelada é de contrato_experiencia,
+      // apaga também o registro em employee_contracts criado pelo fluxo
+      // FCSign (Rev. 2134), para sumir da aba "Contratos CLT" do RAIO-X
+      // "como se nunca tivesse existido". Filtra por criadoPor='FCSign'
+      // p/ NÃO tocar contratos criados manualmente pelo módulo Contratos.
+      if (sess.tipo === 'contrato_experiencia' && sess.employeeId) {
+        try {
+          await db.delete(employeeContracts).where(and(
+            eq(employeeContracts.employeeId, sess.employeeId),
+            eq(employeeContracts.tipo, 'experiencia'),
+            eq(employeeContracts.criadoPor, 'FCSign'),
+            sql`${employeeContracts.status} NOT IN ('encerrado','rescindido')`,
+          ));
+        } catch (e: any) {
+          console.error(`[Rev.2135] FALHA delete employee_contracts pós-adminDelete sess=${sess.id}:`, e?.message || e);
+        }
+      }
       return { success: true };
     }),
 
@@ -793,6 +810,13 @@ export const signaturesRouter = router({
       if (!allowedIds.includes(input.companyId)) {
         throw new TRPCError({ code: "FORBIDDEN", message: "Empresa fora do escopo do usuário." });
       }
+      // Rev. 2135 — antes de cancelar, lê a sessão p/ saber se é
+      // contrato_experiencia e disparar limpeza do employee_contracts.
+      const [sessC] = await db.select().from(signatureSessions)
+        .where(and(
+          companyFilter(signatureSessions.companyId, input),
+          eq(signatureSessions.id, input.id),
+        )).limit(1);
       await db.update(signatureSessions).set({
         status: "cancelado",
         cancelledAt: new Date().toISOString(),
@@ -800,6 +824,19 @@ export const signaturesRouter = router({
         companyFilter(signatureSessions.companyId, input),
         eq(signatureSessions.id, input.id),
       ));
+      // Rev. 2135 — sumir o pré-registro FCSign da aba "Contratos CLT".
+      if (sessC?.tipo === 'contrato_experiencia' && sessC.employeeId) {
+        try {
+          await db.delete(employeeContracts).where(and(
+            eq(employeeContracts.employeeId, sessC.employeeId),
+            eq(employeeContracts.tipo, 'experiencia'),
+            eq(employeeContracts.criadoPor, 'FCSign'),
+            sql`${employeeContracts.status} NOT IN ('encerrado','rescindido')`,
+          ));
+        } catch (e: any) {
+          console.error(`[Rev.2135] FALHA delete employee_contracts pós-cancel sess=${input.id}:`, e?.message || e);
+        }
+      }
       return { success: true };
     }),
 });

@@ -1,6 +1,54 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2135 — **FCSign · Cancelar sessão de contrato_experiencia também
+ * REMOVE o registro de `employee_contracts` (criado em Rev. 2134), p/ sumir
+ * da aba "Contratos CLT" do RAIO-X "como se nunca tivesse existido".**
+ *
+ * User (screenshot iPad RAIO-X Lilian após Rev. 2134, com o card "Experiência
+ * — Vigente" agora visível): "Quando o usuário master cancelar o contrato
+ * de experiência deve subir do raio x tbm, como se nunca tivesse existido".
+ *
+ * **Contexto:** Rev. 2134 passou a pré-criar `employee_contracts` JÁ NA
+ * criação da sessão FCSign de contrato_experiencia (`criadoPor='FCSign'`).
+ * Mas `signatures.adminDelete` e `signatures.cancel` apenas soft-cancelavam
+ * a `signature_sessions` (status='cancelado') — o `employee_contracts`
+ * pré-criado continuava como "vigente" na aba "Contratos CLT" do RAIO-X,
+ * gerando inconsistência (sessão cancelada × contrato vigente exibido).
+ *
+ * **Fix em `server/routers/signatures.ts`:**
+ *
+ * **(1) `adminDelete`** (após soft-cancel da sessão + soft-delete do
+ * `employeeDocument` final): se `sess.tipo === 'contrato_experiencia'` e
+ * `sess.employeeId` definido, `db.delete(employeeContracts)` WHERE
+ * `employeeId=sess.employeeId AND tipo='experiencia' AND criadoPor='FCSign'
+ * AND status NOT IN ('encerrado','rescindido')`. Try/catch isolado loga
+ * mas não bloqueia retorno. Filtro `criadoPor='FCSign'` é CRÍTICO p/
+ * NUNCA tocar contratos criados manualmente pelo módulo Contratos.
+ *
+ * **(2) `cancel`** (mesma lógica): adicionado SELECT prévio em
+ * `signature_sessions` p/ obter `sess.tipo` e `sess.employeeId` antes do
+ * UPDATE de status='cancelado' (cancel original não lia a sessão).
+ * Mesmo bloco DELETE protegido.
+ *
+ * **Decisão HARD-DELETE (vs soft):** `employee_contracts` NÃO tem coluna
+ * `deletedAt` (ver schema L4814) e `server/routers/contracts.ts` (L605,
+ * 671) já usa `db.delete(...)` real em fluxos de exclusão manual — então
+ * hard-delete é o padrão consistente. R-001/R-007/R-010 permite DELETE em
+ * domínio (apenas ALTER/DROP em produção é proibido).
+ *
+ * **Idempotência & segurança:** filtros restritivos (`criadoPor='FCSign'`
+ * + `status NOT IN encerrado/rescindido`) impedem cascata em contratos
+ * efetivados ou rescindidos. Cancelar uma sessão que JÁ COMPLETOU
+ * (employeeContracts já recebeu `contratoAssinadoUrl` da Rev. 2133) ainda
+ * apaga o registro — é o comportamento esperado: master cancelou ⇒ some
+ * tudo do RAIO-X.
+ *
+ * Arquivos: `server/routers/signatures.ts` (adminDelete L781-797 +
+ * cancel L816-842), `shared/version.ts → 2135`.
+ */
+
+/**
  * Rev. 2134 — **FCSign · Contrato de Experiência agora aparece em "Contratos
  * CLT" do RAIO-X JÁ NA CRIAÇÃO da sessão FCSign (não espera o último
  * signer) + backfill SQL p/ sessões pré-existentes (caso Lilian).**
