@@ -1,6 +1,62 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2167 — **HOTFIX iPad · Upload de NR-10 (e qualquer documento)
+ * em Funcionários Terceiros falhava com toast vermelho "Arquivo muito
+ * grande (máx 10MB)" logo após selecionar a foto. Adicionada
+ * compressão client-side de imagens grandes.**
+ *
+ * Após perguntar ao user em que momento o erro aparecia (4 opções),
+ * a resposta foi: "Aparece toast vermelho com mensagem de erro logo
+ * após selecionar o arquivo" — documento NR-10. Inspeção mostrou que
+ * `handleUpload` e `handlePickExtraFile` em `FuncionariosTerceiros.tsx`
+ * tinham guard rígido `file.size > 10*1024*1024` → `toast.error`,
+ * disparando ANTES de subir. Foto de NR-10 tirada pelo iPad
+ * (Safari, 12MP, HDR ligado, sem live photo) facilmente passa de
+ * 10MB. Como o user usa o sistema no iPad pra cadastrar terceiros
+ * em campo, esse cap era impeditivo.
+ *
+ * **Novo helper** (`client/src/lib/imageCompress.ts`):
+ *  - `compressImageIfNeeded(file)` — se `file.type` não começa com
+ *    "image/" (PDF), passa direto. Se for imagem ≤ 1.5MB, passa
+ *    direto. Se for imagem maior, carrega em `<img>`, desenha em
+ *    `<canvas>` redimensionando pro lado maior = 1920px, e
+ *    re-encoda com `toDataURL("image/jpeg", 0.82)`. Devolve
+ *    `{base64, fileName, contentType, originalSize, finalSize}`.
+ *  - HEIC/HEIF do iPad: o Safari nativo decoda HEIC em `<img>`,
+ *    então o canvas converte HEIC→JPEG sem dependência extra.
+ *    Em outros browsers (desktop Chrome/Firefox) HEIC pode falhar
+ *    no `img.onerror` → toast amigável "formato não suportado".
+ *  - Extensão renomeada pra `.jpg` quando o re-encode acontece.
+ *
+ * **Frontend** (`client/src/pages/terceiros/FuncionariosTerceiros.tsx`):
+ *  - `handleUpload(field, funcId)` e `handlePickExtraFile()` agora
+ *    são `async`, chamam `compressImageIfNeeded` antes do `mutate`.
+ *  - Hard cap subiu pra 25MB (foto crua de iPad cabe; PDF grande
+ *    continua bloqueado).
+ *  - `input.accept` ganhou `.heic,.heif,image/*` (Safari iPad
+ *    abre o picker correto) + `application/pdf`.
+ *  - Toast de erro genérico em qualquer falha do reader/canvas.
+ *
+ * **Backend:** zero mudanças (procedure `terceiros.funcionarios.uploadDoc`
+ * já aceitava qualquer base64 + contentType; storagePut também).
+ *
+ * Side benefit: contagem trafegada via tRPC cai drasticamente — uma
+ * foto de 12MP/8MB vira ~250-400KB JPEG q=0.82, dentro do 2GB do
+ * body parser e bem mais rápida em 4G de obra.
+ *
+ * **R-001/R-007/R-010:** OK — só client-side + lib utilitária nova.
+ *
+ * Arquivos tocados:
+ *  - `client/src/lib/imageCompress.ts` (novo)
+ *  - `client/src/pages/terceiros/FuncionariosTerceiros.tsx`
+ *  - `shared/version.ts` → "Rev. 2167"
+ *  - `shared/changelog.ts` (esta entrada)
+ *  - `replit.md` (top-2 + demote)
+ *  - `replit-history.md` (one-liner da Rev. 2160)
+ *
+ * ---
+ *
  * Rev. 2166 — **MELHORIA UX + NOVA AÇÃO · Plano de Contas ganha
  * ordenação natural por código, geração automática de código via
  * "Conta Pai", e botões de Editar/Excluir por linha.**

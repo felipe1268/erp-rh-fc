@@ -3,6 +3,7 @@ import { DraggableCommandBar } from "@/components/DraggableCommandBar";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useCompany } from "@/contexts/CompanyContext";
 import { trpc } from "@/lib/trpc";
+import { compressImageIfNeeded } from "@/lib/imageCompress";
 import DashboardLayout from "@/components/DashboardLayout";
 import FullScreenDialog from "@/components/FullScreenDialog";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
@@ -87,17 +88,21 @@ export default function FuncionariosTerceiros() {
   const handlePickExtraFile = () => {
     const input = document.createElement("input");
     input.type = "file";
-    input.accept = ".pdf,.jpg,.jpeg,.png";
-    input.onchange = (e: any) => {
+    // Rev. 2167 — mesmo tratamento de imagem grande do handleUpload.
+    input.accept = ".pdf,.jpg,.jpeg,.png,.heic,.heif,image/*,application/pdf";
+    input.onchange = async (e: any) => {
       const file = e.target.files?.[0];
       if (!file) return;
-      if (file.size > 10 * 1024 * 1024) { toast.error("Arquivo muito grande (máx 10MB)"); return; }
-      const reader = new FileReader();
-      reader.onload = () => {
-        const base64 = (reader.result as string).split(",")[1] || "";
-        setExtraFile({ base64, fileName: file.name, contentType: file.type || "application/octet-stream" });
-      };
-      reader.readAsDataURL(file);
+      if (file.size > 25 * 1024 * 1024) {
+        toast.error("Arquivo muito grande (máx 25MB).");
+        return;
+      }
+      try {
+        const compressed = await compressImageIfNeeded(file);
+        setExtraFile({ base64: compressed.base64, fileName: compressed.fileName, contentType: compressed.contentType });
+      } catch (err: any) {
+        toast.error(err?.message || "Não foi possível processar o arquivo.");
+      }
     };
     input.click();
   };
@@ -222,17 +227,29 @@ export default function FuncionariosTerceiros() {
   const handleUpload = (field: string, funcId: number) => {
     const input = document.createElement("input");
     input.type = "file";
-    input.accept = ".pdf,.jpg,.jpeg,.png";
-    input.onchange = (e: any) => {
+    // Rev. 2167 — aceita HEIC/HEIF do iPad também; compressImageIfNeeded
+    // re-encoda pra JPEG client-side antes de subir.
+    input.accept = ".pdf,.jpg,.jpeg,.png,.heic,.heif,image/*,application/pdf";
+    input.onchange = async (e: any) => {
       const file = e.target.files?.[0];
       if (!file) return;
-      if (file.size > 10 * 1024 * 1024) { toast.error("Arquivo muito grande (máx 10MB)"); return; }
-      const reader = new FileReader();
-      reader.onload = () => {
-        const base64 = (reader.result as string).split(",")[1];
-        uploadMut.mutate({ funcTerceiroId: funcId, field, fileName: file.name, fileBase64: base64, contentType: file.type });
-      };
-      reader.readAsDataURL(file);
+      // Hard cap subiu pra 25MB (foto crua de iPad cabe; PDF grande continua bloqueado).
+      if (file.size > 25 * 1024 * 1024) {
+        toast.error("Arquivo muito grande (máx 25MB).");
+        return;
+      }
+      try {
+        const compressed = await compressImageIfNeeded(file);
+        uploadMut.mutate({
+          funcTerceiroId: funcId,
+          field,
+          fileName: compressed.fileName,
+          fileBase64: compressed.base64,
+          contentType: compressed.contentType,
+        });
+      } catch (err: any) {
+        toast.error(err?.message || "Não foi possível processar o arquivo.");
+      }
     };
     input.click();
   };
