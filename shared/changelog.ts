@@ -1,6 +1,76 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2139 — **Termo de Responsabilidade · corpo do documento reescrito FIEL
+ * ao modelo institucional .docx aprovado pelo user + hardening de fotos
+ * (rejeita HEIC + valida toDataURL) para eliminar erro "The string did not
+ * match the expected pattern" no iPad.**
+ *
+ * User (após screenshot com toast nativo iOS "The string did not match the
+ * expected pattern" + 2 fotos pretas): "Está com erro, quando mando criar...
+ * precisa que o termo modelo seja, criado automaticamente com os dados...
+ * vou te mandar o modelo de novo... precisa seguir o mesmo padrão do
+ * comunicado e do contrato de experiência" + anexou Termo_Responsabilidade
+ * _Geral.docx.
+ *
+ * **Causa-raiz das fotos pretas + erro iOS:**
+ *   - iPhone/iPad por padrão captura em HEIC. Safari iOS consegue criar um
+ *     `<img>` a partir do data URL HEIC mas, ao desenhar em canvas e chamar
+ *     `canvas.toDataURL("image/jpeg")`, retorna string vazia ou "data:," —
+ *     resultado: thumb preta no preview e `<img src="data:,"/>` no HTML.
+ *   - Ao tentar persistir o HTML via `signatures.create`, algum downstream
+ *     (provavelmente DOMPurify ou o `setAttribute('src','data:,')`) dispara
+ *     o erro nativo do WebKit "The string did not match the expected
+ *     pattern." (mensagem do `URL()`/Pattern API do Safari).
+ *
+ * **Fix em `client/src/components/TermoResponsabilidadeDialog.tsx`:**
+ *   - `comprimirImagem()`: rejeita HEIC/HEIF upfront (extensão + MIME) com
+ *     toast educativo apontando p/ Câmera → Formatos → "Mais Compatível".
+ *     Valida `naturalWidth/Height > 0` antes de desenhar. Wrap try/catch em
+ *     `drawImage` e `toDataURL`. Valida que o data URL final começa com
+ *     `data:image/jpeg;base64,` e tem `length > 200` (descarta `"data:,"`).
+ *   - `handleGerarEnviar()`: helper `fotosValidas()` filtra fotos com data
+ *     URL válido antes de embutir no HTML — garante que nenhum `<img
+ *     src="data:,">` quebrado vá pro `signatures.create`.
+ *
+ * **Reescrita do corpo do termo (fiel ao .docx):**
+ *   - Texto da declaração agora segue palavra-por-palavra o modelo: "Eu,
+ *     [nome], portador(a) do RG nº [rg] e CPF nº [cpf], colaborador(a) da
+ *     empresa [razão], declaro, para os devidos fins, que recebi da empresa,
+ *     para utilização no exercício de minhas atividades profissionais, os
+ *     seguintes bens:"
+ *   - `<ul>` com as 6 categorias gerais do modelo (Ferramentas; Equipamentos;
+ *     Máquinas; Aparelhos eletrônicos; Veículos; Acessórios e demais itens
+ *     correlatos) ANTES da tabela específica.
+ *   - Seção "RELAÇÃO ESPECÍFICA DOS ITENS ENTREGUES NESTA DATA" (renomeada
+ *     de "Relação de itens entregues") preserva tabela + fotos.
+ *   - CLÁUSULA 1ª agora usa `<ol>` numerada com os 5 compromissos exatos do
+ *     .docx (era (a)(b)(c)(d)(e) inline).
+ *   - CLÁUSULA 2ª (descontos) usa `<ul>` com os 7 motivos exatos (mau uso,
+ *     negligência, imprudência, imperícia, utilização inadequada,
+ *     descumprimento, dolo ou culpa) seguido do parágrafo de autorização ex
+ *     vi art. 462 §1º CLT.
+ *   - CLÁUSULA 3ª (veículos) usa `<ul>` com as 3 hipóteses específicas
+ *     (multas, danos por condução inadequada, descumprimento de normas).
+ *   - CLÁUSULA 4ª (vigência) preservada palavra-por-palavra.
+ *   - Adicionada frase de fechamento "Por estarem de pleno acordo, firmam o
+ *     presente termo." antes do local/data, espelhando o .docx.
+ *   - Mantém wrapper `buildFcDocument` (regra de ouro: cabeçalho navy
+ *     #1B2A4A, logo FC, razão social caixa alta, faixa com TÍTULO e Nº/Data,
+ *     bloco de assinaturas com 2 partes — empregador FELIPE COSTA ALVES
+ *     fixo + empregado), mesmo padrão do comunicado e contrato de
+ *     experiência.
+ *
+ * **Limpeza:** removido import não usado `Package` (sobra do refactor
+ * Rev. 2138).
+ *
+ * **R-001/R-007/R-010:** OK — puramente client-side.
+ *
+ * **Arquivos tocados:**
+ *   - `client/src/components/TermoResponsabilidadeDialog.tsx`
+ *
+ * ---
+ *
  * Rev. 2138 — **UX: TermoResponsabilidadeDialog migrado para `FullScreenDialog`
  * (mesmo padrão do cadastro do colaborador) — fim do "modal dentro de modal"
  * apertado em iPad/tablet.**

@@ -7,7 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import FullScreenDialog from "@/components/FullScreenDialog";
 import {
   Plus, Trash2, Camera, X as XIcon, ShieldCheck, Eye, Download, Copy,
-  ExternalLink, CheckCircle2, Clock, Loader2, ArrowLeft, FileText, Package,
+  ExternalLink, CheckCircle2, Clock, Loader2, ArrowLeft, FileText,
 } from "lucide-react";
 import { toast } from "sonner";
 import { buildFcDocument } from "@/lib/fcDocumentTemplate";
@@ -75,19 +75,36 @@ function esc(s: string): string {
     .replace(/'/g, "&#39;");
 }
 
-// Compressão client-side: canvas resize p/ máx 800x600 + JPEG q=0.7
+// Compressão client-side: canvas resize p/ máx 800x600 + JPEG q=0.7.
+// Rev. 2139 — validações reforçadas: rejeita HEIC (iPad camera roll, não
+// renderiza em canvas Safari → produz toDataURL vazio "data:,"), valida
+// dimensões > 0 e dataURL final começa com "data:image/jpeg;base64,".
 async function comprimirImagem(file: File): Promise<string> {
+  // Safari iOS NÃO consegue renderizar HEIC em canvas — gera tela preta ou
+  // toDataURL inválido. Bloqueia upfront com mensagem clara.
+  const isHeic =
+    /\.heic$|\.heif$/i.test(file.name) ||
+    file.type === "image/heic" ||
+    file.type === "image/heif";
+  if (isHeic) {
+    throw new Error(
+      `${file.name}: formato HEIC não suportado. Nas configurações do iPhone/iPad, vá em Câmera → Formatos → "Mais Compatível" (JPEG).`,
+    );
+  }
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => {
       const img = new Image();
       img.onload = () => {
+        if (!img.naturalWidth || !img.naturalHeight) {
+          return reject(new Error("Imagem sem dimensões — formato incompatível."));
+        }
         const MAX_W = 800;
         const MAX_H = 600;
-        let { width, height } = img;
+        let { naturalWidth: width, naturalHeight: height } = img;
         const ratio = Math.min(MAX_W / width, MAX_H / height, 1);
-        width = Math.round(width * ratio);
-        height = Math.round(height * ratio);
+        width = Math.max(1, Math.round(width * ratio));
+        height = Math.max(1, Math.round(height * ratio));
         const canvas = document.createElement("canvas");
         canvas.width = width;
         canvas.height = height;
@@ -95,11 +112,29 @@ async function comprimirImagem(file: File): Promise<string> {
         if (!ctx) return reject(new Error("Canvas indisponível"));
         ctx.fillStyle = "#fff";
         ctx.fillRect(0, 0, width, height);
-        ctx.drawImage(img, 0, 0, width, height);
-        resolve(canvas.toDataURL("image/jpeg", 0.7));
+        try {
+          ctx.drawImage(img, 0, 0, width, height);
+        } catch (e: any) {
+          return reject(new Error("Falha ao renderizar imagem em canvas."));
+        }
+        let dataUrl = "";
+        try {
+          dataUrl = canvas.toDataURL("image/jpeg", 0.7);
+        } catch (e: any) {
+          return reject(new Error("Falha ao gerar JPEG (imagem muito grande?)."));
+        }
+        // toDataURL vazio é "data:," em Safari quando falha silenciosamente
+        if (!dataUrl.startsWith("data:image/jpeg;base64,") || dataUrl.length < 200) {
+          return reject(new Error("Imagem ficou em branco (Safari/HEIC?)."));
+        }
+        resolve(dataUrl);
       };
-      img.onerror = () => reject(new Error("Imagem inválida"));
-      img.src = String(reader.result || "");
+      img.onerror = () => reject(new Error("Imagem inválida ou formato não suportado."));
+      const src = String(reader.result || "");
+      if (!src.startsWith("data:image/")) {
+        return reject(new Error("Arquivo não é uma imagem."));
+      }
+      img.src = src;
     };
     reader.onerror = () => reject(new Error("Falha ao ler arquivo"));
     reader.readAsDataURL(file);
@@ -229,21 +264,34 @@ export default function TermoResponsabilidadeDialog({
         }
       })();
 
-      const itensHtml = items
-        .map(
-          (it, i) => `
+      // Rev. 2139 — filtra apenas fotos com data URL válido (descarta as que
+      // a compressão produziu vazias em Safari/HEIC). Evita HTML inválido +
+      // bloqueia o caminho que dispara "The string did not match the
+      // expected pattern" no iPad quando o <img src="data:,"> falha downstream.
+      const fotosValidas = (fotos: ItemFoto[]) =>
+        fotos.filter(
+          (f) =>
+            typeof f.dataUrl === "string" &&
+            f.dataUrl.startsWith("data:image/") &&
+            f.dataUrl.length > 200,
+        );
+
+      const itensTabela = items
+        .map((it, i) => {
+          const fotos = fotosValidas(it.fotos);
+          return `
         <tr>
           <td style="border:1px solid #cbd5e1;padding:6px 8px;text-align:center;width:36px;font-weight:600;vertical-align:top">${i + 1}</td>
           <td style="border:1px solid #cbd5e1;padding:6px 8px;vertical-align:top">${esc(it.descricao)}</td>
           <td style="border:1px solid #cbd5e1;padding:6px 8px;vertical-align:top;width:180px">${esc(it.estado)}</td>
         </tr>
         ${
-          it.fotos.length > 0
+          fotos.length > 0
             ? `<tr>
                 <td colspan="3" style="border:1px solid #cbd5e1;padding:8px;background:#f8fafc">
                   <div style="font-size:9.5pt;color:#475569;margin-bottom:6px;font-weight:600">Fotos do item #${i + 1}:</div>
                   <div style="display:flex;flex-wrap:wrap;gap:8px">
-                    ${it.fotos
+                    ${fotos
                       .map(
                         (f) =>
                           `<img src="${f.dataUrl}" style="max-width:220px;max-height:170px;border:1px solid #cbd5e1;border-radius:4px;background:#fff"/>`,
@@ -253,29 +301,46 @@ export default function TermoResponsabilidadeDialog({
                 </td>
               </tr>`
             : ""
-        }`,
-        )
+        }`;
+        })
         .join("");
 
       const obsHtml = observacoes.trim()
         ? `<p style="margin-top:14px;padding:10px 12px;background:#f8fafc;border-left:3px solid #1B2A4A;font-size:10.5pt"><strong>Observações:</strong><br/>${esc(observacoes).replace(/\n/g, "<br/>")}</p>`
         : "";
 
+      // Rev. 2139 — Corpo do TERMO DE RESPONSABILIDADE seguindo
+      // FIELMENTE o modelo institucional aprovado (.docx "Termo de
+      // Responsabilidade Geral"): declaração + categorias gerais (Ferramentas/
+      // Equipamentos/Máquinas/Aparelhos eletrônicos/Veículos/Acessórios) +
+      // RELAÇÃO ESPECÍFICA com os itens entregues e fotos + 3 blocos de
+      // compromissos (responsabilidade / desconto art. 462§1º CLT / veículos)
+      // + vigência + local/data. Mesmo padrão visual do Contrato de
+      // Experiência (clauses com border-left navy + Times serif 11.5pt
+      // via buildFcDocument).
       const corpoHtml = `
 <p style="text-align:justify;text-indent:30px;margin-bottom:12px">
-  Pelo presente <strong>TERMO DE RESPONSABILIDADE</strong>, eu, <strong>${esc(empNome)}</strong>,
-  portador(a) do RG nº <strong>${esc(empRg || "________________")}</strong>,
-  inscrito(a) no CPF sob o nº <strong>${esc(empCpf || "________________")}</strong>,
+  Eu, <strong>${esc(empNome)}</strong>,
+  portador(a) do RG nº <strong>${esc(empRg || "________________")}</strong>
+  e CPF nº <strong>${esc(empCpf || "________________")}</strong>,
   ${empFuncao ? `exercendo a função de <strong>${esc(empFuncao)}</strong>, ` : ""}colaborador(a) da empresa
   <strong>${esc(comp?.razaoSocial || "")}</strong>, inscrita no CNPJ sob o nº
-  <strong>${esc(comp?.cnpj || "")}</strong>, declaro para os devidos fins que recebi
-  da empresa, para utilização exclusiva no exercício das minhas atividades
-  profissionais, os bens abaixo discriminados, conforme estado de conservação
-  registrado nesta data:
+  <strong>${esc(comp?.cnpj || "")}</strong>, declaro, para os devidos fins,
+  que recebi da empresa, para utilização no exercício de minhas atividades
+  profissionais, os seguintes bens:
 </p>
 
+<ul style="margin:6px 0 12px 28px;padding:0;font-size:11pt">
+  <li>Ferramentas;</li>
+  <li>Equipamentos;</li>
+  <li>Máquinas;</li>
+  <li>Aparelhos eletrônicos;</li>
+  <li>Veículos;</li>
+  <li>Acessórios e demais itens correlatos necessários à execução das atividades laborais.</li>
+</ul>
+
 <h3 style="font-size:11pt;font-weight:bold;color:#1B2A4A;border-left:3px solid #1B2A4A;padding-left:8px;margin:18px 0 8px">
-  RELAÇÃO DE ITENS ENTREGUES
+  RELAÇÃO ESPECÍFICA DOS ITENS ENTREGUES NESTA DATA
 </h3>
 <table style="width:100%;border-collapse:collapse;font-size:10.5pt;margin-bottom:10px">
   <thead>
@@ -285,59 +350,73 @@ export default function TermoResponsabilidadeDialog({
       <th style="border:1px solid #1B2A4A;padding:6px 8px;text-align:left;width:180px">Estado de Conservação</th>
     </tr>
   </thead>
-  <tbody>${itensHtml}</tbody>
+  <tbody>${itensTabela}</tbody>
 </table>
 ${obsHtml}
 
 <h3 style="font-size:11pt;font-weight:bold;color:#1B2A4A;border-left:3px solid #1B2A4A;padding-left:8px;margin:18px 0 8px">
-  CLÁUSULA 1ª — DA RESPONSABILIDADE
+  CLÁUSULA 1ª — DA PROPRIEDADE E DAS OBRIGAÇÕES
 </h3>
 <p style="text-align:justify;margin-bottom:8px">
-  Declaro estar ciente de que os bens acima relacionados são de propriedade
-  exclusiva da empresa, comprometendo-me a: <strong>(a)</strong> utilizá-los
-  exclusivamente para fins profissionais e relacionados às atividades da
-  empresa; <strong>(b)</strong> zelar pela boa conservação, guarda, limpeza e
-  correta utilização; <strong>(c)</strong> não permitir o uso por terceiros
-  não autorizados; <strong>(d)</strong> comunicar imediatamente à empresa
-  qualquer defeito, dano, extravio, furto, roubo, acidente ou irregularidade;
-  <strong>(e)</strong> devolver todos os itens em perfeito estado de
-  conservação ao término da utilização ou do vínculo, ressalvado o desgaste
-  natural decorrente do uso adequado.
+  Declaro estar ciente de que os bens acima mencionados são de propriedade
+  exclusiva da empresa, comprometendo-me a:
 </p>
+<ol style="margin:0 0 10px 28px;padding:0;font-size:11pt;text-align:justify">
+  <li>Utilizá-los exclusivamente para fins profissionais e relacionados às atividades da empresa;</li>
+  <li>Zelar pela boa conservação, guarda, limpeza e correto uso dos bens disponibilizados;</li>
+  <li>Não permitir o uso por terceiros não autorizados;</li>
+  <li>Comunicar imediatamente à empresa qualquer defeito, dano, extravio, furto, roubo, acidente ou irregularidade envolvendo os bens sob minha responsabilidade;</li>
+  <li>Devolver todos os itens recebidos em perfeito estado de conservação, ressalvado o desgaste natural decorrente do uso adequado.</li>
+</ol>
 
 <h3 style="font-size:11pt;font-weight:bold;color:#1B2A4A;border-left:3px solid #1B2A4A;padding-left:8px;margin:18px 0 8px">
-  CLÁUSULA 2ª — DOS DESCONTOS POR DANO, PERDA OU MAU USO
+  CLÁUSULA 2ª — DESCONTOS POR DANO, PERDA OU MAU USO (ART. 462, §1º, CLT)
 </h3>
-<p style="text-align:justify;margin-bottom:8px">
+<p style="text-align:justify;margin-bottom:6px">
   Fica expressamente estabelecido que, em caso de dano, perda, extravio,
-  avaria, quebra ou qualquer prejuízo decorrente de <strong>mau uso,
-  negligência, imprudência, imperícia, utilização inadequada, descumprimento
-  das orientações da empresa, dolo ou culpa</strong> do colaborador, este
-  autoriza, desde já e nos termos do <strong>art. 462, §1º, da CLT</strong>,
-  o desconto em folha de pagamento dos valores correspondentes ao prejuízo
+  avaria, quebra ou qualquer prejuízo causado em decorrência de:
+</p>
+<ul style="margin:0 0 8px 28px;padding:0;font-size:11pt">
+  <li>mau uso;</li>
+  <li>negligência;</li>
+  <li>imprudência;</li>
+  <li>imperícia;</li>
+  <li>utilização inadequada;</li>
+  <li>descumprimento das orientações da empresa;</li>
+  <li>dolo ou culpa do colaborador;</li>
+</ul>
+<p style="text-align:justify;margin-bottom:8px">
+  o colaborador autoriza, desde já, nos termos do
+  <strong>artigo 462, §1º, da CLT</strong>, o desconto em folha de pagamento
+  dos valores correspondentes ao prejuízo causado, limitado ao valor
   efetivamente apurado pela empresa.
 </p>
 
 <h3 style="font-size:11pt;font-weight:bold;color:#1B2A4A;border-left:3px solid #1B2A4A;padding-left:8px;margin:18px 0 8px">
   CLÁUSULA 3ª — VEÍCULOS E INFRAÇÕES DE TRÂNSITO
 </h3>
-<p style="text-align:justify;margin-bottom:8px">
-  No caso específico de veículos, o colaborador também se responsabiliza por
-  <strong>multas decorrentes de infrações de trânsito</strong> cometidas
-  durante sua utilização, danos ocasionados por condução inadequada e
-  descumprimento das normas internas e da legislação de trânsito vigente,
-  autorizando igualmente o desconto em folha dos valores correspondentes.
+<p style="text-align:justify;margin-bottom:6px">
+  No caso específico de veículos, o colaborador também se responsabiliza por:
 </p>
+<ul style="margin:0 0 8px 28px;padding:0;font-size:11pt">
+  <li>multas decorrentes de infrações de trânsito cometidas durante sua utilização;</li>
+  <li>danos ocasionados por condução inadequada;</li>
+  <li>descumprimento das normas internas e legislação de trânsito vigente.</li>
+</ul>
 
 <h3 style="font-size:11pt;font-weight:bold;color:#1B2A4A;border-left:3px solid #1B2A4A;padding-left:8px;margin:18px 0 8px">
   CLÁUSULA 4ª — VIGÊNCIA
 </h3>
 <p style="text-align:justify;margin-bottom:8px">
-  Este Termo passa a vigorar na data de sua assinatura e permanecerá válido
-  enquanto houver bens da empresa sob a responsabilidade do colaborador.
+  Este termo passa a vigorar na data de sua assinatura e permanecerá válido
+  enquanto houver bens da empresa sob responsabilidade do colaborador.
 </p>
 
-<p style="text-align:right;margin-top:24px;font-size:10.5pt;color:#475569">
+<p style="text-align:justify;text-indent:30px;margin-top:10px;margin-bottom:8px">
+  Por estarem de pleno acordo, firmam o presente termo.
+</p>
+
+<p style="text-align:right;margin-top:18px;font-size:10.5pt;color:#475569">
   ${esc(local)}, ${esc(dataPt)}.
 </p>
 `;
