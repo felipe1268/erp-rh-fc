@@ -13,6 +13,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { Check, ChevronsUpDown } from "lucide-react";
+import { cn } from "@/lib/utils";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -413,30 +417,16 @@ export default function FinanceiroCategorias() {
                   </select>
                 </div>
               </div>
-              {/* Rev. 2162 — vínculo com Plano de Contas (contábil) */}
-              <div>
-                <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">
-                  Plano de Contas <span className="text-gray-400 normal-case">(opcional)</span>
-                </label>
-                <select
-                  value={form.contaPaiId}
-                  onChange={(e) => setForm((f) => ({ ...f, contaPaiId: e.target.value }))}
-                  className="mt-1 h-9 w-full rounded-md border border-gray-200 px-2 text-sm bg-white"
-                >
-                  <option value="">— Não vincular —</option>
-                  {(Array.isArray(planoContas) ? planoContas : [])
-                    .slice()
-                    .sort((a: any, b: any) => Number(a.ordem ?? 0) - Number(b.ordem ?? 0) || String(a.codigo).localeCompare(String(b.codigo)))
-                    .map((p: any) => (
-                      <option key={p.id} value={p.id}>
-                        {"  ".repeat(Math.max(0, Number(p.nivel ?? 1) - 1))}{p.codigo} · {p.nome}
-                      </option>
-                    ))}
-                </select>
-                <p className="text-[10px] text-gray-400 mt-1">
-                  Vincula esta categoria a uma conta do plano contábil (ex.: "Combustível" → "4.4.2 Aluguel de Veículos").
-                </p>
-              </div>
+              {/* Rev. 2162/2165 — vínculo com Plano de Contas (contábil),
+                  agora como combobox pesquisável (Popover + cmdk). */}
+              <PlanoDeContaCombobox
+                value={form.contaPaiId}
+                onChange={(v) => setForm((f) => ({ ...f, contaPaiId: v }))}
+                options={Array.isArray(planoContas) ? planoContas : []}
+              />
+              <p className="text-[10px] text-gray-400 -mt-2">
+                Vincula esta categoria a uma conta do plano contábil (ex.: "Combustível" → "4.4.2 Aluguel de Veículos").
+              </p>
               {!form.id && (
                 <div className="bg-blue-50 border border-blue-100 rounded-lg p-2.5 text-[11px] text-blue-700 leading-relaxed">
                   <strong>Dica:</strong> o código contábil é gerado automaticamente. Categorias podem ser usadas em lançamentos imediatamente após o cadastro.
@@ -497,6 +487,104 @@ function KpiCard({ label, value, icon: Icon, color, bg }: { label: string; value
         <p className="text-[10px] uppercase tracking-wide font-semibold text-gray-500">{label}</p>
       </div>
       <p className={`text-2xl font-bold mt-1 ${color}`}>{value}</p>
+    </div>
+  );
+}
+
+// Rev. 2165 — Combobox pesquisável para "Plano de Contas (opcional)"
+// no dialog de Categoria. Substitui o <select> nativo que ficava
+// gigante (50+ linhas) e não permitia digitar. Usa Popover + cmdk
+// (mesma stack do AvisoPrevio.tsx). Filtra por código OU nome,
+// case-insensitive, sem acentos.
+function PlanoDeContaCombobox({
+  value, onChange, options,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  options: any[];
+}) {
+  const [open, setOpen] = useState(false);
+  const sorted = useMemo(() => {
+    return options.slice().sort(
+      (a: any, b: any) =>
+        Number(a.ordem ?? 0) - Number(b.ordem ?? 0) ||
+        String(a.codigo).localeCompare(String(b.codigo)),
+    );
+  }, [options]);
+  const selected = value ? sorted.find((p: any) => String(p.id) === value) : null;
+  return (
+    <div>
+      <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+        Plano de Contas <span className="text-gray-400 normal-case">(opcional)</span>
+      </label>
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <button
+            type="button"
+            role="combobox"
+            aria-expanded={open}
+            className={cn(
+              "mt-1 h-9 w-full flex items-center justify-between rounded-md border px-2 text-sm bg-white transition-colors",
+              open ? "border-blue-400 ring-2 ring-blue-100" : "border-gray-200 hover:border-gray-300",
+            )}
+          >
+            <span className={cn("truncate text-left", !selected && "text-gray-400")}>
+              {selected ? `${selected.codigo} · ${selected.nome}` : "— Não vincular —"}
+            </span>
+            <div className="flex items-center gap-1 shrink-0">
+              {selected && (
+                <span
+                  className="text-gray-400 hover:text-red-500 px-1"
+                  role="button"
+                  tabIndex={-1}
+                  onClick={(e) => { e.stopPropagation(); e.preventDefault(); onChange(""); setOpen(false); }}
+                >
+                  ×
+                </span>
+              )}
+              <ChevronsUpDown className="w-3.5 h-3.5 text-gray-400" />
+            </div>
+          </button>
+        </PopoverTrigger>
+        <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start" sideOffset={4}>
+          <Command
+            filter={(itemValue, search) => {
+              const s = search.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+              const v = itemValue.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+              return v.includes(s) ? 1 : 0;
+            }}
+          >
+            <CommandInput placeholder="Buscar por código ou nome..." />
+            <CommandList className="max-h-72">
+              <CommandEmpty className="py-6 text-center text-sm text-gray-400">
+                Nenhuma conta encontrada.
+              </CommandEmpty>
+              <CommandGroup>
+                <CommandItem
+                  value="--nao-vincular--"
+                  onSelect={() => { onChange(""); setOpen(false); }}
+                  className="text-xs text-gray-500 italic"
+                >
+                  <Check className={cn("w-3.5 h-3.5 mr-2", !value ? "opacity-100" : "opacity-0")} />
+                  — Não vincular —
+                </CommandItem>
+                {sorted.map((p: any) => (
+                  <CommandItem
+                    key={p.id}
+                    value={`${p.codigo} ${p.nome}`}
+                    onSelect={() => { onChange(String(p.id)); setOpen(false); }}
+                    className="text-xs"
+                  >
+                    <Check className={cn("w-3.5 h-3.5 mr-2", String(p.id) === value ? "opacity-100" : "opacity-0")} />
+                    <span className="font-mono text-gray-500 mr-2">{p.codigo}</span>
+                    <span className="text-gray-800">{p.nome}</span>
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            </CommandList>
+          </Command>
+        </PopoverContent>
+      </Popover>
     </div>
   );
 }

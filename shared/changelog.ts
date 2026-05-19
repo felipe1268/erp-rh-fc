@@ -1,6 +1,57 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2165 — **MELHORIA UX · Campo "Plano de Contas (opcional)"
+ * no dialog de Categoria virou combobox pesquisável (Popover + cmdk).**
+ *
+ * Sequência da Rev. 2162: o user reportou que o `<select>` nativo
+ * pra vincular categoria → plano contábil estava ficando
+ * gigante (50+ contas, indentadas por nível) e — por ser
+ * `<select>` nativo — não permitia digitar pra filtrar. Print
+ * anexado mostrava a dropdown ocupando metade do dialog, com
+ * scroll obrigatório. Pedido literal: "deixe a barra em aberto
+ * para poder digitar".
+ *
+ * **Frontend (`client/src/pages/financeiro/FinanceiroCategorias.tsx`):**
+ *  - Novo componente local `PlanoDeContaCombobox` (definido no
+ *    final do arquivo, ao lado de `FilterPill`/`KPICard`).
+ *  - Substitui o `<select>` da Rev. 2162.
+ *  - Stack: `Popover` + `Command`/`CommandInput`/`CommandList`/
+ *    `CommandItem` (mesmo padrão do combobox de funcionário em
+ *    `AvisoPrevio.tsx` linhas 2358-2421).
+ *  - Filtro `Command.filter` faz `toLowerCase().normalize("NFD")
+ *    .replace(/[\u0300-\u036f]/g, "")` em busca + item — busca
+ *    case-insensitive + acentos-insensitive.
+ *  - `CommandItem.value` = `"{codigo} {nome}"` — permite o user
+ *    digitar tanto o código contábil ("4.4.2") quanto pedaço do
+ *    nome ("aluguel veiculos" sem acento).
+ *  - PopoverContent usa `w-[var(--radix-popover-trigger-width)]`
+ *    pra alinhar largura ao trigger.
+ *  - Trigger custom (button) mostra `"código · nome"` se algo
+ *    selecionado, "— Não vincular —" se não; ChevronsUpDown
+ *    indica que é combobox. Quando há seleção, mostra um "×"
+ *    inline pra limpar sem precisar abrir o popover.
+ *  - Item "— Não vincular —" no topo da lista (com Check de
+ *    "selecionado quando value === ''").
+ *  - Cada item mostra `codigo` em font-mono cinza + nome em
+ *    cinza-escuro, sem indentação por nível (a indentação
+ *    visual deixa de fazer sentido quando o user vai usar busca).
+ *
+ * **Backend:** zero mudanças (procedure
+ * `financial.getAccounts({escopo:"plano",ativo:true})` já entrega
+ * o dataset desde a Rev. 2162).
+ *
+ * **R-001/R-007/R-010:** OK — só client-side, zero SQL.
+ *
+ * Arquivos tocados:
+ *  - `client/src/pages/financeiro/FinanceiroCategorias.tsx`
+ *  - `shared/version.ts` → "Rev. 2165"
+ *  - `shared/changelog.ts` (esta entrada)
+ *  - `replit.md` (top-2 + demote)
+ *  - `replit-history.md` (one-liner da Rev. 2158)
+ *
+ * ---
+ *
  * Rev. 2164 — **MELHORIA UX · AlertDialog de excluir Centro de
  * Custo mostra vínculos detalhados antes de tentar a exclusão.**
  *
