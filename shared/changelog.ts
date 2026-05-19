@@ -1,6 +1,55 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2126 — **RH · Contrato de Experiência: HOTFIX — numeração reinicia em
+ * 001/2026 (eu havia interpretado errado o pedido original na Rev. 2125 e
+ * seedado o counter com 33).**
+ *
+ * User: "Na0 zerou o número do contrato pq?" — screenshot mostrava
+ * "Nº 034/2026" (que era exatamente o seed+1 da Rev. 2125). Releitura do
+ * pedido original ("este é o primeiro este ano, começe a contagem com ela"):
+ * o "ela" referia-se ao CONTRATO (este é o primeiro → deve ser 001), não ao
+ * número 034 do screenshot legado. Bug de interpretação meu.
+ *
+ * **Fix em 2 partes (`server/_core/index.ts` — bloco Rev. 2125+2126):**
+ *
+ * 1. **Migração defaulta agora pra 0** — removida a linha `INSERT ... seed=33`
+ *    que existia na Rev. 2125. O counter é criado vazio; a 1ª chamada de
+ *    `allocateContratoExperienciaNumero` cai no branch `INSERT ... VALUES (1)`
+ *    do UPSERT atômico → próxima alocação = 001/2026.
+ *
+ * 2. **One-shot idempotente para limpar o estrago anterior**:
+ *    - `UPDATE contract_counters SET ultimo_seq=0 WHERE tipo='contrato_experiencia'
+ *      AND ultimo_seq IN (33, 34)` — reseta linhas que estão exatamente no
+ *      valor do seed bruto (33) OU do seed+1 (34 = única alocação que
+ *      consumiu o seed errado). Se alguma empresa já avançou pra >=35
+ *      legitimamente, NÃO mexe (preserva emissões reais).
+ *    - `UPDATE employees SET numero_contrato_experiencia=NULL,
+ *      numero_contrato_experiencia_ano=NULL WHERE numero_contrato_experiencia=34`
+ *      — limpa a alocação errada do colaborador Lilian (única que existia).
+ *      Critério `=34` propositalmente conservador: numa instalação onde alguém
+ *      legitimamente alocou 35,36,... NÃO mexe nesses. Boots subsequentes
+ *      viram no-op (após reset não há mais ninguém com seq=34 originado do
+ *      seed).
+ *
+ * **Idempotência:** ambos UPDATEs viram no-op em boots seguintes pq após o
+ * reset não há mais nenhuma linha que case com `IN (33, 34)` nem nenhum
+ * employee com `numero_contrato_experiencia = 34` originado do seed.
+ *
+ * **Comentário Rev. 2125 atualizado** no bloco de migração explicando o
+ * histórico do erro pra futuras leituras.
+ *
+ * **R-001 / R-007 / R-010:** OK — apenas `UPDATE ... SET = NULL` em coluna
+ * recém-criada (Rev. 2125), sem DROP/DELETE/ALTER destrutivo. Nenhuma
+ * mudança em código TypeScript da aplicação (router/cliente continuam
+ * exatamente como na Rev. 2125 — só o seed da migração foi consertado).
+ *
+ * **Arquivos:** `server/_core/index.ts` (bloco Rev. 2125+2126),
+ * `shared/version.ts` (bump 2125 → 2126), `shared/changelog.ts` (esta
+ * entrada), `replit.md` (one-liner shift).
+ *
+ * --------------------------------------------------------------------------
+ *
  * Rev. 2125 — **RH · Contrato de Experiência: numeração automática NNN/AAAA
  * sequencial, atômica, persistida e idempotente por empresa.**
  *
