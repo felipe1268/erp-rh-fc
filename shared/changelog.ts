@@ -1,6 +1,52 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2138 — **UX: TermoResponsabilidadeDialog migrado para `FullScreenDialog`
+ * (mesmo padrão do cadastro do colaborador) — fim do "modal dentro de modal"
+ * apertado em iPad/tablet.**
+ *
+ * User (após screenshots da Rev. 2137 mostrando o dialog espremido em ~560px
+ * sobre o cadastro fullscreen do colaborador): "Ajuste todo layout conforme.
+ * Nossa regra de ouro."
+ *
+ * **Causa:** o dialog usava o `<Dialog>` shadcn padrão (`max-w-4xl
+ * max-h-[90vh]`) renderizado por cima do `FullScreenDialog` do cadastro do
+ * colaborador. Em tablet ficava com ~560px de largura útil, cards de item
+ * apertados, fotos em thumbs de 80x112px, footer sem destaque, e a quebra
+ * `sm:grid-cols-[1fr_200px]` colapsava pra coluna única.
+ *
+ * **Fix em `client/src/components/TermoResponsabilidadeDialog.tsx`:**
+ *   - Trocado `<Dialog>/<DialogContent>` por `<FullScreenDialog>` (header
+ *     navy `from-[#1B2A4A] to-[#2d4a7a]` já default, ícone FileText, title +
+ *     subtitle preenchidos, `zIndex={70}` p/ ficar acima do cadastro do
+ *     colaborador que usa default 50).
+ *   - Conteúdo wrapped em `max-w-5xl mx-auto w-full` (área de leitura
+ *     confortável centralizada, sem grudar nas bordas em desktop wide).
+ *   - **Footer sticky** (prop `footer` do FullScreenDialog) com 2 variantes:
+ *       LIST → botão "Fechar" só (ações por sessão ficam inline);
+ *       COMPOSE → contagem de itens à esquerda + "Cancelar" / "Gerar e Enviar
+ *       para Assinatura" à direita (gradient azul FC).
+ *     Removido o footer inline duplicado que ficava embaixo do textarea de
+ *     observações.
+ *   - Thumbs de fotos aumentadas de `h-20 w-28` para `h-28 w-36 sm:h-32 w-44`
+ *     + `shadow-sm` (melhor visualização do estado de conservação capturado).
+ *   - Imports: removidos `Dialog*`, adicionado `FullScreenDialog` e ícone
+ *     `Package` (reservado p/ uso futuro nos cards de item).
+ *
+ * **Por que "regra de ouro" se aplica:** a regra de ouro FC do replit.md
+ * fala do cabeçalho institucional de documentos (faixa navy #1B2A4A, logo,
+ * razão social caixa-alta). O `FullScreenDialog` já adota o mesmo gradient
+ * navy no header, então a UI agora ecoa a identidade visual dos documentos
+ * gerados — coerência entre tela e papel.
+ *
+ * **R-001/R-007/R-010:** OK — mudança puramente client-side, zero DB.
+ *
+ * **Arquivos tocados:**
+ *   - `client/src/components/TermoResponsabilidadeDialog.tsx` (refactor JSX
+ *     do return + imports)
+ *
+ * ---
+ *
  * Rev. 2137 — **NOVO: Termo de Responsabilidade (entrega de equipamentos /
  * veículos / EPIs) com fluxo FCSign completo — lista livre de itens, fotos
  * do estado de conservação embutidas, numeração sequencial por empresa/ano,

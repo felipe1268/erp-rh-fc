@@ -1,13 +1,13 @@
 import { useState, useRef, useMemo } from "react";
 import { trpc } from "@/lib/trpc";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import FullScreenDialog from "@/components/FullScreenDialog";
 import {
   Plus, Trash2, Camera, X as XIcon, ShieldCheck, Eye, Download, Copy,
-  ExternalLink, CheckCircle2, Clock, Loader2, ArrowLeft, FileText,
+  ExternalLink, CheckCircle2, Clock, Loader2, ArrowLeft, FileText, Package,
 } from "lucide-react";
 import { toast } from "sonner";
 import { buildFcDocument } from "@/lib/fcDocumentTemplate";
@@ -423,22 +423,52 @@ ${obsHtml}
     );
   };
 
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <FileText className="h-5 w-5 text-primary" />
-            Termo de Responsabilidade — {empNome}
-          </DialogTitle>
-          <DialogDescription>
-            Registre itens entregues ao colaborador (com fotos do estado de conservação)
-            e envie o termo para assinatura digital via FCSign.
-          </DialogDescription>
-        </DialogHeader>
+  const composeFooter =
+    mode === "compose" ? (
+      <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3 w-full">
+        <div className="text-xs text-muted-foreground">
+          {items.length} {items.length === 1 ? "item" : "itens"} · {empNome}
+        </div>
+        <div className="flex gap-2 justify-end">
+          <Button type="button" variant="outline" onClick={() => setMode("list")}>
+            Cancelar
+          </Button>
+          <Button
+            type="button"
+            disabled={allocating || compressing}
+            onClick={handleGerarEnviar}
+            className="bg-gradient-to-r from-blue-700 to-indigo-700 hover:from-blue-800 hover:to-indigo-800 text-white"
+          >
+            {allocating ? (
+              <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+            ) : (
+              <ShieldCheck className="h-4 w-4 mr-1" />
+            )}
+            Gerar e Enviar para Assinatura
+          </Button>
+        </div>
+      </div>
+    ) : (
+      <div className="flex justify-end w-full">
+        <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+          Fechar
+        </Button>
+      </div>
+    );
 
+  return (
+    <FullScreenDialog
+      open={open}
+      onClose={() => onOpenChange(false)}
+      title={`Termo de Responsabilidade — ${empNome}`}
+      subtitle="Registre itens entregues (com fotos do estado de conservação) e envie para assinatura digital via FCSign."
+      icon={<FileText className="h-5 w-5" />}
+      footer={composeFooter}
+      zIndex={70}
+    >
+      <div className="max-w-5xl mx-auto w-full">
         {mode === "list" && (
-          <div className="space-y-3">
+          <div className="space-y-4">
             <div className="flex justify-between items-center">
               <div className="text-sm text-muted-foreground">
                 {q.isLoading
@@ -723,7 +753,7 @@ ${obsHtml}
                               <img
                                 src={f.dataUrl}
                                 alt=""
-                                className="h-20 w-28 object-cover rounded border"
+                                className="h-28 w-36 sm:h-32 sm:w-44 object-cover rounded border shadow-sm"
                               />
                               <button
                                 type="button"
@@ -776,27 +806,9 @@ ${obsHtml}
               />
             </div>
 
-            <div className="flex justify-end gap-2 pt-2 border-t">
-              <Button type="button" variant="outline" onClick={() => setMode("list")}>
-                Cancelar
-              </Button>
-              <Button
-                type="button"
-                disabled={allocating || compressing}
-                onClick={handleGerarEnviar}
-                className="bg-gradient-to-r from-blue-700 to-indigo-700 hover:from-blue-800 hover:to-indigo-800 text-white"
-              >
-                {allocating ? (
-                  <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-                ) : (
-                  <ShieldCheck className="h-4 w-4 mr-1" />
-                )}
-                Gerar e Enviar para Assinatura
-              </Button>
-            </div>
           </div>
         )}
-      </DialogContent>
-    </Dialog>
+      </div>
+    </FullScreenDialog>
   );
 }
