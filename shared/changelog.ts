@@ -1,6 +1,48 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2132 — **HOTFIX FCSign · `pendingForCurrentUser` retornava zero
+ * silenciosamente: `sql\`... = ANY(${array})\`` no Drizzle não serializa
+ * `number[]` JS como PG array — match falhava sempre.**
+ *
+ * User: "O alerta não tá funcionando, recarreguei a página e ele não
+ * apareceu que falta minha assinatura". Mesmo com Rev. 2128 (server por
+ * PAPEL), 2130 (gate client relaxado) e 2131 (modal popup), Felipe não
+ * recebia alerta da sessão Lilian (1ª já assinou em 19/05/2026 04:03:23,
+ * 2ª Felipe pendente).
+ *
+ * **Causa-raiz:** o WHERE da query em `pendingForCurrentUser` usava
+ * `sql\`${signatureSessions.companyId} = ANY(${allowedCompanyIds})\``
+ * — `allowedCompanyIds` é `number[]`. Drizzle, dentro de um template
+ * `sql\`\``, NÃO converte automaticamente JS arrays em PG arrays via
+ * parameter binding. O placeholder vira algo como `$1, $2, $3` (várias
+ * params) ou null/erro silencioso dependendo da versão, resultando em
+ * zero matches. Todos os outros routers (`processosCivis.ts L191/209/227`,
+ * `smo.ts L406`, `purchaseRouter.ts L118/310`) usam `inArray(col, arr)`
+ * — o operador correto.
+ *
+ * **Fix em `server/routers/signatures.ts`:**
+ * - Adicionado `inArray` ao import do drizzle-orm.
+ * - Trocadas 3 ocorrências de `sql\`... = ANY(${array})\`` por
+ *   `inArray(col, array)`:
+ *   - `signatureSessions.companyId` filtro ACL.
+ *   - `signatureSigners.sessionId` no fetch de allSigners.
+ *   - `signatureSessions.id` no fetch de sessions.
+ * - Trocado também `sql\`...status IN ('a','b')\`` por
+ *   `inArray(status, ['a','b'])` por consistência.
+ * - Trocado `sql\`...IS NULL\`` por `isNull(col)` no signedAt.
+ * - Log diagnóstico TEMPORÁRIO no console (`[FCSign.pendingForCurrentUser]`)
+ *   pra confirmar via workflow logs que pendingSigners.length passou de 0.
+ *   Remover na próxima revisão após validação.
+ *
+ * **R-001/R-007/R-010:** OK — só refator de query client-side da API,
+ * zero DDL.
+ *
+ * **Arquivos:** `server/routers/signatures.ts`, `shared/version.ts`,
+ * `shared/changelog.ts`, `replit.md`.
+ *
+ * --------------------------------------------------------------------------
+ *
  * Rev. 2131 — **FCSign · alerta global agora é um POPUP MODAL bloqueante
  * que reabre a cada navegação enquanto houver assinatura pendente —
  * substitui (complementa) o toast no canto da tela.**

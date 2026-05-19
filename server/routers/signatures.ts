@@ -2,7 +2,7 @@ import { router, protectedProcedure, publicProcedure } from "../_core/trpc";
 import { z } from "zod";
 import { getDb, getCompaniesForUser } from "../db";
 import { signatureSessions, signatureSigners, employees, companies, employeeDocuments, users } from "../../drizzle/schema";
-import { eq, and, desc, sql, isNull } from "drizzle-orm";
+import { eq, and, desc, sql, isNull, inArray } from "drizzle-orm";
 import { resolveCompanyIds, companyFilter } from "../companyHelper";
 import { TRPCError } from "@trpc/server";
 import { storagePut } from "../storage";
@@ -524,6 +524,10 @@ export const signaturesRouter = router({
         : isAdminLike
           ? sql`${signatureSigners.role} = 'empregador'`
           : sql`LOWER(${signatureSigners.email}) = ${email}`;
+      // Rev. 2132 — usar `inArray` em vez de `sql\`... = ANY(${array})\``;
+      // Drizzle não serializa JS number[] em template `sql` como PG array,
+      // resultando em zero matches silenciosos. Todos os outros routers usam
+      // `inArray` (ver processosCivis.ts, smo.ts, purchaseRouter.ts).
       const pendingSigners = await db.select({
         signerId: signatureSigners.id,
         sessionId: signatureSigners.sessionId,
@@ -535,10 +539,13 @@ export const signaturesRouter = router({
         .innerJoin(signatureSessions, eq(signatureSessions.id, signatureSigners.sessionId))
         .where(and(
           matchCondition,
-          sql`${signatureSigners.signedAt} IS NULL`,
-          sql`${signatureSessions.status} IN ('pendente','em_andamento')`,
-          sql`${signatureSessions.companyId} = ANY(${allowedCompanyIds})`,
+          isNull(signatureSigners.signedAt),
+          inArray(signatureSessions.status, ['pendente','em_andamento']),
+          inArray(signatureSessions.companyId, allowedCompanyIds),
         ));
+
+      // Rev. 2132 — log diagnóstico p/ confirmar match (remover após validar)
+      console.log(`[FCSign.pendingForCurrentUser] user=${ctx.user.id} email=${email||'(vazio)'} role=${role} isAdminLike=${isAdminLike} allowedCos=${allowedCompanyIds.length} pendingSigners=${pendingSigners.length}`);
 
       if (pendingSigners.length === 0) return [];
 
@@ -553,14 +560,14 @@ export const signaturesRouter = router({
         ordem: signatureSigners.ordem,
         signedAt: signatureSigners.signedAt,
       }).from(signatureSigners)
-        .where(sql`${signatureSigners.sessionId} = ANY(${sessionIds})`);
+        .where(inArray(signatureSigners.sessionId, sessionIds));
 
       const sessions = await db.select({
         id: signatureSessions.id,
         documentTitle: signatureSessions.documentTitle,
         createdAt: signatureSessions.createdAt,
       }).from(signatureSessions)
-        .where(sql`${signatureSessions.id} = ANY(${sessionIds})`);
+        .where(inArray(signatureSessions.id, sessionIds));
       const sessMap = new Map(sessions.map((s) => [s.id, s]));
 
       const result: Array<{
