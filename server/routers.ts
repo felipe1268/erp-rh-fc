@@ -965,6 +965,43 @@ export const appRouter = router({
       return { numero: novoSeq, ano, alreadyAllocated: false };
     }),
 
+    // Rev. 2137 — Aloca número sequencial NNN/AAAA do Termo de Responsabilidade
+    // de forma ATÔMICA. **NÃO idempotente** (diferente do contrato de experiência):
+    // cada chamada consome um número novo, porque o mesmo colaborador pode ter
+    // vários termos ativos (entregas de equipamentos/veículos distintos).
+    // Counter compartilhado em `contract_counters` com tipo='termo_responsabilidade'.
+    allocateTermoResponsabilidadeNumero: protectedProcedure.input(z.object({
+      employeeId: z.number(),
+      companyId: z.number(),
+    })).mutation(async ({ input, ctx }) => {
+      const db = (await getDb())!;
+      // Rev. 2137 — ACL explícita: bloqueia consumo de número fora do escopo
+      // de empresas do user logado (evita gasto de counter cross-tenant).
+      const allowed = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+      const allowedIds = allowed.map((c: any) => (typeof c === 'number' ? c : c?.id)).filter((v: any) => typeof v === 'number') as number[];
+      if (!allowedIds.includes(input.companyId)) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'Sem acesso a esta empresa.' });
+      }
+      const emp = await getEmployeeById(input.employeeId, input.companyId);
+      if (!emp) throw new TRPCError({ code: 'NOT_FOUND', message: 'Colaborador não encontrado' });
+      const ano = new Date().getFullYear();
+      const tipo = 'termo_responsabilidade';
+      const upserted = await db.execute(sql`
+        INSERT INTO contract_counters (company_id, ano, tipo, ultimo_seq)
+        VALUES (${input.companyId}, ${ano}, ${tipo}, 1)
+        ON CONFLICT (company_id, ano, tipo)
+        DO UPDATE SET ultimo_seq = contract_counters.ultimo_seq + 1, atualizado_em = NOW()
+        RETURNING ultimo_seq
+      `);
+      const rows: any[] = (upserted as any)?.rows ?? (upserted as any) ?? [];
+      const novoSeq: number = Number(rows[0]?.ultimo_seq ?? rows[0]?.ultimoSeq);
+      if (!Number.isFinite(novoSeq) || novoSeq <= 0) {
+        throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Falha ao alocar número do Termo de Responsabilidade' });
+      }
+      await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? 'Sistema', action: 'CREATE', module: 'colaboradores', entityType: 'employee', entityId: input.employeeId, details: `Número do Termo de Responsabilidade alocado: ${String(novoSeq).padStart(3, '0')}/${ano}` });
+      return { numero: novoSeq, ano };
+    }),
+
     getTerminationChecklist: protectedProcedure
       .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), employeeId: z.number() }))
       .query(async ({ input }) => {

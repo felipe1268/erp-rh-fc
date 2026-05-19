@@ -1,6 +1,125 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2137 — **NOVO: Termo de Responsabilidade (entrega de equipamentos /
+ * veículos / EPIs) com fluxo FCSign completo — lista livre de itens, fotos
+ * do estado de conservação embutidas, numeração sequencial por empresa/ano,
+ * múltiplos termos ativos por colaborador.**
+ *
+ * User (após Rev. 2136 do contrato de experiência): "criar um termo de
+ * responsabilidade" com itens em lista livre, numeração sequencial por
+ * empresa/ano (001/2026), fotos para registrar estado de conservação, e
+ * envio automático via FCSign (mesmo padrão visual/lógico do contrato
+ * de experiência).
+ *
+ * **Contexto:** O ERP já tinha o fluxo FCSign maturo p/ Contrato de
+ * Experiência (Rev. 2104→2136) — assinatura digital remota, painel de
+ * status, persistência em employee_documents + employee_contracts, soft-
+ * delete por admin_master. Faltava replicar isso pra um documento muito
+ * usado no dia-a-dia da FC: o Termo de Responsabilidade que o colaborador
+ * assina ao receber notebook, ferramenta, EPI, ou veículo da empresa. As
+ * diferenças vs. contrato de experiência são fundamentais:
+ *   1. **Lista livre de itens** (sem catálogo, sem cadastro): cada termo
+ *      tem N itens (descrição + estado), digitados ad-hoc.
+ *   2. **Múltiplos termos ativos** por colaborador: notebook hoje, carro
+ *      mês que vem — cada entrega = termo independente. Contrato de
+ *      experiência é único; termo NÃO.
+ *   3. **Numeração NÃO idempotente**: cada chamada do allocate consome
+ *      um número novo (contrato exp era idempotente — chamadas repetidas
+ *      retornam o mesmo nº já gravado em `employees`).
+ *   4. **Fotos** do estado de conservação no momento da entrega — peça
+ *      central pra resolver disputa quando o item volta danificado.
+ *
+ * **Implementação em 4 frentes:**
+ *
+ * **(1) Server — relaxar dedup em `signatures.create`
+ *     (`server/routers/signatures.ts` ~L174-200):** o check de duplicidade
+ *     do Rev. 2122 (bloqueia se já houver sessão NÃO-cancelada do mesmo
+ *     `tipo+employeeId`) ganhou exceção: `if (input.tipo !==
+ *     'termo_responsabilidade') { ... }`. Sem isso, o segundo termo de
+ *     qualquer colaborador seria rejeitado com CONFLICT.
+ *
+ * **(2) Server — persistência diferenciada em `employee_documents` na
+ *     finalização da sessão (`signatures.ts` sign mutation ~L485-495):**
+ *     antes era hard-coded `tipo: "contrato_trabalho"`. Agora:
+ *     `docTipo = session.tipo === 'termo_responsabilidade'
+ *               ? 'termo_responsabilidade' : 'contrato_trabalho'`.
+ *     Evita misturar termos com contratos na aba Documentos do RAIO-X.
+ *
+ * **(3) Server — nova mutation `employees.allocateTermoResponsabilidade
+ *     Numero` (`server/routers.ts` ~L971-999):** UPSERT atômico em
+ *     `contract_counters` (company_id+ano+tipo), tipo='termo_responsabili
+ *     dade'. **NÃO idempotente** (diferente do `allocateContrato
+ *     ExperienciaNumero` Rev. 2125) — sem check prévio em `employees`,
+ *     sem persistência em `employees` (cada chamada = novo número).
+ *     Audit log + erro tratado igual ao mirror.
+ *
+ * **(4) Client — NOVO componente `TermoResponsabilidadeDialog.tsx`
+ *     (~660 linhas):** dialog 2-modos (LIST / COMPOSE).
+ *     - **LIST**: query `signatures.listByEmployee` filtrada por tipo
+ *       client-side, mostra cards com status (pendente/completo/cancelado),
+ *       links de assinatura (copy + abrir), botão admin_master apagar/
+ *       cancelar (via `signatures.adminDelete`), botão Ver/Baixar quando
+ *       completo (lê `finalDocumentUrl`).
+ *     - **COMPOSE**: form com array dinâmico de itens (descrição + estado
+ *       de conservação + N fotos) + local + data + observações. Botão
+ *       "Adicionar item" / "Adicionar fotos" (input file com
+ *       `capture="environment"` p/ câmera traseira mobile) / remover.
+ *     - **Compressão de fotos client-side** (`comprimirImagem`): canvas
+ *       redimensiona p/ máx 800x600 + `toDataURL('image/jpeg', 0.7)` →
+ *       ~50-150KB por foto. Embedadas como `data:URL` no `<img>` do HTML
+ *       (sem upload separado p/ MVP; documentHtml em `signature_sessions`
+ *       é TEXT sem limite Drizzle/PG).
+ *     - **Validação consolidada** (mesmo padrão Rev. 2136): lista TODAS
+ *       as pendências em um toast (empresa, colaborador, itens ≥1,
+ *       descrição/estado por item, local, data).
+ *     - **HTML do corpo**: cabeçalho FC via `buildFcDocument` (Rev. 2114),
+ *       título "TERMO DE RESPONSABILIDADE", assunto "COLABORADOR: nome —
+ *       CPF", corpo com 4 cláusulas (Responsabilidade, Desconto art.
+ *       462§1º CLT, Veículos, Vigência), tabela de itens com fotos abaixo
+ *       (display flex wrap, max-width 220px), assinaturas EMPRESA +
+ *       COLABORADOR (roles `empregador` + `empregado` p/ slots FCSign).
+ *
+ * **(5) Wire em `Colaboradores.tsx`:** import do componente novo, state
+ *     `termoRespOpen`, mount no top-level próximo ao `FCSignSendDialog`
+ *     existente (IIFE p/ computar `compTermo` + `userNameTermo` no momento
+ *     da abertura, lendo `companies` + `form` + `user`), botão "Gerenciar
+ *     Termos de Responsabilidade" inserido na aba Documentos do form do
+ *     colaborador (logo abaixo de `DocumentUploadSection`, dentro de
+ *     `<TabsContent>`), bloco decorativo azul tracejado. Callback
+ *     `onSendToFcSign` reusa `setFcsignPayload + setFcsignOpen` (já
+ *     existente desde Rev. 2104) — o usuário sai do dialog de termo p/ o
+ *     FCSignSendDialog padrão pra cadastrar signatários. `onOpenChange`
+ *     do FCSign também invalida `signatures.listByEmployee` (Rev. 2137)
+ *     pra a lista de termos refletir o novo registro.
+ *
+ * **Why MVP sem upload separado de fotos:** uploadar fotos p/ S3 e
+ * referenciar por URL seria mais limpo (HTML menor, lazy-load), mas
+ * exigiria endpoint novo + tratamento de cleanup quando admin_master
+ * cancela termo. data:URL embutida funciona end-to-end sem nova
+ * infraestrutura: o renderizador `/assinar/:token` (DOMPurify scopado)
+ * aceita `<img src="data:image/jpeg;...">` sem ajuste; a sessão fica
+ * auto-contida (~1MB típico p/ 5-10 fotos). Se virar gargalo, próxima
+ * revisão troca p/ upload + URL sem mudar UX.
+ *
+ * **R-001/R-007/R-010:** OK. Backend: UPSERT em `contract_counters`
+ * (insert ou +1, sem DROP/ALTER/DELETE), insert em `signature_sessions/
+ * _signers/employee_documents` no fluxo normal, nada de DELETE em
+ * produção. `adminDelete` reusado é soft-cancel + soft-delete (sem
+ * remoção física).
+ *
+ * Arquivos:
+ *   - `server/routers/signatures.ts` (dedup ~L174-200, persist tipo
+ *     ~L485-495)
+ *   - `server/routers.ts` (`allocateTermoResponsabilidadeNumero`
+ *     ~L971-999)
+ *   - `client/src/components/TermoResponsabilidadeDialog.tsx` (NOVO,
+ *     ~660 linhas)
+ *   - `client/src/pages/Colaboradores.tsx` (import L36, state L223-224,
+ *     botão L1563-1587, mount L3705-3731, invalidate L3692)
+ */
+
+/**
  * Rev. 2136 — **Contrato de Experiência · validação consolidada de pré-
  * requisitos ANTES de gerar/enviar (substitui check único de Jornada).
  * Bloqueia se qualquer campo essencial estiver vazio e lista TODAS as

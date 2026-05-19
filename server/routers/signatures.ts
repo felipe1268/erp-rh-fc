@@ -172,23 +172,28 @@ export const signaturesRouter = router({
       // pro mesmo employeeId+tipo. Espelha a regra do painel
       // FCSignContratoExperienciaPanel no front, mas como autoridade final
       // server-side (evita 2 abas/clientes criarem sessões concorrentes).
-      const [dup] = await db.select({ id: signatureSessions.id, status: signatureSessions.status })
-        .from(signatureSessions)
-        .where(and(
-          eq(signatureSessions.companyId, input.companyId),
-          eq(signatureSessions.employeeId, input.employeeId),
-          eq(signatureSessions.tipo, input.tipo),
-          sql`${signatureSessions.status} <> 'cancelado'`,
-        ))
-        .orderBy(desc(signatureSessions.createdAt))
-        .limit(1);
-      if (dup) {
-        throw new TRPCError({
-          code: "CONFLICT",
-          message: dup.status === "completo"
-            ? "Já existe um documento deste tipo assinado pra este colaborador. Apague o anterior (admin master) pra emitir um novo."
-            : "Já existe uma sessão FCSign em andamento pra este documento.",
-        });
+      // Rev. 2137 — `termo_responsabilidade` é EXCEÇÃO: o mesmo colaborador
+      // pode ter vários termos ativos (cada novo equipamento/veículo gera um
+      // novo termo independente). Skip dedup só pra esse tipo.
+      if (input.tipo !== "termo_responsabilidade") {
+        const [dup] = await db.select({ id: signatureSessions.id, status: signatureSessions.status })
+          .from(signatureSessions)
+          .where(and(
+            eq(signatureSessions.companyId, input.companyId),
+            eq(signatureSessions.employeeId, input.employeeId),
+            eq(signatureSessions.tipo, input.tipo),
+            sql`${signatureSessions.status} <> 'cancelado'`,
+          ))
+          .orderBy(desc(signatureSessions.createdAt))
+          .limit(1);
+        if (dup) {
+          throw new TRPCError({
+            code: "CONFLICT",
+            message: dup.status === "completo"
+              ? "Já existe um documento deste tipo assinado pra este colaborador. Apague o anterior (admin master) pra emitir um novo."
+              : "Já existe uma sessão FCSign em andamento pra este documento.",
+          });
+        }
       }
       const hash = sha256(input.documentHtml);
       const [session] = await db.insert(signatureSessions).values({
@@ -475,10 +480,16 @@ export const signaturesRouter = router({
           const { url } = await storagePut(fileKey, buf, "text/html");
 
           // Anexa ao RAIO-X (employeeDocuments)
+          // Rev. 2137 — tipo do doc no RAIO-X agora reflete o tipo da sessão
+          // FCSign (antes era hard-coded "contrato_trabalho", o que misturava
+          // contratos com termos de responsabilidade na aba Documentos).
+          const docTipo = session.tipo === "termo_responsabilidade"
+            ? "termo_responsabilidade"
+            : "contrato_trabalho";
           const [doc] = await db.insert(employeeDocuments).values({
             companyId: session.companyId,
             employeeId: session.employeeId,
-            tipo: "contrato_trabalho",
+            tipo: docTipo,
             nome: `${session.documentTitle} (assinado)`,
             descricao: `FCSign #${session.id} · ${allSigners.length} assinaturas · hash ${session.documentHash.substring(0, 16)}…`,
             fileUrl: url,
