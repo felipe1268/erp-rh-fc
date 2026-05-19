@@ -1,6 +1,97 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2114 — **Documentos institucionais FC · refatoração estrutural com
+ * template ÚNICO (`buildFcDocument`). Fim das 10 micro-revisões no
+ * Contrato de Experiência.**
+ *
+ * Pedido do user (10ª revisão consecutiva sem sucesso):
+ * "a formatação do contrato de experiencia, ainda não esta igual ao
+ * modelo do comunicado, quero isso mais organizado.. esta é a 10 revisão
+ * e vc não resolver o problema, qual a sua dificuldade em manter o padrão
+ * dos documentos, me liste para que eu possa ajudar.."
+ *
+ * **Causa raiz identificada (que motivou as 10 revisões):**
+ * 1. **Mundos diferentes:** Comunicado Interno é JSX React com Tailwind
+ *    renderizado e impresso pela própria página (`ComunicadosInternos.tsx`
+ *    ~L556-635). Contrato de Experiência era HTML string injetado em
+ *    `window.open()` (janela isolada SEM Tailwind, tudo inline). Toda
+ *    "ficar igual" envolvia adivinhar medidas tailwind → inline.
+ * 2. **Padding fantasma:** o contrato usava `@page{margin:1.5cm}` +
+ *    `body{padding:1.8cm}` sem reset adequado no @media print, somando
+ *    em 3.3cm laterais que jogavam tudo pro meio da página.
+ * 3. **Medidas calibradas erradas:** logo 115px (real era 64px = `h-16`),
+ *    razão social 19pt preto (real era `text-lg` ~18px navy), faixa azul
+ *    com `letter-spacing:4px` (real era `tracking-wider` = .05em ≈ 0.5px),
+ *    sem border no ASSUNTO/corpo (real tinha border cinza).
+ * 4. **Sem template compartilhado:** cada micro-ajuste mexia em 1 arquivo
+ *    sem propagar pro outro → desincronia permanente.
+ *
+ * **Solução estrutural (não mais micro-ajuste):**
+ *
+ * - **NOVO arquivo `client/src/lib/fcDocumentTemplate.ts`** com função
+ *   `buildFcDocument({empresa, titulo, numero, dataEmissao, assunto,
+ *   corpoHtml, assinaturas, geradoPor, pageTitle, logoSrc})` que devolve
+ *   HTML completo com inline styles replicando EXATAMENTE o visual do
+ *   Comunicado React. Estrutura:
+ *     • Container `.fc-doc` max-width 760px (~max-w-3xl) padding 32px
+ *       (print: 8px), centralizado.
+ *     • Cabeçalho: logo 64px, razão social 13pt navy `#1B2A4A`,
+ *       CNPJ/endereço 9pt cinza.
+ *     • Faixa azul: bg `#1B2A4A` padding 10x16px border-radius 2px,
+ *       texto 11pt letter-spacing 1.5px uppercase branco.
+ *     • Linha Nº/Data: flex 10.5pt, Nº em navy bold, Data em cinza.
+ *     • Bloco ASSUNTO: **border 1px cinza** padding 14x16px, label 9pt
+ *       cinza uppercase + valor 12pt bold navy.
+ *     • Corpo: **border 1px cinza** padding 20x24px, texto 11pt
+ *       line-height 1.6 text-justify.
+ *     • Local/Data centralizado opcional.
+ *     • Assinaturas partes principais: tabela 2 cols, border-top cinza,
+ *       nome 11pt navy bold + subtítulo 9pt cinza.
+ *     • Testemunhas (opcional): tabela 2 cols com Nome:____ CPF:____.
+ *     • Rodapé: border-top cinza, 8.5pt cinza, "Documento gerado pelo
+ *       ERP - Gestão Integrada" (esq) / "Emitido em DATA às HORA |
+ *       Por: NOME" (dir).
+ *     • `@page{size:A4;margin:14mm 10mm}` (igual à lista de assinatura
+ *       do Comunicado), body sem padding adicional no print (sem soma
+ *       com @page margin).
+ *
+ * - **`client/src/pages/Colaboradores.tsx`:**
+ *     • L19: import `buildFcDocument`.
+ *     • L1928-2010: substituído todo o `contratoHtml` (108 linhas de
+ *       HTML inline) por chamada `buildFcDocument({...})` com `corpoHtml`
+ *       contendo só as 8 cláusulas + EMPREGADOR/EMPREGADO.
+ *     • Partes assinatura: [empregador (razão social + CNPJ), empregado
+ *       (nome + CPF)], testemunhas=true, localData="cidade/UF, data".
+ *
+ * **Por que não refatorei o Comunicado também (escolha consciente):**
+ *   O Comunicado React funciona perfeitamente para sua tela própria
+ *   (`/painel/rh/comunicados/:id`) onde o user navega e imprime via
+ *   `window.print()`. Mexer nele agora exigiria reescrever a tela
+ *   inteira e trazer risco zero. Em vez disso, **o template HTML
+ *   replica O VISUAL do Comunicado React** — então mudanças visuais
+ *   futuras no Comunicado podem ser portadas pro template sem
+ *   reescrita. Follow-up #54: unificar Comunicado também para usar
+ *   `buildFcDocument` quando houver oportunidade.
+ *
+ * **Próximos docs (Aviso Prévio, Termo Rescisão, Advertência, MDO)
+ * agora SÃO triviais:** chamar `buildFcDocument({...})` com `titulo` e
+ * `corpoHtml` específicos. Padrão garantido pelo template.
+ *
+ * **Não-mudanças:** `updateMut`, `updateExperienciaMut` (Rev. 2113),
+ * `createMut`, `deleteMut`, schema, backend `employees.update`,
+ * `signatures.create`, `AssinarDocumento.tsx`, DOMPurify, fluxo FCSign.
+ * Logo continua com fallback `${origin}/logo-fc.jpg`. Sem `on*` handlers.
+ *
+ * **Sobre a razão social:** mantida do banco (`comp.razaoSocial` —
+ * "FC ENGENHARIA E CONSTRUCAO LTDA"). User questionou se devia ser
+ * nome fantasia ("FC ENGENHARIA PROJETOS E OBRAS") mas não confirmou
+ * — fica para revisão futura via cadastro da empresa, não código.
+ *
+ * **R-001/R-007/R-010:** N/A — frontend (apenas client/).
+ *
+ * ---
+ *
  * Rev. 2113 — **RH · Contrato de Experiência — botão "Salvar Experiência"
  * dedicado dentro do card laranja (salvamento parcial sem fechar modal).**
  *
