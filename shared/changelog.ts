@@ -1,6 +1,43 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2164 — **MELHORIA UX · AlertDialog de excluir Centro de
+ * Custo mostra vínculos detalhados antes de tentar a exclusão.**
+ *
+ * Sequência da Rev. 2163: o user reportou que ao tentar excluir
+ * "CC-0001 DESPESAS ADMINISTRATIVAS" o sistema avisou "17
+ * categoria(s) financeira(s) vinculadas" e perguntou se era real.
+ * Era — havia 17 entradas em `financial_accounts` com
+ * `centro_custo_id` apontando pra esse CC. Mas o alerta antigo só
+ * mostrava o contador genérico, sem dizer QUAIS categorias eram —
+ * o user tinha que ir até a tela de Categorias e adivinhar.
+ *
+ * **Backend novo procedure (`server/routers/financial.ts`):**
+ *  - `getCostCenterLinks({id, companyId})` — retorna `{categorias:
+ *    [{id, codigo, nome, tipo, ativo}], nEntries, nRecurring,
+ *    total}`. Mesma estratégia defensiva da Rev. 2163: cada query
+ *    em try/catch próprio (coluna ausente ⇒ console.warn + 0).
+ *
+ * **Frontend (`client/src/pages/financeiro/FinanceiroCentrosCusto.tsx`):**
+ *  - Novo componente `DeleteCostCenterDialog` substitui o
+ *    `AlertDialog` inline da Rev. 2156.
+ *  - Ao abrir, dispara `getCostCenterLinks.useQuery` (enabled
+ *    apenas com cc selecionado + companyId).
+ *  - **Estado vazio:** badge verde "✓ Nenhum vínculo encontrado
+ *    — exclusão liberada" + botão "Excluir definitivamente"
+ *    habilitado.
+ *  - **Estado com vínculos:** card vermelho listando contadores
+ *    (X categorias + Y lançamentos + Z recorrências) + tabela
+ *    rolável (max-h-56) com Código/Nome/Tipo/Status de cada
+ *    categoria vinculada. Botão "Excluir definitivamente"
+ *    **bloqueado** (disabled) — força user a inativar ou reapontar
+ *    antes. Mensagem orienta o caminho: "edite cada categoria e
+ *    troque o CC, ou inative pelo Power".
+ *  - `max-w-2xl` no dialog pra caber a tabela.
+ *
+ * **R-001/R-007/R-010:** OK — query nova é SELECT-only; nenhuma
+ * mudança no procedure de DELETE em si.
+ *
  * Rev. 2163 — **HOTFIX · "Excluir Centro de Custo" devolvia
  * `Unexpected end of JSON input` por column does not exist.**
  *

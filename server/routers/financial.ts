@@ -1959,6 +1959,50 @@ export const financialRouter = router({
     return { ok: true };
   }),
 
+  // Rev. 2164 — Lista vínculos de um Centro de Custo (categorias +
+  // contadores de lançamentos/recorrências). Usado pelo AlertDialog
+  // de exclusão pra mostrar exatamente o que está pendurado e
+  // permitir o usuário reapontar antes de excluir.
+  getCostCenterLinks: protectedProcedure.input(z.object({
+    id: z.number(),
+    companyId: z.number(),
+  })).query(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    let categorias: any[] = [];
+    let nEnt = 0, nRec = 0;
+    try {
+      const r = await dbExecute(db,
+        `SELECT id, codigo, nome, tipo, ativo
+           FROM financial_accounts
+          WHERE company_id=$1 AND centro_custo_id=$2
+          ORDER BY ativo DESC, codigo ASC`,
+        [input.companyId, input.id]);
+      categorias = rows(r);
+    } catch (e: any) {
+      console.warn(`[getCostCenterLinks] skip accounts:`, e?.message);
+    }
+    try {
+      const r = await dbExecute(db,
+        `SELECT COUNT(*)::int AS n FROM financial_entries
+          WHERE company_id=$1 AND conta_id IN
+            (SELECT id FROM financial_accounts WHERE centro_custo_id=$2)`,
+        [input.companyId, input.id]);
+      nEnt = rows(r)[0]?.n ?? 0;
+    } catch (e: any) {
+      console.warn(`[getCostCenterLinks] skip entries:`, e?.message);
+    }
+    try {
+      const r = await dbExecute(db,
+        `SELECT COUNT(*)::int AS n FROM financial_recurring_entries WHERE centro_custo_id=$1`,
+        [input.id]);
+      nRec = rows(r)[0]?.n ?? 0;
+    } catch (e: any) {
+      console.warn(`[getCostCenterLinks] skip recurring (coluna pode não existir):`, e?.message);
+    }
+    return { categorias, nEntries: nEnt, nRecurring: nRec, total: categorias.length + nEnt + nRec };
+  }),
+
   // Rev. 2156 — Excluir definitivamente Centro de Custo (ADM Master).
   // Pedido user: "preciso ter um botao para excluir (apenas para login
   // adm master)". Hard-delete gated em ctx.user.role==='admin_master',

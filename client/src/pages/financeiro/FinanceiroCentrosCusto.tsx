@@ -467,38 +467,133 @@ export default function FinanceiroCentrosCusto() {
           </AlertDialogContent>
         </AlertDialog>
 
-        {/* Rev. 2156 — Confirmação de exclusão DEFINITIVA (ADM Master) */}
-        <AlertDialog open={!!confirmDelete} onOpenChange={(v) => { if (!v) setConfirmDelete(null); }}>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle className="text-red-700">Excluir centro de custo?</AlertDialogTitle>
-              <AlertDialogDescription>
-                Você está prestes a <strong>excluir definitivamente</strong> o centro de custo{" "}
-                <strong>{confirmDelete?.codigo}</strong> — {confirmDelete?.nome}.
-                <br /><br />
-                Esta ação <strong>não pode ser desfeita</strong>. Se o centro estiver vinculado a lançamentos
-                ou recorrências, a exclusão será recusada pelo servidor — nesse caso, inative em vez de excluir.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel disabled={deleteMut.isPending}>Cancelar</AlertDialogCancel>
-              <AlertDialogAction
-                disabled={deleteMut.isPending}
-                onClick={() => {
-                  if (!confirmDelete || !companyId) return;
-                  deleteMut.mutate({ id: confirmDelete.id, companyId });
-                }}
-                className="bg-red-600 hover:bg-red-700 text-white"
-              >
-                {deleteMut.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Trash2 className="w-4 h-4 mr-2" />}
-                Excluir definitivamente
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
+        {/* Rev. 2156/2164 — Confirmação de exclusão DEFINITIVA (ADM Master)
+            com lista de vínculos carregada via getCostCenterLinks. */}
+        <DeleteCostCenterDialog
+          cc={confirmDelete}
+          companyId={companyId}
+          onClose={() => setConfirmDelete(null)}
+          onConfirm={() => {
+            if (!confirmDelete || !companyId) return;
+            deleteMut.mutate({ id: confirmDelete.id, companyId });
+          }}
+          isPending={deleteMut.isPending}
+        />
 
       </div>
     </DashboardLayout>
+  );
+}
+
+// Rev. 2164 — Dialog de exclusão com preview de vínculos.
+// Antes de tentar excluir, carrega categorias + contadores de
+// lançamentos/recorrências via financial.getCostCenterLinks.
+// Se houver QUALQUER vínculo, mostra a lista e bloqueia o botão
+// "Excluir definitivamente" — força o usuário a inativar ou
+// reapontar antes.
+function DeleteCostCenterDialog({
+  cc, companyId, onClose, onConfirm, isPending,
+}: {
+  cc: CC | null;
+  companyId: number | null;
+  onClose: () => void;
+  onConfirm: () => void;
+  isPending: boolean;
+}) {
+  const open = !!cc;
+  const { data: links, isLoading } = (trpc as any).financial.getCostCenterLinks.useQuery(
+    { id: cc?.id, companyId },
+    { enabled: open && !!cc?.id && !!companyId },
+  );
+  const categorias: any[] = Array.isArray(links?.categorias) ? links.categorias : [];
+  const nEnt = Number(links?.nEntries ?? 0);
+  const nRec = Number(links?.nRecurring ?? 0);
+  const totalLinks = categorias.length + nEnt + nRec;
+  const hasLinks = totalLinks > 0;
+  return (
+    <AlertDialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
+      <AlertDialogContent className="max-w-2xl">
+        <AlertDialogHeader>
+          <AlertDialogTitle className="text-red-700">Excluir centro de custo?</AlertDialogTitle>
+          <AlertDialogDescription asChild>
+            <div className="space-y-3">
+              <div>
+                Você está prestes a <strong>excluir definitivamente</strong> o centro de custo{" "}
+                <strong>{cc?.codigo}</strong> — {cc?.nome}.
+              </div>
+              {isLoading ? (
+                <div className="flex items-center gap-2 text-xs text-gray-500">
+                  <Loader2 className="w-3 h-3 animate-spin" /> Verificando vínculos…
+                </div>
+              ) : hasLinks ? (
+                <div className="rounded-lg border border-red-200 bg-red-50 p-3">
+                  <div className="text-xs font-semibold text-red-700 mb-2">
+                    Exclusão bloqueada — {totalLinks} vínculo(s):
+                  </div>
+                  <ul className="text-xs text-red-700 list-disc list-inside space-y-0.5">
+                    {categorias.length > 0 && <li><strong>{categorias.length}</strong> categoria(s) financeira(s)</li>}
+                    {nEnt > 0 && <li><strong>{nEnt}</strong> lançamento(s) já registrado(s)</li>}
+                    {nRec > 0 && <li><strong>{nRec}</strong> recorrência(s) ativa(s)</li>}
+                  </ul>
+                  {categorias.length > 0 && (
+                    <div className="mt-3">
+                      <div className="text-[11px] font-semibold text-red-700 mb-1.5">Categorias vinculadas:</div>
+                      <div className="max-h-56 overflow-y-auto rounded border border-red-200 bg-white">
+                        <table className="w-full text-[11px]">
+                          <thead className="bg-red-50 text-red-700">
+                            <tr>
+                              <th className="text-left px-2 py-1 font-medium">Código</th>
+                              <th className="text-left px-2 py-1 font-medium">Nome</th>
+                              <th className="text-left px-2 py-1 font-medium">Tipo</th>
+                              <th className="text-left px-2 py-1 font-medium">Status</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {categorias.map((c: any) => (
+                              <tr key={c.id} className="border-t border-red-100">
+                                <td className="px-2 py-1 font-mono text-gray-600">{c.codigo}</td>
+                                <td className="px-2 py-1 text-gray-800">{c.nome}</td>
+                                <td className="px-2 py-1 capitalize text-gray-600">{c.tipo}</td>
+                                <td className="px-2 py-1">
+                                  {c.ativo === 1
+                                    ? <span className="text-green-700">Ativa</span>
+                                    : <span className="text-gray-400">Inativa</span>}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+                  <div className="mt-3 text-[11px] text-red-800 leading-relaxed">
+                    Para excluir, primeiro reaponte os itens acima a outro Centro de Custo
+                    (em <strong>Categorias</strong>, edite cada uma e troque o CC), ou
+                    simplesmente <strong>inative</strong> este centro pelo botão <em>Power</em>{" "}
+                    em vez de excluir.
+                  </div>
+                </div>
+              ) : (
+                <div className="rounded-lg border border-green-200 bg-green-50 p-3 text-xs text-green-700">
+                  ✓ Nenhum vínculo encontrado — exclusão liberada. Esta ação <strong>não pode ser desfeita</strong>.
+                </div>
+              )}
+            </div>
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel disabled={isPending}>Cancelar</AlertDialogCancel>
+          <AlertDialogAction
+            disabled={isPending || isLoading || hasLinks}
+            onClick={onConfirm}
+            className="bg-red-600 hover:bg-red-700 text-white disabled:opacity-50"
+          >
+            {isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Trash2 className="w-4 h-4 mr-2" />}
+            Excluir definitivamente
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }
 
