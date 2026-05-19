@@ -2077,6 +2077,49 @@ ${obs ? `<div class="box"><strong>Observações / Justificativa do Enquadramento
                       logoSrc,
                     });
                     const empCpfFmt = formatCPF(empCpf);
+                    // Rev. 2136 — validação consolidada de pré-requisitos do Contrato
+                    // de Experiência. Antes só Jornada bloqueava — agora qualquer
+                    // campo essencial faltando dispara toast listando TODAS as
+                    // pendências de uma vez (evita doc com '________________').
+                    // Usado tanto no Imprimir quanto no Enviar p/ Assinatura.
+                    const validarPreReqsContratoExperiencia = (): string[] => {
+                      const faltando: string[] = [];
+                      // Empresa
+                      if (!comp?.razaoSocial) faltando.push('Empresa: Razão Social');
+                      if (!comp?.cnpj) faltando.push('Empresa: CNPJ');
+                      if (!comp?.endereco) faltando.push('Empresa: Endereço');
+                      if (!comp?.cidade) faltando.push('Empresa: Cidade');
+                      if (!comp?.estado) faltando.push('Empresa: Estado (UF)');
+                      // Empregado — identificação
+                      if (!form.nomeCompleto?.trim()) faltando.push('Empregado: Nome Completo');
+                      if (!form.cpf?.trim()) faltando.push('Empregado: CPF');
+                      if (!form.rg?.trim()) faltando.push('Empregado: RG');
+                      if (!form.ctps?.trim()) faltando.push('Empregado: CTPS');
+                      // Empregado — endereço
+                      if (!form.endereco?.trim()) faltando.push('Empregado: Endereço');
+                      if (!form.cidade?.trim()) faltando.push('Empregado: Cidade');
+                      if (!form.estado?.trim()) faltando.push('Empregado: Estado (UF)');
+                      // Empregado — profissional / remuneração
+                      if (!form.funcao?.trim()) faltando.push('Empregado: Função');
+                      const sb = parseFloat(String(form.salarioBase || '0').replace(',', '.'));
+                      if (!sb || sb <= 0) faltando.push('Empregado: Salário Base');
+                      // Experiência (tipo é garantido pelo IIFE wrapper)
+                      if (!((form as any).experienciaTipo)) faltando.push('Experiência: Tipo (30+30 ou 45+45)');
+                      if (!inicio) faltando.push('Experiência: Data de Início');
+                      if (!fim1) faltando.push('Experiência: Fim do 1º Período');
+                      if (!fim2) faltando.push('Experiência: Fim do 2º Período (Efetivação)');
+                      // Jornada
+                      if (!jornadaDefinida) faltando.push('Jornada de Trabalho (entrada/saída/intervalo dos dias úteis)');
+                      return faltando;
+                    };
+                    const exibirToastPreReqsFaltando = (faltando: string[], acao: 'imprimir' | 'enviar') => {
+                      const label = acao === 'imprimir' ? 'imprimir' : 'enviar para assinatura';
+                      const lista = faltando.map(f => `• ${f}`).join('\n');
+                      toast.error(
+                        `Preencha os campos abaixo antes de ${label} o Contrato de Experiência:\n\n${lista}`,
+                        { duration: 12000, style: { whiteSpace: 'pre-line', maxWidth: 480 } }
+                      );
+                    };
                     return (
                       <div className="mt-3 flex flex-wrap justify-end gap-2">
                         <Button
@@ -2111,12 +2154,16 @@ ${obs ? `<div class="box"><strong>Observações / Justificativa do Enquadramento
                           disabled={allocateContratoExpMut.isPending}
                           className="border-orange-300 text-orange-700 hover:bg-orange-50 disabled:opacity-60"
                           onClick={async () => {
-                            if (!jornadaDefinida) {
-                              toast.error('Defina a Jornada de Trabalho do colaborador (entrada/saída/intervalo) antes de gerar o Contrato de Experiência.');
-                              return;
-                            }
                             if (!editingId || !comp?.id) {
                               toast.error('Salve o cadastro do colaborador antes de gerar o Contrato.');
+                              return;
+                            }
+                            // Rev. 2136 — validação consolidada (substitui o check
+                            // único de Jornada). Bloqueia se QUALQUER campo essencial
+                            // estiver vazio e mostra a lista completa de uma vez.
+                            const faltando = validarPreReqsContratoExperiencia();
+                            if (faltando.length > 0) {
+                              exibirToastPreReqsFaltando(faltando, 'imprimir');
                               return;
                             }
                             // Rev. 2125 — aloca número ANTES de gerar o HTML.
@@ -2143,8 +2190,10 @@ ${obs ? `<div class="box"><strong>Observações / Justificativa do Enquadramento
                             empNome={empNome}
                             isAdminMaster={isAdminMaster}
                             onEnviar={async () => {
-                              if (!jornadaDefinida) {
-                                toast.error('Defina a Jornada de Trabalho do colaborador (entrada/saída/intervalo) antes de enviar o Contrato de Experiência para assinatura.');
+                              // Rev. 2136 — mesma validação consolidada do botão Imprimir.
+                              const faltando = validarPreReqsContratoExperiencia();
+                              if (faltando.length > 0) {
+                                exibirToastPreReqsFaltando(faltando, 'enviar');
                                 return;
                               }
                               // Rev. 2125 — aloca número ANTES de abrir o modal FCSign.

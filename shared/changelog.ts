@@ -1,6 +1,64 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2136 — **Contrato de Experiência · validação consolidada de pré-
+ * requisitos ANTES de gerar/enviar (substitui check único de Jornada).
+ * Bloqueia se qualquer campo essencial estiver vazio e lista TODAS as
+ * pendências em um único toast.**
+ *
+ * User: "Quando o usuário clicar para gerar o contrato de experiência, e
+ * tiver algum dado faltando para ser preenchido precisa gerar um alerta
+ * para que o usuário preencha primeiro o dado antes de conseguir gerar o
+ * documento, para evitar documento com informações faltando".
+ *
+ * **Contexto:** Os botões "Imprimir Contrato de Experiência" e "Enviar
+ * para Assinatura (FCSign)" em `Colaboradores.tsx` (bloco Contrato de
+ * Experiência) só bloqueavam quando a Jornada estava indefinida. Demais
+ * campos (CPF, RG, CTPS, endereço, função, salário, datas de experiência,
+ * dados da empresa) podiam estar vazios — o template HTML usa fallback
+ * `'________________'` em cada um, gerando contratos com lacunas literais
+ * que iam parar no FCSign / impressão / employee_contracts.
+ *
+ * **Fix em `client/src/pages/Colaboradores.tsx`** (dentro do IIFE wrapper
+ * `(form as any).experienciaTipo && (() => { ... })()`, antes do return):
+ *
+ * **(1) `validarPreReqsContratoExperiencia()`** — retorna `string[]` com
+ * labels human-readable das pendências (vazio = ok). Checa:
+ *   - **Empresa**: razaoSocial, cnpj, endereco, cidade, estado.
+ *   - **Empregado · identificação**: nomeCompleto, cpf, rg, ctps.
+ *   - **Empregado · endereço**: endereco, cidade, estado.
+ *   - **Empregado · profissional**: funcao, salarioBase (>0 após
+ *     `parseFloat(replace(',','.'))`).
+ *   - **Experiência**: tipo, dataInicio (com fallback p/ dataAdmissao),
+ *     fim1, fim2.
+ *   - **Jornada**: `jornadaDefinida` (calculada a partir de jornada_{dia}
+ *     _entrada/saida/intervalo dos dias úteis).
+ *
+ * **(2) `exibirToastPreReqsFaltando(faltando, acao)`** — toast.error com
+ * `duration: 12000` (12s, dá tempo de ler), `whiteSpace: 'pre-line'` +
+ * `maxWidth: 480px` no style, listando bullets `• Campo` com mensagem
+ * "Preencha os campos abaixo antes de {imprimir|enviar para assinatura} o
+ * Contrato de Experiência:".
+ *
+ * **(3) Aplicação nos dois botões** (substituindo o `if (!jornadaDefinida)`
+ * antigo):
+ *   - **Imprimir**: `validar` → se faltando → toast `'imprimir'` + return
+ *     (mantém check prévio de `!editingId || !comp?.id`).
+ *   - **Enviar p/ Assinatura (onEnviar)**: `validar` → se faltando → toast
+ *     `'enviar'` + return.
+ *
+ * **Por que IIFE local (não helper exportado):** o validador depende de
+ * `form`, `comp`, `inicio`, `fim1`, `fim2`, `jornadaDefinida` —
+ * todos derivados no escopo do IIFE wrapper. Extrair para função
+ * standalone exigiria passar 6+ argumentos sem ganho. Mantido inline.
+ *
+ * **R-001/R-007/R-010:** OK — só client-side, zero DB.
+ *
+ * Arquivo: `client/src/pages/Colaboradores.tsx` (linhas ~2083-2125 helpers
+ * + 2159-2171 Imprimir + 2195-2201 onEnviar).
+ */
+
+/**
  * Rev. 2135 — **FCSign · Cancelar sessão de contrato_experiencia também
  * REMOVE o registro de `employee_contracts` (criado em Rev. 2134), p/ sumir
  * da aba "Contratos CLT" do RAIO-X "como se nunca tivesse existido".**
