@@ -1,6 +1,42 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2159 — **DATA-FIX · Migração da conta órfã "3.3 DESPESAS COM
+ * MATERIAIS" para "3.2 Materiais de Construção" do plano padrão.**
+ *
+ * User: "agora sim! está excelente, porém com o plano de contas
+ * padrão, não faz mais sentido aquele item criado manualmente 3.3
+ * DESPESAS COM MATERIAIS... apague esse item e deixe apenas o plano
+ * de contas padrão".
+ *
+ * **Diagnóstico:** a conta órfã (id=1, company_id=60002, criada
+ * manualmente antes da Rev. 2158) tinha **219 lançamentos
+ * vinculados em `financial_entries`** — hard-delete violaria FK.
+ *
+ * **Solução aprovada pelo user (opção A do choice_query):**
+ * migrar os 219 lançamentos para "3.2 Materiais de Construção" do
+ * padrão (mesma classificação `custo_obra`, racional contábil
+ * idêntico) e soft-deletar (`ativo=0`) a órfã — histórico de
+ * auditoria preservado, tela limpa.
+ *
+ * **Nota:** sugeri inicialmente "5.3 CUSTOS COM MATERIAIS E INSUMOS"
+ * mas isso não existe no `PLANO_DE_CONTAS_PADRAO` (no padrão `5.3`
+ * é "Viagens e Deslocamentos", `despesa_variavel`). Corrigido para
+ * `3.2 Materiais de Construção` antes de executar.
+ *
+ * **SQL executado (transacional):**
+ * 1. `UPDATE financial_entries SET conta_id=56 WHERE conta_id=1`
+ *    → 219 linhas migradas.
+ * 2. `UPDATE financial_accounts SET ativo=0 WHERE id=1`
+ *    → órfã soft-deletada.
+ * 3. Verificações: 0 lançamentos restantes na órfã, 219 em `3.2`,
+ *    `ativo=0` confirmado.
+ *
+ * **R-001/R-007/R-010:** operação única, single-tenant
+ * (company_id=60002), aprovada explicitamente pelo user, sem
+ * ALTER/DROP, sem DELETE — apenas UPDATEs idempotentes. Código de
+ * aplicação não teve mudanças.
+ *
  * Rev. 2158 — **HOTFIX continuação da Rev. 2157 · botão "Carregar
  * Padrão" sempre visível + seed do plano contábil idempotente.**
  *
