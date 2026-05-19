@@ -28,6 +28,45 @@ function escapeHtml(s: string | null | undefined): string {
     .replace(/'/g, "&#39;");
 }
 
+// Rev. 2120: estampa a imagem da assinatura SOBRE a linha de assinatura do
+// próprio documento (placeholder `<!--FCSIGN:SIG:{role}-->` inserido pelo
+// `fcDocumentTemplate.ts`). Sem assinatura ainda, o placeholder fica vazio
+// (preserva o espaço de 50px do slot, layout estável). Com assinatura,
+// vira `<img src="data:..." />` centralizada acima da linha do nome.
+// O bloco completo de auditoria (CPF/IP/hash/data) continua aparecendo no
+// rodapé via `renderFinalHtml`.
+// Defesa em profundidade contra `signatureDataUrl` malformado vindo de docs
+// legados (assinados antes da Rev. 2120, quando a regex no `sign` era só de
+// prefixo). Aceita SOMENTE o formato canônico ancorado + charset base64
+// estrito — qualquer caractere fora do alfabeto vira `null` e o slot fica
+// vazio em vez de interpolar HTML potencialmente injetável.
+const SIG_DATA_URL_RE = /^data:image\/(png|jpeg);base64,[A-Za-z0-9+/]+={0,2}$/;
+function safeSignatureDataUrl(v: string | null | undefined): string | null {
+  if (!v || typeof v !== "string") return null;
+  if (v.length > 2_000_000) return null;
+  return SIG_DATA_URL_RE.test(v) ? v : null;
+}
+
+function stampSignaturesOnSlots(
+  documentHtml: string,
+  signers: Array<{ role: string; signatureDataUrl: string | null; signedAt: string | null }>
+): string {
+  let html = documentHtml;
+  for (const s of signers) {
+    const placeholder = `<!--FCSIGN:SIG:${s.role}-->`;
+    if (!html.includes(placeholder)) continue;
+    const safeUrl = safeSignatureDataUrl(s.signatureDataUrl);
+    if (safeUrl && s.signedAt) {
+      const imgTag = `<img src="${safeUrl}" alt="Assinatura" style="max-height:50px;max-width:240px;display:inline-block;vertical-align:bottom" />`;
+      html = html.split(placeholder).join(imgTag);
+    } else {
+      // Pendente OU dataUrl rejeitado pela validação — slot vazio (layout estável).
+      html = html.split(placeholder).join("");
+    }
+  }
+  return html;
+}
+
 // Rev. 2119: signers agora podem incluir `ordem` (1..n) — quando passado, o bloco
 // de assinaturas é ordenado por `ordem` e signatários pendentes aparecem como
 // "Aguardando assinatura" (caixa cinza) em vez de "Não assinado" (vermelho).
@@ -53,15 +92,16 @@ function renderFinalHtml(
     const cpfSafe = escapeHtml(s.cpf);
     const roleSafe = escapeHtml(roleLabel[s.role] || s.role);
     const ipSafe = escapeHtml(s.ip);
-    // signatureDataUrl JÁ validado por regex no `sign` (`^data:image/(png|jpeg);base64,`)
-    // signatureHash JÁ é hex puro do sha256
+    // Rev. 2120 (hotfix): valida formato do dataUrl no SINK também (defesa em
+    // profundidade contra registros legados). `signatureHash` é hex puro do sha256.
+    const safeSigUrl = safeSignatureDataUrl(s.signatureDataUrl);
     const ordemBadge = s.ordem ? `<span style="display:inline-block;background:#1B2A4A;color:#fff;font-size:8pt;padding:1px 6px;border-radius:3px;margin-right:6px;vertical-align:middle">${s.ordem}ª</span>` : "";
-    if (s.signedAt && s.signatureDataUrl) {
+    if (s.signedAt && safeSigUrl) {
       return `<div style="border:1px solid #ccc;border-radius:4px;padding:12px;margin-bottom:12px;page-break-inside:avoid;background:#fff">
   <div style="font-size:10pt;color:#666;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">${ordemBadge}${roleSafe}</div>
   <div style="font-weight:bold;font-size:11pt">${nomeSafe}</div>
   ${cpfSafe ? `<div style="font-size:9pt;color:#555">CPF: ${cpfSafe}</div>` : ""}
-  <img src="${s.signatureDataUrl}" alt="Assinatura" style="max-height:80px;margin-top:6px;display:block" />
+  <img src="${safeSigUrl}" alt="Assinatura" style="max-height:80px;margin-top:6px;display:block" />
   <div style="font-size:8pt;color:#888;margin-top:6px">
     Assinado em: ${dt}${ipSafe ? ` · IP: ${ipSafe}` : ""}${s.signatureHash ? `<br/>Hash: ${s.signatureHash.substring(0, 32)}…` : ""}
   </div>
@@ -185,10 +225,17 @@ export const signaturesRouter = router({
         .where(eq(signatureSigners.sessionId, session.id))
         .orderBy(signatureSigners.ordem);
 
+      // Rev. 2120: ANTES de adicionar o footer de auditoria, estampa as
+      // imagens das assinaturas SOBRE as linhas do contrato (placeholders).
+      const docStamped = stampSignaturesOnSlots(
+        session.documentHtml,
+        allSignersFull.map((s) => ({ role: s.role, signatureDataUrl: s.signatureDataUrl, signedAt: s.signedAt }))
+      );
+
       // HTML do documento ENRIQUECIDO com bloco de assinaturas (preview).
       // Se a sessão estiver completa, mostra como definitivo (sem "aguardando").
       const docHtmlWithSignatures = renderFinalHtml(
-        session.documentHtml,
+        docStamped,
         allSignersFull.map((s) => ({
           role: s.role,
           ordem: s.ordem,
@@ -242,7 +289,15 @@ export const signaturesRouter = router({
   sign: publicProcedure
     .input(z.object({
       token: z.string().length(64),
-      signatureDataUrl: z.string().regex(/^data:image\/(png|jpeg);base64,/),
+      // Rev. 2120 (hotfix code review): regex ANCORADA no fim + charset
+      // base64 estrito + limite de tamanho (~1.5MB de PNG codificado).
+      // Antes a regex validava só o PREFIXO, permitindo `data:image/png;base64,X"
+      // onerror=...` — vetor de stored-XSS quando o valor é interpolado em
+      // `<img src="${...}">` por `stampSignaturesOnSlots`/`renderFinalHtml`.
+      signatureDataUrl: z
+        .string()
+        .max(2_000_000)
+        .regex(/^data:image\/(png|jpeg);base64,[A-Za-z0-9+/]+={0,2}$/),
       userAgent: z.string().max(500).optional(),
     }))
     .mutation(async ({ input, ctx }) => {
@@ -304,7 +359,13 @@ export const signaturesRouter = router({
           completedAt: nowIso,
         }).where(and(eq(signatureSessions.id, session.id), sql`${signatureSessions.status} <> 'completo'`)).returning({ id: signatureSessions.id });
         if (claim.length > 0) {
-          const finalHtml = renderFinalHtml(session.documentHtml, allSigners.map((s) => ({
+          // Rev. 2120: também estampa as assinaturas SOBRE as linhas do
+          // documento final persistido (não só no preview).
+          const stampedFinal = stampSignaturesOnSlots(
+            session.documentHtml,
+            allSigners.map((s) => ({ role: s.role, signatureDataUrl: s.signatureDataUrl, signedAt: s.signedAt }))
+          );
+          const finalHtml = renderFinalHtml(stampedFinal, allSigners.map((s) => ({
             role: s.role, ordem: s.ordem, nome: s.nome, cpf: s.cpf, signedAt: s.signedAt,
             signatureDataUrl: s.signatureDataUrl, ip: s.ip, signatureHash: s.signatureHash,
           })));

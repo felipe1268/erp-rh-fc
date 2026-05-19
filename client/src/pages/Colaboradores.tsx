@@ -1984,10 +1984,12 @@ ${obs ? `<div class="box"><strong>Observações / Justificativa do Enquadramento
                       assinaturas: {
                         partes: [
                           {
+                            role: 'empregador',
                             nome: comp?.razaoSocial || 'EMPREGADOR',
                             subtitulo: comp?.cnpj ? `CNPJ: ${comp.cnpj}` : undefined,
                           },
                           {
+                            role: 'empregado',
                             nome: empNome,
                             subtitulo: formatCPF(empCpf) ? `CPF: ${formatCPF(empCpf)}` : undefined,
                           },

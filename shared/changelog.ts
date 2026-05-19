@@ -1,6 +1,82 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2120 — **FCSign · assinatura estampada SOBRE a linha de assinatura
+ * do contrato + fix sobreposição de texto no painel "Assinaturas" do sidebar.**
+ *
+ * Contexto / pedido do user: (1) "quero assinatura aparecendo acima do
+ * local indicado no documento, abaixo vc pode manter com todas as demais
+ * informações" — antes, o doc finalizado/preview no FCSign mostrava as
+ * linhas de assinatura do template vazias (com "FC ENGENHARIA E CONSTRUCAO
+ * LTDA / CNPJ" e "LILIAN OLIVEIRA / CPF" embaixo da linha, mas SEM a imagem
+ * da assinatura por cima). O bloco "ASSINATURAS DIGITAIS — FCSIGN" no fim
+ * já mostrava a imagem + auditoria, mas o doc em si parecia "não assinado".
+ * (2) "arrume aqui tbm, esta com texto sobreposto" — no painel lateral
+ * "Assinaturas" da página `/assinar/:token` (Rev. 2119), o `<span w-16>`
+ * com "1ª · EMPREGADO(A)" (64px) era curto demais e o nome do signatário
+ * vazava por cima do label.
+ *
+ * Solução em 4 arquivos:
+ *
+ * (A) `client/src/lib/fcDocumentTemplate.ts` ganhou campo opcional
+ *   `role: 'empregado'|'empregador'|'testemunha_1'|'testemunha_2'` em
+ *   `FcAssinaturaParte`. Quando preenchido, o helper `slotHtml(role)`
+ *   renderiza acima da linha de assinatura um div de 50px com um
+ *   PLACEHOLDER em HTML comment: `<!--FCSIGN:SIG:{role}-->`. Sem role,
+ *   é só um espaço em branco de 50px (mantém o layout estável e idêntico
+ *   no modo PDF/impressão pré-assinatura). Testemunhas SEMPRE recebem
+ *   slot (`testemunha_1`/`testemunha_2`).
+ *
+ * (B) `server/routers/signatures.ts` ganhou helper
+ *   `stampSignaturesOnSlots(documentHtml, signers)` que percorre signers
+ *   e faz `html.split(placeholder).join(<img>)`. Quando o signatário já
+ *   assinou (`signedAt` + `signatureDataUrl` presentes), substitui o
+ *   placeholder por
+ *   `<img src="data:image/png;base64,…" style="max-height:50px;max-width:240px">`.
+ *   Quando ainda não assinou, troca por string vazio (slot continua com
+ *   50px). O `signatureDataUrl` JÁ É VALIDADO no `sign` por regex
+ *   `^data:image/(png|jpeg);base64,[A-Za-z0-9+/=]+$`, então a
+ *   interpolação no `src` é segura (SSRF/XSS bloqueados por construção).
+ *   Chamadas inseridas em DOIS pontos: `getByToken` (antes de
+ *   `renderFinalHtml` no preview que o viewer recebe) e `sign` (antes de
+ *   `renderFinalHtml` no `finalHtml` persistido no storage quando a
+ *   sessão fecha) — garante consistência preview ↔ documento final.
+ *
+ * (C) `client/src/pages/Colaboradores.tsx` passa `role: 'empregador'` e
+ *   `role: 'empregado'` nas duas partes do contrato de experiência.
+ *
+ * (D) Fix sidebar "Assinaturas" em `client/src/pages/AssinarDocumento.tsx`:
+ *   layout do `<li>` trocado de "ícone + span w-16 label + span nome"
+ *   (que sobrepunha) pra "ícone + div flex-1 min-w-0 com label uppercase
+ *   em cima + nome em baixo (break-words)". Badge da ordem tolerante a
+ *   `s.ordem` ausente (mostra "·" no círculo se falsy). "(você)"
+ *   destacado em azul.
+ *
+ * Como visualizar: abrir documento que JÁ tem assinatura coletada
+ * (qualquer link `/assinar/:token` da Lilian após ela assinar) — a
+ * assinatura desenhada vai aparecer dentro do contrato, centralizada
+ * sobre a linha "LILIAN OLIVEIRA VELOSO DO AMARAL / CPF:". Para
+ * documentos NOVOS criados após esta revisão, o slot vem embutido no
+ * template; para documentos LEGADOS (criados antes), o `documentHtml`
+ * salvo NÃO tem o placeholder — `stampSignaturesOnSlots` faz `continue`
+ * silencioso (`if (!html.includes(placeholder)) continue`), então o
+ * comportamento antigo (assinatura só no bloco de auditoria do final)
+ * é preservado. NENHUMA migração necessária.
+ *
+ * R-001 / R-007 / R-010: OK — sem ALTER/DROP/DELETE; sem mudança de
+ * schema; backward-compat completo com docs legados.
+ *
+ * Arquivos tocados:
+ *  - `client/src/lib/fcDocumentTemplate.ts`
+ *  - `server/routers/signatures.ts`
+ *  - `client/src/pages/Colaboradores.tsx`
+ *  - `client/src/pages/AssinarDocumento.tsx`
+ *  - `shared/version.ts` (2120)
+ *  - `shared/changelog.ts` (este bloco)
+ *  - `replit.md`
+ *
+ * ────────────────────────────────────────────────────────────────────
+ *
  * Rev. 2119 — **FCSign · fluxo SEQUENCIAL de assinatura + preview parcial
  * com assinaturas estampadas A CADA assinatura (não só ao final).**
  *

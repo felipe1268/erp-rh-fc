@@ -75,6 +75,14 @@ export interface FcAssinaturaParte {
   nome: string;
   /** Subtítulo abaixo do nome. Ex: "CNPJ: 29.353.906/0001-71" ou "Departamento de RH". */
   subtitulo?: string;
+  /**
+   * Rev. 2120: role do FCSign — quando preenchido, insere um placeholder
+   * `<!--FCSIGN:SIG:{role}-->` ACIMA da linha de assinatura. O servidor
+   * (`renderFinalHtml` em `server/routers/signatures.ts`) substitui esse
+   * placeholder pela `<img>` da assinatura quando o signatário assina.
+   * Sem este campo, a área de assinatura fica em branco (modo PDF/impressão).
+   */
+  role?: "empregado" | "empregador" | "testemunha_1" | "testemunha_2";
 }
 
 export interface FcAssinaturasBlock {
@@ -144,14 +152,26 @@ export function buildFcDocument(p: FcDocumentParams): string {
   const horaAgora = new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
   const hojeStr = new Date().toLocaleDateString("pt-BR");
 
+  // Rev. 2120: slot ACIMA da linha — o servidor injeta a <img> da assinatura aqui
+  // quando o signatário assina. Sem assinatura, fica espaço em branco (50px) que
+  // mantém o layout estável (linha continua na mesma posição vertical).
+  // O placeholder usa comentário HTML pra não vazar nada caso fique sem replace.
+  const slotHtml = (role?: FcAssinaturaParte["role"]) =>
+    role
+      ? `<div style="height:50px;display:flex;align-items:flex-end;justify-content:center;margin-bottom:-2px"><!--FCSIGN:SIG:${role}--></div>`
+      : `<div style="height:50px"></div>`;
+
   // Assinaturas — 1ª linha (partes principais, 2 colunas equivalentes)
   const partesHtml = p.assinaturas.partes
     .map(
       (pt) => `
     <td style="text-align:center;padding:0 24px;vertical-align:top;width:50%">
-      <div style="border-top:1px solid #6b7280;padding-top:8px;margin-top:48px">
-        <div style="font-family:'Helvetica','Arial',sans-serif;font-size:11pt;font-weight:700;color:#1B2A4A">${esc(pt.nome)}</div>
-        ${pt.subtitulo ? `<div style="font-family:'Helvetica','Arial',sans-serif;font-size:9pt;color:#6b7280;margin-top:2px">${esc(pt.subtitulo)}</div>` : ""}
+      <div style="margin-top:24px">
+        ${slotHtml(pt.role)}
+        <div style="border-top:1px solid #6b7280;padding-top:8px">
+          <div style="font-family:'Helvetica','Arial',sans-serif;font-size:11pt;font-weight:700;color:#1B2A4A">${esc(pt.nome)}</div>
+          ${pt.subtitulo ? `<div style="font-family:'Helvetica','Arial',sans-serif;font-size:9pt;color:#6b7280;margin-top:2px">${esc(pt.subtitulo)}</div>` : ""}
+        </div>
       </div>
     </td>`
     )
@@ -161,17 +181,23 @@ export function buildFcDocument(p: FcDocumentParams): string {
     ? `
   <table style="margin-top:24px;width:100%;border-collapse:collapse;table-layout:fixed;page-break-inside:avoid"><tbody><tr>
     <td style="text-align:center;padding:0 24px;vertical-align:top;width:50%">
-      <div style="border-top:1px solid #6b7280;padding-top:8px;margin-top:32px">
-        <div style="font-family:'Helvetica','Arial',sans-serif;font-size:10pt;font-weight:600;color:#1B2A4A">Testemunha 1</div>
-        <div style="font-family:'Helvetica','Arial',sans-serif;font-size:9pt;color:#6b7280;margin-top:2px">Nome: ____________________________</div>
-        <div style="font-family:'Helvetica','Arial',sans-serif;font-size:9pt;color:#6b7280;margin-top:1px">CPF: __________________</div>
+      <div style="margin-top:16px">
+        ${slotHtml("testemunha_1")}
+        <div style="border-top:1px solid #6b7280;padding-top:8px">
+          <div style="font-family:'Helvetica','Arial',sans-serif;font-size:10pt;font-weight:600;color:#1B2A4A">Testemunha 1</div>
+          <div style="font-family:'Helvetica','Arial',sans-serif;font-size:9pt;color:#6b7280;margin-top:2px">Nome: ____________________________</div>
+          <div style="font-family:'Helvetica','Arial',sans-serif;font-size:9pt;color:#6b7280;margin-top:1px">CPF: __________________</div>
+        </div>
       </div>
     </td>
     <td style="text-align:center;padding:0 24px;vertical-align:top;width:50%">
-      <div style="border-top:1px solid #6b7280;padding-top:8px;margin-top:32px">
-        <div style="font-family:'Helvetica','Arial',sans-serif;font-size:10pt;font-weight:600;color:#1B2A4A">Testemunha 2</div>
-        <div style="font-family:'Helvetica','Arial',sans-serif;font-size:9pt;color:#6b7280;margin-top:2px">Nome: ____________________________</div>
-        <div style="font-family:'Helvetica','Arial',sans-serif;font-size:9pt;color:#6b7280;margin-top:1px">CPF: __________________</div>
+      <div style="margin-top:16px">
+        ${slotHtml("testemunha_2")}
+        <div style="border-top:1px solid #6b7280;padding-top:8px">
+          <div style="font-family:'Helvetica','Arial',sans-serif;font-size:10pt;font-weight:600;color:#1B2A4A">Testemunha 2</div>
+          <div style="font-family:'Helvetica','Arial',sans-serif;font-size:9pt;color:#6b7280;margin-top:2px">Nome: ____________________________</div>
+          <div style="font-family:'Helvetica','Arial',sans-serif;font-size:9pt;color:#6b7280;margin-top:1px">CPF: __________________</div>
+        </div>
       </div>
     </td>
   </tr></tbody></table>`
