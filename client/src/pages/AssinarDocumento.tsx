@@ -195,21 +195,28 @@ export default function AssinarDocumento() {
             )}
           </div>
 
-          {/* Status das assinaturas — Rev. 2119: ordem visível (1ª, 2ª…) */}
+          {/* Status das assinaturas — Rev. 2119: layout empilhado (label em cima,
+              nome embaixo) pra acomodar nomes longos sem sobreposição. */}
           <div className="bg-white rounded-lg shadow border border-slate-200 p-4">
             <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-2 flex items-center gap-1"><Users className="h-3 w-3" /> Assinaturas (em ordem)</div>
-            <ul className="space-y-1.5">
+            <ul className="space-y-2">
               {allSigners.map((s: any) => {
                 const isMe = s.id === signer.id;
                 return (
-                  <li key={s.id} className={`flex items-center gap-2 text-xs ${isMe ? "bg-blue-50 -mx-2 px-2 py-1 rounded" : ""}`}>
+                  <li key={s.id} className={`flex items-start gap-2 text-xs ${isMe ? "bg-blue-50 -mx-2 px-2 py-1.5 rounded" : ""}`}>
                     {s.signedAt ? (
-                      <CheckCircle2 className="h-4 w-4 text-emerald-600 flex-shrink-0" />
+                      <CheckCircle2 className="h-4 w-4 text-emerald-600 flex-shrink-0 mt-0.5" />
                     ) : (
-                      <div className="h-4 w-4 rounded-full border-2 border-slate-300 flex-shrink-0 flex items-center justify-center text-[8px] font-bold text-slate-500">{s.ordem}</div>
+                      <div className="h-4 w-4 rounded-full border-2 border-slate-300 flex-shrink-0 mt-0.5 flex items-center justify-center text-[8px] font-bold text-slate-500">{s.ordem || "·"}</div>
                     )}
-                    <span className="text-slate-500 w-16 flex-shrink-0">{s.ordem}ª · {roleLabel[s.role]?.split(" ")[0] || s.role}</span>
-                    <span className={s.signedAt ? "text-slate-900 font-medium" : "text-slate-500"}>{s.nome}{isMe ? " (você)" : ""}</span>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-[10px] font-bold uppercase tracking-wide text-slate-500 leading-tight">
+                        {s.ordem ? `${s.ordem}ª · ` : ""}{roleLabel[s.role] || s.role}
+                      </div>
+                      <div className={`leading-tight break-words ${s.signedAt ? "text-slate-900 font-medium" : "text-slate-600"}`}>
+                        {s.nome}{isMe ? <span className="text-blue-700 font-semibold"> (você)</span> : null}
+                      </div>
+                    </div>
                   </li>
                 );
               })}
