@@ -1,6 +1,36 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2148 — **HOTFIX UX² · Tabs de Controle de Documentos sobrepondo em
+ * iPad Pro 12.9" portrait (Integrações + Termo de Recebimento amassadas).**
+ *
+ * User (screenshot iPad Pro 12.9" portrait = 1024px): "tá com texto
+ * sobreposto, veja aí integração sobreposto o termo de recebimento".
+ *
+ * Causa: a Rev. 2147 usou `lg:grid-cols-9` (Tailwind `lg` = ≥1024px). O
+ * iPad Pro 12.9" portrait tem EXATAMENTE 1024px, então o lg ativa e
+ * forçava 9 tabs em uma linha só — cada tab ficava ~110px (insuficiente
+ * pros textos longos "Termo de Recebimento" e "Integrações"), gerando
+ * sobreposição visual.
+ *
+ * **Fix em `client/src/pages/ControleDocumentos.tsx`** (1 linha do
+ * `TabsList`): trocar `lg:grid-cols-9 h-auto lg:h-12` por
+ * `xl:grid-cols-9 h-auto xl:h-12`. Agora a linha única de 9 tabs só
+ * ativa em `xl` (≥1280px). Em qualquer iPad (incluso o 12.9" portrait)
+ * fica `md:grid-cols-5` = 5×2 confortável.
+ *
+ * Breakpoints finais:
+ * - mobile (<640px): 2 cols × 5 linhas
+ * - sm (≥640px): 3 cols × 3 linhas
+ * - md (≥768px) + lg (≥1024px): 5 cols × 2 linhas ← inclui TODOS os iPads
+ * - xl (≥1280px): 9 cols × 1 linha ← desktop wide
+ *
+ * **Arquivo tocado**: `client/src/pages/ControleDocumentos.tsx` (1 linha).
+ *
+ * **R-001/R-007/R-010**: OK — só client-side.
+ *
+ * --------------------------------------------------------------------
+ *
  * Rev. 2147 — **HOTFIX UX · Tabs de Controle de Documentos com layout
  * responsivo de verdade (a nova aba "Termo de Recebimento" da Rev. 2146
  * sumia abaixo do fold no iPad).**
