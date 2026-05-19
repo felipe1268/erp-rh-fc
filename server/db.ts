@@ -512,19 +512,36 @@ function proximoNumeroValido(num: number, proibidos?: Set<number>): number {
  * pra uma empresa olhando o MAX numérico dos employees existentes
  * (ignora soft-deleted). Usado como fallback quando `nextCodigoInterno`
  * está desincronizado (NULL, zerado, ou menor que o MAX já gerado).
+ *
+ * Rev. 2168 — HOTFIX: a query estourava com "Failed query: ... CAST AS
+ * INTEGER" quando algum employee tinha `codigoInterno` com >9 dígitos
+ * (CPF/telefone colado por engano vira número > INT_MAX 2.147.483.647).
+ * Mudanças:
+ *  - `CAST AS BIGINT` (suporta até 9.2e18).
+ *  - Filtra só códigos com 1-9 dígitos após limpeza (ignora "lixo" como
+ *    CPF/RG/telefone que possa ter sido salvo errado no passado).
+ *  - `NULLIF(..., '')` blinda contra `CAST('' AS BIGINT)`.
+ *  - try/catch fail-open → retorna 0 e loga warn, evitando bloquear
+ *    o cadastro inteiro caso a query exploda por outro motivo.
  */
 async function getMaxCodigoInternoNumero(db: any, companyId: number, prefixo: string): Promise<number> {
-  const exec = await db.execute(
-    sql`SELECT COALESCE(MAX(CAST(REGEXP_REPLACE("codigoInterno", '\D', '', 'g') AS INTEGER)), 0) AS max_num
-        FROM employees
-        WHERE "companyId" = ${companyId}
-          AND "codigoInterno" IS NOT NULL
-          AND "codigoInterno" <> ''
-          AND "codigoInterno" ~ '[0-9]'`
-  ) as any;
-  const rows = exec?.rows ?? exec ?? [];
-  const n = parseInt(String(rows?.[0]?.max_num ?? 0)) || 0;
-  return n;
+  try {
+    const exec = await db.execute(
+      sql`SELECT COALESCE(MAX(CAST(NULLIF(REGEXP_REPLACE("codigoInterno", '\D', '', 'g'), '') AS BIGINT)), 0) AS max_num
+          FROM employees
+          WHERE "companyId" = ${companyId}
+            AND "codigoInterno" IS NOT NULL
+            AND "codigoInterno" <> ''
+            AND "codigoInterno" ~ '[0-9]'
+            AND LENGTH(REGEXP_REPLACE("codigoInterno", '\D', '', 'g')) BETWEEN 1 AND 9`
+    ) as any;
+    const rows = exec?.rows ?? exec ?? [];
+    const n = parseInt(String(rows?.[0]?.max_num ?? 0)) || 0;
+    return n;
+  } catch (e: any) {
+    console.warn(`[getMaxCodigoInternoNumero] companyId=${companyId} falhou: ${e?.message}. Usando 0 como fallback.`);
+    return 0;
+  }
 }
 
 export async function createEmployee(data: InsertEmployee) {

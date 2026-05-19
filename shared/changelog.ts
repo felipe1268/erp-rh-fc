@@ -1,6 +1,62 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2168 — **HOTFIX BLOQUEANTE · Cadastro de colaborador (Pessoal →
+ * Salvar) falhava com toast "Failed query: SELECT COALESCE(MAX(CAST(
+ * REGEXP_REPLACE(codigoInterno, \\D, '', 'g') AS INTEGER)), 0) AS
+ * max_num ... params: 60002".**
+ *
+ * Print do user (LILIAN OLIVEIRA VELOSO DO AMARAL, companyId=60002)
+ * mostrou toast vermelho ao tentar salvar. A query em
+ * `getMaxCodigoInternoNumero` (`server/db.ts` L516, introduzida na
+ * Rev. 2118) lê o MAX numérico do `codigoInterno` pra ressincronizar
+ * o contador `companies.nextCodigoInterno`. Causa-raiz: algum
+ * employee dessa empresa tinha `codigoInterno` cujos dígitos após
+ * limpeza estouravam o INT4 do Postgres (INT_MAX = 2.147.483.647 —
+ * ~10 dígitos). Provável: CPF (11 dígitos, ex.: "35672799809") ou
+ * telefone foi colado no campo no passado e o REGEXP_REPLACE+CAST
+ * passou de INT4. Como esse helper roda DENTRO do `createEmployee`
+ * antes do INSERT, qualquer falha aqui bloqueia o cadastro inteiro.
+ *
+ * **Fix em `server/db.ts:getMaxCodigoInternoNumero`** (3 camadas):
+ *  1. `CAST AS BIGINT` em vez de `INTEGER` — suporta 9.2 × 10^18,
+ *     cobre qualquer codigoInterno realista.
+ *  2. WHERE extra `LENGTH(REGEXP_REPLACE(...)) BETWEEN 1 AND 9` —
+ *     ignora códigos com 10+ dígitos (provavelmente lixo: CPF, RG,
+ *     telefone). Esses não deveriam estar lá, mas se estão, são
+ *     pulados em vez de bloquear o cadastro.
+ *  3. `NULLIF(..., '')` antes do CAST — defesa contra string vazia
+ *     (cenário teórico; o WHERE `~ '[0-9]'` já protege, mas custa
+ *     nada blindar).
+ *  4. try/catch fail-open envolvendo a query — se EXPLODIR por
+ *     outro motivo desconhecido, devolve 0 e loga warn. A
+ *     consequência é: `nextCodigoInterno` (counter atômico em
+ *     `companies`) assume o controle sozinho, então o cadastro
+ *     ainda sai com um código válido (só perde a defesa de
+ *     reconciliação).
+ *
+ * **Backend:** só `server/db.ts:getMaxCodigoInternoNumero`. Nada
+ * de schema/migration (R-001/R-007/R-010 OK — só mudou o SQL de
+ * leitura).
+ *
+ * **Frontend:** zero mudanças (o toast aparecia porque o tRPC
+ * `employees.create` propagava o erro do Postgres).
+ *
+ * Follow-up sugerido (NÃO feito nesta rev., não bloqueia):
+ *  - Auditar `SELECT id, codigoInterno FROM employees WHERE
+ *    companyId=60002 AND LENGTH(REGEXP_REPLACE(codigoInterno,
+ *    '\D', '', 'g')) >= 10` pra identificar e corrigir os
+ *    códigos sujos.
+ *
+ * Arquivos tocados:
+ *  - `server/db.ts` (L516-548)
+ *  - `shared/version.ts` → "Rev. 2168"
+ *  - `shared/changelog.ts` (esta entrada)
+ *  - `replit.md` (top-2 + demote)
+ *  - `replit-history.md` (one-liner da Rev. 2161)
+ *
+ * ---
+ *
  * Rev. 2167 — **HOTFIX iPad · Upload de NR-10 (e qualquer documento)
  * em Funcionários Terceiros falhava com toast vermelho "Arquivo muito
  * grande (máx 10MB)" logo após selecionar a foto. Adicionada
