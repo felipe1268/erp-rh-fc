@@ -27,6 +27,7 @@ type ItemFoto = { id: string; dataUrl: string };
 type ItemEntregue = {
   id: string;
   descricao: string;
+  quantidade: number;
   estado: string;
   fotos: ItemFoto[];
 };
@@ -169,7 +170,7 @@ export default function TermoResponsabilidadeDialog({
 
   // Defaults dinâmicos quando entra em compose
   const iniciarCompose = () => {
-    setItems([{ id: crypto.randomUUID(), descricao: "", estado: "Novo", fotos: [] }]);
+    setItems([{ id: crypto.randomUUID(), descricao: "", quantidade: 1, estado: "Novo", fotos: [] }]);
     setLocal(`${comp?.cidade || ""}${comp?.estado ? "/" + comp.estado : ""}`.trim() || "");
     setDataDoc(new Date().toISOString().split("T")[0]);
     setObservacoes("");
@@ -177,7 +178,7 @@ export default function TermoResponsabilidadeDialog({
   };
 
   const addItem = () =>
-    setItems((arr) => [...arr, { id: crypto.randomUUID(), descricao: "", estado: "Novo", fotos: [] }]);
+    setItems((arr) => [...arr, { id: crypto.randomUUID(), descricao: "", quantidade: 1, estado: "Novo", fotos: [] }]);
   const removeItem = (id: string) => setItems((arr) => arr.filter((it) => it.id !== id));
   const updateItem = (id: string, patch: Partial<ItemEntregue>) =>
     setItems((arr) => arr.map((it) => (it.id === id ? { ...it, ...patch } : it)));
@@ -231,6 +232,7 @@ export default function TermoResponsabilidadeDialog({
     if (items.length === 0) faltando.push("Adicione pelo menos 1 item");
     items.forEach((it, i) => {
       if (!it.descricao.trim()) faltando.push(`Item #${i + 1}: descrição`);
+      if (!Number.isFinite(it.quantidade) || it.quantidade < 1) faltando.push(`Item #${i + 1}: quantidade (mín. 1)`);
       if (!it.estado.trim()) faltando.push(`Item #${i + 1}: estado de conservação`);
     });
     if (!local.trim()) faltando.push("Local");
@@ -283,12 +285,13 @@ export default function TermoResponsabilidadeDialog({
         <tr>
           <td style="border:1px solid #cbd5e1;padding:6px 8px;text-align:center;width:36px;font-weight:600;vertical-align:top">${i + 1}</td>
           <td style="border:1px solid #cbd5e1;padding:6px 8px;vertical-align:top">${esc(it.descricao)}</td>
+          <td style="border:1px solid #cbd5e1;padding:6px 8px;vertical-align:top;width:60px;text-align:center">${it.quantidade}</td>
           <td style="border:1px solid #cbd5e1;padding:6px 8px;vertical-align:top;width:180px">${esc(it.estado)}</td>
         </tr>
         ${
           fotos.length > 0
             ? `<tr>
-                <td colspan="3" style="border:1px solid #cbd5e1;padding:8px;background:#f8fafc">
+                <td colspan="4" style="border:1px solid #cbd5e1;padding:8px;background:#f8fafc">
                   <div style="font-size:9.5pt;color:#475569;margin-bottom:6px;font-weight:600">Fotos do item #${i + 1}:</div>
                   <div style="display:flex;flex-wrap:wrap;gap:8px">
                     ${fotos
@@ -347,6 +350,7 @@ export default function TermoResponsabilidadeDialog({
     <tr style="background:#1B2A4A;color:#fff">
       <th style="border:1px solid #1B2A4A;padding:6px 8px;text-align:center;width:36px">#</th>
       <th style="border:1px solid #1B2A4A;padding:6px 8px;text-align:left">Item / Descrição</th>
+      <th style="border:1px solid #1B2A4A;padding:6px 8px;text-align:center;width:60px">Qtd.</th>
       <th style="border:1px solid #1B2A4A;padding:6px 8px;text-align:left;width:180px">Estado de Conservação</th>
     </tr>
   </thead>
@@ -761,13 +765,27 @@ ${obsHtml}
                       <div className="text-xs font-bold text-primary bg-primary/10 rounded px-2 py-1 mt-1">
                         #{i + 1}
                       </div>
-                      <div className="flex-1 grid grid-cols-1 sm:grid-cols-[1fr_200px] gap-2">
+                      <div className="flex-1 grid grid-cols-1 sm:grid-cols-[1fr_90px_200px] gap-2">
                         <div>
                           <Label className="text-xs text-muted-foreground">Descrição do item</Label>
                           <Input
                             placeholder="Ex: Notebook Dell Latitude 7420, S/N ABC12345"
                             value={it.descricao}
                             onChange={(e) => updateItem(it.id, { descricao: e.target.value })}
+                          />
+                        </div>
+                        <div>
+                          <Label className="text-xs text-muted-foreground">Quantidade</Label>
+                          <Input
+                            type="number"
+                            min={1}
+                            step={1}
+                            inputMode="numeric"
+                            value={it.quantidade}
+                            onChange={(e) => {
+                              const n = parseInt(e.target.value, 10);
+                              updateItem(it.id, { quantidade: Number.isFinite(n) && n > 0 ? n : 1 });
+                            }}
                           />
                         </div>
                         <div>

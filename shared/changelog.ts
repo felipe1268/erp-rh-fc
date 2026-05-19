@@ -1,6 +1,30 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2143 — **Termo de Responsabilidade · novo campo "Quantidade"
+ * por item entregue.**
+ *
+ * User (após screenshot do dialog com Descrição+Estado): "Falta colocar
+ * a quantidade do produto aqui". Faz sentido — um único colaborador pode
+ * receber 2 capacetes, 5 conjuntos de EPI, 3 chaves etc. e o termo
+ * precisava listar cada um como item separado.
+ *
+ * **Mudanças em `client/src/components/TermoResponsabilidadeDialog.tsx`:**
+ * - Tipo `ItemEntregue` ganhou campo `quantidade: number`.
+ * - `iniciarCompose()` e `addItem()` inicializam com `quantidade: 1`.
+ * - UI do item: grid passou de `[1fr_200px]` (Descrição+Estado) pra
+ *   `[1fr_90px_200px]` (Descrição+Quantidade+Estado) — Input type=number
+ *   min=1 step=1 inputMode=numeric com clamp ≥1 no onChange.
+ * - Validação `validar()` rejeita quantidade não-finita ou <1.
+ * - Tabela HTML do termo (gerado pra FCSign) agora tem 4 colunas:
+ *   #, Descrição, **Qtd.** (60px centro), Estado. Coluna "Qtd." inserida
+ *   entre Descrição e Estado, com `colspan` da linha de fotos ajustado
+ *   de 3 → 4 pra continuar abrangendo a largura total.
+ *
+ * **R-001/R-007/R-010**: OK — apenas client-side, sem DDL/DML.
+ *
+ * --------------------------------------------------------------------
+ *
  * Rev. 2142 — **SECURITY/CONCORRÊNCIA · Hardening da Aba Templates de
  * Documentos (Rev. 2141) após code review do architect.**
  *
