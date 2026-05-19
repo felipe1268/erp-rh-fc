@@ -26,6 +26,7 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import RaioXFuncionario from "@/components/RaioXFuncionario";
 import FullScreenDialog from "@/components/FullScreenDialog";
 import DocumentPreviewDialog, { canPreviewFile } from "@/components/DocumentPreviewDialog";
+import TermosResponsabilidadePanel from "@/components/controleDocumentos/TermosResponsabilidadePanel";
 import { TRAINING_RULES, TRAINING_CATEGORIES, calcularDataValidade, type TrainingRule } from "../../../shared/trainingRules";
 
 // ============ HELPERS ============
@@ -2435,7 +2436,7 @@ export default function ControleDocumentos() {
 
         {/* TABS */}
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="grid w-full grid-cols-4 sm:grid-cols-8 h-auto sm:h-12 gap-1 bg-transparent p-0">
+          <TabsList className="grid w-full grid-cols-3 sm:grid-cols-9 h-auto sm:h-12 gap-1 bg-transparent p-0">
             <TabsTrigger value="validade" className={`gap-1.5 rounded-lg border-2 transition-all duration-200 font-medium ${activeTab === "validade" ? "border-red-500 bg-red-50 text-red-700 shadow-sm" : "border-transparent bg-muted/50 text-muted-foreground hover:bg-red-50/50 hover:text-red-600"}`}>
               <AlertTriangle className="h-4 w-4" /> Validade
             </TabsTrigger>
@@ -2459,6 +2460,9 @@ export default function ControleDocumentos() {
             </TabsTrigger>
             <TabsTrigger value="integracoes" className={`gap-1.5 rounded-lg border-2 transition-all duration-200 font-medium ${activeTab === "integracoes" ? "border-indigo-600 bg-indigo-50 text-indigo-700 shadow-sm" : "border-transparent bg-muted/50 text-muted-foreground hover:bg-indigo-50/50 hover:text-indigo-600"}`}>
               <Users className="h-4 w-4" /> Integrações
+            </TabsTrigger>
+            <TabsTrigger value="termos-responsabilidade" className={`gap-1.5 rounded-lg border-2 transition-all duration-200 font-medium ${activeTab === "termos-responsabilidade" ? "border-blue-600 bg-blue-50 text-blue-700 shadow-sm" : "border-transparent bg-muted/50 text-muted-foreground hover:bg-blue-50/50 hover:text-blue-600"}`}>
+              <FileText className="h-4 w-4" /> Termo de Recebimento
             </TabsTrigger>
           </TabsList>
 
@@ -2965,6 +2969,11 @@ export default function ControleDocumentos() {
           {/* ===================== ABA INTEGRAÇÕES ===================== */}
           <TabsContent value="integracoes" className="mt-4">
             <IntegracoesPanel companyId={companyId} onClickEmployee={setRaioXEmployeeId} />
+          </TabsContent>
+
+          {/* ===================== ABA TERMO DE RECEBIMENTO (Rev. 2146) ===================== */}
+          <TabsContent value="termos-responsabilidade" className="mt-4">
+            <TermosResponsabilidadePanel companyId={companyId} companyIds={companyIds} onClickEmployee={setRaioXEmployeeId} />
           </TabsContent>
 
         </Tabs>

@@ -1,6 +1,96 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2146 — **Termo de Responsabilidade migrado da ficha do colaborador
+ * para nova aba "Termo de Recebimento" em Controle de Documentos
+ * (gestão centralizada + fix do bug "tela não atualiza pós-assinatura").**
+ *
+ * User: "preciso retirar a opção de gerar Termo de Responsabilidade na
+ * ficha de Colaborador e leva-la para Controle de Documentos, em uma
+ * nova aba ao lado de 'Integrações' (chame-a de 'Termo de Recebimento').
+ * Deve ser possível listar TODOS os colaboradores com seus respectivos
+ * termos (vários por colaborador), criar novo, visualizar, baixar e
+ * excluir o termo. Quando assinado, deve continuar indo pro Raio-X.
+ * E corrigir o bug: a tela não atualiza depois que a assinatura é
+ * concluída pelas duas partes (precisa de refresh manual)."
+ *
+ * **Mudanças**:
+ *
+ * 1. **Novo procedure `signatures.listByTipo`** (server/routers/signatures.ts):
+ *    - Lista TODAS as sessões FCSign de um `tipo` específico (no caso,
+ *      'termo_responsabilidade') dentro das empresas autorizadas (ACL via
+ *      `getCompaniesForUser`).
+ *    - LEFT JOIN com `employees` pra trazer nome/CPF/matrícula/função do
+ *      colaborador num único round-trip.
+ *    - Filtro `includeCancelled` (default false) — alinhado com o padrão
+ *      do `getForEmployeeTipo` (Rev. 2122).
+ *    - Retorna signers ordenados por `ordem` pra cada sessão (pra UI saber
+ *      quem assinou / quem falta).
+ *
+ * 2. **Novo painel `TermosResponsabilidadePanel.tsx`** (em
+ *    `client/src/components/controleDocumentos/`):
+ *    - 4 KPIs (Total / Assinados / Em coleta-Pendentes / Colaboradores únicos).
+ *    - Filtros: busca livre (nome, CPF, nº do termo) + select de status
+ *      (Ativos / Assinados / Em coleta / Pendentes / Cancelados / Todos).
+ *    - Tabela: Colaborador (clicável → abre Raio-X) | Termo | Status |
+ *      Emitido em | Concluído em | Por | Ações (Visualizar / Baixar / Excluir).
+ *    - **Visualizar**: se `status=completo` abre `finalDocumentUrl` em
+ *      nova aba; senão abre a página `/assinar/{token}` do primeiro signer
+ *      pendente (que renderiza o documento).
+ *    - **Baixar**: link direto pro `finalDocumentUrl` com `download` attr.
+ *    - **Excluir**: confirm + `signatures.adminDelete` (admin_master only —
+ *      soft-cancel da sessão + soft-delete do employeeDocument anexado).
+ *    - **Novo Termo**: dialog seletor de colaborador (busca por nome/CPF/
+ *      matrícula, lista até 50, ativos apenas) → reusa o
+ *      `TermoResponsabilidadeDialog` existente (composer com itens + fotos
+ *      + envio FCSign). Cada colab pode ter VÁRIOS termos (regra já
+ *      existente no `signatures.create` desde Rev. 2137, linha 175-178).
+ *
+ * 3. **Fix do bug "tela não atualiza pós-assinatura"** — o painel novo
+ *    recebe o `FCSignSendDialog` dentro de si, e quando o dialog fecha
+ *    invalida `signatures.listByTipo` + `listByEmployee` + `getForEmployeeTipo`.
+ *    Antes, o fluxo na ficha do colaborador também invalidava
+ *    `getForEmployeeTipo`/`listByEmployee` mas NUNCA tocava numa lista
+ *    centralizada — agora a lista do painel reage corretamente quando o
+ *    sócio (que assina por último em geral) finaliza a assinatura.
+ *
+ * 4. **Integração em `ControleDocumentos.tsx`**:
+ *    - Import `TermosResponsabilidadePanel`.
+ *    - Grid de tabs `sm:grid-cols-8` → `sm:grid-cols-9` (pra caber a nova
+ *      aba ao lado de "Integrações").
+ *    - Nova `TabsTrigger value="termos-responsabilidade"` (cor azul) +
+ *      `TabsContent` renderizando o painel.
+ *
+ * 5. **Remoção do entry point em `Colaboradores.tsx`**:
+ *    - Bloco "Gerenciar Termos de Responsabilidade" (linhas 1560-1584) na
+ *      aba Documentos da ficha substituído por aviso curto direcionando o
+ *      usuário pra nova aba.
+ *    - Estado `termoRespOpen` removido (órfão).
+ *    - Render block do `TermoResponsabilidadeDialog` removido da ficha
+ *      (órfão — só era acionado pelo `setTermoRespOpen(true)` agora removido).
+ *    - Import `TermoResponsabilidadeDialog` removido (não usado mais na
+ *      ficha; o painel novo importa diretamente).
+ *
+ * **Raio-X**: o vínculo com `employee_documents` (Rev. 2137, linha 486 do
+ * signatures.ts) continua intacto — termos assinados aparecem
+ * automaticamente na aba Documentos do Raio-X do colaborador, sem código
+ * adicional. Excluir via `signatures.adminDelete` faz soft-delete também
+ * no `employeeDocuments` (mantém integridade dos dois lados).
+ *
+ * **Arquivos tocados**:
+ * - `server/routers/signatures.ts` (+ procedure `listByTipo` ~linha 590)
+ * - `client/src/components/controleDocumentos/TermosResponsabilidadePanel.tsx` (NOVO)
+ * - `client/src/pages/ControleDocumentos.tsx` (import + tab grid 8→9 + nova
+ *   TabsTrigger + TabsContent)
+ * - `client/src/pages/Colaboradores.tsx` (entry point removido + cleanup
+ *   de state/dialog/import órfãos)
+ *
+ * **R-001/R-007/R-010**: OK — sem ALTER/DROP/DELETE em prod (excluir já
+ * era soft-cancel via `signatures.adminDelete` existente; ACL preservada
+ * em todo lugar via `getCompaniesForUser`).
+ *
+ * --------------------------------------------------------------------
+ *
  * Rev. 2145 — **Documentos institucionais FC (`buildFcDocument`) ·
  * margens padronizadas 2,5cm topo / 1,5cm laterais / 2,5cm rodapé +
  * aproveitamento máximo da área útil do A4.**

@@ -584,6 +584,88 @@ export const signaturesRouter = router({
       }));
     }),
 
+  // Rev. 2146 — Lista TODAS as sessões FCSign de um `tipo` específico
+  // (ex: 'termo_responsabilidade') dentro das empresas autorizadas, com
+  // dados básicos do colaborador joinados. Usado pelo painel "Termo de
+  // Recebimento" em Controle de Documentos pra listar todos os termos
+  // emitidos (vários por colaborador). NÃO retorna sessões canceladas
+  // por padrão (igual ao padrão do getForEmployeeTipo).
+  listByTipo: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      companyIds: z.array(z.number()).optional(),
+      tipo: z.string().min(1).max(50),
+      includeCancelled: z.boolean().optional().default(false),
+    }))
+    .query(async ({ ctx, input }) => {
+      const db = (await getDb())!;
+      // ACL — espelha getForEmployeeTipo (Rev. 2122) + hardening Rev. 2146:
+      // intersecciona `companyIds` com `allowedIds` ANTES de passar pro
+      // `companyFilter` (que apenas usa o array como vem do cliente, sem
+      // validar). Sem isto, um cliente malicioso poderia pedir
+      // `companyIds=[1,2,3,...]` e vazar metadados de sessões de outros
+      // tenants.
+      const allowed = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+      const allowedIds = (allowed as any[]).map(c => typeof c === 'number' ? c : c?.id).filter((v: any) => typeof v === 'number');
+      if (!allowedIds.includes(input.companyId)) return [];
+
+      const filteredInput = {
+        companyId: input.companyId,
+        companyIds: Array.isArray(input.companyIds) && input.companyIds.length > 0
+          ? input.companyIds.filter((id) => allowedIds.includes(id))
+          : undefined,
+      };
+
+      const baseConditions = [
+        companyFilter(signatureSessions.companyId, filteredInput),
+        eq(signatureSessions.tipo, input.tipo),
+      ];
+      if (!input.includeCancelled) {
+        baseConditions.push(sql`${signatureSessions.status} <> 'cancelado'`);
+      }
+
+      const rows = await db.select({
+        id: signatureSessions.id,
+        companyId: signatureSessions.companyId,
+        employeeId: signatureSessions.employeeId,
+        tipo: signatureSessions.tipo,
+        documentTitle: signatureSessions.documentTitle,
+        status: signatureSessions.status,
+        createdAt: signatureSessions.createdAt,
+        completedAt: signatureSessions.completedAt,
+        cancelledAt: signatureSessions.cancelledAt,
+        createdByName: signatureSessions.createdByName,
+        finalDocumentUrl: signatureSessions.finalDocumentUrl,
+        finalEmployeeDocumentId: signatureSessions.finalEmployeeDocumentId,
+        empNome: employees.nomeCompleto,
+        empCpf: employees.cpf,
+        empMatricula: employees.matricula,
+        empFuncao: employees.funcao,
+      })
+        .from(signatureSessions)
+        .leftJoin(employees, eq(employees.id, signatureSessions.employeeId))
+        .where(and(...baseConditions))
+        .orderBy(desc(signatureSessions.createdAt));
+
+      if (rows.length === 0) return [];
+      const sessionIds = rows.map(r => r.id);
+      const allSigners = await db.select({
+        sessionId: signatureSigners.sessionId,
+        role: signatureSigners.role,
+        nome: signatureSigners.nome,
+        ordem: signatureSigners.ordem,
+        signedAt: signatureSigners.signedAt,
+        token: signatureSigners.token,
+      }).from(signatureSigners).where(inArray(signatureSigners.sessionId, sessionIds));
+
+      return rows.map(r => ({
+        ...r,
+        signers: allSigners
+          .filter(s => s.sessionId === r.id)
+          .sort((a, b) => (a.ordem ?? 0) - (b.ordem ?? 0)),
+      }));
+    }),
+
   // Rev. 2121 + 2128: lista sessões FCSign onde o usuário logado deve ser
   // alertado. Usado pelo alerta global no DashboardLayout pra notificar o
   // user assim que ele entra no ERP.

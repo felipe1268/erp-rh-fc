@@ -30,7 +30,6 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { TimeCombobox, ENTRADA_OPTIONS, INTERVALO_OPTIONS, SAIDA_OPTIONS } from "@/components/TimeCombobox";
 import FCSignSendDialog from "@/components/FCSignSendDialog";
 import FCSignContratoExperienciaPanel from "@/components/FCSignContratoExperienciaPanel";
-import TermoResponsabilidadeDialog from "@/components/TermoResponsabilidadeDialog";
 
 const statusColors: Record<string, string> = {
   Ativo: "bg-green-400/10 text-green-400",
@@ -217,8 +216,8 @@ export default function Colaboradores() {
     companyId: number; employeeId: number; tipo: string; documentTitle: string;
     documentHtml: string; empregadoNome: string; empregadoCpf?: string;
   } | null>(null);
-  // Rev. 2137 — Termo de Responsabilidade (lista + composer + FCSign)
-  const [termoRespOpen, setTermoRespOpen] = useState(false);
+  // Rev. 2146 — Termo de Responsabilidade migrou pra Controle de Documentos
+  // → aba "Termo de Recebimento". Estado/dialog removidos da ficha.
 
   // Seleção múltipla
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
@@ -1557,28 +1556,23 @@ ${obs ? `<div class="box"><strong>Observações / Justificativa do Enquadramento
                 </div>
               )}
 
-              {/* Rev. 2137 — Termo de Responsabilidade (entrega de equipamentos/veículos) */}
+              {/* Rev. 2146 — O fluxo de Termo de Responsabilidade foi movido pra
+                  Controle de Documentos → aba "Termo de Recebimento" (lista
+                  centralizada, criação para qualquer colaborador, visualizar/
+                  baixar/excluir, com fix do refetch pós-assinatura). */}
               {editingId && (
                 <div className="mt-6">
                   <h4 className="text-sm font-semibold text-primary mb-3 flex items-center gap-2">
                     <FileText className="w-4 h-4" /> Termo de Responsabilidade
                   </h4>
-                  <div className="rounded-lg border border-dashed border-blue-300 bg-blue-50/50 dark:bg-blue-950/20 p-4">
-                    <p className="text-xs text-muted-foreground mb-3">
-                      Emita Termos de Responsabilidade para registrar a entrega de
-                      equipamentos, ferramentas, EPIs ou veículos ao colaborador.
-                      Cada termo é numerado sequencialmente e enviado para assinatura
-                      digital via FCSign (com fotos do estado de conservação).
+                  <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50/50 dark:bg-slate-900/20 p-4">
+                    <p className="text-xs text-muted-foreground">
+                      Os Termos de Responsabilidade (entrega de equipamentos, ferramentas,
+                      EPIs e veículos) foram movidos para{" "}
+                      <strong>Controle de Documentos → aba "Termo de Recebimento"</strong>,
+                      onde você pode emitir, visualizar, baixar e excluir termos de
+                      qualquer colaborador em um só lugar.
                     </p>
-                    <Button
-                      type="button"
-                      size="sm"
-                      onClick={() => setTermoRespOpen(true)}
-                      className="bg-gradient-to-r from-blue-700 to-indigo-700 hover:from-blue-800 hover:to-indigo-800 text-white border-0"
-                    >
-                      <FileText className="h-4 w-4 mr-1" />
-                      Gerenciar Termos de Responsabilidade
-                    </Button>
                   </div>
                 </div>
               )}
@@ -3699,33 +3693,8 @@ ${obs ? `<div class="box"><strong>Observações / Justificativa do Enquadramento
         />
       )}
 
-      {/* Rev. 2137 — Termo de Responsabilidade (lista + composer) */}
-      {termoRespOpen && editingId && (() => {
-        const compTermo = companies?.find(
-          (c: any) => String(c.id) === (form.companyId || selectedCompanyId || "")
-        );
-        const userNameTermo = (user as any)?.nome || (user as any)?.name || "Sistema";
-        return (
-          <TermoResponsabilidadeDialog
-            open={termoRespOpen}
-            onOpenChange={setTermoRespOpen}
-            companyId={(compTermo?.id as number) || companyId || 0}
-            employeeId={editingId}
-            empNome={form.nomeCompleto || ""}
-            empCpf={form.cpf}
-            empRg={form.rg}
-            empFuncao={form.funcao}
-            comp={compTermo || {}}
-            geradoPor={userNameTermo}
-            isAdminMaster={isAdminMaster}
-            onSendToFcSign={(payload) => {
-              setFcsignPayload(payload);
-              setFcsignOpen(true);
-              setTermoRespOpen(false);
-            }}
-          />
-        );
-      })()}
+      {/* Rev. 2146 — TermoResponsabilidadeDialog movido pra
+          TermosResponsabilidadePanel (Controle de Documentos). */}
     </DashboardLayout>
   );
 }

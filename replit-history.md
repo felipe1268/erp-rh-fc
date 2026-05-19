@@ -4,6 +4,8 @@
 > O detalhamento completo (causa-raiz, stack traces, arquivos tocados, comentários longos) de TODAS as revisões — incluindo as listadas abaixo — vive em `shared/changelog.ts`.
 > Movido aqui na Rev. 2028 (faxina) — revisões 1903 → 2012.
 
+- Rev. 2139 — Termo de Responsabilidade · corpo reescrito FIEL ao .docx + hardening fotos iOS (rejeita HEIC, valida toDataURL, helper fotosValidas). (movida na Rev. 2146)
+
 - Rev. 2130 — FCSign · gate `enabled` do client relaxado p/ admin_master/admin sem email (complementa Rev. 2128). (movida na Rev. 2137)
 
 - Rev. 2129 — HOTFIX iOS Safari · `fmtTs(ts)` no `FCSignContratoExperienciaPanel` (replace " "→"T" + isNaN guard) — toast falso "Erro ao alocar número do contrato" some. (movida na Rev. 2136)
