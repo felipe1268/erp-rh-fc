@@ -185,7 +185,7 @@ export function buildFcDocument(p: FcDocumentParams): string {
   // Padding 32px tela / 16px print (do print:p-4 do Tailwind)
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${pageTitle}</title></head><body style="margin:0;padding:0;background:#f8fafc;-webkit-print-color-adjust:exact;print-color-adjust:exact">
 <style>
-@page{size:A4;margin:40mm 10mm 14mm 10mm}
+@page{size:A4;margin:25mm 10mm 14mm 10mm}
 @page :first{margin:14mm 10mm}
 body{font-family:'Helvetica','Arial','Liberation Sans',sans-serif;font-size:11pt;line-height:1.55;color:#1a1a1a}
 .fc-doc{max-width:760px;margin:0 auto;background:#fff;padding:32px;box-sizing:border-box}

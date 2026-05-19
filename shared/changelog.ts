@@ -1,6 +1,22 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2117 — **Documentos institucionais FC · margem superior da 2ª
+ * página ajustada de 40mm (4cm) para 25mm (2,5cm).**
+ *
+ * User (ajuste fino da Rev. 2116): "pode colocar 2,5cm acho que fica
+ * bom..". O usuário testou os 4cm e achou que 2,5cm fica visualmente
+ * mais equilibrado entre respiro e aproveitamento de espaço.
+ *
+ * **Mudança (1 caractere):** `client/src/lib/fcDocumentTemplate.ts`
+ * L188 — `@page{size:A4;margin:40mm 10mm 14mm 10mm}` →
+ *         `@page{size:A4;margin:25mm 10mm 14mm 10mm}`.
+ * Override de 1ª página (`@page :first{margin:14mm 10mm}`) inalterado.
+ *
+ * **R-001/R-007/R-010:** N/A — frontend.
+ *
+ * ---
+ *
  * Rev. 2116 — **Documentos institucionais FC · margem superior de 40mm
  * (4cm) na 2ª página em diante — 1ª página mantém os 14mm originais.**
  *
