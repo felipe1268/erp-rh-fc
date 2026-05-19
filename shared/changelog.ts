@@ -1,6 +1,39 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2145 — **Documentos institucionais FC (`buildFcDocument`) ·
+ * margens padronizadas 2,5cm topo / 1,5cm laterais / 2,5cm rodapé +
+ * aproveitamento máximo da área útil do A4.**
+ *
+ * User (com PDF do Termo de Responsabilidade renderizado em anexo):
+ * "precisa ajustar as margens, quero 2,5cm no topo, 1,5cm nas laterais
+ * direita e esquerda e 2,5cm na parte inferior... ajuste ele para
+ * aproveitar ao máximo o papel".
+ *
+ * Antes (Rev. 2140): `@page margin: 25mm 15mm 14mm 15mm` (rodapé só 14mm)
+ * + `@page :first { margin: 14mm 15mm }` (primeira página com topo
+ * compacto pra encaixar cabeçalho) + `.fc-doc padding: 32px 1.5cm` na
+ * tela + `padding: 8px 0` no print (somava com `@page margin`,
+ * desperdiçando ~16px verticais por página).
+ *
+ * Agora: `@page margin: 25mm 15mm 25mm 15mm` UNIFORME pra todas as
+ * páginas (removido o `:first` override — user quer 2,5cm de topo
+ * mesmo na primeira); tela `.fc-doc padding: 2.5cm 1.5cm` espelha
+ * exatamente o `@page` do PDF; print `.fc-doc padding: 0` (zero
+ * padding interno — toda área útil dentro do `@page margin` é
+ * aproveitada pelo conteúdo).
+ *
+ * **Aplica-se a TODOS os 7 documentos institucionais** que usam
+ * `buildFcDocument` (Comunicado, Contrato Experiência, Aviso Prévio,
+ * Termo Rescisão, Termo Responsabilidade, Advertência, Carta MDO).
+ *
+ * **Arquivo tocado**: `client/src/lib/fcDocumentTemplate.ts` (apenas
+ * o bloco `<style>` no `@page` + `.fc-doc` + `@media print .fc-doc`).
+ *
+ * **R-001/R-007/R-010**: OK — só client-side.
+ *
+ * --------------------------------------------------------------------
+ *
  * Rev. 2144 — **Termo de Responsabilidade · campo Quantidade agora
  * permite apagar livremente (fix UX da Rev. 2143).**
  *
