@@ -1955,14 +1955,14 @@ body .destaque{font-weight:700;color:#1a1a1a}
   <span style="font-family:'Helvetica','Arial',sans-serif;font-size:14pt;font-weight:700;letter-spacing:4px;text-transform:uppercase;display:block;color:#fff">Contrato de Experiência</span>
 </div>
 
-<!-- Linha meta Nº/Data (logo abaixo da faixa, 11pt cinza, indent 1cm pra alinhar com ASSUNTO) -->
+<!-- Linha meta Nº/Data (Rev. 2112: SEM indent — colada na margem como no PDF do Comunicado) -->
 <table style="width:100%;border-collapse:collapse;margin:18px 0 6px 0"><tbody><tr>
-  <td style="text-align:left;font-family:'Helvetica','Arial',sans-serif;font-size:11pt;color:#1a1a1a;padding:0 0 0 1cm;font-weight:600">Nº ${String((editingId || 0)).padStart(3,'0')}/${new Date().getFullYear()}</td>
-  <td style="text-align:right;font-family:'Helvetica','Arial',sans-serif;font-size:11pt;color:#1a1a1a;padding:0 1cm 0 0;font-weight:600">Data de Emissão: ${dataHoje}</td>
+  <td style="text-align:left;font-family:'Helvetica','Arial',sans-serif;font-size:11pt;color:#1a1a1a;padding:0;font-weight:600">Nº ${String((editingId || 0)).padStart(3,'0')}/${new Date().getFullYear()}</td>
+  <td style="text-align:right;font-family:'Helvetica','Arial',sans-serif;font-size:11pt;color:#1a1a1a;padding:0;font-weight:600">Data de Emissão: ${dataHoje}</td>
 </tr></tbody></table>
 
-<!-- Bloco ASSUNTO: indent 1cm, label + valor uppercase 11pt -->
-<div style="margin:24px 0 20px 1cm;text-align:left">
+<!-- Bloco ASSUNTO: indent ~0.5cm (como o "  ASSUNTO:" do PDF Comunicado), label + valor uppercase 11pt -->
+<div style="margin:24px 0 20px 0.5cm;text-align:left">
   <div style="font-family:'Helvetica','Arial',sans-serif;font-size:11pt;color:#1a1a1a;font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">ASSUNTO:</div>
   <div style="font-family:'Helvetica','Arial',sans-serif;font-size:11pt;color:#1a1a1a;font-weight:700;text-transform:uppercase;letter-spacing:.3px">CONTRATO DE EXPERIÊNCIA — ${empNome}${empFuncao ? ' (' + empFuncao + ')' : ''}</div>
 </div>

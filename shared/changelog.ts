@@ -1,6 +1,46 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2112 — **RH · Contrato de Experiência — alinhamento final: Nº/Data
+ * sem indent + ASSUNTO com indent menor (0.5cm), conforme PDF do Comunicado.**
+ *
+ * Pedido do user (anexou novamente o PDF text-only do Comunicado pós-2111):
+ * "veja o PDF novamente..".
+ *
+ * **Diagnóstico:** comparando elemento a elemento o PDF do Comunicado com
+ * o contrato atual, 2 micro-divergências restantes em `Colaboradores.tsx`:
+ *
+ * - **Linha Nº/Data:** no PDF "Nº 002/2026" começa colado na margem
+ *   esquerda pura. Eu tinha `padding:0 0 0 1cm` (indent extra de 1cm)
+ *   pra alinhar com o ASSUNTO — mas o PDF do Comunicado mostra
+ *   alinhamento natural (margem direta). **L1959-1961:**
+ *   `padding:0 0 0 1cm` → **`padding:0`** (idem na coluna direita).
+ *
+ * - **Bloco ASSUNTO:** no PDF "  ASSUNTO:" tem indent de 2 espaços
+ *   (~0.5cm), bem pequeno. Eu tinha indent de 1cm (muito recuado).
+ *   **L1964:** `margin:24px 0 20px 1cm` → **`margin:24px 0 20px 0.5cm`**.
+ *
+ * **Não-mudanças:** Logo 115px, razão social 19pt, CNPJ 11pt, endereço
+ * 10pt, faixa azul border-radius 4px dentro do body, cláusulas inline-bold,
+ * assinaturas, rodapé "Documento gerado pelo ERP — Gestão Integrada / Emitido
+ * em X às Y | Por: NOME" (já estava EXATO como no PDF — confirmado).
+ *
+ * **Padrão FINAL (atualizado após esta micro-correção):**
+ *   - Logo 115px centralizado.
+ *   - Razão social 19pt bold uppercase.
+ *   - CNPJ 11pt bold #1a1a1a.
+ *   - Endereço 10pt uppercase letter-spacing .2px.
+ *   - Faixa azul DENTRO do body, border-radius 4px, padding 18px,
+ *     texto 14pt letter-spacing 4px.
+ *   - **Linha Nº/Data: SEM indent** (margem natural).
+ *   - **Bloco ASSUNTO: indent 0.5cm** (não 1cm).
+ *   - Rodapé 2 colunas 8pt "Documento gerado pelo ERP - Gestão Integrada"
+ *     (esq) / "Emitido em: DATA às HORA | Por: NOME" (dir).
+ *
+ * **R-001/R-007/R-010:** N/A — frontend.
+ *
+ * ---
+ *
  * Rev. 2111 — **RH · Contrato de Experiência — faixa azul de volta DENTRO do
  * corpo (não edge-to-edge) com border-radius leve, como o Comunicado.**
  *
