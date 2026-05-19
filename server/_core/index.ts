@@ -1687,6 +1687,42 @@ Regras:
           console.log(`[SyncSchema+] Rev. 2134: backfill employee_contracts p/ sessões FCSign contrato_experiencia — inseridos=${(rBf as any)?.rowCount ?? '?'}.`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.2134 backfill employee_contracts:`, e?.message || e); }
 
+        // Rev. 2141 — Templates institucionais FC com versionamento completo.
+        // Tabelas system_document_templates + system_document_template_versions
+        // garantidas no startup. Não toca em document_templates legado (usado
+        // pelo controleDocumentos.ts) — isolamento total dos templates
+        // institucionais (Contrato Experiência, Termo Responsabilidade,
+        // Comunicado, Advertência, Aviso Prévio, Termo Rescisão, Carta MDO).
+        try {
+          await db.execute(sql`CREATE TABLE IF NOT EXISTS system_document_templates (
+            id SERIAL PRIMARY KEY,
+            tipo VARCHAR(60) NOT NULL,
+            titulo VARCHAR(200) NOT NULL,
+            descricao TEXT,
+            conteudo_html TEXT NOT NULL,
+            versao_atual INTEGER NOT NULL DEFAULT 1,
+            ativo SMALLINT NOT NULL DEFAULT 1,
+            atualizado_por_id INTEGER,
+            atualizado_por_nome VARCHAR(255),
+            created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+          )`);
+          await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS uq_sys_doc_tpl_tipo ON system_document_templates (tipo)`);
+          await db.execute(sql`CREATE TABLE IF NOT EXISTS system_document_template_versions (
+            id SERIAL PRIMARY KEY,
+            template_id INTEGER NOT NULL,
+            versao INTEGER NOT NULL,
+            conteudo_html TEXT NOT NULL,
+            comentario TEXT,
+            criado_por_id INTEGER,
+            criado_por_nome VARCHAR(255),
+            created_at TIMESTAMP NOT NULL DEFAULT NOW()
+          )`);
+          await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS uq_sys_doc_tpl_ver_tpl_versao ON system_document_template_versions (template_id, versao)`);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_sys_doc_tpl_ver_tpl ON system_document_template_versions (template_id)`);
+          console.log(`[SyncSchema+] Rev. 2141: tabelas system_document_templates + versions garantidas.`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.2141 system_document_templates:`, e?.message || e); }
+
       } catch (e: any) { console.error(`[SyncSchema+] ERROR:`, e?.message || e); }
     }).catch(e => console.error("[SyncSchema] Falha ao iniciar:", e));
     // Garantir colunas críticas adicionadas recentemente que o SyncSchema possa ter ignorado

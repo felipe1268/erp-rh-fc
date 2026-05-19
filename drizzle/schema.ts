@@ -8466,3 +8466,40 @@ export const contractCounters = pgTable("contract_counters", {
 }, (table) => [
   uniqueIndex("uq_contract_counters_company_ano_tipo").on(table.companyId, table.ano, table.tipo),
 ]);
+
+// ── Rev. 2141 — Templates institucionais FC com versionamento completo ──────
+// `system_document_templates`: 1 linha por tipo (contrato_experiencia,
+// termo_responsabilidade, comunicado, advertencia, aviso_previo,
+// termo_rescisao, carta_mdo). Conteúdo HTML editável via WYSIWYG na aba
+// Configurações > Templates de Documentos.
+// `system_document_template_versions`: histórico completo (Rev. 1, 2, ...)
+// com autor/data/comentário — toda edição cria uma nova linha aqui.
+export const systemDocumentTemplates = pgTable("system_document_templates", {
+  id: serial().notNull(),
+  tipo: varchar({ length: 60 }).notNull(),                  // único
+  titulo: varchar({ length: 200 }).notNull(),
+  descricao: text(),
+  conteudoHtml: text("conteudo_html").notNull(),
+  versaoAtual: integer("versao_atual").default(1).notNull(),
+  ativo: smallint().default(1).notNull(),
+  atualizadoPorId: integer("atualizado_por_id"),
+  atualizadoPorNome: varchar("atualizado_por_nome", { length: 255 }),
+  createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
+  updatedAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("uq_sys_doc_tpl_tipo").on(table.tipo),
+]);
+
+export const systemDocumentTemplateVersions = pgTable("system_document_template_versions", {
+  id: serial().notNull(),
+  templateId: integer("template_id").notNull(),
+  versao: integer().notNull(),
+  conteudoHtml: text("conteudo_html").notNull(),
+  comentario: text(),                                       // descrição do que mudou
+  criadoPorId: integer("criado_por_id"),
+  criadoPorNome: varchar("criado_por_nome", { length: 255 }),
+  createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("uq_sys_doc_tpl_ver_tpl_versao").on(table.templateId, table.versao),
+  index("idx_sys_doc_tpl_ver_tpl").on(table.templateId),
+]);

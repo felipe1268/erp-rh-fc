@@ -1,6 +1,101 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2141 — **NOVA FEATURE · Aba "Templates de Documentos" em
+ * Configurações com versionamento completo e editor WYSIWYG.**
+ *
+ * User: "Seria importante criar uma aba de templates na tela de critério,
+ * para definirmos todos os textos, contratos, advertências, tudo que
+ * padronizamos para que possamos revisar e editar sem precisar usar o
+ * desenvolvimento... por lá seria mais fácil a revisão, e controle de
+ * revisão também."
+ *
+ * Respondeu 3 perguntas de escopo: (1) TODOS os 7 documentos
+ * (Contrato Experiência, Termo Responsabilidade, Comunicado, Advertência,
+ * Aviso Prévio, Termo Rescisão, Carta MDO); (2) versionamento completo
+ * Rev. 1/2/3... com autor/data, restaurar versão antiga; (3) editor
+ * visual WYSIWYG com toolbar + sidebar de placeholders clicáveis.
+ *
+ * **Esta entrega = Fase 1 (fundação completa):**
+ *
+ * **DB (Rev. 2141 migration em `server/_core/index.ts` linha ~1693):**
+ * 2 novas tabelas isoladas (não tocam `document_templates` legado usado
+ * pelo `controleDocumentos.ts`):
+ *   - `system_document_templates` (id, tipo UNIQUE, titulo, descricao,
+ *     conteudo_html, versao_atual, ativo, atualizado_por_id/nome, timestamps)
+ *   - `system_document_template_versions` (id, template_id, versao,
+ *     conteudo_html, comentario, criado_por_id/nome, created_at) com
+ *     UNIQUE (template_id, versao).
+ * Tabelas declaradas em `drizzle/schema.ts` (`systemDocumentTemplates` +
+ * `systemDocumentTemplateVersions`) E garantidas via CREATE TABLE IF NOT
+ * EXISTS no startup (padrão Rev. 2079).
+ *
+ * **Shared (`shared/documentTemplates.ts`):** novo módulo compartilhado
+ * com `DOCUMENT_TEMPLATES_META` (7 tipos × placeholders agrupados em
+ * Colaborador/Empresa/Documento/Obra/Específicos), helper `renderTemplate()`
+ * que faz interpolação `{{chave}}` → valor (mantém intactos placeholders
+ * desconhecidos pra debug). Cada tipo declara seus placeholders próprios
+ * (ex: Aviso Prévio tem `dataAviso`/`modalidade`/`diasAviso`).
+ *
+ * **Backend (`server/routers/systemDocumentTemplates.ts`):** novo router
+ * tRPC com 5 endpoints, todos com ACL `admin`/`admin_master`:
+ *   - `listAll` — lista os 7 tipos com flag `existe` + `versaoAtual` +
+ *     `atualizadoPorNome` (alimenta a coluna esquerda)
+ *   - `get({tipo, versao?})` — pega conteúdo atual OU versão específica
+ *   - `listVersions({tipo})` — histórico ordenado desc com flag `ehAtual`
+ *   - `save({tipo, conteudoHtml, comentario?})` — upsert: cria template
+ *     + Rev. 1 se não existir; senão incrementa versaoAtual e insere
+ *     nova versão. Se conteúdo idêntico ao atual → no-op (`semMudanca:
+ *     true`) pra não poluir histórico.
+ *   - `restoreVersion({tipo, versao})` — copia conteúdo da versão antiga
+ *     pra nova Rev. (não sobrescreve, preserva histórico). Comentário
+ *     auto = "Restaurado a partir da Rev. X".
+ * Registrado em `server/routers.ts` como `systemDocumentTemplates`.
+ *
+ * **Frontend — Editor (`client/src/components/RichTextEditor.tsx`):**
+ * componente TipTap (já instalado) com `StarterKit` + `Underline` +
+ * `TextAlign` + `Placeholder`. Toolbar com undo/redo, parágrafo, H1-3,
+ * negrito/itálico/sublinhado, listas, citação, divisor, 4 alinhamentos.
+ * Expõe `RichTextEditorHandle` (forwardRef) com `insertText()` —
+ * essencial pra sidebar de placeholders inserir `{{empNome}}` no cursor.
+ * Sincroniza `value` externo via `setContent({emitUpdate:false})`.
+ * `immediatelyRender:false` pra evitar warning de SSR/hydration.
+ *
+ * **Frontend — Aba (`client/src/pages/configuracoes/TemplatesDocsTab.tsx`):**
+ * UI 3 colunas:
+ *   - **Esquerda:** lista dos 7 tipos com ícone (FileSignature/ShieldCheck/
+ *     Megaphone/AlertTriangle/BellRing/UserX/Hammer) + badge "Rev. N" ou
+ *     "Não criado" — selecionável com border-l azul no ativo.
+ *   - **Centro:** título + descrição do tipo + botões Histórico/Preview;
+ *     editor WYSIWYG (ou preview com `renderTemplate(dadosExemplo)`);
+ *     campo de comentário desta revisão + footer com "Rev. atual + autor
+ *     + data" + botão "Salvar Nova Revisão". Banner amarelo quando
+ *     visualizando versão antiga com botões "Voltar à atual" / "Restaurar
+ *     esta" (modal `confirm()` antes).
+ *   - **Direita:** sidebar de placeholders agrupados (Colaborador/Empresa/
+ *     Documento/Específicos) — cada item é botão que insere `{{chave}}`
+ *     no cursor do editor (desabilitado se versão antiga ou preview).
+ *     Abaixo (quando "Histórico" toggle ON): lista de versões clicáveis
+ *     com Rev./data/autor/comentário + badge ATUAL na rev. corrente.
+ *
+ * **Integração em `Configuracoes.tsx`:** nova `TabKey` `"templates_docs"`,
+ * entrada na `allTabs` após "Critérios do Sistema" (ícone FileText, role
+ * admin), import do `TemplatesDocsTab`, render block no switch de tabs.
+ *
+ * **R-001/R-007/R-010:** OK — CREATE TABLE IF NOT EXISTS (nunca ALTER/
+ * DROP/DELETE em tabelas existentes). Tabelas novas isoladas, não tocam
+ * `document_templates` legado.
+ *
+ * **Fase 2 (próxima Rev.) — NÃO incluída nesta entrega:** refatorar os
+ * 7 builders hardcoded (`TermoResponsabilidadeDialog`, contrato de
+ * experiência, comunicado interno, advertência, aviso prévio, termo
+ * rescisão, carta MDO) pra buscar template do DB via
+ * `systemDocumentTemplates.get` + `renderTemplate(html, dadosReais)`,
+ * com fallback pro HTML hardcoded enquanto template não existir (evita
+ * regressão no fluxo FCSign de assinatura). User pode já criar/editar/
+ * versionar templates hoje pela aba — a propagação real nos documentos
+ * gerados vem numa rev. controlada com testes do fluxo de assinatura.
+ *
  * Rev. 2140 — **Documentos institucionais FC (`buildFcDocument`) ·
  * margens laterais padronizadas em 1,5cm (15mm) para melhor distribuição
  * do texto e respiro tipográfico em A4.**

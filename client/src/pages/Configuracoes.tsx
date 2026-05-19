@@ -18,6 +18,7 @@ import GoldenRulesPanel from "@/components/GoldenRulesPanel";
 import BeneficiosAlimentacaoTab from "@/components/BeneficiosAlimentacaoTab";
 import { ComprasConfigSection } from "@/pages/configuracoes/ComprasConfigSection";
 import { FinanceiroConfigSection } from "@/pages/configuracoes/FinanceiroConfigSection";
+import TemplatesDocsTab from "@/pages/configuracoes/TemplatesDocsTab";
 import { Settings, Users, Trash2, Key, Scale, Clock, FileText, AlertTriangle, Gift, Palmtree, UserX, RotateCcw, Save, ChevronRight, ChevronDown, Info, GripVertical, ArrowUp, ArrowDown, Eye, EyeOff, Shield, Bell, Mail, Plus, Check, X, ToggleLeft, ToggleRight, History, Send, CheckCheck, AlertCircle, RefreshCw, Pencil, Hash, HardHat, ClipboardList, Database, Download, Loader2, TrendingUp, Landmark, PlayCircle, UtensilsCrossed, Coffee, MapPin, Gavel, Star, Handshake, BadgeCheck, BookOpen, Building2, CalendarCheck, HardDrive, ExternalLink, Calculator, ShoppingCart, Warehouse, DollarSign, FolderOpen, FileBarChart, Hammer, Truck, Megaphone, Briefcase, Brain, SlidersHorizontal } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
@@ -82,7 +83,7 @@ const CATEGORIAS = [
   { key: "notificacoes_sistema", label: "Notificações do Sistema", icon: Bell, color: "text-pink-600", bgColor: "bg-pink-50", borderColor: "border-pink-200" },
 ];
 
-type TabKey = "criterios" | "senha" | "limpeza" | "regras" | "notificacoes" | "contrato_pj" | "sync_he" | "sindical" | "beneficios_alimentacao" | "modulos" | "backup" | "terceiros" | "portal_cliente";
+type TabKey = "criterios" | "senha" | "limpeza" | "regras" | "notificacoes" | "contrato_pj" | "sync_he" | "sindical" | "beneficios_alimentacao" | "modulos" | "backup" | "terceiros" | "portal_cliente" | "templates_docs";
 
 export default function Configuracoes() {
   const { user } = useAuth();
@@ -300,6 +301,7 @@ export default function Configuracoes() {
     { key: "modulos" as TabKey, label: "Módulos do Sistema", icon: ToggleRight, minRole: "admin" },
     { key: "regras" as TabKey, label: "Regras de Ouro", icon: Shield, minRole: "admin" },
     { key: "criterios" as TabKey, label: "Critérios do Sistema", icon: Scale, minRole: "admin" },
+    { key: "templates_docs" as TabKey, label: "Templates de Documentos", icon: FileText, minRole: "admin" },
     { key: "senha" as TabKey, label: "Minha Senha", icon: Key, minRole: "user" },
     { key: "notificacoes" as TabKey, label: "Notificações E-mail", icon: Bell, minRole: "admin" },
     { key: "contrato_pj" as TabKey, label: "Contrato PJ", icon: FileText, minRole: "admin" },
@@ -445,6 +447,11 @@ export default function Configuracoes() {
         {/* TAB: Regras de Ouro */}
         {activeTab === "regras" && (
           <GoldenRulesPanel />
+        )}
+
+        {/* TAB: Templates de Documentos (Rev. 2141) */}
+        {activeTab === "templates_docs" && (
+          <TemplatesDocsTab />
         )}
 
         {/* TAB: Critérios do Sistema */}
