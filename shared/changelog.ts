@@ -1,6 +1,19 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2160 — **HOTFIX continuação da Rev. 2159 · filtrar contas
+ * inativas (ativo=0) na tela de Plano de Contas.**
+ *
+ * User: "ainda aparece a linha 3.3" (após Rev. 2159 ter soft-deletado
+ * a órfã). A query `financial.getAccounts` em
+ * `FinanceiroPlanoDeConta.tsx` não passava `ativo:true`, e o backend
+ * só filtra se o param for fornecido — então linhas com `ativo=0`
+ * continuavam vindo.
+ *
+ * Fix: 1 linha em `client/src/pages/financeiro/FinanceiroPlanoDeConta.tsx`
+ * — adicionar `ativo: true` no `useQuery`. Zero mudança em backend ou
+ * dados.
+ *
  * Rev. 2159 — **DATA-FIX · Migração da conta órfã "3.3 DESPESAS COM
  * MATERIAIS" para "3.2 Materiais de Construção" do plano padrão.**
  *

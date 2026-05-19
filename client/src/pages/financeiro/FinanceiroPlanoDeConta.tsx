@@ -46,8 +46,9 @@ export default function FinanceiroPlanoDeConta() {
   });
 
   // Rev. 2157 — escopo='plano' filtra fora as categorias operacionais (AUTO-*)
+  // Rev. 2160 — ativo:true esconde contas soft-deletadas (ex.: órfã 3.3 migrada na Rev. 2159)
   const { data: contas, isLoading, refetch } = (trpc as any).financial.getAccounts.useQuery(
-    { companyId, escopo: "plano", tipo: tipoFilter !== "all" ? tipoFilter : undefined },
+    { companyId, escopo: "plano", ativo: true, tipo: tipoFilter !== "all" ? tipoFilter : undefined },
     { enabled: !!companyId }
   );
 
