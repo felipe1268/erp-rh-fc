@@ -1,6 +1,42 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2162 — **NOVO CAMPO · Vincular Categoria ao Plano de Contas
+ * (contábil) via `conta_pai_id`.**
+ *
+ * User: "preciso ter um campo para vincular a CATEGORIA ao PLANO DE
+ * CONTAS". Hoje categorias (AUTO-NNNN) e contas contábeis (3.2,
+ * 4.4.2 etc) viviam totalmente separadas; o usuário queria poder
+ * dizer "Combustível (categoria) pertence a 4.4.2 Aluguel de
+ * Veículos (plano contábil)".
+ *
+ * **Schema:** zero ALTER — coluna `conta_pai_id` já existia em
+ * `financial_accounts` (self-FK, usada antes só pra hierarquia
+ * dentro do plano). Reaproveitada para o vínculo categoria → plano.
+ *
+ * **Backend** (`server/routers/financial.ts`):
+ * - `createAccount` já aceitava `contaPaiId` (no INSERT desde sempre)
+ *   — nenhuma mudança.
+ * - `updateAccount` ganha `contaPaiId: number.nullable.optional` no
+ *   schema Zod + branch `parts.push("conta_pai_id=$N")`. Permite
+ *   editar/limpar o vínculo a qualquer momento.
+ *
+ * **Frontend** (`client/src/pages/financeiro/FinanceiroCategorias.tsx`):
+ * - `Categoria` type + `FormState` + `INITIAL_FORM` ganham
+ *   `contaPaiId`.
+ * - Nova `useQuery` `getAccounts({escopo:"plano", ativo:true})`
+ *   pra popular o select.
+ * - Novo `<select>` "Plano de Contas (opcional)" no dialog, abaixo
+ *   da grid Natureza/Centro de Custo. Options indentadas por
+ *   `nivel` (espaço × (nivel-1)) e ordenadas por `ordem`.
+ * - `openEdit` carrega `contaPaiId` existente.
+ * - `handleSave` passa `contaPaiId` no create + update.
+ * - Lista mostra o vínculo na linha da categoria (badge indigo
+ *   "› 4.4.2 · Aluguel de Veículos") quando preenchido.
+ *
+ * **R-001/R-007/R-010:** OK — zero ALTER/DROP/DELETE, apenas
+ * INSERT/UPDATE idempotente sob ação do user.
+ *
  * Rev. 2161 — **HOTFIX BUILD · Syntax error em FinanceiroCategorias.tsx
  * (vírgula dupla no `createMut.mutate`).**
  *

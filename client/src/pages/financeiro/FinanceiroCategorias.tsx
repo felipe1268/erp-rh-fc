@@ -32,6 +32,7 @@ type Categoria = {
   tipo: string;
   natureza: string;
   centroCustoId: number | null;
+  contaPaiId: number | null;
   ativo: number;
 };
 
@@ -41,6 +42,7 @@ type FormState = {
   tipo: "receita" | "despesa";
   natureza: "fixo" | "variavel";
   centroCustoId: string;
+  contaPaiId: string;
 };
 
 const INITIAL_FORM: FormState = {
@@ -49,6 +51,7 @@ const INITIAL_FORM: FormState = {
   tipo: "despesa",
   natureza: "variavel",
   centroCustoId: "",
+  contaPaiId: "",
 };
 
 export default function FinanceiroCategorias() {
@@ -72,6 +75,11 @@ export default function FinanceiroCategorias() {
   );
   const { data: costCenters } = (trpc as any).financial.getCostCenters.useQuery(
     { companyId },
+    { enabled: !!companyId },
+  );
+  // Rev. 2162 — lista do Plano de Contas (contábil) para o select "Vincular ao Plano de Contas"
+  const { data: planoContas } = (trpc as any).financial.getAccounts.useQuery(
+    { companyId, escopo: "plano", ativo: true },
     { enabled: !!companyId },
   );
 
@@ -125,6 +133,7 @@ export default function FinanceiroCategorias() {
       tipo: (c.tipo === "receita" ? "receita" : "despesa"),
       natureza: (c.natureza === "fixo" ? "fixo" : "variavel"),
       centroCustoId: c.centroCustoId ? String(c.centroCustoId) : "",
+      contaPaiId: c.contaPaiId ? String(c.contaPaiId) : "",
     });
     setShowForm(true);
   }
@@ -136,6 +145,7 @@ export default function FinanceiroCategorias() {
       return;
     }
     const centroCustoId = form.centroCustoId ? Number(form.centroCustoId) : null;
+    const contaPaiId = form.contaPaiId ? Number(form.contaPaiId) : null;
     if (form.id) {
       updateMut.mutate({
         id: form.id,
@@ -144,6 +154,7 @@ export default function FinanceiroCategorias() {
         tipo: form.tipo,
         natureza: form.natureza,
         centroCustoId,
+        contaPaiId,
       });
     } else {
       createMut.mutate({
@@ -152,6 +163,7 @@ export default function FinanceiroCategorias() {
         tipo: form.tipo,
         natureza: form.natureza,
         centroCustoId: centroCustoId ?? undefined,
+        contaPaiId: contaPaiId ?? undefined,
         escopo: "categoria",
       });
     }
@@ -170,6 +182,11 @@ export default function FinanceiroCategorias() {
     if (!id) return "—";
     const cc = (Array.isArray(costCenters) ? costCenters : []).find((c: any) => c.id === id);
     return cc ? `${cc.codigo ? cc.codigo + " · " : ""}${cc.nome}` : `#${id}`;
+  }
+  function planoLabel(id: number | null): string {
+    if (!id) return "";
+    const p = (Array.isArray(planoContas) ? planoContas : []).find((x: any) => x.id === id);
+    return p ? `${p.codigo} · ${p.nome}` : `#${id}`;
   }
 
   const isPending = createMut.isPending || updateMut.isPending;
@@ -289,6 +306,12 @@ export default function FinanceiroCategorias() {
                             <Layers className="w-3 h-3" />
                             {ccLabel(c.centroCustoId)}
                           </span>
+                          {c.contaPaiId && (
+                            <span className="flex items-center gap-1 text-indigo-600 font-medium">
+                              <span className="font-mono">›</span>
+                              {planoLabel(c.contaPaiId)}
+                            </span>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -389,6 +412,30 @@ export default function FinanceiroCategorias() {
                     ))}
                   </select>
                 </div>
+              </div>
+              {/* Rev. 2162 — vínculo com Plano de Contas (contábil) */}
+              <div>
+                <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                  Plano de Contas <span className="text-gray-400 normal-case">(opcional)</span>
+                </label>
+                <select
+                  value={form.contaPaiId}
+                  onChange={(e) => setForm((f) => ({ ...f, contaPaiId: e.target.value }))}
+                  className="mt-1 h-9 w-full rounded-md border border-gray-200 px-2 text-sm bg-white"
+                >
+                  <option value="">— Não vincular —</option>
+                  {(Array.isArray(planoContas) ? planoContas : [])
+                    .slice()
+                    .sort((a: any, b: any) => Number(a.ordem ?? 0) - Number(b.ordem ?? 0) || String(a.codigo).localeCompare(String(b.codigo)))
+                    .map((p: any) => (
+                      <option key={p.id} value={p.id}>
+                        {"  ".repeat(Math.max(0, Number(p.nivel ?? 1) - 1))}{p.codigo} · {p.nome}
+                      </option>
+                    ))}
+                </select>
+                <p className="text-[10px] text-gray-400 mt-1">
+                  Vincula esta categoria a uma conta do plano contábil (ex.: "Combustível" → "4.4.2 Aluguel de Veículos").
+                </p>
               </div>
               {!form.id && (
                 <div className="bg-blue-50 border border-blue-100 rounded-lg p-2.5 text-[11px] text-blue-700 leading-relaxed">

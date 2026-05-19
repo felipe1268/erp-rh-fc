@@ -185,6 +185,7 @@ export const financialRouter = router({
     tipo: z.string().optional(),
     natureza: z.string().optional(),
     centroCustoId: z.number().nullable().optional(),
+    contaPaiId: z.number().nullable().optional(),
     classificacaoDRE: z.string().optional(),
     ativo: z.boolean().optional(),
     ordem: z.number().optional(),
@@ -198,6 +199,7 @@ export const financialRouter = router({
     if (input.tipo !== undefined) { parts.push(`tipo=$${i++}`); vals.push(input.tipo); }
     if (input.natureza !== undefined) { parts.push(`natureza=$${i++}`); vals.push(input.natureza); }
     if (input.centroCustoId !== undefined) { parts.push(`centro_custo_id=$${i++}`); vals.push(input.centroCustoId); }
+    if (input.contaPaiId !== undefined) { parts.push(`conta_pai_id=$${i++}`); vals.push(input.contaPaiId); }
     if (input.classificacaoDRE !== undefined) { parts.push(`classificacao_dre=$${i++}`); vals.push(input.classificacaoDRE); }
     if (input.ativo !== undefined) { parts.push(`ativo=$${i++}`); vals.push(input.ativo ? 1 : 0); }
     if (input.ordem !== undefined) { parts.push(`ordem=$${i++}`); vals.push(input.ordem); }
