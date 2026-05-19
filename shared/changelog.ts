@@ -1,6 +1,31 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2124 — **RH · Contrato de Experiência: prazo + datas da CLÁUSULA 5ª
+ * destacados em VERMELHO pra evitar erro de leitura.**
+ *
+ * Pedido do user: "quero também o prazo e data do contrato de experiência em
+ * vermelho para destaque".
+ *
+ * Single-file change em `client/src/pages/Colaboradores.tsx` — na CLÁUSULA 5ª
+ * (DO PRAZO), os 6 spans em `<strong>` que contêm número de dias do contrato
+ * inicial, data de início, data de término previsto, dias de prorrogação,
+ * total de dias e data de término final ganharam `style="color:#c1121f"`
+ * (vermelho-bordô forte, ~ Tailwind red-700). Cor escolhida por contrastar
+ * bem em impressão preto-e-branco-cinza E em monitores; e é a mesma família
+ * usada nos badges de alerta do app.
+ *
+ * Inline-style em vez de classe CSS pra sobreviver à serialização HTML
+ * (DOMPurify + window.open puro). Sem `<style>` externo.
+ *
+ * Arquivos: `client/src/pages/Colaboradores.tsx` (1 linha do template),
+ * `shared/version.ts` (bump 2123 → 2124), `shared/changelog.ts` (esta
+ * entrada), `replit.md` (one-liner shift).
+ *
+ * R-001 / R-007 / R-010: OK — alteração 100% client-side cosmética.
+ *
+ * --------------------------------------------------------------------------
+ *
  * Rev. 2123 — **RH · Contrato de Experiência usa a JORNADA REAL do colaborador
  * + bloqueia geração se jornada não definida + nova CLÁUSULA 4ª (horas extras
  * Art. 59 CLT como prerrogativa do empregador).**
