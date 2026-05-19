@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { ShieldCheck, Users, Loader2, Copy, CheckCircle2, ExternalLink, Send, Lock } from "lucide-react";
+import { ShieldCheck, Users, Loader2, Copy, CheckCircle2, ExternalLink, Send, Lock, ArrowUp, ArrowDown, ListOrdered } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 
@@ -32,17 +32,39 @@ function maskCpf(v: string): string {
   return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-${d.slice(9)}`;
 }
 
+// Rev. 2119: Roles fixos do core (sempre presentes). Testemunhas entram
+// dinamicamente ao final SE preenchidas. A ordem dos roles fixos é
+// controlada pelo state `roleOrder` (default: colaborador 1º, empregador 2º).
+type CoreRole = "empregado" | "empregador";
+
 export default function FCSignSendDialog({ open, onOpenChange, companyId, employeeId, tipo, documentTitle, documentHtml, empregadoNome, empregadoCpf }: Props) {
   const [t1Nome, setT1Nome] = useState("");
   const [t1Cpf, setT1Cpf] = useState("");
   const [t2Nome, setT2Nome] = useState("");
   const [t2Cpf, setT2Cpf] = useState("");
+  // Rev. 2119: ordem dos signatários CORE. Default: Empregado 1º → Empregador 2º
+  // (regra padrão FC: colaborador lê e assina, depois diretoria valida).
+  // Testemunhas, se preenchidas, sempre vão DEPOIS na ordem 3ª e 4ª.
+  const [roleOrder, setRoleOrder] = useState<CoreRole[]>(["empregado", "empregador"]);
   const [result, setResult] = useState<{ sessionId: number; signers: Array<{ id: number; role: string; nome: string; link: string }> } | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
   const createMut = trpc.signatures.create.useMutation();
 
+  const moveRole = (role: CoreRole, dir: -1 | 1) => {
+    setRoleOrder((prev) => {
+      const idx = prev.indexOf(role);
+      const newIdx = idx + dir;
+      if (idx < 0 || newIdx < 0 || newIdx >= prev.length) return prev;
+      const copy = [...prev];
+      [copy[idx], copy[newIdx]] = [copy[newIdx], copy[idx]];
+      return copy;
+    });
+  };
+  const ordemDe = (role: CoreRole) => roleOrder.indexOf(role) + 1;
+
   const reset = () => {
     setT1Nome(""); setT1Cpf(""); setT2Nome(""); setT2Cpf("");
+    setRoleOrder(["empregado", "empregador"]);
     setResult(null); setCopied(null);
   };
 
@@ -53,11 +75,16 @@ export default function FCSignSendDialog({ open, onOpenChange, companyId, employ
 
   const handleSubmit = async () => {
     try {
-      // Testemunhas são OPCIONAIS — só anexa ao array se nome foi preenchido.
-      const signers: Array<{ role: "empregado" | "empregador" | "testemunha_1" | "testemunha_2"; nome: string; cpf: string | null }> = [
-        { role: "empregado", nome: empregadoNome, cpf: empregadoCpf || null },
-        { role: "empregador", nome: FELIPE_SOCIO.nome, cpf: FELIPE_SOCIO.cpf },
-      ];
+      // Rev. 2119: monta na ordem definida pelo user (roleOrder). O backend
+      // grava `ordem = i+1` baseado na posição no array, então a sequência
+      // visual = sequência de assinatura.
+      const coreSigners: Record<CoreRole, { role: CoreRole; nome: string; cpf: string | null }> = {
+        empregado: { role: "empregado", nome: empregadoNome, cpf: empregadoCpf || null },
+        empregador: { role: "empregador", nome: FELIPE_SOCIO.nome, cpf: FELIPE_SOCIO.cpf },
+      };
+      const signers: Array<{ role: "empregado" | "empregador" | "testemunha_1" | "testemunha_2"; nome: string; cpf: string | null }> =
+        roleOrder.map((r) => coreSigners[r]);
+      // Testemunhas SEMPRE depois dos core, na ordem T1 → T2
       if (t1Nome.trim()) signers.push({ role: "testemunha_1", nome: t1Nome.trim(), cpf: t1Cpf || null });
       if (t2Nome.trim()) signers.push({ role: "testemunha_2", nome: t2Nome.trim(), cpf: t2Cpf || null });
       const r = await createMut.mutateAsync({
@@ -116,47 +143,78 @@ export default function FCSignSendDialog({ open, onOpenChange, companyId, employ
         <div className="flex-1 overflow-y-auto p-6 bg-slate-50">
           {!result ? (
             <div className="space-y-4 max-w-6xl mx-auto w-full">
-              {/* Linha 1: Empregado + Empregador lado a lado (2 cols no desktop) */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                {/* Card EMPREGADO (read-only) */}
-                <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
-                  <div className="bg-emerald-50 border-b border-emerald-100 px-4 py-2 flex items-center gap-2">
-                    <Users className="h-4 w-4 text-emerald-700" />
-                    <span className="text-xs font-bold uppercase tracking-wide text-emerald-800">Empregado(a)</span>
-                  </div>
-                  <div className="p-4 text-sm">
-                    <label className="text-[11px] font-bold uppercase tracking-wide text-slate-600 mb-1.5 block">Nome completo</label>
-                    <Input value={empregadoNome} disabled className="h-9 bg-slate-100" />
-                    <label className="text-[11px] font-bold uppercase tracking-wide text-slate-600 mb-1.5 block mt-3">CPF</label>
-                    <Input value={empregadoCpf || ""} disabled className="h-9 bg-slate-100" placeholder="—" />
-                  </div>
+              {/* Rev. 2119: Banner explicando ordem sequencial */}
+              <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-3 flex items-start gap-2 text-xs text-indigo-900">
+                <ListOrdered className="h-4 w-4 mt-0.5 flex-shrink-0 text-indigo-700" />
+                <div>
+                  <b>Fluxo sequencial:</b> os signatários assinam na ordem definida abaixo (1ª → 2ª → 3ª → 4ª). Use as setas ↑/↓ pra escolher quem assina primeiro. Testemunhas, se houver, sempre vêm no final.
                 </div>
+              </div>
 
-                {/* Card EMPREGADOR (sócio fixo) */}
-                <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
-                  <div className="bg-blue-50 border-b border-blue-100 px-4 py-2 flex items-center gap-2">
-                    <ShieldCheck className="h-4 w-4 text-blue-700" />
-                    <span className="text-xs font-bold uppercase tracking-wide text-blue-800">Empregador (FC Engenharia)</span>
-                  </div>
-                  <div className="p-4 space-y-3">
-                    <div>
-                      <label className="text-[11px] font-bold uppercase tracking-wide text-slate-600 mb-1.5 flex items-center gap-1">
-                        Sócio responsável
-                        <Lock className="h-3 w-3 text-slate-400" />
-                        <span className="text-slate-400 normal-case font-normal ml-1">· fixo (única assinatura autorizada)</span>
-                      </label>
-                      <Input value={FELIPE_SOCIO.nome} disabled className="h-9 bg-slate-100 font-medium" />
+              {/* Linha 1: Empregado + Empregador renderizados na ORDEM definida */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                {roleOrder.map((role) => {
+                  const ordem = ordemDe(role);
+                  const isFirst = ordem === 1;
+                  const isLast = ordem === roleOrder.length;
+                  const orderControls = (
+                    <div className="flex items-center gap-1 ml-auto">
+                      <span className="bg-indigo-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">{ordem}ª</span>
+                      <button type="button" onClick={() => moveRole(role, -1)} disabled={isFirst}
+                        className="p-1 rounded hover:bg-slate-200 disabled:opacity-30 disabled:cursor-not-allowed" title="Mover pra cima">
+                        <ArrowUp className="h-3.5 w-3.5" />
+                      </button>
+                      <button type="button" onClick={() => moveRole(role, 1)} disabled={isLast}
+                        className="p-1 rounded hover:bg-slate-200 disabled:opacity-30 disabled:cursor-not-allowed" title="Mover pra baixo">
+                        <ArrowDown className="h-3.5 w-3.5" />
+                      </button>
                     </div>
-                    <div>
-                      <label className="text-[11px] font-bold uppercase tracking-wide text-slate-600 mb-1.5 block">CPF</label>
-                      <Input value={FELIPE_SOCIO.cpf} disabled className="h-9 bg-slate-100" />
+                  );
+                  if (role === "empregado") {
+                    return (
+                      <div key={role} className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden" style={{ order: ordem }}>
+                        <div className="bg-emerald-50 border-b border-emerald-100 px-4 py-2 flex items-center gap-2">
+                          <Users className="h-4 w-4 text-emerald-700" />
+                          <span className="text-xs font-bold uppercase tracking-wide text-emerald-800">Empregado(a)</span>
+                          {orderControls}
+                        </div>
+                        <div className="p-4 text-sm">
+                          <label className="text-[11px] font-bold uppercase tracking-wide text-slate-600 mb-1.5 block">Nome completo</label>
+                          <Input value={empregadoNome} disabled className="h-9 bg-slate-100" />
+                          <label className="text-[11px] font-bold uppercase tracking-wide text-slate-600 mb-1.5 block mt-3">CPF</label>
+                          <Input value={empregadoCpf || ""} disabled className="h-9 bg-slate-100" placeholder="—" />
+                        </div>
+                      </div>
+                    );
+                  }
+                  return (
+                    <div key={role} className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden" style={{ order: ordem }}>
+                      <div className="bg-blue-50 border-b border-blue-100 px-4 py-2 flex items-center gap-2">
+                        <ShieldCheck className="h-4 w-4 text-blue-700" />
+                        <span className="text-xs font-bold uppercase tracking-wide text-blue-800">Empregador (FC Engenharia)</span>
+                        {orderControls}
+                      </div>
+                      <div className="p-4 space-y-3">
+                        <div>
+                          <label className="text-[11px] font-bold uppercase tracking-wide text-slate-600 mb-1.5 flex items-center gap-1">
+                            Sócio responsável
+                            <Lock className="h-3 w-3 text-slate-400" />
+                            <span className="text-slate-400 normal-case font-normal ml-1">· fixo (única assinatura autorizada)</span>
+                          </label>
+                          <Input value={FELIPE_SOCIO.nome} disabled className="h-9 bg-slate-100 font-medium" />
+                        </div>
+                        <div>
+                          <label className="text-[11px] font-bold uppercase tracking-wide text-slate-600 mb-1.5 block">CPF</label>
+                          <Input value={FELIPE_SOCIO.cpf} disabled className="h-9 bg-slate-100" />
+                        </div>
+                        <p className="text-[11px] text-blue-700 bg-blue-50 border border-blue-100 rounded-md px-2.5 py-2 leading-tight">
+                          <ShieldCheck className="h-3 w-3 inline mr-1" />
+                          Por política da FC Engenharia, <b>somente Felipe Costa Alves</b> pode assinar como sócio responsável em qualquer documento.
+                        </p>
+                      </div>
                     </div>
-                    <p className="text-[11px] text-blue-700 bg-blue-50 border border-blue-100 rounded-md px-2.5 py-2 leading-tight">
-                      <ShieldCheck className="h-3 w-3 inline mr-1" />
-                      Por política da FC Engenharia, <b>somente Felipe Costa Alves</b> pode assinar como sócio responsável em qualquer documento.
-                    </p>
-                  </div>
-                </div>
+                  );
+                })}
               </div>
 
               {/* Card TESTEMUNHAS (full width, 2 cols internas) */}

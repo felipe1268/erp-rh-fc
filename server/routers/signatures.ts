@@ -14,30 +14,82 @@ function sha256(s: string) {
 function genToken() {
   return randomBytes(32).toString("hex");
 }
+// Rev. 2119: escape HTML defensivo — nome/cpf de signatários (especialmente
+// testemunhas digitadas livremente no FCSignSendDialog) são interpolados no
+// HTML do `renderFinalHtml` que vai parar tanto no preview quanto no arquivo
+// final persistido no storage. Sem escape, abre stored-XSS / HTML injection.
+function escapeHtml(s: string | null | undefined): string {
+  if (s == null) return "";
+  return String(s)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
 
-function renderFinalHtml(documentHtml: string, signers: Array<{ role: string; nome: string; cpf: string | null; signedAt: string | null; signatureDataUrl: string | null; ip: string | null; signatureHash: string | null }>) {
+// Rev. 2119: signers agora podem incluir `ordem` (1..n) — quando passado, o bloco
+// de assinaturas é ordenado por `ordem` e signatários pendentes aparecem como
+// "Aguardando assinatura" (caixa cinza) em vez de "Não assinado" (vermelho).
+// Isso permite renderizar o documento parcial (preview) durante o fluxo,
+// mostrando quem já assinou e quem ainda falta — sem esperar todos.
+function renderFinalHtml(
+  documentHtml: string,
+  signers: Array<{ role: string; ordem?: number | null; nome: string; cpf: string | null; signedAt: string | null; signatureDataUrl: string | null; ip: string | null; signatureHash: string | null }>,
+  opts?: { isPreview?: boolean }
+) {
+  const isPreview = !!opts?.isPreview;
   const roleLabel: Record<string, string> = {
     empregado: "EMPREGADO(A)",
     empregador: "EMPREGADOR (FC Engenharia)",
     testemunha_1: "Testemunha 1",
     testemunha_2: "Testemunha 2",
   };
-  const sigsHtml = signers.map((s) => {
+  // Ordena por `ordem` quando disponível (fallback: mantém ordem do array)
+  const ordered = [...signers].sort((a, b) => (a.ordem ?? 0) - (b.ordem ?? 0));
+  const sigsHtml = ordered.map((s) => {
     const dt = s.signedAt ? new Date(s.signedAt).toLocaleString("pt-BR") : "—";
-    return `<div style="border:1px solid #ccc;border-radius:4px;padding:12px;margin-bottom:12px;page-break-inside:avoid">
-  <div style="font-size:10pt;color:#666;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">${roleLabel[s.role] || s.role}</div>
-  <div style="font-weight:bold;font-size:11pt">${s.nome}</div>
-  ${s.cpf ? `<div style="font-size:9pt;color:#555">CPF: ${s.cpf}</div>` : ""}
-  ${s.signatureDataUrl ? `<img src="${s.signatureDataUrl}" alt="Assinatura" style="max-height:80px;margin-top:6px;display:block" />` : `<div style="color:#a00;font-style:italic">Não assinado</div>`}
+    const nomeSafe = escapeHtml(s.nome);
+    const cpfSafe = escapeHtml(s.cpf);
+    const roleSafe = escapeHtml(roleLabel[s.role] || s.role);
+    const ipSafe = escapeHtml(s.ip);
+    // signatureDataUrl JÁ validado por regex no `sign` (`^data:image/(png|jpeg);base64,`)
+    // signatureHash JÁ é hex puro do sha256
+    const ordemBadge = s.ordem ? `<span style="display:inline-block;background:#1B2A4A;color:#fff;font-size:8pt;padding:1px 6px;border-radius:3px;margin-right:6px;vertical-align:middle">${s.ordem}ª</span>` : "";
+    if (s.signedAt && s.signatureDataUrl) {
+      return `<div style="border:1px solid #ccc;border-radius:4px;padding:12px;margin-bottom:12px;page-break-inside:avoid;background:#fff">
+  <div style="font-size:10pt;color:#666;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">${ordemBadge}${roleSafe}</div>
+  <div style="font-weight:bold;font-size:11pt">${nomeSafe}</div>
+  ${cpfSafe ? `<div style="font-size:9pt;color:#555">CPF: ${cpfSafe}</div>` : ""}
+  <img src="${s.signatureDataUrl}" alt="Assinatura" style="max-height:80px;margin-top:6px;display:block" />
   <div style="font-size:8pt;color:#888;margin-top:6px">
-    Assinado em: ${dt}${s.ip ? ` · IP: ${s.ip}` : ""}${s.signatureHash ? `<br/>Hash: ${s.signatureHash.substring(0, 32)}…` : ""}
+    Assinado em: ${dt}${ipSafe ? ` · IP: ${ipSafe}` : ""}${s.signatureHash ? `<br/>Hash: ${s.signatureHash.substring(0, 32)}…` : ""}
   </div>
+</div>`;
+    }
+    // Pendente — preview mostra "Aguardando", final mostra "Não assinado"
+    const waitMsg = isPreview ? "⏳ Aguardando assinatura" : "Não assinado";
+    const waitColor = isPreview ? "#92400e" : "#a00";
+    const waitBg = isPreview ? "#fef3c7" : "#fff";
+    const waitBorder = isPreview ? "#fcd34d" : "#ccc";
+    return `<div style="border:1px dashed ${waitBorder};border-radius:4px;padding:12px;margin-bottom:12px;page-break-inside:avoid;background:${waitBg}">
+  <div style="font-size:10pt;color:#666;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">${ordemBadge}${roleSafe}</div>
+  <div style="font-weight:bold;font-size:11pt;color:#333">${nomeSafe}</div>
+  ${cpfSafe ? `<div style="font-size:9pt;color:#555">CPF: ${cpfSafe}</div>` : ""}
+  <div style="color:${waitColor};font-style:italic;font-size:9.5pt;margin-top:6px">${waitMsg}</div>
 </div>`;
   }).join("\n");
 
+  const headerTitle = isPreview
+    ? "Assinaturas Digitais — FCSign (Em andamento)"
+    : "Assinaturas Digitais — FCSign";
+  const subtitle = isPreview
+    ? "Documento em coleta de assinaturas — fluxo sequencial conforme ordem definida. As assinaturas concluídas têm validade jurídica nos termos da MP 2.200-2/2001."
+    : "Documento assinado eletronicamente nos termos da Medida Provisória 2.200-2/2001.";
+
   const footer = `<div style="margin-top:40px;border-top:2px solid #1B2A4A;padding-top:16px;page-break-before:auto">
-  <h3 style="color:#1B2A4A;margin:0 0 12px 0;font-size:13pt;text-transform:uppercase;letter-spacing:1px">Assinaturas Digitais — FCSign</h3>
-  <p style="font-size:9pt;color:#666;margin-bottom:16px">Documento assinado eletronicamente nos termos da Medida Provisória 2.200-2/2001.</p>
+  <h3 style="color:#1B2A4A;margin:0 0 12px 0;font-size:13pt;text-transform:uppercase;letter-spacing:1px">${headerTitle}</h3>
+  <p style="font-size:9pt;color:#666;margin-bottom:16px">${subtitle}</p>
   ${sigsHtml}
 </div>`;
 
@@ -125,22 +177,64 @@ export const signaturesRouter = router({
       if (!session) throw new TRPCError({ code: "NOT_FOUND", message: "Sessão não encontrada." });
       const [emp] = await db.select({ nome: employees.nomeCompleto }).from(employees).where(eq(employees.id, session.employeeId)).limit(1);
       const [comp] = await db.select({ razaoSocial: companies.razaoSocial, cnpj: companies.cnpj }).from(companies).where(eq(companies.id, session.companyId)).limit(1);
-      const allSigners = await db.select({
-        id: signatureSigners.id, role: signatureSigners.role, nome: signatureSigners.nome, signedAt: signatureSigners.signedAt,
-      }).from(signatureSigners).where(eq(signatureSigners.sessionId, session.id));
+      // Rev. 2119: agora trazemos TUDO dos signers (precisa de signatureDataUrl,
+      // signedAt, ip, hash, ordem) pra montar o preview parcial com o bloco de
+      // assinaturas embutido no documento — incluindo "Aguardando assinatura"
+      // dos pendentes e a ordem (1ª, 2ª…) que precisa ser respeitada.
+      const allSignersFull = await db.select().from(signatureSigners)
+        .where(eq(signatureSigners.sessionId, session.id))
+        .orderBy(signatureSigners.ordem);
+
+      // HTML do documento ENRIQUECIDO com bloco de assinaturas (preview).
+      // Se a sessão estiver completa, mostra como definitivo (sem "aguardando").
+      const docHtmlWithSignatures = renderFinalHtml(
+        session.documentHtml,
+        allSignersFull.map((s) => ({
+          role: s.role,
+          ordem: s.ordem,
+          nome: s.nome,
+          cpf: s.cpf,
+          signedAt: s.signedAt,
+          signatureDataUrl: s.signatureDataUrl,
+          ip: s.ip,
+          signatureHash: s.signatureHash,
+        })),
+        { isPreview: session.status !== "completo" }
+      );
+
+      // Ordem: qual o próximo signatário pendente?
+      // Rev. 2119: blindagem contra sessões legadas onde TODOS signers têm
+      // `ordem` nula/zero — nesses casos o fluxo é PARALELO (compat antiga):
+      // qualquer pendente pode assinar a qualquer momento.
+      const todosSemOrdem = allSignersFull.every((s) => !s.ordem);
+      const pendentes = allSignersFull.filter((s) => !s.signedAt).sort((a, b) => (a.ordem ?? 0) - (b.ordem ?? 0));
+      const proximoSigner = pendentes[0] || null;
+      // canSignNow: paralelo se legado; caso contrário, só se for o próximo da fila
+      const canSignNow = todosSemOrdem
+        ? !signer.signedAt
+        : !!(proximoSigner && proximoSigner.id === signer.id);
+      // Quem está bloqueando (só faz sentido quando há ordem sequencial)
+      const aguardando = !canSignNow && !signer.signedAt && proximoSigner && !todosSemOrdem
+        ? { nome: proximoSigner.nome, role: proximoSigner.role, ordem: proximoSigner.ordem }
+        : null;
+
       return {
         signer: {
-          id: signer.id, role: signer.role, nome: signer.nome, cpf: signer.cpf,
+          id: signer.id, role: signer.role, ordem: signer.ordem, nome: signer.nome, cpf: signer.cpf,
           signedAt: signer.signedAt, signatureDataUrl: signer.signatureDataUrl,
         },
         session: {
           id: session.id, tipo: session.tipo, documentTitle: session.documentTitle,
-          documentHtml: session.documentHtml, status: session.status, createdAt: session.createdAt,
+          documentHtml: docHtmlWithSignatures, status: session.status, createdAt: session.createdAt,
           completedAt: session.completedAt,
         },
         employee: emp ?? null,
         company: comp ?? null,
-        allSigners,
+        allSigners: allSignersFull.map((s) => ({
+          id: s.id, role: s.role, ordem: s.ordem, nome: s.nome, signedAt: s.signedAt,
+        })),
+        canSignNow,
+        aguardando,
       };
     }),
 
@@ -161,6 +255,25 @@ export const signaturesRouter = router({
       if (!session) throw new TRPCError({ code: "NOT_FOUND", message: "Sessão não encontrada." });
       if (session.status === "cancelado") throw new TRPCError({ code: "BAD_REQUEST", message: "Esta solicitação foi cancelada." });
       if (session.status === "completo") throw new TRPCError({ code: "BAD_REQUEST", message: "Documento já está completo." });
+
+      // Rev. 2119 — VALIDA ORDEM: só permite assinar se TODOS com `ordem` menor
+      // já assinaram. Garante o fluxo sequencial definido na criação da sessão
+      // (ex: colaborador 1º → empregador 2º → testemunhas 3ª/4ª).
+      const ordemSigners = await db.select({
+        id: signatureSigners.id, nome: signatureSigners.nome, role: signatureSigners.role,
+        ordem: signatureSigners.ordem, signedAt: signatureSigners.signedAt,
+      }).from(signatureSigners).where(eq(signatureSigners.sessionId, session.id));
+      const minhaOrdem = signer.ordem ?? 0;
+      const anterioresPendentes = ordemSigners
+        .filter((s) => (s.ordem ?? 0) < minhaOrdem && !s.signedAt)
+        .sort((a, b) => (a.ordem ?? 0) - (b.ordem ?? 0));
+      if (anterioresPendentes.length > 0) {
+        const proximo = anterioresPendentes[0];
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: `Aguardando assinatura de ${proximo.nome} (${proximo.ordem}ª na ordem) antes da sua.`,
+        });
+      }
 
       // Captura IP do request (Express)
       const req = (ctx as any).req;
@@ -192,7 +305,7 @@ export const signaturesRouter = router({
         }).where(and(eq(signatureSessions.id, session.id), sql`${signatureSessions.status} <> 'completo'`)).returning({ id: signatureSessions.id });
         if (claim.length > 0) {
           const finalHtml = renderFinalHtml(session.documentHtml, allSigners.map((s) => ({
-            role: s.role, nome: s.nome, cpf: s.cpf, signedAt: s.signedAt,
+            role: s.role, ordem: s.ordem, nome: s.nome, cpf: s.cpf, signedAt: s.signedAt,
             signatureDataUrl: s.signatureDataUrl, ip: s.ip, signatureHash: s.signatureHash,
           })));
 

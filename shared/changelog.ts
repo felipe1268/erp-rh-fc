@@ -1,6 +1,117 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2119 — **FCSign · fluxo SEQUENCIAL de assinatura + preview parcial
+ * com assinaturas estampadas A CADA assinatura (não só ao final).**
+ *
+ * Contexto / pedido do user: "ja assinei o documento mas as assinatura não
+ * esta aparecendo aqui pq?" — Felipe (empregador) assinou primeiro, mas o
+ * doc renderizado no FCSign continuava mostrando as linhas vazias do
+ * template. Causa: `renderFinalHtml` só era invocado quando TODOS
+ * assinavam (na transição pra `status = 'completo'`). Adicional: "quero
+ * poder escolher a sequencia de aprovação. neste caso o colaborador
+ * sempre vai assinar primeira depois a diretoria".
+ *
+ * Investigação:
+ *  - Schema `signature_signers` JÁ tinha campo `ordem` (integer), populado
+ *    como `i+1` do array enviado no `create`. Mas `sign` NÃO validava
+ *    ordem e `getByToken` NÃO usava.
+ *  - HTML do documento mostrado ao signatário era literal `session.documentHtml`
+ *    (template original), sem nenhum bloco de assinaturas até o final.
+ *
+ * **Solução (3 frentes, sem mudança de schema):**
+ *
+ * **(A) `server/routers/signatures.ts::renderFinalHtml`** ganhou parâmetro
+ *   `opts.isPreview`. Quando `true`, signatários sem `signedAt` aparecem
+ *   como caixa âmbar tracejada "⏳ Aguardando assinatura"; quando `false`
+ *   (documento finalizado), aparecem como "Não assinado" (vermelho).
+ *   Cada signatário ganha badge "Nª" (ordem) ao lado do role. Bloco
+ *   ordenado por `ordem`.
+ *
+ * **(B) `server/routers/signatures.ts::getByToken`** agora:
+ *   - SELECT * dos signers ordenados por `ordem` (não só id/role/nome/signedAt).
+ *   - Chama `renderFinalHtml(documentHtml, signers, { isPreview })` e
+ *     RETORNA `session.documentHtml` JÁ ENRIQUECIDO com o bloco de
+ *     assinaturas (assinaturas concluídas inline + caixas "aguardando"
+ *     pros pendentes). Frontend não muda nada — só re-renderiza o HTML.
+ *   - Calcula `canSignNow` (= sou o próximo da fila pendente?) e
+ *     `aguardando` (= se não posso assinar, quem estou esperando: nome,
+ *     role, ordem). Retorna ambos pro frontend.
+ *   - `allSigners` agora inclui `ordem`.
+ *   - `signer` agora inclui `ordem`.
+ *
+ * **(C) `server/routers/signatures.ts::sign`** ANTES de gravar a
+ *   assinatura, faz VALIDAÇÃO DE ORDEM: SELECT signers da sessão; filtra
+ *   os com `ordem < minhaOrdem` E `signedAt = NULL`; se houver algum,
+ *   lança `BAD_REQUEST` com mensagem `Aguardando assinatura de {nome}
+ *   ({ordem}ª na ordem) antes da sua.` Defesa em profundidade: mesmo se
+ *   o frontend deixar o botão habilitado, o servidor recusa.
+ *   `renderFinalHtml` no fim (quando completo) passa `ordem` no mapeamento.
+ *
+ * **(D) `client/src/components/FCSignSendDialog.tsx`** — UI de criação:
+ *   - NOVO state `roleOrder: ('empregado'|'empregador')[]` com default
+ *     `['empregado', 'empregador']` (regra padrão do user).
+ *   - NOVO helper `moveRole(role, ±1)` que troca posição no array.
+ *   - Cards `EMPREGADO` e `EMPREGADOR` agora renderizados via
+ *     `roleOrder.map(...)` com `style.order = ordem` (CSS) — visual
+ *     reflete a ordem escolhida. Cada card mostra badge "Nª" + botões
+ *     ↑/↓ (desabilitados nos extremos).
+ *   - Banner indigo no topo explicando "Fluxo sequencial: 1ª → 2ª → 3ª → 4ª".
+ *   - `handleSubmit` monta `signers` na ordem `roleOrder` + testemunhas
+ *     SEMPRE depois (T1 3ª, T2 4ª). Backend grava `ordem = i+1` baseado
+ *     na posição → sequência visual = sequência de assinatura.
+ *
+ * **(E) `client/src/pages/AssinarDocumento.tsx`** — UI do signatário:
+ *   - Lê `canSignNow` e `aguardando` da resposta do `getByToken`.
+ *   - Novo estado visual `blockedByOrder`: se o signatário abriu o link
+ *     mas ainda não é a vez dele, mostra card âmbar "Aguardando
+ *     assinatura anterior" com nome+ordem+role de quem precisa assinar
+ *     antes. O SignaturePad NÃO é renderizado nesse caso (bloqueio na UI
+ *     + bloqueio no servidor).
+ *   - Painel "Assinaturas (em ordem)" agora mostra badge da ordem (1ª,
+ *     2ª, …) tanto pra quem já assinou (✓) quanto pra pendentes
+ *     (círculo com número). Destaque azul no signatário atual (você).
+ *   - Texto "Sua assinatura (Nª na ordem)" deixa claro a posição na fila.
+ *
+ * **Fluxo concreto agora:**
+ *   1. RH cria sessão com Empregado 1ª, Empregador 2ª.
+ *   2. Felipe abre o link dele → vê "Aguardando assinatura anterior · 1ª
+ *      EMPREGADO(A) · LILIAN" e fica bloqueado.
+ *   3. Lilian abre o link dela → assina. Documento agora mostra a
+ *      assinatura dela inline + "⏳ Aguardando assinatura" no Felipe.
+ *   4. Felipe atualiza a página → bloqueio cai, ele pode assinar.
+ *      Assina → documento estampa as 2 assinaturas, `status = completo`,
+ *      arquiva no RAIO-X.
+ *
+ * **Arquivos tocados:**
+ *   - `server/routers/signatures.ts` (~80 linhas: renderFinalHtml + getByToken + sign)
+ *   - `client/src/components/FCSignSendDialog.tsx` (~70 linhas: roleOrder + cards dinâmicos)
+ *   - `client/src/pages/AssinarDocumento.tsx` (~50 linhas: canSignNow/aguardando + UI bloqueio)
+ *
+ * **Não-mudanças:** schema (campo `ordem` já existia), `create` mutation
+ * (já gravava `ordem = i+1`), template do contrato, cancel, listByEmployee.
+ *
+ * **Hardenings pós-code-review (mesma revisão):**
+ *   - NOVO helper `escapeHtml()` em `signatures.ts` — `nome`/`cpf`/`role`/`ip`
+ *     de signatários agora são escapados antes de interpolar no
+ *     `renderFinalHtml`. Defende contra stored-XSS/HTML-injection via
+ *     nomes de testemunhas (campo livre no FCSignSendDialog) que vão
+ *     parar tanto no preview quanto no arquivo HTML persistido no
+ *     storage. `signatureDataUrl` (regex `^data:image/(png|jpeg);base64,`)
+ *     e `signatureHash` (hex puro) não precisam de escape.
+ *   - Compat sessões legadas: novo flag `todosSemOrdem` em `getByToken`.
+ *     Se TODOS signers da sessão estão com `ordem` nula/zero (legado
+ *     pré-2119), o fluxo é PARALELO — `canSignNow = !signedAt` e
+ *     `aguardando = null`. Evita inconsistência onde UI bloqueava mas
+ *     backend permitia.
+ *
+ * **R-001/R-007/R-010:** OK — só SELECT/UPDATE de colunas existentes,
+ * sem ALTER/DROP/DELETE. Idempotente. Backward-compatible: sessões
+ * antigas com signers sem `ordem` (null) caem no fluxo paralelo via
+ * `todosSemOrdem`.
+ *
+ * ---
+ *
  * Rev. 2118 — **RH · Colaboradores · `codigoInterno` agora SEMPRE é
  * gerado — fix preventivo no `createEmployee` + fix retroativo no
  * `updateEmployee` (basta abrir o cadastro e clicar Salvar pra gerar).**

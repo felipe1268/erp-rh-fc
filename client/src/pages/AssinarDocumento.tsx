@@ -2,7 +2,7 @@ import { useRoute } from "wouter";
 import { useRef, useState, useMemo } from "react";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
-import { Loader2, ShieldCheck, AlertTriangle, CheckCircle2, FileText, Users, Building2, ZoomIn, ZoomOut, Printer, Maximize2, Eye, X, PenLine } from "lucide-react";
+import { Loader2, ShieldCheck, AlertTriangle, CheckCircle2, FileText, Users, Building2, ZoomIn, ZoomOut, Printer, Maximize2, Eye, X, PenLine, Hourglass } from "lucide-react";
 import SignaturePad, { type SignaturePadHandle } from "@/components/SignaturePad";
 import { toast } from "sonner";
 import DOMPurify from "dompurify";
@@ -64,10 +64,12 @@ export default function AssinarDocumento() {
     return <CenteredCard><ErrorBox msg={q.error?.message || "Documento não encontrado."} /></CenteredCard>;
   }
 
-  const { signer, session, employee, company, allSigners } = q.data;
+  const { signer, session, employee, company, allSigners, canSignNow, aguardando } = q.data as any;
   const alreadySigned = !!signer.signedAt || justSigned;
   const sessionDone = session.status === "completo";
   const sessionCancelled = session.status === "cancelado";
+  // Rev. 2119: bloqueio por ordem — só pode assinar se for sua vez na fila
+  const blockedByOrder = !alreadySigned && !sessionCancelled && !sessionDone && !canSignNow;
 
   return (
     <div className="min-h-screen bg-slate-100">
@@ -193,21 +195,24 @@ export default function AssinarDocumento() {
             )}
           </div>
 
-          {/* Status das assinaturas */}
+          {/* Status das assinaturas — Rev. 2119: ordem visível (1ª, 2ª…) */}
           <div className="bg-white rounded-lg shadow border border-slate-200 p-4">
-            <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-2 flex items-center gap-1"><Users className="h-3 w-3" /> Assinaturas</div>
+            <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-2 flex items-center gap-1"><Users className="h-3 w-3" /> Assinaturas (em ordem)</div>
             <ul className="space-y-1.5">
-              {allSigners.map((s) => (
-                <li key={s.id} className="flex items-center gap-2 text-xs">
-                  {s.signedAt ? (
-                    <CheckCircle2 className="h-4 w-4 text-emerald-600 flex-shrink-0" />
-                  ) : (
-                    <div className="h-4 w-4 rounded-full border-2 border-slate-300 flex-shrink-0" />
-                  )}
-                  <span className="text-slate-500 w-20 flex-shrink-0">{roleLabel[s.role]?.split(" ")[0] || s.role}</span>
-                  <span className={s.signedAt ? "text-slate-900 font-medium" : "text-slate-500"}>{s.nome}</span>
-                </li>
-              ))}
+              {allSigners.map((s: any) => {
+                const isMe = s.id === signer.id;
+                return (
+                  <li key={s.id} className={`flex items-center gap-2 text-xs ${isMe ? "bg-blue-50 -mx-2 px-2 py-1 rounded" : ""}`}>
+                    {s.signedAt ? (
+                      <CheckCircle2 className="h-4 w-4 text-emerald-600 flex-shrink-0" />
+                    ) : (
+                      <div className="h-4 w-4 rounded-full border-2 border-slate-300 flex-shrink-0 flex items-center justify-center text-[8px] font-bold text-slate-500">{s.ordem}</div>
+                    )}
+                    <span className="text-slate-500 w-16 flex-shrink-0">{s.ordem}ª · {roleLabel[s.role]?.split(" ")[0] || s.role}</span>
+                    <span className={s.signedAt ? "text-slate-900 font-medium" : "text-slate-500"}>{s.nome}{isMe ? " (você)" : ""}</span>
+                  </li>
+                );
+              })}
             </ul>
           </div>
 
@@ -221,14 +226,30 @@ export default function AssinarDocumento() {
             <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4">
               <div className="flex items-center gap-2 text-emerald-800 font-semibold text-sm"><CheckCircle2 className="h-4 w-4" /> Sua assinatura foi registrada</div>
               <p className="text-xs text-emerald-700 mt-1">
-                {sessionDone || justSigned
+                {sessionDone || (justSigned && allSigners.every((s: any) => s.signedAt))
                   ? "Obrigado! O documento foi arquivado no RAIO-X do colaborador."
                   : "Aguardando as demais assinaturas para conclusão."}
               </p>
             </div>
+          ) : blockedByOrder ? (
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+              <div className="flex items-center gap-2 text-amber-900 font-semibold text-sm">
+                <Hourglass className="h-4 w-4" /> Aguardando assinatura anterior
+              </div>
+              <p className="text-xs text-amber-800 mt-2 leading-relaxed">
+                Este documento segue um fluxo sequencial. Sua assinatura ({signer.ordem}ª) só será liberada após:
+              </p>
+              {aguardando && (
+                <div className="mt-2 bg-white border border-amber-200 rounded p-2 text-xs">
+                  <div className="text-amber-700 font-bold">{aguardando.ordem}ª · {roleLabel[aguardando.role] || aguardando.role}</div>
+                  <div className="text-slate-700 font-medium">{aguardando.nome}</div>
+                </div>
+              )}
+              <p className="text-[11px] text-amber-700 mt-2">Atualize esta página ou aguarde a notificação do RH quando for sua vez.</p>
+            </div>
           ) : (
             <div className="bg-white rounded-lg shadow border border-slate-200 p-4">
-              <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-2">Sua assinatura</div>
+              <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-2">Sua assinatura ({signer.ordem}ª na ordem)</div>
               <SignaturePad ref={padRef} height={180} disabled={submitting} />
               <label className="flex items-start gap-2 mt-3 text-xs text-slate-700 cursor-pointer">
                 <input type="checkbox" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} className="mt-0.5" />
