@@ -1,6 +1,43 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2116 — **Documentos institucionais FC · margem superior de 40mm
+ * (4cm) na 2ª página em diante — 1ª página mantém os 14mm originais.**
+ *
+ * Pedido do user: "DE UM ESPAÇO MAIOR NO INICIO DA 2 FOLHA UMA MARGEM
+ * DE 4cm ja ajudaria..". Print anexo da 2ª folha do Contrato de
+ * Experiência mostrava as cláusulas 5ª-8ª colando no topo (apenas 14mm
+ * de respiro), enquanto a 1ª folha tinha o cabeçalho com logo+faixa
+ * azul fazendo o conteúdo descer naturalmente.
+ *
+ * **Solução CSS @page (1 linha):** `client/src/lib/fcDocumentTemplate.ts`
+ * L188-189 — antes: `@page{size:A4;margin:14mm 10mm}`. Depois:
+ *   `@page{size:A4;margin:40mm 10mm 14mm 10mm}` (topo/dir/baixo/esq —
+ *   40mm = 4cm topo em TODAS as páginas)
+ *   `@page :first{margin:14mm 10mm}` (override só na 1ª, mantém o
+ *   layout original com cabeçalho).
+ *
+ * **Efeito:** 1ª página continua idêntica (logo + razão social + faixa
+ * azul + Nº/Data + ASSUNTO + início do corpo). 2ª folha em diante ganha
+ * 4cm de respiro no topo, deixando as cláusulas continuadas com
+ * visual de documento oficial.
+ *
+ * **Por que `@page :first` funciona:** pseudo-classe CSS Paged Media
+ * que sobrescreve margens só da primeira página impressa. Suportada
+ * por Chrome/Edge/Firefox no print preview e PDF.
+ *
+ * **Reuso:** como toda mudança fica no `fcDocumentTemplate.ts`, vale
+ * automaticamente para qualquer documento futuro que use o template
+ * (Aviso Prévio, Termo de Rescisão, Recibo, MDO etc).
+ *
+ * **Não-mudanças:** corpo HTML, cláusulas, assinaturas, rodapé,
+ * helpers `numeroExtenso`, `Colaboradores.tsx`, FCSign,
+ * `signatures.create`. Comunicado React intacto.
+ *
+ * **R-001/R-007/R-010:** N/A — frontend (apenas client/).
+ *
+ * ---
+ *
  * Rev. 2115 — **RH · Contrato de Experiência · CLÁUSULA 2ª (REMUNERAÇÃO) —
  * valor com formato BR (R$ X.XXX,XX) + valor por extenso entre parênteses.**
  *
