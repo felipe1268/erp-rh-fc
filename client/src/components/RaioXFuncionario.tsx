@@ -288,6 +288,9 @@ export default function RaioXFuncionario({ employeeId, open, onClose }: RaioXPro
   const valeAlimentacao = raioX?.valeAlimentacao || [];
   const adiantamentos = raioX?.adiantamentos || [];
   const rateioObras = raioX?.rateioObras || [];
+  // Rev. 2150 — Termos Assinados via FCSign (Termo de Responsabilidade etc.)
+  const fcsignSessions: any[] = (raioX as any)?.fcsignSessions || [];
+  const termosFcsign: any[] = fcsignSessions.filter((s: any) => s && s.status !== "cancelado");
   const avisosPrevios = (raioX as any)?.avisosPrevios || [];
   const ferias = (raioX as any)?.ferias || [];
   const cipa = (raioX as any)?.cipa || [];
@@ -1195,6 +1198,7 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                       { value: "cipa", label: "CIPA", icon: Shield, count: cipa.length },
                       { value: "dds", label: "DDS", icon: MessageSquare, count: dds.length },
                       { value: "integracoes", label: "Integrações", icon: ShieldCheck, count: integracoes.length + integracoesSST.length },
+                      { value: "termos_fcsign", label: "Termos Assinados", icon: FileSignature, count: termosFcsign.length },
                     ],
                   },
                   {
@@ -2458,6 +2462,102 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                     </div>
                   </div>
                 )}
+              </TabsContent>
+
+              {/* ============ TERMOS ASSINADOS (FCSign) — Rev. 2150 ============ */}
+              <TabsContent value="termos_fcsign" className="mt-4">
+                <div className="bg-white rounded-xl border p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
+                      <FileSignature className="h-5 w-5 text-indigo-500" />
+                      Termos & Documentos Assinados (FCSign) — {termosFcsign.length}
+                    </h3>
+                  </div>
+                  {termosFcsign.length === 0 ? (
+                    <div className="text-center py-12 text-muted-foreground">
+                      <FileSignature className="h-10 w-10 mx-auto mb-2 opacity-30" />
+                      Nenhum termo ou documento assinado por FCSign para este colaborador.
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto rounded-lg border">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="bg-indigo-50 border-b">
+                            <th className="p-3 text-left font-semibold text-indigo-900">Documento</th>
+                            <th className="p-3 text-left font-semibold text-indigo-900">Tipo</th>
+                            <th className="p-3 text-left font-semibold text-indigo-900">Status</th>
+                            <th className="p-3 text-left font-semibold text-indigo-900">Emitido em</th>
+                            <th className="p-3 text-left font-semibold text-indigo-900">Concluído em</th>
+                            <th className="p-3 text-left font-semibold text-indigo-900">Por</th>
+                            <th className="p-3 text-right font-semibold text-indigo-900">Ações</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {termosFcsign.map((s: any) => {
+                            const pendente = (s.signers || []).find((sg: any) => !sg.signedAt);
+                            const verUrl = s.status === "completo" && s.finalDocumentUrl
+                              ? s.finalDocumentUrl
+                              : (pendente && pendente.token ? `${window.location.origin}/assinar/${pendente.token}` : null);
+                            const statusLabel: Record<string, { label: string; cls: string }> = {
+                              completo:     { label: "Assinado",  cls: "bg-emerald-100 text-emerald-700 border-emerald-200" },
+                              em_andamento: { label: "Em coleta", cls: "bg-amber-100 text-amber-700 border-amber-200" },
+                              pendente:     { label: "Pendente",  cls: "bg-slate-100 text-slate-700 border-slate-200" },
+                            };
+                            const stat = statusLabel[s.status] || { label: s.status, cls: "bg-slate-100 text-slate-700" };
+                            const tipoLabel = s.tipo === "termo_responsabilidade" ? "Termo de Recebimento"
+                              : s.tipo === "contrato_experiencia" ? "Contrato de Experiência"
+                              : s.tipo;
+                            return (
+                              <tr key={s.id} className="border-b last:border-0 hover:bg-muted/30">
+                                <td className="p-3 font-medium text-indigo-700">{s.documentTitle}</td>
+                                <td className="p-3 text-xs">{tipoLabel}</td>
+                                <td className="p-3">
+                                  <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${stat.cls}`}>
+                                    {stat.label}
+                                  </span>
+                                </td>
+                                <td className="p-3 text-xs">{s.createdAt ? new Date(s.createdAt).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "—"}</td>
+                                <td className="p-3 text-xs">{s.completedAt ? new Date(s.completedAt).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "—"}</td>
+                                <td className="p-3 text-xs">{s.createdByName || "—"}</td>
+                                <td className="p-3 text-right">
+                                  <div className="inline-flex gap-1">
+                                    {verUrl ? (
+                                      <a
+                                        href={verUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded hover:bg-indigo-50 text-indigo-700"
+                                        title="Visualizar documento"
+                                      >
+                                        <Eye className="h-3.5 w-3.5" /> Ver
+                                      </a>
+                                    ) : (
+                                      <span className="text-xs text-muted-foreground px-2">—</span>
+                                    )}
+                                    {s.status === "completo" && s.finalDocumentUrl ? (
+                                      <a
+                                        href={s.finalDocumentUrl}
+                                        download={`${s.documentTitle}.html`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded hover:bg-emerald-50 text-emerald-700"
+                                        title="Baixar HTML assinado"
+                                      >
+                                        <FileText className="h-3.5 w-3.5" /> Baixar
+                                      </a>
+                                    ) : (
+                                      <span className="text-xs text-muted-foreground px-2" title="Disponível após assinatura completa">—</span>
+                                    )}
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
               </TabsContent>
 
               {/* ============ INTEGRAÇÕES ============ */}

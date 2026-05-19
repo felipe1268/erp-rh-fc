@@ -1,6 +1,44 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2150 — **NOVA FEATURE · Termos & Documentos Assinados (FCSign)
+ * agora aparecem no Raio-X do funcionário, com Visualizar + Baixar.**
+ *
+ * User: "O termo precisa estar no raio-x do funcionário tbm... precisa
+ * poder visualizar e fazer download". Apesar de o procedure
+ * `controleDocumentos.raioX` já estar retornando `fcsignSessions` (com
+ * `finalDocumentUrl`, `signers[]`, `status` etc.), o cliente
+ * `RaioXFuncionario.tsx` só usava esse array pra empurrar eventos na
+ * timeline ("FCSign · Documento enviado/Assinatura") — não havia
+ * lugar nenhum pra clicar e abrir/baixar o documento.
+ *
+ * **Mudanças em `client/src/components/RaioXFuncionario.tsx`:**
+ *
+ * 1. Novo derivado no topo (~L294): `fcsignSessions = raioX.fcsignSessions
+ *    || []` e `termosFcsign = fcsignSessions.filter(s => s.status !==
+ *    "cancelado")` — esconde sessões canceladas (Rev. 2149 soft-cancel).
+ * 2. Nova tab no grupo **SST** (~L1201): `{ value: "termos_fcsign",
+ *    label: "Termos Assinados", icon: FileSignature, count:
+ *    termosFcsign.length }`. Colocada na SST por afinidade com EPIs/
+ *    treinamentos — o termo de recebimento de EPI nasce ali.
+ * 3. Novo `<TabsContent value="termos_fcsign">` (~L2470) com card branco
+ *    + tabela: Documento | Tipo | Status (badge color-coded) | Emitido
+ *    em | Concluído em | Por | Ações (Ver/Baixar).
+ *    - **Ver**: link `finalDocumentUrl` se status=completo; fallback
+ *      pro link `/assinar/{token}` do primeiro signer pendente (se o
+ *      backend expuser o token — hoje não expõe, então pendentes ficam
+ *      sem botão Ver e o usuário usa a aba Controle de Documentos).
+ *    - **Baixar**: `<a download>` direto pro `finalDocumentUrl` (HTML
+ *      auto-contido, mesmo padrão das Rev. 2106+).
+ *    - Empty state com ícone e mensagem clara.
+ * 4. Tipos amigáveis: "termo_responsabilidade" → "Termo de Recebimento",
+ *    "contrato_experiencia" → "Contrato de Experiência".
+ *
+ * **Backend**: zero mudanças — `raioX.fcsignSessions` já vinha completo
+ * desde a Rev. 2106 (linha 2032-2035 de `controleDocumentos.ts`).
+ *
+ * **R-001/R-007/R-010**: OK — só client-side, sem ALTER/DROP/DELETE.
+ *
  * Rev. 2149 — **NOVA FEATURE · Multi-seleção + exclusão em lote no painel
  * "Termo de Recebimento" (gestão centralizada das Rev. 2146/2147/2148).**
  *
