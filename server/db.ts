@@ -507,6 +507,26 @@ function proximoNumeroValido(num: number, proibidos?: Set<number>): number {
   return num;
 }
 
+/**
+ * Rev. 2118 — Helper defensivo: calcula o próximo número de codigoInterno
+ * pra uma empresa olhando o MAX numérico dos employees existentes
+ * (ignora soft-deleted). Usado como fallback quando `nextCodigoInterno`
+ * está desincronizado (NULL, zerado, ou menor que o MAX já gerado).
+ */
+async function getMaxCodigoInternoNumero(db: any, companyId: number, prefixo: string): Promise<number> {
+  const exec = await db.execute(
+    sql`SELECT COALESCE(MAX(CAST(REGEXP_REPLACE("codigoInterno", '\D', '', 'g') AS INTEGER)), 0) AS max_num
+        FROM employees
+        WHERE "companyId" = ${companyId}
+          AND "codigoInterno" IS NOT NULL
+          AND "codigoInterno" <> ''
+          AND "codigoInterno" ~ '[0-9]'`
+  ) as any;
+  const rows = exec?.rows ?? exec ?? [];
+  const n = parseInt(String(rows?.[0]?.max_num ?? 0)) || 0;
+  return n;
+}
+
 export async function createEmployee(data: InsertEmployee) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
@@ -523,7 +543,7 @@ export async function createEmployee(data: InsertEmployee) {
   
   // Buscar prefixo da empresa e incrementar nextCodigoInterno atomicamente
   await db.execute(
-    sql`UPDATE companies SET "nextCodigoInterno" = "nextCodigoInterno" + 1 WHERE id = ${companyId}`
+    sql`UPDATE companies SET "nextCodigoInterno" = COALESCE("nextCodigoInterno", 0) + 1 WHERE id = ${companyId}`
   );
   const companyExec = await db.execute(
     sql`SELECT "prefixoCodigo", "nextCodigoInterno" - 1 as "usedNum", "numerosProibidos" FROM companies WHERE id = ${companyId}`
@@ -533,7 +553,20 @@ export async function createEmployee(data: InsertEmployee) {
   const prefixo = companyRows?.[0]?.prefixoCodigo || 'EMP';
   const numerosProibidosStr = companyRows?.[0]?.numerosProibidos;
   const proibidos = parseNumerosProibidos(numerosProibidosStr);
-  let num = parseInt(String(companyRows?.[0]?.usedNum ?? 1)) || 1;
+  let num = parseInt(String(companyRows?.[0]?.usedNum ?? 0)) || 0;
+
+  // Rev. 2118 — DEFENSIVO: se o contador `nextCodigoInterno` está desincronizado
+  // (NULL, 0, ou menor que o maior número JÁ usado por algum employee desta
+  // empresa), realinhar com MAX(codigoInterno)+1. Evita colisões e códigos
+  // baixos repetidos quando o counter foi resetado ou nunca inicializado.
+  const maxExistente = await getMaxCodigoInternoNumero(db, companyId as number, prefixo);
+  if (num <= maxExistente) {
+    num = maxExistente + 1;
+    await db.execute(
+      sql`UPDATE companies SET "nextCodigoInterno" = ${num + 1} WHERE id = ${companyId}`
+    );
+  }
+  if (num < 1) num = 1;
   
   // Pular números proibidos (dinâmico, configurado por empresa)
   num = proximoNumeroValido(num, proibidos);
@@ -689,6 +722,36 @@ export async function updateEmployee(id: number, companyId: number, data: Partia
       throw new Error(`Número interno ${numPart} não é permitido. Números proibidos: ${listaProibidos}`);
     }
   }
+  // Rev. 2118 — FIX RETROATIVO: se o employee atual está SEM codigoInterno
+  // (cadastro legado que escapou da geração automática) e o update NÃO está
+  // definindo um, gerar o próximo código sequencial da empresa aqui.
+  // Assim, basta o usuário abrir o cadastro do colaborador e clicar Salvar
+  // para preencher o código que faltou.
+  if (sanitized.codigoInterno === undefined || sanitized.codigoInterno === null || sanitized.codigoInterno === "") {
+    const [empAtual] = await db.select({ codigoInterno: employees.codigoInterno })
+      .from(employees).where(and(eq(employees.id, id), eq(employees.companyId, companyId)));
+    const atual = empAtual?.codigoInterno;
+    if (!atual || String(atual).trim() === "") {
+      try {
+        const cfgExec = await db.execute(
+          sql`SELECT "prefixoCodigo", "numerosProibidos" FROM companies WHERE id = ${companyId}`
+        ) as any;
+        const cfgRows = cfgExec?.rows ?? cfgExec ?? [];
+        const prefixo = cfgRows?.[0]?.prefixoCodigo || 'EMP';
+        const proibidos = parseNumerosProibidos(cfgRows?.[0]?.numerosProibidos);
+        const maxExistente = await getMaxCodigoInternoNumero(db, companyId, prefixo);
+        let novoNum = proximoNumeroValido(maxExistente + 1, proibidos);
+        sanitized.codigoInterno = prefixo + String(novoNum).padStart(3, '0');
+        // Manter contador da empresa em dia
+        await db.execute(
+          sql`UPDATE companies SET "nextCodigoInterno" = ${novoNum + 1} WHERE id = ${companyId} AND COALESCE("nextCodigoInterno", 0) <= ${novoNum}`
+        );
+      } catch (e) {
+        console.error('[updateEmployee] Falha ao gerar codigoInterno retroativo:', e);
+      }
+    }
+  }
+
   if (Object.keys(sanitized).length === 0) return;
 
   if (sanitized.status) {

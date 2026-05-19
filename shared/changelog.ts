@@ -1,6 +1,76 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2118 — **RH · Colaboradores · `codigoInterno` agora SEMPRE é
+ * gerado — fix preventivo no `createEmployee` + fix retroativo no
+ * `updateEmployee` (basta abrir o cadastro e clicar Salvar pra gerar).**
+ *
+ * Contexto / causa-raiz reportada pelo user: "VC CRIOU A LILIAN mas pq
+ * o codigo interno não foi criado automaticamente? resolve isso e crie
+ * o codigo apartir do ultimo criado". Investigação: a Lilian foi
+ * cadastrada com `codigoInterno = NULL`. Diagnóstico:
+ *
+ * 1. `server/db.ts::createEmployee` gera o código via
+ *    `UPDATE companies SET "nextCodigoInterno" = "nextCodigoInterno"+1`.
+ *    Se o counter da empresa estiver NULL no banco, `NULL+1 = NULL`, e o
+ *    `parseInt(undefined) || 1` cai pra 1 — mas se a empresa tem
+ *    employees pré-existentes com codes maiores, gera colisão e o retry
+ *    pode falhar silenciosamente. Empresas em diferentes bancos podem
+ *    estar com counter desincronizado (ex: seed inicial, reset manual,
+ *    migração).
+ * 2. Outros caminhos (importação Excel, alguma rota legada) podem ter
+ *    bypassed o `createEmployee` e inserido com codigoInterno NULL.
+ * 3. Sem mecanismo retroativo, registros legados sem código ficavam
+ *    travados — não havia jeito do user gerar manualmente exceto
+ *    digitando.
+ *
+ * **Solução (2 fixes em `server/db.ts`):**
+ *
+ * **(A) NOVO helper `getMaxCodigoInternoNumero(db, companyId, prefixo)`:**
+ *   SQL `SELECT MAX(CAST(REGEXP_REPLACE("codigoInterno", '\D', '', 'g')
+ *   AS INTEGER))` filtrado por companyId + codigoInterno não-vazio +
+ *   regex contendo dígito. Retorna o maior número JÁ usado.
+ *   Independente do counter.
+ *
+ * **(B) FIX PREVENTIVO em `createEmployee`:**
+ *   - `UPDATE ... SET nextCodigoInterno = COALESCE(nextCodigoInterno,0)+1`
+ *     (não vira NULL se counter era NULL).
+ *   - APÓS calcular `num` do counter, comparar com
+ *     `maxExistente = getMaxCodigoInternoNumero(...)`. Se `num <=
+ *     maxExistente`, realinhar `num = maxExistente + 1` e atualizar o
+ *     counter da empresa pra `num + 1`. Garante que o número gerado é
+ *     sempre maior que qualquer um já existente — impossível colidir.
+ *   - Floor `if (num < 1) num = 1`.
+ *
+ * **(C) FIX RETROATIVO em `updateEmployee`:**
+ *   Antes do UPDATE final, se `sanitized.codigoInterno` está
+ *   undefined/null/"" E o employee atual no banco tem codigoInterno
+ *   vazio, gerar via `getMaxCodigoInternoNumero(...) + 1` (já
+ *   respeitando números proibidos da empresa) e adicionar ao
+ *   `sanitized`. Bonus: também atualiza `nextCodigoInterno` da empresa
+ *   condicionalmente (`WHERE COALESCE(nextCodigoInterno,0) <= novoNum`)
+ *   pra não regredir contador legítimo.
+ *
+ * **Como o user usa o fix retroativo:**
+ *   1. Abrir cadastro da Lilian (qualquer colaborador sem código).
+ *   2. Apertar Salvar (sem editar nada — ou editando, tanto faz).
+ *   3. Sistema detecta codigoInterno vazio → gera próximo da empresa →
+ *      salva junto com o resto. Pronto, código aparece.
+ *
+ * **Arquivos tocados:** apenas `server/db.ts` (+47 linhas: helper +
+ * defensive block em createEmployee + retroactive block em
+ * updateEmployee).
+ *
+ * **Não-mudanças:** schema, rotas tRPC, frontend, importação Excel
+ * (pode merecer revisão separada), validação de duplicatas.
+ *
+ * **R-001/R-007/R-010:** OK — apenas SELECT, UPDATE de campos
+ * existentes (`nextCodigoInterno`, `codigoInterno`). Nenhum ALTER/DROP/
+ * DELETE. Operação idempotente: se rodar duas vezes seguidas o segundo
+ * update vê codigoInterno preenchido e não regenera.
+ *
+ * ---
+ *
  * Rev. 2117 — **Documentos institucionais FC · margem superior da 2ª
  * página ajustada de 40mm (4cm) para 25mm (2,5cm).**
  *
