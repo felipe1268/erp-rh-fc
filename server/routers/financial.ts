@@ -189,6 +189,7 @@ export const financialRouter = router({
     classificacaoDRE: z.string().optional(),
     ativo: z.boolean().optional(),
     ordem: z.number().optional(),
+    nivel: z.number().optional(),
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
@@ -203,6 +204,7 @@ export const financialRouter = router({
     if (input.classificacaoDRE !== undefined) { parts.push(`classificacao_dre=$${i++}`); vals.push(input.classificacaoDRE); }
     if (input.ativo !== undefined) { parts.push(`ativo=$${i++}`); vals.push(input.ativo ? 1 : 0); }
     if (input.ordem !== undefined) { parts.push(`ordem=$${i++}`); vals.push(input.ordem); }
+    if (input.nivel !== undefined) { parts.push(`nivel=$${i++}`); vals.push(input.nivel); }
     if (!parts.length) return { ok: true };
     vals.push(input.id, input.companyId);
     await dbExecute(db, `UPDATE financial_accounts SET ${parts.join(",")} WHERE id=$${i++} AND company_id=$${i}`, vals);
@@ -213,6 +215,56 @@ export const financialRouter = router({
     await seedPlanoDeConta(input.companyId);
     await ensureTaxConfig(input.companyId);
     return { ok: true };
+  }),
+
+  // Rev. 2166 — Exclusão de conta contábil (Plano de Contas). Soft-delete
+  // (ativo=0), com checagem de refs em lançamentos (financial_entries.conta_id)
+  // e em filhas (financial_accounts.conta_pai_id). Estratégia defensiva igual
+  // à da Rev. 2163: cada SELECT em try/catch próprio.
+  deleteAccount: protectedProcedure.input(z.object({
+    id: z.number(),
+    companyId: z.number(),
+  })).mutation(async ({ ctx, input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    const accRes = await dbExecute(db,
+      `SELECT id, codigo, nome FROM financial_accounts WHERE id=$1 AND company_id=$2 AND ativo=1`,
+      [input.id, input.companyId]
+    );
+    const acc = rows(accRes)[0];
+    if (!acc) throw new TRPCError({ code: "NOT_FOUND", message: "Conta não encontrada nesta empresa." });
+    let nEnt = 0, nFilhas = 0;
+    try {
+      const r = await dbExecute(db,
+        `SELECT COUNT(*)::int AS n FROM financial_entries WHERE conta_id=$1`,
+        [input.id]);
+      nEnt = rows(r)[0]?.n ?? 0;
+    } catch (e: any) {
+      console.warn(`[deleteAccount] skip financial_entries ref check:`, e?.message);
+    }
+    try {
+      const r = await dbExecute(db,
+        `SELECT COUNT(*)::int AS n FROM financial_accounts WHERE conta_pai_id=$1 AND ativo=1`,
+        [input.id]);
+      nFilhas = rows(r)[0]?.n ?? 0;
+    } catch (e: any) {
+      console.warn(`[deleteAccount] skip filhas ref check:`, e?.message);
+    }
+    if (nEnt > 0 || nFilhas > 0) {
+      const partes: string[] = [];
+      if (nFilhas > 0) partes.push(`${nFilhas} conta(s) filha(s)`);
+      if (nEnt > 0) partes.push(`${nEnt} lançamento(s)`);
+      throw new TRPCError({
+        code: 'BAD_REQUEST',
+        message: `Não foi possível excluir "${acc.codigo} — ${acc.nome}": ainda existem ${partes.join(', ')} vinculados.`,
+      });
+    }
+    await dbExecute(db,
+      `UPDATE financial_accounts SET ativo=0 WHERE id=$1 AND company_id=$2`,
+      [input.id, input.companyId]
+    );
+    await createAuditLog({ action: "financial_account_deleted", userId: (ctx as any).user?.id, companyId: input.companyId, details: `Conta ${acc.codigo} - ${acc.nome}` });
+    return { ok: true, id: input.id, codigo: acc.codigo, nome: acc.nome };
   }),
 
   // ─────────────────── LANÇAMENTOS ───────────────────

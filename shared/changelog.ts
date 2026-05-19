@@ -1,6 +1,78 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2166 — **MELHORIA UX + NOVA AÇÃO · Plano de Contas ganha
+ * ordenação natural por código, geração automática de código via
+ * "Conta Pai", e botões de Editar/Excluir por linha.**
+ *
+ * User reportou 3 problemas em sequência (print anexado):
+ * 1. Conta "4.9 Honorários" criada via "Nova Conta" aparecia NO
+ *    TOPO da lista em vez de embaixo da "4.8 Software e Licenças"
+ *    em DESPESAS FIXAS ADMINISTRATIVAS. Causa: o ORDER BY do
+ *    backend (`ordem ASC, codigo ASC`) usava `ordem=0` (default
+ *    do form) como chave primária — todas as contas novas com
+ *    ordem zerada vinham primeiro, ignorando a hierarquia
+ *    contábil.
+ * 2. Pedido literal: "ao selecionar a conta, a numeração venha
+ *    automática". O dialog antigo exigia que o user pensasse no
+ *    código contábil (ex.: 3.1.5) sem nenhuma ajuda do sistema.
+ * 3. Pedido literal: "preciso de um botão de editar e excluir a
+ *    conta". A tela só permitia criar (e dependia de carregar o
+ *    padrão).
+ *
+ * **Backend novo procedure (`server/routers/financial.ts`):**
+ *  - `deleteAccount({id, companyId})` — soft-delete (`ativo=0`),
+ *    com checagem de refs em `financial_entries.conta_id` e em
+ *    filhas via `financial_accounts.conta_pai_id`. Cada SELECT em
+ *    try/catch próprio (mesma estratégia defensiva da Rev. 2163).
+ *    Bloqueia com erro descritivo se houver refs. Audit log
+ *    `financial_account_deleted` registrado.
+ *  - `updateAccount` já existia da Rev. 2083 (com `contaPaiId`
+ *    adicionado na Rev. 2162) — reaproveitado.
+ *
+ * **Frontend (`client/src/pages/financeiro/FinanceiroPlanoDeConta.tsx`):**
+ * Reescrita parcial — preservou layout/estilo, alterou:
+ *  - **Ordenação natural**: novo helper `cmpCodigo(a,b)` compara
+ *    códigos segmento por segmento como números (`"4.9".split(".").
+ *    map(Number)` < `"4.10"` < `"5"`). Aplicado via `useMemo`
+ *    antes do filtro de busca. Resolve o bug do print sem tocar
+ *    no backend.
+ *  - **Geração automática de código**: novo helper
+ *    `suggestNextCode(parentCodigo, allCodigos)` calcula o próximo
+ *    filho disponível (pai "4" + filhos ["4.1","4.2","4.9"] →
+ *    "4.10"; sem pai → próxima raiz). Disparado pelo handler
+ *    `onPickParent(paiId)` que também herda tipo/natureza do pai
+ *    (consistência contábil) e ajusta nível pra `pai.nivel + 1`.
+ *  - **Combobox "Conta Pai"** (Popover + cmdk, mesmo padrão das
+ *    Rev. 2165 e do AvisoPrevio): busca por código OU nome,
+ *    case/acento-insensitive; item "— Sem pai (conta raiz) —" no
+ *    topo. Exclui a própria conta + descendentes da lista
+ *    elegíveis quando editando, pra evitar ciclo na árvore.
+ *  - **Campo Código fica disabled em modo edição** (mudar código
+ *    de conta com lançamentos é arriscado — mantém ali só pra
+ *    referência visual).
+ *  - **Botões Editar (Pencil) + Excluir (Trash2)** por linha,
+ *    aparecem em hover (`opacity-0 group-hover:opacity-100`) pra
+ *    não poluir. Botão "Editar" abre o mesmo dialog em modo
+ *    edição (`form.id` preenchido). Botão "Excluir" abre
+ *    `AlertDialog` vermelho com aviso de soft-delete + bloqueio
+ *    se houver refs.
+ *  - **handleSave** unificado pra create/update via `form.id`;
+ *    valida nome e código obrigatórios.
+ *
+ * **R-001/R-007/R-010:** OK — `deleteAccount` é UPDATE (ativo=0),
+ * sem ALTER/DROP/DELETE em prod.
+ *
+ * Arquivos tocados:
+ *  - `server/routers/financial.ts` (novo procedure deleteAccount)
+ *  - `client/src/pages/financeiro/FinanceiroPlanoDeConta.tsx`
+ *  - `shared/version.ts` → "Rev. 2166"
+ *  - `shared/changelog.ts` (esta entrada)
+ *  - `replit.md` (top-2 + demote)
+ *  - `replit-history.md` (one-liner da Rev. 2159)
+ *
+ * ---
+ *
  * Rev. 2165 — **MELHORIA UX · Campo "Plano de Contas (opcional)"
  * no dialog de Categoria virou combobox pesquisável (Popover + cmdk).**
  *

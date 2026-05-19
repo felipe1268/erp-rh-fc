@@ -4,6 +4,7 @@
 > O detalhamento completo (causa-raiz, stack traces, arquivos tocados, comentários longos) de TODAS as revisões — incluindo as listadas abaixo — vive em `shared/changelog.ts`.
 > Movido aqui na Rev. 2028 (faxina) — revisões 1903 → 2012.
 
+- Rev. 2159 — DATA-FIX · 219 lançamentos migrados de `3.3 DESPESAS COM MATERIAIS` (órfã) → `3.2 Materiais de Construção` (padrão); órfã soft-deletada (`ativo=0`). Aprovado pelo user. (movida na Rev. 2166)
 - Rev. 2158 — HOTFIX continuação da Rev. 2157 · botão "Carregar Padrão" sempre visível + seed do plano contábil idempotente (skip por código OU nome); migração `db.execute(string, params)` → `sql\`...\`` template tag. (movida na Rev. 2165)
 - Rev. 2157 — Separação Plano de Contas × Categorias (Opção C) — `financial.getAccounts`/`createAccount` ganham param `escopo: plano|categoria|all` + guard do `seedPlanoDeConta` muda pra `COUNT(*) WHERE codigo NOT LIKE 'AUTO-%'`. (movida na Rev. 2164)
 - Rev. 2156 — NOVA AÇÃO ADM Master · Botão "Excluir" em Centros de Custo (hard-delete com gate `admin_master` + checagem de refs em `financial_recurring_entries`/`financial_accounts`; AlertDialog vermelho). (movida na Rev. 2163)
