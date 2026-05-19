@@ -1914,13 +1914,67 @@ ${obs ? `<div class="box"><strong>Observações / Justificativa do Enquadramento
                     const dias1 = tipo === '30_30' ? 30 : 45;
                     const dias2 = tipo === '30_30' ? 60 : 90;
                     const fmtDate = (d: string) => d ? new Date(d + 'T12:00:00').toLocaleDateString('pt-BR') : '___/___/______';
-                    const jornadaDesc = (() => {
+                    // Rev. 2123 — jornadaDesc construída a partir DOS DADOS REAIS
+                      // do cadastro (campos jornada_{dia}_entrada/saida/intervalo). Se
+                      // nenhum dia útil estiver definido retorna `null` → o clique nos
+                      // botões "Imprimir" / "Enviar para Assinatura" bloqueia com toast.
+                    const jornadaInfo = (() => {
                       const j = form as any;
-                      if (j.jornada_seg_entrada && j.jornada_seg_saida) {
-                        return `Segunda a Sexta: ${j.jornada_seg_entrada} às ${j.jornada_seg_saida} (intervalo ${j.jornada_seg_intervalo || '1h'})${j.jornada_sab_entrada ? `, Sábado: ${j.jornada_sab_entrada} às ${j.jornada_sab_saida}` : ''}`;
+                      const dias = [
+                        { key: 'seg', label: 'Segunda-feira' },
+                        { key: 'ter', label: 'Terça-feira' },
+                        { key: 'qua', label: 'Quarta-feira' },
+                        { key: 'qui', label: 'Quinta-feira' },
+                        { key: 'sex', label: 'Sexta-feira' },
+                        { key: 'sab', label: 'Sábado' },
+                        { key: 'dom', label: 'Domingo' },
+                      ];
+                      const linhas: Array<{ label: string; entrada: string; saida: string; intervalo: string; minutos: number }> = [];
+                      let totalMin = 0;
+                      const hhmm = /^\d{1,2}:\d{2}$/;
+                      for (const d of dias) {
+                        const ent = j[`jornada_${d.key}_entrada`];
+                        const sai = j[`jornada_${d.key}_saida`];
+                        const intv = j[`jornada_${d.key}_intervalo`] || '';
+                        if (!ent || !sai || ent === 'none' || sai === 'none') continue;
+                        if (!hhmm.test(ent) || !hhmm.test(sai)) continue;
+                        const [eh, em] = ent.split(':').map(Number);
+                        const [sh, sm] = sai.split(':').map(Number);
+                        let mins = (sh * 60 + sm) - (eh * 60 + em);
+                        let intvLabel = '—';
+                        if (intv && intv !== 'none' && hhmm.test(intv)) {
+                          const [ih, im] = intv.split(':').map(Number);
+                          mins -= (ih * 60 + im);
+                          intvLabel = intv;
+                        }
+                        if (mins <= 0) continue;
+                        linhas.push({ label: d.label, entrada: ent, saida: sai, intervalo: intvLabel, minutos: mins });
+                        totalMin += mins;
                       }
-                      return '44 horas semanais, conforme escala definida pelo empregador';
+                      if (linhas.length === 0) return null;
+                      const totalH = Math.floor(totalMin / 60);
+                      const totalRest = totalMin % 60;
+                      const totalStr = `${totalH}h${totalRest > 0 ? String(totalRest).padStart(2, '0') : ''}`;
+                      const diasUteis = ['Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira'];
+                      const semana = linhas.filter(l => diasUteis.includes(l.label));
+                      const sabado = linhas.find(l => l.label === 'Sábado');
+                      const domingo = linhas.find(l => l.label === 'Domingo');
+                      const semanaUniforme = semana.length === 5
+                        && semana.every(l => l.entrada === semana[0].entrada && l.saida === semana[0].saida && l.intervalo === semana[0].intervalo);
+                      let resumo: string;
+                      if (semanaUniforme && !sabado && !domingo) {
+                        resumo = `de Segunda a Sexta-feira, das ${semana[0].entrada} às ${semana[0].saida}, com intervalo de ${semana[0].intervalo} para repouso e alimentação`;
+                      } else if (semanaUniforme && sabado && !domingo) {
+                        resumo = `de Segunda a Sexta-feira, das ${semana[0].entrada} às ${semana[0].saida} (intervalo de ${semana[0].intervalo}), e aos Sábados das ${sabado.entrada} às ${sabado.saida}${sabado.intervalo !== '—' ? ` (intervalo de ${sabado.intervalo})` : ''}`;
+                      } else {
+                        resumo = linhas.map(l => `${l.label}: das ${l.entrada} às ${l.saida}${l.intervalo !== '—' ? ` (intervalo ${l.intervalo})` : ''}`).join('; ');
+                      }
+                      return { resumo, totalStr, totalMin };
                     })();
+                    const jornadaDesc = jornadaInfo
+                      ? `${jornadaInfo.resumo}, totalizando ${jornadaInfo.totalStr} semanais`
+                      : null;
+                    const jornadaDefinida = !!jornadaInfo;
                     // Logo: usa comp.logoUrl se for URL absoluta, senão fallback para o logo público da FC.
                     // Para HTML renderizado dentro do app (FCSign /assinar/:token) e na impressão,
                     // SEMPRE serializa com URL absoluta pra funcionar mesmo em window.open() vazio.
@@ -1952,17 +2006,19 @@ ${obs ? `<div class="box"><strong>Observações / Justificativa do Enquadramento
 
 <p style="margin-top:8px"><strong>CLÁUSULA 2ª — DA REMUNERAÇÃO.</strong> O(A) EMPREGADO(A) receberá a título de remuneração mensal o valor de <strong>R$ ${esc(empSalarioBRL)}</strong> (${esc(empSalarioExtenso)}), pago até o 5º dia útil do mês subsequente ao trabalhado, com os descontos legais previstos em lei.</p>
 
-<p style="margin-top:8px"><strong>CLÁUSULA 3ª — DA JORNADA DE TRABALHO.</strong> A jornada de trabalho do(a) EMPREGADO(A) será de <strong>${esc(jornadaDesc)}</strong>, respeitados os intervalos legais para repouso e alimentação, nos termos do Art. 71 da CLT.</p>
+<p style="margin-top:8px"><strong>CLÁUSULA 3ª — DA JORNADA DE TRABALHO.</strong> A jornada ordinária de trabalho do(a) EMPREGADO(A) será cumprida <strong>${esc(jornadaDesc || '________________')}</strong>, respeitados os intervalos legais para repouso e alimentação, nos termos do Art. 71 da CLT.</p>
 
-<p style="margin-top:8px"><strong>CLÁUSULA 4ª — DO PRAZO.</strong> O presente contrato é firmado por prazo determinado de <strong>${dias1} (${dias1 === 30 ? 'trinta' : 'quarenta e cinco'}) dias</strong>, com início em <strong>${esc(fmtDate(inicio))}</strong> e término previsto em <strong>${esc(fmtDate(fim1))}</strong>, podendo ser prorrogado por mais <strong>${dias1} dias</strong>, totalizando <strong>${dias2} dias</strong>, com término final em <strong>${esc(fmtDate(fim2))}</strong>, conforme Art. 445 da CLT.</p>
+<p style="margin-top:8px"><strong>CLÁUSULA 4ª — DA PRORROGAÇÃO DA JORNADA E HORAS EXTRAORDINÁRIAS.</strong> Nos termos do <strong>Art. 59 da Consolidação das Leis do Trabalho (CLT)</strong> e da <strong>Convenção Coletiva de Trabalho da categoria profissional</strong> vigente, a jornada normal estabelecida na CLÁUSULA 3ª poderá ser acrescida de <strong>até 2 (duas) horas suplementares diárias</strong>, mediante prévia solicitação do EMPREGADOR, sempre que assim exigirem as necessidades operacionais da obra, do serviço ou do contrato com o cliente. O(A) EMPREGADO(A) declara, neste ato, expressa e formal ciência de que a prestação de horas extraordinárias, dentro do limite legal supracitado, constitui <strong>prerrogativa do EMPREGADOR</strong> e parte integrante das condições do presente contrato, comprometendo-se a manter disponibilidade compatível com a possível convocação para tais demandas, ressalvadas as hipóteses de impossibilidade justificada. As horas extras eventualmente prestadas serão integralmente <strong>remuneradas com o adicional legal/convencional aplicável</strong>, ou, alternativamente, <strong>compensadas mediante banco de horas</strong>, na forma do §2º do Art. 59 da CLT e do acordo individual ou coletivo vigente. A presente cláusula constitui aviso prévio formal e inequívoco ao(à) EMPREGADO(A), afastando, para todos os efeitos, qualquer alegação posterior de desconhecimento da referida prerrogativa empresarial.</p>
 
-<p style="margin-top:8px"><strong>CLÁUSULA 5ª — DA RESCISÃO ANTECIPADA.</strong> Caso o EMPREGADOR rescinda o contrato antes do prazo estipulado, sem justa causa, ficará obrigado a pagar ao EMPREGADO(A), a título de indenização, metade da remuneração a que teria direito até o término do contrato, conforme <strong>Art. 479 da CLT</strong>. Caso o(a) EMPREGADO(A) se desligue antes do prazo, poderá ser obrigado(a) a indenizar o EMPREGADOR nos termos do <strong>Art. 480 da CLT</strong>, limitada a indenização àquela a que teria direito o empregado em idênticas condições (§1º).</p>
+<p style="margin-top:8px"><strong>CLÁUSULA 5ª — DO PRAZO.</strong> O presente contrato é firmado por prazo determinado de <strong>${dias1} (${dias1 === 30 ? 'trinta' : 'quarenta e cinco'}) dias</strong>, com início em <strong>${esc(fmtDate(inicio))}</strong> e término previsto em <strong>${esc(fmtDate(fim1))}</strong>, podendo ser prorrogado por mais <strong>${dias1} dias</strong>, totalizando <strong>${dias2} dias</strong>, com término final em <strong>${esc(fmtDate(fim2))}</strong>, conforme Art. 445 da CLT.</p>
 
-<p style="margin-top:8px"><strong>CLÁUSULA 6ª — DAS OBRIGAÇÕES.</strong> O(A) EMPREGADO(A) se obriga a cumprir o regulamento interno da empresa, manter sigilo sobre informações confidenciais e zelar pelos equipamentos e materiais que lhe forem confiados.</p>
+<p style="margin-top:8px"><strong>CLÁUSULA 6ª — DA RESCISÃO ANTECIPADA.</strong> Caso o EMPREGADOR rescinda o contrato antes do prazo estipulado, sem justa causa, ficará obrigado a pagar ao EMPREGADO(A), a título de indenização, metade da remuneração a que teria direito até o término do contrato, conforme <strong>Art. 479 da CLT</strong>. Caso o(a) EMPREGADO(A) se desligue antes do prazo, poderá ser obrigado(a) a indenizar o EMPREGADOR nos termos do <strong>Art. 480 da CLT</strong>, limitada a indenização àquela a que teria direito o empregado em idênticas condições (§1º).</p>
 
-<p style="margin-top:8px"><strong>CLÁUSULA 7ª — DO LOCAL DE TRABALHO.</strong> O(A) EMPREGADO(A) prestará serviços nas dependências do EMPREGADOR ou em obras/projetos por ele designados, podendo ser transferido(a) conforme necessidade do serviço.</p>
+<p style="margin-top:8px"><strong>CLÁUSULA 7ª — DAS OBRIGAÇÕES.</strong> O(A) EMPREGADO(A) se obriga a cumprir o regulamento interno da empresa, manter sigilo sobre informações confidenciais e zelar pelos equipamentos e materiais que lhe forem confiados.</p>
 
-<p style="margin-top:8px"><strong>CLÁUSULA 8ª — DAS DISPOSIÇÕES GERAIS.</strong> As partes elegem o foro da Comarca de ${esc(comp?.cidade || '________')}/${esc(comp?.estado || '__')} para dirimir quaisquer dúvidas oriundas do presente contrato. Fica assegurado ao(a) EMPREGADO(A) todos os direitos previstos na CLT e legislação trabalhista vigente.</p>
+<p style="margin-top:8px"><strong>CLÁUSULA 8ª — DO LOCAL DE TRABALHO.</strong> O(A) EMPREGADO(A) prestará serviços nas dependências do EMPREGADOR ou em obras/projetos por ele designados, podendo ser transferido(a) conforme necessidade do serviço.</p>
+
+<p style="margin-top:8px"><strong>CLÁUSULA 9ª — DAS DISPOSIÇÕES GERAIS.</strong> As partes elegem o foro da Comarca de ${esc(comp?.cidade || '________')}/${esc(comp?.estado || '__')} para dirimir quaisquer dúvidas oriundas do presente contrato. Fica assegurado ao(a) EMPREGADO(A) todos os direitos previstos na CLT e legislação trabalhista vigente.</p>
 
 <p style="margin-top:16px">E por estarem assim justos e contratados, firmam o presente instrumento em 2 (duas) vias de igual teor e forma, na presença de 2 (duas) testemunhas.</p>
 `;
@@ -2036,6 +2092,10 @@ ${obs ? `<div class="box"><strong>Observações / Justificativa do Enquadramento
                           size="sm"
                           className="border-orange-300 text-orange-700 hover:bg-orange-50"
                           onClick={() => {
+                            if (!jornadaDefinida) {
+                              toast.error('Defina a Jornada de Trabalho do colaborador (entrada/saída/intervalo) antes de gerar o Contrato de Experiência.');
+                              return;
+                            }
                             const w = window.open('', '_blank');
                             if (!w) return toast.error('Popup bloqueado');
                             w.document.write(contratoHtml);
@@ -2052,6 +2112,10 @@ ${obs ? `<div class="box"><strong>Observações / Justificativa do Enquadramento
                             empNome={empNome}
                             isAdminMaster={isAdminMaster}
                             onEnviar={() => {
+                              if (!jornadaDefinida) {
+                                toast.error('Defina a Jornada de Trabalho do colaborador (entrada/saída/intervalo) antes de enviar o Contrato de Experiência para assinatura.');
+                                return;
+                              }
                               setFcsignPayload({
                                 companyId: Number(comp!.id),
                                 employeeId: Number(editingId),

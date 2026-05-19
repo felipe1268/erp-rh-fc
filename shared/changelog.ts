@@ -1,6 +1,88 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2123 — **RH · Contrato de Experiência usa a JORNADA REAL do colaborador
+ * + bloqueia geração se jornada não definida + nova CLÁUSULA 4ª (horas extras
+ * Art. 59 CLT como prerrogativa do empregador).**
+ *
+ * Pedido do user: "ajuste o termo para colocar o horário de trabalho definido
+ * nos critérios abaixo. Se não tiver definido, e o usuário clicar para gerar
+ * o contrato, deve aparecer uma mensagem informando que o horário precisa ser
+ * definido antes de gerar o contrato de experiência. Quero que fale no termo
+ * também sobre a hora extra de até 2 horas por dia, caso a empresa solicite,
+ * e que o funcionário precisa estar atento a deixar este prazo disponível para
+ * possíveis demandas da empresa (texto conforme manda a lei e nossa convenção),
+ * deixando claro de forma sutil que é uma prerrogativa da empresa sobre a lei
+ * XYZ, para não ter problemas depois de falar que não foi avisado."
+ *
+ * Antes, a CLÁUSULA 3ª (DA JORNADA DE TRABALHO) do Contrato de Experiência
+ * em `client/src/pages/Colaboradores.tsx` tinha texto QUASE-genérico: caía no
+ * fallback "44 horas semanais, conforme escala definida pelo empregador" e
+ * mesmo no caminho feliz só citava Seg-Sex com um intervalo fixo "1h" se o
+ * campo não estivesse preenchido. Não havia nenhuma cláusula sobre horas
+ * extras / prerrogativa do empregador (Art. 59 da CLT), o que deixava o
+ * empregador exposto a alegação posterior do empregado de que "não foi
+ * avisado". Além disso, o usuário podia clicar em "Imprimir Contrato" ou
+ * "Enviar para Assinatura (FCSign)" SEM ter cadastrado a jornada do
+ * colaborador, gerando contrato com `________________` no lugar do horário.
+ *
+ * Solução em 3 partes (todas em `client/src/pages/Colaboradores.tsx`):
+ *
+ * (A) `jornadaInfo` — substitui o antigo IIFE `jornadaDesc`. Itera os 7 dias
+ *     (seg→dom), lê `jornada_{dia}_entrada/saida/intervalo` do form, valida
+ *     `HH:MM`, calcula minutos líquidos por dia (saída-entrada-intervalo) e
+ *     soma o total. Retorna `null` se NENHUM dia tem jornada válida. Quando
+ *     a semana é uniforme Seg-Sex (mesmo horário/intervalo nos 5 dias) e SEM
+ *     sábado, monta um resumo elegante "de Segunda a Sexta-feira, das HH:MM
+ *     às HH:MM, com intervalo de HH:MM para repouso e alimentação". Caso
+ *     uniforme + sábado, anexa "e aos Sábados das ...". Caso heterogêneo,
+ *     lista dia-a-dia. Anexa sempre "totalizando NNhMM semanais".
+ *
+ * (B) Reescrita da CLÁUSULA 3ª + nova CLÁUSULA 4ª + renumeração das demais:
+ *     - **CLÁUSULA 3ª** agora cita o horário REAL via `${esc(jornadaDesc)}`
+ *       em <strong>, mantendo a referência ao Art. 71 CLT (intervalos).
+ *     - **CLÁUSULA 4ª (NOVA) — DA PRORROGAÇÃO DA JORNADA E HORAS
+ *       EXTRAORDINÁRIAS.** Texto juridicamente robusto baseado no Art. 59
+ *       CLT + Convenção Coletiva, deixando expresso e formal que (i) a
+ *       prorrogação de até 2h diárias é PRERROGATIVA do EMPREGADOR; (ii) o
+ *       EMPREGADO declara CIÊNCIA PRÉVIA neste ato; (iii) horas extras são
+ *       remuneradas com adicional legal/convencional OU compensadas via
+ *       banco de horas (§2º Art. 59); (iv) a cláusula constitui aviso prévio
+ *       formal e inequívoco, afastando alegação posterior de
+ *       desconhecimento. Sutil, profissional e blindado.
+ *     - **Renumeração**: antiga 4ª (Prazo) → 5ª; 5ª (Rescisão Antecipada) →
+ *       6ª; 6ª (Obrigações) → 7ª; 7ª (Local de Trabalho) → 8ª; 8ª
+ *       (Disposições Gerais) → 9ª.
+ *
+ * (C) Validação de jornada nos dois pontos de entrada:
+ *     - Botão "Imprimir Contrato de Experiência" — onClick checa
+ *       `jornadaDefinida` e, se falso, dispara `toast.error('Defina a
+ *       Jornada de Trabalho do colaborador ... antes de gerar o Contrato
+ *       de Experiência.')` e retorna ANTES de abrir window.open.
+ *     - `FCSignContratoExperienciaPanel.onEnviar` — mesma validação antes
+ *       de chamar `setFcsignPayload`/`setFcsignOpen(true)`. Mensagem
+ *       específica menciona "para assinatura".
+ *
+ * Arquivos tocados:
+ *   - client/src/pages/Colaboradores.tsx — `jornadaInfo`/`jornadaDesc`,
+ *     cláusulas 3ª+4ª e renumeração 5-9, gates onClick (Imprimir + onEnviar).
+ *   - shared/version.ts — bump 2122 → 2123.
+ *   - shared/changelog.ts — esta entrada no topo.
+ *   - replit.md — convenção 2+5 atualizada.
+ *
+ * Limitação assumida: a validação roda no FRONT (e bloqueia o clique). O
+ * backend `signatures.create` aceita qualquer HTML — não há checagem
+ * server-side de "jornada cadastrada" porque o backend não tem conhecimento
+ * de qual é o "Contrato de Experiência" entre dezenas de tipos possíveis
+ * que o front pode submeter. Risco aceitável: única forma de burlar é o
+ * user editar o JS no devtools, e mesmo assim o contrato sai sem horário.
+ *
+ * R-001 / R-007 / R-010: OK — alteração 100% client-side em arquivo TSX
+ * + 1 string em version.ts + 2 entradas em arquivos markdown/ts. Zero
+ * ALTER/DROP/DELETE. Zero mudança de schema. Zero mudança no banco.
+ *
+ * --------------------------------------------------------------------------
+ *
  * Rev. 2122 — **FCSign · painel de status do Contrato de Experiência +
  * timeline na RAIO-X + admin_master pode apagar p/ nova emissão.**
  *
