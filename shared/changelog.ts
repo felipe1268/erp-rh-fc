@@ -1,6 +1,54 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2121 — **FCSign · alerta global automático de documentos pendentes
+ * pra assinatura ao logar no ERP.**
+ *
+ * Contexto / pedido do user: "quando eu acessar o ERP e tiver algum documento
+ * pendente para minha assinatura, preciso que apareça na hora um aviso para
+ * seguir com as assinaturas e não ficar nada pendente". Antes, o user só
+ * descobria que tinha doc pendente via email (se o email chegasse) ou
+ * navegando até a RAIO-X manualmente.
+ *
+ * Solução em 2 partes:
+ *
+ * (A) Backend — nova procedure `signatures.pendingForCurrentUser` (protected)
+ *   em `server/routers/signatures.ts`. Não recebe input; usa `ctx.user.email`
+ *   (case-insensitive) pra match com `signatureSigners.email`. Filtra:
+ *   `signedAt IS NULL` AND `session.status IN ('pendente','em_andamento')`.
+ *   Pós-filtro JS: respeita ordem sequencial da Rev. 2119 — só retorna se
+ *   NÃO houver outro signer da MESMA sessão com `ordem < minha_ordem` ainda
+ *   pendente (i.e., é a vez do user logado). Retorna array de
+ *   `{ sessionId, signerId, token, ordem, documentTitle, createdAt }`.
+ *
+ * (B) Frontend — novo componente `client/src/components/FCSignPendingAlertGlobal.tsx`
+ *   plugado no `DashboardLayout` (ao lado de `ReservasAlertModalGlobal` e
+ *   `FeriasGozoPromptGlobal`). Usa `trpc.signatures.pendingForCurrentUser`
+ *   com `refetchInterval: 60s` + `refetchOnWindowFocus: true`. Pra cada
+ *   doc pendente, dispara um toast persistente (sonner, `duration: Infinity`)
+ *   com ícone azul, título do doc + botão "Assinar agora" que abre
+ *   `/assinar/:token` em nova aba (`noopener`). Set ref em memória evita
+ *   re-disparar o mesmo toast a cada poll na mesma sessão de aba.
+ *
+ * Limitação conhecida: match SOMENTE por email. Se o user logado tiver email
+ * diferente do que foi cadastrado no `FCSignSendDialog` ao enviar o doc, o
+ * alerta não aparece. Próximo passo (não nesta revisão): adicionar match
+ * adicional por CPF do user (precisa vincular `users.cpf` que hoje não
+ * existe no schema — exigiria ALTER TABLE, fora do escopo R-001/R-007/R-010).
+ *
+ * R-001 / R-007 / R-010: OK — só SELECT, sem ALTER/DROP/DELETE; sem mudança
+ * de schema.
+ *
+ * Arquivos tocados:
+ *  - `server/routers/signatures.ts` (procedure `pendingForCurrentUser`)
+ *  - `client/src/components/FCSignPendingAlertGlobal.tsx` (NOVO)
+ *  - `client/src/components/DashboardLayout.tsx` (import + render)
+ *  - `shared/version.ts` (2121)
+ *  - `shared/changelog.ts` (este bloco)
+ *  - `replit.md` (top-2 + one-liners)
+ *
+ * ────────────────────────────────────────────────────────────────────
+ *
  * Rev. 2120 — **FCSign · assinatura estampada SOBRE a linha de assinatura
  * do contrato + fix sobreposição de texto no painel "Assinaturas" do sidebar.**
  *

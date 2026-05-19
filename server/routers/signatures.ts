@@ -1,6 +1,6 @@
 import { router, protectedProcedure, publicProcedure } from "../_core/trpc";
 import { z } from "zod";
-import { getDb } from "../db";
+import { getDb, getCompaniesForUser } from "../db";
 import { signatureSessions, signatureSigners, employees, companies, employeeDocuments } from "../../drizzle/schema";
 import { eq, and, desc, sql } from "drizzle-orm";
 import { resolveCompanyIds, companyFilter } from "../companyHelper";
@@ -421,6 +421,100 @@ export const signaturesRouter = router({
           signedAt: sg.signedAt, token: sg.token,
         })),
       }));
+    }),
+
+  // Rev. 2121: lista sessões FCSign onde o usuário logado é signatário
+  // pendente E está na vez dele (canSignNow). Usado pelo alerta global no
+  // DashboardLayout pra notificar o user assim que ele entra no ERP.
+  // Match por email do user.email (case-insensitive) vs signer.email.
+  // Retorna ARRAY de { sessionId, signerId, token, documentTitle, createdAt, ordem }.
+  pendingForCurrentUser: protectedProcedure
+    .query(async ({ ctx }) => {
+      const email = (ctx.user.email || "").trim().toLowerCase();
+      if (!email) return [];
+      const db = (await getDb())!;
+
+      // ACL: restringir às empresas que o user pode ver. admin/admin_master
+      // veem todas (`getCompaniesForUser` já trata). Sem isto, qualquer user
+      // autenticado cujo email coincidisse com um signer receberia o token
+      // de assinatura de docs fora do escopo dele (cross-tenant leak).
+      const allowedCompanies = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+      const allowedCompanyIds = allowedCompanies
+        .map((c: any) => (typeof c === 'number' ? c : c?.id))
+        .filter((v: any) => typeof v === 'number') as number[];
+      if (allowedCompanyIds.length === 0) return [];
+
+      // 1) Signers pendentes (signedAt null) do user logado, em sessões abertas
+      //    e dentro das empresas autorizadas.
+      const pendingSigners = await db.select({
+        signerId: signatureSigners.id,
+        sessionId: signatureSigners.sessionId,
+        token: signatureSigners.token,
+        role: signatureSigners.role,
+        ordem: signatureSigners.ordem,
+      })
+        .from(signatureSigners)
+        .innerJoin(signatureSessions, eq(signatureSessions.id, signatureSigners.sessionId))
+        .where(and(
+          sql`LOWER(${signatureSigners.email}) = ${email}`,
+          sql`${signatureSigners.signedAt} IS NULL`,
+          sql`${signatureSessions.status} IN ('pendente','em_andamento')`,
+          sql`${signatureSessions.companyId} = ANY(${allowedCompanyIds})`,
+        ));
+
+      if (pendingSigners.length === 0) return [];
+
+      // 2) Pra cada sessão, descobrir se existe outro signer pendente com
+      //    ordem MENOR — se sim, ainda não é a vez do user logado. Regra
+      //    ESPELHA a do procedure `sign` (linha ~321: `(s.ordem ?? 0) < minhaOrdem`)
+      //    pra evitar alerta "é sua vez" enquanto o `sign` recusaria com BAD_REQUEST.
+      const sessionIds = Array.from(new Set(pendingSigners.map((s) => s.sessionId)));
+      const allSigners = await db.select({
+        id: signatureSigners.id,
+        sessionId: signatureSigners.sessionId,
+        ordem: signatureSigners.ordem,
+        signedAt: signatureSigners.signedAt,
+      }).from(signatureSigners)
+        .where(sql`${signatureSigners.sessionId} = ANY(${sessionIds})`);
+
+      const sessions = await db.select({
+        id: signatureSessions.id,
+        documentTitle: signatureSessions.documentTitle,
+        createdAt: signatureSessions.createdAt,
+      }).from(signatureSessions)
+        .where(sql`${signatureSessions.id} = ANY(${sessionIds})`);
+      const sessMap = new Map(sessions.map((s) => [s.id, s]));
+
+      const result: Array<{
+        sessionId: number;
+        signerId: number;
+        token: string;
+        ordem: number;
+        documentTitle: string;
+        createdAt: string;
+      }> = [];
+
+      for (const sg of pendingSigners) {
+        const myOrdem = sg.ordem ?? 0;
+        const blockedBy = allSigners.some((other) =>
+          other.sessionId === sg.sessionId
+          && other.id !== sg.signerId
+          && !other.signedAt
+          && (other.ordem ?? 0) < myOrdem
+        );
+        if (blockedBy) continue;
+        const sess = sessMap.get(sg.sessionId);
+        if (!sess) continue;
+        result.push({
+          sessionId: sg.sessionId,
+          signerId: sg.signerId,
+          token: sg.token,
+          ordem: myOrdem,
+          documentTitle: sess.documentTitle,
+          createdAt: sess.createdAt,
+        });
+      }
+      return result;
     }),
 
   // Cancelar sessao

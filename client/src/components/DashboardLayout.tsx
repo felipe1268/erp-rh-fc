@@ -46,6 +46,7 @@ import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
 import { ReservasAlertModal } from './compras/ReservasAlertModal';
 import FeriasGozoPrompt from './FeriasGozoPrompt';
+import { FCSignPendingAlertGlobal } from './FCSignPendingAlertGlobal';
 import { Button } from "./ui/button";
 import { toast } from "sonner";
 import { useCompany } from "@/contexts/CompanyContext";
@@ -910,6 +911,7 @@ export default function DashboardLayout({
       </DashboardLayoutContent>
       <ReservasAlertModalGlobal />
       <FeriasGozoPromptGlobal />
+      <FCSignPendingAlertGlobal />
     </SidebarProvider>
   );
 }
