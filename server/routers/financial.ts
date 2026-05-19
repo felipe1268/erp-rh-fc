@@ -1982,24 +1982,46 @@ export const financialRouter = router({
     );
     const cc = rows(ccRes)[0];
     if (!cc) throw new TRPCError({ code: "NOT_FOUND", message: "Centro de custo não encontrado nesta empresa." });
-    // Checa referências
-    const refRecRes = await dbExecute(db,
-      `SELECT COUNT(*)::int AS n FROM financial_recurring_entries WHERE centro_custo_id=$1`,
-      [input.id]
-    );
-    const refAccRes = await dbExecute(db,
-      `SELECT COUNT(*)::int AS n FROM financial_accounts WHERE centro_custo_id=$1`,
-      [input.id]
-    );
-    const nRec = rows(refRecRes)[0]?.n ?? 0;
-    const nAcc = rows(refAccRes)[0]?.n ?? 0;
-    if (nRec > 0 || nAcc > 0) {
+    // Checa referências em financial_accounts (categorias) e
+    // financial_entries (lançamentos). Wrapping em try/catch porque
+    // nem todas as instalações têm a coluna centro_custo_id em
+    // todas as tabelas (Rev. 2082 só garantiu em financial_accounts).
+    // Coluna ausente ⇒ trata como 0 refs em vez de explodir a request
+    // com "column does not exist" (que chegava no browser como JSON
+    // vazio — bug reportado Rev. 2163).
+    let nAcc = 0, nEnt = 0, nRec = 0;
+    try {
+      const r = await dbExecute(db,
+        `SELECT COUNT(*)::int AS n FROM financial_accounts WHERE centro_custo_id=$1`,
+        [input.id]);
+      nAcc = rows(r)[0]?.n ?? 0;
+    } catch (e: any) {
+      console.warn(`[deleteCostCenter] skip financial_accounts ref check:`, e?.message);
+    }
+    try {
+      const r = await dbExecute(db,
+        `SELECT COUNT(*)::int AS n FROM financial_entries WHERE conta_id IN (SELECT id FROM financial_accounts WHERE centro_custo_id=$1)`,
+        [input.id]);
+      nEnt = rows(r)[0]?.n ?? 0;
+    } catch (e: any) {
+      console.warn(`[deleteCostCenter] skip financial_entries ref check:`, e?.message);
+    }
+    try {
+      const r = await dbExecute(db,
+        `SELECT COUNT(*)::int AS n FROM financial_recurring_entries WHERE centro_custo_id=$1`,
+        [input.id]);
+      nRec = rows(r)[0]?.n ?? 0;
+    } catch (e: any) {
+      console.warn(`[deleteCostCenter] skip financial_recurring_entries ref check (coluna pode não existir):`, e?.message);
+    }
+    if (nRec > 0 || nAcc > 0 || nEnt > 0) {
       const partes: string[] = [];
-      if (nAcc > 0) partes.push(`${nAcc} lançamento(s) financeiro(s)`);
+      if (nAcc > 0) partes.push(`${nAcc} categoria(s) financeira(s)`);
+      if (nEnt > 0) partes.push(`${nEnt} lançamento(s)`);
       if (nRec > 0) partes.push(`${nRec} recorrência(s)`);
       throw new TRPCError({
         code: 'BAD_REQUEST',
-        message: `Não foi possível excluir "${cc.codigo} — ${cc.nome}": ainda existem ${partes.join(' e ')} vinculados. Inative o centro (botão "Power") em vez de excluir.`,
+        message: `Não foi possível excluir "${cc.codigo} — ${cc.nome}": ainda existem ${partes.join(', ')} vinculados. Inative o centro (botão "Power") em vez de excluir.`,
       });
     }
     await dbExecute(db,

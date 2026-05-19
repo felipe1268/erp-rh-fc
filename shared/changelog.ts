@@ -1,6 +1,43 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2163 — **HOTFIX · "Excluir Centro de Custo" devolvia
+ * `Unexpected end of JSON input` por column does not exist.**
+ *
+ * User (screenshot): toast "Não foi possível excluir / Failed to
+ * execute 'json' on 'Response': Unexpected end of JSON input" ao
+ * clicar na lixeira de qualquer Centro de Custo (mesmo sem nada
+ * vinculado).
+ *
+ * **Causa-raiz:** o procedure `financial.deleteCostCenter` (Rev.
+ * 2156) checava referências em duas tabelas:
+ *  - `financial_accounts.centro_custo_id` — coluna **existe**
+ *    (garantida pela Rev. 2082 no SyncSchema+).
+ *  - `financial_recurring_entries.centro_custo_id` — coluna
+ *    **NÃO existe** em nenhum cliente (nunca foi adicionada via
+ *    SyncSchema, schema.ts nem DDL). O Postgres devolvia
+ *    `ERROR: column "centro_custo_id" does not exist`, o Drizzle
+ *    envelopava em "Failed query:", e a resposta chegava no
+ *    browser em estado tal que o `fetch(...).json()` falhava com
+ *    body vazio.
+ *
+ * **Fix em `server/routers/financial.ts` `deleteCostCenter`:**
+ *  - Cada uma das 3 checagens (`financial_accounts`,
+ *    `financial_entries` via JOIN com accounts, e
+ *    `financial_recurring_entries`) agora vive dentro do próprio
+ *    `try/catch`. Se a coluna não existir, loga `console.warn` e
+ *    trata como 0 refs — não derruba a request.
+ *  - Adicionada terceira checagem (lançamentos efetivos via
+ *    `financial_entries.conta_id IN (SELECT id FROM accounts
+ *    WHERE centro_custo_id=$1)`) — antes a checagem só pegava
+ *    categorias vinculadas, não os lançamentos em si.
+ *  - Mensagem de erro reescrita: "X categoria(s), Y
+ *    lançamento(s), Z recorrência(s)" — mais explícita.
+ *
+ * **R-001/R-007/R-010:** OK — zero ALTER/DROP. O DELETE
+ * preexistente continua intacto (só dispara quando todas as
+ * checagens retornam 0).
+ *
  * Rev. 2162 — **NOVO CAMPO · Vincular Categoria ao Plano de Contas
  * (contábil) via `conta_pai_id`.**
  *

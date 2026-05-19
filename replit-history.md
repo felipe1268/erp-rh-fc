@@ -4,6 +4,7 @@
 > O detalhamento completo (causa-raiz, stack traces, arquivos tocados, comentários longos) de TODAS as revisões — incluindo as listadas abaixo — vive em `shared/changelog.ts`.
 > Movido aqui na Rev. 2028 (faxina) — revisões 1903 → 2012.
 
+- Rev. 2156 — NOVA AÇÃO ADM Master · Botão "Excluir" em Centros de Custo (hard-delete com gate `admin_master` + checagem de refs em `financial_recurring_entries`/`financial_accounts`; AlertDialog vermelho). (movida na Rev. 2163)
 - Rev. 2155 — HOTFIX · "Imprimir Contrato de Experiência" pedia Endereço mesmo com a aba preenchida (fallback `form.endereco`/`form.logradouro`). (movida na Rev. 2162)
 - Rev. 2154 — HOTFIX BUILD · Deploy quebrava porque `RichTextEditor.tsx` não exportava `stripHtml`/`sanitizeHtml`/`isHtmlContent` usados pelo `ComunicadosInternos.tsx`; helpers adicionados + DOMPurify top-level. (movida na Rev. 2161)
 - Rev. 2153 — NOVA AÇÃO ADM Master · Botão "Zerar Termos" no Raio-X (aba "Termos Assinados") pra limpar termos de recebimento em bulk. (movida na Rev. 2160)
