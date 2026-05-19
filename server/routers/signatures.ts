@@ -482,15 +482,27 @@ export const signaturesRouter = router({
       }));
     }),
 
-  // Rev. 2121: lista sessões FCSign onde o usuário logado é signatário
-  // pendente E está na vez dele (canSignNow). Usado pelo alerta global no
-  // DashboardLayout pra notificar o user assim que ele entra no ERP.
-  // Match por email do user.email (case-insensitive) vs signer.email.
-  // Retorna ARRAY de { sessionId, signerId, token, documentTitle, createdAt, ordem }.
+  // Rev. 2121 + 2128: lista sessões FCSign onde o usuário logado deve ser
+  // alertado. Usado pelo alerta global no DashboardLayout pra notificar o
+  // user assim que ele entra no ERP.
+  //
+  // **Critério de match (Rev. 2128 — REGRA DE PAPEL, não email):**
+  //  - Se o user logado tem role `admin_master` ou `admin` → recebe alerta
+  //    de TODOS os signers pendentes com role `empregador` (sócio responsável
+  //    pela FC) dentro das empresas que ele pode ver. Independe de email no
+  //    signer — o vínculo é pelo PAPEL do user, não pela identidade do
+  //    signer cadastrado.
+  //  - Para qualquer user, também casa pelo `email` (mantém comportamento
+  //    Rev. 2121 pra empregados/testemunhas com conta no ERP).
+  // Em ambos os casos, respeita a ordem sequencial (Rev. 2119): só alerta
+  // quando é a vez do signer (nenhum outro pendente com ordem menor).
   pendingForCurrentUser: protectedProcedure
     .query(async ({ ctx }) => {
       const email = (ctx.user.email || "").trim().toLowerCase();
-      if (!email) return [];
+      const role = ctx.user.role;
+      const isAdminLike = role === "admin_master" || role === "admin";
+      // Sem email E sem privilégio admin → não tem como identificar pendências.
+      if (!email && !isAdminLike) return [];
       const db = (await getDb())!;
 
       // ACL: restringir às empresas que o user pode ver. admin/admin_master
@@ -503,8 +515,15 @@ export const signaturesRouter = router({
         .filter((v: any) => typeof v === 'number') as number[];
       if (allowedCompanyIds.length === 0) return [];
 
-      // 1) Signers pendentes (signedAt null) do user logado, em sessões abertas
-      //    e dentro das empresas autorizadas.
+      // 1) Signers pendentes (signedAt null) que casam pelo MATCH (papel
+      //    admin → role='empregador'; OU email do user). Em sessões abertas
+      //    e dentro das empresas autorizadas. OR explícito pra cobrir os
+      //    dois casos sem duplicar (DISTINCT implícito pelo id do signer).
+      const matchCondition = isAdminLike && email
+        ? sql`(${signatureSigners.role} = 'empregador' OR LOWER(${signatureSigners.email}) = ${email})`
+        : isAdminLike
+          ? sql`${signatureSigners.role} = 'empregador'`
+          : sql`LOWER(${signatureSigners.email}) = ${email}`;
       const pendingSigners = await db.select({
         signerId: signatureSigners.id,
         sessionId: signatureSigners.sessionId,
@@ -515,7 +534,7 @@ export const signaturesRouter = router({
         .from(signatureSigners)
         .innerJoin(signatureSessions, eq(signatureSessions.id, signatureSigners.sessionId))
         .where(and(
-          sql`LOWER(${signatureSigners.email}) = ${email}`,
+          matchCondition,
           sql`${signatureSigners.signedAt} IS NULL`,
           sql`${signatureSessions.status} IN ('pendente','em_andamento')`,
           sql`${signatureSessions.companyId} = ANY(${allowedCompanyIds})`,

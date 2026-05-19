@@ -1,6 +1,47 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2128 — **FCSign · alerta global agora dispara por PAPEL (role) do
+ * user logado, não por email do signer. Se você é `admin_master`/`admin`,
+ * recebe alerta de TODO pendente de `empregador` nas suas empresas.**
+ *
+ * User: "Não quero receber e-mail, quero alerta no usuário que precisa
+ * assinar, se eu sou o sócio adm quero que apareça para mim".
+ *
+ * **Mudança em `server/routers/signatures.ts → pendingForCurrentUser`:**
+ * a regra de match passou a ser:
+ *   - `admin_master` / `admin` → casa qualquer `signer.role = 'empregador'`
+ *     pendente nas empresas autorizadas (o vínculo é PAPEL do user × PAPEL
+ *     do signer, não identidade pessoal). Mantém também o match por email,
+ *     então um admin que ALÉM disso é signer individual também recebe seus
+ *     próprios alertas.
+ *   - Demais users → mantém Rev. 2121 (`LOWER(signer.email) = user.email`).
+ * O resto do procedure (ACL por empresa, ordem sequencial Rev. 2119) ficou
+ * intacto: `admin_master` só vê pendências de empresas que ele pode acessar
+ * e só recebe alerta quando é a vez do signer (não enquanto está bloqueado
+ * por outro com `ordem` menor).
+ *
+ * **Por que essa abordagem?** Antes (Rev. 2127), o vínculo dependia de
+ * cadastrar o email correto do Felipe Costa Alves no signer (ou achar via
+ * lookup em `users.name`). Frágil: se cadastraram nome divergente, ou se a
+ * conta do user usa email diferente do que está em `users.email`, o alerta
+ * não dispara. Agora é puramente baseado em ROLE — política da FC já é
+ * "Felipe é o ÚNICO sócio autorizado a assinar como empregador" (regra
+ * hardcoded em `FCSignSendDialog`), então qualquer pessoa logada como
+ * sócio (`admin_master`) recebe alerta de qualquer contrato pendente de
+ * assinatura empresarial. Robusto contra typos no nome/email.
+ *
+ * **Backfill da Rev. 2127 continua útil** (email no signer ajuda quando o
+ * alerta vem pelo email-match — empregados com conta no ERP), mas DEIXOU
+ * de ser pré-requisito pro alerta do EMPREGADOR funcionar.
+ *
+ * **R-001/R-007/R-010:** OK — apenas mudança de query, nenhum DDL.
+ *
+ * **Arquivos:** `server/routers/signatures.ts`, `shared/version.ts`,
+ * `shared/changelog.ts`, `replit.md`.
+ *
+ * --------------------------------------------------------------------------
+ *
  * Rev. 2127 — **FCSign · alerta global de assinatura pendente agora dispara
  * pro EMPREGADOR — bug: signers eram criados SEM email, e o match do alerta é
  * `signers.email == user.email`.**
