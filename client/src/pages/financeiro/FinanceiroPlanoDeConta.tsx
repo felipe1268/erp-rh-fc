@@ -448,8 +448,6 @@ export default function FinanceiroPlanoDeConta() {
                     value={form.nivel}
                     onChange={e => setForm(f => ({ ...f, nivel: parseInt(e.target.value) || 1 }))}
                     min="1" max="5"
-                    disabled={!!form.id}
-                    className={form.id ? "bg-gray-50 text-gray-500" : ""}
                   />
                 </div>
               </div>
