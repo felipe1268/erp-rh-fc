@@ -11,6 +11,7 @@
  */
 
 import { useState, useRef, useMemo, useEffect } from "react";
+import DOMPurify from "dompurify";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { toast } from "sonner";
@@ -109,12 +110,19 @@ export default function TemplatesDocsTab() {
     onError: (e) => toast.error(e.message || "Falha ao restaurar versão."),
   });
 
-  // Preview com dados de exemplo
+  // Preview com dados de exemplo — XSS hardening: sanitiza HTML com DOMPurify
+  // antes de injetar via dangerouslySetInnerHTML. O conteúdo do template é
+  // editável por admins; defense in depth contra conta comprometida.
   const previewHtml = useMemo(() => {
     if (!conteudoEditado) return "";
     const dadosExemplo: Record<string, string> = {};
     meta.placeholders.forEach(p => { dadosExemplo[p.chave] = p.exemplo; });
-    return renderTemplate(conteudoEditado, dadosExemplo);
+    const rendered = renderTemplate(conteudoEditado, dadosExemplo);
+    return DOMPurify.sanitize(rendered, {
+      FORBID_TAGS: ["script", "iframe", "object", "embed", "form", "input", "button", "link", "meta", "base"],
+      FORBID_ATTR: ["onerror", "onload", "onclick", "onmouseover", "onfocus", "onblur", "onchange", "onsubmit", "formaction"],
+      ALLOW_DATA_ATTR: false,
+    });
   }, [conteudoEditado, meta]);
 
   // Agrupa placeholders por grupo

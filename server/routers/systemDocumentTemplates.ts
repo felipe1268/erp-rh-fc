@@ -108,6 +108,10 @@ export const systemDocumentTemplatesRouter = router({
     }),
 
   // ── Salva (upsert): cria template se não existir OU incrementa versão ────
+  // Atômico via db.transaction + SELECT FOR UPDATE pra evitar race condition
+  // entre 2 admins salvando simultaneamente (sem isso, o índice único
+  // (template_id, versao) falhava DEPOIS do UPDATE do ponteiro, deixando
+  // versaoAtual inconsistente com o histórico).
   save: protectedProcedure
     .input(z.object({
       tipo: tipoSchema,
@@ -123,88 +127,124 @@ export const systemDocumentTemplatesRouter = router({
       const userId = (ctx.user as any)?.id ?? null;
       const userName = (ctx.user as any)?.name ?? (ctx.user as any)?.email ?? "Sistema";
 
-      const [existing] = await db.select().from(systemDocumentTemplates).where(eq(systemDocumentTemplates.tipo, input.tipo));
+      return await db.transaction(async (tx: any) => {
+        // FOR UPDATE serializa concorrência por tipo. Se a linha ainda não
+        // existe (criação inicial), advisory lock por hash do tipo evita
+        // que 2 admins criem simultaneamente.
+        const lockKey = (() => {
+          // hash determinístico simples do tipo → bigint pro pg_advisory_xact_lock
+          let h = 0;
+          for (const c of input.tipo) h = ((h << 5) - h + c.charCodeAt(0)) | 0;
+          return h;
+        })();
+        await tx.execute(sql`SELECT pg_advisory_xact_lock(${lockKey})`);
 
-      if (!existing) {
-        // Cria template + versão 1
-        const [created] = await db.insert(systemDocumentTemplates).values({
-          tipo: input.tipo,
-          titulo: meta.titulo,
-          descricao: meta.descricao,
+        const existingRows: any[] = await tx.execute(sql`
+          SELECT id, versao_atual, conteudo_html
+            FROM system_document_templates
+           WHERE tipo = ${input.tipo}
+           FOR UPDATE
+        `);
+        const existing = (existingRows as any).rows?.[0] ?? (Array.isArray(existingRows) ? existingRows[0] : null);
+
+        if (!existing) {
+          // Cria template + versão 1 (mesma transação)
+          const [created] = await tx.insert(systemDocumentTemplates).values({
+            tipo: input.tipo,
+            titulo: meta.titulo,
+            descricao: meta.descricao,
+            conteudoHtml: input.conteudoHtml,
+            versaoAtual: 1,
+            ativo: 1,
+            atualizadoPorId: userId,
+            atualizadoPorNome: userName,
+          } as any).returning({ id: systemDocumentTemplates.id });
+          await tx.insert(systemDocumentTemplateVersions).values({
+            templateId: created.id,
+            versao: 1,
+            conteudoHtml: input.conteudoHtml,
+            comentario: input.comentario ?? "Criação inicial",
+            criadoPorId: userId,
+            criadoPorNome: userName,
+          } as any);
+          return { ok: true, templateId: created.id, versao: 1 };
+        }
+
+        // No-op se conteúdo idêntico (não polui histórico)
+        if (existing.conteudo_html === input.conteudoHtml) {
+          return { ok: true, templateId: existing.id, versao: existing.versao_atual, semMudanca: true };
+        }
+
+        const novaVersao = (existing.versao_atual ?? 0) + 1;
+        // INSERT version PRIMEIRO — se algum conflito (improvável após FOR
+        // UPDATE), aborta antes de mexer no ponteiro.
+        await tx.insert(systemDocumentTemplateVersions).values({
+          templateId: existing.id,
+          versao: novaVersao,
           conteudoHtml: input.conteudoHtml,
-          versaoAtual: 1,
-          ativo: 1,
-          atualizadoPorId: userId,
-          atualizadoPorNome: userName,
-        } as any).returning({ id: systemDocumentTemplates.id });
-        await db.insert(systemDocumentTemplateVersions).values({
-          templateId: created.id,
-          versao: 1,
-          conteudoHtml: input.conteudoHtml,
-          comentario: input.comentario ?? "Criação inicial",
+          comentario: input.comentario ?? null,
           criadoPorId: userId,
           criadoPorNome: userName,
         } as any);
-        return { ok: true, templateId: created.id, versao: 1 };
-      }
-
-      // Se o conteúdo for idêntico ao atual, não cria nova versão
-      if (existing.conteudoHtml === input.conteudoHtml) {
-        return { ok: true, templateId: existing.id, versao: existing.versaoAtual, semMudanca: true };
-      }
-
-      const novaVersao = (existing.versaoAtual ?? 0) + 1;
-      await db.update(systemDocumentTemplates).set({
-        conteudoHtml: input.conteudoHtml,
-        versaoAtual: novaVersao,
-        atualizadoPorId: userId,
-        atualizadoPorNome: userName,
-        updatedAt: sql`NOW()`,
-      } as any).where(eq(systemDocumentTemplates.id, existing.id));
-      await db.insert(systemDocumentTemplateVersions).values({
-        templateId: existing.id,
-        versao: novaVersao,
-        conteudoHtml: input.conteudoHtml,
-        comentario: input.comentario ?? null,
-        criadoPorId: userId,
-        criadoPorNome: userName,
-      } as any);
-      return { ok: true, templateId: existing.id, versao: novaVersao };
+        await tx.update(systemDocumentTemplates).set({
+          conteudoHtml: input.conteudoHtml,
+          versaoAtual: novaVersao,
+          atualizadoPorId: userId,
+          atualizadoPorNome: userName,
+          updatedAt: sql`NOW()`,
+        } as any).where(eq(systemDocumentTemplates.id, existing.id));
+        return { ok: true, templateId: existing.id, versao: novaVersao };
+      });
     }),
 
   // ── Restaurar versão antiga (cria nova versão idêntica à escolhida) ──────
+  // Mesma proteção atômica do save().
   restoreVersion: protectedProcedure
     .input(z.object({ tipo: tipoSchema, versao: z.number().int().positive() }))
     .mutation(async ({ input, ctx }) => {
       requireAdmin(ctx);
       const db = await getDb();
-      const [tpl] = await db.select().from(systemDocumentTemplates).where(eq(systemDocumentTemplates.tipo, input.tipo));
-      if (!tpl) throw new TRPCError({ code: "NOT_FOUND", message: "Template não encontrado." });
-      const [ver] = await db.select().from(systemDocumentTemplateVersions).where(and(
-        eq(systemDocumentTemplateVersions.templateId, tpl.id),
-        eq(systemDocumentTemplateVersions.versao, input.versao),
-      ));
-      if (!ver) throw new TRPCError({ code: "NOT_FOUND", message: "Versão não encontrada." });
 
       const userId = (ctx.user as any)?.id ?? null;
       const userName = (ctx.user as any)?.name ?? (ctx.user as any)?.email ?? "Sistema";
-      const novaVersao = (tpl.versaoAtual ?? 0) + 1;
 
-      await db.update(systemDocumentTemplates).set({
-        conteudoHtml: ver.conteudoHtml,
-        versaoAtual: novaVersao,
-        atualizadoPorId: userId,
-        atualizadoPorNome: userName,
-        updatedAt: sql`NOW()`,
-      } as any).where(eq(systemDocumentTemplates.id, tpl.id));
-      await db.insert(systemDocumentTemplateVersions).values({
-        templateId: tpl.id,
-        versao: novaVersao,
-        conteudoHtml: ver.conteudoHtml,
-        comentario: `Restaurado a partir da Rev. ${ver.versao}`,
-        criadoPorId: userId,
-        criadoPorNome: userName,
-      } as any);
-      return { ok: true, novaVersao };
+      return await db.transaction(async (tx: any) => {
+        const lockKey = (() => {
+          let h = 0;
+          for (const c of input.tipo) h = ((h << 5) - h + c.charCodeAt(0)) | 0;
+          return h;
+        })();
+        await tx.execute(sql`SELECT pg_advisory_xact_lock(${lockKey})`);
+
+        const tplRows: any[] = await tx.execute(sql`
+          SELECT id, versao_atual FROM system_document_templates WHERE tipo = ${input.tipo} FOR UPDATE
+        `);
+        const tpl = (tplRows as any).rows?.[0] ?? (Array.isArray(tplRows) ? tplRows[0] : null);
+        if (!tpl) throw new TRPCError({ code: "NOT_FOUND", message: "Template não encontrado." });
+
+        const [ver] = await tx.select().from(systemDocumentTemplateVersions).where(and(
+          eq(systemDocumentTemplateVersions.templateId, tpl.id),
+          eq(systemDocumentTemplateVersions.versao, input.versao),
+        ));
+        if (!ver) throw new TRPCError({ code: "NOT_FOUND", message: "Versão não encontrada." });
+
+        const novaVersao = (tpl.versao_atual ?? 0) + 1;
+        await tx.insert(systemDocumentTemplateVersions).values({
+          templateId: tpl.id,
+          versao: novaVersao,
+          conteudoHtml: ver.conteudoHtml,
+          comentario: `Restaurado a partir da Rev. ${ver.versao}`,
+          criadoPorId: userId,
+          criadoPorNome: userName,
+        } as any);
+        await tx.update(systemDocumentTemplates).set({
+          conteudoHtml: ver.conteudoHtml,
+          versaoAtual: novaVersao,
+          atualizadoPorId: userId,
+          atualizadoPorNome: userName,
+          updatedAt: sql`NOW()`,
+        } as any).where(eq(systemDocumentTemplates.id, tpl.id));
+        return { ok: true, novaVersao };
+      });
     }),
 });

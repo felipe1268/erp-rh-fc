@@ -1,6 +1,59 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2142 — **SECURITY/CONCORRÊNCIA · Hardening da Aba Templates de
+ * Documentos (Rev. 2141) após code review do architect.**
+ *
+ * Code review apontou 2 críticos na Fase 1 da Rev. 2141:
+ *
+ * (1) **Race condition em `save()` e `restoreVersion()`** —
+ * `server/routers/systemDocumentTemplates.ts`. Fluxo anterior era
+ * `SELECT` → calcula `novaVersao` → `UPDATE templates` → `INSERT versions`
+ * sem transação. Dois admins salvando simultaneamente poderiam calcular
+ * a mesma versão; uma falhava no índice único `(template_id, versao)`
+ * APÓS o UPDATE já aplicado, deixando `versaoAtual`/`conteudoHtml`
+ * apontando para estado SEM entrada correspondente no histórico —
+ * exatamente o oposto do requisito de versionamento confiável.
+ *
+ * **Fix**: ambas as procedures agora rodam dentro de `db.transaction()`.
+ * Dentro da tx: `pg_advisory_xact_lock(hash(tipo))` serializa por tipo
+ * (cobre o caso de criação inicial em que ainda não há linha pra travar)
+ * + `SELECT ... FOR UPDATE` na linha existente. INSERT da nova versão
+ * agora vem ANTES do UPDATE do ponteiro: se houver qualquer conflito, a
+ * tx aborta antes de mexer no `versaoAtual`, mantendo a consistência.
+ * Padrão idêntico ao usado em `planejamento.ts`, `frotas.ts`, `epis.ts`.
+ *
+ * (2) **XSS armazenado no preview** — `TemplatesDocsTab.tsx` injetava
+ * `conteudoEditado` (persistido no banco via `save`) direto em
+ * `dangerouslySetInnerHTML` sem sanitização. Backend não sanitiza HTML
+ * na persistência (template precisa preservar `<style>` interno, classes
+ * `.clausula`, `print-color-adjust: exact` etc.). ACL admin reduz mas
+ * não elimina risco (admin malicioso/conta comprometida).
+ *
+ * **Fix**: preview agora passa por `DOMPurify.sanitize()` com mesma
+ * config defensiva já usada em `AssinarDocumento.tsx` (Rev. 2065):
+ * `FORBID_TAGS: [script, iframe, object, embed, form, input, button,
+ * link, meta, base]` + `FORBID_ATTR: [onerror, onload, onclick,
+ * onmouseover, onfocus, onblur, onchange, onsubmit, formaction]` +
+ * `ALLOW_DATA_ATTR: false`. Defense in depth — quando o template
+ * for usado em FCSign na Fase 2, o `signatures.create` já tem sua
+ * própria camada DOMPurify.
+ *
+ * **Não apontado pelo architect mas vale registrar**: ACL `requireAdmin`
+ * mantida (suficiente pra Fase 1). TipTap `setContent` sync também
+ * OK (usa `emitUpdate:false` + comparação `getHTML()`, sem loop).
+ *
+ * **Arquivos tocados nesta rev.**:
+ * - `server/routers/systemDocumentTemplates.ts` — save/restoreVersion
+ *   reescritos com `db.transaction` + `pg_advisory_xact_lock` +
+ *   `SELECT FOR UPDATE` + INSERT version ANTES do UPDATE ponteiro.
+ * - `client/src/pages/configuracoes/TemplatesDocsTab.tsx` — import
+ *   `dompurify`, `previewHtml` agora sanitiza antes de retornar.
+ *
+ * **R-001/R-007/R-010**: OK — só mudança de código, sem ALTER/DROP/DELETE.
+ *
+ * --------------------------------------------------------------------
+ *
  * Rev. 2141 — **NOVA FEATURE · Aba "Templates de Documentos" em
  * Configurações com versionamento completo e editor WYSIWYG.**
  *
