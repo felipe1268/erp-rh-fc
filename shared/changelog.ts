@@ -1,6 +1,107 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2125 — **RH · Contrato de Experiência: numeração automática NNN/AAAA
+ * sequencial, atômica, persistida e idempotente por empresa.**
+ *
+ * Pedido do user (screenshot mostrava "Nº 034/2026" calculado por padding do
+ * `employee_id` — colidiria com IDs novos): "este é o primeiro que estávamos
+ * fazendo este ano (034/2026 atual), começe a contagem com ela, e todos os
+ * outros devem seguir, garantindo zero duplicidade".
+ *
+ * **Problema anterior:** o número exibido era `padStart(3,'0')(editingId)/year`
+ * em `client/src/pages/Colaboradores.tsx` — ou seja, NÃO era um contador real;
+ * era simplesmente o ID do registro `employees` formatado. Riscos:
+ * (i) buracos sempre que um cadastro era apagado;
+ * (ii) duplicidade impossível, mas saltos enormes (ID novo = 287 → "287/2026");
+ * (iii) reinício do ano não voltava pra 001;
+ * (iv) ID do banco vazando em documento institucional.
+ *
+ * **Solução em 4 camadas:**
+ *
+ * 1. **Schema (`drizzle/schema.ts`):**
+ *    - Nova tabela `contractCounters(company_id, ano, tipo, ultimo_seq,
+ *      atualizado_em)` com PK lógica `UNIQUE(company_id, ano, tipo)` — espelho
+ *      direto de `compras_sc_counters` (Rev. 1799). Tipo é varchar(50) pra
+ *      caber `'contrato_experiencia'` + futuros (`'aviso_previo'`, `'termo_rescisao'`,
+ *      etc.) sem nova tabela.
+ *    - Em `employees` (HR): 2 colunas novas opcionais
+ *      `numero_contrato_experiencia INTEGER` e
+ *      `numero_contrato_experiencia_ano INTEGER`. Ficam NULL até a 1ª alocação;
+ *      uma vez gravadas são IMUTÁVEIS pela API (sem rota de edição).
+ *
+ * 2. **Migração (`server/_core/index.ts`, novo bloco SyncSchema+ Rev. 2125):**
+ *    - `ALTER TABLE employees ADD COLUMN IF NOT EXISTS ...` (×2) — R-001 OK,
+ *      é o padrão aceito do projeto.
+ *    - `CREATE TABLE IF NOT EXISTS contract_counters (...)` + unique idx.
+ *    - **Seed defensivo** (idempotente, ON CONFLICT DO NOTHING) — insere uma
+ *      linha por company ATIVA pro ano corrente com `ultimo_seq=33`. Assim a
+ *      próxima alocação cai em 34/AAAA, **batendo exatamente com o screenshot
+ *      do user** (034/2026 era o "primeiro deste ano" na concepção dele).
+ *      Idempotente: roda em todo boot sem efeito colateral; quando virar 2027,
+ *      a 1ª alocação cria a linha com seq=1 normalmente → 001/2027.
+ *
+ * 3. **tRPC (`server/routers.ts → employees.allocateContratoExperienciaNumero`):**
+ *    - Mutation `protectedProcedure({ employeeId, companyId })`.
+ *    - Idempotente: se o employee já tem `numeroContratoExperiencia` +
+ *      `numeroContratoExperienciaAno`, retorna o existente SEM consumir o
+ *      counter (`alreadyAllocated: true`).
+ *    - Caso contrário, UPSERT atômico `INSERT ... ON CONFLICT DO UPDATE SET
+ *      ultimo_seq = contract_counters.ultimo_seq + 1 ... RETURNING ultimo_seq`
+ *      — mesmo padrão de `gerarProximoNumeroScAtomico` em
+ *      `server/routers/compras.ts` (Rev. 1790). Pega o seq atômico, grava em
+ *      employee, retorna `{numero, ano, alreadyAllocated:false}`.
+ *    - AuditLog: registra a alocação.
+ *
+ * 4. **Cliente (`client/src/pages/Colaboradores.tsx`):**
+ *    - Removido `numero: padStart(editingId)/year` antigo do `buildFcDocument`.
+ *    - Construção do contratoHtml virou um **closure** `buildContratoHtmlWithNumero(numeroStr)`
+ *      — a string `numeroStr` é injetada só depois da alocação.
+ *    - Botão "Imprimir Contrato de Experiência" e callback `onEnviar` do
+ *      `FCSignContratoExperienciaPanel` viraram **async**. Fluxo: valida
+ *      `jornadaDefinida` → `await allocateContratoExpMut.mutateAsync(...)` →
+ *      formata `NNN/AAAA` → `buildContratoHtmlWithNumero(numeroStr)` → segue
+ *      (window.open+print) ou seta payload FCSign.
+ *    - Hook novo `trpc.employees.allocateContratoExperienciaNumero.useMutation`
+ *      com `onSuccess: utils.employees.getById.invalidate()` pra refletir o
+ *      número alocado no formulário sem precisar fechar/reabrir.
+ *    - Preview no rótulo do botão: se `employees[i].numeroContratoExperiencia`
+ *      já existe, mostra `(Nº NNN/AAAA)` no label do botão "Imprimir...".
+ *    - `documentTitle` do payload FCSign agora inclui o número
+ *      (`"Contrato de Experiência NNN/AAAA - <nome>"`).
+ *
+ * **Garantias de unicidade:**
+ * - UNIQUE INDEX `(company_id, ano, tipo)` torna race condition impossível —
+ *   dois processos concorrentes caem no `ON CONFLICT DO UPDATE`, e o
+ *   `RETURNING ultimo_seq` devolve valores DISTINTOS por sessão.
+ * - Idempotência por employee (early-return se já alocado) impede que um
+ *   segundo clique de "Imprimir" consuma outro número para o mesmo registro.
+ * - Por isolamento `(company_id, ano, tipo)`, cada empresa tem sua própria
+ *   sequência e cada ano reinicia em 001 (ou no seed, no caso de 2026).
+ *
+ * **Arquivos tocados:**
+ * - `drizzle/schema.ts` (2 colunas em employees + nova tabela contractCounters)
+ * - `server/_core/index.ts` (bloco SyncSchema+ Rev. 2125 com seed)
+ * - `server/routers.ts` (import contractCounters + nova mutation
+ *   `allocateContratoExperienciaNumero`)
+ * - `client/src/pages/Colaboradores.tsx` (hook allocate + closure builder +
+ *   2 onClick async)
+ * - `shared/version.ts` (bump 2124 → 2125)
+ * - `shared/changelog.ts` (esta entrada no topo)
+ * - `replit.md` (top-2 + one-liners reorganizados)
+ *
+ * **R-001 / R-007 / R-010:** OK — apenas `ADD COLUMN IF NOT EXISTS`, `CREATE
+ * TABLE IF NOT EXISTS` e INSERT com `ON CONFLICT DO NOTHING`. Nenhum DROP /
+ * ALTER destrutivo / DELETE.
+ *
+ * **Limitação conhecida:** se o user excluir um colaborador (soft-delete) que
+ * já tinha número alocado, o número fica "queimado" (não é reaproveitado nem
+ * por delete físico — que está proibido por R-010). Isso é INTENCIONAL: ordem
+ * cronológica de emissão de contrato precisa ser preservada por compliance
+ * trabalhista.
+ *
+ * --------------------------------------------------------------------------
+ *
  * Rev. 2124 — **RH · Contrato de Experiência: prazo + datas da CLÁUSULA 5ª
  * destacados em VERMELHO pra evitar erro de leitura.**
  *

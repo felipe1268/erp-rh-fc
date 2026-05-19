@@ -1563,6 +1563,43 @@ Regras:
           console.log(`[SyncSchema+] Rev. 2082: coluna centro_custo_id garantida em financial_accounts.`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.2082 financial_accounts.centro_custo_id:`, e?.message || e); }
 
+        // Rev. 2125 — Numeração sequencial automática do Contrato de Experiência.
+        // Counter atômico por (company_id, ano, tipo) — espelha padrão de
+        // compras_sc_counters (Rev. 1799). Seed: para o ano corrente, qualquer
+        // empresa que ainda não tem counter recebe ultimo_seq=33 — assim a
+        // primeira alocação no ano vira 34/AAAA (alinha com pedido do user:
+        // "este é o primeiro que estávamos fazendo este ano, começe a contagem
+        // com ela" — screenshot exibia 034/2026 baseado em employee_id padded).
+        // Para anos futuros (2027+), counter começa zerado → 001/AAAA.
+        try {
+          await db.execute(sql`ALTER TABLE employees ADD COLUMN IF NOT EXISTS numero_contrato_experiencia INTEGER`);
+          await db.execute(sql`ALTER TABLE employees ADD COLUMN IF NOT EXISTS numero_contrato_experiencia_ano INTEGER`);
+          await db.execute(sql`
+            CREATE TABLE IF NOT EXISTS contract_counters (
+              company_id INTEGER NOT NULL,
+              ano INTEGER NOT NULL,
+              tipo VARCHAR(50) NOT NULL,
+              ultimo_seq INTEGER NOT NULL DEFAULT 0,
+              atualizado_em TIMESTAMP NOT NULL DEFAULT NOW()
+            )
+          `);
+          await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS uq_contract_counters_company_ano_tipo ON contract_counters (company_id, ano, tipo)`);
+          // Seed defensivo: ano corrente, contrato_experiencia, ultimo_seq=33.
+          // Idempotente: ON CONFLICT DO NOTHING. Roda só pro ano atual; quando
+          // virar 2027, primeira alocação cria row com seq=1 normalmente.
+          const anoCorr = new Date().getFullYear();
+          // Nota: tabela `companies` usa coluna camelCase quoted `"deletedAt"`
+          // (não snake_case) — convenção Drizzle preservada no DDL original.
+          await db.execute(sql`
+            INSERT INTO contract_counters (company_id, ano, tipo, ultimo_seq)
+            SELECT c.id, ${anoCorr}, 'contrato_experiencia', 33
+            FROM companies c
+            WHERE c."deletedAt" IS NULL
+            ON CONFLICT (company_id, ano, tipo) DO NOTHING
+          `);
+          console.log(`[SyncSchema+] Rev. 2125: contract_counters + employees.numero_contrato_experiencia(+_ano) garantidos (seed seq=33 ano=${anoCorr}).`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.2125 contract_counters:`, e?.message || e); }
+
       } catch (e: any) { console.error(`[SyncSchema+] ERROR:`, e?.message || e); }
     }).catch(e => console.error("[SyncSchema] Falha ao iniciar:", e));
     // Garantir colunas críticas adicionadas recentemente que o SyncSchema possa ter ignorado

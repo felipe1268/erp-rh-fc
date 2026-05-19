@@ -44,7 +44,7 @@ import {
 import { DEFAULT_PERMISSIONS, MODULE_KEYS } from "../shared/modules";
 import { getDb, encerrarContratosPjDoFuncionario } from "./db";
 import { normalizeCidadeInput } from "../shared/normalizeCidade";
-import { obraSns, employees, blacklistReactivationRequests, companies, employeeSiteHistory, employeeTerminationChecklist, asos, trainings, sstIntegracaoRegistros, employeeIntegrations } from "../drizzle/schema";
+import { obraSns, employees, blacklistReactivationRequests, companies, employeeSiteHistory, employeeTerminationChecklist, asos, trainings, sstIntegracaoRegistros, employeeIntegrations, contractCounters } from "../drizzle/schema";
 import { eq, and, sql, or, ilike, isNull, inArray } from "drizzle-orm";
 import { resolveCompanyIds, companyFilter } from "./companyHelper";
 import type { ProfileType } from "../shared/modules";
@@ -923,6 +923,46 @@ export const appRouter = router({
         );
       } catch (e) { console.error('[ExperienciaDesligamento] Erro ao encerrar contratos PJ:', e); }
       return { success: true };
+    }),
+
+    // Rev. 2125 — Aloca número sequencial NNN/AAAA do Contrato de Experiência
+    // de forma ATÔMICA. Idempotente: se o employee já tem `numeroContratoExperiencia`
+    // + `numeroContratoExperienciaAno`, retorna o existente (não consome counter).
+    // UPSERT racy-safe via `INSERT ... ON CONFLICT DO UPDATE SET ultimo_seq+=1 RETURNING ultimo_seq`
+    // — mesmo padrão de `gerarProximoNumeroScAtomico` em server/routers/compras.ts.
+    allocateContratoExperienciaNumero: protectedProcedure.input(z.object({
+      employeeId: z.number(),
+      companyId: z.number(),
+    })).mutation(async ({ input, ctx }) => {
+      const db = (await getDb())!;
+      const emp = await getEmployeeById(input.employeeId, input.companyId);
+      if (!emp) throw new TRPCError({ code: 'NOT_FOUND', message: 'Colaborador não encontrado' });
+      const jaNumero = (emp as any).numeroContratoExperiencia;
+      const jaAno = (emp as any).numeroContratoExperienciaAno;
+      if (jaNumero && jaAno) {
+        return { numero: jaNumero as number, ano: jaAno as number, alreadyAllocated: true };
+      }
+      const ano = new Date().getFullYear();
+      const tipo = 'contrato_experiencia';
+      // UPSERT atômico — incrementa ou cria com 1.
+      const upserted = await db.execute(sql`
+        INSERT INTO contract_counters (company_id, ano, tipo, ultimo_seq)
+        VALUES (${input.companyId}, ${ano}, ${tipo}, 1)
+        ON CONFLICT (company_id, ano, tipo)
+        DO UPDATE SET ultimo_seq = contract_counters.ultimo_seq + 1, atualizado_em = NOW()
+        RETURNING ultimo_seq
+      `);
+      const rows: any[] = (upserted as any)?.rows ?? (upserted as any) ?? [];
+      const novoSeq: number = Number(rows[0]?.ultimo_seq ?? rows[0]?.ultimoSeq);
+      if (!Number.isFinite(novoSeq) || novoSeq <= 0) {
+        throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Falha ao alocar número do contrato' });
+      }
+      await db.update(employees).set({
+        numeroContratoExperiencia: novoSeq,
+        numeroContratoExperienciaAno: ano,
+      } as any).where(and(eq(employees.id, input.employeeId), eq(employees.companyId, input.companyId)));
+      await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? 'Sistema', action: 'CREATE', module: 'colaboradores', entityType: 'employee', entityId: input.employeeId, details: `Número do Contrato de Experiência alocado: ${String(novoSeq).padStart(3, '0')}/${ano}` });
+      return { numero: novoSeq, ano, alreadyAllocated: false };
     }),
 
     getTerminationChecklist: protectedProcedure

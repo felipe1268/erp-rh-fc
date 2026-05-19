@@ -363,6 +363,12 @@ export default function Colaboradores() {
     },
     onError: (e) => toast.error("Erro ao salvar experiência: " + e.message),
   });
+  // Rev. 2125 — alocação atômica do número NNN/AAAA do Contrato de Experiência.
+  // Idempotente: se já alocado, retorna o existente; senão consome o counter.
+  const allocateContratoExpMut = trpc.employees.allocateContratoExperienciaNumero.useMutation({
+    onSuccess: () => { if (editingId) utils.employees.getById.invalidate(); },
+    onError: (e) => toast.error("Erro ao alocar número do contrato: " + e.message),
+  });
   const deleteMut = trpc.employees.delete.useMutation({
     onSuccess: () => { utils.employees.list.invalidate(); utils.employees.stats.invalidate(); utils.obras.efetivoPorObra.invalidate(); utils.obras.semObra.invalidate(); toast.success("Colaborador excluído!"); },
     onError: (e) => toast.error("Erro: " + e.message),
@@ -2022,7 +2028,19 @@ ${obs ? `<div class="box"><strong>Observações / Justificativa do Enquadramento
 
 <p style="margin-top:16px">E por estarem assim justos e contratados, firmam o presente instrumento em 2 (duas) vias de igual teor e forma, na presença de 2 (duas) testemunhas.</p>
 `;
-                    const contratoHtml = buildFcDocument({
+                    // Rev. 2125 — número agora é alocado ATOMICAMENTE no backend
+                    // (`employees.allocateContratoExperienciaNumero`) só quando o
+                    // usuário clica em Imprimir / Enviar p/ Assinatura. Aqui montamos
+                    // apenas um closure que recebe a string já formatada.
+                    // Para preview na tela usamos o número já alocado, se houver,
+                    // ou um placeholder "___/AAAA" antes da 1ª alocação.
+                    const empAtualPreview: any = employees?.find((x: any) => x.id === editingId);
+                    const numeroJaAlocado: number | null = empAtualPreview?.numeroContratoExperiencia ?? null;
+                    const anoJaAlocado: number | null = empAtualPreview?.numeroContratoExperienciaAno ?? null;
+                    const numeroPreviewStr = (numeroJaAlocado && anoJaAlocado)
+                      ? `${String(numeroJaAlocado).padStart(3, '0')}/${anoJaAlocado}`
+                      : `___/${new Date().getFullYear()}`;
+                    const buildContratoHtmlWithNumero = (numeroStr: string) => buildFcDocument({
                       empresa: {
                         razaoSocial: comp?.razaoSocial || 'FC Engenharia',
                         cnpj: comp?.cnpj || undefined,
@@ -2032,7 +2050,7 @@ ${obs ? `<div class="box"><strong>Observações / Justificativa do Enquadramento
                         logoUrl: logoSrc,
                       },
                       titulo: 'CONTRATO DE EXPERIÊNCIA',
-                      numero: `${String((editingId || 0)).padStart(3, '0')}/${new Date().getFullYear()}`,
+                      numero: numeroStr,
                       dataEmissao: dataHoje,
                       assunto: {
                         valor: `CONTRATO DE EXPERIÊNCIA — ${empNome}${empFuncao ? ' (' + empFuncao + ')' : ''}`,
@@ -2090,20 +2108,33 @@ ${obs ? `<div class="box"><strong>Observações / Justificativa do Enquadramento
                           type="button"
                           variant="outline"
                           size="sm"
-                          className="border-orange-300 text-orange-700 hover:bg-orange-50"
-                          onClick={() => {
+                          disabled={allocateContratoExpMut.isPending}
+                          className="border-orange-300 text-orange-700 hover:bg-orange-50 disabled:opacity-60"
+                          onClick={async () => {
                             if (!jornadaDefinida) {
                               toast.error('Defina a Jornada de Trabalho do colaborador (entrada/saída/intervalo) antes de gerar o Contrato de Experiência.');
                               return;
                             }
+                            if (!editingId || !comp?.id) {
+                              toast.error('Salve o cadastro do colaborador antes de gerar o Contrato.');
+                              return;
+                            }
+                            // Rev. 2125 — aloca número ANTES de gerar o HTML.
+                            // Se já foi alocado p/ este employee, o backend devolve o mesmo (idempotente).
+                            const res = await allocateContratoExpMut.mutateAsync({
+                              employeeId: Number(editingId),
+                              companyId: Number(comp.id),
+                            });
+                            const numeroStr = `${String(res.numero).padStart(3, '0')}/${res.ano}`;
+                            const html = buildContratoHtmlWithNumero(numeroStr);
                             const w = window.open('', '_blank');
                             if (!w) return toast.error('Popup bloqueado');
-                            w.document.write(contratoHtml);
+                            w.document.write(html);
                             w.document.close();
                             setTimeout(() => w.print(), 500);
                           }}
                         >
-                          <FileText className="h-4 w-4 mr-1" /> Imprimir Contrato de Experiência
+                          <FileText className="h-4 w-4 mr-1" /> Imprimir Contrato de Experiência {numeroPreviewStr && numeroJaAlocado ? `(Nº ${numeroPreviewStr})` : ''}
                         </Button>
                         {editingId && comp?.id ? (
                           <FCSignContratoExperienciaPanel
@@ -2111,17 +2142,24 @@ ${obs ? `<div class="box"><strong>Observações / Justificativa do Enquadramento
                             employeeId={Number(editingId)}
                             empNome={empNome}
                             isAdminMaster={isAdminMaster}
-                            onEnviar={() => {
+                            onEnviar={async () => {
                               if (!jornadaDefinida) {
                                 toast.error('Defina a Jornada de Trabalho do colaborador (entrada/saída/intervalo) antes de enviar o Contrato de Experiência para assinatura.');
                                 return;
                               }
+                              // Rev. 2125 — aloca número ANTES de abrir o modal FCSign.
+                              const res = await allocateContratoExpMut.mutateAsync({
+                                employeeId: Number(editingId),
+                                companyId: Number(comp!.id),
+                              });
+                              const numeroStr = `${String(res.numero).padStart(3, '0')}/${res.ano}`;
+                              const html = buildContratoHtmlWithNumero(numeroStr);
                               setFcsignPayload({
                                 companyId: Number(comp!.id),
                                 employeeId: Number(editingId),
                                 tipo: 'contrato_experiencia',
-                                documentTitle: `Contrato de Experiência - ${empNome}`,
-                                documentHtml: contratoHtml,
+                                documentTitle: `Contrato de Experiência ${numeroStr} - ${empNome}`,
+                                documentHtml: html,
                                 empregadoNome: empNome,
                                 empregadoCpf: empCpfFmt || undefined,
                               });

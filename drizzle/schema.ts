@@ -1008,6 +1008,11 @@ export const employees = pgTable("employees", {
         experienciaEfetivadoEm: date({ mode: 'string' }),
         experienciaEfetivadoPor: varchar({ length: 255 }),
         experienciaObs: text(),
+        // Rev. 2125 — número do Contrato de Experiência alocado uma única vez
+        // e persistido (formato exibido NNN/AAAA). Counter atômico em
+        // `contract_counters(company_id, ano, tipo='contrato_experiencia')`.
+        numeroContratoExperiencia: integer("numero_contrato_experiencia"),
+        numeroContratoExperienciaAno: integer("numero_contrato_experiencia_ano"),
         vtTipo: text(),
         vtValorDiario: varchar({ length: 20 }),
         vtOperadora: varchar({ length: 100 }),
@@ -8447,4 +8452,17 @@ export const signatureSigners = pgTable("signature_signers", {
   createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
 }, (table) => [
   uniqueIndex("signature_signers_token_unique").on(table.token),
+]);
+
+// Rev. 2125 — Counters atômicos por (company, ano, tipo) pra numeração
+// sequencial de contratos institucionais (Contrato de Experiência, etc).
+// Padrão idêntico ao `compras_sc_counters` (Rev. 1799/1790).
+export const contractCounters = pgTable("contract_counters", {
+  companyId: integer("company_id").notNull(),
+  ano: integer().notNull(),
+  tipo: varchar({ length: 50 }).notNull(),                 // 'contrato_experiencia' | ...
+  ultimoSeq: integer("ultimo_seq").default(0).notNull(),
+  atualizadoEm: timestamp("atualizado_em", { mode: 'string' }).defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("uq_contract_counters_company_ano_tipo").on(table.companyId, table.ano, table.tipo),
 ]);
