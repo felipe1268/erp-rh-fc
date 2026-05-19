@@ -13,7 +13,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { trpc } from "@/lib/trpc";
-import { Users, Plus, Search, Pencil, Trash2, Eye, Ban, GraduationCap, ShieldCheck, Shield, ShieldX, Scale, FileText, Building2, AlertTriangle, Upload, HardHat, Download, Printer, ArrowLeft, Hash, Lock, Camera, X as XIcon, Wrench, Star, Award, CalendarDays, UserCheck, UserX, Palmtree, HeartPulse, Clock } from "lucide-react";
+import { Users, Plus, Search, Pencil, Trash2, Eye, Ban, GraduationCap, ShieldCheck, Shield, ShieldX, Scale, FileText, Building2, AlertTriangle, Upload, HardHat, Download, Printer, ArrowLeft, Hash, Lock, Camera, X as XIcon, Wrench, Star, Award, CalendarDays, UserCheck, UserX, Palmtree, HeartPulse, Clock, Save } from "lucide-react";
 import FullScreenDialog from "@/components/FullScreenDialog";
 import { Badge } from "@/components/ui/badge";
 import { useState, useEffect, useMemo, useRef, type ReactNode } from "react";
@@ -350,6 +350,15 @@ export default function Colaboradores() {
   const updateMut = trpc.employees.update.useMutation({
     onSuccess: () => { utils.employees.list.invalidate(); utils.employees.stats.invalidate(); utils.obras.efetivoPorObra.invalidate(); utils.obras.semObra.invalidate(); setDialogOpen(false); toast.success("Colaborador atualizado!"); },
     onError: (e) => toast.error("Erro: " + e.message),
+  });
+  // Rev. 2113: salvamento parcial dos dados do Contrato de Experiência (NÃO fecha o modal)
+  const updateExperienciaMut = trpc.employees.update.useMutation({
+    onSuccess: () => {
+      utils.employees.list.invalidate();
+      if (editingId) utils.employees.getById.invalidate();
+      toast.success("Dados do Contrato de Experiência salvos!");
+    },
+    onError: (e) => toast.error("Erro ao salvar experiência: " + e.message),
   });
   const deleteMut = trpc.employees.delete.useMutation({
     onSuccess: () => { utils.employees.list.invalidate(); utils.employees.stats.invalidate(); utils.obras.efetivoPorObra.invalidate(); utils.obras.semObra.invalidate(); toast.success("Colaborador excluído!"); },
@@ -2028,6 +2037,31 @@ body .destaque{font-weight:700;color:#1a1a1a}
                     const empCpfFmt = formatCPF(empCpf);
                     return (
                       <div className="mt-3 flex flex-wrap justify-end gap-2">
+                        <Button
+                          type="button"
+                          size="sm"
+                          disabled={updateExperienciaMut.isPending || !editingId || !comp?.id}
+                          className="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white border-0 disabled:opacity-60"
+                          onClick={() => {
+                            const empId = editingId;
+                            const compId = comp?.id;
+                            if (!empId || !compId) { toast.error('Salve o cadastro do colaborador antes de salvar a experiência.'); return; }
+                            updateExperienciaMut.mutate({
+                              id: Number(empId),
+                              companyId: Number(compId),
+                              data: {
+                                experienciaTipo: (form as any).experienciaTipo || null,
+                                experienciaInicio: (form as any).experienciaInicio || null,
+                                experienciaFim1: (form as any).experienciaFim1 || null,
+                                experienciaFim2: (form as any).experienciaFim2 || null,
+                                experienciaStatus: (form as any).experienciaStatus || null,
+                                experienciaObs: (form as any).experienciaObs || null,
+                              } as any,
+                            });
+                          }}
+                        >
+                          <Save className="h-4 w-4 mr-1" /> {updateExperienciaMut.isPending ? 'Salvando...' : 'Salvar Experiência'}
+                        </Button>
                         <Button
                           type="button"
                           variant="outline"

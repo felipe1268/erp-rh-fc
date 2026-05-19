@@ -1,6 +1,48 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2113 — **RH · Contrato de Experiência — botão "Salvar Experiência"
+ * dedicado dentro do card laranja (salvamento parcial sem fechar modal).**
+ *
+ * Pedido do user: "preciso ter um botão de salvar o para não perder o que
+ * ja foi feito.... ou ele so vai ficar salvo depois que assinar qual a
+ * logica?". Após explicação da lógica atual (Salvar geral no fim do
+ * formulão + FCSign não salva), user escolheu **Opção B**: botão dedicado.
+ *
+ * **Lógica anterior:** os 6 campos do contrato (`experienciaTipo`,
+ * `experienciaInicio`, `experienciaFim1`, `experienciaFim2`,
+ * `experienciaStatus`, `experienciaObs`) eram salvos apenas pelo botão
+ * "Salvar" geral no rodapé do formulário (L3168), que exigia scroll
+ * longo e fechava o modal. "Enviar para Assinatura (FCSign)" não salva
+ * — só envia. Risco: perda acidental se o user fechasse o modal.
+ *
+ * **Implementação:**
+ * - `Colaboradores.tsx` L357-365: nova mutation `updateExperienciaMut`
+ *   (cópia do `updateMut` mas SEM `setDialogOpen(false)` no onSuccess,
+ *   com toast "Dados do Contrato de Experiência salvos!" e invalidate
+ *   de `employees.list` + `employees.getById`).
+ * - L2043-2067: novo botão emerald→teal "Salvar Experiência" com ícone
+ *   `<Save/>` (lucide-react) ANTES do "Imprimir" no flex. Disabled
+ *   enquanto `updateExperienciaMut.isPending || !editingId || !comp?.id`.
+ *   Passa apenas os 6 campos da experiência (não toda a `form`) pro
+ *   `updateMut` no servidor — fica payload mínimo, evita conflito com
+ *   outros campos que o user possa estar editando em outro card.
+ * - L16: import `Save` adicionado ao lucide-react.
+ *
+ * **Layout dos 3 botões:** [emerald Salvar Experiência] [outline laranja
+ * Imprimir] [gradient azul Enviar para Assinatura FCSign] — flex-wrap
+ * justify-end gap-2.
+ *
+ * **Não-mudanças:** `updateMut` original intacto (botão "Salvar" geral
+ * continua fechando o modal); `createMut`, `deleteMut`, schema, backend
+ * `employees.update` (já aceitava parciais via `data` object) — nada
+ * tocado. FCSign continua exigindo cadastro salvo. Layout do contrato
+ * (Rev. 2112) preservado.
+ *
+ * **R-001/R-007/R-010:** N/A — frontend (mutation existente reusada).
+ *
+ * ---
+ *
  * Rev. 2112 — **RH · Contrato de Experiência — alinhamento final: Nº/Data
  * sem indent + ASSUNTO com indent menor (0.5cm), conforme PDF do Comunicado.**
  *
