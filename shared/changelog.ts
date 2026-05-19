@@ -1,6 +1,78 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2133 — **FCSign · Contrato de Experiência assinado agora também é
+ * persistido em `employee_contracts` p/ aparecer na lista "Contratos CLT"
+ * do RAIO-X do colaborador (com link "Contrato Assinado" p/ visualizar/
+ * baixar o HTML estampado pelo FCSign).**
+ *
+ * User (iPad screenshot RAIO-X de Lilian, aba Contratos CLT vazia):
+ * "O contrato de experiência precisa estar salvo aqui tbm... para
+ * visualizar ou baixar."
+ *
+ * **Contexto:** ao completar uma sessão FCSign (último signer assina),
+ * Rev. 2120 já estampava as assinaturas sobre as linhas do documento,
+ * subia o HTML final pro storage (`fcsign/{companyId}/{employeeId}/
+ * sessao-{id}-assinado.html`), salvava em `signatureSessions.
+ * finalDocumentUrl` e criava um `employeeDocuments` (anexo do RAIO-X
+ * timeline). Mas a aba "Contratos CLT" lê de `employeeContracts` —
+ * tabela alimentada SÓ pelo fluxo manual `contracts.salvarContrato`
+ * (botão "Salvar Contrato" do gerador antigo). FCSign nunca tocava
+ * essa tabela, então o contrato assinado ficava invisível na lista
+ * "Contratos CLT" mesmo já estando no RAIO-X.
+ *
+ * **Fix em `server/routers/signatures.ts → sign` (após o bloco que
+ * cria employeeDocuments + atualiza session.finalDocumentUrl):**
+ *
+ * - Import `employeeContracts` adicionado ao schema barrel.
+ * - Quando `session.tipo === "contrato_experiencia"`:
+ *   1. SELECT por `employeeId + tipo='experiencia' + status NOT IN
+ *      ('encerrado','rescindido')` — pra ser idempotente e respeitar
+ *      a regra do `contracts.salvarContrato` (não duplicar contrato
+ *      de experiência ATIVO).
+ *   2. Se NÃO existe: INSERT em `employeeContracts` com
+ *      `status='vigente'`, `dataInicio=emp.dataAdmissao`, `funcao`/
+ *      `salarioBase`/`valorHora`/`jornadaTrabalho` puxados do
+ *      registro do empregado, `conteudoGerado=finalHtml` (HTML
+ *      estampado), `contratoAssinadoUrl=url` + `contratoAssinadoKey=
+ *      fileKey` (mesmo storage do FCSign), `criadoPor='FCSign'`,
+ *      `criadoPorUserId=session.createdByUserId`.
+ *   3. Se JÁ existe (caso o user tenha usado o gerador antigo antes
+ *      do FCSign): UPDATE apenas `contratoAssinadoUrl + Key + updatedAt`
+ *      — anexa o assinado ao contrato existente em vez de duplicar.
+ * - Try/catch isolado: se o INSERT falhar (constraint violation,
+ *   DB hiccup), apenas loga `[FCSign.complete] falha ao persistir
+ *   employeeContracts: ...` e NÃO bloqueia o `success: true` da
+ *   assinatura — a sessão FCSign continua válida, RAIO-X timeline
+ *   recebe o doc, só a lista CLT fica vazia até intervenção manual.
+ *
+ * **Por que NÃO criar antes (no momento de iniciar a sessão FCSign):**
+ * - Se o user cancelar a sessão (adminDelete) antes de qualquer
+ *   assinatura, ficaria contrato órfão sem URL assinada.
+ * - O preview da sessão é gerado dinamicamente — só faz sentido
+ *   persistir como "contrato" depois que TODAS as partes assinaram
+ *   e o HTML final foi estampado.
+ *
+ * **Backfill da sessão pendente atual (Lilian):**
+ * Não é necessário. A sessão ainda está `pendente` aguardando Felipe.
+ * Quando ele assinar (com o popup modal Rev. 2131 + alerta corrigido
+ * Rev. 2132), o caminho de `allSigned===true` vai disparar e Rev. 2133
+ * cria o registro automaticamente.
+ *
+ * **R-001/R-007/R-010:** OK — INSERT/UPDATE em tabela existente, zero
+ * ALTER/DROP/DELETE em prod. Try/catch isolado garante que falha de
+ * persistência não corrompe estado da sessão FCSign.
+ *
+ * **Arquivos tocados:**
+ * - `server/routers/signatures.ts` — import + bloco try/catch após
+ *   completar sessão.
+ * - `shared/version.ts` → 2133.
+ * - `shared/changelog.ts` — esta entrada no topo.
+ * - `replit.md` — promove 2133/2132 pra top-2 detalhada, demote 2131
+ *   → one-liner, demove 2126 → `replit-history.md`.
+ *
+ * ---
+ *
  * Rev. 2132 — **HOTFIX FCSign · `pendingForCurrentUser` retornava zero
  * silenciosamente: `sql\`... = ANY(${array})\`` no Drizzle não serializa
  * `number[]` JS como PG array — match falhava sempre.**

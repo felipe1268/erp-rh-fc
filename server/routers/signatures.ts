@@ -1,7 +1,7 @@
 import { router, protectedProcedure, publicProcedure } from "../_core/trpc";
 import { z } from "zod";
 import { getDb, getCompaniesForUser } from "../db";
-import { signatureSessions, signatureSigners, employees, companies, employeeDocuments, users } from "../../drizzle/schema";
+import { signatureSessions, signatureSigners, employees, companies, employeeDocuments, employeeContracts, users } from "../../drizzle/schema";
 import { eq, and, desc, sql, isNull, inArray } from "drizzle-orm";
 import { resolveCompanyIds, companyFilter } from "../companyHelper";
 import { TRPCError } from "@trpc/server";
@@ -452,6 +452,56 @@ export const signaturesRouter = router({
             finalDocumentUrl: url,
             finalEmployeeDocumentId: doc.id,
           }).where(eq(signatureSessions.id, session.id));
+
+          // Rev. 2133 — Contrato de Experiência: também persistir registro
+          // em `employee_contracts` para aparecer na lista "Contratos CLT"
+          // do RAIO-X do colaborador (com link p/ visualizar/baixar o
+          // documento assinado). Idempotente: só cria se não houver contrato
+          // de experiência ATIVO (não encerrado/rescindido).
+          if (session.tipo === "contrato_experiencia") {
+            try {
+              const ativos = await db.select({ id: employeeContracts.id })
+                .from(employeeContracts)
+                .where(and(
+                  eq(employeeContracts.employeeId, session.employeeId),
+                  eq(employeeContracts.tipo, "experiencia"),
+                  sql`${employeeContracts.status} NOT IN ('encerrado', 'rescindido')`,
+                ));
+              if (ativos.length === 0) {
+                const [emp] = await db.select().from(employees)
+                  .where(eq(employees.id, session.employeeId)).limit(1);
+                const dataInicio = emp?.dataAdmissao || new Date().toISOString().split("T")[0];
+                await db.insert(employeeContracts).values({
+                  companyId: session.companyId,
+                  employeeId: session.employeeId,
+                  tipo: "experiencia",
+                  status: "vigente",
+                  dataInicio,
+                  funcao: emp?.funcao || emp?.cargo || null,
+                  salarioBase: emp?.salarioBase || null,
+                  valorHora: emp?.valorHora || null,
+                  jornadaTrabalho: emp?.jornadaTrabalho || null,
+                  conteudoGerado: finalHtml,
+                  contratoAssinadoUrl: url,
+                  contratoAssinadoKey: fileKey,
+                  criadoPor: "FCSign",
+                  criadoPorUserId: session.createdByUserId,
+                });
+              } else {
+                // Já existe contrato de experiência ativo: só anexa a URL
+                // assinada (atualiza o registro existente).
+                await db.update(employeeContracts).set({
+                  contratoAssinadoUrl: url,
+                  contratoAssinadoKey: fileKey,
+                  updatedAt: new Date().toISOString(),
+                }).where(eq(employeeContracts.id, ativos[0].id));
+              }
+            } catch (e) {
+              // Não bloqueia a conclusão da assinatura se a persistência do
+              // contrato CLT falhar (log apenas).
+              console.error("[FCSign.complete] falha ao persistir employeeContracts:", e);
+            }
+          }
         }
       }
 
