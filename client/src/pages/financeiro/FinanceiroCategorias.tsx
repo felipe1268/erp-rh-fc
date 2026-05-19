@@ -151,7 +151,9 @@ export default function FinanceiroCategorias() {
         nome,
         tipo: form.tipo,
         natureza: form.natureza,
-        centroCustoId: centroCustoId ?? undefined,, escopo: "categoria"});
+        centroCustoId: centroCustoId ?? undefined,
+        escopo: "categoria",
+      });
     }
   }
 

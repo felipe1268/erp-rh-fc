@@ -1,6 +1,17 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2161 — **HOTFIX BUILD · Syntax error em FinanceiroCategorias.tsx
+ * (vírgula dupla no `createMut.mutate`).**
+ *
+ * User: "está dando erro em categorias" (Babel: Unexpected token
+ * 154:50 — `centroCustoId: centroCustoId ?? undefined,, escopo:
+ * "categoria"`). Regressão da Rev. 2157 que adicionou `escopo:
+ * "categoria"` no mutate sem quebrar linha, deixando `,,`.
+ *
+ * Fix: 1 ponto — quebrar o objeto em múltiplas linhas, remover a
+ * vírgula extra. Zero mudança em backend ou dados.
+ *
  * Rev. 2160 — **HOTFIX continuação da Rev. 2159 · filtrar contas
  * inativas (ativo=0) na tela de Plano de Contas.**
  *
