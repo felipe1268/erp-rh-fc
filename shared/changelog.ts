@@ -1,6 +1,40 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2155 — **HOTFIX · Validação do "Imprimir Contrato de Experiência"
+ * pedindo Endereço mesmo com aba Endereço preenchida.**
+ *
+ * User report: "Não consigo gerar o contrato pra imprimir, fala que
+ * preciso preencher o endereço, porém essa informação está preenchida"
+ * (Lilian Oliveira Veloso do Amaral — CEP 12000-000, Rua Luís Andre
+ * Gadioli 831, Qururim, Taubaté/SP).
+ *
+ * **Causa raiz:** o form do colaborador tem DOIS campos legados pra
+ * endereço — `endereco` (campo antigo) e `logradouro` (campo usado
+ * pela aba "Endereço" atual desde uma reforma anterior, ver
+ * `set("logradouro", ...)` na L1617). O helper `empEnderecoRaw` da
+ * L466 já estava correto (`form.endereco || form.logradouro || ""`),
+ * mas a validação consolidada da Rev. 2136 (L2122) e a montagem do
+ * HTML do contrato (L1936) checavam SOMENTE `form.endereco`. Quando o
+ * usuário preenchia tudo via aba Endereço (caso comum), o campo
+ * `endereco` ficava vazio, a validação bloqueava o "Imprimir
+ * Contrato de Experiência" com "Empregado: Endereço" e — se passasse
+ * — o contrato sairia impresso com o campo em branco.
+ *
+ * **Fix em `client/src/pages/Colaboradores.tsx`:**
+ *
+ * 1. L2122 (validação): troca `if (!form.endereco?.trim())` por
+ *    `if (!(form.endereco?.trim() || (form as any).logradouro?.trim()))`.
+ * 2. L1936 (HTML do contrato): troca
+ *    `esc(form.endereco || '')` por
+ *    `esc(form.endereco || (form as any).logradouro || '')`.
+ *
+ * `cidade` e `estado` já são consistentes entre validação e HTML — só
+ * `endereco` divergia. Comp. (empresa) usa `comp?.endereco` que vem
+ * de outra tabela e segue inalterado.
+ *
+ * **Backend:** zero. **R-001/R-007/R-010:** N/A — só client-side.
+ *
  * Rev. 2154 — **HOTFIX BUILD · Deploy quebrando porque
  * `RichTextEditor.tsx` não exportava `stripHtml/sanitizeHtml/isHtmlContent`
  * usados pelo `ComunicadosInternos.tsx`.**

@@ -1933,7 +1933,8 @@ ${obs ? `<div class="box"><strong>Observações / Justificativa do Enquadramento
                     const empFuncao = esc(form.funcao || '');
                     const empSalarioBRL = formatBRL(form.salarioBase);
                     const empSalarioExtenso = valorPorExtenso(form.salarioBase);
-                    const empEndereco = esc(form.endereco || '');
+                    // Rev. 2155 — fallback p/ logradouro (aba Endereço usa esse campo).
+                    const empEndereco = esc(form.endereco || (form as any).logradouro || '');
                     const empCidade = esc(form.cidade || '');
                     const empEstado = esc(form.estado || '');
                     const inicio = (form as any).experienciaInicio || form.dataAdmissao || '';
@@ -2118,8 +2119,11 @@ ${obs ? `<div class="box"><strong>Observações / Justificativa do Enquadramento
                       if (!form.cpf?.trim()) faltando.push('Empregado: CPF');
                       if (!form.rg?.trim()) faltando.push('Empregado: RG');
                       if (!form.ctps?.trim()) faltando.push('Empregado: CTPS');
-                      // Empregado — endereço
-                      if (!form.endereco?.trim()) faltando.push('Empregado: Endereço');
+                      // Empregado — endereço (Rev. 2155: aceita logradouro como fallback,
+                      // alinhado ao empEnderecoRaw da L466 — a aba "Endereço" preenche o
+                      // campo `logradouro`, então checar só `endereco` falava em vazio mesmo
+                      // com tudo preenchido na UI).
+                      if (!(form.endereco?.trim() || (form as any).logradouro?.trim())) faltando.push('Empregado: Endereço');
                       if (!form.cidade?.trim()) faltando.push('Empregado: Cidade');
                       if (!form.estado?.trim()) faltando.push('Empregado: Estado (UF)');
                       // Empregado — profissional / remuneração
