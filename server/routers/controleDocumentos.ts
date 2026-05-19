@@ -2035,6 +2035,11 @@ export const controleDocumentosRouter = router({
       }));
 
       fcsignRows.forEach(s => {
+        // Rev. 2152 — sessões canceladas NÃO geram eventos de timeline
+        // (eram poluição visual: enviado + cada assinatura parcial + cancelado).
+        // Mantemos no array fcsignSessions p/ histórico/auditoria se preciso,
+        // mas a timeline cronológica só mostra sessões vivas/concluídas.
+        if (s.status === 'cancelado') return;
         const dCriou = String(s.createdAt || '').slice(0, 10);
         if (dCriou) {
           timeline.push({
@@ -2066,18 +2071,6 @@ export const controleDocumentosRouter = router({
               descricao: `${s.documentTitle} — todas as partes assinaram`,
               cor: 'emerald',
               icone: 'check-circle',
-            });
-          }
-        }
-        if (s.status === 'cancelado' && s.cancelledAt) {
-          const dCanc = String(s.cancelledAt).slice(0, 10);
-          if (dCanc) {
-            timeline.push({
-              data: dCanc,
-              tipo: 'FCSign · Cancelado',
-              descricao: `${s.documentTitle} — sessão cancelada`,
-              cor: 'red',
-              icone: 'x-circle',
             });
           }
         }

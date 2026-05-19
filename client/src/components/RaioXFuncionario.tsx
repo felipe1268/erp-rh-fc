@@ -211,6 +211,12 @@ export default function RaioXFuncionario({ employeeId, open, onClose }: RaioXPro
     onSuccess: () => { utils2.integracoes.listar.invalidate(); toast.success("Integração removida."); },
   });
 
+  // Rev. 2153 — ADM Master: zerar histórico de Termos FCSign do colaborador
+  // (bulk soft-cancel via signatures.adminDelete, idêntico ao padrão da
+  // Rev. 2149 no painel Controle de Documentos). Útil pra limpar testes.
+  const [zerandoTermos, setZerandoTermos] = useState(false);
+  const adminDeleteSigMut = trpc.signatures.adminDelete.useMutation();
+
   // Estado do lightbox da foto do colaborador (declarado antes do useEffect
   // de ESC para evitar TDZ ao avaliar o array de dependências).
   const [fotoAmpliada, setFotoAmpliada] = useState(false);
@@ -2467,11 +2473,56 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
               {/* ============ TERMOS ASSINADOS (FCSign) — Rev. 2150 ============ */}
               <TabsContent value="termos_fcsign" className="mt-4">
                 <div className="bg-white rounded-xl border p-6">
-                  <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
                     <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
                       <FileSignature className="h-5 w-5 text-indigo-500" />
                       Termos & Documentos Assinados (FCSign) — {termosFcsign.length}
                     </h3>
+                    {isAdminMaster && fcsignSessions.some((s: any) => s.tipo === "termo_responsabilidade" && s.status !== "cancelado") && (
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        disabled={zerandoTermos}
+                        onClick={async () => {
+                          // Rev. 2153 — restringe a tipo='termo_responsabilidade'
+                          // de propósito: signatures.adminDelete em sessões de
+                          // 'contrato_experiencia' dispara DELETE físico em
+                          // employee_contracts (ver Rev. 2135). Aqui só queremos
+                          // limpar termos de recebimento de teste — NUNCA tocar
+                          // contratos. Outros tipos (contrato_experiencia, etc.)
+                          // têm fluxo próprio de cancelamento.
+                          const alvos = fcsignSessions.filter((s: any) => s.tipo === "termo_responsabilidade" && s.status !== "cancelado");
+                          if (alvos.length === 0) {
+                            toast.info("Não há Termos de Recebimento ativos pra zerar (todos já estão cancelados).");
+                            return;
+                          }
+                          if (!confirm(`Zerar ${alvos.length} Termo(s) de Recebimento ativo(s) deste colaborador?\n\nIsto cancela cada sessão (soft-cancel) e remove os documentos do RAIO-X. As sessões ficam registradas no banco com status="cancelado" pra auditoria. Contratos de experiência e outros tipos FCSign NÃO são afetados. Ação restrita ao ADM Master.`)) return;
+                          setZerandoTermos(true);
+                          let ok = 0, fail = 0;
+                          for (const s of alvos) {
+                            try {
+                              await adminDeleteSigMut.mutateAsync({ companyId: emp.companyId, id: s.id });
+                              ok++;
+                            } catch (e: any) {
+                              fail++;
+                              console.error(`[Rev.2153] Falha ao cancelar sessão ${s.id}:`, e?.message || e);
+                            }
+                          }
+                          setZerandoTermos(false);
+                          if (fail === 0) {
+                            toast.success(`${ok} termo(s) zerados com sucesso.`);
+                          } else {
+                            toast.warning(`Concluído: ${ok} ok, ${fail} falha(s). Veja console.`);
+                          }
+                          await utils2.docs.raioX.invalidate();
+                        }}
+                        className="gap-1.5"
+                        title="Cancela todos os termos FCSign deste colaborador (soft-delete)"
+                      >
+                        <ShieldAlert className="h-3.5 w-3.5" />
+                        {zerandoTermos ? "Zerando..." : "Zerar Termos"}
+                      </Button>
+                    )}
                   </div>
                   {termosFcsign.length === 0 ? (
                     <div className="text-center py-12 text-muted-foreground">

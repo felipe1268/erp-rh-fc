@@ -1,6 +1,86 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2153 — **NOVA AÇÃO ADM Master · Botão "Zerar Termos" no Raio-X
+ * do funcionário (aba "Termos Assinados"), pra limpar testes em bulk.**
+ *
+ * User: "O adm master precisa ter um jeito de zerar a timeline do
+ * funcionário se quiser, inclua isso". Como a Rev. 2152 já filtrou
+ * sessões canceladas da timeline visual, o adm agora ganha um botão
+ * pra de fato cancelar (soft) todos os termos FCSign restantes de um
+ * colaborador em um clique — útil pra limpar testes ou retirar termos
+ * antigos.
+ *
+ * **Mudanças em `client/src/components/RaioXFuncionario.tsx`:**
+ *
+ * 1. Novo state `zerandoTermos` + hook
+ *    `trpc.signatures.adminDelete.useMutation()` no escopo do main
+ *    component (após `excluirIntegracaoMut`, ~L212).
+ * 2. Botão `<Button variant="destructive" size="sm">` injetado no
+ *    header do TabsContent "termos_fcsign" (~L2476) — visível somente
+ *    se `isAdminMaster` E existe ao menos 1 sessão de
+ *    `tipo==='termo_responsabilidade'` ativa. Ícone `ShieldAlert` +
+ *    label "Zerar Termos" (ou "Zerando..." durante).
+ * 3. onClick: filtra `fcsignSessions` p/ `tipo==='termo_responsabilidade'`
+ *    E `status!=="cancelado"` (FILTRO DE TIPO É CRÍTICO — ver nota de
+ *    segurança abaixo), confirm() único explicando que é soft-cancel
+ *    + saída do RAIO-X (registros ficam pra auditoria), loop
+ *    sequencial chamando `adminDeleteSigMut.mutateAsync({ companyId:
+ *    emp.companyId, id: s.id })`, contabiliza ok/fail, toast final com
+ *    resumo, e ao fim `utils2.docs.raioX.invalidate()` pra recarregar
+ *    Raio-X inteiro (timeline + termos).
+ *
+ * **NOTA DE SEGURANÇA (ajuste pós code-review):** o filtro por
+ * `tipo==='termo_responsabilidade'` é OBRIGATÓRIO. `signatures.adminDelete`
+ * (server, ~L877) faz DELETE FÍSICO em `employee_contracts` quando a
+ * sessão é `tipo==='contrato_experiencia'` (cf. Rev. 2135). Permitir o
+ * bulk em outros tipos arriscaria apagar contratos de experiência
+ * legítimos. O contrato de experiência tem fluxo próprio de
+ * cancelamento e NÃO entra neste bulk.
+ * 4. Sequencial (não Promise.all) pra evitar contention em
+ *    signatures+employee_documents — mesmo padrão da Rev. 2149 bulk
+ *    delete no painel Controle de Documentos.
+ *
+ * **Backend**: zero — reusa `signatures.adminDelete` (gate
+ * `admin_master` no backend; ACL de empresa já checada lá).
+ *
+ * **R-001/R-007/R-010**: OK — só soft-cancel + soft-delete, nenhum
+ * DELETE/DROP/ALTER em prod.
+ *
+ * Rev. 2152 — **UX/CLEANUP · Sessões FCSign canceladas deixam de poluir
+ * a Timeline Cronológica do Raio-X do funcionário.**
+ *
+ * User: "Tão usando meu usuário para teste, zere. Minha timeline"
+ * (3 sessões de Termo de Responsabilidade do colaborador Felipe Costa
+ * Alves, todas com status='cancelado', estavam gerando ATÉ 4 eventos
+ * cada na timeline — Documento enviado, cada assinatura parcial antes
+ * do cancelamento, e o próprio "FCSign · Cancelado". Resultado: 17
+ * eventos pra 3 sessões de teste, totalmente irrelevantes).
+ *
+ * Fix idiomático (sem violar R-010 / sem DELETE em prod): no
+ * `server/routers/controleDocumentos.ts`, dentro do `fcsignRows.forEach`
+ * que popula a `timeline` (~L2037), adicionado early-return
+ * `if (s.status === "cancelado") return;`. Removido também o bloco
+ * que empurrava o evento "FCSign · Cancelado" (~L2072-2083) — agora
+ * sessões canceladas simplesmente não aparecem no histórico
+ * cronológico.
+ *
+ * O array `fcsignSessions` retornado continua incluindo sessões
+ * canceladas (pra histórico/auditoria), mas o cliente
+ * `RaioXFuncionario.tsx` já filtra elas da aba "Termos Assinados"
+ * (Rev. 2150). Painel "Termo de Recebimento" em Controle de
+ * Documentos também já oculta canceladas (Rev. 2149 soft-cancel).
+ *
+ * **Arquivos:** `server/routers/controleDocumentos.ts` (procedure
+ * raioX, único hunk).
+ *
+ * **Dados em prod:** zero mudanças. Nenhum DELETE/UPDATE foi
+ * executado nas 3 sessões de teste do Felipe — elas continuam no
+ * banco com status='cancelado' (já estavam cancelled antes desta
+ * revisão), mas a timeline do Raio-X passa a ignorá-las.
+ *
+ * **R-001/R-007/R-010**: OK — só leitura mudou.
+ *
  * Rev. 2151 — **UX POLISH · Dialog "Novo Termo de Recebimento" repaginado
  * com a identidade visual FC (Regra de Ouro — faixa azul #1B2A4A,
  * tipografia uppercase letter-spacing 3px, avatar com iniciais).**
