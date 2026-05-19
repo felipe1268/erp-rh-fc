@@ -1,6 +1,33 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2144 — **Termo de Responsabilidade · campo Quantidade agora
+ * permite apagar livremente (fix UX da Rev. 2143).**
+ *
+ * User (com screenshot do iPad mostrando teclado numérico): "Não estou
+ * conseguindo apagar o 1, quero ter liberdade no campo". O Input
+ * type=number da Rev. 2143 forçava clamp ≥1 no `onChange` — quando o
+ * usuário apagava o "1", o valor voltava instantaneamente pra 1 e era
+ * impossível digitar um novo número (ex: "23" virava "123" porque o
+ * "1" nunca saía).
+ *
+ * **Fix em `client/src/components/TermoResponsabilidadeDialog.tsx`:**
+ * - Input mudou de `type=number` pra `type=text inputMode=numeric` (mesmo
+ *   teclado numérico no mobile, mas sem o comportamento de spinner/clamp
+ *   nativo do browser).
+ * - `onChange` filtra só dígitos (`replace(/[^\d]/g, "")`) e aceita
+ *   string vazia (representada internamente como `0`).
+ * - `value` mostra string vazia quando `quantidade === 0` (placeholder
+ *   "1" aparece) ou `String(quantidade)` caso contrário — permite
+ *   selecionar tudo + apagar e digitar do zero.
+ * - **Clamp movido pro `onBlur`**: se ao sair do campo a quantidade
+ *   estiver <1 ou inválida, volta pra 1 (default seguro). Validação
+ *   final em `validar()` continua bloqueando envio com quantidade <1.
+ *
+ * **R-001/R-007/R-010**: OK — só client-side.
+ *
+ * --------------------------------------------------------------------
+ *
  * Rev. 2143 — **Termo de Responsabilidade · novo campo "Quantidade"
  * por item entregue.**
  *

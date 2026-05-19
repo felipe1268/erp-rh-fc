@@ -777,14 +777,25 @@ ${obsHtml}
                         <div>
                           <Label className="text-xs text-muted-foreground">Quantidade</Label>
                           <Input
-                            type="number"
-                            min={1}
-                            step={1}
+                            type="text"
                             inputMode="numeric"
-                            value={it.quantidade}
+                            placeholder="1"
+                            value={it.quantidade === 0 ? "" : String(it.quantidade)}
                             onChange={(e) => {
-                              const n = parseInt(e.target.value, 10);
-                              updateItem(it.id, { quantidade: Number.isFinite(n) && n > 0 ? n : 1 });
+                              // Aceita vazio / dígitos livremente enquanto digita
+                              // (clamp só no blur). 0 internamente = "vazio".
+                              const raw = e.target.value.replace(/[^\d]/g, "");
+                              if (raw === "") {
+                                updateItem(it.id, { quantidade: 0 });
+                              } else {
+                                const n = parseInt(raw, 10);
+                                updateItem(it.id, { quantidade: Number.isFinite(n) ? n : 0 });
+                              }
+                            }}
+                            onBlur={() => {
+                              if (!Number.isFinite(it.quantidade) || it.quantidade < 1) {
+                                updateItem(it.id, { quantidade: 1 });
+                              }
                             }}
                           />
                         </div>
