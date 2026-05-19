@@ -4,6 +4,7 @@
 > O detalhamento completo (causa-raiz, stack traces, arquivos tocados, comentários longos) de TODAS as revisões — incluindo as listadas abaixo — vive em `shared/changelog.ts`.
 > Movido aqui na Rev. 2028 (faxina) — revisões 1903 → 2012.
 
+- Rev. 2151 — UX POLISH · Dialog "Novo Termo de Recebimento" repaginado com a identidade FC (faixa azul #1B2A4A, uppercase letter-spacing 3px, avatar com iniciais). (movida na Rev. 2158)
 - Rev. 2150 — Termos & Documentos Assinados (FCSign) no Raio-X do funcionário com Visualizar+Baixar (nova tab "Termos Assinados"). (movida na Rev. 2157)
 - Rev. 2149 — Multi-seleção + exclusão em lote no painel "Termo de Recebimento" (checkbox col + barra de ação + bulkDelete sequencial via signatures.adminDelete; gate isAdminMaster). (movida na Rev. 2156)
 

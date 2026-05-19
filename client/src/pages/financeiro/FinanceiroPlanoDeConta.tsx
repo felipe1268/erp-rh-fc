@@ -78,12 +78,12 @@ export default function FinanceiroPlanoDeConta() {
             <p className="text-sm text-gray-500 mt-1">{filtered.length} conta(s) cadastrada(s)</p>
           </div>
           <div className="flex items-center gap-2">
-            {(!contas || contas.length === 0) && (
-              <Button variant="outline" onClick={() => seedMut.mutate({ companyId })} disabled={seedMut.isPending}>
-                <Sprout className="w-4 h-4 mr-2 text-green-600" />
-                {seedMut.isPending ? "Carregando..." : "Carregar Padrão"}
-              </Button>
-            )}
+            {/* Rev. 2158 — sempre visível: seed agora é idempotente e só
+                insere as contas do padrão que ainda faltam */}
+            <Button variant="outline" onClick={() => seedMut.mutate({ companyId })} disabled={seedMut.isPending}>
+              <Sprout className="w-4 h-4 mr-2 text-green-600" />
+              {seedMut.isPending ? "Carregando..." : "Carregar Padrão"}
+            </Button>
             <Button onClick={() => setShowNew(true)} className="bg-blue-600 hover:bg-blue-700 text-white">
               <Plus className="w-4 h-4 mr-2" />Nova Conta
             </Button>

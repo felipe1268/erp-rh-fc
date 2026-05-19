@@ -1,6 +1,40 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2158 — **HOTFIX continuação da Rev. 2157 · botão "Carregar
+ * Padrão" sempre visível + seed do plano contábil idempotente.**
+ *
+ * User: "Está aparecendo somente a conta 3.3. Onde está o botão
+ * 'CARREGAR PADRÃO'?". Após a Rev. 2157 a tela passou a mostrar só a
+ * `3.3` (correto), mas o botão "Carregar Padrão" tinha condição
+ * `!contas || contas.length === 0` — com 1 conta presente, sumia.
+ * Pior: mesmo se o user conseguisse clicar, o `seedPlanoDeConta`
+ * tinha guard `COUNT(*) WHERE codigo NOT LIKE 'AUTO-%' > 0` (introduzido
+ * na própria 2157) e pulava tudo porque `3.3` já existia.
+ *
+ * **Backend — `server/services/financialSeedAccounts.ts`:**
+ *
+ * Reescrita do laço: guard global removido; cada uma das 51 contas
+ * do `PLANO_DE_CONTAS_PADRAO` agora é testada individualmente com
+ * `SELECT id FROM financial_accounts WHERE company_id=$1 AND
+ * (codigo=$2 OR LOWER(nome)=LOWER($3))`. Se já existe → skip; senão
+ * → INSERT com try/catch em `23505` (índice único
+ * `uq_fa_company_lower_nome_ativo` em LOWER(nome) WHERE ativo=1) por
+ * segurança. Log final mostra `{inserted, skipped}` em vez de
+ * "tudo seedado". Resultado: clicar "Carregar Padrão" em empresa
+ * com `3.3 — DESPESAS COM MATERIAIS` agora insere as outras 50 contas
+ * (a `3.3` é "skipped" porque já tem o codigo).
+ *
+ * **Frontend — `client/src/pages/financeiro/FinanceiroPlanoDeConta.tsx`:**
+ *
+ * Botão "Carregar Padrão" passa a ficar sempre visível (removida a
+ * condicional `!contas || contas.length === 0`). Como o backend é
+ * idempotente, clicar duas vezes não duplica nada — apenas mostra
+ * "0 novas, 51 já existentes" no log do servidor.
+ *
+ * **Dados em prod:** zero ALTER/DELETE. Seed só faz INSERT
+ * idempotente quando o user clicar. R-001/R-007/R-010: OK.
+ *
  * Rev. 2157 — **Separação Plano de Contas × Categorias (Opção C —
  * filtro por escopo + seed do plano contábil padrão).**
  *

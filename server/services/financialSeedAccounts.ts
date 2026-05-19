@@ -75,31 +75,36 @@ export async function seedPlanoDeConta(companyId: number): Promise<void> {
   const db = await getDb();
   if (!db) return;
 
-  // Rev. 2157 — conta só contas contábeis "de verdade" (codigo NOT LIKE 'AUTO-%').
-  // Linhas AUTO-* são categorias operacionais (Categorias) e NÃO contam como
-  // plano de contas existente — sem esse filtro o seed era pulado por causa
-  // das 37 categorias espelhadas, e a empresa ficava sem plano contábil real.
-  const existing = await db.execute(
-    `SELECT COUNT(*) AS count FROM financial_accounts
-     WHERE company_id = $1 AND codigo NOT LIKE 'AUTO-%'`,
-    [companyId]
-  );
-  const rows = (existing as any)?.rows ?? (existing as any) ?? [];
-  const count = Number(rows[0]?.count ?? 0);
-  if (count > 0) {
-    console.log(`[FinancialSeed] Plano de contas já existente para company ${companyId} (${count} contas contábeis)`);
-    return;
-  }
-
+  // Rev. 2158 — seed idempotente: tenta inserir todas as contas do padrão,
+  // ignorando individualmente as que já existem (via SELECT por codigo OU
+  // nome). Antes (Rev. 2157) bastava UMA conta contábil pra pular o seed
+  // inteiro — agora cada conta é testada isoladamente, permitindo
+  // "completar" um plano de contas iniciado manualmente.
+  let inserted = 0;
+  let skipped = 0;
   for (const conta of PLANO_DE_CONTAS_PADRAO) {
-    await db.execute(
-      `INSERT INTO financial_accounts (company_id, codigo, nome, tipo, natureza, nivel, classificacao_dre, ativo, ordem)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, 1, $8)`,
-      [companyId, conta.codigo, conta.nome, conta.tipo, conta.natureza, conta.nivel, conta.classificacaoDRE, conta.ordem]
+    const dupRes = await db.execute(
+      `SELECT id FROM financial_accounts
+       WHERE company_id = $1 AND (codigo = $2 OR LOWER(nome) = LOWER($3))
+       LIMIT 1`,
+      [companyId, conta.codigo, conta.nome]
     );
+    const dupRows = (dupRes as any)?.rows ?? (dupRes as any) ?? [];
+    if (dupRows.length > 0) { skipped++; continue; }
+    try {
+      await db.execute(
+        `INSERT INTO financial_accounts (company_id, codigo, nome, tipo, natureza, nivel, classificacao_dre, ativo, ordem)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, 1, $8)`,
+        [companyId, conta.codigo, conta.nome, conta.tipo, conta.natureza, conta.nivel, conta.classificacaoDRE, conta.ordem]
+      );
+      inserted++;
+    } catch (e: any) {
+      // unique violation (índice uq_fa_company_lower_nome_ativo) — trata como já existente
+      if (String(e?.code) === "23505") { skipped++; continue; }
+      throw e;
+    }
   }
-
-  console.log(`[FinancialSeed] ${PLANO_DE_CONTAS_PADRAO.length} contas do plano de contas seedadas para company ${companyId}`);
+  console.log(`[FinancialSeed] company ${companyId}: ${inserted} novas, ${skipped} já existentes (de ${PLANO_DE_CONTAS_PADRAO.length} no padrão).`);
 }
 
 export async function ensureTaxConfig(companyId: number): Promise<void> {
