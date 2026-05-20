@@ -1,6 +1,69 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2172 — **HOTFIX · Data de Nascimento (e validades de docs) do Funcionário
+ * Terceiro "sumiam" ao reabrir o cadastro — bug de exibição que parecia ser
+ * de persistência.**
+ *
+ * User: "nao esta salvado as informações dos funcionarios terceiros... eu
+ * coloco a data de nascimento, aparece uma mensagem que salvou, mas se eu
+ * sair da tela e voltar novamente, a data some". Print mostra "Editar
+ * Funcionário Terceiro" (Edmilson Luis Vicente / SER-00003) com campo
+ * "Data de Nascimento" em `dd/mm/aaaa` vazio.
+ *
+ * Causa-raiz em `client/src/pages/terceiros/FuncionariosTerceiros.tsx:469`
+ * (e gêmeos L769/L813):
+ *
+ *   value={form.dataNascimento?.split("T")[0] || ""}
+ *
+ * O schema Drizzle (`drizzle/schema.ts:3576`) declara
+ * `dataNascimento: timestamp("data_nascimento", { mode: "string" })` e o
+ * driver `pg` retorna timestamps PG como `"1990-05-15 00:00:00"` (com
+ * ESPAÇO, sem `T`, sem timezone — NÃO é ISO). `String.split("T")[0]`
+ * nessa string devolve a string INTEIRA (porque não há `"T"`), que é
+ * inválida pra `<input type="date">` → o browser silenciosamente
+ * descarta e mostra o campo vazio. A data ESTÁ no banco; só não é
+ * renderizada. User assume que não salvou.
+ *
+ * Confirmei em sandbox (psql information_schema):
+ *  - coluna `data_nascimento timestamp without time zone` existe
+ *  - sem triggers, sem CHECK
+ *  - schema bate com Drizzle
+ *
+ * **Fix:** trocar `split("T")[0]` por `String(x).slice(0, 10)`, que
+ * funciona pra TODOS os 3 formatos que aparecem na natureza:
+ *  - `"1990-05-15"` (date puro) → `"1990-05-15"` ✓
+ *  - `"1990-05-15 00:00:00"` (PG timestamp) → `"1990-05-15"` ✓ (FIX)
+ *  - `"1990-05-15T00:00:00.000Z"` (ISO de Date.toISOString) → `"1990-05-15"` ✓
+ *
+ * Aplicado em 3 inputs do mesmo arquivo:
+ *  1. L469 — Data de Nascimento (form principal).
+ *  2. L769 — Validade de documentos fixos (ASO/NR-35/etc).
+ *  3. L813 — Validade de documentos extras (Rev. 2031).
+ *
+ * L922 (`extraValidade`) NÃO é afetado: é state local do dialog
+ * "Adicionar documento extra", sempre alimentado pelo próprio input
+ * (`<input type="date">` sempre devolve `YYYY-MM-DD`), nunca vem do
+ * backend.
+ *
+ * **Backend:** zero — o save sempre funcionou. **R-001/R-007/R-010:**
+ * OK — só leitura/display.
+ *
+ * Arquivos tocados:
+ *  - `client/src/pages/terceiros/FuncionariosTerceiros.tsx` (3 edits)
+ *  - `shared/version.ts` → "Rev. 2172"
+ *  - `shared/changelog.ts` (esta entrada)
+ *  - `replit.md` (top-2 + demote 2170 + drop 2165)
+ *  - `replit-history.md` (one-liner 2165)
+ *
+ * Follow-up sugerido: criar helper `toDateInputValue(v)` em
+ * `client/src/lib/dateUtils.ts` (ou similar) e auditar todos os outros
+ * `<Input type="date" value={x?.split("T")[0]}>` da app — `rg` mostra
+ * que o padrão está espalhado em vários módulos. Mas isso é refactor
+ * de bigger scope, fora do hotfix da Lilian/Edmilson.
+ *
+ * ---
+ *
  * Rev. 2171 — **HOTFIX UX · Modal "Novo Lançamento" (Financeiro) cortava o
  * footer e escondia o botão Salvar em telas médias.**
  *

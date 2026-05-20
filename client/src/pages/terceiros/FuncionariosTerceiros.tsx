@@ -466,7 +466,7 @@ export default function FuncionariosTerceiros() {
                   <div><Label>Nome Completo *</Label><Input value={form.nome || ""} onChange={(e) => setForm({ ...form, nome: e.target.value })} /></div>
                   <div><Label>CPF</Label><Input value={form.cpf || ""} onChange={(e) => setForm({ ...form, cpf: e.target.value })} /></div>
                   <div><Label>RG</Label><Input value={form.rg || ""} onChange={(e) => setForm({ ...form, rg: e.target.value })} /></div>
-                  <div><Label>Data de Nascimento</Label><Input type="date" value={form.dataNascimento?.split("T")[0] || ""} onChange={(e) => setForm({ ...form, dataNascimento: e.target.value })} /></div>
+                  <div><Label>Data de Nascimento</Label><Input type="date" value={form.dataNascimento ? String(form.dataNascimento).slice(0, 10) : ""} onChange={(e) => setForm({ ...form, dataNascimento: e.target.value })} /></div>
                   <div><Label>Função</Label><Input value={form.funcao || ""} onChange={(e) => setForm({ ...form, funcao: e.target.value })} /></div>
                   <div className="md:col-span-2 lg:col-span-3 xl:col-span-4">
                     <div className="rounded-xl border-2 border-emerald-200 bg-gradient-to-r from-emerald-50/70 to-teal-50/40 p-3 sm:p-4">
@@ -766,7 +766,7 @@ export default function FuncionariosTerceiros() {
                                       <Input
                                         type="date"
                                         className={`w-36 text-xs h-8 ${vencido ? "border-red-300 bg-red-50" : proximoVenc ? "border-amber-300 bg-amber-50" : ""}`}
-                                        value={validade?.split("T")[0] || ""}
+                                        value={validade ? String(validade).slice(0, 10) : ""}
                                         onChange={(e) => {
                                           setForm({ ...form, [doc.validadeField!]: e.target.value });
                                           if (editingId) updateMut.mutate({ id: editingId, [doc.validadeField!]: e.target.value });
@@ -810,7 +810,7 @@ export default function FuncionariosTerceiros() {
                                     <Input
                                       type="date"
                                       className={`w-36 text-xs h-8 ${vencido ? "border-red-300 bg-red-50" : proximoVenc ? "border-amber-300 bg-amber-50" : ""}`}
-                                      value={doc.validade?.split("T")[0] || ""}
+                                      value={doc.validade ? String(doc.validade).slice(0, 10) : ""}
                                       onChange={(e) => {
                                         const novaValidade = e.target.value || null;
                                         setForm((f: any) => ({
