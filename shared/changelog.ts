@@ -1,6 +1,45 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2191 — **MELHORIA UX · Ficha de Entrega de EPI agora exibe as
+ * fotos anexadas (estado do EPI no momento da troca).** Lilian:
+ * "esta faltando as fotos que foram anexadas aos documentos".
+ *
+ * **Contexto:** ao registrar uma troca de EPI por `desgaste_normal`
+ * ou `mau_uso`, o sistema OBRIGA o upload de uma foto do EPI
+ * danificado (`server/routers/epis.ts:403` — `createDelivery` faz
+ * throw se faltar). A foto é salva em S3 e a URL persistida em
+ * `epi_deliveries.foto_estado_url`. Mas o preview da ficha
+ * (`Epis.tsx`, dialog `ficha_epi`) nunca renderizava esse campo —
+ * só mostrava a tabela de EPIs, política, declaração e assinaturas.
+ * Usuário abria a ficha pra conferir o registro e via "documento
+ * sem foto", concluindo que o anexo tinha sumido.
+ *
+ * **Fix (Client — `client/src/pages/Epis.tsx`):**
+ * 1. Hoisted `MOTIVO_TROCA_LABEL` para escopo de módulo (antes
+ *    estava local dentro da tabela de entregas em L2449, fora do
+ *    alcance do novo bloco).
+ * 2. Novo bloco "📷 FOTOS ANEXADAS (n)" inserido entre a tabela de
+ *    EPIs e o Policy Box (L1742-1774). Filtra
+ *    `(_grupoItems || [fichaDelivery]).filter(it => it.fotoEstadoUrl)`
+ *    e renderiza grid responsivo 2/3 colunas com thumbnails 128px
+ *    h-32 object-cover clicáveis (abrem em nova aba). Legenda
+ *    mostra `nomeEpi — MOTIVO_TROCA_LABEL[motivoTroca]`.
+ * 3. Se nenhum item tiver foto, o bloco inteiro é omitido (não
+ *    polui entregas regulares sem troca).
+ *
+ * `fotoEstadoUrl` já vinha no payload do `list` query
+ * (`epis.ts:283`) e do `listGrouped` (via `_grupoItems`), então
+ * zero mudança server-side.
+ *
+ * **Não-regressão:** Rev. 2190 (olhinho → preview in-app) segue
+ * intacto; bloco de fotos aparece em qualquer abertura do preview
+ * (FileText ou olhinho).
+ *
+ * **R-001/R-007/R-010:** OK — fix puramente client.
+ *
+ * ---
+ *
  * Rev. 2190 — **HOTFIX BLOQUEANTE · Assinatura de EPI "sumia" ao abrir
  * a ficha via olhinho.** Lilian: "TEM MUITOS QUE NÃO ESTÃO ASSINADOS,
  * MAS O SISTEMA ESTA FALANDO QUE ESTA... PESSOAL ESTA ASSINANDO,

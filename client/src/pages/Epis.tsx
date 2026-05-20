@@ -28,6 +28,14 @@ import { SearchableSelect } from "@/components/SearchableSelect";
 import { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import { toast } from "sonner";
 import { useCompany } from "@/contexts/CompanyContext";
+
+// Rev. 2191 — hoisted para uso fora da tabela (ex.: bloco de fotos anexadas no preview da ficha)
+const MOTIVO_TROCA_LABEL: Record<string, string> = {
+  perda: "Perda",
+  mau_uso: "Mau Uso",
+  desgaste_normal: "Desgaste",
+  furto: "Furto",
+};
 import { useAuth } from "@/_core/hooks/useAuth";
 import { usePermissions } from "@/contexts/PermissionsContext";
 
@@ -1735,6 +1743,40 @@ export default function Epis() {
                 })}
               </tbody>
             </table>
+
+            {/* Rev. 2191 — Fotos anexadas (estado do EPI no momento da entrega/troca).
+                Lilian: "esta faltando as fotos que foram anexadas aos documentos".
+                Renderiza `fotoEstadoUrl` de cada item do grupo quando existir. */}
+            {(() => {
+              const itensComFoto = (fichaDelivery._grupoItems || [fichaDelivery]).filter(
+                (it: any) => it.fotoEstadoUrl
+              );
+              if (itensComFoto.length === 0) return null;
+              return (
+                <div className="mb-6 border border-gray-300 rounded p-3">
+                  <p className="text-xs font-bold text-[#1B2A4A] mb-2">
+                    📷 FOTOS ANEXADAS ({itensComFoto.length})
+                  </p>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                    {itensComFoto.map((it: any) => (
+                      <div key={it.id} className="text-center">
+                        <a href={it.fotoEstadoUrl} target="_blank" rel="noreferrer">
+                          <img
+                            src={it.fotoEstadoUrl}
+                            alt={`Foto ${it.nomeEpi || ""}`}
+                            className="w-full h-32 object-cover rounded border border-gray-300 hover:opacity-90"
+                          />
+                        </a>
+                        <p className="text-[10px] text-gray-600 mt-1 truncate">
+                          {it.nomeEpi || "EPI"}
+                          {it.motivoTroca ? ` — ${MOTIVO_TROCA_LABEL[it.motivoTroca] || it.motivoTroca}` : ""}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
 
             {/* Policy Box - Vida Útil e Desconto */}
             <div className="border-2 border-[#1B2A4A] rounded p-4 mb-4">
