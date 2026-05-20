@@ -315,12 +315,18 @@ export const horasExtrasRouter = router({
             //     pontos sem obra (Infleet sem tag, etc.) não devem virar
             //     uma opção "Sem Obra" no filtro — esses funcionários
             //     continuam aparecendo em "Todas as obras".
+            //     Rev. 2188 — filtro adicional: SÓ obras onde o ponto
+            //     gerou HE de fato (`horasExtras > '0:00'`). Antes,
+            //     qualquer ponto da obra no período virava opção no
+            //     dropdown, mesmo quando a obra não contribuiu com HE.
             const semSolRows = ((await db.execute(sql`
               SELECT DISTINCT tr."employeeId", tr."obraId", o.nome AS "obraNome"
               FROM time_records tr
               JOIN obras o ON o.id = tr."obraId"
               WHERE tr."companyId" = ${period.companyId}
                 AND tr."obraId" IS NOT NULL
+                AND tr."horasExtras" IS NOT NULL
+                AND tr."horasExtras" NOT IN ('', '0', '0:00', '00:00', '0:0')
                 AND tr."employeeId" IN (${sql.join(empIds.map((id: number) => sql`${id}`), sql`,`)})
                 AND tr.data >= ${period.dataInicio}::date
                 AND tr.data <= ${period.dataFim}::date

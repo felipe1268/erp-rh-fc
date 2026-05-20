@@ -1,6 +1,28 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2188 — **HOTFIX UX · Dropdown "Filtrar por obra" do Relatório
+ * de Períodos HE listava QUALQUER obra em que o funcionário bateu
+ * ponto no período, mesmo quando aquela obra não contribuiu com HE.
+ * Lilian: "so deve aparecer no filtro, as obras que tiveram horas
+ * extras..". Fix: query `semSolRows` agora exige
+ * `tr."horasExtras"` > 0 (NOT NULL e fora do conjunto
+ * `'', '0', '0:00', '00:00', '0:0'`).**
+ *
+ * **Causa-raiz:** após a Rev. 2187 limpar o bucket "Sem Obra", o
+ * dropdown ainda listava obras em que o funcionário trabalhou
+ * horas normais (sem extra) durante o período. O usuário esperava
+ * ver SÓ as obras que de fato geraram HE.
+ *
+ * **Fix (Server — `server/routers/horasExtras.ts:getDetalhe`):** na
+ * query (2) `semSolRows`, adicionado `tr."horasExtras" IS NOT NULL`
+ * + `tr."horasExtras" NOT IN ('', '0', '0:00', '00:00', '0:0')`.
+ * `aprovadasRows` não precisa de fix porque já filtra por
+ * `he_solicitacoes.status = 'aprovada'` (sempre HE > 0 por
+ * definição). R-001/R-007/R-010: OK — só SELECT.
+ *
+ * ---
+ *
  * Rev. 2187 — **HOTFIX UX · Dropdown "Filtrar por obra" do Relatório
  * de Períodos HE mostrava opção "Sem Obra" com TODOS os funcionários
  * cujos `time_records.obraId` estavam NULL (pontos sem tag de obra
