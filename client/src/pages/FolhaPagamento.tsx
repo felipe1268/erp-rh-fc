@@ -410,7 +410,9 @@ export default function FolhaPagamento() {
   const [heViewPeriodId, setHeViewPeriodId] = useState<number | null>(null);
   // Rev. 2182 — filtro por origem (cards KPI clicáveis acima da tabela HE)
   const [heOrigemFilter, setHeOrigemFilter] = useState<"todos" | "aprovada" | "sem_solicitacao">("todos");
-  useEffect(() => { setHeOrigemFilter("todos"); }, [heViewPeriodId]);
+  // Rev. 2183 — filtro por obra (Select acima da tabela HE; "all"|"sem"|String(obraId))
+  const [heObraFilterMod, setHeObraFilterMod] = useState<string>("all");
+  useEffect(() => { setHeOrigemFilter("todos"); setHeObraFilterMod("all"); }, [heViewPeriodId]);
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [filterFuncao, setFilterFuncao] = useState<string>("all");
   const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
@@ -4654,7 +4656,26 @@ export default function FolhaPagamento() {
                     <div className="space-y-3">
                       {periods.map((p: any) => {
                         const isOpen = heViewPeriodId === p.id;
-                        const periodEmpsAll = isOpen ? selectedEmps : [];
+                        // Rev. 2183 — filtro por obra: usa obrasPorEmp do server pra construir
+                        // mapa employeeId → Set<obraId|"sem"> e lista de obras pro dropdown.
+                        const obrasPorEmp: Array<{ employeeId: number; obraId: number | null; obraNome: string | null }> =
+                          isOpen ? ((detalhe as any)?.obrasPorEmp || []) : [];
+                        const obrasMap = new Map<number, Set<string>>();
+                        const obrasDoPeriodo = new Map<string, string>();
+                        for (const o of obrasPorEmp) {
+                          const key = o.obraId != null ? String(o.obraId) : "sem";
+                          if (!obrasMap.has(o.employeeId)) obrasMap.set(o.employeeId, new Set());
+                          obrasMap.get(o.employeeId)!.add(key);
+                          if (!obrasDoPeriodo.has(key)) obrasDoPeriodo.set(key, o.obraNome || "Sem Obra");
+                        }
+                        const obrasOptions = Array.from(obrasDoPeriodo.entries())
+                          .map(([id, nome]) => ({ id, nome }))
+                          .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
+                        // Aplica filtro por obra ANTES dos KPIs (cards refletem o escopo da obra)
+                        const periodEmpsAllRaw = isOpen ? selectedEmps : [];
+                        const periodEmpsAll = heObraFilterMod === "all"
+                          ? periodEmpsAllRaw
+                          : periodEmpsAllRaw.filter((e: any) => obrasMap.get(Number(e.employeeId))?.has(heObraFilterMod));
                         // Rev. 2182 — KPIs por origem (sempre sobre o conjunto FULL, não filtrado)
                         const kpiAprovadas = periodEmpsAll.filter((e: any) => (e.origem || "sem_solicitacao") === "aprovada");
                         const kpiSemSol = periodEmpsAll.filter((e: any) => (e.origem || "sem_solicitacao") !== "aprovada");
@@ -4742,6 +4763,37 @@ export default function FolhaPagamento() {
                                             {bancoCount > 0 && <span className="text-blue-700">🏦 {bancoCount} para banco</span>}
                                           </span>
                                         )}
+                                      </div>
+                                    )}
+
+                                    {/* Rev. 2183 — Filtro por OBRA (Select) acima dos cards */}
+                                    {obrasOptions.length > 0 && (
+                                      <div className="flex flex-wrap items-center gap-2 no-print">
+                                        <label className="text-xs font-medium text-gray-700">🏗️ Filtrar por obra:</label>
+                                        <select
+                                          value={heObraFilterMod}
+                                          onChange={(e) => setHeObraFilterMod(e.target.value)}
+                                          className="h-8 text-xs border border-gray-300 rounded px-2 py-1 bg-white focus:border-[#1B2A4A] focus:outline-none focus:ring-1 focus:ring-[#1B2A4A]/30 min-w-[200px]"
+                                        >
+                                          <option value="all">Todas as obras ({obrasOptions.length})</option>
+                                          {obrasOptions.map((o) => (
+                                            <option key={o.id} value={o.id}>{o.nome}</option>
+                                          ))}
+                                        </select>
+                                        {heObraFilterMod !== "all" && (
+                                          <button
+                                            type="button"
+                                            onClick={() => setHeObraFilterMod("all")}
+                                            className="text-xs text-purple-600 hover:underline"
+                                          >
+                                            Limpar obra
+                                          </button>
+                                        )}
+                                        <span className="text-[11px] text-muted-foreground ml-auto">
+                                          {heObraFilterMod === "all"
+                                            ? `${periodEmpsAllRaw.length} func no período`
+                                            : `${periodEmpsAll.length} func nesta obra`}
+                                        </span>
                                       </div>
                                     )}
 

@@ -1,6 +1,64 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2183 — **NOVA FEATURE · Filtro por OBRA no Relatório de
+ * Períodos HE (Folha de Pagamento → HE Módulo), Select acima dos
+ * cards KPI da Rev. 2182, permitindo analisar HE de um período por
+ * obra específica.**
+ *
+ * Lilian: "quero filtro tbm.. por obra para analisar..".
+ *
+ * **Backend — `server/routers/horasExtras.ts:getDetalhe`:** estendido
+ * para retornar `obrasPorEmp: Array<{employeeId, obraId, obraNome}>`
+ * (além de `period` e `employees`). Faz uma query extra a
+ * `time_records` JOIN `obras` no range `[dataInicio, dataFim]` do
+ * período + companyId do período + employeeIds do `he_period_employees`.
+ * Retorna DISTINCT por (employeeId, obraId), incluindo entradas
+ * `obraId=NULL` (mapeadas como "Sem Obra" no client). try/catch
+ * protege a query — falha não derruba o `getDetalhe` (apenas zera o
+ * filtro de obras no UI). **R-001/R-007/R-010:** OK — só SELECT.
+ *
+ * **Frontend — `client/src/pages/FolhaPagamento.tsx`:**
+ * 1. Novo state `heObraFilterMod: "all"|"sem"|String(obraId)` (L417)
+ *    + `useEffect` que zera junto com `heOrigemFilter` ao trocar
+ *    `heViewPeriodId`.
+ * 2. Dentro do `periods.map((p) => {...})` (L4660-4693): novo
+ *    derivado `obrasPorEmp = detalhe?.obrasPorEmp || []`, mapas
+ *    `obrasMap: Map<empId, Set<obraKey>>` + `obrasDoPeriodo:
+ *    Map<obraKey, nome>`. `obrasOptions` (sort pt-BR) alimenta o
+ *    `<select>`. `periodEmpsAllRaw` = conjunto SEM filtro de obra;
+ *    `periodEmpsAll` = FILTRADO por obra (entrada do pipeline de
+ *    KPIs da Rev. 2182). O filtro por origem (cards) opera depois,
+ *    sobre o conjunto já filtrado por obra — empilhamento natural:
+ *    obra → origem → tabela.
+ * 3. Dentro do bloco expandido (L4772-4801), antes dos cards KPI,
+ *    novo `<select>` "🏗️ Filtrar por obra" mostrando todas as obras
+ *    que tiveram time_records no range, com fallback "Sem Obra"
+ *    para registros sem `obraId`. Linha lateral mostra contador
+ *    contextual ("N func nesta obra" / "N func no período"). Link
+ *    "Limpar obra" só aparece quando filtro ativo. `no-print`.
+ *
+ * **Empilhamento de filtros (importante):** os 3 cards KPI da Rev.
+ * 2182 (Total/Aprovadas/Sem solicitação) AGORA refletem o escopo da
+ * obra selecionada — ou seja, ao filtrar pela obra X, o card Total
+ * mostra apenas HE de funcionários que trabalharam na obra X, e os
+ * cards Aprovadas/Sem solicitação repartem esse subconjunto. Isso
+ * mantém a semântica "card = visão agregada do que está na tela".
+ *
+ * **Limitação conhecida:** o filtro é por funcionário (se o func X
+ * trabalhou em duas obras no período, ele aparece em ambos os
+ * filtros). HE não tem alocação por obra (é aggregate por funcionário
+ * no período), então o filtro é "funcionários que tocaram esta obra
+ * no período". Para análise de custo HE por obra, usar a view "Custos
+ * por Obra" (viewMode `custos_obra`).
+ *
+ * **Backend:** uma query extra a `time_records` (com índices em
+ * companyId + data + employeeId). **R-001/R-007/R-010:** OK.
+ *
+ * Arquivos: `server/routers/horasExtras.ts`,
+ * `client/src/pages/FolhaPagamento.tsx`, `shared/version.ts`,
+ * `shared/changelog.ts`, `replit.md`, `replit-history.md`.
+ *
  * Rev. 2182 — **NOVA FEATURE · 3 cards KPI clicáveis (Total HE /
  * Aprovadas / Sem solicitação) acima da tabela do Relatório de
  * Períodos HE, filtrando a tabela ao clicar e respeitando o azul

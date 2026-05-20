@@ -269,7 +269,36 @@ export const horasExtrasRouter = router({
       ]);
       const period = ((periodRows as any).rows || [])[0] || null;
       const employees = (empRows as any).rows || [];
-      return { period, employees };
+
+      // Rev. 2183 — obras trabalhadas por funcionário no período (para filtro UI).
+      // Lê time_records do range do período e cruza com obras, retornando lista
+      // distinta {employeeId, obraId, obraNome} para o client agrupar/filtrar.
+      let obrasPorEmp: Array<{ employeeId: number; obraId: number | null; obraNome: string | null }> = [];
+      if (period && employees.length > 0) {
+        const empIds = employees.map((e: any) => Number(e.employeeId)).filter(Boolean);
+        if (empIds.length > 0) {
+          try {
+            const obrasRows = ((await db.execute(sql`
+              SELECT DISTINCT tr."employeeId", tr."obraId", o.nome as "obraNome"
+              FROM time_records tr
+              LEFT JOIN obras o ON o.id = tr."obraId"
+              WHERE tr."companyId" = ${period.companyId}
+                AND tr."employeeId" IN (${sql.join(empIds.map((id: number) => sql`${id}`), sql`,`)})
+                AND tr.data >= ${period.dataInicio}::date
+                AND tr.data <= ${period.dataFim}::date
+            `)) as any).rows || [];
+            obrasPorEmp = obrasRows.map((r: any) => ({
+              employeeId: Number(r.employeeId),
+              obraId: r.obraId != null ? Number(r.obraId) : null,
+              obraNome: r.obraNome || null,
+            }));
+          } catch (err: any) {
+            console.error("[heModulo.getDetalhe] falha ao buscar obrasPorEmp:", err?.message || err);
+          }
+        }
+      }
+
+      return { period, employees, obrasPorEmp };
     }),
 
   memorialCalculo: protectedProcedure
