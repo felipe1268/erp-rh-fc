@@ -245,7 +245,28 @@ export const financialRouter = router({
     }
     if (!parts.length) return { ok: true };
     vals.push(input.id, input.companyId);
-    await dbExecute(db, `UPDATE financial_accounts SET ${parts.join(",")} WHERE id=$${i++} AND company_id=$${i}`, vals);
+    try {
+      await dbExecute(db, `UPDATE financial_accounts SET ${parts.join(",")} WHERE id=$${i++} AND company_id=$${i}`, vals);
+    } catch (e: any) {
+      // Rev. 2174 — traduz 23505 (constraint única) em mensagem amigável.
+      // dbExecute (Rev. 2170) já anexa code/constraint/detail em e.message.
+      const msg = String(e?.message || "");
+      const code = String((e as any)?.cause?.code || (e as any)?.code || "");
+      const constraint = String((e as any)?.cause?.constraint || "");
+      if (code === "23505" || /uq_fa_company_lower_nome_ativo|duplicate key|unique constraint/i.test(msg) || /uq_fa_/i.test(constraint)) {
+        if (/uq_fa_company_lower_nome_ativo|nome/i.test(msg + constraint)) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: `Já existe uma conta ATIVA com este nome nesta empresa. Renomeie a outra conta primeiro, ou edite-a diretamente.`,
+          });
+        }
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: `Conflito de unicidade ao salvar conta (constraint: ${constraint || "?"}). Verifique se já existe registro duplicado.`,
+        });
+      }
+      throw e;
+    }
     return { ok: true };
   }),
 

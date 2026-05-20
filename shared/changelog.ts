@@ -1,6 +1,58 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2174 — **HOTFIX UX · Erro cru do Postgres (23505 / uq_fa_company_lower_nome_ativo)
+ * vazava no toast ao editar conta do Plano de Contas — traduzido pra
+ * mensagem amigável.**
+ *
+ * Print da Lilian: editando "3.1 TESTE" pra "Mão de Obra Direta" (sob "3
+ * CUSTOS DIRETOS"), toast mostrava:
+ *   "DB: code=23505 | constraint=uq_fa_company_lower_nome_ativo |
+ *    table=financial_accounts | detail=Key (company_id,
+ *    lower(nome::text))=(60002, mão de obra direta) already exists. |
+ *    msg=duplicate key value violates unique constraint
+ *    uq_fa_company_lower_nome_ativo"
+ *
+ * Isso é o `dbExecute` enriquecido da Rev. 2170 fazendo o trabalho dele —
+ * mas a Lilian não fala SQL. O erro REAL é que já existe outra conta
+ * ATIVA com nome "Mão de Obra Direta" naquela empresa (índice único
+ * parcial: `(company_id, lower(nome)) WHERE ativo=1`).
+ *
+ * **Fix em `server/routers/financial.ts` `updateAccount`:** envolver o
+ * `dbExecute(UPDATE ...)` em try/catch que detecta:
+ *  - `code === "23505"` (unique_violation, via `e.cause.code` que a Rev.
+ *    2170 preserva, ou via `e.code` direto)
+ *  - mensagem contendo `uq_fa_company_lower_nome_ativo` / `duplicate key`
+ *  - constraint `uq_fa_*`
+ *
+ * Se a constraint específica é a de nome (`uq_fa_company_lower_nome_ativo`),
+ * lança `TRPCError BAD_REQUEST` com:
+ *   "Já existe uma conta ATIVA com este nome nesta empresa. Renomeie a
+ *   outra conta primeiro, ou edite-a diretamente."
+ *
+ * Para outras unique violations futuras, mensagem genérica menciona a
+ * constraint pra debug ainda ser possível.
+ *
+ * **Por que NÃO no `createAccount`?** Ele já tinha o tratamento (L194-202):
+ * captura 23505, faz SELECT-by-name e devolve `{ id, alreadyExists: true }`
+ * (comportamento idempotente — uma criação duplicada vira "use a existente").
+ * Em UPDATE isso não faz sentido (a user QUER renomear especificamente
+ * aquela linha), então só vira erro humano-legível.
+ *
+ * **NÃO entra no escopo:** auto-resolver o conflito (ex.: trocar nome pra
+ * "Mão de Obra Direta (2)"). Decisão fica com a user.
+ *
+ * **R-001/R-007/R-010:** OK — só tradução de erro, zero DDL/DML novo.
+ *
+ * Arquivos tocados:
+ *  - `server/routers/financial.ts` (updateAccount try/catch)
+ *  - `shared/version.ts` → "Rev. 2174"
+ *  - `shared/changelog.ts` (esta entrada)
+ *  - `replit.md` (top-2 + demote 2172 + drop 2167)
+ *  - `replit-history.md` (one-liner 2167)
+ *
+ * ---
+ *
  * Rev. 2173 — **HOTFIX BLOQUEANTE · Edição de código contábil no Plano de
  * Contas era silenciosamente ignorada — filhos órfãos como "3.1.1" não
  * tinha como ser reorganizados.**
