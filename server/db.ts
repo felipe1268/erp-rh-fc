@@ -3164,6 +3164,29 @@ export async function setUserGroups(userId: number, groupIds: number[]) {
 }
 
 // Obter permissões efetivas do usuário baseado nos grupos
+/**
+ * Rev. 2206 — Sigilo do status "Aviso Prévio": apenas Admin Master e
+ * usuários do grupo "RH" podem enxergar o status real `Aviso`. Demais
+ * usuários recebem o registro mascarado como `Ativo` (no listar, na
+ * ficha individual e nas estatísticas). Pedido da Lilian: "somente o
+ * usuário master e os usuários de RH poderão ver se o colaborador
+ * está de aviso prévio ou não". Match do nome do grupo é case-insensitive
+ * e aceita variações comuns ("RH", "DP", "RH e DP", "RH-DP", "RHDP").
+ */
+export async function userCanSeeAvisoStatus(userId: number, role: string | null | undefined): Promise<boolean> {
+  if (role === 'admin_master') return true;
+  try {
+    const eff = await getUserEffectiveGroupPermissions(userId);
+    return eff.groups.some((g: any) => {
+      const nome = String(g.nome || '').toUpperCase();
+      // Reconhece "RH", "RH E DP", "RH-DP", "RHDP", "DP", "RECURSOS HUMANOS"
+      return /\bRH\b/.test(nome) || /\bDP\b/.test(nome) || /RECURSOS\s+HUMANOS/.test(nome) || /\bRHDP\b/.test(nome);
+    });
+  } catch {
+    return false;
+  }
+}
+
 export async function getUserEffectiveGroupPermissions(userId: number) {
   const db = await getDb();
   if (!db) return { groups: [] as any[], permissions: [] as any[], somenteVisualizacao: true, ocultarDadosSensiveis: true };

@@ -38,7 +38,7 @@ import {
   listUserGroups, getUserGroupById, createUserGroup, updateUserGroup, deleteUserGroup,
   getGroupPermissions, setGroupPermissions, getGroupMembers, getUserGroupMemberships,
   addUserToGroup, removeUserFromGroup, setUserGroups, getUserEffectiveGroupPermissions,
-  getEffectiveAllowedObraIds,
+  getEffectiveAllowedObraIds, userCanSeeAvisoStatus,
   listTrashEntries, getTrashEntry, markTrashEntryRestored, deleteTrashEntry, reinsertSnapshot,
 } from "./db";
 import { DEFAULT_PERMISSIONS, MODULE_KEYS } from "../shared/modules";
@@ -410,14 +410,49 @@ export const appRouter = router({
   // EMPLOYEES
   // ============================================================
   employees: router({
-    list: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), search: z.string().optional(), status: z.string().optional(), excludeTerminated: z.boolean().optional(), includeTerminatedInMonth: z.string().optional() })).query(({ input }) => {
-      const cacheKey = `emp:list:${input.companyId}:${(input.companyIds ?? []).join(',')}:${input.search ?? ''}:${input.status ?? ''}:${input.excludeTerminated ?? ''}:${input.includeTerminatedInMonth ?? ''}`;
-      return memCache.getOrFetch(cacheKey, TTL.SHORT, () => getEmployees(input.companyId, input.search, input.status, input.companyIds, input.excludeTerminated, input.includeTerminatedInMonth));
+    list: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), search: z.string().optional(), status: z.string().optional(), excludeTerminated: z.boolean().optional(), includeTerminatedInMonth: z.string().optional() })).query(async ({ input, ctx }) => {
+      // Rev. 2206 — sigilo do status "Aviso Prévio" para não-RH/não-master.
+      const canSeeAviso = await userCanSeeAvisoStatus(ctx.user.id, ctx.user.role);
+      // Se o filtro pedir Aviso e o usuário não pode ver, devolve vazio.
+      if (!canSeeAviso && input.status === 'Aviso') return [] as any[];
+      const cacheKey = `emp:list:${input.companyId}:${(input.companyIds ?? []).join(',')}:${input.search ?? ''}:${input.status ?? ''}:${input.excludeTerminated ?? ''}:${input.includeTerminatedInMonth ?? ''}:av${canSeeAviso ? 1 : 0}`;
+      const rows = await memCache.getOrFetch(cacheKey, TTL.SHORT, async () => {
+        const data = await getEmployees(input.companyId, input.search, input.status, input.companyIds, input.excludeTerminated, input.includeTerminatedInMonth);
+        if (!canSeeAviso && Array.isArray(data)) {
+          for (const e of data as any[]) if (e && e.status === 'Aviso') e.status = 'Ativo';
+        }
+        return data;
+      });
+      return rows;
     }),
-    getById: protectedProcedure.input(z.object({ id: z.number(), companyId: z.number() })).query(({ input }) => getEmployeeById(input.id, input.companyId)),
-    stats: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() })).query(({ input }) => {
-      const cacheKey = `emp:stats:${input.companyId}:${(input.companyIds ?? []).join(',')}`;
-      return memCache.getOrFetch(cacheKey, TTL.MEDIUM, () => getEmployeeStats(input.companyId, input.companyIds));
+    getById: protectedProcedure.input(z.object({ id: z.number(), companyId: z.number() })).query(async ({ input, ctx }) => {
+      const emp: any = await getEmployeeById(input.id, input.companyId);
+      // Rev. 2206 — mascarar Aviso → Ativo se usuário não tem clearance.
+      if (emp && emp.status === 'Aviso') {
+        const canSeeAviso = await userCanSeeAvisoStatus(ctx.user.id, ctx.user.role);
+        if (!canSeeAviso) emp.status = 'Ativo';
+      }
+      return emp;
+    }),
+    stats: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() })).query(async ({ input, ctx }) => {
+      const canSeeAviso = await userCanSeeAvisoStatus(ctx.user.id, ctx.user.role);
+      const cacheKey = `emp:stats:${input.companyId}:${(input.companyIds ?? []).join(',')}:av${canSeeAviso ? 1 : 0}`;
+      return memCache.getOrFetch(cacheKey, TTL.MEDIUM, async () => {
+        const s: any = await getEmployeeStats(input.companyId, input.companyIds);
+        // Rev. 2206 — sem clearance: aviso some do badge e é somado em ativos.
+        if (!canSeeAviso && s && typeof s === 'object') {
+          const av = Number(s.aviso || 0);
+          if (av > 0) {
+            s.ativos = Number(s.ativos || 0) + av;
+            s.aviso = 0;
+            if (s.porStatus) {
+              s.porStatus.Ativo = (s.porStatus.Ativo ?? 0) + (s.porStatus.Aviso ?? 0);
+              delete s.porStatus.Aviso;
+            }
+          }
+        }
+        return s;
+      });
     }),
     create: protectedProcedure.input(z.any()).mutation(async ({ input, ctx }) => {
       // === UNICIDADE POR EMPRESA ===

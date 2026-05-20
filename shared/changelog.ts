@@ -1,6 +1,75 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2206 — **SEGURANÇA / SIGILO · Status "Aviso Prévio" do
+ * colaborador agora é visível APENAS pra Admin Master e usuários
+ * do grupo RH/DP. Demais usuários veem o colaborador como "Ativo"
+ * (badge, ficha, PDF, KPI e listagem).**
+ *
+ * Lilian (20/05/2026): "somente o usuário master e os usuários de
+ * RH, poderão ver se o colaborador esta de aviso previo ou não..
+ * garanta que isso seja um sigilo para todos que naõ fazem parte
+ * deste grupo." Print: tela /colaboradores mostra MARIANA CASTILHO
+ * com badge amarelo "Aviso Prévio" + KPI "4 Aviso" no topo,
+ * informação que NÃO deve circular fora do RH antes da comunicação
+ * oficial ao colaborador (risco trabalhista e ruído interno).
+ *
+ * **Defesa em profundidade — mascaramento em DOIS níveis:**
+ *
+ * **Backend (`server/db.ts:3169-3191` + `server/routers.ts:415-459`):**
+ * - Novo helper `userCanSeeAvisoStatus(userId, role)`: retorna `true`
+ *   se `role === 'admin_master'` OU usuário pertence a grupo cujo
+ *   `nome` faz match com `/\bRH\b/`, `/\bDP\b/`, `/RECURSOS\s+HUMANOS/`
+ *   ou `/\bRHDP\b/` (case-insensitive). Casa todas as variações
+ *   convencionais ("RH", "DP", "RH e DP", "RH-DP", "RHDP",
+ *   "Recursos Humanos").
+ * - `employees.list`: chama o helper; se `!canSeeAviso`, mapeia cada
+ *   linha `{ status: 'Aviso' } → { status: 'Ativo' }` antes de
+ *   devolver. Filtro `status === 'Aviso'` por usuário sem clearance
+ *   devolve `[]` (não vaza nem por filtro direto).
+ * - `employees.stats`: zera `aviso` e soma o valor em `ativos`
+ *   (mantém o `total` invariante; o badge "Aviso" simplesmente some
+ *   da resposta). Ajusta também `porStatus`.
+ * - `employees.getById`: idem — Aviso → Ativo antes de retornar a
+ *   ficha individual.
+ * - Cache key (`memCache`) agora inclui `:av${canSee?1:0}` em list e
+ *   stats pra evitar cross-leak entre roles via cache.
+ *
+ * **Frontend (`client/src/pages/Colaboradores.tsx`):**
+ * - Novo `canSeeAviso` (derivado do `usePermissions().groupPermissions`
+ *   + `isAdminMaster`) e helper `maskedStatus(s)` que retorna `Ativo`
+ *   quando `s === 'Aviso'` && `!canSeeAviso`.
+ * - Aplica `maskedStatus` no badge da tabela (L1236), na ficha
+ *   aberta no dialog (L3440) e no header do PDF de impressão
+ *   (L893). Resultado: usuário sem clearance vê "Ativo" verde no
+ *   lugar do amarelo "Aviso Prévio".
+ * - KPI "Aviso" (L993) é renderizado dentro de spread condicional —
+ *   some completamente da grid pra quem não tem clearance (em vez
+ *   de aparecer com `0`).
+ * - Opção "Aviso Prévio" do `<Select>` de filtro (L1034) é filtrada
+ *   antes do `.map()`.
+ *
+ * **Por que mascarar como "Ativo" (e não esconder a linha):**
+ * Esconder o registro inteiro confundiria gestores ("cadê fulano?")
+ * e geraria divergência com sistemas integrados (efetivo por obra,
+ * ponto, folha). Mascarar apenas o STATUS preserva visibilidade
+ * operacional do colaborador sem expor o aviso prévio.
+ *
+ * **R-001/R-007/R-010:** ✅ OK — nenhum ALTER/DROP/DELETE. Helper
+ * read-only sobre `user_group_members` + transformação em memória.
+ * Zero migrations.
+ *
+ * **Limitações conhecidas / follow-ups:**
+ * - A rota `/aviso-previo` continua acessível a quem tem permissão
+ *   nela (independente). Quem entra lá vê os avisos diretamente —
+ *   o controle de acesso é via grupo de permissão da rota, não via
+ *   esse helper. Se quiser, dá pra restringir a rota também.
+ * - Outros routers que listam colaboradores (visaoPanoramica,
+ *   curriculos, portalExterno) NÃO foram alterados — só
+ *   `employees.list/stats/getById` (origem do print da Lilian).
+ *   Caso surjam outras telas mostrando "Aviso", aplicar o mesmo
+ *   helper.
+ *
  * Rev. 2205 — **MELHORIA UX · Campo "Quando venceu" no preview de
  * Aviso Prévio mostra a data limite (Art. 134 CLT) de cada período
  * de férias vencidas.**

@@ -30,6 +30,7 @@ import { formatCPF, formatRG, formatCEP, formatPIS, formatTelefone, formatTitulo
 import { nowBrasilia } from "@/lib/dateUtils";
 import RaioXFuncionario from "@/components/RaioXFuncionario";
 import { useAuth } from "@/_core/hooks/useAuth";
+import { usePermissions } from "@/contexts/PermissionsContext";
 import { TimeCombobox, ENTRADA_OPTIONS, INTERVALO_OPTIONS, SAIDA_OPTIONS } from "@/components/TimeCombobox";
 import FCSignSendDialog from "@/components/FCSignSendDialog";
 import FCSignContratoExperienciaPanel from "@/components/FCSignContratoExperienciaPanel";
@@ -187,6 +188,19 @@ export default function Colaboradores() {
   const { selectedCompanyId, companies, isConstrutoras, getCompanyIdsForQuery } = useCompany();
   const { user } = useAuth();
   const isAdminMaster = user?.role === "admin_master";
+  // Rev. 2206 — Sigilo do status "Aviso Prévio": só master e grupo RH
+  // veem que um colaborador está em aviso prévio. Demais usuários têm
+  // o badge mascarado como "Ativo", o KPI somado em Ativos, a opção
+  // do filtro removida e a procedure backend também mascara (defesa
+  // em profundidade — não basta esconder na UI). Pedido Lilian:
+  // "somente o usuário master e os usuários de RH poderão ver".
+  const { groupPermissions } = usePermissions();
+  const canSeeAviso = isAdminMaster || (groupPermissions?.groups || []).some((g: any) => {
+    const nome = String(g?.nome || '').toUpperCase();
+    return /\bRH\b/.test(nome) || /\bDP\b/.test(nome) || /RECURSOS\s+HUMANOS/.test(nome) || /\bRHDP\b/.test(nome);
+  });
+  // Helper centralizado pra usar nos badges/labels (substitui Aviso → Ativo).
+  const maskedStatus = (s: string | null | undefined): string => (!canSeeAviso && s === 'Aviso') ? 'Ativo' : (s || '');
   const selectedCompany = selectedCompanyId;
   const [search, setSearch] = useState("");
   const [skillFilter, setSkillFilter] = useState<string>("all");
@@ -873,7 +887,7 @@ ${obs ? `<div class="box"><strong>Observações / Justificativa do Enquadramento
       }
       <div><h2 style="font-size:18px;font-weight:700;color:#1B2A4A;margin:0;">${safeDisplay(viewingEmployee.nomeCompleto)}</h2>
       <p style="font-size:12px;color:#666;margin:4px 0 0;">${safeDisplay(viewingEmployee.funcao)} · ${safeDisplay(viewingEmployee.setor)}</p>
-      <span style="display:inline-block;background:${viewingEmployee.status === 'Ativo' ? '#dcfce7' : viewingEmployee.status === 'ListaNegra' ? '#fecaca' : '#fef3c7'};color:${viewingEmployee.status === 'Ativo' ? '#166534' : viewingEmployee.status === 'ListaNegra' ? '#991b1b' : '#92400e'};padding:2px 10px;border-radius:4px;font-size:10px;font-weight:600;margin-top:4px;">${statusLabels[viewingEmployee.status] ?? viewingEmployee.status}</span>
+      <span style="display:inline-block;background:${maskedStatus(viewingEmployee.status) === 'Ativo' ? '#dcfce7' : maskedStatus(viewingEmployee.status) === 'ListaNegra' ? '#fecaca' : '#fef3c7'};color:${maskedStatus(viewingEmployee.status) === 'Ativo' ? '#166534' : maskedStatus(viewingEmployee.status) === 'ListaNegra' ? '#991b1b' : '#92400e'};padding:2px 10px;border-radius:4px;font-size:10px;font-weight:600;margin-top:4px;">${statusLabels[maskedStatus(viewingEmployee.status)] ?? maskedStatus(viewingEmployee.status)}</span>
       <span style="font-size:11px;color:#888;margin-left:12px;">Empresa: ${empresa}</span></div></div>`;
 
     if (viewingEmployee.status === "ListaNegra") {
@@ -973,7 +987,7 @@ ${obs ? `<div class="box"><strong>Observações / Justificativa do Enquadramento
                 { label: "Férias", value: statsQ.data.ferias, icon: Palmtree, color: "text-blue-700", bg: "bg-blue-50 border-blue-200", filter: "Ferias" },
                 { label: "Afastados", value: statsQ.data.afastados, icon: HeartPulse, color: "text-amber-700", bg: "bg-amber-50 border-amber-200", filter: "Afastado" },
                 { label: "Licença", value: statsQ.data.licenca, icon: Clock, color: "text-purple-700", bg: "bg-purple-50 border-purple-200", filter: "Licenca" },
-                { label: "Aviso", value: (statsQ.data as any).aviso ?? 0, icon: AlertTriangle, color: "text-yellow-700", bg: "bg-yellow-50 border-yellow-300", filter: "Aviso" },
+                ...(canSeeAviso ? [{ label: "Aviso", value: (statsQ.data as any).aviso ?? 0, icon: AlertTriangle, color: "text-yellow-700", bg: "bg-yellow-50 border-yellow-300", filter: "Aviso" }] : []),
                 { label: "Desligados", value: statsQ.data.desligados, icon: UserX, color: "text-red-700", bg: "bg-red-50 border-red-200", filter: "Desligado" },
                 ...(isAdminMaster ? [{ label: "Blacklist", value: statsQ.data.blacklist || 0, icon: ShieldX, color: "text-red-800", bg: "bg-red-100 border-red-300", filter: "ListaNegra" }] : []),
                 { label: "Reclusos", value: statsQ.data.reclusos, icon: Ban, color: "text-gray-700", bg: "bg-gray-50 border-gray-200", filter: "Recluso" },
@@ -1014,7 +1028,7 @@ ${obs ? `<div class="box"><strong>Observações / Justificativa do Enquadramento
               <SelectItem value="CLT">CLT</SelectItem>
               <SelectItem value="PJ">PJ</SelectItem>
               <SelectItem value="Socio">Sócio</SelectItem>
-              {EMPLOYEE_STATUS.map(s => (
+              {EMPLOYEE_STATUS.filter(s => canSeeAviso || s.value !== 'Aviso').map(s => (
                 <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
               ))}
               {isAdminMaster && <SelectItem value="ListaNegra">Blacklist</SelectItem>}
@@ -1216,9 +1230,11 @@ ${obs ? `<div class="box"><strong>Observações / Justificativa do Enquadramento
                             </div>
                           );
                         }
+                        // Rev. 2206 — mascara Aviso → Ativo p/ usuários sem clearance
+                        const dispStatus = maskedStatus(emp.status);
                         return (
-                          <span className={`text-xs font-medium px-2.5 py-1 rounded ${statusColors[emp.status] ?? ""}`}>
-                            {statusLabels[emp.status] ?? emp.status}
+                          <span className={`text-xs font-medium px-2.5 py-1 rounded ${statusColors[dispStatus] ?? ""}`}>
+                            {statusLabels[dispStatus] ?? dispStatus}
                           </span>
                         );
                       })()}
@@ -3418,9 +3434,15 @@ ${obs ? `<div class="box"><strong>Observações / Justificativa do Enquadramento
                     {safeDisplay(viewingEmployee.funcao)} · {safeDisplay(viewingEmployee.setor)}
                   </p>
                   <div className="flex items-center gap-3 mt-2">
-                    <span className={`text-sm font-medium px-3 py-1 rounded ${statusColors[viewingEmployee.status] ?? ""}`}>
-                      {statusLabels[viewingEmployee.status] ?? viewingEmployee.status}
-                    </span>
+                    {(() => {
+                      // Rev. 2206 — sigilo Aviso na ficha
+                      const ds = maskedStatus(viewingEmployee.status);
+                      return (
+                        <span className={`text-sm font-medium px-3 py-1 rounded ${statusColors[ds] ?? ""}`}>
+                          {statusLabels[ds] ?? ds}
+                        </span>
+                      );
+                    })()}
                     <span className="text-sm text-muted-foreground">
                       Empresa: {getCompanyName(viewingEmployee.companyId)}
                     </span>
