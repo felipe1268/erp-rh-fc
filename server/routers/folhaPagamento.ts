@@ -2091,19 +2091,32 @@ export const folhaPagamentoRouter = router({
           sql`${payrollPeriods.mesReferencia} LIKE ${`${input.ano}-%`}`,
         ));
 
+      // Rev. 2199 — Agrupar POR MÊS antes de mapear. Um mesmo mes_referencia pode ter
+      // múltiplas linhas (uma por empresa/regime ou snapshots distintos). Iteração linha
+      // a linha era ordem-dependente: se a 2ª linha tinha status menor (ex.: "pagamento_simulado")
+      // e timestamps incompletos, sobrescrevia o "consolidado" da 1ª (caso de Mar/2026 FC).
+      const periodsByMes = new Map<string, typeof periods>();
       for (const p of periods) {
-        if (!meses[p.mesReferencia]) meses[p.mesReferencia] = { vale: null, pagamento: null, decimo_terceiro_1: null, decimo_terceiro_2: null };
-        const m = meses[p.mesReferencia];
-        // Período "travada" equivale a totalmente consolidado.
-        const travada = p.status === "travada";
-        // Vale: só sobrescreve se ainda for null (não regride status de folha_lancamentos).
+        if (!periodsByMes.has(p.mesReferencia)) periodsByMes.set(p.mesReferencia, []);
+        periodsByMes.get(p.mesReferencia)!.push(p);
+      }
+      for (const [mesRef, ps] of periodsByMes) {
+        if (!meses[mesRef]) meses[mesRef] = { vale: null, pagamento: null, decimo_terceiro_1: null, decimo_terceiro_2: null };
+        const m = meses[mesRef];
+        // status="travada" em QUALQUER linha do mês → consolidação total.
+        const anyTravada = ps.some(p => p.status === "travada");
+        const valeConsol = anyTravada || ps.some(p => !!p.valeConsolidadoEm);
+        const pagConsol = anyTravada || ps.some(p => !!p.pagamentoConsolidadoEm);
+        const valeGen = ps.some(p => !!p.valeGeradoEm);
+        const pagSim = ps.some(p => !!p.pagamentoSimuladoEm);
+        // Só preenche se folha_lancamentos legacy ainda não cobriu.
         if (!m.vale) {
-          if (p.valeConsolidadoEm || travada) m.vale = "consolidado";
-          else if (p.valeGeradoEm) m.vale = "calculado";
+          if (valeConsol) m.vale = "consolidado";
+          else if (valeGen) m.vale = "calculado";
         }
         if (!m.pagamento) {
-          if (p.pagamentoConsolidadoEm || travada) m.pagamento = "consolidado";
-          else if (p.pagamentoSimuladoEm) m.pagamento = "simulado";
+          if (pagConsol) m.pagamento = "consolidado";
+          else if (pagSim) m.pagamento = "simulado";
         }
       }
 

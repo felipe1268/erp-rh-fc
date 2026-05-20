@@ -2,6 +2,9 @@
 
 > Este arquivo guarda os one-liners das revisões antigas para manter o `replit.md` enxuto.
 
+- **Rev. 2193** — MELHORIA UX · Layout da Ficha de Entrega de EPI reorganizado em documento ÚNICO. Ver `shared/changelog.ts`.
+- **Rev. 2192** — MELHORIA UX · Nome do funcionário e do responsável aparecem em destaque abaixo de cada assinatura na Ficha de Entrega de EPI. Schema aditivo `epi_deliveries.assinatura_responsavel_{nome,em}`. Ver `shared/changelog.ts`.
+
 - **Rev. 2191** — MELHORIA UX · Ficha de Entrega de EPI passou a exibir bloco "📷 FOTOS ANEXADAS" com `fotoEstadoUrl` (foto obrigatória em troca por desgaste/mau_uso). Ver `shared/changelog.ts`.
 
 - **Rev. 2190** — HOTFIX BLOQUEANTE · Assinatura de EPI "sumia" ao abrir via olhinho. Causa: `fichaUrl` (PDF) gerado ANTES da assinatura nunca regerado. Fix: olhinho abre preview in-app (sobrepõe `assinaturaUrl` como `<img>`). Ver `shared/changelog.ts`.

@@ -1,6 +1,83 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2200 — **MELHORIA UX · Calendário do topo da Folha de Pagamento
+ * adotou o mesmo padrão visual do calendário do Fechamento de Ponto
+ * (cores sólidas + Lock no canto).**
+ *
+ * Lilian (após Rev. 2199 corrigir os dados): "precisa respeitar as
+ * cores conforme estamos usando o ponto". Screenshot mostrou o
+ * calendário do Ponto com cores sólidas (bg-green-500, bg-blue-500)
+ * e texto branco — visual muito mais marcante que os tons pastel
+ * (bg-green-100/bg-blue-100) que estavam na Folha.
+ *
+ * **Fix (`client/src/pages/FolhaPagamento.tsx:5738-5754`):** Alinhou
+ * o estilo dos botões de mês ao usado em `FechamentoPonto.tsx:1495-
+ * 1593`:
+ * - `consolidado` → `bg-green-500 text-white border-green-600`
+ * - `completo` → `bg-blue-500 text-white border-blue-600`
+ * - `sem_dados` → `bg-gray-200 text-gray-500 border-gray-300`
+ * - Seleção: `ring-2 ring-offset-1 ring-[#1B2A4A] shadow-md scale-105`
+ *   (mantém cor de status, ganha apenas destaque por ring + leve zoom).
+ * - Ícones `Lock`/`FileText` reposicionados pra `absolute top-0.5
+ *   right-0.5 text-white/80` (canto superior direito, igual ao Ponto).
+ * - Botão virou `relative` pra acomodar o ícone absoluto, padding
+ *   `py-2 px-1` e fonte `text-sm` (paridade com Ponto).
+ *
+ * **Não-regressão:** Rev. 2198 (separação status × seleção) e
+ * Rev. 2199 (agrupar payroll_periods por mês) intactas — só as
+ * classes Tailwind mudaram. Legenda do header (bolinhas) já usava
+ * `bg-blue-500/bg-green-500/bg-gray-200`, então agora bate
+ * exatamente com a cor dos botões.
+ *
+ * **R-001/R-007/R-010:** ✅ OK — só client, zero server, zero schema.
+ *
+ * Rev. 2199 — **HOTFIX · Calendário da Folha agora respeita as cores
+ * da legenda mesmo com múltiplas linhas em `payroll_periods` por mês.**
+ *
+ * Lilian (após Rev. 2198 já corrigir a sobrescrita da seleção):
+ * "precisa respeitar as cores das legendas". Screenshot mostrava Mar
+ * E Abr/2026 FC ambos AZUIS (Com lançamento), mas Mar deveria estar
+ * VERDE (Consolidado) — Lilian já travou a folha de Mar.
+ *
+ * **Causa-raiz:** O merge da Rev. 2197 iterava `payroll_periods`
+ * linha-a-linha. Quando o mesmo `mes_referencia` tinha múltiplas
+ * linhas (ex.: Mar/2026 FC tem 2 — `status='travada'` + `status=
+ * 'pagamento_simulado'`), a ORDEM de retorno do Drizzle decidia o
+ * vencedor. Como o código fazia `if (!m.vale) ...` para evitar
+ * regressão sobre `folha_lancamentos`, se a linha "pagamento_simulado"
+ * (vc=t, pc=f) chegasse primeiro, `m.vale="consolidado"` mas
+ * `m.pagamento="simulado"` — e a linha "travada" depois era ignorada
+ * pelo guard. Resultado: vale=consolidado + pag=simulado → o front
+ * cai no fallback `"completo"` (azul) em vez de `"consolidado"`
+ * (verde) porque `getMonthStatus` exige AMBOS consolidados.
+ *
+ * Confirmado no Neon:
+ * ```
+ *  mes_ref | status              | vg | vc | ps | pc
+ *  2026-03 | travada             | t  | f  | t  | f
+ *  2026-03 | pagamento_simulado  | t  | t  | t  | f
+ *  2026-04 | pagamento_simulado  | t  | f  | t  | t
+ * ```
+ *
+ * **Fix (`server/routers/folhaPagamento.ts:2097-2124`):** Pré-agrupar
+ * `payroll_periods` por `mesReferencia` num `Map`. Para cada mês,
+ * calcular flags com `Array.some(...)`:
+ * - `anyTravada` → consolida vale E pagamento de uma vez.
+ * - `valeConsol / pagConsol` → `anyTravada` OU qualquer
+ *   `valeConsolidadoEm/pagamentoConsolidadoEm` não-nulo entre as linhas.
+ * - `valeGen / pagSim` → fallback se não houver consolidação.
+ *
+ * Resultado: Mar/2026 FC (1 linha travada) → VERDE. Abr/2026 FC
+ * (pagamento consolidado mas vale ainda não) segue AZUL (refletindo
+ * estado real). Quando Lilian travar Abr também, vira verde.
+ *
+ * **Não-regressão:** Guard `if (!m.vale)` preservado — legacy
+ * `folha_lancamentos` continua tendo prioridade. Rev. 2198 (UX da
+ * seleção do botão) intacta.
+ *
+ * **R-001/R-007/R-010:** ✅ OK — leitura adicional, zero schema/migration.
+ *
  * Rev. 2198 — **HOTFIX UX · Mês SELECIONADO no calendário da Folha
  * agora respeita a cor da legenda (Com lançamento azul / Consolidado
  * verde) em vez de virar branco.**

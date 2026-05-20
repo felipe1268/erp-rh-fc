@@ -5732,24 +5732,22 @@ export default function FolhaPagamento() {
                 const mes = i + 1;
                 const isSelected = mes === mesSelecionado;
                 const status = getMonthStatus(mes);
-                // Rev. 2198 — Cor de status (bg) é INDEPENDENTE da seleção (borda+ring).
-                // Antes da Rev. 2198 isSelected sobrescrevia tudo e o mês selecionado
-                // perdia a legenda (ex.: Abr consolidado aparecia branco).
+                // Rev. 2200 — Alinhar visual com o calendário de Fechamento de Ponto:
+                // cores SÓLIDAS (bg-{cor}-500 text-white) + Lock no canto superior
+                // direito. Seleção mantém a cor de status e ganha ring escuro + scale.
                 const statusClasses =
-                  status === "consolidado" ? "bg-green-100 text-green-800 hover:bg-green-200" :
-                  status === "completo" ? "bg-blue-100 text-blue-800 hover:bg-blue-200" :
-                  "bg-gray-100 text-gray-500 hover:bg-gray-200";
-                const borderClasses = isSelected
-                  ? "border-[#1B2A4A] ring-2 ring-[#1B2A4A]/30 shadow-md"
-                  : status === "consolidado" ? "border-green-300"
-                  : status === "completo" ? "border-blue-300"
-                  : "border-gray-200";
+                  status === "consolidado" ? "bg-green-500 text-white hover:bg-green-600 border-green-600" :
+                  status === "completo" ? "bg-blue-500 text-white hover:bg-blue-600 border-blue-600" :
+                  "bg-gray-200 text-gray-500 hover:bg-gray-300 border-gray-300";
+                const selectionClasses = isSelected
+                  ? "ring-2 ring-offset-1 ring-[#1B2A4A] shadow-md scale-105"
+                  : "";
                 return (
                   <button key={mes} onClick={() => setMesSelecionado(mes)}
-                    className={`rounded-lg p-2 text-center text-xs font-medium transition-all border-2 ${statusClasses} ${borderClasses}`}>
-                    <div>{nome}</div>
-                    {status === "consolidado" && <Lock className="h-3 w-3 mx-auto mt-0.5 text-green-600" />}
-                    {status === "completo" && <FileText className="h-3 w-3 mx-auto mt-0.5 text-blue-600" />}
+                    className={`relative rounded-lg py-2 px-1 text-center text-sm font-medium transition-all border-2 ${statusClasses} ${selectionClasses}`}>
+                    {nome}
+                    {status === "consolidado" && <Lock className="h-3 w-3 absolute top-0.5 right-0.5 text-white/80" />}
+                    {status === "completo" && <FileText className="h-3 w-3 absolute top-0.5 right-0.5 text-white/80" />}
                   </button>
                 );
               })}
