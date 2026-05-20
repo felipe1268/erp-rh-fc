@@ -1,6 +1,51 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2175 — **MELHORIA UX · Mensagem de conflito de nome no Plano de Contas
+ * agora diz EXATAMENTE onde está a conta conflitante (Plano de Contas vs
+ * Categorias) e com qual código.**
+ *
+ * Follow-up direto da Rev. 2174. Lilian: "se existe uma conta com esse
+ * nome, nao está aparecendo... onde está ela?". Explicação: a tela "Plano
+ * de Contas" filtra `codigo NOT LIKE 'AUTO-%'` (Rev. 2157, `escopo='plano'`
+ * em `listAccounts`). Categorias usam código `AUTO-NNNN` e moram na mesma
+ * tabela `financial_accounts` — então uma Categoria chamada "Mão de Obra
+ * Direta" fica invisível no Plano de Contas, MAS o índice único parcial
+ * `uq_fa_company_lower_nome_ativo` (em `(company_id, lower(nome)) WHERE
+ * ativo=1`) é compartilhado e dispara conflito ao tentar renomear no Plano.
+ *
+ * **Fix em `server/routers/financial.ts` `updateAccount`:** no catch do
+ * 23505 da Rev. 2174, antes de lançar TRPCError, faz SELECT extra:
+ *
+ *   SELECT id, codigo, nome FROM financial_accounts
+ *   WHERE company_id=$1 AND LOWER(nome)=LOWER($2) AND ativo=1 AND id<>$3
+ *
+ * Se acha a conta conflitante, classifica pelo prefixo do código:
+ *  - `AUTO-*` → mensagem diz "em **Categorias** (código `AUTO-0042`,
+ *    id #N) — não aparece na tela do Plano de Contas"
+ *  - outro    → "no **Plano de Contas** com o código `3.4` (id #N)"
+ *
+ * Sem match (race / categoria recém-deletada): fallback genérico da
+ * Rev. 2174. O SELECT extra está em try/catch separado (fail-open):
+ * se ele falhar, mantém o fix da Rev. 2174 funcionando.
+ *
+ * **Por que markdown (`**…**`, backticks) no message?** O `toast` do
+ * front renderiza texto cru, mas a Lilian/Stéfany hoje copia e cola
+ * mensagens longas pra mim no chat — os asteriscos sobrevivem e
+ * facilitam pra eu entender onde clicar. Custo: 0 (front mostra
+ * literal). Próximo passo (out of scope): renderer markdown no toast.
+ *
+ * **R-001/R-007/R-010:** OK — só SELECT informativo + tradução de erro.
+ *
+ * Arquivos tocados:
+ *  - `server/routers/financial.ts` (updateAccount catch enriquecido)
+ *  - `shared/version.ts` → "Rev. 2175"
+ *  - `shared/changelog.ts` (esta entrada)
+ *  - `replit.md` (top-2 + demote 2173 + drop 2168)
+ *  - `replit-history.md` (one-liner 2168)
+ *
+ * ---
+ *
  * Rev. 2174 — **HOTFIX UX · Erro cru do Postgres (23505 / uq_fa_company_lower_nome_ativo)
  * vazava no toast ao editar conta do Plano de Contas — traduzido pra
  * mensagem amigável.**

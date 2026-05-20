@@ -249,15 +249,33 @@ export const financialRouter = router({
       await dbExecute(db, `UPDATE financial_accounts SET ${parts.join(",")} WHERE id=$${i++} AND company_id=$${i}`, vals);
     } catch (e: any) {
       // Rev. 2174 — traduz 23505 (constraint única) em mensagem amigável.
+      // Rev. 2175 — agora também localiza a conta conflitante e diz onde
+      // ela está (Plano de Contas vs Categorias / código AUTO-*).
       // dbExecute (Rev. 2170) já anexa code/constraint/detail em e.message.
       const msg = String(e?.message || "");
       const code = String((e as any)?.cause?.code || (e as any)?.code || "");
       const constraint = String((e as any)?.cause?.constraint || "");
       if (code === "23505" || /uq_fa_company_lower_nome_ativo|duplicate key|unique constraint/i.test(msg) || /uq_fa_/i.test(constraint)) {
-        if (/uq_fa_company_lower_nome_ativo|nome/i.test(msg + constraint)) {
+        if (/uq_fa_company_lower_nome_ativo|nome/i.test(msg + constraint) && input.nome) {
+          // Localiza a conta conflitante para mensagem rica.
+          let where = "neste cadastro";
+          try {
+            const found = rows(await dbExecute(db,
+              `SELECT id, codigo, nome FROM financial_accounts
+               WHERE company_id=$1 AND LOWER(nome)=LOWER($2) AND ativo=1 AND id<>$3 LIMIT 1`,
+              [input.companyId, input.nome, input.id]
+            ));
+            const dupe: any = found[0];
+            if (dupe?.codigo) {
+              const isCategoria = /^AUTO-/i.test(String(dupe.codigo));
+              where = isCategoria
+                ? `em **Categorias** (código \`${dupe.codigo}\`, id #${dupe.id}) — não aparece na tela do Plano de Contas`
+                : `no **Plano de Contas** com o código \`${dupe.codigo}\` (id #${dupe.id})`;
+            }
+          } catch { /* fail-open: usa fallback genérico */ }
           throw new TRPCError({
             code: "BAD_REQUEST",
-            message: `Já existe uma conta ATIVA com este nome nesta empresa. Renomeie a outra conta primeiro, ou edite-a diretamente.`,
+            message: `Já existe uma conta ATIVA chamada "${input.nome}" ${where}. Para liberar este nome, exclua ou renomeie a outra conta antes.`,
           });
         }
         throw new TRPCError({
