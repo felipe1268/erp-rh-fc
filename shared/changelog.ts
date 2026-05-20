@@ -1,6 +1,47 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2205 — **MELHORIA UX · Campo "Quando venceu" no preview de
+ * Aviso Prévio mostra a data limite (Art. 134 CLT) de cada período
+ * de férias vencidas.**
+ *
+ * Lilian (20/05/2026): "coloca um campo de quando venceu as ferias
+ * para saber.. ok." Na linha "Férias Vencidas + 1/3 (1 período(s))"
+ * do preview de rescisão (REGIS MORAES — R$ 2.918,67) só aparecia a
+ * QUANTIDADE de períodos, sem indicar QUANDO cada um venceu — info
+ * crítica pra avaliar risco do Art. 137 CLT (dobra) e decidir
+ * estratégia de diluição de caixa (Rev. 2203).
+ *
+ * **Backend (`server/routers/avisoPrevioFerias.ts:752-776`):** A
+ * query que apurava `periodosVencidosReal` era um `COUNT(*)` puro.
+ * Trocado por `SELECT periodoAquisitivoInicio, periodoAquisitivoFim,
+ * periodoConcessivoFim` (`ORDER BY periodoAquisitivoFim ASC`),
+ * mapeado pra novo array `periodosVencidosDetalhes`. `periodosVencidosReal`
+ * agora derivado de `.length` (idempotente). O retorno do procedure
+ * `calcular` ganha o novo campo `periodosVencidosDetalhes`
+ * (`L838-839`). Aliases `lowercase` cobrem o caso do driver pg
+ * devolver colunas em snake/lowercase.
+ *
+ * **Frontend (`client/src/pages/AvisoPrevio.tsx:2864-2920`):** Logo
+ * abaixo da linha de breakdown "Férias: X + 1/3: Y" do preview,
+ * novo bloco listando cada período: "Período N: aquisitivo
+ * DD/MM/AAAA → DD/MM/AAAA · limite p/ conceder: DD/MM/AAAA". Quando
+ * `periodoConcessivoFim < hoje` (já estourou), exibe badge vermelho
+ * "⚠ vencido há N dia(s)" calculando o delta em dias corridos.
+ * Header do bloco "📅 Quando venceu (Art. 134 CLT)" pra deixar
+ * claro qual prazo legal está sendo monitorado (Art. 134: empregador
+ * tem 12 meses após o fim do aquisitivo pra conceder o gozo).
+ *
+ * **Por que serve à decisão de RH:**
+ * - Se `diasVencido > 0`, o gestor sabe que JÁ houve estouro do
+ *   prazo concessivo → risco real do Art. 137 (pagar em dobro).
+ * - Se há vários períodos vencendo em sequência, dá pra escalonar
+ *   gozos antes do desligamento (combinado com Rev. 2203 de
+ *   diluição de caixa).
+ *
+ * **R-001/R-007/R-010:** ✅ OK — SELECT readonly + render. Zero
+ * mutation, zero schema change.
+ *
  * Rev. 2204 — **FIX UX · Impressão do Espelho de Ponto totalmente
  * refatorada (acabou a bagunça de 5 páginas com a 1ª em branco).**
  *

@@ -2858,7 +2858,8 @@ ${pdfData.aviso.observacoes ? '<div class="section"><div class="section-title">O
                           <span className="text-xs text-gray-400">Férias: {formatMoeda(calculoPreview.previsaoRescisao.feriasProporcional)} + 1/3: {formatMoeda(calculoPreview.previsaoRescisao.tercoConstitucional)}</span>
                         </div>
 
-                        {/* Férias Vencidas (se houver) */}
+                        {/* Férias Vencidas (se houver) — Rev. 2205: lista os
+                            períodos vencidos com data limite (Art. 134 CLT) */}
                         {parseFloat(calculoPreview.previsaoRescisao.feriasVencidas) > 0 && (
                           <>
                             <div className="flex justify-between py-2 border-b border-gray-100 bg-red-50">
@@ -2871,6 +2872,35 @@ ${pdfData.aviso.observacoes ? '<div class="section"><div class="section-title">O
                             <div className="flex justify-between py-1 pl-6 border-b border-gray-50 bg-red-50/40">
                               <span className="text-xs text-red-400">Férias: {formatMoeda(calculoPreview.previsaoRescisao.feriasVencidasBase ?? '0')} + 1/3: {formatMoeda(calculoPreview.previsaoRescisao.feriasVencidasTerco ?? '0')}</span>
                             </div>
+                            {Array.isArray(calculoPreview.periodosVencidosDetalhes) && calculoPreview.periodosVencidosDetalhes.length > 0 && (
+                              <div className="pl-6 pr-2 py-2 border-b border-gray-50 bg-red-50/30">
+                                <p className="text-[10px] font-bold text-red-600 uppercase tracking-wider mb-1">📅 Quando venceu (Art. 134 CLT)</p>
+                                <div className="space-y-0.5">
+                                  {calculoPreview.periodosVencidosDetalhes.map((p: any, i: number) => {
+                                    const aqIni = p.periodoAquisitivoInicio ? p.periodoAquisitivoInicio.split('-').reverse().join('/') : '—';
+                                    const aqFim = p.periodoAquisitivoFim ? p.periodoAquisitivoFim.split('-').reverse().join('/') : '—';
+                                    const concFim = p.periodoConcessivoFim ? p.periodoConcessivoFim.split('-').reverse().join('/') : '—';
+                                    // Há quantos dias venceu o prazo concessivo?
+                                    const hoje = new Date().toISOString().slice(0,10);
+                                    let diasVencido = 0;
+                                    if (p.periodoConcessivoFim && p.periodoConcessivoFim < hoje) {
+                                      diasVencido = Math.floor((new Date(hoje).getTime() - new Date(p.periodoConcessivoFim).getTime()) / (1000*60*60*24));
+                                    }
+                                    return (
+                                      <div key={i} className="text-[11px] text-red-700 flex flex-wrap items-center gap-x-2">
+                                        <span className="font-semibold">Período {i+1}:</span>
+                                        <span>aquisitivo <strong>{aqIni} → {aqFim}</strong></span>
+                                        <span className="text-red-500">·</span>
+                                        <span>limite p/ conceder: <strong className="text-red-800">{concFim}</strong></span>
+                                        {diasVencido > 0 && (
+                                          <span className="text-[10px] font-bold px-1.5 py-px rounded-full bg-red-200 text-red-800">⚠ vencido há {diasVencido} dia(s)</span>
+                                        )}
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            )}
                           </>
                         )}
 

@@ -747,16 +747,29 @@ export const avisoPrevioFeriasRouter = router({
         // Considera apenas períodos NÃO concluídos/cancelados/em gozo
         // ============================================================
         let periodosVencidosReal: number | undefined;
+        let periodosVencidosDetalhes: Array<{ periodoAquisitivoInicio: string; periodoAquisitivoFim: string; periodoConcessivoFim: string }> = [];
         try {
+          // Rev. 2205 — antes COUNT(*) só; agora trazemos as datas pra mostrar
+          // QUANDO cada período venceu (Lilian: "coloca um campo de quando
+          // venceu as ferias para saber"). O `periodoConcessivoFim` é a data
+          // LIMITE pro empregador conceder o gozo (Art. 134 CLT — 12 meses
+          // após o fim do período aquisitivo). Ordenado pelo mais antigo.
           const vpRows = ((await db.execute(sql`
-            SELECT COUNT(*)::int AS total FROM vacation_periods
+            SELECT "periodoAquisitivoInicio", "periodoAquisitivoFim", "periodoConcessivoFim"
+            FROM vacation_periods
             WHERE "employeeId" = ${input.employeeId}
               AND status NOT IN ('concluida', 'cancelada', 'em_gozo')
               AND "periodoAquisitivoFim" IS NOT NULL
               AND "periodoAquisitivoFim" < ${dataFimAviso}
               AND "deletedAt" IS NULL
+            ORDER BY "periodoAquisitivoFim" ASC
           `)) as any).rows || [];
-          periodosVencidosReal = Number(vpRows[0]?.total ?? 0);
+          periodosVencidosDetalhes = vpRows.map((r: any) => ({
+            periodoAquisitivoInicio: String(r.periodoAquisitivoInicio || r.periodoaquisitivoinicio || ''),
+            periodoAquisitivoFim: String(r.periodoAquisitivoFim || r.periodoaquisitivofim || ''),
+            periodoConcessivoFim: String(r.periodoConcessivoFim || r.periodoconcessivofim || ''),
+          }));
+          periodosVencidosReal = periodosVencidosDetalhes.length;
         } catch { /* fallback para cálculo matemático */ }
         
         // ============================================================
@@ -819,6 +832,8 @@ export const avisoPrevioFeriasRouter = router({
             cpf: emp.cpf,
             obraAtualId: empObraAloc?.obraId || null,
           },
+          // Rev. 2205 — datas dos períodos vencidos pra exibir no preview
+          periodosVencidosDetalhes,
         };
       }),
 
