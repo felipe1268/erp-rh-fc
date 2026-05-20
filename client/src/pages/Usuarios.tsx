@@ -372,6 +372,20 @@ export default function Usuarios() {
     utils.userGroups.list.invalidate();
   };
 
+  // Rev. 2209 — auto-save de grupo de acesso ao clicar no radio.
+  // Lilian: "clicando no grupo já deveria fazer a mudança automaticamente".
+  const handleQuickSetGroup = async (groupIds: number[]) => {
+    if (!selectedUser) return;
+    setEditGroupIds(groupIds);
+    try {
+      await setGroupsMut.mutateAsync({ userId: selectedUser.id, groupIds });
+      utils.userGroups.list.invalidate();
+      toast.success(groupIds.length === 0 ? "Grupo removido" : "Grupo alterado");
+    } catch (e: any) {
+      toast.error("Falha ao alterar grupo: " + (e?.message || ""));
+    }
+  };
+
   const filteredUsers = useMemo(() => {
     const q = removeAccents(uSearch.toLowerCase());
     return allUsers.filter((u: any) => {
@@ -800,16 +814,16 @@ export default function Usuarios() {
                           ) : (
                             <div className="space-y-1.5">
                               {/* Opção "Sem grupo" */}
-                              <label className={`flex items-center gap-2.5 p-3 rounded-xl border cursor-pointer transition-all ${editGroupIds.length === 0 ? "bg-slate-50 border-slate-300 ring-1 ring-slate-200" : "bg-secondary/5 border-border hover:bg-secondary/20"}`}>
+                              <label className={`flex items-center gap-2.5 p-3 rounded-xl border cursor-pointer transition-all ${editGroupIds.length === 0 ? "bg-slate-50 border-slate-300 ring-1 ring-slate-200" : "bg-secondary/5 border-border hover:bg-secondary/20"} ${setGroupsMut.isPending ? "opacity-60 pointer-events-none" : ""}`}>
                                 <input type="radio" name="editGroup" checked={editGroupIds.length === 0}
-                                  onChange={() => setEditGroupIds([])} />
+                                  onChange={() => handleQuickSetGroup([])} />
                                 <ShieldAlert className="h-3.5 w-3.5 text-orange-400 shrink-0" />
                                 <span className="text-sm text-slate-500">Nenhum grupo</span>
                               </label>
                               {(allGroups as any[]).map(g => (
-                                <label key={g.id} className={`flex items-center gap-2.5 p-3 rounded-xl border cursor-pointer transition-all ${editGroupIds.includes(g.id)?"bg-blue-50 border-blue-400 ring-1 ring-blue-200":"bg-secondary/5 border-border hover:bg-secondary/20"}`}>
+                                <label key={g.id} className={`flex items-center gap-2.5 p-3 rounded-xl border cursor-pointer transition-all ${editGroupIds.includes(g.id)?"bg-blue-50 border-blue-400 ring-1 ring-blue-200":"bg-secondary/5 border-border hover:bg-secondary/20"} ${setGroupsMut.isPending ? "opacity-60 pointer-events-none" : ""}`}>
                                   <input type="radio" name="editGroup" checked={editGroupIds.includes(g.id)}
-                                    onChange={() => setEditGroupIds([g.id])} />
+                                    onChange={() => handleQuickSetGroup([g.id])} />
                                   <div className="h-3 w-3 rounded-full shrink-0" style={{background:g.cor||"#6b7280"}} />
                                   <div className="flex-1 min-w-0">
                                     <span className="text-sm font-medium">{g.nome}</span>

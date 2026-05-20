@@ -1,6 +1,24 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2209 — **UX · Mudar Grupo de Acesso do usuário virou
+ * INSTANTÂNEO (clicar no radio salva automaticamente).** Lilian:
+ * "qual a função de poder alterar o usuário clicando no grupo, e
+ * precisar adicionar o usuário manualmente.. quero algo mais
+ * automatizado.. clicando no grupo já deveria fazer a mudança
+ * automaticamente." Antes: usuário precisava selecionar o radio E
+ * clicar "Salvar Alterações" — duas etapas pra uma única troca.
+ * Agora: o `onChange` do radio chama `handleQuickSetGroup` que
+ * dispara `userGroups.setUserGroups` direto, invalida queries
+ * (`userGroups.list`, `userGroups.listAllMembers`,
+ * `userManagement.listUsers`) e mostra toast "Grupo alterado" /
+ * "Grupo removido". Os outros campos (nome, email, empresas, obras,
+ * senha) continuam exigindo o botão Salvar — só o grupo virou
+ * autosave. Visual: cards ganham `opacity-60 pointer-events-none`
+ * durante o `setGroupsMut.isPending` pra evitar clique duplo.
+ * **Arquivos:** `client/src/pages/Usuarios.tsx:375-388,810-822`.
+ * **R-001/R-007/R-010:** OK — UI only, reusa mutation existente.
+ *
  * Rev. 2208 — **SEGURANÇA / HOTFIX · Sigilo do "Aviso Prévio"
  * fecha brechas no Raio-X do Funcionário (lista + detalhe) e em
  * todas as procedures que listam `terminationNotices`.**
