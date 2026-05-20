@@ -576,10 +576,10 @@ export default function FinanceiroLancamentos() {
 
         {/* MODAL NOVO / EDITAR LANÇAMENTO */}
         <Dialog open={showNew} onOpenChange={(v) => { if (!v) { setShowNew(false); resetForm(); setShowObs(false); } }}>
-          <DialogContent className="max-w-lg p-0 overflow-hidden">
+          <DialogContent className="max-w-lg p-0 overflow-hidden flex flex-col max-h-[90vh]">
 
             {/* Header colorido conforme tipo */}
-            <div className={`px-6 pt-5 pb-4 ${
+            <div className={`shrink-0 px-6 pt-5 pb-4 ${
               form.tipo === "receita" ? "bg-green-50" :
               form.tipo === "imposto" ? "bg-yellow-50" :
               form.tipo === "transferencia" ? "bg-gray-50" :
@@ -634,7 +634,7 @@ export default function FinanceiroLancamentos() {
             </div>
 
             {/* Corpo do formulário */}
-            <div className="px-6 py-4 space-y-4 max-h-[60vh] overflow-y-auto">
+            <div className="flex-1 min-h-0 px-6 py-4 space-y-4 overflow-y-auto">
 
               {/* Valor em destaque */}
               <div>
@@ -824,7 +824,7 @@ export default function FinanceiroLancamentos() {
             </div>
 
             {/* Footer */}
-            <div className="px-6 py-4 bg-gray-50 border-t flex justify-between items-center gap-3">
+            <div className="shrink-0 px-6 py-4 bg-gray-50 border-t flex justify-between items-center gap-3">
               <Button variant="ghost" size="sm" onClick={() => { setShowNew(false); resetForm(); setShowObs(false); }}
                 className="text-gray-500">
                 Cancelar

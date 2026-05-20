@@ -1,6 +1,52 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2171 — **HOTFIX UX · Modal "Novo Lançamento" (Financeiro) cortava o
+ * footer e escondia o botão Salvar em telas médias.**
+ *
+ * Print do user: dialog rolado até o final, mostrando "Forma / Natureza /
+ * Adicionar observações" mas SEM footer visível — o botão "Lançar Despesa"
+ * (e o Cancelar) ficavam fora da viewport. User: "redistribua a tela de uma
+ * forma que apareça tudo, aqui nao está aparecendo o botao de salvar".
+ *
+ * Causa-raiz em `client/src/pages/financeiro/FinanceiroLancamentos.tsx:579`:
+ * o `DialogContent` (`max-w-lg p-0 overflow-hidden`) NÃO tinha `max-h` nem
+ * `flex flex-col`. Dentro dele, o body do form tinha `max-h-[60vh]
+ * overflow-y-auto`. Resultado: a altura total renderizada era
+ * `header(~22vh) + body(60vh) + footer(~10vh) = ~92vh` SEM teto no
+ * container externo. Quando a viewport era ~700px (laptop com barra de
+ * ferramentas) ou menos, o dialog era posicionado centralizado pelo
+ * Radix e o footer caía fora da tela. O body já era scrollável, mas
+ * o user nem via que existia um footer — parecia bug.
+ *
+ * **Fix em 3 linhas:**
+ *  1. `DialogContent` ganhou `flex flex-col max-h-[90vh]` — agora o
+ *     dialog inteiro tem teto e estrutura em coluna.
+ *  2. Header colorido (tipo + Único/Recorrente) ganhou `shrink-0` —
+ *     mantém altura natural, sempre visível.
+ *  3. Body do form trocou `max-h-[60vh]` por `flex-1 min-h-0` —
+ *     ocupa todo espaço sobrando entre header e footer; o
+ *     `overflow-y-auto` continua, então campos extras (recorrência,
+ *     observações expandidas) rolam DENTRO do body.
+ *  4. Footer (Cancelar + Salvar) ganhou `shrink-0` — sempre fixo no
+ *     fim, nunca corta.
+ *
+ * `min-h-0` é necessário em flex-children scrolláveis senão o flexbox
+ * ignora o `overflow` e o filho cresce além do container (regra
+ * conhecida do flexbox: items têm `min-height: auto` por padrão).
+ *
+ * **Backend:** zero. **R-001/R-007/R-010:** OK — só CSS de modal.
+ *
+ * Arquivos tocados:
+ *  - `client/src/pages/financeiro/FinanceiroLancamentos.tsx` (3 edits
+ *    em volta de L579-L827)
+ *  - `shared/version.ts` → "Rev. 2171"
+ *  - `shared/changelog.ts` (esta entrada)
+ *  - `replit.md` (top-2 + demote 2169→one-liner + drop 2164)
+ *  - `replit-history.md` (one-liner 2164)
+ *
+ * ---
+ *
  * Rev. 2170 — **DIAGNÓSTICO · `dbExecute` do módulo Financeiro agora propaga
  * a causa real do Postgres (code/constraint/detail) ao invés de engolir no
  * "Failed query: ...".**
