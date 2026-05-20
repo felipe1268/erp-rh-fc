@@ -1,6 +1,141 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2195 — **NOVA FEATURE · Tela "Encargos Sociais sobre Folha"
+ * pra upload e conferência das guias DCTFWeb (DARF unificada
+ * INSS/IRRF/Terceiros) e FGTS Digital enviadas pela contabilidade
+ * terceirizada.**
+ *
+ * Lilian (contexto pós-Rev. 2194 — após remover conferência da
+ * contabilidade dentro de Folha): precisa de um lugar dedicado pra
+ * acompanhar os IMPOSTOS sobre folha que a contabilidade terceirizada
+ * envia todo mês — DCTFWeb (DARF unificada com códigos 1082/1138/1170/
+ * 1184/1646/0561/5952 etc) e FGTS Digital (Mensal + Consignado) —
+ * conferir composição, comparar mês a mês e mandar pro financeiro
+ * pagar.
+ *
+ * **Fluxo do usuário:**
+ * 1. Lilian recebe os PDFs da contabilidade (DCTFWeb 04/2026 = R$
+ *    111.915,01 + FGTS 04/2026 = R$ 29.247,00 — exemplos do material
+ *    de teste).
+ * 2. Acessa RH&DP > Operacional > **Encargos Sociais** (novo item de
+ *    menu, ícone Calculator).
+ * 3. Clica "Importar PDF", escolhe tipo (DCTFWeb/FGTS), seleciona o
+ *    arquivo. Server roda `pdf-parse` + parser específico por tipo,
+ *    extrai competência (PA:04/2026), nº documento, vencimento, valor
+ *    total e composição linha-a-linha por código de tributo.
+ * 4. Documento aparece na lista com status "Importado". Olhinho abre
+ *    detalhe com tabela de composição (Código | Denominação | Principal
+ *    | Multa | Juros | Total) + KPIs Nº Doc / Vencimento / Total.
+ * 5. Lilian valida → status "Validado" → botão "Enviar ao Financeiro"
+ *    → status "Enviado". (Integração efetiva com módulo financeiro fica
+ *    pra revisão futura — por ora só marca o status pra trilha de
+ *    auditoria; quem paga ainda é via processo manual atual.)
+ * 6. KPIs do ano (Total / DCTFWeb / FGTS / Média Mensal) + tabela de
+ *    Evolução Mensal mostram comparativo histórico pra ela ver
+ *    sazonalidade e variação MoM.
+ *
+ * **Arquivos novos/tocados:**
+ * - `drizzle/schema.ts:1666` — tabela `encargosSociaisDocumentos`
+ *   com id/companyId/competencia(YYYY-MM)/tipo(dctfweb|fgts|outro)/
+ *   numeroDocumento/dataVencimento/valorTotal/pdfUrl/pdfFileName/
+ *   itensJson(composição)/status(importado→validado→enviado_financeiro→
+ *   pago)/uploadedPor+Em/validadoPor+Em/enviadoFinanceiroPor+Em/
+ *   observacoes/deletedAt + 2 índices (company+competencia, tipo).
+ * - `server/_core/index.ts:1779-1807` — bootstrap isolado padrão Rev.
+ *   2180 (CREATE TABLE IF NOT EXISTS + CREATE INDEX IF NOT EXISTS),
+ *   log `[SyncSchema+] Rev. 2195: tabela encargos_sociais_documentos
+ *   garantida` confirmado no startup. R-001/R-007/R-010: 100% aditivo,
+ *   ZERO ALTER/DROP/DELETE — só CREATE IF NOT EXISTS.
+ * - `server/routers/encargosSociais.ts` (NOVO, 354 linhas) — router
+ *   tRPC completo:
+ *   - `upload`: recebe base64, extrai texto via `pdf-parse`, parseia
+ *     por tipo (`parseDCTFWebPDF` lê códigos 4-dígitos + valores,
+ *     `parseFGTSDigitalPDF` lê linhas Mensal/Consignado por
+ *     competência), salva no storage (`storage.storagePut` chave
+ *     `encargos-sociais/${companyId}/${competencia}/${tipo}-${random}-
+ *     ${nome}`) e persiste itens em `itensJson`.
+ *   - `detectCompetencia` reconhece "PA:04/2026", "Competência:
+ *     04/2026" e nomes de mês ("ABRIL/2026"). `detectDataVencimento`
+ *     reconhece "Pagar este documento até DD/MM/YYYY". `detectNumero
+ *     Documento` reconhece DCTFWeb ("Número do Documento ...") e FGTS
+ *     ("Identificador ...").
+ *   - `CODIGOS_DCTFWEB` map (0561 IRRF / 1082 CP-Empregados / 1138
+ *     CP-Patronal / 1162 Retenção 9.711 / 1170 Salário Educação /
+ *     1176 INCRA / 1181 SENAI / 1184 SESI / 1187 SENAC / 1190 SESC /
+ *     1200 SEBRAE / 1646 GILRAT / 5952 Retenção PJ-PJ) — fallback pra
+ *     denominação literal do PDF se código não conhecido.
+ *   - `list` (filtros tipo/competencia/status), `getById` (parsed
+ *     itens), `validar`/`enviarFinanceiro`/`desfazer`/`delete` (soft),
+ *     `comparativoMensal` (agrega por competência DCTFWeb/FGTS/Outros/
+ *     Total pra gráfico).
+ * - `server/routers.ts:61, 1294` — import + registro como
+ *   `encargosSociais`.
+ * - `client/src/pages/EncargosSociais.tsx` (NOVO, 452 linhas) — página
+ *   completa com:
+ *   - Header + botão "Importar PDF" → Dialog (tipo + arquivo +
+ *     competência manual opcional + observações; auto-detecta tudo).
+ *   - 4 KPIs do ano corrente (Total / DCTFWeb / FGTS / Média Mensal).
+ *   - Card "Evolução Mensal {ano}" com tabela competência × DCTFWeb ×
+ *     FGTS × Outros × Total.
+ *   - Card "Documentos Importados" com filtros (tipo + status), tabela
+ *     (competência / tipo / nº doc / vencimento / valor / status
+ *     badge / ações).
+ *   - Dialog detalhe com KPIs + tabela de composição completa + status
+ *     + trilha (quem importou/validou/enviou + quando) + botões
+ *     contextuais (Validar quando importado / Enviar ao Financeiro
+ *     quando validado / Desfazer quando validado ou enviado / Baixar
+ *     PDF / Fechar).
+ *   - Usa `useCompany`, `DashboardLayout` (padrão FolhaPagamento).
+ *   - Formato BRL pt-BR, competência em "abr/2026" (mês curto pt-BR),
+ *     toast.success/error em todas as mutations + invalidate queries.
+ * - `client/src/App.tsx:101, 380` — lazy import + Route
+ *   `/encargos-sociais` (RouteGuard reusa permissão `/folha-pagamento`
+ *   pra não criar nova chave de menu/permissão por enquanto — Lilian
+ *   já tem acesso à folha).
+ * - `client/src/components/DashboardLayout.tsx:98` — novo item nav
+ *   `{ icon: Calculator, label: "Encargos Sociais",
+ *   path: "/encargos-sociais" }` na seção Operacional do
+ *   `menuSectionsRHDP`, entre "Folha de Pagamento" e "Controle de
+ *   Documentos" (Calculator já importado L38).
+ *
+ * **Decisões técnicas:**
+ * - `tipo` é VARCHAR(30) e não enum pra permitir adicionar tributos
+ *   futuros (ISS-Folha, contribuição sindical, IRRF Cooperativa) sem
+ *   migration.
+ * - `itensJson` é TEXT serializado em vez de tabela child porque a
+ *   composição varia muito por tipo de documento e por ora não há
+ *   query/agregação por código — UI só renderiza. Se Lilian quiser
+ *   comparar código X código mês a mês depois (ex.: "código 1138 caiu
+ *   30% por quê?"), criar tabela `encargos_sociais_itens` em revisão
+ *   futura.
+ * - `valorTotal` é VARCHAR(20) pra manter consistência com
+ *   `folhaLancamentos.totalLiquido` (padrão do ERP — agregação em JS
+ *   com `parseFloat`).
+ * - `status` "enviado_financeiro" hoje é só marcador de trilha — NÃO
+ *   cria conta a pagar real em `financial_accounts`. Decisão consciente:
+ *   integração com módulo financeiro exige escolha de fornecedor (RFB
+ *   pra DCTFWeb? CEF pra FGTS?), centro de custo (qual? rateio por
+ *   obra?), conta de DRE etc — discussão de produto que merece revisão
+ *   própria. Por ora a Lilian usa essa tela como controle paralelo e
+ *   continua lançando manualmente no financeiro.
+ * - Parser FGTS tem heurística pra evitar duplicar Mensal × Consignado
+ *   (linha de Mensal tem 7 valores, Consignado tem 3 + contexto
+ *   "Consignado" antes).
+ * - Bootstrap isolado em `_core/index.ts` (CREATE TABLE IF NOT EXISTS)
+ *   garante que produção sobe sem precisar de migration manual — padrão
+ *   adotado desde Rev. 2079/2125/2141/2179/2180/2192.
+ *
+ * **R-001/R-007/R-010 (Golden Rules):** ✅ TOTALMENTE ADITIVO. Zero
+ * ALTER TABLE, zero DROP, zero DELETE destrutivo. Tabela nova
+ * (CREATE TABLE IF NOT EXISTS) + 2 índices novos (CREATE INDEX IF NOT
+ * EXISTS). Soft-delete via `deletedAt` (sem DELETE físico).
+ *
+ * **Não-regressão:** Rev. 2194 (remoção Conferência Contabilidade)
+ * intacta — esta tela é módulo NOVO e separado, não toca FolhaPagamento.
+ * Rev. 2193/2192/2191/2190 (EPI) intactas. Folha de Pagamento, Espelho
+ * de Ponto, Vale Alimentação, Banco de Horas: nenhum arquivo tocado.
+ *
  * Rev. 2194 — **REMOÇÃO DE FEATURE · Bloco "Conferência com
  * Contabilidade" removido da aba Folha de Pagamento (UI + dialog
  * de alerta + estados).**

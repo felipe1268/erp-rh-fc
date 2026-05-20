@@ -55,6 +55,7 @@ import { TRPCError } from "@trpc/server";
 import { importExcelRouter } from "./routers/importExcel";
 import { payrollParsersRouter } from "./routers/payrollParsers";
 import { folhaPagamentoRouter } from "./routers/folhaPagamento";
+import { encargosSociaisRouter } from "./routers/encargosSociais";
 import { controleDocumentosRouter } from "./routers/controleDocumentos";
 import { getAvailableTables, getTableStructure, importTableData } from "./routers/importData";
 import { processosTrabRouter } from "./routers/processosTrabalhistas";
@@ -1286,6 +1287,9 @@ export const appRouter = router({
   // FOLHA DE PAGAMENTO (novo módulo redesenhado)
   // ============================================================
   folha: folhaPagamentoRouter,
+
+  // Rev. 2195: Encargos Sociais sobre Folha (upload DCTFWeb + FGTS)
+  encargosSociais: encargosSociaisRouter,
 
   // ============================================================
   // FECHAMENTO DE PONTO (upload DIXI, cálculo horas, inconsistências)

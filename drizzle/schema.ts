@@ -1657,6 +1657,37 @@ export const folhaLancamentos = pgTable("folha_lancamentos", {
         index("folha_lanc_company_mes").on(table.companyId, table.mesReferencia),
 ]);
 
+// Rev. 2195: Encargos Sociais sobre Folha — upload e conferência de
+// guias DCTFWeb (DARF unificada INSS/IRRF/Terceiros) e FGTS Digital
+// que a contabilidade terceirizada envia mensalmente.
+export const encargosSociaisDocumentos = pgTable("encargos_sociais_documentos", {
+        id: serial().notNull(),
+        companyId: integer().notNull(),
+        competencia: varchar({ length: 7 }).notNull(), // YYYY-MM
+        tipo: varchar({ length: 30 }).notNull(), // 'dctfweb' | 'fgts' | 'outro'
+        numeroDocumento: varchar({ length: 60 }),
+        dataVencimento: varchar({ length: 10 }), // DD/MM/YYYY ou YYYY-MM-DD
+        valorTotal: varchar({ length: 20 }).notNull().default('0'),
+        pdfUrl: text().notNull(),
+        pdfFileName: varchar({ length: 255 }),
+        itensJson: text(), // JSON array: [{ codigo, denominacao, principal, multa, juros, total, observacao }]
+        status: varchar({ length: 30 }).default('importado').notNull(), // 'importado' | 'validado' | 'enviado_financeiro' | 'pago'
+        uploadedPor: varchar({ length: 255 }),
+        uploadedEm: timestamp({ mode: 'string' }).defaultNow(),
+        validadoPor: varchar({ length: 255 }),
+        validadoEm: timestamp({ mode: 'string' }),
+        enviadoFinanceiroPor: varchar({ length: 255 }),
+        enviadoFinanceiroEm: timestamp({ mode: 'string' }),
+        observacoes: text(),
+        deletedAt: timestamp({ mode: 'string' }),
+        createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
+        updatedAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
+},
+(table) => [
+        index("encargos_sociais_company_comp").on(table.companyId, table.competencia),
+        index("encargos_sociais_tipo").on(table.tipo),
+]);
+
 export const fornecedoresEpi = pgTable("fornecedores_epi", {
         id: serial().notNull(),
         companyId: integer().notNull(),

@@ -1768,6 +1768,41 @@ Regras:
           console.log(`[SyncSchema+] Rev. 2192: colunas assinatura_responsavel_{url,nome,em} garantidas em epi_deliveries.`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.2192 epi_deliveries.assinatura_responsavel_*:`, e?.message || e); }
 
+        // Rev. 2195: Encargos Sociais sobre Folha — tabela nova pra upload
+        // de guias DCTFWeb (DARF INSS/IRRF/Terceiros) e FGTS Digital que
+        // a contabilidade terceirizada envia mensalmente. Bloco isolado
+        // padrão Rev. 2180 (DO $$ EXCEPTION WHEN OTHERS falha silente em
+        // DBs antigos).
+        try {
+          await db.execute(sql`CREATE TABLE IF NOT EXISTS encargos_sociais_documentos (
+            id SERIAL NOT NULL,
+            company_id INTEGER NOT NULL,
+            competencia VARCHAR(7) NOT NULL,
+            tipo VARCHAR(30) NOT NULL,
+            numero_documento VARCHAR(60),
+            data_vencimento VARCHAR(10),
+            valor_total VARCHAR(20) NOT NULL DEFAULT '0',
+            pdf_url TEXT NOT NULL,
+            pdf_file_name VARCHAR(255),
+            itens_json TEXT,
+            status VARCHAR(30) NOT NULL DEFAULT 'importado',
+            uploaded_por VARCHAR(255),
+            uploaded_em TIMESTAMP DEFAULT NOW(),
+            validado_por VARCHAR(255),
+            validado_em TIMESTAMP,
+            enviado_financeiro_por VARCHAR(255),
+            enviado_financeiro_em TIMESTAMP,
+            observacoes TEXT,
+            deleted_at TIMESTAMP,
+            created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+            PRIMARY KEY (id)
+          )`);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS encargos_sociais_company_comp ON encargos_sociais_documentos (company_id, competencia)`);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS encargos_sociais_tipo ON encargos_sociais_documentos (tipo)`);
+          console.log(`[SyncSchema+] Rev. 2195: tabela encargos_sociais_documentos garantida.`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.2195 encargos_sociais_documentos:`, e?.message || e); }
+
       } catch (e: any) { console.error(`[SyncSchema+] ERROR:`, e?.message || e); }
     }).catch(e => console.error("[SyncSchema] Falha ao iniciar:", e));
     // Garantir colunas críticas adicionadas recentemente que o SyncSchema possa ter ignorado

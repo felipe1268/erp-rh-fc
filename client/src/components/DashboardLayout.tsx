@@ -92,6 +92,7 @@ const menuSectionsRHDP: MenuSection[] = [
       { icon: Clock, label: "Fechamento de Ponto", path: "/fechamento-ponto" },
       { icon: FileText, label: "Espelho de Ponto", path: "/espelho-ponto" },
       { icon: Wallet, label: "Folha de Pagamento", path: "/folha-pagamento" },
+      { icon: Calculator, label: "Encargos Sociais", path: "/encargos-sociais" },
       { icon: FolderOpen, label: "Controle de Documentos", path: "/controle-documentos" },
       { icon: UtensilsCrossed, label: "Vale Alimentação", path: "/vale-alimentacao" },
       { icon: Clock, label: "Solicitação de Hora Extra", path: "/solicitacao-he" },

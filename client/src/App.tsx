@@ -95,6 +95,7 @@ const ObraEfetivo = lazy(() => import("./pages/ObraEfetivo"));
 const FechamentoPonto = lazy(() => import("./pages/FechamentoPonto"));
 const EspelhoPonto = lazy(() => import("./pages/EspelhoPonto"));
 const FolhaPagamento = lazy(() => import("./pages/FolhaPagamento"));
+const EncargosSociais = lazy(() => import("./pages/EncargosSociais"));
 const PayrollCompetencias = lazy(() => import("./pages/PayrollCompetencias"));
 const ControleDocumentos = lazy(() => import("./pages/ControleDocumentos"));
 const ValeAlimentacao = lazy(() => import("./pages/ValeAlimentacao"));
@@ -373,6 +374,7 @@ function Router() {
         <Route path={"/fechamento-ponto"} component={() => <RouteGuard component={FechamentoPonto} route="/fechamento-ponto" />} />
         <Route path={"/espelho-ponto"} component={() => <RouteGuard component={EspelhoPonto} route="/espelho-ponto" />} />
         <Route path={"/folha-pagamento"} component={() => <RouteGuard component={FolhaPagamento} route="/folha-pagamento" />} />
+        <Route path={"/encargos-sociais"} component={() => <RouteGuard component={EncargosSociais} route="/folha-pagamento" />} />
         <Route path={"/gestao-competencias"} component={() => <RouteGuard component={PayrollCompetencias} route="/folha-pagamento" />} />
         <Route path={"/solicitacao-mdo"} component={() => <RouteGuard component={SolicitacaoMDO} route="/solicitacao-mdo" />} />
         <Route path={"/controle-documentos"} component={() => <RouteGuard component={ControleDocumentos} route="/controle-documentos" />} />
