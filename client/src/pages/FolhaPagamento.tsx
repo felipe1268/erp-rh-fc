@@ -4801,25 +4801,23 @@ export default function FolhaPagamento() {
                                                     <td className="text-right py-2 px-2 font-bold text-purple-700">
                                                       <span className="inline-flex items-center gap-1">
                                                         {formatBRL(Number(e.valorHETotal))}
-                                                        {isFirst && (
-                                                          <button
-                                                            type="button"
-                                                            title="Memorial de cálculo"
-                                                            onClick={(ev) => {
-                                                              ev.stopPropagation();
-                                                              const perId = Number(p.id);
-                                                              if (!empKey || !perId) {
-                                                                toast.error(`Não foi possível abrir o memorial: dados ausentes (período=${perId}, funcionário=${empKey})`);
-                                                                return;
-                                                              }
-                                                              setMemorialHePeriodId(perId);
-                                                              setMemorialEmployeeId(empKey);
-                                                            }}
-                                                            className="text-purple-400 hover:text-purple-700 transition-colors ml-0.5 cursor-pointer"
-                                                          >
-                                                            <FileText className="h-3.5 w-3.5" />
-                                                          </button>
-                                                        )}
+                                                        <button
+                                                          type="button"
+                                                          title="Memorial de cálculo"
+                                                          onClick={(ev) => {
+                                                            ev.stopPropagation();
+                                                            const perId = Number(p.id);
+                                                            if (!empKey || !perId) {
+                                                              toast.error(`Não foi possível abrir o memorial: dados ausentes (período=${perId}, funcionário=${empKey})`);
+                                                              return;
+                                                            }
+                                                            setMemorialHePeriodId(perId);
+                                                            setMemorialEmployeeId(empKey);
+                                                          }}
+                                                          className="text-purple-400 hover:text-purple-700 transition-colors ml-0.5 cursor-pointer"
+                                                        >
+                                                          <FileText className="h-3.5 w-3.5" />
+                                                        </button>
                                                       </span>
                                                     </td>
                                                     {hasPlanilha && (() => {

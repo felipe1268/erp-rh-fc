@@ -1,6 +1,31 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2181 — **MELHORIA UX · Botão Memorial de Cálculo agora aparece
+ * em TODAS as linhas do Relatório de Períodos HE (Folha de Pagamento),
+ * não só na primeira do grupo do funcionário.**
+ *
+ * Lilian: "COLOQUE O BOTAO DE MEMORIAL DE CALCULO NAS HORAS SEM
+ * SOLICITAÇÃO TAMBEM". Na Rev. 2179 (split de HE por origem
+ * Aprovada/Sem solicitação em até 2 linhas por funcionário), o
+ * ícone Memorial ficou gateado por `isFirst` (só renderizava na 1ª
+ * linha do grupo, geralmente a "Aprovada"). Resultado: para
+ * funcionários com horas mistas, a 2ª linha ("Sem solicitação") não
+ * tinha botão pra abrir o memorial — embora o memorial cubra o
+ * funcionário inteiro (não filtra por origem).
+ *
+ * **Fix em `client/src/pages/FolhaPagamento.tsx:4804`:** removido o
+ * gate `{isFirst && (...)}` ao redor do `<button>` Memorial. Cada
+ * linha (Aprovada e Sem solicitação) agora exibe o ícone roxo do
+ * memorial ao lado do valor — clicando, abre o mesmo dialog com
+ * detalhamento dia-a-dia do funcionário inteiro (memorial não muda
+ * por origem; ele lista todos os dias com HE no período).
+ *
+ * **Backend:** zero mudanças. `R-001/R-007/R-010:** OK — só client-side.
+ *
+ * Arquivos: `client/src/pages/FolhaPagamento.tsx`, `shared/version.ts`,
+ * `shared/changelog.ts`, `replit.md`, `replit-history.md`.
+ *
  * Rev. 2180 — **HOTFIX BLOQUEANTE · "Calcular Vale" rodava e mostrava
  * o resultado uma vez, mas ao recarregar a tela o vale "sumia"
  * (etapa 1 voltava pra 0%, sem `valeGeradoEm`).**
