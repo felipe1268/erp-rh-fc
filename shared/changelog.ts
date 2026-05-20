@@ -1,6 +1,56 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2196 — **MELHORIA UX · Avatar do colaborador no Relatório de
+ * Períodos HE virou clicável: abre lightbox com foto ampliada pra
+ * análise facial.**
+ *
+ * Lilian: "quero poder clicar na foto e aumentar a foto para melhor
+ * analise d quem é a pessoa" + screenshot da tela `/folha-pagamento`
+ * mostrando a tabela de Períodos HE com avatares 32px (Rev. 2189) na
+ * coluna esquerda da lista de funcionários (Antonio Wagner / Bruno
+ * Luis / Caio Augusto etc).
+ *
+ * **Contexto:** Rev. 2189 adicionou avatar 32px circular do colaborador
+ * (`employees.fotoUrl`) à esquerda do nome no Relatório de Períodos HE
+ * pra Lilian conferir visualmente quem está com hora extra. Mas a foto
+ * fica tão pequena (32×32) que não dá pra reconhecer rosto — só serve
+ * pra "marcar presença" do colaborador. Lilian pediu poder clicar pra
+ * ampliar.
+ *
+ * **Fix (Client `FolhaPagamento.tsx` — único arquivo tocado):**
+ * 1. **State `fotoZoom`** (L520): `useState<{url, nome} | null>(null)`,
+ *    nomeado como Rev. 2196 inline.
+ * 2. **`<img>` do avatar virou clicável** (L4951-4953): adicionado
+ *    `cursor-zoom-in`, `hover:ring-2 hover:ring-blue-400 transition`,
+ *    `title="Clique para ampliar"` e `onClick` que faz
+ *    `setFotoZoom({url: first.fotoUrl, nome: first.nomeCompleto || ...})`.
+ *    Fallback (sem foto, iniciais) NÃO ganha click — sem sentido ampliar
+ *    iniciais.
+ * 3. **Dialog/Lightbox** (L7672-7687, logo antes do `</div>` final):
+ *    `<Dialog open={!!fotoZoom}>` com `DialogContent
+ *    max-w-md p-0 bg-black/95 border-none`, header pequeno com nome do
+ *    colaborador em branco e `<img>` central `max-w-full max-h-[70vh]
+ *    rounded-lg shadow-2xl object-contain bg-white`. Fechamento via
+ *    backdrop click (`onOpenChange(false)`) ou X do shadcn.
+ *
+ * **Decisões técnicas:**
+ * - Lightbox simples sem zoom/pan/download — Lilian só precisa ver rosto
+ *   maior. Se ela pedir depois (zoom 2x, próximo/anterior na lista),
+ *   evoluir em revisão futura.
+ * - `max-w-md` (~448px) é suficiente: fotos do RH geralmente são 3x4
+ *   pequenas, ampliar mais ficaria pixelado. Fundo preto faz a foto
+ *   sobressair.
+ * - Reaproveitada a estrutura `<Dialog>` do shadcn já importada na página
+ *   (zero novos imports).
+ *
+ * **Não-regressão:** Rev. 2189 (avatar 32px) intacta — só ganhou
+ * interatividade. Rev. 2195 (Encargos Sociais), Rev. 2194 (remoção
+ * Conferência) intactas — arquivos diferentes.
+ *
+ * **R-001/R-007/R-010:** ✅ OK — só client, zero server, zero schema,
+ * zero migration.
+ *
  * Rev. 2195 — **NOVA FEATURE · Tela "Encargos Sociais sobre Folha"
  * pra upload e conferência das guias DCTFWeb (DARF unificada
  * INSS/IRRF/Terceiros) e FGTS Digital enviadas pela contabilidade

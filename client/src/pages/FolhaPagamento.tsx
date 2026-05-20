@@ -513,6 +513,8 @@ export default function FolhaPagamento() {
   const [detalheAfericaoEmpId, setDetalheAfericaoEmpId] = useState<number | null>(null);
   const [espelhoPopupEmpId, setEspelhoPopupEmpId] = useState<number | null>(null);
   const [espelhoPopupEmpNome, setEspelhoPopupEmpNome] = useState("");
+  // Rev. 2196 — lightbox da foto do colaborador (clique no avatar amplia)
+  const [fotoZoom, setFotoZoom] = useState<{ url: string; nome: string } | null>(null);
   const [memorialHePeriodId, setMemorialHePeriodId] = useState<number | null>(null);
   const [memorialEmployeeId, setMemorialEmployeeId] = useState<number | null>(null);
   // Rev. 2184 — drill-down do badge "✅ Aprovada" do Relatório de Períodos HE
@@ -4942,7 +4944,9 @@ export default function FolhaPagamento() {
                                                             <img
                                                               src={first.fotoUrl}
                                                               alt={first.nomeCompleto || `ID ${empKey}`}
-                                                              className="w-8 h-8 rounded-full object-cover border border-gray-200 flex-shrink-0 bg-gray-50"
+                                                              title="Clique para ampliar"
+                                                              className="w-8 h-8 rounded-full object-cover border border-gray-200 flex-shrink-0 bg-gray-50 cursor-zoom-in hover:ring-2 hover:ring-blue-400 transition"
+                                                              onClick={() => setFotoZoom({ url: first.fotoUrl, nome: first.nomeCompleto || first.nome || `ID ${empKey}` })}
                                                               onError={(ev) => { (ev.currentTarget as HTMLImageElement).style.display = 'none'; }}
                                                             />
                                                           ) : (
@@ -7657,6 +7661,25 @@ export default function FolhaPagamento() {
                 {espelhoSaveMut.isPending ? <><RefreshCw className="h-4 w-4 mr-1.5 animate-spin" />Salvando…</> : <><Save className="h-4 w-4 mr-1.5" />Salvar Ajuste</>}
               </Button>
             </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Rev. 2196 — Lightbox da foto do colaborador (clique no avatar
+            do Relatório de Períodos HE amplia pra análise facial). */}
+        <Dialog open={!!fotoZoom} onOpenChange={(o) => !o && setFotoZoom(null)}>
+          <DialogContent className="max-w-md p-0 overflow-hidden bg-black/95 border-none">
+            <DialogHeader className="px-4 pt-3 pb-2">
+              <DialogTitle className="text-white text-sm font-medium">{fotoZoom?.nome}</DialogTitle>
+            </DialogHeader>
+            {fotoZoom && (
+              <div className="flex items-center justify-center p-4 pt-0">
+                <img
+                  src={fotoZoom.url}
+                  alt={fotoZoom.nome}
+                  className="max-w-full max-h-[70vh] rounded-lg shadow-2xl object-contain bg-white"
+                />
+              </div>
+            )}
           </DialogContent>
         </Dialog>
 
