@@ -1,6 +1,54 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2186 — **MELHORIA UX + HOTFIX VISUAL · Lista de Entregas de
+ * EPI mostrava o ícone "olhinho" (Ver ficha assinada) em TODAS as
+ * linhas, inclusive nas sem assinatura — usuário (Sandra) perdia
+ * controle de quais entregas ainda precisavam ser assinadas. Fix:
+ * (1) o olhinho só aparece quando `d.assinaturaUrl` está presente
+ * (fonte de verdade da assinatura do funcionário); (2) entregas
+ * sem assinatura mostram ícone âmbar ⚠ "Aguardando assinatura";
+ * (3) novo filtro acima da tabela (Todas / ✓ Assinadas / ⚠ Não
+ * assinadas) com contagem em tempo real.**
+ *
+ * Sandra: "Nas fichas de entrega de epis antes só mostrava o
+ * olhinho quando estava assinado, agora estão todos mostrando esse
+ * olhinho mesmo sem assinatura. Teria como voltar aparecer apenas
+ * quando tiver assinado ou algum outro filtro para achar os não
+ * assinados? para garantir que todos documetnos foram assinados.."
+ *
+ * **Causa-raiz:** condição original do botão era `d.fichaUrl &&`,
+ * mas `fichaUrl` passou a ser populado também para fichas RECÉM
+ * geradas porém ainda não assinadas (a URL do template pré-coleta
+ * passou a ser salva para preview). Com isso o olhinho virou ruído
+ * visual — toda linha mostrava como se já estivesse assinada.
+ *
+ * **Fix (Client — `client/src/pages/Epis.tsx`):**
+ *
+ * 1. **Eye condicionado à assinatura real** (L2571 linha única +
+ *    L2501 linha agrupada): `d.assinaturaUrl && d.fichaUrl` →
+ *    botão verde "Ver ficha assinada". Caso contrário renderiza
+ *    `<AlertTriangle class="text-amber-500">` com tooltip
+ *    "Aguardando assinatura do funcionário".
+ * 2. **Filtro tri-state** acima da tabela (L2348-2371): state
+ *    `filterAssinatura: "todas" | "assinadas" | "nao_assinadas"`,
+ *    aplicado no `useMemo filteredDeliveries` ANTES do filtro de
+ *    busca. Contagem por categoria exibida ao lado de cada botão.
+ *
+ * **Não-regressão:** comportamento original (eye só quando
+ * assinado) restaurado bit-a-bit; agora estruturado em `assinaturaUrl`
+ * (que é o que o backend popula via webhook FCSign no
+ * complete-signature), e não em `fichaUrl` (que vira "tem alguma
+ * arte salva, assinada ou não").
+ *
+ * **Arquivos:** `client/src/pages/Epis.tsx` (L311-313 state,
+ * L564-578 useMemo, L2348-2371 filtro UI, L2500-2510 grupo,
+ * L2568-2581 linha única).
+ *
+ * **R-001/R-007/R-010:** OK — zero mudanças no server / schema.
+ *
+ * ---
+ *
  * Rev. 2185 — **HOTFIX BLOQUEANTE · Filtro por OBRA no Relatório de
  * Períodos HE mostrava linha "Aprovada" sob obra ERRADA quando o
  * funcionário tinha ponto em outra obra no mesmo período. Fix:

@@ -306,6 +306,8 @@ export default function Epis() {
   const [transItens, setTransItens] = useState<Array<{ epiId: string; quantidade: number }>>([]);
   const [transSaving, setTransSaving] = useState(false);
   const [filterObraEstoque, setFilterObraEstoque] = useState<string>("todas");
+  // Rev. 2186 — filtro de assinatura na lista de Entregas de EPI
+  const [filterAssinatura, setFilterAssinatura] = useState<"todas" | "assinadas" | "nao_assinadas">("todas");
   const [showTransferDialog, setShowTransferDialog] = useState(false);
   const [epiPickerOpen, setEpiPickerOpen] = useState(false);
   const [epiPickerSearch, setEpiPickerSearch] = useState("");
@@ -557,13 +559,20 @@ export default function Epis() {
   }, [filterCategoria, episList]);
 
   const filteredDeliveries = useMemo(() => {
-    if (!search) return deliveriesList;
+    let arr = deliveriesList as any[];
+    // Rev. 2186 — filtro por status de assinatura (fonte de verdade: assinaturaUrl do funcionário)
+    if (filterAssinatura === "assinadas") {
+      arr = arr.filter((d: any) => !!d.assinaturaUrl);
+    } else if (filterAssinatura === "nao_assinadas") {
+      arr = arr.filter((d: any) => !d.assinaturaUrl);
+    }
+    if (!search) return arr;
     const s = removeAccents(search);
-    return deliveriesList.filter((d: any) =>
+    return arr.filter((d: any) =>
       (d.nomeEpi || "").toLowerCase().includes(s) ||
       (d.nomeFunc || "").toLowerCase().includes(s)
     );
-  }, [deliveriesList, search]);
+  }, [deliveriesList, search, filterAssinatura]);
 
   const formatCurrency = (val: any) => {
     if (!val) return "—";
@@ -2333,6 +2342,30 @@ export default function Epis() {
             </Card>
           ) : (
             <Card>
+              {/* Rev. 2186 — filtro rápido por status de assinatura */}
+              <div className="flex flex-wrap items-center gap-2 px-4 py-3 border-b bg-slate-50/60">
+                <span className="text-xs font-medium text-slate-600 mr-1">Assinatura:</span>
+                {([
+                  { key: "todas", label: "Todas", cls: "bg-slate-200 text-slate-800 border-slate-300" },
+                  { key: "assinadas", label: "✓ Assinadas", cls: "bg-emerald-100 text-emerald-700 border-emerald-300" },
+                  { key: "nao_assinadas", label: "⚠ Não assinadas", cls: "bg-amber-100 text-amber-800 border-amber-300" },
+                ] as const).map(opt => (
+                  <button
+                    key={opt.key}
+                    onClick={() => setFilterAssinatura(opt.key as any)}
+                    className={`px-3 py-1 rounded-md text-xs font-medium border transition-colors ${
+                      filterAssinatura === opt.key ? opt.cls : "bg-white text-slate-500 border-slate-200 hover:bg-slate-100"
+                    }`}
+                  >
+                    {opt.label}
+                    {opt.key !== "todas" && (
+                      <span className="ml-1.5 text-[10px] opacity-80">
+                        ({deliveriesList.filter((d: any) => opt.key === "assinadas" ? !!d.assinaturaUrl : !d.assinaturaUrl).length})
+                      </span>
+                    )}
+                  </button>
+                ))}
+              </div>
               {selectedDeliveryIds.size > 0 && (
                 <div className="flex items-center gap-3 px-4 py-2 bg-blue-50 border-b">
                   <span className="text-sm font-medium text-blue-800">{selectedDeliveryIds.size} selecionada{selectedDeliveryIds.size !== 1 ? "s" : ""}</span>
@@ -2485,6 +2518,17 @@ export default function Epis() {
                                       onClick={() => { setFichaSignature(null); setResponsavelSignature(null); setFichaDelivery({ ...first, _grupoItems: items }); setViewMode("ficha_epi"); }}>
                                       <FileText className="h-3.5 w-3.5 text-blue-600" />
                                     </Button>
+                                    {/* Rev. 2186 — eye/aguardando em linhas agrupadas (paridade com linhas únicas) */}
+                                    {items.some((d: any) => d.assinaturaUrl) && first.fichaUrl ? (
+                                      <Button size="icon" variant="ghost" className="h-7 w-7" title="Ver ficha assinada"
+                                        onClick={() => window.open(first.fichaUrl, "_blank")}>
+                                        <Eye className="h-3.5 w-3.5 text-green-600" />
+                                      </Button>
+                                    ) : (
+                                      <span title="Aguardando assinatura do funcionário" className="inline-flex items-center justify-center h-7 w-7 text-amber-500">
+                                        <AlertTriangle className="h-3.5 w-3.5" />
+                                      </span>
+                                    )}
                                     <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" title="Remover entrega" onClick={() => {
                                       if (confirm(`Remover ${items.length} EPIs desta entrega? O estoque será devolvido.`)) {
                                         items.forEach((d: any) => deleteDeliveryMut.mutate({ id: d.id, epiId: d.epiId, quantidade: d.quantidade }));
@@ -2553,11 +2597,19 @@ export default function Epis() {
                                   onClick={() => { setFichaSignature(null); setResponsavelSignature(null); setFichaDelivery(d); setViewMode("ficha_epi"); }}>
                                   <FileText className="h-3.5 w-3.5 text-blue-600" />
                                 </Button>
-                                {d.fichaUrl && (
+                                {/* Rev. 2186 — eye só aparece quando há assinatura do funcionário
+                                    (antes usava d.fichaUrl, que passou a ser populado também
+                                    para fichas SEM assinatura, criando falso-positivo visual). */}
+                                {d.assinaturaUrl && d.fichaUrl && (
                                   <Button size="icon" variant="ghost" className="h-7 w-7" title="Ver ficha assinada"
                                     onClick={() => window.open(d.fichaUrl, "_blank")}>
                                     <Eye className="h-3.5 w-3.5 text-green-600" />
                                   </Button>
+                                )}
+                                {!d.assinaturaUrl && (
+                                  <span title="Aguardando assinatura do funcionário" className="inline-flex items-center justify-center h-7 w-7 text-amber-500">
+                                    <AlertTriangle className="h-3.5 w-3.5" />
+                                  </span>
                                 )}
                                 <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" title="Remover entrega" onClick={() => {
                                   if (confirm("Remover esta entrega? O estoque será devolvido.")) {
