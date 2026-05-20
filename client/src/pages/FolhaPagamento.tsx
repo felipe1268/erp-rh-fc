@@ -516,6 +516,11 @@ export default function FolhaPagamento() {
   const [espelhoPopupEmpNome, setEspelhoPopupEmpNome] = useState("");
   const [memorialHePeriodId, setMemorialHePeriodId] = useState<number | null>(null);
   const [memorialEmployeeId, setMemorialEmployeeId] = useState<number | null>(null);
+  // Rev. 2184 — drill-down do badge "✅ Aprovada" do Relatório de Períodos HE
+  // para listar as solicitações HE aprovadas que cobrem o funcionário no período.
+  const [solicAprovDialog, setSolicAprovDialog] = useState<
+    { empId: number; empNome: string; dataInicio: string; dataFim: string } | null
+  >(null);
   const [espelhoEditDate, setEspelhoEditDate] = useState<string | null>(null);
   const [espelhoEditRecord, setEspelhoEditRecord] = useState<any>(null);
   const [espelhoEditForm, setEspelhoEditForm] = useState({ entrada1: "", saida1: "", entrada2: "", saida2: "", justificativa: "", motivoAjuste: "Correção manual" });
@@ -743,6 +748,13 @@ export default function FolhaPagamento() {
   const memorialQ = trpc.horasExtras.memorialCalculo.useQuery(
     { hePeriodId: memorialHePeriodId!, employeeId: memorialEmployeeId! },
     { enabled: !!memorialHePeriodId && !!memorialEmployeeId }
+  );
+
+  // Rev. 2184 — histórico de solicitações HE do funcionário (reusa procedure
+  // existente). Filtragem por data + status='aprovada' é feita client-side.
+  const solicAprovQ = trpc.heSolicitacoes.historyByEmployee.useQuery(
+    { companyId, employeeId: solicAprovDialog?.empId || 0 },
+    { enabled: !!companyId && !!solicAprovDialog?.empId }
   );
 
   const espelhoSaveMut = trpc.fechamentoPonto.manualEntry.useMutation({
@@ -4919,7 +4931,24 @@ export default function FolhaPagamento() {
                                                     )}
                                                     <td className="text-center py-2 px-2">
                                                       {origem === "aprovada" ? (
-                                                        <Badge className="text-[10px] bg-green-100 text-green-800 border border-green-200">✅ Aprovada</Badge>
+                                                        // Rev. 2184 — clicável: abre dialog com a(s) solicitação(ões)
+                                                        // HE aprovada(s) que cobrem este funcionário no período.
+                                                        <button
+                                                          type="button"
+                                                          title="Ver solicitação(ões) HE aprovada(s) que cobrem este período"
+                                                          onClick={(ev) => {
+                                                            ev.stopPropagation();
+                                                            setSolicAprovDialog({
+                                                              empId: Number(empKey),
+                                                              empNome: first.nomeCompleto || first.nome || `ID ${empKey}`,
+                                                              dataInicio: String(p.dataInicio).slice(0, 10),
+                                                              dataFim: String(p.dataFim).slice(0, 10),
+                                                            });
+                                                          }}
+                                                          className="focus:outline-none focus:ring-2 focus:ring-green-300 rounded"
+                                                        >
+                                                          <Badge className="text-[10px] bg-green-100 text-green-800 border border-green-200 cursor-pointer hover:bg-green-200">✅ Aprovada</Badge>
+                                                        </button>
                                                       ) : (
                                                         <Badge className="text-[10px] bg-amber-100 text-amber-800 border border-amber-200">⚠️ Sem solicitação</Badge>
                                                       )}
@@ -5504,6 +5533,92 @@ export default function FolhaPagamento() {
                     </div>
                   );
                 })() : null}
+              </div>
+            </DialogContent>
+          </Dialog>
+
+          {/* Rev. 2184 — Dialog: Solicitações HE aprovadas que cobrem o funcionário no período. */}
+          <Dialog open={!!solicAprovDialog} onOpenChange={(open) => { if (!open) setSolicAprovDialog(null); }}>
+            <DialogContent className="max-w-3xl max-h-[88dvh] flex flex-col p-0 gap-0 overflow-hidden" resizable={false}>
+              <DialogHeader className="px-5 sm:px-6 py-4 border-b shrink-0 bg-gradient-to-r from-green-700 via-emerald-600 to-teal-600 text-white">
+                <DialogTitle className="flex items-center gap-3 text-white">
+                  <div className="h-10 w-10 rounded-xl bg-white/15 backdrop-blur flex items-center justify-center shrink-0">
+                    <CheckCircle2 className="h-5 w-5" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-base sm:text-lg font-semibold leading-tight">Solicitações HE Aprovadas</div>
+                    <div className="text-xs font-normal text-green-100/90 leading-tight truncate">
+                      {solicAprovDialog?.empNome} · {solicAprovDialog ? `${fmtDateBR(solicAprovDialog.dataInicio)} → ${fmtDateBR(solicAprovDialog.dataFim)}` : ""}
+                    </div>
+                  </div>
+                </DialogTitle>
+              </DialogHeader>
+              <div className="flex-1 overflow-y-auto min-h-0 bg-slate-50/60 p-4 sm:p-6">
+                {solicAprovQ.isLoading ? (
+                  <div className="flex flex-col items-center justify-center py-16 text-muted-foreground gap-3">
+                    <div className="h-10 w-10 rounded-full border-4 border-green-100 border-t-green-600 animate-spin" />
+                    <p className="text-sm">Carregando solicitações...</p>
+                  </div>
+                ) : solicAprovQ.error ? (
+                  <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 flex items-start gap-2">
+                    <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+                    <span>Erro ao carregar solicitações: {solicAprovQ.error.message}</span>
+                  </div>
+                ) : (() => {
+                  const di = solicAprovDialog?.dataInicio || "";
+                  const df = solicAprovDialog?.dataFim || "";
+                  const todas = (solicAprovQ.data || []) as any[];
+                  const aprovadas = todas.filter((s) => {
+                    const st = String(s.status || "").toLowerCase();
+                    const heSt = String(s.heStatus || "").toLowerCase();
+                    if (st !== "aprovada" && heSt !== "aprovada") return false;
+                    const d = String(s.dataSolicitacao || "").slice(0, 10);
+                    return d >= di && d <= df;
+                  });
+                  if (aprovadas.length === 0) {
+                    return (
+                      <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+                        Nenhuma solicitação HE aprovada encontrada para este funcionário no intervalo do período.
+                      </div>
+                    );
+                  }
+                  return (
+                    <div className="space-y-3">
+                      {aprovadas.map((s: any) => (
+                        <div key={s.id} className="bg-white rounded-xl border border-green-200 shadow-sm overflow-hidden">
+                          <div className="bg-gradient-to-r from-green-50 to-emerald-50 px-4 py-2.5 border-b border-green-200 flex items-center justify-between gap-2 flex-wrap">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <Badge className="text-[10px] bg-green-600 text-white">#{s.id}</Badge>
+                              <span className="font-semibold text-sm text-green-900">{fmtDateBR(s.dataSolicitacao)}</span>
+                              {s.horaInicio && s.horaFim && (
+                                <span className="text-xs text-green-700 tabular-nums">{s.horaInicio}–{s.horaFim}</span>
+                              )}
+                              {s.horasRealizadas && (
+                                <span className="text-[11px] text-green-700">· {s.horasRealizadas}h realizadas</span>
+                              )}
+                            </div>
+                            <Badge className="text-[10px] bg-green-100 text-green-800 border border-green-200">✅ {String(s.status || "aprovada")}</Badge>
+                          </div>
+                          <div className="px-4 py-3 space-y-1.5 text-xs">
+                            {s.obraNome && (
+                              <p><span className="font-medium text-slate-600 inline-block min-w-[100px]">Obra:</span> {s.obraNome}</p>
+                            )}
+                            <p><span className="font-medium text-slate-600 inline-block min-w-[100px]">Motivo:</span> {s.motivo || "—"}</p>
+                            <p><span className="font-medium text-slate-600 inline-block min-w-[100px]">Solicitado por:</span> {s.solicitadoPor || "—"}</p>
+                            <p>
+                              <span className="font-medium text-slate-600 inline-block min-w-[100px]">Aprovado por:</span>{" "}
+                              {s.aprovadoPor || "—"}
+                              {s.aprovadoEm && <span className="text-muted-foreground"> · em {fmtDateBR(String(s.aprovadoEm).slice(0,10))}</span>}
+                            </p>
+                            {s.observacaoAdmin && (
+                              <p><span className="font-medium text-slate-600 inline-block min-w-[100px]">Obs. admin:</span> {s.observacaoAdmin}</p>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })()}
               </div>
             </DialogContent>
           </Dialog>

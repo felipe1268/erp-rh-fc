@@ -1,6 +1,78 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2184 — **NOVA FEATURE · Drill-down do badge "✅ Aprovada"
+ * no Relatório de Períodos HE: clicar abre dialog listando as
+ * solicitações HE aprovadas que cobrem o funcionário no período.**
+ *
+ * Lilian: "nas aprovadas, quero poder clicar e ver a solicitação
+ * que ela foi aprovada".
+ *
+ * Continuação direta das Rev. 2179 (split por origem aprovada /
+ * sem_solicitacao), 2182 (cards KPI) e 2183 (filtro por obra) —
+ * agora cada linha "✅ Aprovada" vira um ponto de entrada para
+ * auditoria da solicitação original.
+ *
+ * **Backend:** zero mudanças. Reusa procedure existente
+ * `heSolicitacoes.historyByEmployee` ({companyId, employeeId}) que
+ * retorna o histórico completo de solicitações HE do funcionário
+ * com JOIN em `he_solicitacao_funcionarios` + `obras` (id, data,
+ * horários, motivo, status, status do funcionário no bloco, obra,
+ * solicitadoPor, aprovadoPor, aprovadoEm, motivoRejeicao,
+ * observacaoAdmin, horasRealizadas). Filtragem por período e
+ * status='aprovada' é feita client-side — barato porque histórico
+ * de um funcionário é tipicamente <50 registros.
+ *
+ * **Frontend — `client/src/pages/FolhaPagamento.tsx`:**
+ * 1. Novo state `solicAprovDialog: { empId, empNome, dataInicio,
+ *    dataFim } | null` (L522-526).
+ * 2. Query `trpc.heSolicitacoes.historyByEmployee.useQuery` (L756-
+ *    761), gated por `!!companyId && !!solicAprovDialog?.empId`.
+ * 3. Badge "✅ Aprovada" envolto em `<button onClick>` (L4936-4954)
+ *    que dispara `setSolicAprovDialog({empId: empKey, empNome,
+ *    dataInicio: p.dataInicio, dataFim: p.dataFim})`. Mantém o
+ *    `ev.stopPropagation()` p/ não disparar handlers de linha.
+ *    Visual: ganha `cursor-pointer` + hover `bg-green-200` +
+ *    `focus:ring-2 ring-green-300` no wrapper.
+ * 4. Novo `<Dialog>` (L5543+) — header gradiente verde, mostra
+ *    nome do funcionário + período no subtítulo. Body filtra
+ *    `solicAprovQ.data` por `(status||heStatus)=='aprovada'` AND
+ *    `dataSolicitacao` ∈ [dataInicio, dataFim]. Renderiza lista de
+ *    cards: header verde com #ID, data, horário (HH:MM–HH:MM),
+ *    horas realizadas; body com obra, motivo, solicitado por,
+ *    aprovado por (+ data), observação admin. Empty state âmbar
+ *    quando não há aprovadas no intervalo (caso raro — origem
+ *    'aprovada' só é setada se há solicitação cobrindo o dia, mas
+ *    pode acontecer se a solicitação foi cancelada após o cálculo).
+ *
+ * **Por que reusar `historyByEmployee` vs criar nova procedure:**
+ * (a) já existe há várias revisões e está testada; (b) reduz
+ * superfície de mudança server-side (zero migration); (c) custo de
+ * tráfego é desprezível (histórico de 1 funcionário); (d) filtro
+ * client-side permite expandir intervalo no futuro sem refetch.
+ *
+ * **R-001/R-007/R-010:** OK — zero DDL/DELETE. Procedure server
+ * existente é SELECT-only.
+ *
+ * **Limitação conhecida:** a heurística de origem (em
+ * `computeHEForPeriod`) classifica um DIA como 'aprovada' se existe
+ * pelo menos UMA solicitação aprovada cobrindo aquele dia para o
+ * funcionário. O dialog mostra TODAS as solicitações aprovadas do
+ * funcionário no intervalo do período — não filtra por dia
+ * específico nem reconstrói o link 1:1 dia→solicitação (o que
+ * exigiria persistir esse vínculo em `he_period_employees`).
+ *
+ * **Arquivos tocados:**
+ * - `client/src/pages/FolhaPagamento.tsx` (state, query, button
+ *   wrapper, novo Dialog).
+ *
+ * **Follow-ups potenciais:**
+ * - Adicionar botão "Imprimir" no dialog (window.print scoped).
+ * - Mostrar quais dias específicos cada solicitação cobriu (precisa
+ *   persistir vínculo no schema).
+ * - Botão direto "Ir para a solicitação na tela de Aprovações RH"
+ *   (navegação cruzada).
+ *
  * Rev. 2183 — **NOVA FEATURE · Filtro por OBRA no Relatório de
  * Períodos HE (Folha de Pagamento → HE Módulo), Select acima dos
  * cards KPI da Rev. 2182, permitindo analisar HE de um período por
