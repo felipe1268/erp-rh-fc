@@ -1,6 +1,41 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2187 — **HOTFIX UX · Dropdown "Filtrar por obra" do Relatório
+ * de Períodos HE mostrava opção "Sem Obra" com TODOS os funcionários
+ * cujos `time_records.obraId` estavam NULL (pontos sem tag de obra
+ * — Infleet sem associação, etc.). Lilian: "queo campo é este sem
+ * obra.. precisa arrumar isso". Fix: ponto sem obra não vira mais
+ * opção no filtro; o funcionário continua visível em "Todas as
+ * obras".**
+ *
+ * **Causa-raiz:** a Rev. 2185 montava `obrasPorEmp` no server via
+ * LEFT JOIN obras + sem `IS NOT NULL`, então `time_records.obraId
+ * = NULL` gerava linha com `obraId=null`. No client (L4691), o
+ * fallback mapeava esses casos para a chave `"sem"` e nome
+ * `"Sem Obra"`, virando uma opção falsa no dropdown.
+ *
+ * **Fix (Server — `server/routers/horasExtras.ts:getDetalhe`):**
+ * Trocado `LEFT JOIN obras` por `JOIN obras` nas duas queries
+ * (aprovadasRows + semSolRows) + `tr."obraId" IS NOT NULL` na
+ * query de time_records. Resultado: `obrasPorEmp` só contém
+ * linhas com obra real.
+ *
+ * **Fix (Client — `client/src/pages/FolhaPagamento.tsx:4684`):**
+ * `for (const o of obrasPorEmp)` agora pula `o.obraId == null`
+ * (defesa em profundidade, caso o server volte a vazar). Fallback
+ * de nome trocado de `"Sem Obra"` para `\`Obra #${key}\`` (caso
+ * uma obra sem nome apareça, fica claro que é um identificador,
+ * não um bucket vazio).
+ *
+ * **Não-regressão:** funcionários cujos pontos não têm obra
+ * associada continuam visíveis em "Todas as obras" (filtro 'all')
+ * — apenas não viram um bucket próprio confuso. O fix preserva o
+ * cálculo de HE (que NUNCA usou obraId pra somar). R-001/R-007/
+ * R-010: OK — só SELECT, sem DDL/DELETE.
+ *
+ * ---
+ *
  * Rev. 2186 — **MELHORIA UX + HOTFIX VISUAL · Lista de Entregas de
  * EPI mostrava o ícone "olhinho" (Ver ficha assinada) em TODAS as
  * linhas, inclusive nas sem assinatura — usuário (Sandra) perdia

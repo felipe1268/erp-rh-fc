@@ -295,11 +295,13 @@ export const horasExtrasRouter = router({
         if (empIds.length > 0) {
           try {
             // (1) Obras das solicitações HE APROVADAS no range do período.
+            //     Rev. 2187 — `obraId IS NOT NULL` para não vazar "Sem Obra"
+            //     no Select de filtro (LEFT JOIN podia trazer obras deletadas).
             const aprovadasRows = ((await db.execute(sql`
               SELECT DISTINCT sf."employeeId", s."obraId", o.nome AS "obraNome"
               FROM he_solicitacoes s
               JOIN he_solicitacao_funcionarios sf ON sf."solicitacaoId" = s.id
-              LEFT JOIN obras o ON o.id = s."obraId"
+              JOIN obras o ON o.id = s."obraId"
               WHERE s."companyId" = ${period.companyId}
                 AND s.status = 'aprovada'
                 AND sf."employeeId" IN (${sql.join(empIds.map((id: number) => sql`${id}`), sql`,`)})
@@ -309,11 +311,16 @@ export const horasExtrasRouter = router({
 
             // (2) Obras de time_records FORA de dias cobertos por solicitação
             //     aprovada (espelha o que vira origem 'sem_solicitacao').
+            //     Rev. 2187 — INNER JOIN obras + `tr."obraId" IS NOT NULL`:
+            //     pontos sem obra (Infleet sem tag, etc.) não devem virar
+            //     uma opção "Sem Obra" no filtro — esses funcionários
+            //     continuam aparecendo em "Todas as obras".
             const semSolRows = ((await db.execute(sql`
               SELECT DISTINCT tr."employeeId", tr."obraId", o.nome AS "obraNome"
               FROM time_records tr
-              LEFT JOIN obras o ON o.id = tr."obraId"
+              JOIN obras o ON o.id = tr."obraId"
               WHERE tr."companyId" = ${period.companyId}
+                AND tr."obraId" IS NOT NULL
                 AND tr."employeeId" IN (${sql.join(empIds.map((id: number) => sql`${id}`), sql`,`)})
                 AND tr.data >= ${period.dataInicio}::date
                 AND tr.data <= ${period.dataFim}::date

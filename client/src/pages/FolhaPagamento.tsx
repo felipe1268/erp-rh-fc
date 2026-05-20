@@ -4679,7 +4679,12 @@ export default function FolhaPagamento() {
                         const obrasMap = new Map<string, Set<string>>();
                         const obrasDoPeriodo = new Map<string, string>();
                         for (const o of obrasPorEmp) {
-                          const key = o.obraId != null ? String(o.obraId) : "sem";
+                          // Rev. 2187 — entradas sem obraId (ponto sem tag) NÃO entram no
+                          // dropdown nem no mapa de filtro. O funcionário continua
+                          // visível em "Todas as obras"; só não fica órfão num bucket
+                          // "Sem Obra" confuso pro usuário.
+                          if (o.obraId == null) continue;
+                          const key = String(o.obraId);
                           // Fallback: payloads antigos sem 'origem' caem em ambas as origens
                           // (compatibilidade durante o deploy — não afeta dados novos).
                           const origens: Array<"aprovada" | "sem_solicitacao"> = o.origem ? [o.origem] : ["aprovada", "sem_solicitacao"];
@@ -4688,7 +4693,7 @@ export default function FolhaPagamento() {
                             if (!obrasMap.has(mapKey)) obrasMap.set(mapKey, new Set());
                             obrasMap.get(mapKey)!.add(key);
                           }
-                          if (!obrasDoPeriodo.has(key)) obrasDoPeriodo.set(key, o.obraNome || "Sem Obra");
+                          if (!obrasDoPeriodo.has(key)) obrasDoPeriodo.set(key, o.obraNome || `Obra #${key}`);
                         }
                         const obrasOptions = Array.from(obrasDoPeriodo.entries())
                           .map(([id, nome]) => ({ id, nome }))
