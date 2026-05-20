@@ -1,6 +1,37 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2202 — **MELHORIA UX · Filtro do Histórico Catalogado (Frotas
+ * → Controle de Km) virou INTERVALO de datas (de → até) em vez de
+ * data única.**
+ *
+ * Lilian (20/05/2026): "quero poder filtrar um intervalo de datas de
+ * uma placa especifica de um carro". Aba "Histórico Catalogado"
+ * tinha só um input "dia único" + Placa, então pra ver consumo de
+ * uma placa entre 2 datas o usuário precisava abrir cada dia
+ * separadamente.
+ *
+ * **Fix (`client/src/pages/frotas/ControleKm.tsx`):**
+ * - State (`L63-68`): `catalogadoFilterDate` → split em
+ *   `catalogadoFilterDateInicio` + `catalogadoFilterDateFim` (ambos
+ *   strings vazias por default).
+ * - UI (`L783-818`): dois inputs `type="date"` com "até" entre
+ *   eles + tooltips "Data inicial" / "Data final". Botão Limpar
+ *   reseta os 3 filtros (início, fim, placa).
+ * - Filtro (`L842-846`): substituiu `d !== catalogadoFilterDate`
+ *   por par de comparações lexicográficas (`d < inicio` ou
+ *   `d > fim`). Funciona porque strings YYYY-MM-DD ordenam igual a
+ *   datas, sem precisar parsear nem se preocupar com timezone.
+ *   Ambos os limites são inclusivos.
+ *
+ * **Não-regressão:** O range do backend (`dailyKmQ`) continua sendo
+ * controlado pelo seletor de datas global do topo da tela
+ * (`startDate`/`endDate` em `L74-75`); o filtro novo só refina o
+ * que já veio. Aba "Resumo por Veículo", "Visão Diária" e
+ * "Cruzamento Km × Combustível" intactas — só "catalogado" mudou.
+ *
+ * **R-001/R-007/R-010:** ✅ OK — só client, zero server, zero schema.
+ *
  * Rev. 2201 — **HOTFIX · Excluir um Aviso Prévio agora reverte
  * `employees.status` de 'Aviso' para 'Ativo'.**
  *

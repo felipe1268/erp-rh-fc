@@ -57,7 +57,11 @@ export default function ControleKm() {
   const [motPadraoBusca, setMotPadraoBusca] = useState("");
   const [motPadraoVal, setMotPadraoVal] = useState("");
   const [motPadraoInicio, setMotPadraoInicio] = useState("");
-  const [catalogadoFilterDate, setCatalogadoFilterDate] = useState("");
+  // Rev. 2202 — Filtro do Histórico Catalogado virou INTERVALO de datas
+  // (Lilian: "quero poder filtrar um intervalo de datas de uma placa
+  // especifica de um carro"). `catalogadoFilterDate` deprecado.
+  const [catalogadoFilterDateInicio, setCatalogadoFilterDateInicio] = useState("");
+  const [catalogadoFilterDateFim, setCatalogadoFilterDateFim] = useState("");
   const [catalogadoFilterPlaca, setCatalogadoFilterPlaca] = useState("");
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<any>(null);
@@ -778,9 +782,19 @@ export default function ControleKm() {
                           <Input
                             type="date"
                             className="w-[150px] h-8 text-sm"
-                            value={catalogadoFilterDate}
-                            onChange={e => setCatalogadoFilterDate(e.target.value)}
-                            placeholder="Filtrar dia"
+                            value={catalogadoFilterDateInicio}
+                            onChange={e => setCatalogadoFilterDateInicio(e.target.value)}
+                            placeholder="De"
+                            title="Data inicial"
+                          />
+                          <span className="text-xs text-gray-400">até</span>
+                          <Input
+                            type="date"
+                            className="w-[150px] h-8 text-sm"
+                            value={catalogadoFilterDateFim}
+                            onChange={e => setCatalogadoFilterDateFim(e.target.value)}
+                            placeholder="Até"
+                            title="Data final"
                           />
                         </div>
                         <div className="flex items-center gap-1.5">
@@ -793,9 +807,9 @@ export default function ControleKm() {
                             placeholder="Placa"
                           />
                         </div>
-                        {(catalogadoFilterDate || catalogadoFilterPlaca) && (
+                        {(catalogadoFilterDateInicio || catalogadoFilterDateFim || catalogadoFilterPlaca) && (
                           <Button variant="ghost" size="sm" className="h-8 px-2 text-xs text-gray-500"
-                            onClick={() => { setCatalogadoFilterDate(""); setCatalogadoFilterPlaca(""); }}>
+                            onClick={() => { setCatalogadoFilterDateInicio(""); setCatalogadoFilterDateFim(""); setCatalogadoFilterPlaca(""); }}>
                             <X className="h-3 w-3 mr-1" /> Limpar
                           </Button>
                         )}
@@ -823,7 +837,10 @@ export default function ControleKm() {
                       });
                       const allDates = Object.keys(byDate).sort((a, b) => b.localeCompare(a));
                       const dates = allDates.filter(d => {
-                        if (catalogadoFilterDate && d !== catalogadoFilterDate) return false;
+                        // Rev. 2202 — intervalo de datas (inicio/fim inclusivos).
+                        // Strings YYYY-MM-DD comparam lexicograficamente; sem timezone.
+                        if (catalogadoFilterDateInicio && d < catalogadoFilterDateInicio) return false;
+                        if (catalogadoFilterDateFim && d > catalogadoFilterDateFim) return false;
                         if (catalogadoFilterPlaca) {
                           const hasMatch = byDate[d].some((r: any) => (r.placa || "").toUpperCase().includes(catalogadoFilterPlaca));
                           if (!hasMatch) return false;
