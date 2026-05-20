@@ -408,6 +408,9 @@ export default function FolhaPagamento() {
   }, [mesSelecionado, anoSelecionado]);
   const [heCalcResult, setHeCalcResult] = useState<any>(null);
   const [heViewPeriodId, setHeViewPeriodId] = useState<number | null>(null);
+  // Rev. 2182 — filtro por origem (cards KPI clicáveis acima da tabela HE)
+  const [heOrigemFilter, setHeOrigemFilter] = useState<"todos" | "aprovada" | "sem_solicitacao">("todos");
+  useEffect(() => { setHeOrigemFilter("todos"); }, [heViewPeriodId]);
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [filterFuncao, setFilterFuncao] = useState<string>("all");
   const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
@@ -4651,7 +4654,19 @@ export default function FolhaPagamento() {
                     <div className="space-y-3">
                       {periods.map((p: any) => {
                         const isOpen = heViewPeriodId === p.id;
-                        const periodEmps = isOpen ? selectedEmps : [];
+                        const periodEmpsAll = isOpen ? selectedEmps : [];
+                        // Rev. 2182 — KPIs por origem (sempre sobre o conjunto FULL, não filtrado)
+                        const kpiAprovadas = periodEmpsAll.filter((e: any) => (e.origem || "sem_solicitacao") === "aprovada");
+                        const kpiSemSol = periodEmpsAll.filter((e: any) => (e.origem || "sem_solicitacao") !== "aprovada");
+                        const sumValor = (arr: any[]) => arr.reduce((s: number, e: any) => s + Number(e.valorHETotal || 0), 0);
+                        const sumMins  = (arr: any[]) => arr.reduce((s: number, e: any) => s + Number(e.heTotalMins || 0), 0);
+                        const uniqFunc = (arr: any[]) => new Set(arr.map((e: any) => Number(e.employeeId))).size;
+                        // Filtro aplicado à tabela (cards clicáveis)
+                        const periodEmps = heOrigemFilter === "todos"
+                          ? periodEmpsAll
+                          : heOrigemFilter === "aprovada"
+                            ? kpiAprovadas
+                            : kpiSemSol;
                         const pagamentoCount = periodEmps.filter((e: any) => (destinacaoMap[e.id] ?? (e.destinacao || "pagamento")) === "pagamento").length;
                         const bancoCount = periodEmps.filter((e: any) => (destinacaoMap[e.id] ?? (e.destinacao || "pagamento")) === "banco_horas").length;
                         return (
@@ -4730,7 +4745,73 @@ export default function FolhaPagamento() {
                                       </div>
                                     )}
 
+                                    {/* Rev. 2182 — KPI CARDS por origem (clicáveis para filtrar a tabela) */}
+                                    {periodEmpsAll.length > 0 && (() => {
+                                      const totVal = sumValor(periodEmpsAll);
+                                      const totMin = sumMins(periodEmpsAll);
+                                      const totFun = uniqFunc(periodEmpsAll);
+                                      const aprVal = sumValor(kpiAprovadas);
+                                      const aprMin = sumMins(kpiAprovadas);
+                                      const aprFun = uniqFunc(kpiAprovadas);
+                                      const ssVal = sumValor(kpiSemSol);
+                                      const ssMin = sumMins(kpiSemSol);
+                                      const ssFun = uniqFunc(kpiSemSol);
+                                      const cardBase = "rounded-lg border-2 p-3 text-left transition-all cursor-pointer hover:shadow-md focus:outline-none";
+                                      return (
+                                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 no-print">
+                                          {/* TOTAL — azul FC #1B2A4A (regra de ouro) */}
+                                          <button
+                                            type="button"
+                                            onClick={() => setHeOrigemFilter("todos")}
+                                            className={`${cardBase} ${heOrigemFilter === "todos" ? "border-[#1B2A4A] bg-[#1B2A4A] text-white ring-2 ring-[#1B2A4A]/30" : "border-gray-200 bg-white hover:border-[#1B2A4A]/50"}`}
+                                            title="Mostrar todos"
+                                          >
+                                            <div className="flex items-center justify-between mb-1">
+                                              <span className={`text-[11px] font-semibold uppercase tracking-wider ${heOrigemFilter === "todos" ? "text-white/90" : "text-[#1B2A4A]"}`}>Total HE</span>
+                                              <span className={`text-[10px] px-1.5 py-0.5 rounded ${heOrigemFilter === "todos" ? "bg-white/20 text-white" : "bg-gray-100 text-gray-600"}`}>{totFun} func</span>
+                                            </div>
+                                            <div className={`text-xl font-bold ${heOrigemFilter === "todos" ? "text-white" : "text-[#1B2A4A]"}`}>{formatBRL(totVal)}</div>
+                                            <div className={`text-[11px] mt-0.5 ${heOrigemFilter === "todos" ? "text-white/80" : "text-gray-500"}`}>{minsToHHMM(totMin)} acumuladas</div>
+                                          </button>
+                                          {/* APROVADAS — verde */}
+                                          <button
+                                            type="button"
+                                            onClick={() => setHeOrigemFilter(heOrigemFilter === "aprovada" ? "todos" : "aprovada")}
+                                            className={`${cardBase} ${heOrigemFilter === "aprovada" ? "border-green-600 bg-green-600 text-white ring-2 ring-green-600/30" : "border-gray-200 bg-white hover:border-green-400"}`}
+                                            title="Filtrar apenas Aprovadas"
+                                          >
+                                            <div className="flex items-center justify-between mb-1">
+                                              <span className={`text-[11px] font-semibold uppercase tracking-wider ${heOrigemFilter === "aprovada" ? "text-white/90" : "text-green-700"}`}>✅ Aprovadas</span>
+                                              <span className={`text-[10px] px-1.5 py-0.5 rounded ${heOrigemFilter === "aprovada" ? "bg-white/20 text-white" : "bg-green-50 text-green-700"}`}>{aprFun} func</span>
+                                            </div>
+                                            <div className={`text-xl font-bold ${heOrigemFilter === "aprovada" ? "text-white" : "text-green-700"}`}>{formatBRL(aprVal)}</div>
+                                            <div className={`text-[11px] mt-0.5 ${heOrigemFilter === "aprovada" ? "text-white/80" : "text-gray-500"}`}>{minsToHHMM(aprMin)} · {totVal > 0 ? Math.round((aprVal / totVal) * 100) : 0}% do total</div>
+                                          </button>
+                                          {/* SEM SOLICITAÇÃO — âmbar */}
+                                          <button
+                                            type="button"
+                                            onClick={() => setHeOrigemFilter(heOrigemFilter === "sem_solicitacao" ? "todos" : "sem_solicitacao")}
+                                            className={`${cardBase} ${heOrigemFilter === "sem_solicitacao" ? "border-amber-600 bg-amber-600 text-white ring-2 ring-amber-600/30" : "border-gray-200 bg-white hover:border-amber-400"}`}
+                                            title="Filtrar apenas Sem solicitação"
+                                          >
+                                            <div className="flex items-center justify-between mb-1">
+                                              <span className={`text-[11px] font-semibold uppercase tracking-wider ${heOrigemFilter === "sem_solicitacao" ? "text-white/90" : "text-amber-700"}`}>⚠️ Sem solicitação</span>
+                                              <span className={`text-[10px] px-1.5 py-0.5 rounded ${heOrigemFilter === "sem_solicitacao" ? "bg-white/20 text-white" : "bg-amber-50 text-amber-700"}`}>{ssFun} func</span>
+                                            </div>
+                                            <div className={`text-xl font-bold ${heOrigemFilter === "sem_solicitacao" ? "text-white" : "text-amber-700"}`}>{formatBRL(ssVal)}</div>
+                                            <div className={`text-[11px] mt-0.5 ${heOrigemFilter === "sem_solicitacao" ? "text-white/80" : "text-gray-500"}`}>{minsToHHMM(ssMin)} · {totVal > 0 ? Math.round((ssVal / totVal) * 100) : 0}% do total</div>
+                                          </button>
+                                        </div>
+                                      );
+                                    })()}
+
                                     {/* EMPLOYEE TABLE */}
+                                    {heOrigemFilter !== "todos" && periodEmpsAll.length > 0 && (
+                                      <div className="text-xs text-muted-foreground flex items-center gap-2">
+                                        <span>Filtrando: <strong>{heOrigemFilter === "aprovada" ? "Aprovadas" : "Sem solicitação"}</strong> ({periodEmps.length} linhas)</span>
+                                        <button type="button" onClick={() => setHeOrigemFilter("todos")} className="text-purple-600 hover:underline">Limpar filtro</button>
+                                      </div>
+                                    )}
                                     <div className="overflow-x-auto">
                                       <table className="w-full text-sm">
                                         <thead>

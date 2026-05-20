@@ -1,6 +1,55 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2182 — **NOVA FEATURE · 3 cards KPI clicáveis (Total HE /
+ * Aprovadas / Sem solicitação) acima da tabela do Relatório de
+ * Períodos HE, filtrando a tabela ao clicar e respeitando o azul
+ * institucional FC #1B2A4A (regra de ouro).**
+ *
+ * Lilian: "coloque um card separando os valores do total de horas
+ * extras, aprovadas, e não aprovados.. quero que elas sejam
+ * responsivas quando eu clicar ela filtre.. e respeite o layout da
+ * nossa regras de ouro".
+ *
+ * **Mudanças em `client/src/pages/FolhaPagamento.tsx`:**
+ * 1. Novo state `heOrigemFilter: 'todos' | 'aprovada' | 'sem_solicitacao'`
+ *    (L415) + `useEffect` que zera o filtro ao trocar de período
+ *    (`[heViewPeriodId]`) para evitar herdar filtro entre períodos.
+ * 2. No bloco do período expandido (L4658-4673), `periodEmpsAll`
+ *    passa a ser o conjunto FULL e `periodEmps` (usado pela tabela)
+ *    vira o conjunto FILTRADO. Helpers locais `sumValor`/`sumMins`/
+ *    `uniqFunc` para os KPIs.
+ * 3. Novo grid `sm:grid-cols-3 gap-3` (L4750-4810) com 3 cards:
+ *    - **Total HE** — azul FC `#1B2A4A` (regra de ouro), valor total
+ *      em R$, total de horas (HHMM) e contagem única de funcionários.
+ *    - **Aprovadas** — verde-600 (pareia com Badge `✅ Aprovada`),
+ *      mostra % do total além do valor/horas/func.
+ *    - **Sem solicitação** — âmbar-600 (pareia com Badge `⚠️ Sem
+ *      solicitação`), mesmo layout.
+ * 4. Cada card é `<button>` com toggle: clicar no Aprovadas filtra
+ *    a tabela para só aprovadas; clicar de novo volta pra "todos".
+ *    Total HE sempre limpa filtro. Card ativo ganha bg sólido,
+ *    texto branco e `ring-2` da própria cor.
+ * 5. Linha pequena abaixo dos cards quando filtro ativo, com
+ *    contagem ("Filtrando: Aprovadas (12 linhas)") + link "Limpar
+ *    filtro" pra retornar ao "todos".
+ * 6. `no-print` no grid (cards são UI de navegação, não fazem
+ *    sentido em PDF/print).
+ *
+ * **Compatibilidade:** o filtro só afeta a tabela visual + contadores
+ * de Destinação em massa (`pagamentoCount`/`bancoCount` agora
+ * derivam do filtrado). Os KPIs sempre refletem o conjunto FULL —
+ * usuário vê os totais reais mesmo com filtro ativo. Mutations
+ * (Pagar todos / Banco para todos) NÃO foram alteradas: continuam
+ * via `setDestinacaoMassa` no backend que opera por `hePeriodId`
+ * inteiro (escopo do servidor, não da UI). Períodos sem dados não
+ * renderizam os cards (`periodEmpsAll.length > 0` gate).
+ *
+ * **Backend:** zero mudanças. **R-001/R-007/R-010:** OK — só client-side.
+ *
+ * Arquivos: `client/src/pages/FolhaPagamento.tsx`, `shared/version.ts`,
+ * `shared/changelog.ts`, `replit.md`, `replit-history.md`.
+ *
  * Rev. 2181 — **MELHORIA UX · Botão Memorial de Cálculo agora aparece
  * em TODAS as linhas do Relatório de Períodos HE (Folha de Pagamento),
  * não só na primeira do grupo do funcionário.**
