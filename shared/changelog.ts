@@ -1,6 +1,58 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2176 — **HOTFIX BLOQUEANTE · Criar conta no Plano de Contas com
+ * mesmo nome de uma Categoria existente "criava" silenciosamente sem
+ * aparecer em lugar nenhum.**
+ *
+ * Lilian: "a lilian criou uma conta chamada MAO DE OBRA DIRETA, porem ela
+ * tambem nao apareceu no plano de contas". Sequência: ela tentou renomear
+ * 3.1 TESTE → "Mão de Obra Direta" (Rev. 2174/2175 já bloqueavam com erro
+ * amigável). Aí ela criou uma nova conta com esse nome via "+ Nova Conta"
+ * no Plano de Contas — o backend retornou sucesso, mas a conta não
+ * apareceu.
+ *
+ * **Causa raiz em `server/routers/financial.ts:162-167` `createAccount`:**
+ * o dedup `SELECT id FROM financial_accounts WHERE company_id=$1 AND
+ * LOWER(nome)=LOWER($2) AND ativo=1` IGNORAVA o escopo. Quando bateu com
+ * a Categoria AUTO-* homônima já existente, devolveu `{id: <da
+ * categoria>, alreadyExists: true}` — o front mostrou sucesso, mas o que
+ * o `createMut.onSuccess` enxergou foi um id de Categoria, invisível no
+ * Plano de Contas (filtro `codigo NOT LIKE 'AUTO-%'` da Rev. 2157).
+ *
+ * **Fix em duas partes** (`createAccount` L162-191 e L218-245, catch
+ * 23505 da race):
+ *  - SELECT do dedup agora pega `id, codigo`;
+ *  - Se `escopo === "plano"` e `dupe.codigo LIKE 'AUTO-%'` → lança
+ *    `TRPCError BAD_REQUEST` apontando exatamente a Categoria conflitante
+ *    (código, id) e instruindo: "Vá em Financeiro → Categorias, renomeie
+ *    ou exclua, e tente de novo."
+ *  - Se `escopo === "categoria"` e `dupe.codigo` é contábil (não-AUTO)
+ *    → erro espelho: "Já existe no Plano de Contas...".
+ *  - Mesmo escopo (ou escopo legado/indefinido): comportamento
+ *    idempotente original preservado.
+ *
+ * Mesma regra de escopo replicada no catch do 23505 (race condition do
+ * índice único parcial).
+ *
+ * **Frontend:** já passa `escopo: "plano"` no `createMut` da
+ * `FinanceiroPlanoDeConta.tsx:245` (Rev. 2157) — zero mudanças no client.
+ *
+ * **Workflow pra Lilian agora:** tentar criar "MAO DE OBRA DIRETA" no
+ * Plano → toast mostra exatamente o código `AUTO-XXXX` e id da Categoria
+ * homônima. Ela renomeia a Categoria, volta no Plano de Contas e cria.
+ *
+ * **R-001/R-007/R-010:** OK — só lógica de validação, zero DDL/DML novo.
+ *
+ * Arquivos tocados:
+ *  - `server/routers/financial.ts` (createAccount L162-191 + L218-245)
+ *  - `shared/version.ts` → "Rev. 2176"
+ *  - `shared/changelog.ts` (esta entrada)
+ *  - `replit.md` (top-2 + demote 2174 + drop 2169)
+ *  - `replit-history.md` (one-liner 2169)
+ *
+ * ---
+ *
  * Rev. 2175 — **MELHORIA UX · Mensagem de conflito de nome no Plano de Contas
  * agora diz EXATAMENTE onde está a conta conflitante (Plano de Contas vs
  * Categorias) e com qual código.**

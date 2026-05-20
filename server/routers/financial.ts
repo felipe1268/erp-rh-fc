@@ -159,12 +159,33 @@ export const financialRouter = router({
       // categorias sempre auto-geram AUTO-NNNN; ignora qualquer codigo enviado.
       input.codigo = undefined;
     }
-    // Dedup: se já existe categoria com mesmo nome (case-insensitive) na empresa, devolve a existente.
-    const dupe = rows(await dbExecute(db,
-      `SELECT id FROM financial_accounts WHERE company_id=$1 AND LOWER(nome)=LOWER($2) AND ativo=1 LIMIT 1`,
+    // Dedup: se já existe conta com mesmo nome (case-insensitive) na empresa.
+    // Rev. 2176 — agora respeita `escopo`. Antes, dedup retornava silenciosamente
+    // a conta existente independente do escopo — bug clássico: user cria "Mão de
+    // Obra Direta" no Plano de Contas, mas já existia Categoria AUTO-* homônima,
+    // backend devolvia o id da Categoria e a "nova" conta nunca aparecia no Plano
+    // (filtro `codigo NOT LIKE 'AUTO-%'`). Agora, escopos cruzados viram erro.
+    const dupe: any = rows(await dbExecute(db,
+      `SELECT id, codigo FROM financial_accounts WHERE company_id=$1 AND LOWER(nome)=LOWER($2) AND ativo=1 LIMIT 1`,
       [input.companyId, input.nome]
-    ));
-    if (dupe[0]?.id) return { id: dupe[0].id, alreadyExists: true };
+    ))[0];
+    if (dupe?.id) {
+      const dupeIsAuto = /^AUTO-/i.test(String(dupe.codigo || ""));
+      if (input.escopo === "plano" && dupeIsAuto) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: `Já existe uma **Categoria** chamada "${input.nome}" (código \`${dupe.codigo}\`, id #${dupe.id}) — ela bloqueia o cadastro no Plano de Contas. Vá em Financeiro → Categorias, renomeie ou exclua, e tente de novo.`,
+        });
+      }
+      if (input.escopo === "categoria" && !dupeIsAuto) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: `Já existe uma conta no **Plano de Contas** chamada "${input.nome}" (código \`${dupe.codigo}\`, id #${dupe.id}) — ela bloqueia a criação de Categoria homônima. Renomeie ou exclua a conta do Plano antes.`,
+        });
+      }
+      // Mesmo escopo (ou escopo legado/indefinido): comportamento idempotente.
+      return { id: dupe.id, alreadyExists: true };
+    }
 
     // Auto-gera código se não informado: `AUTO-{próximo}`.
     let codigo = (input.codigo || "").trim();
@@ -192,12 +213,30 @@ export const financialRouter = router({
       await createAuditLog({ action: "financial_account_created", userId: ctx.user?.id, companyId: input.companyId, details: `Conta ${codigo} - ${input.nome}` });
       return { id };
     } catch (e: any) {
-      if (String(e?.code) === "23505" || /duplicate key|unique constraint/i.test(e?.message || "")) {
-        const again = rows(await dbExecute(db,
-          `SELECT id FROM financial_accounts WHERE company_id=$1 AND LOWER(nome)=LOWER($2) AND ativo=1 LIMIT 1`,
+      // Rev. 2176 — mesma regra de escopo no fallback de race condition.
+      const msg = String(e?.message || "");
+      const code = String((e as any)?.cause?.code || (e as any)?.code || "");
+      if (code === "23505" || /duplicate key|unique constraint/i.test(msg)) {
+        const again: any = rows(await dbExecute(db,
+          `SELECT id, codigo FROM financial_accounts WHERE company_id=$1 AND LOWER(nome)=LOWER($2) AND ativo=1 LIMIT 1`,
           [input.companyId, input.nome]
-        ));
-        if (again[0]?.id) return { id: again[0].id, alreadyExists: true };
+        ))[0];
+        if (again?.id) {
+          const againIsAuto = /^AUTO-/i.test(String(again.codigo || ""));
+          if (input.escopo === "plano" && againIsAuto) {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: `Já existe uma **Categoria** chamada "${input.nome}" (código \`${again.codigo}\`, id #${again.id}) — bloqueia o cadastro no Plano de Contas. Vá em Financeiro → Categorias e renomeie/exclua antes.`,
+            });
+          }
+          if (input.escopo === "categoria" && !againIsAuto) {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: `Já existe uma conta no **Plano de Contas** chamada "${input.nome}" (código \`${again.codigo}\`, id #${again.id}) — bloqueia a criação de Categoria homônima.`,
+            });
+          }
+          return { id: again.id, alreadyExists: true };
+        }
       }
       throw e;
     }
