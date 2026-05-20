@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { router, protectedProcedure } from "../_core/trpc";
 import { TRPCError } from "@trpc/server";
-import { getDb } from "../db";
+import { getDb, userCanSeeAvisoStatus } from "../db";
 import { sql, SQL } from "drizzle-orm";
 import { resolveCompanyIds } from "../companyHelper";
 
@@ -690,9 +690,11 @@ export const seguroVidaRouter = router({
 
   listarFuncionariosComStatus: protectedProcedure
     .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const db = (await getDb())!;
       const ids = resolveCompanyIds(input);
+      // Rev. 2208 — sigilo Aviso Prévio: mascara emp_status='Aviso' → 'Ativo'.
+      const canSeeAviso = await userCanSeeAvisoStatus(ctx.user.id, ctx.user.role);
 
       const funcionarios = rows(await db.execute(sql`
         SELECT
@@ -710,6 +712,11 @@ export const seguroVidaRouter = router({
         ORDER BY COALESCE(e."tipoContrato",'CLT'), e."nomeCompleto"
       `));
 
+      if (!canSeeAviso) {
+        for (const f of funcionarios as any[]) {
+          if (f.emp_status === 'Aviso') f.emp_status = 'Ativo';
+        }
+      }
       return funcionarios;
     }),
 

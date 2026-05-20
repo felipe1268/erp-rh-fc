@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { router, protectedProcedure } from "../_core/trpc";
-import { getDb } from "../db";
+import { getDb, userCanSeeAvisoStatus } from "../db";
 import { employees, asos, warnings, processosTrabalhistas, obraSns, obras, vacationPeriods, terminationNotices, obraFuncionarios } from "../../drizzle/schema";
 import { eq, and, sql, gte, lte, desc, inArray, isNull } from "drizzle-orm";
 import { resolveCompanyIds, companyFilter } from "../companyHelper";
@@ -22,7 +22,11 @@ export const homeDataRouter = router({
    */
   getData: protectedProcedure
     .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
+      // Rev. 2208 — sigilo Aviso Prévio: usuários sem o flag verStatusAviso
+      // não recebem `avisosPrevios` (Painel RH zera os 3 KPIs e a seção
+      // "Avisos Prévios em Andamento" simplesmente não renderiza).
+      const canSeeAviso = await userCanSeeAvisoStatus(ctx.user.id, ctx.user.role);
       const db = (await getDb())!;
       const hoje = new Date();
       // Usar timezone de Brasília (GMT-3) para evitar bug de dia errado
@@ -566,13 +570,14 @@ export const homeDataRouter = router({
       // Inclui 'em_andamento' (período em curso) E 'aguardando_pagamento'
       // (período encerrado mas rescisão ainda não paga — dataBaixa IS NULL).
       // Ambos representam desembolso financeiro pendente para a empresa.
-      const avisosAtivos = await db.select().from(terminationNotices)
+      // Rev. 2208 — zera sem consultar DB se sem clearance.
+      const avisosAtivos = canSeeAviso ? await db.select().from(terminationNotices)
         .where(and(
           companyFilter(terminationNotices.companyId, input),
           sql`${terminationNotices.status} IN ('em_andamento', 'aguardando_pagamento')`,
           sql`${terminationNotices.dataBaixa} IS NULL`,
           sql`${terminationNotices.deletedAt} IS NULL`,
-        ));
+        )) : [];
 
       const avisosPrevios = avisosAtivos.map(a => {
         const emp = allEmps.find(e => e.id === a.employeeId);

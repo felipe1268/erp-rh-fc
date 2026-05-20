@@ -1,6 +1,6 @@
 import { router, protectedProcedure } from "../_core/trpc";
 import { z } from "zod";
-import { getDb, getConstrutorasIds } from "../db";
+import { getDb, getConstrutorasIds, userCanSeeAvisoStatus } from "../db";
 import { memCache, TTL } from "../services/memCache";
 import {
   employees, extraPayments, payroll, timeRecords, warnings, atestados,
@@ -4314,7 +4314,12 @@ export const dashboardsRouter = router({
   horasExtrasComparativo: protectedProcedure.input(z.object({ companyId: z.number(), ano: z.number().optional(), companyIds: z.array(z.number()).optional() })).query(({ input }) => getDashHorasExtrasComparativo(input.companyId, input.ano, input.companyIds)),
   folhaPagamentoComparativo: protectedProcedure.input(z.object({ companyId: z.number(), mesReferencia: z.string().optional(), companyIds: z.array(z.number()).optional() })).query(({ input }) => getDashFolhaPagamentoComparativo(input.companyId, input.mesReferencia, input.companyIds)),
   funcionariosComparativo: protectedProcedure.input(z.object({ companyId: z.number(), ano: z.number().optional(), companyIds: z.array(z.number()).optional() })).query(({ input }) => getDashFuncionariosComparativo(input.companyId, input.ano, input.companyIds)),
-  avisoPrevioComparativo: protectedProcedure.input(z.object({ companyId: z.number(), ano: z.number().optional(), companyIds: z.array(z.number()).optional() })).query(({ input }) => getDashAvisoPrevioComparativo(input.companyId, input.ano, input.companyIds)),
+  // Rev. 2208 — sigilo Aviso Prévio: zera dashboard pra quem não tem verStatusAviso.
+  avisoPrevioComparativo: protectedProcedure.input(z.object({ companyId: z.number(), ano: z.number().optional(), companyIds: z.array(z.number()).optional() })).query(async ({ input, ctx }) => {
+    const canSee = await userCanSeeAvisoStatus(ctx.user.id, ctx.user.role);
+    if (!canSee) return { ano: input.ano || new Date().getFullYear(), meses: [] as any[] };
+    return getDashAvisoPrevioComparativo(input.companyId, input.ano, input.companyIds);
+  }),
   feriasComparativo: protectedProcedure.input(z.object({ companyId: z.number(), ano: z.number().optional(), companyIds: z.array(z.number()).optional() })).query(({ input }) => getDashFeriasComparativo(input.companyId, input.ano, input.companyIds)),
   apontamentosComparativo: protectedProcedure.input(z.object({ companyId: z.number(), ano: z.number().optional(), companyIds: z.array(z.number()).optional() })).query(({ input }) => getDashApontamentosComparativo(input.companyId, input.ano, input.companyIds)),
   folhaPagamento: protectedProcedure.input(z.object({ companyId: z.number(), mesReferencia: z.string().optional(), companyIds: z.array(z.number()).optional() })).query(({ input }) => getDashFolhaPagamento(input.companyId, input.mesReferencia, input.companyIds)),
@@ -4332,7 +4337,12 @@ export const dashboardsRouter = router({
   juridico: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() })).query(({ input }) => getDashJuridico(input.companyId, input.companyIds)),
   tributario: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() })).query(({ input }) => getDashTributario(input.companyId, input.companyIds)),
   civil: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() })).query(({ input }) => getDashCivil(input.companyId, input.companyIds)),
-  avisoPrevio: protectedProcedure.input(z.object({ companyId: z.number(), ano: z.number().optional(), companyIds: z.array(z.number()).optional() })).query(({ input }) => getDashAvisoPrevio(input.companyId, input.ano, input.companyIds)),
+  // Rev. 2208 — sigilo Aviso Prévio: zera dashboard pra quem não tem verStatusAviso.
+  avisoPrevio: protectedProcedure.input(z.object({ companyId: z.number(), ano: z.number().optional(), companyIds: z.array(z.number()).optional() })).query(async ({ input, ctx }) => {
+    const canSee = await userCanSeeAvisoStatus(ctx.user.id, ctx.user.role);
+    if (!canSee) return null;
+    return getDashAvisoPrevio(input.companyId, input.ano, input.companyIds);
+  }),
   custoDemissaoMassa: protectedProcedure.input(z.object({
     companyId: z.number(),
     companyIds: z.array(z.number()).optional(),

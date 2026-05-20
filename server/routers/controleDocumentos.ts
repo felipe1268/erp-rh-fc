@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
-import { getDb } from "../db";
+import { getDb, userCanSeeAvisoStatus } from "../db";
 import { asos, atestados, trainings, warnings, employees, timeRecords, payroll, epiDeliveries, epis, vrBenefits, advances, obraHorasRateio, obras, documentTemplates, extraPayments, employeeHistory, accidents, processosTrabalhistas, processosAndamentos, jobFunctions, terminationNotices, vacationPeriods, cipaMeetings, cipaMembers, cipaElections, pjContracts, pjPayments, epiDiscountAlerts, customExams, obraFuncionarios, warehouseLoans, almoxarifadoDescontoFolha, almoxarifadoSaidasInsumo, heSolicitacaoConfirmacoes, heSolicitacoes, pontoDescontos, notificationLogs, notificationRecipients, lancamentosParceiros, parceirosConveniados, ddsSessoes, ddsSessaoFuncionarios, signatureSessions, signatureSigners } from "../../drizzle/schema";
 import { eq, and, desc, sql, ne, isNull, inArray, gte, lte } from "drizzle-orm";
 import { resolveCompanyIds, companyFilter } from "../companyHelper";
@@ -1299,11 +1299,18 @@ export const controleDocumentosRouter = router({
   // ===================== RAIO-X DO FUNCIONÁRIO =====================
   raioX: protectedProcedure
     .input(z.object({ employeeId: z.number() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
+      // Rev. 2208 — sigilo Aviso Prévio no Raio-X: para usuários sem o flag
+      // verStatusAviso (e não Master), o array `avisosPrevios` é zerado e
+      // mascaramos `emp.status = 'Ativo'` se for 'Aviso'. Cobre banner vermelho
+      // "EM AVISO PRÉVIO" e a seção "Avisos Prévios" no detalhe do Raio-X.
+      const canSeeAviso = await userCanSeeAvisoStatus(ctx.user.id, ctx.user.role);
       const db = (await getDb())!;
       // Dados do funcionário
       const [emp] = await db.select().from(employees).where(eq(employees.id, input.employeeId));
       if (!emp) return null;
+      // Rev. 2208 — mascara status real "Aviso" → "Ativo" no Raio-X.
+      if (!canSeeAviso && (emp as any).status === 'Aviso') (emp as any).status = 'Ativo';
       // Buscar nome da obra principal
       let obraAtualNome: string | null = null;
       // Buscar obra via alocação ativa
@@ -1580,10 +1587,10 @@ export const controleDocumentosRouter = router({
         timeline.push({ data: f.data, tipo: "Falta", descricao: desc, cor: "red", icone: "user-x" });
       });
 
-      // AVISO PRÉVIO
-      const empAvisosPrevios = await db.select().from(terminationNotices)
+      // AVISO PRÉVIO — Rev. 2208: respeita sigilo (zera lista se sem clearance)
+      const empAvisosPrevios = canSeeAviso ? await db.select().from(terminationNotices)
         .where(and(eq(terminationNotices.employeeId, input.employeeId), isNull(terminationNotices.deletedAt)))
-        .orderBy(desc(terminationNotices.dataInicio));
+        .orderBy(desc(terminationNotices.dataInicio)) : [];
 
       // FÉRIAS
       const empFerias = await db.select().from(vacationPeriods)

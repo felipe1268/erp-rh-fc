@@ -1,6 +1,6 @@
 import { router, protectedProcedure } from "../_core/trpc";
 import { z } from "zod";
-import { getDb, createAuditLog, encerrarContratosPjDoFuncionario } from "../db";
+import { getDb, createAuditLog, encerrarContratosPjDoFuncionario, userCanSeeAvisoStatus } from "../db";
 import { terminationNotices, vacationPeriods, employees, companies, obras, obraFuncionarios, hePeriods, hePeriodEmployees, pontoDescontosResumo, employeeTerminationChecklist } from "../../drizzle/schema";
 import { eq, and, sql, isNull, lte, gte, desc, asc, inArray } from "drizzle-orm";
 import { resolveCompanyIds, companyFilter } from "../companyHelper";
@@ -287,7 +287,13 @@ export const avisoPrevioFeriasRouter = router({
   avisoPrevio: router({
     list: protectedProcedure
       .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), status: z.string().optional() }))
-      .query(async ({ input }) => {
+      .query(async ({ input, ctx }) => {
+        // Rev. 2208 — sigilo Aviso Prévio: usuários sem o flag verStatusAviso
+        // (e que não são Admin Master) recebem lista vazia. Cobre RaioXPage,
+        // RaioXFuncionario (banner vermelho EM AVISO PRÉVIO), módulo /aviso-previo
+        // e qualquer outro consumidor da procedure.
+        const canSeeAviso = await userCanSeeAvisoStatus(ctx.user.id, ctx.user.role);
+        if (!canSeeAviso) return [] as any[];
         const db = (await getDb())!;
 
         // Auto: when notice period ends, move to 'aguardando_pagamento' (NOT 'concluido').

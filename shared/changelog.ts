@@ -1,6 +1,85 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2208 — **SEGURANÇA / HOTFIX · Sigilo do "Aviso Prévio"
+ * fecha brechas no Raio-X do Funcionário (lista + detalhe) e em
+ * todas as procedures que listam `terminationNotices`.**
+ *
+ * Lilian (20/05/2026, follow-up imediato da Rev. 2207): "ainda está
+ * aparecendo para os demais usuários.. acabei de conferir.. também
+ * não pode aparecer no raio-x.. é uma informação que somente o
+ * usuário master pode ver, e os usuários que estão no grupo RH..
+ * somente eles.. garanta isso." Print mostrava:
+ * - `/relatorios/raio-x` com KPI "Aviso Prévio 3" e card laranja da
+ *   Mariana com badge "Aviso Prévio".
+ * - Detalhe do Raio-X da Mariana com badge "Em Aviso Prévio" + box
+ *   vermelho "EM AVISO PRÉVIO" + tabela "Avisos Prévios".
+ *
+ * **Causa raiz:** a Rev. 2206 só mascarou `employees.list/stats/getById`.
+ * Mas o RaioXPage (`client/src/pages/relatorios/RaioXPage.tsx`) chama
+ * **`trpc.avisoPrevio.avisoPrevio.list`** (procedure separada que lê
+ * direto da tabela `termination_notices`) pra pintar os cards laranja
+ * e calcular o KPI "Aviso Prévio" — passando por trás do mask. E o
+ * detalhe (`RaioXFuncionario.tsx`) lê `raioX.avisosPrevios`, que vem
+ * do procedure **`trpc.docs.raioX`** (controleDocumentos), também sem
+ * mask. Resultado: o mascaramento do status no badge era inútil — a
+ * info vazava por duas outras procedures.
+ *
+ * **Fix:**
+ *
+ * **`server/routers/avisoPrevioFerias.ts` (`avisoPrevio.list`):**
+ * - Adicionado `ctx` no signature do procedure.
+ * - Import de `userCanSeeAvisoStatus`.
+ * - Early return `[]` se `!canSeeAviso` (antes de qualquer SELECT).
+ * - Impacto: RaioXPage para de pintar cards laranja e o KPI "Aviso
+ *   Prévio" volta a `0`; módulo `/aviso-previo` fica vazio pra quem
+ *   não tem clearance (mas esse módulo já é gated por permissão de
+ *   rota, então só RH/DP entra).
+ *
+ * **`server/routers/controleDocumentos.ts` (`docs.raioX`):**
+ * - Import de `userCanSeeAvisoStatus`.
+ * - `ctx` adicionado ao signature.
+ * - `empAvisosPrevios` agora é `canSeeAviso ? db.select(...) : []` —
+ *   zera o array sem nem consultar o DB pra quem não pode ver.
+ * - Adicional: mascara `emp.status = 'Ativo'` se for 'Aviso' no
+ *   próprio objeto `emp` do detalhe (o `employees.getById` mascara
+ *   no list/getById, mas o procedure `docs.raioX` faz o SELECT direto
+ *   na tabela `employees`, então precisava do mask local também).
+ *
+ * **Vazamentos adicionais fechados na mesma revisão (apontados pelo
+ * code review):** três outras procedures também liam
+ * `termination_notices` ou retornavam `status='Aviso'` sem guard —
+ * deixariam o sigilo furado fora do Raio-X.
+ *
+ * - `server/routers/dashboards.ts` (`avisoPrevio` e
+ *   `avisoPrevioComparativo`): handlers do `protectedProcedure`
+ *   passam a checar `canSee` via `ctx` e retornam payload zerado
+ *   (`null` / `meses: []`) se sem clearance. Impacto:
+ *   `/dashboards/aviso-previo` fica vazio (sem KPIs, sem séries
+ *   mensais, sem distribuições por setor/função).
+ * - `server/routers/homeData.ts` (`getData`): `ctx` + `canSeeAviso`;
+ *   `avisosAtivos` vira `[]` quando sem clearance. Cascateia em
+ *   `avisosPrevios: []` e zera os 3 KPIs derivados
+ *   (`avisosPreviosAtivos`, `avisosPreviosVencendo`,
+ *   `avisosPreviosAguardando`). Painel RH some a seção "Avisos
+ *   Prévios em Andamento".
+ * - `server/routers/seguroVida.ts` (`listarFuncionariosComStatus`):
+ *   post-process do array; troca `emp_status='Aviso'` por `'Ativo'`
+ *   pra usuário sem clearance. O SELECT mantém `'Aviso'` no `WHERE`
+ *   pra não tirar funcionário da listagem (continuam sendo
+ *   beneficiários de seguro de vida), só esconde o status real.
+ *
+ * **Impacto visível pra usuário não-RH:**
+ * - `/relatorios/raio-x` (lista): KPI "Aviso Prévio" não aparece (0),
+ *   nenhum card pintado de laranja, badge "Em Aviso Prévio" some.
+ * - `/raio-x/:id` (detalhe): badge ao lado do nome vira "Ativo" verde,
+ *   box vermelho "EM AVISO PRÉVIO" some, seção "Avisos Prévios" não
+ *   renderiza (array vazio), tabela `Tipo/Início/Fim/Dias/Redução/
+ *   Status` some, prints/PDF do Raio-X também não trazem nada.
+ *
+ * **R-001/R-007/R-010:** ✅ OK — apenas adicionou guard cond em
+ * SELECTs; zero DDL, zero DROP/DELETE.
+ *
  * Rev. 2207 — **SEGURANÇA / UX · Sigilo do status "Aviso Prévio"
  * agora é OPT-IN configurável por grupo (checkbox "⚠️ Ver Status de
  * Aviso Prévio" em Grupos de Usuários → Informações) em vez de
