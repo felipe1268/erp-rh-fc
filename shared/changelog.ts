@@ -1,6 +1,88 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2194 — **REMOÇÃO DE FEATURE · Bloco "Conferência com
+ * Contabilidade" removido da aba Folha de Pagamento (UI + dialog
+ * de alerta + estados).**
+ *
+ * Lilian: "dentro da aba de folha de pagamento,, tire a função
+ * conferencia de contabilidade" + screenshot mostrando o Card
+ * colapsável "Conferência com Contabilidade — Importação e
+ * verificação dos PDFs da contabilidade terceirizada" embaixo
+ * do banner amarelo de Divergência Detectada.
+ *
+ * **Contexto:** desde a Rev. ~1900 a Folha de Pagamento mostrava
+ * um Card colapsável que permitia upload/visualização dos PDFs
+ * de Vale e Pagamento exportados pela contabilidade terceirizada
+ * (Conjunto, etc), com sub-abas de Detalhes, Verificação,
+ * Custos/Obra e Cruzamento HE. Adicionalmente, ao clicar em
+ * "Consolidar" no Vale/Pagamento, o server (`payrollEngine.ts:4150`
+ * e `folhaPagamento.ts:1405`) checava o critério
+ * `conferenciaContabilidade` da empresa — se ≠ 'opcional' e sem
+ * `ignorarConferencia: true`, retornava `alertaConferencia: true`
+ * pra disparar um Dialog modal pedindo conferência prévia ou
+ * "Consolidar Mesmo Assim". A Lilian quer remover essa
+ * funcionalidade inteira do painel (a contabilidade terceirizada
+ * agora confere por fora; a folha interna FC roda standalone).
+ *
+ * **Fix (Client `FolhaPagamento.tsx` — único arquivo tocado):**
+ * 1. **Card colapsável removido** (~192 linhas, antiga L7003-7193):
+ *    Card.border-gray-200 + button toggle (FileCheck icon "Conferência
+ *    com Contabilidade — Importação e verificação dos PDFs da
+ *    contabilidade terceirizada") + ChevronDown rotativo + Badge
+ *    Vale ✓/• + Badge Pagto ✓/• + grid md:grid-cols-2 com cards
+ *    "Vale / Adiantamento (Dia 20)" e "Pagamento (Dia 5)" lado a
+ *    lado, cada um com Status badge, totais (R$ líquido, n func,
+ *    n divergências), botões Detalhes/Verificação/Custos/Obra/
+ *    Consolidar/Desconsolidar/Excluir/Reimportar PDFs + fallback
+ *    "Nenhum PDF de pagamento/vale importado" + botão upload.
+ * 2. **Dialog "Conferência com Contabilidade Recomendada" removido**
+ *    (antiga L7687-7718): modal amarelo AlertTriangle com mensagem
+ *    do server + recomendação + link pras configurações + botões
+ *    Cancelar/Consolidar Mesmo Assim (que chamava
+ *    `consolidarMut.mutate({ ..., ignorarConferencia: true })`).
+ * 3. **State removido:** `showConferencia` (L367) e
+ *    `conferenciaDialog` (L1048).
+ * 4. **`consolidarMut.onSuccess` simplificado:** branch
+ *    `if (data.alertaConferencia) { setConferenciaDialog(...) }`
+ *    removido; agora sempre `toast.success("Lançamento consolidado!")
+ *    + refetch` (statusMes, lancamentos, mesesComLanc). Comentário
+ *    inline explica decisão da Rev. 2194.
+ *
+ * **Server intacto:** `payrollEngine.ts:4150-4157` e
+ * `folhaPagamento.ts:1405,1450` mantém a checagem
+ * `conferenciaContabilidade !== 'opcional' && !ignorarConferencia`.
+ * Decisão consciente: se algum usuário configurar o critério como
+ * obrigatório, consolidar vai retornar erro (que cai no
+ * `consolidarMut.onError` → toast.error genérico). Não é caso
+ * comum (default é 'opcional'). Se virar problema, remover server-
+ * side em Rev. futura.
+ *
+ * **Imports:** `FileCheck` continua importado (pode ser usado em
+ * outros pontos do arquivo); deixar como está pra evitar churn.
+ *
+ * **Não-regressão:** Rev. 2193 (layout ficha EPI), 2192 (nomes
+ * assinaturas EPI), 2190 (olhinho EPI) intactos. Rev. 2148+
+ * (Cards 13º Salário Nov/Dez) intacto — aparece logo abaixo
+ * do espaço onde estava o Card removido. Botões de Consolidar
+ * dos blocos de 13º (decimoTerceiro1/2, L7243+) continuam
+ * chamando `consolidarMut.mutate({ folhaLancamentoId: ... })`
+ * sem `ignorarConferencia` — o `onSuccess` simplificado funciona
+ * pra eles também (toast + refetch).
+ *
+ * **R-001/R-007/R-010:** OK — só client, zero server, zero schema,
+ * zero migration.
+ *
+ * **Arquivos tocados:**
+ * - `client/src/pages/FolhaPagamento.tsx` (remove L367,
+ *   simplifica L1048-1072, remove L7003-7193, remove L7687-7718)
+ * - `shared/version.ts` → Rev. 2194
+ * - `shared/changelog.ts` → esta entrada no topo
+ * - `replit.md` → top-2 = 2194/2193, demote 2192 → one-liner,
+ *   demote 2187 → `replit-history.md`
+ *
+ * ---
+ *
  * Rev. 2193 — **MELHORIA UX · Layout da Ficha de Entrega de EPI
  * reorganizado em documento ÚNICO: tabela de EPIs → política →
  * declaração → obrigações → assinaturas → fotos anexadas (no

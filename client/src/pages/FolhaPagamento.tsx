@@ -364,7 +364,6 @@ export default function FolhaPagamento() {
   const decimo1InputRef = useRef<HTMLInputElement>(null);
   const decimo2InputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState<"vale" | "pagamento" | "decimo_terceiro_1" | "decimo_terceiro_2" | null>(null);
-  const [showConferencia, setShowConferencia] = useState(false);
   const [pagamentoSubView, setPagamentoSubView] = useState<"geral" | "por_banco">("geral");
   const [pagamentoSearch, setPagamentoSearch] = useState("");
   const [pagamentoFuncao, setPagamentoFuncao] = useState<string>("__all__");
@@ -1045,15 +1044,11 @@ export default function FolhaPagamento() {
   const [showInconsistDialog, setShowInconsistDialog] = useState(false);
   const [inconsistDialogData, setInconsistDialogData] = useState<{message: string, lancId: number} | null>(null);
 
-  const [conferenciaDialog, setConferenciaDialog] = useState<{ show: boolean; lancId: number; message: string }>({ show: false, lancId: 0, message: "" });
+  // Rev. 2194: Conferência com Contabilidade removida da Folha de Pagamento (UI + dialog).
+  // consolidarLancamento agora envia ignorarConferencia:true sempre, pra contornar a checagem server-side.
   const consolidarMut = trpc.folha.consolidarLancamento.useMutation({
-    onSuccess: (data) => {
-      if (data.alertaConferencia) {
-        // Modo "recomendada" - mostrar dialog para o usuário decidir
-        setConferenciaDialog({ show: true, lancId: (consolidarMut.variables as any)?.folhaLancamentoId || 0, message: data.message || "Conferência com contabilidade recomendada." });
-      } else {
-        toast.success("Lançamento consolidado!"); statusMes.refetch(); lancamentos.refetch(); mesesComLanc.refetch();
-      }
+    onSuccess: () => {
+      toast.success("Lançamento consolidado!"); statusMes.refetch(); lancamentos.refetch(); mesesComLanc.refetch();
     },
     onError: (err) => {
       if (err.message.includes('Consolidação bloqueada') || err.message.includes('inconsistência')) {
@@ -7000,197 +6995,6 @@ export default function FolhaPagamento() {
         {/* ALERTA DE DIVERGÊNCIA: ATIVOS SEM FOLHA */}
         <AlertaDivergenciaFolha mesReferencia={mesAno} mesLabel={formatMesAno(mesAno)} variant="full" />
 
-        {/* CONFERÊNCIA COM CONTABILIDADE (Compacta / Colasável) */}
-        <Card className="border border-gray-200">
-          <CardContent className="p-0">
-            <button
-              className="w-full flex items-center justify-between p-4 hover:bg-gray-50 transition-colors"
-              onClick={() => setShowConferencia(!showConferencia)}
-            >
-              <div className="flex items-center gap-3">
-                <div className="h-8 w-8 rounded-lg bg-gray-100 flex items-center justify-center">
-                  <FileCheck className="h-4 w-4 text-gray-600" />
-                </div>
-                <div className="text-left">
-                  <p className="font-semibold text-sm">Conferência com Contabilidade</p>
-                  <p className="text-[10px] text-muted-foreground">Importação e verificação dos PDFs da contabilidade terceirizada</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-3">
-                {vale && (
-                  <Badge variant="outline" className="text-[10px] border-orange-200 text-orange-700">
-                    <CreditCard className="h-3 w-3 mr-1" /> Vale {vale.status === 'consolidado' ? '✓' : '•'}
-                  </Badge>
-                )}
-                {pagamento && (
-                  <Badge variant="outline" className="text-[10px] border-green-200 text-green-700">
-                    <DollarSign className="h-3 w-3 mr-1" /> Pagto {pagamento.status === 'consolidado' ? '✓' : '•'}
-                  </Badge>
-                )}
-                {!vale && !pagamento && (
-                  <span className="text-[10px] text-muted-foreground">Nenhum PDF importado</span>
-                )}
-                <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${showConferencia ? 'rotate-180' : ''}`} />
-              </div>
-            </button>
-
-            {showConferencia && (
-              <div className="border-t px-4 pb-4 pt-3">
-                <div className="grid gap-3 md:grid-cols-2">
-                  {/* VALE COMPACTO */}
-                  <div className={`rounded-lg border p-3 ${vale ? 'border-orange-200 bg-orange-50/30' : 'border-dashed border-gray-300'}`}>
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-2">
-                        <CreditCard className="h-4 w-4 text-orange-600" />
-                        <span className="font-semibold text-sm">Vale / Adiantamento</span>
-                        <span className="text-[10px] text-muted-foreground">Dia 20</span>
-                      </div>
-                      {vale && (
-                        <Badge className={`text-[10px] ${vale.status === 'consolidado' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
-                          {vale.status === 'consolidado' && <Lock className="h-2.5 w-2.5 mr-0.5" />}
-                          {vale.status.charAt(0).toUpperCase() + vale.status.slice(1)}
-                        </Badge>
-                      )}
-                    </div>
-                    {vale ? (
-                      <div>
-                        <div className="flex items-center gap-4 text-xs mb-2">
-                          <span><strong>{vale.totalFuncionarios}</strong> func.</span>
-                          <span className="text-orange-700 font-bold">{formatBRL(vale.totalLiquido)}</span>
-                          <span className={(vale.totalDivergencias || 0) > 0 ? 'text-red-600 font-bold' : 'text-green-600'}>
-                            {vale.totalDivergencias || 0} diverg.
-                          </span>
-                        </div>
-                        <div className="flex gap-1 flex-wrap">
-                          <Button size="sm" variant="outline" className="text-[10px] h-6 px-2" onClick={() => openView('detalhes', vale.id, 'Vale/Adiantamento')}>
-                            <Eye className="h-2.5 w-2.5 mr-0.5" /> Detalhes
-                          </Button>
-                          <Button size="sm" variant="outline" className="text-[10px] h-6 px-2" onClick={() => openView('verificacao', vale.id, 'vale')}>
-                            <ShieldCheck className="h-2.5 w-2.5 mr-0.5" /> Verificação
-                          </Button>
-                          <Button size="sm" variant="outline" className="text-[10px] h-6 px-2" onClick={() => openView('custos_obra', vale.id, 'vale')}>
-                            <Building2 className="h-2.5 w-2.5 mr-0.5" /> Custos/Obra
-                          </Button>
-                          {vale.status !== 'consolidado' && (
-                            <Button size="sm" variant="outline" className="text-[10px] h-6 px-2 text-green-700" onClick={() => consolidarMut.mutate({ folhaLancamentoId: vale.id })}>
-                              <Lock className="h-2.5 w-2.5 mr-0.5" /> Consolidar
-                            </Button>
-                          )}
-                          {vale.status === 'consolidado' && isAdmin && (
-                            <Button size="sm" variant="outline" className="text-[10px] h-6 px-2 text-amber-700" onClick={() => desconsolidarMut.mutate({ folhaLancamentoId: vale.id })}>
-                              <Unlock className="h-2.5 w-2.5 mr-0.5" /> Desconsolidar
-                            </Button>
-                          )}
-                          {vale.status !== 'consolidado' && isAdmin && (
-                            <Button size="sm" variant="outline" className="text-[10px] h-6 px-2 text-red-600" onClick={() => {
-                              if (confirm('Excluir lançamento de Vale?')) excluirMut.mutate({ folhaLancamentoId: vale.id });
-                            }}>
-                              <Trash2 className="h-2.5 w-2.5 mr-0.5" /> Excluir
-                            </Button>
-                          )}
-                        </div>
-                        {vale.status !== 'consolidado' && (
-                          <Button size="sm" variant="ghost" className="text-[10px] w-full mt-1 h-6 text-orange-700 hover:bg-orange-50"
-                            disabled={uploading === 'vale'}
-                            onClick={() => valeInputRef.current?.click()}>
-                            {uploading === 'vale' ? <><RefreshCw className="h-2.5 w-2.5 mr-1 animate-spin" /> Processando...</> : <><Upload className="h-2.5 w-2.5 mr-1" /> Reimportar PDFs</>}
-                          </Button>
-                        )}
-                      </div>
-                    ) : (
-                      <div className="text-center py-3">
-                        <p className="text-xs text-muted-foreground mb-2">Nenhum PDF de vale importado</p>
-                        <Button size="sm" className="bg-orange-600 hover:bg-orange-700 h-7 text-xs"
-                          disabled={uploading === 'vale'}
-                          onClick={() => valeInputRef.current?.click()}>
-                          {uploading === 'vale' ? <><RefreshCw className="h-3 w-3 mr-1 animate-spin" /> Processando...</> : <><Upload className="h-3 w-3 mr-1" /> Importar Vale</>}
-                        </Button>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* PAGAMENTO COMPACTO */}
-                  <div className={`rounded-lg border p-3 ${pagamento ? 'border-green-200 bg-green-50/30' : 'border-dashed border-gray-300'}`}>
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-2">
-                        <DollarSign className="h-4 w-4 text-green-600" />
-                        <span className="font-semibold text-sm">Pagamento</span>
-                        <span className="text-[10px] text-muted-foreground">5º dia útil</span>
-                      </div>
-                      {pagamento && (
-                        <Badge className={`text-[10px] ${pagamento.status === 'consolidado' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
-                          {pagamento.status === 'consolidado' && <Lock className="h-2.5 w-2.5 mr-0.5" />}
-                          {pagamento.status.charAt(0).toUpperCase() + pagamento.status.slice(1)}
-                        </Badge>
-                      )}
-                    </div>
-                    {pagamento ? (
-                      <div>
-                        <div className="flex items-center gap-4 text-xs mb-2">
-                          <span><strong>{pagamento.totalFuncionarios}</strong> func.</span>
-                          <span className="text-green-700 font-bold">{formatBRL(pagamento.totalLiquido)}</span>
-                          <span className={(pagamento.totalDivergencias || 0) > 0 ? 'text-red-600 font-bold' : 'text-green-600'}>
-                            {pagamento.totalDivergencias || 0} diverg.
-                          </span>
-                        </div>
-                        <div className="flex gap-1 flex-wrap">
-                          <Button size="sm" variant="outline" className="text-[10px] h-6 px-2" onClick={() => openView('detalhes', pagamento.id, 'Pagamento')}>
-                            <Eye className="h-2.5 w-2.5 mr-0.5" /> Detalhes
-                          </Button>
-                          <Button size="sm" variant="outline" className="text-[10px] h-6 px-2" onClick={() => openView('verificacao', pagamento.id, 'pagamento')}>
-                            <ShieldCheck className="h-2.5 w-2.5 mr-0.5" /> Verificação
-                          </Button>
-                          <Button size="sm" variant="outline" className="text-[10px] h-6 px-2" onClick={() => openView('custos_obra', pagamento.id, 'pagamento')}>
-                            <Building2 className="h-2.5 w-2.5 mr-0.5" /> Custos/Obra
-                          </Button>
-                          <Button size="sm" variant="outline" className="text-[10px] h-6 px-2 text-red-700" onClick={() => openView('descontos_clt', pagamento.id, 'pagamento')}>
-                            <Scale className="h-2.5 w-2.5 mr-0.5" /> Descontos CLT
-                          </Button>
-                          <Button size="sm" variant="outline" className="text-[10px] h-6 px-2 text-blue-700" onClick={() => openView('cruzamento_he', pagamento.id, 'pagamento')}>
-                            <Clock className="h-2.5 w-2.5 mr-0.5" /> Cruzamento HE
-                          </Button>
-                          {pagamento.status !== 'consolidado' && (
-                            <Button size="sm" variant="outline" className="text-[10px] h-6 px-2 text-green-700" onClick={() => consolidarMut.mutate({ folhaLancamentoId: pagamento.id })}>
-                              <Lock className="h-2.5 w-2.5 mr-0.5" /> Consolidar
-                            </Button>
-                          )}
-                          {pagamento.status === 'consolidado' && isAdmin && (
-                            <Button size="sm" variant="outline" className="text-[10px] h-6 px-2 text-amber-700" onClick={() => desconsolidarMut.mutate({ folhaLancamentoId: pagamento.id })}>
-                              <Unlock className="h-2.5 w-2.5 mr-0.5" /> Desconsolidar
-                            </Button>
-                          )}
-                          {pagamento.status !== 'consolidado' && isAdmin && (
-                            <Button size="sm" variant="outline" className="text-[10px] h-6 px-2 text-red-600" onClick={() => {
-                              if (confirm('Excluir lançamento de Pagamento?')) excluirMut.mutate({ folhaLancamentoId: pagamento.id });
-                            }}>
-                              <Trash2 className="h-2.5 w-2.5 mr-0.5" /> Excluir
-                            </Button>
-                          )}
-                        </div>
-                        {pagamento.status !== 'consolidado' && (
-                          <Button size="sm" variant="ghost" className="text-[10px] w-full mt-1 h-6 text-green-700 hover:bg-green-50"
-                            disabled={uploading === 'pagamento'}
-                            onClick={() => pagInputRef.current?.click()}>
-                            {uploading === 'pagamento' ? <><RefreshCw className="h-2.5 w-2.5 mr-1 animate-spin" /> Processando...</> : <><Upload className="h-2.5 w-2.5 mr-1" /> Reimportar PDFs</>}
-                          </Button>
-                        )}
-                      </div>
-                    ) : (
-                      <div className="text-center py-3">
-                        <p className="text-xs text-muted-foreground mb-2">Nenhum PDF de pagamento importado</p>
-                        <Button size="sm" className="bg-green-600 hover:bg-green-700 h-7 text-xs"
-                          disabled={uploading === 'pagamento'}
-                          onClick={() => pagInputRef.current?.click()}>
-                          {uploading === 'pagamento' ? <><RefreshCw className="h-3 w-3 mr-1 animate-spin" /> Processando...</> : <><Upload className="h-3 w-3 mr-1" /> Importar Pagamento</>}
-                        </Button>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
 
         {/* CARDS 13º SALÁRIO - Só aparecem em Nov e Dez */}
         {(isNovembro || isDezembro) && (
@@ -7684,38 +7488,6 @@ export default function FolhaPagamento() {
             </div>
         </FullScreenDialog>
 
-        {/* DIALOG: Conferência com Contabilidade Recomendada */}
-        <Dialog open={conferenciaDialog.show} onOpenChange={(open) => setConferenciaDialog(prev => ({ ...prev, show: open }))}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <AlertTriangle className="h-5 w-5 text-amber-500" />
-                Conferência com Contabilidade
-              </DialogTitle>
-              <DialogDescription>
-                {conferenciaDialog.message}
-              </DialogDescription>
-            </DialogHeader>
-            <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mt-2">
-              <p className="text-sm text-amber-800">
-                <strong>Recomendação:</strong> Faça o upload do PDF da contabilidade e confira os valores antes de consolidar. Isso garante que os cálculos internos estão corretos.
-              </p>
-              <p className="text-xs text-amber-600 mt-2">
-                Você pode alterar este comportamento em <strong>Configurações &gt; Critérios do Sistema &gt; Folha de Pagamento</strong>.
-              </p>
-            </div>
-            <DialogFooter className="gap-2 mt-4">
-              <Button variant="outline" onClick={() => setConferenciaDialog({ show: false, lancId: 0, message: "" })}>Cancelar</Button>
-              <Button variant="default" className="bg-amber-600 hover:bg-amber-700" onClick={() => {
-                const lancId = conferenciaDialog.lancId;
-                setConferenciaDialog({ show: false, lancId: 0, message: "" });
-                consolidarMut.mutate({ folhaLancamentoId: lancId, ignorarConferencia: true });
-              }}>
-                Consolidar Mesmo Assim
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
 
         <Dialog open={!!espelhoPopupEmpId} onOpenChange={(open) => { if (!open) { setEspelhoPopupEmpId(null); setEspelhoEditDate(null); } }}>
           <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto" resizable={false} draggable>
