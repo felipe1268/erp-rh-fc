@@ -1,6 +1,71 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2173 — **HOTFIX BLOQUEANTE · Edição de código contábil no Plano de
+ * Contas era silenciosamente ignorada — filhos órfãos como "3.1.1" não
+ * tinha como ser reorganizados.**
+ *
+ * Print da Lilian: no Plano de Contas, item 3 (CUSTOS DIRETOS) tinha um
+ * intermediário "3.1 TESTE" e os reais filhos viraram 3.1.1 (Salários),
+ * 3.1.2 (Encargos), 3.1.3 (13º), 3.1.4 (Serviços PJ) — mas ela queria
+ * estes 4 como filhos diretos de "3" (i.e., 3.2/3.3/3.4/3.5). User:
+ * "porque? pois mesmo editanto, esses níveis nao estao mudando".
+ *
+ * **Causa-raiz dupla:**
+ *
+ *  1. **Backend** (`server/routers/financial.ts:207` `updateAccount`):
+ *     o zod input NÃO incluía `codigo`. Aceitava nome/tipo/natureza/
+ *     contaPaiId/nivel/etc, mas o código contábil era sempre ignorado.
+ *     Mesmo se o cliente enviasse, zod descartava antes de chegar no
+ *     UPDATE. Resultado: a coluna `codigo` NUNCA mudava em edição.
+ *
+ *  2. **Frontend** (`client/src/pages/financeiro/FinanceiroPlanoDeConta.tsx`):
+ *      a. `onPickParent` em modo edição (`f.id` existe) fazia
+ *         `codigo: f.id ? f.codigo : next` — mantinha o código antigo
+ *         de propósito. Trocar a Conta Pai só mudava `contaPaiId`+`nivel`,
+ *         deixando o código preso em "3.1.1".
+ *      b. `handleSave` no branch update NÃO enviava `codigo` no payload
+ *         (consistente com o backend que ignoraria mesmo).
+ *
+ * O resultado é que a única forma de "consertar" era apagar e recriar
+ * cada conta — péssima UX e perde lançamentos vinculados.
+ *
+ * **Fix em 3 partes:**
+ *
+ *  1. `updateAccount` ganha `codigo: z.string().optional()` no zod e
+ *     adiciona `parts.push('codigo=$N')` no SQL dinâmico, reaproveitando
+ *     a MESMA validação do `createAccount` (regex `^[0-9]+(\.[0-9]+){0,4}$`,
+ *     bloqueia `AUTO-*`, exige não-vazio).
+ *  2. `onPickParent` agora SEMPRE sugere o próximo código sob o novo
+ *     pai, mesmo em edição (`codigo: next`, sem o ternário `f.id ?`).
+ *     User ainda pode digitar manualmente no campo Código se quiser.
+ *  3. `handleSave` update branch agora envia `codigo: form.codigo`.
+ *
+ * **Cenário típico depois do fix:** Lilian abre "3.1.1 Salários" →
+ * troca Conta Pai de "3.1 TESTE" para "3 CUSTOS DIRETOS" → o campo
+ * Código auto-atualiza para "3.2" (próximo livre sob "3") e nivel=2.
+ * Salva. Backend persiste codigo+contaPaiId+nivel. Lista refeita
+ * mostra "3.2 Salários" como filho direto de "3", no mesmo nível
+ * das outras (Materiais 3.3, etc).
+ *
+ * **NÃO entra no escopo:** auto-renumerar siblings em cascata. Se a
+ * user mover "3.1.1 Salários" → "3.2" e já existir uma conta em "3.2",
+ * o `suggestNextCode` escolhe o próximo livre (3.3, 3.4 etc), mas
+ * NÃO reordena automaticamente. Move manual mantém o controle 100%
+ * na user.
+ *
+ * **R-001/R-007/R-010:** OK — só UPDATE com WHERE id+company_id.
+ *
+ * Arquivos tocados:
+ *  - `server/routers/financial.ts` (updateAccount: zod + parts)
+ *  - `client/src/pages/financeiro/FinanceiroPlanoDeConta.tsx` (onPickParent + handleSave)
+ *  - `shared/version.ts` → "Rev. 2173"
+ *  - `shared/changelog.ts` (esta entrada)
+ *  - `replit.md` (top-2 + demote 2171 + drop 2166)
+ *  - `replit-history.md` (one-liner 2166)
+ *
+ * ---
+ *
  * Rev. 2172 — **HOTFIX · Data de Nascimento (e validades de docs) do Funcionário
  * Terceiro "sumiam" ao reabrir o cadastro — bug de exibição que parecia ser
  * de persistência.**

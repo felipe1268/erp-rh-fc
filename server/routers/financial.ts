@@ -216,6 +216,10 @@ export const financialRouter = router({
     ativo: z.boolean().optional(),
     ordem: z.number().optional(),
     nivel: z.number().optional(),
+    // Rev. 2173 — código contábil agora é editável (até então o backend
+    // ignorava silenciosamente, deixando filhos órfãos como "3.1.1" mesmo
+    // depois de trocar a Conta Pai).
+    codigo: z.string().optional(),
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
@@ -231,6 +235,14 @@ export const financialRouter = router({
     if (input.ativo !== undefined) { parts.push(`ativo=$${i++}`); vals.push(input.ativo ? 1 : 0); }
     if (input.ordem !== undefined) { parts.push(`ordem=$${i++}`); vals.push(input.ordem); }
     if (input.nivel !== undefined) { parts.push(`nivel=$${i++}`); vals.push(input.nivel); }
+    if (input.codigo !== undefined) {
+      // Rev. 2173 — mesma validação do create (formato contábil N.N.N até 5 níveis)
+      const codigo = input.codigo.trim();
+      if (!codigo) throw new TRPCError({ code: "BAD_REQUEST", message: "Código contábil obrigatório." });
+      if (/^AUTO-/i.test(codigo)) throw new TRPCError({ code: "BAD_REQUEST", message: "Plano de Contas não aceita códigos AUTO-*; use formato contábil (ex.: 3.1, 4.2.1)." });
+      if (!/^[0-9]+(\.[0-9]+){0,4}$/.test(codigo)) throw new TRPCError({ code: "BAD_REQUEST", message: `Código contábil inválido: "${codigo}". Use formato N.N (ex.: 3.1, 4.2.1).` });
+      parts.push(`codigo=$${i++}`); vals.push(codigo);
+    }
     if (!parts.length) return { ok: true };
     vals.push(input.id, input.companyId);
     await dbExecute(db, `UPDATE financial_accounts SET ${parts.join(",")} WHERE id=$${i++} AND company_id=$${i}`, vals);

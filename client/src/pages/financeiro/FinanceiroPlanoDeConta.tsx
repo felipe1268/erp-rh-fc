@@ -201,7 +201,11 @@ export default function FinanceiroPlanoDeConta() {
     setForm((f) => ({
       ...f,
       contaPaiId: paiId,
-      codigo: f.id ? f.codigo : next,
+      // Rev. 2173 — em edição também sugere o próximo código sob o NOVO pai.
+      // Antes a edição mantinha o código antigo, então filhos órfãos como
+      // "3.1.1" continuavam aparecendo aninhados mesmo depois de mudar de pai.
+      // User ainda pode editar manualmente o campo "Código" se quiser.
+      codigo: next,
       nivel: (Number(pai.nivel) || 1) + 1,
       // herda tipo/natureza do pai pra coerência contábil (user pode alterar)
       tipo: f.id ? f.tipo : pai.tipo,
@@ -231,6 +235,9 @@ export default function FinanceiroPlanoDeConta() {
         // Rev. 2166 — envia nivel pra acompanhar troca de Conta Pai em edição
         // (onPickParent já recalcula form.nivel = pai.nivel + 1).
         nivel: form.nivel,
+        // Rev. 2173 — envia codigo pra permitir reorganização hierárquica
+        // (antes era silenciosamente ignorado pelo backend).
+        codigo: form.codigo,
       });
     } else {
       createMut.mutate({
@@ -432,14 +439,12 @@ export default function FinanceiroPlanoDeConta() {
                     value={form.codigo}
                     onChange={e => setForm(f => ({ ...f, codigo: e.target.value }))}
                     placeholder="Ex: 4.9"
-                    disabled={!!form.id}
-                    className={form.id ? "bg-gray-50 text-gray-500" : ""}
                   />
-                  {!form.id && (
-                    <p className="text-[10px] text-gray-400 mt-1">
-                      Sugerido automaticamente ao escolher a conta pai.
-                    </p>
-                  )}
+                  {/* Rev. 2173 — código sempre editável (inclusive em edição) pra
+                      permitir reorganizar a hierarquia. Backend valida formato. */}
+                  <p className="text-[10px] text-gray-400 mt-1">
+                    Sugerido automaticamente ao escolher a conta pai — editável.
+                  </p>
                 </div>
                 <div>
                   <Label>Nível</Label>
