@@ -1,6 +1,88 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2204 — **FIX UX · Impressão do Espelho de Ponto totalmente
+ * refatorada (acabou a bagunça de 5 páginas com a 1ª em branco).**
+ *
+ * Lilian (20/05/2026): "corrija totalmente a tela de impresssão do
+ * cartão de ponto.. esta tudo bagunçado." Screenshot do print preview
+ * mostrava 5 páginas A4, a primeira COMPLETAMENTE em branco (só
+ * header + footer LGPD), e a tabela do cartão de ponto jogada
+ * truncada nas páginas seguintes, com colunas vazias e sem cabeçalho
+ * repetindo a cada página.
+ *
+ * **Causa-raiz:** A impressão usava a "tela viva" — o cartão é
+ * renderizado com `display:grid` + `gridTemplateColumns` calculado
+ * dinâmicamente, várias colunas marcadas `no-print` (Ent1/Sai1/.../
+ * Editar), cards de resumo, legenda, banner CLT 62, totalizador e
+ * breakdown HE — tudo grande e sequencial. No `@media print` o
+ * cabeçalho institucional `PrintHeader` + o cabeçalho do funcionário
+ * + os 4 cards de KPI já consumiam ~85% da 1ª página A4, empurrando
+ * a tabela inteira para a 2ª página. Pior: como o grid usa CSS Grid
+ * (não `<table>`), o navegador não repete cabeçalho por página e
+ * trata colunas `display:none` como espaço reservado em alguns
+ * engines, gerando o efeito truncado/jogado.
+ *
+ * **Fix (`client/src/pages/EspelhoPonto.tsx:1402-1620`):** Adicionado
+ * um bloco `.print-only hidden print:block` antes do
+ * `<PrintFooterLGPD/>` que renderiza uma versão LIMPA e
+ * self-contained para impressão. A CSS já existente em
+ * `client/src/index.css:364-370` (`body:has(.print-only)
+ * *:not(.print-only):not(.print-only *):not(:has(.print-only))
+ * { display:none !important }`) garante que TUDO o resto da tela
+ * é escondido na impressão — inclusive `PrintHeader` e
+ * `PrintFooterLGPD` (que viram redundantes nesse modo).
+ *
+ * **Estrutura do bloco print-only (cabe em 1-2 páginas A4 retrato
+ * mesmo com 31 dias):**
+ * - Cabeçalho institucional FC: logo (fallback `/logo-fc.jpg`) +
+ *   razão social + CNPJ à esquerda; "Gerado por: {user}" +
+ *   timestamp `nowBrasilia()` à direita; border-bottom azul FC
+ *   `#1B2A4A`.
+ * - Faixa título azul `#1B2A4A` full-width com "ESPELHO DE PONTO"
+ *   em caixa alta, letter-spacing 3px (regra de ouro Rev. 2106+
+ *   de cabeçalho institucional).
+ * - Cartão funcionário em `<table>` 3 colunas: Nome+Função |
+ *   Matrícula+CPF | Período.
+ * - Banner CLT Art. 62 (cor índigo) APENAS se `isCargoConfianca`.
+ * - 4 KPIs em `<table>` 1 linha: Dias Trab. | Saldo HE | Faltas |
+ *   Atrasos — todos respeitando `cargoConfiancaIntegralNoPeriodo`
+ *   (mostra "Isento"/"—" se aplicável).
+ * - **TABELA PRINCIPAL** em `<table>` HTML real (não grid CSS): thead
+ *   azul `#1B2A4A` com `display:table-header-group` (repete em toda
+ *   página), tbody com fundo zebrado por status (`#fef2f2` falta,
+ *   `#ecfeff` férias, `#fefce8` feriado, `#f8fafc` fim de semana),
+ *   tfoot com totalizador.
+ * - Colunas fixas: Dia (`Seg 01/05`) | Ent.1 | Saí.1 | Ent.2 | Saí.2
+ *   | (Ent.3/Saí.3 se `hasThirdShift`) | Total | HE/Atr (azul se HE,
+ *   âmbar se atraso) | Obra | Ocorrência.
+ * - Dias `cargo_confianca` sem registro: linha colspan italica
+ *   "Isento — CLT Art. 62".
+ * - Breakdown HE em caixa azul (50% dias úteis / 50% sábados / 100%
+ *   domingos) usando os mesmos pUtil/pDom do `empData`.
+ * - 3 assinaturas (Diretoria / Chefia / Funcionário) em `<table>`
+ *   com border-bottom + label cinza.
+ * - Footer LGPD compacto self-contained.
+ *
+ * **Detalhes técnicos críticos:**
+ * - Todo elemento com fundo colorido carrega `WebkitPrintColorAdjust:
+ *   "exact"` + `printColorAdjust: "exact"` inline para garantir que
+ *   as cores apareçam no PDF (regra de ouro Rev. 2106+).
+ * - Usa `<table>` real com `display:table-header-group` no thead =>
+ *   navegador repete cabeçalho automaticamente em cada página
+ *   impressa, sem CSS extra.
+ * - Logo com fallback `${window.location.origin}/logo-fc.jpg`
+ *   (regra de ouro).
+ * - JAMAIS usa `onerror=`/`onload=` (filtro XSS do `signatures.create`
+ *   não se aplica aqui, mas mantemos a convenção).
+ * - Bloco wrappado em IIFE `(() => { ... })()` só renderiza se
+ *   `hasData && queryParams` (mesmo gating do conteúdo da tela).
+ * - O `<PrintFooterLGPD/>` continua no DOM (vira display:none na
+ *   impressão pelo `:has` CSS), preservado caso alguém remova o
+ *   bloco print-only no futuro como fallback.
+ *
+ * **R-001/R-007/R-010:** ✅ OK — só client, zero server, zero schema.
+ *
  * Rev. 2203 — **MELHORIA UX · Informativo de "Diluição de Caixa" no
  * preview de Aviso Prévio quando há FÉRIAS VENCIDAS.**
  *

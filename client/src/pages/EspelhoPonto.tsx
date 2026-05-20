@@ -6,6 +6,8 @@ import PrintFooterLGPD from "@/components/PrintFooterLGPD";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
 import { usePermissions } from "@/contexts/PermissionsContext";
+import { useAuth } from "@/_core/hooks/useAuth";
+import { nowBrasilia } from "@/lib/dateUtils";
 import { Button } from "@/components/ui/button";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
@@ -503,7 +505,8 @@ function EditDialog({ open, onClose, dateStr, record, employeeId, companyId, com
 
 export default function EspelhoPonto() {
   const { isAdminMaster, hasGroup, groupCanAccessRoute, isLoading: permissionsLoading } = usePermissions();
-  const { selectedCompanyId, getCompanyIdsForQuery, isConstrutoras } = useCompany();
+  const { selectedCompanyId, selectedCompany, getCompanyIdsForQuery, isConstrutoras } = useCompany();
+  const { user } = useAuth();
   const companyId = selectedCompanyId
     ? parseInt(selectedCompanyId, 10) : 0;
   const companyIds = getCompanyIdsForQuery();
@@ -1392,6 +1395,206 @@ export default function EspelhoPonto() {
           </>
         )}
       </div>
+
+      {/* ============================================================ */}
+      {/* Rev. 2204 — IMPRESSÃO LIMPA do Espelho de Ponto.             */}
+      {/* ------------------------------------------------------------ */}
+      {/* Substitui a impressão "da tela viva" (que gerava 5 páginas,  */}
+      {/* a primeira em branco, pq o grid display:grid + cards/banner  */}
+      {/* empurram a tabela pra fora). Renderiza um bloco .print-only  */}
+      {/* (CSS em index.css L364-370 esconde todo o resto via :has()), */}
+      {/* com tabela HTML real, header e rodapé self-contained.        */}
+      {/* ============================================================ */}
+      {hasData && queryParams && (() => {
+        const empresaNome = selectedCompany?.nomeFantasia || selectedCompany?.razaoSocial || "";
+        const empresaCnpj = selectedCompany?.cnpj || "";
+        const logoUrl = selectedCompany?.logoUrl || `${typeof window !== 'undefined' ? window.location.origin : ''}/logo-fc.jpg`;
+        const userLabel = user?.name || user?.username || "—";
+        const stamp = nowBrasilia();
+        // breakdown HE
+        const pUtil = parseFloat(empData?.heNormal50 || "50");
+        const pDom = parseFloat(empData?.he100 || "100");
+        let heUtil = 0, heSab = 0, heDom = 0;
+        for (const d of allDays) {
+          const r = recordMap[d]; if (!r) continue;
+          const he = parseHHMM(r.horasExtras); if (he <= 0) continue;
+          const dow = new Date(d + "T12:00:00Z").getUTCDay();
+          if (dow === 0) heDom += he; else if (dow === 6) heSab += he; else heUtil += he;
+        }
+        return (
+          <div className="print-only hidden print:block" style={{ fontFamily: "Arial, Helvetica, sans-serif", color: "#1a1a1a", fontSize: "10px" }}>
+            {/* Cabeçalho institucional FC */}
+            <div style={{ borderBottom: "2px solid #1B2A4A", paddingBottom: "8px", marginBottom: "10px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                <img src={logoUrl} alt="Logo" style={{ height: "40px", objectFit: "contain" }} />
+                <div>
+                  <div style={{ fontSize: "13px", fontWeight: 700, color: "#1B2A4A", textTransform: "uppercase" }}>{empresaNome}</div>
+                  {empresaCnpj && <div style={{ fontSize: "9px", color: "#666" }}>CNPJ: {empresaCnpj}</div>}
+                </div>
+              </div>
+              <div style={{ textAlign: "right", fontSize: "9px", color: "#666", lineHeight: 1.5 }}>
+                <div><strong style={{ color: "#1B2A4A" }}>Gerado por:</strong> {userLabel}</div>
+                <div>{stamp}</div>
+              </div>
+            </div>
+
+            {/* Faixa título */}
+            <div style={{ background: "#1B2A4A", color: "white", padding: "8px 12px", textAlign: "center", letterSpacing: "3px", fontWeight: 700, fontSize: "12px", marginBottom: "10px", WebkitPrintColorAdjust: "exact", printColorAdjust: "exact" } as React.CSSProperties}>
+              ESPELHO DE PONTO
+            </div>
+
+            {/* Cartão funcionário */}
+            <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "8px", fontSize: "10px" }}>
+              <tbody>
+                <tr>
+                  <td style={{ border: "1px solid #ccc", padding: "6px 8px", width: "50%" }}>
+                    <div><strong>Funcionário:</strong> {empData.nomeCompleto}</div>
+                    {empData.funcao && <div><strong>Função:</strong> {empData.funcao}</div>}
+                  </td>
+                  <td style={{ border: "1px solid #ccc", padding: "6px 8px", width: "25%" }}>
+                    {empData.codigoInterno && <div><strong>Matrícula:</strong> {empData.codigoInterno}</div>}
+                    {empData.cpf && <div><strong>CPF:</strong> {empData.cpf}</div>}
+                  </td>
+                  <td style={{ border: "1px solid #ccc", padding: "6px 8px", width: "25%" }}>
+                    <div><strong>Período:</strong></div>
+                    <div>{fmtDate(queryParams.dataInicio)} a {fmtDate(queryParams.dataFim)}</div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+
+            {/* Banner CLT 62 se aplicável */}
+            {isCargoConfianca && (
+              <div style={{ border: "1px solid #c7d2fe", background: "#eef2ff", padding: "6px 10px", fontSize: "9.5px", color: "#3730a3", marginBottom: "8px", WebkitPrintColorAdjust: "exact", printColorAdjust: "exact" } as React.CSSProperties}>
+                <strong>Isento de controle de jornada — CLT Art. 62{cargoConfiancaInciso ? `, inciso ${cargoConfiancaInciso}` : ""}.</strong>
+                {cargoConfiancaDesde && <> Enquadrado em {fmtDate(String(cargoConfiancaDesde).slice(0, 10))}.</>}
+              </div>
+            )}
+
+            {/* KPIs resumo */}
+            <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "8px", fontSize: "9.5px" }}>
+              <tbody>
+                <tr>
+                  {[
+                    { lbl: "Dias Trab.", val: cargoConfiancaIntegralNoPeriodo ? "Isento" : String(summary.trabalhados), sub: cargoConfiancaIntegralNoPeriodo ? "" : minsToHHMM(summary.totalTrabMins, "0h") },
+                    { lbl: "Saldo HE", val: cargoConfiancaIntegralNoPeriodo ? "—" : (summary.saldoHEMins !== 0 ? `${summary.saldoHEMins > 0 ? "+" : "-"}${minsToHHMM(Math.abs(summary.saldoHEMins))}` : "—"), sub: "" },
+                    { lbl: "Faltas", val: cargoConfiancaIntegralNoPeriodo ? "—" : String(summary.diasFalta), sub: "" },
+                    { lbl: "Atrasos", val: cargoConfiancaIntegralNoPeriodo ? "—" : minsToHHMM(summary.totalAtrasoMins, "—"), sub: "" },
+                  ].map((k) => (
+                    <td key={k.lbl} style={{ border: "1px solid #ccc", padding: "5px 8px", textAlign: "center", width: "25%" }}>
+                      <div style={{ fontSize: "8px", color: "#888", textTransform: "uppercase", letterSpacing: "1px" }}>{k.lbl}</div>
+                      <div style={{ fontSize: "14px", fontWeight: 700, color: "#1B2A4A", marginTop: "1px" }}>{k.val}</div>
+                      {k.sub && <div style={{ fontSize: "8px", color: "#999" }}>{k.sub}</div>}
+                    </td>
+                  ))}
+                </tr>
+              </tbody>
+            </table>
+
+            {/* Tabela principal */}
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "9px" }}>
+              <thead style={{ display: "table-header-group" }}>
+                <tr style={{ background: "#1B2A4A", color: "white", WebkitPrintColorAdjust: "exact", printColorAdjust: "exact" } as React.CSSProperties}>
+                  <th style={{ border: "1px solid #1B2A4A", padding: "5px 4px", textAlign: "left", width: "12%" }}>Dia</th>
+                  <th style={{ border: "1px solid #1B2A4A", padding: "5px 4px", width: "8%" }}>Ent. 1</th>
+                  <th style={{ border: "1px solid #1B2A4A", padding: "5px 4px", width: "8%" }}>Saí. 1</th>
+                  <th style={{ border: "1px solid #1B2A4A", padding: "5px 4px", width: "8%" }}>Ent. 2</th>
+                  <th style={{ border: "1px solid #1B2A4A", padding: "5px 4px", width: "8%" }}>Saí. 2</th>
+                  {hasThirdShift && <th style={{ border: "1px solid #1B2A4A", padding: "5px 4px", width: "10%" }}>Ent.3 / Saí.3</th>}
+                  <th style={{ border: "1px solid #1B2A4A", padding: "5px 4px", width: "8%" }}>Total</th>
+                  <th style={{ border: "1px solid #1B2A4A", padding: "5px 4px", width: "9%" }}>HE / Atr.</th>
+                  <th style={{ border: "1px solid #1B2A4A", padding: "5px 4px", textAlign: "left" }}>Obra</th>
+                  <th style={{ border: "1px solid #1B2A4A", padding: "5px 4px", width: "13%" }}>Ocorrência</th>
+                </tr>
+              </thead>
+              <tbody>
+                {allDays.map((dateStr) => {
+                  const { name, num, monthNum, isSun, isSat } = dayInfo(dateStr);
+                  const rec = recordMap[dateStr] || null;
+                  const s = getDayStatus(dateStr, rec, feriasDatesSet, dataDesligamento, empStatus, feriadosSet, cargoConfiancaAtivoEm(dateStr));
+                  const cfg = STATUS_STYLE[s];
+                  const isWeekend = isSun || isSat;
+                  const heM = rec ? parseHHMM(rec.horasExtras) : 0;
+                  const atrasM = rec ? parseHHMM(rec.atrasos) : 0;
+                  const rowBg = isWeekend ? "#f8fafc" : (s === "falta" ? "#fef2f2" : s === "ferias" ? "#ecfeff" : s === "feriado" ? "#fefce8" : "white");
+                  const cellBase: React.CSSProperties = { border: "1px solid #ddd", padding: "3px 4px", textAlign: "center", WebkitPrintColorAdjust: "exact", printColorAdjust: "exact" };
+                  if (s === "cargo_confianca" && !rec) {
+                    return (
+                      <tr key={dateStr} style={{ background: "#eef2ff", WebkitPrintColorAdjust: "exact", printColorAdjust: "exact" } as React.CSSProperties}>
+                        <td style={{ ...cellBase, textAlign: "left" }}><strong>{name}</strong> {String(num).padStart(2, "0")}/{monthNum}</td>
+                        <td colSpan={hasThirdShift ? 8 : 7} style={{ ...cellBase, fontStyle: "italic", color: "#3730a3" }}>Isento — CLT Art. 62{cargoConfiancaInciso ? `, ${cargoConfiancaInciso}` : ""}</td>
+                        <td style={{ ...cellBase, color: "#3730a3" }}>{cfg.label}</td>
+                      </tr>
+                    );
+                  }
+                  return (
+                    <tr key={dateStr} style={{ background: rowBg, WebkitPrintColorAdjust: "exact", printColorAdjust: "exact" } as React.CSSProperties}>
+                      <td style={{ ...cellBase, textAlign: "left", color: isWeekend ? "#94a3b8" : "#1a1a1a" }}>
+                        <strong>{name}</strong> {String(num).padStart(2, "0")}/{monthNum}
+                      </td>
+                      <td style={cellBase}>{rec?.entrada1 || "—"}</td>
+                      <td style={cellBase}>{rec?.saida1 || "—"}</td>
+                      <td style={cellBase}>{rec?.entrada2 || "—"}</td>
+                      <td style={cellBase}>{rec?.saida2 || "—"}</td>
+                      {hasThirdShift && <td style={cellBase}>{(rec?.entrada3 || rec?.saida3) ? `${rec?.entrada3 || "—"} / ${rec?.saida3 || "—"}` : "—"}</td>}
+                      <td style={{ ...cellBase, fontWeight: 700 }}>{rec?.horasTrabalhadas && rec.horasTrabalhadas !== "0:00" ? rec.horasTrabalhadas : "—"}</td>
+                      <td style={{ ...cellBase, color: heM > 0 ? "#1d4ed8" : atrasM > 0 ? "#b45309" : "#999", fontWeight: 600 }}>
+                        {heM > 0 ? `+${minsToHHMM(heM)}` : atrasM > 0 ? `-${minsToHHMM(atrasM)}` : "—"}
+                      </td>
+                      <td style={{ ...cellBase, textAlign: "left", fontSize: "8.5px" }}>{rec?.obraNome || "—"}</td>
+                      <td style={{ ...cellBase, fontSize: "8.5px" }}>{cfg.label || (isWeekend ? (isSun ? "Domingo" : "Sábado") : "")}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+              <tfoot style={{ display: "table-row-group" }}>
+                <tr style={{ background: "#e2e8f0", fontWeight: 700, WebkitPrintColorAdjust: "exact", printColorAdjust: "exact" } as React.CSSProperties}>
+                  <td colSpan={hasThirdShift ? 6 : 5} style={{ border: "1px solid #94a3b8", padding: "5px 8px", textAlign: "right", textTransform: "uppercase", fontSize: "9px", letterSpacing: "1px" }}>Total do Período</td>
+                  <td style={{ border: "1px solid #94a3b8", padding: "5px 4px", textAlign: "center" }}>{minsToHHMM(summary.totalTrabMins, "0h00")}</td>
+                  <td style={{ border: "1px solid #94a3b8", padding: "5px 4px", textAlign: "center" }}>
+                    {summary.saldoHEMins !== 0 ? `${summary.saldoHEMins > 0 ? "+" : "-"}${minsToHHMM(Math.abs(summary.saldoHEMins))}` : "—"}
+                  </td>
+                  <td colSpan={2} style={{ border: "1px solid #94a3b8", padding: "5px 8px", fontSize: "8.5px", textAlign: "left" }}>
+                    {summary.totalHEMins > 0 && <span>HE +{minsToHHMM(summary.totalHEMins)} </span>}
+                    {summary.totalAtrasoMins > 0 && <span>· Atr. -{minsToHHMM(summary.totalAtrasoMins)} </span>}
+                    {summary.diasFalta > 0 && <span>· {summary.diasFalta} falta(s)</span>}
+                    {summary.totalHEMins === 0 && summary.totalAtrasoMins === 0 && summary.diasFalta === 0 && <span>Sem ocorrências</span>}
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
+
+            {/* Breakdown HE */}
+            {summary.totalHEMins > 0 && (heUtil + heSab + heDom) > 0 && (
+              <div style={{ marginTop: "6px", padding: "5px 8px", background: "#eff6ff", border: "1px solid #bfdbfe", fontSize: "9px", color: "#1e40af", WebkitPrintColorAdjust: "exact", printColorAdjust: "exact" } as React.CSSProperties}>
+                <strong>HE:</strong>
+                {heUtil > 0 && ` ${minsToHHMM(heUtil)} a ${pUtil}% (dias úteis)`}
+                {heSab > 0 && `${heUtil > 0 ? " + " : " "}${minsToHHMM(heSab)} a ${pUtil}% (sábados)`}
+                {heDom > 0 && `${(heUtil + heSab) > 0 ? " + " : " "}${minsToHHMM(heDom)} a ${pDom}% (domingos)`}
+              </div>
+            )}
+
+            {/* Assinaturas */}
+            <table style={{ width: "100%", marginTop: "30px", borderCollapse: "collapse" }}>
+              <tbody>
+                <tr>
+                  {["Assinatura da Diretoria", "Assinatura da Chefia Imediata", "Assinatura do Funcionário"].map((l) => (
+                    <td key={l} style={{ width: "33%", padding: "0 12px", textAlign: "center", verticalAlign: "bottom" }}>
+                      <div style={{ borderBottom: "1px solid #1a1a1a", height: "40px" }} />
+                      <div style={{ fontSize: "9px", color: "#666", marginTop: "3px" }}>{l}</div>
+                    </td>
+                  ))}
+                </tr>
+              </tbody>
+            </table>
+
+            {/* Footer LGPD */}
+            <div style={{ marginTop: "16px", borderTop: "1px solid #ccc", paddingTop: "6px", fontSize: "7.5px", color: "#888", textAlign: "center", lineHeight: 1.5 }}>
+              Documento gerado por <strong>{userLabel}</strong> em {stamp} · ERP Gestão Integrada · Contém dados pessoais protegidos pela LGPD (Lei nº 13.709/2018).
+            </div>
+          </div>
+        );
+      })()}
 
       <PrintFooterLGPD />
 
