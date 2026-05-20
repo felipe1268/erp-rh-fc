@@ -1,6 +1,72 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2178 — **HOTFIX BLOQUEANTE · Adiantamento (vale) saía sobre o
+ * salário INTEGRAL para colaboradores admitidos no meio do mês —
+ * agora calcula proporcional aos dias efetivamente trabalhados.**
+ *
+ * Lilian reportou: Fabio Kelly admitido em 04/05/2026, vale puxava
+ * R$ 904,79 (= 40% sobre R$ 2.262, o mês cheio do horista). Outros 4
+ * colaboradores no mesmo mês (James, Marcelo Goes, Marcelo Augusto,
+ * Nilton, Reginaldo) na mesma situação. O alerta "Admitido no mês de
+ * referência — menos de 10 dias trabalhados" já aparecia na tela
+ * "Decisão Necessária" (correto), mas o VALOR mostrado era integral.
+ *
+ * **Causa raiz em `server/routers/payrollEngine.ts:2316-2331` (gerarVale):**
+ * `diasTrabalhados` só descontava `diasFeriasNoMes` e `diasAusentesAviso`
+ * — ignorava os dias ANTES da data de admissão. Resultado:
+ *  - Horista: `valorHora × (horasMensaisBase × diasTrabalhados/30)` →
+ *    com diasTrabalhados = diasNoMes (31), o cálculo virava
+ *    `9,95 × (220 × 31/30) = R$ 2.262,00` (mês cheio) × 40% = R$ 904,80.
+ *  - Mensalista: o gate `if (diasFeriasNoMes > 0 || diasAusentesAviso > 0)`
+ *    não pegava admissão → ficava no `else { salarioBruto = salBase }`
+ *    puro (mês cheio).
+ *
+ * **Fix (mesmo arquivo, mesma função):**
+ *  1. Novo cálculo `diasAntesAdmissao = max(0, admDate.day - 1)` quando
+ *     `admDate.year === year && admDate.month === month`.
+ *  2. `diasTrabalhados` agora subtrai os 4 fatores: férias + aviso +
+ *     admissão (e o conceito "retorno de férias" já é coberto por
+ *     `feriasMesMap`, que conta dias-overlap de qualquer período de
+ *     férias com o mês — colaborador que voltou no meio do mês entra
+ *     com `diasFeriasNoMes > 0` naturalmente).
+ *  3. Novo flag local `temProporcional` unifica as 3 causas; mensalista
+ *     agora aplica `salBase × (diasTrabalhados/diasNoMes)` em qualquer
+ *     uma delas (antes só férias/aviso).
+ *  4. Motivo do alerta atualizado: "Admitido no mês de referência
+ *     (YYYY-MM-DD) — **vale proporcional a X/Y dias trabalhados**"
+ *     (substitui o antigo "menos de 10 dias trabalhados", que era
+ *     impreciso — admitido no dia 02 tinha 30 dias trabalhados e o
+ *     alerta continuava dizendo "menos de 10").
+ *
+ * **O que continua aparecendo na imagem 1 (mantido conforme pedido):**
+ * o card "Decisão Necessária" continua listando esses colaboradores —
+ * o RH ainda precisa **decidir Pagar/Não Pagar** (admissão recente é
+ * critério histórico da FC para revisão manual), mas agora com o
+ * valor JÁ calculado proporcionalmente. RH vê R$ 817,22 (proporcional
+ * a 28 dias do Fabio) em vez de R$ 904,80 (mês cheio errado).
+ *
+ * **Caso "retorno de afastamento INSS":** out of scope desta revisão.
+ * Há tracking em `time_records.afastamento_inss` mas não há mapa
+ * agregado de "dias de afastamento INSS no mês" análogo ao
+ * `feriasMesMap`. Quando Lilian reportar caso concreto de afastamento
+ * INSS com vale errado, faço revisão dedicada (não vale extrapolar
+ * sem caso real — afastamento curto < 15 dias a empresa paga, > 15
+ * dias o INSS paga, regras diferentes).
+ *
+ * **R-001/R-007/R-010:** OK — só lógica em memória, zero DDL/DML.
+ * Inserts em `payroll_advances` continuam usando os mesmos campos.
+ *
+ * Arquivos tocados:
+ *  - `server/routers/payrollEngine.ts` (gerarVale: bloco de cálculo
+ *    proporcional + motivoBloqueio do alerta de admissão)
+ *  - `shared/version.ts` → "Rev. 2178"
+ *  - `shared/changelog.ts` (esta entrada)
+ *  - `replit.md` (top-2 + demote 2176 + drop 2171)
+ *  - `replit-history.md` (one-liner 2171)
+ *
+ * ---
+ *
  * Rev. 2177 — **MELHORIA MOBILE · Scroll horizontal automático em
  * QUALQUER tabela do ERP que estourar a viewport — fix global via CSS
  * `:has()`, zero edição de páginas.**

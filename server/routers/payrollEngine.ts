@@ -2312,11 +2312,27 @@ export const payrollEngineRouter = router({
         const valorHE = 0;
         const isMensalista = (emp.tipoRemuneracao === 'mensalista');
 
-        // ── Salário proporcional: férias + aviso prévio (desligados) ──────
+        // ── Salário proporcional: férias + aviso prévio (desligados) + admissão no mês ──
         const diasFeriasNoMes = feriasMesMap.get(emp.id) || 0;
         const avisoUltimoDia = avisoUltimoDiaMap.get(emp.id);
         const diasAusentesAviso = avisoUltimoDia ? Math.max(0, diasNoMes - avisoUltimoDia) : 0;
-        const diasTrabalhados = Math.max(0, diasNoMes - diasFeriasNoMes - diasAusentesAviso);
+
+        // Rev. 2178 — Admissão no meio do mês: dias ANTES da admissão contam como ausentes.
+        // Sem isso, horista virava `valorHora * (horasMensaisBase * diasNoMes / 30)` (integral)
+        // e mensalista permanecia no `salBase` puro — o adiantamento saía sobre o mês cheio
+        // mesmo quando o colaborador só trabalhou parte do mês. Caso reportado por Lilian:
+        // Fabio Kelly admitido 04/05/2026, vale puxava R$ 904,79 (40% sobre 2.262 = mês cheio)
+        // quando deveria puxar proporcional aos 28 dias efetivamente trabalhados.
+        let diasAntesAdmissao = 0;
+        if (emp.dataAdmissao) {
+          const admDate = new Date(emp.dataAdmissao + "T12:00:00Z");
+          if (admDate.getUTCFullYear() === year && admDate.getUTCMonth() + 1 === month) {
+            diasAntesAdmissao = Math.max(0, admDate.getUTCDate() - 1);
+          }
+        }
+
+        const diasTrabalhados = Math.max(0, diasNoMes - diasFeriasNoMes - diasAusentesAviso - diasAntesAdmissao);
+        const temProporcional = diasFeriasNoMes > 0 || diasAusentesAviso > 0 || diasAntesAdmissao > 0;
 
         let salarioBruto: number;
         let salarioMensalCompleto: number;
@@ -2324,7 +2340,7 @@ export const payrollEngineRouter = router({
         if (isMensalista) {
           const salBase = parseBRL(emp.salarioBase);
           salarioMensalCompleto = salBase;
-          if (diasFeriasNoMes > 0 || diasAusentesAviso > 0) {
+          if (temProporcional) {
             salarioBruto = salBase * (diasTrabalhados / diasNoMes);
           } else {
             salarioBruto = salBase;
@@ -2369,13 +2385,11 @@ export const payrollEngineRouter = router({
         }
 
         // 2) Admitido no mês de referência (menos de 10 dias disponíveis)
-        if (emp.dataAdmissao) {
-          const admDate = new Date(emp.dataAdmissao + "T12:00:00Z");
-          const admYear = admDate.getUTCFullYear();
-          const admMonth = admDate.getUTCMonth() + 1;
-          if (admYear === year && admMonth === month) {
-            motivosBloqueio.push(`Admitido no mês de referência (${emp.dataAdmissao}) — menos de 10 dias trabalhados`);
-          }
+        //    Rev. 2178 — também informa que o vale já saiu proporcional aos dias trabalhados.
+        if (diasAntesAdmissao > 0) {
+          motivosBloqueio.push(
+            `Admitido no mês de referência (${emp.dataAdmissao}) — vale proporcional a ${diasTrabalhados}/${diasNoMes} dias trabalhados`
+          );
         }
 
         const bloqueado = motivosBloqueio.length > 0;
