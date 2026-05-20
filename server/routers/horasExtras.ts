@@ -270,28 +270,78 @@ export const horasExtrasRouter = router({
       const period = ((periodRows as any).rows || [])[0] || null;
       const employees = (empRows as any).rows || [];
 
-      // Rev. 2183 — obras trabalhadas por funcionário no período (para filtro UI).
-      // Lê time_records do range do período e cruza com obras, retornando lista
-      // distinta {employeeId, obraId, obraNome} para o client agrupar/filtrar.
-      let obrasPorEmp: Array<{ employeeId: number; obraId: number | null; obraNome: string | null }> = [];
+      // Rev. 2183 / 2185 — obras trabalhadas por funcionário no período (filtro UI).
+      //
+      // Rev. 2185 (BUG FIX): a Rev. 2183 lia obras SÓ de `time_records`, o que
+      // gerava falso-positivo: se um funcionário com HE aprovada na Obra A
+      // batia ponto em outra Obra B no mesmo período, o filtro "Obra B"
+      // mostrava a linha "Aprovada" dele (que na verdade era da Obra A).
+      //
+      // Fix: dividir `obrasPorEmp` POR ORIGEM, espelhando a classificação de
+      // `computeHEForPeriod`:
+      //   - origem='aprovada'      → obraId vem da própria solicitação HE
+      //                              aprovada (fonte de verdade); JOIN em
+      //                              he_solicitacoes + he_solicitacao_funcionarios.
+      //   - origem='sem_solicitacao' → obraId vem de time_records, EXCLUINDO
+      //                                dias cobertos por solicitação aprovada
+      //                                (esses dias já viraram origem 'aprovada').
+      //
+      // Retorna: { employeeId, origem, obraId, obraNome }. O client filtra
+      // por (employeeId + origem), garantindo que cada linha split (Rev. 2179)
+      // só apareça sob o filtro de obra correto.
+      let obrasPorEmp: Array<{ employeeId: number; origem: "aprovada" | "sem_solicitacao"; obraId: number | null; obraNome: string | null }> = [];
       if (period && employees.length > 0) {
         const empIds = employees.map((e: any) => Number(e.employeeId)).filter(Boolean);
         if (empIds.length > 0) {
           try {
-            const obrasRows = ((await db.execute(sql`
-              SELECT DISTINCT tr."employeeId", tr."obraId", o.nome as "obraNome"
+            // (1) Obras das solicitações HE APROVADAS no range do período.
+            const aprovadasRows = ((await db.execute(sql`
+              SELECT DISTINCT sf."employeeId", s."obraId", o.nome AS "obraNome"
+              FROM he_solicitacoes s
+              JOIN he_solicitacao_funcionarios sf ON sf."solicitacaoId" = s.id
+              LEFT JOIN obras o ON o.id = s."obraId"
+              WHERE s."companyId" = ${period.companyId}
+                AND s.status = 'aprovada'
+                AND sf."employeeId" IN (${sql.join(empIds.map((id: number) => sql`${id}`), sql`,`)})
+                AND s."dataSolicitacao" >= ${period.dataInicio}::date
+                AND s."dataSolicitacao" <= ${period.dataFim}::date
+            `)) as any).rows || [];
+
+            // (2) Obras de time_records FORA de dias cobertos por solicitação
+            //     aprovada (espelha o que vira origem 'sem_solicitacao').
+            const semSolRows = ((await db.execute(sql`
+              SELECT DISTINCT tr."employeeId", tr."obraId", o.nome AS "obraNome"
               FROM time_records tr
               LEFT JOIN obras o ON o.id = tr."obraId"
               WHERE tr."companyId" = ${period.companyId}
                 AND tr."employeeId" IN (${sql.join(empIds.map((id: number) => sql`${id}`), sql`,`)})
                 AND tr.data >= ${period.dataInicio}::date
                 AND tr.data <= ${period.dataFim}::date
+                AND NOT EXISTS (
+                  SELECT 1
+                  FROM he_solicitacoes s2
+                  JOIN he_solicitacao_funcionarios sf2 ON sf2."solicitacaoId" = s2.id
+                  WHERE s2."companyId" = ${period.companyId}
+                    AND s2.status = 'aprovada'
+                    AND sf2."employeeId" = tr."employeeId"
+                    AND s2."dataSolicitacao" = tr.data
+                )
             `)) as any).rows || [];
-            obrasPorEmp = obrasRows.map((r: any) => ({
-              employeeId: Number(r.employeeId),
-              obraId: r.obraId != null ? Number(r.obraId) : null,
-              obraNome: r.obraNome || null,
-            }));
+
+            obrasPorEmp = [
+              ...aprovadasRows.map((r: any) => ({
+                employeeId: Number(r.employeeId),
+                origem: "aprovada" as const,
+                obraId: r.obraId != null ? Number(r.obraId) : null,
+                obraNome: r.obraNome || null,
+              })),
+              ...semSolRows.map((r: any) => ({
+                employeeId: Number(r.employeeId),
+                origem: "sem_solicitacao" as const,
+                obraId: r.obraId != null ? Number(r.obraId) : null,
+                obraNome: r.obraNome || null,
+              })),
+            ];
           } catch (err: any) {
             console.error("[heModulo.getDetalhe] falha ao buscar obrasPorEmp:", err?.message || err);
           }

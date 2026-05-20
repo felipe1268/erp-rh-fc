@@ -1,6 +1,67 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2185 — **HOTFIX BLOQUEANTE · Filtro por OBRA no Relatório de
+ * Períodos HE mostrava linha "Aprovada" sob obra ERRADA quando o
+ * funcionário tinha ponto em outra obra no mesmo período. Fix:
+ * `obrasPorEmp` agora é separado POR ORIGEM, lendo da fonte de
+ * verdade certa pra cada caso.**
+ *
+ * Lilian: "atentar o fitlro, a hora extra do caio é da obra do papa,
+ * inclusive a solicitação esta de la, porem o esta aparecendo como
+ * REVTE-CIVIL.. FAZER A CORREÇÃO.. E GARANTIR QUE ISSO NAÕ VAI SE
+ * REPETIR..".
+ *
+ * **Causa-raiz:** a Rev. 2183 construiu `obrasPorEmp` lendo APENAS
+ * de `time_records` (toda obra que o funcionário bateu ponto no
+ * intervalo do período). Como a Rev. 2179 quebra cada funcionário
+ * em até 2 linhas (origem='aprovada' vs 'sem_solicitacao'), e como
+ * HE não tem alocação direta por obra em `he_period_employees`, o
+ * mapa `employeeId → Set<obraId>` cruzava as duas origens: ao
+ * filtrar por "REVTE-CIVIL", o sistema mostrava também a linha
+ * "Aprovada" do funcionário (cuja solicitação real era de outra
+ * obra — ex.: HOTEL DO PAPA), porque ele tinha bateu ponto em
+ * REVTE-CIVIL em outro dia do mesmo intervalo.
+ *
+ * **Fix (Server — `server/routers/horasExtras.ts:getDetalhe`):**
+ * `obrasPorEmp` agora retorna `Array<{employeeId, origem,
+ * obraId, obraNome}>`, espelhando a classificação de
+ * `computeHEForPeriod`:
+ *
+ * 1. **origem='aprovada'**: query `he_solicitacoes` JOIN
+ *    `he_solicitacao_funcionarios` filtrando `status='aprovada'` +
+ *    `dataSolicitacao ∈ [dataInicio, dataFim]` + empIds. A `obraId`
+ *    vem da PRÓPRIA solicitação aprovada (fonte de verdade).
+ * 2. **origem='sem_solicitacao'**: query `time_records` no range,
+ *    com `NOT EXISTS` que EXCLUI dias onde já há solicitação HE
+ *    aprovada cobrindo aquele dia para aquele funcionário (esses
+ *    dias viram origem 'aprovada' no split — incluir aqui geraria
+ *    o mesmo falso-positivo).
+ *
+ * **Fix (Client — `client/src/pages/FolhaPagamento.tsx`):**
+ * `obrasMap` agora é `Map<"empId|origem", Set<obraKey>>` (antes era
+ * `Map<empId, Set<obraKey>>`). O filtro `periodEmpsAll` checa
+ * `obrasMap.get(\`${e.employeeId}|${e.origem}\`)?.has(filtroObra)`,
+ * garantindo que cada linha split passe só pelo filtro da obra
+ * efetivamente vinculada à sua origem. Fallback de compatibilidade:
+ * payloads antigos sem `origem` populam as duas origens (não afeta
+ * dados novos pós-deploy).
+ *
+ * **Garantia de não-regressão:** como o server agora extrai obras
+ * da MESMA fonte que classifica `origem` em `computeHEForPeriod`
+ * (solicitações aprovadas), o vínculo obra↔origem é estrutural,
+ * não heurístico. Qualquer mudança futura na classificação só
+ * precisa atualizar o `NOT EXISTS` (mesma cláusula de cobertura
+ * por dia).
+ *
+ * **R-001/R-007/R-010:** OK — só SELECT, sem DDL/DELETE.
+ *
+ * **Arquivos tocados:**
+ * - `server/routers/horasExtras.ts` (getDetalhe — obrasPorEmp split
+ *   por origem com 2 queries SQL distintas).
+ * - `client/src/pages/FolhaPagamento.tsx` (obrasMap re-chaveada por
+ *   "empId|origem" + filtro por origem).
+ *
  * Rev. 2184 — **NOVA FEATURE · Drill-down do badge "✅ Aprovada"
  * no Relatório de Períodos HE: clicar abre dialog listando as
  * solicitações HE aprovadas que cobrem o funcionário no período.**

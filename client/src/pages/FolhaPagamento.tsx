@@ -4668,26 +4668,40 @@ export default function FolhaPagamento() {
                     <div className="space-y-3">
                       {periods.map((p: any) => {
                         const isOpen = heViewPeriodId === p.id;
-                        // Rev. 2183 — filtro por obra: usa obrasPorEmp do server pra construir
-                        // mapa employeeId → Set<obraId|"sem"> e lista de obras pro dropdown.
-                        const obrasPorEmp: Array<{ employeeId: number; obraId: number | null; obraNome: string | null }> =
+                        // Rev. 2183 / 2185 — filtro por obra. A Rev. 2185 mudou a chave
+                        // de Map<employeeId, …> para Map<"empId|origem", …> porque o
+                        // server agora separa as obras por origem (aprovada usa obra
+                        // da solicitação; sem_solicitacao usa time_records). Assim
+                        // cada linha split (Rev. 2179) só passa pelo filtro da obra
+                        // CORRETA, sem misturar obras de outras origens.
+                        const obrasPorEmp: Array<{ employeeId: number; origem?: "aprovada" | "sem_solicitacao"; obraId: number | null; obraNome: string | null }> =
                           isOpen ? ((detalhe as any)?.obrasPorEmp || []) : [];
-                        const obrasMap = new Map<number, Set<string>>();
+                        const obrasMap = new Map<string, Set<string>>();
                         const obrasDoPeriodo = new Map<string, string>();
                         for (const o of obrasPorEmp) {
                           const key = o.obraId != null ? String(o.obraId) : "sem";
-                          if (!obrasMap.has(o.employeeId)) obrasMap.set(o.employeeId, new Set());
-                          obrasMap.get(o.employeeId)!.add(key);
+                          // Fallback: payloads antigos sem 'origem' caem em ambas as origens
+                          // (compatibilidade durante o deploy — não afeta dados novos).
+                          const origens: Array<"aprovada" | "sem_solicitacao"> = o.origem ? [o.origem] : ["aprovada", "sem_solicitacao"];
+                          for (const origem of origens) {
+                            const mapKey = `${o.employeeId}|${origem}`;
+                            if (!obrasMap.has(mapKey)) obrasMap.set(mapKey, new Set());
+                            obrasMap.get(mapKey)!.add(key);
+                          }
                           if (!obrasDoPeriodo.has(key)) obrasDoPeriodo.set(key, o.obraNome || "Sem Obra");
                         }
                         const obrasOptions = Array.from(obrasDoPeriodo.entries())
                           .map(([id, nome]) => ({ id, nome }))
                           .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
-                        // Aplica filtro por obra ANTES dos KPIs (cards refletem o escopo da obra)
+                        // Aplica filtro por obra ANTES dos KPIs (cards refletem o escopo da obra).
+                        // Rev. 2185: filtro casa por (employeeId + origem da linha).
                         const periodEmpsAllRaw = isOpen ? selectedEmps : [];
                         const periodEmpsAll = heObraFilterMod === "all"
                           ? periodEmpsAllRaw
-                          : periodEmpsAllRaw.filter((e: any) => obrasMap.get(Number(e.employeeId))?.has(heObraFilterMod));
+                          : periodEmpsAllRaw.filter((e: any) => {
+                              const origem = (e.origem || "sem_solicitacao") as "aprovada" | "sem_solicitacao";
+                              return obrasMap.get(`${Number(e.employeeId)}|${origem}`)?.has(heObraFilterMod);
+                            });
                         // Rev. 2182 — KPIs por origem (sempre sobre o conjunto FULL, não filtrado)
                         const kpiAprovadas = periodEmpsAll.filter((e: any) => (e.origem || "sem_solicitacao") === "aprovada");
                         const kpiSemSol = periodEmpsAll.filter((e: any) => (e.origem || "sem_solicitacao") !== "aprovada");
