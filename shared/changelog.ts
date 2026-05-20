@@ -1,6 +1,25 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2189 — **MELHORIA UX · Tabela do Relatório de Períodos HE agora
+ * mostra a foto do colaborador (avatar 32px circular) à esquerda do
+ * nome, puxando direto de `employees.fotoUrl`.** Lilian: "quero que
+ * apareça as fotos de todos aqui, busque no cadastro de cada um..".
+ *
+ * **Fix (Server — `server/routers/horasExtras.ts:getDetalhe`):** query
+ * de `empRows` passa a selecionar `e."fotoUrl"` no LEFT JOIN `employees`.
+ *
+ * **Fix (Client — `client/src/pages/FolhaPagamento.tsx:4945`):** célula
+ * do nome do colaborador agora renderiza `<img>` 32px rounded-full com
+ * `objectFit: cover` e fallback de iniciais (2 primeiras palavras) num
+ * círculo cinza quando `fotoUrl` é null/erro de carregamento (`onError`
+ * esconde a img). Layout flex centralizado com o botão de nome
+ * preservando o click pra abrir o espelho de ponto.
+ *
+ * R-001/R-007/R-010: OK — só SELECT.
+ *
+ * ---
+ *
  * Rev. 2188 — **HOTFIX UX · Dropdown "Filtrar por obra" do Relatório
  * de Períodos HE listava QUALQUER obra em que o funcionário bateu
  * ponto no período, mesmo quando aquela obra não contribuiu com HE.

@@ -4941,11 +4941,26 @@ export default function FolhaPagamento() {
                                                     className={`hover:bg-white/80 ${dest === "banco_horas" ? "bg-blue-50/30" : ""} ${isLast ? "border-b border-gray-200" : "border-b border-gray-50"}`}>
                                                     {isFirst && (
                                                       <td rowSpan={items.length} className="py-2 px-2 font-medium align-top border-r border-gray-100">
-                                                        <button className="text-left hover:text-blue-600 hover:underline focus:outline-none"
-                                                          onClick={() => { setEspelhoPopupEmpId(empKey); setEspelhoPopupEmpNome(first.nomeCompleto || first.nome || `ID ${empKey}`); }}
-                                                          title="Abrir espelho de ponto">
-                                                          {first.nomeCompleto || first.nome}
-                                                        </button>
+                                                        {/* Rev. 2189 — avatar do colaborador (employees.fotoUrl) */}
+                                                        <div className="flex items-center gap-2">
+                                                          {first.fotoUrl ? (
+                                                            <img
+                                                              src={first.fotoUrl}
+                                                              alt={first.nomeCompleto || `ID ${empKey}`}
+                                                              className="w-8 h-8 rounded-full object-cover border border-gray-200 flex-shrink-0 bg-gray-50"
+                                                              onError={(ev) => { (ev.currentTarget as HTMLImageElement).style.display = 'none'; }}
+                                                            />
+                                                          ) : (
+                                                            <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-[10px] font-semibold text-gray-600 flex-shrink-0">
+                                                              {String(first.nomeCompleto || first.nome || "?").trim().split(/\s+/).slice(0, 2).map((w: string) => w[0]).join("").toUpperCase()}
+                                                            </div>
+                                                          )}
+                                                          <button className="text-left hover:text-blue-600 hover:underline focus:outline-none"
+                                                            onClick={() => { setEspelhoPopupEmpId(empKey); setEspelhoPopupEmpNome(first.nomeCompleto || first.nome || `ID ${empKey}`); }}
+                                                            title="Abrir espelho de ponto">
+                                                            {first.nomeCompleto || first.nome}
+                                                          </button>
+                                                        </div>
                                                       </td>
                                                     )}
                                                     <td className="text-center py-2 px-2">

@@ -258,7 +258,7 @@ export const horasExtrasRouter = router({
       const [periodRows, empRows] = await Promise.all([
         db.execute(sql`SELECT * FROM he_periods WHERE id = ${input.hePeriodId} LIMIT 1`),
         db.execute(sql`
-          SELECT hpe.*, e."nomeCompleto", e.funcao, e."codigoInterno"
+          SELECT hpe.*, e."nomeCompleto", e.funcao, e."codigoInterno", e."fotoUrl"
           FROM he_period_employees hpe
           LEFT JOIN employees e ON e.id = hpe."employeeId"
           WHERE hpe."hePeriodId" = ${input.hePeriodId}
