@@ -2952,6 +2952,38 @@ ${pdfData.aviso.observacoes ? '<div class="section"><div class="section-title">O
                         </div>
                         <span className="text-2xl font-bold text-green-700">{formatMoeda(calculoPreview.previsaoRescisao.total)}</span>
                       </div>
+
+                      {/* Rev. 2203 — INFORMATIVO de Diluição de Caixa: se houver período(s)
+                          de férias vencidas, sugerir conceder as férias ANTES da rescisão
+                          (separa o pagamento das férias da rescisão e empurra a data de
+                          desligamento, diluindo o impacto no fluxo de caixa). */}
+                      {parseFloat(calculoPreview.previsaoRescisao.feriasVencidas || '0') > 0 && !isPedidoDemissao && (() => {
+                        const valorFV = parseFloat(calculoPreview.previsaoRescisao.feriasVencidas || '0');
+                        const totalBruto = parseFloat(calculoPreview.previsaoRescisao.total || '0');
+                        const totalSemFV = Math.max(0, totalBruto - valorFV);
+                        const periodos = calculoPreview.previsaoRescisao.periodosVencidos || 0;
+                        const diasGozo = periodos * 30;
+                        return (
+                          <div className="mt-3 rounded-lg border-l-4 border-amber-500 bg-amber-50 p-3">
+                            <p className="text-sm font-bold text-amber-900 flex items-center gap-1.5">
+                              💡 Sugestão de Diluição de Caixa
+                            </p>
+                            <p className="text-xs text-amber-800 mt-1 leading-relaxed">
+                              O colaborador tem <strong>{periodos} período(s) de férias vencidas ({diasGozo} dias) — {formatMoeda(valorFV)}</strong> já somados nesta rescisão.
+                              Se compensar pro cronograma, considere <strong>conceder as férias ANTES de efetivar o desligamento</strong>:
+                            </p>
+                            <ul className="text-[11px] text-amber-800 mt-1.5 ml-4 list-disc space-y-0.5">
+                              <li><strong>Férias</strong> são pagas até 2 dias antes do início do gozo (Art. 145 CLT) — separadas da rescisão.</li>
+                              <li>O contrato fica suspenso durante o gozo, <strong>empurrando o desligamento em ~{diasGozo} dias</strong> e gerando + 13º/FGTS no período.</li>
+                              <li>Caixa da rescisão cai de {formatMoeda(totalBruto)} para <strong>~{formatMoeda(totalSemFV)}</strong> (− {formatMoeda(valorFV)} pagos em outra data).</li>
+                              <li>Risco evitado: dobra do Art. 137 CLT se o prazo concessivo já tiver estourado.</li>
+                            </ul>
+                            <p className="text-[10px] text-amber-700 mt-1.5 italic">
+                              Análise meramente informativa — decisão sobre conceder ou indenizar é do RH/gestão conforme operação.
+                            </p>
+                          </div>
+                        );
+                      })()}
                     </div>
                   )}
 

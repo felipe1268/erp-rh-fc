@@ -1,6 +1,39 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2203 — **MELHORIA UX · Informativo de "Diluição de Caixa" no
+ * preview de Aviso Prévio quando há FÉRIAS VENCIDAS.**
+ *
+ * Lilian (20/05/2026): "precisa considerar tbm no aviso o valor das
+ * férias vencidas, e se for o caso quando gera o alerta, fazer esta
+ * sugestão para dar férias para o colaborador, se compensar claro..
+ * para diluição do caixa.. ao menos um informativo."
+ *
+ * **Contexto:** O cálculo de `feriasVencidas + 1/3` já existe em
+ * `server/utils/rescisaoCalc.ts:355-360` e é somado no total bruto
+ * (`L390`), com `periodosVencidosOverride` lido do banco
+ * (`vacation_periods`). O card de preview em
+ * `client/src/pages/AvisoPrevio.tsx:2861-2875` já mostrava a linha
+ * "Férias Vencidas + 1/3" quando `> 0`, MAS não havia nenhum aviso
+ * estratégico ao gestor sobre o impacto de caixa.
+ *
+ * **Fix (`client/src/pages/AvisoPrevio.tsx:2959-2989`):** Banner
+ * âmbar `border-l-4` logo abaixo do "TOTAL ESTIMADO DA RESCISÃO",
+ * renderizado APENAS quando `feriasVencidas > 0 && !isPedidoDemissao`
+ * (faz sentido só pra dispensa pelo empregador — pedido de demissão
+ * não tem flexibilidade de cronograma). Mostra:
+ * - Quantos períodos vencidos e quantos dias de gozo (`periodos*30`).
+ * - Valor de férias vencidas já embutido (`feriasVencidas`).
+ * - 4 bullets explicativos: (1) Art. 145 CLT — férias pagas 2 dias
+ *   antes do gozo; (2) contrato suspenso empurra desligamento em
+ *   ~N dias gerando + 13º/FGTS; (3) caixa da rescisão cai de
+ *   `total` para `total − feriasVencidas` (e a saída de
+ *   `feriasVencidas` vira evento separado); (4) risco evitado da
+ *   dobra do Art. 137 CLT se o prazo concessivo já tiver estourado.
+ * - Disclaimer "informativo — decisão é do RH/gestão".
+ *
+ * **R-001/R-007/R-010:** ✅ OK — só client, zero server, zero schema.
+ *
  * Rev. 2202 — **MELHORIA UX · Filtro do Histórico Catalogado (Frotas
  * → Controle de Km) virou INTERVALO de datas (de → até) em vez de
  * data única.**
