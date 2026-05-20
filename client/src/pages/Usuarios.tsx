@@ -12,7 +12,7 @@ import {
   Layers, Plus, UserCheck, Edit2, Check, Palette, UsersRound,
   ShieldCheck, ShieldAlert, Crown, Info, ChevronRight, HardHat,
 } from "lucide-react";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { toast } from "sonner";
 import { useCompany } from "@/contexts/CompanyContext";
 import { removeAccents } from "@/lib/searchUtils";
