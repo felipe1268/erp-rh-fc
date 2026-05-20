@@ -1744,40 +1744,6 @@ export default function Epis() {
               </tbody>
             </table>
 
-            {/* Rev. 2191 — Fotos anexadas (estado do EPI no momento da entrega/troca).
-                Lilian: "esta faltando as fotos que foram anexadas aos documentos".
-                Renderiza `fotoEstadoUrl` de cada item do grupo quando existir. */}
-            {(() => {
-              const itensComFoto = (fichaDelivery._grupoItems || [fichaDelivery]).filter(
-                (it: any) => it.fotoEstadoUrl
-              );
-              if (itensComFoto.length === 0) return null;
-              return (
-                <div className="mb-6 border border-gray-300 rounded p-3">
-                  <p className="text-xs font-bold text-[#1B2A4A] mb-2">
-                    📷 FOTOS ANEXADAS ({itensComFoto.length})
-                  </p>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                    {itensComFoto.map((it: any) => (
-                      <div key={it.id} className="text-center">
-                        <a href={it.fotoEstadoUrl} target="_blank" rel="noreferrer">
-                          <img
-                            src={it.fotoEstadoUrl}
-                            alt={`Foto ${it.nomeEpi || ""}`}
-                            className="w-full h-32 object-cover rounded border border-gray-300 hover:opacity-90"
-                          />
-                        </a>
-                        <p className="text-[10px] text-gray-600 mt-1 truncate">
-                          {it.nomeEpi || "EPI"}
-                          {it.motivoTroca ? ` — ${MOTIVO_TROCA_LABEL[it.motivoTroca] || it.motivoTroca}` : ""}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              );
-            })()}
-
             {/* Policy Box - Vida Útil e Desconto */}
             <div className="border-2 border-[#1B2A4A] rounded p-4 mb-4">
               <div className="flex items-center gap-2 mb-2">
@@ -1868,6 +1834,48 @@ export default function Epis() {
                 )}
               </div>
             </div>
+
+            {/* Rev. 2193 — Fotos anexadas movidas pra DEPOIS das assinaturas
+                (Lilian: "documento unico, documento, assinatura e depois fotos").
+                Bloco renderiza `fotoEstadoUrl` de cada item do grupo como
+                evidência fotográfica do estado do EPI no momento da
+                entrega/troca, após o bloco de assinaturas para encerrar o
+                documento como anexo de provas. */}
+            {(() => {
+              const itensComFoto = (fichaDelivery._grupoItems || [fichaDelivery]).filter(
+                (it: any) => it.fotoEstadoUrl
+              );
+              if (itensComFoto.length === 0) return null;
+              return (
+                <div className="mt-8 pt-6 border-t-2 border-gray-300">
+                  <div className="mb-3">
+                    <p className="text-xs font-bold text-[#1B2A4A] uppercase tracking-wider">
+                      📷 Evidência Fotográfica — EPIs ({itensComFoto.length})
+                    </p>
+                    <p className="text-[10px] text-gray-500 mt-0.5">
+                      Registro do estado do EPI no momento da entrega/troca, conforme política de cobrança (Art. 462, §1º CLT).
+                    </p>
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                    {itensComFoto.map((it: any) => (
+                      <div key={it.id} className="text-center">
+                        <a href={it.fotoEstadoUrl} target="_blank" rel="noreferrer">
+                          <img
+                            src={it.fotoEstadoUrl}
+                            alt={`Foto ${it.nomeEpi || ""}`}
+                            className="w-full h-40 object-cover rounded border border-gray-300 hover:opacity-90"
+                          />
+                        </a>
+                        <p className="text-[10px] text-gray-600 mt-1 truncate">
+                          {it.nomeEpi || "EPI"}
+                          {it.motivoTroca ? ` — ${MOTIVO_TROCA_LABEL[it.motivoTroca] || it.motivoTroca}` : ""}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
 
             {/* Botões de Assinatura Digital - só aparece na tela, não na impressão */}
             <div className="mt-4 print:hidden space-y-2">

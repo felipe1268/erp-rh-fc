@@ -1,6 +1,41 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2193 — **MELHORIA UX · Layout da Ficha de Entrega de EPI
+ * reorganizado em documento ÚNICO: tabela de EPIs → política →
+ * declaração → obrigações → assinaturas → fotos anexadas (no
+ * final, como evidência probatória).** Lilian: "as fotoss
+ * precisam aprecer junto ao relatorio, quando eu clicar em
+ * visualizar, quero ver um documento unico, documento,
+ * assinatura e depois fotos.. organize o layout para isso".
+ *
+ * **Contexto:** a Rev. 2191 colocou o bloco "📷 FOTOS ANEXADAS"
+ * ENTRE a tabela de EPIs e o Policy Box. Isso quebrava o fluxo
+ * narrativo do documento (tabela → fotos no MEIO → política →
+ * declaração → assinaturas), tornando a ficha confusa pra ler/
+ * imprimir/arquivar. A Lilian quer um documento sequencial
+ * "documento → assinatura → fotos" — fotos como ANEXO final.
+ *
+ * **Fix (Client `Epis.tsx`):** bloco de fotos REMOVIDO da posição
+ * antiga (L1747-1779) e INSERIDO depois do grid de assinaturas
+ * (após L1870), separado por `mt-8 pt-6 border-t-2 border-gray-300`
+ * pra demarcar visualmente como anexo. Header rebatizado pra
+ * "📷 Evidência Fotográfica — EPIs (n)" em uppercase tracking-wider
+ * + subtítulo legal ("Registro do estado do EPI no momento da
+ * entrega/troca, conforme política de cobrança Art. 462, §1º CLT").
+ * Thumbnails aumentadas de `h-32` pra `h-40` (mais legíveis na
+ * posição de destaque).
+ *
+ * **Não-regressão:** Rev. 2192 (nomes nas assinaturas) e Rev. 2190
+ * (olhinho → preview in-app) intactos. Bloco continua oculto
+ * quando nenhum item tem foto. Lógica de filtro/coleta dos itens
+ * inalterada (`_grupoItems || [fichaDelivery]).filter(fotoEstadoUrl)`).
+ *
+ * **R-001/R-007/R-010:** OK — apenas reordenação JSX no client,
+ * zero server, zero schema.
+ *
+ * ---
+ *
  * Rev. 2192 — **MELHORIA UX · Nome do funcionário e do responsável
  * agora aparecem em destaque abaixo de cada assinatura na Ficha de
  * Entrega de EPI.** Lilian: "precisa aparecer o nome do Usuário
