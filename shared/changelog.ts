@@ -1,6 +1,66 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2177 — **MELHORIA MOBILE · Scroll horizontal automático em
+ * QUALQUER tabela do ERP que estourar a viewport — fix global via CSS
+ * `:has()`, zero edição de páginas.**
+ *
+ * Lilian: "em algumas telas nao consigo mover para os lados (horizontal)".
+ * O ERP tem ~70+ telas com `<table>` e várias delas não envolvem a
+ * tabela em um `<div class="overflow-x-auto">`. Em desktop não dá pra
+ * notar (cabe tudo), mas em celular o body tem
+ * `overflow-x: hidden; max-width: 100vw` (regra de defesa contra
+ * horizontal-scroll acidental do app inteiro) → a tabela é cortada
+ * lateralmente sem opção de rolar.
+ *
+ * **Solução escolhida — global, não por página:** em `client/src/index.css`
+ * dentro do bloco `@media (max-width: 767px)`, novo conjunto de regras:
+ *
+ *  1. `*:not([class*="overflow-"]):has(> table)` → transforma QUALQUER
+ *     pai direto de `<table>` em scroller horizontal automaticamente,
+ *     EXCETO se ele já tem `overflow-*` explícito (não pisa em wrappers
+ *     manuais já existentes).
+ *  2. `table { min-width: max-content }` → força a tabela a ocupar o
+ *     espaço natural do seu conteúdo, disparando o scroll do pai. Quem
+ *     já usa `min-w-*` Tailwind explicitamente sobrescreve por
+ *     especificidade.
+ *  3. `*:has(> table)::-webkit-scrollbar` → barrinha de 4px sempre
+ *     visível pra dar pista visual de que rola.
+ *  4. `[data-slot="card"], [data-slot="card-content"]` → também ganham
+ *     `overflow-x: auto` pra conteúdo wide em cards (gráficos, listas
+ *     horizontais).
+ *
+ * **Por que `:has()` e não wrapper React?** `:has()` é suportado em
+ * Safari iOS 15.4+ (≥ 03/2022) e Chrome 105+ (≥ 09/2022) — em 2026
+ * cobre 100% dos dispositivos que a FC usa (iPad/iPhone da Lilian é
+ * iOS atual). Editar cada `<table>` em React exigiria 70+ PRs e seria
+ * ponto de regressão futura (toda tabela nova precisaria do wrapper).
+ * CSS global é uma camada de segurança permanente.
+ *
+ * **Riscos / mitigações:**
+ *  - Containers com `position: sticky` em filhos podem perder o sticky
+ *    quando pai vira scroller. Mitigado pelo `:not([class*="overflow-"])`
+ *    — se o dev quer comportamento explícito, declara `overflow-*` e o
+ *    fix não age.
+ *  - `min-width: max-content` em tabelas com muitas colunas pode
+ *    aumentar muito o scroll necessário. Aceitável: melhor scroll
+ *    longo do que conteúdo cortado/invisível.
+ *
+ * **Out of scope (futuro):** versão "card list" automática de tabelas
+ * em mobile (linha → card empilhado). Bom para apenas algumas telas
+ * (ex.: lista de funcionários), mas não vale generalizar globalmente.
+ *
+ * **R-001/R-007/R-010:** OK — só CSS, zero DDL/DML/backend.
+ *
+ * Arquivos tocados:
+ *  - `client/src/index.css` (bloco mobile expandido com :has() rules)
+ *  - `shared/version.ts` → "Rev. 2177"
+ *  - `shared/changelog.ts` (esta entrada)
+ *  - `replit.md` (top-2 + demote 2175 + drop 2170)
+ *  - `replit-history.md` (one-liner 2170)
+ *
+ * ---
+ *
  * Rev. 2176 — **HOTFIX BLOQUEANTE · Criar conta no Plano de Contas com
  * mesmo nome de uma Categoria existente "criava" silenciosamente sem
  * aparecer em lugar nenhum.**

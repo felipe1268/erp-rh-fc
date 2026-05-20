@@ -230,6 +230,47 @@ img, video {
     flex-wrap: nowrap !important;
     -webkit-overflow-scrolling: touch;
   }
+
+  /* Rev. 2177 — RESPONSIVIDADE GLOBAL DE TABELAS EM MOBILE
+     -----------------------------------------------------------------
+     Lilian (e demais users mobile): "em algumas telas nao consigo
+     mover para os lados". Causa: `body { overflow-x:hidden }` acima
+     prende a página, mas várias telas têm `<table>` solta sem wrapper
+     com `overflow-x:auto` → a tabela é cortada na lateral sem scroll.
+     Em vez de editar dezenas de páginas uma a uma, este bloco usa
+     CSS `:has()` (Safari iOS 15.4+, Chrome 105+ — ok em 2026) pra
+     transformar QUALQUER pai direto de `<table>` em scroller
+     horizontal automaticamente. Containers que já têm `overflow-*`
+     explícito são ignorados (não conflita com wrappers manuais). */
+  *:not([class*="overflow-"]):has(> table) {
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch;
+    max-width: 100%;
+  }
+
+  /* Garante hint visual de scroll horizontal (barra sempre visível
+     em mobile pra user perceber que rola). */
+  *:has(> table)::-webkit-scrollbar {
+    height: 4px;
+  }
+  *:has(> table)::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.25);
+    border-radius: 2px;
+  }
+
+  /* Tabelas sem `min-width` explícito ganham um mínimo razoável pra
+     forçar layout em uma linha (e disparar o scroll do pai). Quem já
+     define `min-w-*` explicitamente sobrescreve via especificidade. */
+  table {
+    min-width: max-content;
+  }
+
+  /* Cards/Containers genéricos que podem ter conteúdo wide */
+  [data-slot="card"], [data-slot="card-content"] {
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
 }
 
 /* ===== Landscape phone: aproveitar espaço horizontal ===== */
