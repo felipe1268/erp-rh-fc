@@ -1,6 +1,64 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2170 — **DIAGNÓSTICO · `dbExecute` do módulo Financeiro agora propaga
+ * a causa real do Postgres (code/constraint/detail) ao invés de engolir no
+ * "Failed query: ...".**
+ *
+ * Print do user (Lilian, financeiro, company 60002): ao editar a conta
+ * "3.1 Mão de Obra Direta" no Plano de Contas e clicar Salvar, aparecia
+ * toast vermelho "Erro / Failed query: UPDATE financial_accounts SET
+ * nome=$1,tipo=$2,natureza=$3,conta_pai_id=$4,ordem=$5,nivel=$6 WHERE
+ * id=$7 AND company_id=$8 params: Mão de Obra Direta,custo_obra,devedora,
+ * 51,0,1,214,60002". A SQL está sintaticamente correta, params com tipos
+ * certos, sem CHECK constraint, sem trigger, sem FK em conta_pai_id (só
+ * PRIMARY KEY na tabela). A causa real (código 23xxx/42xxx + detail +
+ * constraint + column) estava sendo perdida porque o wrapper `dbExecute`
+ * em `server/routers/financial.ts:45` faz `await db.execute(built)` sem
+ * try/catch — o DrizzleQueryError sobe puro com só a string "Failed query"
+ * + a SQL renderizada, sem encadear o `.cause` original do node-postgres.
+ *
+ * **Fix em `server/routers/financial.ts:dbExecute`:**
+ *  - Try/catch ao redor do `db.execute(built)`.
+ *  - Extrai `e.cause` (ou `e` se não houver) e monta string diagnóstica
+ *    com TODOS os campos relevantes do erro libpq: `code`, `constraint`,
+ *    `column`, `table`, `detail`, `hint`, `message`.
+ *  - Log no servidor com prefixo `[dbExecute][PG ERROR]` + a query
+ *    completa + os params em JSON (pra rastrear nos logs de deploy).
+ *  - Re-throw como `new Error("DB: <diag>")` com `.cause` preservada —
+ *    a mensagem enriquecida aparece no toast do tRPC do front, então
+ *    a próxima vez que a Lilian tentar e falhar, o motivo aparece claro.
+ *
+ * **Por que só `financial.ts`?** Existem 4 cópias do helper `dbExecute`
+ * (financial.ts, services/payrollProjectionBridge.ts, services/
+ * financialIntegrationBridge.ts, services/financialAutoImport.ts). Só
+ * o de `financial.ts` é o caminho do bug reportado (chamado por
+ * `updateAccount`). As outras 3 são caminhos de job/import em background
+ * que já têm seu próprio logging; serão consolidadas em revisão futura
+ * se padrão se mostrar útil.
+ *
+ * **NÃO é o fix definitivo do bug da Lilian** — é instrumentação. Próximo
+ * passo: pedir pra Lilian retentar; o novo toast vai dizer EXATAMENTE
+ * qual constraint/coluna/código PG está rejeitando. Aí faço a Rev. 2171
+ * com o fix real (provavelmente unique index oculto, dado lixo na linha
+ * 214, ou alguma coisa de schema desalinhada entre dev e prod).
+ *
+ * **Comportamento de sucesso:** intacto. Queries que executam OK retornam
+ * o mesmo `{ rows }` de antes. Único efeito visível pra usuário em
+ * caminhos felizes: zero.
+ *
+ * **R-001/R-007/R-010:** OK — só error handling/logging. Nenhum ALTER,
+ * DROP ou DELETE.
+ *
+ * Arquivos tocados:
+ *  - `server/routers/financial.ts` (helper `dbExecute` com try/catch)
+ *  - `shared/version.ts` → "Rev. 2170"
+ *  - `shared/changelog.ts` (esta entrada)
+ *  - `replit.md` (top-2 + demote)
+ *  - `replit-history.md` (one-liner da Rev. 2163)
+ *
+ * ---
+ *
  * Rev. 2169 — **MELHORIA UX · Campo "Função" no cadastro de Colaboradores
  * (aba Pessoal) virou combobox pesquisável.**
  *

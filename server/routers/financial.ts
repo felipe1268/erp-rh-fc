@@ -42,6 +42,14 @@ function rows(res: any): any[] {
 
 // Executa queries parametrizadas corretamente no Drizzle ORM
 // dbExecute(db, string, array) ignora o array — é preciso usar sql template
+//
+// Rev. 2170 — DIAGNÓSTICO: try/catch ao redor do execute. Lilian (financeiro,
+// company 60002) reportou que editar Plano de Contas falha com toast
+// "Failed query: UPDATE financial_accounts SET ...", mas a mensagem real do
+// Postgres (code 23xxx/42xxx + detail + constraint) estava sendo engolida pelo
+// wrapper DrizzleQueryError. Agora: log no servidor com causa COMPLETA (code,
+// detail, constraint, column, hint, schema, table) + re-throw com mensagem
+// enriquecida pra surgir no toast do front. Comportamento de sucesso intacto.
 async function dbExecute(db: any, query: string, params: unknown[] = []): Promise<{ rows: any[] }> {
   const parts = query.split(/\$\d+/g);
   let built: any = sql.raw(parts[0] ?? "");
@@ -50,9 +58,27 @@ async function dbExecute(db: any, query: string, params: unknown[] = []): Promis
     const tail = parts[i] ?? "";
     built = tail ? sql`${built}${paramVal}${sql.raw(tail)}` : sql`${built}${paramVal}`;
   }
-  const res = await db.execute(built);
-  const rowsArr: any[] = (res as any)?.rows ?? (Array.isArray(res) ? res : []);
-  return { rows: rowsArr };
+  try {
+    const res = await db.execute(built);
+    const rowsArr: any[] = (res as any)?.rows ?? (Array.isArray(res) ? res : []);
+    return { rows: rowsArr };
+  } catch (e: any) {
+    const cause: any = e?.cause ?? e;
+    const bits = [
+      cause?.code ? `code=${cause.code}` : null,
+      cause?.constraint ? `constraint=${cause.constraint}` : null,
+      cause?.column ? `column=${cause.column}` : null,
+      cause?.table ? `table=${cause.table}` : null,
+      cause?.detail ? `detail=${cause.detail}` : null,
+      cause?.hint ? `hint=${cause.hint}` : null,
+      cause?.message ? `msg=${cause.message}` : null,
+    ].filter(Boolean);
+    const diag = bits.length ? bits.join(" | ") : (e?.message ?? "erro desconhecido");
+    console.error("[dbExecute][PG ERROR]", diag, "\n  Q:", query, "\n  P:", JSON.stringify(params));
+    const enriched = new Error(`DB: ${diag}`);
+    (enriched as any).cause = e;
+    throw enriched;
+  }
 }
 
 
