@@ -7,7 +7,7 @@ import {
   folhaLancamentos, folhaItens, employees, payrollUploads,
   timeRecords, pontoConsolidacao, obras, manualObraAssignments, companyBankAccounts, systemCriteria,
   pontoDescontos, pontoDescontosResumo, heSolicitacoes, heSolicitacaoFuncionarios,
-  auditLogs,
+  auditLogs, payrollPeriods,
 } from "../../drizzle/schema";
 import { eq, and, sql, desc, inArray } from "drizzle-orm";
 import { resolveCompanyIds, companyFilter } from "../companyHelper";
@@ -2073,6 +2073,38 @@ export const folhaPagamentoRouter = router({
       for (const l of lancamentos) {
         if (!meses[l.mesReferencia]) meses[l.mesReferencia] = { vale: null, pagamento: null, decimo_terceiro_1: null, decimo_terceiro_2: null };
         meses[l.mesReferencia][l.tipoLancamento] = l.status;
+      }
+
+      // Rev. 2197 — Fonte adicional: payroll_periods (Cálculo Interno novo, Rev. 2180+).
+      // Sem isso, meses calculados pelo wizard novo nunca aparecem coloridos no calendário
+      // porque folha_lancamentos só é populada via importação de PDF (fluxo legacy).
+      const periods = await db.select({
+        mesReferencia: payrollPeriods.mesReferencia,
+        status: payrollPeriods.status,
+        valeGeradoEm: payrollPeriods.valeGeradoEm,
+        valeConsolidadoEm: payrollPeriods.valeConsolidadoEm,
+        pagamentoSimuladoEm: payrollPeriods.pagamentoSimuladoEm,
+        pagamentoConsolidadoEm: payrollPeriods.pagamentoConsolidadoEm,
+      }).from(payrollPeriods)
+        .where(and(
+          companyFilter(payrollPeriods.companyId, input),
+          sql`${payrollPeriods.mesReferencia} LIKE ${`${input.ano}-%`}`,
+        ));
+
+      for (const p of periods) {
+        if (!meses[p.mesReferencia]) meses[p.mesReferencia] = { vale: null, pagamento: null, decimo_terceiro_1: null, decimo_terceiro_2: null };
+        const m = meses[p.mesReferencia];
+        // Período "travada" equivale a totalmente consolidado.
+        const travada = p.status === "travada";
+        // Vale: só sobrescreve se ainda for null (não regride status de folha_lancamentos).
+        if (!m.vale) {
+          if (p.valeConsolidadoEm || travada) m.vale = "consolidado";
+          else if (p.valeGeradoEm) m.vale = "calculado";
+        }
+        if (!m.pagamento) {
+          if (p.pagamentoConsolidadoEm || travada) m.pagamento = "consolidado";
+          else if (p.pagamentoSimuladoEm) m.pagamento = "simulado";
+        }
       }
 
       return meses;

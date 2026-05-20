@@ -1,6 +1,51 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2197 — **HOTFIX · Calendário da Folha de Pagamento volta a
+ * pintar meses calculados pelo Cálculo Interno (Rev. 2180+).**
+ *
+ * Lilian: "abril tem lançamentos, todos na empresa FC tem lançamento,
+ * arrume isso". Screenshot mostrava `/folha-pagamento` ano 2026
+ * empresa FC ENGENHARIA com Abr selecionado, Cálculo Interno
+ * "3 de 4 etapas concluídas", vale R$ 89.329,71, Aferição
+ * Consolidada, Pagamento Consolidado — porém TODOS os meses do
+ * calendário no topo apareciam cinza ("Sem dados").
+ *
+ * **Causa-raiz:** O procedure `folha.listarMesesComLancamentos`
+ * (server `folhaPagamento.ts:2057`) só lia `folha_lancamentos`, a
+ * tabela LEGACY que era populada pela importação de PDF do vale/
+ * pagamento (fluxo antigo). A partir da Rev. 2180 o Cálculo Interno
+ * novo passou a usar `payroll_periods` (`valeGeradoEm`,
+ * `pagamentoSimuladoEm`, `*ConsolidadoEm`) — e a query do calendário
+ * nunca foi atualizada. Resultado: quem usava SÓ o cálculo interno
+ * (sem upload de PDF) via tudo cinza. Confirmado via psql no Neon:
+ * `folha_lancamentos WHERE mesReferencia LIKE '2026-%'` → 0 linhas,
+ * `payroll_periods` → 5 linhas (FC: Jan/Fev ponto_importado, Mar/Abr
+ * pagamento_simulado com Abr totalmente consolidado).
+ *
+ * **Fix (server `folhaPagamento.ts:2081-2111`):** Adicionada segunda
+ * query a `payroll_periods` filtrada por `companyFilter` + ano,
+ * mergeando no mesmo objeto `meses` já populado pelo legacy. Mapping
+ * dos timestamps p/ status que o cliente entende
+ * (`getMonthStatus` em `FolhaPagamento.tsx:1218`):
+ * - `valeConsolidadoEm` OU `status='travada'` → `vale="consolidado"`
+ * - `valeGeradoEm` (sem consol) → `vale="calculado"`
+ * - `pagamentoConsolidadoEm` OU `status='travada'` → `pagamento="consolidado"`
+ * - `pagamentoSimuladoEm` (sem consol) → `pagamento="simulado"`
+ * Mantém prioridade do legacy: só preenche campo do mês se ainda for
+ * `null` (não regride status se PDF já tiver populado folha_lancamentos).
+ * Import `payrollPeriods` adicionado no bloco de imports (L13).
+ *
+ * **Não-regressão:** Quem ainda usa importação de PDF (fluxo legacy)
+ * segue funcionando idêntico — folha_lancamentos é lido PRIMEIRO e
+ * tem prioridade. Quem usa só cálculo interno agora passa a ter o
+ * calendário colorido corretamente. Rev. 2196 (lightbox foto), 2195
+ * (Encargos Sociais), 2194 (remoção Conferência) intactas — arquivos
+ * diferentes.
+ *
+ * **R-001/R-007/R-010:** ✅ OK — só leitura adicional, zero
+ * ALTER/DROP/DELETE, zero schema change.
+ *
  * Rev. 2196 — **MELHORIA UX · Avatar do colaborador no Relatório de
  * Períodos HE virou clicável: abre lightbox com foto ampliada pra
  * análise facial.**
