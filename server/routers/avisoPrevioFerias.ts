@@ -1423,11 +1423,26 @@ export const avisoPrevioFeriasRouter = router({
       .input(z.object({ id: z.number() }))
       .mutation(async ({ input, ctx }) => {
         const db = (await getDb())!;
+        // Rev. 2201 — Antes do soft-delete, capturar employeeId p/ reverter status.
+        // Quando o aviso foi criado (L1271) o status do funcionário virou 'Aviso';
+        // ao excluir, precisamos voltar pra 'Ativo' — senão a ficha continua
+        // mostrando o badge amarelo "Aviso Prévio" eternamente (bug reportado
+        // por Lilian em 20/05/2026 — funcionário Robson).
+        const [aviso] = await db.select({ employeeId: terminationNotices.employeeId })
+          .from(terminationNotices)
+          .where(and(eq(terminationNotices.id, input.id), isNull(terminationNotices.deletedAt)));
         await db.update(terminationNotices).set({
           deletedAt: sql`NOW()`,
           deletedBy: ctx.user.name ?? 'Sistema',
           deletedByUserId: ctx.user.id,
         } as any).where(eq(terminationNotices.id, input.id));
+        // Reverter status APENAS se ainda for 'Aviso' (não sobrescrever
+        // Desligado / Férias / Atestado etc. caso outra mutation tenha mudado).
+        if (aviso?.employeeId) {
+          await db.update(employees)
+            .set({ status: 'Ativo' } as any)
+            .where(and(eq(employees.id, aviso.employeeId), eq(employees.status, 'Aviso')));
+        }
         return { success: true };
       }),
 

@@ -1,6 +1,37 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2201 — **HOTFIX · Excluir um Aviso Prévio agora reverte
+ * `employees.status` de 'Aviso' para 'Ativo'.**
+ *
+ * Lilian (20/05/2026): "o aviso do robson foi excluido mas o status
+ * não mudou". Screenshot mostrava ROBSON TAVARES FLORENCIO (LOCNOW)
+ * com badge amarelo "Aviso Prévio" na lista de Colaboradores E o
+ * KPI "Aviso=1" no topo, MAS a tela `/aviso-previo` listava "Nenhum
+ * aviso prévio encontrado" — porque o aviso já tinha sido excluído.
+ *
+ * **Causa-raiz:** A criação do aviso prévio (`avisoPrevio.create` em
+ * `avisoPrevioFerias.ts:1271`) seta `employees.status = 'Aviso'`,
+ * mas o `avisoPrevio.delete` (mesmo arquivo, L1422-1432) só fazia
+ * soft-delete no `terminationNotices` SEM tocar em `employees`. O
+ * funcionário ficava órfão com status 'Aviso' sem aviso ativo,
+ * exibindo badge eternamente.
+ *
+ * **Fix (`server/routers/avisoPrevioFerias.ts:1425-1450`):** Antes do
+ * soft-delete, capturar `employeeId` do aviso. Após marcar
+ * `deletedAt`, rodar `UPDATE employees SET status='Ativo' WHERE id=?
+ * AND status='Aviso'`. Guard `status='Aviso'` evita sobrescrever
+ * Desligado/Férias/Atestado caso outra mutation tenha mudado o
+ * status enquanto isso.
+ *
+ * **Cleanup de dado já corrompido:** Rodado um `UPDATE` corretivo
+ * direto no Neon p/ ROBSON FLORENCIO (e qualquer outro funcionário
+ * em situação similar): `status='Ativo'` quando status='Aviso' e
+ * nenhum termination_notice ativo aponta pra ele.
+ *
+ * **R-001/R-007/R-010:** ✅ OK — `UPDATE` aditivo (status='Ativo'),
+ * zero ALTER/DROP/DELETE de tabela.
+ *
  * Rev. 2200 — **MELHORIA UX · Calendário do topo da Folha de Pagamento
  * adotou o mesmo padrão visual do calendário do Fechamento de Ponto
  * (cores sólidas + Lock no canto).**

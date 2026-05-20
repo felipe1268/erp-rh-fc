@@ -2,6 +2,8 @@
 
 > Este arquivo guarda os one-liners das revisões antigas para manter o `replit.md` enxuto.
 
+- **Rev. 2194** — REMOÇÃO DE FEATURE · Bloco "Conferência com Contabilidade" removido da aba Folha de Pagamento (Card colapsável + Dialog de alerta + states `showConferencia`/`conferenciaDialog`). Server intacto. Ver `shared/changelog.ts`.
+
 - **Rev. 2193** — MELHORIA UX · Layout da Ficha de Entrega de EPI reorganizado em documento ÚNICO. Ver `shared/changelog.ts`.
 - **Rev. 2192** — MELHORIA UX · Nome do funcionário e do responsável aparecem em destaque abaixo de cada assinatura na Ficha de Entrega de EPI. Schema aditivo `epi_deliveries.assinatura_responsavel_{nome,em}`. Ver `shared/changelog.ts`.
 
