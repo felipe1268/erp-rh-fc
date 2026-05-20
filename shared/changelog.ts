@@ -1,6 +1,66 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2180 — **HOTFIX BLOQUEANTE · "Calcular Vale" rodava e mostrava
+ * o resultado uma vez, mas ao recarregar a tela o vale "sumia"
+ * (etapa 1 voltava pra 0%, sem `valeGeradoEm`).**
+ *
+ * Lilian reportou ao calcular o vale de Maio/2026: a tela mostra o
+ * resultado momentâneo, mas após F5 a etapa 1 volta pra 0% e o valor
+ * não aparece em lugar nenhum. Investigação: a tabela `payroll_periods`
+ * no Neon (dev/staging/clones antigos) estava sem várias colunas que o
+ * `payrollEngine.ts` já escreve há tempos:
+ *  - `valeResultJson` / `pagamentoResultJson` / `afericaoResultJson` (text)
+ *  - `aplicarDsrFalta` / `aplicarDsrAtraso` (smallint default 1)
+ *  - `valeConsolidadoEm` / `valeConsolidadoPor`
+ *  - `heConsolidadoEm` / `heConsolidadoPor`
+ *  - `afericaoConsolidadoEm` / `afericaoConsolidadoPor`
+ *  - `pagamentoConsolidadoEm` / `pagamentoConsolidadoPor`
+ *
+ * **Causa raiz em `server/routers/payrollEngine.ts:2510` (gerarVale):**
+ * Após inserir `payroll_advances` (sucesso), executa
+ * `UPDATE payroll_periods SET status='vale_gerado', "valeGeradoEm"=NOW(),
+ * "totalVale"=..., "valeResultJson"=...`. Como a coluna `valeResultJson`
+ * não existia, o UPDATE inteiro falhava com PG error
+ * `column "valeResultJson" does not exist`. O try/catch externo (L2521)
+ * pegava o erro, jogava TRPCError, mas o tRPC já tinha enviado o payload
+ * de resultado pro cliente em memória — então o cliente exibia o vale
+ * (parcialmente, da resposta HTTP) e gravava `payroll_advances` no DB,
+ * mas `valeGeradoEm` ficava NULL e `totalVale` continuava `'0'`. No
+ * próximo carregamento, `valeOk = !!pd?.valeGeradoEm` = false →
+ * card volta pra 0% e a tela ignora o `valeResultJson` (que também
+ * não foi salvo).
+ *
+ * **Fix:**
+ *  1. `ALTER TABLE payroll_periods ADD COLUMN IF NOT EXISTS` aplicado
+ *     direto via psql para todas as 13 colunas faltantes (aditivo, sem
+ *     perda de dado — R-001 OK).
+ *  2. Bootstrap `[SyncSchema+] Rev. 2180` adicionado em
+ *     `server/_core/index.ts` (try/catch idempotente, padrão dos outros
+ *     ADD COLUMN do startup) garantindo que qualquer ambiente
+ *     (produção, staging, dev limpo, branch clone) ganhe as colunas no
+ *     próximo boot, sem depender de migration manual.
+ *  3. `drizzle/schema.ts:4255` atualizado para incluir os 11 campos
+ *     faltantes em `payrollPeriods` (`valeResultJson`,
+ *     `pagamentoResultJson`, `afericaoResultJson`, e os 4 pares
+ *     `*ConsolidadoEm`/`*ConsolidadoPor` para vale/he/afericao/
+ *     pagamento). `aplicarDsr*` já estavam no schema.
+ *
+ * **Por que isso veio à tona agora:** os dois ambientes mais antigos
+ * (prod + staging) provavelmente ganharam essas colunas em algum
+ * `drizzle push` manual de uma revisão anterior; este DB Neon (dev/preview)
+ * nunca passou por aquele push, então ficou divergente. A Rev. 2180 elimina
+ * essa divergência via bootstrap, independente do estado prévio.
+ *
+ * **R-001/R-007/R-010:** ADD COLUMN aditivo (sem perda de dado, sem
+ * DROP, sem DELETE). Defaults `NULL`/`1` (smallint) coerentes com o
+ * comportamento esperado (linhas antigas viram "nunca executado"/"DSR
+ * aplicado" — idêntico ao que o código já assumia).
+ *
+ * Arquivos: `drizzle/schema.ts`, `server/_core/index.ts`,
+ * `shared/version.ts`, `shared/changelog.ts`, `replit.md`,
+ * `replit-history.md`.
+ *
  * Rev. 2179 — **NOVA FEATURE · Relatório de Períodos HE agora mostra
  * coluna "Solicitação" (Aprovada / Sem solicitação) e quebra o
  * funcionário em até 2 linhas quando tem horas mistas, com botão

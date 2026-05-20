@@ -1731,6 +1731,31 @@ Regras:
           console.log(`[SyncSchema+] Rev. 2179: coluna origem garantida em he_period_employees.`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.2179 he_period_employees.origem:`, e?.message || e); }
 
+        // Rev. 2180 — Garantir colunas que payrollEngine.ts já escreve mas que
+        // estavam ausentes em DBs antigos (ex.: dev limpo): valeResultJson,
+        // pagamentoResultJson, afericaoResultJson, aplicarDsr*, *ConsolidadoEm/Por.
+        // Sem elas, `UPDATE payroll_periods SET "valeResultJson" = ...` em
+        // gerarVale (linha 2515) falhava por "column does not exist", o try/catch
+        // externo jogava TRPCError, payroll_advances ficavam gravados mas
+        // valeGeradoEm/totalVale nunca eram setados — Lilian via "Calcular Vale"
+        // gerar resultado uma vez, recarregar e o vale "sumia".
+        try {
+          await db.execute(sql`ALTER TABLE payroll_periods ADD COLUMN IF NOT EXISTS "valeResultJson" text`);
+          await db.execute(sql`ALTER TABLE payroll_periods ADD COLUMN IF NOT EXISTS "pagamentoResultJson" text`);
+          await db.execute(sql`ALTER TABLE payroll_periods ADD COLUMN IF NOT EXISTS "afericaoResultJson" text`);
+          await db.execute(sql`ALTER TABLE payroll_periods ADD COLUMN IF NOT EXISTS "aplicarDsrFalta" smallint NOT NULL DEFAULT 1`);
+          await db.execute(sql`ALTER TABLE payroll_periods ADD COLUMN IF NOT EXISTS "aplicarDsrAtraso" smallint NOT NULL DEFAULT 1`);
+          await db.execute(sql`ALTER TABLE payroll_periods ADD COLUMN IF NOT EXISTS "valeConsolidadoEm" timestamp`);
+          await db.execute(sql`ALTER TABLE payroll_periods ADD COLUMN IF NOT EXISTS "valeConsolidadoPor" varchar(255)`);
+          await db.execute(sql`ALTER TABLE payroll_periods ADD COLUMN IF NOT EXISTS "heConsolidadoEm" timestamp`);
+          await db.execute(sql`ALTER TABLE payroll_periods ADD COLUMN IF NOT EXISTS "heConsolidadoPor" varchar(255)`);
+          await db.execute(sql`ALTER TABLE payroll_periods ADD COLUMN IF NOT EXISTS "afericaoConsolidadoEm" timestamp`);
+          await db.execute(sql`ALTER TABLE payroll_periods ADD COLUMN IF NOT EXISTS "afericaoConsolidadoPor" varchar(255)`);
+          await db.execute(sql`ALTER TABLE payroll_periods ADD COLUMN IF NOT EXISTS "pagamentoConsolidadoEm" timestamp`);
+          await db.execute(sql`ALTER TABLE payroll_periods ADD COLUMN IF NOT EXISTS "pagamentoConsolidadoPor" varchar(255)`);
+          console.log(`[SyncSchema+] Rev. 2180: colunas faltantes em payroll_periods garantidas (valeResultJson, *ResultJson, aplicarDsr*, *ConsolidadoEm/Por).`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.2180 payroll_periods columns:`, e?.message || e); }
+
       } catch (e: any) { console.error(`[SyncSchema+] ERROR:`, e?.message || e); }
     }).catch(e => console.error("[SyncSchema] Falha ao iniciar:", e));
     // Garantir colunas críticas adicionadas recentemente que o SyncSchema possa ter ignorado
