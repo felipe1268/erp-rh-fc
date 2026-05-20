@@ -2518,10 +2518,15 @@ export default function Epis() {
                                       onClick={() => { setFichaSignature(null); setResponsavelSignature(null); setFichaDelivery({ ...first, _grupoItems: items }); setViewMode("ficha_epi"); }}>
                                       <FileText className="h-3.5 w-3.5 text-blue-600" />
                                     </Button>
-                                    {/* Rev. 2186 — eye/aguardando em linhas agrupadas (paridade com linhas únicas) */}
-                                    {items.some((d: any) => d.assinaturaUrl) && first.fichaUrl ? (
+                                    {/* Rev. 2186 — eye/aguardando em linhas agrupadas (paridade com linhas únicas)
+                                        Rev. 2190 — eye abre o PREVIEW IN-APP (que sobrepõe
+                                        `assinaturaUrl` como <img>), não `window.open(fichaUrl)`.
+                                        Causa: `fichaUrl` é o PDF gerado ANTES da assinatura;
+                                        abrir esse PDF mostrava ficha em branco e usuário
+                                        acreditava que a assinatura tinha "sumido". */}
+                                    {items.some((d: any) => d.assinaturaUrl) ? (
                                       <Button size="icon" variant="ghost" className="h-7 w-7" title="Ver ficha assinada"
-                                        onClick={() => window.open(first.fichaUrl, "_blank")}>
+                                        onClick={() => { setFichaSignature(null); setResponsavelSignature(null); setFichaDelivery({ ...first, _grupoItems: items }); setViewMode("ficha_epi"); }}>
                                         <Eye className="h-3.5 w-3.5 text-green-600" />
                                       </Button>
                                     ) : (
@@ -2599,10 +2604,17 @@ export default function Epis() {
                                 </Button>
                                 {/* Rev. 2186 — eye só aparece quando há assinatura do funcionário
                                     (antes usava d.fichaUrl, que passou a ser populado também
-                                    para fichas SEM assinatura, criando falso-positivo visual). */}
-                                {d.assinaturaUrl && d.fichaUrl && (
+                                    para fichas SEM assinatura, criando falso-positivo visual).
+                                    Rev. 2190 — eye abre o PREVIEW IN-APP (que sobrepõe
+                                    `assinaturaUrl` como <img>), não `window.open(fichaUrl)`.
+                                    Causa: `fichaUrl` é o PDF gerado ANTES da assinatura;
+                                    abrir esse PDF mostrava ficha em branco e usuário
+                                    acreditava que a assinatura tinha "sumido". O botão
+                                    "Ver PDF Salvo" segue disponível DENTRO do dialog
+                                    pra quem quiser o arquivo. */}
+                                {d.assinaturaUrl && (
                                   <Button size="icon" variant="ghost" className="h-7 w-7" title="Ver ficha assinada"
-                                    onClick={() => window.open(d.fichaUrl, "_blank")}>
+                                    onClick={() => { setFichaSignature(null); setResponsavelSignature(null); setFichaDelivery(d); setViewMode("ficha_epi"); }}>
                                     <Eye className="h-3.5 w-3.5 text-green-600" />
                                   </Button>
                                 )}

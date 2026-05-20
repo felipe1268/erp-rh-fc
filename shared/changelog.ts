@@ -1,6 +1,52 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2190 — **HOTFIX BLOQUEANTE · Assinatura de EPI "sumia" ao abrir
+ * a ficha via olhinho.** Lilian: "TEM MUITOS QUE NÃO ESTÃO ASSINADOS,
+ * MAS O SISTEMA ESTA FALANDO QUE ESTA... PESSOAL ESTA ASSINANDO,
+ * SALVANDO A ASSINTURA, MAS DEPOIS QUE VOU VERIFICAR A ASSINATURA
+ * ESTA SUMINDO".
+ *
+ * **Causa-raiz:** o fluxo de assinatura grava a `assinaturaUrl` (PNG
+ * em S3) em `epi_deliveries` — esse campo é a fonte de verdade
+ * (filtro "✓ Assinadas" usa ele). MAS o `fichaUrl` (PDF da ficha)
+ * é gerado UMA ÚNICA VEZ no momento da entrega (`createDelivery` →
+ * `generateEpiFichaPdf`), ANTES de qualquer assinatura. O PDF salvo
+ * em S3 nunca é regerado automaticamente após assinar. O olhinho
+ * (Rev. 2186) chamava `window.open(d.fichaUrl)` — abria o PDF
+ * unsigned em nova aba, mostrando ficha em branco no lugar da
+ * assinatura. O usuário concluía que a assinatura "sumiu", quando
+ * na verdade ela estava intacta no banco, só não embutida no PDF
+ * estático.
+ *
+ * Para REGERAR o PDF assinado o usuário precisava abrir o dialog
+ * de ficha (FileText) e clicar manualmente em "Salvar PDF" — passo
+ * invisível e nunca documentado.
+ *
+ * **Fix (Client — `client/src/pages/Epis.tsx`):** olhinho agora abre
+ * o **preview IN-APP** (mesma ação do FileText: `setFichaDelivery
+ * + setViewMode("ficha_epi")`) em vez de `window.open(fichaUrl)`.
+ * O preview in-app renderiza a `assinaturaUrl` como `<img>` sobre
+ * a linha de assinatura (L1787), garantindo que a assinatura SEMPRE
+ * apareça quando existir, independente do PDF estático estar
+ * regerado ou não. O botão "Ver PDF Salvo" continua disponível
+ * DENTRO do dialog pra quem quiser baixar/imprimir o arquivo;
+ * "Salvar PDF" regenera o `fichaUrl` com a assinatura embutida.
+ *
+ * Aplicado em DUAS posições: L2530 (linhas agrupadas — `items.some
+ * d.assinaturaUrl`) e L2618 (linha única — `d.assinaturaUrl`). Em
+ * linhas agrupadas, removido o gate redundante `&& first.fichaUrl`
+ * (era só pra ter URL pra abrir; agora não é mais necessário).
+ *
+ * **Não-regressão:** filtro tri-state Todas/✓ Assinadas/⚠ Não
+ * assinadas (Rev. 2186) segue intacto — continua usando
+ * `assinaturaUrl` como verdade. Olhinho continua oculto sem
+ * assinatura (⚠ âmbar "Aguardando").
+ *
+ * R-001/R-007/R-010: OK — fix puramente client.
+ *
+ * ---
+ *
  * Rev. 2189 — **MELHORIA UX · Tabela do Relatório de Períodos HE agora
  * mostra a foto do colaborador (avatar 32px circular) à esquerda do
  * nome, puxando direto de `employees.fotoUrl`.** Lilian: "quero que
