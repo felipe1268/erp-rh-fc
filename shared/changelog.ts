@@ -1,6 +1,43 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2198 — **HOTFIX UX · Mês SELECIONADO no calendário da Folha
+ * agora respeita a cor da legenda (Com lançamento azul / Consolidado
+ * verde) em vez de virar branco.**
+ *
+ * Lilian (logo após Rev. 2197): "a legenda ainda não esta correta
+ * precisa ajustar isso quero que respeite". Screenshot mostrava Mar
+ * azul (Com lançamento — correto, com a Rev. 2197 funcionando) e Abr
+ * com a borda preta de seleção MAS sem o fundo verde de Consolidado.
+ *
+ * **Causa-raiz:** A classe condicional do botão de mês em
+ * `FolhaPagamento.tsx` usava ternário onde `isSelected` ERA O PRIMEIRO
+ * RAMO — então quando o mês estava selecionado, todas as classes de
+ * fundo de status (`bg-green-100`, `bg-blue-100`) eram ignoradas e o
+ * botão ficava sem cor de fundo, só com `border-[#1B2A4A] ring-2
+ * shadow-md`. Cor de status e cor de seleção eram mutuamente
+ * exclusivas em vez de complementares.
+ *
+ * **Fix (`client/src/pages/FolhaPagamento.tsx:5738-5752`):** Separou
+ * a lógica em duas variáveis ortogonais:
+ * - `statusClasses`: SEMPRE aplicada — `bg-green-100/text-green-800`
+ *   (consolidado), `bg-blue-100/text-blue-800` (completo) ou
+ *   `bg-gray-100/text-gray-500` (sem dados).
+ * - `borderClasses`: prioriza seleção (`border-[#1B2A4A] ring-2
+ *   ring-[#1B2A4A]/30 shadow-md`) mas, quando não selecionado, cai
+ *   pra cor de borda compatível com o status.
+ *
+ * Resultado: mês selecionado mantém o fundo da cor de status + ganha
+ * a borda azul-escura e o ring. Comentário inline marca a Rev. 2198 e
+ * explica o motivo da separação.
+ *
+ * **Não-regressão:** Rev. 2197 (merge `payroll_periods` no
+ * `listarMesesComLancamentos`) intacta — só o front mudou. Ícones
+ * `Lock` (consolidado) e `FileText` (completo) seguem aparecendo
+ * abaixo do nome do mês.
+ *
+ * **R-001/R-007/R-010:** ✅ OK — só client, zero server, zero schema.
+ *
  * Rev. 2197 — **HOTFIX · Calendário da Folha de Pagamento volta a
  * pintar meses calculados pelo Cálculo Interno (Rev. 2180+).**
  *
