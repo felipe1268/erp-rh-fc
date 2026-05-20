@@ -1723,6 +1723,14 @@ Regras:
           console.log(`[SyncSchema+] Rev. 2141: tabelas system_document_templates + versions garantidas.`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.2141 system_document_templates:`, e?.message || e); }
 
+        // Rev. 2179 — Split de HE por origem (aprovada / sem_solicitacao).
+        // Coluna aditiva em he_period_employees; default mantém comportamento
+        // antigo (linhas antigas viram "Sem solicitação" no UI).
+        try {
+          await db.execute(sql`ALTER TABLE he_period_employees ADD COLUMN IF NOT EXISTS origem TEXT DEFAULT 'sem_solicitacao'`);
+          console.log(`[SyncSchema+] Rev. 2179: coluna origem garantida em he_period_employees.`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.2179 he_period_employees.origem:`, e?.message || e); }
+
       } catch (e: any) { console.error(`[SyncSchema+] ERROR:`, e?.message || e); }
     }).catch(e => console.error("[SyncSchema] Falha ao iniciar:", e));
     // Garantir colunas críticas adicionadas recentemente que o SyncSchema possa ter ignorado

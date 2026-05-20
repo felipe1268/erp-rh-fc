@@ -55,6 +55,10 @@ async function getHECriteria(db: any, companyId: number) {
   };
 }
 
+type Origem = "aprovada" | "sem_solicitacao";
+type OrigemBucket = { aprovada: number; sem_solicitacao: number };
+const newBucket = (): OrigemBucket => ({ aprovada: 0, sem_solicitacao: 0 });
+
 async function computeHEForPeriod(
   db: any,
   companyId: number,
@@ -62,6 +66,26 @@ async function computeHEForPeriod(
   dataFim: string,
   cargaHorariaDiaria: number
 ) {
+  // Rev. 2179 — pré-carrega o conjunto de (employeeId, data) coberto por
+  // solicitações de HE aprovadas no intervalo, para classificar cada dia
+  // de HE como "aprovada" ou "sem_solicitacao".
+  const apprRows = ((await db.execute(sql`
+    SELECT sf."employeeId", s."dataSolicitacao"
+    FROM he_solicitacoes s
+    JOIN he_solicitacao_funcionarios sf ON sf."solicitacaoId" = s.id
+    WHERE s."companyId" = ${companyId}
+      AND s.status = 'aprovada'
+      AND s."dataSolicitacao" >= ${dataInicio}::date
+      AND s."dataSolicitacao" <= ${dataFim}::date
+  `)) as any).rows || [];
+  const approvedSet = new Set<string>();
+  for (const r of apprRows) {
+    const d = r.dataSolicitacao instanceof Date
+      ? r.dataSolicitacao.toISOString().slice(0, 10)
+      : String(r.dataSolicitacao).slice(0, 10);
+    approvedSet.add(`${Number(r.employeeId)}|${d}`);
+  }
+
   // Agrupa por (employeeId, data) pegando o maior horasTrabalhadas — evita dupla contagem de importações.
   // Também traz `atrasos` para descontar do HE bruto antes do pagamento (saldo líquido).
   const trRaws = ((await db.execute(sql`
@@ -87,6 +111,10 @@ async function computeHEForPeriod(
   const atrasoMap   = new Map<number, number>();
   const empMeta     = new Map<number, { nome: string; valorHora: number; salario: number }>();
 
+  // Rev. 2179 — gross por origem (aprovada / sem_solicitacao), por empId
+  const heUtilGrossByOrig = new Map<number, OrigemBucket>();
+  const heFimGrossByOrig  = new Map<number, OrigemBucket>();
+
   for (const r of trRaws) {
     const empId    = Number(r.employeeId);
     const trabMins = parseTime(String(r.horasTrabalhadas || "0:00")) || 0;
@@ -102,9 +130,17 @@ async function computeHEForPeriod(
       const expectedMins = getExpectedMins(r.jornadaTrabalho, dateStr, cargaHorariaDiaria);
       const heMins = Math.max(0, trabMins - expectedMins);
       if (heMins > 0) {
+        const origem: Origem = approvedSet.has(`${empId}|${dateStr}`) ? "aprovada" : "sem_solicitacao";
         // Apenas domingo (0) → HE 100%. Sábado (6) e dias úteis → HE 60%
-        if (dow === 0) heFimGross.set(empId,  (heFimGross.get(empId)  || 0) + heMins);
-        else            heUtilGross.set(empId, (heUtilGross.get(empId) || 0) + heMins);
+        if (dow === 0) {
+          heFimGross.set(empId,  (heFimGross.get(empId)  || 0) + heMins);
+          if (!heFimGrossByOrig.has(empId)) heFimGrossByOrig.set(empId, newBucket());
+          heFimGrossByOrig.get(empId)![origem] += heMins;
+        } else {
+          heUtilGross.set(empId, (heUtilGross.get(empId) || 0) + heMins);
+          if (!heUtilGrossByOrig.has(empId)) heUtilGrossByOrig.set(empId, newBucket());
+          heUtilGrossByOrig.get(empId)![origem] += heMins;
+        }
         heGross.set(empId, (heGross.get(empId) || 0) + heMins);
       }
     }
@@ -132,6 +168,10 @@ async function computeHEForPeriod(
   const heMap     = new Map<number, number>();
   const atrasoDescontadoMap = new Map<number, number>();
 
+  // Rev. 2179 — net por origem (após desconto de atrasos, rateado proporcional ao gross)
+  const heUtilByOrig = new Map<number, OrigemBucket>();
+  const heFimByOrig  = new Map<number, OrigemBucket>();
+
   const allEmpIds = new Set<number>([...heGross.keys(), ...atrasoMap.keys()]);
   for (const empId of allEmpIds) {
     const grossUtil = heUtilGross.get(empId) || 0;
@@ -148,27 +188,46 @@ async function computeHEForPeriod(
     const net = gross - desconto;
     atrasoDescontadoMap.set(empId, desconto);
 
+    let netUtil: number;
+    let netFim: number;
     if (desconto === 0) {
-      heUtilMap.set(empId, grossUtil);
-      heFimMap.set(empId, grossFim);
-      heMap.set(empId, gross);
+      netUtil = grossUtil;
+      netFim  = grossFim;
     } else if (net === 0) {
-      // tudo descontado
-      heUtilMap.set(empId, 0);
-      heFimMap.set(empId, 0);
-      heMap.set(empId, 0);
+      netUtil = 0;
+      netFim  = 0;
     } else {
-      // rateio proporcional
       const ratio = net / gross;
-      const netUtil = Math.round(grossUtil * ratio);
-      const netFim  = Math.max(0, net - netUtil);
-      heUtilMap.set(empId, netUtil);
-      heFimMap.set(empId, netFim);
-      heMap.set(empId, netUtil + netFim);
+      netUtil = Math.round(grossUtil * ratio);
+      netFim  = Math.max(0, net - netUtil);
     }
+    heUtilMap.set(empId, netUtil);
+    heFimMap.set(empId, netFim);
+    heMap.set(empId, netUtil + netFim);
+
+    // Rev. 2179 — rateia o net entre origens proporcionalmente ao gross de cada origem
+    const utilGB = heUtilGrossByOrig.get(empId) || newBucket();
+    const fimGB  = heFimGrossByOrig.get(empId)  || newBucket();
+
+    const splitProporcional = (totalNet: number, bucket: OrigemBucket): OrigemBucket => {
+      const totalGross = bucket.aprovada + bucket.sem_solicitacao;
+      if (totalNet <= 0 || totalGross <= 0) return newBucket();
+      if (bucket.sem_solicitacao === 0) return { aprovada: totalNet, sem_solicitacao: 0 };
+      if (bucket.aprovada === 0) return { aprovada: 0, sem_solicitacao: totalNet };
+      const aprov = Math.round((bucket.aprovada / totalGross) * totalNet);
+      const sem   = Math.max(0, totalNet - aprov);
+      return { aprovada: aprov, sem_solicitacao: sem };
+    };
+
+    heUtilByOrig.set(empId, splitProporcional(netUtil, utilGB));
+    heFimByOrig.set(empId,  splitProporcional(netFim,  fimGB));
   }
 
-  return { heUtilMap, heFimMap, heMap, empMeta, heUtilGross, heFimGross, heGross, atrasoMap, atrasoDescontadoMap };
+  return {
+    heUtilMap, heFimMap, heMap, empMeta,
+    heUtilGross, heFimGross, heGross, atrasoMap, atrasoDescontadoMap,
+    heUtilByOrig, heFimByOrig, // Rev. 2179
+  };
 }
 
 // ============================================================
@@ -203,7 +262,9 @@ export const horasExtrasRouter = router({
           FROM he_period_employees hpe
           LEFT JOIN employees e ON e.id = hpe."employeeId"
           WHERE hpe."hePeriodId" = ${input.hePeriodId}
-          ORDER BY e."nomeCompleto"
+          ORDER BY e."nomeCompleto",
+                   -- Rev. 2179 — "aprovada" antes de "sem_solicitacao" no agrupamento
+                   CASE WHEN hpe.origem = 'aprovada' THEN 0 ELSE 1 END
         `),
       ]);
       const period = ((periodRows as any).rows || [])[0] || null;
@@ -390,7 +451,7 @@ export const horasExtrasRouter = router({
       }
 
       const criteria = await getHECriteria(db, input.companyId);
-      const { heUtilMap, heFimMap, heMap, empMeta } = await computeHEForPeriod(
+      const { heUtilMap, heFimMap, heMap, empMeta, heUtilByOrig, heFimByOrig } = await computeHEForPeriod(
         db, input.companyId, input.dataInicio, input.dataFim, criteria.cargaHorariaDiaria
       );
 
@@ -408,47 +469,61 @@ export const horasExtrasRouter = router({
       const empDataMap = new Map<number, any>();
       for (const e of empRows) empDataMap.set(Number(e.id), e);
 
-      // Calculate values
+      // Rev. 2179 — gera até 2 linhas por funcionário (uma por origem: aprovada / sem_solicitacao).
+      // Cada bucket vira uma row independente em he_period_employees com sua própria
+      // destinacao (Pagar/Banco) e seu próprio valor. Mantemos `funcionariosUnicos`
+      // para `he_periods.totalFuncionarios` (count distinto de empregados).
       const empResults: any[] = [];
+      const funcionariosUnicos = new Set<number>();
       let totalHEMins = 0;
       let totalValorHE = 0;
+      const origens: Origem[] = ["aprovada", "sem_solicitacao"];
 
       for (const empId of empIds) {
         const emp = empDataMap.get(empId);
         if (!emp) continue;
         const valorHora = parseBRL(String(emp.valorHora || emp.salarioBase || "0")) || 0;
-        const heUtil = heUtilMap.get(empId) || 0;
-        const heFim  = heFimMap.get(empId)  || 0;
-        const heTotal = heMap.get(empId) || 0;
-        const valorHEUtil = (heUtil / 60) * valorHora * (1 + criteria.hePercentualDiurna / 100);
-        const valorHEFim  = (heFim  / 60) * valorHora * (1 + criteria.hePercentualDomingo / 100);
-        const valorHETotal = valorHEUtil + valorHEFim;
+        const utilBucket = heUtilByOrig.get(empId) || { aprovada: 0, sem_solicitacao: 0 };
+        const fimBucket  = heFimByOrig.get(empId)  || { aprovada: 0, sem_solicitacao: 0 };
 
-        if (valorHETotal <= 0) continue;
+        for (const origem of origens) {
+          const heUtil = utilBucket[origem] || 0;
+          const heFim  = fimBucket[origem]  || 0;
+          const heTotal = heUtil + heFim;
+          if (heTotal <= 0) continue;
 
-        totalHEMins  += heTotal;
-        totalValorHE += valorHETotal;
+          const valorHEUtil = (heUtil / 60) * valorHora * (1 + criteria.hePercentualDiurna / 100);
+          const valorHEFim  = (heFim  / 60) * valorHora * (1 + criteria.hePercentualDomingo / 100);
+          const valorHETotal = valorHEUtil + valorHEFim;
+          if (valorHETotal <= 0) continue;
 
-        empResults.push({
-          empId,
-          nome: emp.nomeCompleto,
-          heUtil, heFim, heTotal,
-          valorHEUtil: parseFloat(valorHEUtil.toFixed(2)),
-          valorHEFim:  parseFloat(valorHEFim.toFixed(2)),
-          valorHETotal: parseFloat(valorHETotal.toFixed(2)),
-          salarioBruto: parseFloat(String(emp.salarioBase || "0")),
-          valorHora,
-        });
+          funcionariosUnicos.add(empId);
+          totalHEMins  += heTotal;
+          totalValorHE += valorHETotal;
+
+          empResults.push({
+            empId,
+            nome: emp.nomeCompleto,
+            heUtil, heFim, heTotal,
+            valorHEUtil: parseFloat(valorHEUtil.toFixed(2)),
+            valorHEFim:  parseFloat(valorHEFim.toFixed(2)),
+            valorHETotal: parseFloat(valorHETotal.toFixed(2)),
+            salarioBruto: parseFloat(String(emp.salarioBase || "0")),
+            valorHora,
+            origem,
+          });
+        }
       }
 
       let hePeriodId: number;
 
+      const totalFuncs = funcionariosUnicos.size;
       if (existingPeriodId) {
         await db.execute(sql`
           UPDATE he_periods SET
             "dataInicio" = ${input.dataInicio}::date,
             "dataFim" = ${input.dataFim}::date,
-            "totalFuncionarios" = ${empResults.length},
+            "totalFuncionarios" = ${totalFuncs},
             "totalHEMins" = ${totalHEMins},
             "totalValorHE" = ${parseFloat(totalValorHE.toFixed(2))},
             "criadoPor" = ${ctx.user.name || "Sistema"},
@@ -465,7 +540,7 @@ export const horasExtrasRouter = router({
           INSERT INTO he_periods ("companyId", "mesReferencia", "dataInicio", "dataFim", status,
             "totalFuncionarios", "totalHEMins", "totalValorHE", "criadoPor")
           VALUES (${input.companyId}, ${input.mesReferencia}, ${input.dataInicio}::date, ${input.dataFim}::date,
-            'calculado', ${empResults.length}, ${totalHEMins}, ${parseFloat(totalValorHE.toFixed(2))},
+            'calculado', ${totalFuncs}, ${totalHEMins}, ${parseFloat(totalValorHE.toFixed(2))},
             ${ctx.user.name || "Sistema"})
           RETURNING id
         `)) as any).rows || [];
@@ -483,25 +558,25 @@ export const horasExtrasRouter = router({
           ${hePeriodId}, ${input.companyId}, ${e.empId}, ${e.nome},
           ${e.heUtil}, ${e.heFim}, ${e.heTotal},
           ${e.valorHEUtil}, ${e.valorHEFim}, ${e.valorHETotal},
-          ${e.salarioBruto}, ${e.valorHora}, ${destinoPadrao}
+          ${e.salarioBruto}, ${e.valorHora}, ${destinoPadrao}, ${e.origem}
         )`);
         await db.execute(sql`
           INSERT INTO he_period_employees
             ("hePeriodId", "companyId", "employeeId", nome,
              "heUtilMins", "heFimMins", "heTotalMins",
              "valorHEUtil", "valorHEFim", "valorHETotal",
-             "salarioBruto", "valorHora", destinacao)
+             "salarioBruto", "valorHora", destinacao, origem)
           VALUES ${sql.join(empInsertRows, sql`,`)}
         `);
       }
 
       return {
         hePeriodId,
-        totalFuncionarios: empResults.length,
+        totalFuncionarios: totalFuncs,
         totalHEMins,
         totalValorHE: parseFloat(totalValorHE.toFixed(2)),
         periodo: { dataInicio: input.dataInicio, dataFim: input.dataFim },
-        message: `HE calculada: ${empResults.length} funcionários com hora extra, total R$ ${totalValorHE.toFixed(2)}`,
+        message: `HE calculada: ${totalFuncs} funcionários com hora extra, total R$ ${totalValorHE.toFixed(2)}`,
       };
     }),
 

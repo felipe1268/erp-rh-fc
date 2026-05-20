@@ -4736,6 +4736,8 @@ export default function FolhaPagamento() {
                                         <thead>
                                           <tr className="border-b-2 border-gray-200 text-left">
                                             <th className="py-2 px-2">Funcionário</th>
+                                            {/* Rev. 2179 — coluna Solicitação (Aprovada / Sem solicitação) */}
+                                            <th className="text-center py-2 px-2">Solicitação</th>
                                             <th className="text-right py-2 px-2">HE Úteis</th>
                                             <th className="text-right py-2 px-2">HE Fim Sem.</th>
                                             <th className="text-right py-2 px-2">Total HE</th>
@@ -4751,99 +4753,131 @@ export default function FolhaPagamento() {
                                           </tr>
                                         </thead>
                                         <tbody>
-                                          {periodEmps.map((e: any) => {
-                                            const dest = destinacaoMap[e.id] ?? (e.destinacao || "pagamento");
-                                            const saldo = saldoMap.get(Number(e.employeeId)) || 0;
-                                            return (
-                                              <tr key={e.id} className={`border-b border-gray-100 hover:bg-white/80 ${dest === "banco_horas" ? "bg-blue-50/30" : ""}`}>
-                                                <td className="py-2 px-2 font-medium">
-                                                  <button className="text-left hover:text-blue-600 hover:underline focus:outline-none"
-                                                    onClick={() => { setEspelhoPopupEmpId(Number(e.employeeId)); setEspelhoPopupEmpNome(e.nomeCompleto || e.nome || `ID ${e.employeeId}`); }}
-                                                    title="Abrir espelho de ponto">
-                                                    {e.nomeCompleto || e.nome}
-                                                  </button>
-                                                </td>
-                                                <td className="text-right py-2 px-2 text-xs text-muted-foreground">
-                                                  {e.heUtilMins > 0 ? minsToHHMM(e.heUtilMins) : "—"}
-                                                </td>
-                                                <td className="text-right py-2 px-2 text-xs text-muted-foreground">
-                                                  {e.heFimMins > 0 ? minsToHHMM(e.heFimMins) : "—"}
-                                                </td>
-                                                <td className="text-right py-2 px-2 font-medium">{minsToHHMM(e.heTotalMins)}</td>
-                                                <td className="text-right py-2 px-2 font-bold text-purple-700">
-                                                  <span className="inline-flex items-center gap-1">
-                                                    {formatBRL(Number(e.valorHETotal))}
-                                                    <button
-                                                      type="button"
-                                                      title="Memorial de cálculo"
-                                                      onClick={(ev) => {
-                                                        ev.stopPropagation();
-                                                        const empId = Number(e.employeeId ?? e.employee_id ?? e.id);
-                                                        const perId = Number(p.id);
-                                                        if (!empId || !perId) {
-                                                          toast.error(`Não foi possível abrir o memorial: dados ausentes (período=${perId}, funcionário=${empId})`);
-                                                          return;
-                                                        }
-                                                        setMemorialHePeriodId(perId);
-                                                        setMemorialEmployeeId(empId);
-                                                      }}
-                                                      className="text-purple-400 hover:text-purple-700 transition-colors ml-0.5 cursor-pointer"
-                                                    >
-                                                      <FileText className="h-3.5 w-3.5" />
-                                                    </button>
-                                                  </span>
-                                                </td>
-                                                {periodEmps.some((x: any) => x.valorPlanilha != null) && (() => {
-                                                  const vp = e.valorPlanilha != null ? Number(e.valorPlanilha) : null;
-                                                  const ve = Number(e.valorHETotal);
-                                                  const diff = vp !== null ? vp - ve : null;
-                                                  return (
-                                                    <>
-                                                      <td className="text-right py-2 px-2 text-xs">
-                                                        {vp !== null ? <span className="font-medium text-orange-700">{formatBRL(vp)}</span> : <span className="text-gray-300">—</span>}
+                                          {(() => {
+                                            // Rev. 2179 — agrupa por employeeId (assume já ordenado).
+                                            // Nome e Saldo Banco usam rowSpan; HE/Valor/Solicitação/Destinação por linha.
+                                            const hasPlanilha = periodEmps.some((x: any) => x.valorPlanilha != null);
+                                            const groups = new Map<number, any[]>();
+                                            for (const e of periodEmps) {
+                                              const k = Number(e.employeeId);
+                                              if (!groups.has(k)) groups.set(k, []);
+                                              groups.get(k)!.push(e);
+                                            }
+                                            const rows: JSX.Element[] = [];
+                                            for (const [empKey, items] of groups) {
+                                              const saldo = saldoMap.get(empKey) || 0;
+                                              const first = items[0];
+                                              items.forEach((e: any, idx: number) => {
+                                                const dest = destinacaoMap[e.id] ?? (e.destinacao || "pagamento");
+                                                const origem = e.origem || "sem_solicitacao";
+                                                const isFirst = idx === 0;
+                                                const isLast  = idx === items.length - 1;
+                                                rows.push(
+                                                  <tr key={e.id}
+                                                    className={`hover:bg-white/80 ${dest === "banco_horas" ? "bg-blue-50/30" : ""} ${isLast ? "border-b border-gray-200" : "border-b border-gray-50"}`}>
+                                                    {isFirst && (
+                                                      <td rowSpan={items.length} className="py-2 px-2 font-medium align-top border-r border-gray-100">
+                                                        <button className="text-left hover:text-blue-600 hover:underline focus:outline-none"
+                                                          onClick={() => { setEspelhoPopupEmpId(empKey); setEspelhoPopupEmpNome(first.nomeCompleto || first.nome || `ID ${empKey}`); }}
+                                                          title="Abrir espelho de ponto">
+                                                          {first.nomeCompleto || first.nome}
+                                                        </button>
                                                       </td>
-                                                      <td className="text-right py-2 px-2 text-xs font-bold">
-                                                        {diff !== null ? (
-                                                          Math.abs(diff) < 0.02 ? (
-                                                            <span className="text-green-600">✓ OK</span>
-                                                          ) : diff > 0 ? (
-                                                            <span className="text-red-600">+{formatBRL(diff)}</span>
-                                                          ) : (
-                                                            <span className="text-blue-600">{formatBRL(diff)}</span>
-                                                          )
-                                                        ) : <span className="text-gray-300">—</span>}
+                                                    )}
+                                                    <td className="text-center py-2 px-2">
+                                                      {origem === "aprovada" ? (
+                                                        <Badge className="text-[10px] bg-green-100 text-green-800 border border-green-200">✅ Aprovada</Badge>
+                                                      ) : (
+                                                        <Badge className="text-[10px] bg-amber-100 text-amber-800 border border-amber-200">⚠️ Sem solicitação</Badge>
+                                                      )}
+                                                    </td>
+                                                    <td className="text-right py-2 px-2 text-xs text-muted-foreground">
+                                                      {e.heUtilMins > 0 ? minsToHHMM(e.heUtilMins) : "—"}
+                                                    </td>
+                                                    <td className="text-right py-2 px-2 text-xs text-muted-foreground">
+                                                      {e.heFimMins > 0 ? minsToHHMM(e.heFimMins) : "—"}
+                                                    </td>
+                                                    <td className="text-right py-2 px-2 font-medium">{minsToHHMM(e.heTotalMins)}</td>
+                                                    <td className="text-right py-2 px-2 font-bold text-purple-700">
+                                                      <span className="inline-flex items-center gap-1">
+                                                        {formatBRL(Number(e.valorHETotal))}
+                                                        {isFirst && (
+                                                          <button
+                                                            type="button"
+                                                            title="Memorial de cálculo"
+                                                            onClick={(ev) => {
+                                                              ev.stopPropagation();
+                                                              const perId = Number(p.id);
+                                                              if (!empKey || !perId) {
+                                                                toast.error(`Não foi possível abrir o memorial: dados ausentes (período=${perId}, funcionário=${empKey})`);
+                                                                return;
+                                                              }
+                                                              setMemorialHePeriodId(perId);
+                                                              setMemorialEmployeeId(empKey);
+                                                            }}
+                                                            className="text-purple-400 hover:text-purple-700 transition-colors ml-0.5 cursor-pointer"
+                                                          >
+                                                            <FileText className="h-3.5 w-3.5" />
+                                                          </button>
+                                                        )}
+                                                      </span>
+                                                    </td>
+                                                    {hasPlanilha && (() => {
+                                                      const vp = e.valorPlanilha != null ? Number(e.valorPlanilha) : null;
+                                                      const ve = Number(e.valorHETotal);
+                                                      const diff = vp !== null ? vp - ve : null;
+                                                      return (
+                                                        <>
+                                                          <td className="text-right py-2 px-2 text-xs">
+                                                            {vp !== null ? <span className="font-medium text-orange-700">{formatBRL(vp)}</span> : <span className="text-gray-300">—</span>}
+                                                          </td>
+                                                          <td className="text-right py-2 px-2 text-xs font-bold">
+                                                            {diff !== null ? (
+                                                              Math.abs(diff) < 0.02 ? (
+                                                                <span className="text-green-600">✓ OK</span>
+                                                              ) : diff > 0 ? (
+                                                                <span className="text-red-600">+{formatBRL(diff)}</span>
+                                                              ) : (
+                                                                <span className="text-blue-600">{formatBRL(diff)}</span>
+                                                              )
+                                                            ) : <span className="text-gray-300">—</span>}
+                                                          </td>
+                                                        </>
+                                                      );
+                                                    })()}
+                                                    {isFirst && (
+                                                      <td rowSpan={items.length} className="text-right py-2 px-2 align-top">
+                                                        {saldo > 0
+                                                          ? <span className="text-blue-600 font-medium text-xs">{minsToHHMM(saldo)}</span>
+                                                          : <span className="text-gray-300 text-xs">—</span>}
                                                       </td>
-                                                    </>
-                                                  );
-                                                })()}
-                                                <td className="text-right py-2 px-2">
-                                                  {saldo > 0
-                                                    ? <span className="text-blue-600 font-medium text-xs">{minsToHHMM(saldo)}</span>
-                                                    : <span className="text-gray-300 text-xs">—</span>}
-                                                </td>
-                                                <td className="text-center py-2 px-2">
-                                                  {p.status === "calculado" ? (
-                                                    <div className="inline-flex rounded border overflow-hidden">
-                                                      <button
-                                                        className={`px-2.5 py-1 text-[11px] font-medium transition-colors ${dest === "pagamento" ? "bg-green-600 text-white" : "bg-white text-gray-500 hover:bg-gray-50"}`}
-                                                        onClick={() => handleSetDestinacao(e.id, "pagamento")}>
-                                                        💵 Pagar
-                                                      </button>
-                                                      <button
-                                                        className={`px-2.5 py-1 text-[11px] font-medium transition-colors ${dest === "banco_horas" ? "bg-blue-600 text-white" : "bg-white text-gray-500 hover:bg-gray-50"}`}
-                                                        onClick={() => handleSetDestinacao(e.id, "banco_horas")}>
-                                                        🏦 Banco
-                                                      </button>
-                                                    </div>
-                                                  ) : (
-                                                    <Badge className={`text-[10px] ${dest === "banco_horas" ? "bg-blue-100 text-blue-700" : "bg-green-100 text-green-700"}`}>
-                                                      {dest === "banco_horas" ? "🏦 Banco" : "💵 Pagamento"}
-                                                    </Badge>
-                                                  )}
-                                                </td>
-                                              </tr>
-                                            );
-                                          })}
+                                                    )}
+                                                    <td className="text-center py-2 px-2">
+                                                      {p.status === "calculado" ? (
+                                                        <div className="inline-flex rounded border overflow-hidden">
+                                                          <button
+                                                            className={`px-2.5 py-1 text-[11px] font-medium transition-colors ${dest === "pagamento" ? "bg-green-600 text-white" : "bg-white text-gray-500 hover:bg-gray-50"}`}
+                                                            onClick={() => handleSetDestinacao(e.id, "pagamento")}>
+                                                            💵 Pagar
+                                                          </button>
+                                                          <button
+                                                            className={`px-2.5 py-1 text-[11px] font-medium transition-colors ${dest === "banco_horas" ? "bg-blue-600 text-white" : "bg-white text-gray-500 hover:bg-gray-50"}`}
+                                                            onClick={() => handleSetDestinacao(e.id, "banco_horas")}>
+                                                            🏦 Banco
+                                                          </button>
+                                                        </div>
+                                                      ) : (
+                                                        <Badge className={`text-[10px] ${dest === "banco_horas" ? "bg-blue-100 text-blue-700" : "bg-green-100 text-green-700"}`}>
+                                                          {dest === "banco_horas" ? "🏦 Banco" : "💵 Pagamento"}
+                                                        </Badge>
+                                                      )}
+                                                    </td>
+                                                  </tr>
+                                                );
+                                              });
+                                            }
+                                            return rows;
+                                          })()}
                                         </tbody>
                                         <tfoot>
                                           {(() => {
@@ -4853,7 +4887,7 @@ export default function FolhaPagamento() {
                                             const totalDiff = totalPlan - totalERP;
                                             return (
                                               <tr className="border-t-2 border-gray-300 bg-gray-50 font-bold">
-                                                <td className="py-2 px-2" colSpan={4}>TOTAL</td>
+                                                <td className="py-2 px-2" colSpan={5}>TOTAL</td>
                                                 <td className="text-right py-2 px-2 text-lg text-purple-700">
                                                   {formatBRL(totalERP)}
                                                 </td>

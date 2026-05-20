@@ -1,6 +1,99 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2179 — **NOVA FEATURE · Relatório de Períodos HE agora mostra
+ * coluna "Solicitação" (Aprovada / Sem solicitação) e quebra o
+ * funcionário em até 2 linhas quando tem horas mistas, com botão
+ * Pagar/Banco independente por origem.**
+ *
+ * Lilian pediu: replicar no relatório de Períodos HE (Folha de
+ * Pagamento → tabela "Períodos Registrados") as tags que já existem
+ * em outras telas (Aprovada verde / Sem solicitação laranja), e
+ * permitir que um funcionário com horas mistas (parte aprovada, parte
+ * sem solicitação) apareça em duas linhas distintas — uma para cada
+ * origem — cada uma com seu próprio botão Pagar/Banco e seu próprio
+ * valor de HE. Hoje a tabela mostra 1 linha por funcionário com o
+ * total agregado e o gestor não consegue tratar diferente o que foi
+ * autorizado vs. o que extrapolou sem solicitação.
+ *
+ * **Schema (`drizzle/schema.ts:1810` + `ALTER TABLE` aditivo):** nova
+ * coluna `origem text DEFAULT 'sem_solicitacao'` em
+ * `he_period_employees`. Valores válidos: `'aprovada'` | `'sem_solicitacao'`.
+ * Linhas antigas (períodos pré-2179 e os que não forem recalculados)
+ * ficam com o default, ou seja, são exibidas como "Sem solicitação" —
+ * comportamento idêntico ao histórico atual (nenhuma regressão visual).
+ * `ALTER TABLE ADD COLUMN IF NOT EXISTS` aplicado direto (aditivo, sem
+ * perda de dado — autorizado explicitamente pelo usuário antes da
+ * mudança, ciente da regra R-001). Bootstrap `[SyncSchema+] Rev. 2179`
+ * adicionado em `server/_core/index.ts` (try/catch idempotente, padrão
+ * dos outros ADD COLUMN), garantindo que qualquer ambiente (produção,
+ * staging, dev limpo) ganhe a coluna no próximo boot.
+ *
+ * **Backend (`server/routers/horasExtras.ts`):**
+ *  1. `computeHEForPeriod` (L65+) pré-carrega o conjunto de
+ *     `(employeeId, dataSolicitacao)` cobertos por solicitações HE
+ *     com `status='aprovada'` no intervalo (JOIN
+ *     `he_solicitacoes` × `he_solicitacao_funcionarios`).
+ *  2. No loop principal sobre `time_records`, classifica cada DIA com
+ *     HE > 0 como `origem='aprovada'` (se o par `(empId, dateStr)`
+ *     está no Set aprovado) ou `origem='sem_solicitacao'`. Regra
+ *     "dia inteiro": qualquer minuto de HE no dia herda a classificação
+ *     do dia — solicitação HE hoje não tem "quantidade autorizada",
+ *     ela libera o dia. Acumula em `heUtilGrossByOrig` /
+ *     `heFimGrossByOrig` (gross por empId × origem).
+ *  3. Netting de atrasos: o desconto agregado continua sendo aplicado
+ *     globalmente (max(0, HE_total − atrasos)), mas o NET resultante
+ *     é redistribuído entre as origens proporcionalmente ao gross de
+ *     cada origem (`splitProporcional`). Mantém coerência com a
+ *     lógica anterior; se só existe uma origem, a outra fica 0.
+ *  4. `calcularHE` (L482+) agora itera as origens e empurra até **2
+ *     linhas** por funcionário em `empResults` (uma por origem com
+ *     `valorHETotal > 0`). Cada linha vai pro INSERT em
+ *     `he_period_employees` carregando seu próprio `origem`.
+ *  5. `he_periods.totalFuncionarios` passa a usar `Set<empId>.size`
+ *     (funcionários únicos), não `empResults.length` — caso contrário
+ *     a contagem inflaria com o split.
+ *  6. `getDetalhe` ORDER BY adiciona `CASE WHEN origem='aprovada'
+ *     THEN 0 ELSE 1` pra garantir que dentro do mesmo funcionário
+ *     a linha "Aprovada" sempre vem antes da "Sem solicitação"
+ *     (importante pra rowSpan no frontend).
+ *  7. `setDestinacao` / `setDestinacaoMassa` / `aprovarEProcessar` não
+ *     precisaram mudar — eles já operam por `id` da linha em
+ *     `he_period_employees`, então cada bucket é tratado independente
+ *     (pode-se Pagar a parte aprovada e mandar a Sem solicitação pro
+ *     Banco — ou vice-versa — no mesmo período).
+ *
+ * **Frontend (`client/src/pages/FolhaPagamento.tsx:4733+`):** tabela
+ * de funcionários do período reconstruída pra agrupar por
+ * `employeeId`. Nova coluna "Solicitação" entre "Funcionário" e
+ * "HE Úteis" com Badge (`✅ Aprovada` verde / `⚠️ Sem solicitação`
+ * âmbar). Colunas "Funcionário" e "Saldo Banco" usam `rowSpan` (nome
+ * e saldo aparecem 1× por funcionário, na primeira linha do grupo, com
+ * `align="top"` e `border-r` discreto pra separar o agrupamento).
+ * "Memorial de cálculo" (ícone FileText) também aparece só na primeira
+ * linha — abre o memorial do funcionário inteiro (não dividido por
+ * origem), comportamento idêntico ao anterior. Colunas "HE Úteis",
+ * "HE Fim Sem.", "Total HE", "Valor HE" e "Destinação" são por linha
+ * (cada bucket tem seu valor + seu Pagar/Banco). `colSpan` da linha
+ * TOTAL no tfoot bumpado de 4 → 5 pra acomodar a coluna nova.
+ *
+ * **Compatibilidade:** períodos JÁ aprovados ou pagos NÃO são
+ * recalculados (regra existente — `aprovado`/`pago` bloqueiam
+ * recálculo). Suas linhas continuam com `origem='sem_solicitacao'`
+ * (default) e aparecem visualmente como "Sem solicitação" — coerente
+ * porque o cálculo antigo não particionava. Apenas períodos com
+ * status `calculado` quando o usuário clicar "Recalcular" entram no
+ * novo formato. Períodos novos já entram split.
+ *
+ * **R-001/R-007/R-010:** ALTER TABLE ADD COLUMN é aditivo (sem perda
+ * de dado, sem DROP, sem DELETE) e foi autorizado explicitamente pelo
+ * usuário no início desta revisão. Demais mudanças são apenas em
+ * memória / SELECT / INSERT.
+ *
+ * Arquivos: `drizzle/schema.ts`, `server/routers/horasExtras.ts`,
+ * `client/src/pages/FolhaPagamento.tsx`, `shared/version.ts`,
+ * `shared/changelog.ts`, `replit.md`.
+ *
  * Rev. 2178 — **HOTFIX BLOQUEANTE · Adiantamento (vale) saía sobre o
  * salário INTEGRAL para colaboradores admitidos no meio do mês —
  * agora calcula proporcional aos dias efetivamente trabalhados.**

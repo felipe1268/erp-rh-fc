@@ -1801,6 +1801,10 @@ export const hePeriodEmployees = pgTable("he_period_employees", {
   salarioBruto: numeric("salarioBruto", { precision: 15, scale: 2 }).default("0"),
   valorHora:    numeric("valorHora",    { precision: 15, scale: 4 }).default("0"),
   destinacao:   text().default("pagamento"),
+  // Rev. 2179 — origem do bloco de HE: "aprovada" (existe solicitação HE aprovada
+  // cobrindo o dia) ou "sem_solicitacao". Permite até 2 linhas por funcionário
+  // por período (uma de cada origem) com destinacao (Pagar/Banco) independente.
+  origem:       text().default("sem_solicitacao"),
 }, (t) => [
   index("he_pe_period").on(t.hePeriodId),
   index("he_pe_emp").on(t.employeeId),
