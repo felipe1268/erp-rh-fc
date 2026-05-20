@@ -1,6 +1,28 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2210 — **UX · Aba "Grupos de Acesso" abre o 1º grupo
+ * automaticamente em vez de mostrar tela vazia "Selecione um
+ * grupo para configurar".** Lilian (20/05/2026, follow-up da
+ * Rev. 2209): "sumiu tudo não pode.. como vou criar os grupos e
+ * controlar os acessos." Print mostrava a aba Grupos de Acesso
+ * aberta com 11 grupos na coluna esquerda mas o painel direito
+ * só com o placeholder "Selecione um grupo para configurar" —
+ * dava sensação de tela quebrada. Comportamento estava OK por
+ * design (clicar no grupo abre a config), mas para um admin que
+ * gerencia 11 grupos o estado vazio é confuso, principalmente
+ * logo depois da Rev. 2209 que mexeu na vizinhança (autosave de
+ * grupo na aba Usuários). **Fix:** novo `useEffect` em
+ * `Usuarios.tsx:505-514` que monitora `activeTab` e
+ * `filteredGroups.length`; quando entra na aba "grupos" sem
+ * grupo selecionado (`gPanel === "list"` e `!selectedGroup`),
+ * chama `openGroup(filteredGroups[0])` automaticamente. Botão
+ * "+ Novo" continua disponível no header da lista. Auto-select
+ * só dispara uma vez por entrada na aba — se a Lilian voltar
+ * pra "list" manualmente (botão "Voltar" no mobile), permanece
+ * em list. **Arquivos:** `client/src/pages/Usuarios.tsx:505-514`.
+ * **R-001/R-007/R-010:** OK — UI only, zero schema/backend.
+ *
  * Rev. 2209 — **UX · Mudar Grupo de Acesso do usuário virou
  * INSTANTÂNEO (clicar no radio salva automaticamente).** Lilian:
  * "qual a função de poder alterar o usuário clicando no grupo, e

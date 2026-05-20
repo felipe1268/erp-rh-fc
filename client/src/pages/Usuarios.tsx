@@ -499,6 +499,17 @@ export default function Usuarios() {
     return (allGroups as any[]).filter(g => !q || removeAccents((g.nome||"").toLowerCase()).includes(q));
   }, [allGroups, gSearch]);
 
+  // Rev. 2210 — UX: ao entrar na aba "Grupos de Acesso" sem nada selecionado,
+  // abre automaticamente o 1º grupo da lista pra não dar sensação de tela vazia.
+  useEffect(() => {
+    if (activeTab !== "grupos") return;
+    if (gPanel !== "list") return;
+    if (selectedGroup) return;
+    if (filteredGroups.length === 0) return;
+    openGroup(filteredGroups[0]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, filteredGroups.length]);
+
   // ──────────────────────────────────────────────
   // RENDER
   // ──────────────────────────────────────────────
