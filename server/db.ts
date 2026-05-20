@@ -3037,6 +3037,7 @@ export async function listUserGroups() {
     SELECT ug.id, ug.nome, ug.descricao, ug.cor, ug.icone, ug.ativo,
            ug."somenteVisualizacao", ug."ocultarDadosSensiveis",
            ug.acesso_todas_obras AS "acessoTodasObras",
+           COALESCE(ug.ver_status_aviso, 0) AS "verStatusAviso",
            ug.module_access AS "moduleAccess",
            ug.created_at AS "createdAt", ug.updated_at AS "updatedAt",
            (SELECT COUNT(*)::int FROM user_group_members ugm WHERE ugm."groupId" = ug.id) AS "memberCount"
@@ -3053,6 +3054,7 @@ export async function getUserGroupById(id: number) {
     SELECT ug.id, ug.nome, ug.descricao, ug.cor, ug.icone, ug.ativo,
            ug."somenteVisualizacao", ug."ocultarDadosSensiveis",
            ug.acesso_todas_obras AS "acessoTodasObras",
+           COALESCE(ug.ver_status_aviso, 0) AS "verStatusAviso",
            ug.module_access AS "moduleAccess",
            ug.created_at AS "createdAt", ug.updated_at AS "updatedAt",
            (SELECT COUNT(*)::int FROM user_group_members ugm WHERE ugm."groupId" = ug.id) AS "memberCount"
@@ -3064,7 +3066,7 @@ export async function getUserGroupById(id: number) {
   return rows[0] ?? null;
 }
 
-export async function createUserGroup(data: { nome: string; descricao?: string; cor?: string; icone?: string; somenteVisualizacao?: number; ocultarDadosSensiveis?: number; acessoTodasObras?: number }) {
+export async function createUserGroup(data: { nome: string; descricao?: string; cor?: string; icone?: string; somenteVisualizacao?: number; ocultarDadosSensiveis?: number; acessoTodasObras?: number; verStatusAviso?: number }) {
   const db = await getDb();
   if (!db) throw new Error("DB indisponível");
   const nome = data.nome;
@@ -3074,17 +3076,18 @@ export async function createUserGroup(data: { nome: string; descricao?: string; 
   const somenteViz = data.somenteVisualizacao ?? 1;
   const ocultarDados = data.ocultarDadosSensiveis ?? 1;
   const acessoTodas = data.acessoTodasObras ?? 0;
+  const verAviso = data.verStatusAviso ?? 0;
   const exec = await db.execute(sql`
     INSERT INTO user_groups
-      (nome, descricao, cor, icone, "somenteVisualizacao", "ocultarDadosSensiveis", acesso_todas_obras, created_at, updated_at)
-    VALUES (${nome}, ${descricao}, ${cor}, ${icone}, ${somenteViz}, ${ocultarDados}, ${acessoTodas}, now(), now())
+      (nome, descricao, cor, icone, "somenteVisualizacao", "ocultarDadosSensiveis", acesso_todas_obras, ver_status_aviso, created_at, updated_at)
+    VALUES (${nome}, ${descricao}, ${cor}, ${icone}, ${somenteViz}, ${ocultarDados}, ${acessoTodas}, ${verAviso}, now(), now())
     RETURNING id
   `) as any;
   const rows = (exec?.rows ?? exec ?? []) as any[];
   return { id: Number(rows[0].id) };
 }
 
-export async function updateUserGroup(id: number, data: { nome?: string; descricao?: string; cor?: string; icone?: string; somenteVisualizacao?: number; ocultarDadosSensiveis?: number; acessoTodasObras?: number; ativo?: number }) {
+export async function updateUserGroup(id: number, data: { nome?: string; descricao?: string; cor?: string; icone?: string; somenteVisualizacao?: number; ocultarDadosSensiveis?: number; acessoTodasObras?: number; verStatusAviso?: number; ativo?: number }) {
   const db = await getDb();
   if (!db) throw new Error("DB indisponível");
   const setObj: Record<string, any> = { updatedAt: sql`now()` };
@@ -3095,6 +3098,7 @@ export async function updateUserGroup(id: number, data: { nome?: string; descric
   if (data.somenteVisualizacao !== undefined)  setObj.somenteVisualizacao = data.somenteVisualizacao;
   if (data.ocultarDadosSensiveis !== undefined) setObj.ocultarDadosSensiveis = data.ocultarDadosSensiveis;
   if (data.acessoTodasObras !== undefined)     setObj.acessoTodasObras = data.acessoTodasObras;
+  if (data.verStatusAviso !== undefined)       setObj.verStatusAviso = data.verStatusAviso;
   if (data.ativo !== undefined)                setObj.ativo = data.ativo;
   await db.update(userGroups).set(setObj).where(eq(userGroups.id, id));
 }
@@ -3177,11 +3181,10 @@ export async function userCanSeeAvisoStatus(userId: number, role: string | null 
   if (role === 'admin_master') return true;
   try {
     const eff = await getUserEffectiveGroupPermissions(userId);
-    return eff.groups.some((g: any) => {
-      const nome = String(g.nome || '').toUpperCase();
-      // Reconhece "RH", "RH E DP", "RH-DP", "RHDP", "DP", "RECURSOS HUMANOS"
-      return /\bRH\b/.test(nome) || /\bDP\b/.test(nome) || /RECURSOS\s+HUMANOS/.test(nome) || /\bRHDP\b/.test(nome);
-    });
+    // Rev. 2207 — agora usa o flag explícito `ver_status_aviso` do grupo
+    // (configurável na tela Grupos de Usuários → Informações). Basta um
+    // dos grupos do usuário ter o flag = 1 para liberar a visualização.
+    return eff.groups.some((g: any) => Number(g.verStatusAviso || g.ver_status_aviso || 0) === 1);
   } catch {
     return false;
   }
@@ -3225,7 +3228,7 @@ export async function getUserEffectiveGroupPermissions(userId: number) {
   const ocultarDadosSensiveis = groups.every(g => !!g.ocultarDadosSensiveis);
   
   return {
-    groups: groups.map(g => ({ id: g.id, nome: g.nome, cor: g.cor, icone: g.icone })),
+    groups: groups.map(g => ({ id: g.id, nome: g.nome, cor: g.cor, icone: g.icone, verStatusAviso: !!(g as any).verStatusAviso })),
     permissions: Array.from(permMap.values()),
     somenteVisualizacao,
     ocultarDadosSensiveis,

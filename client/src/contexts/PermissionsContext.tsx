@@ -18,6 +18,8 @@ interface GroupInfo {
   nome: string;
   cor: string | null;
   icone: string | null;
+  // Rev. 2207 — flag opt-in pra ver o status "Aviso Prévio" do colaborador
+  verStatusAviso?: boolean;
 }
 
 interface GroupPermissions {

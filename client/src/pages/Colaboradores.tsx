@@ -188,17 +188,13 @@ export default function Colaboradores() {
   const { selectedCompanyId, companies, isConstrutoras, getCompanyIdsForQuery } = useCompany();
   const { user } = useAuth();
   const isAdminMaster = user?.role === "admin_master";
-  // Rev. 2206 — Sigilo do status "Aviso Prévio": só master e grupo RH
-  // veem que um colaborador está em aviso prévio. Demais usuários têm
-  // o badge mascarado como "Ativo", o KPI somado em Ativos, a opção
-  // do filtro removida e a procedure backend também mascara (defesa
-  // em profundidade — não basta esconder na UI). Pedido Lilian:
-  // "somente o usuário master e os usuários de RH poderão ver".
+  // Rev. 2206/2207 — Sigilo do status "Aviso Prévio".
+  // Rev. 2206: hardcoded por regex no nome do grupo (RH/DP).
+  // Rev. 2207: agora controlado por flag explícito `verStatusAviso` no
+  // próprio grupo (configurável em /grupos-usuarios → Informações →
+  // checkbox "Ver Status de Aviso Prévio"). Admin Master sempre vê.
   const { groupPermissions } = usePermissions();
-  const canSeeAviso = isAdminMaster || (groupPermissions?.groups || []).some((g: any) => {
-    const nome = String(g?.nome || '').toUpperCase();
-    return /\bRH\b/.test(nome) || /\bDP\b/.test(nome) || /RECURSOS\s+HUMANOS/.test(nome) || /\bRHDP\b/.test(nome);
-  });
+  const canSeeAviso = isAdminMaster || (groupPermissions?.groups || []).some((g: any) => !!g?.verStatusAviso);
   // Helper centralizado pra usar nos badges/labels (substitui Aviso → Ativo).
   const maskedStatus = (s: string | null | undefined): string => (!canSeeAviso && s === 'Aviso') ? 'Ativo' : (s || '');
   const selectedCompany = selectedCompanyId;

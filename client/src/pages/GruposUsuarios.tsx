@@ -244,6 +244,9 @@ export default function GruposUsuarios() {
   const [editSomenteVis, setEditSomenteVis] = useState(true);
   const [editOcultarDados, setEditOcultarDados] = useState(true);
   const [editAcessoTodasObras, setEditAcessoTodasObras] = useState(false);
+  // Rev. 2207 — controla se o grupo enxerga o status "Aviso Prévio" do
+  // colaborador (sigilo sensível). Default false: por padrão é oculto.
+  const [editVerStatusAviso, setEditVerStatusAviso] = useState(false);
 
   // Permissions state
   const [routePerms, setRoutePerms] = useState<Record<string, RoutePermission>>({});
@@ -272,7 +275,7 @@ export default function GruposUsuarios() {
       toast.success("Grupo criado com sucesso!");
       setShowNewForm(false);
       setEditNome(""); setEditDescricao(""); setEditCor("#6b7280");
-      setEditSomenteVis(true); setEditOcultarDados(true); setEditAcessoTodasObras(false);
+      setEditSomenteVis(true); setEditOcultarDados(true); setEditAcessoTodasObras(false); setEditVerStatusAviso(false);
       utils.userGroups.list.invalidate();
     },
     onError: (e) => toast.error(e.message),
@@ -390,6 +393,7 @@ export default function GruposUsuarios() {
     setEditSomenteVis(g.somenteVisualizacao);
     setEditOcultarDados(g.ocultarDadosSensiveis);
     setEditAcessoTodasObras(!!g.acessoTodasObras);
+    setEditVerStatusAviso(!!g.verStatusAviso);
     setShowNewForm(false);
     setMemberSearch("");
   };
@@ -496,7 +500,7 @@ export default function GruposUsuarios() {
             </div>
             {isAdmin && (
               <button
-                onClick={() => { setShowNewForm(true); setSelectedGroupId(null); setEditNome(""); setEditDescricao(""); setEditCor("#6b7280"); setEditSomenteVis(true); setEditOcultarDados(true); setEditAcessoTodasObras(false); }}
+                onClick={() => { setShowNewForm(true); setSelectedGroupId(null); setEditNome(""); setEditDescricao(""); setEditCor("#6b7280"); setEditSomenteVis(true); setEditOcultarDados(true); setEditAcessoTodasObras(false); setEditVerStatusAviso(false); }}
                 className="h-7 w-7 rounded-lg bg-green-500 hover:bg-green-400 flex items-center justify-center transition-colors"
                 title="Novo Grupo"
               >
@@ -667,6 +671,14 @@ export default function GruposUsuarios() {
                         <p className="text-xs text-slate-500">Membros enxergam <strong>automaticamente</strong> todas as obras ativas (de qualquer empresa que tenham acesso), sem precisar liberar obra por obra. Ideal para o <strong>Escritório Central</strong> (Compras, Adm, Planejamento, Projetos, RH, Orçamento).</p>
                       </div>
                     </label>
+                    {/* Rev. 2207 — sigilo opt-in do status "Aviso Prévio" */}
+                    <label className="flex items-start gap-3 p-3 rounded-lg border-2 border-yellow-300 bg-yellow-50/40 cursor-pointer hover:bg-yellow-50 transition-colors">
+                      <Checkbox checked={editVerStatusAviso} onCheckedChange={(c) => setEditVerStatusAviso(!!c)} className="mt-0.5" />
+                      <div>
+                        <span className="text-sm font-medium text-slate-800">⚠️ Ver Status de Aviso Prévio do colaborador</span>
+                        <p className="text-xs text-slate-500">Por padrão o status <strong>"Aviso Prévio"</strong> é <strong>sigiloso</strong> — todos os usuários veem o colaborador como "Ativo". Marque esta opção para que membros deste grupo (geralmente <strong>RH/DP</strong>) consigam enxergar o badge real "Aviso Prévio" no badge da lista, KPI, ficha e PDF.</p>
+                      </div>
+                    </label>
                   </div>
                 </div>
 
@@ -675,7 +687,7 @@ export default function GruposUsuarios() {
                   <Button
                     onClick={() => {
                       if (!editNome.trim()) { toast.error("Nome é obrigatório"); return; }
-                      createMut.mutate({ nome: editNome.trim(), descricao: editDescricao.trim() || undefined, cor: editCor, somenteVisualizacao: editSomenteVis, ocultarDadosSensiveis: editOcultarDados, acessoTodasObras: editAcessoTodasObras });
+                      createMut.mutate({ nome: editNome.trim(), descricao: editDescricao.trim() || undefined, cor: editCor, somenteVisualizacao: editSomenteVis, ocultarDadosSensiveis: editOcultarDados, acessoTodasObras: editAcessoTodasObras, verStatusAviso: editVerStatusAviso });
                     }}
                     disabled={createMut.isPending}
                     className="flex-1 bg-green-600 hover:bg-green-700 gap-2"
@@ -696,7 +708,7 @@ export default function GruposUsuarios() {
                 <p className="text-sm text-slate-400 mt-1">Clique em um grupo na lista para editar suas permissões e membros</p>
               </div>
               {isAdmin && (
-                <Button onClick={() => { setShowNewForm(true); setEditNome(""); setEditDescricao(""); setEditCor("#6b7280"); setEditSomenteVis(true); setEditOcultarDados(true); setEditAcessoTodasObras(false); }} className="gap-2 bg-green-600 hover:bg-green-700 mt-2">
+                <Button onClick={() => { setShowNewForm(true); setEditNome(""); setEditDescricao(""); setEditCor("#6b7280"); setEditSomenteVis(true); setEditOcultarDados(true); setEditAcessoTodasObras(false); setEditVerStatusAviso(false); }} className="gap-2 bg-green-600 hover:bg-green-700 mt-2">
                   <Plus className="h-4 w-4" /> Criar Primeiro Grupo
                 </Button>
               )}
@@ -808,13 +820,21 @@ export default function GruposUsuarios() {
                             <p className="text-xs text-slate-500">Membros enxergam <strong>automaticamente</strong> todas as obras ativas (de qualquer empresa que tenham acesso), sem precisar liberar obra por obra na tela de cada usuário. Ideal para o <strong>Escritório Central</strong> (Compras, Adm, Planejamento, Projetos, RH, Orçamento).</p>
                           </div>
                         </label>
+                        {/* Rev. 2207 — sigilo opt-in do status "Aviso Prévio" */}
+                        <label className="flex items-start gap-3 p-3 rounded-lg border-2 border-yellow-300 bg-yellow-50/40 cursor-pointer hover:bg-yellow-50 transition-colors">
+                          <Checkbox checked={editVerStatusAviso} onCheckedChange={(c) => setEditVerStatusAviso(!!c)} className="mt-0.5" />
+                          <div>
+                            <span className="text-sm font-medium text-slate-800">⚠️ Ver Status de Aviso Prévio do colaborador</span>
+                            <p className="text-xs text-slate-500">Por padrão o status <strong>"Aviso Prévio"</strong> é <strong>sigiloso</strong> — todos os usuários veem o colaborador como "Ativo". Marque esta opção para que membros deste grupo (geralmente <strong>RH/DP</strong>) consigam enxergar o badge real "Aviso Prévio" na lista, KPI, ficha individual e PDF.</p>
+                          </div>
+                        </label>
                       </div>
                     </div>
                     {isAdmin && (
                       <Button
                         onClick={() => {
                           if (!editNome.trim()) { toast.error("Nome é obrigatório"); return; }
-                          updateMut.mutate({ id: selectedGroup.id, nome: editNome.trim(), descricao: editDescricao.trim() || undefined, cor: editCor, somenteVisualizacao: editSomenteVis, ocultarDadosSensiveis: editOcultarDados, acessoTodasObras: editAcessoTodasObras });
+                          updateMut.mutate({ id: selectedGroup.id, nome: editNome.trim(), descricao: editDescricao.trim() || undefined, cor: editCor, somenteVisualizacao: editSomenteVis, ocultarDadosSensiveis: editOcultarDados, acessoTodasObras: editAcessoTodasObras, verStatusAviso: editVerStatusAviso });
                         }}
                         disabled={updateMut.isPending}
                         className="mt-4 gap-2"

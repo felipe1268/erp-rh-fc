@@ -2955,6 +2955,7 @@ export const appRouter = router({
         somenteVisualizacao: !!g.somenteVisualizacao,
         ocultarDadosSensiveis: !!g.ocultarDadosSensiveis,
         acessoTodasObras: !!g.acessoTodasObras,
+        verStatusAviso: !!g.verStatusAviso,
         moduleAccess: g.moduleAccess ? (() => { try { return JSON.parse(g.moduleAccess); } catch { return {}; } })() : {},
       }));
     }),
@@ -2967,6 +2968,7 @@ export const appRouter = router({
         somenteVisualizacao: !!g.somenteVisualizacao,
         ocultarDadosSensiveis: !!g.ocultarDadosSensiveis,
         acessoTodasObras: !!g.acessoTodasObras,
+        verStatusAviso: !!g.verStatusAviso,
         moduleAccess: g.moduleAccess ? (() => { try { return JSON.parse(g.moduleAccess); } catch { return {}; } })() : {},
       };
     }),
@@ -2978,6 +2980,7 @@ export const appRouter = router({
       somenteVisualizacao: z.boolean().optional(),
       ocultarDadosSensiveis: z.boolean().optional(),
       acessoTodasObras: z.boolean().optional(),
+      verStatusAviso: z.boolean().optional(),
     })).mutation(async ({ input, ctx }) => {
       if (ctx.user.role !== 'admin' && ctx.user.role !== 'admin_master') throw new TRPCError({ code: 'FORBIDDEN', message: 'Apenas admin pode criar grupos' });
       const result = await createUserGroup({
@@ -2988,6 +2991,7 @@ export const appRouter = router({
         somenteVisualizacao: input.somenteVisualizacao === false ? 0 : 1,
         ocultarDadosSensiveis: input.ocultarDadosSensiveis === false ? 0 : 1,
         acessoTodasObras: input.acessoTodasObras ? 1 : 0,
+        verStatusAviso: input.verStatusAviso ? 1 : 0,
       });
       await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? 'Sistema', action: 'CREATE', module: 'usuarios', entityType: 'user_group', entityId: result.id, details: `Grupo '${input.nome}' criado` });
       return result;
@@ -3001,6 +3005,7 @@ export const appRouter = router({
       somenteVisualizacao: z.boolean().optional(),
       ocultarDadosSensiveis: z.boolean().optional(),
       acessoTodasObras: z.boolean().optional(),
+      verStatusAviso: z.boolean().optional(),
       ativo: z.boolean().optional(),
     })).mutation(async ({ input, ctx }) => {
       if (ctx.user.role !== 'admin' && ctx.user.role !== 'admin_master') throw new TRPCError({ code: 'FORBIDDEN', message: 'Apenas admin pode editar grupos' });
@@ -3012,6 +3017,7 @@ export const appRouter = router({
       if (input.somenteVisualizacao !== undefined) updateData.somenteVisualizacao = input.somenteVisualizacao ? 1 : 0;
       if (input.ocultarDadosSensiveis !== undefined) updateData.ocultarDadosSensiveis = input.ocultarDadosSensiveis ? 1 : 0;
       if (input.acessoTodasObras !== undefined) updateData.acessoTodasObras = input.acessoTodasObras ? 1 : 0;
+      if (input.verStatusAviso !== undefined) updateData.verStatusAviso = input.verStatusAviso ? 1 : 0;
       if (input.ativo !== undefined) updateData.ativo = input.ativo ? 1 : 0;
       await updateUserGroup(input.id, updateData);
       await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? 'Sistema', action: 'UPDATE', module: 'usuarios', entityType: 'user_group', entityId: input.id, details: `Grupo atualizado` });

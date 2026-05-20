@@ -4218,6 +4218,12 @@ export const userGroups = pgTable("user_groups", {
         somenteVisualizacao: smallint().default(1).notNull(),
         ocultarDadosSensiveis: smallint().default(1).notNull(),
         acessoTodasObras: smallint("acesso_todas_obras").default(0).notNull(),
+        // Rev. 2207 — controla se o grupo pode ver o STATUS "Aviso Prévio"
+        // do colaborador (sigilo sensível pedido pela Lilian). Default 0
+        // (oculta) — somente admin_master e grupos onde este flag = 1
+        // enxergam o badge real "Aviso Prévio"; demais veem "Ativo".
+        // Substitui o regex hardcoded de nomes de grupo da Rev. 2206.
+        verStatusAviso: smallint("ver_status_aviso").default(0).notNull(),
         moduleAccess: text("module_access"),
         createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
         updatedAt: timestamp("updated_at", { mode: 'string' }).defaultNow().notNull(),

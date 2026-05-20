@@ -1,6 +1,85 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2207 — **SEGURANÇA / UX · Sigilo do status "Aviso Prévio"
+ * agora é OPT-IN configurável por grupo (checkbox "⚠️ Ver Status de
+ * Aviso Prévio" em Grupos de Usuários → Informações) em vez de
+ * regex hardcoded de nome de grupo.**
+ *
+ * Lilian (20/05/2026): "nesta tela, preciso controlar se vamos ou
+ * não liberar informaçãos sobre o statuso do funcionario.. quero
+ * ter a opçao de bloquear a visualização do status do funcionario,
+ * se ele estiver de aviso previo.. é uma informação sensivel." Print:
+ * a Lilian apontou o card de configuração de permissões de grupo
+ * (PERMISSÕES DE ACESSO → ACESSO A MÓDULOS → RH/DP → DADOS SENSÍVEIS
+ * / LGPD) — ela quer uma chave explícita pra liberar/bloquear esse
+ * sigilo, não depender do nome do grupo (Rev. 2206 fazia regex
+ * `/\bRH\b/` no `g.nome`, frágil contra grupos renomeados).
+ *
+ * **Mudanças:**
+ *
+ * **Schema (`drizzle/schema.ts` + `drizzle/0024_ver_status_aviso.sql`):**
+ * - Nova coluna `user_groups.ver_status_aviso smallint DEFAULT 0
+ *   NOT NULL` (aditiva, segura por defeito — todos os grupos
+ *   existentes começam com `0`, mantendo o sigilo até admin marcar
+ *   explicitamente).
+ * - Migration aplicada via `ALTER TABLE ... ADD COLUMN IF NOT EXISTS`
+ *   (R-001/R-007/R-010 OK — DDL aditiva, sem perda de dados, sem
+ *   DROP/DELETE).
+ *
+ * **Backend (`server/db.ts`):**
+ * - `listUserGroups` / `getUserGroupById` selecionam `COALESCE(ver_status_aviso, 0)
+ *   AS "verStatusAviso"`.
+ * - `createUserGroup` / `updateUserGroup` aceitam `verStatusAviso`
+ *   (number 0/1).
+ * - `getUserEffectiveGroupPermissions` devolve `verStatusAviso: bool`
+ *   junto com cada grupo do usuário.
+ * - **`userCanSeeAvisoStatus` (Rev. 2206) reescrito**: agora retorna
+ *   `true` se `role === 'admin_master'` OU se QUALQUER grupo do
+ *   usuário tem `verStatusAviso === 1`. O regex de nome (`/\bRH\b/`,
+ *   `/\bDP\b/`, etc) foi removido — substituído pelo flag explícito.
+ *
+ * **Router (`server/routers.ts`):**
+ * - `userGroups.list` / `getById` retornam `verStatusAviso: !!...`.
+ * - `userGroups.create` / `update` aceitam `verStatusAviso: z.boolean().optional()`
+ *   e gravam como 0/1 no banco.
+ *
+ * **Frontend tela "Grupos de Usuários" (`client/src/pages/GruposUsuarios.tsx`):**
+ * - Novo state `editVerStatusAviso` (default false).
+ * - 4ª checkbox amarela no card de criação E no card de edição
+ *   (aba Informações): "⚠️ Ver Status de Aviso Prévio do colaborador",
+ *   com texto explicativo do impacto (badge da lista, KPI, ficha,
+ *   PDF) e indicação que default é sigiloso.
+ * - `selectGroup` carrega `!!g.verStatusAviso`; `createMut`/`updateMut`
+ *   enviam o flag.
+ *
+ * **Frontend tela "Colaboradores" (`client/src/pages/Colaboradores.tsx`):**
+ * - `canSeeAviso` agora é
+ *   `isAdminMaster || groupPermissions.groups.some(g => !!g.verStatusAviso)`
+ *   (em vez do regex de nome). Tudo o resto da Rev. 2206 (masking
+ *   no badge, ficha, PDF, KPI sumir, opção de filtro filtrada)
+ *   continua funcionando idêntico.
+ *
+ * **Context (`client/src/contexts/PermissionsContext.tsx`):**
+ * - `GroupInfo` ganha `verStatusAviso?: boolean` — propaga o flag do
+ *   `getMyPermissions` (que vem por `getUserEffectiveGroupPermissions`).
+ *
+ * **Migração de dados** (deliberadamente NÃO executada): nenhum
+ * UPDATE retroativo no `ver_status_aviso` para grupos existentes
+ * que casariam com a regex anterior (RH/DP/RHDP/Recursos Humanos).
+ * O admin precisa marcar manualmente o checkbox nos grupos que
+ * devem continuar enxergando o status — comportamento "secure by
+ * default" pedido pela Lilian, e evita falsos positivos do regex.
+ *
+ * **R-001/R-007/R-010:** ✅ OK — `ALTER TABLE ADD COLUMN IF NOT
+ * EXISTS` é aditiva e sem perda de dados. Nada de DROP/DELETE.
+ *
+ * **Acceptance pra Lilian:** em `/grupos-usuarios` selecionar grupo
+ * "RH e DP" → aba Informações → marcar "⚠️ Ver Status de Aviso
+ * Prévio" → Salvar. Membros desse grupo passam a ver o badge
+ * amarelo "Aviso Prévio" e KPI "Aviso" em /colaboradores. Demais
+ * grupos continuam vendo "Ativo" verde.
+ *
  * Rev. 2206 — **SEGURANÇA / SIGILO · Status "Aviso Prévio" do
  * colaborador agora é visível APENAS pra Admin Master e usuários
  * do grupo RH/DP. Demais usuários veem o colaborador como "Ativo"
