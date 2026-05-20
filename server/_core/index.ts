@@ -1756,6 +1756,18 @@ Regras:
           console.log(`[SyncSchema+] Rev. 2180: colunas faltantes em payroll_periods garantidas (valeResultJson, *ResultJson, aplicarDsr*, *ConsolidadoEm/Por).`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.2180 payroll_periods columns:`, e?.message || e); }
 
+        // Rev. 2192 — Nome+timestamp do responsável no momento da coleta da
+        // assinatura do EPI. Bloco isolado (não dentro do DO $$ EXCEPTION
+        // do Bloco2, que falha silenciosamente em DBs antigos). Sem essas
+        // colunas, salvarAssinatura quebra com "column does not exist"
+        // quando tipoAssinante=responsavel.
+        try {
+          await db.execute(sql`ALTER TABLE epi_deliveries ADD COLUMN IF NOT EXISTS assinatura_responsavel_url TEXT`);
+          await db.execute(sql`ALTER TABLE epi_deliveries ADD COLUMN IF NOT EXISTS assinatura_responsavel_nome VARCHAR(255)`);
+          await db.execute(sql`ALTER TABLE epi_deliveries ADD COLUMN IF NOT EXISTS assinatura_responsavel_em TIMESTAMP`);
+          console.log(`[SyncSchema+] Rev. 2192: colunas assinatura_responsavel_{url,nome,em} garantidas em epi_deliveries.`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.2192 epi_deliveries.assinatura_responsavel_*:`, e?.message || e); }
+
       } catch (e: any) { console.error(`[SyncSchema+] ERROR:`, e?.message || e); }
     }).catch(e => console.error("[SyncSchema] Falha ao iniciar:", e));
     // Garantir colunas críticas adicionadas recentemente que o SyncSchema possa ter ignorado
@@ -2516,6 +2528,8 @@ Regras:
             ALTER TABLE epi_deliveries ADD COLUMN IF NOT EXISTS biometria_capturada_em TIMESTAMP;
             ALTER TABLE epi_deliveries ADD COLUMN IF NOT EXISTS modo_identificacao VARCHAR(20) DEFAULT 'manual';
             ALTER TABLE epi_deliveries ADD COLUMN IF NOT EXISTS assinatura_responsavel_url TEXT;
+            ALTER TABLE epi_deliveries ADD COLUMN IF NOT EXISTS assinatura_responsavel_nome VARCHAR(255);
+            ALTER TABLE epi_deliveries ADD COLUMN IF NOT EXISTS assinatura_responsavel_em TIMESTAMP;
             ALTER TABLE warnings ADD COLUMN IF NOT EXISTS assinatura_funcionario_url TEXT;
             ALTER TABLE warnings ADD COLUMN IF NOT EXISTS assinatura_aplicador_url TEXT;
             ALTER TABLE obras ADD COLUMN IF NOT EXISTS insalubridade_grau VARCHAR(20) DEFAULT 'none';

@@ -1822,34 +1822,48 @@ export default function Epis() {
 
             {/* Signature Lines - Digital ou Impressa */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 sm:gap-16 mt-6 sm:mt-12 pt-4 sm:pt-8">
-              {/* Assinatura do Funcionário */}
+              {/* Assinatura do Funcionário — Rev. 2192: nome em destaque
+                  abaixo da linha (assinatura manual nem sempre legível) */}
               <div className="text-center">
                 {fichaDelivery.assinaturaUrl || fichaSignature ? (
                   <div>
                     <img src={fichaDelivery.assinaturaUrl || fichaSignature!} alt="Assinatura" className="mx-auto h-16 object-contain mb-1" />
-                    <div className="border-t border-black pt-1 text-sm">Assinatura do Funcionário</div>
+                    <div className="border-t border-black pt-1 text-sm font-semibold text-[#1B2A4A]">
+                      {fichaDelivery.nomeFunc || emp?.nomeCompleto || "—"}
+                    </div>
+                    <p className="text-[10px] text-gray-600">Assinatura do Funcionário</p>
                     <p className="text-[9px] text-green-600 mt-0.5">✓ Assinatura digital coletada</p>
                   </div>
                 ) : (
                   <div>
                     <div className="h-16" />
-                    <div className="border-t border-black pt-2 text-sm">Assinatura do Funcionário</div>
+                    <div className="border-t border-black pt-2 text-sm font-semibold text-[#1B2A4A]">
+                      {fichaDelivery.nomeFunc || emp?.nomeCompleto || "—"}
+                    </div>
+                    <p className="text-[10px] text-gray-600">Assinatura do Funcionário</p>
                   </div>
                 )}
               </div>
-              {/* Assinatura do Responsável */}
+              {/* Assinatura do Responsável — Rev. 2192: nome em destaque
+                  abaixo da linha. Prioridade: nome salvo no momento da
+                  coleta (`assinaturaResponsavelNome`) > usuário atual. */}
               <div className="text-center">
                 {fichaDelivery.assinaturaResponsavelUrl || responsavelSignature ? (
                   <div>
                     <img src={fichaDelivery.assinaturaResponsavelUrl || responsavelSignature!} alt="Assinatura Responsável" className="mx-auto h-16 object-contain mb-1" />
-                    <div className="border-t border-black pt-1 text-sm">Responsável pela Entrega</div>
+                    <div className="border-t border-black pt-1 text-sm font-semibold text-[#1B2A4A]">
+                      {fichaDelivery.assinaturaResponsavelNome || user?.name || "—"}
+                    </div>
+                    <p className="text-[10px] text-gray-600">Responsável pela Entrega</p>
                     <p className="text-[9px] text-green-600 mt-0.5">✓ Assinatura digital coletada</p>
                   </div>
                 ) : (
                   <div>
                     <div className="h-16" />
-                    <div className="border-t border-black pt-2 text-sm">Responsável pela Entrega</div>
-                    <p className="text-[9px] text-gray-500 mt-0.5">{user?.name || ''}</p>
+                    <div className="border-t border-black pt-2 text-sm font-semibold text-[#1B2A4A]">
+                      {user?.name || "—"}
+                    </div>
+                    <p className="text-[10px] text-gray-600">Responsável pela Entrega</p>
                   </div>
                 )}
               </div>

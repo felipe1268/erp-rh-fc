@@ -832,8 +832,16 @@ export const epiAvancadoRouter = router({
         const [delivery] = await db.select({ grupoEntregaId: epiDeliveries.grupoEntregaId })
           .from(epiDeliveries).where(eq(epiDeliveries.id, input.deliveryId));
         const grupoId = delivery?.grupoEntregaId;
+        // Rev. 2192 — captura nome+timestamp do responsável no momento da
+        // coleta da assinatura (entregadorNome já é salvo em epi_assinaturas
+        // via ctx.user.name; aqui replicamos em epi_deliveries pra render
+        // direto na ficha sem JOIN).
         const updateData = input.tipoAssinante === "responsavel"
-          ? { assinaturaResponsavelUrl: url }
+          ? {
+              assinaturaResponsavelUrl: url,
+              assinaturaResponsavelNome: ctx.user?.name || null,
+              assinaturaResponsavelEm: new Date().toISOString(),
+            }
           : { assinaturaUrl: url };
         if (grupoId) {
           await db.update(epiDeliveries).set(updateData as any)

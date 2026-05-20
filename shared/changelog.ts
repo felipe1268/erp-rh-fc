@@ -1,6 +1,57 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2192 — **MELHORIA UX · Nome do funcionário e do responsável
+ * agora aparecem em destaque abaixo de cada assinatura na Ficha de
+ * Entrega de EPI.** Lilian: "precisa aparecer o nome do Usuário
+ * responsavel que fez a entrega o EPI, alem a assintura, para
+ * facilitar o entendimento, o nome das assinatura as vezes fica
+ * inelegivel".
+ *
+ * **Contexto:** o preview da ficha mostrava só a imagem da
+ * assinatura + linha + label genérico ("Assinatura do Funcionário"
+ * / "Responsável pela Entrega"). Assinaturas manuais (a dedo no
+ * touchscreen) frequentemente ficam ilegíveis — impossível
+ * identificar QUEM assinou só pela imagem.
+ *
+ * **Schema (aditivo via `ADD COLUMN IF NOT EXISTS` — R-001 OK):**
+ * - `epi_deliveries.assinatura_responsavel_nome VARCHAR(255)` —
+ *   nome do usuário logado no momento da coleta da assinatura do
+ *   responsável (snapshot, sobrevive a renomeações/deleções).
+ * - `epi_deliveries.assinatura_responsavel_em TIMESTAMP` —
+ *   timestamp da coleta.
+ * - Bootstrap adicionado em `server/_core/index.ts:2522-2523`.
+ * - `drizzle/schema.ts:1121-1122` reflete as colunas.
+ *
+ * **Fix (Server `epiAvancado.ts:salvarAssinatura`):** quando
+ * `tipoAssinante === "responsavel"`, `updateData` agora inclui
+ * `assinaturaResponsavelNome: ctx.user?.name` e
+ * `assinaturaResponsavelEm: new Date().toISOString()`. Funcionário
+ * não precisa de campo extra — o nome vem do `employees` join.
+ *
+ * **Fix (Server `epis.ts:list`):** SELECT inclui os 2 campos
+ * novos (L297-298) para o client renderizar sem JOIN extra.
+ *
+ * **Fix (Client `Epis.tsx`):** bloco de assinaturas (L1828-1872)
+ * agora renderiza NOME em destaque (font-semibold #1B2A4A 14px)
+ * imediatamente abaixo da linha de assinatura, com o label
+ * descritivo em fonte menor (10px gray-600) embaixo. Aplica-se
+ * tanto pra ficha assinada (mostra nome + label) quanto pra ficha
+ * em branco (mostra só nome + label, sem imagem). Funcionário usa
+ * `nomeFunc || emp?.nomeCompleto`; responsável usa
+ * `assinaturaResponsavelNome || user?.name` (fallback pro user
+ * atual quando a entrega é antiga e não tem o campo preenchido).
+ *
+ * **Não-regressão:** Rev. 2191 (bloco de fotos) e Rev. 2190
+ * (olhinho → preview in-app) seguem intactos. Entregas antigas
+ * sem `assinaturaResponsavelNome` caem no fallback `user?.name` e
+ * mostram um nome plausível (não fica "—" vazio).
+ *
+ * **R-001/R-007/R-010:** OK — só `ADD COLUMN IF NOT EXISTS`
+ * aditivo (zero ALTER destrutivo, zero DROP, zero DELETE).
+ *
+ * ---
+ *
  * Rev. 2191 — **MELHORIA UX · Ficha de Entrega de EPI agora exibe as
  * fotos anexadas (estado do EPI no momento da troca).** Lilian:
  * "esta faltando as fotos que foram anexadas aos documentos".

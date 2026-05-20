@@ -1115,6 +1115,8 @@ export const epiDeliveries = pgTable("epi_deliveries", {
         dataValidade: date("data_validade", { mode: 'string' }),
         assinaturaUrl: text("assinatura_url"),
         assinaturaResponsavelUrl: text("assinatura_responsavel_url"),
+        assinaturaResponsavelNome: varchar("assinatura_responsavel_nome", { length: 255 }),
+        assinaturaResponsavelEm: timestamp("assinatura_responsavel_em", { mode: 'string' }),
         biometriaFacialUrl: text("biometria_facial_url"),
         biometriaCapturadaEm: timestamp("biometria_capturada_em", { mode: 'string' }),
         modoIdentificacao: varchar("modo_identificacao", { length: 20 }).default('manual'),
