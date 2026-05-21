@@ -1,6 +1,49 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2229 — **CHORE/CLEANUP · Removidas 4 procedures duplicadas que
+ * geravam warnings no build de produção (esbuild "Duplicate key" no
+ * object literal do router).** Em JS, quando uma chave aparece duas
+ * vezes no mesmo object literal, a SEGUNDA sobrescreve a primeira
+ * silenciosamente. Resultado: a primeira definição vira código morto e
+ * o build emite warning. Frontend só vê o comportamento da segunda
+ * definição, então qualquer chamada que combinasse com a assinatura da
+ * PRIMEIRA quebraria silenciosamente em runtime.
+ *
+ * **Procedures removidas (1ª definição, código morto):**
+ *  1. `server/routers/financial.ts` — `getCashFlow` (L2167-2215, antiga
+ *     assinatura aceitava `companyIds` + `obraId`). Removida; a 2ª
+ *     definição (L3434, agrupamento dia/semana/mes/ano) permanece como
+ *     única. Frontend não chama `getCashFlow` diretamente — chama
+ *     `getCashFlowMatrix` (`FinanceiroFluxoCaixa.tsx:45`), nenhum
+ *     impacto funcional.
+ *  2. `server/routers/financial.ts` — `markAlertRead` (L3776-3787,
+ *     assinatura `{id, companyId}` sem `ctx.user`). Removida; a 2ª
+ *     definição (L5567, `{companyId, alertId}` + delega pro helper
+ *     `markAlertRead(db,companyId,alertId,userId)` que registra autor)
+ *     permanece como única. Frontend (`FinanceiroCFOSuite.tsx:472`) já
+ *     chamava a 2ª (objeto ganhador), nenhum impacto.
+ *  3. `server/routers/financial.ts` — `getDRE` (L2047-2163, assinatura
+ *     `{periodo, tipoPeriodo, obraId, ...}`). Removida; a 2ª definição
+ *     (L3411, mesma intenção mas implementação atualizada) permanece.
+ *     Frontend (`FinanceiroDRE.tsx:47`) já chamava a 2ª.
+ *  4. `server/routers/payrollEngine.ts` — `consolidarPagamento`
+ *     (L4149-4212, primeira versão sem checagem de período travado).
+ *     Removida; a 2ª definição (L5312, versão evoluída com validações
+ *     adicionais) permanece. Frontend (`FolhaPagamento.tsx:1099`,
+ *     `PayrollCompetencias.tsx:225`) já chamava a 2ª.
+ *
+ * **Validação:** `pnpm build` antes:
+ * `4 warnings (getCashFlow, markAlertRead, getDRE, consolidarPagamento
+ * Duplicate key)`. Depois: `0 warnings` de duplicate key (resta apenas
+ * o warning informativo do Lightning CSS sobre `.print\\:hidden` que é
+ * sintaxe escapada válida do Tailwind, não é fatal — build conclui em
+ * ~68s com `dist/index.js 8.2mb`). Bundle sai ~3KB menor.
+ *
+ * **R-001/R-007/R-010:** N/A — apenas remoção de código morto, zero
+ * SQL alterado, zero schema mexido. As 2ªs definições (ativas) já
+ * eram o comportamento de produção.
+ *
  * Rev. 2228 — **FEATURE/UX · Contas a Pagar: (1) eliminado scroll
  * horizontal compactando colunas; (2) botão EXCLUIR (duplicidade) com
  * confirm + motivo + auditoria; (3) botão ESTORNAR pagamento na aba
