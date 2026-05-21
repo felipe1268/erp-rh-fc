@@ -35,6 +35,7 @@ import { useLocation, useSearch } from "wouter";
 import { toast } from "sonner";
 import { useCompany } from "@/contexts/CompanyContext";
 import RaioXFuncionario from "@/components/RaioXFuncionario";
+import HEAprovadaSemPontoAlert from "@/components/HEAprovadaSemPontoAlert";
 
 type ViewMode = "resumo" | "inconsistencias" | "detalhe" | "rateio" | "nao_identificados" | "memoria_dixi" | "simulador_horistas" | "descontos_clt";
 
@@ -1595,6 +1596,15 @@ export default function FechamentoPonto() {
             })}
           </div>
         </div>
+
+        {/* Rev. 2218 — Alerta: HE aprovada SEM ponto batido neste mês */}
+        <HEAprovadaSemPontoAlert
+          companyId={companyId}
+          companyIds={companyIds}
+          mesReferencia={mesAno}
+          onOpenEmployee={(empId) => openRaioX(empId)}
+          title="HE aprovada SEM ponto — pendente de análise no fechamento"
+        />
 
         {/* ===== TOOLBAR ===== */}
         <div className="flex flex-wrap items-center gap-3">

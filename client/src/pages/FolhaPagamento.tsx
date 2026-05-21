@@ -1,4 +1,5 @@
 import DashboardLayout from "@/components/DashboardLayout";
+import HEAprovadaSemPontoAlert from "@/components/HEAprovadaSemPontoAlert";
 import FolhaAprovacoesRh from "./FolhaAprovacoesRh";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -4599,6 +4600,15 @@ export default function FolhaPagamento() {
               </div>
             </div>
           )}
+
+          {/* Rev. 2218 — Alerta: HE aprovada SEM ponto batido no período */}
+          <HEAprovadaSemPontoAlert
+            companyId={companyId}
+            companyIds={companyIds}
+            dataInicio={heDataInicio}
+            dataFim={heDataFim}
+            title="HE aprovada SEM ponto — não entrou no cálculo da folha"
+          />
 
           {/* ============ SUB-VIEW: PERÍODOS ============ */}
           {heSubView === "periodos" && (

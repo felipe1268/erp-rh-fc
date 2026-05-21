@@ -1,6 +1,46 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2218 — **FIX/UX · Alerta "HE aprovada SEM ponto batido"
+ * propagado pra Fechamento de Ponto + Módulo HE da Folha + bugfix
+ * de tenant na Rev. 2217.** Lilian (21/05/2026, follow-up): "onde
+ * ficou o alerta? não está aqui na tela.. note que ERIC GUSTAVO DE
+ * SOUZA, ELIEL BRENDON DE LIMA MARQUES, GLEDSON FERREIRA SANTOS
+ * tem solicitação aprovada mas não tem ponto pq não foi batido..
+ * precisa gerar um alerta no módulo Fechamento de Ponto e aqui no
+ * cálculo da HE se ele não for resolvido pelo usuário no
+ * fechamento". **Causa do "não aparece":** a chamada inline da
+ * Rev. 2217 em `SolicitacaoHE.tsx` só passava `companyId` —
+ * quando o usuário estava no modo grupo (isConstrutoras=true e
+ * `selectedCompanyId` não-numérico), `companyId` virava `0` e o
+ * backend filtrava `WHERE companyId IN (0)` retornando vazio. O
+ * `list` original já tem o mesmo bug latente mas mascarado por
+ * outras queries que populam pendentesQuery; o alerta caia
+ * silenciosamente. **Fix:** novo componente compartilhado
+ * `client/src/components/HEAprovadaSemPontoAlert.tsx` que (a)
+ * passa `companyId` + `companyIds` (corrige o filtro multi-tenant),
+ * (b) aceita `mesReferencia` OU `dataInicio/dataFim`, (c) recebe
+ * `onOpenEmployee` e `onOpenSolicitacao` opcionais (vira `<span>`
+ * estático quando não passado) e (d) só renderiza quando há ≥1
+ * caso. **Wiring:** (1) `SolicitacaoHE.tsx` aba Aprovações trocou
+ * o bloco inline pelo componente — query duplicada removida +
+ * callbacks de Raio-X e openDetail mantidos; (2) `FechamentoPonto.tsx`
+ * (L1603) — alerta inserido entre o seletor de 12 meses e a
+ * toolbar, com `mesReferencia=mesAno` e `onOpenEmployee=openRaioX`,
+ * título "HE aprovada SEM ponto — pendente de análise no
+ * fechamento"; (3) `FolhaPagamento.tsx` Módulo HE (L4606) — alerta
+ * inserido logo após o EXPIRY ALERT BANNER, dentro do `heSubView`,
+ * com `dataInicio=heDataInicio` + `dataFim=heDataFim` (período
+ * configurável 16→15), título "HE aprovada SEM ponto — não entrou
+ * no cálculo da folha" (sem Raio-X porque essa tela não tem o
+ * dialog). **Resultado:** o caso da HE-120018 (30/04/2026, Eric +
+ * Eliel + Gledson) agora aparece em verde no Fechamento de Ponto
+ * de Abril e no Módulo HE do período 16/04→15/05, dando a Lilian
+ * dois pontos de captura antes da consolidação da folha.
+ * **R-001/R-007/R-010:** OK — apenas SELECT no helper; sem
+ * ALTER/DROP/DELETE; tenant safety reforçado (companyIds
+ * propagado).
+ *
  * Rev. 2217 — **UX/HE · Alerta "HE aprovada SEM ponto batido" na aba
  * Aprovações da tela Solicitação de Hora Extra.** Lilian (21/05/2026):
  * "pode acontecer de ter um solicitação de hora extra aprovada, porem
