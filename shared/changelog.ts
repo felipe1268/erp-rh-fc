@@ -1,6 +1,77 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2222 — **FEATURE/UX · Alerta "HE aprovada SEM ponto" agora
+ * permite DIGITAR o ponto e gravar direto no Espelho do funcionário
+ * (individual ou em lote, sem sair da tela).** Lilian (21/05/2026,
+ * follow-up Rev. 2221): "neste alerta preciso que ela tem a opção
+ * de digitar o ponto e corrigir nesta tela mesmo, o ajuste já ficar
+ * gravado no espelho de ponto do funcionário.. pode colocar
+ * individualmente para cada um. ou selecionar vários e aplicar o
+ * mesmo horário para vários de uma vez". Até a Rev. 2221, o alerta
+ * só listava os funcionários como tags — RH precisava abrir o
+ * Espelho de Ponto de cada um e digitar a batida à mão. Agora cada
+ * card de solicitação tem: (a) checkbox individual por funcionário,
+ * (b) botão "Selec. todos" para marcar todos do grupo, (c) inputs
+ * `<Input type="time">` Entrada/Saída pré-preenchidos com o
+ * `horaInicio`/`horaFim` da própria HE (RH pode editar antes de
+ * lançar), (d) botão "Lançar ponto (N)" que dispara a nova
+ * mutation. **Backend:** nova procedure
+ * `heSolicitacoes.lancarPontoFromHE`
+ * (`server/routers/heSolicitacoes.ts:330-432`). Input
+ * `{solicitacaoId, employeeIds[], horaInicio, horaFim}`. Valida:
+ * solicitação existe + status='aprovada', user tem acesso à obra
+ * (`userCanAccessObra`), `horaFim > horaInicio` (HE cruzando
+ * meia-noite **bloqueada** — mesma limitação do alerta atual),
+ * funcionários estão de fato vinculados à `he_solicitacao_funcionarios`
+ * (defesa contra IDs forjados no client). Para cada funcionário,
+ * abre transação com `pg_advisory_xact_lock(empId, dateKey)` igual
+ * ao padrão de `fechamentoPonto.ts:2101+` (serializa concorrência
+ * por funcionário/dia). Faz SELECT em `time_records WHERE
+ * companyId+employeeId+data` — se existe: UPDATE
+ * `entrada1`/`saida1`/`horasTrabalhadas`/`horasExtras`/`obraId`/
+ * `mesReferencia`/`fonte='manual'`/`ajusteManual=1`/`ajustadoPor`
+ * preservando outras batidas (entrada2/3, saida2/3) e fazendo
+ * append na `justificativa` antiga (`prev | "[HE manual HE-NNNNN]
+ * Lançado da tela de alerta por ${user} (HH:MM—HH:MM)"`); se não
+ * existe: INSERT com mesmas chaves, entrada2/3+saida2/3=null,
+ * `horasNoturnas='0:00'`, `faltas='0'`, `atrasos='0:00'`,
+ * `tipoDia='normal'`. `horasTrabalhadas` e `horasExtras` recebem a
+ * mesma duração calculada (HE = tudo é hora extra). Audit log final
+ * com `action='UPDATE'`, `module='he_solicitacoes'`,
+ * `entityType='time_records'`, detalhes `"HE manual HE-NNNNN (data
+ * HH:MM—HH:MM): N criado(s), M atualizado(s) em K func(s)"`.
+ * **Frontend:** `client/src/components/HEAprovadaSemPontoAlert.tsx`
+ * reescrito (~370L). Adicionado state local por solicitação
+ * (`Record<solId, {selecionados:Set<empId>, horaInicio, horaFim}>`),
+ * inputs `type="time"`, helpers `toggleEmp`/`toggleAll`/`handleLancar`
+ * com validação client (HH:MM regex + ≥1 selecionado), toast de
+ * sucesso/erro via `useToast`, invalidate de
+ * `heSolicitacoes.aprovadasSemPonto` no `onSuccess` (card some
+ * automaticamente quando todos do grupo foram lançados). Cada tag
+ * de funcionário virou pill com checkbox à esquerda (Square/
+ * CheckSquare do `lucide-react`) que muda de cor (laranja→azul)
+ * quando selecionado. Nome continua clicável (abre Raio-X via
+ * `onOpenEmployee`). Botão "Lançar ponto (N)" mostra `Loader2`
+ * spinner durante `lancarMut.isPending` (filtrado por
+ * `variables?.solicitacaoId === sol.id` para que o spinner só
+ * apareça no grupo correto). Header do card mantém badge `Aprovada`,
+ * data, horário aprovado, obra, `periodoBadge` Rev. 2219 e faixa
+ * vermelha de duplicidade quando `pago|aprovado` — RH continua
+ * vendo o alerta de "não lance HE manual, recalcule o período"
+ * antes de decidir. **Limitações:** (1) HE cruzando meia-noite
+ * permanece não suportada (já era no detector); (2) lançamento
+ * sobrescreve `entrada1`/`saida1` mas preserva entrada2/3+saida2/3
+ * (caso real raro mas possível: se o cara já tem 2 turnos batidos
+ * e a HE deveria ser um 3º intervalo, RH ainda precisa abrir o
+ * Espelho manual). (3) Não dispara recálculo automático de banco
+ * de horas — `time_records` ganha `horasExtras > 0` e o próximo
+ * fechamento/Módulo HE pega no recálculo natural. **Permissão:**
+ * `protectedProcedure` + `userCanAccessObra` — não-admin só lança
+ * em obras liberadas. **R-001/R-007/R-010:** INSERT/UPDATE em
+ * `time_records` apenas (sem ALTER/DROP/DELETE destrutivo). Risco
+ * de duplicidade controlado por advisory lock + lookup prévio.
+ *
  * Rev. 2221 — **FIX/LOGIC · Alerta "HE aprovada SEM ponto" agora
  * detecta falta de batida NO HORÁRIO APROVADO (não só no dia).**
  * Lilian (21/05/2026, follow-up): "ainda não apareceu todos que

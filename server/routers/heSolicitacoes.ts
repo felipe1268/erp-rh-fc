@@ -2,7 +2,7 @@ import { router, protectedProcedure } from "../_core/trpc";
 import { getDb, createAuditLog, getEffectiveAllowedObraIds, userCanAccessObra, recordTrashEntry, captureRowSnapshot } from "../db";
 import {
   heSolicitacoes, heSolicitacaoFuncionarios, heSolicitacaoAtividades, heSolicitacaoConfirmacoes,
-  employees, obras, terminationNotices,
+  employees, obras, terminationNotices, timeRecords,
   planejamentoAtividades, planejamentoProjetos, planejamentoRevisoes, planejamentoRefis,
 } from "../../drizzle/schema";
 import { eq, and, sql, desc, inArray, isNull, asc } from "drizzle-orm";
@@ -322,6 +322,139 @@ export const heSolicitacoesRouter = router({
           periodoHE: periodo,
         };
       });
+    }),
+
+  // ===================== LANÇAR PONTO MANUAL A PARTIR DO ALERTA HE =====================
+  // Rev. 2222 — RH digita o ponto direto no card do alerta "HE aprovada SEM
+  // ponto". Cria/atualiza time_records (entrada1/saida1) com horasExtras =
+  // duração informada, fonte='manual', ajusteManual=1. Não trata HE cruzando
+  // meia-noite (mesma limitação do alerta atual).
+  lancarPontoFromHE: protectedProcedure
+    .input(z.object({
+      solicitacaoId: z.number(),
+      employeeIds: z.array(z.number()).min(1),
+      horaInicio: z.string().regex(/^\d{2}:\d{2}$/, "Use HH:MM"),
+      horaFim: z.string().regex(/^\d{2}:\d{2}$/, "Use HH:MM"),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+
+      const [sol] = await db.select().from(heSolicitacoes).where(eq(heSolicitacoes.id, input.solicitacaoId));
+      if (!sol) throw new TRPCError({ code: "NOT_FOUND", message: "Solicitação não encontrada" });
+      if (sol.status !== "aprovada") {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Só lança ponto para HE aprovada" });
+      }
+      if (!(await userCanAccessObra(ctx.user.id, ctx.user.role, sol.obraId))) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta obra" });
+      }
+
+      const toMin = (hhmm: string) => {
+        const [h, m] = hhmm.split(":").map(Number);
+        return h * 60 + m;
+      };
+      const minIni = toMin(input.horaInicio);
+      const minFim = toMin(input.horaFim);
+      if (minFim <= minIni) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Hora fim deve ser maior que hora início (HE cruzando meia-noite não suportada)" });
+      }
+      const totalMin = minFim - minIni;
+      const totalHHMM = `${String(Math.floor(totalMin / 60)).padStart(2, "0")}:${String(totalMin % 60).padStart(2, "0")}`;
+
+      // Confirma que os funcionários estão de fato vinculados à solicitação
+      const sfRows = await db.select({ employeeId: heSolicitacaoFuncionarios.employeeId })
+        .from(heSolicitacaoFuncionarios)
+        .where(and(
+          eq(heSolicitacaoFuncionarios.solicitacaoId, input.solicitacaoId),
+          inArray(heSolicitacaoFuncionarios.employeeId, input.employeeIds),
+        ));
+      const validIds = new Set(sfRows.map((r: any) => Number(r.employeeId)));
+      const filtered = input.employeeIds.filter((id) => validIds.has(id));
+      if (filtered.length === 0) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Nenhum funcionário válido para esta solicitação" });
+      }
+
+      const data = sol.dataSolicitacao;
+      const mesRef = data.substring(0, 7);
+      const ajustadoPor = ctx.user.name || "RH";
+      const numero = `HE-${String(sol.id).padStart(5, "0")}`;
+      const justificativa = `[HE manual ${numero}] Lançado da tela de alerta por ${ajustadoPor} (${input.horaInicio}—${input.horaFim})`;
+
+      let created = 0;
+      let updated = 0;
+
+      for (const empId of filtered) {
+        await db.transaction(async (tx: any) => {
+          const [yLk, mLk, dLk] = data.split("-").map(Number);
+          const dateKey = (yLk * 10000) + (mLk * 100) + dLk;
+          await tx.execute(sql`SELECT pg_advisory_xact_lock(${empId}, ${dateKey})`);
+
+          const existing = await tx.select().from(timeRecords)
+            .where(and(
+              eq(timeRecords.companyId, sol.companyId),
+              eq(timeRecords.employeeId, empId),
+              eq(timeRecords.data, data),
+            ))
+            .limit(1);
+
+          if (existing.length > 0) {
+            const prev = existing[0] as any;
+            await tx.update(timeRecords).set({
+              entrada1: input.horaInicio,
+              saida1: input.horaFim,
+              horasTrabalhadas: totalHHMM,
+              horasExtras: totalHHMM,
+              obraId: prev.obraId || sol.obraId || null,
+              mesReferencia: mesRef,
+              fonte: "manual",
+              ajusteManual: 1,
+              ajustadoPor,
+              justificativa: prev.justificativa
+                ? `${prev.justificativa} | ${justificativa}`
+                : justificativa,
+            } as any).where(eq(timeRecords.id, prev.id));
+            updated++;
+          } else {
+            await tx.insert(timeRecords).values({
+              companyId: sol.companyId,
+              employeeId: empId,
+              data,
+              mesReferencia: mesRef,
+              obraId: sol.obraId || null,
+              entrada1: input.horaInicio,
+              saida1: input.horaFim,
+              entrada2: null,
+              saida2: null,
+              entrada3: null,
+              saida3: null,
+              horasTrabalhadas: totalHHMM,
+              horasExtras: totalHHMM,
+              horasNoturnas: "0:00",
+              faltas: "0",
+              atrasos: "0:00",
+              fonte: "manual",
+              ajusteManual: 1,
+              ajustadoPor,
+              justificativa,
+              tipoDia: "normal",
+            } as any);
+            created++;
+          }
+        });
+      }
+
+      await createAuditLog({
+        userId: ctx.user.id,
+        userName: ctx.user.name || "Sistema",
+        companyId: sol.companyId,
+        action: "UPDATE",
+        module: "he_solicitacoes",
+        entityType: "time_records",
+        entityId: input.solicitacaoId,
+        details: `HE manual ${numero} (${data} ${input.horaInicio}—${input.horaFim}): ${created} criado(s), ${updated} atualizado(s) em ${filtered.length} func(s)`,
+      });
+
+      return { success: true, created, updated, total: filtered.length };
     }),
 
   // ===================== DETALHES DE UMA SOLICITAÇÃO =====================
