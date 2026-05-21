@@ -19,6 +19,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { trpc } from "@/lib/trpc";
 import { toast } from "@/hooks/use-toast";
 
@@ -322,11 +323,17 @@ export default function HEAprovadaSemPontoAlert({
                 <div className="flex flex-wrap gap-1.5">
                   {funcs.map((f: any) => {
                     const checked = gs.selecionados.has(f.employeeId);
+                    const iniciais = (f.employeeName || "?")
+                      .split(/\s+/)
+                      .filter(Boolean)
+                      .slice(0, 2)
+                      .map((p: string) => p[0]?.toUpperCase() || "")
+                      .join("") || "?";
                     return (
                       <div
                         key={f.employeeId}
                         className={
-                          "inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border text-[10px] md:text-xs transition " +
+                          "inline-flex items-center gap-1.5 pl-1 pr-2 py-0.5 rounded-full border text-[10px] md:text-xs transition " +
                           (checked
                             ? "bg-blue-100 border-blue-400 text-blue-900"
                             : "bg-orange-100 border-orange-300 text-orange-900")
@@ -344,6 +351,15 @@ export default function HEAprovadaSemPontoAlert({
                             <Square className="h-3.5 w-3.5 text-orange-600" />
                           )}
                         </button>
+                        <Avatar className="h-5 w-5 shrink-0 ring-1 ring-white">
+                          {f.fotoUrl && <AvatarImage src={f.fotoUrl} alt={f.employeeName} />}
+                          <AvatarFallback className={
+                            "text-[8px] font-semibold " +
+                            (checked ? "bg-blue-200 text-blue-800" : "bg-orange-200 text-orange-800")
+                          }>
+                            {iniciais}
+                          </AvatarFallback>
+                        </Avatar>
                         {onOpenEmployee ? (
                           <button
                             type="button"

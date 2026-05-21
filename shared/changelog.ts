@@ -1,6 +1,19 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2223 — **UX · Foto do funcionário no alerta "HE aprovada SEM
+ * ponto".** Lilian (21/05/2026): "quero que coloca a foto, de cada
+ * usuário para saber quem é". A procedure `aprovadasSemPonto` já
+ * retornava `fotoUrl` desde a Rev. 2217 — só faltava renderizar.
+ * Em `HEAprovadaSemPontoAlert.tsx`, cada pill de funcionário
+ * (Rev. 2222) ganhou um `<Avatar className="h-5 w-5">` à esquerda
+ * do nome, com `<AvatarImage src={f.fotoUrl}>` quando existe, e
+ * `<AvatarFallback>` com iniciais (até 2 primeiras letras dos
+ * nomes) e fundo que segue a cor de seleção (laranja/azul).
+ * `pl-2` virou `pl-1` no pill pra acomodar o avatar com `ring-1
+ * ring-white`. Sem mudança de backend. **R-001/R-007/R-010:** N/A
+ * (só UI).
+ *
  * Rev. 2222 — **FEATURE/UX · Alerta "HE aprovada SEM ponto" agora
  * permite DIGITAR o ponto e gravar direto no Espelho do funcionário
  * (individual ou em lote, sem sair da tela).** Lilian (21/05/2026,
