@@ -1388,6 +1388,49 @@ export const financialRouter = router({
     return { ok: true };
   }),
 
+  // Rev. 2228 — ESTORNAR pagamento (reverte status='pago' → 'a_pagar').
+  // Pedido Lilian: "na aba PAGOS precisa ter botão estornar, pois pode dar
+  // baixa errado". Limpa data_pagamento, valor_realizado, forma_pagamento,
+  // comprovante_url. Mantém histórico via audit log com snapshot.
+  estornarPagamento: protectedProcedure.input(z.object({
+    id: z.number(),
+    companyId: z.number(),
+    motivo: z.string().min(5, "Informe o motivo do estorno (mín. 5 caracteres)"),
+  })).mutation(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    const r: any = await dbExecute(db,
+      `SELECT id, descricao, valor_realizado, data_pagamento, forma_pagamento, status
+       FROM financial_entries WHERE id=$1 AND company_id=$2`,
+      [input.id, input.companyId]
+    );
+    const entry: any = (Array.isArray(r) ? r : r?.rows ?? [])[0];
+    if (!entry) throw new TRPCError({ code: "NOT_FOUND", message: "Lançamento não encontrado." });
+    if (entry.status !== "pago") {
+      throw new TRPCError({ code: "BAD_REQUEST", message: `Lançamento não está pago (status=${entry.status}).` });
+    }
+    const snapshot = `desc="${entry.descricao ?? ""}" pago=${entry.data_pagamento ?? "-"} valor_realizado=${entry.valor_realizado ?? "-"} forma=${entry.forma_pagamento ?? "-"}`;
+    await dbExecute(db,
+      `UPDATE financial_entries
+         SET status='a_pagar',
+             data_pagamento=NULL,
+             valor_realizado=NULL,
+             forma_pagamento=NULL,
+             comprovante_url=NULL,
+             observacoes=CONCAT(COALESCE(observacoes,''), E'\n[ESTORNO ', TO_CHAR(NOW(),'DD/MM/YYYY HH24:MI'), ' por ', $3::text, ']: ', $4::text),
+             updated_at=NOW()
+       WHERE id=$1 AND company_id=$2 AND status='pago'`,
+      [input.id, input.companyId, ctx.user?.name ?? "?", input.motivo]
+    );
+    await createAuditLog({
+      action: "financial_entry_reversed",
+      userId: ctx.user?.id,
+      companyId: input.companyId,
+      details: `Entry ${input.id} ESTORNADO por ${ctx.user?.name ?? "?"} (id=${ctx.user?.id ?? "?"}) — motivo: "${input.motivo}" — snapshot: ${snapshot}`,
+    });
+    return { ok: true };
+  }),
+
   // Rev. 2228 — DELETE definitivo de lançamento (duplicidade). User-driven,
   // protegido por confirmação na UI + motivo obrigatório + audit log
   // (criadoPorNome + ctx.user). Snapshot dos campos críticos vai pro audit

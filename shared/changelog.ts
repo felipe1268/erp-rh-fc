@@ -1,6 +1,80 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2228 — **FEATURE/UX · Contas a Pagar: (1) eliminado scroll
+ * horizontal compactando colunas; (2) botão EXCLUIR (duplicidade) com
+ * confirm + motivo + auditoria; (3) botão ESTORNAR pagamento na aba
+ * Pagos (baixa errada) com confirm + motivo + auditoria.** Lilian
+ * (21/05/2026): "ainda está ruim, quero sem barra de rolagem mas com
+ * todas as informações sem cortar. Tambem precisa de botão EXCLUIR,
+ * pode haver lançamento em duplicidade, com confirmação e registro de
+ * quem excluiu" + segunda mensagem: "na aba PAGOS precisa ter botão
+ * ESTORNAR, pois pode acontecer de dar baixa errado".
+ *
+ * **(1) Sem scroll horizontal** — a Rev. 2227 manteve sticky-right na
+ * coluna Ações pra cobrir overflow, mas o ideal é não ter overflow.
+ * Identificada redundância em `FinanceiroContasAPagar.tsx:1121-1132`:
+ * coluna Categoria mostrava `<span>{cat}</span>` (texto) E logo abaixo
+ * um pill `<Icon/>{ORIGEM_LABELS[origemModulo]}` com a mesma
+ * informação ("Compras" texto + pill "Compras"). Fix:
+ *  - Categoria virou linha única `<span><Icon/>{cat truncate</span>`
+ *    com `max-w-[160px]`, `px-2 py-2.5` (era `px-3`) — economiza
+ *    ~120px por linha → tabela cabe na largura disponível na maioria
+ *    dos viewports após sidebar (~1180px+).
+ *  - Header Ações `w-32` → `w-[140px]` + `px-2` pra caber 3 botões
+ *    (Ver / Pagar-ou-Estornar / Excluir) sem aperto.
+ *  - Sticky-right da 2227 mantido como fallback pra viewports muito
+ *    estreitos (notebook 1024px).
+ *
+ * **(2) Excluir (duplicidade)** — novo procedure
+ * `financial.deleteEntry` em `server/routers/financial.ts:1437` que
+ * faz HARD DELETE em `financial_entries`, mas:
+ *  - Bloqueia se `status='pago'` (orienta usar Estornar antes).
+ *  - Exige `motivo` mín. 5 chars no input zod.
+ *  - Antes do DELETE faz SELECT pra capturar snapshot
+ *    (`descricao/valor_previsto/data_vencimento/origem_modulo+id/conta_nome`)
+ *    e grava em `createAuditLog({ action: 'financial_entry_deleted',
+ *    details: 'Entry N EXCLUÍDO por <nome> (id=X) — motivo: "..." —
+ *    snapshot: ... }')` — rastreabilidade total de quem excluiu o quê
+ *    e por quê (atende a regra "deve ficar registrado quem fez").
+ *  - Botão `<Trash2>` vermelho na coluna Ações (visível pra todos os
+ *    lançamentos exceto projeções e `status='pago'`).
+ *  - Dialog confirma com card vermelho mostrando descrição+obra+venc
+ *    +valor + textarea motivo (validação live: bloqueia botão até
+ *    >=5 chars).
+ *
+ * **(3) Estornar pagamento** — novo procedure
+ * `financial.estornarPagamento` em
+ * `server/routers/financial.ts:1394` que reverte `status='pago' →
+ * 'a_pagar'`, limpa `data_pagamento/valor_realizado/forma_pagamento/
+ * comprovante_url`, append em `observacoes` com timestamp+autor+motivo,
+ * e registra `createAuditLog({ action: 'financial_entry_reversed' })`
+ * com snapshot dos valores zerados.
+ *  - Botão `<RotateCcw>` âmbar APARECE no lugar do "Pagar" quando
+ *    `status === 'pago'` (na aba Pagos é o botão dominante).
+ *  - Dialog idêntico ao de excluir mas em âmbar, mostrando data do
+ *    pagamento original + valor realizado + textarea motivo.
+ *
+ * Schema `financial_entries` JÁ tem `observacoes` (L6472) e
+ * `motivo_cancelamento` (L6473) — nenhum ALTER TABLE necessário.
+ * Audit trail usa `audit_logs` existente via `createAuditLog`.
+ *
+ * **R-001 / R-007 / R-010:** `deleteEntry` faz DELETE *user-driven* a
+ * partir da UI (não é ALTER/DROP de schema nem DELETE administrativo
+ * do agent) — operação esperada do produto pra resolver duplicidades.
+ * Mitigação: protege `status='pago'`, exige motivo, audita autor +
+ * snapshot completo do registro pra forense.
+ *
+ * Files:
+ *  - server/routers/financial.ts (L1394 estornarPagamento; L1437
+ *    deleteEntry).
+ *  - client/src/pages/financeiro/FinanceiroContasAPagar.tsx (L22-25
+ *    imports Trash2/RotateCcw/Textarea; L243-261 state+mutations;
+ *    L831 header w-[140px]; L1146-1154 Categoria compactada; L1180-
+ *    1208 cell Ações com 3 botões condicionais; L1788-1869 dialogs
+ *    Excluir + Estornar).
+ *  - shared/version.ts 2227 → 2228.
+ *
  * Rev. 2227 — **FIX/UX · Tela "Contas a Pagar" cortava coluna
  * "Ações" + valor à direita.** Lilian (21/05/2026): "a tela de
  * resumo do contas a pagar tambem está cortando, redistribua

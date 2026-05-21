@@ -17,7 +17,9 @@ import {
   Users, Truck, Briefcase, Scale, Package, Receipt, Wallet,
   Download, Copy, TrendingDown, TrendingUp, Zap, Activity, X,
   Eye, ExternalLink, History, Building2, Paperclip, Hash as HashIcon, Info,
+  Trash2, RotateCcw,
 } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 // Rev. 1626 — single source of truth para origens financeiras
 import {
@@ -233,6 +235,26 @@ export default function FinanceiroContasAPagar() {
       refetch();
     },
     onError: (e: any) => toast({ title: "Erro", description: e.message, variant: "destructive" }),
+  });
+
+  // Rev. 2228 — Excluir lançamento (duplicidade) + Estornar pagamento
+  const [showDelete, setShowDelete] = useState<any | null>(null);
+  const [motivoDelete, setMotivoDelete] = useState("");
+  const [showEstorno, setShowEstorno] = useState<any | null>(null);
+  const [motivoEstorno, setMotivoEstorno] = useState("");
+  const deleteMut = (trpc as any).financial.deleteEntry.useMutation({
+    onSuccess: () => {
+      toast({ title: "Lançamento excluído!", description: "Operação registrada no log de auditoria." });
+      setShowDelete(null); setMotivoDelete(""); refetch();
+    },
+    onError: (e: any) => toast({ title: "Erro ao excluir", description: e.message, variant: "destructive" }),
+  });
+  const estornoMut = (trpc as any).financial.estornarPagamento.useMutation({
+    onSuccess: () => {
+      toast({ title: "Pagamento estornado!", description: "Lançamento voltou para 'A Pagar'. Registrado no log de auditoria." });
+      setShowEstorno(null); setMotivoEstorno(""); refetch();
+    },
+    onError: (e: any) => toast({ title: "Erro ao estornar", description: e.message, variant: "destructive" }),
   });
 
   const mesesStatus: Record<number, MesStatus> = useMemo(() => {
@@ -803,7 +825,7 @@ export default function FinanceiroContasAPagar() {
                       <th className="px-3 py-2.5 text-left text-[11px] font-semibold text-gray-600 uppercase tracking-wide whitespace-nowrap"><span className="inline-flex items-center gap-1"><Tag className="w-3 h-3" />Categoria</span></th>
                       <th className="px-3 py-2.5 text-right text-[11px] font-semibold text-gray-600 uppercase tracking-wide whitespace-nowrap">Valor</th>
                       <th className="px-3 py-2.5 text-center text-[11px] font-semibold text-gray-600 uppercase tracking-wide whitespace-nowrap">Status</th>
-                      <th className="px-3 py-2.5 text-right text-[11px] font-semibold text-gray-600 uppercase tracking-wide w-32 sticky right-0 bg-gray-50 shadow-[-4px_0_6px_-4px_rgba(0,0,0,0.08)]">Ações</th>
+                      <th className="px-2 py-2.5 text-right text-[11px] font-semibold text-gray-600 uppercase tracking-wide w-[140px] sticky right-0 bg-gray-50 shadow-[-4px_0_6px_-4px_rgba(0,0,0,0.08)]">Ações</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1118,17 +1140,14 @@ export default function FinanceiroContasAPagar() {
                                   <p className="text-[11px] text-slate-400 truncate" title={c.obraNome}>📍 {c.obraNome}</p>
                                 )}
                               </td>
-                              {/* Categoria */}
-                              <td className="px-3 py-2.5">
-                                <div className="flex flex-col gap-0.5">
-                                  <span className="text-xs font-medium text-slate-700 truncate max-w-[180px]" title={cat}>{cat}</span>
-                                  {c.origemModulo && (
-                                    <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium border self-start ${colorCls}`}>
-                                      <Icon className="w-2.5 h-2.5" />
-                                      {ORIGEM_LABELS[c.origemModulo] ?? c.origemModulo}
-                                    </span>
-                                  )}
-                                </div>
+                              {/* Categoria — Rev. 2228: removido pill ORIGEM redundante
+                                  (texto da categoria já carrega o nome). Ícone inline + texto
+                                  poupam ~120px de largura → tabela cabe sem scroll. */}
+                              <td className="px-2 py-2.5">
+                                <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] font-medium border max-w-[160px] ${colorCls}`} title={cat}>
+                                  <Icon className="w-3 h-3 shrink-0" />
+                                  <span className="truncate">{cat}</span>
+                                </span>
                               </td>
                               {/* Valor */}
                               <td className="px-3 py-2.5 text-right whitespace-nowrap">
@@ -1155,17 +1174,31 @@ export default function FinanceiroContasAPagar() {
                                   </span>
                                 )}
                               </td>
-                              {/* Ações — sticky-right (Rev. 2227) pra nunca clipar */}
-                              <td className="px-3 py-2.5 text-right sticky right-0 bg-white group-hover:bg-slate-50 shadow-[-4px_0_6px_-4px_rgba(0,0,0,0.08)]" onClick={(e) => e.stopPropagation()}>
+                              {/* Ações — sticky-right (Rev. 2227) + Estornar/Excluir (Rev. 2228) */}
+                              <td className="px-2 py-2.5 text-right sticky right-0 bg-white group-hover:bg-slate-50 shadow-[-4px_0_6px_-4px_rgba(0,0,0,0.08)]" onClick={(e) => e.stopPropagation()}>
                                 <div className="inline-flex items-center gap-1">
                                   <Button size="sm" variant="outline" className="h-7 w-7 p-0" title="Ver detalhes"
                                     onClick={() => setDetailEntryId(c.id)}>
                                     <Eye className="w-3.5 h-3.5" />
                                   </Button>
-                                  {c.status !== "pago" && (
-                                    <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white h-7 px-2.5 text-xs"
+                                  {c.status === "pago" ? (
+                                    <Button size="sm" variant="outline" className="h-7 w-7 p-0 border-amber-300 text-amber-700 hover:bg-amber-50"
+                                      title="Estornar pagamento (baixa errada)"
+                                      onClick={() => { setShowEstorno(c); setMotivoEstorno(""); }}>
+                                      <RotateCcw className="w-3.5 h-3.5" />
+                                    </Button>
+                                  ) : (
+                                    <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white h-7 px-2 text-xs"
                                       onClick={() => setShowPay(c)}>
                                       <CheckCircle className="w-3 h-3 mr-1" />Pagar
+                                    </Button>
+                                  )}
+                                  {!proj && (
+                                    <Button size="sm" variant="outline" className="h-7 w-7 p-0 border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700"
+                                      title={c.status === "pago" ? "Estorne antes de excluir" : "Excluir lançamento (duplicidade)"}
+                                      disabled={c.status === "pago"}
+                                      onClick={() => { setShowDelete(c); setMotivoDelete(""); }}>
+                                      <Trash2 className="w-3.5 h-3.5" />
                                     </Button>
                                   )}
                                 </div>
@@ -1744,6 +1777,83 @@ export default function FinanceiroContasAPagar() {
                   });
                 }}>
                 {bulkPayMut.isPending ? "Processando..." : `Confirmar ${selectedIds.size} pagamento(s)`}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Rev. 2228 — Modal EXCLUIR (duplicidade) */}
+        <Dialog open={!!showDelete} onOpenChange={(o) => { if (!o) { setShowDelete(null); setMotivoDelete(""); } }}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-red-700">
+                <Trash2 className="w-5 h-5" />Excluir Lançamento
+              </DialogTitle>
+            </DialogHeader>
+            {showDelete && (
+              <div className="space-y-3">
+                <div className="rounded-lg border border-red-200 bg-red-50 p-3">
+                  <p className="text-xs text-red-700 font-semibold uppercase tracking-wide mb-1">Atenção — exclusão definitiva</p>
+                  <p className="text-sm font-medium text-slate-800">{showDelete.descricao ?? showDelete.contaNome ?? "—"}</p>
+                  {showDelete.obraNome && <p className="text-xs text-slate-600">📍 {showDelete.obraNome}</p>}
+                  <div className="flex items-center justify-between mt-2 pt-2 border-t border-red-200">
+                    <span className="text-xs text-slate-600">Vencimento: {fmtDateBR(showDelete.dataVencimento)}</span>
+                    <span className="text-base font-bold text-red-700 tabular-nums">{formatBRL(Number(showDelete.valorPrevisto ?? 0))}</span>
+                  </div>
+                </div>
+                <div>
+                  <Label className="text-sm">Motivo da exclusão <span className="text-red-600">*</span></Label>
+                  <Textarea value={motivoDelete} onChange={(e) => setMotivoDelete(e.target.value)}
+                    placeholder="Ex.: Lançamento em duplicidade com OC-2026-0214" rows={3} className="mt-1" />
+                  <p className="text-[11px] text-slate-500 mt-1">Mínimo 5 caracteres. Quem excluiu, quando e o motivo ficam registrados no log de auditoria.</p>
+                </div>
+              </div>
+            )}
+            <DialogFooter>
+              <Button variant="outline" onClick={() => { setShowDelete(null); setMotivoDelete(""); }}>Cancelar</Button>
+              <Button className="bg-red-600 hover:bg-red-700 text-white"
+                disabled={deleteMut.isPending || motivoDelete.trim().length < 5}
+                onClick={() => deleteMut.mutate({ id: showDelete.id, companyId, motivo: motivoDelete.trim() })}>
+                {deleteMut.isPending ? "Excluindo..." : "Confirmar exclusão"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Rev. 2228 — Modal ESTORNAR pagamento (baixa errada) */}
+        <Dialog open={!!showEstorno} onOpenChange={(o) => { if (!o) { setShowEstorno(null); setMotivoEstorno(""); } }}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-amber-700">
+                <RotateCcw className="w-5 h-5" />Estornar Pagamento
+              </DialogTitle>
+            </DialogHeader>
+            {showEstorno && (
+              <div className="space-y-3">
+                <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+                  <p className="text-xs text-amber-700 font-semibold uppercase tracking-wide mb-1">O lançamento voltará para "A Pagar"</p>
+                  <p className="text-sm font-medium text-slate-800">{showEstorno.descricao ?? showEstorno.contaNome ?? "—"}</p>
+                  {showEstorno.obraNome && <p className="text-xs text-slate-600">📍 {showEstorno.obraNome}</p>}
+                  <div className="grid grid-cols-2 gap-2 mt-2 pt-2 border-t border-amber-200 text-xs">
+                    <div><span className="text-slate-500">Pago em:</span> <span className="font-medium text-slate-800">{fmtDateBR(showEstorno.dataPagamento)}</span></div>
+                    <div className="text-right"><span className="font-bold text-green-700 tabular-nums">{formatBRL(Number(showEstorno.valorRealizado ?? showEstorno.valorPrevisto ?? 0))}</span></div>
+                  </div>
+                  <p className="text-[11px] text-amber-700 mt-2">Data de pagamento, valor realizado, forma e comprovante serão limpos.</p>
+                </div>
+                <div>
+                  <Label className="text-sm">Motivo do estorno <span className="text-red-600">*</span></Label>
+                  <Textarea value={motivoEstorno} onChange={(e) => setMotivoEstorno(e.target.value)}
+                    placeholder="Ex.: Baixa lançada por engano — pagamento não foi efetuado" rows={3} className="mt-1" />
+                  <p className="text-[11px] text-slate-500 mt-1">Mínimo 5 caracteres. Estorno fica registrado no histórico do lançamento e no log de auditoria.</p>
+                </div>
+              </div>
+            )}
+            <DialogFooter>
+              <Button variant="outline" onClick={() => { setShowEstorno(null); setMotivoEstorno(""); }}>Cancelar</Button>
+              <Button className="bg-amber-600 hover:bg-amber-700 text-white"
+                disabled={estornoMut.isPending || motivoEstorno.trim().length < 5}
+                onClick={() => estornoMut.mutate({ id: showEstorno.id, companyId, motivo: motivoEstorno.trim() })}>
+                {estornoMut.isPending ? "Estornando..." : "Confirmar estorno"}
               </Button>
             </DialogFooter>
           </DialogContent>
