@@ -149,17 +149,24 @@ export default function FinanceiroDashboard() {
           </Card>
 
           <Card className="lg:col-span-2 border-0 shadow-sm">
-            <CardHeader className="pb-2 pt-4 px-5">
+            <CardHeader className="pb-2 pt-4 px-5 flex flex-row items-center justify-between space-y-0">
               <CardTitle className="text-sm font-semibold text-gray-600 flex items-center gap-2">
                 <Landmark className="w-4 h-4" /> Contas Bancárias
               </CardTitle>
+              {bancos.length > 0 && (
+                <Link href="/contas-bancarias">
+                  <Button variant="outline" size="sm" className="h-7 px-2 text-xs">
+                    + Nova / Gerenciar
+                  </Button>
+                </Link>
+              )}
             </CardHeader>
             <CardContent className="px-5 pb-4">
               {bancos.length === 0 ? (
                 <div className="text-center py-6">
                   <Landmark className="w-8 h-8 text-gray-300 mx-auto mb-2" />
                   <p className="text-sm text-gray-500">Nenhuma conta bancária cadastrada</p>
-                  <Link href="/financeiro/configuracoes">
+                  <Link href="/contas-bancarias">
                     <Button variant="outline" size="sm" className="mt-2">Cadastrar contas</Button>
                   </Link>
                 </div>

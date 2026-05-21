@@ -1,6 +1,39 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2225 — **FIX/UX · Botão "Cadastrar contas" do Painel
+ * Financeiro abria Regime Tributário em vez da tela de contas
+ * bancárias.** Lilian (21/05/2026): "a tela de cadastrar contas
+ * está abrindo outra informação. quando clico para cadastrar, ele
+ * abre a tela para configurar o regime tributário da empresa". Bug
+ * em `client/src/pages/financeiro/FinanceiroDashboard.tsx:162`:
+ * `<Link href="/financeiro/configuracoes">` (rota de Configurações
+ * Financeiras = Regime Tributário/PIS/COFINS/IRPJ/CSLL) em vez de
+ * `/contas-bancarias` (cadastro real de contas bancárias usado
+ * pelo módulo RH & DP).
+ *
+ * Sobre "replicar contas já cadastradas no financeiro": a query
+ * `financial.getDashboardExecutivo` (`server/routers/financial.ts:2715`)
+ * JÁ lê de `company_bank_accounts` — MESMA tabela do cadastro
+ * (`folha.listarContasBancarias` em `folhaPagamento.ts:2335-2341`).
+ * Ou seja, qualquer conta cadastrada em `/contas-bancarias` aparece
+ * automaticamente no Painel Financeiro. Não há "duas listas" pra
+ * sincronizar — só faltava o link levar pro lugar certo.
+ *
+ * Fix:
+ *  1. Link href `/financeiro/configuracoes` → `/contas-bancarias`
+ *     (botão "Cadastrar contas" quando vazio).
+ *  2. Quando JÁ existem contas, novo botão "+ Nova / Gerenciar" no
+ *     header do card "Contas Bancárias" também leva pra
+ *     `/contas-bancarias` — pra adicionar/editar sem sair do
+ *     painel.
+ *
+ * **R-001/R-007/R-010:** N/A (só UI, mudança de rota de Link).
+ *
+ * Files:
+ *  - client/src/pages/financeiro/FinanceiroDashboard.tsx (L154-175:
+ *    novo botão no header + correção do Link).
+ *
  * Rev. 2224 — **FIX/PARSER · Contrato de trabalho puxava "R$ 3,20"
  * quando salário base era "3.200" (formato BR de milhar).** Lilian
  * (21/05/2026): "O Contrato de trabalho da Lilian está puxando o
