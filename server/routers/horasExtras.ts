@@ -6,6 +6,7 @@ import { eq, and, sql } from "drizzle-orm";
 import { resolveCompanyIds, companyFilter } from "../companyHelper";
 import { TRPCError } from "@trpc/server";
 import { parseBRL } from "../utils/parseBRL";
+import { getFeriadosSetForPeriod } from "./feriados";
 
 // ============================================================
 // HELPERS (mirrored from payrollEngine — kept private here)
@@ -66,6 +67,11 @@ async function computeHEForPeriod(
   dataFim: string,
   cargaHorariaDiaria: number
 ) {
+  // Rev. 2216 — Set<YYYY-MM-DD> de feriados aplicáveis (nacionais fixos +
+  // móveis + custom do banco). Trata feriado como domingo: jornada esperada
+  // = 0 (toda hora trabalhada vira HE) e percentual = he_domingos_feriados.
+  const feriadosSet = await getFeriadosSetForPeriod(db, [companyId], dataInicio, dataFim);
+
   // Rev. 2179 — pré-carrega o conjunto de (employeeId, data) coberto por
   // solicitações de HE aprovadas no intervalo, para classificar cada dia
   // de HE como "aprovada" ou "sem_solicitacao".
@@ -127,12 +133,15 @@ async function computeHEForPeriod(
     }
 
     if (trabMins > 0) {
-      const expectedMins = getExpectedMins(r.jornadaTrabalho, dateStr, cargaHorariaDiaria);
+      // Rev. 2216 — feriado é tratado como domingo: jornada esperada = 0
+      // (toda hora trabalhada vira HE) e bucket "fim de semana" (HE 100%).
+      const isFeriado = feriadosSet.has(dateStr);
+      const expectedMins = isFeriado ? 0 : getExpectedMins(r.jornadaTrabalho, dateStr, cargaHorariaDiaria);
       const heMins = Math.max(0, trabMins - expectedMins);
       if (heMins > 0) {
         const origem: Origem = approvedSet.has(`${empId}|${dateStr}`) ? "aprovada" : "sem_solicitacao";
-        // Apenas domingo (0) → HE 100%. Sábado (6) e dias úteis → HE 60%
-        if (dow === 0) {
+        // Domingo (0) ou feriado → HE 100%. Sábado (6) e dias úteis → HE 60%
+        if (dow === 0 || isFeriado) {
           heFimGross.set(empId,  (heFimGross.get(empId)  || 0) + heMins);
           if (!heFimGrossByOrig.has(empId)) heFimGrossByOrig.set(empId, newBucket());
           heFimGrossByOrig.get(empId)![origem] += heMins;
@@ -399,6 +408,21 @@ export const horasExtrasRouter = router({
         ORDER BY data, "horasTrabalhadas" DESC
       `)) as any).rows || [];
 
+      // Rev. 2216 — feriados do período (nacionais fixos + móveis + custom).
+      // `period.dataInicio/dataFim` pode vir como Date (driver pg) ou string —
+      // `.toISOString().slice(0,10)` evita garbage tipo "Mon May 01 2026..." que
+      // o `String(date).slice(0,10)` produziria.
+      const toIsoDate = (v: any): string =>
+        v instanceof Date ? v.toISOString().slice(0, 10) : String(v).slice(0, 10);
+      const dataIniStr = toIsoDate(period.dataInicio);
+      const dataFimStr = toIsoDate(period.dataFim);
+      const feriadosSet = await getFeriadosSetForPeriod(
+        db,
+        [Number(period.companyId)],
+        dataIniStr,
+        dataFimStr,
+      );
+
       const dias: any[] = [];
       const diasAtraso: any[] = [];
       let totalHEUtilGrossMins = 0;
@@ -410,7 +434,9 @@ export const horasExtrasRouter = router({
         const atrasoMins = parseTime(String(r.atrasos || "0:00")) || 0;
         const dateStr = r.data instanceof Date ? r.data.toISOString().slice(0, 10) : String(r.data).slice(0, 10);
         const dow = new Date(dateStr + "T12:00:00Z").getUTCDay();
-        const expectedMins = getExpectedMins(emp.jornadaTrabalho, dateStr, criteria.cargaHorariaDiaria);
+        // Rev. 2216 — feriado força jornada esperada = 0 (toda hora vira HE) e percentual 100%.
+        const isFeriado = feriadosSet.has(dateStr);
+        const expectedMins = isFeriado ? 0 : getExpectedMins(emp.jornadaTrabalho, dateStr, criteria.cargaHorariaDiaria);
         const heMins = trabMins > 0 ? Math.max(0, trabMins - expectedMins) : 0;
 
         if (atrasoMins > 0) {
@@ -428,12 +454,13 @@ export const horasExtrasRouter = router({
 
         if (heMins <= 0) continue;
 
-        const isDomingo = dow === 0;
-        const percentual = isDomingo ? criteria.hePercentualDomingo : criteria.hePercentualDiurna;
+        // Rev. 2216 — feriado entra no bucket "fim de semana" (HE 100%).
+        const isDomingoOuFeriado = dow === 0 || isFeriado;
+        const percentual = isDomingoOuFeriado ? criteria.hePercentualDomingo : criteria.hePercentualDiurna;
         const fator = 1 + percentual / 100;
         const valorDia = parseFloat(((heMins / 60) * valorHora * fator).toFixed(2));
 
-        if (isDomingo) totalHEFimGrossMins += heMins;
+        if (isDomingoOuFeriado) totalHEFimGrossMins += heMins;
         else totalHEUtilGrossMins += heMins;
 
         dias.push({
@@ -447,6 +474,7 @@ export const horasExtrasRouter = router({
           valorDia,
           horarios: `${r.entrada1 || "--:--"}-${r.saida1 || "--:--"} ${r.entrada2 || "--:--"}-${r.saida2 || "--:--"}`,
           fonte: r.fonte || "",
+          feriado: isFeriado,
         });
       }
 

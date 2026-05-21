@@ -3288,14 +3288,15 @@ export default function FolhaPagamento() {
                             </thead>
                             <tbody>
                               {m.dias.map((d: any, i: number) => (
-                                <tr key={i} className={`border-t border-slate-100 ${d.diaSemana === "Dom" ? "bg-red-50/60" : i % 2 === 0 ? "" : "bg-slate-50/40"} hover:bg-purple-50/40 transition-colors`}>
+                                <tr key={i} className={`border-t border-slate-100 ${d.feriado ? "bg-purple-50/60" : d.diaSemana === "Dom" ? "bg-red-50/60" : i % 2 === 0 ? "" : "bg-slate-50/40"} hover:bg-purple-50/40 transition-colors`}>
                                   <td className="py-1.5 px-3 font-mono whitespace-nowrap">{d.data.split("-").reverse().join("/")}</td>
                                   <td className="py-1.5 px-3 text-center">
                                     <span className={`inline-flex items-center justify-center min-w-[32px] px-1.5 py-0.5 rounded-md text-[10px] font-bold ${
+                                      d.feriado ? "bg-purple-100 text-purple-700" :
                                       d.diaSemana === "Dom" ? "bg-red-100 text-red-700" :
                                       d.diaSemana === "Sáb" ? "bg-orange-100 text-orange-700" :
                                       "bg-slate-100 text-slate-700"
-                                    }`}>{d.diaSemana}</span>
+                                    }`} title={d.feriado ? "Feriado — HE 100%" : undefined}>{d.feriado ? "Fer" : d.diaSemana}</span>
                                   </td>
                                   <td className="py-1.5 px-3 text-center font-mono text-[11px] text-muted-foreground whitespace-nowrap">{d.horarios}</td>
                                   <td className="py-1.5 px-3 text-right font-mono tabular-nums whitespace-nowrap">{d.trabalhado}</td>
@@ -5465,14 +5466,15 @@ export default function FolhaPagamento() {
                             </thead>
                             <tbody>
                               {m.dias.map((d: any, i: number) => (
-                                <tr key={i} className={`border-t border-slate-100 ${d.diaSemana === "Dom" ? "bg-red-50/60" : i % 2 === 0 ? "" : "bg-slate-50/40"} hover:bg-purple-50/40 transition-colors`}>
+                                <tr key={i} className={`border-t border-slate-100 ${d.feriado ? "bg-purple-50/60" : d.diaSemana === "Dom" ? "bg-red-50/60" : i % 2 === 0 ? "" : "bg-slate-50/40"} hover:bg-purple-50/40 transition-colors`}>
                                   <td className="py-1.5 px-3 font-mono whitespace-nowrap">{d.data.split("-").reverse().join("/")}</td>
                                   <td className="py-1.5 px-3 text-center">
                                     <span className={`inline-flex items-center justify-center min-w-[32px] px-1.5 py-0.5 rounded-md text-[10px] font-bold ${
+                                      d.feriado ? "bg-purple-100 text-purple-700" :
                                       d.diaSemana === "Dom" ? "bg-red-100 text-red-700" :
                                       d.diaSemana === "Sáb" ? "bg-orange-100 text-orange-700" :
                                       "bg-slate-100 text-slate-700"
-                                    }`}>{d.diaSemana}</span>
+                                    }`} title={d.feriado ? "Feriado — HE 100%" : undefined}>{d.feriado ? "Fer" : d.diaSemana}</span>
                                   </td>
                                   <td className="py-1.5 px-3 text-center font-mono text-[11px] text-muted-foreground whitespace-nowrap">{d.horarios}</td>
                                   <td className="py-1.5 px-3 text-right font-mono tabular-nums whitespace-nowrap">{d.trabalhado}</td>

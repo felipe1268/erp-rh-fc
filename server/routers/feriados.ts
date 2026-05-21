@@ -76,6 +76,64 @@ function feriadosMoveis(ano: number): Array<{ nome: string; data: string; tipo: 
   ];
 }
 
+// Rev. 2216 — helper reusável (sem auth) para construir Set<YYYY-MM-DD> de
+// feriados aplicáveis a um intervalo, considerando: (a) feriados custom do
+// banco (recorrentes expandidos por ano), (b) FERIADOS_NACIONAIS fixos,
+// (c) feriados móveis. Espelha exatamente a lógica de `listarPeriodo` e é
+// usado por `horasExtras.ts` (memorialCalculo + computeHEForPeriod) para
+// tratar feriado como domingo (HE 100%, jornada esperada 0).
+//
+// ⚠️ ATENÇÃO TENANT: este helper NÃO valida ownership dos `companyIds`.
+// O caller é responsável por garantir que os IDs vieram de uma fonte
+// confiável (ex.: `period.companyId` lido do próprio banco, ou já
+// validado via `ensureUserOwnsCompanies`). NUNCA passe `input.companyIds`
+// cru do cliente sem antes validar.
+export async function getFeriadosSetForPeriod(
+  db: any,
+  companyIds: number[],
+  dataInicio: string,
+  dataFim: string,
+): Promise<Set<string>> {
+  const set = new Set<string>();
+  if (!dataInicio || !dataFim || dataInicio > dataFim) return set;
+  const cids = (companyIds || []).filter((n) => Number.isFinite(Number(n)));
+  if (cids.length === 0) return set;
+
+  const rows = await db
+    .select({ data: feriados.data, recorrente: feriados.recorrente })
+    .from(feriados)
+    .where(and(
+      eq(feriados.ativo, 1),
+      sql`(${feriados.companyId} IS NULL OR ${feriados.companyId} IN (${sql.join(cids.map((c) => sql`${c}`), sql`, `)}))`,
+    ));
+
+  const yIni = parseInt(dataInicio.slice(0, 4), 10);
+  const yFim = parseInt(dataFim.slice(0, 4), 10);
+
+  for (const f of rows) {
+    const raw = String(f.data);
+    if (f.recorrente === 1) {
+      const md = raw.length >= 10 ? raw.slice(5) : raw;
+      for (let y = yIni; y <= yFim; y++) {
+        const ds = `${y}-${md}`;
+        if (ds >= dataInicio && ds <= dataFim) set.add(ds);
+      }
+    } else {
+      if (raw >= dataInicio && raw <= dataFim) set.add(raw);
+    }
+  }
+  for (let y = yIni; y <= yFim; y++) {
+    for (const f of FERIADOS_NACIONAIS) {
+      const ds = `${y}-${f.data}`;
+      if (ds >= dataInicio && ds <= dataFim) set.add(ds);
+    }
+    for (const f of feriadosMoveis(y)) {
+      if (f.data >= dataInicio && f.data <= dataFim) set.add(f.data);
+    }
+  }
+  return set;
+}
+
 export const feriadosRouter = router({
   // Listar feriados de um ano
   listar: protectedProcedure

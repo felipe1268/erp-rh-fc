@@ -1,6 +1,55 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2216 — **FIX/PAYROLL · Memorial de Cálculo de Hora Extra agora
+ * reconhece feriados (nacionais fixos, móveis e custom da empresa).**
+ * Lilian (21/05/2026): "o ERP não esta considerando os feriados, note
+ * que teve atividade no dia 01/05 e ele está considerando como dia
+ * normal.. isso deve ser revisado imediatamente para que não haja
+ * problemas no pagamento". Print do Memorial de Cálculo mostrava
+ * 01/05/2026 (Sex — Dia do Trabalho) calculado como dia útil normal:
+ * jornada esperada 8:00, HE 0:17, percentual 60% (deveria ser jornada
+ * 0:00, HE = 8:17 inteiras, percentual 100% conforme critério
+ * `he_domingos_feriados`). **Causa raiz:** tanto `computeHEForPeriod`
+ * (engine que calcula o HE de TODA a folha — `server/routers/horasExtras.ts:62`)
+ * quanto `memorialCalculo` (procedure que renderiza o detalhamento
+ * dia a dia — L367-492) só checavam `dow === 0` (domingo) para
+ * disparar o bucket "fim de semana" (HE 100% + jornada esperada zero).
+ * Feriado caindo em dia útil era totalmente ignorado: `getExpectedMins`
+ * lia o JSON `jornadaTrabalho` do funcionário, retornava 8:00 pra
+ * sexta-feira "normal" e só as horas que excediam viravam HE — o que
+ * inverte a CLT (no feriado tudo é HE 100%) e gera SUB-pagamento na
+ * folha. **Fix:** (a) novo helper `getFeriadosSetForPeriod(db,
+ * companyIds, dataInicio, dataFim)` exportado de `server/routers/feriados.ts`,
+ * que constrói um `Set<YYYY-MM-DD>` unificando feriados custom do
+ * banco (com recorrentes expandidos por ano), `FERIADOS_NACIONAIS`
+ * fixos (incluindo 01/05) e móveis (Carnaval/Sexta Santa/Corpus
+ * Christi) — espelha exatamente a lógica de `listarPeriodo` que o
+ * EspelhoPonto já usa; (b) `computeHEForPeriod` e `memorialCalculo`
+ * agora pré-carregam esse Set e tratam `feriadosSet.has(dateStr)`
+ * exatamente como domingo: `expectedMins = 0` (toda hora trabalhada
+ * vira HE) e bucket `heFimGross` com percentual `hePercentualDomingo`
+ * (default 100%); (c) o payload de `memorialCalculo` ganhou flag
+ * `feriado: boolean` por dia e a UI `FolhaPagamento.tsx` agora pinta
+ * a linha em roxo claro e troca o badge do dia da semana por "Fer"
+ * (tooltip "Feriado — HE 100%") — visível tanto na tabela principal
+ * (L3294) quanto no resumo por funcionário (L5471). **Impacto
+ * financeiro:** após reprocessar o período (botão "Recalcular" em
+ * Folha → HE), a HE de 01/05/2026 do exemplo vai de 0:17 × 60% pra
+ * 8:17 × 100% — diferença significativa por funcionário que bateu
+ * ponto. **R-001/R-007/R-010:** OK — sem ALTER/DROP/DELETE. Helper
+ * é puro SELECT no banco, calculation engine só muda multiplicador
+ * em memória. Períodos já `aprovado` não recalculam (CONFLICT) —
+ * exige aprovação reversa pra reprocessar, como já era o
+ * comportamento atual. **Arquivos:** `server/routers/feriados.ts`
+ * (+helper `getFeriadosSetForPeriod`), `server/routers/horasExtras.ts`
+ * (computeHEForPeriod L66+, memorialCalculo L399+, +feriado no payload),
+ * `client/src/pages/FolhaPagamento.tsx` (L3294/L5471 — badge "Fer"
+ * roxo). **Follow-up:** verificar se `payrollEngine.ts` /
+ * `fechamentoPonto.ts` (`getFaltasReport`) ainda precisam do mesmo
+ * tratamento — fora do escopo desta revisão (relatório só citou
+ * Memorial de Cálculo / folha de HE).
+ *
  * Rev. 2215 — **UX/LAYOUT · Tela Contas a Pagar agora usa largura
  * estendida (1600px) — coluna "Ações" não corta mais.**
  * Lilian (21/05/2026): "redistribua o tamanho da tela para que nao
