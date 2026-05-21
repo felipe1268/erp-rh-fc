@@ -6879,6 +6879,19 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
       const count = Object.keys(newLocal).length;
       setAvancoLocal(prev => ({ ...prev, ...newLocal }));
 
+      // Rev. 2242 — TRAVA DE DEFESA contra drift drizzle↔DB do msp_uid
+      // (caso Rev. 2241): se o XML tem UIDs válidos mas a coluna `msp_uid`
+      // não foi populada nas atividades do ERP (todas null/undefined),
+      // o matching cai 100% no fallback eapCodigo — silenciosamente
+      // ignorando todas as folhas sem Item. Detecta a anomalia e alerta:
+      //   - >10 UIDs vieram do XML (descarta XML pequeno/legado)
+      //   - <30% das folhas têm mspUid gravado no ERP (sinal claro de
+      //     drift OU de cronograma importado antes do fix da Rev. 2241)
+      const xmlUids       = Object.keys(percentByUid).length;
+      const folhasComUid  = folhasComInd.filter((a: any) => (a.mspUid ?? "").toString().trim()).length;
+      const pctFolhasUid  = folhasComInd.length > 0 ? folhasComUid / folhasComInd.length : 1;
+      const driftDetectado = xmlUids > 10 && pctFolhasUid < 0.30;
+
       // Rev. 2237 — DISTRIBUIÇÃO automática em semanas passadas seguindo a
       // CURVA PREVISTA da atividade. Quando user importa o snapshot da
       // semana N (ex.: SEMANA_03.xml), preenche as semanas 1..N-1 com o
@@ -6997,7 +7010,14 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
       const preservMsg = avancosPreservados > 0
         ? ` 🛡️ ${avancosPreservados} avanço(s) anterior(es) preservado(s) (já lançados — não sobrescritos).`
         : "";
-      setImportStatus({ ok: true, msg: `${count} de ${folhasComInd.length} atividade${count !== 1 ? "s" : ""} preenchida${count !== 1 ? "s" : ""}${breakdown}.${aviso}${autoMsg}${preservMsg} Revise e salve a semana atual.` });
+      // Rev. 2242 — Prefixo de alerta de drift (toast vermelho via ok=false
+      // pra forçar atenção, mas mantém os dados importados que casaram).
+      if (driftDetectado) {
+        const driftMsg = `⛔ DRIFT msp_uid DETECTADO: XML traz ${xmlUids} UIDs do MSP, mas apenas ${folhasComUid}/${folhasComInd.length} atividades do ERP (${(pctFolhasUid * 100).toFixed(0)}%) têm UID gravado. Atividades sem Item NÃO casarão. AÇÃO: Reimportar o CRONOGRAMA COMPLETO (Importar MO) primeiro pra popular os UIDs, depois reimportar este XML de avanço. — `;
+        setImportStatus({ ok: false, msg: `${driftMsg}${count} de ${folhasComInd.length} atividade${count !== 1 ? "s" : ""} preenchida${count !== 1 ? "s" : ""}${breakdown}.${aviso}${autoMsg}${preservMsg}` });
+      } else {
+        setImportStatus({ ok: true, msg: `${count} de ${folhasComInd.length} atividade${count !== 1 ? "s" : ""} preenchida${count !== 1 ? "s" : ""}${breakdown}.${aviso}${autoMsg}${preservMsg} Revise e salve a semana atual.` });
+      }
     } catch (e: any) {
       setImportStatus({ ok: false, msg: e.message ?? "Erro ao processar o arquivo." });
     } finally {

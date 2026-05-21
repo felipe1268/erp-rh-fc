@@ -1,6 +1,42 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2242 — **FEATURE/DEFESA · Alerta visível de drift `msp_uid` no
+ * importer MSP (follow-up Rev. 2241).** User: "sim" à proposta de trava
+ * que avisaria antes do sintoma se o drift drizzle↔DB do `msp_uid`
+ * voltasse a acontecer.
+ *
+ * Contexto: o bug da Rev. 2241 ficou invisível por meses porque o
+ * importer fazia fallback silencioso de `mspUid` → `eapCodigo`, e o
+ * toast de sucesso ("X de Y atividades preenchidas") parecia normal.
+ * Quando o exporter MSP deixa muitas folhas SEM Item (caso PMO/FC com
+ * 190/201 das Vitrais sem `eapCodigo`), o realizado do ERP cai
+ * drasticamente sem nenhum sinal claro de causa.
+ *
+ * Mudança em `client/src/pages/planejamento/PlanejamentoDetalhe.tsx`:
+ *   - Logo após o loop de matching (L6879-6892), calcula:
+ *       - `xmlUids` = nº de UIDs únicos lidos do XML
+ *       - `folhasComUid` = nº de atividades do ERP com `mspUid` gravado
+ *       - `pctFolhasUid` = razão sobre o total de folhas
+ *   - Heurística: `driftDetectado = xmlUids > 10 && pctFolhasUid < 0.30`
+ *     (descarta XMLs pequenos/legados e cronogramas já corretos).
+ *   - Quando detectado, `setImportStatus` vira `ok: false` (toast
+ *     vermelho/persistente) com mensagem prefixada:
+ *       "⛔ DRIFT msp_uid DETECTADO: XML traz N UIDs do MSP, mas
+ *        apenas M/T atividades do ERP (P%) têm UID gravado. AÇÃO:
+ *        Reimportar o CRONOGRAMA COMPLETO (Importar MO) primeiro pra
+ *        popular os UIDs, depois reimportar este XML de avanço."
+ *   - Não bloqueia o import: as atividades que casaram via fallback
+ *     `eapCodigo` continuam sendo aplicadas (degradação graciosa).
+ *
+ * Threshold escolhido (30%): no estado pós-Publish da Rev. 2241,
+ * cronogramas legados terão 0% das folhas com UID até a reimportação
+ * — o alerta dispara nesse cenário, é exatamente o objetivo. Após o
+ * user reimportar o cronograma completo, pctFolhasUid → ~100% e o
+ * alerta some.
+ *
+ * **R-001/R-007/R-010:** N/A (apenas UI/lógica frontend).
+ *
  * Rev. 2241 — **FIX/SCHEMA · Coluna `msp_uid` criada em
  * `planejamento_atividades` (DRIFT drizzle ↔ DB resolvido).** User: "agora
  * temos um problema o percentual previsto pelo msproject está batendo

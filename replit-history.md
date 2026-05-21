@@ -2,6 +2,7 @@
 
 > Este arquivo guarda os one-liners das revisões antigas para manter o `replit.md` enxuto.
 
+- **Rev. 2235** — FIX/IMPORTER · Importar MS Project pulava 20-30% das atividades (sem campo Item). DOIS maps (UID + Item), removida guarda `if (!wbs) return`. Ver `shared/changelog.ts`.
 - **Rev. 2234** — FIX/UX · Planejamento abria sempre na 1ª semana, não na atual. Effect UNIFICADO em `[semanas, cutoffDow]`. Ver `shared/changelog.ts`.
 - **Rev. 2233** — FIX/RACE · Cronograma: responsável (cyan) digitado SUMIA ao clicar Salvar. Sync DOM→state via `querySelectorAll('[data-resp-input]')` no `onClick`. Ver `shared/changelog.ts`.
 - **Rev. 2229** — CHORE/CLEANUP · Removidas 4 procedures duplicadas (warnings esbuild "Duplicate key") em `server/routers/financial.ts` + `payrollEngine.ts`. Ver `shared/changelog.ts`.
