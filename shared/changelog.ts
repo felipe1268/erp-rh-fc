@@ -1,6 +1,25 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2215 — **UX/LAYOUT · Tela Contas a Pagar agora usa largura
+ * estendida (1600px) — coluna "Ações" não corta mais.**
+ * Lilian (21/05/2026): "redistribua o tamanho da tela para que nao
+ * corte a lateral e dê para enxergar todas as informaçoes". Print
+ * mostrava o botão verde "Pagar" parcialmente cortado no canto
+ * direito da tabela (categoria, valor, status visíveis; o botão de
+ * ação ficava com metade fora da área visível ou exigia rolagem
+ * horizontal). **Causa:** container externo da página estava
+ * limitado em `max-w-7xl` (1280px) — mesma classe usada em telas
+ * mais simples — apertando 8 colunas (checkbox, data, Nº OC/OS,
+ * descrição, categoria, valor, status, ações) em pouca largura.
+ * **Fix:** trocado `max-w-7xl mx-auto p-6` → `max-w-[1600px] mx-auto
+ * px-4 py-6` em `client/src/pages/financeiro/FinanceiroContasAPagar.tsx:480`.
+ * Em telas <1600px o `mx-auto` continua centralizando e o
+ * `overflow-x-auto` da tabela continua como safety net pra mobile.
+ * Padding lateral reduzido de `p-6` (24px) pra `px-4` (16px) pra
+ * aproveitar mais a faixa horizontal. **R-001/R-007/R-010:** OK —
+ * mudança visual apenas, nenhum DB touch.
+ *
  * Rev. 2214 — **FIX/UX · Lançamentos recorrentes agora aparecem
  * automaticamente em Contas a Pagar (auto-materialização lazy).**
  * Lilian (21/05/2026): "os lançamentos de contas recorrentes ainda
