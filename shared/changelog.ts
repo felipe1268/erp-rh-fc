@@ -1,6 +1,50 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2217 — **UX/HE · Alerta "HE aprovada SEM ponto batido" na aba
+ * Aprovações da tela Solicitação de Hora Extra.** Lilian (21/05/2026):
+ * "pode acontecer de ter um solicitação de hora extra aprovada, porem
+ * as vezes o funcionario não bateu o ponto, na tela de hora extra
+ * precisa colocar um alerta que mostra quem tem hora extra aprovada,
+ * porem não tem ponto, para que o usuário de RH faça esta analise e
+ * verifique se será pago ou não". **Cenário:** capataz aprova HE,
+ * funcionário esquece de bater ponto facial → folha gera "sem
+ * solicitação" (na verdade tem solicitação mas sem registro de ponto
+ * pra confrontar) e RH não consegue distinguir os casos legítimos
+ * (precisa lançar HE retroativa manual) dos que de fato não fizeram a
+ * hora extra. **Causa:** não havia cruzamento entre `he_solicitacoes`
+ * (status='aprovada') e `time_records` na própria tela de aprovações;
+ * o gestor só via a lista de aprovações sem nenhum sinal de quem ficou
+ * "pendurado". **Fix backend:** nova procedure
+ * `heSolicitacoes.aprovadasSemPonto` (`server/routers/heSolicitacoes.ts:184-264`)
+ * que executa raw SQL com `NOT EXISTS` contra `time_records` —
+ * `JOIN he_solicitacao_funcionarios sf ON sf.solicitacaoId = s.id`
+ * + `LEFT JOIN employees e + obras o`, filtrando
+ * `s.status='aprovada'` no período (`mesReferencia` YYYY-MM via
+ * TO_CHAR ou bounds `dataInicio/dataFim`) e mantendo apenas os pares
+ * (employee, data) sem registro de ponto OU com `horasTrabalhadas IN
+ * ('', '0:00', '00:00', '0:0')`. R-007: respeita
+ * `getEffectiveAllowedObraIds` igual ao `list` (tenant-safe). Retorna
+ * lista plana com `solicitacaoId`, `dataSolicitacao`, `horaInicio/Fim`,
+ * `motivo`, `obraNome`, `employeeId`, `employeeName`, `codigoInterno`,
+ * `funcao`, `fotoUrl` — normalizando `Date → YYYY-MM-DD` no map.
+ * **Fix frontend:** `client/src/pages/SolicitacaoHE.tsx` — novo
+ * `aprovadasSemPontoQuery` (L293-297) seguindo `filterMes` da aba
+ * Aprovações; badge laranja "⚠ N aprovadas sem ponto" no mini-resumo
+ * (L1133); novo card laranja `border-l-orange-500` no topo da aba
+ * Aprovações (L1140+) que agrupa por solicitação e lista cada
+ * funcionário como pill clicável (abre Raio-X do colaborador) com
+ * cabeçalho mostrando HE-NNNNN, data formatada pt-BR com dia da
+ * semana, horário e obra + botão "Ver solicitação" (openDetail). Só
+ * aparece quando há pelo menos 1 caso — não polui a tela quando
+ * tudo está em ordem. **Não criado** procedure de "marcar como
+ * resolvido" porque a resolução natural é: (a) RH ajusta o
+ * espelho de ponto e o item some sozinho, OU (b) RH reverte a
+ * aprovação se decidir não pagar — ambos fluxos já existentes
+ * fecham o alerta automaticamente na próxima invalidação.
+ * **R-001/R-007/R-010:** OK — apenas SELECT, sem ALTER/DROP/DELETE;
+ * obras filter aplicado.
+ *
  * Rev. 2216 — **FIX/PAYROLL · Memorial de Cálculo de Hora Extra agora
  * reconhece feriados (nacionais fixos, móveis e custom da empresa).**
  * Lilian (21/05/2026): "o ERP não esta considerando os feriados, note

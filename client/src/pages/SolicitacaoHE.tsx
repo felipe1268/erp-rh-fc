@@ -287,6 +287,11 @@ export default function SolicitacaoHE() {
     { companyId },
     { enabled: companyId > 0 }
   );
+  // Rev. 2217 — alerta de HE aprovada SEM ponto batido (RH analisa caso a caso).
+  const aprovadasSemPontoQuery = trpc.heSolicitacoes.aprovadasSemPonto.useQuery(
+    { companyId, mesReferencia: filterMes || undefined },
+    { enabled: companyId > 0 || companyIds.length > 0 }
+  );
   const heHistoryQuery = trpc.heSolicitacoes.historyByEmployee.useQuery(
     { companyId, employeeId: heHistoryEmployeeId! },
     { enabled: !!heHistoryEmployeeId && companyId > 0 }
@@ -1122,7 +1127,89 @@ export default function SolicitacaoHE() {
                 <Badge variant="outline" className="text-red-700 border-red-300 bg-red-50">
                   {aprovRejeitadas.length} rejeitadas
                 </Badge>
+                {(aprovadasSemPontoQuery.data?.length ?? 0) > 0 && (
+                  <Badge variant="outline" className="text-orange-700 border-orange-400 bg-orange-50">
+                    ⚠ {aprovadasSemPontoQuery.data!.length} aprovada{aprovadasSemPontoQuery.data!.length > 1 ? "s" : ""} sem ponto
+                  </Badge>
+                )}
               </div>
+
+              {/* Rev. 2217 — Alerta: HE aprovada SEM ponto batido */}
+              {(aprovadasSemPontoQuery.data?.length ?? 0) > 0 && (() => {
+                const items = aprovadasSemPontoQuery.data!;
+                // Agrupar por solicitação
+                const grupos = new Map<number, { sol: any; funcs: any[] }>();
+                for (const it of items) {
+                  if (!grupos.has(it.solicitacaoId)) {
+                    grupos.set(it.solicitacaoId, {
+                      sol: {
+                        id: it.solicitacaoId,
+                        dataSolicitacao: it.dataSolicitacao,
+                        horaInicio: it.horaInicio,
+                        horaFim: it.horaFim,
+                        motivo: it.motivo,
+                        obraNome: it.obraNome,
+                      },
+                      funcs: [],
+                    });
+                  }
+                  grupos.get(it.solicitacaoId)!.funcs.push(it);
+                }
+                return (
+                  <Card className="border-l-4 border-l-orange-500 bg-orange-50/50">
+                    <CardContent className="p-3 md:p-4">
+                      <div className="flex items-start gap-2 mb-3">
+                        <AlertTriangle className="h-5 w-5 text-orange-600 mt-0.5 shrink-0" />
+                        <div className="flex-1">
+                          <h3 className="text-sm md:text-base font-semibold text-orange-900">
+                            HE aprovada SEM ponto batido ({items.length} {items.length === 1 ? "funcionário" : "funcionários"})
+                          </h3>
+                          <p className="text-[11px] md:text-xs text-orange-800/80 mt-0.5">
+                            Estes funcionários têm hora extra <strong>aprovada</strong> mas não bateram ponto no dia.
+                            RH deve analisar caso a caso se a HE será paga (lançamento manual) ou não.
+                          </p>
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        {Array.from(grupos.values()).map(({ sol, funcs }) => (
+                          <div key={sol.id} className="bg-white border border-orange-200 rounded-md p-2.5">
+                            <div className="flex flex-wrap items-center gap-2 text-[11px] md:text-xs mb-1.5">
+                              <Badge className="bg-green-100 text-green-800 border-green-300 text-[10px]">Aprovada</Badge>
+                              <span className="text-muted-foreground">
+                                HE-{String(sol.id).padStart(5, "0")} · {new Date(sol.dataSolicitacao + "T12:00:00").toLocaleDateString("pt-BR", { weekday: "short", day: "2-digit", month: "2-digit", year: "numeric" })}
+                              </span>
+                              {sol.horaInicio && sol.horaFim && (
+                                <span className="text-muted-foreground">{sol.horaInicio} — {sol.horaFim}</span>
+                              )}
+                              {sol.obraNome && (
+                                <span className="flex items-center gap-1 text-muted-foreground">
+                                  <Building2 className="h-3 w-3" /> {sol.obraNome}
+                                </span>
+                              )}
+                              <Button size="sm" variant="outline" className="h-6 ml-auto text-[10px] px-2" onClick={() => openDetail(sol.id)}>
+                                <Eye className="h-3 w-3 mr-1" /> Ver solicitação
+                              </Button>
+                            </div>
+                            <div className="flex flex-wrap gap-1.5">
+                              {funcs.map((f: any) => (
+                                <button
+                                  key={f.employeeId}
+                                  onClick={() => setRaioXEmployeeId(f.employeeId)}
+                                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-orange-100 hover:bg-orange-200 border border-orange-300 text-orange-900 text-[10px] md:text-xs transition"
+                                  title="Abrir Raio-X do funcionário"
+                                >
+                                  <span className="font-medium">{f.employeeName}</span>
+                                  {f.funcao && <span className="text-orange-700/70">· {f.funcao}</span>}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })()}
 
               {/* Seção: Pendentes (sempre visível se houver) */}
               {(filterStatus === "todas" || filterStatus === "pendente") && todasPendentes.length > 0 && (

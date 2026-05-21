@@ -178,6 +178,86 @@ export const heSolicitacoesRouter = router({
     return result;
   }),
 
+  // ===================== APROVADAS SEM PONTO (Rev. 2217) =====================
+  // Lista funcionários cuja solicitação de HE foi APROVADA mas que não bateram
+  // ponto naquele dia (sem time_record OU horasTrabalhadas vazio/0:00). RH
+  // analisa caso a caso se paga (HE retroativa manual) ou não.
+  //
+  // Aplica o mesmo filtro de obras permitidas que `list` (R-007: tenant safety).
+  aprovadasSemPonto: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      companyIds: z.array(z.number()).optional(),
+      dataInicio: z.string().optional(), // YYYY-MM-DD
+      dataFim: z.string().optional(),    // YYYY-MM-DD
+      mesReferencia: z.string().optional(), // YYYY-MM (fallback)
+    }))
+    .query(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) return [] as any[];
+      const cids = resolveCompanyIds(input);
+      if (cids.length === 0) return [];
+
+      const allowed = await getEffectiveAllowedObraIds(ctx.user.id, ctx.user.role);
+      if (allowed !== null && allowed.length === 0) return [];
+      const obrasClause = allowed === null
+        ? sql``
+        : sql` AND s."obraId" IN (${sql.join(allowed.map((id) => sql`${id}`), sql`,`)})`;
+
+      let dateClause = sql``;
+      if (input.dataInicio && input.dataFim) {
+        dateClause = sql` AND s."dataSolicitacao" BETWEEN ${input.dataInicio}::date AND ${input.dataFim}::date`;
+      } else if (input.mesReferencia) {
+        dateClause = sql` AND TO_CHAR(s."dataSolicitacao", 'YYYY-MM') = ${input.mesReferencia}`;
+      }
+
+      const rows = ((await db.execute(sql`
+        SELECT s.id AS "solicitacaoId",
+               s."dataSolicitacao",
+               s."horaInicio", s."horaFim",
+               s.motivo,
+               s."obraId", o.nome AS "obraNome",
+               sf."employeeId",
+               e."nomeCompleto" AS "employeeName",
+               e."codigoInterno",
+               e.funcao,
+               e."fotoUrl"
+        FROM he_solicitacoes s
+        JOIN he_solicitacao_funcionarios sf ON sf."solicitacaoId" = s.id
+        LEFT JOIN employees e ON e.id = sf."employeeId"
+        LEFT JOIN obras o ON o.id = s."obraId"
+        WHERE s."companyId" IN (${sql.join(cids.map((c) => sql`${c}`), sql`,`)})
+          AND s.status = 'aprovada'
+          ${dateClause}
+          ${obrasClause}
+          AND NOT EXISTS (
+            SELECT 1 FROM time_records tr
+            WHERE tr."employeeId" = sf."employeeId"
+              AND tr.data = s."dataSolicitacao"
+              AND tr."horasTrabalhadas" IS NOT NULL
+              AND tr."horasTrabalhadas" NOT IN ('', '0:00', '00:00', '0:0')
+          )
+        ORDER BY s."dataSolicitacao" DESC, e."nomeCompleto" ASC
+      `)) as any).rows || [];
+
+      return rows.map((r: any) => ({
+        solicitacaoId: Number(r.solicitacaoId),
+        dataSolicitacao: r.dataSolicitacao instanceof Date
+          ? r.dataSolicitacao.toISOString().slice(0, 10)
+          : String(r.dataSolicitacao).slice(0, 10),
+        horaInicio: r.horaInicio || null,
+        horaFim: r.horaFim || null,
+        motivo: r.motivo || "",
+        obraId: r.obraId != null ? Number(r.obraId) : null,
+        obraNome: r.obraNome || null,
+        employeeId: Number(r.employeeId),
+        employeeName: r.employeeName || `ID ${r.employeeId}`,
+        codigoInterno: r.codigoInterno || null,
+        funcao: r.funcao || null,
+        fotoUrl: r.fotoUrl || null,
+      }));
+    }),
+
   // ===================== DETALHES DE UMA SOLICITAÇÃO =====================
   getById: protectedProcedure.input(z.object({
     id: z.number(),
