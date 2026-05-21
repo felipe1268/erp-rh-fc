@@ -6,7 +6,7 @@ interface ToastOptions {
   variant?: "default" | "destructive";
 }
 
-function toast(options: ToastOptions) {
+export function toast(options: ToastOptions) {
   const message = options.title || "";
   const description = options.description;
   if (options.variant === "destructive") {
