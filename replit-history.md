@@ -2,6 +2,7 @@
 
 > Este arquivo guarda os one-liners das revisões antigas para manter o `replit.md` enxuto.
 
+- **Rev. 2224** — FIX/PARSER · Contrato puxava "R$ 3,20" quando salário base era "3.200" (formato BR de milhar). `client/src/lib/numeroExtenso.ts:17-37` `parseValor` novo ramo `else if (hasDot)`: se último grupo após ponto tem 3 dígitos exatos = milhar BR (strip pontos); senão decimal US. Ver `shared/changelog.ts`.
 - **Rev. 2223** — UX · Foto do funcionário no alerta "HE aprovada SEM ponto". `HEAprovadaSemPontoAlert.tsx`: avatar (h-5 w-5) com `<AvatarImage src=fotoUrl>` quando existe ou `<AvatarFallback>` com iniciais. Sem backend. Ver `shared/changelog.ts`.
 - **Rev. 2222** — FEATURE/UX · Alerta "HE aprovada SEM ponto" permite DIGITAR o ponto direto no card (individual/lote) e gravar via `heSolicitacoes.lancarPontoFromHE` (`server/routers/heSolicitacoes.ts:330-432`) — UPSERT em `time_records` com `pg_advisory_xact_lock`, `fonte=manual`, `ajusteManual=1`. Ver `shared/changelog.ts`.
 - **Rev. 2221** — FIX/LOGIC · Alerta "HE aprovada SEM ponto" agora detecta falta de batida NO HORÁRIO APROVADO (não só no dia). Novo `NOT EXISTS` em `heSolicitacoes.ts:269-287` considera "bateu HE" se `horasExtras > 0` OU alguma das 6 batidas (entrada1..3/saida1..3) cai BETWEEN `[horaInicio, horaFim]`. Ver `shared/changelog.ts`.

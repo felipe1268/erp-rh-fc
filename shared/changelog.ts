@@ -1,6 +1,44 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2231 — **FIX/PARSER (follow-up Rev. 2230) · Importar Cronograma
+ * ainda falhava com `Colunas detectadas: __col_0, __col_1, Atividade:
+ * Execução de Obra Civil, __col_3...` — a heurística de auto-detecção
+ * de header da 2230 pegava uma linha de TÍTULO como header porque
+ * usava `includes` ("atividade: execução de obra civil" contém
+ * "atividade", que está em KEYS_NOME).**
+ *
+ * Usuário (21/05/2026, 2º screenshot anexo): mesmo erro insistia
+ * em `/planejamento/35` após a 2230, agora apontando que o sistema
+ * "achou" como cabeçalho uma única célula com texto solto e
+ * detectou só a coluna Nome (acertou), mas as outras todas viraram
+ * `__col_N`, e a checagem de WBS (R-013) abortou corretamente.
+ *
+ * **Causa raiz:** em `ImportarCronograma.tsx:514` (Rev. 2230) o
+ * predicado `s.includes(k)` aceitava qualquer célula que CONTIVESSE
+ * uma das KEYS_NOME — incluindo títulos como "Atividade: Execução
+ * de Obra Civil" ou "Nome do Projeto: ...". Também bastava 1 match
+ * em UMA categoria para promover a linha a header.
+ *
+ * **Fix:** reforça a heurística em `ImportarCronograma.tsx:506-539`:
+ *  1. Função `scoreRow(row)` conta quantas CATEGORIAS distintas de
+ *     header (KEYS_NOME, KEYS_WBS, KEYS_INI, KEYS_FIM, KEYS_DUR,
+ *     KEYS_PRED, KEYS_REC, KEYS_PCT) têm match EXATO em alguma célula
+ *     da linha (lowercase+trim, `s === k` em vez de `includes`).
+ *  2. Escolhe a 1ª linha com `score >= 2` — exige no mínimo 2
+ *     categorias distintas (ex.: Nome + WBS, Nome + Start, etc.),
+ *     o que descarta linhas com 1 célula solta de título.
+ *  3. Match exato impede falso-positivo tipo "Atividade: ..." virar
+ *     coluna Nome (só passa se a célula for literalmente "Atividade",
+ *     "Name", "Task Name", etc.).
+ *
+ * Fallback pro `sheet_to_json` padrão permanece quando nenhuma linha
+ * dentro das 30 primeiras tem score >= 2 — preserva compat com XLSX
+ * já bem formatado (header na linha 0).
+ *
+ * **R-001/R-007/R-010:** N/A (parser client-side; valida e descarta
+ * antes de bater no backend).
+ *
  * Rev. 2230 — **FIX/PARSER · Importar Cronograma MS Project (Excel)
  * falhava com "Coluna de nome da tarefa não encontrada. Colunas
  * detectadas: __EMPTY, __EMPTY_1, __EMPTY_2... __EMPTY_7" quando o

@@ -500,25 +500,39 @@ export async function parseMSProjectXLSX(buffer: ArrayBuffer): Promise<TarefaImp
   const KEYS_MARCO = ["Milestone", "Marco", "Is Milestone", "Marcos"];
   const KEYS_PCT   = ["% Complete", "% Concluído", "% Concluido", "Percent Complete", "Percentual", "% Work Complete"];
 
-  // Rev. 2230 — Auto-detecta linha do cabeçalho. Exports do MS Project para
-  // Excel frequentemente têm linhas de título/metadata acima dos headers,
-  // o que faz `sheet_to_json` devolver chaves `__EMPTY`, `__EMPTY_1`...
-  // Estratégia: ler bruto como matriz, achar a 1ª linha que contém alguma
-  // das KEYS_NOME, usar como header e parsear a partir dali.
+  // Rev. 2230 / Rev. 2231 — Auto-detecta linha do cabeçalho. Exports do MS
+  // Project para Excel frequentemente têm linhas de título/metadata acima
+  // dos headers (ex.: "Atividade: Execução de Obra Civil"), o que faz
+  // `sheet_to_json` devolver chaves `__EMPTY`, `__EMPTY_1`...
+  // Estratégia robusta (Rev. 2231):
+  //   - lê bruto como matriz;
+  //   - varre até 30 linhas e pontua cada linha pela QUANTIDADE de
+  //     categorias de header detectadas via match EXATO (lowercase+trim),
+  //     não apenas `includes` (que aceitava "Atividade: Execução..." como
+  //     coluna Nome);
+  //   - escolhe a 1ª linha com score >= 2 (precisa ter pelo menos 2
+  //     categorias distintas para evitar falso-positivo de título).
   const raw = XLSX.utils.sheet_to_json<any[]>(ws, { header: 1, defval: "", raw: false, blankrows: false });
   if (!raw.length) throw new Error("Planilha vazia");
 
-  const nomeLower = KEYS_NOME.map(k => k.toLowerCase());
+  const KEY_GROUPS = [KEYS_NOME, KEYS_WBS, KEYS_INI, KEYS_FIM, KEYS_DUR, KEYS_PRED, KEYS_REC, KEYS_PCT];
+  const GROUPS_LOWER = KEY_GROUPS.map(g => g.map(k => k.toLowerCase().trim()));
+
+  function scoreRow(row: any[]): number {
+    const cells = row.map(c => (c ?? "").toString().toLowerCase().trim()).filter(Boolean);
+    if (!cells.length) return 0;
+    let matched = 0;
+    for (const group of GROUPS_LOWER) {
+      const hit = cells.some(s => group.some(k => s === k));
+      if (hit) matched++;
+    }
+    return matched;
+  }
+
   let headerRowIdx = -1;
   const scanLimit = Math.min(raw.length, 30);
   for (let i = 0; i < scanLimit; i++) {
-    const row = raw[i] || [];
-    const hasNome = row.some((cell: any) => {
-      const s = (cell ?? "").toString().toLowerCase().trim();
-      if (!s) return false;
-      return nomeLower.some(k => s.includes(k));
-    });
-    if (hasNome) { headerRowIdx = i; break; }
+    if (scoreRow(raw[i] || []) >= 2) { headerRowIdx = i; break; }
   }
 
   let rows: any[];
