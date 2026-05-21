@@ -6827,10 +6827,14 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
       // Rev. 2235 — Matching: 1º por mspUid (chave estável MSP, presente em
       // 100% das atividades do XML), 2º por eapCodigo (Item/Texto1, opcional
       // — só preenchido em atividades diretas do orçamento).
+      // Rev. 2235.1 — USA folhasComInd (inclui indiretas). As atividades de
+      // terceiros (Rohr/Lotus/Friul/Santuário) costumam estar marcadas como
+      // isIndireta=true via Padrão FC. Antes (`folhas`) elas saíam do laço
+      // de matching e nunca recebiam %.
       const newLocal: Record<number, number> = {};
       let matchUid = 0, matchEap = 0, semMatch = 0;
       const semMatchNomes: string[] = [];
-      folhas.forEach((a: any) => {
+      folhasComInd.forEach((a: any) => {
         const uidA = (a.mspUid ?? "").toString().trim();
         const eapA = (a.eapCodigo ?? "").toString().trim();
         let pct: number | undefined;
@@ -6849,7 +6853,7 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
         ? ` (${matchUid} via UID${matchEap ? ` · ${matchEap} via Item` : ""}${semMatch ? ` · ${semMatch} sem correspondência` : ""}; fontes: ${srcTexto7} %Reali AUX, ${srcDurNat} Duração Real, ${srcPctNat} %Concluído${srcVazio ? `, ${srcVazio} sem dado` : ""})`
         : "";
       const aviso = semMatch > 0 ? ` ⚠️ ${semMatch} atividade(s) sem match — ex.: ${semMatchNomes.slice(0, 3).join("; ")}.` : "";
-      setImportStatus({ ok: true, msg: `${count} de ${folhas.length} atividade${count !== 1 ? "s" : ""} preenchida${count !== 1 ? "s" : ""}${breakdown}.${aviso} Revise e salve.` });
+      setImportStatus({ ok: true, msg: `${count} de ${folhasComInd.length} atividade${count !== 1 ? "s" : ""} preenchida${count !== 1 ? "s" : ""}${breakdown}.${aviso} Revise e salve.` });
     } catch (e: any) {
       setImportStatus({ ok: false, msg: e.message ?? "Erro ao processar o arquivo." });
     } finally {

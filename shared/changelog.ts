@@ -1,6 +1,28 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2236 — **FIX/IMPORTER (continuação da 2235) · Importer ainda
+ * pulava atividades de terceiros marcadas como `isIndireta=true`.**
+ * User: "nao esta aparecendo o avanço das atividades pq?".
+ *
+ * **Causa-raiz** — A Rev. 2235 corrigiu o descarte por falta de Item
+ * mas iterava `folhas` em `importarDoMSProject`
+ * (`PlanejamentoDetalhe.tsx:6252`), que filtra
+ * `!a.isGrupo && !a.isIndireta && !a.disabled`. As 22 atividades de
+ * TERCEIROS (Rohr, Lotus, Friul, Santuário) costumam estar marcadas
+ * como `isIndireta=true` via Padrão FC — então saíam do laço de
+ * matching e o `newLocal[a.id]` nunca era setado pra elas, mesmo
+ * com `percentByUid` populado corretamente.
+ *
+ * **Fix** (`PlanejamentoDetalhe.tsx:6840`):
+ *  - Troca `folhas.forEach(...)` por `folhasComInd.forEach(...)`.
+ *    `folhasComInd` filtra só `!a.isGrupo && !a.disabled` — inclui
+ *    indiretas. O cálculo agregado (PV/EV) continua usando os
+ *    arrays apropriados; aqui é só matching pra gravar avanço.
+ *  - Atualiza o "X de Y" do status pra refletir `folhasComInd.length`.
+ *
+ * **R-001/R-007/R-010:** N/A.
+ *
  * Rev. 2235 — **FIX/IMPORTER · Importar MS Project pulava 20-30% das
  * atividades silenciosamente.** User (1ª-iésima vez): "TODA VEZ QUE
  * FAÇO A IMPORTAÇÃO ELE NÃO TRAZ O VALOR DO REALIZADO CONFORME O
