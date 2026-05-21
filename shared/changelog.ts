@@ -1,6 +1,40 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2214 — **FIX/UX · Lançamentos recorrentes agora aparecem
+ * automaticamente em Contas a Pagar (auto-materialização lazy).**
+ * Lilian (21/05/2026): "os lançamentos de contas recorrentes ainda
+ * não estão aparecendo no CONTAS A PAGAR, todos esses lançamentos
+ * precisam estar vinculados". Print mostrava Jun 2026 com 71 contas,
+ * TODAS de `compras` (origem OC/OS), nenhuma das 4 recorrências
+ * ativas (Celular R$2k, Energia R$100, Seguro Vida R$1.513,22,
+ * Título de Capitalização R$768,81). **Causa raiz dupla:** (1) o
+ * `generateRecurringEntries` só gerava onde `proximo_vencimento <=
+ * hoje` — como hoje é 21/05/2026 e as recorrências vencem 31/05 e
+ * 01/06, nem clicando em "Gerar Pendentes" elas materializavam.
+ * (2) `getContasAPagarByYear` lê só `financial_entries` — não havia
+ * NENHUM trigger automático ligando recorrência → conta a pagar.
+ * Lilian dependeria de lembrar de apertar um botão todo mês.
+ * **Fix:** (a) extraído helper `materializeRecorrentes(db, companyId,
+ * horizonteMeses)` (`server/routers/financial.ts:94-178`) que projeta
+ * todas recorrências ativas em loop até o horizonte (em meses a
+ * partir de hoje). 100% idempotente — checa `origem_id+YYYY-MM`
+ * antes do INSERT, então roda múltiplas vezes sem duplicar. (b)
+ * `generateRecurringEntries` simplificado pra chamar o helper com
+ * horizonte default 2 meses (aceita `horizonteMeses` opcional).
+ * (c) **principal:** `getContasAPagarByYear` agora chama
+ * `materializeRecorrentes` ANTES do SELECT, com horizonte = nº de
+ * meses até o fim do ano consultado (capado em 13 pra evitar
+ * runaway), envolto em try/catch pra que falha de geração nunca
+ * derrube o SELECT. Resultado: ao abrir /contas-a-pagar a lista de
+ * Jun/Jul/etc já vem populada com as recorrências sem clique.
+ * **R-001/R-007/R-010:** OK — INSERTs idempotentes, nenhum DELETE/
+ * ALTER. Custo: 1 SELECT recurring + N SELECTs de existência por
+ * recorrência por mês — N pequeno (≤ 24 meses × ≤ 20 recorrências
+ * típicas = 480 queries leves, todas com WHERE id+date indexáveis).
+ * **Arquivos:** `server/routers/financial.ts:94-178,2807-2814,
+ * 3239-3260`.
+ *
  * Rev. 2213 — **UX/CRUD · Botão "Excluir" nos Lançamentos Recorrentes.**
  * Lilian (21/05/2026): "nos lançamentos recorrentes, coloque tambem
  * um botao de excluir". A tela `/financeiro/recorrencias` só tinha

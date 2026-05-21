@@ -88,6 +88,103 @@ function inlineIds(ids: number[]): string {
   return ids.map(Number).join(",");
 }
 
+// Rev. 2214 — Helper compartilhado: materializa recorrências ativas em
+// `financial_entries` até um horizonte (em meses a partir de hoje).
+// Idempotente: pula meses já materializados (checagem por
+// origem_id + YYYY-MM). Usado tanto pela mutation `generateRecurringEntries`
+// (botão "Gerar Pendentes") quanto pela auto-geração lazy no
+// `getContasAPagarByYear` (pra recorrência futura aparecer sem clique).
+async function materializeRecorrentes(
+  db: any,
+  companyId: number,
+  horizonteMeses: number,
+): Promise<number> {
+  const today = new Date();
+  const todayStr = today.toISOString().split("T")[0];
+  const horizonte = new Date(today.getFullYear(), today.getMonth() + horizonteMeses + 1, 0);
+
+  const recRes = await dbExecute(db,
+    `SELECT * FROM financial_recurring_entries WHERE company_id=$1 AND ativo=1`,
+    [companyId]
+  );
+  const recs = rows(recRes);
+  let count = 0;
+
+  for (const rec of recs) {
+    // Começa do proximo_vencimento OU calcula a partir de hoje usando dia_vencimento
+    let venc: Date;
+    if (rec.proximo_vencimento) {
+      venc = new Date(rec.proximo_vencimento);
+    } else {
+      const dia = Math.min(Number(rec.dia_vencimento) || 5, 28);
+      venc = new Date(today.getFullYear(), today.getMonth(), dia);
+      if (venc < today) venc = new Date(today.getFullYear(), today.getMonth() + 1, dia);
+    }
+
+    // Para semanal/quinzenal a chave de dedupe é a DATA exata (múltiplos
+    // lançamentos no mesmo mês). Para mensal/trimestral/anual, o YYYY-MM
+    // já é único por natureza e é o que existia historicamente.
+    const dedupePorData = rec.frequencia === "semanal" || rec.frequencia === "quinzenal";
+
+    // Loop materializando até passar do horizonte
+    let lastMaterialized: Date | null = null;
+    let iter = 0;
+    while (venc <= horizonte && iter < 200) {
+      iter++;
+      const vencStr = venc.toISOString().split("T")[0];
+      const existingQuery = dedupePorData
+        ? `SELECT id FROM financial_entries WHERE company_id=$1 AND origem_modulo='recorrente' AND origem_id=$2 AND data_vencimento=$3 LIMIT 1`
+        : `SELECT id FROM financial_entries WHERE company_id=$1 AND origem_modulo='recorrente' AND origem_id=$2 AND TO_CHAR(data_vencimento,'YYYY-MM')=$3 LIMIT 1`;
+      const existingParam = dedupePorData ? vencStr : vencStr.slice(0, 7);
+      const existing = await dbExecute(db, existingQuery, [companyId, rec.id, existingParam]);
+      if (rows(existing).length === 0) {
+        await dbExecute(db,
+          `INSERT INTO financial_entries
+            (company_id, obra_id, obra_nome, conta_id, conta_nome, tipo, natureza,
+             valor_previsto, data_competencia, data_vencimento, status,
+             origem_modulo, origem_id, origem_descricao, descricao)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'recorrente',$12,$13,$14)`,
+          [companyId, rec.obra_id, rec.obra_nome, rec.conta_id, rec.conta_nome,
+           rec.tipo, rec.natureza ?? "fixo", rec.valor, vencStr, vencStr,
+           rec.tipo === "receita" ? "a_receber" : "a_pagar",
+           rec.id, `Recorrência: ${rec.descricao}`, rec.descricao]
+        );
+        count++;
+      }
+      lastMaterialized = venc;
+      const nextVenc = new Date(venc);
+      if (rec.frequencia === "mensal") nextVenc.setMonth(nextVenc.getMonth() + 1);
+      else if (rec.frequencia === "quinzenal") nextVenc.setDate(nextVenc.getDate() + 15);
+      else if (rec.frequencia === "semanal") nextVenc.setDate(nextVenc.getDate() + 7);
+      else if (rec.frequencia === "trimestral") nextVenc.setMonth(nextVenc.getMonth() + 3);
+      else if (rec.frequencia === "anual") nextVenc.setFullYear(nextVenc.getFullYear() + 1);
+      else break; // frequência desconhecida — não loopar infinito
+      venc = nextVenc;
+    }
+
+    // SAFETY: só atualiza `proximo_vencimento` se efetivamente entramos no
+    // loop (lastMaterialized != null). Se a recorrência já estava com
+    // `proximo_vencimento` ALÉM do horizonte (caso comum quando rec foi
+    // criada recentemente apontando pro futuro), NÃO mexemos no agendamento
+    // — evitando que múltiplas chamadas "empurrem" a data pra frente e
+    // pulem competências.
+    if (lastMaterialized) {
+      const nextAfter = new Date(lastMaterialized);
+      if (rec.frequencia === "mensal") nextAfter.setMonth(nextAfter.getMonth() + 1);
+      else if (rec.frequencia === "quinzenal") nextAfter.setDate(nextAfter.getDate() + 15);
+      else if (rec.frequencia === "semanal") nextAfter.setDate(nextAfter.getDate() + 7);
+      else if (rec.frequencia === "trimestral") nextAfter.setMonth(nextAfter.getMonth() + 3);
+      else if (rec.frequencia === "anual") nextAfter.setFullYear(nextAfter.getFullYear() + 1);
+      else continue;
+      await dbExecute(db,
+        `UPDATE financial_recurring_entries SET proximo_vencimento=$1, ultimo_gerado=$2, updated_at=NOW() WHERE id=$3`,
+        [nextAfter.toISOString().split("T")[0], todayStr, rec.id]
+      );
+    }
+  }
+  return count;
+}
+
 export const financialRouter = router({
 
   // ─────────────────── PLANO DE CONTAS ───────────────────
@@ -2820,50 +2917,12 @@ export const financialRouter = router({
 
   generateRecurringEntries: protectedProcedure.input(z.object({
     companyId: z.number(),
-  })).mutation(async ({ input, ctx }) => {
+    horizonteMeses: z.number().min(1).max(24).optional(),
+  })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-    const today = new Date();
-    const todayStr = today.toISOString().split("T")[0];
-    const recRes = await dbExecute(db, 
-      `SELECT * FROM financial_recurring_entries WHERE company_id=$1 AND ativo=1 AND (proximo_vencimento IS NULL OR proximo_vencimento <= $2)`,
-      [input.companyId, todayStr]
-    );
-    const recs = rows(recRes);
-    let count = 0;
-    for (const rec of recs) {
-      const venc = rec.proximo_vencimento ? new Date(rec.proximo_vencimento) : today;
-      const vencStr = venc.toISOString().split("T")[0];
-      const mesComp = vencStr.slice(0, 7);
-      const existing = await dbExecute(db, 
-        `SELECT id FROM financial_entries WHERE company_id=$1 AND origem_modulo='recorrente' AND origem_id=$2 AND TO_CHAR(data_vencimento,'YYYY-MM')=$3 LIMIT 1`,
-        [input.companyId, rec.id, mesComp]
-      );
-      if (rows(existing).length > 0) continue;
-      await dbExecute(db, 
-        `INSERT INTO financial_entries
-          (company_id, obra_id, obra_nome, conta_id, conta_nome, tipo, natureza,
-           valor_previsto, data_competencia, data_vencimento, status,
-           origem_modulo, origem_id, origem_descricao, descricao)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'recorrente',$12,$13,$14)`,
-        [input.companyId, rec.obra_id, rec.obra_nome, rec.conta_id, rec.conta_nome,
-         rec.tipo, rec.natureza ?? "fixo", rec.valor, vencStr, vencStr,
-         rec.tipo === "receita" ? "a_receber" : "a_pagar",
-         rec.id, `Recorrência: ${rec.descricao}`, rec.descricao]
-      );
-      let nextVenc = new Date(venc);
-      if (rec.frequencia === "mensal") nextVenc.setMonth(nextVenc.getMonth() + 1);
-      else if (rec.frequencia === "quinzenal") nextVenc.setDate(nextVenc.getDate() + 15);
-      else if (rec.frequencia === "semanal") nextVenc.setDate(nextVenc.getDate() + 7);
-      else if (rec.frequencia === "trimestral") nextVenc.setMonth(nextVenc.getMonth() + 3);
-      else if (rec.frequencia === "anual") nextVenc.setFullYear(nextVenc.getFullYear() + 1);
-      await dbExecute(db, 
-        `UPDATE financial_recurring_entries SET proximo_vencimento=$1, ultimo_gerado=$2, updated_at=NOW() WHERE id=$3`,
-        [nextVenc.toISOString().split("T")[0], todayStr, rec.id]
-      );
-      count++;
-    }
-    return { generated: count };
+    const generated = await materializeRecorrentes(db, input.companyId, input.horizonteMeses ?? 2);
+    return { generated };
   }),
 
   // ─────────────────── IMPORTAÇÃO EXTRATO OFX/CSV ───────────────────
@@ -3196,6 +3255,20 @@ export const financialRouter = router({
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     const ids = resolveCompanyIds(input);
+
+    // Rev. 2214 — Auto-materialização lazy: garante que as recorrências
+    // ativas estejam projetadas até o fim do ano consultado antes do SELECT.
+    // Idempotente (skip se já existe entrada com mesmo origem_id+mês), então
+    // chamar a cada query é seguro. Roda só pra `companyId` (não pro array
+    // de companyIds) pra manter custo baixo no caso consolidado.
+    try {
+      const now = new Date();
+      const mesesAteFimAno = Math.max(1, (input.ano - now.getFullYear()) * 12 + (12 - now.getMonth()));
+      await materializeRecorrentes(db, input.companyId, Math.min(mesesAteFimAno, 13));
+    } catch (e: any) {
+      console.error("[Rev.2214] materializeRecorrentes falhou em getContasAPagarByYear:", e?.message || e);
+    }
+
     const res = await dbExecute(db,
       `SELECT id, obra_id AS "obraId", obra_nome AS "obraNome", descricao,
               conta_id AS "contaId", conta_nome AS "contaNome",
