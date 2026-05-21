@@ -6211,25 +6211,43 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
     return cutoffWeekFromMonday(semanaAtual, cutoffDow).fim;
   }, [semanaAtual, cutoffDow]);
 
-  // Mantém semanaAtual dentro da faixa disponível
+  // Rev. 2234 — UNIFICADO: mantém semanaAtual dentro da faixa E realinha
+  // pra semana cutoff de HOJE no carregamento inicial (enquanto o usuário
+  // não clicou manualmente em nenhuma semana). Antes eram 2 effects separados
+  // com 2 bugs:
+  //  (1) o cleanup chamava `setSemanaAtual` (com S) que marcava
+  //      `userSelectedSemanaRef = true` — desligando o auto-realign;
+  //  (2) o realign só rodava na mudança de `cutoffDow`, então se o default 4
+  //      coincidia com o cutoff real, nunca realinhava no race da 1ª render
+  //      com `atividades=[]` → `semanas=ultimasSemanas(12)` → fallback caía em
+  //      `semanas[0]` (1ª semana do projeto).
+  // Agora: enquanto `userSelectedSemanaRef=false`, sempre prioriza a Monday
+  // da semana cutoff de HOJE se estiver presente em `semanas`. Senão, escolhe
+  // a mais recente <= hoje (past[last]). Só cai em `semanas[0]` se NADA <= hoje.
+  // Setamos via `setSemanaAtualRaw` p/ NÃO marcar como ação do usuário.
   useEffect(() => {
-    if (semanas.length > 0 && !semanas.includes(semanaAtual)) {
-      const todayMon = mondayOfCutoffWeek(new Date().toISOString().split("T")[0], cutoffDow);
+    if (semanas.length === 0) return;
+    const todayMon = mondayOfCutoffWeek(new Date().toISOString().split("T")[0], cutoffDow);
+    // Caso 1: usuário não interagiu ainda → preferimos HOJE; fallback past[last].
+    if (!userSelectedSemanaRef.current) {
+      const alvo = semanas.includes(todayMon)
+        ? todayMon
+        : (() => {
+            const past = semanas.filter(s => s <= todayMon);
+            return past.length > 0 ? past[past.length - 1] : semanas[0];
+          })();
+      if (alvo !== semanaAtual) setSemanaAtualRaw(alvo);
+      return;
+    }
+    // Caso 2: usuário já clicou em algo, mas saiu da faixa válida (revisão
+    // trocada, atividades editadas). Só corrige se realmente fora — preserva
+    // a escolha do usuário caso continue válida. setSemanaAtualRaw p/ não
+    // "ressetar" o flag (já é true, manter true).
+    if (!semanas.includes(semanaAtual)) {
       const past = semanas.filter(s => s <= todayMon);
-      setSemanaAtual(past.length > 0 ? past[past.length - 1] : semanas[0]);
+      setSemanaAtualRaw(past.length > 0 ? past[past.length - 1] : semanas[0]);
     }
   }, [semanas, cutoffDow]);
-
-  // Rev. 1667 — Quando o cutoffDow real do projeto resolver (default 4 → X real),
-  // realinha semanaAtual p/ a Monday da semana cutoff de hoje — desde que o
-  // usuário ainda não tenha clicado manualmente em nenhuma semana. Funciona
-  // para QUALQUER cutoffDow (Mon-Sun, Sat-Fri, etc.) e em qualquer dia da semana
-  // (especialmente Sex/Sáb/Dom, quando Mon-Sun e cutoff-week divergem).
-  useEffect(() => {
-    if (userSelectedSemanaRef.current) return;
-    const todayMon = mondayOfCutoffWeek(new Date().toISOString().split("T")[0], cutoffDow);
-    if (todayMon !== semanaAtual) setSemanaAtualRaw(todayMon);
-  }, [cutoffDow]);
 
   const folhas = useMemo(() => atividades.filter((a: any) => !a.isGrupo && !a.isIndireta && !a.disabled), [atividades]);
   const folhasComInd = useMemo(() => atividades.filter((a: any) => !a.isGrupo && !a.disabled), [atividades]);

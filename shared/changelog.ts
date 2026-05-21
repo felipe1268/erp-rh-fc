@@ -1,6 +1,43 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2234 — **FIX/UX · Planejamento abria sempre na 1ª semana ao
+ * invés da semana atual.** User: "QUANDO ENTRO NO PLANEJAMENTO ELE
+ * ABRE O PERCENTUAL DA PRIMEIRA SEMANA, O CORRETO É ABRIR DA SEMANA
+ * ATUAL.. ELA SO SOBE O % DA SEMANA QUANDO EU CLICO NA SEMANA ATUAL".
+ *
+ * **Causa-raiz** — Dois bugs combinados nos effects de `semanaAtual`
+ * em `AvancoSemanal` (`PlanejamentoDetalhe.tsx`):
+ *  1. **Auto-corretor marcava como ação do usuário.** O effect de
+ *     "mantém semanaAtual dentro da faixa" (L6215-6221 antigo) usava
+ *     `setSemanaAtual()` (com S), que internamente seta
+ *     `userSelectedSemanaRef.current = true`. Resultado: na 1ª render
+ *     com `atividades=[]`, `semanas = ultimasSemanas(12)` (semanas
+ *     padrão), `semanaAtual` (Mon de hoje) pode não estar lá → o
+ *     auto-corretor disparava e marcava o ref como "true" (como se o
+ *     usuário tivesse escolhido). Depois quando o cutoffDow real
+ *     carregava, o realign p/ hoje era ignorado.
+ *  2. **Realign só na MUDANÇA de cutoffDow.** Effect L6228-6232 antigo
+ *     dependia `[cutoffDow]`. Se o cutoffDow real do projeto era 4
+ *     (Qui, mesmo do default), o effect nunca disparava — não corrigia
+ *     o `semanaAtual` quando `semanas` carregava do banco depois.
+ *
+ * **Fix** — unifica os dois effects num só (`PlanejamentoDetalhe.tsx:
+ * 6217-6253`):
+ *  - Roda em `[semanas, cutoffDow]`.
+ *  - **Enquanto `userSelectedSemanaRef.current === false`** (usuário
+ *    nunca clicou em semana): SEMPRE prioriza Monday da semana cutoff
+ *    de HOJE se estiver presente em `semanas`. Senão, pega a mais
+ *    recente <= hoje (`past[last]`). Só cai em `semanas[0]` quando
+ *    NADA <= hoje (projeto totalmente no futuro).
+ *  - **Depois que o usuário clicou em alguma semana**: só corrige se
+ *    a `semanaAtual` saiu da faixa válida (trocou revisão, editou
+ *    atividades). Preserva a escolha caso continue válida.
+ *  - Setamos sempre via `setSemanaAtualRaw` p/ NÃO ressetar/marcar o
+ *    flag de "ação do usuário".
+ *
+ * **R-001/R-007/R-010:** N/A (frontend; sem schema/query mudança).
+ *
  * Rev. 2233 — **FIX/RACE · Cronograma: responsável (cyan) digitado na
  * grade SUMIA ao clicar Salvar.** User: "ESTOU INDICANDO O RESPONSAVEL
  * PELA ATIVIDADE, ESTOU SALVANDO MAS ELE NÃO ESTA SALVANDO A INFORMAÇÃO".
