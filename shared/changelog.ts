@@ -1,6 +1,36 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2227 — **FIX/UX · Tela "Contas a Pagar" cortava coluna
+ * "Ações" + valor à direita.** Lilian (21/05/2026): "a tela de
+ * resumo do contas a pagar tambem está cortando, redistribua
+ * tela". A Rev. 2215 já tinha aumentado o cap de `max-w-7xl` pra
+ * `max-w-[1600px]`, mas em telas médias/grandes (mesmo com layout
+ * + sidebar tomando ~280px) o conteúdo ainda batia em 1600px e
+ * gerava overflow horizontal que clipava o botão "Pagar".
+ *
+ * Fix em `client/src/pages/financeiro/FinanceiroContasAPagar.tsx`:
+ *  1. L477 `max-w-[1600px] mx-auto` → `w-full mx-auto` — o
+ *     wrapper agora ocupa 100% da área útil do DashboardLayout
+ *     (sidebar continua intacta).
+ *  2. L809 `<th>` Ações ganha `sticky right-0 bg-gray-50` + sombra
+ *     suave à esquerda (`shadow-[-4px_0_6px_-4px_rgba(0,0,0,0.08)]`)
+ *     pra ficar visualmente destacado quando há scroll horizontal.
+ *     Largura `w-24` → `w-32` pra caber "Ver detalhes" + "Pagar".
+ *  3. L1162 `<td>` Ações: mesma stickiness + `bg-white
+ *     group-hover:bg-slate-50` pra manter o hover row consistente.
+ *
+ * Com isso, a coluna "Ações" NUNCA clipa — em viewport estreito ela
+ * fica congelada à direita enquanto as demais rolam horizontalmente;
+ * em viewport largo ela aparece naturalmente. Tabela já estava
+ * dentro de `overflow-x-auto` (L790), então sticky funciona.
+ *
+ * **R-001/R-007/R-010:** N/A (só CSS/layout).
+ *
+ * Files:
+ *  - client/src/pages/financeiro/FinanceiroContasAPagar.tsx
+ *    (L477 container; L809 th sticky; L1162 td sticky).
+ *
  * Rev. 2226 — **FEATURE/UX · Fornecedor/Prestador no modal "Novo
  * Lançamento" Financeiro (Único + Recorrente) com autocomplete dos
  * já cadastrados + atalho "Cadastrar novo" + tela cheia.** Lilian

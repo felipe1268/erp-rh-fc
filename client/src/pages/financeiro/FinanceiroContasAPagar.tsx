@@ -474,7 +474,10 @@ export default function FinanceiroContasAPagar() {
 
   return (
     <DashboardLayout>
-      <div className="max-w-[1600px] mx-auto px-4 py-6 space-y-5">
+      {/* Rev. 2227 — Tela de Contas a Pagar agora ocupa a largura total
+          disponível (antes capada em 1600px → coluna "Ações" cortava em telas
+          médias/grandes). Coluna Ações vira sticky-right pra nunca clipar. */}
+      <div className="w-full mx-auto px-4 py-6 space-y-5">
 
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Contas a Pagar</h1>
@@ -800,7 +803,7 @@ export default function FinanceiroContasAPagar() {
                       <th className="px-3 py-2.5 text-left text-[11px] font-semibold text-gray-600 uppercase tracking-wide whitespace-nowrap"><span className="inline-flex items-center gap-1"><Tag className="w-3 h-3" />Categoria</span></th>
                       <th className="px-3 py-2.5 text-right text-[11px] font-semibold text-gray-600 uppercase tracking-wide whitespace-nowrap">Valor</th>
                       <th className="px-3 py-2.5 text-center text-[11px] font-semibold text-gray-600 uppercase tracking-wide whitespace-nowrap">Status</th>
-                      <th className="px-3 py-2.5 text-right text-[11px] font-semibold text-gray-600 uppercase tracking-wide w-24">Ações</th>
+                      <th className="px-3 py-2.5 text-right text-[11px] font-semibold text-gray-600 uppercase tracking-wide w-32 sticky right-0 bg-gray-50 shadow-[-4px_0_6px_-4px_rgba(0,0,0,0.08)]">Ações</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1152,8 +1155,8 @@ export default function FinanceiroContasAPagar() {
                                   </span>
                                 )}
                               </td>
-                              {/* Ações */}
-                              <td className="px-3 py-2.5 text-right" onClick={(e) => e.stopPropagation()}>
+                              {/* Ações — sticky-right (Rev. 2227) pra nunca clipar */}
+                              <td className="px-3 py-2.5 text-right sticky right-0 bg-white group-hover:bg-slate-50 shadow-[-4px_0_6px_-4px_rgba(0,0,0,0.08)]" onClick={(e) => e.stopPropagation()}>
                                 <div className="inline-flex items-center gap-1">
                                   <Button size="sm" variant="outline" className="h-7 w-7 p-0" title="Ver detalhes"
                                     onClick={() => setDetailEntryId(c.id)}>
