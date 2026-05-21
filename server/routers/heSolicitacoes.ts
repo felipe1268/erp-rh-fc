@@ -211,6 +211,14 @@ export const heSolicitacoesRouter = router({
         dateClause = sql` AND TO_CHAR(s."dataSolicitacao", 'YYYY-MM') = ${input.mesReferencia}`;
       }
 
+      // Rev. 2219 — LATERAL JOIN com `he_periods` pra detectar se a data da
+      // solicitação cai dentro de um período HE já calculado/aprovado/pago.
+      // Se cair, o frontend exibe badge "Período HE aprovado — não lançar
+      // manual" pra evitar pagamento em duplicidade (RH adicionar HE no
+      // Espelho de Ponto enquanto o período já foi/será reprocessado).
+      // Também checa `he_period_employees` pra saber se o funcionário já
+      // tem linha no período (`temLinhaNoPeriodo`) — se sim, recalcular o
+      // período já basta; se não, a manual é mais segura.
       const rows = ((await db.execute(sql`
         SELECT s.id AS "solicitacaoId",
                s."dataSolicitacao",
@@ -221,11 +229,37 @@ export const heSolicitacoesRouter = router({
                e."nomeCompleto" AS "employeeName",
                e."codigoInterno",
                e.funcao,
-               e."fotoUrl"
+               e."fotoUrl",
+               hp.id           AS "hePeriodoId",
+               hp."dataInicio" AS "hePeriodoInicio",
+               hp."dataFim"    AS "hePeriodoFim",
+               hp.status       AS "hePeriodoStatus",
+               hp."aprovadoEm" AS "hePeriodoAprovadoEm",
+               hp."pagoEm"     AS "hePeriodoPagoEm",
+               EXISTS (
+                 SELECT 1 FROM he_period_employees hpe
+                 WHERE hpe."hePeriodId" = hp.id
+                   AND hpe."employeeId" = sf."employeeId"
+               )               AS "temLinhaNoPeriodo"
         FROM he_solicitacoes s
         JOIN he_solicitacao_funcionarios sf ON sf."solicitacaoId" = s.id
         LEFT JOIN employees e ON e.id = sf."employeeId"
         LEFT JOIN obras o ON o.id = s."obraId"
+        LEFT JOIN LATERAL (
+          SELECT hp2.*
+          FROM he_periods hp2
+          WHERE hp2."companyId" = s."companyId"
+            AND s."dataSolicitacao" BETWEEN hp2."dataInicio" AND hp2."dataFim"
+          ORDER BY
+            CASE hp2.status
+              WHEN 'pago'      THEN 0
+              WHEN 'aprovado'  THEN 1
+              WHEN 'calculado' THEN 2
+              ELSE 3
+            END,
+            hp2."criadoEm" DESC
+          LIMIT 1
+        ) hp ON TRUE
         WHERE s."companyId" IN (${sql.join(cids.map((c) => sql`${c}`), sql`,`)})
           AND s.status = 'aprovada'
           ${dateClause}
@@ -240,22 +274,40 @@ export const heSolicitacoesRouter = router({
         ORDER BY s."dataSolicitacao" DESC, e."nomeCompleto" ASC
       `)) as any).rows || [];
 
-      return rows.map((r: any) => ({
-        solicitacaoId: Number(r.solicitacaoId),
-        dataSolicitacao: r.dataSolicitacao instanceof Date
-          ? r.dataSolicitacao.toISOString().slice(0, 10)
-          : String(r.dataSolicitacao).slice(0, 10),
-        horaInicio: r.horaInicio || null,
-        horaFim: r.horaFim || null,
-        motivo: r.motivo || "",
-        obraId: r.obraId != null ? Number(r.obraId) : null,
-        obraNome: r.obraNome || null,
-        employeeId: Number(r.employeeId),
-        employeeName: r.employeeName || `ID ${r.employeeId}`,
-        codigoInterno: r.codigoInterno || null,
-        funcao: r.funcao || null,
-        fotoUrl: r.fotoUrl || null,
-      }));
+      return rows.map((r: any) => {
+        const periodo = r.hePeriodoId
+          ? {
+              id: Number(r.hePeriodoId),
+              dataInicio: r.hePeriodoInicio instanceof Date
+                ? r.hePeriodoInicio.toISOString().slice(0, 10)
+                : String(r.hePeriodoInicio).slice(0, 10),
+              dataFim: r.hePeriodoFim instanceof Date
+                ? r.hePeriodoFim.toISOString().slice(0, 10)
+                : String(r.hePeriodoFim).slice(0, 10),
+              status: String(r.hePeriodoStatus || "calculado"),
+              aprovadoEm: r.hePeriodoAprovadoEm || null,
+              pagoEm: r.hePeriodoPagoEm || null,
+              temLinhaNoPeriodo: !!r.temLinhaNoPeriodo,
+            }
+          : null;
+        return {
+          solicitacaoId: Number(r.solicitacaoId),
+          dataSolicitacao: r.dataSolicitacao instanceof Date
+            ? r.dataSolicitacao.toISOString().slice(0, 10)
+            : String(r.dataSolicitacao).slice(0, 10),
+          horaInicio: r.horaInicio || null,
+          horaFim: r.horaFim || null,
+          motivo: r.motivo || "",
+          obraId: r.obraId != null ? Number(r.obraId) : null,
+          obraNome: r.obraNome || null,
+          employeeId: Number(r.employeeId),
+          employeeName: r.employeeName || `ID ${r.employeeId}`,
+          codigoInterno: r.codigoInterno || null,
+          funcao: r.funcao || null,
+          fotoUrl: r.fotoUrl || null,
+          periodoHE: periodo,
+        };
+      });
     }),
 
   // ===================== DETALHES DE UMA SOLICITAÇÃO =====================

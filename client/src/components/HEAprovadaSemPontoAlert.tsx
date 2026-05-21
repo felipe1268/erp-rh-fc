@@ -48,8 +48,8 @@ export default function HEAprovadaSemPontoAlert({
   const items = query.data ?? [];
   if (items.length === 0) return null;
 
-  // Agrupar por solicitação
-  const grupos = new Map<number, { sol: any; funcs: any[] }>();
+  // Agrupar por solicitação (todos os itens da mesma sol compartilham `periodoHE`)
+  const grupos = new Map<number, { sol: any; funcs: any[]; periodoHE: any }>();
   for (const it of items) {
     if (!grupos.has(it.solicitacaoId)) {
       grupos.set(it.solicitacaoId, {
@@ -62,10 +62,16 @@ export default function HEAprovadaSemPontoAlert({
           obraNome: it.obraNome,
         },
         funcs: [],
+        periodoHE: it.periodoHE || null,
       });
     }
     grupos.get(it.solicitacaoId)!.funcs.push(it);
   }
+
+  const fmtBR = (iso: string) => {
+    const [y, m, d] = iso.split("-");
+    return `${d}/${m}/${y}`;
+  };
 
   return (
     <Card className="border-l-4 border-l-orange-500 bg-orange-50/50 no-print">
@@ -83,7 +89,36 @@ export default function HEAprovadaSemPontoAlert({
           </div>
         </div>
         <div className="space-y-2">
-          {Array.from(grupos.values()).map(({ sol, funcs }) => (
+          {Array.from(grupos.values()).map(({ sol, funcs, periodoHE }) => {
+            // Rev. 2219 — Badge de status do período HE que cobre a data.
+            // Avisa o RH se aquele dia já está em período aprovado/pago →
+            // não lançar manual no Espelho de Ponto pra evitar duplicidade.
+            const pStatus = periodoHE?.status as string | undefined;
+            const pagoOuAprovado = pStatus === "pago" || pStatus === "aprovado";
+            const periodoBadge = periodoHE && (
+              <span
+                className={
+                  "inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium border " +
+                  (pStatus === "pago"
+                    ? "bg-red-100 text-red-800 border-red-300"
+                    : pStatus === "aprovado"
+                    ? "bg-amber-100 text-amber-900 border-amber-300"
+                    : "bg-slate-100 text-slate-700 border-slate-300")
+                }
+                title={
+                  pagoOuAprovado
+                    ? "Este dia já está em período HE " + pStatus + " — NÃO lançar manualmente no Espelho de Ponto, recalcule o período."
+                    : "Este dia está em período HE " + (pStatus || "calculado")
+                }
+              >
+                Período {periodoHE.dataInicio.slice(8, 10)}/{periodoHE.dataInicio.slice(5, 7)}—
+                {periodoHE.dataFim.slice(8, 10)}/{periodoHE.dataFim.slice(5, 7)} ·{" "}
+                {pStatus === "pago" ? "PAGO" : pStatus === "aprovado" ? "APROVADO" : "calculado"}
+                {periodoHE.temLinhaNoPeriodo ? " · c/ linha" : ""}
+              </span>
+            );
+
+            return (
             <div key={sol.id} className="bg-white border border-orange-200 rounded-md p-2.5">
               <div className="flex flex-wrap items-center gap-2 text-[11px] md:text-xs mb-1.5">
                 <Badge className="bg-green-100 text-green-800 border-green-300 text-[10px]">Aprovada</Badge>
@@ -106,6 +141,7 @@ export default function HEAprovadaSemPontoAlert({
                     <Building2 className="h-3 w-3" /> {sol.obraNome}
                   </span>
                 )}
+                {periodoBadge}
                 {onOpenSolicitacao && (
                   <Button
                     size="sm"
@@ -117,6 +153,13 @@ export default function HEAprovadaSemPontoAlert({
                   </Button>
                 )}
               </div>
+              {pagoOuAprovado && (
+                <div className="text-[10px] md:text-[11px] text-red-800 bg-red-50 border border-red-200 rounded px-2 py-1 mb-1.5">
+                  ⚠ <strong>Atenção duplicidade:</strong> o período HE de {fmtBR(periodoHE.dataInicio)} a {fmtBR(periodoHE.dataFim)} já está <strong>{pStatus === "pago" ? "PAGO" : "APROVADO"}</strong>
+                  {periodoHE.temLinhaNoPeriodo ? " e este funcionário já tem linha no período" : " (sem linha pra este funcionário neste período)"}.
+                  Se for pagar agora, faça <strong>desconsolidação/recálculo do período</strong> — não lance HE manual no Espelho de Ponto.
+                </div>
+              )}
               <div className="flex flex-wrap gap-1.5">
                 {funcs.map((f: any) => {
                   const Tag: any = onOpenEmployee ? "button" : "span";
@@ -137,7 +180,7 @@ export default function HEAprovadaSemPontoAlert({
                 })}
               </div>
             </div>
-          ))}
+          );})}
         </div>
       </CardContent>
     </Card>

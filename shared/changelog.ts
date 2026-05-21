@@ -1,6 +1,44 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2219 — **UX/PAYROLL · Alerta "HE aprovada SEM ponto" agora
+ * mostra o status do período HE que cobre o dia + aviso de
+ * duplicidade.** Lilian (21/05/2026, follow-up): "não tem mais
+ * pessoas e veja o intervalo da aprovação tbm.. para não haver
+ * pagamento em duplicidade..". Cenário: Anderson teve HE-120013
+ * aprovada pra sábado 18/04/2026 (sem ponto). O período HE
+ * 16/04→15/05 da empresa **já está APROVADO** (R$ 5.742,10 por
+ * Isabella). Se o RH lança HE manual no Espelho de Ponto pro
+ * Anderson agora, na próxima reabertura/recálculo do período o
+ * sistema vai contar 2x → pagamento em duplicidade. **Fix
+ * backend:** `heSolicitacoes.aprovadasSemPonto`
+ * (`server/routers/heSolicitacoes.ts:217-310`) ganhou LEFT JOIN
+ * LATERAL com `he_periods` filtrando o período HE que cobre
+ * `s.dataSolicitacao` BETWEEN `dataInicio` AND `dataFim` (mesma
+ * companyId), com tie-break priorizando status `pago` > `aprovado`
+ * > `calculado` > demais e `criadoEm DESC` como segundo critério.
+ * Retorna `periodoHE: { id, dataInicio, dataFim, status,
+ * aprovadoEm, pagoEm, temLinhaNoPeriodo }` por solicitação — onde
+ * `temLinhaNoPeriodo` é um EXISTS contra `he_period_employees`
+ * checando se o employee já tem linha calculada naquele período
+ * (se sim, recalcular basta; se não, manual é mais seguro mas
+ * ainda assim tem que sincronizar). **Fix frontend:**
+ * `client/src/components/HEAprovadaSemPontoAlert.tsx` agrupa
+ * `periodoHE` por solicitação e renderiza (a) badge inline ao lado
+ * do número da solicitação no header — vermelho pra PAGO, âmbar pra
+ * APROVADO, cinza pra `calculado`, com tooltip explicando o risco
+ * e sufixo "· c/ linha" quando `temLinhaNoPeriodo=true`; (b) faixa
+ * vermelha logo abaixo do header quando status é `pago` ou
+ * `aprovado`, com call-to-action explícito: "Atenção duplicidade:
+ * o período HE de DD/MM/AAAA a DD/MM/AAAA já está PAGO/APROVADO …
+ * Se for pagar agora, faça desconsolidação/recálculo do período —
+ * não lance HE manual no Espelho de Ponto". **Resultado:** Lilian
+ * vê de uma olhada que a HE-120013 do Anderson cai dentro de
+ * período já aprovado → toma a decisão certa (recálculo do
+ * período HE em vez de lançamento manual paralelo).
+ * **R-001/R-007/R-010:** OK — só SELECT; LATERAL respeita
+ * `companyId` da solicitação (mesma ACL já aplicada).
+ *
  * Rev. 2218 — **FIX/UX · Alerta "HE aprovada SEM ponto batido"
  * propagado pra Fechamento de Ponto + Módulo HE da Folha + bugfix
  * de tenant na Rev. 2217.** Lilian (21/05/2026, follow-up): "onde
