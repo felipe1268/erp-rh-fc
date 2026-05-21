@@ -4607,7 +4607,7 @@ export default function FolhaPagamento() {
             companyIds={companyIds}
             dataInicio={heDataInicio}
             dataFim={heDataFim}
-            title="HE aprovada SEM ponto — não entrou no cálculo da folha"
+            title="HE aprovada SEM ponto no horário aprovado — não entrou no cálculo da folha"
           />
 
           {/* ============ SUB-VIEW: PERÍODOS ============ */}

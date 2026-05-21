@@ -1,6 +1,32 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2221 — **FIX/LOGIC · Alerta "HE aprovada SEM ponto" agora
+ * detecta falta de batida NO HORÁRIO APROVADO (não só no dia).**
+ * Lilian (21/05/2026, follow-up): "ainda não apareceu todos que
+ * têm hora extra aprovada mas não têm indicação de ponto no
+ * horário aprovado.. analise esta lógica e resolva". Bug das
+ * Revs. 2217-2220: o filtro era `NOT EXISTS time_records WHERE
+ * data=dataSolicitacao AND horasTrabalhadas > 0` — isso exclui
+ * QUALQUER funcionário que tenha batido o turno regular, mesmo
+ * quando a HE específica (sábado/domingo extra, HE noturna após
+ * expediente) não foi batida. **Caso típico:** Anderson sáb 18/04
+ * 05:00→16:00 — se ele tivesse batido qualquer outra coisa no
+ * dia (até `tipoDia=folga` com ajuste manual), saía do alerta.
+ * **Fix:** novo `NOT EXISTS` em
+ * `server/routers/heSolicitacoes.ts:283-301` considera "bateu HE"
+ * se **(a)** `tr.horasExtras > 0` (≠ vazio/zero) OU **(b)** alguma
+ * das 6 batidas (`entrada1..3`, `saida1..3`) cai dentro do
+ * intervalo `[s.horaInicio, s.horaFim]` (BETWEEN lex em
+ * 'HH:MM' zero-padded). Caso contrário, mesmo com `horasTrabalhadas`
+ * positivo no dia, a HE entra no alerta. **Copy atualizada** no
+ * componente `HEAprovadaSemPontoAlert.tsx` (header default + parágrafo
+ * explicativo) e em `FolhaPagamento.tsx` L4610 ("SEM ponto no
+ * horário aprovado — não entrou no cálculo da folha"). **Limitação
+ * conhecida:** HE atravessando meia-noite (22:00→02:00) não é
+ * tratada — a UI atual também não aceita esse caso. **R-001/R-007/
+ * R-010:** OK — apenas alteração de SELECT.
+ *
  * Rev. 2220 — **UX · Alerta "HE aprovada SEM ponto" agora vive
  * EXCLUSIVAMENTE no Módulo Hora Extra da Folha.** Lilian
  * (21/05/2026, follow-up das Revs. 2217-2219): "a tela não é pra

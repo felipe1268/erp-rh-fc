@@ -264,12 +264,26 @@ export const heSolicitacoesRouter = router({
           AND s.status = 'aprovada'
           ${dateClause}
           ${obrasClause}
+          -- Rev. 2221 -- "SEM ponto na HE" = sem evidência de que o
+          -- intervalo aprovado foi efetivamente batido (ver changelog).
           AND NOT EXISTS (
             SELECT 1 FROM time_records tr
             WHERE tr."employeeId" = sf."employeeId"
               AND tr.data = s."dataSolicitacao"
-              AND tr."horasTrabalhadas" IS NOT NULL
-              AND tr."horasTrabalhadas" NOT IN ('', '0:00', '00:00', '0:0')
+              AND (
+                (tr."horasExtras" IS NOT NULL
+                  AND tr."horasExtras" NOT IN ('', '0', '0:0', '0:00', '00:00', '00:0'))
+                OR (
+                  s."horaInicio" IS NOT NULL AND s."horaFim" IS NOT NULL AND (
+                    (tr.entrada1 IS NOT NULL AND tr.entrada1 BETWEEN s."horaInicio" AND s."horaFim") OR
+                    (tr.saida1   IS NOT NULL AND tr.saida1   BETWEEN s."horaInicio" AND s."horaFim") OR
+                    (tr.entrada2 IS NOT NULL AND tr.entrada2 BETWEEN s."horaInicio" AND s."horaFim") OR
+                    (tr.saida2   IS NOT NULL AND tr.saida2   BETWEEN s."horaInicio" AND s."horaFim") OR
+                    (tr.entrada3 IS NOT NULL AND tr.entrada3 BETWEEN s."horaInicio" AND s."horaFim") OR
+                    (tr.saida3   IS NOT NULL AND tr.saida3   BETWEEN s."horaInicio" AND s."horaFim")
+                  )
+                )
+              )
           )
         ORDER BY s."dataSolicitacao" DESC, e."nomeCompleto" ASC
       `)) as any).rows || [];

@@ -80,11 +80,12 @@ export default function HEAprovadaSemPontoAlert({
           <AlertTriangle className="h-5 w-5 text-orange-600 mt-0.5 shrink-0" />
           <div className="flex-1">
             <h3 className="text-sm md:text-base font-semibold text-orange-900">
-              {title || "HE aprovada SEM ponto batido"} ({items.length} {items.length === 1 ? "funcionário" : "funcionários"})
+              {title || "HE aprovada SEM ponto no horário aprovado"} ({items.length} {items.length === 1 ? "funcionário" : "funcionários"})
             </h3>
             <p className="text-[11px] md:text-xs text-orange-800/80 mt-0.5">
-              Estes funcionários têm hora extra <strong>aprovada</strong> mas não bateram ponto no dia.
-              Analise caso a caso se a HE será paga (lançamento manual no Espelho de Ponto) ou se a aprovação deve ser revertida.
+              Estes funcionários têm hora extra <strong>aprovada</strong> mas <strong>não há batida</strong> dentro do intervalo aprovado
+              (e <code>horasExtras</code> do dia é zero). Pode ser turno regular batido sem a HE, falha de leitura biométrica ou HE não realizada.
+              Analise caso a caso se será paga (lançamento manual no Espelho de Ponto) ou se a aprovação deve ser revertida.
             </p>
           </div>
         </div>
