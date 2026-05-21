@@ -53,6 +53,16 @@ export default function FinanceiroRecorrentes() {
     onError: (e: any) => toast({ title: "Erro", description: e.message, variant: "destructive" }),
   });
 
+  const deleteMut = (trpc as any).financial.deleteRecurringEntry.useMutation({
+    onSuccess: () => { toast({ title: "Recorrência excluída!" }); refetch(); },
+    onError: (e: any) => toast({ title: "Erro", description: e.message, variant: "destructive" }),
+  });
+
+  function handleDelete(item: any) {
+    if (!confirm(`Excluir a recorrência "${item.descricao}"?\n\nIsso remove apenas o cadastro mestre — lançamentos já gerados em Contas a Pagar permanecem.`)) return;
+    deleteMut.mutate({ id: item.id, companyId });
+  }
+
   const generateMut = (trpc as any).financial.generateRecurringEntries.useMutation({
     onSuccess: (res: any) => {
       toast({ title: res.generated > 0 ? `${res.generated} lançamento(s) gerado(s)!` : "Nenhum lançamento pendente para gerar" });
@@ -230,6 +240,16 @@ export default function FinanceiroRecorrentes() {
                         </Button>
                         <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => toggleAtivo(item)}>
                           {isAtivo ? <Pause className="w-3.5 h-3.5 text-orange-400" /> : <Play className="w-3.5 h-3.5 text-green-500" />}
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 w-8 p-0 hover:bg-red-50"
+                          onClick={() => handleDelete(item)}
+                          disabled={deleteMut.isPending}
+                          title="Excluir recorrência"
+                        >
+                          <Trash2 className="w-3.5 h-3.5 text-red-500" />
                         </Button>
                       </div>
                     </div>

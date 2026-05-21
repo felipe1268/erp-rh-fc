@@ -1,6 +1,26 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2213 — **UX/CRUD · Botão "Excluir" nos Lançamentos Recorrentes.**
+ * Lilian (21/05/2026): "nos lançamentos recorrentes, coloque tambem
+ * um botao de excluir". A tela `/financeiro/recorrencias` só tinha
+ * Editar e Pausar/Retomar — pra remover uma recorrência cancelada
+ * (ex.: contrato encerrado) a Lilian precisava pausar e a linha
+ * ficava poluindo a lista pra sempre. **Backend:** nova procedure
+ * `financial.deleteRecurringEntry` (`server/routers/financial.ts:2808`)
+ * — hard DELETE em `financial_recurring_entries WHERE id=$1 AND
+ * company_id=$2` (escopo da empresa pra evitar cross-tenant). Os
+ * lançamentos já materializados em `financial_entries` (origem
+ * `recorrente`) **permanecem intactos** porque têm vida própria
+ * após gerados — só some o cadastro mestre. **Frontend:** novo
+ * `deleteMut` + `handleDelete` (com `confirm()` explicando que só
+ * remove o cadastro mestre) + botão Trash2 vermelho ao lado de
+ * Pause/Play na linha de cada recorrência
+ * (`client/src/pages/financeiro/FinanceiroRecorrentes.tsx:59-67,247-256`).
+ * **R-001/R-007/R-010:** DELETE é por linha individual escopado por
+ * `id + company_id`, iniciado pelo usuário via UI — não é bulk
+ * destructive, equivalente a qualquer CRUD de cadastro. OK.
+ *
  * Rev. 2212 — **HOTFIX · Contagem "N membros" dos cards laterais
  * de grupo não atualizava ao trocar usuário de grupo (mesmo
  * após o invalidate da Rev. 2211).** Lilian (20/05/2026,

@@ -2802,6 +2802,22 @@ export const financialRouter = router({
     return { ok: true };
   }),
 
+  // Rev. 2213 — Excluir recorrência (hard delete na tabela mestre;
+  // os lançamentos já materializados em `financial_entries` permanecem
+  // intactos, pois têm vida própria após gerados).
+  deleteRecurringEntry: protectedProcedure.input(z.object({
+    id: z.number(),
+    companyId: z.number(),
+  })).mutation(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    await dbExecute(db,
+      `DELETE FROM financial_recurring_entries WHERE id=$1 AND company_id=$2`,
+      [input.id, input.companyId]
+    );
+    return { ok: true };
+  }),
+
   generateRecurringEntries: protectedProcedure.input(z.object({
     companyId: z.number(),
   })).mutation(async ({ input, ctx }) => {
