@@ -1,6 +1,53 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2239 — **UX/AVANÇO-SEMANAL · Headers de grupo (EAP-pai imediato)
+ * antes de cada bloco de atividades, espelhando a estrutura do Cronograma.**
+ * User: "tenho várias atividades de montam de andaimes, pode ser do vitral
+ * 1, 2, 3... da forma que estão não consigo identificar onde é a atividade,
+ * preciso que apareça o nome do pai da atividade e o filho.. igual a
+ * estruturação do cronograma".
+ *
+ * Diagnóstico: A tela Avanço Semanal listava `folhasExibidas` como tabela
+ * plana — 4× "Montagem do andaime" (uma por VITRAL 01..04) apareciam
+ * sequenciais sem nenhuma indicação de qual vitral. Existia um breadcrumb
+ * (Rev. anterior) em `text-[9px]` italic abaixo do nome — quase invisível e
+ * pior, repetia "VITRAL 01" linha-a-linha em vez de virar uma seção.
+ *
+ * Solução: agrupar visualmente por EAP-pai imediato (penúltimo segmento do
+ * código EAP) e emitir uma linha-header ANTES do primeiro filho de cada
+ * grupo, igual o Cronograma renderiza. Detecção stateless dentro do `.map`
+ * comparando `parentEapOf(a.eapCodigo)` com `parentEapOf(folhasExibidas[idx-1].eapCodigo)`
+ * — quando muda, emite header. Sem reordenar nada: confia que
+ * `folhasExibidas` já vem em ordem EAP (mesma ordem do Cronograma) e que
+ * irmãos ficam adjacentes (válido na prática — Item EAP é hierárquico).
+ *
+ * Mudanças em `PlanejamentoDetalhe.tsx:7686-7868`:
+ *  - Trocado `.map` por `.flatMap` (retorna `[header?, row]`).
+ *  - Helper `parentEapOf(eap)`: split por "." e tira o último segmento.
+ *  - `emitHeader = parentNome && parentEap !== prevParentEap` (1ª iter
+ *    `prevParentEap=null` → emite se houver pai; trocou de seção → emite).
+ *  - Linha-header: `bg-slate-100`, `border-y border-slate-300`, EAP em
+ *    `font-mono text-[10px]`, nome em `text-[12px] font-bold uppercase`
+ *    cor FC `#1B2A4A` com `letter-spacing 1.5px`. `colSpan={7}` cobre as
+ *    7 colunas após Item.
+ *  - Ancestrais ACIMA do pai imediato continuam em breadcrumb italic
+ *    `text-[9px]` DENTRO do header (não na linha da atividade).
+ *  - Linha da atividade: `pl-6` (indent 24px) quando tem header pai;
+ *    breadcrumb na linha agora exibe só `hierarquiaOfSem.slice(0,-1)`
+ *    (tudo menos o pai imediato, que já é o header) — evita duplicação.
+ *
+ * Edge cases:
+ *  - Atividade SEM pai-grupo (raiz do EAP ou pai não encontrado em
+ *    `grupoMapSem`): `parentNome=null` → não emite header; breadcrumb
+ *    fallback mostra a hierarquia completa como antes.
+ *  - `filtroAtivo === "todas"`: agrupa por TODAS as folhas; cuidado se a
+ *    ordem natural quebrar (não foi observado).
+ *  - Performance: O(N) extra (1 lookup por linha), insignificante.
+ *
+ * **R-001/R-007/R-010:** N/A (puramente visual; zero alteração de
+ * schema/dados/mutation).
+ *
  * Rev. 2238 — **STYLE/UI · Aplicada Regra de Ouro FC no header do modal
  * "Nova Revisão do Cronograma".** User: "ajuste o layout conforme nossas
  * regras de ouro". Adaptada a Regra de Ouro de cabeçalho institucional

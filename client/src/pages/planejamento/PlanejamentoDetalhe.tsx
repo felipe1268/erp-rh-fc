@@ -7680,7 +7680,25 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
                   : "Nenhuma atividade ativa nesta semana. Clique no filtro para ver todas."}
               </td></tr>
             )}
-            {folhasExibidas.map((a: any, idx: number) => {
+            {folhasExibidas.flatMap((a: any, idx: number) => {
+              // Rev. 2239 — Header de grupo (EAP-pai imediato) ANTES de cada
+              // bloco de atividades. Espelha a estrutura visual do Cronograma:
+              // "VITRAL 01" vira cabeçalho com fundo, e "Montagem do andaime"
+              // /"Retirada da tela metálica" aparecem indentadas abaixo —
+              // resolvendo a queixa "tenho várias 'Montagem do andaime' e
+              // não sei se é do Vitral 1, 2 ou 3". Detecção stateless via
+              // comparação com o elemento anterior do array.
+              const parentEapOf = (eap: string | null | undefined): string | null => {
+                if (!eap) return null;
+                const parts = eap.split(".");
+                if (parts.length <= 1) return null;
+                return parts.slice(0, -1).join(".");
+              };
+              const parentEap = parentEapOf(a.eapCodigo);
+              const prevParentEap = idx > 0 ? parentEapOf(folhasExibidas[idx - 1].eapCodigo) : null;
+              const parentNome = parentEap ? grupoMapSem.get(parentEap) : null;
+              const emitHeader = parentNome && parentEap !== prevParentEap;
+              const ancestors = emitHeader ? hierarquiaOfSem(a.eapCodigo).slice(0, -1) : [];
               const atual    = getAvanco(a.id);
               const anterior = avancoAnterior[a.id] ?? 0;
               const alterado = avancoLocal[a.id] !== undefined;
@@ -7730,7 +7748,27 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
               const naoExecutada = filtroAtivo === "pendentes" && atual === 0 && prevInd > 0;
               const isMaiorPeso = pesoSemana.maiorPesoIds.has(a.id);
 
-              return (
+              return [
+                emitHeader ? (
+                  <tr key={`hdr-${parentEap}-${idx}`} className="bg-slate-100 border-y border-slate-300">
+                    <td className="py-1.5 px-3 font-mono text-[10px] text-slate-500 align-top">{parentEap}</td>
+                    <td colSpan={7} className="py-1.5 px-3">
+                      {ancestors.length > 0 && (
+                        <div className="text-[9px] text-slate-400 italic leading-tight mb-0.5">
+                          {ancestors.map((seg: string, si: number) => (
+                            <span key={si}>
+                              {si > 0 && <span className="mx-0.5">›</span>}
+                              <span className="text-slate-500 font-medium not-italic">{seg}</span>
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                      <div className="text-[12px] font-bold uppercase" style={{ color: "#1B2A4A", letterSpacing: "1.5px" }}>
+                        {parentNome}
+                      </div>
+                    </td>
+                  </tr>
+                ) : null,
                 <tr key={a.id} className={`border-b ${
                   isMaiorPeso && !naoExecutada && !alterado ? "bg-orange-50/60 border-orange-100" :
                   naoExecutada     ? "bg-amber-50/70 border-amber-100" :
@@ -7739,7 +7777,7 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
                                      "bg-slate-50/40 border-slate-50"
                 }`}>
                   <td className="py-2 px-3 font-mono text-slate-500">{a.eapCodigo ?? ""}</td>
-                  <td className="py-2 px-3 text-slate-700">
+                  <td className={`py-2 px-3 text-slate-700 ${parentNome ? "pl-6" : ""}`}>
                     <div className="flex items-center gap-1.5">
                       {isMaiorPeso && <Zap className="h-3 w-3 shrink-0 text-orange-500" />}
                       {(atrasada || naoExecutada) && <AlertTriangle className={`h-3 w-3 shrink-0 ${naoExecutada ? "text-amber-600" : "text-amber-500"}`} />}
@@ -7750,11 +7788,15 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
                         </span>
                       )}
                     </div>
+                    {/* Rev. 2239 — Breadcrumb mostra só ancestrais ACIMA do pai
+                        imediato (que já virou header da seção). Quando não há
+                        header (ex.: atividade direta na raiz), mostra completo. */}
                     {(() => {
                       const h = hierarquiaOfSem(a.eapCodigo);
-                      return h.length > 0 ? (
+                      const display = parentNome ? h.slice(0, -1) : h;
+                      return display.length > 0 ? (
                         <div className="text-[9px] text-slate-400 mt-0.5 italic leading-tight">
-                          {h.map((seg: string, si: number) => (
+                          {display.map((seg: string, si: number) => (
                             <span key={si}>
                               {si > 0 && <span className="mx-0.5">›</span>}
                               <span className="text-slate-500 font-medium not-italic">{seg}</span>
@@ -7820,7 +7862,7 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
                     </div>
                   </td>
                 </tr>
-              );
+              ];
             })}
           </tbody>
         </table>
