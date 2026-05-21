@@ -381,12 +381,19 @@ export default function Usuarios() {
 
   // Rev. 2209 — auto-save de grupo de acesso ao clicar no radio.
   // Lilian: "clicando no grupo já deveria fazer a mudança automaticamente".
+  // Rev. 2212 — força refetch (não só invalidate) das queries que pintam
+  // a contagem "N membros" nos cards laterais e o painel "Membros do
+  // Grupo", garantindo que tudo atualiza ANTES do toast aparecer.
   const handleQuickSetGroup = async (groupIds: number[]) => {
     if (!selectedUser) return;
     setEditGroupIds(groupIds);
     try {
       await setGroupsMut.mutateAsync({ userId: selectedUser.id, groupIds });
-      utils.userGroups.list.invalidate();
+      await Promise.all([
+        utils.userGroups.list.refetch(),
+        utils.userGroups.listAllMembers.refetch(),
+        utils.userGroups.getMembers.invalidate(),
+      ]);
       toast.success(groupIds.length === 0 ? "Grupo removido" : "Grupo alterado");
     } catch (e: any) {
       toast.error("Falha ao alterar grupo: " + (e?.message || ""));

@@ -1,6 +1,31 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2212 — **HOTFIX · Contagem "N membros" dos cards laterais
+ * de grupo não atualizava ao trocar usuário de grupo (mesmo
+ * após o invalidate da Rev. 2211).** Lilian (20/05/2026,
+ * follow-up imediato): "quantidade dos membros precisa alterar
+ * tbm,, faça uma chegagem quando alterar isso ok". Print
+ * mostrava card lateral "RH e DP — 2 membros" mas o painel
+ * direito já mostrava só 1 membro (Isabela) — Ana Beatriz havia
+ * saído mas a contagem agregada não baixou. **Causa raiz:** a
+ * Rev. 2211 chamava `utils.userGroups.list.invalidate()` (e
+ * `getMembers` e `listAllMembers`) SEM await — invalidate é
+ * fire-and-forget, marca como stale mas só refetcha em
+ * background. Pra contagens visíveis a Lilian estava clicando
+ * fora antes do refetch terminar. Além disso, `getMembers` é a
+ * query do painel direito (foi a única que tinha `await` via
+ * mutateAsync), mas o `memberCount` na lista lateral vem do
+ * subselect em `userGroups.list` (`server/db.ts:3043`,
+ * `SELECT COUNT(*) ... AS memberCount`) — esse precisa refetch
+ * explícito. **Fix:** trocado o trio de `invalidate()` por
+ * `Promise.all([list.refetch(), listAllMembers.refetch(),
+ * getMembers.invalidate()])` AWAITADO antes do toast. Agora
+ * card lateral "N membros" e painel "Membros do Grupo"
+ * atualizam atomicamente. **Arquivos:**
+ * `client/src/pages/Usuarios.tsx:382-397`.
+ * **R-001/R-007/R-010:** OK — frontend only.
+ *
  * Rev. 2211 — **HOTFIX · Trocar grupo do usuário não atualizava
  * o painel "Membros do Grupo" do grupo antigo (cache stale).**
  * Lilian (20/05/2026, follow-up imediato da Rev. 2209): "veja a
