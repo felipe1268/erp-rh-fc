@@ -3,7 +3,6 @@ import DashboardLayout from "@/components/DashboardLayout";
 import FullScreenDialog from "@/components/FullScreenDialog";
 import PrintFooterLGPD from "@/components/PrintFooterLGPD";
 import RaioXFuncionario from "@/components/RaioXFuncionario";
-import HEAprovadaSemPontoAlert from "@/components/HEAprovadaSemPontoAlert";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -1125,14 +1124,10 @@ export default function SolicitacaoHE() {
                 </Badge>
               </div>
 
-              {/* Rev. 2217/2218 — Alerta: HE aprovada SEM ponto batido */}
-              <HEAprovadaSemPontoAlert
-                companyId={companyId}
-                companyIds={companyIds}
-                mesReferencia={filterMes || undefined}
-                onOpenEmployee={(empId) => setRaioXEmployeeId(empId)}
-                onOpenSolicitacao={(id) => openDetail(id)}
-              />
+              {/* Rev. 2220 — Alerta "HE aprovada SEM ponto" foi MOVIDO
+                  exclusivamente pra Folha → Módulo Hora Extra (onde a
+                  decisão de pagar realmente acontece). Removido daqui
+                  e do Fechamento de Ponto pra não poluir as telas. */}
 
               {/* Seção: Pendentes (sempre visível se houver) */}
               {(filterStatus === "todas" || filterStatus === "pendente") && todasPendentes.length > 0 && (

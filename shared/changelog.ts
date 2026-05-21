@@ -1,6 +1,27 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2220 — **UX · Alerta "HE aprovada SEM ponto" agora vive
+ * EXCLUSIVAMENTE no Módulo Hora Extra da Folha.** Lilian
+ * (21/05/2026, follow-up das Revs. 2217-2219): "a tela não é pra
+ * ficar aqui.. ela deve ficar no cálculo de hora extra.. mais
+ * precisamente Módulo Hora Extra". Decisão: o alerta vinha
+ * duplicado em 3 telas (Solicitação de HE aba Aprovações,
+ * Fechamento de Ponto, Folha → Módulo HE) — mas a decisão de
+ * **pagar manualmente vs. recalcular o período** só faz sentido
+ * dentro do Módulo Hora Extra. Nas outras telas era ruído visual
+ * e arriscava o RH "agir" no lugar errado. **Fix:** removido
+ * `<HEAprovadaSemPontoAlert />` + import de
+ * `client/src/pages/SolicitacaoHE.tsx` (L6 + L1128-1135) e de
+ * `client/src/pages/FechamentoPonto.tsx` (L38 + L1600-1607).
+ * Mantido apenas em `client/src/pages/FolhaPagamento.tsx` L4605
+ * (Módulo HE, após EXPIRY BANNER, com `dataInicio=heDataInicio`
+ * + `dataFim=heDataFim`). Componente
+ * `HEAprovadaSemPontoAlert.tsx` e procedure
+ * `heSolicitacoes.aprovadasSemPonto` continuam intactos
+ * (toda a lógica Rev. 2219 de período HE + duplicidade vale).
+ * **R-001/R-007/R-010:** N/A (somente remoção de UI).
+ *
  * Rev. 2219 — **UX/PAYROLL · Alerta "HE aprovada SEM ponto" agora
  * mostra o status do período HE que cobre o dia + aviso de
  * duplicidade.** Lilian (21/05/2026, follow-up): "não tem mais
