@@ -6421,6 +6421,31 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
     return chain;
   };
 
+  // Rev. 2240 — Mapa atividadeId → grupo-pai imediato + ancestrais.
+  // Necessário porque MUITAS atividades importadas do MSP (ex.: "Montagem do
+  // andaime" sob VITRAL 01/02/03/04) NÃO têm `eapCodigo` — a hierarquia é
+  // expressa só por `nivel` + ordem (e quem é `isGrupo`). Detecção EAP-only
+  // (Rev. 2239) não emitia header pra elas. Aqui usamos uma stack que
+  // empilha/desempilha grupos conforme `nivel`, espelhando como o Cronograma
+  // renderiza a indentação. Funciona pra TUDO: atividades com EAP, sem EAP,
+  // ou mistas.
+  const grupoParentByAtivId = useMemo(() => {
+    const m = new Map<number, { id: number; nome: string; eap: string | null; nivel: number; ancestors: string[] }>();
+    const stack: Array<{ id: number; nome: string; eap: string | null; nivel: number }> = [];
+    for (const a of atividades as any[]) {
+      const nivel = a.nivel ?? 1;
+      while (stack.length > 0 && stack[stack.length - 1].nivel >= nivel) stack.pop();
+      if (a.isGrupo) {
+        stack.push({ id: a.id, nome: a.nome, eap: a.eapCodigo ?? null, nivel });
+      } else if (stack.length > 0) {
+        const top = stack[stack.length - 1];
+        const ancestors = stack.slice(0, -1).map((s) => s.nome);
+        m.set(a.id, { ...top, ancestors });
+      }
+    }
+    return m;
+  }, [atividades]);
+
   const pesoSemana = useMemo(() => {
     const pesoTotal = folhas.reduce((s: number, a: any) => s + n(a.pesoFinanceiro), 0) || 1;
     const somaSemana = folhasNaSemana.reduce((s: number, a: any) => s + n(a.pesoFinanceiro), 0);
@@ -7681,24 +7706,21 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
               </td></tr>
             )}
             {folhasExibidas.flatMap((a: any, idx: number) => {
-              // Rev. 2239 — Header de grupo (EAP-pai imediato) ANTES de cada
-              // bloco de atividades. Espelha a estrutura visual do Cronograma:
-              // "VITRAL 01" vira cabeçalho com fundo, e "Montagem do andaime"
-              // /"Retirada da tela metálica" aparecem indentadas abaixo —
-              // resolvendo a queixa "tenho várias 'Montagem do andaime' e
-              // não sei se é do Vitral 1, 2 ou 3". Detecção stateless via
-              // comparação com o elemento anterior do array.
-              const parentEapOf = (eap: string | null | undefined): string | null => {
-                if (!eap) return null;
-                const parts = eap.split(".");
-                if (parts.length <= 1) return null;
-                return parts.slice(0, -1).join(".");
-              };
-              const parentEap = parentEapOf(a.eapCodigo);
-              const prevParentEap = idx > 0 ? parentEapOf(folhasExibidas[idx - 1].eapCodigo) : null;
-              const parentNome = parentEap ? grupoMapSem.get(parentEap) : null;
-              const emitHeader = parentNome && parentEap !== prevParentEap;
-              const ancestors = emitHeader ? hierarquiaOfSem(a.eapCodigo).slice(0, -1) : [];
+              // Rev. 2240 — Header de grupo via `grupoParentByAtivId` (stack
+              // nivel-based) em vez de EAP-string. Resolve queixa do user
+              // após 2239: atividades sem `eapCodigo` (ex.: "Montagem do
+              // andaime" sob VITRAL 01..04 importadas do MSP) NÃO emitiam
+              // header. Agora a detecção segue a mesma hierarquia que o
+              // Cronograma usa pra renderizar indentação — funciona com ou
+              // sem EAP. Stateless: compara parentId com o do elemento
+              // anterior.
+              const parent = grupoParentByAtivId.get(a.id);
+              const prevAtiv = idx > 0 ? folhasExibidas[idx - 1] : null;
+              const prevParent = prevAtiv ? grupoParentByAtivId.get(prevAtiv.id) : undefined;
+              const parentNome = parent?.nome ?? null;
+              const parentEap = parent?.eap ?? null;
+              const emitHeader = !!parent && parent.id !== prevParent?.id;
+              const ancestors = emitHeader ? (parent?.ancestors ?? []) : [];
               const atual    = getAvanco(a.id);
               const anterior = avancoAnterior[a.id] ?? 0;
               const alterado = avancoLocal[a.id] !== undefined;
@@ -7788,15 +7810,16 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
                         </span>
                       )}
                     </div>
-                    {/* Rev. 2239 — Breadcrumb mostra só ancestrais ACIMA do pai
-                        imediato (que já virou header da seção). Quando não há
-                        header (ex.: atividade direta na raiz), mostra completo. */}
-                    {(() => {
+                    {/* Rev. 2240 — Breadcrumb da linha só quando NÃO há
+                        header pai (atividade na raiz). Quando há header, ele
+                        já carrega ancestrais — evita duplicação. Fallback
+                        para EAP-based pra cobrir atividades sem grupo-pai
+                        mas com hierarquia EAP. */}
+                    {!parent && (() => {
                       const h = hierarquiaOfSem(a.eapCodigo);
-                      const display = parentNome ? h.slice(0, -1) : h;
-                      return display.length > 0 ? (
+                      return h.length > 0 ? (
                         <div className="text-[9px] text-slate-400 mt-0.5 italic leading-tight">
-                          {display.map((seg: string, si: number) => (
+                          {h.map((seg: string, si: number) => (
                             <span key={si}>
                               {si > 0 && <span className="mx-0.5">›</span>}
                               <span className="text-slate-500 font-medium not-italic">{seg}</span>

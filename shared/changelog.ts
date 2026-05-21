@@ -1,6 +1,55 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2240 — **FIX/UX (continuação 2239) · Header de grupo agora funciona
+ * para atividades SEM `eapCodigo` (muito comum em imports MSP).** User:
+ * "ainda não ficou ajustado corretamente.. tenho atividade de montagem
+ * de andaime mas não sei de qual pai ele se trata".
+ *
+ * Causa-raiz: A Rev. 2239 detectava o pai via `parentEapOf(eap)` = remover
+ * o último segmento do EAP. Mas o MSP grava várias atividades-folha SEM
+ * EAP (campo Item vazio) — quando isso acontece, `parentEapOf(null)`
+ * retorna null e nenhum header era emitido. No print do user: 4×
+ * "Montagem do andaime" (VITRAL 01..04) tinham EAP em branco e ficavam
+ * sequenciais sem qualquer distinção, embora no Cronograma estejam
+ * claramente indentadas sob VITRAL 01/02/03/04 (`isGrupo=true`, sem EAP
+ * também).
+ *
+ * Fix: substituir detecção EAP-string por uma stack `nivel`-based —
+ * exatamente o mesmo critério que o Cronograma usa pra renderizar
+ * indentação. Funciona pra ambos os casos (com ou sem EAP).
+ *
+ * Mudanças em `PlanejamentoDetalhe.tsx`:
+ *  - L6427-6450: novo `grupoParentByAtivId` (useMemo, dep `[atividades]`).
+ *    Walk linear de `atividades` mantendo `stack` de grupos por `nivel`.
+ *    Pop enquanto `stack.top.nivel >= cur.nivel` (fecha grupos
+ *    irmãos/superiores). Se `isGrupo` → push. Senão → mapeia
+ *    `a.id → { id, nome, eap, nivel, ancestors }` onde `top = stack.top` e
+ *    `ancestors = stack.slice(0, -1).map(nome)`.
+ *  - L7711-7726: flatMap usa `grupoParentByAtivId.get(a.id)` em vez do
+ *    `parentEapOf`. `emitHeader = parent && parent.id !== prevParent.id`
+ *    (compara por id estável, não string EAP).
+ *  - L7816-7833: row breadcrumb suprimido quando `parent` existe (header
+ *    já carrega ancestrais). Fallback para `hierarquiaOfSem(eap)` quando
+ *    NÃO há parent-grupo mas há EAP (caso raro: atividade na raiz com
+ *    EAP "01.02.03" sem grupo pai correspondente).
+ *
+ * Edge cases novos:
+ *  - Atividade SEM nivel definido (`nivel ?? 1`): vai pra nivel 1 — pode
+ *    fazer com que grupos de nivel 1 acima dela não emerjam como pai. OK,
+ *    é o comportamento esperado (atividade na raiz).
+ *  - `disabled=true`: ainda entra na stack se for `isGrupo` — mas filhas
+ *    `disabled` não chegam aqui (folhas já filtradas em `folhasNaSemana`).
+ *  - Ordem: depende crucialmente de `atividades` estar na ordem
+ *    hierárquica natural (o que JÁ é garantido pelo backend
+ *    `listarAtividades` ordenando por `ordem, eapCodigo`).
+ *
+ * Performance: O(N) walk único + Map lookup O(1) por linha — desprezível
+ * vs. as O(S × M) já existentes na tela.
+ *
+ * **R-001/R-007/R-010:** N/A (puramente visual; zero alteração de
+ * schema/dados/mutation).
+ *
  * Rev. 2239 — **UX/AVANÇO-SEMANAL · Headers de grupo (EAP-pai imediato)
  * antes de cada bloco de atividades, espelhando a estrutura do Cronograma.**
  * User: "tenho várias atividades de montam de andaimes, pode ser do vitral
