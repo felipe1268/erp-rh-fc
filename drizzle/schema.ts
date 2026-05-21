@@ -4115,9 +4115,9 @@ export const clienteComentarios = pgTable("cliente_comentarios", {
   lidoEm: timestamp("lido_em", { mode: "string" }),
   criadoEm: timestamp("criado_em", { mode: "string" }).defaultNow().notNull(),
 }, (t) => [
-  index("cc_company").on(t.companyId),
-  index("cc_cliente").on(t.clienteId),
-  index("cc_obra").on(t.obraId),
+  index("clcom_company").on(t.companyId),
+  index("clcom_cliente").on(t.clienteId),
+  index("clcom_obra").on(t.obraId),
 ]);
 
 // Avaliações ANÔNIMAS — pesquisa de satisfação (NPS)

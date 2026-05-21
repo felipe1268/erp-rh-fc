@@ -1,6 +1,55 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2241 — **FIX/SCHEMA · Coluna `msp_uid` criada em
+ * `planejamento_atividades` (DRIFT drizzle ↔ DB resolvido).** User: "agora
+ * temos um problema o percentual previsto pelo msproject está batendo
+ * certinho com o ERP, porém o realizado que foi alimentado no MSproject
+ * pelo engenheiro está dando 9% e o ERP quando eu faço o upload do
+ * arquivo XML considerando o avanço apresenta apenas 6%".
+ *
+ * Causa-raiz (auditoria do XML PLN_811_03_2026_R05_LOTUS - VITRA):
+ *   - 201 leaves (tarefas não-summary) no XML.
+ *   - **190 das 201 SEM o campo Item (Texto1 / eapCodigo)** — exporter PMO
+ *     da FC deixa atividades de terceiros e do template MSP sem Item.
+ *   - O importer (Rev. 2235) faz matching primário por `mspUid`
+ *     (`a.mspUid`) e fallback por `eapCodigo`. Como `msp_uid` NÃO existia
+ *     em `planejamento_atividades` no DB (drift drizzle x DB físico),
+ *     `a.mspUid` era sempre `undefined` → matching caía 100% no fallback
+ *     `eapCodigo` → só 11/201 atividades recebiam avanço → as 190 outras
+ *     ficavam zeradas → média ponderada do ERP-Realizado caía de ~9%
+ *     (MSP) para 6.80%.
+ *
+ * Drift confirmado em DEV e PROD via `information_schema.columns`. A
+ * coluna está no `drizzle/schema.ts:5425` desde a Rev. 1829 mas nunca foi
+ * sincronizada com o DB (provavelmente esquecemos de rodar `db:push` na
+ * época).
+ *
+ * Mudanças:
+ *   - `drizzle/schema.ts:4120-4124`: renomeados índices `cc_company` /
+ *     `cc_obra` da `clienteComentarios` → `clcom_*` (colidiam com os
+ *     mesmos nomes em `convencaoColetiva:557-559`, bloqueando
+ *     `drizzle-kit push`).
+ *   - DEV: `ALTER TABLE planejamento_atividades ADD COLUMN IF NOT EXISTS
+ *     msp_uid varchar(20);` aplicado via `executeSql` (não-destrutivo,
+ *     só ADD COLUMN — não viola R-001/R-007/R-010).
+ *   - PROD: será criada AUTOMATICAMENTE no próximo Publish (drizzle diff
+ *     dev → prod). NÃO rodar ALTER manual em prod.
+ *
+ * Ação requerida do usuário pós-merge/Publish:
+ *   1. Reimportar o cronograma COMPLETO (Importar MO/XML do MSP) — isso
+ *      popula `msp_uid` nas 201 atividades existentes (hoje todas NULL).
+ *   2. Importar o XML de avanço (3ª semana) — agora os 201 UIDs casam
+ *      100%, todas as folhas recebem %, o Realizado do ERP sobe para o
+ *      patamar correto (~9% alinhado com MSP).
+ *
+ * Follow-up sugerido (não nesta rev): trava de defesa no importer que
+ * loga warning visível quando >50% das folhas têm `mspUid` no XML mas
+ * `a.mspUid` null no ERP — teria alertado deste drift há semanas.
+ *
+ * **R-001/R-007/R-010:** ADD COLUMN em DEV é permitido (não-destrutivo).
+ * PROD via Publish (drizzle-managed). Nenhum ALTER/DROP/DELETE em prod.
+ *
  * Rev. 2240 — **FIX/UX (continuação 2239) · Header de grupo agora funciona
  * para atividades SEM `eapCodigo` (muito comum em imports MSP).** User:
  * "ainda não ficou ajustado corretamente.. tenho atividade de montagem
