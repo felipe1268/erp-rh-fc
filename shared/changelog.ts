@@ -1,6 +1,45 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2224 — **FIX/PARSER · Contrato de trabalho puxava "R$ 3,20"
+ * quando salário base era "3.200" (formato BR de milhar).** Lilian
+ * (21/05/2026): "O Contrato de trabalho da Lilian está puxando o
+ * valor errado... o correto é 3.200,00 p/mês e está puxando 3,20 por
+ * hora". Cadastro: Salário Base "3.200" + Valor Hora "14,55" — então
+ * o template "remuneração mensal" (em `Colaboradores.tsx:2050`) usa
+ * `formatBRL(form.salarioBase)` + `valorPorExtenso(form.salarioBase)`.
+ * Ambos chamam `parseValor` em `client/src/lib/numeroExtenso.ts:17-37`.
+ * Bug: quando a string tem APENAS ponto e nenhuma vírgula
+ * (`"3.200"`), o ramo `else` assumia formato US e fazia
+ * `Number("3.200")` = 3.2 — resultando em "R$ 3,20 (três reais e
+ * vinte centavos)" no contrato em vez de "R$ 3.200,00 (três mil e
+ * duzentos reais)". Mesmo bug afetaria `valorPorExtenso` em qualquer
+ * outro doc que recebe valor "1.234" / "1.234.567" sem vírgula.
+ *
+ * Fix em `parseValor` (ramo novo `else if (hasDot)`): heurística pt-BR
+ * — se o ÚLTIMO grupo após o último ponto tem **exatamente 3
+ * dígitos**, é separador de milhar (strip todos os pontos); senão é
+ * decimal US (mantém). Casos cobertos:
+ *
+ *   "3.200"     → 3 dígitos → 3200 ✓
+ *   "3.20"      → 2 dígitos → 3.20 ✓
+ *   "3.5"       → 1 dígito  → 3.5 ✓
+ *   "1.234.567" → 3 dígitos → 1234567 ✓
+ *   "1234.56"   → 2 dígitos → 1234.56 ✓
+ *   "1.000.000" → 3 dígitos → 1000000 ✓
+ *
+ * Sem mudança de schema, sem migração, sem backend. Impacto: TODO
+ * documento gerado client-side que usa `formatBRL`/`valorPorExtenso`
+ * sobre `salarioBase`/valores armazenados em formato BR de milhar
+ * passa a renderizar o valor correto (contratos, termos, advertências
+ * com valores monetários, comunicados etc.).
+ *
+ * **R-001/R-007/R-010:** N/A (só parser client-side).
+ *
+ * Files:
+ *  - client/src/lib/numeroExtenso.ts (ramo novo `else if (hasDot)` em
+ *    `parseValor`, L34-49).
+ *
  * Rev. 2223 — **UX · Foto do funcionário no alerta "HE aprovada SEM
  * ponto".** Lilian (21/05/2026): "quero que coloca a foto, de cada
  * usuário para saber quem é". A procedure `aprovadasSemPonto` já

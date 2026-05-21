@@ -30,8 +30,20 @@ export function parseValor(v: unknown): number {
   } else if (hasComma) {
     // "1234,56" — vírgula é decimal
     s = s.replace(",", ".");
+  } else if (hasDot) {
+    // Rev. 2224 — só ponto, sem vírgula: ambíguo entre BR milhar
+    // ("3.200" = 3200) e US decimal ("3.20" = 3.2 ou "1234.56" = 1234.56).
+    // Heurística pt-BR: se o ÚLTIMO grupo após o último ponto tem exatamente
+    // 3 dígitos, é separador de milhar; caso contrário, é decimal.
+    // "3.200" → 3 dígitos → 3200 ✓        "3.20" → 2 dígitos → 3.20 ✓
+    // "1.234.567" → 3 → 1234567 ✓         "1234.56" → 2 → 1234.56 ✓
+    // "3.5" → 1 → 3.5 ✓                   "1.000.000" → 3 → 1000000 ✓
+    const lastDot = s.lastIndexOf(".");
+    const afterLast = s.length - lastDot - 1;
+    if (afterLast === 3 && /^[0-9.]+$/.test(s)) {
+      s = s.replace(/\./g, "");
+    }
   }
-  // else: já está em formato US (1234.56) ou inteiro
   const n = Number(s);
   return isFinite(n) ? n : 0;
 }
