@@ -151,6 +151,26 @@ export default function FinanceiroLancamentos() {
     { companyId },
     { enabled: !!companyId },
   );
+  // Rev. 2226 — Fornecedores/Prestadores cadastrados (compras.listarFornecedores)
+  // para autocomplete do campo "Fornecedor / Pagador" em AMBOS modos (único e recorrente).
+  const { data: fornecedoresList } = (trpc as any).compras.listarFornecedores.useQuery(
+    { companyId, ativo: true },
+    { enabled: !!companyId },
+  );
+  const fornecedoresOptions: { id: number; nome: string; cnpj?: string }[] = (() => {
+    const list: any[] = Array.isArray(fornecedoresList) ? fornecedoresList : [];
+    const seen = new Set<string>();
+    const out: any[] = [];
+    for (const f of list) {
+      const nome = String(f.razaoSocial || f.nomeFantasia || "").trim();
+      if (!nome) continue;
+      const k = nome.toLowerCase();
+      if (seen.has(k)) continue;
+      seen.add(k);
+      out.push({ id: f.id, nome, cnpj: f.cnpj });
+    }
+    return out;
+  })();
   const createAccountMut = (trpc as any).financial.createAccount.useMutation({
     // Rev. 2082 — lemos `vars.nome` (input enviado na mutation) ao invés de `catForm.nome` do state,
     // pra evitar leitura de state stale caso o usuário altere/limpe o sub-dialog antes do retorno.
@@ -576,7 +596,7 @@ export default function FinanceiroLancamentos() {
 
         {/* MODAL NOVO / EDITAR LANÇAMENTO */}
         <Dialog open={showNew} onOpenChange={(v) => { if (!v) { setShowNew(false); resetForm(); setShowObs(false); } }}>
-          <DialogContent className="max-w-lg p-0 overflow-hidden flex flex-col max-h-[90vh]">
+          <DialogContent className="max-w-[min(1200px,96vw)] w-[96vw] p-0 overflow-hidden flex flex-col max-h-[95vh] h-[95vh]">
 
             {/* Header colorido conforme tipo */}
             <div className={`shrink-0 px-6 pt-5 pb-4 ${
@@ -760,12 +780,45 @@ export default function FinanceiroLancamentos() {
                     <Input value={form.obraNome} onChange={e => setForm(f => ({ ...f, obraNome: e.target.value }))} placeholder="Nome da obra" className="h-9" />
                   </div>
                 </div>
-                {form.modoRecorrente && (
-                  <div className="mt-3">
-                    <p className="text-[11px] text-gray-400 mb-1">Fornecedor / Pagador</p>
-                    <Input value={form.fornecedorNome} onChange={e => setForm(f => ({ ...f, fornecedorNome: e.target.value }))} placeholder="Nome do fornecedor ou pagador" className="h-9" />
+                {/* Rev. 2226 — Fornecedor/Prestador disponível em AMBOS modos (único + recorrente)
+                    com autocomplete dos fornecedores já cadastrados + atalho pra cadastrar novo
+                    em nova aba (`/compras/fornecedores`). "Fornecedor" abrange empresa terceira/prestador. */}
+                <div className="mt-3">
+                  <p className="text-[11px] text-gray-400 mb-1">Fornecedor / Prestador / Pagador</p>
+                  <div className="flex gap-1.5">
+                    <div className="flex-1 relative">
+                      <Input
+                        value={form.fornecedorNome}
+                        onChange={e => setForm(f => ({ ...f, fornecedorNome: e.target.value }))}
+                        placeholder="Nome do fornecedor, prestador ou pagador"
+                        className="h-9 pr-8"
+                        list="fornecedores-financeiros-datalist"
+                      />
+                      <Building2 className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-300 pointer-events-none" />
+                      <datalist id="fornecedores-financeiros-datalist">
+                        {fornecedoresOptions.map(f => (
+                          <option key={f.id} value={f.nome}>{f.cnpj || ""}</option>
+                        ))}
+                      </datalist>
+                    </div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => window.open("/compras/fornecedores", "_blank", "noopener,noreferrer")}
+                      className="h-9 px-2.5 shrink-0 border-blue-200 text-blue-700 hover:bg-blue-50 hover:text-blue-800"
+                      title="Cadastrar novo fornecedor/prestador em nova aba"
+                    >
+                      <PlusCircle className="w-3.5 h-3.5 mr-1" />
+                      <span className="text-xs font-semibold">Cadastrar novo</span>
+                    </Button>
                   </div>
-                )}
+                  {fornecedoresOptions.length > 0 && (
+                    <p className="text-[10px] text-gray-400 mt-1">
+                      {fornecedoresOptions.length} fornecedor{fornecedoresOptions.length !== 1 ? "es" : ""} cadastrado{fornecedoresOptions.length !== 1 ? "s" : ""} — digite pra autocompletar
+                    </p>
+                  )}
+                </div>
               </div>
 
               {/* Pagamento */}

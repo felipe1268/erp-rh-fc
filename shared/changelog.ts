@@ -1,6 +1,78 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2226 — **FEATURE/UX · Fornecedor/Prestador no modal "Novo
+ * Lançamento" Financeiro (Único + Recorrente) com autocomplete dos
+ * já cadastrados + atalho "Cadastrar novo" + tela cheia.** Lilian
+ * (21/05/2026): "Ao fazer um lançamento financeiro, sem ordem de
+ * compra, nao tem lugar para lançar o fornecedor, porem se eu
+ * alterar para lançamento recorrente, tem o campo de fornecedor.
+ * Preciso que apareça em ambos. Outro ponto é que os fornecedores
+ * já cadastrados, nao estao aparecendo para que eu possa vincular
+ * o lançamento à ele. Por fim, nessa campo do fornecedor, alem de
+ * aparecer os que ja estao cadastrados, preciso que tenha um campo
+ * bem ao lado, CADASTRAR NOVO FORNECEDOR/PRESTADOR... esse botao
+ * deve abrir uma nova janela, me levando até a tela de cadastro
+ * de fornecedor/prestador. OBS: quando digo fornecedor, entenda
+ * que isso se aplica tambem a empresa terceira (prestador de
+ * serviço). E aumente essa tela, deixe em tela cheia, está muito
+ * pequeno e fica ruim para visualizar".
+ *
+ * Diagnóstico:
+ *  - `client/src/pages/financeiro/FinanceiroLancamentos.tsx:763` o
+ *    campo `Fornecedor / Pagador` vivia DENTRO de
+ *    `{form.modoRecorrente && (...)}` — então só aparecia no modo
+ *    Recorrente. No Único, sumia.
+ *  - Era um `<Input>` puro, SEM `list=` apontando pra `<datalist>`,
+ *    portanto nunca mostrou os fornecedores cadastrados (mesmo no
+ *    Recorrente). Os dados existem em `fornecedores` (compras) via
+ *    `compras.listarFornecedores` — mas o modal nunca consultou.
+ *  - DialogContent `max-w-lg` + `max-h-[90vh]` = ~512px de largura,
+ *    apertado pra um form com 8 sections.
+ *
+ * Fix:
+ *  1. Nova query `(trpc as any).compras.listarFornecedores.useQuery
+ *     ({ companyId, ativo: true })` + helper `fornecedoresOptions`
+ *     (dedup por nome case-insensitive, prioriza `razaoSocial` →
+ *     fallback `nomeFantasia`).
+ *  2. Campo "Fornecedor / Prestador / Pagador" MOVIDO pra fora do
+ *     `{modoRecorrente && ...}` — agora aparece SEMPRE (Único +
+ *     Recorrente + Despesa/Receita/Imposto/Transferência).
+ *  3. `<Input list="fornecedores-financeiros-datalist">` + `<datalist>`
+ *     com todos os cadastrados (renderiza `cnpj` como hint da option).
+ *     Mesmo padrão usado pelas categorias (Rev. 2082).
+ *  4. Botão "Cadastrar novo" ao lado do input (ícone `PlusCircle`,
+ *     borda azul) abre `/compras/fornecedores` em NOVA aba via
+ *     `window.open(url, "_blank", "noopener,noreferrer")` — sem
+ *     fechar o modal de lançamento.
+ *  5. Label revisada pra "Fornecedor / Prestador / Pagador" cobrindo
+ *     explicitamente empresa terceira (pedido literal).
+ *  6. `DialogContent`: `max-w-lg` → `max-w-[min(1200px,96vw)]
+ *     w-[96vw] h-[95vh] max-h-[95vh]` — modal praticamente em tela
+ *     cheia, respeitando viewport. Já era `flex flex-col overflow-hidden`,
+ *     então scroll interno permanece intacto.
+ *
+ * Por que abrir em nova aba (e não dialog inline tipo categoria):
+ *  - Cadastro de fornecedor (`/compras/fornecedores`) tem ~30+
+ *    campos (CNPJ, endereço completo, dados bancários, anexos,
+ *    avaliações, categorias) — embutir num sub-dialog do
+ *    lançamento explodiria UX. Nova aba preserva o lançamento em
+ *    progresso e dá espaço pra cadastro completo.
+ *  - Após cadastrar, a query `compras.listarFornecedores` revalida
+ *    automaticamente no foco da aba (`refetchOnWindowFocus` default
+ *    do TanStack Query) — usuário volta pro modal e o novo
+ *    fornecedor já aparece no autocomplete.
+ *
+ * **R-001/R-007/R-010:** N/A (só client UI + 1 query READ).
+ *
+ * Files:
+ *  - client/src/pages/financeiro/FinanceiroLancamentos.tsx
+ *    - L157-176: nova query `compras.listarFornecedores` +
+ *      `fornecedoresOptions` (dedup).
+ *    - L602: `DialogContent` width/height tela cheia.
+ *    - L786-824: campo Fornecedor sempre visível + datalist
+ *      autocomplete + botão "Cadastrar novo" (nova aba).
+ *
  * Rev. 2225 — **FIX/UX · Botão "Cadastrar contas" do Painel
  * Financeiro abria Regime Tributário em vez da tela de contas
  * bancárias.** Lilian (21/05/2026): "a tela de cadastrar contas
