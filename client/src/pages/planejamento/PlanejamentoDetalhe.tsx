@@ -6834,6 +6834,8 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
       const newLocal: Record<number, number> = {};
       let matchUid = 0, matchEap = 0, semMatch = 0;
       const semMatchNomes: string[] = [];
+      // Rev. 2237 — guarda referência à atividade pra distribuição multi-semana
+      const matched: Array<{ a: any; pct: number }> = [];
       folhasComInd.forEach((a: any) => {
         const uidA = (a.mspUid ?? "").toString().trim();
         const eapA = (a.eapCodigo ?? "").toString().trim();
@@ -6841,7 +6843,9 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
         if (uidA && percentByUid[uidA] !== undefined) { pct = percentByUid[uidA]; matchUid++; }
         else if (eapA && percentByEap[eapA] !== undefined) { pct = percentByEap[eapA]; matchEap++; }
         if (pct !== undefined) {
-          newLocal[a.id] = Math.min(100, Math.max(0, pct));
+          const clamped = Math.min(100, Math.max(0, pct));
+          newLocal[a.id] = clamped;
+          matched.push({ a, pct: clamped });
         } else {
           semMatch++;
           if (semMatchNomes.length < 5) semMatchNomes.push(`${eapA || "(sem Item)"} — ${(a.nome ?? "").slice(0, 50)}`);
@@ -6849,11 +6853,126 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
       });
       const count = Object.keys(newLocal).length;
       setAvancoLocal(prev => ({ ...prev, ...newLocal }));
+
+      // Rev. 2237 — DISTRIBUIÇÃO automática em semanas passadas seguindo a
+      // CURVA PREVISTA da atividade. Quando user importa o snapshot da
+      // semana N (ex.: SEMANA_03.xml), preenche as semanas 1..N-1 com o
+      // cumulativo PLANEJADO da atividade no fim de cada semana (clampado
+      // pelo cumulativo importado), de modo que a Programação Semanal
+      // reflita "atividade andou conforme o plano até aqui" em vez de
+      // dizer "Não exec." em semanas 1 e 2 e jogar 100% do realizado na
+      // semana 3. A semana ATUAL fica em `avancoLocal` (pendente de
+      // Salvar) preservando o fluxo de revisão atual.
+      //
+      // Algoritmo por atividade:
+      //   - imp = cumulativo importado
+      //   - planAtW = fracaoDecorridaMs(ini, fim_semana, fim_planejado) * 100
+      //   - cumW = min(planAtW, imp)
+      //   - semanal_W = max(0, cumW - cum_W-1)
+      let semanasAutoSalvas = 0;
+      let avancosAutoSalvos = 0;
+      let avancosPreservados = 0;
+      const idxAtual = semanas.indexOf(semanaAtual);
+      const semanasPassadas = idxAtual > 0 ? semanas.slice(0, idxAtual) : [];
+      if (matched.length > 0 && semanasPassadas.length > 0 && revisaoAtiva?.id) {
+        // Rev. 2237.1 — fim-de-semana ALINHADO AO CUTOFF (não monday+6).
+        // O módulo usa janela cutoff (ex.: Sex→Qui); usar Sun como fim
+        // inflaria `planAtW` por 3 dias e distorceria deltas.
+        const fimSemPorMon = new Map<string, string>(
+          semanasPassadas.map(s => [s, cutoffWeekFromMonday(s, cutoffDow).fim])
+        );
+
+        // Rev. 2237.1 — set de avanços JÁ EXISTENTES na revisão ativa
+        // (lançamentos manuais ou de imports prévios). NÃO sobrescrever
+        // — pular esses pares (semana, atividade) para preservar o
+        // histórico do user.
+        const existKey = new Set<string>();
+        for (const av of (avancos as any[])) {
+          existKey.add(`${av.semana}::${av.atividadeId}`);
+        }
+
+        // Pré-calcula cumulativo planejado por atividade x semana.
+        // Rev. 2237.1 — cumPlanByAct guarda o cumulativo TEÓRICO da
+        // semana anterior (para cálculo de delta). Usado independente
+        // de sucesso/falha do save da semana N para que falha em W não
+        // distorça o delta de W+1.
+        const cumPorSemana = new Map<string, Map<number, number>>();
+        for (const semMon of semanasPassadas) {
+          const fimSem = fimSemPorMon.get(semMon)!;
+          const fimMs  = new Date(fimSem + "T23:59:59Z").getTime();
+          const mapAct = new Map<number, number>();
+          for (const { a, pct: imp } of matched) {
+            if (!a.dataInicio || !a.dataFim) continue;
+            const iniMs = new Date(a.dataInicio + "T00:00:00Z").getTime();
+            const fimAtMs = new Date(a.dataFim    + "T23:59:59Z").getTime();
+            let planPct: number;
+            if (calMSP) {
+              planPct = fracaoDecorridaMs(iniMs, fimMs, fimAtMs, calMSP) * 100;
+            } else if (fimAtMs > iniMs) {
+              planPct = ((Math.min(fimMs, fimAtMs) - iniMs) / (fimAtMs - iniMs)) * 100;
+            } else {
+              // Rev. 2237.1 — marco/atividade pontual (dataInicio==dataFim):
+              // 100% se a semana já passou da data, 0% se ainda não chegou.
+              planPct = fimMs >= iniMs ? 100 : 0;
+            }
+            const cum = Math.min(imp, Math.max(0, Math.min(100, planPct)));
+            mapAct.set(a.id, +cum.toFixed(2));
+          }
+          if (mapAct.size > 0) cumPorSemana.set(semMon, mapAct);
+        }
+
+        // Dispara salvarAvancoLote por semana (sequencial). `prevCumTeo`
+        // é o cumulativo TEÓRICO acumulado independente de falha — assim
+        // o delta de W+1 fica consistente mesmo se W falhar.
+        const prevCumTeo = new Map<number, number>();
+        for (const semMon of semanasPassadas) {
+          const mapAct = cumPorSemana.get(semMon);
+          if (!mapAct || mapAct.size === 0) continue;
+          const itens: Array<{ atividadeId: number; percentualAcumulado: number; percentualSemanal: number }> = [];
+          for (const [atividadeId, cum] of mapAct.entries()) {
+            const prev = prevCumTeo.get(atividadeId) ?? 0;
+            // Sempre atualiza cumulativo teórico (para o delta de W+1)
+            prevCumTeo.set(atividadeId, cum);
+            // Skip se já existe avanço manual nessa (semana, atividade)
+            if (existKey.has(`${semMon}::${atividadeId}`)) {
+              avancosPreservados++;
+              continue;
+            }
+            // Skip cumulativos zerados (atividade ainda não começou)
+            if (cum <= 0) continue;
+            itens.push({
+              atividadeId,
+              percentualAcumulado: cum,
+              percentualSemanal:   +Math.max(0, cum - prev).toFixed(2),
+            });
+          }
+          if (itens.length === 0) continue;
+          try {
+            await salvarLoteMutation.mutateAsync({
+              projetoId,
+              revisaoId: revisaoAtiva.id,
+              semana:    semMon,
+              itens,
+            });
+            semanasAutoSalvas++;
+            avancosAutoSalvos += itens.length;
+          } catch (e) {
+            console.error(`[importarDoMSProject] falha auto-salvar semana=${semMon}`, e);
+          }
+        }
+      }
+
       const breakdown = ext === "xml"
         ? ` (${matchUid} via UID${matchEap ? ` · ${matchEap} via Item` : ""}${semMatch ? ` · ${semMatch} sem correspondência` : ""}; fontes: ${srcTexto7} %Reali AUX, ${srcDurNat} Duração Real, ${srcPctNat} %Concluído${srcVazio ? `, ${srcVazio} sem dado` : ""})`
         : "";
       const aviso = semMatch > 0 ? ` ⚠️ ${semMatch} atividade(s) sem match — ex.: ${semMatchNomes.slice(0, 3).join("; ")}.` : "";
-      setImportStatus({ ok: true, msg: `${count} de ${folhasComInd.length} atividade${count !== 1 ? "s" : ""} preenchida${count !== 1 ? "s" : ""}${breakdown}.${aviso} Revise e salve.` });
+      const autoMsg = semanasAutoSalvas > 0
+        ? ` 🔁 ${avancosAutoSalvos} avanço(s) distribuído(s) automaticamente em ${semanasAutoSalvas} semana(s) anterior(es) seguindo a curva prevista.`
+        : "";
+      const preservMsg = avancosPreservados > 0
+        ? ` 🛡️ ${avancosPreservados} avanço(s) anterior(es) preservado(s) (já lançados — não sobrescritos).`
+        : "";
+      setImportStatus({ ok: true, msg: `${count} de ${folhasComInd.length} atividade${count !== 1 ? "s" : ""} preenchida${count !== 1 ? "s" : ""}${breakdown}.${aviso}${autoMsg}${preservMsg} Revise e salve a semana atual.` });
     } catch (e: any) {
       setImportStatus({ ok: false, msg: e.message ?? "Erro ao processar o arquivo." });
     } finally {

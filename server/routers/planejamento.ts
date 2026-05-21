@@ -1934,11 +1934,17 @@ export const planejamentoRouter = router({
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();
-      // Carrega todos os existentes da semana de uma vez
+      // Carrega todos os existentes da semana DA REVISÃO de uma vez.
+      // Rev. 2237.1 — adicionado filtro por `revisaoId` (paridade com
+      // `salvarAvanco`) para evitar que atualizações cruzem registros
+      // de OUTRAS revisões na mesma semana/atividade (corrupção de
+      // histórico). Crítico agora que a auto-distribuição grava em
+      // várias semanas passadas de uma vez.
       const existentes = await db.select()
         .from(planejamentoAvancos)
         .where(and(
           eq(planejamentoAvancos.projetoId, input.projetoId),
+          eq(planejamentoAvancos.revisaoId, input.revisaoId),
           eq(planejamentoAvancos.semana, input.semana),
         ));
       const existMap = new Map(existentes.map(e => [e.atividadeId, e.id]));

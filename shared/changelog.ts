@@ -1,6 +1,76 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2237 — **FEATURE/IMPORTER · Distribuição automática do avanço
+ * importado em semanas passadas seguindo a curva prevista.** User:
+ * "as atividades que sobreram avanço, deveriam estar alimentando a
+ * programaçãos semanal... hoje a programação esta dizendo que não
+ * houve atividades na 1, 2 e 3 semana.. mas a atividade ocorreu".
+ *
+ * **Contexto** — Após 2235/2236, o importer já matchava corretamente
+ * todas as 80 folhas. Mas o XML do MS Project só traz % CUMULATIVO
+ * por atividade (snapshot final), não breakdown semanal. O fluxo
+ * antigo gravava 100% do cumulativo numa única semana (a ativa) e
+ * as demais ficavam "Não exec." na Programação Semanal — embora a
+ * atividade tenha sido executada ao longo de várias semanas.
+ *
+ * **Solução** (resposta do user: opção A da query): "quando acontecer
+ * esta situações o sistema poderia preencher o previsto na 1 e 2
+ * semana, e na 3 semana alimentar o restante". Distribuir o
+ * cumulativo importado ao longo das semanas passadas seguindo a CURVA
+ * PREVISTA da atividade. Algoritmo por atividade:
+ *  - `imp` = cumulativo importado (snapshot do XML)
+ *  - Para cada semana passada `W` (Mondays < `semanaAtual`):
+ *    - `planAtW = fracaoDecorridaMs(ini_ativ, fim_W, fim_ativ, calMSP) * 100`
+ *    - `cumW = min(planAtW, imp)`  (não pode passar do realizado)
+ *    - `semanal_W = max(0, cumW - cum_W-1)`
+ *  - Semana atual: `imp` cai em `avancoLocal[a.id]` (review + Salvar)
+ *
+ * Implementação em `PlanejamentoDetalhe.tsx:6859-6953`:
+ *  - Mantém o `setAvancoLocal` pra semana ativa (preserva UX de revisão).
+ *  - Dispara `salvarAvancoLote` SEQUENCIAL pra cada semana passada
+ *    com `cumPorSemana` pré-calculado (sequencial porque o delta da
+ *    semana N+1 depende do cumulativo da semana N).
+ *  - Tolera falha por semana (try/catch + console.error; não aborta
+ *    o lote inteiro se 1 semana falhar).
+ *  - Status message: `"X de Y preenchidas + 🔁 Z avanço(s)
+ *    distribuído(s) automaticamente em N semana(s) anterior(es)"`.
+ *
+ * **Casos de borda cobertos**:
+ *  - `semanaAtual == semanas[0]`: nenhuma semana passada → comporta
+ *    como antes (só preenche a atual).
+ *  - Atividade que começa DEPOIS da semana W: `fracaoDecorridaMs`
+ *    retorna 0 → `cumW = 0` → não grava nada nessa semana (skip).
+ *  - Atividade que TERMINA antes da semana atual mas tem `imp < 100`:
+ *    `planAtW` pode chegar a 100; clampamos por `imp` para não
+ *    inventar realizado acima do snapshot.
+ *  - Sem `calMSP` (calendário ausente): fallback proporcional simples
+ *    `(min(fim_W, fim_ativ) - ini_ativ) / (fim_ativ - ini_ativ)`.
+ *
+ * **R-001/R-007/R-010:** N/A (sem ALTER/DROP; só INSERTs/UPDATEs
+ * na tabela `planejamento_avancos` via `salvarAvancoLote` já
+ * existente, governada pela revisão ativa).
+ *
+ * **Rev. 2237.1 (correções pós-code-review)**:
+ *  1. **Boundary de semana alinhado ao cutoff**: `endOfWeek=monday+6`
+ *     (Domingo) trocado por `cutoffWeekFromMonday(semMon, cutoffDow).fim`
+ *     — paridade com Prog. Semanal LOTUS (ex.: cutoff=Qui → fim=Qui).
+ *     Antes inflava `planAtW` em até 3 dias.
+ *  2. **Preserva avanços manuais em semanas passadas**: build de
+ *     `existKey = Set<"semana::atividadeId">` a partir de `avancos`
+ *     (revisão ativa); auto-dist pula esses pares (contador
+ *     `avancosPreservados` exibido na status msg).
+ *  3. **Delta robusto a falha parcial**: `prevCumTeo` é atualizado
+ *     com o cumulativo TEÓRICO de cada semana INDEPENDENTE de
+ *     sucesso/falha do save — assim falha em W não faz delta de W+1
+ *     virar `cum(W+1) - cum(W-1)` (inflado).
+ *  4. **Marco/atividade pontual sem calMSP**: `dataInicio==dataFim`
+ *     agora retorna `fimMs>=iniMs ? 100 : 0` (antes 0 sempre).
+ *  5. **Backend `salvarAvancoLote` revision-safe**: adicionado filtro
+ *     `eq(planejamentoAvancos.revisaoId, input.revisaoId)` no SELECT
+ *     de existentes — paridade com `salvarAvanco`. Evita cruzar
+ *     registros entre revisões na mesma semana/atividade.
+ *
  * Rev. 2236 — **FIX/IMPORTER (continuação da 2235) · Importer ainda
  * pulava atividades de terceiros marcadas como `isIndireta=true`.**
  * User: "nao esta aparecendo o avanço das atividades pq?".
