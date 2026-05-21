@@ -343,6 +343,13 @@ export default function Usuarios() {
     onSuccess: () => {
       utils.userManagement.listUsers.invalidate();
       utils.userGroups.listAllMembers.invalidate();
+      // Rev. 2211 — invalida getMembers de TODOS os grupos pq não sabemos
+      // de qual grupo o usuário saiu (setUserGroups faz DELETE + INSERT).
+      // Sem isso, o painel direito do grupo antigo continua mostrando o
+      // usuário (cache stale) — bug reportado pela Lilian (Ana Beatriz
+      // movida pra TST mas continuava aparecendo em RH e DP).
+      utils.userGroups.getMembers.invalidate();
+      utils.userGroups.list.invalidate();
     },
   });
   const setObrasMut = trpc.userManagement.setUserObras.useMutation({

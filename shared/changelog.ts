@@ -1,6 +1,34 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2211 — **HOTFIX · Trocar grupo do usuário não atualizava
+ * o painel "Membros do Grupo" do grupo antigo (cache stale).**
+ * Lilian (20/05/2026, follow-up imediato da Rev. 2209): "veja a
+ * ana beatriz, ela foi alterada para o grupo SST, mas o ERP
+ * ainda deixou o email dela no RH naõ pode isso.. toda vez que
+ * o usuário for alterado de grupo, automaticamente todas
+ * permissões dele do outro, devem ser transferida pro grupo que
+ * ele foi realocado." Print mostrava Ana Beatriz Silva Conceição
+ * listada em "Membros do Grupo" de RH e DP mesmo após ter sido
+ * realocada para TST via radio (Rev. 2209). **Causa raiz:** o
+ * `setUserGroups` no servidor (`server/db.ts:3161`) já faz
+ * DELETE de todas memberships do usuário + INSERT na nova — o
+ * BD estava correto. O problema era no frontend: a `onSuccess`
+ * do `setGroupsMut` (`Usuarios.tsx:342-347`) invalidava só
+ * `listUsers` e `listAllMembers`, **NÃO** invalidava
+ * `userGroups.getMembers` — query usada pelo painel direito de
+ * cada grupo. Como não sabemos qual grupo o usuário deixou (a
+ * mutation só recebe `groupIds` novos), basta invalidar TODAS
+ * instâncias de `getMembers` sem filtro. **Fix:** adicionado
+ * `utils.userGroups.getMembers.invalidate()` (sem args) +
+ * `utils.userGroups.list.invalidate()` direto no `onSuccess`.
+ * Agora qualquer troca de grupo (autosave Rev. 2209 OU
+ * `handleSaveUser`) refresca o painel "Membros" do grupo antigo
+ * e do novo automaticamente. **Arquivos:**
+ * `client/src/pages/Usuarios.tsx:345-357`.
+ * **R-001/R-007/R-010:** OK — frontend only, mutation já era
+ * idempotente (DELETE+INSERT), só faltava invalidate.
+ *
  * Rev. 2210 — **UX · Aba "Grupos de Acesso" abre o 1º grupo
  * automaticamente em vez de mostrar tela vazia "Selecione um
  * grupo para configurar".** Lilian (20/05/2026, follow-up da
