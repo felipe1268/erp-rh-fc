@@ -488,52 +488,69 @@ export async function parseMSProjectXLSX(buffer: ArrayBuffer): Promise<TarefaImp
 
   const ws = wb.Sheets[wb.SheetNames[0]];
 
-  // Detecta colunas em inglês ou português
-  const KEYS_NOME = ["Name", "Task Name", "Atividade", "Nome", "Tarefa", "Descrição", "Descricao"];
-  const KEYS_WBS  = ["WBS", "EAP", "Código WBS", "Code", "Codigo"];
-  const KEYS_INI  = ["Start", "Data de Início", "Início", "Inicio", "Data Início", "Data Inicio"];
-  const KEYS_FIM  = ["Finish", "Data de Término", "Fim", "Término", "Termino", "Data Término", "Data Termino"];
-  const KEYS_DUR  = ["Duration", "Duração", "Duracao", "Dur"];
+  // Detecta colunas em inglês ou português (incluindo MSP-BR full)
+  const KEYS_NOME = ["Name", "Task Name", "Atividade", "Nome", "Tarefa", "Descrição", "Descricao", "Nome da tarefa", "Nome da Tarefa", "Tarefas"];
+  const KEYS_WBS  = ["WBS", "EAP", "Código WBS", "Code", "Codigo", "EDT", "Estrutura analítica"];
+  const KEYS_INI  = ["Start", "Data de Início", "Início", "Inicio", "Data Início", "Data Inicio", "Início Real", "Início programado"];
+  const KEYS_FIM  = ["Finish", "Data de Término", "Fim", "Término", "Termino", "Data Término", "Data Termino", "Conclusão", "Conclusao", "Término Real", "Término programado"];
+  const KEYS_DUR  = ["Duration", "Duração", "Duracao", "Dur", "Duração restante"];
   const KEYS_PRED = ["Predecessors", "Predecessoras", "Predecessores", "Pred"];
-  const KEYS_REC  = ["Resource Names", "Recursos", "Recurso", "Resource"];
-  const KEYS_SUMM  = ["Summary", "Resumo", "Grupo", "Is Summary", "Outline Level", "Nível", "Nivel"];
+  const KEYS_REC  = ["Resource Names", "Recursos", "Recurso", "Resource", "Nomes dos recursos", "Nome dos recursos"];
+  const KEYS_SUMM  = ["Summary", "Resumo", "Grupo", "Is Summary", "Outline Level", "Nível", "Nivel", "Nível de tópicos"];
   const KEYS_MARCO = ["Milestone", "Marco", "Is Milestone", "Marcos"];
-  const KEYS_PCT   = ["% Complete", "% Concluído", "% Concluido", "Percent Complete", "Percentual", "% Work Complete"];
+  const KEYS_PCT   = ["% Complete", "% Concluído", "% Concluido", "Percent Complete", "Percentual", "% Work Complete", "% concluída", "% concluida", "Porcentagem concluída"];
 
-  // Rev. 2230 / Rev. 2231 — Auto-detecta linha do cabeçalho. Exports do MS
-  // Project para Excel frequentemente têm linhas de título/metadata acima
-  // dos headers (ex.: "Atividade: Execução de Obra Civil"), o que faz
-  // `sheet_to_json` devolver chaves `__EMPTY`, `__EMPTY_1`...
-  // Estratégia robusta (Rev. 2231):
+  // Rev. 2230 → 2232 — Auto-detecta linha do cabeçalho. Estratégia atual:
   //   - lê bruto como matriz;
-  //   - varre até 30 linhas e pontua cada linha pela QUANTIDADE de
-  //     categorias de header detectadas via match EXATO (lowercase+trim),
-  //     não apenas `includes` (que aceitava "Atividade: Execução..." como
-  //     coluna Nome);
-  //   - escolhe a 1ª linha com score >= 2 (precisa ter pelo menos 2
-  //     categorias distintas para evitar falso-positivo de título).
+  //   - normaliza cada célula: lowercase, trim, remove acentos;
+  //   - bloqueia células contendo ":" (são linhas de título tipo
+  //     "Atividade: Execução de Obra Civil");
+  //   - pontua cada linha pela QUANTIDADE de CATEGORIAS distintas
+  //     (Nome, WBS, Início, Fim, Duração, Pred, Rec, %) onde alguma
+  //     célula casa por EQUALS ou por WORD-BOUNDARY (palavra inteira)
+  //     com uma key — captura "Nome da tarefa" como Nome sem aceitar
+  //     "Atividade: ..." como Nome;
+  //   - promove a linha com MAIOR score (preferindo a 1ª em empate),
+  //     desde que score >= 2 — exige no mínimo 2 categorias na linha.
   const raw = XLSX.utils.sheet_to_json<any[]>(ws, { header: 1, defval: "", raw: false, blankrows: false });
   if (!raw.length) throw new Error("Planilha vazia");
 
+  const stripAcc = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  const norm = (v: any) => stripAcc((v ?? "").toString().toLowerCase().trim());
+
   const KEY_GROUPS = [KEYS_NOME, KEYS_WBS, KEYS_INI, KEYS_FIM, KEYS_DUR, KEYS_PRED, KEYS_REC, KEYS_PCT];
-  const GROUPS_LOWER = KEY_GROUPS.map(g => g.map(k => k.toLowerCase().trim()));
+  const GROUPS_NORM = KEY_GROUPS.map(g => g.map(norm));
+
+  function cellMatchesKey(cell: string, key: string): boolean {
+    if (!cell || !key) return false;
+    if (cell === key) return true;
+    // word-boundary: a key tem que aparecer como palavra completa
+    // (precedida/seguida de início, fim, espaço, ou pontuação leve),
+    // e a célula NÃO pode ter ":" (sinal de título tipo "X: valor").
+    if (cell.includes(":")) return false;
+    const re = new RegExp(`(^|[\\s\\-_/])${key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}($|[\\s\\-_/])`);
+    return re.test(cell);
+  }
 
   function scoreRow(row: any[]): number {
-    const cells = row.map(c => (c ?? "").toString().toLowerCase().trim()).filter(Boolean);
+    const cells = (row || []).map(norm).filter(Boolean);
     if (!cells.length) return 0;
     let matched = 0;
-    for (const group of GROUPS_LOWER) {
-      const hit = cells.some(s => group.some(k => s === k));
+    for (const group of GROUPS_NORM) {
+      const hit = cells.some(s => group.some(k => cellMatchesKey(s, k)));
       if (hit) matched++;
     }
     return matched;
   }
 
   let headerRowIdx = -1;
+  let bestScore = 0;
   const scanLimit = Math.min(raw.length, 30);
   for (let i = 0; i < scanLimit; i++) {
-    if (scoreRow(raw[i] || []) >= 2) { headerRowIdx = i; break; }
+    const sc = scoreRow(raw[i] || []);
+    if (sc > bestScore) { bestScore = sc; headerRowIdx = i; }
   }
+  if (bestScore < 2) headerRowIdx = -1;
 
   let rows: any[];
   if (headerRowIdx > 0) {
@@ -575,8 +592,17 @@ export async function parseMSProjectXLSX(buffer: ArrayBuffer): Promise<TarefaImp
   const kPct   = findKey(KEYS_PCT);
 
   if (!kNome) {
-    const cols = headers.slice(0, 8).join(", ");
-    throw new Error(`Coluna de nome da tarefa não encontrada. Colunas detectadas: ${cols}. Exporte do MS Project com cabeçalhos em inglês ou português.`);
+    const cols = headers.slice(0, 12).join(" | ");
+    // Rev. 2232 — amostra das 1ªs 5 linhas pra diagnóstico quando a
+    // auto-detecção de header falha (XLSX exótico do MSP).
+    const sample = raw.slice(0, 5).map((r, i) =>
+      `L${i + 1}: ${(r || []).slice(0, 10).map((c: any) => (c ?? "").toString().slice(0, 20)).join(" | ")}`
+    ).join(" || ");
+    throw new Error(
+      `Coluna de nome da tarefa não encontrada. Headers usados: ${cols}. ` +
+      `Amostra das 1ªs linhas: ${sample}. ` +
+      `Reexporte do MS Project com cabeçalhos visíveis (Nome/Name na 1ª linha) ou envie o XLSX pro suporte.`
+    );
   }
 
   // ── Rev. 1797 / R-013 — EAP do Orçamento é IMUTÁVEL ─────────────────────

@@ -1,6 +1,37 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2232 — **FIX/PARSER (3ª iteração — followup 2230/2231) · Importar
+ * Cronograma MS Project ainda voltava ao erro `Colunas detectadas:
+ * __EMPTY, __EMPTY_1...__EMPTY_7`.** Causa: a heurística da 2231 com
+ * match EXATO (`s === k`) era restritiva demais — não capturava headers
+ * do MSP-PT-BR completos como "Nome da tarefa", "EDT", "Conclusão",
+ * "Nomes dos recursos", "% concluída". Score ficava < 2 e o fallback
+ * voltava ao `sheet_to_json` padrão, que pegava linha 0 (vazia) como
+ * header e gerava `__EMPTY_N`.
+ *
+ * **Fix em 3 frentes (`ImportarCronograma.tsx:494-557, 597-609`):**
+ *  1. **Vocabulário ampliado** — KEYS_* agora cobrem MSP-PT-BR full:
+ *     "Nome da tarefa", "EDT"/"Estrutura analítica", "Início Real",
+ *     "Conclusão", "Duração restante", "Nomes dos recursos",
+ *     "% concluída", "Nível de tópicos" etc.
+ *  2. **Normalização robusta** — `norm()` faz lowercase + trim +
+ *     strip de acentos (NFD), então "Conclusão" e "conclusao" casam.
+ *  3. **Match híbrido** (`cellMatchesKey`) — passa se `cell === key`
+ *     OU se a key aparece como PALAVRA INTEIRA na célula (regex com
+ *     word boundary `(^|[\\s\\-_/])key($|[\\s\\-_/])`). Bloqueia
+ *     célula que contém `:` (descarta títulos tipo "Atividade: ...").
+ *     Captura "Nome da tarefa" → Nome sem falso-positivo de título.
+ *  4. **Best-match** — varre 30 linhas e escolhe a com MAIOR score
+ *     (1ª em empate), promove só se score >= 2.
+ *  5. **Mensagem de erro com diagnóstico** — quando ainda assim
+ *     falha, mostra amostra das 5 primeiras linhas (10 colunas
+ *     truncadas em 20 chars) pra usuário/suporte ver o que tá no
+ *     arquivo: `L1: ... | ... || L2: ... | ...`.
+ *
+ * **R-001/R-007/R-010:** N/A (parser client-side; valida e descarta
+ * antes do backend).
+ *
  * Rev. 2231 — **FIX/PARSER (follow-up Rev. 2230) · Importar Cronograma
  * ainda falhava com `Colunas detectadas: __col_0, __col_1, Atividade:
  * Execução de Obra Civil, __col_3...` — a heurística de auto-detecção
