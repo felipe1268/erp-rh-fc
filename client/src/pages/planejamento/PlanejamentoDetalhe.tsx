@@ -6713,22 +6713,21 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
 
     try {
       const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
-      const percentMap: Record<string, number> = {};
-      // Rev. 1672 — Bugfix import Avanço Semanal: ler snapshot Texto7
-      // (%Reali AUX, 4 casas) do template FC em vez de só PercentComplete
-      // (campo nativo, granularidade 1% via Int()).
-      // Rev. 1674 — Inserido fallback intermediário ActualDuration /
-      // (ActualDuration + RemainingDuration) ANTES de cair no PercentComplete
-      // inteiro. Esse é o cálculo nativo que o MSP usa internamente antes de
-      // arredondar pro inteiro display. Tem a MESMA precisão do Texto10
-      // (4 casas) e funciona em qualquer XML, mesmo sem o template FC. Ex.:
-      // REVTE-CIVIL WBS 4.1.1 (Limpeza permanente, peso ~12,5%): AD=2160min,
-      // RD=150660min → 1,4134% (bate com Texto10=1,41%); PercentComplete=1
-      // perdia 0,41pp e drenava o agregado de 1,41% pra 1,33%.
-      let srcTexto7  = 0;  // contador: atividades com %Reali AUX
-      let srcDurNat  = 0;  // contador: fallback p/ AD/(AD+RD) preciso
-      let srcPctNat  = 0;  // contador: fallback p/ PercentComplete inteiro
-      let srcVazio   = 0;  // contador: nenhum dado utilizável
+      // Rev. 2235 — DOIS maps de matching: por mspUid (chave estável MSP) e
+      // por eapCodigo (Item/Texto1). Antes só usávamos eapCodigo, mas o
+      // exporter PMO da FC deixa atividades de TERCEIROS (Rohr, Lotus,
+      // Friul, Santuário, Início, "Compra de...") SEM o campo Item — daí
+      // o importer pulava 20-30% das folhas silenciosamente, gerando o
+      // sintoma reportado: "alguns avanços vão, outros não". Agora
+      // matching primário é por mspUid (toda task tem <UID>); fallback
+      // por eapCodigo pra cronogramas legados sem mspUid persistido.
+      const percentByUid: Record<string, number> = {};
+      const percentByEap: Record<string, number> = {};
+      let srcTexto7  = 0;
+      let srcDurNat  = 0;
+      let srcPctNat  = 0;
+      let srcVazio   = 0;
+      let tasksProcessadas = 0;
 
       const parseDurMin = (s: string): number | null => {
         const m = /^PT(\d+)H(\d+)M(\d+)S/.exec(s);
@@ -6740,23 +6739,29 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
         const text = await file.text();
         const doc  = new DOMParser().parseFromString(text, "text/xml");
         doc.querySelectorAll("Task").forEach(task => {
-          const uid = task.querySelector("UID")?.textContent ?? "";
-          if (uid === "0") return;
-          // Rev. 1822 — código EAP = APENAS o campo Item (Texto1,
-          // FieldID=188743731). Sem fallback de WBS. Mesma política do
-          // parser de ImportarCronograma.tsx.
-          let wbs = "";
+          const uid = task.querySelector("UID")?.textContent?.trim() ?? "";
+          if (!uid || uid === "0") return;
+          // Rev. 2235 — pula apenas summary (rollup do MSP, não tem
+          // PercentComplete autoral — vem do agregado dos filhos).
+          const isSummary = task.querySelector("Summary")?.textContent === "1";
+          if (isSummary) return;
+
+          // Item (Texto1, FieldID 188743731) — chave LEGADA. Ainda lemos
+          // pra fallback de matching, mas NÃO é mais obrigatória.
+          let eap = "";
           for (const child of Array.from(task.children)) {
             if (child.tagName !== "ExtendedAttribute") continue;
             const fid = child.querySelector("FieldID")?.textContent ?? "";
             if (fid !== "188743731") continue;
             const val = (child.querySelector("Value")?.textContent ?? "").trim();
-            if (val) { wbs = val; break; }
+            if (val) { eap = val; break; }
           }
-          if (!wbs) return;
+
+          tasksProcessadas++;
 
           // 1ª prioridade: Texto7 (%Reali AUX, FieldID 188743747) — 4 casas, vírgula BR
-          let realiAux: number | undefined;
+          let pct: number | undefined;
+          let fonte: "t7" | "ad" | "pc" | "" = "";
           for (const child of Array.from(task.children)) {
             if (child.tagName !== "ExtendedAttribute") continue;
             const fid = child.querySelector("FieldID")?.textContent ?? "";
@@ -6764,38 +6769,37 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
             const val = (child.querySelector("Value")?.textContent ?? "").trim();
             if (!val) continue;
             const n = parseFloat(val.replace(",", "."));
-            if (Number.isFinite(n)) realiAux = Math.min(100, Math.max(0, n));
+            if (Number.isFinite(n)) { pct = Math.min(100, Math.max(0, n)); fonte = "t7"; }
             break;
           }
 
-          if (realiAux !== undefined) {
-            percentMap[wbs] = realiAux;
-            srcTexto7++;
-            return;
-          }
-
-          // 2ª prioridade (Rev. 1674): ActualDuration / (AD+RD) — precisão MSP nativa.
-          const adMin = parseDurMin(task.querySelector("ActualDuration")?.textContent ?? "");
-          const rdMin = parseDurMin(task.querySelector("RemainingDuration")?.textContent ?? "");
-          if (adMin != null && rdMin != null && adMin + rdMin > 0) {
-            const pct = Math.min(100, Math.max(0, (adMin / (adMin + rdMin)) * 100));
-            if (Number.isFinite(pct)) {
-              percentMap[wbs] = pct;
-              srcDurNat++;
-              return;
+          // 2ª prioridade: ActualDuration / (AD+RD) — precisão MSP nativa.
+          if (pct === undefined) {
+            const adMin = parseDurMin(task.querySelector("ActualDuration")?.textContent ?? "");
+            const rdMin = parseDurMin(task.querySelector("RemainingDuration")?.textContent ?? "");
+            if (adMin != null && rdMin != null && adMin + rdMin > 0) {
+              const v = (adMin / (adMin + rdMin)) * 100;
+              if (Number.isFinite(v)) { pct = Math.min(100, Math.max(0, v)); fonte = "ad"; }
             }
           }
 
           // 3ª prioridade: PercentComplete nativo (inteiro — última opção).
-          const pctRaw = task.querySelector("PercentComplete")?.textContent ?? "";
-          if (pctRaw !== "") {
-            const pct = Math.min(100, Math.max(0, parseFloat(pctRaw) || 0));
-            percentMap[wbs] = pct;
-            srcPctNat++;
-            return;
+          if (pct === undefined) {
+            const pctRaw = task.querySelector("PercentComplete")?.textContent ?? "";
+            if (pctRaw !== "") {
+              const v = parseFloat(pctRaw);
+              if (Number.isFinite(v)) { pct = Math.min(100, Math.max(0, v)); fonte = "pc"; }
+            }
           }
 
-          srcVazio++;
+          if (pct === undefined) { srcVazio++; return; }
+          if (fonte === "t7") srcTexto7++;
+          else if (fonte === "ad") srcDurNat++;
+          else if (fonte === "pc") srcPctNat++;
+
+          // Rev. 2235 — popula AMBOS os maps. Matching prioriza UID.
+          percentByUid[uid] = pct;
+          if (eap) percentByEap[eap] = pct;
         });
       } else if (["xlsx", "xls", "xlsm"].includes(ext)) {
         const buf     = await file.arrayBuffer();
@@ -6812,7 +6816,7 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
             rows.forEach((row: any) => {
               const wbs = String(row[wbsKey]).trim();
               const pct = parseFloat(String(row[pctKey])) || 0;
-              if (wbs) percentMap[wbs] = pct;
+              if (wbs) percentByEap[wbs] = pct;
             });
           }
         }
@@ -6820,18 +6824,32 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
         throw new Error("Formato inválido. Use .xml ou .xlsx exportados do MS Project.");
       }
 
+      // Rev. 2235 — Matching: 1º por mspUid (chave estável MSP, presente em
+      // 100% das atividades do XML), 2º por eapCodigo (Item/Texto1, opcional
+      // — só preenchido em atividades diretas do orçamento).
       const newLocal: Record<number, number> = {};
+      let matchUid = 0, matchEap = 0, semMatch = 0;
+      const semMatchNomes: string[] = [];
       folhas.forEach((a: any) => {
-        const pct = percentMap[a.eapCodigo ?? ""];
-        if (pct !== undefined) newLocal[a.id] = Math.min(100, Math.max(0, pct));
+        const uidA = (a.mspUid ?? "").toString().trim();
+        const eapA = (a.eapCodigo ?? "").toString().trim();
+        let pct: number | undefined;
+        if (uidA && percentByUid[uidA] !== undefined) { pct = percentByUid[uidA]; matchUid++; }
+        else if (eapA && percentByEap[eapA] !== undefined) { pct = percentByEap[eapA]; matchEap++; }
+        if (pct !== undefined) {
+          newLocal[a.id] = Math.min(100, Math.max(0, pct));
+        } else {
+          semMatch++;
+          if (semMatchNomes.length < 5) semMatchNomes.push(`${eapA || "(sem Item)"} — ${(a.nome ?? "").slice(0, 50)}`);
+        }
       });
       const count = Object.keys(newLocal).length;
       setAvancoLocal(prev => ({ ...prev, ...newLocal }));
-      // Rev. 1672/1674 — quebra por fonte (só faz sentido em XML; XLSX cai num único caminho)
       const breakdown = ext === "xml"
-        ? ` (${srcTexto7} via %Reali AUX${srcDurNat ? ` · ${srcDurNat} via Duração Real (precisão MSP)` : ""}${srcPctNat ? ` · ${srcPctNat} via %Concluído inteiro` : ""}${srcVazio ? ` · ${srcVazio} sem dado` : ""})`
+        ? ` (${matchUid} via UID${matchEap ? ` · ${matchEap} via Item` : ""}${semMatch ? ` · ${semMatch} sem correspondência` : ""}; fontes: ${srcTexto7} %Reali AUX, ${srcDurNat} Duração Real, ${srcPctNat} %Concluído${srcVazio ? `, ${srcVazio} sem dado` : ""})`
         : "";
-      setImportStatus({ ok: true, msg: `${count} atividade${count !== 1 ? "s" : ""} preenchida${count !== 1 ? "s" : ""} automaticamente${breakdown}. Revise e salve.` });
+      const aviso = semMatch > 0 ? ` ⚠️ ${semMatch} atividade(s) sem match — ex.: ${semMatchNomes.slice(0, 3).join("; ")}.` : "";
+      setImportStatus({ ok: true, msg: `${count} de ${folhas.length} atividade${count !== 1 ? "s" : ""} preenchida${count !== 1 ? "s" : ""}${breakdown}.${aviso} Revise e salve.` });
     } catch (e: any) {
       setImportStatus({ ok: false, msg: e.message ?? "Erro ao processar o arquivo." });
     } finally {

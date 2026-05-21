@@ -1,6 +1,53 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2235 — **FIX/IMPORTER · Importar MS Project pulava 20-30% das
+ * atividades silenciosamente.** User (1ª-iésima vez): "TODA VEZ QUE
+ * FAÇO A IMPORTAÇÃO ELE NÃO TRAZ O VALOR DO REALIZADO CONFORME O
+ * MSPROJECT... ALGUNS ITENS FORAM IMPORTADOS OUTROS NÃO".
+ *
+ * **Causa-raiz** — Diagnóstico real, parseando o XML
+ * `PLN_805_03_2026_R04_REVTE-CIVIL_-_SEMANA_03.xml` enviado pelo user:
+ *  - 128 tarefas totais → 48 summary → **80 folhas reais**.
+ *  - Dessas 80 folhas, **22 NÃO TÊM o campo customizado "Item"
+ *    (Texto1 / FieldID 188743731)** porque são atividades de
+ *    TERCEIROS no template PMO da FC (Rohr, Lotus, Friul, Santuário,
+ *    "Início", "Chegada de material", "Compra de Argamassa…").
+ *  - O importer do Avanço Semanal (`PlanejamentoDetalhe.tsx
+ *    importarDoMSProject`) tinha `if (!wbs) return;` na linha 6756 —
+ *    pulava silenciosamente toda task sem Item. Ex.: UID=5655
+ *    "Montagem do andaime - Rohr" com **PercentComplete=22%** nunca
+ *    era importada. Sintoma exato do user.
+ *  - Pior: o `percentMap` era indexado SÓ por `eapCodigo`. As 22 sem
+ *    Item ficariam todas com chave `""`, sobrescrevendo-se umas às
+ *    outras se o `if (!wbs) return` fosse removido cruamente.
+ *
+ * **Fix** (`PlanejamentoDetalhe.tsx:6717-6859`):
+ *  1. **Dois maps de matching**: `percentByUid` (chave = `<UID>` do
+ *     MSP, presente em 100% das tasks) E `percentByEap` (chave =
+ *     Item/Texto1, fallback p/ cronogramas legados sem `mspUid`
+ *     persistido no banco).
+ *  2. **Removida guarda `if (!wbs) return`**. Agora processa toda
+ *     task que não seja UID=0 nem `<Summary>1</Summary>`.
+ *  3. **Matching no lado do cliente** prioriza UID:
+ *     `percentByUid[a.mspUid] ?? percentByEap[a.eapCodigo]`. O
+ *     `mspUid` já é persistido pelo cronograma-importer
+ *     (`server/routers/planejamento.ts` Rev. 1829) e retornado por
+ *     `listarAtividades` via `select()` (todas as cols).
+ *  4. **Status melhorado** mostra `X de Y atividades preenchidas
+ *     (N via UID · M via Item · K sem correspondência)` + amostra dos
+ *     itens sem match — torna visível qualquer task que ficar de fora.
+ *
+ * **Nota sobre o sintoma "MSP 5% × ERP 3,85%"** — a divergência
+ * AGREGADA reportada nos prints pode ter outra causa (ponderação
+ * MSP=duração vs ERP=peso financeiro por padrão), mas o fix acima
+ * resolve o sintoma PRIMÁRIO ("alguns vão, outros não"). Com todas as
+ * 80 folhas importando, o agregado deve se aproximar; se ainda
+ * divergir, abrimos rev separada p/ alinhar a ponderação.
+ *
+ * **R-001/R-007/R-010:** N/A (frontend; sem schema/query nova; usa
+ * coluna `mspUid` já existente).
+ *
  * Rev. 2234 — **FIX/UX · Planejamento abria sempre na 1ª semana ao
  * invés da semana atual.** User: "QUANDO ENTRO NO PLANEJAMENTO ELE
  * ABRE O PERCENTUAL DA PRIMEIRA SEMANA, O CORRETO É ABRIR DA SEMANA
