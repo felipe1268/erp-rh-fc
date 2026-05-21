@@ -12334,14 +12334,26 @@ function Revisoes({ projetoId, revisoes, revisaoAtiva, utils, isAdminMaster }: a
       </Dialog>
 
       <Dialog open={modalAberto} onOpenChange={v => { if (!v) fecharModal(); else setModalAberto(true); }}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Nova Revisão do Cronograma</DialogTitle>
-            <DialogDescription className="text-xs text-slate-500 mt-1">
+        <DialogContent className="max-w-md p-0 overflow-hidden gap-0">
+          {/* Rev. 2238 — Header FC (Regra de Ouro): faixa azul #1B2A4A
+              full-width com título caixa alta + letter-spacing 3px branco. */}
+          <DialogHeader className="space-y-0">
+            <div
+              className="px-5 py-3.5 border-y-2 border-white"
+              style={{ backgroundColor: "#1B2A4A" }}
+            >
+              <DialogTitle
+                className="text-white text-[13px] font-bold uppercase m-0"
+                style={{ letterSpacing: "3px" }}
+              >
+                Nova Revisão do Cronograma
+              </DialogTitle>
+            </div>
+            <DialogDescription className="text-xs text-slate-500 px-5 pt-3">
               O arquivo enviado substituirá o cronograma oficial em todos os módulos. A Curva S manterá o histórico de todas as revisões.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-3 mt-1">
+          <div className="space-y-3 mt-1 px-5 pb-5">
 
             <div>
               <Label className="text-xs">Motivo do Replanejamento *</Label>
@@ -12421,7 +12433,8 @@ function Revisoes({ projetoId, revisoes, revisaoAtiva, utils, isAdminMaster }: a
               <Button
                 disabled={!canSubmit}
                 onClick={() => criarMutation.mutate({ projetoId, ...form, copiarAtividades: false })}
-                className="bg-blue-600 hover:bg-blue-700 gap-1.5"
+                className="gap-1.5 text-white"
+                style={{ backgroundColor: "#1B2A4A" }}
               >
                 {isPending
                   ? <><Loader2 className="h-4 w-4 animate-spin" /> {statusMsg}</>

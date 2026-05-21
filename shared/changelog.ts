@@ -1,6 +1,30 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2238 — **STYLE/UI · Aplicada Regra de Ouro FC no header do modal
+ * "Nova Revisão do Cronograma".** User: "ajuste o layout conforme nossas
+ * regras de ouro". Adaptada a Regra de Ouro de cabeçalho institucional
+ * (que originalmente vale para documentos oficiais — contratos, avisos,
+ * termos) para UI de modal: faixa azul `#1B2A4A` full-width com título
+ * em caixa alta, branco, letter-spacing 3px (paridade visual com PDFs
+ * institucionais sem ocupar metade do modal com logo+CNPJ+endereço, que
+ * não fazem sentido num modal de upload de XML).
+ *
+ * Mudanças em `PlanejamentoDetalhe.tsx:12336-12435`:
+ *  - `DialogContent`: `p-0 overflow-hidden gap-0` (libera padding pra
+ *    faixa azul ir borda-a-borda).
+ *  - `DialogHeader`: wrapper `<div>` com `backgroundColor:"#1B2A4A"`,
+ *    `border-y-2 border-white`, `px-5 py-3.5`. `DialogTitle` ganha
+ *    `text-white text-[13px] font-bold uppercase` + `letterSpacing:"3px"`.
+ *  - `DialogDescription`: padding lateral `px-5 pt-3` (compensa o `p-0`
+ *    do content).
+ *  - Body: `px-5 pb-5` no wrapper externo.
+ *  - Botão "Criar e Ativar Revisão": trocado de `bg-blue-600` para
+ *    `backgroundColor:"#1B2A4A"` (azul-marinho FC).
+ *
+ * **R-001/R-007/R-010:** N/A (mudança puramente visual; zero alteração
+ * de schema/contrato/mutation).
+ *
  * Rev. 2237 — **FEATURE/IMPORTER · Distribuição automática do avanço
  * importado em semanas passadas seguindo a curva prevista.** User:
  * "as atividades que sobreram avanço, deveriam estar alimentando a
