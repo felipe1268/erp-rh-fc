@@ -1388,6 +1388,43 @@ export const financialRouter = router({
     return { ok: true };
   }),
 
+  // Rev. 2228 — DELETE definitivo de lançamento (duplicidade). User-driven,
+  // protegido por confirmação na UI + motivo obrigatório + audit log
+  // (criadoPorNome + ctx.user). Snapshot dos campos críticos vai pro audit
+  // log pra rastreabilidade total ("quem excluiu o quê").
+  // NÃO permite excluir status='pago' (proteção financeira — usar cancelEntry
+  // pra estornar). Lançamentos vindos de OC/folha/etc podem ser excluídos
+  // pra resolver duplicidade, mas o módulo de origem permanece intacto.
+  deleteEntry: protectedProcedure.input(z.object({
+    id: z.number(),
+    companyId: z.number(),
+    motivo: z.string().min(5, "Informe o motivo da exclusão (mín. 5 caracteres)"),
+  })).mutation(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    const [entry]: any = await dbExecute(db,
+      `SELECT id, descricao, valor_previsto, data_vencimento, status, origem_modulo, origem_id, conta_nome
+       FROM financial_entries WHERE id=$1 AND company_id=$2`,
+      [input.id, input.companyId]
+    ).then((r: any) => (Array.isArray(r) ? r : r?.rows ?? []));
+    if (!entry) throw new TRPCError({ code: "NOT_FOUND", message: "Lançamento não encontrado." });
+    if (entry.status === "pago") {
+      throw new TRPCError({ code: "FORBIDDEN", message: "Lançamento já pago — use 'Cancelar' (estorno) em vez de excluir." });
+    }
+    const snapshot = `desc="${entry.descricao ?? ""}" valor=${entry.valor_previsto} venc=${entry.data_vencimento ?? "-"} origem=${entry.origem_modulo ?? "manual"}${entry.origem_id ? "#" + entry.origem_id : ""} categoria="${entry.conta_nome ?? "-"}"`;
+    await dbExecute(db,
+      `DELETE FROM financial_entries WHERE id=$1 AND company_id=$2 AND status != 'pago'`,
+      [input.id, input.companyId]
+    );
+    await createAuditLog({
+      action: "financial_entry_deleted",
+      userId: ctx.user?.id,
+      companyId: input.companyId,
+      details: `Entry ${input.id} EXCLUÍDO por ${ctx.user?.name ?? "?"} (id=${ctx.user?.id ?? "?"}) — motivo: "${input.motivo}" — snapshot: ${snapshot}`,
+    });
+    return { ok: true };
+  }),
+
   // ─────────────────── RESUMO / DASHBOARD ───────────────────
 
   getDashboardSummary: protectedProcedure.input(z.object({
