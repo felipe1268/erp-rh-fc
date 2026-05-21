@@ -1,6 +1,45 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2233 — **FIX/RACE · Cronograma: responsável (cyan) digitado na
+ * grade SUMIA ao clicar Salvar.** User: "ESTOU INDICANDO O RESPONSAVEL
+ * PELA ATIVIDADE, ESTOU SALVANDO MAS ELE NÃO ESTA SALVANDO A INFORMAÇÃO".
+ *
+ * **Causa-raiz** — Rev. 1952 trocou o input `responsavelLotus` (cyan,
+ * abaixo do nome da atividade) de **controlled** para **UNCONTROLLED**
+ * (`defaultValue` + `key`) p/ resolver lag de digitação ("trava 1-2s
+ * por letra com ~600 linhas"). O commit no React state passou a
+ * acontecer SÓ no `onBlur` → `setLinhas` (assíncrono). Quando o
+ * usuário clica direto em "Salvar" sem tirar foco antes, o `mousedown`
+ * do botão dispara `blur` no input → `setLinhas` é enfileirado, mas o
+ * `onClick` do botão lê `linhas` via **closure** ainda STALE (sem o
+ * valor digitado) → mutation envia `responsavelLotus = null` → save
+ * "limpa" o campo no banco. Rev. 1910 já havia corrigido o caso da
+ * cascata grupo→descendentes via `aplicarCascataResponsavelGrupos`,
+ * mas a LINHA-PAI propriamente dita continuava perdendo o valor
+ * porque `aplicarCascataResponsavelGrupos` lê o mesmo `linhas` stale.
+ *
+ * **Fix** — `client/src/pages/planejamento/PlanejamentoDetalhe.tsx`:
+ *  1. **L4604 — atributo `data-resp-input={idx}`** no `<Input>`
+ *     uncontrolled de responsavelLotus, identificando a linha pelo
+ *     índice na grade renderizada.
+ *  2. **L4043-4067 — sync DOM → state no `onClick` do Salvar**, ANTES
+ *     de chamar `aplicarCascataResponsavelGrupos` e o mutate:
+ *     `document.querySelectorAll('[data-resp-input]')` → monta `Map`
+ *     `idx→valor atual do DOM` → mergeia em `linhas` (cópia local
+ *     `synced`) → passa pro cascata + mutate. Não depende de
+ *     `setLinhas` flush, é leitura síncrona do DOM.
+ *
+ * **Por que não voltei pro controlled?** A perf de 1-2s/keystroke da
+ * Rev. 1952 ainda é real (não há React.memo nas rows; refatorar é
+ * out-of-scope desta rev). Sync DOM→state no save é o menor delta
+ * possível: zero impacto na digitação, fix cirúrgico no momento do
+ * commit.
+ *
+ * **R-001/R-007/R-010:** N/A (frontend; backend `salvarAtividades`
+ * em `server/routers/planejamento.ts:1199, 1397` já persistia
+ * `responsavelLotus` corretamente — bug era 100% no payload enviado).
+ *
  * Rev. 2232 — **FIX/PARSER (3ª iteração — followup 2230/2231) · Importar
  * Cronograma MS Project ainda voltava ao erro `Colunas detectadas:
  * __EMPTY, __EMPTY_1...__EMPTY_7`.** Causa: a heurística da 2231 com

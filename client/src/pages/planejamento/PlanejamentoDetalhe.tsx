@@ -4038,9 +4038,33 @@ function Cronograma({ projetoId, revisaoAtiva, atividades, loadingAtiv, avancos,
               <Button size="sm" className="gap-1.5 bg-blue-600 hover:bg-blue-700 relative overflow-hidden min-w-[100px]"
                 disabled={salvarMutation.isPending}
                 onClick={() => {
+                  // Rev. 2233 — Sync DOM → state ANTES de salvar.
+                  // O input de responsavelLotus é UNCONTROLLED (Rev. 1952, perf:
+                  // evita re-render de ~600 linhas por keystroke). Ele só commita
+                  // via onBlur → setLinhas (assíncrono). Quando o usuário clica
+                  // Salvar SEM tirar foco antes, onMouseDown dispara blur → setLinhas
+                  // enfileirado, mas o onClick lê `linhas` via closure ainda STALE
+                  // → "responsável digitado some no save". Lemos diretamente do DOM
+                  // todos os inputs `[data-resp-input]` e mergeamos antes de
+                  // chamar a mutation.
+                  const respInputs = document.querySelectorAll<HTMLInputElement>('[data-resp-input]');
+                  const respMap = new Map<number, string>();
+                  respInputs.forEach((el) => {
+                    const i = parseInt(el.getAttribute('data-resp-input') ?? '', 10);
+                    if (!Number.isNaN(i)) respMap.set(i, (el.value ?? '').trim());
+                  });
+                  const synced = linhas.map((l, i) => {
+                    if (!respMap.has(i)) return l;
+                    const v = respMap.get(i) ?? '';
+                    return {
+                      ...l,
+                      responsavelLotus: v || null,
+                      _respManual: !!v || !!l._respManual,
+                    };
+                  });
                   // Rev. 1910 — aplica cascata grupo→descendentes ANTES do save
                   // p/ evitar race com onBlur (setLinhas async vs onClick sync).
-                  const atividades = aplicarCascataResponsavelGrupos(linhas);
+                  const atividades = aplicarCascataResponsavelGrupos(synced);
                   // Sincroniza state local também, p/ que badges apareçam mesmo
                   // antes do refetch (evita "sumiço visual" pós-save).
                   setLinhas(atividades);
@@ -4598,6 +4622,7 @@ function Cronograma({ projetoId, revisaoAtiva, atividades, loadingAtiv, avancos,
                           <Input
                             key={`resp-${a.id ?? idx}-${a.responsavelLotus ?? ""}`}
                             defaultValue={a.responsavelLotus ?? ""}
+                            data-resp-input={idx}
                             onFocus={(e) => { respOriginalRef.current[idx] = e.currentTarget.value ?? ""; }}
                             onBlur={(e) => {
                               const valorAtual = (e.target.value ?? "").trim();
