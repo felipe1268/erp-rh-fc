@@ -1,6 +1,45 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2230 — **FIX/PARSER · Importar Cronograma MS Project (Excel)
+ * falhava com "Coluna de nome da tarefa não encontrada. Colunas
+ * detectadas: __EMPTY, __EMPTY_1, __EMPTY_2... __EMPTY_7" quando o
+ * arquivo XLSX tinha linhas de título/metadata acima dos headers.**
+ * Usuário (21/05/2026, screenshot anexo): "esta dando erro para
+ * importação do cronograma" — print da tela `/planejamento/35` →
+ * "Importar Cronograma — MS Project" com banner vermelho mostrando
+ * `__EMPTY..__EMPTY_7` como colunas detectadas.
+ *
+ * **Causa raiz:** `client/src/pages/planejamento/ImportarCronograma.tsx:490`
+ * chamava `XLSX.utils.sheet_to_json(ws, { defval: "", raw: false })`
+ * direto, que usa a PRIMEIRA linha como header. O export do MS Project
+ * para Excel costuma colocar 1-3 linhas de título do projeto, nome,
+ * período, etc. ANTES da linha real de cabeçalhos ("Name", "WBS",
+ * "Start", ...). Quando a 1ª linha é vazia ou só tem título, o xlsx
+ * gera chaves automáticas `__EMPTY`, `__EMPTY_1`...
+ *
+ * **Fix:** novo passo de auto-detecção da linha de header ANTES de
+ * fazer o `sheet_to_json` final, em `ImportarCronograma.tsx:506-541`:
+ *  1. Ler bruto como matriz: `sheet_to_json(ws, { header: 1,
+ *     defval: "", raw: false, blankrows: false })`.
+ *  2. Varrer até 30 linhas procurando a 1ª que contém uma célula cujo
+ *     texto (lowercase, trim) inclui qualquer KEYS_NOME (`Name`,
+ *     `Task Name`, `Atividade`, `Nome`, `Tarefa`, `Descrição`).
+ *  3. Se achou em linha `> 0`: re-monta `rows` manualmente usando essa
+ *     linha como header e as seguintes como dados (preenche
+ *     `__col_N` em células vazias do header pra não quebrar a chave).
+ *  4. Se não achou (header já está na linha 0): fallback pro
+ *     comportamento antigo (`sheet_to_json` padrão) — preserva
+ *     compatibilidade com planilhas bem formatadas.
+ *
+ * **Compatibilidade:** o branch de fallback garante que planilhas
+ * existentes (que já funcionavam, com header na 1ª linha) continuam
+ * passando pelo mesmo caminho de antes. Validação de WBS/EAP (R-013)
+ * e demais checks permanecem intactos a jusante.
+ *
+ * **R-001/R-007/R-010:** N/A — fix puramente client-side de parser,
+ * zero SQL/schema mexido.
+ *
  * Rev. 2229 — **CHORE/CLEANUP · Removidas 4 procedures duplicadas que
  * geravam warnings no build de produção (esbuild "Duplicate key" no
  * object literal do router).** Em JS, quando uma chave aparece duas

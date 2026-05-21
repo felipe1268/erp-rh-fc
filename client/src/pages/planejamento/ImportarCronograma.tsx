@@ -487,9 +487,6 @@ export async function parseMSProjectXLSX(buffer: ArrayBuffer): Promise<TarefaImp
   const wb = XLSX.read(buffer, { type: "array", cellDates: true });
 
   const ws = wb.Sheets[wb.SheetNames[0]];
-  const rows = XLSX.utils.sheet_to_json<any>(ws, { defval: "", raw: false });
-
-  if (!rows.length) throw new Error("Planilha vazia");
 
   // Detecta colunas em inglês ou português
   const KEYS_NOME = ["Name", "Task Name", "Atividade", "Nome", "Tarefa", "Descrição", "Descricao"];
@@ -502,6 +499,45 @@ export async function parseMSProjectXLSX(buffer: ArrayBuffer): Promise<TarefaImp
   const KEYS_SUMM  = ["Summary", "Resumo", "Grupo", "Is Summary", "Outline Level", "Nível", "Nivel"];
   const KEYS_MARCO = ["Milestone", "Marco", "Is Milestone", "Marcos"];
   const KEYS_PCT   = ["% Complete", "% Concluído", "% Concluido", "Percent Complete", "Percentual", "% Work Complete"];
+
+  // Rev. 2230 — Auto-detecta linha do cabeçalho. Exports do MS Project para
+  // Excel frequentemente têm linhas de título/metadata acima dos headers,
+  // o que faz `sheet_to_json` devolver chaves `__EMPTY`, `__EMPTY_1`...
+  // Estratégia: ler bruto como matriz, achar a 1ª linha que contém alguma
+  // das KEYS_NOME, usar como header e parsear a partir dali.
+  const raw = XLSX.utils.sheet_to_json<any[]>(ws, { header: 1, defval: "", raw: false, blankrows: false });
+  if (!raw.length) throw new Error("Planilha vazia");
+
+  const nomeLower = KEYS_NOME.map(k => k.toLowerCase());
+  let headerRowIdx = -1;
+  const scanLimit = Math.min(raw.length, 30);
+  for (let i = 0; i < scanLimit; i++) {
+    const row = raw[i] || [];
+    const hasNome = row.some((cell: any) => {
+      const s = (cell ?? "").toString().toLowerCase().trim();
+      if (!s) return false;
+      return nomeLower.some(k => s.includes(k));
+    });
+    if (hasNome) { headerRowIdx = i; break; }
+  }
+
+  let rows: any[];
+  if (headerRowIdx > 0) {
+    // Re-parse usando a linha detectada como header
+    const headerRow = (raw[headerRowIdx] || []).map((c: any, i: number) => {
+      const s = (c ?? "").toString().trim();
+      return s || `__col_${i}`;
+    });
+    rows = raw.slice(headerRowIdx + 1).map((arr: any[]) => {
+      const obj: Record<string, any> = {};
+      headerRow.forEach((h: string, i: number) => { obj[h] = arr[i] ?? ""; });
+      return obj;
+    });
+  } else {
+    rows = XLSX.utils.sheet_to_json<any>(ws, { defval: "", raw: false });
+  }
+
+  if (!rows.length) throw new Error("Planilha vazia");
 
   const headers = Object.keys(rows[0] ?? {});
 
