@@ -1,6 +1,51 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2248 — **FIX/CONSISTÊNCIA (continuação 2247) · Unifica ABSOLUTAMENTE
+ * a "régua" do Previsto Acumulado entre topo e BLOCO 2 do REFIS — agora
+ * via `topRefStr` exposto pelo parent.**
+ *
+ * User (segundo screenshot VITRA, mesma semana 22-28/05/2026, pós-Rev. 2247):
+ *   - Topo "Avanço Físico" (Oficial 04/12/2022): Previsto **6.40%**
+ *   - BLOCO 2 do REFIS "Previsto Acumulado": **7.07%**
+ *   - Reclamação: "ainda não está conforme"
+ *
+ * Causa raiz (que a Rev. 2247 não cobriu):
+ *   - Topo computa `semFim` via `cutoffWeekFromMonday(semanaVisualizacao, cutoffDow=4).fim`
+ *     → para semana iniciando Sex 22/05 com cutoff=Qui, retorna janela
+ *     Ter 19/05 → Seg 25/05. Logo, no caminho `if (semanaVisualizacao)` o
+ *     `refStr = semFim = 25/05` (cutoffOficial 04/12/2022 está fora da
+ *     janela, não clipa).
+ *   - REFIS computa `semFim` via `semanas[idx+1]` do `semanasRange()`
+ *     (grid baseado em `proj.dataInicio`/`dataFim`) → para a 4ª semana
+ *     retorna **28/05** (próxima entrada do grid).
+ *   - Rev. 2247 passou `refDateTop` (= today em Live / cutoff em Oficial) e
+ *     tentava clipar via `if (refClip >= semana && refClip < semFim)`. Em
+ *     modo Oficial com cutoff defasado (04/12/2022 << 22/05/2026), a
+ *     condição falha → REFIS caía no `return semFim = 28/05` → 7.07%.
+ *   - Diferença real: 28/05 vs 25/05 = 3 dias = ~0.67pp de PV → exatamente
+ *     a divergência observada (7.07 − 6.40 = 0.67).
+ *
+ * Fix em `client/src/pages/planejamento/PlanejamentoDetalhe.tsx`:
+ *   - L669-686: novo `useMemo` `topRefStr` no parent. Replica
+ *     EXATAMENTE a lógica original de `avancoPrevistoDia` (L686-696):
+ *     `if (semanaVisualizacao) → cutoffWeekFromMonday(...).fim` ou
+ *     `cutoffOficial` se a semana for corrente; senão `cutoffOficial ?? refDateStr`,
+ *     clipado em `refDateStr` quando este é anterior ao cutoff. Fonte única.
+ *   - L1207: passa `topRefStr={topRefStr}` como nova prop pro `<Refis />`.
+ *   - L12635: destructure `topRefStr` na assinatura.
+ *   - L12843-12860: `semanaFimRefis` agora retorna `topRefStr` direto
+ *     quando disponível (cai em `pctRaizMSP(topRefStr, ...)` = mesma fórmula
+ *     que o topo). Fallback Rev. 2247 mantido por segurança.
+ *
+ * Resultado: o BLOCO 2 do REFIS lê PV no MESMO ponto exato que a barra do
+ * topo — mesma janela `cutoffWeekFromMonday`, mesma data efetiva, mesmo
+ * resultado caractere-por-caractere. Quando o usuário troca de semana no
+ * REFIS, ambos avançam juntos via `semanaVisualizacao`. Quando troca o
+ * modo (Live ↔ Oficial), `refDateStr` atualiza e ambos seguem.
+ *
+ * **R-001/R-007/R-010:** N/A (frontend only — apenas leitura/cálculo).
+ *
  * Rev. 2247 — **FIX/CONSISTÊNCIA · Unifica "régua" de Previsto Acumulado:
  * barra "Avanço Físico" do topo e card "Previsto Acumulado" do BLOCO 2
  * do REFIS agora SEMPRE leem a mesma data-de-referência.**

@@ -663,6 +663,25 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
     return Math.min(100, ponderado);
   }, [atividades, avancosMapSemana, usarPesoPorDuracao, refisComIndiretasGlobal, refDateStr, modoVisao, dataCorteInfo?.dataCorteOficial, semanaVisualizacao, cutoffDowTop]);
 
+  // Rev. 2248 — `topRefStr`: data-de-referência EFETIVA usada pela barra
+  // "Avanço Físico" do topo. Extraída exatamente da lógica original de
+  // `avancoPrevistoDia` (L686-696). Exposta como prop pro <Refis /> para que
+  // o card "Previsto Acumulado" do BLOCO 2 leia PV no MESMO instante, com a
+  // MESMA janela cutoffWeekFromMonday — eliminando a divergência residual
+  // (Rev. 2247 passou refDateTop, mas REFIS continuava usando semFim do
+  // grid `semanasRange`, que é diferente do cutoffWeekFromMonday do header).
+  const topRefStr = useMemo(() => {
+    const cutoffOficial = dataCorteInfo?.dataCorteOficial ?? null;
+    if (semanaVisualizacao) {
+      const semFim = cutoffWeekFromMonday(semanaVisualizacao, cutoffDowTop).fim;
+      const naSemanaCorrente = !!cutoffOficial && cutoffOficial >= semanaVisualizacao && cutoffOficial <= semFim;
+      return naSemanaCorrente ? cutoffOficial! : semFim;
+    }
+    let refStr = cutoffOficial ?? refDateStr;
+    if (cutoffOficial && refDateStr < cutoffOficial) refStr = refDateStr;
+    return refStr;
+  }, [semanaVisualizacao, cutoffDowTop, dataCorteInfo?.dataCorteOficial, refDateStr]);
+
   const avancoPrevistoDia = useMemo(() => {
     // Rev. 1646 — Paridade 100% MS Project: o "Avanço Previsto" no card do
     // projeto agora replica EXATAMENTE a fórmula da coluna "%PREVISTO (Texto10)"
@@ -1201,6 +1220,7 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
             pvMacro={pvMacro}
             refDateTop={refDateStr}
             modoVisao={modoVisao}
+            topRefStr={topRefStr}
           />
         )}
         {canViewTab(aba) && aba === "cronograma-financeiro" && (
@@ -12609,7 +12629,7 @@ function Revisoes({ projetoId, revisoes, revisaoAtiva, utils, isAdminMaster }: a
 // ═════════════════════════════════════════════════════════════════════════════
 // ABA: REFIS
 // ═════════════════════════════════════════════════════════════════════════════
-function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, revisaoAtiva, curvaData, curvaMedicoes = [], utils, fmt, fPct: fPct_, isAdminMaster, hideFinancial, initialSemana, onInitialSemanaConsumed, onSemanaChange, usarPesoPorDuracao, refisComIndiretas, setRefisComIndiretas, dataCorteInfo, pvMacro, refDateTop, modoVisao }: any) {
+function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, revisaoAtiva, curvaData, curvaMedicoes = [], utils, fmt, fPct: fPct_, isAdminMaster, hideFinancial, initialSemana, onInitialSemanaConsumed, onSemanaChange, usarPesoPorDuracao, refisComIndiretas, setRefisComIndiretas, dataCorteInfo, pvMacro, refDateTop, modoVisao, topRefStr }: any) {
   // Rev. 1656.2 — calMSP no escopo do componente para que `prevIndRef` (L~10731)
   // use dias úteis do calendário do MSP (paridade com MS Project). Sem esta
   // declaração, qualquer render que avalie `prevIndRef` lançava ReferenceError.
@@ -12817,21 +12837,24 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
       d.setDate(d.getDate() + 7);
       semFim = d.toISOString().split("T")[0];
     }
-    // Rev. 2247 — FONTE ÚNICA com a barra "Avanço Físico" do topo.
-    // Antes clipava só no `cutoffOficial`, que pode estar defasado anos (ex.:
-    // projeto VITRA com cutoff 04/12/2022 e semana selecionada 22-28/05/2026
-    // → não clipava, REFIS lia PV=7.07% no FIM da semana, enquanto o header
-    // lia PV=6.40% em today=22/05). Agora ambos clipam na MESMA "régua":
-    // `refDateTop` = today (modo Live) ou cutoffOficial (modo Oficial),
-    // exatamente o `refDateStr` que o parent usa em `avancoPrevistoDia` /
-    // `avancoAtual`. Quando refDateTop cai dentro da semana selecionada,
-    // clipa nele; caso contrário usa semFim cheio. Resultado: o "Previsto
-    // Acumulado" do BLOCO 2 do REFIS bate caractere por caractere com a
-    // barra do topo em qualquer modo e em qualquer semana.
+    // Rev. 2248 — FONTE ÚNICA ABSOLUTA com a barra "Avanço Físico" do topo.
+    // Se o parent passou `topRefStr` (data-de-referência efetiva computada com
+    // a MESMA lógica de `avancoPrevistoDia` no header — usa
+    // `cutoffWeekFromMonday(semana, cutoffDow).fim`, não o grid `semanasRange`
+    // do REFIS), usa essa data direto. Garante paridade caractere-por-caractere.
+    //
+    // A Rev. 2247 só passava `refDateTop` (= today em Live / cutoff em Oficial)
+    // e mantinha o clip via cutoffOficial — em projeto com cutoff defasado
+    // (VITRA: 04/12/2022) o clip não disparava e o REFIS continuava lendo o
+    // semFim do grid próprio (28/05) vs cutoffWeekFromMonday do header (25/05).
+    // Resultado: divergência persistia (7.07% REFIS vs 6.40% topo).
+    //
+    // Fallback (sem topRefStr): preserva comportamento Rev. 2247.
+    if (topRefStr) return topRefStr;
     const refClip = refDateTop ?? dataCorteInfo?.dataCorteOficial ?? null;
     if (refClip && refClip >= semana && refClip < semFim) return refClip;
     return semFim;
-  }, [semana, semanas, refDateTop, dataCorteInfo?.dataCorteOficial]);
+  }, [semana, semanas, topRefStr, refDateTop, dataCorteInfo?.dataCorteOficial]);
 
   // Calcula avanço previsto ponderado para a semana a partir do cronograma.
   // Usa o FIM da semana (domingo) como referência — igual ao AvancoSemanal.
