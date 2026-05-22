@@ -1,6 +1,52 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2247 — **FIX/CONSISTÊNCIA · Unifica "régua" de Previsto Acumulado:
+ * barra "Avanço Físico" do topo e card "Previsto Acumulado" do BLOCO 2
+ * do REFIS agora SEMPRE leem a mesma data-de-referência.**
+ *
+ * User (screenshot REFIS projeto VITRA, semana 4ª 22-28/05/2026):
+ *   - Topo "Avanço Físico" (Live 22/05): Previsto **6.40%**
+ *   - BLOCO 2 do REFIS "Previsto Acumulado": **7.07%**
+ *   - Reclamação: "valores de avanço não estão iguais.. arrume isso de
+ *     vez.. e sempre deixe eles conectados de forma que nunca perca o
+ *     link.. todos devem ler a mesma informação.. sempre"
+ *
+ * Causa raiz — DUAS réguas diferentes:
+ *   1. Topo (`avancoPrevistoDia`/`avancoAtual` em PlanejamentoDetalhe
+ *      L666+/L605+) usa `refDateStr` (modo Live → today; modo Oficial →
+ *      `cutoffOficial`) e clipa em `min(refDateStr, semFim)` quando há
+ *      `semanaVisualizacao`. Para VITRA Live, ref efetiva = 22/05/2026.
+ *   2. REFIS BLOCO 2 (`semanaFimRefis` em Refis L12809+ → alimenta
+ *      `avancoPrevisto` L12836+) clipava SÓ em `dataCorteInfo.dataCorteOficial`.
+ *      No VITRA esse cutoff oficial está em **04/12/2022** (nunca foi
+ *      fechada uma semana desde a importação MSP). Como 04/12/2022 << 22/05/2026,
+ *      o IF nunca disparava → `semanaFimRefis` virava `semFim = 28/05/2026`
+ *      e o `pctRaizMSP` rodava até o fim da semana, retornando 7.07%.
+ *
+ * Pra cada semana adicional sem cutoff fechado a divergência aumentava
+ * ~0.67pp (ritmo de PV do projeto). Quanto mais tempo sem fechar semana,
+ * mais o REFIS "adiantava" em relação à barra do topo.
+ *
+ * Fix em `client/src/pages/planejamento/PlanejamentoDetalhe.tsx`:
+ *   - L1205-1206: passa `refDateTop={refDateStr}` e `modoVisao={modoVisao}`
+ *     como props pro `<Refis />` (parent já mantém `refDateStr` como
+ *     fonte única — espelho do modo Live/Oficial).
+ *   - L12615: destructure `refDateTop, modoVisao` na assinatura de `Refis`.
+ *   - L12823-12837 (era L12818-12825): `semanaFimRefis` agora clipa em
+ *     `refDateTop ?? cutoffOficial ?? null`. Quando `refDateTop` cai
+ *     dentro da semana selecionada, retorna `refDateTop` (= today em Live,
+ *     = cutoffOficial em Oficial); caso contrário, retorna `semFim` cheio.
+ *     Fallback no cutoff defasado mantido só por segurança (paths que não
+ *     receberem prop).
+ *
+ * Resultado: topo e BLOCO 2 do REFIS leem PV no mesmo instante em
+ * QUALQUER semana / QUALQUER modo (Live ou Oficial). Para projetos com
+ * cutoff oficial desatualizado, ambos seguem a ref efetiva do modo de
+ * visualização — paridade absoluta restaurada e auto-mantida.
+ *
+ * **R-001/R-007/R-010:** N/A (frontend only — só leitura/cálculo).
+ *
  * Rev. 2246 — **PRIVACY/UX · Removido o card "Ocorrências de Segurança" do
  * Painel SST — listava advertências disciplinares (verbal/escrita) com
  * nome do colaborador exposto.**
