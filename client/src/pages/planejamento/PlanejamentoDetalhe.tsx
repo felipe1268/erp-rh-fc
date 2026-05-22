@@ -288,7 +288,27 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
   const { user } = useAuth();
   const { selectedCompany, companyId } = useCompany();
   const [refisInitSemana, setRefisInitSemana] = useState<string | null>(null);
-  const [semanaVisualizacao, setSemanaVisualizacao] = useState<string | null>(null);
+  // Rev. 2255 — Inicializa `semanaVisualizacao` com a Monday da semana cutoff de
+  // HOJE (default cutoffDow=4 igual ao child AvancoSemanal L6196-6198). Antes
+  // iniciava em `null`, fazendo o top bar "Avanço Físico" usar o ramo
+  // `!semanaVisualizacao` em `avancosMapSemana` (L600-602) que dependia do
+  // closure de `avancosMap` — e ficava em 0% até o usuário clicar numa semana
+  // (o que bubble-uppava `onSemanaChange` e ativava o ramo de filtro explícito).
+  // Agora o top bar usa o MESMO caminho do "pós-clique" desde a 1ª renderização.
+  // O effect L6289-6311 do child realinha pro cutoffDow real do projeto (quando
+  // dataCorteInfo carrega) — então valores diferentes do default 4 se
+  // auto-corrigem; o bubble via setSemanaAtual só ocorre no clique manual, mas
+  // o parent já está com data válida desde o mount.
+  const [semanaVisualizacao, setSemanaVisualizacao] = useState<string | null>(
+    () => mondayOfCutoffWeek(todayLocalISO(), 4)
+  );
+  // Rev. 2255 — Flag p/ preservar escolha manual quando o `cutoffDow` real
+  // do projeto carregar (via dataCorteInfo). Wrap em setter custom logo abaixo.
+  const userPickedSemanaVisRef = useRef(false);
+  const setSemanaVisualizacaoUser = useCallback((s: string | null) => {
+    userPickedSemanaVisRef.current = true;
+    setSemanaVisualizacao(s);
+  }, []);
   // Rev. 1537 — Espelha em tempo real os avanços DIGITADOS (ainda não salvos)
   // na aba "Avanço Semanal" para que a barra superior "Avanço Físico" e o
   // card "VISÃO GERAL" reflitam imediatamente o que o usuário está digitando,
@@ -472,6 +492,21 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
   // o fim da semana-cutoff (cutoff=Qui -> fim=Qui). Para cutoff=Qui, top dava 3.82%
   // (15/05) e bottom 3.13% (14/05) na 2a semana. Agora ambos respeitam o cutoffDow.
   const cutoffDowTop: number = (dataCorteInfo as any)?.diaCorteSemana ?? 4;
+
+  // Rev. 2255 — Realinha `semanaVisualizacao` para a Monday da semana cutoff
+  // de HOJE usando o `cutoffDowTop` REAL do projeto (quando dataCorteInfo
+  // carregar), desde que o usuário ainda não tenha escolhido manualmente.
+  // Necessário porque o seed do useState usa o default 4 (sem acesso a
+  // hooks/queries) — para projetos com cutoff diferente (ex.: cutoff=Sex=5
+  // ou Sex=6) isso pode mapear pra Monday de uma semana cutoff distinta,
+  // dessincronizando topo bar vs aba Avanço Semanal (que usa o cutoffDow
+  // real desde o mount do child). Após este realign, paridade absoluta.
+  useEffect(() => {
+    if (userPickedSemanaVisRef.current) return;
+    const alvo = mondayOfCutoffWeek(todayLocalISO(), cutoffDowTop);
+    if (alvo !== semanaVisualizacao) setSemanaVisualizacao(alvo);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cutoffDowTop]);
   // Rev. 1637.1 — Default OFICIAL (era Live). Live induzia o gestor a ver
   // "atraso fantasma" entre quintas (EV congelado vs PV rolando com today)
   // — exatamente o problema que a Rev. 1637 nasceu para resolver. Mantemos
@@ -1202,7 +1237,7 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
             atividades={atividades}
             avancos={avancos}
             utils={utils}
-            onSemanaChange={setSemanaVisualizacao}
+            onSemanaChange={setSemanaVisualizacaoUser}
             onLocalAvancoChange={setAvancoLocalLive}
             usarPesoPorDuracao={usarPesoPorDuracao}
             dataCorteInfo={dataCorteInfo}
@@ -1236,7 +1271,7 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
             hideFinancial={hideFinancial}
             initialSemana={refisInitSemana}
             onInitialSemanaConsumed={() => setRefisInitSemana(null)}
-            onSemanaChange={setSemanaVisualizacao}
+            onSemanaChange={setSemanaVisualizacaoUser}
             usarPesoPorDuracao={usarPesoPorDuracao}
             refisComIndiretas={refisComIndiretasGlobal}
             setRefisComIndiretas={setRefisComIndiretasGlobal}

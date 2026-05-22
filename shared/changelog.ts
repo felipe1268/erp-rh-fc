@@ -1,6 +1,79 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2255 — **FIX · Barra superior "Avanço Físico" (Planejamento → Detalhe)
+ * passa a refletir o avanço REAL desde a 1ª renderização — antes ficava em
+ * 0% até o usuário clicar manualmente numa semana.**
+ *
+ * User (22/05/2026, screenshot VITRA): "note que a barra superior fica em 0%
+ * e só avança quando eu clico na semana atual.. não deveria". Bug visível em
+ * todos os projetos com avanços lançados.
+ *
+ * Causa-raiz em `client/src/pages/planejamento/PlanejamentoDetalhe.tsx`:
+ *
+ *   1. State `semanaVisualizacao` no parent (L291) iniciava `null`.
+ *   2. O memo `avancosMapSemana` (L598-615) tem 2 ramos:
+ *      - `!semanaVisualizacao` → `Object.assign(base, avancosMap)` (closure
+ *        sobre `avancosMap` memoado em `[avancos]`).
+ *      - `else` → filtra `avancos.forEach(av => av.semana <= semanaVisualizacao)`
+ *        lendo direto o array fresh.
+ *   3. O top bar "Avanço Físico" lê `avancoAtual` (L624-683) que usa
+ *      `avancosMapSemana[a.id] ?? 0` por folha.
+ *   4. No mount, `semanaVisualizacao=null` → ramo 1 → ficava em 0%.
+ *      Quando o usuário clicava numa semana no `AvancoSemanal` child,
+ *      `setSemanaAtual` (L6203) chamava `onSemanaChange?.(s)` →
+ *      `setSemanaVisualizacao(s)` no parent → trocava pro ramo 2 → bar
+ *      passava a mostrar valor correto.
+ *
+ * Por que os 2 ramos divergiam na prática: o efeito de mount do child
+ * `AvancoSemanal` (L6289-6311) já posiciona em `mondayOfCutoffWeek(hoje, 4)`
+ * via `setSemanaAtualRaw` — que NÃO bubble-uppa pro parent (Raw bypassa o
+ * `onSemanaChange`). Resultado: child mostrava a semana atual, mas parent
+ * continuava `null`. Sem clique manual nunca havia bubble.
+ *
+ * Fix (2 partes):
+ *
+ *   A) **Seed do useState** (L302-307): inicializar `semanaVisualizacao`
+ *      direto com `mondayOfCutoffWeek(todayLocalISO(), 4)` no `useState`
+ *      factory. Mata o 0% do mount.
+ *
+ *   B) **Realign quando cutoffDow real carrega** (L499-512): adicionado
+ *      `useEffect` que, quando `dataCorteInfo.diaCorteSemana` chega,
+ *      recalcula `mondayOfCutoffWeek(hoje, cutoffDowTop)` e atualiza
+ *      `semanaVisualizacao` — desde que o usuário ainda não tenha
+ *      escolhido manualmente (flag `userPickedSemanaVisRef`).
+ *      Ressalva do code review da 1ª iteração: o effect L6289-6311 do
+ *      child `AvancoSemanal` usa `setSemanaAtualRaw` (NÃO bubble-uppa
+ *      `onSemanaChange`), então em projetos com `cutoffDow != 4` o parent
+ *      podia ficar dessincronizado até clique manual. Este effect resolve.
+ *
+ *   C) **Wrap setSemanaVisualizacao** (L308-314, L1243+L1277): callbacks
+ *      passados como `onSemanaChange` para `AvancoSemanal` e `Refis`
+ *      passam pelo wrapper `setSemanaVisualizacaoUser` que marca a flag
+ *      `userPickedSemanaVisRef=true` antes de setar — preservando a
+ *      escolha manual contra o auto-realign.
+ *
+ * Edge cases:
+ * - `avancos` vazio na 1ª render: top bar = 0% (correto — nada lançado);
+ *   atualiza assim que tRPC entrega dados.
+ * - Semanas futuras lançadas em advance: ambos ramos do `avancosMapSemana`
+ *   continuam consistentes pois `semanaVisualizacao = hoje >= max(av.semana)`
+ *   na vasta maioria dos casos.
+ * - `refDateTop`/`topRefStr` (L705-715) e `avancoPrevistoDia` (L734-757)
+ *   passam a usar a semana inicializada — paridade absoluta topo × REFIS
+ *   × Curva S desde o mount.
+ *
+ * **R-001 / R-007 / R-010:** N/A (frontend only — nenhuma alteração de
+ * schema, drop ou delete em produção).
+ *
+ * Arquivos:
+ *   - `client/src/pages/planejamento/PlanejamentoDetalhe.tsx` (L293-307)
+ *   - `shared/version.ts` (bump 2254 → 2255)
+ *   - `shared/changelog.ts` (esta entrada no topo)
+ *   - `replit.md` (rotação da convenção 2+5)
+ *
+ * ─────────────────────────────────────────────────────────────────────────
+ *
  * Rev. 2254 — **FIX · Programação Semanal (Padrão LOTUS) preserva a
  * hierarquia EAP completa — pais sem `eapCodigo` (VITRAIS, PROTÓTIPO,
  * VITRAL 01/02/03 etc.) agora aparecem como cabeçalhos de grupo.**
