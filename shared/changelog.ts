@@ -1,6 +1,58 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2249 — **FEATURE/CONSISTÊNCIA · Topo "Avanço Físico" agora lê DIRETO
+ * o snapshot do XML do MSP (Texto10/Texto7) em vez de calcular sobre cutoff
+ * defasado — Fase 1 do "ERP só lê, não calcula" (Topo).**
+ *
+ * User (22/05/2026, após Rev. 2248): "o módulo planejamento não pode fazer
+ * cálculos de % de avanço, ele deve ler totalmente o arquivo XML e trazer
+ * pra tela. Hoje o ERP está fazendo cálculos que não precisam." Pivot de
+ * paradigma — abandonar projeção dinâmica e refletir a foto do MSP.
+ *
+ * Causa raiz da divergência crônica (Topo×REFIS):
+ *   - VITRA: `cutoffOficial` no DB = **04/12/2022** (nunca atualizado);
+ *     XML do MSP tem `StatusDate` = **25/05/2026** (foto atual).
+ *   - Modo Oficial usava `cutoffOficial` (04/12/2022) → 6.40% (calculado).
+ *   - REFIS usava grid `semanasRange()` (28/05/2026) → 7.07% (calculado).
+ *   - Nenhum dos dois lia o snapshot real do XML.
+ *   - Telas viviam "calculando" em vez de espelhar o MSP.
+ *
+ * Fix em `client/src/pages/planejamento/PlanejamentoDetalhe.tsx`:
+ *   - L528-531: novo `useMemo statusDateMSP` extrai
+ *     `calendarioJson.statusDateSnapshot` da raiz (gravado pelo importer MSP
+ *     desde Rev. 1675). É a "data da foto" do snapshot Texto10/Texto7.
+ *   - L533-556: `refDateStr` em modo Oficial passa a **priorizar**
+ *     `statusDateMSP` sobre `cutoffOficial`. Quando refDateStr ===
+ *     `statusDateSnapshot`, toda a matemática downstream (`avancoPrevistoDia`
+ *     L688, `avancoAtual` L605, `pvMacro` L758, `Refis` L12856, Curva S
+ *     L7864, Avanço Semanal L6723) já snapa para os valores
+ *     `previstoMspSnapshot`/`realizadoMspSnapshot` direto da raiz (paridade
+ *     absoluta com MSP — ZERO cálculo).
+ *   - L997-1006: label do botão Oficial vira **"📷 Snapshot MSP (DD/MM/AAAA)"**
+ *     exibindo a StatusDate real do XML. Tooltip explica que lê
+ *     Texto10/Texto7 direto, sem cálculo.
+ *
+ * Comportamento backward-compat:
+ *   - Sem XML importado (legado): `statusDateMSP=null` → cai em
+ *     `cutoffOficial` → fallback quinta — comportamento pré-2249 preservado.
+ *   - Modo Live (toggle) preservado: gestor pode forçar projeção
+ *     dinâmica entre fechamentos se precisar.
+ *
+ * Efeito imediato no projeto VITRA:
+ *   - Topo "Avanço Físico" agora exibe a foto do XML de 25/05/2026 (com
+ *     `previstoMspSnapshot` e `realizadoMspSnapshot` lidos diretamente da
+ *     raiz UID=0). Sem mais 6.40% calculado.
+ *   - REFIS BLOCO 2 (via Rev. 2248 `topRefStr`) herda a mesma data e o
+ *     mesmo snapshot — paridade caractere-por-caractere.
+ *
+ * Fases seguintes (próximas revs, sob demanda):
+ *   - Fase 2: REFIS BLOCO 2 mostrar "Snapshot" badge quando lendo do XML.
+ *   - Fase 3: Curva S virar histórico de imports (1 ponto por XML).
+ *   - Fase 4: Avanço Semanal idem.
+ *
+ * **R-001/R-007/R-010:** N/A (frontend only — sem schema/DB).
+ *
  * Rev. 2248 — **FIX/CONSISTÊNCIA (continuação 2247) · Unifica ABSOLUTAMENTE
  * a "régua" do Previsto Acumulado entre topo e BLOCO 2 do REFIS — agora
  * via `topRefStr` exposto pelo parent.**

@@ -516,9 +516,28 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
   // Data de referência efetiva: cutoff oficial OU today, conforme o modo.
   // Fallback client-side: se a query ainda não respondeu, computa a última
   // quinta-feira local, para o modo Oficial nunca cair em today por engano.
+  // Rev. 2249 — `statusDateMSP`: data do último XML importado (StatusDate gravada
+  // pelo MS Project). É a "data da foto" do snapshot Texto10/Texto7. Quando o
+  // refDateStr bate exatamente com esse valor, toda a matemática downstream
+  // (avancoPrevistoDia, avancoAtual, pvMacro, Refis, Curva S, Avanço Semanal)
+  // já snapa para os valores `previstoMspSnapshot`/`realizadoMspSnapshot` da
+  // raiz — paridade absoluta com o MSP, ZERO cálculo no ERP.
+  const statusDateMSP = useMemo(() => {
+    const cal = parseCalendarioJson((proj as any)?.calendarioJson);
+    return cal?.statusDateSnapshot ?? null;
+  }, [(proj as any)?.calendarioJson]);
+
   const refDateStr = useMemo(() => {
     const hojeBR = new Date().toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
     if (modoVisao === "oficial") {
+      // Rev. 2249 — Prioridade: StatusDate do XML > cutoffOficial DB > fallback.
+      // O user pediu (22/05/2026) "o módulo planejamento não pode fazer cálculos
+      // de % de avanço, ele deve ler totalmente o arquivo XML e trazer pra tela".
+      // Usar `statusDateMSP` aqui garante que refDateStr === statusDateSnapshot
+      // → todos os caminhos downstream usam o snapshot direto. cutoffOficial DB
+      // pode estar defasado (ex.: VITRA 04/12/2022 vs XML 25/05/2026) — esse
+      // descompasso era a causa raiz da divergência Topo×REFIS (Rev. 2247/2248).
+      if (statusDateMSP) return statusDateMSP;
       if (dataCorteInfo?.dataCorteOficial) return dataCorteInfo.dataCorteOficial;
       // Rev. 1647 — Fallback client-side respeita o dia de cutoff do projeto
       // (default qui=4). Antes assumia sempre quinta — quebraria projetos
@@ -531,7 +550,7 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
       return d.toISOString().slice(0, 10);
     }
     return hojeBR;
-  }, [modoVisao, dataCorteInfo?.dataCorteOficial, dataCorteInfo?.diaCorteSemana]);
+  }, [modoVisao, statusDateMSP, dataCorteInfo?.dataCorteOficial, dataCorteInfo?.diaCorteSemana]);
 
   // Rev. 1647 — Mutations para configurar o dia do cutoff e consolidar a
   // premissa (one-way lock). UI mora no header logo abaixo de "Fechar semana".
@@ -974,9 +993,13 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
                       </button>
                       <button type="button"
                         onClick={() => setModoVisao("oficial")}
-                        title="Oficial: cálculo congelado na última quinta fechada — IDÊNTICO ao que o cliente vê no Portal (Status Date PMBOK/EVM)."
+                        title={statusDateMSP
+                          ? `Snapshot MSP: lê EXATAMENTE os valores Texto10/Texto7 (% Previsto/Realizado) da foto tirada pelo MS Project em ${fmtBR(statusDateMSP)} — zero cálculo no ERP, paridade absoluta com o XML importado.`
+                          : "Oficial: cálculo congelado na última quinta fechada — IDÊNTICO ao que o cliente vê no Portal (Status Date PMBOK/EVM)."}
                         className={`px-2 py-1 border-l border-slate-200 ${modoVisao === "oficial" ? "bg-emerald-100 text-emerald-800" : "bg-white text-slate-500 hover:bg-slate-50"}`}>
-                        📌 Oficial ({fmtBR(dataCorteInfo.dataCorteOficial)})
+                        {statusDateMSP
+                          ? `📷 Snapshot MSP (${fmtBR(statusDateMSP)})`
+                          : `📌 Oficial (${fmtBR(dataCorteInfo.dataCorteOficial)})`}
                       </button>
                     </div>
                   )}
