@@ -12110,8 +12110,19 @@ function Compras({ projetoId, proj, utils, fmt, revisoes: revisoesAgendamento }:
 // ABA: REVISÕES
 // ═════════════════════════════════════════════════════════════════════════════
 function Revisoes({ projetoId, revisoes, revisaoAtiva, utils, isAdminMaster }: any) {
+  // Rev. 2250 — Auto-preenche o campo "Responsável" com o nome do usuário
+  // logado (engenheiro de planejamento). User: "o nome do engenheiro deve
+  // ser colocado automaticamente". Antes, o campo nascia vazio e exigia
+  // digitação manual a cada nova revisão.
+  const { user: revUser } = useAuth();
   const [modalAberto, setModalAberto] = useState(false);
-  const [form, setForm] = useState({ motivo: "", responsavel: "", dataRevisao: todayLocalISO(), observacao: "" });
+  const [form, setForm] = useState({ motivo: "", responsavel: revUser?.name ?? "", dataRevisao: todayLocalISO(), observacao: "" });
+  // Rev. 2250 — Sincroniza nome quando useAuth resolve após mount inicial.
+  useEffect(() => {
+    if (revUser?.name) {
+      setForm(f => f.responsavel ? f : { ...f, responsavel: revUser.name });
+    }
+  }, [revUser?.name]);
   const [arquivo, setArquivo] = useState<File | null>(null);
   const [tarefas, setTarefas] = useState<TarefaImportada[]>([]);
   const [parseErr, setParseErr] = useState<string | null>(null);
@@ -12219,7 +12230,8 @@ function Revisoes({ projetoId, revisoes, revisaoAtiva, utils, isAdminMaster }: a
 
   function fecharModal() {
     setModalAberto(false);
-    setForm({ motivo: "", responsavel: "", dataRevisao: todayLocalISO(), observacao: "" });
+    // Rev. 2250 — Reset preserva o nome do engenheiro logado.
+    setForm({ motivo: "", responsavel: revUser?.name ?? "", dataRevisao: todayLocalISO(), observacao: "" });
     setArquivo(null);
     setTarefas([]);
     setParseErr(null);

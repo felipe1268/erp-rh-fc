@@ -1,6 +1,33 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2250 — **UX · Modal "Nova Revisão do Cronograma" auto-preenche o
+ * campo Responsável com o nome do engenheiro logado.**
+ *
+ * User (22/05/2026, screenshot do modal aberto com Responsável vazio):
+ * "o nome do engenheiro deve ser colocado automaticamente". Antes, o campo
+ * nascia vazio (placeholder "Engenheiro") e exigia digitação manual a cada
+ * nova revisão — atrito desnecessário, e abria espaço pra inconsistência
+ * (engenheiro digitar nome diferente do que está cadastrado no perfil).
+ *
+ * Fix em `client/src/pages/planejamento/PlanejamentoDetalhe.tsx` (componente
+ * `Revisoes`):
+ *   - L2120: `const { user: revUser } = useAuth();` — hook já importado no
+ *     topo do arquivo (L7). Variável renomeada localmente p/ não colidir
+ *     com `user` no escopo pai.
+ *   - L2122: estado inicial de `form.responsavel` agora é
+ *     `revUser?.name ?? ""` (em vez de `""`).
+ *   - L2124-2128: novo `useEffect` resyncroniza o nome quando `useAuth`
+ *     resolve **depois** do mount inicial (login lento / refresh). Só
+ *     sobrescreve se o campo ainda estiver vazio — preserva edição manual
+ *     do user.
+ *   - L2237: `fecharModal` agora reseta para o nome do logado, não p/ vazio.
+ *
+ * Backward-compat total: se `useAuth` retornar `null` (sessão expirou /
+ * SSR), o campo cai em `""` e o user pode digitar manualmente igual antes.
+ *
+ * **R-001/R-007/R-010:** N/A (frontend only, sem schema/DB).
+ *
  * Rev. 2249 — **FEATURE/CONSISTÊNCIA · Topo "Avanço Físico" agora lê DIRETO
  * o snapshot do XML do MSP (Texto10/Texto7) em vez de calcular sobre cutoff
  * defasado — Fase 1 do "ERP só lê, não calcula" (Topo).**
