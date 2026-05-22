@@ -279,32 +279,11 @@ export default function PainelSST() {
                   </CardContent>
                 </Card>
 
-                {/* Advertências Recentes (disciplinar/segurança) */}
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm flex items-center gap-2">
-                      <AlertTriangle className="h-4 w-4 text-orange-500" />
-                      Ocorrências de Segurança
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    {(homeData?.advertenciasRecentes?.length ?? 0) > 0 ? (
-                      <div className="space-y-1 max-h-48 overflow-y-auto">
-                        {homeData!.advertenciasRecentes!.map((a: any) => (
-                          <div key={a.id} className="flex items-center justify-between text-xs px-2 py-1.5 rounded hover:bg-accent/50">
-                            <span className="font-medium">{a.nome}</span>
-                            <div className="flex items-center gap-2">
-                              <Badge variant="outline" className="text-[10px]">{a.tipo}</Badge>
-                              <span className="text-muted-foreground text-[10px]">{a.data ? new Date(a.data + "T00:00:00").toLocaleDateString("pt-BR") : ""}</span>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="text-xs text-muted-foreground">Nenhuma ocorrência recente</p>
-                    )}
-                  </CardContent>
-                </Card>
+                {/* Rev. 2246 — Card "Ocorrências de Segurança" REMOVIDO.
+                    Listava advertências disciplinares (verbal/escrita) com nome
+                    do colaborador — dado pessoal/RH que não deve aparecer
+                    aberto no Painel SST. Quem tiver acesso ao módulo CIPA ou
+                    Advertências consulta direto lá. */}
               </div>
 
               {/* Rev. 2245 — Card "Atividade Recente - SST" REMOVIDO.

@@ -1,6 +1,29 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2246 — **PRIVACY/UX · Removido o card "Ocorrências de Segurança" do
+ * Painel SST — listava advertências disciplinares (verbal/escrita) com
+ * nome do colaborador exposto.**
+ *
+ * User (screenshot mobile): "Tire este aqui tbm" — card mostrava lista
+ * "MARIANA CASTILHO DE LIMA · Verbal · 19/05/2026", "ALEX ALESSANDRO
+ * MONTEIRO DA SILVA · Escrita · 23/04/2026" etc.
+ *
+ * Continuação direta da Rev. 2245 (que tirou o card de despesas). Mesmo
+ * princípio: o Painel SST é um portal operacional (entrega EPI, ASO,
+ * CIPA, dashboards) e não deve exibir dado nominal de RH/disciplinar
+ * aberto na home. Quem precisa consultar advertências vai pelo módulo
+ * próprio (CIPA / Advertências) com seus controles de permissão.
+ *
+ * Fix em `client/src/pages/PainelSST.tsx`:
+ *   - Removido o bloco `<Card>` "Ocorrências de Segurança" (L282-307).
+ *   - A query `homeData.advertenciasRecentes` **permanece** porque ainda
+ *     alimenta o agregado "Alertas Críticos" (FullScreenDialog) — lá os
+ *     itens entram numa lista filtrável e priorizada, não num feed
+ *     bruto.
+ *
+ * **R-001/R-007/R-010:** N/A (frontend only).
+ *
  * Rev. 2245 — **SECURITY/UX · Removido o card "Atividade Recente - SST" do
  * Painel SST — vazava lançamentos financeiros pra dentro de um módulo
  * operacional que não deveria ver nada de R$.**
