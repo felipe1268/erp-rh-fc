@@ -12587,10 +12587,17 @@ function Revisoes({ projetoId, revisoes, revisaoAtiva, utils, isAdminMaster, pro
                   onChange={e => setForm(f => ({...f, dataRevisao: e.target.value}))} className="mt-1" />
               </div>
               <div>
-                <Label className="text-xs">Responsável</Label>
-                <Input value={form.responsavel}
-                  onChange={e => setForm(f => ({...f, responsavel: e.target.value}))}
-                  placeholder="Engenheiro" className="mt-1" />
+                {/* Rev. 2253 — campo FIXO (readOnly) com o engenheiro
+                    responsável do cadastro da obra. User não pode editar —
+                    garante consistência com o cadastro. */}
+                <Label className="text-xs">Responsável (do cadastro)</Label>
+                <Input
+                  value={projetoResponsavel || "—"}
+                  readOnly
+                  tabIndex={-1}
+                  className="mt-1 bg-slate-100 text-slate-700 cursor-not-allowed focus-visible:ring-0"
+                  title="Engenheiro responsável definido no cadastro da obra. Para alterar, edite a obra em Obras → Editar."
+                />
               </div>
             </div>
 

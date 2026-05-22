@@ -1,6 +1,34 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2253 — **UX · Campo "Responsável" do modal "Nova Revisão" vira
+ * FIXO (readOnly) — sempre exibe o engenheiro do cadastro da obra.**
+ *
+ * User (22/05/2026, pós-2252): "AINDA NÃO FOI ALTERADO, E NÃO PRECISA
+ * DEIXAR DIGITAR DEVE DEIXAR O NOME FIXADO DO RESPONSÁVEL CONFORME O
+ * CADASTRO DA OBRA". A 2252 já lia o campo correto (`engenheiroResponsavel`),
+ * mas o input continuava editável — abria risco de digitação divergente
+ * do cadastro. Decisão: travar o campo.
+ *
+ * Fix em `client/src/pages/planejamento/PlanejamentoDetalhe.tsx` L12592-12604:
+ *   - Label muda pra "Responsável (do cadastro)" — sinal visual de origem.
+ *   - `value={projetoResponsavel || "—"}` — bind direto ao prop, não ao
+ *     `form.responsavel` (descarta qualquer estado local divergente).
+ *   - `readOnly`, `tabIndex={-1}`, classes `bg-slate-100 text-slate-700
+ *     cursor-not-allowed focus-visible:ring-0` — visual claramente
+ *     desabilitado.
+ *   - `title` (tooltip) explica: "Engenheiro responsável definido no
+ *     cadastro da obra. Para alterar, edite a obra em Obras → Editar."
+ *
+ * `form.responsavel` ainda existe no state (init + useEffect da 2251)
+ * para o submit — value mostrado é sempre `projetoResponsavel`, então
+ * o que vai pro backend é coerente com o cadastro.
+ *
+ * Sem cadastro: exibe "—" e backend recebe `""` (gestor edita a obra
+ * antes de fazer a revisão).
+ *
+ * **R-001/R-007/R-010:** N/A (frontend only).
+ *
  * Rev. 2252 — **FIX · Modal "Nova Revisão" agora lê `obra.engenheiroResponsavel`
  * (campo correto do cadastro), não o legado `proj.responsavel`.**
  *

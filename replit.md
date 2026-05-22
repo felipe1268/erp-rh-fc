@@ -50,16 +50,16 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 2253** — **UX · Campo "Responsável" do modal "Nova Revisão" vira FIXO (readOnly) — sempre exibe o engenheiro do cadastro da obra.** User (22/05/2026, pós-2252): "AINDA NÃO FOI ALTERADO, E NÃO PRECISA DEIXAR DIGITAR DEVE DEIXAR O NOME FIXADO". 2252 já lia o campo correto (`engenheiroResponsavel`), mas input continuava editável → risco de divergência. Fix em `PlanejamentoDetalhe.tsx` L12592-12604: label "Responsável (do cadastro)"; `value={projetoResponsavel || "—"}` bindado direto ao prop (não ao state); `readOnly` + `tabIndex={-1}` + classes `bg-slate-100 text-slate-700 cursor-not-allowed`; `title` tooltip "Para alterar, edite a obra em Obras → Editar". `form.responsavel` segue no state pro submit (mesmo valor do cadastro). Sem cadastro: mostra "—". **R-001/R-007/R-010:** N/A (frontend only).
 - **Rev. 2252** — **FIX · Modal "Nova Revisão" lê `obra.engenheiroResponsavel` (campo correto do cadastro), não o legado `proj.responsavel`.** User (22/05/2026, screenshot "Editar Obra"): "o cadastro da obra, o responsável está como Anderson". Rev. 2251 lia `proj.responsavel` (legado desatualizado, vinha com nome do criador). O campo canônico é `obra.engenheiroResponsavel` (combobox vinculado a colaboradores RH), já usado em outros pontos (L1327 ProgSemanal, PortalCliente). Fix em `PlanejamentoDetalhe.tsx` L1221: `projetoResponsavel={(proj as any)?.obra?.engenheiroResponsavel ?? (proj as any)?.responsavel ?? ""}` — fallback igual ao L1327. **R-001/R-007/R-010:** N/A (frontend only).
-- **Rev. 2251** — **UX/FIX · Modal "Nova Revisão do Cronograma" auto-preenche Responsável com o ENGENHEIRO RESPONSÁVEL DA OBRA (cadastro), não com o usuário logado.** User (22/05/2026, pós-2250): "tem que ser o engenheiro responsável da obra, que está no cadastro." Correção da 2250 — o "Responsável" da revisão é o engenheiro do projeto (`proj.responsavel`, já mostrado no header), não quem opera o upload. Fix em `PlanejamentoDetalhe.tsx`: prop `projetoResponsavel={proj?.responsavel ?? ""}` passada pro `<Revisoes />` (L1218); componente `Revisoes` remove `useAuth()` local; estado inicial `form.responsavel = projetoResponsavel ?? ""`; `useEffect` resyncroniza quando query do projeto resolve (só preenche se vazio); `fecharModal` reseta pro responsável do cadastro. Refinada em 2252 (campo correto = `obra.engenheiroResponsavel`). **R-001/R-007/R-010:** N/A (frontend only).
 
 ### Revisões recentes (one-liners)
 
-- ~~Rev. 2250~~ — UX · Modal "Nova Revisão" auto-preenche Responsável com nome do usuário logado. Substituída pela 2251/2252. Ver `shared/changelog.ts`.
+- ~~Rev. 2251~~ — UX/FIX · Modal "Nova Revisão" auto-preenche Responsável com engenheiro do cadastro (1ª tentativa, lia `proj.responsavel` legado). Refinada em 2252/2253. Ver `shared/changelog.ts`.
+- ~~Rev. 2250~~ — UX · Modal "Nova Revisão" auto-preenche Responsável com nome do usuário logado. Substituída pela 2251/2252/2253. Ver `shared/changelog.ts`.
 - ~~Rev. 2249~~ — FEATURE/CONSISTÊNCIA · Topo "Avanço Físico" lê DIRETO snapshot XML MSP (Texto10/Texto7) — Fase 1 pivot "ERP só lê, não calcula". Ver `shared/changelog.ts`.
 - ~~Rev. 2248~~ — FIX/CONSISTÊNCIA · Unifica ABSOLUTAMENTE régua topo↔REFIS via `topRefStr` no parent. Ver `shared/changelog.ts`.
 - ~~Rev. 2247~~ — FIX/CONSISTÊNCIA (1ª tentativa) · Unifica régua Previsto Acumulado topo↔REFIS via `refDateTop`. Insuficiente — corrigido em 2248. Ver `shared/changelog.ts`.
-- ~~Rev. 2246~~ — PRIVACY/UX · Removido card "Ocorrências de Segurança" do Painel SST (vazava advertências disciplinares com nome). Ver `shared/changelog.ts`.
 
 ### REGRA DE OURO — Cabeçalho de documentos institucionais FC (Rev. 2106+)
 
