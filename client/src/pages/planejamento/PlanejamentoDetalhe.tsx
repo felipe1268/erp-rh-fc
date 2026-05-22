@@ -6748,6 +6748,13 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
       // por eapCodigo pra cronogramas legados sem mspUid persistido.
       const percentByUid: Record<string, number> = {};
       const percentByEap: Record<string, number> = {};
+      // Rev. 2243 — Matching por nome (último fallback): permite casar
+      // atividades sem UID e sem Item. Guarda só nomes ÚNICOS no XML
+      // (se colide, vira inválido pra evitar match ambíguo).
+      const uidByEap: Record<string, string> = {};
+      const uidByNome: Record<string, string | null> = {};
+      const pctByUid:  Record<string, number> = {};
+      const normNome = (s: string) => (s ?? "").toString().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLowerCase().replace(/\s+/g, " ");
       let srcTexto7  = 0;
       let srcDurNat  = 0;
       let srcPctNat  = 0;
@@ -6825,6 +6832,16 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
           // Rev. 2235 — popula AMBOS os maps. Matching prioriza UID.
           percentByUid[uid] = pct;
           if (eap) percentByEap[eap] = pct;
+          // Rev. 2243 — índices auxiliares para backfill de msp_uid e
+          // matching por nome (3º fallback).
+          pctByUid[uid] = pct;
+          if (eap) uidByEap[eap] = uid;
+          const nomeXml = (task.querySelector("Name")?.textContent ?? "").trim();
+          const k = normNome(nomeXml);
+          if (k) {
+            if (k in uidByNome) uidByNome[k] = null; // colisão → inválido
+            else uidByNome[k] = uid;
+          }
         });
       } else if (["xlsx", "xls", "xlsm"].includes(ext)) {
         const buf     = await file.arrayBuffer();
@@ -6857,25 +6874,58 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
       // isIndireta=true via Padrão FC. Antes (`folhas`) elas saíam do laço
       // de matching e nunca recebiam %.
       const newLocal: Record<number, number> = {};
-      let matchUid = 0, matchEap = 0, semMatch = 0;
+      let matchUid = 0, matchEap = 0, matchNome = 0, semMatch = 0;
       const semMatchNomes: string[] = [];
       // Rev. 2237 — guarda referência à atividade pra distribuição multi-semana
       const matched: Array<{ a: any; pct: number }> = [];
+      // Rev. 2243 — Pares pra backfill de msp_uid (atividades que casaram
+      // por eapCodigo ou nome mas estão com mspUid null no banco).
+      const backfillPares: Array<{ atividadeId: number; mspUid: string }> = [];
       folhasComInd.forEach((a: any) => {
         const uidA = (a.mspUid ?? "").toString().trim();
         const eapA = (a.eapCodigo ?? "").toString().trim();
+        const nomeA = normNome(a.nome ?? "");
         let pct: number | undefined;
-        if (uidA && percentByUid[uidA] !== undefined) { pct = percentByUid[uidA]; matchUid++; }
-        else if (eapA && percentByEap[eapA] !== undefined) { pct = percentByEap[eapA]; matchEap++; }
+        let uidViaFallback = "";
+        if (uidA && percentByUid[uidA] !== undefined) {
+          pct = percentByUid[uidA]; matchUid++;
+        } else if (eapA && percentByEap[eapA] !== undefined) {
+          pct = percentByEap[eapA]; matchEap++;
+          if (!uidA && uidByEap[eapA]) uidViaFallback = uidByEap[eapA];
+        } else if (nomeA && uidByNome[nomeA] && pctByUid[uidByNome[nomeA] as string] !== undefined) {
+          // 3º fallback: nome único no XML (Rev. 2243)
+          const u = uidByNome[nomeA] as string;
+          pct = pctByUid[u]; matchNome++;
+          if (!uidA) uidViaFallback = u;
+        }
         if (pct !== undefined) {
           const clamped = Math.min(100, Math.max(0, pct));
           newLocal[a.id] = clamped;
           matched.push({ a, pct: clamped });
+          if (uidViaFallback) backfillPares.push({ atividadeId: a.id, mspUid: uidViaFallback });
         } else {
           semMatch++;
           if (semMatchNomes.length < 5) semMatchNomes.push(`${eapA || "(sem Item)"} — ${(a.nome ?? "").slice(0, 50)}`);
         }
       });
+
+      // Rev. 2243 — Dispara backfill em paralelo (não bloqueia a UI). Próxima
+      // importação já casa direto por UID e some o "Importar MO" como pré-req.
+      let backfillAtualizados = 0;
+      if (backfillPares.length > 0) {
+        try {
+          const r = await backfillUidMutation.mutateAsync({
+            projetoId,
+            pares: backfillPares,
+          });
+          backfillAtualizados = r?.atualizados ?? 0;
+          if (backfillAtualizados > 0) {
+            utils.planejamento.listarAtividades.invalidate();
+          }
+        } catch (e) {
+          console.error("[importarDoMSProject] backfill msp_uid falhou:", e);
+        }
+      }
       const count = Object.keys(newLocal).length;
       setAvancoLocal(prev => ({ ...prev, ...newLocal }));
 
@@ -7001,7 +7051,7 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
       }
 
       const breakdown = ext === "xml"
-        ? ` (${matchUid} via UID${matchEap ? ` · ${matchEap} via Item` : ""}${semMatch ? ` · ${semMatch} sem correspondência` : ""}; fontes: ${srcTexto7} %Reali AUX, ${srcDurNat} Duração Real, ${srcPctNat} %Concluído${srcVazio ? `, ${srcVazio} sem dado` : ""})`
+        ? ` (${matchUid} via UID${matchEap ? ` · ${matchEap} via Item` : ""}${matchNome ? ` · ${matchNome} via nome` : ""}${semMatch ? ` · ${semMatch} sem correspondência` : ""}; fontes: ${srcTexto7} %Reali AUX, ${srcDurNat} Duração Real, ${srcPctNat} %Concluído${srcVazio ? `, ${srcVazio} sem dado` : ""}${backfillAtualizados ? `; 🔗 ${backfillAtualizados} msp_uid gravado(s)` : ""})`
         : "";
       const aviso = semMatch > 0 ? ` ⚠️ ${semMatch} atividade(s) sem match — ex.: ${semMatchNomes.slice(0, 3).join("; ")}.` : "";
       const autoMsg = semanasAutoSalvas > 0
@@ -7048,6 +7098,9 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
     },
     onError: (e) => toast.error(`Erro ao salvar avanços: ${e.message}`),
   });
+
+  // Rev. 2243 — backfill de msp_uid disparado pelo importer do Avanço Semanal
+  const backfillUidMutation = trpc.planejamento.backfillMspUid.useMutation();
 
   const limparMutation = trpc.planejamento.limparAvancos.useMutation({
     onSuccess: () => {

@@ -1,6 +1,70 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2243 — **FIX/UX · "Importar MS Project" do Avanço Semanal agora
+ * casa por NOME (3º fallback) e faz BACKFILL automático de `msp_uid`
+ * no banco — fim da dependência de reimportar o cronograma completo.**
+ *
+ * User: "mas pq vc quer isso? so quero importar o MSproject". Razão:
+ * a solução proposta na Rev. 2241/2242 exigia que o user clicasse no
+ * botão verde "Importar MS Project" (componente `ImportarCronograma`
+ * do topo) ANTES do botão azul "Importar MS Project" (importer do
+ * Avanço Semanal) pra popular `msp_uid` nas atividades legadas. Dois
+ * botões com o MESMO NOME, fluxo de 2 cliques pra 1 ação intuitiva.
+ * UX inaceitável.
+ *
+ * Solução desta rev. — o importer do Avanço Semanal se vira sozinho:
+ *
+ * 1. **Backend** (`server/routers/planejamento.ts`, após
+ *    `salvarAvancoLote`): nova mutation `backfillMspUid({ projetoId,
+ *    pares: [{ atividadeId, mspUid }] })`. UPDATE em lote (chunks de
+ *    50, paralelo) com `WHERE msp_uid IS NULL` — JAMAIS sobrescreve
+ *    UID já gravado (idempotente e seguro contra cronograma já
+ *    correto). Retorna `{ atualizados: N }`.
+ *
+ * 2. **Frontend** (`PlanejamentoDetalhe.tsx`, função
+ *    `importarDoMSProject`):
+ *
+ *    a. **Parser XML** (L6754-6847) — além de `percentByUid` e
+ *       `percentByEap`, agora popula:
+ *         - `uidByEap[eap] = uid` (pra recuperar UID quando match
+ *           foi via Item)
+ *         - `uidByNome[normNome(name)] = uid` ou `null` se colidir
+ *           (proteção contra match ambíguo — nomes repetidos no XML
+ *           ficam inválidos pro 3º fallback)
+ *         - `pctByUid[uid] = pct` (espelho de `percentByUid` usado no
+ *           3º fallback)
+ *       `normNome` = NFD + remove acentos + lowercase + collapse
+ *       whitespace.
+ *
+ *    b. **Matching loop** (L6887-6913) — ordem ampliada:
+ *         1. por `mspUid` (existente, ideal)
+ *         2. por `eapCodigo` (existente, legado)
+ *         3. **NOVO** por `nome` normalizado (apenas se único no XML)
+ *       Quando 2 ou 3 acertam E a atividade NÃO tem `mspUid`,
+ *       acumula `{ atividadeId, mspUid: uidViaFallback }` em
+ *       `backfillPares`.
+ *
+ *    c. **Mutation** (L6917-6931) — dispara `backfillUidMutation`
+ *       declarada como hook tRPC (L7105-7106). Em sucesso invalida
+ *       `listarAtividades` cache. Falha é não-fatal (catch + console).
+ *       Próxima importação já casa via UID direto.
+ *
+ *    d. **Toast** (L7057) — adiciona contador `· N via nome` e
+ *       sufixo `; 🔗 N msp_uid gravado(s)` quando aplicável, pra
+ *       user enxergar o auto-healing acontecendo.
+ *
+ * Resultado esperado no caso VITRA (relatório user, ERP 6.80% vs MSP
+ * 9% antes da Rev. 2241): das 201 folhas sem UID, espera-se que a
+ * grande maioria case agora por NOME (cronograma curado pela MSP é
+ * consistente nos nomes). Após primeiro click no botão azul:
+ *   - Avanço atualiza imediatamente (efeito visível).
+ *   - `msp_uid` grava no banco em background (cura permanente).
+ *   - Importações futuras casam 100% via UID direto.
+ *
+ * **R-001/R-007/R-010:** UPDATE com WHERE composto por id+projetoId
+ * +mspUid IS NULL — atômico, idempotente, não destrutivo.
+ *
  * Rev. 2242 — **FEATURE/DEFESA · Alerta visível de drift `msp_uid` no
  * importer MSP (follow-up Rev. 2241).** User: "sim" à proposta de trava
  * que avisaria antes do sintoma se o drift drizzle↔DB do `msp_uid`

@@ -1988,6 +1988,43 @@ export const planejamentoRouter = router({
       return { success: true, total: input.itens.length };
     }),
 
+  // Rev. 2243 — Backfill de msp_uid: chamado pelo "Importar MS Project" do
+  // Avanço Semanal quando ele consegue casar atividades por eapCodigo ou
+  // por nome mas o `msp_uid` ainda está null no banco (cronogramas antigos
+  // importados antes da Rev. 1829 quando msp_uid nem existia). Só atualiza
+  // onde o valor atual é NULL — JAMAIS sobrescreve UID já gravado.
+  backfillMspUid: protectedProcedure
+    .input(z.object({
+      projetoId: z.number(),
+      pares: z.array(z.object({
+        atividadeId: z.number(),
+        mspUid:      z.string().min(1).max(20),
+      })),
+    }))
+    .mutation(async ({ input }) => {
+      if (input.pares.length === 0) return { atualizados: 0 };
+      const db = await getDb();
+      let atualizados = 0;
+      const chunkSize = 50;
+      for (let i = 0; i < input.pares.length; i += chunkSize) {
+        const lote = input.pares.slice(i, i + chunkSize);
+        const results = await Promise.all(
+          lote.map(p =>
+            db.update(planejamentoAtividades)
+              .set({ mspUid: p.mspUid })
+              .where(and(
+                eq(planejamentoAtividades.id, p.atividadeId),
+                eq(planejamentoAtividades.projetoId, input.projetoId),
+                sql`${planejamentoAtividades.mspUid} IS NULL`,
+              ))
+              .returning({ id: planejamentoAtividades.id })
+          )
+        );
+        atualizados += results.reduce((s, r) => s + r.length, 0);
+      }
+      return { atualizados };
+    }),
+
   // ── REFIS ─────────────────────────────────────────────────────────────────
   listarRefis: protectedProcedure
     .input(z.object({ projetoId: z.number() }))
