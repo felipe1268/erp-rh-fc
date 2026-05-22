@@ -1,6 +1,36 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2245 — **SECURITY/UX · Removido o card "Atividade Recente - SST" do
+ * Painel SST — vazava lançamentos financeiros pra dentro de um módulo
+ * operacional que não deveria ver nada de R$.**
+ *
+ * User (screenshot mobile): card "Atividade Recente - SST" mostrava
+ * "despesa R$5000 - PRO LABORE - JULIO FERRAZ", "despesa R$600 -
+ * ALUGUEL DE EQUIPAMENTO", "despesa R$0.9 - DESPESAS BANCÁRIAS",
+ * "Conta AUTO-0050 - DESPESAS BANCÁRIAS" etc. → "tire este card,
+ * não pode ter informações financeiras aqui... remova isso".
+ *
+ * Causa: o card consumia `trpc.audit.list` SEM filtro de módulo — o
+ * feed de auditoria é GLOBAL, então qualquer ação registrada
+ * (financeiro, planejamento, RH, compras) aparecia ali pra qualquer
+ * admin que abrisse o Painel SST. O título "Atividade Recente - SST"
+ * era enganoso e o conteúdo violava o princípio de segregação de
+ * módulos (admin de SST não precisa ver despesas).
+ *
+ * Fix em `client/src/pages/PainelSST.tsx`:
+ *   - Removido o bloco `<Card>` inteiro (L316-343 originais).
+ *   - Removida a query `trpc.audit.list.useQuery` (L44-47).
+ *   - Removidos imports não-usados: ícone `Activity` (lucide-react)
+ *     e helper `formatDateTime` de `@/lib/dateUtils`.
+ *
+ * Demais cards do painel ("Alertas Críticos", "Ocorrências Disciplinares",
+ * "Acesso Rápido") permanecem intactos. Se no futuro quiserem um feed
+ * de atividade SST real, precisa de um endpoint NOVO filtrando audit
+ * por módulo (`module IN ('epi','aso','cipa','controle-documentos')`).
+ *
+ * **R-001/R-007/R-010:** N/A (frontend only; nenhuma query SQL afetada).
+ *
  * Rev. 2244 — **FIX/TZ · `todayLocalISO()` substitui `new Date().toISOString()
  * .split("T")[0]` em TODO o `PlanejamentoDetalhe.tsx` — bug de timezone que
  * adiantava "ATUAL" e datas-padrão em ~3h no Brasil (UTC-3).**

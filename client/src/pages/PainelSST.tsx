@@ -11,10 +11,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { trpc } from "@/lib/trpc";
 import {
   Shield, HardHat, HeartPulse, FileWarning, AlertTriangle,
-  ChevronRight, BarChart3, ShieldCheck, ClipboardList, Activity,
+  ChevronRight, BarChart3, ShieldCheck, ClipboardList,
   Clock, Users, Search, Filter, X, UserPlus, Camera, Fingerprint
 } from "lucide-react";
-import { formatDateTime } from "@/lib/dateUtils";
 import { useLocation } from "wouter";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useState, useMemo } from "react";
@@ -41,11 +40,6 @@ export default function PainelSST() {
     { companyId: queryCompanyId, ...(isConstrutoras ? { companyIds } : {}) },
     { enabled: hasValidCompany }
   );
-  const { data: logs } = trpc.audit.list.useQuery(
-    { companyId: queryCompanyId, limit: 6, ...(isConstrutoras ? { companyIds } : {}) },
-    { enabled: hasValidCompany }
-  );
-
   const s = homeData?.stats;
   const totalAlertasSST = (s?.asosVencidos ?? 0) + (s?.asosVencendo ?? 0) + (s?.semAso ?? 0);
 
@@ -313,34 +307,10 @@ export default function PainelSST() {
                 </Card>
               </div>
 
-              {/* Atividade Recente - apenas para admins */}
-              {(isAdminMaster || user?.role === 'admin') && <Card>
-                <CardHeader className="pb-2">
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="text-sm flex items-center gap-2">
-                      <Activity className="h-4 w-4 text-emerald-500" />
-                      Atividade Recente - SST
-                    </CardTitle>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  {!logs || logs.length === 0 ? (
-                    <p className="text-xs text-muted-foreground">Nenhuma atividade registrada</p>
-                  ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                      {logs.map((log: any) => (
-                        <div key={log.id} className="flex items-start gap-2 text-xs">
-                          <div className={`h-1.5 w-1.5 rounded-full mt-1.5 shrink-0 ${log.action === "DELETE" ? "bg-red-500" : log.action === "CREATE" ? "bg-green-500" : "bg-blue-500"}`} />
-                          <div className="min-w-0 flex-1">
-                            <p className="text-foreground truncate">{log.details}</p>
-                            <p className="text-[10px] text-muted-foreground">{log.userName} · {formatDateTime(log.createdAt)}</p>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>}
+              {/* Rev. 2245 — Card "Atividade Recente - SST" REMOVIDO.
+                  Vazava lançamentos financeiros (despesa R$, Pro Labore, Aluguel,
+                  Despesas Bancárias) do feed global de auditoria pra um painel
+                  que deve ser exclusivamente operacional/SST. */}
 
               {/* Acesso Rápido SST - filtrado por permissões do grupo */}
               <div>
