@@ -1,6 +1,28 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2252 — **FIX · Modal "Nova Revisão" agora lê `obra.engenheiroResponsavel`
+ * (campo correto do cadastro), não o legado `proj.responsavel`.**
+ *
+ * User (22/05/2026, screenshot do "Editar Obra" mostrando "Engenheiro /
+ * Responsável: ANDERSON DOS ANJOS ALKMIN"): "o cadastro da obra, o
+ * responsável está como Anderson". A Rev. 2251 lia `proj.responsavel` —
+ * campo legado/desatualizado que vinha com o nome do usuário criador
+ * ("Felipe Costa Alves") em vez do engenheiro cadastrado.
+ *
+ * O campo canônico é `obra.engenheiroResponsavel` (combobox vinculado a
+ * colaboradores RH desde rev. antiga — ver changelog L20524). O mesmo
+ * padrão já é usado em outros pontos do `PlanejamentoDetalhe.tsx`
+ * (L1327 da ProgramacaoSemanal) e `PortalPlanejamentoCliente.tsx`.
+ *
+ * Fix em `client/src/pages/planejamento/PlanejamentoDetalhe.tsx` L1221:
+ * `projetoResponsavel={(proj as any)?.obra?.engenheiroResponsavel ??
+ * (proj as any)?.responsavel ?? ""}` — mesmo fallback do L1327
+ * (engenheiroResponsavel primeiro, responsavel legado segundo, vazio
+ * último).
+ *
+ * **R-001/R-007/R-010:** N/A (frontend only).
+ *
  * Rev. 2251 — **UX/FIX · Modal "Nova Revisão do Cronograma" auto-preenche
  * Responsável com o ENGENHEIRO RESPONSÁVEL DA OBRA (cadastro do projeto),
  * não com o usuário logado.**

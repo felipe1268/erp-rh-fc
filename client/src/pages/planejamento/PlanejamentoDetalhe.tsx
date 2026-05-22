@@ -1215,7 +1215,7 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
             revisaoAtiva={revisaoAtiva}
             utils={utils}
             isAdminMaster={isAdminMaster}
-            projetoResponsavel={proj?.responsavel ?? ""}
+            projetoResponsavel={(proj as any)?.obra?.engenheiroResponsavel ?? (proj as any)?.responsavel ?? ""}
           />
         )}
         {canViewTab(aba) && aba === "refis" && (
