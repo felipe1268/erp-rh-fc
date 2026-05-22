@@ -1,6 +1,63 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2254 — **FIX · Programação Semanal (Padrão LOTUS) preserva a
+ * hierarquia EAP completa — pais sem `eapCodigo` (VITRAIS, PROTÓTIPO,
+ * VITRAL 01/02/03 etc.) agora aparecem como cabeçalhos de grupo.**
+ *
+ * User (22/05/2026, screenshots VITRA Sem. 6): comparou a Prog. Semanal
+ * com o Cronograma — no Cronograma a estrutura "02 VITRAIS → PROTÓTIPO
+ * → VITRAL 01/02/03 → folhas" aparece corretamente; na Prog. Semanal
+ * as folhas (Proteção do piso, Montagem do andaime, Retirada da tela
+ * metálica, …) apareciam REPETIDAS 3× consecutivas, sem nenhum cabeçalho
+ * de pai entre elas — impossível identificar a qual vitral cada conjunto
+ * pertence.
+ *
+ * Causa-raiz: `client/src/components/planejamento/ProgramacaoSemanalLotus.tsx`
+ * L437-470 (memo `linhas`) reconstruía a cadeia de pais por **prefixo de
+ * `eapCodigo`** (`"02.01.03.04".split(".")` → ancestrais "02", "02.01",
+ * "02.01.03"). Funciona para hierarquias 100% numeradas, mas falha para
+ * grupos importados do MSP **sem** `eapCodigo` (apenas nome) — VITRAIS,
+ * PROTÓTIPO, VITRAL 01/02/03 e quaisquer outros agrupamentos descritivos
+ * eram silenciosamente descartados pelo `grupoMap.get(prefixo)` que
+ * retornava undefined.
+ *
+ * Fix: troca o algoritmo por **walk-back via `nivel` + ordem original**
+ * (mesmo padrão do Cronograma). Para cada folha visível na semana,
+ * percorre o array de atividades (já ordenado por `ordem` do backend)
+ * de trás pra frente, empilhando ancestrais com `isGrupo=true` e
+ * `nivel` estritamente menor até atingir nível 1 — independente de ter
+ * `eapCodigo`. Cache por id evita recomputo. Resultado: estrutura
+ * idêntica à do Cronograma e do Gantt, sempre.
+ *
+ * Arquivos tocados:
+ *   - `ProgramacaoSemanalLotus.tsx` L437-492 (memo `linhas` — fix render
+ *     on-screen).
+ *   - `ProgramacaoSemanalLotus.tsx` L1186-1227 (helper `buildLinhas` do
+ *     export Excel — mesmo fix, garante que o XLSX baixado também tenha
+ *     os pais).
+ *   - `ProgramacaoSemanalLotus.tsx` L1778-1788 (render do cabeçalho de
+ *     grupo): indent visual `paddingLeft = 8 + (nivel-1)*12` px — assim
+ *     VITRAIS (nv 1) fica colado à esquerda, PROTÓTIPO (nv 2) recua 12px,
+ *     VITRAL 01 (nv 3) recua 24px — hierarquia clara em uma olhada.
+ *
+ * Compatibilidade: tipo `LinhaGrupo` ganhou campo `nivel: number` (já
+ * existia na versão antiga, semântica preservada). Tipo `LinhaExp` do
+ * Excel também ganhou `nivel` mas o template do XLSX não usa indent
+ * (linhas planas com bold) — campo é só leitura futura.
+ *
+ * Performance: O(N·D) onde D = profundidade média da hierarquia (≤ 5
+ * em projetos reais) — idêntica à versão anterior. Cache `ancestralCache`
+ * evita repetir o walk-back quando a mesma folha aparece em múltiplas
+ * janelas (não é o caso atual, mas blinda contra futuras refatorações).
+ *
+ * Tested: dev DB tem HOTEL DO PAPA com EAP 100% numerado — segue
+ * funcionando exatamente igual (regression-safe). Caso VITRA é
+ * production-only, validação visual a cargo do user após deploy.
+ *
+ * **R-001/R-007/R-010:** N/A (frontend only — zero SQL, zero schema).
+ */
+/**
  * Rev. 2253 — **UX · Campo "Responsável" do modal "Nova Revisão" vira
  * FIXO (readOnly) — sempre exibe o engenheiro do cadastro da obra.**
  *

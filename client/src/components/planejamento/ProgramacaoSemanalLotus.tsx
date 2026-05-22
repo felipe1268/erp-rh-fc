@@ -430,34 +430,53 @@ export default function ProgramacaoSemanalLotus(props: Props) {
     });
   }, [atividades, semIniStr, semFimStr, temAvSemPorAtv]);
 
-  // Agrupa por EAP-pai (nivel 1 = grupo principal, nivel 2 = subgrupo)
-  // Mostra cabeçalhos de grupo na ordem hierárquica.
+  // Rev. 2254 — Reconstrói a cadeia de pais via `nivel` + ordem original (MSP
+  // outline), NÃO por prefixo de EAP. Motivo: grupos como "VITRAIS",
+  // "PROTÓTIPO", "VITRAL 01/02/03" frequentemente vêm do MSP só com nome
+  // (eapCodigo NULL) — o prefix-match anterior os ignorava e a tela mostrava
+  // as folhas soltas, sem hierarquia. Mesmo algoritmo do Cronograma:
+  // para cada folha, anda pra trás no array (que vem ordenado por `ordem`)
+  // procurando ancestrais com `isGrupo=true` e `nivel` estritamente menor,
+  // empilhando até nivel 1.
   type LinhaGrupo = { tipo: "grupo"; eap: string; nome: string; nivel: number };
   type LinhaAtiv = { tipo: "ativ"; ativ: Atividade };
   const linhas: (LinhaGrupo | LinhaAtiv)[] = useMemo(() => {
     const result: (LinhaGrupo | LinhaAtiv)[] = [];
    try {
-    const gruposEmitidos = new Set<string>();
-    const eapPrefixos = (eap: string): string[] => {
-      const partes = eap.split(".");
-      const out: string[] = [];
-      for (let i = 1; i < partes.length; i++) out.push(partes.slice(0, i).join("."));
-      return out;
+    const idxById = new Map<number, number>();
+    atividades.forEach((a, i) => idxById.set(a.id, i));
+
+    const ancestralCache = new Map<number, Atividade[]>();
+    const getAncestrais = (a: Atividade): Atividade[] => {
+      if (ancestralCache.has(a.id)) return ancestralCache.get(a.id)!;
+      const chain: Atividade[] = [];
+      const idx = idxById.get(a.id);
+      if (idx == null) { ancestralCache.set(a.id, chain); return chain; }
+      let nivelAlvo = (a.nivel ?? 1) - 1;
+      for (let j = idx - 1; j >= 0 && nivelAlvo >= 1; j--) {
+        const cand = atividades[j];
+        const cn = cand.nivel ?? 1;
+        if (cand.isGrupo && cn <= nivelAlvo) {
+          chain.unshift(cand);
+          nivelAlvo = cn - 1;
+        }
+      }
+      ancestralCache.set(a.id, chain);
+      return chain;
     };
-    const grupoMap = new Map<string, Atividade>();
-    atividades.forEach((a) => {
-      if (a.isGrupo && a.eapCodigo) grupoMap.set(a.eapCodigo, a);
-    });
+
+    const gruposEmitidos = new Set<number>();
     atividadesDaSemana.forEach((a) => {
-      const eap = a.eapCodigo || "";
-      const prefixos = eapPrefixos(eap);
-      prefixos.forEach((p) => {
-        if (!gruposEmitidos.has(p)) {
-          const g = grupoMap.get(p);
-          if (g) {
-            result.push({ tipo: "grupo", eap: p, nome: g.nome, nivel: p.split(".").length });
-            gruposEmitidos.add(p);
-          }
+      const ancestrais = getAncestrais(a);
+      ancestrais.forEach((g) => {
+        if (!gruposEmitidos.has(g.id)) {
+          result.push({
+            tipo: "grupo",
+            eap: g.eapCodigo || "",
+            nome: g.nome,
+            nivel: g.nivel ?? 1,
+          });
+          gruposEmitidos.add(g.id);
         }
       });
       result.push({ tipo: "ativ", ativ: a });
@@ -1164,24 +1183,39 @@ export default function ProgramacaoSemanalLotus(props: Props) {
         return { sem, dias, ats, mts, semIni, semFim, temAvSem };
       };
 
-      // 8. Helper: monta lista de linhas (grupos + atividades) na ordem hierárquica
-      const grupoMap = new Map<string, Atividade>();
-      atividades.forEach((a) => { if (a.isGrupo && a.eapCodigo) grupoMap.set(a.eapCodigo, a); });
-      const eapPrefixos = (eap: string): string[] => {
-        const partes = eap.split(".");
-        const out: string[] = [];
-        for (let i = 1; i < partes.length; i++) out.push(partes.slice(0, i).join("."));
-        return out;
+      // 8. Helper: monta lista de linhas (grupos + atividades) na ordem hierárquica.
+      // Rev. 2254 — Mesmo algoritmo do render (nivel + ordem original), NÃO
+      // prefix-match de EAP. Garante que grupos sem eapCodigo (VITRAIS,
+      // PROTÓTIPO, VITRAL 01/02/03 etc.) também apareçam no Excel.
+      type LinhaExp = { tipo: "grupo"; eap: string; nome: string; nivel: number } | { tipo: "ativ"; ativ: Atividade };
+      const idxByIdExp = new Map<number, number>();
+      atividades.forEach((a, i) => idxByIdExp.set(a.id, i));
+      const ancestralCacheExp = new Map<number, Atividade[]>();
+      const getAncestraisExp = (a: Atividade): Atividade[] => {
+        if (ancestralCacheExp.has(a.id)) return ancestralCacheExp.get(a.id)!;
+        const chain: Atividade[] = [];
+        const idx = idxByIdExp.get(a.id);
+        if (idx == null) { ancestralCacheExp.set(a.id, chain); return chain; }
+        let nivelAlvo = (a.nivel ?? 1) - 1;
+        for (let j = idx - 1; j >= 0 && nivelAlvo >= 1; j--) {
+          const cand = atividades[j];
+          const cn = cand.nivel ?? 1;
+          if (cand.isGrupo && cn <= nivelAlvo) {
+            chain.unshift(cand);
+            nivelAlvo = cn - 1;
+          }
+        }
+        ancestralCacheExp.set(a.id, chain);
+        return chain;
       };
-      type LinhaExp = { tipo: "grupo"; eap: string; nome: string } | { tipo: "ativ"; ativ: Atividade };
       const buildLinhas = (ats: Atividade[]): LinhaExp[] => {
         const out: LinhaExp[] = [];
-        const emit = new Set<string>();
+        const emit = new Set<number>();
         ats.forEach((a) => {
-          eapPrefixos(a.eapCodigo || "").forEach((p) => {
-            if (!emit.has(p)) {
-              const g = grupoMap.get(p);
-              if (g) { out.push({ tipo: "grupo", eap: p, nome: g.nome }); emit.add(p); }
+          getAncestraisExp(a).forEach((g) => {
+            if (!emit.has(g.id)) {
+              out.push({ tipo: "grupo", eap: g.eapCodigo || "", nome: g.nome, nivel: g.nivel ?? 1 });
+              emit.add(g.id);
             }
           });
           out.push({ tipo: "ativ", ativ: a });
@@ -1740,10 +1774,13 @@ export default function ProgramacaoSemanalLotus(props: Props) {
               )}
               {linhas.map((l, i) => {
                 if (l.tipo === "grupo") {
+                  // Rev. 2254 — Indent visual por nivel (mesma hierarquia do
+                  // Cronograma). nivel 1 = sem indent; nivel 2+ = +12px por nível.
+                  const indentPx = Math.max(0, (l.nivel - 1)) * 12;
                   return (
-                    <tr key={`g-${l.eap}-${i}`} className="bg-slate-50">
+                    <tr key={`g-${l.nivel}-${l.nome}-${i}`} className="bg-slate-50">
                       <td className="border border-slate-300 px-1 py-1 font-bold text-red-700">{l.eap}</td>
-                      <td colSpan={10 + dias.length} className="border border-slate-300 px-2 py-1 font-bold text-red-700 uppercase">{l.nome}</td>
+                      <td colSpan={10 + dias.length} className="border border-slate-300 px-2 py-1 font-bold text-red-700 uppercase" style={{ paddingLeft: `${8 + indentPx}px` }}>{l.nome}</td>
                     </tr>
                   );
                 }
