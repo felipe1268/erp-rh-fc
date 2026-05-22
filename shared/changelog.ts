@@ -1,6 +1,35 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2244 — **FIX/TZ · `todayLocalISO()` substitui `new Date().toISOString()
+ * .split("T")[0]` em TODO o `PlanejamentoDetalhe.tsx` — bug de timezone que
+ * adiantava "ATUAL" e datas-padrão em ~3h no Brasil (UTC-3).**
+ *
+ * User: "semana atual está errada" → "hoje é 21/05". Screenshot mostrava
+ * "ATUAL" na 4ª Semana (22/05–28/05) mesmo sendo ainda 21/05 (quinta,
+ * dia do cutoff). Causa: `new Date().toISOString()` retorna sempre UTC.
+ * Quando o user acessa às 21h BRT de 21/05, é 00h UTC de 22/05, então
+ * `.split("T")[0]` vira "2026-05-22" → `isCurrentWeek` casa com a semana
+ * 22-28/05 → badge "ATUAL" salta um dia antes. Mesmo bug afetava o
+ * initialState de `semanaAtual` (saltava p/ próxima semana sem o user
+ * clicar) e umas 17 outras posições: defaults de `dataNecessaria` em
+ * compras, `dataRevisao` em nova revisão, comparações de atraso em
+ * atividades (`a.dataFim < hoje`), posição da linha vermelha no Gantt
+ * (`todayX`), filtros por semana, fallback `dataInicio` do projeto.
+ *
+ * Fix: novo helper `todayLocalISO()` no topo do arquivo (L123-136) que
+ * monta YYYY-MM-DD a partir de `getFullYear/Month/Date` (fuso LOCAL,
+ * sem conversão UTC). `replace_all` trocou todas as 19 ocorrências do
+ * pattern UTC pelo helper. Consequências por chamada:
+ *   - L182 `isCurrentWeek`: badge "ATUAL" só vira após 00:00 BRT real
+ *   - L6136 initialState `semanaAtual`: começa na semana cutoff correta
+ *   - L6230 effect realign: alvo certo após atividades carregarem
+ *   - L4405 marcação atrasada: atividade não vira "atrasada" às 21h
+ *   - L5174 `todayX` Gantt: linha vermelha na coluna certa
+ *   - L11497/L12054 forms: defaults de data em pickers no fuso local
+ *
+ * **R-001/R-007/R-010:** N/A (lógica frontend pura).
+ *
  * Rev. 2243 — **FIX/UX · "Importar MS Project" do Avanço Semanal agora
  * casa por NOME (3º fallback) e faz BACKFILL automático de `msp_uid`
  * no banco — fim da dependência de reimportar o cronograma completo.**

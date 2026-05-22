@@ -117,6 +117,21 @@ function toMonday(d: Date) {
   return m.toISOString().split("T")[0];
 }
 
+// ── Rev. 2244 — `todayLocalISO()`: data de hoje em YYYY-MM-DD no fuso LOCAL ──
+// Substitui `new Date().toISOString().split("T")[0]` (que retorna UTC) em
+// TODO o arquivo. Bug observado em VITRA (cutoff=Qui): às 21h BRT de quinta
+// 21/05, `toISOString` retornava "2026-05-22" (já 00h UTC do dia seguinte)
+// → "ATUAL" passava pra próxima semana cutoff (22-28/05) ANTES da virada
+// real do dia. Mesmo problema podia afetar `dataNecessaria`, `dataRevisao`,
+// `semana`, marcação de atrasos, posição da linha vermelha no Gantt.
+function todayLocalISO(): string {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${dd}`;
+}
+
 // ── Rev. 1667 — Camada de tradução Cutoff↔Monday ─────────────────────────────
 // O banco continua armazenando `planejamento_avancos.semana` como Segunda-feira
 // (compatibilidade com Curva S, REFIS, Portal, EVM, Medição etc.). Mas a UI
@@ -179,7 +194,7 @@ function labelSemana(s: string, idx: number, cutoffDow: number = 4) {
 }
 function isCurrentWeek(s: string, cutoffDow: number = 4): boolean {
   // Rev. 1667 — "Atual" agora é a semana cutoff que contém hoje, não Mon-Sun.
-  const today = new Date().toISOString().split("T")[0];
+  const today = todayLocalISO();
   const { ini, fim } = cutoffWeekFromMonday(s, cutoffDow);
   return today >= ini && today <= fim;
 }
@@ -1993,7 +2008,7 @@ function VisaoGeral({ proj, atividades, avancos, avancoAtual, avancoPrevistoDia,
   ];
 
   // Atividades críticas (sem início ou com atraso)
-  const hoje = new Date().toISOString().split("T")[0];
+  const hoje = todayLocalISO();
   const avMap: Record<number, number> = {};
   avancos.forEach((av: any) => { avMap[av.atividadeId] = n(av.percentualAcumulado); });
 
@@ -4402,7 +4417,7 @@ function Cronograma({ projetoId, revisaoAtiva, atividades, loadingAtiv, avancos,
               const isCollapsed = collapsed.has(a.eapCodigo);
               const indent = a.nivel ? (a.nivel - 1) * 16 : 0;
               const avanco = avMap[a.id] ?? 0;
-              const atrasada = !editando && !hasChildren && a.dataFim && a.dataFim < new Date().toISOString().split("T")[0] && avanco < 100;
+              const atrasada = !editando && !hasChildren && a.dataFim && a.dataFim < todayLocalISO() && avanco < 100;
 
               // MS-Project style row color
               const nivel = a.nivel ?? 1;
@@ -5171,7 +5186,7 @@ function GanttCronograma({ projetoId, revisaoAtiva, atividades, loadingAtiv, ava
     return Math.round((d.getTime() - minDate.getTime()) / 86400000) * dayPx;
   }, [minDate, dayPx]);
 
-  const todayX = useMemo(() => dateToX(new Date().toISOString().split("T")[0]), [dateToX]);
+  const todayX = useMemo(() => dateToX(todayLocalISO()), [dateToX]);
 
   // Month header cells
   const monthCells = useMemo(() => {
@@ -5674,7 +5689,7 @@ function CurvaS({ curvaData, curvaLoading, curvaFetching, proj, avancoAtual, fPc
   );
 
   const semanas       = merged.map(p => p.semana);
-  const hoje          = new Date().toISOString().split("T")[0];
+  const hoje          = todayLocalISO();
   const hasBaseline   = merged.some(p => p.baseline   != null);
   const hasPlanejada  = merged.some(p => p.planejada  != null);
   const hasRealizada  = merged.some(p => p.realizada  != null);
@@ -5721,7 +5736,7 @@ function CurvaS({ curvaData, curvaLoading, curvaFetching, proj, avancoAtual, fPc
       ) : <>
       {/* Rev. 1525 — Banner de tendência × prazo contratual */}
       {(() => {
-        const hojeT = new Date().toISOString().split("T")[0];
+        const hojeT = todayLocalISO();
         const lastPlan = [...merged].reverse().find((p: any) => p.semana <= hojeT && p.planejada != null);
         const lastReal = [...merged].reverse().find((p: any) => p.realizada != null);
         const prevPct = Number(lastPlan?.planejada ?? 0);
@@ -5965,7 +5980,7 @@ function CurvaS({ curvaData, curvaLoading, curvaFetching, proj, avancoAtual, fPc
           return v.toLocaleString("pt-BR", { maximumFractionDigits: 0 });
         };
 
-        const hoje2 = new Date().toISOString().split("T")[0];
+        const hoje2 = todayLocalISO();
         const lastPlanPoint = [...finFull].reverse().find((p: any) => p.semana <= hoje2 && p.planejada != null);
         const lastRealPoint = [...finFull].reverse().find((p: any) => p.realizada != null);
         const lastRecPoint  = [...finFull].reverse().find((p: any) => p.receita != null);
@@ -5985,7 +6000,7 @@ function CurvaS({ curvaData, curvaLoading, curvaFetching, proj, avancoAtual, fPc
           <>
           {/* Rev. 1525 — Banner de tendência × prazo contratual (financeira usa mesmos %) */}
           {(() => {
-            const hojeT = new Date().toISOString().split("T")[0];
+            const hojeT = todayLocalISO();
             const lastPlan = [...merged].reverse().find((p: any) => p.semana <= hojeT && p.planejada != null);
             const lastReal = [...merged].reverse().find((p: any) => p.realizada != null);
             const prevPct = Number(lastPlan?.planejada ?? 0);
@@ -6133,7 +6148,7 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
   // Storage no banco continua Monday — conversão 1:1 via mondayOfCutoffWeek.
   const cutoffDow: number = dataCorteInfo?.diaCorteSemana ?? 4;
   const [semanaAtual, setSemanaAtualRaw] = useState(() => mondayOfCutoffWeek(
-    new Date().toISOString().split("T")[0], 4
+    todayLocalISO(), 4
   ));
   // Rev. 1667 — Marca se o usuário já selecionou semana manualmente. Enquanto
   // for false, o effect abaixo é livre para realinhar p/ a semana cutoff de
@@ -6227,7 +6242,7 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
   // Setamos via `setSemanaAtualRaw` p/ NÃO marcar como ação do usuário.
   useEffect(() => {
     if (semanas.length === 0) return;
-    const todayMon = mondayOfCutoffWeek(new Date().toISOString().split("T")[0], cutoffDow);
+    const todayMon = mondayOfCutoffWeek(todayLocalISO(), cutoffDow);
     // Caso 1: usuário não interagiu ainda → preferimos HOJE; fallback past[last].
     if (!userSelectedSemanaRef.current) {
       const alvo = semanas.includes(todayMon)
@@ -11359,7 +11374,7 @@ function CaminhoCritico({ proj, atividades, avancos }: any) {
   const quaseCrit   = atividadesComFloat.filter((a: any) => a.float > 0 && a.float <= 14 && elegivelCpm(a));
   const comFolga    = atividadesComFloat.filter((a: any) => a.float > 14 && elegivelCpm(a));
 
-  const hoje = new Date().toISOString().split("T")[0];
+  const hoje = todayLocalISO();
 
   function GanttBar({ a }: { a: any }) {
     if (!projectStart || !projectEnd) return null;
@@ -11494,7 +11509,7 @@ function badgeCompra(status: string) {
 function Compras({ projetoId, proj, utils, fmt, revisoes: revisoesAgendamento }: any) {
   const [modal, setModal] = useState<null | "novo" | "edit" | "gerar">(null);
   const [editItem, setEditItem] = useState<any>(null);
-  const emptyForm = { item: "", unidade: "un", quantidade: 1, custoUnitario: 0, dataNecessaria: new Date().toISOString().split("T")[0], status: "pendente", fornecedor: "", observacoes: "" };
+  const emptyForm = { item: "", unidade: "un", quantidade: 1, custoUnitario: 0, dataNecessaria: todayLocalISO(), status: "pendente", fornecedor: "", observacoes: "" };
   const [form, setForm] = useState(emptyForm);
   const [revisaoSel, setRevisaoSel] = useState<number | null>(null); // null = latest
   const [leadTime, setLeadTime] = useState(30);
@@ -12051,7 +12066,7 @@ function Compras({ projetoId, proj, utils, fmt, revisoes: revisoesAgendamento }:
 // ═════════════════════════════════════════════════════════════════════════════
 function Revisoes({ projetoId, revisoes, revisaoAtiva, utils, isAdminMaster }: any) {
   const [modalAberto, setModalAberto] = useState(false);
-  const [form, setForm] = useState({ motivo: "", responsavel: "", dataRevisao: new Date().toISOString().split("T")[0], observacao: "" });
+  const [form, setForm] = useState({ motivo: "", responsavel: "", dataRevisao: todayLocalISO(), observacao: "" });
   const [arquivo, setArquivo] = useState<File | null>(null);
   const [tarefas, setTarefas] = useState<TarefaImportada[]>([]);
   const [parseErr, setParseErr] = useState<string | null>(null);
@@ -12159,7 +12174,7 @@ function Revisoes({ projetoId, revisoes, revisaoAtiva, utils, isAdminMaster }: a
 
   function fecharModal() {
     setModalAberto(false);
-    setForm({ motivo: "", responsavel: "", dataRevisao: new Date().toISOString().split("T")[0], observacao: "" });
+    setForm({ motivo: "", responsavel: "", dataRevisao: todayLocalISO(), observacao: "" });
     setArquivo(null);
     setTarefas([]);
     setParseErr(null);
@@ -13219,7 +13234,7 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
 
   // Label correspondente à semana "hoje" para linha vertical no gráfico REFIS
   const cfHojeLabel = useMemo(() => {
-    const hoje = new Date().toISOString().split("T")[0];
+    const hoje = todayLocalISO();
     const row = (curvaFiltrada as any[]).find((r: any) => r.semana >= hoje);
     return row?.label ?? null;
   }, [curvaFiltrada]);
@@ -15269,7 +15284,7 @@ function IAGestora({ projetoId, proj, atividades, avancos, revisaoAtiva, utils, 
 
   // Calcular avanço/SPI atual a partir de atividades+avanços (para contexto do simulador)
   const metricsAtuais = useMemo(() => {
-    const hoje = new Date().toISOString().split("T")[0];
+    const hoje = todayLocalISO();
     const folhas = atividades.filter((a: any) => !a.isGrupo && !a.isIndireta && !a.disabled);
     const pesoTotal = folhas.reduce((s: number, a: any) => s + n(a.pesoFinanceiro), 0) || folhas.length || 1;
     let prevAcum = 0;
@@ -16325,7 +16340,7 @@ function IAGestora({ projetoId, proj, atividades, avancos, revisaoAtiva, utils, 
                               onClick={() => registrarMonitorMut.mutate({
                                 cenarioId: c.id,
                                 projetoId,
-                                semana: new Date().toISOString().split("T")[0],
+                                semana: todayLocalISO(),
                                 avancoReal: simMonitInputs.avancoReal ? parseFloat(simMonitInputs.avancoReal) : undefined,
                                 spiFim: simMonitInputs.spiFim ? parseFloat(simMonitInputs.spiFim) : undefined,
                                 observacao: simMonitInputs.observacao || undefined,
@@ -17061,7 +17076,7 @@ function CurvaSSimulador({ mesesGerados, totalGerado, dataInicio, fmtR }: {
 
 function SimuladorCronograma({ proj, revisaoAtiva, atividades, projetoId, utils, onAdotado, hideFinancial }: any) {
   const valorContrato  = parseFloat(proj?.valorContrato ?? "0") || 0;
-  const dataInicioProj = atividades.find((a: any) => a.dataInicio)?.dataInicio ?? new Date().toISOString().split("T")[0];
+  const dataInicioProj = atividades.find((a: any) => a.dataInicio)?.dataInicio ?? todayLocalISO();
 
   const fmtR    = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
   const toMoney = (v: number) => v > 0 ? v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "";
