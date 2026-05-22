@@ -1215,6 +1215,7 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
             revisaoAtiva={revisaoAtiva}
             utils={utils}
             isAdminMaster={isAdminMaster}
+            projetoResponsavel={proj?.responsavel ?? ""}
           />
         )}
         {canViewTab(aba) && aba === "refis" && (
@@ -12109,20 +12110,23 @@ function Compras({ projetoId, proj, utils, fmt, revisoes: revisoesAgendamento }:
 // ═════════════════════════════════════════════════════════════════════════════
 // ABA: REVISÕES
 // ═════════════════════════════════════════════════════════════════════════════
-function Revisoes({ projetoId, revisoes, revisaoAtiva, utils, isAdminMaster }: any) {
-  // Rev. 2250 — Auto-preenche o campo "Responsável" com o nome do usuário
-  // logado (engenheiro de planejamento). User: "o nome do engenheiro deve
-  // ser colocado automaticamente". Antes, o campo nascia vazio e exigia
-  // digitação manual a cada nova revisão.
-  const { user: revUser } = useAuth();
+function Revisoes({ projetoId, revisoes, revisaoAtiva, utils, isAdminMaster, projetoResponsavel }: any) {
+  // Rev. 2250/2251 — Auto-preenche o campo "Responsável" com o
+  // **engenheiro responsável da obra cadastrado no projeto** (`proj.responsavel`).
+  // Antes (Rev. 2250) usava o usuário logado, mas o user corrigiu: deve ser
+  // o responsável da obra (cadastro), não quem está abrindo o modal.
+  // Fallback: se o projeto não tem responsável cadastrado, cai em `""` e
+  // o user digita manualmente.
   const [modalAberto, setModalAberto] = useState(false);
-  const [form, setForm] = useState({ motivo: "", responsavel: revUser?.name ?? "", dataRevisao: todayLocalISO(), observacao: "" });
-  // Rev. 2250 — Sincroniza nome quando useAuth resolve após mount inicial.
+  const [form, setForm] = useState({ motivo: "", responsavel: projetoResponsavel ?? "", dataRevisao: todayLocalISO(), observacao: "" });
+  // Rev. 2251 — Sincroniza nome quando `proj.responsavel` resolve após mount
+  // inicial (query do projeto lenta). Só sobrescreve se campo vazio —
+  // preserva edição manual do user.
   useEffect(() => {
-    if (revUser?.name) {
-      setForm(f => f.responsavel ? f : { ...f, responsavel: revUser.name });
+    if (projetoResponsavel) {
+      setForm(f => f.responsavel ? f : { ...f, responsavel: projetoResponsavel });
     }
-  }, [revUser?.name]);
+  }, [projetoResponsavel]);
   const [arquivo, setArquivo] = useState<File | null>(null);
   const [tarefas, setTarefas] = useState<TarefaImportada[]>([]);
   const [parseErr, setParseErr] = useState<string | null>(null);
@@ -12230,8 +12234,8 @@ function Revisoes({ projetoId, revisoes, revisaoAtiva, utils, isAdminMaster }: a
 
   function fecharModal() {
     setModalAberto(false);
-    // Rev. 2250 — Reset preserva o nome do engenheiro logado.
-    setForm({ motivo: "", responsavel: revUser?.name ?? "", dataRevisao: todayLocalISO(), observacao: "" });
+    // Rev. 2251 — Reset preserva o engenheiro responsável da obra (cadastro).
+    setForm({ motivo: "", responsavel: projetoResponsavel ?? "", dataRevisao: todayLocalISO(), observacao: "" });
     setArquivo(null);
     setTarefas([]);
     setParseErr(null);

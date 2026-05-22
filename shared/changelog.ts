@@ -1,6 +1,32 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2251 — **UX/FIX · Modal "Nova Revisão do Cronograma" auto-preenche
+ * Responsável com o ENGENHEIRO RESPONSÁVEL DA OBRA (cadastro do projeto),
+ * não com o usuário logado.**
+ *
+ * User (22/05/2026, screenshot mostrando o campo já preenchido com "Felipe
+ * Costa Alves" — o usuário logado): "tem que ser o engenheiro responsável
+ * da obra, que está no cadastro." Correção da Rev. 2250: o "Responsável"
+ * em uma revisão de cronograma é o engenheiro do projeto (`proj.responsavel`,
+ * já mostrado no header do projeto via `<User />` icon L844), não quem
+ * está operacionalmente fazendo o upload do XML.
+ *
+ * Fix em `client/src/pages/planejamento/PlanejamentoDetalhe.tsx`:
+ *   - L1218: prop nova `projetoResponsavel={proj?.responsavel ?? ""}` passada
+ *     do parent pro `<Revisoes />`.
+ *   - Componente `Revisoes`: assinatura recebe `projetoResponsavel`; removido
+ *     `useAuth()` local (não é mais necessário); estado inicial
+ *     `form.responsavel = projetoResponsavel ?? ""`; `useEffect` resyncroniza
+ *     quando a query do projeto resolve após mount (só preenche se vazio —
+ *     preserva edição manual); `fecharModal` reseta pro responsável do
+ *     cadastro.
+ *
+ * Backward-compat: projeto sem `responsavel` cadastrado → campo vazio
+ * (mesmo comportamento pré-2250).
+ *
+ * **R-001/R-007/R-010:** N/A (frontend only).
+ *
  * Rev. 2250 — **UX · Modal "Nova Revisão do Cronograma" auto-preenche o
  * campo Responsável com o nome do engenheiro logado.**
  *
