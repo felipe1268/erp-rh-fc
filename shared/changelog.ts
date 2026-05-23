@@ -1,6 +1,69 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2318 — **UX/HOTFIX · Barra de progresso da importação PDF
+ * não trava mais em 95%: estimativa 20s→35s + creep 95→99% pra
+ * PDFs grandes.**
+ *
+ * Pedido user (23/05/2026, screenshot mostrando "IA analisando
+ * layout do documento… 95%" parado por longo tempo num PDF
+ * F051/R051 da Jalves de 259KB / ~40 contratos / 300+ linhas):
+ * "Trava em 95%".
+ *
+ * **Diagnóstico**: a Rev. 2310 (barra animada) usou
+ * `duracaoEstimada = 20_000` (20s) com clamp `Math.min(95, …)`
+ * — calibrado pra PDFs pequenos (1-5 contratos). Quando o PDF é
+ * extenso (relatórios mensais reais da Jalves com 40+ contratos
+ * e 300+ linhas), o Gemini Vision leva 30-60s pra responder.
+ * A barra batia o teto 95% em ~20s e ficava lá congelada por
+ * mais 10-40s sem nenhum feedback de "ainda tô vivo" — o user
+ * naturalmente assumia que tinha travado.
+ *
+ * **Implementação** (`client/src/pages/equipamentos/Locados.tsx`):
+ *
+ * 1. `duracaoEstimada`: 20_000 → 35_000ms (35s).
+ *    Calibração mais realista pra PDFs médios. Curva ease-out
+ *    quadrática inversa preservada (`1 - (1-t)²`).
+ *
+ * 2. **Nova FASE 2 (creep)**: após estourar os 35s da FASE 1,
+ *    em vez de travar em 95, cresce +1% a cada 15s até teto
+ *    de 99 (somente `onSuccess` força 100):
+ *    ```
+ *    if (decorrido < duracaoEstimada) {
+ *      const t = decorrido / duracaoEstimada;
+ *      pct = Math.round(95 * (1 - (1-t)²));      // FASE 1
+ *    } else {
+ *      const extra = decorrido - duracaoEstimada;
+ *      pct = Math.min(99, 95 + Math.floor(extra / 15_000));  // FASE 2
+ *    }
+ *    ```
+ *    Resultado: user vê 95 → 96 → 97 → 98 → 99 ao longo do
+ *    extra-time. Sensação de "ainda tô processando".
+ *
+ * 3. Novo state `importDemorando` que vira `true` após 30s
+ *    (setTimeout próprio useEffect espelhado em
+ *    `parsearPdf.isPending`). Troca o texto auxiliar embaixo da
+ *    barra:
+ *    - Default: "Tempo típico: 15–45s · não feche esta janela."
+ *      (era "10–30s" — também atualizado pra refletir a
+ *      realidade observada).
+ *    - Após 30s: "📄 PDF extenso detectado — a IA ainda está
+ *      processando. Aguarde mais alguns segundos…".
+ *
+ * 4. Interval: 200ms → 250ms (menos re-renders, suficiente pra
+ *    suavidade visual com `transition-all duration-300 ease-out`
+ *    no width da barra).
+ *
+ * 5. Cleanup do `setTimeout(importDemorando)` no return do
+ *    useEffect — evita memory leak se modal fechar mid-parse.
+ *
+ * **0 mudança backend, 0 schema, 0 procedures novas.** O Gemini
+ * continua sem retornar progresso real (limitação da API
+ * `generateContent` — sempre foi um único request blocking).
+ *
+ * **R-001/R-007/R-010:** N/A — 100% client-side (animação CSS).
+ *
+ *
  * Rev. 2317 — **UX · Remove IMPORTAR PDF (IA) do header do
  * Almoxarifado; fica só RECEBER + DEVOLVER LOCAÇÃO. Importar PDF
  * segue disponível no hero da tela Equipamentos Locados.**

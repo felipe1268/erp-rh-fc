@@ -2,6 +2,7 @@
 
 > Este arquivo guarda os one-liners das revisões antigas para manter o `replit.md` enxuto.
 
+- ~~Rev. 2311~~ — UX · Atalho "Receber/Devolver locação" dentro do modal Receber Material (revertido na Rev. 2312 → 2313). Ver `shared/changelog.ts`.
 - ~~Rev. 2310~~ — UX · Barra de progresso 0→100% animada (ease-out) no modal de importação PDF (Gemini) de contratos de locação. Ver `shared/changelog.ts`.
 - ~~Rev. 2309~~ — UX · Redesign moderno tela Equipamentos Locados (hero gradient + KPIs + pills + lista em cards) + modal Receber em 5 seções coloridas. Ver `shared/changelog.ts`.
 - ~~Rev. 2308~~ — FEAT · Importação em lote de contratos de locação via PDF (Gemini Vision); SyncSchema+ aditivo. Ver `shared/changelog.ts`.

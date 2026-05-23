@@ -148,21 +148,37 @@ export default function EquipamentosLocados() {
     window.history.replaceState({}, "", url.toString());
   }, []);
 
-  // Rev. 2310 — anima barra de 0→95% durante o parse (Gemini não retorna progresso real).
-  // Curva ease-out: cresce rápido nos primeiros segundos e desacelera perto de 95%.
-  // Estimativa baseada em 20s típicos. onSuccess força 100%.
+  // Rev. 2310/2318 — anima barra durante o parse (Gemini não retorna progresso real).
+  // FASE 1 (0→95%): ease-out em ~35s (curva quadrática inversa).
+  // FASE 2 (95→99%): creep lentíssimo (+1% a cada ~15s) pra evitar sensação de travado em PDFs grandes.
+  // onSuccess força 100%; onError reseta pra 0.
   useEffect(() => {
     if (!parsearPdf.isPending) return;
     setImportProgresso(0);
     const inicio = Date.now();
-    const duracaoEstimada = 20_000;
+    const duracaoEstimada = 35_000;
     const id = setInterval(() => {
       const decorrido = Date.now() - inicio;
-      const t = Math.min(decorrido / duracaoEstimada, 1);
-      const pct = Math.min(95, Math.round(95 * (1 - Math.pow(1 - t, 2))));
+      let pct: number;
+      if (decorrido < duracaoEstimada) {
+        const t = decorrido / duracaoEstimada;
+        pct = Math.round(95 * (1 - Math.pow(1 - t, 2)));
+      } else {
+        // Creep 95→99 ao longo dos próximos 60s; trava em 99 (100 só no onSuccess).
+        const extra = decorrido - duracaoEstimada;
+        pct = Math.min(99, 95 + Math.floor(extra / 15_000));
+      }
       setImportProgresso(pct);
-    }, 200);
+    }, 250);
     return () => clearInterval(id);
+  }, [parsearPdf.isPending]);
+
+  // Rev. 2318 — após 30s mostra dica "PDF extenso, aguarde…" embaixo da barra.
+  const [importDemorando, setImportDemorando] = useState(false);
+  useEffect(() => {
+    if (!parsearPdf.isPending) { setImportDemorando(false); return; }
+    const t = setTimeout(() => setImportDemorando(true), 30_000);
+    return () => clearTimeout(t);
   }, [parsearPdf.isPending]);
   function confirmarImport() {
     if (!importPreview || importPreview.length === 0) return;
@@ -562,7 +578,11 @@ export default function EquipamentosLocados() {
                       style={{ width: `${importProgresso}%` }}
                     />
                   </div>
-                  <div className="text-[11px] text-slate-500 text-center">Tempo típico: 10–30s · não feche esta janela.</div>
+                  <div className="text-[11px] text-slate-500 text-center">
+                    {importDemorando
+                      ? "📄 PDF extenso detectado — a IA ainda está processando. Aguarde mais alguns segundos…"
+                      : "Tempo típico: 15–45s · não feche esta janela."}
+                  </div>
                 </div>
               )}
 
