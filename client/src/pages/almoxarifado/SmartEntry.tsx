@@ -1,5 +1,4 @@
 import { useState, useRef, useCallback, useMemo } from "react";
-import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -58,7 +57,6 @@ type EntryMode = "choose" | "foto_nf" | "ordem_compra" | "manual";
 type Step = "mode" | "capture" | "analyzing" | "review" | "confirm" | "success";
 
 export default function SmartEntry({ companyId, obraId, obraNome, itens, onClose, onSuccess }: SmartEntryProps) {
-  const [, setLocation] = useLocation();
   const [mode, setMode] = useState<EntryMode>("choose");
   const [step, setStep] = useState<Step>("mode");
   const [nfData, setNfData] = useState<NFData | null>(null);
@@ -494,37 +492,6 @@ export default function SmartEntry({ companyId, obraId, obraNome, itens, onClose
                 </div>
                 <ChevronRight className="w-5 h-5 text-gray-400" />
               </button>
-
-              {/* Rev. 2311 — Atalho pra receber/devolver equipamento locado */}
-              <div className="pt-3 mt-2 border-t border-slate-200">
-                <p className="text-[11px] text-slate-400 uppercase tracking-wider text-center mb-2">Locação de equipamentos</p>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    onClick={() => { onClose(); setLocation("/equipamentos/locados?action=receber"); }}
-                    className="flex items-center gap-3 p-3 rounded-xl border-2 border-teal-200 bg-teal-50 hover:bg-teal-100 transition text-left"
-                  >
-                    <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center shrink-0">
-                      <Truck className="w-5 h-5 text-white" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-bold text-teal-800 text-sm leading-tight">Receber locação</p>
-                      <p className="text-[11px] text-teal-600 leading-tight">Equipamento da locadora</p>
-                    </div>
-                  </button>
-                  <button
-                    onClick={() => { onClose(); setLocation("/equipamentos/locados?action=devolver"); }}
-                    className="flex items-center gap-3 p-3 rounded-xl border-2 border-amber-200 bg-amber-50 hover:bg-amber-100 transition text-left"
-                  >
-                    <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center shrink-0">
-                      <ArrowDownCircle className="w-5 h-5 text-white rotate-180" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-bold text-amber-800 text-sm leading-tight">Devolver locação</p>
-                      <p className="text-[11px] text-amber-600 leading-tight">Dar baixa / saída</p>
-                    </div>
-                  </button>
-                </div>
-              </div>
             </div>
           )}
 

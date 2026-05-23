@@ -1,6 +1,71 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2312 — **UX · Botões dedicados "RECEBER LOCAÇÃO" e
+ * "DEVOLVER LOCAÇÃO" na barra de ações rápidas do Almoxarifado
+ * (reverte cards dentro do modal da Rev. 2311).**
+ *
+ * Pedido user (23/05/2026, após ver a Rev. 2311 em uso): "Acho
+ * melhor refazer o que pedi, quero um botão separado para receber
+ * outro para devolver equipamento locado" + "Somente por estes
+ * dois botões".
+ *
+ * **Diagnóstico do problema da Rev. 2311**: enterrar os atalhos
+ * DENTRO do modal "Receber Material" exigia 2 cliques (abrir
+ * modal → escolher card) e quebrava o mental model — o user
+ * espera que receber/devolver locação seja uma AÇÃO PRIMÁRIA do
+ * almoxarifado, no mesmo patamar de ENTRADA / SAÍDA / FERRAMENTAS
+ * / TRANSFERIR / FECHAR DIA, não escondida dentro de outro
+ * fluxo.
+ *
+ * **Implementação**:
+ *
+ * 1. `client/src/pages/almoxarifado/SmartEntry.tsx` — **revert**:
+ *    - Removido `import { useLocation } from "wouter"`.
+ *    - Removida a const `const [, setLocation] = useLocation()`.
+ *    - Removido o bloco "Locação de equipamentos" (divider + grid
+ *      de 2 cards Receber/Devolver) do step `mode`. O modal volta
+ *      a ter exatamente as 3 opções originais: Foto NF / Via OC /
+ *      Manual.
+ *
+ * 2. `client/src/pages/almoxarifado/index.tsx`:
+ *    - Import adicional `Truck` de lucide.
+ *    - Grid das ações rápidas atualizado de
+ *      `grid-cols-3 gap-3 sm:grid-cols-5` para
+ *      `grid-cols-3 gap-3 sm:grid-cols-4 lg:grid-cols-7` —
+ *      acomoda os 7 cards (5 existentes + 2 novos) em 1 linha no
+ *      desktop, quebra em 4×2 no tablet e 3×3 no mobile.
+ *    - 2 botões novos APÓS o FECHAR DIA:
+ *      - **RECEBER LOCAÇÃO** — gradient `from-teal-500
+ *        to-emerald-600` (hover dark), ícone `<Truck/>` 8×8,
+ *        label "RECEBER<br/>LOCAÇÃO" em 2 linhas com
+ *        `text-sm leading-tight text-center`. onClick →
+ *        `setLocation("/equipamentos/locados?action=receber")`.
+ *      - **DEVOLVER LOCAÇÃO** — gradient `from-amber-500
+ *        to-orange-600`, ícone `<ArrowUpCircle/>` 8×8, label
+ *        "DEVOLVER<br/>LOCAÇÃO". onClick →
+ *        `setLocation("/equipamentos/locados?action=devolver")`.
+ *    - `setLocation` já existia no escopo do componente (linha
+ *      82), nenhum hook novo.
+ *
+ * 3. `client/src/pages/equipamentos/Locados.tsx` — **PRESERVADO**:
+ *    - O `useEffect([])` criado na Rev. 2311 continua intacto
+ *      (lê `URLSearchParams`, auto-abre modal de cadastro com
+ *      `action=receber` ou filtra `status=em_uso` + toast com
+ *      `action=devolver`, depois remove o param via
+ *      `history.replaceState`). Essa parte do contrato de
+ *      navegação foi mantida — só a UI de origem mudou.
+ *
+ * **Por que reverter o SmartEntry em vez de só adicionar os
+ * botões no header?** Pra evitar 2 entry-points pro mesmo fluxo
+ * (princípio de UI consistente). User foi explícito: "Somente
+ * por estes dois botões".
+ *
+ * **0 mudança backend, 0 schema, 0 procedures novas.**
+ *
+ * **R-001/R-007/R-010:** N/A — 100% client-side.
+ *
+ *
  * Rev. 2311 — **UX · Atalho "Receber/Devolver locação" no modal
  * Receber Material do Almoxarifado (ponte com tela Equipamentos
  * Locados).**
