@@ -235,7 +235,7 @@ function faixasCelula(
     if (inPrev) {
       if (temAvancoNaSemana) inReal = true;
       else if (acumPctAteSemana >= 100 && passou) inReal = true;
-    } else if (temAvancoNaSemana && passou && ehUtil) {
+    } else if (temAvancoNaSemana && ehUtil) {
       // Rev. 1688 — Só auto-deriva REAL fora do envelope previsto quando o
       // dia está ANTES do início previsto (atividade antecipada — pinta
       // LARANJA pelo branch `ds < prevIni` abaixo). Para dias APÓS `prevFim`
@@ -244,6 +244,22 @@ function faixasCelula(
       // revisão, atividades curtas (ex: "Início" 04/05→04/05) com avanço
       // lançado na semana ganhavam células AMARELAS em ter/qua/qui — bug
       // visível no Portal do Cliente, divergente do módulo Planejamento.
+      // Rev. 2280 — REMOVIDO o gate `&& passou` deste branch (mantido só no
+      // branch inPrev p/ acumPctAteSemana ≥ 100). Era uma regressão da
+      // Rev. 1785: `passou` virou "dia < inicioSemanaCorrente" → para a
+      // SEMANA CORRENTE (que é justamente a que tá sendo exportada/vista)
+      // `passou=false` em TODOS os dias úteis, fazendo o branch antecipada/
+      // não-programada nunca disparar. Resultado visível p/ user
+      // (23/05/2026, VITRA Sem.03, screenshots IMG_1053/1054): VITRAL 01/02/03
+      // com prazo 3-jun e avanço lançado em sem.03 → célula r0+2 ficava
+      // EM BRANCO no Excel exportado (e na UI), em vez de LARANJA conforme
+      // legenda. Branch (A) `inPrev + temAvancoNaSemana` já pintava sem
+      // exigir passou — pela mesma lógica, o branch (B) também não deve
+      // exigir. `temAvancoNaSemana=true` já garante que houve trabalho na
+      // semana sendo desenhada (o cálculo de temAvSem em calcSemana filtra
+      // av.semana ∈ [semIni..semFim] da semana atual). O guard de
+      // `!passouFimPrev` segue ativo, preservando a Rev. 1688 (não pinta
+      // amarelo fantasma depois do fim do plano).
       const passouFimPrev = !!prevFim && ds > prevFim;
       if (!passouFimPrev) inReal = true;
     }

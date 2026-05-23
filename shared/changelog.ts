@@ -1,6 +1,102 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2280 — **FIX · LOTUS Programação Semanal: atividade ANTECIPADA / NÃO
+ * PROGRAMADA na SEMANA CORRENTE não pintava célula r0+2 (faixa inferior =
+ * REALIZADO) nem na UI nem no Excel exportado. Regressão da Rev. 1785 que
+ * mudou `passou` p/ "dia < inicioSemanaCorrente" — branch (B) do
+ * `faixasCelula` exigia `passou=true` e nunca disparava pra dias da semana
+ * sendo desenhada. Fix: remover `&& passou` do branch antecipada/não-
+ * programada (mantém `!passouFimPrev` p/ preservar Rev. 1688).**
+ *
+ * Pedido user (23/05/2026, VITRA, screenshots IMG_1053/1054 da
+ * Programação Semanal Sem.03): "Atividade antecipada (que o coice
+ * [Project] chama de não programada) deve ser pintada na cor da legenda
+ * no arquivo Excel, preciso que arrume isso tbm... pinte na celula que
+ * deveria ser preenchido o realizado".
+ *
+ * Diagnóstico:
+ *   `client/src/components/planejamento/ProgramacaoSemanalLotus.tsx`
+ *   L218-223 (intacto, Rev. 1785):
+ *     const passou = inicioSemanaCorrente
+ *       ? dia.getTime() < inicioSemanaCorrente.getTime()
+ *       : dia.getTime() <= hoje.getTime();
+ *   → para a SEMANA CORRENTE (a única tipicamente exportada / visível
+ *   ao engenheiro), `inicioSemanaCorrente == dia da segunda` e
+ *   `dia.getTime() < inicioSemanaCorrente.getTime()` é FALSO em TODOS
+ *   os dias úteis seg-sex. Ou seja, `passou=false` semana inteira.
+ *
+ *   Branch (B) do `faixasCelula` (L238 antiga):
+ *     else if (temAvancoNaSemana && passou && ehUtil) { ... inReal=true }
+ *   → com passou=false, nunca dispara. inReal stays false → bottom=null
+ *   → `corBot=null` no export L1573-1575 → célula r0+2 fica WHITE
+ *   (do reset Rev. 1904 L1527-1532).
+ *
+ *   Branch (A) (L238 antiga, dentro de `if(inPrev)`):
+ *     if (temAvancoNaSemana) inReal = true;   // SEM passou
+ *   → atividade prevista com avanço pinta VERDE na semana corrente
+ *   normalmente. Por isso só ANTECIPADA/NÃO-PROGRAMADA ficou quebrada
+ *   (branch B).
+ *
+ *   Cenário VITRA Sem.03 (week 18-24 mai = current week):
+ *     VITRAL 01 / 02 / 03 — Proteção do piso, prazo 3-jun → 5-jun
+ *     (dataInicio > semFim → ANTECIPADA quando avanço é lançado em mai).
+ *     Engenheiro lançou avanço em sem.03 → `temAvSem.has(a.id)=true` →
+ *     `ant=true` em calcSemana L1124 → atividade incluída em `ats`.
+ *     Mas no `faixasCelula` por dia, passou=false → branch B não roda →
+ *     bottom=null → célula vazia no Excel exportado. User vê linha
+ *     com prazos 3-jun/5-jun e ZERO células pintadas — o avanço
+ *     antecipado fica invisível na programação semanal.
+ *
+ * Fix (única edição, `ProgramacaoSemanalLotus.tsx` L241):
+ *   - } else if (temAvancoNaSemana && passou && ehUtil) {
+ *   + } else if (temAvancoNaSemana && ehUtil) {
+ *   Comentário extenso adicionado L250-265 explicando a Rev. 2280.
+ *
+ * Por que é seguro remover `passou` do branch (B):
+ *   1. `temAvancoNaSemana=true` SÓ acontece quando há avanço lançado
+ *      EXATAMENTE na semana sendo desenhada (calcSemana L1111-1118
+ *      filtra `av.semana ∈ [semIni..semFim]`). Já é o "passou" implícito
+ *      no nível semana.
+ *   2. Branch (A) `inPrev + temAvancoNaSemana` SEMPRE pintou sem exigir
+ *      `passou` (L239). Por simetria, branch (B) também não deve exigir.
+ *   3. Guard `!passouFimPrev` (preserva Rev. 1688) segue ativo →
+ *      atividades curtas (ex: "Início" 04/05→04/05) NÃO pintam amarelo
+ *      em dias depois do prevFim. Bug do Portal do Cliente que motivou
+ *      a Rev. 1688 fica intacto.
+ *   4. UI e Export usam o MESMO `faixasCelula` → ambos consertados na
+ *      mesma edição. Nenhuma divergência UI vs Excel introduzida.
+ *
+ * Cores resultantes (intactas, conforme legenda L1074-1078):
+ *   - ANTECIPADA (`ds < prevIni`)  → `bg-orange-400` → COR_ANTECIP
+ *     = FFED7D31 (laranja Accent2) na célula r0+2 (REALIZADO).
+ *   - NÃO PROGRAMADA (sem prevIni) → `bg-yellow-400` → COR_NAO_PROG
+ *     = FFFFC000 (amarelo Accent4) na célula r0+2.
+ *
+ * Família de regressões `passou` / Rev. 1785:
+ *   A Rev. 1785 mudou semântica de `passou` (dia ≤ hoje → dia <
+ *   inicioSemanaCorrente) p/ corrigir o caso "vermelho dia-a-dia
+ *   dentro da semana aberta" (LPS / PPC: compromisso só avaliado no
+ *   fechamento). Esse fix era válido pro branch TOP-vermelho L263:
+ *     top = (passou && !inReal && metaPct > 0) ? "bg-red-500" : "bg-blue-800";
+ *   Mas afetou em cascata o branch (B) que reusa a MESMA variável. A
+ *   Rev. 2280 isola o branch (B), preservando a semântica do LPS no
+ *   branch top-vermelho (que era o alvo original da Rev. 1785).
+ *
+ * Validação manual sugerida (próxima abertura de obra VITRA):
+ *   1. Sem.03 Lotus: VITRAL 01/02/03 Proteção do piso devem mostrar
+ *      células LARANJA em cols J-N (Seg-Sex) na linha r0+2.
+ *   2. Excel exportado: mesmas células laranja (#ED7D31).
+ *   3. Atividade prevista p/ semana atual com avanço (caso normal,
+ *      branch A) deve seguir pintando VERDE como antes — não-regressão.
+ *   4. Atividade prevista que passou sem avanço deve seguir VERMELHA
+ *      apenas em semanas FECHADAS (passou=true) — Rev. 1785 preservada.
+ *
+ * R-001/R-007/R-010: N/A — fix client-only em util de UI/export, zero
+ *   tocas em DB.
+ */
+
+/**
  * Rev. 2279 — **CHORE · Solicitação de Equipamento (SE) DELETADA do ERP.
  * Página `/equipamentos/solicitacoes`, item de sidebar "Solicitações de
  * Locação (SE)", router subset (`solicitacoesListar` / `solicitacaoById` /
