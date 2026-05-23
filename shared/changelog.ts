@@ -1,6 +1,111 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2281 — **UX · REFIS Análise do Cronograma — redesign sweeping de 3
+ * blocos visíveis na tela do relatório semanal: (A) HEADER de cada GROUP
+ * CARD (Serviços Preliminares, Vitrais, Complementares…), (B) trio de KPIs
+ * de FATURAMENTO DO MÊS, (C) HISTÓRICO DE RELATÓRIOS EMITIDOS. Visual
+ * institucional chapado (slate-700 flat, bordas duras, números pequenos)
+ * substituído por linguagem moderna bento + glassmorphism + dataviz: ring
+ * de progresso radial, gradientes contextuais por status, tiles glass com
+ * backdrop-blur, barras-gradiente com glow, mini-gauge SPI, ícones em
+ * containers, badges pill com indicador animado.** Pedido user
+ * (23/05/2026, screenshots IMG_1055/1056 do REFIS): "Quero um layout
+ * moderno e ultra revolucionário para análise do cronograma, me surpreenda".
+ *
+ * Escopo (3 edições cirúrgicas em `client/src/pages/planejamento/PlanejamentoDetalhe.tsx`):
+ *
+ * (A) Group Cards header (~L15246-15400, antigo header slate-700 flat):
+ *   - Fundo gradiente NOTURNO contextual:
+ *       realizado ≥ previsto       → slate-900 → indigo-900 → violet-900
+ *       desvio < −10pp (crítico)   → slate-900 → rose-900 → red-900
+ *       senão (atraso leve)        → slate-900 → amber-900 → orange-900
+ *   - 2 glows decorativos (top-right blur-3xl + bottom-left blur-2xl) +
+ *     padrão de pontos sutil (opacity 0.04) p/ textura.
+ *   - EAP badge promovido a CHIP 3D 12x12 com bg-white/10 backdrop-blur,
+ *     border white/20, shadow-lg/20, label "EAP" miúdo + código mono.
+ *   - Datas Início/Fim viraram PILLS GLASS coloridos (emerald-500/15 /
+ *     amber-500/15) com backdrop-blur e ícone CalendarDays.
+ *   - RING DE PROGRESSO RADIAL 64x64 SVG à direita exibindo
+ *     g.realizado (stroke-linecap round, gradient ok=emerald
+ *     ou warn=amber→red) com track white/12 e número black 13px no centro.
+ *   - 3 TILES KPI glass embaixo (Previsto/Realizado/Desvio) com
+ *     bg-white/[0.06] backdrop-blur, label uppercase tracking 0.15em,
+ *     número 18px black, tile de Desvio vira emerald/red contextual.
+ *   - Barra-gradiente comparativa h-2 no rodapé: Previsto azul/35 +
+ *     Realizado overlay gradient (emerald→teal se ok, amber→red se
+ *     atrasado) c/ boxShadow glow rgba 0.55/0.45.
+ *
+ * (B) Faturamento do Mês trio KPI (~L15499-15600):
+ *   - Cards passam de bordas planas (rounded-lg + border solid) p/
+ *     bento (rounded-2xl, shadow-sm, glow circular blur-2xl no canto).
+ *   - Fundo: gradient-to-br from-{color}-50 via-{color}-50 to-{accent}-100/40.
+ *   - Cabeçalho: label uppercase tracking-[0.15em] + ÍCONE em container
+ *     8x8 rounded-xl (Previsto=Target amber, Realizado=Activity blue,
+ *     Desvio=TrendingUp/Down contextual).
+ *   - Número principal: text-3xl font-black tabular-nums tracking-tight
+ *     (era text-xl). Pill informativa com bg-white/70 backdrop-blur
+ *     exibe % de avanço + valor contratual.
+ *   - Mini progress bar h-1.5 gradient (amber→orange | blue→indigo |
+ *     emerald→teal | rose→red) refletindo a magnitude do KPI.
+ *   - Desvio negativo dispara variante red automática (border-red-200/70,
+ *     bg from-red-50 via-red-50 to-rose-100/40, glow red-400/20).
+ *
+ * (C) Histórico de Relatórios Emitidos (~L15594-15710):
+ *   - Header passa de slate-800 flat p/ gradient-to-r slate-900 → slate-800
+ *     → slate-900 c/ glow violet-500/15 blur-3xl no top-right. Ícone
+ *     History em container 9x9 rounded-xl bg-white/10 backdrop-blur,
+ *     stroke violet-200. Subtítulo descritivo "Evolução semana a semana —
+ *     avanço, SPI e faturamento" adicionado abaixo do título. Contador
+ *     vira PILL bg-white/10 com indicador pulsante (h-1.5 bg-emerald-400
+ *     animate-pulse).
+ *   - Tabela: header gradient-to-b slate-50 → white com border-b-2,
+ *     tracking-[0.1em], font-bold. Linhas ganham border-l-4 colorida por
+ *     status (emerald/red/amber/slate) p/ varredura visual rápida.
+ *   - Nº muda p/ "#NNN" com font-mono cor slate-400. Badge "ATUAL" vira
+ *     pill com indicador pulsante.
+ *   - Desvio % e Desvio R$ viram CHIPS coloridos (bg + border + arrow
+ *     icon) em vez de texto puro, igualando linguagem visual dos KPIs.
+ *   - SPI ganha MINI-GAUGE 10x1.5 com gradient ok/warn/critic + tick
+ *     vertical na posição "SPI=1.00" (70% do gauge), seguido do valor
+ *     tabular-nums colorido. Critério: spi≥1=verde, 0.85≤spi<1=amber,
+ *     <0.85=red.
+ *   - Hover row: bg-blue-50/40 + transition-all + group p/ animações
+ *     futuras.
+ *
+ * Decisões de design (resumo):
+ *   - Reuso de cores semânticas EXISTENTES (amber=previsto, blue=realizado,
+ *     emerald=ok, red=ruim, violet=accent) — sem novo design system, só
+ *     refresh de aplicação.
+ *   - tracking-[0.15em] em labels uppercase e tabular-nums em todos os
+ *     números p/ alinhamento perfeito de colunas.
+ *   - backdrop-blur só em superfícies sobre fundo escuro/colorido
+ *     (custo render zero em superfícies brancas).
+ *   - Animações pulsantes APENAS em indicadores de "ATIVO/ATUAL"
+ *     (badges semana atual, contador de relatórios) — sem ruído visual.
+ *   - ZERO alteração de wiring de dados, props, hooks, mutations,
+ *     filtros ou shape dos `g`/`r`/`refisLista`. Todos os bindings
+ *     (`g.eapCodigo`, `g.realizado`, `r.spi`, `r.custoPrevisto` etc)
+ *     PRESERVADOS — fix é puramente visual.
+ *   - Sem novos imports além de `Target` (Lucide), já que `Activity`,
+ *     `TrendingUp/Down`, `ArrowUpRight/Down`, `CalendarDays`, `Plus`,
+ *     `Minus`, `History` já estavam importados.
+ *
+ * Compatibilidade:
+ *   - Classes `refis-block` / `refis-block-tall` MANTIDAS p/ não quebrar
+ *     CSS de print (PDF orientado, page-break-inside avoid, etc — ver
+ *     refis-print.css).
+ *   - Estrutura DOM (3 cards em sm:grid-cols-3 p/ Faturamento,
+ *     <thead>/<tbody> em Histórico) preservada → export/print/CSS
+ *     externos seguem funcionando.
+ *   - Modo Máscara / hideFinancial continua escondendo cards de R$
+ *     idêntico (lógica intocada).
+ *
+ * R-001/R-007/R-010: N/A — alteração puramente client-side, zero toca
+ *   em DB.
+ */
+
+/**
  * Rev. 2280 — **FIX · LOTUS Programação Semanal: atividade ANTECIPADA / NÃO
  * PROGRAMADA na SEMANA CORRENTE não pintava célula r0+2 (faixa inferior =
  * REALIZADO) nem na UI nem no Excel exportado. Regressão da Rev. 1785 que

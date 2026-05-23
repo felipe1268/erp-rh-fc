@@ -40,7 +40,7 @@ import {
   TrendingDown, ArrowUpRight, ArrowDownRight, CalendarClock, Network,
   Users, HardHat, CheckCircle, Calculator, Info, Box,
   FileCheck2, FileX2, FileWarning, GraduationCap,
-  Star, Smile, Meh, Frown, ListTree,
+  Star, Smile, Meh, Frown, ListTree, Target,
 } from "lucide-react";
 import { getNrDescricao } from "@shared/trainingRules";
 import {
@@ -15240,49 +15240,138 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
             });
           };
           return (
-        <div key={g.id} className="refis-block refis-block-tall bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-          {/* Header do grupo */}
+        <div key={g.id} className="refis-block refis-block-tall bg-white rounded-2xl border border-slate-200/80 shadow-[0_1px_3px_rgba(15,23,42,0.04),0_8px_24px_-12px_rgba(15,23,42,0.12)] overflow-hidden">
+          {/* Rev. 2281 — Header HERO: gradiente noturno, ring de progresso,
+              KPIs em tiles glass, barra-gradiente comparativa no rodapé.
+              Substitui o header chapado slate-700 da Rev. 2276. */}
           <div
-            className="bg-slate-700 text-white px-5 py-2.5 flex items-center justify-between cursor-pointer select-none"
+            className={`relative overflow-hidden cursor-pointer select-none px-6 pt-5 pb-4 text-white ${
+              g.realizado >= g.previsto
+                ? "bg-gradient-to-br from-slate-900 via-indigo-900 to-violet-900"
+                : (g.previsto - g.realizado) > 10
+                  ? "bg-gradient-to-br from-slate-900 via-rose-900 to-red-900"
+                  : "bg-gradient-to-br from-slate-900 via-amber-900 to-orange-900"
+            }`}
             onClick={() => toggleGrupo(g.id)}
           >
-            <div className="flex items-center gap-3 min-w-0">
-              <span className="text-xs font-mono bg-slate-600 rounded px-2 py-0.5 shrink-0">{g.eapCodigo}</span>
-              <div className="min-w-0">
-                <p className="text-sm font-bold uppercase tracking-wide">{g.nome}</p>
-                {(g.dataInicio || g.dataFim) && (
-                  <div className="flex items-center gap-1.5 mt-1">
-                    {g.dataInicio && (
-                      <span className="inline-flex items-center gap-1 bg-slate-600 rounded px-1.5 py-0.5 text-[10px] font-semibold text-emerald-300">
-                        <CalendarDays className="h-2.5 w-2.5" />
-                        Início: {new Date(g.dataInicio + "T12:00:00").toLocaleDateString("pt-BR")}
-                      </span>
-                    )}
-                    {g.dataInicio && g.dataFim && <span className="text-slate-500 text-[10px] font-bold">→</span>}
-                    {g.dataFim && (
-                      <span className="inline-flex items-center gap-1 bg-slate-600 rounded px-1.5 py-0.5 text-[10px] font-semibold text-amber-300">
-                        <CalendarDays className="h-2.5 w-2.5" />
-                        Fim: {new Date(g.dataFim + "T12:00:00").toLocaleDateString("pt-BR")}
-                      </span>
-                    )}
+            {/* Glows decorativos */}
+            <div className={`pointer-events-none absolute -top-16 -right-16 w-56 h-56 rounded-full blur-3xl ${g.realizado >= g.previsto ? "bg-violet-500/25" : "bg-red-500/20"}`} />
+            <div className="pointer-events-none absolute -bottom-12 -left-12 w-40 h-40 rounded-full blur-2xl bg-indigo-400/10" />
+            <div className="pointer-events-none absolute inset-0 opacity-[0.04]" style={{
+              backgroundImage: "radial-gradient(circle at 1px 1px, white 1px, transparent 0)",
+              backgroundSize: "16px 16px",
+            }} />
+
+            <div className="relative flex items-start justify-between gap-4">
+              <div className="flex items-start gap-4 min-w-0 flex-1">
+                {/* EAP badge — chip 3D destacado */}
+                <div className="shrink-0 w-12 h-12 rounded-2xl bg-white/10 backdrop-blur-md border border-white/20 flex flex-col items-center justify-center shadow-lg shadow-black/20">
+                  <span className="text-[8px] text-white/60 font-bold tracking-[0.15em] leading-none">EAP</span>
+                  <span className="text-sm font-bold font-mono text-white leading-none mt-1">{g.eapCodigo}</span>
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-base font-bold uppercase tracking-wide leading-snug text-white drop-shadow-sm">{g.nome}</p>
+                  {(g.dataInicio || g.dataFim) && (
+                    <div className="flex items-center gap-2 mt-2 flex-wrap">
+                      {g.dataInicio && (
+                        <span className="inline-flex items-center gap-1.5 bg-emerald-500/15 backdrop-blur-sm border border-emerald-400/30 rounded-full px-2.5 py-0.5 text-[11px] font-medium text-emerald-200">
+                          <CalendarDays className="h-3 w-3" />
+                          Início: {new Date(g.dataInicio + "T12:00:00").toLocaleDateString("pt-BR")}
+                        </span>
+                      )}
+                      {g.dataInicio && g.dataFim && <span className="text-white/30 text-[10px] font-bold">→</span>}
+                      {g.dataFim && (
+                        <span className="inline-flex items-center gap-1.5 bg-amber-500/15 backdrop-blur-sm border border-amber-400/30 rounded-full px-2.5 py-0.5 text-[11px] font-medium text-amber-200">
+                          <CalendarDays className="h-3 w-3" />
+                          Fim: {new Date(g.dataFim + "T12:00:00").toLocaleDateString("pt-BR")}
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Ring progresso + collapse */}
+              <div className="flex items-center gap-3 shrink-0">
+                <div className="relative w-16 h-16">
+                  <svg className="absolute inset-0 -rotate-90" viewBox="0 0 64 64">
+                    <circle cx="32" cy="32" r="28" fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth="6" />
+                    <circle
+                      cx="32" cy="32" r="28" fill="none"
+                      stroke={`url(#refisRing-${g.id})`}
+                      strokeWidth="6"
+                      strokeLinecap="round"
+                      strokeDasharray={`${Math.min(100, Math.max(0, g.realizado)) * 1.7593} 175.93`}
+                    />
+                    <defs>
+                      <linearGradient id={`refisRing-${g.id}`} x1="0%" y1="0%" x2="100%" y2="100%">
+                        {g.realizado >= g.previsto ? (
+                          <>
+                            <stop offset="0%" stopColor="#6ee7b7" />
+                            <stop offset="100%" stopColor="#10b981" />
+                          </>
+                        ) : (
+                          <>
+                            <stop offset="0%" stopColor="#fbbf24" />
+                            <stop offset="100%" stopColor="#ef4444" />
+                          </>
+                        )}
+                      </linearGradient>
+                    </defs>
+                  </svg>
+                  <div className="absolute inset-0 flex flex-col items-center justify-center">
+                    <div className="text-[13px] font-black tabular-nums text-white leading-none drop-shadow">{fPct_(g.realizado)}</div>
+                    <div className="text-[8px] text-white/55 mt-0.5 uppercase tracking-[0.12em]">Real</div>
                   </div>
-                )}
+                </div>
+                <div
+                  className="flex items-center justify-center h-8 w-8 rounded-xl bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/20 transition-all text-white shrink-0"
+                  title={isCollapsed ? "Expandir seção" : "Recolher seção"}
+                >
+                  {isCollapsed ? <Plus className="h-4 w-4" /> : <Minus className="h-4 w-4" />}
+                </div>
               </div>
             </div>
-            <div className="flex items-center gap-4 shrink-0">
-              <div className="flex gap-4 text-xs">
-                <span className="text-blue-300">Previsto: <strong className="text-white">{fPct_(g.previsto)}</strong></span>
-                <span className="text-emerald-300">Realizado: <strong className="text-white">{fPct_(g.realizado)}</strong></span>
-                <span className={g.realizado >= g.previsto ? "text-emerald-300" : "text-red-300"}>
-                  Desvio: <strong className="text-white">{g.realizado >= g.previsto ? "+" : ""}{fPct_(g.realizado - g.previsto)}</strong>
-                </span>
+
+            {/* Tiles KPI Previsto / Realizado / Desvio */}
+            <div className="relative mt-4 grid grid-cols-3 gap-2.5">
+              <div className="bg-white/[0.06] backdrop-blur-sm border border-white/10 rounded-xl px-3 py-2 hover:bg-white/[0.09] transition-colors">
+                <div className="text-[9px] uppercase tracking-[0.15em] text-blue-300/90 font-bold">Previsto</div>
+                <div className="text-lg font-black text-white tabular-nums mt-0.5 leading-none">{fPct_(g.previsto)}</div>
               </div>
+              <div className="bg-white/[0.06] backdrop-blur-sm border border-white/10 rounded-xl px-3 py-2 hover:bg-white/[0.09] transition-colors">
+                <div className="text-[9px] uppercase tracking-[0.15em] text-emerald-300/90 font-bold">Realizado</div>
+                <div className="text-lg font-black text-white tabular-nums mt-0.5 leading-none">{fPct_(g.realizado)}</div>
+              </div>
+              <div className={`backdrop-blur-sm border rounded-xl px-3 py-2 transition-colors ${g.realizado >= g.previsto ? "bg-emerald-500/15 border-emerald-400/30 hover:bg-emerald-500/20" : "bg-red-500/15 border-red-400/30 hover:bg-red-500/20"}`}>
+                <div className={`text-[9px] uppercase tracking-[0.15em] font-bold ${g.realizado >= g.previsto ? "text-emerald-200" : "text-red-200"}`}>Desvio</div>
+                <div className={`text-lg font-black tabular-nums mt-0.5 leading-none flex items-center gap-1 ${g.realizado >= g.previsto ? "text-emerald-100" : "text-red-100"}`}>
+                  {g.realizado >= g.previsto ? <ArrowUpRight className="h-3.5 w-3.5" /> : <ArrowDownRight className="h-3.5 w-3.5" />}
+                  {g.realizado >= g.previsto ? "+" : ""}{fPct_(g.realizado - g.previsto)}
+                </div>
+              </div>
+            </div>
+
+            {/* Barra-gradiente comparativa (Previsto bg + Realizado overlay) */}
+            <div className="relative mt-3.5 h-2 bg-white/10 rounded-full overflow-hidden">
               <div
-                className="flex items-center justify-center h-6 w-6 rounded-full bg-slate-600 hover:bg-slate-500 transition-colors text-white font-bold text-sm shrink-0"
-                title={isCollapsed ? "Expandir seção" : "Recolher seção"}
-              >
-                {isCollapsed ? "+" : "−"}
-              </div>
+                className="absolute inset-y-0 left-0 bg-blue-400/35 rounded-full"
+                style={{ width: `${Math.min(100, Math.max(0, g.previsto))}%` }}
+                title={`Previsto: ${fPct_(g.previsto)}`}
+              />
+              <div
+                className="absolute inset-y-0 left-0 rounded-full"
+                style={{
+                  width: `${Math.min(100, Math.max(0, g.realizado))}%`,
+                  background: g.realizado >= g.previsto
+                    ? "linear-gradient(90deg, #34d399 0%, #10b981 100%)"
+                    : "linear-gradient(90deg, #fbbf24 0%, #ef4444 100%)",
+                  boxShadow: g.realizado >= g.previsto
+                    ? "0 0 12px rgba(16,185,129,0.55)"
+                    : "0 0 12px rgba(239,68,68,0.45)",
+                }}
+                title={`Realizado: ${fPct_(g.realizado)}`}
+              />
             </div>
           </div>
 
@@ -15404,62 +15493,95 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
 
         {!colBloco6 && <div className="p-4 space-y-3">
         {!modoMascara && !hideFinancial ? (
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            {/* Faturamento Previsto */}
-            <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-amber-700">
-                Faturamento Previsto no Mês
-              </p>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            {/* Rev. 2281 — KPI Faturamento Previsto: bento card com gradient,
+                glow, ícone container, número black 3xl, mini progress bar. */}
+            <div className="relative overflow-hidden rounded-2xl border border-amber-200/70 bg-gradient-to-br from-amber-50 via-amber-50 to-orange-100/40 px-5 py-4 shadow-sm">
+              <div className="pointer-events-none absolute -top-8 -right-8 w-28 h-28 bg-amber-400/20 rounded-full blur-2xl" />
+              <div className="relative flex items-center justify-between">
+                <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-amber-700">Previsto no Mês</p>
+                <div className="h-8 w-8 rounded-xl bg-amber-200/60 border border-amber-300/60 flex items-center justify-center shadow-sm">
+                  <Target className="h-4 w-4 text-amber-700" />
+                </div>
+              </div>
               {vendaMes > 0 ? (
                 <>
-                  <p className="text-xl font-bold text-amber-800 mt-1">{fmt(rCustoPrev)}</p>
-                  <p className="text-[10px] text-amber-600 mt-0.5">
-                    {fmt(vendaMes)} × {rPrev.toFixed(1)}% (avanço previsto)
-                  </p>
+                  <p className="relative text-3xl font-black text-amber-900 mt-3 tabular-nums tracking-tight leading-none">{fmt(rCustoPrev)}</p>
+                  <div className="relative flex items-center gap-2 mt-2.5 text-[11px] text-amber-700/80 font-medium">
+                    <span className="inline-flex items-center gap-1 bg-white/70 backdrop-blur-sm rounded-full px-2 py-0.5 border border-amber-200">
+                      <span className="font-bold tabular-nums">{rPrev.toFixed(1)}%</span> avanço
+                    </span>
+                    <span className="text-amber-600/70 truncate">de {fmt(vendaMes)}</span>
+                  </div>
+                  <div className="relative mt-3 h-1.5 bg-amber-200/40 rounded-full overflow-hidden">
+                    <div className="h-full bg-gradient-to-r from-amber-400 to-orange-500 rounded-full" style={{ width: `${Math.min(100, rPrev)}%` }} />
+                  </div>
                 </>
               ) : (
-                <p className="text-sm text-amber-600 mt-1">—</p>
+                <p className="relative text-sm text-amber-600 mt-3">—</p>
               )}
             </div>
 
             {/* Faturamento Realizado */}
-            <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3">
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-blue-700">
-                Faturamento Realizado no Mês
-              </p>
+            <div className="relative overflow-hidden rounded-2xl border border-blue-200/70 bg-gradient-to-br from-blue-50 via-blue-50 to-indigo-100/40 px-5 py-4 shadow-sm">
+              <div className="pointer-events-none absolute -top-8 -right-8 w-28 h-28 bg-blue-400/20 rounded-full blur-2xl" />
+              <div className="relative flex items-center justify-between">
+                <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-blue-700">Realizado no Mês</p>
+                <div className="h-8 w-8 rounded-xl bg-blue-200/60 border border-blue-300/60 flex items-center justify-center shadow-sm">
+                  <Activity className="h-4 w-4 text-blue-700" />
+                </div>
+              </div>
               {vendaMes > 0 ? (
                 <>
-                  <p className="text-xl font-bold text-blue-800 mt-1">{fmt(rCustoReal)}</p>
-                  <p className="text-[10px] text-blue-600 mt-0.5">
-                    {fmt(vendaMes)} × {rReal.toFixed(1)}% (avanço realizado)
-                  </p>
+                  <p className="relative text-3xl font-black text-blue-900 mt-3 tabular-nums tracking-tight leading-none">{fmt(rCustoReal)}</p>
+                  <div className="relative flex items-center gap-2 mt-2.5 text-[11px] text-blue-700/80 font-medium">
+                    <span className="inline-flex items-center gap-1 bg-white/70 backdrop-blur-sm rounded-full px-2 py-0.5 border border-blue-200">
+                      <span className="font-bold tabular-nums">{rReal.toFixed(1)}%</span> avanço
+                    </span>
+                    <span className="text-blue-600/70 truncate">de {fmt(vendaMes)}</span>
+                  </div>
+                  <div className="relative mt-3 h-1.5 bg-blue-200/40 rounded-full overflow-hidden">
+                    <div className="h-full bg-gradient-to-r from-blue-400 to-indigo-500 rounded-full" style={{ width: `${Math.min(100, rReal)}%` }} />
+                  </div>
                 </>
               ) : (
-                <p className="text-sm text-blue-600 mt-1">—</p>
+                <p className="relative text-sm text-blue-600 mt-3">—</p>
               )}
             </div>
 
             {/* Desvio Financeiro */}
-            <div className={`rounded-lg border px-4 py-3 ${rDesvioFinanceiro >= 0 ? "border-emerald-200 bg-emerald-50" : "border-red-200 bg-red-50"}`}>
-              <p className={`text-[10px] font-semibold uppercase tracking-wider ${rDesvioFinanceiro >= 0 ? "text-emerald-700" : "text-red-700"}`}>
-                Desvio no Mês
-              </p>
-              {vendaMes > 0 ? (
-                <>
-                  <p className={`text-xl font-bold mt-1 ${rDesvioFinanceiro >= 0 ? "text-emerald-800" : "text-red-800"}`}>
-                    {rDesvioFinanceiro >= 0 ? "+" : ""}{fmt(rDesvioFinanceiro)}
-                  </p>
-                  <p className={`text-[10px] mt-0.5 flex items-center gap-0.5 ${rDesvioFinanceiro >= 0 ? "text-emerald-600" : "text-red-600"}`}>
-                    {rDesvioFinanceiro >= 0
-                      ? <ArrowUpRight className="h-3 w-3" />
-                      : <ArrowDownRight className="h-3 w-3" />}
-                    {rDesvioFisico >= 0 ? "+" : ""}{fPct_(rDesvioFisico)} físico
-                  </p>
-                </>
-              ) : (
-                <p className="text-sm text-slate-400 mt-1">—</p>
-              )}
-            </div>
+            {(() => {
+              const positivo = rDesvioFinanceiro >= 0;
+              return (
+                <div className={`relative overflow-hidden rounded-2xl border px-5 py-4 shadow-sm ${positivo ? "border-emerald-200/70 bg-gradient-to-br from-emerald-50 via-emerald-50 to-teal-100/40" : "border-red-200/70 bg-gradient-to-br from-red-50 via-red-50 to-rose-100/40"}`}>
+                  <div className={`pointer-events-none absolute -top-8 -right-8 w-28 h-28 rounded-full blur-2xl ${positivo ? "bg-emerald-400/20" : "bg-red-400/20"}`} />
+                  <div className="relative flex items-center justify-between">
+                    <p className={`text-[10px] font-bold uppercase tracking-[0.15em] ${positivo ? "text-emerald-700" : "text-red-700"}`}>Desvio no Mês</p>
+                    <div className={`h-8 w-8 rounded-xl flex items-center justify-center border shadow-sm ${positivo ? "bg-emerald-200/60 border-emerald-300/60" : "bg-red-200/60 border-red-300/60"}`}>
+                      {positivo ? <TrendingUp className="h-4 w-4 text-emerald-700" /> : <TrendingDown className="h-4 w-4 text-red-700" />}
+                    </div>
+                  </div>
+                  {vendaMes > 0 ? (
+                    <>
+                      <p className={`relative text-3xl font-black mt-3 tabular-nums tracking-tight leading-none ${positivo ? "text-emerald-900" : "text-red-900"}`}>
+                        {positivo ? "+" : ""}{fmt(rDesvioFinanceiro)}
+                      </p>
+                      <div className={`relative flex items-center gap-2 mt-2.5 text-[11px] font-medium ${positivo ? "text-emerald-700/80" : "text-red-700/80"}`}>
+                        <span className={`inline-flex items-center gap-1 bg-white/70 backdrop-blur-sm rounded-full px-2 py-0.5 border ${positivo ? "border-emerald-200" : "border-red-200"}`}>
+                          {positivo ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
+                          <span className="font-bold tabular-nums">{rDesvioFisico >= 0 ? "+" : ""}{fPct_(rDesvioFisico)}</span> físico
+                        </span>
+                      </div>
+                      <div className={`relative mt-3 h-1.5 rounded-full overflow-hidden ${positivo ? "bg-emerald-200/40" : "bg-red-200/40"}`}>
+                        <div className={`h-full rounded-full ${positivo ? "bg-gradient-to-r from-emerald-400 to-teal-500" : "bg-gradient-to-r from-rose-400 to-red-500"}`} style={{ width: `${Math.min(100, Math.abs(rDesvioFisico) * 5)}%` }} />
+                      </div>
+                    </>
+                  ) : (
+                    <p className="relative text-sm text-slate-400 mt-3">—</p>
+                  )}
+                </div>
+              );
+            })()}
           </div>
         ) : (
           <div className="rounded-lg border border-orange-200 bg-orange-50 px-4 py-3 text-center">
@@ -15492,27 +15614,38 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
           BLOCO 7 — HISTÓRICO DE REFIS ANTERIORES
       ══════════════════════════════════════════════════════════════════════ */}
       {refisLista.length > 0 && (
-        <div className="refis-block bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-          <div className="bg-slate-800 text-white px-5 py-2.5 flex items-center gap-2 cursor-pointer select-none" onClick={() => setColBloco7(v => !v)}>
-            <History className="h-4 w-4 text-slate-300" />
-            <p className="text-xs font-bold uppercase tracking-wider">Histórico de Relatórios Emitidos</p>
-            <span className="ml-auto text-[11px] text-slate-400">{refisLista.length} {refisLista.length === 1 ? "relatório" : "relatórios"}</span>
-            <ChevronDown className={`h-4 w-4 text-slate-400 transition-transform ml-2 ${colBloco7 ? "rotate-180" : ""}`} />
+        <div className="refis-block bg-white rounded-2xl border border-slate-200/80 shadow-[0_1px_3px_rgba(15,23,42,0.04),0_8px_24px_-12px_rgba(15,23,42,0.12)] overflow-hidden">
+          {/* Rev. 2281 — Header gradiente noturno c/ ícone container, contador
+              destacado em pill, chevron animado. */}
+          <div className="relative overflow-hidden bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 text-white px-5 py-3 flex items-center gap-3 cursor-pointer select-none" onClick={() => setColBloco7(v => !v)}>
+            <div className="pointer-events-none absolute -top-10 -right-10 w-36 h-36 bg-violet-500/15 rounded-full blur-3xl" />
+            <div className="relative h-9 w-9 rounded-xl bg-white/10 backdrop-blur-sm border border-white/15 flex items-center justify-center shadow-lg shadow-black/20">
+              <History className="h-4 w-4 text-violet-200" />
+            </div>
+            <div className="relative flex-1 min-w-0">
+              <p className="text-[13px] font-bold uppercase tracking-[0.12em] leading-none">Histórico de Relatórios Emitidos</p>
+              <p className="text-[10px] text-white/55 mt-1 leading-none">Evolução semana a semana — avanço, SPI e faturamento</p>
+            </div>
+            <span className="relative ml-auto inline-flex items-center gap-1.5 bg-white/10 backdrop-blur-sm border border-white/15 rounded-full px-2.5 py-1 text-[11px] font-semibold tabular-nums">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              {refisLista.length} {refisLista.length === 1 ? "relatório" : "relatórios"}
+            </span>
+            <ChevronDown className={`relative h-4 w-4 text-white/60 transition-transform ${colBloco7 ? "rotate-180" : ""}`} />
           </div>
           {!colBloco7 && <div className="overflow-x-auto">
             <table className="w-full text-xs">
               <thead>
-                <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase tracking-wider text-[10px]">
-                  <th className="px-4 py-2 text-left">Nº</th>
-                  <th className="px-4 py-2 text-left">Semana</th>
-                  <th className="px-4 py-2 text-right">Prev. Acum.</th>
-                  <th className="px-4 py-2 text-right">Real. Acum.</th>
-                  <th className="px-4 py-2 text-right">Desvio</th>
-                  <th className="px-4 py-2 text-right">SPI</th>
-                  {!modoMascara && !hideFinancial && <th className="px-4 py-2 text-right">Fat. Previsto</th>}
-                  {!modoMascara && !hideFinancial && <th className="px-4 py-2 text-right">Fat. Realizado</th>}
-                  {!modoMascara && !hideFinancial && <th className="px-4 py-2 text-right">Desvio R$</th>}
-                  <th className="px-4 py-2 text-left">Observações</th>
+                <tr className="bg-gradient-to-b from-slate-50 to-white border-b-2 border-slate-200 text-slate-500 uppercase tracking-[0.1em] text-[10px]">
+                  <th className="px-4 py-2.5 text-left font-bold">Nº</th>
+                  <th className="px-4 py-2.5 text-left font-bold">Semana</th>
+                  <th className="px-4 py-2.5 text-right font-bold">Prev. Acum.</th>
+                  <th className="px-4 py-2.5 text-right font-bold">Real. Acum.</th>
+                  <th className="px-4 py-2.5 text-right font-bold">Desvio</th>
+                  <th className="px-4 py-2.5 text-center font-bold">SPI</th>
+                  {!modoMascara && !hideFinancial && <th className="px-4 py-2.5 text-right font-bold">Fat. Previsto</th>}
+                  {!modoMascara && !hideFinancial && <th className="px-4 py-2.5 text-right font-bold">Fat. Realizado</th>}
+                  {!modoMascara && !hideFinancial && <th className="px-4 py-2.5 text-right font-bold">Desvio R$</th>}
+                  <th className="px-4 py-2.5 text-left font-bold">Observações</th>
                 </tr>
               </thead>
               <tbody>
@@ -15522,30 +15655,66 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
                     const desvR = n(r.avancoRealizado) - n(r.avancoPrevisto);
                     const devFin = n(r.custoRealizado) - n(r.custoPrevisto);
                     const isAtual = r.semana === semana;
+                    const spiVal = n(r.spi);
+                    const spiOk = spiVal >= 1;
+                    const spiCritic = spiVal < 0.85;
+                    const hasPrev = n(r.avancoPrevisto) > 0;
+                    // Cor do indicador de status (left border)
+                    const borderCor = !hasPrev ? "border-l-slate-200" : desvR >= 0 ? "border-l-emerald-400" : desvR < -10 ? "border-l-red-500" : "border-l-amber-400";
                     return (
                       <tr key={r.id}
-                        className={`border-b border-slate-100 ${isAtual ? "bg-blue-50" : idx % 2 === 0 ? "bg-white" : "bg-slate-50/50"} hover:bg-slate-50 transition-colors`}>
-                        <td className="px-4 py-2.5 font-mono text-slate-500">{String(r.numero ?? idx + 1).padStart(3, "0")}</td>
-                        <td className="px-4 py-2.5 font-medium text-slate-700">
-                          {new Date(r.semana + "T12:00:00").toLocaleDateString("pt-BR")}
-                          {isAtual && <span className="ml-1.5 text-[9px] bg-blue-100 text-blue-700 rounded px-1 py-0.5 font-semibold">ATUAL</span>}
+                        className={`group border-b border-slate-100 border-l-4 ${borderCor} ${isAtual ? "bg-blue-50/70" : idx % 2 === 0 ? "bg-white" : "bg-slate-50/40"} hover:bg-blue-50/40 transition-all`}>
+                        <td className="px-4 py-3 font-mono text-[11px] text-slate-400 font-bold tabular-nums">#{String(r.numero ?? idx + 1).padStart(3, "0")}</td>
+                        <td className="px-4 py-3 font-medium text-slate-700">
+                          <div className="flex items-center gap-2">
+                            <span className="tabular-nums">{new Date(r.semana + "T12:00:00").toLocaleDateString("pt-BR")}</span>
+                            {isAtual && (
+                              <span className="inline-flex items-center gap-1 text-[9px] bg-blue-100 text-blue-700 border border-blue-200 rounded-full px-1.5 py-0.5 font-bold uppercase tracking-wider">
+                                <span className="h-1 w-1 rounded-full bg-blue-500 animate-pulse" />
+                                Atual
+                              </span>
+                            )}
+                          </div>
                         </td>
-                        <td className="px-4 py-2.5 text-right text-amber-700 font-semibold">{fPct_(n(r.avancoPrevisto))}</td>
-                        <td className="px-4 py-2.5 text-right text-blue-800 font-semibold">{fPct_(n(r.avancoRealizado))}</td>
-                        <td className={`px-4 py-2.5 text-right font-bold ${desvR >= 0 ? "text-emerald-600" : "text-red-600"}`}>
-                          {desvR >= 0 ? "+" : ""}{fPct_(desvR)}
+                        <td className="px-4 py-3 text-right text-amber-700 font-bold tabular-nums">{fPct_(n(r.avancoPrevisto))}</td>
+                        <td className="px-4 py-3 text-right text-blue-800 font-bold tabular-nums">{fPct_(n(r.avancoRealizado))}</td>
+                        <td className="px-4 py-3 text-right">
+                          <span className={`inline-flex items-center gap-0.5 font-bold tabular-nums rounded-md px-2 py-0.5 text-[11px] ${desvR >= 0 ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : desvR < -10 ? "bg-red-50 text-red-700 border border-red-200" : "bg-amber-50 text-amber-700 border border-amber-200"}`}>
+                            {desvR >= 0 ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
+                            {desvR >= 0 ? "+" : ""}{fPct_(desvR)}
+                          </span>
                         </td>
-                        <td className={`px-4 py-2.5 text-right font-semibold ${n(r.avancoPrevisto) === 0 ? "text-slate-400" : n(r.spi) >= 1 ? "text-emerald-600" : "text-red-600"}`}>
-                          {n(r.avancoPrevisto) === 0 ? "—" : n(r.spi).toFixed(2)}
+                        <td className="px-4 py-3 text-center">
+                          {!hasPrev ? (
+                            <span className="text-slate-400 font-medium">—</span>
+                          ) : (
+                            <div className="inline-flex items-center gap-1.5">
+                              <div className="relative w-10 h-1.5 bg-slate-200 rounded-full overflow-hidden">
+                                <div
+                                  className={`absolute inset-y-0 left-0 rounded-full ${spiOk ? "bg-gradient-to-r from-emerald-400 to-emerald-600" : spiCritic ? "bg-gradient-to-r from-red-400 to-red-600" : "bg-gradient-to-r from-amber-400 to-amber-600"}`}
+                                  style={{ width: `${Math.min(100, spiVal * 70)}%` }}
+                                />
+                                <div className="absolute inset-y-0 w-px bg-slate-600/40" style={{ left: "70%" }} title="SPI ideal = 1.00" />
+                              </div>
+                              <span className={`font-bold tabular-nums text-[11px] ${spiOk ? "text-emerald-600" : spiCritic ? "text-red-600" : "text-amber-600"}`}>{spiVal.toFixed(2)}</span>
+                            </div>
+                          )}
                         </td>
-                        {!modoMascara && !hideFinancial && <td className="px-4 py-2.5 text-right text-slate-600">{r.custoPrevisto > 0 ? fmt(n(r.custoPrevisto)) : "—"}</td>}
-                        {!modoMascara && !hideFinancial && <td className="px-4 py-2.5 text-right text-slate-600">{r.custoRealizado > 0 ? fmt(n(r.custoRealizado)) : "—"}</td>}
+                        {!modoMascara && !hideFinancial && <td className="px-4 py-3 text-right text-slate-600 tabular-nums">{r.custoPrevisto > 0 ? fmt(n(r.custoPrevisto)) : "—"}</td>}
+                        {!modoMascara && !hideFinancial && <td className="px-4 py-3 text-right text-slate-600 tabular-nums">{r.custoRealizado > 0 ? fmt(n(r.custoRealizado)) : "—"}</td>}
                         {!modoMascara && !hideFinancial && (
-                          <td className={`px-4 py-2.5 text-right font-semibold ${devFin >= 0 ? "text-emerald-600" : "text-red-600"}`}>
-                            {r.custoPrevisto > 0 ? `${devFin >= 0 ? "+" : ""}${fmt(devFin)}` : "—"}
+                          <td className="px-4 py-3 text-right">
+                            {r.custoPrevisto > 0 ? (
+                              <span className={`inline-flex items-center gap-0.5 font-bold tabular-nums rounded-md px-2 py-0.5 text-[11px] ${devFin >= 0 ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : "bg-red-50 text-red-700 border border-red-200"}`}>
+                                {devFin >= 0 ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
+                                {devFin >= 0 ? "+" : ""}{fmt(devFin)}
+                              </span>
+                            ) : (
+                              <span className="text-slate-400">—</span>
+                            )}
                           </td>
                         )}
-                        <td className="px-4 py-2.5 text-slate-500 max-w-[200px] truncate">{r.observacoes ?? "—"}</td>
+                        <td className="px-4 py-3 text-slate-500 max-w-[200px] truncate">{r.observacoes ?? <span className="text-slate-300">—</span>}</td>
                       </tr>
                     );
                   })}
