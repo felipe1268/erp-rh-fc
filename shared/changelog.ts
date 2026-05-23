@@ -1,6 +1,34 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2287 — **FEAT/UX · Foto do funcionário clicável (lightbox) na aba
+ * "Efetivo da Obra".**
+ *
+ * Pedido user (23/05/2026, IMG_1076): "Quero poder clicar na foto e
+ * aumentar de tamanho para ver com mais qualidade". Na "Lista de
+ * Funcionários" da aba Efetivo dentro do projeto de Planejamento, as
+ * fotos eram avatares minúsculos (h-9 w-9) sem affordance de clique.
+ *
+ * Fix em `client/src/pages/planejamento/PlanejamentoDetalhe.tsx`,
+ * componente `EfetivoObraTab`:
+ *   1. Estado novo `fotoZoom: { url, nome } | null` (~L11138).
+ *   2. Foto envolvida em `<button>` quando `e.fotoUrl` existe (~L11491):
+ *      hover/focus ring azul + `title="Clique para ampliar"` p/ deixar
+ *      claro que é clicável. Avatar inicial (sem foto) preserva
+ *      comportamento estático.
+ *   3. Lightbox fullscreen (~L11680): overlay preto/80% blur, foto
+ *      `object-contain` até 90vw/80vh, nome embaixo, botão X no canto
+ *      superior direito (`lucide-react` já importado L27).
+ *      Fechar: click no overlay, click no X. `stopPropagation` no
+ *      conteúdo interno p/ não fechar ao clicar na foto em si.
+ *
+ * Zero mudança em schema/router/persistência. Frontend-only. Sem nova
+ * dep (não usa Dialog do shadcn p/ evitar import — overlay simples).
+ *
+ * R-001/R-007/R-010: N/A (client-only).
+ */
+
+/**
  * Rev. 2286 — **FEAT/UX · Histórico de Relatórios REFIS com seleção
  * múltipla + exclusão em lote (admin-only).**
  *

@@ -11131,6 +11131,8 @@ function EfetivoObraTab({ proj }: { proj: any }) {
   const { selectedCompanyId } = useCompany();
   const companyId = Number(selectedCompanyId) || 0;
   const obraId = proj?.obraId ?? 0;
+  // Rev. 2287 — Zoom da foto do funcionário (lightbox)
+  const [fotoZoom, setFotoZoom] = useState<{ url: string; nome: string } | null>(null);
 
   const { data: equipeRaw = [], isLoading } = trpc.obras.equipeObra.useQuery(
     { obraId, companyId },
@@ -11483,7 +11485,14 @@ export function EfetivoObraView({ equipeRaw, isLoading, docsMap = {} }: { equipe
                       </td>
                       <td className="px-4 py-2">
                         {e.fotoUrl ? (
-                          <img src={e.fotoUrl} alt={e.nomeCompleto} className="h-9 w-9 rounded-full object-cover border border-slate-200 shadow-sm" />
+                          <button
+                            type="button"
+                            onClick={() => setFotoZoom({ url: e.fotoUrl, nome: e.nomeCompleto || "—" })}
+                            className="block h-9 w-9 rounded-full overflow-hidden border border-slate-200 shadow-sm hover:ring-2 hover:ring-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
+                            title="Clique para ampliar"
+                          >
+                            <img src={e.fotoUrl} alt={e.nomeCompleto} className="h-full w-full object-cover" />
+                          </button>
                         ) : (
                           <div className="h-9 w-9 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 text-white text-[11px] font-bold flex items-center justify-center shadow-sm">
                             {iniciais}
@@ -11662,6 +11671,35 @@ export function EfetivoObraView({ equipeRaw, isLoading, docsMap = {} }: { equipe
             </div>
           </div>
         </>
+      )}
+
+      {/* Rev. 2287 — Lightbox da foto do funcionário (clique p/ ampliar) */}
+      {fotoZoom && (
+        <div
+          className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in"
+          onClick={() => setFotoZoom(null)}
+          role="dialog"
+          aria-modal="true"
+          aria-label={`Foto de ${fotoZoom.nome}`}
+        >
+          <button
+            type="button"
+            onClick={(ev) => { ev.stopPropagation(); setFotoZoom(null); }}
+            className="absolute top-4 right-4 h-10 w-10 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition"
+            title="Fechar (Esc)"
+            aria-label="Fechar"
+          >
+            <X className="h-5 w-5" />
+          </button>
+          <div className="flex flex-col items-center gap-3 max-w-[90vw] max-h-[90vh]" onClick={(ev) => ev.stopPropagation()}>
+            <img
+              src={fotoZoom.url}
+              alt={fotoZoom.nome}
+              className="max-w-[90vw] max-h-[80vh] rounded-lg shadow-2xl object-contain bg-slate-900"
+            />
+            <span className="text-white/90 text-sm font-medium">{fotoZoom.nome}</span>
+          </div>
+        </div>
       )}
     </div>
   );
