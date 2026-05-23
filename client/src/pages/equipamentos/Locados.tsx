@@ -211,28 +211,78 @@ export default function EquipamentosLocados() {
     const t = setTimeout(() => setImportDemorando(true), 30_000);
     return () => clearTimeout(t);
   }, [parsearPdf.isPending]);
+  // Rev. 2322 — diagnóstico granular: separa motivos de rejeição (sem nº/datas/itens/data inválida)
+  // e mostra um diálogo claro em vez de toast genérico (iOS Safari escondia o erro).
+  // Também normaliza datas DD/MM/AAAA→ISO defensivamente (server já faz no parse, mas se user
+  // tiver editado o campo no preview ou voltado ao estado raw, garante regex /^\d{4}-\d{2}-\d{2}$/).
+  const [importErroDetalhe, setImportErroDetalhe] = useState<string | null>(null);
+  const toIsoDate = (s: any): string => {
+    if (!s) return "";
+    const str = String(s).trim();
+    const m1 = str.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (m1) return `${m1[1]}-${m1[2]}-${m1[3]}`;
+    const m2 = str.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+    if (m2) return `${m2[3]}-${m2[2]}-${m2[1]}`;
+    return "";
+  };
   function confirmarImport() {
     if (!importPreview || importPreview.length === 0) return;
+    if (!companyId) { setImportErroDetalhe("Empresa não selecionada. Selecione uma empresa antes de cadastrar."); return; }
+    let semNumero = 0, semData = 0, semItens = 0, dataInvalida = 0;
     const limpos = importPreview
-      .filter(c => c.numeroContrato && c.periodoInicio && c.periodoFim && c.itens?.length)
-      .map(c => ({
-        numeroContrato: String(c.numeroContrato).slice(0, 50),
-        fornecedorNome: c.fornecedorNome ? String(c.fornecedorNome).slice(0, 255) : undefined,
-        localObra: c.localObra ? String(c.localObra) : undefined,
-        periodoInicio: c.periodoInicio,
-        periodoFim: c.periodoFim,
-        valorTotal: Number(c.valorTotal) || undefined,
-        atendenteResponsavel: c.atendenteResponsavel ? String(c.atendenteResponsavel).slice(0, 255) : undefined,
-        itens: c.itens.map((it: any) => ({
+      .map(c => {
+        const ini = toIsoDate(c.periodoInicio);
+        const fim = toIsoDate(c.periodoFim);
+        const itens = (c.itens || []).map((it: any) => ({
           patrimonio: it.patrimonio ? String(it.patrimonio).slice(0, 100) : undefined,
-          descricao: String(it.descricao || "").slice(0, 255),
+          descricao: String(it.descricao || "").slice(0, 255).trim(),
           quantidade: Math.max(1, parseInt(String(it.quantidade)) || 1),
-          subtotal: Number(it.subtotal) || undefined,
-        })).filter((it: any) => it.descricao),
-      }))
-      .filter(c => c.itens.length > 0);
-    if (limpos.length === 0) return toast.error("Nenhum contrato válido após revisão.");
-    importarLote.mutate({ companyId, nomeArquivo: importArquivo?.nome, contratos: limpos });
+          subtotal: Number(it.subtotal) > 0 ? Number(it.subtotal) : undefined,
+        })).filter((it: any) => it.descricao);
+        if (!c.numeroContrato || !String(c.numeroContrato).trim()) { semNumero++; return null; }
+        if (!c.periodoInicio || !c.periodoFim) { semData++; return null; }
+        if (!ini || !fim) { dataInvalida++; return null; }
+        if (itens.length === 0) { semItens++; return null; }
+        return {
+          numeroContrato: String(c.numeroContrato).trim().slice(0, 50),
+          fornecedorNome: c.fornecedorNome ? String(c.fornecedorNome).slice(0, 255) : undefined,
+          localObra: c.localObra ? String(c.localObra) : undefined,
+          periodoInicio: ini,
+          periodoFim: fim,
+          valorTotal: Number(c.valorTotal) > 0 ? Number(c.valorTotal) : undefined,
+          atendenteResponsavel: c.atendenteResponsavel ? String(c.atendenteResponsavel).slice(0, 255) : undefined,
+          itens,
+        };
+      })
+      .filter((c): c is NonNullable<typeof c> => c !== null);
+    if (limpos.length === 0) {
+      const motivos: string[] = [];
+      if (semNumero) motivos.push(`${semNumero} sem nº de contrato`);
+      if (semData) motivos.push(`${semData} sem datas`);
+      if (dataInvalida) motivos.push(`${dataInvalida} com data em formato inválido`);
+      if (semItens) motivos.push(`${semItens} sem itens`);
+      setImportErroDetalhe(`Nenhum contrato válido para cadastrar.\n\nMotivos: ${motivos.join(", ") || "desconhecido"}.\n\nEdite os campos faltantes no preview e tente de novo.`);
+      return;
+    }
+    // Log diagnóstico — visível no console pra rastrear se algo no payload quebrar Zod no servidor.
+    console.log("[importarLote] enviando", { contratos: limpos.length, itens: limpos.reduce((a, c) => a + c.itens.length, 0), descartados: { semNumero, semData, dataInvalida, semItens } });
+    importarLote.mutate(
+      { companyId, nomeArquivo: importArquivo?.nome, contratos: limpos },
+      {
+        onError: (err: any) => {
+          // Captura ZodError do tRPC e mostra detalhes legíveis no diálogo (não só toast).
+          console.error("[importarLote] erro", err);
+          let msg = err?.message || "Erro desconhecido.";
+          try {
+            const parsed = JSON.parse(msg);
+            if (Array.isArray(parsed)) {
+              msg = parsed.slice(0, 5).map((e: any) => `• ${e.path?.join(".") || "?"}: ${e.message}`).join("\n");
+            }
+          } catch { /* msg é string simples */ }
+          setImportErroDetalhe(`Erro ao cadastrar:\n\n${msg}`);
+        },
+      },
+    );
   }
   function removerContratoPreview(idx: number) {
     setImportPreview(prev => prev ? prev.filter((_, i) => i !== idx) : prev);
@@ -546,6 +596,21 @@ export default function EquipamentosLocados() {
                     )}
                   </div>
                 ))}
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Rev. 2322 — Diálogo de erro detalhado da importação (substitui toast que sumia no iOS). */}
+      {importErroDetalhe && (
+        <div className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4" onClick={() => setImportErroDetalhe(null)}>
+          <div className="bg-white rounded-lg shadow-xl max-w-lg w-full" onClick={e => e.stopPropagation()}>
+            <div className="px-5 py-3 border-b bg-red-50 flex items-center gap-2">
+              <X className="h-5 w-5 text-red-600" />
+              <h3 className="font-semibold text-red-800">Não foi possível cadastrar</h3>
+            </div>
+            <div className="p-5 text-sm text-slate-700 whitespace-pre-wrap">{importErroDetalhe}</div>
+            <div className="px-5 py-3 border-t bg-slate-50 flex justify-end">
+              <button onClick={() => setImportErroDetalhe(null)} className="px-4 py-1.5 text-sm bg-slate-700 hover:bg-slate-800 text-white rounded">Entendi</button>
             </div>
           </div>
         </div>

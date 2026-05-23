@@ -1,6 +1,68 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2322 — **HOTFIX/UX · Botão "Confirmar e cadastrar" da
+ * importação PDF parecia não responder no iPad — diagnóstico
+ * granular + diálogo de erro substitui toast invisível.**
+ *
+ * Pedido user (23/05/2026, screenshot do preview com 46
+ * contratos / 119 unidades): "To clicando em cadastrar e ele
+ * não faz nada".
+ *
+ * **Diagnóstico**: o handler `confirmarImport` em
+ * `Locados.tsx` filtrava silenciosamente contratos sem
+ * `numeroContrato`/`periodoInicio`/`periodoFim`/`itens`. Se
+ * TODOS caíssem no filtro (cenário comum quando IA retorna
+ * alguns contratos incompletos OU quando o regex do server
+ * `/^\d{4}-\d{2}-\d{2}$/` rejeita uma data malformada),
+ * disparava `toast.error("Nenhum contrato válido após
+ * revisão.")` — toast some em ~3s no Safari iOS e o user
+ * não vê. Mesma coisa se o tRPC retornar ZodError do server
+ * (mensagem JSON enorme não cabia no toast).
+ *
+ * **Implementação** (`client/src/pages/equipamentos/
+ * Locados.tsx`):
+ *
+ * 1. Novo state `importErroDetalhe: string | null` + diálogo
+ *    modal vermelho (z-60, acima do modal de importação) que
+ *    persiste até o user clicar "Entendi". Usado em vez de
+ *    toast pra erros de importação.
+ *
+ * 2. Filtro de contratos refatorado pra CONTAR motivos de
+ *    rejeição em counters separados:
+ *    - `semNumero` (numeroContrato vazio/whitespace)
+ *    - `semData` (periodoInicio ou periodoFim vazio)
+ *    - `dataInvalida` (data não casa ISO nem DD/MM/AAAA)
+ *    - `semItens` (todos itens descartados por descrição vazia)
+ *    Mensagem específica: "Nenhum contrato válido. Motivos:
+ *    3 sem nº de contrato, 1 com data inválida, 2 sem itens."
+ *
+ * 3. `toIsoDate(s)` defensivo: aceita ISO ou DD/MM/AAAA,
+ *    retorna "" se inválido. Server já normaliza no parse,
+ *    mas blinda contra edição manual no preview ou state
+ *    raw da IA.
+ *
+ * 4. `onError` da mutation tenta parsear ZodError
+ *    (`JSON.parse(err.message)`) e formata as 5 primeiras
+ *    issues como `• path: message`. Fallback pra mensagem
+ *    crua se não for JSON. Exibido no diálogo (não toast).
+ *
+ * 5. `console.log("[importarLote] enviando", ...)` ao
+ *    submeter — visível no devtools (mobile + desktop) pra
+ *    debug futuro.
+ *
+ * 6. Guard `if (!companyId)` adicionado (cenário raro mas
+ *    possível se modal abrir antes do contexto carregar).
+ *
+ * 7. `Number(...) > 0` em vez de `Number(...) || undefined`
+ *    pra `valorTotal`/`subtotal` — evita enviar 0 quando IA
+ *    retorna campo ausente (cosmético, server aceita ambos).
+ *
+ * **0 mudança server, 0 mudança schema.**
+ *
+ * **R-001/R-007/R-010:** N/A — só UX/client.
+ *
+ *
  * Rev. 2321 — **HOTFIX/INFRA · Importação PDF da locação migrada
  * pra polling (Start+Status) — proxy Replit matava em 60s com
  * PDFs grandes; toast "Load failed" no iOS Safari.**
