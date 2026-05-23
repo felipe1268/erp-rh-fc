@@ -1,6 +1,41 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2299 — **HOTFIX · Funcionários Terceiros: filtros e contadores
+ * Aptos/Inaptos/Pendentes voltaram a funcionar — campo errado no
+ * cliente.**
+ *
+ * Pedido user (23/05/2026): "Os filtros mal estão funcionando pq?"
+ * Screenshot mostrava 23 funcionários listados, vários com badge
+ * "Pendente" visível, mas os 3 cards de stats marcavam 0 / 0 / 0 e o
+ * dropdown "Aptidão" não filtrava nada.
+ *
+ * **Causa-raiz:** O schema do Drizzle (drizzle/schema.ts L3636) define
+ * a coluna como `statusAptidao text NOT NULL DEFAULT 'pendente'`. O
+ * router `server/routers/terceiros.ts` (L570 input, L467 select)
+ * também usa `statusAptidao`. Mas o cliente em
+ * `client/src/pages/terceiros/FuncionariosTerceiros.tsx` referenciava
+ * `f.statusAptidaoTerceiro` em 5 lugares (L128 filter, L323/327/331
+ * contadores, L364 badge no card). Como `statusAptidaoTerceiro`
+ * **não existe** no payload, o filter sempre falhava (lista sumia
+ * quando o usuário clicava em Apto/Inapto/Pendente) e os contadores
+ * sempre retornavam 0. Provavelmente um typo de copy-paste antigo do
+ * nome da tabela (`funcionarios_terceiros` → `statusAptidaoTerceiro`).
+ *
+ * **Fix:** Substituído `statusAptidaoTerceiro` por `statusAptidao` nos
+ * 5 sites. Também simplificado L525 — o `value` do Select da Aptidão
+ * no formulário tinha fallback `form.statusAptidao || form.statusAptidaoTerceiro
+ * || "pendente"` (o segundo termo nunca preenchia), virou
+ * `form.statusAptidao || "pendente"`.
+ *
+ * Arquivos: `client/src/pages/terceiros/FuncionariosTerceiros.tsx`,
+ * `shared/version.ts`, `shared/changelog.ts`, `replit.md`,
+ * `replit-history.md`.
+ *
+ * **R-001 / R-007 / R-010:** N/A — só fix de leitura no cliente; nenhuma
+ * DDL nem mutation. Dados do Postgres estavam corretos o tempo todo,
+ * só não eram lidos com o nome certo.
+ *
  * Rev. 2298 — **UX · Segunda linha de filtros na tela Cotações: pills por
  * TIPO (Todos / Material / MDO / Pacote / Equipamento) com contador.
  * Compõe com os filtros de status — dá "raio-X" 2D da carteira de

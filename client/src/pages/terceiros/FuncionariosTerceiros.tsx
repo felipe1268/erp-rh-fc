@@ -125,7 +125,7 @@ export default function FuncionariosTerceiros() {
 
   const filtered = useMemo(() => {
     let list = funcionarios;
-    if (filterAptidao !== "all") list = list.filter((f: any) => f.statusAptidaoTerceiro === filterAptidao);
+    if (filterAptidao !== "all") list = list.filter((f: any) => f.statusAptidao === filterAptidao);
     if (!search) return list;
     const s = search.toLowerCase();
     return list.filter((f: any) =>
@@ -320,15 +320,15 @@ export default function FuncionariosTerceiros() {
         {/* Stats */}
         <div className="grid grid-cols-3 gap-3">
           <div className="bg-emerald-50 rounded-lg p-3 text-center">
-            <span className="text-2xl font-bold text-emerald-600">{funcionarios.filter((f: any) => f.statusAptidaoTerceiro === "apto").length}</span>
+            <span className="text-2xl font-bold text-emerald-600">{funcionarios.filter((f: any) => f.statusAptidao === "apto").length}</span>
             <p className="text-xs text-emerald-700">Aptos</p>
           </div>
           <div className="bg-red-50 rounded-lg p-3 text-center">
-            <span className="text-2xl font-bold text-red-600">{funcionarios.filter((f: any) => f.statusAptidaoTerceiro === "inapto").length}</span>
+            <span className="text-2xl font-bold text-red-600">{funcionarios.filter((f: any) => f.statusAptidao === "inapto").length}</span>
             <p className="text-xs text-red-700">Inaptos</p>
           </div>
           <div className="bg-amber-50 rounded-lg p-3 text-center">
-            <span className="text-2xl font-bold text-amber-600">{funcionarios.filter((f: any) => f.statusAptidaoTerceiro === "pendente").length}</span>
+            <span className="text-2xl font-bold text-amber-600">{funcionarios.filter((f: any) => f.statusAptidao === "pendente").length}</span>
             <p className="text-xs text-amber-700">Pendentes</p>
           </div>
         </div>
@@ -361,7 +361,7 @@ export default function FuncionariosTerceiros() {
                             <BadgeCheck className="h-3 w-3" />{func.numeroInterno}
                           </span>
                         )}
-                        {aptidaoBadge(func.statusAptidaoTerceiro)}
+                        {aptidaoBadge(func.statusAptidao)}
                       </div>
                       <div className="flex flex-wrap gap-3 mt-1 text-xs text-muted-foreground">
                         {func.cpf && <span>CPF: {func.cpf}</span>}
@@ -522,7 +522,7 @@ export default function FuncionariosTerceiros() {
                       </div>
                       <div>
                         <Label>Aptidão</Label>
-                        <Select value={form.statusAptidao || form.statusAptidaoTerceiro || "pendente"} onValueChange={(v) => setForm({ ...form, statusAptidao: v })}>
+                        <Select value={form.statusAptidao || "pendente"} onValueChange={(v) => setForm({ ...form, statusAptidao: v })}>
                           <SelectTrigger><SelectValue /></SelectTrigger>
                           <SelectContent>
                             <SelectItem value="apto">Apto</SelectItem>
