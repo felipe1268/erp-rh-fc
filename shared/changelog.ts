@@ -1,6 +1,50 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2263 — **UX · Modal "Editar Revisão" adota layout moderno FC,
+ * espelhando "Nova Revisão do Cronograma".**
+ *
+ * Pedido user (23/05/2026): "ajuste este layout conforme as nossas
+ * regras de ouro... padrão de layout moderno e fácil usabilidade".
+ * Screenshot mostrou modal "Editar Revisão Rev. 01" com header
+ * desbotado, Responsável editável (violando Rev. 2253) e botão Salvar
+ * em azul genérico (`bg-blue-600`) — inconsistente com o modal-irmão
+ * "Nova Revisão" (L12629+) que já segue o padrão FC: faixa azul
+ * #1B2A4A full-width + título caixa alta letter-spacing 3px + corpo
+ * com padding px-5 pb-5 + Responsável readOnly puxado do cadastro
+ * da obra + botão `bg #1B2A4A`.
+ *
+ * **Fix:** reescreve o JSX do modal Editar Revisão em
+ * `PlanejamentoDetalhe.tsx` (L12568-12627) para:
+ *  - Header com faixa azul #1B2A4A + título "EDITAR REVISÃO REV. NN"
+ *    em uppercase letter-spacing 3px (idêntico ao Nova Revisão).
+ *  - `DialogContent` com `p-0 overflow-hidden gap-0`; corpo com
+ *    `space-y-3 mt-1 px-5 pb-5`.
+ *  - Campo "Responsável (do cadastro)" agora `readOnly` em
+ *    `bg-slate-100`, valor `projetoResponsavel ?? editForm.responsavel`
+ *    — replica regra Rev. 2253 (consistência com cadastro da obra).
+ *  - Botão "Salvar Alterações" passa de `bg-blue-600` para
+ *    `style={{ backgroundColor: "#1B2A4A" }}` (identidade FC).
+ *  - `editarMutation.mutate` envia `responsavel: projetoResponsavel ??
+ *    editForm.responsavel` — garante que mesmo formularios antigos
+ *    salvem o engenheiro oficial.
+ *  - Placeholder do motivo mais útil ("Ex: Chuvas prolongadas...").
+ *
+ * **Sem mudanças funcionais** na lógica de edição (mutation,
+ * validação, dependências). Apenas refactor visual + lock do
+ * Responsável.
+ *
+ * **R-001/R-007/R-010:** N/A (100% UI client-side).
+ *
+ * Arquivos:
+ *  - `client/src/pages/planejamento/PlanejamentoDetalhe.tsx`
+ *    L12568-12627 (modal Editar Revisão reescrito).
+ *  - `shared/version.ts` 2262 → 2263.
+ *  - `shared/changelog.ts` (esta entrada).
+ *  - `replit.md` (2263 detalhada, 2261 vira one-liner, 2256 → history).
+ */
+
+/**
  * Rev. 2262 — **FIX/REGRA DE OURO · Card "Avanço Físico" do topo espelha
  * snapshot MSP da raiz UID=0 (previsto Texto6/Texto10 + realizado AD/(AD+RD)),
  * ZERO cálculo no ERP quando o XML traz a foto.**

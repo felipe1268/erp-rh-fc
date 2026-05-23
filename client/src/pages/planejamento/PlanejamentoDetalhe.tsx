@@ -12566,14 +12566,28 @@ function Revisoes({ projetoId, revisoes, revisaoAtiva, utils, isAdminMaster, pro
       </div>
 
       <Dialog open={!!editModalRev} onOpenChange={v => { if (!v) setEditModalRev(null); }}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Editar Revisão {editModalRev ? `Rev. ${String(editModalRev.numero).padStart(2, "0")}` : ""}</DialogTitle>
-            <DialogDescription className="text-xs text-slate-500 mt-1">
+        <DialogContent className="max-w-md p-0 overflow-hidden gap-0">
+          {/* Rev. 2263 — Padrão FC modal: faixa azul #1B2A4A full-width
+              com título caixa alta letter-spacing 3px branco. Espelha o
+              layout "Nova Revisão do Cronograma" (L12629+) pra
+              consistência visual e usabilidade dentro do módulo. */}
+          <DialogHeader className="space-y-0">
+            <div
+              className="px-5 py-3.5 border-y-2 border-white"
+              style={{ backgroundColor: "#1B2A4A" }}
+            >
+              <DialogTitle
+                className="text-white text-[13px] font-bold uppercase m-0"
+                style={{ letterSpacing: "3px" }}
+              >
+                Editar Revisão {editModalRev ? `Rev. ${String(editModalRev.numero).padStart(2, "0")}` : ""}
+              </DialogTitle>
+            </div>
+            <DialogDescription className="text-xs text-slate-500 px-5 pt-3">
               Altere os dados da revisão. As atividades do cronograma não são alteradas.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-3 mt-1">
+          <div className="space-y-3 mt-1 px-5 pb-5">
             <div>
               <Label className="text-xs">Descrição</Label>
               <Input value={editForm.descricao}
@@ -12585,7 +12599,7 @@ function Revisoes({ projetoId, revisoes, revisaoAtiva, utils, isAdminMaster, pro
               <textarea
                 value={editForm.motivo}
                 onChange={e => setEditForm(f => ({ ...f, motivo: e.target.value }))}
-                placeholder="Motivo..."
+                placeholder="Ex: Chuvas prolongadas em fevereiro atrasaram fundação..."
                 className="mt-1 w-full border border-input rounded-md px-3 py-2 text-sm bg-background resize-none"
                 rows={2}
               />
@@ -12597,10 +12611,17 @@ function Revisoes({ projetoId, revisoes, revisaoAtiva, utils, isAdminMaster, pro
                   onChange={e => setEditForm(f => ({ ...f, dataRevisao: e.target.value }))} className="mt-1" />
               </div>
               <div>
-                <Label className="text-xs">Responsável</Label>
-                <Input value={editForm.responsavel}
-                  onChange={e => setEditForm(f => ({ ...f, responsavel: e.target.value }))}
-                  placeholder="Engenheiro" className="mt-1" />
+                {/* Rev. 2263 — Responsável FIXO (readOnly), espelhando a regra
+                    aplicada no modal Nova Revisão (Rev. 2253): engenheiro vem
+                    do cadastro da obra, garantindo consistência. */}
+                <Label className="text-xs">Responsável (do cadastro)</Label>
+                <Input
+                  value={projetoResponsavel || editForm.responsavel || "—"}
+                  readOnly
+                  tabIndex={-1}
+                  className="mt-1 bg-slate-100 text-slate-700 cursor-not-allowed focus-visible:ring-0"
+                  title="Engenheiro responsável definido no cadastro da obra. Para alterar, edite a obra em Obras → Editar."
+                />
               </div>
             </div>
             <div>
@@ -12613,8 +12634,9 @@ function Revisoes({ projetoId, revisoes, revisaoAtiva, utils, isAdminMaster, pro
               <Button variant="outline" onClick={() => setEditModalRev(null)} disabled={editarMutation.isPending}>Cancelar</Button>
               <Button
                 disabled={editarMutation.isPending}
-                onClick={() => editarMutation.mutate({ id: editModalRev.id, ...editForm })}
-                className="bg-blue-600 hover:bg-blue-700 gap-1.5"
+                onClick={() => editarMutation.mutate({ id: editModalRev.id, ...editForm, responsavel: projetoResponsavel || editForm.responsavel })}
+                className="gap-1.5 text-white"
+                style={{ backgroundColor: "#1B2A4A" }}
               >
                 {editarMutation.isPending
                   ? <><Loader2 className="h-4 w-4 animate-spin" /> Salvando...</>
