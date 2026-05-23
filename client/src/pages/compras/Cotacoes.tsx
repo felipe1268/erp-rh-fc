@@ -969,8 +969,11 @@ export default function Cotacoes() {
     }
   }, [showDetalhe]);
 
+  // Rev. 2296 — filtro de status é feito client-side pra permitir contadores
+  // por status nos pills (UX pediu "fica visual as cotações finalizadas,
+  // pendentes.. enfim todos os status possíveis").
   const q = trpc.compras.listarCotacoes.useQuery(
-    { companyId, status: filtroStatus === "todos" ? undefined : filtroStatus },
+    { companyId, status: undefined },
     { enabled: companyId > 0 }
   );
   const detalheQ = trpc.compras.getCotacao.useQuery({ id: showDetalhe! }, { enabled: showDetalhe !== null });
@@ -1456,7 +1459,15 @@ export default function Cotacoes() {
   }
 
   const lista = q.data ?? [];
-  const filt = lista.filter(c => !busca || c.numeroCotacao?.toLowerCase().includes(busca.toLowerCase()));
+  // Rev. 2296 — contadores por status (ignoram filtroStatus, mas respeitam busca por número).
+  const listaSearched = lista.filter(c => !busca || c.numeroCotacao?.toLowerCase().includes(busca.toLowerCase()));
+  const countsPorStatus = listaSearched.reduce<Record<string, number>>((acc, c) => {
+    const s = String((c as any).status ?? "pendente");
+    acc[s] = (acc[s] ?? 0) + 1;
+    return acc;
+  }, {});
+  const countTodos = listaSearched.length;
+  const filt = listaSearched.filter(c => filtroStatus === "todos" || String((c as any).status ?? "pendente") === filtroStatus);
 
   const allFilteredIds = filt.map(c => c.id);
   const allSelected = allFilteredIds.length > 0 && allFilteredIds.every(id => selectedIds.has(id));
@@ -6126,13 +6137,43 @@ export default function Cotacoes() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
           <Input placeholder="Buscar por número..." className="pl-9 bg-white border-gray-300 text-gray-900" value={busca} onChange={e => setBusca(e.target.value)} />
         </div>
-        <div className="flex gap-2">
-          {["todos", "pendente", "aprovada", "concluida", "recusada", "expirada"].map(s => (
-            <button key={s} onClick={() => setFiltroStatus(s)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${filtroStatus === s ? "bg-blue-600 border-blue-500 text-white" : "bg-white border-gray-300 text-gray-600 hover:border-gray-400"}`}>
-              {s === "todos" ? "Todos" : STATUS_LABELS[s]?.label}
-            </button>
-          ))}
+        {/* Rev. 2296 — Pills coloridos por status com ícone + contador.
+            Antes: botões neutros (azul=ativo / branco=inativo) sem dimensão visual.
+            Agora: cada status traz sua cor própria (âmbar=pendente, verde=aprovada,
+            azul=concluída, vermelho=recusada, cinza=expirada) + contador,
+            facilitando o "raio-X" da carteira de cotações de relance. */}
+        <div className="flex flex-wrap gap-2">
+          {([
+            { s: "todos",     label: "Todos",     Icon: Layers,        count: countTodos,                   accent: "border-slate-300 text-slate-700",       activeBg: "bg-slate-800 border-slate-800 text-white",      idleHoverBg: "hover:bg-slate-50",  dot: "bg-slate-400" },
+            { s: "pendente",  label: "Pendente",  Icon: Clock,         count: countsPorStatus.pendente  ?? 0, accent: "border-amber-300 text-amber-800",        activeBg: "bg-amber-500 border-amber-500 text-white",       idleHoverBg: "hover:bg-amber-50",  dot: "bg-amber-500" },
+            { s: "aprovada",  label: "Aprovada",  Icon: CheckCircle,   count: countsPorStatus.aprovada  ?? 0, accent: "border-emerald-300 text-emerald-800",   activeBg: "bg-emerald-600 border-emerald-600 text-white",   idleHoverBg: "hover:bg-emerald-50", dot: "bg-emerald-500" },
+            { s: "concluida", label: "Concluída", Icon: ShieldCheck,   count: countsPorStatus.concluida ?? 0, accent: "border-blue-300 text-blue-800",          activeBg: "bg-blue-600 border-blue-600 text-white",         idleHoverBg: "hover:bg-blue-50",   dot: "bg-blue-500" },
+            { s: "recusada",  label: "Recusada",  Icon: XCircle,       count: countsPorStatus.recusada  ?? 0, accent: "border-red-300 text-red-800",            activeBg: "bg-red-600 border-red-600 text-white",           idleHoverBg: "hover:bg-red-50",    dot: "bg-red-500" },
+            { s: "expirada",  label: "Expirada",  Icon: AlertTriangle, count: countsPorStatus.expirada  ?? 0, accent: "border-gray-300 text-gray-600",          activeBg: "bg-gray-600 border-gray-600 text-white",         idleHoverBg: "hover:bg-gray-100",  dot: "bg-gray-400" },
+          ] as const).map(({ s, label, Icon, count, accent, activeBg, idleHoverBg, dot }) => {
+            const active = filtroStatus === s;
+            return (
+              <button
+                key={s}
+                type="button"
+                onClick={() => setFiltroStatus(s)}
+                title={`${label}: ${count} cotaç${count === 1 ? "ão" : "ões"}`}
+                className={`group inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold border transition-all
+                  ${active ? `${activeBg} shadow-sm` : `bg-white ${accent} ${idleHoverBg}`}`}
+              >
+                {active ? (
+                  <Icon className="h-3.5 w-3.5" />
+                ) : (
+                  <span className={`h-2 w-2 rounded-full ${dot}`} />
+                )}
+                <span>{label}</span>
+                <span className={`inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full text-[10px] font-bold tabular-nums
+                  ${active ? "bg-white/25 text-white" : "bg-gray-100 text-gray-700 group-hover:bg-white"}`}>
+                  {count}
+                </span>
+              </button>
+            );
+          })}
         </div>
       </div>
 

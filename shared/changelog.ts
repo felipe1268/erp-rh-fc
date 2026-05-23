@@ -1,6 +1,44 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2296 — **UX · Filtros de status da tela Cotações redesenhados em pills
+ * coloridos com ícone + contador por status (Todos / Pendente / Aprovada /
+ * Concluída / Recusada / Expirada).**
+ *
+ * Pedido user (23/05/2026): "melhore o card de forma que fica visual as
+ * cotações finalizadas, pendentes.. enfim todos os status possíveis".
+ *
+ * **Por quê:** os filtros eram botões neutros (azul=ativo / branco=inativo)
+ * sem dimensão visual nem contagem — o usuário não tinha "raio-X" da
+ * carteira de cotações de relance. Agora cada status tem cor própria, ícone,
+ * e número de cotações naquele estado, o que dá leitura imediata do funil
+ * (quantas estão aguardando preço, quantas viraram OC, quantas expiraram).
+ *
+ * **Mudanças (client — `client/src/pages/compras/Cotacoes.tsx`):**
+ * - Query `listarCotacoes` (L978) deixou de passar `status` pro server.
+ *   Agora carrega todas e filtra client-side, viabilizando os contadores
+ *   por status sem fazer N requisições. Volume é pequeno (<1k cotações por
+ *   empresa típica).
+ * - `listaSearched` (L1466) aplica primeiro o filtro de busca por número;
+ *   `countsPorStatus` (L1467-1471) reduz pra `Record<status, n>`;
+ *   `countTodos` é o tamanho de `listaSearched`; `filt` (L1473) só filtra
+ *   por status depois — assim o contador de "Todos" reflete a busca atual.
+ * - Bloco de filtros (L6143-6181) reescrito: pills `rounded-full` com cor
+ *   tema do status (âmbar=pendente, verde=aprovada, azul=concluída,
+ *   vermelho=recusada, cinza=expirada, slate=todos), ícone Lucide quando
+ *   ativo / bolinha colorida quando inativo, e badge numérico tabular à
+ *   direita (`tabular-nums` pra alinhamento perfeito quando contadores
+ *   crescem). Hover usa cor pastel do tema do status.
+ * - `STATUS_LABELS` (L419) mantido — ainda é usado pelo badge dentro das
+ *   linhas da tabela. Apenas a renderização dos botões mudou.
+ *
+ * **R-001 / R-007 / R-010:** N/A. Mudança 100% client-side, nenhuma DDL nem
+ * mutation no servidor.
+ *
+ * Arquivos: `client/src/pages/compras/Cotacoes.tsx` (L978, L1464-1473,
+ * L6143-6181), `shared/version.ts`, `shared/changelog.ts`, `replit.md`,
+ * `replit-history.md`.
+ *
  * Rev. 2295 — **FEAT/UX · Auto-cotação ao criar SC + Coluna "Aprovação"
  * substituída por "Tipo" e nova coluna "Prioridade" ordenáveis na tabela de
  * Solicitações de Compras.**
