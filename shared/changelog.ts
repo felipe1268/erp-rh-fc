@@ -1,6 +1,50 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2317 — **UX · Remove IMPORTAR PDF (IA) do header do
+ * Almoxarifado; fica só RECEBER + DEVOLVER LOCAÇÃO. Importar PDF
+ * segue disponível no hero da tela Equipamentos Locados.**
+ *
+ * Pedido user (23/05/2026, logo após a Rev. 2316 entregar 8
+ * cards no Almoxarifado): "Nesta tela não precisa ter importar
+ * PDF".
+ *
+ * **Diagnóstico**: a separação de responsabilidades finalmente
+ * decantou:
+ *   - **Almoxarifado** = ações PONTUAIS do dia-a-dia (entrada,
+ *     saída, ferramentas, transferência, fechar dia, RECEBER
+ *     locação avulsa, DEVOLVER locação).
+ *   - **Tela Equipamentos Locados** = dashboard + ação BULK de
+ *     importação via PDF (botão "Importar PDF (IA)" no hero,
+ *     mantido como CTA primária sólida desde a Rev. 2315).
+ * O IMPORTAR PDF no Almoxarifado era duplicação visual — agora
+ * tem só 1 entry-point e ele está no lugar semanticamente
+ * correto.
+ *
+ * **Implementação** (`client/src/pages/almoxarifado/index.tsx`):
+ *
+ * 1. Removido o `<button>` IMPORTAR PDF (IA) (gradient
+ *    indigo→purple→fuchsia, ícone FileUp) do grid de ações
+ *    rápidas.
+ *
+ * 2. Import `FileUp` removido do lucide-react. `Truck` mantido
+ *    (continua sendo usado pelo RECEBER LOCAÇÃO).
+ *
+ * 3. Grid: `grid-cols-3 sm:grid-cols-4 lg:grid-cols-8` (8 cards,
+ *    Rev. 2316) → `grid-cols-3 sm:grid-cols-4 lg:grid-cols-7` (7
+ *    cards). Ordem final: ENTRADA / SAÍDA / FERRAMENTAS /
+ *    TRANSFERIR / FECHAR DIA / RECEBER LOCAÇÃO / DEVOLVER
+ *    LOCAÇÃO.
+ *
+ * 4. Não há mais nenhum entry-point pra `?action=importar` vindo
+ *    do Almoxarifado. O useEffect em `Locados.tsx` que trata
+ *    esse param fica preservado (compat de URL).
+ *
+ * **0 mudança backend, 0 schema, 0 procedures novas.**
+ *
+ * **R-001/R-007/R-010:** N/A — 100% client-side.
+ *
+ *
  * Rev. 2316 — **UX · Restaura RECEBER LOCAÇÃO + DEVOLVER LOCAÇÃO
  * como botões dedicados no header do Almoxarifado, ao lado do
  * IMPORTAR PDF (IA) (efetivamente reverte a consolidação da Rev.

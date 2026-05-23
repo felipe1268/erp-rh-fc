@@ -9,7 +9,7 @@ import {
   AlertTriangle, Loader2, History, X, BarChart2, Boxes,
   LayoutGrid, List, Camera, Trash2, ImageOff, Barcode,
   Wrench, ClipboardCheck, User, CheckCircle2, XCircle, ChevronRight, ChevronLeft,
-  Building2, HardHat, Sparkles, ScanLine, ShoppingCart, ArrowLeftRight, FileUp, Truck,
+  Building2, HardHat, Sparkles, ScanLine, ShoppingCart, ArrowLeftRight, Truck,
 } from "lucide-react";
 import SmartEntry from "./SmartEntry";
 import AlertasAlmoxarifado from "./AlertasAlmoxarifado";
@@ -783,7 +783,7 @@ export default function AlmoxarifadoPage() {
 
         {/* ── AÇÕES RÁPIDAS MOBILE ──────────────────────────────── */}
         <div className="max-w-7xl mx-auto px-4 py-4">
-          <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 lg:grid-cols-8">
+          <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 lg:grid-cols-7">
             {/* ENTRADA */}
             <button
               onClick={() => setModalSmartEntry(true)}
@@ -831,14 +831,7 @@ export default function AlmoxarifadoPage() {
               <ClipboardCheck className="w-8 h-8" />
               📋 FECHAR DIA
             </button>
-            {/* Rev. 2313 — IMPORTAR PDF de contrato de locação (ponte com tela Equipamentos Locados) */}
-            <button
-              onClick={() => setLocation("/equipamentos/locados?action=importar")}
-              className="flex flex-col items-center justify-center gap-2 bg-gradient-to-br from-indigo-500 via-purple-600 to-fuchsia-600 hover:from-indigo-600 hover:via-purple-700 hover:to-fuchsia-700 active:scale-95 text-white rounded-2xl p-4 min-h-[80px] font-bold text-sm shadow-md transition text-center leading-tight"
-            >
-              <FileUp className="w-8 h-8" />
-              IMPORTAR<br />PDF (IA)
-            </button>
+            {/* Rev. 2317 — IMPORTAR PDF removido daqui (continua disponível no hero da tela Equipamentos Locados). */}
             {/* Rev. 2316 — RECEBER LOCAÇÃO (cadastro pontual de equipamento locado) */}
             <button
               onClick={() => setLocation("/equipamentos/locados?action=receber")}
