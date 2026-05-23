@@ -483,3 +483,4 @@
 - Rev. 2265 — REGRA ABSOLUTA · Planejamento é READ-ONLY do MSP — SSOT mspReadOnly, 6 cards lendo snapshot direto.
 - Rev. 2266 — FIX · Importer Avanço Semanal regrava snapshot MSP via parseMSProjectFull ao reimportar XML.
 - Rev. 2267 — UX · Cards exibem snapshot MSP em semanas POSTERIORES ao StatusDate, com chip ambar 'Foto MSP de DD/MM'.
+- Rev. 2268 — FIX · Card 'PREVISTO (SEMANA)' varia por semana via pctRaizMSP; chip 'Foto MSP' se refere SO ao Realizado.

@@ -13498,12 +13498,24 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
     // Rev. 1887 — sub-grupos RECURSIVOS para drill-down pai/filho.
     // Cada etapa ganha `.children: [...]` (mesma forma), permitindo abrir
     // todos os níveis da EAP (igual estrutura do cronograma).
+    // Rev. 2275 — `children` agora INCLUI também as FOLHAS (atividades não-
+    // grupo) como filhas diretas, no mesmo nível dos sub-grupos. Antes
+    // `buildSubgrupos` filtrava só `a.isGrupo`, então a árvore parava no
+    // último grupo (ex.: 01.01 MOBILIZAÇÃO) sem mostrar as folhas finais
+    // (01.01.01 Saúde, 01.01.02 ART). Pedido user (23/05/2026 VITRA,
+    // "AVANÇO FÍSICO POR GRUPO"): "precisa separar por pais e filhos de
+    // forma que possamos analisar cada ativiade por % e grafico em barras
+    // horizontal". Filhos diretos = descendentes com nivel === parent+1
+    // (grupos + folhas), ordenados pela `ordem` original do MSP. Folhas
+    // recebem `children: []` (terminal), grupos recursam.
     function buildSubgrupos(parent: any): any[] {
       const pNivel = parent.nivel ?? 1;
       const pDesc = descendentes(parent);
-      return pDesc
-        .filter((a: any) => a.isGrupo && (a.nivel ?? 1) === pNivel + 1)
-        .map((e: any) => {
+      const filhosDiretos = pDesc
+        .filter((a: any) => (a.nivel ?? 1) === pNivel + 1 && !a.isIndireta && !a.disabled)
+        .sort((a: any, b: any) => (a.ordem ?? 0) - (b.ordem ?? 0));
+      return filhosDiretos.map((e: any) => {
+        if (e.isGrupo) {
           const eDesc = descendentes(e);
           const eLeaves = eDesc.filter((a: any) => !a.isGrupo && !a.isIndireta && !a.disabled);
           const eInis = eLeaves.filter((a: any) => a.dataInicio).map((a: any) => a.dataInicio as string).sort();
@@ -13516,7 +13528,16 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
             dataFim:   eFins[eFins.length - 1] ?? null,
             children:  buildSubgrupos(e),
           };
-        });
+        }
+        // Folha (atividade terminal) — nó terminal sem children.
+        return {
+          ...e,
+          previsto:  +Math.min(100, prevInd(e)).toFixed(1),
+          realizado: +Math.min(100, realMap[e.id] ?? 0).toFixed(1),
+          nLeaves: 1,
+          children: [],
+        };
+      });
     }
 
     return g1.map((g: any) => {

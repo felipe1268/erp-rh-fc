@@ -1,6 +1,57 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2275 — **FEAT · "AVANÇO FÍSICO POR GRUPO" agora separa pais e
+ * filhos até as FOLHAS finais (atividades terminais), com barras
+ * horizontais por nível e drill-down recursivo via chevron.**
+ *
+ * Pedido user (23/05/2026, VITRA, painel "AVANÇO FÍSICO POR GRUPO"):
+ *   "precisa separar por pais e filhos de forma que possamos analisar
+ *    cada ativiade por % e grafico em barras horizontal".
+ *
+ * Diagnóstico (`PlanejamentoDetalhe.tsx::grupos` L13419-13534):
+ *   - Estrutura `grupos[].etapas[].children[]` já é recursiva desde
+ *     Rev. 1887; `renderRow` (Rev. 1945) já trata chevron + barras
+ *     horizontais + indentação por depth.
+ *   - PORÉM `buildSubgrupos` filtrava `a.isGrupo`, então `children`
+ *     SÓ continha sub-grupos. As FOLHAS (atividades não-grupo, ex.:
+ *     01.01.01 "Saúde e segurança", 01.01.02 "ART") NUNCA entravam
+ *     na árvore — o drill-down parava no último grupo (01.01) e o
+ *     engenheiro não conseguia ver os % por atividade individual.
+ *
+ * Fix (`PlanejamentoDetalhe.tsx::buildSubgrupos` L13514-13544):
+ *   - Filhos diretos do parent = TODOS os descendentes com
+ *     `nivel === parent.nivel + 1` (grupos E folhas), `!isIndireta`,
+ *     `!disabled`, ordenados por `ordem` original do MSP.
+ *   - Branch `if (e.isGrupo)`: recursa via `buildSubgrupos(e)` (mesma
+ *     forma de antes — calcula previsto/realizado ponderado das folhas
+ *     do subgrupo).
+ *   - Branch folha: nó terminal `{ ...e, previsto: prevInd(e),
+ *     realizado: realMap[e.id] ?? 0, nLeaves: 1, children: [] }`.
+ *   - `renderRow` (já existente) detecta `hasChildren = e.children.length>0`
+ *     e renderiza folhas SEM chevron, com barras horizontais
+ *     previsto/realizado + % e desvio (mesmo layout dos sub-grupos).
+ *
+ * Resultado VITRA — SERVIÇOS PRELIMINARES:
+ *   - Detalhamento expandido mostra agora 01.01 → expandir → 01.01.01
+ *     Saúde 45,93% / 01.01.02 ART 22,96%. Idem 01.02, 01.03, 01.07, 01.08.
+ *   - "Expandir tudo" do card percorre toda a árvore EAP até as folhas.
+ *
+ * Compat:
+ *   - BarChart macro do card (`g.etapas`) agora pode incluir folhas
+ *     diretas de N1 (raras). Para datasets que só têm subgrupos sob N1
+ *     (VITRA, NAVE NORTE, padrão LOTUS), comportamento idêntico.
+ *   - Indiretas continuam excluídas (filtro `!a.isIndireta`).
+ *   - `nLeaves` de folhas = 1 (não quebra `g.nLeaves > 0` no filter final).
+ *
+ * R-001/R-007/R-010: N/A (client-only, useMemo derivado).
+ *
+ * Arquivos:
+ *   - client/src/pages/planejamento/PlanejamentoDetalhe.tsx (buildSubgrupos)
+ *   - shared/version.ts → Rev. 2275
+ *   - shared/changelog.ts
+ *   - replit.md (2+5)
+ *
  * Rev. 2274 — **FIX · Curva S de Trabalho: linha verde (Realizado) ficava
  * colada na vermelha (Previsto) em ~6,16 % mesmo com obra adiantada em
  * 8,48 %. Label "Realizado atual: 8,48 %" divergia do último ponto
