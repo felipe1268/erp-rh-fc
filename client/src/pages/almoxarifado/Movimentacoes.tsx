@@ -4,8 +4,30 @@ import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
 import {
   ArrowDownCircle, ArrowUpCircle, Loader2, Search, Filter,
-  ArrowRightLeft, Calendar, User, MapPin, X,
+  ArrowRightLeft, Calendar, User, MapPin, X, CalendarRange,
 } from "lucide-react";
+
+// Rev. 2304 — helpers de data LOCAL (sem fuso, sem UTC) p/ filtros por período.
+function toLocalIso(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${dd}`;
+}
+function addDays(base: Date, days: number): Date {
+  const d = new Date(base);
+  d.setDate(d.getDate() + days);
+  return d;
+}
+function startOfMonth(base: Date): Date {
+  return new Date(base.getFullYear(), base.getMonth(), 1);
+}
+function brDate(iso: string): string {
+  const [y, m, d] = iso.split("-");
+  return `${d}/${m}/${y}`;
+}
+
+type PeriodoPreset = "todos" | "hoje" | "7d" | "30d" | "mes" | "custom";
 
 const TIPO_LABELS: Record<string, { label: string; cor: string; icon: any }> = {
   entrada: { label: "Entrada", cor: "text-emerald-700 bg-emerald-50", icon: ArrowDownCircle },
@@ -24,15 +46,50 @@ export default function AlmoxarifadoMovimentacoes() {
   const [filtroTipo, setFiltroTipo] = useState("todos");
   // Rev. 2303 — clicar na obra dentro de um card filtra a lista por obraId.
   const [filtroObra, setFiltroObra] = useState<{ id: number; nome: string } | null>(null);
+  // Rev. 2304 — filtro por período de recebimento.
+  const [filtroPeriodo, setFiltroPeriodo] = useState<PeriodoPreset>("todos");
+  const [dataInicio, setDataInicio] = useState<string>("");
+  const [dataFim, setDataFim] = useState<string>("");
 
+  // Limit subiu de 300 → 1500 p/ não cortar histórico em filtros longos (Este mês etc).
   const { data: movs = [], isLoading } = trpc.warehouse.listMovements.useQuery(
-    { companyId, limit: 300 },
+    { companyId, limit: 1500 },
     { enabled: !!companyId }
   );
+
+  // Resolve o range [dataInicio, dataFim] (YYYY-MM-DD) a partir do preset.
+  const range = useMemo(() => {
+    const hoje = new Date();
+    if (filtroPeriodo === "todos") return null;
+    if (filtroPeriodo === "hoje") {
+      const iso = toLocalIso(hoje);
+      return { ini: iso, fim: iso };
+    }
+    if (filtroPeriodo === "7d") return { ini: toLocalIso(addDays(hoje, -6)), fim: toLocalIso(hoje) };
+    if (filtroPeriodo === "30d") return { ini: toLocalIso(addDays(hoje, -29)), fim: toLocalIso(hoje) };
+    if (filtroPeriodo === "mes") return { ini: toLocalIso(startOfMonth(hoje)), fim: toLocalIso(hoje) };
+    if (filtroPeriodo === "custom") {
+      if (!dataInicio && !dataFim) return null;
+      const ini = dataInicio || "0000-01-01";
+      const fim = dataFim || "9999-12-31";
+      return ini <= fim ? { ini, fim } : { ini: fim, fim: ini };
+    }
+    return null;
+  }, [filtroPeriodo, dataInicio, dataFim]);
 
   const lista = useMemo(() => {
     let r = movs;
     if (filtroObra) r = r.filter(m => m.obraId === filtroObra.id);
+    if (range) {
+      r = r.filter(m => {
+        if (!m.criadoEm) return false;
+        // m.criadoEm é ISO; recorta YYYY-MM-DD em UTC. Pra comparar com data
+        // local do usuário (presets calculados em fuso BR), converte via Date.
+        const d = new Date(m.criadoEm);
+        const iso = toLocalIso(d);
+        return iso >= range.ini && iso <= range.fim;
+      });
+    }
     if (busca) {
       const b = busca.toLowerCase();
       r = r.filter(m =>
@@ -44,13 +101,15 @@ export default function AlmoxarifadoMovimentacoes() {
     }
     if (filtroTipo !== "todos") r = r.filter(m => m.tipo === filtroTipo);
     return r;
-  }, [movs, busca, filtroTipo, filtroObra]);
+  }, [movs, busca, filtroTipo, filtroObra, range]);
 
+  // Rev. 2304 — resumo reflete a lista FILTRADA (período + obra + busca + tipo),
+  // assim os 3 cards no topo respondem aos filtros, inclusive ao recorte temporal.
   const resumo = useMemo(() => {
-    const entradas = movs.filter(m => m.tipo === "entrada").length;
-    const saidas   = movs.filter(m => m.tipo === "saida").length;
-    return { entradas, saidas, total: movs.length };
-  }, [movs]);
+    const entradas = lista.filter(m => m.tipo === "entrada").length;
+    const saidas   = lista.filter(m => m.tipo === "saida").length;
+    return { entradas, saidas, total: lista.length };
+  }, [lista]);
 
   return (
     <DashboardLayout>
@@ -75,6 +134,79 @@ export default function AlmoxarifadoMovimentacoes() {
             <p className="text-2xl font-bold text-red-700">{resumo.saidas}</p>
             <p className="text-xs text-red-600 mt-1">Saídas</p>
           </div>
+        </div>
+
+        {/* Rev. 2304 — Filtro por PERÍODO de recebimento (pills + range custom) */}
+        <div className="bg-white border rounded-xl p-3 space-y-2">
+          <div className="flex items-center gap-2 text-xs font-semibold text-gray-600">
+            <CalendarRange className="w-4 h-4 text-emerald-600" />
+            Período
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {([
+              { v: "todos", l: "Todos" },
+              { v: "hoje",  l: "Hoje" },
+              { v: "7d",    l: "Últimos 7 dias" },
+              { v: "30d",   l: "Últimos 30 dias" },
+              { v: "mes",   l: "Este mês" },
+              { v: "custom", l: "Personalizado" },
+            ] as { v: PeriodoPreset; l: string }[]).map(p => {
+              const ativo = filtroPeriodo === p.v;
+              return (
+                <button
+                  key={p.v}
+                  type="button"
+                  onClick={() => setFiltroPeriodo(p.v)}
+                  className={`px-3 py-1.5 rounded-full text-xs font-medium border transition ${
+                    ativo
+                      ? "bg-emerald-600 text-white border-emerald-600 shadow-sm"
+                      : "bg-white text-gray-700 border-gray-200 hover:border-emerald-300 hover:text-emerald-700"
+                  }`}
+                >
+                  {p.l}
+                </button>
+              );
+            })}
+          </div>
+          {filtroPeriodo === "custom" && (
+            <div className="flex flex-wrap gap-2 pt-1">
+              <label className="flex items-center gap-1.5 text-xs text-gray-600">
+                De:
+                <input
+                  type="date"
+                  value={dataInicio}
+                  max={dataFim || undefined}
+                  onChange={e => setDataInicio(e.target.value)}
+                  className="px-2 py-1.5 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                />
+              </label>
+              <label className="flex items-center gap-1.5 text-xs text-gray-600">
+                Até:
+                <input
+                  type="date"
+                  value={dataFim}
+                  min={dataInicio || undefined}
+                  onChange={e => setDataFim(e.target.value)}
+                  className="px-2 py-1.5 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                />
+              </label>
+              {(dataInicio || dataFim) && (
+                <button
+                  type="button"
+                  onClick={() => { setDataInicio(""); setDataFim(""); }}
+                  className="text-xs text-gray-500 hover:text-gray-700 underline self-center"
+                >
+                  Limpar datas
+                </button>
+              )}
+            </div>
+          )}
+          {range && (
+            <p className="text-[11px] text-emerald-700 font-medium pt-0.5">
+              Mostrando recebimentos de {brDate(range.ini)}
+              {range.ini !== range.fim ? ` até ${brDate(range.fim)}` : ""}.
+            </p>
+          )}
         </div>
 
         {/* Filtros */}

@@ -1,6 +1,57 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2304 — **FEAT/UX · Filtro por PERÍODO de recebimento na tela
+ * Movimentações do Almoxarifado (pills de presets + range
+ * personalizado).**
+ *
+ * Pedido user (23/05/2026): "Quero poder filtrar por período de
+ * recebimento de materiais". Antes a tela mostrava só os últimos 300
+ * registros em ordem cronológica decrescente, sem nenhum recorte
+ * temporal — o usuário precisava rolar pra achar "tudo que entrou
+ * em outubro" ou "essa semana".
+ *
+ * **UX:**
+ * - Novo bloco "Período" no topo dos filtros (card branco com ícone
+ *   `CalendarRange` emerald), acima da pill de obra ativa.
+ * - 6 pills (radio-style): Todos / Hoje / Últimos 7 dias / Últimos
+ *   30 dias / Este mês / Personalizado. Pill ativo `bg-emerald-600
+ *   text-white`; demais `bg-white text-gray-700` com hover
+ *   emerald-300/700.
+ * - "Personalizado" abre 2 `<input type=date>` (De/Até) com
+ *   constraints `min`/`max` mútuos pra não permitir intervalo
+ *   invertido, + atalho "Limpar datas".
+ * - Quando há recorte ativo, linha emerald-700 abaixo do bloco
+ *   confirma: "Mostrando recebimentos de DD/MM/AAAA até
+ *   DD/MM/AAAA." (formato BR).
+ * - Cards do topo (Total / Entradas / Saídas) agora respondem à
+ *   lista FILTRADA — antes contavam o universo bruto.
+ *
+ * **Implementação técnica
+ * (`client/src/pages/almoxarifado/Movimentacoes.tsx`):**
+ * - Helpers locais `toLocalIso`, `addDays`, `startOfMonth`, `brDate`
+ *   pra evitar bug de fuso (UTC→BR à noite faria "Hoje" pular um
+ *   dia). Mesmo padrão da Rev. 2081 em SmartEntry.
+ * - State `filtroPeriodo: "todos" | "hoje" | "7d" | "30d" | "mes" |
+ *   "custom"` + `dataInicio` + `dataFim`.
+ * - `useMemo range` resolve `{ini, fim}` (YYYY-MM-DD) a partir do
+ *   preset; em "custom" aceita range parcial (só ini ou só fim) com
+ *   sentinelas seguras e auto-troca se ini > fim.
+ * - Filtro aplicado no mesmo `useMemo lista` em AND com obra +
+ *   busca + tipo. Filtro por data usa `toLocalIso(new Date(criadoEm))`
+ *   pra normalizar o timestamp do banco no fuso local antes de
+ *   comparar.
+ * - `limit` do `listMovements.useQuery` subiu de 300 → 1500 pra não
+ *   cortar histórico em filtros longos ("Este mês" pode passar de
+ *   300 facilmente). Backend não foi tocado.
+ *
+ * **R-001 / R-007 / R-010:** N/A — 100% client-side, sem migrations,
+ * sem mutations.
+ *
+ * Arquivos: `client/src/pages/almoxarifado/Movimentacoes.tsx`,
+ * `shared/version.ts`, `shared/changelog.ts`, `replit.md`,
+ * `replit-history.md`.
+ *
  * Rev. 2303 — **FEAT/REGRA-DE-OURO · Recebimento de material SÓ pode
  * acontecer na obra da SC/OC + obra clicável na tela Movimentações
  * (Almoxarifado).**
