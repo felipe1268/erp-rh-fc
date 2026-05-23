@@ -136,6 +136,8 @@ export default function Ordens() {
   const [filtroDataFim, setFiltroDataFim] = useState("");
   const [filtroStatus, setFiltroStatus] = useState("todos");
   const [filtroAtrasadas, setFiltroAtrasadas] = useState(false);
+  // Rev. 2307 — Filtro por TIPO (Material/MDO/Pacote/Equipamento)
+  const [filtroTipo, setFiltroTipo] = useState<"todos" | "compra" | "servico" | "pacote" | "equipamento">("todos");
   const [showNova, setShowNova] = useState(false);
   const [rascunhoId, setRascunhoId] = useState<number | null>(null);
   const [showGuardDialog, setShowGuardDialog] = useState(false);
@@ -565,8 +567,45 @@ export default function Ordens() {
     const dataCriacao = ((o as any).criadoEm ?? "").slice(0, 10);
     if (filtroDataInicio && dataCriacao < filtroDataInicio) return false;
     if (filtroDataFim && dataCriacao > filtroDataFim) return false;
+    // Rev. 2307 — Tipo: "compra" é o default histórico (Material) e
+    // também cobre registros antigos com tipo null/vazio.
+    if (filtroTipo !== "todos") {
+      const tipoOc = ((o as any).tipo ?? "compra") || "compra";
+      if (filtroTipo === "compra" ? tipoOc !== "compra" : tipoOc !== filtroTipo) return false;
+    }
     return true;
   });
+  // Rev. 2307 — Contadores por tipo (após status/busca/obra/etc, antes do filtro de tipo).
+  const contadoresTipo = (() => {
+    const base = lista.filter(o => {
+      if (busca && !o.numeroOc?.toLowerCase().includes(busca.toLowerCase())) return false;
+      if (filtroFornecedor) {
+        const forn = fornecedores.find((f: any) => f.id === o.fornecedorId);
+        const nome = forn?.nomeFantasia || forn?.razaoSocial || "";
+        if (!normalizarTexto(nome).includes(normalizarTexto(filtroFornecedor))) return false;
+      }
+      if (filtroObra !== "todas") {
+        const obraId = (o as any).obraId;
+        if (filtroObra === "sem_obra") {
+          if (obraId !== null && obraId !== undefined) return false;
+        } else if (String(obraId ?? "") !== filtroObra) return false;
+      }
+      const total = parseFloat((o as any).total ?? "0");
+      if (filtroValorMin && !isNaN(parseFloat(filtroValorMin)) && total < parseFloat(filtroValorMin)) return false;
+      if (filtroValorMax && !isNaN(parseFloat(filtroValorMax)) && total > parseFloat(filtroValorMax)) return false;
+      const dataCriacao = ((o as any).criadoEm ?? "").slice(0, 10);
+      if (filtroDataInicio && dataCriacao < filtroDataInicio) return false;
+      if (filtroDataFim && dataCriacao > filtroDataFim) return false;
+      return true;
+    });
+    const c = { todos: base.length, compra: 0, servico: 0, pacote: 0, equipamento: 0 } as Record<string, number>;
+    for (const o of base) {
+      const t = ((o as any).tipo ?? "compra") || "compra";
+      if (c[t] !== undefined) c[t]++;
+      else c.compra++;
+    }
+    return c;
+  })();
   const detalhe = detalheQ.data;
 
   const allFilteredIds = filt.map(o => o.id);
@@ -634,7 +673,7 @@ export default function Ordens() {
       {/* Tabs OC / OS */}
       <div className="flex gap-1 bg-white rounded-xl border border-gray-200 p-1 shadow-sm w-fit">
         <button
-          onClick={() => { setAbaAtiva("oc"); setBusca(""); setFiltroFornecedor(""); setFiltroObra("todas"); setFiltroValorMin(""); setFiltroValorMax(""); setFiltroDataInicio(""); setFiltroDataFim(""); setFiltroStatus("todos"); setFiltroAtrasadas(false); }}
+          onClick={() => { setAbaAtiva("oc"); setBusca(""); setFiltroFornecedor(""); setFiltroObra("todas"); setFiltroValorMin(""); setFiltroValorMax(""); setFiltroDataInicio(""); setFiltroDataFim(""); setFiltroStatus("todos"); setFiltroAtrasadas(false); setFiltroTipo("todos"); }}
           className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${abaAtiva === "oc" ? "bg-emerald-600 text-white shadow-sm" : "text-gray-600 hover:bg-gray-100"}`}>
           <ShoppingBag className="h-4 w-4" />
           Ordens de Compra (Material)
@@ -683,6 +722,29 @@ export default function Ordens() {
               <AlertTriangle className="h-3 w-3" /> Atrasadas
             </button>
           </div>
+        </div>
+        {/* Rev. 2307 — Linha de filtro por TIPO (cross-filter com contadores) */}
+        <div className="flex flex-wrap gap-2 items-center">
+          <span className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider mr-1">Tipo:</span>
+          {([
+            { v: "todos",       label: "Todos",        ativo: "bg-emerald-600 border-emerald-500 text-white",  inativo: "bg-white border-gray-300 text-gray-600 hover:border-gray-400" },
+            { v: "compra",      label: "Material",     ativo: "bg-blue-600 border-blue-500 text-white",        inativo: "bg-blue-50 border-blue-200 text-blue-700 hover:border-blue-400" },
+            { v: "servico",     label: "MDO",          ativo: "bg-purple-600 border-purple-500 text-white",    inativo: "bg-purple-50 border-purple-200 text-purple-700 hover:border-purple-400" },
+            { v: "pacote",      label: "MAT+MDO",      ativo: "bg-indigo-600 border-indigo-500 text-white",    inativo: "bg-indigo-50 border-indigo-200 text-indigo-700 hover:border-indigo-400" },
+            { v: "equipamento", label: "Equipamento",  ativo: "bg-cyan-600 border-cyan-500 text-white",        inativo: "bg-cyan-50 border-cyan-200 text-cyan-700 hover:border-cyan-400" },
+          ] as const).map(opt => {
+            const ativo = filtroTipo === opt.v;
+            const n = contadoresTipo[opt.v] ?? 0;
+            return (
+              <button key={opt.v} onClick={() => setFiltroTipo(opt.v as any)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all inline-flex items-center gap-1.5 ${ativo ? opt.ativo : opt.inativo}`}>
+                {opt.label}
+                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${ativo ? "bg-white/25 text-white" : "bg-white/70 text-gray-700"}`}>
+                  {n}
+                </span>
+              </button>
+            );
+          })}
         </div>
         {/* Linha 2: fornecedor + valor mín/máx */}
         <div className="flex flex-wrap gap-2 items-center">

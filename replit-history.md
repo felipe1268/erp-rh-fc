@@ -2,6 +2,7 @@
 
 > Este arquivo guarda os one-liners das revisões antigas para manter o `replit.md` enxuto.
 
+- ~~Rev. 2300~~ — FEAT/UX · Funcionários Terceiros: múltipla seleção + barra de ações bulk (Apto/Inapto/Pendente) via Promise.allSettled. Ver `shared/changelog.ts`.
 - ~~Rev. 2299~~ — HOTFIX · Funcionários Terceiros: typo `statusAptidaoTerceiro`→`statusAptidao` no cliente (5 sites) destravou filtros e contadores. Ver `shared/changelog.ts`.
 - ~~Rev. 2298~~ — UX · Segunda linha de filtros na tela Cotações: pills por TIPO (Material/MDO/Pacote/Equipamento) com cross-filter de contadores. Ver `shared/changelog.ts`.
 - ~~Rev. 2297~~ — UX/Padrão global · Componente `<PersonPhoto>` com lightbox embutido aplicado em 5 telas SEM zoom anterior. Ver `shared/changelog.ts`.

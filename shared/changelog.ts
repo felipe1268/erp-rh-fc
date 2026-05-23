@@ -1,6 +1,41 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2307 — **UX · Pills de filtro por TIPO (Material/MDO/MAT+MDO/
+ * Equipamento) na tela Ordens de Compra, com cross-filter de
+ * contadores.**
+ *
+ * Pedido user (23/05/2026, print das OCs): "Filtre tbm, por mão de
+ * obra, material, equipamentos, pacotes etc... todos os status que
+ * tiverem". A tela já tinha pills de status (Todos/Rascunho/Pendente/
+ * Aprovada/Entrega Parcial/Entregue/Cancelada/Atrasadas) e badges
+ * coloridos de tipo na coluna Número OC, mas nenhuma forma de
+ * filtrar por tipo. Mesmo padrão da Rev. 2301 (Solicitações de
+ * Compra).
+ *
+ * **Implementação** (`client/src/pages/compras/Ordens.tsx`):
+ * - State `filtroTipo: "todos" | "compra" | "servico" | "pacote" |
+ *   "equipamento"` (compra = Material default, é o que cobre
+ *   registros antigos com `tipo` null/vazio).
+ * - Nova linha de pills logo abaixo das pills de status. Cores
+ *   batem com os badges existentes na coluna Número OC: Material
+ *   azul, MDO roxo, MAT+MDO indigo, Equipamento ciano. Cada pill
+ *   mostra um contador (cross-filter — calculado pós-filtros
+ *   status/busca/obra/valor/data, antes do filtro de tipo, então
+ *   reflete "quantas OCs do tipo X dentro do recorte atual").
+ * - `useMemo`-like (`contadoresTipo`) re-aplica os mesmos filtros
+ *   do `filt` exceto o de tipo, depois agrupa por `(tipo ?? "compra")`
+ *   pra capturar OCs antigas.
+ * - Pill "Todos" do tipo respeita o esquema visual já usado nas
+ *   pills de status. Reset do botão de aba "OC" volta o
+ *   `filtroTipo` pra "todos".
+ *
+ * **R-001 / R-007 / R-010:** N/A — 100% client-side, sem schema/DDL.
+ *
+ * Arquivos: `client/src/pages/compras/Ordens.tsx`,
+ * `shared/version.ts`, `shared/changelog.ts`, `replit.md`,
+ * `replit-history.md`.
+ *
  * Rev. 2306 — **HOTFIX/UX · Estorno do Almoxarifado: liberar
  * Recebimento avulso (sem OC) + sinalizar visualmente mov vinculada
  * a OC como não-selecionável.**
