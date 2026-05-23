@@ -6944,16 +6944,16 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
       return { previsto: null as number | null, realizado: null as number | null,
         missingReason: "XML do MS Project ainda não foi importado neste projeto. Importe o cronograma na aba Cronograma → Importar Cronograma." };
     }
-    if (!cal.statusDateSnapshot) {
-      return { previsto: null, realizado: null,
-        missingReason: "XML importado em versão antiga do ERP, sem StatusDate gravado. Reimporte o cronograma para popular o snapshot." };
-    }
-    const envOk = (!cal.envelopeStartSnapshot  || projIni === cal.envelopeStartSnapshot)
-               && (!cal.envelopeFinishSnapshot || projFim === cal.envelopeFinishSnapshot);
-    if (!envOk) {
-      return { previsto: null, realizado: null,
-        missingReason: "Datas de início/término da obra foram alteradas no ERP após o último import. Reimporte o XML para restaurar a paridade com o MSP." };
-    }
+    // Rev. 2271 — PREVISTO desacoplado do snapshot. Se o XML/calendário existe
+    // (jornadas + feriados) + projIni/projFim, o card PREVISTO (SEMANA) sempre
+    // calcula via `pctRaizMSP` (mesma fórmula da barra do topo). REALIZADO
+    // continua dependente do snapshot (estatísticas empíricas). Assim, após
+    // "Limpar Avanços" (Rev. 2270), o card Previsto reflete o mesmo 1,35 %
+    // que a barra do topo, em vez de "—".
+    const snapshotOk = !!cal.statusDateSnapshot;
+    const envOk = snapshotOk
+      && (!cal.envelopeStartSnapshot  || projIni === cal.envelopeStartSnapshot)
+      && (!cal.envelopeFinishSnapshot || projFim === cal.envelopeFinishSnapshot);
     // Rev. 2268 — Política refinada:
     //
     // PREVISTO: sempre calculado via `pctRaizMSP(semanaFim, projIni, projFim,
@@ -6977,28 +6977,31 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
     let prev: number | null = null;
     if (projIniM && projFimM) {
       prev = +pctRaizMSP(semanaFim, projIniM, projFimM, cal).toFixed(2);
-    } else if (cal.previstoMspSnapshot != null && semanaFim === cal.statusDateSnapshot) {
+    } else if (cal.previstoMspSnapshot != null && snapshotOk && semanaFim === cal.statusDateSnapshot) {
       prev = Number(cal.previstoMspSnapshot);
     }
+    // Rev. 2271 — Realizado só vive quando snapshotOk + envelope bate.
+    // Sem snapshot (ex.: após "Limpar Avanços"), Realizado = null (card "—").
     let real: number | null = null;
     let staleFromDate: string | null = null;
-    if (semanaFim < cal.statusDateSnapshot) {
-      real = null;
+    let realMissing: string | null = null;
+    if (!snapshotOk) {
+      realMissing = "Realizado MSP indisponível — reimporte o XML do MS Project para popular o snapshot.";
+    } else if (!envOk) {
+      realMissing = "Datas de início/término da obra foram alteradas no ERP após o último import. Reimporte o XML para restaurar o Realizado.";
+    } else if (semanaFim < cal.statusDateSnapshot) {
+      realMissing = `A semana visualizada (fim ${fmtBR(semanaFim)}) é anterior ao StatusDate do XML mais recente (${fmtBR(cal.statusDateSnapshot)}). O XML do MSP guarda apenas a última foto — não há snapshot histórico para o Realizado em semanas passadas.`;
     } else if (cal.realizadoMspSnapshot != null) {
       real = Number(cal.realizadoMspSnapshot);
       if (semanaFim > cal.statusDateSnapshot) staleFromDate = cal.statusDateSnapshot;
+    } else {
+      realMissing = "Snapshot MSP sem % Realizado (AD/(AD+RD)) gravado. Reimporte o cronograma.";
     }
-    const partes: string[] = [];
-    if (prev == null) partes.push("% Previsto (Texto6/10/11) ausente");
-    if (real == null && semanaFim >= cal.statusDateSnapshot)
-      partes.push("% Realizado (AD/(AD+RD)) ausente no snapshot");
     return {
       previsto: prev != null ? Math.min(100, Math.max(0, prev)) : null,
       realizado: real != null ? Math.min(100, Math.max(0, real)) : null,
       staleFromDate,
-      missingReason: real == null && semanaFim < cal.statusDateSnapshot
-        ? `A semana visualizada (fim ${fmtBR(semanaFim)}) é anterior ao StatusDate do XML mais recente (${fmtBR(cal.statusDateSnapshot)}). O XML do MSP guarda apenas a última foto — não há snapshot histórico para o Realizado em semanas passadas.`
-        : (partes.length ? `Snapshot MSP incompleto no XML: ${partes.join(", ")}. Reimporte o cronograma.` : null),
+      missingReason: realMissing,
     };
   }, [proj, semanaFim]);
   const mspPrev = mspReadOnly.previsto;

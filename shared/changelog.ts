@@ -1,6 +1,53 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2271 — **FIX · Card "PREVISTO (SEMANA)" deixa de cair pra "—" quando
+ * o snapshot MSP é zerado (pós Rev. 2270). Agora replica o mesmo valor que
+ * a barra "Avanço Físico" do topo, usando `pctRaizMSP` direto do
+ * `calendarioJson` (jornadas + projIni/projFim).**
+ *
+ * Pedido user (23/05/2026, VITRA):
+ *   "so tem valor da barra superior do previsto.. quero a teseja
+ *    replicado para abaixo tbm"
+ *
+ * Contexto:
+ *   - Após Rev. 2270, "Limpar Avanços" também apaga o snapshot MSP
+ *     (`previstoMspSnapshot`, `realizadoMspSnapshot`, `statusDateSnapshot`
+ *     etc.).
+ *   - Barra do topo (`avancoPrevistoDia`) continua mostrando 1,35 %
+ *     porque chama `pctRaizMSP` diretamente — independe do snapshot.
+ *   - Card PREVISTO (SEMANA) caía pra "—" porque o `mspReadOnly`
+ *     fazia early-return quando `cal.statusDateSnapshot` era null
+ *     ("XML importado em versão antiga…"). Isso era pra cobrir XML
+ *     pré-Rev. 1643, mas pegava o caso "limpou avanços" como falso
+ *     positivo.
+ *
+ * Fix (`client/src/pages/planejamento/PlanejamentoDetalhe.tsx`):
+ *   - `mspReadOnly`: removido o early-return em `!cal.statusDateSnapshot`
+ *     e em `!envOk`. Agora:
+ *     - **PREVISTO**: sempre via `pctRaizMSP(semanaFim, projIni, projFim, cal)`
+ *       se `cal` (jornadas) + projIni/projFim existem. Não depende do
+ *       snapshot — espelha a barra do topo.
+ *     - **REALIZADO**: continua snapshot-only com `missingReason`
+ *       específico pra cada cenário (sem snapshot, envelope quebrado,
+ *       semana < statusDate, snapshot sem % Realizado).
+ *   - `snapshotOk` + `envOk` viram booleanos locais usados só pelo
+ *     ramo do Realizado.
+ *
+ * Comportamento pós-limpeza:
+ *   - Card PREVISTO (SEMANA): 1,35 % (igual à barra do topo).
+ *   - Card REALIZADO (ACUM.): "—" com tooltip "Realizado MSP
+ *     indisponível — reimporte o XML…".
+ *   - Card VARIAÇÃO: "—" (depende dos dois).
+ *
+ * R-001/R-007/R-010: N/A (mudança puramente client-side).
+ *
+ * Arquivos:
+ *   - client/src/pages/planejamento/PlanejamentoDetalhe.tsx (mspReadOnly L6942-7009)
+ *   - shared/version.ts → Rev. 2271
+ *   - shared/changelog.ts → entrada no topo
+ *   - replit.md → 2+5
+ *
  * Rev. 2270 — **FIX · Botões "Limpar Avanços" (só semana / todas as semanas)
  * agora TAMBÉM zeram o snapshot MSP do `calendarioJson` — cards "REALIZADO
  * (ACUM.)" e barra "Avanço Físico" do topo finalmente refletem a limpeza.**

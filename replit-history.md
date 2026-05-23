@@ -479,3 +479,4 @@
 - Rev. 2261 — BACKFILL · Propaga leitura MSP da Rev. 2260 para todas as obras antigas no startup (idempotente).
 - Rev. 2262 — FIX/REGRA DE OURO · Card 'Avanço Físico' do topo (Planejamento → Detalhe) espelha snapshot MSP da raiz UID=0.
 - Rev. 2263 — UX · Modal 'Editar Revisão' adota layout moderno FC, espelhando 'Nova Revisão do Cronograma'.
+- Rev. 2264 — FIX/REGRA DE OURO · Cards 'PREVISTO (SEMANA)' / 'REALIZADO (ACUM.)' / 'AVANÇO GLOBAL PREVISTO' espelham snapshot MSP da raiz UID=0.
