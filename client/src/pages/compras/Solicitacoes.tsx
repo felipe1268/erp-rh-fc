@@ -2824,159 +2824,6 @@ ${sc.observacoes ? `<div class="obs"><b>Observações da SC:</b><br>${esc(sc.obs
                   </label>
                 )}
               </div>
-              {/* Rev. 2290 — Bloco de Locação (REDESIGN visual chamativo).
-                  Aparece somente quando o tipo é Equipamento. Header
-                  gradiente âmbar→laranja com ícone Truck + toggle switch
-                  grande; quando ativo, 3 cards brancos para os campos
-                  com ícones (CalendarDays/Clock) + faixa de info
-                  destacando o alerta automático do almoxarifado. */}
-              {form.tipo === "equipamento" && (
-                <div className={`mt-3 rounded-xl overflow-hidden shadow-sm transition-all ${form.isLocacao ? "ring-2 ring-amber-400/60 shadow-amber-200/40" : "border border-gray-200 hover:border-amber-300 hover:shadow-md"}`}>
-                  {/* HEADER — CARD INTEIRO CLICÁVEL (um clique liga/desliga) */}
-                  <button
-                    type="button"
-                    role="switch"
-                    aria-checked={form.isLocacao}
-                    onClick={() => {
-                      const checked = !form.isLocacao;
-                      setForm(p => ({
-                        ...p,
-                        isLocacao: checked,
-                        locacaoDuracaoDias: checked ? p.locacaoDuracaoDias : "",
-                        locacaoDataInicioPrevista: checked ? p.locacaoDataInicioPrevista : "",
-                        locacaoDataFimPrevista: checked ? p.locacaoDataFimPrevista : "",
-                      }));
-                    }}
-                    className={`w-full text-left flex items-center justify-between gap-3 px-4 py-3 transition-all focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-inset cursor-pointer ${form.isLocacao
-                      ? "bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 text-white"
-                      : "bg-gradient-to-r from-amber-50 via-orange-50 to-amber-50 hover:from-amber-100 hover:via-orange-100 hover:to-amber-100"
-                    }`}
-                  >
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-lg shadow-sm transition-all ${form.isLocacao ? "bg-white/20 ring-1 ring-white/40" : "bg-amber-200/70"}`}>
-                        <Truck className={`h-5 w-5 ${form.isLocacao ? "text-white" : "text-amber-700"}`} />
-                      </div>
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2">
-                          <h4 className={`text-sm font-bold uppercase tracking-wide ${form.isLocacao ? "text-white" : "text-amber-900"}`}>
-                            É Locação de Equipamento?
-                          </h4>
-                          {form.isLocacao
-                            ? (
-                              <span className="px-2 py-0.5 text-[9px] font-extrabold rounded-full bg-white text-amber-700 shadow-sm tracking-wider">
-                                ALUGUEL ATIVO
-                              </span>
-                            )
-                            : (
-                              <span className="px-2 py-0.5 text-[9px] font-bold rounded-full bg-amber-600 text-white shadow-sm tracking-wider animate-pulse">
-                                CLIQUE PARA ATIVAR
-                              </span>
-                            )
-                          }
-                        </div>
-                        <p className={`text-[11px] mt-0.5 ${form.isLocacao ? "text-amber-50" : "text-amber-800/80"}`}>
-                          {form.isLocacao
-                            ? "Suprimentos vai cotar com fornecedores de aluguel — informe o período abaixo."
-                            : "Marque se for ALUGAR (não comprar) — Suprimentos cotará como locação."}
-                        </p>
-                      </div>
-                    </div>
-                    {/* INDICADOR VISUAL (switch decorativo — clique acontece no card todo) */}
-                    <div
-                      aria-hidden
-                      className={`relative inline-flex h-7 w-12 shrink-0 rounded-full transition-colors duration-200 ${form.isLocacao ? "bg-white/30 ring-1 ring-white/60" : "bg-white ring-1 ring-amber-400"}`}
-                    >
-                      <span
-                        className={`pointer-events-none inline-block h-6 w-6 transform rounded-full shadow-md ring-0 transition duration-200 ease-in-out mt-0.5 ${form.isLocacao ? "translate-x-[22px] bg-white" : "translate-x-0.5 bg-amber-500"}`}
-                      />
-                    </div>
-                  </button>
-                  {/* CORPO — só quando isLocacao */}
-                  {form.isLocacao && (
-                    <div className="bg-amber-50/40 px-4 py-3 space-y-3">
-                      <div className="grid grid-cols-3 gap-3">
-                        <div className="rounded-lg bg-white border border-amber-200/70 p-2.5 shadow-sm">
-                          <label className="flex items-center gap-1.5 text-[10px] font-bold text-amber-700 uppercase tracking-wider mb-1.5">
-                            <CalendarDays className="h-3 w-3" /> Início Previsto
-                          </label>
-                          <input
-                            type="date"
-                            value={form.locacaoDataInicioPrevista}
-                            onChange={e => {
-                              const ini = e.target.value;
-                              setForm(p => {
-                                const next = { ...p, locacaoDataInicioPrevista: ini };
-                                const dias = parseInt(p.locacaoDuracaoDias || "0", 10);
-                                if (ini && dias > 0) {
-                                  const d = new Date(ini + "T00:00:00");
-                                  d.setDate(d.getDate() + dias);
-                                  next.locacaoDataFimPrevista = d.toISOString().slice(0, 10);
-                                }
-                                return next;
-                              });
-                            }}
-                            className="w-full h-9 px-2 text-sm border border-gray-300 rounded-md bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent"
-                          />
-                        </div>
-                        <div className="rounded-lg bg-white border border-amber-200/70 p-2.5 shadow-sm">
-                          <label className="flex items-center gap-1.5 text-[10px] font-bold text-amber-700 uppercase tracking-wider mb-1.5">
-                            <Clock className="h-3 w-3" /> Duração <span className="text-red-500">*</span>
-                          </label>
-                          <div className="relative">
-                            <input
-                              type="number"
-                              min={1}
-                              placeholder="ex.: 30"
-                              value={form.locacaoDuracaoDias}
-                              onChange={e => {
-                                const v = e.target.value;
-                                setForm(p => {
-                                  const next = { ...p, locacaoDuracaoDias: v };
-                                  const dias = parseInt(v || "0", 10);
-                                  if (p.locacaoDataInicioPrevista && dias > 0) {
-                                    const d = new Date(p.locacaoDataInicioPrevista + "T00:00:00");
-                                    d.setDate(d.getDate() + dias);
-                                    next.locacaoDataFimPrevista = d.toISOString().slice(0, 10);
-                                  }
-                                  return next;
-                                });
-                              }}
-                              className="w-full h-9 pl-2 pr-10 text-sm border border-gray-300 rounded-md bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent"
-                            />
-                            <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] font-bold text-amber-600 uppercase">dias</span>
-                          </div>
-                        </div>
-                        <div className="rounded-lg bg-white border border-amber-200/70 p-2.5 shadow-sm">
-                          <label className="flex items-center gap-1.5 text-[10px] font-bold text-amber-700 uppercase tracking-wider mb-1.5">
-                            <CalendarDays className="h-3 w-3" /> Fim Previsto
-                          </label>
-                          <input
-                            type="date"
-                            value={form.locacaoDataFimPrevista}
-                            onChange={e => setForm(p => ({ ...p, locacaoDataFimPrevista: e.target.value }))}
-                            className="w-full h-9 px-2 text-sm border border-gray-300 rounded-md bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent"
-                          />
-                        </div>
-                      </div>
-                      {/* FAIXA DE INFO + RESUMO DO PERÍODO */}
-                      <div className="flex items-start gap-2 rounded-md bg-amber-100/70 border border-amber-300/60 px-3 py-2">
-                        <Sparkles className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
-                        <div className="text-[11px] text-amber-900 leading-snug">
-                          <strong>Alerta automático:</strong> o Almoxarifado será notificado{" "}
-                          <strong>antes do fim previsto</strong> para programar a devolução do equipamento ao fornecedor.
-                          {form.locacaoDataInicioPrevista && form.locacaoDataFimPrevista && form.locacaoDuracaoDias && (
-                            <span className="block mt-1 text-amber-800">
-                              📅 Período: <strong>{form.locacaoDataInicioPrevista.split("-").reverse().join("/")}</strong>{" "}
-                              → <strong>{form.locacaoDataFimPrevista.split("-").reverse().join("/")}</strong>{" "}
-                              <span className="font-bold">({form.locacaoDuracaoDias} dias)</span>
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
               {form.tipo === "pecas_veiculo" && (
                 <div className="relative mt-2" ref={veiculoRef}>
                   <label className="text-xs font-medium text-gray-700 flex items-center gap-1 mb-1">
@@ -3127,6 +2974,144 @@ ${sc.observacoes ? `<div class="obs"><b>Observações da SC:</b><br>${esc(sc.obs
               </div>
             </div>
 
+            {/* Rev. 2290 — Bloco de Locação (aparece DEPOIS da Obra, só quando
+                tipo=Equipamento E obra selecionada). Card inteiro clicável.
+                Quando ativo, "Início Previsto" sincroniza com Data de Necessidade
+                (evita digitar duas vezes) e a Data de Necessidade some do form. */}
+            {form.tipo === "equipamento" && form.obraId && (
+              <div className={`rounded-xl overflow-hidden shadow-sm transition-all ${form.isLocacao ? "ring-2 ring-amber-400/60 shadow-amber-200/40" : "border border-gray-200 hover:border-amber-300 hover:shadow-md"}`}>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={form.isLocacao}
+                  onClick={() => {
+                    const checked = !form.isLocacao;
+                    setForm(p => ({
+                      ...p,
+                      isLocacao: checked,
+                      locacaoDuracaoDias: checked ? p.locacaoDuracaoDias : "",
+                      locacaoDataInicioPrevista: checked ? p.locacaoDataInicioPrevista : "",
+                      locacaoDataFimPrevista: checked ? p.locacaoDataFimPrevista : "",
+                    }));
+                  }}
+                  className={`w-full text-left flex items-center justify-between gap-3 px-4 py-3 transition-all focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-inset cursor-pointer ${form.isLocacao
+                    ? "bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 text-white"
+                    : "bg-gradient-to-r from-amber-50 via-orange-50 to-amber-50 hover:from-amber-100 hover:via-orange-100 hover:to-amber-100"
+                  }`}
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-lg shadow-sm transition-all ${form.isLocacao ? "bg-white/20 ring-1 ring-white/40" : "bg-amber-200/70"}`}>
+                      <Truck className={`h-5 w-5 ${form.isLocacao ? "text-white" : "text-amber-700"}`} />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <h4 className={`text-sm font-bold uppercase tracking-wide ${form.isLocacao ? "text-white" : "text-amber-900"}`}>
+                          É Locação de Equipamento?
+                        </h4>
+                        {form.isLocacao
+                          ? <span className="px-2 py-0.5 text-[9px] font-extrabold rounded-full bg-white text-amber-700 shadow-sm tracking-wider">ALUGUEL ATIVO</span>
+                          : <span className="px-2 py-0.5 text-[9px] font-bold rounded-full bg-amber-600 text-white shadow-sm tracking-wider animate-pulse">CLIQUE PARA ATIVAR</span>
+                        }
+                      </div>
+                      <p className={`text-[11px] mt-0.5 ${form.isLocacao ? "text-amber-50" : "text-amber-800/80"}`}>
+                        {form.isLocacao
+                          ? "Suprimentos vai cotar com fornecedores de aluguel — informe o período abaixo."
+                          : "Marque se for ALUGAR (não comprar) — Suprimentos cotará como locação."}
+                      </p>
+                    </div>
+                  </div>
+                  <div
+                    aria-hidden
+                    className={`relative inline-flex h-7 w-12 shrink-0 rounded-full transition-colors duration-200 ${form.isLocacao ? "bg-white/30 ring-1 ring-white/60" : "bg-white ring-1 ring-amber-400"}`}
+                  >
+                    <span className={`pointer-events-none inline-block h-6 w-6 transform rounded-full shadow-md ring-0 transition duration-200 ease-in-out mt-0.5 ${form.isLocacao ? "translate-x-[22px] bg-white" : "translate-x-0.5 bg-amber-500"}`} />
+                  </div>
+                </button>
+                {form.isLocacao && (
+                  <div className="bg-amber-50/40 px-4 py-3 space-y-3">
+                    <div className="grid grid-cols-3 gap-3">
+                      <div className="rounded-lg bg-white border border-amber-200/70 p-2.5 shadow-sm">
+                        <label className="flex items-center gap-1.5 text-[10px] font-bold text-amber-700 uppercase tracking-wider mb-1.5">
+                          <CalendarDays className="h-3 w-3" /> Início Previsto <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="date"
+                          value={form.locacaoDataInicioPrevista}
+                          onChange={e => {
+                            const ini = e.target.value;
+                            setForm(p => {
+                              const next = { ...p, locacaoDataInicioPrevista: ini, dataNecessidade: ini };
+                              const dias = parseInt(p.locacaoDuracaoDias || "0", 10);
+                              if (ini && dias > 0) {
+                                const d = new Date(ini + "T00:00:00");
+                                d.setDate(d.getDate() + dias);
+                                next.locacaoDataFimPrevista = d.toISOString().slice(0, 10);
+                              }
+                              return next;
+                            });
+                          }}
+                          className="w-full h-9 px-2 text-sm border border-gray-300 rounded-md bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent"
+                        />
+                        <p className="mt-1 text-[9px] text-amber-700/80 leading-tight">↳ vira a Data de Necessidade da SC</p>
+                      </div>
+                      <div className="rounded-lg bg-white border border-amber-200/70 p-2.5 shadow-sm">
+                        <label className="flex items-center gap-1.5 text-[10px] font-bold text-amber-700 uppercase tracking-wider mb-1.5">
+                          <Clock className="h-3 w-3" /> Duração <span className="text-red-500">*</span>
+                        </label>
+                        <div className="relative">
+                          <input
+                            type="number"
+                            min={1}
+                            placeholder="ex.: 30"
+                            value={form.locacaoDuracaoDias}
+                            onChange={e => {
+                              const v = e.target.value;
+                              setForm(p => {
+                                const next = { ...p, locacaoDuracaoDias: v };
+                                const dias = parseInt(v || "0", 10);
+                                if (p.locacaoDataInicioPrevista && dias > 0) {
+                                  const d = new Date(p.locacaoDataInicioPrevista + "T00:00:00");
+                                  d.setDate(d.getDate() + dias);
+                                  next.locacaoDataFimPrevista = d.toISOString().slice(0, 10);
+                                }
+                                return next;
+                              });
+                            }}
+                            className="w-full h-9 pl-2 pr-10 text-sm border border-gray-300 rounded-md bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent"
+                          />
+                          <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] font-bold text-amber-600 uppercase">dias</span>
+                        </div>
+                      </div>
+                      <div className="rounded-lg bg-white border border-amber-200/70 p-2.5 shadow-sm">
+                        <label className="flex items-center gap-1.5 text-[10px] font-bold text-amber-700 uppercase tracking-wider mb-1.5">
+                          <CalendarDays className="h-3 w-3" /> Fim Previsto
+                        </label>
+                        <input
+                          type="date"
+                          value={form.locacaoDataFimPrevista}
+                          onChange={e => setForm(p => ({ ...p, locacaoDataFimPrevista: e.target.value }))}
+                          className="w-full h-9 px-2 text-sm border border-gray-300 rounded-md bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent"
+                        />
+                      </div>
+                    </div>
+                    <div className="flex items-start gap-2 rounded-md bg-amber-100/70 border border-amber-300/60 px-3 py-2">
+                      <Sparkles className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+                      <div className="text-[11px] text-amber-900 leading-snug">
+                        <strong>Alerta automático:</strong> o Almoxarifado será notificado{" "}
+                        <strong>antes do fim previsto</strong> para programar a devolução do equipamento ao fornecedor.
+                        {form.locacaoDataInicioPrevista && form.locacaoDataFimPrevista && form.locacaoDuracaoDias && (
+                          <span className="block mt-1 text-amber-800">
+                            📅 Período: <strong>{form.locacaoDataInicioPrevista.split("-").reverse().join("/")}</strong>{" "}
+                            → <strong>{form.locacaoDataFimPrevista.split("-").reverse().join("/")}</strong>{" "}
+                            <span className="font-bold">({form.locacaoDuracaoDias} dias)</span>
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Modo SC: EAP ou Manual */}
             {(form.obraId && form.obraId !== "0") && (
@@ -4208,17 +4193,20 @@ ${sc.observacoes ? `<div class="obs"><b>Observações da SC:</b><br>${esc(sc.obs
               </div>
             )}
 
-            {/* Data | Prioridade */}
-            <div className="grid grid-cols-2 gap-2">
-              <div className="space-y-1">
-                <label className="text-xs font-medium text-gray-700">Data de Necessidade</label>
-                <input
-                  type="date"
-                  className="w-full h-8 px-3 text-sm rounded-md border border-gray-300 bg-white text-gray-900 outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-300"
-                  value={form.dataNecessidade}
-                  onChange={e => setForm(p => ({ ...p, dataNecessidade: e.target.value }))}
-                />
-              </div>
+            {/* Data | Prioridade — quando isLocacao, a Data de Necessidade
+                vira espelho do "Início Previsto" (não duplicar input). */}
+            <div className={form.isLocacao ? "" : "grid grid-cols-2 gap-2"}>
+              {!form.isLocacao && (
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-gray-700">Data de Necessidade</label>
+                  <input
+                    type="date"
+                    className="w-full h-8 px-3 text-sm rounded-md border border-gray-300 bg-white text-gray-900 outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-300"
+                    value={form.dataNecessidade}
+                    onChange={e => setForm(p => ({ ...p, dataNecessidade: e.target.value }))}
+                  />
+                </div>
+              )}
               <div className="space-y-1">
                 <label className="text-xs font-medium text-gray-700">Prioridade</label>
                 <Select value={form.prioridade} onValueChange={v => setForm(p => ({ ...p, prioridade: v }))}>
