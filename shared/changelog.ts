@@ -1,6 +1,76 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2303 — **FEAT/REGRA-DE-OURO · Recebimento de material SÓ pode
+ * acontecer na obra da SC/OC + obra clicável na tela Movimentações
+ * (Almoxarifado).**
+ *
+ * Pedido user (23/05/2026, print da tela Movimentações):
+ * > "Preciso poder clicar e localizar, em qual obra foi recebida...
+ * > e só pode receber na obra que foi feita a solicitação e ordem
+ * > de compra."
+ *
+ * Duas dores no mesmo print:
+ *
+ * 1. **Auditabilidade fraca:** nos cards do histórico, a obra
+ *    aparecia como texto morto (`📍 NOME DA OBRA`). Não dava pra
+ *    bater o olho e isolar "tudo que entrou na obra X".
+ * 2. **Risco de baixa cruzada:** o backend só checava
+ *    `companyId` — se o usuário estivesse na "Obra A" e selecionasse
+ *    manualmente uma OC da "Obra B" (quando o filtro `obraId`
+ *    do `listPendingOCs` vinha vazio, p.ex. visão geral do
+ *    almoxarifado), a entrada de estoque caía na "Obra A" e a
+ *    quantidade entregue era debitada da OC da "Obra B". Recebimento
+ *    fantasma — ninguém da obra correta sabia que chegou material.
+ *
+ * **Fix 1 (UI — `client/src/pages/almoxarifado/Movimentacoes.tsx`):**
+ * - Ícone `MapPin` (lucide) substitui o emoji `📍`.
+ * - O nome da obra dentro de cada card vira `<button>` clicável
+ *   (hover `bg-emerald-50 text-emerald-700`) que seta um novo state
+ *   `filtroObra: { id, nome } | null`.
+ * - Quando filtroObra está ativo, aparece uma pill emerald no topo
+ *   da seção de filtros: `Filtrando por obra: NOME` + botão "Limpar"
+ *   com ícone `X`. `useMemo` da lista respeita `filtroObra.id` em
+ *   AND com busca + tipo.
+ * - `listMovements` já retornava `obraId` + `obraNome` — não
+ *   precisou mexer no backend pra essa parte (verificado em
+ *   `server/routers/warehouse.ts` L223-244).
+ * - Fallback defensivo: se o registro antigo veio sem `obraId`
+ *   (movimentação manual da época sem vínculo), mostra a obra como
+ *   `<span>` não-clicável (não quebra hover).
+ *
+ * **Fix 2 (Backend — `server/routers/warehouse.ts` `registerSmartEntry`
+ * L1537-1570):**
+ * - O `select` da `ocCheck` virou `leftJoin(obras, obras.id =
+ *   ordens.obraId)` pra trazer `obraNome` no mesmo round-trip
+ *   (zero query extra no caminho feliz).
+ * - Nova regra-de-ouro, dois caminhos:
+ *   - **input.obraId ausente + OC com obraId:** auto-anexa
+ *     `input.obraId = ocCheck.obraId` + `input.obraNome =
+ *     ocCheck.obraNome`. Não força refluxo de UI; só corrige.
+ *   - **input.obraId presente E `!== ocCheck.obraId`:** lança
+ *     `TRPCError BAD_REQUEST` com message dedicada
+ *     (`"Esta OC OC-XXXX foi emitida para «obra Y». O recebimento só
+ *     pode ser feito na MESMA obra da solicitação/ordem de compra."`).
+ *     Toast claro pro almoxarife.
+ * - Mantém o check de "OC entregue" e "todos itens já entregues" que
+ *   já existia (Rev. 2081).
+ *
+ * **Por que NÃO bloquear no front:** o `listPendingOCs` já filtra por
+ * `obraId` quando o front passa (linha 1345-1347), MAS quando o
+ * usuário está sem obra de contexto (visão geral), o front mostra
+ * TODAS as OCs. O hard-check no backend é a barreira final — vale
+ * pra qualquer entrada (foto NF, manual, OC) e qualquer UI futura
+ * (Mobile, API externa).
+ *
+ * **R-001 / R-007 / R-010:** N/A — só leitura + INSERT/UPDATE de
+ * registros novos (recebimentos), nenhum ALTER/DROP/DELETE.
+ *
+ * Arquivos: `server/routers/warehouse.ts`,
+ * `client/src/pages/almoxarifado/Movimentacoes.tsx`,
+ * `shared/version.ts`, `shared/changelog.ts`, `replit.md`,
+ * `replit-history.md`.
+ *
  * Rev. 2302 — **HOTFIX CRÍTICO · "Aprovar e Gerar OC" estourava com
  * erro SQL gigante — 7 colunas locação faltavam em `compras_ordens`
  * no banco (DEV e PROD).**

@@ -4,7 +4,7 @@ import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
 import {
   ArrowDownCircle, ArrowUpCircle, Loader2, Search, Filter,
-  ArrowRightLeft, Calendar, User,
+  ArrowRightLeft, Calendar, User, MapPin, X,
 } from "lucide-react";
 
 const TIPO_LABELS: Record<string, { label: string; cor: string; icon: any }> = {
@@ -22,6 +22,8 @@ export default function AlmoxarifadoMovimentacoes() {
 
   const [busca, setBusca] = useState("");
   const [filtroTipo, setFiltroTipo] = useState("todos");
+  // Rev. 2303 — clicar na obra dentro de um card filtra a lista por obraId.
+  const [filtroObra, setFiltroObra] = useState<{ id: number; nome: string } | null>(null);
 
   const { data: movs = [], isLoading } = trpc.warehouse.listMovements.useQuery(
     { companyId, limit: 300 },
@@ -30,6 +32,7 @@ export default function AlmoxarifadoMovimentacoes() {
 
   const lista = useMemo(() => {
     let r = movs;
+    if (filtroObra) r = r.filter(m => m.obraId === filtroObra.id);
     if (busca) {
       const b = busca.toLowerCase();
       r = r.filter(m =>
@@ -41,7 +44,7 @@ export default function AlmoxarifadoMovimentacoes() {
     }
     if (filtroTipo !== "todos") r = r.filter(m => m.tipo === filtroTipo);
     return r;
-  }, [movs, busca, filtroTipo]);
+  }, [movs, busca, filtroTipo, filtroObra]);
 
   const resumo = useMemo(() => {
     const entradas = movs.filter(m => m.tipo === "entrada").length;
@@ -75,6 +78,23 @@ export default function AlmoxarifadoMovimentacoes() {
         </div>
 
         {/* Filtros */}
+        {filtroObra && (
+          <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-200 rounded-xl px-3 py-2 text-sm">
+            <MapPin className="w-4 h-4 text-emerald-600 shrink-0" />
+            <span className="text-emerald-800 font-medium truncate flex-1">
+              Filtrando por obra: <span className="font-bold">{filtroObra.nome}</span>
+            </span>
+            <button
+              type="button"
+              onClick={() => setFiltroObra(null)}
+              className="shrink-0 inline-flex items-center gap-1 text-xs text-emerald-700 hover:text-emerald-900 bg-white hover:bg-emerald-100 border border-emerald-300 rounded-md px-2 py-1 transition"
+              title="Limpar filtro de obra"
+            >
+              <X className="w-3 h-3" />
+              Limpar
+            </button>
+          </div>
+        )}
         <div className="flex gap-2">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -133,7 +153,23 @@ export default function AlmoxarifadoMovimentacoes() {
                     </p>
                     {(mov.motivo || mov.obraNome) && (
                       <p className="text-xs text-gray-500 mt-0.5 truncate">
-                        {mov.obraNome ? `📍 ${mov.obraNome}` : ""}{mov.motivo ? ` — ${mov.motivo}` : ""}
+                        {mov.obraNome && mov.obraId ? (
+                          <button
+                            type="button"
+                            onClick={() => setFiltroObra({ id: mov.obraId!, nome: mov.obraNome! })}
+                            className="inline-flex items-center gap-1 px-1.5 py-0.5 -mx-1 rounded-md hover:bg-emerald-50 hover:text-emerald-700 active:bg-emerald-100 transition font-medium"
+                            title={`Filtrar pela obra ${mov.obraNome}`}
+                          >
+                            <MapPin className="w-3 h-3" />
+                            {mov.obraNome}
+                          </button>
+                        ) : mov.obraNome ? (
+                          <span className="inline-flex items-center gap-1">
+                            <MapPin className="w-3 h-3" />
+                            {mov.obraNome}
+                          </span>
+                        ) : null}
+                        {mov.motivo ? ` — ${mov.motivo}` : ""}
                       </p>
                     )}
                     <div className="flex gap-3 mt-1 text-xs text-gray-400">

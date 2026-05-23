@@ -1532,12 +1532,39 @@ REGRAS:
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
       if (input.ordemCompraId) {
-        const [ocCheck] = await db.select().from(comprasOrdens)
+        const [ocCheck] = await db
+          .select({
+            id: comprasOrdens.id,
+            numeroOc: comprasOrdens.numeroOc,
+            status: comprasOrdens.status,
+            obraId: comprasOrdens.obraId,
+            obraNome: obras.nome,
+          })
+          .from(comprasOrdens)
+          .leftJoin(obras, eq(obras.id, comprasOrdens.obraId))
           .where(and(eq(comprasOrdens.id, input.ordemCompraId), eq(comprasOrdens.companyId, input.companyId)));
         if (ocCheck && ocCheck.status === "entregue") {
           throw new TRPCError({ code: "BAD_REQUEST", message: "Esta OC já foi totalmente entregue. Não é possível registrar novo recebimento." });
         }
         if (ocCheck) {
+          // Rev. 2303 — regra-de-ouro: recebimento SÓ na obra da OC.
+          // Se OC tem obra vinculada e o input vier sem obra OU com obra diferente,
+          // bloqueamos e devolvemos a obra correta no message pra UI orientar.
+          if (ocCheck.obraId) {
+            if (!input.obraId) {
+              // Auto-anexa a obra da OC ao recebimento (sem obrigar refluxo de UI).
+              input.obraId = ocCheck.obraId;
+              if (!input.obraNome && ocCheck.obraNome) {
+                input.obraNome = ocCheck.obraNome;
+              }
+            } else if (Number(input.obraId) !== Number(ocCheck.obraId)) {
+              const ocObraNome = ocCheck.obraNome ? `"${ocCheck.obraNome}"` : `obra #${ocCheck.obraId}`;
+              throw new TRPCError({
+                code: "BAD_REQUEST",
+                message: `Esta OC ${ocCheck.numeroOc || ""} foi emitida para ${ocObraNome}. O recebimento só pode ser feito na MESMA obra da solicitação/ordem de compra.`,
+              });
+            }
+          }
           const ocItensCheck = await db.select().from(comprasOrdensItens)
             .where(eq(comprasOrdensItens.ordemId, input.ordemCompraId));
           const allDelivered = ocItensCheck.every(it =>
