@@ -14991,22 +14991,35 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
           }
           return out;
         };
+        // Rev. 2276 — Linha estilo CRONOGRAMA: hierarquia visual por
+        // profundidade (fundo escurecido em grupos, branco em folhas),
+        // indent guide vertical, código EAP em badge monospace, barra
+        // horizontal compacta inline (Previsto azul + Realizado colorido
+        // por desvio), 3 colunas tabulares fixas à direita (Prev/Real/
+        // Desvio). Mantém clique em qualquer lugar da linha p/ expandir.
         const renderRow = (e: any, depth: number): React.ReactNode => {
           const hasChildren = (e.children?.length ?? 0) > 0;
           const isOpen = expandedEtapas.has(e.id);
-          const desv = (e.realizado ?? 0) - (e.previsto ?? 0);
-          const corReal = (e.realizado ?? 0) >= (e.previsto ?? 0) ? "#059669" : desv < -10 ? "#dc2626" : "#d97706";
-          const corBarReal = (e.realizado ?? 0) >= (e.previsto ?? 0) ? "#34d399" : desv < -10 ? "#f87171" : "#fbbf24";
+          const prev = e.previsto ?? 0;
+          const real = e.realizado ?? 0;
+          const desv = real - prev;
+          const corReal = real >= prev ? "#047857" : desv < -10 ? "#b91c1c" : "#b45309";
+          const corBarReal = real >= prev ? "#22c55e" : desv < -10 ? "#ef4444" : "#f59e0b";
+          // Hierarquia: grupos com fundo gradativo por nível; folhas brancas.
+          const bgClass = !hasChildren
+            ? "bg-white"
+            : depth === 0
+              ? "bg-slate-100"
+              : depth === 1
+                ? "bg-slate-50"
+                : "bg-slate-50/60";
+          const nomeClass = hasChildren
+            ? depth === 0
+              ? "text-[12px] font-bold text-slate-800 uppercase tracking-wide"
+              : "text-[12px] font-semibold text-slate-700"
+            : "text-[12px] text-slate-600";
           return (
             <React.Fragment key={e.id}>
-              {/* Rev. 1951 — LINHA INTEIRA clicável quando tem filhos.
-                  User (16/05/2026, screenshot NAVE NORTE detalhamento 01.01-01.05
-                  todos recolhidos): "faz assim quando clicar nas atividade,
-                  expande aas atividades que estão abaixo para saber o que
-                  facilitar a analise de cada atividade..". Antes só o chevron
-                  4×4px disparava o toggle — alvo táctil ruim. Agora o clique
-                  em qualquer lugar da linha (código EAP, nome, barra, %)
-                  expande/recolhe. Chevron preservado como afordância visual. */}
               <div
                 role={hasChildren ? "button" : undefined}
                 tabIndex={hasChildren ? 0 : undefined}
@@ -15017,57 +15030,72 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
                     toggleEtapa(e.id);
                   }
                 }}
-                className={`flex items-center gap-2 px-3 py-1.5 border-b border-slate-100 hover:bg-blue-50/40 select-none ${hasChildren ? "cursor-pointer" : ""}`}
-                style={{ paddingLeft: 12 + depth * 18 }}
+                className={`grid items-center gap-3 px-3 py-1.5 border-b border-slate-200/70 select-none transition-colors ${bgClass} ${hasChildren ? "cursor-pointer hover:bg-blue-50" : "hover:bg-blue-50/40"}`}
+                style={{
+                  gridTemplateColumns: "minmax(0, 1fr) 220px 56px 56px 64px",
+                  paddingLeft: 10 + depth * 16,
+                  borderLeft: depth > 0 ? `2px solid ${depth === 1 ? "#cbd5e1" : "#e2e8f0"}` : undefined,
+                }}
                 aria-expanded={hasChildren ? isOpen : undefined}
                 aria-label={hasChildren ? `${e.nome} — ${isOpen ? "recolher" : "expandir"} filhos` : undefined}
               >
-                <span
-                  className={`w-4 h-4 shrink-0 flex items-center justify-center rounded ${hasChildren ? "text-slate-500" : ""}`}
-                  aria-hidden="true"
-                >
-                  {hasChildren
-                    ? (isOpen ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />)
-                    : <span className="h-3 w-3" />}
-                </span>
-                {e.eapCodigo && (
-                  <span className="text-[10px] font-mono text-slate-400 w-16 shrink-0 truncate">
-                    {e.eapCodigo}
+                {/* Col 1 — chevron + EAP + nome */}
+                <div className="flex items-center gap-2 min-w-0">
+                  <span
+                    className={`w-4 h-4 shrink-0 flex items-center justify-center ${hasChildren ? "text-slate-500" : ""}`}
+                    aria-hidden="true"
+                  >
+                    {hasChildren
+                      ? (isOpen ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />)
+                      : <span className="block h-1 w-1 rounded-full bg-slate-300" />}
                   </span>
-                )}
-                <span
-                  className={`text-xs flex-1 truncate ${hasChildren ? "font-semibold text-slate-700" : "text-slate-600"}`}
-                  title={e.nome}
-                >
-                  {e.nome}
-                </span>
-                <div className="hidden md:flex items-center gap-2 shrink-0 w-56">
-                  <div className="relative flex-1 h-3.5 bg-slate-100 rounded overflow-hidden">
+                  {e.eapCodigo && (
+                    <span
+                      className={`text-[10px] font-mono shrink-0 px-1.5 py-0.5 rounded ${hasChildren ? "bg-slate-700 text-white" : "bg-slate-100 text-slate-500"}`}
+                      style={{ minWidth: 56, textAlign: "center" }}
+                      title={`EAP ${e.eapCodigo}`}
+                    >
+                      {e.eapCodigo}
+                    </span>
+                  )}
+                  <span className={`${nomeClass} flex-1 truncate`} title={e.nome}>
+                    {e.nome}
+                  </span>
+                </div>
+                {/* Col 2 — barra horizontal compacta (Previsto/Realizado sobrepostos) */}
+                <div className="hidden md:flex items-center gap-2 shrink-0">
+                  <div className="relative flex-1 h-3.5 bg-slate-200/70 rounded-sm overflow-hidden border border-slate-200">
                     <div
-                      className="absolute inset-y-0 left-0 bg-blue-400/60"
-                      style={{ width: `${Math.min(100, Math.max(0, e.previsto ?? 0))}%` }}
-                      title={`Previsto: ${fPct_(e.previsto ?? 0)}`}
+                      className="absolute inset-y-0 left-0 bg-blue-500/55"
+                      style={{ width: `${Math.min(100, Math.max(0, prev))}%` }}
+                      title={`Previsto: ${fPct_(prev)}`}
                     />
                     <div
-                      className="absolute inset-y-0 left-0 opacity-90"
-                      style={{ width: `${Math.min(100, Math.max(0, e.realizado ?? 0))}%`, backgroundColor: corBarReal }}
-                      title={`Realizado: ${fPct_(e.realizado ?? 0)}`}
+                      className="absolute inset-y-0 left-0"
+                      style={{ width: `${Math.min(100, Math.max(0, real))}%`, backgroundColor: corBarReal, mixBlendMode: "multiply" }}
+                      title={`Realizado: ${fPct_(real)}`}
                     />
                   </div>
                 </div>
-                <span className="text-[10px] tabular-nums text-blue-700 w-12 text-right shrink-0" title="Previsto">
-                  {fPct_(e.previsto ?? 0)}
+                {/* Col 3 — Previsto */}
+                <span className="text-[11px] tabular-nums text-blue-700 text-right shrink-0 font-medium" title="Previsto">
+                  {fPct_(prev)}
                 </span>
+                {/* Col 4 — Realizado */}
                 <span
-                  className="text-[10px] tabular-nums w-12 text-right shrink-0 font-medium"
+                  className="text-[11px] tabular-nums text-right shrink-0 font-semibold"
                   style={{ color: corReal }}
                   title="Realizado"
                 >
-                  {fPct_(e.realizado ?? 0)}
+                  {fPct_(real)}
                 </span>
+                {/* Col 5 — Desvio (chip) */}
                 <span
-                  className="text-[10px] tabular-nums w-14 text-right shrink-0 font-bold"
-                  style={{ color: corReal }}
+                  className="text-[10px] tabular-nums text-right shrink-0 font-bold rounded px-1.5 py-0.5"
+                  style={{
+                    color: corReal,
+                    backgroundColor: real >= prev ? "rgba(16,185,129,0.10)" : desv < -10 ? "rgba(239,68,68,0.10)" : "rgba(245,158,11,0.10)",
+                  }}
                   title="Desvio (Realizado − Previsto)"
                 >
                   {desv >= 0 ? "+" : ""}{fPct_(desv)}
@@ -15146,116 +15174,96 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
             </div>
           </div>
 
-          {/* Gráfico de barras por etapa (visão MACRO) */}
+          {/* Rev. 2276 — Tree estilo CRONOGRAMA é a ÚNICA visão (macro
+              BarChart removido — em VITRAIS plotava 10+ barras zeradas
+              sobrepostas, ruído visual). Cabeçalho de colunas sticky
+              + controles Expandir/Recolher inline. Hierarquia visual
+              por profundidade replica a do cronograma (grupos com
+              fundo escurecido, folhas brancas, indent guides). */}
           {!isCollapsed && (
-            (() => {
-              const TRUNC5 = 32;
-              const etapasChart = g.etapas.map((e: any) => ({
-                ...e,
-                nomeChart: e.nome?.length > TRUNC5 ? e.nome.substring(0, TRUNC5 - 1) + "…" : (e.nome ?? ""),
-              }));
-              const maxLenE = Math.max(8, ...etapasChart.map((e: any) => (e.nomeChart || "").length));
-              const yWidthE = Math.min(240, Math.max(130, maxLenE * 6.2));
-              const rowHE = 64;
-              return (
             <>
-              <div className="px-4 py-3" style={{ height: Math.max(160, g.etapas.length * rowHE + 40) }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart
-                    data={etapasChart}
-                    layout="vertical"
-                    margin={{ top: 4, right: 64, bottom: 4, left: 4 }}
-                    barCategoryGap="26%"
-                    barGap={3}
-                  >
-                    <CartesianGrid horizontal={false} strokeDasharray="3 3" stroke="#f8fafc" />
-                    <XAxis type="number" domain={[0, 100]} tickFormatter={v => `${v}%`} tick={{ fontSize: 10 }} axisLine={false} tickLine={false} />
-                    <YAxis type="category" dataKey="nomeChart" tick={{ fontSize: 10, fill: "#475569" }} width={yWidthE} tickLine={false} axisLine={false} />
-                    <Tooltip
-                      formatter={(v: any, name: string) => [`${Number(v).toFixed(1)}%`, name === "previsto" ? "Previsto" : "Realizado"]}
-                      labelFormatter={(label: string) => {
-                        const e = g.etapas.find((x: any) => x.nome?.substring(0, TRUNC5 - 1) + "…" === label || x.nome === label);
-                        return e?.nome ?? label;
-                      }}
-                    />
-                    <Bar dataKey="previsto"  name="previsto"  fill="#6097f8" radius={[0, 3, 3, 0]} maxBarSize={12}>
-                      <LabelList dataKey="previsto"  position="right" formatter={(v: any) => `${Number(v).toFixed(1)}%`} style={{ fontSize: 9, fill: "#3b82f6", fontWeight: 600 }} />
-                    </Bar>
-                    <Bar dataKey="realizado" name="realizado" fill="#34d399" radius={[0, 3, 3, 0]} maxBarSize={12}>
-                      <LabelList dataKey="realizado" position="right" formatter={(v: any) => `${Number(v).toFixed(1)}%`} style={{ fontSize: 9, fill: "#059669", fontWeight: 600 }} />
-                      {etapasChart.map((e: any) => (
-                        <Cell
-                          key={e.id}
-                          fill={e.realizado >= e.previsto ? "#34d399" : e.previsto - e.realizado > 10 ? "#f87171" : "#fbbf24"}
-                        />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
+              {/* Cabeçalho de colunas */}
+              <div
+                className="grid items-center gap-3 px-3 py-1.5 bg-slate-700 text-slate-100 border-b border-slate-200"
+                style={{ gridTemplateColumns: "minmax(0, 1fr) 220px 56px 56px 64px", paddingLeft: 10 }}
+              >
+                <div className="flex items-center gap-2 min-w-0">
+                  <ListTree className="h-3.5 w-3.5 text-slate-300 shrink-0" />
+                  <span className="text-[10px] font-bold uppercase tracking-wider">Item · Atividade</span>
+                </div>
+                <span className="hidden md:block text-[10px] font-bold uppercase tracking-wider text-slate-300">Avanço</span>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-blue-300 text-right">Previsto</span>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-300 text-right">Realizado</span>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-300 text-right">Desvio</span>
               </div>
 
-              {/* Rev. 1947 — DETALHAMENTO PAI→FILHO opcional: 1 toggle por card
-                  (default = fechado, só bar chart visível). Quando aberto,
-                  reusa o mesmo tree renderRow (Rev. 1945) — sem reinventar. */}
-              <div className="border-t border-slate-200">
-                <button
-                  type="button"
-                  onClick={(ev) => { ev.stopPropagation(); toggleCardDetalhe(g.id); }}
-                  className="w-full px-3 py-1.5 text-[11px] font-semibold uppercase text-slate-600 bg-slate-50 hover:bg-slate-100 transition-colors flex items-center justify-center gap-1.5 select-none"
-                  title={isCardDetalheAberto(g.id) ? "Ocultar tabela detalhada desta NAVE" : "Mostrar tabela detalhada desta NAVE (pai → filho)"}
-                >
-                  {isCardDetalheAberto(g.id) ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
-                  <ListTree className="h-3 w-3 text-slate-400" />
-                  <span>{isCardDetalheAberto(g.id) ? "Ocultar detalhamento" : "Mostrar detalhamento (Pai → Filho)"}</span>
-                </button>
-                {isCardDetalheAberto(g.id) && (
-                  <div className="border-t border-slate-200">
-                    {hasAnyChildren && (
-                      <div className="px-3 py-1 bg-slate-50/60 border-b border-slate-100 flex items-center justify-end gap-1.5">
-                        <button
-                          type="button"
-                          onClick={(ev) => { ev.stopPropagation(); expandirTudoCard(); }}
-                          disabled={cardAllOpen}
-                          className="text-[10px] font-medium bg-white border border-slate-300 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed rounded px-2 py-0.5 transition-colors text-slate-700"
-                          title="Abrir todos os sub-níveis"
-                        >
-                          Expandir tudo
-                        </button>
-                        <button
-                          type="button"
-                          onClick={(ev) => { ev.stopPropagation(); recolherTudoCard(); }}
-                          disabled={!cardSomeOpen}
-                          className="text-[10px] font-medium bg-white border border-slate-300 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed rounded px-2 py-0.5 transition-colors text-slate-700"
-                          title="Fechar todos os sub-níveis"
-                        >
-                          Recolher tudo
-                        </button>
-                      </div>
-                    )}
-                    <div>
-                      {g.etapas.map((e: any) => renderRow(e, 0))}
-                    </div>
+              {/* Controles Expandir/Recolher */}
+              {hasAnyChildren && (
+                <div className="px-3 py-1.5 bg-slate-50 border-b border-slate-200 flex items-center justify-between gap-1.5">
+                  <span className="text-[10px] text-slate-500 font-medium">
+                    Clique em uma linha de grupo para expandir/recolher as atividades filhas.
+                  </span>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={(ev) => { ev.stopPropagation(); expandirTudoCard(); }}
+                      disabled={cardAllOpen}
+                      className="inline-flex items-center gap-1 text-[10px] font-semibold bg-white border border-slate-300 hover:bg-blue-50 hover:border-blue-300 disabled:opacity-40 disabled:cursor-not-allowed rounded px-2 py-0.5 transition-colors text-slate-700"
+                      title="Abrir todos os sub-níveis até as folhas"
+                    >
+                      <ChevronDown className="h-2.5 w-2.5" /> Expandir tudo
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(ev) => { ev.stopPropagation(); recolherTudoCard(); }}
+                      disabled={!cardSomeOpen}
+                      className="inline-flex items-center gap-1 text-[10px] font-semibold bg-white border border-slate-300 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed rounded px-2 py-0.5 transition-colors text-slate-700"
+                      title="Fechar todos os sub-níveis"
+                    >
+                      <ChevronRight className="h-2.5 w-2.5" /> Recolher tudo
+                    </button>
                   </div>
-                )}
-              </div>
-
-              {/* Mini legenda desvios */}
-              {g.etapas.some((e: any) => e.previsto - e.realizado > 5) && (
-                <div className="border-t border-slate-100 px-4 py-2 flex flex-wrap gap-2">
-                  {g.etapas
-                    .filter((e: any) => e.previsto - e.realizado > 5)
-                    .map((e: any) => (
-                      <span key={e.id} className="inline-flex items-center gap-1 text-[11px] bg-red-50 text-red-700 border border-red-200 rounded px-2 py-0.5">
-                        ⚠ {e.nome}: −{fPct_(e.previsto - e.realizado)}
-                      </span>
-                    ))
-                  }
                 </div>
               )}
+
+              {/* Tree pai → filho */}
+              <div>
+                {g.etapas.map((e: any) => renderRow(e, 0))}
+              </div>
+
+              {/* Legenda de desvios (folhas + grupos com desvio relevante) */}
+              {(() => {
+                const desvios: any[] = [];
+                const coletar = (lista: any[]) => {
+                  for (const e of lista) {
+                    const d = (e.previsto ?? 0) - (e.realizado ?? 0);
+                    if (d > 5 && (e.children?.length ?? 0) === 0) desvios.push({ ...e, _d: d });
+                    if (e.children?.length) coletar(e.children);
+                  }
+                };
+                coletar(g.etapas);
+                if (desvios.length === 0) return null;
+                return (
+                  <div className="border-t border-slate-200 px-3 py-2 bg-red-50/30 flex flex-wrap gap-1.5">
+                    <span className="text-[10px] font-bold text-red-700 uppercase tracking-wider mr-1 self-center">
+                      ⚠ Atrasos críticos:
+                    </span>
+                    {desvios.map((e: any) => (
+                      <span
+                        key={e.id}
+                        className="inline-flex items-center gap-1 text-[10px] bg-white text-red-700 border border-red-200 rounded px-2 py-0.5"
+                        title={e.eapCodigo ? `EAP ${e.eapCodigo}` : undefined}
+                      >
+                        {e.eapCodigo && <span className="font-mono text-[9px] text-red-400">{e.eapCodigo}</span>}
+                        <span className="font-medium truncate max-w-[200px]">{e.nome}</span>
+                        <span className="font-bold tabular-nums">−{fPct_(e._d)}</span>
+                      </span>
+                    ))}
+                  </div>
+                );
+              })()}
             </>
-            );
-          })()
-        )}
+          )}
         </div>
         );
       });

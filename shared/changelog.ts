@@ -1,6 +1,55 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2276 — **UX · "AVANÇO FÍSICO POR GRUPO" redesenhado no estilo
+ * CRONOGRAMA: tree pai→filho com hierarquia visual por nível, cabeçalho
+ * de colunas sticky, barra inline compacta. Macro BarChart redundante
+ * removido (em VITRAIS plotava 10+ barras zeradas sobrepostas — ruído
+ * visual puro) e toggle "Mostrar/Ocultar detalhamento" eliminado
+ * (árvore é a única visão).**
+ *
+ * Pedido user (23/05/2026, VITRA + VITRAIS, screenshots):
+ *   "melhore o layout dos graficos e tela. de forma que ela se pareça
+ *    com a estruturação do cronograma. ajuste tudo para que fique de
+ *    facil interpretação".
+ *
+ * Mudanças (`PlanejamentoDetalhe.tsx` BLOCO 5):
+ *   1. Removido o macro `BarChart` (recharts) que aparecia no topo de
+ *      cada card. Era redundante (a árvore exibe o mesmo dado de forma
+ *      mais rica) e em obras com muitas etapas zeradas (ex.: VITRAIS
+ *      com 11 sub-itens a 0,0 %) gerava labels sobrepostos ilegíveis.
+ *   2. Removido o botão "Mostrar/Ocultar detalhamento" — árvore agora
+ *      é sempre visível (sem cliques extras pra ver os dados).
+ *   3. `renderRow` reescrito como grid CSS de 5 colunas (Item·Atividade
+ *      | Avanço | Previsto | Realizado | Desvio) com:
+ *      - Badge EAP monospace: slate-700/white em grupos, slate-100/500
+ *        em folhas (visual idêntico ao do cronograma).
+ *      - Fundo gradativo por profundidade: depth0=slate-100,
+ *        depth1=slate-50, depth2+=slate-50/60, folhas=branco.
+ *      - Nome em uppercase tracking-wide para grupos N1 (mesmo
+ *        tratamento dos headers do cronograma).
+ *      - Border-left colorida como "indent guide" vertical.
+ *      - Barra Previsto azul-500/55 + Realizado colorido por desvio
+ *        (verde/amber/vermelho) com `mix-blend-mode: multiply`.
+ *      - Chip Desvio com cor de fundo translúcida correspondente.
+ *   4. Cabeçalho de colunas sticky (bg slate-700/white) com ícone
+ *      ListTree, mostrando explicitamente Item·Atividade / Avanço /
+ *      Previsto / Realizado / Desvio.
+ *   5. Toolbar Expandir/Recolher movida pra cima da árvore com hint
+ *      "Clique em uma linha de grupo para expandir/recolher".
+ *   6. Legenda de atrasos críticos agora coleta recursivamente das
+ *      FOLHAS (antes só olhava `g.etapas` direto, ignorando folhas
+ *      profundas reveladas pelo drill-down da Rev. 2275). Cada chip
+ *      mostra EAP + nome + −X,XX%.
+ *
+ * R-001/R-007/R-010: N/A (client-only, JSX puro).
+ *
+ * Arquivos:
+ *   - client/src/pages/planejamento/PlanejamentoDetalhe.tsx (BLOCO 5)
+ *   - shared/version.ts → Rev. 2276
+ *   - shared/changelog.ts
+ *   - replit.md (2+5)
+ *
  * Rev. 2275 — **FEAT · "AVANÇO FÍSICO POR GRUPO" agora separa pais e
  * filhos até as FOLHAS finais (atividades terminais), com barras
  * horizontais por nível e drill-down recursivo via chevron.**

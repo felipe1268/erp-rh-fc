@@ -484,3 +484,4 @@
 - Rev. 2266 — FIX · Importer Avanço Semanal regrava snapshot MSP via parseMSProjectFull ao reimportar XML.
 - Rev. 2267 — UX · Cards exibem snapshot MSP em semanas POSTERIORES ao StatusDate, com chip ambar 'Foto MSP de DD/MM'.
 - Rev. 2268 — FIX · Card 'PREVISTO (SEMANA)' varia por semana via pctRaizMSP; chip 'Foto MSP' se refere SO ao Realizado.
+- Rev. 2269 — FIX · Barra topo avancoAtual okSemana = semFimVis >= sd — Realizado deixa de regredir em semanas posteriores ao StatusDate.
