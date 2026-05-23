@@ -1,6 +1,81 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2314 — **UX/ANALYTICS · Tabela "Custo por obra" agregada
+ * no preview da importação PDF de contratos de locação (Gemini
+ * Vision).**
+ *
+ * Pedido user (23/05/2026, anexou PDF "F051/R051 — Relação de
+ * Equipamentos e Previsão para Devolução" da Jalves com ~40
+ * contratos espalhados por 2+ obras): "A ia o PDF, procura nome
+ * da obra, ou pelo endereço, fazer uma análise detalhada, e
+ * trazer uma tabela por obra para saber qual o custo de cada um".
+ *
+ * **Diagnóstico**: o backend (`equipamentos.parsearPdf`, Rev.
+ * 2308) JÁ EXTRAI `localObra` por contrato — o prompt do Gemini
+ * inclui o campo explicitamente. O preview da Rev. 2308 mostrava
+ * o endereço apenas como linha cinza embaixo do card de cada
+ * contrato, sem nenhuma agregação. Pra ter visão de custo por
+ * obra, o user precisava ler 40 contratos e somar de cabeça —
+ * inviável.
+ *
+ * **Implementação** (100% frontend, em
+ * `client/src/pages/equipamentos/Locados.tsx`, dentro do bloco
+ * `importPreview && importPreview.length > 0`, ANTES da lista
+ * detalhada editável):
+ *
+ * IIFE que monta `Map<chaveNormalizada, {obra, contratos, itens,
+ * total, numeros[]}>`:
+ *
+ * 1. **Normalização da chave** (`norm`):
+ *    - `NFD + replace(/[\u0300-\u036f]/g, "")` — remove acentos.
+ *    - `toUpperCase`.
+ *    - `replace(/\s+/g, " ").trim()` — colapsa whitespace.
+ *    Tolerante a variações do OCR tipo "VALE l l" vs "VALE II"
+ *    (ainda imperfeito — não trata l→I; pode evoluir pra
+ *    Levenshtein no futuro se necessário, mas pra Jalves típico
+ *    o endereço sai consistente).
+ *
+ * 2. **Agregação**:
+ *    - `contratos`: count.
+ *    - `itens`: soma de `quantidade` de cada item (não count de
+ *      linhas — peças avulsas contam por unidade).
+ *    - `total`: soma de `valorTotal` (R$/mês por contrato).
+ *    - `numeros[]`: lista de números de contrato pra rastreio
+ *      (truncado a 6 com "+N" no render).
+ *    - Obras sem `localObra` viram chave "NAO IDENTIFICADA" com
+ *      label visual "— Não identificada —".
+ *
+ * 3. **Render**:
+ *    - Header gradient `from-indigo-600 to-purple-600` (mesma
+ *      paleta do botão IMPORTAR PDF da Rev. 2313, sinalização
+ *      "isso é IA"), pill com contagem de obras, total geral em
+ *      destaque.
+ *    - Tabela 5 colunas: **Obra (endereço) / Contratos / Itens /
+ *      Custo/mês / %** — ordenada por custo desc.
+ *    - Cada linha: endereço bold + lista de números de contrato
+ *      pequena cinza embaixo.
+ *    - Cifras em pt-BR (`toLocaleString` 2 casas) com classe
+ *      `tabular-nums` (alinhamento perfeito de colunas).
+ *    - `<tfoot>` com totais (contratos / itens / R$ geral / 100%)
+ *      em bold indigo, border-top reforçado.
+ *    - Hint amber no rodapé explicando o agrupamento.
+ *
+ * **Por que IIFE inline e não `useMemo`?** O bloco só renderiza
+ * quando `importPreview` está populado (após parse Gemini). Não
+ * vale a pena memoizar — é re-render por dependência natural do
+ * React, custo desprezível pra ~50 contratos.
+ *
+ * **Por que ANTES da lista detalhada?** Análise → revisão →
+ * confirmação. O user quer ver o impacto financeiro POR OBRA
+ * primeiro pra decidir se quer importar tudo ou filtrar.
+ *
+ * **0 mudança backend, 0 schema, 0 procedures novas.**
+ *
+ * **R-001/R-007/R-010:** N/A — 100% client-side (agregação em
+ * memória sobre dados já carregados).
+ *
+ *
  * Rev. 2313 — **UX · Substitui os 2 botões de locação (Rev. 2312)
  * por 1 único "IMPORTAR PDF (IA)" na barra de ações rápidas do
  * Almoxarifado; receber/devolver ficam só na tela Equipamentos

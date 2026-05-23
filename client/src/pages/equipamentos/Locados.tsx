@@ -575,6 +575,84 @@ export default function EquipamentosLocados() {
                     ✅ IA detectou <b>{importPreview.length}</b> contrato(s) totalizando <b>{importPreview.reduce((a, c) => a + (c.itens?.length || 0), 0)}</b> item(ns).
                     Revise os dados abaixo (campos são editáveis) e confirme.
                   </div>
+
+                  {/* Rev. 2314 — Resumo agregado por OBRA (chave = localObra normalizado). */}
+                  {(() => {
+                    const norm = (s: string) => (s || "Não identificada")
+                      .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+                      .toUpperCase().replace(/\s+/g, " ").trim();
+                    const grupos = new Map<string, { obra: string; contratos: number; itens: number; total: number; numeros: string[] }>();
+                    for (const c of importPreview) {
+                      const k = norm(c.localObra || "");
+                      const g = grupos.get(k) || { obra: c.localObra || "— Não identificada —", contratos: 0, itens: 0, total: 0, numeros: [] };
+                      g.contratos++;
+                      g.itens += (c.itens || []).reduce((a: number, it: any) => a + (Number(it.quantidade) || 0), 0);
+                      g.total += Number(c.valorTotal) || 0;
+                      if (c.numeroContrato) g.numeros.push(String(c.numeroContrato));
+                      grupos.set(k, g);
+                    }
+                    const linhas = Array.from(grupos.values()).sort((a, b) => b.total - a.total);
+                    const totalGeral = linhas.reduce((a, l) => a + l.total, 0);
+                    const totalItens = linhas.reduce((a, l) => a + l.itens, 0);
+                    const fmt = (n: number) => n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                    return (
+                      <div className="border border-indigo-200 rounded-lg overflow-hidden bg-white">
+                        <div className="px-3 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <Building2 className="h-4 w-4" />
+                            <span className="font-semibold text-sm">Custo por obra</span>
+                            <span className="text-[11px] bg-white/15 px-2 py-0.5 rounded-full">{linhas.length} obra(s)</span>
+                          </div>
+                          <div className="text-xs">
+                            Total geral: <b className="text-base tabular-nums">R$ {fmt(totalGeral)}</b>
+                          </div>
+                        </div>
+                        <table className="w-full text-sm">
+                          <thead className="bg-indigo-50 text-[11px] uppercase text-slate-600">
+                            <tr>
+                              <th className="px-3 py-2 text-left">Obra (endereço extraído do PDF)</th>
+                              <th className="px-3 py-2 text-center w-20">Contratos</th>
+                              <th className="px-3 py-2 text-center w-20">Itens</th>
+                              <th className="px-3 py-2 text-right w-32">Custo / mês</th>
+                              <th className="px-3 py-2 text-right w-16">%</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {linhas.map((l, i) => {
+                              const pct = totalGeral > 0 ? (l.total / totalGeral) * 100 : 0;
+                              return (
+                                <tr key={i} className="border-t hover:bg-slate-50">
+                                  <td className="px-3 py-2">
+                                    <div className="text-slate-800 leading-tight">{l.obra}</div>
+                                    {l.numeros.length > 0 && (
+                                      <div className="text-[10px] text-slate-400 mt-0.5">Contratos: {l.numeros.slice(0, 6).join(", ")}{l.numeros.length > 6 ? ` +${l.numeros.length - 6}` : ""}</div>
+                                    )}
+                                  </td>
+                                  <td className="px-3 py-2 text-center tabular-nums">{l.contratos}</td>
+                                  <td className="px-3 py-2 text-center tabular-nums">{l.itens}</td>
+                                  <td className="px-3 py-2 text-right tabular-nums font-semibold text-indigo-700">R$ {fmt(l.total)}</td>
+                                  <td className="px-3 py-2 text-right tabular-nums text-slate-500">{pct.toFixed(1)}%</td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                          <tfoot>
+                            <tr className="border-t-2 border-indigo-300 bg-indigo-50 font-bold">
+                              <td className="px-3 py-2 text-right text-slate-700">TOTAL</td>
+                              <td className="px-3 py-2 text-center tabular-nums">{importPreview.length}</td>
+                              <td className="px-3 py-2 text-center tabular-nums">{totalItens}</td>
+                              <td className="px-3 py-2 text-right tabular-nums text-indigo-800">R$ {fmt(totalGeral)}</td>
+                              <td className="px-3 py-2 text-right text-slate-400">100%</td>
+                            </tr>
+                          </tfoot>
+                        </table>
+                        <div className="px-3 py-1.5 bg-amber-50 border-t border-amber-200 text-[11px] text-amber-800">
+                          💡 Agrupamento automático por endereço (normalizado). Contratos sem obra identificada aparecem como "— Não identificada —".
+                        </div>
+                      </div>
+                    );
+                  })()}
+
                   <div className="space-y-3 max-h-[55vh] overflow-y-auto pr-1">
                     {importPreview.map((c, ci) => (
                       <div key={ci} className="border rounded-lg overflow-hidden">
