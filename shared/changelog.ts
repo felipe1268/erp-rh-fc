@@ -1,6 +1,81 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2319 — **HOTFIX/DB · CREATE TABLE IF NOT EXISTS para
+ * `equipamentos_locados` + `equipamento_locado_eventos` no
+ * SyncSchema+ (a Rev. 2308 só fazia ADD COLUMN e dependia de
+ * `pnpm db:push` — quebrava o INSERT da importação PDF em
+ * ambientes onde o push nunca rodou).**
+ *
+ * Pedido user (23/05/2026, após receber a Rev. 2318 — barra de
+ * progresso corrigida): "Tá dando erro na importação".
+ *
+ * **Diagnóstico**: log do servidor desde a Rev. 2308 mostrava:
+ *   `[SyncSchema+] Rev. 2308: tabela equipamentos_locados ainda
+ *    não existe — pulando ADDs (rode 'pnpm db:push' p/ criar).`
+ * O `parsearContratoLocacaoPdf` (procedure pura — só chama o
+ * Gemini Vision) funcionava perfeitamente, mas no
+ * `confirmarImport` o `tx.insert(equipamentosLocados)` estourava
+ * porque a tabela física não existia no Neon. A Rev. 2308
+ * criou as defs Drizzle + os ALTER COLUMN aditivos esperando
+ * que `pnpm db:push` rodasse pra criar as tabelas — mas em
+ * dev/prod automatizado o push nunca foi disparado, deixando o
+ * feature inteiro quebrado por silenciamento via try/catch.
+ *
+ * **Implementação** (`server/_core/index.ts`, bloco SyncSchema+
+ * onde antes ficava o `if (!exists) skip`):
+ *
+ * 1. Adicionado `CREATE TABLE IF NOT EXISTS equipamentos_locados`
+ *    com TODAS as 30 colunas que o schema Drizzle define:
+ *    id/companyId/obraId/fornecedorId/fornecedorNome/ordemCompraId/
+ *    contratoLocacaoId/codigoPatrimonioFornecedor/codigoInternoErp/
+ *    descricao/categoria/numeroSerie/dataInicio/dataFimPrevista/
+ *    dataFimReal/valorDiario/valorMensal/status/
+ *    fotosRecebimentoJson/fotosDevolucaoJson/funcionarioResponsavelId/
+ *    funcionarioResponsavelNome/observacoes/ocAnteriorId/
+ *    ultimoCheckInData/ultimoCheckInUserId/numeroContratoFornecedor/
+ *    atendenteResponsavel/arquivoOrigemUrl/valorSubtotalContrato/
+ *    createdAt/updatedAt. Tipos espelhados (varchar, integer,
+ *    jsonb, numeric(14,2), timestamp DEFAULT NOW(), etc).
+ *
+ * 2. 6 índices: `idx_equip_loc_company_status`, `_obra`,
+ *    `_fornecedor`, `_data_fim`, `_oc`, `_num_contrato`. Todos
+ *    CREATE INDEX IF NOT EXISTS.
+ *
+ * 3. `CREATE TABLE IF NOT EXISTS equipamento_locado_eventos`
+ *    com 13 colunas (id/companyId/equipamentoLocadoId/tipo/
+ *    dataEvento/funcionarioId/funcionarioNome/obraId/obraNome/
+ *    fotosJson/observacao/usuarioId/usuarioNome/createdAt) + 3
+ *    índices (`idx_equip_evt_equip`, `_tipo_data`, `_company`).
+ *
+ * 4. ADD COLUMN IF NOT EXISTS da Rev. 2308 PRESERVADOS no fim
+ *    (numero_contrato_fornecedor / atendente_responsavel /
+ *    arquivo_origem_url / valor_subtotal_contrato) — totalmente
+ *    idempotentes, cobrem o caso teórico de uma tabela criada
+ *    antes da Rev. 2308 (não acontece em prática, mas defesa em
+ *    profundidade).
+ *
+ * **0 mudança schema Drizzle** (já existia desde a Rev. 2308),
+ * **0 mudança client** — só o SyncSchema+ alinhando o estado
+ * real do banco com o que o ORM esperava.
+ *
+ * **R-001/R-007/R-010: OK** — somente CREATE TABLE/INDEX/COLUMN
+ * IF NOT EXISTS. Nenhum DROP, ALTER destrutivo ou DELETE.
+ *
+ * **Verificação**: workflow reinicia e log mostra
+ *   `[SyncSchema+] Rev. 2319: tabelas equipamentos_locados +
+ *    equipamento_locado_eventos garantidas (+ índices + colunas
+ *    import-lote da Rev. 2308).` — antes mostrava o "pulando
+ *    ADDs" da Rev. 2308. INSERT agora passa pra tabela real.
+ *
+ * **Lição aprendida**: SyncSchema+ deve SEMPRE incluir CREATE
+ * TABLE IF NOT EXISTS junto com os ALTERs aditivos quando
+ * introduz uma tabela nova — não dá pra confiar em `db:push`
+ * em ambientes automatizados (deploy Replit, novos workspaces,
+ * Neon branches). A regra é: se a feature precisa de uma
+ * tabela nova, o bloco SyncSchema+ tem que ser auto-suficiente.
+ *
+ *
  * Rev. 2318 — **UX/HOTFIX · Barra de progresso da importação PDF
  * não trava mais em 95%: estimativa 20s→35s + creep 95→99% pra
  * PDFs grandes.**

@@ -1882,20 +1882,85 @@ Regras:
         // contrato do fornecedor + rastreio do PDF original. R-001/R-007/R-010: OK
         // (apenas ADD COLUMN IF NOT EXISTS + CREATE INDEX IF NOT EXISTS).
         // Pula se a tabela ainda não existe (dev local sem `pnpm db:push`).
+        // Rev. 2319 — CREATE TABLE IF NOT EXISTS para equipamentos_locados +
+        // equipamento_locado_eventos (a Rev. 2308 esqueceu de criar as tabelas
+        // pelo SyncSchema+, dependendo de `pnpm db:push` — que nunca rodou em
+        // alguns ambientes, quebrando a importação PDF no INSERT). R-001/R-007/
+        // R-010: OK (apenas CREATE TABLE/INDEX IF NOT EXISTS + ADD COLUMN IF
+        // NOT EXISTS — nenhum DROP/ALTER destrutivo).
         try {
-          const t: any = await db.execute(sql`SELECT to_regclass('public.equipamentos_locados') AS r`);
-          const exists = t?.rows?.[0]?.r ?? t?.[0]?.r;
-          if (!exists) {
-            console.log(`[SyncSchema+] Rev. 2308: tabela equipamentos_locados ainda não existe — pulando ADDs (rode 'pnpm db:push' p/ criar).`);
-          } else {
-            await db.execute(sql`ALTER TABLE equipamentos_locados ADD COLUMN IF NOT EXISTS numero_contrato_fornecedor VARCHAR(50)`);
-            await db.execute(sql`ALTER TABLE equipamentos_locados ADD COLUMN IF NOT EXISTS atendente_responsavel VARCHAR(255)`);
-            await db.execute(sql`ALTER TABLE equipamentos_locados ADD COLUMN IF NOT EXISTS arquivo_origem_url TEXT`);
-            await db.execute(sql`ALTER TABLE equipamentos_locados ADD COLUMN IF NOT EXISTS valor_subtotal_contrato NUMERIC(14,2)`);
-            await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_equip_loc_num_contrato ON equipamentos_locados (company_id, numero_contrato_fornecedor)`);
-            console.log(`[SyncSchema+] Rev. 2308: colunas de import em lote garantidas em equipamentos_locados.`);
-          }
-        } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.2308 equipamentos_locados import-lote:`, e?.message || e); }
+          await db.execute(sql`
+            CREATE TABLE IF NOT EXISTS equipamentos_locados (
+              id SERIAL PRIMARY KEY,
+              company_id INTEGER NOT NULL,
+              obra_id INTEGER,
+              fornecedor_id INTEGER,
+              fornecedor_nome VARCHAR(255),
+              ordem_compra_id INTEGER,
+              contrato_locacao_id INTEGER,
+              codigo_patrimonio_fornecedor VARCHAR(100),
+              codigo_interno_erp VARCHAR(50),
+              descricao VARCHAR(255) NOT NULL,
+              categoria VARCHAR(100),
+              numero_serie VARCHAR(100),
+              data_inicio VARCHAR(10) NOT NULL,
+              data_fim_prevista VARCHAR(10) NOT NULL,
+              data_fim_real VARCHAR(10),
+              valor_diario NUMERIC(14,2),
+              valor_mensal NUMERIC(14,2),
+              status VARCHAR(30) NOT NULL DEFAULT 'em_uso',
+              fotos_recebimento_json JSONB,
+              fotos_devolucao_json JSONB,
+              funcionario_responsavel_id INTEGER,
+              funcionario_responsavel_nome VARCHAR(255),
+              observacoes TEXT,
+              oc_anterior_id INTEGER,
+              ultimo_check_in_data VARCHAR(10),
+              ultimo_check_in_user_id INTEGER,
+              numero_contrato_fornecedor VARCHAR(50),
+              atendente_responsavel VARCHAR(255),
+              arquivo_origem_url TEXT,
+              valor_subtotal_contrato NUMERIC(14,2),
+              created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+              updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+            )
+          `);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_equip_loc_company_status ON equipamentos_locados (company_id, status)`);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_equip_loc_obra ON equipamentos_locados (obra_id)`);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_equip_loc_fornecedor ON equipamentos_locados (fornecedor_id)`);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_equip_loc_data_fim ON equipamentos_locados (data_fim_prevista)`);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_equip_loc_oc ON equipamentos_locados (ordem_compra_id)`);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_equip_loc_num_contrato ON equipamentos_locados (company_id, numero_contrato_fornecedor)`);
+
+          await db.execute(sql`
+            CREATE TABLE IF NOT EXISTS equipamento_locado_eventos (
+              id SERIAL PRIMARY KEY,
+              company_id INTEGER NOT NULL,
+              equipamento_locado_id INTEGER NOT NULL,
+              tipo VARCHAR(40) NOT NULL,
+              data_evento TIMESTAMP NOT NULL DEFAULT NOW(),
+              funcionario_id INTEGER,
+              funcionario_nome VARCHAR(255),
+              obra_id INTEGER,
+              obra_nome VARCHAR(255),
+              fotos_json JSONB,
+              observacao TEXT,
+              usuario_id INTEGER,
+              usuario_nome VARCHAR(255),
+              created_at TIMESTAMP NOT NULL DEFAULT NOW()
+            )
+          `);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_equip_evt_equip ON equipamento_locado_eventos (equipamento_locado_id)`);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_equip_evt_tipo_data ON equipamento_locado_eventos (tipo, data_evento)`);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_equip_evt_company ON equipamento_locado_eventos (company_id)`);
+
+          // ADDs idempotentes (caso a tabela já existisse de uma versão antiga sem essas colunas).
+          await db.execute(sql`ALTER TABLE equipamentos_locados ADD COLUMN IF NOT EXISTS numero_contrato_fornecedor VARCHAR(50)`);
+          await db.execute(sql`ALTER TABLE equipamentos_locados ADD COLUMN IF NOT EXISTS atendente_responsavel VARCHAR(255)`);
+          await db.execute(sql`ALTER TABLE equipamentos_locados ADD COLUMN IF NOT EXISTS arquivo_origem_url TEXT`);
+          await db.execute(sql`ALTER TABLE equipamentos_locados ADD COLUMN IF NOT EXISTS valor_subtotal_contrato NUMERIC(14,2)`);
+          console.log(`[SyncSchema+] Rev. 2319: tabelas equipamentos_locados + equipamento_locado_eventos garantidas (+ índices + colunas import-lote da Rev. 2308).`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.2319 equipamentos_locados (CREATE):`, e?.message || e); }
 
         // ── Rev. 2260 — Backfill `previsto_msp_pct` em obras antigas ──────
         // Decisão user (23/05/2026): a regra "PREVISTO = % PREVISTO do MSP /
