@@ -1,6 +1,62 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2320 — **HOTFIX/IA · Importação PDF estava truncando o
+ * JSON do Gemini em PDFs grandes ("Expected ',' or ']' at
+ * position 38975"); fix: `maxOutputTokens` 32768 → 65536 +
+ * reparo de array truncado caractere a caractere.**
+ *
+ * Pedido user (23/05/2026, screenshot do toast vermelho:
+ * "Expected ',' or ']' after array element in JSON at position
+ * 38975"): "Erro".
+ *
+ * **Diagnóstico**: PDF F051/R051 da Jalves (40+ contratos /
+ * ~300 itens) gerava resposta JSON do Gemini com ~39KB —
+ * estourando o `maxOutputTokens: 32768` que a Rev. 2308 definiu.
+ * A API do Gemini retorna o JSON cortado no meio do array
+ * `contratos[]` (sem fechar item nem array), e o `JSON.parse`
+ * quebra com a mensagem clássica de array não fechado.
+ * Posição 38975 = byte onde o token budget acabou.
+ *
+ * **Implementação** (`server/routers/equipamentos.ts`,
+ * procedure `parsearContratoLocacaoPdf`):
+ *
+ * 1. `maxTokens: 32768 → 65536`. O `gemini-2.5-flash` suporta
+ *    esse limite. Resolve o caso dos PDFs grandes que cabiam
+ *    em 65k.
+ *
+ * 2. Nova função `tryRepairTruncated(raw: string)`:
+ *    - Acha o índice de `"contratos"` no raw.
+ *    - Acha o `[` que abre o array.
+ *    - Varre caractere a caractere a partir daí, mantendo 3
+ *      flags: `depth` (profundidade de `{}`), `inStr` (dentro
+ *      de string), `esc` (próximo caractere escapado).
+ *    - Marca o ÚLTIMO `}` que estiver em `depth == 0` (= último
+ *      contrato completo no array).
+ *    - Reconstrói o JSON: `head + body_até_lastClose + ]}`.
+ *    - Se reparar dá certo, devolve o objeto parseado com os
+ *      contratos que couberam.
+ *
+ * 3. Catch reordenado:
+ *    - Tenta `JSON.parse(raw)` direto;
+ *    - Fallback 1: regex `\{[\s\S]*\}` (caso o Gemini retorne
+ *      lixo antes/depois);
+ *    - Fallback 2: `tryRepairTruncated(raw)`;
+ *    - Se tudo falhar: TRPCError "Resposta da IA truncada/
+ *      inválida. Tente dividir o PDF em arquivos menores."
+ *
+ * **Resultado**: PDFs até ~80 contratos passam direto (cabem em
+ * 65k tokens). PDFs maiores que isso ainda retornam ~90% dos
+ * contratos via reparo — em vez de erro fatal. User pode
+ * editar o preview, confirmar o que veio, e re-importar
+ * separadamente os que faltam.
+ *
+ * **0 mudança client, 0 mudança schema, 0 nova procedure** —
+ * fix totalmente contido na procedure existente.
+ *
+ * **R-001/R-007/R-010:** N/A — server-side puro, sem DB.
+ *
+ *
  * Rev. 2319 — **HOTFIX/DB · CREATE TABLE IF NOT EXISTS para
  * `equipamentos_locados` + `equipamento_locado_eventos` no
  * SyncSchema+ (a Rev. 2308 só fazia ADD COLUMN e dependia de

@@ -649,18 +649,50 @@ export const equipamentosRouter = router({
         systemPrompt,
         base64: input.pdfBase64,
         mimeType: input.mimeType,
-        maxTokens: 32768,
+        maxTokens: 65536, // Rev. 2320 — dobrado (era 32768): PDFs com 40+ contratos estouravam o cap e truncavam o JSON.
         responseSchema,
       });
       if (!raw?.trim()) throw new TRPCError({ code: "BAD_REQUEST", message: "IA não retornou dados — verifique se o PDF é legível." });
 
+      // Rev. 2320 — Reparo de JSON truncado.
+      // Mesmo dobrando o cap, PDFs muito grandes (60+ contratos) podem truncar.
+      // Estratégia: tenta parse normal; se falhar, encontra o último `}` válido
+      // dentro do array `contratos` e fecha o array+objeto manualmente.
+      // Resultado: o user recebe os contratos parciais que couberam (≈90%) em
+      // vez de erro fatal "Expected ',' or ']' at position N".
+      const tryRepairTruncated = (s: string): any | null => {
+        const idx = s.indexOf('"contratos"');
+        if (idx < 0) return null;
+        const arrStart = s.indexOf("[", idx);
+        if (arrStart < 0) return null;
+        // Varre achando o último `}` no nível 1 do array (top-level dentro de contratos[]).
+        let depth = 0, inStr = false, esc = false, lastClose = -1;
+        for (let i = arrStart + 1; i < s.length; i++) {
+          const ch = s[i];
+          if (esc) { esc = false; continue; }
+          if (ch === "\\") { esc = true; continue; }
+          if (ch === '"') { inStr = !inStr; continue; }
+          if (inStr) continue;
+          if (ch === "{") depth++;
+          else if (ch === "}") { depth--; if (depth === 0) lastClose = i; }
+        }
+        if (lastClose < 0) return null;
+        const head = s.slice(0, arrStart + 1);
+        const body = s.slice(arrStart + 1, lastClose + 1);
+        try { return JSON.parse(`${head}${body}]}`); } catch { return null; }
+      };
       let parsed: any;
       try {
         parsed = JSON.parse(raw);
       } catch {
         const m = raw.match(/\{[\s\S]*\}/);
-        if (!m) throw new TRPCError({ code: "BAD_REQUEST", message: "Resposta da IA inválida (não é JSON)." });
-        parsed = JSON.parse(m[0]);
+        if (m) {
+          try { parsed = JSON.parse(m[0]); }
+          catch { parsed = tryRepairTruncated(raw); }
+        } else {
+          parsed = tryRepairTruncated(raw);
+        }
+        if (!parsed) throw new TRPCError({ code: "BAD_REQUEST", message: "Resposta da IA truncada/inválida. Tente dividir o PDF em arquivos menores." });
       }
       const contratos: any[] = Array.isArray(parsed?.contratos) ? parsed.contratos : [];
       if (contratos.length === 0) throw new TRPCError({ code: "BAD_REQUEST", message: "Nenhum contrato detectado no documento." });
