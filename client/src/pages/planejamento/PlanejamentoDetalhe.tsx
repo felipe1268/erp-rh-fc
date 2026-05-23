@@ -13317,7 +13317,10 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
   // Antes usávamos `avancoRealAtual` (ponderação ad-hoc 3,75 %) e
   // disparávamos "Desvio Crítico" mesmo com a obra adiantada (8,48 %
   // no topo vs 6,40 % previsto = SPI 1,32 / +2,08pp).
-  const realOficialRefis = (typeof avancoAtual === "number") ? avancoAtual : avancoRealAtual;
+  // Rev. 2283 — hardening: usa Number.isFinite (evita NaN/Infinity) em vez
+  // de typeof number, que aceita NaN e propagaria pro payload da mutation
+  // salvarRefis (z.number() rejeita NaN → erro de validação em runtime).
+  const realOficialRefis = Number.isFinite(avancoAtual) ? avancoAtual : avancoRealAtual;
   const spi = avancoPrevisto > 0 ? realOficialRefis / avancoPrevisto : 0;
 
   const refisPrevistoComInd = useMemo(() => {
@@ -13574,18 +13577,31 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
   // Realizado = venda do mês × % avanço realizado da semana
   const vendaMes      = dadosMesSelecionado.venda;
   const custoPrevAuto = +(vendaMes * avancoPrevisto / 100).toFixed(2);
-  const custoRealAuto = +(vendaMes * avancoRealAtual / 100).toFixed(2);
+  // Rev. 2283 — `custoRealAuto` passa a usar `realOficialRefis` (snapshot
+  // MSP raiz UID=0 — mesma fonte da Curva S Financeira) em vez de
+  // `avancoRealAtual` (ponderação local). Antes da Rev. 2283, o REFIS
+  // gravava 4,61 % (calc local) enquanto Curva S Financeira mostrava
+  // 6,86 % (MSP) → divergência de ~R$ 11k no FAT.REALIZADO da tabela
+  // histórica. Single-source-of-truth conforme convenção 2260+/2278.
+  const custoRealAuto = +(vendaMes * realOficialRefis / 100).toFixed(2);
   const rCustoPrev    = +(vendaMes * rPrev / 100).toFixed(2);
   const rCustoReal    = +(vendaMes * rReal / 100).toFixed(2);
 
   function emitirRefis() {
+    // Rev. 2283 — `avancoRealizado` gravado é `realOficialRefis` (MSP
+    // raiz UID=0), garantindo paridade absoluta entre tabela histórica
+    // do REFIS e Curva S Financeira (que já usa realOficialRefis desde
+    // Rev. 2278). `avancoRealSemanal` também passa a ser delta de
+    // realOficialRefis vs acumulado de início da semana, evitando que
+    // semana mostre delta com base diferente do acumulado.
+    const avancoRealSemanalMsp = Math.max(0, realOficialRefis - avancoRealAntes);
     salvarMutation.mutate({
       projetoId,
       semana,
       avancoPrevisto:         avancoPrevisto,
-      avancoRealizado:        avancoRealAtual,
+      avancoRealizado:        realOficialRefis,
       avancoSemanalPrevisto:  avancoPrevSemanal,
-      avancoSemanalRealizado: avancoRealSemanal,
+      avancoSemanalRealizado: avancoRealSemanalMsp,
       spi:                    parseFloat(spi.toFixed(4)),
       cpi:                    1,
       custoPrevisto:          custoPrevAuto,

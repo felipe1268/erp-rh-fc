@@ -1,6 +1,67 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2283 — **FIX CRÍTICO · emitirRefis() agora grava `realOficialRefis`
+ * (snapshot MSP raiz UID=0) em vez de `avancoRealAtual` (cálculo local).**
+ *
+ * Pedido user (23/05/2026): "o 6,86 % veio do MSP, use os mesmos valores
+ * do avanço". Investigação confirmou divergência real:
+ *   - Curva S Financeira (KPI verde): R$ 34.700,43 = **6,86 %** do
+ *     contrato (R$ 506 k) — calculado via `realOficialRefis × totalContrato
+ *     / 100`, em que `realOficialRefis = avancoAtual` (prop do componente)
+ *     vem do snapshot MSP raiz UID=0 (fonte canônica, convenção 2260+).
+ *   - Tabela "Histórico de Relatórios Emitidos" linha #003: Real Acum
+ *     **4,61 %** + Fat. Realizado R$ 8.886,28 — valores GRAVADOS no banco
+ *     quando o REFIS foi emitido, originados de `avancoRealAtual`
+ *     (ponderação local de atividades). Discrepância de ~R$ 11 k entre
+ *     o KPI ao vivo e o snapshot da tabela.
+ *
+ * Causa raiz: `emitirRefis()` (linha ~13586) gravava `avancoRealizado:
+ * avancoRealAtual`. A Rev. 2278 já tinha consertado a Curva S Financeira
+ * (override do último ponto com `realOficialRefis`), mas o REFIS persistido
+ * continuava usando a métrica antiga — duas fontes de verdade vivendo em
+ * paralelo. Resultado visível: usuário vê obra adiantada (+R$10.848 na
+ * Curva S) e atrasada (−0,10 pp / −R$194 na tabela) na MESMA tela.
+ *
+ * Correção (cliente, 1 arquivo):
+ *   - `client/src/pages/planejamento/PlanejamentoDetalhe.tsx`:
+ *     * Linha ~13577: `custoRealAuto` agora usa `realOficialRefis` em
+ *       vez de `avancoRealAtual`. Antes:
+ *           const custoRealAuto = +(vendaMes * avancoRealAtual / 100).toFixed(2);
+ *       Depois:
+ *           const custoRealAuto = +(vendaMes * realOficialRefis / 100).toFixed(2);
+ *     * Função `emitirRefis()`: `avancoRealizado` passa de
+ *       `avancoRealAtual` → `realOficialRefis`.
+ *     * `avancoSemanalRealizado` recalculado localmente como
+ *       `Math.max(0, realOficialRefis - avancoRealAntes)` para manter
+ *       o delta semanal coerente com o acumulado MSP (antes era delta
+ *       da ponderação local, base diferente do acumulado salvo).
+ *     * Zero alteração no schema (drizzle), zero migration, zero
+ *       nova procedure. Só muda VALOR enviado no payload da
+ *       mutation `salvarMutation`.
+ *
+ * Como aplicar nos REFIS já gravados (#001/#002/#003 que carregam
+ * 4,61/2,65/1,29 %): o usuário deve **re-emitir o REFIS** da semana
+ * correspondente (mesmo modal "Emitir REFIS"). O endpoint
+ * `planejamento.salvarRefis` é upsert por `(projetoId, semana)`, então
+ * a re-emissão sobrescreve as colunas `avancoRealizado`/`custoRealizado`
+ * com os novos valores MSP. Para o REFIS "ATUAL" (#003), basta clicar
+ * em "Emitir REFIS" na tela aberta. Para semanas passadas, navegar até
+ * a semana desejada via dropdown e re-emitir. NÃO há comando bulk
+ * automático (regra R-001/R-007: nunca ALTER/UPDATE direto em prod).
+ *
+ * Comparativo do painel expansível (Rev. 2282): ao re-emitir #003, os
+ * Δs vs #002 ficarão corretos porque ambos os lados passarão a ler
+ * MSP. Enquanto #002 não for re-emitido, o Δ pode parecer maior por
+ * mistura de fontes — recomendamos re-emitir #003 primeiro (que é
+ * a referência "ATUAL" da Curva S).
+ *
+ * R-001/R-007/R-010: N/A — alteração 100 % client-side, sem migrations,
+ * sem DDL, sem DELETE/UPDATE direto. Persistência continua via
+ * mutation tRPC existente que faz upsert idempotente.
+ */
+
+/**
  * Rev. 2282 — **FEAT/UX · HISTÓRICO DE RELATÓRIOS EMITIDOS (REFIS) vira
  * EXPANSÍVEL com painel de ANÁLISE COMPARATIVA vs semana anterior.**
  * Pedido user (23/05/2026, IMG_1058/1059, contexto direto da Rev. 2281):
