@@ -1,9 +1,9 @@
 import DashboardLayout from "@/components/DashboardLayout";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
 import { toast } from "sonner";
-import { Plus, Search, X, Truck, CheckCircle2, RotateCcw, ClipboardCheck, Eye } from "lucide-react";
+import { Plus, Search, X, Truck, CheckCircle2, RotateCcw, ClipboardCheck, Eye, FileText, Upload, Sparkles, Trash2 } from "lucide-react";
 import { FotosUploader, FotoItem, fmtMoney, fmtDate, Spinner } from "./_shared";
 
 const STATUS_LABELS: Record<string, string> = {
@@ -72,6 +72,84 @@ export default function EquipamentosLocados() {
     onError: (e) => toast.error(e.message),
   });
 
+  // Rev. 2308 — Importação em lote via PDF da locadora (Gemini Vision)
+  const [modalImport, setModalImport] = useState(false);
+  const [importArquivo, setImportArquivo] = useState<{ nome: string; mimeType: string; base64: string } | null>(null);
+  const [importPreview, setImportPreview] = useState<any[] | null>(null);
+  const importFileRef = useRef<HTMLInputElement>(null);
+
+  const parsearPdf = trpc.equipamentos.parsearContratoLocacaoPdf.useMutation({
+    onSuccess: (res) => {
+      setImportPreview(res.contratos);
+      toast.success(`IA detectou ${res.totalContratos} contrato(s) · ${res.totalItens} item(ns).`);
+    },
+    onError: (e) => toast.error(e.message),
+  });
+  const importarLote = trpc.equipamentos.importarContratosLocacaoLote.useMutation({
+    onSuccess: (res) => {
+      utils.equipamentos.locadosListar.invalidate();
+      toast.success(`${res.contratosImportados} contrato(s) e ${res.itensImportados} item(ns) cadastrados.`);
+      setModalImport(false); setImportArquivo(null); setImportPreview(null);
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  function abrirImportar() {
+    setImportArquivo(null);
+    setImportPreview(null);
+    setModalImport(true);
+  }
+  async function handlePdfPick(file: File) {
+    if (file.size > 15 * 1024 * 1024) return toast.error("Arquivo > 15MB. Reduza ou divida o PDF.");
+    const okMimes = ["application/pdf", "image/jpeg", "image/png", "image/webp"];
+    if (!okMimes.includes(file.type)) return toast.error("Formato não suportado. Use PDF, JPG, PNG ou WEBP.");
+    const buf = await file.arrayBuffer();
+    const bytes = new Uint8Array(buf);
+    let binary = "";
+    for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+    const base64 = btoa(binary);
+    setImportArquivo({ nome: file.name, mimeType: file.type, base64 });
+    setImportPreview(null);
+    parsearPdf.mutate({ companyId, pdfBase64: base64, mimeType: file.type as any, nomeArquivo: file.name });
+  }
+  function confirmarImport() {
+    if (!importPreview || importPreview.length === 0) return;
+    const limpos = importPreview
+      .filter(c => c.numeroContrato && c.periodoInicio && c.periodoFim && c.itens?.length)
+      .map(c => ({
+        numeroContrato: String(c.numeroContrato).slice(0, 50),
+        fornecedorNome: c.fornecedorNome ? String(c.fornecedorNome).slice(0, 255) : undefined,
+        localObra: c.localObra ? String(c.localObra) : undefined,
+        periodoInicio: c.periodoInicio,
+        periodoFim: c.periodoFim,
+        valorTotal: Number(c.valorTotal) || undefined,
+        atendenteResponsavel: c.atendenteResponsavel ? String(c.atendenteResponsavel).slice(0, 255) : undefined,
+        itens: c.itens.map((it: any) => ({
+          patrimonio: it.patrimonio ? String(it.patrimonio).slice(0, 100) : undefined,
+          descricao: String(it.descricao || "").slice(0, 255),
+          quantidade: Math.max(1, parseInt(String(it.quantidade)) || 1),
+          subtotal: Number(it.subtotal) || undefined,
+        })).filter((it: any) => it.descricao),
+      }))
+      .filter(c => c.itens.length > 0);
+    if (limpos.length === 0) return toast.error("Nenhum contrato válido após revisão.");
+    importarLote.mutate({ companyId, nomeArquivo: importArquivo?.nome, contratos: limpos });
+  }
+  function removerContratoPreview(idx: number) {
+    setImportPreview(prev => prev ? prev.filter((_, i) => i !== idx) : prev);
+  }
+  function removerItemPreview(ci: number, ii: number) {
+    setImportPreview(prev => prev ? prev.map((c, i) => i === ci ? { ...c, itens: c.itens.filter((_: any, j: number) => j !== ii) } : c) : prev);
+  }
+  function updateContratoField(ci: number, field: string, value: any) {
+    setImportPreview(prev => prev ? prev.map((c, i) => i === ci ? { ...c, [field]: value } : c) : prev);
+  }
+  function updateItemField(ci: number, ii: number, field: string, value: any) {
+    setImportPreview(prev => prev ? prev.map((c, i) => i === ci ? {
+      ...c, itens: c.itens.map((it: any, j: number) => j === ii ? { ...it, [field]: value } : it)
+    } : c) : prev);
+  }
+
   function salvar() {
     if (!form.descricao.trim()) return toast.error("Descrição é obrigatória.");
     if (!form.dataFimPrevista) return toast.error("Data fim prevista é obrigatória.");
@@ -130,10 +208,16 @@ export default function EquipamentosLocados() {
             </h1>
             <p className="text-sm text-slate-600">Rastreio de equipamentos em locação. Foto obrigatória no recebimento e devolução.</p>
           </div>
-          <button onClick={() => { setForm({ ...EMPTY }); setFotos([]); setModal(true); }}
-            className="inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded shadow-sm">
-            <Plus className="h-4 w-4" /> Receber locação
-          </button>
+          <div className="flex items-center gap-2">
+            <button onClick={abrirImportar}
+              className="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded shadow-sm" title="Importar PDF de relatório da locadora (Jalves, Mills, etc.) — a IA detecta o layout e cadastra em lote">
+              <Sparkles className="h-4 w-4" /> Importar PDF (IA)
+            </button>
+            <button onClick={() => { setForm({ ...EMPTY }); setFotos([]); setModal(true); }}
+              className="inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded shadow-sm">
+              <Plus className="h-4 w-4" /> Receber locação
+            </button>
+          </div>
         </div>
 
         <div className="grid grid-cols-4 gap-3">
@@ -307,6 +391,145 @@ export default function EquipamentosLocados() {
           </div>
         </div>
       )}
+      {/* Rev. 2308 — Modal Importar PDF da locadora (IA detecta layout) */}
+      {modalImport && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => { if (!parsearPdf.isPending && !importarLote.isPending) setModalImport(false); }}>
+          <div className="bg-white rounded-lg shadow-xl max-w-5xl w-full max-h-[92vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <div className="px-5 py-3 border-b flex items-center justify-between bg-gradient-to-r from-indigo-50 to-purple-50">
+              <div className="flex items-center gap-2">
+                <Sparkles className="h-5 w-5 text-indigo-600" />
+                <h2 className="font-semibold text-slate-800">Importar contratos de locação (PDF · IA)</h2>
+              </div>
+              <button onClick={() => setModalImport(false)} disabled={parsearPdf.isPending || importarLote.isPending}>
+                <X className="h-5 w-5 text-slate-500" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4">
+              {!importArquivo && (
+                <div
+                  onClick={() => importFileRef.current?.click()}
+                  onDragOver={e => { e.preventDefault(); }}
+                  onDrop={e => { e.preventDefault(); const f = e.dataTransfer.files?.[0]; if (f) handlePdfPick(f); }}
+                  className="border-2 border-dashed border-indigo-300 rounded-lg p-10 text-center cursor-pointer hover:bg-indigo-50/50 transition"
+                >
+                  <Upload className="h-10 w-10 text-indigo-400 mx-auto mb-3" />
+                  <div className="text-slate-700 font-medium">Arraste o PDF da locadora aqui</div>
+                  <div className="text-xs text-slate-500 mt-1">ou clique para selecionar · PDF/JPG/PNG até 15MB</div>
+                  <div className="text-[11px] text-slate-400 mt-3">A IA (Gemini) detecta automaticamente o layout — Jalves, Mills, Locamerica etc.</div>
+                  <input ref={importFileRef} type="file" accept=".pdf,image/*" className="hidden"
+                    onChange={e => { const f = e.target.files?.[0]; if (f) handlePdfPick(f); }} />
+                </div>
+              )}
+
+              {importArquivo && (
+                <div className="flex items-center justify-between bg-slate-50 border rounded p-3 text-sm">
+                  <div className="flex items-center gap-2">
+                    <FileText className="h-4 w-4 text-indigo-600" />
+                    <span className="font-medium">{importArquivo.nome}</span>
+                    <span className="text-xs text-slate-500">({(importArquivo.base64.length * 0.75 / 1024).toFixed(0)} KB)</span>
+                  </div>
+                  {!parsearPdf.isPending && (
+                    <button onClick={() => { setImportArquivo(null); setImportPreview(null); }} className="text-xs text-red-600 hover:underline">Trocar arquivo</button>
+                  )}
+                </div>
+              )}
+
+              {parsearPdf.isPending && (
+                <div className="flex items-center justify-center gap-3 py-8 text-indigo-600">
+                  <Spinner />
+                  <span className="text-sm">IA analisando layout do documento — isso leva 10–30s…</span>
+                </div>
+              )}
+
+              {importPreview && importPreview.length > 0 && (
+                <>
+                  <div className="bg-emerald-50 border border-emerald-200 rounded p-3 text-sm text-emerald-800">
+                    ✅ IA detectou <b>{importPreview.length}</b> contrato(s) totalizando <b>{importPreview.reduce((a, c) => a + (c.itens?.length || 0), 0)}</b> item(ns).
+                    Revise os dados abaixo (campos são editáveis) e confirme.
+                  </div>
+                  <div className="space-y-3 max-h-[55vh] overflow-y-auto pr-1">
+                    {importPreview.map((c, ci) => (
+                      <div key={ci} className="border rounded-lg overflow-hidden">
+                        <div className="bg-indigo-50 px-3 py-2 grid grid-cols-12 gap-2 items-center text-xs">
+                          <div className="col-span-2">
+                            <label className="text-[10px] text-slate-500 uppercase block">Contrato</label>
+                            <input value={c.numeroContrato || ""} onChange={e => updateContratoField(ci, "numeroContrato", e.target.value)} className="inp" />
+                          </div>
+                          <div className="col-span-3">
+                            <label className="text-[10px] text-slate-500 uppercase block">Fornecedor</label>
+                            <input value={c.fornecedorNome || ""} onChange={e => updateContratoField(ci, "fornecedorNome", e.target.value)} className="inp" />
+                          </div>
+                          <div className="col-span-2">
+                            <label className="text-[10px] text-slate-500 uppercase block">Início</label>
+                            <input type="date" value={c.periodoInicio || ""} onChange={e => updateContratoField(ci, "periodoInicio", e.target.value)} className="inp" />
+                          </div>
+                          <div className="col-span-2">
+                            <label className="text-[10px] text-slate-500 uppercase block">Fim</label>
+                            <input type="date" value={c.periodoFim || ""} onChange={e => updateContratoField(ci, "periodoFim", e.target.value)} className="inp" />
+                          </div>
+                          <div className="col-span-2">
+                            <label className="text-[10px] text-slate-500 uppercase block">Valor total</label>
+                            <input type="number" step="0.01" value={c.valorTotal || ""} onChange={e => updateContratoField(ci, "valorTotal", parseFloat(e.target.value) || 0)} className="inp" />
+                          </div>
+                          <div className="col-span-1 text-right">
+                            <button onClick={() => removerContratoPreview(ci)} className="text-red-600 hover:bg-red-50 p-1 rounded" title="Remover contrato">
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                          {c.localObra && (
+                            <div className="col-span-12 text-[11px] text-slate-600">📍 {c.localObra}</div>
+                          )}
+                        </div>
+                        <table className="w-full text-xs">
+                          <thead className="bg-slate-50">
+                            <tr className="text-left text-[10px] text-slate-500 uppercase">
+                              <th className="px-2 py-1 w-24">Patrim.</th>
+                              <th className="px-2 py-1">Descrição</th>
+                              <th className="px-2 py-1 w-16 text-right">Qtde</th>
+                              <th className="px-2 py-1 w-24 text-right">Subtotal</th>
+                              <th className="px-2 py-1 w-8"></th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {(c.itens || []).map((it: any, ii: number) => (
+                              <tr key={ii} className="border-t">
+                                <td className="px-2 py-1"><input value={it.patrimonio || ""} onChange={e => updateItemField(ci, ii, "patrimonio", e.target.value)} className="inp" /></td>
+                                <td className="px-2 py-1"><input value={it.descricao || ""} onChange={e => updateItemField(ci, ii, "descricao", e.target.value)} className="inp" /></td>
+                                <td className="px-2 py-1"><input type="number" min={1} value={it.quantidade || 1} onChange={e => updateItemField(ci, ii, "quantidade", parseInt(e.target.value) || 1)} className="inp text-right" /></td>
+                                <td className="px-2 py-1"><input type="number" step="0.01" value={it.subtotal || ""} onChange={e => updateItemField(ci, ii, "subtotal", parseFloat(e.target.value) || 0)} className="inp text-right" /></td>
+                                <td className="px-2 py-1 text-right">
+                                  <button onClick={() => removerItemPreview(ci, ii)} className="text-red-500 hover:bg-red-50 p-0.5 rounded" title="Remover item">
+                                    <X className="h-3 w-3" />
+                                  </button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+
+            <div className="px-5 py-3 border-t bg-slate-50 flex items-center justify-between gap-2">
+              <div className="text-xs text-slate-500">
+                {importPreview ? `Total: ${importPreview.length} contrato(s) · ${importPreview.reduce((a, c) => a + (c.itens?.length || 0), 0)} unidade(s) a cadastrar` : "Cadastro inicial — fotos serão exigidas nos próximos recebimentos."}
+              </div>
+              <div className="flex items-center gap-2">
+                <button onClick={() => setModalImport(false)} disabled={parsearPdf.isPending || importarLote.isPending} className="px-3 py-1.5 text-sm border rounded">Cancelar</button>
+                <button onClick={confirmarImport} disabled={!importPreview || importPreview.length === 0 || importarLote.isPending}
+                  className="px-4 py-1.5 text-sm bg-emerald-600 hover:bg-emerald-700 text-white rounded disabled:opacity-50 inline-flex items-center gap-1">
+                  {importarLote.isPending ? "Cadastrando…" : <><CheckCircle2 className="h-4 w-4" /> Confirmar e cadastrar</>}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <style>{`.inp{width:100%;padding:6px 8px;border:1px solid #e2e8f0;border-radius:4px;font-size:14px}`}</style>
     </DashboardLayout>
   );

@@ -583,6 +583,191 @@ export const equipamentosRouter = router({
         .orderBy(desc(equipamentoLocadoEventos.dataEvento));
     }),
 
+  // ── IMPORTAÇÃO EM LOTE VIA PDF DA LOCADORA (Rev. 2308) ────────────────────
+  // Cada locadora (Jalves, Locamerica, Mills, etc.) tem um layout próprio de
+  // relatório. A IA (Gemini Vision) detecta o layout, extrai contratos+itens
+  // e devolve uma estrutura padronizada. O usuário revisa no preview e
+  // confirma o cadastro em lote (sem foto obrigatória — é cadastro inicial,
+  // fotos virão nos próximos recebimentos via fluxo de compras/recebimento).
+
+  parsearContratoLocacaoPdf: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      pdfBase64: z.string().min(100),
+      mimeType: z.enum(["application/pdf", "image/jpeg", "image/png", "image/webp"]),
+      nomeArquivo: z.string().max(255).optional(),
+    }))
+    .mutation(async ({ input }) => {
+      // Hard-limit server-side (defesa em profundidade — client limita em 15MB).
+      // base64 inflado ~33%; 25MB base64 ≈ 18MB binário. Acima disso bloqueia.
+      if (input.pdfBase64.length > 25 * 1024 * 1024) {
+        throw new TRPCError({ code: "PAYLOAD_TOO_LARGE", message: "PDF muito grande (>18MB). Reduza ou divida o arquivo." });
+      }
+      const { invokeGeminiVision } = await import("../_core/llm");
+      const systemPrompt = `Você é um extrator de relatórios de locação de equipamentos para construção civil no Brasil.\nCada locadora tem um layout próprio (Jalves, Mills, Locamerica, etc.). Detecte automaticamente o layout e extraia TODOS os contratos e seus respectivos itens.\nDatas no formato brasileiro DD/MM/AAAA. Valores em reais (R$). Quantidades inteiras ou decimais.`;
+      const prompt = `Extraia TODOS os contratos de locação deste documento. Para cada contrato, capture:\n- numeroContrato (ex: "19096-32")\n- fornecedorNome (razão social/nome fantasia da locadora — geralmente no cabeçalho)\n- localObra (endereço/identificação da obra)\n- periodoInicio (DD/MM/AAAA)\n- periodoFim (DD/MM/AAAA)\n- valorTotal (numérico, sem R$, ponto como separador decimal)\n- atendenteResponsavel\n- itens: array de {patrimonio, descricao, quantidade (number), valorUnitario (subtotal/qtde, number), subtotal (number)}\n\nRetorne APENAS JSON válido no formato {contratos: [...]}. Se um campo estiver ausente, use string vazia ou 0. Datas SEMPRE em DD/MM/AAAA.`;
+
+      const responseSchema = {
+        type: "object",
+        properties: {
+          contratos: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                numeroContrato: { type: "string" },
+                fornecedorNome: { type: "string" },
+                localObra: { type: "string" },
+                periodoInicio: { type: "string" },
+                periodoFim: { type: "string" },
+                valorTotal: { type: "number" },
+                atendenteResponsavel: { type: "string" },
+                itens: {
+                  type: "array",
+                  items: {
+                    type: "object",
+                    properties: {
+                      patrimonio: { type: "string" },
+                      descricao: { type: "string" },
+                      quantidade: { type: "number" },
+                      valorUnitario: { type: "number" },
+                      subtotal: { type: "number" },
+                    },
+                    required: ["patrimonio", "descricao", "quantidade", "subtotal"],
+                  },
+                },
+              },
+              required: ["numeroContrato", "periodoInicio", "periodoFim", "itens"],
+            },
+          },
+        },
+        required: ["contratos"],
+      };
+
+      const raw = await invokeGeminiVision({
+        prompt,
+        systemPrompt,
+        base64: input.pdfBase64,
+        mimeType: input.mimeType,
+        maxTokens: 32768,
+        responseSchema,
+      });
+      if (!raw?.trim()) throw new TRPCError({ code: "BAD_REQUEST", message: "IA não retornou dados — verifique se o PDF é legível." });
+
+      let parsed: any;
+      try {
+        parsed = JSON.parse(raw);
+      } catch {
+        const m = raw.match(/\{[\s\S]*\}/);
+        if (!m) throw new TRPCError({ code: "BAD_REQUEST", message: "Resposta da IA inválida (não é JSON)." });
+        parsed = JSON.parse(m[0]);
+      }
+      const contratos: any[] = Array.isArray(parsed?.contratos) ? parsed.contratos : [];
+      if (contratos.length === 0) throw new TRPCError({ code: "BAD_REQUEST", message: "Nenhum contrato detectado no documento." });
+
+      // Conversão DD/MM/AAAA → ISO YYYY-MM-DD pra alinhar com schema (varchar(10))
+      const toIso = (br: string) => {
+        if (!br) return "";
+        const m = br.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+        if (m) return `${m[3]}-${m[2]}-${m[1]}`;
+        const m2 = br.match(/^(\d{4})-(\d{2})-(\d{2})/);
+        return m2 ? `${m2[1]}-${m2[2]}-${m2[3]}` : "";
+      };
+      for (const c of contratos) {
+        c.periodoInicio = toIso(c.periodoInicio);
+        c.periodoFim = toIso(c.periodoFim);
+        if (!Array.isArray(c.itens)) c.itens = [];
+      }
+
+      return {
+        contratos,
+        totalContratos: contratos.length,
+        totalItens: contratos.reduce((a, c) => a + (c.itens?.length || 0), 0),
+      };
+    }),
+
+  importarContratosLocacaoLote: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      obraId: z.number().optional(),
+      nomeArquivo: z.string().max(255).optional(),
+      contratos: z.array(z.object({
+        numeroContrato: z.string().max(50),
+        fornecedorNome: z.string().max(255).optional(),
+        fornecedorId: z.number().optional(),
+        obraId: z.number().optional(),
+        localObra: z.string().optional(),
+        periodoInicio: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+        periodoFim: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+        valorTotal: z.number().optional(),
+        atendenteResponsavel: z.string().max(255).optional(),
+        itens: z.array(z.object({
+          patrimonio: z.string().max(100).optional(),
+          descricao: z.string().min(1).max(255),
+          quantidade: z.number().min(1).default(1),
+          subtotal: z.number().optional(),
+        })).min(1),
+      })).min(1).max(200),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      // Atomicidade: import 100% transacional. Se qualquer INSERT falhar,
+      // tudo é revertido — sem estado parcial em caso de erro de rede,
+      // FK rejeitada ou exceção do servidor.
+      const ids: number[] = [];
+      let totalItens = 0;
+      await db.transaction(async (tx: any) => {
+        for (const c of input.contratos) {
+          const obraIdCt = c.obraId ?? input.obraId ?? null;
+          for (const it of c.itens) {
+            const qty = Math.max(1, Math.floor(it.quantidade || 1));
+            // Cada unidade física vira 1 linha em equipamentos_locados.
+            // Subtotal do contrato dividido pela quantidade (valor por unidade).
+            const subtotalUnidade = it.subtotal && qty > 0 ? (it.subtotal / qty) : (it.subtotal || 0);
+            for (let i = 0; i < qty; i++) {
+              const [created] = await tx.insert(equipamentosLocados).values({
+                companyId: input.companyId,
+                obraId: obraIdCt,
+                fornecedorId: c.fornecedorId ?? null,
+                fornecedorNome: c.fornecedorNome ?? null,
+                codigoPatrimonioFornecedor: it.patrimonio ?? null,
+                descricao: it.descricao,
+                dataInicio: c.periodoInicio,
+                dataFimPrevista: c.periodoFim,
+                valorMensal: subtotalUnidade > 0 ? String(subtotalUnidade.toFixed(2)) : null,
+                status: "em_uso",
+                observacoes: c.localObra ? `Local da obra (PDF): ${c.localObra}` : null,
+                numeroContratoFornecedor: c.numeroContrato,
+                atendenteResponsavel: c.atendenteResponsavel ?? null,
+                arquivoOrigemUrl: input.nomeArquivo ?? null,
+                valorSubtotalContrato: it.subtotal != null ? String(it.subtotal.toFixed(2)) : null,
+                fotosRecebimentoJson: [] as any,
+              }).returning({ id: equipamentosLocados.id });
+              ids.push(created.id);
+              totalItens++;
+              // Evento de auditoria (RECEBIMENTO via import)
+              await tx.insert(equipamentoLocadoEventos).values({
+                companyId: input.companyId,
+                equipamentoLocadoId: created.id,
+                tipo: "RECEBIMENTO",
+                obraId: obraIdCt,
+                observacao: `Cadastro inicial via import PDF · Contrato ${c.numeroContrato}${input.nomeArquivo ? ` · ${input.nomeArquivo}` : ""}`,
+                usuarioId: ctx.user.id,
+                usuarioNome: ctx.user.name || String(ctx.user.id),
+              });
+            }
+          }
+        }
+      });
+      return {
+        ok: true as const,
+        contratosImportados: input.contratos.length,
+        itensImportados: totalItens,
+        ids,
+      };
+    }),
+
   // ── FATURA DE LOCAÇÃO (skeleton; OCR vem na Fase 3) ───────────────────────
 
   faturasListar: protectedProcedure

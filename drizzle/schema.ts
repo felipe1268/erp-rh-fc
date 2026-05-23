@@ -8657,6 +8657,11 @@ export const equipamentosLocados = pgTable("equipamentos_locados", {
   // Último check-in semanal (controle de "ainda está na obra")
   ultimoCheckInData:           varchar("ultimo_check_in_data", { length: 10 }),
   ultimoCheckInUserId:         integer("ultimo_check_in_user_id"),
+  // Rev. 2308 — Importação em lote via PDF da locadora (Jalves etc).
+  numeroContratoFornecedor:    varchar("numero_contrato_fornecedor", { length: 50 }),
+  atendenteResponsavel:        varchar("atendente_responsavel", { length: 255 }),
+  arquivoOrigemUrl:            text("arquivo_origem_url"),
+  valorSubtotalContrato:       numeric("valor_subtotal_contrato", { precision: 14, scale: 2 }),
   createdAt:                   timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
   updatedAt:                   timestamp("updated_at", { mode: "string" }).defaultNow().notNull(),
 }, (table) => [
@@ -8665,6 +8670,7 @@ export const equipamentosLocados = pgTable("equipamentos_locados", {
   index("idx_equip_loc_fornecedor").on(table.fornecedorId),
   index("idx_equip_loc_data_fim").on(table.dataFimPrevista),
   index("idx_equip_loc_oc").on(table.ordemCompraId),
+  index("idx_equip_loc_num_contrato").on(table.companyId, table.numeroContratoFornecedor),
 ]);
 
 // 3) Auditoria de eventos do equipamento locado (timeline)

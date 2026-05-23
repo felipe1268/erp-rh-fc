@@ -1877,6 +1877,26 @@ Regras:
           console.log(`[SyncSchema+] Rev. 2195: tabela encargos_sociais_documentos garantida.`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.2195 encargos_sociais_documentos:`, e?.message || e); }
 
+        // Rev. 2308 — Importação em lote de contratos de locação via PDF da locadora.
+        // 4 colunas aditivas em equipamentos_locados pra suportar agrupamento por
+        // contrato do fornecedor + rastreio do PDF original. R-001/R-007/R-010: OK
+        // (apenas ADD COLUMN IF NOT EXISTS + CREATE INDEX IF NOT EXISTS).
+        // Pula se a tabela ainda não existe (dev local sem `pnpm db:push`).
+        try {
+          const t: any = await db.execute(sql`SELECT to_regclass('public.equipamentos_locados') AS r`);
+          const exists = t?.rows?.[0]?.r ?? t?.[0]?.r;
+          if (!exists) {
+            console.log(`[SyncSchema+] Rev. 2308: tabela equipamentos_locados ainda não existe — pulando ADDs (rode 'pnpm db:push' p/ criar).`);
+          } else {
+            await db.execute(sql`ALTER TABLE equipamentos_locados ADD COLUMN IF NOT EXISTS numero_contrato_fornecedor VARCHAR(50)`);
+            await db.execute(sql`ALTER TABLE equipamentos_locados ADD COLUMN IF NOT EXISTS atendente_responsavel VARCHAR(255)`);
+            await db.execute(sql`ALTER TABLE equipamentos_locados ADD COLUMN IF NOT EXISTS arquivo_origem_url TEXT`);
+            await db.execute(sql`ALTER TABLE equipamentos_locados ADD COLUMN IF NOT EXISTS valor_subtotal_contrato NUMERIC(14,2)`);
+            await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_equip_loc_num_contrato ON equipamentos_locados (company_id, numero_contrato_fornecedor)`);
+            console.log(`[SyncSchema+] Rev. 2308: colunas de import em lote garantidas em equipamentos_locados.`);
+          }
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.2308 equipamentos_locados import-lote:`, e?.message || e); }
+
         // ── Rev. 2260 — Backfill `previsto_msp_pct` em obras antigas ──────
         // Decisão user (23/05/2026): a regra "PREVISTO = % PREVISTO do MSP /
         // REALIZADO = PercentComplete da raiz" precisa valer p/ todas as

@@ -456,3 +456,73 @@ export async function invokeAnthropicVision(params: {
     .map((c) => (c as Anthropic.Messages.TextBlock).text)
     .join("");
 }
+
+// ── Exported helper: invoke Gemini com PDF ou imagem (base64) ────────────────
+// Rev. 2308 — Suporte a PDF/imagem via endpoint nativo Gemini (o endpoint
+// OpenAI-compatible usado em invokeGemini não aceita inline_data binário).
+// Usado pelo upload em lote de contratos de locação. Retorna string (texto
+// concatenado). Suporta JSON mode via responseSchema (Gemini structured output).
+export async function invokeGeminiVision(params: {
+  prompt: string;
+  base64: string;
+  mimeType: string;
+  systemPrompt?: string;
+  maxTokens?: number;
+  responseSchema?: Record<string, unknown>;
+  model?: string;
+}): Promise<string> {
+  const googleKey = process.env.GOOGLE_API_KEY;
+  if (!googleKey) throw new Error("Google API key não configurada");
+
+  const model = params.model ?? "gemini-2.5-flash";
+  const body: Record<string, unknown> = {
+    contents: [
+      {
+        role: "user",
+        parts: [
+          { inline_data: { mime_type: params.mimeType, data: params.base64 } },
+          { text: params.prompt },
+        ],
+      },
+    ],
+    generationConfig: {
+      maxOutputTokens: params.maxTokens ?? 8192,
+      temperature: 0.1,
+      ...(params.responseSchema ? {
+        responseMimeType: "application/json",
+        responseSchema: params.responseSchema,
+      } : {}),
+    },
+    ...(params.systemPrompt ? {
+      systemInstruction: { parts: [{ text: params.systemPrompt }] },
+    } : {}),
+  };
+
+  const MAX_RETRIES = 3;
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${googleKey}`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+      }
+    );
+    if (res.ok) {
+      const json: any = await res.json();
+      const text = json?.candidates?.[0]?.content?.parts
+        ?.map((p: any) => p?.text || "")
+        .join("") || "";
+      return text;
+    }
+    const errText = await res.text();
+    if (res.status === 429 && attempt < MAX_RETRIES) {
+      const waitMs = Math.min(1000 * Math.pow(2, attempt) + Math.random() * 500, 60000);
+      console.warn(`[Gemini Vision] 429 (tentativa ${attempt + 1}/${MAX_RETRIES + 1}). Aguardando ${Math.round(waitMs)}ms...`);
+      await new Promise(r => setTimeout(r, waitMs));
+      continue;
+    }
+    throw new Error(`Gemini Vision falhou: ${res.status} – ${errText.slice(0, 500)}`);
+  }
+  throw new Error("Gemini Vision: máximo de tentativas excedido.");
+}

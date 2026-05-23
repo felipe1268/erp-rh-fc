@@ -1,6 +1,96 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2308 — **FEAT · Importação em lote de contratos de locação de
+ * equipamentos via PDF da locadora (IA Gemini detecta layout).**
+ * MVP / Fase 1 do projeto "Locações com alertas em Compras" (Rev.
+ * 2308–2311; cada locadora tem um modelo de arquivo próprio).
+ *
+ * Pedido user (23/05/2026, anexo Jalves F051/R051 com 80+ contratos):
+ * "preciso criar uma forma de fazer o upload e já cadastrar tudo que
+ * temos locados com valores... cada empresa de locação tem seu
+ * modelo de arquivo, é preciso que a IA detecte neste momento, pra
+ * cadastro inicial". Decisões via user_query: IA escolhida pela
+ * agente (Gemini — já tem GOOGLE_API_KEY configurada); alertas serão
+ * in-app + email (Rev. 2309); renovação com workflow completo de
+ * aprovação (Rev. 2310). Fase atual entrega só o upload+parse+
+ * cadastro em lote.
+ *
+ * **Schema** (`drizzle/schema.ts`, aditivo em `equipamentos_locados`):
+ * - `numero_contrato_fornecedor VARCHAR(50)` — nº do contrato no
+ *   sistema da locadora (ex: "19096-32"); pra agrupar itens na UI.
+ * - `atendente_responsavel VARCHAR(255)` — nome do atendente da
+ *   locadora (ex: "RUAN FELIPE DOS SANTOS").
+ * - `arquivo_origem_url TEXT` — referência ao arquivo importado.
+ * - `valor_subtotal_contrato NUMERIC(14,2)` — valor desse item
+ *   dentro do contrato (cópia fiel do PDF).
+ * - Index novo `idx_equip_loc_num_contrato (company_id, numero_
+ *   contrato_fornecedor)` pra queries de agrupamento.
+ *
+ * **SyncSchema+ Rev. 2308** (`server/_core/index.ts`): 4× `ADD
+ * COLUMN IF NOT EXISTS` + `CREATE INDEX IF NOT EXISTS`. 100%
+ * aditivo. R-001/R-007/R-010: OK (nenhum DROP/DELETE).
+ *
+ * **Hardening pós-code-review** (`server/routers/equipamentos.ts`):
+ * (a) `parsearContratoLocacaoPdf` agora rejeita PDFs >18MB binário
+ * (25MB base64) via `PAYLOAD_TOO_LARGE` — defesa em profundidade
+ * além do limite frontend de 15MB, evita abuso/OOM/custo Gemini.
+ * (b) `importarContratosLocacaoLote` agora roda 100% dentro de
+ * `db.transaction(async tx => ...)` — se qualquer INSERT (linha
+ * de equipamento ou evento) falhar, ROLLBACK completo. Sem mais
+ * estado parcial em caso de erro de rede / FK / exceção no meio
+ * do lote (potencialmente 80+ contratos × N unidades).
+ *
+ * **Helper IA** (`server/_core/llm.ts`): novo `invokeGeminiVision`
+ * que usa o endpoint nativo do Gemini
+ * (`/v1beta/models/{model}:generateContent`), aceita PDF/imagem via
+ * `inline_data`, suporta JSON mode (`responseSchema`), retry com
+ * backoff em 429. O `invokeGemini` existente é OpenAI-compatible e
+ * NÃO aceita binário, por isso o helper separado.
+ *
+ * **Backend** (`server/routers/equipamentos.ts`, 2 procedures):
+ * - `parsearContratoLocacaoPdf` — recebe PDF base64 + mime, manda
+ *   pro Gemini Vision com `responseSchema` exigindo
+ *   {contratos:[{numeroContrato, fornecedorNome, localObra,
+ *   periodoInicio, periodoFim, valorTotal, atendenteResponsavel,
+ *   itens:[{patrimonio, descricao, quantidade, subtotal}]}]}.
+ *   Converte datas BR (DD/MM/AAAA) → ISO (YYYY-MM-DD) antes de
+ *   devolver pro client. Limite 32k tokens out (suficiente pros
+ *   PDFs de relatório típicos de 5–20 páginas).
+ * - `importarContratosLocacaoLote` — recebe a lista revisada e
+ *   insere em `equipamentos_locados`. **Cada unidade física vira
+ *   uma linha** (qtde=3 → 3 INSERTs), porque é assim que o resto
+ *   do módulo trata equipamentos locados (uma linha por número de
+ *   patrimônio físico, com check-in/devolução individual). Valor
+ *   mensal = subtotal/qtde por unidade. Cria evento `RECEBIMENTO`
+ *   em `equipamento_locado_eventos` pra cada unidade. Sem foto
+ *   obrigatória nesse cadastro inicial (será exigida nos próximos
+ *   recebimentos via fluxo de compras — Rev. 2311).
+ *
+ * **Frontend** (`client/src/pages/equipamentos/Locados.tsx`):
+ * - Botão "✨ Importar PDF (IA)" no header ao lado do "Receber
+ *   locação".
+ * - Modal de upload com drag&drop (PDF/JPG/PNG/WEBP até 15MB).
+ * - Spinner durante o parse ("IA analisando layout — 10–30s").
+ * - Preview editável: cards por contrato (nº/fornecedor/datas/
+ *   valor) com tabela aninhada de itens (patrim/desc/qtde/sub).
+ *   Cada campo editável; botões de remover contrato e remover
+ *   item individual. Toolbar inferior mostra totais.
+ * - Confirma via `importarContratosLocacaoLote` + invalida
+ *   `locadosListar`.
+ *
+ * **Não cobre nesta rev (escopo das próximas Revs):**
+ * - Alertas in-app + email 3d antes do vencimento (Rev. 2309).
+ * - Workflow de aprovação de renovação/devolução (Rev. 2310).
+ * - Cadastro automático via fluxo de OC tipo=equipamento ao
+ *   receber (Rev. 2311).
+ *
+ * Arquivos: `drizzle/schema.ts`, `server/_core/index.ts`,
+ * `server/_core/llm.ts`, `server/routers/equipamentos.ts`,
+ * `client/src/pages/equipamentos/Locados.tsx`,
+ * `shared/version.ts`, `shared/changelog.ts`, `replit.md`,
+ * `replit-history.md`.
+ *
  * Rev. 2307 — **UX · Pills de filtro por TIPO (Material/MDO/MAT+MDO/
  * Equipamento) na tela Ordens de Compra, com cross-filter de
  * contadores.**
