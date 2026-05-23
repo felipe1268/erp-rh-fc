@@ -6915,6 +6915,55 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
   const distorcaoPrev = +(previstoComInd - previsto).toFixed(2);
   const distorcaoReal = +(realizadoComInd - realizadoAcum).toFixed(2);
 
+  // ── Rev. 2265 — SSOT READ-ONLY do MSP (User preferences, regra absoluta) ───
+  // O módulo Planejamento NÃO calcula avanço: só LÊ o snapshot gravado no XML
+  // do MS Project. Os 6 cards do painel "Previsto × Realizado" + "Avanço Global"
+  // consomem este hook diretamente. Quando o snapshot está ausente (XML pré-Rev.
+  // 1675, semana fora do cutoff, envelope mexido ou XML nunca importado), os
+  // valores ficam null e a UI mostra "—" com o motivo. Os useMemos legados
+  // (`previsto`, `realizadoAcum`, `previstoComInd`, `realizadoComInd`) seguem
+  // existindo apenas para consumidores internos não-cardealizados (REFIS,
+  // editor de avanços, exports). Migração progressiva: nenhum card novo deve
+  // usá-los — TODOS devem ler `mspReadOnly`.
+  const mspReadOnly = useMemo(() => {
+    const cal = parseCalendarioJson((proj as any)?.calendarioJson);
+    const projIni = (proj as any)?.dataInicio as string | null | undefined;
+    const projFim = (proj as any)?.dataTerminoContratual as string | null | undefined;
+    if (!cal) {
+      return { previsto: null as number | null, realizado: null as number | null,
+        missingReason: "XML do MS Project ainda não foi importado neste projeto. Importe o cronograma na aba Cronograma → Importar Cronograma." };
+    }
+    if (!cal.statusDateSnapshot) {
+      return { previsto: null, realizado: null,
+        missingReason: "XML importado em versão antiga do ERP, sem StatusDate gravado. Reimporte o cronograma para popular o snapshot." };
+    }
+    const envOk = (!cal.envelopeStartSnapshot  || projIni === cal.envelopeStartSnapshot)
+               && (!cal.envelopeFinishSnapshot || projFim === cal.envelopeFinishSnapshot);
+    if (!envOk) {
+      return { previsto: null, realizado: null,
+        missingReason: "Datas de início/término da obra foram alteradas no ERP após o último import. Reimporte o XML para restaurar a paridade com o MSP." };
+    }
+    if (semanaFim !== cal.statusDateSnapshot) {
+      return { previsto: null, realizado: null,
+        missingReason: `A semana visualizada (fim ${fmtBR(semanaFim)}) não coincide com o StatusDate do XML (${fmtBR(cal.statusDateSnapshot)}). Selecione a semana do cutoff oficial para ver os indicadores do MSP.` };
+    }
+    const prev = cal.previstoMspSnapshot  != null ? Number(cal.previstoMspSnapshot)  : null;
+    const real = cal.realizadoMspSnapshot != null ? Number(cal.realizadoMspSnapshot) : null;
+    const partes: string[] = [];
+    if (prev  == null) partes.push("% Previsto (Texto6/10/11) ausente");
+    if (real == null) partes.push("% Realizado (AD/(AD+RD)) ausente");
+    return {
+      previsto: prev != null ? Math.min(100, Math.max(0, prev)) : null,
+      realizado: real != null ? Math.min(100, Math.max(0, real)) : null,
+      missingReason: partes.length
+        ? `Snapshot MSP incompleto no XML: ${partes.join(", ")}. Reimporte o cronograma para popular.`
+        : null,
+    };
+  }, [proj, semanaFim]);
+  const mspPrev = mspReadOnly.previsto;
+  const mspReal = mspReadOnly.realizado;
+  const mspDelta = (mspPrev != null && mspReal != null) ? +(mspReal - mspPrev).toFixed(2) : null;
+
   // ── Import XML / XLSX do MS Project ───────────────────────────────────────
   async function importarDoMSProject(file: File) {
     setImportando(true);
@@ -7605,77 +7654,81 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
         <div
           className="bg-white rounded-xl border border-slate-100 shadow-sm p-4 flex flex-col gap-1 cursor-help"
           title={
-            `PREVISTO (SEMANA) = ${previsto.toFixed(2)}%\n\n` +
-            `O que é: avanço físico que o cronograma DIZ que deveria estar concluído até o fim da semana selecionada (${semanaAtual}).\n\n` +
-            `Como é calculado: para cada atividade, mede a fração do prazo já decorrida (entre Início e Fim do cronograma) e multiplica pelo Peso% financeiro. A soma de todas as atividades dá este número.\n\n` +
-            `Para que serve: é a META do baseline. Comparando com o "Realizado", você sabe se a obra está adiantada, no prazo ou atrasada.`
+            mspPrev != null
+              ? `PREVISTO (SEMANA) = ${mspPrev.toFixed(2)}%\n\nFonte: snapshot "% PREVISTO" da tarefa-resumo (UID=0) do XML do MS Project — leitura direta, sem cálculo no ERP (User preference Rev. 2265).\nReferência: StatusDate ${fmtBR((parseCalendarioJson((proj as any)?.calendarioJson) as any)?.statusDateSnapshot ?? "")}.`
+              : `PREVISTO (SEMANA) — sem dado do MSP.\n\n${mspReadOnly.missingReason ?? ""}`
           }
         >
           <div className="flex items-center justify-between">
             <p className="text-[10px] font-medium text-slate-500 uppercase tracking-wide">Previsto (semana)</p>
             <Info className="h-3 w-3 text-slate-300" />
           </div>
-          <p className="text-2xl font-bold text-orange-600">{previsto.toFixed(2)}%</p>
+          {mspPrev != null ? (
+            <p className="text-2xl font-bold text-orange-600">{mspPrev.toFixed(2)}%</p>
+          ) : (
+            <p className="text-2xl font-bold text-slate-300">—</p>
+          )}
           <div className="w-full bg-slate-100 rounded-full h-2 mt-1 overflow-hidden">
-            <div className="h-full rounded-full bg-orange-400" style={{ width: `${Math.min(100, previsto)}%` }} />
+            <div className="h-full rounded-full bg-orange-400" style={{ width: `${Math.min(100, mspPrev ?? 0)}%` }} />
           </div>
-          <p className="text-[10px] text-slate-400 mt-0.5">Baseado nas datas do cronograma</p>
+          <p className="text-[10px] text-slate-400 mt-0.5">{mspPrev != null ? "Lido do snapshot MS Project (UID=0)" : "Reimporte o XML do MS Project"}</p>
         </div>
 
         {/* Realizado */}
         <div
           className="bg-white rounded-xl border border-slate-100 shadow-sm p-4 flex flex-col gap-1 cursor-help"
           title={
-            `REALIZADO (ACUMULADO) = ${realizadoAcum.toFixed(2)}%\n\n` +
-            `O que é: avanço físico real EXECUTADO na obra até a data de corte (Live = hoje, Oficial = última quinta fechada).\n\n` +
-            `Como é calculado: soma do % lançado em cada atividade × Peso% financeiro da atividade. É o EV (Earned Value) do PMBOK.\n\n` +
-            `Onde os números entram: nos lançamentos de "Avanço Semanal" abaixo (campo % Realizado por atividade) e/ou no "Diário de Obra".\n\n` +
-            `É acumulado: inclui TUDO que já foi feito desde o início da obra.`
+            mspReal != null
+              ? `REALIZADO (ACUM.) = ${mspReal.toFixed(2)}%\n\nFonte: snapshot AD/(AD+RD) da tarefa-resumo (UID=0) do XML do MS Project — leitura direta, sem cálculo no ERP (User preference Rev. 2265).\nReferência: StatusDate ${fmtBR((parseCalendarioJson((proj as any)?.calendarioJson) as any)?.statusDateSnapshot ?? "")}.`
+              : `REALIZADO (ACUM.) — sem dado do MSP.\n\n${mspReadOnly.missingReason ?? ""}`
           }
         >
           <div className="flex items-center justify-between">
             <p className="text-[10px] font-medium text-slate-500 uppercase tracking-wide">Realizado (acum.)</p>
             <Info className="h-3 w-3 text-slate-300" />
           </div>
-          <p className="text-2xl font-bold text-emerald-600">{realizadoAcum.toFixed(2)}%</p>
+          {mspReal != null ? (
+            <p className="text-2xl font-bold text-emerald-600">{mspReal.toFixed(2)}%</p>
+          ) : (
+            <p className="text-2xl font-bold text-slate-300">—</p>
+          )}
           <div className="w-full bg-slate-100 rounded-full h-2 mt-1 overflow-hidden">
-            <div className="h-full rounded-full bg-emerald-500" style={{ width: `${Math.min(100, realizadoAcum)}%` }} />
+            <div className="h-full rounded-full bg-emerald-500" style={{ width: `${Math.min(100, mspReal ?? 0)}%` }} />
           </div>
-          <p className="text-[10px] text-slate-400 mt-0.5">Ponderado pelo peso financeiro</p>
+          <p className="text-[10px] text-slate-400 mt-0.5">{mspReal != null ? "Lido do snapshot MS Project (UID=0)" : "Reimporte o XML do MS Project"}</p>
         </div>
 
         {/* Delta */}
         <div
-          className={`rounded-xl border shadow-sm p-4 flex flex-col gap-1 cursor-help ${delta >= 0 ? "bg-emerald-50 border-emerald-200" : "bg-red-50 border-red-200"}`}
+          className={`rounded-xl border shadow-sm p-4 flex flex-col gap-1 cursor-help ${mspDelta == null ? "bg-slate-50 border-slate-200" : mspDelta >= 0 ? "bg-emerald-50 border-emerald-200" : "bg-red-50 border-red-200"}`}
           title={
-            `VARIAÇÃO (REAL − PREVISTO) = ${delta >= 0 ? "+" : ""}${delta.toFixed(2)}%\n\n` +
-            `O que é: a diferença entre o que foi EXECUTADO e o que o cronograma PEDIA para esta semana.\n\n` +
-            `Como é calculado: Realizado (Acum.) − Previsto (Semana) = ${realizadoAcum.toFixed(2)}% − ${previsto.toFixed(2)}% = ${delta >= 0 ? "+" : ""}${delta.toFixed(2)}%.\n\n` +
-            `Como ler o sinal:\n` +
-            `  • Positivo (verde) = obra ADIANTADA em relação ao baseline.\n` +
-            `  • Negativo (vermelho) = obra ATRASADA em relação ao baseline.\n` +
-            `  • Próximo de zero (±0,1%) = obra no PRAZO.\n\n` +
-            `Equivale ao SV% (Schedule Variance) do PMBOK/EVM.`
+            mspDelta != null
+              ? `VARIAÇÃO (REAL − PREVISTO) = ${mspDelta >= 0 ? "+" : ""}${mspDelta.toFixed(2)}%\n\nFonte: diferença direta entre os snapshots do XML do MSP (sem cálculo no ERP).\n  Realizado (UID=0) ${mspReal!.toFixed(2)}%  −  Previsto (UID=0) ${mspPrev!.toFixed(2)}%  =  ${mspDelta >= 0 ? "+" : ""}${mspDelta.toFixed(2)}%`
+              : `VARIAÇÃO — sem dado do MSP.\n\n${mspReadOnly.missingReason ?? ""}`
           }
         >
           <div className="flex items-center justify-between">
             <p className="text-[10px] font-medium text-slate-500 uppercase tracking-wide">Variação (Real − Prev.)</p>
             <Info className="h-3 w-3 text-slate-400" />
           </div>
-          <p className={`text-2xl font-bold ${delta >= 0 ? "text-emerald-700" : "text-red-700"}`}>
-            {delta >= 0 ? "+" : ""}{delta.toFixed(2)}%
-          </p>
+          {mspDelta != null ? (
+            <p className={`text-2xl font-bold ${mspDelta >= 0 ? "text-emerald-700" : "text-red-700"}`}>
+              {mspDelta >= 0 ? "+" : ""}{mspDelta.toFixed(2)}%
+            </p>
+          ) : (
+            <p className="text-2xl font-bold text-slate-300">—</p>
+          )}
           <div className="flex items-center gap-1.5 mt-1">
-            <div className={`h-2 w-2 rounded-full ${delta >= 0 ? "bg-emerald-500" : "bg-red-500"}`} />
-            <p className={`text-[10px] font-medium ${delta >= 0 ? "text-emerald-700" : "text-red-700"}`}>
-              {delta >= 0 ? "Adiantado" : "Atrasado"} em relação ao planejado
+            <div className={`h-2 w-2 rounded-full ${mspDelta == null ? "bg-slate-300" : mspDelta >= 0 ? "bg-emerald-500" : "bg-red-500"}`} />
+            <p className={`text-[10px] font-medium ${mspDelta == null ? "text-slate-400" : mspDelta >= 0 ? "text-emerald-700" : "text-red-700"}`}>
+              {mspDelta == null ? "Sem snapshot — reimporte o XML" : mspDelta >= 0 ? "Adiantado em relação ao planejado" : "Atrasado em relação ao planejado"}
             </p>
           </div>
           <p className="text-[10px] text-slate-400 mt-0.5">{semanaNum}ª Semana — {fmtBR(semanaAtual)} a {fmtBR(semanaFim)}</p>
         </div>
       </div>
 
-      {(distorcaoPrev !== 0 || distorcaoReal !== 0) && (
+      {(folhasComInd.length > folhas.length) && (
         <UiTooltipProvider delayDuration={200}>
         <div className="rounded-xl border-2 border-blue-200 bg-blue-50/50 shadow-sm overflow-hidden">
           <div className="bg-blue-600 px-4 py-2 flex items-center justify-between">
@@ -7697,12 +7750,12 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
                   <UiTooltipTrigger asChild>
                     <div className="cursor-help">
                       <p className="text-[9px] text-slate-400">Diretas</p>
-                      <p className="text-base font-black text-slate-500">{previsto.toFixed(2)}%</p>
+                      <p className="text-base font-black text-slate-500">{mspPrev != null ? `${mspPrev.toFixed(2)}%` : "—"}</p>
                     </div>
                   </UiTooltipTrigger>
-                  <UiTooltipContent side="bottom" className="max-w-[240px] text-xs">
+                  <UiTooltipContent side="bottom" className="max-w-[260px] text-xs">
                     <p className="font-semibold">Previsto (só diretas)</p>
-                    <p className="text-slate-400 mt-0.5">Avanço previsto considerando apenas atividades diretas da obra.</p>
+                    <p className="text-slate-400 mt-0.5">Snapshot "% PREVISTO" da raiz UID=0 do XML do MSP — leitura direta, sem cálculo no ERP (Rev. 2265).{mspPrev == null ? ` ${mspReadOnly.missingReason ?? ""}` : ""}</p>
                   </UiTooltipContent>
                 </UiTooltip>
                 <ChevronRight className="h-4 w-4 text-slate-300" />
@@ -7710,23 +7763,23 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
                   <UiTooltipTrigger asChild>
                     <div className="cursor-help">
                       <p className="text-[9px] text-blue-400">Global</p>
-                      <p className="text-base font-black text-blue-700">{previstoComInd.toFixed(2)}%</p>
+                      <p className="text-base font-black text-blue-700">{mspPrev != null ? `${mspPrev.toFixed(2)}%` : "—"}</p>
                     </div>
                   </UiTooltipTrigger>
-                  <UiTooltipContent side="bottom" className="max-w-[240px] text-xs">
+                  <UiTooltipContent side="bottom" className="max-w-[260px] text-xs">
                     <p className="font-semibold">Previsto (c/ indiretas)</p>
-                    <p className="text-slate-400 mt-0.5">Avanço previsto incluindo atividades indiretas no cálculo ponderado.</p>
+                    <p className="text-slate-400 mt-0.5">Igual ao "Diretas" — o snapshot da raiz UID=0 do MSP não distingue diretas de indiretas (indiretas existem apenas no ERP, fora do XML). Rev. 2265.</p>
                   </UiTooltipContent>
                 </UiTooltip>
                 <UiTooltip>
                   <UiTooltipTrigger asChild>
-                    <span className={`text-xs font-extrabold px-2 py-0.5 rounded-full cursor-help ${distorcaoPrev >= 0 ? "bg-emerald-100 text-emerald-700 border border-emerald-200" : "bg-red-100 text-red-700 border border-red-200"}`}>
-                      {distorcaoPrev >= 0 ? "+" : ""}{distorcaoPrev.toFixed(2)}pp
+                    <span className="text-[10px] font-medium px-2 py-0.5 rounded-full cursor-help bg-slate-100 text-slate-500 border border-slate-200">
+                      MSP only
                     </span>
                   </UiTooltipTrigger>
-                  <UiTooltipContent side="bottom" className="max-w-[240px] text-xs">
-                    <p className="font-semibold">Distorção do Previsto</p>
-                    <p className="text-slate-400 mt-0.5">Quanto as indiretas alteram o previsto em pontos percentuais.</p>
+                  <UiTooltipContent side="bottom" className="max-w-[260px] text-xs">
+                    <p className="font-semibold">Distorção do Previsto desativada (Rev. 2265)</p>
+                    <p className="text-slate-400 mt-0.5">Por preferência do usuário, o ERP não calcula mais a contribuição das indiretas — só lê o snapshot do MSP.</p>
                   </UiTooltipContent>
                 </UiTooltip>
               </div>
@@ -7738,12 +7791,12 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
                   <UiTooltipTrigger asChild>
                     <div className="cursor-help">
                       <p className="text-[9px] text-slate-400">Diretas</p>
-                      <p className="text-base font-black text-slate-500">{realizadoAcum.toFixed(2)}%</p>
+                      <p className="text-base font-black text-slate-500">{mspReal != null ? `${mspReal.toFixed(2)}%` : "—"}</p>
                     </div>
                   </UiTooltipTrigger>
-                  <UiTooltipContent side="bottom" className="max-w-[240px] text-xs">
+                  <UiTooltipContent side="bottom" className="max-w-[260px] text-xs">
                     <p className="font-semibold">Realizado (só diretas)</p>
-                    <p className="text-slate-400 mt-0.5">Avanço real acumulado apenas com atividades diretas.</p>
+                    <p className="text-slate-400 mt-0.5">Snapshot AD/(AD+RD) da raiz UID=0 do XML do MSP — leitura direta, sem cálculo no ERP (Rev. 2265).{mspReal == null ? ` ${mspReadOnly.missingReason ?? ""}` : ""}</p>
                   </UiTooltipContent>
                 </UiTooltip>
                 <ChevronRight className="h-4 w-4 text-slate-300" />
@@ -7751,23 +7804,23 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
                   <UiTooltipTrigger asChild>
                     <div className="cursor-help">
                       <p className="text-[9px] text-blue-400">Global</p>
-                      <p className="text-base font-black text-blue-700">{realizadoComInd.toFixed(2)}%</p>
+                      <p className="text-base font-black text-blue-700">{mspReal != null ? `${mspReal.toFixed(2)}%` : "—"}</p>
                     </div>
                   </UiTooltipTrigger>
-                  <UiTooltipContent side="bottom" className="max-w-[240px] text-xs">
+                  <UiTooltipContent side="bottom" className="max-w-[260px] text-xs">
                     <p className="font-semibold">Realizado (c/ indiretas)</p>
-                    <p className="text-slate-400 mt-0.5">Avanço real incluindo indiretas (progresso proporcional ao tempo).</p>
+                    <p className="text-slate-400 mt-0.5">Igual ao "Diretas" — o snapshot da raiz UID=0 do MSP não distingue diretas de indiretas (indiretas existem apenas no ERP, fora do XML). Rev. 2265.</p>
                   </UiTooltipContent>
                 </UiTooltip>
                 <UiTooltip>
                   <UiTooltipTrigger asChild>
-                    <span className={`text-xs font-extrabold px-2 py-0.5 rounded-full cursor-help ${distorcaoReal >= 0 ? "bg-emerald-100 text-emerald-700 border border-emerald-200" : "bg-red-100 text-red-700 border border-red-200"}`}>
-                      {distorcaoReal >= 0 ? "+" : ""}{distorcaoReal.toFixed(2)}pp
+                    <span className="text-[10px] font-medium px-2 py-0.5 rounded-full cursor-help bg-slate-100 text-slate-500 border border-slate-200">
+                      MSP only
                     </span>
                   </UiTooltipTrigger>
-                  <UiTooltipContent side="bottom" className="max-w-[240px] text-xs">
-                    <p className="font-semibold">Distorção do Realizado</p>
-                    <p className="text-slate-400 mt-0.5">Quanto as indiretas alteram o realizado em pontos percentuais.</p>
+                  <UiTooltipContent side="bottom" className="max-w-[260px] text-xs">
+                    <p className="font-semibold">Distorção do Realizado desativada (Rev. 2265)</p>
+                    <p className="text-slate-400 mt-0.5">Por preferência do usuário, o ERP não calcula mais a contribuição das indiretas — só lê o snapshot do MSP.</p>
                   </UiTooltipContent>
                 </UiTooltip>
               </div>
@@ -7775,8 +7828,9 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
           </div>
           <div className="grid grid-cols-2 divide-x divide-blue-100 border-t border-blue-100 bg-slate-50/80">
             {(() => {
-              const desvDiretas = +(realizadoAcum - previsto).toFixed(2);
-              const desvGlobal = +(realizadoComInd - previstoComInd).toFixed(2);
+              // Rev. 2265 — desvios diretas/global são IDÊNTICOS porque MSP não
+              // distingue indiretas no snapshot raiz. Ambos lêem mspDelta.
+              const desv = mspDelta;
               return <>
                 <div className="px-4 py-2 flex items-center gap-2">
                   <UiTooltip>
@@ -7784,12 +7838,12 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
                       <span className="text-[10px] text-slate-400 font-medium cursor-help border-b border-dashed border-slate-300">Desvio (diretas):</span>
                     </UiTooltipTrigger>
                     <UiTooltipContent side="bottom" className="max-w-[260px] text-xs">
-                      <p className="font-semibold">Desvio = Realizado − Previsto (só diretas)</p>
-                      <p className="text-slate-400 mt-0.5">Diferença entre o avanço real e o previsto pelo cronograma, considerando apenas atividades diretas. Negativo = obra atrasada.</p>
+                      <p className="font-semibold">Desvio = Realizado − Previsto (snapshot MSP)</p>
+                      <p className="text-slate-400 mt-0.5">Diferença direta entre os snapshots da raiz UID=0 do XML do MSP (Rev. 2265). Negativo = obra atrasada.</p>
                     </UiTooltipContent>
                   </UiTooltip>
-                  <span className={`text-sm font-extrabold ${desvDiretas >= 0 ? "text-emerald-600" : "text-red-600"}`}>
-                    {desvDiretas >= 0 ? "+" : ""}{desvDiretas.toFixed(2)}pp
+                  <span className={`text-sm font-extrabold ${desv == null ? "text-slate-300" : desv >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+                    {desv == null ? "—" : `${desv >= 0 ? "+" : ""}${desv.toFixed(2)}pp`}
                   </span>
                 </div>
                 <div className="px-4 py-2 flex items-center gap-2">
@@ -7798,12 +7852,12 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
                       <span className="text-[10px] text-slate-400 font-medium cursor-help border-b border-dashed border-slate-300">Desvio (global):</span>
                     </UiTooltipTrigger>
                     <UiTooltipContent side="bottom" className="max-w-[260px] text-xs">
-                      <p className="font-semibold">Desvio = Realizado − Previsto (c/ indiretas)</p>
-                      <p className="text-slate-400 mt-0.5">Diferença entre o avanço real e o previsto incluindo atividades indiretas no cálculo. Negativo = obra atrasada na visão global.</p>
+                      <p className="font-semibold">Desvio = Realizado − Previsto (snapshot MSP)</p>
+                      <p className="text-slate-400 mt-0.5">Igual ao "Diretas" — o snapshot MSP da raiz não distingue ind/dir (Rev. 2265).</p>
                     </UiTooltipContent>
                   </UiTooltip>
-                  <span className={`text-sm font-extrabold ${desvGlobal >= 0 ? "text-emerald-600" : "text-red-600"}`}>
-                    {desvGlobal >= 0 ? "+" : ""}{desvGlobal.toFixed(2)}pp
+                  <span className={`text-sm font-extrabold ${desv == null ? "text-slate-300" : desv >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+                    {desv == null ? "—" : `${desv >= 0 ? "+" : ""}${desv.toFixed(2)}pp`}
                   </span>
                 </div>
               </>;

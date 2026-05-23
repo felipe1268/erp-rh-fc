@@ -1,6 +1,117 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2265 — **REGRA ABSOLUTA · Planejamento é READ-ONLY do MSP.
+ * Cards do Avanço Semanal lêem o snapshot direto e exibem "—" quando
+ * ausente. ZERO cálculo de avanço no ERP para esses agregados.**
+ *
+ * Pedido user direto (23/05/2026, após Rev. 2264):
+ *   "ja falei que não quero quer o ERP faça nenhum calculo..sobre isso.
+ *    proiba de vez isso.. quero que o modulo de planejamento, apenas faça
+ *    a leitura dos dados.... é um comando simples e objetivo."
+ *
+ * Contexto: a Rev. 2264 estendeu a guarda de snapshot para `previsto`,
+ * `realizadoAcum` e `previstoComInd` — mas mantinha o fallback Σ(avanço ×
+ * peso) quando o snapshot estava ausente. No VITRA 3ª Semana, o XML foi
+ * importado em versão antiga do parser (pré-Rev. 1675), então
+ * `realizadoMspSnapshot` era `null` no `calendarioJson`. Resultado: o
+ * card "REALIZADO (ACUM.)" caía no fallback e mostrava 3,75 % (média
+ * ponderada por duração das 211 folhas) em vez dos 6,16 % AD/(AD+RD)
+ * que o usuário esperava ver na linha de projeto do MSP.
+ *
+ * Diagnóstico apresentado ao user na resposta anterior — duas naturezas
+ * matematicamente distintas:
+ *   • MSP raiz: AD/(AD+RD) "de cima pra baixo" — uma única razão.
+ *   • ERP fallback: Σ(avanço folha × peso) "de baixo pra cima" — média
+ *     ponderada.
+ * Os dois NÃO podem bater quando há apontamento incompleto nas folhas,
+ * porque medem coisas diferentes. User pediu então PROIBIÇÃO ABSOLUTA
+ * de qualquer cálculo no ERP para esses cards.
+ *
+ * **Fix:**
+ *   1. Novo hook SSOT `mspReadOnly` em `PlanejamentoDetalhe.tsx`
+ *      L6921-6968. Devolve `{ previsto: number | null, realizado:
+ *      number | null, missingReason: string | null }` baseado APENAS no
+ *      `calendarioJson`. Quatro portões em cascata (cada um com mensagem
+ *      específica):
+ *        a) `cal == null` → "XML do MS Project ainda não foi importado".
+ *        b) `cal.statusDateSnapshot == null` → "XML importado em versão
+ *           antiga do ERP, sem StatusDate gravado".
+ *        c) envelope mexido (`projIni/projFim !== envelopeSnapshot`) →
+ *           "Datas de início/término foram alteradas no ERP".
+ *        d) `semanaFim !== cal.statusDateSnapshot` → "Semana visualizada
+ *           não coincide com o StatusDate do XML".
+ *      Quando todos os portões passam, retorna os snapshots brutos
+ *      (clipados em [0,100]). Se apenas um dos dois snapshots estiver
+ *      ausente (XML novo pré-Rev. 1675 com só `previstoMspSnapshot`),
+ *      devolve o que tem e marca `missingReason` apontando qual está
+ *      faltando.
+ *   2. `mspPrev`, `mspReal`, `mspDelta` exportados como derivados
+ *      simples — `mspDelta` é `null` quando qualquer um dos dois é
+ *      null (sem fallback).
+ *   3. Substituição dos 6 displays (3 cards do painel "Previsto ×
+ *      Realizado" + 4 valores + 2 desvios do painel "Avanço Global"):
+ *        • Card "Previsto (semana)" L7656-7678: lê `mspPrev`, mostra
+ *          "—" cinza quando null, tooltip explica fonte ou motivo da
+ *          ausência. Barra de progresso usa `mspPrev ?? 0` (vazia).
+ *        • Card "Realizado (acum.)" L7680-7702: idem com `mspReal`.
+ *        • Card "Variação" L7704-7731: lê `mspDelta`, classes neutras
+ *          (slate-50/slate-200) quando null, texto "Sem snapshot —
+ *          reimporte o XML".
+ *        • Painel "Avanço Global" (L7734+): gate mudou de
+ *          `distorcaoPrev !== 0 || distorcaoReal !== 0` para
+ *          `folhasComInd.length > folhas.length` — abre quando há
+ *          indiretas (única razão pra existir o painel agora). Os 4
+ *          valores Diretas/Global × Prev/Real lêem `mspPrev`/`mspReal`
+ *          diretamente — Diretas == Global porque o snapshot da raiz
+ *          UID=0 do MSP não distingue ind/dir (indiretas só existem no
+ *          ERP, fora do XML).
+ *        • Chips de distorção `+X,XXpp` viram pílulas neutras "MSP
+ *          only" com tooltip explicando que o conceito foi aposentado.
+ *        • Desvios (rodapé do painel) usam `mspDelta`, ambos idênticos
+ *          (Diretas == Global pela mesma razão acima).
+ *
+ * **O que NÃO foi tocado:**
+ *   • Os 4 useMemos legados (`previsto`, `realizadoAcum`,
+ *     `previstoComInd`, `realizadoComInd`) seguem existindo intactos.
+ *     São consumidos por REFIS (por-revisão, lógica própria), Curva S
+ *     (vem pronta do server), editor de avanços (precisa de número
+ *     pra apoiar a digitação em tempo real) e exports/relatórios.
+ *     Migração progressiva — `replit.md` marca que NENHUM card novo
+ *     deve usá-los.
+ *   • Topo "Avanço Físico" (Rev. 2262): já lê snapshot direto,
+ *     comportamento intacto.
+ *   • Importador (`ImportarCronograma.tsx`): grava `realizadoMspSnapshot`
+ *     desde Rev. 1675, sem mudanças.
+ *
+ * **Comportamento esperado no VITRA 3ª Semana após Rev. 2265:**
+ *   • Se user reimportar o XML: 6 cards mostram 4,00 % / 6,16 % /
+ *     +2,16pp travado. Paridade absoluta MSP.
+ *   • Se NÃO reimportar (XML pré-Rev. 1675): cards mostram "—" com
+ *     tooltip "Snapshot MSP incompleto no XML: % Realizado AD/(AD+RD)
+ *     ausente. Reimporte o cronograma para popular." — força o
+ *     reimport em vez de mascarar o problema com fallback impreciso.
+ *
+ * **Arquivos tocados:**
+ *   • `client/src/pages/planejamento/PlanejamentoDetalhe.tsx`
+ *       — adiciona `mspReadOnly` (L6921-6968)
+ *       — substitui 6 displays no painel Previsto × Realizado (L7656-7731)
+ *       — substitui 8 displays no painel Avanço Global (L7734-7870)
+ *       — gate de Avanço Global muda pra `folhasComInd.length > folhas.length`
+ *   • `shared/version.ts` — bump 2264 → 2265
+ *   • `shared/changelog.ts` — esta entrada
+ *   • `replit.md` — 2+5 rotacionado + nova User preference de proibição
+ *
+ * **R-001/R-007/R-010:** N/A — 100 % client-side, 1 hook novo + 14
+ * displays substituídos. Zero schema/migration/SQL.
+ *
+ * **Risco residual:** os tooltips dos 6 displays ainda computam
+ * `parseCalendarioJson` inline pra mostrar StatusDate — pequena
+ * duplicação aceitável (string template). Se virar gargalo, mover pra
+ * dentro do `mspReadOnly` numa rev futura.
+ *
+ * ─────────────────────────────────────────────────────────────────────
+ *
  * Rev. 2264 — **FIX/REGRA DE OURO · Cards "PREVISTO (SEMANA)",
  * "REALIZADO (ACUM.)" e "AVANÇO GLOBAL (C/ INDIRETAS) - PREVISTO"
  * (aba Avanço Semanal) espelham snapshot MSP da raiz UID=0 quando
