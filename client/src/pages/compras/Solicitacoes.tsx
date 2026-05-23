@@ -1103,7 +1103,7 @@ export default function Solicitacoes() {
   const [filtroObra, setFiltroObra] = useState("todas");
   const [filtroClassificacao, setFiltroClassificacao] = useState("todas");
   // Rev. 2089 — Ordenação clicável por coluna. Default: criadoEm DESC (mais recentes primeiro).
-  type SortKey = "criadoEm" | "aprovacaoStatus" | "status" | "numeroSc" | "titulo" | "obra" | "dataNecessidade";
+  type SortKey = "criadoEm" | "tipo" | "prioridade" | "status" | "numeroSc" | "titulo" | "obra" | "dataNecessidade";
   const [sortKey, setSortKey] = useState<SortKey>("criadoEm");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   function toggleSort(k: SortKey) {
@@ -2292,7 +2292,16 @@ ${sc.observacoes ? `<div class="obs"><b>Observações da SC:</b><br>${esc(sc.obs
         case "dataNecessidade": return r.dataNecessidade ? new Date(r.dataNecessidade + "T00:00:00").getTime() : 0;
         case "numeroSc": return String(r.numeroSc ?? "");  // ordenado via localeCompare numeric abaixo
         case "titulo": return String(r.titulo ?? "").toLowerCase();
-        case "aprovacaoStatus": return String(r.aprovacaoStatus ?? "aguardando").toLowerCase();
+        // Rev. 2295 — Ordenação por TIPO (badge MAT/MDO/EQUIP/etc.). Concatena `isLocacao`
+        // pra "equipamento" agrupar EQUIP·LOC perto de EQUIP. Substituiu "aprovacaoStatus"
+        // (obsoleto desde a Rev. 2294 — toda SC nasce aprovada).
+        case "tipo": return `${String(r.tipo ?? "material")}${r.isLocacao ? "_loc" : ""}`.toLowerCase();
+        // Rev. 2295 — Prioridade ordenada por peso semântico (URGENTE → ALTA → NORMAL → BAIXA),
+        // não alfabético (alfabético colocaria "alta" antes de "urgente", inverso do esperado).
+        case "prioridade": {
+          const peso: Record<string, number> = { urgente: 0, alta: 1, normal: 2, baixa: 3 };
+          return peso[String(r.prioridade ?? "normal").toLowerCase()] ?? 99;
+        }
         case "status": return String(r.status ?? "").toLowerCase();
         case "obra": return (nomeObra(r.obraId) ?? "").toLowerCase();
         default: return 0;
@@ -2534,7 +2543,8 @@ ${sc.observacoes ? `<div class="obs"><b>Observações da SC:</b><br>${esc(sc.obs
         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-50 border border-amber-200 text-amber-700 font-medium">
           {({
             criadoEm: "Data postada",
-            aprovacaoStatus: "Aprovação",
+            tipo: "Tipo",
+            prioridade: "Prioridade",
             status: "Status",
             numeroSc: "Número",
             titulo: "Título",
@@ -2571,7 +2581,12 @@ ${sc.observacoes ? `<div class="obs"><b>Observações da SC:</b><br>${esc(sc.obs
                 />
               </TableHead>
               {([
-                { k: "aprovacaoStatus", label: "Aprovação" },
+                // Rev. 2295 — Coluna "Aprovação" virou "Tipo" (Rev. 2294 tornou aprovação automática,
+                // o badge "Aprovada" sempre verde era ruído puro). Coluna "Prioridade" foi
+                // adicionada como ordenável, atendendo o pedido "preciso poder organizar
+                // as colunas das solicitações de compras".
+                { k: "tipo", label: "Tipo" },
+                { k: "prioridade", label: "Prioridade" },
                 { k: "status", label: "Status" },
                 { k: "numeroSc", label: "Número" },
                 { k: "titulo", label: "Título / Setor" },
@@ -2594,15 +2609,15 @@ ${sc.observacoes ? `<div class="obs"><b>Observações da SC:</b><br>${esc(sc.obs
                   </TableHead>
                 );
               })}
-              <TableHead className="text-gray-500 text-xs font-semibold uppercase tracking-wider">Recebido</TableHead>
+              <TableHead className="text-gray-500 text-xs font-semibold uppercase tracking-wider whitespace-nowrap">Recebido</TableHead>
               <TableHead className="w-8"></TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {q.isLoading ? (
-              <TableRow><TableCell colSpan={9} className="text-center py-10 text-gray-400"><Loader2 className="h-5 w-5 animate-spin mx-auto" /></TableCell></TableRow>
+              <TableRow><TableCell colSpan={10} className="text-center py-10 text-gray-400"><Loader2 className="h-5 w-5 animate-spin mx-auto" /></TableCell></TableRow>
             ) : listaFiltradaObra.length === 0 ? (
-              <TableRow><TableCell colSpan={9} className="text-center py-10 text-gray-400">Nenhuma solicitação encontrada</TableCell></TableRow>
+              <TableRow><TableCell colSpan={10} className="text-center py-10 text-gray-400">Nenhuma solicitação encontrada</TableCell></TableRow>
             ) : listaFiltradaObra.map((sc: any) => {
               const itC = sc._itens ?? { total: 0, atendidos: 0 };
               const pct = itC.total > 0 ? Math.round((itC.atendidos / itC.total) * 100) : 0;
@@ -2621,7 +2636,34 @@ ${sc.observacoes ? `<div class="obs"><b>Observações da SC:</b><br>${esc(sc.obs
                       }}
                     />
                   </TableCell>
-                  <TableCell><AprovBadge status={sc.aprovacaoStatus} /></TableCell>
+                  {/* Rev. 2295 — Célula "Aprovação" foi substituída por "Tipo" (badge MAT/MDO/EQUIP/VEÍC).
+                       Aprovação virou automática (Rev. 2294) e mostrar "Aprovada" pra TUDO era ruído. */}
+                  <TableCell>
+                    <span className={`px-2 py-0.5 text-[10px] font-semibold rounded ${
+                      (sc as any).tipo === "servico" ? "bg-purple-100 text-purple-700"
+                      : (sc as any).tipo === "pacote" ? "bg-indigo-100 text-indigo-700"
+                      : (sc as any).tipo === "equipamento" ? "bg-cyan-100 text-cyan-700"
+                      : (sc as any).tipo === "pecas_veiculo" || (sc as any).tipo === "manutencao" ? "bg-teal-100 text-teal-700"
+                      : "bg-blue-100 text-blue-700"
+                    }`}>
+                      {(sc as any).tipo === "servico" ? "MDO"
+                        : (sc as any).tipo === "pacote" ? "MAT+MDO"
+                        : (sc as any).tipo === "equipamento" ? ((sc as any).isLocacao ? "EQUIP·LOC" : "EQUIP")
+                        : (sc as any).tipo === "pecas_veiculo" || (sc as any).tipo === "manutencao" ? "VEÍC"
+                        : "MAT"}
+                    </span>
+                  </TableCell>
+                  {/* Rev. 2295 — Célula nova "Prioridade" (URGENTE/ALTA/NORMAL/BAIXA), ordenável por peso. */}
+                  <TableCell>
+                    <span className={`px-2 py-0.5 text-[10px] font-semibold rounded ${
+                      sc.prioridade === "urgente" ? "bg-red-100 text-red-700"
+                      : sc.prioridade === "alta" ? "bg-orange-100 text-orange-700"
+                      : sc.prioridade === "baixa" ? "bg-gray-100 text-gray-600"
+                      : "bg-slate-100 text-slate-700"
+                    }`}>
+                      {String(sc.prioridade ?? "normal").toUpperCase()}
+                    </span>
+                  </TableCell>
                   <TableCell><StatusBadge status={statusEfetivoSC(sc)} /></TableCell>
                   <TableCell className="text-gray-900 font-mono font-semibold text-xs">
                     <div className="flex items-center gap-1.5">

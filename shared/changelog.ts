@@ -1,6 +1,86 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2295 — **FEAT/UX · Auto-cotação ao criar SC + Coluna "Aprovação"
+ * substituída por "Tipo" e nova coluna "Prioridade" ordenáveis na tabela de
+ * Solicitações de Compras.**
+ *
+ * Pedido user (23/05/2026): "preciso que as cotações aprovadas venham
+ * diretamente para as cotações.. mas não veio a solicitação de locação de
+ * equipamento.. preciso tbm que eu possa organizar as colunas de forma
+ * crescente ou decrescente conforme as solicitações de compras". Confirmou
+ * via user_query: criação automática de cotação ao salvar a SC, qualquer
+ * tipo (incluindo equipamento + locação).
+ *
+ * **Por quê:** desde a Rev. 2294 a SC já nasce aprovada. Mas o engenheiro
+ * ainda precisava abrir a SC e clicar "Enviar para Cotação" pra ela aparecer
+ * em /compras/cotacoes — um passo manual extra sem decisão envolvida. O
+ * problema também explicava por que a SC de locação de equipamento "não
+ * aparecia" — ela existia, mas como ninguém abriu ela e clicou o botão, a
+ * Cotação nunca foi gerada e portanto a tela Cotações não mostrava nada.
+ *
+ * **Mudanças (server — `server/routers/compras.ts` L2796-2906):**
+ * - `criarSolicitacao`: o `db.insert(comprasSolicitacoesItens)` agora usa
+ *   `.returning()` pra captar os IDs reais dos itens recém-criados.
+ * - Logo depois, em bloco `try/catch` independente (não derruba a criação da
+ *   SC se falhar), gera automaticamente:
+ *   - 1 `comprasCotacoes` `status="pendente"` com `numeroCotacao` no formato
+ *     `COT-AAAA-NNNN` (count+1 padrão Rev. 1799+), `tipo` herdado da SC
+ *     (`material` / `servico` / `pacote` / `equipamento` / `pecas_veiculo`),
+ *     `solicitacaoId` apontando pra SC, `descricao` = título da SC,
+ *     `prioridade` herdada, `obraId` herdado, `criadoPor*` herdado.
+ *   - N `comprasCotacoesItens`, 1 pra cada `comprasSolicitacoesItens`,
+ *     mapeando `solicitacaoItemId` → ID real do item da SC, `precoUnitario=0`,
+ *     `total=0` (compras preenche preço depois ao cotar fornecedor).
+ *   - `UPDATE comprasSolicitacoes SET status="cotacao"` (mesmo
+ *     comportamento que `criarCotacao` tinha quando disparada manualmente).
+ *   - Log informativo no console com número da cotação, número da SC,
+ *     quantidade de itens, tipo e flag LOCAÇÃO quando aplicável.
+ * - Falha silenciosa (apenas log) — se algo der errado na auto-cotação a SC
+ *   ainda foi criada com sucesso e o usuário pode disparar manualmente via
+ *   botão "Enviar para Cotação" (mantido na UI por segurança/back-compat).
+ *
+ * **Mudanças (client — `client/src/pages/compras/Solicitacoes.tsx`):**
+ * - `SortKey` (L1109): removido `aprovacaoStatus` (obsoleto desde Rev. 2294),
+ *   adicionados `tipo` e `prioridade`.
+ * - Switch `getVal` (L2290-2307): novos cases pra `tipo` (string
+ *   `material|servico|pacote|equipamento[_loc]|pecas_veiculo` pra agrupar
+ *   EQUIP·LOC perto de EQUIP) e `prioridade` (peso semântico
+ *   `urgente=0 → alta=1 → normal=2 → baixa=3`, NÃO alfabético — alfabético
+ *   colocaria "alta" antes de "urgente" o que inverte a expectativa).
+ * - Indicador "Ordenado por:" (L2547-2556): labels atualizados.
+ * - Array de colunas clicáveis (L2586-2598): "Aprovação" virou "Tipo", e
+ *   "Prioridade" foi inserida como segunda coluna ordenável.
+ * - `<TableCell><AprovBadge/></TableCell>` (L2642+) substituído por:
+ *   - Célula "Tipo" com badge colorido (MAT azul / MDO roxo / MAT+MDO indigo
+ *     / EQUIP cyan / EQUIP·LOC cyan / VEÍC teal) — replicando o estilo já
+ *     usado dentro da célula Número.
+ *   - Célula "Prioridade" nova com badge (URGENTE vermelho / ALTA laranja /
+ *     NORMAL slate / BAIXA cinza).
+ * - `colSpan` dos rows vazios bumpado de 9 → 10 (uma coluna a mais).
+ * - Função `AprovBadge` mantida no código (L253) — não estava sendo usada em
+ *   mais nenhum lugar, mas a remoção fica pra cleanup posterior pra evitar
+ *   regressão silenciosa em telas de detalhe que ainda possam consumi-la.
+ *
+ * **Validação esperada (pós-restart):**
+ * - Criar SC nova de qualquer tipo → na tela /compras/cotacoes deve aparecer
+ *   COT-2026-NNNN com mesmo título da SC, status "Pendente", total R$ 0,00,
+ *   itens espelhando 1-pra-1 os da SC.
+ * - SC de Equipamento com `isLocacao=true` → idem (deve gerar COT
+ *   tipo=equipamento) + na tabela de SCs aparece badge cyan "EQUIP·LOC".
+ * - Cabeçalhos da tabela de SCs: clicar em "Tipo" → ordena por
+ *   MAT→MAT+MDO→MDO→EQUIP/EQUIP·LOC→VEÍC. Clicar em "Prioridade" → ordena
+ *   URGENTE → ALTA → NORMAL → BAIXA (asc) ou inverso (desc).
+ *
+ * **R-001 / R-007 / R-010:** N/A. Nenhum `ALTER`/`DROP`/`DELETE`; apenas
+ * `INSERT` em `comprasCotacoes`/`comprasCotacoesItens` e `UPDATE` de
+ * `status` em `comprasSolicitacoes` (tabelas/colunas pré-existentes).
+ *
+ * Arquivos: `server/routers/compras.ts` (L2796-2906),
+ * `client/src/pages/compras/Solicitacoes.tsx` (L1109, L2290-2307,
+ * L2547-2556, L2586-2598, L2621-2669), `shared/version.ts`,
+ * `shared/changelog.ts`, `replit.md`, `replit-history.md`.
+ *
  * Rev. 2294 — **FEAT/UX · Aprovação automática de SC e OC — fluxo manual de
  * "Aprovar Solicitação / Aprovar OC" descontinuado. A existência da SC JÁ É
  * a aprovação.**

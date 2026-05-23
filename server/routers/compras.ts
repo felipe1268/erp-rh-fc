@@ -2790,8 +2790,9 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
       if (!sc) {
         throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Falha desconhecida ao criar SC." });
       }
+      let scItensInseridos: any[] = [];
       if (input.itens.length > 0) {
-        await db.insert(comprasSolicitacoesItens).values(
+        scItensInseridos = await db.insert(comprasSolicitacoesItens).values(
           input.itens.map(it => ({
             solicitacaoId: sc.id,
             descricao: normalizarTexto(it.descricao),
@@ -2813,8 +2814,70 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
             metaMdoProfissional: it.metaMdoProfissional ? String(it.metaMdoProfissional) : null,
             metaMdoAjudante: it.metaMdoAjudante ? String(it.metaMdoAjudante) : null,
           }))
-        );
+        ).returning();
       }
+
+      // Rev. 2295 — Auto-cotação: junto com a Rev. 2294 (aprovação automática),
+      // toda SC já nasce com uma Cotação "pendente" vinculada, que aparece
+      // direto na tela /compras/cotacoes. Compras não precisa mais abrir a SC
+      // e clicar "Enviar para Cotação" — o engenheiro pediu "se tem SC, o
+      // ERP já entende como aprovada E já joga pra cotação".
+      // Falhar aqui NÃO derruba a criação da SC (try/catch com log) — o usuário
+      // ainda pode disparar manualmente pelo botão "Enviar para Cotação".
+      //
+      // ATOMICIDADE (review architect Rev. 2295): cotação + itens + UPDATE da
+      // SC rodam dentro de db.transaction. Se algo falhar no meio, nada é
+      // persistido — evita estados inconsistentes do tipo "cotação ativa sem
+      // itens" que bloqueariam o retry manual em `criarCotacao` (L3406 — gate
+      // de cotação ativa).
+      try {
+        if (scItensInseridos.length > 0) {
+          await db.transaction(async (tx: any) => {
+            const yr = new Date().getFullYear();
+            const cnt = await tx.select({ c: sql<number>`count(*)` }).from(comprasCotacoes).where(eq(comprasCotacoes.companyId, input.companyId));
+            const seq = (parseInt(String(cnt[0]?.c ?? 0)) + 1).toString().padStart(4, "0");
+            const numeroCotacao = `COT-${yr}-${seq}`;
+            const [cotAuto] = await tx.insert(comprasCotacoes).values({
+              companyId: input.companyId,
+              numeroCotacao,
+              descricao: normalizarTexto(input.titulo) ?? numeroSc,
+              prioridade: input.prioridade ?? "normal",
+              tipo: tipoSC,
+              obraId: input.obraId ?? null,
+              solicitacaoId: sc.id,
+              fornecedorId: null,
+              total: "0",
+              status: "pendente",
+              criadoPorId: input.userId ?? null,
+              criadoPorNome: input.userName ?? null,
+            } as any).returning();
+            await tx.insert(comprasCotacoesItens).values(
+              scItensInseridos.map((it: any, idx: number) => {
+                const inp = input.itens[idx];
+                return {
+                  cotacaoId: cotAuto.id,
+                  solicitacaoItemId: it.id,
+                  descricao: normalizarTexto(inp?.descricao || it.descricao),
+                  unidade: inp?.unidade ?? it.unidade ?? "un",
+                  quantidade: String(inp?.quantidade ?? it.quantidade ?? 1),
+                  precoUnitario: "0",
+                  descontoPct: "0",
+                  total: "0",
+                };
+              })
+            );
+            await tx.update(comprasSolicitacoes)
+              .set({ status: "cotacao", atualizadoEm: new Date().toISOString() })
+              .where(eq(comprasSolicitacoes.id, sc.id));
+            console.log(`[compras.criarSolicitacao] Rev. 2295 auto-cotação ${numeroCotacao} criada pra SC ${numeroSc} (${scItensInseridos.length} itens, tipo=${tipoSC}${input.isLocacao ? ", LOCAÇÃO" : ""}).`);
+          });
+        }
+      } catch (e: any) {
+        // Não derruba a criação da SC. O usuário ainda pode gerar via botão "Enviar para Cotação".
+        // A transação acima garante que NADA da auto-cotação foi persistido se chegou aqui — não há "cotação órfã".
+        console.error(`[compras.criarSolicitacao] Rev. 2295 FALHA ao auto-criar cotação pra SC ${numeroSc} (transação revertida):`, e?.cause?.message || e?.message || e);
+      }
+
       return sc;
     }),
 
@@ -3350,16 +3413,37 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
           ));
         const activeCots = existingCots.filter(c => !["cancelada", "recusada"].includes(c.status ?? ""));
         if (activeCots.length > 0) {
-          const existingOCs = await db.select({ id: comprasOrdens.id, numeroOc: comprasOrdens.numeroOc })
-            .from(comprasOrdens)
-            .where(and(
-              inArray(comprasOrdens.cotacaoId, activeCots.map(c => c.id)),
-              eq(comprasOrdens.companyId, input.companyId),
-            ));
-          if (existingOCs.length > 0) {
-            throw new Error(`Esta solicitação já possui Ordem de Compra em andamento (${existingOCs.map(o => o.numeroOc).join(", ")}). Não é possível criar nova cotação.`);
+          // Rev. 2295 — defesa em profundidade: cotação "ativa" SEM itens (órfã,
+          // resultado teórico de uma falha parcial pré-transação) é
+          // auto-cancelada aqui pra desbloquear retry. Com a transação
+          // adicionada no `criarSolicitacao` isso virou cinto+suspensório, mas
+          // protege casos legados (cotações criadas antes desta revisão) e
+          // qualquer rota futura que insira cotação fora de tx.
+          const cotIds = activeCots.map(c => c.id);
+          const itensRows = await db.select({ cotacaoId: comprasCotacoesItens.cotacaoId })
+            .from(comprasCotacoesItens)
+            .where(inArray(comprasCotacoesItens.cotacaoId, cotIds));
+          const cotsComItens = new Set(itensRows.map(r => r.cotacaoId));
+          const cotsOrfas = activeCots.filter(c => !cotsComItens.has(c.id));
+          if (cotsOrfas.length > 0) {
+            await db.update(comprasCotacoes)
+              .set({ status: "cancelada", observacoes: sql`COALESCE(${comprasCotacoes.observacoes}, '') || ' [Rev.2295: auto-cancelada por estar sem itens]'` })
+              .where(inArray(comprasCotacoes.id, cotsOrfas.map(c => c.id)));
+            console.log(`[compras.criarCotacao] Rev. 2295 auto-cancelou ${cotsOrfas.length} cotação(ões) órfã(s) sem itens pra SC ${input.solicitacaoId}:`, cotsOrfas.map(c => c.numeroCotacao).join(", "));
           }
-          throw new Error(`Esta solicitação já possui cotação ativa (${activeCots.map(c => c.numeroCotacao).join(", ")}). Cancele a cotação existente antes de criar uma nova.`);
+          const stillActive = activeCots.filter(c => cotsComItens.has(c.id));
+          if (stillActive.length > 0) {
+            const existingOCs = await db.select({ id: comprasOrdens.id, numeroOc: comprasOrdens.numeroOc })
+              .from(comprasOrdens)
+              .where(and(
+                inArray(comprasOrdens.cotacaoId, stillActive.map(c => c.id)),
+                eq(comprasOrdens.companyId, input.companyId),
+              ));
+            if (existingOCs.length > 0) {
+              throw new Error(`Esta solicitação já possui Ordem de Compra em andamento (${existingOCs.map(o => o.numeroOc).join(", ")}). Não é possível criar nova cotação.`);
+            }
+            throw new Error(`Esta solicitação já possui cotação ativa (${stillActive.map(c => c.numeroCotacao).join(", ")}). Cancele a cotação existente antes de criar uma nova.`);
+          }
         }
       }
 
