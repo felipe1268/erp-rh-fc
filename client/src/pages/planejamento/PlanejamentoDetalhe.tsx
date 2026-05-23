@@ -657,6 +657,29 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
   const [refisComIndiretasGlobal, setRefisComIndiretasGlobal] = useState(false);
 
   const avancoAtual = useMemo(() => {
+    // Rev. 2262 — REGRA DE OURO MSP (replit.md User preferences):
+    // REALIZADO = PercentComplete da tarefa-resumo do projeto.
+    // Quando o XML tem `realizadoMspSnapshot` (computado via AD/(AD+RD) da
+    // raiz UID=0 — precisão MSP-nativa) e o envelope do projeto continua
+    // intacto, ESPELHAMOS o snapshot diretamente — ZERO cálculo no ERP,
+    // paridade absoluta com o que o engenheiro vê no MS Project.
+    // Cai no cálculo dinâmico só quando: (a) snapshot ausente, (b) envelope
+    // foi alterado no ERP após o import, (c) toggle "Global c/ Indiretas"
+    // ligado (snapshot é só MSP puro), ou (d) navegando semana específica
+    // que NÃO cobre o statusDate (preserva exploração histórica).
+    const _calMSP_R = parseCalendarioJson((proj as any)?.calendarioJson);
+    if (
+      !refisComIndiretasGlobal &&
+      _calMSP_R?.realizadoMspSnapshot != null &&
+      _calMSP_R?.statusDateSnapshot &&
+      (!_calMSP_R.envelopeStartSnapshot  || _calMSP_R.envelopeStartSnapshot  === (proj as any)?.dataInicio) &&
+      (!_calMSP_R.envelopeFinishSnapshot || _calMSP_R.envelopeFinishSnapshot === (proj as any)?.dataTerminoContratual)
+    ) {
+      const sd = _calMSP_R.statusDateSnapshot;
+      const okSemana = !semanaVisualizacao
+        || (sd >= semanaVisualizacao && sd <= cutoffWeekFromMonday(semanaVisualizacao, cutoffDowTop).fim);
+      if (okSemana) return Math.min(100, Math.max(0, Number(_calMSP_R.realizadoMspSnapshot)));
+    }
     if (!atividades.length) return 0;
     const folhas    = atividades.filter((a: any) => !a.isGrupo && !a.disabled && (refisComIndiretasGlobal || !a.isIndireta));
     const folhasFiltradas = refisComIndiretasGlobal
@@ -715,7 +738,7 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
       return s + val * (peso / pesoTotal);
     }, 0);
     return Math.min(100, ponderado);
-  }, [atividades, avancosMapSemana, usarPesoPorDuracao, refisComIndiretasGlobal, refDateStr, modoVisao, dataCorteInfo?.dataCorteOficial, semanaVisualizacao, cutoffDowTop]);
+  }, [atividades, avancosMapSemana, usarPesoPorDuracao, refisComIndiretasGlobal, refDateStr, modoVisao, dataCorteInfo?.dataCorteOficial, semanaVisualizacao, cutoffDowTop, (proj as any)?.calendarioJson, (proj as any)?.dataInicio, (proj as any)?.dataTerminoContratual]);
 
   // Rev. 2248 — `topRefStr`: data-de-referência EFETIVA usada pela barra
   // "Avanço Físico" do topo. Extraída exatamente da lógica original de
@@ -737,6 +760,27 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
   }, [semanaVisualizacao, cutoffDowTop, dataCorteInfo?.dataCorteOficial, refDateStr]);
 
   const avancoPrevistoDia = useMemo(() => {
+    // Rev. 2262 — REGRA DE OURO MSP (replit.md User preferences):
+    // PREVISTO = campo "% PREVISTO" calculado pelo MSP na tarefa-resumo (UID=0).
+    // Lido na ordem: Texto10 (188743750) → Texto11 (188743997) → Texto6
+    // (188743746). Quando esse snapshot existe e o envelope do projeto continua
+    // intacto, ESPELHAMOS o número diretamente — ZERO cálculo no ERP.
+    // Mesma lógica de fallback de `avancoAtual` (ver acima).
+    {
+      const _calMSP_P = parseCalendarioJson((proj as any)?.calendarioJson);
+      if (
+        !refisComIndiretasGlobal &&
+        _calMSP_P?.previstoMspSnapshot != null &&
+        _calMSP_P?.statusDateSnapshot &&
+        (!_calMSP_P.envelopeStartSnapshot  || _calMSP_P.envelopeStartSnapshot  === (proj as any)?.dataInicio) &&
+        (!_calMSP_P.envelopeFinishSnapshot || _calMSP_P.envelopeFinishSnapshot === (proj as any)?.dataTerminoContratual)
+      ) {
+        const sd = _calMSP_P.statusDateSnapshot;
+        const okSemana = !semanaVisualizacao
+          || (sd >= semanaVisualizacao && sd <= cutoffWeekFromMonday(semanaVisualizacao, cutoffDowTop).fim);
+        if (okSemana) return Math.min(100, Math.max(0, Number(_calMSP_P.previstoMspSnapshot)));
+      }
+    }
     // Rev. 1646 — Paridade 100% MS Project: o "Avanço Previsto" no card do
     // projeto agora replica EXATAMENTE a fórmula da coluna "%PREVISTO (Texto10)"
     // do MS Project: `fracao_dias_uteis(inicio_projeto → ref) / total_dias_uteis_projeto`,

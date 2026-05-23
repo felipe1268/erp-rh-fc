@@ -1,6 +1,99 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2262 — **FIX/REGRA DE OURO · Card "Avanço Físico" do topo espelha
+ * snapshot MSP da raiz UID=0 (previsto Texto6/Texto10 + realizado AD/(AD+RD)),
+ * ZERO cálculo no ERP quando o XML traz a foto.**
+ *
+ * Pedido user (23/05/2026): "quero que aplique a regra de ouro... sempre
+ * adote estas duas informações para mapear os dados: % PREVISTO calculado
+ * no MSP = PREVISTO; PercentComplete da tarefa-resumo do projeto =
+ * REALIZADO. O ERP deve sempre ler do MSP, para garantir que estamos
+ * lendo a mesma informação sempre." Regra já estava formalizada em
+ * `replit.md` User preferences desde Rev. 2260 — esta revisão aplica de
+ * fato no card "Avanço Físico" (barra superior em Planejamento → Detalhe).
+ *
+ * **Sintoma (obra VITRA, XML PLN_811 4ª Semana):** XML do MSP diz
+ * **Previsto 4 % / Realizado 8 %** (Texto6 raiz UID=0 = " 4%",
+ * PercentComplete raiz = 8). Card no topo do ERP mostrava
+ * **6,40 % / 6,12 %** — divergência grosseira.
+ *
+ * **Causa-raiz** (auditoria):
+ *  1. `ImportarCronograma.tsx` (L260-334) JÁ persiste o snapshot oficial
+ *     na raiz em `proj.calendarioJson`:
+ *     - `previstoMspSnapshot` (Texto10 → Texto11 → Texto6 da UID=0).
+ *     - `realizadoMspSnapshot` (`AD/(AD+RD)` da raiz, precisão MSP-nativa).
+ *     - `statusDateSnapshot` (data da foto do MSP).
+ *     - `envelopeStartSnapshot` / `envelopeFinishSnapshot` (proteção
+ *       contra snapshot stale após edição manual de datas no ERP).
+ *  2. **MAS as funções `avancoAtual` (L659) e `avancoPrevistoDia` (L739)
+ *     que alimentam o card NUNCA leram esse snapshot:**
+ *     - `avancoAtual` SEMPRE fazia média ponderada Σ(folha × duração).
+ *     - `avancoPrevistoDia` SEMPRE caía em `pctRaizMSP(refStr,...)` —
+ *       recálculo dinâmico em dias úteis.
+ *  3. Existia `pvMacro` (L804-819) com a lógica correta de snapshot,
+ *     mas não era usado pelo card do topo (só pelo REFIS interno).
+ *  4. Mesmo no modo "📷 Snapshot MSP", o card recomputava porque
+ *     `cutoffOficial` (gravado no DB, ex.: 04/12/2022 pro VITRA) tinha
+ *     prioridade sobre `statusDateSnapshot` em `avancoPrevistoDia` L767
+ *     (`refStr = cutoffOficial ?? refDateStr`) — fazendo o `refStr ≠
+ *     statusDateSnapshot` e o caminho de snapshot nunca disparar.
+ *
+ * **Fix** — 2 patches mínimos no `PlanejamentoDetalhe.tsx`, ambos no
+ * TOPO do `useMemo` (antes de qualquer outra computação ou early-return):
+ *
+ *  - **`avancoAtual` (L659+):**
+ *      ```ts
+ *      if (!refisComIndiretasGlobal
+ *          && calMSP.realizadoMspSnapshot != null
+ *          && calMSP.statusDateSnapshot
+ *          && envelopeIntacto(calMSP, proj)
+ *          && semanaCobreStatusDate(semanaVisualizacao, calMSP.statusDateSnapshot)
+ *      ) {
+ *        return clamp(Number(calMSP.realizadoMspSnapshot));
+ *      }
+ *      ```
+ *
+ *  - **`avancoPrevistoDia` (L739+):** idêntico, lendo `previstoMspSnapshot`.
+ *
+ * **Condições do fallback** (cai no cálculo dinâmico atual quando):
+ *  - (a) Snapshot ausente (obra antiga sem XML importado).
+ *  - (b) Envelope alterado no ERP após o import (`dataInicio` ou
+ *    `dataTerminoContratual` ≠ snapshot) — proteção contra dados stale.
+ *  - (c) Toggle "🌐 Global (c/ Indiretas)" ligado (snapshot é só MSP
+ *    puro, não inclui indiretas extras).
+ *  - (d) Semana específica selecionada que NÃO cobre o `statusDate`
+ *    (preserva exploração histórica — ex.: olhando semana 2 quando o
+ *    XML é da semana 4).
+ *
+ * **Resultado validado mental no VITRA:**
+ *  - XML: Previsto Texto6 raiz = ` 4%` → snapshot persistido = 4.
+ *  - XML: PercentComplete raiz = 8 (mas snapshot grava AD/(AD+RD) com
+ *    precisão maior — esperado ~7.8).
+ *  - StatusDate XML = 2026-05-21. Envelope 2026-05-04 → 2027-07-06.
+ *  - Sem semana selecionada + modo Oficial → `refDateStr` = statusDate
+ *    (já era assim desde Rev. 2249), envelope intacto, snapshot != null
+ *    → **retorna snapshot direto**.
+ *  - Card passa a mostrar `4,00 % / ~7,8 %` em vez de `6,40 % / 6,12 %`.
+ *
+ * **Escopo cirúrgico:** SÓ o card "Avanço Físico" do topo
+ * (`PlanejamentoDetalhe.tsx` L1005-1105). Outros componentes (Curva S,
+ * REFIS, Programação Semanal, Avanço Semanal) JÁ tinham lógica própria
+ * de paridade snapshot via `pvMacro` ou caminhos análogos — não foram
+ * tocados. Importador, backend, schema — tudo intacto.
+ *
+ * **R-001/R-007/R-010:** N/A (mudança 100% client-side em `useMemo`).
+ *
+ * Arquivos:
+ *  - `client/src/pages/planejamento/PlanejamentoDetalhe.tsx`
+ *    L659-682 (avancoAtual, +22 LoC no topo) e
+ *    L763-781 (avancoPrevistoDia, +22 LoC no topo).
+ *  - `shared/version.ts` 2261 → 2262.
+ *  - `shared/changelog.ts` (esta entrada no topo).
+ *  - `replit.md` (promove 2262 detalhada, 2260 vira one-liner, 2255 → history).
+ */
+
+/**
  * Rev. 2261 — **BACKFILL · Propaga a leitura MSP da Rev. 2260 para todas
  * as obras já importadas, automaticamente no startup (idempotente).**
  *
