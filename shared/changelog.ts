@@ -1,6 +1,68 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2260 — **FIX · Importador MS Project lê `% PREVISTO` por atividade
+ * via Texto6 (FieldID 188743746) como fallback de Texto10 — corrige
+ * snapshot perdido em XMLs LOTUS R05.**
+ *
+ * Pedido user (23/05/2026, junto com o XML PLN_811_03_2026_R05_LOTUS):
+ * "sempre adote estas duas informações para mapear os dados: % Previsto
+ * (campo '% PREVISTO' calculado no MSP) → PREVISTO; PercentComplete da
+ * tarefa-resumo → REALIZADO. O ERP deve sempre ler do MSP para garantir
+ * que estamos lendo a mesma informação sempre." Formalizou a regra como
+ * preferência de usuário permanente (gravada em `replit.md`).
+ *
+ * **Bug encontrado durante a auditoria do parser:** O XML R05 do template
+ * LOTUS desta obra (VITRA 3 Semana) NÃO traz o campo Texto10
+ * (FieldID 188743750, %PREVISTO 4 casas) — só traz Texto6
+ * (FieldID 188743746, alias "% PREVISTO", versão inteira " 4%"). O parser
+ * por atividade (`parseMSProjectTasksFromDoc` em
+ * `client/src/pages/planejamento/ImportarCronograma.tsx` L424-449) lia
+ * SOMENTE Texto10 → quando ausente, `previstoMsp` ficava `undefined` e o
+ * ERP caía no cálculo dinâmico em vez de espelhar o snapshot oficial do
+ * MSP. (O parser da raiz UID=0 já tinha o fallback Texto6 desde Rev.
+ * 1646.7 — L286-291; só o per-task estava torto.)
+ *
+ * **Fix (cirúrgico, 1 função, ~14 linhas):**
+ *  - Adicionada captura de `previstoMspT6` lendo FieldID 188743746.
+ *  - Limpeza atualizada: `valRaw.replace(/%/g, "").replace(",", ".")`
+ *    (Texto6 vem como " 4%" com espaço e símbolo; Texto10 vem "1,41").
+ *  - Após o loop: `if (previstoMsp === undefined) previstoMsp = previstoMspT6;`
+ *    — Texto10 mantém prioridade absoluta quando presente (preserva
+ *    paridade 4 casas decimais para templates modernos).
+ *  - Comentário do bloco reescrito explicando as 3 prioridades (Texto10
+ *    → Texto6 por atividade) e referenciando a Rev. 2260.
+ *
+ * **Compatibilidade:** ZERO impacto em XMLs que JÁ tinham Texto10 — eles
+ * continuam sendo lidos com precisão 4 casas. Para LOTUS R05 (e templates
+ * mais antigos), `previstoMsp` agora vem preenchido (inteiro) em vez de
+ * `undefined` → todos os agregados de Curva S e cards "% Previsto" passam
+ * a refletir o snapshot oficial do MSP, eliminando divergência fantasma
+ * pós-import.
+ *
+ * **NÃO impacta:**
+ *  - %REALIZADO por atividade (Texto7 → fallback AD/(AD+RD)) — já correto.
+ *  - %PREVISTO/REALIZADO da raiz UID=0 — já tinha fallback Texto6.
+ *  - Backend `planejamento.salvarAtividades` — só persiste o número.
+ *  - Schema — coluna `previsto_msp_pct` já existe desde Rev. 1670.
+ *
+ * **R-001/R-007/R-010:** N/A (alteração 100% client-side, ZERO DDL/SQL).
+ *
+ * **Convenção formalizada em `replit.md` → User preferences (Rev. 2260+):**
+ *   PREVISTO = % PREVISTO da tarefa-resumo (Texto10 → Texto11 → Texto6).
+ *   REALIZADO = PercentComplete da tarefa-resumo (UID=0).
+ *   O ERP deve SEMPRE ler do MSP — nunca recalcular quando há snapshot.
+ *
+ * Arquivos tocados:
+ *  - `client/src/pages/planejamento/ImportarCronograma.tsx` L424-452
+ *    (bloco de captura per-task; +14 LoC, reescrita do comentário).
+ *  - `shared/version.ts` 2259 → 2260.
+ *  - `replit.md` — promove 2259 a one-liner, prepende Rev. 2260 detalhada,
+ *    adiciona regra de leitura MSP em "User preferences".
+ *  - Este `shared/changelog.ts`.
+ */
+
+/**
  * Rev. 2259 — **REFACTOR · Solicitação de Equipamento (SE) migra para o
  * módulo Compras — Almoxarifado só gerencia recebimento/uso/devolução.**
  *

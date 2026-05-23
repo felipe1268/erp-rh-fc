@@ -418,23 +418,35 @@ function parseMSProjectTasksFromDoc(doc: Document): TarefaImportada[] {
     const pctRaw = task.querySelector("PercentComplete")?.textContent ?? "";
     const percentConcluido = pctRaw !== "" ? Math.min(100, Math.max(0, parseFloat(pctRaw) || 0)) : 0;
 
-    // Rev. 1670 — Snapshot por atividade (Texto10 + Texto7) lido do XML.
+    // Rev. 1670 — Snapshot por atividade (Texto10/Texto6 + Texto7) lido do XML.
     // Não confundir com PercentComplete (campo nativo, granularidade inteira).
-    // Texto10 e Texto7 são fórmulas customizadas do template FC com 4 casas
-    // (ex.: "1,41" → 1.41). Filtra ExtendedAttributes filhos diretos do Task
-    // (não dos Assignment aninhados) e converte vírgula BR → ponto.
+    //
+    // %PREVISTO: tem 2 versões no template LOTUS:
+    //   • Texto10 (188743750) — Round 4 casas (template moderno).
+    //   • Texto6  (188743746) — Int(...) + "%", inteiro (template R05 e antigos).
+    // Lemos AMBOS e Texto10 ganha prioridade quando presente (mais preciso).
+    // Rev. 2260: muitos XMLs LOTUS (ex.: PLN_811_03 R05) NÃO trazem Texto10 —
+    // sem o fallback Texto6 o ERP perdia o snapshot e caía no cálculo dinâmico.
+    //
+    // %REALIZADO: Texto7 (188743747) — %Reali AUX, com 4 casas. Se ausente,
+    // F2 abaixo usa AD/(AD+RD) com precisão MSP-nativa.
     let previstoMsp: number | undefined;
+    let previstoMspT6: number | undefined; // Rev. 2260 — fallback p/ XMLs sem Texto10
     let realizadoMsp: number | undefined;
     for (const child of Array.from(task.children)) {
       if (child.tagName !== "ExtendedAttribute") continue;
       const fid = child.querySelector("FieldID")?.textContent ?? "";
-      const val = (child.querySelector("Value")?.textContent ?? "").trim();
-      if (!val) continue;
-      const num = parseFloat(val.replace(",", "."));
+      const valRaw = (child.querySelector("Value")?.textContent ?? "").trim();
+      if (!valRaw) continue;
+      // Limpa "%" (Texto6 vem como " 4%") e vírgula BR → ponto.
+      const num = parseFloat(valRaw.replace(/%/g, "").replace(",", ".").trim());
       if (!Number.isFinite(num)) continue;
-      if (fid === "188743750") previstoMsp = Math.min(100, Math.max(0, num));   // Texto10 — %PREVISTO
-      else if (fid === "188743747") realizadoMsp = Math.min(100, Math.max(0, num)); // Texto7 — %Reali AUX
+      if (fid === "188743750") previstoMsp = Math.min(100, Math.max(0, num));        // Texto10 — %PREVISTO 4 casas
+      else if (fid === "188743746") previstoMspT6 = Math.min(100, Math.max(0, num)); // Texto6  — %PREVISTO inteiro (fallback)
+      else if (fid === "188743747") realizadoMsp = Math.min(100, Math.max(0, num));  // Texto7  — %Reali AUX
     }
+    // Texto10 preferido; Texto6 cobre LOTUS R05 e templates antigos.
+    if (previstoMsp === undefined && previstoMspT6 !== undefined) previstoMsp = previstoMspT6;
 
     // Rev. 1674 — Fallback de alta precisão: ActualDuration / (ActualDuration +
     // RemainingDuration) é o que o MSP usa internamente pra calcular
