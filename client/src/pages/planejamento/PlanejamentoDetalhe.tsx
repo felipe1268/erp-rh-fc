@@ -9,7 +9,7 @@ import { useCompany } from "@/hooks/useCompany";
 import PrintHeader from "@/components/PrintHeader";
 import PlanejamentoPrintHeader from "@/components/PlanejamentoPrintHeader";
 import PrintActions from "@/components/PrintActions";
-import ImportarCronograma, { parseMSProjectXML, parseMSProjectXLSX, TarefaImportada } from "./ImportarCronograma";
+import ImportarCronograma, { parseMSProjectXML, parseMSProjectXLSX, parseMSProjectFull, TarefaImportada } from "./ImportarCronograma";
 import DiagnosticoEapOrcCron from "@/components/planejamento/DiagnosticoEapOrcCron";
 import { parseCalendarioJson, fracaoDecorridaMs, pvPonderadoPorAtividade, pctRaizMSP } from "../../../../shared/diasUteis";
 import { ProgramacaoSemanal } from "./ProgramacaoSemanal";
@@ -7009,8 +7009,14 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
         return +m[1] * 60 + +m[2] + +m[3] / 60;
       };
 
+      // Rev. 2266 — texto do XML guardado pra REGRAVAR o `calendarioJson`
+      // ao final do import. Sem isso, o snapshot MSP da raiz UID=0 fica
+      // parado no valor do import inicial e os cards da Rev. 2265 mostram
+      // 0 % em vez do AD/(AD+RD) atual.
+      let xmlTextSnapshot: string | null = null;
       if (ext === "xml") {
         const text = await file.text();
+        xmlTextSnapshot = text;
         const doc  = new DOMParser().parseFromString(text, "text/xml");
         doc.querySelectorAll("Task").forEach(task => {
           const uid = task.querySelector("UID")?.textContent?.trim() ?? "";
@@ -7292,8 +7298,34 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
         }
       }
 
+      // Rev. 2266 — REGRAVA o `calendarioJson` no banco com o snapshot
+      // FRESCO da raiz UID=0 (previstoMspSnapshot / realizadoMspSnapshot
+      // / statusDateSnapshot / envelope). Sem isso, os cards do topo
+      // (Rev. 2265 / mspReadOnly) continuam mostrando o snapshot do
+      // import inicial. Fire-and-forget: erro aqui não invalida o import
+      // de avanços (que já foi feito acima). Só XML — XLSX não traz
+      // metadados do MSP suficientes pra um snapshot confiável.
+      let snapshotRegravado = false;
+      if (xmlTextSnapshot) {
+        try {
+          const full = parseMSProjectFull(xmlTextSnapshot);
+          await salvarMetaMspMut.mutateAsync({
+            projetoId,
+            statusDate:     full.statusDate     ?? undefined,
+            statusDateIso:  full.statusDateIso  ?? undefined,
+            calendarioJson: full.calendarioJson ?? undefined,
+            projetoStart:   full.projetoStart   ?? undefined,
+            projetoFinish:  full.projetoFinish  ?? undefined,
+          });
+          snapshotRegravado = true;
+          utils.planejamento.getProjetoById.invalidate({ id: projetoId });
+        } catch (e) {
+          console.error("[importarDoMSProject] falha ao regravar calendarioJson:", e);
+        }
+      }
+
       const breakdown = ext === "xml"
-        ? ` (${matchUid} via UID${matchEap ? ` · ${matchEap} via Item` : ""}${matchNome ? ` · ${matchNome} via nome` : ""}${semMatch ? ` · ${semMatch} sem correspondência` : ""}; fontes: ${srcTexto7} %Reali AUX, ${srcDurNat} Duração Real, ${srcPctNat} %Concluído${srcVazio ? `, ${srcVazio} sem dado` : ""}${backfillAtualizados ? `; 🔗 ${backfillAtualizados} msp_uid gravado(s)` : ""})`
+        ? ` (${matchUid} via UID${matchEap ? ` · ${matchEap} via Item` : ""}${matchNome ? ` · ${matchNome} via nome` : ""}${semMatch ? ` · ${semMatch} sem correspondência` : ""}; fontes: ${srcTexto7} %Reali AUX, ${srcDurNat} Duração Real, ${srcPctNat} %Concluído${srcVazio ? `, ${srcVazio} sem dado` : ""}${backfillAtualizados ? `; 🔗 ${backfillAtualizados} msp_uid gravado(s)` : ""}${snapshotRegravado ? `; 📸 snapshot MSP atualizado` : ""})`
         : "";
       const aviso = semMatch > 0 ? ` ⚠️ ${semMatch} atividade(s) sem match — ex.: ${semMatchNomes.slice(0, 3).join("; ")}.` : "";
       const autoMsg = semanasAutoSalvas > 0
@@ -7343,6 +7375,15 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
 
   // Rev. 2243 — backfill de msp_uid disparado pelo importer do Avanço Semanal
   const backfillUidMutation = trpc.planejamento.backfillMspUid.useMutation();
+
+  // Rev. 2266 — regravar `calendarioJson` (snapshot MSP fresco) quando user
+  // reimporta o XML via aba "Avanço Semanal". Antes, esse fluxo SÓ atualizava
+  // os avanços por atividade — `previstoMspSnapshot` / `realizadoMspSnapshot`
+  // / `statusDateSnapshot` ficavam parados no valor da importação inicial do
+  // cronograma. Resultado: cards do topo (Rev. 2265 / mspReadOnly) exibiam
+  // 0,00 % verde em vez do AD/(AD+RD) atual (ex.: VITRA 3ª Sem mostrava
+  // 0 % no realizado quando o XML novo trazia 6,16 %).
+  const salvarMetaMspMut = trpc.planejamento.salvarMetadadosMSProject.useMutation();
 
   const limparMutation = trpc.planejamento.limparAvancos.useMutation({
     onSuccess: () => {

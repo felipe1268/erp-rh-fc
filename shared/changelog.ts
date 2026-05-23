@@ -1,6 +1,79 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2266 — **FIX · Importer "Avanço Semanal" agora REGRAVA o snapshot MSP
+ * (`calendarioJson`) ao reimportar XML — sem isso a Rev. 2265 mostrava 0,00 %
+ * verde nos cards quando o XML antigo (import inicial) tinha realizado = 0.**
+ *
+ * Pedido user direto (23/05/2026, screenshot VITRA 3ª Semana):
+ *   "REALIZADO está mostrando 0,00 %... importei o XML novo... não está
+ *    abrindo / atualizando."
+ *
+ * Diagnóstico (causa raiz):
+ *   - Existem DOIS pontos de entrada de XML do MS Project no ERP:
+ *       1) Aba "Cronograma" → "Importar Cronograma" (ImportarCronograma.tsx)
+ *          — chama `salvarMetadadosMSProject` e grava o `calendarioJson`
+ *          completo (com `previstoMspSnapshot`, `realizadoMspSnapshot`,
+ *          `statusDateSnapshot`, envelope, calendars).
+ *       2) Aba "Avanço Semanal" → botão roxo "Importar MS Project"
+ *          (PlanejamentoDetalhe.tsx → `importarDoMSProject`)
+ *          — SÓ atualizava `% concluído` por atividade. NÃO tocava o
+ *          `calendarioJson`. Snapshot ficava STALE no valor do import #1.
+ *   - VITRA: import inicial foi feito quando a obra tinha 0 h realizadas.
+ *     `realizadoMspSnapshot` virou 0. Toda reimportação semanal via fluxo
+ *     #2 só atualizava avanços por folha — o snapshot da raiz UID=0 nunca
+ *     era refrescado. A Rev. 2265 (`mspReadOnly`) lia esse 0 e mostrava
+ *     "0,00 %" (valor numérico válido, não "—"), exatamente como pedido,
+ *     mas usando dado obsoleto.
+ *   - User não conseguia "reimportar" porque clicava no botão certo
+ *     (aba Avanço Semanal) e o snapshot permanecia parado — só conseguiria
+ *     refrescar voltando à aba Cronograma e fazendo "Importar Cronograma"
+ *     completo, o que é desnecessariamente destrutivo (recria atividades).
+ *
+ * **Fix:**
+ *   1. `PlanejamentoDetalhe.tsx` — importer `importarDoMSProject` agora:
+ *        a) Guarda `xmlTextSnapshot` ao ler o arquivo (L7019-7022).
+ *        b) Ao final do matching/auto-save (L7311-7328), chama
+ *           `parseMSProjectFull(xmlTextSnapshot)` pra extrair
+ *           `statusDate / statusDateIso / calendarioJson / projetoStart /
+ *           projetoFinish` e dispara mutation `salvarMetadadosMSProject`
+ *           pra regravar tudo. Em sucesso, invalida `getProjetoById` —
+ *           os cards Rev. 2265 re-renderizam com snapshot fresco.
+ *        c) Toast de sucesso ganha sufixo `📸 snapshot MSP atualizado`
+ *           pra dar feedback visível.
+ *        d) Fire-and-forget defensivo: erro na regravação NÃO invalida
+ *           o import de avanços (que já foi commitado). Só loga.
+ *   2. Novo `import { parseMSProjectFull }` em PlanejamentoDetalhe.tsx L15.
+ *   3. Novo hook `salvarMetaMspMut` em L7357 (reutiliza endpoint
+ *      `planejamento.salvarMetadadosMSProject` já existente desde Rev. 1643).
+ *
+ * **Coerência com Regra de Ouro (User pref Rev. 2265):**
+ *   - Esta Rev. NÃO reintroduz cálculo no Planejamento. Continua sendo
+ *     leitura do XML. O que mudou: o snapshot lido agora pode ser atualizado
+ *     SEM destruir as atividades — mais um caminho válido pra refrescar a
+ *     fonte da verdade (XML do MSP), exatamente como o user quer.
+ *   - "—" continua aparecendo quando o XML ainda não foi importado nunca
+ *     (cal == null), ou quando o XML é tão antigo que não tem
+ *     `statusDateSnapshot` (XML pré-Rev. 1675). A Rev. 2266 só elimina
+ *     o estado "0,00 % verde porque o snapshot é do dia 0".
+ *
+ * **R-001 / R-007 / R-010:** N/A (sem ALTER/DROP/DELETE; só UPDATE de
+ * registro existente já permitido pelo endpoint legado).
+ *
+ * Arquivos tocados:
+ *   - client/src/pages/planejamento/PlanejamentoDetalhe.tsx (3 hunks)
+ *   - shared/version.ts → Rev. 2266
+ *   - shared/changelog.ts → entrada no topo
+ *   - replit.md → 2+5
+ *
+ * Follow-ups possíveis (não bloqueantes):
+ *   - Banner discreto no topo do Planejamento quando snapshot tem
+ *     `realizadoMspSnapshot = 0` E há atividades com avanço > 0 no ERP
+ *     (sintoma de "snapshot velho, esqueceu de reimportar XML").
+ *   - Backfill: aplicar `salvarMetadadosMSProject` em obras com snapshot
+ *     antigo, similar à Rev. 2261 — mas requer ter o XML original
+ *     armazenado, o que não temos hoje. Fica como decisão de produto.
+ *
  * Rev. 2265 — **REGRA ABSOLUTA · Planejamento é READ-ONLY do MSP.
  * Cards do Avanço Semanal lêem o snapshot direto e exibem "—" quando
  * ausente. ZERO cálculo de avanço no ERP para esses agregados.**
