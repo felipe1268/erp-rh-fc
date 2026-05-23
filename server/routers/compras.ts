@@ -2747,19 +2747,28 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
         const code = e?.code || e?.cause?.code;
         const constraint = e?.constraint || e?.cause?.constraint || "";
         const detail = e?.detail || e?.cause?.detail || "";
+        const causeMsg = e?.cause?.message || "";
+        const pgMsg = e?.cause?.hint || e?.hint || "";
         console.error("[compras.criarSolicitacao] insert falhou (R-014)", {
           companyId: input.companyId,
           numeroScTentativa: numeroSc,
+          tipoSC,
+          isLocacao: input.isLocacao,
+          locacaoDuracaoDias: input.locacaoDuracaoDias,
+          locacaoDataInicioPrevista: input.locacaoDataInicioPrevista,
+          locacaoDataFimPrevista: input.locacaoDataFimPrevista,
           code,
           constraint,
           detail,
           table: e?.table || e?.cause?.table,
           column: e?.column || e?.cause?.column,
+          causeMessage: causeMsg,
           message: e?.message,
-          stack: e?.stack?.split("\n").slice(0, 5).join("\n"),
+          stack: e?.stack?.split("\n").slice(0, 8).join("\n"),
         });
-        // Mensagens mais úteis pelo código Postgres
-        let friendly = e?.message || "Erro desconhecido";
+        // Rev. 2291 — Sempre incluir a mensagem REAL do Postgres (cause.message) +
+        // detail/hint, pra o usuário ver no toast por que falhou (não só "Failed query: insert into…").
+        let friendly = [causeMsg, detail, pgMsg].filter(Boolean).join(" · ") || e?.message || "Erro desconhecido";
         if (code === "23505" && constraint.includes("uq_compras_solicitacoes_numero")) {
           // Não deveria mais acontecer com o counter atômico — se acontecer, é bug grave
           // (counter dessincronizado da tabela). Mensagem aponta exatamente o problema.

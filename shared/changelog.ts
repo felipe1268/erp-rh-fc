@@ -1,6 +1,42 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2291 — **HOTFIX/DX · Erro real do Postgres exposto no toast +
+ * server log ao criar SC (locação de equipamento).**
+ *
+ * Pedido user (23/05/2026): "Erro ao criar SC: Failed query: insert
+ * into compras_solicitacoes…" — o toast cortava na query e não
+ * mostrava QUAL constraint/coluna violou. Os logs do servidor também
+ * eram genéricos (só `e.message` do Drizzle, que vem como "Failed
+ * query: insert into…" sem o `cause.message` real do node-postgres).
+ *
+ * Causa-raiz: o catch de `criarSolicitacao` (compras.ts L2746+,
+ * Rev. 1799/R-014) montava `friendly = e?.message` — mas o Drizzle
+ * embrulha o erro PG em `e.cause` e `e.message` perde o motivo real
+ * ("violates not-null", "invalid input syntax for type integer",
+ * "duplicate key", etc). Sem isso, impossível diagnosticar locação.
+ *
+ * Fix:
+ * 1. `server/routers/compras.ts` (criarSolicitacao catch L2749-2774):
+ *    - Extrai `causeMsg = e.cause.message` + `pgMsg = e.cause.hint`.
+ *    - `friendly = [causeMsg, detail, pgMsg].filter(Boolean).join(" · ")`
+ *      antes do fallback `e.message`. Toast passa a mostrar a
+ *      mensagem REAL do Postgres (ex: "null value in column X
+ *      violates not-null constraint").
+ *    - `console.error` extra inclui `tipoSC`, `isLocacao`,
+ *      `locacaoDuracaoDias`, datas de início/fim e `causeMessage`,
+ *      pra facilitar reprodução nos logs do servidor.
+ *    - Stack agora com 8 linhas (era 5).
+ * 2. Sem mudança de schema, sem mudança de fluxo de negócio — só
+ *    melhora a observabilidade do catch existente.
+ *
+ * Não bumpa endpoint nem mexe em UI. Frontend não precisa de mudança.
+ *
+ * **R-001/R-007/R-010:** N/A (server-only, sem schema/DDL).
+ */
+export const CHANGELOG_PLACEHOLDER_2291 = true;
+
+/**
  * Rev. 2290 — **FEAT · Locação de Equipamento indicada já na SC (não
  * só na OC). Suprimentos cota como aluguel, OC nasce com os dados,
  * almoxarifado recebe alertas de vencimento.**
