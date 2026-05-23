@@ -6,6 +6,7 @@
 // ============================================================================
 
 import { z } from "zod";
+import crypto from "node:crypto";
 import { router, protectedProcedure } from "../_core/trpc";
 import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
@@ -590,6 +591,42 @@ export const equipamentosRouter = router({
   // confirma o cadastro em lote (sem foto obrigatória — é cadastro inicial,
   // fotos virão nos próximos recebimentos via fluxo de compras/recebimento).
 
+  // Rev. 2321 — Polling job store pra parse de PDF (evita timeout 60s do proxy Replit).
+  // O Gemini com PDFs grandes leva 60-120s e o proxy mata a conexão (cliente vê
+  // "Load failed" no iOS Safari). Solução: mutation `Start` retorna jobId
+  // imediatamente, parse roda em background; query `Status` faz polling a cada
+  // 2.5s até `done`/`error`. Sem long-lived HTTP.
+  parsearContratoLocacaoPdfStart: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      pdfBase64: z.string().min(100),
+      mimeType: z.enum(["application/pdf", "image/jpeg", "image/png", "image/webp"]),
+      nomeArquivo: z.string().max(255).optional(),
+    }))
+    .mutation(async ({ input }) => {
+      if (input.pdfBase64.length > 25 * 1024 * 1024) {
+        throw new TRPCError({ code: "PAYLOAD_TOO_LARGE", message: "PDF muito grande (>18MB). Reduza ou divida o arquivo." });
+      }
+      const jobId = crypto.randomUUID();
+      parseContratoJobs.set(jobId, { status: "pending", startedAt: Date.now() });
+      // Fire-and-forget — o request HTTP retorna em ms.
+      executeParseContratoLocacao(input)
+        .then((result) => parseContratoJobs.set(jobId, { status: "done", startedAt: Date.now(), result }))
+        .catch((err: any) => parseContratoJobs.set(jobId, { status: "error", startedAt: Date.now(), error: err?.message || String(err) }));
+      return { jobId };
+    }),
+
+  parsearContratoLocacaoPdfStatus: protectedProcedure
+    .input(z.object({ jobId: z.string().min(1) }))
+    .query(({ input }) => {
+      const j = parseContratoJobs.get(input.jobId);
+      if (!j) return { status: "expired" as const };
+      if (j.status === "done") return { status: "done" as const, result: j.result };
+      if (j.status === "error") return { status: "error" as const, error: j.error };
+      return { status: "pending" as const };
+    }),
+
+  // (Procedure legada — mantida só pra retrocompatibilidade; cliente agora usa Start/Status.)
   parsearContratoLocacaoPdf: protectedProcedure
     .input(z.object({
       companyId: z.number(),
@@ -598,124 +635,10 @@ export const equipamentosRouter = router({
       nomeArquivo: z.string().max(255).optional(),
     }))
     .mutation(async ({ input }) => {
-      // Hard-limit server-side (defesa em profundidade — client limita em 15MB).
-      // base64 inflado ~33%; 25MB base64 ≈ 18MB binário. Acima disso bloqueia.
       if (input.pdfBase64.length > 25 * 1024 * 1024) {
         throw new TRPCError({ code: "PAYLOAD_TOO_LARGE", message: "PDF muito grande (>18MB). Reduza ou divida o arquivo." });
       }
-      const { invokeGeminiVision } = await import("../_core/llm");
-      const systemPrompt = `Você é um extrator de relatórios de locação de equipamentos para construção civil no Brasil.\nCada locadora tem um layout próprio (Jalves, Mills, Locamerica, etc.). Detecte automaticamente o layout e extraia TODOS os contratos e seus respectivos itens.\nDatas no formato brasileiro DD/MM/AAAA. Valores em reais (R$). Quantidades inteiras ou decimais.`;
-      const prompt = `Extraia TODOS os contratos de locação deste documento. Para cada contrato, capture:\n- numeroContrato (ex: "19096-32")\n- fornecedorNome (razão social/nome fantasia da locadora — geralmente no cabeçalho)\n- localObra (endereço/identificação da obra)\n- periodoInicio (DD/MM/AAAA)\n- periodoFim (DD/MM/AAAA)\n- valorTotal (numérico, sem R$, ponto como separador decimal)\n- atendenteResponsavel\n- itens: array de {patrimonio, descricao, quantidade (number), valorUnitario (subtotal/qtde, number), subtotal (number)}\n\nRetorne APENAS JSON válido no formato {contratos: [...]}. Se um campo estiver ausente, use string vazia ou 0. Datas SEMPRE em DD/MM/AAAA.`;
-
-      const responseSchema = {
-        type: "object",
-        properties: {
-          contratos: {
-            type: "array",
-            items: {
-              type: "object",
-              properties: {
-                numeroContrato: { type: "string" },
-                fornecedorNome: { type: "string" },
-                localObra: { type: "string" },
-                periodoInicio: { type: "string" },
-                periodoFim: { type: "string" },
-                valorTotal: { type: "number" },
-                atendenteResponsavel: { type: "string" },
-                itens: {
-                  type: "array",
-                  items: {
-                    type: "object",
-                    properties: {
-                      patrimonio: { type: "string" },
-                      descricao: { type: "string" },
-                      quantidade: { type: "number" },
-                      valorUnitario: { type: "number" },
-                      subtotal: { type: "number" },
-                    },
-                    required: ["patrimonio", "descricao", "quantidade", "subtotal"],
-                  },
-                },
-              },
-              required: ["numeroContrato", "periodoInicio", "periodoFim", "itens"],
-            },
-          },
-        },
-        required: ["contratos"],
-      };
-
-      const raw = await invokeGeminiVision({
-        prompt,
-        systemPrompt,
-        base64: input.pdfBase64,
-        mimeType: input.mimeType,
-        maxTokens: 65536, // Rev. 2320 — dobrado (era 32768): PDFs com 40+ contratos estouravam o cap e truncavam o JSON.
-        responseSchema,
-      });
-      if (!raw?.trim()) throw new TRPCError({ code: "BAD_REQUEST", message: "IA não retornou dados — verifique se o PDF é legível." });
-
-      // Rev. 2320 — Reparo de JSON truncado.
-      // Mesmo dobrando o cap, PDFs muito grandes (60+ contratos) podem truncar.
-      // Estratégia: tenta parse normal; se falhar, encontra o último `}` válido
-      // dentro do array `contratos` e fecha o array+objeto manualmente.
-      // Resultado: o user recebe os contratos parciais que couberam (≈90%) em
-      // vez de erro fatal "Expected ',' or ']' at position N".
-      const tryRepairTruncated = (s: string): any | null => {
-        const idx = s.indexOf('"contratos"');
-        if (idx < 0) return null;
-        const arrStart = s.indexOf("[", idx);
-        if (arrStart < 0) return null;
-        // Varre achando o último `}` no nível 1 do array (top-level dentro de contratos[]).
-        let depth = 0, inStr = false, esc = false, lastClose = -1;
-        for (let i = arrStart + 1; i < s.length; i++) {
-          const ch = s[i];
-          if (esc) { esc = false; continue; }
-          if (ch === "\\") { esc = true; continue; }
-          if (ch === '"') { inStr = !inStr; continue; }
-          if (inStr) continue;
-          if (ch === "{") depth++;
-          else if (ch === "}") { depth--; if (depth === 0) lastClose = i; }
-        }
-        if (lastClose < 0) return null;
-        const head = s.slice(0, arrStart + 1);
-        const body = s.slice(arrStart + 1, lastClose + 1);
-        try { return JSON.parse(`${head}${body}]}`); } catch { return null; }
-      };
-      let parsed: any;
-      try {
-        parsed = JSON.parse(raw);
-      } catch {
-        const m = raw.match(/\{[\s\S]*\}/);
-        if (m) {
-          try { parsed = JSON.parse(m[0]); }
-          catch { parsed = tryRepairTruncated(raw); }
-        } else {
-          parsed = tryRepairTruncated(raw);
-        }
-        if (!parsed) throw new TRPCError({ code: "BAD_REQUEST", message: "Resposta da IA truncada/inválida. Tente dividir o PDF em arquivos menores." });
-      }
-      const contratos: any[] = Array.isArray(parsed?.contratos) ? parsed.contratos : [];
-      if (contratos.length === 0) throw new TRPCError({ code: "BAD_REQUEST", message: "Nenhum contrato detectado no documento." });
-
-      // Conversão DD/MM/AAAA → ISO YYYY-MM-DD pra alinhar com schema (varchar(10))
-      const toIso = (br: string) => {
-        if (!br) return "";
-        const m = br.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
-        if (m) return `${m[3]}-${m[2]}-${m[1]}`;
-        const m2 = br.match(/^(\d{4})-(\d{2})-(\d{2})/);
-        return m2 ? `${m2[1]}-${m2[2]}-${m2[3]}` : "";
-      };
-      for (const c of contratos) {
-        c.periodoInicio = toIso(c.periodoInicio);
-        c.periodoFim = toIso(c.periodoFim);
-        if (!Array.isArray(c.itens)) c.itens = [];
-      }
-
-      return {
-        contratos,
-        totalContratos: contratos.length,
-        totalItens: contratos.reduce((a, c) => a + (c.itens?.length || 0), 0),
-      };
+      return executeParseContratoLocacao(input);
     }),
 
   importarContratosLocacaoLote: protectedProcedure
@@ -817,3 +740,139 @@ export const equipamentosRouter = router({
         .orderBy(desc(faturaLocacaoConferencia.id));
     }),
 });
+
+// ── Rev. 2321 — Job store in-memory pra parse de PDF (polling).
+// `Start` cria entrada em "pending" e dispara `executeParseContratoLocacao`
+// em background; `Status` é polled pelo cliente. GC limpa entradas finalizadas
+// após 10 min (pending nunca expira — protege polls longos > 60s).
+type ParseContratoJob = {
+  status: "pending" | "done" | "error";
+  startedAt: number;
+  result?: { contratos: any[]; totalContratos: number; totalItens: number };
+  error?: string;
+};
+const parseContratoJobs = new Map<string, ParseContratoJob>();
+setInterval(() => {
+  const cutoff = Date.now() - 10 * 60 * 1000;
+  for (const [id, j] of parseContratoJobs.entries()) {
+    if (j.status !== "pending" && j.startedAt < cutoff) parseContratoJobs.delete(id);
+  }
+}, 60_000).unref?.();
+
+// ── Rev. 2321 — Helper que executa o parse (chamado pela Start e pela legada).
+// Extraído pra fora do router porque a Start dispara em background (fire-and-forget)
+// e armazena o resultado no jobs Map; a procedure HTTP retorna em ms, evitando
+// timeout de 60s do proxy Replit (que matava a conexão com PDFs grandes).
+async function executeParseContratoLocacao(input: {
+  companyId: number;
+  pdfBase64: string;
+  mimeType: "application/pdf" | "image/jpeg" | "image/png" | "image/webp";
+  nomeArquivo?: string;
+}): Promise<{ contratos: any[]; totalContratos: number; totalItens: number }> {
+  const { invokeGeminiVision } = await import("../_core/llm");
+  const systemPrompt = `Você é um extrator de relatórios de locação de equipamentos para construção civil no Brasil.\nCada locadora tem um layout próprio (Jalves, Mills, Locamerica, etc.). Detecte automaticamente o layout e extraia TODOS os contratos e seus respectivos itens.\nDatas no formato brasileiro DD/MM/AAAA. Valores em reais (R$). Quantidades inteiras ou decimais.`;
+  const prompt = `Extraia TODOS os contratos de locação deste documento. Para cada contrato, capture:\n- numeroContrato (ex: "19096-32")\n- fornecedorNome (razão social/nome fantasia da locadora — geralmente no cabeçalho)\n- localObra (endereço/identificação da obra)\n- periodoInicio (DD/MM/AAAA)\n- periodoFim (DD/MM/AAAA)\n- valorTotal (numérico, sem R$, ponto como separador decimal)\n- atendenteResponsavel\n- itens: array de {patrimonio, descricao, quantidade (number), valorUnitario (subtotal/qtde, number), subtotal (number)}\n\nRetorne APENAS JSON válido no formato {contratos: [...]}. Se um campo estiver ausente, use string vazia ou 0. Datas SEMPRE em DD/MM/AAAA.`;
+
+  const responseSchema = {
+    type: "object",
+    properties: {
+      contratos: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: {
+            numeroContrato: { type: "string" },
+            fornecedorNome: { type: "string" },
+            localObra: { type: "string" },
+            periodoInicio: { type: "string" },
+            periodoFim: { type: "string" },
+            valorTotal: { type: "number" },
+            atendenteResponsavel: { type: "string" },
+            itens: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  patrimonio: { type: "string" },
+                  descricao: { type: "string" },
+                  quantidade: { type: "number" },
+                  valorUnitario: { type: "number" },
+                  subtotal: { type: "number" },
+                },
+                required: ["patrimonio", "descricao", "quantidade", "subtotal"],
+              },
+            },
+          },
+          required: ["numeroContrato", "periodoInicio", "periodoFim", "itens"],
+        },
+      },
+    },
+    required: ["contratos"],
+  };
+
+  const raw = await invokeGeminiVision({
+    prompt,
+    systemPrompt,
+    base64: input.pdfBase64,
+    mimeType: input.mimeType,
+    maxTokens: 65536, // Rev. 2320 — dobrado (era 32768): PDFs com 40+ contratos estouravam o cap e truncavam o JSON.
+    responseSchema,
+  });
+  if (!raw?.trim()) throw new TRPCError({ code: "BAD_REQUEST", message: "IA não retornou dados — verifique se o PDF é legível." });
+
+  // Rev. 2320 — Reparo de JSON truncado caractere a caractere.
+  const tryRepairTruncated = (s: string): any | null => {
+    const idx = s.indexOf('"contratos"');
+    if (idx < 0) return null;
+    const arrStart = s.indexOf("[", idx);
+    if (arrStart < 0) return null;
+    let depth = 0, inStr = false, esc = false, lastClose = -1;
+    for (let i = arrStart + 1; i < s.length; i++) {
+      const ch = s[i];
+      if (esc) { esc = false; continue; }
+      if (ch === "\\") { esc = true; continue; }
+      if (ch === '"') { inStr = !inStr; continue; }
+      if (inStr) continue;
+      if (ch === "{") depth++;
+      else if (ch === "}") { depth--; if (depth === 0) lastClose = i; }
+    }
+    if (lastClose < 0) return null;
+    const head = s.slice(0, arrStart + 1);
+    const body = s.slice(arrStart + 1, lastClose + 1);
+    try { return JSON.parse(`${head}${body}]}`); } catch { return null; }
+  };
+  let parsed: any;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    const m = raw.match(/\{[\s\S]*\}/);
+    if (m) {
+      try { parsed = JSON.parse(m[0]); }
+      catch { parsed = tryRepairTruncated(raw); }
+    } else {
+      parsed = tryRepairTruncated(raw);
+    }
+    if (!parsed) throw new TRPCError({ code: "BAD_REQUEST", message: "Resposta da IA truncada/inválida. Tente dividir o PDF em arquivos menores." });
+  }
+  const contratos: any[] = Array.isArray(parsed?.contratos) ? parsed.contratos : [];
+  if (contratos.length === 0) throw new TRPCError({ code: "BAD_REQUEST", message: "Nenhum contrato detectado no documento." });
+
+  const toIso = (br: string) => {
+    if (!br) return "";
+    const m = br.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+    if (m) return `${m[3]}-${m[2]}-${m[1]}`;
+    const m2 = br.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    return m2 ? `${m2[1]}-${m2[2]}-${m2[3]}` : "";
+  };
+  for (const c of contratos) {
+    c.periodoInicio = toIso(c.periodoInicio);
+    c.periodoFim = toIso(c.periodoFim);
+    if (!Array.isArray(c.itens)) c.itens = [];
+  }
+
+  return {
+    contratos,
+    totalContratos: contratos.length,
+    totalItens: contratos.reduce((a, c) => a + (c.itens?.length || 0), 0),
+  };
+}

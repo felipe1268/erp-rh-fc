@@ -86,14 +86,44 @@ export default function EquipamentosLocados() {
   const [importProgresso, setImportProgresso] = useState(0); // Rev. 2310 — barra 0-100% animada
   const importFileRef = useRef<HTMLInputElement>(null);
 
-  const parsearPdf = trpc.equipamentos.parsearContratoLocacaoPdf.useMutation({
-    onSuccess: (res) => {
-      setImportProgresso(100);
-      setImportPreview(res.contratos);
-      toast.success(`IA detectou ${res.totalContratos} contrato(s) · ${res.totalItens} item(ns).`);
-    },
-    onError: (e) => { setImportProgresso(0); toast.error(e.message); },
+  // Rev. 2321 — Polling em vez de single mutation (proxy Replit matava em 60s).
+  // Fluxo: Start retorna {jobId} em ms → polling /Status cada 2.5s → done|error.
+  const [parsePending, setParsePending] = useState(false);
+  const [parseJobId, setParseJobId] = useState<string | null>(null);
+  const parsearStart = trpc.equipamentos.parsearContratoLocacaoPdfStart.useMutation({
+    onSuccess: ({ jobId }) => { setParseJobId(jobId); },
+    onError: (e) => { setParsePending(false); setImportProgresso(0); toast.error(e.message); },
   });
+  useEffect(() => {
+    if (!parseJobId) return;
+    let cancelled = false;
+    const poll = async () => {
+      try {
+        const res = await utils.equipamentos.parsearContratoLocacaoPdfStatus.fetch({ jobId: parseJobId });
+        if (cancelled) return;
+        if (res.status === "done" && res.result) {
+          setImportProgresso(100);
+          setImportPreview(res.result.contratos);
+          toast.success(`IA detectou ${res.result.totalContratos} contrato(s) · ${res.result.totalItens} item(ns).`);
+          setParsePending(false); setParseJobId(null);
+        } else if (res.status === "error") {
+          toast.error(res.error || "Falha ao processar o PDF.");
+          setParsePending(false); setImportProgresso(0); setParseJobId(null);
+        } else if (res.status === "expired") {
+          toast.error("Job expirou. Tente novamente.");
+          setParsePending(false); setImportProgresso(0); setParseJobId(null);
+        } else {
+          setTimeout(poll, 2500);
+        }
+      } catch {
+        if (!cancelled) setTimeout(poll, 5000); // retry transient network
+      }
+    };
+    poll();
+    return () => { cancelled = true; };
+  }, [parseJobId]);
+  // Shim pra preservar o resto do arquivo que lê parsearPdf.isPending.
+  const parsearPdf = { isPending: parsePending };
   const importarLote = trpc.equipamentos.importarContratosLocacaoLote.useMutation({
     onSuccess: (res) => {
       utils.equipamentos.locadosListar.invalidate();
@@ -120,7 +150,8 @@ export default function EquipamentosLocados() {
     setImportArquivo({ nome: file.name, mimeType: file.type, base64 });
     setImportPreview(null);
     setImportProgresso(0);
-    parsearPdf.mutate({ companyId, pdfBase64: base64, mimeType: file.type as any, nomeArquivo: file.name });
+    setParsePending(true);
+    parsearStart.mutate({ companyId, pdfBase64: base64, mimeType: file.type as any, nomeArquivo: file.name });
   }
 
   // Rev. 2311 — auto-abrir modal quando vier do Almoxarifado com ?action=receber|devolver.

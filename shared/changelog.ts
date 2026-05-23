@@ -1,6 +1,110 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2321 — **HOTFIX/INFRA · Importação PDF da locação migrada
+ * pra polling (Start+Status) — proxy Replit matava em 60s com
+ * PDFs grandes; toast "Load failed" no iOS Safari.**
+ *
+ * Pedido user (23/05/2026, screenshot do toast vermelho "Load
+ * failed" após receber a Rev. 2320): "Erro persistente".
+ *
+ * **Diagnóstico**: a Rev. 2320 dobrou o `maxOutputTokens` (32k
+ * → 65k), o que aumentou o WORST-CASE de tempo de geração do
+ * Gemini. PDFs grandes (40+ contratos) agora demoram 60-120s
+ * pra responder. O proxy mTLS do Replit tem timeout de ~60s
+ * — derruba a conexão TCP antes do server responder, e o iOS
+ * Safari (fetch nativo) mostra genérico "Load failed" sem
+ * chegar log nenhum no servidor (o request começa, processa,
+ * mas a resposta não consegue voltar pelo proxy já derrubado).
+ *
+ * **Solução**: migrar a procedure síncrona pra **polling
+ * assíncrono** (Start + Status), padrão clássico de jobs
+ * longos. O HTTP request curto (Start) retorna `{jobId}` em
+ * ms; o cliente faz polling de uma query rápida (Status) a
+ * cada 2.5s até receber `done`/`error`. Nenhuma conexão HTTP
+ * passa de 1s, então o proxy nunca derruba.
+ *
+ * **Implementação server** (`server/routers/equipamentos.ts`):
+ *
+ * 1. Job store in-memory:
+ *    ```
+ *    type ParseContratoJob = {
+ *      status: "pending"|"done"|"error";
+ *      startedAt: number;
+ *      result?: {contratos, totalContratos, totalItens};
+ *      error?: string;
+ *    };
+ *    const parseContratoJobs = new Map<string, ParseContratoJob>();
+ *    ```
+ *    GC roda a cada 60s: limpa jobs finalizados >10min de idade.
+ *    Pending nunca expira (protege polls longos).
+ *
+ * 2. `parsearContratoLocacaoPdfStart` (mutation):
+ *    - Valida tamanho (`<=25MB base64`);
+ *    - `crypto.randomUUID()` pra jobId;
+ *    - `parseContratoJobs.set(jobId, {status:"pending", ...})`;
+ *    - `executeParseContratoLocacao(input).then(...).catch(...)`
+ *      FIRE-AND-FORGET (não await) — popula o map quando termina;
+ *    - retorna `{jobId}`.
+ *    Resposta HTTP volta em ms (proxy não derruba).
+ *
+ * 3. `parsearContratoLocacaoPdfStatus` (query):
+ *    - Input: `{jobId: string}`;
+ *    - Retorna `{status, result?, error?}` lendo o map;
+ *    - Se jobId não existir mais: `{status:"expired"}`.
+ *
+ * 4. `executeParseContratoLocacao(input)` — helper extraído
+ *    pra fora do router. Contém TODA a lógica original da
+ *    Rev. 2308/2320: prompt + responseSchema do Gemini,
+ *    `invokeGeminiVision({maxTokens: 65536})`, função
+ *    `tryRepairTruncated` (Rev. 2320), conversão DD/MM→ISO,
+ *    `TRPCError` em casos de erro. 0 alteração de comportamento.
+ *
+ * 5. `parsearContratoLocacaoPdf` (legada) mantida como wrapper
+ *    síncrono `return executeParseContratoLocacao(input)` pra
+ *    retrocompat — não é mais chamada pelo cliente, mas evita
+ *    breakage se outra integração estiver usando.
+ *
+ * **Implementação client** (`client/src/pages/equipamentos/
+ * Locados.tsx`):
+ *
+ * - States novos: `parsePending: boolean`, `parseJobId: string|null`.
+ * - `parsearStart.useMutation({onSuccess: ({jobId}) => setParseJobId(jobId)})`
+ *   inicia o job (HTTP curto).
+ * - `useEffect([parseJobId])` faz polling recursivo:
+ *   ```
+ *   const poll = async () => {
+ *     const res = await utils.parsearContratoLocacaoPdfStatus
+ *       .fetch({jobId: parseJobId});
+ *     if (res.status === "done") { setImportPreview(res.result.contratos); ... }
+ *     else if (res.status === "error") { toast.error(res.error); ... }
+ *     else if (res.status === "expired") { toast.error("Job expirou..."); ... }
+ *     else setTimeout(poll, 2500);
+ *   };
+ *   ```
+ *   Erros de rede transientes: retry em 5s. Cleanup via flag
+ *   `cancelled` quando o user navega/fecha modal.
+ * - SHIM: `const parsearPdf = { isPending: parsePending };`
+ *   pra preservar TODOS os usos existentes de
+ *   `parsearPdf.isPending` (barra de progresso da Rev. 2318,
+ *   disabled de botões Cancelar/Confirmar, etc) — 0 alteração
+ *   nessas linhas, drop-in replacement.
+ * - Em `handlePdfPick`: `parsearPdf.mutate(...)` →
+ *   `setParsePending(true); parsearStart.mutate(...)`.
+ *
+ * **0 mudança schema, 0 mudança no fluxo de UI** — só infra.
+ *
+ * **R-001/R-007/R-010:** N/A — server-side puro, sem DB.
+ *
+ * **Tradeoffs aceitos**:
+ * - Job store é in-memory (perde em restart do server). Aceitável
+ *   porque jobs são curtos (60-120s); se restart no meio, user
+ *   recebe "expired" e re-submete. Não vale a complexidade de
+ *   persistir em DB.
+ * - Polling 2.5s gera 1 query rápida/poll (~24-48 polls num PDF
+ *   típico de 60-120s). Carga mínima — query lê de Map.
+ *
+ *
  * Rev. 2320 — **HOTFIX/IA · Importação PDF estava truncando o
  * JSON do Gemini em PDFs grandes ("Expected ',' or ']' at
  * position 38975"); fix: `maxOutputTokens` 32768 → 65536 +
