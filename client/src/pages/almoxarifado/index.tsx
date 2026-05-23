@@ -9,7 +9,7 @@ import {
   AlertTriangle, Loader2, History, X, BarChart2, Boxes,
   LayoutGrid, List, Camera, Trash2, ImageOff, Barcode,
   Wrench, ClipboardCheck, User, CheckCircle2, XCircle, ChevronRight, ChevronLeft,
-  Building2, HardHat, Sparkles, ScanLine, ShoppingCart, ArrowLeftRight, FileUp,
+  Building2, HardHat, Sparkles, ScanLine, ShoppingCart, ArrowLeftRight, FileUp, Truck,
 } from "lucide-react";
 import SmartEntry from "./SmartEntry";
 import AlertasAlmoxarifado from "./AlertasAlmoxarifado";
@@ -783,7 +783,7 @@ export default function AlmoxarifadoPage() {
 
         {/* ── AÇÕES RÁPIDAS MOBILE ──────────────────────────────── */}
         <div className="max-w-7xl mx-auto px-4 py-4">
-          <div className="grid grid-cols-3 gap-3 sm:grid-cols-6">
+          <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 lg:grid-cols-8">
             {/* ENTRADA */}
             <button
               onClick={() => setModalSmartEntry(true)}
@@ -838,6 +838,22 @@ export default function AlmoxarifadoPage() {
             >
               <FileUp className="w-8 h-8" />
               IMPORTAR<br />PDF (IA)
+            </button>
+            {/* Rev. 2316 — RECEBER LOCAÇÃO (cadastro pontual de equipamento locado) */}
+            <button
+              onClick={() => setLocation("/equipamentos/locados?action=receber")}
+              className="flex flex-col items-center justify-center gap-2 bg-gradient-to-br from-teal-500 to-emerald-600 hover:from-teal-600 hover:to-emerald-700 active:scale-95 text-white rounded-2xl p-4 min-h-[80px] font-bold text-sm shadow-md transition text-center leading-tight"
+            >
+              <Truck className="w-8 h-8" />
+              RECEBER<br />LOCAÇÃO
+            </button>
+            {/* Rev. 2316 — DEVOLVER/ENTREGAR LOCAÇÃO (baixa de saída do equipamento locado) */}
+            <button
+              onClick={() => setLocation("/equipamentos/locados?action=devolver")}
+              className="flex flex-col items-center justify-center gap-2 bg-gradient-to-br from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 active:scale-95 text-white rounded-2xl p-4 min-h-[80px] font-bold text-sm shadow-md transition text-center leading-tight"
+            >
+              <ArrowUpCircle className="w-8 h-8" />
+              DEVOLVER<br />LOCAÇÃO
             </button>
           </div>
 

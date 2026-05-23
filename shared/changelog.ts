@@ -1,6 +1,79 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2316 — **UX · Restaura RECEBER LOCAÇÃO + DEVOLVER LOCAÇÃO
+ * como botões dedicados no header do Almoxarifado, ao lado do
+ * IMPORTAR PDF (IA) (efetivamente reverte a consolidação da Rev.
+ * 2313).**
+ *
+ * Pedido user (23/05/2026, screenshot do Almoxarifado Central
+ * com 6 botões: Entrada / Saída / Ferramentas / Transferir /
+ * Fechar Dia / Importar PDF (IA)): "Vc entendeu errado, aqui
+ * precisa ter recebimento e entrega de equipamentos locados. Em
+ * botões diferentes como estava antes".
+ *
+ * **Diagnóstico**: A linha de evolução Rev. 2311 → 2312 → 2313 →
+ * 2315 foi consolidando os botões de locação no Almoxarifado em
+ * favor de 1 só (IMPORTAR PDF), na suposição de que o fluxo
+ * dominante seria sempre bulk-via-PDF. O user esclareceu que os
+ * 3 fluxos coexistem em frequência relevante:
+ *   - Bulk via PDF (relatório mensal da locadora);
+ *   - Cadastro pontual de RECEBIMENTO de 1 equipamento avulso
+ *     (não veio em PDF, equipamento chegou no canteiro);
+ *   - DEVOLUÇÃO/ENTREGA de equipamento (baixa de saída).
+ * Cada um merece entry-point dedicado no painel principal — não
+ * cabe esconder receber/devolver atrás da tela Locados (que é só
+ * a listagem/dashboard).
+ *
+ * **Implementação** (`client/src/pages/almoxarifado/index.tsx`):
+ *
+ * 1. Re-importado `Truck` do lucide-react (tinha sido removido
+ *    na Rev. 2313).
+ *
+ * 2. Grid: `grid-cols-3 sm:grid-cols-6` (6 cards) →
+ *    `grid-cols-3 sm:grid-cols-4 lg:grid-cols-8` (8 cards).
+ *    Mantém 3 colunas em mobile (quebra em 3 linhas), 4 em
+ *    tablet (2 linhas), 8 em desktop (1 linha cheia).
+ *
+ * 3. Adicionado **RECEBER LOCAÇÃO** (gradient
+ *    `from-teal-500 to-emerald-600`, ícone `<Truck/>` 8×8,
+ *    label "RECEBER<br/>LOCAÇÃO" em 2 linhas) →
+ *    `setLocation("/equipamentos/locados?action=receber")`.
+ *
+ * 4. Adicionado **DEVOLVER LOCAÇÃO** (gradient
+ *    `from-amber-500 to-orange-600`, ícone `<ArrowUpCircle/>`
+ *    8×8, label "DEVOLVER<br/>LOCAÇÃO") →
+ *    `setLocation("/equipamentos/locados?action=devolver")`.
+ *
+ * 5. **IMPORTAR PDF (IA)** mantido (Rev. 2313). Ordem final dos
+ *    8 cards: ENTRADA / SAÍDA / FERRAMENTAS / TRANSFERIR /
+ *    FECHAR DIA / IMPORTAR PDF (IA) / RECEBER LOCAÇÃO / DEVOLVER
+ *    LOCAÇÃO.
+ *
+ * 6. O `useEffect` em `Locados.tsx` (criado na Rev. 2311 e
+ *    estendido na Rev. 2313) JÁ trata os 3 query params sem
+ *    nenhuma mudança necessária:
+ *    - `?action=receber` → reseta form, abre modal de cadastro
+ *      pontual (`setModal(true)`).
+ *    - `?action=devolver` → filtra `status=em_uso` + toast
+ *      "Selecione o equipamento que deseja devolver".
+ *    - `?action=importar` → abre modal de seleção de PDF
+ *      (`setModalImport(true)`).
+ *
+ * 7. O botão "+ Receber locação" do hero da tela Locados
+ *    REMOVIDO na Rev. 2315 segue removido (o user pediu
+ *    explicitamente "tire este botão" — naquele contexto era
+ *    redundância com o que ele agora quer no Almoxarifado).
+ *
+ * **0 mudança backend, 0 schema, 0 procedures novas.**
+ *
+ * **Lição**: a linha 2311→2315 mostrou que escolher fluxo único
+ * artificialmente prejudica usuários multi-cenário. Daqui pra
+ * frente, manter os 3 entry-points distintos.
+ *
+ * **R-001/R-007/R-010:** N/A — 100% client-side.
+ *
+ *
  * Rev. 2315 — **UX · Removido botão "+ Receber locação" do hero
  * da tela Equipamentos Locados; "Importar PDF (IA)" vira ação
  * primária.**
