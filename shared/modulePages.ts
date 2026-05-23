@@ -655,6 +655,12 @@ export const ROUTE_TO_PAGEID: Record<string, Record<string, string>> = {
     "/almoxarifado/inventario":       "inventario",
     "/almoxarifado/ferramentas-terceiros": "ferramentas_terceiros",
     "/almoxarifado/categorias":       "categorias",
+    // Equipamentos (Rev. 2258)
+    "/equipamentos":                  "equipamentos_hub",
+    "/equipamentos/proprios":         "equipamentos_proprios",
+    "/equipamentos/locados":          "equipamentos_locados",
+    "/equipamentos/solicitacoes":     "equipamentos_solicitacoes",
+    "/equipamentos/parametros-capex": "equipamentos_parametros",
   },
   "operacional": {
     "/operacional/painel":                "painel",

@@ -357,6 +357,12 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
       { key: "almoxarifado-inventario",    label: "Inventário Semanal", route: "/almoxarifado/inventario",    icon: "ClipboardList" },
       { key: "almoxarifado-ferr-terceiros",label: "Ferramentas de Terceiros", route: "/almoxarifado/ferramentas-terceiros", icon: "Wrench" },
       { key: "almoxarifado-categorias",    label: "Categorias",         route: "/almoxarifado/categorias",    icon: "Layers" },
+      // Equipamentos (Rev. 2258) — plugado no Almoxarifado
+      { key: "equipamentos-hub",          label: "Equip. — Visão Geral",      route: "/equipamentos",                  icon: "Package" },
+      { key: "equipamentos-proprios",     label: "Equip. — Próprios",         route: "/equipamentos/proprios",         icon: "HardHat" },
+      { key: "equipamentos-locados",      label: "Equip. — Locados",          route: "/equipamentos/locados",          icon: "Truck" },
+      { key: "equipamentos-solicitacoes", label: "Equip. — Solicitações (SE)",route: "/equipamentos/solicitacoes",     icon: "FileText" },
+      { key: "equipamentos-parametros",   label: "Equip. — Parâmetros CAPEX", route: "/equipamentos/parametros-capex", icon: "Settings" },
     ],
   },
   {

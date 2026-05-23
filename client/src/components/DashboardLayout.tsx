@@ -457,6 +457,19 @@ const menuSectionsAlmoxarifado: MenuSection[] = [
       { icon: Tag, label: "Categorias", path: "/almoxarifado/categorias" },
     ],
   },
+  // Rev. 2258 — Módulo Controle de Equipamentos (rastreio unitário de
+  // próprios + locados, análise CAPEX, solicitações). Plugado em
+  // Almoxarifado p/ herdar permissão sem novo módulo.
+  {
+    title: "Controle de Equipamentos",
+    items: [
+      { icon: Package,   label: "Visão Geral",       path: "/equipamentos" },
+      { icon: HardHat,   label: "Próprios",          path: "/equipamentos/proprios" },
+      { icon: Truck,     label: "Locados",           path: "/equipamentos/locados" },
+      { icon: FileText,  label: "Solicitações (SE)", path: "/equipamentos/solicitacoes" },
+      { icon: Settings,  label: "Parâmetros CAPEX",  path: "/equipamentos/parametros-capex" },
+    ],
+  },
 ];
 
 const menuSectionsFinanceiro: MenuSection[] = [

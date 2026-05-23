@@ -254,6 +254,12 @@ const AlmoxarifadoCategorias = lazy(() => import("./pages/almoxarifado/Categoria
 const AlmoxarifadoMovimentacoes = lazy(() => import("./pages/almoxarifado/Movimentacoes"));
 const AlmoxarifadoInventario = lazy(() => import("./pages/almoxarifado/Inventario"));
 const FerramentasTerceiros = lazy(() => import("./pages/almoxarifado/FerramentasTerceiros"));
+// Equipamentos (Rev. 2258)
+const EquipamentosHub = lazy(() => import("./pages/equipamentos/index"));
+const EquipamentosProprios = lazy(() => import("./pages/equipamentos/Proprios"));
+const EquipamentosLocados = lazy(() => import("./pages/equipamentos/Locados"));
+const SolicitacoesEquipamento = lazy(() => import("./pages/equipamentos/Solicitacoes"));
+const ParametrosCapex = lazy(() => import("./pages/equipamentos/ParametrosCapex"));
 const SolicitacaoMDO = lazy(() => import("./pages/SolicitacaoMDO"));
 const Solicitacoes = lazy(() => import("./pages/compras/Solicitacoes"));
 const Cotacoes = lazy(() => import("./pages/compras/Cotacoes"));
@@ -514,6 +520,12 @@ function Router() {
         <Route path="/almoxarifado/inventario"    component={() => <RouteGuard component={AlmoxarifadoInventario} route="/almoxarifado/inventario" />} />
         <Route path="/almoxarifado/ferramentas-terceiros" component={() => <RouteGuard component={FerramentasTerceiros} route="/almoxarifado/ferramentas-terceiros" />} />
         <Route path="/almoxarifado"              component={() => <RouteGuard component={AlmoxarifadoPage} route="/almoxarifado" />} />
+        {/* Equipamentos (Rev. 2258) */}
+        <Route path="/equipamentos"                  component={() => <RouteGuard component={EquipamentosHub} route="/almoxarifado" />} />
+        <Route path="/equipamentos/proprios"         component={() => <RouteGuard component={EquipamentosProprios} route="/almoxarifado" />} />
+        <Route path="/equipamentos/locados"          component={() => <RouteGuard component={EquipamentosLocados} route="/almoxarifado" />} />
+        <Route path="/equipamentos/solicitacoes"     component={() => <RouteGuard component={SolicitacoesEquipamento} route="/almoxarifado" />} />
+        <Route path="/equipamentos/parametros-capex" component={() => <RouteGuard component={ParametrosCapex} route="/almoxarifado" />} />
         <Route path="/compras/painel"            component={() => <RouteGuard component={PainelCompras} route="/compras/painel" />} />
         <Route path="/compras/fornecedores"      component={() => <RouteGuard component={Fornecedores} route="/compras/fornecedores" />} />
         <Route path="/compras/almoxarifado"      component={() => <RouteGuard component={Almoxarifado} route="/compras/painel" />} />

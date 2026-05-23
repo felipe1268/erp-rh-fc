@@ -96,6 +96,12 @@ const ROUTE_MODULE_MAP: Record<string, ModuleId> = {
   "/almoxarifado/movimentacoes": "almoxarifado" as ModuleId,
   "/almoxarifado/inventario":  "almoxarifado" as ModuleId,
   "/almoxarifado/categorias":  "almoxarifado" as ModuleId,
+  // Equipamentos (Rev. 2258) — plugados no módulo Almoxarifado
+  "/equipamentos":                  "almoxarifado" as ModuleId,
+  "/equipamentos/proprios":         "almoxarifado" as ModuleId,
+  "/equipamentos/locados":          "almoxarifado" as ModuleId,
+  "/equipamentos/solicitacoes":     "almoxarifado" as ModuleId,
+  "/equipamentos/parametros-capex": "almoxarifado" as ModuleId,
   "/compras/solicitacoes":     "compras" as ModuleId,
   "/compras/cotacoes":         "compras" as ModuleId,
   "/compras/ordens":           "compras" as ModuleId,

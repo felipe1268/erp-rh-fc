@@ -1,6 +1,101 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2258 — **FEATURE · Módulo Controle de Equipamentos (Fase 1 Sprint 3 —
+ * páginas React: Hub + Próprios + Locados + Solicitações + Parâmetros CAPEX).**
+ *
+ * Continuação direta da Rev. 2257 (router tRPC). Esta rev entrega TODA a UI
+ * da Fase 1 do módulo, plugada no sidebar de Almoxarifado (herda permissão
+ * sem novo módulo) e roteada em `/equipamentos/*`.
+ *
+ * Arquivos novos:
+ *  - `client/src/pages/equipamentos/_shared.tsx` — `FotosUploader` (input
+ *    file + capture=environment + `compressImage` 800px JPEG 78% → dataURL),
+ *    helpers `fmtMoney`, `fmtDate`, `Spinner`.
+ *  - `client/src/pages/equipamentos/index.tsx` — Hub com 4 cards (próprios,
+ *    locados, SEs, parâmetros) + lista "Locações vencendo em 30d".
+ *  - `client/src/pages/equipamentos/Proprios.tsx` — CRUD + filtros + 4
+ *    cards de status (total / em obra / disponíveis / manutenção).
+ *  - `client/src/pages/equipamentos/Locados.tsx` — listagem + receber
+ *    locação (foto obrigatória), check-in semanal, devolução (foto
+ *    obrigatória), modal de histórico de eventos.
+ *  - `client/src/pages/equipamentos/Solicitacoes.tsx` — criar SE + decidir
+ *    (detecta override visual + dispara fluxo de alçada), aprovar override
+ *    pendente.
+ *  - `client/src/pages/equipamentos/ParametrosCapex.tsx` — editor agrupado
+ *    por categoria (financeiro / alçada / técnico / vida útil).
+ *
+ * Arquivos modificados (cirúrgicos):
+ *  - `client/src/App.tsx` (+11 linhas) — 5 lazy imports + 5 rotas, todas
+ *    com `route="/almoxarifado"` no RouteGuard (herda permissão).
+ *  - `client/src/components/DashboardLayout.tsx` (+13 linhas) — nova
+ *    section "Controle de Equipamentos" em `menuSectionsAlmoxarifado` com
+ *    5 itens. Ícones já estavam importados (Package, HardHat, Truck,
+ *    FileText, Settings).
+ *  - `client/src/contexts/ModuleContext.tsx` (+5 linhas) — mapeia as 5
+ *    rotas `/equipamentos/*` para `activeModule="almoxarifado"`. Sem
+ *    isso, abrir URL direta deixava o módulo ativo errado no header e
+ *    a sidebar não exibia as entradas.
+ *  - `shared/modules.ts` (+5 linhas) — 5 features novas no módulo
+ *    `almoxarifado` (`equipamentos-hub`, `equipamentos-proprios`,
+ *    `equipamentos-locados`, `equipamentos-solicitacoes`,
+ *    `equipamentos-parametros`). Sem isso, perfis com grupo restrito
+ *    a `routeToFeatureKey` não veriam os itens no sidebar.
+ *  - `shared/modulePages.ts` (+5 linhas) — mapeia as 5 rotas para
+ *    page IDs (`equipamentos_*`) no namespace `almoxarifado` p/ o
+ *    pipeline de autorização baseado em página.
+ *  - `shared/version.ts` (2257 → 2258).
+ *
+ * Decisões de design:
+ *  - **Foto via base64 dataURL inline** no `fotosJson`/`fotosRecebimentoJson`/
+ *    `fotosDevolucaoJson` — mesma estratégia já usada em outras telas do ERP
+ *    (almoxarifado, RDO). Sem dependência de bucket externo. `compressImage`
+ *    garante < 100KB por foto (800px max, JPEG 78%). Trade-off conhecido:
+ *    inflate de payload, mas elimina infra extra na Fase 1.
+ *  - **Plug em Almoxarifado** (não novo módulo) — evita mexer em
+ *    `shared/modules.ts`, permissões, telemetria, módulo enabler.
+ *    Equipamentos é função de almoxarife/comprador, então faz sentido
+ *    semântico. Migração para módulo próprio fica como follow-up se o
+ *    user pedir.
+ *  - **RouteGuard com `route="/almoxarifado"`** — quem vê Almoxarifado vê
+ *    Equipamentos. Simples, sem matriz de permissão nova.
+ *  - **Validação client-side de foto obrigatória DUPLICA a do router** —
+ *    UX (toast imediato) + segurança (router rejeita bypass). Defense-
+ *    in-depth conforme code review da 2257.
+ *  - **Filtro default em Locados = `em_uso`** — usuário típico abre a
+ *    tela p/ agir sobre equipamentos ativos (check-in, devolver). Estado
+ *    "devolvido" disponível via dropdown.
+ *
+ * Fluxos cobertos:
+ *  1. **Cadastrar equipamento próprio** → patrimônio único por company,
+ *     fotos opcionais, valor + vida útil para análise CAPEX futura.
+ *  2. **Receber locação** → foto OBRIGATÓRIA, registra evento RECEBIMENTO
+ *     automaticamente (regra do router 2257).
+ *  3. **Check-in semanal** → marca presença física na obra; gera evento
+ *     CHECK_IN_OBRA. Cron de alerta vem na Rev. 2259.
+ *  4. **Devolver locação** → foto OBRIGATÓRIA, status → devolvido, registra
+ *     evento DEVOLUCAO_FORNECEDOR.
+ *  5. **Histórico** → lista todos os eventos com fotos thumb 12px.
+ *  6. **Criar SE** → numeração auto SE-AAAA-NNNN, valor estimado opcional
+ *     (usado p/ checar alçada se houver override).
+ *  7. **Decidir SE** → frontend detecta visualmente quando decisão final ≠
+ *     recomendação ERP e mostra aviso de override; router faz a checagem
+ *     real de alçada R$ 5k.
+ *  8. **Aprovar override pendente** → botão "Aprovar" em SEs status
+ *     `analisada` (acima da alçada).
+ *  9. **Editar parâmetros CAPEX** → input por chave, salva 1×1 via
+ *     mutation com optimistic invalidate.
+ *
+ * R-001/R-007/R-010: RESPEITADAS — esta rev é 100% frontend, ZERO DDL.
+ *
+ * Próximos:
+ *  - Rev. 2259: cron de alerta de vencimento (notif Compras + Obra).
+ *  - Rev. 2260: plug do bloco "Equipamentos" no Raio-X do funcionário.
+ *  - Rev. 2261: bloqueio de baixa de obra com equipamentos não devolvidos.
+ *  - Rev. 2262: Dash Operacional (mapa de equipamentos por obra).
+ */
+
+/**
  * Rev. 2257 — **FEATURE · Módulo Controle de Equipamentos (Fase 1 Sprint 2 —
  * tRPC router + auto-seed de parâmetros CAPEX).**
  *
