@@ -13376,8 +13376,18 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
     }, 0));
   }, [atividades, avancos, semAntes, semAntesFim, usarPesoPorDuracao]);
 
+  // Rev. 2272 — REFIS "Realizado Acumulado" passa a ESPELHAR a barra
+  // "Avanço Físico" do topo (`avancoAtual` recebido como prop). Antes o
+  // REFIS recalculava via ponderação local (`avancoRealAtual`) e divergia
+  // do topo quando o snapshot MSP estava ativo — ex.: top mostrava 8,48 %
+  // (snapshot da raiz UID=0) e REFIS mostrava 3,75 % (ponderação ad-hoc),
+  // confundindo o engenheiro. Para o modo "comIndiretas" continua o
+  // cálculo proprietário (snapshot é só diretas/MSP puro). Mesma política
+  // do Previsto, que já usava `pctRaizMSP` (paridade absoluta com o topo).
   const rPrev       = refisComIndiretas ? refisPrevistoComInd : avancoPrevisto;
-  const rReal       = refisComIndiretas ? refisRealComInd : avancoRealAtual;
+  const rReal       = refisComIndiretas
+    ? refisRealComInd
+    : (typeof avancoAtual === "number" ? avancoAtual : avancoRealAtual);
   const rPrevAntes  = refisComIndiretas ? avancoPrevAntesComInd : avancoPrevAntes;
   const rRealAntes  = refisComIndiretas ? avancoRealAntesComInd : avancoRealAntes;
   const rPrevSem    = Math.max(0, rPrev - rPrevAntes);

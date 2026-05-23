@@ -1,6 +1,37 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2272 — **FIX · REFIS "Realizado Acumulado" passa a ESPELHAR a barra
+ * "Avanço Físico" do topo (`avancoAtual`). Antes recalculava via ponderação
+ * local e divergia do topo (8,48 % topo vs 3,75 % REFIS).**
+ *
+ * Pedido user (23/05/2026, VITRA, 3ª Sem):
+ *   "o refis previsto e realizado igual a barra de comando superior.."
+ *
+ * Diagnóstico:
+ *   - Top bar (Rev. 2262/2269): `avancoAtual` lê `realizadoMspSnapshot`
+ *     da raiz UID=0 do MSP (snapshot oficial, AD/(AD+RD) MSP-nativo).
+ *   - REFIS "Realizado Acumulado": usava `avancoRealAtual` local —
+ *     ponderação ad-hoc Σ(peso × percentualAcumulado). Sem snapshot,
+ *     divergia em ~5pp do snapshot raiz.
+ *   - "Previsto Acumulado" já estava OK desde Rev. 1825 (usa `pctRaizMSP`,
+ *     mesma fórmula do topo).
+ *
+ * Fix (`PlanejamentoDetalhe.tsx::Refis` L13390-13395):
+ *   - `rReal` agora prioriza a prop `avancoAtual` (número da barra
+ *     superior), caindo no `avancoRealAtual` local apenas se o prop
+ *     não vier como number (defensive).
+ *   - Modo "Global c/ Indiretas" continua usando `refisRealComInd`
+ *     (snapshot MSP é só MSP puro / diretas — indiretas são do ERP).
+ *
+ * R-001/R-007/R-010: N/A (client-only).
+ *
+ * Arquivos:
+ *   - client/src/pages/planejamento/PlanejamentoDetalhe.tsx (Refis rReal)
+ *   - shared/version.ts → Rev. 2272
+ *   - shared/changelog.ts
+ *   - replit.md (2+5)
+ *
  * Rev. 2271 — **FIX · Card "PREVISTO (SEMANA)" deixa de cair pra "—" quando
  * o snapshot MSP é zerado (pós Rev. 2270). Agora replica o mesmo valor que
  * a barra "Avanço Físico" do topo, usando `pctRaizMSP` direto do
