@@ -1,6 +1,103 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2309 — **UX · Redesign moderno da tela Equipamentos Locados
+ * + modal "Receber locação" totalmente reorganizado em seções.**
+ *
+ * Pedido user (23/05/2026, na sequência da Rev. 2308): "quero um
+ * layout moderno e inovador... quero poder receber os equipamentos
+ * pelo botão receber para facilitar o fluxo". A tela tinha um look
+ * corporativo cinza (header simples, 4 cards Stat retangulares
+ * iguais, select de status, tabela densa de 7 colunas) que destoava
+ * do resto do app — agora alinhado com o estilo das telas mais
+ * modernas (Compras, Movimentações). O modal de receber era um
+ * grid 2-col sem hierarquia visual entre os blocos (descrição,
+ * fornecedor, datas, valores, observações e fotos misturados).
+ *
+ * **Antes** (Locados.tsx pré-2309):
+ * - Header em texto puro + 2 botões.
+ * - 4 cards `<Stat>` brancos idênticos com valor grande sem ícone.
+ * - Filtro por `<select>` HTML (1 status por vez, sem contadores).
+ * - Tabela de 7 colunas (Foto/Equip./Forn./Datas/Status/R$/Ações)
+ *   com ícones de 16px sem rótulo.
+ * - Modal Receber: `<div className="grid grid-cols-2 gap-3">` com
+ *   10 fields seguidos + textarea + uploader, sem separação visual.
+ *
+ * **Depois** (Locados.tsx pós-2309, 100% client-side):
+ *
+ * 1. **Hero header** com gradient `from-emerald-600 via-teal-600
+ *    to-cyan-700`, overlay radial sutil, ícone Truck em badge
+ *    `bg-white/20 backdrop-blur-sm ring-1 ring-white/30`, título
+ *    2xl tracking-tight, subtítulo em `emerald-50/90`. Botões:
+ *    "Importar PDF (IA)" em glass (`bg-white/15 ring-1`) e
+ *    "Receber locação" sólido branco com texto `text-emerald-700`
+ *    — destaque máximo no botão de ação principal (atende pedido
+ *    explícito "facilitar o fluxo do recebimento").
+ *
+ * 2. **KPI cards modernos** — novo helper `<Kpi>` (substitui
+ *    `<Stat>`): ícone colorido em badge (`bg-${tint}-50 text-
+ *    ${tint}-600 rounded-lg p-2`), valor 3xl bold, label embaixo,
+ *    pill de sub-rótulo no canto superior direito ("em locação",
+ *    "atenção", "renovar/devolver", "comprometido"). Paleta por
+ *    tint: blue (Ativos), amber (Vencendo 30d), red (Atrasados),
+ *    emerald (Custo/mês). Ring sutil colorida + hover:shadow-md.
+ *
+ * 3. **Pills de filtro de status** — substituem o `<select>` antigo:
+ *    Todos / Em uso / Em renovação / Atrasados / Devolvidos. Pill
+ *    ativo com `bg-gradient-to-r ${color}` + sombra; inativo em
+ *    `bg-slate-50 border`. Contador inline em pílula menor
+ *    (`min-w-[20px]`) — fonte de verdade `useMemo contStatus` que
+ *    agrupa `data` por status. Padrão consistente com Solicitações
+ *    (Rev. 2301), Cotações (Rev. 2298) e Ordens (Rev. 2307).
+ *    Busca abaixo em `<input>` arredondado com focus ring emerald.
+ *
+ * 4. **Lista em cards** (grid 1-2-3 colunas responsivos) substitui
+ *    a tabela. Cada card: faixa de cor de 1px no topo
+ *    (`bg-gradient-to-r ${accent}` — red/amber/emerald/slate por
+ *    status), corpo com foto 16×16 (fallback ícone Camera em
+ *    bg-slate-100), título + badge de status redondo no topo,
+ *    metadata com ícones Hash/Building2, footer slate-50 com
+ *    Calendar+período+`R$/mês` destacado em emerald-700 bold, e
+ *    rodapé de ações com botões pílula (Histórico em ghost slate,
+ *    Check-in em bg-blue-50 text-blue-700, Devolver em bg-emerald-
+ *    50 text-emerald-700) com rótulo visível além do ícone. Hover
+ *    `-translate-y-0.5 shadow-md` pra feedback tátil.
+ *
+ * 5. **Empty state** redesenhado: ícone Truck grande, título
+ *    "Nenhum equipamento locado encontrado", CTA textual citando
+ *    os dois caminhos (Receber locação / Importar PDF IA).
+ *
+ * 6. **Modal "Receber locação na obra"** — refatorado em 5
+ *    seções coloridas (novo helper `<Section icon title tint>`):
+ *    - 🟢 Equipamento (emerald): descrição, categoria, patrim.,
+ *      n° série, código interno ERP (com placeholders úteis).
+ *    - 🔵 Fornecedor — locadora (blue): nome do fornecedor.
+ *    - 🟡 Período & Valores (amber): início, fim previsto, valor
+ *      diário, valor mensal.
+ *    - ⚪ Responsabilidade & Observações (slate): funcionário
+ *      responsável, observações (estado, acessórios).
+ *    - 🔴 Fotos do recebimento (red, **obrigatório**): copy
+ *      explicando que é comprovação visual.
+ *    Cada seção tem header com ícone Lucide em badge colorido +
+ *    título em color-coded text. Save label trocado de "Salvar"
+ *    pra "Confirmar recebimento" pra reforçar o fluxo.
+ *
+ * 7. **Sidebar** (`DashboardLayout.tsx`): item "Locados" da seção
+ *    CONTROLE DE EQUIPAMENTOS renomeado pra "Equipamentos
+ *    Locados" pra alinhar com o pedido prévio do user.
+ *
+ * **Arquivos**: `client/src/pages/equipamentos/Locados.tsx`,
+ * `client/src/components/DashboardLayout.tsx`.
+ *
+ * **0 mudanças de lógica de negócio**: mesmas procedures tRPC
+ * (`locadosListar`, `locadoCriar`, `locadoDevolver`, `locadoCheckIn`,
+ * `parsearContratoLocacaoPdf`, `importarContratosLocacaoLote`),
+ * mesmo schema, mesmos modais de Devolução / Check-in / Eventos /
+ * Importar PDF (mantidos intactos — só o Receber foi refatorado).
+ *
+ * **R-001/R-007/R-010:** N/A — 100% client-side, sem schema.
+ *
+ *
  * Rev. 2308 — **FEAT · Importação em lote de contratos de locação de
  * equipamentos via PDF da locadora (IA Gemini detecta layout).**
  * MVP / Fase 1 do projeto "Locações com alertas em Compras" (Rev.

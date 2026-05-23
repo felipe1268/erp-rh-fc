@@ -3,7 +3,8 @@ import { useState, useMemo, useRef } from "react";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
 import { toast } from "sonner";
-import { Plus, Search, X, Truck, CheckCircle2, RotateCcw, ClipboardCheck, Eye, FileText, Upload, Sparkles, Trash2 } from "lucide-react";
+import { Plus, Search, X, Truck, CheckCircle2, RotateCcw, ClipboardCheck, Eye, FileText, Upload, Sparkles, Trash2, Activity, Clock, AlertTriangle, DollarSign, Calendar, Hash, Building2, User as UserIcon, MapPin, Camera, StickyNote, type LucideIcon } from "lucide-react";
+import type { ReactNode } from "react";
 import { FotosUploader, FotoItem, fmtMoney, fmtDate, Spinner } from "./_shared";
 
 const STATUS_LABELS: Record<string, string> = {
@@ -36,9 +37,15 @@ export default function EquipamentosLocados() {
   const [filtroStatus, setFiltroStatus] = useState<string>("em_uso");
 
   const utils = trpc.useUtils();
-  const { data = [], isLoading } = trpc.equipamentos.locadosListar.useQuery(
-    { companyId, busca: busca || undefined, status: filtroStatus || undefined },
+  // Lista TUDO (sem filtro server-side de status) pra os contadores das
+  // pills baterem cross-filter. Filtro de status aplicado client-side abaixo.
+  const { data: dataAll = [], isLoading } = trpc.equipamentos.locadosListar.useQuery(
+    { companyId, busca: busca || undefined },
     { enabled: !!companyId }
+  );
+  const data = useMemo(
+    () => (filtroStatus ? (dataAll as any[]).filter(l => l.status === filtroStatus) : dataAll),
+    [dataAll, filtroStatus]
   );
 
   const [modal, setModal] = useState(false);
@@ -198,137 +205,200 @@ export default function EquipamentosLocados() {
     return s;
   }, [data]);
 
+  const STATUS_PILLS: { key: string; label: string; color: string }[] = [
+    { key: "",             label: "Todos",       color: "from-slate-500 to-slate-700" },
+    { key: "em_uso",       label: "Em uso",      color: "from-blue-500 to-blue-700" },
+    { key: "em_renovacao", label: "Em renovação", color: "from-amber-500 to-amber-700" },
+    { key: "atrasado",     label: "Atrasados",   color: "from-red-500 to-red-700" },
+    { key: "devolvido",    label: "Devolvidos",  color: "from-slate-400 to-slate-600" },
+  ];
+  // Contadores cross-filter — sempre sobre o universo completo (dataAll),
+  // pra que cada pill mostre quantos existem em cada status independente
+  // do filtro selecionado.
+  const contStatus = useMemo(() => {
+    const c: Record<string, number> = { "": 0, em_uso: 0, em_renovacao: 0, atrasado: 0, devolvido: 0 };
+    for (const l of dataAll as any[]) { c[""]++; if (c[l.status] != null) c[l.status]++; }
+    return c;
+  }, [dataAll]);
+
   return (
     <DashboardLayout>
-      <div className="max-w-6xl mx-auto px-4 py-6 space-y-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
-              <Truck className="h-6 w-6 text-emerald-600" /> Equipamentos Locados
-            </h1>
-            <p className="text-sm text-slate-600">Rastreio de equipamentos em locação. Foto obrigatória no recebimento e devolução.</p>
-          </div>
-          <div className="flex items-center gap-2">
-            <button onClick={abrirImportar}
-              className="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded shadow-sm" title="Importar PDF de relatório da locadora (Jalves, Mills, etc.) — a IA detecta o layout e cadastra em lote">
-              <Sparkles className="h-4 w-4" /> Importar PDF (IA)
-            </button>
-            <button onClick={() => { setForm({ ...EMPTY }); setFotos([]); setModal(true); }}
-              className="inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded shadow-sm">
-              <Plus className="h-4 w-4" /> Receber locação
-            </button>
+      <div className="max-w-7xl mx-auto px-4 py-6 space-y-5">
+
+        {/* Hero header com gradient */}
+        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-emerald-600 via-teal-600 to-cyan-700 text-white shadow-lg">
+          <div className="absolute inset-0 opacity-20" style={{ backgroundImage: "radial-gradient(circle at 20% 50%, rgba(255,255,255,0.3) 0%, transparent 50%), radial-gradient(circle at 80% 50%, rgba(255,255,255,0.2) 0%, transparent 50%)" }} />
+          <div className="relative px-6 py-5 flex items-center justify-between gap-4 flex-wrap">
+            <div className="flex items-center gap-4">
+              <div className="bg-white/20 backdrop-blur-sm rounded-xl p-3 ring-1 ring-white/30">
+                <Truck className="h-7 w-7" />
+              </div>
+              <div>
+                <h1 className="text-2xl font-bold tracking-tight">Equipamentos Locados</h1>
+                <p className="text-sm text-emerald-50/90 mt-0.5">Rastreio de equipamentos em locação — recebimento, check-in semanal, devolução.</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <button onClick={abrirImportar}
+                className="inline-flex items-center gap-2 bg-white/15 hover:bg-white/25 backdrop-blur-sm ring-1 ring-white/30 text-white px-4 py-2.5 rounded-xl shadow-sm transition font-medium text-sm"
+                title="Importar PDF de relatório da locadora (Jalves, Mills, etc.) — a IA detecta o layout e cadastra em lote">
+                <Sparkles className="h-4 w-4" /> Importar PDF (IA)
+              </button>
+              <button onClick={() => { setForm({ ...EMPTY }); setFotos([]); setModal(true); }}
+                className="inline-flex items-center gap-2 bg-white text-emerald-700 hover:bg-emerald-50 px-5 py-2.5 rounded-xl shadow-md font-semibold text-sm transition">
+                <Plus className="h-4 w-4" /> Receber locação
+              </button>
+            </div>
           </div>
         </div>
 
-        <div className="grid grid-cols-4 gap-3">
-          <Stat title="Ativos" value={stats.ativos} color="text-blue-700" />
-          <Stat title="Vencendo (30d)" value={stats.vencendo} color="text-amber-700" />
-          <Stat title="Atrasados" value={stats.atrasados} color="text-red-700" />
-          <Stat title="R$ / mês" value={fmtMoney(stats.valorMes)} color="text-slate-800" small />
+        {/* KPI cards modernos */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <Kpi icon={Activity}      label="Ativos"         value={stats.ativos}             tint="blue"   sub="em locação"  />
+          <Kpi icon={Clock}         label="Vencendo (30d)" value={stats.vencendo}           tint="amber"  sub="atenção"     />
+          <Kpi icon={AlertTriangle} label="Atrasados"      value={stats.atrasados}          tint="red"    sub="renovar/devolver" />
+          <Kpi icon={DollarSign}    label="Custo / mês"    value={fmtMoney(stats.valorMes)} tint="emerald" sub="comprometido" money />
         </div>
 
-        <div className="bg-white border rounded-lg shadow-sm p-3 flex items-center gap-3">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-            <input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar…"
-              className="w-full pl-9 pr-3 py-2 border rounded text-sm" />
+        {/* Filtros: pills de status + busca */}
+        <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-3 space-y-3">
+          <div className="flex flex-wrap items-center gap-2">
+            {STATUS_PILLS.map(p => {
+              const active = filtroStatus === p.key;
+              return (
+                <button key={p.key} onClick={() => setFiltroStatus(p.key)}
+                  className={`group inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-semibold transition ${
+                    active
+                      ? `bg-gradient-to-r ${p.color} text-white shadow-md`
+                      : "bg-slate-50 text-slate-700 hover:bg-slate-100 border border-slate-200"
+                  }`}>
+                  {p.label}
+                  <span className={`inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-[10px] font-bold ${
+                    active ? "bg-white/25 text-white" : "bg-slate-200 text-slate-700"
+                  }`}>{contStatus[p.key] ?? 0}</span>
+                </button>
+              );
+            })}
           </div>
-          <select value={filtroStatus} onChange={e => setFiltroStatus(e.target.value)} className="px-3 py-2 border rounded text-sm">
-            <option value="">Todos</option>
-            <option value="em_uso">Em uso</option>
-            <option value="devolvido">Devolvidos</option>
-            <option value="atrasado">Atrasados</option>
-            <option value="em_renovacao">Em renovação</option>
-          </select>
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+            <input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar por descrição, fornecedor, patrimônio…"
+              className="w-full pl-10 pr-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 outline-none transition" />
+          </div>
         </div>
 
-        <div className="bg-white border rounded-lg shadow-sm overflow-hidden">
-          {isLoading ? <div className="p-8 flex justify-center"><Spinner /></div> :
-            data.length === 0 ? <div className="p-8 text-center text-sm text-slate-500">Nenhum equipamento locado.</div> : (
-            <table className="w-full text-sm">
-              <thead className="bg-slate-50">
-                <tr className="text-left text-xs text-slate-600 uppercase">
-                  <th className="px-3 py-2">Foto</th>
-                  <th className="px-3 py-2">Equipamento</th>
-                  <th className="px-3 py-2">Fornecedor</th>
-                  <th className="px-3 py-2">Início → Fim previsto</th>
-                  <th className="px-3 py-2">Status</th>
-                  <th className="px-3 py-2 text-right">R$/mês</th>
-                  <th className="px-3 py-2 text-right">Ações</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(data as any[]).map(l => {
-                  const fotos = (l.fotosRecebimentoJson as FotoItem[]) || [];
-                  return (
-                    <tr key={l.id} className="border-t hover:bg-slate-50">
-                      <td className="px-3 py-2">
-                        {fotos[0] ? <img src={fotos[0].url} className="w-10 h-10 object-cover rounded" />
-                          : <div className="w-10 h-10 rounded bg-slate-100" />}
-                      </td>
-                      <td className="px-3 py-2">
-                        <div className="font-medium text-slate-800">{l.descricao}</div>
-                        <div className="text-xs text-slate-500">{l.categoria || "—"} · {l.codigoPatrimonioFornecedor || "s/ patr."}</div>
-                      </td>
-                      <td className="px-3 py-2 text-slate-700">{l.fornecedorNome || "—"}</td>
-                      <td className="px-3 py-2 text-xs text-slate-600">
-                        {fmtDate(l.dataInicio)} → <b>{fmtDate(l.dataFimPrevista)}</b>
-                      </td>
-                      <td className="px-3 py-2">
-                        <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${STATUS_COLORS[l.status] || "bg-slate-100"}`}>
+        {/* Lista em cards modernos */}
+        {isLoading ? (
+          <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-12 flex justify-center"><Spinner /></div>
+        ) : data.length === 0 ? (
+          <div className="bg-white border border-dashed border-slate-300 rounded-xl p-12 text-center">
+            <Truck className="h-12 w-12 text-slate-300 mx-auto mb-3" />
+            <div className="text-slate-700 font-semibold">Nenhum equipamento locado encontrado</div>
+            <div className="text-sm text-slate-500 mt-1">Use <b>Receber locação</b> para cadastro pontual ou <b>Importar PDF (IA)</b> para cadastro em lote.</div>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-3">
+            {(data as any[]).map(l => {
+              const fotos = (l.fotosRecebimentoJson as FotoItem[]) || [];
+              const accent = l.status === "atrasado" ? "from-red-500 to-red-600"
+                : l.status === "em_renovacao" ? "from-amber-500 to-amber-600"
+                : l.status === "em_uso" ? "from-emerald-500 to-teal-600"
+                : "from-slate-400 to-slate-500";
+              return (
+                <div key={l.id} className="group bg-white border border-slate-200 rounded-xl shadow-sm hover:shadow-md hover:-translate-y-0.5 transition overflow-hidden flex flex-col">
+                  <div className={`h-1 bg-gradient-to-r ${accent}`} />
+                  <div className="p-4 flex gap-3">
+                    {fotos[0] ? (
+                      <img src={fotos[0].url} className="w-16 h-16 object-cover rounded-lg ring-1 ring-slate-200 flex-shrink-0" alt="" />
+                    ) : (
+                      <div className="w-16 h-16 rounded-lg bg-slate-100 ring-1 ring-slate-200 flex items-center justify-center flex-shrink-0">
+                        <Camera className="h-5 w-5 text-slate-400" />
+                      </div>
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-start justify-between gap-2">
+                        <h3 className="font-semibold text-slate-900 truncate" title={l.descricao}>{l.descricao}</h3>
+                        <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider whitespace-nowrap ${STATUS_COLORS[l.status] || "bg-slate-100"}`}>
                           {STATUS_LABELS[l.status] || l.status}
                         </span>
-                      </td>
-                      <td className="px-3 py-2 text-right">{fmtMoney(l.valorMensal)}</td>
-                      <td className="px-3 py-2">
-                        <div className="flex items-center justify-end gap-1">
-                          <button onClick={() => setModalEventos(l)} className="text-slate-600 hover:bg-slate-100 p-1 rounded" title="Histórico">
-                            <Eye className="h-4 w-4" />
-                          </button>
-                          {l.status === "em_uso" && (
-                            <>
-                              <button onClick={() => { setModalCheckin(l); setCheckinObs(""); }} className="text-blue-600 hover:bg-blue-50 p-1 rounded" title="Check-in semanal">
-                                <ClipboardCheck className="h-4 w-4" />
-                              </button>
-                              <button onClick={() => { setModalDev(l); setDevFotos([]); setDevObs(""); setDevData(new Date().toISOString().slice(0, 10)); }}
-                                className="text-emerald-600 hover:bg-emerald-50 p-1 rounded" title="Devolver">
-                                <RotateCcw className="h-4 w-4" />
-                              </button>
-                            </>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          )}
-        </div>
+                      </div>
+                      <div className="text-xs text-slate-500 mt-0.5 flex items-center gap-1.5">
+                        <Hash className="h-3 w-3" /> {l.codigoPatrimonioFornecedor || "s/ patr."} · {l.categoria || "sem categoria"}
+                      </div>
+                      <div className="text-xs text-slate-600 mt-1 flex items-center gap-1.5 truncate">
+                        <Building2 className="h-3 w-3 text-slate-400" /> {l.fornecedorNome || "Sem fornecedor"}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="px-4 py-2 bg-slate-50/70 border-t border-slate-100 flex items-center justify-between text-xs">
+                    <div className="text-slate-600 flex items-center gap-1.5">
+                      <Calendar className="h-3.5 w-3.5 text-slate-400" />
+                      {fmtDate(l.dataInicio)} → <b className="text-slate-800">{fmtDate(l.dataFimPrevista)}</b>
+                    </div>
+                    <div className="font-bold text-emerald-700">{fmtMoney(l.valorMensal)}<span className="text-[10px] text-slate-500 font-normal">/mês</span></div>
+                  </div>
+                  <div className="px-4 py-2 border-t border-slate-100 flex items-center justify-end gap-1">
+                    <button onClick={() => setModalEventos(l)} className="text-slate-600 hover:bg-slate-100 px-2 py-1 rounded-md text-xs inline-flex items-center gap-1 transition" title="Histórico">
+                      <Eye className="h-3.5 w-3.5" /> Histórico
+                    </button>
+                    {l.status === "em_uso" && (
+                      <>
+                        <button onClick={() => { setModalCheckin(l); setCheckinObs(""); }} className="text-blue-700 bg-blue-50 hover:bg-blue-100 px-2 py-1 rounded-md text-xs inline-flex items-center gap-1 font-medium transition" title="Check-in semanal">
+                          <ClipboardCheck className="h-3.5 w-3.5" /> Check-in
+                        </button>
+                        <button onClick={() => { setModalDev(l); setDevFotos([]); setDevObs(""); setDevData(new Date().toISOString().slice(0, 10)); }}
+                          className="text-emerald-700 bg-emerald-50 hover:bg-emerald-100 px-2 py-1 rounded-md text-xs inline-flex items-center gap-1 font-medium transition" title="Devolver">
+                          <RotateCcw className="h-3.5 w-3.5" /> Devolver
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
-      {/* Modal receber locação */}
+      {/* Modal receber locação — seções com ícones */}
       {modal && (
-        <Modal title="Receber Locação" onClose={() => setModal(false)} onSave={salvar} loading={criar.isPending}>
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Descrição*"><input value={form.descricao} onChange={e => setForm(p => ({ ...p, descricao: e.target.value }))} className="inp" /></Field>
-            <Field label="Categoria"><input value={form.categoria} onChange={e => setForm(p => ({ ...p, categoria: e.target.value }))} className="inp" /></Field>
-            <Field label="Fornecedor"><input value={form.fornecedorNome} onChange={e => setForm(p => ({ ...p, fornecedorNome: e.target.value }))} className="inp" /></Field>
-            <Field label="Patrim. fornecedor"><input value={form.codigoPatrimonioFornecedor} onChange={e => setForm(p => ({ ...p, codigoPatrimonioFornecedor: e.target.value }))} className="inp" /></Field>
-            <Field label="N° série"><input value={form.numeroSerie} onChange={e => setForm(p => ({ ...p, numeroSerie: e.target.value }))} className="inp" /></Field>
-            <Field label="Código interno ERP"><input value={form.codigoInternoErp} onChange={e => setForm(p => ({ ...p, codigoInternoErp: e.target.value }))} className="inp" /></Field>
-            <Field label="Data início*"><input type="date" value={form.dataInicio} onChange={e => setForm(p => ({ ...p, dataInicio: e.target.value }))} className="inp" /></Field>
-            <Field label="Data fim prevista*"><input type="date" value={form.dataFimPrevista} onChange={e => setForm(p => ({ ...p, dataFimPrevista: e.target.value }))} className="inp" /></Field>
-            <Field label="Valor diário"><input value={form.valorDiario} onChange={e => setForm(p => ({ ...p, valorDiario: e.target.value }))} placeholder="0,00" className="inp" /></Field>
-            <Field label="Valor mensal"><input value={form.valorMensal} onChange={e => setForm(p => ({ ...p, valorMensal: e.target.value }))} placeholder="0,00" className="inp" /></Field>
-          </div>
-          <Field label="Funcionário responsável">
-            <input value={form.funcionarioResponsavelNome} onChange={e => setForm(p => ({ ...p, funcionarioResponsavelNome: e.target.value }))} className="inp" />
-          </Field>
-          <Field label="Observações">
-            <textarea value={form.observacoes} onChange={e => setForm(p => ({ ...p, observacoes: e.target.value }))} rows={2} className="inp" />
-          </Field>
-          <FotosUploader fotos={fotos} onChange={setFotos} label="Fotos de recebimento" required />
+        <Modal title="Receber Locação na Obra" onClose={() => setModal(false)} onSave={salvar} loading={criar.isPending} saveLabel="Confirmar recebimento">
+          <Section icon={Truck} title="Equipamento" tint="emerald">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <Field label="Descrição *"><input value={form.descricao} onChange={e => setForm(p => ({ ...p, descricao: e.target.value }))} className="inp" placeholder="Ex: Betoneira 400L" /></Field>
+              <Field label="Categoria"><input value={form.categoria} onChange={e => setForm(p => ({ ...p, categoria: e.target.value }))} className="inp" placeholder="Ex: Equipamento de concretagem" /></Field>
+              <Field label="Patrim. do fornecedor"><input value={form.codigoPatrimonioFornecedor} onChange={e => setForm(p => ({ ...p, codigoPatrimonioFornecedor: e.target.value }))} className="inp" /></Field>
+              <Field label="N° de série"><input value={form.numeroSerie} onChange={e => setForm(p => ({ ...p, numeroSerie: e.target.value }))} className="inp" /></Field>
+              <Field label="Código interno ERP"><input value={form.codigoInternoErp} onChange={e => setForm(p => ({ ...p, codigoInternoErp: e.target.value }))} className="inp" /></Field>
+            </div>
+          </Section>
+
+          <Section icon={Building2} title="Fornecedor (locadora)" tint="blue">
+            <Field label="Nome do fornecedor"><input value={form.fornecedorNome} onChange={e => setForm(p => ({ ...p, fornecedorNome: e.target.value }))} className="inp" placeholder="Ex: Jalves Locações" /></Field>
+          </Section>
+
+          <Section icon={Calendar} title="Período & Valores" tint="amber">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <Field label="Data início *"><input type="date" value={form.dataInicio} onChange={e => setForm(p => ({ ...p, dataInicio: e.target.value }))} className="inp" /></Field>
+              <Field label="Data fim prevista *"><input type="date" value={form.dataFimPrevista} onChange={e => setForm(p => ({ ...p, dataFimPrevista: e.target.value }))} className="inp" /></Field>
+              <Field label="Valor diário (R$)"><input value={form.valorDiario} onChange={e => setForm(p => ({ ...p, valorDiario: e.target.value }))} placeholder="0,00" className="inp" /></Field>
+              <Field label="Valor mensal (R$)"><input value={form.valorMensal} onChange={e => setForm(p => ({ ...p, valorMensal: e.target.value }))} placeholder="0,00" className="inp" /></Field>
+            </div>
+          </Section>
+
+          <Section icon={UserIcon} title="Responsabilidade & Observações" tint="slate">
+            <Field label="Funcionário responsável">
+              <input value={form.funcionarioResponsavelNome} onChange={e => setForm(p => ({ ...p, funcionarioResponsavelNome: e.target.value }))} className="inp" />
+            </Field>
+            <Field label="Observações">
+              <textarea value={form.observacoes} onChange={e => setForm(p => ({ ...p, observacoes: e.target.value }))} rows={2} className="inp" placeholder="Estado de conservação, acessórios recebidos, etc." />
+            </Field>
+          </Section>
+
+          <Section icon={Camera} title="Fotos do recebimento *" tint="red">
+            <p className="text-xs text-slate-500 mb-2">Foto obrigatória — comprovação visual do estado do equipamento ao chegar na obra.</p>
+            <FotosUploader fotos={fotos} onChange={setFotos} label="" required />
+          </Section>
         </Modal>
       )}
 
@@ -535,11 +605,45 @@ export default function EquipamentosLocados() {
   );
 }
 
-function Stat({ title, value, color, small }: { title: string; value: any; color: string; small?: boolean }) {
+function Kpi({ icon: Icon, label, value, sub, tint, money }: { icon: LucideIcon; label: string; value: ReactNode; sub?: string; tint: "blue" | "amber" | "red" | "emerald"; money?: boolean }) {
+  const palette: Record<string, { ring: string; iconBg: string; iconColor: string; value: string }> = {
+    blue:    { ring: "ring-blue-100",    iconBg: "bg-blue-50",    iconColor: "text-blue-600",    value: "text-blue-900" },
+    amber:   { ring: "ring-amber-100",   iconBg: "bg-amber-50",   iconColor: "text-amber-600",   value: "text-amber-900" },
+    red:     { ring: "ring-red-100",     iconBg: "bg-red-50",     iconColor: "text-red-600",     value: "text-red-900" },
+    emerald: { ring: "ring-emerald-100", iconBg: "bg-emerald-50", iconColor: "text-emerald-600", value: "text-emerald-900" },
+  };
+  const p = palette[tint];
   return (
-    <div className="bg-white border rounded-lg shadow-sm p-3">
-      <div className="text-xs text-slate-500 uppercase">{title}</div>
-      <div className={`${small ? "text-lg" : "text-2xl"} font-bold ${color}`}>{value}</div>
+    <div className={`bg-white border border-slate-200 rounded-xl shadow-sm p-4 ring-1 ${p.ring} hover:shadow-md transition`}>
+      <div className="flex items-start justify-between">
+        <div className={`${p.iconBg} ${p.iconColor} rounded-lg p-2`}>
+          <Icon className="h-5 w-5" />
+        </div>
+        {sub && <span className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">{sub}</span>}
+      </div>
+      <div className={`mt-3 ${money ? "text-xl" : "text-3xl"} font-bold ${p.value}`}>{value}</div>
+      <div className="text-xs text-slate-500 mt-0.5">{label}</div>
+    </div>
+  );
+}
+function Section({ icon: Icon, title, tint, children }: { icon: LucideIcon; title: string; tint: "emerald" | "blue" | "amber" | "slate" | "red"; children: ReactNode }) {
+  const palette: Record<string, { bar: string; iconBg: string; iconColor: string; text: string }> = {
+    emerald: { bar: "bg-emerald-500", iconBg: "bg-emerald-50", iconColor: "text-emerald-600", text: "text-emerald-900" },
+    blue:    { bar: "bg-blue-500",    iconBg: "bg-blue-50",    iconColor: "text-blue-600",    text: "text-blue-900" },
+    amber:   { bar: "bg-amber-500",   iconBg: "bg-amber-50",   iconColor: "text-amber-600",   text: "text-amber-900" },
+    slate:   { bar: "bg-slate-400",   iconBg: "bg-slate-100",  iconColor: "text-slate-600",   text: "text-slate-900" },
+    red:     { bar: "bg-red-500",     iconBg: "bg-red-50",     iconColor: "text-red-600",     text: "text-red-900" },
+  };
+  const p = palette[tint];
+  return (
+    <div className="border border-slate-200 rounded-xl overflow-hidden bg-white">
+      <div className="flex items-center gap-2.5 px-4 py-2.5 border-b border-slate-100 bg-slate-50/50">
+        <div className={`${p.iconBg} ${p.iconColor} rounded-md p-1.5`}>
+          <Icon className="h-4 w-4" />
+        </div>
+        <h3 className={`text-sm font-semibold ${p.text}`}>{title}</h3>
+      </div>
+      <div className="p-4 space-y-3">{children}</div>
     </div>
   );
 }
