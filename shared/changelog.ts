@@ -1,6 +1,64 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2313 — **UX · Substitui os 2 botões de locação (Rev. 2312)
+ * por 1 único "IMPORTAR PDF (IA)" na barra de ações rápidas do
+ * Almoxarifado; receber/devolver ficam só na tela Equipamentos
+ * Locados.**
+ *
+ * Pedido user (23/05/2026, após ver a Rev. 2312 em uso, screenshot
+ * da tela Equipamentos Locados com hero contendo "Importar PDF
+ * (IA)" + "Receber locação"): "Só deixe o botão de importação o
+ * receber só vai ficar na outra tela".
+ *
+ * **Diagnóstico**: a tela `/equipamentos/locados` (redesign da
+ * Rev. 2309) já tem entry-points dedicados pra:
+ *   - Receber locação (botão branco no hero);
+ *   - Devolver (botão pílula em cada card da lista, por-item);
+ *   - Importar PDF em lote (botão glass no hero, Rev. 2308).
+ * Ter os 3 também no Almoxarifado é redundante. O único que vale
+ * a pena duplicar é o **IMPORTAR PDF (IA)** — é uma ação de
+ * produtividade (cadastra DEZENAS de equipamentos de uma vez via
+ * Gemini Vision) que o almoxarife pode disparar enquanto está
+ * conferindo entradas/saídas no painel principal, sem precisar
+ * sair da rotina pra ir à tela específica.
+ *
+ * **Implementação**:
+ *
+ * 1. `client/src/pages/almoxarifado/index.tsx`:
+ *    - Import trocado: `Truck` → `FileUp` (lucide).
+ *    - Removidos os 2 botões RECEBER LOCAÇÃO e DEVOLVER LOCAÇÃO
+ *      adicionados na Rev. 2312.
+ *    - Grid: `grid-cols-3 sm:grid-cols-4 lg:grid-cols-7` →
+ *      `grid-cols-3 gap-3 sm:grid-cols-6` (6 cards: ENTRADA /
+ *      SAÍDA / FERRAMENTAS / TRANSFERIR / FECHAR DIA / IMPORTAR).
+ *    - Novo botão **IMPORTAR PDF (IA)** com gradient
+ *      `from-indigo-500 via-purple-600 to-fuchsia-600` (mesma
+ *      paleta da barra de progresso da Rev. 2310, sinalização
+ *      visual consistente "isso é IA"), ícone `<FileUp/>` 8×8,
+ *      label "IMPORTAR<br/>PDF (IA)" em 2 linhas.
+ *      onClick → `setLocation("/equipamentos/locados?action=importar")`.
+ *
+ * 2. `client/src/pages/equipamentos/Locados.tsx`:
+ *    - `useEffect([])` (Rev. 2311) ganha novo branch
+ *      `action === "importar"`:
+ *      ```
+ *      setImportArquivo(null);
+ *      setImportPreview(null);
+ *      setModalImport(true);
+ *      ```
+ *      Abre direto o modal de seleção de PDF (mesmo do botão
+ *      "Importar PDF (IA)" no hero da tela).
+ *    - Branches `receber` e `devolver` preservados — não há mais
+ *      entry-point UI pra eles, mas se alguém colar uma URL
+ *      antiga em /equipamentos/locados?action=receber, segue
+ *      funcionando (não é regressão).
+ *
+ * **0 mudança backend, 0 schema, 0 procedures novas.**
+ *
+ * **R-001/R-007/R-010:** N/A — 100% client-side.
+ *
+ *
  * Rev. 2312 — **UX · Botões dedicados "RECEBER LOCAÇÃO" e
  * "DEVOLVER LOCAÇÃO" na barra de ações rápidas do Almoxarifado
  * (reverte cards dentro do modal da Rev. 2311).**

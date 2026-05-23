@@ -137,6 +137,11 @@ export default function EquipamentosLocados() {
     } else if (action === "devolver") {
       setFiltroStatus("em_uso");
       toast.info("Selecione o equipamento que deseja devolver na lista abaixo.", { duration: 5000 });
+    } else if (action === "importar") {
+      // Rev. 2313 — vem do botão "IMPORTAR PDF (IA)" do Almoxarifado.
+      setImportArquivo(null);
+      setImportPreview(null);
+      setModalImport(true);
     }
     const url = new URL(window.location.href);
     url.searchParams.delete("action");

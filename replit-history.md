@@ -2,6 +2,7 @@
 
 > Este arquivo guarda os one-liners das revisões antigas para manter o `replit.md` enxuto.
 
+- ~~Rev. 2306~~ — HOTFIX/UX · Estorno do Almoxarifado: liberar Recebimento avulso (sem OC) + sinalizar mov vinculada a OC como não-selecionável. Ver `shared/changelog.ts`.
 - ~~Rev. 2305~~ — FEAT · Seleção múltipla + ESTORNO em lote de movimentações do Almoxarifado (soft-delete auditável + transação atômica + multi-tenant). Ver `shared/changelog.ts`.
 - ~~Rev. 2304~~ — FEAT/UX · Filtro por PERÍODO em Movimentações (pills Todos/Hoje/7d/30d/Este mês/Personalizado + range customizado com helpers de fuso local). Ver `shared/changelog.ts`.
 - ~~Rev. 2303~~ — FEAT/REGRA-DE-OURO · Recebimento só na obra da SC/OC + obra clicável (`filtroObra`) em Movimentações; hard-check backend em `registerSmartEntry`. Ver `shared/changelog.ts`.
