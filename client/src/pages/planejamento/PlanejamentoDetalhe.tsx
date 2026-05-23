@@ -676,8 +676,19 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
       (!_calMSP_R.envelopeFinishSnapshot || _calMSP_R.envelopeFinishSnapshot === (proj as any)?.dataTerminoContratual)
     ) {
       const sd = _calMSP_R.statusDateSnapshot;
+      // Rev. 2269 — Realizado é EMPÍRICO (AD/(AD+RD) medido) e MONOTÔNICO:
+      // nunca pode regredir entre semanas. Para semanas POSTERIORES ao
+      // StatusDate (sd), mantém o snapshot (última foto MSP conhecida) —
+      // antes caía no cálculo ponderado legado e mostrava 3,75 % na
+      // semana 4 enquanto a semana 3 (que cobria sd=21/05) mostrava
+      // 6,16 % do snapshot, gerando regressão visual reportada pelo user.
+      // Para semanas ANTERIORES ao snapshot, mantém o fallback ponderado
+      // (permite explorar avanços históricos editados no ERP).
+      const semFimVis = semanaVisualizacao
+        ? cutoffWeekFromMonday(semanaVisualizacao, cutoffDowTop).fim
+        : null;
       const okSemana = !semanaVisualizacao
-        || (sd >= semanaVisualizacao && sd <= cutoffWeekFromMonday(semanaVisualizacao, cutoffDowTop).fim);
+        || (semFimVis! >= sd); // cobre OU é posterior ao snapshot
       if (okSemana) return Math.min(100, Math.max(0, Number(_calMSP_R.realizadoMspSnapshot)));
     }
     if (!atividades.length) return 0;

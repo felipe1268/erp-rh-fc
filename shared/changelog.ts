@@ -1,6 +1,42 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2269 — **FIX · Barra "Avanço Físico" do topo: Realizado deixa de
+ * regredir em semanas posteriores ao StatusDate (semana 3 = 6,16 %, semana
+ * 4 caía pra 3,75 %). Agora mantém o snapshot MSP em qualquer semana ≥ sd.**
+ *
+ * Pedido user (23/05/2026, VITRA):
+ *   "pq na 3 semana o realizado está 6,16 %, mas na 4 semana ele cai
+ *    para 3,75 % NA BARRA DO TOPO".
+ *
+ * Diagnóstico: `avancoAtual` (L659) tinha condição `okSemana = sd >=
+ * semanaVisualizacao && sd <= semFim` — só devolvia o snapshot quando a
+ * janela visualizada COBRIA o StatusDate. Semana 3 (15-21/05) cobria
+ * sd=21/05 → snapshot 6,16 %. Semana 4 (22-28/05) caía no cálculo
+ * ponderado legado (média por pesoFinanceiro × avancosMapSemana) →
+ * 3,75 %. Realizado é grandeza EMPÍRICA e MONOTÔNICA — jamais pode
+ * regredir entre semanas consecutivas. O fix do card "REALIZADO (ACUM.)"
+ * (Rev. 2267) já tratava isso; faltava propagar pra barra do topo.
+ *
+ * Fix:
+ *   - `PlanejamentoDetalhe.tsx` L681-695 — `okSemana` agora é
+ *     `semFimVis >= sd` (cobre OU é posterior). Para semanas anteriores
+ *     ao snapshot, mantém o fallback ponderado (permite explorar avanços
+ *     históricos editados no ERP).
+ *
+ * Coerência:
+ *   - Realizado nunca cai entre semanas consecutivas (regra de monotonia).
+ *   - Mantém política Rev. 2267 do card "REALIZADO (ACUM.)" — mesma lógica.
+ *   - Previsto não é afetado: já varia normalmente via `pctRaizMSP` (Rev. 2268).
+ *
+ * R-001/R-007/R-010: N/A (100% client-side).
+ *
+ * Arquivos:
+ *   - client/src/pages/planejamento/PlanejamentoDetalhe.tsx (1 hunk)
+ *   - shared/version.ts → Rev. 2269
+ *   - shared/changelog.ts → entrada no topo
+ *   - replit.md → 2+5
+ *
  * Rev. 2268 — **FIX · Card "PREVISTO (SEMANA)" agora VARIA por semana, em
  * paridade absoluta com a barra "Avanço Físico" do topo. Chip "📸 Foto MSP"
  * passa a se referir APENAS ao Realizado.**
