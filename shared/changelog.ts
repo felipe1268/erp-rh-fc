@@ -1,6 +1,57 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2278 — **FIX · Curva S Financeira: KPI "Faturamento Realizado
+ * (Físico)" e linha verde do gráfico estavam usando `avancoRealAtual`
+ * (ponderação local 4,61 %) em vez de `realOficialRefis` (snapshot MSP
+ * raiz UID=0 = 6,86 %). Em VITRA isso fazia o card mostrar R$ 23.339
+ * e Desvio −R$ 511 numa obra que estava ADIANTADA +2,14 % físico.**
+ *
+ * Pedido user (23/05/2026, VITRA, screenshot Curva S Financeira):
+ *   "estaa certa a curva S financeira?".
+ *
+ * Diagnóstico:
+ *   Conta: 6,86 % × R$ 506.000 = R$ 34.711,60 esperado pra
+ *   "Faturamento Realizado". Tela mostrava R$ 23.339,87 = 4,613 %
+ *   × 506k. `avancoRealAtual` (useMemo ad-hoc, ponderação local
+ *   pelos `planejamento_avancos`) divergia do `realOficialRefis`
+ *   (que segue o snapshot MSP raiz UID=0, fonte canônica fixada
+ *   pela Convenção de Métricas no `replit.md`). Mesma família de
+ *   bug das Rev. 2272/2273/2274 — múltiplas fontes paralelas de
+ *   `% Realizado`. Cada vez que um novo painel calculava por conta
+ *   própria, criava-se uma "ilha" com número diferente.
+ *
+ * Fix (`PlanejamentoDetalhe.tsx`):
+ *   1. L14789 — `realAcumFin = totalContrato * realOficialRefis /
+ *      100` (antes `* avancoRealAtual / 100`). Afeta o KPI card,
+ *      o cálculo de `desvioFin` (texto vermelho/verde) e a
+ *      `ReferenceLine` horizontal do gráfico.
+ *   2. L13618-13654 — `curvaFinanceira` useMemo: após sortar as
+ *      semanas, sobrescreve o ÚLTIMO ponto da série `realizada`
+ *      com `realOficialRefis × totalContrato / 100`. Mantém a
+ *      forma da curva (mesma distribuição de R$ ao longo das
+ *      semanas calculada server-side) mas garante que o endpoint
+ *      bate com o REFIS. Se não houver ponto realizada existente
+ *      (caso raro), injeta no último ponto cuja semana ≤
+ *      `semanaFimRefis` (StatusDate). Mesma estratégia da Rev. 2274
+ *      pra Curva S Trabalho.
+ *   3. Comentários ligando ao princípio do replit.md ("Métricas de
+ *      avanço de obra — fonte ÚNICA é o MS Project") e às revisões
+ *      irmãs (2273/2274).
+ *
+ * Resultado VITRA: KPI passa a mostrar R$ 34.711,60, Desvio fica
+ * +R$ 10.859,75 (verde), linha verde do gráfico fecha em
+ * R$ 34,7k coerente com REFIS oficial.
+ *
+ * R-001/R-007/R-010: N/A (client-only, sem alteração de schema).
+ *
+ * Arquivos:
+ *   - client/src/pages/planejamento/PlanejamentoDetalhe.tsx
+ *     (L13618-13654 useMemo curvaFinanceira · L14789 realAcumFin)
+ *   - shared/version.ts → Rev. 2278
+ *   - shared/changelog.ts
+ *   - replit.md (2+5)
+ *
  * Rev. 2277 — **FEAT · Filtro "Apenas atrasadas" na seção "Avanço Físico
  * por Grupo": pill clicável no header com contador de atividades em
  * atraso (`previsto > realizado`). Ao ativar: macro BarChart mostra só

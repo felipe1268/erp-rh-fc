@@ -13612,7 +13612,13 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
     return itens.reduce((s: number, item: any) => s + n(item.vendaTotal), 0);
   }, [cruzamento]);
 
-  // Curva S financeira (R$) — idêntica ao merged, mas escalada pelo valor do contrato
+  // Curva S financeira (R$) — idêntica ao merged, mas escalada pelo valor do contrato.
+  // Rev. 2278 — Último ponto da série `realizada` é sobrescrito pela
+  // multiplicação `realOficialRefis × totalContrato / 100` (snapshot MSP
+  // raiz UID=0, fonte canônica de % Realizado). Sem isso, a linha verde
+  // do gráfico fechava em ~4,61 % × contrato = R$ 23.339 enquanto o REFIS
+  // mostrava 6,86 % = R$ 34.711 — divergência R$ 11k em obra adiantada.
+  // Mesma estratégia da Rev. 2274 (Curva S Trabalho).
   const curvaFinanceira = useMemo(() => {
     if (!curvaData || totalContrato === 0) return [];
     const map: Record<string, any> = {};
@@ -13625,8 +13631,24 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
     add(curvaData.curvaRealizada, "realizada");
     add(curvaData.curvaTendencia, "tendencia");
     const rows = (Object.values(map) as any[]).sort((a, b) => a.semana.localeCompare(b.semana));
+    // Override do último ponto realizada com snapshot MSP raiz (paridade absoluta com REFIS).
+    if (typeof realOficialRefis === "number" && realOficialRefis > 0) {
+      const alvo = +(realOficialRefis / 100 * totalContrato).toFixed(0);
+      // Procura o último ponto que JÁ tem realizada definido; se não houver,
+      // injeta no último ponto cuja semana <= StatusDate (semanaFimRefis).
+      let idxAlvo = -1;
+      for (let i = rows.length - 1; i >= 0; i--) {
+        if (rows[i].realizada != null) { idxAlvo = i; break; }
+      }
+      if (idxAlvo === -1 && semanaFimRefis) {
+        for (let i = rows.length - 1; i >= 0; i--) {
+          if (rows[i].semana && rows[i].semana <= semanaFimRefis) { idxAlvo = i; break; }
+        }
+      }
+      if (idxAlvo >= 0) rows[idxAlvo] = { ...rows[idxAlvo], realizada: alvo };
+    }
     return rows.map((p: any, i: number) => ({ ...p, label: `S${i + 1}` }));
-  }, [curvaData, totalContrato]);
+  }, [curvaData, totalContrato, realOficialRefis, semanaFimRefis]);
 
   const cfFinHasBaseline  = curvaFinanceira.some((p: any) => p.baseline  != null);
   const cfFinHasPlanejada = curvaFinanceira.some((p: any) => p.planejada != null);
@@ -14756,7 +14778,12 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
       {/* BLOCO 3B — Curva S Financeira */}
       {curvaFinanceira.length > 1 && !modoMascara && !hideFinancial && (() => {
         const prevAcumFin  = totalContrato * avancoPrevisto  / 100;
-        const realAcumFin  = totalContrato * avancoRealAtual / 100;
+        // Rev. 2278 — usa `realOficialRefis` (snapshot MSP raiz UID=0) e
+        // não `avancoRealAtual` (ponderação local). Sem essa troca, o KPI
+        // "Faturamento Realizado (Físico)" reportava ~R$ 23k (4,61 %)
+        // enquanto REFIS oficial era 6,86 % = R$ 34k. Mesma raiz da
+        // Rev. 2273 (REFIS) e Rev. 2274 (Curva S Trabalho).
+        const realAcumFin  = totalContrato * realOficialRefis / 100;
         const desvioFin    = realAcumFin - prevAcumFin;
         const desvioFatVsReal = cfHasFaturado ? faturadoAcumulado - realAcumFin : null;
         const maxFin       = Math.max(...(curvaFinanceiraFull as any[]).map((r: any) => r.baseline ?? 0), ...(curvaFinanceiraFull as any[]).map((r: any) => r.planejada ?? 0), ...(curvaFinanceiraFull as any[]).map((r: any) => r.realizada ?? 0), ...(curvaFinanceiraFull as any[]).map((r: any) => r.tendencia ?? 0), ...(curvaFinanceiraFull as any[]).map((r: any) => r.faturado ?? 0));
