@@ -15,7 +15,6 @@ import {
   equipamentosProprios,
   equipamentosLocados,
   equipamentoLocadoEventos,
-  solicitacoesEquipamento,
   faturaLocacaoConferencia,
   parametrosCapex,
 } from "../../drizzle/schema";
@@ -104,34 +103,6 @@ async function seedParametrosCapexIfNeeded(db: any, companyId: number): Promise<
       editavel: true,
     }))
   );
-}
-
-/**
- * Gera próximo número de Solicitação de Equipamento (SE) no formato SE-AAAA-NNNN.
- * Counter por company+ano via scan do MAX existente — simples e seguro para o
- * volume esperado (< 1k SEs/ano). Migrar para tabela de counters se virar gargalo.
- */
-async function nextNumeroSE(db: any, companyId: number): Promise<string> {
-  const ano = new Date().getFullYear();
-  const prefix = `SE-${ano}-`;
-  const rows = await db
-    .select({ numero: solicitacoesEquipamento.numero })
-    .from(solicitacoesEquipamento)
-    .where(
-      and(
-        eq(solicitacoesEquipamento.companyId, companyId),
-        sql`${solicitacoesEquipamento.numero} LIKE ${prefix + "%"}`
-      )
-    );
-  let maxSeq = 0;
-  for (const r of rows) {
-    const m = String(r.numero || "").match(/SE-\d{4}-(\d+)$/);
-    if (m) {
-      const n = parseInt(m[1], 10);
-      if (n > maxSeq) maxSeq = n;
-    }
-  }
-  return `${prefix}${String(maxSeq + 1).padStart(4, "0")}`;
 }
 
 // ----------------------------------------------------------------------------
@@ -610,152 +581,6 @@ export const equipamentosRouter = router({
           eq(equipamentoLocadoEventos.equipamentoLocadoId, input.equipamentoLocadoId),
         ))
         .orderBy(desc(equipamentoLocadoEventos.dataEvento));
-    }),
-
-  // ── SOLICITAÇÕES DE EQUIPAMENTO ───────────────────────────────────────────
-
-  solicitacoesListar: protectedProcedure
-    .input(companyInput.extend({
-      status: z.enum(["pendente", "analisada", "aprovada", "rejeitada", "concluida", "cancelada"]).optional(),
-      obraId: z.number().optional(),
-    }))
-    .query(async ({ input }) => {
-      const db = await getDb();
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      const conds: any[] = [companyFilter(solicitacoesEquipamento.companyId, input)];
-      if (input.status) conds.push(eq(solicitacoesEquipamento.status, input.status));
-      if (input.obraId) conds.push(eq(solicitacoesEquipamento.obraId, input.obraId));
-      return await db.select().from(solicitacoesEquipamento).where(and(...conds))
-        .orderBy(desc(solicitacoesEquipamento.id));
-    }),
-
-  solicitacaoById: protectedProcedure
-    .input(z.object({ companyId: z.number(), id: z.number() }))
-    .query(async ({ input }) => {
-      const db = await getDb();
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      const [row] = await db.select().from(solicitacoesEquipamento)
-        .where(and(eq(solicitacoesEquipamento.id, input.id), eq(solicitacoesEquipamento.companyId, input.companyId)))
-        .limit(1);
-      if (!row) throw new TRPCError({ code: "NOT_FOUND" });
-      return row;
-    }),
-
-  solicitacaoCriar: protectedProcedure
-    .input(z.object({
-      companyId: z.number(),
-      obraId: z.number().optional(),
-      obraNome: z.string().max(255).optional(),
-      descricaoEquipamento: z.string().min(1).max(255),
-      categoria: z.string().max(100).optional(),
-      quantidade: z.number().int().min(1).default(1),
-      dataInicioUso: z.string().min(10).max(10),
-      dataFimUso: z.string().min(10).max(10),
-      duracaoMeses: z.number().optional(),
-      analiseCapex: z.any().optional(),
-      recomendacaoErp: z.enum(["USAR_PROPRIO", "LOCAR", "COMPRAR"]).optional(),
-      vinculoEquipProprios: z.any().optional(),
-    }))
-    .mutation(async ({ input, ctx }) => {
-      const db = await getDb();
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      const numero = await nextNumeroSE(db, input.companyId);
-      const [created] = await db.insert(solicitacoesEquipamento).values({
-        companyId: input.companyId,
-        numero,
-        obraId: input.obraId ?? null,
-        obraNome: input.obraNome ?? null,
-        solicitanteId: ctx.user.id,
-        solicitanteNome: ctx.user.name || String(ctx.user.id),
-        descricaoEquipamento: input.descricaoEquipamento,
-        categoria: input.categoria ?? null,
-        quantidade: input.quantidade,
-        dataInicioUso: input.dataInicioUso,
-        dataFimUso: input.dataFimUso,
-        duracaoMeses: input.duracaoMeses != null ? String(input.duracaoMeses) : null,
-        analiseCapexJson: input.analiseCapex ?? null,
-        recomendacaoErp: input.recomendacaoErp ?? null,
-        vinculoEquipProprios: input.vinculoEquipProprios ?? null,
-        status: "pendente",
-      }).returning({ id: solicitacoesEquipamento.id, numero: solicitacoesEquipamento.numero });
-      return { id: created.id, numero: created.numero };
-    }),
-
-  solicitacaoDecidir: protectedProcedure
-    .input(z.object({
-      companyId: z.number(),
-      id: z.number(),
-      decisaoFinal: z.enum(["USAR_PROPRIO", "LOCAR", "COMPRAR"]),
-      decisaoJustificativa: z.string().optional(),
-    }))
-    .mutation(async ({ input, ctx }) => {
-      const db = await getDb();
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      const [se] = await db.select().from(solicitacoesEquipamento)
-        .where(and(eq(solicitacoesEquipamento.id, input.id), eq(solicitacoesEquipamento.companyId, input.companyId)))
-        .limit(1);
-      if (!se) throw new TRPCError({ code: "NOT_FOUND" });
-
-      const isOverride = !!se.recomendacaoErp && se.recomendacaoErp !== input.decisaoFinal;
-
-      // Se override, checa alçada
-      let precisaAprovacao = false;
-      if (isOverride) {
-        const capex: any = se.analiseCapexJson || {};
-        const valorEstimado = Number(capex.valorEstimado ?? capex.tco ?? 0);
-        const [alcadaRow] = await db.select().from(parametrosCapex)
-          .where(and(
-            eq(parametrosCapex.companyId, input.companyId),
-            eq(parametrosCapex.chave, "limite_alcada_capex"),
-          )).limit(1);
-        const alcada = Number(alcadaRow?.valorNumerico ?? 5000);
-        precisaAprovacao = valorEstimado > alcada;
-      }
-
-      const update: any = {
-        decisaoFinal: input.decisaoFinal,
-        decisaoJustificativa: input.decisaoJustificativa ?? null,
-        decisaoOverride: isOverride,
-        status: precisaAprovacao ? "analisada" : "aprovada",
-        updatedAt: sql`now()`,
-      };
-      if (isOverride && !precisaAprovacao) {
-        // Auto-aprova quando override está dentro da alçada
-        update.decisaoOverrideAprovadorId = ctx.user.id;
-        update.decisaoOverrideAprovadorNome = ctx.user.name || String(ctx.user.id);
-        update.decisaoOverrideAprovadoEm = sql`now()`;
-      }
-      await db.update(solicitacoesEquipamento).set(update)
-        .where(and(
-          eq(solicitacoesEquipamento.id, input.id),
-          eq(solicitacoesEquipamento.companyId, input.companyId),
-        ));
-      return {
-        id: input.id,
-        status: update.status,
-        decisaoOverride: isOverride,
-        precisaAprovacao,
-      };
-    }),
-
-  solicitacaoAprovarOverride: protectedProcedure
-    .input(z.object({ companyId: z.number(), id: z.number() }))
-    .mutation(async ({ input, ctx }) => {
-      const db = await getDb();
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      const r = await db.update(solicitacoesEquipamento).set({
-        status: "aprovada",
-        decisaoOverrideAprovadorId: ctx.user.id,
-        decisaoOverrideAprovadorNome: ctx.user.name || String(ctx.user.id),
-        decisaoOverrideAprovadoEm: sql`now()`,
-        updatedAt: sql`now()`,
-      }).where(and(
-        eq(solicitacoesEquipamento.id, input.id),
-        eq(solicitacoesEquipamento.companyId, input.companyId),
-        eq(solicitacoesEquipamento.status, "analisada"),
-      )).returning({ id: solicitacoesEquipamento.id });
-      if (r.length === 0) throw new TRPCError({ code: "NOT_FOUND", message: "SE não está aguardando aprovação." });
-      return { id: r[0].id };
     }),
 
   // ── FATURA DE LOCAÇÃO (skeleton; OCR vem na Fase 3) ───────────────────────

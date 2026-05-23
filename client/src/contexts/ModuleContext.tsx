@@ -101,8 +101,6 @@ const ROUTE_MODULE_MAP: Record<string, ModuleId> = {
   "/equipamentos/proprios":         "almoxarifado" as ModuleId,
   "/equipamentos/locados":          "almoxarifado" as ModuleId,
   "/equipamentos/parametros-capex": "almoxarifado" as ModuleId,
-  // Rev. 2259 — SE é fluxo de COMPRAS (não almox).
-  "/equipamentos/solicitacoes":     "compras" as ModuleId,
   "/compras/solicitacoes":     "compras" as ModuleId,
   "/compras/cotacoes":         "compras" as ModuleId,
   "/compras/ordens":           "compras" as ModuleId,

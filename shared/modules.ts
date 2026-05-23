@@ -465,8 +465,6 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
       { key: "compras-painel",         label: "Painel",              route: "/compras/painel",         icon: "LayoutDashboard" },
       { key: "compras-fornecedores",   label: "Empresas Terceiras",  route: "/compras/fornecedores",   icon: "Truck" },
       { key: "compras-solicitacoes",   label: "Solicitações (SC)",   route: "/compras/solicitacoes",   icon: "ClipboardList" },
-      // Rev. 2259 — SE (locação) é fluxo de compras, não almox.
-      { key: "compras-se-locacao",     label: "Solicitações de Locação (SE)", route: "/equipamentos/solicitacoes", icon: "Truck" },
       { key: "compras-cotacoes",       label: "Cotações",            route: "/compras/cotacoes",       icon: "FileSearch" },
       { key: "compras-ordens",         label: "Ordens de Compra",    route: "/compras/ordens",         icon: "ShoppingBag" },
       { key: "compras-aprovacoes",     label: "Aprovações",          route: "/compras/aprovacoes",     icon: "CheckCircle" },

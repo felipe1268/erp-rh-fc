@@ -8679,43 +8679,13 @@ export const equipamentoLocadoEventos = pgTable("equipamento_locado_eventos", {
   index("idx_equip_evt_company").on(table.companyId),
 ]);
 
-// 4) Solicitações de Equipamento (porta de entrada do fluxo, com análise CAPEX)
-export const solicitacoesEquipamento = pgTable("solicitacoes_equipamento", {
-  id:                            serial().primaryKey(),
-  companyId:                     integer("company_id").notNull(),
-  numero:                        varchar({ length: 20 }).notNull(),
-  obraId:                        integer("obra_id"),
-  obraNome:                      varchar("obra_nome", { length: 255 }),
-  solicitanteId:                 integer("solicitante_id"),
-  solicitanteNome:               varchar("solicitante_nome", { length: 255 }),
-  descricaoEquipamento:          varchar("descricao_equipamento", { length: 255 }).notNull(),
-  categoria:                     varchar({ length: 100 }),
-  quantidade:                    integer().notNull().default(1),
-  dataInicioUso:                 varchar("data_inicio_uso", { length: 10 }).notNull(),
-  dataFimUso:                    varchar("data_fim_uso", { length: 10 }).notNull(),
-  duracaoMeses:                  numeric("duracao_meses", { precision: 6, scale: 2 }),
-  // Snapshot da análise CAPEX (VPL, Payback, CEA, TCO, etc)
-  analiseCapexJson:              jsonb("analise_capex_json"),
-  // Recomendação calculada pelo ERP: USAR_PROPRIO | LOCAR | COMPRAR
-  recomendacaoErp:               varchar("recomendacao_erp", { length: 20 }),
-  // Decisão do usuário (pode ser diferente da recomendação → override)
-  decisaoFinal:                  varchar("decisao_final", { length: 20 }),
-  decisaoJustificativa:          text("decisao_justificativa"),
-  decisaoOverride:               boolean("decisao_override").default(false),
-  decisaoOverrideAprovadorId:    integer("decisao_override_aprovador_id"),
-  decisaoOverrideAprovadorNome:  varchar("decisao_override_aprovador_nome", { length: 255 }),
-  decisaoOverrideAprovadoEm:     timestamp("decisao_override_aprovado_em", { mode: "string" }),
-  vinculoEquipProprios:          jsonb("vinculo_equip_proprios_json"),
-  ordemCompraId:                 integer("ordem_compra_id"),
-  // Status: pendente | analisada | aprovada | rejeitada | concluida | cancelada
-  status:                        varchar({ length: 30 }).notNull().default("pendente"),
-  createdAt:                     timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
-  updatedAt:                     timestamp("updated_at", { mode: "string" }).defaultNow().notNull(),
-}, (table) => [
-  uniqueIndex("uq_se_company_numero").on(table.companyId, table.numero),
-  index("idx_se_company_status").on(table.companyId, table.status),
-  index("idx_se_obra").on(table.obraId),
-]);
+// 4) [REMOVIDO Rev. 2279] solicitacoes_equipamento — fluxo SE consolidado dentro
+//    de compras_solicitacoes (tipo="equipamento"). Tabela nunca foi migrada para
+//    o banco (verificado em prod via information_schema). Pedido user (VITRA):
+//    "nao quero uma aba separada para locação de equipamentos, quero isso dentro
+//    da solicitação de compras". Removida do schema + router + sidebar + páginas.
+//    R-001/R-007/R-010: como a tabela nunca existiu fisicamente, nenhum DROP foi
+//    executado — apenas remoção da declaração Drizzle.
 
 // 5) Conferência de Fatura de Locação (cruza fatura do fornecedor × dias reais)
 export const faturaLocacaoConferencia = pgTable("fatura_locacao_conferencia", {

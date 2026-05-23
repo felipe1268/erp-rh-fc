@@ -3,7 +3,7 @@ import { Link } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
 import {
-  HardHat, Package, Truck, FileText, Settings, AlertTriangle, ChevronRight,
+  HardHat, Package, Truck, Settings, AlertTriangle, ChevronRight,
 } from "lucide-react";
 import { fmtDate, fmtMoney } from "./_shared";
 
@@ -17,7 +17,6 @@ export default function EquipamentosHub() {
     { companyId, vencendoEmDias: 30 },
     { enabled: !!companyId }
   );
-  const ses = trpc.equipamentos.solicitacoesListar.useQuery({ companyId }, { enabled: !!companyId });
 
   const cards = [
     {
@@ -35,14 +34,6 @@ export default function EquipamentosHub() {
       count: (locados.data || []).filter((l: any) => l.status === "em_uso").length,
       sub: `${(locados.data || []).filter((l: any) => l.status === "devolvido").length} devolvidos`,
       to: "/equipamentos/locados",
-    },
-    {
-      label: "Solicitações de Locação (SE)",
-      icon: FileText,
-      color: "from-purple-500 to-purple-700",
-      count: ses.data?.length ?? 0,
-      sub: `${(ses.data || []).filter((s: any) => s.status === "pendente").length} pendentes · gerido em Compras`,
-      to: "/equipamentos/solicitacoes",
     },
     {
       label: "Parâmetros CAPEX",
@@ -66,7 +57,7 @@ export default function EquipamentosHub() {
           </p>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           {cards.map((c) => (
             <Link key={c.to} href={c.to}>
               <a className="block bg-white border rounded-lg shadow-sm hover:shadow-md transition cursor-pointer">

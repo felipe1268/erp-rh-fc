@@ -1,6 +1,98 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2279 — **CHORE · Solicitação de Equipamento (SE) DELETADA do ERP.
+ * Página `/equipamentos/solicitacoes`, item de sidebar "Solicitações de
+ * Locação (SE)", router subset (`solicitacoesListar` / `solicitacaoById` /
+ * `solicitacaoCriar` / `solicitacaoDecidir` / `solicitacaoAprovarOverride`
+ * + helper `nextNumeroSE`), schema Drizzle `solicitacoesEquipamento`,
+ * entradas em `shared/modules.ts` (`compras-se-locacao`) e
+ * `shared/modulePages.ts` (`se_locacao`), mapeamento em
+ * `ModuleContext.tsx` e card no hub `equipamentos/index.tsx` — TODOS
+ * removidos. Etapa 1 da consolidação SE→SC (Etapa 2 = ampliar SC tipo
+ * "equipamento" com seletor de equipamentos do BDI + vínculo SC-item →
+ * atividades MSP, fica como follow-up Rev. 2280).**
+ *
+ * Pedido user (23/05/2026): "nao quero uma aba separada para locação de
+ * equipamentos, quero isso dentro da solicitação de compras". Confirmado
+ * via user_query: (a) deletar página + router + schema (sem DROP no DB);
+ * (b) link SC↔atividades por item (cada equipamento → N atividades MSP);
+ * (c) incluir equipamentos do BDI no seletor da SC.
+ *
+ * Diagnóstico pré-execução (R-001/R-007/R-010):
+ *   Query `information_schema.tables WHERE table_name='solicitacoes_equipamento'`
+ *   = 0 linhas. A tabela NUNCA foi migrada pro banco em prod (a infra do ERP
+ *   usa SyncSchema+ apenas pras tabelas declaradas com ALTER explícito, e a
+ *   `solicitacoesEquipamento` não tinha entrada). Logo, remover o `export`
+ *   do Drizzle NÃO dispara nenhum DROP — apenas tira a declaração TS.
+ *   Zero registros, zero risco de perda de dado.
+ *
+ * Arquivos tocados:
+ *   - `client/src/App.tsx` — removidos lazy import `SolicitacoesEquipamento`
+ *     e Route `/equipamentos/solicitacoes`.
+ *   - `client/src/components/DashboardLayout.tsx` — removido item de menu
+ *     "Solicitações de Locação (SE)" do grupo "Fluxo de Compras".
+ *   - `client/src/contexts/ModuleContext.tsx` — removido mapeamento
+ *     `/equipamentos/solicitacoes` → `compras`.
+ *   - `client/src/pages/equipamentos/index.tsx` — removido card "SE" do
+ *     hub + query `ses` + import `FileText` (não-usado). Grid passa de
+ *     4 colunas pra 3 (`sm:grid-cols-3`).
+ *   - `client/src/pages/equipamentos/Solicitacoes.tsx` — ARQUIVO DELETADO
+ *     (262 linhas — página de criação/análise CAPEX inline da SE).
+ *   - `shared/modules.ts` — removida feature `compras-se-locacao`.
+ *   - `shared/modulePages.ts` — removido mapeamento `se_locacao`.
+ *   - `server/routers/equipamentos.ts` — removido import
+ *     `solicitacoesEquipamento`, função helper `nextNumeroSE` (SE-AAAA-NNNN
+ *     counter por scan), e 5 procedures (solicitacoesListar / By /
+ *     Criar / Decidir / AprovarOverride). Mantidos
+ *     `equipamentosProprios`, `equipamentosLocados`,
+ *     `equipamentoLocadoEventos`, `faturaLocacaoConferencia`,
+ *     `parametrosCapex` — o resto do módulo Equipamentos continua intacto.
+ *   - `drizzle/schema.ts` — bloco `solicitacoesEquipamento` (export
+ *     `pgTable("solicitacoes_equipamento")` + 3 índices) substituído por
+ *     comentário-marca explicando a remoção e a razão (R-001/R-007/R-010
+ *     OK: tabela nunca existiu).
+ *
+ * Racional UX:
+ *   Antes da 2279, equipamentos tinham um fluxo paralelo (SE com análise
+ *   CAPEX VPL/Payback/CEA) totalmente desconectado da SC tradicional. Pra
+ *   o engenheiro de obra isso significava 2 telas, 2 numerações, 2
+ *   permissões, 2 dashboards — sem ganho real, já que a decisão
+ *   COMPRAR/LOCAR/USAR-PRÓPRIO acaba virando uma OC normal. A consolidação
+ *   na SC permite: (a) 1 só fluxo de aprovação, (b) reaproveitar cotações
+ *   e fornecedores existentes, (c) vincular o equipamento solicitado às
+ *   atividades MSP que o consomem (fica disponível pro Painel de Compras
+ *   por obra e pra Curva S de equipamentos no Refis).
+ *
+ * Etapa 2 (próxima Rev. 2280 — follow-up):
+ *   No modal de criação de SC tipo "equipamento" (em
+ *   `client/src/pages/compras/Solicitacoes.tsx`, ~5500 linhas), adicionar:
+ *   (i) novo card-fonte "BDI — Equipamentos da Indireta" puxando rows de
+ *   `bdi_indiretos` da obra filtrados por modalidade EQUIPAMENTO; novo
+ *   endpoint `compras.getEquipamentosBdiParaObra(obraId)`; (ii) por item
+ *   adicionado, multi-select de atividades do cronograma MSP (usa
+ *   `planejamento.listarAtividades` da revisão ativa via obraId); nova
+ *   coluna `atividades_ids_json` em `compras_solicitacoes_itens` via
+ *   SyncSchema+ (`ALTER TABLE … ADD COLUMN IF NOT EXISTS … jsonb`); (iii)
+ *   mutation `comprasSolicitacoesCriar` aceita `atividadesIds` por item.
+ *
+ * Validação:
+ *   - Workflow reiniciou clean (tsx watch sem erros).
+ *   - `rg solicitacoesEquipamento|/equipamentos/solicitacoes|se_locacao`
+ *     no client/server retorna 0 hits (só refs históricas em
+ *     `shared/changelog.ts` / `replit-history.md` — esperado).
+ *   - Build TS deve passar — `inArray` ainda é usado em
+ *     `equipamentos.ts` (em propriosListar/locadosListar), `desc`/`sql`
+ *     também — nenhum import órfão.
+ *
+ * R-001/R-007/R-010: **JAMAIS rodar `DROP TABLE solicitacoes_equipamento`
+ *   em prod.** Como a tabela nunca existiu no banco, isso é academic, mas
+ *   pela política, fica registrado: a remoção é PURAMENTE TypeScript-side.
+ *   Se algum dia alguém criar a tabela manualmente e quiser dropá-la, isso
+ *   precisa de migration explícita aprovada pelo user.
+ */
+
+/**
  * Rev. 2278 — **FIX · Curva S Financeira: KPI "Faturamento Realizado
  * (Físico)" e linha verde do gráfico estavam usando `avancoRealAtual`
  * (ponderação local 4,61 %) em vez de `realOficialRefis` (snapshot MSP
