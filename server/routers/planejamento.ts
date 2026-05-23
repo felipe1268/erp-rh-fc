@@ -54,6 +54,42 @@ function toMondayStr(d: Date): string {
   return m.toISOString().split("T")[0];
 }
 
+// Rev. 2270 — Helper: zera os campos de snapshot MSP (`previstoMspSnapshot`,
+// `realizadoMspSnapshot`, `statusDateSnapshot`, `envelopeStartSnapshot`,
+// `envelopeFinishSnapshot`) do `calendarioJson` + `dataCorteAtual` +
+// `dataCorteIso`. Calendário (jornadas/feriados) é PRESERVADO. Usado pelos
+// dois "Limpar Avanços" para garantir que os cards visíveis (REALIZADO ACUM.
+// e barra Avanço Físico do topo) também zerem — antes só a tabela `avancos`
+// era apagada, mas a Regra de Ouro (Rev. 2264/2265) faz os cards lerem do
+// snapshot MSP, então sem este reset o card continuava mostrando o valor
+// do último XML mesmo após o user clicar "Todas as semanas".
+async function limparSnapshotMspDoProjeto(db: any, projetoId: number) {
+  const [proj] = await db.select({ calendarioJson: planejamentoProjetos.calendarioJson })
+    .from(planejamentoProjetos)
+    .where(eq(planejamentoProjetos.id, projetoId));
+  if (!proj) return;
+  let calLimpo: string | null = null;
+  if (proj.calendarioJson) {
+    try {
+      const cal = JSON.parse(proj.calendarioJson as any);
+      delete cal.previstoMspSnapshot;
+      delete cal.realizadoMspSnapshot;
+      delete cal.statusDateSnapshot;
+      delete cal.envelopeStartSnapshot;
+      delete cal.envelopeFinishSnapshot;
+      calLimpo = JSON.stringify(cal);
+    } catch {
+      calLimpo = proj.calendarioJson as any;
+    }
+  }
+  await db.update(planejamentoProjetos).set({
+    calendarioJson: calLimpo as any,
+    dataCorteAtual: null as any,
+    dataCorteIso: null as any,
+    atualizadoEm: new Date(),
+  }).where(eq(planejamentoProjetos.id, projetoId));
+}
+
 export const planejamentoRouter = router({
 
   // ── Projetos ──────────────────────────────────────────────────────────────
@@ -2463,6 +2499,7 @@ export const planejamentoRouter = router({
       const db = await getDb();
       await db.delete(planejamentoAvancos)
         .where(eq(planejamentoAvancos.projetoId, input.projetoId));
+      await limparSnapshotMspDoProjeto(db, input.projetoId);
       return { success: true };
     }),
 
@@ -2475,6 +2512,7 @@ export const planejamentoRouter = router({
           eq(planejamentoAvancos.projetoId, input.projetoId),
           eq(planejamentoAvancos.semana, input.semana),
         ));
+      await limparSnapshotMspDoProjeto(db, input.projetoId);
       return { success: true };
     }),
 

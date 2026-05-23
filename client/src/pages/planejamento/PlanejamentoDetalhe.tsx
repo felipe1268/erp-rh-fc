@@ -7435,9 +7435,12 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
     onSuccess: () => {
       utils.planejamento.listarAvancos.invalidate();
       utils.planejamento.listarSemanasComAvanco.invalidate();
+      // Rev. 2270 — server também zerou snapshot MSP; invalida getProjetoById
+      // pra cards "REALIZADO ACUM." e barra topo re-renderizarem zerados.
+      utils.planejamento.getProjetoById.invalidate({ id: projetoId });
       setAvancoLocal({});
       setConfirmLimpar(false);
-      toast.success("Avanços limpos.");
+      toast.success("Avanços limpos (inclui snapshot MSP).");
     },
     onError: (e) => toast.error(`Erro ao limpar avanços: ${e.message}`),
   });
@@ -7446,9 +7449,10 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
     onSuccess: () => {
       utils.planejamento.listarAvancos.invalidate();
       utils.planejamento.listarSemanasComAvanco.invalidate();
+      utils.planejamento.getProjetoById.invalidate({ id: projetoId });
       setAvancoLocal({});
       setConfirmLimpar(false);
-      toast.success("Avanços da semana limpos.");
+      toast.success("Avanços da semana limpos (inclui snapshot MSP).");
     },
     onError: (e) => toast.error(`Erro ao limpar avanços da semana: ${e.message}`),
   });

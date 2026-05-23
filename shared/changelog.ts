@@ -1,6 +1,59 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2270 — **FIX · Botões "Limpar Avanços" (só semana / todas as semanas)
+ * agora TAMBÉM zeram o snapshot MSP do `calendarioJson` — cards "REALIZADO
+ * (ACUM.)" e barra "Avanço Físico" do topo finalmente refletem a limpeza.**
+ *
+ * Pedido user (23/05/2026, VITRA):
+ *   "estou limpando os semans mas não estão apagando pq"
+ *
+ * Diagnóstico:
+ *   - Mutations `limparAvancos` / `limparAvancosSemana` apagavam só a
+ *     tabela `planejamento_avancos` (linhas-detalhe).
+ *   - Desde a Regra de Ouro (Rev. 2264/2265), os cards grandes e a barra
+ *     superior LEEM do snapshot MSP (`realizadoMspSnapshot` no
+ *     `calendarioJson`), não da tabela. Resultado: usuário limpava e os
+ *     cards permaneciam em 8,48 % (último valor do XML importado),
+ *     mesmo com a linha detalhe mostrando "Realizado(Acum.) 0,00 %".
+ *   - User pediu (via user_query 23/05): ambos os botões devem limpar
+ *     tudo — avancos + snapshot.
+ *
+ * Fix server (`server/routers/planejamento.ts`):
+ *   - Helper top-level `limparSnapshotMspDoProjeto(db, projetoId)`:
+ *     parseia `calendarioJson`, REMOVE chaves `previstoMspSnapshot`,
+ *     `realizadoMspSnapshot`, `statusDateSnapshot`,
+ *     `envelopeStartSnapshot`, `envelopeFinishSnapshot`; preserva
+ *     calendário (jornadas, feriados); zera `dataCorteAtual` e
+ *     `dataCorteIso`. Tolera JSON malformado (não destrói o
+ *     `calendarioJson` se parse falhar).
+ *   - `limparAvancos` e `limparAvancosSemana` chamam o helper após o
+ *     DELETE da tabela `avancos`.
+ *
+ * Fix client (`PlanejamentoDetalhe.tsx`):
+ *   - Ambas as mutations invalidam `getProjetoById` no onSuccess →
+ *     cards re-renderizam imediatamente.
+ *   - Toast atualizado: "Avanços limpos (inclui snapshot MSP)".
+ *
+ * Comportamento esperado pós-limpeza:
+ *   - Card REALIZADO (ACUM.): "—" (snapshot ausente, conforme política
+ *     Rev. 2267 do `mspReadOnly`).
+ *   - Barra "Avanço Físico" do topo: cai no fallback ponderado e mostra
+ *     0,00 % (tabela `avancos` vazia).
+ *   - Card PREVISTO (SEMANA): continua variando via `pctRaizMSP` (Rev. 2268)
+ *     porque `pctRaizMSP` usa só `projIni/projFim/calendarioJson.jornadas`
+ *     que ficaram intactos — útil pra continuar enxergando a meta exigível.
+ *
+ * R-001/R-007/R-010: É um UPDATE (não DELETE) sobre registro existente
+ * em `planejamento_projetos`. Tabelas e schema preservados.
+ *
+ * Arquivos:
+ *   - server/routers/planejamento.ts (helper + 2 mutations)
+ *   - client/src/pages/planejamento/PlanejamentoDetalhe.tsx (2 onSuccess)
+ *   - shared/version.ts → Rev. 2270
+ *   - shared/changelog.ts → entrada no topo
+ *   - replit.md → 2+5
+ *
  * Rev. 2269 — **FIX · Barra "Avanço Físico" do topo: Realizado deixa de
  * regredir em semanas posteriores ao StatusDate (semana 3 = 6,16 %, semana
  * 4 caía pra 3,75 %). Agora mantém o snapshot MSP em qualquer semana ≥ sd.**
