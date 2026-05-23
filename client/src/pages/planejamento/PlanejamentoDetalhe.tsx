@@ -6753,6 +6753,24 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
     const cutoffStr = dataCorteInfo?.dataCorteOficial ?? null;
     const naSemanaCorrente = !!cutoffStr && cutoffStr >= semanaAtual && cutoffStr < semanaFim;
     const ref = naSemanaCorrente ? cutoffStr! : semanaFim;
+    // Rev. 2264 — REGRA DE OURO (User preferences): quando a semana visualizada
+    // cobre o StatusDate gravado no XML do MSP e o envelope continua intacto,
+    // ESPELHAMOS o snapshot " % PREVISTO" (Texto6/Texto10/Texto11) da raiz
+    // UID=0 — ZERO cálculo no ERP. Garante paridade absoluta com o card
+    // "Avanço Físico" do topo (Rev. 2262) e com o que o engenheiro vê no MSP.
+    // Sem essa guarda, pctRaizMSP calculava 4,71 % por dia útil enquanto o
+    // topo mostrava 4 % (Texto6 inteiro do MSP) — divergência reportada no
+    // VITRA 3ª Semana 21/05/2026.
+    if (
+      calMSP?.previstoMspSnapshot != null
+      && calMSP?.statusDateSnapshot
+      && projIniIso && projFimIso
+      && (!calMSP.envelopeStartSnapshot  || calMSP.envelopeStartSnapshot  === projIniIso)
+      && (!calMSP.envelopeFinishSnapshot || calMSP.envelopeFinishSnapshot === projFimIso)
+      && semanaFim === calMSP.statusDateSnapshot
+    ) {
+      return Math.min(100, Math.max(0, Number(calMSP.previstoMspSnapshot)));
+    }
     // Rev. 1825 — Texto6 raiz (paridade MSP) c/ fallback ponderado.
     if (projIniIso && projFimIso && calMSP) return pctRaizMSP(ref, projIniIso, projFimIso, calMSP);
     return pvPonderadoPorAtividade(ref, folhas, usarPesoPorDuracao, calMSP);
@@ -6762,6 +6780,27 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
   // Prioriza avancoLocal > avancoExistente (semana exata) > avancoMaisRecente (semana mais recente ≤ atual)
   // Quando usarPesoPorDuracao=true pondera por duracaoDias (igual à barra superior e ao MS Project)
   const realizadoAcum = useMemo(() => {
+    // Rev. 2264 — REGRA DE OURO (User preferences): quando a semana visualizada
+    // cobre o StatusDate do XML, envelope intacto e usuário NÃO editou avanços
+    // localmente nesta sessão, ESPELHAMOS o snapshot AD/(AD+RD) da raiz UID=0
+    // direto. `folhas` aqui já exclui indiretas por construção (filtro acima),
+    // então não precisa do `!temIndiretas` adicional do `realizadoComInd`.
+    // Resolve o sintoma reportado (VITRA 3ª Sem: card mostrava 3,75 % com
+    // ponderação financeira em vez de 6,16 % AD/(AD+RD) do MSP).
+    const _calMSPR = parseCalendarioJson((proj as any)?.calendarioJson);
+    const _projIniR = (proj as any)?.dataInicio as string | null | undefined;
+    const _projFimR = (proj as any)?.dataTerminoContratual as string | null | undefined;
+    const _envOkR = !_calMSPR?.envelopeStartSnapshot || !_calMSPR?.envelopeFinishSnapshot
+      || (_projIniR === _calMSPR.envelopeStartSnapshot && _projFimR === _calMSPR.envelopeFinishSnapshot);
+    if (
+      _calMSPR?.realizadoMspSnapshot != null
+      && _calMSPR?.statusDateSnapshot
+      && semanaFim === _calMSPR.statusDateSnapshot
+      && _envOkR
+      && Object.keys(avancoLocal).length === 0
+    ) {
+      return Number(_calMSPR.realizadoMspSnapshot);
+    }
     const pesoBruto = usarPesoPorDuracao
       ? folhas.reduce((s: number, a: any) => s + (a.duracaoDias ?? 0), 0)
       : folhas.reduce((s: number, a: any) => s + n(a.pesoFinanceiro), 0);
@@ -6779,7 +6818,7 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
     // casa, ex.: 1.385 → 1.4 → display "1.40"). Causa divergência com a
     // barra superior "Avanço Físico" que usa precisão cheia (1.38).
     return soma;
-  }, [folhas, avancoExistente, avancoMaisRecente, avancoLocal, usarPesoPorDuracao]);
+  }, [folhas, avancoExistente, avancoMaisRecente, avancoLocal, usarPesoPorDuracao, proj, semanaFim]);
 
   const delta = +(realizadoAcum - previsto).toFixed(2);
 
@@ -6791,6 +6830,20 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
     const cutoffStr = dataCorteInfo?.dataCorteOficial ?? null;
     const naSemanaCorrente = !!cutoffStr && cutoffStr >= semanaAtual && cutoffStr < semanaFim;
     const ref = naSemanaCorrente ? cutoffStr! : semanaFim;
+    // Rev. 2264 — REGRA DE OURO (mesma guarda de `previsto`): semana que
+    // cobre o StatusDate do XML usa snapshot direto da raiz. Vale igual aqui
+    // porque o snapshot Texto6 do MSP (raiz UID=0) já é projeto-inteiro e
+    // não distingue indireta de direta (indiretas não existem no XML).
+    if (
+      calMSP?.previstoMspSnapshot != null
+      && calMSP?.statusDateSnapshot
+      && projIniIso && projFimIso
+      && (!calMSP.envelopeStartSnapshot  || calMSP.envelopeStartSnapshot  === projIniIso)
+      && (!calMSP.envelopeFinishSnapshot || calMSP.envelopeFinishSnapshot === projFimIso)
+      && semanaFim === calMSP.statusDateSnapshot
+    ) {
+      return Math.min(100, Math.max(0, Number(calMSP.previstoMspSnapshot)));
+    }
     // Rev. 1825 — Texto6 raiz (paridade MSP). Fórmula da raiz NÃO depende de
     // folhasComInd — só do envelope do projeto. Fallback ponderado mantido.
     if (projIniIso && projFimIso && calMSP) return pctRaizMSP(ref, projIniIso, projFimIso, calMSP);

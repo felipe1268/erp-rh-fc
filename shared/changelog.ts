@@ -1,6 +1,77 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2264 — **FIX/REGRA DE OURO · Cards "PREVISTO (SEMANA)",
+ * "REALIZADO (ACUM.)" e "AVANÇO GLOBAL (C/ INDIRETAS) - PREVISTO"
+ * (aba Avanço Semanal) espelham snapshot MSP da raiz UID=0 quando
+ * a semana visualizada cobre o StatusDate — ZERO cálculo no ERP.**
+ *
+ * Pedido user (23/05/2026): "estender a regra de ouro pra TODOS
+ * os cards — todos passam a mostrar igual ao MSP". Sintoma reportado
+ * (screenshot VITRA 3ª Semana 15/05 → 21/05, StatusDate 21/05):
+ *  - Topo "Avanço Físico" (Rev. 2262): Previsto **4 %** / Realizado
+ *    0 % (snapshot ausente do realizado pré-Rev. 1675, mas Previsto
+ *    OK).
+ *  - Card "PREVISTO (SEMANA)": **4,71 %** (calculado por dias úteis).
+ *  - Card "REALIZADO (ACUM.)": **3,75 %** (ponderação financeira).
+ *  - Card "AVANÇO GLOBAL Diretas/Previsto": **4,71 %** (mesmo cálc.).
+ *
+ * Divergência entre 4 % (snapshot Texto6 raiz) e 4,71 % (pctRaizMSP
+ * calculado) porque o MSP grava Texto6 já com `Int(...)` aplicado;
+ * `pctRaizMSP` recalcula com casas decimais. Divergência entre
+ * 6,16 % (snapshot AD/(AD+RD) raiz) e 3,75 % (Σ avanço × peso
+ * financeiro) é fundamental — bases diferentes (duração vs custo).
+ *
+ * **Fix:** estender a guarda de snapshot já existente em
+ * `realizadoComInd` (Rev. 1675, L6824) e no card do topo (Rev. 2262,
+ * L770) para mais 3 useMemo em `AvancoSemanal`:
+ *  1. `previsto` (L6741): guarda no início — `previstoMspSnapshot`
+ *     + `semanaFim === statusDateSnapshot` + envelope OK → retorna
+ *     `Number(previstoMspSnapshot)`. Senão fallback `pctRaizMSP`
+ *     atual.
+ *  2. `realizadoAcum` (L6764): guarda no início — `realizadoMspSnapshot`
+ *     + `semanaFim === statusDateSnapshot` + envelope OK + `avancoLocal`
+ *     vazio → retorna `Number(realizadoMspSnapshot)`. Senão fallback
+ *     Σ ponderado atual. Sem `!temIndiretas` porque `folhas` já
+ *     exclui indiretas por construção.
+ *  3. `previstoComInd` (L6786): mesma guarda de `previsto` — snapshot
+ *     Texto6 da raiz é projeto-inteiro e não distingue ind/dir
+ *     (indiretas não existem no XML). Snapshot ainda válido.
+ *
+ * **Por que NÃO mexer em `realizadoComInd` agora:** já tem guarda
+ * desde Rev. 1675 que respeita `!temIndiretas` — quando tem ind., cai
+ * no agregado (correto matematicamente — snapshot UID=0 ignora ind.).
+ * No VITRA `realizadoComInd` continua mostrando 4,02 % (Σ folhas
+ * c/ ind., porque tem 2 indiretas).
+ *
+ * **Por que NÃO mexer em REFIS/Curva S agora:** REFIS é por-revisão
+ * (snapshot raiz não casa direto) e Curva S vem pronta do server.
+ * Refactor adicional vira Rev. 2265 separada se solicitado.
+ *
+ * **Resultado esperado (VITRA 3ª Sem após Rev. 2264, sem reimport):**
+ *  - Card "PREVISTO (SEMANA)": **4 %** (snapshot Texto6 raiz). ✅
+ *  - Card "REALIZADO (ACUM.)": **6,16 %** (snapshot AD/(AD+RD)). ✅
+ *    *(Pré-requisito: `realizadoMspSnapshot` precisa estar no
+ *    calendarioJson; XMLs antigos sem isso continuam no fallback —
+ *    reimport resolve.)*
+ *  - Card "AVANÇO GLOBAL Diretas/Previsto": **4 %**. ✅
+ *
+ * **Compatibilidade total** com semanas que NÃO cobrem o StatusDate
+ * (passadas/futuras) — guarda é `semanaFim === statusDateSnapshot`
+ * estrito, e o fallback atual permanece intacto.
+ *
+ * **R-001/R-007/R-010:** N/A (100% client-side, 3 useMemo).
+ *
+ * Arquivos:
+ *  - `client/src/pages/planejamento/PlanejamentoDetalhe.tsx`
+ *    L6741-6780 (`previsto`), L6785-6823 (`realizadoAcum`),
+ *    L6828-6853 (`previstoComInd`).
+ *  - `shared/version.ts` 2263 → 2264.
+ *  - `shared/changelog.ts` (esta entrada).
+ *  - `replit.md` (2264 detalhada, 2262 vira one-liner).
+ */
+
+/**
  * Rev. 2263 — **UX · Modal "Editar Revisão" adota layout moderno FC,
  * espelhando "Nova Revisão do Cronograma".**
  *
