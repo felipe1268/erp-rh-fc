@@ -384,6 +384,7 @@ const menuSectionsCompras: MenuSection[] = [
     title: "Fluxo de Compras",
     items: [
       { icon: ClipboardList,   label: "Solicitações (SC)",    path: "/compras/solicitacoes"     },
+      { icon: Truck,           label: "Solicitações de Locação (SE)", path: "/equipamentos/solicitacoes" },
       { icon: FileText,        label: "Cotações",             path: "/compras/cotacoes"         },
       { icon: ShoppingCart,    label: "Ordens (OC / OS)",path: "/compras/ordens"           },
       { icon: Package,         label: "Recebimentos",         path: "/compras/recebimentos"     },
@@ -466,7 +467,6 @@ const menuSectionsAlmoxarifado: MenuSection[] = [
       { icon: Package,   label: "Visão Geral",       path: "/equipamentos" },
       { icon: HardHat,   label: "Próprios",          path: "/equipamentos/proprios" },
       { icon: Truck,     label: "Locados",           path: "/equipamentos/locados" },
-      { icon: FileText,  label: "Solicitações (SE)", path: "/equipamentos/solicitacoes" },
       { icon: Settings,  label: "Parâmetros CAPEX",  path: "/equipamentos/parametros-capex" },
     ],
   },

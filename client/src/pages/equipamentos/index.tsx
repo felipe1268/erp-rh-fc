@@ -37,11 +37,11 @@ export default function EquipamentosHub() {
       to: "/equipamentos/locados",
     },
     {
-      label: "Solicitações (SE)",
+      label: "Solicitações de Locação (SE)",
       icon: FileText,
       color: "from-purple-500 to-purple-700",
       count: ses.data?.length ?? 0,
-      sub: `${(ses.data || []).filter((s: any) => s.status === "pendente").length} pendentes`,
+      sub: `${(ses.data || []).filter((s: any) => s.status === "pendente").length} pendentes · gerido em Compras`,
       to: "/equipamentos/solicitacoes",
     },
     {

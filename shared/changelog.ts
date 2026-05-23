@@ -1,6 +1,54 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2259 — **REFACTOR · Solicitação de Equipamento (SE) migra para o
+ * módulo Compras — Almoxarifado só gerencia recebimento/uso/devolução.**
+ *
+ * Pedido user (23/05/2026): "quero que as solicitações de locação sejam
+ * feitas somente pelo módulo de Compras. O Almoxarifado apenas gerencia
+ * quando chega, quem usou e quando saiu." Faz sentido — SE é decisão
+ * de compra (cotação, alçada, override CAPEX); almoxarifado é portaria
+ * (foto, check-in, devolução).
+ *
+ * Mudanças (cirúrgicas, ZERO impacto em código de regra de negócio):
+ *  - `client/src/App.tsx` — RouteGuard de `/equipamentos/solicitacoes`
+ *    passa de `route="/almoxarifado"` para `route="/compras"`.
+ *  - `client/src/components/DashboardLayout.tsx` — item "Solicitações
+ *    (SE)" sai da section "Controle de Equipamentos" (almox) e entra em
+ *    "Fluxo de Compras" com label "Solicitações de Locação (SE)" e
+ *    ícone Truck (entre SC e Cotações).
+ *  - `client/src/contexts/ModuleContext.tsx` — `/equipamentos/solicitacoes`
+ *    remapeada para `activeModule="compras"`.
+ *  - `shared/modules.ts` — feature `equipamentos-solicitacoes` removida do
+ *    módulo `almoxarifado`; nova feature `compras-se-locacao` em `compras`
+ *    (mesma rota, novo escopo de permissão).
+ *  - `shared/modulePages.ts` — rota migra do namespace `almoxarifado` para
+ *    `compras` (page id `se_locacao`).
+ *  - `client/src/pages/equipamentos/index.tsx` — card "Solicitações" do Hub
+ *    mantém link mas exibe sub "gerido em Compras" para deixar claro o
+ *    novo dono do fluxo.
+ *  - `shared/version.ts` (2258 → 2259).
+ *
+ * O QUE NÃO MUDOU:
+ *  - Backend (`server/routers/equipamentos.ts`) — procedures
+ *    `solicitacaoCriar`/`solicitacaoDecidir`/`solicitacaoAprovarOverride`
+ *    seguem idênticas. SE permanece em tabela `solicitacoes_equipamento`
+ *    (não migra pra `compras_solicitacoes` — é um workflow específico,
+ *    com detecção de override CAPEX, alçada de R$ 5k e numeração própria
+ *    SE-AAAA-NNNN). Apenas o "quem vê" mudou.
+ *  - Página `Solicitacoes.tsx` — mesmo componente, mesma URL, novo guard.
+ *
+ * Impacto em usuários:
+ *  - Almoxarife perde acesso a SE (correto — não era responsabilidade dele).
+ *  - Comprador ganha SE como item nativo do menu Compras.
+ *  - Admin master segue vendo tudo.
+ *  - Quem tem grupo restrito a Compras agora vê o item; quem tem grupo
+ *    restrito a Almox não vê mais.
+ *
+ * R-001/R-007/R-010: N/A (100% mapeamentos client + shared, ZERO DDL).
+ */
+
+/**
  * Rev. 2258 — **FEATURE · Módulo Controle de Equipamentos (Fase 1 Sprint 3 —
  * páginas React: Hub + Próprios + Locados + Solicitações + Parâmetros CAPEX).**
  *
