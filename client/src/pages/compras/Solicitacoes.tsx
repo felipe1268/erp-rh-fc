@@ -1145,6 +1145,11 @@ export default function Solicitacoes() {
     tipo: "material" as "material" | "servico" | "pacote" | "equipamento" | "pecas_veiculo",
     incluirEquipamentos: false,
     vehicleId: "" as string,
+    // Rev. 2290 — Locação (só relevante p/ tipo=equipamento).
+    isLocacao: false,
+    locacaoDuracaoDias: "" as string,
+    locacaoDataInicioPrevista: "" as string,
+    locacaoDataFimPrevista: "" as string,
   });
   const [obraSearch, setObraSearch] = useState("");
   const [obraOpen, setObraOpen] = useState(false);
@@ -1603,7 +1608,7 @@ ${sc.observacoes ? `<div class="obs"><b>Observações da SC:</b><br>${esc(sc.obs
   }
 
   function resetForm() {
-    setForm({ titulo: "", obraId: "", dataNecessidade: "", prioridade: "normal", observacoes: "", tipo: "material", incluirEquipamentos: false, vehicleId: "" });
+    setForm({ titulo: "", obraId: "", dataNecessidade: "", prioridade: "normal", observacoes: "", tipo: "material", incluirEquipamentos: false, vehicleId: "", isLocacao: false, locacaoDuracaoDias: "", locacaoDataInicioPrevista: "", locacaoDataFimPrevista: "" });
     setObraSearch(""); setObraOpen(false);
     setVeiculoSearch(""); setVeiculoOpen(false);
     setItens([newItem()]);
@@ -2159,6 +2164,11 @@ ${sc.observacoes ? `<div class="obs"><b>Observações da SC:</b><br>${esc(sc.obs
         observacoes: form.observacoes || undefined,
         tipo: form.tipo,
         incluirEquipamentos: form.incluirEquipamentos || undefined,
+        // Rev. 2290 — Locação (edição).
+        isLocacao: form.tipo === "equipamento" ? form.isLocacao : false,
+        locacaoDuracaoDias: form.tipo === "equipamento" && form.isLocacao && form.locacaoDuracaoDias ? parseInt(form.locacaoDuracaoDias, 10) : null,
+        locacaoDataInicioPrevista: form.tipo === "equipamento" && form.isLocacao ? (form.locacaoDataInicioPrevista || null) : null,
+        locacaoDataFimPrevista: form.tipo === "equipamento" && form.isLocacao ? (form.locacaoDataFimPrevista || null) : null,
         imagemReferenciaUrl: imgUrl ? imgUrl : (imagemPreview && !imagemBase64 ? undefined : null),
         anexos: uploadedAnexos,
         itens: itensPayload,
@@ -2179,6 +2189,11 @@ ${sc.observacoes ? `<div class="obs"><b>Observações da SC:</b><br>${esc(sc.obs
         anexos: uploadedAnexos,
         tipo: form.tipo,
         incluirEquipamentos: form.incluirEquipamentos || undefined,
+        // Rev. 2290 — Locação (criação).
+        isLocacao: form.tipo === "equipamento" ? form.isLocacao : undefined,
+        locacaoDuracaoDias: form.tipo === "equipamento" && form.isLocacao && form.locacaoDuracaoDias ? parseInt(form.locacaoDuracaoDias, 10) : undefined,
+        locacaoDataInicioPrevista: form.tipo === "equipamento" && form.isLocacao ? (form.locacaoDataInicioPrevista || undefined) : undefined,
+        locacaoDataFimPrevista: form.tipo === "equipamento" && form.isLocacao ? (form.locacaoDataFimPrevista || undefined) : undefined,
         itens: itensPayload,
       });
     }
@@ -2625,7 +2640,7 @@ ${sc.observacoes ? `<div class="obs"><b>Observações da SC:</b><br>${esc(sc.obs
                       )}
                       {sc.numeroSc}
                       <span className={`ml-1 px-1.5 py-0.5 text-[9px] font-semibold rounded ${(sc as any).tipo === "servico" ? "bg-purple-100 text-purple-700" : (sc as any).tipo === "pacote" ? "bg-indigo-100 text-indigo-700" : (sc as any).tipo === "equipamento" ? "bg-cyan-100 text-cyan-700" : (sc as any).tipo === "pecas_veiculo" || (sc as any).tipo === "manutencao" ? "bg-teal-100 text-teal-700" : "bg-blue-100 text-blue-700"}`}>
-                        {(sc as any).tipo === "servico" ? "MDO" : (sc as any).tipo === "pacote" ? "MAT+MDO" : (sc as any).tipo === "equipamento" ? "EQUIP" : (sc as any).tipo === "pecas_veiculo" || (sc as any).tipo === "manutencao" ? "VEÍC" : "MAT"}
+                        {(sc as any).tipo === "servico" ? "MDO" : (sc as any).tipo === "pacote" ? "MAT+MDO" : (sc as any).tipo === "equipamento" ? ((sc as any).isLocacao ? "EQUIP·LOC" : "EQUIP") : (sc as any).tipo === "pecas_veiculo" || (sc as any).tipo === "manutencao" ? "VEÍC" : "MAT"}
                       </span>
                       {((sc as any).origemModulo === "frotas" || (sc as any).origem_modulo === "frotas") && (
                         <span className="ml-1 px-1.5 py-0.5 text-[9px] font-semibold rounded bg-orange-100 text-orange-700">FROTAS</span>
@@ -2774,7 +2789,7 @@ ${sc.observacoes ? `<div class="obs"><b>Observações da SC:</b><br>${esc(sc.obs
                     }`}
                     onClick={() => {
                       if (form.tipo === opt.value) return;
-                      setForm(p => ({ ...p, tipo: opt.value, incluirEquipamentos: false, vehicleId: opt.value !== "pecas_veiculo" ? "" : p.vehicleId }));
+                      setForm(p => ({ ...p, tipo: opt.value, incluirEquipamentos: false, vehicleId: opt.value !== "pecas_veiculo" ? "" : p.vehicleId, isLocacao: opt.value === "equipamento" ? p.isLocacao : false, locacaoDuracaoDias: opt.value === "equipamento" ? p.locacaoDuracaoDias : "", locacaoDataInicioPrevista: opt.value === "equipamento" ? p.locacaoDataInicioPrevista : "", locacaoDataFimPrevista: opt.value === "equipamento" ? p.locacaoDataFimPrevista : "" }));
                       if (!editingSc) {
                         setSelectedEapIds(new Set());
                         setItens([newItem()]);
@@ -2809,6 +2824,95 @@ ${sc.observacoes ? `<div class="obs"><b>Observações da SC:</b><br>${esc(sc.obs
                   </label>
                 )}
               </div>
+              {/* Rev. 2290 — Bloco de Locação. Aparece somente quando o tipo
+                  é Equipamento. O engenheiro indica aqui se é compra ou
+                  locação + período previsto, para que suprimentos cote
+                  corretamente e a OC nasça já com os dados de locação. */}
+              {form.tipo === "equipamento" && (
+                <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50/60 p-3 space-y-2">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={form.isLocacao}
+                      onChange={e => {
+                        const checked = e.target.checked;
+                        setForm(p => ({
+                          ...p,
+                          isLocacao: checked,
+                          locacaoDuracaoDias: checked ? p.locacaoDuracaoDias : "",
+                          locacaoDataInicioPrevista: checked ? p.locacaoDataInicioPrevista : "",
+                          locacaoDataFimPrevista: checked ? p.locacaoDataFimPrevista : "",
+                        }));
+                      }}
+                      className="h-4 w-4 rounded border-amber-400 text-amber-600 focus:ring-amber-500"
+                    />
+                    <span className={`text-xs font-semibold ${form.isLocacao ? "text-amber-800" : "text-gray-700"}`}>
+                      É Locação de Equipamento <span className="font-normal text-gray-500">(aluguel — não compra)</span>
+                    </span>
+                  </label>
+                  {form.isLocacao && (
+                    <div className="grid grid-cols-3 gap-2 pt-1">
+                      <div>
+                        <label className="text-[10px] font-medium text-gray-600 uppercase tracking-wide">Início Previsto</label>
+                        <input
+                          type="date"
+                          value={form.locacaoDataInicioPrevista}
+                          onChange={e => {
+                            const ini = e.target.value;
+                            setForm(p => {
+                              const next = { ...p, locacaoDataInicioPrevista: ini };
+                              const dias = parseInt(p.locacaoDuracaoDias || "0", 10);
+                              if (ini && dias > 0) {
+                                const d = new Date(ini + "T00:00:00");
+                                d.setDate(d.getDate() + dias);
+                                next.locacaoDataFimPrevista = d.toISOString().slice(0, 10);
+                              }
+                              return next;
+                            });
+                          }}
+                          className="w-full h-8 px-2 text-sm border border-gray-300 rounded-md bg-white"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-medium text-gray-600 uppercase tracking-wide">Duração (dias) *</label>
+                        <input
+                          type="number"
+                          min={1}
+                          placeholder="ex.: 30"
+                          value={form.locacaoDuracaoDias}
+                          onChange={e => {
+                            const v = e.target.value;
+                            setForm(p => {
+                              const next = { ...p, locacaoDuracaoDias: v };
+                              const dias = parseInt(v || "0", 10);
+                              if (p.locacaoDataInicioPrevista && dias > 0) {
+                                const d = new Date(p.locacaoDataInicioPrevista + "T00:00:00");
+                                d.setDate(d.getDate() + dias);
+                                next.locacaoDataFimPrevista = d.toISOString().slice(0, 10);
+                              }
+                              return next;
+                            });
+                          }}
+                          className="w-full h-8 px-2 text-sm border border-gray-300 rounded-md bg-white"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-medium text-gray-600 uppercase tracking-wide">Fim Previsto</label>
+                        <input
+                          type="date"
+                          value={form.locacaoDataFimPrevista}
+                          onChange={e => setForm(p => ({ ...p, locacaoDataFimPrevista: e.target.value }))}
+                          className="w-full h-8 px-2 text-sm border border-gray-300 rounded-md bg-white"
+                        />
+                      </div>
+                      <p className="col-span-3 text-[10px] text-amber-700/80">
+                        💡 O almoxarifado receberá alertas de vencimento {""}
+                        <strong>antes do fim previsto</strong> para programar a devolução.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
               {form.tipo === "pecas_veiculo" && (
                 <div className="relative mt-2" ref={veiculoRef}>
                   <label className="text-xs font-medium text-gray-700 flex items-center gap-1 mb-1">
@@ -4617,7 +4721,7 @@ ${sc.observacoes ? `<div class="obs"><b>Observações da SC:</b><br>${esc(sc.obs
                         : (detalhe as any).tipo === "pecas_veiculo" ? "bg-teal-100 text-teal-700"
                         : "bg-blue-100 text-blue-700"
                       }`}>
-                        {(detalhe as any).tipo === "servico" ? "MDO" : (detalhe as any).tipo === "pacote" ? "MAT+MDO" : (detalhe as any).tipo === "equipamento" ? "EQUIP" : (detalhe as any).tipo === "pecas_veiculo" ? "VEÍC" : (detalhe as any).tipo?.toUpperCase()}
+                        {(detalhe as any).tipo === "servico" ? "MDO" : (detalhe as any).tipo === "pacote" ? "MAT+MDO" : (detalhe as any).tipo === "equipamento" ? ((detalhe as any).isLocacao ? "EQUIP·LOCAÇÃO" : "EQUIP") : (detalhe as any).tipo === "pecas_veiculo" ? "VEÍC" : (detalhe as any).tipo?.toUpperCase()}
                       </span>
                     )}
                   </DialogTitle>
@@ -4635,6 +4739,11 @@ ${sc.observacoes ? `<div class="obs"><b>Observações da SC:</b><br>${esc(sc.obs
                             tipo: scTipo,
                             incluirEquipamentos: (detalhe as any).incluirEquipamentos || false,
                             vehicleId: (detalhe as any).vehicleId ? String((detalhe as any).vehicleId) : "",
+                            // Rev. 2290 — Locação (carrega da SC ao editar).
+                            isLocacao: !!(detalhe as any).isLocacao,
+                            locacaoDuracaoDias: (detalhe as any).locacaoDuracaoDias ? String((detalhe as any).locacaoDuracaoDias) : "",
+                            locacaoDataInicioPrevista: (detalhe as any).locacaoDataInicioPrevista || "",
+                            locacaoDataFimPrevista: (detalhe as any).locacaoDataFimPrevista || "",
                           });
                           if (detalhe.obraId) {
                             const obra = obrasQ.data?.find((o: any) => o.id === detalhe.obraId);

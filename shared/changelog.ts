@@ -1,6 +1,61 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2290 — **FEAT · Locação de Equipamento indicada já na SC (não
+ * só na OC). Suprimentos cota como aluguel, OC nasce com os dados,
+ * almoxarifado recebe alertas de vencimento.**
+ *
+ * Pedido user (23/05/2026, IMG_1079/IMG_1080): "A locação deve ser
+ * feita na solicitação, pq o engenheiro deve preencher o equipamento
+ * e o tempo de uso, para que o suprimentos faça a cotação correta".
+ * O ERP já tinha `isLocacao` em `compras_ordens` e `origem='alugado'`
+ * em `almoxarifado_itens` (Rev. anteriores), mas o toggle só
+ * aparecia na OC — tarde demais, porque a cotação já foi feita sem
+ * saber que era aluguel.
+ *
+ * Mudanças:
+ *   1. **Schema** (`drizzle/schema.ts`) — `comprasSolicitacoes` ganha
+ *      `is_locacao boolean`, `locacao_duracao_dias int`,
+ *      `locacao_data_inicio_prevista varchar(10)`,
+ *      `locacao_data_fim_prevista varchar(10)`. Aditivo, sem DROP.
+ *   2. **Router** (`server/routers/compras.ts`):
+ *      - `criarSolicitacao` e `editarSolicitacao` aceitam os novos
+ *        campos. Só persistem se `tipo === "equipamento"` (defensivo
+ *        — qualquer outro tipo zera os campos).
+ *      - `criarOrdemDeCotacao` lê `comprasSolicitacoes` da cotação
+ *        original; se a SC era de locação, a OC nasce com
+ *        `isLocacao=true`, `locacaoDataInicio/Fim`, `duracaoDias`
+ *        já preenchidos. Quando o almoxarifado dá entrada via
+ *        SmartEntry, os metadados fluem para `almoxarifado_itens`
+ *        (origem='alugado' + datas) e `AlertasAlmoxarifado` já
+ *        notifica vencimento via `getItensLocadosVencendo`.
+ *   3. **Frontend** (`client/src/pages/compras/Solicitacoes.tsx`):
+ *      - Form state com 4 campos novos; quando tipo muda para algo
+ *        diferente de Equipamento, campos são limpos.
+ *      - Bloco amarelo condicional `tipo === "equipamento"` com
+ *        checkbox "É Locação de Equipamento" + 3 campos (Início,
+ *        Duração em dias, Fim). Auto-cálculo bidirecional:
+ *        Início+Duração → Fim.
+ *      - Submit (criar + editar) envia campos quando aplicáveis.
+ *      - LoadDetalhe (editar SC existente) carrega os campos do
+ *        backend.
+ *      - Badge **EQUIP·LOC** (lista) / **EQUIP·LOCAÇÃO** (detalhe)
+ *        para SCs com `isLocacao=true`.
+ *
+ * **Fluxo end-to-end agora funciona 100% via Compras + Almoxarifado:**
+ * Engenheiro abre SC → marca Locação + período → Suprimentos cota com
+ * fornecedores de aluguel → Gera OC herdando datas → Almoxarifado
+ * recebe via SmartEntry (`origem='alugado'` + vencimento gravado) →
+ * `AlertasAlmoxarifado` avisa X dias antes do fim p/ programar
+ * devolução. Sem precisar do módulo Equipamentos.
+ *
+ * **R-001/R-007/R-010:** Schema migration é aditiva (4 colunas
+ * nullable, sem DROP/ALTER de coluna existente). Aplicada em DEV via
+ * `pnpm db:push` (drizzle-kit generate + migrate). PROD precisa rodar
+ * a mesma migration via deploy script.
+ */
+
+/**
  * Rev. 2289 — **FEAT/UX · Filtro por VÍNCULO (CLT / PJ / TERCEIRO) na
  * tela Efetivo da Obra.**
  *

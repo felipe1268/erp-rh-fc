@@ -2668,6 +2668,11 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
       anexos: z.array(z.object({ url: z.string(), nome: z.string(), tipo: z.string(), ts: z.number() })).optional(),
       tipo: z.enum(["material", "servico", "pacote", "equipamento", "pecas_veiculo"]).optional(),
       incluirEquipamentos: z.boolean().optional(),
+      // Rev. 2290 — Locação na SC.
+      isLocacao: z.boolean().optional(),
+      locacaoDuracaoDias: z.number().int().positive().optional().nullable(),
+      locacaoDataInicioPrevista: z.string().optional().nullable(),
+      locacaoDataFimPrevista: z.string().optional().nullable(),
       userId: z.number().optional(),
       userName: z.string().optional(),
       itens: z.array(z.object({
@@ -2726,6 +2731,11 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
             anexos: input.anexos || [],
             tipo: tipoSC,
             incluirEquipamentos: input.incluirEquipamentos ?? false,
+            // Rev. 2290 — Locação só vale para tipo=equipamento.
+            isLocacao: tipoSC === "equipamento" ? (input.isLocacao ?? false) : false,
+            locacaoDuracaoDias: tipoSC === "equipamento" && input.isLocacao ? (input.locacaoDuracaoDias ?? null) : null,
+            locacaoDataInicioPrevista: tipoSC === "equipamento" && input.isLocacao ? (input.locacaoDataInicioPrevista ?? null) : null,
+            locacaoDataFimPrevista: tipoSC === "equipamento" && input.isLocacao ? (input.locacaoDataFimPrevista ?? null) : null,
             status: "pendente",
             aprovacaoStatus: "aguardando",
             criadoPorId: input.userId ?? null,
@@ -6050,12 +6060,43 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
         }
       }
 
+      // Rev. 2290 — Herdar dados de locação da SC original quando o
+      // engenheiro marcou "É Locação" lá (suprimentos cotou como aluguel,
+      // OC nasce com os campos preenchidos automaticamente).
+      let scLocacao: { isLocacao: boolean; dataInicio: string | null; dataFim: string | null; duracaoDias: number | null } | null = null;
+      if (cot.solicitacaoId) {
+        try {
+          const [scSrc] = await db.select({
+            isLocacao: comprasSolicitacoes.isLocacao,
+            locacaoDataInicioPrevista: comprasSolicitacoes.locacaoDataInicioPrevista,
+            locacaoDataFimPrevista: comprasSolicitacoes.locacaoDataFimPrevista,
+            locacaoDuracaoDias: comprasSolicitacoes.locacaoDuracaoDias,
+          }).from(comprasSolicitacoes).where(eq(comprasSolicitacoes.id, cot.solicitacaoId));
+          if (scSrc?.isLocacao) {
+            scLocacao = {
+              isLocacao: true,
+              dataInicio: scSrc.locacaoDataInicioPrevista ?? null,
+              dataFim: scSrc.locacaoDataFimPrevista ?? null,
+              duracaoDias: scSrc.locacaoDuracaoDias ?? null,
+            };
+          }
+        } catch (e: any) {
+          console.warn("[criarOrdemDeCotacao] Herança locação SC→OC falhou:", e?.message);
+        }
+      }
+
       const [oc] = await db.insert(comprasOrdens).values({
         companyId: input.companyId,
         numeroOc,
         cotacaoId: input.cotacaoId,
         solicitacaoId: cot.solicitacaoId ?? null,
         obraId: cot.obraId ?? null,
+        ...(scLocacao ? {
+          isLocacao: true,
+          locacaoDataInicio: scLocacao.dataInicio,
+          locacaoDataFim: scLocacao.dataFim,
+          locacaoDuracaoDias: scLocacao.duracaoDias,
+        } : {}),
         fornecedorId: isEstoqueWinner ? null : (vencedorFornecedorId ?? null),
         fornecedorNome: isEstoqueWinner
           ? "Estoque (Almoxarifado)"
@@ -6451,10 +6492,25 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
 
       const todosItens = await db.select().from(comprasCotacoesItens).where(eq(comprasCotacoesItens.cotacaoId, input.cotacaoId));
 
-      const scTipo = cot.solicitacaoId
-        ? (await db.select({ tipo: comprasSolicitacoes.tipo }).from(comprasSolicitacoes).where(eq(comprasSolicitacoes.id, cot.solicitacaoId)))?.[0]?.tipo ?? "material"
-        : "material";
+      // Rev. 2290 — Carrega tipo + dados de locação da SC origem
+      // numa única query, para herdar em TODAS as OCs parciais geradas.
+      const scSrc = cot.solicitacaoId
+        ? (await db.select({
+            tipo: comprasSolicitacoes.tipo,
+            isLocacao: comprasSolicitacoes.isLocacao,
+            locacaoDataInicioPrevista: comprasSolicitacoes.locacaoDataInicioPrevista,
+            locacaoDataFimPrevista: comprasSolicitacoes.locacaoDataFimPrevista,
+            locacaoDuracaoDias: comprasSolicitacoes.locacaoDuracaoDias,
+          }).from(comprasSolicitacoes).where(eq(comprasSolicitacoes.id, cot.solicitacaoId)))?.[0] ?? null
+        : null;
+      const scTipo = scSrc?.tipo ?? "material";
       const ordemTipo = scTipo === "pacote" ? "pacote" : (scTipo === "servico" ? "servico" : "compra");
+      const scLocacaoParcial = scSrc?.isLocacao ? {
+        isLocacao: true,
+        locacaoDataInicio: scSrc.locacaoDataInicioPrevista ?? null,
+        locacaoDataFim: scSrc.locacaoDataFimPrevista ?? null,
+        locacaoDuracaoDias: scSrc.locacaoDuracaoDias ?? null,
+      } : null;
 
       const ocsGeradas: { id: number; numeroOc: string; fornecedorId: number }[] = [];
 
@@ -6516,6 +6572,8 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
           cotacaoId: input.cotacaoId,
           solicitacaoId: cot.solicitacaoId ?? null,
           obraId: cot.obraId ?? null,
+          // Rev. 2290 — Herda locação da SC em TODAS as OCs parciais.
+          ...(scLocacaoParcial ?? {}),
           fornecedorId: grupo.fornecedorId,
           fornecedorNome: fornNome,
           criadoPorId: input.userId ?? null,
@@ -10479,6 +10537,11 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
       obraId: z.number().nullable().optional(),
       vehicleId: z.number().nullable().optional(),
       tipo: z.string().optional(),
+      // Rev. 2290 — Locação na edição de SC.
+      isLocacao: z.boolean().optional(),
+      locacaoDuracaoDias: z.number().int().positive().optional().nullable(),
+      locacaoDataInicioPrevista: z.string().optional().nullable(),
+      locacaoDataFimPrevista: z.string().optional().nullable(),
       imagemReferenciaUrl: z.string().nullable().optional(),
       anexos: z.array(z.object({ url: z.string(), nome: z.string(), tipo: z.string(), ts: z.number() })).optional(),
       itens: z.array(z.object({
@@ -10543,6 +10606,20 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
         obraId: input.obraId !== undefined ? input.obraId : sc.obraId,
         vehicleId: input.vehicleId !== undefined ? input.vehicleId : (sc as any).vehicleId,
         tipo: input.tipo ?? sc.tipo,
+        // Rev. 2290 — Locação. Se tipo deixar de ser equipamento, zera tudo.
+        ...(() => {
+          const tipoFinal = input.tipo ?? sc.tipo;
+          if (tipoFinal !== "equipamento") {
+            return { isLocacao: false, locacaoDuracaoDias: null, locacaoDataInicioPrevista: null, locacaoDataFimPrevista: null };
+          }
+          if (input.isLocacao === undefined) return {};
+          return {
+            isLocacao: input.isLocacao,
+            locacaoDuracaoDias: input.isLocacao ? (input.locacaoDuracaoDias ?? null) : null,
+            locacaoDataInicioPrevista: input.isLocacao ? (input.locacaoDataInicioPrevista ?? null) : null,
+            locacaoDataFimPrevista: input.isLocacao ? (input.locacaoDataFimPrevista ?? null) : null,
+          };
+        })(),
         imagemReferenciaUrl: input.imagemReferenciaUrl !== undefined ? input.imagemReferenciaUrl : sc.imagemReferenciaUrl,
         ...(input.anexos !== undefined ? { anexos: input.anexos } : {}),
         atualizadoEm: new Date().toISOString(),

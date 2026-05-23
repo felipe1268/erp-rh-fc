@@ -5912,6 +5912,12 @@ export const comprasSolicitacoes = pgTable("compras_solicitacoes", {
   aprovadoEm:       timestamp("aprovado_em", { mode: "string" }),
   tipo:             varchar({ length: 20 }).default("material"),
   incluirEquipamentos: boolean("incluir_equipamentos").default(false),
+  // Rev. 2290 — Locação na SC (engenheiro indica já na solicitação,
+  // suprimentos cota sabendo que é aluguel + período).
+  isLocacao:        boolean("is_locacao").default(false),
+  locacaoDuracaoDias: integer("locacao_duracao_dias"),
+  locacaoDataInicioPrevista: varchar("locacao_data_inicio_prevista", { length: 10 }),
+  locacaoDataFimPrevista:    varchar("locacao_data_fim_prevista", { length: 10 }),
   observacoes:      text(),
   imagemReferenciaUrl: text("imagem_referencia_url"),
   anexos:             json().default([]),
