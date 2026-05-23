@@ -1,6 +1,61 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2300 — **FEAT/UX · Funcionários Terceiros: múltipla seleção +
+ * barra de ações pra alterar status (Apto/Inapto/Pendente) de
+ * vários funcionários de uma vez.**
+ *
+ * Pedido user (23/05/2026): "Quero múltipla seleção para poder alterar
+ * o status de todos de uma vez ou alguns específicos". Antes só dava
+ * pra editar um funcionário por vez via "Editar" → form → trocar
+ * aptidão → salvar. Com 23 funcionários na tela e a maioria
+ * "Pendente" (depois da Rev. 2299 que destravou a leitura), o user
+ * precisava agilizar marcar lote como Apto.
+ *
+ * **UX:**
+ * - Checkbox em cada card (à esquerda da foto). Clicar marca/desmarca.
+ *   Card selecionado ganha ring azul (`ring-2 ring-blue-400`) pra
+ *   reforço visual.
+ * - Header logo abaixo dos cards de stats: checkbox + texto
+ *   "Selecionar todos (N)" / "Todos os N selecionados" — opera sobre
+ *   a **lista filtrada atual** (respeita busca + dropdown Empresa +
+ *   dropdown Aptidão), não a lista completa.
+ * - Quando `selectedIds.size > 0`, aparece barra sticky azul no topo
+ *   com contador + 3 botões coloridos (Apto verde / Inapto vermelho /
+ *   Pendente âmbar) + "Limpar seleção". Cores espelham os badges das
+ *   linhas (`aptidaoBadge`).
+ *
+ * **Backend:** Sem novo endpoint — reutiliza
+ * `trpc.terceiros.funcionarios.update` (que já aceita `statusAptidao`
+ * via Zod L570 do `server/routers/terceiros.ts`). Mutation `bulkUpdateMut`
+ * é uma cópia SEM `onSuccess` (pra não disparar N toasts e N
+ * `setShowForm(false)` por item). `bulkSetStatus` usa
+ * `Promise.allSettled` + `mutateAsync` pra paralelizar e tolerar
+ * falhas parciais: 1 toast no fim com `${ok} atualizado(s), ${fail}
+ * falharam` quando aplicável. `refetch()` único no fim.
+ *
+ * **Confirmação:** `window.confirm` antes do bulk — evita clique
+ * acidental quando a seleção é grande. Mensagem inclui contagem e
+ * label do status.
+ *
+ * **Mudanças (`client/src/pages/terceiros/FuncionariosTerceiros.tsx`):**
+ * - Imports: `Checkbox`, `Loader2`.
+ * - State: `selectedIds: Set<number>`, `bulkBusy: boolean`.
+ * - Mutation: `bulkUpdateMut` (silenciosa).
+ * - Helpers: `filteredIds`, `allFilteredSelected`, `toggleSelect`,
+ *   `toggleSelectAll`, `bulkSetStatus`.
+ * - JSX: barra de ações sticky (L376-394), header "selecionar todos"
+ *   (L396-408), checkbox no card (L424-428), ring azul condicional
+ *   no card.
+ *
+ * **R-001 / R-007 / R-010:** N/A — só `update` legítimo via tRPC
+ * (escopo company via `companyFilter` no router), nenhuma DDL, nenhum
+ * `DELETE`. Bulk de até N updates idempotentes no mesmo campo.
+ *
+ * Arquivos: `client/src/pages/terceiros/FuncionariosTerceiros.tsx`,
+ * `shared/version.ts`, `shared/changelog.ts`, `replit.md`,
+ * `replit-history.md`.
+ *
  * Rev. 2299 — **HOTFIX · Funcionários Terceiros: filtros e contadores
  * Aptos/Inaptos/Pendentes voltaram a funcionar — campo errado no
  * cliente.**

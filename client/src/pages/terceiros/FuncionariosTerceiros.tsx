@@ -11,8 +11,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
-import { Users, Plus, Search, Edit, Trash2, Upload, FileText, CheckCircle, XCircle, Clock, ShieldCheck, Building2, HardHat, Camera, BadgeCheck, User as UserIcon, X, Heart, Award, BookOpen, ClipboardCheck, AlertTriangle, Calendar, Phone, Briefcase } from "lucide-react";
+import { Users, Plus, Search, Edit, Trash2, Upload, FileText, CheckCircle, XCircle, Clock, ShieldCheck, Building2, HardHat, Camera, BadgeCheck, User as UserIcon, X, Heart, Award, BookOpen, ClipboardCheck, AlertTriangle, Calendar, Phone, Briefcase, Loader2 } from "lucide-react";
 import { PersonPhoto } from "@/components/PersonPhoto";
 
 export default function FuncionariosTerceiros() {
@@ -29,6 +30,9 @@ export default function FuncionariosTerceiros() {
   const [ddsForm, setDdsForm] = useState<any>({ dataDds: new Date().toISOString().slice(0, 10) });
   const [ddsListaPayload, setDdsListaPayload] = useState<{ base64: string; fileName: string; contentType: string } | null>(null);
   const [form, setForm] = useState<any>({});
+  // Rev. 2300 — múltipla seleção + bulk update de status (apto/inapto/pendente).
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
   // Rev. 1998 — foto preview no momento do cadastro (antes de existir id no banco)
   const [fotoPreview, setFotoPreview] = useState<string | null>(null);
   const [fotoPayload, setFotoPayload] = useState<{ base64: string; fileName: string; contentType: string } | null>(null);
@@ -47,6 +51,8 @@ export default function FuncionariosTerceiros() {
   );
   const createMut = trpc.terceiros.funcionarios.create.useMutation({ onSuccess: () => { refetch(); setShowForm(false); toast.success("Funcionário cadastrado!"); } });
   const updateMut = trpc.terceiros.funcionarios.update.useMutation({ onSuccess: () => { refetch(); setShowForm(false); toast.success("Funcionário atualizado!"); } });
+  // Rev. 2300 — bulk update silencioso (sem toast/refetch por item — usado pela barra de ações múltipla).
+  const bulkUpdateMut = trpc.terceiros.funcionarios.update.useMutation();
   const deleteMut = trpc.terceiros.funcionarios.delete.useMutation({ onSuccess: () => { refetch(); toast.success("Funcionário excluído!"); } });
   const uploadMut = trpc.terceiros.funcionarios.uploadDoc.useMutation({ onSuccess: () => { refetch(); toast.success("Documento enviado!"); } });
   // Rev. 2031 — Documentos avulsos por categoria
@@ -134,6 +140,37 @@ export default function FuncionariosTerceiros() {
       f.funcao?.toLowerCase().includes(s)
     );
   }, [funcionarios, search, filterAptidao]);
+
+  // Rev. 2300 — múltipla seleção + bulk update.
+  const filteredIds = filtered.map((f: any) => f.id);
+  const allFilteredSelected = filteredIds.length > 0 && filteredIds.every((id: number) => selectedIds.has(id));
+  function toggleSelect(id: number) {
+    setSelectedIds(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  }
+  function toggleSelectAll() {
+    if (allFilteredSelected) setSelectedIds(new Set());
+    else setSelectedIds(new Set(filteredIds));
+  }
+  async function bulkSetStatus(novoStatus: "apto" | "inapto" | "pendente") {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) return;
+    const labelMap = { apto: "Apto", inapto: "Inapto", pendente: "Pendente" };
+    if (!confirm(`Alterar ${ids.length} funcionário(s) para "${labelMap[novoStatus]}"?`)) return;
+    setBulkBusy(true);
+    try {
+      const results = await Promise.allSettled(
+        ids.map(id => bulkUpdateMut.mutateAsync({ id, statusAptidao: novoStatus } as any))
+      );
+      const ok = results.filter(r => r.status === "fulfilled").length;
+      const fail = results.length - ok;
+      if (fail === 0) toast.success(`${ok} funcionário(s) atualizado(s) para "${labelMap[novoStatus]}".`);
+      else toast.warning(`${ok} atualizado(s), ${fail} falharam.`);
+      setSelectedIds(new Set());
+      refetch();
+    } finally {
+      setBulkBusy(false);
+    }
+  }
 
   const openNew = () => {
     setForm({ companyId: companyId ?? 0 });
@@ -333,6 +370,40 @@ export default function FuncionariosTerceiros() {
           </div>
         </div>
 
+        {/* Rev. 2300 — Barra de ações múltipla (aparece quando há seleção) */}
+        {selectedIds.size > 0 && (
+          <div className="flex flex-wrap items-center gap-2 px-4 py-2.5 rounded-lg bg-blue-50 border border-blue-200 sticky top-2 z-10">
+            <span className="text-sm font-semibold text-blue-800">{selectedIds.size} selecionado(s)</span>
+            <span className="text-xs text-blue-600">— alterar status para:</span>
+            <Button size="sm" variant="outline" className="gap-1.5 bg-white border-emerald-300 text-emerald-700 hover:bg-emerald-50" disabled={bulkBusy} onClick={() => bulkSetStatus("apto")}>
+              {bulkBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle className="h-3.5 w-3.5" />} Apto
+            </Button>
+            <Button size="sm" variant="outline" className="gap-1.5 bg-white border-red-300 text-red-700 hover:bg-red-50" disabled={bulkBusy} onClick={() => bulkSetStatus("inapto")}>
+              {bulkBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <XCircle className="h-3.5 w-3.5" />} Inapto
+            </Button>
+            <Button size="sm" variant="outline" className="gap-1.5 bg-white border-amber-300 text-amber-700 hover:bg-amber-50" disabled={bulkBusy} onClick={() => bulkSetStatus("pendente")}>
+              {bulkBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Clock className="h-3.5 w-3.5" />} Pendente
+            </Button>
+            <Button size="sm" variant="ghost" className="ml-auto text-blue-700" disabled={bulkBusy} onClick={() => setSelectedIds(new Set())}>
+              <X className="h-3.5 w-3.5 mr-1" /> Limpar seleção
+            </Button>
+          </div>
+        )}
+
+        {/* Rev. 2300 — Cabeçalho "selecionar todos os filtrados" */}
+        {filtered.length > 0 && (
+          <div className="flex items-center gap-2 px-4 py-1.5">
+            <Checkbox
+              checked={allFilteredSelected}
+              onCheckedChange={toggleSelectAll}
+              aria-label="Selecionar todos os funcionários filtrados"
+            />
+            <span className="text-xs text-muted-foreground">
+              {allFilteredSelected ? `Todos os ${filtered.length} selecionados` : `Selecionar todos (${filtered.length})`}
+            </span>
+          </div>
+        )}
+
         {/* List */}
         <div className="space-y-3">
           {filtered.length === 0 ? (
@@ -342,10 +413,16 @@ export default function FuncionariosTerceiros() {
             </div>
           ) : (
             filtered.map((func: any) => (
-              <div key={func.id} className="bg-card rounded-xl border p-4 hover:shadow-sm transition-shadow">
+              <div key={func.id} className={`bg-card rounded-xl border p-4 hover:shadow-sm transition-shadow ${selectedIds.has(func.id) ? "ring-2 ring-blue-400 border-blue-300" : ""}`}>
                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                   {/* Rev. 1998 — Avatar + número interno pra identificação visual rápida */}
                   <div className="flex items-center gap-3 flex-1 min-w-0">
+                    {/* Rev. 2300 — checkbox de seleção múltipla */}
+                    <Checkbox
+                      checked={selectedIds.has(func.id)}
+                      onCheckedChange={() => toggleSelect(func.id)}
+                      aria-label={`Selecionar ${func.nome}`}
+                    />
                     {/* Rev. 2297 — foto clicável (lightbox global) */}
                     <PersonPhoto
                       src={func.fotoUrl}
