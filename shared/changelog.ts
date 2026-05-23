@@ -1,6 +1,38 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2292 — **UX · Modal "Descartar solicitação?" redesenhado no padrão FC.**
+ *
+ * Pedido user (23/05/2026, IMG attached): "ajuste este layout, para
+ * deixar no nosso padrão". Print mostrava o modal de descarte da SC
+ * com caixa branca crua, título pequeno sem ícone, botões empilhados
+ * sem hierarquia visual e uma scrollbar horizontal vazia abaixo dos
+ * botões — destoa dos demais modais do ERP (Rev. 1983 "Itens sem
+ * verba" estabeleceu o padrão FC pra confirmações).
+ *
+ * Fix em `client/src/pages/compras/Solicitacoes.tsx` (L4646-4727):
+ * 1. `DialogContent` agora `p-0 overflow-hidden gap-0 flex flex-col
+ *    w-[min(92vw,460px)]` — mata a scrollbar horizontal fantasma e
+ *    estrutura header/body/footer como blocos distintos.
+ * 2. **Header** com faixa âmbar gradient (from-amber-50 to-white),
+ *    ícone AlertTriangle em pill (bg-amber-100 ring-4 ring-amber-50),
+ *    título `text-amber-900 font-bold` + subtítulo curto explicando.
+ * 3. **Corpo** com mensagem em card âmbar leve (rounded-lg border
+ *    amber-200 bg-amber-50/60) + ícone Info, "todos os dados
+ *    digitados serão perdidos" em strong.
+ * 4. **Footer sticky** com `border-t bg-gray-50/60`: ação primária
+ *    (Salvar) full-width destacada em âmbar com shadow, depois linha
+ *    com "Continuar editando" (neutro) e "Descartar" (vermelho com
+ *    ícone X). Hierarquia visual clara: salvar > continuar > descartar.
+ *
+ * Mantém TODOS os handlers e estados existentes (setConfirmFecharNova,
+ * handleSalvar, resetForm, setEditingOriginalEapIds). Só reestilização.
+ *
+ * **R-001/R-007/R-010:** N/A (client-only, sem schema).
+ */
+export const CHANGELOG_PLACEHOLDER_2292 = true;
+
+/**
  * Rev. 2291 — **HOTFIX/DX · Erro real do Postgres exposto no toast +
  * server log ao criar SC (locação de equipamento).**
  *

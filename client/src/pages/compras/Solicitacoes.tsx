@@ -4640,20 +4640,55 @@ ${sc.observacoes ? `<div class="obs"><b>Observações da SC:</b><br>${esc(sc.obs
         </DialogContent>
       </Dialog>
 
-      {/* ── Dialog Confirmação Sem Verba ────────────────────────── */}
+      {/* ── Rev. 2292 — Dialog "Descartar solicitação?" redesenhado no padrão FC ──
+          Antes: caixa branca simples, título sem ícone, botões empilhados sem
+          hierarquia clara, scrollbar horizontal vazia abaixo dos botões.
+          Agora (mesmo padrão dos demais modais — Rev. 1983 "Itens sem verba"):
+          - DialogContent p-0 overflow-hidden flex-col, sem scrollbar fantasma
+          - Header com faixa âmbar sutil + ícone AlertTriangle em pill + título
+            bold + subtítulo curto explicando a ação
+          - Corpo px-5 py-4 com mensagem destacada em card âmbar leve
+          - Footer sticky com borda superior: ação primária (Salvar) full-width
+            destacada em âmbar, depois linha c/ "Continuar editando" (neutro) e
+            "Descartar" (vermelho) — hierarquia visual clara */}
       <Dialog open={confirmFecharNova} onOpenChange={setConfirmFecharNova}>
-        <DialogContent className="border-gray-200 max-w-md" style={{ background: '#ffffff', color: '#111827' }}>
-          <DialogHeader>
-            <DialogTitle className="text-base font-semibold">Descartar solicitação?</DialogTitle>
+        <DialogContent
+          className="border-amber-200 w-[min(92vw,460px)] max-w-[460px] p-0 overflow-hidden gap-0 flex flex-col"
+          style={{ background: '#ffffff', color: '#111827' }}
+        >
+          {/* Header — faixa âmbar sutil + ícone em pill */}
+          <DialogHeader className="px-5 py-4 bg-gradient-to-b from-amber-50 to-white border-b border-amber-100 space-y-0">
+            <div className="flex items-start gap-3">
+              <div className="p-2 rounded-full bg-amber-100 ring-4 ring-amber-50 shrink-0">
+                <AlertTriangle className="h-5 w-5 text-amber-600" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <DialogTitle className="text-amber-900 text-base font-bold leading-tight">
+                  Descartar solicitação?
+                </DialogTitle>
+                <p className="text-[11px] text-amber-700/80 mt-0.5 leading-snug">
+                  Você ainda não salvou esta solicitação. Confirme antes de fechar.
+                </p>
+              </div>
+            </div>
           </DialogHeader>
-          <div className="text-sm text-gray-700 py-2">
-            Você preencheu informações nesta solicitação. Se fechar agora, todos os dados digitados serão perdidos.
+
+          {/* Corpo — mensagem em card âmbar leve */}
+          <div className="px-5 py-4">
+            <div className="rounded-lg border border-amber-200 bg-amber-50/60 p-3 flex gap-2.5">
+              <Info className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+              <p className="text-xs text-amber-900 leading-snug">
+                Você preencheu informações nesta solicitação. Se fechar agora, <strong>todos os dados digitados serão perdidos</strong>.
+              </p>
+            </div>
           </div>
-          <div className="flex flex-col gap-2 pt-2">
+
+          {/* Footer sticky — ação primária + secundárias */}
+          <div className="px-5 py-3 border-t border-gray-200 bg-gray-50/60 flex flex-col gap-2">
             <button
               onClick={() => { setConfirmFecharNova(false); handleSalvar(); }}
               disabled={criar.isPending || editar.isPending || uploadingImagem}
-              className="w-full h-9 text-sm rounded-md bg-amber-600 hover:bg-amber-500 text-white font-semibold disabled:opacity-60 flex items-center justify-center gap-2"
+              className="w-full h-9 text-sm rounded-md bg-amber-600 hover:bg-amber-500 text-white font-semibold disabled:opacity-60 flex items-center justify-center gap-2 shadow-sm transition"
             >
               {(criar.isPending || editar.isPending || uploadingImagem) ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
               {editingSc ? "Salvar Alterações" : "Salvar Solicitação"}
@@ -4661,7 +4696,7 @@ ${sc.observacoes ? `<div class="obs"><b>Observações da SC:</b><br>${esc(sc.obs
             <div className="flex gap-2">
               <button
                 onClick={() => setConfirmFecharNova(false)}
-                className="flex-1 h-9 text-sm border border-gray-300 rounded-md bg-white text-gray-700 hover:bg-gray-50 font-medium"
+                className="flex-1 h-9 text-sm border border-gray-300 rounded-md bg-white text-gray-700 hover:bg-gray-50 font-medium transition"
               >
                 Continuar editando
               </button>
@@ -4673,8 +4708,9 @@ ${sc.observacoes ? `<div class="obs"><b>Observações da SC:</b><br>${esc(sc.obs
                   setEditingSc(null);
                   setEditingOriginalEapIds(new Set());
                 }}
-                className="flex-1 h-9 text-sm rounded-md bg-red-600 hover:bg-red-500 text-white font-semibold"
+                className="flex-1 h-9 text-sm rounded-md bg-red-600 hover:bg-red-500 text-white font-semibold transition flex items-center justify-center gap-1.5"
               >
+                <X className="h-3.5 w-3.5" />
                 Descartar
               </button>
             </div>
