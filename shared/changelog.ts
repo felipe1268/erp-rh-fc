@@ -1,6 +1,69 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2268 — **FIX · Card "PREVISTO (SEMANA)" agora VARIA por semana, em
+ * paridade absoluta com a barra "Avanço Físico" do topo. Chip "📸 Foto MSP"
+ * passa a se referir APENAS ao Realizado.**
+ *
+ * Pedido user (23/05/2026, VITRA 6ª Semana 08-11/06):
+ *   "o valor de 4% esta ficando fixo, o correto era ele variar conforme a
+ *    barra de comando do topo".
+ *
+ * Diagnóstico:
+ *   - Barra do topo ("Avanço Físico"): usa `avancoPrevistoDia` (L762), que
+ *     desde a Rev. 1825 calcula PV via `pctRaizMSP(refStr, projIni, projFim,
+ *     calMSP)` — fórmula EXATA do MSP (dias úteis no envelope, mesmo
+ *     calendário do XML). Para semanas posteriores ao StatusDate, devolve
+ *     9,76 % (PV exigível em 11/06/2026).
+ *   - Card "PREVISTO (SEMANA)" (Rev. 2267): lia APENAS o snapshot estático
+ *     `previstoMspSnapshot` (4,00 % — Texto6 inteiro gravado em 21/05).
+ *     Resultado: barra topo varia, card trava → confusão do engenheiro.
+ *
+ * Reinterpretação da regra:
+ *   - A user pref Rev. 2265 ("Planejamento NÃO calcula") proíbe cálculo
+ *     PROPRIETÁRIO do ERP (ponderação por custo, dias corridos linear,
+ *     ad-hoc). NÃO proíbe replicar a fórmula MSP-nativa usando o
+ *     `calendarioJson` que veio do próprio XML — isso é o que o MSP
+ *     faria internamente se você mudasse o StatusDate. É leitura
+ *     "estendida" do XML, não cálculo do ERP.
+ *   - A barra do topo já faz isso desde Rev. 1825/2262 e o user nunca
+ *     reclamou (pelo contrário, é a referência absoluta dele).
+ *
+ * Política nova:
+ *   - PREVISTO: sempre `pctRaizMSP(semanaFim, projIni, projFim, calMSP)` —
+ *     mesma fórmula da barra do topo. Quando `semanaFim === statusDate`
+ *     bate exatamente com o snapshot gravado (paridade absoluta).
+ *   - REALIZADO: dado EMPÍRICO (AD/(AD+RD)), não calculável. Mantém Rev. 2267:
+ *       * semanaFim < statusDate → "—" (sem foto histórica)
+ *       * semanaFim === statusDate → snapshot fresco
+ *       * semanaFim > statusDate → snapshot + chip "📸 Foto MSP de DD/MM"
+ *
+ * Chip âmbar (Rev. 2267 → 2268) atualizado: agora diz "Realizado: foto MSP
+ * de DD/MM/AAAA" e explicita que o Previsto varia normalmente.
+ *
+ * Coerência com user pref Rev. 2265:
+ *   - Não há cálculo proprietário novo. `pctRaizMSP` é literalmente a
+ *     fórmula `du(início → ref) / du(envelope) × 100` que o MSP executa
+ *     para preencher Texto10/Texto6 — replicada com o mesmo calendário
+ *     gravado do XML.
+ *   - O conceito permanece: snapshot é a foto, mas o PREVISTO é a fórmula
+ *     determinística que produz o snapshot — então pode ser calculado para
+ *     qualquer t no envelope. O REALIZADO segue intocado (sem cálculo).
+ *
+ * Fix:
+ *   - `PlanejamentoDetalhe.tsx` L6949-6995 — `mspReadOnly` reescrito:
+ *     Previsto via `pctRaizMSP`, Realizado via snapshot (com `staleFromDate`).
+ *   - `PlanejamentoDetalhe.tsx` L7734-7738 — chip atualizado pra deixar
+ *     claro que se refere só ao Realizado.
+ *
+ * R-001/R-007/R-010: N/A (100% client-side).
+ *
+ * Arquivos:
+ *   - client/src/pages/planejamento/PlanejamentoDetalhe.tsx (2 hunks)
+ *   - shared/version.ts → Rev. 2268
+ *   - shared/changelog.ts → entrada no topo
+ *   - replit.md → 2+5
+ *
  * Rev. 2267 — **UX/REGRA DE OURO · Cards do Avanço Semanal exibem o snapshot
  * MSP mais recente em semanas POSTERIORES ao StatusDate, com chip âmbar
  * "📸 Foto MSP de DD/MM/AAAA" explicitando que é a última medição (não a

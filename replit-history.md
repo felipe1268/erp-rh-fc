@@ -476,3 +476,4 @@
 
 - Rev. 2259 — REFACTOR · SE (Solicitação de Equipamento de locação) migra do Almoxarifado para o módulo Compras.
 - Rev. 2260 — FIX · Importador MS Project lê % PREVISTO por atividade via Texto6 (FieldID 188743746) como fallback de Texto10.
+- Rev. 2261 — BACKFILL · Propaga leitura MSP da Rev. 2260 para todas as obras antigas no startup (idempotente).

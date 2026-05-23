@@ -6943,33 +6943,51 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
       return { previsto: null, realizado: null,
         missingReason: "Datas de início/término da obra foram alteradas no ERP após o último import. Reimporte o XML para restaurar a paridade com o MSP." };
     }
-    // Rev. 2267 — Política de cutoff:
-    //   - semanaFim < statusDateSnapshot → semana ANTERIOR ao snapshot:
-    //     o MSP daquele momento não existia ainda. Não há foto histórica
-    //     no XML (apenas a foto atual). Mostra "—".
-    //   - semanaFim === statusDateSnapshot → semana DO snapshot: foto
-    //     fresca, sem chip.
-    //   - semanaFim > statusDateSnapshot → semana POSTERIOR: ainda não
-    //     houve nova medição do MSP, mas o snapshot mais recente é a
-    //     melhor leitura disponível. Exibe os valores com `staleFromDate`
-    //     para a UI mostrar chip "📸 Foto MSP de DD/MM/AAAA".
-    if (semanaFim < cal.statusDateSnapshot) {
-      return { previsto: null, realizado: null, staleFromDate: null as string | null,
-        missingReason: `A semana visualizada (fim ${fmtBR(semanaFim)}) é anterior ao StatusDate do XML mais recente (${fmtBR(cal.statusDateSnapshot)}). O XML do MSP guarda apenas a última foto — não há snapshot histórico para semanas passadas.` };
+    // Rev. 2268 — Política refinada:
+    //
+    // PREVISTO: sempre calculado via `pctRaizMSP(semanaFim, projIni, projFim,
+    // calMSP)` — MESMA fórmula que o MSP usa internamente (dias úteis no
+    // envelope, Texto10/Texto6). Quando `semanaFim === statusDateSnapshot`
+    // bate exatamente com o snapshot gravado (paridade absoluta com o XML).
+    // Para outras semanas, devolve o que o MSP mostraria se você mudasse o
+    // StatusDate pra aquela data. NÃO é "cálculo do ERP" — é a fórmula MSP
+    // replicada usando o `calendarioJson` (feriados, jornadas) gravado do
+    // próprio XML. Assim o card varia junto com a barra do topo (que já
+    // usa essa mesma fórmula desde a Rev. 2262).
+    //
+    // REALIZADO: só existe quando o engenheiro rodou o MSP e mediu — é dado
+    // empírico (AD/(AD+RD)), não calculável. Política:
+    //   - semanaFim < statusDate → "—" (não há foto histórica no XML).
+    //   - semanaFim === statusDate → snapshot fresco.
+    //   - semanaFim > statusDate → snapshot + `staleFromDate` (chip
+    //     "📸 Foto MSP de DD/MM").
+    const projIniM = (proj as any)?.dataInicio as string | null | undefined;
+    const projFimM = (proj as any)?.dataTerminoContratual as string | null | undefined;
+    let prev: number | null = null;
+    if (projIniM && projFimM) {
+      prev = +pctRaizMSP(semanaFim, projIniM, projFimM, cal).toFixed(2);
+    } else if (cal.previstoMspSnapshot != null && semanaFim === cal.statusDateSnapshot) {
+      prev = Number(cal.previstoMspSnapshot);
     }
-    const prev = cal.previstoMspSnapshot  != null ? Number(cal.previstoMspSnapshot)  : null;
-    const real = cal.realizadoMspSnapshot != null ? Number(cal.realizadoMspSnapshot) : null;
+    let real: number | null = null;
+    let staleFromDate: string | null = null;
+    if (semanaFim < cal.statusDateSnapshot) {
+      real = null;
+    } else if (cal.realizadoMspSnapshot != null) {
+      real = Number(cal.realizadoMspSnapshot);
+      if (semanaFim > cal.statusDateSnapshot) staleFromDate = cal.statusDateSnapshot;
+    }
     const partes: string[] = [];
-    if (prev  == null) partes.push("% Previsto (Texto6/10/11) ausente");
-    if (real == null) partes.push("% Realizado (AD/(AD+RD)) ausente");
-    const stale = semanaFim > cal.statusDateSnapshot ? cal.statusDateSnapshot : null;
+    if (prev == null) partes.push("% Previsto (Texto6/10/11) ausente");
+    if (real == null && semanaFim >= cal.statusDateSnapshot)
+      partes.push("% Realizado (AD/(AD+RD)) ausente no snapshot");
     return {
       previsto: prev != null ? Math.min(100, Math.max(0, prev)) : null,
       realizado: real != null ? Math.min(100, Math.max(0, real)) : null,
-      staleFromDate: stale,
-      missingReason: partes.length
-        ? `Snapshot MSP incompleto no XML: ${partes.join(", ")}. Reimporte o cronograma para popular.`
-        : null,
+      staleFromDate,
+      missingReason: real == null && semanaFim < cal.statusDateSnapshot
+        ? `A semana visualizada (fim ${fmtBR(semanaFim)}) é anterior ao StatusDate do XML mais recente (${fmtBR(cal.statusDateSnapshot)}). O XML do MSP guarda apenas a última foto — não há snapshot histórico para o Realizado em semanas passadas.`
+        : (partes.length ? `Snapshot MSP incompleto no XML: ${partes.join(", ")}. Reimporte o cronograma.` : null),
     };
   }, [proj, semanaFim]);
   const mspPrev = mspReadOnly.previsto;
@@ -7713,7 +7731,7 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
       {mspStaleFromDate && (
         <div className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-amber-50 border border-amber-200 text-[11px] text-amber-800">
           <span>📸</span>
-          <span><b>Foto MSP de {fmtBR(mspStaleFromDate)}</b> — a semana selecionada ({fmtBR(semanaAtual)} a {fmtBR(semanaFim)}) é posterior ao último StatusDate do XML. Os números abaixo refletem a última medição disponível do MS Project, não a semana selecionada. Para atualizar, exporte um novo XML com StatusDate em {fmtBR(semanaFim)} e reimporte via "Importar MS Project".</span>
+          <span><b>Realizado: foto MSP de {fmtBR(mspStaleFromDate)}</b> — a semana selecionada ({fmtBR(semanaAtual)} a {fmtBR(semanaFim)}) é posterior ao último StatusDate do XML. O <b>Previsto</b> varia normalmente (calculado pela mesma fórmula MSP, dias úteis até {fmtBR(semanaFim)}), mas o <b>Realizado</b> é dado empírico e fica congelado na última medição. Para atualizar, exporte novo XML com StatusDate em {fmtBR(semanaFim)} e reimporte via "Importar MS Project".</span>
         </div>
       )}
       <div className="grid grid-cols-3 gap-3">
