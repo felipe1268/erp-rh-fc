@@ -274,17 +274,17 @@ export const warehouseRouter = router({
       const sucessos: number[] = [];
       const erros: { id: number; motivo: string }[] = [];
 
-      // Bloqueio estrutural de mov originada do fluxo de Recebimento /
-      // OC. `registerSmartEntry` grava motivo como "Recebimento NF: ..."
-      // ou "Recebimento inteligente"; já o `registerEntry` manual grava
-      // "NF: ..." (sem "Recebimento") ou texto livre. O regex abaixo
-      // cobre TODOS os padrões de smart-entry sem capturar entrada
-      // manual de NF avulsa:
-      //   /^\s*recebimento\b/i  → "Recebimento NF: 1234", "Recebimento inteligente"
-      //   /\boc[\s-]/i          → "OC OC-2026-0123 entregue" e variantes
-      const isFromOcOrSmartEntry = (motivo: string | null | undefined) => {
+      // Rev. 2306 — Refinamento: SÓ bloqueia movimentação vinculada a
+      // uma OC (porque estornar mexeria em `qtd_entregue` e status da
+      // OC sem que esta tela faça essa reversão). Recebimento avulso
+      // SEM OC (motivo "Recebimento inteligente" ou "Recebimento NF:")
+      // pode ser estornado livremente — só atualiza estoque. Caso real:
+      // user com 606 movs, quase todas de Recebimento, todas
+      // bloqueadas pelo regex antigo `/^\s*recebimento\b/i` que era
+      // largo demais.
+      const isLinkedToOc = (motivo: string | null | undefined) => {
         const s = String(motivo || "");
-        return /^\s*recebimento\b/i.test(s) || /\boc[\s-]/i.test(s);
+        return /\boc[\s-]/i.test(s);
       };
 
       for (const mid of input.movementIds) {
@@ -300,8 +300,8 @@ export const warehouseRouter = router({
             ));
           if (!mov) { erros.push({ id: mid, motivo: "Movimentação não encontrada" }); continue; }
           if (mov.estornadaEm) { erros.push({ id: mid, motivo: "Já estornada anteriormente" }); continue; }
-          if (isFromOcOrSmartEntry(mov.motivo)) {
-            erros.push({ id: mid, motivo: "Movimentação de OC/Recebimento — estorne pela tela de Recebimentos" });
+          if (isLinkedToOc(mov.motivo)) {
+            erros.push({ id: mid, motivo: "Vinculada a Ordem de Compra — estorne pela tela de Recebimentos para reverter o status da OC" });
             continue;
           }
 

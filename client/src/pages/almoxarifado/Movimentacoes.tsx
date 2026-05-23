@@ -342,8 +342,12 @@ export default function AlmoxarifadoMovimentacoes() {
               const meta = TIPO_LABELS[mov.tipo] || TIPO_LABELS["ajuste"];
               const Icon = meta.icon;
               const estornada = !!mov.estornadaEm;
+              // Rev. 2306 — Mov vinculada a OC não pode ser estornada
+              // por esta tela (dessincroniza qtd_entregue/status da OC).
+              // Marca visualmente pra economizar clique do user.
+              const vinculadaOc = /\boc[\s-]/i.test(String(mov.motivo || ""));
               const sel = selecionadas.has(mov.id);
-              const podeSelecionar = modoSelecao && !estornada;
+              const podeSelecionar = modoSelecao && !estornada && !vinculadaOc;
               const onCardClick = podeSelecionar ? () => toggleSel(mov.id) : undefined;
               return (
                 <div
@@ -358,8 +362,17 @@ export default function AlmoxarifadoMovimentacoes() {
                   }`}
                 >
                   {modoSelecao && (
-                    <div className="flex-shrink-0 pt-1">
-                      {estornada ? (
+                    <div
+                      className="flex-shrink-0 pt-1"
+                      title={
+                        estornada
+                          ? "Já estornada"
+                          : vinculadaOc
+                          ? "Vinculada a OC — estorne pela tela de Recebimentos"
+                          : sel ? "Desmarcar" : "Selecionar para estornar"
+                      }
+                    >
+                      {estornada || vinculadaOc ? (
                         <Ban className="w-5 h-5 text-gray-300" />
                       ) : sel ? (
                         <CheckSquare className="w-5 h-5 text-emerald-600" />

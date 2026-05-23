@@ -1,6 +1,48 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2306 — **HOTFIX/UX · Estorno do Almoxarifado: liberar
+ * Recebimento avulso (sem OC) + sinalizar visualmente mov vinculada
+ * a OC como não-selecionável.**
+ *
+ * Dor real (print user 23/05/2026, 18h03): das 606 movimentações da
+ * tela, praticamente todas vinham do fluxo Recebimento — "Recebimento
+ * inteligente" puro ou "OC OC-2026-XXX entregue". O regex da Rev. 2305
+ * `/^\s*recebimento\b/i` bloqueava AMBOS os casos, então o botão
+ * Estornar mostrava 3× a mesma mensagem "Movimentação de
+ * OC/Recebimento — estorne pela tela de Recebimentos" e nenhuma das
+ * mov era estornada. Feature ficou inútil pro caso real.
+ *
+ * **Refinamento da regra (backend `server/routers/warehouse.ts`):**
+ * helper antigo `isFromOcOrSmartEntry` virou `isLinkedToOc`, mantendo
+ * APENAS o regex `/\boc[\s-]/i`. Justificativa: o que de fato
+ * dessincroniza ao estornar é o vínculo com OC (mexer no estoque sem
+ * tocar em `qtd_entregue`/status da OC deixa OC mentindo). Recebimento
+ * avulso sem OC só atualizou estoque — o estorno reverte exatamente
+ * isso, sem efeito colateral. Erro reformulado: "Vinculada a Ordem de
+ * Compra — estorne pela tela de Recebimentos para reverter o status
+ * da OC".
+ *
+ * **UX (`client/src/pages/almoxarifado/Movimentacoes.tsx`):** novo
+ * flag local `vinculadaOc = /\boc[\s-]/i.test(motivo)`. Em modo
+ * seleção:
+ * - Cards vinculados a OC mostram ícone `Ban` no slot do checkbox
+ *   (mesmo tratamento das já estornadas), tooltip "Vinculada a OC —
+ *   estorne pela tela de Recebimentos".
+ * - `podeSelecionar` agora é `modoSelecao && !estornada
+ *   && !vinculadaOc` — clique no card simplesmente não responde,
+ *   economizando 3 tentativas + toast de erro pra cada lote.
+ * - Tooltip também adicionado pros casos válidos
+ *   ("Selecionar para estornar" / "Desmarcar") e "Já estornada".
+ *
+ * **R-001 / R-007 / R-010:** N/A — mudança de regra de negócio em
+ * mutation existente + UX, sem schema/DDL.
+ *
+ * Arquivos: `server/routers/warehouse.ts`,
+ * `client/src/pages/almoxarifado/Movimentacoes.tsx`,
+ * `shared/version.ts`, `shared/changelog.ts`, `replit.md`,
+ * `replit-history.md`.
+ *
  * Rev. 2305 — **FEAT · Seleção múltipla + ESTORNO em lote de movimentações
  * do Almoxarifado (soft-delete auditável).**
  *
