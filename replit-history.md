@@ -2,6 +2,7 @@
 
 > Este arquivo guarda os one-liners das revisões antigas para manter o `replit.md` enxuto.
 
+- ~~Rev. 2318~~ — UX/HOTFIX · Barra de progresso da importação PDF não trava mais em 95% (creep 95→99% + estimativa realista 35s). Ver `shared/changelog.ts`.
 - ~~Rev. 2317~~ — UX · Remove IMPORTAR PDF (IA) do header do Almoxarifado; fica só RECEBER + DEVOLVER LOCAÇÃO. Ver `shared/changelog.ts`.
 - ~~Rev. 2316~~ — UX · Restaura RECEBER + DEVOLVER LOCAÇÃO como botões dedicados no header do Almoxarifado (Importar PDF removido depois na Rev. 2317). Ver `shared/changelog.ts`.
 - ~~Rev. 2315~~ — UX · Removido botão "Receber locação" do hero da tela Equipamentos Locados; Importar PDF (IA) vira CTA primária. Ver `shared/changelog.ts`.

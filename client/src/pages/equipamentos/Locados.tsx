@@ -100,32 +100,83 @@ export default function EquipamentosLocados() {
       return n;
     });
   };
-  const vincularLote = trpc.equipamentos.locadosVincularObraLote.useMutation({
-    onSuccess: (res) => {
-      utils.equipamentos.locadosListar.invalidate();
-      toast.success(`${res.vinculados} equipamento(s) vinculado(s).`);
-      setSelecionados(new Set()); setObraParaVincular("");
-    },
-    onError: (e) => toast.error(e.message),
-  });
-  const excluirLote = trpc.equipamentos.locadosExcluirLote.useMutation({
-    onSuccess: (res) => {
-      utils.equipamentos.locadosListar.invalidate();
-      toast.success(`${res.excluidos} equipamento(s) excluído(s).`);
-      setSelecionados(new Set());
-    },
-    onError: (e) => toast.error(e.message),
-  });
-  function confirmarVincular() {
+  // Rev. 2325 — chunking client-side. O server limita ids[1..500] por chamada
+  // (proteção contra payload gigante); ao selecionar 1218 cards o user batia
+  // ZodError "expected array to have <=500 items". Fazemos N chamadas de 500
+  // sequenciais com modal de progresso + modal de erro bonito (não toast).
+  const CHUNK = 500;
+  const vincularLote = trpc.equipamentos.locadosVincularObraLote.useMutation();
+  const excluirLote  = trpc.equipamentos.locadosExcluirLote.useMutation();
+
+  // Estados pra modais (substituem window.confirm + toast invisível no iPad)
+  const [confirmExcluir, setConfirmExcluir] = useState<number | null>(null); // total a excluir
+  const [loteProgresso, setLoteProgresso] = useState<{ acao: "vincular" | "excluir"; feitos: number; total: number; chunks: number; chunkAtual: number } | null>(null);
+  const [loteErro, setLoteErro] = useState<string | null>(null);
+
+  function chunkIds(arr: number[], size: number): number[][] {
+    const out: number[][] = [];
+    for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
+    return out;
+  }
+  function formatTrpcError(e: any): string {
+    try {
+      const parsed = JSON.parse(e.message);
+      if (Array.isArray(parsed)) {
+        return parsed.slice(0, 5).map((it: any) => `• ${(it.path || []).join('.')}: ${it.message}`).join('\n');
+      }
+    } catch {}
+    return String(e?.message || "Erro desconhecido");
+  }
+
+  async function confirmarVincular() {
     if (selecionados.size === 0) return;
     const obraId = obraParaVincular === "__null__" ? null : (parseInt(obraParaVincular) || null);
-    if (obraId === null && obraParaVincular !== "__null__") return toast.error("Selecione uma obra.");
-    vincularLote.mutate({ companyId, ids: Array.from(selecionados), obraId });
+    if (obraId === null && obraParaVincular !== "__null__") { setLoteErro("Selecione uma obra."); return; }
+    const ids = Array.from(selecionados);
+    const chunks = chunkIds(ids, CHUNK);
+    setLoteProgresso({ acao: "vincular", feitos: 0, total: ids.length, chunks: chunks.length, chunkAtual: 0 });
+    let vinculados = 0;
+    try {
+      for (let i = 0; i < chunks.length; i++) {
+        setLoteProgresso({ acao: "vincular", feitos: vinculados, total: ids.length, chunks: chunks.length, chunkAtual: i + 1 });
+        const res = await vincularLote.mutateAsync({ companyId, ids: chunks[i], obraId });
+        vinculados += Number((res as any)?.vinculados || chunks[i].length);
+      }
+      setLoteProgresso(null);
+      utils.equipamentos.locadosListar.invalidate();
+      toast.success(`${vinculados} equipamento(s) vinculado(s).`);
+      setSelecionados(new Set()); setObraParaVincular("");
+    } catch (e: any) {
+      setLoteProgresso(null);
+      setLoteErro(`Falhou após vincular ${vinculados} de ${ids.length}.\n\n${formatTrpcError(e)}`);
+      utils.equipamentos.locadosListar.invalidate();
+    }
   }
   function confirmarExcluir() {
     if (selecionados.size === 0) return;
-    if (!window.confirm(`Excluir ${selecionados.size} equipamento(s) locado(s)?\n\nEsta ação remove TAMBÉM todo o histórico (eventos) deles e NÃO pode ser desfeita.`)) return;
-    excluirLote.mutate({ companyId, ids: Array.from(selecionados) });
+    setConfirmExcluir(selecionados.size); // abre modal bonito (em vez de window.confirm)
+  }
+  async function executarExcluir() {
+    setConfirmExcluir(null);
+    const ids = Array.from(selecionados);
+    const chunks = chunkIds(ids, CHUNK);
+    setLoteProgresso({ acao: "excluir", feitos: 0, total: ids.length, chunks: chunks.length, chunkAtual: 0 });
+    let excluidos = 0;
+    try {
+      for (let i = 0; i < chunks.length; i++) {
+        setLoteProgresso({ acao: "excluir", feitos: excluidos, total: ids.length, chunks: chunks.length, chunkAtual: i + 1 });
+        const res = await excluirLote.mutateAsync({ companyId, ids: chunks[i] });
+        excluidos += Number((res as any)?.excluidos || chunks[i].length);
+      }
+      setLoteProgresso(null);
+      utils.equipamentos.locadosListar.invalidate();
+      toast.success(`${excluidos} equipamento(s) excluído(s).`);
+      setSelecionados(new Set());
+    } catch (e: any) {
+      setLoteProgresso(null);
+      setLoteErro(`Falhou após excluir ${excluidos} de ${ids.length}.\n\n${formatTrpcError(e)}`);
+      utils.equipamentos.locadosListar.invalidate();
+    }
   }
 
   const criar = trpc.equipamentos.locadoCriar.useMutation({
@@ -583,6 +634,90 @@ export default function EquipamentosLocados() {
         )}
       </div>
 
+      {/* Rev. 2325 — Modal de confirmação de exclusão em lote (bonito, substitui window.confirm) */}
+      {confirmExcluir !== null && (
+        <div className="fixed inset-0 z-[60] bg-black/50 flex items-center justify-center p-4" onClick={() => setConfirmExcluir(null)}>
+          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="bg-red-50 border-b-2 border-red-200 px-5 py-4 flex items-center gap-3">
+              <div className="h-10 w-10 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
+                <Trash2 className="h-5 w-5 text-red-600" />
+              </div>
+              <div>
+                <h3 className="font-bold text-red-900">Confirmar exclusão em lote</h3>
+                <p className="text-xs text-red-700">Esta ação não pode ser desfeita.</p>
+              </div>
+            </div>
+            <div className="px-5 py-4 space-y-3">
+              <p className="text-sm text-slate-700">
+                Você está prestes a excluir <span className="font-bold text-red-700">{confirmExcluir.toLocaleString('pt-BR')} equipamento(s) locado(s)</span>.
+              </p>
+              <div className="bg-amber-50 border border-amber-200 rounded-md p-3 text-xs text-amber-900">
+                <strong>⚠ Atenção:</strong> Todo o histórico de eventos (recebimento, check-ins, devoluções) também será removido permanentemente do banco.
+              </div>
+              {confirmExcluir > CHUNK && (
+                <div className="bg-blue-50 border border-blue-200 rounded-md p-3 text-xs text-blue-900">
+                  ℹ Como são mais de {CHUNK} itens, a exclusão será dividida em <strong>{Math.ceil(confirmExcluir / CHUNK)} etapas</strong> de até {CHUNK} de cada vez (limite do servidor).
+                </div>
+              )}
+            </div>
+            <div className="px-5 py-3 bg-slate-50 border-t border-slate-200 flex items-center justify-end gap-2">
+              <button onClick={() => setConfirmExcluir(null)} className="px-4 py-2 text-sm border border-slate-300 rounded-md text-slate-700 hover:bg-white">Cancelar</button>
+              <button onClick={executarExcluir} className="px-4 py-2 text-sm bg-red-600 hover:bg-red-700 text-white rounded-md font-semibold inline-flex items-center gap-2">
+                <Trash2 className="h-4 w-4" /> Sim, excluir {confirmExcluir}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Rev. 2325 — Modal de progresso em lote (chunks de 500) */}
+      {loteProgresso && (
+        <div className="fixed inset-0 z-[60] bg-black/50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full overflow-hidden">
+            <div className="px-5 py-4 border-b border-slate-200">
+              <h3 className="font-bold text-slate-900 flex items-center gap-2">
+                {loteProgresso.acao === "vincular" ? <MapPin className="h-5 w-5 text-blue-600" /> : <Trash2 className="h-5 w-5 text-red-600" />}
+                {loteProgresso.acao === "vincular" ? "Vinculando obras…" : "Excluindo equipamentos…"}
+              </h3>
+            </div>
+            <div className="px-5 py-5 space-y-3">
+              <div className="text-sm text-slate-700">
+                Lote <strong>{loteProgresso.chunkAtual}</strong> de <strong>{loteProgresso.chunks}</strong> · {loteProgresso.feitos.toLocaleString('pt-BR')} de {loteProgresso.total.toLocaleString('pt-BR')} processados
+              </div>
+              <div className="h-3 bg-slate-200 rounded-full overflow-hidden">
+                <div
+                  className={`h-full ${loteProgresso.acao === "vincular" ? "bg-blue-500" : "bg-red-500"} transition-all duration-300`}
+                  style={{ width: `${Math.max(5, Math.min(100, (loteProgresso.chunkAtual / Math.max(1, loteProgresso.chunks)) * 100))}%` }}
+                />
+              </div>
+              <p className="text-xs text-slate-500">
+                Processando em chunks de {CHUNK} itens — o servidor limita por chamada pra evitar payload gigante. Não feche essa janela.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Rev. 2325 — Modal de erro em lote (persistente, substitui toast invisível) */}
+      {loteErro && (
+        <div className="fixed inset-0 z-[60] bg-black/50 flex items-center justify-center p-4" onClick={() => setLoteErro(null)}>
+          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="bg-red-50 border-b-2 border-red-200 px-5 py-4 flex items-center gap-3">
+              <div className="h-10 w-10 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
+                <AlertTriangle className="h-5 w-5 text-red-600" />
+              </div>
+              <h3 className="font-bold text-red-900">Erro na operação em lote</h3>
+            </div>
+            <div className="px-5 py-4">
+              <pre className="text-xs text-slate-800 whitespace-pre-wrap font-mono bg-slate-50 border border-slate-200 rounded p-3 max-h-60 overflow-auto">{loteErro}</pre>
+            </div>
+            <div className="px-5 py-3 bg-slate-50 border-t border-slate-200 flex items-center justify-end">
+              <button onClick={() => setLoteErro(null)} className="px-4 py-2 text-sm bg-slate-800 hover:bg-slate-900 text-white rounded-md font-semibold">Entendi</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Rev. 2323 — Action bar flutuante (sticky bottom) quando há seleção */}
       {selecionados.size > 0 && (
         <div className="fixed bottom-0 inset-x-0 z-40 bg-white border-t-2 border-emerald-500 shadow-2xl">
@@ -608,9 +743,9 @@ export default function EquipamentosLocados() {
             </div>
             <div className="flex items-center gap-2">
               <button onClick={() => setSelecionados(new Set())} className="px-3 py-1.5 text-sm border border-slate-300 rounded-md text-slate-700 hover:bg-slate-50">Cancelar</button>
-              <button onClick={confirmarExcluir} disabled={excluirLote.isPending}
+              <button onClick={confirmarExcluir} disabled={!!loteProgresso}
                 className="px-3 py-1.5 text-sm bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white rounded-md inline-flex items-center gap-1 font-medium">
-                <Trash2 className="h-4 w-4" /> {excluirLote.isPending ? "Excluindo…" : `Excluir ${selecionados.size}`}
+                <Trash2 className="h-4 w-4" /> Excluir {selecionados.size}
               </button>
             </div>
           </div>

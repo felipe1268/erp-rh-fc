@@ -1,6 +1,82 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2325 — **HOTFIX/UX · Exclusão/vinculação em lote de
+ * equipamentos locados — chunking de 500 + modais bonitos
+ * (substitui ZodError "expected array to have <=500 items"
+ * e o toast cortado no canto do iPad).**
+ *
+ * Pedido user (23/05/2026, 2 screenshots do iPad): "Precisa
+ * arrumar o erro, e corrigir o layout da mensagem". As
+ * screenshots mostravam: (1) toast vazando do canto inferior
+ * esquerdo com `[ { "origin": "array", "code": "too_big",
+ * "maximum": 500, "inclusive": true, "path": [ "ids" ],
+ * "message": "Too big: expected array to have <=500 items" }
+ * ]` (ZodError cru do tRPC, ilegível e cortado); (2) o
+ * `window.confirm` nativo do iPad que aparece centralizado
+ * mas não diz que vai falhar.
+ *
+ * Diagnóstico: na Rev. 2323 a procedure server
+ * `locadosExcluirLote` (e `locadosVincularObraLote`) limitou
+ * `ids: z.array(z.number()).min(1).max(500)` pra evitar
+ * payload gigante. Faz sentido no server — mas o user
+ * selecionou todos os 1218 cards visíveis (cenário comum
+ * depois do import em lote da Rev. 2308 que criou 1218
+ * SAPATAS AJUSTÁVEIS) e o client mandava tudo num único
+ * call → ZodError. Pior: o toast do erro era exibido pelo
+ * Sonner com a mensagem JSON inteira, que no iPad em
+ * orientação retrato vaza pra fora da tela e some em ~3s.
+ *
+ * Implementação (`client/src/pages/equipamentos/Locados.tsx`,
+ * 0 mudança server, 0 schema):
+ *
+ *   (1) Constante `CHUNK = 500` (espelha o `.max(500)` do
+ *       server) + util `chunkIds(arr, size)` que fatia o
+ *       array de ids em pedaços. Tanto `confirmarVincular`
+ *       quanto `executarExcluir` agora rodam `for` sequencial
+ *       chamando `mutateAsync` por chunk, acumulando
+ *       `vinculados`/`excluidos` retornados pelo server.
+ *
+ *   (2) Estado `loteProgresso: { acao, feitos, total, chunks,
+ *       chunkAtual } | null` + modal modal-overlay (z-60) que
+ *       fica aberto durante toda a operação, mostrando barra
+ *       de progresso azul (vincular) ou vermelha (excluir) e
+ *       texto "Lote X de Y · N de M processados". Não fecha
+ *       enquanto roda — impede o user de clicar de novo.
+ *
+ *   (3) Estado `confirmExcluir: number | null` que substitui
+ *       o `window.confirm`. Abre modal vermelho próprio com
+ *       header de alerta + corpo destacando o total + box
+ *       amarelo de aviso ("histórico será removido") + box
+ *       azul informativo SÓ se total > 500 ("dividida em N
+ *       etapas de até 500 — limite do servidor"). Botão "Sim,
+ *       excluir N" e "Cancelar".
+ *
+ *   (4) Estado `loteErro: string | null` + modal de erro
+ *       persistente (z-60) que substitui o `toast.error`. Em
+ *       falha parcial mostra "Falhou após excluir X de Y" +
+ *       `<pre>` formatado com a mensagem (parseia ZodError
+ *       JSON via `formatTrpcError` igual ao da Rev. 2322,
+ *       devolvendo até 5 issues como `• path: message`).
+ *
+ *   (5) `excluirLote.isPending` removido do `disabled` dos
+ *       botões (substituído por `!!loteProgresso`, que cobre
+ *       o caso de chunks em série).
+ *
+ * Por que NÃO subir o `.max(500)` no server: limite existe
+ * por uma razão (transação Postgres com 1200+ UPDATEs +
+ * DELETEs + INSERTs de eventos pode estourar timeout/lock).
+ * Manter limite + paginar no client = melhor dos dois mundos.
+ *
+ * Bonus UX: o modal de progresso fica aberto durante toda a
+ * operação, então mesmo no Safari iOS (que mata XHR em
+ * background) o user vê o que está acontecendo e não fecha
+ * a aba achando que travou.
+ *
+ * R-001/R-007/R-010: N/A — DELETE continua sendo via mutation
+ * iniciada pelo user, com escopo por `companyId` + `id` +
+ * transação atômica por chunk no server (Rev. 2323).
+ *
  * Rev. 2324 — **FEATURE · Dashboard consolidada Almoxarifado
  * & Equipamentos — análise unificada em abas separadas.**
  *
