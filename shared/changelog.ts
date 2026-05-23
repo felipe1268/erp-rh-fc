@@ -1,6 +1,111 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2257 — **FEATURE · Módulo Controle de Equipamentos (Fase 1 Sprint 2 —
+ * tRPC router + auto-seed de parâmetros CAPEX).**
+ *
+ * Continuação direta da Rev. 2256 (schema). Esta rev expõe o backend via
+ * tRPC para o frontend consumir (páginas vêm na 2258) e semeia os parâmetros
+ * CAPEX default na 1ª listagem por company — sem precisar de migration de
+ * dados, sem precisar de seed script externo.
+ *
+ * Arquivos:
+ *  - `server/routers/equipamentos.ts` (novo, ~580 linhas)
+ *  - `server/routers.ts` (+2 linhas: import + registro em `appRouter` como
+ *    `equipamentos: equipamentosRouter`)
+ *  - `shared/version.ts` (2256 → 2257)
+ *
+ * Procedures expostas (namespace `trpc.equipamentos.*`):
+ *
+ *  PARÂMETROS CAPEX:
+ *    - `parametrosCapexListar` (query) — lista parâmetros da company.
+ *      AUTO-SEED na 1ª chamada (idempotente) com 13 chaves default:
+ *      `tma_mensal` 1.2%/mês, `limite_alcada_capex` R$ 5k,
+ *      `taxa_manutencao_anual` 8%, `taxa_seguro_anual` 1%,
+ *      `peso_utilizacao_historica` 0.7, `limiar_payback_fracao` 60%,
+ *      + 7 chaves `vida_util_<categoria>` (andaime 120m, betoneira 84m,
+ *      compressor 96m, gerador 120m, compactador 60m, serra 48m,
+ *      ferramenta_eletrica 36m) — benchmarks de construção pesada/edificações.
+ *    - `parametrosCapexAtualizar` (mutation) — bloqueia se `editavel=false`.
+ *
+ *  EQUIPAMENTOS PRÓPRIOS:
+ *    - `propriosListar` (query) — filtros: status, categoria, obraId, busca
+ *      (descrição/patrimônio/série via ILIKE).
+ *    - `proprioById` (query)
+ *    - `proprioCriar` (mutation) — bloqueia duplicata de patrimônio na company.
+ *    - `proprioAtualizar` (mutation) — `map(k,v)` só seta o que veio.
+ *
+ *  EQUIPAMENTOS LOCADOS:
+ *    - `locadosListar` (query) — filtros: status, obraId, fornecedorId,
+ *      ordemCompraId, `vencendoEmDias` (alerta de vencimento — futuro
+ *      consumido pela tela "Alertas" e pelo cron de 2259), busca.
+ *    - `locadoById` (query)
+ *    - `locadoCriar` (mutation) — **foto de recebimento OBRIGATÓRIA**
+ *      (regra do user). Registra evento `RECEBIMENTO` automaticamente.
+ *    - `locadoAtualizar` (mutation)
+ *    - `locadoDevolver` (mutation) — **foto de devolução OBRIGATÓRIA**.
+ *      Bloqueia se já devolvido. Registra evento `DEVOLUCAO_FORNECEDOR`.
+ *    - `locadoCheckIn` (mutation) — check-in semanal "está na obra?".
+ *      Carimba `ultimo_check_in_data` + evento `CHECK_IN_OBRA`.
+ *    - `locadoRegistrarEvento` (mutation) — registro genérico p/ os 9 tipos
+ *      de evento (RENOVACAO, MANUTENCAO, TRANSFERENCIA_OBRA, etc).
+ *    - `eventosListar` (query) — timeline em ordem decrescente.
+ *
+ *  SOLICITAÇÕES DE EQUIPAMENTO (SE):
+ *    - `solicitacoesListar` (query) — filtros status/obra.
+ *    - `solicitacaoById` (query)
+ *    - `solicitacaoCriar` (mutation) — gera numeração `SE-AAAA-NNNN` via
+ *      scan de MAX (volume esperado < 1k SEs/ano por company; migrar p/ tabela
+ *      de counters se virar gargalo).
+ *    - `solicitacaoDecidir` (mutation) — registra decisão e detecta override.
+ *      Se decisão ≠ `recomendacao_erp`, marca `decisao_override=true`. Compara
+ *      valor estimado (do snapshot CAPEX) contra `limite_alcada_capex`:
+ *        - dentro da alçada → auto-aprova
+ *        - acima da alçada → status `analisada` (aguarda aprovação)
+ *    - `solicitacaoAprovarOverride` (mutation) — aprovador formal.
+ *
+ *  FATURA LOCAÇÃO:
+ *    - `faturasListar` (query) — skeleton (OCR + cruzamento vem na Fase 3).
+ *
+ * **Por que auto-seed de parâmetros CAPEX (vs migration SQL com INSERTs):**
+ *  Seed por SQL exigiria saber `company_id` na hora da migration — quebra em
+ *  prod multi-empresa (criação de empresa nova ficaria sem parâmetros).
+ *  Auto-seed no `parametrosCapexListar` é idempotente, lazy, e funciona p/
+ *  toda company nova automaticamente sem intervenção do DBA.
+ *
+ * **Por que foto de recebimento E devolução obrigatória no router (não só na
+ * UI):** O user pediu explicitamente "sem foto não pode receber/devolver".
+ * Validar só no front é frágil — qualquer chamada direta da API bypassa.
+ * Throw `BAD_REQUEST` aqui é a única forma segura de garantir a regra.
+ *
+ * **Por que map(k,v) só atualiza o que veio (vs spread completo):** Evita
+ * sobrescrever campos não enviados com `null`/`undefined`. Padrão usado em
+ * outros routers do projeto (warehouse, compras). Mais seguro para mutations
+ * parciais vindas de formulários grandes.
+ *
+ * **R-001 / R-007 / R-010:** N/A (sem DDL). Router lê e escreve em tabelas
+ * já criadas pela 2256. Sem ALTER/DROP/DELETE.
+ *
+ * **Hardening de code review aplicado nesta rev:** WHERE de UPDATEs em
+ * `locadoDevolver` e `solicitacaoDecidir` reforçado com `eq(companyId,...)`
+ * (defense-in-depth) — antes confiava só no SELECT prévio, agora bloqueia
+ * cross-tenant mesmo se refatoração futura quebrar a checagem prévia.
+ *
+ * **Follow-up imediato (Rev. 2258):** páginas React em `client/src/pages/equipamentos/`:
+ *  - `EquipamentosProprios.tsx` (CRUD + lista filtrada)
+ *  - `EquipamentosLocados.tsx` (CRUD + foto upload + check-in + devolução)
+ *  - `SolicitacoesEquipamento.tsx` (criação + análise CAPEX inline)
+ *  - `ParametrosCapex.tsx` (apenas admin/financeiro)
+ *  - Plug no menu lateral (módulo "Equipamentos" novo).
+ *
+ * **Rev. 2259-2262:** cron alerta vencimento → plug Raio-X funcionário →
+ * bloqueio baixa obra → Dashboard Operacional. (Fase 2 vem depois: análise
+ * CAPEX completa, score fornecedor, transferência entre obras, Dash Gerencial.
+ * Fase 3: conferência fatura, OCR Anthropic, previsão demanda via MSP, Dash
+ * Estratégico.)
+ */
+
+/**
  * Rev. 2256 — **FEATURE · Módulo Controle de Equipamentos (Fase 1 Sprint 1 —
  * schema base) — fundação p/ acabar com perda recorrente de R$ 10-20k/mês
  * por locação descontrolada.**
