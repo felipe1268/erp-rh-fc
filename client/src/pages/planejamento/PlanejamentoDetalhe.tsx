@@ -13014,6 +13014,11 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
   // `expandedEtapas` = nós cujos filhos estão visíveis (qualquer nível).
   // Default: tudo recolhido — usuário abre manualmente para identificar gargalos.
   const [expandedEtapas, setExpandedEtapas] = useState<Set<string | number>>(new Set());
+  // Rev. 2277 — Filtro "Apenas atrasadas" da seção "Avanço Físico por Grupo".
+  // Quando ON: macro BarChart mostra só grupos com atrasos; cada card filtra
+  // a árvore para os ramos cujas folhas têm `previsto > realizado`; árvore
+  // é forçadamente expandida pra revelar todas as atrasadas sem clique extra.
+  const [apenasAtrasadas, setApenasAtrasadas] = useState(false);
   // Rev. 1948 — cards (NAVE) cujo bloco "Detalhamento Pai→Filho" está OCULTO.
   // Semântica invertida vs Rev. 1947: default = TODOS abertos (filhos visíveis).
   // Usuário fecha individualmente se quiser; quando fechado, entra no Set.
@@ -14920,10 +14925,32 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
 
       {/* ══════════════════════════════════════════════════════════════════════
           BLOCO 4 — AVANÇO POR GRUPO (Pavimento) — gráfico de barras horizontal
+          Rev. 2277 — pill "Apenas atrasadas" no header da seção: filtra macro
+          chart (só grupos com atraso) + filtra árvore de cada card abaixo.
       ══════════════════════════════════════════════════════════════════════ */}
       {grupos.length > 0 && (() => {
+        // Helpers compartilhados pelo filtro (BLOCO 4 + BLOCO 5)
+        const isAtrasadaFolha = (n: any) => ((n.children?.length ?? 0) === 0) && ((n.previsto ?? 0) - (n.realizado ?? 0) > 0.01);
+        const temAtrasoNaArvore = (n: any): boolean => {
+          if ((n.children?.length ?? 0) === 0) return isAtrasadaFolha(n);
+          return n.children.some((c: any) => temAtrasoNaArvore(c));
+        };
+        const contarAtrasadas = (lista: any[]): number => {
+          let c = 0;
+          for (const n of lista) {
+            if ((n.children?.length ?? 0) === 0) { if (isAtrasadaFolha(n)) c++; }
+            else c += contarAtrasadas(n.children);
+          }
+          return c;
+        };
+        const totalAtrasadas = grupos.reduce((acc: number, g: any) => acc + contarAtrasadas(g.etapas ?? []), 0);
+        // Filtro aplicado ao macro: apenas grupos cujo `realizado < previsto`
+        // OU que tenham alguma folha atrasada na sub-árvore.
+        const gruposFiltrados = apenasAtrasadas
+          ? grupos.filter((g: any) => (g.realizado ?? 0) < (g.previsto ?? 0) - 0.01 || (g.etapas ?? []).some((e: any) => temAtrasoNaArvore(e)))
+          : grupos;
         const TRUNC4 = 36;
-        const gruposChart = grupos.map((g: any) => ({
+        const gruposChart = gruposFiltrados.map((g: any) => ({
           ...g,
           nomeChart: g.nome?.length > TRUNC4 ? g.nome.substring(0, TRUNC4 - 1) + "…" : (g.nome ?? ""),
         }));
@@ -14932,13 +14959,48 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
         const rowHG = 72;
         return (
         <div className="refis-block refis-break-before bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-          <div className="bg-slate-100 border-b border-slate-200 px-5 py-2 flex items-center justify-between cursor-pointer select-none" onClick={() => setColBloco4(v => !v)}>
-            <p className="text-xs font-bold uppercase tracking-wider text-slate-600">
+          <div className="bg-slate-100 border-b border-slate-200 px-5 py-2 flex items-center justify-between gap-3 select-none">
+            <p
+              className="text-xs font-bold uppercase tracking-wider text-slate-600 cursor-pointer flex-1"
+              onClick={() => setColBloco4(v => !v)}
+            >
               Avanço Físico por Grupo
             </p>
-            <ChevronDown className={`h-3.5 w-3.5 text-slate-400 transition-transform ${colBloco4 ? "rotate-180" : ""}`} />
+            {/* Rev. 2277 — Pill filtro "Apenas atrasadas" */}
+            <button
+              type="button"
+              onClick={(ev) => { ev.stopPropagation(); setApenasAtrasadas(v => !v); }}
+              disabled={totalAtrasadas === 0}
+              className={`inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider rounded-full px-2.5 py-1 border transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
+                apenasAtrasadas
+                  ? "bg-red-600 text-white border-red-700 hover:bg-red-700"
+                  : "bg-white text-red-700 border-red-300 hover:bg-red-50"
+              }`}
+              title={
+                totalAtrasadas === 0
+                  ? "Nenhuma atividade em atraso"
+                  : apenasAtrasadas
+                    ? "Mostrar todas as atividades"
+                    : `Mostrar apenas as ${totalAtrasadas} atividade(s) em atraso (realizado < previsto)`
+              }
+            >
+              <span>⚠</span>
+              <span>{apenasAtrasadas ? "Filtro ativo · todas" : "Apenas atrasadas"}</span>
+              <span className={`inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-bold rounded-full ${apenasAtrasadas ? "bg-white text-red-700" : "bg-red-100 text-red-700"}`}>
+                {totalAtrasadas}
+              </span>
+            </button>
+            <ChevronDown
+              className={`h-3.5 w-3.5 text-slate-400 transition-transform cursor-pointer ${colBloco4 ? "rotate-180" : ""}`}
+              onClick={() => setColBloco4(v => !v)}
+            />
           </div>
-          {!colBloco4 && (<><div className="px-4 py-3" style={{ height: Math.max(200, grupos.length * rowHG + 40) }}>
+          {!colBloco4 && apenasAtrasadas && gruposChart.length === 0 && (
+            <div className="px-5 py-6 text-center text-xs text-slate-500 bg-emerald-50/40 border-b border-emerald-100">
+              ✓ Nenhum grupo em atraso. Toda a obra está em dia ou adiantada.
+            </div>
+          )}
+          {!colBloco4 && gruposChart.length > 0 && (<><div className="px-4 py-3" style={{ height: Math.max(200, gruposChart.length * rowHG + 40) }}>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart
                 data={gruposChart}
@@ -14991,15 +15053,34 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
           }
           return out;
         };
+        // Rev. 2277 — Filtro "Apenas atrasadas": poda a sub-árvore mantendo
+        // só os ramos com folhas atrasadas (`previsto > realizado`). Pais
+        // são preservados se algum descendente folha está atrasado.
+        const _isAtrasoFolha = (n: any) => ((n.children?.length ?? 0) === 0) && ((n.previsto ?? 0) - (n.realizado ?? 0) > 0.01);
+        const filtrarAtrasos = (lista: any[]): any[] => {
+          const out: any[] = [];
+          for (const n of lista) {
+            if ((n.children?.length ?? 0) === 0) {
+              if (_isAtrasoFolha(n)) out.push(n);
+            } else {
+              const kids = filtrarAtrasos(n.children);
+              if (kids.length > 0) out.push({ ...n, children: kids });
+            }
+          }
+          return out;
+        };
         // Rev. 2276 — Linha estilo CRONOGRAMA: hierarquia visual por
         // profundidade (fundo escurecido em grupos, branco em folhas),
         // indent guide vertical, código EAP em badge monospace, barra
         // horizontal compacta inline (Previsto azul + Realizado colorido
         // por desvio), 3 colunas tabulares fixas à direita (Prev/Real/
         // Desvio). Mantém clique em qualquer lugar da linha p/ expandir.
+        // Rev. 2277 — `isOpen` força-expandido quando filtro `apenasAtrasadas`
+        // está ativo (não faz sentido pedir pra ver atrasos e ter que abrir
+        // os pais manualmente).
         const renderRow = (e: any, depth: number): React.ReactNode => {
           const hasChildren = (e.children?.length ?? 0) > 0;
-          const isOpen = expandedEtapas.has(e.id);
+          const isOpen = apenasAtrasadas ? true : expandedEtapas.has(e.id);
           const prev = e.previsto ?? 0;
           const real = e.realizado ?? 0;
           const desv = real - prev;
@@ -15108,8 +15189,12 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
 
         return grupos.filter((g: any) => g.etapas?.length > 0).map((g: any) => {
           const isCollapsed = collapsedGrupos.has(g.id);
+          // Rev. 2277 — Quando "Apenas atrasadas" está ON, poda a árvore
+          // do card; se sobrarem 0 folhas atrasadas, oculta o card inteiro.
+          const etapasView = apenasAtrasadas ? filtrarAtrasos(g.etapas) : g.etapas;
+          if (apenasAtrasadas && etapasView.length === 0) return null;
           // IDs dos descendentes COM filhos (linhas expandíveis) deste card
-          const childIdsThisCard = collectIds(g.etapas);
+          const childIdsThisCard = collectIds(etapasView);
           const hasAnyChildren = childIdsThisCard.length > 0;
           const cardAllOpen = hasAnyChildren && childIdsThisCard.every((id) => expandedEtapas.has(id));
           const cardSomeOpen = hasAnyChildren && childIdsThisCard.some((id) => expandedEtapas.has(id));
@@ -15228,7 +15313,7 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
 
               {/* Tree pai → filho */}
               <div>
-                {g.etapas.map((e: any) => renderRow(e, 0))}
+                {etapasView.map((e: any) => renderRow(e, 0))}
               </div>
 
               {/* Legenda de desvios (folhas + grupos com desvio relevante) */}

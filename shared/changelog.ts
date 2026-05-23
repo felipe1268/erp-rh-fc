@@ -1,6 +1,51 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2277 — **FEAT · Filtro "Apenas atrasadas" na seção "Avanço Físico
+ * por Grupo": pill clicável no header com contador de atividades em
+ * atraso (`previsto > realizado`). Ao ativar: macro BarChart mostra só
+ * os grupos com atraso, cada card filtra a árvore para os ramos
+ * problemáticos e força-os expandidos até as folhas.**
+ *
+ * Pedido user (23/05/2026, VITRA, screenshot): "quero um filtro para
+ * poder clicar e ver todas atividades em atraso..".
+ *
+ * Mudanças:
+ *   1. Novo estado `apenasAtrasadas` em `PlanejamentoDetalhe.tsx`
+ *      (L13019+) — default OFF.
+ *   2. BLOCO 4 header recebe pill `⚠ Apenas atrasadas (N)` à direita
+ *      do título. Cor vermelha tomato quando ativo, ghost quando
+ *      inativo. Disabled (opacity 40) quando `totalAtrasadas === 0`
+ *      com tooltip "Nenhuma atividade em atraso". Click stopProp pra
+ *      não disparar o colapso do bloco.
+ *   3. Helpers compartilhados no IIFE do BLOCO 4:
+ *        - `isAtrasadaFolha(n)` = folha com `previsto - realizado > 0.01`.
+ *        - `temAtrasoNaArvore(n)` = recursivo, true se alguma folha
+ *          descendente é atrasada.
+ *        - `contarAtrasadas(lista)` = total agregado das folhas.
+ *      No BLOCO 5 IIFE: helper `filtrarAtrasos(lista)` que poda a
+ *      sub-árvore preservando ancestrais quando algum descendente
+ *      folha é atrasado.
+ *   4. Macro BarChart (BLOCO 4) usa `gruposFiltrados` quando filtro
+ *      ON. Quando o resultado é vazio, mostra mensagem ✓ em verde
+ *      "Nenhum grupo em atraso. Toda a obra está em dia ou adiantada".
+ *   5. Cada card do BLOCO 5: `etapasView = apenasAtrasadas ?
+ *      filtrarAtrasos(g.etapas) : g.etapas`. Se `etapasView.length === 0`
+ *      e filtro ON, o card inteiro retorna `null` (oculto).
+ *   6. `renderRow` agora calcula `isOpen = apenasAtrasadas ? true :
+ *      expandedEtapas.has(e.id)` — força-expandido quando filtro
+ *      ativo (sem necessidade do user clicar pra ver os atrasos).
+ *
+ * R-001/R-007/R-010: N/A (client-only).
+ *
+ * Arquivos:
+ *   - client/src/pages/planejamento/PlanejamentoDetalhe.tsx
+ *     (L13019 estado · L14934-15010 BLOCO 4 header+helpers · L15059-15086
+ *     filtro renderRow · L15193-15200 etapasView · L15319 tree)
+ *   - shared/version.ts → Rev. 2277
+ *   - shared/changelog.ts
+ *   - replit.md (2+5)
+ *
  * Rev. 2276 — **UX · "AVANÇO FÍSICO POR GRUPO" redesenhado no estilo
  * CRONOGRAMA: tree pai→filho com hierarquia visual por nível, cabeçalho
  * de colunas sticky, barra inline compacta. Macro BarChart redundante
