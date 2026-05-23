@@ -13330,7 +13330,12 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
     }, 0));
   }, [atividades, avancos, semAntes, usarPesoPorDuracao]);
 
-  const avancoRealSemanal = Math.max(0, avancoRealAtual - avancoRealAntes);
+  // Rev. 2285 — usa realOficialRefis (snapshot MSP raiz UID=0) como
+  // acumulado p/ que o delta semanal exibido bata com o acumulado mostrado
+  // em "Avanço Acumulado da Obra" e com o que `emitirRefis()` persiste
+  // (Rev. 2283). Antes era `avancoRealAtual` (ponderação local) → semanal
+  // divergia do acumulado quando MSP e cálculo local não batiam.
+  const avancoRealSemanal = Math.max(0, realOficialRefis - avancoRealAntes);
   // Rev. 2273 — Realizado OFICIAL (fonte única) para SPI/Desvio do REFIS:
   // mesma origem da barra do topo (`avancoAtual` recebido como prop —
   // snapshot MSP raiz UID=0 quando disponível, fallback p/ ponderação).
@@ -13382,7 +13387,10 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
   }, [atividades, avancos, semana, semanaFimRefis, usarPesoPorDuracao]);
 
   const refisDistPrev = +(refisPrevistoComInd - avancoPrevisto).toFixed(2);
-  const refisDistReal = +(refisRealComInd - avancoRealAtual).toFixed(2);
+  // Rev. 2285 — distorção indiretas usa realOficialRefis (snapshot MSP raiz)
+  // em vez de avancoRealAtual (ponderação local), p/ paridade com Avanço
+  // Acumulado da Obra (que já usa realOficialRefis desde Rev. 2273).
+  const refisDistReal = +(refisRealComInd - realOficialRefis).toFixed(2);
   const qtdIndiretas = atividades.filter((a: any) => a.isIndireta && !a.isGrupo && !a.disabled).length;
 
   const avancoPrevAntesComInd = useMemo(() => {
@@ -14742,7 +14750,8 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
                 </div>
                 <div className="px-5 py-3 text-center">
                   <p className="text-[10px] uppercase tracking-wide text-slate-400 mb-0.5">Realizado</p>
-                  <p className="text-lg font-bold text-emerald-700">{fPct_(avancoRealAtual)}</p>
+                  {/* Rev. 2285 — usa realOficialRefis (snapshot MSP raiz UID=0) */}
+                  <p className="text-lg font-bold text-emerald-700">{fPct_(realOficialRefis)}</p>
                 </div>
                 <div className="px-5 py-3 text-center">
                   <p className="text-[10px] uppercase tracking-wide text-slate-400 mb-0.5">Desvio Físico</p>

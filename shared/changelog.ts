@@ -1,6 +1,60 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2285 — **FIX · TODA aba REFIS lê `realOficialRefis` (snapshot MSP
+ * raiz UID=0) — eliminadas as últimas 3 ocorrências de `avancoRealAtual`
+ * (ponderação local) que ainda apareciam em painéis/KPIs.**
+ *
+ * Pedido user (23/05/2026, IMG_1073): "Os valores devem bater. O percentual
+ * de avanço foi de 6,86% não 4,08%. Lê toda aba de REFIS e garanta que A
+ * INFORMAÇÃO SEJA A MESMA EM TODAS AS TELAS E ABAS". A tela mostrava
+ * Realizado Acum 6,86% (MSP) no card "Avanço Acumulado da Obra" mas
+ * coexistiam pontos calculando localmente:
+ *   - **KPI "AVANÇO SEMANAL REALIZADO"** = 4,08 % (= avancoRealAtual −
+ *     avancoRealAntes) → numericamente bate com 6,86 − 2,78, mas a
+ *     fórmula partia da ponderação local, não do MSP.
+ *   - **Painel "Revisão Atual / Realizado / Desvio Físico"** abaixo de
+ *     "Curva S Física" (linha 14745) exibia Realizado via
+ *     `fPct_(avancoRealAtual)` → mostrava 4,61 % enquanto a Curva S
+ *     Acumulada mostrava 6,86 %.
+ *   - **`refisDistReal`** (distorção indiretas, L13385) calculava
+ *     `refisRealComInd − avancoRealAtual` → distorção exibida no card
+ *     "Indiretas: +X pp" não bateria com `avancoAcumuladoRefis`.
+ *
+ * Correção (1 arquivo, 3 substituições):
+ *   - `client/src/pages/planejamento/PlanejamentoDetalhe.tsx`:
+ *     * L13333: `avancoRealSemanal = Math.max(0, realOficialRefis −
+ *       avancoRealAntes)`. Antes era `avancoRealAtual − avancoRealAntes`.
+ *     * L13391: `refisDistReal = +(refisRealComInd − realOficialRefis)
+ *       .toFixed(2)`. Antes `avancoRealAtual`.
+ *     * L14749: `<p>{fPct_(realOficialRefis)}</p>` no painel KPI da
+ *       Curva S Física. Antes `fPct_(avancoRealAtual)`.
+ *
+ * Pontos que MANTÉM `avancoRealAtual` (definição + fallbacks ok):
+ *   - L13294: `useMemo` que CALCULA `avancoRealAtual` (precisa existir
+ *     pra servir de fallback quando `avancoAtual` é NaN/undefined).
+ *   - L13343: `realOficialRefis = isFinite(avancoAtual) ? avancoAtual :
+ *     avancoRealAtual` (fallback intencional).
+ *   - L13433: outro fallback condicional (manter).
+ *   - L13602/14826: comentários explicativos (manter).
+ *
+ * Continuidade das Revs anteriores:
+ *   - Rev. 2278 corrigiu Curva S Financeira KPI.
+ *   - Rev. 2283 corrigiu `emitirRefis()` + `custoRealAuto` + delta
+ *     semanal PERSISTIDO.
+ *   - Rev. 2284 corrigiu semana inicial.
+ *   - Rev. 2285 (esta) elimina os últimos pontos de DIVERGÊNCIA VISUAL
+ *     em runtime.
+ *
+ * Como aplicar aos REFIS já gravados: continua valendo a re-emissão via
+ * modal "Emitir REFIS" (endpoint upsert por projetoId+semana). Esta Rev.
+ * só afeta o que é exibido em RUNTIME — não toca em dados persistidos.
+ *
+ * R-001/R-007/R-010: N/A — alteração 100 % client-side, sem migrations,
+ * sem DDL, sem mudança de schema/procedure/mutation.
+ */
+
+/**
  * Rev. 2284 — **FIX · Aba REFIS abre na SEMANA-CUTOFF atual (Sex→Qui p/
  * cutoff=Qui), não na semana ISO (Seg→Dom).**
  *
