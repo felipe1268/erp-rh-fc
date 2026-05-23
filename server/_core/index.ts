@@ -1803,6 +1803,82 @@ Regras:
           console.log(`[SyncSchema+] Rev. 2195: tabela encargos_sociais_documentos garantida.`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.2195 encargos_sociais_documentos:`, e?.message || e); }
 
+        // ── Rev. 2260 — Backfill `previsto_msp_pct` em obras antigas ──────
+        // Decisão user (23/05/2026): a regra "PREVISTO = % PREVISTO do MSP /
+        // REALIZADO = PercentComplete da raiz" precisa valer p/ todas as
+        // obras existentes — sem re-importar XML uma a uma. Este bloco
+        // re-popula `previsto_msp_pct` (NULL em imports antigos que só tinham
+        // Texto6) calculando a MESMA fórmula que o MSP usa para Texto6 —
+        // `Int(du(início→min(fim,statusDate)) / du(início→fim) * 100)` —
+        // via `pctRaizMSP()` em `shared/diasUteis.ts`.
+        //
+        // Idempotente (só toca NULL, COALESCE preserva snapshots existentes
+        // vindos do XML). Sentinel `backfill_msp_pct_v2260` garante 1 execução.
+        // Re-imports futuros sobrescrevem com a fonte original via salvarAtividades.
+        // %REALIZADO não é tocado: depende de Texto7 ou AD/(AD+RD) não persistidos.
+        try {
+          const { getCache, setCache } = await import("../services/startupCache");
+          const SENTINEL = "backfill_msp_pct_v2260";
+          if (await getCache(SENTINEL)) {
+            console.log("[Backfill MSP %Previsto] Rev. 2260 já aplicado — pulando.");
+          } else {
+            const { pctRaizMSP } = await import("../../shared/diasUteis");
+            const projs: any = await db.execute(sql`
+              SELECT id, calendario_json
+              FROM planejamento_projetos
+              WHERE calendario_json IS NOT NULL
+            `);
+            const projRows: any[] = projs?.rows ?? [];
+            let projsOk = 0, projsSkip = 0, ativsUpd = 0;
+            for (const p of projRows) {
+              let cal: any = null;
+              try { cal = JSON.parse(p.calendario_json); } catch { projsSkip++; continue; }
+              const statusDate: string | null = cal?.statusDateSnapshot ?? null;
+              if (!statusDate) { projsSkip++; continue; }
+              const ativs: any = await db.execute(sql`
+                SELECT id, data_inicio, data_fim
+                FROM planejamento_atividades
+                WHERE projeto_id = ${p.id}
+                  AND data_inicio IS NOT NULL
+                  AND data_fim IS NOT NULL
+                  AND COALESCE(is_grupo, false) = false
+                  AND previsto_msp_pct IS NULL
+              `);
+              const ativRows: any[] = ativs?.rows ?? [];
+              if (ativRows.length === 0) continue;
+              const ids: number[] = [];
+              const vals: string[] = [];
+              for (const a of ativRows) {
+                const ini = String(a.data_inicio).slice(0, 10);
+                const fim = String(a.data_fim).slice(0, 10);
+                let pct = 0;
+                try { pct = pctRaizMSP(statusDate.slice(0, 10), ini, fim, cal); } catch { pct = 0; }
+                if (!Number.isFinite(pct)) continue;
+                // MSP Texto6 = Int(...) — equivalente a Math.floor p/ positivos
+                const prevInt = Math.max(0, Math.min(100, Math.floor(pct)));
+                ids.push(Number(a.id));
+                vals.push(`WHEN ${Number(a.id)} THEN ${prevInt}`);
+              }
+              if (ids.length === 0) continue;
+              const CHUNK = 500;
+              for (let i = 0; i < ids.length; i += CHUNK) {
+                const cIds = ids.slice(i, i + CHUNK);
+                const cVals = vals.slice(i, i + CHUNK);
+                // COALESCE preserva snapshot existente entre SELECT e UPDATE.
+                await db.execute(sql.raw(`
+                  UPDATE planejamento_atividades
+                  SET previsto_msp_pct = COALESCE(previsto_msp_pct, (CASE id ${cVals.join(' ')} END)::numeric)
+                  WHERE id IN (${cIds.join(',')})
+                `));
+              }
+              ativsUpd += ids.length;
+              projsOk++;
+            }
+            await setCache(SENTINEL, new Date().toISOString());
+            console.log(`[Backfill MSP %Previsto] Rev. 2260: ${projsOk} obras processadas (${projsSkip} sem statusDate/cal), ${ativsUpd} atividades populadas.`);
+          }
+        } catch (e: any) { console.error(`[Backfill MSP %Previsto] FALHA Rev.2260:`, e?.message || e); }
+
       } catch (e: any) { console.error(`[SyncSchema+] ERROR:`, e?.message || e); }
     }).catch(e => console.error("[SyncSchema] Falha ao iniciar:", e));
     // Garantir colunas críticas adicionadas recentemente que o SyncSchema possa ter ignorado

@@ -1,6 +1,70 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2261 — **BACKFILL · Propaga a leitura MSP da Rev. 2260 para todas
+ * as obras já importadas, automaticamente no startup (idempotente).**
+ *
+ * Pedido user (23/05/2026): "preciso que propague isso para todos as
+ * obras existente e esse seja o modelo de leitura padrão para todas as
+ * obras.. novas e antigas." Escolheu "Backfill automático server-side"
+ * entre as 3 opções oferecidas — sem ação manual por obra.
+ *
+ * **Problema:** o XML cru não fica persistido — só as colunas
+ * `previsto_msp_pct` / `realizado_msp_pct` em `planejamento_atividades`.
+ * Como o Texto6 (FieldID 188743746) só passou a ser lido na Rev. 2260,
+ * todas as obras importadas antes ficaram com `previsto_msp_pct = NULL`
+ * (Texto10 ausente nos XMLs LOTUS R05) e caíam no cálculo dinâmico.
+ *
+ * **Solução:** novo bloco em `server/_core/index.ts` (dentro de
+ * SyncSchema+) que ao subir o servidor:
+ *  1. Lê o sentinel `backfill_msp_pct_v2260` em `startup_cache`. Se já
+ *     existir, pula imediatamente (idempotência absoluta).
+ *  2. Itera `planejamento_projetos` com `calendario_json NOT NULL`.
+ *  3. Pra cada projeto, parseia o calMSP e extrai `statusDateSnapshot`.
+ *     Sem statusDate → pula (não dá pra calcular Previsto contra qual data).
+ *  4. Pra cada atividade-folha (`is_grupo=false`) com datas e
+ *     `previsto_msp_pct IS NULL`, calcula:
+ *       `pct = pctRaizMSP(statusDate, dataInicio, dataFim, calMSP)`
+ *       `prevInt = Math.floor(pct)` — replica `Int(...)` do MSP no Texto6.
+ *  5. UPDATE em batch (CHUNK=500) via `CASE id WHEN ... THEN ...`, com
+ *     `SET previsto_msp_pct = COALESCE(previsto_msp_pct, val::numeric)`
+ *     pra preservar snapshots concorrentes entre SELECT e UPDATE.
+ *  6. Grava sentinel `backfill_msp_pct_v2260` com timestamp.
+ *
+ * **Por que `pctRaizMSP` (shared/diasUteis.ts)?** É exatamente a fórmula
+ * que o MSP usa pra calcular o campo "% PREVISTO" (Texto6):
+ * `du(início→min(fim,statusDate)) / du(início→fim) * 100`, em dias úteis
+ * do calendário do projeto. Já estava sendo usada no client pra cálculo
+ * dinâmico — mesma função, agora persiste o resultado. Paridade absoluta
+ * com o que o engenheiro vê no MSP.
+ *
+ * **%REALIZADO não é tocado:** depende de Texto7 (188743747, `qtR/qt`)
+ * ou AD/(AD+RD) que NÃO estão persistidos no banco — impossível
+ * reconstruir retroativamente. Re-import do XML é o único caminho pra
+ * popular legado. (Não é problema crítico: o card e a Curva S já leem
+ * `percent_concluido` em outras tabelas pro Realizado da raiz.)
+ *
+ * **Garantias:**
+ *  - Idempotente: COALESCE + sentinel garantem 0 sobrescrita.
+ *  - Re-imports futuros vencem: `salvarAtividades` faz UPDATE direto
+ *    com o valor lido do XML (Texto10 → Texto6), substituindo o
+ *    backfill calculado quando o user sobe XML novo.
+ *  - Performance: SELECT por obra (índice projeto_id), UPDATE em
+ *    batches de 500 — N obras × M folhas, mas executa só 1x ever.
+ *  - Falha graceful: try/catch externo loga FALHA e continua startup.
+ *
+ * **R-001/R-007/R-010:** UPDATE-only com COALESCE e WHERE estrito (só
+ * folhas com data, sem snapshot). ZERO ALTER/DROP/DELETE.
+ *
+ * Arquivos:
+ *  - `server/_core/index.ts` ~L1809-1888 (novo bloco backfill).
+ *  - `shared/version.ts` 2260 → 2261.
+ *  - `shared/changelog.ts` (esta entrada).
+ *  - `replit.md` (promove 2260 a one-liner, prepende 2261).
+ *  - `replit-history.md` (Rev. 2254 demovida).
+ */
+
+/**
  * Rev. 2260 — **FIX · Importador MS Project lê `% PREVISTO` por atividade
  * via Texto6 (FieldID 188743746) como fallback de Texto10 — corrige
  * snapshot perdido em XMLs LOTUS R05.**
