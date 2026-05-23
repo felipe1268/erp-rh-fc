@@ -12994,8 +12994,28 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
   // Rev. 1667 — REFIS também usa cutoffDow do projeto p/ rotular semanas
   // alinhadas (Sex→Qui p/ cutoff=Qui), em paridade com Avanço Físico e LOTUS.
   const cutoffDow: number = dataCorteInfo?.diaCorteSemana ?? 4;
-  const [semana, setSemanaRaw] = useState(() => toMonday(new Date()));
+  // Rev. 2284 — Inicializa na semana CUTOFF atual (Sex→Qui p/ cutoff=Qui),
+  // não na semana ISO (Seg→Dom). Antes: `toMonday(new Date())` retornava
+  // a Segunda da semana ISO contendo hoje (Sáb 23/05 → Seg 18/05 → label
+  // "15/05 até 21/05" = semana ANTERIOR à cutoff atual). Agora:
+  // `mondayOfCutoffWeek` retorna a Segunda DENTRO da semana-cutoff atual
+  // (Sex 22/05 a Qui 28/05 contém Seg 25/05) → label "22/05 até 28/05".
+  // Default cutoffDow=4 (Quinta) porque dataCorteInfo pode não estar
+  // pronto no primeiro render — effect abaixo realinha quando chegar.
+  const [semana, setSemanaRaw] = useState(() => mondayOfCutoffWeek(todayLocalISO(), 4));
   const setSemana = (s: string) => { setSemanaRaw(s); onSemanaChange?.(s); };
+  // Rev. 2284 — Quando o cutoffDow REAL do projeto chega (via dataCorteInfo),
+  // realinha a semana inicial. Mesmo padrão do parent L504-509. Só roda
+  // quando cutoffDow muda — se o usuário já trocou de semana manualmente,
+  // a próxima mudança via dropdown ou initialSemana sobrescreve normalmente.
+  const cutoffDowRealignedRef = useRef(false);
+  useEffect(() => {
+    if (cutoffDowRealignedRef.current) return;
+    cutoffDowRealignedRef.current = true;
+    const alvo = mondayOfCutoffWeek(todayLocalISO(), cutoffDow);
+    if (alvo !== semana) setSemanaRaw(alvo);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cutoffDow]);
   const [obs, setObs] = useState("");
   const [collapsedGrupos, setCollapsedGrupos] = useState<Set<string | number>>(new Set());
 

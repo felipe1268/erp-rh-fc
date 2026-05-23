@@ -1,6 +1,54 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2284 — **FIX · Aba REFIS abre na SEMANA-CUTOFF atual (Sex→Qui p/
+ * cutoff=Qui), não na semana ISO (Seg→Dom).**
+ *
+ * Pedido user (23/05/2026, IMG_1070): "Deveria aparecer 4ª semana não 3ª
+ * semana, arrume isso" + "A tela sempre abre na semana atual". Hoje é
+ * sábado 23/05/2026, cutoff do projeto = Quinta. Semana-cutoff atual =
+ * Sex 22/05 → Qui 28/05 (4ª semana desde início 04/05). Tela abria em
+ * "3ª Semana — 15/05 até 21/05" (semana anterior).
+ *
+ * Causa raiz: `client/src/pages/planejamento/PlanejamentoDetalhe.tsx`
+ * linha 12997 (componente `Refis`) inicializava o state `semana` com
+ * `toMonday(new Date())`, que retorna a Segunda da semana ISO (Seg→Dom)
+ * contendo hoje. Para Sáb 23/05, Segunda ISO = 18/05 → label
+ * `cutoffWeekFromMonday(18/05, 4)` = Sex 15/05 a Qui 21/05 (a semana
+ * cutoff que CONTÉM essa Segunda, não a que contém HOJE). A semana
+ * cutoff que contém o sábado é a próxima (Sex 22/05 a Qui 28/05), cuja
+ * Segunda interna é 25/05.
+ *
+ * Correção (1 arquivo, client-only):
+ *   - `client/src/pages/planejamento/PlanejamentoDetalhe.tsx`:
+ *     * Linha 13008: `useState(() => toMonday(new Date()))` substituído
+ *       por `useState(() => mondayOfCutoffWeek(todayLocalISO(), 4))`.
+ *       `mondayOfCutoffWeek` (já existente, L149) retorna a Segunda
+ *       DENTRO da semana-cutoff que contém a data informada (paridade
+ *       com o parent L303 que já usava esse helper).
+ *     * Default `cutoffDow=4` (Quinta) no useState porque `dataCorteInfo`
+ *       pode não estar carregado no primeiro render; effect novo
+ *       realinha quando o cutoffDow real do projeto chega.
+ *     * Novo `useEffect([cutoffDow])` + `cutoffDowRealignedRef` (roda 1×
+ *       quando cutoffDow muda): `setSemanaRaw(mondayOfCutoffWeek(today,
+ *       cutoffDow))`. Mesmo padrão do parent L504-509.
+ *     * `setSemanaRaw` direto (não `setSemana`) p/ evitar disparar
+ *       `onSemanaChange` no realinhamento inicial — só dispara em
+ *       interação manual do usuário.
+ *
+ * Efeitos colaterais: nenhum.
+ *   - O effect L13046 que consome `initialSemana` (popup Visão Geral)
+ *     continua sobrescrevendo a semana inicial quando vem prop.
+ *   - O effect L13127 que mantém `semana` dentro de `semanas` continua
+ *     ativo (fallback p/ último Monday válido).
+ *   - Dropdown de semana, navegação manual e re-emissão de REFIS
+ *     funcionam idênticos.
+ *
+ * R-001/R-007/R-010: N/A — alteração 100 % client-side, sem migrations,
+ * sem DDL, sem mudança de schema/procedure/mutation.
+ */
+
+/**
  * Rev. 2283 — **FIX CRÍTICO · emitirRefis() agora grava `realOficialRefis`
  * (snapshot MSP raiz UID=0) em vez de `avancoRealAtual` (cálculo local).**
  *
