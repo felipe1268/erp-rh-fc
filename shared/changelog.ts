@@ -1,6 +1,123 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2256 — **FEATURE · Módulo Controle de Equipamentos (Fase 1 Sprint 1 —
+ * schema base) — fundação p/ acabar com perda recorrente de R$ 10-20k/mês
+ * por locação descontrolada.**
+ *
+ * Contexto do pedido (user, 23/05/2026): "temos um problema interno de falta
+ * de controle dos equipamentos alugado, isso tem gerado custo que variam de
+ * 10 a 20k por mês, quero acabar com este problema". Discussão de arquitetura
+ * fechou em 3 fases. Esta revisão entrega a FUNDAÇÃO de dados da Fase 1.
+ *
+ * Decisões fechadas com o user (defaults para destravar):
+ *  - Granularidade: 1 registro por UNIDADE FÍSICA (não por lote). Justifica
+ *    com "quero tudo rastreado, inclusive cada item".
+ *  - Sem QR code (pedido explícito) — código de patrimônio impresso simples
+ *    + busca por código no ERP.
+ *  - Canal de alerta: inbox ERP + e-mail (SMTP_PASSWORD já disponível).
+ *  - Renovação: gera OC NOVA vinculada (cadeia via `locacaoOcAnteriorId`) —
+ *    histórico contábil limpo.
+ *  - Override CAPEX: alçada R$ 5.000 default, configurável em `parametros_capex`.
+ *  - Importação CSV de ativos próprios: Fase 2.
+ *  - OCR de fatura (Anthropic já instalado): Fase 3.
+ *
+ * Arquitetura entregue NESTA REV (Fase 1 Sprint 1):
+ *  - 6 tabelas novas em `drizzle/schema.ts` + migration `0025_equip_rastreio_v1.sql`:
+ *
+ *    1. `equipamentos_proprios` — ativo fixo da construtora. Permite
+ *       "use o seu primeiro" antes de locar. Campos de vida útil/depreciação
+ *       p/ análise CAPEX. Status: disponivel|em_obra|manutencao|baixado.
+ *       Unique (company_id, codigo_patrimonio).
+ *
+ *    2. `equipamentos_locados` — 1 registro por unidade física locada.
+ *       Vinculado à OC, fornecedor, obra. `fotosRecebimentoJson` (Fase 1) e
+ *       `fotosDevolucaoJson` (preenchida na devolução). Campos `oc_anterior_id`
+ *       p/ rastrear renovações em cadeia. `ultimo_check_in_data` p/ controle
+ *       semanal "ainda está na obra?" (gap captura sumiço em ≤7d em vez de 30+).
+ *       Status: em_uso|devolvido|atrasado|em_renovacao|localizacao_pendente|em_manutencao.
+ *
+ *    3. `equipamento_locado_eventos` — timeline imutável (RECEBIMENTO, SAIDA_ALMOX,
+ *       RETORNO_ALMOX, DEVOLUCAO_FORNECEDOR, RENOVACAO, MANUTENCAO, CHECK_IN_OBRA,
+ *       LOCALIZACAO_PENDENTE, TRANSFERENCIA_OBRA). Plug direto no Raio-X do
+ *       funcionário (aba "Empréstimos" já existe — apenas join via funcionario_id).
+ *
+ *    4. `solicitacoes_equipamento` — PORTA DE ENTRADA do fluxo. Substitui
+ *       "abrir OC direta". `analiseCapexJson` guarda snapshot do cálculo
+ *       (VPL, Payback, CEA, TCO) p/ auditoria. `recomendacao_erp` vs
+ *       `decisao_final` — se diferentes, marca `decisao_override=true` e
+ *       exige aprovação se > alçada.
+ *
+ *    5. `fatura_locacao_conferencia` — sobe fatura mensal do fornecedor
+ *       (PDF/XML), ERP cruza com `equipamentos_locados` daquele fornecedor
+ *       no mês e grava divergências em `divergencias_json`. Unique
+ *       (company_id, fornecedor_id, mes_referencia) — evita duplicar fatura.
+ *       Fase 3 adiciona OCR via Anthropic.
+ *
+ *    6. `parametros_capex` — chave/valor editável pelo financeiro. Chaves
+ *       semeadas na 1ª execução do módulo: tma_mensal, limite_alcada_capex,
+ *       taxa_manutencao_anual, taxa_seguro_anual, peso_utilizacao_historica,
+ *       limiar_payback_fracao, vida_util_categoria_<slug>.
+ *
+ *  - 2 extensões aditivas (zero risco de quebra):
+ *
+ *    A. `compras_ordens` (+7 colunas): `is_locacao`, `locacao_data_inicio`,
+ *       `locacao_data_fim`, `locacao_duracao_dias`, `locacao_renovavel`,
+ *       `locacao_oc_anterior_id`, `locacao_solicitacao_id`.
+ *
+ *    B. `warehouse_loans` (+3 colunas): `foto_devolucao_url`,
+ *       `equipamento_proprio_id`, `equipamento_locado_id`. Reaproveita 100%
+ *       do fluxo de empréstimo p/ funcionário (já integrado ao Raio-X).
+ *
+ * **Por que escolha "1 unidade física por registro" (não por lote):**
+ *  O user pediu explicitamente "quero listar CADA ITEM" e "quando um funcionário
+ *  retirar deve ser rastreado no raio-x". Lote não dá granularidade pra saber
+ *  QUAL andaime específico sumiu, nem QUAL andaime tem foto X de recebimento.
+ *  Custo: ~50 inserts a mais por OC de locação multi-unidade (insignificante).
+ *  Ganho: rastreio individual completo, foto-a-foto, responsável-a-responsável.
+ *
+ * **Por que tabela de eventos imutável (vs flag de status apenas):**
+ *  Auditoria. Quando der briga com fornecedor sobre "esse equipamento ficou
+ *  3 ou 5 meses na obra?", o histórico de eventos com timestamp+foto+usuário
+ *  resolve em segundos. Status sozinho perde a história.
+ *
+ * **Por que `oc_anterior_id` em vez de "estender OC existente":**
+ *  Cada renovação vira OC nova com novo nº fiscal, novo financeiro, novo
+ *  controle de aprovação. Estender perderia histórico contábil e dificultaria
+ *  auditoria. Cadeia via FK lógica preserva rastro completo.
+ *
+ * **R-001 / R-007 / R-010:** A migration `0025_equip_rastreio_v1.sql` é
+ *  100% ADITIVA — apenas `CREATE TABLE IF NOT EXISTS` e `ALTER TABLE … ADD
+ *  COLUMN IF NOT EXISTS`. Zero DROP, zero RENAME, zero DELETE. Todos os
+ *  campos novos em tabelas existentes são nullable ou têm `DEFAULT` — não
+ *  quebra código legado nem rotinas em produção. Idempotente (pode rodar
+ *  N vezes sem efeito colateral).
+ *
+ * **Follow-up (próximas revisões da Fase 1):**
+ *  - Rev. 2257: routers tRPC (`server/routers/equipamentosRouter.ts`) — CRUD
+ *    base + listagem por obra/status + registro de eventos.
+ *  - Rev. 2258: páginas React — Cadastro de Equipamentos Próprios + Locados
+ *    (Almoxarifado) + tela de Solicitação (SE).
+ *  - Rev. 2259: cron job de alerta de vencimento (D-30/D-15/D-7) + plug no
+ *    sistema de notificações existente.
+ *  - Rev. 2260: extensão Raio-X funcionário (mostra equip. próprios+locados
+ *    em uso pelo funcionário).
+ *  - Rev. 2261: bloqueio de baixa de obra com equipamento pendente.
+ *  - Rev. 2262: Dashboard Operacional (almox+eng).
+ *  Fase 2 (CAPEX) e Fase 3 (OCR/conferência) virão em sequência depois.
+ *
+ * Arquivos tocados nesta rev:
+ *  - `drizzle/schema.ts` (append linhas 8561+; extensão `comprasOrdens` L6121-6128;
+ *    extensão `warehouseLoans` L6291-6294)
+ *  - `drizzle/0025_equip_rastreio_v1.sql` (novo — 100% aditivo)
+ *  - `drizzle/meta/_journal.json` (entradas 0024 + 0025)
+ *  - `shared/version.ts` (2255 → 2256)
+ *  - `shared/changelog.ts` (esta entrada no topo)
+ *  - `replit.md` (rotação 2+5)
+ *  - `replit-history.md` (recebe 2249)
+ */
+
+/**
  * Rev. 2255 — **FIX · Barra superior "Avanço Físico" (Planejamento → Detalhe)
  * passa a refletir o avanço REAL desde a 1ª renderização — antes ficava em
  * 0% até o usuário clicar manualmente numa semana.**

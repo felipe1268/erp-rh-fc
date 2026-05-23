@@ -6115,6 +6115,14 @@ export const comprasOrdens = pgTable("compras_ordens", {
   criadoPorNome:      varchar("criado_por_nome", { length: 255 }),
   criadoEm:           timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
   atualizadoEm:       timestamp("updated_at", { mode: "string" }).defaultNow().notNull(),
+  // === Locação de equipamento (Rev. 2256) ===
+  isLocacao:             boolean("is_locacao").default(false),
+  locacaoDataInicio:     varchar("locacao_data_inicio", { length: 10 }),
+  locacaoDataFim:        varchar("locacao_data_fim", { length: 10 }),
+  locacaoDuracaoDias:    integer("locacao_duracao_dias"),
+  locacaoRenovavel:      boolean("locacao_renovavel").default(false),
+  locacaoOcAnteriorId:   integer("locacao_oc_anterior_id"),
+  locacaoSolicitacaoId:  integer("locacao_solicitacao_id"),
 });
 
 export const comprasOrdensItens = pgTable("compras_ordens_itens", {
@@ -6277,6 +6285,10 @@ export const warehouseLoans = pgTable("warehouse_loans", {
   almoxarifeId:     integer("almoxarife_id"),
   almoxarifeNome:   varchar("almoxarife_nome", { length: 255 }),
   createdAt:        timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
+  // === Rastreio de equipamento (Rev. 2256) ===
+  fotoDevolucaoUrl:     text("foto_devolucao_url"),
+  equipamentoProprioId: integer("equipamento_proprio_id"),
+  equipamentoLocadoId:  integer("equipamento_locado_id"),
 });
 
 // Saídas de Insumos/Consumíveis para Funcionários
@@ -8556,4 +8568,202 @@ export const systemDocumentTemplateVersions = pgTable("system_document_template_
 }, (table) => [
   uniqueIndex("uq_sys_doc_tpl_ver_tpl_versao").on(table.templateId, table.versao),
   index("idx_sys_doc_tpl_ver_tpl").on(table.templateId),
+]);
+
+// ============================================================================
+// MÓDULO: CONTROLE DE EQUIPAMENTOS (Rev. 2256+) — Fase 1 Sprint 1
+// ============================================================================
+// Resolve perda recorrente de R$ 10-20k/mês com locações descontroladas.
+// - Rastreio físico unitário (1 registro por unidade), foto obrigatória,
+//   alerta de vencimento, conferência de fatura mensal.
+// - Análise CAPEX (VPL/Payback/CEA/TCO) na entrada (Solicitação de Equipamento).
+// - Plug no Raio-X do funcionário (aba "Empréstimos" já existe).
+//
+// Convenção: TODOS os novos campos são nullable ou têm default — não quebram
+// código existente. Migrações são ADD COLUMN / CREATE TABLE puras.
+
+// 1) Equipamentos PRÓPRIOS (ativo fixo da construtora)
+export const equipamentosProprios = pgTable("equipamentos_proprios", {
+  id:                      serial().primaryKey(),
+  companyId:               integer("company_id").notNull(),
+  codigoPatrimonio:        varchar("codigo_patrimonio", { length: 50 }).notNull(),
+  descricao:               varchar({ length: 255 }).notNull(),
+  categoria:               varchar({ length: 100 }),
+  numeroSerie:             varchar("numero_serie", { length: 100 }),
+  marca:                   varchar({ length: 100 }),
+  modelo:                  varchar({ length: 100 }),
+  dataAquisicao:           varchar("data_aquisicao", { length: 10 }),
+  valorAquisicao:          numeric("valor_aquisicao", { precision: 14, scale: 2 }),
+  vidaUtilMeses:           integer("vida_util_meses"),
+  custoManutencaoMedioMes: numeric("custo_manut_medio_mes", { precision: 14, scale: 2 }).default("0"),
+  custoSeguroMedioMes:     numeric("custo_seguro_medio_mes", { precision: 14, scale: 2 }).default("0"),
+  // Localização: "almoxarifado" ou "obra" (com obraId)
+  localizacaoAtualTipo:    varchar("localizacao_atual_tipo", { length: 20 }).default("almoxarifado"),
+  localizacaoAtualObraId:  integer("localizacao_atual_obra_id"),
+  // Status: disponivel | em_obra | manutencao | baixado
+  status:                  varchar({ length: 20 }).notNull().default("disponivel"),
+  fotosJson:               jsonb("fotos_json"),
+  observacoes:             text(),
+  ativo:                   boolean().default(true),
+  createdAt:               timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
+  updatedAt:               timestamp("updated_at", { mode: "string" }).defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("uq_equip_proprio_company_patrimonio").on(table.companyId, table.codigoPatrimonio),
+  index("idx_equip_proprio_company_status").on(table.companyId, table.status),
+  index("idx_equip_proprio_categoria").on(table.categoria),
+]);
+
+// 2) Equipamentos LOCADOS (1 registro por unidade física locada)
+export const equipamentosLocados = pgTable("equipamentos_locados", {
+  id:                          serial().primaryKey(),
+  companyId:                   integer("company_id").notNull(),
+  obraId:                      integer("obra_id"),
+  fornecedorId:                integer("fornecedor_id"),
+  fornecedorNome:              varchar("fornecedor_nome", { length: 255 }),
+  ordemCompraId:               integer("ordem_compra_id"),    // FK lógica → compras_ordens
+  contratoLocacaoId:           integer("contrato_locacao_id"),// FK lógica → terceiro_contratos
+  codigoPatrimonioFornecedor:  varchar("codigo_patrimonio_fornecedor", { length: 100 }),
+  codigoInternoErp:            varchar("codigo_interno_erp", { length: 50 }),
+  descricao:                   varchar({ length: 255 }).notNull(),
+  categoria:                   varchar({ length: 100 }),
+  numeroSerie:                 varchar("numero_serie", { length: 100 }),
+  dataInicio:                  varchar("data_inicio", { length: 10 }).notNull(),
+  dataFimPrevista:             varchar("data_fim_prevista", { length: 10 }).notNull(),
+  dataFimReal:                 varchar("data_fim_real", { length: 10 }),
+  valorDiario:                 numeric("valor_diario", { precision: 14, scale: 2 }),
+  valorMensal:                 numeric("valor_mensal", { precision: 14, scale: 2 }),
+  // Status: em_uso | devolvido | atrasado | em_renovacao | localizacao_pendente | em_manutencao
+  status:                      varchar({ length: 30 }).notNull().default("em_uso"),
+  fotosRecebimentoJson:        jsonb("fotos_recebimento_json"),
+  fotosDevolucaoJson:          jsonb("fotos_devolucao_json"),
+  funcionarioResponsavelId:    integer("funcionario_responsavel_id"),
+  funcionarioResponsavelNome:  varchar("funcionario_responsavel_nome", { length: 255 }),
+  observacoes:                 text(),
+  // Cadeia de renovações: aponta para a unidade locada anterior (caso seja renovação)
+  ocAnteriorId:                integer("oc_anterior_id"),
+  // Último check-in semanal (controle de "ainda está na obra")
+  ultimoCheckInData:           varchar("ultimo_check_in_data", { length: 10 }),
+  ultimoCheckInUserId:         integer("ultimo_check_in_user_id"),
+  createdAt:                   timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
+  updatedAt:                   timestamp("updated_at", { mode: "string" }).defaultNow().notNull(),
+}, (table) => [
+  index("idx_equip_loc_company_status").on(table.companyId, table.status),
+  index("idx_equip_loc_obra").on(table.obraId),
+  index("idx_equip_loc_fornecedor").on(table.fornecedorId),
+  index("idx_equip_loc_data_fim").on(table.dataFimPrevista),
+  index("idx_equip_loc_oc").on(table.ordemCompraId),
+]);
+
+// 3) Auditoria de eventos do equipamento locado (timeline)
+export const equipamentoLocadoEventos = pgTable("equipamento_locado_eventos", {
+  id:                   serial().primaryKey(),
+  companyId:            integer("company_id").notNull(),
+  equipamentoLocadoId:  integer("equipamento_locado_id").notNull(),
+  // Tipo: RECEBIMENTO | SAIDA_ALMOX | RETORNO_ALMOX | DEVOLUCAO_FORNECEDOR
+  //     | RENOVACAO | MANUTENCAO | CHECK_IN_OBRA | LOCALIZACAO_PENDENTE
+  //     | TRANSFERENCIA_OBRA
+  tipo:                 varchar({ length: 40 }).notNull(),
+  dataEvento:           timestamp("data_evento", { mode: "string" }).defaultNow().notNull(),
+  funcionarioId:        integer("funcionario_id"),
+  funcionarioNome:      varchar("funcionario_nome", { length: 255 }),
+  obraId:               integer("obra_id"),
+  obraNome:             varchar("obra_nome", { length: 255 }),
+  fotosJson:            jsonb("fotos_json"),
+  observacao:           text(),
+  usuarioId:            integer("usuario_id"),
+  usuarioNome:          varchar("usuario_nome", { length: 255 }),
+  createdAt:            timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
+}, (table) => [
+  index("idx_equip_evt_equip").on(table.equipamentoLocadoId),
+  index("idx_equip_evt_tipo_data").on(table.tipo, table.dataEvento),
+  index("idx_equip_evt_company").on(table.companyId),
+]);
+
+// 4) Solicitações de Equipamento (porta de entrada do fluxo, com análise CAPEX)
+export const solicitacoesEquipamento = pgTable("solicitacoes_equipamento", {
+  id:                            serial().primaryKey(),
+  companyId:                     integer("company_id").notNull(),
+  numero:                        varchar({ length: 20 }).notNull(),
+  obraId:                        integer("obra_id"),
+  obraNome:                      varchar("obra_nome", { length: 255 }),
+  solicitanteId:                 integer("solicitante_id"),
+  solicitanteNome:               varchar("solicitante_nome", { length: 255 }),
+  descricaoEquipamento:          varchar("descricao_equipamento", { length: 255 }).notNull(),
+  categoria:                     varchar({ length: 100 }),
+  quantidade:                    integer().notNull().default(1),
+  dataInicioUso:                 varchar("data_inicio_uso", { length: 10 }).notNull(),
+  dataFimUso:                    varchar("data_fim_uso", { length: 10 }).notNull(),
+  duracaoMeses:                  numeric("duracao_meses", { precision: 6, scale: 2 }),
+  // Snapshot da análise CAPEX (VPL, Payback, CEA, TCO, etc)
+  analiseCapexJson:              jsonb("analise_capex_json"),
+  // Recomendação calculada pelo ERP: USAR_PROPRIO | LOCAR | COMPRAR
+  recomendacaoErp:               varchar("recomendacao_erp", { length: 20 }),
+  // Decisão do usuário (pode ser diferente da recomendação → override)
+  decisaoFinal:                  varchar("decisao_final", { length: 20 }),
+  decisaoJustificativa:          text("decisao_justificativa"),
+  decisaoOverride:               boolean("decisao_override").default(false),
+  decisaoOverrideAprovadorId:    integer("decisao_override_aprovador_id"),
+  decisaoOverrideAprovadorNome:  varchar("decisao_override_aprovador_nome", { length: 255 }),
+  decisaoOverrideAprovadoEm:     timestamp("decisao_override_aprovado_em", { mode: "string" }),
+  vinculoEquipProprios:          jsonb("vinculo_equip_proprios_json"),
+  ordemCompraId:                 integer("ordem_compra_id"),
+  // Status: pendente | analisada | aprovada | rejeitada | concluida | cancelada
+  status:                        varchar({ length: 30 }).notNull().default("pendente"),
+  createdAt:                     timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
+  updatedAt:                     timestamp("updated_at", { mode: "string" }).defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("uq_se_company_numero").on(table.companyId, table.numero),
+  index("idx_se_company_status").on(table.companyId, table.status),
+  index("idx_se_obra").on(table.obraId),
+]);
+
+// 5) Conferência de Fatura de Locação (cruza fatura do fornecedor × dias reais)
+export const faturaLocacaoConferencia = pgTable("fatura_locacao_conferencia", {
+  id:                  serial().primaryKey(),
+  companyId:           integer("company_id").notNull(),
+  fornecedorId:        integer("fornecedor_id"),
+  fornecedorNome:      varchar("fornecedor_nome", { length: 255 }),
+  mesReferencia:       varchar("mes_referencia", { length: 7 }).notNull(),  // YYYY-MM
+  numeroFatura:        varchar("numero_fatura", { length: 100 }),
+  valorFaturado:       numeric("valor_faturado", { precision: 14, scale: 2 }),
+  valorCalculadoErp:   numeric("valor_calculado_erp", { precision: 14, scale: 2 }),
+  arquivoFaturaUrl:    text("arquivo_fatura_url"),
+  arquivoFaturaTipo:   varchar("arquivo_fatura_tipo", { length: 10 }),  // pdf | xml | xlsx
+  ocrExtractedJson:    jsonb("ocr_extracted_json"),
+  divergenciasJson:    jsonb("divergencias_json"),
+  // Status: pendente | conferida | aprovada | contestada | paga
+  status:              varchar({ length: 30 }).notNull().default("pendente"),
+  observacoes:         text(),
+  conferidoPorId:      integer("conferido_por_id"),
+  conferidoPorNome:    varchar("conferido_por_nome", { length: 255 }),
+  conferidoEm:         timestamp("conferido_em", { mode: "string" }),
+  createdAt:           timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
+  updatedAt:           timestamp("updated_at", { mode: "string" }).defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("uq_fatura_company_fornecedor_mes").on(
+    table.companyId, table.fornecedorId, table.mesReferencia
+  ),
+  index("idx_fatura_status").on(table.companyId, table.status),
+]);
+
+// 6) Parâmetros CAPEX (editáveis pelo financeiro; semeados na 1ª execução)
+export const parametrosCapex = pgTable("parametros_capex", {
+  id:                serial().primaryKey(),
+  companyId:         integer("company_id").notNull(),
+  // Chaves padrão: tma_mensal | limite_alcada_capex | taxa_manutencao_anual
+  //   | taxa_seguro_anual | peso_utilizacao_historica | limiar_payback_fracao
+  //   | vida_util_categoria_<slug>
+  chave:             varchar({ length: 80 }).notNull(),
+  valorNumerico:     numeric("valor_numerico", { precision: 14, scale: 4 }),
+  valorTexto:        varchar("valor_texto", { length: 255 }),
+  descricao:         text(),
+  // Categoria: financeiro | tecnico | alcada | vida_util
+  categoria:         varchar({ length: 60 }),
+  editavel:          boolean().default(true),
+  atualizadoPorId:   integer("atualizado_por_id"),
+  atualizadoPorNome: varchar("atualizado_por_nome", { length: 255 }),
+  createdAt:         timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
+  updatedAt:         timestamp("updated_at", { mode: "string" }).defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("uq_param_capex_company_chave").on(table.companyId, table.chave),
 ]);

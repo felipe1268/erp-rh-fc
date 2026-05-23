@@ -462,3 +462,5 @@
 - ~~Rev. 2137~~ — NOVO Termo de Responsabilidade (entrega equip/veículos/EPIs) com fluxo FCSign completo: lista livre + fotos + numeração sequencial 001/2026 + múltiplos termos ativos por colaborador.
 - ~~Rev. 2138~~ — UX: TermoResponsabilidadeDialog migrado de <Dialog> shadcn para FullScreenDialog com header navy + zIndex=70 + footer sticky + thumbs maiores.
 - ~~Rev. 2247~~ — FIX/CONSISTÊNCIA (1ª tentativa) · Unifica régua Previsto Acumulado topo↔REFIS via `refDateTop`. Insuficiente — corrigido em 2248. Ver `shared/changelog.ts`.
+
+- ~~Rev. 2249~~ — FEATURE/CONSISTÊNCIA · Topo "Avanço Físico" lê DIRETO snapshot XML MSP (Texto10/Texto7) — Fase 1 pivot "ERP só lê, não calcula". Ver `shared/changelog.ts`.
