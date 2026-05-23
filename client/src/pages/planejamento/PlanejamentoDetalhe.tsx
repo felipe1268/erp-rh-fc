@@ -13330,12 +13330,6 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
     }, 0));
   }, [atividades, avancos, semAntes, usarPesoPorDuracao]);
 
-  // Rev. 2285 — usa realOficialRefis (snapshot MSP raiz UID=0) como
-  // acumulado p/ que o delta semanal exibido bata com o acumulado mostrado
-  // em "Avanço Acumulado da Obra" e com o que `emitirRefis()` persiste
-  // (Rev. 2283). Antes era `avancoRealAtual` (ponderação local) → semanal
-  // divergia do acumulado quando MSP e cálculo local não batiam.
-  const avancoRealSemanal = Math.max(0, realOficialRefis - avancoRealAntes);
   // Rev. 2273 — Realizado OFICIAL (fonte única) para SPI/Desvio do REFIS:
   // mesma origem da barra do topo (`avancoAtual` recebido como prop —
   // snapshot MSP raiz UID=0 quando disponível, fallback p/ ponderação).
@@ -13345,7 +13339,15 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
   // Rev. 2283 — hardening: usa Number.isFinite (evita NaN/Infinity) em vez
   // de typeof number, que aceita NaN e propagaria pro payload da mutation
   // salvarRefis (z.number() rejeita NaN → erro de validação em runtime).
+  // Rev. 2285 — MOVIDO p/ antes de `avancoRealSemanal` (era declarado depois,
+  // causando TDZ "Cannot access 'realOficialRefis' before initialization").
   const realOficialRefis = Number.isFinite(avancoAtual) ? avancoAtual : avancoRealAtual;
+  // Rev. 2285 — usa realOficialRefis (snapshot MSP raiz UID=0) como
+  // acumulado p/ que o delta semanal exibido bata com o acumulado mostrado
+  // em "Avanço Acumulado da Obra" e com o que `emitirRefis()` persiste
+  // (Rev. 2283). Antes era `avancoRealAtual` (ponderação local) → semanal
+  // divergia do acumulado quando MSP e cálculo local não batiam.
+  const avancoRealSemanal = Math.max(0, realOficialRefis - avancoRealAntes);
   const spi = avancoPrevisto > 0 ? realOficialRefis / avancoPrevisto : 0;
 
   const refisPrevistoComInd = useMemo(() => {
