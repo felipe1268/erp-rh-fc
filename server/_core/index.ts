@@ -844,6 +844,35 @@ Regras:
           console.log(`[SyncSchema+] Rev. 2290/2293: colunas locação (is_locacao + duração + datas) garantidas em compras_solicitacoes.`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.2290/2293 locação compras_solicitacoes:`, e?.message || e); }
 
+        // Rev. 2294 — Aprovação automática (SC/OC). A existência da SC já é
+        // a aprovação; o fluxo manual foi removido. Backfill aditivo (UPDATE
+        // de status, não DROP/DELETE) normaliza o backlog antigo:
+        // - SCs em "aguardando" viram "aprovada" (exceto canceladas/recusadas);
+        // - OCs em "aguardando_aprovacao_extra" viram "aprovada"/"aprovado".
+        try {
+          const upSC: any = await db.execute(sql`
+            UPDATE compras_solicitacoes
+               SET aprovacao_status = 'aprovada',
+                   aprovado_em = COALESCE(aprovado_em, NOW())
+             WHERE aprovacao_status = 'aguardando'
+               AND status NOT IN ('cancelado','recusado')
+          `);
+          const upOC: any = await db.execute(sql`
+            UPDATE compras_ordens
+               SET status = 'aprovada',
+                   aprovacao_status = 'aprovado',
+                   aprovado_em = COALESCE(aprovado_em, NOW())
+             WHERE status = 'aguardando_aprovacao_extra'
+          `);
+          const nSC = (upSC?.rowCount ?? upSC?.rows?.length ?? 0);
+          const nOC = (upOC?.rowCount ?? upOC?.rows?.length ?? 0);
+          if (nSC > 0 || nOC > 0) {
+            console.log(`[SyncSchema+] Rev. 2294: backfill aprovação automática — ${nSC} SC(s) e ${nOC} OC(s) normalizada(s) para "aprovada".`);
+          } else {
+            console.log(`[SyncSchema+] Rev. 2294: backfill aprovação automática — nada a fazer (já normalizado).`);
+          }
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.2294 backfill aprovação automática:`, e?.message || e); }
+
         try {
           await db.execute(sql`ALTER TABLE cliente_avaliacoes ADD COLUMN IF NOT EXISTS nota_escritorio INTEGER`);
           await db.execute(sql`ALTER TABLE cliente_avaliacoes ADD COLUMN IF NOT EXISTS nota_faturamento INTEGER`);

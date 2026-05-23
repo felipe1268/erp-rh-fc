@@ -1,6 +1,90 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2294 — **FEAT/UX · Aprovação automática de SC e OC — fluxo manual de
+ * "Aprovar Solicitação / Aprovar OC" descontinuado. A existência da SC JÁ É
+ * a aprovação.**
+ *
+ * Pedido user (23/05/2026): "TIRAR A FUNÇÃO DE PRECISAR APROVAR A OS, OU OC..
+ * SE TIVER SOLICITAÇÃO O ERP JA ENTENDE QUE ESTA APROVADO". Engenheiros e
+ * compradores reclamavam que o gate de aprovação travava o fluxo sem agregar
+ * valor — quem cria a SC já tem a alçada implícita.
+ *
+ * Mudanças (server — `server/routers/compras.ts`):
+ * - `criarSolicitacao` (L2742-2752): SC nasce com `aprovacaoStatus="aprovada"`
+ *   + `aprovadoEm=NOW()` + `aprovadorId/Nome` = criador. Não há mais SC em
+ *   estado "aguardando".
+ * - `criarCotacao` (L3339-3343): removido o gate
+ *   `if (sc.aprovacaoStatus !== "aprovada") throw`. Só bloqueia se a SC foi
+ *   explicitamente RECUSADA (estado raro, mantido por back-compat).
+ * - `criarOrdemDeCotacao` (L6128-6135): OC nasce SEMPRE `status="aprovada"` /
+ *   `aprovacaoStatus="aprovado"`. O cálculo de estouro de orçamento
+ *   (`extraAprovacaoRequerida`) ainda roda e é persistido em
+ *   `aprovacaoExtraMotivo` para auditoria/histórico, mas NÃO bloqueia mais a
+ *   OC — não há mais "aguardando_aprovacao_extra". As mutations legadas
+ *   `aprovarSolicitacao`, `desaprovarSolicitacao` e `aprovarOcExtra`
+ *   continuam expostas no tRPC para back-compat (SCs antigas que ainda
+ *   estejam em "aguardando" podem ser processadas via API), mas nenhuma tela
+ *   ativa as chama mais.
+ *
+ * Mudanças (server — backfill em `server/_core/index.ts` L850-877, dentro do
+ * SyncSchema+): bloco aditivo idempotente roda no boot:
+ *   - `UPDATE compras_solicitacoes SET aprovacao_status='aprovada',
+ *      aprovado_em=COALESCE(aprovado_em, NOW())
+ *      WHERE aprovacao_status='aguardando'
+ *        AND status NOT IN ('cancelado','recusado')`
+ *   - `UPDATE compras_ordens SET status='aprovada',
+ *      aprovacao_status='aprovado',
+ *      aprovado_em=COALESCE(aprovado_em, NOW())
+ *      WHERE status='aguardando_aprovacao_extra'`
+ *   Log no boot: "Rev. 2294: backfill aprovação automática — N SC(s) e M
+ *   OC(s) normalizada(s)" ou "nada a fazer (já normalizado)".
+ *   Validação em PROD após restart: 219 SCs aprovadas, 1 SC cancelada
+ *   (preservada em "aguardando" pelo filtro). OCs: 17 aprovadas, 0 em
+ *   "aguardando_aprovacao_extra" (já estavam consistentes).
+ *
+ * Mudanças (client):
+ * - `client/src/pages/compras/Solicitacoes.tsx`:
+ *   * Bloco APROVAÇÃO no detalhe da SC (L5134-5194) REMOVIDO — não há mais
+ *     botões "Aprovar / Recusar / Voltar p/ Aguardando / Desaprovar".
+ *   * Banner azul "Aguardando aprovação. Só é possível enviar para cotação
+ *     após a aprovação" (L5460-5467) REMOVIDO.
+ *   * Botão "Enviar para Cotação" (L5469) perdeu o gate
+ *     `aprovacaoStatus === "aprovada"` — aparece imediatamente após criar
+ *     a SC.
+ *   * Botão "Aprovar Selecionadas" do batch (L2501-2508) REMOVIDO.
+ *   * O AprovBadge na coluna da tabela e na rastreabilidade (timeline) foram
+ *     MANTIDOS — vão sempre exibir "Aprovada" e isso reforça visualmente a
+ *     nova convenção.
+ * - `client/src/pages/compras/Aprovacoes.tsx`: substituída por tela
+ *   informativa "Aprovações automáticas" com CTA pra navegar pra
+ *   /compras/solicitacoes. Mantida só pra não quebrar bookmarks/links
+ *   antigos no menu.
+ * - Menu: entrada "Aprovações Pendentes" removida de
+ *   `client/src/components/DashboardLayout.tsx` (L396) e de
+ *   `shared/modules.ts` (L470). Badge `bd.aprovacoesPendentes` no header
+ *   continua existindo no código mas não tem mais onde renderizar (sem
+ *   item de menu correspondente).
+ *
+ * Arquivos NÃO tocados (escopo controlado):
+ * - `client/src/pages/compras/Ordens.tsx` ainda tem refs ao status
+ *   "aguardando_aprovacao_extra" (badge L30, ações L914/L1560/L1889).
+ *   Como o backfill zerou as OCs nesse estado e o `criarOrdemDeCotacao`
+ *   nunca mais cria, essas refs viram código morto inofensivo — limpeza
+ *   pode entrar numa revisão futura sem urgência.
+ * - `Emergencial.tsx` ainda chama `aprovarMut` pra fluxo de SC emergencial
+ *   (dupla aprovação) — mantido intencionalmente porque emergencial é um
+ *   caso especial que JÁ exige justificativa do solicitante e MERECE um
+ *   gate explícito.
+ *
+ * R-001/R-007/R-010 (revisão):
+ * - R-001 (não ALTER em prod): N/A — só UPDATEs em colunas existentes.
+ * - R-007 (não DROP em prod): N/A.
+ * - R-010 (não DELETE em prod): N/A — backfill é UPDATE de status
+ *   ("aguardando" → "aprovada" / "aguardando_aprovacao_extra" → "aprovada"),
+ *   sem perda de dados. `aprovacaoExtraMotivo` continua persistido pra
+ *   auditoria.
+ *
  * Rev. 2293 — **HOTFIX CRÍTICO · Solicitações "sumiram" da tela porque as
  * colunas de locação (Rev. 2290) faltavam no Neon de PROD. Auto-migration
  * idempotente adicionada ao SyncSchema+ pra garantir que NUNCA mais aconteça.**

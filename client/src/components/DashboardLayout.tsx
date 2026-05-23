@@ -393,7 +393,6 @@ const menuSectionsCompras: MenuSection[] = [
     title: "Prioridade",
     items: [
       { icon: AlertTriangle,   label: "Compras Emergenciais", path: "/compras/emergencial"      },
-      { icon: CheckCircle,     label: "Aprovações Pendentes", path: "/compras/aprovacoes"       },
     ],
   },
   {

@@ -2736,8 +2736,15 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
             locacaoDuracaoDias: tipoSC === "equipamento" && input.isLocacao ? (input.locacaoDuracaoDias ?? null) : null,
             locacaoDataInicioPrevista: tipoSC === "equipamento" && input.isLocacao ? (input.locacaoDataInicioPrevista ?? null) : null,
             locacaoDataFimPrevista: tipoSC === "equipamento" && input.isLocacao ? (input.locacaoDataFimPrevista ?? null) : null,
+            // Rev. 2294 — Aprovação automática: a existência da SC JÁ É a aprovação.
+            // O fluxo de aprovação manual (aprovarSolicitacao) foi descontinuado;
+            // a SC nasce pronta pra ser cotada e o botão "Enviar para Cotação"
+            // aparece imediatamente.
             status: "pendente",
-            aprovacaoStatus: "aguardando",
+            aprovacaoStatus: "aprovada",
+            aprovadoEm: new Date().toISOString(),
+            aprovadorId: input.userId ?? null,
+            aprovadorNome: input.userName ?? null,
             criadoPorId: input.userId ?? null,
             criadoPorNome: input.userName ?? null,
           } as any).returning();
@@ -3326,8 +3333,10 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
         const [sc] = await db.select({ id: comprasSolicitacoes.id, aprovacaoStatus: comprasSolicitacoes.aprovacaoStatus, status: comprasSolicitacoes.status, tipo: comprasSolicitacoes.tipo })
           .from(comprasSolicitacoes)
           .where(eq(comprasSolicitacoes.id, input.solicitacaoId));
-        if (sc && sc.aprovacaoStatus !== "aprovada") {
-          throw new Error("Esta solicitação ainda não foi aprovada. Só é possível criar cotação após a aprovação da SC.");
+        // Rev. 2294 — Aprovação automática: SC já nasce aprovada,
+        // logo o gate "sc.aprovacaoStatus !== 'aprovada'" foi removido.
+        if (sc && sc.aprovacaoStatus === "recusada") {
+          throw new Error("Esta solicitação foi recusada e não pode ser cotada.");
         }
         if (sc?.tipo) {
           tipoFinal = sc.tipo as string;
@@ -6113,8 +6122,12 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
         criadoPorId: input.userId ?? null,
         criadoPorNome: input.userName ?? null,
         tipo: isEstoqueWinner ? "estoque" : ordemTipo,
-        status: input.comoRascunho ? "rascunho" : (extraAprovacaoRequerida ? "aguardando_aprovacao_extra" : "aprovada"),
-        aprovacaoStatus: input.comoRascunho ? "aguardando" : (extraAprovacaoRequerida ? "aguardando_admin" : "aprovado"),
+        // Rev. 2294 — Aprovação automática: OC nasce sempre aprovada (a
+        // existência da SC já é a aprovação). O estouro de orçamento NÃO
+        // bloqueia mais a OC — fica apenas registrado em aprovacaoExtraMotivo
+        // pra auditoria/histórico (sem gate).
+        status: input.comoRascunho ? "rascunho" : "aprovada",
+        aprovacaoStatus: input.comoRascunho ? "aguardando" : "aprovado",
         aprovacaoExtraRequerida: extraAprovacaoRequerida,
         aprovacaoExtraMotivo: extraAprovacaoRequerida ? extraMotivo : null,
         subtotal: String(subtotal.toFixed(2)),

@@ -2498,14 +2498,7 @@ ${sc.observacoes ? `<div class="obs"><b>Observações da SC:</b><br>${esc(sc.obs
         <div className="flex items-center gap-3 px-4 py-2.5 bg-amber-50 border border-amber-200 rounded-lg flex-wrap">
           <CheckSquare className="h-4 w-4 text-amber-600" />
           <span className="text-sm text-amber-800 font-medium">{selectedSCIds.size} selecionada(s)</span>
-          {lista.filter((s: any) => selectedSCIds.has(s.id) && s.aprovacaoStatus === "aguardando").length > 0 && (
-            <Button size="sm" className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs gap-1 ml-2"
-              disabled={aprovarLote.isPending}
-              onClick={() => aprovarLote.mutate({ ids: Array.from(selectedSCIds), companyId, aprovacaoStatus: "aprovada", aprovadorId: user?.id ? parseInt(String(user.id)) : undefined, aprovadorNome: user?.nome || user?.name || undefined })}>
-              {aprovarLote.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <CheckCircle2 className="h-3 w-3" />}
-              Aprovar Selecionadas
-            </Button>
-          )}
+          {/* Rev. 2294 — Botão "Aprovar Selecionadas" em lote removido: aprovação automática. */}
           <Button size="sm" variant="destructive" className="text-xs gap-1"
             disabled={!!excluirProgress?.running}
             onClick={() => setConfirmExcluirLote(true)}>
@@ -5131,67 +5124,8 @@ ${sc.observacoes ? `<div class="obs"><b>Observações da SC:</b><br>${esc(sc.obs
                 ) : null;
               })()}
 
-              {/* Aprovação */}
-              <div className="border border-gray-200 rounded-lg p-3">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-semibold text-gray-500 uppercase tracking-widest">Aprovação</span>
-                  <AprovBadge status={detalhe.aprovacaoStatus} />
-                </div>
-                {detalhe.status === "cotacao" || detalhe.status === "aprovado" ? (
-                  <div className="flex items-center justify-between">
-                    <p className="text-xs text-gray-500">Esta solicitação já está em andamento no fluxo de compras.</p>
-                    <Button size="sm" variant="outline"
-                      onClick={() => setConfirmAprov({
-                        id: detalhe.id, key: "desaprovar", icone: "voltar",
-                        titulo: `Desaprovar ${detalhe.numeroSc}?`,
-                        descricao: "A solicitação voltará ao status 'Pendente'. Cotações vinculadas que não possuem OC serão canceladas automaticamente.",
-                        cor: "red",
-                      })}
-                      disabled={aprovar.isPending || desaprovar.isPending}
-                      className="text-xs border-red-300 text-red-700 hover:bg-red-50">
-                      <XCircle className="h-3 w-3 mr-1" /> Desaprovar
-                    </Button>
-                  </div>
-                ) : (
-                <div className="flex gap-2">
-                  {[
-                    ...(detalhe.aprovacaoStatus !== "aguardando" ? [{ key: "aguardando", label: "Voltar p/ Aguardando", cls: "border-amber-300 text-amber-700 hover:bg-amber-50" }] : []),
-                    ...(detalhe.aprovacaoStatus !== "aprovada" ? [{ key: "aprovada", label: "Aprovar", cls: "border-emerald-300 text-emerald-700 hover:bg-emerald-50" }] : []),
-                    ...(detalhe.aprovacaoStatus !== "recusada" ? [{ key: "recusada", label: "Recusar", cls: "border-red-300 text-red-700 hover:bg-red-50" }] : []),
-                  ].map(a => (
-                    <Button key={a.key} size="sm" variant="outline"
-                      onClick={() => {
-                        if (a.key === "aprovada") {
-                          setConfirmAprov({
-                            id: detalhe.id, key: a.key, icone: "aprovar",
-                            titulo: `Aprovar ${detalhe.numeroSc}?`,
-                            descricao: "Ao aprovar, esta SC avançará no fluxo de compras e poderá ser enviada para cotação junto a fornecedores.",
-                            cor: "emerald",
-                          });
-                        } else if (a.key === "recusada") {
-                          setConfirmAprov({
-                            id: detalhe.id, key: a.key, icone: "recusar",
-                            titulo: `Recusar ${detalhe.numeroSc}?`,
-                            descricao: "Ao recusar, esta solicitação será bloqueada e não seguirá para cotação. O solicitante será notificado.",
-                            cor: "red",
-                          });
-                        } else {
-                          setConfirmAprov({
-                            id: detalhe.id, key: a.key, icone: "voltar",
-                            titulo: `Voltar ${detalhe.numeroSc} para Aguardando?`,
-                            descricao: "A solicitação voltará ao status 'Aguardando Aprovação' e poderá ser reavaliada.",
-                            cor: "amber",
-                          });
-                        }
-                      }}
-                      disabled={aprovar.isPending}
-                      className={`text-xs ${a.cls}`}>
-                      {a.label}
-                    </Button>
-                  ))}
-                </div>
-                )}
-              </div>
+              {/* Rev. 2294 — Bloco de Aprovação manual removido: SC/OC nascem
+                  aprovadas automaticamente. A existência da SC já é a aprovação. */}
 
               {/* Rastreabilidade */}
               <div className="border border-gray-200 rounded-lg p-3">
@@ -5457,16 +5391,9 @@ ${sc.observacoes ? `<div class="obs"><b>Observações da SC:</b><br>${esc(sc.obs
                   </span>
                 </div>
               )}
-              {!["cotacao", "cancelado"].includes(detalhe.status) && detalhe.aprovacaoStatus !== "aprovada" && (
-                <div className="flex items-center gap-2 px-3 py-2 bg-blue-50 border border-blue-200 rounded-lg">
-                  <AlertTriangle className="h-4 w-4 text-blue-500 shrink-0" />
-                  <span className="text-xs text-blue-700 font-medium">
-                    Aguardando aprovação. Só é possível enviar para cotação após a aprovação da solicitação.
-                  </span>
-                </div>
-              )}
+              {/* Rev. 2294 — Banner "Aguardando aprovação" removido: SC já nasce aprovada. */}
               <div className="flex flex-wrap gap-2 pt-2 border-t border-gray-200">
-                {!["cotacao", "aprovado", "cancelado"].includes(detalhe.status) && detalhe.aprovacaoStatus === "aprovada" && (() => {
+                {!["cotacao", "aprovado", "cancelado"].includes(detalhe.status) && (() => {
                   const scTipo = (detalhe as any).tipo || "material";
                   const tipoLabel = scTipo === "servico" ? "Mão de Obra" : scTipo === "pacote" ? "Pacote (MAT + MO)" : scTipo === "equipamento" ? "Equipamento" : scTipo === "pecas_veiculo" ? "Manutenção de Veículos" : "Material";
                   const tipoCor = scTipo === "servico" ? "bg-purple-600 hover:bg-purple-500" : scTipo === "pacote" ? "bg-indigo-600 hover:bg-indigo-500" : scTipo === "pecas_veiculo" ? "bg-cyan-600 hover:bg-cyan-500" : "bg-blue-600 hover:bg-blue-500";

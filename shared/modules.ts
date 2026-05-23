@@ -467,9 +467,12 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
       { key: "compras-solicitacoes",   label: "Solicitações (SC)",   route: "/compras/solicitacoes",   icon: "ClipboardList" },
       { key: "compras-cotacoes",       label: "Cotações",            route: "/compras/cotacoes",       icon: "FileSearch" },
       { key: "compras-ordens",         label: "Ordens de Compra",    route: "/compras/ordens",         icon: "ShoppingBag" },
-      { key: "compras-aprovacoes",     label: "Aprovações",          route: "/compras/aprovacoes",     icon: "CheckCircle" },
       { key: "compras-recebimentos",   label: "Recebimentos",        route: "/compras/recebimentos",   icon: "PackageCheck" },
       { key: "compras-emergencial",    label: "Emergencial",         route: "/compras/emergencial",    icon: "Zap" },
+      // Rev. 2294 — Feature mantida só para permissão de acesso à rota
+      // informativa /compras/aprovacoes (links/bookmarks antigos). O item
+      // foi REMOVIDO do menu lateral em `DashboardLayout.tsx`.
+      { key: "compras-aprovacoes",     label: "Aprovações",          route: "/compras/aprovacoes",     icon: "CheckCircle" },
 
       { key: "compras-realocacao",     label: "Realocação",          route: "/compras/realocacao",     icon: "ArrowLeftRight" },
       { key: "compras-comissoes",      label: "Comissões",           route: "/compras/comissoes",      icon: "Percent" },
