@@ -17,7 +17,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { toast } from "sonner";
 import { normalizarTexto } from "@shared/textNormalization";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Plus, Search, Trash2, FileText, ChevronRight, ChevronDown, Loader2, CheckCircle, X, XCircle, Building2, Trophy, UserPlus, Save, BarChart3, ChevronsUpDown, Paperclip, ExternalLink, AlertTriangle, TrendingDown, TrendingUp, Package, Undo2, History, Link2, RefreshCw, Phone, Mail, User, Smartphone, Sparkles, Star, ShieldCheck, ShieldAlert, Settings, DollarSign, Pencil, Check, ClipboardList, FileSearch, ShoppingCart, RotateCcw, Pin, GitBranch, Zap, PenTool, CreditCard, Banknote, Calendar, Truck, Target, BarChart2, Clock, Wallet, Layers, ArrowLeftRight, Warehouse, type LucideIcon } from "lucide-react";
+import { Plus, Search, Trash2, FileText, ChevronRight, ChevronDown, Loader2, CheckCircle, X, XCircle, Building2, Trophy, UserPlus, Save, BarChart3, ChevronsUpDown, Paperclip, ExternalLink, AlertTriangle, TrendingDown, TrendingUp, Package, Undo2, History, Link2, RefreshCw, Phone, Mail, User, Smartphone, Sparkles, Star, ShieldCheck, ShieldAlert, Settings, DollarSign, Pencil, Check, ClipboardList, FileSearch, ShoppingCart, RotateCcw, Pin, GitBranch, Zap, PenTool, CreditCard, Banknote, Calendar, Truck, Target, BarChart2, Clock, Wallet, Layers, ArrowLeftRight, Warehouse, HardHat, type LucideIcon } from "lucide-react";
 import { TIPOS_PAGAMENTO, getTipoPagamentoInfo, calcularParcelas, formatCurrency } from "../../../../shared/paymentConditions";
 import { PurchaseTimeline, TimelineBadge } from "@/components/compras/PurchaseTimeline";
 
@@ -795,6 +795,8 @@ export default function Cotacoes() {
 
   const [busca, setBusca] = useState("");
   const [filtroStatus, setFiltroStatus] = useState("todos");
+  // Rev. 2298 — filtro por tipo (material/servico/pacote/equipamento)
+  const [filtroTipo, setFiltroTipo] = useState<"todos" | "material" | "servico" | "pacote" | "equipamento">("todos");
   const [showNova, setShowNova] = useState(false);
   const [showDetalhe, setShowDetalhe] = useState<number | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
@@ -1461,13 +1463,34 @@ export default function Cotacoes() {
   const lista = q.data ?? [];
   // Rev. 2296 — contadores por status (ignoram filtroStatus, mas respeitam busca por número).
   const listaSearched = lista.filter(c => !busca || c.numeroCotacao?.toLowerCase().includes(busca.toLowerCase()));
-  const countsPorStatus = listaSearched.reduce<Record<string, number>>((acc, c) => {
-    const s = String((c as any).status ?? "pendente");
+  // Rev. 2298 — contadores e filtros são compostos (status + tipo).
+  // Cada linha de pills mostra o contador IGNORANDO seu próprio filtro
+  // mas APLICANDO o filtro da outra dimensão — assim, ao escolher um
+  // tipo, o contador de status reflete só aquele tipo, e vice-versa.
+  function tipoOf(c: any) { return String(c?.tipo ?? "material"); }
+  function statusOf(c: any) { return String(c?.status ?? "pendente"); }
+
+  const baseTipoFiltered = listaSearched.filter(c => filtroTipo === "todos" || tipoOf(c) === filtroTipo);
+  const baseStatusFiltered = listaSearched.filter(c => filtroStatus === "todos" || statusOf(c) === filtroStatus);
+
+  const countsPorStatus = baseTipoFiltered.reduce<Record<string, number>>((acc, c) => {
+    const s = statusOf(c);
     acc[s] = (acc[s] ?? 0) + 1;
     return acc;
   }, {});
-  const countTodos = listaSearched.length;
-  const filt = listaSearched.filter(c => filtroStatus === "todos" || String((c as any).status ?? "pendente") === filtroStatus);
+  const countTodos = baseTipoFiltered.length;
+
+  const countsPorTipo = baseStatusFiltered.reduce<Record<string, number>>((acc, c) => {
+    const t = tipoOf(c);
+    acc[t] = (acc[t] ?? 0) + 1;
+    return acc;
+  }, {});
+  const countTodosTipo = baseStatusFiltered.length;
+
+  const filt = listaSearched.filter(c =>
+    (filtroStatus === "todos" || statusOf(c) === filtroStatus) &&
+    (filtroTipo === "todos" || tipoOf(c) === filtroTipo)
+  );
 
   const allFilteredIds = filt.map(c => c.id);
   const allSelected = allFilteredIds.length > 0 && allFilteredIds.every(id => selectedIds.has(id));
@@ -6167,6 +6190,44 @@ export default function Cotacoes() {
                   <span className={`h-2 w-2 rounded-full ${dot}`} />
                 )}
                 <span>{label}</span>
+                <span className={`inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full text-[10px] font-bold tabular-nums
+                  ${active ? "bg-white/25 text-white" : "bg-gray-100 text-gray-700 group-hover:bg-white"}`}>
+                  {count}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+        {/* Rev. 2298 — Segunda linha: filtros por TIPO (Material / MDO / Pacote / Equipamento).
+            Pedido user (23/05/2026): "Coloca filtro para material, mão de obra,
+            pacote e equipamentos.. todos os status para ver mais rápido as solicitações".
+            Mesma pegada visual dos pills de status, mas com cores neutras
+            por tipo (azul/roxo/indigo/ciano) — espelha cores já usadas
+            nos badges das linhas (L6226). */}
+        <div className="flex flex-wrap gap-2 w-full">
+          {([
+            { t: "todos",       label: "Todos os tipos", short: "Todos",       Icon: Package,    count: countTodosTipo,                    accent: "border-slate-300 text-slate-700",     activeBg: "bg-slate-800 border-slate-800 text-white",     idleHoverBg: "hover:bg-slate-50",  dot: "bg-slate-400" },
+            { t: "material",    label: "Material",       short: "Material",    Icon: Package,    count: countsPorTipo.material    ?? 0, accent: "border-blue-300 text-blue-800",        activeBg: "bg-blue-600 border-blue-600 text-white",       idleHoverBg: "hover:bg-blue-50",   dot: "bg-blue-500" },
+            { t: "servico",     label: "Mão de Obra",    short: "MDO",         Icon: HardHat,    count: countsPorTipo.servico     ?? 0, accent: "border-purple-300 text-purple-800",    activeBg: "bg-purple-600 border-purple-600 text-white",   idleHoverBg: "hover:bg-purple-50", dot: "bg-purple-500" },
+            { t: "pacote",      label: "Pacote (MAT+MDO)", short: "Pacote",    Icon: Layers,     count: countsPorTipo.pacote      ?? 0, accent: "border-indigo-300 text-indigo-800",    activeBg: "bg-indigo-600 border-indigo-600 text-white",   idleHoverBg: "hover:bg-indigo-50", dot: "bg-indigo-500" },
+            { t: "equipamento", label: "Equipamento",    short: "Equipamento", Icon: Warehouse,  count: countsPorTipo.equipamento ?? 0, accent: "border-cyan-300 text-cyan-800",        activeBg: "bg-cyan-600 border-cyan-600 text-white",       idleHoverBg: "hover:bg-cyan-50",   dot: "bg-cyan-500" },
+          ] as const).map(({ t, label, short, Icon, count, accent, activeBg, idleHoverBg, dot }) => {
+            const active = filtroTipo === t;
+            return (
+              <button
+                key={t}
+                type="button"
+                onClick={() => setFiltroTipo(t as any)}
+                title={`${label}: ${count} cotaç${count === 1 ? "ão" : "ões"}`}
+                className={`group inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold border transition-all
+                  ${active ? `${activeBg} shadow-sm` : `bg-white ${accent} ${idleHoverBg}`}`}
+              >
+                {active ? (
+                  <Icon className="h-3.5 w-3.5" />
+                ) : (
+                  <span className={`h-2 w-2 rounded-full ${dot}`} />
+                )}
+                <span>{short}</span>
                 <span className={`inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full text-[10px] font-bold tabular-nums
                   ${active ? "bg-white/25 text-white" : "bg-gray-100 text-gray-700 group-hover:bg-white"}`}>
                   {count}

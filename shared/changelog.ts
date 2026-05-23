@@ -1,6 +1,62 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2298 — **UX · Segunda linha de filtros na tela Cotações: pills por
+ * TIPO (Todos / Material / MDO / Pacote / Equipamento) com contador.
+ * Compõe com os filtros de status — dá "raio-X" 2D da carteira de
+ * cotações.**
+ *
+ * Pedido user (23/05/2026): "Coloca filtro para material, mão de obra,
+ * pacote e equipamentos.. todos os status para ver mais rápido as
+ * solicitações". Print mostrava 204 cotações sem como filtrar por tipo
+ * — o user só conseguia ver "todos os MAT" rolando manualmente.
+ *
+ * **Por quê:** com a Rev. 2296 os filtros de status já viraram pills
+ * coloridos com contador, mas faltava cortar por tipo (a outra
+ * dimensão natural da Compras). Agora o user consegue, por exemplo,
+ * ver "todos os Equipamentos pendentes" ou "todos os Pacotes aprovados"
+ * num clique.
+ *
+ * **Como funciona — filtros COMPOSTOS:**
+ * - Os 2 filtros (status + tipo) são aplicados em AND no `filt` final.
+ * - O contador de cada linha de pills é calculado IGNORANDO o próprio
+ *   filtro mas APLICANDO o filtro da outra dimensão:
+ *   `countsPorStatus` usa `baseTipoFiltered` (lista já cortada pelo
+ *   tipo escolhido); `countsPorTipo` usa `baseStatusFiltered`. Assim,
+ *   ao escolher "Equipamento", os pills de status mostram quantas
+ *   cotações de equipamento estão em cada status; ao escolher
+ *   "Aprovada", os pills de tipo mostram quantas aprovadas existem
+ *   por tipo. Sem isso o usuário escolhia tipo e via contadores
+ *   "fantasma" que não batiam com a lista visível.
+ *
+ * **Tipos (mapeamento com o domínio existente):**
+ * - `material` → Material (azul, `Package`)
+ * - `servico` → Mão de Obra / MDO (roxo, `HardHat`)
+ * - `pacote` → Pacote MAT+MDO (indigo, `Layers`)
+ * - `equipamento` → Equipamento (ciano, `Warehouse`)
+ * - Cores espelham os badges das linhas (L6226) — ciano para EQUIP,
+ *   indigo para Pacote, etc., mantendo coerência visual com o resto
+ *   da tela.
+ *
+ * **Mudanças (`client/src/pages/compras/Cotacoes.tsx`):**
+ * - Novo state `filtroTipo` (L802) — default `"todos"`.
+ * - Bloco de filtros refatorado (L1469-1496): helpers `tipoOf`/`statusOf`,
+ *   `baseTipoFiltered` / `baseStatusFiltered`, `countsPorStatus` e
+ *   `countsPorTipo` com cross-filter, `filt` final em AND.
+ * - Segunda linha de pills adicionada logo abaixo da de status
+ *   (L6204-6241) — mesma pegada visual (rounded-full + ícone ativo +
+ *   bolinha inativa + badge tabular-nums) pra preservar consistência
+ *   da Rev. 2296. Largura `w-full` força quebra de linha quando
+ *   horizontalmente apertado.
+ * - `HardHat` adicionado ao import de `lucide-react` (L20).
+ *
+ * **R-001 / R-007 / R-010:** N/A. Mudança 100% client-side; nenhuma DDL
+ * nem mutation; só agregações em memória.
+ *
+ * Arquivos: `client/src/pages/compras/Cotacoes.tsx`,
+ * `shared/version.ts`, `shared/changelog.ts`, `replit.md`,
+ * `replit-history.md`.
+ *
  * Rev. 2297 — **UX/Padrão global · Componente reutilizável `<PersonPhoto>`
  * com lightbox embutido. Toda foto de pessoa do ERP passa a ser clicável
  * pra ampliar.**
