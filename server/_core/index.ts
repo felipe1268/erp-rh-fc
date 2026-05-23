@@ -830,6 +830,20 @@ Regras:
           console.log(`[SyncSchema+] Rev. 1799: tabela compras_sc_counters criada e semeada com MAX(seq) atual.`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.1799 compras_sc_counters:`, e?.message || e); }
 
+        // Rev. 2290/2293 — Locação de Equipamento já na SC (toggle + período).
+        // CRITICO: o Drizzle gera SELECT explícito com TODAS as colunas do schema
+        // TS — se estas colunas faltarem em PROD, listarSolicitacoes / getSolicitacao
+        // falham e o frontend mostra "Nenhuma solicitação encontrada" (Rev. 2293 fix).
+        // Auto-migration aditiva e idempotente garante paridade schema TS ↔ DB
+        // em DEV e PROD sem precisar de `pnpm db:push` manual.
+        try {
+          await db.execute(sql`ALTER TABLE compras_solicitacoes ADD COLUMN IF NOT EXISTS is_locacao BOOLEAN DEFAULT false`);
+          await db.execute(sql`ALTER TABLE compras_solicitacoes ADD COLUMN IF NOT EXISTS locacao_duracao_dias INTEGER`);
+          await db.execute(sql`ALTER TABLE compras_solicitacoes ADD COLUMN IF NOT EXISTS locacao_data_inicio_prevista VARCHAR(10)`);
+          await db.execute(sql`ALTER TABLE compras_solicitacoes ADD COLUMN IF NOT EXISTS locacao_data_fim_prevista VARCHAR(10)`);
+          console.log(`[SyncSchema+] Rev. 2290/2293: colunas locação (is_locacao + duração + datas) garantidas em compras_solicitacoes.`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.2290/2293 locação compras_solicitacoes:`, e?.message || e); }
+
         try {
           await db.execute(sql`ALTER TABLE cliente_avaliacoes ADD COLUMN IF NOT EXISTS nota_escritorio INTEGER`);
           await db.execute(sql`ALTER TABLE cliente_avaliacoes ADD COLUMN IF NOT EXISTS nota_faturamento INTEGER`);

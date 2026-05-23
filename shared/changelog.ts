@@ -1,6 +1,62 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2293 — **HOTFIX CRÍTICO · Solicitações "sumiram" da tela porque as
+ * colunas de locação (Rev. 2290) faltavam no Neon de PROD. Auto-migration
+ * idempotente adicionada ao SyncSchema+ pra garantir que NUNCA mais aconteça.**
+ *
+ * Pedido user (23/05/2026, IMG image_1779563277563): "SUMIU TODAS AS
+ * SOLICITAÇÕES EXISTENTES.. NÃO PODE,, TRAGA TODAS DE VOLTA NOVAMENTE E NÃO
+ * PERMITA QUE ISSO JAMAIS ACONTESSA NOVAMENTE". Tela Solicitações de Compra
+ * exibia "0 no total" e "Nenhuma solicitação encontrada" — pânico legítimo.
+ *
+ * Diagnóstico (script Node temporário direto no Neon):
+ * - `SELECT COUNT(*) FROM compras_solicitacoes WHERE company_id=60002` → **219**.
+ *   Os dados ESTAVAM intactos. Nada foi deletado.
+ * - `information_schema.columns WHERE column_name LIKE '%locacao%'` → **[]**.
+ *   As 4 colunas da Rev. 2290 (is_locacao, locacao_duracao_dias,
+ *   locacao_data_inicio_prevista, locacao_data_fim_prevista) NÃO existiam no
+ *   Neon — Rev. 2290 só foi aplicada via `pnpm db:push` em DEV (e o user roda
+ *   contra a mesma Neon, então o `db:push` provavelmente não foi executado
+ *   contra essa branch / não foi commitado migration).
+ *
+ * Causa-raiz: o Drizzle ORM gera SELECT EXPLÍCITO com todas as colunas
+ * declaradas no schema TS (`drizzle/schema.ts` L5897+). Quando o DB não tem
+ * essas colunas, `db.select().from(comprasSolicitacoes)` falha com
+ * `column "is_locacao" does not exist`. O tRPC retorna o erro, mas o
+ * `useQuery` do front entra em estado `isError` SEM mostrar mensagem clara
+ * — e o componente cai no fallback "Nenhuma solicitação encontrada"
+ * (renderiza tabela vazia). Resultado: parece que sumiram, mas estavam lá.
+ *
+ * Fix em `server/_core/index.ts` (L836-848): adiciona bloco SyncSchema+ com
+ * 4 `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` aditivos:
+ *   - `is_locacao BOOLEAN DEFAULT false`
+ *   - `locacao_duracao_dias INTEGER`
+ *   - `locacao_data_inicio_prevista VARCHAR(10)`
+ *   - `locacao_data_fim_prevista VARCHAR(10)`
+ * Idempotente (IF NOT EXISTS), aditivo (sem DROP/ALTER de coluna existente),
+ * roda automaticamente no boot do server. Imediatamente após restart:
+ * `Cols locacao agora: [is_locacao, locacao_data_fim_prevista,
+ * locacao_data_inicio_prevista, locacao_duracao_dias]` + 219 SCs preservadas.
+ *
+ * Prevenção (a garantia "JAMAIS NOVAMENTE" que o user pediu):
+ * - **Daqui pra frente**, toda revisão que adicionar coluna em tabela
+ *   referenciada por `db.select().from(...)` DEVE também adicionar bloco
+ *   `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` no SyncSchema+ — não
+ *   confiar em `pnpm db:push` manual. Convenção R-001/R-007/R-010 já
+ *   proíbe DROP/ALTER destrutivo; agora estende: ADD COLUMN aditivo
+ *   precisa ser auto-aplicado.
+ * - Rev. 2290 (locação na SC) re-anotada: a parte "PROD precisa rodar a
+ *   mesma migration" estava errada como instrução manual — auto-migration
+ *   agora cobre.
+ *
+ * **R-001/R-007/R-010:** N/A (todos ADD COLUMN IF NOT EXISTS aditivos,
+ * nenhum DROP/ALTER destrutivo). Aplicado automaticamente em DEV e PROD
+ * via SyncSchema+ no boot.
+ */
+export const CHANGELOG_PLACEHOLDER_2293 = true;
+
+/**
  * Rev. 2292 — **UX · Modal "Descartar solicitação?" redesenhado no padrão FC.**
  *
  * Pedido user (23/05/2026, IMG attached): "ajuste este layout, para
