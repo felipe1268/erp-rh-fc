@@ -2831,53 +2831,66 @@ ${sc.observacoes ? `<div class="obs"><b>Observações da SC:</b><br>${esc(sc.obs
                   com ícones (CalendarDays/Clock) + faixa de info
                   destacando o alerta automático do almoxarifado. */}
               {form.tipo === "equipamento" && (
-                <div className={`mt-3 rounded-xl overflow-hidden shadow-sm transition-all ${form.isLocacao ? "ring-2 ring-amber-400/60 shadow-amber-200/40" : "border border-gray-200"}`}>
-                  {/* HEADER */}
-                  <div className={`flex items-center justify-between gap-3 px-4 py-3 transition-colors ${form.isLocacao ? "bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 text-white" : "bg-gradient-to-r from-gray-50 to-gray-100"}`}>
+                <div className={`mt-3 rounded-xl overflow-hidden shadow-sm transition-all ${form.isLocacao ? "ring-2 ring-amber-400/60 shadow-amber-200/40" : "border border-gray-200 hover:border-amber-300 hover:shadow-md"}`}>
+                  {/* HEADER — CARD INTEIRO CLICÁVEL (um clique liga/desliga) */}
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={form.isLocacao}
+                    onClick={() => {
+                      const checked = !form.isLocacao;
+                      setForm(p => ({
+                        ...p,
+                        isLocacao: checked,
+                        locacaoDuracaoDias: checked ? p.locacaoDuracaoDias : "",
+                        locacaoDataInicioPrevista: checked ? p.locacaoDataInicioPrevista : "",
+                        locacaoDataFimPrevista: checked ? p.locacaoDataFimPrevista : "",
+                      }));
+                    }}
+                    className={`w-full text-left flex items-center justify-between gap-3 px-4 py-3 transition-all focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-inset cursor-pointer ${form.isLocacao
+                      ? "bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 text-white"
+                      : "bg-gradient-to-r from-amber-50 via-orange-50 to-amber-50 hover:from-amber-100 hover:via-orange-100 hover:to-amber-100"
+                    }`}
+                  >
                     <div className="flex items-center gap-3 min-w-0">
-                      <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg shadow-sm ${form.isLocacao ? "bg-white/20 ring-1 ring-white/40" : "bg-amber-100"}`}>
-                        <Truck className={`h-5 w-5 ${form.isLocacao ? "text-white" : "text-amber-600"}`} />
+                      <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-lg shadow-sm transition-all ${form.isLocacao ? "bg-white/20 ring-1 ring-white/40" : "bg-amber-200/70"}`}>
+                        <Truck className={`h-5 w-5 ${form.isLocacao ? "text-white" : "text-amber-700"}`} />
                       </div>
                       <div className="min-w-0">
                         <div className="flex items-center gap-2">
-                          <h4 className={`text-sm font-bold uppercase tracking-wide ${form.isLocacao ? "text-white" : "text-gray-800"}`}>
-                            Locação de Equipamento
+                          <h4 className={`text-sm font-bold uppercase tracking-wide ${form.isLocacao ? "text-white" : "text-amber-900"}`}>
+                            É Locação de Equipamento?
                           </h4>
-                          {form.isLocacao && (
-                            <span className="px-2 py-0.5 text-[9px] font-extrabold rounded-full bg-white text-amber-700 shadow-sm tracking-wider">
-                              ALUGUEL
-                            </span>
-                          )}
-                        </div>
-                        <p className={`text-[11px] mt-0.5 ${form.isLocacao ? "text-amber-50" : "text-gray-500"}`}>
                           {form.isLocacao
-                            ? "Suprimentos vai cotar com fornecedores de aluguel para o período abaixo."
-                            : "Marque se for ALUGAR (não comprar) o equipamento — Suprimentos cotará como locação."}
+                            ? (
+                              <span className="px-2 py-0.5 text-[9px] font-extrabold rounded-full bg-white text-amber-700 shadow-sm tracking-wider">
+                                ALUGUEL ATIVO
+                              </span>
+                            )
+                            : (
+                              <span className="px-2 py-0.5 text-[9px] font-bold rounded-full bg-amber-600 text-white shadow-sm tracking-wider animate-pulse">
+                                CLIQUE PARA ATIVAR
+                              </span>
+                            )
+                          }
+                        </div>
+                        <p className={`text-[11px] mt-0.5 ${form.isLocacao ? "text-amber-50" : "text-amber-800/80"}`}>
+                          {form.isLocacao
+                            ? "Suprimentos vai cotar com fornecedores de aluguel — informe o período abaixo."
+                            : "Marque se for ALUGAR (não comprar) — Suprimentos cotará como locação."}
                         </p>
                       </div>
                     </div>
-                    {/* TOGGLE SWITCH */}
-                    <button
-                      type="button"
-                      role="switch"
-                      aria-checked={form.isLocacao}
-                      onClick={() => {
-                        const checked = !form.isLocacao;
-                        setForm(p => ({
-                          ...p,
-                          isLocacao: checked,
-                          locacaoDuracaoDias: checked ? p.locacaoDuracaoDias : "",
-                          locacaoDataInicioPrevista: checked ? p.locacaoDataInicioPrevista : "",
-                          locacaoDataFimPrevista: checked ? p.locacaoDataFimPrevista : "",
-                        }));
-                      }}
-                      className={`relative inline-flex h-7 w-12 shrink-0 cursor-pointer rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-amber-500 ${form.isLocacao ? "bg-white/30 ring-1 ring-white/60" : "bg-gray-300"}`}
+                    {/* INDICADOR VISUAL (switch decorativo — clique acontece no card todo) */}
+                    <div
+                      aria-hidden
+                      className={`relative inline-flex h-7 w-12 shrink-0 rounded-full transition-colors duration-200 ${form.isLocacao ? "bg-white/30 ring-1 ring-white/60" : "bg-white ring-1 ring-amber-400"}`}
                     >
                       <span
-                        className={`pointer-events-none inline-block h-6 w-6 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out mt-0.5 ${form.isLocacao ? "translate-x-[22px]" : "translate-x-0.5"}`}
+                        className={`pointer-events-none inline-block h-6 w-6 transform rounded-full shadow-md ring-0 transition duration-200 ease-in-out mt-0.5 ${form.isLocacao ? "translate-x-[22px] bg-white" : "translate-x-0.5 bg-amber-500"}`}
                       />
-                    </button>
-                  </div>
+                    </div>
+                  </button>
                   {/* CORPO — só quando isLocacao */}
                   {form.isLocacao && (
                     <div className="bg-amber-50/40 px-4 py-3 space-y-3">
