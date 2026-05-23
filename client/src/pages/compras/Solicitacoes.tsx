@@ -4295,15 +4295,14 @@ ${sc.observacoes ? `<div class="obs"><b>Observações da SC:</b><br>${esc(sc.obs
                     <span className="text-gray-400 font-normal ml-1">({itens.filter(i => i.descricao.trim()).length} ite{itens.filter(i => i.descricao.trim()).length === 1 ? "m" : "ns"})</span>
                   )}
                 </label>
-                {modoSC === "manual" && (
-                  <button
-                    type="button"
-                    onClick={() => setItens(p => [...p, newItem()])}
-                    className="flex items-center gap-1 px-2 py-1 text-xs border border-gray-300 rounded-md bg-white text-gray-600 hover:bg-gray-50 transition"
-                  >
-                    <Plus className="h-3 w-3" /> Item
-                  </button>
-                )}
+                <button
+                  type="button"
+                  onClick={() => setItens(p => [...p, newItem()])}
+                  className="flex items-center gap-1 px-2.5 py-1 text-xs font-semibold border border-amber-300 rounded-md bg-amber-50 text-amber-700 hover:bg-amber-100 hover:border-amber-400 transition shadow-sm"
+                  title="Adicionar outro item à esta Solicitação"
+                >
+                  <Plus className="h-3.5 w-3.5" /> Adicionar Item
+                </button>
               </div>
 
               {(itens.filter(i => i.origemEap).length > 0 || (modoSC === "eap" && itens.filter(i => !i.origemEap && i.orcamentoItemId && i.descricao.trim()).length > 0)) ? (
@@ -4371,6 +4370,73 @@ ${sc.observacoes ? `<div class="obs"><b>Observações da SC:</b><br>${esc(sc.obs
                       </div>
                     </div>
                   ))}
+                  {/* Rev. 2290 — Editor inline para items soltos adicionados via "+ Adicionar Item"
+                      mesmo quando há itens EAP (modos Via EAP / Por Disciplina / Por Insumo). */}
+                  {(() => {
+                    const idxsSolo = itens.map((it, i) => ({ it, i })).filter(x => !x.it.origemEap && !x.it.orcamentoItemId);
+                    if (idxsSolo.length === 0) return null;
+                    return (
+                      <div className="mt-2 pt-2 border-t border-dashed border-amber-300/60 space-y-1.5">
+                        <div className="flex items-center gap-1.5 text-[10px] font-semibold text-amber-700 uppercase tracking-wide px-1">
+                          <Plus className="h-3 w-3" /> Itens avulsos adicionados ({idxsSolo.length})
+                          <span className="text-amber-600/70 font-normal normal-case tracking-normal">— sem vínculo com EAP, exigem verba realocada</span>
+                        </div>
+                        {idxsSolo.map(({ it, i: idx }) => (
+                          <div key={`solo-edit-${idx}`} className="p-2 rounded-lg border bg-orange-50/50 border-orange-200 space-y-1.5">
+                            <div className="flex gap-2 items-end">
+                              <div className="flex-1 min-w-0">
+                                <label className="block text-[9px] font-bold text-orange-700 uppercase tracking-wider leading-none mb-0.5 px-0.5">Descrição</label>
+                                <input
+                                  className="w-full h-7 px-2 text-xs rounded border border-orange-300 bg-white text-gray-900 placeholder-gray-400 outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-300"
+                                  placeholder="Descrição do item *"
+                                  value={it.descricao}
+                                  onChange={e => setItens(p => p.map((x, j) => j === idx ? { ...x, descricao: e.target.value } : x))}
+                                  onBlur={e => setItens(p => p.map((x, j) => j === idx ? { ...x, descricao: normalizarTexto(e.target.value) } : x))}
+                                />
+                              </div>
+                              <div className="shrink-0">
+                                <label className="block text-[9px] font-bold text-orange-700 uppercase tracking-wider leading-none mb-0.5 px-0.5">Un</label>
+                                <Select value={it.unidade} onValueChange={v => setItens(p => p.map((x, j) => j === idx ? { ...x, unidade: v } : x))}>
+                                  <SelectTrigger className="w-[72px] h-7 text-xs font-semibold border-orange-300 bg-white text-gray-900 px-2"><SelectValue /></SelectTrigger>
+                                  <SelectContent className="bg-white border-gray-200">
+                                    {UNIDADES.map(u => <SelectItem key={u} value={u}>{u}</SelectItem>)}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                              <div className="shrink-0">
+                                <label className="block text-[9px] font-bold text-orange-700 uppercase tracking-wider leading-none mb-0.5 px-0.5">Qtd</label>
+                                <input
+                                  className="w-24 h-7 px-2 text-xs font-semibold text-right rounded border border-orange-300 bg-white text-gray-900 outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-300"
+                                  type="number" min="0.001" step="0.001" placeholder="0"
+                                  value={it.quantidade}
+                                  onChange={e => setItens(p => p.map((x, j) => j === idx ? { ...x, quantidade: e.target.value } : x))}
+                                />
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => setItens(p => p.filter((_, j) => j !== idx))}
+                                className="text-gray-400 hover:text-red-500 self-end mb-1"
+                                title="Remover item"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
+                            <input
+                              className="w-full h-7 px-2 text-xs rounded border border-orange-200 bg-white text-gray-700 placeholder-gray-400 outline-none focus:border-amber-400"
+                              placeholder="Especificação do produto (ex: marca, modelo, referência)"
+                              value={it.observacoes}
+                              onChange={e => setItens(p => p.map((x, j) => j === idx ? { ...x, observacoes: e.target.value } : x))}
+                            />
+                            {it.descricao.trim() && (
+                              <div className="flex items-center gap-1 text-[9px] text-orange-600 font-medium">
+                                <AlertTriangle className="h-2.5 w-2.5" /> Item fora do orçamento — será necessário verba realocada para liberar OC/OS
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })()}
                 </div>
               ) : modoSC === "eap" ? (
                 <div className="text-xs text-gray-400 bg-gray-50 border border-gray-200 rounded-lg px-3 py-3 text-center">
