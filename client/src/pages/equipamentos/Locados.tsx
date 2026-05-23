@@ -1,5 +1,5 @@
 import DashboardLayout from "@/components/DashboardLayout";
-import { useState, useMemo, useRef } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
 import { toast } from "sonner";
@@ -83,14 +83,16 @@ export default function EquipamentosLocados() {
   const [modalImport, setModalImport] = useState(false);
   const [importArquivo, setImportArquivo] = useState<{ nome: string; mimeType: string; base64: string } | null>(null);
   const [importPreview, setImportPreview] = useState<any[] | null>(null);
+  const [importProgresso, setImportProgresso] = useState(0); // Rev. 2310 — barra 0-100% animada
   const importFileRef = useRef<HTMLInputElement>(null);
 
   const parsearPdf = trpc.equipamentos.parsearContratoLocacaoPdf.useMutation({
     onSuccess: (res) => {
+      setImportProgresso(100);
       setImportPreview(res.contratos);
       toast.success(`IA detectou ${res.totalContratos} contrato(s) · ${res.totalItens} item(ns).`);
     },
-    onError: (e) => toast.error(e.message),
+    onError: (e) => { setImportProgresso(0); toast.error(e.message); },
   });
   const importarLote = trpc.equipamentos.importarContratosLocacaoLote.useMutation({
     onSuccess: (res) => {
@@ -117,8 +119,26 @@ export default function EquipamentosLocados() {
     const base64 = btoa(binary);
     setImportArquivo({ nome: file.name, mimeType: file.type, base64 });
     setImportPreview(null);
+    setImportProgresso(0);
     parsearPdf.mutate({ companyId, pdfBase64: base64, mimeType: file.type as any, nomeArquivo: file.name });
   }
+
+  // Rev. 2310 — anima barra de 0→95% durante o parse (Gemini não retorna progresso real).
+  // Curva ease-out: cresce rápido nos primeiros segundos e desacelera perto de 95%.
+  // Estimativa baseada em 20s típicos. onSuccess força 100%.
+  useEffect(() => {
+    if (!parsearPdf.isPending) return;
+    setImportProgresso(0);
+    const inicio = Date.now();
+    const duracaoEstimada = 20_000;
+    const id = setInterval(() => {
+      const decorrido = Date.now() - inicio;
+      const t = Math.min(decorrido / duracaoEstimada, 1);
+      const pct = Math.min(95, Math.round(95 * (1 - Math.pow(1 - t, 2))));
+      setImportProgresso(pct);
+    }, 200);
+    return () => clearInterval(id);
+  }, [parsearPdf.isPending]);
   function confirmarImport() {
     if (!importPreview || importPreview.length === 0) return;
     const limpos = importPreview
@@ -506,9 +526,21 @@ export default function EquipamentosLocados() {
               )}
 
               {parsearPdf.isPending && (
-                <div className="flex items-center justify-center gap-3 py-8 text-indigo-600">
-                  <Spinner />
-                  <span className="text-sm">IA analisando layout do documento — isso leva 10–30s…</span>
+                <div className="py-6 px-2 space-y-3">
+                  <div className="flex items-center justify-between text-sm">
+                    <div className="flex items-center gap-2 text-indigo-700 font-medium">
+                      <Sparkles className="h-4 w-4 animate-pulse" />
+                      <span>IA analisando layout do documento…</span>
+                    </div>
+                    <span className="text-indigo-900 font-bold tabular-nums">{importProgresso}%</span>
+                  </div>
+                  <div className="h-3 bg-indigo-100 rounded-full overflow-hidden ring-1 ring-indigo-200">
+                    <div
+                      className="h-full bg-gradient-to-r from-indigo-500 via-purple-500 to-fuchsia-500 transition-all duration-300 ease-out"
+                      style={{ width: `${importProgresso}%` }}
+                    />
+                  </div>
+                  <div className="text-[11px] text-slate-500 text-center">Tempo típico: 10–30s · não feche esta janela.</div>
                 </div>
               )}
 

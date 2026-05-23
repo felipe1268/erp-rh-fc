@@ -2,6 +2,7 @@
 
 > Este arquivo guarda os one-liners das revisões antigas para manter o `replit.md` enxuto.
 
+- ~~Rev. 2303~~ — FEAT/REGRA-DE-OURO · Recebimento só na obra da SC/OC + obra clicável (`filtroObra`) em Movimentações; hard-check backend em `registerSmartEntry`. Ver `shared/changelog.ts`.
 - ~~Rev. 2302~~ — HOTFIX CRÍTICO · "Aprovar e Gerar OC" estourava: 7 colunas locação faltavam em `compras_ordens`. Auto-migration SyncSchema+ Rev. 2302. Ver `shared/changelog.ts`.
 - ~~Rev. 2301~~ — UX · Pills de filtro por TIPO em Solicitações de Compra (Material/MDO/Pacote/Equip/Manutenção) com cross-filter; helper `effectiveTipo()`. Ver `shared/changelog.ts`.
 - ~~Rev. 2300~~ — FEAT/UX · Funcionários Terceiros: múltipla seleção + barra de ações bulk (Apto/Inapto/Pendente) via Promise.allSettled. Ver `shared/changelog.ts`.

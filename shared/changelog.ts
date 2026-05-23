@@ -1,6 +1,58 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2310 — **UX · Barra de progresso 0→100% no modal de importação
+ * PDF (IA) de contratos de locação.**
+ *
+ * Pedido user (23/05/2026, screenshot do modal travado em "IA
+ * analisando layout do documento — isso leva 10–30s..."): "Coloca
+ * a barra de 0 a 100%". O modal de Importar PDF da Rev. 2308 mostrava
+ * apenas um spinner com texto estático durante a chamada ao Gemini
+ * Vision (10–30s típicos), o que passava sensação de travamento e
+ * deixava o usuário inseguro se deveria fechar/recarregar.
+ *
+ * **Decisão**: animação estimada client-side (Gemini não expõe
+ * progresso real — resposta é blocking single-shot via REST). Curva
+ * **ease-out** sobre estimativa de 20s, com cap de 95% até a resposta
+ * chegar, e jump pra 100% no `onSuccess`. Padrão consistente com
+ * upload bars de outros apps quando o servidor não emite eventos.
+ *
+ * **Implementação** (`client/src/pages/equipamentos/Locados.tsx`):
+ * - Novo state `importProgresso: number` (0–100).
+ * - `useEffect` observa `parsearPdf.isPending`: quando vira true,
+ *   zera o progresso, registra `Date.now()` como início e dispara
+ *   `setInterval(200ms)` que calcula:
+ *     `t = min(decorrido / 20_000, 1)`
+ *     `pct = round(95 * (1 - (1-t)²))`  // ease-out quadrático
+ *   Cresce rápido nos primeiros segundos, desacelera perto do limite
+ *   superior. Cleanup do interval no `return` do effect.
+ * - `parsearPdf.onSuccess`: `setImportProgresso(100)` antes de
+ *   popular o preview — barra completa antes da troca de tela.
+ * - `parsearPdf.onError` e `handlePdfPick` zeram o progresso.
+ *
+ * **UI** (substitui o `<Spinner /> + texto`):
+ * ```
+ * [✨ pulsing] IA analisando layout do documento…   42%
+ * [████████████░░░░░░░░░░░░░░░░░░░░░░░░░░░░] (h-3 rounded-full)
+ *     Tempo típico: 10–30s · não feche esta janela.
+ * ```
+ * - Pista: `bg-indigo-100 ring-1 ring-indigo-200 h-3 rounded-full`.
+ * - Preenchimento: `bg-gradient-to-r from-indigo-500 via-purple-500
+ *   to-fuchsia-500 transition-all duration-300 ease-out`.
+ * - Contador `{pct}%` em `font-bold tabular-nums text-indigo-900`
+ *   (tabular evita "saltos" de largura ao incrementar).
+ * - Ícone `Sparkles` com `animate-pulse` à esquerda.
+ *
+ * **Por que não progresso real?** O `parsearContratoLocacaoPdf` é
+ * um tRPC mutation que retorna 1 vez no final do `invokeGeminiVision`.
+ * Implementar streaming (subscription tRPC ou SSE) traria complexidade
+ * desproporcional pra ganho marginal — o tempo é dominado pela latência
+ * do Gemini, que não emite chunks de progresso útil. Animação estimada
+ * cobre o UX com 1 effect de 12 linhas.
+ *
+ * **R-001/R-007/R-010:** N/A — 100% client-side, sem backend, sem schema.
+ *
+ *
  * Rev. 2309 — **UX · Redesign moderno da tela Equipamentos Locados
  * + modal "Receber locação" totalmente reorganizado em seções.**
  *
