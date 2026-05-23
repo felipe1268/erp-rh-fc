@@ -844,6 +844,25 @@ Regras:
           console.log(`[SyncSchema+] Rev. 2290/2293: colunas locação (is_locacao + duração + datas) garantidas em compras_solicitacoes.`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.2290/2293 locação compras_solicitacoes:`, e?.message || e); }
 
+        // Rev. 2302 — Locação de Equipamento em compras_ordens (espelho da Rev.
+        // 2293 pra compras_solicitacoes). O INSERT de OC gerado pelo Drizzle
+        // inclui TODAS as colunas do schema TS (drizzle/schema.ts L6125-6131):
+        // is_locacao, locacao_data_inicio/fim, locacao_duracao_dias,
+        // locacao_renovavel, locacao_oc_anterior_id, locacao_solicitacao_id.
+        // Se faltarem em PROD/DEV, "Aprovar e Gerar OC" estoura no
+        // "Aprovar e Gerar OC" com erro SQL gigante (column doesn't exist).
+        // Auto-migration aditiva e idempotente.
+        try {
+          await db.execute(sql`ALTER TABLE compras_ordens ADD COLUMN IF NOT EXISTS is_locacao BOOLEAN DEFAULT false`);
+          await db.execute(sql`ALTER TABLE compras_ordens ADD COLUMN IF NOT EXISTS locacao_data_inicio VARCHAR(10)`);
+          await db.execute(sql`ALTER TABLE compras_ordens ADD COLUMN IF NOT EXISTS locacao_data_fim VARCHAR(10)`);
+          await db.execute(sql`ALTER TABLE compras_ordens ADD COLUMN IF NOT EXISTS locacao_duracao_dias INTEGER`);
+          await db.execute(sql`ALTER TABLE compras_ordens ADD COLUMN IF NOT EXISTS locacao_renovavel BOOLEAN DEFAULT false`);
+          await db.execute(sql`ALTER TABLE compras_ordens ADD COLUMN IF NOT EXISTS locacao_oc_anterior_id INTEGER`);
+          await db.execute(sql`ALTER TABLE compras_ordens ADD COLUMN IF NOT EXISTS locacao_solicitacao_id INTEGER`);
+          console.log(`[SyncSchema+] Rev. 2302: colunas locação (7 cols) garantidas em compras_ordens.`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.2302 locação compras_ordens:`, e?.message || e); }
+
         // Rev. 2294 — Aprovação automática (SC/OC). A existência da SC já é
         // a aprovação; o fluxo manual foi removido. Backfill aditivo (UPDATE
         // de status, não DROP/DELETE) normaliza o backlog antigo:

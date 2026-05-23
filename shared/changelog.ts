@@ -1,6 +1,48 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2302 — **HOTFIX CRÍTICO · "Aprovar e Gerar OC" estourava com
+ * erro SQL gigante — 7 colunas locação faltavam em `compras_ordens`
+ * no banco (DEV e PROD).**
+ *
+ * Reportado user (23/05/2026): print de erro com o INSERT inteiro
+ * em `compras_ordens` exposto na UI, incluindo a lista de colunas
+ * (`is_locacao`, `locacao_data_inicio`, `locacao_data_fim`,
+ * `locacao_duracao_dias`, `locacao_renovavel`,
+ * `locacao_oc_anterior_id`, `locacao_solicitacao_id`) e todos os
+ * `params` (60002, OC-2026-225, …). Acontecia ao clicar "Aprovar
+ * e Gerar OC (Autorizado)" em uma cotação.
+ *
+ * **Causa-raiz:** As 7 colunas de locação foram adicionadas ao
+ * schema TS de `compras_ordens` (`drizzle/schema.ts` L6125-6131,
+ * Rev. 2256) mas a auto-migration `SyncSchema+` da Rev. 2293 SÓ
+ * cobriu `compras_solicitacoes` (4 colunas) — ESQUECEU de espelhar
+ * pra `compras_ordens`. Como o Drizzle gera o INSERT explicitando
+ * TODAS as colunas do schema TS, qualquer coluna faltante no banco
+ * derruba a query inteira com `column does not exist`. Mesmo padrão
+ * de falha da Rev. 2293, em outra tabela.
+ *
+ * **Fix:** novo bloco `try` em `server/_core/index.ts` L847-863
+ * espelhando exatamente o padrão da Rev. 2293, com 7 ALTER TABLE
+ * ADD COLUMN IF NOT EXISTS (aditivo, idempotente) pra
+ * `compras_ordens`. Log dedicado `[SyncSchema+] Rev. 2302: colunas
+ * locação (7 cols) garantidas em compras_ordens.`. Roda em todo
+ * boot — DEV ou PROD — sem precisar de `pnpm db:push` manual.
+ *
+ * **Por que CRÍTICO:** travava o fluxo de geração de OC inteiro —
+ * usuário não conseguia aprovar NENHUMA cotação, mesmo as que não
+ * eram locação (porque o schema do INSERT é fixo, independente do
+ * payload). O `compras_ordens` também é base do financeiro
+ * (`financial_entry_id` é criado pelo mesmo fluxo).
+ *
+ * **R-001 / R-007 / R-010:** OK — só ADD COLUMN IF NOT EXISTS
+ * (aditivo, sem DROP/ALTER destrutivo, sem DELETE). Defaults
+ * idênticos ao schema TS (`is_locacao BOOLEAN DEFAULT false`,
+ * `locacao_renovavel BOOLEAN DEFAULT false`, demais nullable).
+ *
+ * Arquivos: `server/_core/index.ts`, `shared/version.ts`,
+ * `shared/changelog.ts`, `replit.md`, `replit-history.md`.
+ *
  * Rev. 2301 — **UX · Filtro por TIPO em pills coloridos na tela
  * Solicitações de Compra (substitui o dropdown "Classificação")
  * com contador cross-filter por status.**
