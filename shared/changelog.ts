@@ -1,6 +1,54 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2274 — **FIX · Curva S de Trabalho: linha verde (Realizado) ficava
+ * colada na vermelha (Previsto) em ~6,16 % mesmo com obra adiantada em
+ * 8,48 %. Label "Realizado atual: 8,48 %" divergia do último ponto
+ * plotado (~6,16 %), parecendo erro de escala.**
+ *
+ * Pedido user (23/05/2026, VITRA, Curva S Trabalho):
+ *   "o previsto da curva S não deveria estar mais deslocado da curva
+ *    prevista? ja ques ta bem adiantado? ou é algum erro de escala?"
+ *
+ * Diagnóstico (`server/routers/planejamento.ts::getCurvaS` L2860-2920):
+ *   - `curvaRealizada` é construída ponderando `planejamento_avancos`
+ *     por atividade (= 6,16 % em VITRA Sem 18/05).
+ *   - Snapshot MSP raiz UID=0 (`realizadoMspSnapshot` = 8,48 %) só era
+ *     INJETADO quando a semana do StatusDate NÃO tinha entrada na
+ *     `planejamento_avancos` — guarda `if (!jaTem)`.
+ *   - VITRA tem lançamentos manuais em 18/05 (Sem do StatusDate), então
+ *     o `if` curto-circuitava e o snapshot era ignorado. Curva travava
+ *     na ponderação ad-hoc 6,16 % enquanto o label do gráfico (vindo de
+ *     `avancoAtual` no client) mostrava 8,48 % — mismatch visual.
+ *   - Mesma raiz do bug que motivou Rev. 2272/2273 nos cards/banner:
+ *     o backend tinha múltiplas fontes paralelas pro "Realizado" e a
+ *     ponderação local era preferida sobre o snapshot oficial do MSP.
+ *
+ * Fix (`server/routers/planejamento.ts::getCurvaS` L2897-2936):
+ *   - Snapshot MSP raiz UID=0 agora SOBRESCREVE o ponto da semana do
+ *     StatusDate quando disponível (regra de ouro: snapshot é a verdade).
+ *   - Trocado `if (!jaTem) { push }` por `findIndex` + branch:
+ *       * Se snapshot raiz existe → sempre sobrescreve/insere.
+ *       * Fallback ponderado (`realizadoMspPct` por atividade) só roda
+ *         quando NÃO há snapshot raiz E a semana ainda não tem ponto
+ *         (preserva comportamento legado p/ XMLs antigos).
+ *   - Tendência (regressão linear sobre `curvaRealizada`) ganha
+ *     automaticamente a correção, pois é calculada DEPOIS.
+ *
+ * Resultado VITRA (Sem 18/05, StatusDate 21/05):
+ *   - Último ponto da curva Realizada = 8,48 % (= barra do topo,
+ *     = card Realizado Acumulado, = chip "Realizado atual" do gráfico).
+ *   - Linha verde se descola visivelmente da vermelha (Previsto 6,40 %).
+ *   - Linha de tendência reflete inclinação real (mais agressiva).
+ *
+ * R-001/R-007/R-010: N/A (apenas leitura — nenhum `ALTER/DROP/DELETE`).
+ *
+ * Arquivos:
+ *   - server/routers/planejamento.ts (`getCurvaS` snapshot override)
+ *   - shared/version.ts → Rev. 2274
+ *   - shared/changelog.ts
+ *   - replit.md (2+5)
+ *
  * Rev. 2273 — **FIX · Alarme "DESVIO CRÍTICO DE PRAZO" disparava com a
  * obra ADIANTADA. Painel "Avanço Global (c/ Indiretas)" mostrava
  * "Diretas 3,75 %" enquanto o topo mostrava "Realizado 8,48 %". Card

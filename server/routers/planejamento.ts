@@ -2891,29 +2891,42 @@ export const planejamentoRouter = router({
       // O ponto sintético é ancorado na semana do StatusDate (segunda-feira
       // da semana de cutoff oficial gravada no XML), só é injetado se essa
       // semana ainda não tiver dado vindo de planejamento_avancos.
+      // Rev. 2274 — Snapshot MSP raiz UID=0 (`realizadoMspSnapshot`) agora
+      // SOBRESCREVE o ponto da semana do StatusDate quando disponível
+      // (antes só era injetado se a semana NÃO tivesse entrada na tabela
+      // `planejamento_avancos`, deixando a curva travada em 6,16 % ponderado
+      // enquanto o topo/card mostravam 8,48 % do snapshot — linha verde
+      // colava na vermelha mesmo com obra adiantada). Regra de ouro: o
+      // snapshot MSP é a verdade. Fallback (`realizadoMspPct` ponderado)
+      // continua aplicando-se apenas quando a semana ainda não tem ponto.
       const statusDateMsp = typeof calMspRoot?.statusDateSnapshot === "string" ? calMspRoot.statusDateSnapshot : null;
       if (statusDateMsp) {
         const semStatus = toMondayStr(new Date(statusDateMsp + "T12:00:00Z"));
-        const jaTem = curvaRealizada.some(p => p.semana === semStatus);
-        if (!jaTem) {
-          let snapAcum: number | null = null;
-          if (typeof calMspRoot.realizadoMspSnapshot === "number") {
-            snapAcum = Math.min(100, Math.max(0, calMspRoot.realizadoMspSnapshot));
+        const idxJaTem = curvaRealizada.findIndex(p => p.semana === semStatus);
+        let snapAcum: number | null = null;
+        if (typeof calMspRoot.realizadoMspSnapshot === "number") {
+          snapAcum = Math.min(100, Math.max(0, calMspRoot.realizadoMspSnapshot));
+        } else if (idxJaTem < 0) {
+          // Fallback ponderado só quando NÃO há snapshot raiz E a semana
+          // ainda não tem ponto (preserva comportamento legado).
+          let soma = 0; let temAlgumSnap = false;
+          folhasParaCurva.forEach(a => {
+            const snap = (a as any).realizadoMspPct == null ? null : n((a as any).realizadoMspPct);
+            if (snap != null) {
+              temAlgumSnap = true;
+              const peso = usarIgualCurva ? 1 : (porDuracaoCurva ? (a.duracaoDias ?? 0) : n(a.pesoFinanceiro));
+              soma += snap * (peso / pesoTotalCurva);
+            }
+          });
+          if (temAlgumSnap) snapAcum = +Math.min(100, soma).toFixed(2);
+        }
+        if (snapAcum != null) {
+          const valor = +snapAcum.toFixed(2);
+          if (idxJaTem >= 0) {
+            // Sobrescreve: snapshot MSP > ponderação ad-hoc da tabela de avanços.
+            curvaRealizada[idxJaTem] = { semana: semStatus, acumulado: valor };
           } else {
-            // Fallback: pondera realizado_msp_pct por atividade (mesma base de pesos da curva).
-            let soma = 0; let temAlgumSnap = false;
-            folhasParaCurva.forEach(a => {
-              const snap = (a as any).realizadoMspPct == null ? null : n((a as any).realizadoMspPct);
-              if (snap != null) {
-                temAlgumSnap = true;
-                const peso = usarIgualCurva ? 1 : (porDuracaoCurva ? (a.duracaoDias ?? 0) : n(a.pesoFinanceiro));
-                soma += snap * (peso / pesoTotalCurva);
-              }
-            });
-            if (temAlgumSnap) snapAcum = +Math.min(100, soma).toFixed(2);
-          }
-          if (snapAcum != null) {
-            curvaRealizada.push({ semana: semStatus, acumulado: +snapAcum.toFixed(2) });
+            curvaRealizada.push({ semana: semStatus, acumulado: valor });
             curvaRealizada.sort((a, b) => a.semana.localeCompare(b.semana));
           }
         }
