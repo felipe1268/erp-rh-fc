@@ -13163,6 +13163,35 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
     onError: (e) => alert(e.message),
   });
 
+  // Rev. 2286 — Seleção múltipla + exclusão em lote do histórico de REFIS.
+  // Mutation `deletarRefisLote` (admin-only, server-side companyId guard,
+  // já existe desde Rev. 1859 — router L2154).
+  const [selectedRefisIdsHist, setSelectedRefisIdsHist] = useState<Set<number>>(new Set());
+  const [confirmBulkDeleteHist, setConfirmBulkDeleteHist] = useState(false);
+  const deletarRefisLoteHistMut = trpc.planejamento.deletarRefisLote.useMutation({
+    onSuccess: () => {
+      utils.planejamento.listarRefis.invalidate();
+      setSelectedRefisIdsHist(new Set());
+      setConfirmBulkDeleteHist(false);
+    },
+    onError: (e) => alert(e.message),
+  });
+  const toggleSelectRefisHist = (id: number) => {
+    setSelectedRefisIdsHist(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+  const toggleSelectAllRefisHist = (ids: number[], all: boolean) => {
+    setSelectedRefisIdsHist(prev => {
+      const next = new Set(prev);
+      if (all) ids.forEach(id => next.add(id));
+      else ids.forEach(id => next.delete(id));
+      return next;
+    });
+  };
+
   const consolidarMutation = trpc.planejamento.consolidarRefis.useMutation({
     onSuccess: () => utils.planejamento.listarRefis.invalidate(),
     onError: (e) => alert(e.message),
@@ -15688,9 +15717,52 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
             <ChevronDown className={`relative h-4 w-4 text-white/60 transition-transform ${colBloco7 ? "rotate-180" : ""}`} />
           </div>
           {!colBloco7 && <div className="overflow-x-auto">
+            {/* Rev. 2286 — Toolbar de seleção múltipla (aparece quando ≥1 selecionado).
+                Admin-only no backend (router valida role). */}
+            {isAdminMaster && selectedRefisIdsHist.size > 0 && (
+              <div className="flex items-center gap-3 px-4 py-2.5 bg-red-50 border-b border-red-200">
+                <span className="text-[12px] font-semibold text-red-800 tabular-nums">
+                  {selectedRefisIdsHist.size} {selectedRefisIdsHist.size === 1 ? "relatório selecionado" : "relatórios selecionados"}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setSelectedRefisIdsHist(new Set())}
+                  className="text-[11px] text-slate-600 hover:text-slate-900 underline underline-offset-2"
+                >
+                  Limpar seleção
+                </button>
+                <div className="flex-1" />
+                <button
+                  type="button"
+                  onClick={() => setConfirmBulkDeleteHist(true)}
+                  disabled={deletarRefisLoteHistMut.isPending}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-red-600 hover:bg-red-700 disabled:bg-red-300 text-white text-[11px] font-bold rounded-md shadow-sm"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                  Excluir selecionados
+                </button>
+              </div>
+            )}
             <table className="w-full text-xs">
               <thead>
                 <tr className="bg-gradient-to-b from-slate-50 to-white border-b-2 border-slate-200 text-slate-500 uppercase tracking-[0.1em] text-[10px]">
+                  {isAdminMaster && (
+                    <th className="px-3 py-2.5 text-center font-bold w-[40px]">
+                      {(() => {
+                        const allIds = refisLista.map((r: any) => r.id);
+                        const allSelected = allIds.length > 0 && allIds.every((id: number) => selectedRefisIdsHist.has(id));
+                        return (
+                          <input
+                            type="checkbox"
+                            checked={allSelected}
+                            onChange={(e) => toggleSelectAllRefisHist(allIds, e.target.checked)}
+                            className="h-3.5 w-3.5 rounded border-slate-300 text-red-600 focus:ring-red-500 cursor-pointer"
+                            title={allSelected ? "Desmarcar todos" : "Selecionar todos"}
+                          />
+                        );
+                      })()}
+                    </th>
+                  )}
                   <th className="px-4 py-2.5 text-left font-bold">Nº</th>
                   <th className="px-4 py-2.5 text-left font-bold">Semana</th>
                   <th className="px-4 py-2.5 text-right font-bold">Prev. Acum.</th>
@@ -15706,7 +15778,7 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
               <tbody>
                 {(() => {
                   const sortedRefis = [...refisLista].sort((a: any, b: any) => b.semana.localeCompare(a.semana));
-                  const totalCols = 7 + (!modoMascara && !hideFinancial ? 3 : 0);
+                  const totalCols = 7 + (!modoMascara && !hideFinancial ? 3 : 0) + (isAdminMaster ? 1 : 0);
                   return sortedRefis.map((r: any, idx: number) => {
                     const desvR = n(r.avancoRealizado) - n(r.avancoPrevisto);
                     const devFin = n(r.custoRealizado) - n(r.custoPrevisto);
@@ -15720,12 +15792,24 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
                     // Rev. 2282 — comparativo vs semana anterior (próxima no array,
                     // já que está ordenado DESC). undefined = mais antigo do histórico.
                     const prevRow = sortedRefis[idx + 1];
+                    const isSelected = selectedRefisIdsHist.has(r.id);
                     return (
                       <React.Fragment key={r.id}>
                         <tr
                           onClick={() => toggleHistRow(r.id)}
-                          className={`group border-b border-slate-100 border-l-4 ${borderCor} ${isAtual ? "bg-blue-50/70" : idx % 2 === 0 ? "bg-white" : "bg-slate-50/40"} hover:bg-blue-50/60 cursor-pointer transition-all`}
+                          className={`group border-b border-slate-100 border-l-4 ${borderCor} ${isSelected ? "bg-red-50/60" : isAtual ? "bg-blue-50/70" : idx % 2 === 0 ? "bg-white" : "bg-slate-50/40"} hover:bg-blue-50/60 cursor-pointer transition-all`}
                         >
+                          {isAdminMaster && (
+                            <td className="px-3 py-3 text-center" onClick={(e) => e.stopPropagation()}>
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                onChange={() => toggleSelectRefisHist(r.id)}
+                                className="h-3.5 w-3.5 rounded border-slate-300 text-red-600 focus:ring-red-500 cursor-pointer"
+                                title="Selecionar para exclusão em lote"
+                              />
+                            </td>
+                          )}
                           <td className="px-4 py-3 font-mono text-[11px] text-slate-400 font-bold tabular-nums">
                             <div className="flex items-center gap-1.5">
                               <ChevronRight className={`h-3 w-3 text-slate-400 transition-transform ${isExpanded ? "rotate-90" : ""}`} />
@@ -15951,6 +16035,42 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
           </div>}
         </div>
       )}
+
+      {/* Rev. 2286 — AlertDialog confirmação exclusão em lote do histórico REFIS */}
+      <AlertDialog open={confirmBulkDeleteHist} onOpenChange={(o) => { if (!o && !deletarRefisLoteHistMut.isPending) setConfirmBulkDeleteHist(false); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir {selectedRefisIdsHist.size} REFI{selectedRefisIdsHist.size > 1 ? "s" : "S"}?</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div>
+                <div className="mb-2">
+                  Esta ação <strong>não pode ser desfeita</strong>. Os relatórios abaixo serão removidos permanentemente do histórico:
+                </div>
+                <ul className="list-disc pl-5 max-h-40 overflow-y-auto text-xs space-y-0.5">
+                  {[...refisLista]
+                    .filter((r: any) => selectedRefisIdsHist.has(r.id))
+                    .sort((a: any, b: any) => (b.numero ?? 0) - (a.numero ?? 0))
+                    .map((r: any) => (
+                      <li key={r.id}>
+                        <strong>Nº {String(r.numero ?? "").padStart(3, "0")}</strong> — semana de {new Date(r.semana + "T12:00:00").toLocaleDateString("pt-BR")} ({r.status ?? "—"})
+                      </li>
+                    ))}
+                </ul>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deletarRefisLoteHistMut.isPending}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={deletarRefisLoteHistMut.isPending || selectedRefisIdsHist.size === 0}
+              onClick={() => deletarRefisLoteHistMut.mutate({ projetoId: proj.id, ids: Array.from(selectedRefisIdsHist) })}
+              className="bg-red-600 hover:bg-red-700 text-white"
+            >
+              {deletarRefisLoteHistMut.isPending ? "Excluindo…" : `Excluir ${selectedRefisIdsHist.size}`}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* ━━━ PRINT-ONLY: Rodapé do documento ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
       <div className="refis-doc-footer refis-print-only-block" style={{ display: 'none' }}>

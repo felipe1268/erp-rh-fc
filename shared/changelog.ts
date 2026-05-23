@@ -1,6 +1,54 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2286 — **FEAT/UX · Histórico de Relatórios REFIS com seleção
+ * múltipla + exclusão em lote (admin-only).**
+ *
+ * Pedido user (23/05/2026): "Coloca múltipla seleção do refis para poder
+ * apagar todas de uma vez". Contexto: após Revs 2283/2285, os 3 REFIS já
+ * gravados (#001/#002/#003) carregam valores antigos do cálculo local
+ * (`avancoRealAtual` = 4,61 % em vez do snapshot MSP 6,86 %). User quer
+ * limpar todos de uma vez e re-emitir com os valores corretos.
+ *
+ * Backend já existia: `trpc.planejamento.deletarRefisLote` (router L2154,
+ * desde Rev. 1859) — admin-only, valida `companyId` cross-tenant guard,
+ * deleta só IDs que pertencem ao projeto passado (defense-in-depth contra
+ * IDs estranhos no payload), limite 100 IDs/chamada.
+ *
+ * Frontend (`client/src/pages/planejamento/PlanejamentoDetalhe.tsx`,
+ * componente `Refis`):
+ *   1. **Estados novos** (~L13165): `selectedRefisIdsHist: Set<number>`
+ *      + `confirmBulkDeleteHist: bool` + mutation
+ *      `deletarRefisLoteHistMut` (invalida cache + limpa seleção +
+ *      fecha modal no onSuccess; alert no onError).
+ *   2. **Toolbar contextual** (~L15691): aparece quando ≥1 selecionado.
+ *      Mostra contador, botão "Limpar seleção" + botão "Excluir
+ *      selecionados" (vermelho). Visível APENAS p/ admin (`isAdminMaster`
+ *      prop) — paridade com o backend (que rejeitaria com 403 mesmo).
+ *   3. **Coluna checkbox** (~L15700): cabeçalho com "select all" +
+ *      checkbox por linha (`onClick stopPropagation` p/ não expandir
+ *      o painel comparativo da Rev. 2282 ao marcar). Linha selecionada
+ *      ganha bg vermelho suave (`bg-red-50/60`).
+ *   4. **AlertDialog** (~L15970): copia o padrão da exclusão lote da
+ *      Visão Geral (L2840) — lista os REFIS que serão removidos com
+ *      numero+semana+status, botão "Excluir N" desabilitado durante
+ *      isPending. Componentes shadcn/ui já importados (L24).
+ *   5. **`totalCols` ajustado** (+1 quando admin) p/ o colSpan do
+ *      painel comparativo expandido ficar coerente.
+ *
+ * Fluxo p/ o user resolver o problema dos 3 REFIS desalinhados:
+ *   - Marca todos via "select all" → "Excluir selecionados" → confirma
+ *   - Tela fica vazia, re-emite cada semana via "Emitir REFIS" (que já
+ *     grava `realOficialRefis` desde Rev. 2283)
+ *
+ * R-001/R-007/R-010: O backend `deletarRefisLote` faz DELETE em produção
+ * (semantica intencional do endpoint, restrita a admin + companyId
+ * isolado por tenant). Esta Rev. **NÃO** introduz nenhum DELETE/ALTER/
+ * DROP novo — só expõe na UI um endpoint que já existia desde Rev. 1859.
+ * Frontend-only change. Sem migration, sem DDL, sem mudança de schema.
+ */
+
+/**
  * Rev. 2285 — **FIX · TODA aba REFIS lê `realOficialRefis` (snapshot MSP
  * raiz UID=0) — eliminadas as últimas 3 ocorrências de `avancoRealAtual`
  * (ponderação local) que ainda apareciam em painéis/KPIs.**
