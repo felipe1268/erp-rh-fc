@@ -1,6 +1,55 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2301 — **UX · Filtro por TIPO em pills coloridos na tela
+ * Solicitações de Compra (substitui o dropdown "Classificação")
+ * com contador cross-filter por status.**
+ *
+ * Pedido user (23/05/2026): "Quero filtro aqui tbm, para solicitação
+ * de material, mão de obra, equipamentos... todos status que temos
+ * para facilitar a usabilidade". Mesmo pedido que motivou a Rev. 2298
+ * (Cotações), agora aplicado à tela `Solicitacoes.tsx`. O filtro de
+ * tipo (`filtroClassificacao`) JÁ EXISTIA como dropdown, mas o user
+ * não o percebia — virou linha de pills coloridos no padrão visual
+ * da Rev. 2298, lado a lado com a busca e o filtro de obra.
+ *
+ * **UX:**
+ * - 6 pills: Todos (slate) / Material (azul · Package) / MDO
+ *   (roxo · HardHat) / Pacote (indigo · Layers) / Equipamento
+ *   (ciano · Warehouse) / Manutenção (âmbar · Wrench). Cores
+ *   espelham os badges das linhas da tabela.
+ * - Cada pill mostra contador. Pill ativo ganha `ring-2
+ *   ring-offset-1 ring-{cor}-400` + opacidade cheia.
+ * - **Cross-filter de contadores:** os números refletem busca + obra
+ *   + status (cards do breakdown + KPI pendente_oc/entrega), só
+ *   ignoram o próprio filtro de classificação. Assim, escolhendo
+ *   "Pendente" no card de status superior, os pills mostram quantas
+ *   SCs pendentes existem de cada tipo (e vice-versa).
+ * - "Status das Solicitações" (9 cards no topo) + KPI badges (Pend.
+ *   de OC, Pend. de Entrega, Concluído, Recusado) já existiam como
+ *   filtros clicáveis (Rev. 1732/1734) — agora compostos com tipo em
+ *   AND. O botão "Todos" no canto direito reseta status + tipo.
+ *
+ * **Refactor leve:** extraí helper `effectiveTipo(r)` (L2263) usado
+ * tanto pelo `listaFiltradaObraSemBreakdown` quanto pelo contador
+ * dos pills, eliminando duplicação da regra de "manutencao" (que
+ * cobre `tipo === 'pecas_veiculo'`, `tipo === 'manutencao'` e
+ * qualquer SC com `vehicleId`).
+ *
+ * **Mudanças (`client/src/pages/compras/Solicitacoes.tsx`):**
+ * - Imports lucide: `HardHat`, `Warehouse`, `Wrench` adicionados.
+ * - Novo helper `effectiveTipo` (L2263-2271).
+ * - `listaFiltradaObraSemBreakdown` simplificado pra usar o helper.
+ * - JSX: dropdown `<Select value={filtroClassificacao}>` substituído
+ *   por IIFE com pills (L2491-2528). Estado `filtroClassificacao`
+ *   preservado — só a UI mudou.
+ *
+ * **R-001 / R-007 / R-010:** N/A — 100% client-side, sem query nova.
+ *
+ * Arquivos: `client/src/pages/compras/Solicitacoes.tsx`,
+ * `shared/version.ts`, `shared/changelog.ts`, `replit.md`,
+ * `replit-history.md`.
+ *
  * Rev. 2300 — **FEAT/UX · Funcionários Terceiros: múltipla seleção +
  * barra de ações pra alterar status (Apto/Inapto/Pendente) de
  * vários funcionários de uma vez.**

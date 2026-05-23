@@ -19,7 +19,7 @@ import {
   CheckCircle2, XCircle, Clock, Building2, ListTree, CalendarDays, ShoppingCart, AlertTriangle, Zap, FileText, Package,
   Camera, ImageIcon, X, Briefcase, History, ShoppingBag, Pencil, Copy, CheckSquare, FileDown,
   UserCircle, ShieldCheck, FileSearch, Truck, Users, Layers, ArrowRightLeft, Sparkles, RotateCw, Car, Link2, Film, Paperclip,
-  Info, ArrowDown, ArrowUp, ArrowUpDown,
+  Info, ArrowDown, ArrowUp, ArrowUpDown, HardHat, Warehouse, Wrench,
 } from "lucide-react";
 
 const STATUS_CFG: Record<string, { label: string; cls: string }> = {
@@ -2256,17 +2256,19 @@ ${sc.observacoes ? `<div class="obs"><b>Observações da SC:</b><br>${esc(sc.obs
     : filtroStatus === "pendente_entrega"
     ? listaFiltradaObraBase.filter((r: any) => r._hasOC === true && !scEntregueTotal(r))
     : listaFiltradaObraBase;
+  // Rev. 2301 — helper único de tipo efetivo (usado pelo filter abaixo + contadores dos pills).
+  const effectiveTipo = (r: any): "material" | "servico" | "equipamento" | "pacote" | "manutencao" => {
+    const t = r.tipo || "material";
+    if (t === "pecas_veiculo" || r.vehicleId) return "manutencao";
+    if (t === "manutencao") return "manutencao";
+    if (t === "servico") return "servico";
+    if (t === "equipamento") return "equipamento";
+    if (t === "pacote") return "pacote";
+    return "material";
+  };
   const listaFiltradaObraSemBreakdown = filtroClassificacao === "todas"
     ? listaFiltradaObraStatus
-    : listaFiltradaObraStatus.filter((r: any) => {
-        const tipo = r.tipo || "material";
-        if (filtroClassificacao === "material") return tipo === "material" && !r.vehicleId;
-        if (filtroClassificacao === "servico") return tipo === "servico";
-        if (filtroClassificacao === "equipamento") return tipo === "equipamento";
-        if (filtroClassificacao === "pacote") return tipo === "pacote";
-        if (filtroClassificacao === "manutencao") return tipo === "manutencao" || tipo === "pecas_veiculo" || !!r.vehicleId;
-        return true;
-      });
+    : listaFiltradaObraStatus.filter((r: any) => effectiveTipo(r) === filtroClassificacao);
   // Rev. 1734 — Predicados dos 9 mini-blocos do card "Status das Solicitações"
   // (mesma lógica do useMemo statusBreakdown, agora exposta como filtro clicável)
   const breakdownPredicates: Record<string, (r: any) => boolean> = {
@@ -2483,20 +2485,44 @@ ${sc.observacoes ? `<div class="obs"><b>Observações da SC:</b><br>${esc(sc.obs
             ))}
           </SelectContent>
         </Select>
-        <Select value={filtroClassificacao} onValueChange={setFiltroClassificacao}>
-          <SelectTrigger className="w-[220px] bg-white border-gray-300">
-            <Layers className="h-4 w-4 text-gray-400 mr-1" />
-            <SelectValue placeholder="Classificação" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="todas">Todas classificações</SelectItem>
-            <SelectItem value="material">Material</SelectItem>
-            <SelectItem value="servico">Serviço / MDO</SelectItem>
-            <SelectItem value="equipamento">Equipamento</SelectItem>
-            <SelectItem value="pacote">Pacote (MAT + MO)</SelectItem>
-            <SelectItem value="manutencao">Manutenção de Veículos</SelectItem>
-          </SelectContent>
-        </Select>
+        {/* Rev. 2301 — Filtro por TIPO em pills coloridos (substitui o dropdown).
+            Contadores cross-filter: respeitam busca + obra + status (breakdown + kpis),
+            só ignoram o próprio filtro de classificação. */}
+        {(() => {
+          const baseContagemTipo = filtroBreakdown && breakdownPredicates[filtroBreakdown]
+            ? listaFiltradaObraStatus.filter(breakdownPredicates[filtroBreakdown])
+            : listaFiltradaObraStatus;
+          const contar = (t: string) => baseContagemTipo.filter((r: any) => effectiveTipo(r) === t).length;
+          const tiposPills = [
+            { key: "todas",       label: "Todos",       icon: Layers,    count: baseContagemTipo.length,    cls: "bg-slate-50 border-slate-300 text-slate-700",     ring: "ring-slate-400" },
+            { key: "material",    label: "Material",    icon: Package,   count: contar("material"),         cls: "bg-blue-50 border-blue-300 text-blue-700",        ring: "ring-blue-400" },
+            { key: "servico",     label: "MDO",         icon: HardHat,   count: contar("servico"),          cls: "bg-purple-50 border-purple-300 text-purple-700",  ring: "ring-purple-400" },
+            { key: "pacote",      label: "Pacote",      icon: Layers,    count: contar("pacote"),           cls: "bg-indigo-50 border-indigo-300 text-indigo-700",  ring: "ring-indigo-400" },
+            { key: "equipamento", label: "Equipamento", icon: Warehouse, count: contar("equipamento"),      cls: "bg-cyan-50 border-cyan-300 text-cyan-700",        ring: "ring-cyan-400" },
+            { key: "manutencao",  label: "Manutenção",  icon: Wrench,    count: contar("manutencao"),       cls: "bg-amber-50 border-amber-300 text-amber-700",     ring: "ring-amber-400" },
+          ];
+          return (
+            <div className="flex flex-wrap gap-2 items-center">
+              {tiposPills.map(t => {
+                const Icon = t.icon;
+                const ativo = filtroClassificacao === t.key;
+                return (
+                  <button
+                    key={t.key}
+                    type="button"
+                    onClick={() => setFiltroClassificacao(t.key)}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-semibold transition-all ${t.cls} ${ativo ? `ring-2 ring-offset-1 ${t.ring}` : "opacity-75 hover:opacity-100"}`}
+                    title={`Filtrar por ${t.label}`}
+                  >
+                    <Icon className="h-3.5 w-3.5" />
+                    <span>{t.label}</span>
+                    <span className="ml-1 px-1.5 py-0.5 rounded-md bg-white/70 text-[10px] tabular-nums">{t.count}</span>
+                  </button>
+                );
+              })}
+            </div>
+          );
+        })()}
         <button onClick={() => { setFiltroStatus("todos"); setFiltroClassificacao("todas"); }}
           className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${filtroStatus === "todos" && filtroClassificacao === "todas" ? "bg-amber-600 border-amber-500 text-white" : "bg-white border-gray-300 text-gray-600 hover:border-gray-400"}`}>
           Todos
