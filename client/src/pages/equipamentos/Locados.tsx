@@ -284,14 +284,11 @@ export default function EquipamentosLocados() {
               </div>
             </div>
             <div className="flex items-center gap-2">
+              {/* Rev. 2315 — Removido botão "Receber locação"; fluxo principal é Importar PDF (IA). */}
               <button onClick={abrirImportar}
-                className="inline-flex items-center gap-2 bg-white/15 hover:bg-white/25 backdrop-blur-sm ring-1 ring-white/30 text-white px-4 py-2.5 rounded-xl shadow-sm transition font-medium text-sm"
+                className="inline-flex items-center gap-2 bg-white text-indigo-700 hover:bg-indigo-50 px-5 py-2.5 rounded-xl shadow-md font-semibold text-sm transition"
                 title="Importar PDF de relatório da locadora (Jalves, Mills, etc.) — a IA detecta o layout e cadastra em lote">
                 <Sparkles className="h-4 w-4" /> Importar PDF (IA)
-              </button>
-              <button onClick={() => { setForm({ ...EMPTY }); setFotos([]); setModal(true); }}
-                className="inline-flex items-center gap-2 bg-white text-emerald-700 hover:bg-emerald-50 px-5 py-2.5 rounded-xl shadow-md font-semibold text-sm transition">
-                <Plus className="h-4 w-4" /> Receber locação
               </button>
             </div>
           </div>
@@ -339,7 +336,7 @@ export default function EquipamentosLocados() {
           <div className="bg-white border border-dashed border-slate-300 rounded-xl p-12 text-center">
             <Truck className="h-12 w-12 text-slate-300 mx-auto mb-3" />
             <div className="text-slate-700 font-semibold">Nenhum equipamento locado encontrado</div>
-            <div className="text-sm text-slate-500 mt-1">Use <b>Receber locação</b> para cadastro pontual ou <b>Importar PDF (IA)</b> para cadastro em lote.</div>
+            <div className="text-sm text-slate-500 mt-1">Use <b>Importar PDF (IA)</b> para cadastrar contratos em lote a partir do relatório da locadora.</div>
           </div>
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-3">

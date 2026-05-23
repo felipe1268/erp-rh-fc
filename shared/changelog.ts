@@ -1,6 +1,61 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2315 — **UX · Removido botão "+ Receber locação" do hero
+ * da tela Equipamentos Locados; "Importar PDF (IA)" vira ação
+ * primária.**
+ *
+ * Pedido user (23/05/2026, screenshot do hero mostrando o botão
+ * branco "+ Receber locação" ao lado do glass "Importar PDF
+ * (IA)"): "Tire este botão".
+ *
+ * **Contexto**: a Rev. 2313 já tinha consolidado a estratégia de
+ * fluxo dominante = importação em lote via PDF (único botão no
+ * Almoxarifado); a Rev. 2314 reforçou com tabela "Custo por
+ * obra" no preview. Manter um botão de cadastro pontual ("+
+ * Receber locação") no hero da tela Locados ficava como CTA
+ * concorrente — o user prefere fluxo único e claro.
+ *
+ * **Implementação** (`client/src/pages/equipamentos/Locados.tsx`):
+ *
+ * 1. Removido o `<button>` "+ Receber locação" do
+ *    `<div className="flex items-center gap-2">` do hero
+ *    (gradient verde→teal). O onClick fazia
+ *    `setForm({...EMPTY}); setFotos([]); setModal(true)` —
+ *    abrindo o modal de cadastro pontual.
+ *
+ * 2. O botão "Importar PDF (IA)" ficou sozinho e foi promovido a
+ *    ação primária: paleta trocada de glass
+ *    `bg-white/15 backdrop-blur-sm ring-1 ring-white/30 text-white`
+ *    (secundária, transparente sobre o gradient) pra sólido
+ *    `bg-white text-indigo-700 hover:bg-indigo-50 shadow-md
+ *    font-semibold` (mesma vibe do antigo "Receber locação", agora
+ *    a CTA principal). Padding `px-5 py-2.5`.
+ *
+ * 3. Helper text do empty state (linha "Nenhum equipamento
+ *    locado encontrado") ajustado: ANTES "Use **Receber
+ *    locação** para cadastro pontual ou **Importar PDF (IA)**
+ *    para cadastro em lote." → AGORA "Use **Importar PDF (IA)**
+ *    para cadastrar contratos em lote a partir do relatório da
+ *    locadora.".
+ *
+ * 4. **Modal de cadastro pontual PRESERVADO no JSX** — todo o
+ *    bloco do modal de Receber locação (formulário 5 seções
+ *    coloridas, fotos, vínculo com fornecedor etc., redesign Rev.
+ *    2309) segue intacto. Continua sendo chamado por:
+ *    - `useEffect` quando alguém abre
+ *      `/equipamentos/locados?action=receber` (URL legada/compat
+ *      Rev. 2311);
+ *    - Eventuais outros entry-points internos (botões em outras
+ *      telas que apontem pra cá).
+ *    Não há regressão funcional — apenas o entry-point UI foi
+ *    removido do hero.
+ *
+ * **0 mudança backend, 0 schema, 0 procedures novas.**
+ *
+ * **R-001/R-007/R-010:** N/A — 100% client-side.
+ *
+ *
  * Rev. 2314 — **UX/ANALYTICS · Tabela "Custo por obra" agregada
  * no preview da importação PDF de contratos de locação (Gemini
  * Vision).**
