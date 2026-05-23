@@ -1,6 +1,83 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2282 — **FEAT/UX · HISTÓRICO DE RELATÓRIOS EMITIDOS (REFIS) vira
+ * EXPANSÍVEL com painel de ANÁLISE COMPARATIVA vs semana anterior.**
+ * Pedido user (23/05/2026, IMG_1058/1059, contexto direto da Rev. 2281):
+ * "Acho que tem erro no histórico do refis, quero que reavalie e quando
+ * eu clicar quero poder ver os dados e uma análise comparativa, se o
+ * valor subiu ou caiu… se o desempenho melhorou ou não mês a mês".
+ *
+ * Antes (Rev. 2281): linhas do histórico eram apenas leitura compacta —
+ * 9-10 células com chips e mini-gauge SPI, mas sem possibilidade de
+ * drill-down. Observação truncada em 200px.
+ *
+ * Agora: clique em qualquer linha → expande painel rich abaixo com:
+ *   1. **Banner de Veredito** automático ("Desempenho MELHOROU/PIOROU/
+ *      ESTÁVEL") com cor contextual (emerald/red/amber), ícone TrendingUp/
+ *      Down/Activity em container 10x10 e subtítulo com datas + nº de
+ *      dias entre os 2 relatórios.
+ *   2. **Grid de 4-5 KPIs Δ** (componente `<Delta>`):
+ *      - Δ Previsto Acum (pp)
+ *      - Δ Realizado Acum (pp)
+ *      - Δ Desvio Físico (pp)
+ *      - Δ SPI (decimal)
+ *      - Δ Faturamento Realizado (R$, oculto se modoMascara || hideFinancial)
+ *      Cada tile mostra: ícone setinha (Up/Down/Minus), valor BLACK
+ *      contextual (emerald=subiu+bom, red=caiu+ruim, slate=estável) e
+ *      label minúscula "subiu / caiu / estável vs sem. anterior".
+ *   3. **Tabela densa lado-a-lado** (grid 12 colunas):
+ *      Indicador | Sem. anterior (DD/MM) | Sem. atual (DD/MM) | Δ
+ *      Linhas: Avanço Previsto Acum / Avanço Realizado Acum / SPI /
+ *      Faturamento Previsto / Faturamento Realizado.
+ *   4. **Observações COMPLETAS** dos 2 relatórios em colunas pareadas
+ *      (whitespace-pre-wrap, sem truncar) — semana anterior à esquerda,
+ *      esta semana à direita destacada em violet-50/30.
+ *
+ * Heurística do veredito:
+ *   - MELHOROU se (Δ Desvio Físico > +0.01pp) E (Δ SPI ≥ −0.02)
+ *   - PIOROU   se (Δ Desvio Físico < −0.01pp) OU (Δ SPI < −0.05)
+ *   - ESTÁVEL  caso contrário
+ *
+ * Implementação:
+ *   - `client/src/pages/planejamento/PlanejamentoDetalhe.tsx`:
+ *     * Novo state `expandedHistRows: Set<string>` no nível do component
+ *       Refis (~L13076), com `toggleHistRow(id)`.
+ *     * `<tr>` ganha onClick + cursor-pointer + ChevronRight rotativo
+ *       na 1ª célula. Linha de expansão renderizada via
+ *       `<React.Fragment>` com `<tr><td colSpan={totalCols}>` p/ painel
+ *       full-width. `totalCols` calculado dinamicamente (7 base + 3 se
+ *       financeiro visível).
+ *     * Comparativo usa o array já ordenado DESC: `prevRow =
+ *       sortedRefis[idx + 1]` (próximo no array = anterior no tempo).
+ *       Se `prevRow` undefined → exibe banner "Primeiro relatório do
+ *       histórico — não há semana anterior para comparar".
+ *     * Mapa PALETA estático (não classes Tailwind dinâmicas, que JIT
+ *       não captura): cores emerald/red/slate com border/iconBg/iconText/
+ *       valText/lblText fixos.
+ *     * Não há nova chamada de API/mutation — apenas leitura local de
+ *       `refisLista` já carregada.
+ *     * Zero alteração no shape da tabela (10 colunas + thead idêntico),
+ *       nem no payload das procedures.
+ *     * Sem novos imports (ChevronRight, ArrowUp/Down, TrendingUp/Down,
+ *     *   Activity, Sparkles, Info, Minus já estavam no escopo).
+ *
+ * Notas de UX:
+ *   - Clique em qualquer parte da `<tr>` expande/colapsa (não exige
+ *     mira em ícone), por consistência com o resto do app.
+ *   - ChevronRight rotaciona 90deg quando expandida — feedback visual
+ *     imediato.
+ *   - Múltiplas linhas podem ficar expandidas simultaneamente (Set),
+ *     facilitando comparação visual entre semanas distintas.
+ *   - Painel se fecha automaticamente quando o usuário recolhe o
+ *     "Histórico de Relatórios Emitidos" inteiro (colBloco7 não foi
+ *     tocado).
+ *
+ * R-001/R-007/R-010: N/A — alteração puramente client-side, zero toca
+ *   em DB.
+ */
+
+/**
  * Rev. 2281 — **UX · REFIS Análise do Cronograma — redesign sweeping de 3
  * blocos visíveis na tela do relatório semanal: (A) HEADER de cada GROUP
  * CARD (Serviços Preliminares, Vitrais, Complementares…), (B) trio de KPIs

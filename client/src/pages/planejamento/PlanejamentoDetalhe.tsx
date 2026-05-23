@@ -13070,6 +13070,14 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
   const [colBloco4, setColBloco4] = useState(false);
   const [colBloco6, setColBloco6] = useState(false);
   const [colBloco7, setColBloco7] = useState(false);
+  // Rev. 2282 — Linhas do histórico viram expansíveis (clique → painel
+  // comparativo vs semana anterior com Δs + veredito Melhorou/Piorou).
+  const [expandedHistRows, setExpandedHistRows] = useState<Set<string>>(new Set());
+  const toggleHistRow = (id: string) => setExpandedHistRows(prev => {
+    const next = new Set(prev);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
   // Rev. 1525 — toggles individuais por série nas Curvas S do REFIS (Física + Financeira)
   const [serRefis, setSerRefis] = useState<Record<string, boolean>>({
     baseline: true, planejada: true, realizada: true, tendencia: true, faturado: true,
@@ -15649,9 +15657,10 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
                 </tr>
               </thead>
               <tbody>
-                {[...refisLista]
-                  .sort((a: any, b: any) => b.semana.localeCompare(a.semana))
-                  .map((r: any, idx: number) => {
+                {(() => {
+                  const sortedRefis = [...refisLista].sort((a: any, b: any) => b.semana.localeCompare(a.semana));
+                  const totalCols = 7 + (!modoMascara && !hideFinancial ? 3 : 0);
+                  return sortedRefis.map((r: any, idx: number) => {
                     const desvR = n(r.avancoRealizado) - n(r.avancoPrevisto);
                     const devFin = n(r.custoRealizado) - n(r.custoPrevisto);
                     const isAtual = r.semana === semana;
@@ -15659,65 +15668,237 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
                     const spiOk = spiVal >= 1;
                     const spiCritic = spiVal < 0.85;
                     const hasPrev = n(r.avancoPrevisto) > 0;
-                    // Cor do indicador de status (left border)
                     const borderCor = !hasPrev ? "border-l-slate-200" : desvR >= 0 ? "border-l-emerald-400" : desvR < -10 ? "border-l-red-500" : "border-l-amber-400";
+                    const isExpanded = expandedHistRows.has(r.id);
+                    // Rev. 2282 — comparativo vs semana anterior (próxima no array,
+                    // já que está ordenado DESC). undefined = mais antigo do histórico.
+                    const prevRow = sortedRefis[idx + 1];
                     return (
-                      <tr key={r.id}
-                        className={`group border-b border-slate-100 border-l-4 ${borderCor} ${isAtual ? "bg-blue-50/70" : idx % 2 === 0 ? "bg-white" : "bg-slate-50/40"} hover:bg-blue-50/40 transition-all`}>
-                        <td className="px-4 py-3 font-mono text-[11px] text-slate-400 font-bold tabular-nums">#{String(r.numero ?? idx + 1).padStart(3, "0")}</td>
-                        <td className="px-4 py-3 font-medium text-slate-700">
-                          <div className="flex items-center gap-2">
-                            <span className="tabular-nums">{new Date(r.semana + "T12:00:00").toLocaleDateString("pt-BR")}</span>
-                            {isAtual && (
-                              <span className="inline-flex items-center gap-1 text-[9px] bg-blue-100 text-blue-700 border border-blue-200 rounded-full px-1.5 py-0.5 font-bold uppercase tracking-wider">
-                                <span className="h-1 w-1 rounded-full bg-blue-500 animate-pulse" />
-                                Atual
-                              </span>
-                            )}
-                          </div>
-                        </td>
-                        <td className="px-4 py-3 text-right text-amber-700 font-bold tabular-nums">{fPct_(n(r.avancoPrevisto))}</td>
-                        <td className="px-4 py-3 text-right text-blue-800 font-bold tabular-nums">{fPct_(n(r.avancoRealizado))}</td>
-                        <td className="px-4 py-3 text-right">
-                          <span className={`inline-flex items-center gap-0.5 font-bold tabular-nums rounded-md px-2 py-0.5 text-[11px] ${desvR >= 0 ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : desvR < -10 ? "bg-red-50 text-red-700 border border-red-200" : "bg-amber-50 text-amber-700 border border-amber-200"}`}>
-                            {desvR >= 0 ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
-                            {desvR >= 0 ? "+" : ""}{fPct_(desvR)}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 text-center">
-                          {!hasPrev ? (
-                            <span className="text-slate-400 font-medium">—</span>
-                          ) : (
-                            <div className="inline-flex items-center gap-1.5">
-                              <div className="relative w-10 h-1.5 bg-slate-200 rounded-full overflow-hidden">
-                                <div
-                                  className={`absolute inset-y-0 left-0 rounded-full ${spiOk ? "bg-gradient-to-r from-emerald-400 to-emerald-600" : spiCritic ? "bg-gradient-to-r from-red-400 to-red-600" : "bg-gradient-to-r from-amber-400 to-amber-600"}`}
-                                  style={{ width: `${Math.min(100, spiVal * 70)}%` }}
-                                />
-                                <div className="absolute inset-y-0 w-px bg-slate-600/40" style={{ left: "70%" }} title="SPI ideal = 1.00" />
-                              </div>
-                              <span className={`font-bold tabular-nums text-[11px] ${spiOk ? "text-emerald-600" : spiCritic ? "text-red-600" : "text-amber-600"}`}>{spiVal.toFixed(2)}</span>
+                      <React.Fragment key={r.id}>
+                        <tr
+                          onClick={() => toggleHistRow(r.id)}
+                          className={`group border-b border-slate-100 border-l-4 ${borderCor} ${isAtual ? "bg-blue-50/70" : idx % 2 === 0 ? "bg-white" : "bg-slate-50/40"} hover:bg-blue-50/60 cursor-pointer transition-all`}
+                        >
+                          <td className="px-4 py-3 font-mono text-[11px] text-slate-400 font-bold tabular-nums">
+                            <div className="flex items-center gap-1.5">
+                              <ChevronRight className={`h-3 w-3 text-slate-400 transition-transform ${isExpanded ? "rotate-90" : ""}`} />
+                              #{String(r.numero ?? sortedRefis.length - idx).padStart(3, "0")}
                             </div>
-                          )}
-                        </td>
-                        {!modoMascara && !hideFinancial && <td className="px-4 py-3 text-right text-slate-600 tabular-nums">{r.custoPrevisto > 0 ? fmt(n(r.custoPrevisto)) : "—"}</td>}
-                        {!modoMascara && !hideFinancial && <td className="px-4 py-3 text-right text-slate-600 tabular-nums">{r.custoRealizado > 0 ? fmt(n(r.custoRealizado)) : "—"}</td>}
-                        {!modoMascara && !hideFinancial && (
+                          </td>
+                          <td className="px-4 py-3 font-medium text-slate-700">
+                            <div className="flex items-center gap-2">
+                              <span className="tabular-nums">{new Date(r.semana + "T12:00:00").toLocaleDateString("pt-BR")}</span>
+                              {isAtual && (
+                                <span className="inline-flex items-center gap-1 text-[9px] bg-blue-100 text-blue-700 border border-blue-200 rounded-full px-1.5 py-0.5 font-bold uppercase tracking-wider">
+                                  <span className="h-1 w-1 rounded-full bg-blue-500 animate-pulse" />
+                                  Atual
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="px-4 py-3 text-right text-amber-700 font-bold tabular-nums">{fPct_(n(r.avancoPrevisto))}</td>
+                          <td className="px-4 py-3 text-right text-blue-800 font-bold tabular-nums">{fPct_(n(r.avancoRealizado))}</td>
                           <td className="px-4 py-3 text-right">
-                            {r.custoPrevisto > 0 ? (
-                              <span className={`inline-flex items-center gap-0.5 font-bold tabular-nums rounded-md px-2 py-0.5 text-[11px] ${devFin >= 0 ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : "bg-red-50 text-red-700 border border-red-200"}`}>
-                                {devFin >= 0 ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
-                                {devFin >= 0 ? "+" : ""}{fmt(devFin)}
-                              </span>
+                            <span className={`inline-flex items-center gap-0.5 font-bold tabular-nums rounded-md px-2 py-0.5 text-[11px] ${desvR >= 0 ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : desvR < -10 ? "bg-red-50 text-red-700 border border-red-200" : "bg-amber-50 text-amber-700 border border-amber-200"}`}>
+                              {desvR >= 0 ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
+                              {desvR >= 0 ? "+" : ""}{fPct_(desvR)}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            {!hasPrev ? (
+                              <span className="text-slate-400 font-medium">—</span>
                             ) : (
-                              <span className="text-slate-400">—</span>
+                              <div className="inline-flex items-center gap-1.5">
+                                <div className="relative w-10 h-1.5 bg-slate-200 rounded-full overflow-hidden">
+                                  <div
+                                    className={`absolute inset-y-0 left-0 rounded-full ${spiOk ? "bg-gradient-to-r from-emerald-400 to-emerald-600" : spiCritic ? "bg-gradient-to-r from-red-400 to-red-600" : "bg-gradient-to-r from-amber-400 to-amber-600"}`}
+                                    style={{ width: `${Math.min(100, spiVal * 70)}%` }}
+                                  />
+                                  <div className="absolute inset-y-0 w-px bg-slate-600/40" style={{ left: "70%" }} title="SPI ideal = 1.00" />
+                                </div>
+                                <span className={`font-bold tabular-nums text-[11px] ${spiOk ? "text-emerald-600" : spiCritic ? "text-red-600" : "text-amber-600"}`}>{spiVal.toFixed(2)}</span>
+                              </div>
                             )}
                           </td>
+                          {!modoMascara && !hideFinancial && <td className="px-4 py-3 text-right text-slate-600 tabular-nums">{r.custoPrevisto > 0 ? fmt(n(r.custoPrevisto)) : "—"}</td>}
+                          {!modoMascara && !hideFinancial && <td className="px-4 py-3 text-right text-slate-600 tabular-nums">{r.custoRealizado > 0 ? fmt(n(r.custoRealizado)) : "—"}</td>}
+                          {!modoMascara && !hideFinancial && (
+                            <td className="px-4 py-3 text-right">
+                              {r.custoPrevisto > 0 ? (
+                                <span className={`inline-flex items-center gap-0.5 font-bold tabular-nums rounded-md px-2 py-0.5 text-[11px] ${devFin >= 0 ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : "bg-red-50 text-red-700 border border-red-200"}`}>
+                                  {devFin >= 0 ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
+                                  {devFin >= 0 ? "+" : ""}{fmt(devFin)}
+                                </span>
+                              ) : (
+                                <span className="text-slate-400">—</span>
+                              )}
+                            </td>
+                          )}
+                          <td className="px-4 py-3 text-slate-500 max-w-[200px] truncate">{r.observacoes ?? <span className="text-slate-300">—</span>}</td>
+                        </tr>
+
+                        {/* Rev. 2282 — Painel de análise comparativa expansível */}
+                        {isExpanded && (
+                          <tr className="border-b-2 border-slate-200">
+                            <td colSpan={totalCols} className="p-0">
+                              {(() => {
+                                if (!prevRow) {
+                                  return (
+                                    <div className="px-6 py-5 bg-gradient-to-br from-slate-50 to-slate-100/60 border-l-4 border-l-slate-300">
+                                      <div className="flex items-center gap-2 text-slate-500">
+                                        <Info className="h-4 w-4" />
+                                        <p className="text-xs font-medium">Primeiro relatório do histórico — não há semana anterior para comparar.</p>
+                                      </div>
+                                    </div>
+                                  );
+                                }
+                                const dPrev   = n(r.avancoPrevisto)  - n(prevRow.avancoPrevisto);
+                                const dReal   = n(r.avancoRealizado) - n(prevRow.avancoRealizado);
+                                const dDesv   = desvR                - (n(prevRow.avancoRealizado) - n(prevRow.avancoPrevisto));
+                                const dSpi    = spiVal               - n(prevRow.spi);
+                                const dFat    = n(r.custoRealizado)  - n(prevRow.custoRealizado);
+                                const dFatPrv = n(r.custoPrevisto)   - n(prevRow.custoPrevisto);
+                                // Veredito: melhora se desvio físico aprovou + SPI estável ou subiu
+                                const melhorou = dDesv > 0.01 && dSpi >= -0.02;
+                                const piorou   = dDesv < -0.01 || dSpi < -0.05;
+                                const estavel  = !melhorou && !piorou;
+                                const vereditoCor = melhorou
+                                  ? { bg: "bg-emerald-50", border: "border-emerald-300", text: "text-emerald-800", icon: "text-emerald-600", ring: "ring-emerald-200" }
+                                  : piorou
+                                  ? { bg: "bg-red-50", border: "border-red-300", text: "text-red-800", icon: "text-red-600", ring: "ring-red-200" }
+                                  : { bg: "bg-amber-50", border: "border-amber-300", text: "text-amber-800", icon: "text-amber-600", ring: "ring-amber-200" };
+                                const vereditoLabel = melhorou ? "Desempenho MELHOROU" : piorou ? "Desempenho PIOROU" : "Desempenho ESTÁVEL";
+                                const vereditoIcon = melhorou ? <TrendingUp className="h-5 w-5" /> : piorou ? <TrendingDown className="h-5 w-5" /> : <Activity className="h-5 w-5" />;
+
+                                // Mapa estático de classes Tailwind (JIT exige strings literais).
+                                const PALETA = {
+                                  emerald: { border: "border-emerald-200/70", iconBg: "bg-emerald-100/70 border-emerald-200", iconText: "text-emerald-700", valText: "text-emerald-700", lblText: "text-emerald-600/80" },
+                                  red:     { border: "border-red-200/70",     iconBg: "bg-red-100/70 border-red-200",         iconText: "text-red-700",     valText: "text-red-700",     lblText: "text-red-600/80" },
+                                  slate:   { border: "border-slate-200/70",   iconBg: "bg-slate-100/70 border-slate-200",     iconText: "text-slate-700",   valText: "text-slate-700",   lblText: "text-slate-600/80" },
+                                } as const;
+                                const Delta = ({
+                                  label, value, suffix, positivoBom = true, format = "pp",
+                                }: { label: string; value: number; suffix?: string; positivoBom?: boolean; format?: "pp" | "spi" | "money" }) => {
+                                  const subiu = value > 0.001;
+                                  const caiu  = value < -0.001;
+                                  const bom = positivoBom ? subiu : caiu;
+                                  const ruim = positivoBom ? caiu : subiu;
+                                  const p = PALETA[bom ? "emerald" : ruim ? "red" : "slate"];
+                                  const trendLabel = subiu ? "subiu" : caiu ? "caiu" : "estável";
+                                  const formatado = format === "spi"
+                                    ? `${value >= 0 ? "+" : ""}${value.toFixed(2)}`
+                                    : format === "money"
+                                    ? `${value >= 0 ? "+" : ""}${fmt(value)}`
+                                    : `${value >= 0 ? "+" : ""}${fPct_(value)}`;
+                                  return (
+                                    <div className={`relative overflow-hidden rounded-xl border bg-white p-3 shadow-sm ${p.border}`}>
+                                      <div className="flex items-center justify-between mb-1.5">
+                                        <p className="text-[9px] font-bold uppercase tracking-[0.12em] text-slate-500">{label}</p>
+                                        <div className={`h-6 w-6 rounded-lg flex items-center justify-center border ${p.iconBg}`}>
+                                          {subiu ? <ArrowUpRight className={`h-3.5 w-3.5 ${p.iconText}`} /> : caiu ? <ArrowDownRight className={`h-3.5 w-3.5 ${p.iconText}`} /> : <Minus className={`h-3.5 w-3.5 ${p.iconText}`} />}
+                                        </div>
+                                      </div>
+                                      <p className={`text-lg font-black tabular-nums leading-none ${p.valText}`}>{formatado}{suffix}</p>
+                                      <p className={`text-[10px] mt-1.5 ${p.lblText} font-medium capitalize`}>{trendLabel} vs sem. anterior</p>
+                                    </div>
+                                  );
+                                };
+
+                                return (
+                                  <div className="px-6 py-4 bg-gradient-to-br from-slate-50 via-white to-slate-50/60 border-l-4 border-l-violet-400">
+                                    {/* Banner do veredito */}
+                                    <div className={`flex items-center gap-3 ${vereditoCor.bg} border ${vereditoCor.border} rounded-xl px-4 py-2.5 mb-3.5 ring-1 ${vereditoCor.ring}`}>
+                                      <div className={`h-10 w-10 rounded-xl bg-white/70 border ${vereditoCor.border} flex items-center justify-center ${vereditoCor.icon} shadow-sm shrink-0`}>
+                                        {vereditoIcon}
+                                      </div>
+                                      <div className="min-w-0 flex-1">
+                                        <p className={`text-sm font-black uppercase tracking-wide ${vereditoCor.text} leading-tight`}>{vereditoLabel}</p>
+                                        <p className={`text-[11px] ${vereditoCor.text}/80 mt-0.5 leading-tight`}>
+                                          Comparativo {new Date(r.semana + "T12:00:00").toLocaleDateString("pt-BR")} vs {new Date(prevRow.semana + "T12:00:00").toLocaleDateString("pt-BR")}
+                                          {" "}({Math.round((new Date(r.semana).getTime() - new Date(prevRow.semana).getTime()) / 86400000)} dias)
+                                        </p>
+                                      </div>
+                                      <div className="hidden md:flex items-center gap-1 text-[10px] text-slate-500">
+                                        <Sparkles className="h-3 w-3 text-violet-400" />
+                                        Análise auto
+                                      </div>
+                                    </div>
+
+                                    {/* Grid de deltas */}
+                                    <div className={`grid gap-2.5 ${!modoMascara && !hideFinancial ? "grid-cols-2 lg:grid-cols-5" : "grid-cols-2 lg:grid-cols-4"}`}>
+                                      <Delta label="Δ Previsto Acum"  value={dPrev} positivoBom={true} format="pp" />
+                                      <Delta label="Δ Realizado Acum" value={dReal} positivoBom={true} format="pp" />
+                                      <Delta label="Δ Desvio Físico"  value={dDesv} positivoBom={true} format="pp" />
+                                      <Delta label="Δ SPI"             value={dSpi}  positivoBom={true} format="spi" />
+                                      {!modoMascara && !hideFinancial && (
+                                        <Delta label="Δ Fat. Realizado" value={dFat} positivoBom={true} format="money" />
+                                      )}
+                                    </div>
+
+                                    {/* Tabela densa: valor atual × anterior lado a lado */}
+                                    <div className="mt-3.5 rounded-xl border border-slate-200 bg-white overflow-hidden">
+                                      <div className="grid grid-cols-12 gap-2 px-3 py-2 bg-slate-50 border-b border-slate-200 text-[9px] font-bold uppercase tracking-wider text-slate-500">
+                                        <div className="col-span-4">Indicador</div>
+                                        <div className="col-span-3 text-right">Semana {new Date(prevRow.semana + "T12:00:00").toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })}</div>
+                                        <div className="col-span-3 text-right">Semana {new Date(r.semana + "T12:00:00").toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })}</div>
+                                        <div className="col-span-2 text-right">Δ</div>
+                                      </div>
+                                      {[
+                                        { lbl: "Avanço Previsto Acum",  ant: fPct_(n(prevRow.avancoPrevisto)),  atu: fPct_(n(r.avancoPrevisto)),  d: dPrev, fmt: "pp" as const, posBom: true },
+                                        { lbl: "Avanço Realizado Acum", ant: fPct_(n(prevRow.avancoRealizado)), atu: fPct_(n(r.avancoRealizado)), d: dReal, fmt: "pp" as const, posBom: true },
+                                        { lbl: "SPI",                    ant: n(prevRow.spi).toFixed(2),         atu: spiVal.toFixed(2),            d: dSpi,  fmt: "spi" as const, posBom: true },
+                                        ...(!modoMascara && !hideFinancial ? [
+                                          { lbl: "Faturamento Previsto",  ant: n(prevRow.custoPrevisto)  > 0 ? fmt(n(prevRow.custoPrevisto))  : "—", atu: n(r.custoPrevisto)  > 0 ? fmt(n(r.custoPrevisto))  : "—", d: dFatPrv, fmt: "money" as const, posBom: true },
+                                          { lbl: "Faturamento Realizado", ant: n(prevRow.custoRealizado) > 0 ? fmt(n(prevRow.custoRealizado)) : "—", atu: n(r.custoRealizado) > 0 ? fmt(n(r.custoRealizado)) : "—", d: dFat,    fmt: "money" as const, posBom: true },
+                                        ] : []),
+                                      ].map((row, i) => {
+                                        const subiu = row.d > 0.001;
+                                        const caiu  = row.d < -0.001;
+                                        const bom = row.posBom ? subiu : caiu;
+                                        const ruim = row.posBom ? caiu : subiu;
+                                        const cor = bom ? "text-emerald-600" : ruim ? "text-red-600" : "text-slate-500";
+                                        const fmtDelta = row.fmt === "spi"
+                                          ? `${row.d >= 0 ? "+" : ""}${row.d.toFixed(2)}`
+                                          : row.fmt === "money"
+                                          ? `${row.d >= 0 ? "+" : ""}${fmt(row.d)}`
+                                          : `${row.d >= 0 ? "+" : ""}${fPct_(row.d)}`;
+                                        return (
+                                          <div key={i} className={`grid grid-cols-12 gap-2 px-3 py-2 text-xs ${i % 2 === 0 ? "bg-white" : "bg-slate-50/40"} border-b border-slate-100 last:border-b-0`}>
+                                            <div className="col-span-4 text-slate-700 font-medium truncate">{row.lbl}</div>
+                                            <div className="col-span-3 text-right text-slate-500 tabular-nums">{row.ant}</div>
+                                            <div className="col-span-3 text-right text-slate-800 font-semibold tabular-nums">{row.atu}</div>
+                                            <div className={`col-span-2 text-right font-bold tabular-nums flex items-center justify-end gap-0.5 ${cor}`}>
+                                              {subiu ? <ArrowUpRight className="h-3 w-3" /> : caiu ? <ArrowDownRight className="h-3 w-3" /> : <Minus className="h-3 w-3" />}
+                                              {fmtDelta}
+                                            </div>
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+
+                                    {/* Observações COMPLETAS dos 2 relatórios */}
+                                    {(r.observacoes || prevRow.observacoes) && (
+                                      <div className="mt-3.5 grid grid-cols-1 md:grid-cols-2 gap-2.5">
+                                        <div className="rounded-xl border border-slate-200 bg-white p-3">
+                                          <p className="text-[9px] font-bold uppercase tracking-[0.12em] text-slate-500 mb-1">Observações — semana anterior ({new Date(prevRow.semana + "T12:00:00").toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })})</p>
+                                          <p className="text-xs text-slate-700 whitespace-pre-wrap leading-relaxed">{prevRow.observacoes || <span className="italic text-slate-400">Sem observações</span>}</p>
+                                        </div>
+                                        <div className="rounded-xl border border-violet-200 bg-violet-50/30 p-3">
+                                          <p className="text-[9px] font-bold uppercase tracking-[0.12em] text-violet-700 mb-1">Observações — esta semana ({new Date(r.semana + "T12:00:00").toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })})</p>
+                                          <p className="text-xs text-slate-700 whitespace-pre-wrap leading-relaxed">{r.observacoes || <span className="italic text-slate-400">Sem observações</span>}</p>
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })()}
+                            </td>
+                          </tr>
                         )}
-                        <td className="px-4 py-3 text-slate-500 max-w-[200px] truncate">{r.observacoes ?? <span className="text-slate-300">—</span>}</td>
-                      </tr>
+                      </React.Fragment>
                     );
-                  })}
+                  });
+                })()}
               </tbody>
             </table>
           </div>}
