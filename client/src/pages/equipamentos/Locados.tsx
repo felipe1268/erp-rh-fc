@@ -123,6 +123,26 @@ export default function EquipamentosLocados() {
     parsearPdf.mutate({ companyId, pdfBase64: base64, mimeType: file.type as any, nomeArquivo: file.name });
   }
 
+  // Rev. 2311 — auto-abrir modal quando vier do Almoxarifado com ?action=receber|devolver.
+  // Lê window.location.search 1× e remove o param pra não reabrir em navegações internas.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const action = params.get("action");
+    if (!action) return;
+    if (action === "receber") {
+      setForm({ ...EMPTY });
+      setFotos([]);
+      setModal(true);
+    } else if (action === "devolver") {
+      setFiltroStatus("em_uso");
+      toast.info("Selecione o equipamento que deseja devolver na lista abaixo.", { duration: 5000 });
+    }
+    const url = new URL(window.location.href);
+    url.searchParams.delete("action");
+    window.history.replaceState({}, "", url.toString());
+  }, []);
+
   // Rev. 2310 — anima barra de 0→95% durante o parse (Gemini não retorna progresso real).
   // Curva ease-out: cresce rápido nos primeiros segundos e desacelera perto de 95%.
   // Estimativa baseada em 20s típicos. onSuccess força 100%.

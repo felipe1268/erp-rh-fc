@@ -1,6 +1,69 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2311 — **UX · Atalho "Receber/Devolver locação" no modal
+ * Receber Material do Almoxarifado (ponte com tela Equipamentos
+ * Locados).**
+ *
+ * Pedido user (23/05/2026, screenshot do modal "Receber Material"
+ * com 3 cards Foto NF / Via OC / Manual): "Quero poder receber os
+ * equipamentos locados por esta tela, tbm é dar baixa de saída".
+ *
+ * **Contexto**: a tela Visão Geral do Almoxarifado é o ponto único
+ * onde o almoxarife dispara ações de movimentação (ENTRADA, SAÍDA,
+ * FERRAMENTAS, TRANSFERIR, FECHAR DIA). O fluxo de locação de
+ * equipamentos (Rev. 2308) está numa tela separada
+ * (`/equipamentos/locados`), o que quebrava o mental model "tudo
+ * que entra/sai da obra eu dou baixa no Almoxarifado".
+ *
+ * **Decisão de design**: ponte por navegação, NÃO duplicação do
+ * formulário. O modal `<SmartEntry>` ganha 2 atalhos pequenos no
+ * rodapé do step inicial; ao clicar, fecha o modal e navega pra
+ * `/equipamentos/locados?action=receber|devolver`, que reaproveita
+ * o modal de cadastro/lista já moderno da Rev. 2309 (cabeçalho
+ * hero + 5 seções coloridas). Vantagens: 0 duplicação de validação,
+ * 0 duplicação de upload de fotos, 0 duplicação de procedures.
+ *
+ * **Implementação**:
+ *
+ * 1. `client/src/pages/almoxarifado/SmartEntry.tsx`:
+ *    - Import de `useLocation` (wouter).
+ *    - Após os 3 cards existentes (Foto NF / Via OC / Manual), um
+ *      divider `<div className="pt-3 mt-2 border-t border-slate-200">`
+ *      com header "LOCAÇÃO DE EQUIPAMENTOS" (`text-[11px]
+ *      uppercase tracking-wider`) e grid de 2 cards menores
+ *      (`grid-cols-2 gap-2`):
+ *      - **Receber locação**: bg-teal-50 / ring teal, ícone Truck
+ *        em badge gradient emerald→teal, copy "Equipamento da
+ *        locadora", onClick → `onClose(); setLocation(
+ *        "/equipamentos/locados?action=receber")`.
+ *      - **Devolver locação**: bg-amber-50 / ring amber, ícone
+ *        ArrowDownCircle rotate-180 em badge gradient amber→
+ *        orange, copy "Dar baixa / saída", onClick análogo com
+ *        `?action=devolver`.
+ *
+ * 2. `client/src/pages/equipamentos/Locados.tsx`:
+ *    - Novo `useEffect([])` que executa 1× no mount:
+ *      - Lê `new URLSearchParams(window.location.search)`.
+ *      - Se `action === "receber"`: reseta `form={...EMPTY}`,
+ *        `fotos=[]` e `setModal(true)` (abre modal de cadastro).
+ *      - Se `action === "devolver"`: `setFiltroStatus("em_uso")`
+ *        (filtra só os ativos, que são os que podem ser devolvidos)
+ *        e mostra `toast.info("Selecione o equipamento que deseja
+ *        devolver na lista abaixo.", { duration: 5000 })`. A
+ *        devolução é por-item (cada card tem seu botão Devolver),
+ *        então o toast guia o user — não há "modal único de
+ *        devolução" que faça sentido sem item selecionado.
+ *      - `window.history.replaceState` remove `action` da URL pra
+ *        não reabrir o modal se o user navegar pra outra rota e
+ *        voltar pelo back do navegador.
+ *
+ * **0 mudança backend, 0 schema, 0 procedures novas.**
+ *
+ * **R-001/R-007/R-010:** N/A — 100% client-side (navegação +
+ * detecção de query param).
+ *
+ *
  * Rev. 2310 — **UX · Barra de progresso 0→100% no modal de importação
  * PDF (IA) de contratos de locação.**
  *
