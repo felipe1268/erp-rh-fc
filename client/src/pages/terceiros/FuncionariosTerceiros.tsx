@@ -13,6 +13,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { Users, Plus, Search, Edit, Trash2, Upload, FileText, CheckCircle, XCircle, Clock, ShieldCheck, Building2, HardHat, Camera, BadgeCheck, User as UserIcon, X, Heart, Award, BookOpen, ClipboardCheck, AlertTriangle, Calendar, Phone, Briefcase } from "lucide-react";
+import { PersonPhoto } from "@/components/PersonPhoto";
 
 export default function FuncionariosTerceiros() {
   const { user } = useAuth();
@@ -345,13 +346,13 @@ export default function FuncionariosTerceiros() {
                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                   {/* Rev. 1998 — Avatar + número interno pra identificação visual rápida */}
                   <div className="flex items-center gap-3 flex-1 min-w-0">
-                    <div className="h-12 w-12 rounded-full overflow-hidden bg-muted ring-2 ring-white shadow-sm flex items-center justify-center flex-shrink-0">
-                      {func.fotoUrl ? (
-                        <img src={func.fotoUrl} alt={func.nome} className="h-full w-full object-cover" />
-                      ) : (
-                        <UserIcon className="h-6 w-6 text-muted-foreground" />
-                      )}
-                    </div>
+                    {/* Rev. 2297 — foto clicável (lightbox global) */}
+                    <PersonPhoto
+                      src={func.fotoUrl}
+                      alt={func.nome}
+                      size="lg"
+                      caption={[func.cpf && `CPF: ${func.cpf}`, func.funcao, func.obraNome].filter(Boolean).join(" · ") || undefined}
+                    />
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <h3 className="font-semibold text-foreground">{func.nome}</h3>

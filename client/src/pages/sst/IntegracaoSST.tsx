@@ -26,6 +26,7 @@ import {
 } from "lucide-react";
 import { Link as WouterLink } from "wouter";
 import { generateCertificadoIntegracaoSstPdf } from "@/lib/certificadoIntegracaoSstPdf";
+import { PersonPhoto } from "@/components/PersonPhoto";
 
 function formatDate(d: string | null | undefined) {
   if (!d) return "-";
@@ -1452,9 +1453,8 @@ function PendentesTab({ companyId }: { companyId: number }) {
                 return (
                   <div key={`${p.kind}-${p.id}`} className={`flex items-center justify-between gap-2 flex-wrap rounded-lg border bg-white px-3 py-2 ring-1 ${estadoMeta.ring}`}>
                     <div className="flex items-center gap-3 min-w-0 flex-1">
-                      <div className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center flex-shrink-0 overflow-hidden">
-                        {p.fotoUrl ? <img src={p.fotoUrl} alt={p.nome} className="w-full h-full object-cover" /> : <Users className="h-4 w-4 text-slate-500" />}
-                      </div>
+                      {/* Rev. 2297 — foto clicável (lightbox global) */}
+                      <PersonPhoto src={p.fotoUrl} alt={p.nome} size="sm" caption={[p.funcao, p.cpf && `CPF: ${p.cpf}`, p.obraNome].filter(Boolean).join(" · ") || undefined} />
                       <div className="min-w-0">
                         <p className="font-medium text-sm truncate">{p.nome}</p>
                         <p className="text-xs text-muted-foreground truncate">

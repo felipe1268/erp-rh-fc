@@ -9,6 +9,7 @@ import { formatCPF } from "@/lib/formatters";
 import { Search, UserSearch, Users, UserCheck, UserX, Clock, Shield, Ban, AlertTriangle, Palmtree, FileWarning } from "lucide-react";
 import { removeAccents } from "@/lib/searchUtils";
 import { usePermissions } from "@/contexts/PermissionsContext";
+import { PersonPhoto } from "@/components/PersonPhoto";
 
 const STATUS_OPTIONS = [
   { value: "Todos", label: "Todos", icon: Users, color: "bg-gray-100 text-gray-700 border-gray-300", activeColor: "bg-gray-700 text-white border-gray-700" },
@@ -220,13 +221,8 @@ export default function RaioXPage() {
                   }`}
                 >
                   <div className="flex items-start gap-3">
-                    <div className={`h-10 w-10 rounded-full ${avatarColor} flex items-center justify-center font-bold text-sm shrink-0 overflow-hidden`}>
-                      {emp.fotoUrl ? (
-                        <img src={emp.fotoUrl} alt="" className="w-full h-full object-cover object-top" />
-                      ) : (
-                        <>{emp.nomeCompleto?.charAt(0) || "?"}</>
-                      )}
-                    </div>
+                    {/* Rev. 2297 — foto clicável (lightbox global) */}
+                    <PersonPhoto src={emp.fotoUrl} alt={emp.nomeCompleto || "Funcionário"} size="md" caption={[formatCPF(emp.cpf), emp.funcao].filter(Boolean).join(" · ") || undefined} />
                     <div className="min-w-0 flex-1">
                       <p className="font-medium text-sm truncate group-hover:text-blue-700 transition-colors">
                         {emp.nomeCompleto}

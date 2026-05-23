@@ -20,6 +20,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
+import { PersonPhoto } from "@/components/PersonPhoto";
 import { trpc } from "@/lib/trpc";
 import { toast } from "@/hooks/use-toast";
 
@@ -351,15 +352,8 @@ export default function HEAprovadaSemPontoAlert({
                             <Square className="h-3.5 w-3.5 text-orange-600" />
                           )}
                         </button>
-                        <Avatar className="h-5 w-5 shrink-0 ring-1 ring-white">
-                          {f.fotoUrl && <AvatarImage src={f.fotoUrl} alt={f.employeeName} />}
-                          <AvatarFallback className={
-                            "text-[8px] font-semibold " +
-                            (checked ? "bg-blue-200 text-blue-800" : "bg-orange-200 text-orange-800")
-                          }>
-                            {iniciais}
-                          </AvatarFallback>
-                        </Avatar>
+                        {/* Rev. 2297 — foto clicável (lightbox global) */}
+                        <PersonPhoto src={f.fotoUrl} alt={f.employeeName} className="h-5 w-5 text-[8px]" showZoomHint={false} />
                         {onOpenEmployee ? (
                           <button
                             type="button"

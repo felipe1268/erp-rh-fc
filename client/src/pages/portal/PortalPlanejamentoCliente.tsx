@@ -27,6 +27,7 @@ import PrintActions from "@/components/PrintActions";
 import { Tooltip as UiTooltip, TooltipContent as UiTooltipContent, TooltipProvider as UiTooltipProvider, TooltipTrigger as UiTooltipTrigger } from "@/components/ui/tooltip";
 import { Popover as UiPopover, PopoverContent as UiPopoverContent, PopoverTrigger as UiPopoverTrigger } from "@/components/ui/popover";
 import { Info as InfoIcon } from "lucide-react";
+import { PersonPhoto } from "@/components/PersonPhoto";
 
 const fmtBR = (s?: string | null) => (s ? s.split("T")[0].split("-").reverse().join("/") : "—");
 const fmtPct = (n: number) => `${n.toFixed(2).replace(".", ",")}%`;
@@ -4381,20 +4382,8 @@ function AbaEfetivo({ token, obraId }: { token: string; obraId: number }) {
                           ) : null}
                         </td>
                         <td className="px-3 py-2">
-                          {e.fotoUrl ? (
-                            <img
-                              src={e.fotoUrl}
-                              alt={e.nomeCompleto}
-                              className="h-9 w-9 rounded-full object-cover border border-slate-200 bg-slate-100"
-                              onError={(ev) => { (ev.currentTarget as HTMLImageElement).style.display = "none"; }}
-                            />
-                          ) : (
-                            <div className={`h-9 w-9 rounded-full border flex items-center justify-center text-[11px] font-bold ${
-                              isTerc ? "bg-amber-50 text-amber-700 border-amber-200" : isPJ ? "bg-violet-50 text-violet-700 border-violet-200" : "bg-blue-50 text-blue-700 border-blue-200"
-                            }`}>
-                              {iniciais(e.nomeCompleto)}
-                            </div>
-                          )}
+                          {/* Rev. 2297 — foto clicável (lightbox global) */}
+                          <PersonPhoto src={e.fotoUrl} alt={e.nomeCompleto} size="sm" caption={isTerc ? (e.empresaTerceira || "Terceiro") : isPJ ? "PJ" : "CLT"} />
                         </td>
                         <td className="px-4 py-2 font-medium text-slate-800 text-[13px]">
                           <span className={podeExpandir ? "hover:text-blue-700 hover:underline underline-offset-2" : ""}>{e.nomeCompleto}</span>

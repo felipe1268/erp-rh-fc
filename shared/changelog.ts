@@ -1,6 +1,69 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2297 — **UX/Padrão global · Componente reutilizável `<PersonPhoto>`
+ * com lightbox embutido. Toda foto de pessoa do ERP passa a ser clicável
+ * pra ampliar.**
+ *
+ * Pedido user (23/05/2026): "Como regra geral, todo lugar que tiver foto
+ * de pessoas, quero poder clicar e ela ser ampliada para saber quem é
+ * quem... isso vale para o ERP todo... 100%".
+ *
+ * **Por quê:** o zoom em foto até hoje era feito caso-a-caso (cada tela
+ * reimplementando seu próprio modal — Dialog do shadcn em FolhaPagamento,
+ * overlay manual em DashAvisoPrevio, modal próprio em PlanejamentoDetalhe,
+ * etc.) e a maioria das telas simplesmente NÃO tinha zoom. Resultado:
+ * inconsistência visual, código duplicado e o engenheiro/RH não conseguia
+ * confirmar "quem é quem" em listas densas (Funcionários Terceiros foi o
+ * caso citado pelo user, mas o pedido é universal). A solução é um único
+ * componente padronizado.
+ *
+ * **O componente (`client/src/components/PersonPhoto.tsx`):**
+ * - API: `<PersonPhoto src alt size="xs|sm|md|lg|xl" caption className clickable showZoomHint />`.
+ * - Render: avatar circular com `object-cover object-top` (mantém rosto no
+ *   topo), fallback automático em iniciais sobre gradiente azul-FC quando
+ *   `src` ausente OU `onError` dispara.
+ * - Lightbox: overlay `fixed inset-0 z-[120]` com `bg-black/85 backdrop-blur-sm`,
+ *   imagem `object-contain` até 78vh / 92vw, caption com nome + linha extra
+ *   (CPF, função, obra…). ESC fecha (listener com `body.style.overflow`
+ *   tratado pra restaurar scroll). Click no backdrop fecha. Click no
+ *   `<figure>` é stoppado pra não fechar acidental.
+ * - Sem foto OU `clickable=false`: vira `<div>` neutro (cursor default,
+ *   sem `<button>` aninhado em pais clicáveis — evita HTML inválido).
+ * - `e.stopPropagation()` no click do botão evita disparar o handler do
+ *   card/row pai (não navega + abre lightbox ao mesmo tempo).
+ * - "Zoom hint" — ícone discreto no canto que aparece no hover.
+ *
+ * **Aplicado em (telas que NÃO tinham zoom):**
+ * - `client/src/pages/terceiros/FuncionariosTerceiros.tsx` (L347-357) —
+ *   tela do screenshot do user; lista de 23+ funcionários terceiros.
+ * - `client/src/pages/relatorios/RaioXPage.tsx` (L225-227) — lista lateral
+ *   de funcionários no Raio-X.
+ * - `client/src/pages/portal/PortalPlanejamentoCliente.tsx` (L4386-4388)
+ *   — coluna foto da tabela do Portal Cliente.
+ * - `client/src/pages/sst/IntegracaoSST.tsx` (L1458-1459) — lista de
+ *   participantes de integração SST.
+ * - `client/src/components/HEAprovadaSemPontoAlert.tsx` (L357-358) —
+ *   mini-avatar (5x5) na lista de funcionários sem ponto.
+ *
+ * **Telas NÃO tocadas (já têm zoom próprio funcional — evita regressão):**
+ * `FolhaPagamento.tsx`, `FechamentoPonto.tsx` (setFotoZoom), `DashAvisoPrevio.tsx`,
+ * `PlanejamentoDetalhe.tsx`, `PortalRhDocumentosCliente.tsx`,
+ * `sst/DashboardAtestadosAcidentes.tsx`, `RDO.tsx`, `RaioXFuncionario.tsx`.
+ * Migração delas pro `<PersonPhoto>` fica como follow-up de uniformidade
+ * (não-funcional — o user já tem o zoom funcionando lá).
+ *
+ * **Telas DELIBERADAMENTE não tocadas:** `terceiros/Crachas.tsx` — é o
+ * design impresso do crachá; abrir lightbox no preview do crachá não faz
+ * sentido UX.
+ *
+ * **R-001 / R-007 / R-010:** N/A. Mudança 100% client-side; novo
+ * componente + 5 arquivos editados, nenhuma DDL/mutation.
+ *
+ * Arquivos: `client/src/components/PersonPhoto.tsx` (novo), 5 telas
+ * acima, `shared/version.ts`, `shared/changelog.ts`, `replit.md`,
+ * `replit-history.md`.
+ *
  * Rev. 2296 — **UX · Filtros de status da tela Cotações redesenhados em pills
  * coloridos com ícone + contador por status (Todos / Pendente / Aprovada /
  * Concluída / Recusada / Expirada).**
