@@ -194,6 +194,7 @@ const DashCompetencias = lazy(() => import("./pages/dashboards/DashCompetencias"
 const DashApontamentos = lazy(() => import("./pages/dashboards/DashApontamentos"));
 const DashHabilidades = lazy(() => import("./pages/dashboards/DashHabilidades"));
 const DashParceiros = lazy(() => import("./pages/dashboards/DashParceiros"));
+const DashAlmoxarifadoEquipamentos = lazy(() => import("./pages/dashboards/DashAlmoxarifadoEquipamentos"));
 const RelatorioHabilidadesObra = lazy(() => import("./pages/RelatorioHabilidadesObra"));
 const ImportacaoHabilidades = lazy(() => import("./pages/ImportacaoHabilidades"));
 
@@ -464,6 +465,7 @@ function Router() {
         <Route path={"/dashboards/apontamentos"} component={() => <RouteGuard component={DashApontamentos} route="/dashboards/apontamentos" />} />
         <Route path={"/dashboards/habilidades"} component={() => <RouteGuard component={DashHabilidades} route="/dashboards/habilidades" />} />
         <Route path={"/dashboards/parceiros"} component={() => <RouteGuard component={DashParceiros} route="/dashboards/parceiros" />} />
+        <Route path={"/dashboards/almoxarifado-equipamentos"} component={() => <RouteGuard component={DashAlmoxarifadoEquipamentos} route="/almoxarifado" />} />
         {/* Terceiros */}
         <Route path="/terceiros" component={() => <RouteGuard component={PainelTerceiros} route="/terceiros/painel" />} />
         <Route path="/terceiros/empresas" component={() => <RouteGuard component={EmpresasTerceiras} route="/terceiros/empresas" />} />

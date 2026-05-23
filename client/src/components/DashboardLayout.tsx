@@ -468,6 +468,14 @@ const menuSectionsAlmoxarifado: MenuSection[] = [
       { icon: Settings,  label: "Parâmetros CAPEX",  path: "/equipamentos/parametros-capex" },
     ],
   },
+  // Rev. 2324 — Dashboard consolidada (estoque + movimentações + equipamentos
+  // próprios/locados + ferramentas de terceiros) em abas separadas pra análise.
+  {
+    title: "Análise",
+    items: [
+      { icon: BarChart3, label: "Dashboard Almox & Equip.", path: "/dashboards/almoxarifado-equipamentos" },
+    ],
+  },
 ];
 
 const menuSectionsFinanceiro: MenuSection[] = [

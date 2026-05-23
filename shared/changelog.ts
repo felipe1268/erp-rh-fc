@@ -1,6 +1,73 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2324 — **FEATURE · Dashboard consolidada Almoxarifado
+ * & Equipamentos — análise unificada em abas separadas.**
+ *
+ * Pedido user (23/05/2026): "Crie uma aba na barra lateral
+ * com um dashboard contendo TUDO do módulo Almoxarifado +
+ * Equipamentos em abas separadas para análise."
+ *
+ * Contexto: o ERP já tinha dashboards setoriais (EPIs, Folha,
+ * Ponto, Jurídico…) mas nada que consolidasse a visão de
+ * suprimentos. O eng. de obra precisava abrir 4-5 telas
+ * (Almoxarifado, Movimentações, Equipamentos Próprios,
+ * Locados, Ferramentas Terceiros) pra cruzar informações
+ * básicas — "quanto custa minha locação por mês?", "qual obra
+ * mais consome estoque?", "tenho item abaixo do mínimo?".
+ *
+ * Implementação 100% client-side (zero novo endpoint, zero
+ * mudança server, zero mudança schema). Tudo agregado em
+ * useMemo a partir das procedures existentes:
+ *
+ *   - `compras.listarItens` (estoque por categoria, valor
+ *     parado, abaixo do mínimo, sem estoque)
+ *   - `warehouse.listMovements` (últimos 30 dias bucketizados
+ *     por dia + tipo, entradas vs saídas)
+ *   - `warehouse.listOpenLoans` / `listInsumos` /
+ *     `listTransferencias` (KPIs operacionais)
+ *   - `equipamentos.propriosListar` (status, valor ativo)
+ *   - `equipamentos.locadosListar` (ativos/devolvidos/
+ *     atrasados/vencendo 30d, custo mensal por obra +
+ *     fornecedor, sem-obra)
+ *   - `ferramentasTerceiros.listarRegistros` (KPI + lista)
+ *   - `obras.listActive` (resolve nome das obras)
+ *
+ * Arquivos:
+ *   - `client/src/pages/dashboards/DashAlmoxarifadoEquipamentos.tsx`
+ *     (novo, ~430 linhas — 6 tabs: Visão Geral, Estoque,
+ *     Movimentações, Ferramentas Terceiros, Equip. Próprios,
+ *     Equip. Locados; usa DashboardLayout + DashKpi +
+ *     DashChart + shadcn Tabs)
+ *   - `client/src/App.tsx` (lazy import + rota
+ *     `/dashboards/almoxarifado-equipamentos` com
+ *     `route="/almoxarifado"` p/ herdar permissão do módulo)
+ *   - `client/src/components/DashboardLayout.tsx` (nova
+ *     seção "Análise" no `menuSectionsAlmoxarifado` com
+ *     BarChart3 icon)
+ *   - `shared/version.ts` → 2324
+ *
+ * Decisões de design:
+ *   (1) Reaproveitar padrão visual do DashEpis (Tabs +
+ *       DashKpi + DashChart) pra manter consistência com os
+ *       outros 19 dashboards já entregues.
+ *   (2) Janela fixa de 30 dias pra movimentações (bucketizado
+ *       client-side a partir do `criadoEm`) — evita criar
+ *       endpoint de agregação só pra isso.
+ *   (3) "Custo mensal por obra" usa `valorMensal` SOMADO
+ *       apenas dos locados em status `em_uso` — devolvidos e
+ *       atrasados ficam fora pra refletir custo recorrente
+ *       atual.
+ *   (4) `ferrAgg` lê snake_case do retorno raw SQL
+ *       (`empresa_terceira`, `qtd_itens`, `obra_id`,
+ *       `criado_em`) — `listarRegistros` em ferramentas usa
+ *       `db.execute(sql\`...\`)` sem mapeamento camelCase.
+ *
+ * R-001/R-007/R-010: N/A — read-only puro, zero DDL/DML.
+ * Multi-tenant: todas as queries já filtram por `companyId`
+ * + `getEffectiveAllowedObraIds(ctx.user)` no server (regra
+ * estabelecida na Rev. 1607/1609).
+ *
  * Rev. 2323 — **FEATURE · Equipamentos Locados — vínculo de
  * obra visível no card + multi-seleção pra vincular/excluir
  * em lote.**
