@@ -1,6 +1,25 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2288 — **HOTFIX · `ReferenceError: Can't find variable: fotoZoom`
+ * na tela Efetivo da Obra.**
+ *
+ * Regressão da Rev. 2287. O state `fotoZoom`/`setFotoZoom` foi declarado
+ * no componente errado: `EfetivoObraTab` (L11130 — wrapper que só busca
+ * dados via tRPC) em vez de `EfetivoObraView` (L11215 — onde a tabela e
+ * o lightbox vivem). Resultado: ao renderizar a lista, o JSX em
+ * `EfetivoObraView` tentava ler `fotoZoom` fora de escopo → exception
+ * runtime e tela em branco.
+ *
+ * Fix em `client/src/pages/planejamento/PlanejamentoDetalhe.tsx`:
+ * remover declaração em `EfetivoObraTab` (L11138) e mover pra
+ * `EfetivoObraView` (após `busca`/`filtroStatus`). Lightbox no JSX,
+ * `<button>` em volta da foto e import do `X` permanecem inalterados.
+ *
+ * R-001/R-007/R-010: N/A (client-only).
+ */
+
+/**
  * Rev. 2287 — **FEAT/UX · Foto do funcionário clicável (lightbox) na aba
  * "Efetivo da Obra".**
  *

@@ -11131,8 +11131,6 @@ function EfetivoObraTab({ proj }: { proj: any }) {
   const { selectedCompanyId } = useCompany();
   const companyId = Number(selectedCompanyId) || 0;
   const obraId = proj?.obraId ?? 0;
-  // Rev. 2287 — Zoom da foto do funcionário (lightbox)
-  const [fotoZoom, setFotoZoom] = useState<{ url: string; nome: string } | null>(null);
 
   const { data: equipeRaw = [], isLoading } = trpc.obras.equipeObra.useQuery(
     { obraId, companyId },
@@ -11215,6 +11213,10 @@ function EfetivoObraTab({ proj }: { proj: any }) {
 export function EfetivoObraView({ equipeRaw, isLoading, docsMap = {} }: { equipeRaw: any[]; isLoading: boolean; docsMap?: Record<number, { aso: any | null; treinamentos: any[]; integracao?: any | null }> }) {
   const [busca, setBusca] = useState("");
   const [filtroStatus, setFiltroStatus] = useState<string>("todos");
+  // Rev. 2288 — Zoom da foto do funcionário (lightbox). Estado movido pra
+  // cá (era em EfetivoObraTab por engano — quebrava render porque a
+  // tabela vive aqui em EfetivoObraView).
+  const [fotoZoom, setFotoZoom] = useState<{ url: string; nome: string } | null>(null);
   // Rev. 1596 — filtro Direto/Indireto (paridade c/ Portal do Cliente).
   const [filtroCat, setFiltroCat] = useState<"todos" | "Direto" | "Indireto">("todos");
   // Rev. 1558 — linhas expandidas para mostrar ASO + Treinamentos (mesma UI
