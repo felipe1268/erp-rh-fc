@@ -5876,18 +5876,25 @@ export const almoxarifadoItens = pgTable("almoxarifado_itens", {
 });
 
 export const almoxarifadoMovimentacoes = pgTable("almoxarifado_movimentacoes", {
-  id:           serial().primaryKey(),
-  companyId:    integer("company_id").notNull(),
-  itemId:       integer("item_id").notNull(),
-  tipo:         varchar({ length: 20 }).notNull(),
-  quantidade:   numeric({ precision: 14, scale: 3 }).notNull(),
-  obraId:       integer("obra_id"),
-  obraNome:     varchar("obra_nome", { length: 255 }),
-  motivo:       text(),
-  usuarioId:    integer("usuario_id"),
-  usuarioNome:  varchar("usuario_nome", { length: 255 }),
-  observacoes:  text(),
-  criadoEm:     timestamp("criado_em", { mode: 'string' }).defaultNow().notNull(),
+  id:                 serial().primaryKey(),
+  companyId:          integer("company_id").notNull(),
+  itemId:             integer("item_id").notNull(),
+  tipo:               varchar({ length: 20 }).notNull(),
+  quantidade:         numeric({ precision: 14, scale: 3 }).notNull(),
+  obraId:             integer("obra_id"),
+  obraNome:           varchar("obra_nome", { length: 255 }),
+  motivo:             text(),
+  usuarioId:          integer("usuario_id"),
+  usuarioNome:        varchar("usuario_nome", { length: 255 }),
+  observacoes:        text(),
+  criadoEm:           timestamp("criado_em", { mode: 'string' }).defaultNow().notNull(),
+  // Rev. 2305 — Estorno (soft-delete auditável). Quando preenchidas, a
+  // movimentação foi REVERTIDA: estoque devolvido ao estado anterior,
+  // mas o registro permanece no histórico com badge ESTORNADA.
+  estornadaEm:        timestamp("estornada_em", { mode: 'string' }),
+  estornadaPorId:     integer("estornada_por_id"),
+  estornadaPorNome:   varchar("estornada_por_nome", { length: 255 }),
+  estornoMotivo:      text("estorno_motivo"),
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════

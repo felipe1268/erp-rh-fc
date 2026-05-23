@@ -234,6 +234,10 @@ export const warehouseRouter = router({
           itemId: almoxarifadoMovimentacoes.itemId,
           itemNome: almoxarifadoItens.nome,
           unidade: almoxarifadoItens.unidade,
+          // Rev. 2305 — campos de estorno (soft-delete auditável).
+          estornadaEm: almoxarifadoMovimentacoes.estornadaEm,
+          estornadaPorNome: almoxarifadoMovimentacoes.estornadaPorNome,
+          estornoMotivo: almoxarifadoMovimentacoes.estornoMotivo,
         })
         .from(almoxarifadoMovimentacoes)
         .leftJoin(almoxarifadoItens, eq(almoxarifadoMovimentacoes.itemId, almoxarifadoItens.id))
@@ -242,6 +246,102 @@ export const warehouseRouter = router({
         .limit(input.limit);
 
       return movs;
+    }),
+
+  // ── ESTORNO DE MOVIMENTAÇÕES (Rev. 2305) ───────────────────────
+  // Reverte 1+ movimentações de uma vez. Soft-delete: marca a mov como
+  // estornada (preserva histórico) e devolve a quantidade ao estoque
+  // do item. Operação restrita a admin/admin_master. Movimentações
+  // originadas de Recebimento Inteligente (vinculadas a OC) são
+  // BLOQUEADAS — devem ser revertidas pela tela de Recebimentos pra
+  // não dessincronizar quantidade_entregue/status da OC.
+  reverseMovements: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      movementIds: z.array(z.number()).min(1).max(200),
+      motivo: z.string().min(3).max(500),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      if (!isAdmin(ctx)) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Apenas administradores podem estornar movimentações.",
+        });
+      }
+
+      const sucessos: number[] = [];
+      const erros: { id: number; motivo: string }[] = [];
+
+      for (const mid of input.movementIds) {
+        try {
+          const [mov] = await db
+            .select()
+            .from(almoxarifadoMovimentacoes)
+            .where(and(
+              eq(almoxarifadoMovimentacoes.id, mid),
+              eq(almoxarifadoMovimentacoes.companyId, input.companyId),
+            ));
+          if (!mov) { erros.push({ id: mid, motivo: "Movimentação não encontrada" }); continue; }
+          if (mov.estornadaEm) { erros.push({ id: mid, motivo: "Já estornada anteriormente" }); continue; }
+
+          // Bloqueia mov vinda de Recebimento Inteligente (vinculada a OC).
+          const motivoOrig = String(mov.motivo || "").toLowerCase();
+          if (motivoOrig.includes("recebimento inteligente") || /\boc[\s-]/i.test(String(mov.motivo || ""))) {
+            erros.push({ id: mid, motivo: "Movimentação de OC — estorne pela tela de Recebimentos" });
+            continue;
+          }
+
+          const [item] = await db
+            .select()
+            .from(almoxarifadoItens)
+            .where(eq(almoxarifadoItens.id, mov.itemId));
+          if (!item) { erros.push({ id: mid, motivo: "Item do estoque não encontrado" }); continue; }
+
+          const qtd = parseFloat(String(mov.quantidade) || "0");
+          const atual = parseFloat(String(item.quantidadeAtual) || "0");
+          let novo = atual;
+          if (mov.tipo === "entrada") {
+            // Reverter entrada = subtrair do estoque. Bloqueia se ficaria negativo
+            // (significa que o material já foi consumido depois — estorno inseguro).
+            if (atual < qtd) {
+              erros.push({
+                id: mid,
+                motivo: `Estoque atual (${atual}) menor que a quantidade a estornar (${qtd}). Material já consumido.`,
+              });
+              continue;
+            }
+            novo = atual - qtd;
+          } else if (mov.tipo === "saida") {
+            novo = atual + qtd;
+          } else {
+            erros.push({ id: mid, motivo: `Tipo "${mov.tipo}" não é estornável por esta tela` });
+            continue;
+          }
+
+          await db
+            .update(almoxarifadoItens)
+            .set({ quantidadeAtual: String(novo) } as any)
+            .where(eq(almoxarifadoItens.id, mov.itemId));
+
+          await db
+            .update(almoxarifadoMovimentacoes)
+            .set({
+              estornadaEm: new Date().toISOString(),
+              estornadaPorId: ctx.user.id,
+              estornadaPorNome: ctx.user.name || "",
+              estornoMotivo: input.motivo,
+            } as any)
+            .where(eq(almoxarifadoMovimentacoes.id, mid));
+
+          sucessos.push(mid);
+        } catch (e: any) {
+          erros.push({ id: mid, motivo: e?.message || "Erro inesperado" });
+        }
+      }
+
+      return { sucessos, erros, total: input.movementIds.length };
     }),
 
   // ── EMPRÉSTIMO (COMODATO DIÁRIO) ───────────────────────────────

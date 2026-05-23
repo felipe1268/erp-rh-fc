@@ -2,9 +2,12 @@ import DashboardLayout from "@/components/DashboardLayout";
 import { useState, useMemo } from "react";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
+import { useAuth } from "@/_core/hooks/useAuth";
+import { toast } from "sonner";
 import {
   ArrowDownCircle, ArrowUpCircle, Loader2, Search, Filter,
   ArrowRightLeft, Calendar, User, MapPin, X, CalendarRange,
+  CheckSquare, Square, Undo2, AlertTriangle, Ban,
 } from "lucide-react";
 
 // Rev. 2304 — helpers de data LOCAL (sem fuso, sem UTC) p/ filtros por período.
@@ -41,6 +44,8 @@ function fmt(v: any) { return n(v).toLocaleString("pt-BR", { maximumFractionDigi
 export default function AlmoxarifadoMovimentacoes() {
   const { selectedCompany } = useCompany();
   const companyId = selectedCompany?.id ?? 0;
+  const { user } = useAuth();
+  const isAdmin = user?.role === "admin" || user?.role === "admin_master";
 
   const [busca, setBusca] = useState("");
   const [filtroTipo, setFiltroTipo] = useState("todos");
@@ -50,12 +55,57 @@ export default function AlmoxarifadoMovimentacoes() {
   const [filtroPeriodo, setFiltroPeriodo] = useState<PeriodoPreset>("todos");
   const [dataInicio, setDataInicio] = useState<string>("");
   const [dataFim, setDataFim] = useState<string>("");
+  // Rev. 2305 — modo seleção múltipla + estorno.
+  const [modoSelecao, setModoSelecao] = useState(false);
+  const [selecionadas, setSelecionadas] = useState<Set<number>>(new Set());
+  const [modalEstorno, setModalEstorno] = useState(false);
+  const [motivoEstorno, setMotivoEstorno] = useState("");
 
   // Limit subiu de 300 → 1500 p/ não cortar histórico em filtros longos (Este mês etc).
+  const utils = trpc.useUtils();
   const { data: movs = [], isLoading } = trpc.warehouse.listMovements.useQuery(
     { companyId, limit: 1500 },
     { enabled: !!companyId }
   );
+
+  // Rev. 2305 — Mutation de estorno em lote.
+  const reverseMut = trpc.warehouse.reverseMovements.useMutation({
+    onSuccess: (res) => {
+      const { sucessos, erros, total } = res;
+      if (sucessos.length === total) {
+        toast.success(`${sucessos.length} movimentação(ões) estornada(s). Estoque atualizado.`);
+      } else if (sucessos.length > 0) {
+        toast.warning(
+          `${sucessos.length} de ${total} estornadas. ${erros.length} bloqueadas: ${erros.slice(0, 3).map(e => e.motivo).join("; ")}${erros.length > 3 ? "..." : ""}`,
+          { duration: 8000 }
+        );
+      } else {
+        toast.error(
+          `Nenhuma estornada. ${erros.slice(0, 3).map(e => e.motivo).join("; ")}${erros.length > 3 ? "..." : ""}`,
+          { duration: 8000 }
+        );
+      }
+      setSelecionadas(new Set());
+      setModoSelecao(false);
+      setModalEstorno(false);
+      setMotivoEstorno("");
+      utils.warehouse.listMovements.invalidate();
+      utils.warehouse.getDashboard.invalidate();
+    },
+    onError: (err) => toast.error(err.message || "Erro ao estornar movimentações"),
+  });
+
+  function toggleSel(id: number) {
+    setSelecionadas(prev => {
+      const n = new Set(prev);
+      if (n.has(id)) n.delete(id); else n.add(id);
+      return n;
+    });
+  }
+  function sairModoSelecao() {
+    setModoSelecao(false);
+    setSelecionadas(new Set());
+  }
 
   // Resolve o range [dataInicio, dataFim] (YYYY-MM-DD) a partir do preset.
   const range = useMemo(() => {
@@ -119,6 +169,32 @@ export default function AlmoxarifadoMovimentacoes() {
           <h1 className="text-2xl font-bold text-gray-900">Movimentações</h1>
           <p className="text-sm text-gray-500 mt-1">Histórico completo de entradas e saídas</p>
         </div>
+
+        {/* Rev. 2305 — Toggle modo seleção (só admin) */}
+        {isAdmin && (
+          <div className="flex justify-end">
+            {!modoSelecao ? (
+              <button
+                type="button"
+                onClick={() => setModoSelecao(true)}
+                className="inline-flex items-center gap-1.5 text-xs font-medium text-gray-700 bg-white border border-gray-200 hover:border-emerald-300 hover:text-emerald-700 rounded-full px-3 py-1.5 transition"
+                title="Selecionar várias movimentações para estornar"
+              >
+                <CheckSquare className="w-3.5 h-3.5" />
+                Selecionar
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={sairModoSelecao}
+                className="inline-flex items-center gap-1.5 text-xs font-medium text-gray-700 bg-gray-100 border border-gray-300 hover:bg-gray-200 rounded-full px-3 py-1.5 transition"
+              >
+                <X className="w-3.5 h-3.5" />
+                Cancelar seleção
+              </button>
+            )}
+          </div>
+        )}
 
         {/* Cards de resumo */}
         <div className="grid grid-cols-3 gap-3">
@@ -261,26 +337,58 @@ export default function AlmoxarifadoMovimentacoes() {
             <p className="text-gray-500">Nenhuma movimentação encontrada</p>
           </div>
         ) : (
-          <div className="space-y-2">
+          <div className={`space-y-2 ${modoSelecao && selecionadas.size > 0 ? "pb-24" : ""}`}>
             {lista.map(mov => {
               const meta = TIPO_LABELS[mov.tipo] || TIPO_LABELS["ajuste"];
               const Icon = meta.icon;
+              const estornada = !!mov.estornadaEm;
+              const sel = selecionadas.has(mov.id);
+              const podeSelecionar = modoSelecao && !estornada;
+              const onCardClick = podeSelecionar ? () => toggleSel(mov.id) : undefined;
               return (
                 <div
                   key={mov.id}
-                  className="bg-white rounded-xl border p-4 flex gap-3 items-start"
+                  onClick={onCardClick}
+                  className={`bg-white rounded-xl border p-4 flex gap-3 items-start transition ${
+                    estornada ? "opacity-60 border-gray-200 bg-gray-50" : ""
+                  } ${
+                    podeSelecionar ? "cursor-pointer hover:border-emerald-300" : ""
+                  } ${
+                    sel ? "ring-2 ring-emerald-500 border-emerald-400 bg-emerald-50/40" : ""
+                  }`}
                 >
+                  {modoSelecao && (
+                    <div className="flex-shrink-0 pt-1">
+                      {estornada ? (
+                        <Ban className="w-5 h-5 text-gray-300" />
+                      ) : sel ? (
+                        <CheckSquare className="w-5 h-5 text-emerald-600" />
+                      ) : (
+                        <Square className="w-5 h-5 text-gray-300" />
+                      )}
+                    </div>
+                  )}
                   <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${meta.cor}`}>
                     <Icon className="w-5 h-5" />
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-semibold text-gray-900 truncate">{mov.itemNome ?? "Item"}</span>
+                      <span className={`font-semibold truncate ${estornada ? "text-gray-500 line-through" : "text-gray-900"}`}>
+                        {mov.itemNome ?? "Item"}
+                      </span>
                       <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${meta.cor}`}>
                         {meta.label}
                       </span>
+                      {estornada && (
+                        <span
+                          className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-gray-200 text-gray-700 tracking-wider"
+                          title={mov.estornoMotivo ? `Motivo: ${mov.estornoMotivo}` : "Estornada"}
+                        >
+                          ESTORNADA
+                        </span>
+                      )}
                     </div>
-                    <p className="text-base font-bold text-gray-800 mt-0.5">
+                    <p className={`text-base font-bold mt-0.5 ${estornada ? "text-gray-400 line-through" : "text-gray-800"}`}>
                       {mov.tipo === "entrada" ? "+" : "-"}{fmt(mov.quantidade)} {mov.unidade ?? "un"}
                     </p>
                     {(mov.motivo || mov.obraNome) && (
@@ -288,7 +396,7 @@ export default function AlmoxarifadoMovimentacoes() {
                         {mov.obraNome && mov.obraId ? (
                           <button
                             type="button"
-                            onClick={() => setFiltroObra({ id: mov.obraId!, nome: mov.obraNome! })}
+                            onClick={(e) => { e.stopPropagation(); setFiltroObra({ id: mov.obraId!, nome: mov.obraNome! }); }}
                             className="inline-flex items-center gap-1 px-1.5 py-0.5 -mx-1 rounded-md hover:bg-emerald-50 hover:text-emerald-700 active:bg-emerald-100 transition font-medium"
                             title={`Filtrar pela obra ${mov.obraNome}`}
                           >
@@ -304,7 +412,7 @@ export default function AlmoxarifadoMovimentacoes() {
                         {mov.motivo ? ` — ${mov.motivo}` : ""}
                       </p>
                     )}
-                    <div className="flex gap-3 mt-1 text-xs text-gray-400">
+                    <div className="flex gap-3 mt-1 text-xs text-gray-400 flex-wrap">
                       {mov.usuarioNome && (
                         <span className="flex items-center gap-1">
                           <User className="w-3 h-3" />
@@ -319,6 +427,12 @@ export default function AlmoxarifadoMovimentacoes() {
                           })}
                         </span>
                       )}
+                      {estornada && mov.estornadaPorNome && (
+                        <span className="flex items-center gap-1 text-gray-500">
+                          <Undo2 className="w-3 h-3" />
+                          Estornada por {mov.estornadaPorNome}
+                        </span>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -327,6 +441,95 @@ export default function AlmoxarifadoMovimentacoes() {
           </div>
         )}
       </div>
+
+      {/* Rev. 2305 — Barra de ação flutuante quando há seleção */}
+      {modoSelecao && selecionadas.size > 0 && (
+        <div className="fixed bottom-0 left-0 right-0 z-40 bg-white border-t shadow-2xl px-3 py-3 flex items-center gap-2 sm:gap-3">
+          <div className="flex-1 text-sm">
+            <span className="font-bold text-emerald-700">{selecionadas.size}</span>
+            <span className="text-gray-600"> selecionada(s)</span>
+          </div>
+          <button
+            type="button"
+            onClick={sairModoSelecao}
+            className="px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg border border-gray-200"
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            onClick={() => setModalEstorno(true)}
+            className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium bg-red-600 hover:bg-red-700 text-white rounded-lg shadow-sm"
+          >
+            <Undo2 className="w-4 h-4" />
+            Estornar
+          </button>
+        </div>
+      )}
+
+      {/* Rev. 2305 — Modal de confirmação de estorno */}
+      {modalEstorno && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+          <div className="bg-white w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl shadow-2xl max-h-[90vh] flex flex-col">
+            <div className="bg-amber-50 border-b border-amber-200 px-4 py-3 flex items-center gap-2 sm:rounded-t-2xl">
+              <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0" />
+              <h2 className="font-bold text-amber-900">Estornar movimentações</h2>
+            </div>
+            <div className="p-4 space-y-3 overflow-y-auto">
+              <p className="text-sm text-gray-700">
+                Você vai estornar <span className="font-bold text-red-700">{selecionadas.size}</span> movimentação(ões).
+                Isso devolve a quantidade ao estoque — <span className="font-semibold">entradas</span> serão descontadas
+                e <span className="font-semibold">saídas</span> serão somadas de volta. O registro fica no histórico marcado
+                como ESTORNADA (auditoria).
+              </p>
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-2.5 text-xs text-amber-800">
+                <p className="font-semibold mb-1">Não é possível estornar daqui:</p>
+                <ul className="list-disc pl-4 space-y-0.5">
+                  <li>Recebimentos vinculados a OC (faça pela tela de Recebimentos)</li>
+                  <li>Entradas cujo material já foi consumido (estoque atual menor que a quantidade)</li>
+                </ul>
+              </div>
+              <label className="block">
+                <span className="text-xs font-semibold text-gray-700">Motivo do estorno (obrigatório)</span>
+                <textarea
+                  rows={3}
+                  value={motivoEstorno}
+                  onChange={e => setMotivoEstorno(e.target.value)}
+                  placeholder="Ex: Material lançado em duplicidade na NF 1234..."
+                  className="mt-1 w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-400"
+                />
+              </label>
+            </div>
+            <div className="border-t px-4 py-3 flex gap-2 sticky bottom-0 bg-white sm:rounded-b-2xl">
+              <button
+                type="button"
+                onClick={() => { setModalEstorno(false); setMotivoEstorno(""); }}
+                disabled={reverseMut.isPending}
+                className="flex-1 px-4 py-2 text-sm text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg border border-gray-200 disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                disabled={reverseMut.isPending || motivoEstorno.trim().length < 3}
+                onClick={() => reverseMut.mutate({
+                  companyId,
+                  movementIds: Array.from(selecionadas),
+                  motivo: motivoEstorno.trim(),
+                })}
+                className="flex-1 inline-flex items-center justify-center gap-1.5 px-4 py-2 text-sm font-medium bg-red-600 hover:bg-red-700 text-white rounded-lg disabled:opacity-50"
+              >
+                {reverseMut.isPending ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Undo2 className="w-4 h-4" />
+                )}
+                Confirmar estorno
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </DashboardLayout>
   );
 }

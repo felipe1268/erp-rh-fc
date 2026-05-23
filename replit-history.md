@@ -2,6 +2,7 @@
 
 > Este arquivo guarda os one-liners das revisões antigas para manter o `replit.md` enxuto.
 
+- ~~Rev. 2298~~ — UX · Segunda linha de filtros na tela Cotações: pills por TIPO (Material/MDO/Pacote/Equipamento) com cross-filter de contadores. Ver `shared/changelog.ts`.
 - ~~Rev. 2297~~ — UX/Padrão global · Componente `<PersonPhoto>` com lightbox embutido aplicado em 5 telas SEM zoom anterior. Ver `shared/changelog.ts`.
 - ~~Rev. 2296~~ — UX · Filtros de status da tela Cotações em pills coloridos com ícone + contador (Todos/Pendente/Aprovada/Concluída/Recusada/Expirada). Ver `shared/changelog.ts`.
 - ~~Rev. 2295~~ — FEAT/UX · Auto-cotação ao criar SC (qualquer tipo, incluindo EQUIP·LOC) + Coluna "Aprovação"→"Tipo" + nova coluna "Prioridade" ordenáveis em Solicitacoes.tsx. Ver `shared/changelog.ts`.

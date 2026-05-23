@@ -863,6 +863,18 @@ Regras:
           console.log(`[SyncSchema+] Rev. 2302: colunas locação (7 cols) garantidas em compras_ordens.`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.2302 locação compras_ordens:`, e?.message || e); }
 
+        // Rev. 2305 — Estorno auditável de movimentações do almoxarifado.
+        // Soft-delete: marca a mov como estornada (preserva histórico),
+        // devolve quantidade ao estoque. 4 colunas ADDED em
+        // almoxarifado_movimentacoes — aditivo, idempotente.
+        try {
+          await db.execute(sql`ALTER TABLE almoxarifado_movimentacoes ADD COLUMN IF NOT EXISTS estornada_em TIMESTAMP`);
+          await db.execute(sql`ALTER TABLE almoxarifado_movimentacoes ADD COLUMN IF NOT EXISTS estornada_por_id INTEGER`);
+          await db.execute(sql`ALTER TABLE almoxarifado_movimentacoes ADD COLUMN IF NOT EXISTS estornada_por_nome VARCHAR(255)`);
+          await db.execute(sql`ALTER TABLE almoxarifado_movimentacoes ADD COLUMN IF NOT EXISTS estorno_motivo TEXT`);
+          console.log(`[SyncSchema+] Rev. 2305: colunas de estorno (4 cols) garantidas em almoxarifado_movimentacoes.`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.2305 estorno almoxarifado_movimentacoes:`, e?.message || e); }
+
         // Rev. 2294 — Aprovação automática (SC/OC). A existência da SC já é
         // a aprovação; o fluxo manual foi removido. Backfill aditivo (UPDATE
         // de status, não DROP/DELETE) normaliza o backlog antigo:

@@ -1,6 +1,73 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2305 — **FEAT · Seleção múltipla + ESTORNO em lote de movimentações
+ * do Almoxarifado (soft-delete auditável).**
+ *
+ * Pedido user (23/05/2026): "Quero múltipla seleção" na tela
+ * Movimentações; após clarificação, intenção real era APAGAR várias
+ * movimentações erradas de uma vez. Como apagar registro de estoque
+ * sem reverter quantidade quebra inventário, foi convertido em
+ * ESTORNO: o registro fica no histórico marcado como ESTORNADA e o
+ * estoque é devolvido ao estado anterior — auditável, sem perda de
+ * dado.
+ *
+ * **UX (`client/src/pages/almoxarifado/Movimentacoes.tsx`):**
+ * - Toggle "Selecionar" no header (só admin/admin_master vê — `isAdmin`
+ *   derivado de `useAuth().user.role`).
+ * - Em modo seleção: cards ficam clicáveis (toggle), checkbox
+ *   esquerdo (Square/CheckSquare), card selecionado ganha
+ *   `ring-2 ring-emerald-500`. Movimentações já estornadas exibem
+ *   ícone `Ban` no lugar do checkbox e não são selecionáveis.
+ * - Sticky bottom-bar (z-40) com "X selecionada(s)" + "Cancelar" +
+ *   botão vermelho "Estornar".
+ * - Modal de confirmação (faixa âmbar) lista as consequências
+ *   (entrada→subtrai, saída→soma de volta), avisa quais casos serão
+ *   bloqueados, exige textarea de motivo (mín 3 chars).
+ * - Cards estornados: `opacity-60`, item/quantidade com
+ *   `line-through`, badge cinza "ESTORNADA" com tooltip do motivo,
+ *   linha extra com `Undo2` + "Estornada por NOME".
+ * - Clique no `obraNome` dentro do card usa `e.stopPropagation()` pra
+ *   não disparar a seleção do card.
+ * - Toast resumido após mutação: full success / parcial (mostra até
+ *   3 motivos de bloqueio) / total failure.
+ *
+ * **Backend (`server/routers/warehouse.ts`):**
+ * - Novo endpoint `reverseMovements` (protectedProcedure, mutation):
+ *   input `{ companyId, movementIds: number[] (1..200), motivo:
+ *   string (3..500) }`. Authz: `isAdmin(ctx)` (admin/admin_master) →
+ *   senão `FORBIDDEN`.
+ * - Loop por ID com erros individuais (não rollback geral): pra cada
+ *   mov valida `companyId` (multi-tenant), checa já estornada,
+ *   BLOQUEIA se motivo contém "Recebimento inteligente" ou regex
+ *   `/\boc[\s-]/i` (essas devem ser revertidas pela tela de
+ *   Recebimentos pra não dessincronizar `qtd_entregue`/status da OC).
+ * - Entrada → `quantidadeAtual - qtd`. Se ficaria negativo → BLOQUEIA
+ *   (material já consumido, estorno inseguro). Saída → soma. Demais
+ *   tipos → bloqueia ("não estornável por esta tela").
+ * - Soft-delete: UPDATE da própria mov setando `estornadaEm`,
+ *   `estornadaPorId`, `estornadaPorNome`, `estornoMotivo` (não DELETE).
+ * - `listMovements`: select agora inclui `estornadaEm`,
+ *   `estornadaPorNome`, `estornoMotivo`.
+ *
+ * **Schema (`drizzle/schema.ts` `almoxarifadoMovimentacoes`):** 4
+ * novas colunas — `estornadaEm timestamp`, `estornadaPorId integer`,
+ * `estornadaPorNome varchar(255)`, `estornoMotivo text`.
+ *
+ * **SyncSchema+ Rev. 2305** (`server/_core/index.ts` após bloco
+ * Rev. 2302): `ALTER TABLE almoxarifado_movimentacoes ADD COLUMN IF
+ * NOT EXISTS` pras 4 colunas. Aditivo, idempotente, sem DROP/ALTER
+ * destrutivo.
+ *
+ * **R-001 / R-007 / R-010:** OK — ADD COLUMN IF NOT EXISTS aditivo,
+ * sem DROP, sem DELETE. O endpoint só faz UPDATE (soft-delete) +
+ * UPDATE do saldo do item.
+ *
+ * Arquivos: `client/src/pages/almoxarifado/Movimentacoes.tsx`,
+ * `server/routers/warehouse.ts`, `server/_core/index.ts`,
+ * `drizzle/schema.ts`, `shared/version.ts`, `shared/changelog.ts`,
+ * `replit.md`, `replit-history.md`.
+ *
  * Rev. 2304 — **FEAT/UX · Filtro por PERÍODO de recebimento na tela
  * Movimentações do Almoxarifado (pills de presets + range
  * personalizado).**
