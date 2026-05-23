@@ -11219,6 +11219,16 @@ export function EfetivoObraView({ equipeRaw, isLoading, docsMap = {} }: { equipe
   const [fotoZoom, setFotoZoom] = useState<{ url: string; nome: string } | null>(null);
   // Rev. 1596 — filtro Direto/Indireto (paridade c/ Portal do Cliente).
   const [filtroCat, setFiltroCat] = useState<"todos" | "Direto" | "Indireto">("todos");
+  // Rev. 2289 — Filtro por vínculo (CLT / PJ / TERCEIRO). Pedido user
+  // (23/05/2026, IMG_1078): "Quero o filtro, para terceiros tbm".
+  const [filtroVinc, setFiltroVinc] = useState<"todos" | "CLT" | "PJ" | "TERCEIRO">("todos");
+  const vincOf = (e: any): "CLT" | "PJ" | "TERCEIRO" | "OUTRO" => {
+    const t = String(e?.tipoContrato || "").toUpperCase();
+    if (t === "CLT") return "CLT";
+    if (t === "PJ") return "PJ";
+    if (t === "TERCEIRO" || t === "TERC") return "TERCEIRO";
+    return "OUTRO";
+  };
   // Rev. 1558 — linhas expandidas para mostrar ASO + Treinamentos (mesma UI
   // do Portal do Cliente). Estado por employeeId.
   const [expandidos, setExpandidos] = useState<Record<string | number, boolean>>({});
@@ -11241,20 +11251,29 @@ export function EfetivoObraView({ equipeRaw, isLoading, docsMap = {} }: { equipe
   const totDireto = useMemo(() => equipe.filter((e: any) => (e.categoria || "Direto") === "Direto").length, [equipe]);
   const totIndireto = useMemo(() => equipe.filter((e: any) => (e.categoria || "Direto") === "Indireto").length, [equipe]);
 
+  // Rev. 2289 — totais por vínculo (CLT / PJ / TERCEIRO).
+  const totVinc = useMemo(() => {
+    const c = { CLT: 0, PJ: 0, TERCEIRO: 0 };
+    equipe.forEach((e: any) => { const v = vincOf(e); if (v !== "OUTRO") c[v]++; });
+    return c;
+  }, [equipe]);
+
   const funcaoMap = useMemo(() => {
     const m = new Map<string, number>();
     equipe.forEach((e: any) => {
       if (filtroStatus !== "todos" && e.effectiveStatus !== filtroStatus) return;
       if (filtroCat !== "todos" && (e.categoria || "Direto") !== filtroCat) return;
+      if (filtroVinc !== "todos" && vincOf(e) !== filtroVinc) return;
       const f = e.funcao || e.cargo || "Não informado";
       m.set(f, (m.get(f) || 0) + 1);
     });
     return Array.from(m.entries()).sort((a, b) => b[1] - a[1]);
-  }, [equipe, filtroStatus, filtroCat]);
+  }, [equipe, filtroStatus, filtroCat, filtroVinc]);
 
   const listaFiltrada = useMemo(() => {
     let lista = filtroStatus === "todos" ? [...equipe] : equipe.filter((e: any) => e.effectiveStatus === filtroStatus);
     if (filtroCat !== "todos") lista = lista.filter((e: any) => (e.categoria || "Direto") === filtroCat);
+    if (filtroVinc !== "todos") lista = lista.filter((e: any) => vincOf(e) === filtroVinc);
     if (busca) {
       const q = busca.toLowerCase();
       lista = lista.filter((e: any) =>
@@ -11265,7 +11284,7 @@ export function EfetivoObraView({ equipeRaw, isLoading, docsMap = {} }: { equipe
     }
     lista.sort((a: any, b: any) => (a.nomeCompleto || "").localeCompare(b.nomeCompleto || ""));
     return lista;
-  }, [equipe, filtroStatus, filtroCat, busca]);
+  }, [equipe, filtroStatus, filtroCat, filtroVinc, busca]);
 
   const maxBar = funcaoMap.length > 0 ? funcaoMap[0][1] : 1;
 
@@ -11352,8 +11371,34 @@ export function EfetivoObraView({ equipeRaw, isLoading, docsMap = {} }: { equipe
                 </button>
               );
             })}
-            {(filtroStatus !== "todos" || filtroCat !== "todos") && (
-              <button onClick={() => { setFiltroStatus("todos"); setFiltroCat("todos"); }} className="ml-auto text-[10px] text-slate-400 hover:text-slate-600 flex items-center gap-1">
+            <span className="mx-1 h-5 w-px bg-slate-200" />
+            {/* Rev. 2289 — Filtros por vínculo (CLT / PJ / TERCEIRO).
+                Pedido user (23/05/2026, IMG_1078): mesma lógica dos
+                filtros Direto/Indireto, agora discriminando o tipo
+                de contrato. */}
+            {(["todos", "CLT", "PJ", "TERCEIRO"] as const).map(k => {
+              const active = filtroVinc === k;
+              const count = k === "todos" ? equipe.length : totVinc[k];
+              const cls = k === "CLT"
+                ? "bg-blue-50 text-blue-700 border-blue-300"
+                : k === "PJ"
+                  ? "bg-purple-50 text-purple-700 border-purple-300"
+                  : k === "TERCEIRO"
+                    ? "bg-orange-50 text-orange-700 border-orange-300"
+                    : "bg-slate-50 text-slate-700 border-slate-300";
+              return (
+                <button
+                  key={`vinc-${k}`}
+                  onClick={() => setFiltroVinc(filtroVinc === k && k !== "todos" ? "todos" : k)}
+                  className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-all border ${active ? `${cls} shadow-sm` : "text-slate-500 hover:bg-slate-50 border-transparent"}`}
+                >
+                  <span className="font-bold">{count}</span>
+                  <span>{k === "todos" ? "Todos vínculos" : k}</span>
+                </button>
+              );
+            })}
+            {(filtroStatus !== "todos" || filtroCat !== "todos" || filtroVinc !== "todos") && (
+              <button onClick={() => { setFiltroStatus("todos"); setFiltroCat("todos"); setFiltroVinc("todos"); }} className="ml-auto text-[10px] text-slate-400 hover:text-slate-600 flex items-center gap-1">
                 <X className="h-3 w-3" /> Limpar
               </button>
             )}
@@ -11397,6 +11442,7 @@ export function EfetivoObraView({ equipeRaw, isLoading, docsMap = {} }: { equipe
               Distribuição por Função
               {filtroStatus !== "todos" && <span className="text-[10px] font-normal text-slate-400">— {statusPills.find(p => p.key === filtroStatus)?.label}</span>}
               {filtroCat !== "todos" && <span className="text-[10px] font-normal text-slate-400">— {filtroCat === "Direto" ? "Direto" : "Indireto"}</span>}
+              {filtroVinc !== "todos" && <span className="text-[10px] font-normal text-slate-400">— {filtroVinc}</span>}
               <span className="text-[10px] font-normal text-slate-400 ml-auto">{funcaoMap.reduce((s, [, c]) => s + c, 0)} funcionários em {funcaoMap.length} funções</span>
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1">

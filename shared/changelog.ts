@@ -1,6 +1,35 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2289 — **FEAT/UX · Filtro por VÍNCULO (CLT / PJ / TERCEIRO) na
+ * tela Efetivo da Obra.**
+ *
+ * Pedido user (23/05/2026, IMG_1078): "Quero o filtro, para terceiros
+ * tbm". A toolbar de filtros tinha Status (Total/Ativos/...) +
+ * Direto/Indireto, mas não havia como isolar CLT, PJ ou TERCEIRO
+ * rapidamente — só dava pra ler o pill na coluna Vínculo da tabela.
+ *
+ * Fix em `client/src/pages/planejamento/PlanejamentoDetalhe.tsx`
+ * componente `EfetivoObraView`:
+ *   1. State novo `filtroVinc: "todos" | "CLT" | "PJ" | "TERCEIRO"` +
+ *      helper `vincOf(e)` que normaliza `tipoContrato` (TERC → TERCEIRO).
+ *   2. `totVinc` (useMemo) — contadores por vínculo dentro de `equipe`.
+ *   3. Aplicado em `funcaoMap` (Distribuição por Função respeita
+ *      filtro) e em `listaFiltrada` (tabela respeita filtro).
+ *   4. Nova fileira de pills após o separador dos filtros
+ *      Direto/Indireto: "Todos vínculos / CLT / PJ / TERCEIRO" com
+ *      contadores e cores espelhando o pill da coluna Vínculo
+ *      (azul/roxo/laranja).
+ *   5. Botão "Limpar" agora reseta também `filtroVinc`. Subtítulo
+ *      da Distribuição por Função mostra o filtro ativo.
+ *
+ * Funciona com tudo combinado (Status + Cat + Vínculo). Frontend-only,
+ * zero mudança em schema/router.
+ *
+ * R-001/R-007/R-010: N/A (client-only).
+ */
+
+/**
  * Rev. 2288 — **HOTFIX · `ReferenceError: Can't find variable: fotoZoom`
  * na tela Efetivo da Obra.**
  *
