@@ -3732,28 +3732,37 @@ ${sc.observacoes ? `<div class="obs"><b>Observações da SC:</b><br>${esc(sc.obs
                                             if (avIt.orcamentoItemId !== it.id || avIt.insumoCodigo || avIt.origemEap) return null;
                                             return (
                                               <div key={`av-${avIdx}`} className="bg-orange-50/60 border border-orange-200 rounded px-2.5 py-2 space-y-1.5">
-                                                <div className="flex gap-2 items-center">
-                                                  <input
-                                                    className="flex-1 h-7 px-2 text-xs rounded border border-orange-300 bg-white text-gray-900 placeholder-gray-400 outline-none focus:border-amber-400"
-                                                    placeholder="Descrição do produto *"
-                                                    value={avIt.descricao}
-                                                    onClick={e => e.stopPropagation()}
-                                                    onChange={e => { const v = e.target.value; setItens(p => p.map((x, i) => i === avIdx ? { ...x, descricao: v } : x)); }}
-                                                  />
-                                                  <Select value={avIt.unidade} onValueChange={v => setItens(p => p.map((x, i) => i === avIdx ? { ...x, unidade: v } : x))}>
-                                                    <SelectTrigger className="w-16 h-7 text-xs border-orange-300 bg-white text-gray-900" onClick={e => e.stopPropagation()}><SelectValue /></SelectTrigger>
-                                                    <SelectContent className="bg-white border-gray-200">
-                                                      {UNIDADES.map(u => <SelectItem key={u} value={u}>{u}</SelectItem>)}
-                                                    </SelectContent>
-                                                  </Select>
-                                                  <input
-                                                    className="w-20 h-7 px-2 text-xs rounded border border-orange-300 bg-white text-gray-900 outline-none focus:border-amber-400"
-                                                    type="number" min="0.001" step="0.001" placeholder="Qtd"
-                                                    value={avIt.quantidade}
-                                                    onClick={e => e.stopPropagation()}
-                                                    onChange={e => { const v = e.target.value; setItens(p => p.map((x, i) => i === avIdx ? { ...x, quantidade: v } : x)); }}
-                                                  />
-                                                  <button onClick={e => { e.stopPropagation(); setItens(p => p.filter((_, i) => i !== avIdx)); }} className="text-gray-400 hover:text-red-500">
+                                                <div className="flex gap-2 items-end">
+                                                  <div className="flex-1 min-w-0">
+                                                    <label className="block text-[9px] font-bold text-orange-700 uppercase tracking-wider leading-none mb-0.5 px-0.5">Descrição</label>
+                                                    <input
+                                                      className="w-full h-7 px-2 text-xs rounded border border-orange-300 bg-white text-gray-900 placeholder-gray-400 outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-300"
+                                                      placeholder="Descrição do produto *"
+                                                      value={avIt.descricao}
+                                                      onClick={e => e.stopPropagation()}
+                                                      onChange={e => { const v = e.target.value; setItens(p => p.map((x, i) => i === avIdx ? { ...x, descricao: v } : x)); }}
+                                                    />
+                                                  </div>
+                                                  <div className="shrink-0">
+                                                    <label className="block text-[9px] font-bold text-orange-700 uppercase tracking-wider leading-none mb-0.5 px-0.5">Un</label>
+                                                    <Select value={avIt.unidade} onValueChange={v => setItens(p => p.map((x, i) => i === avIdx ? { ...x, unidade: v } : x))}>
+                                                      <SelectTrigger className="w-[72px] h-7 text-xs font-semibold border-orange-300 bg-white text-gray-900 px-2" onClick={e => e.stopPropagation()}><SelectValue /></SelectTrigger>
+                                                      <SelectContent className="bg-white border-gray-200">
+                                                        {UNIDADES.map(u => <SelectItem key={u} value={u}>{u}</SelectItem>)}
+                                                      </SelectContent>
+                                                    </Select>
+                                                  </div>
+                                                  <div className="shrink-0">
+                                                    <label className="block text-[9px] font-bold text-orange-700 uppercase tracking-wider leading-none mb-0.5 px-0.5">Qtd</label>
+                                                    <input
+                                                      className="w-24 h-7 px-2 text-xs font-semibold text-right rounded border border-orange-300 bg-white text-gray-900 outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-300"
+                                                      type="number" min="0.001" step="0.001" placeholder="0"
+                                                      value={avIt.quantidade}
+                                                      onClick={e => e.stopPropagation()}
+                                                      onChange={e => { const v = e.target.value; setItens(p => p.map((x, i) => i === avIdx ? { ...x, quantidade: v } : x)); }}
+                                                    />
+                                                  </div>
+                                                  <button onClick={e => { e.stopPropagation(); setItens(p => p.filter((_, i) => i !== avIdx)); }} className="text-gray-400 hover:text-red-500 self-end mb-1">
                                                     <Trash2 className="h-3.5 w-3.5" />
                                                   </button>
                                                 </div>
@@ -4391,26 +4400,35 @@ ${sc.observacoes ? `<div class="obs"><b>Observações da SC:</b><br>${esc(sc.obs
                   const it = itens[idx];
                   return (
                     <div key={idx} className={`p-2 rounded-lg border space-y-1.5 ${!it.orcamentoItemId && it.descricao.trim() ? "bg-orange-50/50 border-orange-200" : isChild ? "bg-white border-emerald-100" : "bg-gray-50 border-gray-200"}`}>
-                      <div className="flex gap-2 items-center">
-                        <input
-                          className="flex-1 h-7 px-2 text-xs rounded border border-gray-300 bg-white text-gray-900 placeholder-gray-400 outline-none focus:border-amber-400"
-                          placeholder={isChild ? "Descrição do insumo *" : "Descrição do item *"}
-                          value={it.descricao}
-                          onChange={e => setItens(p => p.map((x, i) => i === idx ? { ...x, descricao: e.target.value } : x))}
-                          onBlur={e => setItens(p => p.map((x, i) => i === idx ? { ...x, descricao: normalizarTexto(e.target.value) } : x))}
-                        />
-                        <Select value={it.unidade} onValueChange={v => setItens(p => p.map((x, i) => i === idx ? { ...x, unidade: v } : x))}>
-                          <SelectTrigger className="w-16 h-7 text-xs border-gray-300 bg-white text-gray-900"><SelectValue /></SelectTrigger>
-                          <SelectContent className="bg-white border-gray-200">
-                            {UNIDADES.map(u => <SelectItem key={u} value={u}>{u}</SelectItem>)}
-                          </SelectContent>
-                        </Select>
-                        <input
-                          className="w-20 h-7 px-2 text-xs rounded border border-gray-300 bg-white text-gray-900 outline-none focus:border-amber-400"
-                          type="number" min="0.001" step="0.001" placeholder="Qtd"
-                          value={it.quantidade}
-                          onChange={e => setItens(p => p.map((x, i) => i === idx ? { ...x, quantidade: e.target.value } : x))}
-                        />
+                      <div className="flex gap-2 items-end">
+                        <div className="flex-1 min-w-0">
+                          <label className="block text-[9px] font-bold text-gray-500 uppercase tracking-wider leading-none mb-0.5 px-0.5">Descrição</label>
+                          <input
+                            className="w-full h-7 px-2 text-xs rounded border border-gray-300 bg-white text-gray-900 placeholder-gray-400 outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-300"
+                            placeholder={isChild ? "Descrição do insumo *" : "Descrição do item *"}
+                            value={it.descricao}
+                            onChange={e => setItens(p => p.map((x, i) => i === idx ? { ...x, descricao: e.target.value } : x))}
+                            onBlur={e => setItens(p => p.map((x, i) => i === idx ? { ...x, descricao: normalizarTexto(e.target.value) } : x))}
+                          />
+                        </div>
+                        <div className="shrink-0">
+                          <label className="block text-[9px] font-bold text-gray-500 uppercase tracking-wider leading-none mb-0.5 px-0.5">Un</label>
+                          <Select value={it.unidade} onValueChange={v => setItens(p => p.map((x, i) => i === idx ? { ...x, unidade: v } : x))}>
+                            <SelectTrigger className="w-[72px] h-7 text-xs font-semibold border-gray-300 bg-white text-gray-900 px-2"><SelectValue /></SelectTrigger>
+                            <SelectContent className="bg-white border-gray-200">
+                              {UNIDADES.map(u => <SelectItem key={u} value={u}>{u}</SelectItem>)}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="shrink-0">
+                          <label className="block text-[9px] font-bold text-gray-500 uppercase tracking-wider leading-none mb-0.5 px-0.5">Qtd</label>
+                          <input
+                            className="w-24 h-7 px-2 text-xs font-semibold text-right rounded border border-gray-300 bg-white text-gray-900 outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-300"
+                            type="number" min="0.001" step="0.001" placeholder="0"
+                            value={it.quantidade}
+                            onChange={e => setItens(p => p.map((x, i) => i === idx ? { ...x, quantidade: e.target.value } : x))}
+                          />
+                        </div>
                         {itens.length > 1 && (
                           <button onClick={() => setItens(p => p.filter((_, i) => i !== idx))} className="text-gray-400 hover:text-red-500" title="Remover este insumo">
                             <Trash2 className="h-3.5 w-3.5" />
