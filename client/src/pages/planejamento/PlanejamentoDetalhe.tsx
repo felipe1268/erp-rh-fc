@@ -13298,7 +13298,14 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
   }, [atividades, avancos, semAntes, usarPesoPorDuracao]);
 
   const avancoRealSemanal = Math.max(0, avancoRealAtual - avancoRealAntes);
-  const spi = avancoPrevisto > 0 ? avancoRealAtual / avancoPrevisto : 0;
+  // Rev. 2273 — Realizado OFICIAL (fonte única) para SPI/Desvio do REFIS:
+  // mesma origem da barra do topo (`avancoAtual` recebido como prop —
+  // snapshot MSP raiz UID=0 quando disponível, fallback p/ ponderação).
+  // Antes usávamos `avancoRealAtual` (ponderação ad-hoc 3,75 %) e
+  // disparávamos "Desvio Crítico" mesmo com a obra adiantada (8,48 %
+  // no topo vs 6,40 % previsto = SPI 1,32 / +2,08pp).
+  const realOficialRefis = (typeof avancoAtual === "number") ? avancoAtual : avancoRealAtual;
+  const spi = avancoPrevisto > 0 ? realOficialRefis / avancoPrevisto : 0;
 
   const refisPrevistoComInd = useMemo(() => {
     // Rev. 1825 — Texto6 raiz (paridade MSP). Mesma fórmula da raiz, sem
@@ -13638,8 +13645,8 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
     return row?.label ?? null;
   }, [curvaFiltrada]);
 
-  // Desvio físico global (pp)
-  const desvioFisico = avancoRealAtual - avancoPrevisto;
+  // Desvio físico global (pp) — Rev. 2273 usa realOficialRefis (espelha topo).
+  const desvioFisico = realOficialRefis - avancoPrevisto;
   const rDesvioFisico = rReal - rPrev;
   // Desvio financeiro do mês (R$)
   const desvioFinanceiro = custoRealAuto - custoPrevAuto;
@@ -14367,7 +14374,7 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
                   <UiTooltipTrigger asChild>
                     <div className="cursor-help">
                       <p className="text-[9px] text-slate-400">Diretas</p>
-                      <p className="text-base font-black text-slate-500">{fPct_(avancoRealAtual)}</p>
+                      <p className="text-base font-black text-slate-500">{fPct_(realOficialRefis)}</p>
                     </div>
                   </UiTooltipTrigger>
                   <UiTooltipContent side="bottom" className="max-w-[240px] text-xs">
@@ -14404,7 +14411,10 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
           </div>
           <div className="grid grid-cols-2 divide-x divide-blue-100 border-t border-blue-100 bg-slate-50/80">
             {(() => {
-              const desvDiretas = +(avancoRealAtual - avancoPrevisto).toFixed(2);
+              // Rev. 2273 — "Diretas" agora espelha o topo (snapshot MSP raiz
+              // UID=0 = só MSP = só diretas). Antes mostrava 3,75 % vs 8,48 %
+              // do topo, gerando -2,65pp falso quando a obra está adiantada.
+              const desvDiretas = +(realOficialRefis - avancoPrevisto).toFixed(2);
               const desvGlobal = +(refisRealComInd - refisPrevistoComInd).toFixed(2);
               return <>
                 <div className="px-5 py-2 flex items-center gap-2">

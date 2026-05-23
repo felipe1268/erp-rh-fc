@@ -1,6 +1,53 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2273 — **FIX · Alarme "DESVIO CRÍTICO DE PRAZO" disparava com a
+ * obra ADIANTADA. Painel "Avanço Global (c/ Indiretas)" mostrava
+ * "Diretas 3,75 %" enquanto o topo mostrava "Realizado 8,48 %". Card
+ * grande "Desvio Físico Global" exibia −2,65 pp em vez de +2,08 pp.**
+ *
+ * Pedido user (23/05/2026, VITRA, 3ª Sem):
+ *   "pq o ERP esta dizendo que tem desvio quando a obra esta adiantada?"
+ *
+ * Diagnóstico:
+ *   - `desvioFisico` (L13642) e `spi` (L13301) dentro do componente Refis
+ *     usavam `avancoRealAtual` (ponderação ad-hoc local = 3,75 %) em vez
+ *     do realizado oficial do snapshot MSP raiz UID=0 (= 8,48 % no topo).
+ *   - Banner alerta vermelho (L14448 `desvioFisico < -1` / L14449
+ *     `spi < 0.85`) disparava como "Crítico" porque 3,75 − 6,40 = −2,65
+ *     pp e SPI = 0,59 — contradizendo a barra do topo (+2,08 pp / 1,32).
+ *   - Painel "Avanço Global (c/ Indiretas)" no mesmo bloco exibia o
+ *     campo "Diretas" com `avancoRealAtual` (3,75 %) e calculava
+ *     `desvDiretas` = avancoRealAtual − avancoPrevisto (−2,65 pp).
+ *   - Rev. 2272 já tinha trazido a barra do topo (`avancoAtual` prop)
+ *     pra `rReal`/`rDesvioFisico`/`rSpi` (chips do alerta), mas
+ *     `desvioFisico`/`spi`/painel "Diretas" continuaram no caminho legado.
+ *
+ * Fix (`PlanejamentoDetalhe.tsx::Refis`):
+ *   - Nova constante `realOficialRefis` (L13310) = `typeof avancoAtual
+ *     === "number" ? avancoAtual : avancoRealAtual`. Fonte única do
+ *     realizado oficial dentro do Refis (espelha o topo, fallback
+ *     defensivo p/ ponderação se a prop não vier como number).
+ *   - `spi` (L13311) usa `realOficialRefis / avancoPrevisto`.
+ *   - `desvioFisico` (L13652) usa `realOficialRefis − avancoPrevisto`.
+ *   - Painel "Avanço Global (c/ Indiretas)" coluna "Diretas" (L14380)
+ *     exibe `fPct_(realOficialRefis)`; `desvDiretas` (L14420) usa
+ *     `realOficialRefis − avancoPrevisto`.
+ *
+ * Resultado VITRA (3ª Sem, snapshot MSP ativo):
+ *   - Banner vermelho NÃO dispara (desvioFisico = +2,08 pp > -1).
+ *   - Painel "Avanço Global (c/ Indiretas)" mostra Diretas 8,48 % /
+ *     Global 4,39 %, desvDiretas = +2,08 pp (verde).
+ *   - Card "Desvio Físico Global" exibe +2,08 pp em verde.
+ *
+ * R-001/R-007/R-010: N/A (client-only).
+ *
+ * Arquivos:
+ *   - client/src/pages/planejamento/PlanejamentoDetalhe.tsx
+ *   - shared/version.ts → Rev. 2273
+ *   - shared/changelog.ts
+ *   - replit.md (2+5)
+ *
  * Rev. 2272 — **FIX · REFIS "Realizado Acumulado" passa a ESPELHAR a barra
  * "Avanço Físico" do topo (`avancoAtual`). Antes recalculava via ponderação
  * local e divergia do topo (8,48 % topo vs 3,75 % REFIS).**

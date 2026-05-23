@@ -481,3 +481,4 @@
 - Rev. 2263 — UX · Modal 'Editar Revisão' adota layout moderno FC, espelhando 'Nova Revisão do Cronograma'.
 - Rev. 2264 — FIX/REGRA DE OURO · Cards 'PREVISTO (SEMANA)' / 'REALIZADO (ACUM.)' / 'AVANÇO GLOBAL PREVISTO' espelham snapshot MSP da raiz UID=0.
 - Rev. 2265 — REGRA ABSOLUTA · Planejamento é READ-ONLY do MSP — SSOT mspReadOnly, 6 cards lendo snapshot direto.
+- Rev. 2266 — FIX · Importer Avanço Semanal regrava snapshot MSP via parseMSProjectFull ao reimportar XML.
