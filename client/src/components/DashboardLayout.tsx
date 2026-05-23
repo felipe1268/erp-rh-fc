@@ -464,7 +464,7 @@ const menuSectionsAlmoxarifado: MenuSection[] = [
     items: [
       { icon: Package,   label: "Visão Geral",       path: "/equipamentos" },
       { icon: HardHat,   label: "Próprios",          path: "/equipamentos/proprios" },
-      { icon: Truck,     label: "Locados",           path: "/equipamentos/locados" },
+      { icon: Truck,     label: "Equipamentos Locados", path: "/equipamentos/locados" },
       { icon: Settings,  label: "Parâmetros CAPEX",  path: "/equipamentos/parametros-capex" },
     ],
   },
