@@ -1996,7 +1996,9 @@ Gere 2-3 perguntas por categoria (total ~15 perguntas). Contexto: empresa de con
       .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() }))
       .query(async ({ input }) => {
         const db = await getDb();
-        return db.select({ id: obras.id, nome: obras.nome, codigo: obras.codigo, status: obras.status })
+        // Rev. 2326 — incluir endereco/cidade pra auto-match de PDF de locação
+        // por endereço de entrega (cruza com `localObra` extraído pelo Gemini).
+        return db.select({ id: obras.id, nome: obras.nome, codigo: obras.codigo, status: obras.status, endereco: obras.endereco, cidade: obras.cidade })
           .from(obras)
           .where(and(
             companyFilter(obras.companyId, input),

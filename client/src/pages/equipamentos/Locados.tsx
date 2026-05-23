@@ -113,6 +113,41 @@ export default function EquipamentosLocados() {
   const [loteProgresso, setLoteProgresso] = useState<{ acao: "vincular" | "excluir"; feitos: number; total: number; chunks: number; chunkAtual: number } | null>(null);
   const [loteErro, setLoteErro] = useState<string | null>(null);
 
+  // Rev. 2326 — Auto-match de "Local da obra" do PDF com obras ativas.
+  // Normaliza ambos os lados (sem acento, lowercase, sem pontuação, tokens
+  // de 4+ chars) e exige >=2 tokens significativos em comum. Score = qtd de
+  // tokens da PDF presentes em (nome + endereco + cidade) da obra.
+  const STOP_TOKENS = new Set(["rua","avenida","alameda","travessa","praca","estrada","rodovia","jardim","bairro","jd","av","rod","sao","santa","santo","dos","das","de","do","da","sp","obra","loteamento","numero","apto","apartamento","casa","quadra","lote","hotel"]);
+  function normalize(s: string): string {
+    return String(s || "")
+      .toLowerCase()
+      .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+      .replace(/n[º°]\s*\d+/g, " ")
+      .replace(/[^a-z0-9\s]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+  function tokenize(s: string): string[] {
+    return normalize(s).split(" ").filter(t => t.length >= 4 && !STOP_TOKENS.has(t));
+  }
+  function matchObra(localObra: string, obrasList: any[]): { obraId: number; score: number; tokensMatch: number; tokensTotal: number } | null {
+    const tokens = tokenize(localObra);
+    if (tokens.length === 0) return null;
+    let best: { obraId: number; score: number; tokensMatch: number; tokensTotal: number } | null = null;
+    for (const o of obrasList) {
+      const alvo = normalize([o.nome, o.endereco, o.cidade].filter(Boolean).join(" "));
+      if (!alvo) continue;
+      const alvoTokens = new Set(alvo.split(" ").filter(Boolean));
+      let match = 0;
+      for (const t of tokens) if (alvoTokens.has(t)) match++;
+      const score = match / tokens.length;
+      if (match >= 2 && (!best || match > best.tokensMatch || (match === best.tokensMatch && score > best.score))) {
+        best = { obraId: Number(o.id), score, tokensMatch: match, tokensTotal: tokens.length };
+      }
+    }
+    return best;
+  }
+
   function chunkIds(arr: number[], size: number): number[][] {
     const out: number[][] = [];
     for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
@@ -216,8 +251,17 @@ export default function EquipamentosLocados() {
         if (cancelled) return;
         if (res.status === "done" && res.result) {
           setImportProgresso(100);
-          setImportPreview(res.result.contratos);
-          toast.success(`IA detectou ${res.result.totalContratos} contrato(s) · ${res.result.totalItens} item(ns).`);
+          // Rev. 2326 — auto-match com obras ativas pelo endereço/nome.
+          const obrasList = (obrasAtivasQ.data || []) as any[];
+          let autoMatched = 0;
+          const comMatch = (res.result.contratos as any[]).map(c => {
+            const m = matchObra(c.localObra || "", obrasList);
+            if (m) { autoMatched++; return { ...c, obraId: m.obraId, obraMatchAuto: true, obraMatchScore: m.score }; }
+            return { ...c, obraId: undefined, obraMatchAuto: false };
+          });
+          setImportPreview(comMatch);
+          const tot = res.result.totalContratos;
+          toast.success(`IA detectou ${tot} contrato(s) · ${res.result.totalItens} item(ns).${autoMatched > 0 ? ` ${autoMatched}/${tot} auto-vinculados à obra.` : ""}`);
           setParsePending(false); setParseJobId(null);
         } else if (res.status === "error") {
           toast.error(res.error || "Falha ao processar o PDF.");
@@ -359,6 +403,7 @@ export default function EquipamentosLocados() {
         return {
           numeroContrato: String(c.numeroContrato).trim().slice(0, 50),
           fornecedorNome: c.fornecedorNome ? String(c.fornecedorNome).slice(0, 255) : undefined,
+          obraId: c.obraId ? Number(c.obraId) : undefined, // Rev. 2326 — auto-match ou seleção manual
           localObra: c.localObra ? String(c.localObra) : undefined,
           periodoInicio: ini,
           periodoFim: fim,
@@ -935,6 +980,25 @@ export default function EquipamentosLocados() {
                 </div>
               )}
 
+              {/* Rev. 2326 — banner de cruzamento automático */}
+              {importPreview && importPreview.length > 0 && (() => {
+                const total = importPreview.length;
+                const auto = importPreview.filter((c: any) => c.obraMatchAuto).length;
+                const manual = importPreview.filter((c: any) => c.obraId && !c.obraMatchAuto).length;
+                const sem = total - auto - manual;
+                return (
+                  <div className="mb-3 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs text-emerald-900">
+                    <div className="font-semibold flex items-center gap-2">
+                      🔗 Cruzamento automático com obras em andamento
+                    </div>
+                    <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1">
+                      <span><b className="text-emerald-700">{auto}</b> auto-vinculados pelo endereço/nome</span>
+                      {manual > 0 && <span><b className="text-blue-700">{manual}</b> vinculados manualmente</span>}
+                      {sem > 0 && <span className="text-amber-800"><b>{sem}</b> sem obra (escolha no select de cada contrato)</span>}
+                    </div>
+                  </div>
+                );
+              })()}
               {importPreview && importPreview.length > 0 && (
                 <>
                   <div className="bg-emerald-50 border border-emerald-200 rounded p-3 text-sm text-emerald-800">
@@ -1048,9 +1112,28 @@ export default function EquipamentosLocados() {
                               <Trash2 className="h-3.5 w-3.5" />
                             </button>
                           </div>
-                          {c.localObra && (
-                            <div className="col-span-12 text-[11px] text-slate-600">📍 {c.localObra}</div>
-                          )}
+                          {/* Rev. 2326 — endereço + select de obra (auto-vinculado via cruzamento) */}
+                          <div className="col-span-12 flex flex-wrap items-center gap-2 pt-1 border-t border-indigo-100 mt-1">
+                            {c.localObra && (
+                              <div className="text-[11px] text-slate-600 flex-1 min-w-[200px]">📍 <span className="text-slate-500">PDF:</span> {c.localObra}</div>
+                            )}
+                            <div className="flex items-center gap-1">
+                              <label className="text-[10px] text-slate-500 uppercase font-semibold">Obra ERP:</label>
+                              <select
+                                value={c.obraId ? String(c.obraId) : ""}
+                                onChange={e => updateContratoField(ci, "obraId", e.target.value ? parseInt(e.target.value) : undefined)}
+                                className={`text-xs border rounded px-2 py-1 min-w-[220px] ${c.obraMatchAuto ? "border-emerald-400 bg-emerald-50" : c.obraId ? "border-blue-400 bg-blue-50" : "border-amber-400 bg-amber-50"}`}
+                              >
+                                <option value="">— Sem vínculo —</option>
+                                {((obrasAtivasQ.data || []) as any[]).map((o: any) => (
+                                  <option key={o.id} value={String(o.id)}>{o.nome}{o.cidade ? ` · ${o.cidade}` : ""}</option>
+                                ))}
+                              </select>
+                              {c.obraMatchAuto && (
+                                <span className="text-[9px] uppercase font-bold text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded" title={`Match automático · ${Math.round((c.obraMatchScore || 0) * 100)}% de tokens em comum`}>✓ auto</span>
+                              )}
+                            </div>
+                          </div>
                         </div>
                         <table className="w-full text-xs">
                           <thead className="bg-slate-50">

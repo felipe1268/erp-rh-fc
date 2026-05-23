@@ -1,6 +1,84 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2326 — **FEATURE · Importação PDF de locação cruza
+ * "Local da obra" com obras em andamento e sugere o vínculo
+ * automaticamente no preview.**
+ *
+ * Pedido user (23/05/2026, PDF F051/R051 anexado — relatório
+ * de Equipamentos e Previsão para Devolução com 84+ contratos
+ * de 2 endereços distintos: "RUA JOAO MARCELINO CAVALHEIRO
+ * Nº336 JARDIM DO VALE l l , GUARATINGUETA/SP" e "AVENIDA
+ * GETULIO VARGAS, 995 SANTA RITA APARECIDA HOTEL DO PAPA"):
+ * "Quero q o ERP cruze o endereço de entrega, nome da obra
+ * com as obras em andamento para que seja importando no
+ * local correto". Contexto: após a Rev. 2308 (importação em
+ * lote da IA Gemini) os 1218 itens ficaram TODOS "Sem obra
+ * vinculada" — porque o server salva o `localObra` (texto
+ * livre extraído pela IA) apenas em `observacoes`, sem
+ * tentar resolver pra um `obraId`. Tinha que vincular tudo
+ * na mão depois (origem da multi-seleção da Rev. 2323 e do
+ * chunking da Rev. 2325 — tudo workaround pra esse problema
+ * raiz).
+ *
+ * Implementação em 2 camadas:
+ *
+ *   (1) **Server** (`server/routers/avaliacao.ts` -
+ *       procedure `obras.listActive`): adicionado
+ *       `endereco` e `cidade` ao SELECT. Procedure é
+ *       compartilhada por ~7 telas — todas seguem
+ *       funcionando (campos extras são opcionais e ninguém
+ *       desestrutura por keys conhecidas). O server de
+ *       import (`importarContratosLocacaoLote`) JÁ aceitava
+ *       `obraId` por contrato desde a Rev. 2308 — não
+ *       precisou mudança.
+ *
+ *   (2) **Client** (`client/src/pages/equipamentos/Locados.tsx`):
+ *       - `normalize(s)` — lowercase + NFD strip de acentos
+ *         + remove `Nº336` + remove pontuação + colapsa
+ *         espaços.
+ *       - `tokenize(s)` — split por espaço + filtra tokens
+ *         de 4+ chars + descarta stop-tokens portugueses
+ *         (rua, avenida, jardim, bairro, sao, santa, sp,
+ *         hotel, casa, lote, etc — 25 termos).
+ *       - `matchObra(localObra, obras)` — score = qtd de
+ *         tokens da PDF presentes em `nome + endereco +
+ *         cidade` da obra. Exige >=2 tokens em comum
+ *         (corta falso positivo). Desempate por maior
+ *         contagem absoluta, depois maior proporção. Ex:
+ *         PDF "RUA JOAO MARCELINO CAVALHEIRO Nº336 JARDIM
+ *         DO VALE ll GUARATINGUETA/SP" tokeniza pra
+ *         `[joao, marcelino, cavalheiro, vale,
+ *         guaratingueta]` e bate em obra cujo endereço
+ *         contenha 2+ desses tokens.
+ *       - No callback do polling (status === "done") roda
+ *         auto-match em cada contrato detectado e popula
+ *         `c.obraId`, `c.obraMatchAuto: true`,
+ *         `c.obraMatchScore`. Toast vira "IA detectou N
+ *         contrato(s)... · X/N auto-vinculados à obra".
+ *       - **UI do preview**: substituído o `📍 {localObra}`
+ *         simples por linha com endereço da PDF + select de
+ *         obras ativas (incluindo cidade), com cor
+ *         contextual: verde (auto), azul (manual), âmbar
+ *         (sem vínculo). Badge `✓ auto` ao lado quando
+ *         match automático, com tooltip de % de tokens.
+ *       - **Banner verde** acima da lista mostrando "X
+ *         auto-vinculados · Y manuais · Z sem obra".
+ *       - `confirmarImport` agora envia `obraId: c.obraId`
+ *         por contrato no payload.
+ *
+ * Resultado prático no PDF anexado: os ~13 contratos do
+ * endereço "RUA JOAO MARCELINO" e os ~13 do "AVENIDA
+ * GETULIO VARGAS" são auto-vinculados às obras
+ * correspondentes (se cadastradas no ERP com esses
+ * endereços) — zero clique manual. Os "Sem obra" caem do
+ * select com fundo amarelo deixando claro o que falta.
+ *
+ * R-001/R-007/R-010: N/A — ALTER no schema não foi
+ * necessário (só leitura de colunas existentes). Sem
+ * UPDATE/DELETE adhoc. Multi-tenant herdado de
+ * `listActive` (já filtra por `companyId`).
+ *
  * Rev. 2325 — **HOTFIX/UX · Exclusão/vinculação em lote de
  * equipamentos locados — chunking de 500 + modais bonitos
  * (substitui ZodError "expected array to have <=500 items"
