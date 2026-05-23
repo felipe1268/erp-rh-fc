@@ -39,12 +39,25 @@
  *   senão `FORBIDDEN`.
  * - Loop por ID com erros individuais (não rollback geral): pra cada
  *   mov valida `companyId` (multi-tenant), checa já estornada,
- *   BLOQUEIA se motivo contém "Recebimento inteligente" ou regex
- *   `/\boc[\s-]/i` (essas devem ser revertidas pela tela de
- *   Recebimentos pra não dessincronizar `qtd_entregue`/status da OC).
+ *   BLOQUEIA via helper `isFromOcOrSmartEntry` com 2 regex que cobrem
+ *   TODOS os padrões de motivo emitidos por `registerSmartEntry`:
+ *   `/^\s*recebimento\b/i` (pega "Recebimento NF: 1234" e
+ *   "Recebimento inteligente") + `/\boc[\s-]/i` (pega "OC OC-XXXX
+ *   entregue"). Essas movs devem ser revertidas pela tela de
+ *   Recebimentos pra não dessincronizar `qtd_entregue`/status da OC.
+ *   Pós-review architect: o regex original `recebimento inteligente`
+ *   (literal) deixava passar "Recebimento NF" — ampliado.
  * - Entrada → `quantidadeAtual - qtd`. Se ficaria negativo → BLOQUEIA
  *   (material já consumido, estorno inseguro). Saída → soma. Demais
  *   tipos → bloqueia ("não estornável por esta tela").
+ * - **Multi-tenant**: select e update de `almoxarifadoItens` filtram
+ *   tanto por `id` quanto por `companyId` (defesa em profundidade —
+ *   evita que dado inconsistente faça update cross-tenant).
+ * - **Atomicidade**: a marcação da mov + o ajuste do saldo correm
+ *   dentro de `db.transaction`. O UPDATE da mov tem guarda
+ *   `estornada_em IS NULL` no WHERE + `.returning()` — se 0 linhas
+ *   forem retornadas, outro processo estornou em paralelo e a
+ *   transação faz rollback (anti-race-condition de dupla reversão).
  * - Soft-delete: UPDATE da própria mov setando `estornadaEm`,
  *   `estornadaPorId`, `estornadaPorNome`, `estornoMotivo` (não DELETE).
  * - `listMovements`: select agora inclui `estornadaEm`,

@@ -274,8 +274,23 @@ export const warehouseRouter = router({
       const sucessos: number[] = [];
       const erros: { id: number; motivo: string }[] = [];
 
+      // Bloqueio estrutural de mov originada do fluxo de Recebimento /
+      // OC. `registerSmartEntry` grava motivo como "Recebimento NF: ..."
+      // ou "Recebimento inteligente"; já o `registerEntry` manual grava
+      // "NF: ..." (sem "Recebimento") ou texto livre. O regex abaixo
+      // cobre TODOS os padrões de smart-entry sem capturar entrada
+      // manual de NF avulsa:
+      //   /^\s*recebimento\b/i  → "Recebimento NF: 1234", "Recebimento inteligente"
+      //   /\boc[\s-]/i          → "OC OC-2026-0123 entregue" e variantes
+      const isFromOcOrSmartEntry = (motivo: string | null | undefined) => {
+        const s = String(motivo || "");
+        return /^\s*recebimento\b/i.test(s) || /\boc[\s-]/i.test(s);
+      };
+
       for (const mid of input.movementIds) {
         try {
+          // 1) Lê + valida tudo ANTES de abrir transação. Falhas de
+          //    pré-condição não tocam o banco.
           const [mov] = await db
             .select()
             .from(almoxarifadoMovimentacoes)
@@ -285,19 +300,20 @@ export const warehouseRouter = router({
             ));
           if (!mov) { erros.push({ id: mid, motivo: "Movimentação não encontrada" }); continue; }
           if (mov.estornadaEm) { erros.push({ id: mid, motivo: "Já estornada anteriormente" }); continue; }
-
-          // Bloqueia mov vinda de Recebimento Inteligente (vinculada a OC).
-          const motivoOrig = String(mov.motivo || "").toLowerCase();
-          if (motivoOrig.includes("recebimento inteligente") || /\boc[\s-]/i.test(String(mov.motivo || ""))) {
-            erros.push({ id: mid, motivo: "Movimentação de OC — estorne pela tela de Recebimentos" });
+          if (isFromOcOrSmartEntry(mov.motivo)) {
+            erros.push({ id: mid, motivo: "Movimentação de OC/Recebimento — estorne pela tela de Recebimentos" });
             continue;
           }
 
+          // Multi-tenant: item DEVE pertencer à mesma empresa da mov.
           const [item] = await db
             .select()
             .from(almoxarifadoItens)
-            .where(eq(almoxarifadoItens.id, mov.itemId));
-          if (!item) { erros.push({ id: mid, motivo: "Item do estoque não encontrado" }); continue; }
+            .where(and(
+              eq(almoxarifadoItens.id, mov.itemId),
+              eq(almoxarifadoItens.companyId, input.companyId),
+            ));
+          if (!item) { erros.push({ id: mid, motivo: "Item do estoque não encontrado nesta empresa" }); continue; }
 
           const qtd = parseFloat(String(mov.quantidade) || "0");
           const atual = parseFloat(String(item.quantidadeAtual) || "0");
@@ -320,20 +336,36 @@ export const warehouseRouter = router({
             continue;
           }
 
-          await db
-            .update(almoxarifadoItens)
-            .set({ quantidadeAtual: String(novo) } as any)
-            .where(eq(almoxarifadoItens.id, mov.itemId));
-
-          await db
-            .update(almoxarifadoMovimentacoes)
-            .set({
-              estornadaEm: new Date().toISOString(),
-              estornadaPorId: ctx.user.id,
-              estornadaPorNome: ctx.user.name || "",
-              estornoMotivo: input.motivo,
-            } as any)
-            .where(eq(almoxarifadoMovimentacoes.id, mid));
+          // 2) Transação atômica: marca a mov como estornada APENAS se
+          //    nenhuma outra requisição estornou em paralelo (condição
+          //    `estornada_em IS NULL`), e ajusta o saldo do item
+          //    filtrando por companyId (defesa em profundidade).
+          await db.transaction(async (tx: any) => {
+            const upd = await tx
+              .update(almoxarifadoMovimentacoes)
+              .set({
+                estornadaEm: new Date().toISOString(),
+                estornadaPorId: ctx.user.id,
+                estornadaPorNome: ctx.user.name || "",
+                estornoMotivo: input.motivo,
+              } as any)
+              .where(and(
+                eq(almoxarifadoMovimentacoes.id, mid),
+                eq(almoxarifadoMovimentacoes.companyId, input.companyId),
+                sql`estornada_em IS NULL`,
+              ))
+              .returning({ id: almoxarifadoMovimentacoes.id });
+            if (!upd || upd.length === 0) {
+              throw new Error("Movimentação já estornada por outro processo");
+            }
+            await tx
+              .update(almoxarifadoItens)
+              .set({ quantidadeAtual: String(novo) } as any)
+              .where(and(
+                eq(almoxarifadoItens.id, mov.itemId),
+                eq(almoxarifadoItens.companyId, input.companyId),
+              ));
+          });
 
           sucessos.push(mid);
         } catch (e: any) {
