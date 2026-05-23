@@ -475,3 +475,4 @@
 - ~~Rev. 2250~~ — UX · Modal "Nova Revisão" auto-preenche Responsável com nome do usuário logado. Substituída pela 2251/2252/2253. Ver `shared/changelog.ts`.
 
 - Rev. 2259 — REFACTOR · SE (Solicitação de Equipamento de locação) migra do Almoxarifado para o módulo Compras.
+- Rev. 2260 — FIX · Importador MS Project lê % PREVISTO por atividade via Texto6 (FieldID 188743746) como fallback de Texto10.

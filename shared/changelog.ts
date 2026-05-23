@@ -1,6 +1,58 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2267 — **UX/REGRA DE OURO · Cards do Avanço Semanal exibem o snapshot
+ * MSP mais recente em semanas POSTERIORES ao StatusDate, com chip âmbar
+ * "📸 Foto MSP de DD/MM/AAAA" explicitando que é a última medição (não a
+ * semana selecionada). Semanas ANTERIORES continuam mostrando "—".**
+ *
+ * Pedido user (23/05/2026, screenshot VITRA 4ª Semana):
+ *   "pq não está aparecendo os valores após a 4ª semana? só muda a barra
+ *    superior..." — user escolheu opção B (afrouxar o gate de cutoff).
+ *
+ * Diagnóstico: na Rev. 2265 o portão era estrito (`semanaFim !== statusDate
+ * → null`). Isso fazia sentido conceitualmente (snapshot é UMA foto), mas
+ * gerava UX confusa: a barra superior (que não depende de semana) mostrava
+ * 6,40/3,75, mas os 6 cards abaixo ficavam todos "—". User não conseguia
+ * acompanhar VITRA na 4ª semana porque o último XML enviado pelo PMO era
+ * da 3ª (StatusDate=21/05).
+ *
+ * Política nova (semanticamente correta):
+ *   - `semanaFim < statusDate` → "—" (não existe foto histórica no XML;
+ *     o MSP só guarda a foto atual).
+ *   - `semanaFim === statusDate` → snapshot fresco, sem chip.
+ *   - `semanaFim > statusDate` → snapshot exibido + `staleFromDate` setado
+ *     → UI mostra chip âmbar "📸 Foto MSP de DD/MM/AAAA" acima dos cards
+ *     explicando que é a última medição disponível, e instruindo a
+ *     exportar novo XML com StatusDate em DD/MM (semana atual) pra atualizar.
+ *
+ * **Coerência com User pref Rev. 2265 (read-only MSP):**
+ *   - NÃO há cálculo novo. Cards continuam lendo APENAS `previstoMsp
+ *     Snapshot` e `realizadoMspSnapshot` do `calendarioJson`.
+ *   - O que mudou é só o GATE de exibição: ao invés de bloquear o
+ *     snapshot em semanas futuras, exibe com selo de "foto datada".
+ *   - "—" continua aparecendo nos cenários onde realmente não há dado:
+ *     XML não importado, sem statusDateSnapshot, envelope mexido, ou
+ *     semana anterior ao snapshot.
+ *
+ * **Fix:**
+ *   1. `PlanejamentoDetalhe.tsx` L6949-6985 — `mspReadOnly` agora retorna
+ *      campo extra `staleFromDate: string | null`. Lógica de cutoff:
+ *      bloqueia apenas quando `semanaFim < statusDate`; quando maior,
+ *      seta `staleFromDate = statusDate` e devolve snapshot normal.
+ *   2. `PlanejamentoDetalhe.tsx` L7716-7721 — banner âmbar acima da grid
+ *      de 3 cards quando `mspStaleFromDate != null`. Texto explica que
+ *      a semana é posterior, dá o CTA pra exportar novo XML com
+ *      StatusDate em DD/MM/AAAA e reimportar.
+ *
+ * **R-001 / R-007 / R-010:** N/A (100% client-side; nenhuma migração).
+ *
+ * Arquivos tocados:
+ *   - client/src/pages/planejamento/PlanejamentoDetalhe.tsx (3 hunks)
+ *   - shared/version.ts → Rev. 2267
+ *   - shared/changelog.ts → entrada no topo
+ *   - replit.md → 2+5
+ *
  * Rev. 2266 — **FIX · Importer "Avanço Semanal" agora REGRAVA o snapshot MSP
  * (`calendarioJson`) ao reimportar XML — sem isso a Rev. 2265 mostrava 0,00 %
  * verde nos cards quando o XML antigo (import inicial) tinha realizado = 0.**

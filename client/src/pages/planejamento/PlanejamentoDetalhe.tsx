@@ -6943,18 +6943,30 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
       return { previsto: null, realizado: null,
         missingReason: "Datas de início/término da obra foram alteradas no ERP após o último import. Reimporte o XML para restaurar a paridade com o MSP." };
     }
-    if (semanaFim !== cal.statusDateSnapshot) {
-      return { previsto: null, realizado: null,
-        missingReason: `A semana visualizada (fim ${fmtBR(semanaFim)}) não coincide com o StatusDate do XML (${fmtBR(cal.statusDateSnapshot)}). Selecione a semana do cutoff oficial para ver os indicadores do MSP.` };
+    // Rev. 2267 — Política de cutoff:
+    //   - semanaFim < statusDateSnapshot → semana ANTERIOR ao snapshot:
+    //     o MSP daquele momento não existia ainda. Não há foto histórica
+    //     no XML (apenas a foto atual). Mostra "—".
+    //   - semanaFim === statusDateSnapshot → semana DO snapshot: foto
+    //     fresca, sem chip.
+    //   - semanaFim > statusDateSnapshot → semana POSTERIOR: ainda não
+    //     houve nova medição do MSP, mas o snapshot mais recente é a
+    //     melhor leitura disponível. Exibe os valores com `staleFromDate`
+    //     para a UI mostrar chip "📸 Foto MSP de DD/MM/AAAA".
+    if (semanaFim < cal.statusDateSnapshot) {
+      return { previsto: null, realizado: null, staleFromDate: null as string | null,
+        missingReason: `A semana visualizada (fim ${fmtBR(semanaFim)}) é anterior ao StatusDate do XML mais recente (${fmtBR(cal.statusDateSnapshot)}). O XML do MSP guarda apenas a última foto — não há snapshot histórico para semanas passadas.` };
     }
     const prev = cal.previstoMspSnapshot  != null ? Number(cal.previstoMspSnapshot)  : null;
     const real = cal.realizadoMspSnapshot != null ? Number(cal.realizadoMspSnapshot) : null;
     const partes: string[] = [];
     if (prev  == null) partes.push("% Previsto (Texto6/10/11) ausente");
     if (real == null) partes.push("% Realizado (AD/(AD+RD)) ausente");
+    const stale = semanaFim > cal.statusDateSnapshot ? cal.statusDateSnapshot : null;
     return {
       previsto: prev != null ? Math.min(100, Math.max(0, prev)) : null,
       realizado: real != null ? Math.min(100, Math.max(0, real)) : null,
+      staleFromDate: stale,
       missingReason: partes.length
         ? `Snapshot MSP incompleto no XML: ${partes.join(", ")}. Reimporte o cronograma para popular.`
         : null,
@@ -6963,6 +6975,11 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
   const mspPrev = mspReadOnly.previsto;
   const mspReal = mspReadOnly.realizado;
   const mspDelta = (mspPrev != null && mspReal != null) ? +(mspReal - mspPrev).toFixed(2) : null;
+  // Rev. 2267 — quando staleFromDate != null, a semana é posterior ao
+  // StatusDate do XML. Cards mostram os valores do snapshot mais recente
+  // com chip "📸 Foto MSP de DD/MM/AAAA" pra deixar claro que o número
+  // é da última medição, não da semana selecionada.
+  const mspStaleFromDate = (mspReadOnly as any).staleFromDate as string | null;
 
   // ── Import XML / XLSX do MS Project ───────────────────────────────────────
   async function importarDoMSProject(file: File) {
@@ -7689,7 +7706,16 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
 
       {/* ── Painel Previsto × Realizado ─────────────────────────────────────── */}
       {/* Rev. 1796 — Cada card ganhou ícone Info + tooltip detalhado (title)
-          explicando o que o número significa, como é calculado e o que esperar. */}
+          explicando o que o número significa, como é calculado e o que esperar.
+          Rev. 2267 — Chip "Foto MSP de DD/MM" quando a semana selecionada é
+          posterior ao StatusDate do XML (semana ainda não medida no MSP, mas
+          o último snapshot continua sendo a melhor leitura disponível). */}
+      {mspStaleFromDate && (
+        <div className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-amber-50 border border-amber-200 text-[11px] text-amber-800">
+          <span>📸</span>
+          <span><b>Foto MSP de {fmtBR(mspStaleFromDate)}</b> — a semana selecionada ({fmtBR(semanaAtual)} a {fmtBR(semanaFim)}) é posterior ao último StatusDate do XML. Os números abaixo refletem a última medição disponível do MS Project, não a semana selecionada. Para atualizar, exporte um novo XML com StatusDate em {fmtBR(semanaFim)} e reimporte via "Importar MS Project".</span>
+        </div>
+      )}
       <div className="grid grid-cols-3 gap-3">
         {/* Previsto */}
         <div
