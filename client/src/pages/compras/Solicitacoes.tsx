@@ -2824,18 +2824,45 @@ ${sc.observacoes ? `<div class="obs"><b>Observações da SC:</b><br>${esc(sc.obs
                   </label>
                 )}
               </div>
-              {/* Rev. 2290 — Bloco de Locação. Aparece somente quando o tipo
-                  é Equipamento. O engenheiro indica aqui se é compra ou
-                  locação + período previsto, para que suprimentos cote
-                  corretamente e a OC nasça já com os dados de locação. */}
+              {/* Rev. 2290 — Bloco de Locação (REDESIGN visual chamativo).
+                  Aparece somente quando o tipo é Equipamento. Header
+                  gradiente âmbar→laranja com ícone Truck + toggle switch
+                  grande; quando ativo, 3 cards brancos para os campos
+                  com ícones (CalendarDays/Clock) + faixa de info
+                  destacando o alerta automático do almoxarifado. */}
               {form.tipo === "equipamento" && (
-                <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50/60 p-3 space-y-2">
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={form.isLocacao}
-                      onChange={e => {
-                        const checked = e.target.checked;
+                <div className={`mt-3 rounded-xl overflow-hidden shadow-sm transition-all ${form.isLocacao ? "ring-2 ring-amber-400/60 shadow-amber-200/40" : "border border-gray-200"}`}>
+                  {/* HEADER */}
+                  <div className={`flex items-center justify-between gap-3 px-4 py-3 transition-colors ${form.isLocacao ? "bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 text-white" : "bg-gradient-to-r from-gray-50 to-gray-100"}`}>
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg shadow-sm ${form.isLocacao ? "bg-white/20 ring-1 ring-white/40" : "bg-amber-100"}`}>
+                        <Truck className={`h-5 w-5 ${form.isLocacao ? "text-white" : "text-amber-600"}`} />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <h4 className={`text-sm font-bold uppercase tracking-wide ${form.isLocacao ? "text-white" : "text-gray-800"}`}>
+                            Locação de Equipamento
+                          </h4>
+                          {form.isLocacao && (
+                            <span className="px-2 py-0.5 text-[9px] font-extrabold rounded-full bg-white text-amber-700 shadow-sm tracking-wider">
+                              ALUGUEL
+                            </span>
+                          )}
+                        </div>
+                        <p className={`text-[11px] mt-0.5 ${form.isLocacao ? "text-amber-50" : "text-gray-500"}`}>
+                          {form.isLocacao
+                            ? "Suprimentos vai cotar com fornecedores de aluguel para o período abaixo."
+                            : "Marque se for ALUGAR (não comprar) o equipamento — Suprimentos cotará como locação."}
+                        </p>
+                      </div>
+                    </div>
+                    {/* TOGGLE SWITCH */}
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={form.isLocacao}
+                      onClick={() => {
+                        const checked = !form.isLocacao;
                         setForm(p => ({
                           ...p,
                           isLocacao: checked,
@@ -2844,71 +2871,95 @@ ${sc.observacoes ? `<div class="obs"><b>Observações da SC:</b><br>${esc(sc.obs
                           locacaoDataFimPrevista: checked ? p.locacaoDataFimPrevista : "",
                         }));
                       }}
-                      className="h-4 w-4 rounded border-amber-400 text-amber-600 focus:ring-amber-500"
-                    />
-                    <span className={`text-xs font-semibold ${form.isLocacao ? "text-amber-800" : "text-gray-700"}`}>
-                      É Locação de Equipamento <span className="font-normal text-gray-500">(aluguel — não compra)</span>
-                    </span>
-                  </label>
+                      className={`relative inline-flex h-7 w-12 shrink-0 cursor-pointer rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-amber-500 ${form.isLocacao ? "bg-white/30 ring-1 ring-white/60" : "bg-gray-300"}`}
+                    >
+                      <span
+                        className={`pointer-events-none inline-block h-6 w-6 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out mt-0.5 ${form.isLocacao ? "translate-x-[22px]" : "translate-x-0.5"}`}
+                      />
+                    </button>
+                  </div>
+                  {/* CORPO — só quando isLocacao */}
                   {form.isLocacao && (
-                    <div className="grid grid-cols-3 gap-2 pt-1">
-                      <div>
-                        <label className="text-[10px] font-medium text-gray-600 uppercase tracking-wide">Início Previsto</label>
-                        <input
-                          type="date"
-                          value={form.locacaoDataInicioPrevista}
-                          onChange={e => {
-                            const ini = e.target.value;
-                            setForm(p => {
-                              const next = { ...p, locacaoDataInicioPrevista: ini };
-                              const dias = parseInt(p.locacaoDuracaoDias || "0", 10);
-                              if (ini && dias > 0) {
-                                const d = new Date(ini + "T00:00:00");
-                                d.setDate(d.getDate() + dias);
-                                next.locacaoDataFimPrevista = d.toISOString().slice(0, 10);
-                              }
-                              return next;
-                            });
-                          }}
-                          className="w-full h-8 px-2 text-sm border border-gray-300 rounded-md bg-white"
-                        />
+                    <div className="bg-amber-50/40 px-4 py-3 space-y-3">
+                      <div className="grid grid-cols-3 gap-3">
+                        <div className="rounded-lg bg-white border border-amber-200/70 p-2.5 shadow-sm">
+                          <label className="flex items-center gap-1.5 text-[10px] font-bold text-amber-700 uppercase tracking-wider mb-1.5">
+                            <CalendarDays className="h-3 w-3" /> Início Previsto
+                          </label>
+                          <input
+                            type="date"
+                            value={form.locacaoDataInicioPrevista}
+                            onChange={e => {
+                              const ini = e.target.value;
+                              setForm(p => {
+                                const next = { ...p, locacaoDataInicioPrevista: ini };
+                                const dias = parseInt(p.locacaoDuracaoDias || "0", 10);
+                                if (ini && dias > 0) {
+                                  const d = new Date(ini + "T00:00:00");
+                                  d.setDate(d.getDate() + dias);
+                                  next.locacaoDataFimPrevista = d.toISOString().slice(0, 10);
+                                }
+                                return next;
+                              });
+                            }}
+                            className="w-full h-9 px-2 text-sm border border-gray-300 rounded-md bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent"
+                          />
+                        </div>
+                        <div className="rounded-lg bg-white border border-amber-200/70 p-2.5 shadow-sm">
+                          <label className="flex items-center gap-1.5 text-[10px] font-bold text-amber-700 uppercase tracking-wider mb-1.5">
+                            <Clock className="h-3 w-3" /> Duração <span className="text-red-500">*</span>
+                          </label>
+                          <div className="relative">
+                            <input
+                              type="number"
+                              min={1}
+                              placeholder="ex.: 30"
+                              value={form.locacaoDuracaoDias}
+                              onChange={e => {
+                                const v = e.target.value;
+                                setForm(p => {
+                                  const next = { ...p, locacaoDuracaoDias: v };
+                                  const dias = parseInt(v || "0", 10);
+                                  if (p.locacaoDataInicioPrevista && dias > 0) {
+                                    const d = new Date(p.locacaoDataInicioPrevista + "T00:00:00");
+                                    d.setDate(d.getDate() + dias);
+                                    next.locacaoDataFimPrevista = d.toISOString().slice(0, 10);
+                                  }
+                                  return next;
+                                });
+                              }}
+                              className="w-full h-9 pl-2 pr-10 text-sm border border-gray-300 rounded-md bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent"
+                            />
+                            <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] font-bold text-amber-600 uppercase">dias</span>
+                          </div>
+                        </div>
+                        <div className="rounded-lg bg-white border border-amber-200/70 p-2.5 shadow-sm">
+                          <label className="flex items-center gap-1.5 text-[10px] font-bold text-amber-700 uppercase tracking-wider mb-1.5">
+                            <CalendarDays className="h-3 w-3" /> Fim Previsto
+                          </label>
+                          <input
+                            type="date"
+                            value={form.locacaoDataFimPrevista}
+                            onChange={e => setForm(p => ({ ...p, locacaoDataFimPrevista: e.target.value }))}
+                            className="w-full h-9 px-2 text-sm border border-gray-300 rounded-md bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent"
+                          />
+                        </div>
                       </div>
-                      <div>
-                        <label className="text-[10px] font-medium text-gray-600 uppercase tracking-wide">Duração (dias) *</label>
-                        <input
-                          type="number"
-                          min={1}
-                          placeholder="ex.: 30"
-                          value={form.locacaoDuracaoDias}
-                          onChange={e => {
-                            const v = e.target.value;
-                            setForm(p => {
-                              const next = { ...p, locacaoDuracaoDias: v };
-                              const dias = parseInt(v || "0", 10);
-                              if (p.locacaoDataInicioPrevista && dias > 0) {
-                                const d = new Date(p.locacaoDataInicioPrevista + "T00:00:00");
-                                d.setDate(d.getDate() + dias);
-                                next.locacaoDataFimPrevista = d.toISOString().slice(0, 10);
-                              }
-                              return next;
-                            });
-                          }}
-                          className="w-full h-8 px-2 text-sm border border-gray-300 rounded-md bg-white"
-                        />
+                      {/* FAIXA DE INFO + RESUMO DO PERÍODO */}
+                      <div className="flex items-start gap-2 rounded-md bg-amber-100/70 border border-amber-300/60 px-3 py-2">
+                        <Sparkles className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+                        <div className="text-[11px] text-amber-900 leading-snug">
+                          <strong>Alerta automático:</strong> o Almoxarifado será notificado{" "}
+                          <strong>antes do fim previsto</strong> para programar a devolução do equipamento ao fornecedor.
+                          {form.locacaoDataInicioPrevista && form.locacaoDataFimPrevista && form.locacaoDuracaoDias && (
+                            <span className="block mt-1 text-amber-800">
+                              📅 Período: <strong>{form.locacaoDataInicioPrevista.split("-").reverse().join("/")}</strong>{" "}
+                              → <strong>{form.locacaoDataFimPrevista.split("-").reverse().join("/")}</strong>{" "}
+                              <span className="font-bold">({form.locacaoDuracaoDias} dias)</span>
+                            </span>
+                          )}
+                        </div>
                       </div>
-                      <div>
-                        <label className="text-[10px] font-medium text-gray-600 uppercase tracking-wide">Fim Previsto</label>
-                        <input
-                          type="date"
-                          value={form.locacaoDataFimPrevista}
-                          onChange={e => setForm(p => ({ ...p, locacaoDataFimPrevista: e.target.value }))}
-                          className="w-full h-8 px-2 text-sm border border-gray-300 rounded-md bg-white"
-                        />
-                      </div>
-                      <p className="col-span-3 text-[10px] text-amber-700/80">
-                        💡 O almoxarifado receberá alertas de vencimento {""}
-                        <strong>antes do fim previsto</strong> para programar a devolução.
-                      </p>
                     </div>
                   )}
                 </div>
