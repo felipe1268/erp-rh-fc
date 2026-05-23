@@ -12,6 +12,7 @@ import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
 import { eq, and, desc, sql, inArray } from "drizzle-orm";
 import { resolveCompanyIds, companyFilter, companyInput } from "../companyHelper";
+import { getCompaniesForUser } from "../db";
 import {
   equipamentosProprios,
   equipamentosLocados,
@@ -463,6 +464,75 @@ export const equipamentosRouter = router({
         .returning({ id: equipamentosLocados.id });
       if (r.length === 0) throw new TRPCError({ code: "NOT_FOUND" });
       return { id: r[0].id };
+    }),
+
+  // Rev. 2323 — Vincular obra em lote + Excluir em lote (multi-seleção na UI).
+  locadosVincularObraLote: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      ids: z.array(z.number()).min(1).max(500),
+      obraId: z.number().nullable(), // null = desvincular
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      // Tenant isolation — confirma que a empresa pertence ao usuário.
+      const allowedCompanies = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+      const allowedIds = (allowedCompanies as any[]).map(c => c.id);
+      if (!allowedIds.includes(input.companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta empresa." });
+      }
+      let total = 0;
+      await db.transaction(async (tx: any) => {
+        for (const id of input.ids) {
+          const r = await tx.update(equipamentosLocados)
+            .set({ obraId: input.obraId, updatedAt: sql`now()` })
+            .where(and(eq(equipamentosLocados.id, id), eq(equipamentosLocados.companyId, input.companyId)))
+            .returning({ id: equipamentosLocados.id });
+          if (r.length > 0) {
+            total += 1;
+            await tx.insert(equipamentoLocadoEventos).values({
+              companyId: input.companyId,
+              equipamentoLocadoId: id,
+              tipo: "VINCULO_OBRA",
+              obraId: input.obraId,
+              observacao: input.obraId == null ? "Desvinculado da obra (lote)" : `Vinculado à obra #${input.obraId} (lote)`,
+              usuarioId: ctx.user.id,
+              usuarioNome: ctx.user.name || String(ctx.user.id),
+            });
+          }
+        }
+      });
+      return { ok: true as const, vinculados: total };
+    }),
+
+  locadosExcluirLote: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      ids: z.array(z.number()).min(1).max(500),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      // Tenant isolation — confirma que a empresa pertence ao usuário.
+      const allowedCompanies = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+      const allowedIds = (allowedCompanies as any[]).map(c => c.id);
+      if (!allowedIds.includes(input.companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta empresa." });
+      }
+      let total = 0;
+      await db.transaction(async (tx: any) => {
+        for (const id of input.ids) {
+          // Eventos primeiro (FK em equipamento_locado_id).
+          await tx.delete(equipamentoLocadoEventos)
+            .where(and(eq(equipamentoLocadoEventos.equipamentoLocadoId, id), eq(equipamentoLocadoEventos.companyId, input.companyId)));
+          const r = await tx.delete(equipamentosLocados)
+            .where(and(eq(equipamentosLocados.id, id), eq(equipamentosLocados.companyId, input.companyId)))
+            .returning({ id: equipamentosLocados.id });
+          total += r.length;
+        }
+      });
+      return { ok: true as const, excluidos: total };
     }),
 
   locadoDevolver: protectedProcedure

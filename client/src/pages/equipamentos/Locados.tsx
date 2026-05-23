@@ -66,6 +66,68 @@ export default function EquipamentosLocados() {
     { enabled: !!modalEventos }
   );
 
+  // Rev. 2323 — Obras ativas (pra mostrar nome no card + dropdown de vínculo em lote).
+  const obrasAtivasQ = trpc.obras.listActive.useQuery({ companyId }, { enabled: !!companyId });
+  const obrasMap = useMemo(() => {
+    const m = new Map<number, string>();
+    for (const o of (obrasAtivasQ.data || []) as any[]) m.set(Number(o.id), String(o.nome || `Obra #${o.id}`));
+    return m;
+  }, [obrasAtivasQ.data]);
+
+  // Rev. 2323 — Multi-seleção (vincular obra em lote + excluir em lote).
+  const [selecionados, setSelecionados] = useState<Set<number>>(new Set());
+  const [obraParaVincular, setObraParaVincular] = useState<string>("");
+  const toggleSelecionado = (id: number) => {
+    setSelecionados(prev => {
+      const n = new Set(prev);
+      if (n.has(id)) n.delete(id); else n.add(id);
+      return n;
+    });
+  };
+  const todosVisiveisSelecionados = useMemo(
+    () => (data as any[]).length > 0 && (data as any[]).every(l => selecionados.has(l.id)),
+    [data, selecionados]
+  );
+  const toggleTodosVisiveis = () => {
+    setSelecionados(prev => {
+      if (todosVisiveisSelecionados) {
+        const n = new Set(prev);
+        for (const l of data as any[]) n.delete(l.id);
+        return n;
+      }
+      const n = new Set(prev);
+      for (const l of data as any[]) n.add(l.id);
+      return n;
+    });
+  };
+  const vincularLote = trpc.equipamentos.locadosVincularObraLote.useMutation({
+    onSuccess: (res) => {
+      utils.equipamentos.locadosListar.invalidate();
+      toast.success(`${res.vinculados} equipamento(s) vinculado(s).`);
+      setSelecionados(new Set()); setObraParaVincular("");
+    },
+    onError: (e) => toast.error(e.message),
+  });
+  const excluirLote = trpc.equipamentos.locadosExcluirLote.useMutation({
+    onSuccess: (res) => {
+      utils.equipamentos.locadosListar.invalidate();
+      toast.success(`${res.excluidos} equipamento(s) excluído(s).`);
+      setSelecionados(new Set());
+    },
+    onError: (e) => toast.error(e.message),
+  });
+  function confirmarVincular() {
+    if (selecionados.size === 0) return;
+    const obraId = obraParaVincular === "__null__" ? null : (parseInt(obraParaVincular) || null);
+    if (obraId === null && obraParaVincular !== "__null__") return toast.error("Selecione uma obra.");
+    vincularLote.mutate({ companyId, ids: Array.from(selecionados), obraId });
+  }
+  function confirmarExcluir() {
+    if (selecionados.size === 0) return;
+    if (!window.confirm(`Excluir ${selecionados.size} equipamento(s) locado(s)?\n\nEsta ação remove TAMBÉM todo o histórico (eventos) deles e NÃO pode ser desfeita.`)) return;
+    excluirLote.mutate({ companyId, ids: Array.from(selecionados) });
+  }
+
   const criar = trpc.equipamentos.locadoCriar.useMutation({
     onSuccess: () => { utils.equipamentos.locadosListar.invalidate(); setModal(false); setForm({ ...EMPTY }); setFotos([]); toast.success("Equipamento locado cadastrado!"); },
     onError: (e) => toast.error(e.message),
@@ -424,6 +486,18 @@ export default function EquipamentosLocados() {
             <input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar por descrição, fornecedor, patrimônio…"
               className="w-full pl-10 pr-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 outline-none transition" />
           </div>
+          {/* Rev. 2323 — Selecionar todos visíveis (cabeçalho da lista). */}
+          {(data as any[]).length > 0 && (
+            <div className="flex items-center gap-2 pt-1 border-t border-slate-100 -mb-1">
+              <label className="inline-flex items-center gap-2 text-xs text-slate-600 cursor-pointer select-none px-1 py-1">
+                <input type="checkbox" checked={todosVisiveisSelecionados} onChange={toggleTodosVisiveis} className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500" />
+                Selecionar todos visíveis ({(data as any[]).length})
+              </label>
+              {selecionados.size > 0 && (
+                <button onClick={() => setSelecionados(new Set())} className="text-xs text-slate-500 hover:text-slate-700 underline">limpar seleção ({selecionados.size})</button>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Lista em cards modernos */}
@@ -443,10 +517,15 @@ export default function EquipamentosLocados() {
                 : l.status === "em_renovacao" ? "from-amber-500 to-amber-600"
                 : l.status === "em_uso" ? "from-emerald-500 to-teal-600"
                 : "from-slate-400 to-slate-500";
+              const sel = selecionados.has(l.id);
+              const obraNome = l.obraId ? obrasMap.get(Number(l.obraId)) : null;
               return (
-                <div key={l.id} className="group bg-white border border-slate-200 rounded-xl shadow-sm hover:shadow-md hover:-translate-y-0.5 transition overflow-hidden flex flex-col">
+                <div key={l.id} className={`group bg-white border rounded-xl shadow-sm hover:shadow-md hover:-translate-y-0.5 transition overflow-hidden flex flex-col ${sel ? "border-emerald-500 ring-2 ring-emerald-200" : "border-slate-200"}`}>
                   <div className={`h-1 bg-gradient-to-r ${accent}`} />
                   <div className="p-4 flex gap-3">
+                    {/* Rev. 2323 — checkbox de multi-seleção */}
+                    <input type="checkbox" checked={sel} onChange={() => toggleSelecionado(l.id)}
+                      className="h-4 w-4 mt-1 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer flex-shrink-0" />
                     {fotos[0] ? (
                       <img src={fotos[0].url} className="w-16 h-16 object-cover rounded-lg ring-1 ring-slate-200 flex-shrink-0" alt="" />
                     ) : (
@@ -466,6 +545,11 @@ export default function EquipamentosLocados() {
                       </div>
                       <div className="text-xs text-slate-600 mt-1 flex items-center gap-1.5 truncate">
                         <Building2 className="h-3 w-3 text-slate-400" /> {l.fornecedorNome || "Sem fornecedor"}
+                      </div>
+                      {/* Rev. 2323 — Linha da obra vinculada (ou aviso quando sem) */}
+                      <div className={`text-xs mt-1 flex items-center gap-1.5 truncate ${obraNome ? "text-emerald-700" : "text-amber-700"}`} title={obraNome || "Sem obra vinculada"}>
+                        <MapPin className="h-3 w-3" />
+                        {obraNome ? <span className="truncate font-medium">{obraNome}</span> : <span className="italic">Sem obra vinculada</span>}
                       </div>
                     </div>
                   </div>
@@ -498,6 +582,40 @@ export default function EquipamentosLocados() {
           </div>
         )}
       </div>
+
+      {/* Rev. 2323 — Action bar flutuante (sticky bottom) quando há seleção */}
+      {selecionados.size > 0 && (
+        <div className="fixed bottom-0 inset-x-0 z-40 bg-white border-t-2 border-emerald-500 shadow-2xl">
+          <div className="max-w-7xl mx-auto px-4 py-3 flex flex-wrap items-center gap-3">
+            <div className="flex items-center gap-2 text-sm font-semibold text-slate-800">
+              <span className="inline-flex items-center justify-center min-w-[28px] h-7 px-2 rounded-full bg-emerald-100 text-emerald-700 text-xs font-bold">{selecionados.size}</span>
+              selecionado(s)
+            </div>
+            <div className="flex-1 flex flex-wrap items-center gap-2 min-w-[260px]">
+              <select value={obraParaVincular} onChange={e => setObraParaVincular(e.target.value)}
+                className="px-3 py-1.5 border border-slate-300 rounded-md text-sm focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 outline-none min-w-[200px]">
+                <option value="">— escolher obra —</option>
+                {((obrasAtivasQ.data || []) as any[]).map(o => (
+                  <option key={o.id} value={String(o.id)}>{o.nome}</option>
+                ))}
+                <option value="__null__">⊘ Desvincular obra</option>
+              </select>
+              <button onClick={confirmarVincular}
+                disabled={!obraParaVincular || vincularLote.isPending}
+                className="px-3 py-1.5 text-sm bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-md inline-flex items-center gap-1 font-medium">
+                <MapPin className="h-4 w-4" /> {vincularLote.isPending ? "Vinculando…" : "Vincular"}
+              </button>
+            </div>
+            <div className="flex items-center gap-2">
+              <button onClick={() => setSelecionados(new Set())} className="px-3 py-1.5 text-sm border border-slate-300 rounded-md text-slate-700 hover:bg-slate-50">Cancelar</button>
+              <button onClick={confirmarExcluir} disabled={excluirLote.isPending}
+                className="px-3 py-1.5 text-sm bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white rounded-md inline-flex items-center gap-1 font-medium">
+                <Trash2 className="h-4 w-4" /> {excluirLote.isPending ? "Excluindo…" : `Excluir ${selecionados.size}`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal receber locação — seções com ícones */}
       {modal && (

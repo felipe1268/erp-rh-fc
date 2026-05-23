@@ -1,6 +1,89 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2323 — **FEATURE · Equipamentos Locados — vínculo de
+ * obra visível no card + multi-seleção pra vincular/excluir
+ * em lote.**
+ *
+ * Pedido user (23/05/2026, screenshot da lista com vários
+ * cards "SAPATAS AJUSTÁVEIS · Sem fornecedor" sem obra):
+ * "Quero que apareça os nomes das obras em andamento, para
+ * que eu possa vincular os equipamentos locados. Quero
+ * múltipla seleção para poder apagar todos de uma vez."
+ *
+ * Contexto: após a importação em lote (Rev. 2308+), 1218
+ * unidades caíram em "Sem fornecedor" e SEM obra vinculada
+ * — o PDF da locadora não cita obras do nosso ERP. Só dava
+ * pra editar 1 a 1 (modal de edição). Inviável.
+ *
+ * **Implementação server** (`server/routers/equipamentos.ts`):
+ *
+ * 1. `locadosVincularObraLote({companyId, ids[1..500],
+ *    obraId|null})`:
+ *    - UPDATE em transação por id (UPDATE individual pra
+ *      respeitar o filtro `companyId` por linha — segurança);
+ *    - INSERT evento `VINCULO_OBRA` por equipamento atualizado
+ *      (auditoria — fica no histórico do card);
+ *    - `obraId: null` = desvincular (option ⊘ no dropdown).
+ *
+ * 2. `locadosExcluirLote({companyId, ids[1..500]})`:
+ *    - Em transação: DELETE eventos primeiro (FK em
+ *      `equipamento_locado_id`), depois DELETE locados.
+ *    - Filtro `companyId` em ambas as queries (R-007).
+ *    - Cap de 500 ids por chamada.
+ *
+ * **Segurança (multi-tenant)**: ambas as procedures fazem
+ * `getCompaniesForUser(ctx.user.id, ctx.user.role)` e checam
+ * se `input.companyId` está na lista — `FORBIDDEN` se não.
+ * Padrão idêntico ao usado em `compras.ts` (Rev. anteriores).
+ * Sem isso, um usuário logado podia passar `companyId`
+ * arbitrário e mexer/excluir locados de OUTRA empresa.
+ * `vinculados` no retorno conta apenas linhas realmente
+ * atualizadas (não `input.ids.length`), pra feedback correto.
+ *
+ * **R-001/R-007/R-010:** o DELETE é via mutation iniciada
+ * pelo user (CRUD legítimo da aplicação, não comando ad-hoc
+ * do agente), escopado por `companyId` + `id` + transação
+ * atômica — fora do escopo da regra que proíbe DELETEs
+ * administrativos.
+ *
+ * **Implementação client** (`client/src/pages/equipamentos/
+ * Locados.tsx`):
+ *
+ * 1. `trpc.obras.listActive.useQuery({companyId})` →
+ *    `obrasMap: Map<obraId, nome>` (memoizado em useMemo).
+ *
+ * 2. Nova linha no card (entre Fornecedor e o footer): ícone
+ *    📍 + nome da obra em verde-esmeralda quando vinculada,
+ *    ou "⚠ Sem obra vinculada" em âmbar italic quando não.
+ *
+ * 3. Multi-seleção:
+ *    - `selecionados: Set<number>` no state;
+ *    - Checkbox emerald em cada card (à esquerda da foto);
+ *    - Card selecionado: `border-emerald-500 ring-2 ring-emerald-200`;
+ *    - Checkbox "Selecionar todos visíveis (N)" no painel
+ *      de filtros (respeita o filtro de status atual);
+ *    - Botão "limpar seleção (N)" quando há algo selecionado.
+ *
+ * 4. **Action bar fixa** no rodapé (z-40, full-width, border
+ *    superior emerald) quando `selecionados.size > 0`:
+ *    - Badge com count;
+ *    - `<select>` com todas as obras ativas + opção
+ *      "⊘ Desvincular obra" (sentinel `__null__`);
+ *    - Botão "Vincular" (azul, disabled enquanto sem obra);
+ *    - Botão "Excluir N" (vermelho) com `window.confirm`
+ *      avisando que o histórico (eventos) também será
+ *      removido;
+ *    - Botão "Cancelar" (limpa seleção).
+ *
+ * 5. `onSuccess` de ambas as mutations: `invalidate` da lista
+ *    + `setSelecionados(new Set())` + toast.
+ *
+ * **0 mudança schema** — colunas `obraId` em
+ * `equipamentos_locados` e `equipamento_locado_eventos` já
+ * existiam desde a Rev. 2308.
+ *
+ *
  * Rev. 2322 — **HOTFIX/UX · Botão "Confirmar e cadastrar" da
  * importação PDF parecia não responder no iPad — diagnóstico
  * granular + diálogo de erro substitui toast invisível.**
