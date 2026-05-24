@@ -760,6 +760,17 @@ export const equipamentosRouter = router({
       // é DETERMINÍSTICO porque dentro de um único contrato todos os eventos
       // compartilham obraId+numeroContrato — não dependemos da ordem do
       // RETURNING. Atomicidade preservada pela transaction.
+      // Rev. 2353 — guard de servidor: refuse contratos sem obra
+      // vinculada (defense-in-depth contra cliente desatualizado/abuso de API).
+      // Cliente já bloqueia no botão "Confirmar", mas o backend é a fronteira
+      // de verdade — equipamento sem obra polui dashboards e cálculo de custo.
+      const semObra = input.contratos.filter(c => !(c.obraId ?? input.obraId));
+      if (semObra.length > 0) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: `${semObra.length} contrato(s) sem obra vinculada (ex: ${semObra.slice(0, 3).map(c => c.numeroContrato).join(", ")}). Selecione uma obra para cada contrato no preview antes de cadastrar.`,
+        });
+      }
       const ids: number[] = [];
       let totalItens = 0;
       await db.transaction(async (tx: any) => {

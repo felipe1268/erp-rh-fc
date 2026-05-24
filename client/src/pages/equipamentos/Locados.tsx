@@ -487,6 +487,21 @@ export default function EquipamentosLocados() {
   function confirmarImport() {
     if (!importPreview || importPreview.length === 0) return;
     if (!companyId) { setImportErroDetalhe("Empresa não selecionada. Selecione uma empresa antes de cadastrar."); return; }
+    // Rev. 2353 — bloqueio: não permite importar com contrato sem obra
+    // vinculada (regra do user: "Não pode ter equipamento sem obra vinculada").
+    // Cruzamento automático (Rev. 2326) já sugere; o que sobrar precisa de
+    // seleção manual no select "Obra ERP" de cada cartão antes de prosseguir.
+    const semObra = importPreview.filter((c: any) => !c.obraId);
+    if (semObra.length > 0) {
+      const nums = semObra.slice(0, 8).map((c: any) => c.numeroContrato || "(sem nº)").join(", ");
+      const extra = semObra.length > 8 ? ` (+${semObra.length - 8} outros)` : "";
+      setImportErroDetalhe(
+        `${semObra.length} contrato(s) sem obra vinculada.\n\n` +
+        `Não é possível cadastrar equipamento sem obra. Use o select "Obra ERP" em cada cartão pra escolher a obra correta antes de confirmar.\n\n` +
+        `Contratos pendentes: ${nums}${extra}.`
+      );
+      return;
+    }
     let semNumero = 0, semData = 0, semItens = 0, dataInvalida = 0;
     const limpos = importPreview
       .map(c => {
@@ -1831,22 +1846,35 @@ export default function EquipamentosLocados() {
                 </div>
               )}
 
-              {/* Rev. 2326 — banner de cruzamento automático */}
+              {/* Rev. 2326 + 2353 — banner de cruzamento automático
+                  (vermelho/bloqueante quando há contratos sem obra). */}
               {importPreview && importPreview.length > 0 && (() => {
+                // Rev. 2353 — fonte ÚNICA de "sem obra" é `!c.obraId` (mesma
+                // condição usada pelo guard do confirmarImport e pelo botão).
+                // Evita estado stale: se user limpa o select de um contrato
+                // auto-matched, `obraMatchAuto` continua true mas `obraId` vira
+                // undefined; antes o banner ficava verde enquanto o botão
+                // bloqueava — inconsistente.
                 const total = importPreview.length;
-                const auto = importPreview.filter((c: any) => c.obraMatchAuto).length;
+                const sem = importPreview.filter((c: any) => !c.obraId).length;
+                const auto = importPreview.filter((c: any) => c.obraId && c.obraMatchAuto).length;
                 const manual = importPreview.filter((c: any) => c.obraId && !c.obraMatchAuto).length;
-                const sem = total - auto - manual;
+                const bloqueia = sem > 0;
                 return (
-                  <div className="mb-3 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs text-emerald-900">
+                  <div className={`mb-3 rounded-lg border px-4 py-3 text-xs ${bloqueia ? "border-red-300 bg-red-50 text-red-900" : "border-emerald-200 bg-emerald-50 text-emerald-900"}`}>
                     <div className="font-semibold flex items-center gap-2">
-                      🔗 Cruzamento automático com obras em andamento
+                      {bloqueia ? "⛔ Há contratos SEM obra vinculada — corrija antes de importar" : "🔗 Cruzamento automático com obras em andamento"}
                     </div>
                     <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1">
                       <span><b className="text-emerald-700">{fmtN(auto)}</b> auto-vinculados pelo endereço/nome</span>
                       {manual > 0 && <span><b className="text-blue-700">{fmtN(manual)}</b> vinculados manualmente</span>}
-                      {sem > 0 && <span className="text-amber-800"><b>{fmtN(sem)}</b> sem obra (escolha no select de cada contrato)</span>}
+                      {sem > 0 && <span className="text-red-800"><b>{fmtN(sem)}</b> SEM OBRA — selecione no campo "Obra ERP" de cada cartão</span>}
                     </div>
+                    {bloqueia && (
+                      <div className="mt-2 text-[11px] text-red-700">
+                        ℹ Regra: não é permitido cadastrar equipamento locado sem obra vinculada (impede agrupamento e atribui custo errado).
+                      </div>
+                    )}
                   </div>
                 );
               })()}
@@ -2105,10 +2133,26 @@ export default function EquipamentosLocados() {
               </div>
               <div className="flex items-center gap-2">
                 <button onClick={() => setModalImport(false)} disabled={parsearPdf.isPending || !!importLoteProgresso} className="px-3 py-1.5 text-sm border rounded">Cancelar</button>
-                <button onClick={confirmarImport} disabled={!importPreview || importPreview.length === 0 || !!importLoteProgresso}
-                  className="px-4 py-1.5 text-sm bg-emerald-600 hover:bg-emerald-700 text-white rounded disabled:opacity-50 inline-flex items-center gap-1">
-                  {importLoteProgresso ? `Cadastrando lote ${importLoteProgresso.lote}/${importLoteProgresso.totalLotes}…` : <><CheckCircle2 className="h-4 w-4" /> Confirmar e cadastrar</>}
-                </button>
+                {(() => {
+                  // Rev. 2353 — desabilita "Confirmar" enquanto houver contrato
+                  // sem obra (regra do user: nada de equipamento sem obra).
+                  const semObra = importPreview ? importPreview.filter((c: any) => !c.obraId).length : 0;
+                  const bloqueado = !importPreview || importPreview.length === 0 || !!importLoteProgresso || semObra > 0;
+                  return (
+                    <button
+                      onClick={confirmarImport}
+                      disabled={bloqueado}
+                      title={semObra > 0 ? `${semObra} contrato(s) sem obra vinculada — selecione no campo "Obra ERP" de cada cartão` : undefined}
+                      className={`px-4 py-1.5 text-sm rounded disabled:opacity-50 inline-flex items-center gap-1 ${semObra > 0 ? "bg-red-500 hover:bg-red-600 text-white cursor-not-allowed" : "bg-emerald-600 hover:bg-emerald-700 text-white"}`}
+                    >
+                      {importLoteProgresso
+                        ? `Cadastrando lote ${importLoteProgresso.lote}/${importLoteProgresso.totalLotes}…`
+                        : semObra > 0
+                          ? <>⛔ {fmtN(semObra)} sem obra — vincule antes</>
+                          : <><CheckCircle2 className="h-4 w-4" /> Confirmar e cadastrar</>}
+                    </button>
+                  );
+                })()}
               </div>
             </div>
           </div>

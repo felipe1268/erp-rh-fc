@@ -1,6 +1,80 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2353 — **FEATURE/REGRA · Import PDF de locação passa a
+ * EXIGIR obra vinculada por contrato antes de cadastrar (client
+ * bloqueia botão "Confirmar" + backend recusa com BAD_REQUEST).
+ * Tudo que for igual e estiver na mesma obra fica corretamente
+ * agrupado na tela (regra que já existia mas só funcionava se o
+ * vínculo de obra estivesse populado).**
+ *
+ * Pedido user (24/05/2026, IMG_1150 mostrando 32 unidades com
+ * label vermelho "Sem obra vinculada"): "Não pode ter equipamento
+ * sem obra vinculada, quando fizer o upload do documento, e o ERP
+ * não consegue identificar deve deixar o usuário escolher antes
+ * de importar, e tudo que for igual e estiver na mesma obra deve
+ * ser agrupado".
+ *
+ * **Estado anterior**: o cruzamento automático por endereço
+ * (Rev. 2326) e o select manual por contrato (Rev. 2326) JÁ
+ * existiam no preview. O agrupamento por descrição+obra
+ * (Rev. 2344) também já existia na listagem. Mas era possível
+ * confirmar o import com contratos sem `obraId` — esses iam pro
+ * DB com `obra_id = null` e quebravam o agrupamento posterior
+ * (eles viravam cartões soltos com label "Sem obra vinculada").
+ *
+ * **Causa raiz**: validação faltando — `confirmarImport` (client)
+ * e `importarContratosLocacaoLote` (server) aceitavam contratos
+ * com `obraId` undefined/null.
+ *
+ * **Implementação client** (`client/src/pages/equipamentos/
+ * Locados.tsx`):
+ * (1) **Guard no `confirmarImport`** (linha ~493): antes de
+ *     processar `limpos`, filtra `importPreview` por `!c.obraId`;
+ *     se houver pelo menos 1, abre o modal de erro listando os
+ *     primeiros 8 números de contrato pendentes e instrui o user
+ *     a selecionar a obra no campo "Obra ERP" de cada cartão.
+ * (2) **Banner de cruzamento** (linha ~1854) passa de verde
+ *     suave para vermelho/bloqueante quando há contratos sem
+ *     obra; substitui o "sem obra" amber por vermelho com label
+ *     "SEM OBRA — selecione no campo Obra ERP de cada cartão" e
+ *     adiciona a nota da regra ("não é permitido cadastrar
+ *     equipamento locado sem obra vinculada").
+ * (3) **Botão "Confirmar e cadastrar"** (linha ~2132) ganha
+ *     branch visual: se `semObra > 0`, fica vermelho com label
+ *     "⛔ N sem obra — vincule antes" e `cursor-not-allowed`,
+ *     tooltip explicando o motivo; quando todos os contratos têm
+ *     obra, volta ao verde "Confirmar e cadastrar" original.
+ *
+ * **Implementação server** (`server/routers/equipamentos.ts`,
+ * `importarContratosLocacaoLote` linha ~766): guard de
+ * defense-in-depth — refuse com `BAD_REQUEST` se algum contrato
+ * tiver `(c.obraId ?? input.obraId)` falsy. Cliente bloqueia o
+ * botão, mas a fronteira de verdade é o server (API call direta
+ * via curl ou cliente desatualizado não deve conseguir poluir
+ * o DB com equipamento órfão).
+ *
+ * **Sobre o agrupamento** (Rev. 2344 preservada): a tela
+ * `Locados.tsx` já tem agrupamento por descrição+obra com toggle
+ * Agrupar/Individual (default agrupar). O fix de hoje faz o
+ * agrupamento funcionar bem na PRÁTICA — ao garantir que toda
+ * unidade nasça com `obra_id` populado, equipamentos iguais na
+ * mesma obra colapsam num único cartão agregado como esperado
+ * (em vez de aparecerem fragmentados em "Sem obra vinculada").
+ *
+ * **Como o user resolve hoje os 32 já cadastrados sem obra**: na
+ * tela Locados, filtrar por "Sem obra vinculada — 32 unid",
+ * selecionar todos, e usar o botão "Vincular em lote" (Rev. 2325/
+ * 2329) — fluxo já existente e bulk-rápido.
+ *
+ * **Por que NÃO migration retroativa**: violaria R-001 (UPDATE
+ * em massa em prod sem critério dado pelo user). O user precisa
+ * escolher a obra correta para cada um dos 32 órfãos antigos
+ * — não dá pra inferir.
+ *
+ * **R-001/R-007/R-010:** N/A — só validações novas (client +
+ * server), zero DDL, zero DELETE/UPDATE em prod.
+ *
  * Rev. 2352 — **CLEANUP/UX · Removida a subpágina "Parâmetros
  * CAPEX" da UI (sidebar + card no hub + rota + page component +
  * mapeamento de módulo).** Pedido user (24/05/2026, IMG_1148):
