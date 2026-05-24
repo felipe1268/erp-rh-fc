@@ -1401,8 +1401,8 @@ async function executeParseContratoLocacao(input: {
   nomeArquivo?: string;
 }): Promise<{ contratos: any[]; totalContratos: number; totalItens: number }> {
   const { invokeGeminiVision } = await import("../_core/llm");
-  const systemPrompt = `Você é um extrator de relatórios de locação de equipamentos para construção civil no Brasil.\nCada locadora tem um layout próprio (Jalves, Mills, Locamerica, etc.). Detecte automaticamente o layout e extraia TODOS os contratos e seus respectivos itens.\nDatas no formato brasileiro DD/MM/AAAA. Valores em reais (R$). Quantidades inteiras ou decimais.`;
-  const prompt = `Extraia TODOS os contratos de locação deste documento. Para cada contrato, capture:\n- numeroContrato (ex: "19096-32")\n- fornecedorNome (razão social/nome fantasia da locadora — geralmente no cabeçalho)\n- localObra (endereço/identificação da obra)\n- periodoInicio (DD/MM/AAAA)\n- periodoFim (DD/MM/AAAA)\n- valorTotal (numérico, sem R$, ponto como separador decimal)\n- atendenteResponsavel\n- itens: array de {patrimonio, descricao, quantidade (number), valorUnitario (subtotal/qtde, number), subtotal (number), categoria}\n\nPara o campo "categoria" de CADA ITEM, classifique em UMA das categorias abaixo (escolha a MAIS específica):\n- "Andaime e escoramento" (guarda-corpo, pranchão, diagonal, sapata ajustável, escora, cruzeta, longarina, plataforma metálica, base regulável, painel de escoramento, viga H20)\n- "Equipamento elétrico" (gerador, betoneira, vibrador, lixadeira, esmerilhadeira, serra circular/policorte, compressor, bomba submersa/centrífuga, transformador, quadro de força)\n- "Ferramenta manual" (carrinho de mão, marreta, martelete, furadeira não-elétrica, alavanca, pá, picareta)\n- "EPI/EPC" (capacete, cinto de segurança, luva, óculos, redes de proteção, tela de fachada)\n- "Veículo/Máquina pesada" (caminhão, retroescavadeira, escavadeira, guindaste, manipulador telescópico)\n- "Container/Mobiliário" (container, mesa, cadeira, armário, escritório de obra)\n- "Outros" (use somente se NÃO encaixar em nenhuma acima)\n\nRetorne APENAS JSON válido no formato {contratos: [...]}. Se um campo estiver ausente, use string vazia ou 0. Datas SEMPRE em DD/MM/AAAA.`;
+  const systemPrompt = `Você é um extrator de relatórios de locação de equipamentos para construção civil no Brasil.\nCada locadora tem um layout próprio (Jalves, Mills, Locamerica, F051/R051, etc.). Detecte automaticamente o layout e extraia TODOS os contratos e seus respectivos itens.\nDatas SEMPRE no formato brasileiro DD/MM/AAAA. Valores em reais (R$). Quantidades inteiras ou decimais.`;
+  const prompt = `Extraia TODOS os contratos de locação deste documento. Para cada contrato, capture:\n- numeroContrato (ex: "19096-32")\n- fornecedorNome (razão social/nome fantasia da locadora — geralmente no cabeçalho)\n- localObra (endereço/identificação da obra)\n- periodoInicio (DD/MM/AAAA) — OBRIGATÓRIO\n- periodoFim (DD/MM/AAAA) — OBRIGATÓRIO\n- valorTotal (numérico, sem R$, ponto como separador decimal)\n- atendenteResponsavel\n- itens: array de {patrimonio, descricao, quantidade (number), valorUnitario (subtotal/qtde, number), subtotal (number), categoria}\n\n**REGRAS CRÍTICAS PARA O PERÍODO DE LOCAÇÃO** (este campo NUNCA pode vir vazio):\n1. O período fica SEMPRE no cabeçalho de cada contrato, geralmente no canto direito da MESMA linha do "Nº Contrato" e "Valor".\n2. O texto típico é \`Período: DD/MM/AAAA  A  DD/MM/AAAA\` — extraia a PRIMEIRA data como periodoInicio e a SEGUNDA como periodoFim.\n3. Layout F051/R051 (Jalves e similares): a linha do cabeçalho tem o formato \`Nº Contrato: NNNNN-NN   Valor: 999,00   Local da obra: ...   Período: DD/MM/AAAA  A  DD/MM/AAAA\`. Cada contrato repete esse cabeçalho.\n4. Sinônimos aceitos para o campo: "Período", "Vigência", "Locação de", "Data início", "Data fim", "De", "Até", "Aluguel de".\n5. Se houver SÓ uma data inicial sem fim explícito, calcule fim = início + 30 dias.\n6. Se o documento tem um período GERAL no cabeçalho (ex: "Período para devolução entre 20/05/2010 a 20/05/2040"), IGNORE-O — esse é o range do relatório, NÃO o período do contrato. Use sempre o período próprio de cada contrato.\n7. CADA contrato pode ter seu próprio período distinto (não copie o período do primeiro contrato pros demais).\n8. NUNCA invente datas: se realmente não houver período visível no contrato, deixe periodoInicio/periodoFim vazios — mas é raro, o período quase sempre está no cabeçalho.\n\n**Exemplos do layout F051/R051** (use isso pra calibrar):\n- "Nº Contrato: 19096 - 32  Valor: 250,00  ... Período: 09/04/2026 A 09/05/2026" → periodoInicio="09/04/2026", periodoFim="09/05/2026"\n- "Nº Contrato: 19487 - 32  Valor: 245,00  ... Período: 21/04/2026 A 21/05/2026" → periodoInicio="21/04/2026", periodoFim="21/05/2026"\n- "Nº Contrato: 19751 - 30  Valor: 300,00  ... Período: 27/04/2026 A 27/05/2026" → periodoInicio="27/04/2026", periodoFim="27/05/2026"\n\nPara o campo "categoria" de CADA ITEM, classifique em UMA das categorias abaixo (escolha a MAIS específica):\n- "Andaime e escoramento" (guarda-corpo, pranchão, diagonal, sapata ajustável, escora, cruzeta, longarina, plataforma metálica, base regulável, painel de escoramento, viga H20)\n- "Equipamento elétrico" (gerador, betoneira, vibrador, lixadeira, esmerilhadeira, serra circular/policorte, compressor, bomba submersa/centrífuga, transformador, quadro de força)\n- "Ferramenta manual" (carrinho de mão, marreta, martelete, furadeira não-elétrica, alavanca, pá, picareta)\n- "EPI/EPC" (capacete, cinto de segurança, luva, óculos, redes de proteção, tela de fachada)\n- "Veículo/Máquina pesada" (caminhão, retroescavadeira, escavadeira, guindaste, manipulador telescópico)\n- "Container/Mobiliário" (container, mesa, cadeira, armário, escritório de obra)\n- "Outros" (use somente se NÃO encaixar em nenhuma acima)\n\nRetorne APENAS JSON válido no formato {contratos: [...]}. Se um campo estiver ausente, use string vazia ou 0. Datas SEMPRE em DD/MM/AAAA.`;
 
   const responseSchema = {
     type: "object",
@@ -1489,18 +1489,39 @@ async function executeParseContratoLocacao(input: {
   const contratos: any[] = Array.isArray(parsed?.contratos) ? parsed.contratos : [];
   if (contratos.length === 0) throw new TRPCError({ code: "BAD_REQUEST", message: "Nenhum contrato detectado no documento." });
 
+  // Rev. 2351 — toIso mais tolerante: aceita "DD/MM/AAAA", "D/M/AAAA",
+  // "DD-MM-AAAA", "DD.MM.AAAA", e ISO. Trim e normalização de separador.
+  // Falha silenciosa retorna "" (preserva contrato no preview pra user
+  // corrigir manualmente em vez de quebrar todo o lote).
   const toIso = (br: string) => {
     if (!br) return "";
-    const m = br.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
-    if (m) return `${m[3]}-${m[2]}-${m[1]}`;
-    const m2 = br.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    const s = String(br).trim().replace(/\s+/g, "");
+    const m = s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})$/);
+    if (m) {
+      const dd = m[1].padStart(2, "0");
+      const mm = m[2].padStart(2, "0");
+      return `${m[3]}-${mm}-${dd}`;
+    }
+    const m2 = s.match(/^(\d{4})[\/\-.](\d{2})[\/\-.](\d{2})/);
     return m2 ? `${m2[1]}-${m2[2]}-${m2[3]}` : "";
   };
+  // Rev. 2351 — se LLM trouxer só periodoInicio (cenário do prompt regra 5),
+  // calcula fim = início + 30 dias como fallback razoável de locação mensal.
+  const addDays = (iso: string, days: number): string => {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return "";
+    const d = new Date(iso + "T00:00:00Z");
+    d.setUTCDate(d.getUTCDate() + days);
+    return d.toISOString().slice(0, 10);
+  };
+  let comDatas = 0, semDatas = 0;
   for (const c of contratos) {
     c.periodoInicio = toIso(c.periodoInicio);
     c.periodoFim = toIso(c.periodoFim);
+    if (c.periodoInicio && !c.periodoFim) c.periodoFim = addDays(c.periodoInicio, 30);
     if (!Array.isArray(c.itens)) c.itens = [];
+    if (c.periodoInicio && c.periodoFim) comDatas++; else semDatas++;
   }
+  console.log(`[executeParseContratoLocacao] Datas: ${comDatas} contratos OK / ${semDatas} sem período (preview vai pedir correção manual).`);
 
   return {
     contratos,

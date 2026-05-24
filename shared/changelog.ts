@@ -1,6 +1,118 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2351 — **HOTFIX/FEATURE · Extração de PERÍODO DE LOCAÇÃO
+ * por contrato no import PDF reforçada: prompt Gemini ganha 8
+ * regras críticas + 3 exemplos do layout F051/R051 (Jalves), e
+ * `toIso` aceita variações (D/M/AAAA, DD-MM, DD.MM) com fallback
+ * fim = início + 30 dias quando só vem início.**
+ *
+ * Pedido user (24/05/2026, IMG_1145 do relatório F051/R051):
+ * "Analisando PDF do fornecedor tem o período de locação, que
+ * precisa ser respeitado ou renovado, quando fizer o upload quero
+ * que cadastre o período de locação de cada equipamento". Após
+ * pergunta de clarificação, user confirmou: "As datas NÃO estão
+ * sendo extraídas do PDF (vêm em branco ou erradas no preview) —
+ * preciso que a IA capture melhor".
+ *
+ * **Estado anterior**: o pipeline JÁ existia — Gemini extraía
+ * `periodoInicio`/`periodoFim` por contrato, server persistia
+ * `dataInicio`/`dataFimPrevista` por unidade (linhas 781-782 de
+ * `importarContratosLocacaoLote`), client mostrava em todos os
+ * cards/tabelas/painéis. Mas o prompt era genérico ("periodoInicio
+ * (DD/MM/AAAA)") e Gemini frequentemente trazia vazio ou pegava o
+ * range global do cabeçalho ("Período para devolução entre
+ * 20/05/2010 a 20/05/2040") em vez do período próprio do contrato.
+ *
+ * **Causa raiz**: prompt sem (a) instrução de ONDE achar o
+ * campo, (b) exemplos calibrados pro layout F051/R051 do user,
+ * (c) regra explícita pra ignorar o range global do documento.
+ *
+ * **Implementação** (`server/routers/equipamentos.ts`,
+ * `executeParseContratoLocacao`):
+ *
+ * (1) **Prompt reforçado** com seção "REGRAS CRÍTICAS PARA O
+ * PERÍODO DE LOCAÇÃO" e 8 regras:
+ *   1. Período fica no cabeçalho de cada contrato, canto direito
+ *      da MESMA linha do "Nº Contrato" e "Valor".
+ *   2. Texto típico `Período: DD/MM/AAAA  A  DD/MM/AAAA` —
+ *      primeira data = inicio, segunda = fim.
+ *   3. Layout F051/R051 descrito explicitamente: `Nº Contrato:
+ *      NNNNN-NN   Valor: 999,00   Local da obra: ...   Período:
+ *      DD/MM/AAAA  A  DD/MM/AAAA`.
+ *   4. Sinônimos aceitos: Período, Vigência, Locação de, Data
+ *      início, Data fim, De, Até, Aluguel de.
+ *   5. Se só houver data inicial sem fim explícito, calcular
+ *      fim = início + 30 dias.
+ *   6. **IGNORAR explicitamente** o range global do documento
+ *      ("Período para devolução entre 20/05/2010 a 20/05/2040") —
+ *      esse é o range do relatório, NÃO o período do contrato.
+ *   7. CADA contrato tem seu próprio período distinto (não copiar
+ *      o do primeiro pros demais).
+ *   8. NUNCA inventar datas — se realmente não houver, deixar
+ *      vazio (raro).
+ *
+ * (2) **3 exemplos calibrados pro PDF do user** (capturados do
+ * IMG_1145): contratos 19096-32 (09/04→09/05), 19487-32 (21/04→
+ * 21/05), 19751-30 (27/04→27/05). Few-shot ajuda Gemini a fixar
+ * o layout F051/R051.
+ *
+ * (3) **System prompt** ganha referência a F051/R051 + reforço
+ * "Datas SEMPRE no formato DD/MM/AAAA".
+ *
+ * (4) **`responseSchema`** ganha sufixo " — OBRIGATÓRIO" no
+ * label de `periodoInicio`/`periodoFim` (estavam só com "(DD/MM/
+ * AAAA)" — agora a obrigatoriedade está visível no prompt além
+ * do schema `required`).
+ *
+ * (5) **`toIso` mais tolerante** — antes só aceitava `^(\\d{2})/
+ * (\\d{2})/(\\d{4})$` e ISO; agora aceita `D/M/AAAA` (zero-pad
+ * automático), `DD-MM-AAAA`, `DD.MM.AAAA`, com `trim()` e remoção
+ * de espaços internos via `replace(/\\s+/g,"")`. Cobre variações
+ * que Gemini eventualmente solta (ex: "9/4/2026" sem zero-pad,
+ * "09 / 04 / 2026" com espaços).
+ *
+ * (6) **Fallback `addDays`**: se LLM trouxer só `periodoInicio`
+ * (cenário da regra 5 do prompt), calcula `periodoFim = início
+ * + 30 dias`. Locação mensal é o caso comum.
+ *
+ * (7) **Telemetria**: log `[executeParseContratoLocacao] Datas:
+ * X contratos OK / Y sem período` ao final do parse — sem
+ * instrumentar o client, dá visibilidade imediata da taxa de
+ * extração em qualquer próximo import.
+ *
+ * **Preservado**: `importarContratosLocacaoLote` (linhas 781-782)
+ * continua aplicando `c.periodoInicio`/`c.periodoFim` em CADA
+ * unidade criada (`dataInicio`/`dataFimPrevista`). O cliente
+ * `Locados.tsx` já filtra contratos sem datas no preview
+ * (`if (!c.periodoInicio || !c.periodoFim) { semData++; return
+ * null; }`) e oferece inputs `<input type="date">` editáveis pra
+ * correção manual quando necessário (linhas 2031, 2035).
+ *
+ * **Por que NÃO defaultar tudo pra hoje + 30 dias**: violaria
+ * R-001 (nunca inventar dado em prod). Melhor mostrar "sem
+ * período" no preview e deixar user corrigir — é fail-loud em
+ * vez de fail-silent.
+ *
+ * **Por que NÃO fazer 2ª passada de OCR pixel-level**: o problema
+ * não era OCR (Gemini Vision já lê o texto perfeitamente), era o
+ * prompt sem instrução clara de onde olhar/o que ignorar. Few-shot
+ * com exemplos do layout real do user resolve.
+ *
+ * **Esperado**: 100% dos contratos com período visível no
+ * cabeçalho devem vir com `periodoInicio`+`periodoFim` corretos.
+ * Caso edge (PDFs muito antigos sem cabeçalho padronizado) cai
+ * no fluxo de correção manual no preview.
+ *
+ * **Housekeeping**: replit.md reorganizado pra seguir convenção
+ * de 2 detalhadas + 5 one-liners (estava com 13+ entradas
+ * detalhadas inline). Revs 2343-2325 migradas pra
+ * replit-history.md. Linha duplicada "Revisões 2098 → 2044"
+ * removida.
+ *
+ * **R-001/R-007/R-010:** N/A — só LLM call (PDF parse) + UPDATE
+ * escopado por `company_id` (preservado), idempotente, zero DDL.
+ *
  * Rev. 2350 — **CAUSA RAIZ ENCONTRADA via teste manual + correção
  * completa: a GOOGLE_API_KEY tem o Custom Search API
  * PERMANENTEMENTE BLOQUEADO no projeto GCP 1052983877622

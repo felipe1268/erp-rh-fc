@@ -2,6 +2,24 @@
 
 > Este arquivo guarda os one-liners das revisões antigas para manter o `replit.md` enxuto.
 
+- **Rev. 2344** — UX/PERF · Tela Equipamentos Locados ganha AGRUPAMENTO por descrição+obra (default ON); 1218 cards individuais viram ~60 cards agregados com modal drill-down. Ver `shared/changelog.ts`.
+- **Rev. 2343** — HOTFIX · Busca de fotos com IA traduz PT→EN (guards anti-alucinação) antes dos providers. Ver `shared/changelog.ts`.
+- **Rev. 2342** — HOTFIX/FEATURE · Busca de fotos da IA passa por validação rigorosa via Gemini antes de persistir + botão "Limpar fotos IA" pra reset em massa. Ver `shared/changelog.ts`.
+- **Rev. 2341** — FEATURE/HOTFIX · Busca de fotos com IA usa chain de provedores públicos (OpenVerse + Wikimedia Commons + Google CSE opcional) — destrava feature mesmo com GOOGLE_API_KEY restrita. Ver `shared/changelog.ts`.
+- **Rev. 2340** — FEATURE · Busca de foto ilustrativa dos equipamentos locados via IA (Google Custom Search Image) + thumbnail nos cards com badge "IA". Ver `shared/changelog.ts`.
+- **Rev. 2339** — FEATURE/UX · Card de Equipamento Locado clicável + painel de detalhes completos (foto, KPIs, obra/fornecedor, galeria, timeline). Ver `shared/changelog.ts`.
+- **Rev. 2338** — UX · KPI cards de Equipamentos Locados responsivos (1→2→4 cols) + `clamp()`. Ver `shared/changelog.ts`.
+- **Rev. 2336** — FEATURE/UX · Drill-down clicável nas células da tabela "Locações mês a mês" → modal moderno. Ver `shared/changelog.ts`.
+- **Rev. 2334** — UX · Filtro por OBRA em Equipamentos Locados + grid 2-col busca+obra + chips. Ver `shared/changelog.ts`.
+- **Rev. 2333** — HOTFIX/PERF/UX · Import PDF de locação: bulk INSERT no server (corrige "Load failed" iOS Safari) + chunking de 10 contratos no client. Ver `shared/changelog.ts`.
+- **Rev. 2331** — UX · Layout modernizado das 6 tabelas mês a mês do Dashboard Almox & Equip. + segmented pill p/ filtro de período. Ver `shared/changelog.ts`.
+- **Rev. 2330** — FEATURE · Filtro de período (Últimos 12 meses ou ano fechado) nas 6 tabelas mês a mês do Dashboard Almox & Equip. Ver `shared/changelog.ts`.
+- **Rev. 2329** — PERF · Exclusão/vinculação em lote de locados ~50× mais rápida via bulk SQL. Ver `shared/changelog.ts`.
+- **Rev. 2328** — HOTFIX/UX · Exclusão/vinculação em lote de locados parecia travada — chunk 500→200 + spinner + tempo decorrido. Ver `shared/changelog.ts`.
+- **Rev. 2327** — UX · Cada aba do Dashboard Almox & Equip. vira item próprio na sidebar + tabela mês a mês (12 meses) em cada. Ver `shared/changelog.ts`.
+- **Rev. 2326** — FEATURE · Importação PDF de locação cruza endereço com obras em andamento e sugere vínculo automático. Ver `shared/changelog.ts`.
+- **Rev. 2325** — HOTFIX/UX · Exclusão/vinculação em lote de equipamentos locados — chunking de 500 + modais bonitos. Ver `shared/changelog.ts`.
+
 - **Rev. 2335** — UX · Padrão do filtro de período dos 6 dashboards mês a mês passa de "últimos 12 meses" pro ano corrente. Ver `shared/changelog.ts`.
 - **Rev. 2332** — UX · Nome do mês capitalizado ("Jan 2026") + indicador MoM (▲/▼ %) nas 6 tabelas mês a mês. Ver `shared/changelog.ts`.
 - **Rev. 2337** — FEATURE · Categorização automática dos equipamentos locados via IA (Claude→Gemini fallback) + filtro por categoria; coluna `categoria` já existia; UPDATE por categoria (7 round-trips vs 1218). Hardening pós-review: guard `getCompaniesForUser`. Ver `shared/changelog.ts`.
