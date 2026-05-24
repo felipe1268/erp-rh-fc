@@ -1,6 +1,158 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2355 — **FEATURE/SOLUÇÃO DEFINITIVA · Biblioteca CURADA
+ * de fotos de equipamentos locados por descrição canônica.
+ * Substitui de vez a "busca de fotos com IA" (revs 2340-2350)
+ * que sofreu 9 rounds de tentativas frustradas por limitação
+ * estrutural dos provedores gratuitos (Google CSE bloqueado no
+ * GCP da empresa; OpenVerse/Wikimedia indexam ~só EN e quase
+ * não têm fotos de equipamentos de construção civil brasileira).
+ * O user sobe 1 foto por descrição (PAINEL NR18 1,5X1,0, DIAGONA
+ * 1,50M, etc) e o ERP propaga essa foto pra TODAS as unidades
+ * com aquela descrição — atuais (UPDATE em lote) E futuras
+ * (hook no import PDF). Determinístico, nunca erra.**
+ *
+ * Pedido user (24/05/2026, IMG_1147 — screenshot mostrando
+ * 1.220 unidades com fotos genéricas erradas, PAINEL NR18 com
+ * foto de pessoa, PRANCHAO com foto de pessoa, DIAGONA com foto
+ * de algo aleatório): "Foto tudo errado,... quero que isso seja
+ * resolvido em definitivo". Apresentei 4 opções (A=biblioteca
+ * curada, B=destravar GCP, C=SVG nominal, D=API paga). User
+ * escolheu A.
+ *
+ * **Por que a "IA" falhou em 9 revs (2342-2350)** — sumário pra
+ * fechar o capítulo: (a) Google Custom Search está bloqueado no
+ * projeto GCP da empresa — cota 0 mesmo com GOOGLE_API_KEY válida;
+ * (b) OpenVerse e Wikimedia, os fallbacks gratuitos restantes,
+ * indexam principalmente conteúdo em inglês e quase não cobrem
+ * equipamentos de construção civil específicos do mercado BR
+ * (DIAGONA, PRANCHAO, SAPATA AJUSTÁVEL); (c) validação visual
+ * por LLM (Gemini Vision) sobre candidatos ruins só consegue
+ * REJEITAR, não consegue criar bons resultados — quando todos os
+ * top-K são lixo, o melhor que dá é placeholder colorido. Não há
+ * solução automática viável neste universo.
+ *
+ * **Arquitetura da Rev. 2355** — 3 partes coordenadas:
+ *
+ * 1) **Tabela nova `equipamentos_fotos_canonicas`**
+ *    (`drizzle/schema.ts` + SyncSchema+ em `server/_core/index.ts`):
+ *    - `id`, `company_id`, `descricao_normalizada` (UNIQUE per
+ *      company), `descricao_original`, `foto_url`, `criado_por`,
+ *      `created_at`, `updated_at`.
+ *    - Índice único `(company_id, descricao_normalizada)` garante
+ *      idempotência do upsert.
+ *    - SyncSchema+ usa `CREATE TABLE IF NOT EXISTS` — R-001 OK.
+ *    - Normalização: NFD + remove diacríticos + uppercase +
+ *      collapse spaces + trim. Ex.: "Painel NR18 1,5x1,0 com
+ *      Degrau " → "PAINEL NR18 1,5X1,0 COM DEGRAU".
+ *
+ * 2) **3 procedures tRPC em `server/routers/equipamentos.ts`**:
+ *    - `fotosCanonicasListar({companyId})`: agrupa todas as
+ *      descrições cadastradas por chave normalizada + faz LEFT
+ *      JOIN com a biblioteca canônica. Retorna `grupos[]` com
+ *      `descricaoNormalizada`, `descricoesOriginais[]`, `unidades`,
+ *      `comFoto`, `canonica` (ou null).
+ *    - `fotosCanonicasUpsert({companyId, descricaoOriginal,
+ *      fotoBase64, fotoMime})`:
+ *      (a) `storagePut` salva o arquivo (key estável por
+ *          `sha1(descNorm).slice(0,12)-{timestamp}`);
+ *      (b) `INSERT ... ON CONFLICT DO UPDATE` no equipamentos_
+ *          fotos_canonicas;
+ *      (c) SELECT id+descricao de TODAS as unidades da empresa,
+ *          filtra em JS pelos que normalizam pra mesma chave,
+ *          UPDATE em chunks de 1000 (precaução com placeholders
+ *          PG) → propaga `foto_url` automaticamente.
+ *      Retorna `{ fotoUrl, unidadesAtualizadas }`.
+ *    - `fotosCanonicasRemover({companyId, id, limparUnidades})`:
+ *      DELETE da canônica + opcionalmente limpa `foto_url` SOMENTE
+ *      das unidades cujo `foto_url === canonica.foto_url`
+ *      (preserva fotos atribuídas por outras vias — IA antiga,
+ *      recebimento físico).
+ *
+ * 3) **Hook no `importarContratosLocacaoLote`** (mesma file,
+ *    bloco antes do `tx.insert(equipamentosLocados)`):
+ *    - Pra cada batch de unidades a inserir, computa `Set` das
+ *      descrições normalizadas únicas;
+ *    - `SELECT descricao_normalizada, foto_url FROM
+ *      equipamentos_fotos_canonicas WHERE company_id = X AND
+ *      descricao_normalizada IN (...)`;
+ *    - Pra cada `locadosRow`, se a descNorm tem foto canônica,
+ *      preenche `r.fotoUrl = url` ANTES do INSERT.
+ *    - Resultado: usuário importa novo PDF com 50 painéis,
+ *      cada um nasce JÁ com a foto canônica de "PAINEL NR18".
+ *
+ * **Frontend** (`client/src/pages/equipamentos/Locados.tsx`):
+ * - **Botão novo no header** (indigo, sempre visível):
+ *   `Biblioteca de fotos`. Substitui o pink "Buscar fotos com
+ *   IA" como ação principal.
+ * - **Botão antigo "Buscar fotos com IA"** rebatizado pra
+ *   `Tentar IA` (compacto, white-on-pink, secundário). Preservado
+ *   pra não quebrar o fluxo de quem ainda quer tentar.
+ * - **Modal "Biblioteca de fotos"** (max-w-4xl):
+ *   - Header indigo com `Library` icon + sumário "N descrições /
+ *     M com foto".
+ *   - Search filter por descrição (normalizada — case+accent
+ *     insensitive).
+ *   - Grid 2 colunas (sm+) com card por descrição: thumbnail
+ *     clicável 80×80 (upload via `<input type="file" hidden>` +
+ *     `compressImageIfNeeded` → tRPC upsert), descrição, count
+ *     "N un.", indicador "X/N c/ foto" (verde se 100%, âmbar se
+ *     parcial, cinza se 0), botão "Remover" se já tem canônica.
+ *   - Loader spinner inline no thumb durante upload.
+ * - **Helpers**: `handleBibliotecaUpload(descOriginal, file)` que
+ *   normaliza (NFD+uppercase+collapse), comprime, chama mutation.
+ *   `mutation.onSuccess` invalida `bibliotecaQuery` +
+ *   `locadosListar` (cards na página principal recarregam com a
+ *   foto nova).
+ *
+ * **Fluxo end-to-end** (perspectiva do usuário FC):
+ *   1. Abre `/equipamentos/locados`, clica `Biblioteca de fotos`.
+ *   2. Vê lista das ~30-50 descrições únicas que ele realmente
+ *      tem (ordenadas por nº de unidades — as mais comuns primeiro).
+ *   3. Pra cada uma, clica no quadro vazio, escolhe foto do
+ *      celular/galeria. ERP comprime + sobe + aplica em todas.
+ *   4. Toast: "Foto aplicada a 165 unidades".
+ *   5. Próximo import PDF de "PAINEL NR18 1,5X1,0" já nasce com
+ *      a foto correta — sem ação adicional.
+ *
+ * **Arquivos modificados**:
+ * - `drizzle/schema.ts`: +tabela `equipamentosFotosCanonicas`
+ *   (uniqueIndex já estava importado).
+ * - `server/_core/index.ts`: +CREATE TABLE IF NOT EXISTS +
+ *   índices (idempotente, dentro do bloco SyncSchema+ Rev. 2319/
+ *   2340).
+ * - `server/routers/equipamentos.ts`: +import `storagePut` + helper
+ *   `normalizarDescricao` + hook no `importarContratosLocacaoLote`
+ *   + 3 procedures (`fotosCanonicasListar`, `fotosCanonicasUpsert`,
+ *   `fotosCanonicasRemover`).
+ * - `client/src/pages/equipamentos/Locados.tsx`: +import
+ *   `compressImageIfNeeded`, `Library`, `ImagePlus`, `Check` +
+ *   estado `modalBiblioteca` + `bibliotecaQuery` + 2 mutations +
+ *   `handleBibliotecaUpload` + botão header + modal completo.
+ * - `shared/version.ts`: 2354 → 2355.
+ *
+ * **R-001 / R-007 / R-010 (interpretação refinada)**: OK.
+ * - DDL: apenas `CREATE TABLE IF NOT EXISTS` + `CREATE INDEX
+ *   IF NOT EXISTS`. Zero `ALTER TABLE` destrutivo, zero `DROP`.
+ * - DML write: existem `INSERT` (upsert canônica), `UPDATE` (foto_url
+ *   nas unidades) e `DELETE` (em `fotosCanonicasRemover`). A regra
+ *   R-001 proíbe `DELETE` **adhoc em massa em produção** — aqui o
+ *   DELETE é WHERE id=X AND company_id=Y disparado por ação
+ *   explícita do usuário autenticado, equivalente em escopo aos
+ *   demais CRUDs do ERP, NÃO é um delete em massa adhoc. Está OK.
+ * - Hardening adicional (whitelist MIME, allowed-check em
+ *   `importarContratosLocacaoLote` que estava ausente desde a Rev.
+ *   2333) aplicado junto na 2355 após review do architect.
+ *
+ * **Por que NÃO mexer nas fotos já erradas existentes**: deixar
+ * o user decidir. Ao subir a foto canônica de "PAINEL NR18", o
+ * upsert SOBRESCREVE o `foto_url` de TODAS as unidades dessa
+ * descrição — inclusive as que tinham foto errada da IA. Logo,
+ * o efeito colateral é positivo (corrige). Pra unidades cujas
+ * descrições NÃO ganharem foto canônica, o user pode usar o botão
+ * existente "Limpar fotos IA" pra zerar.
+ *
  * Rev. 2354 — **UX · Inputs de dinheiro no preview do import PDF
  * de locação passam a usar formato BRL "R$ X.XXX,XX" com ponto
  * de milhar e vírgula decimal (em vez do `type="number"` cru

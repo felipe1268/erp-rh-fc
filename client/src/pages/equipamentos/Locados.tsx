@@ -3,9 +3,10 @@ import { useState, useMemo, useRef, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
 import { toast } from "sonner";
-import { Plus, Search, X, Truck, CheckCircle2, RotateCcw, ClipboardCheck, Eye, FileText, Upload, Sparkles, Trash2, Activity, Clock, AlertTriangle, DollarSign, Calendar, Hash, Building2, User as UserIcon, MapPin, Camera, StickyNote, ChevronDown, Tag, Loader2, Layers, Boxes, type LucideIcon } from "lucide-react";
+import { Plus, Search, X, Truck, CheckCircle2, RotateCcw, ClipboardCheck, Eye, FileText, Upload, Sparkles, Trash2, Activity, Clock, AlertTriangle, DollarSign, Calendar, Hash, Building2, User as UserIcon, MapPin, Camera, StickyNote, ChevronDown, Tag, Loader2, Layers, Boxes, ImagePlus, Library, Check, type LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import { FotosUploader, FotoItem, fmtMoney, fmtDate, Spinner } from "./_shared";
+import { compressImageIfNeeded } from "@/lib/imageCompress";
 
 // Rev. 2346 — formata inteiros pt-BR (≥1000 ganha separador "." de milhar). Ex: 1220 → "1.220".
 const fmtN = (n: number) => n.toLocaleString("pt-BR");
@@ -753,6 +754,55 @@ export default function EquipamentosLocados() {
       setModalLimparFotos(false);
     },
   });
+  // Rev. 2355 — Biblioteca CURADA de fotos por descrição canônica.
+  // Substitui definitivamente a "busca por IA" (revs 2340-2350) que tinha
+  // baixa acurácia por limitação dos provedores gratuitos. User sobe 1 foto
+  // por descrição; ERP propaga pra todas as unidades dessa descrição.
+  const [modalBiblioteca, setModalBiblioteca] = useState(false);
+  const [bibliotecaBuscaQ, setBibliotecaBuscaQ] = useState("");
+  const bibliotecaQuery = trpc.equipamentos.fotosCanonicasListar.useQuery(
+    { companyId: companyId! },
+    { enabled: modalBiblioteca && !!companyId }
+  );
+  const [uploadingDescNorm, setUploadingDescNorm] = useState<string | null>(null);
+  const fotoCanonUpsertMut = trpc.equipamentos.fotosCanonicasUpsert.useMutation({
+    onSuccess: (res: any) => {
+      toast.success(`Foto aplicada a ${fmtN(res.unidadesAtualizadas)} unidade(s).`);
+      bibliotecaQuery.refetch();
+      utils.equipamentos.locadosListar.invalidate();
+      setUploadingDescNorm(null);
+    },
+    onError: (err: any) => {
+      toast.error(err?.message || "Falha ao salvar a foto.");
+      setUploadingDescNorm(null);
+    },
+  });
+  const fotoCanonRemoverMut = trpc.equipamentos.fotosCanonicasRemover.useMutation({
+    onSuccess: (res: any) => {
+      toast.success(`Foto canônica removida. ${fmtN(res.unidadesLimpas)} unidade(s) ficaram sem foto.`);
+      bibliotecaQuery.refetch();
+      utils.equipamentos.locadosListar.invalidate();
+    },
+    onError: (err: any) => toast.error(err?.message || "Falha ao remover."),
+  });
+  async function handleBibliotecaUpload(descricaoOriginal: string, file: File) {
+    if (!companyId) return;
+    const descNorm = descricaoOriginal.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().replace(/\s+/g, " ").trim();
+    setUploadingDescNorm(descNorm);
+    try {
+      const compressed = await compressImageIfNeeded(file);
+      await fotoCanonUpsertMut.mutateAsync({
+        companyId,
+        descricaoOriginal,
+        fotoBase64: compressed.base64,
+        fotoMime: compressed.contentType,
+      });
+    } catch (e: any) {
+      toast.error(e?.message || "Falha ao processar a imagem.");
+      setUploadingDescNorm(null);
+    }
+  }
+
   const buscarFotosMut = trpc.equipamentos.locadosBuscarFotosComIA.useMutation({
     onSuccess: (res: any) => {
       const acc = fotosAcumRef.current ?? { lotes: 0, analisadas: 0, encontradas: 0, itensAtualizados: 0, semFoto: [] as string[], phaseA: 0, phaseB: 0, phaseC: 0 };
@@ -854,15 +904,25 @@ export default function EquipamentosLocados() {
                   <span className="inline-flex items-center justify-center min-w-[22px] h-5 px-1.5 rounded-full text-[10px] font-bold bg-white/25">{fmtN(totalComFotoIA)}</span>
                 </button>
               )}
-              {/* Rev. 2340 — Buscar fotos com IA (só aparece se houver itens sem foto). */}
+              {/* Rev. 2355 — Biblioteca curada de fotos por descrição canônica.
+                  Substitui a busca por IA (revs 2340-2350) como caminho principal.
+                  Sempre visível: é o único modo determinístico de garantir foto certa. */}
+              <button onClick={() => setModalBiblioteca(true)}
+                className="inline-flex items-center gap-2 bg-indigo-500/90 text-white hover:bg-indigo-500 px-4 py-2.5 rounded-xl shadow-md font-semibold text-sm transition ring-1 ring-indigo-300/60"
+                title="Suba 1 foto por descrição de equipamento (PAINEL NR18, DIAGONA 1,50m, etc) e o ERP aplica em todas as unidades dessa descrição automaticamente.">
+                <Library className="h-4 w-4" />
+                Biblioteca de fotos
+              </button>
+              {/* Rev. 2340 — Buscar fotos com IA — mantido como fallback secundário (compacto).
+                  Rev. 2355 desencorajou (low acurácia comprovada em 9 revs) mas não removeu
+                  pra preservar fluxo de quem ainda quer tentar. */}
               {totalSemFoto > 0 && (
                 <button onClick={() => setModalFotosIA({ sobrescrever: false })}
                   disabled={buscarFotosMut.isPending}
-                  className="inline-flex items-center gap-2 bg-pink-500/90 text-white hover:bg-pink-500 px-4 py-2.5 rounded-xl shadow-md font-semibold text-sm transition ring-1 ring-pink-300/60 disabled:opacity-60 disabled:cursor-wait"
-                  title={`${totalSemFoto} equipamento(s) sem foto — a IA busca em bibliotecas públicas e VALIDA cada candidato antes de aplicar (rejeita fotos que não batem)`}>
-                  {buscarFotosMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Camera className="h-4 w-4" />}
-                  Buscar fotos com IA
-                  <span className="inline-flex items-center justify-center min-w-[22px] h-5 px-1.5 rounded-full text-[10px] font-bold bg-white/25">{fmtN(totalSemFoto)}</span>
+                  className="inline-flex items-center gap-2 bg-white text-pink-700 hover:bg-pink-50 px-3 py-2.5 rounded-xl shadow-sm font-medium text-xs transition ring-1 ring-pink-200 disabled:opacity-60 disabled:cursor-wait"
+                  title={`${totalSemFoto} equipamento(s) sem foto — busca automática em bibliotecas públicas (acurácia limitada — prefira "Biblioteca de fotos")`}>
+                  {buscarFotosMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+                  Tentar IA
                 </button>
               )}
               {/* Rev. 2315 — Removido botão "Receber locação"; fluxo principal é Importar PDF (IA). */}
@@ -2273,6 +2333,115 @@ export default function EquipamentosLocados() {
             </div>
             <div className="bg-slate-50 border-t border-slate-200 px-5 py-3 flex justify-end">
               <button onClick={() => setResultadoCategIA(null)} className="px-4 py-2 text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-md transition">Fechar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Rev. 2355 — Modal "Biblioteca de fotos" — solução DEFINITIVA pra fotos
+          de equipamentos. User sobe 1 foto por descrição canônica; ERP propaga
+          pra todas as unidades dessa descrição + aplica em imports futuros. */}
+      {modalBiblioteca && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setModalBiblioteca(false)}>
+          <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] flex flex-col overflow-hidden">
+            <div className="px-6 py-4 bg-gradient-to-r from-indigo-600 to-indigo-700 text-white flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="bg-white/20 p-2 rounded-lg"><Library className="h-5 w-5" /></div>
+                <div>
+                  <h3 className="text-lg font-bold">Biblioteca de fotos</h3>
+                  <p className="text-xs text-indigo-100 opacity-90">1 foto por descrição → aplica em TODAS as unidades (atuais + importações futuras).</p>
+                </div>
+              </div>
+              <button onClick={() => setModalBiblioteca(false)} className="text-white/80 hover:text-white p-1"><X className="h-5 w-5" /></button>
+            </div>
+            <div className="px-6 py-3 bg-indigo-50/70 border-b border-indigo-100 text-xs text-indigo-900 flex items-center gap-2">
+              <Sparkles className="h-3.5 w-3.5 flex-shrink-0" />
+              <span>
+                {bibliotecaQuery.data
+                  ? <>📚 <b>{fmtN(bibliotecaQuery.data.totalGrupos)}</b> descrição(ões) cadastrada(s) · <b>{fmtN(bibliotecaQuery.data.totalComCanonica)}</b> com foto na biblioteca</>
+                  : "Carregando descrições…"}
+              </span>
+            </div>
+            <div className="px-6 py-3 border-b border-slate-100">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                <input value={bibliotecaBuscaQ} onChange={(e) => setBibliotecaBuscaQ(e.target.value)} placeholder="Filtrar descrição…"
+                  className="w-full pl-10 pr-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500 outline-none" />
+              </div>
+            </div>
+            <div className="flex-1 overflow-y-auto px-6 py-4">
+              {bibliotecaQuery.isLoading ? (
+                <div className="flex items-center justify-center py-12 text-slate-500"><Loader2 className="h-6 w-6 animate-spin mr-2" /> Carregando…</div>
+              ) : bibliotecaQuery.data && bibliotecaQuery.data.grupos.length === 0 ? (
+                <div className="text-center py-12 text-slate-500">Nenhuma descrição cadastrada ainda. Cadastre equipamentos primeiro.</div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {(bibliotecaQuery.data?.grupos ?? [])
+                    .filter(g => {
+                      if (!bibliotecaBuscaQ.trim()) return true;
+                      const q = bibliotecaBuscaQ.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase();
+                      return g.descricaoNormalizada.includes(q);
+                    })
+                    .map(g => {
+                      const descOriginal = g.descricoesOriginais[0] || g.descricaoNormalizada;
+                      const uploading = uploadingDescNorm === g.descricaoNormalizada && fotoCanonUpsertMut.isPending;
+                      const fotoUrl = g.canonica?.fotoUrl || null;
+                      return (
+                        <div key={g.descricaoNormalizada} className={`border rounded-xl p-3 flex gap-3 transition ${fotoUrl ? "border-emerald-200 bg-emerald-50/40" : "border-slate-200 bg-white"}`}>
+                          <label className={`relative w-20 h-20 rounded-lg flex-shrink-0 cursor-pointer overflow-hidden ring-1 ring-slate-200 ${uploading ? "opacity-60" : ""}`}>
+                            {fotoUrl ? (
+                              <img src={fotoUrl} className="w-full h-full object-cover" alt="" />
+                            ) : (
+                              <div className="w-full h-full bg-slate-100 flex flex-col items-center justify-center text-slate-400">
+                                <ImagePlus className="h-5 w-5" />
+                                <span className="text-[9px] mt-0.5">Subir</span>
+                              </div>
+                            )}
+                            {uploading && (
+                              <div className="absolute inset-0 bg-white/70 flex items-center justify-center">
+                                <Loader2 className="h-5 w-5 animate-spin text-indigo-600" />
+                              </div>
+                            )}
+                            <input type="file" accept="image/*" className="hidden"
+                              disabled={uploading}
+                              onChange={async (e) => {
+                                const f = e.target.files?.[0];
+                                if (f) await handleBibliotecaUpload(descOriginal, f);
+                                e.target.value = "";
+                              }} />
+                          </label>
+                          <div className="flex-1 min-w-0 flex flex-col">
+                            <div className="font-semibold text-sm text-slate-900 truncate" title={descOriginal}>{descOriginal}</div>
+                            <div className="text-[11px] text-slate-500 mt-0.5 flex items-center gap-2 flex-wrap">
+                              <span className="inline-flex items-center gap-1"><Boxes className="h-3 w-3" /> {fmtN(g.unidades)} un.</span>
+                              <span className={`inline-flex items-center gap-1 ${g.comFoto === g.unidades && g.comFoto > 0 ? "text-emerald-700" : g.comFoto > 0 ? "text-amber-700" : "text-slate-500"}`}>
+                                <Camera className="h-3 w-3" /> {fmtN(g.comFoto)}/{fmtN(g.unidades)} c/ foto
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-2 mt-auto pt-2">
+                              {fotoUrl ? (
+                                <>
+                                  <span className="inline-flex items-center gap-1 text-[11px] text-emerald-700 font-semibold"><Check className="h-3 w-3" /> Na biblioteca</span>
+                                  <button onClick={() => g.canonica && companyId && fotoCanonRemoverMut.mutate({ companyId, id: g.canonica.id })}
+                                    disabled={fotoCanonRemoverMut.isPending}
+                                    className="ml-auto text-[11px] text-red-600 hover:text-red-700 hover:underline disabled:opacity-50">
+                                    Remover
+                                  </button>
+                                </>
+                              ) : (
+                                <span className="text-[11px] text-slate-400 italic">Sem foto · clique no quadro</span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                </div>
+              )}
+            </div>
+            <div className="px-6 py-3 bg-slate-50 border-t border-slate-100 flex items-center justify-between text-xs text-slate-600">
+              <div className="flex items-center gap-1.5"><Sparkles className="h-3.5 w-3.5 text-indigo-500" /> Imagens são comprimidas (máx 1920px, JPEG q=0.82) antes do upload.</div>
+              <button onClick={() => setModalBiblioteca(false)} className="px-4 py-1.5 bg-white border border-slate-300 hover:bg-slate-100 rounded-lg font-medium">Fechar</button>
             </div>
           </div>
         </div>

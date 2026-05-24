@@ -1963,7 +1963,27 @@ Regras:
           // Idempotente; fallback visual quando o recebimento não teve fotos.
           await db.execute(sql`ALTER TABLE equipamentos_locados ADD COLUMN IF NOT EXISTS foto_url TEXT`);
           console.log(`[SyncSchema+] Rev. 2319+2340: tabelas equipamentos_locados + equipamento_locado_eventos garantidas (+ índices + colunas import-lote + foto_url IA).`);
-        } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.2319/2340 equipamentos_locados (CREATE):`, e?.message || e); }
+
+          // Rev. 2355 — Biblioteca CURADA de fotos por descrição canônica.
+          // Substitui a "busca por IA" (revs 2340-2350) que tinha baixa
+          // acurácia por limitação dos provedores gratuitos. R-001/R-007/
+          // R-010: OK — apenas CREATE TABLE/INDEX IF NOT EXISTS.
+          await db.execute(sql`
+            CREATE TABLE IF NOT EXISTS equipamentos_fotos_canonicas (
+              id SERIAL PRIMARY KEY,
+              company_id INTEGER NOT NULL,
+              descricao_normalizada VARCHAR(255) NOT NULL,
+              descricao_original VARCHAR(255) NOT NULL,
+              foto_url TEXT NOT NULL,
+              criado_por INTEGER,
+              created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+              updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+            )
+          `);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_fotos_canon_company ON equipamentos_fotos_canonicas (company_id)`);
+          await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS uniq_fotos_canon_company_desc ON equipamentos_fotos_canonicas (company_id, descricao_normalizada)`);
+          console.log(`[SyncSchema+] Rev. 2355: tabela equipamentos_fotos_canonicas garantida (biblioteca curada).`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.2319/2340/2355 equipamentos_locados (CREATE):`, e?.message || e); }
 
         // ── Rev. 2260 — Backfill `previsto_msp_pct` em obras antigas ──────
         // Decisão user (23/05/2026): a regra "PREVISTO = % PREVISTO do MSP /

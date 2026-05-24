@@ -17,9 +17,23 @@ import {
   equipamentosProprios,
   equipamentosLocados,
   equipamentoLocadoEventos,
+  equipamentosFotosCanonicas,
   faturaLocacaoConferencia,
   parametrosCapex,
 } from "../../drizzle/schema";
+import { storagePut } from "../storage";
+
+// Rev. 2355 — Normaliza descrição para chave canônica da biblioteca de fotos.
+// NFD + remove diacríticos + uppercase + collapse espaços + trim.
+// Ex.: "Painel NR18 1,5x1,0 com Degrau " → "PAINEL NR18 1,5X1,0 COM DEGRAU"
+function normalizarDescricao(s: string): string {
+  return (s || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toUpperCase()
+    .replace(/\s+/g, " ")
+    .trim();
+}
 
 // ----------------------------------------------------------------------------
 // Defaults de parâmetros CAPEX (semeados na 1ª leitura por company)
@@ -751,6 +765,12 @@ export const equipamentosRouter = router({
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      // Rev. 2355 — guard de autorização por empresa (estava ausente desde
+      // a Rev. 2333; flagged pelo architect na 2355 e consertado junto).
+      const allowed = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+      if (!(allowed as any[]).some(c => c.id === input.companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta empresa." });
+      }
       // Rev. 2333 — bulk INSERT POR CONTRATO em transação.
       // Causa raiz do "Load failed" iOS Safari: o loop antigo fazia 2 INSERTs
       // POR UNIDADE dentro de transação grande (1218 unid × 2 = 2436 round-trips
@@ -803,6 +823,26 @@ export const equipamentosRouter = router({
             }
           }
           if (locadosRows.length === 0) continue;
+          // Rev. 2355 — Hook biblioteca curada: se já existe foto canônica
+          // pra alguma descrição deste lote, aplica direto no INSERT (foto
+          // aparece imediata, sem o user precisar abrir a biblioteca depois).
+          const descricoesNormDoLote = Array.from(new Set(locadosRows.map(r => normalizarDescricao(r.descricao))));
+          if (descricoesNormDoLote.length > 0) {
+            const canonicas = await tx
+              .select({ d: equipamentosFotosCanonicas.descricaoNormalizada, u: equipamentosFotosCanonicas.fotoUrl })
+              .from(equipamentosFotosCanonicas)
+              .where(and(
+                eq(equipamentosFotosCanonicas.companyId, input.companyId),
+                inArray(equipamentosFotosCanonicas.descricaoNormalizada, descricoesNormDoLote),
+              ));
+            if (canonicas.length > 0) {
+              const mapaFoto = new Map(canonicas.map((c: any) => [c.d, c.u]));
+              for (const r of locadosRows) {
+                const url = mapaFoto.get(normalizarDescricao(r.descricao));
+                if (url) r.fotoUrl = url;
+              }
+            }
+          }
           const created = await tx.insert(equipamentosLocados).values(locadosRows).returning({ id: equipamentosLocados.id });
           totalItens += created.length;
           const observacao = `Cadastro inicial via import PDF · Contrato ${c.numeroContrato}${input.nomeArquivo ? ` · ${input.nomeArquivo}` : ""}`;
@@ -1363,6 +1403,183 @@ Reply JSON {"queries":[{"descricao":"<original PT>","query":"<EN words>"}]} with
       `);
       const itensLimpos = Number(res.rowCount ?? res.rows?.length ?? 0);
       return { ok: true as const, itensLimpos };
+    }),
+
+  // ── Rev. 2355 — BIBLIOTECA CURADA DE FOTOS POR DESCRIÇÃO CANÔNICA ─────────
+  // Substitui definitivamente a "busca de fotos com IA" (revs 2340-2350) que
+  // tinha baixa acurácia por limitação dos provedores gratuitos. O user sobe
+  // 1 foto por descrição normalizada; o ERP propaga pra TODAS as unidades
+  // dessa descrição (atuais via UPDATE em lote + futuras via hook no import).
+
+  fotosCanonicasListar: protectedProcedure
+    .input(z.object({ companyId: z.number() }))
+    .query(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const allowed = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+      if (!(allowed as any[]).some(c => c.id === input.companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta empresa." });
+      }
+      // 1) Todas as descrições atuais cadastradas (count + foto mais recente)
+      const rows: any = await db.execute(sql`
+        SELECT descricao,
+               COUNT(*)::int AS unidades,
+               COUNT(*) FILTER (WHERE foto_url IS NOT NULL AND foto_url <> '')::int AS com_foto
+          FROM equipamentos_locados
+         WHERE company_id = ${input.companyId}
+         GROUP BY descricao
+         ORDER BY COUNT(*) DESC, descricao ASC
+      `);
+      const descricoes = (rows.rows ?? rows) as Array<{ descricao: string; unidades: number; com_foto: number }>;
+      // 2) Biblioteca canônica existente
+      const canonicas = await db
+        .select()
+        .from(equipamentosFotosCanonicas)
+        .where(eq(equipamentosFotosCanonicas.companyId, input.companyId));
+      const mapaCanon = new Map<string, { id: number; fotoUrl: string; updatedAt: string }>();
+      for (const c of canonicas as any[]) {
+        mapaCanon.set(c.descricaoNormalizada, { id: c.id, fotoUrl: c.fotoUrl, updatedAt: c.updatedAt });
+      }
+      // 3) Agrupa descrições por chave normalizada (pra mostrar 1 linha por canônica)
+      const grupos = new Map<string, {
+        descricaoNormalizada: string;
+        descricoesOriginais: string[];
+        unidades: number;
+        comFoto: number;
+        canonica: { id: number; fotoUrl: string; updatedAt: string } | null;
+      }>();
+      for (const d of descricoes) {
+        const k = normalizarDescricao(d.descricao);
+        const g = grupos.get(k) || {
+          descricaoNormalizada: k,
+          descricoesOriginais: [],
+          unidades: 0,
+          comFoto: 0,
+          canonica: mapaCanon.get(k) || null,
+        };
+        g.descricoesOriginais.push(d.descricao);
+        g.unidades += Number(d.unidades);
+        g.comFoto += Number(d.com_foto);
+        grupos.set(k, g);
+      }
+      return {
+        grupos: Array.from(grupos.values()).sort((a, b) => b.unidades - a.unidades),
+        totalGrupos: grupos.size,
+        totalComCanonica: Array.from(grupos.values()).filter(g => g.canonica).length,
+      };
+    }),
+
+  fotosCanonicasUpsert: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      descricaoOriginal: z.string().min(1).max(255),
+      fotoBase64: z.string().min(10),
+      // Rev. 2355 — whitelist de MIME (defense-in-depth contra upload de
+      // executáveis renomeados ou SVG com payload XSS).
+      fotoMime: z.enum(["image/jpeg", "image/jpg", "image/png", "image/webp"]).default("image/jpeg"),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const allowed = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+      if (!(allowed as any[]).some(c => c.id === input.companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta empresa." });
+      }
+      // Limite de payload (5MB base64 ≈ 3.75MB binário — front comprime pra
+      // <500KB normalmente; este teto é defense-in-depth).
+      if (input.fotoBase64.length > 7 * 1024 * 1024) {
+        throw new TRPCError({ code: "PAYLOAD_TOO_LARGE", message: "Foto muito grande (>5MB). Será comprimida no envio — tente novamente." });
+      }
+      const descNorm = normalizarDescricao(input.descricaoOriginal);
+      if (!descNorm) throw new TRPCError({ code: "BAD_REQUEST", message: "Descrição vazia após normalização." });
+
+      // 1) Salva o arquivo no storage (key estável por descrição → idempotente)
+      const buf = Buffer.from(input.fotoBase64, "base64");
+      const ext = input.fotoMime.includes("png") ? "png" : input.fotoMime.includes("webp") ? "webp" : "jpg";
+      const hash = crypto.createHash("sha1").update(descNorm).digest("hex").slice(0, 12);
+      const ts = Date.now();
+      const key = `equipamentos/fotos-canonicas/${input.companyId}/${hash}-${ts}.${ext}`;
+      const { url } = await storagePut(key, buf, input.fotoMime);
+
+      // 2) Upsert na biblioteca canônica (ON CONFLICT por company+desc_norm)
+      await db.execute(sql`
+        INSERT INTO equipamentos_fotos_canonicas
+          (company_id, descricao_normalizada, descricao_original, foto_url, criado_por, created_at, updated_at)
+        VALUES
+          (${input.companyId}, ${descNorm}, ${input.descricaoOriginal}, ${url}, ${ctx.user.id}, NOW(), NOW())
+        ON CONFLICT (company_id, descricao_normalizada)
+        DO UPDATE SET
+          foto_url = EXCLUDED.foto_url,
+          descricao_original = EXCLUDED.descricao_original,
+          updated_at = NOW()
+      `);
+
+      // 3) Propaga pra todas as unidades atuais com mesma descrição normalizada.
+      // Como Postgres não tem "normalize NFD" nativo, faço em 2 passos:
+      //   (a) SELECT id, descricao das unidades da empresa
+      //   (b) filtra em JS por descNorm
+      //   (c) UPDATE ... WHERE id IN (...)
+      // Performance: max ~50k unidades por empresa — bem barato.
+      const unidades: any = await db.execute(sql`
+        SELECT id, descricao FROM equipamentos_locados
+         WHERE company_id = ${input.companyId}
+      `);
+      const ids: number[] = [];
+      for (const u of (unidades.rows ?? unidades) as any[]) {
+        if (normalizarDescricao(u.descricao) === descNorm) ids.push(Number(u.id));
+      }
+      let unidadesAtualizadas = 0;
+      if (ids.length > 0) {
+        // Bulk update em chunks de 1000 (precaução com placeholders no PG)
+        const CHUNK = 1000;
+        for (let i = 0; i < ids.length; i += CHUNK) {
+          const slice = ids.slice(i, i + CHUNK);
+          const res: any = await db.execute(sql`
+            UPDATE equipamentos_locados
+               SET foto_url = ${url}, updated_at = NOW()
+             WHERE company_id = ${input.companyId}
+               AND id IN ${sql.raw(`(${slice.join(",")})`)}
+          `);
+          unidadesAtualizadas += Number(res.rowCount ?? res.rows?.length ?? slice.length);
+        }
+      }
+      return { ok: true as const, fotoUrl: url, unidadesAtualizadas, descricaoNormalizada: descNorm };
+    }),
+
+  fotosCanonicasRemover: protectedProcedure
+    .input(z.object({ companyId: z.number(), id: z.number(), limparUnidades: z.boolean().default(true) }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const allowed = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+      if (!(allowed as any[]).some(c => c.id === input.companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta empresa." });
+      }
+      const [canon] = await db
+        .select()
+        .from(equipamentosFotosCanonicas)
+        .where(and(
+          eq(equipamentosFotosCanonicas.id, input.id),
+          eq(equipamentosFotosCanonicas.companyId, input.companyId),
+        ));
+      if (!canon) throw new TRPCError({ code: "NOT_FOUND", message: "Foto canônica não encontrada." });
+      let unidadesLimpas = 0;
+      if (input.limparUnidades) {
+        // Limpa SOMENTE unidades cuja foto_url == essa URL (preserva fotos
+        // manualmente atribuídas/recebimento).
+        const res: any = await db.execute(sql`
+          UPDATE equipamentos_locados
+             SET foto_url = NULL, updated_at = NOW()
+           WHERE company_id = ${input.companyId}
+             AND foto_url = ${(canon as any).fotoUrl}
+        `);
+        unidadesLimpas = Number(res.rowCount ?? res.rows?.length ?? 0);
+      }
+      await db.execute(sql`
+        DELETE FROM equipamentos_fotos_canonicas
+         WHERE id = ${input.id} AND company_id = ${input.companyId}
+      `);
+      return { ok: true as const, unidadesLimpas };
     }),
 
   // ── FATURA DE LOCAÇÃO (skeleton; OCR vem na Fase 3) ───────────────────────

@@ -8676,6 +8676,30 @@ export const equipamentosLocados = pgTable("equipamentos_locados", {
   index("idx_equip_loc_num_contrato").on(table.companyId, table.numeroContratoFornecedor),
 ]);
 
+// 2.1) Rev. 2355 — Biblioteca CURADA de fotos por descrição
+// canônica. O user sobe 1 foto por descrição normalizada (ex.:
+// "PAINEL NR18 1,5X1,0 COM DEGRAU") e o ERP propaga essa foto
+// pra TODAS as unidades cadastradas (atuais e futuras) com a
+// mesma descrição normalizada. Substitui a "busca de fotos com
+// IA" (revs 2340-2350) que tinha taxa de acerto baixa por
+// limitação dos provedores (Google CSE bloqueado, OV/WM só EN).
+export const equipamentosFotosCanonicas = pgTable("equipamentos_fotos_canonicas", {
+  id:                    serial().primaryKey(),
+  companyId:             integer("company_id").notNull(),
+  // Descrição NORMALIZADA: NFD + remove diacríticos + uppercase
+  // + collapse espaços + trim. Chave de match.
+  descricaoNormalizada:  varchar("descricao_normalizada", { length: 255 }).notNull(),
+  // Descrição original (pra exibir no modal "Biblioteca de fotos").
+  descricaoOriginal:     varchar("descricao_original", { length: 255 }).notNull(),
+  fotoUrl:               text("foto_url").notNull(),
+  criadoPor:             integer("criado_por"),
+  createdAt:             timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
+  updatedAt:             timestamp("updated_at", { mode: "string" }).defaultNow().notNull(),
+}, (table) => [
+  index("idx_fotos_canon_company").on(table.companyId),
+  uniqueIndex("uniq_fotos_canon_company_desc").on(table.companyId, table.descricaoNormalizada),
+]);
+
 // 3) Auditoria de eventos do equipamento locado (timeline)
 export const equipamentoLocadoEventos = pgTable("equipamento_locado_eventos", {
   id:                   serial().primaryKey(),
