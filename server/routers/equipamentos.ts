@@ -704,11 +704,19 @@ export const equipamentosRouter = router({
         throw new TRPCError({ code: "PAYLOAD_TOO_LARGE", message: "PDF muito grande (>18MB). Reduza ou divida o arquivo." });
       }
       const jobId = crypto.randomUUID();
-      parseContratoJobs.set(jobId, { status: "pending", startedAt: Date.now() });
+      const now = Date.now();
+      // Rev. 2359 — guarda fase inicial pro Status reportar progresso.
+      parseContratoJobs.set(jobId, { status: "pending", startedAt: now, phase: "queued", phaseAt: now });
       // Fire-and-forget — o request HTTP retorna em ms.
-      executeParseContratoLocacao(input)
-        .then((result) => parseContratoJobs.set(jobId, { status: "done", startedAt: Date.now(), result }))
-        .catch((err: any) => parseContratoJobs.set(jobId, { status: "error", startedAt: Date.now(), error: err?.message || String(err) }));
+      executeParseContratoLocacao(input, jobId)
+        .then((result) => {
+          const prev = parseContratoJobs.get(jobId);
+          parseContratoJobs.set(jobId, { status: "done", startedAt: prev?.startedAt ?? now, phase: "finalizing", phaseAt: Date.now(), result });
+        })
+        .catch((err: any) => {
+          const prev = parseContratoJobs.get(jobId);
+          parseContratoJobs.set(jobId, { status: "error", startedAt: prev?.startedAt ?? now, phase: prev?.phase ?? "queued", phaseAt: Date.now(), error: err?.message || String(err) });
+        });
       return { jobId };
     }),
 
@@ -717,9 +725,14 @@ export const equipamentosRouter = router({
     .query(({ input }) => {
       const j = parseContratoJobs.get(input.jobId);
       if (!j) return { status: "expired" as const };
-      if (j.status === "done") return { status: "done" as const, result: j.result };
-      if (j.status === "error") return { status: "error" as const, error: j.error };
-      return { status: "pending" as const };
+      // Rev. 2359 — devolve fase + idade da fase pro client mostrar
+      // "Chamando Gemini Vision · há 42s" e parar a percepção de travado.
+      const now = Date.now();
+      const elapsedMs = now - j.startedAt;
+      const phaseElapsedMs = now - j.phaseAt;
+      if (j.status === "done") return { status: "done" as const, result: j.result, elapsedMs, phase: j.phase, phaseElapsedMs };
+      if (j.status === "error") return { status: "error" as const, error: j.error, elapsedMs, phase: j.phase, phaseElapsedMs };
+      return { status: "pending" as const, elapsedMs, phase: j.phase, phaseElapsedMs };
     }),
 
   // (Procedure legada — mantida só pra retrocompatibilidade; cliente agora usa Start/Status.)
@@ -1604,13 +1617,31 @@ Reply JSON {"queries":[{"descricao":"<original PT>","query":"<EN words>"}]} with
 // `Start` cria entrada em "pending" e dispara `executeParseContratoLocacao`
 // em background; `Status` é polled pelo cliente. GC limpa entradas finalizadas
 // após 10 min (pending nunca expira — protege polls longos > 60s).
+// Rev. 2359 — adiciona `phase` + `phaseAt` pro client mostrar diagnóstico
+// em tempo real (qual etapa, quanto tempo nessa etapa). Combate a percepção
+// de "travado em 99%" quando o Gemini demora 60-120s em PDFs grandes.
+type ParsePhase =
+  | "queued"            // ainda não começou (vai começar em ms)
+  | "calling_ai"        // chamada HTTP pro Gemini Vision rodando
+  | "parsing_json"      // recebeu raw text, decodificando JSON
+  | "repairing_json"    // JSON truncado, tentando reparar
+  | "normalizing_dates" // pós-proc das datas DD/MM → ISO
+  | "finalizing";
 type ParseContratoJob = {
   status: "pending" | "done" | "error";
   startedAt: number;
+  phase: ParsePhase;
+  phaseAt: number; // timestamp da última troca de fase
   result?: { contratos: any[]; totalContratos: number; totalItens: number };
   error?: string;
 };
 const parseContratoJobs = new Map<string, ParseContratoJob>();
+// Rev. 2359 — helper pra atualizar a fase preservando o `startedAt` original.
+function setParsePhase(jobId: string, phase: ParsePhase) {
+  const j = parseContratoJobs.get(jobId);
+  if (!j || j.status !== "pending") return;
+  parseContratoJobs.set(jobId, { ...j, phase, phaseAt: Date.now() });
+}
 setInterval(() => {
   const cutoff = Date.now() - 10 * 60 * 1000;
   for (const [id, j] of parseContratoJobs.entries()) {
@@ -1627,7 +1658,10 @@ async function executeParseContratoLocacao(input: {
   pdfBase64: string;
   mimeType: "application/pdf" | "image/jpeg" | "image/png" | "image/webp";
   nomeArquivo?: string;
-}): Promise<{ contratos: any[]; totalContratos: number; totalItens: number }> {
+}, jobId?: string): Promise<{ contratos: any[]; totalContratos: number; totalItens: number }> {
+  // Rev. 2359 — helper local que ignora silenciosamente quando chamado
+  // pela procedure legada (sem jobId).
+  const phase = (p: ParsePhase) => { if (jobId) setParsePhase(jobId, p); };
   const { invokeGeminiVision } = await import("../_core/llm");
   const systemPrompt = `Você é um extrator de relatórios de locação de equipamentos para construção civil no Brasil.\nCada locadora tem um layout próprio (Jalves, Mills, Locamerica, F051/R051, etc.). Detecte automaticamente o layout e extraia TODOS os contratos e seus respectivos itens.\nDatas SEMPRE no formato brasileiro DD/MM/AAAA. Valores em reais (R$). Quantidades inteiras ou decimais.`;
   const prompt = `Extraia TODOS os contratos de locação deste documento. Para cada contrato, capture:\n- numeroContrato (ex: "19096-32")\n- fornecedorNome (razão social/nome fantasia da locadora — geralmente no cabeçalho)\n- localObra (endereço/identificação da obra)\n- periodoInicio (DD/MM/AAAA) — OBRIGATÓRIO\n- periodoFim (DD/MM/AAAA) — OBRIGATÓRIO\n- valorTotal (numérico, sem R$, ponto como separador decimal)\n- atendenteResponsavel\n- itens: array de {patrimonio, descricao, quantidade (number), valorUnitario (subtotal/qtde, number), subtotal (number), categoria}\n\n**REGRAS CRÍTICAS PARA O PERÍODO DE LOCAÇÃO** (este campo NUNCA pode vir vazio):\n1. O período fica SEMPRE no cabeçalho de cada contrato, geralmente no canto direito da MESMA linha do "Nº Contrato" e "Valor".\n2. O texto típico é \`Período: DD/MM/AAAA  A  DD/MM/AAAA\` — extraia a PRIMEIRA data como periodoInicio e a SEGUNDA como periodoFim.\n3. Layout F051/R051 (Jalves e similares): a linha do cabeçalho tem o formato \`Nº Contrato: NNNNN-NN   Valor: 999,00   Local da obra: ...   Período: DD/MM/AAAA  A  DD/MM/AAAA\`. Cada contrato repete esse cabeçalho.\n4. Sinônimos aceitos para o campo: "Período", "Vigência", "Locação de", "Data início", "Data fim", "De", "Até", "Aluguel de".\n5. Se houver SÓ uma data inicial sem fim explícito, calcule fim = início + 30 dias.\n6. Se o documento tem um período GERAL no cabeçalho (ex: "Período para devolução entre 20/05/2010 a 20/05/2040"), IGNORE-O — esse é o range do relatório, NÃO o período do contrato. Use sempre o período próprio de cada contrato.\n7. CADA contrato pode ter seu próprio período distinto (não copie o período do primeiro contrato pros demais).\n8. NUNCA invente datas: se realmente não houver período visível no contrato, deixe periodoInicio/periodoFim vazios — mas é raro, o período quase sempre está no cabeçalho.\n\n**Exemplos do layout F051/R051** (use isso pra calibrar):\n- "Nº Contrato: 19096 - 32  Valor: 250,00  ... Período: 09/04/2026 A 09/05/2026" → periodoInicio="09/04/2026", periodoFim="09/05/2026"\n- "Nº Contrato: 19487 - 32  Valor: 245,00  ... Período: 21/04/2026 A 21/05/2026" → periodoInicio="21/04/2026", periodoFim="21/05/2026"\n- "Nº Contrato: 19751 - 30  Valor: 300,00  ... Período: 27/04/2026 A 27/05/2026" → periodoInicio="27/04/2026", periodoFim="27/05/2026"\n\nPara o campo "categoria" de CADA ITEM, classifique em UMA das categorias abaixo (escolha a MAIS específica):\n- "Andaime e escoramento" (guarda-corpo, pranchão, diagonal, sapata ajustável, escora, cruzeta, longarina, plataforma metálica, base regulável, painel de escoramento, viga H20)\n- "Equipamento elétrico" (gerador, betoneira, vibrador, lixadeira, esmerilhadeira, serra circular/policorte, compressor, bomba submersa/centrífuga, transformador, quadro de força)\n- "Ferramenta manual" (carrinho de mão, marreta, martelete, furadeira não-elétrica, alavanca, pá, picareta)\n- "EPI/EPC" (capacete, cinto de segurança, luva, óculos, redes de proteção, tela de fachada)\n- "Veículo/Máquina pesada" (caminhão, retroescavadeira, escavadeira, guindaste, manipulador telescópico)\n- "Container/Mobiliário" (container, mesa, cadeira, armário, escritório de obra)\n- "Outros" (use somente se NÃO encaixar em nenhuma acima)\n\nRetorne APENAS JSON válido no formato {contratos: [...]}. Se um campo estiver ausente, use string vazia ou 0. Datas SEMPRE em DD/MM/AAAA.`;
@@ -1670,6 +1704,7 @@ async function executeParseContratoLocacao(input: {
     required: ["contratos"],
   };
 
+  phase("calling_ai");
   const raw = await invokeGeminiVision({
     prompt,
     systemPrompt,
@@ -1678,6 +1713,7 @@ async function executeParseContratoLocacao(input: {
     maxTokens: 65536, // Rev. 2320 — dobrado (era 32768): PDFs com 40+ contratos estouravam o cap e truncavam o JSON.
     responseSchema,
   });
+  phase("parsing_json");
   if (!raw?.trim()) throw new TRPCError({ code: "BAD_REQUEST", message: "IA não retornou dados — verifique se o PDF é legível." });
 
   // Rev. 2320 — Reparo de JSON truncado caractere a caractere.
@@ -1705,6 +1741,7 @@ async function executeParseContratoLocacao(input: {
   try {
     parsed = JSON.parse(raw);
   } catch {
+    phase("repairing_json");
     const m = raw.match(/\{[\s\S]*\}/);
     if (m) {
       try { parsed = JSON.parse(m[0]); }
@@ -1714,6 +1751,7 @@ async function executeParseContratoLocacao(input: {
     }
     if (!parsed) throw new TRPCError({ code: "BAD_REQUEST", message: "Resposta da IA truncada/inválida. Tente dividir o PDF em arquivos menores." });
   }
+  phase("normalizing_dates");
   const contratos: any[] = Array.isArray(parsed?.contratos) ? parsed.contratos : [];
   if (contratos.length === 0) throw new TRPCError({ code: "BAD_REQUEST", message: "Nenhum contrato detectado no documento." });
 

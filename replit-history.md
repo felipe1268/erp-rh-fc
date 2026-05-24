@@ -581,3 +581,5 @@
 - Rev. 2328 — HOTFIX/UX · Exclusão/vinculação em lote de locados — chunk 500→200 + spinner + tempo decorrido. Ver `shared/changelog.ts`.
 
 - Rev. 2329 — PERF · Exclusão/vinculação em lote de locados ~50× mais rápida (bulk SQL). Ver `shared/changelog.ts`.
+
+- **Rev. 2352** — CLEANUP/UX · Removida a subpágina "Parâmetros CAPEX" da UI (sidebar + card no hub + rota + page + mapeamento de módulo); backend procedures e tabela DB preservados.

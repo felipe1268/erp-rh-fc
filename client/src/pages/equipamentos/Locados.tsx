@@ -353,17 +353,33 @@ export default function EquipamentosLocados() {
   // Fluxo: Start retorna {jobId} em ms → polling /Status cada 2.5s → done|error.
   const [parsePending, setParsePending] = useState(false);
   const [parseJobId, setParseJobId] = useState<string | null>(null);
+  // Rev. 2359 — diagnóstico do parse em tempo real (fase reportada pelo server
+  // + nº de polls + timestamp do último). Combate a percepção de "travado em
+  // 99%" — agora o user vê "Chamando IA · há 42s" em vez de barra estática.
+  const [parseDiag, setParseDiag] = useState<{ phase: string; phaseElapsedMs: number; elapsedMs: number; pollCount: number; lastPollAt: number } | null>(null);
   const parsearStart = trpc.equipamentos.parsearContratoLocacaoPdfStart.useMutation({
     onSuccess: ({ jobId }) => { setParseJobId(jobId); },
-    onError: (e) => { setParsePending(false); setImportProgresso(0); toast.error(e.message); },
+    onError: (e) => { setParsePending(false); setImportProgresso(0); setParseDiag(null); toast.error(e.message); },
   });
   useEffect(() => {
     if (!parseJobId) return;
     let cancelled = false;
+    let polls = 0;
     const poll = async () => {
       try {
         const res = await utils.equipamentos.parsearContratoLocacaoPdfStatus.fetch({ jobId: parseJobId });
         if (cancelled) return;
+        polls++;
+        // Rev. 2359 — atualiza diag (server sempre devolve elapsedMs/phase agora).
+        if ((res as any).elapsedMs != null) {
+          setParseDiag({
+            phase: (res as any).phase || "queued",
+            phaseElapsedMs: (res as any).phaseElapsedMs || 0,
+            elapsedMs: (res as any).elapsedMs || 0,
+            pollCount: polls,
+            lastPollAt: Date.now(),
+          });
+        }
         if (res.status === "done" && res.result) {
           setImportProgresso(100);
           // Rev. 2326 — auto-match com obras ativas pelo endereço/nome.
@@ -377,13 +393,13 @@ export default function EquipamentosLocados() {
           setImportPreview(comMatch);
           const tot = res.result.totalContratos;
           toast.success(`IA detectou ${tot} contrato(s) · ${res.result.totalItens} item(ns).${autoMatched > 0 ? ` ${autoMatched}/${tot} auto-vinculados à obra.` : ""}`);
-          setParsePending(false); setParseJobId(null);
+          setParsePending(false); setParseJobId(null); setParseDiag(null);
         } else if (res.status === "error") {
           toast.error(res.error || "Falha ao processar o PDF.");
-          setParsePending(false); setImportProgresso(0); setParseJobId(null);
+          setParsePending(false); setImportProgresso(0); setParseJobId(null); setParseDiag(null);
         } else if (res.status === "expired") {
           toast.error("Job expirou. Tente novamente.");
-          setParsePending(false); setImportProgresso(0); setParseJobId(null);
+          setParsePending(false); setImportProgresso(0); setParseJobId(null); setParseDiag(null);
         } else {
           setTimeout(poll, 2500);
         }
@@ -1900,28 +1916,110 @@ export default function EquipamentosLocados() {
                 </div>
               )}
 
-              {parsearPdf.isPending && (
-                <div className="py-6 px-2 space-y-3">
-                  <div className="flex items-center justify-between text-sm">
-                    <div className="flex items-center gap-2 text-indigo-700 font-medium">
-                      <Sparkles className="h-4 w-4 animate-pulse" />
-                      <span>IA analisando layout do documento…</span>
+              {parsearPdf.isPending && (() => {
+                // Rev. 2359 — Painel de diagnóstico em tempo real.
+                // O server agora reporta a fase atual (queued/calling_ai/
+                // parsing_json/repairing_json/normalizing_dates/finalizing) e
+                // quanto tempo está nela. Combatemos a percepção de "travado
+                // em 99%" mostrando timer mm:ss, fase legível, e contador de
+                // checagens. Após 90s aparece dica + botão "Cancelar".
+                const fmtClock = (ms: number) => {
+                  const s = Math.floor(ms / 1000);
+                  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+                };
+                const phaseLabel: Record<string, { label: string; icon: string }> = {
+                  queued:            { label: "Enviando PDF pra IA…",                icon: "📤" },
+                  calling_ai:        { label: "Chamando Gemini Vision (IA do Google)", icon: "🤖" },
+                  parsing_json:      { label: "Decodificando resposta da IA",          icon: "🔍" },
+                  repairing_json:    { label: "Reparando JSON truncado",               icon: "🔧" },
+                  normalizing_dates: { label: "Normalizando datas e itens",            icon: "📅" },
+                  finalizing:        { label: "Finalizando",                           icon: "✅" },
+                };
+                const d = parseDiag;
+                const ph = d?.phase || "queued";
+                const phInfo = phaseLabel[ph] || phaseLabel.queued;
+                const elapsed = d?.elapsedMs || 0;
+                const phaseElapsed = d?.phaseElapsedMs || 0;
+                const desdeUltimoPoll = d ? Date.now() - d.lastPollAt : 0;
+                const veryLong = elapsed > 90_000;
+                return (
+                  <div className="py-5 px-2 space-y-3">
+                    <div className="flex items-center justify-between text-sm">
+                      <div className="flex items-center gap-2 text-indigo-700 font-medium">
+                        <Sparkles className="h-4 w-4 animate-pulse" />
+                        <span>IA analisando layout do documento…</span>
+                      </div>
+                      <span className="text-indigo-900 font-bold tabular-nums">{importProgresso}%</span>
                     </div>
-                    <span className="text-indigo-900 font-bold tabular-nums">{importProgresso}%</span>
+                    <div className="h-3 bg-indigo-100 rounded-full overflow-hidden ring-1 ring-indigo-200">
+                      <div
+                        className="h-full bg-gradient-to-r from-indigo-500 via-purple-500 to-fuchsia-500 transition-all duration-300 ease-out"
+                        style={{ width: `${importProgresso}%` }}
+                      />
+                    </div>
+
+                    {/* Rev. 2359 — Card de diagnóstico ao vivo */}
+                    <div className="rounded-lg border border-indigo-200 bg-gradient-to-br from-indigo-50 to-purple-50/40 px-3 py-2.5 space-y-1.5">
+                      <div className="flex items-center justify-between gap-2 text-sm">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="text-base shrink-0">{phInfo.icon}</span>
+                          <span className="font-semibold text-indigo-900 truncate">{phInfo.label}</span>
+                        </div>
+                        <span className="text-[11px] text-indigo-700 tabular-nums whitespace-nowrap">
+                          há {fmtClock(phaseElapsed)} nesta etapa
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-3 gap-2 text-[11px] text-indigo-800/90">
+                        <div className="bg-white/70 rounded px-2 py-1 ring-1 ring-indigo-100">
+                          <div className="uppercase text-[9px] tracking-wider text-indigo-500/80 font-semibold">Tempo total</div>
+                          <div className="font-bold tabular-nums">{fmtClock(elapsed)}</div>
+                        </div>
+                        <div className="bg-white/70 rounded px-2 py-1 ring-1 ring-indigo-100">
+                          <div className="uppercase text-[9px] tracking-wider text-indigo-500/80 font-semibold">Checagens</div>
+                          <div className="font-bold tabular-nums">{d?.pollCount ?? 0}</div>
+                        </div>
+                        <div className="bg-white/70 rounded px-2 py-1 ring-1 ring-indigo-100">
+                          <div className="uppercase text-[9px] tracking-wider text-indigo-500/80 font-semibold">Próxima em</div>
+                          <div className="font-bold tabular-nums">~{Math.max(0, Math.ceil((2500 - desdeUltimoPoll) / 1000))}s</div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1.5 text-[11px] text-emerald-700 font-medium pt-0.5">
+                        <span className="relative flex h-2 w-2">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                          <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                        </span>
+                        <span>Conexão ativa — processamento NÃO travado.</span>
+                      </div>
+                    </div>
+
+                    <div className="text-[11px] text-slate-500 text-center">
+                      {veryLong
+                        ? "🕐 PDF grande — pode levar até 2 minutos. Se preferir, cancele e divida o arquivo em partes menores."
+                        : importDemorando
+                          ? "📄 PDF extenso detectado — a IA ainda está processando. Aguarde mais alguns segundos…"
+                          : "Tempo típico: 15–45s · não feche esta janela."}
+                    </div>
+
+                    {veryLong && (
+                      <div className="flex justify-center">
+                        <button
+                          onClick={() => {
+                            setParsePending(false);
+                            setImportProgresso(0);
+                            setParseJobId(null);
+                            setParseDiag(null);
+                            setImportArquivo(null);
+                            toast.info("Parse cancelado. Tente um PDF menor ou divida em partes.");
+                          }}
+                          className="text-xs px-3 py-1.5 rounded-md border border-red-200 bg-white text-red-700 hover:bg-red-50 font-medium transition"
+                        >
+                          Cancelar parse e trocar arquivo
+                        </button>
+                      </div>
+                    )}
                   </div>
-                  <div className="h-3 bg-indigo-100 rounded-full overflow-hidden ring-1 ring-indigo-200">
-                    <div
-                      className="h-full bg-gradient-to-r from-indigo-500 via-purple-500 to-fuchsia-500 transition-all duration-300 ease-out"
-                      style={{ width: `${importProgresso}%` }}
-                    />
-                  </div>
-                  <div className="text-[11px] text-slate-500 text-center">
-                    {importDemorando
-                      ? "📄 PDF extenso detectado — a IA ainda está processando. Aguarde mais alguns segundos…"
-                      : "Tempo típico: 15–45s · não feche esta janela."}
-                  </div>
-                </div>
-              )}
+                );
+              })()}
 
               {/* Rev. 2326 + 2353 — banner de cruzamento automático
                   (vermelho/bloqueante quando há contratos sem obra). */}

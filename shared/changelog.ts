@@ -1,6 +1,80 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2359 — **UX/OBSERVABILIDADE · Parse de PDF de locação ganha
+ * painel de diagnóstico em tempo real (fase atual + timer mm:ss +
+ * contador de checagens + heartbeat) pra eliminar a percepção de
+ * "travado em 99%". Após 90s aparece botão "Cancelar parse e trocar
+ * arquivo".**
+ *
+ * **Pedido user (24/05/2026, IMG_1155 — JALVES.pdf 259KB):**
+ * "Está travado em 99% quero ver o que está acontecendo com alertas
+ * pq não posso e pensar que esta travado".
+ *
+ * **Causa raiz da percepção:** o cliente faz creep client-side
+ * 0→95% em 35s e 95→99% em ~60s, travando em 99% até o `onSuccess`
+ * (por design — Rev. 2310/2318). Quando o Gemini Vision leva 80-120s
+ * em PDFs grandes (40+ contratos), o user vê a barra ESTÁTICA em 99%
+ * com APENAS o texto "PDF extenso detectado…". Sem timer, sem fase,
+ * sem contador de polls — nada que confirme que o sistema ainda está
+ * vivo. Toda comunicação real (polling tRPC `Status` a cada 2.5s)
+ * acontece silenciosamente no DevTools.
+ *
+ * **Fix em 2 camadas (server + client):**
+ *
+ * **(1) Server — tracking de fase granular** (`server/routers/equipamentos.ts`):
+ *   - Novo type `ParsePhase = "queued" | "calling_ai" | "parsing_json"
+ *     | "repairing_json" | "normalizing_dates" | "finalizing"` adicionado
+ *     ao `ParseContratoJob` (+ `phaseAt: number` pra calcular "há Xs
+ *     nesta etapa").
+ *   - Helper `setParsePhase(jobId, phase)` que preserva `startedAt`
+ *     original e ignora se job já não está "pending".
+ *   - `executeParseContratoLocacao` agora recebe `jobId?` opcional e
+ *     marca fase em 4 pontos críticos: `calling_ai` antes do
+ *     `invokeGeminiVision`, `parsing_json` depois do retorno,
+ *     `repairing_json` no catch do JSON.parse, `normalizing_dates`
+ *     depois do reparo. Procedure legada (sem jobId) continua
+ *     funcionando — helper vira no-op.
+ *   - `parsearContratoLocacaoPdfStatus` agora devolve `elapsedMs`,
+ *     `phase` e `phaseElapsedMs` em todos os 3 status (pending/done/
+ *     error), permitindo ao client compor texto rico.
+ *
+ * **(2) Client — painel de diagnóstico ao vivo** (`client/src/pages/equipamentos/Locados.tsx`):
+ *   - Novo state `parseDiag` (phase + phaseElapsedMs + elapsedMs +
+ *     pollCount + lastPollAt) atualizado a CADA poll (a cada 2.5s).
+ *   - Card indigo abaixo da barra de progresso mostrando:
+ *     • Ícone + label legível em pt-BR da fase atual (ex: "🤖 Chamando
+ *       Gemini Vision (IA do Google)", "🔍 Decodificando resposta da
+ *       IA").
+ *     • 3 chips: Tempo total (mm:ss) · Checagens (counter) · Próxima
+ *       em ~Xs (countdown 2.5s).
+ *     • Heartbeat verde animado (`animate-ping`) + texto "Conexão
+ *       ativa — processamento NÃO travado."
+ *   - Após 90s: mensagem muda pra "🕐 PDF grande — pode levar até 2
+ *     minutos. Se preferir, cancele e divida o arquivo em partes
+ *     menores." + botão "Cancelar parse e trocar arquivo" (limpa
+ *     parseJobId/Diag/arquivo, mostra toast info).
+ *   - Map `phaseLabel` traduz IDs técnicos do server pra português
+ *     amigável; fallback pra "queued" se o server reportar fase
+ *     desconhecida (forward-compatibility).
+ *
+ * **Por que NÃO mudar a barra de progresso pra "real":** os 99%
+ * client-side existem PORQUE não dá pra saber progresso real do
+ * Gemini (single shot, sem stream). A barra cumpre função puramente
+ * psicológica (feedback de movimento inicial); o painel novo é o
+ * verdadeiro indicador de saúde. Mantemos os dois — barra pra "alguma
+ * coisa está acontecendo", painel pra "isto especificamente está
+ * acontecendo, há 42s".
+ *
+ * **Por que 90s pro botão Cancelar:** P95 dos PDFs Jalves observados
+ * fica < 60s; > 90s indica PDF realmente grande OU lentidão Gemini.
+ * Antes disso, oferecer cancelar geraria abandono prematuro de jobs
+ * que estavam quase pra completar.
+ *
+ * **R-001/R-007/R-010:** N/A — zero DDL, zero mutations novas, só
+ * UI client-side + 4 chamadas `setParsePhase` (writes in-memory no Map
+ * já existente desde Rev. 2321, sem persistência).
+ *
  * Rev. 2358 — **FEATURE/UX · Import PDF de locação ganha campo
  * "Fornecedor (locadora) deste PDF" com botão "Aplicar a todos"
  * pra padronizar o fornecedor em todos os contratos do mesmo PDF
