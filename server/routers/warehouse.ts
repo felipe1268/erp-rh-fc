@@ -1470,7 +1470,7 @@ REGRAS:
       companyId: z.number(),
       obraId: z.number().optional(),
     }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
@@ -1478,8 +1478,18 @@ REGRAS:
         eq(comprasOrdens.companyId, input.companyId),
         sql`${comprasOrdens.status} IN ('pendente', 'aprovada', 'parcial')`,
       ];
+      // Rev. 2384 — autorização por obra (admin/admin_master = null = todas).
+      // Aplica em AMBOS os caminhos (com ou sem obraId explícito) pra evitar
+      // IDOR horizontal: user com acesso só à obra A não pode pedir obra B.
+      const allowed = await getEffectiveAllowedObraIds(ctx.user.id, ctx.user.role);
       if (input.obraId) {
+        if (allowed !== null && !allowed.includes(input.obraId)) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso à obra solicitada" });
+        }
         conditions.push(eq(comprasOrdens.obraId, input.obraId));
+      } else if (allowed !== null) {
+        if (allowed.length === 0) return [];
+        conditions.push(inArray(comprasOrdens.obraId, allowed));
       }
 
       const ocs = await db

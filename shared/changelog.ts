@@ -1,6 +1,45 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2384 — **FIX/UX · Badges "X pra receber" do botão ENTRADA e do
+ * botão RECEBER LOCAÇÃO agora contam só as OCs da obra em contexto (ou
+ * só das obras que o usuário tem permissão quando está em "todos
+ * almoxarifados").**
+ *
+ * Pedido user (IMG_1184/1185/1186, 24/05/2026): "No botão de entrada
+ * está mostrando 37 OCs não recebidas, porém isso é pra várias obras;
+ * quero que este contador apareça por obra — assim o usuário que tem
+ * acesso da obra A só vai ver o alerta da obra A, ou das obras que
+ * tiver permissão". Os screenshots mostram o mesmo "37 pra receber"
+ * aparecendo em "QIU 2 - FASE 4", "HOTEL DO PAPA - 5 PAV" e
+ * "CARAMURU - CACHOEIRA PAULISTA" — o número era global da empresa.
+ *
+ * **Backend:**
+ *   - `server/routers/warehouse.ts > listPendingOCs`: usa
+ *     `getEffectiveAllowedObraIds(ctx.user.id, ctx.user.role)` —
+ *     admin/admin_master vê tudo (retorna `null`). Quando `obraId`
+ *     vier explícito, **valida que está nas obras permitidas**
+ *     (evita IDOR horizontal: user da obra A não pode pedir obra B)
+ *     e lança `FORBIDDEN` caso contrário. Sem `obraId`, restringe
+ *     ao `allowedObraIds`; `allowed === []` retorna `[]` sem ir ao banco.
+ *   - `server/routers/equipamentos.ts > ocsLocacaoPendentes`: input
+ *     ganhou `obraId` opcional + mesma lógica de autorização +
+ *     filtro por `allowedObraIds`.
+ *
+ * **Frontend** (`client/src/pages/almoxarifado/index.tsx`): hooks
+ * `ocsLocacaoPendentesQ` e `ocsMaterialPendentesQ` agora passam
+ * `obraId: obraContexto` quando o usuário está vendo uma obra
+ * específica (number); quando está em "todos" ou null, omitem o
+ * `obraId` e o backend aplica o filtro de permissão. Os hooks foram
+ * reposicionados pra depois da declaração de `obraContexto` (TDZ).
+ *
+ * R-001/R-007/R-010 OK — read-only, zero DDL/DELETE/UPDATE.
+ */
+import "./version";
+
+/**
+ * Changelog centralizado do ERP.
+ *
  * Rev. 2383 — **FEATURE · Multi-seleção também no view "Todos almoxarifados":
  * Alterar categoria em lote + Próprio/Alugado disponíveis no consolidado
  * (antes só funcionava por obra).**

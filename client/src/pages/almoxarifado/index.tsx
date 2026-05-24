@@ -82,23 +82,6 @@ export default function AlmoxarifadoPage() {
   const companyId = typeof selectedCompany?.id === 'number' ? selectedCompany.id : parseInt(String(selectedCompany?.id)) || 0;
   const [location, setLocation] = useLocation();
 
-  // Rev. 2375 — alerta visual de OCs de locação aguardando recebimento.
-  // Reusa endpoint da Rev. 2371; refetch a cada 60s pra "piscar" quando chega nova OC.
-  const ocsLocacaoPendentesQ = trpc.equipamentos.ocsLocacaoPendentes.useQuery(
-    { companyId },
-    { enabled: !!companyId, refetchInterval: 60_000, refetchOnWindowFocus: true }
-  );
-  const qtdLocacaoPendente = (ocsLocacaoPendentesQ.data || []).length;
-
-  // Rev. 2376 — alerta visual de OCs de MATERIAL pendentes de recebimento
-  // (botão ENTRADA / modal "Receber Material" do SmartEntry). Mesma query
-  // que SmartEntry usa (warehouse.listPendingOCs).
-  const ocsMaterialPendentesQ = trpc.warehouse.listPendingOCs.useQuery(
-    { companyId },
-    { enabled: !!companyId, refetchInterval: 60_000, refetchOnWindowFocus: true }
-  );
-  const qtdMaterialPendente = (ocsMaterialPendentesQ.data || []).length;
-
   // Rev. 2377 — Busca de foto na web (DDG Images) pros itens do Almoxarifado
   // que ainda não têm foto. Mesma UX da Rev. 2366 (Equipamentos Locados):
   //   (a) botão hero "Buscar fotos da web" → loop por TODOS os nomes sem foto
@@ -125,6 +108,25 @@ export default function AlmoxarifadoPage() {
   const [viewMode, setViewMode] = useState<"cards" | "table">("cards");
   const [obraContexto, setObraContexto] = useState<number | null | "todos">(null);
   const [fotoExpandida, setFotoExpandida] = useState<{ url: string; nome: string } | null>(null);
+
+  // Rev. 2375/2384 — alerta visual de OCs de locação aguardando recebimento.
+  // Filtra pela obra do contexto quando o user está vendo uma obra específica;
+  // no consolidado ("todos"), o backend já restringe às obras permitidas pro user.
+  const obraIdFiltro = typeof obraContexto === "number" ? obraContexto : undefined;
+  const ocsLocacaoPendentesQ = trpc.equipamentos.ocsLocacaoPendentes.useQuery(
+    { companyId, obraId: obraIdFiltro },
+    { enabled: !!companyId, refetchInterval: 60_000, refetchOnWindowFocus: true }
+  );
+  const qtdLocacaoPendente = (ocsLocacaoPendentesQ.data || []).length;
+
+  // Rev. 2376/2384 — alerta visual de OCs de MATERIAL pendentes de recebimento
+  // (botão ENTRADA / modal "Receber Material" do SmartEntry). Mesma query
+  // que SmartEntry usa (warehouse.listPendingOCs) com filtro por obra contexto.
+  const ocsMaterialPendentesQ = trpc.warehouse.listPendingOCs.useQuery(
+    { companyId, obraId: obraIdFiltro },
+    { enabled: !!companyId, refetchInterval: 60_000, refetchOnWindowFocus: true }
+  );
+  const qtdMaterialPendente = (ocsMaterialPendentesQ.data || []).length;
 
   // Rev. 2374 — Modo "Classificar como Próprio / Alugado": múltipla seleção
   // de cards do consolidado pra empurrar em lote pros módulos /equipamentos/proprios

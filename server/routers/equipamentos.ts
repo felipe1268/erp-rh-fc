@@ -11,7 +11,7 @@ import dns from "node:dns/promises";
 import net from "node:net";
 import { router, protectedProcedure } from "../_core/trpc";
 import { TRPCError } from "@trpc/server";
-import { getDb } from "../db";
+import { getDb, getEffectiveAllowedObraIds } from "../db";
 import { eq, and, desc, sql, inArray } from "drizzle-orm";
 import { resolveCompanyIds, companyFilter, companyInput } from "../companyHelper";
 import { getCompaniesForUser } from "../db";
@@ -389,13 +389,27 @@ export const equipamentosRouter = router({
   // pendente / aprovada / parcial (mesmo conjunto usado em warehouse.ts:1475).
   // 'entregue' e 'cancelada' são filtrados fora.
   ocsLocacaoPendentes: protectedProcedure
-    .input(companyInput)
-    .query(async ({ input }) => {
+    .input(companyInput.extend({ obraId: z.number().optional() }))
+    .query(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       // Rev. 2371 — companyFilter() valida que o user tem acesso à companyId
       // pedida (mesmo padrão de locadosListar/equipamentosProprios). Sem isso
       // qualquer user autenticado poderia listar OCs de outra empresa (IDOR).
+      // Rev. 2384 — filtro + autorização por obra. Admin/admin_master =>
+      // allowed === null => vê tudo. Quando obraId explícito vier, valida
+      // que o user tem acesso (evita IDOR horizontal: obra A pedindo obra B).
+      const obraConds: any[] = [];
+      const allowed = await getEffectiveAllowedObraIds(ctx.user.id, ctx.user.role);
+      if (input.obraId) {
+        if (allowed !== null && !allowed.includes(input.obraId)) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso à obra solicitada" });
+        }
+        obraConds.push(eq(comprasOrdens.obraId, input.obraId));
+      } else if (allowed !== null) {
+        if (allowed.length === 0) return [];
+        obraConds.push(inArray(comprasOrdens.obraId, allowed));
+      }
       const ocs = await db.select({
         id: comprasOrdens.id,
         numeroOc: comprasOrdens.numeroOc,
@@ -417,6 +431,7 @@ export const equipamentosRouter = router({
           eq(comprasOrdens.isLocacao, true),
           sql`${comprasOrdens.status} IN ('pendente', 'aprovada', 'parcial')`,
           sql`NOT EXISTS (SELECT 1 FROM equipamentos_locados el WHERE el.ordem_compra_id = ${comprasOrdens.id})`,
+          ...obraConds,
         ))
         .orderBy(desc(comprasOrdens.criadoEm));
 
