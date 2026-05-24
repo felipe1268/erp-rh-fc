@@ -1,6 +1,83 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2334 — **UX · Filtro por OBRA em Equipamentos Locados +
+ * reorganização da barra de filtros (grid 2-col: busca + obra)
+ * com chips de filtros ativos.**
+ *
+ * Pedido user (24/05/2026, screenshot iPad mostrando 1220
+ * cards "SAPATAS AJUSTÁVEIS" idênticos enfileirados): "Melhore
+ * o layout coloque um filtro por obra". Após o import em massa
+ * (Rev. 2333) a lista virou um paredão sem como localizar
+ * quais equipamentos pertencem a qual obra — a única forma de
+ * filtrar era status (Em uso, Atrasado, etc.) ou texto livre
+ * (que não bate em obra porque o nome da obra não está no
+ * card como string indexada).
+ *
+ * **Implementação** (`client/src/pages/equipamentos/Locados.tsx`,
+ * 0 server, 0 schema):
+ *
+ *   (1) **Estado `filtroObra: string`**: "" (todas) / "__null__"
+ *       (sem obra vinculada) / "<id>" (obra ERP específica).
+ *
+ *   (2) **Pipeline de filtro reescrito**:
+ *       - `dataPorStatus` (memo intermediário) = `dataAll`
+ *         filtrado SÓ por status. Exposto pra alimentar
+ *         contadores do select de obra (cross-filter
+ *         respeita o status).
+ *       - `data` (memo final) = `dataPorStatus` + filtro por
+ *         obra. Mantém a semântica antiga de `data` (lista
+ *         que vai pros cards + multi-seleção).
+ *
+ *   (3) **`obrasComItens` useMemo**: agrupa `dataPorStatus`
+ *       por `obraId` (nome resolvido via `obrasMap` cacheado
+ *       de `obras.listActive`), com `count` de unidades +
+ *       `valorMes` somado. Ordenação: maior count primeiro,
+ *       "sem obra" empurrado pro fim. Apenas obras que
+ *       efetivamente TÊM equipamentos no status corrente
+ *       entram no select — não polui dropdown com 50 obras
+ *       ativas zeradas.
+ *
+ *   (4) **UI reorganizada** (grid 2-col responsivo):
+ *       - Linha 1: pills de status (preservada).
+ *       - Linha 2: busca (fr) + select de obra
+ *         (minmax(260px,auto)) lado a lado no desktop,
+ *         empilhado no mobile.
+ *       - Select com ícone Building2 (esq), ChevronDown
+ *         (dir), `appearance-none` pra estilo consistente;
+ *         borda emerald quando filtro ativo.
+ *       - Cada opção: "Nome obra · N unid. · R$ X/mês"
+ *         (custo só aparece se >0).
+ *       - Linha 3 (condicional): chips de filtros ativos
+ *         — "Filtros ativos: [Obra X · count] [busca]
+ *         [limpar tudo]". Botão X em cada chip remove só
+ *         aquele filtro.
+ *       - Linha 4: "Selecionar todos visíveis (preservada)".
+ *
+ *   (5) **`obraSelecionada` useMemo**: pequena lookup pra
+ *       resolver nome+count da obra ativa no chip sem
+ *       reiterar a lista.
+ *
+ * **Por que cliente-side**: `locadosListar` já traz tudo
+ * (busca server-side só por texto). Bucketing O(n) em 1218
+ * itens roda <5ms. Server-side adicionaria round-trip a
+ * cada mudança de filtro sem ganho real.
+ *
+ * **Por que `<select>` nativo (não combobox)**: até 50
+ * obras ativas cabem confortavelmente no scroll nativo; um
+ * combobox autoreplit traria 200+ linhas de código por um
+ * ganho marginal. No iPad o nativo abre full-screen, fácil
+ * de tocar. Layout já foi modernizado com ícones + chips
+ * coloridos, mascarando a aparência "system default".
+ *
+ * **Por que chip "limpar"**: pós-filtro o usuário precisa
+ * de uma saída óbvia que não exija scroll até o select.
+ * Chips colocam o controle visualmente acima dos resultados
+ * + mostram exatamente quanto está sendo filtrado.
+ *
+ * **R-001/R-007/R-010:** N/A — apenas leitura cliente-side,
+ * zero DDL, zero mutations.
+ *
  * Rev. 2333 — **HOTFIX/PERF/UX · Import PDF de locação: bulk
  * INSERT no server (corrige "Load failed") + chunking de 10
  * contratos no client + nova seção "Equipamentos por Obra ERP"

@@ -3,7 +3,7 @@ import { useState, useMemo, useRef, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
 import { toast } from "sonner";
-import { Plus, Search, X, Truck, CheckCircle2, RotateCcw, ClipboardCheck, Eye, FileText, Upload, Sparkles, Trash2, Activity, Clock, AlertTriangle, DollarSign, Calendar, Hash, Building2, User as UserIcon, MapPin, Camera, StickyNote, type LucideIcon } from "lucide-react";
+import { Plus, Search, X, Truck, CheckCircle2, RotateCcw, ClipboardCheck, Eye, FileText, Upload, Sparkles, Trash2, Activity, Clock, AlertTriangle, DollarSign, Calendar, Hash, Building2, User as UserIcon, MapPin, Camera, StickyNote, ChevronDown, type LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import { FotosUploader, FotoItem, fmtMoney, fmtDate, Spinner } from "./_shared";
 
@@ -35,6 +35,8 @@ export default function EquipamentosLocados() {
   const companyId = Number(selectedCompany?.id) || 0;
   const [busca, setBusca] = useState("");
   const [filtroStatus, setFiltroStatus] = useState<string>("em_uso");
+  // Rev. 2334 — filtro por obra ("" = todas; "__null__" = sem obra; "<id>" = obra ERP)
+  const [filtroObra, setFiltroObra] = useState<string>("");
 
   const utils = trpc.useUtils();
   // Lista TUDO (sem filtro server-side de status) pra os contadores das
@@ -43,10 +45,18 @@ export default function EquipamentosLocados() {
     { companyId, busca: busca || undefined },
     { enabled: !!companyId }
   );
-  const data = useMemo(
-    () => (filtroStatus ? (dataAll as any[]).filter(l => l.status === filtroStatus) : dataAll),
+  // Rev. 2334 — pipeline: status → obra. `dataPorStatus` é exposto pra
+  // contadores de obra (cross-filter respeita o status corrente).
+  const dataPorStatus = useMemo(
+    () => (filtroStatus ? (dataAll as any[]).filter(l => l.status === filtroStatus) : (dataAll as any[])),
     [dataAll, filtroStatus]
   );
+  const data = useMemo(() => {
+    if (!filtroObra) return dataPorStatus;
+    if (filtroObra === "__null__") return dataPorStatus.filter(l => !l.obraId);
+    const oid = parseInt(filtroObra) || 0;
+    return dataPorStatus.filter(l => Number(l.obraId) === oid);
+  }, [dataPorStatus, filtroObra]);
 
   const [modal, setModal] = useState(false);
   const [form, setForm] = useState({ ...EMPTY });
@@ -554,6 +564,28 @@ export default function EquipamentosLocados() {
     return c;
   }, [dataAll]);
 
+  // Rev. 2334 — obras com equipamentos no status corrente (pra alimentar select).
+  // Cross-filter: muda o status, lista de obras se reduz proporcionalmente.
+  // Cada item leva o nome resolvido via obrasMap + contagem de unidades.
+  const obrasComItens = useMemo(() => {
+    const acc = new Map<string, { key: string; obraId: number | null; nome: string; count: number; valorMes: number }>();
+    for (const l of dataPorStatus) {
+      const oid = l.obraId ? Number(l.obraId) : null;
+      const k = String(oid ?? "__null__");
+      const nome = oid ? (obrasMap.get(oid) || `Obra #${oid}`) : "— Sem obra vinculada —";
+      const g = acc.get(k) || { key: k, obraId: oid, nome, count: 0, valorMes: 0 };
+      g.count++;
+      g.valorMes += Number(l.valorMensal) || 0;
+      acc.set(k, g);
+    }
+    return Array.from(acc.values()).sort((a, b) => {
+      if (a.obraId === null && b.obraId !== null) return 1;
+      if (b.obraId === null && a.obraId !== null) return -1;
+      return b.count - a.count;
+    });
+  }, [dataPorStatus, obrasMap]);
+  const obraSelecionada = useMemo(() => obrasComItens.find(o => o.key === filtroObra) || null, [obrasComItens, filtroObra]);
+
   return (
     <DashboardLayout>
       <div className="max-w-7xl mx-auto px-4 py-6 space-y-5">
@@ -590,7 +622,8 @@ export default function EquipamentosLocados() {
           <Kpi icon={DollarSign}    label="Custo / mês"    value={fmtMoney(stats.valorMes)} tint="emerald" sub="comprometido" money />
         </div>
 
-        {/* Filtros: pills de status + busca */}
+        {/* Rev. 2334 — Filtros: pills de status (linha 1) + busca + obra (linha 2)
+            + chip de filtro ativo (linha 3) + seleção (linha 4). */}
         <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-3 space-y-3">
           <div className="flex flex-wrap items-center gap-2">
             {STATUS_PILLS.map(p => {
@@ -610,11 +643,57 @@ export default function EquipamentosLocados() {
               );
             })}
           </div>
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-            <input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar por descrição, fornecedor, patrimônio…"
-              className="w-full pl-10 pr-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 outline-none transition" />
+          <div className="grid grid-cols-1 md:grid-cols-[1fr_minmax(260px,auto)] gap-2">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+              <input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar por descrição, fornecedor, patrimônio…"
+                className="w-full pl-10 pr-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 outline-none transition" />
+            </div>
+            <div className="relative">
+              <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
+              <select
+                value={filtroObra}
+                onChange={e => setFiltroObra(e.target.value)}
+                className={`w-full pl-10 pr-8 py-2.5 border rounded-lg text-sm focus:ring-2 focus:ring-emerald-500/30 outline-none transition appearance-none bg-white font-medium ${
+                  filtroObra ? "border-emerald-400 bg-emerald-50/40 text-emerald-900" : "border-slate-200 text-slate-700"
+                }`}
+                title="Filtrar equipamentos por obra ERP">
+                <option value="">Todas as obras ({dataPorStatus.length})</option>
+                {obrasComItens.map(o => (
+                  <option key={o.key} value={o.key}>
+                    {o.nome} · {o.count} unid.{o.valorMes > 0 ? ` · ${fmtMoney(o.valorMes)}/mês` : ""}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
+            </div>
           </div>
+          {/* Rev. 2334 — chips de filtros ativos com botão limpar */}
+          {(filtroObra || busca) && (
+            <div className="flex flex-wrap items-center gap-2 text-xs">
+              <span className="text-slate-500">Filtros ativos:</span>
+              {filtroObra && obraSelecionada && (
+                <span className="inline-flex items-center gap-1.5 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-full pl-3 pr-1.5 py-1 font-medium">
+                  <Building2 className="h-3 w-3" />
+                  <span className="max-w-[260px] truncate" title={obraSelecionada.nome}>{obraSelecionada.nome}</span>
+                  <span className="text-emerald-600 font-bold">· {obraSelecionada.count}</span>
+                  <button onClick={() => setFiltroObra("")} className="ml-1 bg-emerald-200/70 hover:bg-emerald-300 rounded-full p-0.5" title="Remover filtro de obra">
+                    <X className="h-3 w-3" />
+                  </button>
+                </span>
+              )}
+              {busca && (
+                <span className="inline-flex items-center gap-1.5 bg-slate-100 border border-slate-200 text-slate-700 rounded-full pl-3 pr-1.5 py-1 font-medium">
+                  <Search className="h-3 w-3" />
+                  <span className="max-w-[180px] truncate">"{busca}"</span>
+                  <button onClick={() => setBusca("")} className="ml-1 bg-slate-200 hover:bg-slate-300 rounded-full p-0.5" title="Limpar busca">
+                    <X className="h-3 w-3" />
+                  </button>
+                </span>
+              )}
+              <button onClick={() => { setFiltroObra(""); setBusca(""); }} className="text-slate-500 hover:text-slate-700 underline ml-1">limpar tudo</button>
+            </div>
+          )}
           {/* Rev. 2323 — Selecionar todos visíveis (cabeçalho da lista). */}
           {(data as any[]).length > 0 && (
             <div className="flex items-center gap-2 pt-1 border-t border-slate-100 -mb-1">

@@ -546,3 +546,5 @@
 - Rev. 2325 — HOTFIX/UX · Exclusão/vinculação em lote — chunking 500 + modais bonitos. Ver `shared/changelog.ts`.
 
 - Rev. 2326 — FEATURE · Importação PDF de locação cruza endereço com obras ativas (auto-match). Ver `shared/changelog.ts`.
+
+- Rev. 2327 — UX · Cada aba do Dashboard Almox & Equip. vira item próprio na sidebar + tabela mês a mês (12m). Ver `shared/changelog.ts`.
