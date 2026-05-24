@@ -1,6 +1,63 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2358 — **FEATURE/UX · Import PDF de locação ganha campo
+ * "Fornecedor (locadora) deste PDF" com botão "Aplicar a todos"
+ * pra padronizar o fornecedor em todos os contratos do mesmo PDF
+ * de uma vez.**
+ *
+ * **Pedido user (24/05/2026, IMG_1154 + JALVES_*.pdf):**
+ * "Preciso ter uma forma de indicar o fornecedor, a cada PDF que
+ * fizer upload, neste caso todos itens e da empresa JALVES
+ * locações como poder fazer isso?". O print mostrava a coluna
+ * "FORNECEDOR" preenchida com "6716-FC ENGENHARIA E CONSTRUÇÃO
+ * LTDA" (que é o LOCATÁRIO/cliente impresso no cabeçalho do
+ * F051/R051) em vez de "JALVES" (a locadora real).
+ *
+ * **Causa raiz:** o cabeçalho do PDF F051/R051 emitido por
+ * JALVES traz "6716-FC ENGENHARIA..." (FC é o cliente da JALVES),
+ * NÃO o nome da locadora. O nome JALVES está em outro lugar do
+ * PDF (rodapé/logo) que o Gemini Vision frequentemente perde. O
+ * parser então usa o primeiro nome de empresa que vê — o errado.
+ *
+ * **Fix:** sem mexer no parser (que continua tentando extrair),
+ * adiciona controle MANUAL no preview do import:
+ * 1. **Input "Fornecedor (locadora) deste PDF"** no topo do
+ *    preview (faixa amber), com `datalist` populado por
+ *    `trpc.compras.listarFornecedores` (autocomplete dos
+ *    cadastrados no módulo Compras).
+ * 2. **Botão "Aplicar a todos"** que sobrescreve
+ *    `c.fornecedorNome` em TODOS os contratos do preview
+ *    (`importPreview.map(c => ({...c, fornecedorNome: nome}))`).
+ * 3. **Diagnóstico inline**: mostra se nenhum contrato tem
+ *    fornecedor preenchido (⚠ amarelo), se todos têm o mesmo
+ *    (✅ verde) ou se há N fornecedores diferentes detectados
+ *    (⚠ lista os 3 primeiros + " +N"). Ajuda o user a decidir
+ *    quando aplicar em massa vs editar cartão a cartão.
+ *
+ * **Arquivos tocados:**
+ * - `client/src/pages/equipamentos/Locados.tsx`: novo state
+ *   `importFornecedorPadrao` (~344), query
+ *   `fornecedoresCadastradosQ` (~350), reset em
+ *   `abrirImportar()` (~411), helper
+ *   `aplicarFornecedorPadraoATodos()` (~414), bloco UI amber
+ *   (~1968) entre o banner verde "IA detectou" e o resumo "Custo
+ *   por obra".
+ * - `shared/version.ts`: 2357 → 2358.
+ *
+ * **Por que NÃO server-side:** o parser permanece "best effort"
+ * e os campos por contrato continuam editáveis individualmente
+ * (`updateContratoField`). Esta feature é puramente UX —
+ * encurta de N edits manuais pra 1 clique no caso comum (PDF
+ * inteiro = 1 fornecedor) sem remover a flexibilidade caso
+ * algum PDF misture fornecedores.
+ *
+ * **R-001 / R-007 / R-010:** N/A — só UI client-side + 1 query
+ * read-only nova (`listarFornecedores` já existia, só está sendo
+ * consumida em mais 1 tela). Zero DDL, zero mutations novas.
+ *
+ * ---
+ *
  * Rev. 2357 — **HOTFIX/UX · Modal drill-down de "Locações mês a
  * mês" ganha botão "Fechar" no rodapé + altura usa `dvh` em vez
  * de `vh` pra respeitar a URL bar dinâmica do iOS Safari.**

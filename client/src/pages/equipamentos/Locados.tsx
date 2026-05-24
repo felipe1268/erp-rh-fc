@@ -339,6 +339,15 @@ export default function EquipamentosLocados() {
   const [importPreview, setImportPreview] = useState<any[] | null>(null);
   const [importProgresso, setImportProgresso] = useState(0); // Rev. 2310 — barra 0-100% animada
   const importFileRef = useRef<HTMLInputElement>(null);
+  // Rev. 2358 — Fornecedor padrão do PDF: o cabeçalho do F051/R051 traz
+  // o nome do LOCATÁRIO (ex: "6716-FC ENGENHARIA..."), não o da LOCADORA
+  // (ex: JALVES). O parser muitas vezes confunde os 2. User indica aqui o
+  // nome real do fornecedor do PDF inteiro → "Aplicar a todos" propaga.
+  const [importFornecedorPadrao, setImportFornecedorPadrao] = useState("");
+  const fornecedoresCadastradosQ = trpc.compras.listarFornecedores.useQuery(
+    { companyId, ativo: true },
+    { enabled: !!companyId }
+  );
 
   // Rev. 2321 — Polling em vez de single mutation (proxy Replit matava em 60s).
   // Fluxo: Start retorna {jobId} em ms → polling /Status cada 2.5s → done|error.
@@ -396,7 +405,15 @@ export default function EquipamentosLocados() {
   function abrirImportar() {
     setImportArquivo(null);
     setImportPreview(null);
+    setImportFornecedorPadrao(""); // Rev. 2358
     setModalImport(true);
+  }
+  // Rev. 2358 — Aplica o fornecedor padrão a TODOS os contratos do preview.
+  function aplicarFornecedorPadraoATodos() {
+    const nome = importFornecedorPadrao.trim();
+    if (!nome) { toast.error("Digite o nome do fornecedor primeiro."); return; }
+    setImportPreview(prev => prev ? prev.map(c => ({ ...c, fornecedorNome: nome })) : prev);
+    toast.success(`Fornecedor "${nome}" aplicado a todos os contratos.`);
   }
   async function handlePdfPick(file: File) {
     if (file.size > 15 * 1024 * 1024) return toast.error("Arquivo > 15MB. Reduza ou divida o PDF.");
@@ -1944,6 +1961,64 @@ export default function EquipamentosLocados() {
                     ✅ IA detectou <b>{fmtN(importPreview.length)}</b> contrato(s) totalizando <b>{fmtN(importPreview.reduce((a, c) => a + (c.itens?.length || 0), 0))}</b> item(ns).
                     Revise os dados abaixo (campos são editáveis) e confirme.
                   </div>
+
+                  {/* Rev. 2358 — Fornecedor padrão deste PDF.
+                      O cabeçalho do F051/R051 (JALVES) traz o nome do
+                      LOCATÁRIO ("6716-FC ENGENHARIA..."), não o da
+                      LOCADORA — o parser muitas vezes preenche errado.
+                      Aqui o user indica o fornecedor real do PDF inteiro
+                      e propaga pra todos os contratos com 1 clique. */}
+                  {(() => {
+                    const opts = fornecedoresCadastradosQ.data || [];
+                    const nomesDistintos = Array.from(new Set(importPreview.map((c: any) => (c.fornecedorNome || "").trim()).filter(Boolean)));
+                    const todosIguais = nomesDistintos.length === 1;
+                    const algumPreenchido = nomesDistintos.length > 0;
+                    return (
+                      <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 space-y-2">
+                        <div className="flex items-start gap-2 text-amber-900">
+                          <Building2 className="h-4 w-4 mt-0.5 shrink-0" />
+                          <div className="text-xs leading-snug">
+                            <div className="font-semibold text-sm">Fornecedor (locadora) deste PDF</div>
+                            <div className="text-amber-800/90">
+                              O cabeçalho do PDF costuma trazer o nome da empresa <b>locatária</b> (FC Engenharia). Indique aqui a <b>locadora</b> real (ex: JALVES) e clique em "Aplicar a todos".
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex flex-wrap gap-2 items-stretch">
+                          <input
+                            list="fornecedores-cadastrados-import"
+                            value={importFornecedorPadrao}
+                            onChange={e => setImportFornecedorPadrao(e.target.value)}
+                            placeholder="Ex: JALVES LOCAÇÕES"
+                            className="inp flex-1 min-w-[220px] bg-white"
+                          />
+                          <datalist id="fornecedores-cadastrados-import">
+                            {opts.map((f: any) => (
+                              <option key={f.id} value={f.razaoSocial || f.nomeFantasia || ""}>{f.nomeFantasia && f.razaoSocial && f.nomeFantasia !== f.razaoSocial ? f.nomeFantasia : ""}</option>
+                            ))}
+                          </datalist>
+                          <button
+                            type="button"
+                            onClick={aplicarFornecedorPadraoATodos}
+                            disabled={!importFornecedorPadrao.trim()}
+                            className="px-3 py-2 rounded-md bg-amber-600 hover:bg-amber-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white text-xs font-semibold whitespace-nowrap shadow-sm transition"
+                            title="Aplica este nome em TODOS os contratos abaixo"
+                          >
+                            Aplicar a todos
+                          </button>
+                        </div>
+                        <div className="text-[11px] text-amber-800/80">
+                          {!algumPreenchido ? (
+                            <>⚠ Nenhum contrato tem fornecedor preenchido — recomendado aplicar antes de cadastrar.</>
+                          ) : todosIguais ? (
+                            <>✅ Todos os contratos estão com fornecedor <b>"{nomesDistintos[0]}"</b>.</>
+                          ) : (
+                            <>⚠ Há <b>{nomesDistintos.length}</b> fornecedores diferentes detectados: <span className="font-mono">{nomesDistintos.slice(0, 3).join(" · ")}{nomesDistintos.length > 3 ? ` +${nomesDistintos.length - 3}` : ""}</span>. Use o campo acima pra padronizar (ou edite cartão a cartão abaixo).</>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })()}
 
                   {/* Rev. 2314 — Resumo agregado por OBRA (chave = localObra normalizado). */}
                   {(() => {
