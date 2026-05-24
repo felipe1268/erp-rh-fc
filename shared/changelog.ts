@@ -1,6 +1,37 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2387 — **UX · Substituídos os 2 `window.confirm()` nativos que
+ * sobravam no Almoxarifado por modais customizados (header vermelho/rose
+ * + Trash2 icon).**
+ *
+ * Pedido user (IMG_1188, 24/05/2026): print do iPad mostrava o `confirm()`
+ * nativo do Safari com a URL feia ".picard.replit.dev diz" ocupando 3
+ * linhas no título e oferecendo "Bloquear caixas de diálogo" (que se
+ * acionado quebra a UX). Pareando com Rev. 2378/2379 (que já tinham
+ * convertido confirmações de fotos/preços), agora todo confirm nativo
+ * sumiu da página.
+ *
+ * **Frontend** (`client/src/pages/almoxarifado/index.tsx`):
+ *   - Removidos: `if (!confirm(label)) return;` em `handleExcluirItem`
+ *     (~L808) e `window.confirm(...)` no botão de excluir unidade no
+ *     modal de cadastro (~L3252).
+ *   - Adicionados 2 states: `confirmExcluirItem` (com `nome` + `ids[]`
+ *     pra cobrir o caso de sub-itens agregados) e `confirmExcluirUnidade`
+ *     (`{ id, sigla }`).
+ *   - Modais red→rose (mesma estilização dos modais sky/violet das
+ *     Rev. 2378-2381): header com Trash2 grande, descrição clara do
+ *     impacto ("desativa o item, histórico preservado" / "itens
+ *     existentes não são alterados, só some do cadastro"), footer
+ *     com Cancelar + Remover/Excluir.
+ *
+ * UI-only, zero backend, R-001/R-007/R-010 OK.
+ */
+import "./version";
+
+/**
+ * Changelog centralizado do ERP.
+ *
  * Rev. 2386 — **FEATURE · IA sugere categorias para itens "Sem categoria"
  * no Almoxarifado (em lote, com modal de revisão e aplicação seletiva).**
  *

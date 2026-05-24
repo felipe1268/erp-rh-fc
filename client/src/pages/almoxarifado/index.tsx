@@ -94,6 +94,10 @@ export default function AlmoxarifadoPage() {
   // que no Safari iPad mostrava a URL feia do Replit como título de 3 linhas).
   const [confirmBuscaFotos, setConfirmBuscaFotos] = useState<null | { nomes: string[] }>(null);
   const [confirmIAPrecos, setConfirmIAPrecos] = useState<null | { escopo: "empresa" | "obra"; qtd: number }>(null);
+  // Rev. 2387 — Modais de confirmação de exclusão (item + unidade) substituem
+  // window.confirm() nativo do Safari que mostrava a URL ".picard.replit.dev diz".
+  const [confirmExcluirItem, setConfirmExcluirItem] = useState<null | { nome: string; ids: number[] }>(null);
+  const [confirmExcluirUnidade, setConfirmExcluirUnidade] = useState<null | { id: number; sigla: string }>(null);
   // Rev. 2381 — Modal de rebusca de foto com termo customizado (user ajuda a IA)
   const [rebuscarFoto, setRebuscarFoto] = useState<null | { nome: string; termo: string; previewUrl: string | null; buscando: boolean; aplicando: boolean; erro: string | null }>(null);
   // Rev. 2382 — Multi-seleção de itens (alterar categoria em lote / unificar duplicatas)
@@ -802,15 +806,8 @@ export default function AlmoxarifadoPage() {
 
   function handleExcluirItem(item: any) {
     const subs = item._subItems as any[] | undefined;
-    const label = subs && subs.length > 1
-      ? `Remover "${item.nome}" (${subs.length} registros)?`
-      : `Remover "${item.nome}"?`;
-    if (!confirm(label)) return;
-    if (subs && subs.length > 1) {
-      subs.forEach((sub: any) => excluirMut.mutate({ id: sub.id }));
-    } else {
-      excluirMut.mutate({ id: item.id });
-    }
+    const ids = subs && subs.length > 1 ? subs.map((s: any) => s.id) : [item.id];
+    setConfirmExcluirItem({ nome: item.nome, ids });
   }
   const devolverLocacaoMut = trpc.compras.devolverLocacaoItem.useMutation({
     onSuccess: () => { refetch(); setModalDevolverLocacao(false); setItemDevolverLocacao(null); setObsDevolucaoLocacao(""); toast.success("Equipamento devolvido ao fornecedor. Item desativado."); },
@@ -3248,11 +3245,7 @@ export default function AlmoxarifadoPage() {
                     </div>
                     <button
                       className="text-red-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition p-1"
-                      onClick={() => {
-                        if (window.confirm(`Excluir a unidade "${u.sigla}"?`)) {
-                          excluirUnidadeMut.mutate({ id: u.id, companyId });
-                        }
-                      }}
+                      onClick={() => setConfirmExcluirUnidade({ id: u.id, sigla: u.sigla })}
                     >
                       <Trash2 className="h-4 w-4" />
                     </button>
@@ -4160,6 +4153,93 @@ export default function AlmoxarifadoPage() {
           </div>
         </div>
       )}
+      {/* Rev. 2387 — Modal customizado p/ confirmar exclusão de item (substitui window.confirm) */}
+      {confirmExcluirItem && (
+        <div
+          className="fixed inset-0 z-[110] bg-black/50 flex items-center justify-center p-4"
+          onClick={() => setConfirmExcluirItem(null)}
+        >
+          <div
+            className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="bg-gradient-to-br from-red-500 to-rose-600 px-6 pt-6 pb-5 text-white text-center">
+              <div className="mx-auto bg-white/20 rounded-full p-3 w-fit mb-3">
+                <Trash2 className="w-8 h-8" />
+              </div>
+              <h3 className="text-xl font-bold leading-tight">Remover item do almoxarifado?</h3>
+              <p className="text-rose-50 text-sm mt-1 break-words">
+                "{confirmExcluirItem.nome}"
+                {confirmExcluirItem.ids.length > 1 && <> · {confirmExcluirItem.ids.length} registros</>}
+              </p>
+            </div>
+            <div className="px-6 py-5 text-sm text-gray-700">
+              <p className="leading-relaxed">
+                Esta ação <strong>desativa o item</strong> no almoxarifado. O histórico de movimentações é preservado.
+              </p>
+            </div>
+            <div className="px-5 py-4 bg-gray-50 flex items-center gap-2 border-t border-gray-200">
+              <button
+                onClick={() => setConfirmExcluirItem(null)}
+                className="flex-1 px-4 py-3 text-sm font-medium text-gray-700 bg-white hover:bg-gray-100 border border-gray-300 rounded-lg transition"
+              >Cancelar</button>
+              <button
+                onClick={() => {
+                  const ids = confirmExcluirItem.ids;
+                  setConfirmExcluirItem(null);
+                  ids.forEach((id) => excluirMut.mutate({ id }));
+                }}
+                className="flex-1 px-4 py-3 text-sm font-semibold text-white bg-red-600 hover:bg-red-700 rounded-lg transition shadow-sm flex items-center justify-center gap-2"
+              >
+                <Trash2 className="w-4 h-4" /> Remover
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Rev. 2387 — Modal customizado p/ confirmar exclusão de unidade */}
+      {confirmExcluirUnidade && companyId && (
+        <div
+          className="fixed inset-0 z-[110] bg-black/50 flex items-center justify-center p-4"
+          onClick={() => setConfirmExcluirUnidade(null)}
+        >
+          <div
+            className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="bg-gradient-to-br from-red-500 to-rose-600 px-6 pt-6 pb-5 text-white text-center">
+              <div className="mx-auto bg-white/20 rounded-full p-3 w-fit mb-3">
+                <Trash2 className="w-8 h-8" />
+              </div>
+              <h3 className="text-xl font-bold leading-tight">Excluir unidade?</h3>
+              <p className="text-rose-50 text-sm mt-1">"{confirmExcluirUnidade.sigla}"</p>
+            </div>
+            <div className="px-6 py-5 text-sm text-gray-700">
+              <p className="leading-relaxed">
+                Itens existentes que usam esta unidade <strong>não são alterados</strong> — só a unidade some da lista de cadastro.
+              </p>
+            </div>
+            <div className="px-5 py-4 bg-gray-50 flex items-center gap-2 border-t border-gray-200">
+              <button
+                onClick={() => setConfirmExcluirUnidade(null)}
+                className="flex-1 px-4 py-3 text-sm font-medium text-gray-700 bg-white hover:bg-gray-100 border border-gray-300 rounded-lg transition"
+              >Cancelar</button>
+              <button
+                onClick={() => {
+                  const { id } = confirmExcluirUnidade;
+                  setConfirmExcluirUnidade(null);
+                  excluirUnidadeMut.mutate({ id, companyId });
+                }}
+                className="flex-1 px-4 py-3 text-sm font-semibold text-white bg-red-600 hover:bg-red-700 rounded-lg transition shadow-sm flex items-center justify-center gap-2"
+              >
+                <Trash2 className="w-4 h-4" /> Excluir
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Rev. 2386 — Modal: sugestões de categoria por IA */}
       {modalSugestoesCateg && (() => {
         const m = modalSugestoesCateg;
