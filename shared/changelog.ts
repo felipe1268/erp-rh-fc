@@ -1,6 +1,96 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2340 — **FEATURE · Busca de FOTO ILUSTRATIVA dos equipamentos locados
+ * via IA (Google Custom Search Image) + thumbnail nos cards com badge "IA"
+ * quando a foto veio da busca.**
+ *
+ * Pedido user (24/05/2026, sequência das Revs. 2337/2339): "Botão 📷 Buscar
+ * fotos com IA ao lado do Categorizar com IA, aparece se houver itens sem
+ * foto". Pós-import em massa (Rev. 2333) 1.218 equipamentos ficaram com
+ * thumbnail genérico (ícone de câmera cinza) porque o relatório PDF da
+ * locadora não trazia fotos — só descrição/qtd/contrato. Categorização
+ * (Rev. 2337) deu identidade textual; faltava identidade VISUAL.
+ *
+ * **Arquitetura (zero N+1, cota-aware)**: 1.218 unidades repetem ~50-80
+ * descrições únicas — buscar 1 foto por DESCRIÇÃO e replicar em bulk gasta
+ * ~80 queries de Google CSE em vez de 1.218 (× e dentro da cota free de
+ * 100/dia). Schema ganha 1 coluna nova `foto_url TEXT` (não toca
+ * `fotos_recebimento_json`, que é fluxo de origem física diferente).
+ *
+ * **Implementação**:
+ *
+ *   **A. Schema** (`drizzle/schema.ts` + `server/_core/index.ts`):
+ *     - Drizzle: `fotoUrl: text("foto_url")` em `equipamentosLocados`.
+ *     - SyncSchema+: `ALTER TABLE equipamentos_locados ADD COLUMN IF NOT
+ *       EXISTS foto_url TEXT` — idempotente, no bloco existente do Rev.
+ *       2319; log renomeado pra "Rev. 2319+2340".
+ *
+ *   **B. Server** (`server/routers/equipamentos.ts`):
+ *     - Nova procedure `locadosBuscarFotosComIA({companyId, sobrescrever?,
+ *       maxDescricoes?=60})`. Tenant guard via `getCompaniesForUser`.
+ *     - Pré-condição: aborta com `PRECONDITION_FAILED` se `GOOGLE_API_KEY`
+ *       ou `GOOGLE_CSE_ID` ausentes nas Secrets (mensagem clara).
+ *     - Passo 1: `SELECT DISTINCT descricao + COUNT(*)` onde `foto_url IS
+ *       NULL OR ''` (ou TRUE se `sobrescrever`). Limite 60 desc/call.
+ *     - Passo 2: loop sequencial (evita rate-limit do CSE) chamando
+ *       `https://www.googleapis.com/customsearch/v1?searchType=image
+ *       &num=5&safe=active&imgSize=medium&fileType=jpg,png,webp`
+ *       com query `"${descricao} equipamento construção civil"` (palavras
+ *       de contexto reduzem ruído tipo screenshot/meme). Filtra 1ª URL
+ *       válida: HTTPS + extensão de imagem + ≤1000 chars. Detecta 429/403
+ *       como cota esgotada e abortagem precoce (devolve o que já foi feito).
+ *     - Passo 3: bulk `UPDATE equipamentos_locados SET foto_url=$url
+ *       WHERE company_id=$id AND descricao=$desc AND (foto_url IS NULL OR
+ *       '')` — 1 round-trip por descrição encontrada (~80 max) em vez de
+ *       1.218 (~15× menos).
+ *     - Retorna `{descricoesAnalisadas, fotosEncontradas, itensAtualizados,
+ *       descricoesSemFoto[30], haMaisLotes, cotaEsgotada}`.
+ *
+ *   **C. Client** (`client/src/pages/equipamentos/Locados.tsx`):
+ *     - `totalSemFoto` useMemo (espelha `totalSemCategoria`): conta itens
+ *       sem `fotosRecebimentoJson[0]` E sem `fotoUrl`.
+ *     - Estado `modalFotosIA` + `resultadoFotosIA` + `buscarFotosMut`
+ *       (mesmo padrão de `categorizarMut` da Rev. 2337).
+ *     - Botão "📷 Buscar fotos com IA" cor pink/rose ao lado do violet
+ *       "Categorizar com IA" (só renderiza se `totalSemFoto > 0`), com
+ *       badge de contagem em pílula white/25.
+ *     - Modal de confirmação (pink-rose gradient): explica cota Google
+ *       100/dia, idempotência, ~1min de espera.
+ *     - Modal de resultado (emerald-teal): mostra encontradas/analisadas/
+ *       atualizadas; alerta âmbar com descrições sem foto (ex: abreviações
+ *       genéricas); alerta vermelho se `cotaEsgotada` ("rode de novo
+ *       amanhã"); alerta azul se `haMaisLotes` (próximo clique processa
+ *       os restantes); mensagem ✅ se tudo OK.
+ *     - **Thumbnail do card**: `fotoPrincipal = fotos[0]?.url || fotoUrl`,
+ *       com badge `<Sparkles>` pink no canto top-right quando vem da IA
+ *       (transparência: user sabe que é ilustrativa, não a foto real do
+ *       item dele).
+ *     - **Foto do header do painel de detalhes** (Rev. 2339): mesmo
+ *       fallback + badge IA — preserva o visual mesmo em itens importados
+ *       sem foto física.
+ *
+ * **Por que não buscar foto durante o IMPORT PDF**: (1) o import já demora
+ * com chunking de 10 contratos (Rev. 2333) — adicionar 50+ buscas HTTP
+ * sequenciais por contrato estouraria o timeout do proxy (60s); (2) cota
+ * Google é compartilhada — fazer no import gastaria 100 buscas/dia em UM
+ * único PDF; (3) idempotência: bulk-buscar permite o user rodar/re-rodar
+ * sem refazer o import. Foto é cosmético, import é crítico.
+ *
+ * **Por que badge IA visível**: rastreabilidade. Foto buscada na web é
+ * ILUSTRATIVA — a unidade física pode ter detalhes diferentes (cor, marca,
+ * desgaste). Marcar com selo evita expectativa errada quando o user
+ * compara com a foto real do recebimento futuro.
+ *
+ * **Por que `equipamento construção civil` no query**: descrições do PDF
+ * são curtas (ex: "ANDAIME") — sem contexto, Google retorna screenshots
+ * de jogos, memes, produtos sem relação. Adicionar termo de domínio
+ * direciona pro nicho certo. Não usei `site:` porque limitaria a uma
+ * única locadora; queremos diversidade de imagens.
+ *
+ * **R-001/R-007/R-010**: UPDATE escopado por `company_id`, idempotente,
+ * disparado pelo user, ALTER ADD COLUMN IF NOT EXISTS (zero risco em prod).
+ *
  * Rev. 2339 — **FEATURE/UX · Card de Equipamento Locado clicável + painel
  * de detalhes completos (foto, KPIs, obra/fornecedor, galeria, timeline
  * de eventos, ações).**

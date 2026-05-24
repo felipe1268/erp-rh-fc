@@ -8649,6 +8649,9 @@ export const equipamentosLocados = pgTable("equipamentos_locados", {
   status:                      varchar({ length: 30 }).notNull().default("em_uso"),
   fotosRecebimentoJson:        jsonb("fotos_recebimento_json"),
   fotosDevolucaoJson:          jsonb("fotos_devolucao_json"),
+  // Rev. 2340 — URL de foto buscada por IA (Google Custom Search Image).
+  // Fallback visual quando NÃO há fotos do recebimento (fotosRecebimentoJson vazio).
+  fotoUrl:                     text("foto_url"),
   funcionarioResponsavelId:    integer("funcionario_responsavel_id"),
   funcionarioResponsavelNome:  varchar("funcionario_responsavel_nome", { length: 255 }),
   observacoes:                 text(),

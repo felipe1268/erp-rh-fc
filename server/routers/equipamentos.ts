@@ -955,6 +955,153 @@ Gere o JSON conforme o esquema. Não omita nenhuma descrição.`;
       };
     }),
 
+  // Rev. 2340 — Busca de FOTO ILUSTRATIVA via Google Custom Search Image.
+  // Pra cada DESCRIÇÃO distinta sem foto, faz 1 chamada à Google Custom Search
+  // API (engine = GOOGLE_CSE_ID) pedindo `searchType=image`, pega o 1º
+  // resultado válido (PNG/JPG/JPEG/WEBP) com tamanho razoável e dá UPDATE em
+  // BULK em todos os equipamentos com aquela descrição.
+  //
+  // Por que DISTINCT por descrição: ~1.218 unidades repetem ~50-80 strings
+  // únicas → 50-80 chamadas de API (cota Google) em vez de 1218. Idempotente:
+  // só atualiza onde `foto_url IS NULL OR ''` (a menos que `sobrescrever`).
+  //
+  // Limite defensivo de descrições/call (MAX_DESC=60) — Google CSE free tier
+  // dá 100 queries/dia. User pode chamar de novo amanhã pro restante.
+  //
+  // **R-001/R-007/R-010**: UPDATE escopado por `company_id`, idempotente,
+  // disparado pelo user, zero DDL.
+  locadosBuscarFotosComIA: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      sobrescrever: z.boolean().optional().default(false),
+      maxDescricoes: z.number().int().min(1).max(100).optional().default(60),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      // Tenant guard
+      const allowedCompanies = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+      const allowedIds = (allowedCompanies as any[]).map(c => c.id);
+      if (!allowedIds.includes(input.companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta empresa." });
+      }
+      const apiKey = process.env.GOOGLE_API_KEY;
+      const cx = process.env.GOOGLE_CSE_ID;
+      if (!apiKey || !cx) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "Configure GOOGLE_API_KEY e GOOGLE_CSE_ID nas Secrets antes de buscar fotos.",
+        });
+      }
+
+      // 1. Descrições distintas SEM foto — espelha exatamente o filtro do
+      // client (`totalSemFoto`): item conta se NÃO tem foto de recebimento
+      // E não tem `foto_url`. `sobrescrever` ignora o `foto_url` (mas ainda
+      // pula itens com foto física — recebimento é fonte autoritativa).
+      const semFotoRec = sql`(fotos_recebimento_json IS NULL OR jsonb_typeof(fotos_recebimento_json) <> 'array' OR jsonb_array_length(fotos_recebimento_json) = 0)`;
+      const condFoto = input.sobrescrever
+        ? semFotoRec
+        : sql`(${semFotoRec} AND (foto_url IS NULL OR foto_url = ''))`;
+      const rowsResult: any = await db.execute(sql`
+        SELECT descricao, COUNT(*)::int AS qtd
+        FROM equipamentos_locados
+        WHERE company_id = ${input.companyId}
+          AND descricao IS NOT NULL
+          AND descricao <> ''
+          AND ${condFoto}
+        GROUP BY descricao
+        ORDER BY qtd DESC, descricao ASC
+      `);
+      const descricoes: { descricao: string; qtd: number }[] = (rowsResult.rows || rowsResult) as any[];
+      if (descricoes.length === 0) {
+        return { ok: true as const, descricoesAnalisadas: 0, itensAtualizados: 0, fotosEncontradas: 0, descricoesSemFoto: [] as string[], haMaisLotes: false, cotaEsgotada: false };
+      }
+
+      const lote = descricoes.slice(0, input.maxDescricoes);
+
+      // 2. Busca foto pra cada descrição (sequencial — evita rate-limit do CSE)
+      const encontradas: { descricao: string; url: string }[] = [];
+      const semFoto: string[] = [];
+      let cotaEsgotada = false;
+      let configInvalida = false;
+      for (const d of lote) {
+        if (cotaEsgotada || configInvalida) break;
+        // Timeout 10s por chamada — evita travar a mutation se o Google demorar.
+        const ctrl = new AbortController();
+        const t = setTimeout(() => ctrl.abort(), 10_000);
+        try {
+          const q = encodeURIComponent(`${d.descricao} equipamento construção civil`);
+          const url = `https://www.googleapis.com/customsearch/v1?key=${apiKey}&cx=${cx}&q=${q}&searchType=image&num=5&safe=active&imgSize=medium&fileType=jpg,png,webp`;
+          const resp = await fetch(url, { signal: ctrl.signal });
+          if (resp.status === 429) {
+            cotaEsgotada = true;
+            semFoto.push(d.descricao);
+            break;
+          }
+          if (resp.status === 403) {
+            // 403 pode ser quota OU credencial/billing inválidos — tenta
+            // distinguir pela mensagem (`reason: "rateLimitExceeded"` /
+            // "dailyLimitExceeded" → cota; "keyInvalid" / "accessNotConfigured"
+            // → config). Default conservador: trata como cota (mais comum no free tier).
+            const body: any = await resp.json().catch(() => ({}));
+            const reason = String(body?.error?.errors?.[0]?.reason || "").toLowerCase();
+            if (reason.includes("keyinvalid") || reason.includes("accessnotconfigured") || reason.includes("forbidden")) {
+              configInvalida = true;
+              throw new TRPCError({ code: "PRECONDITION_FAILED", message: `Google CSE rejeitou a chamada: ${body?.error?.message || "credencial/permissão inválida"}. Verifique GOOGLE_API_KEY e GOOGLE_CSE_ID.` });
+            }
+            cotaEsgotada = true;
+            semFoto.push(d.descricao);
+            break;
+          }
+          if (!resp.ok) { semFoto.push(d.descricao); continue; }
+          const json: any = await resp.json();
+          const items: any[] = Array.isArray(json.items) ? json.items : [];
+          // Pega 1ª URL válida (https + extensão de imagem)
+          const first = items.find((it: any) => {
+            const link = String(it?.link || "");
+            return /^https?:\/\//.test(link) && /\.(jpe?g|png|webp)(\?|$)/i.test(link) && link.length <= 1000;
+          });
+          if (first) {
+            encontradas.push({ descricao: d.descricao, url: first.link });
+          } else {
+            semFoto.push(d.descricao);
+          }
+        } catch (e: any) {
+          if (e instanceof TRPCError) throw e;
+          // AbortError (timeout) ou erro de rede — não derruba o lote inteiro.
+          semFoto.push(d.descricao);
+        } finally {
+          clearTimeout(t);
+        }
+      }
+
+      // 3. Bulk UPDATE por descrição (mesmo filtro "sem foto real" do SELECT).
+      let itensAtualizados = 0;
+      for (const { descricao, url } of encontradas) {
+        const condSobre = input.sobrescrever
+          ? semFotoRec
+          : sql`(${semFotoRec} AND (foto_url IS NULL OR foto_url = ''))`;
+        const res: any = await db.execute(sql`
+          UPDATE equipamentos_locados
+             SET foto_url = ${url}, updated_at = NOW()
+           WHERE company_id = ${input.companyId}
+             AND descricao = ${descricao}
+             AND ${condSobre}
+        `);
+        itensAtualizados += Number(res.rowCount ?? res.rows?.length ?? 0);
+      }
+
+      return {
+        ok: true as const,
+        descricoesAnalisadas: lote.length,
+        fotosEncontradas: encontradas.length,
+        itensAtualizados,
+        descricoesSemFoto: semFoto.slice(0, 30),
+        haMaisLotes: descricoes.length > input.maxDescricoes,
+        cotaEsgotada,
+      };
+    }),
+
   // ── FATURA DE LOCAÇÃO (skeleton; OCR vem na Fase 3) ───────────────────────
 
   faturasListar: protectedProcedure

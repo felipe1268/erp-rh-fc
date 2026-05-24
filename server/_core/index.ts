@@ -1959,8 +1959,11 @@ Regras:
           await db.execute(sql`ALTER TABLE equipamentos_locados ADD COLUMN IF NOT EXISTS atendente_responsavel VARCHAR(255)`);
           await db.execute(sql`ALTER TABLE equipamentos_locados ADD COLUMN IF NOT EXISTS arquivo_origem_url TEXT`);
           await db.execute(sql`ALTER TABLE equipamentos_locados ADD COLUMN IF NOT EXISTS valor_subtotal_contrato NUMERIC(14,2)`);
-          console.log(`[SyncSchema+] Rev. 2319: tabelas equipamentos_locados + equipamento_locado_eventos garantidas (+ índices + colunas import-lote da Rev. 2308).`);
-        } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.2319 equipamentos_locados (CREATE):`, e?.message || e); }
+          // Rev. 2340 — foto_url para imagem buscada por IA (Google Custom Search).
+          // Idempotente; fallback visual quando o recebimento não teve fotos.
+          await db.execute(sql`ALTER TABLE equipamentos_locados ADD COLUMN IF NOT EXISTS foto_url TEXT`);
+          console.log(`[SyncSchema+] Rev. 2319+2340: tabelas equipamentos_locados + equipamento_locado_eventos garantidas (+ índices + colunas import-lote + foto_url IA).`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.2319/2340 equipamentos_locados (CREATE):`, e?.message || e); }
 
         // ── Rev. 2260 — Backfill `previsto_msp_pct` em obras antigas ──────
         // Decisão user (23/05/2026): a regra "PREVISTO = % PREVISTO do MSP /

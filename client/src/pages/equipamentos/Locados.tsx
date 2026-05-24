@@ -617,6 +617,11 @@ export default function EquipamentosLocados() {
   }, [dataPorStatusEObra]);
   const categoriaSelecionada = useMemo(() => categoriasComItens.find(c => c.key === filtroCategoria) || null, [categoriasComItens, filtroCategoria]);
   const totalSemCategoria = useMemo(() => (dataAll as any[]).filter(l => !l.categoria || String(l.categoria).trim() === "").length, [dataAll]);
+  // Rev. 2340 — quantos itens NÃO têm foto (nem recebimento, nem IA)
+  const totalSemFoto = useMemo(() => (dataAll as any[]).filter(l => {
+    const fr = (l.fotosRecebimentoJson as any[]) || [];
+    return fr.length === 0 && !l.fotoUrl;
+  }).length, [dataAll]);
 
   // Rev. 2337 — Categorização em lote via IA.
   const [modalCategIA, setModalCategIA] = useState<null | { sobrescrever: boolean }>(null);
@@ -631,6 +636,22 @@ export default function EquipamentosLocados() {
     onError: (err: any) => {
       toast.error(err?.message || "Falha ao categorizar com IA.");
       setModalCategIA(null);
+    },
+  });
+
+  // Rev. 2340 — Busca de fotos ilustrativas em lote via Google Custom Search.
+  const [modalFotosIA, setModalFotosIA] = useState<null | { sobrescrever: boolean }>(null);
+  const [resultadoFotosIA, setResultadoFotosIA] = useState<null | { descricoesAnalisadas: number; fotosEncontradas: number; itensAtualizados: number; descricoesSemFoto: string[]; haMaisLotes?: boolean; cotaEsgotada?: boolean }>(null);
+  const buscarFotosMut = trpc.equipamentos.locadosBuscarFotosComIA.useMutation({
+    onSuccess: (res: any) => {
+      setResultadoFotosIA(res);
+      setModalFotosIA(null);
+      utils.equipamentos.locadosListar.invalidate();
+      toast.success(`IA encontrou ${res.fotosEncontradas} foto(s) — ${res.itensAtualizados} equipamento(s) atualizado(s).`);
+    },
+    onError: (err: any) => {
+      toast.error(err?.message || "Falha ao buscar fotos com IA.");
+      setModalFotosIA(null);
     },
   });
 
@@ -661,6 +682,17 @@ export default function EquipamentosLocados() {
                   {categorizarMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Tag className="h-4 w-4" />}
                   Categorizar com IA
                   <span className="inline-flex items-center justify-center min-w-[22px] h-5 px-1.5 rounded-full text-[10px] font-bold bg-white/25">{totalSemCategoria}</span>
+                </button>
+              )}
+              {/* Rev. 2340 — Buscar fotos com IA (só aparece se houver itens sem foto). */}
+              {totalSemFoto > 0 && (
+                <button onClick={() => setModalFotosIA({ sobrescrever: false })}
+                  disabled={buscarFotosMut.isPending}
+                  className="inline-flex items-center gap-2 bg-pink-500/90 text-white hover:bg-pink-500 px-4 py-2.5 rounded-xl shadow-md font-semibold text-sm transition ring-1 ring-pink-300/60 disabled:opacity-60 disabled:cursor-wait"
+                  title={`${totalSemFoto} equipamento(s) sem foto — a IA busca uma imagem ilustrativa no Google e aplica em lote`}>
+                  {buscarFotosMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Camera className="h-4 w-4" />}
+                  Buscar fotos com IA
+                  <span className="inline-flex items-center justify-center min-w-[22px] h-5 px-1.5 rounded-full text-[10px] font-bold bg-white/25">{totalSemFoto}</span>
                 </button>
               )}
               {/* Rev. 2315 — Removido botão "Receber locação"; fluxo principal é Importar PDF (IA). */}
@@ -809,6 +841,9 @@ export default function EquipamentosLocados() {
           <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-3">
             {(data as any[]).map(l => {
               const fotos = (l.fotosRecebimentoJson as FotoItem[]) || [];
+              // Rev. 2340 — fallback: se não houver fotos do recebimento, usa a foto buscada pela IA (fotoUrl).
+              const fotoPrincipal = fotos[0]?.url || (l.fotoUrl as string | null) || null;
+              const fotoIA = !fotos[0] && !!l.fotoUrl;
               const accent = l.status === "atrasado" ? "from-red-500 to-red-600"
                 : l.status === "em_renovacao" ? "from-amber-500 to-amber-600"
                 : l.status === "em_uso" ? "from-emerald-500 to-teal-600"
@@ -831,8 +866,15 @@ export default function EquipamentosLocados() {
                     <input type="checkbox" checked={sel} onChange={() => toggleSelecionado(l.id)}
                       onClick={(e) => e.stopPropagation()}
                       className="h-4 w-4 mt-1 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer flex-shrink-0" />
-                    {fotos[0] ? (
-                      <img src={fotos[0].url} className="w-16 h-16 object-cover rounded-lg ring-1 ring-slate-200 flex-shrink-0" alt="" />
+                    {fotoPrincipal ? (
+                      <div className="relative flex-shrink-0">
+                        <img src={fotoPrincipal} className="w-16 h-16 object-cover rounded-lg ring-1 ring-slate-200" alt="" loading="lazy" />
+                        {fotoIA && (
+                          <span title="Imagem ilustrativa encontrada por IA" className="absolute -top-1 -right-1 bg-pink-500 text-white rounded-full p-0.5 ring-2 ring-white shadow">
+                            <Sparkles className="h-2.5 w-2.5" />
+                          </span>
+                        )}
+                      </div>
                     ) : (
                       <div className="w-16 h-16 rounded-lg bg-slate-100 ring-1 ring-slate-200 flex items-center justify-center flex-shrink-0">
                         <Camera className="h-5 w-5 text-slate-400" />
@@ -1148,8 +1190,15 @@ export default function EquipamentosLocados() {
                   <X className="h-5 w-5" />
                 </button>
                 <div className="flex items-start gap-4 pr-10">
-                  {fotosRec[0] ? (
-                    <img src={fotosRec[0].url} className="w-20 h-20 sm:w-24 sm:h-24 object-cover rounded-xl ring-2 ring-white/40 shadow-lg flex-shrink-0" alt="" />
+                  {fotosRec[0] || l.fotoUrl ? (
+                    <div className="relative flex-shrink-0">
+                      <img src={fotosRec[0]?.url || (l.fotoUrl as string)} className="w-20 h-20 sm:w-24 sm:h-24 object-cover rounded-xl ring-2 ring-white/40 shadow-lg" alt="" />
+                      {!fotosRec[0] && l.fotoUrl && (
+                        <span title="Imagem ilustrativa encontrada por IA" className="absolute -top-1.5 -right-1.5 bg-pink-500 text-white rounded-full p-1 ring-2 ring-white shadow">
+                          <Sparkles className="h-3 w-3" />
+                        </span>
+                      )}
+                    </div>
                   ) : (
                     <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-xl bg-white/15 ring-2 ring-white/30 flex items-center justify-center flex-shrink-0">
                       <Camera className="h-8 w-8 text-white/70" />
@@ -1776,6 +1825,95 @@ export default function EquipamentosLocados() {
             </div>
             <div className="bg-slate-50 border-t border-slate-200 px-5 py-3 flex justify-end">
               <button onClick={() => setResultadoCategIA(null)} className="px-4 py-2 text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-md transition">Fechar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Rev. 2340 — Modal de confirmação "Buscar fotos com IA" */}
+      {modalFotosIA && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => !buscarFotosMut.isPending && setModalFotosIA(null)}>
+          <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="bg-gradient-to-br from-pink-600 to-rose-600 text-white p-5">
+              <div className="flex items-center gap-3">
+                <div className="bg-white/20 rounded-xl p-2.5 ring-1 ring-white/30">
+                  <Camera className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold">Buscar fotos com IA</h3>
+                  <p className="text-xs text-pink-50/90 mt-0.5">Imagem ilustrativa do Google para os {totalSemFoto} equipamento(s) sem foto</p>
+                </div>
+              </div>
+            </div>
+            <div className="p-5 space-y-3 text-sm text-slate-700">
+              <p>A IA agrupa por <b>descrição única</b> (ex: "SAPATAS AJUSTÁVEIS" aparece 1.218 vezes mas é 1 busca só) e procura no <b>Google Imagens</b> uma foto ilustrativa do equipamento. Depois aplica a mesma foto em todas as unidades.</p>
+              <div className="bg-pink-50 border border-pink-200 rounded-lg p-3 text-xs text-pink-900 space-y-1">
+                <div><b>Cota:</b> 100 buscas/dia no plano gratuito do Google. Roda até 60 descrições por vez.</div>
+                <div><b>Idempotente:</b> só toca itens sem foto (não substitui fotos do recebimento).</div>
+                <div><b>Custo:</b> a Google armazena só URLs públicas — nada é baixado pro servidor.</div>
+              </div>
+              {buscarFotosMut.isPending && (
+                <div className="flex items-center gap-2 text-pink-700 text-sm">
+                  <Loader2 className="h-4 w-4 animate-spin" /> Buscando fotos no Google… (pode levar ~1min)
+                </div>
+              )}
+            </div>
+            <div className="bg-slate-50 border-t border-slate-200 px-5 py-3 flex justify-end gap-2">
+              <button onClick={() => setModalFotosIA(null)} disabled={buscarFotosMut.isPending}
+                className="px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-200 rounded-lg transition disabled:opacity-60">Cancelar</button>
+              <button onClick={() => buscarFotosMut.mutate({ companyId, sobrescrever: false })} disabled={buscarFotosMut.isPending}
+                className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-pink-600 hover:bg-pink-700 rounded-lg shadow-md transition disabled:opacity-60 disabled:cursor-wait">
+                {buscarFotosMut.isPending ? <><Loader2 className="h-4 w-4 animate-spin" /> Buscando…</> : <><Camera className="h-4 w-4" /> Buscar agora</>}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Rev. 2340 — Modal de resultado da busca de fotos */}
+      {resultadoFotosIA && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setResultadoFotosIA(null)}>
+          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="bg-gradient-to-br from-emerald-600 to-teal-600 text-white p-5 flex items-start justify-between">
+              <div className="flex items-center gap-3">
+                <div className="bg-white/20 rounded-xl p-2.5 ring-1 ring-white/30">
+                  <CheckCircle2 className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold">Fotos encontradas pela IA</h3>
+                  <p className="text-xs text-emerald-50/90 mt-0.5">
+                    {resultadoFotosIA.fotosEncontradas} de {resultadoFotosIA.descricoesAnalisadas} descrição(ões) — {resultadoFotosIA.itensAtualizados} equipamento(s) atualizado(s)
+                  </p>
+                </div>
+              </div>
+              <button onClick={() => setResultadoFotosIA(null)} className="text-white/80 hover:text-white bg-white/10 hover:bg-white/20 rounded-lg p-1.5"><X className="h-4 w-4" /></button>
+            </div>
+            <div className="p-5 space-y-3 overflow-y-auto">
+              {resultadoFotosIA.cotaEsgotada && (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-xs text-red-800">
+                  <b>⚠ Cota do Google esgotada hoje.</b> O plano gratuito do Custom Search dá 100 buscas/dia. Rode de novo amanhã pras descrições restantes.
+                </div>
+              )}
+              {resultadoFotosIA.descricoesSemFoto.length > 0 && (
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                  <div className="text-xs font-semibold text-amber-900 mb-1">⚠ {resultadoFotosIA.descricoesSemFoto.length} descrição(ões) sem foto encontrada:</div>
+                  <ul className="text-xs text-amber-800 space-y-0.5 max-h-32 overflow-y-auto">
+                    {resultadoFotosIA.descricoesSemFoto.map((d, i) => <li key={i}>• {d}</li>)}
+                  </ul>
+                  <div className="text-[11px] text-amber-700 mt-2">Dica: descrições muito genéricas ou abreviadas (ex: "DIV", "S/N") podem não retornar imagem relevante.</div>
+                </div>
+              )}
+              {resultadoFotosIA.haMaisLotes && (
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-xs text-blue-800">
+                  Ainda há mais descrições sem foto. Clique em <b>Buscar fotos com IA</b> de novo para processar o próximo lote.
+                </div>
+              )}
+              {!resultadoFotosIA.cotaEsgotada && resultadoFotosIA.descricoesSemFoto.length === 0 && !resultadoFotosIA.haMaisLotes && (
+                <div className="text-sm text-slate-700">Todas as descrições deste lote receberam foto. 🎉</div>
+              )}
+            </div>
+            <div className="bg-slate-50 border-t border-slate-200 px-5 py-3 flex justify-end">
+              <button onClick={() => setResultadoFotosIA(null)} className="px-4 py-2 text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-md transition">Fechar</button>
             </div>
           </div>
         </div>
