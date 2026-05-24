@@ -81,6 +81,14 @@ export default function Almoxarifado() {
     },
     onError: (e) => toast.error("Erro na IA: " + e.message),
   });
+  // Rev. 2373 — toggle manual: operador decide sem precisar da IA.
+  const definirTipoMut = trpc.compras.definirTipoControleManual.useMutation({
+    onSuccess: (data) => {
+      toast.success(data.tipoControle === "aplicacao_direta" ? "Marcado como GRANEL (aplicação direta)." : "Voltou para ESTOQUE normal.");
+      refetchItens(); refetchAplicDireta();
+    },
+    onError: (e) => toast.error(e.message),
+  });
   const { data: categorias = [] } = trpc.compras.listarCategoriasAlmoxarifado.useQuery(
     { companyId }, { enabled: !!companyId }
   );
@@ -690,6 +698,28 @@ export default function Almoxarifado() {
                   {isAD && (
                     <p className="text-[10px] text-amber-700 mt-1 italic">⚠ Este item NÃO entra no estoque. Recebimentos via OC geram movimentação de consumo direto na obra.</p>
                   )}
+                  {/* Rev. 2373 — Toggle MANUAL pro operador decidir sem precisar de IA.
+                      Útil pra granel óbvio (areia, pedra, lajota) que a IA pode
+                      classificar errado se a descrição for ambígua. */}
+                  <div className="mt-2 pt-2 border-t border-slate-200">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const novo = isAD ? "estoque" : "aplicacao_direta";
+                        const msg = isAD
+                          ? "Voltar para ESTOQUE normal? Entradas vão somar ao saldo e saídas vão descontar."
+                          : "Marcar como INSUMO A GRANEL (aplicação direta)? O item vai sumir do saldo e cada recebimento será consumido na obra automaticamente. Bom pra areia, pedra, lajota.";
+                        if (!window.confirm(msg)) return;
+                        definirTipoMut.mutate({ itemId: editandoItem, companyId, tipoControle: novo as any });
+                      }}
+                      disabled={definirTipoMut.isPending}
+                      className={`text-[10px] font-semibold underline ${isAD ? "text-emerald-700 hover:text-emerald-900" : "text-amber-700 hover:text-amber-900"}`}
+                    >
+                      {definirTipoMut.isPending ? "Salvando..." : (isAD
+                        ? "← Voltar para Estoque normal"
+                        : "→ Marcar como insumo A GRANEL (areia/pedra/lajota)")}
+                    </button>
+                  </div>
                 </div>
               );
             })()}

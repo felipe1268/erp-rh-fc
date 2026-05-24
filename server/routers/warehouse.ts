@@ -1,9 +1,11 @@
 import { z } from "zod";
 import { router, protectedProcedure } from "../_core/trpc";
 import { TRPCError } from "@trpc/server";
-import { getDb, getEffectiveAllowedObraIds, userCanAccessObra } from "../db";
+import { getDb, getEffectiveAllowedObraIds, userCanAccessObra, getCompaniesForUser } from "../db";
 import { eq, and, desc, sql, inArray } from "drizzle-orm";
+import crypto from "crypto";
 import { buscarFotoParaItem } from "../_core/autoFoto";
+import { storagePut } from "../storage";
 import {
   almoxarifadoItens,
   almoxarifadoMovimentacoes,
@@ -13,6 +15,8 @@ import {
   almoxarifadoRecebimentos,
   almoxarifadoRecebimentoItens,
   almoxarifadoNotificacoes,
+  almoxarifadoBaias,
+  almoxarifadoBaiaLeituras,
   warehouseLoans,
   warehouseInventorySessions,
   warehouseInventorySessionItems,
@@ -2001,5 +2005,283 @@ REGRAS:
           eq(almoxarifadoNotificacoes.companyId, input.companyId),
         ));
       return { success: true };
+    }),
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // Rev. 2373 — INVENTÁRIO VISUAL DE BAIAS (areia, pedra, lajota, granel)
+  // ═══════════════════════════════════════════════════════════════════════
+  // Operador olha a baia física e toca em 1 de 5 botões (0/25/50/75/100%).
+  // Foto opcional, observação opcional, histórico fica registrado.
+  // Tenant + obra isolation em TODAS as queries/mutations.
+  // Hardening pós code review (Rev. 2373): checa companyId no allowlist do
+  // usuário (getCompaniesForUser) ANTES de qualquer SELECT/INSERT/UPDATE, e
+  // valida que obra.companyId === input.companyId no baiaCriar pra impedir
+  // mismatch cross-tenant (obra de empresa A com company_id da empresa B).
+
+  baiaListar: protectedProcedure
+    .input(z.object({ companyId: z.number(), obraId: z.number().optional(), incluirInativas: z.boolean().optional() }))
+    .query(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      // Tenant guard: rejeita se a company não pertence ao usuário.
+      const allowedCompanies = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+      if (!allowedCompanies.map((c: any) => c.id).includes(input.companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta empresa." });
+      }
+      const allowed = await getEffectiveAllowedObraIds(ctx.user.id, ctx.user.role);
+      const conds: any[] = [eq(almoxarifadoBaias.companyId, input.companyId)];
+      if (!input.incluirInativas) conds.push(eq(almoxarifadoBaias.ativo, true));
+      if (input.obraId !== undefined) conds.push(eq(almoxarifadoBaias.obraId, input.obraId));
+      if (allowed !== null) {
+        if (allowed.length === 0) return [];
+        conds.push(inArray(almoxarifadoBaias.obraId, allowed));
+      }
+      const baias = await db.select().from(almoxarifadoBaias).where(and(...conds)).orderBy(desc(almoxarifadoBaias.criadoEm));
+      if (baias.length === 0) return [];
+
+      // Última leitura por baia (1 query agregada).
+      const baiaIds = baias.map((b: any) => b.id);
+      const ultimas: any = await db.execute(sql`
+        SELECT DISTINCT ON (baia_id) baia_id, id, percentual, foto_url, observacoes,
+               lida_por_id, lida_por_nome, lida_em
+        FROM almoxarifado_baia_leituras
+        WHERE baia_id IN (${sql.join(baiaIds.map((id: number) => sql`${id}`), sql`, `)})
+        ORDER BY baia_id, lida_em DESC
+      `);
+      const mapUlt = new Map<number, any>();
+      for (const r of (ultimas?.rows ?? [])) mapUlt.set(Number(r.baia_id), r);
+
+      // Penúltima leitura por baia (pra calcular tendência subiu/desceu).
+      const penultimas: any = await db.execute(sql`
+        SELECT baia_id, percentual, lida_em FROM (
+          SELECT baia_id, percentual, lida_em,
+                 ROW_NUMBER() OVER (PARTITION BY baia_id ORDER BY lida_em DESC) rn
+          FROM almoxarifado_baia_leituras
+          WHERE baia_id IN (${sql.join(baiaIds.map((id: number) => sql`${id}`), sql`, `)})
+        ) t WHERE rn = 2
+      `);
+      const mapPenult = new Map<number, any>();
+      for (const r of (penultimas?.rows ?? [])) mapPenult.set(Number(r.baia_id), r);
+
+      // Nome da obra (1 query).
+      const obraIdsUnicos = Array.from(new Set(baias.map((b: any) => b.obraId)));
+      const obrasRows = await db.select({ id: obras.id, nome: obras.nome }).from(obras).where(inArray(obras.id, obraIdsUnicos));
+      const mapObras = new Map<number, string>();
+      for (const o of obrasRows) mapObras.set(o.id, o.nome);
+
+      // Normaliza raw SQL rows pra camelCase (evita drift com o resto da API).
+      const toCamel = (r: any) => r ? ({
+        id: Number(r.id),
+        baiaId: Number(r.baia_id),
+        percentual: Number(r.percentual),
+        fotoUrl: r.foto_url ?? null,
+        observacoes: r.observacoes ?? null,
+        lidaPorId: r.lida_por_id != null ? Number(r.lida_por_id) : null,
+        lidaPorNome: r.lida_por_nome ?? null,
+        lidaEm: r.lida_em ?? null,
+      }) : null;
+      return baias.map((b: any) => ({
+        ...b,
+        obraNome: mapObras.get(b.obraId) ?? null,
+        ultimaLeitura: toCamel(mapUlt.get(b.id)),
+        leituraAnterior: toCamel(mapPenult.get(b.id)),
+      }));
+    }),
+
+  baiaCriar: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      obraId: z.number(),
+      itemId: z.number().nullable().optional(),
+      nome: z.string().min(1).max(200),
+      material: z.string().min(1).max(100),
+      unidade: z.string().max(20).default("m³"),
+      capacidadeEstimada: z.number().nullable().optional(),
+      observacoes: z.string().optional(),
+      fotoBase64: z.string().optional(),
+      fotoMime: z.string().optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      // Company guard + obra guard + verificar obra.companyId === input.companyId.
+      const allowedCompanies = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+      if (!allowedCompanies.map((c: any) => c.id).includes(input.companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta empresa." });
+      }
+      if (!(await userCanAccessObra(ctx.user.id, ctx.user.role, input.obraId))) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta obra." });
+      }
+      const [obraRow] = await db.select({ id: obras.id, companyId: obras.companyId }).from(obras).where(eq(obras.id, input.obraId));
+      if (!obraRow || obraRow.companyId !== input.companyId) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Obra não pertence à empresa informada." });
+      }
+      let fotoUrl: string | null = null;
+      if (input.fotoBase64 && input.fotoMime) {
+        const buf = Buffer.from(input.fotoBase64, "base64");
+        const ext = input.fotoMime.includes("png") ? "png" : input.fotoMime.includes("webp") ? "webp" : "jpg";
+        const hash = crypto.createHash("sha1").update(`${input.companyId}-${input.obraId}-${input.nome}-${Date.now()}`).digest("hex").slice(0, 12);
+        const key = `almoxarifado/baias/${input.companyId}/${hash}.${ext}`;
+        const { url } = await storagePut(key, buf, input.fotoMime);
+        fotoUrl = url;
+      }
+      const [novo] = await db.insert(almoxarifadoBaias).values({
+        companyId: input.companyId,
+        obraId: input.obraId,
+        itemId: input.itemId ?? null,
+        nome: input.nome.trim(),
+        material: input.material.trim(),
+        unidade: input.unidade,
+        capacidadeEstimada: input.capacidadeEstimada != null ? String(input.capacidadeEstimada) : null,
+        fotoUrl,
+        observacoes: input.observacoes ?? null,
+        ativo: true,
+        criadoPorId: ctx.user.id,
+        criadoPorNome: ctx.user.name ?? null,
+      } as any).returning();
+      return novo;
+    }),
+
+  baiaEditar: protectedProcedure
+    .input(z.object({
+      id: z.number(),
+      companyId: z.number(),
+      nome: z.string().min(1).max(200).optional(),
+      material: z.string().min(1).max(100).optional(),
+      unidade: z.string().max(20).optional(),
+      capacidadeEstimada: z.number().nullable().optional(),
+      observacoes: z.string().nullable().optional(),
+      fotoBase64: z.string().optional(),
+      fotoMime: z.string().optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const allowedCompanies = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+      if (!allowedCompanies.map((c: any) => c.id).includes(input.companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta empresa." });
+      }
+      const [existing] = await db.select().from(almoxarifadoBaias).where(and(
+        eq(almoxarifadoBaias.id, input.id),
+        eq(almoxarifadoBaias.companyId, input.companyId),
+      ));
+      if (!existing) throw new TRPCError({ code: "NOT_FOUND" });
+      if (!(await userCanAccessObra(ctx.user.id, ctx.user.role, existing.obraId))) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta obra." });
+      }
+      const patch: any = { atualizadoEm: new Date().toISOString() };
+      if (input.nome !== undefined) patch.nome = input.nome.trim();
+      if (input.material !== undefined) patch.material = input.material.trim();
+      if (input.unidade !== undefined) patch.unidade = input.unidade;
+      if (input.capacidadeEstimada !== undefined) patch.capacidadeEstimada = input.capacidadeEstimada != null ? String(input.capacidadeEstimada) : null;
+      if (input.observacoes !== undefined) patch.observacoes = input.observacoes;
+      if (input.fotoBase64 && input.fotoMime) {
+        const buf = Buffer.from(input.fotoBase64, "base64");
+        const ext = input.fotoMime.includes("png") ? "png" : input.fotoMime.includes("webp") ? "webp" : "jpg";
+        const hash = crypto.createHash("sha1").update(`${input.companyId}-${input.id}-${Date.now()}`).digest("hex").slice(0, 12);
+        const key = `almoxarifado/baias/${input.companyId}/${hash}.${ext}`;
+        const { url } = await storagePut(key, buf, input.fotoMime);
+        patch.fotoUrl = url;
+      }
+      await db.update(almoxarifadoBaias).set(patch).where(eq(almoxarifadoBaias.id, input.id));
+      return { success: true };
+    }),
+
+  baiaDesativar: protectedProcedure
+    .input(z.object({ id: z.number(), companyId: z.number() }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const allowedCompanies = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+      if (!allowedCompanies.map((c: any) => c.id).includes(input.companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta empresa." });
+      }
+      const [existing] = await db.select().from(almoxarifadoBaias).where(and(
+        eq(almoxarifadoBaias.id, input.id),
+        eq(almoxarifadoBaias.companyId, input.companyId),
+      ));
+      if (!existing) throw new TRPCError({ code: "NOT_FOUND" });
+      if (!(await userCanAccessObra(ctx.user.id, ctx.user.role, existing.obraId))) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta obra." });
+      }
+      await db.update(almoxarifadoBaias).set({ ativo: false, atualizadoEm: new Date().toISOString() } as any).where(eq(almoxarifadoBaias.id, input.id));
+      return { success: true };
+    }),
+
+  baiaLeiturasListar: protectedProcedure
+    .input(z.object({ companyId: z.number(), baiaId: z.number(), limit: z.number().optional() }))
+    .query(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const allowedCompanies = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+      if (!allowedCompanies.map((c: any) => c.id).includes(input.companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta empresa." });
+      }
+      const [b] = await db.select().from(almoxarifadoBaias).where(and(
+        eq(almoxarifadoBaias.id, input.baiaId),
+        eq(almoxarifadoBaias.companyId, input.companyId),
+      ));
+      if (!b) throw new TRPCError({ code: "NOT_FOUND" });
+      if (!(await userCanAccessObra(ctx.user.id, ctx.user.role, b.obraId))) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta obra." });
+      }
+      const rows = await db.select().from(almoxarifadoBaiaLeituras)
+        .where(and(
+          eq(almoxarifadoBaiaLeituras.companyId, input.companyId),
+          eq(almoxarifadoBaiaLeituras.baiaId, input.baiaId),
+        ))
+        .orderBy(desc(almoxarifadoBaiaLeituras.lidaEm))
+        .limit(input.limit ?? 50);
+      return rows;
+    }),
+
+  baiaLeituraRegistrar: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      baiaId: z.number(),
+      percentual: z.number().int().min(0).max(100),
+      observacoes: z.string().optional(),
+      fotoBase64: z.string().optional(),
+      fotoMime: z.string().optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      // Validar percentual nos 5 níveis canônicos (0/25/50/75/100).
+      const niveis = [0, 25, 50, 75, 100];
+      if (!niveis.includes(input.percentual)) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Percentual deve ser 0, 25, 50, 75 ou 100." });
+      }
+      const allowedCompanies = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+      if (!allowedCompanies.map((c: any) => c.id).includes(input.companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta empresa." });
+      }
+      const [b] = await db.select().from(almoxarifadoBaias).where(and(
+        eq(almoxarifadoBaias.id, input.baiaId),
+        eq(almoxarifadoBaias.companyId, input.companyId),
+      ));
+      if (!b) throw new TRPCError({ code: "NOT_FOUND" });
+      if (!(await userCanAccessObra(ctx.user.id, ctx.user.role, b.obraId))) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta obra." });
+      }
+      let fotoUrl: string | null = null;
+      if (input.fotoBase64 && input.fotoMime) {
+        const buf = Buffer.from(input.fotoBase64, "base64");
+        const ext = input.fotoMime.includes("png") ? "png" : input.fotoMime.includes("webp") ? "webp" : "jpg";
+        const hash = crypto.createHash("sha1").update(`${input.companyId}-${input.baiaId}-${Date.now()}`).digest("hex").slice(0, 12);
+        const key = `almoxarifado/baias-leituras/${input.companyId}/${hash}.${ext}`;
+        const { url } = await storagePut(key, buf, input.fotoMime);
+        fotoUrl = url;
+      }
+      const [novo] = await db.insert(almoxarifadoBaiaLeituras).values({
+        companyId: input.companyId,
+        baiaId: input.baiaId,
+        percentual: input.percentual,
+        fotoUrl,
+        observacoes: input.observacoes ?? null,
+        lidaPorId: ctx.user.id,
+        lidaPorNome: ctx.user.name ?? null,
+      } as any).returning();
+      return novo;
     }),
 });

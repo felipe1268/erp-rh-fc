@@ -1,6 +1,125 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2373 — **FEATURE · "AB" (resposta do user) para controlar insumos a
+ * granel (areia, pedra, lajota): (A) toggle MANUAL no cadastro do item
+ * pra marcar como "insumo a granel = aplicação direta" sem depender da IA;
+ * (B) nova tela "Inventário Visual (Baias)" mobile-first onde o operador
+ * de 4ª série olha a baia física e toca em 1 de 5 botões grandes
+ * (VAZIA / 1/4 / METADE / 3/4 / CHEIA) — opcionalmente tira foto e deixa
+ * observação. Cada leitura vira histórico com tendência (subiu/desceu).**
+ *
+ * **Pedido user (24/05/2026, IMG_1173):** "Precisamos corrigir um ponto
+ * aqui... tem insumos que não dá para controlar no almoxarifado, tipo
+ * areia, pedra, lajota, como podemos controlar isso?" Apresentei 3 opções
+ * (A = aplicação direta já existente / B = inventário visual semanal /
+ * C = baixa automática por ficha técnica). User respondeu **"AB"** —
+ * quer A + B juntos: aplicação direta no recebimento + inventário visual
+ * periódico pra conferir o que sobrou no canteiro.
+ *
+ * **PARTE A — Toggle manual no cadastro do item:**
+ *
+ * Antes existia só a classificação por IA (`compras.reclassificarTipoControleIA`,
+ * Rev. 1607), que decidia entre "estoque" e "aplicação direta" baseado no
+ * nome. Mas pra areia/pedra/lajota, o operador pode querer FORÇAR a
+ * classificação sem depender da IA acertar o termo. Adicionei:
+ *
+ * - Backend (`server/routers/compras.ts:1621`): nova mutation
+ *   `definirTipoControleManual` que aceita `{ itemId, companyId, tipoControle: "estoque" | "aplicacao_direta" }`.
+ *   Reusa todos os guards do reclassificarIA (tenant + obra), grava
+ *   `tipoControleClassificadoIa = false` (foi MANUAL) e gera justificativa
+ *   automática citando quem marcou. PROTEÇÃO: bloqueia virar aplicação
+ *   direta se `quantidadeAtual > 0` (evita "sumir" estoque real do sistema).
+ *
+ * - Frontend (`client/src/pages/compras/Almoxarifado.tsx:80,696`): novo
+ *   `definirTipoMut` + botão "→ Marcar como insumo A GRANEL (areia/pedra/lajota)"
+ *   logo abaixo do card de classificação IA no modal de editar item.
+ *   Confirma com `window.confirm()` explicando o impacto. Toggle bidirecional
+ *   ("← Voltar para Estoque normal" quando já é AD). Cor âmbar (granel) /
+ *   verde (estoque) pra reforço visual.
+ *
+ * **PARTE B — Inventário Visual de Baias (NOVA TELA):**
+ *
+ * - **Schema** (`drizzle/schema.ts:5903`): 2 tabelas novas, sem mexer nas
+ *   existentes (R-001 OK):
+ *   - `almoxarifado_baias`: id, companyId, obraId (NOT NULL), itemId
+ *     (opcional — liga a um almoxarifadoItens se quiser), nome ("Baia
+ *     areia média - lado esquerdo"), material ("Areia média", "Brita 0",
+ *     "Lajota cerâmica"…), unidade ("m³"), capacidadeEstimada (numeric
+ *     14,3 — opcional, ex: "8 m³"), fotoUrl, observacoes, ativo (soft
+ *     delete), criadoPor*, criadoEm/atualizadoEm.
+ *   - `almoxarifado_baia_leituras`: id, companyId, baiaId, percentual
+ *     (0/25/50/75/100 — validado no backend), fotoUrl, observacoes,
+ *     lidaPor*, lidaEm.
+ *
+ * - **Migration idempotente** (`server/_core/index.ts:1990`): `CREATE
+ *   TABLE/INDEX IF NOT EXISTS` no boot do servidor, padrão SyncSchema+
+ *   já usado por outras revs (2319/2340/2355). Índices:
+ *   `(company_id, obra_id)`, `(company_id, ativo)`, `(baia_id, lida_em DESC)`,
+ *   `(company_id, lida_em DESC)`. R-001/R-007/R-010 OK — zero ALTER/DROP/DELETE.
+ *
+ * - **Backend router** (`server/routers/warehouse.ts:2013` — 6 endpoints):
+ *   - `baiaListar({ companyId, obraId?, incluirInativas? })` query —
+ *     retorna baias + última leitura (DISTINCT ON) + penúltima leitura
+ *     (ROW_NUMBER) pra calcular tendência subiu/desceu + nome da obra
+ *     (batch query, zero N+1). Filtro de obras permitidas via
+ *     `getEffectiveAllowedObraIds`.
+ *   - `baiaCriar`, `baiaEditar`, `baiaDesativar` (soft delete) —
+ *     mutations com `userCanAccessObra` em todos os pontos. Upload de
+ *     foto via `storagePut` em `almoxarifado/baias/{companyId}/{hash}.{ext}`.
+ *   - `baiaLeiturasListar({ companyId, baiaId, limit? })` query —
+ *     histórico ordenado por `lida_em DESC` (default limit 50).
+ *   - `baiaLeituraRegistrar` mutation — valida `percentual ∈ {0,25,50,75,100}`,
+ *     upload de foto opcional via storagePut em `almoxarifado/baias-leituras/`.
+ *   - Imports adicionados: `crypto`, `storagePut`, `almoxarifadoBaias`,
+ *     `almoxarifadoBaiaLeituras`.
+ *
+ * - **Nova página** (`client/src/pages/almoxarifado/InventarioVisual.tsx` — 380 linhas):
+ *   - Header gradient âmbar→laranja com select de obra + botão "Nova baia".
+ *   - Grid 1col mobile / 2col md / 3col xl de cards de baias.
+ *   - Cada card: foto 40h (ou ícone Camera placeholder), barra de nível
+ *     visual com cor por % (vermelho 0 / laranja 25 / âmbar 50 / lima 75
+ *     / esmeralda 100) + ícone TrendingUp/Down/Minus comparando com a
+ *     leitura anterior, info da baia (nome bold, material com badge âmbar,
+ *     unidade + capacidade, obra com Building2), info da última leitura
+ *     (quem leu + quando), e os **5 botões grandes** numa grid 5col
+ *     coloridos por nível (mesmas cores da barra), com active:scale-95
+ *     pra feedback tátil mobile. Link "Ver histórico" abre modal.
+ *   - Modal "Nova/Editar baia": form com select obra, nome, material
+ *     (datalist com 11 sugestões: areia/brita/pedrisco/lajota/tijolo/
+ *     bloco/argamassa/cimento), unidade, capacidade, upload de foto
+ *     (`capture="environment"` — câmera traseira no mobile), observações.
+ *   - Modal "Confirmar leitura": header colorido pela cor do nível
+ *     (VAZIA vermelho / CHEIA esmeralda…) com nome da baia e percentual
+ *     gigante, upload de foto opcional (`capture="environment"`), obs
+ *     opcional, botão Confirmar.
+ *   - Modal "Histórico": lista timeline de leituras com badge colorido
+ *     do %, thumbnail da foto (se houver), quem leu, quando, obs.
+ *   - Modal "Remover baia": soft delete, preserva histórico.
+ *
+ * - **Rota + sidebar** (`client/src/App.tsx:260,525` + `client/src/components/DashboardLayout.tsx:438`):
+ *   nova rota `/almoxarifado/inventario-visual` + entrada no menu
+ *   Almoxarifado entre "Inventário Semanal" e "Ferramentas de Terceiros"
+ *   com ícone Package e label "Inventário Visual (Baias)".
+ *
+ * **R-001/R-007/R-010 OK:** zero ALTER/DROP/DELETE — só CREATE TABLE/
+ * INDEX IF NOT EXISTS via SyncSchema+ idempotente; soft delete em
+ * `baiaDesativar`. Tenant + obra isolation em TODAS as queries/mutations.
+ * Compressão de imagem reusa `compressImageIfNeeded` (mesmo helper das
+ * fotos canônicas de equipamentos).
+ *
+ * **Arquivos:**
+ * - `drizzle/schema.ts` (+38 linhas — 2 tabelas)
+ * - `server/_core/index.ts` (+42 linhas — migration idempotente)
+ * - `server/routers/warehouse.ts` (+2 imports, +1 import crypto, +228 linhas — 6 endpoints)
+ * - `server/routers/compras.ts` (+44 linhas — definirTipoControleManual)
+ * - `client/src/pages/almoxarifado/InventarioVisual.tsx` (NOVO — 380 linhas)
+ * - `client/src/pages/compras/Almoxarifado.tsx` (+8 linhas state, +22 linhas UI toggle)
+ * - `client/src/App.tsx` (+2 linhas — lazy import + Route)
+ * - `client/src/components/DashboardLayout.tsx` (+2 linhas — sidebar)
+ *
+ * ---
+ *
  * Rev. 2372 — **UX · "DEVOLVER LOCAÇÃO" do Almoxarifado agora abre um
  * PICKER VISUAL com cards grandes (foto + descrição + obra + fornecedor)
  * dos equipamentos em uso — operador de 4ª série escolhe e devolve em

@@ -1983,7 +1983,49 @@ Regras:
           await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_fotos_canon_company ON equipamentos_fotos_canonicas (company_id)`);
           await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS uniq_fotos_canon_company_desc ON equipamentos_fotos_canonicas (company_id, descricao_normalizada)`);
           console.log(`[SyncSchema+] Rev. 2355: tabela equipamentos_fotos_canonicas garantida (biblioteca curada).`);
-        } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.2319/2340/2355 equipamentos_locados (CREATE):`, e?.message || e); }
+
+          // Rev. 2373 — Inventário Visual de Baias (insumos a granel: areia,
+          // pedra, lajota). 2 tabelas novas + índices. R-001/R-007/R-010 OK:
+          // só CREATE TABLE/INDEX IF NOT EXISTS, zero ALTER/DROP/DELETE.
+          await db.execute(sql`
+            CREATE TABLE IF NOT EXISTS almoxarifado_baias (
+              id SERIAL PRIMARY KEY,
+              company_id INTEGER NOT NULL,
+              obra_id INTEGER NOT NULL,
+              item_id INTEGER,
+              nome VARCHAR(200) NOT NULL,
+              material VARCHAR(100) NOT NULL,
+              unidade VARCHAR(20) NOT NULL DEFAULT 'm³',
+              capacidade_estimada NUMERIC(14,3),
+              foto_url TEXT,
+              observacoes TEXT,
+              ativo BOOLEAN DEFAULT TRUE,
+              criado_por_id INTEGER,
+              criado_por_nome VARCHAR(255),
+              criado_em TIMESTAMP NOT NULL DEFAULT NOW(),
+              atualizado_em TIMESTAMP NOT NULL DEFAULT NOW()
+            )
+          `);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_almox_baias_company_obra ON almoxarifado_baias (company_id, obra_id)`);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_almox_baias_ativo ON almoxarifado_baias (company_id, ativo)`);
+
+          await db.execute(sql`
+            CREATE TABLE IF NOT EXISTS almoxarifado_baia_leituras (
+              id SERIAL PRIMARY KEY,
+              company_id INTEGER NOT NULL,
+              baia_id INTEGER NOT NULL,
+              percentual INTEGER NOT NULL,
+              foto_url TEXT,
+              observacoes TEXT,
+              lida_por_id INTEGER,
+              lida_por_nome VARCHAR(255),
+              lida_em TIMESTAMP NOT NULL DEFAULT NOW()
+            )
+          `);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_almox_baia_leit_baia ON almoxarifado_baia_leituras (baia_id, lida_em DESC)`);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_almox_baia_leit_company ON almoxarifado_baia_leituras (company_id, lida_em DESC)`);
+          console.log(`[SyncSchema+] Rev. 2373: tabelas almoxarifado_baias + almoxarifado_baia_leituras garantidas (inventário visual de granel).`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.2319/2340/2355/2373 equipamentos_locados+baias (CREATE):`, e?.message || e); }
 
         // ── Rev. 2260 — Backfill `previsto_msp_pct` em obras antigas ──────
         // Decisão user (23/05/2026): a regra "PREVISTO = % PREVISTO do MSP /

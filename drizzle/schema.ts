@@ -5898,6 +5898,44 @@ export const almoxarifadoMovimentacoes = pgTable("almoxarifado_movimentacoes", {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// Rev. 2373 — INVENTÁRIO VISUAL DE BAIAS (insumos a granel: areia, pedra, lajota)
+// ═══════════════════════════════════════════════════════════════════════════════
+// Operador de obra (4ª série) abre a tela "Inventário Visual", olha a baia
+// física e toca em UM de 5 botões grandes (VAZIA / 1/4 / METADE / 3/4 / CHEIA).
+// Foto opcional. Cada leitura vira histórico, e o card mostra a última leitura
+// + tendência (subiu/desceu desde a leitura anterior).
+// Não mexe em saldo de estoque (granel costuma estar em `aplicacao_direta`).
+export const almoxarifadoBaias = pgTable("almoxarifado_baias", {
+  id:                 serial().primaryKey(),
+  companyId:          integer("company_id").notNull(),
+  obraId:             integer("obra_id").notNull(),
+  itemId:             integer("item_id"),  // opcional: liga a almoxarifado_itens (rastreia consumo se quiser)
+  nome:               varchar({ length: 200 }).notNull(),  // "Baia areia média (lado esquerdo)"
+  material:           varchar({ length: 100 }).notNull(),  // "areia", "brita 0", "lajota cerâmica", ...
+  unidade:            varchar({ length: 20 }).notNull().default("m³"),
+  capacidadeEstimada: numeric("capacidade_estimada", { precision: 14, scale: 3 }),
+  fotoUrl:            text("foto_url"),
+  observacoes:        text(),
+  ativo:              boolean().default(true),
+  criadoPorId:        integer("criado_por_id"),
+  criadoPorNome:      varchar("criado_por_nome", { length: 255 }),
+  criadoEm:           timestamp("criado_em", { mode: 'string' }).defaultNow().notNull(),
+  atualizadoEm:       timestamp("atualizado_em", { mode: 'string' }).defaultNow().notNull(),
+});
+
+export const almoxarifadoBaiaLeituras = pgTable("almoxarifado_baia_leituras", {
+  id:          serial().primaryKey(),
+  companyId:   integer("company_id").notNull(),
+  baiaId:      integer("baia_id").notNull(),
+  percentual:  integer().notNull(),  // 0, 25, 50, 75, 100
+  fotoUrl:     text("foto_url"),
+  observacoes: text(),
+  lidaPorId:   integer("lida_por_id"),
+  lidaPorNome: varchar("lida_por_nome", { length: 255 }),
+  lidaEm:      timestamp("lida_em", { mode: 'string' }).defaultNow().notNull(),
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // MÓDULO DE COMPRAS — FASE 2: SC → COTAÇÃO → OC → FINANCEIRO
 // ═══════════════════════════════════════════════════════════════════════════════
 

@@ -431,6 +431,8 @@ const menuSectionsAlmoxarifado: MenuSection[] = [
       { icon: Warehouse,      label: "Visão Geral",       path: "/almoxarifado" },
       { icon: ArrowLeftRight, label: "Movimentações",     path: "/almoxarifado/movimentacoes" },
       { icon: ClipboardList,  label: "Inventário Semanal",path: "/almoxarifado/inventario" },
+      // Rev. 2373 — inventário visual de baias (areia, pedra, lajota — granel).
+      { icon: Package,        label: "Inventário Visual (Baias)", path: "/almoxarifado/inventario-visual" },
       // Rev. 1880 hot-patch — módulo "Ferramentas de Terceiros" (portaria
       // de obra) já existe em shared/modules.ts L361 e em App.tsx L507,
       // mas faltava entrada na sidebar (lista hardcoded). Sem isso, usuário

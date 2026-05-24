@@ -1615,6 +1615,51 @@ export const comprasRouter = router({
       return cls;
     }),
 
+  // Rev. 2373 — Sobrescreve manualmente o tipoControle (operador decide).
+  // Usado pelo toggle "Insumo a granel (aplicação direta)" no cadastro.
+  // Guarda a mesma proteção do reclassificarIA: NÃO permite virar
+  // aplicação direta se ainda há saldo (evita "sumir" estoque real).
+  definirTipoControleManual: protectedProcedure
+    .input(z.object({
+      itemId: z.number(),
+      companyId: z.number(),
+      tipoControle: z.enum(["estoque", "aplicacao_direta"]),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      const allowedCompanies = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+      const allowedIds = allowedCompanies.map((c: any) => c.id);
+      if (!allowedIds.includes(input.companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta empresa." });
+      }
+      const [it] = await db.select().from(almoxarifadoItens).where(and(
+        eq(almoxarifadoItens.id, input.itemId),
+        eq(almoxarifadoItens.companyId, input.companyId),
+      ));
+      if (!it) throw new TRPCError({ code: "NOT_FOUND", message: "Item não encontrado nesta empresa" });
+      const allowedObras = await getEffectiveAllowedObraIds(ctx.user.id, ctx.user.role);
+      if (allowedObras !== null && it.obraId !== null && !allowedObras.includes(it.obraId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta obra." });
+      }
+      const saldoAtual = n(it.quantidadeAtual);
+      if (input.tipoControle === "aplicacao_direta" && saldoAtual > 0) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: `Este item tem ${saldoAtual} ${it.unidade} em estoque. Zere o saldo antes de marcar como "insumo a granel".`,
+        });
+      }
+      const justificativa = input.tipoControle === "aplicacao_direta"
+        ? `Marcado manualmente como insumo a granel por ${ctx.user.name || ctx.user.id}: recebimentos vão direto pra obra, não somam saldo.`
+        : `Marcado manualmente como estoque normal por ${ctx.user.name || ctx.user.id}: entradas somam ao saldo, saídas descontam.`;
+      await db.update(almoxarifadoItens).set({
+        tipoControle: input.tipoControle,
+        tipoControleClassificadoIa: false,
+        tipoControleJustificativa: justificativa,
+        atualizadoEm: new Date().toISOString(),
+      } as any).where(eq(almoxarifadoItens.id, input.itemId));
+      return { tipoControle: input.tipoControle, justificativa };
+    }),
+
   atualizarItem: protectedProcedure
     .input(z.object({
       id:                    z.number(),
