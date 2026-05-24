@@ -1,6 +1,96 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2327 — **UX · Cada aba do Dashboard Almox & Equip.
+ * vira item próprio na sidebar + tabela mês a mês (12m) em
+ * cada tela.**
+ *
+ * Pedido user (23/05/2026, 2 screenshots iPad anexados):
+ * (1) header das 6 abas atual do dashboard "Visão Geral,
+ * Estoque, Movimentações, Ferramentas Terceiros, Equip.
+ * Próprios, Equip. Locados" — "quero que todos esses dash
+ * fique, na barra de comando lateral da forma que está ok";
+ * (2) item único atual da sidebar "Dashboard Almox & Equip."
+ * em ÂMBAR de "ANÁLISE". User quer cada aba navegável a
+ * partir do menu lateral e uma TABELA comparativa mês a mês
+ * em CADA tela (12 meses).
+ *
+ * Implementação 0-server, 0-schema (puro client):
+ *
+ *   (1) **Sidebar** (`client/src/components/DashboardLayout.tsx`,
+ *       seção "Análise" L478): 1 item virou 6 — todos
+ *       apontando pra mesma rota
+ *       `/dashboards/almoxarifado-equipamentos` com
+ *       `?tab=visao|estoque|movs|ferramentas|proprios|locados`.
+ *       Ícones distintos por contexto (Package, ArrowLeftRight,
+ *       Wrench, HardHat, Truck). Active-state já era
+ *       suportado nativamente — a lógica L1170/L1784 já
+ *       trackava `sidebarActiveParam` (querystring) e o
+ *       branch `item.path.includes('?')` casa
+ *       `path.split('?')[1] === sidebarActiveParam`. Cada
+ *       sub-item destaca corretamente em dourado quando
+ *       ativo.
+ *
+ *   (2) **Página** (`client/src/pages/dashboards/DashAlmoxarifadoEquipamentos.tsx`):
+ *       - `useLocation()` do wouter + parse de
+ *         `window.location.search` na render → variável
+ *         `tabAtual`. `<Tabs>` agora é CONTROLADO
+ *         (`value={tabAtual} onValueChange={setTab}`) —
+ *         clicar numa aba navega pra
+ *         `?tab=X` (mantém URL ↔ aba em sync, permite
+ *         deep-link via sidebar e back/forward do
+ *         navegador).
+ *       - Set `TABS_VALIDOS` valida `?tab=` (fallback
+ *         "visao" se inválido).
+ *
+ *   (3) **Comparativo mês a mês — 12 meses** (NOVO em cada
+ *       tab):
+ *       - util `monthKey(d)` (YYYY-MM com `getUTC*`) +
+ *         `lastNMonths(12)` (chave + label "mmm/aa" pt).
+ *       - `monthlyAgg` useMemo único bucketiza tudo:
+ *         `movsEntradas`/`movsSaidas`/`movsCount`
+ *         (warehouse.listMovements, exclui estornadas),
+ *         `propriosNovos`/`propriosValor`
+ *         (`dataAquisicao` ou `criadoEm`),
+ *         `locadosIniciados`/`locadosCustoIniciado`
+ *         (`dataInicio`), `locadosDevolvidos`
+ *         (`dataDevolucao`), `ferramentasReg`
+ *         (`data_hora|criado_em`), `itensCadastrados`
+ *         (`criadoEm` dos itens de almoxarifado).
+ *       - **Tabela em Visão Geral**: consolidada — Mês ·
+ *         Movs · Entradas · Saídas · Locados iniciados ·
+ *         Próprios adquiridos · Ferramentas terc. · Itens
+ *         cadastrados (8 cols).
+ *       - **Tabela em Estoque**: Mês · Novos itens ·
+ *         Acumulado (running sum).
+ *       - **Tabela em Movs**: Mês · Movs · Entradas ·
+ *         Saídas · Saldo (verde se ≥0, vermelho se neg).
+ *       - **Tabela em Ferramentas**: Mês · Registros.
+ *       - **Tabela em Próprios**: Mês · Equipamentos ·
+ *         Valor adquirido (BRL).
+ *       - **Tabela em Locados**: Mês · Iniciadas ·
+ *         Devolvidas · Saldo · Custo mensal das iniciadas
+ *         (BRL).
+ *
+ *   (4) Header de cada tabela usa ícone `CalendarRange` +
+ *       título padronizado "X mês a mês — últimos 12
+ *       meses" pra reforçar a leitura comparativa.
+ *
+ * Por que tudo na mesma rota com `?tab=` (em vez de 6
+ * rotas): mantém todas as 10 queries tRPC em UMA instância
+ * de página — sem re-fetch ao trocar de aba, e tudo já
+ * compartilhado no react-query cache (mesma key). Trocar
+ * tab é instantâneo.
+ *
+ * Por que tabela mês a mês client-side sem novo endpoint:
+ * `listMovements limit:2000` (já existente) + as listas
+ * de locados/próprios/itens/ferramentas já trazem todo
+ * o universo necessário pra 12 meses. Bucketing em
+ * `useMemo` é O(n) e roda em <10ms mesmo com milhares de
+ * registros.
+ *
+ * R-001/R-007/R-010: N/A — leitura pura, zero DDL/DML.
+ *
  * Rev. 2326 — **FEATURE · Importação PDF de locação cruza
  * "Local da obra" com obras em andamento e sugere o vínculo
  * automaticamente no preview.**

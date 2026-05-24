@@ -4,7 +4,7 @@
 // Ferramentas Terceiros, Equipamentos Próprios, Equipamentos Locados.
 // 100% client-side — agrega dados dos endpoints existentes (sem novo server).
 // ============================================================================
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "wouter";
 import DashboardLayout from "@/components/DashboardLayout";
 import DashChart, { DashKpi } from "@/components/DashChart";
@@ -15,6 +15,7 @@ import {
   Warehouse, Package, ArrowLeftRight, AlertTriangle, Truck, HardHat,
   DollarSign, Activity, Clock, Wrench, ArrowLeft, MapPin, Building2,
   TrendingUp, TrendingDown, ShieldAlert, CheckCircle2, Layers, Tag,
+  CalendarRange,
 } from "lucide-react";
 
 const fmtBRL = (v: number) => (v || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -27,10 +28,106 @@ function bucketDayKey(d: Date | string) {
   return x.toISOString().slice(0, 10);
 }
 
+// YYYY-MM bucket key
+function monthKey(d: Date | string | null | undefined): string | null {
+  if (!d) return null;
+  const x = typeof d === "string" ? new Date(d) : d;
+  if (isNaN(x.getTime())) return null;
+  return `${x.getUTCFullYear()}-${String(x.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
+// Últimos N meses (chave + label "mmm/aa")
+function lastNMonths(n: number): { key: string; label: string }[] {
+  const out: { key: string; label: string }[] = [];
+  const meses = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
+  const now = new Date();
+  for (let i = n - 1; i >= 0; i--) {
+    const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - i, 1));
+    const k = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+    out.push({ key: k, label: `${meses[d.getUTCMonth()]}/${String(d.getUTCFullYear()).slice(2)}` });
+  }
+  return out;
+}
+
+const TABS_VALIDOS = new Set(["visao", "estoque", "movs", "ferramentas", "proprios", "locados"]);
+
 export default function DashAlmoxarifadoEquipamentos() {
   const { selectedCompany } = useCompany();
   const companyId = Number(selectedCompany?.id) || 0;
   const enabled = !!companyId;
+
+  // Rev. 2327 — Aba controlada pela querystring (?tab=X) com 3 fontes:
+  //   (a) leitura inicial de window.location.search OU sessionStorage._navParams
+  //       (usado pela sidebar do DashboardLayout pra deep-link, ver L1790-1808);
+  //   (b) listener do evento 'navParamsUpdated' (clique de outro item da
+  //       sidebar enquanto a página já está montada — mesmo pattern de
+  //       Epis.tsx / ProgramasSST.tsx / PlanejamentoDetalhe.tsx);
+  //   (c) clique nas próprias <Tabs>: setTab atualiza state + sessionStorage
+  //       + dispara 'navParamsUpdated' pra sincronizar o destaque dourado
+  //       da sidebar. Não usamos setLocation com query porque o useLocation
+  //       do wouter v3 só observa pathname — re-render por mudança de query
+  //       não acontece, e isso quebraria o sync.
+  const readInitial = (): string => {
+    if (typeof window === "undefined") return "visao";
+    const qs = new URLSearchParams(window.location.search).get("tab");
+    if (qs && TABS_VALIDOS.has(qs)) return qs;
+    const stored = sessionStorage.getItem("_navParams");
+    if (stored) {
+      const t = new URLSearchParams(stored).get("tab");
+      if (t && TABS_VALIDOS.has(t)) return t;
+    }
+    return "visao";
+  };
+  const [tabAtual, setTabAtual] = useState<string>(() => readInitial());
+  const setTab = (v: string) => {
+    const safe = TABS_VALIDOS.has(v) ? v : "visao";
+    setTabAtual(safe);
+    try {
+      // URL = fonte de verdade pra deep-link / back-forward.
+      // replaceState evita inflar o histórico a cada clique de aba.
+      const url = `${window.location.pathname}?tab=${safe}${window.location.hash || ""}`;
+      window.history.replaceState(null, "", url);
+      sessionStorage.setItem("_navParams", `tab=${safe}`);
+      window.dispatchEvent(new Event("navParamsUpdated"));
+    } catch {}
+  };
+  useEffect(() => {
+    const handler = () => {
+      const raw = sessionStorage.getItem("_navParams");
+      if (!raw) return;
+      const t = new URLSearchParams(raw).get("tab");
+      if (t && TABS_VALIDOS.has(t)) setTabAtual(t);
+      // Não removemos aqui pra não atropelar o listener do DashboardLayout
+      // (que também lê _navParams pra atualizar sidebarActiveParam).
+    };
+    window.addEventListener("navParamsUpdated", handler);
+    // Sync inicial: garante que a sidebar destaque o item correto mesmo
+    // quando a página entra sem ?tab= (ex.: refresh com _navParams ainda em
+    // sessionStorage de uma navegação anterior) ou quando o tab inicial veio
+    // só do sessionStorage. Sem isso, fica "aba X visível, nenhum item
+    // dourado na sidebar".
+    try {
+      if (!sessionStorage.getItem("_navParams")) {
+        sessionStorage.setItem("_navParams", `tab=${tabAtual}`);
+      }
+      if (!new URLSearchParams(window.location.search).get("tab")) {
+        const url = `${window.location.pathname}?tab=${tabAtual}${window.location.hash || ""}`;
+        window.history.replaceState(null, "", url);
+      }
+      window.dispatchEvent(new Event("navParamsUpdated"));
+    } catch {}
+    // Back/forward do navegador → re-leitura da URL.
+    const onPop = () => {
+      const qs = new URLSearchParams(window.location.search).get("tab");
+      if (qs && TABS_VALIDOS.has(qs)) setTabAtual(qs);
+    };
+    window.addEventListener("popstate", onPop);
+    return () => {
+      window.removeEventListener("navParamsUpdated", handler);
+      window.removeEventListener("popstate", onPop);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // ── Queries (todas em paralelo via react-query) ────────────────────────────
   const itensQ      = trpc.compras.listarItens.useQuery({ companyId, incluirAplicacaoDireta: true }, { enabled });
@@ -151,6 +248,65 @@ export default function DashAlmoxarifadoEquipamentos() {
     };
   }, [locadosQ.data, vencendoQ.data, obrasMap]);
 
+  // ── Rev. 2327 — Comparativo mês a mês (últimos 12 meses) ───────────────────
+  const monthlyAgg = useMemo(() => {
+    const months = lastNMonths(12);
+    const empty = () => months.reduce((acc, m) => { acc[m.key] = 0; return acc; }, {} as Record<string, number>);
+
+    const movsEntradas = empty();
+    const movsSaidas = empty();
+    const movsCount = empty();
+    const propriosNovos = empty();
+    const propriosValor = empty();
+    const locadosIniciados = empty();
+    const locadosDevolvidos = empty();
+    const locadosCustoIniciado = empty();
+    const ferramentasReg = empty();
+    const itensCadastrados = empty();
+
+    for (const m of ((movsQ.data || []) as any[])) {
+      if (m.estornadaEm) continue;
+      const k = monthKey(m.criadoEm);
+      if (!k || !(k in movsCount)) continue;
+      const qtd = Math.abs(Number(m.quantidade || 0));
+      const isEntrada = String(m.tipo || "").toLowerCase().includes("entrada");
+      movsCount[k] += 1;
+      if (isEntrada) movsEntradas[k] += qtd;
+      else movsSaidas[k] += qtd;
+    }
+    for (const p of ((propriosQ.data || []) as any[])) {
+      const k = monthKey(p.dataAquisicao || p.criadoEm);
+      if (!k || !(k in propriosNovos)) continue;
+      propriosNovos[k] += 1;
+      propriosValor[k] += Number(p.valorAquisicao || 0);
+    }
+    for (const l of ((locadosQ.data || []) as any[])) {
+      const ki = monthKey(l.dataInicio || l.criadoEm);
+      if (ki && ki in locadosIniciados) {
+        locadosIniciados[ki] += 1;
+        locadosCustoIniciado[ki] += Number(l.valorMensal || 0);
+      }
+      const kd = monthKey(l.dataDevolucao);
+      if (kd && kd in locadosDevolvidos) locadosDevolvidos[kd] += 1;
+    }
+    for (const f of ((ferramentasQ.data || []) as any[])) {
+      const k = monthKey(f.data_hora || f.dataHora || f.criado_em || f.criadoEm);
+      if (k && k in ferramentasReg) ferramentasReg[k] += 1;
+    }
+    for (const it of ((itensQ.data || []) as any[])) {
+      const k = monthKey(it.criadoEm || it.createdAt);
+      if (k && k in itensCadastrados) itensCadastrados[k] += 1;
+    }
+
+    return {
+      months,
+      movsEntradas, movsSaidas, movsCount,
+      propriosNovos, propriosValor,
+      locadosIniciados, locadosDevolvidos, locadosCustoIniciado,
+      ferramentasReg, itensCadastrados,
+    };
+  }, [movsQ.data, propriosQ.data, locadosQ.data, ferramentasQ.data, itensQ.data]);
+
   // ── Ferramentas terceiros ──────────────────────────────────────────────────
   const ferrAgg = useMemo(() => {
     const list = (ferramentasQ.data || []) as any[];
@@ -183,7 +339,7 @@ export default function DashAlmoxarifadoEquipamentos() {
           {carregando && <div className="text-xs text-slate-500">Carregando dados…</div>}
         </div>
 
-        <Tabs defaultValue="visao" className="w-full">
+        <Tabs value={tabAtual} onValueChange={setTab} className="w-full">
           <TabsList className="flex flex-wrap h-auto">
             <TabsTrigger value="visao"><Activity className="h-4 w-4 mr-1.5" />Visão Geral</TabsTrigger>
             <TabsTrigger value="estoque"><Package className="h-4 w-4 mr-1.5" />Estoque</TabsTrigger>
@@ -229,6 +385,43 @@ export default function DashAlmoxarifadoEquipamentos() {
                 datasets={[{ data: locAgg.porObra.slice(0, 8).map(o => Math.round(o.custo)) }]}
                 valueFormatter={fmtBRL}
               />
+            </div>
+
+            {/* Rev. 2327 — Comparativo mês a mês consolidado */}
+            <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+              <div className="px-4 py-3 border-b border-slate-100 font-semibold text-slate-800 flex items-center gap-2">
+                <CalendarRange className="h-4 w-4 text-slate-500" /> Comparativo mês a mês — últimos 12 meses
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-slate-50 text-xs text-slate-500 uppercase">
+                    <tr>
+                      <th className="text-left p-2.5">Mês</th>
+                      <th className="text-right p-2.5">Movs</th>
+                      <th className="text-right p-2.5 text-emerald-700">Entradas (qtd)</th>
+                      <th className="text-right p-2.5 text-red-700">Saídas (qtd)</th>
+                      <th className="text-right p-2.5">Locados iniciados</th>
+                      <th className="text-right p-2.5">Próprios adquiridos</th>
+                      <th className="text-right p-2.5">Ferramentas terc.</th>
+                      <th className="text-right p-2.5">Itens cadastrados</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {monthlyAgg.months.map(m => (
+                      <tr key={m.key} className="border-t border-slate-100 hover:bg-slate-50">
+                        <td className="p-2.5 font-medium text-slate-800 whitespace-nowrap">{m.label}</td>
+                        <td className="p-2.5 text-right">{fmtNum(monthlyAgg.movsCount[m.key])}</td>
+                        <td className="p-2.5 text-right text-emerald-700">{fmtNum(monthlyAgg.movsEntradas[m.key])}</td>
+                        <td className="p-2.5 text-right text-red-700">{fmtNum(monthlyAgg.movsSaidas[m.key])}</td>
+                        <td className="p-2.5 text-right">{fmtNum(monthlyAgg.locadosIniciados[m.key])}</td>
+                        <td className="p-2.5 text-right">{fmtNum(monthlyAgg.propriosNovos[m.key])}</td>
+                        <td className="p-2.5 text-right">{fmtNum(monthlyAgg.ferramentasReg[m.key])}</td>
+                        <td className="p-2.5 text-right">{fmtNum(monthlyAgg.itensCadastrados[m.key])}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </TabsContent>
 
@@ -279,6 +472,40 @@ export default function DashAlmoxarifadoEquipamentos() {
                       </tr>
                     ))}
                     {stockAgg.cats.length === 0 && <tr><td colSpan={3} className="p-6 text-center text-slate-500">Sem dados.</td></tr>}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Rev. 2327 — Itens cadastrados mês a mês */}
+            <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+              <div className="px-4 py-3 border-b border-slate-100 font-semibold text-slate-800 flex items-center gap-2">
+                <CalendarRange className="h-4 w-4 text-slate-500" /> Itens cadastrados mês a mês — últimos 12 meses
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-slate-50 text-xs text-slate-500 uppercase">
+                    <tr>
+                      <th className="text-left p-2.5">Mês</th>
+                      <th className="text-right p-2.5">Novos itens</th>
+                      <th className="text-right p-2.5">Acumulado</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(() => {
+                      let acc = 0;
+                      return monthlyAgg.months.map(m => {
+                        const n = monthlyAgg.itensCadastrados[m.key];
+                        acc += n;
+                        return (
+                          <tr key={m.key} className="border-t border-slate-100 hover:bg-slate-50">
+                            <td className="p-2.5 font-medium text-slate-800 whitespace-nowrap">{m.label}</td>
+                            <td className="p-2.5 text-right">{fmtNum(n)}</td>
+                            <td className="p-2.5 text-right text-slate-600">{fmtNum(acc)}</td>
+                          </tr>
+                        );
+                      });
+                    })()}
                   </tbody>
                 </table>
               </div>
@@ -334,6 +561,42 @@ export default function DashAlmoxarifadoEquipamentos() {
                 </div>
               </div>
             </div>
+
+            {/* Rev. 2327 — Entradas vs Saídas mês a mês */}
+            <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+              <div className="px-4 py-3 border-b border-slate-100 font-semibold text-slate-800 flex items-center gap-2">
+                <CalendarRange className="h-4 w-4 text-slate-500" /> Movimentações mês a mês — últimos 12 meses
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-slate-50 text-xs text-slate-500 uppercase">
+                    <tr>
+                      <th className="text-left p-2.5">Mês</th>
+                      <th className="text-right p-2.5">Movs (#)</th>
+                      <th className="text-right p-2.5 text-emerald-700">Entradas (qtd)</th>
+                      <th className="text-right p-2.5 text-red-700">Saídas (qtd)</th>
+                      <th className="text-right p-2.5">Saldo</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {monthlyAgg.months.map(m => {
+                      const ent = monthlyAgg.movsEntradas[m.key];
+                      const sai = monthlyAgg.movsSaidas[m.key];
+                      const saldo = ent - sai;
+                      return (
+                        <tr key={m.key} className="border-t border-slate-100 hover:bg-slate-50">
+                          <td className="p-2.5 font-medium text-slate-800 whitespace-nowrap">{m.label}</td>
+                          <td className="p-2.5 text-right">{fmtNum(monthlyAgg.movsCount[m.key])}</td>
+                          <td className="p-2.5 text-right text-emerald-700">{fmtNum(ent)}</td>
+                          <td className="p-2.5 text-right text-red-700">{fmtNum(sai)}</td>
+                          <td className={"p-2.5 text-right font-medium " + (saldo >= 0 ? "text-emerald-700" : "text-red-700")}>{fmtNum(saldo)}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
           </TabsContent>
 
           {/* ─────────── FERRAMENTAS TERCEIROS ─────────── */}
@@ -359,6 +622,31 @@ export default function DashAlmoxarifadoEquipamentos() {
                       </tr>
                     ))}
                     {ferrAgg.items.length === 0 && <tr><td colSpan={4} className="p-6 text-center text-slate-500">Nenhum registro de ferramentas de terceiros.</td></tr>}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Rev. 2327 — Registros de ferramentas mês a mês */}
+            <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+              <div className="px-4 py-3 border-b border-slate-100 font-semibold text-slate-800 flex items-center gap-2">
+                <CalendarRange className="h-4 w-4 text-slate-500" /> Registros mês a mês — últimos 12 meses
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-slate-50 text-xs text-slate-500 uppercase">
+                    <tr>
+                      <th className="text-left p-2.5">Mês</th>
+                      <th className="text-right p-2.5">Registros</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {monthlyAgg.months.map(m => (
+                      <tr key={m.key} className="border-t border-slate-100 hover:bg-slate-50">
+                        <td className="p-2.5 font-medium text-slate-800 whitespace-nowrap">{m.label}</td>
+                        <td className="p-2.5 text-right">{fmtNum(monthlyAgg.ferramentasReg[m.key])}</td>
+                      </tr>
+                    ))}
                   </tbody>
                 </table>
               </div>
@@ -400,6 +688,33 @@ export default function DashAlmoxarifadoEquipamentos() {
                       </tr>
                     ))}
                     {((propriosQ.data || []) as any[]).length === 0 && <tr><td colSpan={4} className="p-6 text-center text-slate-500">Nenhum equipamento próprio cadastrado.</td></tr>}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Rev. 2327 — Aquisições mês a mês */}
+            <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+              <div className="px-4 py-3 border-b border-slate-100 font-semibold text-slate-800 flex items-center gap-2">
+                <CalendarRange className="h-4 w-4 text-slate-500" /> Aquisições mês a mês — últimos 12 meses
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-slate-50 text-xs text-slate-500 uppercase">
+                    <tr>
+                      <th className="text-left p-2.5">Mês</th>
+                      <th className="text-right p-2.5">Equipamentos</th>
+                      <th className="text-right p-2.5">Valor adquirido</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {monthlyAgg.months.map(m => (
+                      <tr key={m.key} className="border-t border-slate-100 hover:bg-slate-50">
+                        <td className="p-2.5 font-medium text-slate-800 whitespace-nowrap">{m.label}</td>
+                        <td className="p-2.5 text-right">{fmtNum(monthlyAgg.propriosNovos[m.key])}</td>
+                        <td className="p-2.5 text-right">{fmtBRL(monthlyAgg.propriosValor[m.key])}</td>
+                      </tr>
+                    ))}
                   </tbody>
                 </table>
               </div>
@@ -457,6 +772,42 @@ export default function DashAlmoxarifadoEquipamentos() {
                       </tr>
                     ))}
                     {locAgg.vencendo.length === 0 && <tr><td colSpan={5} className="p-6 text-center text-slate-500">Nenhuma locação vencendo no período. 👌</td></tr>}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Rev. 2327 — Locações iniciadas vs devolvidas mês a mês */}
+            <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+              <div className="px-4 py-3 border-b border-slate-100 font-semibold text-slate-800 flex items-center gap-2">
+                <CalendarRange className="h-4 w-4 text-slate-500" /> Locações mês a mês — últimos 12 meses
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-slate-50 text-xs text-slate-500 uppercase">
+                    <tr>
+                      <th className="text-left p-2.5">Mês</th>
+                      <th className="text-right p-2.5 text-emerald-700">Iniciadas</th>
+                      <th className="text-right p-2.5 text-red-700">Devolvidas</th>
+                      <th className="text-right p-2.5">Saldo (#)</th>
+                      <th className="text-right p-2.5">Custo mensal das iniciadas</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {monthlyAgg.months.map(m => {
+                      const ini = monthlyAgg.locadosIniciados[m.key];
+                      const dev = monthlyAgg.locadosDevolvidos[m.key];
+                      const saldo = ini - dev;
+                      return (
+                        <tr key={m.key} className="border-t border-slate-100 hover:bg-slate-50">
+                          <td className="p-2.5 font-medium text-slate-800 whitespace-nowrap">{m.label}</td>
+                          <td className="p-2.5 text-right text-emerald-700">{fmtNum(ini)}</td>
+                          <td className="p-2.5 text-right text-red-700">{fmtNum(dev)}</td>
+                          <td className={"p-2.5 text-right font-medium " + (saldo >= 0 ? "text-emerald-700" : "text-red-700")}>{fmtNum(saldo)}</td>
+                          <td className="p-2.5 text-right">{fmtBRL(monthlyAgg.locadosCustoIniciado[m.key])}</td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>

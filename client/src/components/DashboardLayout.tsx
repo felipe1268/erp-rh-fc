@@ -470,10 +470,17 @@ const menuSectionsAlmoxarifado: MenuSection[] = [
   },
   // Rev. 2324 — Dashboard consolidada (estoque + movimentações + equipamentos
   // próprios/locados + ferramentas de terceiros) em abas separadas pra análise.
+  // Rev. 2327 — cada aba exposta como item próprio da sidebar (?tab=...);
+  // todos abrem a mesma página que reage à querystring.
   {
     title: "Análise",
     items: [
-      { icon: BarChart3, label: "Dashboard Almox & Equip.", path: "/dashboards/almoxarifado-equipamentos" },
+      { icon: BarChart3,      label: "Dashboard Almox & Equip.", path: "/dashboards/almoxarifado-equipamentos?tab=visao" },
+      { icon: Package,        label: "↳ Estoque",                 path: "/dashboards/almoxarifado-equipamentos?tab=estoque" },
+      { icon: ArrowLeftRight, label: "↳ Movimentações",           path: "/dashboards/almoxarifado-equipamentos?tab=movs" },
+      { icon: Wrench,         label: "↳ Ferramentas Terceiros",   path: "/dashboards/almoxarifado-equipamentos?tab=ferramentas" },
+      { icon: HardHat,        label: "↳ Equip. Próprios",         path: "/dashboards/almoxarifado-equipamentos?tab=proprios" },
+      { icon: Truck,          label: "↳ Equip. Locados",          path: "/dashboards/almoxarifado-equipamentos?tab=locados" },
     ],
   },
 ];

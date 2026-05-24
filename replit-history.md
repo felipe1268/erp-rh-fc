@@ -532,3 +532,5 @@
 - Rev. 2269 — FIX · Barra topo avancoAtual okSemana = semFimVis >= sd — Realizado deixa de regredir em semanas posteriores ao StatusDate.
 - Rev. 2270 — FIX · Botões 'Limpar Avanços' também zeram snapshot MSP do calendarioJson (helper limparSnapshotMspDoProjeto).
 - Rev. 2271 — FIX · Card 'PREVISTO (SEMANA)' deixa de cair pra '—' quando snapshot MSP é zerado; agora replica topo via pctRaizMSP.
+
+- Rev. 2320 — HOTFIX/IA · `maxOutputTokens` 32k→65k + reparo de JSON truncado em PDF de locação. Ver `shared/changelog.ts`.
