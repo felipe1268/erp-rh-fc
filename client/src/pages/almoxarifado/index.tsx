@@ -318,6 +318,35 @@ export default function AlmoxarifadoPage() {
   // Rev. 2382 — Mutations multi-seleção
   const altCategLoteMut = trpc.compras.atualizarCategoriaEmLote.useMutation();
   const unificarLoteMut = trpc.compras.unificarItensEmLote.useMutation();
+  // Rev. 2383 — Categoria em lote POR NOME (consolidado)
+  const altCategPorNomeMut = trpc.compras.atualizarCategoriaPorNomeEmLote.useMutation();
+  // Rev. 2383 — Modal "Alterar categoria" disparado a partir do modo
+  // seleção do CONSOLIDADO (Rev. 2374). Usa selecClassif (Map por nome)
+  // e chama atualizarCategoriaPorNomeEmLote.
+  const [modalAltCategConsol, setModalAltCategConsol] = useState<{ categoria: string; aplicando: boolean } | null>(null);
+  async function aplicarAlterarCategoriaConsol() {
+    if (!companyId || !modalAltCategConsol || !modalAltCategConsol.categoria.trim() || selecClassif.size === 0) return;
+    setModalAltCategConsol(s => s ? { ...s, aplicando: true } : s);
+    try {
+      const nomes = Array.from(selecClassif.values()).map(v => v.nome);
+      const r: any = await altCategPorNomeMut.mutateAsync({
+        companyId, nomes, categoria: modalAltCategConsol.categoria.trim(),
+      });
+      if (r?.ok) {
+        toast.success(`Categoria aplicada em ${r.itensAtualizados} item(ns).`);
+        utils.compras.listarItens.invalidate();
+        utils.compras.listarItensConsolidado.invalidate();
+        setModalAltCategConsol(null);
+        sairModoClassif();
+      } else {
+        toast.warning(r?.motivo || "Nenhum item atualizado.");
+        setModalAltCategConsol(s => s ? { ...s, aplicando: false } : s);
+      }
+    } catch (e: any) {
+      toast.error(e?.message || "Falha ao alterar categoria.");
+      setModalAltCategConsol(s => s ? { ...s, aplicando: false } : s);
+    }
+  }
   function sairModoSelecao() { setModoSelecao(false); setSelecionados(new Set()); }
   function toggleSelecionado(id: number) {
     setSelecionados(prev => {
@@ -1337,21 +1366,21 @@ export default function AlmoxarifadoPage() {
                 Apenas abaixo do mínimo
               </label>
               <span className="text-xs text-gray-400">{consListFinal.length} resultado{consListFinal.length !== 1 ? "s" : ""}</span>
-              {/* Rev. 2374 — botão "Classificar como Próprio/Alugado". Só aparece
-                  quando o usuário filtrou por uma categoria de equipamento (faz
-                  sentido empurrar pros módulos /equipamentos/{proprios,locados}
-                  só pra Equipamentos / Ferramentas / Escoramento). */}
-              {viewMode === "cards" && (filtroCateg === "Equipamentos" || filtroCateg === "Ferramentas" || filtroCateg === "Escoramento") && (
+              {/* Rev. 2374/2383 — botão "Selecionar" no view consolidado:
+                  permite Alterar categoria em lote sempre, e quando o filtro
+                  é Equipamentos/Ferramentas/Escoramento também oferece
+                  PRÓPRIO/ALUGADO. (Antes só aparecia nessas 3 categorias.) */}
+              {viewMode === "cards" && (
                 <button
                   onClick={() => modoClassificarEquip ? sairModoClassif() : setModoClassificarEquip(true)}
-                  className={`h-9 px-3 text-xs font-semibold rounded-lg border inline-flex items-center gap-1.5 transition ml-auto ${modoClassificarEquip ? "bg-blue-600 text-white border-blue-600 hover:bg-blue-700" : "bg-white text-blue-700 border-blue-300 hover:bg-blue-50"}`}
-                  title="Selecionar equipamentos e classificar como PRÓPRIO da FC ou ALUGADO"
+                  className={`h-9 px-3 text-xs font-semibold rounded-lg border inline-flex items-center gap-1.5 transition ml-auto ${modoClassificarEquip ? "bg-indigo-600 text-white border-indigo-600 hover:bg-indigo-700" : "bg-white text-indigo-700 border-indigo-300 hover:bg-indigo-50"}`}
+                  title="Selecionar itens para alterar categoria ou classificar como PRÓPRIO/ALUGADO"
                 >
                   <CheckSquare className="h-4 w-4" />
-                  {modoClassificarEquip ? `Cancelar seleção (${selecClassif.size})` : "Próprio ou Alugado?"}
+                  {modoClassificarEquip ? `Cancelar seleção (${selecClassif.size})` : "Selecionar"}
                 </button>
               )}
-              <div className={`flex border border-gray-200 rounded-lg overflow-hidden ${modoClassificarEquip || !(viewMode === "cards" && (filtroCateg === "Equipamentos" || filtroCateg === "Ferramentas" || filtroCateg === "Escoramento")) ? "ml-auto" : ""}`}>
+              <div className={`flex border border-gray-200 rounded-lg overflow-hidden ${modoClassificarEquip || viewMode !== "cards" ? "ml-auto" : ""}`}>
                 <button onClick={() => setViewMode("cards")} className={`px-3 py-1.5 text-xs font-medium flex items-center gap-1.5 ${viewMode === "cards" ? "bg-emerald-50 text-emerald-700" : "text-gray-500 hover:bg-gray-50"}`}>
                   <LayoutGrid className="h-3.5 w-3.5" /> Cards
                 </button>
@@ -3602,40 +3631,94 @@ export default function AlmoxarifadoPage() {
         </div>
       )}
 
-      {/* Rev. 2374 — Barra sticky de classificação (Próprio / Alugado) */}
+      {/* Rev. 2374/2383 — Barra sticky de ações do modo seleção CONSOLIDADO.
+          "Alterar categoria" sempre disponível; PRÓPRIO/ALUGADO só quando o
+          filtro for Equipamentos/Ferramentas/Escoramento. */}
       {modoClassificarEquip && (
-        <div className="fixed bottom-0 inset-x-0 z-50 bg-white border-t-4 border-blue-500 shadow-[0_-8px_24px_rgba(0,0,0,0.15)]">
+        <div className="fixed bottom-0 inset-x-0 z-50 bg-white border-t-4 border-indigo-500 shadow-[0_-8px_24px_rgba(0,0,0,0.15)]">
           <div className="max-w-7xl mx-auto px-4 py-3 flex items-center gap-2 flex-wrap">
             <div className="flex-1 min-w-[160px]">
-              <p className="text-sm font-bold text-blue-900">
-                {selecClassif.size} equipamento{selecClassif.size !== 1 ? "s" : ""} selecionado{selecClassif.size !== 1 ? "s" : ""}
+              <p className="text-sm font-bold text-indigo-900">
+                {selecClassif.size} item{selecClassif.size !== 1 ? "ns" : ""} selecionado{selecClassif.size !== 1 ? "s" : ""}
               </p>
               <p className="text-[11px] text-gray-500 leading-tight">
                 {selecClassif.size === 0
                   ? "Toque nos cards pra escolher."
-                  : "Este equipamento é da FC ou alugado? Você vai pro cadastro detalhado."}
+                  : "Escolha a ação abaixo."}
               </p>
             </div>
             <button
-              onClick={() => classificarComo("proprio")}
+              onClick={() => {
+                if (selecClassif.size === 0) { toast.warning("Selecione ao menos 1 item."); return; }
+                setModalAltCategConsol({ categoria: "", aplicando: false });
+              }}
               disabled={selecClassif.size === 0}
-              className="inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-3 rounded-xl font-bold text-sm shadow-md disabled:opacity-40 disabled:cursor-not-allowed transition"
+              className="inline-flex items-center gap-2 bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-3 rounded-xl font-bold text-sm shadow-md disabled:opacity-40 disabled:cursor-not-allowed transition"
             >
-              <HardHat className="h-4 w-4" /> É PRÓPRIO da FC
+              <Tag className="h-4 w-4" /> Alterar categoria
             </button>
-            <button
-              onClick={() => classificarComo("alugado")}
-              disabled={selecClassif.size === 0}
-              className="inline-flex items-center gap-2 bg-orange-600 hover:bg-orange-700 text-white px-4 py-3 rounded-xl font-bold text-sm shadow-md disabled:opacity-40 disabled:cursor-not-allowed transition"
-            >
-              <Truck className="h-4 w-4" /> É ALUGADO
-            </button>
+            {(filtroCateg === "Equipamentos" || filtroCateg === "Ferramentas" || filtroCateg === "Escoramento") && (
+              <>
+                <button
+                  onClick={() => classificarComo("proprio")}
+                  disabled={selecClassif.size === 0}
+                  className="inline-flex items-center gap-2 bg-emerald-700 hover:bg-emerald-800 text-white px-4 py-3 rounded-xl font-bold text-sm shadow-md disabled:opacity-40 disabled:cursor-not-allowed transition"
+                >
+                  <HardHat className="h-4 w-4" /> É PRÓPRIO da FC
+                </button>
+                <button
+                  onClick={() => classificarComo("alugado")}
+                  disabled={selecClassif.size === 0}
+                  className="inline-flex items-center gap-2 bg-orange-600 hover:bg-orange-700 text-white px-4 py-3 rounded-xl font-bold text-sm shadow-md disabled:opacity-40 disabled:cursor-not-allowed transition"
+                >
+                  <Truck className="h-4 w-4" /> É ALUGADO
+                </button>
+              </>
+            )}
             <button
               onClick={sairModoClassif}
               className="px-3 py-3 text-gray-600 hover:bg-gray-100 rounded-lg text-sm font-medium"
             >
               Cancelar
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Rev. 2383 — Modal "Alterar categoria" disparado pelo modo seleção CONSOLIDADO */}
+      {modalAltCategConsol && (
+        <div
+          className="fixed inset-0 z-[110] bg-black/50 flex items-center justify-center p-4"
+          onClick={() => !modalAltCategConsol.aplicando && setModalAltCategConsol(null)}
+        >
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden" onClick={(e) => e.stopPropagation()}>
+            <div className="bg-gradient-to-br from-emerald-500 to-teal-600 px-6 pt-6 pb-5 text-white text-center">
+              <div className="mx-auto bg-white/20 rounded-full p-3 w-fit mb-3"><Tag className="w-8 h-8" /></div>
+              <h3 className="text-xl font-bold">Alterar categoria em lote</h3>
+              <p className="text-emerald-50 text-xs mt-1">{selecClassif.size} nome(s) · aplicado em todos os almoxarifados</p>
+            </div>
+            <div className="px-6 py-5 space-y-4 text-sm text-gray-700">
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1.5">Nova categoria</label>
+                <select
+                  value={modalAltCategConsol.categoria}
+                  onChange={(e) => setModalAltCategConsol(s => s ? { ...s, categoria: e.target.value } : s)}
+                  disabled={modalAltCategConsol.aplicando}
+                  className="w-full h-11 px-3 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-emerald-400 focus:border-emerald-400 outline-none disabled:bg-gray-50"
+                >
+                  <option value="">— escolha uma categoria —</option>
+                  {(categorias as string[]).map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+                <p className="text-[11px] text-gray-500 mt-1.5">A categoria será aplicada a todos os itens com esses nomes, em qualquer obra/almoxarifado.</p>
+              </div>
+            </div>
+            <div className="px-5 py-4 bg-gray-50 flex items-center gap-2 border-t border-gray-200">
+              <button onClick={() => setModalAltCategConsol(null)} disabled={modalAltCategConsol.aplicando} className="flex-1 px-4 py-3 text-sm font-medium text-gray-700 bg-white hover:bg-gray-100 border border-gray-300 rounded-lg transition disabled:opacity-50">Cancelar</button>
+              <button onClick={aplicarAlterarCategoriaConsol} disabled={!modalAltCategConsol.categoria || modalAltCategConsol.aplicando} className="flex-1 px-4 py-3 text-sm font-semibold text-white bg-emerald-500 hover:bg-emerald-600 disabled:bg-gray-300 rounded-lg transition shadow-sm flex items-center justify-center gap-2">
+                {modalAltCategConsol.aplicando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                Aplicar
+              </button>
+            </div>
           </div>
         </div>
       )}

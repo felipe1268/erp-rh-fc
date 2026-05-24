@@ -1754,6 +1754,43 @@ export const comprasRouter = router({
       return { ok: true as const, itensAtualizados };
     }),
 
+  // Rev. 2383 — Atualizar categoria em lote POR NOME (usado no view
+  // Consolidado "Todos almoxarifados", onde o card agrega N item_ids).
+  // Faz UPDATE escopado por companyId em todos os itens cujo `lower(nome)`
+  // bate. R-001/R-007/R-010 OK (só UPDATE, zero DDL/DELETE).
+  atualizarCategoriaPorNomeEmLote: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      nomes: z.array(z.string()).min(1).max(500),
+      categoria: z.string().min(1).max(100),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const allowedCompanies = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+      const allowedIds = (allowedCompanies as any[]).map(c => c.id);
+      if (!allowedIds.includes(input.companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta empresa." });
+      }
+      const nomesLower = Array.from(new Set(
+        input.nomes.map(n => (n || "").toLowerCase().trim()).filter(Boolean)
+      ));
+      if (nomesLower.length === 0) {
+        return { ok: false as const, motivo: "Nenhum nome válido.", itensAtualizados: 0 };
+      }
+      const res: any = await db.update(almoxarifadoItens).set({
+        categoria: input.categoria.trim(),
+        atualizadoEm: new Date().toISOString(),
+        atualizadoPorId: ctx.user?.id ?? null,
+        atualizadoPorNome: ctx.user?.name || null,
+      }).where(and(
+        eq(almoxarifadoItens.companyId, input.companyId),
+        inArray(sql`lower(${almoxarifadoItens.nome})`, nomesLower),
+      ));
+      const itensAtualizados = Number(res.rowCount ?? res.rows?.length ?? 0);
+      return { ok: true as const, itensAtualizados };
+    }),
+
   // Rev. 2382 — Unificar itens iguais em lote (mesma obra, mesmo nome
   // normalizado). Canonical = item com MAIOR quantidade do grupo (escolha
   // do user). Soma quantidades no canonical, migra movimentações e

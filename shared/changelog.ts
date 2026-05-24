@@ -1,6 +1,40 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2383 — **FEATURE · Multi-seleção também no view "Todos almoxarifados":
+ * Alterar categoria em lote + Próprio/Alugado disponíveis no consolidado
+ * (antes só funcionava por obra).**
+ *
+ * Pedido user (IMG_1183, 24/05/2026): "Quero poder clicar em vários itens
+ * e fazer a alteração de categoria ou indicar se é próprio ou alugado...
+ * isso hoje tá funcionando somente em cada almoxarifado, mas quando eu
+ * coloco na opção de ver todos almoxarifado essa opção não tá aparecendo".
+ *
+ * **Backend** (`server/routers/compras.ts`): nova mutation
+ * `atualizarCategoriaPorNomeEmLote({ companyId, nomes[], categoria })`
+ * — UPDATE escopado por companyId + `lower(nome) IN (nomes_lower)`.
+ * Necessária porque o consolidado agrega N item_ids por nome, então não
+ * dá pra usar a mutation por IDs da Rev. 2382. R-001/R-007/R-010 OK.
+ *
+ * **Frontend** (`client/src/pages/almoxarifado/index.tsx`):
+ *   - Botão "Próprio ou Alugado?" do view consolidado (Rev. 2374) foi
+ *     renomeado pra "Selecionar" e perdeu a restrição de filtroCateg —
+ *     agora aparece sempre que `viewMode === "cards"` no consolidado,
+ *     pra qualquer categoria.
+ *   - Sticky bar do consolidado ganhou 3ª ação "Alterar categoria"
+ *     (emerald, Tag) que abre modal com select de categorias e chama
+ *     a mutation por nome.
+ *   - Botões "É PRÓPRIO da FC" / "É ALUGADO" continuam condicionais ao
+ *     filtro ser Equipamentos/Ferramentas/Escoramento (só faz sentido
+ *     pra essas pra empurrar pros módulos /equipamentos/*).
+ *   - Cor da sticky bar mudou de blue pra indigo pra ficar coerente
+ *     com a Rev. 2382 (mesmo padrão visual).
+ */
+import "./version";
+
+/**
+ * Changelog centralizado do ERP.
+ *
  * Rev. 2382 — **FEATURE · Multi-seleção de itens no Almoxarifado: alterar
  * categoria em lote + unificar duplicatas (mesma obra, mesmo nome, mesma
  * unidade) somando quantidades no item com maior estoque.**
