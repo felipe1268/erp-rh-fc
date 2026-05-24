@@ -90,6 +90,15 @@ export default function AlmoxarifadoPage() {
   );
   const qtdLocacaoPendente = (ocsLocacaoPendentesQ.data || []).length;
 
+  // Rev. 2376 — alerta visual de OCs de MATERIAL pendentes de recebimento
+  // (botão ENTRADA / modal "Receber Material" do SmartEntry). Mesma query
+  // que SmartEntry usa (warehouse.listPendingOCs).
+  const ocsMaterialPendentesQ = trpc.warehouse.listPendingOCs.useQuery(
+    { companyId },
+    { enabled: !!companyId, refetchInterval: 60_000, refetchOnWindowFocus: true }
+  );
+  const qtdMaterialPendente = (ocsMaterialPendentesQ.data || []).length;
+
   const [busca, setBusca] = useState("");
   const [filtroCateg, setFiltroCateg] = useState("todas");
   const [apenasAbaixo, setApenasAbaixo] = useState(false);
@@ -832,12 +841,29 @@ export default function AlmoxarifadoPage() {
         <div className="max-w-7xl mx-auto px-4 py-4">
           <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 lg:grid-cols-7">
             {/* ENTRADA */}
+            {/* Rev. 2376 — badge piscante com quantidade de OCs de material pendentes de recebimento */}
             <button
               onClick={() => setModalSmartEntry(true)}
-              className="flex flex-col items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-white rounded-2xl p-4 min-h-[80px] font-bold text-base shadow-md transition"
+              className={`relative flex flex-col items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-white rounded-2xl p-4 min-h-[80px] font-bold text-base shadow-md transition ${qtdMaterialPendente > 0 ? "ring-4 ring-amber-300 ring-offset-2 animate-pulse" : ""}`}
+              title={qtdMaterialPendente > 0 ? `${qtdMaterialPendente} OC${qtdMaterialPendente !== 1 ? "s" : ""} de material pra receber — toque pra dar entrada` : "Dar entrada de material"}
             >
-              <ArrowUpCircle className="w-8 h-8" />
-              ENTRADA
+              {qtdMaterialPendente > 0 && (
+                <>
+                  <span className="absolute -top-2 -right-2 z-10 min-w-[28px] h-7 px-2 inline-flex items-center justify-center bg-red-600 text-white text-sm font-extrabold rounded-full border-2 border-white shadow-lg animate-bounce">
+                    {qtdMaterialPendente}
+                  </span>
+                  <span className="absolute inset-0 rounded-2xl bg-amber-400/30 animate-ping pointer-events-none" />
+                </>
+              )}
+              <ArrowUpCircle className="w-8 h-8 relative z-[1]" />
+              <span className="relative z-[1]">
+                ENTRADA
+                {qtdMaterialPendente > 0 && (
+                  <span className="block text-[10px] font-semibold mt-0.5 bg-white/25 rounded px-1 py-0.5">
+                    {qtdMaterialPendente} pra receber
+                  </span>
+                )}
+              </span>
             </button>
             {/* SAÍDA */}
             <button

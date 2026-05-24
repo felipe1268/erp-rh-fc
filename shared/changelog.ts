@@ -1,6 +1,38 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2376 — **UX/ALERTA · Botão "ENTRADA" do Almoxarifado também pisca
+ * com badge vermelho mostrando quantas OCs de MATERIAL estão pendentes de
+ * recebimento (complementa a Rev. 2375 que tratou apenas LOCAÇÃO).**
+ *
+ * Pedido user (IMG_1177, 24/05/2026): "Tem várias OCs para receber, mas
+ * não tem alerta nem informativo de alerta". O modal "Receber Material"
+ * mostrava 37 OCs pendentes, mas o botão ENTRADA do Almoxarifado estava
+ * "mudo" — a Rev. 2375 só cobriu o botão RECEBER LOCAÇÃO (OCs flagged
+ * `isLocacao=true`), enquanto as OCs de compra normal (status 'pendente'/
+ * 'aprovada'/'parcial') que entram pelo SmartEntry não tinham indicador.
+ *
+ * Implementação (UI-only, zero backend novo):
+ *   - `client/src/pages/almoxarifado/index.tsx`: nova
+ *     `trpc.warehouse.listPendingOCs.useQuery` (mesma query que SmartEntry
+ *     usa internamente) no topo do componente, com refetchInterval=60s +
+ *     refetchOnWindowFocus.
+ *   - Botão ENTRADA ganha o mesmo tratamento visual da Rev. 2375 quando
+ *     `qtdMaterialPendente > 0`:
+ *       * `ring-4 ring-amber-300 ring-offset-2 animate-pulse`
+ *       * badge vermelho `-top-2 -right-2` com o N + `animate-bounce`
+ *       * overlay `absolute inset-0 animate-ping bg-amber-400/30`
+ *       * sublabel "{N} pra receber"
+ *       * tooltip "{N} OC(s) de material pra receber — toque pra dar
+ *         entrada"
+ *
+ * R-001 / R-007 / R-010: OK — UI-only.
+ */
+import "./version";
+
+/**
+ * Changelog centralizado do ERP.
+ *
  * Rev. 2375 — **UX/ALERTA · Botão "RECEBER LOCAÇÃO" do Almoxarifado agora
  * pisca com badge vermelho quando há OCs de locação aguardando recebimento,
  * mostrando a quantidade que vai chegar.**
