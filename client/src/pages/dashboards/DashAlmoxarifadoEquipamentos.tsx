@@ -16,7 +16,9 @@ import {
   DollarSign, Activity, Clock, Wrench, ArrowLeft, MapPin, Building2,
   TrendingUp, TrendingDown, ShieldAlert, CheckCircle2, Layers, Tag,
   CalendarRange, ArrowUp, ArrowDown, Minus, X, Search, Hash, Eye,
+  Scale, ShoppingCart, Sparkles, Loader2, RotateCcw,
 } from "lucide-react";
+import { toast } from "sonner";
 
 const fmtBRL = (v: number) => (v || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 const fmtNum = (v: number) => (v || 0).toLocaleString("pt-BR");
@@ -412,6 +414,33 @@ export default function DashAlmoxarifadoEquipamentos() {
   // até 30 dias" troca de conteúdo e título pra refletir o recorte clicado.
   type FiltroLocCard = "ativos" | "custoMes" | "vencendo30" | "atrasados" | "devolvidos" | "semObra" | "fornecedores" | "obras";
   const [filtroLocCard, setFiltroLocCard] = useState<FiltroLocCard | null>(null);
+
+  // Rev. 2365 — Análise IA "Comprar vs Continuar Alugando" migrada do
+  // /equipamentos/locados pra cá (Dashboard). Centraliza decisão estratégica.
+  type AnaliseItem = {
+    descricao: string; categoria: string | null; qtd: number;
+    aluguelUnMes: number; gastoMesTotal: number;
+    precoMedio: number; precoMin: number; precoMax: number;
+    canalTipico: string; confianca: "alta" | "media" | "baixa";
+    temPreco: boolean;
+    paybackMeses: number | null; investimentoCompra: number | null; economiaAnual: number | null;
+    recomendacao: "COMPRAR_JA" | "COMPRAR" | "AVALIAR" | "MANTER_LOCACAO";
+  };
+  type AnaliseResultado = {
+    totalAnalisado: number; itens: AnaliseItem[];
+    economiaAnualPotencial: number; investimentoTotalRecomendado: number;
+    semEstimativa?: number; iaErroMsg?: string | null;
+    fonte: string; geradoEm?: string;
+  };
+  const [resultadoAnaliseCA, setResultadoAnaliseCA] = useState<AnaliseResultado | null>(null);
+  const [filtroRecAnalise, setFiltroRecAnalise] = useState<"" | "comprar" | "avaliar" | "manter">("");
+  const analiseCAMut = trpc.equipamentos.locadosAnalisarCompraVsAluguel.useMutation({
+    onSuccess: (res: any) => {
+      setResultadoAnaliseCA(res);
+      toast.success(`Análise IA concluída: ${res.totalAnalisado} descrição(ões) avaliada(s).`);
+    },
+    onError: (err: any) => toast.error(err?.message || "Falha ao gerar análise IA."),
+  });
   const anosDisponiveis = useMemo(() => {
     const anos = new Set<number>();
     const yearOf = (d: any) => { const k = monthKey(d); return k ? Number(k.slice(0, 4)) : null; };
@@ -1324,6 +1353,253 @@ export default function DashAlmoxarifadoEquipamentos() {
                     })}
                   </tbody>
                 </table>
+              </div>
+            </div>
+
+            {/* Rev. 2365 — Análise IA "Comprar vs Continuar Alugando" (migrada do /equipamentos/locados).
+                Inclui o KPI 0-100% de gasto mensal que vale a pena comprar. */}
+            <div className="bg-white border border-amber-200 rounded-2xl shadow-sm overflow-hidden">
+              <div className="bg-gradient-to-r from-amber-50 to-white px-5 py-4 border-b border-amber-100 flex items-start justify-between gap-3 flex-wrap">
+                <div className="flex items-start gap-3 min-w-0">
+                  <div className="bg-amber-100 text-amber-700 rounded-lg p-2 shrink-0"><Scale className="h-5 w-5" /></div>
+                  <div className="min-w-0">
+                    <h3 className="text-base font-bold text-slate-900">Análise IA · Comprar vs Continuar Alugando</h3>
+                    <p className="text-xs text-slate-600 mt-0.5">Estima o preço de compra novo (mercado BR) de cada equipamento em locação e calcula payback vs aluguel mensal atual.</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  {resultadoAnaliseCA && !analiseCAMut.isPending && (
+                    <button
+                      onClick={() => companyId && analiseCAMut.mutate({ companyId, maxDescricoes: 80 })}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-amber-700 bg-white hover:bg-amber-50 ring-1 ring-amber-300 rounded-lg transition"
+                    >
+                      <RotateCcw className="h-3.5 w-3.5" /> Re-analisar
+                    </button>
+                  )}
+                  <button
+                    onClick={() => companyId && analiseCAMut.mutate({ companyId, maxDescricoes: 80 })}
+                    disabled={!companyId || analiseCAMut.isPending}
+                    className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-semibold bg-amber-600 hover:bg-amber-700 text-white rounded-lg shadow disabled:opacity-50"
+                  >
+                    {analiseCAMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                    {resultadoAnaliseCA ? "Atualizar análise" : "Gerar análise IA agora"}
+                  </button>
+                </div>
+              </div>
+
+              <div className="p-5 space-y-4">
+                {/* Estado 1: nunca rodou */}
+                {!resultadoAnaliseCA && !analiseCAMut.isPending && (
+                  <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-sm text-amber-900 space-y-2">
+                    <div className="font-semibold flex items-center gap-2"><Sparkles className="h-4 w-4" /> Como funciona</div>
+                    <ul className="list-disc pl-5 space-y-1 text-amber-800">
+                      <li>O ERP agrupa os equipamentos <b>em uso</b> por descrição (até 80 descrições com maior gasto mensal).</li>
+                      <li>A IA estima o preço de compra (item NOVO, R$, mercado BR) — faixa min/médio/max.</li>
+                      <li>Calculamos <b>payback</b> (preço ÷ aluguel mensal) e <b>economia anual</b> (12×aluguel − preço de compra).</li>
+                      <li>Recomendação: <b className="text-emerald-700">COMPRAR JÁ</b> (payback ≤6m) · <b className="text-emerald-600">COMPRAR</b> (≤12m) · <b className="text-amber-700">AVALIAR</b> (≤24m) · <b className="text-slate-700">MANTER LOCAÇÃO</b> (&gt;24m).</li>
+                    </ul>
+                    <div className="text-[11px] text-amber-700/80 pt-1">⚠ Estimativa baseada no conhecimento da IA (sem busca ao vivo na web). Use como ponto de partida pra cotação real.</div>
+                  </div>
+                )}
+
+                {/* Estado 2: carregando */}
+                {analiseCAMut.isPending && (
+                  <div className="flex flex-col items-center justify-center py-12 gap-3 text-slate-600">
+                    <Loader2 className="h-10 w-10 animate-spin text-amber-600" />
+                    <div className="text-sm font-medium">Consultando IA para estimar preços de mercado…</div>
+                    <div className="text-xs text-slate-400">Isso pode levar de 30s a 2min dependendo da quantidade de descrições.</div>
+                  </div>
+                )}
+
+                {/* Estado 3: resultado */}
+                {resultadoAnaliseCA && !analiseCAMut.isPending && (() => {
+                  const r = resultadoAnaliseCA;
+                  const itensFiltrados = r.itens.filter(it => {
+                    if (filtroRecAnalise === "comprar") return it.recomendacao === "COMPRAR_JA" || it.recomendacao === "COMPRAR";
+                    if (filtroRecAnalise === "avaliar") return it.recomendacao === "AVALIAR";
+                    if (filtroRecAnalise === "manter") return it.recomendacao === "MANTER_LOCACAO";
+                    return true;
+                  });
+                  const cntComprar = r.itens.filter(i => i.recomendacao === "COMPRAR_JA" || i.recomendacao === "COMPRAR").length;
+                  const cntAvaliar = r.itens.filter(i => i.recomendacao === "AVALIAR").length;
+                  const cntManter  = r.itens.filter(i => i.recomendacao === "MANTER_LOCACAO").length;
+                  // Rev. 2365 — KPI 0-100%: % do gasto mensal de aluguel que está em
+                  // descrições recomendadas pra COMPRAR (urgente + recomendado). É a
+                  // métrica que o user pediu: "quanto do meu aluguel já era pra ter comprado".
+                  const gastoTotalMes  = r.itens.reduce((s, i) => s + (Number(i.gastoMesTotal) || 0), 0);
+                  const gastoComprarMes = r.itens.filter(i => i.recomendacao === "COMPRAR_JA" || i.recomendacao === "COMPRAR")
+                    .reduce((s, i) => s + (Number(i.gastoMesTotal) || 0), 0);
+                  const pctComprar = gastoTotalMes > 0 ? Math.round((gastoComprarMes / gastoTotalMes) * 100) : 0;
+                  const pctTone = pctComprar >= 50 ? "text-emerald-700" : pctComprar >= 25 ? "text-amber-700" : "text-slate-600";
+                  const pctRing = pctComprar >= 50 ? "stroke-emerald-500" : pctComprar >= 25 ? "stroke-amber-500" : "stroke-slate-400";
+                  // Anel SVG: r=44, circunferência ≈ 276.46
+                  const R = 44;
+                  const C = 2 * Math.PI * R;
+                  const dash = (pctComprar / 100) * C;
+                  const recBadge = (rec: AnaliseItem["recomendacao"]) => {
+                    const map: Record<typeof rec, { cls: string; label: string }> = {
+                      COMPRAR_JA:     { cls: "bg-emerald-600 text-white",                                        label: "COMPRAR JÁ" },
+                      COMPRAR:        { cls: "bg-emerald-100 text-emerald-800 ring-1 ring-emerald-300",          label: "COMPRAR" },
+                      AVALIAR:        { cls: "bg-amber-100 text-amber-800 ring-1 ring-amber-300",                label: "AVALIAR" },
+                      MANTER_LOCACAO: { cls: "bg-slate-100 text-slate-700 ring-1 ring-slate-300",                label: "MANTER" },
+                    };
+                    const m = map[rec];
+                    return <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide ${m.cls}`}>{m.label}</span>;
+                  };
+                  const confBadge = (c: AnaliseItem["confianca"]) => {
+                    const map = { alta: "text-emerald-700", media: "text-amber-700", baixa: "text-red-700" };
+                    return <span className={`text-[10px] font-semibold uppercase ${map[c]}`}>{c}</span>;
+                  };
+                  return (
+                    <div className="space-y-4">
+                      {r.iaErroMsg && (
+                        <div className="bg-amber-50 border border-amber-300 rounded-lg p-3 text-xs text-amber-900 flex items-start gap-2">
+                          <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+                          <div><b>Atenção:</b> {r.iaErroMsg}</div>
+                        </div>
+                      )}
+
+                      {/* KPIs + Anel 0-100% (destaque máximo, métrica pedida pelo user) */}
+                      <div className="grid grid-cols-1 lg:grid-cols-[auto_1fr] gap-4 items-stretch">
+                        {/* Anel 0-100% */}
+                        <div className="bg-gradient-to-br from-amber-50 to-orange-50 border-2 border-amber-200 rounded-2xl p-5 flex items-center gap-4">
+                          <div className="relative shrink-0">
+                            <svg width="120" height="120" viewBox="0 0 120 120" className="-rotate-90">
+                              <circle cx="60" cy="60" r={R} fill="none" strokeWidth="12" className="stroke-slate-200" />
+                              <circle
+                                cx="60" cy="60" r={R} fill="none" strokeWidth="12"
+                                strokeLinecap="round"
+                                strokeDasharray={`${dash} ${C}`}
+                                className={`${pctRing} transition-all duration-700`}
+                              />
+                            </svg>
+                            <div className="absolute inset-0 flex flex-col items-center justify-center">
+                              <div className={`text-3xl font-bold tabular-nums ${pctTone}`}>{pctComprar}%</div>
+                              <div className="text-[9px] uppercase tracking-wider text-slate-500 font-semibold">do aluguel</div>
+                            </div>
+                          </div>
+                          <div className="min-w-0">
+                            <div className="text-xs uppercase tracking-wider text-amber-700 font-bold">% do gasto mensal que vale a pena comprar</div>
+                            <div className="text-sm text-slate-700 mt-1">
+                              Você gasta <b className="tabular-nums">{fmtBRL(gastoTotalMes)}/mês</b> nas {fmtNum(r.totalAnalisado)} descrições analisadas.
+                            </div>
+                            <div className="text-sm text-slate-700 mt-0.5">
+                              Desse total, <b className={`tabular-nums ${pctTone}`}>{fmtBRL(gastoComprarMes)}/mês</b> está em itens onde a IA recomenda <b>comprar</b> (payback ≤ 12 meses).
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* KPIs auxiliares */}
+                        <div className="grid grid-cols-2 sm:grid-cols-2 gap-3">
+                          <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3">
+                            <div className="flex items-center gap-2 text-[10px] uppercase tracking-wider text-emerald-700 font-bold"><ShoppingCart className="h-3 w-3" />Recomendado comprar</div>
+                            <div className="text-2xl font-bold text-emerald-800 mt-1 tabular-nums">{fmtNum(cntComprar)}</div>
+                            <div className="text-[11px] text-emerald-700/80">de {fmtNum(r.totalAnalisado)} descrições</div>
+                          </div>
+                          <div className="bg-amber-50 border border-amber-200 rounded-xl p-3">
+                            <div className="flex items-center gap-2 text-[10px] uppercase tracking-wider text-amber-700 font-bold"><TrendingDown className="h-3 w-3" />Economia anual potencial</div>
+                            <div className="text-xl font-bold text-amber-800 mt-1 tabular-nums truncate" title={fmtBRL(r.economiaAnualPotencial)}>{fmtBRL(r.economiaAnualPotencial)}</div>
+                            <div className="text-[11px] text-amber-700/80">se comprar todos recomendados</div>
+                          </div>
+                          <div className="bg-blue-50 border border-blue-200 rounded-xl p-3">
+                            <div className="flex items-center gap-2 text-[10px] uppercase tracking-wider text-blue-700 font-bold"><DollarSign className="h-3 w-3" />Investimento necessário</div>
+                            <div className="text-xl font-bold text-blue-800 mt-1 tabular-nums truncate" title={fmtBRL(r.investimentoTotalRecomendado)}>{fmtBRL(r.investimentoTotalRecomendado)}</div>
+                            <div className="text-[11px] text-blue-700/80">à vista, novo, sem frete</div>
+                          </div>
+                          <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
+                            <div className="flex items-center gap-2 text-[10px] uppercase tracking-wider text-slate-600 font-bold"><AlertTriangle className="h-3 w-3" />Avaliar / Manter</div>
+                            <div className="text-2xl font-bold text-slate-700 mt-1 tabular-nums">{fmtNum(cntAvaliar)} / {fmtNum(cntManter)}</div>
+                            <div className="text-[11px] text-slate-500">descrições sem ganho claro</div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Filter pills */}
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-xs font-semibold text-slate-600">Filtrar:</span>
+                        {[
+                          { k: "",        label: `Todos (${r.totalAnalisado})`,           cls: "bg-slate-100 text-slate-800 ring-slate-300" },
+                          { k: "comprar", label: `Recomendado comprar (${cntComprar})`,  cls: "bg-emerald-100 text-emerald-800 ring-emerald-300" },
+                          { k: "avaliar", label: `Avaliar (${cntAvaliar})`,              cls: "bg-amber-100 text-amber-800 ring-amber-300" },
+                          { k: "manter",  label: `Manter locação (${cntManter})`,        cls: "bg-slate-100 text-slate-700 ring-slate-300" },
+                        ].map(o => (
+                          <button key={o.k} onClick={() => setFiltroRecAnalise(o.k as any)}
+                            className={`text-[11px] px-2.5 py-1 rounded-full font-semibold transition ring-1 ${
+                              filtroRecAnalise === o.k ? `${o.cls} shadow-sm` : "bg-white text-slate-500 ring-slate-200 hover:bg-slate-50"
+                            }`}>
+                            {o.label}
+                          </button>
+                        ))}
+                      </div>
+
+                      {/* Tabela */}
+                      <div className="border border-slate-200 rounded-xl overflow-hidden">
+                        <div className="overflow-x-auto">
+                          <table className="min-w-full text-xs">
+                            <thead className="bg-slate-50 text-slate-600 uppercase tracking-wider text-[10px]">
+                              <tr>
+                                <th className="text-left px-3 py-2">Descrição</th>
+                                <th className="text-right px-2 py-2">Qtd</th>
+                                <th className="text-right px-2 py-2">Aluguel/un/mês</th>
+                                <th className="text-right px-2 py-2">Preço estim./un</th>
+                                <th className="text-right px-2 py-2">Investir total</th>
+                                <th className="text-right px-2 py-2">Payback</th>
+                                <th className="text-right px-2 py-2">Economia/ano</th>
+                                <th className="text-center px-2 py-2">Recomendação</th>
+                                <th className="text-left px-3 py-2">Canal · Confiança</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100">
+                              {itensFiltrados.length === 0 && (
+                                <tr><td colSpan={9} className="px-3 py-8 text-center text-slate-400">Nenhuma descrição neste filtro.</td></tr>
+                              )}
+                              {itensFiltrados.map((it) => (
+                                <tr key={it.descricao} className="hover:bg-slate-50/60">
+                                  <td className="px-3 py-2 max-w-[280px]">
+                                    <div className="font-medium text-slate-800 truncate" title={it.descricao}>{it.descricao}</div>
+                                    {it.categoria && <div className="text-[10px] text-slate-400 truncate">{it.categoria}</div>}
+                                  </td>
+                                  <td className="px-2 py-2 text-right tabular-nums text-slate-700">{fmtNum(it.qtd)}</td>
+                                  <td className="px-2 py-2 text-right tabular-nums text-slate-700">{fmtBRL(it.aluguelUnMes)}</td>
+                                  <td className="px-2 py-2 text-right tabular-nums">
+                                    <div className="text-slate-900 font-semibold">{it.precoMedio > 0 ? fmtBRL(it.precoMedio) : "—"}</div>
+                                    {it.precoMedio > 0 && (
+                                      <div className="text-[10px] text-slate-400">{fmtBRL(it.precoMin)} – {fmtBRL(it.precoMax)}</div>
+                                    )}
+                                  </td>
+                                  <td className="px-2 py-2 text-right tabular-nums text-slate-700">{it.investimentoCompra != null && it.investimentoCompra > 0 ? fmtBRL(it.investimentoCompra) : "—"}</td>
+                                  <td className="px-2 py-2 text-right tabular-nums">
+                                    {it.paybackMeses != null ? (
+                                      <span className={`font-semibold ${it.paybackMeses <= 6 ? "text-emerald-700" : it.paybackMeses <= 12 ? "text-emerald-600" : it.paybackMeses <= 24 ? "text-amber-700" : "text-slate-500"}`}>
+                                        {it.paybackMeses.toFixed(1)} m
+                                      </span>
+                                    ) : <span className="text-slate-400">—</span>}
+                                  </td>
+                                  <td className="px-2 py-2 text-right tabular-nums">
+                                    {it.economiaAnual != null ? (
+                                      <span className={`font-semibold ${it.economiaAnual > 0 ? "text-emerald-700" : "text-slate-500"}`}>
+                                        {(it.economiaAnual > 0 ? "+" : "") + fmtBRL(it.economiaAnual)}
+                                      </span>
+                                    ) : <span className="text-slate-400">—</span>}
+                                  </td>
+                                  <td className="px-2 py-2 text-center">{recBadge(it.recomendacao)}</td>
+                                  <td className="px-3 py-2 text-slate-600 max-w-[200px]">
+                                    <div className="truncate text-[11px]" title={it.canalTipico}>{it.canalTipico || "—"}</div>
+                                    <div className="text-[10px]">{confBadge(it.confianca)}</div>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+
+                      <div className="text-[11px] text-slate-400 italic">
+                        Fonte: {r.fonte}. Gerado em {r.geradoEm ? new Date(r.geradoEm).toLocaleString("pt-BR") : "—"}. Economia anual = 12 × aluguel mensal total − investimento de compra (ignora valor residual, custo de capital e manutenção).
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
             </div>
           </TabsContent>

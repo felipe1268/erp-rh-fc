@@ -1,6 +1,115 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2365 — **UX/REORGANIZAÇÃO + KPI · Análise IA "Comprar vs Continuar
+ * Alugando" MIGRADA de `/equipamentos/locados` (botão âmbar no hero header
+ * + modal full-screen) pra Dashboard Almoxarifado, aba "Equip. Locados",
+ * agora com KPI 0-100% destacado em anel SVG: "% do gasto mensal de aluguel
+ * que vale a pena comprar".**
+ *
+ * **Pedido user (24/05/2026, IMG_1163):** "Quero um percentual de zero a
+ * cem porcento... tbm não quero esta análise aí (em /equipamentos/locados).
+ * Quero uma análise no dash para fazer esta verificação".
+ *
+ * **Problema:** a análise existia no lugar errado. `/equipamentos/locados`
+ * é a tela operacional (recebimento físico, check-in semanal, devolução —
+ * usada pelo almoxarife em campo) e o botão âmbar "Comprar vs Alugar (IA)"
+ * no hero ficava poluindo o fluxo do dia-a-dia + abria um modal pesado que
+ * trava o iPad com requisição de 30s-2min. Pior: o engenheiro/comprador
+ * que toma a DECISÃO de comprar nunca entra em `/equipamentos/locados`, ele
+ * vive no Dashboard Almoxarifado. Resultado: a análise quase nunca era
+ * rodada por quem importa. Faltava também uma métrica-resumo de fácil
+ * leitura — os 4 KPIs do modal anterior eram absolutos (R$, contagem) e
+ * não respondiam à pergunta executiva: "que fatia do meu aluguel é
+ * desperdício?".
+ *
+ * **Fix em 2 arquivos:**
+ *
+ *   1. **REMOÇÃO de `client/src/pages/equipamentos/Locados.tsx`:**
+ *      botão "Comprar vs Alugar (IA)" do hero header, modal full-screen
+ *      completo (~215 linhas), tipos `AnaliseItem`/`AnaliseResultado`,
+ *      states `modalAnaliseCA`/`resultadoAnaliseCA`/`filtroRecAnalise`,
+ *      mutation `analiseCAMut` e imports não-mais-usados (`Scale`,
+ *      `ShoppingCart`, `TrendingDown`). Tela volta a ser 100% operacional.
+ *
+ *   2. **ADIÇÃO em `client/src/pages/dashboards/DashAlmoxarifadoEquipamentos.tsx`,
+ *      aba "Equip. Locados"** (após a tabela "Locações mês a mês",
+ *      antes de fechar `</TabsContent>`): seção nova com card âmbar
+ *      contendo:
+ *
+ *      - **Header** (gradient amber-50 → white): título + descrição +
+ *        botão "Gerar análise IA agora" (vira "Atualizar análise" quando
+ *        já tem resultado) + botão secundário "Re-analisar" (RotateCcw).
+ *        Estado loading mostra `Loader2` spin no botão.
+ *
+ *      - **Métrica destacada — Anel SVG 0-100%** (R=44, circumference
+ *        ≈276, dashoffset animado em 700ms): mostra "% do gasto mensal
+ *        que vale a pena comprar" = `sum(gastoMesTotal dos itens com
+ *        recomendacao=COMPRAR_JA ou COMPRAR) / sum(gastoMesTotal de todos
+ *        analisados) × 100`. Cor do anel + número escalam por threshold:
+ *        ≥50% emerald (sinal forte), ≥25% amber (médio), <25% slate
+ *        (baixo). Ao lado, frase em pt-BR: "Você gasta R$ X/mês nas N
+ *        descrições analisadas. Desse total, R$ Y/mês está em itens onde
+ *        a IA recomenda comprar". Esta é a métrica que o user pediu —
+ *        responde em 1 número à pergunta "quanto do meu aluguel já era
+ *        pra ter virado compra?".
+ *
+ *      - **4 KPIs secundários** em grid 2×2 ao lado do anel: Recomendado
+ *        comprar (qtd) · Economia anual potencial (R$) · Investimento
+ *        necessário (R$) · Avaliar / Manter (qtd). Mantidos do modal
+ *        original pra preservar contexto financeiro.
+ *
+ *      - **Filter pills** (Todos · Recomendado comprar · Avaliar ·
+ *        Manter locação) + **tabela completa** (Descrição · Qtd ·
+ *        Aluguel/un/mês · Preço estim./un · Investir total · Payback ·
+ *        Economia/ano · Recomendação · Canal · Confiança) — idêntica ao
+ *        modal anterior, agora inline no dashboard.
+ *
+ *      - **Estados:** (1) nunca rodou → painel "Como funciona" amber +
+ *        CTA grande no header; (2) loading → spinner + texto explicativo;
+ *        (3) resultado → anel + KPIs + filtros + tabela; (4) erro IA
+ *        (`iaErroMsg`) → faixa amber acima dos KPIs.
+ *
+ *      - **Imports novos no dashboard:** `Scale`, `ShoppingCart`,
+ *        `Sparkles`, `Loader2`, `RotateCcw` do lucide + `toast` do sonner.
+ *
+ * **Decisão de design — qual percentual escolher?** Considerei 3
+ * alternativas: (A) % de descrições recomendadas pra comprar (cntComprar
+ * / total) — descartado, não pondera por valor (1 betoneira cara conta
+ * igual a 1 sapata barata); (B) % de payback médio inverso — descartado,
+ * confuso pro decisor; (C) % do gasto mensal "vale comprar" (escolhido)
+ * — responde direto à pergunta financeira "fração do meu OPEX de aluguel
+ * que vira CAPEX". Esse número é diretamente acionável: 70% = abre
+ * cotação urgente; 20% = continua locando.
+ *
+ * **Decisão técnica — endpoint intocado.** A procedure
+ * `locadosAnalisarCompraVsAluguel` em `server/routers/equipamentos.ts`
+ * (linhas 1446-1620) NÃO mudou — só o cliente que a chama mudou de
+ * lugar. Garante zero risco de regressão no contrato tRPC e nas
+ * heurísticas de payback/recomendação (≤6m=COMPRAR_JA · ≤12m=COMPRAR ·
+ * ≤24m=AVALIAR · >24m=MANTER_LOCACAO).
+ *
+ * **Anel SVG sem dependência externa:** evitei recharts/d3 — só 2
+ * `<circle>` (trilho cinza + arco colorido) com `strokeDasharray` e
+ * rotação −90° na raiz do SVG pra começar do topo. Pesa <1KB e respeita
+ * o `prefers-reduced-motion` via Tailwind `transition-all duration-700`.
+ *
+ * **R-001/R-007/R-010:** N/A — 100% UI client-side, zero DDL, zero
+ * mudança de schema, endpoint backend intocado.
+ *
+ * **Arquivos:**
+ *   - `client/src/pages/equipamentos/Locados.tsx` (removidos: types
+ *     `AnaliseItem`/`AnaliseResultado`, states+mutation, botão hero,
+ *     modal completo ~215 linhas, imports `Scale`/`ShoppingCart`/
+ *     `TrendingDown`).
+ *   - `client/src/pages/dashboards/DashAlmoxarifadoEquipamentos.tsx`
+ *     (adicionado: imports lucide + sonner, types+state+mutation,
+ *     seção análise completa ~210 linhas com anel SVG 0-100%).
+ *   - `shared/version.ts` → Rev. 2365.
+ *   - `shared/changelog.ts` → esta entrada.
+ *   - `replit.md` → rotação 2+5.
+ *   - `replit-history.md` → recebe Rev. 2358.
+ *
  * Rev. 2364 — **UX/REDESIGN · Modal de cadastro de Equipamentos Próprios
  * (/equipamentos/proprios) refeito do zero pra "servente consegue cadastrar":
  * foto-em-destaque no topo, descrição como único obrigatório, chips de
