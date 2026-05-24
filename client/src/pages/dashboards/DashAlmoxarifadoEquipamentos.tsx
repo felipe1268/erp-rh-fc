@@ -296,7 +296,9 @@ export default function DashAlmoxarifadoEquipamentos() {
   // Rev. 2330: filtro de período compartilhado por todas as 6 tabs.
   // '12m' = últimos 12 meses corridos; número = ano fechado (jan→dez).
   // Anos disponíveis = união dos anos com dado em qualquer fonte + ano atual.
-  const [periodoMeses, setPeriodoMeses] = useState<"12m" | number>("12m");
+  // Rev. 2335 — padrão = ano corrente (pedido user 24/05/2026: "começar
+  // sempre no início do ano"). "12m" continua disponível na pill.
+  const [periodoMeses, setPeriodoMeses] = useState<"12m" | number>(() => new Date().getFullYear());
   const anosDisponiveis = useMemo(() => {
     const anos = new Set<number>();
     const yearOf = (d: any) => { const k = monthKey(d); return k ? Number(k.slice(0, 4)) : null; };

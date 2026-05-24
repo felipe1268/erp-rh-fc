@@ -1,6 +1,43 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2335 — **UX · Padrão do filtro de período dos 6 dashboards
+ * mês a mês passa de "últimos 12 meses" pro ano corrente.**
+ *
+ * Pedido user (24/05/2026): "O padrão é começar sempre no [início]
+ * do ano". Desde a Rev. 2330 (que introduziu o seletor de período)
+ * o default era `'12m'` (janela móvel jun/AA-1 → mai/AA). Em maio
+ * isso ainda fazia algum sentido, mas o usuário pensa em ANO
+ * CALENDÁRIO ("estamos em 2026 quero analisar 2026") — janela
+ * móvel sempre carrega 5+ meses do ano anterior, confundindo
+ * leitura ano-vs-ano e relatórios fiscais.
+ *
+ * **Implementação** (`client/src/pages/dashboards/DashAlmoxarifadoEquipamentos.tsx`,
+ * 0 server, 0 schema):
+ *
+ *   (1) `useState<"12m" | number>("12m")` → `useState(() =>
+ *       new Date().getFullYear())` (lazy initializer = avalia
+ *       1× no mount, evita re-criar a cada render).
+ *
+ *   (2) Pill "12M" permanece disponível como 1 clique — quem
+ *       quiser a janela móvel ainda tem acesso instantâneo.
+ *
+ *   (3) Estado é compartilhado entre as 6 tabs (Rev. 2330);
+ *       trocar tab preserva o período selecionado.
+ *
+ * **Por que ano corrente e não "12m"**: ano calendário é a
+ * unidade natural pra análise empresarial (fechamento contábil,
+ * comparação ano-vs-ano, planejamento orçamentário). Janela
+ * móvel é útil pra detectar tendência recente, mas não pra
+ * default — usuário entrando pela 1ª vez espera ver "2026".
+ *
+ * **Por que lazy initializer**: `new Date().getFullYear()` é
+ * barato mas `useState(value)` rodaria a expressão em todo
+ * render (ignorada após mount, mas desperdício). `useState(() =>
+ * fn())` roda só no mount.
+ *
+ * **R-001/R-007/R-010:** N/A — apenas valor inicial de useState.
+ *
  * Rev. 2334 — **UX · Filtro por OBRA em Equipamentos Locados +
  * reorganização da barra de filtros (grid 2-col: busca + obra)
  * com chips de filtros ativos.**
