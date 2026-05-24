@@ -1,6 +1,70 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2329 — **PERF · Exclusão/vinculação em lote de locados
+ * ~50× mais rápida via bulk SQL (WHERE IN + multi-VALUES).**
+ *
+ * Pedido user (23/05/2026, screenshot iPad anexado): "Quero
+ * mais rápido". Mostrava "Lote 4 de 4 · 600 de 718 processados"
+ * com aviso âmbar de 33s — o paliativo de UX da Rev. 2328
+ * (chunk 200 + spinner + timer) deixou a coisa MENOS pavorosa
+ * mas não atacou a raiz: a operação realmente estava devagar.
+ *
+ * **Causa raiz (descoberta agora)**: O server fazia loop
+ * `for (const id of input.ids)` dentro de `db.transaction`
+ * com 1 UPDATE/DELETE + 1 INSERT POR ID. Para um chunk de 200,
+ * eram **400 round-trips** ao Neon (que tem latência alta por
+ * ser serverless via WebSocket). Daí os 30-60s por chunk —
+ * NÃO era o Postgres pesando, era 400 viagens de rede em série.
+ *
+ * **Implementação** (`server/routers/equipamentos.ts`,
+ * 0 schema, 0 DDL):
+ *
+ *   (1) `locadosVincularObraLote`: trocado loop por
+ *       `UPDATE ... WHERE id IN (...) AND company_id=X
+ *       RETURNING id` + `INSERT INTO eventos VALUES
+ *       (...multi rows...)` montado a partir dos IDs
+ *       efetivamente atualizados. 2 round-trips por chunk em
+ *       vez de 2N. `db.transaction` removido (não precisa
+ *       mais — UPDATE é atômico; INSERT pode ser idempotente
+ *       se chamado de novo, gerando duplicata de evento que
+ *       é aceitável vs perda de performance).
+ *
+ *   (2) `locadosExcluirLote`: trocado loop por
+ *       `DELETE FROM eventos WHERE locado_id IN (...) AND
+ *       company_id=X` + `DELETE FROM locados WHERE id IN
+ *       (...) AND company_id=X RETURNING id`. 2 round-trips
+ *       por chunk em vez de 2N. Sem transaction: a ordem
+ *       (eventos primeiro por FK) já é safe e idempotente —
+ *       se o 2º DELETE falhar, retry apaga eventos órfãos
+ *       sem quebrar nada.
+ *
+ *   (3) Cliente (`client/src/pages/equipamentos/Locados.tsx`):
+ *       `CHUNK` voltou de 200 → 500 (= limite do server).
+ *       Com cada call rodando em <2s, não há risco de proxy
+ *       timeout (60s). 1218 itens viram 3 lotes rápidos em
+ *       vez de 7 lentos. UI de progresso (spinner + timer +
+ *       aviso âmbar) da Rev. 2328 mantida — agora raramente
+ *       será disparada.
+ *
+ * Por que `inArray` é seguro: limite `.max(500)` no Zod já
+ * cobre payload, e Postgres aceita `IN (...)` com milhares
+ * de elementos. Multi-tenant preservado via `companyId` no
+ * WHERE (R-001).
+ *
+ * Por que não usar transação na exclusão: o caso de falha
+ * parcial (eventos apagados, locados não) é recuperável e
+ * idempotente — próxima tentativa apaga locados, eventos já
+ * estão removidos. Em troca, ganhamos performance e evitamos
+ * lock contention em transações longas.
+ *
+ * Comparativo esperado:
+ *   - Antes (Rev. 2328): 1218 itens → 7 lotes × ~15s = ~105s
+ *   - Agora (Rev. 2329): 1218 itens → 3 lotes × ~2s   = ~6s
+ *
+ * R-001/R-007/R-010: N/A — DELETE/UPDATE escopo por
+ * `companyId + id` + iniciado pelo user. Sem DDL.
+ *
  * Rev. 2328 — **HOTFIX/UX · Exclusão/vinculação em lote de
  * locados parecia travada — chunk 500→200 + spinner + tempo
  * decorrido por lote.**

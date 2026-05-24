@@ -536,3 +536,5 @@
 - Rev. 2320 — HOTFIX/IA · `maxOutputTokens` 32k→65k + reparo de JSON truncado em PDF de locação. Ver `shared/changelog.ts`.
 
 - Rev. 2321 — HOTFIX/INFRA · Importação PDF migrada pra polling; proxy Replit matava em 60s. Ver `shared/changelog.ts`.
+
+- Rev. 2322 — HOTFIX/UX · Botão "Confirmar e cadastrar" da importação PDF — diálogo de erro substitui toast invisível. Ver `shared/changelog.ts`.

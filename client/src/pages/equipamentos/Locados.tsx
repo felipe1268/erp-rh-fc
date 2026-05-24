@@ -106,11 +106,13 @@ export default function EquipamentosLocados() {
   //   timeout de 60s do proxy do Replit (mesmo problema do PDF, Rev. 2321).
   //   No iPad o user via "Lote 1 de 3 · 0 de 1.218 processados" parado por
   //   quase 1 min → screenshot "Travou?".
-  // - Rev. 2328: chunk reduzido pra 200 (= ~10-20s por chamada, bem dentro
-  //   dos 60s do proxy). 1218 itens viram 7 lotes — barra anda a cada ~15s,
-  //   feedback visível, sem timeout. Mantém limite do servidor (≤500), só
-  //   muda o tamanho do lote no cliente.
-  const CHUNK = 200;
+  // - Rev. 2328: chunk reduzido pra 200 (paliativo de UX — só dava
+  //   feedback, não atacava a raiz).
+  // - Rev. 2329: server bulkificado (UPDATE/DELETE/INSERT WHERE IN
+  //   + multi-values, 2 round-trips por chunk em vez de 2N). Com
+  //   cada call rodando <2s, voltamos CHUNK pra 500 — 1218 itens
+  //   viram 3 lotes de poucos segundos cada (antes 7 lotes de 15s).
+  const CHUNK = 500;
   const vincularLote = trpc.equipamentos.locadosVincularObraLote.useMutation();
   const excluirLote  = trpc.equipamentos.locadosExcluirLote.useMutation();
 

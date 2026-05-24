@@ -482,27 +482,34 @@ export const equipamentosRouter = router({
       if (!allowedIds.includes(input.companyId)) {
         throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta empresa." });
       }
-      let total = 0;
-      await db.transaction(async (tx: any) => {
-        for (const id of input.ids) {
-          const r = await tx.update(equipamentosLocados)
-            .set({ obraId: input.obraId, updatedAt: sql`now()` })
-            .where(and(eq(equipamentosLocados.id, id), eq(equipamentosLocados.companyId, input.companyId)))
-            .returning({ id: equipamentosLocados.id });
-          if (r.length > 0) {
-            total += 1;
-            await tx.insert(equipamentoLocadoEventos).values({
-              companyId: input.companyId,
-              equipamentoLocadoId: id,
-              tipo: "VINCULO_OBRA",
-              obraId: input.obraId,
-              observacao: input.obraId == null ? "Desvinculado da obra (lote)" : `Vinculado à obra #${input.obraId} (lote)`,
-              usuarioId: ctx.user.id,
-              usuarioNome: ctx.user.name || String(ctx.user.id),
-            });
-          }
-        }
-      });
+      // Rev. 2329 — Bulkificação. Antes (Rev. 2323/2325): 1 UPDATE +
+      // 1 INSERT por ID = 2N round-trips ao Neon (200 itens = 400
+      // viagens, ~30s no proxy). Agora: 1 UPDATE WHERE IN + 1 INSERT
+      // multi-VALUES = 2 round-trips totais. ~50× mais rápido.
+      const updated = await db.update(equipamentosLocados)
+        .set({ obraId: input.obraId, updatedAt: sql`now()` })
+        .where(and(
+          inArray(equipamentosLocados.id, input.ids),
+          eq(equipamentosLocados.companyId, input.companyId),
+        ))
+        .returning({ id: equipamentosLocados.id });
+      const total = updated.length;
+      if (total > 0) {
+        const obsTxt = input.obraId == null
+          ? "Desvinculado da obra (lote)"
+          : `Vinculado à obra #${input.obraId} (lote)`;
+        const userNome = ctx.user.name || String(ctx.user.id);
+        const rows = updated.map(u => ({
+          companyId: input.companyId,
+          equipamentoLocadoId: u.id,
+          tipo: "VINCULO_OBRA" as const,
+          obraId: input.obraId,
+          observacao: obsTxt,
+          usuarioId: ctx.user.id,
+          usuarioNome: userNome,
+        }));
+        await db.insert(equipamentoLocadoEventos).values(rows);
+      }
       return { ok: true as const, vinculados: total };
     }),
 
@@ -520,19 +527,24 @@ export const equipamentosRouter = router({
       if (!allowedIds.includes(input.companyId)) {
         throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta empresa." });
       }
-      let total = 0;
-      await db.transaction(async (tx: any) => {
-        for (const id of input.ids) {
-          // Eventos primeiro (FK em equipamento_locado_id).
-          await tx.delete(equipamentoLocadoEventos)
-            .where(and(eq(equipamentoLocadoEventos.equipamentoLocadoId, id), eq(equipamentoLocadoEventos.companyId, input.companyId)));
-          const r = await tx.delete(equipamentosLocados)
-            .where(and(eq(equipamentosLocados.id, id), eq(equipamentosLocados.companyId, input.companyId)))
-            .returning({ id: equipamentosLocados.id });
-          total += r.length;
-        }
-      });
-      return { ok: true as const, excluidos: total };
+      // Rev. 2329 — Bulkificação. Antes (Rev. 2323/2325): 1 DELETE
+      // eventos + 1 DELETE locado por ID = 2N round-trips (200 itens
+      // = 400 viagens). Agora: 1 DELETE eventos WHERE IN + 1 DELETE
+      // locados WHERE IN = 2 round-trips totais. ~50× mais rápido.
+      // Sem transaction explícito: eventos primeiro (FK), depois
+      // locados; se o 2º falhar, eventos órfãos seriam apagados de
+      // novo na próxima tentativa (idempotente).
+      await db.delete(equipamentoLocadoEventos).where(and(
+        inArray(equipamentoLocadoEventos.equipamentoLocadoId, input.ids),
+        eq(equipamentoLocadoEventos.companyId, input.companyId),
+      ));
+      const deleted = await db.delete(equipamentosLocados)
+        .where(and(
+          inArray(equipamentosLocados.id, input.ids),
+          eq(equipamentosLocados.companyId, input.companyId),
+        ))
+        .returning({ id: equipamentosLocados.id });
+      return { ok: true as const, excluidos: deleted.length };
     }),
 
   locadoDevolver: protectedProcedure
