@@ -1,6 +1,123 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2366 — **FEATURE/UX · Busca de foto "como usuário normal faria" em
+ * `/equipamentos/locados`: 1 descrição por vez → DuckDuckGo Images → 1º
+ * resultado → UPDATE em todas as unidades dessa descrição. ZERO LLM no
+ * caminho. Dois gatilhos: botão hero "Buscar fotos da web" (loop em todas
+ * as descrições sem foto, com widget de progresso flutuante) + botão por
+ * card no thumbnail (refresh-on-hover quando tem foto, click direto quando
+ * não tem).**
+ *
+ * **Pedido user (24/05/2026, IMG_1164):** "Tive uma ideia para resolver o
+ * problema da IA colando a foto errada — ela poderia colocar a foto por
+ * foto no item... ela pesquisa na internet cada nome, acha a foto e coloca
+ * no item. Não tem erro isso se fizer no Google Imagem — como um usuário
+ * normal faria".
+ *
+ * **Diagnóstico do que falhou antes:** as Revs. 2340-2349 tentaram lote
+ * com LLM (gerar query EN → cascade OpenVerse/Wikimedia → blocklist anti-
+ * lixo). Resultado real era foto errada em ~30-40% dos casos: LLM gerava
+ * query genérica demais ("scaffold panel") que trazia 1ª imagem do banco
+ * EN que NÃO era exatamente o item BR (PAINEL NR18 1,5x1,0 → veio painel
+ * de obra qualquer). Rev. 2355 desistiu e fez biblioteca curada (upload
+ * manual, determinística — segue ativa em paralelo). Usuário agora sugere
+ * um terceiro caminho: literal "o que o Google mostraria pra esse nome".
+ *
+ * **Bloqueio técnico:** Rev. 2349.1 documentou que a `GOOGLE_API_KEY` do
+ * projeto está PERMANENTEMENTE bloqueada pra Custom Search no GCP (403
+ * `API_KEY_SERVICE_BLOCKED`). Solução: **DuckDuckGo Images** — mesma
+ * mecânica de "1º hit por query literal", sem chave, sem cota, indexa
+ * PT-BR direto. Acessado via:
+ *   1. GET `https://duckduckgo.com/?q=<termo>&iax=images&ia=images` →
+ *      regex extrai token `vqd` do HTML.
+ *   2. GET `https://duckduckgo.com/i.js?l=br-pt&o=json&q=<termo>&vqd=<token>`
+ *      → JSON com array `results[]`, cada item tem `image` (URL direta
+ *      do CDN original).
+ *   3. Itera o array e pega o 1º com URL HTTPS + extensão jpg/png/webp +
+ *      tamanho ≤ 1000 chars.
+ * Headers de browser real (UA Chrome 120 + Accept-Language PT-BR) pra não
+ * cair em rate-limit anti-bot.
+ *
+ * **Backend** (`server/routers/equipamentos.ts:1401`): novo procedure
+ * `locadosBuscarFotoWebPorDescricao({companyId, descricao, sobrescrever})`.
+ * Tenant guard. 2 fetches sequenciais com timeout 9s cada. Retorna
+ * `{ok:true, fotoUrl, itensAtualizados, descricao}` em sucesso ou
+ * `{ok:false, motivo, fotoUrl:null, itensAtualizados:0}` em falha (vqd
+ * inacessível OU 0 imagens válidas na 1ª página). UPDATE escopado por
+ * `company_id` + `descricao` exata; sem `sobrescrever` aplica só onde
+ * `foto_url` está vazia E não tem foto física de recebimento (recebimento
+ * é fonte autoritativa); com `sobrescrever:true` reaplica até em quem já
+ * tinha foto da web.
+ *
+ * **Frontend** (`client/src/pages/equipamentos/Locados.tsx`):
+ *   1. **Hook + helpers** (linhas ~937-1000): `buscarFotoWebMut`, Set
+ *      `buscandoDescricoes` (loading por descrição), state `batchWeb`
+ *      com `{atual, total, descricaoAtual, ok, falhas, itensAtualizados}`,
+ *      ref `batchWebRef` pra cancelamento. Função `buscarFotoUma(d, sob)`
+ *      pra ação individual e `popularFotosWebTodas(sob)` pra loop
+ *      sequencial com pausa de 250ms entre calls (defensivo anti-rate-
+ *      limit do DDG).
+ *   2. **Botão hero "Buscar fotos da web"** (substitui "Tentar IA" antigo):
+ *      ícone Globe + badge contador de itens sem foto + cor sky (em vez de
+ *      pink do IA antigo, sinaliza "fonte diferente"). Tooltip educativo:
+ *      "igual um usuário faria no Google Imagens".
+ *   3. **Thumbnail interativo no card de grupo** (linhas ~1309-1351):
+ *      COM foto → overlay preto/55% no hover com ícone RefreshCw chama
+ *      `buscarFotoUma(d, true)`. SEM foto → o placeholder INTEIRO vira
+ *      botão clicável (bg slate-100→sky-50 no hover, badge Globe que
+ *      aparece no hover). Loading state mostra spinner no lugar do ícone.
+ *      Ambos respeitam `buscandoDescricoes.has(d) || batchWeb` pra
+ *      desabilitar durante operação.
+ *   4. **Widget de progresso flutuante** (canto inferior direito, z-80,
+ *      `role=status` + `aria-live=polite`): header sky/cyan + barra de
+ *      progresso animada + descrição atual truncada + 3 KPIs (Encontradas
+ *      / Sem foto / Aplicadas em unidades) + botão "Parar busca" que seta
+ *      `batchWebRef.current.cancelar=true` (cancela após a descrição atual,
+ *      não no meio da chamada — graceful stop).
+ *
+ * **O QUE FICA preservado:**
+ *   - `locadosBuscarFotosComIA` (Rev. 2349.x — multi-source cascade com
+ *     LLM EN) continua no backend, intocado. Não é mais chamado pela UI
+ *     mas fica disponível pra rollback/comparação.
+ *   - `modalFotosIA`, `resultadoFotosIA`, `fotosAcumRef`, `fotoInicio` e
+ *     o modal de progresso/resultado antigos seguem no código mas nunca
+ *     são abertos. Dead code intencional pra reduzir blast radius.
+ *   - **Biblioteca curada de fotos** (Rev. 2355) segue como caminho
+ *     determinístico pra quem quiser garantia 100% — os dois fluxos
+ *     convivem (sky=busca web, indigo=biblioteca curada).
+ *
+ * **Decisões de UX/design:**
+ *   - 1 descrição por chamada (não em batch no servidor) → cada call é
+ *     independente, dá pra ver progresso real, dá pra cancelar, dá pra
+ *     re-tentar individualmente sem reprocessar tudo.
+ *   - Overlay no thumbnail em vez de botão separado: o thumbnail JÁ é o
+ *     elemento visual representativo da foto — natural que o gesto de
+ *     trocar foto aconteça ali.
+ *   - Cor sky (em vez de pink do IA antigo): sinaliza que é uma fonte
+ *     diferente e que o usuário não deve esperar "validação inteligente"
+ *     — é literalmente "o que apareceu primeiro na busca".
+ *   - Sem modal de confirmação no batch — clique direto, widget mostra
+ *     progresso em tempo real, botão "Parar" interrompe. Menos atrito
+ *     pro caso comum (popular tudo de uma vez).
+ *
+ * **Limitações conhecidas:**
+ *   - DDG pode bloquear se o servidor fizer muitas requests do mesmo IP
+ *     em curto período. Pausa de 250ms entre calls + rate-limit defensivo
+ *     do próprio DDG (~1 req/s tolerado) deve bastar pra ~50-100
+ *     descrições. Se falhar massivamente, o widget mostra "Sem foto:N"
+ *     e o usuário pode tentar de novo em alguns minutos.
+ *   - O parser de `vqd` depende do HTML da DDG não mudar. Se mudar,
+ *     `vqd` vem null → endpoint retorna `motivo` claro pro usuário.
+ *   - "1º resultado" não é 100% acerto. Mas é o que o usuário PEDIU.
+ *     Pra casos onde dá errado, o botão por card permite re-trigger
+ *     individual (com `sobrescrever:true`). Pra casos críticos, a
+ *     Biblioteca Curada (Rev. 2355) garante 100%.
+ *
+ * **R-001/R-007/R-010:** UPDATE escopado por `company_id` + `descricao`
+ * exata, idempotente (a menos que `sobrescrever:true`), zero DDL, zero
+ * DELETE. Tenant guard via `getCompaniesForUser`.
+ *
  * Rev. 2365 — **UX/REORGANIZAÇÃO + KPI · Análise IA "Comprar vs Continuar
  * Alugando" MIGRADA de `/equipamentos/locados` (botão âmbar no hero header
  * + modal full-screen) pra Dashboard Almoxarifado, aba "Equip. Locados",

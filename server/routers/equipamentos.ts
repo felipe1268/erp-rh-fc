@@ -1395,6 +1395,139 @@ Reply JSON {"queries":[{"descricao":"<original PT>","query":"<EN words>"}]} with
       };
     }),
 
+  // ── Rev. 2366 — BUSCA DE FOTO "como usuário normal faria" ────────────────
+  // Pedido user (24/05/2026, IMG_1164): "Ela pesquisa na internet cada
+  // nome, acha a foto e coloca no item... como um usuário normal faria."
+  //
+  // Estratégia: 1 descrição por chamada → DuckDuckGo Image Search (sem
+  // chave, sem cota, indexa PT-BR direto) → pega o 1º resultado válido →
+  // UPDATE em todas as unidades dessa descrição. ZERO LLM no caminho —
+  // o usuário quer literalmente "o que o Google mostraria pra esse nome".
+  //
+  // Por que DDG e não Google CSE: Rev. 2349.1 documentou que a
+  // GOOGLE_API_KEY do projeto está PERMANENTEMENTE bloqueada pra Custom
+  // Search no GCP (403 API_KEY_SERVICE_BLOCKED). DDG é o substituto
+  // funcional mais próximo — mesmo modelo (1º hit por query literal).
+  //
+  // Loop client-side: a UI chama esse endpoint 1×/descrição com progresso
+  // visível. Por-card também: botão "trocar foto" no thumbnail chama com
+  // `sobrescrever:true` pra forçar nova busca.
+  //
+  // **R-001/R-007/R-010**: UPDATE escopado por `company_id` + `descricao`
+  // exata, idempotente (a menos que `sobrescrever`), zero DDL.
+  locadosBuscarFotoWebPorDescricao: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      descricao: z.string().min(1).max(500),
+      sobrescrever: z.boolean().optional().default(false),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const allowedCompanies = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+      const allowedIds = (allowedCompanies as any[]).map(c => c.id);
+      if (!allowedIds.includes(input.companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta empresa." });
+      }
+
+      // Headers de browser real — DDG bloqueia UAs óbvios de bot.
+      const headers: Record<string, string> = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7",
+      };
+
+      // 1. Pega o token vqd da página HTML inicial (DDG exige esse token
+      //    pra autorizar a chamada JSON subsequente).
+      const ctrl1 = new AbortController();
+      const t1 = setTimeout(() => ctrl1.abort(), 9000);
+      let vqd: string | null = null;
+      try {
+        const r1 = await fetch(
+          `https://duckduckgo.com/?q=${encodeURIComponent(input.descricao)}&iax=images&ia=images`,
+          { signal: ctrl1.signal, headers: { ...headers, "Accept": "text/html,application/xhtml+xml" } }
+        );
+        const html = await r1.text();
+        const m = html.match(/vqd=["']([\d-]+)["']/)
+              || html.match(/vqd=([\d-]+)/)
+              || html.match(/&vqd=([\w-]+)&/);
+        if (m) vqd = m[1];
+      } catch (e: any) {
+        console.error("[locadosBuscarFotoWebPorDescricao] vqd fetch falhou:", e?.message || e);
+      } finally { clearTimeout(t1); }
+
+      if (!vqd) {
+        return {
+          ok: false as const,
+          motivo: "Busca web indisponível no momento (não foi possível obter token da DuckDuckGo).",
+          fotoUrl: null,
+          itensAtualizados: 0,
+          descricao: input.descricao,
+        };
+      }
+
+      // 2. Chama o endpoint JSON da DDG Images.
+      const ctrl2 = new AbortController();
+      const t2 = setTimeout(() => ctrl2.abort(), 9000);
+      let fotoUrl: string | null = null;
+      try {
+        const url = `https://duckduckgo.com/i.js?l=br-pt&o=json&q=${encodeURIComponent(input.descricao)}&vqd=${vqd}&f=,,,,,&p=1`;
+        const r2 = await fetch(url, {
+          signal: ctrl2.signal,
+          headers: { ...headers, "Accept": "application/json", "Referer": "https://duckduckgo.com/" },
+        });
+        if (r2.ok) {
+          const j: any = await r2.json();
+          const results: any[] = Array.isArray(j?.results) ? j.results : [];
+          for (const it of results) {
+            const u = String(it?.image || "");
+            // Aceita só HTTPS + extensão de imagem válida + URL de tamanho razoável.
+            if (/^https:\/\//.test(u)
+                && /\.(jpe?g|png|webp)(\?|$)/i.test(u)
+                && u.length <= 1000) {
+              fotoUrl = u;
+              break;
+            }
+          }
+        }
+      } catch (e: any) {
+        console.error("[locadosBuscarFotoWebPorDescricao] i.js fetch falhou:", e?.message || e);
+      } finally { clearTimeout(t2); }
+
+      if (!fotoUrl) {
+        return {
+          ok: false as const,
+          motivo: "Nenhuma foto válida encontrada na 1ª página de resultados.",
+          fotoUrl: null,
+          itensAtualizados: 0,
+          descricao: input.descricao,
+        };
+      }
+
+      // 3. UPDATE em todas as unidades dessa descrição (escopado a empresa).
+      //    Sem `sobrescrever`: só preenche onde foto_url está vazia E não tem
+      //    foto física de recebimento (recebimento é fonte autoritativa).
+      const semFotoRec = sql`(fotos_recebimento_json IS NULL OR jsonb_typeof(fotos_recebimento_json) <> 'array' OR jsonb_array_length(fotos_recebimento_json) = 0)`;
+      const condFoto = input.sobrescrever
+        ? semFotoRec
+        : sql`(${semFotoRec} AND (foto_url IS NULL OR foto_url = ''))`;
+
+      const res: any = await db.execute(sql`
+        UPDATE equipamentos_locados
+           SET foto_url = ${fotoUrl}, updated_at = NOW()
+         WHERE company_id = ${input.companyId}
+           AND descricao = ${input.descricao}
+           AND ${condFoto}
+      `);
+      const itensAtualizados = Number(res.rowCount ?? res.rows?.length ?? 0);
+
+      return {
+        ok: true as const,
+        fotoUrl,
+        itensAtualizados,
+        descricao: input.descricao,
+      };
+    }),
+
   // Rev. 2342 — Limpar TODAS as fotos buscadas por IA (foto_url) — NÃO toca
   // `fotos_recebimento_json` (essas são da física, autoritativas). Tenant-scoped.
   locadosLimparFotosIA: protectedProcedure

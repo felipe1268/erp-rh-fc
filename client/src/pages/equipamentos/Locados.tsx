@@ -3,7 +3,7 @@ import { useState, useMemo, useRef, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
 import { toast } from "sonner";
-import { Plus, Search, X, Truck, CheckCircle2, RotateCcw, ClipboardCheck, Eye, FileText, Upload, Sparkles, Trash2, Activity, Clock, AlertTriangle, DollarSign, Calendar, Hash, Building2, User as UserIcon, MapPin, Camera, StickyNote, ChevronDown, Tag, Loader2, Layers, Boxes, ImagePlus, Library, Check, type LucideIcon } from "lucide-react";
+import { Plus, Search, X, Truck, CheckCircle2, RotateCcw, ClipboardCheck, Eye, FileText, Upload, Sparkles, Trash2, Activity, Clock, AlertTriangle, DollarSign, Calendar, Hash, Building2, User as UserIcon, MapPin, Camera, StickyNote, ChevronDown, Tag, Loader2, Layers, Boxes, ImagePlus, Library, Check, Globe, RefreshCw, type LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import { FotosUploader, FotoItem, fmtMoney, fmtDate, Spinner } from "./_shared";
 import { compressImageIfNeeded } from "@/lib/imageCompress";
@@ -931,6 +931,73 @@ export default function EquipamentosLocados() {
     ? Math.min(95, Math.round((fotoSegundosDecorridos / fotoSegundosEstimados) * 100))
     : 0;
 
+  // ── Rev. 2366 — Busca de foto "como usuário normal faria" ──────────────
+  // 1 descrição por chamada → DuckDuckGo Images → 1º hit → UPDATE em lote
+  // nas unidades dessa descrição. Sem LLM, sem cascade, sem blocklist.
+  // Usada por DOIS gatilhos:
+  //   (a) Botão hero "Buscar fotos da web" → loop client-side por TODAS
+  //       as descrições sem foto (com progresso visível no canto).
+  //   (b) Botão por card no thumbnail → 1 descrição, sobrescreve a atual.
+  const [buscandoDescricoes, setBuscandoDescricoes] = useState<Set<string>>(new Set());
+  const [batchWeb, setBatchWeb] = useState<null | { atual: number; total: number; descricaoAtual: string; ok: number; falhas: number; itensAtualizados: number; cancelar: boolean }>(null);
+  const batchWebRef = useRef<{ cancelar: boolean }>({ cancelar: false });
+  const buscarFotoWebMut = trpc.equipamentos.locadosBuscarFotoWebPorDescricao.useMutation();
+
+  async function buscarFotoUma(descricao: string, sobrescrever: boolean) {
+    if (!companyId) return;
+    setBuscandoDescricoes(prev => { const n = new Set(prev); n.add(descricao); return n; });
+    try {
+      const r: any = await buscarFotoWebMut.mutateAsync({ companyId, descricao, sobrescrever });
+      if (r?.ok) {
+        utils.equipamentos.locadosListar.invalidate();
+        toast.success(`Foto aplicada em ${fmtN(r.itensAtualizados)} unidade(s) — "${descricao.slice(0, 40)}"`);
+      } else {
+        toast.error(r?.motivo || "Não encontrada na web.", { duration: 4000 });
+      }
+    } catch (e: any) {
+      toast.error(e?.message || "Falha ao buscar foto.");
+    } finally {
+      setBuscandoDescricoes(prev => { const n = new Set(prev); n.delete(descricao); return n; });
+    }
+  }
+
+  async function popularFotosWebTodas(sobrescrever: boolean) {
+    if (!companyId) return;
+    // Coleta descrições distintas SEM foto (mesmo critério dos grupos).
+    const setDesc = new Set<string>();
+    for (const l of dataAll as any[]) {
+      const fotosRec = ((l.fotosRecebimentoJson as FotoItem[]) || []);
+      const semFoto = fotosRec.length === 0 && (sobrescrever || !l.fotoUrl);
+      if (semFoto && l.descricao) setDesc.add(String(l.descricao).trim());
+    }
+    const descs = Array.from(setDesc).filter(Boolean);
+    if (descs.length === 0) { toast.info("Nenhuma descrição sem foto."); return; }
+    batchWebRef.current.cancelar = false;
+    setBatchWeb({ atual: 0, total: descs.length, descricaoAtual: descs[0], ok: 0, falhas: 0, itensAtualizados: 0, cancelar: false });
+    let ok = 0, falhas = 0, itensAtualizados = 0;
+    for (let i = 0; i < descs.length; i++) {
+      if (batchWebRef.current.cancelar) break;
+      const d = descs[i];
+      setBatchWeb(p => p ? { ...p, atual: i + 1, descricaoAtual: d } : p);
+      try {
+        const r: any = await buscarFotoWebMut.mutateAsync({ companyId, descricao: d, sobrescrever });
+        if (r?.ok) { ok += 1; itensAtualizados += Number(r.itensAtualizados || 0); }
+        else { falhas += 1; }
+      } catch { falhas += 1; }
+      setBatchWeb(p => p ? { ...p, ok, falhas, itensAtualizados } : p);
+      // Pequena pausa pra não martelar o DDG (rate-limit defensivo).
+      await new Promise(res => setTimeout(res, 250));
+    }
+    utils.equipamentos.locadosListar.invalidate();
+    const cancelado = batchWebRef.current.cancelar;
+    setBatchWeb(null);
+    if (cancelado) {
+      toast.info(`Interrompido — ${fmtN(ok)} foto(s) aplicada(s) em ${fmtN(itensAtualizados)} unidade(s).`);
+    } else {
+      toast.success(`Concluído — ${fmtN(ok)} foto(s) em ${fmtN(itensAtualizados)} unidade(s)${falhas > 0 ? ` · ${fmtN(falhas)} sem resultado` : ""}.`);
+    }
+  }
+
   return (
     <DashboardLayout>
       <div className="max-w-7xl mx-auto px-4 py-6 space-y-5">
@@ -983,16 +1050,19 @@ export default function EquipamentosLocados() {
                 <Library className="h-4 w-4" />
                 Biblioteca de fotos
               </button>
-              {/* Rev. 2340 — Buscar fotos com IA — mantido como fallback secundário (compacto).
-                  Rev. 2355 desencorajou (low acurácia comprovada em 9 revs) mas não removeu
-                  pra preservar fluxo de quem ainda quer tentar. */}
+              {/* Rev. 2366 — "Buscar fotos da web" (DuckDuckGo Images) — substitui
+                  "Tentar IA" antigo. Loop client-side: pra cada descrição sem
+                  foto chama o endpoint 1×, pega o 1º resultado do DDG, aplica
+                  em todas as unidades. Mesmo modelo de quem abre Google
+                  Imagens, digita o nome e copia a 1ª foto. */}
               {totalSemFoto > 0 && (
-                <button onClick={() => setModalFotosIA({ sobrescrever: false })}
-                  disabled={buscarFotosMut.isPending}
-                  className="inline-flex items-center gap-2 bg-white text-pink-700 hover:bg-pink-50 px-3 py-2.5 rounded-xl shadow-sm font-medium text-xs transition ring-1 ring-pink-200 disabled:opacity-60 disabled:cursor-wait"
-                  title={`${totalSemFoto} equipamento(s) sem foto — busca automática em bibliotecas públicas (acurácia limitada — prefira "Biblioteca de fotos")`}>
-                  {buscarFotosMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
-                  Tentar IA
+                <button onClick={() => popularFotosWebTodas(false)}
+                  disabled={!!batchWeb}
+                  className="inline-flex items-center gap-2 bg-white text-sky-700 hover:bg-sky-50 px-4 py-2.5 rounded-xl shadow-md font-semibold text-sm transition ring-1 ring-sky-200 disabled:opacity-60 disabled:cursor-wait"
+                  title={`${totalSemFoto} equipamento(s) sem foto — busca cada descrição na web e aplica o 1º resultado, igual um usuário faria no Google Imagens.`}>
+                  {batchWeb ? <Loader2 className="h-4 w-4 animate-spin" /> : <Globe className="h-4 w-4" />}
+                  Buscar fotos da web
+                  <span className="inline-flex items-center justify-center min-w-[22px] h-5 px-1.5 rounded-full text-[10px] font-bold bg-sky-100 text-sky-800">{fmtN(totalSemFoto)}</span>
                 </button>
               )}
               {/* Rev. 2315 — Removido botão "Receber locação"; fluxo principal é Importar PDF (IA). */}
@@ -1233,19 +1303,48 @@ export default function EquipamentosLocados() {
                       className="h-4 w-4 mt-1 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer flex-shrink-0"
                       title={todosSelecionados ? "Desmarcar todas as unidades do grupo" : "Marcar todas as unidades do grupo"}
                     />
+                    {/* Rev. 2366 — Thumbnail interativo: COM foto mostra
+                        botão "trocar" no hover; SEM foto vira botão "buscar
+                        foto na web" (chama DDG só pra essa descrição). */}
                     {g.fotoUrl ? (
-                      <div className="relative flex-shrink-0">
+                      <div className="relative flex-shrink-0 group/foto">
                         <img src={g.fotoUrl} className="w-16 h-16 object-cover rounded-lg ring-1 ring-slate-200" alt="" loading="lazy" />
                         {g.fotoIA && (
-                          <span title="Imagem ilustrativa encontrada por IA" className="absolute -top-1 -right-1 bg-pink-500 text-white rounded-full p-0.5 ring-2 ring-white shadow">
+                          <span title="Imagem ilustrativa encontrada na web" className="absolute -top-1 -right-1 bg-pink-500 text-white rounded-full p-0.5 ring-2 ring-white shadow">
                             <Sparkles className="h-2.5 w-2.5" />
                           </span>
                         )}
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); buscarFotoUma(g.descricao, true); }}
+                          disabled={buscandoDescricoes.has(g.descricao) || !!batchWeb}
+                          className="absolute inset-0 rounded-lg bg-black/55 text-white opacity-0 group-hover/foto:opacity-100 focus:opacity-100 transition flex items-center justify-center disabled:cursor-wait"
+                          title={`Buscar nova foto na web para "${g.descricao}"`}
+                          aria-label="Buscar nova foto na web">
+                          {buscandoDescricoes.has(g.descricao)
+                            ? <Loader2 className="h-4 w-4 animate-spin" />
+                            : <RefreshCw className="h-4 w-4" />}
+                        </button>
                       </div>
                     ) : (
-                      <div className="w-16 h-16 rounded-lg bg-slate-100 ring-1 ring-slate-200 flex items-center justify-center flex-shrink-0">
-                        <Camera className="h-5 w-5 text-slate-400" />
-                      </div>
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); buscarFotoUma(g.descricao, false); }}
+                        disabled={buscandoDescricoes.has(g.descricao) || !!batchWeb}
+                        className="relative w-16 h-16 rounded-lg bg-slate-100 hover:bg-sky-50 ring-1 ring-slate-200 hover:ring-sky-300 flex items-center justify-center flex-shrink-0 transition disabled:cursor-wait group/foto"
+                        title={`Buscar foto na web para "${g.descricao}"`}
+                        aria-label="Buscar foto na web">
+                        {buscandoDescricoes.has(g.descricao) ? (
+                          <Loader2 className="h-5 w-5 text-sky-600 animate-spin" />
+                        ) : (
+                          <>
+                            <Camera className="h-5 w-5 text-slate-400 group-hover/foto:text-sky-500 transition" />
+                            <span className="absolute -bottom-1 -right-1 bg-sky-500 text-white rounded-full p-0.5 ring-2 ring-white shadow opacity-0 group-hover/foto:opacity-100 transition">
+                              <Globe className="h-2.5 w-2.5" />
+                            </span>
+                          </>
+                        )}
+                      </button>
                     )}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-start justify-between gap-2">
@@ -2854,6 +2953,54 @@ export default function EquipamentosLocados() {
             <div className="bg-slate-50 border-t border-slate-200 px-5 py-3 flex justify-end">
               <button onClick={() => setResultadoFotosIA(null)} className="px-4 py-2 text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-md transition">Fechar</button>
             </div>
+          </div>
+        </div>
+      )}
+      {/* Rev. 2366 — Widget de progresso flutuante (canto inferior direito)
+          enquanto roda a busca em lote de fotos da web. Mostra X/Total +
+          descrição atual + contadores de sucesso/falha + botão "Parar". */}
+      {batchWeb && (
+        <div role="status" aria-live="polite"
+             className="fixed bottom-4 right-4 z-[80] w-[min(92vw,420px)] bg-white rounded-2xl shadow-2xl ring-1 ring-slate-200 overflow-hidden">
+          <div className="bg-gradient-to-r from-sky-600 to-cyan-600 text-white px-4 py-2.5 flex items-center gap-2">
+            <Globe className="h-4 w-4" />
+            <div className="text-sm font-semibold flex-1">Buscando fotos na web</div>
+            <Loader2 className="h-4 w-4 animate-spin opacity-80" />
+          </div>
+          <div className="p-4 space-y-2">
+            <div className="flex items-baseline justify-between text-xs text-slate-600">
+              <span>Processando <b className="text-slate-900">{fmtN(batchWeb.atual)}</b> de <b>{fmtN(batchWeb.total)}</b></span>
+              <span className="tabular-nums">{Math.round((batchWeb.atual / Math.max(1, batchWeb.total)) * 100)}%</span>
+            </div>
+            <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
+              <div className="h-full bg-gradient-to-r from-sky-500 to-cyan-500 transition-all duration-300"
+                   style={{ width: `${Math.round((batchWeb.atual / Math.max(1, batchWeb.total)) * 100)}%` }} />
+            </div>
+            <div className="text-xs text-slate-700 truncate" title={batchWeb.descricaoAtual}>
+              <span className="text-slate-500">Agora: </span>
+              <span className="font-medium">{batchWeb.descricaoAtual}</span>
+            </div>
+            <div className="grid grid-cols-3 gap-2 pt-1">
+              <div className="text-center bg-emerald-50 rounded-lg px-2 py-1.5">
+                <div className="text-[10px] text-emerald-700 uppercase tracking-wider font-bold">Encontradas</div>
+                <div className="text-sm font-bold text-emerald-800 tabular-nums">{fmtN(batchWeb.ok)}</div>
+              </div>
+              <div className="text-center bg-slate-50 rounded-lg px-2 py-1.5">
+                <div className="text-[10px] text-slate-600 uppercase tracking-wider font-bold">Sem foto</div>
+                <div className="text-sm font-bold text-slate-700 tabular-nums">{fmtN(batchWeb.falhas)}</div>
+              </div>
+              <div className="text-center bg-sky-50 rounded-lg px-2 py-1.5">
+                <div className="text-[10px] text-sky-700 uppercase tracking-wider font-bold">Aplicadas</div>
+                <div className="text-sm font-bold text-sky-800 tabular-nums">{fmtN(batchWeb.itensAtualizados)}</div>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => { batchWebRef.current.cancelar = true; }}
+              className="w-full mt-1 text-xs font-medium text-slate-600 hover:text-red-700 hover:bg-red-50 py-1.5 rounded-md transition inline-flex items-center justify-center gap-1.5"
+              title="Interromper após a descrição atual">
+              <X className="h-3.5 w-3.5" /> Parar busca
+            </button>
           </div>
         </div>
       )}
