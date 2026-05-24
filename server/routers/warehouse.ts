@@ -1349,7 +1349,7 @@ Retorne os até 5 melhores matches em ordem decrescente de similaridade. Se nenh
 
       // ── AUTHZ: empresa do user + acesso à obra destino ──
       const allowedCompanies = await getCompaniesForUser(ctx.user.id, ctx.user.role);
-      if (!allowedCompanies.includes(input.companyId)) {
+      if (!allowedCompanies.map((c: any) => c.id).includes(input.companyId)) {
         throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a essa empresa." });
       }
       const destinoObraId = input.destinoTipo === "obra" ? (input.destinoObraId ?? null) : null;
