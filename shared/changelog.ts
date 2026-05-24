@@ -1,6 +1,70 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2391 — **OBRAS/GOVERNANÇA · Não permitir encerrar obra com estoque
+ * no Almoxarifado — pre-check + modal com CTA pra transferir.**
+ *
+ * Pedido user (IMG_1197, 24/05/2026, 20:23): "A obra não pode ser
+ * finalizada se tiver estoque, precisa sugerir a transferência para
+ * outro depósito ok…". Hoje o engenheiro mudava o status da obra pra
+ * Concluída/Cancelada/Paralisada e o ERP aceitava — itens ficavam
+ * órfãos no almoxarifado da obra encerrada (já desativada pra todos
+ * os efeitos de alocação e ponto), sem rastreabilidade do destino.
+ *
+ * **Backend** (`server/routers.ts`):
+ *   1. Nova query `obras.checarEstoquePendente({obraId})` — read-only,
+ *      retorna `{temPendente, total, itens:[{id,nome,quantidade,unidade}]}`
+ *      filtrando `almoxarifado_itens` por `companyId + obraId + ativo=true
+ *      + COALESCE(quantidadeAtual,0) > 0`. AUTHZ: valida `getObraById`
+ *      + `getEffectiveAllowedObraIds` (anti-IDOR — sem isso, qualquer user
+ *      autenticado conseguia listar itens/qtds de qualquer obra). Usado
+ *      pelo frontend pra pre-check ANTES de chamar `update`.
+ *   2. Guard server-side dentro de `obras.update` — só dispara quando há
+ *      TRANSIÇÃO de status pra encerrador (`statusAtual !== data.status`
+ *      AND novo ∈ {Concluida, Cancelada, Paralisada}). Editar cadastro
+ *      de obra já encerrada com estoque legado segue permitido (paridade
+ *      com a regra do user: "não pode SER finalizada"). Mesmo AUTHZ
+ *      + companyId scope no SELECT. Lança `TRPCError BAD_REQUEST` com
+ *      mensagem humanizada citando 3 primeiros itens + "e mais N".
+ * Schema import de `almoxarifadoItens` adicionado no topo do arquivo.
+ *
+ * **Frontend Obras** (`client/src/pages/Obras.tsx`):
+ *   - Novo state `estoquePendModal` + import `useLocation` do wouter
+ *     pra navegação.
+ *   - `handleSave` virou async: se `editingId` e novo status é
+ *     encerrador, chama `obras.checarEstoquePendente.fetch` via
+ *     `trpc.useUtils()`. Se positivo → abre modal e não salva. Se
+ *     fetch falhar (rede, etc.), prossegue e deixa o backend bloquear.
+ *   - Modal âmbar→laranja: lista os itens com qtd/unidade,
+ *     explica que precisa transferir, e tem 2 botões: "Cancelar"
+ *     fecha modal mantendo o FullScreenDialog aberto pra user
+ *     reverter o status; "Ir ao Almoxarifado pra transferir" fecha
+ *     ambos e navega pra `/almoxarifado?obra=<id>`.
+ *
+ * **Frontend Almoxarifado** (`client/src/pages/almoxarifado/index.tsx`
+ * L1238-1258): estendeu o handler de URL param que já lia `?modal=`
+ * pra também ler `?obra=ID` e setar `obraContexto` automaticamente.
+ * Assim o deep-link da tela de Obras já abre o almoxarifado no
+ * contexto da obra certa — o user só precisa marcar os itens e
+ * clicar no novo botão "Transferir" do sticky bar (Rev. 2390).
+ *
+ * **Fluxo completo do user**:
+ *   1. Edita obra X em /obras, muda status pra Concluída → Salvar.
+ *   2. Pre-check detecta estoque pendente → modal âmbar mostra lista.
+ *   3. Clica "Ir ao Almoxarifado pra transferir" → navega pro
+ *      almoxarifado já filtrado pela obra X.
+ *   4. Entra no modo seleção (botão "Sair da seleção" inverte) →
+ *      marca os itens → clica "Transferir" (Rev. 2390) → escolhe
+ *      destino (Central ou outra obra) → transfere em lote.
+ *   5. Volta pra /obras → muda status pra Concluída → Salvar.
+ *      Backend re-checa (já zerado) → permite. Obra encerrada com
+ *      almoxarifado limpo e trilha auditável em
+ *      `almoxarifado_transferencias`.
+ *
+ * R-001/R-007/R-010 OK (zero ALTER/DROP/DELETE em produção, só
+ * SELECT). Zero impacto em obras já encerradas (guard só dispara
+ * quando há mudança de status no save).
+ *
  * Rev. 2390 — **ALMOXARIFADO/UX · Transferência em LOTE no sticky bar de
  * multi-seleção (N itens → 1 destino comum, qtd editável por linha).**
  *

@@ -612,4 +612,5 @@
 
 - **Rev. 2352** — CLEANUP/UX · Removida a subpágina "Parâmetros CAPEX" da UI (sidebar + card no hub + rota + page + mapeamento de módulo); backend procedures e tabela DB preservados.
 
+- **Rev. 2384** — FIX/UX · Badges "X pra receber" do ENTRADA e RECEBER LOCAÇÃO contam só OCs da obra em contexto (ou das obras permitidas); `obraId` opcional + `getEffectiveAllowedObraIds` + FORBIDDEN se fora do allowed (IDOR).
 - **Rev. 2383** — FEATURE · Multi-seleção também no view "Todos almoxarifados": Alterar categoria em lote (`atualizarCategoriaPorNomeEmLote` com `lower(nome) IN (...)`) + Próprio/Alugado no consolidado.

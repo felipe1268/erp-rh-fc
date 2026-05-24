@@ -1232,13 +1232,19 @@ export default function AlmoxarifadoPage() {
   function resetSaida() { setSaidaItemId(0); setSaidaQtd(""); setSaidaObraId(typeof obraContexto === "number" ? obraContexto : 0); setSaidaOk(null); }
   function resetEmprestimo() { setEmpCodigo(""); setEmpSearch(""); setEmpSelecionado(null); setEmpShowSug(false); setEmpItemId(0); setEmpQtd("1"); setEmpItens([]); setEmpSubmitting(false); setEmpOk(null); setEmpErr(null); setEmpTipo("mao_obra"); setEmpTerceiroNome(""); setEmpTerceiroEmpresa(""); }
 
-  // ── Abrir modal via URL param (?modal=X) ──────────────────────
+  // ── Abrir modal via URL param (?modal=X) e/ou setar obra (?obra=ID) ────────
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const modal = params.get("modal");
-    if (!modal) return;
-    // Remove o param da URL sem recarregar
+    const obraParam = params.get("obra");
+    if (!modal && !obraParam) return;
+    // Remove os params da URL sem recarregar
     setLocation("/almoxarifado", { replace: true });
+    // Rev. 2391 — Deep-link da tela de Obras: foca o almoxarifado da obra X.
+    if (obraParam) {
+      const obraId = Number(obraParam);
+      if (Number.isFinite(obraId) && obraId > 0) setObraContexto(obraId);
+    }
     if (modal === "entrada")      { setModalSmartEntry(true); }
     if (modal === "ferramentas")  { resetEmprestimo(); setModalEmprestimo(true); }
     if (modal === "insumo")       { resetInsumo(); setModalInsumo(true); }

@@ -44,7 +44,7 @@ import {
 import { DEFAULT_PERMISSIONS, MODULE_KEYS } from "../shared/modules";
 import { getDb, encerrarContratosPjDoFuncionario } from "./db";
 import { normalizeCidadeInput } from "../shared/normalizeCidade";
-import { obraSns, employees, blacklistReactivationRequests, companies, employeeSiteHistory, employeeTerminationChecklist, asos, trainings, sstIntegracaoRegistros, employeeIntegrations, contractCounters } from "../drizzle/schema";
+import { obraSns, employees, blacklistReactivationRequests, companies, employeeSiteHistory, employeeTerminationChecklist, asos, trainings, sstIntegracaoRegistros, employeeIntegrations, contractCounters, almoxarifadoItens } from "../drizzle/schema";
 import { eq, and, sql, or, ilike, isNull, inArray } from "drizzle-orm";
 import { resolveCompanyIds, companyFilter } from "./companyHelper";
 import type { ProfileType } from "../shared/modules";
@@ -1514,6 +1514,43 @@ export const appRouter = router({
       }
       return result;
     }),
+    // Rev. 2391 — Checa se a obra tem itens em estoque no almoxarifado (qtd > 0).
+    // Usado pelo frontend ANTES de mudar o status pra Concluida/Cancelada/Paralisada,
+    // e também como guard server-side dentro do `update`.
+    // AUTHZ: valida que o user tem acesso à obra (anti-IDOR — sem isso, qualquer
+    // user autenticado conseguia listar itens/qtds de qualquer obra de qualquer
+    // empresa via deep-link manual).
+    checarEstoquePendente: protectedProcedure
+      .input(z.object({ obraId: z.number() }))
+      .query(async ({ input, ctx }) => {
+        const obraInfo = await getObraById(input.obraId);
+        if (!obraInfo) throw new TRPCError({ code: "NOT_FOUND", message: "Obra não encontrada." });
+        const allowedObras = await getEffectiveAllowedObraIds(ctx.user.id, ctx.user.role);
+        if (allowedObras !== null && !allowedObras.includes(input.obraId)) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta obra." });
+        }
+        const db = await getDb();
+        if (!db) return { temPendente: false, total: 0, itens: [] as Array<{ id: number; nome: string; quantidade: number; unidade: string }> };
+        const rows = await db.select({
+          id: almoxarifadoItens.id,
+          nome: almoxarifadoItens.nome,
+          quantidadeAtual: almoxarifadoItens.quantidadeAtual,
+          unidade: almoxarifadoItens.unidade,
+        }).from(almoxarifadoItens)
+          .where(and(
+            eq(almoxarifadoItens.companyId, (obraInfo as any).companyId),
+            eq(almoxarifadoItens.obraId, input.obraId),
+            eq(almoxarifadoItens.ativo, true),
+            sql`COALESCE(${almoxarifadoItens.quantidadeAtual}, 0) > 0`,
+          ));
+        const itens = rows.map((r: any) => ({
+          id: r.id,
+          nome: r.nome,
+          quantidade: Number(r.quantidadeAtual ?? 0),
+          unidade: r.unidade,
+        }));
+        return { temPendente: itens.length > 0, total: itens.length, itens };
+      }),
     update: protectedProcedure.input(z.object({
       id: z.number(),
       nome: z.string().optional(),
@@ -1549,6 +1586,46 @@ export const appRouter = router({
       percentualAdm: z.string().nullable().optional(),
     })).mutation(async ({ input, ctx }) => {
       const { id, responsavelId, ...data } = input;
+      // Rev. 2391 — Guard server-side: não permitir TRANSITAR obra pra status encerrador
+      // (Concluida/Cancelada/Paralisada) enquanto houver estoque no Almoxarifado dela.
+      // Só dispara na MUDANÇA de status — editar cadastro de obra já encerrada com
+      // estoque legado segue permitido (paridade com regra do user: "não pode SER
+      // finalizada"). AUTHZ + companyId scope no SELECT (defesa em profundidade).
+      const STATUS_ENCERRADORES = ["Concluida", "Cancelada", "Paralisada"];
+      if (data.status && STATUS_ENCERRADORES.includes(data.status)) {
+        const obraAtual = await getObraById(id);
+        const statusAtual = (obraAtual as any)?.status;
+        const isTransicaoParaEncerrador = !!statusAtual && statusAtual !== data.status;
+        if (isTransicaoParaEncerrador) {
+          const allowedObras = await getEffectiveAllowedObraIds(ctx.user.id, ctx.user.role);
+          if (allowedObras !== null && !allowedObras.includes(id)) {
+            throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta obra." });
+          }
+          const db = await getDb();
+          if (db) {
+            const pend: any[] = await db.select({
+              id: almoxarifadoItens.id,
+              nome: almoxarifadoItens.nome,
+              quantidadeAtual: almoxarifadoItens.quantidadeAtual,
+              unidade: almoxarifadoItens.unidade,
+            }).from(almoxarifadoItens)
+              .where(and(
+                eq(almoxarifadoItens.companyId, (obraAtual as any).companyId),
+                eq(almoxarifadoItens.obraId, id),
+                eq(almoxarifadoItens.ativo, true),
+                sql`COALESCE(${almoxarifadoItens.quantidadeAtual}, 0) > 0`,
+              ));
+            if (pend.length > 0) {
+              const exemplos = pend.slice(0, 3).map(p => `${p.nome} (${Number(p.quantidadeAtual)} ${p.unidade})`).join(", ");
+              const resto = pend.length > 3 ? ` e mais ${pend.length - 3}` : "";
+              throw new TRPCError({
+                code: "BAD_REQUEST",
+                message: `Não é possível alterar o status para "${data.status}": esta obra ainda tem ${pend.length} item(ns) com estoque no Almoxarifado (${exemplos}${resto}). Transfira o estoque para outro depósito antes de encerrar.`,
+              });
+            }
+          }
+        }
+      }
       if (data.status && data.status !== "Em_Andamento") {
         await releaseObraSns(id);
         try {

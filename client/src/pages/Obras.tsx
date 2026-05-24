@@ -11,7 +11,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { trpc } from "@/lib/trpc";
-import { Plus, Search, Pencil, Trash2, Landmark, MapPin, Calendar, Loader2, Wifi, X, AlertCircle, CheckCircle, ArrowLeft, FileText, Brain, BookOpen, Wrench, UserCheck, ChevronDown, Merge, Upload, Image as ImageIcon, Building } from "lucide-react";
+import { Plus, Search, Pencil, Trash2, Landmark, MapPin, Calendar, Loader2, Wifi, X, AlertCircle, CheckCircle, ArrowLeft, FileText, Brain, BookOpen, Wrench, UserCheck, ChevronDown, Merge, Upload, Image as ImageIcon, Building, PackageOpen, ArrowLeftRight } from "lucide-react";
+import { useLocation } from "wouter";
 import FullScreenDialog from "@/components/FullScreenDialog";
 import { useState, useMemo, useCallback, useRef, useEffect } from "react";
 import { toast } from "sonner";
@@ -111,6 +112,10 @@ export default function Obras() {
     onSuccess: () => { obrasQ.refetch(); allSnsQ.refetch(); availableSnsQ.refetch(); setSaving(false); setDialogOpen(false); toast.success("Obra atualizada com sucesso!"); },
     onError: (err) => { setSaving(false); toast.error(err.message || "Erro ao atualizar obra"); },
   });
+  // Rev. 2391 — Pre-check de estoque antes de encerrar obra.
+  const [, navigate] = useLocation();
+  const [estoquePendModal, setEstoquePendModal] = useState<{ open: boolean; obraId: number; obraNome: string; statusAlvo: string; itens: Array<{ id: number; nome: string; quantidade: number; unidade: string }> }>({ open: false, obraId: 0, obraNome: "", statusAlvo: "", itens: [] });
+  const checarEstoqueUtils = trpc.useUtils();
   const deleteMut = trpc.obras.delete.useMutation({ onSuccess: () => { obrasQ.refetch(); allSnsQ.refetch(); toast.success("Obra excluída!"); } });
   const mesclarMut = trpc.obras.mesclar.useMutation({
     onSuccess: () => { obrasQ.refetch(); allSnsQ.refetch(); setMesclarDialog({ open: false, sourceObra: null }); setMesclarTargetId(null); toast.success("Obras mescladas com sucesso! Todos os registros foram migrados."); },
@@ -302,7 +307,7 @@ export default function Obras() {
     ).slice(0, 20);
   }, [clientes, clienteBusca]);
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (saving) return;
     const nomeEfetivo = form.nome.trim() || form.numOrcamento.trim();
     if (!nomeEfetivo) {
@@ -313,6 +318,25 @@ export default function Obras() {
       return;
     }
     setNomeError(false);
+    // Rev. 2391 — Pre-check: se editando e mudando status pra encerrador, verifica estoque do almoxarifado.
+    const STATUS_ENCERRADORES = ["Concluida", "Cancelada", "Paralisada"];
+    if (editingId && STATUS_ENCERRADORES.includes(form.status)) {
+      try {
+        const pend = await checarEstoqueUtils.obras.checarEstoquePendente.fetch({ obraId: editingId });
+        if (pend?.temPendente) {
+          setEstoquePendModal({
+            open: true,
+            obraId: editingId,
+            obraNome: nomeEfetivo,
+            statusAlvo: form.status,
+            itens: pend.itens,
+          });
+          return; // não salva; usuário precisa transferir o estoque primeiro
+        }
+      } catch (e) {
+        // se a checagem falhar, deixa o backend decidir (ele também guarda)
+      }
+    }
     setSaving(true);
     const logoFields = ["clienteLogoUrl", "gerenciadoraLogoUrl", "gerenciadoraNome"];
     const cleanForm = Object.fromEntries(
@@ -1389,6 +1413,54 @@ export default function Obras() {
       </Dialog>
 
           <PrintFooterLGPD />
+
+      {/* Rev. 2391 — Modal: obra com estoque pendente não pode ser encerrada */}
+      <Dialog open={estoquePendModal.open} onOpenChange={(v) => !v && setEstoquePendModal(s => ({ ...s, open: false }))}>
+        <DialogContent className="max-w-lg p-0 overflow-hidden">
+          <div className="bg-gradient-to-r from-amber-500 to-orange-600 px-6 py-4 text-white">
+            <div className="flex items-center gap-3">
+              <div className="rounded-full bg-white/20 p-2"><PackageOpen className="h-5 w-5" /></div>
+              <div>
+                <DialogTitle className="text-white text-base font-semibold">Estoque pendente no Almoxarifado</DialogTitle>
+                <p className="text-white/90 text-xs mt-0.5">Esta obra ainda tem itens em estoque e não pode ser encerrada.</p>
+              </div>
+            </div>
+          </div>
+          <div className="px-6 py-4 space-y-3">
+            <p className="text-sm text-gray-700">
+              A obra <strong>{estoquePendModal.obraNome}</strong> não pode ter o status alterado para{" "}
+              <strong>{STATUS_OPTIONS.find(s => s.value === estoquePendModal.statusAlvo)?.label ?? estoquePendModal.statusAlvo}</strong>{" "}
+              porque ainda existem <strong>{estoquePendModal.itens.length} item(ns)</strong> em estoque.
+              Transfira tudo para outro depósito (Central ou outra obra) antes de encerrar.
+            </p>
+            <div className="border border-amber-200 rounded-lg bg-amber-50/50 divide-y divide-amber-100 max-h-56 overflow-auto">
+              {estoquePendModal.itens.map(it => (
+                <div key={it.id} className="px-3 py-2 flex items-center justify-between text-sm">
+                  <span className="truncate text-gray-800">{it.nome}</span>
+                  <span className="text-amber-900 font-semibold whitespace-nowrap ml-3">{it.quantidade} {it.unidade}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+          <DialogFooter className="px-6 py-3 bg-gray-50 border-t flex-row gap-2 sm:justify-end">
+            <Button variant="outline" onClick={() => setEstoquePendModal(s => ({ ...s, open: false }))}>
+              Cancelar
+            </Button>
+            <Button
+              className="bg-purple-600 hover:bg-purple-700 text-white"
+              onClick={() => {
+                const obraId = estoquePendModal.obraId;
+                setEstoquePendModal(s => ({ ...s, open: false }));
+                setDialogOpen(false);
+                navigate(`/almoxarifado?obra=${obraId}`);
+              }}
+            >
+              <ArrowLeftRight className="h-4 w-4 mr-2" />
+              Ir ao Almoxarifado pra transferir
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   );
 }
