@@ -1,6 +1,69 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2332 — **UX · Nome do mês capitalizado + ano completo
+ * ("Jan 2026") e indicador MoM (▲/▼ + %) em cada célula
+ * numérica das 6 tabelas mês a mês do Dashboard Almox & Equip.**
+ *
+ * Pedido user (24/05/2026, screenshot iPad): "Melhore o nome
+ * do mês, quero quero tinha indicador mês a mês, se subiu,
+ * abaixou cada movimentação isso em todos os dash ok".
+ * Os rótulos "jan/26" (minúsculo + ano abreviado) eram apertados
+ * e nenhuma célula mostrava se o número subiu/desceu vs o mês
+ * anterior — força o user a comparar visualmente linha-a-linha.
+ *
+ * **Implementação** (`client/src/pages/dashboards/DashAlmoxarifadoEquipamentos.tsx`,
+ * 0 server, 0 schema):
+ *
+ *   (1) **Labels capitalizados + ano completo**: nova const
+ *       `MESES_PT_CAP = ["Jan", "Fev", …]`. `lastNMonths()` e
+ *       `monthsOfYear()` agora geram `"Jan 2026"` em vez de
+ *       `"jan/26"`. Coluna "Mês" ficou mais legível e formal.
+ *
+ *   (2) **Componente `DeltaCell({ value, prev, money?, accent? })`**:
+ *       renderiza valor formatado (BRL ou número) + badge ao
+ *       lado com ícone direcional (▲ ArrowUp / ▼ ArrowDown / —
+ *       Minus) e % de variação vs mês anterior. Cores: verde
+ *       (subiu), vermelho (desceu), cinza (igual ou primeiro mês
+ *       da série). Quando |%| ≥ 999 cai pro delta absoluto (evita
+ *       "+9999%" feio quando prev=1 e atual=100). Badge tem
+ *       `ring-1` + `bg-X-50` + `text-X-700` (mesma paleta dos
+ *       cards Linear). Tooltip `title=` mostra valor do mês
+ *       anterior. Prop `accent` permite sobrescrever cor do
+ *       valor principal (ex: emerald p/ "Entradas", red p/
+ *       "Saídas", semantic p/ "Saldo").
+ *
+ *   (3) **DeltaCell aplicado nas 6 tabelas**:
+ *       - **Visão Geral** (Comparativo mês a mês — 7 colunas
+ *         numéricas): Movs, Entradas, Saídas, Locados iniciados,
+ *         Próprios adquiridos, Ferramentas terc., Itens cadastrados.
+ *       - **Estoque** (Itens cadastrados mês a mês): Novos itens
+ *         + Acumulado (ambos com delta — acumulado sempre sobe
+ *         então sempre verde, esperado).
+ *       - **Movimentações** (Movs/Entradas/Saídas/Saldo).
+ *       - **Ferramentas** (Registros).
+ *       - **Próprios** (Equipamentos + Valor BRL).
+ *       - **Locados** (Iniciadas/Devolvidas/Saldo/Custo BRL).
+ *
+ *   (4) Iteração mudou de `.map(m => …)` pra `.map((m, i, arr)
+ *       => { const pk = arr[i-1]?.key; … })` — i-1 dá acesso ao
+ *       mês anterior. Estoque (que usa IIFE com `acc`) ganhou
+ *       `prevN` + `prevAcc` mantidos por closure.
+ *
+ * Por que direcional puro (verde sobe / vermelho desce) e NÃO
+ * semântico (verde "bom" / vermelho "ruim"): pra Almoxarifado,
+ * subir/descer em métricas como "Saídas" ou "Devolvidas" não
+ * tem leitura óbvia de bom/ruim (mais saídas = mais obras
+ * ativas ou mais consumo? depende). Padrão direcional é
+ * universalmente entendido como "aumentou ou diminuiu vs antes",
+ * sem interpretação ambígua.
+ *
+ * Por que % e não delta absoluto: % normaliza escalas diferentes
+ * (1→2 é +100%, 1000→1001 é +0%) — mais útil pra leitura rápida.
+ * Tooltip já mostra valor exato anterior.
+ *
+ * R-001/R-007/R-010: N/A — só apresentação client-side.
+ *
  * Rev. 2331 — **UX · Layout modernizado das 6 tabelas mês a mês
  * do Dashboard Almox & Equip. + segmented pill p/ filtro de
  * período (substitui dropdown nativo).**

@@ -15,7 +15,7 @@ import {
   Warehouse, Package, ArrowLeftRight, AlertTriangle, Truck, HardHat,
   DollarSign, Activity, Clock, Wrench, ArrowLeft, MapPin, Building2,
   TrendingUp, TrendingDown, ShieldAlert, CheckCircle2, Layers, Tag,
-  CalendarRange,
+  CalendarRange, ArrowUp, ArrowDown, Minus,
 } from "lucide-react";
 
 const fmtBRL = (v: number) => (v || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -36,15 +36,16 @@ function monthKey(d: Date | string | null | undefined): string | null {
   return `${x.getUTCFullYear()}-${String(x.getUTCMonth() + 1).padStart(2, "0")}`;
 }
 
-// Últimos N meses (chave + label "mmm/aa")
+// Rev. 2332 — Labels capitalizados + ano completo ("Jan 2026" no lugar de "jan/26")
 const MESES_PT = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
+const MESES_PT_CAP = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
 function lastNMonths(n: number): { key: string; label: string }[] {
   const out: { key: string; label: string }[] = [];
   const now = new Date();
   for (let i = n - 1; i >= 0; i--) {
     const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - i, 1));
     const k = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
-    out.push({ key: k, label: `${MESES_PT[d.getUTCMonth()]}/${String(d.getUTCFullYear()).slice(2)}` });
+    out.push({ key: k, label: `${MESES_PT_CAP[d.getUTCMonth()]} ${d.getUTCFullYear()}` });
   }
   return out;
 }
@@ -53,9 +54,43 @@ function monthsOfYear(year: number): { key: string; label: string }[] {
   const out: { key: string; label: string }[] = [];
   for (let m = 0; m < 12; m++) {
     const k = `${year}-${String(m + 1).padStart(2, "0")}`;
-    out.push({ key: k, label: `${MESES_PT[m]}/${String(year).slice(2)}` });
+    out.push({ key: k, label: `${MESES_PT_CAP[m]} ${year}` });
   }
   return out;
+}
+
+// Rev. 2332 — DeltaCell: valor + seta direcional vs mês anterior (% ou abs).
+// Direcional puro: ▲ verde se subiu, ▼ vermelho se desceu, ─ cinza se igual/sem prev.
+function DeltaCell({ value, prev, money, accent }: { value: number; prev: number | undefined; money?: boolean; accent?: string }) {
+  const v = money ? (value || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : (value || 0).toLocaleString("pt-BR");
+  const hasPrev = prev !== undefined;
+  const diff = hasPrev ? (value || 0) - (prev || 0) : 0;
+  const pct = hasPrev && prev! !== 0 ? (diff / Math.abs(prev!)) * 100 : null;
+  const tone = !hasPrev || diff === 0
+    ? "text-slate-400 bg-slate-50 ring-slate-200/60"
+    : diff > 0
+      ? "text-emerald-700 bg-emerald-50 ring-emerald-200/60"
+      : "text-red-700 bg-red-50 ring-red-200/60";
+  const Arrow = !hasPrev || diff === 0 ? Minus : diff > 0 ? ArrowUp : ArrowDown;
+  const badgeText = !hasPrev
+    ? "—"
+    : diff === 0
+      ? "0"
+      : pct !== null && Math.abs(pct) < 999
+        ? `${diff > 0 ? "+" : ""}${pct.toFixed(0)}%`
+        : `${diff > 0 ? "+" : ""}${(diff || 0).toLocaleString("pt-BR")}`;
+  return (
+    <div className="flex items-center justify-end gap-2">
+      <span className={accent || "text-slate-800"}>{v}</span>
+      <span
+        className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md ring-1 text-[10px] font-semibold tabular-nums ${tone}`}
+        title={hasPrev ? `Mês anterior: ${money ? (prev || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : (prev || 0).toLocaleString("pt-BR")}` : "Sem mês anterior na série"}
+      >
+        <Arrow className="h-2.5 w-2.5" strokeWidth={2.5} />
+        {badgeText}
+      </span>
+    </div>
+  );
 }
 
 const TABS_VALIDOS = new Set(["visao", "estoque", "movs", "ferramentas", "proprios", "locados"]);
@@ -480,18 +515,22 @@ export default function DashAlmoxarifadoEquipamentos() {
                     </tr>
                   </thead>
                   <tbody>
-                    {monthlyAgg.months.map(m => (
-                      <tr key={m.key} className="border-t border-slate-100 hover:bg-slate-50">
-                        <td className="p-2.5 font-medium text-slate-800 whitespace-nowrap">{m.label}</td>
-                        <td className="p-2.5 text-right">{fmtNum(monthlyAgg.movsCount[m.key])}</td>
-                        <td className="p-2.5 text-right text-emerald-700">{fmtNum(monthlyAgg.movsEntradas[m.key])}</td>
-                        <td className="p-2.5 text-right text-red-700">{fmtNum(monthlyAgg.movsSaidas[m.key])}</td>
-                        <td className="p-2.5 text-right">{fmtNum(monthlyAgg.locadosIniciados[m.key])}</td>
-                        <td className="p-2.5 text-right">{fmtNum(monthlyAgg.propriosNovos[m.key])}</td>
-                        <td className="p-2.5 text-right">{fmtNum(monthlyAgg.ferramentasReg[m.key])}</td>
-                        <td className="p-2.5 text-right">{fmtNum(monthlyAgg.itensCadastrados[m.key])}</td>
-                      </tr>
-                    ))}
+                    {monthlyAgg.months.map((m, i, arr) => {
+                      const pk = arr[i - 1]?.key;
+                      const p = (f: Record<string, number>) => (pk !== undefined ? f[pk] : undefined);
+                      return (
+                        <tr key={m.key} className="border-t border-slate-100 hover:bg-slate-50">
+                          <td className="p-2.5 font-medium text-slate-800 whitespace-nowrap">{m.label}</td>
+                          <td className="p-2.5"><DeltaCell value={monthlyAgg.movsCount[m.key]} prev={p(monthlyAgg.movsCount)} /></td>
+                          <td className="p-2.5"><DeltaCell value={monthlyAgg.movsEntradas[m.key]} prev={p(monthlyAgg.movsEntradas)} accent="text-emerald-700" /></td>
+                          <td className="p-2.5"><DeltaCell value={monthlyAgg.movsSaidas[m.key]} prev={p(monthlyAgg.movsSaidas)} accent="text-red-700" /></td>
+                          <td className="p-2.5"><DeltaCell value={monthlyAgg.locadosIniciados[m.key]} prev={p(monthlyAgg.locadosIniciados)} /></td>
+                          <td className="p-2.5"><DeltaCell value={monthlyAgg.propriosNovos[m.key]} prev={p(monthlyAgg.propriosNovos)} /></td>
+                          <td className="p-2.5"><DeltaCell value={monthlyAgg.ferramentasReg[m.key]} prev={p(monthlyAgg.ferramentasReg)} /></td>
+                          <td className="p-2.5"><DeltaCell value={monthlyAgg.itensCadastrados[m.key]} prev={p(monthlyAgg.itensCadastrados)} /></td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -565,16 +604,21 @@ export default function DashAlmoxarifadoEquipamentos() {
                   <tbody>
                     {(() => {
                       let acc = 0;
+                      let prevN: number | undefined;
+                      let prevAcc: number | undefined;
                       return monthlyAgg.months.map(m => {
                         const n = monthlyAgg.itensCadastrados[m.key];
                         acc += n;
-                        return (
+                        const row = (
                           <tr key={m.key} className="border-t border-slate-100 hover:bg-slate-50">
                             <td className="p-2.5 font-medium text-slate-800 whitespace-nowrap">{m.label}</td>
-                            <td className="p-2.5 text-right">{fmtNum(n)}</td>
-                            <td className="p-2.5 text-right text-slate-600">{fmtNum(acc)}</td>
+                            <td className="p-2.5"><DeltaCell value={n} prev={prevN} /></td>
+                            <td className="p-2.5"><DeltaCell value={acc} prev={prevAcc} accent="text-slate-600" /></td>
                           </tr>
                         );
+                        prevN = n;
+                        prevAcc = acc;
+                        return row;
                       });
                     })()}
                   </tbody>
@@ -648,17 +692,22 @@ export default function DashAlmoxarifadoEquipamentos() {
                     </tr>
                   </thead>
                   <tbody>
-                    {monthlyAgg.months.map(m => {
+                    {monthlyAgg.months.map((m, i, arr) => {
+                      const pk = arr[i - 1]?.key;
                       const ent = monthlyAgg.movsEntradas[m.key];
                       const sai = monthlyAgg.movsSaidas[m.key];
                       const saldo = ent - sai;
+                      const prevEnt = pk ? monthlyAgg.movsEntradas[pk] : undefined;
+                      const prevSai = pk ? monthlyAgg.movsSaidas[pk] : undefined;
+                      const prevSaldo = pk ? (monthlyAgg.movsEntradas[pk] - monthlyAgg.movsSaidas[pk]) : undefined;
+                      const prevCount = pk ? monthlyAgg.movsCount[pk] : undefined;
                       return (
                         <tr key={m.key} className="border-t border-slate-100 hover:bg-slate-50">
                           <td className="p-2.5 font-medium text-slate-800 whitespace-nowrap">{m.label}</td>
-                          <td className="p-2.5 text-right">{fmtNum(monthlyAgg.movsCount[m.key])}</td>
-                          <td className="p-2.5 text-right text-emerald-700">{fmtNum(ent)}</td>
-                          <td className="p-2.5 text-right text-red-700">{fmtNum(sai)}</td>
-                          <td className={"p-2.5 text-right font-medium " + (saldo >= 0 ? "text-emerald-700" : "text-red-700")}>{fmtNum(saldo)}</td>
+                          <td className="p-2.5"><DeltaCell value={monthlyAgg.movsCount[m.key]} prev={prevCount} /></td>
+                          <td className="p-2.5"><DeltaCell value={ent} prev={prevEnt} accent="text-emerald-700" /></td>
+                          <td className="p-2.5"><DeltaCell value={sai} prev={prevSai} accent="text-red-700" /></td>
+                          <td className="p-2.5"><DeltaCell value={saldo} prev={prevSaldo} accent={saldo >= 0 ? "text-emerald-700 font-semibold" : "text-red-700 font-semibold"} /></td>
                         </tr>
                       );
                     })}
@@ -708,12 +757,15 @@ export default function DashAlmoxarifadoEquipamentos() {
                     </tr>
                   </thead>
                   <tbody>
-                    {monthlyAgg.months.map(m => (
-                      <tr key={m.key} className="border-t border-slate-100 hover:bg-slate-50">
-                        <td className="p-2.5 font-medium text-slate-800 whitespace-nowrap">{m.label}</td>
-                        <td className="p-2.5 text-right">{fmtNum(monthlyAgg.ferramentasReg[m.key])}</td>
-                      </tr>
-                    ))}
+                    {monthlyAgg.months.map((m, i, arr) => {
+                      const pk = arr[i - 1]?.key;
+                      return (
+                        <tr key={m.key} className="border-t border-slate-100 hover:bg-slate-50">
+                          <td className="p-2.5 font-medium text-slate-800 whitespace-nowrap">{m.label}</td>
+                          <td className="p-2.5"><DeltaCell value={monthlyAgg.ferramentasReg[m.key]} prev={pk ? monthlyAgg.ferramentasReg[pk] : undefined} /></td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -773,13 +825,16 @@ export default function DashAlmoxarifadoEquipamentos() {
                     </tr>
                   </thead>
                   <tbody>
-                    {monthlyAgg.months.map(m => (
-                      <tr key={m.key} className="border-t border-slate-100 hover:bg-slate-50">
-                        <td className="p-2.5 font-medium text-slate-800 whitespace-nowrap">{m.label}</td>
-                        <td className="p-2.5 text-right">{fmtNum(monthlyAgg.propriosNovos[m.key])}</td>
-                        <td className="p-2.5 text-right">{fmtBRL(monthlyAgg.propriosValor[m.key])}</td>
-                      </tr>
-                    ))}
+                    {monthlyAgg.months.map((m, i, arr) => {
+                      const pk = arr[i - 1]?.key;
+                      return (
+                        <tr key={m.key} className="border-t border-slate-100 hover:bg-slate-50">
+                          <td className="p-2.5 font-medium text-slate-800 whitespace-nowrap">{m.label}</td>
+                          <td className="p-2.5"><DeltaCell value={monthlyAgg.propriosNovos[m.key]} prev={pk ? monthlyAgg.propriosNovos[pk] : undefined} /></td>
+                          <td className="p-2.5"><DeltaCell value={monthlyAgg.propriosValor[m.key]} prev={pk ? monthlyAgg.propriosValor[pk] : undefined} money /></td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -857,17 +912,22 @@ export default function DashAlmoxarifadoEquipamentos() {
                     </tr>
                   </thead>
                   <tbody>
-                    {monthlyAgg.months.map(m => {
+                    {monthlyAgg.months.map((m, i, arr) => {
+                      const pk = arr[i - 1]?.key;
                       const ini = monthlyAgg.locadosIniciados[m.key];
                       const dev = monthlyAgg.locadosDevolvidos[m.key];
                       const saldo = ini - dev;
+                      const prevIni = pk ? monthlyAgg.locadosIniciados[pk] : undefined;
+                      const prevDev = pk ? monthlyAgg.locadosDevolvidos[pk] : undefined;
+                      const prevSaldo = pk ? (monthlyAgg.locadosIniciados[pk] - monthlyAgg.locadosDevolvidos[pk]) : undefined;
+                      const prevCusto = pk ? monthlyAgg.locadosCustoIniciado[pk] : undefined;
                       return (
                         <tr key={m.key} className="border-t border-slate-100 hover:bg-slate-50">
                           <td className="p-2.5 font-medium text-slate-800 whitespace-nowrap">{m.label}</td>
-                          <td className="p-2.5 text-right text-emerald-700">{fmtNum(ini)}</td>
-                          <td className="p-2.5 text-right text-red-700">{fmtNum(dev)}</td>
-                          <td className={"p-2.5 text-right font-medium " + (saldo >= 0 ? "text-emerald-700" : "text-red-700")}>{fmtNum(saldo)}</td>
-                          <td className="p-2.5 text-right">{fmtBRL(monthlyAgg.locadosCustoIniciado[m.key])}</td>
+                          <td className="p-2.5"><DeltaCell value={ini} prev={prevIni} accent="text-emerald-700" /></td>
+                          <td className="p-2.5"><DeltaCell value={dev} prev={prevDev} accent="text-red-700" /></td>
+                          <td className="p-2.5"><DeltaCell value={saldo} prev={prevSaldo} accent={saldo >= 0 ? "text-emerald-700 font-semibold" : "text-red-700 font-semibold"} /></td>
+                          <td className="p-2.5"><DeltaCell value={monthlyAgg.locadosCustoIniciado[m.key]} prev={prevCusto} money /></td>
                         </tr>
                       );
                     })}
