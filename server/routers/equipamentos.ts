@@ -1106,39 +1106,48 @@ Gere o JSON conforme o esquema. Não omita nenhuma descrição.`;
         } catch { return { cands: [], cotaEsgotada: false, configInvalida: false }; } finally { clearTimeout(t); }
       }
 
-      // Rev. 2349 — SOLUÇÃO DEFINITIVA: LLM (Claude/Gemini) gera a QUERY
-      // PERFEITA em PT-BR pra cada item (conhece jargão BR), e a gente
-      // confia no PRIMEIRO resultado do Google Images. Sem validação a
-      // posteriori (que rejeitava 100% e travava em placeholder). Filtro
-      // anti-lixo só por keywords óbvias no título (modelo/pessoa/banner).
-      // Esse é o mesmo gesto que um humano faz no Google: monta query
-      // específica + confia no 1º hit relevante.
+      // Rev. 2349.1 — DESCOBERTA CRÍTICA via teste manual:
+      // (a) Google CSE retorna 403 API_KEY_SERVICE_BLOCKED — a chave está
+      //     PERMANENTEMENTE bloqueada pra Custom Search no projeto GCP.
+      //     Não dá pra usar Google CSE com essa key.
+      // (b) OpenVerse e Wikimedia INDEXAM EM INGLÊS — queries em PT
+      //     retornam 0 resultados; queries EN curtas (2-3 palavras)
+      //     retornam fotos perfeitas (adjustable scaffold jack → foto;
+      //     concrete mixer → foto; demolition hammer → Jackhammer.jpg).
+      // Por isso TODAS as revs anteriores (2342-2349) deram 0/60.
+      //
+      // SOLUÇÃO: LLM gera query EN curta (2-3 palavras industriais) +
+      // cascade OpenVerse → Wikimedia, pegando o 1º não-lixo (sem PDF).
       let cotaEsgotada = false;
-      let googleDesativadoPorErro = false;
+      let googleDesativadoPorErro = true; // Google fica desativado — sempre falha.
 
-      // 2a. 1 LLM call pra gerar query PT-BR específica pra cada descrição.
-      // Claude/Gemini conhece sinônimos industriais e desambigua via
-      // categoria (RODAPÉ em ANDAIME → "rodapé proteção andaime tubular").
+      // 2a. 1 LLM call pra gerar query EN curta (2-3 palavras industriais).
+      // EN porque OpenVerse/Wikimedia indexam mal PT. Curta porque
+      // queries longas ("scaffold facade panel") trazem PDFs.
       const queryMap = new Map<string, string>();
       try {
         const { invokeLLM } = await import("../_core/llm");
-        const sys = `Você é especialista em equipamentos de construção civil brasileira (andaimes, escoramentos, formas, ferramentas, EPI/EPC). Pra cada item gera UMA query PT-BR de busca no Google Imagens que vai trazer foto NÍTIDA do PRODUTO ISOLADO (não obra, não pessoa).
+        const sys = `You are a Brazilian construction-equipment expert. For each item, output ONE Wikimedia/OpenVerse search query in ENGLISH that will find a clear product photo. Output MUST be in English (OpenVerse and Wikimedia index almost no Portuguese).
 
-Regras das queries:
-- 4-7 palavras, PT-BR, jargão de obra (andaime tubular, escora metálica, sapata ajustável, painel fachadeiro, rodapé proteção, betoneira inclinada, martelete demolidor).
-- Use a CATEGORIA pra desambiguar termos (RODAPÉ em ANDAIME = "rodapé proteção andaime"; PAINEL em ANDAIME = "painel fachadeiro NR18"; DIAGONAIS em ANDAIME = "diagonal contraventamento andaime").
-- SEM aspas, SEM código proprietário, SEM medida específica que polua (substitua "1,50 M" por "andaime").
-- Termina com "produto" ou "equipamento" pra forçar foto isolada (não canteiro).
+Query rules:
+- 2-3 words, English, industrial vocabulary (scaffold, scaffolding, jack, plank, brace, toe board, formwork, shoring prop, concrete mixer, demolition hammer, angle grinder, jackhammer, generator).
+- Use the CATEGORIA to disambiguate (RODAPÉ in ANDAIME = "toe board scaffold", NOT skirting board; PAINEL in ANDAIME = "scaffold panel" or "facade scaffold"; DIAGONAIS in ANDAIME = "scaffold brace"; SAPATAS in ESCORAMENTO = "adjustable scaffold jack").
+- NO quotes, NO proprietary codes (PG-2030, FE-12), NO measurements ("1,50 M", "400L" → drop or use generic).
+- NO words like "product", "photo", "equipment" — they pollute search results.
 
-Exemplos:
-- "DIAGONAIS X 1,50 M" + ANDAIME → "diagonal contraventamento andaime tubular produto"
-- "RODAPÉ 20 CM" + ANDAIME → "rodapé proteção andaime fachadeiro produto"
-- "PAINEL NR18 1,5X1,0 COM D..." + ANDAIME → "painel fachadeiro nr18 andaime produto"
-- "SAPATAS AJUSTÁVEIS" + ESCORAMENTO → "sapata ajustável escora metálica produto"
-- "BETONEIRA 400L" + (sem cat) → "betoneira 400 litros produto"
-- "PRANCHAO METALICO 1,50" + ANDAIME → "pranchão metálico andaime produto"
+Examples:
+- "DIAGONAIS X 1,50 M" + ANDAIME → "scaffold brace"
+- "RODAPÉ 20 CM" + ANDAIME → "toe board scaffold"
+- "PAINEL NR18 1,5X1,0 COM D..." + ANDAIME → "scaffold facade panel"
+- "SAPATAS AJUSTÁVEIS" + ESCORAMENTO → "adjustable scaffold jack"
+- "BETONEIRA 400L" + (sem cat) → "concrete mixer"
+- "PRANCHAO METALICO 1,50" + ANDAIME → "scaffold metal plank"
+- "MARTELETE DEMOLIDOR" + FERRAMENTA → "demolition hammer"
+- "ANDAIME TUBULAR" + ANDAIME → "tubular scaffolding"
+- "ESCORA METALICA" + ESCORAMENTO → "shoring prop"
+- "GERADOR DIESEL" + (sem cat) → "diesel generator"
 
-Responda JSON {"queries":[{"descricao":"<exato>","query":"<texto>"}]} com TODAS as descrições.`;
+Reply JSON {"queries":[{"descricao":"<original PT>","query":"<EN words>"}]} with ALL descricoes.`;
 
         const payload = lote.map(d => ({ descricao: d.descricao, categoria: d.categoria || "(sem)" }));
         const userPrompt = `Gere queries pra estas ${lote.length} descrições:\n\n${JSON.stringify(payload, null, 2)}`;
@@ -1167,39 +1176,47 @@ Responda JSON {"queries":[{"descricao":"<exato>","query":"<texto>"}]} com TODAS 
 
       // 2b. Filtro anti-lixo por keywords óbvias no título/URL — barra
       // banner/modelo/pessoa/avatar/logo SEM precisar de LLM call extra.
+      // Blocklist mais cirúrgica: pessoas/animais/comida/PDFs/banners.
+      // Removido "model/modelo" (aparece em "scaffold model X" legítimo).
       const BLOCKLIST = [
-        /\b(model|modelo|female|male|woman|man|girl|boy|kid|child|portrait|selfie)\b/i,
-        /\b(avatar|profile|logo|brand|banner|cover|poster|capa)\b/i,
-        /\b(book|livro|magazine|revista|article|artigo|pdf)\b/i,
-        /\b(food|comida|cake|dish|recipe|restaurant)\b/i,
-        /\b(cartoon|illustration|drawing|sketch|vetor|vector)\b/i,
+        /\b(female|male|woman|women|man|men|girl|boy|kid|child|baby|portrait|selfie|nude)\b/i,
+        /\b(avatar|profile|logo|brand|banner|poster)\b/i,
+        /\b(book|livro|magazine|revista|article|artigo)\b/i,
+        /\b(food|comida|cake|dish|recipe|restaurant|beetle|insect|rhino|cat|dog|bird)\b/i,
+        /\b(cartoon|illustration|drawing|sketch|vetor|vector|painting|exhibition|fragonard)\b/i,
+        /\.pdf(\?|$)/i, // Wikimedia retorna PDFs antigos que escapam ao filtro de extensão.
       ];
       const isLixo = (title: string, url: string): boolean => {
         const t = title + " " + url;
         return BLOCKLIST.some(rx => rx.test(t));
       };
 
-      // 2c. Pra cada descrição: busca com query LLM em Google → 1º
-      // resultado não-lixo ganha; senão OpenVerse → Wikimedia. Confia
-      // no Google porque a query foi calibrada pelo LLM.
+      // 2c. Pra cada descrição: cascade OpenVerse → Wikimedia. Google
+      // pulado (API_KEY_SERVICE_BLOCKED na key compartilhada).
+      // Fallback de query: se LLM falhou, usa categoria EN comum (poucos
+      // hits, mas melhor que PT cru).
+      const FALLBACK_EN: Record<string, string> = {
+        andaime: "scaffolding", escora: "shoring prop", escoramento: "shoring",
+        forma: "formwork", ferramenta: "construction tool", epi: "safety helmet",
+        epc: "safety barrier", veiculo: "construction vehicle", maquina: "construction machine",
+        container: "container", mobiliario: "office furniture", eletric: "electric tool",
+      };
+      const fallbackQuery = (cat: string): string => {
+        const c = cat.toLowerCase();
+        for (const k of Object.keys(FALLBACK_EN)) if (c.includes(k)) return FALLBACK_EN[k];
+        return "construction equipment";
+      };
+
       type Aprovada = { descricao: string; url: string; provider: string; query: string };
       const aprovacoes: Aprovada[] = [];
       const semFoto: string[] = [];
       for (const d of lote) {
         const desc = d.descricao;
         const cat = (d.categoria || "").trim();
-        const query = queryMap.get(desc) || (cat ? `${desc} ${cat} produto` : `${desc} equipamento construção`);
+        const query = queryMap.get(desc) || fallbackQuery(cat);
 
         let picked: { url: string; provider: string } | null = null;
 
-        if (googleHabilitado && !googleDesativadoPorErro && !cotaEsgotada) {
-          const gc = await fromGoogleCSE(query);
-          if (gc.configInvalida) googleDesativadoPorErro = true;
-          if (gc.cotaEsgotada) cotaEsgotada = true;
-          for (const c of gc.cands) {
-            if (!isLixo(c.title, c.url)) { picked = { url: c.url, provider: "google" }; break; }
-          }
-        }
         if (!picked) {
           const ov = await fromOpenverse(query);
           for (const c of ov) {
@@ -1210,6 +1227,16 @@ Responda JSON {"queries":[{"descricao":"<exato>","query":"<texto>"}]} com TODAS 
           const wm = await fromWikimedia(query);
           for (const c of wm) {
             if (!isLixo(c.title, c.url)) { picked = { url: c.url, provider: "wikimedia" }; break; }
+          }
+        }
+        if (!picked && googleHabilitado && !googleDesativadoPorErro && !cotaEsgotada) {
+          // Tentativa final no Google (provavelmente bloqueado, mas se algum
+          // dia liberarem, esse branch volta a funcionar).
+          const gc = await fromGoogleCSE(query);
+          if (gc.configInvalida) googleDesativadoPorErro = true;
+          if (gc.cotaEsgotada) cotaEsgotada = true;
+          for (const c of gc.cands) {
+            if (!isLixo(c.title, c.url)) { picked = { url: c.url, provider: "google" }; break; }
           }
         }
 

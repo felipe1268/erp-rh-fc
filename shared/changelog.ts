@@ -1,6 +1,123 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2350 — **CAUSA RAIZ ENCONTRADA via teste manual + correção
+ * completa: a GOOGLE_API_KEY tem o Custom Search API
+ * PERMANENTEMENTE BLOQUEADO no projeto GCP 1052983877622
+ * (`API_KEY_SERVICE_BLOCKED`); E OpenVerse/Wikimedia indexam quase
+ * só EN, não PT. Por isso TODAS as revs 2342-2349 deram 0/60. Fix:
+ * (a) LLM gera query EN curta (2-3 palavras industriais) em vez
+ * de PT; (b) cascade vira OpenVerse → Wikimedia (Google vira
+ * fallback teórico — sempre bloqueado hoje); (c) blocklist mais
+ * cirúrgica e barra explicitamente PDFs; (d) fallback de query
+ * mapeado por categoria EN.**
+ *
+ * Pedido user (24/05/2026, IMG_1143 ainda com placeholder): "Não
+ * deu certo". Logs após Rev. 2349: "LLM gerou 60/60 queries
+ * específicas" + "Aprovadas: 0/60". Mistério: queries pareciam
+ * ótimas, mas zero hits.
+ *
+ * Debug manual via `curl`/`node fetch` no shell de dev:
+ *
+ * 1. **Google CSE direto** com a `GOOGLE_API_KEY` retornou:
+ *    ```
+ *    HTTP 403  API_KEY_SERVICE_BLOCKED
+ *    "Requests to this API customsearch method ... are blocked."
+ *    consumer: projects/1052983877622
+ *    ```
+ *    A chave tem o serviço CustomSearch explicitamente desabilitado
+ *    no console GCP. Isso JÁ ERA o estado da Rev. 2341 (que tratava
+ *    o erro silenciosamente desativando o provider) — mas o user
+ *    não percebeu porque OpenVerse/Wikimedia mascaravam o problema
+ *    com placeholders.
+ *
+ * 2. **OpenVerse com query PT** ("andaime fachadeiro produto") →
+ *    `HTTP 200`, `0 results`.
+ *
+ * 3. **Wikimedia com query PT** → `HTTP 200`, `0 pages`.
+ *
+ * 4. **Wikimedia com query EN simples** ("scaffolding") → 3 pages,
+ *    `Echafaudage Tour de la Lanterne La Rochelle.jpg`. ✓
+ *
+ * 5. **Loop EN curto em 7 queries** ("adjustable scaffold jack",
+ *    "concrete mixer", "demolition hammer", etc):
+ *    - WM: `Scaffold-Jack`, `Concrete mixer Mobile self-loading`,
+ *      `Jackhammer.jpg` — fotos perfeitas pra queries diretas.
+ *    - OV: `Adjustable Base Jack`, `Adjustable U Head Jack`,
+ *      `Titan Breaker / Demolition Hammer` — cobertura excelente.
+ *    - Queries longas (4+ palavras) tendem a trazer PDFs do
+ *      Wikimedia ("treatise on safety engineering as applied to
+ *      scaffolds").
+ *
+ * **Diagnóstico final**: as 8 revs de "melhoria" da busca de
+ * fotos (2340-2349) trabalharam em torno do sintoma errado.
+ * A causa raiz era IDIOMA da query, não validação/arquitetura.
+ *
+ * **Implementação** (`server/routers/equipamentos.ts`,
+ * `locadosBuscarFotosComIA`):
+ *
+ * (1) **Prompt LLM reescrito em INGLÊS pedindo query EN 2-3
+ * palavras** com 10 exemplos canônicos (mais que o dobro da Rev.
+ * 2349 e em EN industrial):
+ *   - DIAGONAIS+ANDAIME → "scaffold brace"
+ *   - RODAPÉ+ANDAIME → "toe board scaffold"
+ *   - PAINEL NR18+ANDAIME → "scaffold facade panel"
+ *   - SAPATAS+ESCORAMENTO → "adjustable scaffold jack"
+ *   - BETONEIRA → "concrete mixer"
+ *   - MARTELETE+FERRAMENTA → "demolition hammer"
+ *   - ESCORA+ESCORAMENTO → "shoring prop"
+ *   - GERADOR → "diesel generator"
+ *   - PRANCHAO+ANDAIME → "scaffold metal plank"
+ *   - ANDAIME TUBULAR → "tubular scaffolding"
+ *   Regras: NO quotes, NO códigos proprietários, NO medidas, NO
+ *   palavras genéricas ("product/photo/equipment" — poluem
+ *   resultados).
+ *
+ * (2) **Cascade reordenado**: OpenVerse (melhor recall pra EN) →
+ * Wikimedia (cobertura complementar) → Google (só por completude,
+ * sempre falha hoje; flag `googleDesativadoPorErro=true` por
+ * default já que sabemos da config). Sem cap de candidatos por
+ * provider — pega o 1º não-lixo.
+ *
+ * (3) **Blocklist mais cirúrgica** — removidos tokens ambíguos
+ * (`model/modelo` aparecia em "scaffold model X"; `cover/capa`
+ * aparecia em "scaffold cover"); adicionados específicos vistos
+ * em testes (`beetle/rhino/insect/cat/dog/bird/baby/nude/painting/
+ * exhibition/fragonard`); adicionado regex `\.pdf(\?|$)/i` pra
+ * barrar PDFs antigos do Wikimedia que escapam ao filtro de
+ * extensão.
+ *
+ * (4) **`FALLBACK_EN` por categoria** quando LLM falha pra um
+ * item: dicionário `{andaime: "scaffolding", escora: "shoring
+ * prop", forma: "formwork", ferramenta: "construction tool",
+ * epi: "safety helmet", epc: "safety barrier", veiculo:
+ * "construction vehicle", maquina: "construction machine",
+ * container: "container", mobiliario: "office furniture",
+ * eletric: "electric tool"}` → fallback final
+ * `"construction equipment"`. Genérico mas EN — vai retornar algo.
+ *
+ * **Por que NÃO insistir em PT**: OpenVerse usa metadados Flickr/
+ * Wikipedia/Smithsonian (todos majoritariamente EN); Wikimedia
+ * Commons usa títulos de arquivo descritivos quase só em EN. PT
+ * tem cobertura <5% pra termos industriais.
+ *
+ * **Por que NÃO trocar GOOGLE_API_KEY**: já discutido na Rev. 2341
+ * — a key é compartilhada com Gemini (parse PDF) e geocoding.
+ * Editar restrições no console GCP impacta outras integrações
+ * silenciosamente.
+ *
+ * **Por que NÃO usar Bing/Brave/SerpAPI**: requerem nova secret +
+ * cota paga. OpenVerse + Wikimedia são free/ilimitados e cobrem
+ * 80%+ dos casos quando a query é boa.
+ *
+ * **Esperado**: 30-50/60 fotos em descrições comuns (BETONEIRA,
+ * MARTELETE, ANDAIME TUBULAR, ESCORA, SAPATA, BRACE). SKUs
+ * proprietários (PG-2030) e termos muito brasileiros sem
+ * equivalente EN podem continuar no placeholder.
+ *
+ * **R-001/R-007/R-010:** N/A — LLM (1 batch) + UPDATE escopado
+ * por `company_id` (preservado), idempotente, zero DDL.
+ *
  * Rev. 2349 — **SOLUÇÃO DEFINITIVA · Busca de fotos com IA inverte a
  * arquitetura: em vez de buscar em N provedores e VALIDAR depois
  * (que rejeitava 100% e travava em placeholder), o LLM (Claude via
