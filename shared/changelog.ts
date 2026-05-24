@@ -1,6 +1,59 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2386 — **FEATURE · IA sugere categorias para itens "Sem categoria"
+ * no Almoxarifado (em lote, com modal de revisão e aplicação seletiva).**
+ *
+ * Pareando com Rev. 2385 (filtro "⚠️ Sem categoria"): agora que o usuário
+ * consegue ISOLAR os itens sem categoria, ele pode pedir à IA pra sugerir
+ * uma categoria pra cada um — escolhendo APENAS dentre as categorias
+ * cadastradas (`almoxarifado_categorias`). Isso elimina o trabalho manual
+ * de classificar item por item em empresas com centenas de produtos
+ * importados de NFs/planilhas sem categoria definida.
+ *
+ * **Backend** (`server/routers/compras.ts > sugerirCategoriasIA`):
+ *   - Input: `{ companyId, obraId?, tamanhoLote? }`.
+ *   - Lê categorias disponíveis da empresa (vocabulário fechado).
+ *   - Busca itens sem categoria (`isNull(categoria) OR categoria=''`),
+ *     escopados por `getEffectiveAllowedObraIds` (admin vê tudo;
+ *     restritos só veem suas obras). Valida `FORBIDDEN` se `obraId`
+ *     explícito não pertence ao allowedObraIds (fecha IDOR horizontal —
+ *     mesma proteção da Rev. 2384).
+ *   - Deduplica por `nome.lower()` (vários IDs de mesmo nome geram só
+ *     uma chamada à IA, mas o frontend aplica em todos).
+ *   - Manda lotes de 25 nomes pro Claude Sonnet via `invokeLLM` com
+ *     prompt instruindo "escolha EXATAMENTE um da lista; null se vago"
+ *     + `confianca: alta|media|baixa`. Filtra sugestões fora da lista
+ *     pra null (evita categoria inventada).
+ *   - Ordena: com sugestão (alta→media→baixa) primeiro.
+ *   - Retorna sugestões SEM aplicar (read-only mutation) — apply é
+ *     feito pelo frontend, dando ao user controle total.
+ *
+ * **Frontend** (`client/src/pages/almoxarifado/index.tsx`):
+ *   - Botão hero violeta "✨ Sugerir categorias com IA" aparece nos
+ *     DOIS toolbars (view por obra ~linha 1768 + view consolidado
+ *     ~linha 1447) APENAS quando `filtroCateg === "__sem__"`. Hidden
+ *     por padrão (não polui UI quando filtro não está ativo).
+ *   - Modal violeta/purple full-featured (gradient header, tabela
+ *     editável, footer com progresso):
+ *       - Tabela com Item · Qtd (de itens com esse nome) · Confiança
+ *         (badge colorida: alta=emerald, media=amber, baixa=gray)
+ *         · Categoria (select editável, "— Não alterar —" pra
+ *         excluir do apply).
+ *       - Quick actions: "Restaurar sugestões da IA" + "Limpar tudo".
+ *       - Contador no topo: N nomes / N com categoria / N itens totais.
+ *   - Apply agrupa por categoria → loop `atualizarCategoriaPorNomeEmLote`
+ *     (Rev. 2383) por categoria → progresso por grupo no footer →
+ *     toast agregado de itens atualizados.
+ *
+ * R-001/R-007/R-010 OK — só UPDATE via mutation existente já validada,
+ * zero DDL/DELETE. IDOR fechado.
+ */
+import "./version";
+
+/**
+ * Changelog centralizado do ERP.
+ *
  * Rev. 2385 — **UX · Filtro "⚠️ Sem categoria" no dropdown de categorias
  * do Almoxarifado (view por obra E consolidado).**
  *

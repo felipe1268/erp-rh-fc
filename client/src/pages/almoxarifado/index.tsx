@@ -322,6 +322,84 @@ export default function AlmoxarifadoPage() {
   const unificarLoteMut = trpc.compras.unificarItensEmLote.useMutation();
   // Rev. 2383 — Categoria em lote POR NOME (consolidado)
   const altCategPorNomeMut = trpc.compras.atualizarCategoriaPorNomeEmLote.useMutation();
+
+  // Rev. 2386 — IA sugere categorias para itens sem categoria.
+  // Backend retorna sugestões (nome → categoriaSugerida + confianca);
+  // frontend mostra modal pra revisar, editar e aplicar em lote via
+  // atualizarCategoriaPorNomeEmLote agrupado por categoria.
+  type SugestaoCateg = { nome: string; unidade: string | null; qtdItens: number; ids: number[]; categoriaSugerida: string | null; confianca: "alta" | "media" | "baixa" };
+  const [modalSugestoesCateg, setModalSugestoesCateg] = useState<null | {
+    sugestoes: SugestaoCateg[];
+    categoriasDisponiveis: string[];
+    escolhas: Record<string, string>; // nomeLower → categoria escolhida (vazio = não aplicar)
+    aplicando: boolean;
+    progresso?: { atual: number; total: number };
+  }>(null);
+  const sugerirCategsIAMut = trpc.compras.sugerirCategoriasIA.useMutation({
+    onSuccess: (d: any) => {
+      const sugestoes: SugestaoCateg[] = d?.sugestoes ?? [];
+      if (sugestoes.length === 0) {
+        toast.info(d?.mensagem || "Nenhum item sem categoria encontrado.");
+        return;
+      }
+      const escolhas: Record<string, string> = {};
+      for (const s of sugestoes) {
+        escolhas[s.nome.toLowerCase().trim()] = s.categoriaSugerida || "";
+      }
+      setModalSugestoesCateg({
+        sugestoes,
+        categoriasDisponiveis: d?.categoriasDisponiveis ?? [],
+        escolhas,
+        aplicando: false,
+      });
+      toast.success(`✨ ${d?.mensagem || `IA analisou ${sugestoes.length} itens`}`, { duration: 6000 });
+    },
+    onError: (e) => toast.error(`Falha na IA: ${e.message}`),
+  });
+  function dispararSugerirCategsIA() {
+    if (!companyId) return;
+    sugerirCategsIAMut.mutate({
+      companyId,
+      ...(typeof obraContexto === "number" ? { obraId: obraContexto } : {}),
+    });
+  }
+  async function aplicarSugestoesCategs() {
+    if (!companyId || !modalSugestoesCateg) return;
+    // Rev. 2386 — Agrupa por categoria escolhida e aplica via
+    // atualizarCategoriaEmLote (escopo por IDs explícitos, NUNCA por
+    // nome), garantindo que só os itens analisados pela IA — que
+    // estavam sem categoria — sejam alterados. Evita sobrescrever
+    // itens corretos em outras obras com nome igual.
+    const porCategoria = new Map<string, number[]>();
+    for (const s of modalSugestoesCateg.sugestoes) {
+      const cat = (modalSugestoesCateg.escolhas[s.nome.toLowerCase().trim()] || "").trim();
+      if (!cat) continue;
+      const arr = porCategoria.get(cat) || [];
+      for (const id of s.ids) arr.push(id);
+      porCategoria.set(cat, arr);
+    }
+    if (porCategoria.size === 0) {
+      toast.warning("Nenhuma sugestão selecionada para aplicar.");
+      return;
+    }
+    const grupos = Array.from(porCategoria.entries());
+    setModalSugestoesCateg(s => s ? { ...s, aplicando: true, progresso: { atual: 0, total: grupos.length } } : s);
+    let totalItens = 0, falhas = 0;
+    for (const [idx, [cat, ids]] of grupos.entries()) {
+      try {
+        const r: any = await altCategLoteMut.mutateAsync({ companyId, ids, categoria: cat });
+        totalItens += Number(r?.itensAtualizados || 0);
+      } catch (e) {
+        falhas += ids.length;
+      }
+      setModalSugestoesCateg(s => s ? { ...s, progresso: { atual: idx + 1, total: grupos.length } } : s);
+    }
+    utils.compras.listarItens.invalidate();
+    utils.compras.listarItensConsolidado.invalidate();
+    if (totalItens > 0) toast.success(`✅ ${totalItens} item(ns) categorizado(s) em ${grupos.length} categoria(s).${falhas > 0 ? ` ${falhas} falharam.` : ""}`, { duration: 8000 });
+    else toast.warning("Nenhum item foi atualizado.");
+    setModalSugestoesCateg(null);
+  }
   // Rev. 2383 — Modal "Alterar categoria" disparado a partir do modo
   // seleção do CONSOLIDADO (Rev. 2374). Usa selecClassif (Map por nome)
   // e chama atualizarCategoriaPorNomeEmLote.
@@ -1367,6 +1445,19 @@ export default function AlmoxarifadoPage() {
                 <option value="__sem__">⚠️ Sem categoria</option>
                 {consCategs.map((c: any) => <option key={c} value={c}>{c}</option>)}
               </select>
+              {/* Rev. 2386 — IA sugere categorias quando filtro "Sem categoria" ativo */}
+              {filtroCateg === "__sem__" && (
+                <button
+                  onClick={dispararSugerirCategsIA}
+                  disabled={sugerirCategsIAMut.isPending}
+                  title="A IA analisa cada item sem categoria e sugere a melhor opção dentre as categorias cadastradas"
+                  className="h-9 px-3 text-xs font-semibold rounded-lg inline-flex items-center gap-1.5 bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-700 hover:to-purple-700 text-white shadow-sm transition disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                  {sugerirCategsIAMut.isPending
+                    ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> IA analisando…</>
+                    : <><Sparkles className="h-3.5 w-3.5" /> Sugerir categorias com IA</>}
+                </button>
+              )}
               <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer select-none">
                 <input type="checkbox" checked={apenasAbaixo} onChange={e => setApenasAbaixo(e.target.checked)} className="rounded border-gray-300" />
                 Apenas abaixo do mínimo
@@ -1674,6 +1765,19 @@ export default function AlmoxarifadoPage() {
               <option value="__sem__">⚠️ Sem categoria</option>
               {categorias.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
+            {/* Rev. 2386 — IA sugere categorias quando filtro "Sem categoria" ativo */}
+            {filtroCateg === "__sem__" && (
+              <button
+                onClick={dispararSugerirCategsIA}
+                disabled={sugerirCategsIAMut.isPending}
+                title="A IA analisa cada item sem categoria e sugere a melhor opção dentre as categorias cadastradas"
+                className="h-9 px-3 text-xs font-semibold rounded-lg inline-flex items-center gap-1.5 bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-700 hover:to-purple-700 text-white shadow-sm transition disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                {sugerirCategsIAMut.isPending
+                  ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> IA analisando…</>
+                  : <><Sparkles className="h-3.5 w-3.5" /> Sugerir categorias com IA</>}
+              </button>
+            )}
             <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer select-none">
               <input type="checkbox" checked={apenasAbaixo} onChange={e => setApenasAbaixo(e.target.checked)} className="rounded border-gray-300" />
               Apenas abaixo do mínimo
@@ -4056,6 +4160,132 @@ export default function AlmoxarifadoPage() {
           </div>
         </div>
       )}
+      {/* Rev. 2386 — Modal: sugestões de categoria por IA */}
+      {modalSugestoesCateg && (() => {
+        const m = modalSugestoesCateg;
+        const totalSelec = m.sugestoes.filter(s => (m.escolhas[s.nome.toLowerCase().trim()] || "").trim()).length;
+        const totalItens = m.sugestoes
+          .filter(s => (m.escolhas[s.nome.toLowerCase().trim()] || "").trim())
+          .reduce((acc, s) => acc + s.qtdItens, 0);
+        return (
+          <div
+            className="fixed inset-0 z-[110] bg-black/50 flex items-center justify-center p-4"
+            onClick={() => !m.aplicando && setModalSugestoesCateg(null)}
+          >
+            <div
+              className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="bg-gradient-to-br from-violet-600 to-purple-600 px-6 pt-6 pb-5 text-white">
+                <div className="flex items-start gap-3">
+                  <div className="bg-white/20 rounded-full p-2.5 shrink-0">
+                    <Sparkles className="w-7 h-7" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h3 className="text-xl font-bold leading-tight">Sugestões de categoria por IA</h3>
+                    <p className="text-violet-50 text-sm mt-1">
+                      Revise as sugestões e desmarque (Categoria → "—") os itens que não quer alterar. Você também pode trocar a categoria manualmente.
+                    </p>
+                  </div>
+                </div>
+              </div>
+              <div className="px-6 py-3 bg-violet-50 border-b border-violet-100 text-xs text-violet-900 flex items-center justify-between gap-4">
+                <span>
+                  <strong>{m.sugestoes.length}</strong> nome(s) analisado(s) ·
+                  <strong className="text-emerald-700"> {totalSelec}</strong> com categoria escolhida ·
+                  <strong className="text-violet-700"> {totalItens}</strong> item(ns) totais a atualizar
+                </span>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => {
+                      const escolhas: Record<string, string> = {};
+                      for (const s of m.sugestoes) escolhas[s.nome.toLowerCase().trim()] = s.categoriaSugerida || "";
+                      setModalSugestoesCateg(s => s ? { ...s, escolhas } : s);
+                    }}
+                    disabled={m.aplicando}
+                    className="text-[11px] font-medium px-2 py-1 rounded bg-white border border-violet-200 hover:bg-violet-50 disabled:opacity-50"
+                  >Restaurar sugestões da IA</button>
+                  <button
+                    onClick={() => {
+                      const escolhas: Record<string, string> = {};
+                      for (const s of m.sugestoes) escolhas[s.nome.toLowerCase().trim()] = "";
+                      setModalSugestoesCateg(s => s ? { ...s, escolhas } : s);
+                    }}
+                    disabled={m.aplicando}
+                    className="text-[11px] font-medium px-2 py-1 rounded bg-white border border-gray-200 hover:bg-gray-50 disabled:opacity-50"
+                  >Limpar tudo</button>
+                </div>
+              </div>
+              <div className="flex-1 overflow-y-auto px-6 py-4">
+                <table className="w-full text-sm">
+                  <thead className="text-[11px] uppercase text-gray-500 border-b border-gray-200">
+                    <tr>
+                      <th className="text-left py-2 font-semibold">Item</th>
+                      <th className="text-left py-2 font-semibold w-20">Qtd</th>
+                      <th className="text-left py-2 font-semibold w-24">Confiança</th>
+                      <th className="text-left py-2 font-semibold w-64">Categoria</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {m.sugestoes.map((s, idx) => {
+                      const key = s.nome.toLowerCase().trim();
+                      const escolha = m.escolhas[key] ?? "";
+                      const corConf = s.confianca === "alta" ? "bg-emerald-100 text-emerald-700"
+                        : s.confianca === "media" ? "bg-amber-100 text-amber-700"
+                        : "bg-gray-100 text-gray-500";
+                      const lbl = s.confianca === "alta" ? "Alta" : s.confianca === "media" ? "Média" : "Baixa";
+                      return (
+                        <tr key={idx} className="hover:bg-violet-50/30">
+                          <td className="py-2 pr-3">
+                            <div className="font-medium text-gray-800 break-words">{s.nome}</div>
+                            {s.unidade && <div className="text-[11px] text-gray-400">un: {s.unidade}</div>}
+                          </td>
+                          <td className="py-2 pr-3 text-gray-600 tabular-nums">{s.qtdItens}</td>
+                          <td className="py-2 pr-3">
+                            <span className={`inline-block text-[10px] font-bold px-1.5 py-0.5 rounded ${corConf}`}>{lbl}</span>
+                          </td>
+                          <td className="py-2">
+                            <select
+                              value={escolha}
+                              onChange={(e) => setModalSugestoesCateg(prev => prev ? { ...prev, escolhas: { ...prev.escolhas, [key]: e.target.value } } : prev)}
+                              disabled={m.aplicando}
+                              className={`w-full h-8 text-xs border rounded px-2 outline-none ${escolha ? "border-violet-300 bg-violet-50 text-violet-900 font-medium" : "border-gray-200 bg-white text-gray-500"}`}
+                            >
+                              <option value="">— Não alterar —</option>
+                              {m.categoriasDisponiveis.map(c => <option key={c} value={c}>{c}</option>)}
+                            </select>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              <div className="px-5 py-4 bg-gray-50 border-t border-gray-200 flex items-center gap-2">
+                {m.aplicando && m.progresso && (
+                  <span className="text-xs text-violet-700 font-medium mr-auto">
+                    Aplicando… {m.progresso.atual}/{m.progresso.total} categoria(s)
+                  </span>
+                )}
+                <button
+                  onClick={() => setModalSugestoesCateg(null)}
+                  disabled={m.aplicando}
+                  className="px-4 py-2.5 text-sm font-medium text-gray-700 bg-white hover:bg-gray-100 border border-gray-300 rounded-lg transition disabled:opacity-60"
+                >Cancelar</button>
+                <button
+                  onClick={aplicarSugestoesCategs}
+                  disabled={m.aplicando || totalSelec === 0}
+                  className="px-4 py-2.5 text-sm font-semibold text-white bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-700 hover:to-purple-700 rounded-lg transition shadow-sm flex items-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                  {m.aplicando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+                  Aplicar {totalSelec > 0 ? `(${totalItens} item${totalItens !== 1 ? "ns" : ""})` : ""}
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Rev. 2380 — Widget de progresso 0-100% destacado */}
       {batchFotoWeb && (() => {
         const pct = Math.min(100, Math.round((batchFotoWeb.atual / Math.max(1, batchFotoWeb.total)) * 100));

@@ -2269,6 +2269,178 @@ Responda APENAS com um JSON no formato (sem markdown, sem comentários):
     }),
 
   // ══════════════════════════════════════════════════════════════
+  // ALMOXARIFADO — IA: SUGERIR CATEGORIAS PARA ITENS SEM CATEGORIA
+  // ══════════════════════════════════════════════════════════════
+  // Rev. 2386 — Analisa itens sem categoria (NULL/vazio) e sugere uma
+  // categoria pra cada um, escolhendo APENAS dentre as categorias já
+  // cadastradas na empresa (almoxarifado_categorias). Retorna sugestões
+  // pro frontend revisar e aplicar (não escreve no banco — apply é feito
+  // pelo client via `atualizarCategoriaPorNomeEmLote`).
+  sugerirCategoriasIA: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      obraId: z.number().nullable().optional(),
+      tamanhoLote: z.number().min(5).max(50).default(25),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      // 0) Validar acesso à empresa (paridade com atualizarCategoriaEmLote)
+      const allowedCompanies = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+      const allowedCompanyIds = (allowedCompanies as any[]).map(c => c.id);
+      if (!allowedCompanyIds.includes(input.companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta empresa." });
+      }
+
+      // 1) Categorias disponíveis (vocabulário fechado pra IA escolher)
+      const categoriasRows = await db.select().from(almoxarifadoCategorias)
+        .where(eq(almoxarifadoCategorias.companyId, input.companyId))
+        .orderBy(asc(almoxarifadoCategorias.ordem), asc(almoxarifadoCategorias.nome));
+      const categorias = categoriasRows.map(r => r.nome);
+      if (categorias.length === 0) {
+        return { sugestoes: [], total: 0, mensagem: "Cadastre ao menos uma categoria antes de pedir sugestões à IA." };
+      }
+
+      // 2) Itens sem categoria, escopados por permissão de obra
+      const conds: any[] = [
+        eq(almoxarifadoItens.companyId, input.companyId),
+        eq(almoxarifadoItens.ativo, true),
+        or(isNull(almoxarifadoItens.categoria), eq(almoxarifadoItens.categoria, "")),
+      ];
+      if (input.obraId === null) {
+        conds.push(isNull(almoxarifadoItens.obraId));
+      } else if (input.obraId !== undefined) {
+        conds.push(eq(almoxarifadoItens.obraId, input.obraId));
+      }
+      const allowed = await getEffectiveAllowedObraIds(ctx.user.id, ctx.user.role);
+      if (allowed !== null) {
+        if (allowed.length === 0) {
+          return { sugestoes: [], total: 0, mensagem: "Sem permissão em nenhuma obra desta empresa." };
+        }
+        if (input.obraId !== undefined && input.obraId !== null && !allowed.includes(input.obraId)) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para esta obra." });
+        }
+        conds.push(or(isNull(almoxarifadoItens.obraId), inArray(almoxarifadoItens.obraId, allowed)));
+      }
+      const todos = await db.select({
+        id: almoxarifadoItens.id,
+        nome: almoxarifadoItens.nome,
+        unidade: almoxarifadoItens.unidade,
+      }).from(almoxarifadoItens).where(and(...conds));
+
+      // Deduplicar por nome lower (consolidado pra LLM, mas devolve IDs por nome)
+      const porNomeLower = new Map<string, { nome: string; unidade: string | null; ids: number[] }>();
+      for (const it of todos) {
+        const k = (it.nome || "").toLowerCase().trim();
+        if (!k) continue;
+        const cur = porNomeLower.get(k);
+        if (cur) cur.ids.push(it.id);
+        else porNomeLower.set(k, { nome: it.nome, unidade: it.unidade, ids: [it.id] });
+      }
+      const nomesUnicos = Array.from(porNomeLower.values());
+      if (nomesUnicos.length === 0) {
+        return { sugestoes: [], total: 0, mensagem: "Nenhum item sem categoria encontrado." };
+      }
+
+      // 3) Processa em lotes
+      const lotes: typeof nomesUnicos[] = [];
+      for (let i = 0; i < nomesUnicos.length; i += input.tamanhoLote) {
+        lotes.push(nomesUnicos.slice(i, i + input.tamanhoLote));
+      }
+
+      const sugestoes: Array<{
+        nome: string;
+        unidade: string | null;
+        qtdItens: number;
+        ids: number[];
+        categoriaSugerida: string | null;
+        confianca: "alta" | "media" | "baixa";
+      }> = [];
+      let falhas = 0;
+
+      for (const [idxLote, lote] of lotes.entries()) {
+        const linhas = lote.map((it, i) => `${i + 1}|${it.nome}|${it.unidade ?? "-"}`).join("\n");
+        const prompt = `Você é um especialista em organização de almoxarifado de obras de construção civil no Brasil.
+
+Para CADA item abaixo (formato: indice|nome|unidade), escolha A MELHOR categoria DENTRE A LISTA FECHADA fornecida. NÃO invente categorias novas — use EXATAMENTE um dos nomes da lista.
+
+Lista de categorias disponíveis (escolha apenas dessas):
+${categorias.map(c => `- ${c}`).join("\n")}
+
+Itens para classificar:
+${linhas}
+
+REGRAS:
+- Use EXATAMENTE o nome da categoria como está na lista (preserve acentos, maiúsculas/minúsculas).
+- Se o nome do item for muito vago/ambíguo pra escolher com confiança, retorne categoria=null e confianca="baixa".
+- Caso contrário, use confianca="alta" quando o match é óbvio (ex.: "Cimento CP-II 50kg" → "Insumos"), "media" quando faz sentido mas tem alternativa plausível.
+
+Responda APENAS com um JSON (sem markdown, sem comentários extras):
+{"itens":[{"indice":<numero>,"categoria":"<nome_exato_da_lista_ou_null>","confianca":"alta"|"media"|"baixa"}]}`;
+
+        try {
+          const result = await invokeLLM({
+            messages: [{ role: "user", content: prompt }],
+            maxTokens: 4096,
+          });
+          const text = (result as any)?.choices?.[0]?.message?.content ?? (result as any)?.content ?? "";
+          const match = String(text).match(/\{[\s\S]*\}/);
+          if (!match) { falhas += lote.length; continue; }
+          const parsed = JSON.parse(match[0]);
+          const respostas: Array<{ indice: number; categoria: string | null; confianca?: string }> = parsed.itens || [];
+          const byIdx = new Map(respostas.map(r => [Number(r.indice), r]));
+
+          const categoriasSet = new Set(categorias);
+          for (const [i, it] of lote.entries()) {
+            const r = byIdx.get(i + 1);
+            const sug = r?.categoria && categoriasSet.has(r.categoria) ? r.categoria : null;
+            const conf = (r?.confianca === "alta" || r?.confianca === "media" || r?.confianca === "baixa")
+              ? r.confianca : (sug ? "media" : "baixa");
+            sugestoes.push({
+              nome: it.nome,
+              unidade: it.unidade,
+              qtdItens: it.ids.length,
+              ids: it.ids,
+              categoriaSugerida: sug,
+              confianca: conf as any,
+            });
+          }
+        } catch (err: any) {
+          console.error(`[sugerirCategoriasIA] Lote ${idxLote + 1}/${lotes.length} falhou:`, err?.message || err);
+          falhas += lote.length;
+          for (const it of lote) {
+            sugestoes.push({
+              nome: it.nome,
+              unidade: it.unidade,
+              qtdItens: it.ids.length,
+              ids: it.ids,
+              categoriaSugerida: null,
+              confianca: "baixa",
+            });
+          }
+        }
+      }
+
+      // Ordena: com sugestão (alta → media → baixa) primeiro, depois sem sugestão
+      const ordemConf: any = { alta: 0, media: 1, baixa: 2 };
+      sugestoes.sort((a, b) => {
+        if (!!a.categoriaSugerida !== !!b.categoriaSugerida) return a.categoriaSugerida ? -1 : 1;
+        return (ordemConf[a.confianca] ?? 3) - (ordemConf[b.confianca] ?? 3);
+      });
+
+      const comSugestao = sugestoes.filter(s => s.categoriaSugerida).length;
+      return {
+        sugestoes,
+        total: sugestoes.length,
+        comSugestao,
+        falhas,
+        categoriasDisponiveis: categorias,
+        mensagem: `IA analisou ${sugestoes.length} item(ns) distinto(s). ${comSugestao} com sugestão${falhas > 0 ? ` · ${falhas} falharam` : ""}.`,
+      };
+    }),
+
+  // ══════════════════════════════════════════════════════════════
   // ALMOXARIFADO — IA: SUGESTÃO DE PREÇO POR FOTO
   // ══════════════════════════════════════════════════════════════
 
