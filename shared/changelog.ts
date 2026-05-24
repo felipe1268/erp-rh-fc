@@ -1,6 +1,50 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2357 — **HOTFIX/UX · Modal drill-down de "Locações mês a
+ * mês" ganha botão "Fechar" no rodapé + altura usa `dvh` em vez
+ * de `vh` pra respeitar a URL bar dinâmica do iOS Safari.**
+ *
+ * **Pedido user (24/05/2026, IMG_1153):** "Preciso de um botão
+ * de fechar para voltar a tela normal". O print mostrava o modal
+ * KPI/tabela aberto SEM o cabeçalho gradient visível — só os 4
+ * cards de KPI, a busca, a tabela e o footer. O X de fechar ficou
+ * fora do viewport visível.
+ *
+ * **Causa raiz:** o modal usa `max-h-[90vh]` + `flex items-center`.
+ * No iOS Safari, `vh` é calculado pelo viewport "máximo" (URL bar
+ * colapsada) — quando a URL bar está expandida (como no print),
+ * 90vh excede o viewport visível e, como o modal é centralizado
+ * verticalmente, o topo (que contém o header com X) escapa pra
+ * cima fora da tela.
+ *
+ * **Fix em 2 camadas:**
+ * 1. **Altura responsiva à chrome dinâmica:** adiciona
+ *    `max-h-[88dvh]` (dynamic viewport height) após o fallback
+ *    `max-h-[88vh]` — `dvh` no Tailwind/CSS moderno usa o
+ *    viewport visível ATUAL (com URL bar expandida). Browsers
+ *    antigos sem suporte caem no `vh`.
+ * 2. **Botão "Fechar" no rodapé:** botão preto sólido com X +
+ *    label "Fechar" no footer, sempre visível porque o footer
+ *    fica colado no bottom do modal flex-column. Redundância
+ *    proposital — o X do header continua, agora há 2 caminhos.
+ *
+ * **Arquivo tocado:**
+ * - `client/src/pages/dashboards/DashAlmoxarifadoEquipamentos.tsx`
+ *   (~1010, ~1117): altura `dvh` + botão "Fechar" no footer
+ *   (estrutura virou flex com `Abrir Equipamentos Locados` à
+ *   esquerda + "Fechar" à direita).
+ * - `shared/version.ts`: 2356 → 2357.
+ *
+ * **Por que NÃO sticky header:** já tem `overflow-hidden` no
+ * container — sticky não funcionaria em modal com `max-h` +
+ * scroll interno. Fix de altura corrige o root cause; o botão
+ * extra é defense-in-depth.
+ *
+ * **R-001 / R-007 / R-010:** N/A — só UI client-side.
+ *
+ * ---
+ *
  * Rev. 2356 — **UX/REDESIGN · Hub de Equipamentos (`/equipamentos`)
  * ganha layout 100% renovado com foco em ILUSTRAÇÃO DOS DADOS.**
  *

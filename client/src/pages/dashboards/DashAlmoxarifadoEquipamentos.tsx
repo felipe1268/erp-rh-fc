@@ -999,7 +999,12 @@ export default function DashAlmoxarifadoEquipamentos() {
         const Icon = cfg.icone;
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-slate-900/60 backdrop-blur-sm" onClick={() => setDetalheLoc(null)}>
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-6xl max-h-[90vh] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
+            {/* Rev. 2357 — `max-h-[88dvh]` em vez de `90vh`: no iOS Safari
+                a barra de URL dinâmica encolhe o viewport visível e o
+                `vh` (medido pelo viewport "completo") empurrava o header
+                pra fora da tela, escondendo o X de fechar. `dvh` respeita
+                a chrome atual. Fallback `vh` pra browsers antigos. */}
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-6xl max-h-[88vh] max-h-[88dvh] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
               {/* Header gradient */}
               <div className={`relative overflow-hidden bg-gradient-to-br ${cfg.gradient} text-white`}>
                 <div className="absolute inset-0 opacity-20" style={{ backgroundImage: "radial-gradient(circle at 20% 50%, rgba(255,255,255,0.3) 0%, transparent 50%), radial-gradient(circle at 80% 50%, rgba(255,255,255,0.2) 0%, transparent 50%)" }} />
@@ -1103,17 +1108,28 @@ export default function DashAlmoxarifadoEquipamentos() {
                 )}
               </div>
 
-              {/* Footer */}
-              <div className="border-t border-slate-200 bg-slate-50/80 px-5 py-3 flex items-center justify-between text-xs text-slate-600">
-                <div>
+              {/* Footer — Rev. 2357: botão "Fechar" explícito no rodapé
+                  além do X do header (que pode estar fora da viewport
+                  visível no iPad quando a URL bar do Safari está expandida). */}
+              <div className="border-t border-slate-200 bg-slate-50/80 px-5 py-3 flex items-center justify-between gap-3 text-xs text-slate-600">
+                <div className="min-w-0 flex-1">
                   Mostrando <b className="text-slate-900">{filtradas.length}</b> de <b className="text-slate-900">{totalUnid}</b> {totalUnid === 1 ? "registro" : "registros"}
                   {buscaNorm && <span className="ml-1 text-slate-500">(filtrado por "{detalheBusca}")</span>}
                 </div>
-                <Link href={`/equipamentos/locados`}>
-                  <a className="inline-flex items-center gap-1.5 text-emerald-700 hover:text-emerald-800 font-medium hover:underline" onClick={() => setDetalheLoc(null)}>
-                    Abrir Equipamentos Locados →
-                  </a>
-                </Link>
+                <div className="flex items-center gap-2 shrink-0">
+                  <Link href={`/equipamentos/locados`}>
+                    <a className="inline-flex items-center gap-1.5 text-emerald-700 hover:text-emerald-800 font-medium hover:underline" onClick={() => setDetalheLoc(null)}>
+                      Abrir Equipamentos Locados →
+                    </a>
+                  </Link>
+                  <button
+                    onClick={() => setDetalheLoc(null)}
+                    className="inline-flex items-center gap-1.5 bg-slate-900 hover:bg-slate-800 text-white font-semibold rounded-lg px-3 py-1.5 transition shadow-sm"
+                    title="Fechar (Esc)"
+                  >
+                    <X className="h-3.5 w-3.5" /> Fechar
+                  </button>
+                </div>
               </div>
             </div>
           </div>
