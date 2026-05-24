@@ -1,6 +1,100 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2344 — **UX/PERF · Tela Equipamentos Locados ganha AGRUPAMENTO por
+ * descrição+obra (default ON) — 1218 cards individuais viram ~60 cards
+ * agregados (1 por "DESCRIÇÃO @ OBRA"), com modal drill-down listando as
+ * unidades individuais com todas as ações originais.**
+ *
+ * Pedido user (24/05/2026, IMG_1137): screenshot mostra 12 cards "DIAGONAIS
+ * X 1,50 M" idênticos enfileirados em "QIU 2 - FASE 4", junto a outros
+ * grupos repetidos. "Agrupar os itens com o mesmo nome dentro da mesma obra
+ * para facilitar a análise". Após o import em massa da Rev. 2333 (1218
+ * unidades de 46 contratos) a lista virou um paredão visual: 90% das
+ * unidades de uma mesma obra compartilham descrição (locação de andaime
+ * vende 50× "SAPATA AJUSTÁVEL", 30× "DIAGONAL X 1,50M", etc) — operador
+ * precisa rolar 1218 cards pra entender o que tem em cada obra; análise
+ * "quantas DIAGONAIS estão atrasadas no QIU 2" exige memória humana.
+ *
+ * **Decisão arquitetural**: agrupamento APENAS no client (zero schema/server).
+ * Render derivado de `data` (já filtrado por status/obra/categoria/busca).
+ * Default ON pra dar imediatamente o ganho de densidade; toggle 1 clique
+ * pra voltar pra view individual quando precisar ver caso a caso.
+ *
+ * **Client** (`client/src/pages/equipamentos/Locados.tsx`):
+ *
+ * 1. **Estado** `agruparPorDescObra: boolean` (default true) + `modalGrupo`
+ *    (drill-down selecionado).
+ *
+ * 2. **useMemo `grupos`**: agrupa `data` por chave
+ *    `${descricao.toUpperCase().trim()}__${obraId ?? "na"}`. Cada grupo
+ *    agrega: `unidades[]`, `valorMensalTotal` (Σ), `statusMix`
+ *    (Record<status,count>), `statusPrincipal` (status com mais
+ *    ocorrências — define cor da faixa do card), `fotoUrl`/`fotoIA`
+ *    (primeira foto não-nula encontrada — recebimento físico tem prioridade
+ *    sobre IA), `fornecedorNome`/`categoria` (primeiro não-nulo). Ordenado
+ *    por #unidades desc, depois por valorMensalTotal desc — grupos pesados
+ *    ficam no topo. Chave normalizada (upper+trim) coalesce variações de
+ *    capitalização do PDF. `obraId === null` agrupa todos os "sem obra"
+ *    com mesma descrição num único bucket.
+ *
+ * 3. **Toggle pill** no header da lista (ao lado de "Selecionar todos
+ *    visíveis"): 2 botões dentro de um container rounded-full bg-slate-100
+ *    — "Agrupar (N)" (emerald-700 quando ativo, ícone Layers) e
+ *    "Individual (N)" (slate-700 quando ativo). Cada label mostra a
+ *    contagem do modo correspondente — usuário enxerga ganho ANTES de
+ *    clicar.
+ *
+ * 4. **Render branch condicional** substitui o `.map(l => …)` único por
+ *    `agruparPorDescObra ? grupos.map(g => …) : data.map(l => …)`. View
+ *    individual preservada bit a bit (card original intacto — risco zero
+ *    de regressão pra quem prefere ver caso a caso).
+ *
+ * 5. **Card de GRUPO**: visual irmão do card individual (mesma faixa
+ *    gradient com cor do statusPrincipal, mesma estrutura header→meio
+ *    →rodapé). Diferenças:
+ *      - Badge emerald grande "{N} un." (ícone Boxes) substitui o badge de
+ *        status único — porque grupo pode ter status mix.
+ *      - Linha de status mostra **pílulas por status** ("12 EM USO", "3
+ *        ATRASADO") — comunica heterogeneidade sem esconder.
+ *      - R$/mês mostra Σ ("total mensal") em vez do valor de uma unidade.
+ *      - Checkbox do header é **tri-state** (`ref.indeterminate`): marca/
+ *        desmarca TODAS as unidades do grupo de uma vez (alimentando o
+ *        Set existente de seleção). Click no checkbox não propaga.
+ *      - Footer botão único "Ver N unidade(s)" (Eye icon) — abre modal
+ *        drill-down. Sem Check-in/Devolver no card de grupo (ações são
+ *        por unidade — promove-se ao modal pra evitar ambiguidade de
+ *        "qual unidade?").
+ *
+ * 6. **Modal drill-down `modalGrupo`**: header gradient emerald→teal com
+ *    foto, descrição, obra; KPI strip 4 cards (Unidades / Total mensal /
+ *    Em uso / Atrasadas — atrasadas vermelho se >0); tabela das unidades
+ *    com colunas Patr / Status / Fornecedor / Início→Fim / R$/mês / Ações;
+ *    `<thead>` sticky; zebra stripes; ações por linha (Detalhes / Check-in
+ *    / Devolver) FECHAM este modal e abrem o respectivo (evita 2 modais
+ *    sobrepostos — mesma convenção da Rev. 2339). Footer com contagem +
+ *    botão Fechar.
+ *
+ * **Por que default ON**: o caso comum pós-import (1218 unidades) é
+ * ilegível sem agrupamento; usuário enxerga o ganho na 1ª render sem
+ * configurar nada. Toggle dá escape hatch sem fricção.
+ *
+ * **Por que client-side puro**: dados de `locadosListar` já trazem tudo
+ * que precisamos; bucketing O(n) em 1218 itens <5ms; mover pro server
+ * exigiria nova procedure agregada, perderia o cross-filter natural com
+ * status/obra/categoria/busca, e quebraria a UX de toggle instantâneo.
+ *
+ * **Por que ações no modal e não no card**: card de grupo agrega 12
+ * unidades — "Devolver" no card seria ambíguo (devolve todas? a primeira?
+ * abre múltiplos modais?). Promover ações ao modal mantém a operação
+ * sempre 1:1 com a unidade física, sem mudar a semântica das procedures.
+ *
+ * **R-001/R-007/R-010:** N/A — feature puramente client-side, zero
+ * schema/server change. Tenant guard preservado (data vem de
+ * `locadosListar` que já escopa por `companyId`).
+ *
+ * ---
+ *
  * Rev. 2343 — **HOTFIX · Busca de fotos com IA agora TRADUZ as descrições
  * PT → query em INGLÊS antes de buscar nos provedores (Wikimedia/OpenVerse/
  * Google CSE) — sem isso a Rev. 2342 retornava 0/60 porque termos como

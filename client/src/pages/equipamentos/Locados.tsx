@@ -3,7 +3,7 @@ import { useState, useMemo, useRef, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
 import { toast } from "sonner";
-import { Plus, Search, X, Truck, CheckCircle2, RotateCcw, ClipboardCheck, Eye, FileText, Upload, Sparkles, Trash2, Activity, Clock, AlertTriangle, DollarSign, Calendar, Hash, Building2, User as UserIcon, MapPin, Camera, StickyNote, ChevronDown, Tag, Loader2, type LucideIcon } from "lucide-react";
+import { Plus, Search, X, Truck, CheckCircle2, RotateCcw, ClipboardCheck, Eye, FileText, Upload, Sparkles, Trash2, Activity, Clock, AlertTriangle, DollarSign, Calendar, Hash, Building2, User as UserIcon, MapPin, Camera, StickyNote, ChevronDown, Tag, Loader2, Layers, Boxes, type LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import { FotosUploader, FotoItem, fmtMoney, fmtDate, Spinner } from "./_shared";
 
@@ -39,6 +39,10 @@ export default function EquipamentosLocados() {
   const [filtroObra, setFiltroObra] = useState<string>("");
   // Rev. 2337 — filtro por categoria ("" = todas; "__null__" = sem categoria; "<nome>" = nome exato)
   const [filtroCategoria, setFiltroCategoria] = useState<string>("");
+  // Rev. 2344 — agrupa cards por descrição+obra (default ON) para condensar
+  // listas com muitas unidades idênticas (1218 cards → ~60 grupos).
+  const [agruparPorDescObra, setAgruparPorDescObra] = useState<boolean>(true);
+  const [modalGrupo, setModalGrupo] = useState<any>(null);
 
   const utils = trpc.useUtils();
   // Lista TUDO (sem filtro server-side de status) pra os contadores das
@@ -66,6 +70,69 @@ export default function EquipamentosLocados() {
     if (filtroCategoria === "__null__") return dataPorStatusEObra.filter(l => !l.categoria);
     return dataPorStatusEObra.filter(l => String(l.categoria || "") === filtroCategoria);
   }, [dataPorStatusEObra, filtroCategoria]);
+
+  // Rev. 2344 — agrupamento por descrição+obra (key normalizada). Cada grupo
+  // agrega: contagem, status mix, Σ valorMensal, foto representativa, lista
+  // de unidades pra drill-down via modal. Não muda nada se grupo tem 1 só.
+  type Grupo = {
+    key: string;
+    descricao: string;
+    obraId: number | null;
+    categoria: string | null;
+    fornecedorNome: string | null;
+    fotoUrl: string | null;
+    fotoIA: boolean;
+    valorMensalTotal: number;
+    statusMix: Record<string, number>;
+    statusPrincipal: string;
+    unidades: any[];
+  };
+  const grupos = useMemo<Grupo[]>(() => {
+    const map = new Map<string, Grupo>();
+    for (const l of data as any[]) {
+      const oid = l.obraId ? Number(l.obraId) : null;
+      const k = `${String(l.descricao || "").trim().toUpperCase()}__${oid ?? "na"}`;
+      const g = map.get(k);
+      if (g) {
+        g.unidades.push(l);
+        g.valorMensalTotal += Number(l.valorMensal || 0);
+        g.statusMix[l.status] = (g.statusMix[l.status] || 0) + 1;
+        if (!g.fotoUrl) {
+          const fotos = (l.fotosRecebimentoJson as FotoItem[]) || [];
+          const fp = fotos[0]?.url || (l.fotoUrl as string | null) || null;
+          if (fp) { g.fotoUrl = fp; g.fotoIA = !fotos[0] && !!l.fotoUrl; }
+        }
+        if (!g.fornecedorNome && l.fornecedorNome) g.fornecedorNome = l.fornecedorNome;
+        if (!g.categoria && l.categoria) g.categoria = String(l.categoria);
+      } else {
+        const fotos = (l.fotosRecebimentoJson as FotoItem[]) || [];
+        const fp = fotos[0]?.url || (l.fotoUrl as string | null) || null;
+        map.set(k, {
+          key: k,
+          descricao: l.descricao,
+          obraId: oid,
+          categoria: l.categoria ? String(l.categoria) : null,
+          fornecedorNome: l.fornecedorNome || null,
+          fotoUrl: fp,
+          fotoIA: !fotos[0] && !!l.fotoUrl,
+          valorMensalTotal: Number(l.valorMensal || 0),
+          statusMix: { [l.status]: 1 },
+          statusPrincipal: l.status,
+          unidades: [l],
+        });
+      }
+    }
+    // Ordena por #unidades desc, depois por valor desc
+    const arr = Array.from(map.values()).map(g => {
+      // statusPrincipal = o status com mais ocorrências
+      let max = 0; let principal = g.statusPrincipal;
+      for (const [s, n] of Object.entries(g.statusMix)) { if (n > max) { max = n; principal = s; } }
+      g.statusPrincipal = principal;
+      return g;
+    });
+    arr.sort((a, b) => b.unidades.length - a.unidades.length || b.valorMensalTotal - a.valorMensalTotal);
+    return arr;
+  }, [data]);
 
   const [modal, setModal] = useState(false);
   const [form, setForm] = useState({ ...EMPTY });
@@ -864,7 +931,7 @@ export default function EquipamentosLocados() {
           )}
           {/* Rev. 2323 — Selecionar todos visíveis (cabeçalho da lista). */}
           {(data as any[]).length > 0 && (
-            <div className="flex items-center gap-2 pt-1 border-t border-slate-100 -mb-1">
+            <div className="flex items-center gap-2 pt-1 border-t border-slate-100 -mb-1 flex-wrap">
               <label className="inline-flex items-center gap-2 text-xs text-slate-600 cursor-pointer select-none px-1 py-1">
                 <input type="checkbox" checked={todosVisiveisSelecionados} onChange={toggleTodosVisiveis} className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500" />
                 Selecionar todos visíveis ({(data as any[]).length})
@@ -872,6 +939,25 @@ export default function EquipamentosLocados() {
               {selecionados.size > 0 && (
                 <button onClick={() => setSelecionados(new Set())} className="text-xs text-slate-500 hover:text-slate-700 underline">limpar seleção ({selecionados.size})</button>
               )}
+              {/* Rev. 2344 — toggle de agrupamento por descrição+obra */}
+              <div className="ml-auto inline-flex items-center gap-1 bg-slate-100 rounded-full p-0.5 ring-1 ring-slate-200">
+                <button
+                  type="button"
+                  onClick={() => setAgruparPorDescObra(true)}
+                  className={`px-3 py-1 rounded-full text-xs font-semibold transition inline-flex items-center gap-1.5 ${agruparPorDescObra ? "bg-white shadow-sm text-emerald-700 ring-1 ring-emerald-200" : "text-slate-600 hover:text-slate-800"}`}
+                  title="Agrupa itens com a mesma descrição na mesma obra"
+                >
+                  <Layers className="h-3.5 w-3.5" /> Agrupar <span className={`font-bold ${agruparPorDescObra ? "text-emerald-600" : "opacity-70"}`}>({grupos.length})</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAgruparPorDescObra(false)}
+                  className={`px-3 py-1 rounded-full text-xs font-semibold transition inline-flex items-center gap-1.5 ${!agruparPorDescObra ? "bg-white shadow-sm text-slate-700 ring-1 ring-slate-300" : "text-slate-600 hover:text-slate-800"}`}
+                  title="Mostra todas as unidades individualmente"
+                >
+                  Individual <span className="font-bold opacity-70">({(data as any[]).length})</span>
+                </button>
+              </div>
             </div>
           )}
         </div>
@@ -884,6 +970,109 @@ export default function EquipamentosLocados() {
             <Truck className="h-12 w-12 text-slate-300 mx-auto mb-3" />
             <div className="text-slate-700 font-semibold">Nenhum equipamento locado encontrado</div>
             <div className="text-sm text-slate-500 mt-1">Use <b>Importar PDF (IA)</b> para cadastrar contratos em lote a partir do relatório da locadora.</div>
+          </div>
+        ) : agruparPorDescObra ? (
+          // Rev. 2344 — Render em GRUPOS (descrição+obra). Cada grupo mostra
+          // contagem, status mix, Σ R$/mês. Click abre modal com unidades.
+          <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-3">
+            {grupos.map(g => {
+              const accent = g.statusPrincipal === "atrasado" ? "from-red-500 to-red-600"
+                : g.statusPrincipal === "em_renovacao" ? "from-amber-500 to-amber-600"
+                : g.statusPrincipal === "em_uso" ? "from-emerald-500 to-teal-600"
+                : "from-slate-400 to-slate-500";
+              const obraNome = g.obraId ? obrasMap.get(g.obraId) : null;
+              const statusEntries = Object.entries(g.statusMix).sort((a, b) => b[1] - a[1]);
+              const algumSelecionado = g.unidades.some(u => selecionados.has(u.id));
+              const todosSelecionados = g.unidades.every(u => selecionados.has(u.id));
+              return (
+                <div
+                  key={g.key}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => setModalGrupo(g)}
+                  onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setModalGrupo(g); } }}
+                  className={`group bg-white border rounded-xl shadow-sm hover:shadow-md hover:-translate-y-0.5 hover:border-emerald-300 transition overflow-hidden flex flex-col cursor-pointer focus:outline-none focus:ring-2 focus:ring-emerald-400 ${algumSelecionado ? (todosSelecionados ? "border-emerald-500 ring-2 ring-emerald-200" : "border-emerald-300 ring-1 ring-emerald-100") : "border-slate-200"}`}
+                  title={`${g.unidades.length} unidade(s) — clique para ver detalhes`}
+                >
+                  <div className={`h-1 bg-gradient-to-r ${accent}`} />
+                  <div className="p-4 flex gap-3">
+                    <input
+                      type="checkbox"
+                      checked={todosSelecionados}
+                      ref={el => { if (el) el.indeterminate = algumSelecionado && !todosSelecionados; }}
+                      onChange={() => {
+                        const novo = new Set(selecionados);
+                        if (todosSelecionados) g.unidades.forEach(u => novo.delete(u.id));
+                        else g.unidades.forEach(u => novo.add(u.id));
+                        setSelecionados(novo);
+                      }}
+                      onClick={(e) => e.stopPropagation()}
+                      className="h-4 w-4 mt-1 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer flex-shrink-0"
+                      title={todosSelecionados ? "Desmarcar todas as unidades do grupo" : "Marcar todas as unidades do grupo"}
+                    />
+                    {g.fotoUrl ? (
+                      <div className="relative flex-shrink-0">
+                        <img src={g.fotoUrl} className="w-16 h-16 object-cover rounded-lg ring-1 ring-slate-200" alt="" loading="lazy" />
+                        {g.fotoIA && (
+                          <span title="Imagem ilustrativa encontrada por IA" className="absolute -top-1 -right-1 bg-pink-500 text-white rounded-full p-0.5 ring-2 ring-white shadow">
+                            <Sparkles className="h-2.5 w-2.5" />
+                          </span>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="w-16 h-16 rounded-lg bg-slate-100 ring-1 ring-slate-200 flex items-center justify-center flex-shrink-0">
+                        <Camera className="h-5 w-5 text-slate-400" />
+                      </div>
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-start justify-between gap-2">
+                        <h3 className="font-semibold text-slate-900 truncate" title={g.descricao}>{g.descricao}</h3>
+                        <span className="inline-flex items-center gap-1 bg-emerald-100 text-emerald-800 border border-emerald-200 px-2 py-0.5 rounded-full text-[10px] font-bold whitespace-nowrap" title={`${g.unidades.length} unidade(s) neste grupo`}>
+                          <Boxes className="h-3 w-3" /> {g.unidades.length}<span className="font-normal opacity-80">un.</span>
+                        </span>
+                      </div>
+                      <div className="text-xs mt-0.5 flex items-center gap-1.5 flex-wrap">
+                        {statusEntries.map(([s, n]) => (
+                          <span key={s} className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${STATUS_COLORS[s] || "bg-slate-100"}`}>
+                            {n} {STATUS_LABELS[s] || s}
+                          </span>
+                        ))}
+                        {g.categoria && (
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); setFiltroCategoria(g.categoria!); }}
+                            className="inline-flex items-center gap-1 bg-violet-50 text-violet-700 border border-violet-200 hover:bg-violet-100 px-1.5 py-0.5 rounded-full text-[10px] font-semibold transition"
+                            title={`Filtrar por categoria "${g.categoria}"`}>
+                            <Tag className="h-2.5 w-2.5" /> {g.categoria}
+                          </button>
+                        )}
+                      </div>
+                      {g.fornecedorNome && (
+                        <div className="text-xs text-slate-600 mt-1 flex items-center gap-1.5 truncate">
+                          <Building2 className="h-3 w-3 text-slate-400" /> {g.fornecedorNome}
+                        </div>
+                      )}
+                      <div className={`text-xs mt-1 flex items-center gap-1.5 truncate ${obraNome ? "text-emerald-700" : "text-amber-700"}`} title={obraNome || "Sem obra vinculada"}>
+                        <MapPin className="h-3 w-3" />
+                        {obraNome ? <span className="truncate font-medium">{obraNome}</span> : <span className="italic">Sem obra vinculada</span>}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="px-4 py-2 bg-slate-50/70 border-t border-slate-100 flex items-center justify-between text-xs">
+                    <div className="text-slate-600 flex items-center gap-1.5">
+                      <DollarSign className="h-3.5 w-3.5 text-slate-400" />
+                      <span title="Soma do valor mensal de todas as unidades do grupo">total mensal</span>
+                    </div>
+                    <div className="font-bold text-emerald-700">{fmtMoney(g.valorMensalTotal)}<span className="text-[10px] text-slate-500 font-normal">/mês</span></div>
+                  </div>
+                  <div className="px-4 py-2 border-t border-slate-100 flex items-center justify-end gap-1">
+                    <button onClick={(e) => { e.stopPropagation(); setModalGrupo(g); }} className="text-emerald-700 bg-emerald-50 hover:bg-emerald-100 px-2 py-1 rounded-md text-xs inline-flex items-center gap-1 font-medium transition" title={`Ver as ${g.unidades.length} unidades`}>
+                      <Eye className="h-3.5 w-3.5" /> Ver {g.unidades.length} unidade(s)
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-3">
@@ -990,6 +1179,107 @@ export default function EquipamentosLocados() {
           </div>
         )}
       </div>
+
+      {/* Rev. 2344 — Modal drill-down do GRUPO (descrição+obra). Lista as
+          unidades individuais com ações idênticas ao card individual. */}
+      {modalGrupo && (
+        <div className="fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setModalGrupo(null)}>
+          <div className="bg-white rounded-2xl shadow-2xl max-w-5xl w-full max-h-[90vh] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="bg-gradient-to-r from-emerald-600 to-teal-600 text-white px-6 py-4 flex items-start justify-between gap-3 flex-shrink-0">
+              <div className="flex items-start gap-3 min-w-0">
+                {modalGrupo.fotoUrl ? (
+                  <img src={modalGrupo.fotoUrl} className="w-14 h-14 rounded-lg object-cover ring-2 ring-white/40 flex-shrink-0" alt="" />
+                ) : (
+                  <div className="w-14 h-14 rounded-lg bg-white/15 ring-2 ring-white/40 flex items-center justify-center flex-shrink-0">
+                    <Boxes className="h-6 w-6" />
+                  </div>
+                )}
+                <div className="min-w-0">
+                  <div className="text-[10px] uppercase tracking-wider opacity-80 font-bold">Grupo · {modalGrupo.unidades.length} unidade(s)</div>
+                  <h2 className="text-lg font-bold truncate" title={modalGrupo.descricao}>{modalGrupo.descricao}</h2>
+                  <div className="text-xs opacity-90 flex items-center gap-1.5 mt-0.5 truncate">
+                    <MapPin className="h-3 w-3" />
+                    {modalGrupo.obraId ? (obrasMap.get(modalGrupo.obraId) || `Obra #${modalGrupo.obraId}`) : "Sem obra vinculada"}
+                  </div>
+                </div>
+              </div>
+              <button onClick={() => setModalGrupo(null)} className="text-white/80 hover:text-white p-1 rounded-lg hover:bg-white/15 transition flex-shrink-0" title="Fechar">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            {/* KPI strip */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 px-6 py-3 bg-slate-50 border-b border-slate-200 flex-shrink-0">
+              <div className="bg-white rounded-lg p-2 ring-1 ring-slate-200">
+                <div className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Unidades</div>
+                <div className="text-lg font-bold text-slate-900">{modalGrupo.unidades.length}</div>
+              </div>
+              <div className="bg-white rounded-lg p-2 ring-1 ring-slate-200">
+                <div className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Total mensal</div>
+                <div className="text-lg font-bold text-emerald-700 tabular-nums">{fmtMoney(modalGrupo.valorMensalTotal)}</div>
+              </div>
+              <div className="bg-white rounded-lg p-2 ring-1 ring-slate-200">
+                <div className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Em uso</div>
+                <div className="text-lg font-bold text-emerald-700">{modalGrupo.statusMix["em_uso"] || 0}</div>
+              </div>
+              <div className="bg-white rounded-lg p-2 ring-1 ring-slate-200">
+                <div className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Atrasadas</div>
+                <div className={`text-lg font-bold ${(modalGrupo.statusMix["atrasado"] || 0) > 0 ? "text-red-600" : "text-slate-400"}`}>{modalGrupo.statusMix["atrasado"] || 0}</div>
+              </div>
+            </div>
+            {/* Lista de unidades */}
+            <div className="flex-1 overflow-y-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-slate-100 sticky top-0 z-10 backdrop-blur-sm">
+                  <tr className="text-left text-[11px] uppercase tracking-wider text-slate-600">
+                    <th className="px-4 py-2 font-semibold">Patrimônio</th>
+                    <th className="px-4 py-2 font-semibold">Status</th>
+                    <th className="px-4 py-2 font-semibold">Fornecedor</th>
+                    <th className="px-4 py-2 font-semibold">Início → Fim</th>
+                    <th className="px-4 py-2 font-semibold text-right">R$/mês</th>
+                    <th className="px-4 py-2 font-semibold text-right">Ações</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {modalGrupo.unidades.map((u: any, i: number) => (
+                    <tr key={u.id} className={`border-b border-slate-100 ${i % 2 === 0 ? "bg-white" : "bg-slate-50/50"} hover:bg-emerald-50/40 transition`}>
+                      <td className="px-4 py-2 font-mono text-xs text-slate-700">{u.codigoPatrimonioFornecedor || <span className="italic text-slate-400">s/ patr.</span>}</td>
+                      <td className="px-4 py-2">
+                        <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider whitespace-nowrap ${STATUS_COLORS[u.status] || "bg-slate-100"}`}>
+                          {STATUS_LABELS[u.status] || u.status}
+                        </span>
+                      </td>
+                      <td className="px-4 py-2 text-xs text-slate-600 truncate max-w-[180px]" title={u.fornecedorNome || ""}>{u.fornecedorNome || "—"}</td>
+                      <td className="px-4 py-2 text-xs text-slate-600 whitespace-nowrap">{fmtDate(u.dataInicio)} → <b className="text-slate-800">{fmtDate(u.dataFimPrevista)}</b></td>
+                      <td className="px-4 py-2 text-right font-semibold text-emerald-700 tabular-nums whitespace-nowrap">{fmtMoney(u.valorMensal)}</td>
+                      <td className="px-4 py-2 text-right">
+                        <div className="inline-flex items-center gap-1">
+                          <button onClick={() => { setModalGrupo(null); setModalEventos(u); }} className="text-emerald-700 bg-emerald-50 hover:bg-emerald-100 px-2 py-1 rounded-md text-[11px] inline-flex items-center gap-1 font-medium transition" title="Detalhes completos">
+                            <Eye className="h-3 w-3" /> Detalhes
+                          </button>
+                          {u.status === "em_uso" && (
+                            <>
+                              <button onClick={() => { setModalGrupo(null); setModalCheckin(u); setCheckinObs(""); }} className="text-blue-700 bg-blue-50 hover:bg-blue-100 px-2 py-1 rounded-md text-[11px] inline-flex items-center gap-1 font-medium transition" title="Check-in semanal">
+                                <ClipboardCheck className="h-3 w-3" />
+                              </button>
+                              <button onClick={() => { setModalGrupo(null); setModalDev(u); setDevFotos([]); setDevObs(""); setDevData(new Date().toISOString().slice(0, 10)); }} className="text-emerald-700 bg-emerald-50 hover:bg-emerald-100 px-2 py-1 rounded-md text-[11px] inline-flex items-center gap-1 font-medium transition" title="Devolver">
+                                <RotateCcw className="h-3 w-3" />
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="px-6 py-3 bg-slate-50 border-t border-slate-200 flex items-center justify-between text-xs text-slate-600 flex-shrink-0">
+              <div>{modalGrupo.unidades.length} unidade(s) · {fmtMoney(modalGrupo.valorMensalTotal)}/mês total</div>
+              <button onClick={() => setModalGrupo(null)} className="px-3 py-1.5 rounded-md bg-slate-200 hover:bg-slate-300 text-slate-700 font-medium transition">Fechar</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Rev. 2325 — Modal de confirmação de exclusão em lote (bonito, substitui window.confirm) */}
       {confirmExcluir !== null && (
