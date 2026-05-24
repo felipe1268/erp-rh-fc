@@ -1,6 +1,78 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2363 — **UX/FILTRO · Cards KPI da aba "Equip. Locados" do Dashboard
+ * Almoxarifado ficaram CLICÁVEIS — clique aplica filtro contextual à
+ * tabela abaixo (troca fonte + título + colunas).**
+ *
+ * **Pedido user (24/05/2026, IMG_1160):** "Quero cada card responsivo
+ * para que quando clicar o filtro aconteça".
+ *
+ * **Problema:** os 8 cards KPI da aba "Equip. Locados"
+ * (Ativos·Custo/mês·Vencendo 30d·Atrasados·Devolvidos·Sem obra·Fornecedores
+ * ·Obras atendidas) eram só leitura — pra ver, por exemplo, "quais são
+ * os atrasados?" ou "quais ativos não têm obra vinculada?", o engenheiro
+ * tinha que abrir a página `/equipamentos/locados` separadamente,
+ * configurar filtros lá e voltar. Drill-down de 1 clique resolve.
+ *
+ * **Fix em 1 arquivo** (`client/src/pages/dashboards/DashAlmoxarifadoEquipamentos.tsx`):
+ *
+ *   1. **State novo** `filtroLocCard: FiltroLocCard | null` (8 valores:
+ *      ativos·custoMes·vencendo30·atrasados·devolvidos·semObra·
+ *      fornecedores·obras). `null` = comportamento original (tabela
+ *      mostra "vencendo em até 30 dias", como antes da Rev).
+ *
+ *   2. **Todos os 8 `DashKpi` ganharam `onClick` + `active`** — toggle real:
+ *      clique no card já ativo limpa o filtro; clique em outro card troca.
+ *      `DashKpi` já suportava esses props (ring-2 quando active, hover-scale),
+ *      só estavam sem uso aqui. Card de "Vencendo (30d)" mudou de `color="amber"`
+ *      pra `"orange"` (mais saturado, casa com a paleta clicável).
+ *
+ *   3. **Painel contextual abaixo** — antes era um bloco fixo "Locações
+ *      vencendo em até 30 dias" com 5 colunas. Agora é dinâmico:
+ *        - **Sem filtro / vencendo30 / ativos / custoMes / atrasados / devolvidos / semObra:**
+ *          tabela com 5 colunas (Equipamento·Fornecedor·Obra·Fim previsto·R$/mês),
+ *          fonte/título/ordenação variam pelo `cfgMap`. Atrasados destaca
+ *          `fim previsto` em vermelho. `custoMes` ordena por valor desc.
+ *          `vencendo30` e `atrasados` ordenam por data fim asc.
+ *        - **fornecedores / obras:** tabela agregada (Nome·Unidades·Custo
+ *          mensal·% do total) usando `locAgg.porFornecedor` /
+ *          `locAgg.porObra` que já existiam pros gráficos. Não faz sentido
+ *          listar item-a-item nesses dois — o card é uma métrica de
+ *          contagem de GRUPOS, não de itens.
+ *
+ *   4. **Chip "Limpar filtro × "** no header do painel quando há filtro
+ *      ativo, mais contador "(N itens, exibindo 25)" pra dar visibilidade
+ *      do cap. Botão "Abrir lista →" continua linkando pra
+ *      `/equipamentos/locados` quando o user quer ver tudo sem cap.
+ *
+ *   5. **Heurística "atrasado"** = `status === 'atrasado'` **OU**
+ *      (`status === 'em_uso'` E `dataFimPrevista < hoje`). Os jobs de
+ *      `StatusSync` rodam só 1×/h e podem demorar pra mudar o status
+ *      formalmente — incluir o cálculo client-side garante que o card
+ *      mostra o que o user enxerga visualmente.
+ *
+ * **Decisões de design:**
+ *   - Toggle real (clique no card ativo limpa) em vez de "1 card sempre
+ *     ativo" — UX consistente com a Rev. 2361 (mesma feature na página
+ *     `/equipamentos/locados`). User aprende uma vez e usa em todo lugar.
+ *   - Fornecedores/Obras não viram lista de itens (poluiria com 1.218
+ *     linhas) — viram tabela agregada com % do gasto total, que é a
+ *     leitura natural pra esses dois recortes.
+ *   - Sem filtro mantém o painel "vencendo 30d" pra não regredir o
+ *     comportamento pra quem usa o dashboard sem clicar em nada.
+ *   - 100% client-side reusando `locadosQ.data` já em cache — zero novas
+ *     queries, zero impacto de performance.
+ *
+ * **R-001/R-007/R-010:** N/A — alteração 100% client-side em React state +
+ * renderização condicional. Zero DDL, zero mutations, zero queries novas.
+ *
+ * **Arquivos:** `client/src/pages/dashboards/DashAlmoxarifadoEquipamentos.tsx`
+ * (+state +cards onClick/active +painel contextual ~120L), `shared/version.ts`,
+ * `shared/changelog.ts`, `replit.md`, `replit-history.md`.
+ *
+ * ─────────────────────────────────────────────────────────────────────────
+ *
  * Rev. 2362 — **FEATURE/IA · Nova análise "Comprar vs Continuar Alugando"
  * em /equipamentos/locados — IA estima preço de mercado de cada
  * descrição e calcula payback + recomendação.**

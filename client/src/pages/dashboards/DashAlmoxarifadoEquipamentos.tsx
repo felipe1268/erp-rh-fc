@@ -363,9 +363,13 @@ export default function DashAlmoxarifadoEquipamentos() {
   // ── Equipamentos Locados ───────────────────────────────────────────────────
   const locAgg = useMemo(() => {
     const list = (locadosQ.data || []) as any[];
+    // Rev. 2363 — heurística "atrasado" expandida (status formal OU em_uso
+    // com data fim já no passado) pra casar com o filtro clicável do card e
+    // não depender do StatusSync horário. Antes só usava o status formal.
+    const HOJE_AGG = new Date(); HOJE_AGG.setHours(0, 0, 0, 0);
     const ativos = list.filter(l => l.status === "em_uso");
     const devolvidos = list.filter(l => l.status === "devolvido");
-    const atrasados = list.filter(l => l.status === "atrasado");
+    const atrasados = list.filter(l => l.status === "atrasado" || (l.status === "em_uso" && l.dataFimPrevista && new Date(l.dataFimPrevista) < HOJE_AGG));
     const vencendo = (vencendoQ.data || []) as any[];
     const custoMes = ativos.reduce((acc, l) => acc + Number(l.valorMensal || 0), 0);
     const porFornecedor = new Map<string, { qtd: number; custo: number }>();
@@ -403,6 +407,11 @@ export default function DashAlmoxarifadoEquipamentos() {
   const [detalheLoc, setDetalheLoc] = useState<{ mesKey: string; mesLabel: string; metrica: MetricaLoc } | null>(null);
   const [detalheBusca, setDetalheBusca] = useState("");
   useEffect(() => { if (!detalheLoc) setDetalheBusca(""); }, [detalheLoc]);
+  // Rev. 2363 — filtro contextual dos cards KPI da aba "Equip. Locados".
+  // Cada card vira um toggle; quando ativo, a tabela "Locações vencendo em
+  // até 30 dias" troca de conteúdo e título pra refletir o recorte clicado.
+  type FiltroLocCard = "ativos" | "custoMes" | "vencendo30" | "atrasados" | "devolvidos" | "semObra" | "fornecedores" | "obras";
+  const [filtroLocCard, setFiltroLocCard] = useState<FiltroLocCard | null>(null);
   const anosDisponiveis = useMemo(() => {
     const anos = new Set<number>();
     const yearOf = (d: any) => { const k = monthKey(d); return k ? Number(k.slice(0, 4)) : null; };
@@ -1133,15 +1142,16 @@ export default function DashAlmoxarifadoEquipamentos() {
 
           {/* ─────────── EQUIP. LOCADOS ─────────── */}
           <TabsContent value="locados" className="space-y-4 mt-4">
+            {/* Rev. 2363 — todos os 8 cards são toggles. Clique = aplica filtro contextual à tabela abaixo. Segundo clique limpa. */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              <DashKpi label="Ativos" value={fmtNum(locAgg.ativos)} icon={Activity} color="blue" />
-              <DashKpi label="Custo / mês" value={fmtBRL(locAgg.custoMes)} icon={DollarSign} color="teal" />
-              <DashKpi label="Vencendo (30d)" value={fmtNum(locAgg.vencendo30)} icon={Clock} color="amber" />
-              <DashKpi label="Atrasados" value={fmtNum(locAgg.atrasados)} icon={AlertTriangle} color="red" />
-              <DashKpi label="Devolvidos" value={fmtNum(locAgg.devolvidos)} icon={CheckCircle2} color="green" />
-              <DashKpi label="Sem obra vinculada" value={fmtNum(locAgg.semObra)} icon={MapPin} color="amber" sub="vincule em lote" />
-              <DashKpi label="Fornecedores" value={fmtNum(locAgg.porFornecedor.length)} icon={Building2} color="purple" />
-              <DashKpi label="Obras atendidas" value={fmtNum(locAgg.porObra.filter(o => o.nome !== "— sem obra —").length)} icon={MapPin} color="indigo" />
+              <DashKpi label="Ativos" value={fmtNum(locAgg.ativos)} icon={Activity} color="blue"   active={filtroLocCard === "ativos"}       onClick={() => setFiltroLocCard(p => p === "ativos" ? null : "ativos")} />
+              <DashKpi label="Custo / mês" value={fmtBRL(locAgg.custoMes)} icon={DollarSign} color="teal"  active={filtroLocCard === "custoMes"}     onClick={() => setFiltroLocCard(p => p === "custoMes" ? null : "custoMes")} sub="ordena por R$/mês" />
+              <DashKpi label="Vencendo (30d)" value={fmtNum(locAgg.vencendo30)} icon={Clock} color="orange" active={filtroLocCard === "vencendo30"}   onClick={() => setFiltroLocCard(p => p === "vencendo30" ? null : "vencendo30")} />
+              <DashKpi label="Atrasados" value={fmtNum(locAgg.atrasados)} icon={AlertTriangle} color="red" active={filtroLocCard === "atrasados"}    onClick={() => setFiltroLocCard(p => p === "atrasados" ? null : "atrasados")} />
+              <DashKpi label="Devolvidos" value={fmtNum(locAgg.devolvidos)} icon={CheckCircle2} color="green" active={filtroLocCard === "devolvidos"}   onClick={() => setFiltroLocCard(p => p === "devolvidos" ? null : "devolvidos")} />
+              <DashKpi label="Sem obra vinculada" value={fmtNum(locAgg.semObra)} icon={MapPin} color="orange" sub="vincule em lote" active={filtroLocCard === "semObra"} onClick={() => setFiltroLocCard(p => p === "semObra" ? null : "semObra")} />
+              <DashKpi label="Fornecedores" value={fmtNum(locAgg.porFornecedor.length)} icon={Building2} color="purple" active={filtroLocCard === "fornecedores"} onClick={() => setFiltroLocCard(p => p === "fornecedores" ? null : "fornecedores")} sub="agrupa por locadora" />
+              <DashKpi label="Obras atendidas" value={fmtNum(locAgg.porObra.filter(o => o.nome !== "— sem obra —").length)} icon={MapPin} color="indigo" active={filtroLocCard === "obras"} onClick={() => setFiltroLocCard(p => p === "obras" ? null : "obras")} sub="agrupa por obra" />
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -1161,31 +1171,111 @@ export default function DashAlmoxarifadoEquipamentos() {
               />
             </div>
 
-            <div className="bg-white border border-slate-200/70 rounded-2xl shadow-sm hover:shadow-md transition-shadow overflow-hidden">
-              <div className="px-4 py-3 border-b border-slate-100 font-semibold text-slate-800 flex items-center justify-between">
-                <span className="flex items-center gap-2"><Clock className="h-4 w-4 text-amber-600" /> Locações vencendo em até 30 dias</span>
-                <Link href="/equipamentos/locados"><a className="text-xs text-blue-600 hover:underline">Abrir lista →</a></Link>
-              </div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead className="bg-gradient-to-b from-slate-50 to-slate-50/40 text-[11px] text-slate-500 uppercase tracking-wide">
-                    <tr><th className="text-left p-2">Equipamento</th><th className="text-left p-2">Fornecedor</th><th className="text-left p-2">Obra</th><th className="text-left p-2">Fim previsto</th><th className="text-right p-2">R$/mês</th></tr>
-                  </thead>
-                  <tbody>
-                    {locAgg.vencendo.slice(0, 25).map((l: any) => (
-                      <tr key={l.id} className="border-t border-slate-100 hover:bg-slate-50">
-                        <td className="p-2 text-slate-800">{l.descricao}</td>
-                        <td className="p-2 text-slate-700">{l.fornecedorNome || "—"}</td>
-                        <td className="p-2 text-slate-700">{l.obraId ? (obrasMap.get(Number(l.obraId)) || `#${l.obraId}`) : "—"}</td>
-                        <td className="p-2 text-amber-700 font-medium">{fmtDate(l.dataFimPrevista)}</td>
-                        <td className="p-2 text-right">{fmtBRL(Number(l.valorMensal || 0))}</td>
-                      </tr>
-                    ))}
-                    {locAgg.vencendo.length === 0 && <tr><td colSpan={5} className="p-6 text-center text-slate-500">Nenhuma locação vencendo no período. 👌</td></tr>}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+            {/* Rev. 2363 — painel contextual: troca de fonte + título + colunas conforme card clicado.
+                Sem filtro → mantém o comportamento original (vencendo 30d). */}
+            {(() => {
+              const todos = (locadosQ.data || []) as any[];
+              const HOJE = new Date(); HOJE.setHours(0, 0, 0, 0);
+              const fim = (l: any) => l?.dataFimPrevista ? new Date(l.dataFimPrevista) : null;
+              const isFornOrObra = filtroLocCard === "fornecedores" || filtroLocCard === "obras";
+              type Cfg = { titulo: string; icon: any; iconColor: string; list: any[]; emptyMsg: string; orderBy?: "valor" | "fim" };
+              const cfgMap: Record<Exclude<FiltroLocCard, "fornecedores" | "obras">, Cfg> = {
+                ativos:     { titulo: "Locações ativas (em uso)",          icon: Activity,       iconColor: "text-blue-600",   list: todos.filter(l => l.status === "em_uso"),                                              emptyMsg: "Nenhuma locação ativa." },
+                custoMes:   { titulo: "Locações ativas — ordenado por custo mensal", icon: DollarSign, iconColor: "text-teal-600", list: todos.filter(l => l.status === "em_uso" && Number(l.valorMensal || 0) > 0),     emptyMsg: "Nenhuma locação ativa com valor mensal." , orderBy: "valor"},
+                vencendo30: { titulo: "Locações vencendo em até 30 dias",  icon: Clock,          iconColor: "text-orange-600", list: locAgg.vencendo,                                                                      emptyMsg: "Nenhuma locação vencendo no período. 👌", orderBy: "fim" },
+                atrasados:  { titulo: "Locações em atraso",                icon: AlertTriangle,  iconColor: "text-red-600",    list: todos.filter(l => l.status === "atrasado" || (l.status === "em_uso" && fim(l) && fim(l)! < HOJE)), emptyMsg: "Nenhuma locação atrasada. 👌", orderBy: "fim" },
+                devolvidos: { titulo: "Locações devolvidas",               icon: CheckCircle2,   iconColor: "text-green-600",  list: todos.filter(l => l.status === "devolvido"),                                          emptyMsg: "Nenhuma devolução registrada." },
+                semObra:    { titulo: "Locações ativas sem obra vinculada", icon: MapPin,       iconColor: "text-orange-600", list: todos.filter(l => l.status === "em_uso" && !l.obraId),                               emptyMsg: "Todas as locações ativas estão vinculadas a uma obra. 👌" },
+              };
+              const cfgDefault: Cfg = cfgMap.vencendo30;
+              // Code review fix Rev. 2363: pra fornecedores/obras, header
+              // próprio (título/ícone/cor) em vez de reaproveitar o default
+              // "vencendo 30d" que induzia leitura errada.
+              const cfgAgrupado: Record<"fornecedores" | "obras", Cfg> = {
+                fornecedores: { titulo: "Locações ativas agrupadas por fornecedor (locadora)", icon: Building2, iconColor: "text-purple-600", list: [], emptyMsg: "Sem fornecedores." },
+                obras:        { titulo: "Locações ativas agrupadas por obra",                  icon: MapPin,   iconColor: "text-indigo-600", list: [], emptyMsg: "Sem obras." },
+              };
+              const cfg: Cfg = !filtroLocCard ? cfgDefault : (isFornOrObra ? cfgAgrupado[filtroLocCard as "fornecedores" | "obras"] : cfgMap[filtroLocCard as keyof typeof cfgMap]);
+              // Aplica ordenação opcional
+              let listaOrd = [...cfg.list];
+              if (cfg.orderBy === "valor") listaOrd.sort((a, b) => Number(b.valorMensal || 0) - Number(a.valorMensal || 0));
+              if (cfg.orderBy === "fim") listaOrd.sort((a, b) => {
+                const fa = a.dataFimPrevista ? new Date(a.dataFimPrevista).getTime() : Infinity;
+                const fb = b.dataFimPrevista ? new Date(b.dataFimPrevista).getTime() : Infinity;
+                return fa - fb;
+              });
+              const Icon = cfg.icon;
+              return (
+                <div className="bg-white border border-slate-200/70 rounded-2xl shadow-sm hover:shadow-md transition-shadow overflow-hidden">
+                  <div className="px-4 py-3 border-b border-slate-100 font-semibold text-slate-800 flex items-center justify-between gap-3 flex-wrap">
+                    <span className="flex items-center gap-2"><Icon className={`h-4 w-4 ${cfg.iconColor}`} /> {cfg.titulo}{!isFornOrObra && listaOrd.length > 0 && <span className="text-xs font-normal text-slate-500">({fmtNum(listaOrd.length)} {listaOrd.length === 1 ? "item" : "itens"}{listaOrd.length > 25 ? `, exibindo 25` : ""})</span>}</span>
+                    <div className="flex items-center gap-2">
+                      {filtroLocCard && (
+                        <button onClick={() => setFiltroLocCard(null)} className="text-[11px] inline-flex items-center gap-1 px-2 py-1 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-700 transition" title="Limpar filtro">
+                          Limpar filtro <X className="h-3 w-3" />
+                        </button>
+                      )}
+                      <Link href="/equipamentos/locados"><a className="text-xs text-blue-600 hover:underline">Abrir lista →</a></Link>
+                    </div>
+                  </div>
+                  {isFornOrObra ? (
+                    // Modo agregado por fornecedor / obra
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead className="bg-gradient-to-b from-slate-50 to-slate-50/40 text-[11px] text-slate-500 uppercase tracking-wide">
+                          <tr>
+                            <th className="text-left p-2">{filtroLocCard === "fornecedores" ? "Fornecedor (locadora)" : "Obra"}</th>
+                            <th className="text-right p-2">Unidades ativas</th>
+                            <th className="text-right p-2">Custo mensal</th>
+                            <th className="text-right p-2">% do total</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(filtroLocCard === "fornecedores" ? locAgg.porFornecedor : locAgg.porObra).map((g: any) => {
+                            const pct = locAgg.custoMes > 0 ? (g.custo / locAgg.custoMes) * 100 : 0;
+                            return (
+                              <tr key={g.nome} className="border-t border-slate-100 hover:bg-slate-50">
+                                <td className="p-2 text-slate-800">{g.nome}</td>
+                                <td className="p-2 text-right tabular-nums text-slate-700">{fmtNum(g.qtd)}</td>
+                                <td className="p-2 text-right tabular-nums text-slate-800 font-medium">{fmtBRL(g.custo)}</td>
+                                <td className="p-2 text-right tabular-nums text-slate-500">{pct.toFixed(1)}%</td>
+                              </tr>
+                            );
+                          })}
+                          {(filtroLocCard === "fornecedores" ? locAgg.porFornecedor : locAgg.porObra).length === 0 && (
+                            <tr><td colSpan={4} className="p-6 text-center text-slate-500">Sem dados.</td></tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead className="bg-gradient-to-b from-slate-50 to-slate-50/40 text-[11px] text-slate-500 uppercase tracking-wide">
+                          <tr><th className="text-left p-2">Equipamento</th><th className="text-left p-2">Fornecedor</th><th className="text-left p-2">Obra</th><th className="text-left p-2">Fim previsto</th><th className="text-right p-2">R$/mês</th></tr>
+                        </thead>
+                        <tbody>
+                          {listaOrd.slice(0, 25).map((l: any) => {
+                            const fimD = fim(l);
+                            const atrasado = fimD && fimD < HOJE && l.status !== "devolvido";
+                            return (
+                              <tr key={l.id} className="border-t border-slate-100 hover:bg-slate-50">
+                                <td className="p-2 text-slate-800">{l.descricao}</td>
+                                <td className="p-2 text-slate-700">{l.fornecedorNome || "—"}</td>
+                                <td className="p-2 text-slate-700">{l.obraId ? (obrasMap.get(Number(l.obraId)) || `#${l.obraId}`) : "—"}</td>
+                                <td className={`p-2 font-medium ${atrasado ? "text-red-700" : "text-amber-700"}`}>{fmtDate(l.dataFimPrevista)}</td>
+                                <td className="p-2 text-right tabular-nums">{fmtBRL(Number(l.valorMensal || 0))}</td>
+                              </tr>
+                            );
+                          })}
+                          {listaOrd.length === 0 && <tr><td colSpan={5} className="p-6 text-center text-slate-500">{cfg.emptyMsg}</td></tr>}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
 
             {/* Rev. 2327 — Locações iniciadas vs devolvidas mês a mês */}
             <div className="bg-white border border-slate-200/70 rounded-2xl shadow-sm hover:shadow-md transition-shadow overflow-hidden">
