@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Maximize2 } from "lucide-react";
@@ -288,7 +288,7 @@ export function DashKpi({ label, value, color = "blue", icon: Icon, sub, active,
   value: string | number;
   color?: string;
   icon?: any;
-  sub?: string;
+  sub?: ReactNode;
   active?: boolean;
   dimmed?: boolean;
   onClick?: () => void;

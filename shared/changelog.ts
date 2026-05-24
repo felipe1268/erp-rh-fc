@@ -1,6 +1,96 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2360 — **UX/REDESIGN · Aba "Movimentações" do Dashboard
+ * Almoxarifado completamente refeita pra análise mais profunda +
+ * TODAS as datas dos charts padronizadas em formato BR (DD/MM).**
+ *
+ * **Pedido user (24/05/2026, IMG_1156):**
+ * "Refaça o layout para que possamos ter uma análise melhor,
+ * todas as datas devem ser feitas no padrão brasileiro".
+ *
+ * **Problema 1 — datas no formato errado:** o eixo X do gráfico
+ * "Entradas vs Saídas por dia" mostrava `04-25` (MM-DD ISO sem ano),
+ * formato americano + ambíguo. Causa: `Object.keys(movAgg.porDia).map(k => k.slice(5))`
+ * — `k` é `"YYYY-MM-DD"` e `slice(5)` corta só o ano, devolvendo `"MM-DD"`.
+ * Mesmo bug acontecia no chart "Movimentações por dia" da Visão Geral.
+ *
+ * **Problema 2 — análise rasa:** a aba tinha só 4 KPIs sem contexto
+ * (números absolutos sem média/dia, sem comparação com período anterior),
+ * um único gráfico fixo em 30 dias, doughnut de "por tipo" que na prática
+ * mostra só 2-4 fatias (entrada/saída) + uma tabela das últimas 15 movs
+ * sem informar obra ou responsável. Nada respondia perguntas básicas:
+ * "qual item gira mais?", "qual obra consome mais?", "tem padrão por
+ * dia da semana?", "estou movimentando mais ou menos que mês passado?".
+ *
+ * **Fix — 1 arquivo só** (`client/src/pages/dashboards/DashAlmoxarifadoEquipamentos.tsx`):
+ *
+ * **(1) Datas BR universais.** Novo helper `fmtDayBR(iso)`:
+ *   `"2026-04-25"` → `"25/04"`. Aplicado nos 2 charts que faziam
+ *   `.slice(5)` (Visão Geral + Movs gráfico principal). Tooltip nativa
+ *   do DashChart continua com label do dataset — o eixo curto basta
+ *   pra leitura sem ambiguidade BR.
+ *
+ * **(2) Filtro de período 7/30/90 dias** (state local `movsPeriodoDias`).
+ * Pill segmented logo no topo da aba (mesmo padrão visual da pill do
+ * `MesesHeader` global pra consistência). NÃO afeta as outras tabs —
+ * é independente do `periodoMeses` global. Todos os agregados da tab
+ * (KPIs, gráficos, top itens, top obras, dia da semana) reagem ao toggle.
+ *
+ * **(3) `movAgg` reescrito** pra calcular, além do diário + por-tipo
+ * originais: `mediaDiaEntradas`, `mediaDiaSaidas`, `mediaDiaMovs`,
+ * `entAnt`/`saiAnt`/`movsAnt` (período anterior de mesma duração imediatamente
+ * antes do limite — base pros deltas), `porDiaSemana` (array [dom..sab] de
+ * total de movs por dia), `topItens` (top 10 por qtd somada, com split
+ * entradas/saídas), `topObras` (top 8 destino por qtd somada, com split).
+ *
+ * **(4) UI refeita** (de 4 blocos pra 6 blocos contextuais):
+ *   - Header com filtro 7/30/90d + sub-texto explicando o comparativo.
+ *   - 4 KPIs com `sub` informativo via novo componente `DeltaSub`:
+ *     "X,X/dia · ↑12% vs N" (seta+cor verde/vermelha conforme variação
+ *     vs período anterior). Saldo ganha "+N unidades líquidas".
+ *   - Gráfico Entradas vs Saídas por dia (bar agrupado, eixo X em DD/MM).
+ *   - Grid 3-col: Top 10 itens (lista visual com barra split verde/vermelho
+ *     proporcional aos volumes de entrada/saída de cada item, ordem por total) +
+ *     Doughnut "Por tipo" (compacto) + mini-bar "Por dia da semana"
+ *     (Dom-Sáb, fim de semana em cinza pra destacar).
+ *   - Card "Top 8 obras destino" (grid 2-col com nome + total + barra
+ *     gradient emerald→blue proporcional).
+ *   - Tabela últimas 15 ampliada: +2 colunas (Obra, Responsável), badge
+ *     verde/vermelha colorida por tipo (era cinza padrão), qtd com sinal
+ *     ±N colorido e tabular-nums pra leitura rápida.
+ *
+ * **Decisões de design:**
+ *   - Top itens como LISTA VISUAL (barras CSS proporcionais) em vez de
+ *     horizontal bar chart do Chart.js: render mais limpo com 10 itens,
+ *     mostra split entrada/saída sem precisar de stacked chart, sem
+ *     dependência nova, mobile-friendly.
+ *   - Por tipo MANTIDO como doughnut: nesse domínio são 2-4 categorias
+ *     (entrada, saída, transferência, devolução) e doughnut funciona bem.
+ *   - Dia da semana como mini-bar inline (não chart): só 7 barras, fim de
+ *     semana em cinza pra destacar dias úteis sem precisar de cor cheia.
+ *   - Período anterior pros deltas é "imediatamente anterior" (não
+ *     same-period-last-month) — mais útil pra ver tendência semana-a-semana
+ *     ou mês-a-mês conforme o usuário troca o toggle.
+ *   - Comparação 7d→7d/30d→30d/90d→90d sempre mesma janela, sem
+ *     normalização — usuário sabe que está olhando "metade do tempo total".
+ *
+ * **Isolamento Visão Geral × Movs:** o chart da Visão Geral ("Movimentações
+ * por dia — últimos 30 dias") usa um memo SEPARADO `visaoGeralMovs` (fixo
+ * em 30d, depende só de `movsQ.data`). Assim o toggle 7/30/90 da aba Movs
+ * NÃO contamina a Visão Geral — cada superfície tem sua janela.
+ *
+ * **R-001/R-007/R-010:** N/A — zero DDL, zero SQL, zero mutations.
+ * 100% client-side, refatoração pura de UI + agregações em useMemo.
+ *
+ * **Arquivos tocados:**
+ *   - `client/src/pages/dashboards/DashAlmoxarifadoEquipamentos.tsx`
+ *     (helpers BR + movAgg expandido + state movsPeriodoDias + UI refeita
+ *     da tab Movs + label do chart da Visão Geral).
+ *   - `shared/version.ts` (2359 → 2360).
+ *   - `shared/changelog.ts` (esta entrada).
+ *   - `replit.md` (rotação 2+5).
+ *
  * Rev. 2359 — **UX/OBSERVABILIDADE · Parse de PDF de locação ganha
  * painel de diagnóstico em tempo real (fase atual + timer mm:ss +
  * contador de checagens + heartbeat) pra eliminar a percepção de

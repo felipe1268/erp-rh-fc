@@ -21,6 +21,30 @@ import {
 const fmtBRL = (v: number) => (v || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 const fmtNum = (v: number) => (v || 0).toLocaleString("pt-BR");
 const fmtDate = (d: any) => (d ? new Date(d).toLocaleDateString("pt-BR") : "—");
+// Rev. 2360 — converte "YYYY-MM-DD" → "DD/MM" (padrão BR) pros eixos X dos charts.
+const fmtDayBR = (iso: string) => {
+  const [, mm, dd] = (iso || "").split("-");
+  return dd && mm ? `${dd}/${mm}` : (iso || "");
+};
+const DIAS_SEMANA_PT = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+
+// Rev. 2360 — DeltaSub: badge compacto de variação Δ% vs período anterior
+// usado nos `sub` dos KPIs da aba Movs. Renderiza inline: "x,x/dia · ↑12% vs N".
+function DeltaSub({ current, previous, mediaDia, unidade = "" }: { current: number; previous: number; mediaDia: number; unidade?: string }) {
+  const diff = current - previous;
+  const pct = previous > 0 ? (diff / previous) * 100 : (current > 0 ? 100 : 0);
+  const hasPrev = previous > 0 || current > 0;
+  const sym = !hasPrev || diff === 0 ? "─" : diff > 0 ? "↑" : "↓";
+  const tone = !hasPrev || diff === 0 ? "text-slate-400" : diff > 0 ? "text-emerald-600" : "text-red-600";
+  const pctTxt = !hasPrev ? "—" : Math.abs(pct) >= 999 ? `${diff > 0 ? "+" : ""}${(diff || 0).toLocaleString("pt-BR")}` : `${Math.abs(pct).toFixed(0)}%`;
+  return (
+    <>
+      {mediaDia.toFixed(1)}/dia{unidade} ·{" "}
+      <span className={`font-semibold ${tone}`}>{sym} {pctTxt}</span>{" "}
+      <span className="text-slate-400">vs {(previous || 0).toLocaleString("pt-BR")}</span>
+    </>
+  );
+}
 
 // Last N days bucket key (YYYY-MM-DD)
 function bucketDayKey(d: Date | string) {
@@ -216,21 +240,40 @@ export default function DashAlmoxarifadoEquipamentos() {
     return { total, unidadesEstoque, valorTotal, abaixoMin, semEstoque, cats };
   }, [itensQ.data]);
 
-  // ── Agregados Movimentações (últimos 30 dias) ──────────────────────────────
+  // Rev. 2360 — período variável (7/30/90 dias) selecionável só na aba Movs.
+  // Independente do `periodoMeses` (que controla tabelas mês-a-mês globais).
+  const [movsPeriodoDias, setMovsPeriodoDias] = useState<7 | 30 | 90>(30);
+
+  // ── Agregados Movimentações (período variável) ─────────────────────────────
+  // Rev. 2360 — redesign: além do diário + por-tipo originais, agora calcula
+  // top 10 itens mais movimentados, distribuição por dia da semana, top obras
+  // destino, média/dia (entradas+saídas+saldo) e período anterior pra deltas.
   const movAgg = useMemo(() => {
+    const dias = movsPeriodoDias;
     const movs = ((movsQ.data || []) as any[]).filter(m => !m.estornadaEm);
-    const limite = new Date(); limite.setDate(limite.getDate() - 29);
+    const limite = new Date(); limite.setDate(limite.getDate() - (dias - 1));
     const limiteKey = bucketDayKey(limite);
-    const last30 = movs.filter(m => bucketDayKey(m.criadoEm) >= limiteKey);
+    // Período anterior (mesma duração, imediatamente antes do limite) pros deltas
+    const limiteAnt = new Date(); limiteAnt.setDate(limiteAnt.getDate() - (2 * dias - 1));
+    const limiteAntKey = bucketDayKey(limiteAnt);
+
+    const periodoAtual = movs.filter(m => bucketDayKey(m.criadoEm) >= limiteKey);
+    const periodoAnterior = movs.filter(m => {
+      const k = bucketDayKey(m.criadoEm);
+      return k >= limiteAntKey && k < limiteKey;
+    });
 
     const porTipo = new Map<string, number>();
     const porDia: Record<string, { entradas: number; saidas: number }> = {};
-    for (let i = 0; i < 30; i++) {
-      const d = new Date(); d.setDate(d.getDate() - (29 - i));
+    const porDiaSemana = [0, 0, 0, 0, 0, 0, 0]; // dom..sab — total movs
+    const porItem = new Map<string, { nome: string; entradas: number; saidas: number; total: number }>();
+    const porObra = new Map<string, { nome: string; entradas: number; saidas: number; total: number }>();
+    for (let i = 0; i < dias; i++) {
+      const d = new Date(); d.setDate(d.getDate() - (dias - 1 - i));
       porDia[bucketDayKey(d)] = { entradas: 0, saidas: 0 };
     }
     let totalEntradas = 0, totalSaidas = 0;
-    for (const m of last30) {
+    for (const m of periodoAtual) {
       porTipo.set(m.tipo, (porTipo.get(m.tipo) || 0) + 1);
       const k = bucketDayKey(m.criadoEm);
       if (!porDia[k]) porDia[k] = { entradas: 0, saidas: 0 };
@@ -238,13 +281,69 @@ export default function DashAlmoxarifadoEquipamentos() {
       const isEntrada = String(m.tipo || "").toLowerCase().includes("entrada");
       if (isEntrada) { porDia[k].entradas += qtd; totalEntradas += qtd; }
       else { porDia[k].saidas += qtd; totalSaidas += qtd; }
+      // Dia da semana
+      const dow = new Date(m.criadoEm).getDay();
+      if (dow >= 0 && dow <= 6) porDiaSemana[dow] += 1;
+      // Top itens
+      const itemKey = String(m.itemId || m.itemNome || "—");
+      const itemNome = String(m.itemNome || "— sem item —");
+      const ci = porItem.get(itemKey) || { nome: itemNome, entradas: 0, saidas: 0, total: 0 };
+      ci.nome = itemNome;
+      if (isEntrada) ci.entradas += qtd; else ci.saidas += qtd;
+      ci.total += qtd;
+      porItem.set(itemKey, ci);
+      // Top obras destino
+      const oNome = m.obraNome || (m.obraId ? (obrasMap.get(Number(m.obraId)) || `Obra #${m.obraId}`) : "— sem obra —");
+      const co = porObra.get(oNome) || { nome: oNome, entradas: 0, saidas: 0, total: 0 };
+      if (isEntrada) co.entradas += qtd; else co.saidas += qtd;
+      co.total += qtd;
+      porObra.set(oNome, co);
+    }
+    // Período anterior — só agregado (pros deltas dos KPIs)
+    let entAnt = 0, saiAnt = 0;
+    for (const m of periodoAnterior) {
+      const qtd = Math.abs(Number(m.quantidade || 0));
+      const isEntrada = String(m.tipo || "").toLowerCase().includes("entrada");
+      if (isEntrada) entAnt += qtd; else saiAnt += qtd;
     }
     return {
-      totalMovs: last30.length,
+      dias,
+      totalMovs: periodoAtual.length,
       totalEntradas, totalSaidas,
+      mediaDiaEntradas: totalEntradas / dias,
+      mediaDiaSaidas: totalSaidas / dias,
+      mediaDiaMovs: periodoAtual.length / dias,
+      entAnt, saiAnt,
+      movsAnt: periodoAnterior.length,
       porTipo: Array.from(porTipo.entries()).map(([t, c]) => ({ tipo: t, count: c })).sort((a, b) => b.count - a.count),
       porDia,
+      porDiaSemana,
+      topItens: Array.from(porItem.values()).sort((a, b) => b.total - a.total).slice(0, 10),
+      topObras: Array.from(porObra.values()).sort((a, b) => b.total - a.total).slice(0, 8),
     };
+  }, [movsQ.data, movsPeriodoDias, obrasMap]);
+
+  // Rev. 2360 — Memo SEPARADO pro chart da Visão Geral (sempre 30d fixos),
+  // pra que o filtro 7/30/90 da aba Movs NÃO contamine a Visão Geral.
+  const visaoGeralMovs = useMemo(() => {
+    const movs = ((movsQ.data || []) as any[]).filter(m => !m.estornadaEm);
+    const limite = new Date(); limite.setDate(limite.getDate() - 29);
+    const limiteKey = bucketDayKey(limite);
+    const last30 = movs.filter(m => bucketDayKey(m.criadoEm) >= limiteKey);
+    const porDia: Record<string, { entradas: number; saidas: number }> = {};
+    for (let i = 0; i < 30; i++) {
+      const d = new Date(); d.setDate(d.getDate() - (29 - i));
+      porDia[bucketDayKey(d)] = { entradas: 0, saidas: 0 };
+    }
+    for (const m of last30) {
+      const k = bucketDayKey(m.criadoEm);
+      if (!porDia[k]) porDia[k] = { entradas: 0, saidas: 0 };
+      const qtd = Math.abs(Number(m.quantidade || 0));
+      const isEntrada = String(m.tipo || "").toLowerCase().includes("entrada");
+      if (isEntrada) porDia[k].entradas += qtd;
+      else porDia[k].saidas += qtd;
+    }
+    return { porDia };
   }, [movsQ.data]);
 
   // ── Equipamentos Próprios ──────────────────────────────────────────────────
@@ -489,10 +588,10 @@ export default function DashAlmoxarifadoEquipamentos() {
               <DashChart
                 title="Movimentações por dia (últimos 30 dias)"
                 type="line"
-                labels={Object.keys(movAgg.porDia).map(k => k.slice(5))}
+                labels={Object.keys(visaoGeralMovs.porDia).map(fmtDayBR)}
                 datasets={[
-                  { label: "Entradas", data: Object.values(movAgg.porDia).map(d => d.entradas), borderColor: "#10B981", backgroundColor: "rgba(16,185,129,0.15)", fill: true, tension: 0.3 },
-                  { label: "Saídas",   data: Object.values(movAgg.porDia).map(d => d.saidas),   borderColor: "#DC2626", backgroundColor: "rgba(220,38,38,0.15)", fill: true, tension: 0.3 },
+                  { label: "Entradas", data: Object.values(visaoGeralMovs.porDia).map(d => d.entradas), borderColor: "#10B981", backgroundColor: "rgba(16,185,129,0.15)", fill: true, tension: 0.3 },
+                  { label: "Saídas",   data: Object.values(visaoGeralMovs.porDia).map(d => d.saidas),   borderColor: "#DC2626", backgroundColor: "rgba(220,38,38,0.15)", fill: true, tension: 0.3 },
                 ]}
               />
               <DashChart
@@ -634,19 +733,85 @@ export default function DashAlmoxarifadoEquipamentos() {
             </div>
           </TabsContent>
 
-          {/* ─────────── MOVIMENTAÇÕES ─────────── */}
+          {/* ─────────── MOVIMENTAÇÕES (Rev. 2360 redesign) ─────────── */}
           <TabsContent value="movs" className="space-y-4 mt-4">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              <DashKpi label="Movimentações (30d)" value={fmtNum(movAgg.totalMovs)} icon={ArrowLeftRight} color="blue" />
-              <DashKpi label="Entradas (qtd)" value={fmtNum(movAgg.totalEntradas)} icon={TrendingUp} color="green" />
-              <DashKpi label="Saídas (qtd)" value={fmtNum(movAgg.totalSaidas)} icon={TrendingDown} color="red" />
-              <DashKpi label="Saldo (qtd)" value={fmtNum(movAgg.totalEntradas - movAgg.totalSaidas)} icon={Activity} color={movAgg.totalEntradas >= movAgg.totalSaidas ? "green" : "red"} />
+            {/* Rev. 2360 — Header com filtro de período (7/30/90d) +
+                resumo do período anterior (referência pros deltas). */}
+            <div className="bg-white border border-slate-200/70 rounded-2xl shadow-sm overflow-hidden">
+              <div className="px-5 py-3.5 border-b border-slate-100 bg-gradient-to-r from-slate-50/80 via-white to-white flex items-center justify-between gap-4 flex-wrap">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="shrink-0 h-9 w-9 rounded-xl bg-gradient-to-br from-blue-50 to-blue-100/60 ring-1 ring-blue-200/60 flex items-center justify-center">
+                    <ArrowLeftRight className="h-4.5 w-4.5 text-blue-700" />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="font-semibold text-slate-900 text-[15px] leading-tight">Análise de Movimentações</div>
+                    <div className="text-[11px] text-slate-500 mt-0.5 leading-tight">
+                      Últimos {movAgg.dias} dias · comparado com {movAgg.dias} dias anteriores
+                    </div>
+                  </div>
+                </div>
+                <div className="inline-flex items-center gap-0.5 p-1 rounded-full bg-slate-100/80 ring-1 ring-slate-200/70" role="tablist" aria-label="Período de análise">
+                  {([7, 30, 90] as const).map(d => {
+                    const ativo = movsPeriodoDias === d;
+                    return (
+                      <button
+                        key={d}
+                        type="button"
+                        role="tab"
+                        aria-selected={ativo}
+                        onClick={() => setMovsPeriodoDias(d)}
+                        className={[
+                          "shrink-0 px-3.5 py-1.5 rounded-full text-xs font-medium transition-all duration-150 whitespace-nowrap",
+                          ativo
+                            ? "bg-white text-slate-900 shadow-sm ring-1 ring-slate-200"
+                            : "text-slate-500 hover:text-slate-800 hover:bg-white/60",
+                        ].join(" ")}
+                      >
+                        {d} dias
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
 
+            {/* Rev. 2360 — KPIs com sub (média/dia + delta vs período anterior) */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <DashKpi
+                label={`Movimentações (${movAgg.dias}d)`}
+                value={fmtNum(movAgg.totalMovs)}
+                icon={ArrowLeftRight}
+                color="blue"
+                sub={(<DeltaSub current={movAgg.totalMovs} previous={movAgg.movsAnt} mediaDia={movAgg.mediaDiaMovs} />) as any}
+              />
+              <DashKpi
+                label="Entradas (qtd)"
+                value={fmtNum(movAgg.totalEntradas)}
+                icon={TrendingUp}
+                color="green"
+                sub={(<DeltaSub current={movAgg.totalEntradas} previous={movAgg.entAnt} mediaDia={movAgg.mediaDiaEntradas} />) as any}
+              />
+              <DashKpi
+                label="Saídas (qtd)"
+                value={fmtNum(movAgg.totalSaidas)}
+                icon={TrendingDown}
+                color="red"
+                sub={(<DeltaSub current={movAgg.totalSaidas} previous={movAgg.saiAnt} mediaDia={movAgg.mediaDiaSaidas} />) as any}
+              />
+              <DashKpi
+                label="Saldo (qtd)"
+                value={fmtNum(movAgg.totalEntradas - movAgg.totalSaidas)}
+                icon={Activity}
+                color={movAgg.totalEntradas >= movAgg.totalSaidas ? "green" : "red"}
+                sub={`${movAgg.totalEntradas >= movAgg.totalSaidas ? "+" : ""}${fmtNum(movAgg.totalEntradas - movAgg.totalSaidas)} unidades líquidas`}
+              />
+            </div>
+
+            {/* Rev. 2360 — Gráfico principal: eixo X em DD/MM (padrão BR) */}
             <DashChart
-              title="Entradas vs Saídas por dia (últimos 30 dias)"
+              title={`Entradas vs Saídas por dia (últimos ${movAgg.dias} dias)`}
               type="bar"
-              labels={Object.keys(movAgg.porDia).map(k => k.slice(5))}
+              labels={Object.keys(movAgg.porDia).map(fmtDayBR)}
               datasets={[
                 { label: "Entradas", data: Object.values(movAgg.porDia).map(d => d.entradas), backgroundColor: "#10B981" },
                 { label: "Saídas",   data: Object.values(movAgg.porDia).map(d => d.saidas),   backgroundColor: "#DC2626" },
@@ -654,33 +819,151 @@ export default function DashAlmoxarifadoEquipamentos() {
               height={320}
             />
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              <DashChart
-                title="Movimentações por tipo (30d)"
-                type="doughnut"
-                labels={movAgg.porTipo.map(t => t.tipo)}
-                datasets={[{ data: movAgg.porTipo.map(t => t.count) }]}
-              />
-              <div className="bg-white border border-slate-200/70 rounded-2xl shadow-sm hover:shadow-md transition-shadow overflow-hidden">
-                <div className="px-4 py-3 border-b border-slate-100 font-semibold text-slate-800">Últimas 15 movimentações</div>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead className="bg-gradient-to-b from-slate-50 to-slate-50/40 text-[11px] text-slate-500 uppercase tracking-wide">
-                      <tr><th className="text-left p-2">Data</th><th className="text-left p-2">Tipo</th><th className="text-left p-2">Item</th><th className="text-right p-2">Qtd</th></tr>
-                    </thead>
-                    <tbody>
-                      {((movsQ.data || []) as any[]).slice(0, 15).map((m: any) => (
-                        <tr key={m.id} className="border-t border-slate-100">
-                          <td className="p-2 text-slate-600 whitespace-nowrap">{fmtDate(m.criadoEm)}</td>
-                          <td className="p-2"><span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-100 text-slate-700">{m.tipo}</span></td>
-                          <td className="p-2 text-slate-800 truncate max-w-[200px]" title={m.itemNome}>{m.itemNome || "—"}</td>
-                          <td className="p-2 text-right font-medium">{fmtNum(Math.abs(Number(m.quantidade || 0)))}</td>
-                        </tr>
-                      ))}
-                      {((movsQ.data || []) as any[]).length === 0 && <tr><td colSpan={4} className="p-6 text-center text-slate-500">Sem movimentações.</td></tr>}
-                    </tbody>
-                  </table>
+            {/* Rev. 2360 — Análises auxiliares: 3 cards lado-a-lado.
+                1) Top 10 itens mais movimentados (lista visual com barras
+                   proporcionais — mais legível que doughnut com 10+ fatias).
+                2) Por tipo (doughnut, mantido — costuma ter 2-4 categorias).
+                3) Distribuição por dia da semana (vertical bar). */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+              <div className="bg-white border border-slate-200/70 rounded-2xl shadow-sm hover:shadow-md transition-shadow overflow-hidden lg:col-span-2">
+                <div className="px-4 py-3 border-b border-slate-100 font-semibold text-slate-800 flex items-center gap-2">
+                  <Package className="h-4 w-4 text-blue-600" /> Top 10 itens mais movimentados
                 </div>
+                <div className="p-3 space-y-2">
+                  {movAgg.topItens.length === 0 && <div className="p-4 text-center text-sm text-slate-500">Sem itens no período.</div>}
+                  {movAgg.topItens.map((it, idx) => {
+                    const maxTotal = movAgg.topItens[0]?.total || 1;
+                    const pct = (it.total / maxTotal) * 100;
+                    const pctEnt = it.total > 0 ? (it.entradas / it.total) * 100 : 0;
+                    return (
+                      <div key={`${it.nome}-${idx}`} className="group">
+                        <div className="flex items-center justify-between gap-2 text-xs mb-1">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className="shrink-0 h-5 w-5 rounded-full bg-slate-100 text-slate-600 text-[10px] font-bold flex items-center justify-center">{idx + 1}</span>
+                            <span className="font-medium text-slate-800 truncate" title={it.nome}>{it.nome}</span>
+                          </div>
+                          <span className="text-[11px] text-slate-500 whitespace-nowrap tabular-nums">
+                            <span className="text-emerald-600 font-semibold">↑{fmtNum(it.entradas)}</span>
+                            {" · "}
+                            <span className="text-red-600 font-semibold">↓{fmtNum(it.saidas)}</span>
+                            {" = "}
+                            <span className="font-bold text-slate-700">{fmtNum(it.total)}</span>
+                          </span>
+                        </div>
+                        <div className="h-2 bg-slate-100 rounded-full overflow-hidden flex">
+                          <div className="h-full bg-emerald-500" style={{ width: `${pct * pctEnt / 100}%` }} title={`Entradas: ${fmtNum(it.entradas)}`} />
+                          <div className="h-full bg-red-500" style={{ width: `${pct * (100 - pctEnt) / 100}%` }} title={`Saídas: ${fmtNum(it.saidas)}`} />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <DashChart
+                  title={`Por tipo (${movAgg.dias}d)`}
+                  type="doughnut"
+                  labels={movAgg.porTipo.map(t => t.tipo)}
+                  datasets={[{ data: movAgg.porTipo.map(t => t.count) }]}
+                />
+                <div className="bg-white border border-slate-200/70 rounded-2xl shadow-sm hover:shadow-md transition-shadow overflow-hidden">
+                  <div className="px-4 py-3 border-b border-slate-100 font-semibold text-slate-800 text-sm flex items-center gap-2">
+                    <CalendarRange className="h-4 w-4 text-purple-600" /> Por dia da semana
+                  </div>
+                  <div className="p-3">
+                    {(() => {
+                      const max = Math.max(1, ...movAgg.porDiaSemana);
+                      return (
+                        <div className="flex items-end justify-between gap-1.5 h-28">
+                          {movAgg.porDiaSemana.map((v, idx) => {
+                            const h = (v / max) * 100;
+                            const isFimSem = idx === 0 || idx === 6;
+                            return (
+                              <div key={idx} className="flex-1 flex flex-col items-center gap-1 group">
+                                <div className="text-[10px] font-semibold text-slate-500 tabular-nums opacity-0 group-hover:opacity-100 transition-opacity">{v}</div>
+                                <div className="w-full bg-slate-100 rounded-t flex items-end" style={{ height: "70%" }}>
+                                  <div
+                                    className={`w-full rounded-t transition-all ${isFimSem ? "bg-slate-300" : "bg-blue-500"}`}
+                                    style={{ height: `${h}%` }}
+                                    title={`${DIAS_SEMANA_PT[idx]}: ${fmtNum(v)} movs`}
+                                  />
+                                </div>
+                                <div className={`text-[10px] ${isFimSem ? "text-slate-400" : "text-slate-600 font-medium"}`}>{DIAS_SEMANA_PT[idx]}</div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      );
+                    })()}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Rev. 2360 — Top obras destino (full width, lista limpa) */}
+            {movAgg.topObras.length > 0 && (
+              <div className="bg-white border border-slate-200/70 rounded-2xl shadow-sm hover:shadow-md transition-shadow overflow-hidden">
+                <div className="px-4 py-3 border-b border-slate-100 font-semibold text-slate-800 flex items-center gap-2">
+                  <Building2 className="h-4 w-4 text-emerald-600" /> Obras com mais movimentações (top 8)
+                </div>
+                <div className="p-3 grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2">
+                  {movAgg.topObras.map((o, idx) => {
+                    const maxTotal = movAgg.topObras[0]?.total || 1;
+                    const pct = (o.total / maxTotal) * 100;
+                    return (
+                      <div key={`${o.nome}-${idx}`}>
+                        <div className="flex items-center justify-between gap-2 text-xs mb-1">
+                          <span className="font-medium text-slate-800 truncate" title={o.nome}>{o.nome}</span>
+                          <span className="text-[11px] text-slate-500 whitespace-nowrap tabular-nums font-semibold">{fmtNum(o.total)}</span>
+                        </div>
+                        <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                          <div className="h-full bg-gradient-to-r from-emerald-500 to-blue-500" style={{ width: `${pct}%` }} />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Rev. 2360 — Tabela últimas 15 movs: + colunas Obra/Responsável */}
+            <div className="bg-white border border-slate-200/70 rounded-2xl shadow-sm hover:shadow-md transition-shadow overflow-hidden">
+              <div className="px-4 py-3 border-b border-slate-100 font-semibold text-slate-800">Últimas 15 movimentações</div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-gradient-to-b from-slate-50 to-slate-50/40 text-[11px] text-slate-500 uppercase tracking-wide">
+                    <tr>
+                      <th className="text-left p-2.5">Data</th>
+                      <th className="text-left p-2.5">Tipo</th>
+                      <th className="text-left p-2.5">Item</th>
+                      <th className="text-left p-2.5">Obra</th>
+                      <th className="text-left p-2.5">Responsável</th>
+                      <th className="text-right p-2.5">Qtd</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {((movsQ.data || []) as any[]).slice(0, 15).map((m: any) => {
+                      const isEntrada = String(m.tipo || "").toLowerCase().includes("entrada");
+                      const obraNome = m.obraNome || (m.obraId ? (obrasMap.get(Number(m.obraId)) || `#${m.obraId}`) : "—");
+                      return (
+                        <tr key={m.id} className="border-t border-slate-100 hover:bg-slate-50">
+                          <td className="p-2.5 text-slate-600 whitespace-nowrap tabular-nums">{fmtDate(m.criadoEm)}</td>
+                          <td className="p-2.5">
+                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${isEntrada ? "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200" : "bg-red-50 text-red-700 ring-1 ring-red-200"}`}>{m.tipo}</span>
+                          </td>
+                          <td className="p-2.5 text-slate-800 truncate max-w-[200px]" title={m.itemNome}>{m.itemNome || "—"}</td>
+                          <td className="p-2.5 text-slate-700 truncate max-w-[180px]" title={obraNome}>{obraNome}</td>
+                          <td className="p-2.5 text-slate-600 truncate max-w-[140px]" title={m.usuarioNome || ""}>{m.usuarioNome || "—"}</td>
+                          <td className={`p-2.5 text-right font-semibold tabular-nums ${isEntrada ? "text-emerald-700" : "text-red-700"}`}>
+                            {isEntrada ? "+" : "−"}{fmtNum(Math.abs(Number(m.quantidade || 0)))}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                    {((movsQ.data || []) as any[]).length === 0 && <tr><td colSpan={6} className="p-6 text-center text-slate-500">Sem movimentações.</td></tr>}
+                  </tbody>
+                </table>
               </div>
             </div>
 
