@@ -985,14 +985,12 @@ Gere o JSON conforme o esquema. Não omita nenhuma descrição.`;
       if (!allowedIds.includes(input.companyId)) {
         throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta empresa." });
       }
+      // Rev. 2341 — Provedores: OpenVerse (primário, sem chave, sem cota) +
+      // Google CSE (fallback opcional se as creds estiverem ok). Não exige
+      // mais GOOGLE_API_KEY/CSE_ID — se faltarem, só pula o CSE.
       const apiKey = process.env.GOOGLE_API_KEY;
       const cx = process.env.GOOGLE_CSE_ID;
-      if (!apiKey || !cx) {
-        throw new TRPCError({
-          code: "PRECONDITION_FAILED",
-          message: "Configure GOOGLE_API_KEY e GOOGLE_CSE_ID nas Secrets antes de buscar fotos.",
-        });
-      }
+      const googleHabilitado = !!(apiKey && cx);
 
       // 1. Descrições distintas SEM foto — espelha exatamente o filtro do
       // client (`totalSemFoto`): item conta se NÃO tem foto de recebimento
@@ -1019,65 +1017,164 @@ Gere o JSON conforme o esquema. Não omita nenhuma descrição.`;
 
       const lote = descricoes.slice(0, input.maxDescricoes);
 
-      // 2. Busca foto pra cada descrição (sequencial — evita rate-limit do CSE)
-      const encontradas: { descricao: string; url: string }[] = [];
-      const semFoto: string[] = [];
-      let cotaEsgotada = false;
-      let configInvalida = false;
-      for (const d of lote) {
-        if (cotaEsgotada || configInvalida) break;
-        // Timeout 10s por chamada — evita travar a mutation se o Google demorar.
-        const ctrl = new AbortController();
-        const t = setTimeout(() => ctrl.abort(), 10_000);
+      // 2. Busca candidatos pra cada descrição em 3 provedores. Cada
+      // candidato vem com TÍTULO/SNIPPET pra validação textual pela IA.
+      // Helpers retornam até 5 candidatos cada, never-throws no path feliz.
+      type Cand = { url: string; title: string; provider: "openverse" | "wikimedia" | "google" };
+      async function fromOpenverse(query: string): Promise<Cand[]> {
+        const ctrl = new AbortController(); const t = setTimeout(() => ctrl.abort(), 8000);
         try {
-          const q = encodeURIComponent(`${d.descricao} equipamento construção civil`);
-          const url = `https://www.googleapis.com/customsearch/v1?key=${apiKey}&cx=${cx}&q=${q}&searchType=image&num=5&safe=active&imgSize=medium&fileType=jpg,png,webp`;
-          const resp = await fetch(url, { signal: ctrl.signal });
-          if (resp.status === 429) {
-            cotaEsgotada = true;
-            semFoto.push(d.descricao);
-            break;
+          const url = `https://api.openverse.engineering/v1/images/?q=${encodeURIComponent(query)}&page_size=5&mature=false`;
+          const r = await fetch(url, { signal: ctrl.signal, headers: { "User-Agent": "FCEngenhariaERP/2341 (fotos-ilustrativas)" } });
+          if (!r.ok) return [];
+          const j: any = await r.json();
+          const items: any[] = Array.isArray(j?.results) ? j.results : [];
+          const out: Cand[] = [];
+          for (const it of items) {
+            const link = String(it?.thumbnail || it?.url || "");
+            if (/^https?:\/\//.test(link) && link.length <= 1000) {
+              out.push({ url: link, title: String(it?.title || "").slice(0, 200), provider: "openverse" });
+            }
           }
-          if (resp.status === 403) {
-            // 403 pode ser quota OU credencial/billing inválidos — tenta
-            // distinguir pela mensagem (`reason: "rateLimitExceeded"` /
-            // "dailyLimitExceeded" → cota; "keyInvalid" / "accessNotConfigured"
-            // → config). Default conservador: trata como cota (mais comum no free tier).
+          return out;
+        } catch { return []; } finally { clearTimeout(t); }
+      }
+      async function fromWikimedia(query: string): Promise<Cand[]> {
+        const ctrl = new AbortController(); const t = setTimeout(() => ctrl.abort(), 8000);
+        try {
+          const url = `https://commons.wikimedia.org/w/api.php?action=query&format=json&generator=search&gsrnamespace=6&gsrlimit=5&gsrsearch=${encodeURIComponent(query)}&prop=imageinfo&iiprop=url&iiurlwidth=400&origin=*`;
+          const r = await fetch(url, { signal: ctrl.signal, headers: { "User-Agent": "FCEngenhariaERP/2341 (fotos-ilustrativas)" } });
+          if (!r.ok) return [];
+          const j: any = await r.json();
+          const pages: any[] = Object.values(j?.query?.pages || {});
+          const out: Cand[] = [];
+          for (const p of pages) {
+            const info = (p?.imageinfo || [])[0];
+            const link = String(info?.thumburl || info?.url || "");
+            if (/^https?:\/\//.test(link) && /\.(jpe?g|png|webp)(\?|$)/i.test(link) && link.length <= 1000) {
+              const t = String(p?.title || "").replace(/^File:/i, "").replace(/\.[a-z]+$/i, "").replace(/_/g, " ").slice(0, 200);
+              out.push({ url: link, title: t, provider: "wikimedia" });
+            }
+          }
+          return out;
+        } catch { return []; } finally { clearTimeout(t); }
+      }
+      async function fromGoogleCSE(query: string): Promise<{ cands: Cand[]; cotaEsgotada: boolean; configInvalida: boolean }> {
+        if (!googleHabilitado) return { cands: [], cotaEsgotada: false, configInvalida: false };
+        const ctrl = new AbortController(); const t = setTimeout(() => ctrl.abort(), 10_000);
+        try {
+          const url = `https://www.googleapis.com/customsearch/v1?key=${apiKey}&cx=${cx}&q=${encodeURIComponent(query)}&searchType=image&num=5&safe=active&imgSize=medium&fileType=jpg,png,webp`;
+          const resp = await fetch(url, { signal: ctrl.signal });
+          if (resp.status === 429) return { cands: [], cotaEsgotada: true, configInvalida: false };
+          if (resp.status === 403 || resp.status === 400) {
             const body: any = await resp.json().catch(() => ({}));
             const reason = String(body?.error?.errors?.[0]?.reason || "").toLowerCase();
-            if (reason.includes("keyinvalid") || reason.includes("accessnotconfigured") || reason.includes("forbidden")) {
-              configInvalida = true;
-              throw new TRPCError({ code: "PRECONDITION_FAILED", message: `Google CSE rejeitou a chamada: ${body?.error?.message || "credencial/permissão inválida"}. Verifique GOOGLE_API_KEY e GOOGLE_CSE_ID.` });
-            }
-            cotaEsgotada = true;
-            semFoto.push(d.descricao);
-            break;
+            const msg = String(body?.error?.message || "").toLowerCase();
+            const isConfigErr = reason.includes("keyinvalid") || reason.includes("accessnotconfigured") || reason.includes("forbidden") || reason.includes("badrequest") || msg.includes("api key not valid") || msg.includes("api_key_invalid") || msg.includes("api key expired");
+            if (isConfigErr) return { cands: [], cotaEsgotada: false, configInvalida: true };
+            if (resp.status === 403) return { cands: [], cotaEsgotada: true, configInvalida: false };
+            return { cands: [], cotaEsgotada: false, configInvalida: false };
           }
-          if (!resp.ok) { semFoto.push(d.descricao); continue; }
+          if (!resp.ok) return { cands: [], cotaEsgotada: false, configInvalida: false };
           const json: any = await resp.json();
           const items: any[] = Array.isArray(json.items) ? json.items : [];
-          // Pega 1ª URL válida (https + extensão de imagem)
-          const first = items.find((it: any) => {
+          const out: Cand[] = [];
+          for (const it of items) {
             const link = String(it?.link || "");
-            return /^https?:\/\//.test(link) && /\.(jpe?g|png|webp)(\?|$)/i.test(link) && link.length <= 1000;
+            if (/^https?:\/\//.test(link) && /\.(jpe?g|png|webp)(\?|$)/i.test(link) && link.length <= 1000) {
+              out.push({ url: link, title: String(it?.title || it?.snippet || "").slice(0, 200), provider: "google" });
+            }
+          }
+          return { cands: out, cotaEsgotada: false, configInvalida: false };
+        } catch { return { cands: [], cotaEsgotada: false, configInvalida: false }; } finally { clearTimeout(t); }
+      }
+
+      // 2a. Coleta candidatos de TODOS os provedores em paralelo por descrição.
+      type Bundle = { descricao: string; cands: Cand[] };
+      const bundles: Bundle[] = [];
+      let cotaEsgotada = false;
+      let googleDesativadoPorErro = false;
+      for (const d of lote) {
+        const query = `${d.descricao} equipamento construção civil`;
+        const [ov, wm, gc] = await Promise.all([
+          fromOpenverse(query),
+          fromWikimedia(d.descricao),
+          (googleHabilitado && !googleDesativadoPorErro && !cotaEsgotada) ? fromGoogleCSE(query) : Promise.resolve({ cands: [] as Cand[], cotaEsgotada: false, configInvalida: false }),
+        ]);
+        if (gc.configInvalida) googleDesativadoPorErro = true;
+        if (gc.cotaEsgotada) cotaEsgotada = true;
+        const cands = [...gc.cands, ...ov, ...wm].slice(0, 8); // máx 8 candidatos / descrição
+        bundles.push({ descricao: d.descricao, cands });
+      }
+
+      // 2b. VALIDAÇÃO RIGOROSA via IA — uma única call ao LLM com todos os
+      // bundles, retorna {descricao, urlSelecionada|null}. IA deve REJEITAR
+      // candidatos cujo título não menciona claramente o equipamento. Melhor
+      // não ter foto do que ter foto errada (regra explícita no prompt).
+      const bundlesComCands = bundles.filter(b => b.cands.length > 0);
+      let validacoes: { descricao: string; url: string | null; motivo?: string }[] = [];
+      if (bundlesComCands.length > 0) {
+        try {
+          const { invokeLLM } = await import("../_core/llm");
+          const systemPrompt = `Você valida correspondência entre DESCRIÇÕES de equipamentos de construção civil/locação e TÍTULOS de imagens candidatas.
+
+REGRAS RIGOROSAS (siga à risca):
+1. SÓ aprove um candidato se o TÍTULO mencionar EXPLICITAMENTE o tipo de equipamento descrito (ou sinônimo industrial inequívoco — ex: "scaffold" = "andaime", "shoring" = "escora").
+2. REJEITE títulos genéricos: "untitled", "image", "stock photo", "photo by X", nomes de pessoa, capas de livro, banners de loja/promoção, logos.
+3. REJEITE quando o título descrever um CONTEXTO mas não o objeto (ex: "obra em São Paulo", "trabalhador").
+4. EM CASO DE DÚVIDA → REJEITE (urlSelecionada = null). É MELHOR não ter foto do que ter foto errada.
+5. Se houver candidato do provider "google" que case bem, prefira ele (qualidade > CC).
+6. Acentos/maiúsculas não importam; abreviações (NR18, EPI) e dimensões (1,5x1,0) são pistas — não exija que apareçam no título.
+
+Responda JSON {"resultados":[{"descricao":"<exato>","i":<index|null>,"motivo":"<curto>"}, ...]} contendo TODAS as descrições recebidas.`;
+
+          const userPayload = bundlesComCands.map((b, k) => ({
+            descricao: b.descricao,
+            candidatos: b.cands.map((c, i) => ({ i, provider: c.provider, title: c.title })),
+          }));
+          const userPrompt = `Valide as ${bundlesComCands.length} descrições abaixo. Para cada uma, escolha o ÍNDICE do candidato que melhor representa o equipamento, OU retorne i=null se nenhum bate com confiança.
+
+${JSON.stringify(userPayload, null, 2)}
+
+Retorne APENAS o JSON conforme o esquema.`;
+          const resp = await invokeLLM({
+            messages: [
+              { role: "system", content: systemPrompt },
+              { role: "user", content: userPrompt },
+            ],
+            maxTokens: 8000,
+            response_format: { type: "json_object" },
           });
-          if (first) {
-            encontradas.push({ descricao: d.descricao, url: first.link });
-          } else {
-            semFoto.push(d.descricao);
+          const content = resp.choices?.[0]?.message?.content;
+          let raw = (typeof content === "string" ? content : Array.isArray(content) ? content.map((c: any) => c?.text ?? "").join("") : "").trim();
+          const m = raw.match(/```(?:json)?\s*([\s\S]*?)\s*```/i); if (m) raw = m[1].trim();
+          const fi = raw.indexOf("{"); const li = raw.lastIndexOf("}");
+          if (fi >= 0 && li > fi) raw = raw.slice(fi, li + 1);
+          const parsed: any = JSON.parse(raw);
+          const resultados: any[] = Array.isArray(parsed?.resultados) ? parsed.resultados : [];
+          const mapBundle = new Map(bundlesComCands.map(b => [b.descricao, b]));
+          for (const r of resultados) {
+            const desc = String(r?.descricao || "");
+            const b = mapBundle.get(desc);
+            if (!b) continue;
+            const i = (typeof r?.i === "number") ? r.i : null;
+            if (i !== null && i >= 0 && i < b.cands.length) {
+              validacoes.push({ descricao: desc, url: b.cands[i].url, motivo: String(r?.motivo || "").slice(0, 200) });
+            } else {
+              validacoes.push({ descricao: desc, url: null, motivo: String(r?.motivo || "Sem match confiável").slice(0, 200) });
+            }
           }
         } catch (e: any) {
-          if (e instanceof TRPCError) throw e;
-          // AbortError (timeout) ou erro de rede — não derruba o lote inteiro.
-          semFoto.push(d.descricao);
-        } finally {
-          clearTimeout(t);
+          // Se a validação por IA falhar, NÃO persiste nada (segurança).
+          // Loga e retorna lista vazia — usuário verá "0 fotos aprovadas".
+          console.error("[locadosBuscarFotosComIA] Validação IA falhou:", e?.message || e);
         }
       }
 
-      // 3. Bulk UPDATE por descrição (mesmo filtro "sem foto real" do SELECT).
+      // 3. Bulk UPDATE por descrição — só pras URLs APROVADAS pela IA.
       let itensAtualizados = 0;
-      for (const { descricao, url } of encontradas) {
+      const aprovadas = validacoes.filter(v => v.url);
+      for (const { descricao, url } of aprovadas) {
         const condSobre = input.sobrescrever
           ? semFotoRec
           : sql`(${semFotoRec} AND (foto_url IS NULL OR foto_url = ''))`;
@@ -1091,15 +1188,42 @@ Gere o JSON conforme o esquema. Não omita nenhuma descrição.`;
         itensAtualizados += Number(res.rowCount ?? res.rows?.length ?? 0);
       }
 
+      const descricoesRejeitadas = validacoes.filter(v => !v.url).map(v => v.descricao);
+      const descricoesSemCandidato = bundles.filter(b => b.cands.length === 0).map(b => b.descricao);
+      const semFoto = [...descricoesSemCandidato, ...descricoesRejeitadas];
+
       return {
         ok: true as const,
         descricoesAnalisadas: lote.length,
-        fotosEncontradas: encontradas.length,
+        fotosEncontradas: aprovadas.length,
         itensAtualizados,
         descricoesSemFoto: semFoto.slice(0, 30),
         haMaisLotes: descricoes.length > input.maxDescricoes,
         cotaEsgotada,
       };
+    }),
+
+  // Rev. 2342 — Limpar TODAS as fotos buscadas por IA (foto_url) — NÃO toca
+  // `fotos_recebimento_json` (essas são da física, autoritativas). Tenant-scoped.
+  locadosLimparFotosIA: protectedProcedure
+    .input(z.object({ companyId: z.number() }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const allowedCompanies = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+      const allowedIds = (allowedCompanies as any[]).map(c => c.id);
+      if (!allowedIds.includes(input.companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta empresa." });
+      }
+      const res: any = await db.execute(sql`
+        UPDATE equipamentos_locados
+           SET foto_url = NULL, updated_at = NOW()
+         WHERE company_id = ${input.companyId}
+           AND foto_url IS NOT NULL
+           AND foto_url <> ''
+      `);
+      const itensLimpos = Number(res.rowCount ?? res.rows?.length ?? 0);
+      return { ok: true as const, itensLimpos };
     }),
 
   // ── FATURA DE LOCAÇÃO (skeleton; OCR vem na Fase 3) ───────────────────────

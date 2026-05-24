@@ -1,6 +1,169 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2342 — **HOTFIX/FEATURE · Busca de fotos da IA passa por VALIDAÇÃO
+ * RIGOROSA via Gemini antes de persistir + novo botão "Limpar fotos IA"
+ * para reset em massa quando fotos erradas foram aplicadas.**
+ *
+ * **Contexto** (24/05/2026, IMG_1133/IMG_1134): Rev. 2341 trocou Google CSE
+ * por chain OpenVerse → Wikimedia → Google. Funcionou pra termos genéricos
+ * mas para descrições muito nichas/abreviadas (PAINEL NR18, DIAGONAIS,
+ * PRANCHAO METALICO, SAPATAS AJUSTÁVEIS) os provedores CC retornaram lixo
+ * categórico — IMG_1134 mostra ~12 cards "SAPATAS AJUSTÁVEIS" todos com a
+ * MESMA foto pink genérica (uma capa de livro "Materiais Básicos para a
+ * Biblioteca da USP" indexada no OpenVerse). User: "troque todas e arrume
+ * tudo de uma vez... quero a validação exata da foto, não pode colocar
+ * foto aleatoriamente". O problema central: nenhum filtro semântico entre
+ * "URL retornada por API de imagens" e "URL realmente bate com o equipamento".
+ *
+ * **Decisão**: usar IA pra VALIDAR os candidatos antes de persistir. Pra
+ * cada descrição, coletar candidatos dos 3 provedores em paralelo (com
+ * TÍTULO/SNIPPET), enviar TODOS numa única call ao Gemini com prompt
+ * rigoroso, IA escolhe ÍNDICE do melhor candidato OU rejeita tudo se
+ * nenhum bate. Filosofia explícita: "melhor não ter foto do que ter foto
+ * errada". Termos muito nichos vão ficar sem foto — comportamento honesto.
+ *
+ * **Server** (`server/routers/equipamentos.ts`):
+ *   - Refatorada `locadosBuscarFotosComIA`: helpers `fromOpenverse` /
+ *     `fromWikimedia` / `fromGoogleCSE` agora retornam `Cand[]` (até 5
+ *     candidatos cada com `{url, title, provider}`) em vez de `string|null`.
+ *     Wikimedia extrai título limpo do nome do arquivo (`File:Foo_bar.jpg`
+ *     → "Foo bar"). Google usa `it.title || it.snippet`.
+ *   - Loop principal: 3 chamadas em **paralelo** (Promise.all) por
+ *     descrição em vez de sequencial → ~3× mais rápido. Concatena
+ *     `[google, openverse, wikimedia].slice(0, 8)` (Google primeiro porque
+ *     tem mais metadata útil pra validação).
+ *   - **Validação batch**: 1 única call `invokeLLM` (Claude→Gemini
+ *     fallback existente) com TODOS os bundles (~60 descrições × 8 cands).
+ *     Prompt detalhado: 6 regras explícitas (rejeitar genéricos / capas /
+ *     pessoas / banners; aceitar só se título menciona o equipamento ou
+ *     sinônimo industrial; em dúvida → rejeitar; preferir Google quando
+ *     case). Response_format `json_object` → `{resultados: [{descricao, i,
+ *     motivo}, ...]}`. Se a validação IA falhar (LLM down), NÃO persiste
+ *     nada (segurança) — user vê "0 fotos aprovadas" e sabe que rodou.
+ *   - UPDATE só pra `validacoes.filter(v => v.url)` — bulk por descrição
+ *     com mesmo filtro `semFotoRec` do SELECT (idempotência).
+ *   - `descricoesSemFoto` agora une `semCandidato` (nenhum provider
+ *     retornou) + `rejeitadas` (IA disse não).
+ *   - **Nova procedure `locadosLimparFotosIA({companyId})`**: tenant guard
+ *     via `getCompaniesForUser`; `UPDATE equipamentos_locados SET foto_url
+ *     = NULL WHERE company_id = X AND foto_url IS NOT NULL`. NÃO toca
+ *     `fotos_recebimento_json` (essa é da física, autoritativa). Retorna
+ *     `{itensLimpos: count}`. Permite reset completo quando a busca
+ *     anterior aplicou fotos erradas.
+ *
+ * **Client** (`client/src/pages/equipamentos/Locados.tsx`):
+ *   - Novo `totalComFotoIA` useMemo: conta itens com `fotoUrl` setado.
+ *   - Nova mutation `limparFotosMut` + estado `modalLimparFotos`.
+ *   - Novo botão vermelho "🗑 Limpar fotos IA" no header (só aparece se
+ *     `totalComFotoIA > 0`) com badge contagem. Posicionado ANTES do
+ *     "Buscar fotos com IA" pink (fluxo natural: limpar → buscar).
+ *   - Novo modal de confirmação vermelho/rose: explica que zera
+ *     `foto_url`, destaca "seguro: não toca fotos do recebimento físico",
+ *     aviso âmbar "depois use buscar — agora valida pelo Gemini".
+ *   - Modal "Buscar fotos com IA" atualizado: copy menciona
+ *     **"validação rigorosa"** + bullet "melhor não ter foto do que foto
+ *     errada — termos nichos podem ficar sem foto, é o esperado" + bullet
+ *     "reset disponível via botão Limpar fotos IA". Tooltip do botão
+ *     também menciona validação.
+ *
+ * **Por que validação textual e não vision**: vision (image-to-text) sobre
+ * 480 candidatos (60 desc × 8) seria 2-3min e $$. Título/snippet são
+ * geralmente descritivos o suficiente — Wikimedia "Scaffolding-construction
+ * site Brazil" é claramente um andaime. Para casos onde título mente,
+ * vision adicionaria valor marginal a custo alto. Mantemos vision como
+ * follow-up se a validação textual provar insuficiente em produção.
+ *
+ * **Por que batch numa call só**: 60 calls sequenciais × 1s = 1min. Uma
+ * call com payload de ~8KB é processada em ~5s. Trade-off: prompt grande
+ * mas Gemini Flash 1M token context dá folga.
+ *
+ * **Por que ordem [Google, Openverse, Wikimedia]**: Google tem mais
+ * metadata útil pra validação (title + snippet), CC providers retornam só
+ * title. Quando válido, Google bate melhor pra equipamentos brasileiros.
+ *
+ * **Por que "Limpar" como ação separada**: idempotência da busca depende
+ * de `WHERE foto_url IS NULL` — sem reset explícito, fotos erradas ficam
+ * grudadas. Botão dá ao user controle total do ciclo busca→avaliar→limpar.
+ *
+ * **Files**: `server/routers/equipamentos.ts` (procedure refatorada +
+ * nova procedure limpar), `client/src/pages/equipamentos/Locados.tsx`
+ * (mutation + botão + modal + copy).
+ *
+ * **R-001/R-007/R-010**: UPDATE escopado por `company_id`, tenant guard
+ * via `getCompaniesForUser`, idempotente, zero DDL.
+ *
+ * Rev. 2341 — **FEATURE/HOTFIX · Busca de fotos com IA agora usa múltiplos
+ * provedores públicos (OpenVerse + Wikimedia Commons + Google CSE opcional)
+ * para destravar o feature mesmo quando a GOOGLE_API_KEY/CSE_ID estão com
+ * restrições de aplicativo ou Custom Search API desativada no projeto.**
+ *
+ * **Contexto** (24/05/2026): Rev. 2340 dependia exclusivamente do Google
+ * Custom Search Image. User habilitou a Custom Search API no projeto GCP
+ * `1052983877622` (print confirmando "Ativadas") mas o erro persistiu —
+ * causa real é que a `GOOGLE_API_KEY` reutilizada do Gemini tem restrições
+ * (HTTP referrer ou allowlist de APIs) que rejeitam chamadas server-side
+ * para Custom Search. Mensagem do Google é confusa ("API not enabled"),
+ * mesmo a API estando enabled. User pediu "arrume ou ache outra forma agora".
+ *
+ * **Decisão**: em vez de pedir pra editar restrições da key (frágil — pode
+ * quebrar outras integrações), trocar para uma chain de providers públicos
+ * sem chave: OpenVerse (Creative Commons, sem auth, sem cota) →
+ * Wikimedia Commons (MediaWiki API, sem auth) → Google CSE (mantido como
+ * 3º fallback opcional pra quando voltar a funcionar).
+ *
+ * **Server** (`server/routers/equipamentos.ts`, procedure
+ * `locadosBuscarFotosComIA`):
+ *   - Removido guard `PRECONDITION_FAILED` que abortava sem GOOGLE_API_KEY.
+ *     Agora `googleHabilitado = !!(apiKey && cx)` controla se o CSE é
+ *     tentado, mas a procedure roda sem ele.
+ *   - 3 helpers internos: `tryOpenverse(query)` (timeout 8s, busca em
+ *     `api.openverse.engineering/v1/images/?page_size=5&mature=false`,
+ *     pega 1ª URL https válida do array `results`),
+ *     `tryWikimedia(query)` (usa `commons.wikimedia.org/w/api.php?
+ *     action=query&generator=search&gsrnamespace=6&prop=imageinfo
+ *     &iiurlwidth=400` — só arquivos de mídia, retorna thumburl),
+ *     `tryGoogleCSE(query)` (lógica antiga preservada + retorna struct
+ *     `{url, cotaEsgotada, configInvalida, msg}` em vez de throw).
+ *   - Cada provider tem timeout 8s (10s no Google) e never throws no path
+ *     feliz — falha de 1 não derruba o lote.
+ *   - Loop principal: pra cada descrição, tenta OpenVerse → Wikimedia →
+ *     Google (se habilitado e não desativado por erro no lote). Após 1
+ *     erro de config no Google, `googleDesativadoPorErro = true` evita
+ *     repetir a chamada com erro pelas próximas 59 descrições (perda de
+ *     ~10s × 59 = 10min se não tivesse o flag). User-Agent custom em
+ *     OpenVerse/Wikimedia (boa prática + alguns endpoints exigem).
+ *   - Wikimedia recebe `d.descricao` cru (sem "equipamento construção
+ *     civil") — termos genéricos como "ANDAIME" indexam melhor sem
+ *     qualificadores.
+ *
+ * **Client** (`client/src/pages/equipamentos/Locados.tsx`):
+ *   - Modal de confirmação atualizado: "procura em bibliotecas públicas
+ *     de imagens (OpenVerse / Wikimedia Commons / Google)" em vez de só
+ *     Google. Linha de cota trocada por "Sem cota: OpenVerse e Wikimedia
+ *     são abertos e ilimitados". Resto do fluxo (barra de progresso da
+ *     Rev. 2340.1, modal de resultado, badge Sparkles na thumbnail) é
+ *     reaproveitado sem mudanças.
+ *
+ * **Por que NÃO trocar a key**: GOOGLE_API_KEY é usada também pelo Gemini
+ * (parsing de PDFs) e potencialmente pelo geocoding futuro. Editar
+ * restrições da key impacta outras integrações silenciosamente. Múltiplos
+ * providers é mais resiliente em arquitetura.
+ *
+ * **Por que OpenVerse**: Creative Commons aggregator do WordPress
+ * Foundation. ~700M imagens indexadas de Flickr/Wikimedia/Smithsonian/
+ * Museus. API pública sem auth, rate limit generoso (60/min sem chave).
+ * Qualidade boa pra termos comuns; para descrições muito específicas (ex:
+ * "SAPATAS AJUSTÁVEIS REGULÁVEIS") cai pro Wikimedia.
+ *
+ * **Por que manter Google CSE no chain**: a chave pode ser corrigida
+ * depois (criar key dedicada sem restrições) — quando voltar, ele entra
+ * automaticamente como 3º fallback pros casos que OpenVerse/Wikimedia
+ * não cobrem, sem mudança de código.
+ *
+ * **R-001/R-007/R-010:** N/A — só network IO + UPDATE escopado por
+ * `company_id` (igual Rev. 2340), idempotente. Zero schema/DDL change.
+ *
  * Rev. 2340 — **FEATURE · Busca de FOTO ILUSTRATIVA dos equipamentos locados
  * via IA (Google Custom Search Image) + thumbnail nos cards com badge "IA"
  * quando a foto veio da busca.**

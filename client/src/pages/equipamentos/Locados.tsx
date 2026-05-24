@@ -622,6 +622,8 @@ export default function EquipamentosLocados() {
     const fr = (l.fotosRecebimentoJson as any[]) || [];
     return fr.length === 0 && !l.fotoUrl;
   }).length, [dataAll]);
+  // Rev. 2342 — quantos itens TÊM foto da IA (foto_url preenchido) — pra botão Limpar
+  const totalComFotoIA = useMemo(() => (dataAll as any[]).filter(l => !!l.fotoUrl).length, [dataAll]);
 
   // Rev. 2337 — Categorização em lote via IA.
   const [modalCategIA, setModalCategIA] = useState<null | { sobrescrever: boolean }>(null);
@@ -652,6 +654,19 @@ export default function EquipamentosLocados() {
     const id = setInterval(() => setFotoTickNow(Date.now()), 500);
     return () => clearInterval(id);
   }, [fotoInicio]);
+  // Rev. 2342 — Limpar todas as fotos da IA (reset). Útil quando a busca anterior aplicou imagens erradas.
+  const [modalLimparFotos, setModalLimparFotos] = useState(false);
+  const limparFotosMut = trpc.equipamentos.locadosLimparFotosIA.useMutation({
+    onSuccess: (res: any) => {
+      setModalLimparFotos(false);
+      utils.equipamentos.locadosListar.invalidate();
+      toast.success(`${res.itensLimpos} foto(s) da IA removida(s). As fotos do recebimento físico foram preservadas.`);
+    },
+    onError: (err: any) => {
+      toast.error(err?.message || "Falha ao limpar fotos da IA.");
+      setModalLimparFotos(false);
+    },
+  });
   const buscarFotosMut = trpc.equipamentos.locadosBuscarFotosComIA.useMutation({
     onSuccess: (res: any) => {
       setResultadoFotosIA(res);
@@ -706,12 +721,23 @@ export default function EquipamentosLocados() {
                   <span className="inline-flex items-center justify-center min-w-[22px] h-5 px-1.5 rounded-full text-[10px] font-bold bg-white/25">{totalSemCategoria}</span>
                 </button>
               )}
+              {/* Rev. 2342 — Limpar fotos da IA (reset). Só aparece se houver fotos da IA aplicadas. */}
+              {totalComFotoIA > 0 && (
+                <button onClick={() => setModalLimparFotos(true)}
+                  disabled={limparFotosMut.isPending}
+                  className="inline-flex items-center gap-2 bg-red-500/90 text-white hover:bg-red-500 px-4 py-2.5 rounded-xl shadow-md font-semibold text-sm transition ring-1 ring-red-300/60 disabled:opacity-60 disabled:cursor-wait"
+                  title={`${totalComFotoIA} equipamento(s) com foto da IA — remover todas (mantém fotos do recebimento físico)`}>
+                  {limparFotosMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                  Limpar fotos IA
+                  <span className="inline-flex items-center justify-center min-w-[22px] h-5 px-1.5 rounded-full text-[10px] font-bold bg-white/25">{totalComFotoIA}</span>
+                </button>
+              )}
               {/* Rev. 2340 — Buscar fotos com IA (só aparece se houver itens sem foto). */}
               {totalSemFoto > 0 && (
                 <button onClick={() => setModalFotosIA({ sobrescrever: false })}
                   disabled={buscarFotosMut.isPending}
                   className="inline-flex items-center gap-2 bg-pink-500/90 text-white hover:bg-pink-500 px-4 py-2.5 rounded-xl shadow-md font-semibold text-sm transition ring-1 ring-pink-300/60 disabled:opacity-60 disabled:cursor-wait"
-                  title={`${totalSemFoto} equipamento(s) sem foto — a IA busca uma imagem ilustrativa no Google e aplica em lote`}>
+                  title={`${totalSemFoto} equipamento(s) sem foto — a IA busca em bibliotecas públicas e VALIDA cada candidato antes de aplicar (rejeita fotos que não batem)`}>
                   {buscarFotosMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Camera className="h-4 w-4" />}
                   Buscar fotos com IA
                   <span className="inline-flex items-center justify-center min-w-[22px] h-5 px-1.5 rounded-full text-[10px] font-bold bg-white/25">{totalSemFoto}</span>
@@ -1852,6 +1878,44 @@ export default function EquipamentosLocados() {
         </div>
       )}
 
+      {/* Rev. 2342 — Modal de confirmação "Limpar fotos da IA" */}
+      {modalLimparFotos && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => !limparFotosMut.isPending && setModalLimparFotos(false)}>
+          <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="bg-gradient-to-br from-red-600 to-rose-600 text-white p-5">
+              <div className="flex items-center gap-3">
+                <div className="bg-white/20 rounded-xl p-2.5 ring-1 ring-white/30">
+                  <Trash2 className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold">Limpar fotos da IA</h3>
+                  <p className="text-xs text-red-50/90 mt-0.5">Remover as {totalComFotoIA} foto(s) ilustrativa(s) aplicadas pela IA</p>
+                </div>
+              </div>
+            </div>
+            <div className="p-5 space-y-3 text-sm text-slate-700">
+              <p>Esta ação zera o campo <code className="bg-slate-100 px-1.5 py-0.5 rounded text-xs">foto_url</code> de todos os {totalComFotoIA} equipamento(s) desta empresa que tinham foto aplicada pela IA.</p>
+              <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 text-xs text-emerald-900">
+                <b>Seguro:</b> as fotos do <b>recebimento físico</b> (tiradas na obra durante o check-in) NÃO são afetadas — apenas as ilustrativas buscadas pela IA.
+              </div>
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-900">
+                Depois de limpar, use "Buscar fotos com IA" novamente — a nova versão valida cada candidato pelo Gemini antes de aplicar.
+              </div>
+            </div>
+            <div className="bg-slate-50 border-t border-slate-200 px-5 py-3 flex justify-end gap-2">
+              <button onClick={() => setModalLimparFotos(false)} disabled={limparFotosMut.isPending}
+                className="px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-200 rounded-lg transition disabled:opacity-60">Cancelar</button>
+              <button
+                onClick={() => limparFotosMut.mutate({ companyId })}
+                disabled={limparFotosMut.isPending}
+                className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-red-600 hover:bg-red-700 rounded-lg shadow-md transition disabled:opacity-60 disabled:cursor-wait">
+                {limparFotosMut.isPending ? <><Loader2 className="h-4 w-4 animate-spin" /> Limpando…</> : <><Trash2 className="h-4 w-4" /> Sim, limpar todas</>}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Rev. 2340 — Modal de confirmação "Buscar fotos com IA" */}
       {modalFotosIA && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => !buscarFotosMut.isPending && setModalFotosIA(null)}>
@@ -1863,22 +1927,22 @@ export default function EquipamentosLocados() {
                 </div>
                 <div>
                   <h3 className="text-lg font-bold">Buscar fotos com IA</h3>
-                  <p className="text-xs text-pink-50/90 mt-0.5">Imagem ilustrativa do Google para os {totalSemFoto} equipamento(s) sem foto</p>
+                  <p className="text-xs text-pink-50/90 mt-0.5">Imagem ilustrativa com <b>validação rigorosa</b> para os {totalSemFoto} equipamento(s) sem foto</p>
                 </div>
               </div>
             </div>
             <div className="p-5 space-y-3 text-sm text-slate-700">
-              <p>A IA agrupa por <b>descrição única</b> (ex: "SAPATAS AJUSTÁVEIS" aparece 1.218 vezes mas é 1 busca só) e procura no <b>Google Imagens</b> uma foto ilustrativa do equipamento. Depois aplica a mesma foto em todas as unidades.</p>
+              <p>A IA agrupa por <b>descrição única</b> (ex: "SAPATAS AJUSTÁVEIS" aparece 1.218 vezes mas é 1 busca só), coleta candidatos em bibliotecas públicas (OpenVerse, Wikimedia, Google) e o Gemini <b>valida cada título</b> — só persiste a imagem se o título realmente bater com o equipamento. <b>Em caso de dúvida, rejeita.</b></p>
               <div className="bg-pink-50 border border-pink-200 rounded-lg p-3 text-xs text-pink-900 space-y-1">
-                <div><b>Cota:</b> 100 buscas/dia no plano gratuito do Google. Roda até 60 descrições por vez.</div>
-                <div><b>Idempotente:</b> só toca itens sem foto (não substitui fotos do recebimento).</div>
-                <div><b>Custo:</b> a Google armazena só URLs públicas — nada é baixado pro servidor.</div>
+                <div><b>Validação por IA:</b> melhor não ter foto do que ter foto errada. Termos muito nichos (ex: "PAINEL NR18") podem ficar sem foto — é o comportamento esperado.</div>
+                <div><b>Idempotente:</b> só toca itens sem foto (não substitui fotos do recebimento físico).</div>
+                <div><b>Reset:</b> se quiser começar do zero, use o botão vermelho "Limpar fotos IA" no header.</div>
               </div>
               {buscarFotosMut.isPending && (
                 <div className="space-y-2">
                   <div className="flex items-center justify-between text-xs">
                     <span className="inline-flex items-center gap-1.5 text-pink-700 font-medium">
-                      <Loader2 className="h-3.5 w-3.5 animate-spin" /> Buscando no Google…
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" /> Buscando imagens…
                     </span>
                     <span className="font-mono text-slate-600 tabular-nums">
                       {fotoSegundosDecorridos}s / ~{fotoSegundosEstimados}s · <b className="text-pink-700">{fotoPct}%</b>
@@ -1893,7 +1957,7 @@ export default function EquipamentosLocados() {
                   <div className="text-[11px] text-slate-500">
                     Processando ~{fotoDescricoesEstimadas} descrição(ões) única(s) — 1 busca por descrição.
                     {fotoSegundosDecorridos > fotoSegundosEstimados + 10 && (
-                      <span className="text-amber-700"> · O Google está respondendo mais devagar que o esperado — aguarde.</span>
+                      <span className="text-amber-700"> · Os provedores estão respondendo mais devagar que o esperado — aguarde.</span>
                     )}
                   </div>
                 </div>
