@@ -15,7 +15,7 @@ import {
   Warehouse, Package, ArrowLeftRight, AlertTriangle, Truck, HardHat,
   DollarSign, Activity, Clock, Wrench, ArrowLeft, MapPin, Building2,
   TrendingUp, TrendingDown, ShieldAlert, CheckCircle2, Layers, Tag,
-  CalendarRange, ArrowUp, ArrowDown, Minus,
+  CalendarRange, ArrowUp, ArrowDown, Minus, X, Search, Hash, Eye,
 } from "lucide-react";
 
 const fmtBRL = (v: number) => (v || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -299,6 +299,11 @@ export default function DashAlmoxarifadoEquipamentos() {
   // Rev. 2335 — padrão = ano corrente (pedido user 24/05/2026: "começar
   // sempre no início do ano"). "12m" continua disponível na pill.
   const [periodoMeses, setPeriodoMeses] = useState<"12m" | number>(() => new Date().getFullYear());
+  // Rev. 2336 — drill-down: célula clicada da tabela "Locações mês a mês"
+  type MetricaLoc = "ini" | "dev" | "saldo" | "custo";
+  const [detalheLoc, setDetalheLoc] = useState<{ mesKey: string; mesLabel: string; metrica: MetricaLoc } | null>(null);
+  const [detalheBusca, setDetalheBusca] = useState("");
+  useEffect(() => { if (!detalheLoc) setDetalheBusca(""); }, [detalheLoc]);
   const anosDisponiveis = useMemo(() => {
     const anos = new Set<number>();
     const yearOf = (d: any) => { const k = monthKey(d); return k ? Number(k.slice(0, 4)) : null; };
@@ -923,13 +928,24 @@ export default function DashAlmoxarifadoEquipamentos() {
                       const prevDev = pk ? monthlyAgg.locadosDevolvidos[pk] : undefined;
                       const prevSaldo = pk ? (monthlyAgg.locadosIniciados[pk] - monthlyAgg.locadosDevolvidos[pk]) : undefined;
                       const prevCusto = pk ? monthlyAgg.locadosCustoIniciado[pk] : undefined;
+                      // Rev. 2336 — célula clicável (drill-down) com indicador discreto
+                      const cellBtn = (content: any, metrica: MetricaLoc, disabled = false) => (
+                        <button
+                          onClick={() => !disabled && setDetalheLoc({ mesKey: m.key, mesLabel: m.label, metrica })}
+                          disabled={disabled}
+                          className={`group inline-flex items-center gap-1.5 -mx-1 px-1 py-0.5 rounded-md transition ${disabled ? "cursor-default opacity-60" : "hover:bg-emerald-50 hover:ring-1 hover:ring-emerald-200 cursor-pointer"}`}
+                          title={disabled ? "Sem registros nesse mês" : `Ver detalhes — ${m.label}`}>
+                          {content}
+                          {!disabled && <Eye className="h-3 w-3 text-slate-400 opacity-0 group-hover:opacity-100 transition" />}
+                        </button>
+                      );
                       return (
-                        <tr key={m.key} className="border-t border-slate-100 hover:bg-slate-50">
+                        <tr key={m.key} className="border-t border-slate-100 hover:bg-slate-50/60 transition">
                           <td className="p-2.5 font-medium text-slate-800 whitespace-nowrap">{m.label}</td>
-                          <td className="p-2.5"><DeltaCell value={ini} prev={prevIni} accent="text-emerald-700" /></td>
-                          <td className="p-2.5"><DeltaCell value={dev} prev={prevDev} accent="text-red-700" /></td>
-                          <td className="p-2.5"><DeltaCell value={saldo} prev={prevSaldo} accent={saldo >= 0 ? "text-emerald-700 font-semibold" : "text-red-700 font-semibold"} /></td>
-                          <td className="p-2.5"><DeltaCell value={monthlyAgg.locadosCustoIniciado[m.key]} prev={prevCusto} money /></td>
+                          <td className="p-2.5">{cellBtn(<DeltaCell value={ini} prev={prevIni} accent="text-emerald-700" />, "ini", !ini)}</td>
+                          <td className="p-2.5">{cellBtn(<DeltaCell value={dev} prev={prevDev} accent="text-red-700" />, "dev", !dev)}</td>
+                          <td className="p-2.5">{cellBtn(<DeltaCell value={saldo} prev={prevSaldo} accent={saldo >= 0 ? "text-emerald-700 font-semibold" : "text-red-700 font-semibold"} />, "saldo", !ini && !dev)}</td>
+                          <td className="p-2.5">{cellBtn(<DeltaCell value={monthlyAgg.locadosCustoIniciado[m.key]} prev={prevCusto} money />, "custo", !ini)}</td>
                         </tr>
                       );
                     })}
@@ -940,6 +956,169 @@ export default function DashAlmoxarifadoEquipamentos() {
           </TabsContent>
         </Tabs>
       </div>
+
+      {/* Rev. 2336 — Modal drill-down de Locações mês a mês */}
+      {detalheLoc && (() => {
+        const list = (locadosQ.data || []) as any[];
+        const inMonth = (d: any) => monthKey(d) === detalheLoc.mesKey;
+        // Constrói linhas com tag pra cada métrica.
+        // IMPORTANTE: usar a MESMA chave de bucket do monthlyAgg (dataInicio || criadoEm)
+        // pra ini/custo/saldo, senão a contagem do modal diverge da célula clicada.
+        const rows: Array<{ l: any; tag: "ini" | "dev"; data: any }> = [];
+        if (detalheLoc.metrica === "ini" || detalheLoc.metrica === "custo") {
+          for (const l of list) {
+            const di = l.dataInicio || l.criadoEm;
+            if (inMonth(di)) rows.push({ l, tag: "ini", data: di });
+          }
+        } else if (detalheLoc.metrica === "dev") {
+          for (const l of list) if (inMonth(l.dataDevolucao)) rows.push({ l, tag: "dev", data: l.dataDevolucao });
+        } else { // saldo: ini ∪ dev
+          for (const l of list) {
+            const di = l.dataInicio || l.criadoEm;
+            if (inMonth(di)) rows.push({ l, tag: "ini", data: di });
+            if (inMonth(l.dataDevolucao)) rows.push({ l, tag: "dev", data: l.dataDevolucao });
+          }
+        }
+        const buscaNorm = detalheBusca.trim().toLowerCase();
+        const filtradas = buscaNorm
+          ? rows.filter(({ l }) => `${l.descricao || ""} ${l.fornecedorNome || ""} ${l.codigoPatrimonioFornecedor || ""} ${l.obraId ? obrasMap.get(Number(l.obraId)) || "" : ""}`.toLowerCase().includes(buscaNorm))
+          : rows;
+        const totalUnid = rows.length;
+        const totalIni = rows.filter(r => r.tag === "ini").length;
+        const totalDev = rows.filter(r => r.tag === "dev").length;
+        const custoIni = rows.filter(r => r.tag === "ini").reduce((s, r) => s + (Number(r.l.valorMensal) || 0), 0);
+        const obrasUnicas = new Set<number>();
+        for (const r of rows) if (r.l.obraId) obrasUnicas.add(Number(r.l.obraId));
+        const metricaCfg: Record<MetricaLoc, { titulo: string; icone: any; gradient: string; sub: string }> = {
+          ini:   { titulo: "Locações iniciadas",   icone: TrendingUp,   gradient: "from-emerald-600 via-teal-600 to-cyan-700",  sub: "equipamentos cujo contrato começou neste mês" },
+          dev:   { titulo: "Devoluções",            icone: TrendingDown, gradient: "from-rose-600 via-red-600 to-orange-600",    sub: "equipamentos devolvidos neste mês" },
+          saldo: { titulo: "Movimentação líquida",  icone: ArrowLeftRight, gradient: "from-indigo-600 via-violet-600 to-fuchsia-600", sub: "iniciadas e devolvidas neste mês" },
+          custo: { titulo: "Custo mensal iniciado", icone: DollarSign,   gradient: "from-amber-600 via-orange-600 to-red-600",   sub: "custo das locações iniciadas neste mês" },
+        };
+        const cfg = metricaCfg[detalheLoc.metrica];
+        const Icon = cfg.icone;
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-slate-900/60 backdrop-blur-sm" onClick={() => setDetalheLoc(null)}>
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-6xl max-h-[90vh] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
+              {/* Header gradient */}
+              <div className={`relative overflow-hidden bg-gradient-to-br ${cfg.gradient} text-white`}>
+                <div className="absolute inset-0 opacity-20" style={{ backgroundImage: "radial-gradient(circle at 20% 50%, rgba(255,255,255,0.3) 0%, transparent 50%), radial-gradient(circle at 80% 50%, rgba(255,255,255,0.2) 0%, transparent 50%)" }} />
+                <div className="relative px-5 py-4 flex items-start justify-between gap-4">
+                  <div className="flex items-center gap-3">
+                    <div className="bg-white/20 backdrop-blur-sm rounded-xl p-2.5 ring-1 ring-white/30">
+                      <Icon className="h-6 w-6" />
+                    </div>
+                    <div>
+                      <div className="text-xs uppercase tracking-widest text-white/80 font-semibold">{detalheLoc.mesLabel}</div>
+                      <h2 className="text-xl font-bold tracking-tight">{cfg.titulo}</h2>
+                      <p className="text-xs text-white/80 mt-0.5">{cfg.sub}</p>
+                    </div>
+                  </div>
+                  <button onClick={() => setDetalheLoc(null)} className="bg-white/15 hover:bg-white/25 backdrop-blur-sm rounded-xl p-2 ring-1 ring-white/30 transition" title="Fechar">
+                    <X className="h-5 w-5" />
+                  </button>
+                </div>
+              </div>
+
+              {/* KPI strip + busca */}
+              <div className="border-b border-slate-200 bg-slate-50/60 px-5 py-3 space-y-3">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  <div className="bg-white rounded-xl border border-slate-200 p-3">
+                    <div className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Iniciadas</div>
+                    <div className="text-xl font-bold text-emerald-700 mt-0.5">{fmtNum(totalIni)}</div>
+                  </div>
+                  <div className="bg-white rounded-xl border border-slate-200 p-3">
+                    <div className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Devolvidas</div>
+                    <div className="text-xl font-bold text-red-700 mt-0.5">{fmtNum(totalDev)}</div>
+                  </div>
+                  <div className="bg-white rounded-xl border border-slate-200 p-3">
+                    <div className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Custo iniciado</div>
+                    <div className="text-xl font-bold text-amber-700 mt-0.5">{fmtBRL(custoIni)}</div>
+                  </div>
+                  <div className="bg-white rounded-xl border border-slate-200 p-3">
+                    <div className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Obras envolvidas</div>
+                    <div className="text-xl font-bold text-indigo-700 mt-0.5">{fmtNum(obrasUnicas.size)}</div>
+                  </div>
+                </div>
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                  <input
+                    autoFocus
+                    value={detalheBusca}
+                    onChange={e => setDetalheBusca(e.target.value)}
+                    placeholder="Filtrar por descrição, fornecedor, patrimônio, obra…"
+                    className="w-full pl-10 pr-3 py-2 border border-slate-200 rounded-lg text-sm bg-white focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 outline-none transition" />
+                </div>
+              </div>
+
+              {/* Lista */}
+              <div className="flex-1 overflow-auto">
+                {filtradas.length === 0 ? (
+                  <div className="p-12 text-center text-slate-500">
+                    <Truck className="h-10 w-10 text-slate-300 mx-auto mb-2" />
+                    <div className="font-medium">Nenhum equipamento encontrado.</div>
+                    {buscaNorm && <div className="text-xs mt-1">Ajuste o filtro de busca acima.</div>}
+                  </div>
+                ) : (
+                  <table className="w-full text-sm">
+                    <thead className="sticky top-0 bg-gradient-to-b from-slate-50 to-slate-50/90 backdrop-blur text-[11px] text-slate-500 uppercase tracking-wide z-10">
+                      <tr className="border-b border-slate-200">
+                        <th className="text-left p-2.5 pl-5">Evento</th>
+                        <th className="text-left p-2.5">Equipamento</th>
+                        <th className="text-left p-2.5">Patrim.</th>
+                        <th className="text-left p-2.5">Fornecedor</th>
+                        <th className="text-left p-2.5">Obra</th>
+                        <th className="text-left p-2.5 whitespace-nowrap">Data</th>
+                        <th className="text-right p-2.5 pr-5 whitespace-nowrap">R$/mês</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filtradas.map(({ l, tag, data }, idx) => (
+                        <tr key={`${l.id}-${tag}-${idx}`} className="border-t border-slate-100 hover:bg-emerald-50/30 transition">
+                          <td className="p-2.5 pl-5">
+                            {tag === "ini" ? (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full">
+                                <TrendingUp className="h-3 w-3" /> Iniciada
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider bg-red-100 text-red-800 px-2 py-0.5 rounded-full">
+                                <TrendingDown className="h-3 w-3" /> Devolvida
+                              </span>
+                            )}
+                          </td>
+                          <td className="p-2.5 text-slate-800 font-medium max-w-[280px] truncate" title={l.descricao}>{l.descricao}</td>
+                          <td className="p-2.5 text-slate-600 font-mono text-xs"><span className="inline-flex items-center gap-1"><Hash className="h-3 w-3 text-slate-400" />{l.codigoPatrimonioFornecedor || "—"}</span></td>
+                          <td className="p-2.5 text-slate-700">{l.fornecedorNome || <span className="text-slate-400 italic">sem fornecedor</span>}</td>
+                          <td className="p-2.5 text-slate-700">
+                            {l.obraId ? (
+                              <span className="inline-flex items-center gap-1"><Building2 className="h-3 w-3 text-slate-400" />{obrasMap.get(Number(l.obraId)) || `#${l.obraId}`}</span>
+                            ) : <span className="text-slate-400 italic">— sem obra —</span>}
+                          </td>
+                          <td className="p-2.5 text-slate-600 whitespace-nowrap">{fmtDate(data)}</td>
+                          <td className="p-2.5 pr-5 text-right text-slate-800 font-medium whitespace-nowrap">{tag === "ini" ? fmtBRL(Number(l.valorMensal) || 0) : <span className="text-slate-400">—</span>}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+
+              {/* Footer */}
+              <div className="border-t border-slate-200 bg-slate-50/80 px-5 py-3 flex items-center justify-between text-xs text-slate-600">
+                <div>
+                  Mostrando <b className="text-slate-900">{filtradas.length}</b> de <b className="text-slate-900">{totalUnid}</b> {totalUnid === 1 ? "registro" : "registros"}
+                  {buscaNorm && <span className="ml-1 text-slate-500">(filtrado por "{detalheBusca}")</span>}
+                </div>
+                <Link href={`/equipamentos/locados`}>
+                  <a className="inline-flex items-center gap-1.5 text-emerald-700 hover:text-emerald-800 font-medium hover:underline" onClick={() => setDetalheLoc(null)}>
+                    Abrir Equipamentos Locados →
+                  </a>
+                </Link>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </DashboardLayout>
   );
 }

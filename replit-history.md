@@ -550,3 +550,5 @@
 - Rev. 2327 — UX · Cada aba do Dashboard Almox & Equip. vira item próprio na sidebar + tabela mês a mês (12m). Ver `shared/changelog.ts`.
 
 - Rev. 2328 — HOTFIX/UX · Exclusão/vinculação em lote de locados — chunk 500→200 + spinner + tempo decorrido. Ver `shared/changelog.ts`.
+
+- Rev. 2329 — PERF · Exclusão/vinculação em lote de locados ~50× mais rápida (bulk SQL). Ver `shared/changelog.ts`.

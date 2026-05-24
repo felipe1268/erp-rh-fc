@@ -1,6 +1,98 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2336 — **FEATURE/UX · Drill-down clicável nas células da tabela
+ * "Locações mês a mês" do Dashboard Almox & Equip. → modal moderno
+ * com lista detalhada dos equipamentos, KPI strip, busca interna
+ * e link pra tela principal.**
+ *
+ * Pedido user (24/05/2026, screenshot da tabela mostrando "Abr 2026
+ * · 1.012 iniciadas / R$ 15.815,50"): "Quero poder clicar na
+ * informação, quero q abra uma nova tela conforme nossa regra de
+ * ouro, e layout moderno e interativo".
+ *
+ * Contexto: a tabela mês a mês (Rev. 2327/2330/2332) mostrava só
+ * agregados — pra entender QUAIS equipamentos compunham um pico
+ * (ex.: 1.012 iniciadas em Abr/26), o engenheiro tinha que abrir
+ * Equipamentos Locados, filtrar por mês manualmente. Sem caminho
+ * óbvio entre análise → operação.
+ *
+ * **Implementação** (`client/src/pages/dashboards/DashAlmoxarifadoEquipamentos.tsx`,
+ * 0 server, 0 schema):
+ *
+ *   (1) **Células clicáveis** (Iniciadas, Devolvidas, Saldo, Custo):
+ *       wrapper `cellBtn(content, metrica, disabled)` que envolve
+ *       o `<DeltaCell>` num `<button>` com hover ring emerald +
+ *       ícone 👁 que aparece on hover (affordance discreta).
+ *       Células com valor 0 ficam `disabled` (cursor-default,
+ *       opacity-60, sem hover) — evita "clicar e abrir vazio".
+ *
+ *   (2) **Estado `detalheLoc`**: `{ mesKey, mesLabel, metrica:
+ *       "ini"|"dev"|"saldo"|"custo" } | null`. `detalheBusca` (string)
+ *       pra filtro interno do modal — `useEffect` reseta busca ao
+ *       fechar modal.
+ *
+ *   (3) **Modal `bg-slate-900/60 backdrop-blur-sm`**: z-50, click
+ *       no backdrop fecha; `stopPropagation` no card pra evitar
+ *       fechar ao clicar dentro. `max-w-6xl max-h-[90vh]` com
+ *       layout flex-col (header fixo + body scroll + footer fixo).
+ *
+ *   (4) **Header gradient por métrica**: cada uma com cor própria
+ *       (emerald→cyan iniciadas, rose→orange devoluções, indigo→
+ *       fuchsia saldo, amber→red custo), ícone branco em chip
+ *       backdrop-blur, label do mês caixa alta + título grande +
+ *       descrição em 1 linha. Botão X também em chip translúcido.
+ *
+ *   (5) **KPI strip (4 cards)**: Iniciadas, Devolvidas, Custo
+ *       iniciado, Obras envolvidas — sempre as 4 mesmo quando a
+ *       métrica clicada é apenas uma (dá contexto adicional).
+ *
+ *   (6) **Busca interna**: input com ícone Search filtrando por
+ *       descrição + fornecedor + patrimônio + nome da obra.
+ *       `autoFocus` pro tab/teclado.
+ *
+ *   (7) **Tabela**: thead sticky (top-0 backdrop-blur), col Evento
+ *       (badge Iniciada/Devolvida com TrendingUp/Down + cor),
+ *       Equipamento (truncate), Patrimônio (mono), Fornecedor,
+ *       Obra (ícone Building2), Data (dd/mm/aaaa), R$/mês
+ *       (devoluções mostram "—" porque a métrica de custo refere
+ *       só às iniciadas). Empty state com ícone Truck.
+ *
+ *   (8) **Footer**: contagem "X de Y registros" + link "Abrir
+ *       Equipamentos Locados →" que fecha o modal e navega.
+ *
+ *   (9) **Composição das linhas por métrica**:
+ *       - "ini" / "custo" → `dataInicio` casa com mesKey;
+ *       - "dev" → `dataDevolucao` casa com mesKey;
+ *       - "saldo" → união de ambos (cada equipamento pode
+ *         aparecer 2× — uma como Iniciada, outra como Devolvida
+ *         — quando entrou e saiu no mesmo mês).
+ *
+ * **Por que modal e não rota nova**: o usuário disse "nova tela",
+ * mas a intenção UX (drill-down de uma célula) é melhor servida
+ * por overlay — preserva o contexto da tabela mês a mês,
+ * fechamento é 1 clique (ESC ou backdrop), zero round-trips
+ * (dados já carregados em `locadosQ`). Uma rota nova exigiria
+ * back/forward do navegador e dependeria de querystring pra
+ * voltar pra mesma tab/período.
+ *
+ * **Por que ícone 👁 só no hover**: célula numérica precisa
+ * permanecer legível como tabela; ícone permanente poluiria. Só
+ * aparece quando o mouse está em cima → reforça affordance sem
+ * competir com o número.
+ *
+ * **Por que disabled quando valor=0**: evita "click → modal vazio
+ * → fechar" (UX irritante). Em meses com 0 iniciadas o usuário
+ * vê opacidade reduzida e tooltip "Sem registros nesse mês".
+ *
+ * **Escopo**: só a tabela Locações mês a mês (foco do screenshot).
+ * As outras 5 tabelas (Visão Geral, Estoque, Movs, Ferramentas,
+ * Próprios) ficam pra próxima rev se o user pedir — o padrão
+ * `cellBtn` + modal genérico já está estabelecido pra reuso.
+ *
+ * **R-001/R-007/R-010:** N/A — apenas leitura cliente-side de
+ * `locadosQ.data` já cacheado, zero DDL, zero mutations.
+ *
  * Rev. 2335 — **UX · Padrão do filtro de período dos 6 dashboards
  * mês a mês passa de "últimos 12 meses" pro ano corrente.**
  *
