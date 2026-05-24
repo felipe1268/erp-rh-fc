@@ -2225,11 +2225,11 @@ export default function EquipamentosLocados() {
               </div>
             </div>
             <div className="p-5 space-y-3 text-sm text-slate-700">
-              <p>A IA agrupa por <b>descrição única</b> (ex: "SAPATAS AJUSTÁVEIS" aparece 1.218 vezes mas é 1 busca só), coleta candidatos em bibliotecas públicas (OpenVerse, Wikimedia, Google) e aplica <b>3 fases</b> até garantir foto pra todos.</p>
+              <p>A IA agrupa por <b>descrição única</b> (ex: "SAPATAS AJUSTÁVEIS" aparece 1.218 vezes mas é 1 busca só), busca em <b>português</b> no Google + OpenVerse + Wikimedia e aplica <b>validação rigorosa</b> em todo candidato antes de salvar.</p>
               <div className="bg-pink-50 border border-pink-200 rounded-lg p-3 text-xs text-pink-900 space-y-1">
-                <div><b>Fase A — Match preciso:</b> Gemini escolhe o melhor candidato cujo título bate com o equipamento.</div>
-                <div><b>Fase B — Busca ampla:</b> pros que sobrarem, busca por categoria/palavra-chave e pega o 1º resultado relevante.</div>
-                <div><b>Fase C — Placeholder por categoria:</b> último recurso — card colorido com o nome da categoria. Garante 100%.</div>
+                <div><b>Fase A — Foto validada:</b> Gemini só aprova candidatos cujo título bate com o equipamento. <b>Em dúvida, rejeita.</b></div>
+                <div><b>Fase C — Placeholder por categoria:</b> pros que não passarem na validação — card colorido com a categoria. Garante 100% sem foto errada.</div>
+                <div className="text-pink-700 italic">Filosofia: melhor placeholder honesto que foto errada.</div>
                 <div><b>Idempotente:</b> só toca itens sem foto (não substitui fotos do recebimento físico).</div>
                 <div><b>Reset:</b> se quiser começar do zero, use o botão vermelho "Limpar fotos IA" no header.</div>
               </div>
@@ -2295,15 +2295,11 @@ export default function EquipamentosLocados() {
               <button onClick={() => setResultadoFotosIA(null)} className="text-white/80 hover:text-white bg-white/10 hover:bg-white/20 rounded-lg p-1.5"><X className="h-4 w-4" /></button>
             </div>
             <div className="p-5 space-y-3 overflow-y-auto">
-              {(resultadoFotosIA.fotosPhaseA !== undefined || resultadoFotosIA.fotosPhaseB !== undefined || resultadoFotosIA.fotosPhaseC !== undefined) && (
-                <div className="grid grid-cols-3 gap-2">
+              {(resultadoFotosIA.fotosPhaseA !== undefined || resultadoFotosIA.fotosPhaseC !== undefined) && (
+                <div className="grid grid-cols-2 gap-2">
                   <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 text-center">
                     <div className="text-2xl font-bold text-emerald-700 tabular-nums">{fmtN(resultadoFotosIA.fotosPhaseA ?? 0)}</div>
-                    <div className="text-[10px] uppercase tracking-wide text-emerald-900 font-semibold mt-1">Fase A · Match preciso</div>
-                  </div>
-                  <div className="bg-sky-50 border border-sky-200 rounded-lg p-3 text-center">
-                    <div className="text-2xl font-bold text-sky-700 tabular-nums">{fmtN(resultadoFotosIA.fotosPhaseB ?? 0)}</div>
-                    <div className="text-[10px] uppercase tracking-wide text-sky-900 font-semibold mt-1">Fase B · Busca ampla</div>
+                    <div className="text-[10px] uppercase tracking-wide text-emerald-900 font-semibold mt-1">Fase A · Foto validada</div>
                   </div>
                   <div className="bg-slate-100 border border-slate-200 rounded-lg p-3 text-center">
                     <div className="text-2xl font-bold text-slate-700 tabular-nums">{fmtN(resultadoFotosIA.fotosPhaseC ?? 0)}</div>
@@ -2313,7 +2309,7 @@ export default function EquipamentosLocados() {
               )}
               {resultadoFotosIA.cotaEsgotada && (
                 <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-xs text-red-800">
-                  <b>⚠ Cota do Google esgotada hoje.</b> Plano gratuito = 100 buscas/dia. As Fases B/C cobriram o restante, mas amanhã rode de novo pra trocar placeholders por fotos reais.
+                  <b>⚠ Cota do Google esgotada hoje.</b> Plano gratuito = 100 buscas/dia. OpenVerse + Wikimedia + placeholder cobriram o restante; amanhã rode de novo pra tentar buscar mais fotos reais.
                 </div>
               )}
               {resultadoFotosIA.haMaisLotes && (

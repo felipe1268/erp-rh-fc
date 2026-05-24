@@ -1,6 +1,104 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2347 — **HOTFIX/FILOSOFIA · Busca de fotos com IA volta a buscar
+ * em PORTUGUÊS (Google CSE prioridade) com VALIDAÇÃO RIGOROSA em TODOS
+ * os candidatos. Phase B "busca ampla sem validação" da Rev. 2345
+ * REMOVIDA — era ela que aplicou foto de homem em RODAPÉ 20 CM
+ * (IMG_1140). Reverte a tradução PT→EN da Rev. 2343.**
+ *
+ * Pedido user (24/05/2026, IMG_1140 mostrando "RODAPÉ 20 CM" com
+ * thumbnail de torso de homem): "As fotos, não tem nada a ver, com o
+ * produto, veja o rodapé tem uma foto de um homem, usa o Google e
+ * pesquisa as fotos na internet, procure em português para facilitar
+ * as buscas, e agrar a que nunca de errado".
+ *
+ * Causa raiz: a Rev. 2345 introduziu Phase B (busca ampla por categoria
+ * e 1ª palavra) que pegava o 1º candidato SEM nova validação por IA,
+ * só pra garantir cobertura 100%. Funcionou pra equipamentos com termo
+ * único ("BETONEIRA", "MARTELETE") mas em descrições ambíguas como
+ * "RODAPÉ 20 CM" (em construção civil = guard rail/toe board do
+ * andaime) a query "rodape construction" voltou foto de rodapé de
+ * piso → foto de homem ao lado de um piso. Phase B era um VETOR DE
+ * FOTO ERRADA. Adicionalmente, a Rev. 2343 traduzia PT→EN ("RODAPÉ"
+ * → "skirting board") amplificando a ambiguidade para Google CSE
+ * que indexa MUITO conteúdo em português brasileiro relevante.
+ *
+ * Implementação:
+ *
+ * **A. Server (`server/routers/equipamentos.ts`, `locadosBuscarFotosComIA`):**
+ *
+ * (1) **Removido bloco de tradução PT→EN inteiro** (60 linhas + 1 LLM
+ *     call). Não havia evidência empírica de que melhorava Google CSE
+ *     (que indexa PT-BR muito bem) e ATIVAMENTE piorava ambiguidades.
+ *     Para Wikimedia/OpenVerse (mais EN-centric), a validação rigorosa
+ *     no passo 2b já filtra resultados ruins.
+ *
+ * (2) **Busca PT-only com 2 queries por descrição** (passo 2a):
+ *     - `queryPt = "<descricao> <categoria>"` ou `"<descricao> construção civil"`.
+ *     - `queryAmpla = "<categoria> equipamento construção"` ou `"<descricao> equipamento"`.
+ *     - Roda em paralelo: 2× OpenVerse + 2× Wikimedia + 1× Google CSE
+ *       (Google só na queryPt — quota é cara).
+ *     - Dedup por URL preservando ordem (Google primeiro = maior
+ *       prioridade no desempate da IA), cap em 10 candidatos/descrição.
+ *
+ * (3) **Validação RIGOROSA em TUDO** (passo 2b, 1 LLM call):
+ *     - Prompt reescrito com "REGRA DE OURO: em dúvida, REJEITE".
+ *     - Lista CRITÉRIOS PARA REJEITAR explícitos (5 itens): nenhum
+ *       candidato menciona equipamento/sinônimo; algum sugere pessoa/
+ *       animal/paisagem/capa de livro; título vago sem contexto;
+ *       título sugere categoria diferente; confiança < 80%.
+ *     - Seção "CUIDADO COM AMBIGUIDADES" com 4 exemplos contra
+ *       (RODAPÉ ≠ rodapé de piso; PAINEL precisa de categoria;
+ *       DIAGONAIS ≠ listras; códigos proprietários → rejeite).
+ *     - Sinônimos PT/EN aceitos (scaffold=andaime, etc) preservados
+ *       da Rev. 2343 — agora títulos podem vir em qualquer idioma.
+ *
+ * (4) **Phase B REMOVIDA** (passo 3 simplificado):
+ *     - Antes: Phase A (validada) → Phase B (busca ampla, 1º hit sem
+ *       validação) → Phase C (placeholder SVG).
+ *     - Agora: Phase A (validada) → Phase C (placeholder SVG). Sem
+ *       intermediário. Tudo que não passa na validação vai DIRETO pro
+ *       placeholder honesto.
+ *     - `fotosPhaseB` constante 0 no retorno (mantém shape pra não
+ *       quebrar o client legacy).
+ *
+ * **B. Client (`client/src/pages/equipamentos/Locados.tsx`):**
+ *
+ * (1) Modal de confirmação "Buscar com IA":
+ *     - Substitui "busca em bibliotecas públicas" + "3 fases" por
+ *       "busca em **português** no Google + OpenVerse + Wikimedia e
+ *       aplica **validação rigorosa** em todo candidato".
+ *     - Box pink-50 vira 2 fases (A: foto validada com "em dúvida,
+ *       rejeita" + C: placeholder por categoria) + linha itálica
+ *       "Filosofia: melhor placeholder honesto que foto errada".
+ *
+ * (2) Modal de resultado: grid de **3 cards** (A/B/C) vira grid de
+ *     **2 cards** (A emerald + C slate). Phase B sumiu da UI também.
+ *
+ * (3) Mensagem "Cota Google esgotada" atualizada — não menciona mais
+ *     "Fases B/C" (B não existe).
+ *
+ * **Por que NÃO traduzir PT→EN mesmo pro Wikimedia**: A tradução
+ * automática é o vetor #1 de ambiguidade ("RODAPÉ"→"skirting board"
+ * só faz sentido pra piso; o termo correto em EN do equipamento é
+ * "toe board" — Gemini erra isso confundido pelo nome popular). A
+ * validação rigorosa no passo 2b filtra resultados ruins do
+ * Wikimedia também; cobertura inferior é compensada pelo Google CSE
+ * em PT-BR.
+ *
+ * **Por que placeholder em vez de Phase B salvada**: A Phase B foi
+ * adicionada na Rev. 2345 para garantir "100% de cobertura" mas
+ * trocou um problema (sem foto) por outro pior (foto errada). User
+ * preferiu explicitamente o placeholder honesto: "agrar a que nunca
+ * de errado". Filosoficamente alinhado com R-001 (nunca dado mentiroso
+ * em prod, mesmo "fictício").
+ *
+ * **R-001/R-007/R-010:** N/A — só LLM calls + UPDATE escopado por
+ * `company_id` (preservado), idempotente, zero DDL.
+ *
+ * --
+ *
  * Rev. 2346 — **UX/i18n · Inteiros ≥ 1.000 nos cards e listas de
  * Equipamentos Locados agora vêm formatados em pt-BR com ponto como
  * separador de milhar (1220 → "1.220", 1069 → "1.069").**

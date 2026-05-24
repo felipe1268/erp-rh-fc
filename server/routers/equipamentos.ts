@@ -1106,125 +1106,87 @@ Gere o JSON conforme o esquema. Não omita nenhuma descrição.`;
         } catch { return { cands: [], cotaEsgotada: false, configInvalida: false }; } finally { clearTimeout(t); }
       }
 
-      // 2a. PRÉ-PASSO: traduzir descrições PT → query em INGLÊS otimizada
-      // para busca em bibliotecas internacionais. Termos como "SAPATAS
-      // AJUSTÁVEIS" indexam pouco; "scaffold adjustable base jack" é o
-      // termo industrial padrão e bate em Wikimedia/OpenVerse/Google. 1
-      // única call ao LLM com todo o lote. Falha silenciosa → fallback
-      // pra própria descrição em português (comportamento da Rev. 2342).
-      const traducoes = new Map<string, string>();
-      try {
-        const { invokeLLM } = await import("../_core/llm");
-        const sysT = `Você converte descrições brasileiras de equipamentos de construção civil/locação para queries de busca de imagem em INGLÊS técnico-industrial.
+      // Rev. 2347 — Busca em PORTUGUÊS (Google CSE prioridade; OpenVerse +
+      // Wikimedia complementam) com VALIDAÇÃO RIGOROSA em TUDO. Reverte a
+      // Rev. 2343 (PT→EN) e o "Phase B sem validação" da Rev. 2345 que
+      // deixou passar foto de homem em RODAPÉ 20 CM (IMG_1140).
+      // Filosofia: "placeholder honesto > foto errada".
 
-REGRA CRÍTICA DE SEGURANÇA:
-- Se você NÃO TIVER CERTEZA do termo técnico correto em inglês, retorne EN IGUAL ao PT (cópia literal). NÃO INVENTE.
-- Tradução errada = foto errada salva. É preferível busca falhar (0 resultados) do que retornar foto de outro equipamento.
-- NUNCA traduza para um equipamento de categoria diferente. Ex: se PT é "MARTELETE", o EN NÃO PODE conter "mixer", "drill", "saw" — só termos diretamente relacionados a martelete (rotary hammer, demolition hammer).
-- Mantenha sinônimos próximos: scaffold/scaffolding/staging são todos andaime; shoring/prop são escora; jack base/base jack são sapata.
-
-Exemplos OK:
-- "SAPATAS AJUSTÁVEIS" → "adjustable scaffold base jack"
-- "ANDAIME TUBULAR" → "tubular scaffolding"
-- "PRANCHAO METALICO" → "metal scaffold plank platform"
-- "DIAGONAIS X 1,50 M" → "scaffold diagonal brace"
-- "PAINEL NR18" → "construction edge protection panel"
-- "ESCORA METALICA" → "steel shoring prop"
-- "BETONEIRA 400L" → "concrete mixer 400L"
-- "MARTELETE DEMOLIDOR" → "demolition rotary hammer"
-
-Exemplos de quando COPIAR PT (não sabe traduzir):
-- "PG-2030 ROTACIONADO" → "PG-2030 ROTACIONADO" (código proprietário, não invente)
-- "DIV NR-12" → "DIV NR-12" (sigla obscura, não invente)
-- "ITEM 4329" → "ITEM 4329" (sem semântica, não invente)
-
-Responda APENAS JSON {"traducoes":[{"pt":"<exato>","en":"<query inglês OU cópia do PT>"}, ...]} para TODAS as descrições.`;
-        const userT = `Traduza as ${lote.length} descrições:\n\n${lote.map(d => `- ${d.descricao}`).join("\n")}`;
-        const respT = await invokeLLM({
-          messages: [
-            { role: "system", content: sysT },
-            { role: "user", content: userT },
-          ],
-          maxTokens: 4000,
-          response_format: { type: "json_object" },
-        });
-        let rawT = (typeof respT.choices?.[0]?.message?.content === "string"
-          ? respT.choices[0].message.content
-          : Array.isArray(respT.choices?.[0]?.message?.content)
-            ? (respT.choices[0].message.content as any[]).map((c: any) => c?.text ?? "").join("")
-            : "").trim();
-        const mT = rawT.match(/```(?:json)?\s*([\s\S]*?)\s*```/i); if (mT) rawT = mT[1].trim();
-        const fiT = rawT.indexOf("{"); const liT = rawT.lastIndexOf("}");
-        if (fiT >= 0 && liT > fiT) rawT = rawT.slice(fiT, liT + 1);
-        const parsedT: any = JSON.parse(rawT);
-        const arrT: any[] = Array.isArray(parsedT?.traducoes) ? parsedT.traducoes : [];
-        for (const t of arrT) {
-          const pt = String(t?.pt || "").trim();
-          const en = String(t?.en || "").trim();
-          if (pt && en) traducoes.set(pt, en);
-        }
-        console.log(`[locadosBuscarFotosComIA] Tradução: ${traducoes.size}/${lote.length} queries traduzidas`);
-      } catch (e: any) {
-        console.warn("[locadosBuscarFotosComIA] Tradução falhou, usando PT:", e?.message || e);
-      }
-
-      // 2b. Coleta candidatos de TODOS os provedores em paralelo por descrição.
-      // Usa query EM INGLÊS quando disponível, fallback PT.
+      // 2a. Para cada descrição, gera 2 queries PT alternativas e coleta
+      // candidatos de TODOS os provedores em paralelo (qualificadores
+      // diferentes pra Wikimedia/OpenVerse que indexam menos PT).
       type Bundle = { descricao: string; queryUsada: string; cands: Cand[] };
       const bundles: Bundle[] = [];
       let cotaEsgotada = false;
       let googleDesativadoPorErro = false;
       for (const d of lote) {
-        const queryEn = traducoes.get(d.descricao);
-        const queryPrincipal = queryEn || d.descricao;
-        const [ov, wm, gc] = await Promise.all([
-          fromOpenverse(queryPrincipal),
-          fromWikimedia(queryPrincipal),
+        const cat = (d.categoria || "").trim();
+        const desc = d.descricao;
+        // Query primária PT (Google indexa PT muito bem)
+        const queryPt = cat ? `${desc} ${cat}` : `${desc} construção civil`;
+        // Query secundária mais ampla (fallback se a primária zerar)
+        const queryAmpla = cat ? `${cat} equipamento construção` : `${desc} equipamento`;
+        const [ov1, ov2, wm1, wm2, gc] = await Promise.all([
+          fromOpenverse(queryPt),
+          fromOpenverse(queryAmpla),
+          fromWikimedia(queryPt),
+          fromWikimedia(queryAmpla),
           (googleHabilitado && !googleDesativadoPorErro && !cotaEsgotada)
-            ? fromGoogleCSE(queryEn ? `${queryEn} construction` : `${d.descricao} equipamento construção civil`)
+            ? fromGoogleCSE(queryPt)
             : Promise.resolve({ cands: [] as Cand[], cotaEsgotada: false, configInvalida: false }),
         ]);
         if (gc.configInvalida) googleDesativadoPorErro = true;
         if (gc.cotaEsgotada) cotaEsgotada = true;
-        const cands = [...gc.cands, ...ov, ...wm].slice(0, 8); // máx 8 candidatos / descrição
-        bundles.push({ descricao: d.descricao, queryUsada: queryPrincipal, cands });
+        // Dedup por URL preservando ordem (google primeiro = prioridade no desempate)
+        const seen = new Set<string>();
+        const cands: Cand[] = [];
+        for (const c of [...gc.cands, ...ov1, ...wm1, ...ov2, ...wm2]) {
+          if (!seen.has(c.url)) { seen.add(c.url); cands.push(c); }
+          if (cands.length >= 10) break;
+        }
+        bundles.push({ descricao: desc, queryUsada: queryPt, cands });
       }
-      console.log(`[locadosBuscarFotosComIA] Busca: ${bundles.filter(b => b.cands.length > 0).length}/${bundles.length} descrições com candidatos`);
+      console.log(`[locadosBuscarFotosComIA] Busca PT: ${bundles.filter(b => b.cands.length > 0).length}/${bundles.length} descrições com candidatos`);
 
-      // 2c. Rev. 2345 — VALIDAÇÃO RELAXADA via IA — "pick BEST available".
-      // Mudou de "rejeite se duvidoso" para "sempre escolha o melhor; só null
-      // se TODOS os candidatos forem evidentemente de categoria DIFERENTE
-      // (foto de pessoa, capa de livro, paisagem sem equipamento)". User
-      // explícito: "Garanta que todas as fotos serão geradas, sem exceção".
+      // 2b. VALIDAÇÃO RIGOROSA via IA — 1 call pra TODOS os bundles.
+      // Volta filosofia "em dúvida, rejeite". User pediu "agrar a que nunca
+      // de errado" (IMG_1140 mostrou foto de homem em RODAPÉ 20 CM).
+      // Não-aprovados vão direto pro placeholder SVG (sem Phase B).
       const bundlesComCands = bundles.filter(b => b.cands.length > 0);
       let validacoes: { descricao: string; url: string | null; motivo?: string }[] = [];
       if (bundlesComCands.length > 0) {
         try {
           const { invokeLLM } = await import("../_core/llm");
-          const systemPrompt = `Você seleciona a MELHOR foto candidata para EQUIPAMENTOS de construção civil/locação (descritos em PORTUGUÊS BRASILEIRO).
+          const systemPrompt = `Você seleciona a MELHOR foto candidata para EQUIPAMENTOS de construção civil/locação descritos em PORTUGUÊS BRASILEIRO.
 
-PRINCÍPIO #1 (NÃO NEGOCIÁVEL): SEMPRE escolha um candidato quando a lista não estiver vazia. Use i=null APENAS se TODOS os candidatos forem evidentemente de categoria TOTALMENTE diferente (foto de pessoa, capa de livro, logo, banner de loja, paisagem sem nenhum equipamento). Em qualquer outro caso (até quando você está em dúvida), ESCOLHA o candidato com título mais próximo do equipamento.
+REGRA DE OURO (NÃO NEGOCIÁVEL): "Em dúvida, REJEITE." É MELHOR retornar i=null (sem foto) do que retornar foto de algo diferente. O usuário PREFERE um placeholder honesto a uma foto errada.
 
-PRINCÍPIO #2: DESCRIÇÃO_PT é a verdade. Use sinônimos industriais livremente: scaffold/scaffolding/staging=andaime, shoring/prop/shore=escora, formwork=fôrma, jack base/screw jack/base jack=sapata, plank/platform/board=prancha, brace=diagonal/contraventamento, guard rail/edge protection=guarda-corpo, concrete mixer/cement mixer=betoneira, rotary hammer/demolition hammer=martelete, angle grinder=esmerilhadeira, generator=gerador, compressor=compressor, panel/board=painel.
+CRITÉRIOS PARA APROVAR (i=índice):
+- Título do candidato (PT ou EN) menciona EXPLICITAMENTE o equipamento da descrição, OU um sinônimo industrial inequívoco.
+- Sinônimos aceitos: scaffold/scaffolding/staging=andaime; shoring/prop/shore=escora; formwork=fôrma; jack base/screw jack/base jack=sapata ajustável; plank/platform/board=prancha/pranchão; brace=diagonal/contraventamento; guard rail/edge protection/toe board=guarda-corpo/rodapé de proteção; concrete mixer/cement mixer=betoneira; rotary hammer/demolition hammer=martelete; angle grinder=esmerilhadeira; generator=gerador; compressor=compressor; panel/board (em contexto NR-18/site protection)=painel.
+- Se múltiplos candidatos passam: prefira google > openverse > wikimedia (ordem dada).
 
-RANKING (em ordem de preferência para escolher i):
-1. Título menciona explicitamente o equipamento OU sinônimo industrial → MELHOR.
-2. Título genérico mas claramente da MESMA categoria (ex: "construction equipment", "scaffold parts", "tools") → BOM, escolha o melhor disponível.
-3. Título vago ("untitled construction", "industrial site") que NÃO contradiz a descrição → OK, escolha como último recurso ANTES de i=null.
-4. Título descreve categoria EVIDENTEMENTE diferente em TODOS os candidatos (ex: descrição é MARTELETE e todos os 8 candidatos são fotos de gatos, pessoas, livros) → i=null.
+CRITÉRIOS PARA REJEITAR (i=null) — qualquer um destes basta:
+1. Nenhum candidato menciona o equipamento nem sinônimo industrial.
+2. Algum candidato tem título sugerindo pessoa, animal, paisagem, capa de livro, logo, banner de loja, comida, veículo de passeio.
+3. Título é vago demais ("untitled", "construction", "image123") SEM contexto que confirme o equipamento.
+4. Título sugere categoria DIFERENTE (ex: descrição é "RODAPÉ 20 CM" — equipamento de andaime — e candidato é "skirting board floor" ou foto de pessoa).
+5. Você não tem certeza ≥80% de que a foto representa o equipamento da descrição.
 
-DESEMPATE: google > openverse > wikimedia (já ordenados — em caso de empate, prefira o índice menor).
-
-LEMBRE: o objetivo é cobertura 100%. Foto aproximada da categoria certa é MELHOR que sem foto.
+CUIDADO COM AMBIGUIDADES (rejeite!):
+- "RODAPÉ" em construção civil = guard rail/toe board do andaime (proteção de borda), NÃO rodapé de piso.
+- "PAINEL" pode ser de andaime, NR-18 ou elétrico — categoria ajuda a desambiguar.
+- "DIAGONAIS" = brace de andaime, NÃO listras diagonais.
+- Códigos proprietários (PG-2030, NR-18) sem outro contexto: rejeite tudo.
 
 Responda JSON {"resultados":[{"descricao":"<exato>","i":<index|null>,"motivo":"<curto>"}, ...]} contendo TODAS as descrições recebidas.`;
 
-          const userPayload = bundlesComCands.map((b, k) => ({
+          const userPayload = bundlesComCands.map((b) => ({
             descricao_pt: b.descricao,
-            query_busca_en: b.queryUsada,
+            query_busca: b.queryUsada,
             candidatos: b.cands.map((c, i) => ({ i, provider: c.provider, title: c.title })),
           }));
-          const userPrompt = `Valide as ${bundlesComCands.length} descrições abaixo. Para cada uma, escolha o ÍNDICE do candidato que melhor representa o equipamento, OU retorne i=null se nenhum bate com confiança.
+          const userPrompt = `Valide as ${bundlesComCands.length} descrições abaixo. Lembre: "em dúvida, REJEITE (i=null)".
 
 ${JSON.stringify(userPayload, null, 2)}
 
@@ -1257,8 +1219,7 @@ Retorne APENAS o JSON conforme o esquema.`;
             }
           }
         } catch (e: any) {
-          // Se a validação por IA falhar, NÃO persiste nada (segurança).
-          // Loga e retorna lista vazia — usuário verá "0 fotos aprovadas".
+          // Validação falhou → NÃO persiste nada (segurança). Todas vão pro placeholder.
           console.error("[locadosBuscarFotosComIA] Validação IA falhou:", e?.message || e);
         }
       }
@@ -1281,20 +1242,15 @@ Retorne APENAS o JSON conforme o esquema.`;
       }
 
       // ──────────────────────────────────────────────────────────────────
-      // Rev. 2345 — Phase B (BUSCA AMPLA) + Phase C (PLACEHOLDER CURADO):
-      // Garante 100% de cobertura. Para cada descrição que ainda ficou sem
-      // foto após Phase A (sem candidatos OU rejeitada), tenta queries
-      // amplas (categoria, 1ª palavra + "construction"); pega o 1º
-      // resultado SEM nova validação por IA — é fallback best-effort.
-      // Se ainda assim falhar, usa placeholder SVG por categoria.
+      // Rev. 2347 — Phase C (PLACEHOLDER SVG): para CADA descrição que
+      // não foi aprovada na validação (sem candidatos, rejeitada, ou
+      // validação IA falhou). Garante cobertura 100% SEM foto errada.
+      // Removeu Phase B (busca ampla sem validação) — era o vetor da
+      // foto de homem em RODAPÉ 20 CM.
       // ──────────────────────────────────────────────────────────────────
       const aprovadasMap = new Map(validacoes.filter(v => v.url).map(v => [v.descricao, v.url as string]));
       const aindaSemFoto = lote.filter(d => !aprovadasMap.has(d.descricao));
 
-      // Phase C — placeholders SVG data-URI por categoria (NUNCA quebra,
-      // sem dependência de rede). Renderiza um card "tipo polaroid" com a
-      // categoria + descrição como texto. Garante R-001/R-007/R-010 → puro
-      // string, sem chamada externa.
       function svgPlaceholder(categoria: string | null, descricao: string): string {
         const cor = (() => {
           const c = (categoria || "").toLowerCase();
@@ -1311,45 +1267,10 @@ Retorne APENAS o JSON conforme o esquema.`;
         return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
       }
 
-      // Phase B — busca ampla: para cada descricao restante, monta queries
-      // alternativas e roda OpenVerse + Wikimedia em paralelo. Pega o 1º
-      // candidato (sem validação IA — best-effort).
-      let fotosPhaseB = 0;
+      const fotosPhaseB = 0; // Rev. 2347 — Phase B removida (era insegura).
       let fotosPhaseC = 0;
-      const phaseBUpdates: { descricao: string; url: string }[] = [];
-      const phaseCUpdates: { descricao: string; url: string }[] = [];
       for (const d of aindaSemFoto) {
-        const queryEn = traducoes.get(d.descricao);
-        const cat = (d.categoria || "").trim();
-        // queries de fallback ordenadas por especificidade
-        const queriesBroad: string[] = [];
-        if (queryEn && cat) queriesBroad.push(`${cat} ${queryEn} construction`);
-        if (queryEn) queriesBroad.push(`${queryEn} construction equipment`);
-        if (cat) queriesBroad.push(`${cat} construction equipment`);
-        // 1ª palavra do PT (heurística — costuma ser substantivo principal)
-        const primeiraPt = d.descricao.split(/[\s,\/\-]/)[0]?.trim();
-        if (primeiraPt && primeiraPt.length >= 4) queriesBroad.push(`${primeiraPt} construction`);
-        // garante pelo menos 1 tentativa
-        if (queriesBroad.length === 0) queriesBroad.push(`${d.descricao} equipamento`);
-
-        let found: string | null = null;
-        for (const q of queriesBroad) {
-          const [ov, wm] = await Promise.all([fromOpenverse(q), fromWikimedia(q)]);
-          const first = [...ov, ...wm][0];
-          if (first?.url) { found = first.url; break; }
-        }
-        if (found) {
-          phaseBUpdates.push({ descricao: d.descricao, url: found });
-          fotosPhaseB++;
-        } else {
-          phaseCUpdates.push({ descricao: d.descricao, url: svgPlaceholder(d.categoria, d.descricao) });
-          fotosPhaseC++;
-        }
-      }
-      console.log(`[locadosBuscarFotosComIA] Phase B (busca ampla): ${fotosPhaseB} | Phase C (placeholder): ${fotosPhaseC}`);
-
-      // Aplica UPDATEs das phases B+C (mesma condição de Phase A).
-      for (const { descricao, url } of [...phaseBUpdates, ...phaseCUpdates]) {
+        const url = svgPlaceholder(d.categoria, d.descricao);
         const condSobre = input.sobrescrever
           ? semFotoRec
           : sql`(${semFotoRec} AND (foto_url IS NULL OR foto_url = ''))`;
@@ -1357,13 +1278,15 @@ Retorne APENAS o JSON conforme o esquema.`;
           UPDATE equipamentos_locados
              SET foto_url = ${url}, updated_at = NOW()
            WHERE company_id = ${input.companyId}
-             AND descricao = ${descricao}
+             AND descricao = ${d.descricao}
              AND ${condSobre}
         `);
         itensAtualizados += Number(res.rowCount ?? res.rows?.length ?? 0);
+        fotosPhaseC++;
       }
+      console.log(`[locadosBuscarFotosComIA] Phase A (validada): ${aprovadasMap.size} | Phase C (placeholder): ${fotosPhaseC}`);
 
-      const fotosEncontradasTotal = aprovadasMap.size + fotosPhaseB + fotosPhaseC;
+      const fotosEncontradasTotal = aprovadasMap.size + fotosPhaseC;
 
       return {
         ok: true as const,
