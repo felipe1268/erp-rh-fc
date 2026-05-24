@@ -1,6 +1,93 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2339 — **FEATURE/UX · Card de Equipamento Locado clicável + painel
+ * de detalhes completos (foto, KPIs, obra/fornecedor, galeria, timeline
+ * de eventos, ações).**
+ *
+ * Pedido user (24/05/2026, screenshot iPad com 1220 cards repetidos):
+ * "Quero poder clicar no item e abrir tudo relacionado ao item".
+ *
+ * Diagnóstico: o card listava só o essencial e o único caminho pro
+ * detalhe era o botão pequeno "Histórico" — que abria um modal mínimo
+ * mostrando apenas `e.tipo + e.observacao` sem contexto. Dados do
+ * contrato (datas, valor diário, responsável, observações), fotos do
+ * recebimento, KPIs derivados (dias em uso, valor acumulado, dias
+ * restantes/atraso) ficavam invisíveis sem editar o item.
+ *
+ * **Implementação** (`client/src/pages/equipamentos/Locados.tsx`,
+ * 0 server, 0 schema — reutiliza `eventosListar` que já existia):
+ *
+ *   (1) **Card inteiro clicável**: `role="button"` + `tabIndex=0` +
+ *       `onClick={() => setModalEventos(l)}` + `onKeyDown` (Enter/Space)
+ *       no wrapper. Hover ganha `border-emerald-300` + `-translate-y-0.5`
+ *       (já tinha). Foco visível: `focus:ring-2 focus:ring-emerald-400`.
+ *       `title="Clique para abrir os detalhes completos"`. Checkbox de
+ *       multi-seleção e todos os botões de ação (Detalhes, Check-in,
+ *       Devolver, badge de categoria) usam `e.stopPropagation()` para
+ *       não dispararem o card também. Botão antes chamado "Histórico"
+ *       virou "Detalhes" (verde emerald, mais proeminente).
+ *
+ *   (2) **Painel de detalhes redesenhado** (substitui o antigo modal
+ *       "Histórico — descrição" minimalista):
+ *
+ *     - **Header gradient** (emerald-600 → teal-500): foto grande
+ *       (96×96 com ring branca + shadow), pílulas de status + categoria,
+ *       título grande, sub com Patrimônio + N°S + ERP em linha. Botão
+ *       de fechar absoluto em chip semitransparente.
+ *
+ *     - **KPI strip** (4 cards): Dias em uso (`floor(hoje-dataInicio)`),
+ *       Restam/Atrasado há (`fim - hoje` — colore verde/âmbar/vermelho
+ *       conforme proximidade do vencimento), Custo/mês (verde com
+ *       diária derivada se houver), Acumulado estimado (`diasUso ×
+ *       valorDia` — primeira vez que o user vê quanto JÁ gastou). Todos
+ *       com `clamp()` pra não estourar valor longo.
+ *
+ *     - **Info grid 2-col**: card 1 = Obra (emerald se vinculada,
+ *       âmbar itálico se não) + local + Fornecedor + N° contrato;
+ *       card 2 = Período (dataInicio→fim com seta) + dataDevolucao
+ *       quando houver + Responsável na obra.
+ *
+ *     - **Observações** (condicional, painel âmbar): exibe
+ *       `whitespace-pre-wrap` o texto livre cadastrado no recebimento.
+ *
+ *     - **Galeria de fotos do recebimento** (condicional): grid 3-6
+ *       colunas, `aspect-square object-cover`, `<a target=_blank>` pra
+ *       abrir em tab nova (lightbox seria over-engineering por enquanto).
+ *
+ *     - **Timeline de eventos**: `<ol>` com `border-l-2` na esquerda,
+ *       cada `<li>` tem chip-ícone colorido absoluto (-left-[34px])
+ *       atrás de `ring-4 ring-white` que cria efeito de "ponto" sobre
+ *       a linha. `TIPO_META` mapeia os 6 tipos de evento conhecidos
+ *       (RECEBIMENTO/CHECK_IN_OBRA/DEVOLUCAO_FORNECEDOR/RENOVACAO/
+ *       MANUTENCAO/VINCULO_OBRA) → label legível + cor + ícone Lucide
+ *       coerente; fallback genérico (FileText) pra tipos não previstos.
+ *       Cada evento exibe data formatada pt-BR, observação
+ *       `whitespace-pre-wrap`, usuário (com ícone), e até 6 thumbs
+ *       de `e.fotosJson` (links abrem em tab nova).
+ *
+ *     - **Footer sticky**: Check-in semanal (azul) + Devolver (emerald,
+ *       só se `status === "em_uso"`) que fecham este modal e abrem
+ *       o respectivo modal de ação (mantém fluxo existente, evita
+ *       sobreposição de 2 modais). Botão Fechar à direita.
+ *
+ *   (3) **Por que reusar `modalEventos` em vez de novo state**: a
+ *       query `eventos = trpc.equipamentos.eventosListar` já estava
+ *       keyed em `modalEventos?.id` (`enabled: !!modalEventos`).
+ *       Trocar o nome forçaria refatorar 4 callsites + a query. Aqui
+ *       o estado "item selecionado pro detalhe" é semanticamente o
+ *       mesmo — o painel só ficou mais rico. Zero overhead extra.
+ *
+ *   (4) **Por que IIFE em vez de componente separado**: o painel
+ *       consome 8 closures locais (`obrasMap`, `eventos`, `setModalDev`,
+ *       `setModalCheckin`, ...). Extrair como componente exigiria props
+ *       drilling de 8 args ou refatorar pra um custom hook — overkill
+ *       pra renderer condicional. IIFE deixa a leitura linear e ainda
+ *       permite derivar variáveis locais (`diasUso`, `valorAcumulado`,
+ *       `meta()`) sem useMemo (rederiva só quando o modal está aberto).
+ *
+ * **R-001/R-007/R-010**: N/A — leitura pura no client, zero DDL/mutation.
+ *
  * Rev. 2338 — **UX · KPI cards de Equipamentos Locados verdadeiramente
  * responsivos (1 → 2 → 4 colunas) com tipografia fluida.**
  *

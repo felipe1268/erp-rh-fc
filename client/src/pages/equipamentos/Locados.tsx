@@ -816,11 +816,20 @@ export default function EquipamentosLocados() {
               const sel = selecionados.has(l.id);
               const obraNome = l.obraId ? obrasMap.get(Number(l.obraId)) : null;
               return (
-                <div key={l.id} className={`group bg-white border rounded-xl shadow-sm hover:shadow-md hover:-translate-y-0.5 transition overflow-hidden flex flex-col ${sel ? "border-emerald-500 ring-2 ring-emerald-200" : "border-slate-200"}`}>
+                <div
+                  key={l.id}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => setModalEventos(l)}
+                  onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setModalEventos(l); } }}
+                  className={`group bg-white border rounded-xl shadow-sm hover:shadow-md hover:-translate-y-0.5 hover:border-emerald-300 transition overflow-hidden flex flex-col cursor-pointer focus:outline-none focus:ring-2 focus:ring-emerald-400 ${sel ? "border-emerald-500 ring-2 ring-emerald-200" : "border-slate-200"}`}
+                  title="Clique para abrir os detalhes completos"
+                >
                   <div className={`h-1 bg-gradient-to-r ${accent}`} />
                   <div className="p-4 flex gap-3">
-                    {/* Rev. 2323 — checkbox de multi-seleção */}
+                    {/* Rev. 2323 — checkbox de multi-seleção (não propaga click) */}
                     <input type="checkbox" checked={sel} onChange={() => toggleSelecionado(l.id)}
+                      onClick={(e) => e.stopPropagation()}
                       className="h-4 w-4 mt-1 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer flex-shrink-0" />
                     {fotos[0] ? (
                       <img src={fotos[0].url} className="w-16 h-16 object-cover rounded-lg ring-1 ring-slate-200 flex-shrink-0" alt="" />
@@ -870,15 +879,15 @@ export default function EquipamentosLocados() {
                     <div className="font-bold text-emerald-700">{fmtMoney(l.valorMensal)}<span className="text-[10px] text-slate-500 font-normal">/mês</span></div>
                   </div>
                   <div className="px-4 py-2 border-t border-slate-100 flex items-center justify-end gap-1">
-                    <button onClick={() => setModalEventos(l)} className="text-slate-600 hover:bg-slate-100 px-2 py-1 rounded-md text-xs inline-flex items-center gap-1 transition" title="Histórico">
-                      <Eye className="h-3.5 w-3.5" /> Histórico
+                    <button onClick={(e) => { e.stopPropagation(); setModalEventos(l); }} className="text-emerald-700 bg-emerald-50 hover:bg-emerald-100 px-2 py-1 rounded-md text-xs inline-flex items-center gap-1 font-medium transition" title="Detalhes completos">
+                      <Eye className="h-3.5 w-3.5" /> Detalhes
                     </button>
                     {l.status === "em_uso" && (
                       <>
-                        <button onClick={() => { setModalCheckin(l); setCheckinObs(""); }} className="text-blue-700 bg-blue-50 hover:bg-blue-100 px-2 py-1 rounded-md text-xs inline-flex items-center gap-1 font-medium transition" title="Check-in semanal">
+                        <button onClick={(e) => { e.stopPropagation(); setModalCheckin(l); setCheckinObs(""); }} className="text-blue-700 bg-blue-50 hover:bg-blue-100 px-2 py-1 rounded-md text-xs inline-flex items-center gap-1 font-medium transition" title="Check-in semanal">
                           <ClipboardCheck className="h-3.5 w-3.5" /> Check-in
                         </button>
-                        <button onClick={() => { setModalDev(l); setDevFotos([]); setDevObs(""); setDevData(new Date().toISOString().slice(0, 10)); }}
+                        <button onClick={(e) => { e.stopPropagation(); setModalDev(l); setDevFotos([]); setDevObs(""); setDevData(new Date().toISOString().slice(0, 10)); }}
                           className="text-emerald-700 bg-emerald-50 hover:bg-emerald-100 px-2 py-1 rounded-md text-xs inline-flex items-center gap-1 font-medium transition" title="Devolver">
                           <RotateCcw className="h-3.5 w-3.5" /> Devolver
                         </button>
@@ -1101,38 +1110,218 @@ export default function EquipamentosLocados() {
         </Modal>
       )}
 
-      {/* Modal eventos */}
-      {modalEventos && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setModalEventos(null)}>
-          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-            <div className="px-5 py-3 border-b flex items-center justify-between">
-              <h2 className="font-semibold text-slate-800">Histórico — {modalEventos.descricao}</h2>
-              <button onClick={() => setModalEventos(null)}><X className="h-5 w-5 text-slate-500" /></button>
-            </div>
-            <div className="p-5 space-y-2">
-              {eventos.isLoading ? <Spinner /> :
-                (eventos.data || []).length === 0 ? <div className="text-sm text-slate-500">Sem eventos.</div> :
-                (eventos.data || []).map((e: any) => (
-                  <div key={e.id} className="border rounded p-3 text-sm">
-                    <div className="flex items-center justify-between">
-                      <span className="font-medium text-blue-700">{e.tipo}</span>
-                      <span className="text-xs text-slate-500">{new Date(e.dataEvento).toLocaleString("pt-BR")}</span>
+      {/* Rev. 2339 — Painel de DETALHES COMPLETOS do equipamento locado.
+          Substitui o antigo modal "Histórico" — agora o card inteiro é clicável
+          e abre um drawer full-height com TUDO relacionado ao item:
+          foto grande + KPIs (dias, valor acumulado, restante) + dados do
+          contrato/obra/fornecedor/responsável + galeria + timeline de eventos
+          + ações (check-in, devolver) no rodapé sticky. */}
+      {modalEventos && (() => {
+        const l = modalEventos;
+        const fotosRec = (l.fotosRecebimentoJson as FotoItem[]) || [];
+        const ini = l.dataInicio ? new Date(l.dataInicio) : null;
+        const fim = l.dataFimPrevista ? new Date(l.dataFimPrevista) : null;
+        const hoje = new Date();
+        const dia = 86400000;
+        const diasUso = ini ? Math.max(0, Math.floor((hoje.getTime() - ini.getTime()) / dia)) : 0;
+        const diasRestantes = fim ? Math.floor((fim.getTime() - hoje.getTime()) / dia) : null;
+        const valorMes = Number(l.valorMensal) || 0;
+        const valorDia = Number(l.valorDiario) || (valorMes ? valorMes / 30 : 0);
+        const valorAcumulado = valorDia * diasUso;
+        const obraNome = l.obraId ? obrasMap.get(Number(l.obraId)) : null;
+        const evs = (eventos.data || []) as any[];
+        const TIPO_META: Record<string, { label: string; color: string; bg: string; ring: string; icon: LucideIcon }> = {
+          RECEBIMENTO:           { label: "Recebimento",            color: "text-emerald-700", bg: "bg-emerald-100", ring: "ring-emerald-200", icon: Truck },
+          CHECK_IN_OBRA:         { label: "Check-in semanal",       color: "text-blue-700",    bg: "bg-blue-100",    ring: "ring-blue-200",    icon: ClipboardCheck },
+          DEVOLUCAO_FORNECEDOR:  { label: "Devolução ao fornecedor", color: "text-slate-700",  bg: "bg-slate-200",   ring: "ring-slate-300",   icon: RotateCcw },
+          RENOVACAO:             { label: "Renovação de contrato",  color: "text-amber-700",   bg: "bg-amber-100",   ring: "ring-amber-200",   icon: Calendar },
+          MANUTENCAO:            { label: "Manutenção",              color: "text-purple-700", bg: "bg-purple-100",  ring: "ring-purple-200",  icon: Activity },
+          VINCULO_OBRA:          { label: "Vinculação à obra",       color: "text-indigo-700", bg: "bg-indigo-100",  ring: "ring-indigo-200",  icon: MapPin },
+        };
+        const meta = (t: string) => TIPO_META[t] || { label: t, color: "text-slate-700", bg: "bg-slate-100", ring: "ring-slate-200", icon: FileText };
+        return (
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-2 sm:p-4" onClick={() => setModalEventos(null)}>
+            <div className="bg-white rounded-2xl shadow-2xl max-w-5xl w-full max-h-[95vh] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
+              {/* Header gradient */}
+              <div className="relative bg-gradient-to-br from-emerald-600 via-emerald-500 to-teal-500 text-white px-5 py-4 sm:px-6 sm:py-5">
+                <button onClick={() => setModalEventos(null)} className="absolute top-3 right-3 h-8 w-8 rounded-full bg-white/15 hover:bg-white/25 flex items-center justify-center transition" title="Fechar">
+                  <X className="h-5 w-5" />
+                </button>
+                <div className="flex items-start gap-4 pr-10">
+                  {fotosRec[0] ? (
+                    <img src={fotosRec[0].url} className="w-20 h-20 sm:w-24 sm:h-24 object-cover rounded-xl ring-2 ring-white/40 shadow-lg flex-shrink-0" alt="" />
+                  ) : (
+                    <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-xl bg-white/15 ring-2 ring-white/30 flex items-center justify-center flex-shrink-0">
+                      <Camera className="h-8 w-8 text-white/70" />
                     </div>
-                    {e.observacao && <div className="text-slate-700 mt-1">{e.observacao}</div>}
-                    {e.usuarioNome && <div className="text-xs text-slate-500 mt-1">por {e.usuarioNome}</div>}
-                    {Array.isArray(e.fotosJson) && e.fotosJson.length > 0 && (
-                      <div className="flex gap-1 mt-2">
-                        {e.fotosJson.slice(0, 4).map((f: any, i: number) => (
-                          <img key={i} src={f.url} className="w-12 h-12 object-cover rounded" />
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap mb-1">
+                      <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-white/20 ring-1 ring-white/30`}>
+                        {STATUS_LABELS[l.status] || l.status}
+                      </span>
+                      {l.categoria && (
+                        <span className="inline-flex items-center gap-1 bg-white/15 ring-1 ring-white/25 px-2 py-0.5 rounded-full text-[10px] font-semibold">
+                          <Tag className="h-2.5 w-2.5" /> {l.categoria}
+                        </span>
+                      )}
+                    </div>
+                    <h2 className="text-lg sm:text-xl font-bold leading-tight truncate" title={l.descricao}>{l.descricao}</h2>
+                    <div className="text-xs sm:text-sm text-white/85 mt-1 flex items-center gap-3 flex-wrap">
+                      <span className="inline-flex items-center gap-1"><Hash className="h-3.5 w-3.5" /> {l.codigoPatrimonioFornecedor || "s/ patrimônio"}</span>
+                      {l.numeroSerie && <span className="inline-flex items-center gap-1">N°S {l.numeroSerie}</span>}
+                      {l.codigoInternoErp && <span className="inline-flex items-center gap-1">ERP {l.codigoInternoErp}</span>}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Conteúdo scrollável */}
+              <div className="flex-1 overflow-y-auto bg-slate-50/40">
+                {/* KPI strip */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3 p-3 sm:p-5 pb-2">
+                  <div className="bg-white rounded-xl ring-1 ring-slate-200 p-3 shadow-sm min-w-0">
+                    <div className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Dias em uso</div>
+                    <div className="mt-1 font-bold text-slate-900 tabular-nums" style={{ fontSize: "clamp(1.25rem, 3vw, 1.75rem)" }}>{diasUso}</div>
+                    <div className="text-[11px] text-slate-500">desde {fmtDate(l.dataInicio)}</div>
+                  </div>
+                  <div className={`bg-white rounded-xl ring-1 p-3 shadow-sm min-w-0 ${diasRestantes !== null && diasRestantes < 0 ? "ring-red-200" : diasRestantes !== null && diasRestantes < 30 ? "ring-amber-200" : "ring-slate-200"}`}>
+                    <div className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">{diasRestantes !== null && diasRestantes < 0 ? "Atrasado há" : "Restam"}</div>
+                    <div className={`mt-1 font-bold tabular-nums ${diasRestantes !== null && diasRestantes < 0 ? "text-red-700" : diasRestantes !== null && diasRestantes < 30 ? "text-amber-700" : "text-slate-900"}`} style={{ fontSize: "clamp(1.25rem, 3vw, 1.75rem)" }}>
+                      {diasRestantes === null ? "—" : `${Math.abs(diasRestantes)}d`}
+                    </div>
+                    <div className="text-[11px] text-slate-500">prev. {fmtDate(l.dataFimPrevista)}</div>
+                  </div>
+                  <div className="bg-white rounded-xl ring-1 ring-slate-200 p-3 shadow-sm min-w-0">
+                    <div className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Custo / mês</div>
+                    <div className="mt-1 font-bold text-emerald-700 truncate tabular-nums" style={{ fontSize: "clamp(1rem, 2.6vw, 1.5rem)" }} title={fmtMoney(valorMes)}>{fmtMoney(valorMes)}</div>
+                    <div className="text-[11px] text-slate-500 truncate">{valorDia ? `${fmtMoney(valorDia)}/dia` : "—"}</div>
+                  </div>
+                  <div className="bg-white rounded-xl ring-1 ring-emerald-200 p-3 shadow-sm min-w-0">
+                    <div className="text-[10px] uppercase tracking-wider text-emerald-700 font-semibold">Acumulado est.</div>
+                    <div className="mt-1 font-bold text-emerald-800 truncate tabular-nums" style={{ fontSize: "clamp(1rem, 2.6vw, 1.5rem)" }} title={fmtMoney(valorAcumulado)}>{fmtMoney(valorAcumulado)}</div>
+                    <div className="text-[11px] text-slate-500 truncate">{diasUso}d × diária</div>
+                  </div>
+                </div>
+
+                {/* Grids de info: obra/fornecedor + datas/responsável + observações */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 px-3 sm:px-5 pb-3">
+                  <div className="bg-white rounded-xl ring-1 ring-slate-200 p-4 space-y-3">
+                    <div className="text-[11px] uppercase tracking-wider text-slate-500 font-bold flex items-center gap-1.5"><MapPin className="h-3.5 w-3.5" /> Obra & local</div>
+                    <div className={`text-sm font-semibold ${obraNome ? "text-emerald-800" : "text-amber-700 italic"}`}>{obraNome || "Sem obra vinculada"}</div>
+                    {l.localObra && <div className="text-xs text-slate-600">{l.localObra}</div>}
+                    <hr className="border-slate-100" />
+                    <div className="text-[11px] uppercase tracking-wider text-slate-500 font-bold flex items-center gap-1.5"><Building2 className="h-3.5 w-3.5" /> Fornecedor</div>
+                    <div className="text-sm font-semibold text-slate-800">{l.fornecedorNome || <span className="italic text-slate-500 font-normal">Sem fornecedor cadastrado</span>}</div>
+                    {l.numeroContrato && <div className="text-xs text-slate-600">Contrato: <span className="font-mono font-medium">{l.numeroContrato}</span></div>}
+                  </div>
+                  <div className="bg-white rounded-xl ring-1 ring-slate-200 p-4 space-y-3">
+                    <div className="text-[11px] uppercase tracking-wider text-slate-500 font-bold flex items-center gap-1.5"><Calendar className="h-3.5 w-3.5" /> Período</div>
+                    <div className="text-sm text-slate-800">
+                      <span className="font-semibold">{fmtDate(l.dataInicio)}</span>
+                      <span className="text-slate-400 mx-2">→</span>
+                      <span className="font-semibold">{fmtDate(l.dataFimPrevista)}</span>
+                    </div>
+                    {l.dataDevolucao && <div className="text-xs text-emerald-700">Devolvido em <b>{fmtDate(l.dataDevolucao)}</b></div>}
+                    <hr className="border-slate-100" />
+                    <div className="text-[11px] uppercase tracking-wider text-slate-500 font-bold flex items-center gap-1.5"><UserIcon className="h-3.5 w-3.5" /> Responsável na obra</div>
+                    <div className="text-sm font-semibold text-slate-800">{l.funcionarioResponsavelNome || <span className="italic text-slate-500 font-normal">Não informado</span>}</div>
+                  </div>
+                </div>
+
+                {/* Observações */}
+                {l.observacoes && (
+                  <div className="px-3 sm:px-5 pb-3">
+                    <div className="bg-amber-50 ring-1 ring-amber-200 rounded-xl p-4">
+                      <div className="text-[11px] uppercase tracking-wider text-amber-800 font-bold flex items-center gap-1.5 mb-1"><StickyNote className="h-3.5 w-3.5" /> Observações</div>
+                      <div className="text-sm text-amber-900 whitespace-pre-wrap">{l.observacoes}</div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Galeria de fotos do recebimento */}
+                {fotosRec.length > 0 && (
+                  <div className="px-3 sm:px-5 pb-3">
+                    <div className="bg-white rounded-xl ring-1 ring-slate-200 p-4">
+                      <div className="text-[11px] uppercase tracking-wider text-slate-500 font-bold flex items-center gap-1.5 mb-3"><Camera className="h-3.5 w-3.5" /> Fotos do recebimento ({fotosRec.length})</div>
+                      <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2">
+                        {fotosRec.map((f, i) => (
+                          <a key={i} href={f.url} target="_blank" rel="noreferrer" className="block aspect-square overflow-hidden rounded-lg ring-1 ring-slate-200 hover:ring-emerald-400 hover:shadow-md transition">
+                            <img src={f.url} className="w-full h-full object-cover" alt={`Foto ${i + 1}`} />
+                          </a>
                         ))}
                       </div>
-                    )}
+                    </div>
                   </div>
-                ))}
+                )}
+
+                {/* Timeline de eventos */}
+                <div className="px-3 sm:px-5 pb-5">
+                  <div className="bg-white rounded-xl ring-1 ring-slate-200 p-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="text-[11px] uppercase tracking-wider text-slate-500 font-bold flex items-center gap-1.5"><Activity className="h-3.5 w-3.5" /> Linha do tempo</div>
+                      {!eventos.isLoading && <span className="text-xs text-slate-400">{evs.length} evento{evs.length !== 1 ? "s" : ""}</span>}
+                    </div>
+                    {eventos.isLoading ? <div className="py-6 flex justify-center"><Spinner /></div> :
+                      evs.length === 0 ? <div className="text-sm text-slate-500 italic py-6 text-center">Nenhum evento registrado.</div> :
+                      <ol className="relative border-l-2 border-slate-200 ml-3 space-y-3">
+                        {evs.map((e: any) => {
+                          const m = meta(e.tipo);
+                          const Icon = m.icon;
+                          return (
+                            <li key={e.id} className="ml-5 relative">
+                              <span className={`absolute -left-[34px] top-0 h-7 w-7 rounded-full ${m.bg} ring-4 ring-white flex items-center justify-center shadow-sm`}>
+                                <Icon className={`h-3.5 w-3.5 ${m.color}`} />
+                              </span>
+                              <div className={`rounded-lg ring-1 ${m.ring} bg-white p-3`}>
+                                <div className="flex items-center justify-between gap-2 flex-wrap">
+                                  <span className={`text-xs font-bold uppercase tracking-wider ${m.color}`}>{m.label}</span>
+                                  <span className="text-[11px] text-slate-500 tabular-nums">{new Date(e.dataEvento).toLocaleString("pt-BR")}</span>
+                                </div>
+                                {e.observacao && <div className="text-sm text-slate-700 mt-1.5 whitespace-pre-wrap">{e.observacao}</div>}
+                                {e.usuarioNome && <div className="text-[11px] text-slate-500 mt-1 inline-flex items-center gap-1"><UserIcon className="h-3 w-3" /> {e.usuarioNome}</div>}
+                                {Array.isArray(e.fotosJson) && e.fotosJson.length > 0 && (
+                                  <div className="flex flex-wrap gap-1.5 mt-2">
+                                    {e.fotosJson.slice(0, 6).map((f: any, i: number) => (
+                                      <a key={i} href={f.url} target="_blank" rel="noreferrer" className="block">
+                                        <img src={f.url} className="w-14 h-14 object-cover rounded ring-1 ring-slate-200 hover:ring-emerald-400 transition" alt="" />
+                                      </a>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            </li>
+                          );
+                        })}
+                      </ol>}
+                  </div>
+                </div>
+              </div>
+
+              {/* Footer sticky com ações */}
+              <div className="border-t border-slate-200 bg-white px-4 py-3 flex items-center justify-end gap-2 flex-wrap">
+                {l.status === "em_uso" && (
+                  <>
+                    <button
+                      onClick={() => { setModalCheckin(l); setCheckinObs(""); setModalEventos(null); }}
+                      className="px-4 py-2 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-md font-semibold inline-flex items-center gap-2 transition"
+                    >
+                      <ClipboardCheck className="h-4 w-4" /> Check-in semanal
+                    </button>
+                    <button
+                      onClick={() => { setModalDev(l); setDevFotos([]); setDevObs(""); setDevData(new Date().toISOString().slice(0, 10)); setModalEventos(null); }}
+                      className="px-4 py-2 text-sm bg-emerald-600 hover:bg-emerald-700 text-white rounded-md font-semibold inline-flex items-center gap-2 transition"
+                    >
+                      <RotateCcw className="h-4 w-4" /> Devolver
+                    </button>
+                  </>
+                )}
+                <button onClick={() => setModalEventos(null)} className="px-4 py-2 text-sm border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 rounded-md font-medium">Fechar</button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
       {/* Rev. 2322 — Diálogo de erro detalhado da importação (substitui toast que sumia no iOS). */}
       {importErroDetalhe && (
         <div className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4" onClick={() => setImportErroDetalhe(null)}>
