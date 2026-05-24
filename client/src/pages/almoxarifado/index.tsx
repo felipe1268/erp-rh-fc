@@ -10,7 +10,7 @@ import {
   LayoutGrid, List, Camera, Trash2, ImageOff, Barcode,
   Wrench, ClipboardCheck, User, CheckCircle2, XCircle, ChevronRight, ChevronLeft,
   Building2, HardHat, Sparkles, ScanLine, ShoppingCart, ArrowLeftRight, Truck,
-  CheckSquare, Square, Globe,
+  CheckSquare, Square, Globe, Check, Tag, Layers,
 } from "lucide-react";
 import SmartEntry from "./SmartEntry";
 import AlertasAlmoxarifado from "./AlertasAlmoxarifado";
@@ -113,6 +113,11 @@ export default function AlmoxarifadoPage() {
   const [confirmIAPrecos, setConfirmIAPrecos] = useState<null | { escopo: "empresa" | "obra"; qtd: number }>(null);
   // Rev. 2381 — Modal de rebusca de foto com termo customizado (user ajuda a IA)
   const [rebuscarFoto, setRebuscarFoto] = useState<null | { nome: string; termo: string; previewUrl: string | null; buscando: boolean; aplicando: boolean; erro: string | null }>(null);
+  // Rev. 2382 — Multi-seleção de itens (alterar categoria em lote / unificar duplicatas)
+  const [modoSelecao, setModoSelecao] = useState(false);
+  const [selecionados, setSelecionados] = useState<Set<number>>(new Set());
+  const [modalAltCateg, setModalAltCateg] = useState<null | { categoria: string; aplicando: boolean }>(null);
+  const [modalUnificar, setModalUnificar] = useState<null | { carregando: boolean; aplicando: boolean; grupos: any[]; totalInativ: number; erro: string | null }>(null);
 
   const [busca, setBusca] = useState("");
   const [filtroCateg, setFiltroCateg] = useState("todas");
@@ -308,6 +313,75 @@ export default function AlmoxarifadoPage() {
     } catch (e: any) {
       toast.error(e?.message || "Falha ao aplicar foto.");
       setRebuscarFoto(s => s ? { ...s, aplicando: false } : s);
+    }
+  }
+  // Rev. 2382 — Mutations multi-seleção
+  const altCategLoteMut = trpc.compras.atualizarCategoriaEmLote.useMutation();
+  const unificarLoteMut = trpc.compras.unificarItensEmLote.useMutation();
+  function sairModoSelecao() { setModoSelecao(false); setSelecionados(new Set()); }
+  function toggleSelecionado(id: number) {
+    setSelecionados(prev => {
+      const n = new Set(prev);
+      if (n.has(id)) n.delete(id); else n.add(id);
+      return n;
+    });
+  }
+  async function aplicarAlterarCategoria() {
+    if (!companyId || !modalAltCateg || !modalAltCateg.categoria.trim() || selecionados.size === 0) return;
+    setModalAltCateg(s => s ? { ...s, aplicando: true } : s);
+    try {
+      const r = await altCategLoteMut.mutateAsync({
+        companyId, ids: Array.from(selecionados), categoria: modalAltCateg.categoria.trim(),
+      });
+      toast.success(`Categoria atualizada em ${r.itensAtualizados} item(ns).`);
+      utils.compras.listarItens.invalidate();
+      utils.compras.listarItensConsolidado.invalidate();
+      setModalAltCateg(null);
+      sairModoSelecao();
+    } catch (e: any) {
+      toast.error(e?.message || "Falha ao atualizar categoria.");
+      setModalAltCateg(s => s ? { ...s, aplicando: false } : s);
+    }
+  }
+  async function abrirUnificarPreview() {
+    if (!companyId || selecionados.size < 2) {
+      toast.warning("Selecione pelo menos 2 itens pra unificar.");
+      return;
+    }
+    setModalUnificar({ carregando: true, aplicando: false, grupos: [], totalInativ: 0, erro: null });
+    try {
+      const r: any = await unificarLoteMut.mutateAsync({
+        companyId, ids: Array.from(selecionados), dryRun: true,
+      });
+      if (r?.ok) {
+        setModalUnificar({ carregando: false, aplicando: false, grupos: r.grupos || [], totalInativ: r.totalItensInativados || 0, erro: null });
+      } else {
+        setModalUnificar({ carregando: false, aplicando: false, grupos: [], totalInativ: 0, erro: r?.motivo || "Nada a unificar." });
+      }
+    } catch (e: any) {
+      setModalUnificar({ carregando: false, aplicando: false, grupos: [], totalInativ: 0, erro: e?.message || "Falha." });
+    }
+  }
+  async function confirmarUnificar() {
+    if (!companyId || !modalUnificar || modalUnificar.grupos.length === 0) return;
+    setModalUnificar(s => s ? { ...s, aplicando: true } : s);
+    try {
+      const r: any = await unificarLoteMut.mutateAsync({
+        companyId, ids: Array.from(selecionados),
+      });
+      if (r?.ok) {
+        toast.success(`Unificação concluída: ${r.totalItensInativados} item(ns) consolidado(s) em ${r.grupos?.length || 0} grupo(s).`);
+        utils.compras.listarItens.invalidate();
+        utils.compras.listarItensConsolidado.invalidate();
+        setModalUnificar(null);
+        sairModoSelecao();
+      } else {
+        toast.error(r?.motivo || "Falha na unificação.");
+        setModalUnificar(s => s ? { ...s, aplicando: false } : s);
+      }
+    } catch (e: any) {
+      toast.error(e?.message || "Falha na unificação.");
+      setModalUnificar(s => s ? { ...s, aplicando: false } : s);
     }
   }
   // Rev. 2377 — Buscar 1 foto na web (1 nome). Usado pelo botão por card.
@@ -1568,6 +1642,15 @@ export default function AlmoxarifadoPage() {
               <input type="checkbox" checked={apenasAbaixo} onChange={e => setApenasAbaixo(e.target.checked)} className="rounded border-gray-300" />
               Apenas abaixo do mínimo
             </label>
+            {/* Rev. 2382 — Toggle modo seleção múltipla */}
+            <button
+              onClick={() => { if (modoSelecao) sairModoSelecao(); else setModoSelecao(true); }}
+              className={`h-9 px-3 flex items-center gap-2 text-sm font-medium rounded-lg transition shadow-sm ${modoSelecao ? "bg-indigo-600 hover:bg-indigo-700 text-white" : "bg-white hover:bg-indigo-50 text-indigo-700 border border-indigo-200"}`}
+              title="Selecionar múltiplos itens pra alterar categoria ou unificar"
+            >
+              {modoSelecao ? <X className="w-4 h-4" /> : <CheckSquare className="w-4 h-4" />}
+              <span className="hidden sm:inline">{modoSelecao ? "Sair da seleção" : "Selecionar"}</span>
+            </button>
             <span className="text-xs text-gray-400">
               {lista.length} resultado{lista.length !== 1 ? "s" : ""}
             </span>
@@ -1589,13 +1672,19 @@ export default function AlmoxarifadoPage() {
                 const atual = n(item.quantidadeAtual);
                 const minimo = n(item.quantidadeMinima);
                 const abaixo = minimo > 0 && atual < minimo;
+                const isSel = modoSelecao && selecionados.has(item.id);
                 return (
-                  <div key={item.id} className={`bg-white rounded-xl border shadow-sm overflow-hidden flex flex-col transition hover:shadow-md ${abaixo ? "border-red-200" : "border-gray-100"}`}>
+                  <div
+                    key={item.id}
+                    className={`bg-white rounded-xl border shadow-sm overflow-hidden flex flex-col transition hover:shadow-md ${isSel ? "border-indigo-500 ring-2 ring-indigo-300" : abaixo ? "border-red-200" : "border-gray-100"} ${modoSelecao ? "cursor-pointer" : ""}`}
+                    onClick={modoSelecao ? () => toggleSelecionado(item.id) : undefined}
+                  >
                     {/* Foto */}
                     <div
                       className="relative bg-gray-50 flex items-center justify-center cursor-pointer group"
                       style={{ height: 140 }}
-                      onClick={() => {
+                      onClick={(e) => {
+                        if (modoSelecao) { e.stopPropagation(); toggleSelecionado(item.id); return; }
                         if ((item as any).fotoUrl) {
                           setFotoExpandida({ url: (item as any).fotoUrl, nome: item.nome });
                         } else {
@@ -1603,6 +1692,12 @@ export default function AlmoxarifadoPage() {
                         }
                       }}
                     >
+                      {/* Rev. 2382 — Checkbox de seleção múltipla */}
+                      {modoSelecao && (
+                        <div className={`absolute top-1.5 left-1.5 z-10 w-7 h-7 rounded-md flex items-center justify-center shadow-md transition ${isSel ? "bg-indigo-600" : "bg-white/95 border-2 border-gray-300"}`}>
+                          {isSel && <Check className="w-4 h-4 text-white" strokeWidth={3} />}
+                        </div>
+                      )}
                       {(item as any).fotoUrl ? (
                         <>
                           <img src={(item as any).fotoUrl} alt={item.nome} className="w-full h-full object-cover" />
@@ -3544,6 +3639,153 @@ export default function AlmoxarifadoPage() {
           </div>
         </div>
       )}
+      {/* Rev. 2382 — Sticky bar de ações da multi-seleção */}
+      {modoSelecao && (
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-[100] bg-white shadow-2xl rounded-2xl border border-indigo-200 px-4 py-3 flex items-center gap-3 max-w-[95vw]">
+          <div className="flex items-center gap-2 pr-3 border-r border-gray-200">
+            <div className="w-9 h-9 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 font-bold text-sm">
+              {selecionados.size}
+            </div>
+            <span className="text-xs text-gray-600 hidden sm:inline">selecionado{selecionados.size !== 1 ? "s" : ""}</span>
+          </div>
+          <button
+            onClick={() => {
+              if (selecionados.size === 0) { toast.warning("Selecione ao menos 1 item."); return; }
+              setModalAltCateg({ categoria: "", aplicando: false });
+            }}
+            className="h-10 px-3 sm:px-4 flex items-center gap-2 bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-semibold rounded-lg transition shadow-sm"
+          >
+            <Tag className="w-4 h-4" />
+            <span className="hidden sm:inline">Alterar categoria</span>
+            <span className="sm:hidden">Categoria</span>
+          </button>
+          <button
+            onClick={abrirUnificarPreview}
+            className="h-10 px-3 sm:px-4 flex items-center gap-2 bg-violet-500 hover:bg-violet-600 text-white text-sm font-semibold rounded-lg transition shadow-sm"
+          >
+            <Layers className="w-4 h-4" />
+            <span className="hidden sm:inline">Unificar duplicatas</span>
+            <span className="sm:hidden">Unificar</span>
+          </button>
+          <button
+            onClick={sairModoSelecao}
+            className="h-10 px-3 flex items-center gap-1 text-gray-600 hover:bg-gray-100 text-sm rounded-lg transition"
+          >
+            <X className="w-4 h-4" /> <span className="hidden sm:inline">Cancelar</span>
+          </button>
+        </div>
+      )}
+
+      {/* Rev. 2382 — Modal "Alterar categoria em lote" */}
+      {modalAltCateg && (
+        <div
+          className="fixed inset-0 z-[110] bg-black/50 flex items-center justify-center p-4"
+          onClick={() => !modalAltCateg.aplicando && setModalAltCateg(null)}
+        >
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden" onClick={(e) => e.stopPropagation()}>
+            <div className="bg-gradient-to-br from-emerald-500 to-teal-600 px-6 pt-6 pb-5 text-white text-center">
+              <div className="mx-auto bg-white/20 rounded-full p-3 w-fit mb-3"><Tag className="w-8 h-8" /></div>
+              <h3 className="text-xl font-bold">Alterar categoria em lote</h3>
+              <p className="text-emerald-50 text-xs mt-1">{selecionados.size} item(ns) selecionado(s)</p>
+            </div>
+            <div className="px-6 py-5 space-y-4 text-sm text-gray-700">
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1.5">Nova categoria</label>
+                <select
+                  value={modalAltCateg.categoria}
+                  onChange={(e) => setModalAltCateg(s => s ? { ...s, categoria: e.target.value } : s)}
+                  disabled={modalAltCateg.aplicando}
+                  className="w-full h-11 px-3 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-emerald-400 focus:border-emerald-400 outline-none disabled:bg-gray-50"
+                >
+                  <option value="">— escolha uma categoria —</option>
+                  {(categorias as string[]).map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+                <p className="text-[11px] text-gray-500 mt-1.5">A categoria selecionada será aplicada a todos os itens marcados.</p>
+              </div>
+            </div>
+            <div className="px-5 py-4 bg-gray-50 flex items-center gap-2 border-t border-gray-200">
+              <button onClick={() => setModalAltCateg(null)} disabled={modalAltCateg.aplicando} className="flex-1 px-4 py-3 text-sm font-medium text-gray-700 bg-white hover:bg-gray-100 border border-gray-300 rounded-lg transition disabled:opacity-50">Cancelar</button>
+              <button onClick={aplicarAlterarCategoria} disabled={!modalAltCateg.categoria || modalAltCateg.aplicando} className="flex-1 px-4 py-3 text-sm font-semibold text-white bg-emerald-500 hover:bg-emerald-600 disabled:bg-gray-300 rounded-lg transition shadow-sm flex items-center justify-center gap-2">
+                {modalAltCateg.aplicando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                Aplicar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Rev. 2382 — Modal "Unificar duplicatas" com preview */}
+      {modalUnificar && (
+        <div
+          className="fixed inset-0 z-[110] bg-black/50 flex items-center justify-center p-4"
+          onClick={() => !modalUnificar.aplicando && !modalUnificar.carregando && setModalUnificar(null)}
+        >
+          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
+            <div className="bg-gradient-to-br from-violet-500 to-purple-600 px-6 pt-6 pb-5 text-white text-center flex-shrink-0">
+              <div className="mx-auto bg-white/20 rounded-full p-3 w-fit mb-3"><Layers className="w-8 h-8" /></div>
+              <h3 className="text-xl font-bold">Unificar itens duplicados</h3>
+              <p className="text-violet-50 text-xs mt-1">Mesma obra · mesmo nome · mesma unidade · soma quantidades</p>
+            </div>
+            <div className="px-6 py-5 space-y-3 text-sm text-gray-700 overflow-y-auto flex-1">
+              {modalUnificar.carregando && (
+                <div className="flex flex-col items-center justify-center py-10 text-gray-400">
+                  <Loader2 className="w-8 h-8 animate-spin text-violet-500 mb-2" />
+                  <p className="text-xs">Analisando duplicatas...</p>
+                </div>
+              )}
+              {!modalUnificar.carregando && modalUnificar.erro && (
+                <div className="flex flex-col items-center justify-center py-8 text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-4 text-center">
+                  <AlertTriangle className="w-8 h-8 mb-2" />
+                  <p className="text-sm font-medium">{modalUnificar.erro}</p>
+                  <p className="text-[11px] text-gray-500 mt-1">Itens só são considerados duplicatas se tiverem o mesmo nome (sem prefixo/sufixo de código), mesma obra e mesma unidade.</p>
+                </div>
+              )}
+              {!modalUnificar.carregando && !modalUnificar.erro && modalUnificar.grupos.length > 0 && (
+                <>
+                  <div className="bg-violet-50 border border-violet-200 rounded-lg p-3 text-xs text-violet-900">
+                    <div className="font-semibold mb-1">{modalUnificar.grupos.length} grupo(s) de duplicatas · {modalUnificar.totalInativ} item(ns) serão consolidados</div>
+                    <div className="text-violet-700">Em cada grupo, o item com MAIOR quantidade fica como principal e os outros são marcados como inativos (histórico preservado). As quantidades são somadas.</div>
+                  </div>
+                  {modalUnificar.grupos.map((g: any, i: number) => (
+                    <div key={i} className="border border-gray-200 rounded-lg p-3">
+                      <div className="flex items-start justify-between gap-2 mb-2">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-gray-800 truncate">{g.canonicalNome}</p>
+                          <p className="text-[11px] text-gray-500">Unidade: {g.unidade}</p>
+                        </div>
+                        <div className="text-right flex-shrink-0">
+                          <p className="text-[10px] text-gray-400 uppercase">Quantidade final</p>
+                          <p className="text-lg font-bold text-violet-600">{g.qtdDepois} <span className="text-xs text-gray-400">{g.unidade}</span></p>
+                        </div>
+                      </div>
+                      <div className="text-[11px] text-gray-600 bg-gray-50 rounded p-2 space-y-0.5">
+                        <div className="flex justify-between">
+                          <span className="text-emerald-700 font-medium">✓ Mantém #{g.canonicalId}</span>
+                          <span className="text-gray-500">{g.qtdAntes} {g.unidade}</span>
+                        </div>
+                        {g.inativadosNomes.map((it: any) => (
+                          <div key={it.id} className="flex justify-between text-gray-500">
+                            <span>+ Inativa #{it.id}</span>
+                            <span>{it.qtd} {g.unidade}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </>
+              )}
+            </div>
+            <div className="px-5 py-4 bg-gray-50 flex items-center gap-2 border-t border-gray-200 flex-shrink-0">
+              <button onClick={() => setModalUnificar(null)} disabled={modalUnificar.aplicando} className="flex-1 px-4 py-3 text-sm font-medium text-gray-700 bg-white hover:bg-gray-100 border border-gray-300 rounded-lg transition disabled:opacity-50">Cancelar</button>
+              <button onClick={confirmarUnificar} disabled={modalUnificar.grupos.length === 0 || modalUnificar.aplicando || modalUnificar.carregando} className="flex-1 px-4 py-3 text-sm font-semibold text-white bg-violet-500 hover:bg-violet-600 disabled:bg-gray-300 rounded-lg transition shadow-sm flex items-center justify-center gap-2">
+                {modalUnificar.aplicando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Layers className="w-4 h-4" />}
+                Confirmar unificação
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Rev. 2381 — Modal de rebusca de foto com termo customizado (user ajuda a IA) */}
       {rebuscarFoto && (
         <div

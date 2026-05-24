@@ -1,6 +1,62 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2382 — **FEATURE · Multi-seleção de itens no Almoxarifado: alterar
+ * categoria em lote + unificar duplicatas (mesma obra, mesmo nome, mesma
+ * unidade) somando quantidades no item com maior estoque.**
+ *
+ * Pedido user (IMG_1182, 24/05/2026): "Preciso ter a opção de múltipla
+ * seleção e poder alterar as categorias de todos selecionados, preciso que
+ * o ERP unifique todos itens iguais, da mesma obra".
+ *
+ * **Backend** (`server/routers/compras.ts`, +2 mutations escopadas por
+ * companyId, R-001/R-007/R-010 OK):
+ *   1. `atualizarCategoriaEmLote({ companyId, ids[], categoria })` — único
+ *      UPDATE com `inArray(id, ids)` + `eq(companyId)`. Bate `atualizadoEm`
+ *      / `atualizadoPorId/Nome`. Limite 500 ids por chamada.
+ *   2. `unificarItensEmLote({ companyId, ids[], dryRun })` — agrupa por
+ *      `obraId + nome normalizado (strip [N.N]) + unidade`. Pra cada grupo
+ *      com 2+ itens ATIVOS: canonical = item com MAIOR `quantidadeAtual`
+ *      (tiebreak por ID menor). Faz (em ordem, sem transação porque pg
+ *      simple-query basta pro escopo): (a) UPDATE
+ *      `almoxarifado_movimentacoes.item_id` dos inativados → canonical
+ *      (preserva histórico no item canonical); (b) UPDATE
+ *      `almoxarifado_recebimento_itens.item_id` idem; (c) SET
+ *      `quantidadeAtual = soma` no canonical; (d) SET `ativo = false` nos
+ *      outros + observação "Unificado em YYYY-MM-DD no item #X" (NUNCA
+ *      DELETE — R-010). `dryRun = true` retorna só o preview dos grupos
+ *      sem tocar no banco.
+ *
+ * **Frontend** (`client/src/pages/almoxarifado/index.tsx`):
+ *   - Botão "Selecionar" (indigo, CheckSquare) na filter bar — toggle do
+ *     modo de seleção. Quando ativo vira "Sair da seleção" (X).
+ *   - State `modoSelecao: boolean`, `selecionados: Set<number>` (IDs).
+ *   - Cards no modo seleção: cursor pointer, ring indigo, checkbox 7x7
+ *     no canto superior esquerdo (indigo cheio quando marcado).
+ *   - Clique em qualquer parte do card (área da foto OU info) toggle a
+ *     seleção; em modo normal preserva o comportamento antigo (abrir foto
+ *     ou editar).
+ *   - Sticky bar bottom-center (z-100) com contador 0..N + 2 botões:
+ *     - "Alterar categoria" (emerald, Tag) → abre modal com select de
+ *       categorias da empresa + Aplicar.
+ *     - "Unificar duplicatas" (violet, Layers) → chama backend com
+ *       `dryRun=true`, exibe modal max-w-2xl scrollável com cada grupo
+ *       (canonical + lista dos inativados, quantidade antes/depois);
+ *       "Confirmar unificação" repete sem dryRun.
+ *   - Ambos os modais seguem o padrão Rev. 2378+ (bg-black/50 + card
+ *     branco rounded-2xl + header gradient centralizado + footer flex-1).
+ *
+ * Limitação consciente: itens só são considerados duplicatas se tiverem
+ * mesma obra, mesmo nome normalizado E mesma unidade (evita somar "kg"
+ * com "saco"). Tabelas além de `movimentacoes` e `recebimento_itens`
+ * NÃO são migradas — itens inativos continuam apontados por OCs antigas
+ * (que ainda exibem o nome corretamente porque guardam o snapshot).
+ */
+import "./version";
+
+/**
+ * Changelog centralizado do ERP.
+ *
  * Rev. 2381 — **FEATURE · Botão "Trocar foto" nos cards do Almoxarifado: user
  * ajuda a IA fornecendo um termo de busca mais específico (modal com input +
  * preview antes de aplicar).**

@@ -1725,6 +1725,149 @@ export const comprasRouter = router({
       return { success: true };
     }),
 
+  // Rev. 2382 — Atualizar categoria em lote (multi-seleção no Almoxarifado).
+  // Só UPDATE escopado por companyId + ids[]. R-001/R-007/R-010 OK.
+  atualizarCategoriaEmLote: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      ids: z.array(z.number()).min(1).max(500),
+      categoria: z.string().min(1).max(100),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const allowedCompanies = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+      const allowedIds = (allowedCompanies as any[]).map(c => c.id);
+      if (!allowedIds.includes(input.companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta empresa." });
+      }
+      const res: any = await db.update(almoxarifadoItens).set({
+        categoria: input.categoria.trim(),
+        atualizadoEm: new Date().toISOString(),
+        atualizadoPorId: ctx.user?.id ?? null,
+        atualizadoPorNome: ctx.user?.name || null,
+      }).where(and(
+        eq(almoxarifadoItens.companyId, input.companyId),
+        inArray(almoxarifadoItens.id, input.ids),
+      ));
+      const itensAtualizados = Number(res.rowCount ?? res.rows?.length ?? 0);
+      return { ok: true as const, itensAtualizados };
+    }),
+
+  // Rev. 2382 — Unificar itens iguais em lote (mesma obra, mesmo nome
+  // normalizado). Canonical = item com MAIOR quantidade do grupo (escolha
+  // do user). Soma quantidades no canonical, migra movimentações e
+  // recebimentos pra ele, marca os outros como ativo=false (soft-delete,
+  // R-010 OK). Agrupamento por nome normalizado (strip prefixo/sufixo
+  // `[N.N]` igual ao usado em `buscarFotoWebPorNome`).
+  unificarItensEmLote: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      ids: z.array(z.number()).min(2).max(500),
+      dryRun: z.boolean().optional().default(false),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const allowedCompanies = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+      const allowedIds = (allowedCompanies as any[]).map(c => c.id);
+      if (!allowedIds.includes(input.companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta empresa." });
+      }
+      const rows = await db.select().from(almoxarifadoItens).where(and(
+        eq(almoxarifadoItens.companyId, input.companyId),
+        inArray(almoxarifadoItens.id, input.ids),
+        eq(almoxarifadoItens.ativo, true),
+      ));
+      if (rows.length < 2) {
+        return { ok: false as const, motivo: "Menos de 2 itens ativos selecionados.", grupos: [], totalItensInativados: 0 };
+      }
+      const norm = (s: string) => (s || "")
+        .replace(/^\s*\[[0-9.]+\]\s*/i, "")
+        .replace(/\s*\[[0-9.]+\]\s*$/i, "")
+        .toLowerCase().trim();
+      type Item = typeof rows[number];
+      const buckets = new Map<string, Item[]>();
+      for (const r of rows) {
+        const key = `${r.obraId ?? "null"}__${norm(r.nome)}__${(r.unidade || "").toLowerCase()}`;
+        const arr = buckets.get(key) || [];
+        arr.push(r);
+        buckets.set(key, arr);
+      }
+      const grupos: any[] = [];
+      for (const [key, arr] of buckets.entries()) {
+        if (arr.length < 2) continue;
+        const sorted = [...arr].sort((a, b) => {
+          const qa = Number(a.quantidadeAtual ?? 0);
+          const qb = Number(b.quantidadeAtual ?? 0);
+          if (qb !== qa) return qb - qa;
+          return Number(a.id) - Number(b.id);
+        });
+        const canonical = sorted[0];
+        const outros = sorted.slice(1);
+        const somaOutros = outros.reduce((s, it) => s + Number(it.quantidadeAtual ?? 0), 0);
+        grupos.push({
+          chave: key,
+          canonicalId: canonical.id,
+          canonicalNome: canonical.nome,
+          obraId: canonical.obraId,
+          unidade: canonical.unidade,
+          qtdAntes: Number(canonical.quantidadeAtual ?? 0),
+          qtdDepois: Number(canonical.quantidadeAtual ?? 0) + somaOutros,
+          inativadosIds: outros.map(o => o.id),
+          inativadosNomes: outros.map(o => ({ id: o.id, nome: o.nome, qtd: Number(o.quantidadeAtual ?? 0) })),
+        });
+      }
+      if (grupos.length === 0) {
+        return { ok: false as const, motivo: "Nenhum grupo de duplicatas encontrado entre os selecionados (precisa ter mesmo nome, obra e unidade).", grupos: [], totalItensInativados: 0 };
+      }
+      if (input.dryRun) {
+        return { ok: true as const, dryRun: true as const, grupos, totalItensInativados: grupos.reduce((s, g) => s + g.inativadosIds.length, 0) };
+      }
+      // Transação garante atomicidade: ou todos os grupos são unificados,
+      // ou nada muda (sugestão architect Rev. 2382).
+      const totalInativados = await db.transaction(async (tx) => {
+        let total = 0;
+        for (const g of grupos) {
+          if (g.inativadosIds.length === 0) continue;
+          // 1) Migrar movimentações pro canonical
+          await tx.execute(sql`
+            UPDATE almoxarifado_movimentacoes
+               SET item_id = ${g.canonicalId}
+             WHERE company_id = ${input.companyId}
+               AND item_id IN (${sql.join(g.inativadosIds.map((x: number) => sql`${x}`), sql`, `)})
+          `);
+          // 2) Migrar recebimentos (itemId opcional)
+          await tx.execute(sql`
+            UPDATE almoxarifado_recebimento_itens
+               SET item_id = ${g.canonicalId}
+             WHERE item_id IN (${sql.join(g.inativadosIds.map((x: number) => sql`${x}`), sql`, `)})
+          `);
+          // 3) Somar quantidades no canonical
+          await tx.update(almoxarifadoItens).set({
+            quantidadeAtual: String(g.qtdDepois),
+            atualizadoEm: new Date().toISOString(),
+            atualizadoPorId: ctx.user?.id ?? null,
+            atualizadoPorNome: ctx.user?.name || null,
+          }).where(eq(almoxarifadoItens.id, g.canonicalId));
+          // 4) Inativar os outros (NUNCA DELETE — R-010)
+          const resInat: any = await tx.update(almoxarifadoItens).set({
+            ativo: false,
+            observacoes: sql`COALESCE(observacoes, '') || ${`\n[Unificado em ${new Date().toISOString().slice(0, 10)} no item #${g.canonicalId}]`}`,
+            atualizadoEm: new Date().toISOString(),
+            atualizadoPorId: ctx.user?.id ?? null,
+            atualizadoPorNome: ctx.user?.name || null,
+          }).where(and(
+            eq(almoxarifadoItens.companyId, input.companyId),
+            inArray(almoxarifadoItens.id, g.inativadosIds),
+          ));
+          total += Number(resInat.rowCount ?? resInat.rows?.length ?? g.inativadosIds.length);
+        }
+        return total;
+      });
+      return { ok: true as const, grupos, totalItensInativados: totalInativados };
+    }),
+
   // Rev. 2377 — Busca de foto "como usuário normal faria" pros itens do
   // Almoxarifado. Mesma estratégia da Rev. 2366 (Equipamentos Locados):
   // DuckDuckGo Images, 1ª foto válida, UPDATE em todos os itens da empresa
