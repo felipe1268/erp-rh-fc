@@ -1,6 +1,110 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2362 — **FEATURE/IA · Nova análise "Comprar vs Continuar Alugando"
+ * em /equipamentos/locados — IA estima preço de mercado de cada
+ * descrição e calcula payback + recomendação.**
+ *
+ * **Pedido user (24/05/2026, IMG_1158+1159):** "Preciso de uma análise da
+ * IA, fazendo uma análise nos valores dos equipamentos locados x o preço
+ * do produto na internet, para analisar se vamos comprar ou não. Não
+ * faz sentido ter estes produtos locados se é mais fácil comprar".
+ *
+ * **Problema:** o ERP tinha 1.218 equipamentos em locação ativa gastando
+ * ~R$ 18,2 mil/mês mas NENHUMA ferramenta pra decidir "isso vale a pena
+ * alugar ou já era pra ter comprado?". O engenheiro precisaria cotar
+ * manualmente preço de mercado de cada SKU, dividir por aluguel/mês e
+ * julgar — humanamente inviável.
+ *
+ * **Solução — 1 mutation nova + 1 botão + 1 modal:**
+ *
+ * **(1) Backend** (`server/routers/equipamentos.ts`): nova mutation
+ * `locadosAnalisarCompraVsAluguel` (1 arquivo, ~180L). Tenant guard via
+ * `getCompaniesForUser`. Agrega `equipamentos_locados` `em_uso` por
+ * descrição (SUM/AVG valorMensal + COUNT qtd + MAX categoria), ordena
+ * por gasto mensal desc, cap em `maxDescricoes=80` (default — priorizar
+ * quem dói mais no caixa). Manda a lista pra `invokeLLM` (Claude primário
+ * → fallback Gemini 2.5 Flash) com JSON mode pedindo: `precoMedio`,
+ * `precoMin`, `precoMax`, `canalTipico` (≤60 chars), `confianca`
+ * (alta/media/baixa) em R$ mercado BR 2025-2026 NOVO sem frete. Pra
+ * cada item calcula `paybackMeses = precoMedio / aluguelUnMes`,
+ * `investimentoCompra = precoMedio × qtd`, `economiaAnual =
+ * 12×gastoMesTotal − investimentoCompra`. Heurística de recomendação:
+ *   - payback ≤  6m → **COMPRAR_JA** (alta urgência)
+ *   - payback ≤ 12m → **COMPRAR**
+ *   - payback ≤ 24m → **AVALIAR**
+ *   - payback >  24m → **MANTER_LOCACAO**
+ * Sem resposta da IA pra uma descrição → AVALIAR + confianca baixa (não
+ * desaparece da tabela). Ordena por recomendação asc, depois por
+ * economia anual desc. Devolve totais: `economiaAnualPotencial` e
+ * `investimentoTotalRecomendado` (só dos COMPRAR_*).
+ *
+ * **(2) Frontend** (`client/src/pages/equipamentos/Locados.tsx`): 3 hunks:
+ *   - **Imports** — `Scale`, `ShoppingCart`, `TrendingDown` do lucide.
+ *   - **State + mutation** (após bloco fotos canônicas): types
+ *     `AnaliseItem` + `AnaliseResultado`, `modalAnaliseCA` (boolean),
+ *     `resultadoAnaliseCA`, `filtroRecAnalise`
+ *     (`'' | 'comprar' | 'avaliar' | 'manter'`), `analiseCAMut` com
+ *     toast de sucesso/erro.
+ *   - **Botão** no header (cor âmbar, ícone Scale, ao lado de "Categorizar
+ *     com IA"): "Comprar vs Alugar (IA)". Tooltip explica que a IA estima
+ *     preço de mercado e compara com aluguel mensal.
+ *   - **Modal full-screen** (max-w-6xl, max-h-92dvh) em 3 estados:
+ *       a) Sem resultado: cartão explicativo (como funciona, faixas
+ *          de payback, ⚠ aviso de "estimativa não cotação firme") +
+ *          CTA "Gerar análise IA agora".
+ *       b) Loading: spinner + texto "30s a 2min".
+ *       c) Resultado: 4 KPIs no topo (Recomendado comprar / Economia
+ *          anual potencial / Investimento necessário / Avaliar+Manter),
+ *          pills de filtro por recomendação com contadores ao vivo,
+ *          tabela 9 colunas (Descrição·Qtd·Aluguel/un/mês·Preço estim.
+ *          com faixa min-max·Investir total·Payback colorido por
+ *          urgência·Economia/ano·Badge recomendação·Canal+Confiança),
+ *          rodapé italic com fonte/timestamp/fórmula.
+ *   - Rodapé do modal: botão "Re-analisar" (RotateCcw) + "Fechar". Click
+ *     no backdrop também fecha (exceto durante mutation).
+ *
+ * **Decisões:**
+ *   - Agregamos por DESCRIÇÃO (não por unidade nem por contrato) porque
+ *     preço de mercado é por SKU. 1.218 unidades viram ~50-80 SKUs únicos
+ *     → custo de prompt controlado.
+ *   - Só `status='em_uso'`: analisar item devolvido/atrasado pra decidir
+ *     "comprar ou alugar" não faz sentido — quem saiu já saiu.
+ *   - Faixa min-médio-max + badge de confiança (não só um número):
+ *     deixa explícito que é estimativa. UI sempre rotula como
+ *     "estimativa baseada no conhecimento da IA, sem busca ao vivo".
+ *   - Sem search grounding por ora (o endpoint OpenAI-compat do Gemini
+ *     usado em `invokeLLM` não habilita web search). Seria upgrade
+ *     futuro: usar Google CSE + 3-5 snippets/SKU + prompt RAG.
+ *   - Heurística simples (payback em meses) sem custo de capital nem
+ *     valor residual nem manutenção — explicado no rodapé do modal.
+ *     User pediu "comparação simples"; sofisticação financeira fica
+ *     pra v2 se vier feedback.
+ *   - 80 descrições por call: cobre top ~95% do gasto mensal (Pareto),
+ *     evita prompt gigante. Tabela ordenada já põe quem importa em cima.
+ *
+ * **R-001/R-007/R-010:** N/A — mutation READ-ONLY (só SELECT no banco
+ * + call à IA + cálculo em memória + retorno JSON). ZERO DDL, ZERO
+ * UPDATE/DELETE/INSERT. Botão visível só na tela do user; tenant guard
+ * obrigatório igual aos outros locados*ComIA. Custo IA controlado pelo
+ * cap de 80 descrições.
+ *
+ * Arquivos tocados:
+ * - `server/routers/equipamentos.ts` (nova mutation `locadosAnalisarCompraVsAluguel`, ~180L)
+ * - `client/src/pages/equipamentos/Locados.tsx` (imports + state + botão header + modal full-screen)
+ * - `shared/version.ts` → 2362
+ * - `shared/changelog.ts` (este bloco)
+ * - `replit.md` (rotação: 2362+2361 detalhadas, 2360 vira one-liner, 2355 sai pra history)
+ * - `replit-history.md` (recebe 2355)
+ *
+ * Follow-ups possíveis (NÃO incluídos):
+ * - Web search grounding (Google CSE) pra preços ao vivo.
+ * - Botão "Exportar análise" (CSV/XLSX) — pedido futuro provável.
+ * - Análise por OBRA (filtro adicional) — útil quando uma obra
+ *   específica concentra a maior parte do gasto.
+ *
+ * ─────────────────────────────────────────────────────────────────────
+ *
  * Rev. 2361 — **UX/FILTRO · Cards KPI de Equipamentos Locados ficaram
  * CLICÁVEIS (drill-down por urgência) + novo card "Vencendo (5d)" +
  * grid 5col responsivo (2/3/5).**

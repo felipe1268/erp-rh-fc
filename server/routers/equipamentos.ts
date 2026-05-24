@@ -1418,6 +1418,232 @@ Reply JSON {"queries":[{"descricao":"<original PT>","query":"<EN words>"}]} with
       return { ok: true as const, itensLimpos };
     }),
 
+  // ── Rev. 2362 — ANÁLISE COMPRAR vs ALUGAR (IA) ────────────────────────────
+  // Pedido user (24/05/2026, IMG_1158+1159): "Análise nos valores dos
+  // equipamentos locados x o preço do produto na internet, para analisar
+  // se vamos comprar ou não, não faz sentido ter estes produtos locados se
+  // é mais fácil comprar".
+  //
+  // Estratégia: agrega equipamentos em_uso por DESCRIÇÃO (não por unidade —
+  // o preço de mercado é por SKU). Pra cada descrição calcula:
+  //   - qtd unidades em locação
+  //   - aluguel mensal médio/un (Σ valorMensal / qtd)
+  //   - gasto mensal total da descrição (Σ valorMensal)
+  // Manda pra Gemini estimar `precoCompraUn` (mediana mercado BR novo) +
+  // faixa min/max + canal típico. Calcula payback (preço/aluguel) + economia
+  // anual em 12 meses (12*aluguelMes - preçoTotal). Recomendação heurística:
+  //   - payback ≤  6 meses → COMPRAR_JA (alta urgência)
+  //   - payback ≤ 12 meses → COMPRAR
+  //   - payback ≤ 24 meses → AVALIAR
+  //   - payback >  24 meses → MANTER_LOCACAO
+  //
+  // Limitação documentada: Gemini estima preço com base no conhecimento de
+  // treinamento (sem busca ao vivo na web). Pra preços muito específicos
+  // (marca/modelo exato) pode errar — por isso devolvemos faixa min/max
+  // e exibimos no UI como "estimativa", não como cotação firme.
+  //
+  // R-001/R-007/R-010: read-only — zero DDL, zero UPDATE/DELETE/INSERT.
+  locadosAnalisarCompraVsAluguel: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      maxDescricoes: z.number().int().min(1).max(150).optional().default(80),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const allowedCompanies = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+      const allowedIds = (allowedCompanies as any[]).map(c => c.id);
+      if (!allowedIds.includes(input.companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta empresa." });
+      }
+
+      // 1. Agregação por descrição (só em_uso — alugar item devolvido/atrasado
+      // não faz sentido analisar). Cap em maxDescricoes pra controlar custo
+      // do prompt; ordena por gasto mensal desc pra priorizar quem dói mais.
+      const aggResult: any = await db.execute(sql`
+        SELECT
+          descricao,
+          COUNT(*)::int                              AS qtd,
+          COALESCE(SUM(valor_mensal), 0)::float     AS gasto_mes_total,
+          COALESCE(AVG(valor_mensal), 0)::float     AS aluguel_un_mes,
+          MAX(categoria)                             AS categoria
+        FROM equipamentos_locados
+        WHERE company_id = ${input.companyId}
+          AND status = 'em_uso'
+          AND descricao IS NOT NULL
+          AND descricao <> ''
+          AND valor_mensal IS NOT NULL
+          AND valor_mensal > 0
+        GROUP BY descricao
+        HAVING SUM(valor_mensal) > 0
+        ORDER BY SUM(valor_mensal) DESC
+        LIMIT ${input.maxDescricoes}
+      `);
+      const grupos: { descricao: string; qtd: number; gasto_mes_total: number; aluguel_un_mes: number; categoria: string | null }[] =
+        (aggResult.rows || aggResult) as any[];
+      if (grupos.length === 0) {
+        return {
+          ok: true as const,
+          totalAnalisado: 0,
+          itens: [] as any[],
+          economiaAnualPotencial: 0,
+          investimentoTotalRecomendado: 0,
+          fonte: "Gemini 2.5 Flash (estimativa baseada em conhecimento, sem busca ao vivo)",
+        };
+      }
+
+      // 2. Prompt Gemini: estima preço de mercado BR (novo) por descrição.
+      const { invokeLLM } = await import("../_core/llm");
+      const systemPrompt = `Você é um especialista em compras de equipamentos para obra de construção civil pesada no Brasil. Recebe uma lista de descrições de equipamentos atualmente LOCADOS por uma construtora e deve estimar o preço de COMPRA (item NOVO, em R$, sem frete, à vista) de cada um no mercado brasileiro.
+
+Regras OBRIGATÓRIAS:
+1. Para CADA descrição, estimar:
+   - "precoMedio": número em R$ (mediana de mercado, item NOVO comum)
+   - "precoMin": número em R$ (mínimo plausível — marca genérica/promoção)
+   - "precoMax": número em R$ (máximo plausível — marca premium)
+   - "canalTipico": string ≤ 60 chars (ex: "Leroy Merlin / Madeira Madeira", "Mercado Livre — locadoras revenda", "Casa do Construtor / Telha Norte")
+   - "confianca": "alta" | "media" | "baixa" — sua confiança na estimativa
+2. Se a descrição for genérica demais pra estimar (ex: "ACESSÓRIO DIVERSO"), use "confianca":"baixa" e dê faixa larga.
+3. Use preços de 2025-2026 em REAL. NÃO converta de USD.
+4. Retornar APENAS JSON válido — sem markdown:
+   {
+     "itens": [
+       { "descricao": "TEXTO EXATO ORIGINAL", "precoMedio": 1200, "precoMin": 800, "precoMax": 1800, "canalTipico": "...", "confianca": "media" },
+       ...
+     ]
+   }
+5. O campo "descricao" deve ser IGUAL (caractere a caractere) ao recebido. Não omita nenhum item.`;
+
+      const userPrompt = `Estime o preço de compra (item NOVO, R$, mercado BR) das ${grupos.length} descrições abaixo. Entre parênteses está a quantidade de unidades que a construtora atualmente aluga e o aluguel mensal médio por unidade — use isso APENAS pra calibrar o porte do equipamento (aluguel R$ 9/mês = sapata; R$ 500/mês = betoneira; R$ 3.000/mês = compressor industrial).
+
+${grupos.map(g => `- ${g.descricao}  (${g.qtd} un · aluguel R$ ${g.aluguel_un_mes.toFixed(2)}/un/mês)`).join("\n")}
+
+Gere o JSON conforme o esquema. Não omita nenhuma descrição.`;
+
+      // Fix code review Rev. 2362: degradar pra { itens: [] } se JSON vier quebrado
+      // — assim o endpoint sempre devolve estrutura, todos os grupos viram AVALIAR
+      // (sem preço) em vez de derrubar a análise inteira. Só lança se a IA estiver
+      // SEM CHAVE configurada (erro estrutural, não transiente).
+      let parsed: any = { itens: [] };
+      let iaErroMsg: string | null = null;
+      try {
+        const resp = await invokeLLM({
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: userPrompt },
+          ],
+          maxTokens: 16000,
+          response_format: { type: "json_object" },
+        });
+        const content = resp.choices?.[0]?.message?.content;
+        let raw = (typeof content === "string" ? content : Array.isArray(content) ? content.map((c: any) => c?.text ?? "").join("") : "").trim();
+        const m = raw.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+        if (m) raw = m[1].trim();
+        const fi = raw.indexOf("{"); const li = raw.lastIndexOf("}");
+        if (fi >= 0 && li > fi) raw = raw.slice(fi, li + 1);
+        try {
+          parsed = JSON.parse(raw);
+        } catch (jsonErr: any) {
+          // Code review fix: JSON malformado não derruba mais o endpoint;
+          // todos os grupos viram AVALIAR + confianca baixa, com aviso na UI.
+          iaErroMsg = `IA devolveu JSON inválido (${(jsonErr?.message || "parse error").slice(0, 80)}). Análise gerada sem estimativa de preço — clique em Re-analisar.`;
+          console.warn("[locadosAnalisarCompraVsAluguel] JSON parse falhou:", jsonErr?.message, "raw[0:200]:", raw.slice(0, 200));
+        }
+      } catch (err: any) {
+        const msg = err?.message || String(err);
+        if (msg.includes("Nenhuma chave de IA")) {
+          // Único erro estrutural que ainda lança — UI vai pedir pra configurar chave.
+          throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Nenhuma IA configurada (ANTHROPIC_API_KEY ou GOOGLE_API_KEY ausente)." });
+        }
+        // Code review fix: rede/429/5xx degradam pra análise sem preços em vez
+        // de quebrar tudo. User vê a lista com confianca=baixa e re-tenta.
+        iaErroMsg = `Falha ao consultar IA (${msg.slice(0, 100)}). Análise gerada sem estimativa de preço.`;
+        console.warn("[locadosAnalisarCompraVsAluguel] invokeLLM falhou:", msg);
+      }
+
+      const respostas: any[] = Array.isArray(parsed.itens) ? parsed.itens : [];
+      const respMap = new Map<string, any>();
+      for (const r of respostas) {
+        const d = String(r?.descricao ?? "");
+        if (d) respMap.set(d, r);
+      }
+
+      // 3. Calcula payback + recomendação por grupo. Sem resposta da IA → AVALIAR
+      // com confianca "baixa" pra não desaparecer da tabela.
+      function recomendar(paybackMeses: number): "COMPRAR_JA" | "COMPRAR" | "AVALIAR" | "MANTER_LOCACAO" {
+        if (!isFinite(paybackMeses) || paybackMeses <= 0) return "AVALIAR";
+        if (paybackMeses <=  6) return "COMPRAR_JA";
+        if (paybackMeses <= 12) return "COMPRAR";
+        if (paybackMeses <= 24) return "AVALIAR";
+        return "MANTER_LOCACAO";
+      }
+
+      const itens = grupos.map(g => {
+        const r = respMap.get(g.descricao);
+        const precoMedio = r ? Math.max(0, Number(r.precoMedio) || 0) : 0;
+        const precoMin   = r ? Math.max(0, Number(r.precoMin)   || 0) : 0;
+        const precoMax   = r ? Math.max(0, Number(r.precoMax)   || 0) : 0;
+        const canal      = r ? String(r.canalTipico || "").slice(0, 80) : "";
+        const confianca: "alta" | "media" | "baixa" =
+          r && (r.confianca === "alta" || r.confianca === "media" || r.confianca === "baixa") ? r.confianca : "baixa";
+        const temPreco = precoMedio > 0 && g.aluguel_un_mes > 0;
+        // Code review fix: sem preço → investimento/economia = null (não 0),
+        // pra não simular "economia falsa = 12×gasto" e empurrar o item pra topo.
+        const paybackMeses = temPreco ? precoMedio / g.aluguel_un_mes : null;
+        const investimentoCompra = temPreco ? precoMedio * g.qtd : null;
+        const economiaAnual = temPreco ? (g.gasto_mes_total * 12) - (precoMedio * g.qtd) : null;
+        const recomendacao = temPreco && paybackMeses != null ? recomendar(paybackMeses) : "AVALIAR";
+        return {
+          descricao: g.descricao,
+          categoria: g.categoria,
+          qtd: g.qtd,
+          aluguelUnMes: g.aluguel_un_mes,
+          gastoMesTotal: g.gasto_mes_total,
+          precoMedio,
+          precoMin,
+          precoMax,
+          canalTipico: canal,
+          confianca,
+          temPreco,
+          paybackMeses,
+          investimentoCompra,
+          economiaAnual,
+          recomendacao,
+        };
+      });
+      // Ordena: recomendações de COMPRA primeiro, depois AVALIAR (com preço
+      // antes de sem preço — code review fix), depois MANTER.
+      const ordemRec: Record<string, number> = { COMPRAR_JA: 0, COMPRAR: 1, AVALIAR: 2, MANTER_LOCACAO: 3 };
+      itens.sort((a, b) => {
+        const dr = (ordemRec[a.recomendacao] ?? 9) - (ordemRec[b.recomendacao] ?? 9);
+        if (dr !== 0) return dr;
+        // Itens com preço (analisados) vêm antes dos sem preço dentro do mesmo bucket.
+        if (a.temPreco !== b.temPreco) return a.temPreco ? -1 : 1;
+        return (b.economiaAnual ?? -Infinity) - (a.economiaAnual ?? -Infinity);
+      });
+
+      const economiaAnualPotencial = itens
+        .filter(i => i.recomendacao === "COMPRAR_JA" || i.recomendacao === "COMPRAR")
+        .reduce((a, i) => a + Math.max(0, i.economiaAnual ?? 0), 0);
+      const investimentoTotalRecomendado = itens
+        .filter(i => i.recomendacao === "COMPRAR_JA" || i.recomendacao === "COMPRAR")
+        .reduce((a, i) => a + (i.investimentoCompra ?? 0), 0);
+      const semEstimativa = itens.filter(i => !i.temPreco).length;
+
+      return {
+        ok: true as const,
+        totalAnalisado: itens.length,
+        haMaisLotes: false, // (cap em maxDescricoes — top N por gasto já cobre o relevante)
+        itens,
+        economiaAnualPotencial,
+        investimentoTotalRecomendado,
+        semEstimativa,
+        iaErroMsg,
+        fonte: "Gemini 2.5 Flash · estimativa baseada em conhecimento (sem busca ao vivo)",
+        geradoEm: new Date().toISOString(),
+      };
+    }),
+
   // ── Rev. 2355 — BIBLIOTECA CURADA DE FOTOS POR DESCRIÇÃO CANÔNICA ─────────
   // Substitui definitivamente a "busca de fotos com IA" (revs 2340-2350) que
   // tinha baixa acurácia por limitação dos provedores gratuitos. O user sobe

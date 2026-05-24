@@ -3,7 +3,7 @@ import { useState, useMemo, useRef, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
 import { toast } from "sonner";
-import { Plus, Search, X, Truck, CheckCircle2, RotateCcw, ClipboardCheck, Eye, FileText, Upload, Sparkles, Trash2, Activity, Clock, AlertTriangle, DollarSign, Calendar, Hash, Building2, User as UserIcon, MapPin, Camera, StickyNote, ChevronDown, Tag, Loader2, Layers, Boxes, ImagePlus, Library, Check, type LucideIcon } from "lucide-react";
+import { Plus, Search, X, Truck, CheckCircle2, RotateCcw, ClipboardCheck, Eye, FileText, Upload, Sparkles, Trash2, Activity, Clock, AlertTriangle, DollarSign, Calendar, Hash, Building2, User as UserIcon, MapPin, Camera, StickyNote, ChevronDown, Tag, Loader2, Layers, Boxes, ImagePlus, Library, Check, Scale, ShoppingCart, TrendingDown, type LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import { FotosUploader, FotoItem, fmtMoney, fmtDate, Spinner } from "./_shared";
 import { compressImageIfNeeded } from "@/lib/imageCompress";
@@ -774,6 +774,37 @@ export default function EquipamentosLocados() {
   // Rev. 2342 — quantos itens TÊM foto da IA (foto_url preenchido) — pra botão Limpar
   const totalComFotoIA = useMemo(() => (dataAll as any[]).filter(l => !!l.fotoUrl).length, [dataAll]);
 
+  // Rev. 2362 — Análise IA Comprar vs Alugar. State + mutation. Resultado
+  // fica num modal full-screen ordenado por recomendação + economia anual.
+  type AnaliseItem = {
+    descricao: string; categoria: string | null; qtd: number;
+    aluguelUnMes: number; gastoMesTotal: number;
+    precoMedio: number; precoMin: number; precoMax: number;
+    canalTipico: string; confianca: "alta" | "media" | "baixa";
+    temPreco: boolean;
+    paybackMeses: number | null; investimentoCompra: number | null; economiaAnual: number | null;
+    recomendacao: "COMPRAR_JA" | "COMPRAR" | "AVALIAR" | "MANTER_LOCACAO";
+  };
+  type AnaliseResultado = {
+    totalAnalisado: number; itens: AnaliseItem[];
+    economiaAnualPotencial: number; investimentoTotalRecomendado: number;
+    semEstimativa?: number; iaErroMsg?: string | null;
+    fonte: string; geradoEm?: string;
+  };
+  const [modalAnaliseCA, setModalAnaliseCA] = useState(false);
+  const [resultadoAnaliseCA, setResultadoAnaliseCA] = useState<AnaliseResultado | null>(null);
+  const [filtroRecAnalise, setFiltroRecAnalise] = useState<"" | "comprar" | "avaliar" | "manter">("");
+  const analiseCAMut = trpc.equipamentos.locadosAnalisarCompraVsAluguel.useMutation({
+    onSuccess: (res: any) => {
+      setResultadoAnaliseCA(res);
+      toast.success(`Análise IA concluída: ${res.totalAnalisado} descrição(ões) avaliada(s).`);
+    },
+    onError: (err: any) => {
+      toast.error(err?.message || "Falha ao gerar análise IA.");
+      setModalAnaliseCA(false);
+    },
+  });
+
   // Rev. 2337 — Categorização em lote via IA.
   const [modalCategIA, setModalCategIA] = useState<null | { sobrescrever: boolean }>(null);
   const [resultadoCategIA, setResultadoCategIA] = useState<null | { categorias: string[]; itensAtualizados: number; descricoesAnalisadas: number; descricoesNaoMapeadas: string[]; haMaisLotes?: boolean }>(null);
@@ -945,6 +976,14 @@ export default function EquipamentosLocados() {
               </div>
             </div>
             <div className="flex items-center gap-2 flex-wrap">
+              {/* Rev. 2362 — Análise IA "Comprar vs Alugar". Sempre visível: compara
+                  custo da locação atual vs preço de mercado e recomenda compra. */}
+              <button onClick={() => { setResultadoAnaliseCA(null); setFiltroRecAnalise(""); setModalAnaliseCA(true); }}
+                className="inline-flex items-center gap-2 bg-amber-500/90 text-white hover:bg-amber-500 px-4 py-2.5 rounded-xl shadow-md font-semibold text-sm transition ring-1 ring-amber-300/60"
+                title="A IA estima o preço de mercado de cada equipamento e compara com o aluguel mensal — recomenda comprar quando o payback for curto.">
+                <Scale className="h-4 w-4" />
+                Comprar vs Alugar (IA)
+              </button>
               {/* Rev. 2337 — Categorizar com IA (só aparece se houver itens sem categoria). */}
               {totalSemCategoria > 0 && (
                 <button onClick={() => setModalCategIA({ sobrescrever: false })}
@@ -2846,6 +2885,221 @@ export default function EquipamentosLocados() {
             </div>
             <div className="bg-slate-50 border-t border-slate-200 px-5 py-3 flex justify-end">
               <button onClick={() => setResultadoFotosIA(null)} className="px-4 py-2 text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-md transition">Fechar</button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Rev. 2362 — Modal "Comprar vs Alugar (IA)" */}
+      {modalAnaliseCA && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => !analiseCAMut.isPending && setModalAnaliseCA(false)}>
+          <div role="dialog" aria-modal="true" aria-labelledby="analiseCA-title" aria-describedby="analiseCA-desc" className="bg-white rounded-2xl shadow-2xl w-full max-w-6xl max-h-[92dvh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+            <div className="px-5 py-4 border-b border-slate-200 flex items-start justify-between gap-3">
+              <div className="flex items-start gap-3 min-w-0">
+                <div className="bg-amber-100 text-amber-700 rounded-lg p-2 shrink-0"><Scale className="h-5 w-5" /></div>
+                <div className="min-w-0">
+                  <h2 id="analiseCA-title" className="text-lg font-bold text-slate-900">Análise IA · Comprar vs Continuar Alugando</h2>
+                  <p id="analiseCA-desc" className="text-xs text-slate-500 mt-0.5">Estima o preço de compra novo (mercado BR) de cada equipamento em locação e calcula payback vs aluguel mensal atual.</p>
+                </div>
+              </div>
+              <button onClick={() => !analiseCAMut.isPending && setModalAnaliseCA(false)} disabled={analiseCAMut.isPending} aria-label="Fechar modal" className="text-slate-400 hover:text-slate-600 disabled:opacity-40 shrink-0"><X className="h-5 w-5" /></button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-5 space-y-4">
+              {/* Estado 1: sem resultado ainda → CTA + explicação */}
+              {!resultadoAnaliseCA && !analiseCAMut.isPending && (
+                <div className="space-y-4">
+                  <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-sm text-amber-900 space-y-2">
+                    <div className="font-semibold flex items-center gap-2"><Sparkles className="h-4 w-4" /> Como funciona</div>
+                    <ul className="list-disc pl-5 space-y-1 text-amber-800">
+                      <li>O ERP agrupa os equipamentos <b>em uso</b> por descrição (até 80 descrições com maior gasto mensal).</li>
+                      <li>A IA estima o preço de compra (item NOVO, R$, mercado BR) — faixa min/médio/max.</li>
+                      <li>Calculamos <b>payback</b> (preço ÷ aluguel mensal) e <b>economia anual</b> (12×aluguel − preço de compra).</li>
+                      <li>Recomendação: <b className="text-emerald-700">COMPRAR JÁ</b> (payback ≤6m) · <b className="text-emerald-600">COMPRAR</b> (≤12m) · <b className="text-amber-700">AVALIAR</b> (≤24m) · <b className="text-slate-700">MANTER LOCAÇÃO</b> (&gt;24m).</li>
+                    </ul>
+                    <div className="text-[11px] text-amber-700/80 pt-1">⚠ Estimativa baseada no conhecimento da IA (sem busca ao vivo na web). Use como ponto de partida para cotação real — não como cotação firme.</div>
+                  </div>
+                  <div className="flex justify-center">
+                    <button onClick={() => companyId && analiseCAMut.mutate({ companyId, maxDescricoes: 80 })}
+                      disabled={!companyId || analiseCAMut.isPending}
+                      className="inline-flex items-center gap-2 bg-amber-600 hover:bg-amber-700 text-white px-6 py-3 rounded-xl shadow-md font-semibold text-sm transition disabled:opacity-50">
+                      <Sparkles className="h-4 w-4" /> Gerar análise IA agora
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Estado 2: carregando */}
+              {analiseCAMut.isPending && (
+                <div className="flex flex-col items-center justify-center py-16 gap-3 text-slate-600">
+                  <Loader2 className="h-10 w-10 animate-spin text-amber-600" />
+                  <div className="text-sm font-medium">Consultando IA para estimar preços de mercado…</div>
+                  <div className="text-xs text-slate-400">Isso pode levar de 30s a 2min dependendo da quantidade de descrições.</div>
+                </div>
+              )}
+
+              {/* Estado 3: resultado */}
+              {resultadoAnaliseCA && !analiseCAMut.isPending && (() => {
+                const r = resultadoAnaliseCA;
+                const itensFiltrados = r.itens.filter(it => {
+                  if (filtroRecAnalise === "comprar") return it.recomendacao === "COMPRAR_JA" || it.recomendacao === "COMPRAR";
+                  if (filtroRecAnalise === "avaliar") return it.recomendacao === "AVALIAR";
+                  if (filtroRecAnalise === "manter") return it.recomendacao === "MANTER_LOCACAO";
+                  return true;
+                });
+                const cntComprar = r.itens.filter(i => i.recomendacao === "COMPRAR_JA" || i.recomendacao === "COMPRAR").length;
+                const cntAvaliar = r.itens.filter(i => i.recomendacao === "AVALIAR").length;
+                const cntManter  = r.itens.filter(i => i.recomendacao === "MANTER_LOCACAO").length;
+                const recBadge = (rec: AnaliseItem["recomendacao"]) => {
+                  const map: Record<typeof rec, { cls: string; label: string }> = {
+                    COMPRAR_JA:     { cls: "bg-emerald-600 text-white",           label: "COMPRAR JÁ" },
+                    COMPRAR:        { cls: "bg-emerald-100 text-emerald-800 ring-1 ring-emerald-300", label: "COMPRAR" },
+                    AVALIAR:        { cls: "bg-amber-100 text-amber-800 ring-1 ring-amber-300",       label: "AVALIAR" },
+                    MANTER_LOCACAO: { cls: "bg-slate-100 text-slate-700 ring-1 ring-slate-300",       label: "MANTER" },
+                  };
+                  const m = map[rec];
+                  return <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide ${m.cls}`}>{m.label}</span>;
+                };
+                const confBadge = (c: AnaliseItem["confianca"]) => {
+                  const map = { alta: "text-emerald-700", media: "text-amber-700", baixa: "text-red-700" };
+                  return <span className={`text-[10px] font-semibold uppercase ${map[c]}`}>{c}</span>;
+                };
+                return (
+                  <div className="space-y-4">
+                    {/* Code review fix: aviso quando IA falhou/JSON quebrou */}
+                    {r.iaErroMsg && (
+                      <div className="bg-amber-50 border border-amber-300 rounded-lg p-3 text-xs text-amber-900 flex items-start gap-2">
+                        <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+                        <div><b>Atenção:</b> {r.iaErroMsg}</div>
+                      </div>
+                    )}
+                    {/* Top KPIs */}
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                      <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3">
+                        <div className="flex items-center gap-2 text-[10px] uppercase tracking-wider text-emerald-700 font-bold"><ShoppingCart className="h-3 w-3" />Recomendado comprar</div>
+                        <div className="text-2xl font-bold text-emerald-800 mt-1 tabular-nums">{fmtN(cntComprar)}</div>
+                        <div className="text-[11px] text-emerald-700/80">de {fmtN(r.totalAnalisado)} descrições</div>
+                      </div>
+                      <div className="bg-amber-50 border border-amber-200 rounded-xl p-3">
+                        <div className="flex items-center gap-2 text-[10px] uppercase tracking-wider text-amber-700 font-bold"><TrendingDown className="h-3 w-3" />Economia anual potencial</div>
+                        <div className="text-xl font-bold text-amber-800 mt-1 tabular-nums truncate" title={fmtMoney(r.economiaAnualPotencial)}>{fmtMoney(r.economiaAnualPotencial)}</div>
+                        <div className="text-[11px] text-amber-700/80">se comprar todos recomendados</div>
+                      </div>
+                      <div className="bg-blue-50 border border-blue-200 rounded-xl p-3">
+                        <div className="flex items-center gap-2 text-[10px] uppercase tracking-wider text-blue-700 font-bold"><DollarSign className="h-3 w-3" />Investimento necessário</div>
+                        <div className="text-xl font-bold text-blue-800 mt-1 tabular-nums truncate" title={fmtMoney(r.investimentoTotalRecomendado)}>{fmtMoney(r.investimentoTotalRecomendado)}</div>
+                        <div className="text-[11px] text-blue-700/80">à vista, novo, sem frete</div>
+                      </div>
+                      <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
+                        <div className="flex items-center gap-2 text-[10px] uppercase tracking-wider text-slate-600 font-bold"><AlertTriangle className="h-3 w-3" />Avaliar / Manter</div>
+                        <div className="text-2xl font-bold text-slate-700 mt-1 tabular-nums">{fmtN(cntAvaliar)} / {fmtN(cntManter)}</div>
+                        <div className="text-[11px] text-slate-500">descrições sem ganho claro</div>
+                      </div>
+                    </div>
+
+                    {/* Filter pills */}
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-xs font-semibold text-slate-600">Filtrar:</span>
+                      {[
+                        { k: "",        label: `Todos (${r.totalAnalisado})`, cls: "bg-slate-100 text-slate-800 ring-slate-300" },
+                        { k: "comprar", label: `Recomendado comprar (${cntComprar})`, cls: "bg-emerald-100 text-emerald-800 ring-emerald-300" },
+                        { k: "avaliar", label: `Avaliar (${cntAvaliar})`,   cls: "bg-amber-100 text-amber-800 ring-amber-300" },
+                        { k: "manter",  label: `Manter locação (${cntManter})`, cls: "bg-slate-100 text-slate-700 ring-slate-300" },
+                      ].map(o => (
+                        <button key={o.k} onClick={() => setFiltroRecAnalise(o.k as any)}
+                          className={`text-[11px] px-2.5 py-1 rounded-full font-semibold transition ring-1 ${
+                            filtroRecAnalise === o.k ? `${o.cls} shadow-sm` : "bg-white text-slate-500 ring-slate-200 hover:bg-slate-50"
+                          }`}>
+                          {o.label}
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Tabela */}
+                    <div className="border border-slate-200 rounded-xl overflow-hidden">
+                      <div className="overflow-x-auto">
+                        <table className="min-w-full text-xs">
+                          <thead className="bg-slate-50 text-slate-600 uppercase tracking-wider text-[10px]">
+                            <tr>
+                              <th className="text-left px-3 py-2">Descrição</th>
+                              <th className="text-right px-2 py-2">Qtd</th>
+                              <th className="text-right px-2 py-2">Aluguel/un/mês</th>
+                              <th className="text-right px-2 py-2">Preço estim./un</th>
+                              <th className="text-right px-2 py-2">Investir total</th>
+                              <th className="text-right px-2 py-2">Payback</th>
+                              <th className="text-right px-2 py-2">Economia/ano</th>
+                              <th className="text-center px-2 py-2">Recomendação</th>
+                              <th className="text-left px-3 py-2">Canal · Confiança</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100">
+                            {itensFiltrados.length === 0 && (
+                              <tr><td colSpan={9} className="px-3 py-8 text-center text-slate-400">Nenhuma descrição neste filtro.</td></tr>
+                            )}
+                            {itensFiltrados.map((it) => (
+                              <tr key={it.descricao} className="hover:bg-slate-50/60">
+                                <td className="px-3 py-2 max-w-[280px]">
+                                  <div className="font-medium text-slate-800 truncate" title={it.descricao}>{it.descricao}</div>
+                                  {it.categoria && <div className="text-[10px] text-slate-400 truncate">{it.categoria}</div>}
+                                </td>
+                                <td className="px-2 py-2 text-right tabular-nums text-slate-700">{fmtN(it.qtd)}</td>
+                                <td className="px-2 py-2 text-right tabular-nums text-slate-700">{fmtMoney(it.aluguelUnMes)}</td>
+                                <td className="px-2 py-2 text-right tabular-nums">
+                                  <div className="text-slate-900 font-semibold">{it.precoMedio > 0 ? fmtMoney(it.precoMedio) : "—"}</div>
+                                  {it.precoMedio > 0 && (
+                                    <div className="text-[10px] text-slate-400">{fmtMoney(it.precoMin)} – {fmtMoney(it.precoMax)}</div>
+                                  )}
+                                </td>
+                                <td className="px-2 py-2 text-right tabular-nums text-slate-700">{it.investimentoCompra != null && it.investimentoCompra > 0 ? fmtMoney(it.investimentoCompra) : "—"}</td>
+                                <td className="px-2 py-2 text-right tabular-nums">
+                                  {it.paybackMeses != null ? (
+                                    <span className={`font-semibold ${it.paybackMeses <= 6 ? "text-emerald-700" : it.paybackMeses <= 12 ? "text-emerald-600" : it.paybackMeses <= 24 ? "text-amber-700" : "text-slate-500"}`}>
+                                      {it.paybackMeses.toFixed(1)} m
+                                    </span>
+                                  ) : <span className="text-slate-400">—</span>}
+                                </td>
+                                <td className="px-2 py-2 text-right tabular-nums">
+                                  {it.economiaAnual != null ? (
+                                    <span className={`font-semibold ${it.economiaAnual > 0 ? "text-emerald-700" : "text-slate-500"}`}>
+                                      {(it.economiaAnual > 0 ? "+" : "") + fmtMoney(it.economiaAnual)}
+                                    </span>
+                                  ) : <span className="text-slate-400">—</span>}
+                                </td>
+                                <td className="px-2 py-2 text-center">{recBadge(it.recomendacao)}</td>
+                                <td className="px-3 py-2 text-slate-600 max-w-[200px]">
+                                  <div className="truncate text-[11px]" title={it.canalTipico}>{it.canalTipico || "—"}</div>
+                                  <div className="text-[10px]">{confBadge(it.confianca)}</div>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+
+                    <div className="text-[11px] text-slate-400 italic">
+                      Fonte: {r.fonte}. Gerado em {r.geradoEm ? new Date(r.geradoEm).toLocaleString("pt-BR") : "—"}. Economia anual = 12 × aluguel mensal total − investimento de compra (ignora valor residual, custo de capital e manutenção).
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+
+            <div className="bg-slate-50 border-t border-slate-200 px-5 py-3 flex justify-between items-center gap-2">
+              <div className="text-[11px] text-slate-500">
+                {resultadoAnaliseCA && !analiseCAMut.isPending && `${resultadoAnaliseCA.totalAnalisado} descrições analisadas`}
+              </div>
+              <div className="flex gap-2">
+                {resultadoAnaliseCA && !analiseCAMut.isPending && (
+                  <button onClick={() => companyId && analiseCAMut.mutate({ companyId, maxDescricoes: 80 })}
+                    className="px-3 py-2 text-xs font-semibold text-amber-700 bg-white hover:bg-amber-50 ring-1 ring-amber-300 rounded-lg transition inline-flex items-center gap-1.5">
+                    <RotateCcw className="h-3.5 w-3.5" /> Re-analisar
+                  </button>
+                )}
+                <button onClick={() => setModalAnaliseCA(false)} disabled={analiseCAMut.isPending}
+                  className="px-4 py-2 text-sm font-semibold text-white bg-slate-700 hover:bg-slate-800 rounded-lg shadow-md transition disabled:opacity-50">
+                  Fechar
+                </button>
+              </div>
             </div>
           </div>
         </div>
