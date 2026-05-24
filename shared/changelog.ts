@@ -1,6 +1,84 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2346 — **UX/i18n · Inteiros ≥ 1.000 nos cards e listas de
+ * Equipamentos Locados agora vêm formatados em pt-BR com ponto como
+ * separador de milhar (1220 → "1.220", 1069 → "1.069").**
+ *
+ * Pedido user (24/05/2026, IMG_1138): "Quero o número acima de mil,
+ * separado por ponto e vírgula" — KPIs e contadores apareciam crus
+ * ("1220 Ativos", "Buscar fotos com IA (1069)", "Selecionar todos
+ * visíveis (1220)") porque cada render usava `{n}` direto ao invés de
+ * passar por `Intl.NumberFormat`.
+ *
+ * Implementação (`client/src/pages/equipamentos/Locados.tsx`, 0 server,
+ * 0 schema):
+ *
+ * 1. **Helper `fmtN(n: number) => n.toLocaleString("pt-BR")`** no topo
+ *    do arquivo. `Intl` aplica separador SOMENTE quando |n| ≥ 1000,
+ *    então valores < 1000 (ex: "363", "89", "0") ficam inalterados —
+ *    atende literalmente "acima de mil".
+ *
+ * 2. **`<Kpi>` auto-formata** — o componente já aceitava `value:
+ *    ReactNode`; agora se `typeof value === "number"`, aplica
+ *    `toLocaleString("pt-BR")` antes de renderizar. Zero alteração nos
+ *    call-sites — os 4 KPIs do topo (Ativos / Vencendo / Atrasados /
+ *    Custo·mês) passam a exibir "1.220", "363", "857", "R$ 18.209,50".
+ *    `title` mantém valor cru pra hover/tooltip.
+ *
+ * 3. **Substituições inline com `fmtN(...)`** em todos os contadores
+ *    visíveis:
+ *    - Status pills (Em uso / Em renovação / Atrasados / Devolvidos)
+ *      — badge dentro de cada pílula.
+ *    - Botões do header — "Limpar fotos IA (151)" + "Buscar fotos com
+ *      IA (1.069)" badges.
+ *    - Filtro de obras — "Todas as obras (1.220)" + cada option
+ *      "Nome · 1.220 unid.".
+ *    - Filtro de categorias — idem.
+ *    - "Selecionar todos visíveis (1.220)" + toggle Agrupar/Individual
+ *      "Agrupar (89)" / "Individual (1.220)".
+ *    - Card de grupo: badge "1.220 un." + pílulas de status mix
+ *      ("12 EM USO") + botão "Ver 1.220 unidade(s)".
+ *    - Modal de grupo: header subtítulo "Grupo · 1.220 unidade(s)",
+ *      KPI strip (Unidades / Em uso / Atrasadas), footer
+ *      "1.220 unidade(s) · R$ X/mês total".
+ *    - Painel de detalhes: "Fotos do recebimento (12)" + "N eventos"
+ *      na timeline.
+ *    - Modais de import: "IA detectou 5 contrato(s) totalizando 1.220
+ *      item(ns)", linhas TOTAL da tabela "Custo por obra", badge
+ *      "5 obra(s) · 1.220 unidade(s)", footer "Total: ...".
+ *    - Modais de categorização: "1.220 equipamentos classificados em
+ *      8 categoria(s)" + "X descrição(ões) não puderam ser
+ *      classificadas".
+ *    - Modais de limpar/buscar fotos: contagens nos subtítulos e
+ *      corpo da confirmação.
+ *
+ * **Por que `toLocaleString("pt-BR")` em vez de Intl explícito**: API
+ * mais curta, mesmo resultado, sem alocação de NumberFormat por
+ * render. Pra contagens não há fração — default ok.
+ *
+ * **Por que helper local e não import de `_shared`**: `fmtMoney`/
+ * `fmtDate` já moram lá; `fmtN` é trivial (1 linha) e por enquanto só
+ * é usado nessa tela. Promove pra `_shared` quando aparecer 2º
+ * call-site.
+ *
+ * **Por que tratar dentro do `<Kpi>` em vez de wrappar nos call-sites**:
+ * 4 KPIs * mantém `value={stats.ativos}` legível; encapsular a regra
+ * "número → string pt-BR" no componente significa que qualquer reuso
+ * futuro do `<Kpi>` herda o comportamento de graça.
+ *
+ * **Não tocado** (intencional): `selecionados.size` ("limpar seleção
+ * (3)") — sempre < 100 itens (UI manual de seleção), separador não
+ * acrescentaria nada. Strings de erro/log internas (ex: `${ids.length}`
+ * em mensagens de toast) também não — não são UI primária.
+ *
+ * **R-001/R-007/R-010**: N/A — feature 100% client-side, zero
+ * mutations, zero DDL, zero schema change. Tenant guard preservado em
+ * todas as queries upstream.
+ */
+const _r2346 = null;
+
+/**
  * Rev. 2345 — **FEATURE/FILOSOFIA · Busca de fotos com IA agora GARANTE
  * COBERTURA 100% via fluxo em 3 fases (A: match preciso → B: busca ampla →
  * C: placeholder SVG por categoria). Inverte a filosofia da Rev. 2342 ("melhor

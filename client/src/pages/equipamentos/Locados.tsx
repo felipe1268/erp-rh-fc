@@ -7,6 +7,9 @@ import { Plus, Search, X, Truck, CheckCircle2, RotateCcw, ClipboardCheck, Eye, F
 import type { ReactNode } from "react";
 import { FotosUploader, FotoItem, fmtMoney, fmtDate, Spinner } from "./_shared";
 
+// Rev. 2346 — formata inteiros pt-BR (≥1000 ganha separador "." de milhar). Ex: 1220 → "1.220".
+const fmtN = (n: number) => n.toLocaleString("pt-BR");
+
 const STATUS_LABELS: Record<string, string> = {
   em_uso: "Em uso", devolvido: "Devolvido", atrasado: "Atrasado",
   em_renovacao: "Em renovação", localizacao_pendente: "Local pendente", em_manutencao: "Manutenção",
@@ -785,7 +788,7 @@ export default function EquipamentosLocados() {
                   title={`${totalSemCategoria} equipamento(s) sem categoria — a IA propõe categorias e classifica em lote`}>
                   {categorizarMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Tag className="h-4 w-4" />}
                   Categorizar com IA
-                  <span className="inline-flex items-center justify-center min-w-[22px] h-5 px-1.5 rounded-full text-[10px] font-bold bg-white/25">{totalSemCategoria}</span>
+                  <span className="inline-flex items-center justify-center min-w-[22px] h-5 px-1.5 rounded-full text-[10px] font-bold bg-white/25">{fmtN(totalSemCategoria)}</span>
                 </button>
               )}
               {/* Rev. 2342 — Limpar fotos da IA (reset). Só aparece se houver fotos da IA aplicadas. */}
@@ -796,7 +799,7 @@ export default function EquipamentosLocados() {
                   title={`${totalComFotoIA} equipamento(s) com foto da IA — remover todas (mantém fotos do recebimento físico)`}>
                   {limparFotosMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
                   Limpar fotos IA
-                  <span className="inline-flex items-center justify-center min-w-[22px] h-5 px-1.5 rounded-full text-[10px] font-bold bg-white/25">{totalComFotoIA}</span>
+                  <span className="inline-flex items-center justify-center min-w-[22px] h-5 px-1.5 rounded-full text-[10px] font-bold bg-white/25">{fmtN(totalComFotoIA)}</span>
                 </button>
               )}
               {/* Rev. 2340 — Buscar fotos com IA (só aparece se houver itens sem foto). */}
@@ -807,7 +810,7 @@ export default function EquipamentosLocados() {
                   title={`${totalSemFoto} equipamento(s) sem foto — a IA busca em bibliotecas públicas e VALIDA cada candidato antes de aplicar (rejeita fotos que não batem)`}>
                   {buscarFotosMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Camera className="h-4 w-4" />}
                   Buscar fotos com IA
-                  <span className="inline-flex items-center justify-center min-w-[22px] h-5 px-1.5 rounded-full text-[10px] font-bold bg-white/25">{totalSemFoto}</span>
+                  <span className="inline-flex items-center justify-center min-w-[22px] h-5 px-1.5 rounded-full text-[10px] font-bold bg-white/25">{fmtN(totalSemFoto)}</span>
                 </button>
               )}
               {/* Rev. 2315 — Removido botão "Receber locação"; fluxo principal é Importar PDF (IA). */}
@@ -844,7 +847,7 @@ export default function EquipamentosLocados() {
                   {p.label}
                   <span className={`inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-[10px] font-bold ${
                     active ? "bg-white/25 text-white" : "bg-slate-200 text-slate-700"
-                  }`}>{contStatus[p.key] ?? 0}</span>
+                  }`}>{fmtN(contStatus[p.key] ?? 0)}</span>
                 </button>
               );
             })}
@@ -864,10 +867,10 @@ export default function EquipamentosLocados() {
                   filtroObra ? "border-emerald-400 bg-emerald-50/40 text-emerald-900" : "border-slate-200 text-slate-700"
                 }`}
                 title="Filtrar equipamentos por obra ERP">
-                <option value="">Todas as obras ({dataPorStatus.length})</option>
+                <option value="">Todas as obras ({fmtN(dataPorStatus.length)})</option>
                 {obrasComItens.map(o => (
                   <option key={o.key} value={o.key}>
-                    {o.nome} · {o.count} unid.{o.valorMes > 0 ? ` · ${fmtMoney(o.valorMes)}/mês` : ""}
+                    {o.nome} · {fmtN(o.count)} unid.{o.valorMes > 0 ? ` · ${fmtMoney(o.valorMes)}/mês` : ""}
                   </option>
                 ))}
               </select>
@@ -883,10 +886,10 @@ export default function EquipamentosLocados() {
                   filtroCategoria ? "border-violet-400 bg-violet-50/40 text-violet-900" : "border-slate-200 text-slate-700"
                 }`}
                 title="Filtrar por categoria de equipamento">
-                <option value="">Todas as categorias ({dataPorStatusEObra.length})</option>
+                <option value="">Todas as categorias ({fmtN(dataPorStatusEObra.length)})</option>
                 {categoriasComItens.map(c => (
                   <option key={c.key} value={c.key}>
-                    {c.nome} · {c.count} unid.{c.valorMes > 0 ? ` · ${fmtMoney(c.valorMes)}/mês` : ""}
+                    {c.nome} · {fmtN(c.count)} unid.{c.valorMes > 0 ? ` · ${fmtMoney(c.valorMes)}/mês` : ""}
                   </option>
                 ))}
               </select>
@@ -901,7 +904,7 @@ export default function EquipamentosLocados() {
                 <span className="inline-flex items-center gap-1.5 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-full pl-3 pr-1.5 py-1 font-medium">
                   <Building2 className="h-3 w-3" />
                   <span className="max-w-[260px] truncate" title={obraSelecionada.nome}>{obraSelecionada.nome}</span>
-                  <span className="text-emerald-600 font-bold">· {obraSelecionada.count}</span>
+                  <span className="text-emerald-600 font-bold">· {fmtN(obraSelecionada.count)}</span>
                   <button onClick={() => setFiltroObra("")} className="ml-1 bg-emerald-200/70 hover:bg-emerald-300 rounded-full p-0.5" title="Remover filtro de obra">
                     <X className="h-3 w-3" />
                   </button>
@@ -911,7 +914,7 @@ export default function EquipamentosLocados() {
                 <span className="inline-flex items-center gap-1.5 bg-violet-50 border border-violet-200 text-violet-800 rounded-full pl-3 pr-1.5 py-1 font-medium">
                   <Tag className="h-3 w-3" />
                   <span className="max-w-[200px] truncate" title={categoriaSelecionada.nome}>{categoriaSelecionada.nome}</span>
-                  <span className="text-violet-600 font-bold">· {categoriaSelecionada.count}</span>
+                  <span className="text-violet-600 font-bold">· {fmtN(categoriaSelecionada.count)}</span>
                   <button onClick={() => setFiltroCategoria("")} className="ml-1 bg-violet-200/70 hover:bg-violet-300 rounded-full p-0.5" title="Remover filtro de categoria">
                     <X className="h-3 w-3" />
                   </button>
@@ -934,10 +937,10 @@ export default function EquipamentosLocados() {
             <div className="flex items-center gap-2 pt-1 border-t border-slate-100 -mb-1 flex-wrap">
               <label className="inline-flex items-center gap-2 text-xs text-slate-600 cursor-pointer select-none px-1 py-1">
                 <input type="checkbox" checked={todosVisiveisSelecionados} onChange={toggleTodosVisiveis} className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500" />
-                Selecionar todos visíveis ({(data as any[]).length})
+                Selecionar todos visíveis ({fmtN((data as any[]).length)})
               </label>
               {selecionados.size > 0 && (
-                <button onClick={() => setSelecionados(new Set())} className="text-xs text-slate-500 hover:text-slate-700 underline">limpar seleção ({selecionados.size})</button>
+                <button onClick={() => setSelecionados(new Set())} className="text-xs text-slate-500 hover:text-slate-700 underline">limpar seleção ({fmtN(selecionados.size)})</button>
               )}
               {/* Rev. 2344 — toggle de agrupamento por descrição+obra */}
               <div className="ml-auto inline-flex items-center gap-1 bg-slate-100 rounded-full p-0.5 ring-1 ring-slate-200">
@@ -947,7 +950,7 @@ export default function EquipamentosLocados() {
                   className={`px-3 py-1 rounded-full text-xs font-semibold transition inline-flex items-center gap-1.5 ${agruparPorDescObra ? "bg-white shadow-sm text-emerald-700 ring-1 ring-emerald-200" : "text-slate-600 hover:text-slate-800"}`}
                   title="Agrupa itens com a mesma descrição na mesma obra"
                 >
-                  <Layers className="h-3.5 w-3.5" /> Agrupar <span className={`font-bold ${agruparPorDescObra ? "text-emerald-600" : "opacity-70"}`}>({grupos.length})</span>
+                  <Layers className="h-3.5 w-3.5" /> Agrupar <span className={`font-bold ${agruparPorDescObra ? "text-emerald-600" : "opacity-70"}`}>({fmtN(grupos.length)})</span>
                 </button>
                 <button
                   type="button"
@@ -955,7 +958,7 @@ export default function EquipamentosLocados() {
                   className={`px-3 py-1 rounded-full text-xs font-semibold transition inline-flex items-center gap-1.5 ${!agruparPorDescObra ? "bg-white shadow-sm text-slate-700 ring-1 ring-slate-300" : "text-slate-600 hover:text-slate-800"}`}
                   title="Mostra todas as unidades individualmente"
                 >
-                  Individual <span className="font-bold opacity-70">({(data as any[]).length})</span>
+                  Individual <span className="font-bold opacity-70">({fmtN((data as any[]).length)})</span>
                 </button>
               </div>
             </div>
@@ -1028,13 +1031,13 @@ export default function EquipamentosLocados() {
                       <div className="flex items-start justify-between gap-2">
                         <h3 className="font-semibold text-slate-900 truncate" title={g.descricao}>{g.descricao}</h3>
                         <span className="inline-flex items-center gap-1 bg-emerald-100 text-emerald-800 border border-emerald-200 px-2 py-0.5 rounded-full text-[10px] font-bold whitespace-nowrap" title={`${g.unidades.length} unidade(s) neste grupo`}>
-                          <Boxes className="h-3 w-3" /> {g.unidades.length}<span className="font-normal opacity-80">un.</span>
+                          <Boxes className="h-3 w-3" /> {fmtN(g.unidades.length)}<span className="font-normal opacity-80">un.</span>
                         </span>
                       </div>
                       <div className="text-xs mt-0.5 flex items-center gap-1.5 flex-wrap">
                         {statusEntries.map(([s, n]) => (
                           <span key={s} className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${STATUS_COLORS[s] || "bg-slate-100"}`}>
-                            {n} {STATUS_LABELS[s] || s}
+                            {fmtN(n as number)} {STATUS_LABELS[s] || s}
                           </span>
                         ))}
                         {g.categoria && (
@@ -1067,7 +1070,7 @@ export default function EquipamentosLocados() {
                   </div>
                   <div className="px-4 py-2 border-t border-slate-100 flex items-center justify-end gap-1">
                     <button onClick={(e) => { e.stopPropagation(); setModalGrupo(g); }} className="text-emerald-700 bg-emerald-50 hover:bg-emerald-100 px-2 py-1 rounded-md text-xs inline-flex items-center gap-1 font-medium transition" title={`Ver as ${g.unidades.length} unidades`}>
-                      <Eye className="h-3.5 w-3.5" /> Ver {g.unidades.length} unidade(s)
+                      <Eye className="h-3.5 w-3.5" /> Ver {fmtN(g.unidades.length)} unidade(s)
                     </button>
                   </div>
                 </div>
@@ -1195,7 +1198,7 @@ export default function EquipamentosLocados() {
                   </div>
                 )}
                 <div className="min-w-0">
-                  <div className="text-[10px] uppercase tracking-wider opacity-80 font-bold">Grupo · {modalGrupo.unidades.length} unidade(s)</div>
+                  <div className="text-[10px] uppercase tracking-wider opacity-80 font-bold">Grupo · {fmtN(modalGrupo.unidades.length)} unidade(s)</div>
                   <h2 className="text-lg font-bold truncate" title={modalGrupo.descricao}>{modalGrupo.descricao}</h2>
                   <div className="text-xs opacity-90 flex items-center gap-1.5 mt-0.5 truncate">
                     <MapPin className="h-3 w-3" />
@@ -1211,7 +1214,7 @@ export default function EquipamentosLocados() {
             <div className="grid grid-cols-2 md:grid-cols-4 gap-2 px-6 py-3 bg-slate-50 border-b border-slate-200 flex-shrink-0">
               <div className="bg-white rounded-lg p-2 ring-1 ring-slate-200">
                 <div className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Unidades</div>
-                <div className="text-lg font-bold text-slate-900">{modalGrupo.unidades.length}</div>
+                <div className="text-lg font-bold text-slate-900">{fmtN(modalGrupo.unidades.length)}</div>
               </div>
               <div className="bg-white rounded-lg p-2 ring-1 ring-slate-200">
                 <div className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Total mensal</div>
@@ -1219,11 +1222,11 @@ export default function EquipamentosLocados() {
               </div>
               <div className="bg-white rounded-lg p-2 ring-1 ring-slate-200">
                 <div className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Em uso</div>
-                <div className="text-lg font-bold text-emerald-700">{modalGrupo.statusMix["em_uso"] || 0}</div>
+                <div className="text-lg font-bold text-emerald-700">{fmtN(modalGrupo.statusMix["em_uso"] || 0)}</div>
               </div>
               <div className="bg-white rounded-lg p-2 ring-1 ring-slate-200">
                 <div className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Atrasadas</div>
-                <div className={`text-lg font-bold ${(modalGrupo.statusMix["atrasado"] || 0) > 0 ? "text-red-600" : "text-slate-400"}`}>{modalGrupo.statusMix["atrasado"] || 0}</div>
+                <div className={`text-lg font-bold ${(modalGrupo.statusMix["atrasado"] || 0) > 0 ? "text-red-600" : "text-slate-400"}`}>{fmtN(modalGrupo.statusMix["atrasado"] || 0)}</div>
               </div>
             </div>
             {/* Lista de unidades */}
@@ -1274,7 +1277,7 @@ export default function EquipamentosLocados() {
               </table>
             </div>
             <div className="px-6 py-3 bg-slate-50 border-t border-slate-200 flex items-center justify-between text-xs text-slate-600 flex-shrink-0">
-              <div>{modalGrupo.unidades.length} unidade(s) · {fmtMoney(modalGrupo.valorMensalTotal)}/mês total</div>
+              <div>{fmtN(modalGrupo.unidades.length)} unidade(s) · {fmtMoney(modalGrupo.valorMensalTotal)}/mês total</div>
               <button onClick={() => setModalGrupo(null)} className="px-3 py-1.5 rounded-md bg-slate-200 hover:bg-slate-300 text-slate-700 font-medium transition">Fechar</button>
             </div>
           </div>
@@ -1392,7 +1395,7 @@ export default function EquipamentosLocados() {
         <div className="fixed bottom-0 inset-x-0 z-40 bg-white border-t-2 border-emerald-500 shadow-2xl">
           <div className="max-w-7xl mx-auto px-4 py-3 flex flex-wrap items-center gap-3">
             <div className="flex items-center gap-2 text-sm font-semibold text-slate-800">
-              <span className="inline-flex items-center justify-center min-w-[28px] h-7 px-2 rounded-full bg-emerald-100 text-emerald-700 text-xs font-bold">{selecionados.size}</span>
+              <span className="inline-flex items-center justify-center min-w-[28px] h-7 px-2 rounded-full bg-emerald-100 text-emerald-700 text-xs font-bold">{fmtN(selecionados.size)}</span>
               selecionado(s)
             </div>
             <div className="flex-1 flex flex-wrap items-center gap-2 min-w-[260px]">
@@ -1414,7 +1417,7 @@ export default function EquipamentosLocados() {
               <button onClick={() => setSelecionados(new Set())} className="px-3 py-1.5 text-sm border border-slate-300 rounded-md text-slate-700 hover:bg-slate-50">Cancelar</button>
               <button onClick={confirmarExcluir} disabled={!!loteProgresso}
                 className="px-3 py-1.5 text-sm bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white rounded-md inline-flex items-center gap-1 font-medium">
-                <Trash2 className="h-4 w-4" /> Excluir {selecionados.size}
+                <Trash2 className="h-4 w-4" /> Excluir {fmtN(selecionados.size)}
               </button>
             </div>
           </div>
@@ -1630,7 +1633,7 @@ export default function EquipamentosLocados() {
                 {fotosRec.length > 0 && (
                   <div className="px-3 sm:px-5 pb-3">
                     <div className="bg-white rounded-xl ring-1 ring-slate-200 p-4">
-                      <div className="text-[11px] uppercase tracking-wider text-slate-500 font-bold flex items-center gap-1.5 mb-3"><Camera className="h-3.5 w-3.5" /> Fotos do recebimento ({fotosRec.length})</div>
+                      <div className="text-[11px] uppercase tracking-wider text-slate-500 font-bold flex items-center gap-1.5 mb-3"><Camera className="h-3.5 w-3.5" /> Fotos do recebimento ({fmtN(fotosRec.length)})</div>
                       <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2">
                         {fotosRec.map((f, i) => (
                           <a key={i} href={f.url} target="_blank" rel="noreferrer" className="block aspect-square overflow-hidden rounded-lg ring-1 ring-slate-200 hover:ring-emerald-400 hover:shadow-md transition">
@@ -1647,7 +1650,7 @@ export default function EquipamentosLocados() {
                   <div className="bg-white rounded-xl ring-1 ring-slate-200 p-4">
                     <div className="flex items-center justify-between mb-3">
                       <div className="text-[11px] uppercase tracking-wider text-slate-500 font-bold flex items-center gap-1.5"><Activity className="h-3.5 w-3.5" /> Linha do tempo</div>
-                      {!eventos.isLoading && <span className="text-xs text-slate-400">{evs.length} evento{evs.length !== 1 ? "s" : ""}</span>}
+                      {!eventos.isLoading && <span className="text-xs text-slate-400">{fmtN(evs.length)} evento{evs.length !== 1 ? "s" : ""}</span>}
                     </div>
                     {eventos.isLoading ? <div className="py-6 flex justify-center"><Spinner /></div> :
                       evs.length === 0 ? <div className="text-sm text-slate-500 italic py-6 text-center">Nenhum evento registrado.</div> :
@@ -1803,9 +1806,9 @@ export default function EquipamentosLocados() {
                       🔗 Cruzamento automático com obras em andamento
                     </div>
                     <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1">
-                      <span><b className="text-emerald-700">{auto}</b> auto-vinculados pelo endereço/nome</span>
-                      {manual > 0 && <span><b className="text-blue-700">{manual}</b> vinculados manualmente</span>}
-                      {sem > 0 && <span className="text-amber-800"><b>{sem}</b> sem obra (escolha no select de cada contrato)</span>}
+                      <span><b className="text-emerald-700">{fmtN(auto)}</b> auto-vinculados pelo endereço/nome</span>
+                      {manual > 0 && <span><b className="text-blue-700">{fmtN(manual)}</b> vinculados manualmente</span>}
+                      {sem > 0 && <span className="text-amber-800"><b>{fmtN(sem)}</b> sem obra (escolha no select de cada contrato)</span>}
                     </div>
                   </div>
                 );
@@ -1813,7 +1816,7 @@ export default function EquipamentosLocados() {
               {importPreview && importPreview.length > 0 && (
                 <>
                   <div className="bg-emerald-50 border border-emerald-200 rounded p-3 text-sm text-emerald-800">
-                    ✅ IA detectou <b>{importPreview.length}</b> contrato(s) totalizando <b>{importPreview.reduce((a, c) => a + (c.itens?.length || 0), 0)}</b> item(ns).
+                    ✅ IA detectou <b>{fmtN(importPreview.length)}</b> contrato(s) totalizando <b>{fmtN(importPreview.reduce((a, c) => a + (c.itens?.length || 0), 0))}</b> item(ns).
                     Revise os dados abaixo (campos são editáveis) e confirme.
                   </div>
 
@@ -1842,7 +1845,7 @@ export default function EquipamentosLocados() {
                           <div className="flex items-center gap-2">
                             <Building2 className="h-4 w-4" />
                             <span className="font-semibold text-sm">Custo por obra</span>
-                            <span className="text-[11px] bg-white/15 px-2 py-0.5 rounded-full">{linhas.length} obra(s)</span>
+                            <span className="text-[11px] bg-white/15 px-2 py-0.5 rounded-full">{fmtN(linhas.length)} obra(s)</span>
                           </div>
                           <div className="text-xs">
                             Total geral: <b className="text-base tabular-nums">R$ {fmt(totalGeral)}</b>
@@ -1869,8 +1872,8 @@ export default function EquipamentosLocados() {
                                       <div className="text-[10px] text-slate-400 mt-0.5">Contratos: {l.numeros.slice(0, 6).join(", ")}{l.numeros.length > 6 ? ` +${l.numeros.length - 6}` : ""}</div>
                                     )}
                                   </td>
-                                  <td className="px-3 py-2 text-center tabular-nums">{l.contratos}</td>
-                                  <td className="px-3 py-2 text-center tabular-nums">{l.itens}</td>
+                                  <td className="px-3 py-2 text-center tabular-nums">{fmtN(l.contratos)}</td>
+                                  <td className="px-3 py-2 text-center tabular-nums">{fmtN(l.itens)}</td>
                                   <td className="px-3 py-2 text-right tabular-nums font-semibold text-indigo-700">R$ {fmt(l.total)}</td>
                                   <td className="px-3 py-2 text-right tabular-nums text-slate-500">{pct.toFixed(1)}%</td>
                                 </tr>
@@ -1880,8 +1883,8 @@ export default function EquipamentosLocados() {
                           <tfoot>
                             <tr className="border-t-2 border-indigo-300 bg-indigo-50 font-bold">
                               <td className="px-3 py-2 text-right text-slate-700">TOTAL</td>
-                              <td className="px-3 py-2 text-center tabular-nums">{importPreview.length}</td>
-                              <td className="px-3 py-2 text-center tabular-nums">{totalItens}</td>
+                              <td className="px-3 py-2 text-center tabular-nums">{fmtN(importPreview.length)}</td>
+                              <td className="px-3 py-2 text-center tabular-nums">{fmtN(totalItens)}</td>
                               <td className="px-3 py-2 text-right tabular-nums text-indigo-800">R$ {fmt(totalGeral)}</td>
                               <td className="px-3 py-2 text-right text-slate-400">100%</td>
                             </tr>
@@ -1925,11 +1928,11 @@ export default function EquipamentosLocados() {
                           <div className="flex items-center gap-2">
                             <Building2 className="h-4 w-4" />
                             <span className="font-semibold text-sm">Equipamentos por Obra (validação)</span>
-                            <span className="text-[11px] bg-white/15 px-2 py-0.5 rounded-full">{linhas.length} obra(s) · {totalUnid} unidade(s)</span>
+                            <span className="text-[11px] bg-white/15 px-2 py-0.5 rounded-full">{fmtN(linhas.length)} obra(s) · {fmtN(totalUnid)} unidade(s)</span>
                           </div>
                           {semObra && (
                             <span className="text-[11px] bg-amber-400/90 text-amber-950 font-semibold px-2 py-0.5 rounded-full">
-                              ⚠ {semObra.unidades} unidade(s) sem obra
+                              ⚠ {fmtN(semObra.unidades)} unidade(s) sem obra
                             </span>
                           )}
                         </div>
@@ -1944,8 +1947,8 @@ export default function EquipamentosLocados() {
                                     <span className={`font-medium text-sm truncate ${g.obraId === null ? "text-amber-700" : "text-slate-800"}`}>{g.obraNome}</span>
                                   </div>
                                   <div className="flex items-center gap-3 text-xs tabular-nums flex-shrink-0">
-                                    <span className="text-slate-500">{g.contratos} contrato(s)</span>
-                                    <span className="font-semibold text-emerald-700">{g.unidades} unid.</span>
+                                    <span className="text-slate-500">{fmtN(g.contratos)} contrato(s)</span>
+                                    <span className="font-semibold text-emerald-700">{fmtN(g.unidades)} unid.</span>
                                   </div>
                                 </summary>
                                 <div className="px-3 pb-3 pt-1 bg-slate-50/40">
@@ -2061,7 +2064,7 @@ export default function EquipamentosLocados() {
 
             <div className="px-5 py-3 border-t bg-slate-50 flex items-center justify-between gap-2">
               <div className="text-xs text-slate-500">
-                {importPreview ? `Total: ${importPreview.length} contrato(s) · ${importPreview.reduce((a, c) => a + (c.itens?.length || 0), 0)} unidade(s) a cadastrar` : "Cadastro inicial — fotos serão exigidas nos próximos recebimentos."}
+                {importPreview ? `Total: ${fmtN(importPreview.length)} contrato(s) · ${fmtN(importPreview.reduce((a, c) => a + (c.itens?.length || 0), 0))} unidade(s) a cadastrar` : "Cadastro inicial — fotos serão exigidas nos próximos recebimentos."}
               </div>
               <div className="flex items-center gap-2">
                 <button onClick={() => setModalImport(false)} disabled={parsearPdf.isPending || !!importLoteProgresso} className="px-3 py-1.5 text-sm border rounded">Cancelar</button>
@@ -2088,7 +2091,7 @@ export default function EquipamentosLocados() {
                 </div>
                 <div>
                   <h3 className="text-lg font-bold">Categorizar com IA</h3>
-                  <p className="text-xs text-violet-50/90 mt-0.5">Classificação automática dos {totalSemCategoria} equipamento(s) sem categoria</p>
+                  <p className="text-xs text-violet-50/90 mt-0.5">Classificação automática dos {fmtN(totalSemCategoria)} equipamento(s) sem categoria</p>
                 </div>
               </div>
             </div>
@@ -2127,7 +2130,7 @@ export default function EquipamentosLocados() {
                 <div>
                   <h3 className="text-lg font-bold">Categorização concluída</h3>
                   <p className="text-xs text-emerald-50/90 mt-0.5">
-                    {resultadoCategIA.itensAtualizados} equipamento(s) classificados em {resultadoCategIA.categorias.length} categoria(s)
+                    {fmtN(resultadoCategIA.itensAtualizados)} equipamento(s) classificados em {fmtN(resultadoCategIA.categorias.length)} categoria(s)
                   </p>
                 </div>
               </div>
@@ -2147,7 +2150,7 @@ export default function EquipamentosLocados() {
               </div>
               {resultadoCategIA.descricoesNaoMapeadas.length > 0 && (
                 <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
-                  <div className="text-xs font-semibold text-amber-900 mb-1">⚠ {resultadoCategIA.descricoesNaoMapeadas.length} descrição(ões) não puderam ser classificadas:</div>
+                  <div className="text-xs font-semibold text-amber-900 mb-1">⚠ {fmtN(resultadoCategIA.descricoesNaoMapeadas.length)} descrição(ões) não puderam ser classificadas:</div>
                   <ul className="text-xs text-amber-800 space-y-0.5 mt-1 max-h-32 overflow-y-auto">
                     {resultadoCategIA.descricoesNaoMapeadas.map((d, i) => <li key={i}>• {d}</li>)}
                   </ul>
@@ -2159,7 +2162,7 @@ export default function EquipamentosLocados() {
                   <b>Há mais lotes pra processar.</b> Acervo grande (&gt;800 descrições únicas) — clique de novo em "Categorizar com IA" pra processar o próximo lote.
                 </div>
               )}
-              <div className="text-[11px] text-slate-500">Analisadas: {resultadoCategIA.descricoesAnalisadas} descrição(ões) única(s).</div>
+              <div className="text-[11px] text-slate-500">Analisadas: {fmtN(resultadoCategIA.descricoesAnalisadas)} descrição(ões) única(s).</div>
             </div>
             <div className="bg-slate-50 border-t border-slate-200 px-5 py-3 flex justify-end">
               <button onClick={() => setResultadoCategIA(null)} className="px-4 py-2 text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-md transition">Fechar</button>
@@ -2179,12 +2182,12 @@ export default function EquipamentosLocados() {
                 </div>
                 <div>
                   <h3 className="text-lg font-bold">Limpar fotos da IA</h3>
-                  <p className="text-xs text-red-50/90 mt-0.5">Remover as {totalComFotoIA} foto(s) ilustrativa(s) aplicadas pela IA</p>
+                  <p className="text-xs text-red-50/90 mt-0.5">Remover as {fmtN(totalComFotoIA)} foto(s) ilustrativa(s) aplicadas pela IA</p>
                 </div>
               </div>
             </div>
             <div className="p-5 space-y-3 text-sm text-slate-700">
-              <p>Esta ação zera o campo <code className="bg-slate-100 px-1.5 py-0.5 rounded text-xs">foto_url</code> de todos os {totalComFotoIA} equipamento(s) desta empresa que tinham foto aplicada pela IA.</p>
+              <p>Esta ação zera o campo <code className="bg-slate-100 px-1.5 py-0.5 rounded text-xs">foto_url</code> de todos os {fmtN(totalComFotoIA)} equipamento(s) desta empresa que tinham foto aplicada pela IA.</p>
               <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 text-xs text-emerald-900">
                 <b>Seguro:</b> as fotos do <b>recebimento físico</b> (tiradas na obra durante o check-in) NÃO são afetadas — apenas as ilustrativas buscadas pela IA.
               </div>
@@ -2217,7 +2220,7 @@ export default function EquipamentosLocados() {
                 </div>
                 <div>
                   <h3 className="text-lg font-bold">Buscar fotos com IA</h3>
-                  <p className="text-xs text-pink-50/90 mt-0.5"><b>Cobertura 100% garantida</b> para os {totalSemFoto} equipamento(s) sem foto</p>
+                  <p className="text-xs text-pink-50/90 mt-0.5"><b>Cobertura 100% garantida</b> para os {fmtN(totalSemFoto)} equipamento(s) sem foto</p>
                 </div>
               </div>
             </div>
@@ -2285,7 +2288,7 @@ export default function EquipamentosLocados() {
                 <div>
                   <h3 className="text-lg font-bold">Fotos aplicadas pela IA</h3>
                   <p className="text-xs text-emerald-50/90 mt-0.5">
-                    {resultadoFotosIA.fotosEncontradas} de {resultadoFotosIA.descricoesAnalisadas} descrição(ões) — {resultadoFotosIA.itensAtualizados} equipamento(s) atualizado(s)
+                    {fmtN(resultadoFotosIA.fotosEncontradas)} de {fmtN(resultadoFotosIA.descricoesAnalisadas)} descrição(ões) — {fmtN(resultadoFotosIA.itensAtualizados)} equipamento(s) atualizado(s)
                   </p>
                 </div>
               </div>
@@ -2295,15 +2298,15 @@ export default function EquipamentosLocados() {
               {(resultadoFotosIA.fotosPhaseA !== undefined || resultadoFotosIA.fotosPhaseB !== undefined || resultadoFotosIA.fotosPhaseC !== undefined) && (
                 <div className="grid grid-cols-3 gap-2">
                   <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 text-center">
-                    <div className="text-2xl font-bold text-emerald-700 tabular-nums">{resultadoFotosIA.fotosPhaseA ?? 0}</div>
+                    <div className="text-2xl font-bold text-emerald-700 tabular-nums">{fmtN(resultadoFotosIA.fotosPhaseA ?? 0)}</div>
                     <div className="text-[10px] uppercase tracking-wide text-emerald-900 font-semibold mt-1">Fase A · Match preciso</div>
                   </div>
                   <div className="bg-sky-50 border border-sky-200 rounded-lg p-3 text-center">
-                    <div className="text-2xl font-bold text-sky-700 tabular-nums">{resultadoFotosIA.fotosPhaseB ?? 0}</div>
+                    <div className="text-2xl font-bold text-sky-700 tabular-nums">{fmtN(resultadoFotosIA.fotosPhaseB ?? 0)}</div>
                     <div className="text-[10px] uppercase tracking-wide text-sky-900 font-semibold mt-1">Fase B · Busca ampla</div>
                   </div>
                   <div className="bg-slate-100 border border-slate-200 rounded-lg p-3 text-center">
-                    <div className="text-2xl font-bold text-slate-700 tabular-nums">{resultadoFotosIA.fotosPhaseC ?? 0}</div>
+                    <div className="text-2xl font-bold text-slate-700 tabular-nums">{fmtN(resultadoFotosIA.fotosPhaseC ?? 0)}</div>
                     <div className="text-[10px] uppercase tracking-wide text-slate-900 font-semibold mt-1">Fase C · Placeholder</div>
                   </div>
                 </div>
@@ -2359,7 +2362,7 @@ function Kpi({ icon: Icon, label, value, sub, tint, money }: { icon: LucideIcon;
         style={valueStyle}
         title={typeof value === "string" || typeof value === "number" ? String(value) : undefined}
       >
-        {value}
+        {typeof value === "number" ? value.toLocaleString("pt-BR") : value}
       </div>
       <div className="text-[11px] sm:text-xs text-slate-500 mt-0.5 truncate">{label}</div>
     </div>

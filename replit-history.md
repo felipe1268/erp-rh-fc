@@ -2,6 +2,7 @@
 
 > Este arquivo guarda os one-liners das revisões antigas para manter o `replit.md` enxuto.
 
+- **Rev. 2335** — UX · Padrão do filtro de período dos 6 dashboards mês a mês passa de "últimos 12 meses" pro ano corrente. Ver `shared/changelog.ts`.
 - **Rev. 2332** — UX · Nome do mês capitalizado ("Jan 2026") + indicador MoM (▲/▼ %) nas 6 tabelas mês a mês. Ver `shared/changelog.ts`.
 - **Rev. 2337** — FEATURE · Categorização automática dos equipamentos locados via IA (Claude→Gemini fallback) + filtro por categoria; coluna `categoria` já existia; UPDATE por categoria (7 round-trips vs 1218). Hardening pós-review: guard `getCompaniesForUser`. Ver `shared/changelog.ts`.
 
