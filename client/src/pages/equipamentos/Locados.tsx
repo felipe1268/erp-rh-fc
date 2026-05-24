@@ -854,12 +854,111 @@ export default function EquipamentosLocados() {
     return () => window.removeEventListener("keydown", onKey);
   }, [lightbox]);
 
+  // Rev. 2369 — Modal "Rebuscar foto com termo customizado". O DDG vai
+  // procurar pelo TEXTO QUE O USER DIGITAR, não pela descrição cripto do
+  // ERP ("ESMER INDL41/2" 220V" → "esmerilhadeira angular 4 polegadas").
+  // tipo='locado' usa endpoint que UPDATE direto na tabela (todas unidades);
+  // tipo='biblioteca' grava na canônica + propaga.
+  const [modalRebuscar, setModalRebuscar] = useState<
+    | { tipo: "locado"; descricao: string; fotoAtual: string | null }
+    | { tipo: "biblioteca"; descricao: string; fotoAtual: string | null }
+    | null
+  >(null);
+  const [rebuscarTermo, setRebuscarTermo] = useState("");
+  const [rebuscarPreview, setRebuscarPreview] = useState<string | null>(null);
+  const [rebuscarLoading, setRebuscarLoading] = useState<"buscando" | "aplicando" | null>(null);
+  const [rebuscarErro, setRebuscarErro] = useState<string | null>(null);
+  function abrirModalRebuscar(
+    tipo: "locado" | "biblioteca",
+    descricao: string,
+    fotoAtual: string | null,
+  ) {
+    setRebuscarTermo(descricao);
+    setRebuscarPreview(null);
+    setRebuscarErro(null);
+    setRebuscarLoading(null);
+    setModalRebuscar({ tipo, descricao, fotoAtual } as any);
+  }
+  async function rebuscarFoto() {
+    if (!companyId || !modalRebuscar) return;
+    const termo = rebuscarTermo.trim();
+    if (!termo) { setRebuscarErro("Digite um termo de busca."); return; }
+    setRebuscarLoading("buscando");
+    setRebuscarErro(null);
+    setRebuscarPreview(null);
+    try {
+      if (modalRebuscar.tipo === "locado") {
+        const r: any = await buscarFotoWebMut.mutateAsync({
+          companyId,
+          descricao: modalRebuscar.descricao,
+          queryOverride: termo,
+          dryRun: true,
+          sobrescrever: true,
+        });
+        if (r?.ok && r.fotoUrl) setRebuscarPreview(r.fotoUrl);
+        else setRebuscarErro(r?.motivo || "Nenhuma foto encontrada.");
+      } else {
+        const r: any = await fotoCanonBuscarWebMut.mutateAsync({
+          companyId,
+          descricaoOriginal: modalRebuscar.descricao,
+          queryOverride: termo,
+          dryRun: true,
+        });
+        if (r?.ok && r.fotoUrl) setRebuscarPreview(r.fotoUrl);
+        else setRebuscarErro("Nenhuma foto encontrada.");
+      }
+    } catch (e: any) {
+      setRebuscarErro(e?.message || "Falha na busca.");
+    } finally {
+      setRebuscarLoading(null);
+    }
+  }
+  async function aplicarRebuscaFoto() {
+    if (!companyId || !modalRebuscar || !rebuscarPreview) return;
+    const termo = rebuscarTermo.trim();
+    setRebuscarLoading("aplicando");
+    setRebuscarErro(null);
+    try {
+      if (modalRebuscar.tipo === "locado") {
+        const r: any = await buscarFotoWebMut.mutateAsync({
+          companyId,
+          descricao: modalRebuscar.descricao,
+          queryOverride: termo,
+          sobrescrever: true,
+        });
+        if (r?.ok) {
+          utils.equipamentos.locadosListar.invalidate();
+          toast.success(`Foto aplicada em ${fmtN(r.itensAtualizados)} unidade(s).`);
+          setModalRebuscar(null);
+        } else {
+          setRebuscarErro(r?.motivo || "Falha ao aplicar.");
+        }
+      } else {
+        const r: any = await fotoCanonBuscarWebMut.mutateAsync({
+          companyId,
+          descricaoOriginal: modalRebuscar.descricao,
+          queryOverride: termo,
+        });
+        if (r?.ok) {
+          // onSuccess do fotoCanonBuscarWebMut já dá toast e refetch.
+          setModalRebuscar(null);
+        }
+      }
+    } catch (e: any) {
+      setRebuscarErro(e?.message || "Falha ao aplicar.");
+    } finally {
+      setRebuscarLoading(null);
+    }
+  }
+
   // Rev. 2367 — busca foto na web E salva na Biblioteca (1 clique por linha).
   const [buscandoWebBibliotecaDescNorm, setBuscandoWebBibliotecaDescNorm] = useState<Set<string>>(new Set());
   const fotoCanonBuscarWebMut = trpc.equipamentos.fotosCanonicasBuscarWebUpsert.useMutation({
     onSuccess: (res: any, vars: any) => {
       const descNorm = (vars?.descricaoOriginal || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().replace(/\s+/g, " ").trim();
       setBuscandoWebBibliotecaDescNorm(prev => { const n = new Set(prev); n.delete(descNorm); return n; });
+      // Rev. 2369 — dryRun: preview-only, sem toast nem refetch.
+      if (res?.dryRun) return;
       toast.success(`Foto da web aplicada à biblioteca + ${fmtN(res.unidadesAtualizadas)} unidade(s).`);
       bibliotecaQuery.refetch();
       utils.equipamentos.locadosListar.invalidate();
@@ -1357,13 +1456,16 @@ export default function EquipamentosLocados() {
                             <Sparkles className="h-2.5 w-2.5" />
                           </span>
                         )}
+                        {/* Rev. 2369 — Badge agora abre modal "Rebuscar com
+                            outro termo" (descrição cripto do ERP costuma dar
+                            foto errada; user edita o termo de busca). */}
                         <button
                           type="button"
-                          onClick={(e) => { e.stopPropagation(); buscarFotoUma(g.descricao, true); }}
+                          onClick={(e) => { e.stopPropagation(); abrirModalRebuscar("locado", g.descricao, g.fotoUrl); }}
                           disabled={buscandoDescricoes.has(g.descricao) || !!batchWeb}
                           className="absolute -bottom-1 -left-1 h-6 w-6 rounded-full bg-white ring-2 ring-white shadow-md text-sky-700 hover:bg-sky-50 flex items-center justify-center disabled:opacity-60 disabled:cursor-wait"
-                          title={`Buscar nova foto na web para "${g.descricao}"`}
-                          aria-label="Buscar nova foto na web">
+                          title="Trocar foto: digite um termo de busca melhor (ex.: 'esmerilhadeira angular 4 polegadas')"
+                          aria-label="Trocar foto com outro termo de busca">
                           {buscandoDescricoes.has(g.descricao)
                             ? <Loader2 className="h-3 w-3 animate-spin" />
                             : <RefreshCw className="h-3 w-3" />}
@@ -2853,9 +2955,10 @@ export default function EquipamentosLocados() {
                               {fotoUrl ? (
                                 <>
                                   <span className="inline-flex items-center gap-1 text-[11px] text-emerald-700 font-semibold"><Check className="h-3 w-3" /> Na biblioteca</span>
-                                  <button onClick={() => buscarWebParaBiblioteca(descOriginal)}
+                                  {/* Rev. 2369 — abre modal "Rebuscar com outro termo". */}
+                                  <button onClick={() => abrirModalRebuscar("biblioteca", descOriginal, fotoUrl)}
                                     disabled={buscandoWeb || uploading}
-                                    title="Trocar pela 1ª foto da web (DuckDuckGo)"
+                                    title="Trocar foto: digite um termo de busca melhor pra encontrar a foto certa"
                                     className="inline-flex items-center gap-1 text-[11px] text-sky-700 hover:text-sky-800 hover:underline disabled:opacity-50">
                                     {buscandoWeb ? <Loader2 className="h-3 w-3 animate-spin" /> : <Globe className="h-3 w-3" />} Trocar pela web
                                   </button>
@@ -2894,6 +2997,96 @@ export default function EquipamentosLocados() {
       )}
 
       {/* Rev. 2368 — Lightbox de foto (fullscreen, ESC ou click fora fecha) */}
+      {/* Rev. 2369 — Modal "Rebuscar foto com outro termo".
+          O DDG vai procurar pelo TEXTO QUE O USER DIGITAR (não pela
+          descrição cripto do ERP). Preview antes de aplicar. */}
+      {modalRebuscar && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[55] flex items-center justify-center p-4"
+          onClick={() => { if (!rebuscarLoading) setModalRebuscar(null); }}
+          role="dialog" aria-modal="true" aria-label="Buscar foto com outro termo">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col"
+            onClick={(e) => e.stopPropagation()}>
+            <div className="px-5 py-4 bg-gradient-to-r from-sky-600 to-cyan-600 text-white flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2 min-w-0">
+                <Globe className="h-5 w-5 flex-shrink-0" />
+                <div className="min-w-0">
+                  <h3 className="font-bold text-base truncate">Buscar foto com outro termo</h3>
+                  <p className="text-xs text-sky-50/90 truncate">{modalRebuscar.descricao}</p>
+                </div>
+              </div>
+              <button onClick={() => setModalRebuscar(null)} disabled={!!rebuscarLoading}
+                className="h-8 w-8 rounded-full bg-white/15 hover:bg-white/25 flex items-center justify-center transition disabled:opacity-50"
+                title="Fechar">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="p-5 space-y-4 overflow-y-auto">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                  Termo de busca (o que vai pro DuckDuckGo Images)
+                </label>
+                <div className="flex gap-2">
+                  <input type="text" value={rebuscarTermo}
+                    onChange={(e) => setRebuscarTermo(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter" && !rebuscarLoading) rebuscarFoto(); }}
+                    placeholder="ex.: esmerilhadeira angular 4 polegadas 220v"
+                    disabled={!!rebuscarLoading}
+                    className="flex-1 px-3 py-2 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-sky-400 focus:border-sky-400 disabled:bg-slate-50" />
+                  <button onClick={rebuscarFoto} disabled={!!rebuscarLoading || !rebuscarTermo.trim()}
+                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-sky-600 hover:bg-sky-700 text-white text-sm font-semibold transition disabled:opacity-50 disabled:cursor-wait">
+                    {rebuscarLoading === "buscando"
+                      ? <><Loader2 className="h-4 w-4 animate-spin" /> Buscando...</>
+                      : <><Search className="h-4 w-4" /> Buscar</>}
+                  </button>
+                </div>
+                <p className="text-[11px] text-slate-500 mt-1.5">
+                  Dica: descrições cripto (ex.: "ESMER INDL41/2" 220V") confundem a busca. Escreva como você procuraria no Google.
+                </p>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <div className="text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1.5">Foto atual</div>
+                  <div className="aspect-square rounded-lg ring-1 ring-slate-200 bg-slate-50 flex items-center justify-center overflow-hidden">
+                    {modalRebuscar.fotoAtual
+                      ? <img src={modalRebuscar.fotoAtual} alt="Foto atual" className="w-full h-full object-contain" />
+                      : <div className="text-slate-400 text-xs flex flex-col items-center gap-1"><Camera className="h-8 w-8" /> Sem foto</div>}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-[11px] font-semibold text-sky-700 uppercase tracking-wide mb-1.5">Candidata da web</div>
+                  <div className="aspect-square rounded-lg ring-2 ring-sky-300 bg-sky-50 flex items-center justify-center overflow-hidden">
+                    {rebuscarLoading === "buscando"
+                      ? <Loader2 className="h-8 w-8 animate-spin text-sky-500" />
+                      : rebuscarPreview
+                      ? <img src={rebuscarPreview} alt="Candidata" className="w-full h-full object-contain" />
+                      : <div className="text-slate-400 text-xs text-center px-2">Clique em <strong>Buscar</strong> pra ver a foto candidata</div>}
+                  </div>
+                </div>
+              </div>
+              {rebuscarErro && (
+                <div className="rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-xs text-red-700 flex items-start gap-2">
+                  <AlertTriangle className="h-4 w-4 flex-shrink-0 mt-0.5" />
+                  <span>{rebuscarErro}</span>
+                </div>
+              )}
+            </div>
+            <div className="px-5 py-3 bg-slate-50 border-t border-slate-100 flex items-center justify-between gap-2">
+              <button onClick={() => setModalRebuscar(null)} disabled={!!rebuscarLoading}
+                className="px-4 py-2 rounded-lg text-sm text-slate-700 hover:bg-slate-200 transition disabled:opacity-50">
+                Cancelar
+              </button>
+              <button onClick={aplicarRebuscaFoto}
+                disabled={!rebuscarPreview || !!rebuscarLoading}
+                className="inline-flex items-center gap-1.5 px-5 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold transition disabled:opacity-50 disabled:cursor-wait shadow">
+                {rebuscarLoading === "aplicando"
+                  ? <><Loader2 className="h-4 w-4 animate-spin" /> Aplicando...</>
+                  : <><Check className="h-4 w-4" /> Aplicar esta foto</>}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {lightbox && (
         <div
           className="fixed inset-0 bg-black/85 backdrop-blur-md z-[60] flex items-center justify-center p-4 cursor-zoom-out"

@@ -1,6 +1,74 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2369 — **FEATURE/UX · "Trocar foto com outro termo": modal de
+ * rebusca com query customizada e preview antes de aplicar.**
+ *
+ * **Pedido user (24/05/2026, IMG_1167):** as fotos de "ESMER INDL41/2"
+ * 220V" tinham vindo erradas (apareciam outros equipamentos no lugar de
+ * uma esmerilhadeira). User: "preciso ter como mudar elas e mandar a ia
+ * fazer outras perguntas". Diagnóstico: a Rev. 2366/2367 mandam a
+ * DESCRIÇÃO LITERAL pro DuckDuckGo Images. Descrições internas do ERP
+ * costumam ser cripto-abreviadas ("ESMER INDL41/2" = esmerilhadeira
+ * industrial 4 1/2 polegadas) e o DDG não decodifica isso, devolvendo
+ * imagens irrelevantes. Solução: dar ao user controle sobre o termo de
+ * busca, com preview antes de gravar.
+ *
+ * **Backend** (`server/routers/equipamentos.ts`):
+ *  - `locadosBuscarFotoWebPorDescricao` (Rev. 2366) e
+ *    `fotosCanonicasBuscarWebUpsert` (Rev. 2367) ganharam 2 inputs
+ *    opcionais:
+ *      • `queryOverride: string` — termo livre que SUBSTITUI a descrição
+ *        no encodeURIComponent do DDG (tanto na fase vqd quanto i.js).
+ *        A propagação do UPDATE/UPSERT continua usando a `descricao`
+ *        ORIGINAL (match key no banco — não pode mudar).
+ *      • `dryRun: boolean` (default false) — quando true, faz só a busca
+ *        no DDG e retorna `{ ok, fotoUrl, dryRun: true }` sem tocar no
+ *        banco (e sem baixar pro storage no caso canônico). Usado pelo
+ *        modal pra mostrar a candidata antes de o user confirmar.
+ *  - O handler `fotoCanonBuscarWebMut.onSuccess` no client agora ignora
+ *    o toast/refetch quando `res.dryRun === true` (preview-only).
+ *
+ * **Frontend** (`client/src/pages/equipamentos/Locados.tsx`):
+ *  - Novo state `modalRebuscar` + handlers `abrirModalRebuscar()`,
+ *    `rebuscarFoto()` (dryRun), `aplicarRebuscaFoto()` (write real).
+ *  - Modal full-featured (`z-[55]`, abaixo do lightbox `z-[60]`):
+ *      • Header sky/cyan com Globe + descrição original truncada.
+ *      • Input editável pré-preenchido com a descrição + botão "Buscar"
+ *        (Enter também dispara). Dica em texto pequeno explicando que
+ *        descrições cripto confundem a busca.
+ *      • Grid 2-col: "Foto atual" (esq, slate) vs "Candidata da web"
+ *        (dir, sky, ring-2). Loading spinner no card direito durante
+ *        a busca; placeholder "Clique em Buscar pra ver..." antes.
+ *      • Erro inline (red-50 + AlertTriangle) se DDG falha ou não acha.
+ *      • Footer: "Cancelar" (esq) + "Aplicar esta foto" (dir, emerald,
+ *        disabled enquanto preview vazio ou loading).
+ *      • Click fora fecha (a menos que esteja aplicando, pra não perder
+ *        operação em andamento). A11y: role=dialog, aria-modal.
+ *  - Wiring:
+ *      1. Badge "buscar nova foto" do card de grupo (Rev. 2368, canto
+ *         inferior esquerdo do thumbnail) — antes chamava `buscarFotoUma`
+ *         direto com a descrição; AGORA abre o modal pra user editar.
+ *      2. Botão "Trocar pela web" do modal Biblioteca (Rev. 2367) — antes
+ *         chamava `buscarWebParaBiblioteca` direto; AGORA abre o modal.
+ *  - **Preservado:** a busca em lote ("Buscar fotos da web" no header,
+ *    Rev. 2366) e os botões "Buscar na web" do modal Biblioteca pra
+ *    descrições SEM foto continuam 1-clique (sem modal) — esses fluxos
+ *    são "best-effort em massa", o modal é pra fix individual.
+ *
+ * **Arquivos:**
+ *  - `server/routers/equipamentos.ts` (input schema + queryDDG + dryRun
+ *    guard em ambos endpoints).
+ *  - `client/src/pages/equipamentos/Locados.tsx` (state, handlers,
+ *    modal component, wiring nos 2 botões).
+ *
+ * **R-001/R-007/R-010:** UPDATE/UPSERT continuam escopados por
+ * `company_id + descricao`/`descricao_normalizada`, idempotentes, zero
+ * DDL. SSRF guard da Rev. 2367 preservado no caminho de write (dryRun
+ * não baixa nada, retorna só a URL externa pro <img> do preview).
+ *
+ * ---
+ *
  * Rev. 2368 — **UX · Lightbox de foto na Biblioteca: clicar no thumbnail
  * amplia a foto em fullscreen pra melhor visualização (ESC ou click fora
  * fecha).**

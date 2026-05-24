@@ -1422,6 +1422,15 @@ Reply JSON {"queries":[{"descricao":"<original PT>","query":"<EN words>"}]} with
       companyId: z.number(),
       descricao: z.string().min(1).max(500),
       sobrescrever: z.boolean().optional().default(false),
+      // Rev. 2369 — termo de busca customizado pro DDG (a descrição original
+      // do equipamento costuma ser cripto: "ESMER INDL41/2"220V-CÓD..." vira
+      // foto errada). Se omitido, usa `descricao`. A propagação no UPDATE
+      // continua usando `descricao` (match key no banco).
+      queryOverride: z.string().min(1).max(500).optional(),
+      // Rev. 2369 — dryRun=true: só busca a URL no DDG e retorna pra
+      // preview, SEM tocar no banco. Usado pelo modal "Rebuscar com termo
+      // customizado" pra mostrar a foto candidata antes de aplicar.
+      dryRun: z.boolean().optional().default(false),
     }))
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
@@ -1440,12 +1449,14 @@ Reply JSON {"queries":[{"descricao":"<original PT>","query":"<EN words>"}]} with
 
       // 1. Pega o token vqd da página HTML inicial (DDG exige esse token
       //    pra autorizar a chamada JSON subsequente).
+      // Rev. 2369 — query do DDG = override OU descrição literal.
+      const queryDDG = (input.queryOverride || input.descricao).trim();
       const ctrl1 = new AbortController();
       const t1 = setTimeout(() => ctrl1.abort(), 9000);
       let vqd: string | null = null;
       try {
         const r1 = await fetch(
-          `https://duckduckgo.com/?q=${encodeURIComponent(input.descricao)}&iax=images&ia=images`,
+          `https://duckduckgo.com/?q=${encodeURIComponent(queryDDG)}&iax=images&ia=images`,
           { signal: ctrl1.signal, headers: { ...headers, "Accept": "text/html,application/xhtml+xml" } }
         );
         const html = await r1.text();
@@ -1472,7 +1483,7 @@ Reply JSON {"queries":[{"descricao":"<original PT>","query":"<EN words>"}]} with
       const t2 = setTimeout(() => ctrl2.abort(), 9000);
       let fotoUrl: string | null = null;
       try {
-        const url = `https://duckduckgo.com/i.js?l=br-pt&o=json&q=${encodeURIComponent(input.descricao)}&vqd=${vqd}&f=,,,,,&p=1`;
+        const url = `https://duckduckgo.com/i.js?l=br-pt&o=json&q=${encodeURIComponent(queryDDG)}&vqd=${vqd}&f=,,,,,&p=1`;
         const r2 = await fetch(url, {
           signal: ctrl2.signal,
           headers: { ...headers, "Accept": "application/json", "Referer": "https://duckduckgo.com/" },
@@ -1502,6 +1513,17 @@ Reply JSON {"queries":[{"descricao":"<original PT>","query":"<EN words>"}]} with
           fotoUrl: null,
           itensAtualizados: 0,
           descricao: input.descricao,
+        };
+      }
+
+      // Rev. 2369 — dryRun: só retorna a URL pra preview, não escreve.
+      if (input.dryRun) {
+        return {
+          ok: true as const,
+          fotoUrl,
+          itensAtualizados: 0,
+          descricao: input.descricao,
+          dryRun: true as const,
         };
       }
 
@@ -1936,6 +1958,9 @@ Gere o JSON conforme o esquema. Não omita nenhuma descrição.`;
     .input(z.object({
       companyId: z.number(),
       descricaoOriginal: z.string().min(1).max(255),
+      // Rev. 2369 — ver comentário no locadosBuscarFotoWebPorDescricao.
+      queryOverride: z.string().min(1).max(500).optional(),
+      dryRun: z.boolean().optional().default(false),
     }))
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
@@ -1952,13 +1977,15 @@ Gere o JSON conforme o esquema. Não omita nenhuma descrição.`;
         "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7",
       };
 
+      // Rev. 2369 — query do DDG = override OU descrição original.
+      const queryDDG = (input.queryOverride || input.descricaoOriginal).trim();
       // 1) Pega vqd
       const ctrl1 = new AbortController();
       const t1 = setTimeout(() => ctrl1.abort(), 9000);
       let vqd: string | null = null;
       try {
         const r1 = await fetch(
-          `https://duckduckgo.com/?q=${encodeURIComponent(input.descricaoOriginal)}&iax=images&ia=images`,
+          `https://duckduckgo.com/?q=${encodeURIComponent(queryDDG)}&iax=images&ia=images`,
           { signal: ctrl1.signal, headers: { ...headers, "Accept": "text/html,application/xhtml+xml" } }
         );
         const html = await r1.text();
@@ -1979,7 +2006,7 @@ Gere o JSON conforme o esquema. Não omita nenhuma descrição.`;
       const t2 = setTimeout(() => ctrl2.abort(), 9000);
       let fotoUrl: string | null = null;
       try {
-        const url = `https://duckduckgo.com/i.js?l=br-pt&o=json&q=${encodeURIComponent(input.descricaoOriginal)}&vqd=${vqd}&f=,,,,,&p=1`;
+        const url = `https://duckduckgo.com/i.js?l=br-pt&o=json&q=${encodeURIComponent(queryDDG)}&vqd=${vqd}&f=,,,,,&p=1`;
         const r2 = await fetch(url, {
           signal: ctrl2.signal,
           headers: { ...headers, "Accept": "application/json", "Referer": "https://duckduckgo.com/" },
@@ -2001,6 +2028,18 @@ Gere o JSON conforme o esquema. Não omita nenhuma descrição.`;
 
       if (!fotoUrl) {
         throw new TRPCError({ code: "NOT_FOUND", message: "Nenhuma foto válida encontrada na 1ª página de resultados." });
+      }
+
+      // Rev. 2369 — dryRun: retorna a URL externa pra preview, NÃO baixa
+      // nem grava na biblioteca. Download/storage/upsert só rodam no Apply.
+      if (input.dryRun) {
+        return {
+          ok: true as const,
+          fotoUrl,
+          unidadesAtualizadas: 0,
+          descricaoOriginal: input.descricaoOriginal,
+          dryRun: true as const,
+        };
       }
 
       // 3) Baixa o arquivo (até 5MB, timeout 10s) — não confia em URL externa
