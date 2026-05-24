@@ -2,6 +2,7 @@
 
 > Este arquivo guarda os one-liners das revisões antigas para manter o `replit.md` enxuto.
 
+- **Rev. 2386** — FEATURE · IA sugere categorias para itens "Sem categoria" no Almoxarifado (em lote, com modal de revisão); vocabulário fechado (`almoxarifado_categorias`); apply POR IDS via `atualizarCategoriaEmLote`. Ver `shared/changelog.ts`.
 - **Rev. 2385** — UX · Filtro "⚠️ Sem categoria" no dropdown de categorias do Almoxarifado (view por obra E consolidado). `<option value="__sem__">` + filtro em `lista`/`consFinal`. Ver `shared/changelog.ts`.
 - **Rev. 2382** — FEATURE · Multi-seleção de itens no Almoxarifado (por obra): alterar categoria em lote + unificar duplicatas (mesma obra/nome/unidade) somando quantidades no item de MAIOR qtd, migrando movimentações + recebimentos. Transação. Ver `shared/changelog.ts`.
 - **Rev. 2381** — FEATURE · Botão "Trocar foto" nos cards do Almoxarifado (modal violet com input editável + preview dryRun → aplicar). Usuário ajuda a IA fornecendo termo de busca mais específico quando nomes genéricos retornam fotos ruins. Ver `shared/changelog.ts`.

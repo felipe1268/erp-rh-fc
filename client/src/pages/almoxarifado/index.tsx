@@ -135,6 +135,17 @@ export default function AlmoxarifadoPage() {
   // Rev. 2382 — Multi-seleção de itens (alterar categoria em lote / unificar duplicatas)
   const [modoSelecao, setModoSelecao] = useState(false);
   const [selecionados, setSelecionados] = useState<Set<number>>(new Set());
+  // Rev. 2393 — Drag-to-select (lasso/rubber-band) na grade de cards. Ativa só em
+  // modoSelecao. Origem = snapshot das seleções no início pro drag ser ADITIVO.
+  const gridRef = useRef<HTMLDivElement | null>(null);
+  const [dragSel, setDragSel] = useState<null | {
+    startX: number; startY: number; curX: number; curY: number; origin: Set<number>;
+  }>(null);
+  // Rev. 2393 — Refs pra que o `executar` async do ModalConfirmacaoAuditoria
+  // sempre leia o estado MAIS NOVO de selecionados/lista no retry (closure
+  // capturaria o snapshot antigo).
+  const selecionadosRef = useRef<Set<number>>(new Set());
+  const listaRef = useRef<any[]>([]);
   const [modalAltCateg, setModalAltCateg] = useState<null | { categoria: string; aplicando: boolean }>(null);
   const [modalUnificar, setModalUnificar] = useState<null | { carregando: boolean; aplicando: boolean; grupos: any[]; totalInativ: number; erro: string | null }>(null);
   // Rev. 2390 — Transferência em lote: N itens selecionados → 1 destino comum.
@@ -475,7 +486,84 @@ export default function AlmoxarifadoPage() {
       setModalAltCategConsol(s => s ? { ...s, aplicando: false } : s);
     }
   }
-  function sairModoSelecao() { setModoSelecao(false); setSelecionados(new Set()); }
+  function sairModoSelecao() { setModoSelecao(false); setSelecionados(new Set()); setDragSel(null); }
+  // Rev. 2393 — Excluir em lote os itens selecionados. Reusa o ModalConfirmacaoAuditoria
+  // (senha + justificativa) e itera a mutation `compras.excluirItem` (mesma do single).
+  // Soft-delete preserva histórico de movimentações. Para no 1º erro de senha/autorização.
+  function handleExcluirSelecionados() {
+    if (!companyId || selecionados.size === 0) { toast.warning("Selecione ao menos 1 item."); return; }
+    const itensSelInicial = (lista as any[]).filter(i => selecionados.has(i.id));
+    if (itensSelInicial.length === 0) { toast.error("Itens selecionados não estão visíveis na lista atual."); return; }
+    const nomes = itensSelInicial.map(i => i.nome).slice(0, 3).join(", ");
+    const sufixo = itensSelInicial.length > 3 ? ` e mais ${itensSelInicial.length - 3}` : "";
+    setModalAuditoria({
+      tipo: "excluir_item",
+      titulo: `Remover ${itensSelInicial.length} item(ns) do almoxarifado?`,
+      subtitulo: `${nomes}${sufixo}`,
+      descricao: (
+        <p>Esta ação <strong>desativa {itensSelInicial.length === 1 ? "o item" : "os itens"}</strong> selecionado(s) no almoxarifado. O histórico de movimentações é preservado.</p>
+      ),
+      textoBotao: "Remover todos",
+      executar: async ({ senha, justificativa }) => {
+        setModalAuditoria((p) => p ? { ...p, carregando: true, erro: null } : p);
+        // Recalcula pendentes a CADA chamada (retry pós-erro-de-senha precisa
+        // ler o Set atualizado, não o snapshot do 1º clique).
+        const selAtual = selecionadosRef.current;
+        const listAtual = listaRef.current;
+        const itensSel = (listAtual as any[]).filter(i => selAtual.has(i.id));
+        if (itensSel.length === 0) {
+          setModalAuditoria(null);
+          sairModoSelecao();
+          toast.info("Nenhum item pendente.");
+          return;
+        }
+        let firstError: any = null;
+        let okCount = 0;
+        const idsRemovidos = new Set<number>();
+        for (const it of itensSel) {
+          const subs = (it as any)._subItems as any[] | undefined;
+          const ids = subs && subs.length > 1 ? subs.map((s: any) => s.id) : [it.id];
+          let cardOk = true;
+          for (const id of ids) {
+            try {
+              await excluirMutSilent.mutateAsync({ id, senha, justificativa });
+              okCount++;
+            } catch (e: any) {
+              cardOk = false;
+              if (!firstError) firstError = e;
+              if (e?.data?.code === "UNAUTHORIZED" || e?.data?.code === "BAD_REQUEST") break;
+            }
+          }
+          if (cardOk) idsRemovidos.add(it.id);
+          if (firstError && (firstError?.data?.code === "UNAUTHORIZED" || firstError?.data?.code === "BAD_REQUEST")) break;
+        }
+        // 1 refetch agregado (substitui o per-item da mutation single)
+        if (okCount > 0) refetch();
+        const isAuthErr = firstError && (firstError?.data?.code === "UNAUTHORIZED" || firstError?.data?.code === "BAD_REQUEST");
+        if (isAuthErr) {
+          // Mantém modal aberto pra retry. Tira da seleção os já removidos pra
+          // que a próxima tentativa SÓ reprocesse o restante. Erro inline.
+          if (idsRemovidos.size > 0) {
+            setSelecionados(prev => {
+              const n = new Set(prev);
+              idsRemovidos.forEach(id => n.delete(id));
+              return n;
+            });
+          }
+          const prefix = okCount > 0 ? `${okCount} já removido(s). ` : "";
+          setModalAuditoria((p) => p ? { ...p, carregando: false, erro: prefix + (firstError.message || "Falha ao remover.") } : p);
+          return;
+        }
+        setModalAuditoria(null);
+        sairModoSelecao();
+        if (firstError) {
+          toast.warning(`${okCount} removido(s); houve falhas. ${firstError.message || ""}`);
+        } else {
+          toast.success(`${okCount} item(ns) removido(s). Pendência de auditoria registrada.`);
+        }
+      },
+    });
+  }
   function toggleSelecionado(id: number) {
     setSelecionados(prev => {
       const n = new Set(prev);
@@ -723,6 +811,8 @@ export default function AlmoxarifadoPage() {
   const normNomeItem = (nome: string) =>
     nome.replace(/^\[[\d.]+\]\s*/, "").replace(/\s*\[[\d.]+\]\s*$/, "").trim().toLowerCase().replace(/\s+/g, " ");
 
+  // Rev. 2393 — keep refs em sync pro async closure do executar (retry).
+  useEffect(() => { selecionadosRef.current = selecionados; }, [selecionados]);
   const lista = useMemo(() => {
     let r = itens;
     if (busca) {
@@ -767,6 +857,8 @@ export default function AlmoxarifadoPage() {
     }
     return merged;
   }, [itens, busca, filtroCateg, apenasAbaixo]);
+  // Rev. 2393 — keep listaRef em sync pro async closure do executar (retry).
+  useEffect(() => { listaRef.current = lista as any[]; }, [lista]);
 
   const totalCriticos = useMemo(() =>
     itens.filter(i => n(i.quantidadeMinima) > 0 && n(i.quantidadeAtual) < n(i.quantidadeMinima)).length,
@@ -927,6 +1019,9 @@ export default function AlmoxarifadoPage() {
     onSuccess: () => { refetch(); toast.success("Item removido. Pendência de auditoria registrada."); },
     onError: (e) => { setModalAuditoria((p) => p ? { ...p, carregando: false, erro: e.message } : p); toast.error(e.message); },
   });
+  // Rev. 2393 — Mutation SEM callbacks pro fluxo em lote: o handler agrega toast
+  // único + 1 refetch final, evitando cascata de toasts/refetches por item.
+  const excluirMutSilent = trpc.compras.excluirItem.useMutation();
 
   function handleExcluirItem(item: any) {
     const subs = item._subItems as any[] | undefined;
@@ -2003,7 +2098,66 @@ export default function AlmoxarifadoPage() {
             </div>
           ) : viewMode === "cards" ? (
             /* ── CARD VIEW ── */
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+            /* Rev. 2393 — wrapper relativo pra abrigar o retângulo de seleção (lasso).
+               touchAction=none só durante modoSelecao pra capturar o pan do dedo
+               como drag-select em vez de scroll. User sai da seleção pra scrollar. */
+            <div
+              ref={gridRef}
+              className="relative grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4"
+              style={{ touchAction: modoSelecao ? "none" : "auto", userSelect: dragSel ? "none" : "auto" }}
+              onPointerDown={(e) => {
+                if (!modoSelecao) return;
+                const el = e.target as HTMLElement;
+                // Inicia drag SÓ no espaço vazio entre cards (tap em card mantém toggle).
+                if (el.closest("[data-card-id]") || el.closest("button") || el.closest("a") || el.closest("input")) return;
+                if (!gridRef.current) return;
+                try { gridRef.current.setPointerCapture(e.pointerId); } catch {}
+                setDragSel({
+                  startX: e.clientX, startY: e.clientY,
+                  curX: e.clientX, curY: e.clientY,
+                  origin: new Set(selecionados),
+                });
+              }}
+              onPointerMove={(e) => {
+                if (!dragSel || !gridRef.current) return;
+                e.preventDefault();
+                const curX = e.clientX, curY = e.clientY;
+                const x1 = Math.min(dragSel.startX, curX);
+                const y1 = Math.min(dragSel.startY, curY);
+                const x2 = Math.max(dragSel.startX, curX);
+                const y2 = Math.max(dragSel.startY, curY);
+                const next = new Set(dragSel.origin);
+                gridRef.current.querySelectorAll<HTMLElement>("[data-card-id]").forEach(card => {
+                  const r = card.getBoundingClientRect();
+                  if (!(r.right < x1 || r.left > x2 || r.bottom < y1 || r.top > y2)) {
+                    const idAttr = card.dataset.cardId;
+                    if (idAttr) next.add(Number(idAttr));
+                  }
+                });
+                setDragSel(prev => prev ? { ...prev, curX, curY } : prev);
+                setSelecionados(next);
+              }}
+              onPointerUp={(e) => {
+                if (!dragSel) return;
+                try { gridRef.current?.releasePointerCapture(e.pointerId); } catch {}
+                setDragSel(null);
+              }}
+              onPointerCancel={() => setDragSel(null)}
+            >
+              {/* Overlay do retângulo de seleção (lasso) */}
+              {dragSel && gridRef.current && (() => {
+                const gridRect = gridRef.current.getBoundingClientRect();
+                const x1 = Math.min(dragSel.startX, dragSel.curX) - gridRect.left;
+                const y1 = Math.min(dragSel.startY, dragSel.curY) - gridRect.top;
+                const w = Math.abs(dragSel.curX - dragSel.startX);
+                const h = Math.abs(dragSel.curY - dragSel.startY);
+                return (
+                  <div
+                    className="pointer-events-none absolute z-20 border-2 border-indigo-500 bg-indigo-400/15 rounded-sm"
+                    style={{ left: x1, top: y1, width: w, height: h }}
+                  />
+                );
+              })()}
               {lista.map(item => {
                 const atual = n(item.quantidadeAtual);
                 const minimo = n(item.quantidadeMinima);
@@ -2012,6 +2166,7 @@ export default function AlmoxarifadoPage() {
                 return (
                   <div
                     key={item.id}
+                    data-card-id={item.id}
                     className={`bg-white rounded-xl border shadow-sm overflow-hidden flex flex-col transition hover:shadow-md ${isSel ? "border-indigo-500 ring-2 ring-indigo-300" : abaixo ? "border-red-200" : "border-gray-100"} ${modoSelecao ? "cursor-pointer" : ""}`}
                     onClick={modoSelecao ? () => toggleSelecionado(item.id) : undefined}
                   >
@@ -4074,6 +4229,15 @@ export default function AlmoxarifadoPage() {
             <ArrowLeftRight className="w-4 h-4" />
             <span className="hidden sm:inline">Transferir</span>
             <span className="sm:hidden">Transf.</span>
+          </button>
+          {/* Rev. 2393 — Excluir em lote (soft-delete, auditado) */}
+          <button
+            onClick={handleExcluirSelecionados}
+            className="h-10 px-3 sm:px-4 flex items-center gap-2 bg-gradient-to-br from-red-500 to-rose-600 hover:from-red-600 hover:to-rose-700 text-white text-sm font-semibold rounded-lg transition shadow-sm"
+            title="Remover os itens selecionados (auditado)"
+          >
+            <Trash2 className="w-4 h-4" />
+            <span className="hidden sm:inline">Excluir</span>
           </button>
           <button
             onClick={sairModoSelecao}

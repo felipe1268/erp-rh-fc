@@ -1,6 +1,77 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2393 — **ALMOXARIFADO/UX · Drag-to-select (lasso) na grade de cards
+ * + botão "Excluir" em lote no sticky bar do modo seleção.**
+ *
+ * Pedido user (24/05/2026, pós Rev. 2392): "Quero poder seleção clicando e
+ * arrastando o dedo como uma janela de seleção pra facilitar o trabalho;
+ * preciso poder apagar os selecionados também tudo de uma vez". Antes, no
+ * modo seleção (Rev. 2382) só dava pra marcar item-a-item com tap — em
+ * iPad com 30+ cards ficava penoso. E o sticky bar tinha Categoria /
+ * Unificar / Transferir / Cancelar, mas SEM "Excluir" em lote (única via
+ * de delete era abrir cada card e clicar no ícone individual).
+ *
+ * **Frontend** (`client/src/pages/almoxarifado/index.tsx`):
+ *   1. **Lasso (rubber-band selection)** no container do grid de cards
+ *      (L2013-2080). Novo state `dragSel` (L141-146) com snapshot da
+ *      seleção corrente (`origin`) pra o drag ser ADITIVO (não apaga as
+ *      seleções prévias). `gridRef` aponta pro wrapper relativo. Handlers
+ *      Pointer Events (`onPointerDown/Move/Up/Cancel`) cobrem mouse + touch
+ *      uniformemente em iPad/Safari/Desktop.
+ *        - Inicia drag SÓ no espaço VAZIO entre cards (filtro `closest
+ *          ('[data-card-id]')` + buttons/inputs) — tap em card mantém o
+ *          toggle individual da Rev. 2382, preservando o fluxo antigo.
+ *        - `setPointerCapture(pointerId)` mantém os eventos chegando mesmo
+ *          se o dedo sair do bounding box do grid durante o drag.
+ *        - Hit-test por intersecção AABB (axis-aligned bounding box) com
+ *          `getBoundingClientRect()` de cada `[data-card-id]` no grid.
+ *          Marca todos que intersectam o retângulo desenhado.
+ *        - `touchAction: 'none'` aplicado SÓ enquanto `modoSelecao=true`
+ *          pra capturar o pan do dedo como drag-select em vez de scroll
+ *          do page. User sai da seleção pra scrollar normalmente — UX
+ *          trade-off documentado e aceitável (botão "Cancelar" sempre
+ *          visível no sticky bar).
+ *        - `userSelect: 'none'` durante o drag pra não selecionar texto.
+ *        - Overlay do retângulo (`absolute z-20 border-2 border-indigo-500
+ *          bg-indigo-400/15`) renderizado em coords RELATIVAS ao grid
+ *          (subtrai `gridRect.left/top` do clientX/Y).
+ *   2. **Botão "Excluir" no sticky bar** (L4196-4204) — gradient
+ *      red→rose com ícone Trash2 (mesmo padrão visual do ModalConfirmacao
+ *      Auditoria), posicionado entre "Transferir" e "Cancelar".
+ *   3. **`handleExcluirSelecionados`** (L488-536) — reusa o
+ *      `ModalConfirmacaoAuditoria` existente (Rev. 2388 — senha+
+ *      justificativa) e itera a mutation `compras.excluirItem` que já está
+ *      hardened. Lista até 3 nomes no subtítulo ("nome1, nome2, nome3 e
+ *      mais N"). Inclui suporte a `_subItems` (caso do view consolidado,
+ *      onde 1 card representa N IDs). Para no 1º erro UNAUTHORIZED/
+ *      BAD_REQUEST (senha incorreta) pra manter modal aberto pra retry.
+ *      Sucesso parcial: toast.warning com contagem; sucesso total: toast.
+ *      success + fecha modal + sai do modo seleção.
+ *   4. `sairModoSelecao()` agora limpa `dragSel` também — evita ficar
+ *      com retângulo fantasma se user clicar Cancelar no meio do drag.
+ *
+ * **Backend**: ZERO mudanças. Reusa `compras.excluirItem` (soft-delete via
+ * `ativo=false`) que já preserva FKs de movimentações/transferências e já
+ * grava log em `almoxarifado_auditoria` (Rev. 2388). R-001/R-007/R-010 OK.
+ *
+ * **Compat**: o tap em card individual continua funcionando pra quem
+ * prefere a UX antiga. Drag-select é ADITIVO ao tap (origin snapshot).
+ *
+ * Arquivos tocados:
+ *   - `client/src/pages/almoxarifado/index.tsx` (state dragSel, gridRef,
+ *     handlers Pointer Events, overlay, handleExcluirSelecionados, botão
+ *     Excluir no sticky bar, sairModoSelecao).
+ *   - `shared/version.ts`, `shared/changelog.ts`, `replit.md`,
+ *     `replit-history.md`.
+ *
+ * Follow-ups potenciais (NÃO entram nesta rev):
+ *   - Estender lasso pro view CONSOLIDADO (modoClassificarEquip — Rev.
+ *     2374/2383) e pro view de TABLE (lista densa).
+ *   - Adicionar long-press (250ms) como gatilho alternativo pra preservar
+ *     scroll do page por padrão em iPad, e ativar lasso só após o hold.
+ *   - Selecionar todos / inverter seleção no sticky bar (Ctrl+A virtual).
+ *
  * Rev. 2392 — **ALMOXARIFADO/UX · Após transferir TODO o estoque de um item
  * de obra, o item SOME da lista (soft-delete via `ativo=false`).**
  *
