@@ -1,6 +1,33 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2378 — **UX · Substituído `window.confirm()` por modal customizado no
+ * fluxo "Buscar fotos da web" do Almoxarifado.**
+ *
+ * Pedido user (IMG_1179, 24/05/2026): "Melhore a tela". Print do iPad mostrava
+ * o nativo do Safari com o domínio Replit (`b41aedae-6288-4323-...replit.dev
+ * diz`) ocupando 3 linhas no título — visual quebrado e nada profissional.
+ *
+ * Implementação (`client/src/pages/almoxarifado/index.tsx`, UI-only):
+ *   - Novo state `confirmBuscaFotos: { nomes: string[] } | null`.
+ *   - `buscarFotosWebTodas()` agora só coleta nomes e abre o modal (em vez
+ *     de chamar `window.confirm()`).
+ *   - Nova função `executarBuscaFotosWebTodas(nomes)` recebe o array e
+ *     roda o loop (lógica antiga preservada).
+ *   - Modal customizado: header gradient sky/blue com ícone Globe + título
+ *     "Buscar fotos na internet" + subtítulo "{N} itens sem foto"; corpo
+ *     com lista de bullets explicando o que vai acontecer (1 busca por
+ *     nome, só preenche sem foto, tempo estimado, pode interromper);
+ *     footer com botões Cancelar + Buscar agora; backdrop bg-black/50
+ *     clicável pra fechar; z-[110] (acima do widget de progresso z-[100]).
+ *
+ * R-001 / R-007 / R-010: OK — UI-only, zero backend, zero DDL.
+ */
+import "./version";
+
+/**
+ * Changelog centralizado do ERP.
+ *
  * Rev. 2377 — **FEATURE · "Buscar fotos da web" no Almoxarifado (mesma
  * abordagem da Rev. 2366 dos Equipamentos Locados): DuckDuckGo Images,
  * 1 chamada por nome, UPDATE em lote nos itens SEM foto.**

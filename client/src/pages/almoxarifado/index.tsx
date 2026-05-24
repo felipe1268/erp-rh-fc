@@ -107,6 +107,9 @@ export default function AlmoxarifadoPage() {
   const [batchFotoWeb, setBatchFotoWeb] = useState<null | { atual: number; total: number; nomeAtual: string; ok: number; falhas: number; itensAtualizados: number }>(null);
   const batchFotoWebRef = useRef<{ cancelar: boolean }>({ cancelar: false });
   const buscarFotoWebMut = trpc.compras.buscarFotoWebPorNome.useMutation();
+  // Rev. 2378 — Modal customizado de confirmação (substitui window.confirm que
+  // no Safari iPad mostrava a URL feia do Replit como título).
+  const [confirmBuscaFotos, setConfirmBuscaFotos] = useState<null | { nomes: string[] }>(null);
 
   const [busca, setBusca] = useState("");
   const [filtroCateg, setFiltroCateg] = useState("todas");
@@ -292,14 +295,12 @@ export default function AlmoxarifadoPage() {
     }
     const nomes = Array.from(setNomes).filter(Boolean);
     if (nomes.length === 0) { toast.info("Todos os itens visíveis já têm foto."); return; }
-    const ok = window.confirm(
-      `Vou buscar fotos na internet (DuckDuckGo Images) pra ${nomes.length} item(ns) sem foto.\n\n` +
-      `• 1 busca por nome (~1-2s cada)\n` +
-      `• Só preenche itens SEM foto cadastrada\n` +
-      `• Pode levar ${Math.ceil(nomes.length * 1.5 / 60)} min\n\n` +
-      `Continuar?`
-    );
-    if (!ok) return;
+    setConfirmBuscaFotos({ nomes });
+  }
+
+  async function executarBuscaFotosWebTodas(nomes: string[]) {
+    if (!companyId) return;
+    setConfirmBuscaFotos(null);
     batchFotoWebRef.current.cancelar = false;
     setBatchFotoWeb({ atual: 0, total: nomes.length, nomeAtual: nomes[0], ok: 0, falhas: 0, itensAtualizados: 0 });
     let okN = 0, falhas = 0, itensAtualizados = 0;
@@ -3482,6 +3483,49 @@ export default function AlmoxarifadoPage() {
             >
               Cancelar
             </button>
+          </div>
+        </div>
+      )}
+      {/* Rev. 2378 — Modal customizado de confirmação pra busca em lote de fotos */}
+      {confirmBuscaFotos && (
+        <div
+          className="fixed inset-0 z-[110] bg-black/50 flex items-center justify-center p-4"
+          onClick={() => setConfirmBuscaFotos(null)}
+        >
+          <div
+            className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="bg-gradient-to-br from-sky-500 to-blue-600 px-6 py-5 text-white">
+              <div className="flex items-center gap-3 mb-1">
+                <div className="bg-white/20 rounded-full p-2"><Globe className="w-6 h-6" /></div>
+                <h3 className="text-lg font-bold">Buscar fotos na internet</h3>
+              </div>
+              <p className="text-sky-50 text-sm">
+                {confirmBuscaFotos.nomes.length} item{confirmBuscaFotos.nomes.length === 1 ? "" : "s"} sem foto
+              </p>
+            </div>
+            <div className="px-6 py-5 space-y-3 text-sm text-gray-700">
+              <p>Vou pesquisar no <strong>DuckDuckGo Images</strong> e aplicar a 1ª foto válida em cada item.</p>
+              <ul className="space-y-1.5 text-gray-600">
+                <li className="flex items-start gap-2"><span className="text-sky-500 mt-0.5">•</span><span>1 busca por nome (~1-2s cada)</span></li>
+                <li className="flex items-start gap-2"><span className="text-sky-500 mt-0.5">•</span><span>Só preenche itens <strong>sem</strong> foto cadastrada</span></li>
+                <li className="flex items-start gap-2"><span className="text-sky-500 mt-0.5">•</span><span>Tempo estimado: <strong>~{Math.ceil(confirmBuscaFotos.nomes.length * 1.5 / 60)} min</strong></span></li>
+                <li className="flex items-start gap-2"><span className="text-sky-500 mt-0.5">•</span><span>Pode interromper a qualquer momento</span></li>
+              </ul>
+            </div>
+            <div className="px-6 py-4 bg-gray-50 flex items-center justify-end gap-2 border-t border-gray-200">
+              <button
+                onClick={() => setConfirmBuscaFotos(null)}
+                className="px-5 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-200 rounded-lg transition"
+              >Cancelar</button>
+              <button
+                onClick={() => executarBuscaFotosWebTodas(confirmBuscaFotos.nomes)}
+                className="px-5 py-2.5 text-sm font-semibold text-white bg-sky-500 hover:bg-sky-600 rounded-lg transition shadow-sm flex items-center gap-2"
+              >
+                <Globe className="w-4 h-4" /> Buscar agora
+              </button>
+            </div>
           </div>
         </div>
       )}
