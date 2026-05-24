@@ -1,6 +1,58 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2331 — **UX · Layout modernizado das 6 tabelas mês a mês
+ * do Dashboard Almox & Equip. + segmented pill p/ filtro de
+ * período (substitui dropdown nativo).**
+ *
+ * Pedido user (24/05/2026, screenshot iPad mostrando "Locações
+ * mês a mês — ano 2026" com select cinza): "Melhore o layout
+ * deixe mais moderno e melhore o layout do filtro do ano tbm…
+ * quero algo melhor". O dropdown `<select>` nativo da Rev. 2330
+ * fica feio no iPad (estilo nativo do iOS sobrescreve CSS) e
+ * exige 2 cliques (abre → escolhe).
+ *
+ * **Implementação** (`client/src/pages/dashboards/DashAlmoxarifadoEquipamentos.tsx`,
+ * 0 server, 0 schema):
+ *
+ *   (1) **Filtro = segmented pill** (1 clique = troca). Botões
+ *       redondos lado a lado dentro de container `rounded-full
+ *       bg-slate-100/80 ring-1 ring-slate-200/70`. Opção ativa:
+ *       `bg-white text-slate-900 shadow-sm ring-1`; inativas:
+ *       `text-slate-500 hover:bg-white/60`. Rótulos compactos
+ *       ("12M", "2026", "2025") em vez de "Últimos 12 meses" —
+ *       cabe horizontalmente até em telas estreitas. Container
+ *       com `overflow-x-auto` p/ scroll horizontal quando muitos
+ *       anos. `role="tablist"` + `aria-selected` p/ acessibilidade.
+ *
+ *   (2) **Header da tabela refeito**: chip de ícone (h-9 w-9
+ *       rounded-xl gradient emerald-50→emerald-100/60 com ring)
+ *       + título em 15px font-semibold + sub-título 11px com o
+ *       label do período ("últimos 12 meses" / "ano 2026"). Fundo
+ *       do header ganhou gradient sutil `from-slate-50/80 via-white
+ *       to-white`. Trocou "título — período" inline (que ficava
+ *       longo e quebrava em mobile) por 2 linhas curtas.
+ *
+ *   (3) **Cards das 10 tabelas/widgets** (replaceAll): `rounded-xl
+ *       shadow-sm` → `rounded-2xl shadow-sm hover:shadow-md
+ *       transition-shadow` + border 70% opacity (`border-slate-200/70`).
+ *       Mais arredondado, sombra reage ao hover.
+ *
+ *   (4) **Thead** (11 ocorrências, replaceAll): `bg-slate-50 text-xs`
+ *       → `bg-gradient-to-b from-slate-50 to-slate-50/40 text-[11px]
+ *       tracking-wide`. Tipografia menor + mais espaçada (estilo
+ *       Linear/Notion), gradient sutil dá profundidade ao cabeçalho.
+ *
+ * Por que NÃO usar Radix Select / shadcn dropdown: segmented pill
+ * é melhor pra ≤7 opções (visíveis de uma vez = decisão instantânea).
+ * Dropdown faria sentido com 20+ anos — mas aqui sempre teremos 3-5.
+ *
+ * Por que rótulo "12M" em vez de "Últimos 12 meses": cabe ao lado
+ * dos anos sem quebrar layout no iPad portrait. O sub-título já
+ * deixa claro o que significa.
+ *
+ * R-001/R-007/R-010: N/A — só CSS/markup.
+ *
  * Rev. 2330 — **FEATURE · Filtro de período (Últimos 12 meses
  * ou ano fechado) nas 6 tabelas mês a mês do Dashboard Almox
  * & Equip.**

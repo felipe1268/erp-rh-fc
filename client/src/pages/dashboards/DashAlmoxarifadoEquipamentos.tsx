@@ -334,23 +334,51 @@ export default function DashAlmoxarifadoEquipamentos() {
     };
   }, [periodoMeses, movsQ.data, propriosQ.data, locadosQ.data, ferramentasQ.data, itensQ.data]);
 
-  // Rev. 2330 — Header padrão pras 6 tabelas mês a mês (título + selector).
+  // Rev. 2330/2331 — Header padrão pras 6 tabelas mês a mês.
+  // Rev. 2331: design refeito — chip de ícone, título + sub-título do período,
+  // e selector como SEGMENTED PILL (mais moderno + 1 clique = troca, sem dropdown).
   // Selector global afeta TODAS as tabs (state único `periodoMeses`).
+  const periodoOpcoes: Array<{ valor: "12m" | number; rotulo: string }> = [
+    { valor: "12m", rotulo: "12M" },
+    ...anosDisponiveis.map(y => ({ valor: y, rotulo: String(y) })),
+  ];
   const MesesHeader = ({ titulo }: { titulo: string }) => (
-    <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between gap-3 flex-wrap">
-      <div className="font-semibold text-slate-800 flex items-center gap-2">
-        <CalendarRange className="h-4 w-4 text-slate-500" /> {titulo} — {periodoLabel}
+    <div className="px-5 py-3.5 border-b border-slate-100 bg-gradient-to-r from-slate-50/80 via-white to-white flex items-center justify-between gap-4 flex-wrap">
+      <div className="flex items-center gap-3 min-w-0">
+        <div className="shrink-0 h-9 w-9 rounded-xl bg-gradient-to-br from-emerald-50 to-emerald-100/60 ring-1 ring-emerald-200/60 flex items-center justify-center">
+          <CalendarRange className="h-4.5 w-4.5 text-emerald-700" />
+        </div>
+        <div className="min-w-0">
+          <div className="font-semibold text-slate-900 text-[15px] leading-tight truncate">{titulo}</div>
+          <div className="text-[11px] text-slate-500 mt-0.5 leading-tight">{periodoLabel}</div>
+        </div>
       </div>
-      <select
-        value={String(periodoMeses)}
-        onChange={(e) => setPeriodoMeses(e.target.value === "12m" ? "12m" : Number(e.target.value))}
-        className="text-xs border border-slate-300 rounded-md px-2 py-1 bg-white hover:border-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+      <div
+        className="inline-flex items-center gap-0.5 p-1 rounded-full bg-slate-100/80 ring-1 ring-slate-200/70 max-w-full overflow-x-auto scrollbar-thin"
+        role="tablist"
+        aria-label="Período"
       >
-        <option value="12m">Últimos 12 meses</option>
-        {anosDisponiveis.map(y => (
-          <option key={y} value={y}>Ano {y}</option>
-        ))}
-      </select>
+        {periodoOpcoes.map(opt => {
+          const ativo = String(opt.valor) === String(periodoMeses);
+          return (
+            <button
+              key={String(opt.valor)}
+              type="button"
+              role="tab"
+              aria-selected={ativo}
+              onClick={() => setPeriodoMeses(opt.valor)}
+              className={[
+                "shrink-0 px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-150 whitespace-nowrap",
+                ativo
+                  ? "bg-white text-slate-900 shadow-sm ring-1 ring-slate-200"
+                  : "text-slate-500 hover:text-slate-800 hover:bg-white/60",
+              ].join(" ")}
+            >
+              {opt.rotulo}
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 
@@ -435,11 +463,11 @@ export default function DashAlmoxarifadoEquipamentos() {
             </div>
 
             {/* Rev. 2327 — Comparativo mês a mês consolidado */}
-            <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+            <div className="bg-white border border-slate-200/70 rounded-2xl shadow-sm hover:shadow-md transition-shadow overflow-hidden">
               <MesesHeader titulo="Comparativo mês a mês" />
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
-                  <thead className="bg-slate-50 text-xs text-slate-500 uppercase">
+                  <thead className="bg-gradient-to-b from-slate-50 to-slate-50/40 text-[11px] text-slate-500 uppercase tracking-wide">
                     <tr>
                       <th className="text-left p-2.5">Mês</th>
                       <th className="text-right p-2.5">Movs</th>
@@ -499,13 +527,13 @@ export default function DashAlmoxarifadoEquipamentos() {
               />
             </div>
 
-            <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+            <div className="bg-white border border-slate-200/70 rounded-2xl shadow-sm hover:shadow-md transition-shadow overflow-hidden">
               <div className="px-4 py-3 border-b border-slate-100 font-semibold text-slate-800 flex items-center gap-2">
                 <Tag className="h-4 w-4 text-slate-500" /> Categorias — detalhe
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
-                  <thead className="bg-slate-50 text-xs text-slate-500 uppercase">
+                  <thead className="bg-gradient-to-b from-slate-50 to-slate-50/40 text-[11px] text-slate-500 uppercase tracking-wide">
                     <tr><th className="text-left p-2.5">Categoria</th><th className="text-right p-2.5">Itens</th><th className="text-right p-2.5">Valor parado</th></tr>
                   </thead>
                   <tbody>
@@ -523,11 +551,11 @@ export default function DashAlmoxarifadoEquipamentos() {
             </div>
 
             {/* Rev. 2327 — Itens cadastrados mês a mês */}
-            <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+            <div className="bg-white border border-slate-200/70 rounded-2xl shadow-sm hover:shadow-md transition-shadow overflow-hidden">
               <MesesHeader titulo="Itens cadastrados mês a mês" />
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
-                  <thead className="bg-slate-50 text-xs text-slate-500 uppercase">
+                  <thead className="bg-gradient-to-b from-slate-50 to-slate-50/40 text-[11px] text-slate-500 uppercase tracking-wide">
                     <tr>
                       <th className="text-left p-2.5">Mês</th>
                       <th className="text-right p-2.5">Novos itens</th>
@@ -582,11 +610,11 @@ export default function DashAlmoxarifadoEquipamentos() {
                 labels={movAgg.porTipo.map(t => t.tipo)}
                 datasets={[{ data: movAgg.porTipo.map(t => t.count) }]}
               />
-              <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+              <div className="bg-white border border-slate-200/70 rounded-2xl shadow-sm hover:shadow-md transition-shadow overflow-hidden">
                 <div className="px-4 py-3 border-b border-slate-100 font-semibold text-slate-800">Últimas 15 movimentações</div>
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
-                    <thead className="bg-slate-50 text-xs text-slate-500 uppercase">
+                    <thead className="bg-gradient-to-b from-slate-50 to-slate-50/40 text-[11px] text-slate-500 uppercase tracking-wide">
                       <tr><th className="text-left p-2">Data</th><th className="text-left p-2">Tipo</th><th className="text-left p-2">Item</th><th className="text-right p-2">Qtd</th></tr>
                     </thead>
                     <tbody>
@@ -606,11 +634,11 @@ export default function DashAlmoxarifadoEquipamentos() {
             </div>
 
             {/* Rev. 2327 — Entradas vs Saídas mês a mês */}
-            <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+            <div className="bg-white border border-slate-200/70 rounded-2xl shadow-sm hover:shadow-md transition-shadow overflow-hidden">
               <MesesHeader titulo="Movimentações mês a mês" />
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
-                  <thead className="bg-slate-50 text-xs text-slate-500 uppercase">
+                  <thead className="bg-gradient-to-b from-slate-50 to-slate-50/40 text-[11px] text-slate-500 uppercase tracking-wide">
                     <tr>
                       <th className="text-left p-2.5">Mês</th>
                       <th className="text-right p-2.5">Movs (#)</th>
@@ -646,11 +674,11 @@ export default function DashAlmoxarifadoEquipamentos() {
               <DashKpi label="Registros" value={fmtNum(ferrAgg.total)} icon={Wrench} color="indigo" />
               <DashKpi label="Empréstimos abertos" value={fmtNum(opsAgg.loansAbertos)} icon={ArrowLeftRight} color="purple" sub="pendentes de devolução" />
             </div>
-            <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+            <div className="bg-white border border-slate-200/70 rounded-2xl shadow-sm hover:shadow-md transition-shadow overflow-hidden">
               <div className="px-4 py-3 border-b border-slate-100 font-semibold text-slate-800">Ferramentas de terceiros — últimos 30 registros</div>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
-                  <thead className="bg-slate-50 text-xs text-slate-500 uppercase">
+                  <thead className="bg-gradient-to-b from-slate-50 to-slate-50/40 text-[11px] text-slate-500 uppercase tracking-wide">
                     <tr><th className="text-left p-2">Data</th><th className="text-left p-2">Terceiro</th><th className="text-left p-2">Obra</th><th className="text-left p-2">Itens</th></tr>
                   </thead>
                   <tbody>
@@ -669,11 +697,11 @@ export default function DashAlmoxarifadoEquipamentos() {
             </div>
 
             {/* Rev. 2327 — Registros de ferramentas mês a mês */}
-            <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+            <div className="bg-white border border-slate-200/70 rounded-2xl shadow-sm hover:shadow-md transition-shadow overflow-hidden">
               <MesesHeader titulo="Registros mês a mês" />
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
-                  <thead className="bg-slate-50 text-xs text-slate-500 uppercase">
+                  <thead className="bg-gradient-to-b from-slate-50 to-slate-50/40 text-[11px] text-slate-500 uppercase tracking-wide">
                     <tr>
                       <th className="text-left p-2.5">Mês</th>
                       <th className="text-right p-2.5">Registros</th>
@@ -707,14 +735,14 @@ export default function DashAlmoxarifadoEquipamentos() {
               labels={proprAgg.porStatus.map(([s]) => s)}
               datasets={[{ data: proprAgg.porStatus.map(([, c]) => c) }]}
             />
-            <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+            <div className="bg-white border border-slate-200/70 rounded-2xl shadow-sm hover:shadow-md transition-shadow overflow-hidden">
               <div className="px-4 py-3 border-b border-slate-100 font-semibold text-slate-800 flex items-center justify-between">
                 <span>Lista (20 mais recentes)</span>
                 <Link href="/equipamentos/proprios"><a className="text-xs text-blue-600 hover:underline">Ver todos →</a></Link>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
-                  <thead className="bg-slate-50 text-xs text-slate-500 uppercase">
+                  <thead className="bg-gradient-to-b from-slate-50 to-slate-50/40 text-[11px] text-slate-500 uppercase tracking-wide">
                     <tr><th className="text-left p-2">Descrição</th><th className="text-left p-2">Patrimônio</th><th className="text-left p-2">Status</th><th className="text-right p-2">Valor aquisição</th></tr>
                   </thead>
                   <tbody>
@@ -733,11 +761,11 @@ export default function DashAlmoxarifadoEquipamentos() {
             </div>
 
             {/* Rev. 2327 — Aquisições mês a mês */}
-            <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+            <div className="bg-white border border-slate-200/70 rounded-2xl shadow-sm hover:shadow-md transition-shadow overflow-hidden">
               <MesesHeader titulo="Aquisições mês a mês" />
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
-                  <thead className="bg-slate-50 text-xs text-slate-500 uppercase">
+                  <thead className="bg-gradient-to-b from-slate-50 to-slate-50/40 text-[11px] text-slate-500 uppercase tracking-wide">
                     <tr>
                       <th className="text-left p-2.5">Mês</th>
                       <th className="text-right p-2.5">Equipamentos</th>
@@ -788,14 +816,14 @@ export default function DashAlmoxarifadoEquipamentos() {
               />
             </div>
 
-            <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+            <div className="bg-white border border-slate-200/70 rounded-2xl shadow-sm hover:shadow-md transition-shadow overflow-hidden">
               <div className="px-4 py-3 border-b border-slate-100 font-semibold text-slate-800 flex items-center justify-between">
                 <span className="flex items-center gap-2"><Clock className="h-4 w-4 text-amber-600" /> Locações vencendo em até 30 dias</span>
                 <Link href="/equipamentos/locados"><a className="text-xs text-blue-600 hover:underline">Abrir lista →</a></Link>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
-                  <thead className="bg-slate-50 text-xs text-slate-500 uppercase">
+                  <thead className="bg-gradient-to-b from-slate-50 to-slate-50/40 text-[11px] text-slate-500 uppercase tracking-wide">
                     <tr><th className="text-left p-2">Equipamento</th><th className="text-left p-2">Fornecedor</th><th className="text-left p-2">Obra</th><th className="text-left p-2">Fim previsto</th><th className="text-right p-2">R$/mês</th></tr>
                   </thead>
                   <tbody>
@@ -815,11 +843,11 @@ export default function DashAlmoxarifadoEquipamentos() {
             </div>
 
             {/* Rev. 2327 — Locações iniciadas vs devolvidas mês a mês */}
-            <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+            <div className="bg-white border border-slate-200/70 rounded-2xl shadow-sm hover:shadow-md transition-shadow overflow-hidden">
               <MesesHeader titulo="Locações mês a mês" />
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
-                  <thead className="bg-slate-50 text-xs text-slate-500 uppercase">
+                  <thead className="bg-gradient-to-b from-slate-50 to-slate-50/40 text-[11px] text-slate-500 uppercase tracking-wide">
                     <tr>
                       <th className="text-left p-2.5">Mês</th>
                       <th className="text-right p-2.5 text-emerald-700">Iniciadas</th>

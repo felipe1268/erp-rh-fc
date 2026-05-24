@@ -540,3 +540,5 @@
 - Rev. 2322 — HOTFIX/UX · Botão "Confirmar e cadastrar" da importação PDF — diálogo de erro substitui toast invisível. Ver `shared/changelog.ts`.
 
 - Rev. 2323 — FEATURE · Equipamentos Locados — vínculo de obra visível + multi-seleção (limite 500 IDs). Ver `shared/changelog.ts`.
+
+- Rev. 2324 — FEATURE · Dashboard consolidada Almoxarifado & Equipamentos (6 tabs). Ver `shared/changelog.ts`.
