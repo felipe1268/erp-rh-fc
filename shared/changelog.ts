@@ -1,6 +1,47 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2377 — **FEATURE · "Buscar fotos da web" no Almoxarifado (mesma
+ * abordagem da Rev. 2366 dos Equipamentos Locados): DuckDuckGo Images,
+ * 1 chamada por nome, UPDATE em lote nos itens SEM foto.**
+ *
+ * Pedido user (IMG_1178, 24/05/2026): "Quero ter a opção de colocar fotos
+ * aqui tbm, vamos usar a mesma abordagem que usamos da última vez, procura
+ * na internet como se fosse um usuário humano e cola foto nos que ainda
+ * não tem". Cards mostravam "Adicionar foto" em dezenas de itens (Bloco
+ * Espuma, Abraçadeira, Aditivo, Andaimes, Aplicador de Massa…) e o único
+ * caminho era cadastrar foto a foto manualmente.
+ *
+ * Implementação:
+ *   - **Backend** `server/routers/compras.ts:1731` novo endpoint
+ *     `buscarFotoWebPorNome` (cópia do `equipamentos.locadosBuscarFotoWebPorDescricao`
+ *     adaptado pra `almoxarifado_itens.nome`): pega vqd da DDG HTML →
+ *     chama `i.js` → 1ª foto válida (HTTPS + .jpg/.png/.webp + ≤1000 chars)
+ *     → UPDATE `almoxarifado_itens` SET foto_url=$1 WHERE company_id=$2
+ *     AND nome=$3 AND ativo=TRUE AND (foto_url IS NULL OR ''). Suporta
+ *     `sobrescrever`, `queryOverride`, `dryRun`. Guard de tenant via
+ *     `getCompaniesForUser`. Sem LLM, sem cascade, sem blocklist.
+ *   - **Frontend** `client/src/pages/almoxarifado/index.tsx`:
+ *       * Toolbar: novo botão sky "Fotos da web" ao lado de "Foto IA"
+ *         que dispara `buscarFotosWebTodas()` — coleta nomes distintos
+ *         SEM foto da lista FILTRADA (`lista`), confirm() com estimativa
+ *         de tempo (1.5s/item), loop sequencial com pausa 250ms, widget
+ *         de progresso flutuante bottom-right (Globe pulsando + barra +
+ *         contadores ok/falhas/itensAtualizados + botão Parar).
+ *       * Card sem foto: novo botão sky "Buscar na web" no canto inferior
+ *         do thumbnail (sobrepõe o placeholder "Adicionar foto") que
+ *         dispara `buscarFotoWebUm(item.nome, false)` — loader spinner
+ *         durante a chamada via `buscandoFotoNomes: Set<string>`.
+ *   - Invalida `compras.listarItens` + `compras.listarItensConsolidado`
+ *     ao final de cada busca (1 ou em lote) — UI atualiza sozinha.
+ *
+ * R-001 / R-007 / R-010: OK — só INSERT/UPDATE escopado, zero ALTER/DROP.
+ */
+import "./version";
+
+/**
+ * Changelog centralizado do ERP.
+ *
  * Rev. 2376 — **UX/ALERTA · Botão "ENTRADA" do Almoxarifado também pisca
  * com badge vermelho mostrando quantas OCs de MATERIAL estão pendentes de
  * recebimento (complementa a Rev. 2375 que tratou apenas LOCAÇÃO).**

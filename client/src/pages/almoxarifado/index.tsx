@@ -10,7 +10,7 @@ import {
   LayoutGrid, List, Camera, Trash2, ImageOff, Barcode,
   Wrench, ClipboardCheck, User, CheckCircle2, XCircle, ChevronRight, ChevronLeft,
   Building2, HardHat, Sparkles, ScanLine, ShoppingCart, ArrowLeftRight, Truck,
-  CheckSquare, Square,
+  CheckSquare, Square, Globe,
 } from "lucide-react";
 import SmartEntry from "./SmartEntry";
 import AlertasAlmoxarifado from "./AlertasAlmoxarifado";
@@ -98,6 +98,15 @@ export default function AlmoxarifadoPage() {
     { enabled: !!companyId, refetchInterval: 60_000, refetchOnWindowFocus: true }
   );
   const qtdMaterialPendente = (ocsMaterialPendentesQ.data || []).length;
+
+  // Rev. 2377 — Busca de foto na web (DDG Images) pros itens do Almoxarifado
+  // que ainda não têm foto. Mesma UX da Rev. 2366 (Equipamentos Locados):
+  //   (a) botão hero "Buscar fotos da web" → loop por TODOS os nomes sem foto
+  //   (b) botão por card no placeholder "Adicionar foto" → 1 nome de cada vez
+  const [buscandoFotoNomes, setBuscandoFotoNomes] = useState<Set<string>>(new Set());
+  const [batchFotoWeb, setBatchFotoWeb] = useState<null | { atual: number; total: number; nomeAtual: string; ok: number; falhas: number; itensAtualizados: number }>(null);
+  const batchFotoWebRef = useRef<{ cancelar: boolean }>({ cancelar: false });
+  const buscarFotoWebMut = trpc.compras.buscarFotoWebPorNome.useMutation();
 
   const [busca, setBusca] = useState("");
   const [filtroCateg, setFiltroCateg] = useState("todas");
@@ -250,6 +259,74 @@ export default function AlmoxarifadoPage() {
       ...(escopo === "obra" && obraContexto !== "todos" ? { obraId: obraContexto === "central" ? null : Number(obraContexto) } : {}),
     });
   };
+  // Rev. 2377 — Buscar 1 foto na web (1 nome). Usado pelo botão por card.
+  async function buscarFotoWebUm(nome: string, sobrescrever: boolean) {
+    if (!companyId || !nome) return;
+    setBuscandoFotoNomes(prev => { const n = new Set(prev); n.add(nome); return n; });
+    try {
+      const r: any = await buscarFotoWebMut.mutateAsync({ companyId, nome, sobrescrever });
+      if (r?.ok && Number(r.itensAtualizados || 0) > 0) {
+        utils.compras.listarItens.invalidate();
+        utils.compras.listarItensConsolidado.invalidate();
+        toast.success(`Foto aplicada em ${r.itensAtualizados} item(ns) — "${nome.slice(0, 40)}"`);
+      } else if (r?.ok) {
+        toast.warning(`Foto encontrada mas nenhum item foi atualizado (nome não bateu no banco).`, { duration: 4000 });
+      } else {
+        toast.error(r?.motivo || "Não encontrada na web.", { duration: 4000 });
+      }
+    } catch (e: any) {
+      toast.error(e?.message || "Falha ao buscar foto.");
+    } finally {
+      setBuscandoFotoNomes(prev => { const n = new Set(prev); n.delete(nome); return n; });
+    }
+  }
+
+  // Rev. 2377 — Buscar fotos na web em LOTE pra todos os itens sem foto
+  // visíveis na lista atual (respeita filtros de obra/categoria/busca).
+  async function buscarFotosWebTodas() {
+    if (!companyId) return;
+    // Coleta NOMES distintos sem foto da lista filtrada (`lista` já existe).
+    const setNomes = new Set<string>();
+    for (const it of (lista as any[])) {
+      if (!it?.fotoUrl && it?.nome) setNomes.add(String(it.nome).trim());
+    }
+    const nomes = Array.from(setNomes).filter(Boolean);
+    if (nomes.length === 0) { toast.info("Todos os itens visíveis já têm foto."); return; }
+    const ok = window.confirm(
+      `Vou buscar fotos na internet (DuckDuckGo Images) pra ${nomes.length} item(ns) sem foto.\n\n` +
+      `• 1 busca por nome (~1-2s cada)\n` +
+      `• Só preenche itens SEM foto cadastrada\n` +
+      `• Pode levar ${Math.ceil(nomes.length * 1.5 / 60)} min\n\n` +
+      `Continuar?`
+    );
+    if (!ok) return;
+    batchFotoWebRef.current.cancelar = false;
+    setBatchFotoWeb({ atual: 0, total: nomes.length, nomeAtual: nomes[0], ok: 0, falhas: 0, itensAtualizados: 0 });
+    let okN = 0, falhas = 0, itensAtualizados = 0;
+    for (let i = 0; i < nomes.length; i++) {
+      if (batchFotoWebRef.current.cancelar) break;
+      const nome = nomes[i];
+      setBatchFotoWeb(p => p ? { ...p, atual: i + 1, nomeAtual: nome } : p);
+      try {
+        const r: any = await buscarFotoWebMut.mutateAsync({ companyId, nome, sobrescrever: false });
+        const upd = Number(r?.itensAtualizados || 0);
+        if (r?.ok && upd > 0) { okN += 1; itensAtualizados += upd; }
+        else { falhas += 1; }
+      } catch { falhas += 1; }
+      setBatchFotoWeb(p => p ? { ...p, ok: okN, falhas, itensAtualizados } : p);
+      await new Promise(res => setTimeout(res, 250));
+    }
+    utils.compras.listarItens.invalidate();
+    utils.compras.listarItensConsolidado.invalidate();
+    const cancelado = batchFotoWebRef.current.cancelar;
+    setBatchFotoWeb(null);
+    if (cancelado) {
+      toast.info(`Interrompido — ${okN} foto(s) aplicada(s) em ${itensAtualizados} item(ns).`);
+    } else {
+      toast.success(`Concluído — ${okN} foto(s) em ${itensAtualizados} item(ns)${falhas > 0 ? ` · ${falhas} sem resultado` : ""}.`);
+    }
+  }
+
   const [buscandoBarcode, setBuscandoBarcode] = useState(false);
   const buscarBarcodeMut = trpc.compras.buscarPorCodigoBarras.useMutation({
     onSuccess: (d: any) => {
@@ -1413,6 +1490,16 @@ export default function AlmoxarifadoPage() {
               <ScanLine className="w-4 h-4" />
               <span className="hidden sm:inline">Foto IA</span>
             </button>
+            {/* Rev. 2377 — Buscar fotos na web (DDG) pros itens SEM foto da lista atual */}
+            <button
+              onClick={buscarFotosWebTodas}
+              disabled={!!batchFotoWeb}
+              className="h-9 px-3 flex items-center gap-2 bg-sky-500 hover:bg-sky-600 disabled:opacity-60 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg transition shadow-sm"
+              title="Buscar fotos na internet (DuckDuckGo) pros itens sem foto"
+            >
+              {batchFotoWeb ? <Loader2 className="w-4 h-4 animate-spin" /> : <Globe className="w-4 h-4" />}
+              <span className="hidden sm:inline">{batchFotoWeb ? "Buscando..." : "Fotos da web"}</span>
+            </button>
             <input
               ref={fotoIAInputRef}
               type="file"
@@ -1479,6 +1566,19 @@ export default function AlmoxarifadoPage() {
                           <Camera className="h-8 w-8" />
                           <span className="text-[10px]">Adicionar foto</span>
                         </div>
+                      )}
+                      {/* Rev. 2377 — Botão "Buscar foto na web" no canto inferior pros itens sem foto */}
+                      {!(item as any).fotoUrl && (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); buscarFotoWebUm(item.nome, false); }}
+                          disabled={buscandoFotoNomes.has(item.nome)}
+                          className="absolute bottom-1.5 left-1.5 right-1.5 h-7 flex items-center justify-center gap-1 bg-sky-500/95 hover:bg-sky-600 disabled:bg-sky-400 text-white text-[11px] font-medium rounded-md shadow-md transition"
+                          title="Buscar foto na internet (DuckDuckGo)"
+                        >
+                          {buscandoFotoNomes.has(item.nome)
+                            ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            : <><Globe className="w-3.5 h-3.5" /> Buscar na web</>}
+                        </button>
                       )}
                       {abaixo && (
                         <div className="absolute top-1.5 right-1.5 bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">!</div>
@@ -3382,6 +3482,34 @@ export default function AlmoxarifadoPage() {
             >
               Cancelar
             </button>
+          </div>
+        </div>
+      )}
+      {/* Rev. 2377 — Widget de progresso da busca de fotos na web */}
+      {batchFotoWeb && (
+        <div className="fixed bottom-4 right-4 z-[100] bg-white rounded-xl shadow-2xl border border-sky-200 p-4 w-80 max-w-[calc(100vw-2rem)]">
+          <div className="flex items-center gap-2 mb-2">
+            <Globe className="w-5 h-5 text-sky-600 animate-pulse" />
+            <span className="font-semibold text-sm text-gray-800">Buscando fotos na web…</span>
+            <button
+              onClick={() => { batchFotoWebRef.current.cancelar = true; }}
+              className="ml-auto text-xs text-red-500 hover:text-red-700 font-medium"
+              title="Parar"
+            >Parar</button>
+          </div>
+          <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden mb-2">
+            <div
+              className="h-full bg-sky-500 transition-all"
+              style={{ width: `${(batchFotoWeb.atual / Math.max(1, batchFotoWeb.total)) * 100}%` }}
+            />
+          </div>
+          <p className="text-xs text-gray-600 mb-1">
+            {batchFotoWeb.atual}/{batchFotoWeb.total} — <span className="italic truncate inline-block max-w-[180px] align-bottom">{batchFotoWeb.nomeAtual}</span>
+          </p>
+          <div className="flex items-center justify-between text-[11px] text-gray-500">
+            <span>✅ {batchFotoWeb.ok}</span>
+            <span>📷 {batchFotoWeb.itensAtualizados} itens</span>
+            <span>❌ {batchFotoWeb.falhas}</span>
           </div>
         </div>
       )}

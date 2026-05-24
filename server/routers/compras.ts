@@ -1725,6 +1725,133 @@ export const comprasRouter = router({
       return { success: true };
     }),
 
+  // Rev. 2377 — Busca de foto "como usuário normal faria" pros itens do
+  // Almoxarifado. Mesma estratégia da Rev. 2366 (Equipamentos Locados):
+  // DuckDuckGo Images, 1ª foto válida, UPDATE em todos os itens da empresa
+  // com o mesmo `nome` que estejam SEM foto. Sem LLM, sem cascade.
+  buscarFotoWebPorNome: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      nome: z.string().min(1).max(500),
+      sobrescrever: z.boolean().optional().default(false),
+      queryOverride: z.string().min(1).max(500).optional(),
+      dryRun: z.boolean().optional().default(false),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const allowedCompanies = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+      const allowedIds = (allowedCompanies as any[]).map(c => c.id);
+      if (!allowedIds.includes(input.companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta empresa." });
+      }
+
+      const headers: Record<string, string> = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7",
+      };
+
+      const queryDDG = (input.queryOverride || input.nome).trim();
+      const ctrl1 = new AbortController();
+      const t1 = setTimeout(() => ctrl1.abort(), 9000);
+      let vqd: string | null = null;
+      try {
+        const r1 = await fetch(
+          `https://duckduckgo.com/?q=${encodeURIComponent(queryDDG)}&iax=images&ia=images`,
+          { signal: ctrl1.signal, headers: { ...headers, "Accept": "text/html,application/xhtml+xml" } }
+        );
+        const html = await r1.text();
+        const m = html.match(/vqd=["']([\d-]+)["']/)
+              || html.match(/vqd=([\d-]+)/)
+              || html.match(/&vqd=([\w-]+)&/);
+        if (m) vqd = m[1];
+      } catch (e: any) {
+        console.error("[compras.buscarFotoWebPorNome] vqd fetch falhou:", e?.message || e);
+      } finally { clearTimeout(t1); }
+
+      if (!vqd) {
+        return {
+          ok: false as const,
+          motivo: "Busca web indisponível no momento (não foi possível obter token da DuckDuckGo).",
+          fotoUrl: null,
+          itensAtualizados: 0,
+          nome: input.nome,
+        };
+      }
+
+      const ctrl2 = new AbortController();
+      const t2 = setTimeout(() => ctrl2.abort(), 9000);
+      let fotoUrl: string | null = null;
+      try {
+        const url = `https://duckduckgo.com/i.js?l=br-pt&o=json&q=${encodeURIComponent(queryDDG)}&vqd=${vqd}&f=,,,,,&p=1`;
+        const r2 = await fetch(url, {
+          signal: ctrl2.signal,
+          headers: { ...headers, "Accept": "application/json", "Referer": "https://duckduckgo.com/" },
+        });
+        if (r2.ok) {
+          const j: any = await r2.json();
+          const results: any[] = Array.isArray(j?.results) ? j.results : [];
+          for (const it of results) {
+            const u = String(it?.image || "");
+            if (/^https:\/\//.test(u)
+                && /\.(jpe?g|png|webp)(\?|$)/i.test(u)
+                && u.length <= 1000) {
+              fotoUrl = u;
+              break;
+            }
+          }
+        }
+      } catch (e: any) {
+        console.error("[compras.buscarFotoWebPorNome] i.js fetch falhou:", e?.message || e);
+      } finally { clearTimeout(t2); }
+
+      if (!fotoUrl) {
+        return {
+          ok: false as const,
+          motivo: "Nenhuma foto válida encontrada na 1ª página de resultados.",
+          fotoUrl: null,
+          itensAtualizados: 0,
+          nome: input.nome,
+        };
+      }
+
+      if (input.dryRun) {
+        return {
+          ok: true as const,
+          fotoUrl,
+          itensAtualizados: 0,
+          nome: input.nome,
+          dryRun: true as const,
+        };
+      }
+
+      // UPDATE em todos os itens da empresa com o mesmo nome SEM foto
+      // (ou sobrescreve se sobrescrever=true). NUNCA toca itens inativos.
+      // Match NORMALIZADO: o frontend agrupa por nome "limpo" (sem prefixo/sufixo
+      // `[N.N]` do código interno), mas o banco guarda o nome original.
+      // Pra casar, normalizamos AMBOS os lados via regex no SQL.
+      const condFoto = input.sobrescrever
+        ? sql`1=1`
+        : sql`(foto_url IS NULL OR foto_url = '')`;
+      const res: any = await db.execute(sql`
+        UPDATE almoxarifado_itens
+           SET foto_url = ${fotoUrl}, atualizado_em = NOW()
+         WHERE company_id = ${input.companyId}
+           AND lower(btrim(regexp_replace(regexp_replace(nome, '^[[][0-9.]+[]][[:space:]]*', ''), '[[:space:]]*[[][0-9.]+[]]$', '')))
+             = lower(btrim(regexp_replace(regexp_replace(${input.nome}::text, '^[[][0-9.]+[]][[:space:]]*', ''), '[[:space:]]*[[][0-9.]+[]]$', '')))
+           AND ativo = TRUE
+           AND ${condFoto}
+      `);
+      const itensAtualizados = Number(res.rowCount ?? res.rows?.length ?? 0);
+
+      return {
+        ok: true as const,
+        fotoUrl,
+        itensAtualizados,
+        nome: input.nome,
+      };
+    }),
+
   getItensLocadosVencendo: protectedProcedure
     .input(z.object({ companyId: z.number() }))
     .query(async ({ input }) => {
