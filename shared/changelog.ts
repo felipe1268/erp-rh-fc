@@ -1,6 +1,43 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2375 — **UX/ALERTA · Botão "RECEBER LOCAÇÃO" do Almoxarifado agora
+ * pisca com badge vermelho quando há OCs de locação aguardando recebimento,
+ * mostrando a quantidade que vai chegar.**
+ *
+ * Pedido user (IMG_1176, 24/05/2026): "Quero que fique um alerta, com
+ * quantidade e alerta visual, piscando para que saibam que tem produto para
+ * chegar... quero que o alerta indique a quantidade de os que iram chegar".
+ *
+ * Implementação (UI-only, zero backend novo):
+ *   - `client/src/pages/almoxarifado/index.tsx` (top do componente):
+ *       useQuery em `equipamentos.ocsLocacaoPendentes` (endpoint que já existe
+ *       desde Rev. 2371) com refetchInterval=60s + refetchOnWindowFocus pra
+ *       o badge atualizar conforme novas OCs são aprovadas.
+ *   - Botão "RECEBER LOCAÇÃO" (linha ~887): quando `qtdLocacaoPendente > 0`:
+ *       * `ring-4 ring-amber-300 ring-offset-2 animate-pulse` no próprio
+ *         botão (pulse suave Tailwind).
+ *       * badge `absolute -top-2 -right-2` vermelho redondo com a quantidade
+ *         + `animate-bounce` (chama bastante atenção).
+ *       * overlay `absolute inset-0 ... animate-ping` (segundo pulso, dá
+ *         sensação de "está chegando").
+ *       * sublabel branca semi-transparente "{N} pra chegar" embaixo do
+ *         "RECEBER LOCAÇÃO".
+ *       * title (tooltip) "{N} equipamento(s) pra chegar — toque pra
+ *         receber".
+ *   - Quando não há OCs pendentes, o botão volta ao visual normal (sem ring,
+ *     sem badge, sem ping).
+ *
+ * Reusa o endpoint da Rev. 2371 (já tem companyFilter + IDOR guard). Zero
+ * DDL, zero novas rotas tRPC, zero schema change.
+ *
+ * R-001 / R-007 / R-010: OK — UI-only.
+ */
+import "./version";
+
+/**
+ * Changelog centralizado do ERP.
+ *
  * Rev. 2374 — **FEATURE · Classificar equipamentos do Almoxarifado como
  * "PRÓPRIO da FC" ou "ALUGADO" em LOTE, via múltipla seleção visual, e ser
  * jogado direto pros formulários de cadastro com tudo pré-preenchido.**

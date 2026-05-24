@@ -82,6 +82,14 @@ export default function AlmoxarifadoPage() {
   const companyId = typeof selectedCompany?.id === 'number' ? selectedCompany.id : parseInt(String(selectedCompany?.id)) || 0;
   const [location, setLocation] = useLocation();
 
+  // Rev. 2375 — alerta visual de OCs de locação aguardando recebimento.
+  // Reusa endpoint da Rev. 2371; refetch a cada 60s pra "piscar" quando chega nova OC.
+  const ocsLocacaoPendentesQ = trpc.equipamentos.ocsLocacaoPendentes.useQuery(
+    { companyId },
+    { enabled: !!companyId, refetchInterval: 60_000, refetchOnWindowFocus: true }
+  );
+  const qtdLocacaoPendente = (ocsLocacaoPendentesQ.data || []).length;
+
   const [busca, setBusca] = useState("");
   const [filtroCateg, setFiltroCateg] = useState("todas");
   const [apenasAbaixo, setApenasAbaixo] = useState(false);
@@ -872,12 +880,29 @@ export default function AlmoxarifadoPage() {
             </button>
             {/* Rev. 2317 — IMPORTAR PDF removido daqui (continua disponível no hero da tela Equipamentos Locados). */}
             {/* Rev. 2316 — RECEBER LOCAÇÃO (cadastro pontual de equipamento locado) */}
+            {/* Rev. 2375 — badge piscante com quantidade de OCs de locação pendentes de recebimento */}
             <button
               onClick={() => setLocation("/equipamentos/locados?action=receber")}
-              className="flex flex-col items-center justify-center gap-2 bg-gradient-to-br from-teal-500 to-emerald-600 hover:from-teal-600 hover:to-emerald-700 active:scale-95 text-white rounded-2xl p-4 min-h-[80px] font-bold text-sm shadow-md transition text-center leading-tight"
+              className={`relative flex flex-col items-center justify-center gap-2 bg-gradient-to-br from-teal-500 to-emerald-600 hover:from-teal-600 hover:to-emerald-700 active:scale-95 text-white rounded-2xl p-4 min-h-[80px] font-bold text-sm shadow-md transition text-center leading-tight ${qtdLocacaoPendente > 0 ? "ring-4 ring-amber-300 ring-offset-2 animate-pulse" : ""}`}
+              title={qtdLocacaoPendente > 0 ? `${qtdLocacaoPendente} equipamento${qtdLocacaoPendente !== 1 ? "s" : ""} pra chegar — toque pra receber` : "Receber equipamento locado"}
             >
-              <Truck className="w-8 h-8" />
-              RECEBER<br />LOCAÇÃO
+              {qtdLocacaoPendente > 0 && (
+                <>
+                  <span className="absolute -top-2 -right-2 z-10 min-w-[28px] h-7 px-2 inline-flex items-center justify-center bg-red-600 text-white text-sm font-extrabold rounded-full border-2 border-white shadow-lg animate-bounce">
+                    {qtdLocacaoPendente}
+                  </span>
+                  <span className="absolute inset-0 rounded-2xl bg-amber-400/30 animate-ping pointer-events-none" />
+                </>
+              )}
+              <Truck className="w-8 h-8 relative z-[1]" />
+              <span className="relative z-[1]">
+                RECEBER<br />LOCAÇÃO
+                {qtdLocacaoPendente > 0 && (
+                  <span className="block text-[10px] font-semibold mt-0.5 bg-white/25 rounded px-1 py-0.5">
+                    {qtdLocacaoPendente} pra chegar
+                  </span>
+                )}
+              </span>
             </button>
             {/* Rev. 2316 — DEVOLVER/ENTREGAR LOCAÇÃO (baixa de saída do equipamento locado) */}
             <button
