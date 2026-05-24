@@ -1,6 +1,109 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2389 — **GOVERNANÇA/COMPRAS · Guarda determinística impede que OCs
+ * de SERVIÇO / ADMINISTRATIVO / TRIBUTO virem item de Almoxarifado.**
+ *
+ * Pedido user (IMG_1192, 24/05/2026, 19:35): print do almoxarifado central
+ * mostrava lixo institucional misturado com material legítimo —
+ * "Internet", "Mensalidade Ponto Facial", "Papel Timbrado FC Engenharia",
+ * "Serviço de Manutenção do…", "Pistola de Pólvora Ancora" (ferramenta).
+ * Esses itens nunca deveriam ter virado registro de estoque; o user vai
+ * apagar manualmente, mas pediu que NUNCA MAIS aconteça.
+ *
+ * **Causa-raiz**: o fluxo `atualizarStatusOrdem` (compras.ts L7916+),
+ * disparado quando uma OC é marcada como `entregue`, criava/incrementava
+ * itens no almoxarifado para CADA linha da OC. O único filtro existente
+ * era `if (ocTipo === "servico" || ocTipo === "pacote") return` — ou
+ * seja, só bloqueava OCs INTEIRAS de serviço. Quando uma OC tipo
+ * `compra` (material) continha linhas administrativas misturadas (ex:
+ * "Internet — mensalidade" pago via OC convencional), TODAS as linhas
+ * viravam item de estoque com categoria "Compras". Adicionalmente,
+ * `warehouse.registerSmartEntry` (warehouse.ts L1646) deixava o
+ * almoxarife marcar `itemNovo: true` em qualquer descrição no
+ * recebimento inteligente, sem validação semântica.
+ *
+ * **Decisão**: introduzir uma função pura, determinística, sem IA, que
+ * classifica `{material: boolean, motivo: string|null}` baseada em
+ * keywords no nome do item + unidade. Determinística (vs LLM) porque:
+ * (a) precisa rodar em hot path da OC entregue sem custo de inferência,
+ * (b) precisa ser previsível pro almoxarife — se o nome bate o padrão,
+ * SEMPRE bloqueia, sem variação de modelo. Aplicada em 2 portões:
+ *
+ * **Portão 1 — `compras.atualizarStatusOrdem` (server/routers/compras.ts
+ * ~L8077)**:
+ *   1. Se OC tem `solicitacaoId`, lê `comprasSolicitacoes.tipo` (coluna
+ *      já existente, default `'material'`). Se `tipo!='material'` (ex:
+ *      `servico`, `equipamento`, `administrativo`), pula a OC INTEIRA
+ *      com `{ok:true, almoxarifado:false, motivo:"SC tipo='servico'"}`.
+ *   2. Per-item dentro do loop: chama `classificarNaturezaItemAlmox(
+ *      item.descricao, item.unidade)`. Se `material:false`:
+ *      - Empurra `{descricao, motivo}` em `itensIgnorados[]` (devolvido
+ *        no response pra UI poder exibir "X itens não entraram no
+ *        almoxarifado por serem de serviço/administrativo").
+ *      - Atualiza `comprasOrdensItens.quantidadeEntregue` da linha
+ *        (pra OC fechar normalmente).
+ *      - Se a linha tem `solicitacaoItemId`, atualiza
+ *        `comprasSolicitacoesItens.quantidadeAtendida` + `statusItem`
+ *        ('atendido'|'parcial'), pra SC também fechar.
+ *      - PULA a criação no almoxarifado e a inserção de movimentação.
+ *   3. Response final: `{ok:true, almoxarifado: itensAdicionados>0,
+ *      itens: itensAdicionados, itensIgnorados}`.
+ *
+ * **Portão 2 — `warehouse.registerSmartEntry` (server/routers/warehouse.ts
+ * L1771)**: quando `item.itemNovo && !itemId && item.recebido`, importa
+ * dinamicamente `classificarNaturezaItemAlmox` (evita ciclo entre os 2
+ * routers, ambos crescem com cross-imports), classifica, e se
+ * `material:false` lança `TRPCError BAD_REQUEST` com mensagem
+ * pedagógica: `"<nome>" parece ser <motivo> — não pode entrar no
+ * Almoxarifado. Lance esse item como Despesa/Serviço no módulo
+ * Financeiro/Compras, não como estoque.` Almoxarife entende
+ * imediatamente o caminho correto sem precisar adivinhar.
+ *
+ * **Helper — `classificarNaturezaItemAlmox(descricao, unidade)`**
+ * (`server/routers/compras.ts` L48, exportado):
+ *   - Normaliza: `desc.toLowerCase().trim()`, `unidade.toLowerCase().trim()`.
+ *   - Descrição vazia → `{material:false, motivo:"descrição vazia"}`.
+ *   - Itera lista de `{rx: RegExp, motivo: string}` com word-boundary
+ *     (`\b`) e variações ASCII/Unicode (`servi[cç]o`, `manuten[cç][aã]o`,
+ *     `honor[aá]rio`, `ped[aá]gio`, etc.). Padrões cobertos: serviço,
+ *     mensalidade, assinatura, internet, manutenção, consultoria,
+ *     honorário, hora técnica, mão de obra/MDO, taxa, imposto, multa,
+ *     tarifa, pedágio, seguro, correios/sedex, papel timbrado, ponto
+ *     facial/biométrico/eletrônico, host/hospedagem/domínio/cloud/SaaS,
+ *     licença de software, locação de software/sistema, frete,
+ *     análise/laudo/ensaio/inspeção, curso/treinamento.
+ *   - Unidades de serviço/tempo: `h, hora, horas, mês, mes, mensal,
+ *     ano, anos, serv, vb, verba` → `{material:false}`.
+ *   - Default → `{material:true, motivo:null}` (princípio: na dúvida,
+ *     deixa entrar — a lista é blacklist, não whitelist, pra não
+ *     bloquear material legítimo desconhecido).
+ *
+ * **Trade-offs conhecidos**:
+ *   - Blacklist heurística pode bater FALSO POSITIVO em casos raros
+ *     (ex: "Fita Multiuso 3M para Manutenção Predial" — bateria em
+ *     `\bmanuten[cç][aã]o\b`). Mitigação: o erro é claro pro almoxarife
+ *     no Portão 2, e no Portão 1 fica visível em `itensIgnorados[]`
+ *     pra ele acionar suprimentos.
+ *   - Não cobre 100% dos casos. Ex: "Aluguel de equipamento" não bate
+ *     padrão de serviço (locação tem fluxo próprio via `oc.tipo='locacao'`).
+ *     Pode evoluir pra LLM como fallback se ficar saturado.
+ *
+ * **Arquivos**:
+ *   - `server/routers/compras.ts` L42-87 (helper exportado);
+ *     L8077-8094 (Portão 1.1 — SC.tipo); L8113-8138 (Portão 1.2 —
+ *     per-item); L8262-8266 (response com `itensIgnorados`).
+ *   - `server/routers/warehouse.ts` L1771-1782 (Portão 2).
+ *   - `shared/version.ts` → Rev. 2389.
+ *   - `replit.md` rotacionado (2389+2388 detalhadas, 2387 vira
+ *     one-liner, Rev. 2382 movida pra `replit-history.md`).
+ *
+ * **R-001 / R-007 / R-010**: OK — zero `ALTER TABLE`, `DROP`, `DELETE`
+ * em prod. Helper puro + 2 edits em fluxos existentes. Itens
+ * problemáticos pré-existentes no banco continuam lá (user vai apagar
+ * via modal de auditoria da Rev. 2388 — agora cada exclusão fica
+ * registrada). Esta rev. só impede que NOVOS apareçam.
+ *
  * Rev. 2388 — **SEGURANÇA/AUDITORIA · Controle rígido no Almoxarifado:
  * exclusão de item/unidade + alteração manual de quantidade exigem
  * senha (se user local) + justificativa obrigatória, com log e validação

@@ -35,6 +35,58 @@ function getClientIp(ctx: any): string | null {
   if (typeof xf === "string" && xf.length > 0) return xf.split(",")[0].trim().slice(0, 64);
   return (req.ip || req.socket?.remoteAddress || null)?.slice(0, 64) ?? null;
 }
+
+// Rev. 2389 — Guarda determinística pra impedir que OCs de SERVIÇO / ADMINISTRATIVO
+// virem item de Almoxarifado (acontecia com Internet, Mensalidade Ponto Facial,
+// Papel Timbrado, Serviço de Manutenção, etc.). Heurística por keywords no nome do
+// item + unidade. Retorna razão pra logar quando bloqueia. Aplicada em:
+// (1) `atualizarStatusOrdem` (OC entregue → almox) e (2) `warehouse.registerSmartEntry`
+// (criação manual de item novo no recebimento inteligente).
+export function classificarNaturezaItemAlmox(
+  descricao: string,
+  unidade?: string | null,
+): { material: boolean; motivo: string | null } {
+  const desc = (descricao ?? "").toLowerCase().trim();
+  const un = (unidade ?? "").toLowerCase().trim();
+  if (!desc) return { material: false, motivo: "descrição vazia" };
+
+  // Keywords de SERVIÇO / ADMINISTRATIVO / IMPOSTOS (word-boundary onde faz sentido).
+  const padroes: { rx: RegExp; motivo: string }[] = [
+    { rx: /\b(servi[cç]o|servi[cç]os)\b/i,           motivo: "descrição contém 'serviço'" },
+    { rx: /\bmensalidade\b/i,                         motivo: "mensalidade (serviço recorrente)" },
+    { rx: /\bassinatura\b/i,                          motivo: "assinatura (serviço recorrente)" },
+    { rx: /\binternet\b/i,                            motivo: "Internet (serviço)" },
+    { rx: /\bmanuten[cç][aã]o\b/i,                    motivo: "manutenção (serviço)" },
+    { rx: /\bconsultoria\b/i,                         motivo: "consultoria (serviço)" },
+    { rx: /\bhonor[aá]rio(s)?\b/i,                    motivo: "honorário (serviço)" },
+    { rx: /\bhora[- ]?t[eé]cnica\b/i,                 motivo: "hora técnica (serviço)" },
+    { rx: /\bm[aã]o[- ]de[- ]obra\b|\bmdo\b/i,        motivo: "mão de obra (serviço)" },
+    { rx: /\btaxa(s)?\b/i,                            motivo: "taxa (tributo/serviço)" },
+    { rx: /\bimposto(s)?\b/i,                         motivo: "imposto (tributo)" },
+    { rx: /\bmulta(s)?\b/i,                           motivo: "multa (tributo/penalidade)" },
+    { rx: /\btarifa(s)?\b/i,                          motivo: "tarifa (serviço)" },
+    { rx: /\bped[aá]gio\b/i,                          motivo: "pedágio (serviço)" },
+    { rx: /\bseguro\b/i,                              motivo: "seguro (serviço)" },
+    { rx: /\bcorreio(s)?\b|\bsedex\b/i,               motivo: "correios/sedex (serviço)" },
+    { rx: /\bpapel\s+timbrado\b/i,                    motivo: "papel timbrado (gráfica/serviço)" },
+    { rx: /\bponto\s+(facial|biom[eé]trico|eletr[oô]nico)\b/i, motivo: "ponto facial/biométrico (serviço)" },
+    { rx: /\b(host(ing)?|hospedagem|dom[ií]nio|cloud|saas|software\s+como\s+servi[cç]o)\b/i, motivo: "TI/SaaS (serviço)" },
+    { rx: /\b(licen[cç]a\s+de\s+software|licen[cç]a\s+anual)\b/i, motivo: "licença de software (serviço)" },
+    { rx: /\b(loca[cç][aã]o\s+de\s+(software|sistema))\b/i, motivo: "locação de software (serviço)" },
+    { rx: /\bfrete\b/i,                                motivo: "frete (serviço logístico)" },
+    { rx: /\b(an[aá]lise|laudo|ensaio|inspe[cç][aã]o)\b/i, motivo: "ensaio/laudo (serviço técnico)" },
+    { rx: /\bcurso(s)?\b|\btreinamento(s)?\b/i,        motivo: "curso/treinamento (serviço)" },
+  ];
+
+  for (const p of padroes) {
+    if (p.rx.test(desc)) return { material: false, motivo: p.motivo };
+  }
+  // Unidades típicas de serviço/tempo.
+  if (["h", "hora", "horas", "mês", "mes", "mensal", "ano", "anos", "serv", "vb", "verba"].includes(un)) {
+    return { material: false, motivo: `unidade '${un}' é de serviço/tempo` };
+  }
+  return { material: true, motivo: null };
+}
 import crypto from "crypto";
 import { eq, and, desc, asc, ilike, or, sql, gte, lte, inArray, isNull } from "drizzle-orm";
 import {
@@ -8021,10 +8073,24 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
 
         const ocTipo = (oc as any).tipo ?? "compra";
         if (ocTipo === "servico" || ocTipo === "pacote") {
-          return { ok: true, almoxarifado: false, itens: 0 };
+          return { ok: true, almoxarifado: false, itens: 0, motivo: `OC tipo='${ocTipo}'` };
+        }
+
+        // Rev. 2389 — Se a OC veio de uma SC marcada como SERVIÇO / EQUIPAMENTO /
+        // ADMINISTRATIVO, NUNCA gera item de almoxarifado. (comprasSolicitacoes.tipo
+        // default = 'material'; valores não-'material' indicam natureza não-estocável.)
+        if (oc.solicitacaoId) {
+          const [sc] = await db.select({ tipo: comprasSolicitacoes.tipo })
+            .from(comprasSolicitacoes).where(eq(comprasSolicitacoes.id, oc.solicitacaoId));
+          const scTipo = (sc?.tipo ?? "material").toLowerCase();
+          if (scTipo && scTipo !== "material") {
+            console.log(`[OC→Almox] OC ${oc.numeroOc} ignorada — SC tipo='${scTipo}' (não-material).`);
+            return { ok: true, almoxarifado: false, itens: 0, motivo: `SC tipo='${scTipo}'` };
+          }
         }
 
         const itensOC = await db.select().from(comprasOrdensItens).where(eq(comprasOrdensItens.ordemId, input.id));
+        const itensIgnorados: { descricao: string; motivo: string }[] = [];
 
         // busca nome da obra
         let obraNome: string | null = null;
@@ -8040,6 +8106,33 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
         for (const item of itensOC) {
           const qtd = n(item.quantidade);
           if (qtd <= 0) continue;
+
+          // Rev. 2389 — Filtro per-item: bloqueia serviço/administrativo/tributo
+          // mesmo quando vem dentro de uma OC tipo 'compra'. Atualiza só a
+          // quantidadeEntregue da linha da OC (pra fechar a SC), mas NÃO cria
+          // item no almoxarifado nem registra movimentação. Log fica em
+          // `itensIgnorados` no response.
+          const classif = classificarNaturezaItemAlmox(item.descricao, item.unidade);
+          if (!classif.material) {
+            itensIgnorados.push({ descricao: item.descricao, motivo: classif.motivo ?? "não-material" });
+            console.log(`[OC→Almox] Item "${item.descricao}" ignorado: ${classif.motivo}`);
+            await db.update(comprasOrdensItens).set({
+              quantidadeEntregue: String(qtd),
+            }).where(eq(comprasOrdensItens.id, item.id));
+            if (item.solicitacaoItemId) {
+              const [scItem] = await db.select().from(comprasSolicitacoesItens)
+                .where(eq(comprasSolicitacoesItens.id, item.solicitacaoItemId));
+              if (scItem) {
+                const novaAtendida = n(scItem.quantidadeAtendida) + qtd;
+                const atendido = novaAtendida >= n(scItem.quantidade);
+                await db.update(comprasSolicitacoesItens).set({
+                  quantidadeAtendida: String(novaAtendida),
+                  statusItem: atendido ? "atendido" : "parcial",
+                }).where(eq(comprasSolicitacoesItens.id, item.solicitacaoItemId));
+              }
+            }
+            continue;
+          }
           itensAdicionados++;
 
           // busca ou cria item no almoxarifado
@@ -8162,7 +8255,12 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
           }
         }
 
-        return { ok: true, almoxarifado: itensAdicionados > 0, itens: itensAdicionados };
+        return {
+          ok: true,
+          almoxarifado: itensAdicionados > 0,
+          itens: itensAdicionados,
+          itensIgnorados,
+        };
       }
 
       return { ok: true, almoxarifado: false };

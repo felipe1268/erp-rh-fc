@@ -1766,6 +1766,17 @@ REGRAS:
         }
 
         if (item.itemNovo && !itemId && item.recebido) {
+          // Rev. 2389 — Mesma guarda do fluxo OC→Almox: nada de serviço/
+          // administrativo/tributo cair no almoxarifado por engano via
+          // "recebimento inteligente" com `itemNovo: true`.
+          const { classificarNaturezaItemAlmox } = await import("./compras");
+          const classif = classificarNaturezaItemAlmox(item.itemNome, item.unidade);
+          if (!classif.material) {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: `"${item.itemNome}" parece ser ${classif.motivo} — não pode entrar no Almoxarifado. Lance esse item como Despesa/Serviço no módulo Financeiro/Compras, não como estoque.`,
+            });
+          }
           const [newItem] = await db.insert(almoxarifadoItens).values({
             companyId: input.companyId,
             obraId: input.obraId || null,
