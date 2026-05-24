@@ -1256,12 +1256,30 @@ export default function EquipamentosLocados() {
               );
             })}
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-[1fr_minmax(220px,auto)_minmax(220px,auto)] gap-2">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-              <input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar por descrição, fornecedor, patrimônio…"
-                className="w-full pl-10 pr-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 outline-none transition" />
-            </div>
+          {/* Rev. 2370 — busca em linha própria full-width (antes dividia row com selects e colapsava no iPad). */}
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-emerald-500" />
+            <input
+              value={busca}
+              onChange={e => setBusca(e.target.value)}
+              placeholder="Buscar por descrição, fornecedor ou patrimônio…"
+              className={`w-full pl-10 ${busca ? "pr-10" : "pr-3"} py-2.5 border-2 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500/30 outline-none transition ${
+                busca ? "border-emerald-400 bg-emerald-50/40" : "border-slate-200 focus:border-emerald-500"
+              }`}
+            />
+            {busca && (
+              <button
+                type="button"
+                onClick={() => setBusca("")}
+                className="absolute right-2 top-1/2 -translate-y-1/2 h-6 w-6 inline-flex items-center justify-center rounded-full text-slate-500 hover:bg-slate-100 hover:text-slate-700"
+                title="Limpar busca"
+                aria-label="Limpar busca"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
             <div className="relative">
               <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
               <select

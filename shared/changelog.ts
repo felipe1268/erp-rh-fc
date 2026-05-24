@@ -1,6 +1,62 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2370 — **UX/BUGFIX · Barra de busca de Equipamentos Locados
+ * promovida pra linha própria full-width (no iPad colapsava em ~100px
+ * mostrando só o ícone, sem placeholder visível) + botão limpar (X).**
+ *
+ * **Pedido user (24/05/2026, IMG_1169):** "Cadê a barra para pesquisa ?".
+ * Print mostrava a row de filtros com o ícone 🔍 visível mas SEM input
+ * aparente — só uma caixinha vazia ao lado de "Todas as obras (1.218)"
+ * e "Todas as categorias (1.218)".
+ *
+ * **Diagnóstico:** o `<input>` da busca SEMPRE existiu (Locados.tsx
+ * linha 1262, `value={busca}` wired ao state da Rev. 2334-ish e ao
+ * query server-side `locadosListar({busca})`). O problema era CSS:
+ * a row usava `md:grid-cols-[1fr_minmax(220px,auto)_minmax(220px,auto)]`,
+ * forçando os 2 selects (Obra + Categoria) a consumirem ≥220px cada.
+ * No viewport do iPad em retrato (~700px úteis no painel central), o
+ * `1fr` da busca recebia ~100px líquidos — só sobrava espaço pro ícone
+ * Search com `pl-10`, e o placeholder "Buscar por descrição,
+ * fornecedor, patrimônio…" ficava cortado/invisível. Para o user
+ * (não-técnico), a barra simplesmente NÃO EXISTIA.
+ *
+ * **Implementação** (`client/src/pages/equipamentos/Locados.tsx`):
+ * Quebrou a row em 2 níveis:
+ *
+ * 1. **Busca em linha PRÓPRIA full-width** (não compete mais com
+ *    nenhum select) — visual destacado com border-2 (em vez de border
+ *    simples) e ícone Search em emerald-500 (em vez de slate-400) pra
+ *    chamar atenção. Quando há texto digitado: border-emerald-400 +
+ *    bg-emerald-50/40 (mesmo padrão dos filtros ativos já usado nos
+ *    selects de Obra/Categoria) — feedback visual de "filtro ligado".
+ *
+ * 2. **Botão limpar (X)** circular à direita, só aparece quando
+ *    `busca` tem conteúdo. `aria-label="Limpar busca"`, title pra
+ *    tooltip, dimensão 6x6 (clique fácil no touch), hover slate-100.
+ *    Padding direito do input vira `pr-10` quando o X tá visível
+ *    (evita texto colidir com o botão).
+ *
+ * 3. **Selects Obra + Categoria** migraram pra row separada abaixo
+ *    com `md:grid-cols-2` — cada um agora tem ~50% da largura
+ *    independente do tamanho da busca. Zero mudança no comportamento
+ *    deles.
+ *
+ * **Backend / state / wiring:** ZERO alteração. `busca` state
+ * (linha 40), debounce/onChange do input, `locadosListar` query
+ * server-side que filtra `descricao/fornecedor/patrimonio` por ILIKE,
+ * chips de filtros ativos com botão limpar global (Rev. 2334+2337+2361)
+ * — tudo preservado.
+ *
+ * **R-001/R-007/R-010:** UI-only, zero backend, zero DDL,
+ * idempotente, sem impacto em prod.
+ *
+ * **Files:** `client/src/pages/equipamentos/Locados.tsx` (linhas
+ * 1262-1284 — block reescrito; antes era 1 div grid 3-col, agora são
+ * 2 blocos: relative full-width pra busca + grid 2-col pros selects).
+ *
+ * ---
+ *
  * Rev. 2369 — **FEATURE/UX · "Trocar foto com outro termo": modal de
  * rebusca com query customizada e preview antes de aplicar.**
  *
