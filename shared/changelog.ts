@@ -1,6 +1,43 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2381 — **FEATURE · Botão "Trocar foto" nos cards do Almoxarifado: user
+ * ajuda a IA fornecendo um termo de busca mais específico (modal com input +
+ * preview antes de aplicar).**
+ *
+ * Pedido user (24/05/2026): "Preciso poder alterar uma foto do item se eu
+ * quiser, quero é ajudar a IA a acertar a busca". Cards com foto não tinham
+ * como trocar — só editar manualmente. A busca automática (Rev. 2377) usa o
+ * nome do item, mas nomes genéricos tipo "Andaimes" voltam com qualquer
+ * imagem; o user quer poder digitar "andaime fachadeiro tubular" e ver o
+ * preview antes de aplicar.
+ *
+ * Backend: já suportava (Rev. 2369 portado pra `compras.buscarFotoWebPorNome`
+ * na Rev. 2377): `queryOverride: string` + `dryRun: boolean`. Quando `dryRun
+ * = true` retorna `{ ok, fotoUrl }` SEM tocar no banco; quando false faz o
+ * UPDATE com `sobrescrever = true`.
+ *
+ * Frontend (`client/src/pages/almoxarifado/index.tsx`, UI-only):
+ *   - Novo botão "Trocar" (violet, ícone Sparkles, canto inferior direito)
+ *     em todos os cards que JÁ têm foto. Cards sem foto continuam com o
+ *     "Buscar na web" sky existente.
+ *   - State `rebuscarFoto: { nome, termo, previewUrl, buscando, aplicando, erro }`.
+ *   - Modal violet com header centralizado + Sparkles + nome do item; input
+ *     pré-preenchido com o nome (user pode editar livremente); botão
+ *     "Buscar" chama `rebuscarPreview()` que faz `dryRun=true` e exibe o
+ *     resultado num card (loading spinner / imagem object-contain / erro /
+ *     estado vazio). Enter no input dispara a busca.
+ *   - Botão "Usar esta foto" chama `aplicarRebusca()` que repete a chamada
+ *     com `sobrescrever=true` (sem dryRun) e invalida as queries.
+ *   - Backdrop clicável só fecha quando NÃO está buscando/aplicando.
+ *
+ * R-001 / R-007 / R-010: OK — só UPDATE escopado por companyId+nome, zero DDL.
+ */
+import "./version";
+
+/**
+ * Changelog centralizado do ERP.
+ *
  * Rev. 2380 — **UX · Widget de progresso da "Busca de fotos na web" agora
  * mostra contador 0-100% destacado + ETA dinâmica.**
  *

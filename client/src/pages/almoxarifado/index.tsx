@@ -111,6 +111,8 @@ export default function AlmoxarifadoPage() {
   // que no Safari iPad mostrava a URL feia do Replit como título de 3 linhas).
   const [confirmBuscaFotos, setConfirmBuscaFotos] = useState<null | { nomes: string[] }>(null);
   const [confirmIAPrecos, setConfirmIAPrecos] = useState<null | { escopo: "empresa" | "obra"; qtd: number }>(null);
+  // Rev. 2381 — Modal de rebusca de foto com termo customizado (user ajuda a IA)
+  const [rebuscarFoto, setRebuscarFoto] = useState<null | { nome: string; termo: string; previewUrl: string | null; buscando: boolean; aplicando: boolean; erro: string | null }>(null);
 
   const [busca, setBusca] = useState("");
   const [filtroCateg, setFiltroCateg] = useState("todas");
@@ -262,6 +264,52 @@ export default function AlmoxarifadoPage() {
       ...(escopo === "obra" && obraContexto !== "todos" ? { obraId: obraContexto === "central" ? null : Number(obraContexto) } : {}),
     });
   };
+  // Rev. 2381 — Rebusca com termo customizado: dryRun pra preview, depois apply.
+  async function rebuscarPreview() {
+    if (!companyId || !rebuscarFoto) return;
+    const termo = rebuscarFoto.termo.trim();
+    if (!termo) return;
+    setRebuscarFoto(s => s ? { ...s, buscando: true, erro: null, previewUrl: null } : s);
+    try {
+      const r: any = await buscarFotoWebMut.mutateAsync({
+        companyId,
+        nome: rebuscarFoto.nome,
+        queryOverride: termo,
+        dryRun: true,
+      });
+      if (r?.ok && r?.fotoUrl) {
+        setRebuscarFoto(s => s ? { ...s, buscando: false, previewUrl: r.fotoUrl, erro: null } : s);
+      } else {
+        setRebuscarFoto(s => s ? { ...s, buscando: false, previewUrl: null, erro: r?.motivo || "Nada encontrado." } : s);
+      }
+    } catch (e: any) {
+      setRebuscarFoto(s => s ? { ...s, buscando: false, previewUrl: null, erro: e?.message || "Falha na busca." } : s);
+    }
+  }
+  async function aplicarRebusca() {
+    if (!companyId || !rebuscarFoto || !rebuscarFoto.previewUrl) return;
+    setRebuscarFoto(s => s ? { ...s, aplicando: true } : s);
+    try {
+      const r: any = await buscarFotoWebMut.mutateAsync({
+        companyId,
+        nome: rebuscarFoto.nome,
+        queryOverride: rebuscarFoto.termo.trim(),
+        sobrescrever: true,
+      });
+      if (r?.ok && Number(r.itensAtualizados || 0) > 0) {
+        toast.success(`Foto aplicada em ${r.itensAtualizados} item(ns).`);
+        utils.compras.listarItens.invalidate();
+        utils.compras.listarItensConsolidado.invalidate();
+        setRebuscarFoto(null);
+      } else {
+        toast.warning(r?.motivo || "Nenhum item foi atualizado.");
+        setRebuscarFoto(s => s ? { ...s, aplicando: false } : s);
+      }
+    } catch (e: any) {
+      toast.error(e?.message || "Falha ao aplicar foto.");
+      setRebuscarFoto(s => s ? { ...s, aplicando: false } : s);
+    }
+  }
   // Rev. 2377 — Buscar 1 foto na web (1 nome). Usado pelo botão por card.
   async function buscarFotoWebUm(nome: string, sobrescrever: boolean) {
     if (!companyId || !nome) return;
@@ -1579,6 +1627,16 @@ export default function AlmoxarifadoPage() {
                           {buscandoFotoNomes.has(item.nome)
                             ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
                             : <><Globe className="w-3.5 h-3.5" /> Buscar na web</>}
+                        </button>
+                      )}
+                      {/* Rev. 2381 — Botão "Trocar foto" pros itens COM foto (ajudar IA a acertar) */}
+                      {(item as any).fotoUrl && (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setRebuscarFoto({ nome: item.nome, termo: item.nome, previewUrl: null, buscando: false, aplicando: false, erro: null }); }}
+                          className="absolute bottom-1.5 right-1.5 h-7 px-2 flex items-center gap-1 bg-white/90 hover:bg-white text-violet-700 text-[11px] font-semibold rounded-md shadow-md transition border border-violet-200"
+                          title="Trocar foto com outro termo de busca"
+                        >
+                          <Sparkles className="w-3.5 h-3.5" /> Trocar
                         </button>
                       )}
                       {abaixo && (
@@ -3483,6 +3541,96 @@ export default function AlmoxarifadoPage() {
             >
               Cancelar
             </button>
+          </div>
+        </div>
+      )}
+      {/* Rev. 2381 — Modal de rebusca de foto com termo customizado (user ajuda a IA) */}
+      {rebuscarFoto && (
+        <div
+          className="fixed inset-0 z-[110] bg-black/50 flex items-center justify-center p-4"
+          onClick={() => !rebuscarFoto.buscando && !rebuscarFoto.aplicando && setRebuscarFoto(null)}
+        >
+          <div
+            className="bg-white rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="bg-gradient-to-br from-violet-500 to-purple-600 px-6 pt-6 pb-5 text-white text-center">
+              <div className="mx-auto bg-white/20 rounded-full p-3 w-fit mb-3">
+                <Sparkles className="w-8 h-8" />
+              </div>
+              <h3 className="text-xl font-bold leading-tight">Ajudar a IA a encontrar a foto certa</h3>
+              <p className="text-violet-50 text-xs mt-1 truncate">{rebuscarFoto.nome}</p>
+            </div>
+            <div className="px-6 py-5 space-y-4 text-sm text-gray-700">
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1.5">Termo de busca (edite pra ser mais específico)</label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={rebuscarFoto.termo}
+                    onChange={(e) => setRebuscarFoto(s => s ? { ...s, termo: e.target.value, previewUrl: null, erro: null } : s)}
+                    onKeyDown={(e) => { if (e.key === "Enter" && !rebuscarFoto.buscando) rebuscarPreview(); }}
+                    placeholder='Ex: "parafuso sextavado M8 inox"'
+                    disabled={rebuscarFoto.buscando || rebuscarFoto.aplicando}
+                    className="flex-1 px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-violet-400 focus:border-violet-400 outline-none disabled:bg-gray-50"
+                  />
+                  <button
+                    onClick={rebuscarPreview}
+                    disabled={!rebuscarFoto.termo.trim() || rebuscarFoto.buscando || rebuscarFoto.aplicando}
+                    className="px-4 py-2.5 bg-violet-500 hover:bg-violet-600 disabled:bg-gray-300 text-white text-sm font-semibold rounded-lg transition flex items-center gap-2"
+                  >
+                    {rebuscarFoto.buscando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
+                    Buscar
+                  </button>
+                </div>
+                <p className="text-[11px] text-gray-500 mt-1.5">Dica: inclua marca, dimensão ou material pra refinar.</p>
+              </div>
+              {/* Preview */}
+              <div className="bg-gray-50 border border-gray-200 rounded-lg overflow-hidden" style={{ minHeight: 180 }}>
+                {rebuscarFoto.buscando && (
+                  <div className="flex flex-col items-center justify-center py-12 text-gray-400">
+                    <Loader2 className="w-8 h-8 animate-spin text-violet-500 mb-2" />
+                    <p className="text-xs">Procurando na web...</p>
+                  </div>
+                )}
+                {!rebuscarFoto.buscando && rebuscarFoto.previewUrl && (
+                  <div className="flex flex-col">
+                    <img src={rebuscarFoto.previewUrl} alt="Preview" className="w-full h-56 object-contain bg-white" />
+                    <div className="px-3 py-2 bg-emerald-50 border-t border-emerald-200 text-xs text-emerald-700 flex items-center gap-1">
+                      <span>✓</span> Foto encontrada — confira e clique em "Usar esta foto" pra aplicar.
+                    </div>
+                  </div>
+                )}
+                {!rebuscarFoto.buscando && !rebuscarFoto.previewUrl && rebuscarFoto.erro && (
+                  <div className="flex flex-col items-center justify-center py-10 text-red-600 px-4 text-center">
+                    <span className="text-2xl mb-1">✕</span>
+                    <p className="text-sm font-medium">{rebuscarFoto.erro}</p>
+                    <p className="text-[11px] text-gray-500 mt-1">Tente um termo diferente.</p>
+                  </div>
+                )}
+                {!rebuscarFoto.buscando && !rebuscarFoto.previewUrl && !rebuscarFoto.erro && (
+                  <div className="flex flex-col items-center justify-center py-12 text-gray-400">
+                    <Globe className="w-8 h-8 mb-2" />
+                    <p className="text-xs">Digite um termo e clique em Buscar pra ver o preview.</p>
+                  </div>
+                )}
+              </div>
+            </div>
+            <div className="px-5 py-4 bg-gray-50 flex items-center gap-2 border-t border-gray-200">
+              <button
+                onClick={() => setRebuscarFoto(null)}
+                disabled={rebuscarFoto.aplicando}
+                className="flex-1 px-4 py-3 text-sm font-medium text-gray-700 bg-white hover:bg-gray-100 border border-gray-300 rounded-lg transition disabled:opacity-50"
+              >Cancelar</button>
+              <button
+                onClick={aplicarRebusca}
+                disabled={!rebuscarFoto.previewUrl || rebuscarFoto.aplicando || rebuscarFoto.buscando}
+                className="flex-1 px-4 py-3 text-sm font-semibold text-white bg-violet-500 hover:bg-violet-600 disabled:bg-gray-300 rounded-lg transition shadow-sm flex items-center justify-center gap-2"
+              >
+                {rebuscarFoto.aplicando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+                Usar esta foto
+              </button>
+            </div>
           </div>
         </div>
       )}

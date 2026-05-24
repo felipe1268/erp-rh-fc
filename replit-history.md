@@ -2,6 +2,7 @@
 
 > Este arquivo guarda os one-liners das revisões antigas para manter o `replit.md` enxuto.
 
+- **Rev. 2374** — FEATURE · Classificar equipamentos do Almoxarifado como Próprio FC ou Alugado em LOTE — múltipla seleção visual + sticky bar com 2 botões; fila em sessionStorage (com companyId guard) leva pros forms de Próprios/Locados pré-preenchidos. Ver `shared/changelog.ts`.
 - **Rev. 2373** — FEATURE · Controle de insumos a granel (areia/pedra/lajota): (A) toggle MANUAL "insumo a granel = aplicação direta" no cadastro; (B) nova tela "Inventário Visual (Baias)" mobile-first com 5 botões grandes (VAZIA / 1/4 / METADE / 3/4 / CHEIA), foto opcional, histórico c/ tendência. Ver `shared/changelog.ts`.
 - **Rev. 2372** — UX · "DEVOLVER LOCAÇÃO" do Almoxarifado agora abre PICKER VISUAL com cards grandes (foto + descrição + obra + fornecedor) dos equipamentos em uso — operador de 4ª série escolhe e devolve em 2 cliques. Ver `shared/changelog.ts`.
 - **Rev. 2371** — FEATURE · "Receber Locação na Obra" lista OCs de locação pendentes no topo do modal (almoxarife dá entrada com 1 clique). Backend `equipamentos.ocsLocacaoPendentes` com companyFilter, frontend pré-preenche dados. Ver `shared/changelog.ts`.
