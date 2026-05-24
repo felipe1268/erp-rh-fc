@@ -1,6 +1,61 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2338 — **UX · KPI cards de Equipamentos Locados verdadeiramente
+ * responsivos (1 → 2 → 4 colunas) com tipografia fluida.**
+ *
+ * Pedido user (24/05/2026, screenshot iPad mostrando 4 cards
+ * "184 Ativos · 150 Vencendo · 34 Atrasados · R$ 1.752,50"): "Quero
+ * o card responsivos".
+ *
+ * Diagnóstico: o grid era `grid-cols-2 lg:grid-cols-4` — só virava
+ * 4 colunas em ≥1024px. iPad portrait (~820px) ficava sempre em 2×2,
+ * e em celular (<640px) também 2 colunas apertadas. Adicionalmente,
+ * o card monetário usava `text-xl` enquanto os de número puro usavam
+ * `text-3xl` (diferença visual cravada no JSX), e quando o valor
+ * crescia (ex.: pós-import, "R$ 15.815,50") o número estourava o
+ * card e quebrava o layout vizinho.
+ *
+ * **Implementação** (`client/src/pages/equipamentos/Locados.tsx`,
+ * 0 server, 0 schema):
+ *
+ *   (1) **Grid responsivo de verdade**: `grid-cols-1 sm:grid-cols-2
+ *       md:grid-cols-4` + `gap-2 sm:gap-3`. Mobile (<640px) empilha
+ *       1 por linha (legível, valor grande); tablet portrait (640px+)
+ *       fica 2×2; iPad landscape e desktop (768px+) ficam 4 lado a
+ *       lado. Antes precisava de ≥1024px pra ter 4 cols.
+ *
+ *   (2) **Tipografia fluida via CSS `clamp()`**: substitui os tamanhos
+ *       fixos `text-3xl` / `text-xl` por `clamp(min, vw, max)` —
+ *       números puros usam `clamp(1.5rem, 3.2vw, 2rem)` (encolhe em
+ *       celular, cresce até 32px em desktop); monetário usa
+ *       `clamp(1rem, 2.6vw, 1.5rem)` (cabe sempre o "R$ X.XXX,XX"
+ *       sem estouro). A largura do viewport faz o trabalho — sem
+ *       precisar de N variações com `sm:` / `md:` no className.
+ *
+ *   (3) **Defesas anti-overflow**: `min-w-0` no card (libera flex/
+ *       grid pra encolher), `truncate` no valor e na label (texto
+ *       longo vira "…"), `tabular-nums` (alinha dígitos), `title=`
+ *       no valor (hover mostra completo se foi truncado), `shrink-0`
+ *       no ícone (não comprime), `text-right truncate` no `sub`.
+ *
+ *   (4) **Padding e tamanhos do ícone adaptativos**: `p-3 sm:p-4`
+ *       no card, `p-1.5 sm:p-2` no chip do ícone, `h-4 w-4
+ *       sm:h-5 sm:w-5` no SVG. Mobile fica mais compacto sem perder
+ *       hierarquia.
+ *
+ * **Por que `clamp()` e não `text-{sm,base,lg}` com breakpoints**:
+ * `clamp()` é fluido (transição contínua com a viewport), não
+ * pulsa em quebras discretas. Pra KPI com valor que pode crescer
+ * (R$ 1k vs R$ 100k), a transição contínua evita "estourou no
+ * passo do 768 → 1024".
+ *
+ * **Escopo deliberado**: alteração restrita ao componente `Kpi` e
+ * ao grid wrapper desta tela. Outras telas que copiarem o padrão
+ * vão receber em revs futuras se o user pedir.
+ *
+ * **R-001/R-007/R-010**: N/A — só CSS/markup.
+ *
  * Rev. 2337 — **FEATURE · Categorização automática dos equipamentos
  * locados via IA + filtro por categoria na tela Equipamentos Locados.**
  *

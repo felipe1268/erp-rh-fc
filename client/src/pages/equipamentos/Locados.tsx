@@ -673,8 +673,8 @@ export default function EquipamentosLocados() {
           </div>
         </div>
 
-        {/* KPI cards modernos */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        {/* KPI cards modernos · Rev. 2338 — responsivos: 1col(<sm) → 2col(sm) → 4col(md+) */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2 sm:gap-3">
           <Kpi icon={Activity}      label="Ativos"         value={stats.ativos}             tint="blue"   sub="em locação"  />
           <Kpi icon={Clock}         label="Vencendo (30d)" value={stats.vencendo}           tint="amber"  sub="atenção"     />
           <Kpi icon={AlertTriangle} label="Atrasados"      value={stats.atrasados}          tint="red"    sub="renovar/devolver" />
@@ -1603,16 +1603,27 @@ function Kpi({ icon: Icon, label, value, sub, tint, money }: { icon: LucideIcon;
     emerald: { ring: "ring-emerald-100", iconBg: "bg-emerald-50", iconColor: "text-emerald-600", value: "text-emerald-900" },
   };
   const p = palette[tint];
+  // Rev. 2338 — tipografia fluida (clamp) p/ caber tanto em mobile quanto desktop
+  // sem quebrar layout quando valor monetário cresce (ex: "R$ 15.815,50").
+  const valueStyle = money
+    ? { fontSize: "clamp(1rem, 2.6vw, 1.5rem)" }   // R$ ... — encolhe pra caber
+    : { fontSize: "clamp(1.5rem, 3.2vw, 2rem)" };  // números puros — maior
   return (
-    <div className={`bg-white border border-slate-200 rounded-xl shadow-sm p-4 ring-1 ${p.ring} hover:shadow-md transition`}>
-      <div className="flex items-start justify-between">
-        <div className={`${p.iconBg} ${p.iconColor} rounded-lg p-2`}>
-          <Icon className="h-5 w-5" />
+    <div className={`bg-white border border-slate-200 rounded-xl shadow-sm p-3 sm:p-4 ring-1 ${p.ring} hover:shadow-md transition min-w-0`}>
+      <div className="flex items-start justify-between gap-2">
+        <div className={`${p.iconBg} ${p.iconColor} rounded-lg p-1.5 sm:p-2 shrink-0`}>
+          <Icon className="h-4 w-4 sm:h-5 sm:w-5" />
         </div>
-        {sub && <span className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">{sub}</span>}
+        {sub && <span className="text-[9px] sm:text-[10px] uppercase tracking-wider text-slate-400 font-semibold text-right truncate">{sub}</span>}
       </div>
-      <div className={`mt-3 ${money ? "text-xl" : "text-3xl"} font-bold ${p.value}`}>{value}</div>
-      <div className="text-xs text-slate-500 mt-0.5">{label}</div>
+      <div
+        className={`mt-2 sm:mt-3 font-bold ${p.value} truncate tabular-nums`}
+        style={valueStyle}
+        title={typeof value === "string" || typeof value === "number" ? String(value) : undefined}
+      >
+        {value}
+      </div>
+      <div className="text-[11px] sm:text-xs text-slate-500 mt-0.5 truncate">{label}</div>
     </div>
   );
 }
