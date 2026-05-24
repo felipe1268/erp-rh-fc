@@ -43,6 +43,10 @@ export default function EquipamentosLocados() {
   const [filtroObra, setFiltroObra] = useState<string>("");
   // Rev. 2337 — filtro por categoria ("" = todas; "__null__" = sem categoria; "<nome>" = nome exato)
   const [filtroCategoria, setFiltroCategoria] = useState<string>("");
+  // Rev. 2361 — filtro por urgência de vencimento (só aplica sobre em_uso).
+  // "" = sem filtro; "vencidos" = fim < hoje; "5d" = fim em [hoje, hoje+5d);
+  // "30d" = fim em [hoje, hoje+30d). Setado ao clicar nos cards KPI.
+  const [filtroVencimento, setFiltroVencimento] = useState<"" | "vencidos" | "5d" | "30d">("");
   // Rev. 2344 — agrupa cards por descrição+obra (default ON) para condensar
   // listas com muitas unidades idênticas (1218 cards → ~60 grupos).
   const [agruparPorDescObra, setAgruparPorDescObra] = useState<boolean>(true);
@@ -69,11 +73,30 @@ export default function EquipamentosLocados() {
     const oid = parseInt(filtroObra) || 0;
     return dataPorStatus.filter(l => Number(l.obraId) === oid);
   }, [dataPorStatus, filtroObra]);
-  const data = useMemo(() => {
+  // Rev. 2361 — pipeline: status → obra → categoria → vencimento.
+  // `dataPorCat` (pré-vencimento) é a fonte do `stats` para que os contadores
+  // dos cards KPI continuem mostrando os totais ao clicar e filtrar por urgência
+  // (caso contrário, clicar em "Atrasados" zeraria "Vencendo" e vice-versa).
+  const dataPorCat = useMemo(() => {
     if (!filtroCategoria) return dataPorStatusEObra;
     if (filtroCategoria === "__null__") return dataPorStatusEObra.filter(l => !l.categoria);
     return dataPorStatusEObra.filter(l => String(l.categoria || "") === filtroCategoria);
   }, [dataPorStatusEObra, filtroCategoria]);
+  const data = useMemo(() => {
+    if (!filtroVencimento) return dataPorCat;
+    const hoje = Date.now();
+    const lim5  = hoje + 5  * 86400 * 1000;
+    const lim30 = hoje + 30 * 86400 * 1000;
+    return dataPorCat.filter(l => {
+      if (l.status !== "em_uso") return false;
+      const fim = new Date(l.dataFimPrevista).getTime();
+      if (!isFinite(fim)) return false;
+      if (filtroVencimento === "vencidos") return fim < hoje;
+      if (filtroVencimento === "5d")       return fim >= hoje && fim < lim5;
+      if (filtroVencimento === "30d")      return fim >= hoje && fim < lim30;
+      return true;
+    });
+  }, [dataPorCat, filtroVencimento]);
 
   // Rev. 2344 — agrupamento por descrição+obra (key normalizada). Cada grupo
   // agrega: contagem, status mix, Σ valorMensal, foto representativa, lista
@@ -662,21 +685,28 @@ export default function EquipamentosLocados() {
     checkIn.mutate({ companyId, id: modalCheckin.id, observacao: checkinObs || undefined });
   }
 
+  // Rev. 2361 — stats lê de `dataPorCat` (pré-vencimento) pra que os contadores
+  // dos cards continuem corretos mesmo quando o filtro de urgência já está ativo
+  // (clicar em "Atrasados" não deve zerar "Vencendo 5d" e vice-versa). Adicionado
+  // `vencendo5` (fim em [hoje, hoje+5d)) pro novo card "Vencendo (5d)".
   const stats = useMemo(() => {
-    const s = { ativos: 0, vencendo: 0, atrasados: 0, valorMes: 0 };
+    const s = { ativos: 0, vencendo5: 0, vencendo: 0, atrasados: 0, valorMes: 0 };
     const hoje = Date.now();
+    const limite5  = hoje + 5  * 86400 * 1000;
     const limite30 = hoje + 30 * 86400 * 1000;
-    for (const l of data as any[]) {
+    for (const l of dataPorCat as any[]) {
       if (l.status === "em_uso") {
         s.ativos++;
         s.valorMes += Number(l.valorMensal) || 0;
         const fim = new Date(l.dataFimPrevista).getTime();
+        if (!isFinite(fim)) continue;
         if (fim < hoje) s.atrasados++;
-        else if (fim < limite30) s.vencendo++;
+        else if (fim < limite5) s.vencendo5++;
+        if (fim >= hoje && fim < limite30) s.vencendo++;
       }
     }
     return s;
-  }, [data]);
+  }, [dataPorCat]);
 
   const STATUS_PILLS: { key: string; label: string; color: string }[] = [
     { key: "",             label: "Todos",       color: "from-slate-500 to-slate-700" },
@@ -968,11 +998,31 @@ export default function EquipamentosLocados() {
           </div>
         </div>
 
-        {/* KPI cards modernos · Rev. 2338 — responsivos: 1col(<sm) → 2col(sm) → 4col(md+) */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2 sm:gap-3">
-          <Kpi icon={Activity}      label="Ativos"         value={stats.ativos}             tint="blue"   sub="em locação"  />
-          <Kpi icon={Clock}         label="Vencendo (30d)" value={stats.vencendo}           tint="amber"  sub="atenção"     />
-          <Kpi icon={AlertTriangle} label="Atrasados"      value={stats.atrasados}          tint="red"    sub="renovar/devolver" />
+        {/* KPI cards modernos · Rev. 2338/2361 — clicáveis (aplicam filtro de
+            urgência/status); responsivos: 2col(<sm) → 3col(sm) → 5col(md+) pra
+            comportar o novo card "Vencendo (5d)". */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2 sm:gap-3">
+          <Kpi icon={Activity}      label="Ativos"         value={stats.ativos}             tint="blue"   sub="em locação"
+            active={filtroStatus === "em_uso" && !filtroVencimento}
+            onClick={() => {
+              // Rev. 2361 — toggle real: 2º clique no card ativo volta pra "Todos"
+              // (consistente com o destoggle dos cards de urgência).
+              if (filtroStatus === "em_uso" && !filtroVencimento) { setFiltroStatus(""); }
+              else { setFiltroStatus("em_uso"); setFiltroVencimento(""); }
+            }}
+            title="Mostrar todos os equipamentos em locação (clique novamente para limpar)" />
+          <Kpi icon={AlertTriangle} label="Vencendo (5d)"  value={stats.vencendo5}          tint="red"    sub="urgente"
+            active={filtroVencimento === "5d"}
+            onClick={() => { setFiltroStatus("em_uso"); setFiltroVencimento(filtroVencimento === "5d" ? "" : "5d"); }}
+            title="Filtrar contratos que vencem nos próximos 5 dias" />
+          <Kpi icon={Clock}         label="Vencendo (30d)" value={stats.vencendo}           tint="amber"  sub="atenção"
+            active={filtroVencimento === "30d"}
+            onClick={() => { setFiltroStatus("em_uso"); setFiltroVencimento(filtroVencimento === "30d" ? "" : "30d"); }}
+            title="Filtrar contratos que vencem nos próximos 30 dias" />
+          <Kpi icon={AlertTriangle} label="Atrasados"      value={stats.atrasados}          tint="red"    sub="renovar/devolver"
+            active={filtroVencimento === "vencidos"}
+            onClick={() => { setFiltroStatus("em_uso"); setFiltroVencimento(filtroVencimento === "vencidos" ? "" : "vencidos"); }}
+            title="Filtrar contratos já vencidos (atrasados)" />
           <Kpi icon={DollarSign}    label="Custo / mês"    value={fmtMoney(stats.valorMes)} tint="emerald" sub="comprometido" money />
         </div>
 
@@ -983,7 +1033,7 @@ export default function EquipamentosLocados() {
             {STATUS_PILLS.map(p => {
               const active = filtroStatus === p.key;
               return (
-                <button key={p.key} onClick={() => setFiltroStatus(p.key)}
+                <button key={p.key} onClick={() => { setFiltroStatus(p.key); if (p.key !== "em_uso") setFiltroVencimento(""); }}
                   className={`group inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-semibold transition ${
                     active
                       ? `bg-gradient-to-r ${p.color} text-white shadow-md`
@@ -1041,10 +1091,28 @@ export default function EquipamentosLocados() {
               <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
             </div>
           </div>
-          {/* Rev. 2334+2337 — chips de filtros ativos com botão limpar */}
-          {(filtroObra || filtroCategoria || busca) && (
+          {/* Rev. 2334+2337+2361 — chips de filtros ativos com botão limpar */}
+          {(filtroObra || filtroCategoria || busca || filtroVencimento) && (
             <div className="flex flex-wrap items-center gap-2 text-xs">
               <span className="text-slate-500">Filtros ativos:</span>
+              {filtroVencimento && (
+                <span className={`inline-flex items-center gap-1.5 rounded-full pl-3 pr-1.5 py-1 font-medium border ${
+                  filtroVencimento === "vencidos" ? "bg-red-50 border-red-200 text-red-800"
+                    : filtroVencimento === "5d"   ? "bg-red-50 border-red-200 text-red-800"
+                                                  : "bg-amber-50 border-amber-200 text-amber-800"
+                }`}>
+                  {filtroVencimento === "vencidos" ? <AlertTriangle className="h-3 w-3" /> : <Clock className="h-3 w-3" />}
+                  <span>
+                    {filtroVencimento === "vencidos" ? "Atrasados"
+                      : filtroVencimento === "5d"   ? "Vencendo em 5 dias"
+                                                    : "Vencendo em 30 dias"}
+                  </span>
+                  <span className="font-bold">· {fmtN((data as any[]).length)}</span>
+                  <button onClick={() => setFiltroVencimento("")} className="ml-1 bg-white/60 hover:bg-white/90 rounded-full p-0.5" title="Remover filtro de urgência">
+                    <X className="h-3 w-3" />
+                  </button>
+                </span>
+              )}
               {filtroObra && obraSelecionada && (
                 <span className="inline-flex items-center gap-1.5 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-full pl-3 pr-1.5 py-1 font-medium">
                   <Building2 className="h-3 w-3" />
@@ -1074,7 +1142,7 @@ export default function EquipamentosLocados() {
                   </button>
                 </span>
               )}
-              <button onClick={() => { setFiltroObra(""); setFiltroCategoria(""); setBusca(""); }} className="text-slate-500 hover:text-slate-700 underline ml-1">limpar tudo</button>
+              <button onClick={() => { setFiltroObra(""); setFiltroCategoria(""); setBusca(""); setFiltroVencimento(""); }} className="text-slate-500 hover:text-slate-700 underline ml-1">limpar tudo</button>
             </div>
           )}
           {/* Rev. 2323 — Selecionar todos visíveis (cabeçalho da lista). */}
@@ -2786,21 +2854,26 @@ export default function EquipamentosLocados() {
   );
 }
 
-function Kpi({ icon: Icon, label, value, sub, tint, money }: { icon: LucideIcon; label: string; value: ReactNode; sub?: string; tint: "blue" | "amber" | "red" | "emerald"; money?: boolean }) {
-  const palette: Record<string, { ring: string; iconBg: string; iconColor: string; value: string }> = {
-    blue:    { ring: "ring-blue-100",    iconBg: "bg-blue-50",    iconColor: "text-blue-600",    value: "text-blue-900" },
-    amber:   { ring: "ring-amber-100",   iconBg: "bg-amber-50",   iconColor: "text-amber-600",   value: "text-amber-900" },
-    red:     { ring: "ring-red-100",     iconBg: "bg-red-50",     iconColor: "text-red-600",     value: "text-red-900" },
-    emerald: { ring: "ring-emerald-100", iconBg: "bg-emerald-50", iconColor: "text-emerald-600", value: "text-emerald-900" },
+function Kpi({ icon: Icon, label, value, sub, tint, money, onClick, active, title }: { icon: LucideIcon; label: string; value: ReactNode; sub?: string; tint: "blue" | "amber" | "red" | "emerald"; money?: boolean; onClick?: () => void; active?: boolean; title?: string }) {
+  const palette: Record<string, { ring: string; ringActive: string; iconBg: string; iconColor: string; value: string; bgActive: string }> = {
+    blue:    { ring: "ring-blue-100",    ringActive: "ring-2 ring-blue-500",       iconBg: "bg-blue-50",    iconColor: "text-blue-600",    value: "text-blue-900",    bgActive: "bg-blue-50/60"    },
+    amber:   { ring: "ring-amber-100",   ringActive: "ring-2 ring-amber-500",      iconBg: "bg-amber-50",   iconColor: "text-amber-600",   value: "text-amber-900",   bgActive: "bg-amber-50/60"   },
+    red:     { ring: "ring-red-100",     ringActive: "ring-2 ring-red-500",        iconBg: "bg-red-50",     iconColor: "text-red-600",     value: "text-red-900",     bgActive: "bg-red-50/60"     },
+    emerald: { ring: "ring-emerald-100", ringActive: "ring-2 ring-emerald-500",    iconBg: "bg-emerald-50", iconColor: "text-emerald-600", value: "text-emerald-900", bgActive: "bg-emerald-50/60" },
   };
   const p = palette[tint];
   // Rev. 2338 — tipografia fluida (clamp) p/ caber tanto em mobile quanto desktop
   // sem quebrar layout quando valor monetário cresce (ex: "R$ 15.815,50").
+  // Rev. 2361 — com 5 cards o clamp ficou um pouco mais agressivo no mínimo.
   const valueStyle = money
-    ? { fontSize: "clamp(1rem, 2.6vw, 1.5rem)" }   // R$ ... — encolhe pra caber
-    : { fontSize: "clamp(1.5rem, 3.2vw, 2rem)" };  // números puros — maior
-  return (
-    <div className={`bg-white border border-slate-200 rounded-xl shadow-sm p-3 sm:p-4 ring-1 ${p.ring} hover:shadow-md transition min-w-0`}>
+    ? { fontSize: "clamp(0.95rem, 2.2vw, 1.4rem)" } // R$ ... — encolhe pra caber em 5col
+    : { fontSize: "clamp(1.25rem, 2.8vw, 1.85rem)" };
+  // Rev. 2361 — quando há onClick vira <button> com hover/ring de seleção + ARIA pressed.
+  const baseCls = `border rounded-xl shadow-sm p-3 sm:p-4 ring-1 transition min-w-0 w-full text-left ${
+    active ? `${p.ringActive} ${p.bgActive} border-transparent shadow-md` : `bg-white border-slate-200 ${p.ring}`
+  } ${onClick ? "hover:shadow-md hover:-translate-y-0.5 cursor-pointer active:scale-[0.98]" : ""}`;
+  const content = (
+    <>
       <div className="flex items-start justify-between gap-2">
         <div className={`${p.iconBg} ${p.iconColor} rounded-lg p-1.5 sm:p-2 shrink-0`}>
           <Icon className="h-4 w-4 sm:h-5 sm:w-5" />
@@ -2815,8 +2888,16 @@ function Kpi({ icon: Icon, label, value, sub, tint, money }: { icon: LucideIcon;
         {typeof value === "number" ? value.toLocaleString("pt-BR") : value}
       </div>
       <div className="text-[11px] sm:text-xs text-slate-500 mt-0.5 truncate">{label}</div>
-    </div>
+    </>
   );
+  if (onClick) {
+    return (
+      <button type="button" onClick={onClick} aria-pressed={!!active} title={title} className={baseCls}>
+        {content}
+      </button>
+    );
+  }
+  return <div className={baseCls} title={title}>{content}</div>;
 }
 function Section({ icon: Icon, title, tint, children }: { icon: LucideIcon; title: string; tint: "emerald" | "blue" | "amber" | "slate" | "red"; children: ReactNode }) {
   const palette: Record<string, { bar: string; iconBg: string; iconColor: string; text: string }> = {

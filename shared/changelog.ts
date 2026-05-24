@@ -1,6 +1,78 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2361 — **UX/FILTRO · Cards KPI de Equipamentos Locados ficaram
+ * CLICÁVEIS (drill-down por urgência) + novo card "Vencendo (5d)" +
+ * grid 5col responsivo (2/3/5).**
+ *
+ * **Pedido user (24/05/2026, IMG_1157):** "Quero poder clicar no card
+ * e filtrar quero poder ver o que tá vencido, vencendo nos próximos 5
+ * dias, quero todos cards responsivos".
+ *
+ * **Problema:** os 4 cards KPI (Ativos / Vencendo 30d / Atrasados /
+ * Custo) eram só leitura. Pra ver "o que está vencendo em 5 dias" o
+ * user precisava saber a data fim de cada um dos 1.218 contratos —
+ * humanamente inviável. Além disso só havia o agregado "30d", sem
+ * granularidade de urgência crítica (≤5d).
+ *
+ * **Fix — 1 arquivo só** (`client/src/pages/equipamentos/Locados.tsx`):
+ *
+ * **(1) Novo state `filtroVencimento`** (`'' | 'vencidos' | '5d' | '30d'`).
+ * Pipeline extendido: status → obra → categoria → **vencimento**. O memo
+ * `data` aplica o filtro de urgência (sempre limita a `status === 'em_uso'`,
+ * que é o único universo onde "vencido/vencendo" faz sentido). `dataPorCat`
+ * (pré-vencimento) foi extraído pra que o `stats` continue mostrando os
+ * 5 contadores corretos mesmo com filtro ativo — caso contrário, clicar
+ * em "Atrasados" zeraria "Vencendo 5d" e o user perderia a referência.
+ *
+ * **(2) Novo card "Vencendo (5d)"** — vermelho, sub "urgente". Calculado
+ * em `stats.vencendo5` (fim em `[hoje, hoje+5d)`). Atende exatamente o
+ * pedido "quero ver o que está vencendo nos próximos 5 dias".
+ *
+ * **(3) Componente `Kpi` ganhou `onClick` + `active` + `title`.** Quando
+ * `onClick` é passado, renderiza como `<button>` com `aria-pressed`,
+ * hover lift (`-translate-y-0.5`), `active:scale-[0.98]` (feedback tátil
+ * iPad) e `ring-2` colorido + bg `*-50/60` quando selecionado. Cards sem
+ * onClick (ex: "Custo / mês", que é métrica passiva) continuam como
+ * `<div>` estático. Clique aplica filtro toggle (clicar 2x destoggle):
+ *   - **Ativos** → `setFiltroStatus("em_uso") + setFiltroVencimento("")`
+ *   - **Vencendo 5d / 30d / Atrasados** → mesmo + `setFiltroVencimento(...)`
+ *
+ * **(4) Grid responsivo refeito** pra 5 cards: era
+ * `grid-cols-1 sm:grid-cols-2 md:grid-cols-4` (4 cards). Virou
+ * `grid-cols-2 sm:grid-cols-3 md:grid-cols-5` — 2 por linha em mobile
+ * (era 1 = scroll vertical absurdo), 3 em sm, 5 em md+. Clamp do valor
+ * apertado um pouco no mínimo (`1.25rem` em vez de `1.5rem`) pra os
+ * números puros não estourarem largura quando 5 cards dividem a linha.
+ *
+ * **(5) Chip de filtro ativo no painel "Filtros ativos".** Novo chip
+ * vermelho ("Atrasados" / "Vencendo em 5 dias") ou âmbar ("Vencendo em
+ * 30 dias") com contador real (`data.length` pós-filtro) e botão X pra
+ * remover. "limpar tudo" agora também zera `filtroVencimento`.
+ *
+ * **(6) Pills de status auto-clearam vencimento** quando o user troca
+ * pra "Devolvidos", "Em renovação", etc — sem isso, ficar em "Devolvidos
+ * + Atrasados" daria zero resultados (devolvido não pode estar atrasado)
+ * e o user veria lista vazia sem entender porquê.
+ *
+ * **Decisões de design:**
+ * - **Toggle nos cards** (clicar de novo desativa) em vez de "tab" pra
+ *   preservar a affordance de "card de métrica" — cada card continua
+ *   mostrando seu número, mas agora é um atalho pra drill-down.
+ * - **Cards 5col em md+** (não 4) — agrupar 5d+30d num único card com
+ *   menu seria menos descobrível; o user pediu explicitamente o card
+ *   "vencendo 5 dias", então ele tem que estar visível por padrão.
+ * - **Cores diferenciadas:** 5d vermelho (urgente, ação esta semana) ·
+ *   30d âmbar (planejar) · Atrasados vermelho (já estourou) — mantém
+ *   a hierarquia visual de criticidade.
+ * - **Vencimento só aplica a `em_uso`** porque "atrasado / vencendo" só
+ *   existe nesse universo (devolvido já fechou, em_renovacao está sendo
+ *   tratado). Esse invariante é forçado tanto no pipeline quanto no
+ *   handler dos cards (que sempre setam status="em_uso" antes).
+ *
+ * **R-001 / R-007 / R-010:** N/A — 100% client-side, zero DDL,
+ * zero SQL, zero mutations novas.
+ *
  * Rev. 2360 — **UX/REDESIGN · Aba "Movimentações" do Dashboard
  * Almoxarifado completamente refeita pra análise mais profunda +
  * TODAS as datas dos charts padronizadas em formato BR (DD/MM).**

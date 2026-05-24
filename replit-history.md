@@ -2,6 +2,7 @@
 
 > Este arquivo guarda os one-liners das revisões antigas para manter o `replit.md` enxuto.
 
+- **Rev. 2354** — UX · Inputs de dinheiro no preview do import PDF de locação passam a usar formato BRL "R$ X.XXX,XX" (ponto de milhar + vírgula decimal). Ver `shared/changelog.ts`.
 - **Rev. 2353** — FEATURE/REGRA · Import PDF de locação EXIGE obra vinculada por contrato antes de cadastrar (client bloqueia botão + server recusa BAD_REQUEST + banner vermelho + agrupamento por descricao+obra). Ver `shared/changelog.ts`.
 - **Rev. 2351** — HOTFIX/FEATURE · Extração de PERÍODO DE LOCAÇÃO por contrato no import PDF reforçada (prompt Gemini com 8 regras + 3 exemplos F051/R051; `toIso` aceita D/M/AAAA, DD-MM, DD.MM; fallback fim = início + 30 dias). Ver `shared/changelog.ts`.
 - **Rev. 2350** — CAUSA RAIZ ENCONTRADA · Busca de fotos com IA — GOOGLE_API_KEY tem Custom Search BLOQUEADO no GCP + OpenVerse/Wikimedia indexam quase só EN. Fix: LLM gera query EN curta, cascade OV→WM, blocklist cirúrgica + barra PDFs, fallback EN por categoria. Ver `shared/changelog.ts`.
