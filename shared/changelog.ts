@@ -1,6 +1,152 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2337 — **FEATURE · Categorização automática dos equipamentos
+ * locados via IA + filtro por categoria na tela Equipamentos Locados.**
+ *
+ * Pedido user (24/05/2026, sequência de duas perguntas): primeiro
+ * "A ia consegue separar... categoria por exemplo... seria possível
+ * a ia colocar foto do produto tbm?" — depois, em resposta à pergunta
+ * sobre categorias propostas, escolheu "🤖 Deixa a IA propor as
+ * categorias com base nos 1.218 itens" + (pra foto, em rev separada)
+ * "📷 IA busca foto real na web (Google Images) — gratuito".
+ *
+ * Contexto: pós-import em massa (Rev. 2333) o acervo virou um paredão
+ * de 1.218 cards SEM categoria — a coluna `categoria varchar(100)`
+ * JÁ EXISTIA no schema (drizzle/schema.ts L8641) desde a Rev. 2257
+ * e o form manual de cadastro até preenchia, mas a IA do import PDF
+ * (Rev. 2308) nunca extraía esse campo, e nada classificava em lote
+ * os já cadastrados. Resultado: filtro inutilizável, badge mostrando
+ * "sem categoria" em 100% dos cards, análise gerencial impossível.
+ *
+ * **Implementação** (zero schema change — coluna já existia):
+ *
+ * **A. Server (`server/routers/equipamentos.ts`):**
+ *
+ *   (1) **Prompt + responseSchema do `executeParseContratoLocacao`
+ *       estendidos**: adicionado campo `categoria` no schema dos itens
+ *       (não required — backward compat) + bloco no prompt listando
+ *       7 categorias canônicas (Andaime e escoramento, Equipamento
+ *       elétrico, Ferramenta manual, EPI/EPC, Veículo/Máquina pesada,
+ *       Container/Mobiliário, Outros) com exemplos pra cada uma. A
+ *       Gemini Vision agora classifica DURANTE o parse — próximos
+ *       imports já vêm categorizados sem custo extra (mesma call).
+ *
+ *   (2) **`importarContratosLocacaoLote` aceita `categoria` opcional
+ *       por item** (Zod `z.string().max(100).optional()`) + persiste
+ *       em `equipamentosLocados.categoria` no bulk INSERT.
+ *
+ *   (3) **Nova procedure `locadosCategorizarComIA({companyId,
+ *       sobrescrever?})`** — backfill em lote. Algoritmo:
+ *       (a) `SELECT DISTINCT descricao, COUNT(*) AS qtd FROM
+ *           equipamentos_locados WHERE company_id = X AND (categoria
+ *           IS NULL OR sobrescrever) GROUP BY descricao ORDER BY qtd
+ *           DESC`. Trabalhar com DISTINCT (não com linhas individuais)
+ *           reduz 1218 → ~50-80 strings únicas — IA processa tudo em
+ *           UMA call.
+ *       (b) Chama `invokeLLM` (Claude→Gemini fallback). System prompt
+ *           pede 5-10 categorias curtas em jargão de obra brasileira,
+ *           cada uma com ≥2 descrições (evita pulverização). Inclui
+ *           qtd entre parênteses pra IA priorizar o que importa.
+ *           `maxTokens: 16000`, `response_format: json_object`.
+ *       (c) Output: `{ categorias: string[], mapping:
+ *           [{descricao, categoria}] }`. Saneamento: ignora mappings
+ *           com descrição que não foi enviada ou categoria que não foi
+ *           proposta (defesa contra alucinação).
+ *       (d) Agrupa mapping por categoria → 1 `UPDATE ... WHERE
+ *           descricao = ANY(ARRAY[...]::varchar[])` por categoria
+ *           (chunks de 200 descrições). 7 categorias × 1 UPDATE =
+ *           7 round-trips ao Neon (vs 1218 se fizesse linha a linha).
+ *       (e) Retorna stats: `{categorias, itensAtualizados,
+ *           descricoesAnalisadas, descricoesNaoMapeadas: string[20],
+ *           haMaisLotes}`. Limite defensivo de 800 descrições por call
+ *           (acima disso retorna `haMaisLotes: true` e o user roda
+ *           de novo).
+ *       (f) Erro `Nenhuma chave de IA` → `PRECONDITION_FAILED`.
+ *
+ * **B. Client (`client/src/pages/equipamentos/Locados.tsx`):**
+ *
+ *   (1) **confirmarImport** agora envia `categoria` por item (vinda
+ *       da IA do parse) — fecha o loop pra próximos imports.
+ *
+ *   (2) **Pipeline de filtros estendido**: `dataAll → dataPorStatus
+ *       → dataPorStatusEObra → data (com filtroCategoria)`. Filtro
+ *       de categoria é o ÚLTIMO da cadeia, então os counters do select
+ *       de categoria respeitam status+obra correntes (cross-filter).
+ *
+ *   (3) **`categoriasComItens` useMemo**: agrupa `dataPorStatusEObra`
+ *       por `categoria || "__null__"`, com count + valorMes; "sem
+ *       categoria" sempre ao fim. `categoriaSelecionada` resolve o
+ *       chip ativo sem reiterar. `totalSemCategoria` (sobre `dataAll`)
+ *       é usado pra mostrar/esconder o botão de IA.
+ *
+ *   (4) **UI**: grid de filtros muda de 2-col (busca | obra) pra
+ *       3-col (busca | obra | categoria). Select de categoria com
+ *       ícone Tag + borda violet quando ativo (distingue visualmente
+ *       do verde da obra). Chip de categoria ativa também violet.
+ *
+ *   (5) **Badge no card**: antes mostrava "sem categoria" em texto
+ *       cinza misturado com o patrimônio (l.codigoPatrimonioFornecedor
+ *       || "s/ patr." · "sem categoria"). Agora é uma pílula clicável:
+ *       quando há categoria, botão violet que filtra ao clicar
+ *       (`setFiltroCategoria(l.categoria)` + stopPropagation); quando
+ *       não há, pílula cinza estática "sem categoria" com tooltip
+ *       indicando o botão de IA.
+ *
+ *   (6) **Botão "Categorizar com IA"** no header (ao lado do
+ *       "Importar PDF (IA)"): aparece SÓ se `totalSemCategoria > 0`,
+ *       gradiente violet, badge com a contagem. Loader2 spinner
+ *       durante a chamada.
+ *
+ *   (7) **Dois modais**:
+ *       - **Confirmação** (violet→fuchsia gradient): explica o que
+ *         vai rodar, com info-box azul ("~10-30s · preserva o que
+ *         você já categorizou na mão · pode rodar de novo"). Botão
+ *         "Categorizar agora" dispara `categorizarMut.mutate`.
+ *       - **Resultado** (emerald→teal gradient): mostra as N
+ *         categorias propostas como pills clicáveis (clique aplica
+ *         o filtro + fecha o modal — fluxo direto pra ver os itens
+ *         de uma categoria). Box âmbar com descrições não mapeadas
+ *         (até 20 listadas) se houver. Box azul "Há mais lotes" se
+ *         `haMaisLotes`. Footer com botão fechar.
+ *
+ * **Por que DISTINCT no banco e não LINHAS no payload da IA**: 1218
+ * linhas individuais teriam ~50-80 strings únicas — mandar tudo
+ * estoura prompt sem trazer informação nova. Ao mandar DISTINCT +
+ * qtd, a IA vê a distribuição (categoria com 500 itens é mais
+ * importante que uma com 1) e o prompt cabe folgado em 16k tokens.
+ *
+ * **Por que UPDATE por categoria (não por linha)**: cada UPDATE
+ * SET categoria = 'X' WHERE descricao = ANY([...]) toca centenas
+ * de linhas em 1 round-trip. 7 categorias = 7 round-trips totais.
+ * Se fizesse `UPDATE WHERE id = ?` por linha seria 1218 round-trips
+ * (mesmo problema da Rev. 2329).
+ *
+ * **Por que badge clicável no card**: descobrabilidade. User vê "POSTE
+ * DUPLO ARTICULADO · Andaime e escoramento", clica na categoria e
+ * vê todos os outros postes da mesma categoria — análise emerge do
+ * gesto natural, sem ir ao filtro de cima.
+ *
+ * **Escopo deliberadamente fora desta rev**: (a) FOTOS dos
+ * equipamentos via Google Custom Search — depende de CSE_ID que
+ * o user precisa criar em programmablesearchengine.google.com
+ * (próxima rev, secret novo). (b) Nova tab "Por Categoria" no
+ * dashboard Almox & Equip. mostrando distribuição — vai sair na
+ * Rev. 2338 junto com fotos, ou em rev específica se user pedir.
+ *
+ * **R-001/R-007/R-010**: N/A — UPDATE escopo por `company_id`,
+ * idempotente (default só toca categoria NULL/vazia), iniciado
+ * pelo user via botão. ZERO DDL (coluna `categoria` já existia).
+ *
+ * **Hardening pós-review (mesma rev)**: code review apontou que a
+ * mutation só usava `input.companyId` sem cruzar com as empresas
+ * permitidas ao `ctx.user` — qualquer usuário autenticado poderia
+ * disparar a IA sobre dados de OUTRO tenant trocando o companyId
+ * no payload (cross-tenant data tampering). Adicionado o mesmo guard
+ * de `locadosVincularObraLote`/`locadosExcluirLote`:
+ * `getCompaniesForUser(ctx.user.id, ctx.user.role)` →
+ * `FORBIDDEN` se `input.companyId` não estiver na lista.
+ *
  * Rev. 2336 — **FEATURE/UX · Drill-down clicável nas células da tabela
  * "Locações mês a mês" do Dashboard Almox & Equip. → modal moderno
  * com lista detalhada dos equipamentos, KPI strip, busca interna

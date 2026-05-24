@@ -743,6 +743,8 @@ export const equipamentosRouter = router({
           descricao: z.string().min(1).max(255),
           quantidade: z.number().min(1).default(1),
           subtotal: z.number().optional(),
+          // Rev. 2337 — categoria inferida pela IA durante o parse do PDF
+          categoria: z.string().max(100).optional(),
         })).min(1),
       })).min(1).max(200),
     }))
@@ -775,6 +777,7 @@ export const equipamentosRouter = router({
                 fornecedorNome: c.fornecedorNome ?? null,
                 codigoPatrimonioFornecedor: it.patrimonio ?? null,
                 descricao: it.descricao,
+                categoria: it.categoria ?? null,
                 dataInicio: c.periodoInicio,
                 dataFimPrevista: c.periodoFim,
                 valorMensal: subtotalUnidade > 0 ? String(subtotalUnidade.toFixed(2)) : null,
@@ -812,6 +815,143 @@ export const equipamentosRouter = router({
         contratosImportados: input.contratos.length,
         itensImportados: totalItens,
         ids,
+      };
+    }),
+
+  // ── Rev. 2337 — CATEGORIZAÇÃO EM LOTE VIA IA ──────────────────────────────
+  // Backfill de `categoria` em equipamentos_locados existentes.
+  // Estratégia: lê descrições DISTINCT → IA propõe categorias + mapping →
+  // bulk UPDATE agrupado por categoria (1 round-trip por categoria, não por linha).
+  // Idempotente: por padrão só toca registros com categoria NULL/vazia.
+  locadosCategorizarComIA: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      sobrescrever: z.boolean().optional().default(false),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      // Tenant isolation — confirma que a empresa pertence ao usuário
+      // (mesmo padrão de locadosVincularObraLote/locadosExcluirLote).
+      // SEM isto, qualquer usuário autenticado poderia disparar a IA
+      // sobre dados de OUTRO tenant passando companyId alheio.
+      const allowedCompanies = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+      const allowedIds = (allowedCompanies as any[]).map(c => c.id);
+      if (!allowedIds.includes(input.companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta empresa." });
+      }
+
+      // 1. Descrições distintas pendentes de categorização.
+      const condCat = input.sobrescrever ? sql`TRUE` : sql`(categoria IS NULL OR categoria = '')`;
+      const rowsResult: any = await db.execute(sql`
+        SELECT DISTINCT descricao, COUNT(*)::int AS qtd
+        FROM equipamentos_locados
+        WHERE company_id = ${input.companyId}
+          AND descricao IS NOT NULL
+          AND descricao <> ''
+          AND ${condCat}
+        GROUP BY descricao
+        ORDER BY qtd DESC, descricao ASC
+      `);
+      const descricoes: { descricao: string; qtd: number }[] = (rowsResult.rows || rowsResult) as any[];
+      if (descricoes.length === 0) {
+        return { ok: true as const, categorias: [] as string[], itensAtualizados: 0, descricoesAnalisadas: 0, descricoesNaoMapeadas: [] as string[] };
+      }
+
+      // 2. Chama IA. Limite defensivo: 800 descrições por call (cabe em 1 prompt
+      // de ~40k tokens com folga). Acima disso o user roda 2x.
+      const MAX_DESC = 800;
+      const lote = descricoes.slice(0, MAX_DESC);
+      const { invokeLLM } = await import("../_core/llm");
+      const systemPrompt = `Você é um especialista em classificação de equipamentos de obra de construção civil pesada brasileira. Recebe uma lista de descrições de equipamentos LOCADOS de uma única construtora e deve agrupá-las em categorias úteis para análise gerencial.
+
+Regras OBRIGATÓRIAS:
+1. PROPOR de 5 a 10 CATEGORIAS curtas (≤ 40 chars), usando o jargão de obra brasileira (andaime, escoramento, elétrico, ferramenta, EPI, etc.). Cada categoria deve ter ≥ 2 descrições para evitar pulverização. Itens isolados vão pra "Outros".
+2. Para CADA descrição da lista, atribuir UMA das categorias propostas. NÃO invente categorias novas no mapping.
+3. Retornar APENAS JSON válido — sem markdown, sem preâmbulo:
+   {
+     "categorias": ["Andaime e escoramento", "Equipamento elétrico", ...],
+     "mapping": [ {"descricao": "TEXTO EXATO ORIGINAL", "categoria": "Andaime e escoramento"}, ... ]
+   }
+4. O campo "descricao" do mapping deve ser IGUAL (caractere a caractere) ao recebido.`;
+
+      const userPrompt = `Classifique as ${lote.length} descrições abaixo (números entre parênteses = quantidade de unidades dessa descrição no acervo, para você priorizar categorias relevantes):
+
+${lote.map(d => `- ${d.descricao}  (${d.qtd})`).join("\n")}
+
+Gere o JSON conforme o esquema. Não omita nenhuma descrição.`;
+
+      let parsed: any;
+      try {
+        const resp = await invokeLLM({
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: userPrompt },
+          ],
+          maxTokens: 16000,
+          response_format: { type: "json_object" },
+        });
+        const content = resp.choices?.[0]?.message?.content;
+        let raw = (typeof content === "string" ? content : Array.isArray(content) ? content.map((c: any) => c?.text ?? "").join("") : "").trim();
+        const m = raw.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+        if (m) raw = m[1].trim();
+        const fi = raw.indexOf("{"); const li = raw.lastIndexOf("}");
+        if (fi >= 0 && li > fi) raw = raw.slice(fi, li + 1);
+        parsed = JSON.parse(raw);
+      } catch (err: any) {
+        const msg = err?.message || String(err);
+        if (msg.includes("Nenhuma chave de IA")) {
+          throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Nenhuma IA configurada (ANTHROPIC_API_KEY ou GOOGLE_API_KEY ausente)." });
+        }
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: `Falha na IA: ${msg.slice(0, 200)}` });
+      }
+
+      const categoriasValidas: string[] = Array.isArray(parsed.categorias) ? parsed.categorias.map((c: any) => String(c).slice(0, 100).trim()).filter(Boolean) : [];
+      const categoriaSet = new Set(categoriasValidas);
+      const mapping: { descricao: string; categoria: string }[] = Array.isArray(parsed.mapping) ? parsed.mapping : [];
+
+      // 3. Agrupa descrições por categoria → 1 UPDATE por categoria (round-trips = #categorias).
+      const porCategoria = new Map<string, string[]>();
+      const descricoesNaoMapeadas: string[] = [];
+      const setEnviadas = new Set(lote.map(d => d.descricao));
+      for (const m2 of mapping) {
+        const desc = String(m2?.descricao ?? "");
+        const cat = String(m2?.categoria ?? "").slice(0, 100).trim();
+        if (!desc || !setEnviadas.has(desc)) continue;
+        if (!categoriaSet.has(cat)) continue;
+        const arr = porCategoria.get(cat) || [];
+        arr.push(desc);
+        porCategoria.set(cat, arr);
+      }
+      const mapeadasSet = new Set<string>();
+      for (const arr of porCategoria.values()) for (const d of arr) mapeadasSet.add(d);
+      for (const d of lote) if (!mapeadasSet.has(d.descricao)) descricoesNaoMapeadas.push(d.descricao);
+
+      let itensAtualizados = 0;
+      for (const [cat, descs] of porCategoria.entries()) {
+        if (descs.length === 0) continue;
+        // UPDATE em chunks de 200 descrições pra evitar SQL gigante.
+        for (let i = 0; i < descs.length; i += 200) {
+          const slice = descs.slice(i, i + 200);
+          const condSobre = input.sobrescrever ? sql`TRUE` : sql`(categoria IS NULL OR categoria = '')`;
+          const res: any = await db.execute(sql`
+            UPDATE equipamentos_locados
+               SET categoria = ${cat}, updated_at = NOW()
+             WHERE company_id = ${input.companyId}
+               AND ${condSobre}
+               AND descricao = ANY(${sql.raw(`ARRAY[${slice.map(d => `'${d.replace(/'/g, "''")}'`).join(",")}]::varchar[]`)})
+          `);
+          itensAtualizados += Number(res.rowCount ?? res.rows?.length ?? 0);
+        }
+      }
+
+      return {
+        ok: true as const,
+        categorias: categoriasValidas,
+        itensAtualizados,
+        descricoesAnalisadas: lote.length,
+        descricoesNaoMapeadas: descricoesNaoMapeadas.slice(0, 20),
+        haMaisLotes: descricoes.length > MAX_DESC,
       };
     }),
 
@@ -863,7 +1003,7 @@ async function executeParseContratoLocacao(input: {
 }): Promise<{ contratos: any[]; totalContratos: number; totalItens: number }> {
   const { invokeGeminiVision } = await import("../_core/llm");
   const systemPrompt = `Você é um extrator de relatórios de locação de equipamentos para construção civil no Brasil.\nCada locadora tem um layout próprio (Jalves, Mills, Locamerica, etc.). Detecte automaticamente o layout e extraia TODOS os contratos e seus respectivos itens.\nDatas no formato brasileiro DD/MM/AAAA. Valores em reais (R$). Quantidades inteiras ou decimais.`;
-  const prompt = `Extraia TODOS os contratos de locação deste documento. Para cada contrato, capture:\n- numeroContrato (ex: "19096-32")\n- fornecedorNome (razão social/nome fantasia da locadora — geralmente no cabeçalho)\n- localObra (endereço/identificação da obra)\n- periodoInicio (DD/MM/AAAA)\n- periodoFim (DD/MM/AAAA)\n- valorTotal (numérico, sem R$, ponto como separador decimal)\n- atendenteResponsavel\n- itens: array de {patrimonio, descricao, quantidade (number), valorUnitario (subtotal/qtde, number), subtotal (number)}\n\nRetorne APENAS JSON válido no formato {contratos: [...]}. Se um campo estiver ausente, use string vazia ou 0. Datas SEMPRE em DD/MM/AAAA.`;
+  const prompt = `Extraia TODOS os contratos de locação deste documento. Para cada contrato, capture:\n- numeroContrato (ex: "19096-32")\n- fornecedorNome (razão social/nome fantasia da locadora — geralmente no cabeçalho)\n- localObra (endereço/identificação da obra)\n- periodoInicio (DD/MM/AAAA)\n- periodoFim (DD/MM/AAAA)\n- valorTotal (numérico, sem R$, ponto como separador decimal)\n- atendenteResponsavel\n- itens: array de {patrimonio, descricao, quantidade (number), valorUnitario (subtotal/qtde, number), subtotal (number), categoria}\n\nPara o campo "categoria" de CADA ITEM, classifique em UMA das categorias abaixo (escolha a MAIS específica):\n- "Andaime e escoramento" (guarda-corpo, pranchão, diagonal, sapata ajustável, escora, cruzeta, longarina, plataforma metálica, base regulável, painel de escoramento, viga H20)\n- "Equipamento elétrico" (gerador, betoneira, vibrador, lixadeira, esmerilhadeira, serra circular/policorte, compressor, bomba submersa/centrífuga, transformador, quadro de força)\n- "Ferramenta manual" (carrinho de mão, marreta, martelete, furadeira não-elétrica, alavanca, pá, picareta)\n- "EPI/EPC" (capacete, cinto de segurança, luva, óculos, redes de proteção, tela de fachada)\n- "Veículo/Máquina pesada" (caminhão, retroescavadeira, escavadeira, guindaste, manipulador telescópico)\n- "Container/Mobiliário" (container, mesa, cadeira, armário, escritório de obra)\n- "Outros" (use somente se NÃO encaixar em nenhuma acima)\n\nRetorne APENAS JSON válido no formato {contratos: [...]}. Se um campo estiver ausente, use string vazia ou 0. Datas SEMPRE em DD/MM/AAAA.`;
 
   const responseSchema = {
     type: "object",
@@ -890,6 +1030,7 @@ async function executeParseContratoLocacao(input: {
                   quantidade: { type: "number" },
                   valorUnitario: { type: "number" },
                   subtotal: { type: "number" },
+                  categoria: { type: "string" },
                 },
                 required: ["patrimonio", "descricao", "quantidade", "subtotal"],
               },

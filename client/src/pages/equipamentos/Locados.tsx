@@ -3,7 +3,7 @@ import { useState, useMemo, useRef, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
 import { toast } from "sonner";
-import { Plus, Search, X, Truck, CheckCircle2, RotateCcw, ClipboardCheck, Eye, FileText, Upload, Sparkles, Trash2, Activity, Clock, AlertTriangle, DollarSign, Calendar, Hash, Building2, User as UserIcon, MapPin, Camera, StickyNote, ChevronDown, type LucideIcon } from "lucide-react";
+import { Plus, Search, X, Truck, CheckCircle2, RotateCcw, ClipboardCheck, Eye, FileText, Upload, Sparkles, Trash2, Activity, Clock, AlertTriangle, DollarSign, Calendar, Hash, Building2, User as UserIcon, MapPin, Camera, StickyNote, ChevronDown, Tag, Loader2, type LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import { FotosUploader, FotoItem, fmtMoney, fmtDate, Spinner } from "./_shared";
 
@@ -37,6 +37,8 @@ export default function EquipamentosLocados() {
   const [filtroStatus, setFiltroStatus] = useState<string>("em_uso");
   // Rev. 2334 — filtro por obra ("" = todas; "__null__" = sem obra; "<id>" = obra ERP)
   const [filtroObra, setFiltroObra] = useState<string>("");
+  // Rev. 2337 — filtro por categoria ("" = todas; "__null__" = sem categoria; "<nome>" = nome exato)
+  const [filtroCategoria, setFiltroCategoria] = useState<string>("");
 
   const utils = trpc.useUtils();
   // Lista TUDO (sem filtro server-side de status) pra os contadores das
@@ -51,12 +53,19 @@ export default function EquipamentosLocados() {
     () => (filtroStatus ? (dataAll as any[]).filter(l => l.status === filtroStatus) : (dataAll as any[])),
     [dataAll, filtroStatus]
   );
-  const data = useMemo(() => {
+  // Rev. 2337 — pipeline: status → obra → categoria. `dataPorStatusEObra` é
+  // exposto pro select de categoria (cross-filter respeita status+obra correntes).
+  const dataPorStatusEObra = useMemo(() => {
     if (!filtroObra) return dataPorStatus;
     if (filtroObra === "__null__") return dataPorStatus.filter(l => !l.obraId);
     const oid = parseInt(filtroObra) || 0;
     return dataPorStatus.filter(l => Number(l.obraId) === oid);
   }, [dataPorStatus, filtroObra]);
+  const data = useMemo(() => {
+    if (!filtroCategoria) return dataPorStatusEObra;
+    if (filtroCategoria === "__null__") return dataPorStatusEObra.filter(l => !l.categoria);
+    return dataPorStatusEObra.filter(l => String(l.categoria || "") === filtroCategoria);
+  }, [dataPorStatusEObra, filtroCategoria]);
 
   const [modal, setModal] = useState(false);
   const [form, setForm] = useState({ ...EMPTY });
@@ -418,6 +427,8 @@ export default function EquipamentosLocados() {
           descricao: String(it.descricao || "").slice(0, 255).trim(),
           quantidade: Math.max(1, parseInt(String(it.quantidade)) || 1),
           subtotal: Number(it.subtotal) > 0 ? Number(it.subtotal) : undefined,
+          // Rev. 2337 — categoria inferida pela IA durante o parse
+          categoria: it.categoria ? String(it.categoria).slice(0, 100).trim() : undefined,
         })).filter((it: any) => it.descricao);
         if (!c.numeroContrato || !String(c.numeroContrato).trim()) { semNumero++; return null; }
         if (!c.periodoInicio || !c.periodoFim) { semData++; return null; }
@@ -586,6 +597,43 @@ export default function EquipamentosLocados() {
   }, [dataPorStatus, obrasMap]);
   const obraSelecionada = useMemo(() => obrasComItens.find(o => o.key === filtroObra) || null, [obrasComItens, filtroObra]);
 
+  // Rev. 2337 — categorias com equipamentos no status+obra correntes (alimenta select).
+  const categoriasComItens = useMemo(() => {
+    const acc = new Map<string, { key: string; nome: string; count: number; valorMes: number }>();
+    for (const l of dataPorStatusEObra) {
+      const cat = String(l.categoria || "").trim();
+      const k = cat || "__null__";
+      const nome = cat || "— Sem categoria —";
+      const g = acc.get(k) || { key: k, nome, count: 0, valorMes: 0 };
+      g.count++;
+      g.valorMes += Number(l.valorMensal) || 0;
+      acc.set(k, g);
+    }
+    return Array.from(acc.values()).sort((a, b) => {
+      if (a.key === "__null__" && b.key !== "__null__") return 1;
+      if (b.key === "__null__" && a.key !== "__null__") return -1;
+      return b.count - a.count;
+    });
+  }, [dataPorStatusEObra]);
+  const categoriaSelecionada = useMemo(() => categoriasComItens.find(c => c.key === filtroCategoria) || null, [categoriasComItens, filtroCategoria]);
+  const totalSemCategoria = useMemo(() => (dataAll as any[]).filter(l => !l.categoria || String(l.categoria).trim() === "").length, [dataAll]);
+
+  // Rev. 2337 — Categorização em lote via IA.
+  const [modalCategIA, setModalCategIA] = useState<null | { sobrescrever: boolean }>(null);
+  const [resultadoCategIA, setResultadoCategIA] = useState<null | { categorias: string[]; itensAtualizados: number; descricoesAnalisadas: number; descricoesNaoMapeadas: string[]; haMaisLotes?: boolean }>(null);
+  const categorizarMut = trpc.equipamentos.locadosCategorizarComIA.useMutation({
+    onSuccess: (res: any) => {
+      setResultadoCategIA(res);
+      setModalCategIA(null);
+      utils.equipamentos.locadosListar.invalidate();
+      toast.success(`IA categorizou ${res.itensAtualizados} equipamento(s) em ${res.categorias.length} categoria(s).`);
+    },
+    onError: (err: any) => {
+      toast.error(err?.message || "Falha ao categorizar com IA.");
+      setModalCategIA(null);
+    },
+  });
+
   return (
     <DashboardLayout>
       <div className="max-w-7xl mx-auto px-4 py-6 space-y-5">
@@ -603,7 +651,18 @@ export default function EquipamentosLocados() {
                 <p className="text-sm text-emerald-50/90 mt-0.5">Rastreio de equipamentos em locação — recebimento, check-in semanal, devolução.</p>
               </div>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
+              {/* Rev. 2337 — Categorizar com IA (só aparece se houver itens sem categoria). */}
+              {totalSemCategoria > 0 && (
+                <button onClick={() => setModalCategIA({ sobrescrever: false })}
+                  disabled={categorizarMut.isPending}
+                  className="inline-flex items-center gap-2 bg-violet-500/90 text-white hover:bg-violet-500 px-4 py-2.5 rounded-xl shadow-md font-semibold text-sm transition ring-1 ring-violet-300/60 disabled:opacity-60 disabled:cursor-wait"
+                  title={`${totalSemCategoria} equipamento(s) sem categoria — a IA propõe categorias e classifica em lote`}>
+                  {categorizarMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Tag className="h-4 w-4" />}
+                  Categorizar com IA
+                  <span className="inline-flex items-center justify-center min-w-[22px] h-5 px-1.5 rounded-full text-[10px] font-bold bg-white/25">{totalSemCategoria}</span>
+                </button>
+              )}
               {/* Rev. 2315 — Removido botão "Receber locação"; fluxo principal é Importar PDF (IA). */}
               <button onClick={abrirImportar}
                 className="inline-flex items-center gap-2 bg-white text-indigo-700 hover:bg-indigo-50 px-5 py-2.5 rounded-xl shadow-md font-semibold text-sm transition"
@@ -643,7 +702,7 @@ export default function EquipamentosLocados() {
               );
             })}
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-[1fr_minmax(260px,auto)] gap-2">
+          <div className="grid grid-cols-1 md:grid-cols-[1fr_minmax(220px,auto)_minmax(220px,auto)] gap-2">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
               <input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar por descrição, fornecedor, patrimônio…"
@@ -667,9 +726,28 @@ export default function EquipamentosLocados() {
               </select>
               <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
             </div>
+            {/* Rev. 2337 — filtro por categoria */}
+            <div className="relative">
+              <Tag className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
+              <select
+                value={filtroCategoria}
+                onChange={e => setFiltroCategoria(e.target.value)}
+                className={`w-full pl-10 pr-8 py-2.5 border rounded-lg text-sm focus:ring-2 focus:ring-violet-500/30 outline-none transition appearance-none bg-white font-medium ${
+                  filtroCategoria ? "border-violet-400 bg-violet-50/40 text-violet-900" : "border-slate-200 text-slate-700"
+                }`}
+                title="Filtrar por categoria de equipamento">
+                <option value="">Todas as categorias ({dataPorStatusEObra.length})</option>
+                {categoriasComItens.map(c => (
+                  <option key={c.key} value={c.key}>
+                    {c.nome} · {c.count} unid.{c.valorMes > 0 ? ` · ${fmtMoney(c.valorMes)}/mês` : ""}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
+            </div>
           </div>
-          {/* Rev. 2334 — chips de filtros ativos com botão limpar */}
-          {(filtroObra || busca) && (
+          {/* Rev. 2334+2337 — chips de filtros ativos com botão limpar */}
+          {(filtroObra || filtroCategoria || busca) && (
             <div className="flex flex-wrap items-center gap-2 text-xs">
               <span className="text-slate-500">Filtros ativos:</span>
               {filtroObra && obraSelecionada && (
@@ -678,6 +756,16 @@ export default function EquipamentosLocados() {
                   <span className="max-w-[260px] truncate" title={obraSelecionada.nome}>{obraSelecionada.nome}</span>
                   <span className="text-emerald-600 font-bold">· {obraSelecionada.count}</span>
                   <button onClick={() => setFiltroObra("")} className="ml-1 bg-emerald-200/70 hover:bg-emerald-300 rounded-full p-0.5" title="Remover filtro de obra">
+                    <X className="h-3 w-3" />
+                  </button>
+                </span>
+              )}
+              {filtroCategoria && categoriaSelecionada && (
+                <span className="inline-flex items-center gap-1.5 bg-violet-50 border border-violet-200 text-violet-800 rounded-full pl-3 pr-1.5 py-1 font-medium">
+                  <Tag className="h-3 w-3" />
+                  <span className="max-w-[200px] truncate" title={categoriaSelecionada.nome}>{categoriaSelecionada.nome}</span>
+                  <span className="text-violet-600 font-bold">· {categoriaSelecionada.count}</span>
+                  <button onClick={() => setFiltroCategoria("")} className="ml-1 bg-violet-200/70 hover:bg-violet-300 rounded-full p-0.5" title="Remover filtro de categoria">
                     <X className="h-3 w-3" />
                   </button>
                 </span>
@@ -691,7 +779,7 @@ export default function EquipamentosLocados() {
                   </button>
                 </span>
               )}
-              <button onClick={() => { setFiltroObra(""); setBusca(""); }} className="text-slate-500 hover:text-slate-700 underline ml-1">limpar tudo</button>
+              <button onClick={() => { setFiltroObra(""); setFiltroCategoria(""); setBusca(""); }} className="text-slate-500 hover:text-slate-700 underline ml-1">limpar tudo</button>
             </div>
           )}
           {/* Rev. 2323 — Selecionar todos visíveis (cabeçalho da lista). */}
@@ -749,7 +837,20 @@ export default function EquipamentosLocados() {
                         </span>
                       </div>
                       <div className="text-xs text-slate-500 mt-0.5 flex items-center gap-1.5">
-                        <Hash className="h-3 w-3" /> {l.codigoPatrimonioFornecedor || "s/ patr."} · {l.categoria || "sem categoria"}
+                        <Hash className="h-3 w-3" /> {l.codigoPatrimonioFornecedor || "s/ patr."}
+                        {l.categoria ? (
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); setFiltroCategoria(String(l.categoria)); }}
+                            className="ml-1 inline-flex items-center gap-1 bg-violet-50 text-violet-700 border border-violet-200 hover:bg-violet-100 px-1.5 py-0.5 rounded-full text-[10px] font-semibold transition"
+                            title={`Filtrar por categoria "${l.categoria}"`}>
+                            <Tag className="h-2.5 w-2.5" /> {l.categoria}
+                          </button>
+                        ) : (
+                          <span className="ml-1 inline-flex items-center gap-1 bg-slate-100 text-slate-500 border border-slate-200 px-1.5 py-0.5 rounded-full text-[10px] font-medium" title="Use o botão 'Categorizar com IA' no topo">
+                            <Tag className="h-2.5 w-2.5" /> sem categoria
+                          </span>
+                        )}
                       </div>
                       <div className="text-xs text-slate-600 mt-1 flex items-center gap-1.5 truncate">
                         <Building2 className="h-3 w-3 text-slate-400" /> {l.fornecedorNome || "Sem fornecedor"}
@@ -1399,6 +1500,97 @@ export default function EquipamentosLocados() {
       )}
 
       <style>{`.inp{width:100%;padding:6px 8px;border:1px solid #e2e8f0;border-radius:4px;font-size:14px}`}</style>
+
+      {/* Rev. 2337 — Modal de confirmação "Categorizar com IA" */}
+      {modalCategIA && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => !categorizarMut.isPending && setModalCategIA(null)}>
+          <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="bg-gradient-to-br from-violet-600 to-fuchsia-600 text-white p-5">
+              <div className="flex items-center gap-3">
+                <div className="bg-white/20 rounded-xl p-2.5 ring-1 ring-white/30">
+                  <Sparkles className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold">Categorizar com IA</h3>
+                  <p className="text-xs text-violet-50/90 mt-0.5">Classificação automática dos {totalSemCategoria} equipamento(s) sem categoria</p>
+                </div>
+              </div>
+            </div>
+            <div className="p-5 space-y-3 text-sm text-slate-700">
+              <p>A IA vai ler as <b>descrições únicas</b> do seu acervo e propor de 5 a 10 categorias (andaime, elétrico, ferramenta, EPI, etc.). Depois aplica a cada equipamento em uma única operação.</p>
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-xs text-blue-800">
+                <b>Como funciona:</b> roda em ~10–30s · só toca itens sem categoria (o que você já categorizou na mão é preservado) · você pode rodar de novo a qualquer momento.
+              </div>
+              {categorizarMut.isPending && (
+                <div className="flex items-center gap-2 text-violet-700 text-sm">
+                  <Loader2 className="h-4 w-4 animate-spin" /> IA analisando descrições e propondo categorias…
+                </div>
+              )}
+            </div>
+            <div className="bg-slate-50 border-t border-slate-200 px-5 py-3 flex justify-end gap-2">
+              <button onClick={() => setModalCategIA(null)} disabled={categorizarMut.isPending}
+                className="px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-200 rounded-lg transition disabled:opacity-60">Cancelar</button>
+              <button onClick={() => categorizarMut.mutate({ companyId, sobrescrever: false })} disabled={categorizarMut.isPending}
+                className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-violet-600 hover:bg-violet-700 rounded-lg shadow-md transition disabled:opacity-60 disabled:cursor-wait">
+                {categorizarMut.isPending ? <><Loader2 className="h-4 w-4 animate-spin" /> Categorizando…</> : <><Sparkles className="h-4 w-4" /> Categorizar agora</>}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Rev. 2337 — Modal de resultado da categorização */}
+      {resultadoCategIA && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setResultadoCategIA(null)}>
+          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="bg-gradient-to-br from-emerald-600 to-teal-600 text-white p-5 flex items-start justify-between">
+              <div className="flex items-center gap-3">
+                <div className="bg-white/20 rounded-xl p-2.5 ring-1 ring-white/30">
+                  <CheckCircle2 className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold">Categorização concluída</h3>
+                  <p className="text-xs text-emerald-50/90 mt-0.5">
+                    {resultadoCategIA.itensAtualizados} equipamento(s) classificados em {resultadoCategIA.categorias.length} categoria(s)
+                  </p>
+                </div>
+              </div>
+              <button onClick={() => setResultadoCategIA(null)} className="text-white/80 hover:text-white bg-white/10 hover:bg-white/20 rounded-lg p-1.5"><X className="h-4 w-4" /></button>
+            </div>
+            <div className="p-5 space-y-4 overflow-y-auto">
+              <div>
+                <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Categorias propostas pela IA</div>
+                <div className="flex flex-wrap gap-2">
+                  {resultadoCategIA.categorias.map(c => (
+                    <button key={c} onClick={() => { setFiltroCategoria(c); setResultadoCategIA(null); }}
+                      className="inline-flex items-center gap-1.5 bg-violet-50 hover:bg-violet-100 border border-violet-200 text-violet-800 px-3 py-1.5 rounded-full text-xs font-semibold transition">
+                      <Tag className="h-3 w-3" /> {c}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {resultadoCategIA.descricoesNaoMapeadas.length > 0 && (
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                  <div className="text-xs font-semibold text-amber-900 mb-1">⚠ {resultadoCategIA.descricoesNaoMapeadas.length} descrição(ões) não puderam ser classificadas:</div>
+                  <ul className="text-xs text-amber-800 space-y-0.5 mt-1 max-h-32 overflow-y-auto">
+                    {resultadoCategIA.descricoesNaoMapeadas.map((d, i) => <li key={i}>• {d}</li>)}
+                  </ul>
+                  <div className="text-[11px] text-amber-700 mt-2">Rode novamente ou edite manualmente — o botão "Categorizar com IA" continua disponível enquanto houver itens sem categoria.</div>
+                </div>
+              )}
+              {resultadoCategIA.haMaisLotes && (
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-xs text-blue-800">
+                  <b>Há mais lotes pra processar.</b> Acervo grande (&gt;800 descrições únicas) — clique de novo em "Categorizar com IA" pra processar o próximo lote.
+                </div>
+              )}
+              <div className="text-[11px] text-slate-500">Analisadas: {resultadoCategIA.descricoesAnalisadas} descrição(ões) única(s).</div>
+            </div>
+            <div className="bg-slate-50 border-t border-slate-200 px-5 py-3 flex justify-end">
+              <button onClick={() => setResultadoCategIA(null)} className="px-4 py-2 text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-md transition">Fechar</button>
+            </div>
+          </div>
+        </div>
+      )}
     </DashboardLayout>
   );
 }
