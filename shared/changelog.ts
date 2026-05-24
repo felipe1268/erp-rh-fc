@@ -42,11 +42,20 @@
  *    botão "Subir nova" separado pra não poluir a action bar (já tem 3:
  *    "Trocar pela web", "Na biblioteca" badge, "Remover").
  *
- * **Escopo:** intencionalmente NÃO mexi nos thumbnails dos cards de
- * grupo/unidade na lista principal (linhas 1334, 1453, 1878) — esses já
- * têm comportamentos próprios (hover→"buscar nova foto" no grupo,
- * navegação no card da unidade). Adicionar zoom lá conflitaria com os
- * handlers atuais. Pode ser feito em revisão futura se o user pedir.
+ * **Escopo (REVISADO no mesmo dia após feedback "não funcionou — quero zoom em todos os lugares"):**
+ * Aplicado em TODOS os thumbnails de foto da página:
+ *  1. Modal Biblioteca de fotos (descrito acima).
+ *  2. Cards de GRUPO na lista principal — antes o hover-overlay engolia
+ *     o click inteiro pra "buscar nova foto"; agora click NA foto amplia,
+ *     e o botão de re-busca virou badge circular branco no canto inferior
+ *     esquerdo (`absolute -bottom-1 -left-1 h-6 w-6 rounded-full`). Badge
+ *     `fotoIA` (Sparkles rosa) ganhou `pointer-events-none` pra não
+ *     bloquear o click do zoom.
+ *  3. Cards de UNIDADE na lista — wrap em `<button>` com `stopPropagation`
+ *     pra não disparar o click do card (que abre modal de eventos).
+ *  4. Cabeçalho do modal Eventos — mesmo wrap (foto 20x20 ou 24x24).
+ * Em todos os lugares: hover mostra overlay preto + ícone `ZoomIn`,
+ * cursor `zoom-in`.
  *
  * **Ícone novo:** `ZoomIn` adicionado ao import lucide-react.
  *

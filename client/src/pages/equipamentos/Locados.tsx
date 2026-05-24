@@ -1336,14 +1336,24 @@ export default function EquipamentosLocados() {
                       className="h-4 w-4 mt-1 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer flex-shrink-0"
                       title={todosSelecionados ? "Desmarcar todas as unidades do grupo" : "Marcar todas as unidades do grupo"}
                     />
-                    {/* Rev. 2366 — Thumbnail interativo: COM foto mostra
-                        botão "trocar" no hover; SEM foto vira botão "buscar
-                        foto na web" (chama DDG só pra essa descrição). */}
+                    {/* Rev. 2368 — Thumbnail: click NA foto AMPLIA (lightbox).
+                        O botão "Trocar foto" virou badge no canto inferior
+                        esquerdo pra não engolir o click inteiro. */}
                     {g.fotoUrl ? (
                       <div className="relative flex-shrink-0 group/foto">
-                        <img src={g.fotoUrl} className="w-16 h-16 object-cover rounded-lg ring-1 ring-slate-200" alt="" loading="lazy" />
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); setLightbox({ url: g.fotoUrl!, titulo: g.descricao }); }}
+                          className="block w-16 h-16 rounded-lg ring-1 ring-slate-200 overflow-hidden cursor-zoom-in relative"
+                          title="Clique para ampliar a foto"
+                          aria-label="Ampliar foto">
+                          <img src={g.fotoUrl} className="w-full h-full object-cover" alt={g.descricao} loading="lazy" />
+                          <div className="absolute inset-0 bg-black/0 group-hover/foto:bg-black/35 transition flex items-center justify-center opacity-0 group-hover/foto:opacity-100">
+                            <ZoomIn className="h-4 w-4 text-white drop-shadow" />
+                          </div>
+                        </button>
                         {g.fotoIA && (
-                          <span title="Imagem ilustrativa encontrada na web" className="absolute -top-1 -right-1 bg-pink-500 text-white rounded-full p-0.5 ring-2 ring-white shadow">
+                          <span title="Imagem ilustrativa encontrada na web" className="absolute -top-1 -right-1 bg-pink-500 text-white rounded-full p-0.5 ring-2 ring-white shadow pointer-events-none">
                             <Sparkles className="h-2.5 w-2.5" />
                           </span>
                         )}
@@ -1351,12 +1361,12 @@ export default function EquipamentosLocados() {
                           type="button"
                           onClick={(e) => { e.stopPropagation(); buscarFotoUma(g.descricao, true); }}
                           disabled={buscandoDescricoes.has(g.descricao) || !!batchWeb}
-                          className="absolute inset-0 rounded-lg bg-black/55 text-white opacity-0 group-hover/foto:opacity-100 focus:opacity-100 transition flex items-center justify-center disabled:cursor-wait"
+                          className="absolute -bottom-1 -left-1 h-6 w-6 rounded-full bg-white ring-2 ring-white shadow-md text-sky-700 hover:bg-sky-50 flex items-center justify-center disabled:opacity-60 disabled:cursor-wait"
                           title={`Buscar nova foto na web para "${g.descricao}"`}
                           aria-label="Buscar nova foto na web">
                           {buscandoDescricoes.has(g.descricao)
-                            ? <Loader2 className="h-4 w-4 animate-spin" />
-                            : <RefreshCw className="h-4 w-4" />}
+                            ? <Loader2 className="h-3 w-3 animate-spin" />
+                            : <RefreshCw className="h-3 w-3" />}
                         </button>
                       </div>
                     ) : (
@@ -1459,10 +1469,21 @@ export default function EquipamentosLocados() {
                       onClick={(e) => e.stopPropagation()}
                       className="h-4 w-4 mt-1 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer flex-shrink-0" />
                     {fotoPrincipal ? (
-                      <div className="relative flex-shrink-0">
-                        <img src={fotoPrincipal} className="w-16 h-16 object-cover rounded-lg ring-1 ring-slate-200" alt="" loading="lazy" />
+                      <div className="relative flex-shrink-0 group/uphoto">
+                        {/* Rev. 2368 — click NA foto amplia (lightbox), sem propagar click do card. */}
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); setLightbox({ url: fotoPrincipal, titulo: l.descricao }); }}
+                          className="block w-16 h-16 rounded-lg ring-1 ring-slate-200 overflow-hidden cursor-zoom-in relative"
+                          title="Clique para ampliar a foto"
+                          aria-label="Ampliar foto">
+                          <img src={fotoPrincipal} className="w-full h-full object-cover" alt={l.descricao} loading="lazy" />
+                          <div className="absolute inset-0 bg-black/0 group-hover/uphoto:bg-black/35 transition flex items-center justify-center opacity-0 group-hover/uphoto:opacity-100">
+                            <ZoomIn className="h-4 w-4 text-white drop-shadow" />
+                          </div>
+                        </button>
                         {fotoIA && (
-                          <span title="Imagem ilustrativa encontrada por IA" className="absolute -top-1 -right-1 bg-pink-500 text-white rounded-full p-0.5 ring-2 ring-white shadow">
+                          <span title="Imagem ilustrativa encontrada por IA" className="absolute -top-1 -right-1 bg-pink-500 text-white rounded-full p-0.5 ring-2 ring-white shadow pointer-events-none">
                             <Sparkles className="h-2.5 w-2.5" />
                           </span>
                         )}
@@ -1884,10 +1905,21 @@ export default function EquipamentosLocados() {
                 </button>
                 <div className="flex items-start gap-4 pr-10">
                   {fotosRec[0] || l.fotoUrl ? (
-                    <div className="relative flex-shrink-0">
-                      <img src={fotosRec[0]?.url || (l.fotoUrl as string)} className="w-20 h-20 sm:w-24 sm:h-24 object-cover rounded-xl ring-2 ring-white/40 shadow-lg" alt="" />
+                    <div className="relative flex-shrink-0 group/hphoto">
+                      {/* Rev. 2368 — click amplia (lightbox). */}
+                      <button
+                        type="button"
+                        onClick={() => setLightbox({ url: fotosRec[0]?.url || (l.fotoUrl as string), titulo: l.descricao })}
+                        className="block w-20 h-20 sm:w-24 sm:h-24 rounded-xl ring-2 ring-white/40 shadow-lg overflow-hidden cursor-zoom-in relative"
+                        title="Clique para ampliar a foto"
+                        aria-label="Ampliar foto">
+                        <img src={fotosRec[0]?.url || (l.fotoUrl as string)} className="w-full h-full object-cover" alt={l.descricao} />
+                        <div className="absolute inset-0 bg-black/0 group-hover/hphoto:bg-black/35 transition flex items-center justify-center opacity-0 group-hover/hphoto:opacity-100">
+                          <ZoomIn className="h-5 w-5 text-white drop-shadow" />
+                        </div>
+                      </button>
                       {!fotosRec[0] && l.fotoUrl && (
-                        <span title="Imagem ilustrativa encontrada por IA" className="absolute -top-1.5 -right-1.5 bg-pink-500 text-white rounded-full p-1 ring-2 ring-white shadow">
+                        <span title="Imagem ilustrativa encontrada por IA" className="absolute -top-1.5 -right-1.5 bg-pink-500 text-white rounded-full p-1 ring-2 ring-white shadow pointer-events-none">
                           <Sparkles className="h-3 w-3" />
                         </span>
                       )}
