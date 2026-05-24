@@ -128,9 +128,10 @@ export const warehouseRouter = router({
       const antes = parseFloat(String(item.quantidadeAtual) || "0");
       const depois = antes + input.quantidade;
 
+      // Rev. 2392 — reativa item se estava soft-deleted (zerou via transferência).
       await db
         .update(almoxarifadoItens)
-        .set({ quantidadeAtual: String(depois) } as any)
+        .set({ quantidadeAtual: String(depois), ativo: true } as any)
         .where(eq(almoxarifadoItens.id, input.itemId));
 
       await db.insert(almoxarifadoMovimentacoes).values({
@@ -362,9 +363,10 @@ export const warehouseRouter = router({
             if (!upd || upd.length === 0) {
               throw new Error("Movimentação já estornada por outro processo");
             }
+            // Rev. 2392 — reativa item se voltou a ter saldo (saiu do soft-delete por transferência).
             await tx
               .update(almoxarifadoItens)
-              .set({ quantidadeAtual: String(novo) } as any)
+              .set({ quantidadeAtual: String(novo), ativo: true } as any)
               .where(and(
                 eq(almoxarifadoItens.id, mov.itemId),
                 eq(almoxarifadoItens.companyId, input.companyId),
@@ -555,10 +557,12 @@ export const warehouseRouter = router({
         .set({ status: "devolvido", dataDevolucao: hoje, horaDevolucao: hora } as any)
         .where(eq(warehouseLoans.id, input.loanId));
 
+      // Rev. 2392 — reativa item se estava soft-deleted (zerou via transferência).
       await db
         .update(almoxarifadoItens)
         .set({
           quantidadeAtual: sql`${almoxarifadoItens.quantidadeAtual}::numeric + ${loan.quantidade}::numeric`,
+          ativo: true,
         } as any)
         .where(eq(almoxarifadoItens.id, loan.itemId));
 
@@ -1246,19 +1250,74 @@ Retorne os até 5 melhores matches em ordem decrescente de similaridade. Se nenh
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
+      // ── AUTHZ (Rev. 2392) — fecha IDOR cross-tenant ──
+      const allowedCompanies = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+      if (!allowedCompanies.map((c: any) => c.id).includes(input.companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a essa empresa." });
+      }
+
       // 1. Busca item de origem
       const [itemOrigem] = await db.select().from(almoxarifadoItens).where(eq(almoxarifadoItens.id, input.itemIdOrigem));
       if (!itemOrigem) throw new TRPCError({ code: "NOT_FOUND", message: "Item de origem não encontrado." });
+      if (itemOrigem.companyId !== input.companyId) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Item de outra empresa." });
+      }
+      if (itemOrigem.obraId && !(await userCanAccessObra(ctx.user.id, ctx.user.role, itemOrigem.obraId))) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso à obra origem." });
+      }
+      const destinoObraIdAuthz = input.destinoTipo === "obra" ? (input.destinoObraId ?? null) : null;
+      if (input.destinoTipo === "obra") {
+        if (!destinoObraIdAuthz || !Number.isInteger(destinoObraIdAuthz) || destinoObraIdAuthz <= 0) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Destino do tipo 'obra' exige destinoObraId inteiro positivo." });
+        }
+        if (!(await userCanAccessObra(ctx.user.id, ctx.user.role, destinoObraIdAuthz))) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso à obra destino." });
+        }
+      }
+
+      // Rev. 2392 — origem INFERIDA do próprio item (não confia no client → log fidedigno).
+      const origemTipoServer: "central" | "obra" = itemOrigem.obraId ? "obra" : "central";
+      const origemObraIdServer = itemOrigem.obraId ?? null;
+      let origemObraNomeServer: string | null = null;
+      if (origemObraIdServer !== null) {
+        const r = await db.execute(sql`SELECT codigo, nome FROM obras WHERE id = ${origemObraIdServer} LIMIT 1`);
+        const row = ((r as any)?.rows ?? r ?? [])[0];
+        if (row) origemObraNomeServer = row.codigo ? `${row.codigo} – ${row.nome}` : row.nome;
+      }
+      // Resolve nome do destino server-side
+      let destinoObraNomeServer: string | null = null;
+      if (destinoObraIdAuthz !== null) {
+        const r = await db.execute(sql`SELECT codigo, nome FROM obras WHERE id = ${destinoObraIdAuthz} LIMIT 1`);
+        const row = ((r as any)?.rows ?? r ?? [])[0];
+        if (row) destinoObraNomeServer = row.codigo ? `${row.codigo} – ${row.nome}` : row.nome;
+      }
+      // Bloqueia origem == destino (paridade com lote)
+      if (origemTipoServer === input.destinoTipo && origemObraIdServer === destinoObraIdAuthz) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Item já está no almoxarifado de destino." });
+      }
 
       const estoqueAtual = parseFloat(String(itemOrigem.quantidadeAtual) || "0");
       if (estoqueAtual < input.quantidade) {
         throw new TRPCError({ code: "BAD_REQUEST", message: `Estoque insuficiente. Disponível: ${estoqueAtual} ${itemOrigem.unidade}.` });
       }
 
-      // 2. Débita da origem
-      await db.update(almoxarifadoItens)
-        .set({ quantidadeAtual: sql`${almoxarifadoItens.quantidadeAtual}::numeric - ${input.quantidade}` } as any)
-        .where(eq(almoxarifadoItens.id, input.itemIdOrigem));
+      // 2. Débita da origem com GUARD de concorrência (Rev. 2392).
+      // Se for item de obra (obraId IS NOT NULL) e o saldo zerar, marca
+      // ativo=false na mesma UPDATE pra "sumir" da lista (que já filtra
+      // por ativo=true). Itens centrais ficam visíveis mesmo a 0 (catálogo).
+      const debitado = await db.update(almoxarifadoItens)
+        .set({
+          quantidadeAtual: sql`${almoxarifadoItens.quantidadeAtual}::numeric - ${input.quantidade}`,
+          ativo: sql`CASE WHEN ${almoxarifadoItens.obraId} IS NOT NULL AND (${almoxarifadoItens.quantidadeAtual}::numeric - ${input.quantidade}) <= 0 THEN false ELSE ${almoxarifadoItens.ativo} END`,
+        } as any)
+        .where(and(
+          eq(almoxarifadoItens.id, input.itemIdOrigem),
+          sql`${almoxarifadoItens.quantidadeAtual}::numeric >= ${input.quantidade}`,
+        ))
+        .returning({ id: almoxarifadoItens.id });
+      if (!debitado || debitado.length === 0) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Estoque mudou durante a transferência (concorrência). Tente novamente." });
+      }
 
       // 3. Localiza ou cria item no destino
       const destinoObraId = input.destinoTipo === "obra" ? (input.destinoObraId ?? null) : null;
@@ -1277,8 +1336,12 @@ Retorne os até 5 melhores matches em ordem decrescente de similaridade. Se nenh
 
       if (existingDestino.length > 0) {
         itemIdDestino = existingDestino[0].id;
+        // Rev. 2392 — reativa se estava inativo (item zerou antes via transferência)
         await db.update(almoxarifadoItens)
-          .set({ quantidadeAtual: sql`${almoxarifadoItens.quantidadeAtual}::numeric + ${input.quantidade}` } as any)
+          .set({
+            quantidadeAtual: sql`${almoxarifadoItens.quantidadeAtual}::numeric + ${input.quantidade}`,
+            ativo: true,
+          } as any)
           .where(eq(almoxarifadoItens.id, itemIdDestino));
       } else {
         // Cria novo item no destino com as mesmas propriedades
@@ -1299,7 +1362,7 @@ Retorne os até 5 melhores matches em ordem decrescente de similaridade. Se nenh
         itemIdDestino = novoItem.id;
       }
 
-      // 4. Registra a transferência
+      // 4. Registra a transferência — Rev. 2392: origem/destino server-side (anti-spoofing)
       await db.insert(almoxarifadoTransferencias).values({
         companyId:      input.companyId,
         itemIdOrigem:   input.itemIdOrigem,
@@ -1307,12 +1370,12 @@ Retorne os até 5 melhores matches em ordem decrescente de similaridade. Se nenh
         itemNome:       itemOrigem.nome,
         unidade:        itemOrigem.unidade,
         quantidade:     String(input.quantidade),
-        origemTipo:     input.origemTipo,
-        origemObraId:   input.origemObraId ?? null,
-        origemObraNome: input.origemObraNome ?? null,
+        origemTipo:     origemTipoServer,
+        origemObraId:   origemObraIdServer,
+        origemObraNome: origemObraNomeServer,
         destinoTipo:    input.destinoTipo,
         destinoObraId:  destinoObraId,
-        destinoObraNome: input.destinoObraNome ?? null,
+        destinoObraNome: destinoObraNomeServer,
         motivo:         input.motivo ?? null,
         almoxarifeId:   input.almoxarifeId ?? null,
         almoxarifeNome: input.almoxarifeNome ?? null,
@@ -1413,9 +1476,14 @@ Retorne os até 5 melhores matches em ordem decrescente de similaridade. Se nenh
 
           // ── TX ATÔMICA POR LINHA: débito + upsert destino + registro ──
           await db.transaction(async (tx: any) => {
-            // 2. Débita origem (com guard de estoque pra concorrência)
+            // 2. Débita origem (com guard de estoque pra concorrência).
+            // Rev. 2392 — Se for item de obra e o saldo zerar, marca ativo=false
+            // pra "sumir" da lista (que filtra por ativo=true). Centrais ficam.
             const debitado = await tx.update(almoxarifadoItens)
-              .set({ quantidadeAtual: sql`${almoxarifadoItens.quantidadeAtual}::numeric - ${linha.quantidade}` } as any)
+              .set({
+                quantidadeAtual: sql`${almoxarifadoItens.quantidadeAtual}::numeric - ${linha.quantidade}`,
+                ativo: sql`CASE WHEN ${almoxarifadoItens.obraId} IS NOT NULL AND (${almoxarifadoItens.quantidadeAtual}::numeric - ${linha.quantidade}) <= 0 THEN false ELSE ${almoxarifadoItens.ativo} END`,
+              } as any)
               .where(and(
                 eq(almoxarifadoItens.id, linha.itemIdOrigem),
                 sql`${almoxarifadoItens.quantidadeAtual}::numeric >= ${linha.quantidade}`,
@@ -1439,8 +1507,12 @@ Retorne os até 5 melhores matches em ordem decrescente de similaridade. Se nenh
             let itemIdDestino: number;
             if (existingDestino.length > 0) {
               itemIdDestino = existingDestino[0].id;
+              // Rev. 2392 — reativa se estava inativo (item zerou antes via transferência)
               await tx.update(almoxarifadoItens)
-                .set({ quantidadeAtual: sql`${almoxarifadoItens.quantidadeAtual}::numeric + ${linha.quantidade}` } as any)
+                .set({
+                  quantidadeAtual: sql`${almoxarifadoItens.quantidadeAtual}::numeric + ${linha.quantidade}`,
+                  ativo: true,
+                } as any)
                 .where(eq(almoxarifadoItens.id, itemIdDestino));
             } else {
               const [novoItem] = await tx.insert(almoxarifadoItens).values({
@@ -1970,9 +2042,10 @@ REGRAS:
           if (existing) {
             const antes = parseFloat(String(existing.quantidadeAtual) || "0");
             const depois = antes + item.quantidadeRecebida;
+            // Rev. 2392 — reativa item se estava soft-deleted (zerou via transferência).
             await db
               .update(almoxarifadoItens)
-              .set({ quantidadeAtual: String(depois) } as any)
+              .set({ quantidadeAtual: String(depois), ativo: true } as any)
               .where(and(eq(almoxarifadoItens.id, itemId), eq(almoxarifadoItens.companyId, input.companyId)));
 
             await db.insert(almoxarifadoMovimentacoes).values({

@@ -1801,7 +1801,11 @@ export const comprasRouter = router({
       if ('valorLocacaoMensal' in data)            updates.valorLocacaoMensal = data.valorLocacaoMensal != null ? String(data.valorLocacaoMensal) : null;
       if ('diasAlertaLocacao' in data && data.diasAlertaLocacao != null) updates.diasAlertaLocacao = data.diasAlertaLocacao;
       if ('observacoesLocacao' in data)            updates.observacoesLocacao = data.observacoesLocacao;
-      if (data.quantidadeAtual !== undefined && data.quantidadeAtual !== null) updates.quantidadeAtual = String(data.quantidadeAtual);
+      if (data.quantidadeAtual !== undefined && data.quantidadeAtual !== null) {
+        updates.quantidadeAtual = String(data.quantidadeAtual);
+        // Rev. 2392 — edição manual com qty>0 reativa item soft-deleted (zerou via transferência).
+        if (Number(data.quantidadeAtual) > 0) updates.ativo = true;
+      }
       // Sanitização defensiva de datas: garantir formato yyyy-MM-dd. Datas vazias viram null.
       for (const k of ["dataInicioLocacao", "dataVencimentoLocacao"] as const) {
         if (k in updates) {
@@ -2770,13 +2774,16 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
         observacoes: input.observacoes ?? null,
       });
 
-      // Atualiza saldo do item
+      // Atualiza saldo do item.
+      // Rev. 2392 — se for ENTRADA (delta>0), reativa item caso estivesse soft-deleted.
       const delta = input.tipo === "entrada" ? input.quantidade : -input.quantidade;
+      const updateSet: any = {
+        quantidadeAtual: sql`GREATEST(0, ${almoxarifadoItens.quantidadeAtual}::numeric + ${delta})`,
+        atualizadoEm: new Date().toISOString(),
+      };
+      if (delta > 0) updateSet.ativo = true;
       await db.update(almoxarifadoItens)
-        .set({
-          quantidadeAtual: sql`GREATEST(0, ${almoxarifadoItens.quantidadeAtual}::numeric + ${delta})`,
-          atualizadoEm: new Date().toISOString(),
-        })
+        .set(updateSet)
         .where(eq(almoxarifadoItens.id, input.itemId));
 
       return { success: true };
@@ -8212,8 +8219,10 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
               usuarioNome,
               observacoes: `Entrada automática via Ordem de Compra ${oc.numeroOc}`,
             });
+            // Rev. 2392 — reativa item se estava soft-deleted (zerou via transferência).
             await db.update(almoxarifadoItens).set({
               quantidadeAtual: sql`${almoxarifadoItens.quantidadeAtual}::numeric + ${qtd}`,
+              ativo: true,
               atualizadoEm: new Date().toISOString(),
             }).where(eq(almoxarifadoItens.id, almoItemId));
           }

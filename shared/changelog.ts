@@ -1,6 +1,62 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2392 — **ALMOXARIFADO/UX · Após transferir TODO o estoque de um item
+ * de obra, o item SOME da lista (soft-delete via `ativo=false`).**
+ *
+ * Pedido user (IMG_1199, 24/05/2026, 20:27): após usar o lote da Rev. 2390
+ * pra transferir todos os 6 itens da obra X pra outro almoxarifado, os cards
+ * continuaram aparecendo zerados (0 un, "Sem mínimo", botão Trocar) — viraram
+ * fantasmas visuais que poluem a tela e confundem o engenheiro ("isso ainda
+ * tá aqui?"). Cause-root: o débito setava `quantidadeAtual=0` mas mantinha
+ * `ativo=true`, e a lista (`listarItens` L755 / `listarItensConsolidado`
+ * L873) filtra apenas por `ativo=true` → 0 é exibido.
+ *
+ * **Backend** (`server/routers/warehouse.ts`):
+ *   1. `createTransferencia` (single, L1259-1270) — UPDATE do débito agora
+ *      seta condicionalmente `ativo=false` via CASE WHEN: se item é de OBRA
+ *      (`obraId IS NOT NULL`) E saldo final `<= 0` após débito, marca inativo
+ *      no mesmo statement (atômico, sem race). Itens CENTRAIS ficam visíveis
+ *      mesmo a 0 — comportam-se como catálogo (recebem entradas recorrentes
+ *      via OC sem precisar reabrir cadastro).
+ *   2. `createTransferenciaLote` (L1428-1437) — mesma lógica dentro da tx
+ *      por linha. Reusa o guard de concorrência (`quantidadeAtual >= linha
+ *      .quantidade`) inalterado.
+ *   3. Upsert no destino (single L1290-1295 e lote L1461-1466) — quando o
+ *      item de destino JÁ EXISTE mas estava inativo (zerou anteriormente
+ *      por transferência), o UPDATE agora também seta `ativo=true` junto
+ *      com o crédito. Garante que reentrar com qualquer qty reativa o card
+ *      em vez de criar duplicata.
+ *   4. **Reativação em TODOS os fluxos de crédito** (achado do code review)
+ *      — sem isso, item soft-deleted por transferência ficaria "fantasma
+ *      invisível" mesmo recebendo nova entrada via OC / smart entry /
+ *      entrada manual. Corrigido em:
+ *        - `warehouse.registerEntry` (L131-138): adiciona `ativo: true`.
+ *        - `warehouse.registerSmartEntry` (L1993-2000): idem no path do
+ *          item existente (recebimento via OC com itemId já cadastrado).
+ *        - `compras.atualizarStatusOrdem` (L8218-8223): idem na entrada
+ *          automática quando a OC é marcada "entregue".
+ *   5. **Hardening do `createTransferencia` single** (achado do code review
+ *      — IDOR cross-tenant pré-existente exposto pelo soft-delete):
+ *      adicionado AUTHZ completo (`getCompaniesForUser` no companyId +
+ *      `userCanAccessObra` em obra origem E destino + check `itemOrigem
+ *      .companyId === input.companyId`) e GUARD de concorrência no WHERE
+ *      do débito (`quantidadeAtual >= input.quantidade` + `.returning()`
+ *      → throw se 0 linhas afetadas). Paridade com o que o lote já tinha.
+ *
+ * **Não muda**: schema (nenhum ALTER), filtros de listagem (já filtravam
+ * `ativo=true`), endpoints de auditoria/movimentação (transferência continua
+ * registrada em `almoxarifado_transferencias` com IDs originais — soft-delete
+ * preserva FK, histórico íntegro). Hard-delete foi descartado pra não
+ * quebrar referências de `almoxarifado_movimentacoes` e `almoxarifado_
+ * transferencias.itemIdOrigem`.
+ *
+ * **R-001 / R-007 / R-010**: OK — zero ALTER/DROP/DELETE; apenas UPDATE de
+ * coluna `ativo` já existente no schema (`almoxarifado_itens.ativo boolean`).
+ *
+ * **Arquivos tocados**: `server/routers/warehouse.ts`, `shared/version.ts`,
+ * `shared/changelog.ts`, `replit.md`.
+ *
  * Rev. 2391 — **OBRAS/GOVERNANÇA · Não permitir encerrar obra com estoque
  * no Almoxarifado — pre-check + modal com CTA pra transferir.**
  *
