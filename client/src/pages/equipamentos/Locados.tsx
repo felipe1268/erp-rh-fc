@@ -710,7 +710,7 @@ export default function EquipamentosLocados() {
 
   // Rev. 2340 — Busca de fotos ilustrativas em lote via Google Custom Search.
   const [modalFotosIA, setModalFotosIA] = useState<null | { sobrescrever: boolean }>(null);
-  const [resultadoFotosIA, setResultadoFotosIA] = useState<null | { descricoesAnalisadas: number; fotosEncontradas: number; itensAtualizados: number; descricoesSemFoto: string[]; haMaisLotes?: boolean; cotaEsgotada?: boolean }>(null);
+  const [resultadoFotosIA, setResultadoFotosIA] = useState<null | { descricoesAnalisadas: number; fotosEncontradas: number; itensAtualizados: number; descricoesSemFoto: string[]; haMaisLotes?: boolean; cotaEsgotada?: boolean; fotosPhaseA?: number; fotosPhaseB?: number; fotosPhaseC?: number }>(null);
   // Rev. 2340.1 — Progresso estimado por tempo decorrido (server roda
   // sequencial sem stream; ~1.2s por descrição CSE). Capamos em 95% até a
   // mutation retornar para evitar "100% que não termina".
@@ -2217,14 +2217,16 @@ export default function EquipamentosLocados() {
                 </div>
                 <div>
                   <h3 className="text-lg font-bold">Buscar fotos com IA</h3>
-                  <p className="text-xs text-pink-50/90 mt-0.5">Imagem ilustrativa com <b>validação rigorosa</b> para os {totalSemFoto} equipamento(s) sem foto</p>
+                  <p className="text-xs text-pink-50/90 mt-0.5"><b>Cobertura 100% garantida</b> para os {totalSemFoto} equipamento(s) sem foto</p>
                 </div>
               </div>
             </div>
             <div className="p-5 space-y-3 text-sm text-slate-700">
-              <p>A IA agrupa por <b>descrição única</b> (ex: "SAPATAS AJUSTÁVEIS" aparece 1.218 vezes mas é 1 busca só), coleta candidatos em bibliotecas públicas (OpenVerse, Wikimedia, Google) e o Gemini <b>valida cada título</b> — só persiste a imagem se o título realmente bater com o equipamento. <b>Em caso de dúvida, rejeita.</b></p>
+              <p>A IA agrupa por <b>descrição única</b> (ex: "SAPATAS AJUSTÁVEIS" aparece 1.218 vezes mas é 1 busca só), coleta candidatos em bibliotecas públicas (OpenVerse, Wikimedia, Google) e aplica <b>3 fases</b> até garantir foto pra todos.</p>
               <div className="bg-pink-50 border border-pink-200 rounded-lg p-3 text-xs text-pink-900 space-y-1">
-                <div><b>Validação por IA:</b> melhor não ter foto do que ter foto errada. Termos muito nichos (ex: "PAINEL NR18") podem ficar sem foto — é o comportamento esperado.</div>
+                <div><b>Fase A — Match preciso:</b> Gemini escolhe o melhor candidato cujo título bate com o equipamento.</div>
+                <div><b>Fase B — Busca ampla:</b> pros que sobrarem, busca por categoria/palavra-chave e pega o 1º resultado relevante.</div>
+                <div><b>Fase C — Placeholder por categoria:</b> último recurso — card colorido com o nome da categoria. Garante 100%.</div>
                 <div><b>Idempotente:</b> só toca itens sem foto (não substitui fotos do recebimento físico).</div>
                 <div><b>Reset:</b> se quiser começar do zero, use o botão vermelho "Limpar fotos IA" no header.</div>
               </div>
@@ -2281,7 +2283,7 @@ export default function EquipamentosLocados() {
                   <CheckCircle2 className="h-5 w-5" />
                 </div>
                 <div>
-                  <h3 className="text-lg font-bold">Fotos encontradas pela IA</h3>
+                  <h3 className="text-lg font-bold">Fotos aplicadas pela IA</h3>
                   <p className="text-xs text-emerald-50/90 mt-0.5">
                     {resultadoFotosIA.fotosEncontradas} de {resultadoFotosIA.descricoesAnalisadas} descrição(ões) — {resultadoFotosIA.itensAtualizados} equipamento(s) atualizado(s)
                   </p>
@@ -2290,18 +2292,25 @@ export default function EquipamentosLocados() {
               <button onClick={() => setResultadoFotosIA(null)} className="text-white/80 hover:text-white bg-white/10 hover:bg-white/20 rounded-lg p-1.5"><X className="h-4 w-4" /></button>
             </div>
             <div className="p-5 space-y-3 overflow-y-auto">
-              {resultadoFotosIA.cotaEsgotada && (
-                <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-xs text-red-800">
-                  <b>⚠ Cota do Google esgotada hoje.</b> O plano gratuito do Custom Search dá 100 buscas/dia. Rode de novo amanhã pras descrições restantes.
+              {(resultadoFotosIA.fotosPhaseA !== undefined || resultadoFotosIA.fotosPhaseB !== undefined || resultadoFotosIA.fotosPhaseC !== undefined) && (
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 text-center">
+                    <div className="text-2xl font-bold text-emerald-700 tabular-nums">{resultadoFotosIA.fotosPhaseA ?? 0}</div>
+                    <div className="text-[10px] uppercase tracking-wide text-emerald-900 font-semibold mt-1">Fase A · Match preciso</div>
+                  </div>
+                  <div className="bg-sky-50 border border-sky-200 rounded-lg p-3 text-center">
+                    <div className="text-2xl font-bold text-sky-700 tabular-nums">{resultadoFotosIA.fotosPhaseB ?? 0}</div>
+                    <div className="text-[10px] uppercase tracking-wide text-sky-900 font-semibold mt-1">Fase B · Busca ampla</div>
+                  </div>
+                  <div className="bg-slate-100 border border-slate-200 rounded-lg p-3 text-center">
+                    <div className="text-2xl font-bold text-slate-700 tabular-nums">{resultadoFotosIA.fotosPhaseC ?? 0}</div>
+                    <div className="text-[10px] uppercase tracking-wide text-slate-900 font-semibold mt-1">Fase C · Placeholder</div>
+                  </div>
                 </div>
               )}
-              {resultadoFotosIA.descricoesSemFoto.length > 0 && (
-                <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
-                  <div className="text-xs font-semibold text-amber-900 mb-1">⚠ {resultadoFotosIA.descricoesSemFoto.length} descrição(ões) sem foto encontrada:</div>
-                  <ul className="text-xs text-amber-800 space-y-0.5 max-h-32 overflow-y-auto">
-                    {resultadoFotosIA.descricoesSemFoto.map((d, i) => <li key={i}>• {d}</li>)}
-                  </ul>
-                  <div className="text-[11px] text-amber-700 mt-2">Dica: descrições muito genéricas ou abreviadas (ex: "DIV", "S/N") podem não retornar imagem relevante.</div>
+              {resultadoFotosIA.cotaEsgotada && (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-xs text-red-800">
+                  <b>⚠ Cota do Google esgotada hoje.</b> Plano gratuito = 100 buscas/dia. As Fases B/C cobriram o restante, mas amanhã rode de novo pra trocar placeholders por fotos reais.
                 </div>
               )}
               {resultadoFotosIA.haMaisLotes && (
@@ -2309,8 +2318,9 @@ export default function EquipamentosLocados() {
                   Ainda há mais descrições sem foto. Clique em <b>Buscar fotos com IA</b> de novo para processar o próximo lote.
                 </div>
               )}
-              {!resultadoFotosIA.cotaEsgotada && resultadoFotosIA.descricoesSemFoto.length === 0 && !resultadoFotosIA.haMaisLotes && (
-                <div className="text-sm text-slate-700">Todas as descrições deste lote receberam foto. 🎉</div>
+              <div className="text-sm text-slate-700">Cobertura 100% deste lote garantida. 🎉</div>
+              {(resultadoFotosIA.fotosPhaseC ?? 0) > 0 && (
+                <div className="text-[11px] text-slate-500">Placeholders são cards coloridos com o nome da categoria — clique em "Limpar fotos IA" e rode novamente quando quiser tentar fotos reais.</div>
               )}
             </div>
             <div className="bg-slate-50 border-t border-slate-200 px-5 py-3 flex justify-end">

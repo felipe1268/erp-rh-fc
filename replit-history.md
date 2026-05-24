@@ -2,6 +2,7 @@
 
 > Este arquivo guarda os one-liners das revisões antigas para manter o `replit.md` enxuto.
 
+- **Rev. 2332** — UX · Nome do mês capitalizado ("Jan 2026") + indicador MoM (▲/▼ %) nas 6 tabelas mês a mês. Ver `shared/changelog.ts`.
 - **Rev. 2337** — FEATURE · Categorização automática dos equipamentos locados via IA (Claude→Gemini fallback) + filtro por categoria; coluna `categoria` já existia; UPDATE por categoria (7 round-trips vs 1218). Hardening pós-review: guard `getCompaniesForUser`. Ver `shared/changelog.ts`.
 
 - ~~Rev. 2318~~ — UX/HOTFIX · Barra de progresso da importação PDF não trava mais em 95% (creep 95→99% + estimativa realista 35s). Ver `shared/changelog.ts`.

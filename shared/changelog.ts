@@ -1,6 +1,107 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2345 — **FEATURE/FILOSOFIA · Busca de fotos com IA agora GARANTE
+ * COBERTURA 100% via fluxo em 3 fases (A: match preciso → B: busca ampla →
+ * C: placeholder SVG por categoria). Inverte a filosofia da Rev. 2342 ("melhor
+ * sem foto que foto errada") por pedido explícito do user: "Garanta que todas
+ * as fotos, sem exceção serão geradas, não quero nenhum item sem foto".**
+ *
+ * Pedido user (24/05/2026, pós Rev. 2343): após validação rigorosa relaxada
+ * com tradução PT→EN, ainda sobravam itens sem foto (descrições nichas tipo
+ * "PG-2030 ROTACIONADO", "DIV NR-12", abreviações). User aceita que essas
+ * fotos sejam aproximadas — só não quer NENHUM card visualmente vazio.
+ *
+ * Causa raiz da Rev. 2342: princípio "em dúvida REJEITE (i=null)" deixava
+ * descrições com candidatos OK-mas-não-perfeitos sem foto. Bom pro princípio
+ * "foto correta", ruim pro princípio "card preenchido".
+ *
+ * Implementação (`server/routers/equipamentos.ts`, `locadosBuscarFotosComIA`):
+ *
+ * 1. **SELECT enriquecido** — CTE com `ROW_NUMBER() OVER (PARTITION BY
+ *    descricao ORDER BY qtd DESC)` puxa a categoria MAIS COMUM por descrição
+ *    (necessário pra Phase B/C fallback). Tipo do array atualizado pra
+ *    `{descricao, categoria, qtd}`.
+ *
+ * 2. **Phase A (Validação IA) RELAXADA** — prompt reescrito:
+ *    - PRINCÍPIO #1 invertido: "SEMPRE escolha um candidato quando a lista
+ *      não estiver vazia. Use i=null APENAS se TODOS forem evidentemente de
+ *      categoria TOTALMENTE diferente (foto de pessoa, capa de livro, logo,
+ *      banner, paisagem sem equipamento)."
+ *    - RANKING explícito em 4 níveis: equipamento mencionado > mesma
+ *      categoria genérica > vago mas não contradiz > evidentemente diferente.
+ *    - Removeu regra "em dúvida → rejeite". Manteve sinônimos industriais e
+ *      desempate google > openverse > wikimedia.
+ *    - Esperado: cobertura Phase A sobe de ~40-60% pra ~85-95%.
+ *
+ * 3. **Phase B (Busca Ampla, NOVA)** — pra cada descrição que sobrou após
+ *    Phase A (sem candidatos OU rejeitada como i=null), gera queries
+ *    alternativas em cascata:
+ *    - `{categoria} {queryEn} construction` (mais específico)
+ *    - `{queryEn} construction equipment`
+ *    - `{categoria} construction equipment`
+ *    - `{1ª palavra do PT} construction` (heurística — substantivo principal)
+ *    - Fallback PT cru
+ *    Roda OpenVerse + Wikimedia em paralelo POR QUERY, pega o 1º candidato
+ *    SEM nova validação IA (best-effort — assume que a query mais genérica
+ *    + categoria de contexto já filtra suficientemente).
+ *
+ * 4. **Phase C (Placeholder SVG, NOVA — ÚLTIMO RECURSO)** — função
+ *    `svgPlaceholder(categoria, descricao)` retorna `data:image/svg+xml`
+ *    com:
+ *    - Cor de fundo + texto por categoria (Andaime amarelo-âmbar, Elétrico
+ *      amarelo, Ferramenta azul, EPI vermelho-pálido, Veículo violeta,
+ *      Container verde, "Equipamento" cinza default).
+ *    - Label categoria CAPS (22px bold) + descrição (truncada 28 chars) +
+ *      assinatura "FC ENGENHARIA · IA".
+ *    - SVG 400×400, encoded via `encodeURIComponent` — entra no `foto_url`
+ *      sem nenhuma chamada externa. **NUNCA quebra**, não depende de rede.
+ *
+ * 5. **UPDATE em 2 ondas** — primeiro aprovadas da Phase A (preserva o bulk
+ *    UPDATE escopado por `company_id` da Rev. 2342), depois um 2º loop pra
+ *    `[...phaseBUpdates, ...phaseCUpdates]` com mesmo `condSobre`. Tudo
+ *    idempotente. R-001/R-007/R-010 preservados.
+ *
+ * 6. **Return enriquecido** — novos campos `fotosPhaseA`/`fotosPhaseB`/
+ *    `fotosPhaseC` permitem ao client mostrar o breakdown. `descricoesSemFoto`
+ *    agora SEMPRE retorna `[]` (cobertura 100% garantida pelo placeholder).
+ *
+ * Implementação client (`client/src/pages/equipamentos/Locados.tsx`):
+ *
+ * 1. **Tipo `resultadoFotosIA`** ganhou `fotosPhaseA/B/C` opcionais.
+ *
+ * 2. **Modal "Buscar com IA"** — copy reescrita:
+ *    - Header sub: "Cobertura 100% garantida" (era "validação rigorosa").
+ *    - Box explicativo lista as 3 fases (A: match preciso / B: busca ampla
+ *      / C: placeholder por categoria — último recurso).
+ *    - Removida frase "Termos muito nichos podem ficar sem foto" (não é mais
+ *      verdade).
+ *
+ * 3. **Modal de resultado** — substituída lista âmbar "X sem foto" por
+ *    **breakdown 3-card grid**:
+ *    - Fase A emerald (match preciso) | Fase B sky (busca ampla) | Fase C
+ *      slate (placeholder). Sempre visível quando disponível.
+ *    - Texto "Cobertura 100% deste lote garantida 🎉" sempre presente.
+ *    - Quando `fotosPhaseC > 0`, dica explicando que pode rodar de novo pra
+ *      tentar trocar placeholders por fotos reais.
+ *    - Mensagem da cota Google atualizada — agora menciona que Fases B/C
+ *      cobriram o restante mas amanhã rode de novo.
+ *
+ * Por que NÃO usar Phase B antes de validar? A validação IA da Phase A
+ * filtra os candidatos QUALIFICADOS encontrados na busca específica. Pular
+ * direto pra busca ampla baixaria a qualidade dos itens que JÁ tinham match
+ * perfeito. Pipeline preserva o melhor de cada mundo.
+ *
+ * Por que SVG e não imagem real curada? Imagens externas curadas (Wikimedia
+ * URLs hardcoded) quebram se forem renomeadas/movidas no projeto upstream.
+ * SVG inline é GUARANTIA absoluta de funcionamento + carrega sem latência +
+ * deixa óbvio visualmente que é placeholder (não engana o user).
+ *
+ * R-001/R-007/R-010: N/A — só LLM calls + UPDATEs escopados por `company_id`
+ * (preservado), idempotentes, zero DDL.
+ *
+ * --
+ *
  * Rev. 2344 — **UX/PERF · Tela Equipamentos Locados ganha AGRUPAMENTO por
  * descrição+obra (default ON) — 1218 cards individuais viram ~60 cards
  * agregados (1 por "DESCRIÇÃO @ OBRA"), com modal drill-down listando as
