@@ -344,9 +344,20 @@ export default function EquipamentosLocados() {
   }
 
   const criar = trpc.equipamentos.locadoCriar.useMutation({
-    onSuccess: () => { utils.equipamentos.locadosListar.invalidate(); setModal(false); setForm({ ...EMPTY }); setFotos([]); toast.success("Equipamento locado cadastrado!"); },
+    onSuccess: () => {
+      utils.equipamentos.locadosListar.invalidate();
+      utils.equipamentos.ocsLocacaoPendentes.invalidate(); // Rev. 2371 — OC selecionada some da lista após recebimento
+      setModal(false); setForm({ ...EMPTY }); setFotos([]); setOcSelecionada(null);
+      toast.success("Equipamento locado cadastrado!");
+    },
     onError: (e) => toast.error(e.message),
   });
+  // Rev. 2371 — OCs de locação aguardando recebimento (modal "Receber Locação na Obra").
+  const ocsPendentesQ = trpc.equipamentos.ocsLocacaoPendentes.useQuery(
+    { companyId },
+    { enabled: !!companyId }
+  );
+  const [ocSelecionada, setOcSelecionada] = useState<{ id: number; numeroOc: string } | null>(null);
   const devolver = trpc.equipamentos.locadoDevolver.useMutation({
     onSuccess: () => { utils.equipamentos.locadosListar.invalidate(); setModalDev(null); setDevFotos([]); toast.success("Equipamento devolvido."); },
     onError: (e) => toast.error(e.message),
@@ -480,6 +491,7 @@ export default function EquipamentosLocados() {
     if (action === "receber") {
       setForm({ ...EMPTY });
       setFotos([]);
+      setOcSelecionada(null); // Rev. 2371
       setModal(true);
     } else if (action === "devolver") {
       setFiltroStatus("em_uso");
@@ -672,7 +684,33 @@ export default function EquipamentosLocados() {
       funcionarioResponsavelNome: form.funcionarioResponsavelNome || undefined,
       observacoes: form.observacoes || undefined,
       fotosRecebimento: fotos,
+      ordemCompraId: ocSelecionada?.id, // Rev. 2371 — vincula OC quando o user clicou em "Receber esta OC"
     });
+  }
+  // Rev. 2371 — Pré-preenche o form a partir de uma OC de locação pendente.
+  // Usa o 1º item da OC como descrição (locações normalmente têm 1 item;
+  // se forem múltiplos, o user edita depois). Datas vêm da locação da OC.
+  function receberDaOC(oc: any) {
+    const it = (oc.itens || [])[0];
+    const valorMes = oc.locacaoDuracaoDias && Number(oc.total) > 0 && Number(oc.locacaoDuracaoDias) > 0
+      ? (Number(oc.total) / Number(oc.locacaoDuracaoDias)) * 30
+      : null;
+    setForm({
+      ...EMPTY,
+      descricao: it?.descricao || "",
+      categoria: "",
+      fornecedorNome: oc.fornecedorNome || "",
+      codigoPatrimonioFornecedor: "",
+      codigoInternoErp: "",
+      numeroSerie: "",
+      dataInicio: oc.locacaoDataInicio || oc.dataEntregaPrevista || new Date().toISOString().slice(0, 10),
+      dataFimPrevista: oc.locacaoDataFim || "",
+      valorDiario: it?.precoUnitario ? String(it.precoUnitario).replace(".", ",") : "",
+      valorMensal: valorMes ? valorMes.toFixed(2).replace(".", ",") : "",
+      funcionarioResponsavelNome: "",
+      observacoes: `Recebimento referente à OC ${oc.numeroOc}`,
+    });
+    setOcSelecionada({ id: oc.id, numeroOc: oc.numeroOc });
   }
   function fazerDevolucao() {
     if (devFotos.length === 0) return toast.error("Foto de devolução é obrigatória.");
@@ -1919,7 +1957,90 @@ export default function EquipamentosLocados() {
 
       {/* Modal receber locação — seções com ícones */}
       {modal && (
-        <Modal title="Receber Locação na Obra" onClose={() => setModal(false)} onSave={salvar} loading={criar.isPending} saveLabel="Confirmar recebimento">
+        <Modal title="Receber Locação na Obra" onClose={() => { setModal(false); setOcSelecionada(null); }} onSave={salvar} loading={criar.isPending} saveLabel="Confirmar recebimento">
+          {/* Rev. 2371 — OCs de locação pendentes de recebimento. Almoxarife clica
+              numa OC pra pré-preencher o form (descrição, fornecedor, datas, valor)
+              e vincular o equipamento à OC via ordemCompraId. */}
+          {(() => {
+            const ocs = (ocsPendentesQ.data || []) as any[];
+            if (ocsPendentesQ.isLoading) {
+              return (
+                <Section icon={FileText} title="Ordens de Compra pendentes de recebimento" tint="violet">
+                  <div className="text-xs text-slate-500 flex items-center gap-2"><Loader2 className="h-3 w-3 animate-spin" /> Buscando OCs de locação aprovadas…</div>
+                </Section>
+              );
+            }
+            if (ocs.length === 0 && !ocSelecionada) return null; // sem OCs e sem seleção → esconde seção, fluxo manual normal
+            return (
+              <Section icon={FileText} title={`Ordens de Compra pendentes${ocs.length ? ` (${ocs.length})` : ""}`} tint="violet">
+                {ocSelecionada ? (
+                  <div className="rounded-lg border-2 border-emerald-400 bg-emerald-50/60 p-3 flex items-start gap-3">
+                    <div className="rounded-full bg-emerald-500 text-white p-1.5 flex-shrink-0"><Check className="h-3.5 w-3.5" /></div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-xs font-bold text-emerald-900">Recebendo OC <span className="font-mono">{ocSelecionada.numeroOc}</span></div>
+                      <div className="text-[11px] text-emerald-700 mt-0.5">Os campos abaixo foram pré-preenchidos a partir da OC. Confira, anexe a(s) foto(s) e confirme.</div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => { setOcSelecionada(null); setForm({ ...EMPTY }); }}
+                      className="text-xs text-emerald-700 hover:text-emerald-900 underline whitespace-nowrap"
+                      title="Limpar OC selecionada e voltar ao modo manual">
+                      Trocar OC
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <p className="text-[11px] text-slate-500 mb-2">Clique numa OC pra preencher automaticamente os dados do equipamento abaixo.</p>
+                    <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+                      {ocs.map((oc: any) => {
+                        const it0 = (oc.itens || [])[0];
+                        const qtdItens = (oc.itens || []).length;
+                        return (
+                          <button
+                            key={oc.id}
+                            type="button"
+                            onClick={() => receberDaOC(oc)}
+                            className="w-full text-left rounded-lg border border-violet-200 hover:border-violet-400 hover:bg-violet-50/60 bg-white p-3 transition group">
+                            <div className="flex items-start justify-between gap-2 mb-1">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-violet-100 text-violet-800 text-[10px] font-bold uppercase tracking-wider">
+                                  <FileText className="h-2.5 w-2.5" /> OC {oc.numeroOc}
+                                </span>
+                                <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold bg-slate-100 text-slate-700">
+                                  {oc.status}
+                                </span>
+                              </div>
+                              {oc.total != null && (
+                                <span className="text-xs font-bold text-emerald-700 whitespace-nowrap">{fmtMoney(Number(oc.total))}</span>
+                              )}
+                            </div>
+                            <div className="text-sm font-semibold text-slate-800 truncate">
+                              {it0?.descricao || "(sem descrição de item)"}
+                              {qtdItens > 1 && <span className="text-[11px] font-normal text-slate-500"> +{qtdItens - 1} item(s)</span>}
+                            </div>
+                            <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-slate-600">
+                              {oc.fornecedorNome && (
+                                <span className="inline-flex items-center gap-1"><Building2 className="h-3 w-3" /> {oc.fornecedorNome}</span>
+                              )}
+                              {(oc.locacaoDataInicio || oc.locacaoDataFim) && (
+                                <span className="inline-flex items-center gap-1">
+                                  <Calendar className="h-3 w-3" /> {oc.locacaoDataInicio ? fmtDate(oc.locacaoDataInicio) : "—"} → {oc.locacaoDataFim ? fmtDate(oc.locacaoDataFim) : "—"}
+                                </span>
+                              )}
+                              {oc.locacaoDuracaoDias && (
+                                <span className="inline-flex items-center gap-1"><Clock className="h-3 w-3" /> {oc.locacaoDuracaoDias}d</span>
+                              )}
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </>
+                )}
+              </Section>
+            );
+          })()}
+
           <Section icon={Truck} title="Equipamento" tint="emerald">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <Field label="Descrição *"><input value={form.descricao} onChange={e => setForm(p => ({ ...p, descricao: e.target.value }))} className="inp" placeholder="Ex: Betoneira 400L" /></Field>
@@ -3395,13 +3516,14 @@ function Kpi({ icon: Icon, label, value, sub, tint, money, onClick, active, titl
   }
   return <div className={baseCls} title={title}>{content}</div>;
 }
-function Section({ icon: Icon, title, tint, children }: { icon: LucideIcon; title: string; tint: "emerald" | "blue" | "amber" | "slate" | "red"; children: ReactNode }) {
+function Section({ icon: Icon, title, tint, children }: { icon: LucideIcon; title: string; tint: "emerald" | "blue" | "amber" | "slate" | "red" | "violet"; children: ReactNode }) {
   const palette: Record<string, { bar: string; iconBg: string; iconColor: string; text: string }> = {
     emerald: { bar: "bg-emerald-500", iconBg: "bg-emerald-50", iconColor: "text-emerald-600", text: "text-emerald-900" },
     blue:    { bar: "bg-blue-500",    iconBg: "bg-blue-50",    iconColor: "text-blue-600",    text: "text-blue-900" },
     amber:   { bar: "bg-amber-500",   iconBg: "bg-amber-50",   iconColor: "text-amber-600",   text: "text-amber-900" },
     slate:   { bar: "bg-slate-400",   iconBg: "bg-slate-100",  iconColor: "text-slate-600",   text: "text-slate-900" },
     red:     { bar: "bg-red-500",     iconBg: "bg-red-50",     iconColor: "text-red-600",     text: "text-red-900" },
+    violet:  { bar: "bg-violet-500",  iconBg: "bg-violet-50",  iconColor: "text-violet-600",  text: "text-violet-900" },
   };
   const p = palette[tint];
   return (

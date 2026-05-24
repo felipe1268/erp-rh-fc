@@ -1,6 +1,103 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2371 — **FEATURE · "Receber Locação na Obra" agora lista as OCs de
+ * locação pendentes de recebimento no topo do modal — almoxarife clica e
+ * dá entrada com 1 clique (em vez de digitar tudo na mão).**
+ *
+ * **Pedido user (24/05/2026, IMG_1171):** "Quando tiver ordem de compra
+ * para equipamentos locados deve aparecer aqui, para que o almoxarife dê
+ * a entrada". O modal de recebimento existia mas era 100% manual: o
+ * almoxarife precisava redigitar descrição, fornecedor, datas e valores
+ * que JÁ ESTAVAM na OC aprovada pelo gerente.
+ *
+ * **Backend** (`server/routers/equipamentos.ts`):
+ *
+ * - Novo `equipamentos.ocsLocacaoPendentes` (query, input `{ companyId }`).
+ *   Lista OCs onde `is_locacao = true`, `status IN ('pendente','aprovada','parcial')`
+ *   (mesmo conjunto usado em `warehouse.ts:1475` para recebimento de OC
+ *   não-locação) e que AINDA NÃO foram recebidas — garantido por
+ *   `NOT EXISTS (SELECT 1 FROM equipamentos_locados el WHERE
+ *   el.ordem_compra_id = compras_ordens.id)`. Retorna metadados da OC
+ *   (numeroOc, fornecedor, obraId, total, datas de locação, duração) +
+ *   array `itens` (id, descricao, unidade, quantidade, precoUnitario,
+ *   total) carregado em uma única query batch via `inArray(ordemId, ids)`
+ *   pra evitar N+1.
+ *
+ * - Imports adicionados: `comprasOrdens`, `comprasOrdensItens` do schema.
+ *
+ * - Zero alteração no schema (a tabela `equipamentos_locados` já tem o
+ *   campo `ordem_compra_id integer`, FK lógica criada na Rev. 2306).
+ *
+ * **Frontend** (`client/src/pages/equipamentos/Locados.tsx`):
+ *
+ * 1. **Query nova:** `trpc.equipamentos.ocsLocacaoPendentes.useQuery({ companyId })`.
+ *
+ * 2. **State `ocSelecionada: { id, numeroOc } | null`** marca qual OC
+ *    está sendo recebida no momento.
+ *
+ * 3. **Handler `receberDaOC(oc)`:** pré-preenche o form com dados da OC
+ *    — descrição do 1º item, fornecedor, dataInicio (preferindo
+ *    `locacaoDataInicio` → `dataEntregaPrevista` → hoje), dataFimPrevista
+ *    (locacaoDataFim), valorDiario (preço unitário do item), valorMensal
+ *    calculado como `(total / locacaoDuracaoDias) * 30` quando possível.
+ *    Observações pré-preenchidas com "Recebimento referente à OC NNN".
+ *    Seta `ocSelecionada` pra exibir o banner verde.
+ *
+ * 4. **Nova seção `<Section icon={FileText} tint="violet">` no TOPO do
+ *    modal "Receber Locação na Obra"** — antes do bloco "Equipamento".
+ *    Comportamento:
+ *      - Loading → spinner inline com "Buscando OCs de locação aprovadas…".
+ *      - 0 OCs + sem seleção → seção INTEIRA escondida (preserva fluxo
+ *        manual histórico — não polui o modal quando não há OC pendente).
+ *      - OC selecionada → banner verde com check, número da OC em fonte
+ *        mono, mensagem "Os campos foram pré-preenchidos…" e botão
+ *        "Trocar OC" (limpa form + seleção, volta pra lista).
+ *      - Lista de OCs → cards clicáveis com badge violet "OC NNN" +
+ *        status, total em emerald (direita), descrição do 1º item
+ *        (truncado, "+N item(s)" se >1), linha de metadados (fornecedor,
+ *        período DD/MM/AA → DD/MM/AA, duração em dias). Hover muda
+ *        border + background. `max-h-64 overflow-y-auto` pra OCs em
+ *        massa.
+ *
+ * 5. **`salvar()` envia `ordemCompraId: ocSelecionada?.id`** — o backend
+ *    `locadoCriar` já gravava `ordem_compra_id` (linha 417), só faltava
+ *    o front mandar o valor. Após sucesso, `utils.equipamentos.ocsLocacaoPendentes.invalidate()`
+ *    + `setOcSelecionada(null)` — a OC recém-recebida some da lista
+ *    (filtrada pelo `NOT EXISTS` do backend) sem refresh manual.
+ *
+ * 6. **Reset on close:** `setOcSelecionada(null)` adicionado em onClose
+ *    do modal + no deep-link `?action=receber` (linha 494) pra evitar
+ *    estado stale quando reabre.
+ *
+ * 7. **Section "violet" novo:** o componente local `Section` (linha
+ *    ~3519) só aceitava `emerald | blue | amber | slate | red`. Adicionei
+ *    `violet` (bar bg-violet-500, iconBg bg-violet-50, iconColor
+ *    text-violet-600, text text-violet-900) pra diferenciar essa seção
+ *    "vinda de outro módulo (Compras)" das seções de dados do próprio
+ *    equipamento.
+ *
+ * **R-001/R-007/R-010:** zero DDL, query READ-ONLY no novo endpoint,
+ * mutation já existia (`locadoCriar`) só ganhou um campo opcional no
+ * payload — backward compatible com chamadas anteriores. Sem impacto em
+ * produção.
+ *
+ * **Pegadinha conhecida (documentada pra próxima rev):** OC com 1+
+ * item de locação só consome o 1º item pra montar o equipamento locado.
+ * Caso clientes comecem a usar OC multi-item de locação (raro hoje —
+ * locadoras emitem 1 OC por item), uma rev futura precisará iterar
+ * sobre `oc.itens` e criar 1 `equipamentos_locados` por item (similar
+ * ao fluxo de Import PDF em lote da Rev. 2308/2358).
+ *
+ * **Files:**
+ * - `server/routers/equipamentos.ts` (linhas 21-30 imports; 387-449
+ *   novo endpoint `ocsLocacaoPendentes`).
+ * - `client/src/pages/equipamentos/Locados.tsx` (linhas 349-363 query +
+ *   state; 494-498 reset on deep-link; 670-716 salvar + receberDaOC;
+ *   1961-2046 nova seção no modal; 3519-3530 Section ganha tint violet).
+ *
+ * ---
+ *
  * Rev. 2370 — **UX/BUGFIX · Barra de busca de Equipamentos Locados
  * promovida pra linha própria full-width (no iPad colapsava em ~100px
  * mostrando só o ícone, sem placeholder visível) + botão limpar (X).**

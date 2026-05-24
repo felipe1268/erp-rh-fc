@@ -22,6 +22,8 @@ import {
   equipamentosFotosCanonicas,
   faturaLocacaoConferencia,
   parametrosCapex,
+  comprasOrdens,
+  comprasOrdensItens,
 } from "../../drizzle/schema";
 import { storagePut } from "../storage";
 
@@ -377,6 +379,72 @@ export const equipamentosRouter = router({
         .limit(1);
       if (!row) throw new TRPCError({ code: "NOT_FOUND" });
       return row;
+    }),
+
+  // Rev. 2371 — Lista Ordens de Compra de LOCAÇÃO que estão aprovadas/emitidas
+  // mas ainda não foram recebidas (i.e. não existe `equipamentos_locados`
+  // apontando pra elas via `ordemCompraId`). Usado pelo modal "Receber Locação
+  // na Obra" pra o almoxarife dar entrada a partir da OC (em vez de digitar
+  // tudo na mão). Status considerados "pendentes de recebimento":
+  // pendente / aprovada / parcial (mesmo conjunto usado em warehouse.ts:1475).
+  // 'entregue' e 'cancelada' são filtrados fora.
+  ocsLocacaoPendentes: protectedProcedure
+    .input(companyInput)
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      // Rev. 2371 — companyFilter() valida que o user tem acesso à companyId
+      // pedida (mesmo padrão de locadosListar/equipamentosProprios). Sem isso
+      // qualquer user autenticado poderia listar OCs de outra empresa (IDOR).
+      const ocs = await db.select({
+        id: comprasOrdens.id,
+        numeroOc: comprasOrdens.numeroOc,
+        fornecedorNome: comprasOrdens.fornecedorNome,
+        fornecedorId: comprasOrdens.fornecedorId,
+        obraId: comprasOrdens.obraId,
+        status: comprasOrdens.status,
+        total: comprasOrdens.total,
+        dataEntregaPrevista: comprasOrdens.dataEntregaPrevista,
+        locacaoDataInicio: comprasOrdens.locacaoDataInicio,
+        locacaoDataFim: comprasOrdens.locacaoDataFim,
+        locacaoDuracaoDias: comprasOrdens.locacaoDuracaoDias,
+        criadoEm: comprasOrdens.criadoEm,
+        criadoPorNome: comprasOrdens.criadoPorNome,
+      })
+        .from(comprasOrdens)
+        .where(and(
+          companyFilter(comprasOrdens.companyId, input),
+          eq(comprasOrdens.isLocacao, true),
+          sql`${comprasOrdens.status} IN ('pendente', 'aprovada', 'parcial')`,
+          sql`NOT EXISTS (SELECT 1 FROM equipamentos_locados el WHERE el.ordem_compra_id = ${comprasOrdens.id})`,
+        ))
+        .orderBy(desc(comprasOrdens.criadoEm));
+
+      if (ocs.length === 0) return [];
+
+      const itens = await db.select({
+        id: comprasOrdensItens.id,
+        ordemId: comprasOrdensItens.ordemId,
+        descricao: comprasOrdensItens.descricao,
+        unidade: comprasOrdensItens.unidade,
+        quantidade: comprasOrdensItens.quantidade,
+        precoUnitario: comprasOrdensItens.precoUnitario,
+        total: comprasOrdensItens.total,
+      })
+        .from(comprasOrdensItens)
+        .where(inArray(comprasOrdensItens.ordemId, ocs.map(o => o.id)));
+
+      const itensPorOc = new Map<number, typeof itens>();
+      for (const it of itens) {
+        const arr = itensPorOc.get(it.ordemId) || [];
+        arr.push(it);
+        itensPorOc.set(it.ordemId, arr);
+      }
+
+      return ocs.map(oc => ({
+        ...oc,
+        itens: itensPorOc.get(oc.id) || [],
+      }));
     }),
 
   locadoCriar: protectedProcedure
