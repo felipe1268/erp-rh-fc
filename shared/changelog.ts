@@ -1,6 +1,137 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2348 — **HOTFIX/UX · Busca de fotos com IA ganha (a) AUTO-LOOP
+ * client-side até processar TODOS os lotes (não para em 60) +
+ * (b) VALIDAÇÃO STRICT "foto EXATA do produto" reforçada com
+ * `categoria` no payload da IA pra desambiguar (RODAPÉ/PAINEL/
+ * DIAGONAIS).**
+ *
+ * Pedido user (24/05/2026, IMG_1141 mostrando modal "60 de 60 — 0
+ * Fase A / 60 Fase C"): "Quero que a ia melhore a busca e só par4
+ * quando fizer todas, não quero liberando apenas 60" + segunda
+ * mensagem na mesma sessão: "Quero que a foto seja exatamente do
+ * produto".
+ *
+ * Causa raiz dupla:
+ *
+ * (1) A procedure server-side processava no máximo 60 descrições
+ * únicas por call (cap intencional pra não estourar o LLM context +
+ * timeout HTTP). O server retornava `haMaisLotes: true` mas o client
+ * só mostrava o aviso "Clique novamente pra processar o próximo
+ * lote" — exigindo N cliques manuais pra cobrir as ~300 descrições
+ * únicas. User justamente reclama disso.
+ *
+ * (2) Phase A retornou 0/60 (todas viraram placeholder) — sinal de
+ * que validação ficou rigorosa demais. Investigação: o prompt da
+ * Rev. 2347 mencionava `RODAPÉ` na seção AMBIGUIDADES mas o payload
+ * passado pro Gemini não carregava a categoria DO ITEM — só
+ * `descricao_pt`, `query_busca` e `candidatos`. Sem categoria
+ * explícita, o LLM não tinha como aplicar a desambiguação (ex:
+ * RODAPÉ em ANDAIME vs RODAPÉ de piso) e caía no "em dúvida,
+ * rejeite" default.
+ *
+ * Implementação:
+ *
+ * **Server (`server/routers/equipamentos.ts`,
+ * `locadosBuscarFotosComIA`):**
+ *
+ * (1) Bundle ganha campo `categoria: string` — populado direto do
+ * `d.categoria` que JÁ vinha do SELECT (eq.categoria coalesceado por
+ * descrição na agregação inicial). Type `Bundle = { descricao;
+ * categoria; queryUsada; cands }`.
+ *
+ * (2) `userPayload` passado pro LLM agora inclui `categoria` por
+ * item (`(sem categoria)` quando NULL). Isso dá ao Gemini contexto
+ * pra aplicar as regras de AMBIGUIDADES do system prompt sem
+ * adivinhar.
+ *
+ * (3) System prompt reescrito como "foto EXATA do produto" (não
+ * "plausível", não "razoável"). Estrutura:
+ *   - REGRA SUPREMA: "em dúvida, REJEITE" não negociável.
+ *   - APROVE só quando título nomeia o equipamento OU sinônimo
+ *     industrial inequívoco + categoria bate, OU nome de arquivo
+ *     descritivo no Wikimedia Commons.
+ *   - REJEITE quando título é GENÉRICO (mostra ambiente mas não O
+ *     PRODUTO — "construction site", "obra", "canteiro",
+ *     "scaffolding system overview"), pessoa/animal/paisagem,
+ *     categoria diferente, vago, ou confiança <85%.
+ *   - DESEMPATE: google > openverse > wikimedia.
+ *   - CASOS ESPECIAIS desambiguados via categoria (RODAPÉ em
+ *     ANDAIME = toe board; PAINEL em ANDAIME = fachadeiro; em
+ *     ELÉTRICO = quadro elétrico; etc).
+ *   - Códigos proprietários (PG-2030, modelos de fabricante) →
+ *     quase sempre rejeite.
+ *
+ * **Client (`client/src/pages/equipamentos/Locados.tsx`):**
+ *
+ * (1) Novo `fotosAcumRef = useRef<{ lotes, analisadas, encontradas,
+ * itensAtualizados, semFoto[], phaseA, phaseB, phaseC } | null>` —
+ * acumulador entre lotes do mesmo run. Ref (não state) pra evitar
+ * re-render desnecessário durante o loop.
+ *
+ * (2) `buscarFotosMut.onSuccess` reescrito como state machine:
+ *   - Soma `res.*` no acumulador.
+ *   - `utils.equipamentos.locadosListar.invalidate()` a cada lote
+ *     (UI atualiza visualmente conforme processa — feedback parcial).
+ *   - Se `res.haMaisLotes && !res.cotaEsgotada` → reseta timer,
+ *     `setTimeout(() => mutate(...), 250)` pra próximo lote (250ms
+ *     dá frame pra UI atualizar + sai do stack do react-query).
+ *   - Senão (fim natural OU cota esgotada) → consolida acumulado em
+ *     `resultadoFotosIA` (com novo campo `lotesProcessados`),
+ *     fecha modal de progresso, mostra resultado final, toast
+ *     "processou N lote(s) — X equip atualizado(s)".
+ *
+ * (3) `onError` limpa o acumulador também (run abortado = perde
+ * progresso parcial pra não confundir; idempotente, basta clicar
+ * de novo).
+ *
+ * (4) Botão "Buscar agora" reseta `fotosAcumRef.current = null`
+ * antes de disparar — garante que runs sucessivos não somem entre si.
+ *
+ * (5) Texto de progresso no modal de confirmação mostra "Processando
+ * lote N" + acumulado de lotes anteriores quando lotes > 0. Linha
+ * inicial muda pra "vou rodar em cascata até processar todos" no
+ * primeiro lote.
+ *
+ * (6) Type `resultadoFotosIA` ganha `lotesProcessados?: number` pra
+ * UI mostrar quantos lotes rolaram (opcionalmente exibido no modal
+ * de resultado).
+ *
+ * Por que ref em vez de state pro acumulador: o loop dispara
+ * mutations sequenciais e o re-render do componente entre elas iria
+ * resetar a closure do onSuccess se o estado fosse via useState
+ * (capturaria valor antigo). Ref garante "última escrita ganha"
+ * estável.
+ *
+ * Por que setTimeout 250ms vs 0: dá frame pra invalidate() do
+ * react-query refetchar `locadosListar` (UI mostra fotos novas
+ * conforme aparecem) ANTES do próximo lote começar. Sem o atraso, o
+ * usuário só veria atualização no final.
+ *
+ * Por que NÃO mover o loop pro server: cap de 60 existe pra evitar
+ * (a) LLM context overflow (60 desc × ~10 cands = ~600 títulos) +
+ * (b) timeout HTTP (>2min) + (c) bloqueio do thread Node em uma
+ * única call. Loop client-side preserva esses limites + dá
+ * feedback visual incremental + permite cancelar fechando aba.
+ *
+ * Por que passar categoria SÓ no payload (não na busca): a busca já
+ * usa categoria como qualificador (`${desc} ${cat}`); o problema
+ * estava só na validação que não recebia o contexto. Adicionar no
+ * payload é zero custo de tokens (1 campo curto) mas habilita as
+ * regras de desambiguação.
+ *
+ * Esperado: descrições com categoria definida (ex: "RODAPÉ 20 CM"
+ * em "Andaime e escoramento") agora têm contexto pra Phase A
+ * aprovar fotos corretas. Equipamentos sem categoria continuam
+ * dependendo da força da query — placeholder permanece como
+ * fallback honesto.
+ *
+ * **R-001/R-007/R-010:** N/A — só LLM calls + UPDATE escopado por
+ * `company_id` (preservado), idempotente, zero DDL. Loop
+ * client-side respeita rate limits naturais do Gemini (1 call por
+ * lote, ~5-8s entre lotes).
+ *
  * Rev. 2347 — **HOTFIX/FILOSOFIA · Busca de fotos com IA volta a buscar
  * em PORTUGUÊS (Google CSE prioridade) com VALIDAÇÃO RIGOROSA em TODOS
  * os candidatos. Phase B "busca ampla sem validação" da Rev. 2345

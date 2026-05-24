@@ -713,7 +713,8 @@ export default function EquipamentosLocados() {
 
   // Rev. 2340 — Busca de fotos ilustrativas em lote via Google Custom Search.
   const [modalFotosIA, setModalFotosIA] = useState<null | { sobrescrever: boolean }>(null);
-  const [resultadoFotosIA, setResultadoFotosIA] = useState<null | { descricoesAnalisadas: number; fotosEncontradas: number; itensAtualizados: number; descricoesSemFoto: string[]; haMaisLotes?: boolean; cotaEsgotada?: boolean; fotosPhaseA?: number; fotosPhaseB?: number; fotosPhaseC?: number }>(null);
+  const [resultadoFotosIA, setResultadoFotosIA] = useState<null | { descricoesAnalisadas: number; fotosEncontradas: number; itensAtualizados: number; descricoesSemFoto: string[]; haMaisLotes?: boolean; cotaEsgotada?: boolean; fotosPhaseA?: number; fotosPhaseB?: number; fotosPhaseC?: number; lotesProcessados?: number }>(null);
+  const fotosAcumRef = useRef<{ lotes: number; analisadas: number; encontradas: number; itensAtualizados: number; semFoto: string[]; phaseA: number; phaseB: number; phaseC: number } | null>(null);
   // Rev. 2340.1 — Progresso estimado por tempo decorrido (server roda
   // sequencial sem stream; ~1.2s por descrição CSE). Capamos em 95% até a
   // mutation retornar para evitar "100% que não termina".
@@ -739,16 +740,51 @@ export default function EquipamentosLocados() {
   });
   const buscarFotosMut = trpc.equipamentos.locadosBuscarFotosComIA.useMutation({
     onSuccess: (res: any) => {
-      setResultadoFotosIA(res);
+      const acc = fotosAcumRef.current ?? { lotes: 0, analisadas: 0, encontradas: 0, itensAtualizados: 0, semFoto: [] as string[], phaseA: 0, phaseB: 0, phaseC: 0 };
+      acc.lotes += 1;
+      acc.analisadas += res.descricoesAnalisadas ?? 0;
+      acc.encontradas += res.fotosEncontradas ?? 0;
+      acc.itensAtualizados += res.itensAtualizados ?? 0;
+      acc.phaseA += res.fotosPhaseA ?? 0;
+      acc.phaseB += res.fotosPhaseB ?? 0;
+      acc.phaseC += res.fotosPhaseC ?? 0;
+      if (Array.isArray(res.descricoesSemFoto)) acc.semFoto.push(...res.descricoesSemFoto);
+      fotosAcumRef.current = acc;
+      utils.equipamentos.locadosListar.invalidate();
+
+      // Rev. 2348 — auto-loop: se o servidor sinaliza haMaisLotes, dispara
+      // o próximo batch automaticamente. Cota esgotada interrompe.
+      if (res.haMaisLotes && !res.cotaEsgotada) {
+        setFotoInicio(Date.now());
+        setFotoTickNow(Date.now());
+        // microtask: evita stack do react-query e dá frame pra atualizar UI
+        setTimeout(() => buscarFotosMut.mutate({ companyId, sobrescrever: false }), 250);
+        return;
+      }
+
+      // Fim do loop — consolida e mostra resultado acumulado.
+      setResultadoFotosIA({
+        descricoesAnalisadas: acc.analisadas,
+        fotosEncontradas: acc.encontradas,
+        itensAtualizados: acc.itensAtualizados,
+        descricoesSemFoto: acc.semFoto.slice(0, 50),
+        haMaisLotes: false,
+        cotaEsgotada: res.cotaEsgotada,
+        fotosPhaseA: acc.phaseA,
+        fotosPhaseB: acc.phaseB,
+        fotosPhaseC: acc.phaseC,
+        lotesProcessados: acc.lotes,
+      });
       setModalFotosIA(null);
       setFotoInicio(null);
-      utils.equipamentos.locadosListar.invalidate();
-      toast.success(`IA encontrou ${res.fotosEncontradas} foto(s) — ${res.itensAtualizados} equipamento(s) atualizado(s).`);
+      fotosAcumRef.current = null;
+      toast.success(`IA processou ${acc.lotes} lote(s) — ${acc.itensAtualizados} equipamento(s) atualizado(s).`);
     },
     onError: (err: any) => {
       toast.error(err?.message || "Falha ao buscar fotos com IA.");
       setModalFotosIA(null);
       setFotoInicio(null);
+      fotosAcumRef.current = null;
     },
   });
   // Estimativa: a procedure processa até 60 descrições únicas por call. Cada
@@ -2250,7 +2286,11 @@ export default function EquipamentosLocados() {
                     />
                   </div>
                   <div className="text-[11px] text-slate-500">
-                    Processando ~{fotoDescricoesEstimadas} descrição(ões) única(s) — 1 busca por descrição.
+                    Processando lote <b className="text-pink-700">{(fotosAcumRef.current?.lotes ?? 0) + 1}</b>
+                    {fotosAcumRef.current && fotosAcumRef.current.lotes > 0 && (
+                      <> · acumulado: <b>{fmtN(fotosAcumRef.current.itensAtualizados)}</b> equip. atualizado(s), <b>{fmtN(fotosAcumRef.current.encontradas)}</b> foto(s) encontrada(s)</>
+                    )}
+                    {!fotosAcumRef.current?.lotes && <> — ~{fotoDescricoesEstimadas} descrição(ões) por lote, vou rodar em cascata até processar todos.</>}
                     {fotoSegundosDecorridos > fotoSegundosEstimados + 10 && (
                       <span className="text-amber-700"> · Os provedores estão respondendo mais devagar que o esperado — aguarde.</span>
                     )}
@@ -2263,6 +2303,7 @@ export default function EquipamentosLocados() {
                 className="px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-200 rounded-lg transition disabled:opacity-60">Cancelar</button>
               <button
                 onClick={() => {
+                  fotosAcumRef.current = null;
                   setFotoInicio(Date.now());
                   setFotoTickNow(Date.now());
                   buscarFotosMut.mutate({ companyId, sobrescrever: false });

@@ -1115,7 +1115,7 @@ Gere o JSON conforme o esquema. Não omita nenhuma descrição.`;
       // 2a. Para cada descrição, gera 2 queries PT alternativas e coleta
       // candidatos de TODOS os provedores em paralelo (qualificadores
       // diferentes pra Wikimedia/OpenVerse que indexam menos PT).
-      type Bundle = { descricao: string; queryUsada: string; cands: Cand[] };
+      type Bundle = { descricao: string; categoria: string; queryUsada: string; cands: Cand[] };
       const bundles: Bundle[] = [];
       let cotaEsgotada = false;
       let googleDesativadoPorErro = false;
@@ -1144,7 +1144,7 @@ Gere o JSON conforme o esquema. Não omita nenhuma descrição.`;
           if (!seen.has(c.url)) { seen.add(c.url); cands.push(c); }
           if (cands.length >= 10) break;
         }
-        bundles.push({ descricao: desc, queryUsada: queryPt, cands });
+        bundles.push({ descricao: desc, categoria: cat, queryUsada: queryPt, cands });
       }
       console.log(`[locadosBuscarFotosComIA] Busca PT: ${bundles.filter(b => b.cands.length > 0).length}/${bundles.length} descrições com candidatos`);
 
@@ -1157,32 +1157,36 @@ Gere o JSON conforme o esquema. Não omita nenhuma descrição.`;
       if (bundlesComCands.length > 0) {
         try {
           const { invokeLLM } = await import("../_core/llm");
-          const systemPrompt = `Você seleciona a MELHOR foto candidata para EQUIPAMENTOS de construção civil/locação descritos em PORTUGUÊS BRASILEIRO.
+          const systemPrompt = `Você seleciona a foto EXATA do produto descrito (equipamento de construção civil/locação em PORTUGUÊS BRASILEIRO). NÃO aceita "foto parecida", "genérica da categoria" ou "obra com vários equipamentos".
 
-REGRA DE OURO (NÃO NEGOCIÁVEL): "Em dúvida, REJEITE." É MELHOR retornar i=null (sem foto) do que retornar foto de algo diferente. O usuário PREFERE um placeholder honesto a uma foto errada.
+REGRA SUPREMA: o usuário quer a foto EXATAMENTE do produto. Em DÚVIDA, REJEITE (i=null). Placeholder honesto > foto errada.
 
-CRITÉRIOS PARA APROVAR (i=índice):
-- Título do candidato (PT ou EN) menciona EXPLICITAMENTE o equipamento da descrição, OU um sinônimo industrial inequívoco.
-- Sinônimos aceitos: scaffold/scaffolding/staging=andaime; shoring/prop/shore=escora; formwork=fôrma; jack base/screw jack/base jack=sapata ajustável; plank/platform/board=prancha/pranchão; brace=diagonal/contraventamento; guard rail/edge protection/toe board=guarda-corpo/rodapé de proteção; concrete mixer/cement mixer=betoneira; rotary hammer/demolition hammer=martelete; angle grinder=esmerilhadeira; generator=gerador; compressor=compressor; panel/board (em contexto NR-18/site protection)=painel.
-- Se múltiplos candidatos passam: prefira google > openverse > wikimedia (ordem dada).
+APROVE (i=índice) APENAS quando o título do candidato deixa CLARO que a imagem mostra esse equipamento específico isolado/em destaque. Pelo menos uma destas tem que valer:
+1. Título nomeia o equipamento (PT ou EN) — ex: descrição "BETONEIRA 400L" + título "Betoneira 400L Menegotti" / "Concrete mixer 400L"; descrição "ANDAIME FACHADEIRO" + título "Andaime fachadeiro" / "Facade scaffold".
+2. Título usa sinônimo industrial INEQUÍVOCO + categoria bate — scaffold/scaffolding=andaime; shoring/prop=escora; formwork=fôrma; jack base/screw jack=sapata ajustável; plank=prancha; brace=diagonal; guard rail/toe board=guarda-corpo/rodapé de proteção; concrete mixer=betoneira; rotary/demolition hammer=martelete; angle grinder=esmerilhadeira; generator=gerador; compressor=compressor.
+3. Wikimedia Commons com nome de arquivo descritivo em PT-BR/EN que nomeia o equipamento (ex: "Andaime_fachadeiro.jpg", "Sapata_ajustavel_andaime.jpg").
 
-CRITÉRIOS PARA REJEITAR (i=null) — qualquer um destes basta:
-1. Nenhum candidato menciona o equipamento nem sinônimo industrial.
-2. Algum candidato tem título sugerindo pessoa, animal, paisagem, capa de livro, logo, banner de loja, comida, veículo de passeio.
-3. Título é vago demais ("untitled", "construction", "image123") SEM contexto que confirme o equipamento.
-4. Título sugere categoria DIFERENTE (ex: descrição é "RODAPÉ 20 CM" — equipamento de andaime — e candidato é "skirting board floor" ou foto de pessoa).
-5. Você não tem certeza ≥80% de que a foto representa o equipamento da descrição.
+REJEITE (i=null) sempre que QUALQUER uma destas for verdadeira:
+1. NENHUM candidato nomeia o equipamento nem sinônimo direto.
+2. Título é genérico ("construction site", "obra em andamento", "canteiro", "workers", "scaffolding system overview") — mostra o ambiente mas não O PRODUTO.
+3. Título sugere pessoa/modelo/operário posando, animal, paisagem, comida, capa de livro/revista, banner de loja, logo de marca, veículo de passeio.
+4. Título sugere categoria diferente da informada — ex: "RODAPÉ" em ANDAIME mas candidato é "skirting board floor" (rodapé de piso); "PAINEL" em ANDAIME mas candidato é "electrical panel".
+5. Título vago ("untitled", "image123", "img_001", "construction").
+6. Confiança <85% que a foto é EXATAMENTE desse produto.
 
-CUIDADO COM AMBIGUIDADES (rejeite!):
-- "RODAPÉ" em construção civil = guard rail/toe board do andaime (proteção de borda), NÃO rodapé de piso.
-- "PAINEL" pode ser de andaime, NR-18 ou elétrico — categoria ajuda a desambiguar.
-- "DIAGONAIS" = brace de andaime, NÃO listras diagonais.
-- Códigos proprietários (PG-2030, NR-18) sem outro contexto: rejeite tudo.
+DESEMPATE quando múltiplos aprovados: google > openverse > wikimedia (índice menor preferido).
+
+CASOS ESPECIAIS — use a CATEGORIA pra desambiguar:
+- "RODAPÉ" em categoria ANDAIME ou EPC/EPI = toe board / rodapé de proteção / guard rail (NÃO rodapé de piso). Só aprove se título mencionar andaime/scaffold/toe board/edge protection.
+- "PAINEL" em ANDAIME = painel fachadeiro / NR-18; em ELÉTRICO = quadro elétrico; em CONTAINER = parede de container.
+- "DIAGONAIS" em ANDAIME = brace/contraventamento.
+- Códigos proprietários ou siglas sem contexto óbvio (PG-2030, modelos de fabricante) — quase sempre REJEITE.
 
 Responda JSON {"resultados":[{"descricao":"<exato>","i":<index|null>,"motivo":"<curto>"}, ...]} contendo TODAS as descrições recebidas.`;
 
           const userPayload = bundlesComCands.map((b) => ({
             descricao_pt: b.descricao,
+            categoria: b.categoria || "(sem categoria)",
             query_busca: b.queryUsada,
             candidatos: b.cands.map((c, i) => ({ i, provider: c.provider, title: c.title })),
           }));
