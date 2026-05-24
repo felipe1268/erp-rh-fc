@@ -1,6 +1,31 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2380 — **UX · Widget de progresso da "Busca de fotos na web" agora
+ * mostra contador 0-100% destacado + ETA dinâmica.**
+ *
+ * Pedido user (IMG_1181, 24/05/2026): "Quero uma tela de 0 a 100% ajuste isso
+ * pra mim". Print mostrava o widget antigo com "4/161" pequeno e barrinha
+ * fininha — sem percentual numérico visível.
+ *
+ * Implementação (`client/src/pages/almoxarifado/index.tsx`, UI-only):
+ *   - Widget bottom-right reformulado em card 340px com 2 áreas:
+ *     (a) header gradient sky/blue com Globe pulsando + "Parar" estilizado;
+ *     (b) corpo com número grande "{pct}%" (text-3xl bold sky-600) à
+ *         esquerda + "atual/total" e ETA dinâmica ("~M min restantes" ou
+ *         "~Xs restantes" baseado em 1.5s/item) à direita.
+ *   - Barra agora h-3 com gradient sky-400→blue-500 e transition 300ms.
+ *   - Footer com 3 contadores estilizados (✓ ok emerald / 📷 itens sky /
+ *     ✕ falhas red) separados por border-top.
+ *   - Nome do item atual em linha própria (truncate) abaixo da barra.
+ *
+ * R-001 / R-007 / R-010: OK — UI-only, zero backend, zero DDL.
+ */
+import "./version";
+
+/**
+ * Changelog centralizado do ERP.
+ *
  * Rev. 2379 — **UX · Polimento do modal "Buscar fotos" + conversão do
  * `window.confirm()` do "Preencher preços com IA" pra modal customizado
  * com a mesma identidade visual.**

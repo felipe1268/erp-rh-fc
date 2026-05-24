@@ -3576,34 +3576,48 @@ export default function AlmoxarifadoPage() {
           </div>
         </div>
       )}
-      {/* Rev. 2377 — Widget de progresso da busca de fotos na web */}
-      {batchFotoWeb && (
-        <div className="fixed bottom-4 right-4 z-[100] bg-white rounded-xl shadow-2xl border border-sky-200 p-4 w-80 max-w-[calc(100vw-2rem)]">
-          <div className="flex items-center gap-2 mb-2">
-            <Globe className="w-5 h-5 text-sky-600 animate-pulse" />
-            <span className="font-semibold text-sm text-gray-800">Buscando fotos na web…</span>
-            <button
-              onClick={() => { batchFotoWebRef.current.cancelar = true; }}
-              className="ml-auto text-xs text-red-500 hover:text-red-700 font-medium"
-              title="Parar"
-            >Parar</button>
+      {/* Rev. 2380 — Widget de progresso 0-100% destacado */}
+      {batchFotoWeb && (() => {
+        const pct = Math.min(100, Math.round((batchFotoWeb.atual / Math.max(1, batchFotoWeb.total)) * 100));
+        const restantes = Math.max(0, batchFotoWeb.total - batchFotoWeb.atual);
+        const etaSeg = Math.ceil(restantes * 1.5);
+        const etaTxt = etaSeg >= 60 ? `~${Math.ceil(etaSeg / 60)} min restantes` : `~${etaSeg}s restantes`;
+        return (
+          <div className="fixed bottom-4 right-4 z-[100] bg-white rounded-2xl shadow-2xl border border-sky-200 w-[340px] max-w-[calc(100vw-2rem)] overflow-hidden">
+            <div className="bg-gradient-to-br from-sky-500 to-blue-600 px-4 py-3 flex items-center gap-2 text-white">
+              <Globe className="w-5 h-5 animate-pulse" />
+              <span className="font-semibold text-sm">Buscando fotos na web</span>
+              <button
+                onClick={() => { batchFotoWebRef.current.cancelar = true; }}
+                className="ml-auto text-xs bg-white/20 hover:bg-white/30 px-2.5 py-1 rounded-md font-medium transition"
+              >Parar</button>
+            </div>
+            <div className="px-4 pt-4 pb-3">
+              <div className="flex items-end justify-between mb-2">
+                <div className="text-3xl font-bold text-sky-600 leading-none tabular-nums">{pct}<span className="text-xl text-sky-400">%</span></div>
+                <div className="text-right">
+                  <div className="text-sm font-semibold text-gray-700 tabular-nums">{batchFotoWeb.atual} / {batchFotoWeb.total}</div>
+                  <div className="text-[11px] text-gray-500">{etaTxt}</div>
+                </div>
+              </div>
+              <div className="relative w-full h-3 bg-gray-100 rounded-full overflow-hidden mb-3">
+                <div
+                  className="absolute inset-y-0 left-0 bg-gradient-to-r from-sky-400 to-blue-500 rounded-full transition-all duration-300"
+                  style={{ width: `${pct}%` }}
+                />
+              </div>
+              <p className="text-[11px] text-gray-600 mb-2 truncate">
+                <span className="text-gray-400">Atual: </span><span className="italic">{batchFotoWeb.nomeAtual || "—"}</span>
+              </p>
+              <div className="flex items-center justify-between text-[11px] pt-2 border-t border-gray-100">
+                <span className="flex items-center gap-1 text-emerald-600 font-medium"><span>✓</span> {batchFotoWeb.ok}</span>
+                <span className="flex items-center gap-1 text-sky-600 font-medium">📷 {batchFotoWeb.itensAtualizados}</span>
+                <span className="flex items-center gap-1 text-red-500 font-medium"><span>✕</span> {batchFotoWeb.falhas}</span>
+              </div>
+            </div>
           </div>
-          <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden mb-2">
-            <div
-              className="h-full bg-sky-500 transition-all"
-              style={{ width: `${(batchFotoWeb.atual / Math.max(1, batchFotoWeb.total)) * 100}%` }}
-            />
-          </div>
-          <p className="text-xs text-gray-600 mb-1">
-            {batchFotoWeb.atual}/{batchFotoWeb.total} — <span className="italic truncate inline-block max-w-[180px] align-bottom">{batchFotoWeb.nomeAtual}</span>
-          </p>
-          <div className="flex items-center justify-between text-[11px] text-gray-500">
-            <span>✅ {batchFotoWeb.ok}</span>
-            <span>📷 {batchFotoWeb.itensAtualizados} itens</span>
-            <span>❌ {batchFotoWeb.falhas}</span>
-          </div>
-        </div>
-      )}
+        );
+      })()}
     </DashboardLayout>
   );
 }
