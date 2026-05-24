@@ -1,6 +1,32 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2385 — **UX · Filtro "⚠️ Sem categoria" no dropdown de categorias
+ * do Almoxarifado (view por obra E consolidado).**
+ *
+ * Pedido user (IMG_1187, 24/05/2026): "Quero um filtro para saber quais
+ * produtos não têm categoria definida, pra fazer o controle". Hoje
+ * itens criados via NF/import ou pelo usuário sem escolher categoria
+ * ficavam invisíveis no filtro, dificultando classificá-los em lote.
+ *
+ * **Frontend** (`client/src/pages/almoxarifado/index.tsx`):
+ *   - Opção `<option value="__sem__">⚠️ Sem categoria</option>` adicionada
+ *     em AMBOS os selects de categoria (view por obra ~linha 1670 + view
+ *     consolidado ~linha 1370).
+ *   - Lógica de filtro estendida em 2 lugares:
+ *     - `lista` useMemo (view por obra, ~linha 530): `filtroCateg === "__sem__"`
+ *       → `r.filter(i => !i.categoria || String(i.categoria).trim() === "")`.
+ *     - `consFinal` (view consolidado, ~linha 1206): mesmo tratamento.
+ *   - Pareando com Rev. 2382/2383: depois de filtrar, o user pode ativar
+ *     "Selecionar" e mudar a categoria em lote dos itens encontrados.
+ *
+ * UI-only, zero backend, R-001/R-007/R-010 OK.
+ */
+import "./version";
+
+/**
+ * Changelog centralizado do ERP.
+ *
  * Rev. 2384 — **FIX/UX · Badges "X pra receber" do botão ENTRADA e do
  * botão RECEBER LOCAÇÃO agora contam só as OCs da obra em contexto (ou
  * só das obras que o usuário tem permissão quando está em "todos

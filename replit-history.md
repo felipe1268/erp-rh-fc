@@ -2,6 +2,7 @@
 
 > Este arquivo guarda os one-liners das revisões antigas para manter o `replit.md` enxuto.
 
+- **Rev. 2378** — UX · Substituído `window.confirm()` por modal customizado no fluxo "Buscar fotos da web" do Almoxarifado. Print do iPad mostrava nativo Safari com URL Replit ocupando 3 linhas no título. Header sky/blue + Globe, body com bullets, z-[110]. UI-only. Ver `shared/changelog.ts`.
 - **Rev. 2377** — FEATURE · "Buscar fotos da web" no Almoxarifado — mesma abordagem da Rev. 2366 (DDG Images, 1 chamada por nome, UPDATE em lote). Backend `compras.buscarFotoWebPorNome` com match normalizado por regex (strip `[N.N]` em ambos lados). Frontend: botão hero "Fotos da web" + botão por card + widget de progresso. Ver `shared/changelog.ts`.
 - **Rev. 2376** — UX/ALERTA · Botão ENTRADA do Almoxarifado pisca com badge vermelho mostrando quantas OCs de MATERIAL estão pendentes (complementa Rev. 2375 que tratou só LOCAÇÃO). Nova `warehouse.listPendingOCs.useQuery` com refetch 60s. UI-only. Ver `shared/changelog.ts`.
 - **Rev. 2375** — UX/ALERTA · Botão "RECEBER LOCAÇÃO" do Almoxarifado pisca com badge vermelho da qtd. de equipamentos pra chegar (OCs de locação pendentes). Reusa `equipamentos.ocsLocacaoPendentes` (Rev. 2371) com refetch 60s. UI-only. Ver `shared/changelog.ts`.

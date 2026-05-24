@@ -524,7 +524,8 @@ export default function AlmoxarifadoPage() {
       const b = busca.toLowerCase();
       r = r.filter(i => i.nome.toLowerCase().includes(b) || i.codigoInterno?.toLowerCase().includes(b) || i.categoria?.toLowerCase().includes(b));
     }
-    if (filtroCateg !== "todas") r = r.filter(i => i.categoria === filtroCateg);
+    if (filtroCateg === "__sem__") r = r.filter(i => !i.categoria || String(i.categoria).trim() === "");
+    else if (filtroCateg !== "todas") r = r.filter(i => i.categoria === filtroCateg);
     if (apenasAbaixo) r = r.filter(i => n(i.quantidadeMinima) > 0 && n(i.quantidadeAtual) < n(i.quantidadeMinima));
 
     const groups = new Map<string, any[]>();
@@ -1199,7 +1200,9 @@ export default function AlmoxarifadoPage() {
           const consFiltered = consBusca
             ? consItens.filter((i: any) => i.nome.toLowerCase().includes(consBusca) || i.categoria?.toLowerCase().includes(consBusca) || i.codigoInterno?.toLowerCase().includes(consBusca))
             : consItens;
-          const consFinal = filtroCateg !== "todas" ? consFiltered.filter((i: any) => i.categoria === filtroCateg) : consFiltered;
+          const consFinal = filtroCateg === "__sem__"
+            ? consFiltered.filter((i: any) => !i.categoria || String(i.categoria).trim() === "")
+            : (filtroCateg !== "todas" ? consFiltered.filter((i: any) => i.categoria === filtroCateg) : consFiltered);
           const consListFinal = apenasAbaixo ? consFinal.filter((i: any) => i.quantidadeMinima > 0 && i.quantidadeTotal < i.quantidadeMinima) : consFinal;
 
           const consTotalItens = consItens.length;
@@ -1361,6 +1364,7 @@ export default function AlmoxarifadoPage() {
                 className="h-9 text-sm border border-gray-200 rounded-lg px-3 bg-white text-gray-700 outline-none focus:border-emerald-400"
               >
                 <option value="todas">Todas categorias</option>
+                <option value="__sem__">⚠️ Sem categoria</option>
                 {consCategs.map((c: any) => <option key={c} value={c}>{c}</option>)}
               </select>
               <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer select-none">
@@ -1667,6 +1671,7 @@ export default function AlmoxarifadoPage() {
               className="h-9 text-sm border border-gray-200 rounded-lg px-3 bg-white text-gray-700 outline-none focus:border-emerald-400"
             >
               <option value="todas">Todas categorias</option>
+              <option value="__sem__">⚠️ Sem categoria</option>
               {categorias.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
             <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer select-none">
