@@ -343,12 +343,44 @@ export default function EquipamentosLocados() {
     }
   }
 
+  // Rev. 2374 — Fila de importação vinda do Almoxarifado (?importAlmox=1).
+  // Mesmo padrão da Proprios.tsx: o usuário marcou N equipamentos no Almoxarifado,
+  // clicou "É ALUGADO" e foi parar aqui. Pré-preenchemos descricao + foto de
+  // recebimento (a foto do item do almoxarifado vira a 1ª foto obrigatória).
+  // O user ainda precisa preencher fornecedor, datas e ajustar.
+  const [importQueue, setImportQueue] = useState<Array<{ nome: string; fotoUrl: string; categoria: string }>>([]);
+  const [importTotal, setImportTotal] = useState(0);
+  function preencherFormDoItemAlmox(it: { nome: string; fotoUrl: string; categoria: string }) {
+    setForm({
+      ...EMPTY,
+      descricao: it.nome,
+      categoria: it.categoria || "",
+    });
+    setFotos(it.fotoUrl ? [{ url: it.fotoUrl, uploadedAt: new Date().toISOString() }] : []);
+    setOcSelecionada(null);
+    setModal(true);
+  }
+
   const criar = trpc.equipamentos.locadoCriar.useMutation({
     onSuccess: () => {
       utils.equipamentos.locadosListar.invalidate();
       utils.equipamentos.ocsLocacaoPendentes.invalidate(); // Rev. 2371 — OC selecionada some da lista após recebimento
-      setModal(false); setForm({ ...EMPTY }); setFotos([]); setOcSelecionada(null);
-      toast.success("Equipamento locado cadastrado!");
+      // Rev. 2374 — fila de importação do Almoxarifado: avança pro próximo item.
+      if (importQueue.length > 0) {
+        const [next, ...rest] = importQueue;
+        setImportQueue(rest);
+        setOcSelecionada(null);
+        setTimeout(() => preencherFormDoItemAlmox(next), 200);
+        toast.success("Cadastrado! Próximo da fila…");
+      } else {
+        setModal(false); setForm({ ...EMPTY }); setFotos([]); setOcSelecionada(null);
+        if (importTotal > 0) {
+          toast.success(`${importTotal} equipamento${importTotal !== 1 ? "s" : ""} locado${importTotal !== 1 ? "s" : ""} importado${importTotal !== 1 ? "s" : ""} do Almoxarifado.`);
+          setImportTotal(0);
+        } else {
+          toast.success("Equipamento locado cadastrado!");
+        }
+      }
     },
     onError: (e) => toast.error(e.message),
   });
@@ -515,6 +547,43 @@ export default function EquipamentosLocados() {
     url.searchParams.delete("action");
     window.history.replaceState({}, "", url.toString());
   }, []);
+
+  // Rev. 2374 — Fila de importação do Almoxarifado (?importAlmox=1). O usuário
+  // marcou N equipamentos no Almoxarifado, clicou "É ALUGADO" e foi parar aqui.
+  // Pré-preenchemos descricao + categoria + foto de recebimento do 1º item e
+  // avançamos pra cada save (criar.onSuccess).
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (!companyId) return;
+    const url = new URL(window.location.href);
+    if (url.searchParams.get("importAlmox") !== "1") return;
+    try {
+      const raw = sessionStorage.getItem("fc:importAlmoxEquip:queue");
+      const tipo = sessionStorage.getItem("fc:importAlmoxEquip:tipo");
+      if (!raw || tipo !== "alugado") return;
+      const payload = JSON.parse(raw) as { companyId: number; itens: Array<{ nome: string; fotoUrl: string; categoria: string }> };
+      const arr = payload?.itens;
+      // Rev. 2374 — rejeita se a empresa atual ≠ empresa de origem (anti-contaminação).
+      if (!payload || payload.companyId !== companyId) {
+        sessionStorage.removeItem("fc:importAlmoxEquip:queue");
+        sessionStorage.removeItem("fc:importAlmoxEquip:tipo");
+        url.searchParams.delete("importAlmox");
+        window.history.replaceState({}, "", url.pathname + (url.search ? `?${url.searchParams.toString()}` : ""));
+        toast.error("A fila de importação era de outra empresa. Foi descartada.");
+        return;
+      }
+      if (!Array.isArray(arr) || arr.length === 0) return;
+      sessionStorage.removeItem("fc:importAlmoxEquip:queue");
+      sessionStorage.removeItem("fc:importAlmoxEquip:tipo");
+      url.searchParams.delete("importAlmox");
+      window.history.replaceState({}, "", url.pathname + (url.search ? `?${url.searchParams.toString()}` : ""));
+      setImportTotal(arr.length);
+      setImportQueue(arr.slice(1));
+      preencherFormDoItemAlmox(arr[0]);
+      toast.info(`${arr.length} equipamento${arr.length !== 1 ? "s" : ""} pra cadastrar como ALUGADO. Preencha fornecedor + datas e salve cada um.`);
+    } catch {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [companyId]);
 
   // Rev. 2310/2318 — anima barra durante o parse (Gemini não retorna progresso real).
   // FASE 1 (0→95%): ease-out em ~35s (curva quadrática inversa).
@@ -1978,7 +2047,28 @@ export default function EquipamentosLocados() {
 
       {/* Modal receber locação — seções com ícones */}
       {modal && (
-        <Modal title="Receber Locação na Obra" onClose={() => { setModal(false); setOcSelecionada(null); }} onSave={salvar} loading={criar.isPending} saveLabel="Confirmar recebimento">
+        <Modal title={importTotal > 0 ? `Cadastrar Equipamento Alugado (${importTotal - importQueue.length} de ${importTotal})` : "Receber Locação na Obra"} onClose={() => { setModal(false); setOcSelecionada(null); }} onSave={salvar} loading={criar.isPending} saveLabel={importQueue.length > 0 ? "Salvar e próximo" : "Confirmar recebimento"}>
+          {/* Rev. 2374 — Banner da fila de importação do Almoxarifado */}
+          {importTotal > 0 && (
+            <div className="bg-orange-50 border-2 border-orange-300 rounded-lg px-3 py-2 flex items-center gap-3 -mt-1 mb-2">
+              <Truck className="h-5 w-5 text-orange-700 shrink-0" />
+              <div className="flex-1">
+                <p className="text-sm font-bold text-orange-900">
+                  Importando do Almoxarifado · {importTotal - importQueue.length} de {importTotal}
+                </p>
+                <p className="text-[11px] text-orange-700/90 leading-tight">
+                  Preencha fornecedor, datas e ajuste a foto. Restam {importQueue.length} equipamento{importQueue.length !== 1 ? "s" : ""} na fila.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => { setImportQueue([]); setImportTotal(0); toast.info("Importação cancelada."); }}
+                className="text-xs text-orange-700 hover:text-orange-900 font-medium underline"
+              >
+                Parar fila
+              </button>
+            </div>
+          )}
           {/* Rev. 2371 — OCs de locação pendentes de recebimento. Almoxarife clica
               numa OC pra pré-preencher o form (descrição, fornecedor, datas, valor)
               e vincular o equipamento à OC via ordemCompraId. */}

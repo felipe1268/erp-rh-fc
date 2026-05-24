@@ -1,9 +1,9 @@
 import DashboardLayout from "@/components/DashboardLayout";
-import { useState, useMemo, useRef } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
 import { toast } from "sonner";
-import { Plus, Search, Pencil, X, HardHat, Camera, ChevronDown, ChevronUp, Sparkles, Trash2 } from "lucide-react";
+import { Plus, Search, Pencil, X, HardHat, Camera, ChevronDown, ChevronUp, Sparkles, Trash2, Boxes } from "lucide-react";
 import { FotosUploader, FotoItem, compressImage, fmtMoney, fmtDate, Spinner } from "./_shared";
 
 const EMPTY_FORM = {
@@ -77,6 +77,57 @@ export default function EquipamentosProprios() {
     setMostrarDetalhes(false); setModal(true);
   }
 
+  // Rev. 2374 — Fila de importação vinda do Almoxarifado (?importAlmox=1).
+  // O usuário marcou N equipamentos no Almoxarifado, clicou "É PRÓPRIO da FC"
+  // e foi parar aqui — abrimos o modal pré-preenchido com nome+categoria+foto
+  // do 1º item, e a cada save avançamos pro próximo até esvaziar a fila.
+  const [importQueue, setImportQueue] = useState<Array<{ nome: string; fotoUrl: string; categoria: string }>>([]);
+  const [importTotal, setImportTotal] = useState(0);
+  function preencherFormDoItem(it: { nome: string; fotoUrl: string; categoria: string }) {
+    setForm({
+      ...EMPTY_FORM,
+      descricao: it.nome,
+      categoria: it.categoria || "",
+      codigoPatrimonio: gerarPatrimonioAuto(),
+    });
+    setFotos(it.fotoUrl ? [{ url: it.fotoUrl, uploadedAt: new Date().toISOString() }] : []);
+    setEditingId(null);
+    setMostrarDetalhes(false);
+    setModal(true);
+  }
+  useEffect(() => {
+    if (!companyId) return;
+    if (!totalFetched) return; // espera contagem pro EQP-NNNN não colidir
+    const url = new URL(window.location.href);
+    if (url.searchParams.get("importAlmox") !== "1") return;
+    try {
+      const raw = sessionStorage.getItem("fc:importAlmoxEquip:queue");
+      const tipo = sessionStorage.getItem("fc:importAlmoxEquip:tipo");
+      if (!raw || tipo !== "proprio") return;
+      const payload = JSON.parse(raw) as { companyId: number; itens: Array<{ nome: string; fotoUrl: string; categoria: string }> };
+      const arr = payload?.itens;
+      // Rev. 2374 — rejeita se a empresa atual ≠ empresa de origem (anti-contaminação).
+      if (!payload || payload.companyId !== companyId) {
+        sessionStorage.removeItem("fc:importAlmoxEquip:queue");
+        sessionStorage.removeItem("fc:importAlmoxEquip:tipo");
+        url.searchParams.delete("importAlmox");
+        window.history.replaceState({}, "", url.pathname + (url.search ? `?${url.searchParams.toString()}` : ""));
+        toast.error("A fila de importação era de outra empresa. Foi descartada.");
+        return;
+      }
+      if (!Array.isArray(arr) || arr.length === 0) return;
+      sessionStorage.removeItem("fc:importAlmoxEquip:queue");
+      sessionStorage.removeItem("fc:importAlmoxEquip:tipo");
+      url.searchParams.delete("importAlmox");
+      window.history.replaceState({}, "", url.pathname + (url.search ? `?${url.searchParams.toString()}` : ""));
+      setImportTotal(arr.length);
+      setImportQueue(arr.slice(1));
+      preencherFormDoItem(arr[0]);
+      toast.info(`${arr.length} equipamento${arr.length !== 1 ? "s" : ""} pra cadastrar como PRÓPRIO. Revise e salve cada um.`);
+    } catch {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [companyId, totalFetched]);
+
   async function handleFotoTop(e: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files || []);
     if (!files.length) return;
@@ -110,7 +161,26 @@ export default function EquipamentosProprios() {
   }
 
   const criar = trpc.equipamentos.proprioCriar.useMutation({
-    onSuccess: () => { utils.equipamentos.propriosListar.invalidate(); setModal(false); toast.success("Equipamento cadastrado!"); },
+    onSuccess: () => {
+      utils.equipamentos.propriosListar.invalidate();
+      // Rev. 2374 — se há fila de importação do Almoxarifado, avança pro próximo
+      // item em vez de fechar o modal. Quando a fila esvazia, fecha + toast final.
+      if (importQueue.length > 0) {
+        const [next, ...rest] = importQueue;
+        setImportQueue(rest);
+        // pequeno delay pra dar tempo do invalidate atualizar `totalList` (EQP-NNNN)
+        setTimeout(() => preencherFormDoItem(next), 250);
+        toast.success("Cadastrado! Próximo da fila…");
+      } else {
+        setModal(false);
+        if (importTotal > 0) {
+          toast.success(`${importTotal} equipamento${importTotal !== 1 ? "s" : ""} próprio${importTotal !== 1 ? "s" : ""} importado${importTotal !== 1 ? "s" : ""} do Almoxarifado.`);
+          setImportTotal(0);
+        } else {
+          toast.success("Equipamento cadastrado!");
+        }
+      }
+    },
     onError: (e) => toast.error(e.message),
   });
   const atualizar = trpc.equipamentos.proprioAtualizar.useMutation({
@@ -279,6 +349,26 @@ export default function EquipamentosProprios() {
                 <X className="h-6 w-6 text-slate-500" />
               </button>
             </div>
+            {/* Rev. 2374 — Banner da fila de importação do Almoxarifado */}
+            {importTotal > 0 && (
+              <div className="bg-emerald-50 border-b-2 border-emerald-300 px-5 py-3 flex items-center gap-3">
+                <Boxes className="h-5 w-5 text-emerald-700 shrink-0" />
+                <div className="flex-1">
+                  <p className="text-sm font-bold text-emerald-900">
+                    Importando do Almoxarifado · {importTotal - importQueue.length} de {importTotal}
+                  </p>
+                  <p className="text-[11px] text-emerald-700/90 leading-tight">
+                    Revise os dados e salve. Restam {importQueue.length} equipamento{importQueue.length !== 1 ? "s" : ""} na fila.
+                  </p>
+                </div>
+                <button
+                  onClick={() => { setImportQueue([]); setImportTotal(0); toast.info("Importação cancelada."); }}
+                  className="text-xs text-emerald-700 hover:text-emerald-900 font-medium underline"
+                >
+                  Parar fila
+                </button>
+              </div>
+            )}
 
             <div className="p-5 space-y-5">
               {/* 1) FOTO — destaque máximo. Servente toca, abre câmera traseira. */}

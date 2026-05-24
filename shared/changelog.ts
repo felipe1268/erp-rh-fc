@@ -1,6 +1,113 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2374 — **FEATURE · Classificar equipamentos do Almoxarifado como
+ * "PRÓPRIO da FC" ou "ALUGADO" em LOTE, via múltipla seleção visual, e ser
+ * jogado direto pros formulários de cadastro com tudo pré-preenchido.**
+ *
+ * Pedido user (IMG_1175, 24/05/2026): "preciso indicar se o equipamento é
+ * alugado ou próprio da construtora FC.. acredito que tenha como você fazer
+ * isso, fazendo múltipla seleção, e já ir para os campos de equipamento
+ * próprio ou equipamento locado".
+ *
+ * UX (operador 4ª série, poucos cliques):
+ *   1. No Almoxarifado (Visão Geral, modo cards, categoria=Equipamentos/
+ *      Ferramentas/Escoramento), aparece botão azul "Próprio ou Alugado?"
+ *      no toolbar.
+ *   2. Clica → entra em modo seleção: cards ganham checkbox overlay, ficam
+ *      clicáveis (toque marca/desmarca), selecionados destacados com ring
+ *      azul e border-2.
+ *   3. Marca N itens → barra sticky no rodapé mostra "X selecionados" +
+ *      2 botões grandes:
+ *        🟢 HardHat "É PRÓPRIO da FC"  (verde)
+ *        🟠 Truck   "É ALUGADO"        (laranja)
+ *   4. Clica num dos 2 → grava fila em sessionStorage e navega:
+ *        - /equipamentos/proprios?importAlmox=1   ou
+ *        - /equipamentos/locados?importAlmox=1
+ *   5. Na página de destino, useEffect detecta o param, lê a fila, abre o
+ *      modal de cadastro pré-preenchido com o 1º item (descrição, categoria,
+ *      foto, EQP-NNNN auto pra próprios) e mostra banner "Importando X de N
+ *      · Parar fila".
+ *   6. User completa os campos restantes (em Próprios: data aquisição/valor;
+ *      em Locados: fornecedor + datas) e salva.
+ *   7. criar.onSuccess avança pro próximo item da fila (toast "Cadastrado!
+ *      Próximo da fila…"), repreenche o modal, e segue até esvaziar. Toast
+ *      final "N equipamento(s) importado(s) do Almoxarifado."
+ *
+ * Por que UI-only (zero backend): as mutations `proprioCriar` e `locadoCriar`
+ * já existem e validam tudo (tenant, obra, fotos obrigatórias em locado,
+ * EQP-NNNN único em próprio). Adicionar uma rota de "classificar batch"
+ * obrigaria recriar a UI de preenchimento, e o user pediu pra "ir para os
+ * campos" — então o caminho mais direto é levar pros forms existentes.
+ *
+ * Por que sessionStorage e não query param JSON: a lista pode ter 10+ itens
+ * com foto (URLs longas), que estoura limite prático de URL em alguns
+ * proxies. sessionStorage é wiped por tab, então não vaza entre usuários.
+ *
+ * Arquivos:
+ *   - client/src/pages/almoxarifado/index.tsx
+ *       * imports: +CheckSquare, +Square (lucide-react)
+ *       * state: modoClassificarEquip, selecClassif (Map<nome,{nome,fotoUrl,categoria}>)
+ *       * helpers: toggleSelClassif, sairModoClassif, classificarComo(tipo)
+ *           — gravam sessionStorage "fc:importAlmoxEquip:queue" + ":tipo"
+ *           e navegam via setLocation.
+ *       * toolbar: botão azul "Próprio ou Alugado?" condicional
+ *         (viewMode=cards && filtroCateg ∈ {Equipamentos,Ferramentas,Escoramento}).
+ *       * cards: checkbox overlay no canto sup. dir. quando em modo
+ *         classificar, onClick toggle (preserva outros handlers via stopPropagation),
+ *         ring-2 ring-blue-500 + border-blue quando selecionado.
+ *       * sticky bottom bar: `fixed bottom-0 inset-x-0 z-40` com contador,
+ *         botão Cancelar, e 2 hero buttons (verde+laranja).
+ *
+ *   - client/src/pages/equipamentos/Proprios.tsx
+ *       * imports: +Boxes (lucide); useEffect já estava.
+ *       * state: importQueue + importTotal.
+ *       * preencherFormDoItem(it): seta form.descricao=it.nome,
+ *         form.categoria=it.categoria, foto principal=it.fotoUrl, gera
+ *         EQP-NNNN via next-counter (usa lógica existente do abrirNovo).
+ *       * useEffect detecta ?importAlmox=1 + sessionStorage tipo="proprio",
+ *         carrega fila, abre modal com 1º item, mostra toast.
+ *       * criar.onSuccess: se há fila, avança pro próximo (setTimeout 200ms
+ *         pra evitar race de invalidate); senão fecha modal e toast final.
+ *       * banner emerald no header do modal: "Importando do Almoxarifado ·
+ *         X de N" + botão "Parar fila".
+ *
+ *   - client/src/pages/equipamentos/Locados.tsx
+ *       * state: importQueue + importTotal.
+ *       * preencherFormDoItemAlmox(it): seta form.descricao + categoria,
+ *         injeta it.fotoUrl como 1ª foto de recebimento (campo obrigatório).
+ *         User ainda precisa preencher fornecedor + dataInicio + dataFimPrev.
+ *       * useEffect detecta ?importAlmox=1 + tipo="alugado" (próximo ao
+ *         useEffect existente da Rev. 2311 que trata ?action=).
+ *       * criar.onSuccess: avança fila (igual ao Proprios) + invalida
+ *         ocsPendentesQ (mantém comportamento Rev. 2371).
+ *       * Modal title dinâmico: "Cadastrar Equipamento Alugado (X de N)"
+ *         quando importTotal>0; saveLabel "Salvar e próximo" enquanto
+ *         há fila.
+ *       * banner laranja como 1º child do Modal (antes da seção de OCs
+ *         pendentes da Rev. 2371).
+ *
+ * R-001 / R-007 / R-010: OK
+ *   - Zero DDL (CREATE/ALTER/DROP/DELETE) — reusa schema existente.
+ *   - Zero novas tRPC routes — reusa proprioCriar + locadoCriar.
+ *   - Tenant + obra isolation preservadas (já implementadas nas mutations).
+ *   - Validações (foto obrigatória em locado, EQP-NNNN único, fornecedor
+ *     vs dataInicio etc.) continuam no backend, intactas.
+ *
+ * Follow-ups possíveis (não implementados):
+ *   - Marcar item do Almoxarifado como "convertido em equipamento" pra não
+ *     reaparecer no botão "Próprio ou Alugado?". Hoje o user precisa
+ *     desativá-lo manualmente OU o item segue listado e ele simplesmente
+ *     ignora. Caso vire dor, criar coluna `convertidoEm` (proprioId/locadoId)
+ *     em almoxarifado_itens.
+ *   - Suporte a alteração em massa do tipoControle (granel vs estoque) na
+ *     mesma UX — hoje é item-a-item pelo modal de editar (Rev. 2373).
+ */
+import "./version";
+
+/**
+ * Changelog centralizado do ERP.
+ *
  * Rev. 2373 — **FEATURE · "AB" (resposta do user) para controlar insumos a
  * granel (areia, pedra, lajota): (A) toggle MANUAL no cadastro do item
  * pra marcar como "insumo a granel = aplicação direta" sem depender da IA;

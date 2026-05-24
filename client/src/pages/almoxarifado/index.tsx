@@ -10,6 +10,7 @@ import {
   LayoutGrid, List, Camera, Trash2, ImageOff, Barcode,
   Wrench, ClipboardCheck, User, CheckCircle2, XCircle, ChevronRight, ChevronLeft,
   Building2, HardHat, Sparkles, ScanLine, ShoppingCart, ArrowLeftRight, Truck,
+  CheckSquare, Square,
 } from "lucide-react";
 import SmartEntry from "./SmartEntry";
 import AlertasAlmoxarifado from "./AlertasAlmoxarifado";
@@ -87,6 +88,44 @@ export default function AlmoxarifadoPage() {
   const [viewMode, setViewMode] = useState<"cards" | "table">("cards");
   const [obraContexto, setObraContexto] = useState<number | null | "todos">(null);
   const [fotoExpandida, setFotoExpandida] = useState<{ url: string; nome: string } | null>(null);
+
+  // Rev. 2374 — Modo "Classificar como Próprio / Alugado": múltipla seleção
+  // de cards do consolidado pra empurrar em lote pros módulos /equipamentos/proprios
+  // ou /equipamentos/locados (cadastro pré-preenchido com nome+foto+categoria
+  // via sessionStorage). Pedido user (IMG_1175): "preciso indicar se o
+  // equipamento é alugado ou próprio... fazendo múltipla seleção e já ir
+  // pros campos de equipamento próprio ou locado". Chave do Map = nome
+  // normalizado (consolidado não tem id único, agrega N almoxarifados).
+  const [modoClassificarEquip, setModoClassificarEquip] = useState(false);
+  const [selecClassif, setSelecClassif] = useState<Map<string, { nome: string; fotoUrl: string; categoria: string }>>(new Map());
+  function toggleSelClassif(item: any) {
+    const k = String(item?.nome || "").toLowerCase().trim();
+    if (!k) return;
+    setSelecClassif(prev => {
+      const m = new Map(prev);
+      if (m.has(k)) m.delete(k);
+      else m.set(k, { nome: item.nome, fotoUrl: item.fotoUrl || "", categoria: item.categoria || "" });
+      return m;
+    });
+  }
+  function sairModoClassif() {
+    setModoClassificarEquip(false);
+    setSelecClassif(new Map());
+  }
+  function classificarComo(tipo: "proprio" | "alugado") {
+    const arr = Array.from(selecClassif.values());
+    if (arr.length === 0) { toast.error("Selecione ao menos 1 equipamento."); return; }
+    const companyId = selectedCompany?.id;
+    if (!companyId) { toast.error("Empresa não selecionada."); return; }
+    try {
+      // Rev. 2374 — payload inclui companyId pra evitar contaminação se o user
+      // trocar de empresa antes da página de destino consumir a fila.
+      sessionStorage.setItem("fc:importAlmoxEquip:queue", JSON.stringify({ companyId, itens: arr }));
+      sessionStorage.setItem("fc:importAlmoxEquip:tipo", tipo);
+    } catch {}
+    sairModoClassif();
+    setLocation(tipo === "proprio" ? "/equipamentos/proprios?importAlmox=1" : "/equipamentos/locados?importAlmox=1");
+  }
 
   // Busca por foto (IA)
   const fotoIAInputRef = useRef<HTMLInputElement>(null);
@@ -1047,7 +1086,21 @@ export default function AlmoxarifadoPage() {
                 Apenas abaixo do mínimo
               </label>
               <span className="text-xs text-gray-400">{consListFinal.length} resultado{consListFinal.length !== 1 ? "s" : ""}</span>
-              <div className="flex border border-gray-200 rounded-lg overflow-hidden ml-auto">
+              {/* Rev. 2374 — botão "Classificar como Próprio/Alugado". Só aparece
+                  quando o usuário filtrou por uma categoria de equipamento (faz
+                  sentido empurrar pros módulos /equipamentos/{proprios,locados}
+                  só pra Equipamentos / Ferramentas / Escoramento). */}
+              {viewMode === "cards" && (filtroCateg === "Equipamentos" || filtroCateg === "Ferramentas" || filtroCateg === "Escoramento") && (
+                <button
+                  onClick={() => modoClassificarEquip ? sairModoClassif() : setModoClassificarEquip(true)}
+                  className={`h-9 px-3 text-xs font-semibold rounded-lg border inline-flex items-center gap-1.5 transition ml-auto ${modoClassificarEquip ? "bg-blue-600 text-white border-blue-600 hover:bg-blue-700" : "bg-white text-blue-700 border-blue-300 hover:bg-blue-50"}`}
+                  title="Selecionar equipamentos e classificar como PRÓPRIO da FC ou ALUGADO"
+                >
+                  <CheckSquare className="h-4 w-4" />
+                  {modoClassificarEquip ? `Cancelar seleção (${selecClassif.size})` : "Próprio ou Alugado?"}
+                </button>
+              )}
+              <div className={`flex border border-gray-200 rounded-lg overflow-hidden ${modoClassificarEquip || !(viewMode === "cards" && (filtroCateg === "Equipamentos" || filtroCateg === "Ferramentas" || filtroCateg === "Escoramento")) ? "ml-auto" : ""}`}>
                 <button onClick={() => setViewMode("cards")} className={`px-3 py-1.5 text-xs font-medium flex items-center gap-1.5 ${viewMode === "cards" ? "bg-emerald-50 text-emerald-700" : "text-gray-500 hover:bg-gray-50"}`}>
                   <LayoutGrid className="h-3.5 w-3.5" /> Cards
                 </button>
@@ -1068,19 +1121,31 @@ export default function AlmoxarifadoPage() {
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
                 {consListFinal.map((item: any, idx: number) => {
                   const abaixo = item.quantidadeMinima > 0 && item.quantidadeTotal < item.quantidadeMinima;
+                  // Rev. 2374 — modo seleção: card inteiro vira clicável p/ marcar.
+                  const selKey = String(item.nome || "").toLowerCase().trim();
+                  const isSel = modoClassificarEquip && selecClassif.has(selKey);
                   return (
-                    <div key={idx} className={`bg-white rounded-xl border shadow-sm overflow-hidden flex flex-col transition hover:shadow-md ${abaixo ? "border-red-200" : "border-gray-100"}`}>
+                    <div
+                      key={idx}
+                      onClick={modoClassificarEquip ? () => toggleSelClassif(item) : undefined}
+                      className={`bg-white rounded-xl border shadow-sm overflow-hidden flex flex-col transition hover:shadow-md ${
+                        isSel ? "border-blue-500 ring-2 ring-blue-300" :
+                        abaixo ? "border-red-200" : "border-gray-100"
+                      } ${modoClassificarEquip ? "cursor-pointer" : ""}`}
+                    >
                       <div
-                        className={`relative bg-gray-50 flex items-center justify-center ${item.fotoUrl ? "cursor-pointer group" : ""}`}
+                        className={`relative bg-gray-50 flex items-center justify-center ${!modoClassificarEquip && item.fotoUrl ? "cursor-pointer group" : ""}`}
                         style={{ height: 140 }}
-                        onClick={() => { if (item.fotoUrl) setFotoExpandida({ url: item.fotoUrl, nome: item.nome }); }}
+                        onClick={modoClassificarEquip ? undefined : () => { if (item.fotoUrl) setFotoExpandida({ url: item.fotoUrl, nome: item.nome }); }}
                       >
                         {item.fotoUrl ? (
                           <>
                             <img src={item.fotoUrl} alt={item.nome} className="w-full h-full object-cover" />
-                            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition flex items-center justify-center">
-                              <Search className="h-5 w-5 text-white opacity-0 group-hover:opacity-100 transition drop-shadow-md" />
-                            </div>
+                            {!modoClassificarEquip && (
+                              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition flex items-center justify-center">
+                                <Search className="h-5 w-5 text-white opacity-0 group-hover:opacity-100 transition drop-shadow-md" />
+                              </div>
+                            )}
                           </>
                         ) : (
                           <div className="flex flex-col items-center gap-1 text-gray-300">
@@ -1088,8 +1153,14 @@ export default function AlmoxarifadoPage() {
                             <span className="text-[10px]">Sem foto</span>
                           </div>
                         )}
-                        {abaixo && (
+                        {abaixo && !modoClassificarEquip && (
                           <div className="absolute top-1.5 right-1.5 bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">!</div>
+                        )}
+                        {/* Rev. 2374 — checkbox overlay em modo seleção */}
+                        {modoClassificarEquip && (
+                          <div className={`absolute top-2 left-2 w-8 h-8 rounded-md flex items-center justify-center font-bold shadow-md transition ${isSel ? "bg-blue-600 text-white" : "bg-white/95 text-gray-300 border-2 border-gray-300"}`}>
+                            {isSel ? <CheckSquare className="h-5 w-5" /> : <Square className="h-5 w-5" />}
+                          </div>
                         )}
                       </div>
                       <div className="p-3 flex flex-col gap-1.5 flex-1">
@@ -3226,6 +3297,43 @@ export default function AlmoxarifadoPage() {
         </div>
       )}
 
+      {/* Rev. 2374 — Barra sticky de classificação (Próprio / Alugado) */}
+      {modoClassificarEquip && (
+        <div className="fixed bottom-0 inset-x-0 z-50 bg-white border-t-4 border-blue-500 shadow-[0_-8px_24px_rgba(0,0,0,0.15)]">
+          <div className="max-w-7xl mx-auto px-4 py-3 flex items-center gap-2 flex-wrap">
+            <div className="flex-1 min-w-[160px]">
+              <p className="text-sm font-bold text-blue-900">
+                {selecClassif.size} equipamento{selecClassif.size !== 1 ? "s" : ""} selecionado{selecClassif.size !== 1 ? "s" : ""}
+              </p>
+              <p className="text-[11px] text-gray-500 leading-tight">
+                {selecClassif.size === 0
+                  ? "Toque nos cards pra escolher."
+                  : "Este equipamento é da FC ou alugado? Você vai pro cadastro detalhado."}
+              </p>
+            </div>
+            <button
+              onClick={() => classificarComo("proprio")}
+              disabled={selecClassif.size === 0}
+              className="inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-3 rounded-xl font-bold text-sm shadow-md disabled:opacity-40 disabled:cursor-not-allowed transition"
+            >
+              <HardHat className="h-4 w-4" /> É PRÓPRIO da FC
+            </button>
+            <button
+              onClick={() => classificarComo("alugado")}
+              disabled={selecClassif.size === 0}
+              className="inline-flex items-center gap-2 bg-orange-600 hover:bg-orange-700 text-white px-4 py-3 rounded-xl font-bold text-sm shadow-md disabled:opacity-40 disabled:cursor-not-allowed transition"
+            >
+              <Truck className="h-4 w-4" /> É ALUGADO
+            </button>
+            <button
+              onClick={sairModoClassif}
+              className="px-3 py-3 text-gray-600 hover:bg-gray-100 rounded-lg text-sm font-medium"
+            >
+              Cancelar
+            </button>
+          </div>
+        </div>
+      )}
     </DashboardLayout>
   );
 }
