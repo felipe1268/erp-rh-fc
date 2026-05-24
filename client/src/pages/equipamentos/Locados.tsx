@@ -3,7 +3,7 @@ import { useState, useMemo, useRef, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
 import { toast } from "sonner";
-import { Plus, Search, X, Truck, CheckCircle2, RotateCcw, ClipboardCheck, Eye, FileText, Upload, Sparkles, Trash2, Activity, Clock, AlertTriangle, DollarSign, Calendar, Hash, Building2, User as UserIcon, MapPin, Camera, StickyNote, ChevronDown, Tag, Loader2, Layers, Boxes, ImagePlus, Library, Check, Globe, RefreshCw, type LucideIcon } from "lucide-react";
+import { Plus, Search, X, Truck, CheckCircle2, RotateCcw, ClipboardCheck, Eye, FileText, Upload, Sparkles, Trash2, Activity, Clock, AlertTriangle, DollarSign, Calendar, Hash, Building2, User as UserIcon, MapPin, Camera, StickyNote, ChevronDown, Tag, Loader2, Layers, Boxes, ImagePlus, Library, Check, Globe, RefreshCw, ZoomIn, type LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import { FotosUploader, FotoItem, fmtMoney, fmtDate, Spinner } from "./_shared";
 import { compressImageIfNeeded } from "@/lib/imageCompress";
@@ -844,6 +844,16 @@ export default function EquipamentosLocados() {
       setUploadingDescNorm(null);
     },
   });
+  // Rev. 2368 — Lightbox: clicar em foto amplia em fullscreen. Usado em
+  // todos os thumbnails da página (Biblioteca, grupos, unidades).
+  const [lightbox, setLightbox] = useState<{ url: string; titulo: string } | null>(null);
+  useEffect(() => {
+    if (!lightbox) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setLightbox(null); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [lightbox]);
+
   // Rev. 2367 — busca foto na web E salva na Biblioteca (1 clique por linha).
   const [buscandoWebBibliotecaDescNorm, setBuscandoWebBibliotecaDescNorm] = useState<Set<string>>(new Set());
   const fotoCanonBuscarWebMut = trpc.equipamentos.fotosCanonicasBuscarWebUpsert.useMutation({
@@ -2759,28 +2769,46 @@ export default function EquipamentosLocados() {
                       const fotoUrl = g.canonica?.fotoUrl || null;
                       return (
                         <div key={g.descricaoNormalizada} className={`border rounded-xl p-3 flex gap-3 transition ${fotoUrl ? "border-emerald-200 bg-emerald-50/40" : "border-slate-200 bg-white"}`}>
-                          <label className={`relative w-20 h-20 rounded-lg flex-shrink-0 cursor-pointer overflow-hidden ring-1 ring-slate-200 ${uploading || buscandoWeb ? "opacity-60" : ""}`}>
-                            {fotoUrl ? (
-                              <img src={fotoUrl} className="w-full h-full object-cover" alt="" />
-                            ) : (
+                          {/* Rev. 2368 — COM foto: thumb vira botão que abre
+                              lightbox (zoom). SEM foto: vira label de upload
+                              (comportamento original). */}
+                          {fotoUrl ? (
+                            <button
+                              type="button"
+                              onClick={() => setLightbox({ url: fotoUrl, titulo: descOriginal })}
+                              disabled={buscandoWeb}
+                              title="Clique para ampliar a foto"
+                              className={`relative w-20 h-20 rounded-lg flex-shrink-0 overflow-hidden ring-1 ring-slate-200 group/zoom cursor-zoom-in ${buscandoWeb ? "opacity-60 cursor-wait" : ""}`}>
+                              <img src={fotoUrl} className="w-full h-full object-cover" alt={descOriginal} />
+                              <div className="absolute inset-0 bg-black/0 group-hover/zoom:bg-black/40 transition flex items-center justify-center opacity-0 group-hover/zoom:opacity-100">
+                                <ZoomIn className="h-5 w-5 text-white drop-shadow" />
+                              </div>
+                              {buscandoWeb && (
+                                <div className="absolute inset-0 bg-white/70 flex items-center justify-center">
+                                  <Loader2 className="h-5 w-5 animate-spin text-sky-600" />
+                                </div>
+                              )}
+                            </button>
+                          ) : (
+                            <label className={`relative w-20 h-20 rounded-lg flex-shrink-0 cursor-pointer overflow-hidden ring-1 ring-slate-200 ${uploading || buscandoWeb ? "opacity-60" : ""}`}>
                               <div className="w-full h-full bg-slate-100 flex flex-col items-center justify-center text-slate-400">
                                 <ImagePlus className="h-5 w-5" />
                                 <span className="text-[9px] mt-0.5">Subir</span>
                               </div>
-                            )}
-                            {(uploading || buscandoWeb) && (
-                              <div className="absolute inset-0 bg-white/70 flex items-center justify-center">
-                                <Loader2 className={`h-5 w-5 animate-spin ${buscandoWeb ? "text-sky-600" : "text-indigo-600"}`} />
-                              </div>
-                            )}
-                            <input type="file" accept="image/*" className="hidden"
-                              disabled={uploading || buscandoWeb}
-                              onChange={async (e) => {
-                                const f = e.target.files?.[0];
-                                if (f) await handleBibliotecaUpload(descOriginal, f);
-                                e.target.value = "";
-                              }} />
-                          </label>
+                              {(uploading || buscandoWeb) && (
+                                <div className="absolute inset-0 bg-white/70 flex items-center justify-center">
+                                  <Loader2 className={`h-5 w-5 animate-spin ${buscandoWeb ? "text-sky-600" : "text-indigo-600"}`} />
+                                </div>
+                              )}
+                              <input type="file" accept="image/*" className="hidden"
+                                disabled={uploading || buscandoWeb}
+                                onChange={async (e) => {
+                                  const f = e.target.files?.[0];
+                                  if (f) await handleBibliotecaUpload(descOriginal, f);
+                                  e.target.value = "";
+                                }} />
+                            </label>
+                          )}
                           <div className="flex-1 min-w-0 flex flex-col">
                             <div className="font-semibold text-sm text-slate-900 truncate" title={descOriginal}>{descOriginal}</div>
                             <div className="text-[11px] text-slate-500 mt-0.5 flex items-center gap-2 flex-wrap">
@@ -2829,6 +2857,38 @@ export default function EquipamentosLocados() {
               <div className="flex items-center gap-1.5"><Sparkles className="h-3.5 w-3.5 text-indigo-500" /> Imagens são comprimidas (máx 1920px, JPEG q=0.82) antes do upload.</div>
               <button onClick={() => setModalBiblioteca(false)} className="px-4 py-1.5 bg-white border border-slate-300 hover:bg-slate-100 rounded-lg font-medium">Fechar</button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Rev. 2368 — Lightbox de foto (fullscreen, ESC ou click fora fecha) */}
+      {lightbox && (
+        <div
+          className="fixed inset-0 bg-black/85 backdrop-blur-md z-[60] flex items-center justify-center p-4 cursor-zoom-out"
+          onClick={() => setLightbox(null)}
+          role="dialog"
+          aria-modal="true"
+          aria-label={`Foto ampliada: ${lightbox.titulo}`}
+        >
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); setLightbox(null); }}
+            className="absolute top-4 right-4 h-10 w-10 rounded-full bg-white/15 hover:bg-white/30 text-white flex items-center justify-center transition"
+            title="Fechar (ESC)"
+            aria-label="Fechar foto ampliada">
+            <X className="h-5 w-5" />
+          </button>
+          <div className="absolute top-4 left-4 right-16 text-white/95 text-sm font-semibold truncate" title={lightbox.titulo}>
+            {lightbox.titulo}
+          </div>
+          <img
+            src={lightbox.url}
+            alt={lightbox.titulo}
+            className="max-w-[95vw] max-h-[88vh] object-contain rounded-lg shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          />
+          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 text-white/70 text-xs select-none pointer-events-none">
+            Clique fora ou pressione <kbd className="px-1.5 py-0.5 bg-white/15 rounded text-[10px] font-semibold">ESC</kbd> para fechar
           </div>
         </div>
       )}

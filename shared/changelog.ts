@@ -1,6 +1,62 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2368 — **UX · Lightbox de foto na Biblioteca: clicar no thumbnail
+ * amplia a foto em fullscreen pra melhor visualização (ESC ou click fora
+ * fecha).**
+ *
+ * **Pedido user (24/05/2026):** "Quando clicar foto, quero que ela seja
+ * ampliada para melhor visualização." Contexto da resposta anterior: as
+ * fotos retornadas pela Rev. 2367 (DDG → biblioteca) às vezes vinham
+ * erradas ou de baixa qualidade, e o thumbnail de 80x80px no modal
+ * Biblioteca era pequeno demais pra avaliar se a foto correspondia à
+ * descrição. Sem zoom, o engenheiro só sabia que a foto estava errada
+ * depois de aplicada nas unidades.
+ *
+ * **Implementação:**
+ *  - Estado `lightbox: {url, titulo} | null` em `Locados.tsx` + listener
+ *    de `keydown` (ESC fecha) registrado via useEffect só quando aberto.
+ *  - Modal fullscreen: `fixed inset-0 bg-black/85 backdrop-blur-md z-[60]`
+ *    (z acima do modal Biblioteca z-50), `cursor-zoom-out` no overlay,
+ *    `onClick={() => setLightbox(null)}` no overlay e
+ *    `e.stopPropagation()` no `<img>` (clique na imagem NÃO fecha).
+ *    Botão X canto superior direito (também `stopPropagation`), título
+ *    da descrição truncado canto superior esquerdo, dica "Clique fora ou
+ *    ESC para fechar" rodapé com `<kbd>` estilizado.
+ *  - Imagem com `max-w-[95vw] max-h-[88vh] object-contain` —
+ *    preserva aspect ratio, nunca corta, nunca extrapola viewport.
+ *  - A11y: `role=dialog`, `aria-modal=true`, `aria-label` com a descrição
+ *    + `aria-label` no botão fechar.
+ *
+ * **Mudança no thumbnail do modal Biblioteca:**
+ *  - ANTES: thumbnail era um `<label>` (com ou sem foto) que abria o file
+ *    picker pra upload. Click sempre = upload.
+ *  - DEPOIS:
+ *    - SEM foto → continua sendo `<label>` (upload) — preserva o caminho
+ *      original do botão "Subir".
+ *    - COM foto → vira `<button>` que abre lightbox; overlay preto no
+ *      hover com ícone `ZoomIn` pra indicar a ação; cursor `zoom-in`.
+ *  - Upload de SUBSTITUIÇÃO (caso a foto atual esteja errada) continua
+ *    acessível via fluxo existente: clicar "Remover" → thumb fica vazio →
+ *    clicar pra subir; OU "Trocar pela web" (Rev. 2367). Não adicionei
+ *    botão "Subir nova" separado pra não poluir a action bar (já tem 3:
+ *    "Trocar pela web", "Na biblioteca" badge, "Remover").
+ *
+ * **Escopo:** intencionalmente NÃO mexi nos thumbnails dos cards de
+ * grupo/unidade na lista principal (linhas 1334, 1453, 1878) — esses já
+ * têm comportamentos próprios (hover→"buscar nova foto" no grupo,
+ * navegação no card da unidade). Adicionar zoom lá conflitaria com os
+ * handlers atuais. Pode ser feito em revisão futura se o user pedir.
+ *
+ * **Ícone novo:** `ZoomIn` adicionado ao import lucide-react.
+ *
+ * **Arquivos:**
+ *  - `client/src/pages/equipamentos/Locados.tsx` — state, useEffect ESC,
+ *    refactor do thumb (label vs button), render do lightbox modal,
+ *    import ZoomIn.
+ *
+ * **R-001/R-007/R-010:** UI-only, zero backend, zero DDL, idempotente.
+ *
  * Rev. 2367 — **FEATURE/UX · Extensão do "Buscar na web" (Rev. 2366) pra
  * dentro do modal Biblioteca de fotos — cada linha das 65 descrições ganha
  * um botão sky "Buscar na web" que faz DDG → baixa o arquivo → joga no
