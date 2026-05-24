@@ -1,6 +1,38 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2379 — **UX · Polimento do modal "Buscar fotos" + conversão do
+ * `window.confirm()` do "Preencher preços com IA" pra modal customizado
+ * com a mesma identidade visual.**
+ *
+ * Pedido user (IMG_1180, 24/05/2026): "Melhore o layout e a mensagem tbm, não
+ * precisa aparecer o código grande assim". Print mostrava native iOS confirm
+ * com a URL `b41aedae-...replit.dev diz` ocupando 4 linhas no título — isso
+ * acontecia no botão de IA de preços (que ainda usava `window.confirm()`).
+ *
+ * Implementação (`client/src/pages/almoxarifado/index.tsx`, UI-only):
+ *   1. **Modal "Buscar fotos" polido** (Rev. 2378): header agora é centralizado
+ *      com ícone Globe grande em círculo, título maior e linha de meta no
+ *      subtítulo ("{N} itens sem foto · ~{M} min"). Corpo com card sky-50
+ *      contendo checkmarks emerald (✓) em vez de bullets. Footer com 2
+ *      botões flex-1 (Cancelar branco com borda + Buscar agora sky cheio)
+ *      mais touch-friendly em iPad.
+ *   2. **Modal novo "Preencher preços com IA"**: novo state `confirmIAPrecos`,
+ *      handler `executarPreencherIA()` separado. Mesmo layout do modal de
+ *      fotos mas em violet/purple (cor do botão "Preencher preços com IA"
+ *      original); header com ícone Sparkles, subtítulo "{N} itens sem valor
+ *      · 1-3 min", corpo com 3 checkmarks (tag 🤖 IA / só onde está vazio
+ *      / não altera preços já cadastrados), botão "Preencher" violet.
+ *   3. **Eliminados todos `window.confirm()` deste fluxo** — só sobrou um em
+ *      cenário não-crítico (excluir unidade de medida no modal de unidades).
+ *
+ * R-001 / R-007 / R-010: OK — UI-only, zero backend, zero DDL.
+ */
+import "./version";
+
+/**
+ * Changelog centralizado do ERP.
+ *
  * Rev. 2378 — **UX · Substituído `window.confirm()` por modal customizado no
  * fluxo "Buscar fotos da web" do Almoxarifado.**
  *

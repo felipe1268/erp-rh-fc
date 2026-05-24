@@ -107,9 +107,10 @@ export default function AlmoxarifadoPage() {
   const [batchFotoWeb, setBatchFotoWeb] = useState<null | { atual: number; total: number; nomeAtual: string; ok: number; falhas: number; itensAtualizados: number }>(null);
   const batchFotoWebRef = useRef<{ cancelar: boolean }>({ cancelar: false });
   const buscarFotoWebMut = trpc.compras.buscarFotoWebPorNome.useMutation();
-  // Rev. 2378 — Modal customizado de confirmação (substitui window.confirm que
-  // no Safari iPad mostrava a URL feia do Replit como título).
+  // Rev. 2378/2379 — Modais customizados de confirmação (substituem window.confirm
+  // que no Safari iPad mostrava a URL feia do Replit como título de 3 linhas).
   const [confirmBuscaFotos, setConfirmBuscaFotos] = useState<null | { nomes: string[] }>(null);
+  const [confirmIAPrecos, setConfirmIAPrecos] = useState<null | { escopo: "empresa" | "obra"; qtd: number }>(null);
 
   const [busca, setBusca] = useState("");
   const [filtroCateg, setFiltroCateg] = useState("todas");
@@ -249,13 +250,12 @@ export default function AlmoxarifadoPage() {
       toast.info("Não há itens sem preço para preencher.");
       return;
     }
-    const ok = window.confirm(
-      `A IA vai estimar o preço médio de mercado de ${itensSemPreco} item(ns) sem valor cadastrado.\n\n` +
-      `• Os preços serão marcados com a tag "🤖 IA" para revisão posterior.\n` +
-      `• Pode levar 1-3 minutos. Os preços só substituem onde está vazio.\n\n` +
-      `Deseja continuar?`
-    );
-    if (!ok) return;
+    setConfirmIAPrecos({ escopo, qtd: itensSemPreco });
+  };
+  const executarPreencherIA = () => {
+    if (!companyId || !confirmIAPrecos) return;
+    const escopo = confirmIAPrecos.escopo;
+    setConfirmIAPrecos(null);
     setPreenchendoIA(true);
     preencherIAMut.mutate({
       companyId,
@@ -3486,6 +3486,51 @@ export default function AlmoxarifadoPage() {
           </div>
         </div>
       )}
+      {/* Rev. 2379 — Modal customizado de confirmação pra preencher preços com IA */}
+      {confirmIAPrecos && (
+        <div
+          className="fixed inset-0 z-[110] bg-black/50 flex items-center justify-center p-4"
+          onClick={() => setConfirmIAPrecos(null)}
+        >
+          <div
+            className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="bg-gradient-to-br from-violet-500 to-purple-600 px-6 pt-6 pb-5 text-white text-center">
+              <div className="mx-auto bg-white/20 rounded-full p-3 w-fit mb-3">
+                <Sparkles className="w-8 h-8" />
+              </div>
+              <h3 className="text-xl font-bold leading-tight">Preencher preços com IA</h3>
+              <p className="text-violet-50 text-sm mt-1">
+                {confirmIAPrecos.qtd} {confirmIAPrecos.qtd === 1 ? "item" : "itens"} sem valor · 1-3 min
+              </p>
+            </div>
+            <div className="px-6 py-5 text-sm text-gray-700 space-y-3">
+              <p className="leading-relaxed">
+                A IA vai estimar o <strong>preço médio de mercado</strong> dos itens que
+                ainda não têm valor cadastrado.
+              </p>
+              <div className="bg-violet-50 border border-violet-100 rounded-lg p-3 text-[13px] text-gray-700 space-y-1.5">
+                <div className="flex items-start gap-2"><span className="text-emerald-600 font-bold">✓</span><span>Preços marcados com tag <strong>🤖 IA</strong> pra revisão</span></div>
+                <div className="flex items-start gap-2"><span className="text-emerald-600 font-bold">✓</span><span>Só preenche onde está <strong>vazio</strong></span></div>
+                <div className="flex items-start gap-2"><span className="text-emerald-600 font-bold">✓</span><span>Não altera preços já cadastrados</span></div>
+              </div>
+            </div>
+            <div className="px-5 py-4 bg-gray-50 flex items-center gap-2 border-t border-gray-200">
+              <button
+                onClick={() => setConfirmIAPrecos(null)}
+                className="flex-1 px-4 py-3 text-sm font-medium text-gray-700 bg-white hover:bg-gray-100 border border-gray-300 rounded-lg transition"
+              >Cancelar</button>
+              <button
+                onClick={executarPreencherIA}
+                className="flex-1 px-4 py-3 text-sm font-semibold text-white bg-violet-500 hover:bg-violet-600 rounded-lg transition shadow-sm flex items-center justify-center gap-2"
+              >
+                <Sparkles className="w-4 h-4" /> Preencher
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {/* Rev. 2378 — Modal customizado de confirmação pra busca em lote de fotos */}
       {confirmBuscaFotos && (
         <div
@@ -3496,32 +3541,34 @@ export default function AlmoxarifadoPage() {
             className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="bg-gradient-to-br from-sky-500 to-blue-600 px-6 py-5 text-white">
-              <div className="flex items-center gap-3 mb-1">
-                <div className="bg-white/20 rounded-full p-2"><Globe className="w-6 h-6" /></div>
-                <h3 className="text-lg font-bold">Buscar fotos na internet</h3>
+            <div className="bg-gradient-to-br from-sky-500 to-blue-600 px-6 pt-6 pb-5 text-white text-center">
+              <div className="mx-auto bg-white/20 rounded-full p-3 w-fit mb-3">
+                <Globe className="w-8 h-8" />
               </div>
-              <p className="text-sky-50 text-sm">
-                {confirmBuscaFotos.nomes.length} item{confirmBuscaFotos.nomes.length === 1 ? "" : "s"} sem foto
+              <h3 className="text-xl font-bold leading-tight">Buscar fotos na internet</h3>
+              <p className="text-sky-50 text-sm mt-1">
+                {confirmBuscaFotos.nomes.length} {confirmBuscaFotos.nomes.length === 1 ? "item" : "itens"} sem foto · ~{Math.ceil(confirmBuscaFotos.nomes.length * 1.5 / 60)} min
               </p>
             </div>
-            <div className="px-6 py-5 space-y-3 text-sm text-gray-700">
-              <p>Vou pesquisar no <strong>DuckDuckGo Images</strong> e aplicar a 1ª foto válida em cada item.</p>
-              <ul className="space-y-1.5 text-gray-600">
-                <li className="flex items-start gap-2"><span className="text-sky-500 mt-0.5">•</span><span>1 busca por nome (~1-2s cada)</span></li>
-                <li className="flex items-start gap-2"><span className="text-sky-500 mt-0.5">•</span><span>Só preenche itens <strong>sem</strong> foto cadastrada</span></li>
-                <li className="flex items-start gap-2"><span className="text-sky-500 mt-0.5">•</span><span>Tempo estimado: <strong>~{Math.ceil(confirmBuscaFotos.nomes.length * 1.5 / 60)} min</strong></span></li>
-                <li className="flex items-start gap-2"><span className="text-sky-500 mt-0.5">•</span><span>Pode interromper a qualquer momento</span></li>
-              </ul>
+            <div className="px-6 py-5 text-sm text-gray-700 space-y-3">
+              <p className="leading-relaxed">
+                Vou pesquisar no <strong>Google/DuckDuckGo</strong> e aplicar automaticamente
+                a primeira foto que combinar com o nome do produto.
+              </p>
+              <div className="bg-sky-50 border border-sky-100 rounded-lg p-3 text-[13px] text-gray-700 space-y-1.5">
+                <div className="flex items-start gap-2"><span className="text-emerald-600 font-bold">✓</span><span>Só preenche itens <strong>sem</strong> foto</span></div>
+                <div className="flex items-start gap-2"><span className="text-emerald-600 font-bold">✓</span><span>Não substitui fotos já cadastradas</span></div>
+                <div className="flex items-start gap-2"><span className="text-emerald-600 font-bold">✓</span><span>Pode interromper quando quiser</span></div>
+              </div>
             </div>
-            <div className="px-6 py-4 bg-gray-50 flex items-center justify-end gap-2 border-t border-gray-200">
+            <div className="px-5 py-4 bg-gray-50 flex items-center gap-2 border-t border-gray-200">
               <button
                 onClick={() => setConfirmBuscaFotos(null)}
-                className="px-5 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-200 rounded-lg transition"
+                className="flex-1 px-4 py-3 text-sm font-medium text-gray-700 bg-white hover:bg-gray-100 border border-gray-300 rounded-lg transition"
               >Cancelar</button>
               <button
                 onClick={() => executarBuscaFotosWebTodas(confirmBuscaFotos.nomes)}
-                className="px-5 py-2.5 text-sm font-semibold text-white bg-sky-500 hover:bg-sky-600 rounded-lg transition shadow-sm flex items-center gap-2"
+                className="flex-1 px-4 py-3 text-sm font-semibold text-white bg-sky-500 hover:bg-sky-600 rounded-lg transition shadow-sm flex items-center justify-center gap-2"
               >
                 <Globe className="w-4 h-4" /> Buscar agora
               </button>

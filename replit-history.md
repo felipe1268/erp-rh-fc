@@ -2,6 +2,7 @@
 
 > Este arquivo guarda os one-liners das revisões antigas para manter o `replit.md` enxuto.
 
+- **Rev. 2372** — UX · "DEVOLVER LOCAÇÃO" do Almoxarifado agora abre PICKER VISUAL com cards grandes (foto + descrição + obra + fornecedor) dos equipamentos em uso — operador de 4ª série escolhe e devolve em 2 cliques. Ver `shared/changelog.ts`.
 - **Rev. 2371** — FEATURE · "Receber Locação na Obra" lista OCs de locação pendentes no topo do modal (almoxarife dá entrada com 1 clique). Backend `equipamentos.ocsLocacaoPendentes` com companyFilter, frontend pré-preenche dados. Ver `shared/changelog.ts`.
 - **Rev. 2370** — UX/BUGFIX · Barra de busca de Equipamentos Locados promovida pra linha própria full-width (no iPad colapsava em ~100px mostrando só o ícone) + botão limpar (X). Selects Obra+Categoria migrados pra row abaixo. Ver `shared/changelog.ts`.
 - **Rev. 2369** — FEATURE/UX · "Trocar foto com outro termo": modal de rebusca com query customizada + preview antes de aplicar. Backend `queryOverride`+`dryRun` em `locadosBuscarFotoWebPorDescricao` e `fotosCanonicasBuscarWebUpsert`. Ver `shared/changelog.ts`.
