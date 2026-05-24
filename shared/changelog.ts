@@ -1,6 +1,66 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2330 — **FEATURE · Filtro de período (Últimos 12 meses
+ * ou ano fechado) nas 6 tabelas mês a mês do Dashboard Almox
+ * & Equip.**
+ *
+ * Pedido user (24/05/2026, screenshot iPad): "Quero um filtro
+ * por ano ou seja estamos em 2026 quero analisar isso" +
+ * "Replica isso para todos os dash deste módulo". A tabela
+ * "Movimentações mês a mês" mostrava jun/25→mai/26 — janelas
+ * móveis impossibilitavam comparar "ano calendário 2026" com
+ * "ano calendário 2025".
+ *
+ * **Implementação** (`client/src/pages/dashboards/DashAlmoxarifadoEquipamentos.tsx`,
+ * 0 server, 0 schema):
+ *
+ *   (1) Helper `monthsOfYear(year)` retorna [jan/aa..dez/aa]
+ *       de um ano específico (espelha `lastNMonths(12)` da
+ *       Rev. 2327, mesma shape `{key, label}`). Constante
+ *       `MESES_PT` extraída do escopo de `lastNMonths` p/
+ *       reuso.
+ *
+ *   (2) Estado `periodoMeses: '12m' | number` (default `'12m'`)
+ *       — único pra TODAS as 6 tabs. Trocar período em qualquer
+ *       tabela atualiza simultaneamente as outras 5.
+ *
+ *   (3) `anosDisponiveis` useMemo: união dos anos com dado em
+ *       qualquer fonte (movs, próprios, locados início/devolução,
+ *       ferramentas, itens) + ano atual sempre incluso (range
+ *       2000-2100 como sanitização). Ordenado desc.
+ *
+ *   (4) `monthlyAgg` useMemo: depende de `periodoMeses` —
+ *       `months = periodoMeses === '12m' ? lastNMonths(12) :
+ *       monthsOfYear(periodoMeses)`. Loops e buckets inalterados
+ *       (já filtravam por `k in <bucket>`).
+ *
+ *   (5) Componente inline `MesesHeader({titulo})` renderiza o
+ *       header padronizado: ícone CalendarRange + título + " —
+ *       últimos 12 meses" OU " — ano 2026", e à direita um
+ *       `<select>` com opções "Últimos 12 meses" / "Ano YYYY".
+ *       Substituiu 6 blocos repetidos de `<div className="px-4
+ *       py-3 border-b...">` — agora cabe em 1 linha por header.
+ *
+ *   (6) As 6 tabelas (Visão Geral, Estoque, Movimentações,
+ *       Ferramentas Terceiros, Equip. Próprios, Equip. Locados)
+ *       passaram a usar `<MesesHeader titulo="..." />`.
+ *
+ * Por que selector único compartilhado entre tabs: troca de
+ * período é uma intenção GLOBAL (o user pensa "quero ver 2026
+ * inteiro"), não local de cada gráfico. Replicar selector
+ * isolado por tab forçaria re-clique em 6 lugares.
+ *
+ * Por que NÃO usar checkboxes/datepicker: a maioria das
+ * análises mês-a-mês interessantes são "ano vs ano" ou
+ * "rolling 12m"; intervalos arbitrários só complicam UI sem
+ * caso de uso real (já tem outros filtros pra drill-down).
+ *
+ * R-001/R-007/R-010: N/A — só leitura, 100% client-side. As
+ * tRPC queries (movsQ/locadosQ/etc) já trazem dados suficientes
+ * (rev. 2327 documentou: limit 2000 + listas full); bucketing
+ * em ano fechado roda no mesmo O(n).
+ *
  * Rev. 2329 — **PERF · Exclusão/vinculação em lote de locados
  * ~50× mais rápida via bulk SQL (WHERE IN + multi-VALUES).**
  *

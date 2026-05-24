@@ -37,14 +37,23 @@ function monthKey(d: Date | string | null | undefined): string | null {
 }
 
 // Últimos N meses (chave + label "mmm/aa")
+const MESES_PT = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
 function lastNMonths(n: number): { key: string; label: string }[] {
   const out: { key: string; label: string }[] = [];
-  const meses = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
   const now = new Date();
   for (let i = n - 1; i >= 0; i--) {
     const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - i, 1));
     const k = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
-    out.push({ key: k, label: `${meses[d.getUTCMonth()]}/${String(d.getUTCFullYear()).slice(2)}` });
+    out.push({ key: k, label: `${MESES_PT[d.getUTCMonth()]}/${String(d.getUTCFullYear()).slice(2)}` });
+  }
+  return out;
+}
+// Rev. 2330 — Ano fechado (jan→dez do ano escolhido)
+function monthsOfYear(year: number): { key: string; label: string }[] {
+  const out: { key: string; label: string }[] = [];
+  for (let m = 0; m < 12; m++) {
+    const k = `${year}-${String(m + 1).padStart(2, "0")}`;
+    out.push({ key: k, label: `${MESES_PT[m]}/${String(year).slice(2)}` });
   }
   return out;
 }
@@ -248,9 +257,27 @@ export default function DashAlmoxarifadoEquipamentos() {
     };
   }, [locadosQ.data, vencendoQ.data, obrasMap]);
 
-  // ── Rev. 2327 — Comparativo mês a mês (últimos 12 meses) ───────────────────
+  // ── Rev. 2327/2330 — Comparativo mês a mês ────────────────────────────────
+  // Rev. 2330: filtro de período compartilhado por todas as 6 tabs.
+  // '12m' = últimos 12 meses corridos; número = ano fechado (jan→dez).
+  // Anos disponíveis = união dos anos com dado em qualquer fonte + ano atual.
+  const [periodoMeses, setPeriodoMeses] = useState<"12m" | number>("12m");
+  const anosDisponiveis = useMemo(() => {
+    const anos = new Set<number>();
+    const yearOf = (d: any) => { const k = monthKey(d); return k ? Number(k.slice(0, 4)) : null; };
+    const push = (y: number | null) => { if (y && y >= 2000 && y <= 2100) anos.add(y); };
+    for (const m of ((movsQ.data || []) as any[])) push(yearOf(m.criadoEm));
+    for (const p of ((propriosQ.data || []) as any[])) push(yearOf(p.dataAquisicao || p.criadoEm));
+    for (const l of ((locadosQ.data || []) as any[])) { push(yearOf(l.dataInicio || l.criadoEm)); push(yearOf(l.dataDevolucao)); }
+    for (const f of ((ferramentasQ.data || []) as any[])) push(yearOf(f.data_hora || f.dataHora || f.criado_em || f.criadoEm));
+    for (const it of ((itensQ.data || []) as any[])) push(yearOf(it.criadoEm || it.createdAt));
+    anos.add(new Date().getUTCFullYear());
+    return Array.from(anos).sort((a, b) => b - a);
+  }, [movsQ.data, propriosQ.data, locadosQ.data, ferramentasQ.data, itensQ.data]);
+  const periodoLabel = periodoMeses === "12m" ? "últimos 12 meses" : `ano ${periodoMeses}`;
+
   const monthlyAgg = useMemo(() => {
-    const months = lastNMonths(12);
+    const months = periodoMeses === "12m" ? lastNMonths(12) : monthsOfYear(periodoMeses);
     const empty = () => months.reduce((acc, m) => { acc[m.key] = 0; return acc; }, {} as Record<string, number>);
 
     const movsEntradas = empty();
@@ -305,7 +332,27 @@ export default function DashAlmoxarifadoEquipamentos() {
       locadosIniciados, locadosDevolvidos, locadosCustoIniciado,
       ferramentasReg, itensCadastrados,
     };
-  }, [movsQ.data, propriosQ.data, locadosQ.data, ferramentasQ.data, itensQ.data]);
+  }, [periodoMeses, movsQ.data, propriosQ.data, locadosQ.data, ferramentasQ.data, itensQ.data]);
+
+  // Rev. 2330 — Header padrão pras 6 tabelas mês a mês (título + selector).
+  // Selector global afeta TODAS as tabs (state único `periodoMeses`).
+  const MesesHeader = ({ titulo }: { titulo: string }) => (
+    <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between gap-3 flex-wrap">
+      <div className="font-semibold text-slate-800 flex items-center gap-2">
+        <CalendarRange className="h-4 w-4 text-slate-500" /> {titulo} — {periodoLabel}
+      </div>
+      <select
+        value={String(periodoMeses)}
+        onChange={(e) => setPeriodoMeses(e.target.value === "12m" ? "12m" : Number(e.target.value))}
+        className="text-xs border border-slate-300 rounded-md px-2 py-1 bg-white hover:border-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+      >
+        <option value="12m">Últimos 12 meses</option>
+        {anosDisponiveis.map(y => (
+          <option key={y} value={y}>Ano {y}</option>
+        ))}
+      </select>
+    </div>
+  );
 
   // ── Ferramentas terceiros ──────────────────────────────────────────────────
   const ferrAgg = useMemo(() => {
@@ -389,9 +436,7 @@ export default function DashAlmoxarifadoEquipamentos() {
 
             {/* Rev. 2327 — Comparativo mês a mês consolidado */}
             <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
-              <div className="px-4 py-3 border-b border-slate-100 font-semibold text-slate-800 flex items-center gap-2">
-                <CalendarRange className="h-4 w-4 text-slate-500" /> Comparativo mês a mês — últimos 12 meses
-              </div>
+              <MesesHeader titulo="Comparativo mês a mês" />
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead className="bg-slate-50 text-xs text-slate-500 uppercase">
@@ -479,9 +524,7 @@ export default function DashAlmoxarifadoEquipamentos() {
 
             {/* Rev. 2327 — Itens cadastrados mês a mês */}
             <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
-              <div className="px-4 py-3 border-b border-slate-100 font-semibold text-slate-800 flex items-center gap-2">
-                <CalendarRange className="h-4 w-4 text-slate-500" /> Itens cadastrados mês a mês — últimos 12 meses
-              </div>
+              <MesesHeader titulo="Itens cadastrados mês a mês" />
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead className="bg-slate-50 text-xs text-slate-500 uppercase">
@@ -564,9 +607,7 @@ export default function DashAlmoxarifadoEquipamentos() {
 
             {/* Rev. 2327 — Entradas vs Saídas mês a mês */}
             <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
-              <div className="px-4 py-3 border-b border-slate-100 font-semibold text-slate-800 flex items-center gap-2">
-                <CalendarRange className="h-4 w-4 text-slate-500" /> Movimentações mês a mês — últimos 12 meses
-              </div>
+              <MesesHeader titulo="Movimentações mês a mês" />
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead className="bg-slate-50 text-xs text-slate-500 uppercase">
@@ -629,9 +670,7 @@ export default function DashAlmoxarifadoEquipamentos() {
 
             {/* Rev. 2327 — Registros de ferramentas mês a mês */}
             <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
-              <div className="px-4 py-3 border-b border-slate-100 font-semibold text-slate-800 flex items-center gap-2">
-                <CalendarRange className="h-4 w-4 text-slate-500" /> Registros mês a mês — últimos 12 meses
-              </div>
+              <MesesHeader titulo="Registros mês a mês" />
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead className="bg-slate-50 text-xs text-slate-500 uppercase">
@@ -695,9 +734,7 @@ export default function DashAlmoxarifadoEquipamentos() {
 
             {/* Rev. 2327 — Aquisições mês a mês */}
             <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
-              <div className="px-4 py-3 border-b border-slate-100 font-semibold text-slate-800 flex items-center gap-2">
-                <CalendarRange className="h-4 w-4 text-slate-500" /> Aquisições mês a mês — últimos 12 meses
-              </div>
+              <MesesHeader titulo="Aquisições mês a mês" />
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead className="bg-slate-50 text-xs text-slate-500 uppercase">
@@ -779,9 +816,7 @@ export default function DashAlmoxarifadoEquipamentos() {
 
             {/* Rev. 2327 — Locações iniciadas vs devolvidas mês a mês */}
             <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
-              <div className="px-4 py-3 border-b border-slate-100 font-semibold text-slate-800 flex items-center gap-2">
-                <CalendarRange className="h-4 w-4 text-slate-500" /> Locações mês a mês — últimos 12 meses
-              </div>
+              <MesesHeader titulo="Locações mês a mês" />
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead className="bg-slate-50 text-xs text-slate-500 uppercase">
