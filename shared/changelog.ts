@@ -1,6 +1,76 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2328 — **HOTFIX/UX · Exclusão/vinculação em lote de
+ * locados parecia travada — chunk 500→200 + spinner + tempo
+ * decorrido por lote.**
+ *
+ * Pedido user (23/05/2026, screenshot iPad anexado):
+ * "Travou" — modal "Excluindo equipamentos…" parado em
+ * "Lote 1 de 3 · 0 de 1.218 processados" por quase 1 min.
+ *
+ * Diagnóstico: Rev. 2325 deixou `CHUNK=500` (limite do
+ * servidor). 500 deletes em transação única no Neon +
+ * insert de eventos demora 30-60s — e o proxy do Replit
+ * mata em 60s (mesmo problema que motivou polling do PDF
+ * na Rev. 2321). Resultado: ou (a) o lote completava no
+ * limite, ou (b) timeout cru. Em ambos os casos, durante
+ * os 30-60s a UI mostrava "0 de 1.218 processados"
+ * estático sem feedback de vida → user via como travamento.
+ *
+ * **Implementação** (`client/src/pages/equipamentos/Locados.tsx`,
+ * 0 server, 0 schema):
+ *
+ *   (1) **CHUNK 500 → 200**: cada chamada agora processa no
+ *       máximo 200 IDs (≈10-20s no Neon, com folga dentro
+ *       dos 60s do proxy). 1218 itens viram 7 lotes em
+ *       vez de 3 — a barra avança a cada ~15s e fica óbvio
+ *       que tá rodando.
+ *
+ *   (2) **Spinner girando** ao lado do texto "Lote X de Y"
+ *       — sinal visual constante de atividade mesmo
+ *       enquanto o chunk atual está em flight.
+ *
+ *   (3) **Tempo decorrido por lote**: estado `tickNow`
+ *       atualizado a cada 500ms via `setInterval` enquanto
+ *       `loteProgresso` existe (limpo no return do effect).
+ *       Mostra "Lote atual em andamento… 14s" em fonte
+ *       monoespaçada. Quando passa de 25s, exibe aviso
+ *       âmbar "O banco está demorando mais que o normal —
+ *       aguarde, pode levar até 60s por lote" pra dar
+ *       contexto se realmente está pendurado.
+ *
+ *   (4) **Preview otimista do progresso**: a barra agora
+ *       calcula `previstoFeitos = feitos + min(restante,
+ *       CHUNK)` em vez de mostrar só `chunkAtual/chunks`.
+ *       Visual continua marchando enquanto o servidor
+ *       processa, em vez de pular em degraus de 1/N.
+ *
+ *   (5) **Texto explicativo atualizado**: "Processando em
+ *       lotes de 200 itens (servidor aceita até 500, mas
+ *       reduzimos pra evitar timeout). Não feche essa
+ *       janela."
+ *
+ *   (6) Estado `loteProgresso` ganhou campo
+ *       `loteIniciadoEm: number` (`Date.now()` no início de
+ *       cada iteração do `for`) — base do contador.
+ *
+ * Por que NÃO baixar o limite do servidor (`.max(500)`):
+ * outras integrações futuras podem precisar de batches
+ * maiores; o limite de 500 protege contra payload abusivo.
+ * Cliente menor é a escolha certa pra evitar timeout do
+ * proxy sem comprometer a segurança do server.
+ *
+ * Por que NÃO migrar pra polling (como o PDF Rev. 2321):
+ * o overhead de fila + status seria desproporcional pra
+ * uma operação que cabe em 7 lotes de 15s. Polling faz
+ * sentido pra IA Gemini que leva 60-120s sequenciais sem
+ * paralelizar.
+ *
+ * R-001/R-007/R-010: N/A — DELETE via mutation iniciada
+ * pelo user, escopo por `companyId` + `id` + transação
+ * atômica por chunk.
+ *
  * Rev. 2327 — **UX · Cada aba do Dashboard Almox & Equip.
  * vira item próprio na sidebar + tabela mês a mês (12m) em
  * cada tela.**

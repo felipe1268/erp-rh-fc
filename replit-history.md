@@ -534,3 +534,5 @@
 - Rev. 2271 — FIX · Card 'PREVISTO (SEMANA)' deixa de cair pra '—' quando snapshot MSP é zerado; agora replica topo via pctRaizMSP.
 
 - Rev. 2320 — HOTFIX/IA · `maxOutputTokens` 32k→65k + reparo de JSON truncado em PDF de locação. Ver `shared/changelog.ts`.
+
+- Rev. 2321 — HOTFIX/INFRA · Importação PDF migrada pra polling; proxy Replit matava em 60s. Ver `shared/changelog.ts`.

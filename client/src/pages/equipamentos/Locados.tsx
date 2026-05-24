@@ -100,17 +100,31 @@ export default function EquipamentosLocados() {
       return n;
     });
   };
-  // Rev. 2325 — chunking client-side. O server limita ids[1..500] por chamada
-  // (proteção contra payload gigante); ao selecionar 1218 cards o user batia
-  // ZodError "expected array to have <=500 items". Fazemos N chamadas de 500
-  // sequenciais com modal de progresso + modal de erro bonito (não toast).
-  const CHUNK = 500;
+  // Rev. 2325/2328 — chunking client-side.
+  // - Rev. 2325 começou com CHUNK=500 (= limite do servidor) — mas 500 deletes
+  //   em transação única no Neon + insert de eventos demora 30-60s e ATINGE o
+  //   timeout de 60s do proxy do Replit (mesmo problema do PDF, Rev. 2321).
+  //   No iPad o user via "Lote 1 de 3 · 0 de 1.218 processados" parado por
+  //   quase 1 min → screenshot "Travou?".
+  // - Rev. 2328: chunk reduzido pra 200 (= ~10-20s por chamada, bem dentro
+  //   dos 60s do proxy). 1218 itens viram 7 lotes — barra anda a cada ~15s,
+  //   feedback visível, sem timeout. Mantém limite do servidor (≤500), só
+  //   muda o tamanho do lote no cliente.
+  const CHUNK = 200;
   const vincularLote = trpc.equipamentos.locadosVincularObraLote.useMutation();
   const excluirLote  = trpc.equipamentos.locadosExcluirLote.useMutation();
 
   // Estados pra modais (substituem window.confirm + toast invisível no iPad)
   const [confirmExcluir, setConfirmExcluir] = useState<number | null>(null); // total a excluir
-  const [loteProgresso, setLoteProgresso] = useState<{ acao: "vincular" | "excluir"; feitos: number; total: number; chunks: number; chunkAtual: number } | null>(null);
+  const [loteProgresso, setLoteProgresso] = useState<{ acao: "vincular" | "excluir"; feitos: number; total: number; chunks: number; chunkAtual: number; loteIniciadoEm: number } | null>(null);
+  // Rev. 2328 — tick por segundo pra mostrar tempo decorrido do lote atual
+  // (sem isso a UI parece travada durante os ~15s que cada chunk leva no Neon).
+  const [tickNow, setTickNow] = useState(Date.now());
+  useEffect(() => {
+    if (!loteProgresso) return;
+    const id = setInterval(() => setTickNow(Date.now()), 500);
+    return () => clearInterval(id);
+  }, [loteProgresso]);
   const [loteErro, setLoteErro] = useState<string | null>(null);
 
   // Rev. 2326 — Auto-match de "Local da obra" do PDF com obras ativas.
@@ -169,11 +183,11 @@ export default function EquipamentosLocados() {
     if (obraId === null && obraParaVincular !== "__null__") { setLoteErro("Selecione uma obra."); return; }
     const ids = Array.from(selecionados);
     const chunks = chunkIds(ids, CHUNK);
-    setLoteProgresso({ acao: "vincular", feitos: 0, total: ids.length, chunks: chunks.length, chunkAtual: 0 });
+    setLoteProgresso({ acao: "vincular", feitos: 0, total: ids.length, chunks: chunks.length, chunkAtual: 0, loteIniciadoEm: Date.now() });
     let vinculados = 0;
     try {
       for (let i = 0; i < chunks.length; i++) {
-        setLoteProgresso({ acao: "vincular", feitos: vinculados, total: ids.length, chunks: chunks.length, chunkAtual: i + 1 });
+        setLoteProgresso({ acao: "vincular", feitos: vinculados, total: ids.length, chunks: chunks.length, chunkAtual: i + 1, loteIniciadoEm: Date.now() });
         const res = await vincularLote.mutateAsync({ companyId, ids: chunks[i], obraId });
         vinculados += Number((res as any)?.vinculados || chunks[i].length);
       }
@@ -195,11 +209,11 @@ export default function EquipamentosLocados() {
     setConfirmExcluir(null);
     const ids = Array.from(selecionados);
     const chunks = chunkIds(ids, CHUNK);
-    setLoteProgresso({ acao: "excluir", feitos: 0, total: ids.length, chunks: chunks.length, chunkAtual: 0 });
+    setLoteProgresso({ acao: "excluir", feitos: 0, total: ids.length, chunks: chunks.length, chunkAtual: 0, loteIniciadoEm: Date.now() });
     let excluidos = 0;
     try {
       for (let i = 0; i < chunks.length; i++) {
-        setLoteProgresso({ acao: "excluir", feitos: excluidos, total: ids.length, chunks: chunks.length, chunkAtual: i + 1 });
+        setLoteProgresso({ acao: "excluir", feitos: excluidos, total: ids.length, chunks: chunks.length, chunkAtual: i + 1, loteIniciadoEm: Date.now() });
         const res = await excluirLote.mutateAsync({ companyId, ids: chunks[i] });
         excluidos += Number((res as any)?.excluidos || chunks[i].length);
       }
@@ -715,8 +729,15 @@ export default function EquipamentosLocados() {
         </div>
       )}
 
-      {/* Rev. 2325 — Modal de progresso em lote (chunks de 500) */}
-      {loteProgresso && (
+      {/* Rev. 2325/2328 — Modal de progresso em lote.
+          - chunks de 200 (Rev. 2328) p/ caber nos 60s do proxy Replit.
+          - mostra spinner + tempo decorrido do lote atual pra UX não parecer travada
+            (cada chunk leva ~10-20s no Neon, durante esse tempo a barra fica parada). */}
+      {loteProgresso && (() => {
+        const elapsedSec = Math.max(0, Math.floor((tickNow - loteProgresso.loteIniciadoEm) / 1000));
+        const lentidao = elapsedSec >= 25;
+        const previstoFeitos = loteProgresso.feitos + Math.min(loteProgresso.total - loteProgresso.feitos, CHUNK);
+        return (
         <div className="fixed inset-0 z-[60] bg-black/50 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-2xl max-w-md w-full overflow-hidden">
             <div className="px-5 py-4 border-b border-slate-200">
@@ -726,22 +747,37 @@ export default function EquipamentosLocados() {
               </h3>
             </div>
             <div className="px-5 py-5 space-y-3">
-              <div className="text-sm text-slate-700">
-                Lote <strong>{loteProgresso.chunkAtual}</strong> de <strong>{loteProgresso.chunks}</strong> · {loteProgresso.feitos.toLocaleString('pt-BR')} de {loteProgresso.total.toLocaleString('pt-BR')} processados
+              <div className="text-sm text-slate-700 flex items-center gap-2">
+                <span className={`inline-block h-3 w-3 rounded-full border-2 border-transparent ${loteProgresso.acao === "vincular" ? "border-t-blue-600 border-r-blue-600" : "border-t-red-600 border-r-red-600"} animate-spin`} />
+                <span>
+                  Lote <strong>{loteProgresso.chunkAtual}</strong> de <strong>{loteProgresso.chunks}</strong> · {loteProgresso.feitos.toLocaleString('pt-BR')} de {loteProgresso.total.toLocaleString('pt-BR')} processados
+                </span>
               </div>
               <div className="h-3 bg-slate-200 rounded-full overflow-hidden">
                 <div
                   className={`h-full ${loteProgresso.acao === "vincular" ? "bg-blue-500" : "bg-red-500"} transition-all duration-300`}
-                  style={{ width: `${Math.max(5, Math.min(100, (loteProgresso.chunkAtual / Math.max(1, loteProgresso.chunks)) * 100))}%` }}
+                  style={{ width: `${Math.max(5, Math.min(100, (previstoFeitos / Math.max(1, loteProgresso.total)) * 100))}%` }}
                 />
               </div>
+              <div className="text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded p-2.5">
+                <div className="flex items-center justify-between">
+                  <span>Lote atual em andamento…</span>
+                  <span className="font-mono text-slate-700">{elapsedSec}s</span>
+                </div>
+                {lentidao && (
+                  <div className="mt-1.5 text-amber-700">
+                    O banco está demorando mais que o normal — aguarde, pode levar até 60s por lote.
+                  </div>
+                )}
+              </div>
               <p className="text-xs text-slate-500">
-                Processando em chunks de {CHUNK} itens — o servidor limita por chamada pra evitar payload gigante. Não feche essa janela.
+                Processando em lotes de {CHUNK} itens (servidor aceita até 500, mas reduzimos pra evitar timeout). Não feche essa janela.
               </p>
             </div>
           </div>
         </div>
-      )}
+        );
+      })()}
 
       {/* Rev. 2325 — Modal de erro em lote (persistente, substitui toast invisível) */}
       {loteErro && (
