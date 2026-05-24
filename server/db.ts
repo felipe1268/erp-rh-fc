@@ -64,6 +64,34 @@ export async function getDb() {
       _db = drizzle(_pool);
       console.log("[Database] Conectado ao Neon com sucesso.");
 
+      // Rev. 2388 — Bootstrap CREATE TABLE IF NOT EXISTS para a tabela nova
+      // de auditoria do Almoxarifado (evita rodar drizzle-kit migrate em prod).
+      _pool.query(`
+        CREATE TABLE IF NOT EXISTS almoxarifado_auditoria (
+          id SERIAL PRIMARY KEY,
+          company_id INTEGER NOT NULL,
+          obra_id INTEGER,
+          user_id INTEGER NOT NULL,
+          user_nome VARCHAR(255),
+          acao VARCHAR(40) NOT NULL,
+          entidade_tipo VARCHAR(40) NOT NULL,
+          entidade_id INTEGER NOT NULL,
+          entidade_nome VARCHAR(255),
+          dados_antes JSONB,
+          dados_depois JSONB,
+          justificativa TEXT NOT NULL,
+          ip VARCHAR(64),
+          status_validacao VARCHAR(20) NOT NULL DEFAULT 'pendente',
+          validado_por_id INTEGER,
+          validado_por_nome VARCHAR(255),
+          validado_em TIMESTAMP,
+          observacao_validacao TEXT,
+          created_at TIMESTAMP NOT NULL DEFAULT now()
+        );
+        CREATE INDEX IF NOT EXISTS idx_alm_aud_company_status ON almoxarifado_auditoria(company_id, status_validacao);
+        CREATE INDEX IF NOT EXISTS idx_alm_aud_obra ON almoxarifado_auditoria(obra_id);
+      `).catch(err => console.warn("[Database] bootstrap almoxarifado_auditoria:", err.message));
+
       // Keep-alive: ping a cada 4 min para impedir o Neon de hibernar
       // O Neon entra em sleep após ~5 min de inatividade — o ping mantém vivo
       setInterval(async () => {

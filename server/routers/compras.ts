@@ -12,11 +12,35 @@ import { enviarConviteAssinatura } from "../services/integrasignEmail";
 
 const classificacaoProgress = new Map<string, { etapa: string; loteAtual: number; totalLotes: number; itensProcessados: number; totalItens: number; startedAt: number }>();
 function classifKey(orcId: number, compId: number) { return `${compId}-${orcId}`; }
+
+// Rev. 2388 — Helpers de auditoria do Almoxarifado.
+async function verificarSenhaSeLocal(ctx: any, senha: string | undefined) {
+  const db = await getDb();
+  if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+  const { users } = await import("../../drizzle/schema");
+  const [user] = await db.select().from(users).where(eq(users.id, ctx.user.id));
+  if (!user) throw new TRPCError({ code: "UNAUTHORIZED" });
+  // Sem password local (OAuth) → libera com base na justificativa.
+  if (!user.password) return;
+  if (!senha) throw new TRPCError({ code: "BAD_REQUEST", message: "Senha obrigatória." });
+  const bcrypt = await import("bcryptjs");
+  if (!bcrypt.compareSync(senha, user.password)) {
+    throw new TRPCError({ code: "UNAUTHORIZED", message: "Senha incorreta." });
+  }
+}
+function getClientIp(ctx: any): string | null {
+  const req = ctx?.req;
+  if (!req) return null;
+  const xf = req.headers?.["x-forwarded-for"];
+  if (typeof xf === "string" && xf.length > 0) return xf.split(",")[0].trim().slice(0, 64);
+  return (req.ip || req.socket?.remoteAddress || null)?.slice(0, 64) ?? null;
+}
 import crypto from "crypto";
 import { eq, and, desc, asc, ilike, or, sql, gte, lte, inArray, isNull } from "drizzle-orm";
 import {
   fornecedores, avaliacoesFornecedor, almoxarifadoItens, almoxarifadoMovimentacoes,
   almoxarifadoCategorias, almoxarifadoUnidades, almoxarifadoRecebimentos,
+  almoxarifadoAuditoria,
   comprasSolicitacoes, comprasSolicitacoesItens,
   comprasCotacoes, comprasCotacoesItens,
   comprasCotacaoFornecedores, comprasCotacaoRespostas,
@@ -1679,10 +1703,32 @@ export const comprasRouter = router({
       diasAlertaLocacao:     z.number().nullable().optional(),
       observacoesLocacao:    z.string().nullable().optional(),
       quantidadeAtual:       z.number().nullable().optional(),
+      // Rev. 2388 — Auditoria obrigatória SE quantidadeAtual está mudando vs DB.
+      auditoria: z.object({
+        senha: z.string().optional(),
+        justificativa: z.string().min(10, "Justifique com ao menos 10 caracteres."),
+      }).optional(),
     }))
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
-      const { id, ...data } = input;
+      const { id, auditoria, ...data } = input;
+      // Rev. 2388 — Detectar alteração manual de quantidade.
+      let qtdAnterior: number | null = null;
+      let qtdNova: number | null = null;
+      let qtdMudou = false;
+      if (data.quantidadeAtual !== undefined && data.quantidadeAtual !== null) {
+        const [atual] = await db.select().from(almoxarifadoItens).where(eq(almoxarifadoItens.id, id));
+        if (atual) {
+          qtdAnterior = Number(atual.quantidadeAtual ?? 0);
+          qtdNova = Number(data.quantidadeAtual);
+          // Comparação por inteiros (escala 1000) evita imprecisão de FP do JS.
+          if (Math.round(qtdNova * 1000) !== Math.round(qtdAnterior * 1000)) {
+            qtdMudou = true;
+            if (!auditoria) throw new TRPCError({ code: "BAD_REQUEST", message: "Para alterar a quantidade manualmente é necessário informar uma justificativa." });
+            await verificarSenhaSeLocal(ctx, auditoria.senha);
+          }
+        }
+      }
       const updates: any = {
         atualizadoEm: new Date().toISOString(),
         atualizadoPorId: ctx.user?.id ?? null,
@@ -1721,6 +1767,26 @@ export const comprasRouter = router({
       } catch (err: any) {
         console.error("[compras.atualizarItem] erro DB:", err?.message, "updates:", JSON.stringify(updates));
         throw err;
+      }
+      // Rev. 2388 — Log de auditoria SE houve mudança real de quantidade.
+      if (qtdMudou && auditoria) {
+        const [itemDb] = await db.select().from(almoxarifadoItens).where(eq(almoxarifadoItens.id, id));
+        if (itemDb) {
+          await db.insert(almoxarifadoAuditoria).values({
+            companyId: itemDb.companyId,
+            obraId: itemDb.obraId,
+            userId: ctx.user.id,
+            userNome: ctx.user.name || null,
+            acao: "alterar_quantidade",
+            entidadeTipo: "almoxarifado_item",
+            entidadeId: itemDb.id,
+            entidadeNome: itemDb.nome,
+            dadosAntes: { quantidadeAtual: qtdAnterior } as any,
+            dadosDepois: { quantidadeAtual: qtdNova } as any,
+            justificativa: auditoria.justificativa,
+            ip: getClientIp(ctx),
+          });
+        }
       }
       return { success: true };
     }),
@@ -2074,12 +2140,36 @@ export const comprasRouter = router({
     }),
 
   excluirItem: protectedProcedure
-    .input(z.object({ id: z.number() }))
-    .mutation(async ({ input }) => {
+    .input(z.object({
+      id: z.number(),
+      // Rev. 2388 — Controle rígido: justificativa obrigatória + senha
+      // se o user tem login local. Gera log em almoxarifado_auditoria.
+      senha: z.string().optional(),
+      justificativa: z.string().min(10, "Justifique com ao menos 10 caracteres."),
+    }))
+    .mutation(async ({ input, ctx }) => {
       const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const [item] = await db.select().from(almoxarifadoItens).where(eq(almoxarifadoItens.id, input.id));
+      if (!item) throw new TRPCError({ code: "NOT_FOUND", message: "Item não encontrado." });
+      await verificarSenhaSeLocal(ctx, input.senha);
       await db.update(almoxarifadoItens)
         .set({ ativo: false, atualizadoEm: new Date().toISOString() })
         .where(eq(almoxarifadoItens.id, input.id));
+      await db.insert(almoxarifadoAuditoria).values({
+        companyId: item.companyId,
+        obraId: item.obraId,
+        userId: ctx.user.id,
+        userNome: ctx.user.name || null,
+        acao: "excluir_item",
+        entidadeTipo: "almoxarifado_item",
+        entidadeId: item.id,
+        entidadeNome: item.nome,
+        dadosAntes: item as any,
+        dadosDepois: { ativo: false } as any,
+        justificativa: input.justificativa,
+        ip: getClientIp(ctx),
+      });
       return { success: true };
     }),
 
@@ -2785,9 +2875,18 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
     }),
 
   excluirUnidade: protectedProcedure
-    .input(z.object({ id: z.number(), companyId: z.number() }))
-    .mutation(async ({ input }) => {
+    .input(z.object({
+      id: z.number(), companyId: z.number(),
+      // Rev. 2388 — Controle rígido (mesmo padrão de excluirItem).
+      senha: z.string().optional(),
+      justificativa: z.string().min(10, "Justifique com ao menos 10 caracteres."),
+    }))
+    .mutation(async ({ input, ctx }) => {
       const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const [unidade] = await db.select().from(almoxarifadoUnidades)
+        .where(and(eq(almoxarifadoUnidades.id, input.id), eq(almoxarifadoUnidades.companyId, input.companyId)));
+      if (!unidade) throw new TRPCError({ code: "NOT_FOUND", message: "Unidade não encontrada." });
       const emUso = await db.select({ id: almoxarifadoItens.id })
         .from(almoxarifadoItens)
         .where(and(
@@ -2797,8 +2896,23 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
         ))
         .limit(1);
       if (emUso.length > 0) throw new TRPCError({ code: "CONFLICT", message: "Esta unidade está em uso por um ou mais itens e não pode ser excluída." });
+      await verificarSenhaSeLocal(ctx, input.senha);
       await db.delete(almoxarifadoUnidades)
         .where(and(eq(almoxarifadoUnidades.id, input.id), eq(almoxarifadoUnidades.companyId, input.companyId)));
+      await db.insert(almoxarifadoAuditoria).values({
+        companyId: input.companyId,
+        obraId: null,
+        userId: ctx.user.id,
+        userNome: ctx.user.name || null,
+        acao: "excluir_unidade",
+        entidadeTipo: "almoxarifado_unidade",
+        entidadeId: unidade.id,
+        entidadeNome: unidade.sigla,
+        dadosAntes: unidade as any,
+        dadosDepois: null,
+        justificativa: input.justificativa,
+        ip: getClientIp(ctx),
+      });
       return { success: true };
     }),
 
@@ -13173,5 +13287,86 @@ Responda APENAS com JSON válido, sem markdown, no formato:
         .orderBy(desc(comprasReservasLog.criadoEm))
         .limit(input.limite);
       return rows;
+    }),
+
+  // ══════════════════════════════════════════════════════════════
+  // Rev. 2388 — AUDITORIA DO ALMOXARIFADO (controle rígido)
+  // ══════════════════════════════════════════════════════════════
+  auditoriaListar: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      status: z.enum(["pendente", "validado", "rejeitado", "todos"]).optional(),
+      limite: z.number().int().min(1).max(500).optional(),
+    }))
+    .query(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const allowedCompanies = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+      if (!(allowedCompanies as any[]).map(c => c.id).includes(input.companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN" });
+      }
+      const allowed = await getEffectiveAllowedObraIds(ctx.user.id, ctx.user.role);
+      const conds: any[] = [eq(almoxarifadoAuditoria.companyId, input.companyId)];
+      if (input.status && input.status !== "todos") conds.push(eq(almoxarifadoAuditoria.statusValidacao, input.status));
+      if (allowed !== null) {
+        // Restringe pra obras permitidas + entradas sem obra (excluir_unidade).
+        conds.push(or(isNull(almoxarifadoAuditoria.obraId), inArray(almoxarifadoAuditoria.obraId, allowed)));
+      }
+      return await db.select().from(almoxarifadoAuditoria)
+        .where(and(...conds))
+        .orderBy(desc(almoxarifadoAuditoria.createdAt))
+        .limit(input.limite ?? 200);
+    }),
+
+  auditoriaPendenciasCount: protectedProcedure
+    .input(z.object({ companyId: z.number() }))
+    .query(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) return { count: 0 };
+      const allowedCompanies = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+      if (!(allowedCompanies as any[]).map(c => c.id).includes(input.companyId)) return { count: 0 };
+      // Só admin/admin_master é "validador" — pra evitar floods de UI pra users comuns.
+      if (!["admin", "admin_master"].includes(ctx.user.role)) return { count: 0 };
+      const allowed = await getEffectiveAllowedObraIds(ctx.user.id, ctx.user.role);
+      const conds: any[] = [
+        eq(almoxarifadoAuditoria.companyId, input.companyId),
+        eq(almoxarifadoAuditoria.statusValidacao, "pendente"),
+      ];
+      if (allowed !== null) {
+        conds.push(or(isNull(almoxarifadoAuditoria.obraId), inArray(almoxarifadoAuditoria.obraId, allowed)));
+      }
+      const rows = await db.select({ id: almoxarifadoAuditoria.id }).from(almoxarifadoAuditoria).where(and(...conds));
+      return { count: rows.length };
+    }),
+
+  auditoriaValidar: protectedProcedure
+    .input(z.object({
+      id: z.number(),
+      aprovar: z.boolean(),
+      observacao: z.string().optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      if (!["admin", "admin_master"].includes(ctx.user.role)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Apenas admin pode validar auditorias." });
+      }
+      const [reg] = await db.select().from(almoxarifadoAuditoria).where(eq(almoxarifadoAuditoria.id, input.id));
+      if (!reg) throw new TRPCError({ code: "NOT_FOUND" });
+      const allowedCompanies = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+      if (!(allowedCompanies as any[]).map(c => c.id).includes(reg.companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN" });
+      }
+      if (reg.statusValidacao !== "pendente") {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Este registro já foi validado." });
+      }
+      await db.update(almoxarifadoAuditoria).set({
+        statusValidacao: input.aprovar ? "validado" : "rejeitado",
+        validadoPorId: ctx.user.id,
+        validadoPorNome: ctx.user.name || null,
+        validadoEm: new Date().toISOString(),
+        observacaoValidacao: input.observacao || null,
+      }).where(eq(almoxarifadoAuditoria.id, input.id));
+      return { success: true };
     }),
 });

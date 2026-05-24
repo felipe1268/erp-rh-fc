@@ -1,6 +1,132 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2388 — **SEGURANÇA/AUDITORIA · Controle rígido no Almoxarifado:
+ * exclusão de item/unidade + alteração manual de quantidade exigem
+ * senha (se user local) + justificativa obrigatória, com log e validação
+ * por admin.**
+ *
+ * Pedido user: existiam 3 ações sensíveis no almoxarifado que rodavam
+ * sem nenhum controle — qualquer user com acesso podia (1) apagar um
+ * item ativo, (2) apagar uma unidade de medida, ou (3) sobrescrever a
+ * quantidade atual de estoque digitando outro número no campo "Qtd
+ * Atual" da tela de edição. Sem justificativa, sem confirmação forte,
+ * sem rastro. Risco de fraude / erro irreversível.
+ *
+ * **Decisão**: introduzir uma camada de auditoria escopada SÓ ao
+ * almoxarifado (módulo apontado pelo user como crítico). As 3 ações
+ * agora abrem um modal único (`ModalConfirmacaoAuditoria`) que exige:
+ *   - **Justificativa textual** (mínimo 10 caracteres) — SEMPRE.
+ *   - **Senha de login** — SÓ se o user tem password local (login
+ *     username/password). Users OAuth (Manus) entram via SSO e não têm
+ *     password no DB; pra eles a justificativa basta.
+ * O backend valida ambos (`bcryptjs.compareSync` na coluna
+ * `users.password`) e grava 1 linha em `almoxarifado_auditoria` com
+ * snapshot completo antes/depois, IP, userId/userNome, justificativa
+ * e status `pendente`. Admin/admin_master da empresa vê um badge
+ * vermelho no botão "Auditoria" do header do almoxarifado com o
+ * contador de pendências (poll 30s) e pode aprovar/rejeitar cada item
+ * com observação opcional.
+ *
+ * **Schema** (`drizzle/schema.ts` final do arquivo): nova tabela
+ * `almoxarifado_auditoria` com `id, companyId, obraId, userId,
+ * userNome, acao ('excluir_item'|'excluir_unidade'|'alterar_quantidade'),
+ * entidadeTipo, entidadeId, entidadeNome, dadosAntes jsonb, dadosDepois
+ * jsonb, justificativa text, ip varchar(64), statusValidacao
+ * ('pendente'|'validado'|'rejeitado'), validadoPorId, validadoPorNome,
+ * validadoEm, observacaoValidacao, createdAt`. Bootstrap CREATE TABLE
+ * IF NOT EXISTS em `server/db.ts` dentro de `getDb()` (cria índices
+ * `(companyId, statusValidacao)` e `(obraId)`) — evita ter que rodar
+ * `drizzle-kit migrate` em produção (R-001/R-007/R-010 OK, apenas
+ * CREATE em tabela nova).
+ *
+ * **Backend** (`server/routers/compras.ts`):
+ *   - Helpers no topo: `verificarSenhaSeLocal(ctx, senha)` (lookup em
+ *     `users` por id; se `user.password` truthy exige senha e valida
+ *     com `bcryptjs.compareSync`, senão libera) e `getClientIp(ctx)`
+ *     (lê `x-forwarded-for` → `req.ip` → `socket.remoteAddress`,
+ *     truncado em 64 chars).
+ *   - `excluirItem`: input agora aceita `{id, senha?, justificativa
+ *     (min 10)}`. Lê item antes, chama `verificarSenhaSeLocal`, marca
+ *     `ativo=false` e insere registro de auditoria com `dadosAntes =
+ *     item completo`, `dadosDepois = {ativo:false}`.
+ *   - `excluirUnidade`: mesmo padrão, sem `obraId` (unidades são por
+ *     company, não por obra). Mantém o check de "em uso" antes do
+ *     delete — se em uso, throw CONFLICT antes de pedir senha.
+ *   - `atualizarItem`: novo campo opcional `auditoria: {senha?,
+ *     justificativa}`. Se `input.quantidadeAtual` está definido, faz
+ *     SELECT no item, compara com `Number(atual.quantidadeAtual)` com
+ *     tolerância 1e-3 (precisão do `numeric scale=3`). Se mudou,
+ *     EXIGE `auditoria` (BAD_REQUEST se ausente) e valida senha. Log
+ *     de auditoria gravado SÓ se `qtdMudou && auditoria` — edições
+ *     que não mexem em qtd seguem livres (categoria, nome, foto,
+ *     locação etc.). `dadosAntes/Depois` carregam só `{quantidadeAtual}`.
+ *   - 3 endpoints novos:
+ *     - `auditoriaListar({companyId, status?, limite?})`: query com
+ *       filtro multi-tenant (`getCompaniesForUser`) + escopo de obras
+ *       (`getEffectiveAllowedObraIds` — inclui `isNull(obraId)` pra
+ *       cobrir registros de excluir_unidade). Limit default 200.
+ *     - `auditoriaPendenciasCount({companyId})`: count escopado por
+ *       `status='pendente'`. Retorna `{count:0}` se user não é
+ *       admin/admin_master (evita flood de UI pra users comuns).
+ *     - `auditoriaValidar({id, aprovar, observacao?})`: só
+ *       admin/admin_master; checa que o registro pertence a uma
+ *       company permitida, exige `statusValidacao='pendente'`, e
+ *       atualiza pra 'validado' ou 'rejeitado' com
+ *       `validadoPorId/Nome/Em` e `observacaoValidacao`.
+ *
+ * **Backend** (`server/routers.ts`): `auth.me` agora retorna
+ * `hasLocalPassword: !!password` (campo derivado, não vaza o hash).
+ * Frontend usa essa flag pra decidir se mostra ou esconde o input
+ * de senha no modal de confirmação.
+ *
+ * **Frontend** (novo `client/src/components/almoxarifado/ModalConfirmacaoAuditoria.tsx`):
+ * componente reutilizável. Header red→rose com Trash2 (mesmo padrão
+ * dos modais Rev. 2387), textarea de justificativa com contador
+ * `/10`, input password condicional (mostrado só se `requerSenha`),
+ * badge amber "Operação auditada" explicando que vai pra validação.
+ * Auto-focus na textarea; Enter no input de senha submete; clique no
+ * backdrop cancela (a menos que `carregando=true`); botão "Remover"
+ * mostra spinner durante o submit.
+ *
+ * **Frontend** (`client/src/pages/almoxarifado/index.tsx`): estado
+ * único `modalAuditoria` (discriminated union com `tipo` +
+ * `titulo` + `subtitulo` + `descricao` + `textoBotao` + `executar(p)`)
+ * que cobre os 3 fluxos:
+ *   - `handleExcluirItem`: monta lista de ids (agregado/sub-itens),
+ *     abre modal, executa `excluirMut.mutateAsync` em loop, para no
+ *     primeiro UNAUTHORIZED/BAD_REQUEST (senha errada) mantendo o
+ *     modal aberto pra retry, fecha só se sucesso.
+ *   - Botão de excluir unidade (~L3293): inline handler que abre o
+ *     modal e chama `excluirUnidadeMut.mutateAsync`.
+ *   - `salvarItem` (no fluxo de edição): localiza `itemOriginal` em
+ *     `itens` por id, calcula `qtdOriginal`, compara com `pQtdAtual`
+ *     com tolerância 1e-3; se mudou abre modal e envia
+ *     `{...payload, auditoria: {senha, justificativa}}` pro
+ *     `atualizarMut`. Se não mudou, segue fluxo normal sem fricção.
+ * Mensagens de sucesso atualizadas pra mencionar "Pendência de
+ * auditoria registrada".
+ *
+ * **Frontend** (mesmo arquivo, viewer): botão "Auditoria" no header
+ * (só visível pra admin/admin_master) com badge vermelho de
+ * `pendenciasCount.data.count` (refetch 30s). Modal de listagem com
+ * tabs Pendentes/Validados/Rejeitados/Todos, cada registro mostra
+ * ação + entidade + autor + IP + justificativa em itálico + diff de
+ * quantidade (quando aplicável). Pendentes têm botões Aprovar
+ * (emerald) e Rejeitar (red, com `prompt` opcional pra observação).
+ *
+ * **Por que NÃO está em um router separado** (`auditoriaAlmoxarifado`):
+ * só são 3 endpoints que dependem fortemente de helpers já existentes
+ * no `compras.ts` (`getCompaniesForUser`, `getEffectiveAllowedObraIds`,
+ * almoxarifadoItens). Mover pra novo router exigiria duplicar
+ * imports e o `_assertCompanyAccess` pattern. Mantido escopado.
+ *
+ * **R-001/R-007/R-010 OK**: apenas CREATE TABLE nova + INSERT/UPDATE
+ * em tabela nova + os UPDATEs em `almoxarifado_itens/unidades` que
+ * já existiam (agora gated). Sem `ALTER`, sem `DROP`, sem `DELETE`
+ * em tabelas pré-existentes (a única operação `DELETE` é em
+ * `almoxarifado_unidades` que já existia).
+ *
  * Rev. 2387 — **UX · Substituídos os 2 `window.confirm()` nativos que
  * sobravam no Almoxarifado por modais customizados (header vermelho/rose
  * + Trash2 icon).**

@@ -15,6 +15,8 @@ import {
 import SmartEntry from "./SmartEntry";
 import AlertasAlmoxarifado from "./AlertasAlmoxarifado";
 import { inferirCategoria, CATEGORIA_KEYWORDS } from "./categoriaUtils";
+import { ModalConfirmacaoAuditoria } from "@/components/almoxarifado/ModalConfirmacaoAuditoria";
+import { ShieldCheck, ShieldAlert } from "lucide-react";
 
 
 const EMPTY_ITEM = {
@@ -94,10 +96,40 @@ export default function AlmoxarifadoPage() {
   // que no Safari iPad mostrava a URL feia do Replit como título de 3 linhas).
   const [confirmBuscaFotos, setConfirmBuscaFotos] = useState<null | { nomes: string[] }>(null);
   const [confirmIAPrecos, setConfirmIAPrecos] = useState<null | { escopo: "empresa" | "obra"; qtd: number }>(null);
-  // Rev. 2387 — Modais de confirmação de exclusão (item + unidade) substituem
-  // window.confirm() nativo do Safari que mostrava a URL ".picard.replit.dev diz".
-  const [confirmExcluirItem, setConfirmExcluirItem] = useState<null | { nome: string; ids: number[] }>(null);
-  const [confirmExcluirUnidade, setConfirmExcluirUnidade] = useState<null | { id: number; sigla: string }>(null);
+  // Rev. 2388 — Modal de auditoria (senha + justificativa) p/ ações sensíveis:
+  // excluir item, excluir unidade e alterar quantidade manualmente. Cada caller
+  // configura: título, subtítulo, descrição e a função `executar` que recebe
+  // {senha, justificativa} e dispara a mutation correspondente. `carregando`
+  // sinaliza pra travar UI durante o submit.
+  const [modalAuditoria, setModalAuditoria] = useState<null | {
+    tipo: "excluir_item" | "excluir_unidade" | "alterar_qtd";
+    titulo: string;
+    subtitulo?: string;
+    descricao: React.ReactNode;
+    textoBotao: string;
+    executar: (p: { senha?: string; justificativa: string }) => void;
+    carregando?: boolean;
+    erro?: string | null;
+  }>(null);
+  // Rev. 2388 — Auditoria: log + tela de validação por admin.
+  const [modalAuditoriaList, setModalAuditoriaList] = useState(false);
+  const [auditoriaFiltroStatus, setAuditoriaFiltroStatus] = useState<"pendente" | "validado" | "rejeitado" | "todos">("pendente");
+  const me = trpc.auth.me.useQuery();
+  const requerSenha = !!(me.data as any)?.hasLocalPassword;
+  const meRole: string = (me.data as any)?.role ?? "";
+  const isAdmin = meRole === "admin" || meRole === "admin_master";
+  const pendenciasCount = trpc.compras.auditoriaPendenciasCount.useQuery(
+    { companyId },
+    { enabled: !!companyId && isAdmin, refetchInterval: 30000 }
+  );
+  const auditoriaQuery = trpc.compras.auditoriaListar.useQuery(
+    { companyId, status: auditoriaFiltroStatus, limite: 200 },
+    { enabled: !!companyId && modalAuditoriaList }
+  );
+  const validarAuditoriaMut = trpc.compras.auditoriaValidar.useMutation({
+    onSuccess: () => { auditoriaQuery.refetch(); pendenciasCount.refetch(); toast.success("Registro validado."); },
+    onError: (e) => toast.error(e.message),
+  });
   // Rev. 2381 — Modal de rebusca de foto com termo customizado (user ajuda a IA)
   const [rebuscarFoto, setRebuscarFoto] = useState<null | { nome: string; termo: string; previewUrl: string | null; buscando: boolean; aplicando: boolean; erro: string | null }>(null);
   // Rev. 2382 — Multi-seleção de itens (alterar categoria em lote / unificar duplicatas)
@@ -659,8 +691,8 @@ export default function AlmoxarifadoPage() {
     onError: (e) => toast.error(e.message),
   });
   const excluirUnidadeMut = trpc.compras.excluirUnidade.useMutation({
-    onSuccess: () => { refetchUnidades(); toast.success("Unidade removida."); },
-    onError: (e) => toast.error(e.message),
+    onSuccess: () => { refetchUnidades(); setModalAuditoria(null); toast.success("Unidade removida. Pendência de auditoria registrada."); },
+    onError: (e) => { setModalAuditoria((p) => p ? { ...p, carregando: false, erro: e.message } : p); toast.error(e.message); },
   });
 
   // ── Modal Item ──────────────────────────────────────────────────
@@ -801,13 +833,42 @@ export default function AlmoxarifadoPage() {
     },
   });
   const excluirMut = trpc.compras.excluirItem.useMutation({
-    onSuccess: () => { refetch(); toast.success("Item removido."); },
+    onSuccess: () => { refetch(); toast.success("Item removido. Pendência de auditoria registrada."); },
+    onError: (e) => { setModalAuditoria((p) => p ? { ...p, carregando: false, erro: e.message } : p); toast.error(e.message); },
   });
 
   function handleExcluirItem(item: any) {
     const subs = item._subItems as any[] | undefined;
     const ids = subs && subs.length > 1 ? subs.map((s: any) => s.id) : [item.id];
-    setConfirmExcluirItem({ nome: item.nome, ids });
+    setModalAuditoria({
+      tipo: "excluir_item",
+      titulo: "Remover item do almoxarifado?",
+      subtitulo: `"${item.nome}"${ids.length > 1 ? ` · ${ids.length} registros` : ""}`,
+      descricao: (
+        <p>Esta ação <strong>desativa o item</strong> no almoxarifado. O histórico de movimentações é preservado.</p>
+      ),
+      textoBotao: "Remover",
+      executar: async ({ senha, justificativa }) => {
+        setModalAuditoria((p) => p ? { ...p, carregando: true } : p);
+        let firstError: any = null;
+        let okCount = 0;
+        for (const id of ids) {
+          try {
+            await excluirMut.mutateAsync({ id, senha, justificativa });
+            okCount++;
+          } catch (e: any) {
+            if (!firstError) firstError = e;
+            // Senha incorreta no 1º item → para tudo, mantém modal aberto pra retry.
+            if (e?.data?.code === "UNAUTHORIZED" || e?.data?.code === "BAD_REQUEST") break;
+          }
+        }
+        if (firstError && okCount === 0) {
+          setModalAuditoria((p) => p ? { ...p, carregando: false } : p);
+          return;
+        }
+        setModalAuditoria(null);
+      },
+    });
   }
   const devolverLocacaoMut = trpc.compras.devolverLocacaoItem.useMutation({
     onSuccess: () => { refetch(); setModalDevolverLocacao(false); setItemDevolverLocacao(null); setObsDevolucaoLocacao(""); toast.success("Equipamento devolvido ao fornecedor. Item desativado."); },
@@ -833,7 +894,7 @@ export default function AlmoxarifadoPage() {
     } : { origem: "proprio" as const, fornecedorLocacao: null, dataInicioLocacao: null, dataVencimentoLocacao: null, valorLocacaoMensal: null, diasAlertaLocacao: null, observacoesLocacao: null };
     const obraParaCriar = obraContexto === "todos" ? null : obraContexto;
     if (editandoId) {
-      const payload = {
+      const payload: any = {
         id: editandoId, nome: formItem.nome, unidade: formItem.unidade,
         categoria: formItem.categoria || undefined, codigoInterno: formItem.codigoInterno || undefined,
         quantidadeMinima: pQtdMin, observacoes: formItem.observacoes || undefined,
@@ -841,6 +902,32 @@ export default function AlmoxarifadoPage() {
         valorUnitario: pValUnit || null,
         ...locacaoPayload,
       };
+      // Rev. 2388 — Se a quantidade está mudando manualmente, abre modal de auditoria
+      // antes de chamar o atualizarMut. O backend valida tolerância 1e-3.
+      const itemOriginal: any = itens.find((it: any) => it.id === editandoId);
+      const qtdOriginal = Number(itemOriginal?.quantidadeAtual ?? 0);
+      const qtdMudou = itemOriginal && Math.abs(pQtdAtual - qtdOriginal) > 1e-3;
+      if (qtdMudou) {
+        setModalAuditoria({
+          tipo: "alterar_qtd",
+          titulo: "Alterar quantidade manualmente?",
+          subtitulo: `"${itemOriginal.nome}" · ${qtdOriginal} → ${pQtdAtual} ${formItem.unidade}`,
+          descricao: (
+            <p>Ajustes manuais de estoque ficam <strong>fora do fluxo normal</strong> (entrada/saída). Use apenas pra corrigir erros de cadastro ou contagem física.</p>
+          ),
+          textoBotao: "Confirmar alteração",
+          executar: async ({ senha, justificativa }) => {
+            setModalAuditoria((p) => p ? { ...p, carregando: true } : p);
+            try {
+              await atualizarMut.mutateAsync({ ...payload, auditoria: { senha, justificativa } });
+              setModalAuditoria(null);
+            } catch {
+              setModalAuditoria((p) => p ? { ...p, carregando: false } : p);
+            }
+          },
+        });
+        return;
+      }
       console.log("[salvarItem→atualizar] payload:", payload);
       try {
         atualizarMut.mutate(payload);
@@ -1108,6 +1195,21 @@ export default function AlmoxarifadoPage() {
                   <List className="h-3.5 w-3.5" /> Tabela
                 </button>
               </div>
+              {/* Rev. 2388 — Botão Auditoria com badge de pendências (só admin) */}
+              {isAdmin && (
+                <button
+                  onClick={() => setModalAuditoriaList(true)}
+                  className="relative flex items-center gap-1.5 bg-white hover:bg-amber-50 border border-amber-300 text-amber-800 text-sm font-medium px-3 py-2 rounded-lg transition"
+                  title="Auditoria do almoxarifado"
+                >
+                  <ShieldCheck className="h-4 w-4" /> Auditoria
+                  {pendenciasCount.data && pendenciasCount.data.count > 0 && (
+                    <span className="absolute -top-1.5 -right-1.5 bg-red-600 text-white text-[10px] font-bold rounded-full px-1.5 min-w-[18px] h-[18px] flex items-center justify-center">
+                      {pendenciasCount.data.count}
+                    </span>
+                  )}
+                </button>
+              )}
               <button onClick={abrirNovo} className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium px-3 py-2 rounded-lg transition">
                 <Plus className="h-4 w-4" /> Novo Item
               </button>
@@ -3245,7 +3347,20 @@ export default function AlmoxarifadoPage() {
                     </div>
                     <button
                       className="text-red-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition p-1"
-                      onClick={() => setConfirmExcluirUnidade({ id: u.id, sigla: u.sigla })}
+                      onClick={() => companyId && setModalAuditoria({
+                        tipo: "excluir_unidade",
+                        titulo: "Excluir unidade?",
+                        subtitulo: `"${u.sigla}"`,
+                        descricao: (
+                          <p>Itens existentes que usam esta unidade <strong>não são alterados</strong> — só a unidade some da lista de cadastro.</p>
+                        ),
+                        textoBotao: "Excluir",
+                        executar: async ({ senha, justificativa }) => {
+                          setModalAuditoria((p) => p ? { ...p, carregando: true } : p);
+                          try { await excluirUnidadeMut.mutateAsync({ id: u.id, companyId, senha, justificativa }); }
+                          catch {}
+                        },
+                      })}
                     >
                       <Trash2 className="h-4 w-4" />
                     </button>
@@ -4153,92 +4268,136 @@ export default function AlmoxarifadoPage() {
           </div>
         </div>
       )}
-      {/* Rev. 2387 — Modal customizado p/ confirmar exclusão de item (substitui window.confirm) */}
-      {confirmExcluirItem && (
+      {/* Rev. 2388 — Modal viewer da auditoria do almoxarifado (admin valida/rejeita) */}
+      {modalAuditoriaList && (
         <div
-          className="fixed inset-0 z-[110] bg-black/50 flex items-center justify-center p-4"
-          onClick={() => setConfirmExcluirItem(null)}
+          className="fixed inset-0 z-[100] bg-black/50 flex items-center justify-center p-4"
+          onClick={() => setModalAuditoriaList(false)}
         >
           <div
-            className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden"
+            className="bg-white rounded-2xl shadow-2xl max-w-5xl w-full max-h-[90vh] flex flex-col overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="bg-gradient-to-br from-red-500 to-rose-600 px-6 pt-6 pb-5 text-white text-center">
-              <div className="mx-auto bg-white/20 rounded-full p-3 w-fit mb-3">
-                <Trash2 className="w-8 h-8" />
+            <div className="bg-gradient-to-br from-amber-500 to-orange-600 px-6 py-4 text-white flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <ShieldCheck className="w-6 h-6" />
+                <div>
+                  <h3 className="text-lg font-bold leading-tight">Auditoria do Almoxarifado</h3>
+                  <p className="text-amber-50 text-xs">Validar ou rejeitar exclusões e alterações manuais de quantidade.</p>
+                </div>
               </div>
-              <h3 className="text-xl font-bold leading-tight">Remover item do almoxarifado?</h3>
-              <p className="text-rose-50 text-sm mt-1 break-words">
-                "{confirmExcluirItem.nome}"
-                {confirmExcluirItem.ids.length > 1 && <> · {confirmExcluirItem.ids.length} registros</>}
-              </p>
-            </div>
-            <div className="px-6 py-5 text-sm text-gray-700">
-              <p className="leading-relaxed">
-                Esta ação <strong>desativa o item</strong> no almoxarifado. O histórico de movimentações é preservado.
-              </p>
-            </div>
-            <div className="px-5 py-4 bg-gray-50 flex items-center gap-2 border-t border-gray-200">
-              <button
-                onClick={() => setConfirmExcluirItem(null)}
-                className="flex-1 px-4 py-3 text-sm font-medium text-gray-700 bg-white hover:bg-gray-100 border border-gray-300 rounded-lg transition"
-              >Cancelar</button>
-              <button
-                onClick={() => {
-                  const ids = confirmExcluirItem.ids;
-                  setConfirmExcluirItem(null);
-                  ids.forEach((id) => excluirMut.mutate({ id }));
-                }}
-                className="flex-1 px-4 py-3 text-sm font-semibold text-white bg-red-600 hover:bg-red-700 rounded-lg transition shadow-sm flex items-center justify-center gap-2"
-              >
-                <Trash2 className="w-4 h-4" /> Remover
+              <button onClick={() => setModalAuditoriaList(false)} className="text-white/80 hover:text-white p-1">
+                <X className="w-5 h-5" />
               </button>
+            </div>
+            <div className="px-6 py-3 border-b border-gray-200 flex items-center gap-2 text-xs">
+              {(["pendente", "validado", "rejeitado", "todos"] as const).map((s) => (
+                <button
+                  key={s}
+                  onClick={() => setAuditoriaFiltroStatus(s)}
+                  className={`px-3 py-1.5 rounded-full font-medium transition ${
+                    auditoriaFiltroStatus === s
+                      ? "bg-amber-600 text-white"
+                      : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                  }`}
+                >
+                  {s === "pendente" ? "Pendentes" : s === "validado" ? "Validados" : s === "rejeitado" ? "Rejeitados" : "Todos"}
+                </button>
+              ))}
+            </div>
+            <div className="flex-1 overflow-y-auto p-4">
+              {auditoriaQuery.isLoading ? (
+                <div className="text-center py-8 text-gray-400"><Loader2 className="w-6 h-6 animate-spin mx-auto" /></div>
+              ) : !auditoriaQuery.data || auditoriaQuery.data.length === 0 ? (
+                <p className="text-center text-sm text-gray-400 py-8">Nenhum registro nesta categoria.</p>
+              ) : (
+                <div className="space-y-3">
+                  {auditoriaQuery.data.map((r: any) => {
+                    const acaoLabel: Record<string, string> = {
+                      excluir_item: "Exclusão de item",
+                      excluir_unidade: "Exclusão de unidade",
+                      alterar_quantidade: "Alteração manual de quantidade",
+                    };
+                    const isPend = r.statusValidacao === "pendente";
+                    return (
+                      <div key={r.id} className="border border-gray-200 rounded-lg p-3 hover:border-amber-300 transition">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${
+                                r.statusValidacao === "pendente" ? "bg-amber-100 text-amber-800" :
+                                r.statusValidacao === "validado" ? "bg-emerald-100 text-emerald-800" :
+                                "bg-red-100 text-red-700"
+                              }`}>
+                                {r.statusValidacao.toUpperCase()}
+                              </span>
+                              <span className="text-sm font-semibold text-gray-900">{acaoLabel[r.acao] ?? r.acao}</span>
+                              <span className="text-xs text-gray-500">·</span>
+                              <span className="text-xs text-gray-600 truncate">{r.entidadeNome}</span>
+                            </div>
+                            <p className="text-xs text-gray-500 mt-1">
+                              Por <strong>{r.userNome || `User #${r.userId}`}</strong> em {new Date(r.createdAt).toLocaleString("pt-BR")}
+                              {r.ip && <> · IP {r.ip}</>}
+                            </p>
+                            <p className="text-sm text-gray-700 mt-2 bg-gray-50 rounded px-2 py-1.5 italic">"{r.justificativa}"</p>
+                            {r.acao === "alterar_quantidade" && r.dadosAntes && r.dadosDepois && (
+                              <p className="text-xs text-gray-600 mt-1">
+                                Quantidade: <strong>{r.dadosAntes.quantidadeAtual}</strong> → <strong>{r.dadosDepois.quantidadeAtual}</strong>
+                              </p>
+                            )}
+                            {r.statusValidacao !== "pendente" && (
+                              <p className="text-[11px] text-gray-400 mt-1">
+                                {r.statusValidacao === "validado" ? "Validado" : "Rejeitado"} por {r.validadoPorNome || `#${r.validadoPorId}`}
+                                {r.validadoEm && <> em {new Date(r.validadoEm).toLocaleString("pt-BR")}</>}
+                                {r.observacaoValidacao && <> — "{r.observacaoValidacao}"</>}
+                              </p>
+                            )}
+                          </div>
+                          {isPend && isAdmin && (
+                            <div className="flex flex-col gap-1.5">
+                              <button
+                                onClick={() => validarAuditoriaMut.mutate({ id: r.id, aprovar: true })}
+                                disabled={validarAuditoriaMut.isPending}
+                                className="px-3 py-1.5 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded transition flex items-center gap-1"
+                              >
+                                <Check className="w-3 h-3" /> Aprovar
+                              </button>
+                              <button
+                                onClick={() => {
+                                  const obs = prompt("Motivo da rejeição (opcional):") ?? undefined;
+                                  validarAuditoriaMut.mutate({ id: r.id, aprovar: false, observacao: obs || undefined });
+                                }}
+                                disabled={validarAuditoriaMut.isPending}
+                                className="px-3 py-1.5 text-xs font-semibold text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 rounded transition flex items-center gap-1"
+                              >
+                                <X className="w-3 h-3" /> Rejeitar
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </div>
         </div>
       )}
 
-      {/* Rev. 2387 — Modal customizado p/ confirmar exclusão de unidade */}
-      {confirmExcluirUnidade && companyId && (
-        <div
-          className="fixed inset-0 z-[110] bg-black/50 flex items-center justify-center p-4"
-          onClick={() => setConfirmExcluirUnidade(null)}
-        >
-          <div
-            className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="bg-gradient-to-br from-red-500 to-rose-600 px-6 pt-6 pb-5 text-white text-center">
-              <div className="mx-auto bg-white/20 rounded-full p-3 w-fit mb-3">
-                <Trash2 className="w-8 h-8" />
-              </div>
-              <h3 className="text-xl font-bold leading-tight">Excluir unidade?</h3>
-              <p className="text-rose-50 text-sm mt-1">"{confirmExcluirUnidade.sigla}"</p>
-            </div>
-            <div className="px-6 py-5 text-sm text-gray-700">
-              <p className="leading-relaxed">
-                Itens existentes que usam esta unidade <strong>não são alterados</strong> — só a unidade some da lista de cadastro.
-              </p>
-            </div>
-            <div className="px-5 py-4 bg-gray-50 flex items-center gap-2 border-t border-gray-200">
-              <button
-                onClick={() => setConfirmExcluirUnidade(null)}
-                className="flex-1 px-4 py-3 text-sm font-medium text-gray-700 bg-white hover:bg-gray-100 border border-gray-300 rounded-lg transition"
-              >Cancelar</button>
-              <button
-                onClick={() => {
-                  const { id } = confirmExcluirUnidade;
-                  setConfirmExcluirUnidade(null);
-                  excluirUnidadeMut.mutate({ id, companyId });
-                }}
-                className="flex-1 px-4 py-3 text-sm font-semibold text-white bg-red-600 hover:bg-red-700 rounded-lg transition shadow-sm flex items-center justify-center gap-2"
-              >
-                <Trash2 className="w-4 h-4" /> Excluir
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Rev. 2388 — Modal único de auditoria (excluir item / unidade / alterar qtd) */}
+      <ModalConfirmacaoAuditoria
+        aberto={!!modalAuditoria}
+        titulo={modalAuditoria?.titulo ?? ""}
+        subtitulo={modalAuditoria?.subtitulo}
+        descricao={modalAuditoria?.descricao ?? null}
+        textoBotaoConfirmar={modalAuditoria?.textoBotao ?? "Confirmar"}
+        requerSenha={requerSenha}
+        carregando={!!modalAuditoria?.carregando}
+        erroExterno={modalAuditoria?.erro ?? null}
+        onCancelar={() => setModalAuditoria(null)}
+        onConfirmar={(p) => { setModalAuditoria(prev => prev ? { ...prev, erro: null } : prev); modalAuditoria?.executar(p); }}
+      />
 
       {/* Rev. 2386 — Modal: sugestões de categoria por IA */}
       {modalSugestoesCateg && (() => {

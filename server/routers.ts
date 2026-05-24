@@ -216,7 +216,8 @@ export const appRouter = router({
     me: publicProcedure.query(opts => {
       if (!opts.ctx.user) return null;
       const { password, ...safeUser } = opts.ctx.user as any;
-      return safeUser;
+      // Rev. 2388 — expor flag para o frontend saber se exige senha em ações sensíveis.
+      return { ...safeUser, hasLocalPassword: !!password };
     }),
     logout: publicProcedure.mutation(({ ctx }) => {
       const cookieOptions = getSessionCookieOptions(ctx.req);

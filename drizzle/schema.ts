@@ -8821,3 +8821,34 @@ export const parametrosCapex = pgTable("parametros_capex", {
 }, (table) => [
   uniqueIndex("uq_param_capex_company_chave").on(table.companyId, table.chave),
 ]);
+
+// Rev. 2388 — Controle rígido de auditoria no Almoxarifado.
+// Toda exclusão (item/unidade) e toda alteração manual de quantidade no
+// almoxarifado gera 1 linha aqui. Senha (se user local) + justificativa
+// obrigatória. Admin da empresa valida/rejeita.
+export const almoxarifadoAuditoria = pgTable("almoxarifado_auditoria", {
+  id:                serial().primaryKey(),
+  companyId:         integer("company_id").notNull(),
+  obraId:            integer("obra_id"),
+  userId:            integer("user_id").notNull(),
+  userNome:          varchar("user_nome", { length: 255 }),
+  // 'excluir_item' | 'excluir_unidade' | 'alterar_quantidade'
+  acao:              varchar({ length: 40 }).notNull(),
+  entidadeTipo:      varchar("entidade_tipo", { length: 40 }).notNull(),
+  entidadeId:        integer("entidade_id").notNull(),
+  entidadeNome:      varchar("entidade_nome", { length: 255 }),
+  dadosAntes:        jsonb("dados_antes"),
+  dadosDepois:       jsonb("dados_depois"),
+  justificativa:     text().notNull(),
+  ip:                varchar({ length: 64 }),
+  // 'pendente' | 'validado' | 'rejeitado'
+  statusValidacao:   varchar("status_validacao", { length: 20 }).notNull().default("pendente"),
+  validadoPorId:     integer("validado_por_id"),
+  validadoPorNome:   varchar("validado_por_nome", { length: 255 }),
+  validadoEm:        timestamp("validado_em", { mode: "string" }),
+  observacaoValidacao: text("observacao_validacao"),
+  createdAt:         timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
+}, (table) => [
+  index("idx_alm_aud_company_status").on(table.companyId, table.statusValidacao),
+  index("idx_alm_aud_obra").on(table.obraId),
+]);
