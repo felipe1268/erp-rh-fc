@@ -642,18 +642,40 @@ export default function EquipamentosLocados() {
   // Rev. 2340 — Busca de fotos ilustrativas em lote via Google Custom Search.
   const [modalFotosIA, setModalFotosIA] = useState<null | { sobrescrever: boolean }>(null);
   const [resultadoFotosIA, setResultadoFotosIA] = useState<null | { descricoesAnalisadas: number; fotosEncontradas: number; itensAtualizados: number; descricoesSemFoto: string[]; haMaisLotes?: boolean; cotaEsgotada?: boolean }>(null);
+  // Rev. 2340.1 — Progresso estimado por tempo decorrido (server roda
+  // sequencial sem stream; ~1.2s por descrição CSE). Capamos em 95% até a
+  // mutation retornar para evitar "100% que não termina".
+  const [fotoInicio, setFotoInicio] = useState<number | null>(null);
+  const [fotoTickNow, setFotoTickNow] = useState<number>(() => Date.now());
+  useEffect(() => {
+    if (fotoInicio == null) return;
+    const id = setInterval(() => setFotoTickNow(Date.now()), 500);
+    return () => clearInterval(id);
+  }, [fotoInicio]);
   const buscarFotosMut = trpc.equipamentos.locadosBuscarFotosComIA.useMutation({
     onSuccess: (res: any) => {
       setResultadoFotosIA(res);
       setModalFotosIA(null);
+      setFotoInicio(null);
       utils.equipamentos.locadosListar.invalidate();
       toast.success(`IA encontrou ${res.fotosEncontradas} foto(s) — ${res.itensAtualizados} equipamento(s) atualizado(s).`);
     },
     onError: (err: any) => {
       toast.error(err?.message || "Falha ao buscar fotos com IA.");
       setModalFotosIA(null);
+      setFotoInicio(null);
     },
   });
+  // Estimativa: a procedure processa até 60 descrições únicas por call. Cada
+  // chamada CSE leva ~1.0-1.5s (rede + parse). Estimamos 1.2s/descrição.
+  const MAX_DESC_FOTOS = 60;
+  const SEG_POR_DESC = 1.2;
+  const fotoDescricoesEstimadas = Math.min(totalSemFoto, MAX_DESC_FOTOS);
+  const fotoSegundosEstimados = Math.max(8, Math.round(fotoDescricoesEstimadas * SEG_POR_DESC));
+  const fotoSegundosDecorridos = fotoInicio ? Math.floor((fotoTickNow - fotoInicio) / 1000) : 0;
+  const fotoPct = fotoInicio
+    ? Math.min(95, Math.round((fotoSegundosDecorridos / fotoSegundosEstimados) * 100))
+    : 0;
 
   return (
     <DashboardLayout>
@@ -1853,15 +1875,40 @@ export default function EquipamentosLocados() {
                 <div><b>Custo:</b> a Google armazena só URLs públicas — nada é baixado pro servidor.</div>
               </div>
               {buscarFotosMut.isPending && (
-                <div className="flex items-center gap-2 text-pink-700 text-sm">
-                  <Loader2 className="h-4 w-4 animate-spin" /> Buscando fotos no Google… (pode levar ~1min)
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="inline-flex items-center gap-1.5 text-pink-700 font-medium">
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" /> Buscando no Google…
+                    </span>
+                    <span className="font-mono text-slate-600 tabular-nums">
+                      {fotoSegundosDecorridos}s / ~{fotoSegundosEstimados}s · <b className="text-pink-700">{fotoPct}%</b>
+                    </span>
+                  </div>
+                  <div className="h-2.5 w-full bg-pink-100 rounded-full overflow-hidden ring-1 ring-pink-200">
+                    <div
+                      className="h-full bg-gradient-to-r from-pink-500 to-rose-500 transition-all duration-500 ease-out"
+                      style={{ width: `${fotoPct}%` }}
+                    />
+                  </div>
+                  <div className="text-[11px] text-slate-500">
+                    Processando ~{fotoDescricoesEstimadas} descrição(ões) única(s) — 1 busca por descrição.
+                    {fotoSegundosDecorridos > fotoSegundosEstimados + 10 && (
+                      <span className="text-amber-700"> · O Google está respondendo mais devagar que o esperado — aguarde.</span>
+                    )}
+                  </div>
                 </div>
               )}
             </div>
             <div className="bg-slate-50 border-t border-slate-200 px-5 py-3 flex justify-end gap-2">
               <button onClick={() => setModalFotosIA(null)} disabled={buscarFotosMut.isPending}
                 className="px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-200 rounded-lg transition disabled:opacity-60">Cancelar</button>
-              <button onClick={() => buscarFotosMut.mutate({ companyId, sobrescrever: false })} disabled={buscarFotosMut.isPending}
+              <button
+                onClick={() => {
+                  setFotoInicio(Date.now());
+                  setFotoTickNow(Date.now());
+                  buscarFotosMut.mutate({ companyId, sobrescrever: false });
+                }}
+                disabled={buscarFotosMut.isPending}
                 className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-pink-600 hover:bg-pink-700 rounded-lg shadow-md transition disabled:opacity-60 disabled:cursor-wait">
                 {buscarFotosMut.isPending ? <><Loader2 className="h-4 w-4 animate-spin" /> Buscando…</> : <><Camera className="h-4 w-4" /> Buscar agora</>}
               </button>
