@@ -1,16 +1,23 @@
 import DashboardLayout from "@/components/DashboardLayout";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
 import { toast } from "sonner";
-import { Plus, Search, Pencil, X, HardHat } from "lucide-react";
-import { FotosUploader, FotoItem, fmtMoney, fmtDate, Spinner } from "./_shared";
+import { Plus, Search, Pencil, X, HardHat, Camera, ChevronDown, ChevronUp, Sparkles, Trash2 } from "lucide-react";
+import { FotosUploader, FotoItem, compressImage, fmtMoney, fmtDate, Spinner } from "./_shared";
 
 const EMPTY_FORM = {
   codigoPatrimonio: "", descricao: "", categoria: "", numeroSerie: "",
   marca: "", modelo: "", dataAquisicao: "", valorAquisicao: "",
   vidaUtilMeses: "", observacoes: "",
 };
+
+// Rev. 2364 — chips de categoria de toque rápido (servente toca em vez de digitar).
+// Casa com as categorias de vida útil do CAPEX (server/routers/equipamentos.ts:90-96).
+const CATEGORIAS_QUICK = [
+  "Andaime", "Betoneira", "Compressor", "Gerador",
+  "Compactador", "Serra", "Furadeira", "Ferramenta elétrica",
+];
 
 const STATUS_LABELS: Record<string, string> = {
   disponivel: "Disponível", em_obra: "Em obra", manutencao: "Manutenção", baixado: "Baixado",
@@ -33,14 +40,55 @@ export default function EquipamentosProprios() {
     { companyId, busca: busca || undefined, status: (filtroStatus as any) || undefined },
     { enabled: !!companyId }
   );
+  // Rev. 2364 — segunda query SEM filtros pra contagem total real (auto-ID).
+  // Não pode usar `data.length` porque essa lista é filtrada por busca/status
+  // (gera colisões com patrimônios já existentes fora do filtro ativo).
+  const { data: totalList = [], isFetched: totalFetched } =
+    trpc.equipamentos.propriosListar.useQuery(
+      { companyId },
+      { enabled: !!companyId, staleTime: 30_000 }
+    );
 
   const [modal, setModal] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [form, setForm] = useState({ ...EMPTY_FORM });
   const [fotos, setFotos] = useState<FotoItem[]>([]);
+  const [mostrarDetalhes, setMostrarDetalhes] = useState(false);
+  const fotoInputRef = useRef<HTMLInputElement>(null);
+
+  // Rev. 2364 — gera patrimônio automático "EQP-NNNN" baseado no count TOTAL
+  // (não na lista filtrada). Olha o maior `EQP-N` já cadastrado e soma 1 pra
+  // evitar colisão quando IDs antigos foram apagados ou misturados.
+  function gerarPatrimonioAuto() {
+    let maxN = 0;
+    for (const p of (totalList || []) as any[]) {
+      const m = /^EQP-(\d+)$/i.exec(String(p.codigoPatrimonio || ""));
+      if (m) {
+        const n = parseInt(m[1], 10);
+        if (n > maxN) maxN = n;
+      }
+    }
+    const proximo = maxN + 1;
+    return `EQP-${String(proximo).padStart(4, "0")}`;
+  }
 
   function abrirNovo() {
-    setForm({ ...EMPTY_FORM }); setFotos([]); setEditingId(null); setModal(true);
+    setForm({ ...EMPTY_FORM }); setFotos([]); setEditingId(null);
+    setMostrarDetalhes(false); setModal(true);
+  }
+
+  async function handleFotoTop(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files || []);
+    if (!files.length) return;
+    const news: FotoItem[] = [];
+    for (const f of files) {
+      try {
+        const url = await compressImage(f);
+        news.push({ url, uploadedAt: new Date().toISOString() });
+      } catch {}
+    }
+    setFotos(prev => [...prev, ...news].slice(0, 6));
+    e.target.value = "";
   }
   function abrirEdit(p: any) {
     setForm({
@@ -57,6 +105,7 @@ export default function EquipamentosProprios() {
     });
     setFotos((p.fotosJson as FotoItem[]) || []);
     setEditingId(p.id);
+    setMostrarDetalhes(true); // ao editar, abre detalhes pra ver tudo
     setModal(true);
   }
 
@@ -70,8 +119,14 @@ export default function EquipamentosProprios() {
   });
 
   function salvar() {
-    if (!form.codigoPatrimonio.trim()) return toast.error("Patrimônio é obrigatório.");
-    if (!form.descricao.trim()) return toast.error("Descrição é obrigatória.");
+    if (!form.descricao.trim()) return toast.error("Diga o que é o equipamento (descrição).");
+    // Rev. 2364 — patrimônio auto-preenchido se vazio. Aguarda a query de
+    // contagem total chegar (totalFetched) pra evitar colisão com EQP-0001
+    // quando o usuário salva antes do load inicial.
+    if (!editingId && !form.codigoPatrimonio.trim() && !totalFetched) {
+      return toast.error("Carregando lista de patrimônios… tente em 1s.");
+    }
+    const patrimonio = form.codigoPatrimonio.trim() || gerarPatrimonioAuto();
     const valor = parseFloat(form.valorAquisicao.replace(",", ".")) || undefined;
     const vida = parseInt(form.vidaUtilMeses) || undefined;
     if (editingId) {
@@ -89,7 +144,7 @@ export default function EquipamentosProprios() {
     } else {
       criar.mutate({
         companyId,
-        codigoPatrimonio: form.codigoPatrimonio,
+        codigoPatrimonio: patrimonio,
         descricao: form.descricao,
         categoria: form.categoria || undefined,
         numeroSerie: form.numeroSerie || undefined,
@@ -205,69 +260,215 @@ export default function EquipamentosProprios() {
       </div>
 
       {modal && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setModal(false)}>
-          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-            <div className="px-5 py-3 border-b flex items-center justify-between">
-              <h2 className="font-semibold text-slate-800">{editingId ? "Editar Equipamento" : "Novo Equipamento Próprio"}</h2>
-              <button onClick={() => setModal(false)}><X className="h-5 w-5 text-slate-500" /></button>
+        <div
+          className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center sm:p-4"
+          onClick={() => setModal(false)}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="prop-modal-title"
+        >
+          <div
+            className="bg-white rounded-t-2xl sm:rounded-2xl shadow-xl max-w-xl w-full max-h-[92dvh] overflow-y-auto"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="px-5 py-3 border-b flex items-center justify-between sticky top-0 bg-white z-10">
+              <h2 id="prop-modal-title" className="font-semibold text-slate-800 text-lg">
+                {editingId ? "Editar Equipamento" : "Cadastrar Equipamento"}
+              </h2>
+              <button onClick={() => setModal(false)} aria-label="Fechar">
+                <X className="h-6 w-6 text-slate-500" />
+              </button>
             </div>
-            <div className="p-5 space-y-3">
-              <div className="grid grid-cols-2 gap-3">
-                <Field label="Patrimônio*" disabled={!!editingId}>
-                  <input value={form.codigoPatrimonio} disabled={!!editingId}
+
+            <div className="p-5 space-y-5">
+              {/* 1) FOTO — destaque máximo. Servente toca, abre câmera traseira. */}
+              {!editingId && (
+                <div>
+                  <input
+                    ref={fotoInputRef}
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    multiple
+                    onChange={handleFotoTop}
+                    className="hidden"
+                  />
+                  {fotos.length === 0 ? (
+                    <button
+                      type="button"
+                      onClick={() => fotoInputRef.current?.click()}
+                      className="w-full border-2 border-dashed border-blue-300 hover:border-blue-500 hover:bg-blue-50 rounded-2xl py-8 flex flex-col items-center justify-center gap-2 text-blue-700 active:scale-[0.98] transition"
+                    >
+                      <Camera className="h-12 w-12" />
+                      <span className="text-base font-semibold">Bater foto do equipamento</span>
+                      <span className="text-xs text-slate-500">Toque pra abrir a câmera</span>
+                    </button>
+                  ) : (
+                    <div>
+                      <div className="grid grid-cols-3 gap-2">
+                        {fotos.map((f, i) => (
+                          <div key={i} className="relative group">
+                            <img src={f.url} alt={`foto-${i}`} className="w-full h-24 object-cover rounded-lg border" />
+                            <button
+                              type="button"
+                              onClick={() => setFotos(prev => prev.filter((_, j) => j !== i))}
+                              aria-label="Remover foto"
+                              className="absolute top-1 right-1 bg-red-600 text-white rounded-full p-1 shadow"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        ))}
+                        {fotos.length < 6 && (
+                          <button
+                            type="button"
+                            onClick={() => fotoInputRef.current?.click()}
+                            className="h-24 border-2 border-dashed border-slate-300 hover:border-blue-400 rounded-lg flex items-center justify-center text-slate-400 hover:text-blue-600"
+                            aria-label="Adicionar mais fotos"
+                          >
+                            <Camera className="h-7 w-7" />
+                          </button>
+                        )}
+                      </div>
+                      <p className="text-xs text-slate-500 mt-1.5 text-center">{fotos.length} foto(s) · máx 6</p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* 2) DESCRIÇÃO — único campo obrigatório, em destaque */}
+              <div>
+                <label className="block text-sm font-semibold text-slate-800 mb-1.5">
+                  O que é? <span className="text-red-600">*</span>
+                </label>
+                <input
+                  value={form.descricao}
+                  onChange={e => setForm(p => ({ ...p, descricao: e.target.value }))}
+                  placeholder="Ex: Furadeira Bosch GSB 550, Andaime tubular 1,5m…"
+                  autoFocus
+                  className="w-full px-3 py-3 border-2 border-slate-200 focus:border-blue-500 focus:outline-none rounded-lg text-base"
+                />
+              </div>
+
+              {/* 3) CATEGORIA — chips de toque rápido */}
+              <div>
+                <label className="block text-sm font-semibold text-slate-800 mb-1.5">Categoria</label>
+                <div className="flex flex-wrap gap-2">
+                  {CATEGORIAS_QUICK.map(cat => {
+                    const active = form.categoria.toLowerCase() === cat.toLowerCase();
+                    return (
+                      <button
+                        key={cat}
+                        type="button"
+                        onClick={() => setForm(p => ({ ...p, categoria: active ? "" : cat }))}
+                        className={`px-3 py-2 rounded-full text-sm font-medium border-2 transition ${
+                          active
+                            ? "bg-blue-600 text-white border-blue-600 shadow"
+                            : "bg-white text-slate-700 border-slate-200 hover:border-blue-400"
+                        }`}
+                      >
+                        {cat}
+                      </button>
+                    );
+                  })}
+                </div>
+                {/* permite categoria livre digitada se não bater com nenhum chip */}
+                {form.categoria && !CATEGORIAS_QUICK.some(c => c.toLowerCase() === form.categoria.toLowerCase()) && (
+                  <input
+                    value={form.categoria}
+                    onChange={e => setForm(p => ({ ...p, categoria: e.target.value }))}
+                    placeholder="Outra categoria"
+                    className="mt-2 w-full px-3 py-2 border rounded text-sm"
+                  />
+                )}
+              </div>
+
+              {/* 4) PATRIMÔNIO — auto-gerado, mas editável */}
+              <div>
+                <label className="block text-sm font-semibold text-slate-800 mb-1.5">
+                  Patrimônio {!editingId && <span className="text-xs font-normal text-slate-500">(deixe vazio pra gerar automático)</span>}
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    value={form.codigoPatrimonio}
+                    disabled={!!editingId}
                     onChange={e => setForm(p => ({ ...p, codigoPatrimonio: e.target.value }))}
-                    className="w-full px-2 py-1.5 border rounded text-sm disabled:bg-slate-100" />
-                </Field>
-                <Field label="N° Série">
-                  <input value={form.numeroSerie} disabled={!!editingId}
-                    onChange={e => setForm(p => ({ ...p, numeroSerie: e.target.value }))}
-                    className="w-full px-2 py-1.5 border rounded text-sm disabled:bg-slate-100" />
-                </Field>
+                    placeholder={editingId ? "" : gerarPatrimonioAuto()}
+                    className="flex-1 px-3 py-2.5 border rounded-lg text-base font-mono disabled:bg-slate-100"
+                  />
+                  {!editingId && (
+                    <button
+                      type="button"
+                      onClick={() => setForm(p => ({ ...p, codigoPatrimonio: gerarPatrimonioAuto() }))}
+                      className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg flex items-center gap-1 text-sm"
+                      title="Gerar patrimônio automático"
+                    >
+                      <Sparkles className="h-4 w-4" /> Auto
+                    </button>
+                  )}
+                </div>
               </div>
-              <Field label="Descrição*">
-                <input value={form.descricao} onChange={e => setForm(p => ({ ...p, descricao: e.target.value }))}
-                  className="w-full px-2 py-1.5 border rounded text-sm" />
-              </Field>
-              <div className="grid grid-cols-3 gap-3">
-                <Field label="Categoria">
-                  <input value={form.categoria} onChange={e => setForm(p => ({ ...p, categoria: e.target.value }))}
-                    placeholder="andaime, betoneira…"
-                    className="w-full px-2 py-1.5 border rounded text-sm" />
-                </Field>
-                <Field label="Marca">
-                  <input value={form.marca} onChange={e => setForm(p => ({ ...p, marca: e.target.value }))}
-                    className="w-full px-2 py-1.5 border rounded text-sm" />
-                </Field>
-                <Field label="Modelo">
-                  <input value={form.modelo} onChange={e => setForm(p => ({ ...p, modelo: e.target.value }))}
-                    className="w-full px-2 py-1.5 border rounded text-sm" />
-                </Field>
+
+              {/* 5) MAIS DETALHES — collapsible, fechado por default */}
+              <div className="border-t pt-3">
+                <button
+                  type="button"
+                  onClick={() => setMostrarDetalhes(v => !v)}
+                  aria-expanded={mostrarDetalhes}
+                  className="w-full flex items-center justify-between py-2 text-sm font-medium text-slate-600 hover:text-slate-900"
+                >
+                  <span>Mais detalhes (opcional)</span>
+                  {mostrarDetalhes ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                </button>
+
+                {mostrarDetalhes && (
+                  <div className="space-y-3 pt-2">
+                    <div className="grid grid-cols-2 gap-3">
+                      <Field label="N° Série">
+                        <input value={form.numeroSerie} disabled={!!editingId}
+                          onChange={e => setForm(p => ({ ...p, numeroSerie: e.target.value }))}
+                          className="w-full px-2 py-1.5 border rounded text-sm disabled:bg-slate-100" />
+                      </Field>
+                      <Field label="Marca">
+                        <input value={form.marca} onChange={e => setForm(p => ({ ...p, marca: e.target.value }))}
+                          className="w-full px-2 py-1.5 border rounded text-sm" />
+                      </Field>
+                    </div>
+                    <Field label="Modelo">
+                      <input value={form.modelo} onChange={e => setForm(p => ({ ...p, modelo: e.target.value }))}
+                        className="w-full px-2 py-1.5 border rounded text-sm" />
+                    </Field>
+                    <div className="grid grid-cols-3 gap-3">
+                      <Field label="Data Aquisição">
+                        <input type="date" value={form.dataAquisicao} disabled={!!editingId}
+                          onChange={e => setForm(p => ({ ...p, dataAquisicao: e.target.value }))}
+                          className="w-full px-2 py-1.5 border rounded text-sm disabled:bg-slate-100" />
+                      </Field>
+                      <Field label="Valor (R$)">
+                        <input value={form.valorAquisicao} onChange={e => setForm(p => ({ ...p, valorAquisicao: e.target.value }))}
+                          placeholder="0,00" className="w-full px-2 py-1.5 border rounded text-sm" />
+                      </Field>
+                      <Field label="Vida útil (meses)">
+                        <input value={form.vidaUtilMeses} onChange={e => setForm(p => ({ ...p, vidaUtilMeses: e.target.value }))}
+                          placeholder="ex: 84" className="w-full px-2 py-1.5 border rounded text-sm" />
+                      </Field>
+                    </div>
+                    <Field label="Observações">
+                      <textarea value={form.observacoes} onChange={e => setForm(p => ({ ...p, observacoes: e.target.value }))}
+                        rows={2} className="w-full px-2 py-1.5 border rounded text-sm" />
+                    </Field>
+                    {editingId && (
+                      <FotosUploader fotos={fotos} onChange={setFotos} label="Fotos do equipamento" />
+                    )}
+                  </div>
+                )}
               </div>
-              <div className="grid grid-cols-3 gap-3">
-                <Field label="Data Aquisição">
-                  <input type="date" value={form.dataAquisicao} disabled={!!editingId}
-                    onChange={e => setForm(p => ({ ...p, dataAquisicao: e.target.value }))}
-                    className="w-full px-2 py-1.5 border rounded text-sm disabled:bg-slate-100" />
-                </Field>
-                <Field label="Valor (R$)">
-                  <input value={form.valorAquisicao} onChange={e => setForm(p => ({ ...p, valorAquisicao: e.target.value }))}
-                    placeholder="0,00" className="w-full px-2 py-1.5 border rounded text-sm" />
-                </Field>
-                <Field label="Vida útil (meses)">
-                  <input value={form.vidaUtilMeses} onChange={e => setForm(p => ({ ...p, vidaUtilMeses: e.target.value }))}
-                    placeholder="ex: 84" className="w-full px-2 py-1.5 border rounded text-sm" />
-                </Field>
-              </div>
-              <Field label="Observações">
-                <textarea value={form.observacoes} onChange={e => setForm(p => ({ ...p, observacoes: e.target.value }))}
-                  rows={2} className="w-full px-2 py-1.5 border rounded text-sm" />
-              </Field>
-              <FotosUploader fotos={fotos} onChange={setFotos} label="Fotos do equipamento" />
             </div>
-            <div className="px-5 py-3 border-t bg-slate-50 flex items-center justify-end gap-2">
-              <button onClick={() => setModal(false)} className="px-3 py-1.5 text-sm border rounded">Cancelar</button>
+
+            <div className="px-5 py-3 border-t bg-slate-50 flex items-center justify-end gap-2 sticky bottom-0">
+              <button onClick={() => setModal(false)} className="px-4 py-2 text-sm border rounded-lg hover:bg-slate-100">Cancelar</button>
               <button onClick={salvar} disabled={criar.isPending || atualizar.isPending}
-                className="px-4 py-1.5 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded disabled:opacity-50">
+                className="px-6 py-2 text-base font-semibold bg-blue-600 hover:bg-blue-700 text-white rounded-lg shadow disabled:opacity-50">
                 {criar.isPending || atualizar.isPending ? "Salvando…" : "Salvar"}
               </button>
             </div>

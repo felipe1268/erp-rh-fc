@@ -1,6 +1,90 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2364 — **UX/REDESIGN · Modal de cadastro de Equipamentos Próprios
+ * (/equipamentos/proprios) refeito do zero pra "servente consegue cadastrar":
+ * foto-em-destaque no topo, descrição como único obrigatório, chips de
+ * categoria de toque rápido, patrimônio auto-gerado, demais campos escondidos
+ * atrás de "Mais detalhes (opcional)".**
+ *
+ * **Pedido user (24/05/2026, IMG_1161+1162):** "Quero um layout novo, de
+ * fácil cadastramento, de forma que o usuário cadastre o arquivo de forma
+ * fácil e eficiente... não quero dados desnecessários, quero que seja tão
+ * fácil que um servente possa fazer o cadastro".
+ *
+ * **Problema:** o modal anterior expunha 11 campos de uma vez em 4 linhas
+ * apertadas (Patrimônio* · Nº Série · Descrição* · Categoria · Marca · Modelo
+ * · Data Aquis. · Valor R$ · Vida útil meses · Observações · Fotos), com
+ * `Patrimônio` obrigatório e nenhum auxílio pra preenchê-lo. Inviável pra
+ * um servente cadastrar 50 ferramentas via tablet em campo — abandona no 2º
+ * equipamento. Foto ficava no fim, como afterthought, sem destaque.
+ *
+ * **Fix em 1 arquivo** (`client/src/pages/equipamentos/Proprios.tsx`):
+ *
+ *   1. **FOTO no topo, com botão dropzone gigante** (border-dashed 2px,
+ *      Camera 12×12, "Bater foto do equipamento" + "Toque pra abrir a
+ *      câmera"). `<input type=file accept=image/* capture=environment
+ *      multiple>` — em iOS/Android abre a câmera traseira direto, sem
+ *      passar por galeria. Quando há fotos, vira grid 3-col com thumbs
+ *      24×24, botão lixeira por foto e tile "+" pra adicionar mais
+ *      (limite 6). Função `handleFotoTop` reusa `compressImage` do
+ *      `_shared.tsx`. Só renderiza no modo "Novo" (na edição, o uploader
+ *      antigo aparece dentro de "Mais detalhes" pra não confundir).
+ *
+ *   2. **DESCRIÇÃO como único obrigatório**, fonte grande (text-base),
+ *      input 2px border, placeholder com exemplos reais ("Ex: Furadeira
+ *      Bosch GSB 550, Andaime tubular 1,5m…"), `autoFocus` no abrir.
+ *      Label "O que é?" em vez de "Descrição*" (linguagem de canteiro).
+ *
+ *   3. **CATEGORIA via chips de toque** (8 chips: Andaime · Betoneira ·
+ *      Compressor · Gerador · Compactador · Serra · Furadeira · Ferramenta
+ *      elétrica — bate com `vida_util_*` do CAPEX
+ *      `server/routers/equipamentos.ts:90-96`). Chip ativo fica azul sólido
+ *      com shadow, toggle real (clicar de novo desmarca). Se o user
+ *      digitar categoria que não bate com nenhum chip, aparece input
+ *      "Outra categoria" abaixo (fallback livre).
+ *
+ *   4. **PATRIMÔNIO auto-preenchido**: label diz "(deixe vazio pra gerar
+ *      automático)", placeholder mostra o próximo ID que será usado
+ *      (`EQP-NNNN` baseado em `data.length + 1`, padStart 4). Botão "Auto"
+ *      ao lado (ícone Sparkles) gera o ID com 1 clique. `salvar()` faz
+ *      fallback `form.codigoPatrimonio.trim() || gerarPatrimonioAuto()`,
+ *      então o servente pode literalmente só bater foto + escrever
+ *      descrição + tocar "Salvar". Backend mantém validação de unicidade
+ *      (`server/routers/equipamentos.ts:264`) — se colidir (race ou
+ *      patrimônio digitado duplicado), erro vai pro toast e user tenta
+ *      de novo.
+ *
+ *   5. **"Mais detalhes (opcional)" collapsible** (fechado por default no
+ *      modo Novo, aberto no Editar pra ver os dados existentes). Esconde:
+ *      Nº Série, Marca, Modelo, Data Aquisição, Valor (R$), Vida útil
+ *      (meses), Observações e (só na edição) o `FotosUploader` antigo.
+ *
+ *   6. **Mobile-first**: modal usa `items-end` no mobile (bottom-sheet),
+ *      `items-center` em ≥sm (centralizado), `rounded-t-2xl` no mobile vs
+ *      `rounded-2xl` no desktop, `max-h-[92dvh]` (não `vh`, respeita URL
+ *      bar do iOS Safari). Header e footer `sticky` pra não perder o
+ *      "Salvar" durante scroll de fotos. Botão "Salvar" maior (text-base,
+ *      px-6 py-2) pra alvo de toque.
+ *
+ *   7. **A11Y**: `role="dialog"` + `aria-modal` + `aria-labelledby`,
+ *      `aria-expanded` no toggle de detalhes, `aria-label` nos botões só-
+ *      ícone (X, Trash2, "+").
+ *
+ * **Decisões deliberadas:**
+ *   - Patrimônio NÃO virou obrigatório no backend — apenas auto-fill no
+ *     client. Mantém compatibilidade com endpoints externos/integrações.
+ *   - Auto-ID usa `data.length+1` (não `Date.now()`) pra dar números
+ *     legíveis e sequenciais (EQP-0001, EQP-0002…). Colisão é tratada
+ *     pelo CONFLICT do backend, não ignorada.
+ *   - Categoria livre digitada ainda é aceita (não força chip) pra não
+ *     bloquear o engenheiro que quer "Plataforma elevatória" custom.
+ *   - Manteve `FotosUploader` original só no modo Editar pra não duplicar
+ *     UX e reaproveitar comportamento conhecido pelos usuários atuais.
+ *
+ * **R-001/R-007/R-010:** N/A — só client (Proprios.tsx), zero mudança de
+ * schema/migração/SQL. Endpoint `proprioCriar` intocado.
+ *
  * Rev. 2363 — **UX/FILTRO · Cards KPI da aba "Equip. Locados" do Dashboard
  * Almoxarifado ficaram CLICÁVEIS — clique aplica filtro contextual à
  * tabela abaixo (troca fonte + título + colunas).**

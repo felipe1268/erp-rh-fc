@@ -2,6 +2,7 @@
 
 > Este arquivo guarda os one-liners das revisões antigas para manter o `replit.md` enxuto.
 
+- **Rev. 2357** — HOTFIX/UX · Modal drill-down de "Locações mês a mês" ganha botão "Fechar" no rodapé + altura usa `dvh` em vez de `vh` pra respeitar a URL bar dinâmica do iOS Safari. Ver `shared/changelog.ts`.
 - **Rev. 2356** — UX/REDESIGN · Hub de Equipamentos (`/equipamentos`) ganha layout 100% renovado: agrupamento client-side por (descricao+obra+fornecedor+fim), 4 KPIs, cards com badge urgência semaforizado e barra de progresso. Ver `shared/changelog.ts`.
 - **Rev. 2355** — FEATURE/SOLUÇÃO DEFINITIVA · Biblioteca CURADA de fotos de equipamentos locados por descrição canônica. Substitui de vez a "busca de fotos com IA" (revs 2340-2350). User sobe 1 foto por descrição → ERP propaga pra TODAS as unidades atuais + futuras. Ver `shared/changelog.ts`.
 - **Rev. 2354** — UX · Inputs de dinheiro no preview do import PDF de locação passam a usar formato BRL "R$ X.XXX,XX" (ponto de milhar + vírgula decimal). Ver `shared/changelog.ts`.
