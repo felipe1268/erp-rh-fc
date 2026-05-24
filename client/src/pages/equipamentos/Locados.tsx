@@ -358,6 +358,12 @@ export default function EquipamentosLocados() {
     { enabled: !!companyId }
   );
   const [ocSelecionada, setOcSelecionada] = useState<{ id: number; numeroOc: string } | null>(null);
+  // Rev. 2372 — Picker visual de devolução (cards grandes com foto). Aberto
+  // pelo botão "DEVOLVER LOCAÇÃO" do Almoxarifado (?action=devolver) ou pelo
+  // botão hero da própria página. Operador clica no card → abre direto o
+  // modalDev (fluxo de devolução já existente).
+  const [pickerDevolver, setPickerDevolver] = useState(false);
+  const [pickerDevolverBusca, setPickerDevolverBusca] = useState("");
   const devolver = trpc.equipamentos.locadoDevolver.useMutation({
     onSuccess: () => { utils.equipamentos.locadosListar.invalidate(); setModalDev(null); setDevFotos([]); toast.success("Equipamento devolvido."); },
     onError: (e) => toast.error(e.message),
@@ -494,8 +500,11 @@ export default function EquipamentosLocados() {
       setOcSelecionada(null); // Rev. 2371
       setModal(true);
     } else if (action === "devolver") {
+      // Rev. 2372 — em vez de só filtrar+toast (operador de 4ª série não
+      // entendia que tinha que rolar a tabela e achar o botão "Devolver"
+      // na linha), abre direto o picker visual com cards grandes.
       setFiltroStatus("em_uso");
-      toast.info("Selecione o equipamento que deseja devolver na lista abaixo.", { duration: 5000 });
+      setPickerDevolver(true);
     } else if (action === "importar") {
       // Rev. 2313 — vem do botão "IMPORTAR PDF (IA)" do Almoxarifado.
       setImportArquivo(null);
@@ -1233,6 +1242,18 @@ export default function EquipamentosLocados() {
                   {batchWeb ? <Loader2 className="h-4 w-4 animate-spin" /> : <Globe className="h-4 w-4" />}
                   Buscar fotos da web
                   <span className="inline-flex items-center justify-center min-w-[22px] h-5 px-1.5 rounded-full text-[10px] font-bold bg-sky-100 text-sky-800">{fmtN(totalSemFoto)}</span>
+                </button>
+              )}
+              {/* Rev. 2372 — Botão hero DEVOLVER: abre picker visual de
+                  equipamentos em uso (cards grandes com foto). Mesmo fluxo
+                  do botão "DEVOLVER LOCAÇÃO" do Almoxarifado, agora também
+                  acessível direto da própria página. */}
+              {stats.ativos > 0 && (
+                <button onClick={() => { setPickerDevolverBusca(""); setPickerDevolver(true); }}
+                  className="inline-flex items-center gap-2 bg-white text-orange-700 hover:bg-orange-50 px-5 py-2.5 rounded-xl shadow-md font-semibold text-sm transition ring-1 ring-orange-200"
+                  title="Devolver um equipamento locado — escolha visualmente pela foto">
+                  <RotateCcw className="h-4 w-4" /> Devolver locação
+                  <span className="inline-flex items-center justify-center min-w-[22px] h-5 px-1.5 rounded-full text-[10px] font-bold bg-orange-100 text-orange-800">{fmtN(stats.ativos)}</span>
                 </button>
               )}
               {/* Rev. 2315 — Removido botão "Receber locação"; fluxo principal é Importar PDF (IA). */}
@@ -2079,6 +2100,194 @@ export default function EquipamentosLocados() {
           </Section>
         </Modal>
       )}
+
+      {/* Rev. 2372 — PICKER VISUAL DE DEVOLUÇÃO. Aberto pelo botão
+          "DEVOLVER LOCAÇÃO" do Almoxarifado (?action=devolver) ou pelo botão
+          hero da própria página. Mostra cards GRANDES com foto + descrição
+          enorme + obra + fornecedor de cada equipamento "em_uso", ordenados
+          por urgência (atrasado > vencendo > normal). Operador clica num
+          card → fecha o picker e abre direto o modalDev (fluxo existente).
+          Foco: 2 cliques (escolher + confirmar). Pensado para operador com
+          baixa familiaridade — botão único enorme por card, sem busca
+          obrigatória, sem rolagem horizontal, sem filtros adicionais. */}
+      {pickerDevolver && (() => {
+        const emUso = (dataAll as any[]).filter(l => l.status === "em_uso");
+        const hoje = Date.now();
+        const busca = pickerDevolverBusca.trim().toLowerCase();
+        const filtrados = busca
+          ? emUso.filter(l =>
+              String(l.descricao || "").toLowerCase().includes(busca) ||
+              String(l.fornecedorNome || "").toLowerCase().includes(busca) ||
+              String(l.codigoPatrimonioFornecedor || "").toLowerCase().includes(busca) ||
+              String(obrasMap.get(Number(l.obraId)) || "").toLowerCase().includes(busca)
+            )
+          : emUso;
+        const ordenados = [...filtrados].sort((a, b) => {
+          const fa = new Date(a.dataFimPrevista || 0).getTime() || Infinity;
+          const fb = new Date(b.dataFimPrevista || 0).getTime() || Infinity;
+          return fa - fb;
+        });
+        function escolher(l: any) {
+          setPickerDevolver(false);
+          setModalDev(l);
+          setDevFotos([]);
+          setDevObs("");
+          setDevData(new Date().toISOString().slice(0, 10));
+        }
+        return (
+          <div className="fixed inset-0 bg-black/60 z-50 flex items-stretch justify-center p-0 sm:p-4" onClick={() => setPickerDevolver(false)}>
+            <div className="bg-white sm:rounded-2xl shadow-2xl w-full max-w-5xl max-h-full sm:max-h-[92vh] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
+              {/* Header laranja grande pra ficar óbvio */}
+              <div className="px-5 py-4 bg-gradient-to-r from-orange-500 to-orange-600 text-white flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="bg-white/20 rounded-xl p-2.5 flex-shrink-0"><RotateCcw className="h-6 w-6" /></div>
+                  <div className="min-w-0">
+                    <h2 className="font-bold text-lg sm:text-xl leading-tight truncate">Qual equipamento vai devolver?</h2>
+                    <p className="text-[12px] sm:text-sm text-orange-50 leading-tight">Toque no equipamento certo. Depois é só tirar a foto e confirmar.</p>
+                  </div>
+                </div>
+                <button onClick={() => setPickerDevolver(false)} className="bg-white/20 hover:bg-white/30 rounded-full p-2 flex-shrink-0" aria-label="Fechar">
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+
+              {/* Busca grande (opcional) */}
+              {emUso.length > 6 && (
+                <div className="px-4 sm:px-5 pt-3 pb-1 bg-orange-50/40 border-b border-orange-100">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-orange-500" />
+                    <input
+                      autoFocus={false}
+                      value={pickerDevolverBusca}
+                      onChange={e => setPickerDevolverBusca(e.target.value)}
+                      placeholder="Buscar por nome, obra ou fornecedor…"
+                      className="w-full pl-11 pr-10 py-3 text-base border-2 border-orange-200 focus:border-orange-400 focus:ring-2 focus:ring-orange-200 rounded-xl outline-none"
+                    />
+                    {pickerDevolverBusca && (
+                      <button onClick={() => setPickerDevolverBusca("")} className="absolute right-2 top-1/2 -translate-y-1/2 bg-slate-200 hover:bg-slate-300 rounded-full p-1.5" aria-label="Limpar busca">
+                        <X className="h-3.5 w-3.5 text-slate-700" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Lista de cards GRANDES */}
+              <div className="flex-1 overflow-y-auto p-3 sm:p-5">
+                {ordenados.length === 0 ? (
+                  <div className="text-center py-16">
+                    <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-slate-100 mb-4">
+                      <Boxes className="h-10 w-10 text-slate-400" />
+                    </div>
+                    <p className="text-slate-700 font-semibold text-lg">
+                      {busca ? "Nenhum equipamento encontrado" : "Nenhum equipamento em locação"}
+                    </p>
+                    <p className="text-sm text-slate-500 mt-1">
+                      {busca ? "Tente outro nome ou apague a busca." : "Não há nada pra devolver agora."}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                    {ordenados.map((l: any) => {
+                      const fotos = (l.fotosRecebimentoJson as FotoItem[]) || [];
+                      const fotoUrl = fotos[0]?.url || l.fotoUrl || null;
+                      const obraNome = l.obraId ? obrasMap.get(Number(l.obraId)) : null;
+                      const fim = l.dataFimPrevista ? new Date(l.dataFimPrevista).getTime() : null;
+                      const ini = l.dataInicio ? new Date(l.dataInicio).getTime() : null;
+                      const diasUso = ini ? Math.max(0, Math.floor((hoje - ini) / 86400000)) : null;
+                      const atrasado = fim != null && fim < hoje;
+                      const vencendo5 = fim != null && fim >= hoje && fim < hoje + 5 * 86400000;
+                      const badgeTint = atrasado
+                        ? "bg-red-600 text-white"
+                        : vencendo5
+                        ? "bg-amber-500 text-white"
+                        : "bg-emerald-100 text-emerald-800";
+                      const badgeText = atrasado
+                        ? "ATRASADO"
+                        : vencendo5
+                        ? "VENCE EM BREVE"
+                        : "EM USO";
+                      return (
+                        <button
+                          key={l.id}
+                          onClick={() => escolher(l)}
+                          className="group relative text-left bg-white border-2 border-slate-200 hover:border-orange-500 hover:shadow-lg rounded-2xl overflow-hidden transition active:scale-[0.98]">
+                          <div className="flex gap-3 p-3">
+                            {/* Foto grande quadrada */}
+                            <div className="w-28 h-28 sm:w-32 sm:h-32 flex-shrink-0 rounded-xl overflow-hidden bg-slate-100 ring-1 ring-slate-200 flex items-center justify-center">
+                              {fotoUrl ? (
+                                <img src={fotoUrl} alt={l.descricao} className="w-full h-full object-cover" loading="lazy" />
+                              ) : (
+                                <Camera className="h-10 w-10 text-slate-300" />
+                              )}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wider ${badgeTint} mb-1`}>{badgeText}</span>
+                              <div className="font-bold text-base sm:text-lg text-slate-900 leading-tight line-clamp-2">
+                                {l.descricao || "(sem descrição)"}
+                              </div>
+                              {obraNome ? (
+                                <div className="mt-1.5 flex items-center gap-1.5 text-[13px] text-emerald-800 font-semibold truncate">
+                                  <MapPin className="h-3.5 w-3.5 flex-shrink-0" />
+                                  <span className="truncate">{obraNome}</span>
+                                </div>
+                              ) : (
+                                <div className="mt-1.5 flex items-center gap-1.5 text-[13px] text-amber-700 italic truncate">
+                                  <MapPin className="h-3.5 w-3.5 flex-shrink-0" /> Sem obra
+                                </div>
+                              )}
+                              {l.fornecedorNome && (
+                                <div className="mt-0.5 flex items-center gap-1.5 text-[12px] text-slate-600 truncate">
+                                  <Building2 className="h-3 w-3 flex-shrink-0" /> <span className="truncate">{l.fornecedorNome}</span>
+                                </div>
+                              )}
+                              {(l.codigoPatrimonioFornecedor || l.numeroSerie) && (
+                                <div className="mt-0.5 flex items-center gap-1.5 text-[11px] text-slate-500 truncate font-mono">
+                                  <Hash className="h-3 w-3 flex-shrink-0" />
+                                  <span className="truncate">{l.codigoPatrimonioFornecedor || l.numeroSerie}</span>
+                                </div>
+                              )}
+                              <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-slate-500">
+                                {diasUso != null && (
+                                  <span className="inline-flex items-center gap-1"><Clock className="h-3 w-3" /> {diasUso}d na obra</span>
+                                )}
+                                {fim != null && (
+                                  <span className={`inline-flex items-center gap-1 ${atrasado ? "text-red-700 font-semibold" : ""}`}>
+                                    <Calendar className="h-3 w-3" /> fim: {fmtDate(l.dataFimPrevista)}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                          {/* Footer "ESTE AQUI" — botão visual grande, todo o card é clicável */}
+                          <div className="px-4 py-2.5 bg-orange-50 group-hover:bg-orange-100 border-t border-orange-100 flex items-center justify-between transition">
+                            <span className="text-orange-800 font-bold text-sm tracking-wide">DEVOLVER ESTE</span>
+                            <div className="bg-orange-500 group-hover:bg-orange-600 text-white rounded-full p-1.5 transition">
+                              <RotateCcw className="h-4 w-4" />
+                            </div>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* Footer com contador + cancelar */}
+              <div className="px-4 sm:px-5 py-3 border-t bg-slate-50 flex items-center justify-between gap-3">
+                <p className="text-xs sm:text-sm text-slate-600">
+                  {ordenados.length === emUso.length
+                    ? <><b>{fmtN(emUso.length)}</b> equipamento(s) em locação</>
+                    : <><b>{fmtN(ordenados.length)}</b> de {fmtN(emUso.length)} mostrado(s)</>}
+                </p>
+                <button onClick={() => setPickerDevolver(false)} className="px-4 py-2 text-sm border-2 border-slate-300 hover:bg-slate-100 rounded-lg font-semibold text-slate-700">
+                  Cancelar
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Modal devolução */}
       {modalDev && (

@@ -1,6 +1,65 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2372 — **UX · "DEVOLVER LOCAÇÃO" do Almoxarifado agora abre um
+ * PICKER VISUAL com cards grandes (foto + descrição + obra + fornecedor)
+ * dos equipamentos em uso — operador de 4ª série escolhe e devolve em
+ * 2 cliques (escolher + confirmar).**
+ *
+ * **Pedido user (24/05/2026, IMG_1172):** "Quero que quando eu clicar
+ * em devolver o equipamento eu possa ver o que está locado.. quero
+ * facilidade... lembre-se quem opera é alguém que só tem a quarta série,
+ * pouco conhecimento. Tem que ser com poucos cliques, resolver muita
+ * coisa." O botão laranja "DEVOLVER LOCAÇÃO" do Almoxarifado Central
+ * navegava pra /equipamentos/locados?action=devolver e o handler antigo
+ * só fazia `setFiltroStatus("em_uso")` + um toast.info pedindo pro user
+ * rolar a tabela e achar o botão "Devolver" minúsculo na linha. Operador
+ * com baixa familiaridade não entendia.
+ *
+ * **Implementação** (`client/src/pages/equipamentos/Locados.tsx`):
+ *
+ * 1. **State novo:** `pickerDevolver: boolean` + `pickerDevolverBusca:
+ *    string`. Aberto pelo deep-link `?action=devolver` (substitui o
+ *    toast antigo) OU pelo novo botão hero "Devolver locação" laranja
+ *    no header da página (badge mostrando `stats.ativos`, só aparece
+ *    quando há equipamento em uso).
+ *
+ * 2. **Picker modal (z-50, max-w-5xl, full-screen no mobile):**
+ *    - Header gradient laranja-500→600 com ícone RotateCcw grande
+ *      ("Qual equipamento vai devolver?" + subtítulo "Toque no
+ *      equipamento certo. Depois é só tirar a foto e confirmar.").
+ *    - Busca por nome/obra/fornecedor/patrimônio só aparece quando há
+ *      >6 equipamentos (não polui o modal quando a lista é curta).
+ *    - Grid 1col mobile / 2col sm+ de cards GRANDES por equipamento
+ *      em_uso, ordenados por `dataFimPrevista ASC` (atrasados primeiro).
+ *    - Cada card: foto 28x28 (mobile) / 32x32 (sm+) à esquerda, badge
+ *      colorido no topo direito (vermelho ATRASADO / âmbar VENCE EM
+ *      BREVE / verde EM USO), descrição em font-bold lg (line-clamp-2),
+ *      obra (MapPin emerald) ou "Sem obra" (italic amber), fornecedor
+ *      (Building2), patrimônio/n°série em mono, dias na obra + data
+ *      fim. Footer laranja "DEVOLVER ESTE" + ícone RotateCcw circular.
+ *    - Todo o card é clicável (`<button>`); hover muda border pra
+ *      orange-500 + shadow-lg; `active:scale-[0.98]` pra feedback
+ *      tátil mobile.
+ *    - Estado vazio: ícone Boxes + "Nenhum equipamento encontrado"
+ *      (com busca) ou "Nenhum equipamento em locação" (sem busca).
+ *
+ * 3. **Handler `escolher(l)`:** fecha o picker + `setModalDev(l)` +
+ *    reseta `devFotos/devObs/devData`. O fluxo de devolução continua
+ *    sendo o `modalDev` existente (data de devolução + observação +
+ *    fotos obrigatórias). Zero alteração no backend.
+ *
+ * **R-001/R-007/R-010:** UI-only, zero backend, zero DDL, zero novas
+ * tRPC routes. Reusa `dataAll` (mesma query `locadosListar` já em uso
+ * na página) e a mutation `locadoDevolver` que já existia.
+ *
+ * **Arquivos:**
+ * - `client/src/pages/equipamentos/Locados.tsx` (linha 364-369 state;
+ *   500-504 deep-link substitui toast; 1250-1261 botão hero;
+ *   2107-2257 picker modal).
+ *
+ * ---
+ *
  * Rev. 2371 — **FEATURE · "Receber Locação na Obra" agora lista as OCs de
  * locação pendentes de recebimento no topo do modal — almoxarife clica e
  * dá entrada com 1 clique (em vez de digitar tudo na mão).**
