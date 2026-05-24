@@ -1,6 +1,46 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2354 — **UX · Inputs de dinheiro no preview do import PDF
+ * de locação passam a usar formato BRL "R$ X.XXX,XX" com ponto
+ * de milhar e vírgula decimal (em vez do `type="number"` cru
+ * que mostrava "1641" pra um milhão e seiscentos e quarenta e um
+ * reais).**
+ *
+ * Pedido user (24/05/2026, IMG_1151): "Coloca o valor em
+ * dinheiro no formato de dinheiro com ponto e vírgula".
+ *
+ * **Antes**: campos "Valor total" (header de cada contrato) e
+ * "Subtotal" (por item) eram `<input type="number" step="0.01">`
+ * — exibiam "1641" pra R$ 1.641,00, "440" pra R$ 440,00, sem
+ * formatação. Usuário precisava interpretar mentalmente.
+ *
+ * **Depois** (`client/src/pages/equipamentos/Locados.tsx`,
+ * linhas ~2066 e ~2113): `<input type="text" inputMode="numeric">`
+ * com padrão CENTAVOS:
+ * - **Display**: `R$ ${Number(v).toLocaleString("pt-BR",
+ *   { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` →
+ *   "R$ 1.641,00", "R$ 440,00".
+ * - **Onchange**: `raw = e.target.value.replace(/\D/g, "")` +
+ *   `num = parseInt(raw, 10) / 100` → ao digitar "164100" vira
+ *   R$ 1.641,00; ao digitar "44000" vira R$ 440,00. Padrão usado
+ *   por fintechs brasileiras (Nubank, Inter, C6) — usuário não
+ *   precisa digitar separador.
+ * - `inputMode="numeric"` traz teclado numérico no mobile.
+ * - `text-right tabular-nums` mantém alinhamento à direita com
+ *   dígitos de largura igual (legibilidade financeira).
+ *
+ * **Por que NÃO componente compartilhado**: só 2 inputs em 1 tela
+ * — overhead de criar `<CurrencyInput />` em `client/src/components/
+ * ui/` + import + props/forwardRef não compensa ainda. Quando surgir
+ * o 3º uso (próxima vez que alguém pedir o mesmo formato), extrair.
+ *
+ * **Preservado**: tipo do estado interno (`subtotal`, `valorTotal`)
+ * continua `number` — só a representação visual mudou. Server
+ * recebe o mesmo float. Schema Zod inalterado.
+ *
+ * **R-001/R-007/R-010:** N/A — só UI client-side, zero DDL.
+ *
  * Rev. 2353 — **FEATURE/REGRA · Import PDF de locação passa a
  * EXIGIR obra vinculada por contrato antes de cadastrar (client
  * bloqueia botão "Confirmar" + backend recusa com BAD_REQUEST).

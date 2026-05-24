@@ -2064,7 +2064,20 @@ export default function EquipamentosLocados() {
                           </div>
                           <div className="col-span-2">
                             <label className="text-[10px] text-slate-500 uppercase block">Valor total</label>
-                            <input type="number" step="0.01" value={c.valorTotal || ""} onChange={e => updateContratoField(ci, "valorTotal", parseFloat(e.target.value) || 0)} className="inp" />
+                            {/* Rev. 2354 — input em formato BRL (R$ X.XXX,XX).
+                                Padrão centavos: cada digito vira a casa mais à direita,
+                                divide por 100. Permite digitar "164100" → R$ 1.641,00. */}
+                            <input
+                              type="text"
+                              inputMode="numeric"
+                              value={c.valorTotal != null && c.valorTotal !== "" ? `R$ ${Number(c.valorTotal).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : ""}
+                              onChange={e => {
+                                const raw = e.target.value.replace(/\D/g, "");
+                                const num = raw ? parseInt(raw, 10) / 100 : 0;
+                                updateContratoField(ci, "valorTotal", num);
+                              }}
+                              className="inp text-right tabular-nums"
+                            />
                           </div>
                           <div className="col-span-1 text-right">
                             <button onClick={() => removerContratoPreview(ci)} className="text-red-600 hover:bg-red-50 p-1 rounded" title="Remover contrato">
@@ -2110,7 +2123,20 @@ export default function EquipamentosLocados() {
                                 <td className="px-2 py-1"><input value={it.patrimonio || ""} onChange={e => updateItemField(ci, ii, "patrimonio", e.target.value)} className="inp" /></td>
                                 <td className="px-2 py-1"><input value={it.descricao || ""} onChange={e => updateItemField(ci, ii, "descricao", e.target.value)} className="inp" /></td>
                                 <td className="px-2 py-1"><input type="number" min={1} value={it.quantidade || 1} onChange={e => updateItemField(ci, ii, "quantidade", parseInt(e.target.value) || 1)} className="inp text-right" /></td>
-                                <td className="px-2 py-1"><input type="number" step="0.01" value={it.subtotal || ""} onChange={e => updateItemField(ci, ii, "subtotal", parseFloat(e.target.value) || 0)} className="inp text-right" /></td>
+                                <td className="px-2 py-1">
+                                  {/* Rev. 2354 — subtotal em formato BRL (R$ X.XXX,XX). */}
+                                  <input
+                                    type="text"
+                                    inputMode="numeric"
+                                    value={it.subtotal != null && it.subtotal !== "" ? `R$ ${Number(it.subtotal).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : ""}
+                                    onChange={e => {
+                                      const raw = e.target.value.replace(/\D/g, "");
+                                      const num = raw ? parseInt(raw, 10) / 100 : 0;
+                                      updateItemField(ci, ii, "subtotal", num);
+                                    }}
+                                    className="inp text-right tabular-nums"
+                                  />
+                                </td>
                                 <td className="px-2 py-1 text-right">
                                   <button onClick={() => removerItemPreview(ci, ii)} className="text-red-500 hover:bg-red-50 p-0.5 rounded" title="Remover item">
                                     <X className="h-3 w-3" />

@@ -2,6 +2,7 @@
 
 > Este arquivo guarda os one-liners das revisões antigas para manter o `replit.md` enxuto.
 
+- **Rev. 2347** — HOTFIX/FILOSOFIA · Busca de fotos volta a buscar em PORTUGUÊS com validação rigorosa em todos os candidatos; Phase B "busca ampla sem validação" da Rev. 2345 removida (era ela que aplicou foto errada em RODAPÉ 20 CM). Ver `shared/changelog.ts`.
 - **Rev. 2346** — UX/i18n · Inteiros ≥ 1.000 em Equipamentos Locados formatados em pt-BR com separador de milhar (1220 → "1.220"). Ver `shared/changelog.ts`.
 - **Rev. 2345** — FEATURE/FILOSOFIA · Busca de fotos com IA passa a garantir cobertura 100% via 3 fases (A match preciso → B busca ampla → C placeholder SVG por categoria). Ver `shared/changelog.ts`.
 - **Rev. 2344** — UX/PERF · Tela Equipamentos Locados ganha AGRUPAMENTO por descrição+obra (default ON); 1218 cards individuais viram ~60 cards agregados com modal drill-down. Ver `shared/changelog.ts`.
