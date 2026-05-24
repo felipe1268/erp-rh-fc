@@ -1,6 +1,74 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2356 — **UX/REDESIGN · Hub de Equipamentos (`/equipamentos`)
+ * ganha layout 100% renovado com foco em ILUSTRAÇÃO DOS DADOS.**
+ *
+ * **Pedido user (24/05/2026, IMG_1152):** "Quero um layout 100
+ * renovado e moderno de forma que os dados sejam melhor
+ * ilustrados". O print mostrava a seção "Locações vencendo em até
+ * 30 dias" com ~30 linhas IDÊNTICAS de "SAPATAS AJUSTÁVEIS / 6716
+ * FC / REVTE-CIVIL / 18/06/2026 / R$ 9,50" — ruído puro, zero
+ * insight pro engenheiro.
+ *
+ * **Causa raiz do ruído visual:** a tabela renderizava 1 linha
+ * por UNIDADE locada. Quando o contrato tem 30 sapatas iguais na
+ * mesma obra/fornecedor com mesmo fim, viram 30 linhas clones.
+ * O engenheiro precisa saber "30 sapatas vencem dia 18/06 em
+ * REVTE-CIVIL — total R$ 285/mês" e não ler 30 linhas idênticas.
+ *
+ * **Solução de design (3 camadas):**
+ * 1. **Agrupamento client-side** por `(descricao + obraNome +
+ *    fornecedorNome + dataFimPrevista)`. Soma `valorMensal`
+ *    para mostrar subtotal do grupo. Ordena por urgência (dias
+ *    até vencer ASC) e desempata por valor DESC.
+ * 2. **Faixa de 4 KPIs** acima da lista:
+ *    - Unidades (total) + "em X grupos"
+ *    - Valor mensal em risco (soma)
+ *    - Mais urgente (badge "Nd" + descrição truncada)
+ *    - Obras impactadas (distintas)
+ * 3. **Cards de grupo** substituindo a tabela:
+ *    - Thumbnail 56×56 (foto da Biblioteca da Rev. 2355 ou
+ *      ícone Package fallback)
+ *    - Badge "×N" quando qtd > 1 (highlight pra olho)
+ *    - Badge de urgência semaforizado: vermelho ≤7d, laranja
+ *      ≤15d, âmbar ≤30d, verde >30d, vermelho "Vencido há Nd"
+ *      pra valores negativos
+ *    - Barra de progresso da janela de 30d consumida
+ *    - Linha "total/mês: R$ X (R$ Y/un)" — ergonomia financeira
+ *    - Mostra 8 grupos por padrão + botão "Mostrar mais N"
+ *
+ * **Cards do hub também repaginados:**
+ * - `rounded-xl` + `hover:-translate-y-0.5` (lift sutil).
+ * - Layout 2 colunas: número grande à esquerda + KPI secundário
+ *   à direita (Próprios: "em obra"; Locados: "devolvidos").
+ * - Barra de progresso azul (Próprios: % em obra) e barra
+ *   bicolor emerald/cinza (Locados: em uso vs devolvidos).
+ * - Números formatados pt-BR com `tabular-nums`.
+ *
+ * **Por que NÃO um gráfico (chart.js / recharts)?**
+ * O dataset é pequeno (~30 grupos) e o que importa pro PCP é
+ * ranking por urgência + decisão de renovação. Cards com badge
+ * semaforizado entregam isso instantaneamente — gráfico de
+ * barras horizontal seria mais bonito mas menos acionável.
+ *
+ * **Por que NÃO agrupar no backend?**
+ * Mantém a procedure `locadosListar` única e o agrupamento é
+ * O(n) trivial. Outras telas que usam a procedure (lista raw)
+ * continuam funcionando sem mudança.
+ *
+ * **Arquivos tocados:**
+ * - `client/src/pages/equipamentos/index.tsx` (reescrito ~120
+ *   → ~280 linhas): helpers `diasAte` + `urgenciaTheme`,
+ *   `useMemo` de agrupamento, componente `KpiTile`, cards de
+ *   grupo com thumb/badge/barra.
+ * - `shared/version.ts`: 2355 → 2356.
+ *
+ * **R-001 / R-007 / R-010:** N/A — só UI client-side, zero DDL
+ * e zero novas mutations.
+ *
+ * ---
+ *
  * Rev. 2355 — **FEATURE/SOLUÇÃO DEFINITIVA · Biblioteca CURADA
  * de fotos de equipamentos locados por descrição canônica.
  * Substitui de vez a "busca de fotos com IA" (revs 2340-2350)

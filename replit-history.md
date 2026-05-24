@@ -2,6 +2,7 @@
 
 > Este arquivo guarda os one-liners das revisões antigas para manter o `replit.md` enxuto.
 
+- **Rev. 2349** — SOLUÇÃO DEFINITIVA · Busca de fotos com IA inverte a arquitetura: LLM gera a QUERY PT-BR perfeita por item e confia no 1º resultado do Google (substituída pela Rev. 2350 ao descobrir Google CSE bloqueado). Ver `shared/changelog.ts`.
 - **Rev. 2348** — HOTFIX/UX · Busca de fotos com IA ganha auto-loop client-side (não para mais em 60 por click) + validação strict "foto EXATA do produto" com categoria no payload. Ver `shared/changelog.ts`.
 - **Rev. 2347** — HOTFIX/FILOSOFIA · Busca de fotos volta a buscar em PORTUGUÊS com validação rigorosa em todos os candidatos; Phase B "busca ampla sem validação" da Rev. 2345 removida (era ela que aplicou foto errada em RODAPÉ 20 CM). Ver `shared/changelog.ts`.
 - **Rev. 2346** — UX/i18n · Inteiros ≥ 1.000 em Equipamentos Locados formatados em pt-BR com separador de milhar (1220 → "1.220"). Ver `shared/changelog.ts`.
