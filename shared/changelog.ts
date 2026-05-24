@@ -1,6 +1,104 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2333 — **HOTFIX/PERF/UX · Import PDF de locação: bulk
+ * INSERT no server (corrige "Load failed") + chunking de 10
+ * contratos no client + nova seção "Equipamentos por Obra ERP"
+ * pra validar antes de cadastrar.**
+ *
+ * Pedido user (24/05/2026, 2 screenshots iPad): (1) "Tá travando
+ * nesta tela quando clico em cadastrar" — modal mostrava
+ * "Cadastrando…" indefinidamente e estourava com diálogo
+ * "Erro ao cadastrar · Load failed"; (2) "Quero tbm quero
+ * liste todos os equipamentos por obra para o usuário validar
+ * antes de importar".
+ *
+ * **Causa raiz "Load failed"** (mesma classe da Rev. 2329):
+ * o procedure `importarContratosLocacaoLote` fazia `for` aninhado
+ * com 2 INSERTs POR UNIDADE (`equipamentos_locados` + evento
+ * `RECEBIMENTO`) dentro de UMA transação grande. PDF típico
+ * tem 46 contratos / 1218 unidades → 2436 round-trips ao Neon
+ * em sequência → estoura os 60s do proxy Replit → iOS Safari
+ * mata o fetch com "Load failed" (mensagem nativa do WebKit
+ * quando a conexão é cortada do servidor).
+ *
+ * **Implementação**:
+ *
+ *   (1) **Server bulk INSERT por contrato** (`server/routers/equipamentos.ts`):
+ *       - Dentro da transação, loop por contrato: monta `locadosRows`
+ *         com as N unidades daquele contrato, faz 1 `tx.insert(
+ *         equipamentosLocados).values(locadosRows).returning({id})`,
+ *         depois 1 `tx.insert(equipamentoLocadoEventos).values(
+ *         eventos)` com todos os eventos do contrato.
+ *       - 46 contratos × 2 INSERTs = 92 round-trips em vez de 2436
+ *         (~25× menos). Pareamento eventos→locados é
+ *         DETERMINÍSTICO: dentro de um único contrato todos os
+ *         eventos compartilham `obraId` + `numeroContrato`, então
+ *         não dependemos da ordem do RETURNING (escolha defensiva
+ *         pra não pressupor `returning()` preserva a ordem de
+ *         `VALUES` — convenção comum no pg, mas não garantida
+ *         pelo SQL standard).
+ *       - Atomicidade preservada: se INSERT 2 falhar, INSERT 1
+ *         do mesmo contrato + todos os contratos anteriores são
+ *         revertidos (transação por chunk).
+ *
+ *   (2) **Client chunking** (`client/src/pages/equipamentos/Locados.tsx`,
+ *       fn `confirmarImport`):
+ *       - `CHUNK = 10` contratos por chamada (~200-300 unid/chunk,
+ *         <3s com bulk insert, folgado nos 60s do proxy).
+ *       - Loop `for` sequencial com `mutateAsync`, acumulando
+ *         `contratosFeitos` + `itensFeitos`.
+ *       - Estado `importLoteProgresso` `{ lote, totalLotes,
+ *         contratosFeitos, itensFeitos, total, totalItens }`
+ *         atualizado a cada iteração.
+ *       - Botão "Confirmar e cadastrar" agora mostra
+ *         "Cadastrando lote X/Y…" enquanto roda — feedback
+ *         visual em vez de spinner mudo.
+ *       - On error: mensagem inclui "após X/N contratos" pra
+ *         user saber o que já foi gravado; invalida list query
+ *         pra refletir parcial.
+ *       - Não usa `importarLote.isPending` no `disabled` (cobre
+ *         só a chamada corrente); usa `!!importLoteProgresso`
+ *         que cobre TODO o lote em série.
+ *
+ *   (3) **Seção "Equipamentos por Obra ERP"** (novo painel
+ *       verde, abaixo do "Custo por obra" indigo existente):
+ *       - Agrupa `importPreview` por `c.obraId` (resolvido via
+ *         `obrasMap`), com bucket extra "— Sem obra vinculada —"
+ *         (sempre aberto + borda âmbar pra chamar atenção).
+ *       - Por obra: lista `<details>`/`<summary>` colapsável com
+ *         contagem de contratos + unidades; expande pra tabela
+ *         de equipamentos consolidados (descrição → qtd total,
+ *         desc).
+ *       - Ordenação: maior unidades primeiro; "sem obra"
+ *         empurrado pro fim, mas com `open` default e badge no
+ *         header geral ("⚠ N unidade(s) sem obra") pra ser
+ *         impossível ignorar.
+ *       - Rodapé contextual: se há "sem obra", instrui a usar
+ *         o select de Obra ERP abaixo antes de cadastrar; se
+ *         tudo vinculado, parabeniza.
+ *
+ * **Esperado**: 1218 unidades passam de ∞ (timeout) → ~15s
+ * total (5 lotes × 3s). User vê barra avançando lote a lote
+ * em vez de "Cadastrando…" estático seguido de "Load failed".
+ *
+ * **Por que não 1 lote único com bulk**: bulk só corrige
+ * latência do DB; payload de ~500KB ainda atravessa o proxy
+ * e o WebKit em uma única request. Chunking limita o pior
+ * caso por chamada (~50KB) e dá pontos de progresso visual.
+ *
+ * **Por que mostrar "por obra" e não só "por endereço"**: o
+ * agrupamento por endereço (Rev. 2326) é diagnóstico do PDF;
+ * o agrupamento por obra ERP é o que de fato vai pro banco
+ * — é o que o user precisa validar antes do INSERT
+ * irreversível (sem botão de "desfazer import").
+ *
+ * R-001/R-007/R-010: N/A — apenas INSERTs (escopo por
+ * `companyId`), zero DDL/DROP/DELETE adhoc. Transação atômica
+ * por chunk; falha em um lote não afeta lotes anteriores
+ * (intencional, pra permitir retry parcial após edição do
+ * preview).
+ *
  * Rev. 2332 — **UX · Nome do mês capitalizado + ano completo
  * ("Jan 2026") e indicador MoM (▲/▼ + %) em cada célula
  * numérica das 6 tabelas mês a mês do Dashboard Almox & Equip.**

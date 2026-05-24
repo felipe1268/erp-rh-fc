@@ -298,13 +298,10 @@ export default function EquipamentosLocados() {
   // Shim pra preservar o resto do arquivo que lê parsearPdf.isPending.
   const parsearPdf = { isPending: parsePending };
   const importarLote = trpc.equipamentos.importarContratosLocacaoLote.useMutation({
-    onSuccess: (res) => {
-      utils.equipamentos.locadosListar.invalidate();
-      toast.success(`${res.contratosImportados} contrato(s) e ${res.itensImportados} item(ns) cadastrados.`);
-      setModalImport(false); setImportArquivo(null); setImportPreview(null);
-    },
     onError: (e) => toast.error(e.message),
   });
+  // Rev. 2333 — progresso de import em lote (chunks de 10 contratos)
+  const [importLoteProgresso, setImportLoteProgresso] = useState<{ lote: number; totalLotes: number; contratosFeitos: number; itensFeitos: number; total: number; totalItens: number } | null>(null);
 
   function abrirImportar() {
     setImportArquivo(null);
@@ -438,25 +435,45 @@ export default function EquipamentosLocados() {
       setImportErroDetalhe(`Nenhum contrato válido para cadastrar.\n\nMotivos: ${motivos.join(", ") || "desconhecido"}.\n\nEdite os campos faltantes no preview e tente de novo.`);
       return;
     }
-    // Log diagnóstico — visível no console pra rastrear se algo no payload quebrar Zod no servidor.
-    console.log("[importarLote] enviando", { contratos: limpos.length, itens: limpos.reduce((a, c) => a + c.itens.length, 0), descartados: { semNumero, semData, dataInvalida, semItens } });
-    importarLote.mutate(
-      { companyId, nomeArquivo: importArquivo?.nome, contratos: limpos },
-      {
-        onError: (err: any) => {
-          // Captura ZodError do tRPC e mostra detalhes legíveis no diálogo (não só toast).
-          console.error("[importarLote] erro", err);
-          let msg = err?.message || "Erro desconhecido.";
-          try {
-            const parsed = JSON.parse(msg);
-            if (Array.isArray(parsed)) {
-              msg = parsed.slice(0, 5).map((e: any) => `• ${e.path?.join(".") || "?"}: ${e.message}`).join("\n");
-            }
-          } catch { /* msg é string simples */ }
-          setImportErroDetalhe(`Erro ao cadastrar:\n\n${msg}`);
-        },
-      },
-    );
+    // Rev. 2333 — chunking de 10 contratos por chamada (1218 unidades → ~5 lotes
+    // de ≤300 unid, cada call <3s no Neon após bulk insert). Evita "Load failed"
+    // do iOS Safari (timeout 60s do proxy) que estourava ao mandar tudo de uma vez.
+    const totalItens = limpos.reduce((a, c) => a + c.itens.reduce((s, it) => s + (it.quantidade || 1), 0), 0);
+    console.log("[importarLote] enviando", { contratos: limpos.length, itens: totalItens, descartados: { semNumero, semData, dataInvalida, semItens } });
+    const CHUNK = 10;
+    const totalLotes = Math.ceil(limpos.length / CHUNK);
+    setImportLoteProgresso({ lote: 0, totalLotes, contratosFeitos: 0, itensFeitos: 0, total: limpos.length, totalItens });
+    (async () => {
+      let contratosFeitos = 0;
+      let itensFeitos = 0;
+      try {
+        for (let i = 0; i < limpos.length; i += CHUNK) {
+          const slice = limpos.slice(i, i + CHUNK);
+          const loteNum = Math.floor(i / CHUNK) + 1;
+          setImportLoteProgresso(p => p ? { ...p, lote: loteNum } : p);
+          const res = await importarLote.mutateAsync({ companyId, nomeArquivo: importArquivo?.nome, contratos: slice });
+          contratosFeitos += res.contratosImportados;
+          itensFeitos += res.itensImportados;
+          setImportLoteProgresso(p => p ? { ...p, contratosFeitos, itensFeitos } : p);
+        }
+        utils.equipamentos.locadosListar.invalidate();
+        toast.success(`${contratosFeitos} contrato(s) e ${itensFeitos} item(ns) cadastrados.`);
+        setModalImport(false); setImportArquivo(null); setImportPreview(null);
+        setImportLoteProgresso(null);
+      } catch (err: any) {
+        console.error("[importarLote] erro", err);
+        let msg = err?.message || "Erro desconhecido.";
+        try {
+          const parsed = JSON.parse(msg);
+          if (Array.isArray(parsed)) {
+            msg = parsed.slice(0, 5).map((e: any) => `• ${e.path?.join(".") || "?"}: ${e.message}`).join("\n");
+          }
+        } catch { /* msg é string simples */ }
+        setImportErroDetalhe(`Erro ao cadastrar (após ${contratosFeitos}/${limpos.length} contratos):\n\n${msg}`);
+        setImportLoteProgresso(null);
+        if (contratosFeitos > 0) utils.equipamentos.locadosListar.invalidate();
+      }
+    })();
   }
   function removerContratoPreview(idx: number) {
     setImportPreview(prev => prev ? prev.filter((_, i) => i !== idx) : prev);
@@ -1121,6 +1138,86 @@ export default function EquipamentosLocados() {
                     );
                   })()}
 
+                  {/* Rev. 2333 — Equipamentos por OBRA ERP (validação pré-import) */}
+                  {(() => {
+                    type ObraGrp = { obraId: number | null; obraNome: string; contratos: number; unidades: number; itens: Map<string, number> };
+                    const grupos = new Map<string, ObraGrp>();
+                    for (const c of importPreview) {
+                      const oid = c.obraId ? Number(c.obraId) : null;
+                      const nome = oid ? (obrasMap.get(oid) || `Obra #${oid}`) : "— Sem obra vinculada —";
+                      const k = String(oid ?? "null");
+                      const g = grupos.get(k) || { obraId: oid, obraNome: nome, contratos: 0, unidades: 0, itens: new Map<string, number>() };
+                      g.contratos++;
+                      for (const it of (c.itens || [])) {
+                        const qty = Math.max(1, parseInt(String(it.quantidade)) || 1);
+                        const desc = String(it.descricao || "—").trim();
+                        g.unidades += qty;
+                        g.itens.set(desc, (g.itens.get(desc) || 0) + qty);
+                      }
+                      grupos.set(k, g);
+                    }
+                    const linhas = Array.from(grupos.values()).sort((a, b) => {
+                      if (a.obraId === null && b.obraId !== null) return 1;
+                      if (b.obraId === null && a.obraId !== null) return -1;
+                      return b.unidades - a.unidades;
+                    });
+                    const totalUnid = linhas.reduce((s, l) => s + l.unidades, 0);
+                    const semObra = linhas.find(l => l.obraId === null);
+                    return (
+                      <div className="border border-emerald-200 rounded-lg overflow-hidden bg-white">
+                        <div className="px-3 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 text-white flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <Building2 className="h-4 w-4" />
+                            <span className="font-semibold text-sm">Equipamentos por Obra (validação)</span>
+                            <span className="text-[11px] bg-white/15 px-2 py-0.5 rounded-full">{linhas.length} obra(s) · {totalUnid} unidade(s)</span>
+                          </div>
+                          {semObra && (
+                            <span className="text-[11px] bg-amber-400/90 text-amber-950 font-semibold px-2 py-0.5 rounded-full">
+                              ⚠ {semObra.unidades} unidade(s) sem obra
+                            </span>
+                          )}
+                        </div>
+                        <div className="divide-y divide-emerald-100">
+                          {linhas.map((g, i) => {
+                            const itens = Array.from(g.itens.entries()).sort((a, b) => b[1] - a[1]);
+                            return (
+                              <details key={i} className="group" {...(g.obraId === null ? { open: true } : {})}>
+                                <summary className={`px-3 py-2 cursor-pointer flex items-center justify-between hover:bg-emerald-50/60 ${g.obraId === null ? "bg-amber-50/50" : ""}`}>
+                                  <div className="flex items-center gap-2 min-w-0 flex-1">
+                                    <span className="text-emerald-600 group-open:rotate-90 transition-transform inline-block text-xs">▶</span>
+                                    <span className={`font-medium text-sm truncate ${g.obraId === null ? "text-amber-700" : "text-slate-800"}`}>{g.obraNome}</span>
+                                  </div>
+                                  <div className="flex items-center gap-3 text-xs tabular-nums flex-shrink-0">
+                                    <span className="text-slate-500">{g.contratos} contrato(s)</span>
+                                    <span className="font-semibold text-emerald-700">{g.unidades} unid.</span>
+                                  </div>
+                                </summary>
+                                <div className="px-3 pb-3 pt-1 bg-slate-50/40">
+                                  <table className="w-full text-xs">
+                                    <thead className="text-[10px] text-slate-500 uppercase">
+                                      <tr><th className="text-left py-1">Equipamento</th><th className="text-right py-1 w-20">Qtde</th></tr>
+                                    </thead>
+                                    <tbody>
+                                      {itens.map(([desc, qtd], j) => (
+                                        <tr key={j} className="border-t border-slate-200/60">
+                                          <td className="py-1 text-slate-700">{desc}</td>
+                                          <td className="py-1 text-right tabular-nums font-semibold">{qtd}</td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              </details>
+                            );
+                          })}
+                        </div>
+                        <div className="px-3 py-1.5 bg-emerald-50 border-t border-emerald-200 text-[11px] text-emerald-800">
+                          ✅ Confira os equipamentos que cada obra vai receber. Clique pra expandir/colapsar. {semObra ? "Use o select de Obra ERP abaixo pra vincular as unidades sem obra antes de cadastrar." : "Todas as unidades estão vinculadas a uma obra."}
+                        </div>
+                      </div>
+                    );
+                  })()}
+
                   <div className="space-y-3 max-h-[55vh] overflow-y-auto pr-1">
                     {importPreview.map((c, ci) => (
                       <div key={ci} className="border rounded-lg overflow-hidden">
@@ -1211,10 +1308,10 @@ export default function EquipamentosLocados() {
                 {importPreview ? `Total: ${importPreview.length} contrato(s) · ${importPreview.reduce((a, c) => a + (c.itens?.length || 0), 0)} unidade(s) a cadastrar` : "Cadastro inicial — fotos serão exigidas nos próximos recebimentos."}
               </div>
               <div className="flex items-center gap-2">
-                <button onClick={() => setModalImport(false)} disabled={parsearPdf.isPending || importarLote.isPending} className="px-3 py-1.5 text-sm border rounded">Cancelar</button>
-                <button onClick={confirmarImport} disabled={!importPreview || importPreview.length === 0 || importarLote.isPending}
+                <button onClick={() => setModalImport(false)} disabled={parsearPdf.isPending || !!importLoteProgresso} className="px-3 py-1.5 text-sm border rounded">Cancelar</button>
+                <button onClick={confirmarImport} disabled={!importPreview || importPreview.length === 0 || !!importLoteProgresso}
                   className="px-4 py-1.5 text-sm bg-emerald-600 hover:bg-emerald-700 text-white rounded disabled:opacity-50 inline-flex items-center gap-1">
-                  {importarLote.isPending ? "Cadastrando…" : <><CheckCircle2 className="h-4 w-4" /> Confirmar e cadastrar</>}
+                  {importLoteProgresso ? `Cadastrando lote ${importLoteProgresso.lote}/${importLoteProgresso.totalLotes}…` : <><CheckCircle2 className="h-4 w-4" /> Confirmar e cadastrar</>}
                 </button>
               </div>
             </div>

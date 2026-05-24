@@ -749,21 +749,26 @@ export const equipamentosRouter = router({
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      // Atomicidade: import 100% transacional. Se qualquer INSERT falhar,
-      // tudo é revertido — sem estado parcial em caso de erro de rede,
-      // FK rejeitada ou exceção do servidor.
+      // Rev. 2333 — bulk INSERT POR CONTRATO em transação.
+      // Causa raiz do "Load failed" iOS Safari: o loop antigo fazia 2 INSERTs
+      // POR UNIDADE dentro de transação grande (1218 unid × 2 = 2436 round-trips
+      // ao Neon → estoura 60s do proxy). Agora: para cada contrato, 1 bulk
+      // INSERT das unidades + 1 bulk INSERT dos eventos. 46 contratos × 2 = 92
+      // round-trips em vez de 2436 (~25× menos). Pareamento eventos→locados
+      // é DETERMINÍSTICO porque dentro de um único contrato todos os eventos
+      // compartilham obraId+numeroContrato — não dependemos da ordem do
+      // RETURNING. Atomicidade preservada pela transaction.
       const ids: number[] = [];
       let totalItens = 0;
       await db.transaction(async (tx: any) => {
         for (const c of input.contratos) {
           const obraIdCt = c.obraId ?? input.obraId ?? null;
+          const locadosRows: any[] = [];
           for (const it of c.itens) {
             const qty = Math.max(1, Math.floor(it.quantidade || 1));
-            // Cada unidade física vira 1 linha em equipamentos_locados.
-            // Subtotal do contrato dividido pela quantidade (valor por unidade).
             const subtotalUnidade = it.subtotal && qty > 0 ? (it.subtotal / qty) : (it.subtotal || 0);
             for (let i = 0; i < qty; i++) {
-              const [created] = await tx.insert(equipamentosLocados).values({
+              locadosRows.push({
                 companyId: input.companyId,
                 obraId: obraIdCt,
                 fornecedorId: c.fornecedorId ?? null,
@@ -780,21 +785,26 @@ export const equipamentosRouter = router({
                 arquivoOrigemUrl: input.nomeArquivo ?? null,
                 valorSubtotalContrato: it.subtotal != null ? String(it.subtotal.toFixed(2)) : null,
                 fotosRecebimentoJson: [] as any,
-              }).returning({ id: equipamentosLocados.id });
-              ids.push(created.id);
-              totalItens++;
-              // Evento de auditoria (RECEBIMENTO via import)
-              await tx.insert(equipamentoLocadoEventos).values({
-                companyId: input.companyId,
-                equipamentoLocadoId: created.id,
-                tipo: "RECEBIMENTO",
-                obraId: obraIdCt,
-                observacao: `Cadastro inicial via import PDF · Contrato ${c.numeroContrato}${input.nomeArquivo ? ` · ${input.nomeArquivo}` : ""}`,
-                usuarioId: ctx.user.id,
-                usuarioNome: ctx.user.name || String(ctx.user.id),
               });
             }
           }
+          if (locadosRows.length === 0) continue;
+          const created = await tx.insert(equipamentosLocados).values(locadosRows).returning({ id: equipamentosLocados.id });
+          totalItens += created.length;
+          const observacao = `Cadastro inicial via import PDF · Contrato ${c.numeroContrato}${input.nomeArquivo ? ` · ${input.nomeArquivo}` : ""}`;
+          const eventos = created.map((r: any) => {
+            ids.push(r.id);
+            return {
+              companyId: input.companyId,
+              equipamentoLocadoId: r.id,
+              tipo: "RECEBIMENTO" as const,
+              obraId: obraIdCt,
+              observacao,
+              usuarioId: ctx.user.id,
+              usuarioNome: ctx.user.name || String(ctx.user.id),
+            };
+          });
+          if (eventos.length > 0) await tx.insert(equipamentoLocadoEventos).values(eventos);
         }
       });
       return {

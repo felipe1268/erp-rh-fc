@@ -544,3 +544,5 @@
 - Rev. 2324 — FEATURE · Dashboard consolidada Almoxarifado & Equipamentos (6 tabs). Ver `shared/changelog.ts`.
 
 - Rev. 2325 — HOTFIX/UX · Exclusão/vinculação em lote — chunking 500 + modais bonitos. Ver `shared/changelog.ts`.
+
+- Rev. 2326 — FEATURE · Importação PDF de locação cruza endereço com obras ativas (auto-match). Ver `shared/changelog.ts`.
