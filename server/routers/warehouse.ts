@@ -1321,6 +1321,174 @@ Retorne os até 5 melhores matches em ordem decrescente de similaridade. Se nenh
       return { success: true, itemNome: itemOrigem.nome, novoEstoque: estoqueAtual - input.quantidade };
     }),
 
+  // ── TRANSFERIR EM LOTE (Rev. 2390) ───────────────────────────
+  // Recebe N linhas {itemIdOrigem, quantidade} pra um ÚNICO destino comum
+  // (mesma obra/central) + motivo. Processa item-a-item reusando a lógica
+  // do `createTransferencia` (débito origem → upsert destino → registro
+  // em almoxarifado_transferencias). Não usa transação multi-item — se
+  // uma linha falhar (estoque insuficiente, item sumiu), as demais já
+  // processadas permanecem aplicadas. Retorna {sucessos, falhas} pra UI
+  // exibir resumo.
+  createTransferenciaLote: protectedProcedure
+    .input(z.object({
+      companyId:       z.number(),
+      itens:           z.array(z.object({
+        itemIdOrigem: z.number(),
+        quantidade:   z.number().positive(),
+      })).min(1),
+      destinoTipo:     z.enum(["central", "obra"]),
+      destinoObraId:   z.number().optional(),
+      destinoObraNome: z.string().optional(),
+      motivo:          z.string().optional(),
+      almoxarifeId:    z.number().optional(),
+      almoxarifeNome:  z.string().optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      // ── AUTHZ: empresa do user + acesso à obra destino ──
+      const allowedCompanies = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+      if (!allowedCompanies.includes(input.companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a essa empresa." });
+      }
+      const destinoObraId = input.destinoTipo === "obra" ? (input.destinoObraId ?? null) : null;
+      if (input.destinoTipo === "obra") {
+        if (!destinoObraId || !Number.isInteger(destinoObraId) || destinoObraId <= 0) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Destino do tipo 'obra' exige destinoObraId inteiro positivo." });
+        }
+        if (!(await userCanAccessObra(ctx.user.id, ctx.user.role, destinoObraId))) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso à obra destino." });
+        }
+      }
+
+      // Resolve nome da obra destino server-side (não confia no client)
+      let destinoObraNomeResolvido: string | null = null;
+      if (destinoObraId !== null) {
+        const r = await db.execute(sql`SELECT codigo, nome FROM obras WHERE id = ${destinoObraId} LIMIT 1`);
+        const row = ((r as any)?.rows ?? r ?? [])[0];
+        if (row) destinoObraNomeResolvido = row.codigo ? `${row.codigo} – ${row.nome}` : row.nome;
+      }
+
+      const sucessos: Array<{ itemIdOrigem: number; itemNome: string; quantidade: number }> = [];
+      const falhas: Array<{ itemIdOrigem: number; itemNome?: string; motivo: string }> = [];
+
+      for (const linha of input.itens) {
+        try {
+          // 1. Busca item origem (fora da tx pra validações cedo)
+          const [itemOrigem] = await db.select().from(almoxarifadoItens).where(eq(almoxarifadoItens.id, linha.itemIdOrigem));
+          if (!itemOrigem) {
+            falhas.push({ itemIdOrigem: linha.itemIdOrigem, motivo: "Item não encontrado." });
+            continue;
+          }
+          if (itemOrigem.companyId !== input.companyId) {
+            falhas.push({ itemIdOrigem: linha.itemIdOrigem, itemNome: itemOrigem.nome, motivo: "Item de outra empresa." });
+            continue;
+          }
+          // AUTHZ: user deve ter acesso à obra origem também
+          if (itemOrigem.obraId && !(await userCanAccessObra(ctx.user.id, ctx.user.role, itemOrigem.obraId))) {
+            falhas.push({ itemIdOrigem: linha.itemIdOrigem, itemNome: itemOrigem.nome, motivo: "Sem acesso à obra origem." });
+            continue;
+          }
+
+          const origemTipo: "central" | "obra" = itemOrigem.obraId ? "obra" : "central";
+          const origemObraId = itemOrigem.obraId ?? null;
+          let origemObraNome: string | null = null;
+          if (origemObraId !== null) {
+            const r = await db.execute(sql`SELECT codigo, nome FROM obras WHERE id = ${origemObraId} LIMIT 1`);
+            const row = ((r as any)?.rows ?? r ?? [])[0];
+            if (row) origemObraNome = row.codigo ? `${row.codigo} – ${row.nome}` : row.nome;
+          }
+
+          if (origemTipo === input.destinoTipo && origemObraId === destinoObraId) {
+            falhas.push({ itemIdOrigem: linha.itemIdOrigem, itemNome: itemOrigem.nome, motivo: "Item já está no almoxarifado de destino." });
+            continue;
+          }
+
+          const estoqueAtual = parseFloat(String(itemOrigem.quantidadeAtual) || "0");
+          if (estoqueAtual < linha.quantidade) {
+            falhas.push({ itemIdOrigem: linha.itemIdOrigem, itemNome: itemOrigem.nome, motivo: `Estoque insuficiente (disp.: ${estoqueAtual} ${itemOrigem.unidade}).` });
+            continue;
+          }
+
+          // ── TX ATÔMICA POR LINHA: débito + upsert destino + registro ──
+          await db.transaction(async (tx: any) => {
+            // 2. Débita origem (com guard de estoque pra concorrência)
+            const debitado = await tx.update(almoxarifadoItens)
+              .set({ quantidadeAtual: sql`${almoxarifadoItens.quantidadeAtual}::numeric - ${linha.quantidade}` } as any)
+              .where(and(
+                eq(almoxarifadoItens.id, linha.itemIdOrigem),
+                sql`${almoxarifadoItens.quantidadeAtual}::numeric >= ${linha.quantidade}`,
+              ))
+              .returning({ id: almoxarifadoItens.id });
+            if (!debitado || debitado.length === 0) {
+              throw new Error("Estoque mudou durante a transferência (concorrência).");
+            }
+
+            // 3. Upsert no destino
+            const destinoConditions = [
+              eq(almoxarifadoItens.companyId, input.companyId),
+              eq(almoxarifadoItens.nome, itemOrigem.nome),
+            ];
+            if (destinoObraId !== null) {
+              destinoConditions.push(eq(almoxarifadoItens.obraId, destinoObraId));
+            } else {
+              destinoConditions.push(sql`${almoxarifadoItens.obraId} IS NULL`);
+            }
+            const existingDestino = await tx.select().from(almoxarifadoItens).where(and(...destinoConditions));
+            let itemIdDestino: number;
+            if (existingDestino.length > 0) {
+              itemIdDestino = existingDestino[0].id;
+              await tx.update(almoxarifadoItens)
+                .set({ quantidadeAtual: sql`${almoxarifadoItens.quantidadeAtual}::numeric + ${linha.quantidade}` } as any)
+                .where(eq(almoxarifadoItens.id, itemIdDestino));
+            } else {
+              const [novoItem] = await tx.insert(almoxarifadoItens).values({
+                companyId: input.companyId,
+                obraId: destinoObraId,
+                nome: itemOrigem.nome,
+                unidade: itemOrigem.unidade,
+                categoria: itemOrigem.categoria,
+                codigoInterno: itemOrigem.codigoInterno,
+                quantidadeAtual: String(linha.quantidade),
+                quantidadeMinima: "0",
+                fotoUrl: (itemOrigem as any).fotoUrl,
+                ativo: true,
+                criadoPorId: ctx.user?.id ?? null,
+                criadoPorNome: ctx.user?.name || `Transferência em lote`,
+              } as any).returning({ id: almoxarifadoItens.id });
+              itemIdDestino = novoItem.id;
+            }
+
+            // 4. Registro
+            await tx.insert(almoxarifadoTransferencias).values({
+              companyId:       input.companyId,
+              itemIdOrigem:    linha.itemIdOrigem,
+              itemIdDestino,
+              itemNome:        itemOrigem.nome,
+              unidade:         itemOrigem.unidade,
+              quantidade:      String(linha.quantidade),
+              origemTipo,
+              origemObraId,
+              origemObraNome,
+              destinoTipo:     input.destinoTipo,
+              destinoObraId,
+              destinoObraNome: destinoObraNomeResolvido,
+              motivo:          input.motivo ?? null,
+              almoxarifeId:    input.almoxarifeId ?? null,
+              almoxarifeNome:  input.almoxarifeNome ?? null,
+            } as any);
+          });
+
+          sucessos.push({ itemIdOrigem: linha.itemIdOrigem, itemNome: itemOrigem.nome, quantidade: linha.quantidade });
+        } catch (e: any) {
+          falhas.push({ itemIdOrigem: linha.itemIdOrigem, motivo: e?.message || "Erro desconhecido." });
+        }
+      }
+
+      return { sucessos, falhas, total: input.itens.length };
+    }),
+
   // ── LISTAR TRANSFERÊNCIAS ───────────────────────────────────
   listTransferencias: protectedProcedure
     .input(z.object({ companyId: z.number(), limit: z.number().optional(), data: z.string().optional() }))

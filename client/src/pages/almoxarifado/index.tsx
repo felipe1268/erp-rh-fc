@@ -137,6 +137,18 @@ export default function AlmoxarifadoPage() {
   const [selecionados, setSelecionados] = useState<Set<number>>(new Set());
   const [modalAltCateg, setModalAltCateg] = useState<null | { categoria: string; aplicando: boolean }>(null);
   const [modalUnificar, setModalUnificar] = useState<null | { carregando: boolean; aplicando: boolean; grupos: any[]; totalInativ: number; erro: string | null }>(null);
+  // Rev. 2390 — Transferência em lote: N itens selecionados → 1 destino comum.
+  // Cada linha tem qtd editável (default = estoque atual). destinoTipo/Id fica
+  // num único select. aplicando=true bloqueia UI durante o submit; resultado
+  // (sucessos/falhas) é exibido inline pra user antes de fechar.
+  const [modalTransfLote, setModalTransfLote] = useState<null | {
+    itens: Array<{ id: number; nome: string; unidade: string; estoque: number; qtd: string }>;
+    destinoTipo: "central" | "obra";
+    destinoObraId: number;
+    motivo: string;
+    aplicando: boolean;
+    resultado: null | { sucessos: number; falhas: Array<{ itemNome?: string; motivo: string }> };
+  }>(null);
 
   const [busca, setBusca] = useState("");
   const [filtroCateg, setFiltroCateg] = useState("todas");
@@ -505,6 +517,85 @@ export default function AlmoxarifadoPage() {
       }
     } catch (e: any) {
       setModalUnificar({ carregando: false, aplicando: false, grupos: [], totalInativ: 0, erro: e?.message || "Falha." });
+    }
+  }
+  // Rev. 2390 — Abre o modal de transferência em lote com os itens selecionados.
+  // `lista` traz os cards visíveis (filtrados pela view atual: 1 obra OU central).
+  // Default da qtd = estoque atual (transfere tudo). User pode editar por linha.
+  const createTransferenciaLoteMut = trpc.warehouse.createTransferenciaLote.useMutation();
+  function abrirTransfLote() {
+    if (!companyId || selecionados.size === 0) {
+      toast.warning("Selecione ao menos 1 item.");
+      return;
+    }
+    const itensSel = (lista as any[]).filter(i => selecionados.has(i.id));
+    if (itensSel.length === 0) {
+      toast.error("Itens selecionados não estão visíveis na lista atual.");
+      return;
+    }
+    setModalTransfLote({
+      itens: itensSel.map(i => {
+        const estoque = parseFloat(String(i.quantidadeAtual ?? i.quantidadeTotal ?? "0")) || 0;
+        return {
+          id: i.id,
+          nome: i.nome,
+          unidade: i.unidade || "un",
+          estoque,
+          qtd: String(estoque),
+        };
+      }),
+      destinoTipo: "central",
+      destinoObraId: 0,
+      motivo: "",
+      aplicando: false,
+      resultado: null,
+    });
+  }
+  async function aplicarTransfLote() {
+    if (!companyId || !modalTransfLote) return;
+    const m = modalTransfLote;
+    if (m.destinoTipo === "obra" && !m.destinoObraId) {
+      toast.warning("Selecione a obra de destino.");
+      return;
+    }
+    const linhas = m.itens
+      .map(it => ({ itemIdOrigem: it.id, quantidade: parseFloat(it.qtd) || 0, nome: it.nome, estoque: it.estoque }))
+      .filter(l => l.quantidade > 0);
+    if (linhas.length === 0) {
+      toast.warning("Defina ao menos 1 item com quantidade > 0.");
+      return;
+    }
+    const excedeu = linhas.find(l => l.quantidade > l.estoque + 1e-9);
+    if (excedeu) {
+      toast.error(`Qtd de "${excedeu.nome}" maior que o estoque (${excedeu.estoque}).`);
+      return;
+    }
+    setModalTransfLote(s => s ? { ...s, aplicando: true } : s);
+    try {
+      const destinoObraSel = m.destinoTipo === "obra"
+        ? (obrasAtivas as any[]).find((o: any) => o.id === m.destinoObraId)
+        : null;
+      const r = await createTransferenciaLoteMut.mutateAsync({
+        companyId,
+        itens: linhas.map(l => ({ itemIdOrigem: l.itemIdOrigem, quantidade: l.quantidade })),
+        destinoTipo: m.destinoTipo,
+        destinoObraId: m.destinoTipo === "obra" ? m.destinoObraId : undefined,
+        destinoObraNome: destinoObraSel ? (destinoObraSel.codigo ? `${destinoObraSel.codigo} – ${destinoObraSel.nome}` : destinoObraSel.nome) : undefined,
+        motivo: m.motivo || undefined,
+      });
+      utils.compras.listarItens.invalidate();
+      utils.compras.listarItensConsolidado.invalidate();
+      if (r.falhas.length === 0) {
+        toast.success(`${r.sucessos.length} item(ns) transferido(s).`);
+        setModalTransfLote(null);
+        sairModoSelecao();
+      } else {
+        toast.warning(`${r.sucessos.length} OK · ${r.falhas.length} falha(s).`);
+        setModalTransfLote(s => s ? { ...s, aplicando: false, resultado: { sucessos: r.sucessos.length, falhas: r.falhas } } : s);
+      }
+    } catch (e: any) {
+      toast.error(e?.message || "Falha ao transferir.");
+      setModalTransfLote(s => s ? { ...s, aplicando: false } : s);
     }
   }
   async function confirmarUnificar() {
@@ -3969,6 +4060,15 @@ export default function AlmoxarifadoPage() {
             <span className="hidden sm:inline">Unificar duplicatas</span>
             <span className="sm:hidden">Unificar</span>
           </button>
+          {/* Rev. 2390 — Transferir em lote */}
+          <button
+            onClick={abrirTransfLote}
+            className="h-10 px-3 sm:px-4 flex items-center gap-2 bg-purple-600 hover:bg-purple-700 text-white text-sm font-semibold rounded-lg transition shadow-sm"
+          >
+            <ArrowLeftRight className="w-4 h-4" />
+            <span className="hidden sm:inline">Transferir</span>
+            <span className="sm:hidden">Transf.</span>
+          </button>
           <button
             onClick={sairModoSelecao}
             className="h-10 px-3 flex items-center gap-1 text-gray-600 hover:bg-gray-100 text-sm rounded-lg transition"
@@ -4082,6 +4182,142 @@ export default function AlmoxarifadoPage() {
               <button onClick={confirmarUnificar} disabled={modalUnificar.grupos.length === 0 || modalUnificar.aplicando || modalUnificar.carregando} className="flex-1 px-4 py-3 text-sm font-semibold text-white bg-violet-500 hover:bg-violet-600 disabled:bg-gray-300 rounded-lg transition shadow-sm flex items-center justify-center gap-2">
                 {modalUnificar.aplicando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Layers className="w-4 h-4" />}
                 Confirmar unificação
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Rev. 2390 — Modal "Transferir em lote" */}
+      {modalTransfLote && (
+        <div
+          className="fixed inset-0 z-[110] bg-black/50 flex items-center justify-center p-4"
+          onClick={() => !modalTransfLote.aplicando && setModalTransfLote(null)}
+        >
+          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[92vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
+            <div className="bg-gradient-to-br from-purple-600 to-indigo-600 px-6 pt-6 pb-5 text-white text-center flex-shrink-0">
+              <div className="mx-auto bg-white/20 rounded-full p-3 w-fit mb-3"><ArrowLeftRight className="w-8 h-8" /></div>
+              <h3 className="text-xl font-bold">Transferir em lote</h3>
+              <p className="text-purple-50 text-xs mt-1">{modalTransfLote.itens.length} item(ns) selecionado(s) · 1 destino comum</p>
+            </div>
+            <div className="px-5 py-4 space-y-4 text-sm text-gray-700 overflow-y-auto flex-1">
+              {/* DESTINO */}
+              <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-3 space-y-2">
+                <p className="text-[11px] font-bold text-indigo-700 uppercase tracking-wide">Almoxarifado de destino</p>
+                <select
+                  className="w-full border-2 border-indigo-200 rounded-lg p-2.5 text-sm bg-white"
+                  disabled={modalTransfLote.aplicando}
+                  value={modalTransfLote.destinoTipo === "central" ? "central" : String(modalTransfLote.destinoObraId)}
+                  onChange={e => {
+                    const v = e.target.value;
+                    setModalTransfLote(s => s ? (
+                      v === "central"
+                        ? { ...s, destinoTipo: "central", destinoObraId: 0, resultado: null }
+                        : { ...s, destinoTipo: "obra", destinoObraId: Number(v), resultado: null }
+                    ) : s);
+                  }}
+                >
+                  <option value="central">🏢 Almoxarifado Central</option>
+                  {(obrasAtivas as any[]).map((o: any) => (
+                    <option key={o.id} value={o.id}>🏗️ {o.codigo ? `${o.codigo} – ${o.nome}` : o.nome}</option>
+                  ))}
+                </select>
+                <p className="text-[11px] text-indigo-700/70">Itens que já estão neste destino serão pulados (você vê a lista no fim).</p>
+              </div>
+
+              {/* MOTIVO */}
+              <div>
+                <label className="block text-[11px] font-semibold text-gray-600 mb-1 uppercase tracking-wide">Motivo / Observação</label>
+                <input
+                  type="text"
+                  className="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-purple-400 focus:border-purple-400 outline-none"
+                  placeholder="Ex: Material excedente, transferência entre obras..."
+                  disabled={modalTransfLote.aplicando}
+                  value={modalTransfLote.motivo}
+                  onChange={e => setModalTransfLote(s => s ? { ...s, motivo: e.target.value } : s)}
+                />
+              </div>
+
+              {/* LISTA DE ITENS */}
+              <div className="border border-gray-200 rounded-xl overflow-hidden">
+                <div className="bg-gray-50 px-3 py-2 flex items-center justify-between border-b">
+                  <p className="text-[11px] font-bold text-gray-600 uppercase tracking-wide">Itens · qtd a transferir</p>
+                  <button
+                    type="button"
+                    onClick={() => setModalTransfLote(s => s ? { ...s, itens: s.itens.map(it => ({ ...it, qtd: String(it.estoque) })) } : s)}
+                    disabled={modalTransfLote.aplicando}
+                    className="text-[11px] text-purple-600 hover:text-purple-800 font-semibold disabled:opacity-50"
+                  >
+                    Preencher tudo
+                  </button>
+                </div>
+                <div className="divide-y divide-gray-100 max-h-[40vh] overflow-y-auto">
+                  {modalTransfLote.itens.map((it, idx) => (
+                    <div key={it.id} className="flex items-center gap-2 px-3 py-2">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-gray-800 truncate">{it.nome}</p>
+                        <p className="text-[11px] text-gray-500">Estoque: {it.estoque} {it.unidade}</p>
+                      </div>
+                      <input
+                        type="number"
+                        inputMode="decimal"
+                        min="0"
+                        max={it.estoque}
+                        step="0.01"
+                        value={it.qtd}
+                        disabled={modalTransfLote.aplicando}
+                        onChange={e => setModalTransfLote(s => {
+                          if (!s) return s;
+                          const itens = [...s.itens];
+                          itens[idx] = { ...itens[idx], qtd: e.target.value };
+                          return { ...s, itens };
+                        })}
+                        className="w-24 border border-gray-300 rounded-lg px-2 py-1.5 text-sm text-right font-semibold focus:ring-2 focus:ring-purple-400 focus:border-purple-400 outline-none"
+                      />
+                      <span className="text-[11px] text-gray-500 w-8">{it.unidade}</span>
+                      <button
+                        type="button"
+                        onClick={() => setModalTransfLote(s => s ? { ...s, itens: s.itens.filter((_, i) => i !== idx) } : s)}
+                        disabled={modalTransfLote.aplicando || modalTransfLote.itens.length <= 1}
+                        className="text-gray-300 hover:text-red-500 disabled:opacity-30"
+                        title="Remover do lote"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* RESULTADO (após tentativa com falhas parciais) */}
+              {modalTransfLote.resultado && (
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs">
+                  <p className="font-semibold text-amber-900 mb-1">
+                    ✓ {modalTransfLote.resultado.sucessos} transferida(s) · ⚠️ {modalTransfLote.resultado.falhas.length} falha(s)
+                  </p>
+                  <ul className="space-y-0.5 text-amber-800">
+                    {modalTransfLote.resultado.falhas.map((f, i) => (
+                      <li key={i}>• <strong>{f.itemNome || "?"}</strong>: {f.motivo}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+            <div className="px-5 py-4 bg-gray-50 flex items-center gap-2 border-t border-gray-200 flex-shrink-0">
+              <button
+                onClick={() => setModalTransfLote(null)}
+                disabled={modalTransfLote.aplicando}
+                className="flex-1 px-4 py-3 text-sm font-medium text-gray-700 bg-white hover:bg-gray-100 border border-gray-300 rounded-lg transition disabled:opacity-50"
+              >
+                {modalTransfLote.resultado ? "Fechar" : "Cancelar"}
+              </button>
+              <button
+                onClick={aplicarTransfLote}
+                disabled={modalTransfLote.aplicando || modalTransfLote.itens.length === 0}
+                className="flex-1 px-4 py-3 text-sm font-semibold text-white bg-purple-600 hover:bg-purple-700 disabled:bg-gray-300 rounded-lg transition shadow-sm flex items-center justify-center gap-2"
+              >
+                {modalTransfLote.aplicando ? <Loader2 className="w-4 h-4 animate-spin" /> : <ArrowLeftRight className="w-4 h-4" />}
+                ↔ Transferir
               </button>
             </div>
           </div>

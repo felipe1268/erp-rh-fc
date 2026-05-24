@@ -1,6 +1,63 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2390 — **ALMOXARIFADO/UX · Transferência em LOTE no sticky bar de
+ * multi-seleção (N itens → 1 destino comum, qtd editável por linha).**
+ *
+ * Pedido user (IMG_1195, 24/05/2026, 20:07): sticky bar do modo seleção
+ * do Almoxarifado já tinha "Alterar categoria" + "Unificar duplicatas"
+ * + "Cancelar". User pediu pra adicionar tb "Transferir" — selecionar
+ * vários itens e mandar de uma vez pra outro almoxarifado (central ou
+ * outra obra), com quantidade configurável por item (default = qtd
+ * total de cada).
+ *
+ * **Backend** (`server/routers/warehouse.ts` L1327-1454): novo endpoint
+ * `createTransferenciaLote` recebe `{companyId, itens: [{itemIdOrigem,
+ * quantidade}], destinoTipo, destinoObraId?, destinoObraNome?, motivo?}`.
+ * Itera linha-a-linha reusando exatamente a mesma lógica do
+ * `createTransferencia` single (busca item, valida companyId+estoque,
+ * débita origem, upsert no destino pelo `nome+obraId`, registra em
+ * `almoxarifado_transferencias`). Origem (tipo + obraId + obraNome) é
+ * INFERIDA do próprio item de origem (não vem do client), pra log
+ * fidedigno. Pula com `falhas.push(...)` quando:
+ *   - Item não existe / é de outra empresa (IDOR guard).
+ *   - Origem == destino (mesma obra/central).
+ *   - Estoque insuficiente.
+ *   - Qualquer exceção no try-catch.
+ * Não usa transação multi-item — se falhar no item 5 de 10, os 4
+ * primeiros permanecem aplicados. Decisão consciente: (a) já existe
+ * registro auditável em `almoxarifado_transferencias` linha-a-linha,
+ * (b) atomicidade em transferências de N obras envolveria locks
+ * caros e bloqueio de outras operações concorrentes. Retorna
+ * `{sucessos: [...], falhas: [...], total}` pro frontend renderizar
+ * resumo. ZERO mudança de schema (R-001/R-007/R-010 OK).
+ *
+ * **Frontend** (`client/src/pages/almoxarifado/index.tsx`):
+ *   - Novo state `modalTransfLote` com `{itens:[{id,nome,unidade,
+ *     estoque,qtd}], destinoTipo, destinoObraId, motivo, aplicando,
+ *     resultado}`. Default qtd de cada linha = estoque atual.
+ *   - Helpers `abrirTransfLote()` (lê `lista` da view atual + filtra
+ *     pelos IDs do Set `selecionados`) e `aplicarTransfLote()` (valida
+ *     destino obra, valida qtd>0, valida qtd≤estoque com tolerância
+ *     1e-9, chama `createTransferenciaLote.mutateAsync`, invalida
+ *     `compras.listarItens` + `listarItensConsolidado`, exibe toast).
+ *   - Botão "Transferir" (roxo, ArrowLeftRight) inserido no sticky
+ *     bar ~L4066 entre "Unificar duplicatas" e "Cancelar".
+ *   - Modal grande (max-w-2xl, max-h-92vh) com header roxo→indigo:
+ *     select de destino (Central / obras ativas) + input motivo +
+ *     lista scroll com cada item (nome+estoque, input qtd numérico
+ *     com max=estoque, unidade, X pra remover do lote) + botão
+ *     "Preencher tudo" (resetar todas as qtds pro estoque atual) +
+ *     painel de resultado parcial (sucessos/falhas com motivo por
+ *     linha) quando houver falhas. Footer: Cancelar/Fechar + Transferir
+ *     (disabled durante aplicando). Toast verde quando 100% OK +
+ *     fecha modal + sai do modo seleção. Toast amarelo + modal
+ *     permanece com painel de falhas quando há erros parciais.
+ *
+ * **Arquivos**: `server/routers/warehouse.ts`, `client/src/pages/
+ * almoxarifado/index.tsx`, `shared/version.ts`, `shared/changelog.ts`,
+ * `replit.md`.
+ *
  * Rev. 2389 — **GOVERNANÇA/COMPRAS · Guarda determinística impede que OCs
  * de SERVIÇO / ADMINISTRATIVO / TRIBUTO virem item de Almoxarifado.**
  *
