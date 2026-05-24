@@ -3,7 +3,7 @@ import { Link } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
 import {
-  HardHat, Package, Truck, Settings, AlertTriangle, ChevronRight,
+  HardHat, Package, Truck, AlertTriangle, ChevronRight,
 } from "lucide-react";
 import { fmtDate, fmtMoney } from "./_shared";
 
@@ -35,14 +35,6 @@ export default function EquipamentosHub() {
       sub: `${(locados.data || []).filter((l: any) => l.status === "devolvido").length} devolvidos`,
       to: "/equipamentos/locados",
     },
-    {
-      label: "Parâmetros CAPEX",
-      icon: Settings,
-      color: "from-slate-500 to-slate-700",
-      count: "",
-      sub: "Editar TMA, alçada, vida útil",
-      to: "/equipamentos/parametros-capex",
-    },
   ];
 
   return (
@@ -57,7 +49,7 @@ export default function EquipamentosHub() {
           </p>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {cards.map((c) => (
             <Link key={c.to} href={c.to}>
               <a className="block bg-white border rounded-lg shadow-sm hover:shadow-md transition cursor-pointer">

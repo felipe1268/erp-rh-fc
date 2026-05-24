@@ -2,6 +2,7 @@
 
 > Este arquivo guarda os one-liners das revisões antigas para manter o `replit.md` enxuto.
 
+- **Rev. 2345** — FEATURE/FILOSOFIA · Busca de fotos com IA passa a garantir cobertura 100% via 3 fases (A match preciso → B busca ampla → C placeholder SVG por categoria). Ver `shared/changelog.ts`.
 - **Rev. 2344** — UX/PERF · Tela Equipamentos Locados ganha AGRUPAMENTO por descrição+obra (default ON); 1218 cards individuais viram ~60 cards agregados com modal drill-down. Ver `shared/changelog.ts`.
 - **Rev. 2343** — HOTFIX · Busca de fotos com IA traduz PT→EN (guards anti-alucinação) antes dos providers. Ver `shared/changelog.ts`.
 - **Rev. 2342** — HOTFIX/FEATURE · Busca de fotos da IA passa por validação rigorosa via Gemini antes de persistir + botão "Limpar fotos IA" pra reset em massa. Ver `shared/changelog.ts`.

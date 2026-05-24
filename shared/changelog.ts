@@ -1,6 +1,45 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2352 — **CLEANUP/UX · Removida a subpágina "Parâmetros
+ * CAPEX" da UI (sidebar + card no hub + rota + page component +
+ * mapeamento de módulo).** Pedido user (24/05/2026, IMG_1148):
+ * "Retire esta função de capex não precisa mais aqui".
+ *
+ * **Escopo da remoção**:
+ * - `client/src/pages/equipamentos/ParametrosCapex.tsx` — DELETADO.
+ * - `client/src/App.tsx` — removidos lazy import e rota
+ *   `/equipamentos/parametros-capex`.
+ * - `client/src/contexts/ModuleContext.tsx` — removida entrada do
+ *   mapa de rotas→módulo.
+ * - `client/src/components/DashboardLayout.tsx` — removido item da
+ *   sidebar (grupo "Controle de Equipamentos").
+ * - `client/src/pages/equipamentos/index.tsx` — removido card do
+ *   hub, import `Settings` não usado, grid reduzido de `sm:grid-
+ *   cols-3` para `sm:grid-cols-2` (agora só "Próprios" + "Locados",
+ *   ocupam a largura toda em telas médias+).
+ *
+ * **Preservado no backend** (server/routers/equipamentos.ts):
+ * `parametrosCapexListar`, `parametrosCapexAtualizar`,
+ * `seedParametrosCapexIfNeeded` e `PARAMETROS_CAPEX_DEFAULTS`
+ * continuam existindo. Por quê:
+ * (a) `seedParametrosCapexIfNeeded` era chamado dentro do
+ *     `parametrosCapexListar` — sem UI chamando o procedure, o seed
+ *     não roda mais (zero efeito colateral em prod).
+ * (b) Procedures intocados = zero risco de quebrar referência
+ *     escondida em script de migration/relatório antigo.
+ * (c) Schema `parametros_capex` na DB permanece — R-001 proíbe
+ *     DROP em prod e a tabela pode ter dados de companies que
+ *     algum dia voltarão a usar.
+ *
+ * **NÃO confundir com CAPEX financeiro**: o cálculo de Caixa Livre
+ * (FCL = FCO − CAPEX) em `server/services/financialKpiService.ts`
+ * é INDEPENDENTE — usa `valor_previsto` da tabela de orçamento e
+ * NÃO depende da subpágina removida. Está preservado.
+ *
+ * **R-001/R-007/R-010:** N/A — só remoção de UI client-side, zero
+ * DDL, zero DELETE/UPDATE em prod.
+ *
  * Rev. 2351 — **HOTFIX/FEATURE · Extração de PERÍODO DE LOCAÇÃO
  * por contrato no import PDF reforçada: prompt Gemini ganha 8
  * regras críticas + 3 exemplos do layout F051/R051 (Jalves), e

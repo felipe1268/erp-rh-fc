@@ -465,7 +465,6 @@ const menuSectionsAlmoxarifado: MenuSection[] = [
       { icon: Package,   label: "Visão Geral",       path: "/equipamentos" },
       { icon: HardHat,   label: "Próprios",          path: "/equipamentos/proprios" },
       { icon: Truck,     label: "Equipamentos Locados", path: "/equipamentos/locados" },
-      { icon: Settings,  label: "Parâmetros CAPEX",  path: "/equipamentos/parametros-capex" },
     ],
   },
   // Rev. 2324 — Dashboard consolidada (estoque + movimentações + equipamentos

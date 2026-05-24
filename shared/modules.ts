@@ -361,7 +361,6 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
       { key: "equipamentos-hub",          label: "Equip. — Visão Geral",      route: "/equipamentos",                  icon: "Package" },
       { key: "equipamentos-proprios",     label: "Equip. — Próprios",         route: "/equipamentos/proprios",         icon: "HardHat" },
       { key: "equipamentos-locados",      label: "Equip. — Locados",          route: "/equipamentos/locados",          icon: "Truck" },
-      { key: "equipamentos-parametros",   label: "Equip. — Parâmetros CAPEX", route: "/equipamentos/parametros-capex", icon: "Settings" },
     ],
   },
   {

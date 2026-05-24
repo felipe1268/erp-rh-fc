@@ -659,7 +659,6 @@ export const ROUTE_TO_PAGEID: Record<string, Record<string, string>> = {
     "/equipamentos":                  "equipamentos_hub",
     "/equipamentos/proprios":         "equipamentos_proprios",
     "/equipamentos/locados":          "equipamentos_locados",
-    "/equipamentos/parametros-capex": "equipamentos_parametros",
   },
   "operacional": {
     "/operacional/painel":                "painel",
