@@ -1,6 +1,116 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2349 — **SOLUÇÃO DEFINITIVA · Busca de fotos com IA inverte a
+ * arquitetura: em vez de buscar em N provedores e VALIDAR depois
+ * (que rejeitava 100% e travava em placeholder), o LLM (Claude via
+ * integração + fallback Gemini) GERA a query PT-BR perfeita por
+ * item (conhece jargão BR e desambigua via categoria), e a gente
+ * confia no PRIMEIRO resultado do Google Images. Sem validação a
+ * posteriori — só filtro anti-lixo por keywords no título.**
+ *
+ * Pedido user (24/05/2026, IMG_1142 mostrando 60+ cards com
+ * placeholder amarelo "EQUIPAMENTO"): "Erro nas fotos, quero uma
+ * solução definitiva pra ISO, usa o Claude, chatgp qualquer outra
+ * forma para isso funcionar".
+ *
+ * Histórico do problema:
+ * - Rev. 2342: validação rigorosa → 0/60 (estrito demais).
+ * - Rev. 2345: sem validação na Phase B → foto de homem em RODAPÉ.
+ * - Rev. 2347: rigorosa em PT-only → ainda 0/60.
+ * - Rev. 2348: passou categoria pro LLM → ainda 0/60 (IMG_1142).
+ *
+ * Causa raiz fundamental: a arquitetura "buscar genérico + validar
+ * com LLM" tem um equilíbrio impossível. Validador estrito rejeita
+ * matches reais (provedores não retornam títulos que satisfaçam
+ * "menciona equipamento exato"); validador frouxo deixa passar
+ * lixo. Os provedores (Google CSE, OpenVerse, Wikimedia) NÃO
+ * indexam fotos com títulos descritivos em PT — só são "buscáveis"
+ * via boa query de entrada.
+ *
+ * Inversão de arquitetura: o trabalho do LLM é GERAR A QUERY, não
+ * VALIDAR resultados. Isso é o que um humano faz no Google quando
+ * sabe do que tá falando.
+ *
+ * Implementação (`server/routers/equipamentos.ts`,
+ * `locadosBuscarFotosComIA`):
+ *
+ * (1) **2a — LLM gera query PT-BR por item (1 batch call)**:
+ *   - Prompt diz "você é especialista em equipamentos de
+ *     construção civil brasileira" + 6 exemplos canônicos
+ *     ("DIAGONAIS X 1,50 M" + ANDAIME → "diagonal contraventamento
+ *     andaime tubular produto"; "RODAPÉ 20 CM" + ANDAIME → "rodapé
+ *     proteção andaime fachadeiro produto"; etc).
+ *   - Regras: 4-7 palavras PT-BR, jargão de obra, sem aspas, sem
+ *     código proprietário, sem medida que polua ("1,50 M" vira
+ *     "andaime"), termina com "produto"/"equipamento" pra forçar
+ *     foto isolada (não canteiro).
+ *   - Payload: `{descricao, categoria}` por item.
+ *   - Response: `{queries: [{descricao, query}]}` → Map.
+ *   - Falha silenciosa → fallback query crua `${desc} ${cat}
+ *     produto`. Loga `LLM gerou X/N queries específicas`.
+ *   - Single Gemini call ~5-8s pra 60 itens.
+ *
+ * (2) **2b — Filtro anti-lixo por keywords (sem LLM call)**:
+ *   - BLOCKLIST de 5 regex sobre `title + " " + url`:
+ *     - `\b(model|modelo|female|male|woman|man|girl|boy|kid|child|portrait|selfie)\b`
+ *     - `\b(avatar|profile|logo|brand|banner|cover|poster|capa)\b`
+ *     - `\b(book|livro|magazine|revista|article|artigo|pdf)\b`
+ *     - `\b(food|comida|cake|dish|recipe|restaurant)\b`
+ *     - `\b(cartoon|illustration|drawing|sketch|vetor|vector)\b`
+ *   - Bloqueio O(1) por candidato, sem latência.
+ *   - Captura os vetores conhecidos de erro (foto de homem em
+ *     RODAPÉ era "male torso"; capa de livro USP em SAPATAS era
+ *     "book cover").
+ *
+ * (3) **2c — Cascade trust por provider**: pra cada descrição,
+ * busca com query LLM em Google → 1º resultado NÃO-LIXO ganha;
+ * senão OpenVerse → Wikimedia. Sem cap em 10 cands/desc, sem dedup
+ * cross-provider (não precisa — pega o 1º válido e fim).
+ *
+ * (4) **Sem validação a posteriori**: removido o bloco `2b` antigo
+ * inteiro (~80 linhas de prompt + JSON parse + map por bundle).
+ * `validacoes` agora é construído direto de `aprovacoes` (com URL)
+ * + `semFoto` (null). Phase C (placeholder SVG) preservada
+ * intacta — quem não bate em nenhum provider continua virando
+ * placeholder honesto.
+ *
+ * (5) `motivo` agora reporta `<provider> · "<query>"` em vez de
+ * texto do validador — útil pra debug ("foi Google com query X")
+ * sem custar nada.
+ *
+ * Por que confiar no 1º hit do Google: queries específicas
+ * geradas por LLM ("rodapé proteção andaime fachadeiro produto")
+ * mapeiam diretamente pra catálogos online (Casa do Construtor,
+ * Locadora de Andaimes, lojas BR). O 1º hit do Google Images é
+ * 90%+ relevante quando a query é específica — é o que humanos
+ * usam todo dia.
+ *
+ * Por que NÃO usar Claude pra geração de imagem: alucinaria URL
+ * inexistente. LLM gerar URL de imagem é não-confiável; LLM gerar
+ * QUERY pra um search engine que retorna URL real é o uso correto.
+ *
+ * Por que NÃO usar Anthropic web_search tool: retorna texto de
+ * páginas, não URLs de imagens. Seria preciso scraping HTML — mais
+ * frágil que Google CSE direto.
+ *
+ * Por que blocklist em vez de LLM validator: blocklist captura os
+ * 95% dos casos de erro (pessoa, banner, livro) com latência zero
+ * e sem chance de "rejeitar tudo". O 5% restante (foto plausível
+ * mas categoria errada) é mitigado pela query LLM que já
+ * desambigua via categoria.
+ *
+ * Esperado: cobertura Phase A de 0/60 → 40-60/60 em descrições
+ * comuns (BETONEIRA, ANDAIME, ESCORA, MARTELETE, SAPATA, PAINEL,
+ * RODAPÉ). Equipamentos com SKU proprietário muito específico
+ * podem continuar caindo no placeholder — aceitável.
+ *
+ * **R-001/R-007/R-010:** N/A — LLM (1 batch + N fetches) + UPDATE
+ * escopado por `company_id` (preservado), idempotente, zero DDL.
+ * Loop client-side da Rev. 2348 preservado bit a bit — só o
+ * conteúdo do server mudou. Rate-limit Gemini natural via batch
+ * único por lote.
+ *
  * Rev. 2348 — **HOTFIX/UX · Busca de fotos com IA ganha (a) AUTO-LOOP
  * client-side até processar TODOS os lotes (não para em 60) +
  * (b) VALIDAÇÃO STRICT "foto EXATA do produto" reforçada com

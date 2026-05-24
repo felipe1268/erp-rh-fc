@@ -753,8 +753,9 @@ export default function EquipamentosLocados() {
       utils.equipamentos.locadosListar.invalidate();
 
       // Rev. 2348 — auto-loop: se o servidor sinaliza haMaisLotes, dispara
-      // o próximo batch automaticamente. Cota esgotada interrompe.
-      if (res.haMaisLotes && !res.cotaEsgotada) {
+      // o próximo batch automaticamente. Rev. 2349 — segue mesmo com cota
+      // Google esgotada (server continua via OpenVerse/Wikimedia).
+      if (res.haMaisLotes) {
         setFotoInicio(Date.now());
         setFotoTickNow(Date.now());
         // microtask: evita stack do react-query e dá frame pra atualizar UI

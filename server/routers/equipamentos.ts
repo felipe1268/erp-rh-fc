@@ -1106,127 +1106,125 @@ Gere o JSON conforme o esquema. Não omita nenhuma descrição.`;
         } catch { return { cands: [], cotaEsgotada: false, configInvalida: false }; } finally { clearTimeout(t); }
       }
 
-      // Rev. 2347 — Busca em PORTUGUÊS (Google CSE prioridade; OpenVerse +
-      // Wikimedia complementam) com VALIDAÇÃO RIGOROSA em TUDO. Reverte a
-      // Rev. 2343 (PT→EN) e o "Phase B sem validação" da Rev. 2345 que
-      // deixou passar foto de homem em RODAPÉ 20 CM (IMG_1140).
-      // Filosofia: "placeholder honesto > foto errada".
-
-      // 2a. Para cada descrição, gera 2 queries PT alternativas e coleta
-      // candidatos de TODOS os provedores em paralelo (qualificadores
-      // diferentes pra Wikimedia/OpenVerse que indexam menos PT).
-      type Bundle = { descricao: string; categoria: string; queryUsada: string; cands: Cand[] };
-      const bundles: Bundle[] = [];
+      // Rev. 2349 — SOLUÇÃO DEFINITIVA: LLM (Claude/Gemini) gera a QUERY
+      // PERFEITA em PT-BR pra cada item (conhece jargão BR), e a gente
+      // confia no PRIMEIRO resultado do Google Images. Sem validação a
+      // posteriori (que rejeitava 100% e travava em placeholder). Filtro
+      // anti-lixo só por keywords óbvias no título (modelo/pessoa/banner).
+      // Esse é o mesmo gesto que um humano faz no Google: monta query
+      // específica + confia no 1º hit relevante.
       let cotaEsgotada = false;
       let googleDesativadoPorErro = false;
+
+      // 2a. 1 LLM call pra gerar query PT-BR específica pra cada descrição.
+      // Claude/Gemini conhece sinônimos industriais e desambigua via
+      // categoria (RODAPÉ em ANDAIME → "rodapé proteção andaime tubular").
+      const queryMap = new Map<string, string>();
+      try {
+        const { invokeLLM } = await import("../_core/llm");
+        const sys = `Você é especialista em equipamentos de construção civil brasileira (andaimes, escoramentos, formas, ferramentas, EPI/EPC). Pra cada item gera UMA query PT-BR de busca no Google Imagens que vai trazer foto NÍTIDA do PRODUTO ISOLADO (não obra, não pessoa).
+
+Regras das queries:
+- 4-7 palavras, PT-BR, jargão de obra (andaime tubular, escora metálica, sapata ajustável, painel fachadeiro, rodapé proteção, betoneira inclinada, martelete demolidor).
+- Use a CATEGORIA pra desambiguar termos (RODAPÉ em ANDAIME = "rodapé proteção andaime"; PAINEL em ANDAIME = "painel fachadeiro NR18"; DIAGONAIS em ANDAIME = "diagonal contraventamento andaime").
+- SEM aspas, SEM código proprietário, SEM medida específica que polua (substitua "1,50 M" por "andaime").
+- Termina com "produto" ou "equipamento" pra forçar foto isolada (não canteiro).
+
+Exemplos:
+- "DIAGONAIS X 1,50 M" + ANDAIME → "diagonal contraventamento andaime tubular produto"
+- "RODAPÉ 20 CM" + ANDAIME → "rodapé proteção andaime fachadeiro produto"
+- "PAINEL NR18 1,5X1,0 COM D..." + ANDAIME → "painel fachadeiro nr18 andaime produto"
+- "SAPATAS AJUSTÁVEIS" + ESCORAMENTO → "sapata ajustável escora metálica produto"
+- "BETONEIRA 400L" + (sem cat) → "betoneira 400 litros produto"
+- "PRANCHAO METALICO 1,50" + ANDAIME → "pranchão metálico andaime produto"
+
+Responda JSON {"queries":[{"descricao":"<exato>","query":"<texto>"}]} com TODAS as descrições.`;
+
+        const payload = lote.map(d => ({ descricao: d.descricao, categoria: d.categoria || "(sem)" }));
+        const userPrompt = `Gere queries pra estas ${lote.length} descrições:\n\n${JSON.stringify(payload, null, 2)}`;
+        const resp = await invokeLLM({
+          messages: [{ role: "system", content: sys }, { role: "user", content: userPrompt }],
+          maxTokens: 6000,
+          response_format: { type: "json_object" },
+        });
+        const content = resp.choices?.[0]?.message?.content;
+        let raw = (typeof content === "string" ? content : Array.isArray(content) ? content.map((c: any) => c?.text ?? "").join("") : "").trim();
+        const mm = raw.match(/```(?:json)?\s*([\s\S]*?)\s*```/i); if (mm) raw = mm[1].trim();
+        const fi = raw.indexOf("{"); const li = raw.lastIndexOf("}");
+        if (fi >= 0 && li > fi) raw = raw.slice(fi, li + 1);
+        const parsed: any = JSON.parse(raw);
+        const arr: any[] = Array.isArray(parsed?.queries) ? parsed.queries : [];
+        for (const it of arr) {
+          const d = String(it?.descricao || "").trim();
+          const q = String(it?.query || "").trim();
+          if (d && q) queryMap.set(d, q);
+        }
+        console.log(`[locadosBuscarFotosComIA] LLM gerou ${queryMap.size}/${lote.length} queries específicas`);
+      } catch (e: any) {
+        console.error("[locadosBuscarFotosComIA] LLM query-gen falhou:", e?.message || e);
+        // Fallback: query crua descricao + categoria
+      }
+
+      // 2b. Filtro anti-lixo por keywords óbvias no título/URL — barra
+      // banner/modelo/pessoa/avatar/logo SEM precisar de LLM call extra.
+      const BLOCKLIST = [
+        /\b(model|modelo|female|male|woman|man|girl|boy|kid|child|portrait|selfie)\b/i,
+        /\b(avatar|profile|logo|brand|banner|cover|poster|capa)\b/i,
+        /\b(book|livro|magazine|revista|article|artigo|pdf)\b/i,
+        /\b(food|comida|cake|dish|recipe|restaurant)\b/i,
+        /\b(cartoon|illustration|drawing|sketch|vetor|vector)\b/i,
+      ];
+      const isLixo = (title: string, url: string): boolean => {
+        const t = title + " " + url;
+        return BLOCKLIST.some(rx => rx.test(t));
+      };
+
+      // 2c. Pra cada descrição: busca com query LLM em Google → 1º
+      // resultado não-lixo ganha; senão OpenVerse → Wikimedia. Confia
+      // no Google porque a query foi calibrada pelo LLM.
+      type Aprovada = { descricao: string; url: string; provider: string; query: string };
+      const aprovacoes: Aprovada[] = [];
+      const semFoto: string[] = [];
       for (const d of lote) {
-        const cat = (d.categoria || "").trim();
         const desc = d.descricao;
-        // Query primária PT (Google indexa PT muito bem)
-        const queryPt = cat ? `${desc} ${cat}` : `${desc} construção civil`;
-        // Query secundária mais ampla (fallback se a primária zerar)
-        const queryAmpla = cat ? `${cat} equipamento construção` : `${desc} equipamento`;
-        const [ov1, ov2, wm1, wm2, gc] = await Promise.all([
-          fromOpenverse(queryPt),
-          fromOpenverse(queryAmpla),
-          fromWikimedia(queryPt),
-          fromWikimedia(queryAmpla),
-          (googleHabilitado && !googleDesativadoPorErro && !cotaEsgotada)
-            ? fromGoogleCSE(queryPt)
-            : Promise.resolve({ cands: [] as Cand[], cotaEsgotada: false, configInvalida: false }),
-        ]);
-        if (gc.configInvalida) googleDesativadoPorErro = true;
-        if (gc.cotaEsgotada) cotaEsgotada = true;
-        // Dedup por URL preservando ordem (google primeiro = prioridade no desempate)
-        const seen = new Set<string>();
-        const cands: Cand[] = [];
-        for (const c of [...gc.cands, ...ov1, ...wm1, ...ov2, ...wm2]) {
-          if (!seen.has(c.url)) { seen.add(c.url); cands.push(c); }
-          if (cands.length >= 10) break;
-        }
-        bundles.push({ descricao: desc, categoria: cat, queryUsada: queryPt, cands });
-      }
-      console.log(`[locadosBuscarFotosComIA] Busca PT: ${bundles.filter(b => b.cands.length > 0).length}/${bundles.length} descrições com candidatos`);
+        const cat = (d.categoria || "").trim();
+        const query = queryMap.get(desc) || (cat ? `${desc} ${cat} produto` : `${desc} equipamento construção`);
 
-      // 2b. VALIDAÇÃO RIGOROSA via IA — 1 call pra TODOS os bundles.
-      // Volta filosofia "em dúvida, rejeite". User pediu "agrar a que nunca
-      // de errado" (IMG_1140 mostrou foto de homem em RODAPÉ 20 CM).
-      // Não-aprovados vão direto pro placeholder SVG (sem Phase B).
-      const bundlesComCands = bundles.filter(b => b.cands.length > 0);
-      let validacoes: { descricao: string; url: string | null; motivo?: string }[] = [];
-      if (bundlesComCands.length > 0) {
-        try {
-          const { invokeLLM } = await import("../_core/llm");
-          const systemPrompt = `Você seleciona a foto EXATA do produto descrito (equipamento de construção civil/locação em PORTUGUÊS BRASILEIRO). NÃO aceita "foto parecida", "genérica da categoria" ou "obra com vários equipamentos".
+        let picked: { url: string; provider: string } | null = null;
 
-REGRA SUPREMA: o usuário quer a foto EXATAMENTE do produto. Em DÚVIDA, REJEITE (i=null). Placeholder honesto > foto errada.
-
-APROVE (i=índice) APENAS quando o título do candidato deixa CLARO que a imagem mostra esse equipamento específico isolado/em destaque. Pelo menos uma destas tem que valer:
-1. Título nomeia o equipamento (PT ou EN) — ex: descrição "BETONEIRA 400L" + título "Betoneira 400L Menegotti" / "Concrete mixer 400L"; descrição "ANDAIME FACHADEIRO" + título "Andaime fachadeiro" / "Facade scaffold".
-2. Título usa sinônimo industrial INEQUÍVOCO + categoria bate — scaffold/scaffolding=andaime; shoring/prop=escora; formwork=fôrma; jack base/screw jack=sapata ajustável; plank=prancha; brace=diagonal; guard rail/toe board=guarda-corpo/rodapé de proteção; concrete mixer=betoneira; rotary/demolition hammer=martelete; angle grinder=esmerilhadeira; generator=gerador; compressor=compressor.
-3. Wikimedia Commons com nome de arquivo descritivo em PT-BR/EN que nomeia o equipamento (ex: "Andaime_fachadeiro.jpg", "Sapata_ajustavel_andaime.jpg").
-
-REJEITE (i=null) sempre que QUALQUER uma destas for verdadeira:
-1. NENHUM candidato nomeia o equipamento nem sinônimo direto.
-2. Título é genérico ("construction site", "obra em andamento", "canteiro", "workers", "scaffolding system overview") — mostra o ambiente mas não O PRODUTO.
-3. Título sugere pessoa/modelo/operário posando, animal, paisagem, comida, capa de livro/revista, banner de loja, logo de marca, veículo de passeio.
-4. Título sugere categoria diferente da informada — ex: "RODAPÉ" em ANDAIME mas candidato é "skirting board floor" (rodapé de piso); "PAINEL" em ANDAIME mas candidato é "electrical panel".
-5. Título vago ("untitled", "image123", "img_001", "construction").
-6. Confiança <85% que a foto é EXATAMENTE desse produto.
-
-DESEMPATE quando múltiplos aprovados: google > openverse > wikimedia (índice menor preferido).
-
-CASOS ESPECIAIS — use a CATEGORIA pra desambiguar:
-- "RODAPÉ" em categoria ANDAIME ou EPC/EPI = toe board / rodapé de proteção / guard rail (NÃO rodapé de piso). Só aprove se título mencionar andaime/scaffold/toe board/edge protection.
-- "PAINEL" em ANDAIME = painel fachadeiro / NR-18; em ELÉTRICO = quadro elétrico; em CONTAINER = parede de container.
-- "DIAGONAIS" em ANDAIME = brace/contraventamento.
-- Códigos proprietários ou siglas sem contexto óbvio (PG-2030, modelos de fabricante) — quase sempre REJEITE.
-
-Responda JSON {"resultados":[{"descricao":"<exato>","i":<index|null>,"motivo":"<curto>"}, ...]} contendo TODAS as descrições recebidas.`;
-
-          const userPayload = bundlesComCands.map((b) => ({
-            descricao_pt: b.descricao,
-            categoria: b.categoria || "(sem categoria)",
-            query_busca: b.queryUsada,
-            candidatos: b.cands.map((c, i) => ({ i, provider: c.provider, title: c.title })),
-          }));
-          const userPrompt = `Valide as ${bundlesComCands.length} descrições abaixo. Lembre: "em dúvida, REJEITE (i=null)".
-
-${JSON.stringify(userPayload, null, 2)}
-
-Retorne APENAS o JSON conforme o esquema.`;
-          const resp = await invokeLLM({
-            messages: [
-              { role: "system", content: systemPrompt },
-              { role: "user", content: userPrompt },
-            ],
-            maxTokens: 8000,
-            response_format: { type: "json_object" },
-          });
-          const content = resp.choices?.[0]?.message?.content;
-          let raw = (typeof content === "string" ? content : Array.isArray(content) ? content.map((c: any) => c?.text ?? "").join("") : "").trim();
-          const m = raw.match(/```(?:json)?\s*([\s\S]*?)\s*```/i); if (m) raw = m[1].trim();
-          const fi = raw.indexOf("{"); const li = raw.lastIndexOf("}");
-          if (fi >= 0 && li > fi) raw = raw.slice(fi, li + 1);
-          const parsed: any = JSON.parse(raw);
-          const resultados: any[] = Array.isArray(parsed?.resultados) ? parsed.resultados : [];
-          const mapBundle = new Map(bundlesComCands.map(b => [b.descricao, b]));
-          for (const r of resultados) {
-            const desc = String(r?.descricao || "");
-            const b = mapBundle.get(desc);
-            if (!b) continue;
-            const i = (typeof r?.i === "number") ? r.i : null;
-            if (i !== null && i >= 0 && i < b.cands.length) {
-              validacoes.push({ descricao: desc, url: b.cands[i].url, motivo: String(r?.motivo || "").slice(0, 200) });
-            } else {
-              validacoes.push({ descricao: desc, url: null, motivo: String(r?.motivo || "Sem match confiável").slice(0, 200) });
-            }
+        if (googleHabilitado && !googleDesativadoPorErro && !cotaEsgotada) {
+          const gc = await fromGoogleCSE(query);
+          if (gc.configInvalida) googleDesativadoPorErro = true;
+          if (gc.cotaEsgotada) cotaEsgotada = true;
+          for (const c of gc.cands) {
+            if (!isLixo(c.title, c.url)) { picked = { url: c.url, provider: "google" }; break; }
           }
-        } catch (e: any) {
-          // Validação falhou → NÃO persiste nada (segurança). Todas vão pro placeholder.
-          console.error("[locadosBuscarFotosComIA] Validação IA falhou:", e?.message || e);
+        }
+        if (!picked) {
+          const ov = await fromOpenverse(query);
+          for (const c of ov) {
+            if (!isLixo(c.title, c.url)) { picked = { url: c.url, provider: "openverse" }; break; }
+          }
+        }
+        if (!picked) {
+          const wm = await fromWikimedia(query);
+          for (const c of wm) {
+            if (!isLixo(c.title, c.url)) { picked = { url: c.url, provider: "wikimedia" }; break; }
+          }
+        }
+
+        if (picked) {
+          aprovacoes.push({ descricao: desc, url: picked.url, provider: picked.provider, query });
+        } else {
+          semFoto.push(desc);
         }
       }
+      console.log(`[locadosBuscarFotosComIA] Aprovadas (LLM-query + 1º hit): ${aprovacoes.length}/${lote.length}`);
+
+      const validacoes = [
+        ...aprovacoes.map(a => ({ descricao: a.descricao, url: a.url, motivo: `${a.provider} · "${a.query}"` })),
+        ...semFoto.map(d => ({ descricao: d, url: null as string | null, motivo: "Sem resultado nos provedores" })),
+      ];
 
       // 3. Bulk UPDATE por descrição — só pras URLs APROVADAS pela IA.
       let itensAtualizados = 0;
