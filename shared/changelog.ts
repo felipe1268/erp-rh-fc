@@ -1,6 +1,88 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2343 — **HOTFIX · Busca de fotos com IA agora TRADUZ as descrições
+ * PT → query em INGLÊS antes de buscar nos provedores (Wikimedia/OpenVerse/
+ * Google CSE) — sem isso a Rev. 2342 retornava 0/60 porque termos como
+ * "SAPATAS AJUSTÁVEIS" / "PRANCHAO METALICO" / "DIAGONAIS" não indexam
+ * em bibliotecas internacionais.**
+ *
+ * Pedido user (24/05/2026, IMG_1136): após Rev. 2342 (validação rigorosa),
+ * modal mostrou "0 de 60 descrição(ões) — 0 equipamento(s) atualizado(s)"
+ * e lista de 30 termos sem foto encontrada. Causa raiz: providers CC
+ * (Wikimedia Commons, OpenVerse) indexam majoritariamente conteúdo em
+ * INGLÊS — buscar "SAPATAS AJUSTÁVEIS" retorna 0 ou lixo (capa de livro
+ * USP), enquanto "adjustable scaffold base jack" retorna fotos reais do
+ * equipamento. A Rev. 2342 fez seu trabalho (rejeitar lixo); o gargalo
+ * é a busca, não a validação.
+ *
+ * Implementação (`server/routers/equipamentos.ts`,
+ * `locadosBuscarFotosComIA`):
+ *
+ * 1. **Novo PRÉ-PASSO (etapa 2a)**: 1 única call ao `invokeLLM` com TODO
+ *    o lote (até 60 descrições) pedindo tradução PT→EN industrial. Prompt
+ *    inclui REGRA CRÍTICA DE SEGURANÇA: "se NÃO TIVER CERTEZA, copie o
+ *    PT". Nunca traduzir pra categoria diferente (MARTELETE não pode
+ *    virar "mixer"). 8 exemplos OK + 3 exemplos "quando copiar PT"
+ *    (códigos proprietários PG-2030, siglas DIV NR-12, IDs sem semântica).
+ *    Resposta `{traducoes:[{pt,en}]}`. Saneamento + Map<pt, en>. Falha
+ *    silenciosa → fallback pra própria descrição PT (preserva comportamento
+ *    Rev. 2342). Log `[locadosBuscarFotosComIA] Tradução: X/N queries
+ *    traduzidas`.
+ *
+ * 2. **Busca usa EN (etapa 2b, antiga 2a renomeada)**: `queryPrincipal =
+ *    traducoes.get(desc) || desc`. Os 3 providers em paralelo recebem
+ *    `queryPrincipal`. Google CSE recebe `${en} construction` (qualifier
+ *    explícito quando temos EN; PT mantém "equipamento construção civil").
+ *    Bundle passa a registrar `queryUsada` pra debug + passar pra IA na
+ *    etapa de validação.
+ *
+ * 3. **Prompt de validação atualizado (etapa 2c)** com PRINCÍPIO #1 NÃO
+ *    NEGOCIÁVEL: DESCRIÇÃO_PT é a VERDADE ABSOLUTA. A query EN foi gerada
+ *    por outra IA e PODE TER MENTIDO. Se título bate com EN mas EN não
+ *    descreve fielmente PT → REJEITE. 2 exemplos contra-tradução:
+ *    "MARTELETE DEMOLIDOR" + EN="concrete mixer" + título "industrial
+ *    concrete mixer" → REJEITE; "ANDAIME TUBULAR" + EN="tubular pipe" +
+ *    título "copper pipe fitting" → REJEITE. Dicionário expandido de
+ *    sinônimos industriais (scaffold/scaffolding/staging=andaime,
+ *    shoring/prop/shore=escora, formwork=fôrma, jack base=sapata,
+ *    plank/platform=prancha, brace=diagonal, guard rail/edge protection
+ *    =guarda-corpo, concrete mixer=betoneira, rotary/demolition hammer=
+ *    martelete, angle grinder=esmerilhadeira, generator=gerador,
+ *    compressor=compressor). Regra 1 RELAXADA — aceita títulos descritivos
+ *    com contexto desde que mencionem equipamento/sinônimo. Nova regra 3:
+ *    REJEITE categoria diferente do PT mesmo que case com EN. Regra "em
+ *    dúvida real rejeite" preservada. Payload passa `descricao_pt` +
+ *    `query_busca_en` + candidatos.
+ *
+ * 4. **Logs server-side**: `[locadosBuscarFotosComIA] Busca: X/N
+ *    descrições com candidatos` após coleta. Permite diagnosticar onde
+ *    está o gargalo (tradução? busca? validação?) sem precisar instrumentar
+ *    o client.
+ *
+ * **Por que tradução E não relaxar a validação**: relaxar permitiria
+ * voltar ao bug original (capa de livro USP grudada). Tradução ataca a
+ * CAUSA RAIZ (queries ruins) sem comprometer a precisão.
+ *
+ * **Por que 1 call só pra tradução**: 60 descrições × 1 call ≈ 5-8s; 60
+ * calls individuais seriam 1-2min e custariam 60× mais tokens.
+ *
+ * **Por que NÃO traduzir uma vez e cachear**: descrições mudam ao longo
+ * do tempo (novos contratos importados); cachear exigiria invalidação
+ * complexa. Custo de cada busca completa ainda <$0.05 com Gemini.
+ *
+ * **Por que NÃO usar Google Translate API**: mais 1 dependência + a IA
+ * já entende contexto industrial ("PAINEL NR18" → "construction site
+ * protection panel" — Google Translate erra isso, daria "panel NR18").
+ *
+ * **Esperado pós-fix**: descrições comuns (BETONEIRA, ANDAIME, ESCORA,
+ * MARTELETE) devem encontrar foto em 60-80% dos casos. Descrições muito
+ * proprietárias/SKUs (ex: "PG-2030 ROTACIONADO") provavelmente seguirão
+ * sem foto — comportamento aceitável.
+ *
+ * **R-001/R-007/R-010**: N/A — só LLM calls + UPDATE escopado por
+ * `company_id` (preservado da Rev. 2342), idempotente, zero DDL.
+ *
  * Rev. 2342 — **HOTFIX/FEATURE · Busca de fotos da IA passa por VALIDAÇÃO
  * RIGOROSA via Gemini antes de persistir + novo botão "Limpar fotos IA"
  * para reset em massa quando fotos erradas foram aplicadas.**

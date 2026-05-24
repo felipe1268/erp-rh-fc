@@ -1089,23 +1089,90 @@ Gere o JSON conforme o esquema. Não omita nenhuma descrição.`;
         } catch { return { cands: [], cotaEsgotada: false, configInvalida: false }; } finally { clearTimeout(t); }
       }
 
-      // 2a. Coleta candidatos de TODOS os provedores em paralelo por descrição.
-      type Bundle = { descricao: string; cands: Cand[] };
+      // 2a. PRÉ-PASSO: traduzir descrições PT → query em INGLÊS otimizada
+      // para busca em bibliotecas internacionais. Termos como "SAPATAS
+      // AJUSTÁVEIS" indexam pouco; "scaffold adjustable base jack" é o
+      // termo industrial padrão e bate em Wikimedia/OpenVerse/Google. 1
+      // única call ao LLM com todo o lote. Falha silenciosa → fallback
+      // pra própria descrição em português (comportamento da Rev. 2342).
+      const traducoes = new Map<string, string>();
+      try {
+        const { invokeLLM } = await import("../_core/llm");
+        const sysT = `Você converte descrições brasileiras de equipamentos de construção civil/locação para queries de busca de imagem em INGLÊS técnico-industrial.
+
+REGRA CRÍTICA DE SEGURANÇA:
+- Se você NÃO TIVER CERTEZA do termo técnico correto em inglês, retorne EN IGUAL ao PT (cópia literal). NÃO INVENTE.
+- Tradução errada = foto errada salva. É preferível busca falhar (0 resultados) do que retornar foto de outro equipamento.
+- NUNCA traduza para um equipamento de categoria diferente. Ex: se PT é "MARTELETE", o EN NÃO PODE conter "mixer", "drill", "saw" — só termos diretamente relacionados a martelete (rotary hammer, demolition hammer).
+- Mantenha sinônimos próximos: scaffold/scaffolding/staging são todos andaime; shoring/prop são escora; jack base/base jack são sapata.
+
+Exemplos OK:
+- "SAPATAS AJUSTÁVEIS" → "adjustable scaffold base jack"
+- "ANDAIME TUBULAR" → "tubular scaffolding"
+- "PRANCHAO METALICO" → "metal scaffold plank platform"
+- "DIAGONAIS X 1,50 M" → "scaffold diagonal brace"
+- "PAINEL NR18" → "construction edge protection panel"
+- "ESCORA METALICA" → "steel shoring prop"
+- "BETONEIRA 400L" → "concrete mixer 400L"
+- "MARTELETE DEMOLIDOR" → "demolition rotary hammer"
+
+Exemplos de quando COPIAR PT (não sabe traduzir):
+- "PG-2030 ROTACIONADO" → "PG-2030 ROTACIONADO" (código proprietário, não invente)
+- "DIV NR-12" → "DIV NR-12" (sigla obscura, não invente)
+- "ITEM 4329" → "ITEM 4329" (sem semântica, não invente)
+
+Responda APENAS JSON {"traducoes":[{"pt":"<exato>","en":"<query inglês OU cópia do PT>"}, ...]} para TODAS as descrições.`;
+        const userT = `Traduza as ${lote.length} descrições:\n\n${lote.map(d => `- ${d.descricao}`).join("\n")}`;
+        const respT = await invokeLLM({
+          messages: [
+            { role: "system", content: sysT },
+            { role: "user", content: userT },
+          ],
+          maxTokens: 4000,
+          response_format: { type: "json_object" },
+        });
+        let rawT = (typeof respT.choices?.[0]?.message?.content === "string"
+          ? respT.choices[0].message.content
+          : Array.isArray(respT.choices?.[0]?.message?.content)
+            ? (respT.choices[0].message.content as any[]).map((c: any) => c?.text ?? "").join("")
+            : "").trim();
+        const mT = rawT.match(/```(?:json)?\s*([\s\S]*?)\s*```/i); if (mT) rawT = mT[1].trim();
+        const fiT = rawT.indexOf("{"); const liT = rawT.lastIndexOf("}");
+        if (fiT >= 0 && liT > fiT) rawT = rawT.slice(fiT, liT + 1);
+        const parsedT: any = JSON.parse(rawT);
+        const arrT: any[] = Array.isArray(parsedT?.traducoes) ? parsedT.traducoes : [];
+        for (const t of arrT) {
+          const pt = String(t?.pt || "").trim();
+          const en = String(t?.en || "").trim();
+          if (pt && en) traducoes.set(pt, en);
+        }
+        console.log(`[locadosBuscarFotosComIA] Tradução: ${traducoes.size}/${lote.length} queries traduzidas`);
+      } catch (e: any) {
+        console.warn("[locadosBuscarFotosComIA] Tradução falhou, usando PT:", e?.message || e);
+      }
+
+      // 2b. Coleta candidatos de TODOS os provedores em paralelo por descrição.
+      // Usa query EM INGLÊS quando disponível, fallback PT.
+      type Bundle = { descricao: string; queryUsada: string; cands: Cand[] };
       const bundles: Bundle[] = [];
       let cotaEsgotada = false;
       let googleDesativadoPorErro = false;
       for (const d of lote) {
-        const query = `${d.descricao} equipamento construção civil`;
+        const queryEn = traducoes.get(d.descricao);
+        const queryPrincipal = queryEn || d.descricao;
         const [ov, wm, gc] = await Promise.all([
-          fromOpenverse(query),
-          fromWikimedia(d.descricao),
-          (googleHabilitado && !googleDesativadoPorErro && !cotaEsgotada) ? fromGoogleCSE(query) : Promise.resolve({ cands: [] as Cand[], cotaEsgotada: false, configInvalida: false }),
+          fromOpenverse(queryPrincipal),
+          fromWikimedia(queryPrincipal),
+          (googleHabilitado && !googleDesativadoPorErro && !cotaEsgotada)
+            ? fromGoogleCSE(queryEn ? `${queryEn} construction` : `${d.descricao} equipamento construção civil`)
+            : Promise.resolve({ cands: [] as Cand[], cotaEsgotada: false, configInvalida: false }),
         ]);
         if (gc.configInvalida) googleDesativadoPorErro = true;
         if (gc.cotaEsgotada) cotaEsgotada = true;
         const cands = [...gc.cands, ...ov, ...wm].slice(0, 8); // máx 8 candidatos / descrição
-        bundles.push({ descricao: d.descricao, cands });
+        bundles.push({ descricao: d.descricao, queryUsada: queryPrincipal, cands });
       }
+      console.log(`[locadosBuscarFotosComIA] Busca: ${bundles.filter(b => b.cands.length > 0).length}/${bundles.length} descrições com candidatos`);
 
       // 2b. VALIDAÇÃO RIGOROSA via IA — uma única call ao LLM com todos os
       // bundles, retorna {descricao, urlSelecionada|null}. IA deve REJEITAR
@@ -1116,20 +1183,29 @@ Gere o JSON conforme o esquema. Não omita nenhuma descrição.`;
       if (bundlesComCands.length > 0) {
         try {
           const { invokeLLM } = await import("../_core/llm");
-          const systemPrompt = `Você valida correspondência entre DESCRIÇÕES de equipamentos de construção civil/locação e TÍTULOS de imagens candidatas.
+          const systemPrompt = `Você valida correspondência entre EQUIPAMENTOS de construção civil/locação (descritos em PORTUGUÊS BRASILEIRO) e TÍTULOS (geralmente em inglês) de imagens candidatas.
 
-REGRAS RIGOROSAS (siga à risca):
-1. SÓ aprove um candidato se o TÍTULO mencionar EXPLICITAMENTE o tipo de equipamento descrito (ou sinônimo industrial inequívoco — ex: "scaffold" = "andaime", "shoring" = "escora").
-2. REJEITE títulos genéricos: "untitled", "image", "stock photo", "photo by X", nomes de pessoa, capas de livro, banners de loja/promoção, logos.
-3. REJEITE quando o título descrever um CONTEXTO mas não o objeto (ex: "obra em São Paulo", "trabalhador").
-4. EM CASO DE DÚVIDA → REJEITE (urlSelecionada = null). É MELHOR não ter foto do que ter foto errada.
-5. Se houver candidato do provider "google" que case bem, prefira ele (qualidade > CC).
-6. Acentos/maiúsculas não importam; abreviações (NR18, EPI) e dimensões (1,5x1,0) são pistas — não exija que apareçam no título.
+PRINCÍPIO #1 (NÃO NEGOCIÁVEL): DESCRIÇÃO_PT é a VERDADE ABSOLUTA. A query em inglês foi gerada por outra IA e PODE ESTAR ERRADA. Se um título bate com QUERY_EN mas você acha que QUERY_EN NÃO descreve fielmente DESCRIÇÃO_PT, REJEITE — a tradução pode ter mentido.
 
-Responda JSON {"resultados":[{"descricao":"<exato>","i":<index|null>,"motivo":"<curto>"}, ...]} contendo TODAS as descrições recebidas.`;
+EXEMPLO DE TRADUÇÃO QUE PODE TER MENTIDO:
+- DESCRIÇÃO_PT="MARTELETE DEMOLIDOR" + QUERY_EN="concrete mixer" + título="industrial concrete mixer" → REJEITE (mixer ≠ martelete; tradução errou).
+- DESCRIÇÃO_PT="ANDAIME TUBULAR" + QUERY_EN="tubular pipe" + título="copper pipe fitting" → REJEITE (pipe sem andaime/scaffold).
+
+Sinônimos industriais OK (use livremente): scaffold/scaffolding/staging=andaime, shoring/prop/shore=escora, formwork=fôrma, jack base/screw jack/base jack=sapata, plank/platform/board=prancha, brace=diagonal/contraventamento, guard rail/edge protection=guarda-corpo, concrete mixer/cement mixer=betoneira, rotary hammer/demolition hammer=martelete, angle grinder=esmerilhadeira, generator=gerador, compressor=compressor.
+
+REGRAS:
+1. APROVE só quando o título contém termo do equipamento descrito em PT (ou sinônimo industrial inequívoco da lista acima). Aceite títulos descritivos com contexto ("scaffold base jack closeup" para SAPATA → OK).
+2. REJEITE títulos genéricos: "untitled", "image", "stock photo", nomes de pessoa, capas de livro, banners de loja, logos, paisagens, "construction site" sem nomear equipamento.
+3. REJEITE quando título descreve equipamento de CATEGORIA DIFERENTE do PT (mesmo que case com QUERY_EN). Reverifique mentalmente: "esse título realmente mostra <DESCRIÇÃO_PT>?"
+4. EM CASO DE DÚVIDA REAL → REJEITE (i=null). Melhor não ter foto do que ter foto errada.
+5. Se múltiplos candidatos baterem, prefira ordem: google > openverse > wikimedia (já ordenados).
+6. Abreviações (NR18, EPI) e dimensões (1,5x1,0) são pistas no PT — não exija no título.
+
+Responda JSON {"resultados":[{"descricao":"<exato>","i":<index|null>,"motivo":"<curto>"}, ...]} contendo TODAS as descrições recebidas. No "motivo", se rejeitar por suspeita de tradução errada, diga "tradução EN não bate com PT".`;
 
           const userPayload = bundlesComCands.map((b, k) => ({
-            descricao: b.descricao,
+            descricao_pt: b.descricao,
+            query_busca_en: b.queryUsada,
             candidatos: b.cands.map((c, i) => ({ i, provider: c.provider, title: c.title })),
           }));
           const userPrompt = `Valide as ${bundlesComCands.length} descrições abaixo. Para cada uma, escolha o ÍNDICE do candidato que melhor representa o equipamento, OU retorne i=null se nenhum bate com confiança.
