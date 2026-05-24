@@ -7,6 +7,8 @@
 
 import { z } from "zod";
 import crypto from "node:crypto";
+import dns from "node:dns/promises";
+import net from "node:net";
 import { router, protectedProcedure } from "../_core/trpc";
 import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
@@ -1916,6 +1918,259 @@ Gere o JSON conforme o esquema. Não omita nenhuma descrição.`;
         }
       }
       return { ok: true as const, fotoUrl: url, unidadesAtualizadas, descricaoNormalizada: descNorm };
+    }),
+
+  // ── Rev. 2367 — Buscar foto na web E salvar na Biblioteca (1 clique) ────
+  // Pedido user (24/05/2026, IMG_1165): abriu a Biblioteca de fotos e viu
+  // "0 com foto na biblioteca" — a Rev. 2366 popula só `equipamentos_locados.
+  // foto_url`, NÃO a tabela canônica `equipamentos_fotos_canonicas`. Agora
+  // a biblioteca tem botão "Buscar na web" por linha que:
+  //   1. Faz DDG Images (mesmo fluxo do `locadosBuscarFotoWebPorDescricao`).
+  //   2. Baixa o arquivo (até 5MB, com timeout 10s).
+  //   3. Joga no storage interno (URL estável, evita hot-link quebrar).
+  //   4. Faz UPSERT em `equipamentos_fotos_canonicas` por descricao_normalizada.
+  //   5. Propaga pra todas as unidades dessa descrição (UPDATE foto_url).
+  // Idêntico ao `fotosCanonicasUpsert` exceto que a origem da foto é a web
+  // em vez de upload do usuário.
+  fotosCanonicasBuscarWebUpsert: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      descricaoOriginal: z.string().min(1).max(255),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const allowed = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+      if (!(allowed as any[]).some(c => c.id === input.companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta empresa." });
+      }
+      const descNorm = normalizarDescricao(input.descricaoOriginal);
+      if (!descNorm) throw new TRPCError({ code: "BAD_REQUEST", message: "Descrição vazia após normalização." });
+
+      const headers: Record<string, string> = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7",
+      };
+
+      // 1) Pega vqd
+      const ctrl1 = new AbortController();
+      const t1 = setTimeout(() => ctrl1.abort(), 9000);
+      let vqd: string | null = null;
+      try {
+        const r1 = await fetch(
+          `https://duckduckgo.com/?q=${encodeURIComponent(input.descricaoOriginal)}&iax=images&ia=images`,
+          { signal: ctrl1.signal, headers: { ...headers, "Accept": "text/html,application/xhtml+xml" } }
+        );
+        const html = await r1.text();
+        const m = html.match(/vqd=["']([\d-]+)["']/)
+              || html.match(/vqd=([\d-]+)/)
+              || html.match(/&vqd=([\w-]+)&/);
+        if (m) vqd = m[1];
+      } catch (e: any) {
+        console.error("[fotosCanonicasBuscarWebUpsert] vqd falhou:", e?.message || e);
+      } finally { clearTimeout(t1); }
+
+      if (!vqd) {
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Busca web indisponível (sem token DDG)." });
+      }
+
+      // 2) Pega 1ª URL válida
+      const ctrl2 = new AbortController();
+      const t2 = setTimeout(() => ctrl2.abort(), 9000);
+      let fotoUrl: string | null = null;
+      try {
+        const url = `https://duckduckgo.com/i.js?l=br-pt&o=json&q=${encodeURIComponent(input.descricaoOriginal)}&vqd=${vqd}&f=,,,,,&p=1`;
+        const r2 = await fetch(url, {
+          signal: ctrl2.signal,
+          headers: { ...headers, "Accept": "application/json", "Referer": "https://duckduckgo.com/" },
+        });
+        if (r2.ok) {
+          const j: any = await r2.json();
+          const results: any[] = Array.isArray(j?.results) ? j.results : [];
+          for (const it of results) {
+            const u = String(it?.image || "");
+            if (/^https:\/\//.test(u) && /\.(jpe?g|png|webp)(\?|$)/i.test(u) && u.length <= 1000) {
+              fotoUrl = u;
+              break;
+            }
+          }
+        }
+      } catch (e: any) {
+        console.error("[fotosCanonicasBuscarWebUpsert] i.js falhou:", e?.message || e);
+      } finally { clearTimeout(t2); }
+
+      if (!fotoUrl) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Nenhuma foto válida encontrada na 1ª página de resultados." });
+      }
+
+      // 3) Baixa o arquivo (até 5MB, timeout 10s) — não confia em URL externa
+      //    pra ficar hot-linked no banco; copia pro storage interno.
+      //
+      // Rev. 2367 — SSRF GUARD (code-review feedback): URL externa do DDG
+      // pode (a) ter hostname que resolve pra IP privado/loopback/metadata
+      // ou (b) redirecionar pra um. Bloqueio em 3 camadas:
+      //   1. Resolver DNS de TODOS os endereços (A+AAAA) e rejeitar se
+      //      QUALQUER um cair em range privado/loopback/link-local/multicast.
+      //   2. `redirect: 'manual'` — qualquer 3xx vira erro (não seguimos
+      //      cego pra IP novo).
+      //   3. Validar Content-Length ≤ 5MB ANTES de ler corpo (anti-DoS
+      //      de memória) + double-check no buffer final.
+      // Allowlist de protocolos: só HTTPS (HTTP normal já filtrado na fase 2).
+      function ipIsPrivate(ip: string): boolean {
+        const v = net.isIP(ip);
+        if (v === 4) {
+          const [a, b] = ip.split(".").map(Number);
+          if (a === 0 || a === 10 || a === 127) return true;
+          if (a === 169 && b === 254) return true;          // link-local + metadata
+          if (a === 172 && b >= 16 && b <= 31) return true;
+          if (a === 192 && b === 168) return true;
+          if (a === 100 && b >= 64 && b <= 127) return true; // CGNAT
+          if (a >= 224) return true;                          // multicast + reserved
+          return false;
+        }
+        if (v === 6) {
+          const low = ip.toLowerCase();
+          if (low === "::1" || low === "::") return true;
+          // fe80::/10 → primeiros 10 bits = 1111 1110 10 → primeiro byte
+          // 0xfe, segundo nibble 8/9/a/b. Cobre fe80–febf.
+          if (/^fe[89ab]/.test(low)) return true;
+          if (low.startsWith("fc") || low.startsWith("fd")) return true; // ULA fc00::/7
+          if (low.startsWith("ff")) return true;              // multicast
+          // ::ffff:x.x.x.x → mapped IPv4 — extrai e re-checa
+          const m = low.match(/^::ffff:([\d.]+)$/);
+          if (m && ipIsPrivate(m[1])) return true;
+          return false;
+        }
+        return true; // unknown format → bloqueia
+      }
+
+      let parsedUrl: URL;
+      try {
+        parsedUrl = new URL(fotoUrl);
+      } catch {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "URL da foto inválida." });
+      }
+      if (parsedUrl.protocol !== "https:") {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Só HTTPS é permitido pra download externo." });
+      }
+      // Node coloca colchetes em hostname IPv6 literal — strip pra net.isIP funcionar.
+      const host = parsedUrl.hostname.replace(/^\[|\]$/g, "");
+      // Se for IP literal, valida direto. Caso contrário, resolve DNS.
+      let ipsResolvidos: string[] = [];
+      if (net.isIP(host)) {
+        ipsResolvidos = [host];
+      } else {
+        try {
+          const recs = await dns.lookup(host, { all: true, verbatim: true });
+          ipsResolvidos = recs.map(r => r.address);
+        } catch {
+          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Não foi possível resolver o host da foto." });
+        }
+      }
+      if (ipsResolvidos.length === 0) {
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Host da foto sem IPs." });
+      }
+      for (const ip of ipsResolvidos) {
+        if (ipIsPrivate(ip)) {
+          console.warn("[fotosCanonicasBuscarWebUpsert] SSRF bloqueado:", host, "→", ip);
+          throw new TRPCError({ code: "FORBIDDEN", message: "URL da foto aponta pra rede interna — bloqueado por segurança." });
+        }
+      }
+
+      const ctrl3 = new AbortController();
+      const t3 = setTimeout(() => ctrl3.abort(), 10_000);
+      let bytes: Buffer | null = null;
+      let mime: "image/jpeg" | "image/png" | "image/webp" = "image/jpeg";
+      try {
+        const r3 = await fetch(fotoUrl, {
+          signal: ctrl3.signal,
+          redirect: "manual",
+          headers: { "User-Agent": headers["User-Agent"], "Accept": "image/*" },
+        });
+        // redirect:'manual' → 3xx vira resposta direta com status 3xx (ou
+        // 'opaqueredirect' em alguns runtimes — checamos as 2 condições).
+        if (r3.status >= 300 && r3.status < 400) {
+          throw new Error(`Redirect HTTP ${r3.status} bloqueado (anti-SSRF).`);
+        }
+        if ((r3 as any).type === "opaqueredirect") {
+          throw new Error("Redirect opaco bloqueado (anti-SSRF).");
+        }
+        if (!r3.ok) throw new Error(`Download falhou: HTTP ${r3.status}`);
+        const clen = Number(r3.headers.get("content-length") || 0);
+        if (clen && clen > 5 * 1024 * 1024) {
+          throw new Error("Content-Length declarado > 5MB — descartado por segurança.");
+        }
+        const ctype = String(r3.headers.get("content-type") || "").toLowerCase();
+        if (!ctype.startsWith("image/")) {
+          throw new Error(`Content-Type não-imagem (${ctype || "vazio"}) — descartado.`);
+        }
+        if (ctype.includes("png")) mime = "image/png";
+        else if (ctype.includes("webp")) mime = "image/webp";
+        else mime = "image/jpeg";
+        const ab = await r3.arrayBuffer();
+        if (ab.byteLength > 5 * 1024 * 1024) {
+          throw new Error("Arquivo da web maior que 5MB — descartado por segurança.");
+        }
+        bytes = Buffer.from(ab);
+      } catch (e: any) {
+        console.error("[fotosCanonicasBuscarWebUpsert] download falhou:", e?.message || e);
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: `Falha ao baixar a foto encontrada (${e?.message || "erro de rede"}).` });
+      } finally { clearTimeout(t3); }
+
+      if (!bytes || bytes.length === 0) {
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Arquivo vazio após download." });
+      }
+
+      // 4) Salva no storage e faz upsert na biblioteca canônica.
+      const ext = mime.includes("png") ? "png" : mime.includes("webp") ? "webp" : "jpg";
+      const hash = crypto.createHash("sha1").update(descNorm).digest("hex").slice(0, 12);
+      const ts = Date.now();
+      const key = `equipamentos/fotos-canonicas/${input.companyId}/${hash}-${ts}.${ext}`;
+      const { url } = await storagePut(key, bytes, mime);
+
+      await db.execute(sql`
+        INSERT INTO equipamentos_fotos_canonicas
+          (company_id, descricao_normalizada, descricao_original, foto_url, criado_por, created_at, updated_at)
+        VALUES
+          (${input.companyId}, ${descNorm}, ${input.descricaoOriginal}, ${url}, ${ctx.user.id}, NOW(), NOW())
+        ON CONFLICT (company_id, descricao_normalizada)
+        DO UPDATE SET
+          foto_url = EXCLUDED.foto_url,
+          descricao_original = EXCLUDED.descricao_original,
+          updated_at = NOW()
+      `);
+
+      // 5) Propaga pras unidades (mesma lógica de fotosCanonicasUpsert).
+      const unidades: any = await db.execute(sql`
+        SELECT id, descricao FROM equipamentos_locados
+         WHERE company_id = ${input.companyId}
+      `);
+      const ids: number[] = [];
+      for (const u of (unidades.rows ?? unidades) as any[]) {
+        if (normalizarDescricao(u.descricao) === descNorm) ids.push(Number(u.id));
+      }
+      let unidadesAtualizadas = 0;
+      if (ids.length > 0) {
+        const CHUNK = 1000;
+        for (let i = 0; i < ids.length; i += CHUNK) {
+          const slice = ids.slice(i, i + CHUNK);
+          const res: any = await db.execute(sql`
+            UPDATE equipamentos_locados
+               SET foto_url = ${url}, updated_at = NOW()
+             WHERE company_id = ${input.companyId}
+               AND id IN ${sql.raw(`(${slice.join(",")})`)}
+          `);
+          unidadesAtualizadas += Number(res.rowCount ?? res.rows?.length ?? slice.length);
+        }
+      }
+
+      return {
+        ok: true as const,
+        fotoUrl: url,
+        fotoUrlOrigem: fotoUrl,
+        unidadesAtualizadas,
+        descricaoNormalizada: descNorm,
+      };
     }),
 
   fotosCanonicasRemover: protectedProcedure

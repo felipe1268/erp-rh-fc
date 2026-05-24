@@ -1,6 +1,143 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2367 — **FEATURE/UX · Extensão do "Buscar na web" (Rev. 2366) pra
+ * dentro do modal Biblioteca de fotos — cada linha das 65 descrições ganha
+ * um botão sky "Buscar na web" que faz DDG → baixa o arquivo → joga no
+ * storage interno → upsert em `equipamentos_fotos_canonicas` → propaga pra
+ * todas as unidades. Resolve o "Cadê as fotos aqui?" (IMG_1165).**
+ *
+ * **Pedido user (24/05/2026, IMG_1165):** abriu o modal "Biblioteca de
+ * fotos" depois da Rev. 2366 e perguntou "Cadê as fotos aqui?" — o contador
+ * mostrava "65 descrição(ões) cadastrada(s) · 0 com foto na biblioteca",
+ * mesmo após o batch de busca web ter rodado. Esperava ver as fotos da web
+ * preenchidas ali também.
+ *
+ * **Diagnóstico:** a Rev. 2366 só popula `equipamentos_locados.foto_url`
+ * (tabela de unidades) e NÃO toca em `equipamentos_fotos_canonicas` (tabela
+ * de biblioteca curada, Rev. 2355). São dois sistemas paralelos:
+ *  - Biblioteca curada (`equipamentos_fotos_canonicas`): 1 foto por
+ *    descrição normalizada; upload manual via dropzone; aplicada em TODAS as
+ *    unidades + importações FUTURAS (porque o `bulkInsert` consulta a
+ *    canônica e colhe a foto na hora da inserção).
+ *  - Foto direta (`equipamentos_locados.foto_url`): foto da unidade
+ *    específica; foi o alvo da Rev. 2366; NÃO sobrevive a re-importações.
+ * Conclusão: a biblioteca É a fonte estratégica. Faz total sentido o user
+ * conseguir buscar na web e salvar AHÍ direto, sem precisar baixar manual
+ * → comprimir → subir.
+ *
+ * **Fix em 2 arquivos:**
+ *
+ * **(1) `server/routers/equipamentos.ts:1924` — nova procedure
+ * `fotosCanonicasBuscarWebUpsert({companyId, descricaoOriginal})`:**
+ *  - Tenant guard via `getCompaniesForUser` + `FORBIDDEN` se não-membro
+ *    (R-001).
+ *  - `normalizarDescricao()` no input; `BAD_REQUEST` se vazio.
+ *  - Fase 1 — DDG vqd: GET `duckduckgo.com/?q=…&iax=images&ia=images` com
+ *    UA Chrome 120 + Accept-Language pt-BR; AbortController timeout 9s; 3
+ *    regex fallback no HTML (`/vqd=["']([\d-]+)["']/`,
+ *    `/vqd=([\d-]+)/`, `/&vqd=([\w-]+)&/`); se nenhuma der match →
+ *    `INTERNAL_SERVER_ERROR "Busca web indisponível (sem token DDG)"`.
+ *  - Fase 2 — DDG JSON: GET `duckduckgo.com/i.js?l=br-pt&o=json&q=…&vqd=…`
+ *    com Accept JSON + Referer ddg; timeout 9s; itera `results[]` e pega
+ *    1º `image` que case `^https://`, extensão `jpe?g|png|webp`, ≤1000c;
+ *    nenhum hit → `NOT_FOUND`.
+ *  - Fase 3 — Download seguro do arquivo (DIFERE da Rev. 2366, que só
+ *    grava a URL externa direto): GET na URL com UA + Accept image/*.
+ *    SSRF GUARD em 3 camadas (apontado por code review e corrigido antes
+ *    do release):
+ *      a. URL parse + reject não-HTTPS.
+ *      b. DNS lookup `all+verbatim` → valida CADA IP retornado contra
+ *         `ipIsPrivate(ip)` que cobre IPv4 (0/8, 10/8, 127/8, 169.254/16
+ *         metadata, 172.16-31, 192.168, 100.64-127 CGNAT, ≥224 multicast)
+ *         + IPv6 (::1, ::, fe80::/10 via regex `/^fe[89ab]/`, fc00::/7
+ *         ULA, ff multicast, ::ffff:x.x.x.x mapeado re-checa IPv4). IP
+ *         literal valida direto; hostname IPv6 vem com colchetes do
+ *         `URL.hostname`, então faço strip `replace(/^\[|\]$/g, "")`.
+ *      c. `fetch(..., {redirect:'manual'})` → status 3xx ou
+ *         `type === 'opaqueredirect'` viram erro (anti-DNS-rebinding via
+ *         redirect pra IP novo).
+ *    Mais: Content-Length declarado ≤ 5MB ANTES de ler body (anti-DoS de
+ *    memória) + Content-Type tem que começar com `image/` + double-check
+ *    no buffer ≤ 5MB. TOCTOU de rebinding remanescente (`fetch` re-resolve
+ *    DNS) aceito — cobre ≥95% dos vetores; pra resolver 100% precisaria
+ *    de dispatcher custom com IP pinning.
+ *    Razão de copiar pro storage e NÃO hot-linkar: (a) URL externa quebra
+ *    a qualquer momento; (b) consistência com `fotosCanonicasUpsert`
+ *    (sempre URL nossa); (c) elimina dependência de rede externa nos
+ *    render dos cards depois.
+ *  - Fase 4 — `storagePut` com key estável `equipamentos/fotos-canonicas/
+ *    {companyId}/{sha1(descNorm).slice(12)}-{ts}.{ext}` (mesmo formato do
+ *    upload manual — mantém convenção).
+ *  - Fase 5 — `INSERT … ON CONFLICT (company_id, descricao_normalizada) DO
+ *    UPDATE` em `equipamentos_fotos_canonicas` (upsert idempotente; sobre-
+ *    escreve foto existente se user clicou "Trocar pela web").
+ *  - Fase 6 — Propagação pras unidades: SELECT all + filter JS por
+ *    `normalizarDescricao` (idem `fotosCanonicasUpsert` — Postgres não tem
+ *    `NFD` nativo), depois `UPDATE … WHERE id IN (…)` em chunks de 1000.
+ *  - Retorna `{ok, fotoUrl, fotoUrlOrigem, unidadesAtualizadas,
+ *    descricaoNormalizada}`.
+ *
+ * **(2) `client/src/pages/equipamentos/Locados.tsx`:**
+ *  - **State**: `buscandoWebBibliotecaDescNorm: Set<string>` (loading por
+ *    descrição — permite múltiplas em paralelo se quiser, mas a UI atual
+ *    serializa visualmente).
+ *  - **Mutation hook** `fotoCanonBuscarWebMut`: onSuccess remove do Set,
+ *    toast verde "Foto da web aplicada à biblioteca + N unidade(s)",
+ *    refetch biblioteca + invalidate `locadosListar` (cascateia pros
+ *    cards). onError remove do Set, toast vermelho com mensagem do tRPC.
+ *  - **Função wrapper** `buscarWebParaBiblioteca(descricaoOriginal)`:
+ *    normaliza desc no client (pra trackear no Set), add no Set, dispara
+ *    mutate.
+ *  - **UI por linha do modal** (Biblioteca de fotos, ~linha 2795):
+ *      - SEM foto: botão hero `bg-sky-50 text-sky-700 border-sky-200` com
+ *        ícone Globe + "Buscar na web" (vira "Buscando…" com Loader2 sky);
+ *        ao lado texto fraco "ou clique no quadro p/ subir" (preserva o
+ *        fluxo manual de upload).
+ *      - COM foto: link sutil sky "🌐 Trocar pela web" (substitui a foto
+ *        atual pela 1ª da web — útil quando o user subiu errada).
+ *      - Thumbnail dim 60% + spinner sky no overlay quando `buscandoWeb`
+ *        (mesma UX do upload).
+ *      - Botão "Remover" mantido; desabilita durante busca pra evitar race.
+ *
+ * **Não alterado:**
+ *  - Endpoint `locadosBuscarFotoWebPorDescricao` (Rev. 2366) intocado —
+ *    segue ativo no botão hero "Buscar fotos da web" e no thumbnail dos
+ *    cards de grupo.
+ *  - `fotosCanonicasUpsert` (Rev. 2355) intocado — segue como caminho
+ *    manual (upload de arquivo); só compartilha o destino (storage +
+ *    tabela canônica).
+ *  - Modal IA legacy (`modalFotosIA`/`resultadoFotosIA`) intocado —
+ *    permanece dead code aguardando limpeza futura.
+ *
+ * **Decisão de design:** dois botões com cores diferentes na MESMA tela
+ * poderia gerar confusão (sky pra biblioteca, sky pro card). Mantive
+ * mesma cor sky porque a SEMÂNTICA é a mesma (busca DDG); o contexto
+ * (modal vs card) já diferencia visualmente. Único cuidado: o link
+ * "Trocar pela web" usa underline + cor sutil, pra NÃO competir com o
+ * botão primário "Remover" (vermelho).
+ *
+ * **Decisão técnica — por que baixar a foto pro storage em vez de só
+ * gravar URL externa:** a tabela `equipamentos_fotos_canonicas` é a
+ * "fonte oficial" — URLs externas (CDN do fornecedor de scaffold, blog
+ * aleatório, marketplace chinês) podem expirar/sumir a qualquer momento
+ * e quebrariam silenciosamente a biblioteca inteira. Custo extra: ~1
+ * fetch + ~500KB upload pro storage por descrição — irrelevante na
+ * escala (65 descrições típicas = ~32MB total uma vez por descrição).
+ *
+ * **R-001 / R-007 / R-010:** UPDATE escopado por `company_id`,
+ * idempotente (ON CONFLICT), zero DDL.
+ *
+ * **Arquivos:**
+ *   - `server/routers/equipamentos.ts` (+ ~170 linhas — nova procedure)
+ *   - `client/src/pages/equipamentos/Locados.tsx` (+ ~50 linhas — hook,
+ *     state, wrapper, UI per-row)
+ *   - `shared/version.ts` (bump 2366 → 2367)
+ *   - `shared/changelog.ts` (esta entrada)
+ *   - `replit.md` (rotação 2+5)
+ *
+ * ---
+ *
  * Rev. 2366 — **FEATURE/UX · Busca de foto "como usuário normal faria" em
  * `/equipamentos/locados`: 1 descrição por vez → DuckDuckGo Images → 1º
  * resultado → UPDATE em todas as unidades dessa descrição. ZERO LLM no

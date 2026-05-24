@@ -844,6 +844,29 @@ export default function EquipamentosLocados() {
       setUploadingDescNorm(null);
     },
   });
+  // Rev. 2367 — busca foto na web E salva na Biblioteca (1 clique por linha).
+  const [buscandoWebBibliotecaDescNorm, setBuscandoWebBibliotecaDescNorm] = useState<Set<string>>(new Set());
+  const fotoCanonBuscarWebMut = trpc.equipamentos.fotosCanonicasBuscarWebUpsert.useMutation({
+    onSuccess: (res: any, vars: any) => {
+      const descNorm = (vars?.descricaoOriginal || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().replace(/\s+/g, " ").trim();
+      setBuscandoWebBibliotecaDescNorm(prev => { const n = new Set(prev); n.delete(descNorm); return n; });
+      toast.success(`Foto da web aplicada à biblioteca + ${fmtN(res.unidadesAtualizadas)} unidade(s).`);
+      bibliotecaQuery.refetch();
+      utils.equipamentos.locadosListar.invalidate();
+    },
+    onError: (err: any, vars: any) => {
+      const descNorm = (vars?.descricaoOriginal || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().replace(/\s+/g, " ").trim();
+      setBuscandoWebBibliotecaDescNorm(prev => { const n = new Set(prev); n.delete(descNorm); return n; });
+      toast.error(err?.message || "Falha na busca web.");
+    },
+  });
+  function buscarWebParaBiblioteca(descricaoOriginal: string) {
+    if (!companyId) return;
+    const descNorm = descricaoOriginal.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().replace(/\s+/g, " ").trim();
+    setBuscandoWebBibliotecaDescNorm(prev => new Set(prev).add(descNorm));
+    fotoCanonBuscarWebMut.mutate({ companyId, descricaoOriginal });
+  }
+
   const fotoCanonRemoverMut = trpc.equipamentos.fotosCanonicasRemover.useMutation({
     onSuccess: (res: any) => {
       toast.success(`Foto canônica removida. ${fmtN(res.unidadesLimpas)} unidade(s) ficaram sem foto.`);
@@ -2732,10 +2755,11 @@ export default function EquipamentosLocados() {
                     .map(g => {
                       const descOriginal = g.descricoesOriginais[0] || g.descricaoNormalizada;
                       const uploading = uploadingDescNorm === g.descricaoNormalizada && fotoCanonUpsertMut.isPending;
+                      const buscandoWeb = buscandoWebBibliotecaDescNorm.has(g.descricaoNormalizada);
                       const fotoUrl = g.canonica?.fotoUrl || null;
                       return (
                         <div key={g.descricaoNormalizada} className={`border rounded-xl p-3 flex gap-3 transition ${fotoUrl ? "border-emerald-200 bg-emerald-50/40" : "border-slate-200 bg-white"}`}>
-                          <label className={`relative w-20 h-20 rounded-lg flex-shrink-0 cursor-pointer overflow-hidden ring-1 ring-slate-200 ${uploading ? "opacity-60" : ""}`}>
+                          <label className={`relative w-20 h-20 rounded-lg flex-shrink-0 cursor-pointer overflow-hidden ring-1 ring-slate-200 ${uploading || buscandoWeb ? "opacity-60" : ""}`}>
                             {fotoUrl ? (
                               <img src={fotoUrl} className="w-full h-full object-cover" alt="" />
                             ) : (
@@ -2744,13 +2768,13 @@ export default function EquipamentosLocados() {
                                 <span className="text-[9px] mt-0.5">Subir</span>
                               </div>
                             )}
-                            {uploading && (
+                            {(uploading || buscandoWeb) && (
                               <div className="absolute inset-0 bg-white/70 flex items-center justify-center">
-                                <Loader2 className="h-5 w-5 animate-spin text-indigo-600" />
+                                <Loader2 className={`h-5 w-5 animate-spin ${buscandoWeb ? "text-sky-600" : "text-indigo-600"}`} />
                               </div>
                             )}
                             <input type="file" accept="image/*" className="hidden"
-                              disabled={uploading}
+                              disabled={uploading || buscandoWeb}
                               onChange={async (e) => {
                                 const f = e.target.files?.[0];
                                 if (f) await handleBibliotecaUpload(descOriginal, f);
@@ -2765,18 +2789,33 @@ export default function EquipamentosLocados() {
                                 <Camera className="h-3 w-3" /> {fmtN(g.comFoto)}/{fmtN(g.unidades)} c/ foto
                               </span>
                             </div>
-                            <div className="flex items-center gap-2 mt-auto pt-2">
+                            <div className="flex items-center gap-2 mt-auto pt-2 flex-wrap">
                               {fotoUrl ? (
                                 <>
                                   <span className="inline-flex items-center gap-1 text-[11px] text-emerald-700 font-semibold"><Check className="h-3 w-3" /> Na biblioteca</span>
+                                  <button onClick={() => buscarWebParaBiblioteca(descOriginal)}
+                                    disabled={buscandoWeb || uploading}
+                                    title="Trocar pela 1ª foto da web (DuckDuckGo)"
+                                    className="inline-flex items-center gap-1 text-[11px] text-sky-700 hover:text-sky-800 hover:underline disabled:opacity-50">
+                                    {buscandoWeb ? <Loader2 className="h-3 w-3 animate-spin" /> : <Globe className="h-3 w-3" />} Trocar pela web
+                                  </button>
                                   <button onClick={() => g.canonica && companyId && fotoCanonRemoverMut.mutate({ companyId, id: g.canonica.id })}
-                                    disabled={fotoCanonRemoverMut.isPending}
+                                    disabled={fotoCanonRemoverMut.isPending || buscandoWeb}
                                     className="ml-auto text-[11px] text-red-600 hover:text-red-700 hover:underline disabled:opacity-50">
                                     Remover
                                   </button>
                                 </>
                               ) : (
-                                <span className="text-[11px] text-slate-400 italic">Sem foto · clique no quadro</span>
+                                <>
+                                  <button onClick={() => buscarWebParaBiblioteca(descOriginal)}
+                                    disabled={buscandoWeb || uploading}
+                                    title="Buscar a 1ª foto da web no DuckDuckGo e salvar na biblioteca"
+                                    className="inline-flex items-center gap-1 text-[11px] px-2 py-1 rounded-md bg-sky-50 text-sky-700 hover:bg-sky-100 border border-sky-200 font-semibold disabled:opacity-50">
+                                    {buscandoWeb ? <Loader2 className="h-3 w-3 animate-spin" /> : <Globe className="h-3 w-3" />}
+                                    {buscandoWeb ? "Buscando..." : "Buscar na web"}
+                                  </button>
+                                  <span className="text-[11px] text-slate-400 italic">ou clique no quadro p/ subir</span>
+                                </>
                               )}
                             </div>
                           </div>
