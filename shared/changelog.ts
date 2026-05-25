@@ -1,6 +1,127 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2415 — **ALMOXARIFADO / INVENTÁRIO VISUAL DE BAIAS ·
+ * AGREGADOS APARECEM AUTOMATICAMENTE — almoxarife não cadastra
+ * baia, só dá baixa.**
+ *
+ * Pedido user (25/05/2026, com screenshot do modal "Nova baia"):
+ * "nao quero precisar cadastrar baia.. se o produto recebido
+ * for, areia, pedra, ou melhor qualquer agregado.. precisamos
+ * que apareça automaticamente o que foi recebido aqui e o
+ * almoxarife vai dando baixa."
+ *
+ * Screenshot seguinte mostrou que as obras já têm Areia, Areia
+ * Lavada, Areia Peneirada, etc. — cadastrados como itens
+ * normais do almoxarifado. Cadastrar "baia" pra cada um era
+ * trabalho redundante: o sistema JÁ sabe quais agregados a
+ * obra tem (almoxarifado_itens) e JÁ sabe quanto entrou hoje
+ * (almoxarifado_movimentacoes tipo='entrada'). A baia vira
+ * só um vínculo lógico criado sob demanda no 1º clique.
+ *
+ * **Decisão arquitetural — ZERO migration, reusa schema 2373:**
+ *
+ * A tabela `almoxarifado_baias` já tinha coluna `item_id`
+ * (rev. 2373, originalmente "opcional pra rastrear consumo").
+ * Agora ela passa a ser o **link primário**: 1 item agregado
+ * ↔ 1 baia. A baia ainda guarda o histórico das leituras
+ * visuais (`almoxarifado_baia_leituras`), mas o
+ * **cadastro** acontece transparentemente.
+ *
+ * **2 endpoints novos em `server/routers/warehouse.ts`:**
+ *
+ * - `baiaAgregadosListar({ companyId, obraId })`: lista
+ *   linhas pra renderizar no Visual. Cada linha = 1 item
+ *   agregado da obra (heurística) OU 1 baia órfã (legado).
+ *   Itens sem baia ainda vêm com `id: null` + `itemId`
+ *   preenchido. Carrega LEFT JOIN com baia por itemId pra
+ *   trazer ultimaLeitura/leituraAnterior, e SOMA entradas de
+ *   hoje (tipo='entrada' AND date(criado_em AT TIME ZONE
+ *   'America/Sao_Paulo') = today AND estornada_em IS NULL)
+ *   pro badge "+X chegou hoje". Preserva baias com itemId
+ *   apontando pra item não-agregado (categoria mudou depois)
+ *   como `origem: "manual"` pra não esconder histórico.
+ *
+ * - `baiaAutoEnsureFromItem({ companyId, obraId, itemId })`:
+ *   idempotente. Procura baia ativa (itemId+obraId), se acha
+ *   retorna. Senão, INSERT herdando nome/material/unidade/foto
+ *   do almoxarifado_itens. Chamado pelo client no `confirmar`
+ *   da leitura quando `leituraBaia.id == null`. User não vê.
+ *
+ * **Heurística de agregado/granel** (regex JS, case-insensitive):
+ *
+ * ```
+ * areia | brita | pedra | pedrisco | pó-de-pedra (com variações
+ * de espaço/hífen/acento) | rachão (rachao) | bica corrida |
+ * seixo | lajota | tijolo | bloco | argamass(a/ado) | cimento |
+ * cal\b | cal hidrat(ada) | saibro | terra | entulho | concreto |
+ * agregado | granel | aglomerado | gnaisse | calcário
+ * ```
+ *
+ * Mais fallback por **unidade** (m³, m3, t, ton, tonelada).
+ * Combinação OR — qualquer match. Pega o vocabulário FC
+ * inteiro visto nas obras (areia/areia lavada/areia peneirada,
+ * brita/rachão/pó-de-pedra, lajota cerâmica, bloco de concreto,
+ * argamassa pronta, cimento granel).
+ *
+ * **Frontend (`InventarioVisual.tsx`):**
+ *
+ * 1. `baiaListar` → `baiaAgregadosListar` (obraContexto
+ *    obrigatório, já era pré-requisito desde Rev. 2414).
+ * 2. `confirmarLeitura()`: se `leituraBaia.id == null` antes
+ *    de `baiaLeituraRegistrar`, chama `baiaAutoEnsureFromItem`
+ *    pra obter baiaId. Mut `autoEnsureMut` adicionado, botão
+ *    "Confirmar" disable também durante `autoEnsureMut.isPending`.
+ * 3. Card ganhou 3 elementos visuais:
+ *    - Badge sky **"+X un hoje"** (canto sup esq) quando
+ *      `entradaHoje > 0` — substitui "Conferida hoje" só pra
+ *      itens não conferidos ainda.
+ *    - Badge amber **"Auto"** (canto sup esq, pequeno) quando
+ *      item agregado SEM baia ainda — sinaliza que aparece
+ *      ali sozinho pela heurística.
+ *    - Linha **"Saldo no sistema: X un"** logo abaixo do
+ *      material — só quando `quantidadeAtual > 0` E baia existe
+ *      (evita confundir o saldo do almox com a leitura visual).
+ * 4. Pergunta acima dos 5 botões:
+ *    - `conferida` → "Refazer leitura?"
+ *    - `semBaia`   → "Quanto restou na baia?" (1º contato)
+ *    - default     → "Como está agora?"
+ * 5. Botão "Ver histórico" ESCONDIDO quando `semBaia`
+ *    (não tem leitura ainda, link ia abrir vazio).
+ * 6. Ícones edit/trash do modo Gerenciar ESCONDIDOS quando
+ *    `semBaia` (não existe registro pra editar/excluir).
+ * 7. Empty state "Nenhuma baia cadastrada" → "Nenhum agregado
+ *    recebido nesta obra" + explicação do automatismo + botão
+ *    "Cadastrar baia manual" só no modo Gerenciar (fallback).
+ * 8. Empty state "Iniciar Aferição" ganhou rodapé explicativo:
+ *    "Itens agregados aparecem aqui automaticamente conforme
+ *    entram na obra."
+ * 9. Key estável: `b.id ?? \`item-${b.itemId}\`` pra cards
+ *    sem baia ainda.
+ *
+ * **O fluxo do almoxarife agora é:**
+ *
+ * 1. Recebe areia lavada → confirma OC no Almoxarifado normal
+ *    (gera `almoxarifado_movimentacoes` tipo='entrada').
+ * 2. Vai pra Inventário Visual de Baias → escolhe obra → o
+ *    item areia lavada JÁ ESTÁ LÁ, com badge "+100 m³ hoje".
+ * 3. Toca CHEIA / 3/4 / METADE / etc. → modal de leitura
+ *    abre normal → confirma → baia é criada por baixo (1ª
+ *    vez) e leitura registrada (2ª vez em diante reusa).
+ *
+ * **Files**: server/routers/warehouse.ts (+~190 linhas, 2
+ * endpoints), client/src/pages/almoxarifado/InventarioVisual.tsx
+ * (~70 linhas trocadas: query, mut, card render, empty states).
+ *
+ * **R-001/R-007/R-010 OK**: schema NÃO alterado (reusa item_id
+ * que já existia). Apenas SELECT/INSERT em tabelas existentes.
+ * Cadastro manual de baia preservado intacto pro modo Gerenciar.
+ * Histórico de baias antigas (cadastradas no fluxo 2373/2414)
+ * preservado via `baiasSemItem` + filtro de baias com itemId
+ * apontando pra item não-agregado. Item central (obraId NULL)
+ * também é considerado: vai aparecer em qualquer obra que se
+ * escolha, evitando esconder agregado central (cimento, p.ex.).
+ *
  * Rev. 2414 — **ALMOXARIFADO / INVENTÁRIO VISUAL DE BAIAS ·
  * Reformatado pra MESMA LINGUAGEM do Inventário Semanal —
  * sessão DIÁRIA por obra (não mais lista solta de baias).**

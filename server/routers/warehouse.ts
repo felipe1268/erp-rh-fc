@@ -2546,4 +2546,247 @@ REGRAS:
       } as any).returning();
       return novo;
     }),
+
+  // ─────────────────────────────────────────────────────────────────────
+  // Rev. 2415 — AGREGADOS AUTOMÁTICOS NO INVENTÁRIO VISUAL DE BAIAS
+  // Pedido user: "não quero precisar cadastrar baia... qualquer agregado
+  // recebido precisa aparecer aqui automaticamente." A baia é criada
+  // sob demanda (na 1ª leitura) via `baiaAutoEnsureFromItem`. Heurística
+  // de agregado: nome do item match em regex (areia, brita, pedra,
+  // pedrisco, lajota, tijolo, bloco, argamassa, cimento, cal, saibro,
+  // terra, entulho, concreto, seixo, agregado, granel) OU a própria
+  // categoria/observação cita "granel/agregado". Sem migration, reusa
+  // schema rev. 2373 (almoxarifado_baias.itemId já existia).
+  // ─────────────────────────────────────────────────────────────────────
+  baiaAgregadosListar: protectedProcedure
+    .input(z.object({ companyId: z.number(), obraId: z.number() }))
+    .query(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const allowedCompanies = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+      if (!allowedCompanies.map((c: any) => c.id).includes(input.companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta empresa." });
+      }
+      if (!(await userCanAccessObra(ctx.user.id, ctx.user.role, input.obraId))) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta obra." });
+      }
+      const [obraRow] = await db.select({ id: obras.id, nome: obras.nome, companyId: obras.companyId }).from(obras).where(eq(obras.id, input.obraId));
+      if (!obraRow || obraRow.companyId !== input.companyId) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Obra não pertence à empresa informada." });
+      }
+      const obraNome = obraRow.nome;
+
+      // 1) Itens da obra (ou sem obra = central) — só ativos.
+      const { or, isNull } = await import("drizzle-orm");
+      const itensRows = await db.select().from(almoxarifadoItens).where(and(
+        eq(almoxarifadoItens.companyId, input.companyId),
+        eq(almoxarifadoItens.ativo, true),
+        or(eq(almoxarifadoItens.obraId, input.obraId), isNull(almoxarifadoItens.obraId)),
+      ));
+
+      // 2) Heurística de agregado/granel (JS, lista limitada).
+      // Rev. 2415 — heurística ampliada com vocabulário FC (rachão, pó-de-pedra,
+      // areia lavada/peneirada, bica corrida, etc.). Tudo em minúsculas, sem
+      // exigir acento (regex roda case-insensitive sobre o nome bruto).
+      const AGGR_RE = /areia|brita|pedra|pedrisco|p[óo]\s*[- ]?\s*de\s*[- ]?\s*pedra|rach[ãa]o|bica\s*corrida|seixo|lajota|tijolo|bloco|argamass|cimento|cal\b|cal hidrat|saibro|terra|entulho|concreto|agregado|granel|aglomerado|gnaisse|calc[áa]rio/i;
+      const UNI_GRANEL = new Set(["m³", "m3", "t", "ton", "tonelada", "tonelada(s)"]);
+      const itensAgg = itensRows.filter((it: any) => {
+        const nome = String(it.nome ?? "");
+        const cat = String(it.categoria ?? "");
+        const uni = String(it.unidade ?? "").toLowerCase();
+        return AGGR_RE.test(nome) || AGGR_RE.test(cat) || UNI_GRANEL.has(uni);
+      });
+
+      // 3) Baias ativas dessa obra (qualquer baia, com ou sem itemId).
+      const baias = await db.select().from(almoxarifadoBaias).where(and(
+        eq(almoxarifadoBaias.companyId, input.companyId),
+        eq(almoxarifadoBaias.obraId, input.obraId),
+        eq(almoxarifadoBaias.ativo, true),
+      ));
+      const baiaPorItem = new Map<number, any>();
+      const baiasSemItem: any[] = [];
+      for (const b of baias) {
+        if (b.itemId != null) baiaPorItem.set(b.itemId, b);
+        else baiasSemItem.push(b);
+      }
+
+      // 4) Última + penúltima leitura por baia.
+      const baiaIds = baias.map((b: any) => b.id);
+      const mapUlt = new Map<number, any>();
+      const mapPenult = new Map<number, any>();
+      if (baiaIds.length > 0) {
+        const ultimas: any = await db.execute(sql`
+          SELECT DISTINCT ON (baia_id) baia_id, id, percentual, foto_url, observacoes,
+                 lida_por_id, lida_por_nome, lida_em
+          FROM almoxarifado_baia_leituras
+          WHERE baia_id IN (${sql.join(baiaIds.map((id: number) => sql`${id}`), sql`, `)})
+          ORDER BY baia_id, lida_em DESC
+        `);
+        for (const r of (ultimas?.rows ?? [])) mapUlt.set(Number(r.baia_id), r);
+        const penultimas: any = await db.execute(sql`
+          SELECT baia_id, id, percentual, foto_url, observacoes,
+                 lida_por_id, lida_por_nome, lida_em
+          FROM (
+            SELECT baia_id, id, percentual, foto_url, observacoes,
+                   lida_por_id, lida_por_nome, lida_em,
+                   ROW_NUMBER() OVER (PARTITION BY baia_id ORDER BY lida_em DESC) rn
+            FROM almoxarifado_baia_leituras
+            WHERE baia_id IN (${sql.join(baiaIds.map((id: number) => sql`${id}`), sql`, `)})
+          ) t WHERE rn = 2
+        `);
+        for (const r of (penultimas?.rows ?? [])) mapPenult.set(Number(r.baia_id), r);
+      }
+
+      // 5) Entradas de hoje por item (badge "📦 chegou hoje").
+      const itemIds = itensAgg.map((i: any) => i.id);
+      const mapEntradasHoje = new Map<number, number>();
+      if (itemIds.length > 0) {
+        const entradas: any = await db.execute(sql`
+          SELECT item_id, COALESCE(SUM(quantidade), 0)::float AS qtd
+          FROM almoxarifado_movimentacoes
+          WHERE company_id = ${input.companyId}
+            AND tipo = 'entrada'
+            AND obra_id = ${input.obraId}
+            AND item_id IN (${sql.join(itemIds.map((id: number) => sql`${id}`), sql`, `)})
+            AND (criado_em AT TIME ZONE 'America/Sao_Paulo')::date = (NOW() AT TIME ZONE 'America/Sao_Paulo')::date
+            AND estornada_em IS NULL
+          GROUP BY item_id
+        `);
+        for (const r of (entradas?.rows ?? [])) mapEntradasHoje.set(Number(r.item_id), Number(r.qtd) || 0);
+      }
+
+      const toCamel = (r: any) => r ? ({
+        id: Number(r.id),
+        baiaId: Number(r.baia_id),
+        percentual: Number(r.percentual),
+        fotoUrl: r.foto_url ?? null,
+        observacoes: r.observacoes ?? null,
+        lidaPorId: r.lida_por_id != null ? Number(r.lida_por_id) : null,
+        lidaPorNome: r.lida_por_nome ?? null,
+        lidaEm: r.lida_em ?? null,
+      }) : null;
+
+      // 6) Combina: 1 linha por item agregado + 1 linha por baia órfã.
+      const result: any[] = [];
+      for (const it of itensAgg) {
+        const baia = baiaPorItem.get(it.id);
+        result.push({
+          id: baia?.id ?? null,                 // null = baia ainda não criada (1º clique cria)
+          itemId: it.id,
+          obraId: input.obraId,
+          obraNome,
+          nome: baia?.nome ?? it.nome,
+          material: baia?.material ?? it.nome,
+          unidade: baia?.unidade ?? it.unidade ?? "m³",
+          capacidadeEstimada: baia?.capacidadeEstimada ?? null,
+          fotoUrl: baia?.fotoUrl ?? it.fotoUrl ?? null,
+          observacoes: baia?.observacoes ?? null,
+          quantidadeAtual: Number(it.quantidadeAtual ?? 0),
+          entradaHoje: mapEntradasHoje.get(it.id) ?? 0,
+          ativo: true,
+          origem: "agregado_auto",
+          ultimaLeitura: baia ? toCamel(mapUlt.get(baia.id)) : null,
+          leituraAnterior: baia ? toCamel(mapPenult.get(baia.id)) : null,
+        });
+      }
+      // Baias órfãs (sem item ou item não-agregado) preservadas, pra não esconder histórico.
+      for (const b of baiasSemItem) {
+        result.push({
+          id: b.id,
+          itemId: null,
+          obraId: input.obraId,
+          obraNome,
+          nome: b.nome,
+          material: b.material,
+          unidade: b.unidade,
+          capacidadeEstimada: b.capacidadeEstimada,
+          fotoUrl: b.fotoUrl,
+          observacoes: b.observacoes,
+          quantidadeAtual: 0,
+          entradaHoje: 0,
+          ativo: b.ativo,
+          origem: "manual",
+          ultimaLeitura: toCamel(mapUlt.get(b.id)),
+          leituraAnterior: toCamel(mapPenult.get(b.id)),
+        });
+      }
+      // Baias com itemId que apontam pra item NÃO-agregado (categoria mudou depois)
+      // — também listar como manual pra preservar histórico.
+      for (const b of baias) {
+        if (b.itemId != null && !itensAgg.find((it: any) => it.id === b.itemId)) {
+          result.push({
+            id: b.id,
+            itemId: b.itemId,
+            obraId: input.obraId,
+            obraNome,
+            nome: b.nome,
+            material: b.material,
+            unidade: b.unidade,
+            capacidadeEstimada: b.capacidadeEstimada,
+            fotoUrl: b.fotoUrl,
+            observacoes: b.observacoes,
+            quantidadeAtual: 0,
+            entradaHoje: 0,
+            ativo: b.ativo,
+            origem: "manual",
+            ultimaLeitura: toCamel(mapUlt.get(b.id)),
+            leituraAnterior: toCamel(mapPenult.get(b.id)),
+          });
+        }
+      }
+      return result;
+    }),
+
+  // Cria (idempotente) uma baia ligada a um item agregado. Chamado no 1º
+  // clique de nível de um item que ainda não tem baia — o user nem
+  // percebe que isso aconteceu. Retorna `{ baiaId }`.
+  baiaAutoEnsureFromItem: protectedProcedure
+    .input(z.object({ companyId: z.number(), obraId: z.number(), itemId: z.number() }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const allowedCompanies = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+      if (!allowedCompanies.map((c: any) => c.id).includes(input.companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta empresa." });
+      }
+      if (!(await userCanAccessObra(ctx.user.id, ctx.user.role, input.obraId))) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta obra." });
+      }
+      const [obraRow] = await db.select({ id: obras.id, companyId: obras.companyId }).from(obras).where(eq(obras.id, input.obraId));
+      if (!obraRow || obraRow.companyId !== input.companyId) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Obra não pertence à empresa informada." });
+      }
+      // Advisory lock por (company, obra, item) pra serializar cliques
+      // simultâneos do mesmo almoxarife. Vive até o fim da sessão (não
+      // estamos numa tx, então usamos pg_advisory_lock + unlock no finally).
+      // Hash determinístico via hashtext de uma chave estável.
+      const lockKey = `baia_auto:${input.companyId}:${input.obraId}:${input.itemId}`;
+      await db.execute(sql`SELECT pg_advisory_lock(hashtext(${lockKey}))`);
+      try {
+        const [existing] = await db.select().from(almoxarifadoBaias).where(and(
+          eq(almoxarifadoBaias.companyId, input.companyId),
+          eq(almoxarifadoBaias.obraId, input.obraId),
+          eq(almoxarifadoBaias.itemId, input.itemId),
+          eq(almoxarifadoBaias.ativo, true),
+        ));
+        if (existing) return { baiaId: existing.id, created: false };
+        const [item] = await db.select().from(almoxarifadoItens).where(eq(almoxarifadoItens.id, input.itemId));
+        if (!item) throw new TRPCError({ code: "NOT_FOUND", message: "Item não encontrado." });
+        const [novo] = await db.insert(almoxarifadoBaias).values({
+          companyId: input.companyId,
+          obraId: input.obraId,
+          itemId: input.itemId,
+          nome: item.nome,
+          material: item.nome,
+          unidade: item.unidade ?? "m³",
+          fotoUrl: item.fotoUrl ?? null,
+          ativo: true,
+          criadoPorId: ctx.user.id,
+          criadoPorNome: ctx.user.name ?? null,
+        } as any).returning();
+        return { baiaId: novo.id, created: true };
+      } finally {
+        await db.execute(sql`SELECT pg_advisory_unlock(hashtext(${lockKey}))`);
+      }
+    }),
 });

@@ -2,6 +2,7 @@
 
 > Este arquivo guarda os one-liners das revisões antigas para manter o `replit.md` enxuto.
 
+- **Rev. 2408** — EQUIPAMENTOS LOCADOS/UX · Filtro por LOCADORA (fornecedor) na toolbar da Visão Geral. State `filtroFornecedor` + useMemo `dataPorFornecedor` (pipeline status→obra→cat→**fornecedor**→venc), `fornecedoresComItens` derivado dos próprios equipamentos (não dos 1190 cadastrados), comparação case-insensitive. UI: grid 2→3 cols, select amber Truck, chip amber. Zero backend. Ver `shared/changelog.ts`.
 - **Rev. 2407** — EQUIPAMENTOS LOCADOS/IMPORT · Multi-PDF no modal "Importar contratos de locação (PDF · IA)". Fila client-side (`importFilas`/`Ref`), `handlePdfPickMultiple({append})`, poll done acumula preview e auto-avança, branches error/expired/start-error também avançam. `<input multiple>`, badge X/N, "+ Adicionar PDFs", lista da fila. Zero backend. Ver `shared/changelog.ts`.
 - **Rev. 2406** — ALMOXARIFADO/UX · Filtro por vínculo Equipamento (Próprio/Locado/Qualquer/Nenhum) nas 2 barras de filtro da Visão Geral. Novo state `filtroEquip` (5 valores) em `almoxarifado/index.tsx`, filtro aplicado em `lista` e `consListFinal`, 2 `<select>` indigo idênticos. Zero backend. Ver `shared/changelog.ts`.
 - **Rev. 2405** — ALMOXARIFADO ← EQUIPAMENTOS · Sync reverso (vínculo bidirecional). Novo `server/lib/almoxEquipamentoSync.ts` com `ensureAlmoxItemForEquipamento` (idempotente, INSERT/UPDATE conforme transferência) + `backfillAlmoxFromEquipamentos` (SQL bulk no startup). Hooks `locadoCriar`/`locadoAtualizar`. Zero migration. Ver `shared/changelog.ts`.

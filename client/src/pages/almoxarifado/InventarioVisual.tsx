@@ -9,6 +9,13 @@
 // conferidas, lista separada (pendentes em destaque, conferidas abaixo)
 // e card final "Aferição do dia concluída". Estado de sessão derivado
 // das próprias leituras (sem migration): baia tem leitura hoje = conferida.
+//
+// Rev. 2415 — AGREGADOS AUTOMÁTICOS: o almoxarife não precisa mais
+// cadastrar baia. Qualquer item recebido na obra que seja granel
+// (areia, brita, pedra, lajota, cimento, argamassa…) APARECE SOZINHO
+// nesta tela. A baia é criada por baixo dos panos no 1º clique de
+// nível (`baiaAutoEnsureFromItem`). Cadastro manual fica restrito ao
+// modo "Gerenciar" pra casos excepcionais.
 import DashboardLayout from "@/components/DashboardLayout";
 import { useState, useMemo } from "react";
 import { trpc } from "@/lib/trpc";
@@ -17,7 +24,7 @@ import { toast } from "sonner";
 import {
   Package, Plus, Loader2, Camera, History, Building2, Pencil, Trash2,
   TrendingUp, TrendingDown, Minus, ImagePlus, CheckCircle2,
-  ClipboardList, Play, HardHat, Settings,
+  ClipboardList, Play, HardHat, Settings, PackagePlus, Sparkles,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -88,8 +95,11 @@ export default function InventarioVisualBaias() {
   const [iniciadoLocal, setIniciadoLocal] = useState(false);
   const [gerenciarMode, setGerenciarMode] = useState(false);
 
-  const { data: baias = [], isLoading } = trpc.warehouse.baiaListar.useQuery(
-    { companyId, obraId: obraContexto ?? undefined },
+  // Rev. 2415 — endpoint novo: traz itens agregados (areia/brita/pedra/…)
+  // recebidos na obra MAIS baias órfãs (preserva histórico de cadastros antigos).
+  // Itens sem baia ainda vêm com `id: null` — a 1ª leitura cria a baia.
+  const { data: baias = [], isLoading } = trpc.warehouse.baiaAgregadosListar.useQuery(
+    { companyId, obraId: obraContexto ?? 0 },
     { enabled: !!companyId && obraContexto != null },
   );
 
@@ -108,19 +118,23 @@ export default function InventarioVisualBaias() {
   const [excluindo, setExcluindo] = useState<any | null>(null);
 
   const criarMut = trpc.warehouse.baiaCriar.useMutation({
-    onSuccess: () => { toast.success("Baia criada!"); utils.warehouse.baiaListar.invalidate(); fecharForm(); },
+    onSuccess: () => { toast.success("Baia criada!"); utils.warehouse.baiaAgregadosListar.invalidate(); fecharForm(); },
     onError: (e) => toast.error(e.message),
   });
   const editarMut = trpc.warehouse.baiaEditar.useMutation({
-    onSuccess: () => { toast.success("Baia atualizada!"); utils.warehouse.baiaListar.invalidate(); fecharForm(); },
+    onSuccess: () => { toast.success("Baia atualizada!"); utils.warehouse.baiaAgregadosListar.invalidate(); fecharForm(); },
     onError: (e) => toast.error(e.message),
   });
   const desativarMut = trpc.warehouse.baiaDesativar.useMutation({
-    onSuccess: () => { toast.success("Baia removida."); utils.warehouse.baiaListar.invalidate(); setExcluindo(null); },
+    onSuccess: () => { toast.success("Baia removida."); utils.warehouse.baiaAgregadosListar.invalidate(); setExcluindo(null); },
     onError: (e) => toast.error(e.message),
   });
   const leituraMut = trpc.warehouse.baiaLeituraRegistrar.useMutation({
-    onSuccess: () => { toast.success("Leitura registrada!"); utils.warehouse.baiaListar.invalidate(); fecharLeitura(); },
+    onSuccess: () => { toast.success("Leitura registrada!"); utils.warehouse.baiaAgregadosListar.invalidate(); fecharLeitura(); },
+    onError: (e) => toast.error(e.message),
+  });
+  // Rev. 2415 — cria/encontra baia ligada ao item agregado no 1º clique.
+  const autoEnsureMut = trpc.warehouse.baiaAutoEnsureFromItem.useMutation({
     onError: (e) => toast.error(e.message),
   });
 
@@ -190,13 +204,26 @@ export default function InventarioVisualBaias() {
   async function confirmarLeitura() {
     if (!leituraBaia || leituraPct == null) return;
     try {
+      // Rev. 2415 — se item agregado ainda não tem baia (id=null),
+      // cria a baia automaticamente antes de registrar a leitura.
+      let baiaId: number | null = leituraBaia.id;
+      if (baiaId == null) {
+        if (!leituraBaia.itemId || obraContexto == null) {
+          toast.error("Item sem vínculo. Use o modo Gerenciar pra cadastrar manualmente.");
+          return;
+        }
+        const r = await autoEnsureMut.mutateAsync({
+          companyId, obraId: obraContexto, itemId: leituraBaia.itemId,
+        });
+        baiaId = r.baiaId;
+      }
       let fotoB64: string | undefined, fotoMime: string | undefined;
       if (leituraFoto) {
         const c = await compressImageIfNeeded(leituraFoto);
         fotoB64 = c.base64; fotoMime = c.contentType;
       }
       await leituraMut.mutateAsync({
-        companyId, baiaId: leituraBaia.id, percentual: leituraPct,
+        companyId, baiaId, percentual: leituraPct,
         observacoes: leituraObs.trim() || undefined,
         fotoBase64: fotoB64, fotoMime,
       });
@@ -229,9 +256,12 @@ export default function InventarioVisualBaias() {
     const pctAtual: number | null = ult ? Number(ult.percentual) : null;
     const pctAnt: number | null = ant ? Number(ant.percentual) : null;
     const delta = pctAtual != null && pctAnt != null ? pctAtual - pctAnt : null;
+    const semBaia = b.id == null;
+    const entradaHoje = Number(b.entradaHoje ?? 0);
+    const qtdAtual = Number(b.quantidadeAtual ?? 0);
     return (
       <div
-        key={b.id}
+        key={b.id ?? `item-${b.itemId}`}
         className={`bg-white rounded-2xl border-2 overflow-hidden shadow-sm hover:shadow-lg transition-shadow ${
           conferida ? "border-emerald-200" : "border-amber-300 ring-2 ring-amber-100"
         }`}
@@ -245,7 +275,7 @@ export default function InventarioVisualBaias() {
               <Camera className="w-12 h-12" />
             </div>
           )}
-          {gerenciarMode && (
+          {gerenciarMode && !semBaia && (
             <div className="absolute top-2 right-2 flex gap-1">
               <button onClick={() => abrirEdicao(b)} className="bg-white/90 hover:bg-white p-1.5 rounded-lg shadow" title="Editar">
                 <Pencil className="w-3.5 h-3.5 text-slate-700" />
@@ -258,6 +288,16 @@ export default function InventarioVisualBaias() {
           {conferida && (
             <div className="absolute top-2 left-2 bg-emerald-500 text-white text-[11px] font-bold px-2 py-1 rounded-md shadow flex items-center gap-1">
               <CheckCircle2 className="w-3 h-3" /> Conferida hoje
+            </div>
+          )}
+          {!conferida && entradaHoje > 0 && (
+            <div className="absolute top-2 left-2 bg-sky-500 text-white text-[11px] font-bold px-2 py-1 rounded-md shadow flex items-center gap-1" title="Quantidade recebida hoje na obra">
+              <PackagePlus className="w-3 h-3" /> +{entradaHoje.toLocaleString("pt-BR")} {b.unidade} hoje
+            </div>
+          )}
+          {!conferida && semBaia && entradaHoje === 0 && (
+            <div className="absolute top-2 left-2 bg-amber-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-md shadow flex items-center gap-1" title="Aparece aqui automaticamente porque foi recebido na obra">
+              <Sparkles className="w-3 h-3" /> Auto
             </div>
           )}
           {pctAtual != null && (
@@ -283,6 +323,11 @@ export default function InventarioVisualBaias() {
             </span>
             <span className="text-slate-500">{b.unidade}{b.capacidadeEstimada ? ` · cap. ${b.capacidadeEstimada}` : ""}</span>
           </div>
+          {!semBaia && qtdAtual > 0 && (
+            <div className="text-[11px] text-slate-600 mt-1">
+              Saldo no sistema: <span className="font-semibold text-slate-800">{qtdAtual.toLocaleString("pt-BR")} {b.unidade}</span>
+            </div>
+          )}
           {ult && (
             <div className="text-[11px] text-slate-500 mt-1">
               Última: <span className="font-semibold text-slate-700">{ult.lidaPorNome || "—"}</span> · {fmtData(ult.lidaEm)}
@@ -292,7 +337,7 @@ export default function InventarioVisualBaias() {
         {/* 5 botões grandes */}
         <div className="p-3">
           <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wide mb-2">
-            {conferida ? "Refazer leitura?" : "Como está agora?"}
+            {conferida ? "Refazer leitura?" : semBaia ? "Quanto restou na baia?" : "Como está agora?"}
           </p>
           <div className="grid grid-cols-5 gap-1.5">
             {NIVEIS.map(n => (
@@ -307,12 +352,14 @@ export default function InventarioVisualBaias() {
               </button>
             ))}
           </div>
-          <button
-            onClick={() => setHistoricoBaia(b)}
-            className="mt-2 w-full text-[11px] text-slate-500 hover:text-slate-800 flex items-center justify-center gap-1 py-1"
-          >
-            <History className="w-3 h-3" /> Ver histórico
-          </button>
+          {!semBaia && (
+            <button
+              onClick={() => setHistoricoBaia(b)}
+              className="mt-2 w-full text-[11px] text-slate-500 hover:text-slate-800 flex items-center justify-center gap-1 py-1"
+            >
+              <History className="w-3 h-3" /> Ver histórico
+            </button>
+          )}
         </div>
       </div>
     );
@@ -398,17 +445,22 @@ export default function InventarioVisualBaias() {
           </div>
         )}
 
-        {/* Obra sem baia cadastrada */}
+        {/* Obra sem agregado recebido (e sem baia manual) */}
         {obraContexto != null && !isLoading && total === 0 && (
           <div className="bg-white rounded-2xl border-2 border-dashed border-gray-300 p-10 text-center space-y-3">
             <Package className="w-14 h-14 text-gray-300 mx-auto" />
             <div>
-              <p className="text-lg font-semibold text-gray-700">Nenhuma baia cadastrada nesta obra</p>
-              <p className="text-sm text-gray-500 mt-1">Cadastre as baias (areia, pedra, lajota…) pra começar a aferir diariamente.</p>
+              <p className="text-lg font-semibold text-gray-700">Nenhum agregado recebido nesta obra</p>
+              <p className="text-sm text-gray-500 mt-1">
+                Areia, brita, pedra, lajota, cimento e afins <span className="font-semibold">aparecem aqui automaticamente</span> quando recebidos pelo almoxarifado.
+              </p>
+              <p className="text-xs text-gray-400 mt-2">Se precisar de uma baia manual fora dessa lógica, use <span className="font-semibold">Gerenciar</span>.</p>
             </div>
-            <Button onClick={abrirNova} className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2">
-              <Plus className="w-4 h-4" /> Cadastrar primeira baia
-            </Button>
+            {gerenciarMode && (
+              <Button onClick={abrirNova} className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2">
+                <Plus className="w-4 h-4" /> Cadastrar baia manual
+              </Button>
+            )}
           </div>
         )}
 
@@ -429,6 +481,9 @@ export default function InventarioVisualBaias() {
               <Play className="w-5 h-5" />
               Iniciar Aferição
             </button>
+            <p className="text-xs text-gray-400 max-w-md mx-auto">
+              Itens agregados aparecem aqui automaticamente conforme entram na obra.
+            </p>
           </div>
         )}
 
@@ -611,8 +666,8 @@ export default function InventarioVisualBaias() {
           )}
           <DialogFooter>
             <Button variant="outline" onClick={fecharLeitura}>Cancelar</Button>
-            <Button onClick={confirmarLeitura} disabled={leituraMut.isPending} className="bg-emerald-600 hover:bg-emerald-700">
-              {leituraMut.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Confirmar"}
+            <Button onClick={confirmarLeitura} disabled={leituraMut.isPending || autoEnsureMut.isPending} className="bg-emerald-600 hover:bg-emerald-700">
+              {(leituraMut.isPending || autoEnsureMut.isPending) ? <Loader2 className="w-4 h-4 animate-spin" /> : "Confirmar"}
             </Button>
           </DialogFooter>
         </DialogContent>
