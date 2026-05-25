@@ -2,6 +2,7 @@
 
 > Este arquivo guarda os one-liners das revisões antigas para manter o `replit.md` enxuto.
 
+- **Rev. 2394** — ALMOXARIFADO/CONFIG · Cadastro de Categorias exposto em Configurações + `excluirCategoria` migra itens pra "Sem categoria" (UPDATE categoria=NULL) atomicamente em `db.transaction`. Ver `shared/changelog.ts`.
 - **Rev. 2393** — ALMOXARIFADO/UX · Drag-to-select (lasso) na grade de cards via Pointer Events + botão "Excluir" red→rose no sticky bar do modo seleção (reusa `ModalConfirmacaoAuditoria` da Rev. 2388). Ver `shared/changelog.ts`.
 - **Rev. 2392** — ALMOXARIFADO/UX · Após transferir TODO o estoque de um item de obra, o item SOME da lista (soft-delete via `ativo=false`). UPDATE em `createTransferencia`/`createTransferenciaLote` seta `ativo=false` via CASE WHEN quando obraId IS NOT NULL e saldo final ≤ 0; upsert no destino reativa via `ativo=true` evitando duplicata. Ver `shared/changelog.ts`.
 - **Rev. 2391** — OBRAS/GOVERNANÇA · Não permitir encerrar obra com estoque no Almoxarifado — pre-check `obras.checarEstoquePendente` + guard em `obras.update` (só na transição pra encerrador) + modal âmbar→laranja com CTA pra `/almoxarifado?obra=<id>`. Ver `shared/changelog.ts`.

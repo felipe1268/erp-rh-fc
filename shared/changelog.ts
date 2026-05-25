@@ -1,6 +1,23 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2402 — **CONFIGURAÇÕES/UX · Abas com `flex-wrap` (uma sobre a
+ * outra) em vez de scroll horizontal.**
+ *
+ * Pedido user (IMG_image_1779710495504, 25/05/2026): a Rev. 2401
+ * resolveu o texto quebrando vertical adotando scroll-x, mas o user
+ * preferiu abas se reorganizando em múltiplas linhas, sem precisar
+ * arrastar a barra.
+ *
+ * **Fix** (`client/src/pages/Configuracoes.tsx` L425-446): trocou
+ * `overflow-x-auto` + `inline-flex` por `flex flex-wrap`. Padding
+ * horizontal dos botões caiu de `px-4` pra `px-3` pra ganhar densidade
+ * (com 14 abas economiza ~28px por botão = 1 linha a menos). Mantido
+ * `whitespace-nowrap` em cada botão (texto da label nunca quebra) e
+ * `flex-shrink-0` no ícone. Zero mudança de comportamento ou estado.
+ *
+ * R-001/R-007/R-010 OK (frontend-only).
+ *
  * Rev. 2401 — **CONFIGURAÇÕES/UX · Barra de abas com scroll horizontal
  * em vez de quebrar texto em várias linhas.**
  *
