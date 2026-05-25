@@ -422,22 +422,25 @@ export default function Configuracoes() {
           <PrintActions title="Configurações" />
         </div>
 
-        {/* Tabs */}
-        <div className="flex gap-1 mb-6 bg-gray-100 p-1 rounded-lg">
-          {tabs.map(tab => (
-            <button
-              key={tab.key}
-              onClick={() => setActiveTab(tab.key)}
-              className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                activeTab === tab.key
-                  ? "bg-white text-gray-900 shadow-sm"
-                  : "text-gray-500 hover:text-gray-700 hover:bg-gray-50"
-              }`}
-            >
-              <tab.icon className="w-4 h-4" />
-              {tab.label}
-            </button>
-          ))}
+        {/* Tabs — Rev. 2401: scroll-x + whitespace-nowrap pra não quebrar texto vertical
+            quando passa de ~10 tabs (print 25/05/2026 mostrava "Regras / de / Ouro" em 3 linhas). */}
+        <div className="mb-6 -mx-1 px-1 overflow-x-auto">
+          <div className="inline-flex gap-1 bg-gray-100 p-1 rounded-lg min-w-full">
+            {tabs.map(tab => (
+              <button
+                key={tab.key}
+                onClick={() => setActiveTab(tab.key)}
+                className={`flex-shrink-0 inline-flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors whitespace-nowrap ${
+                  activeTab === tab.key
+                    ? "bg-white text-gray-900 shadow-sm"
+                    : "text-gray-500 hover:text-gray-700 hover:bg-gray-50"
+                }`}
+              >
+                <tab.icon className="w-4 h-4 flex-shrink-0" />
+                {tab.label}
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* TAB: Módulos do Sistema */}

@@ -1,6 +1,28 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2401 — **CONFIGURAÇÕES/UX · Barra de abas com scroll horizontal
+ * em vez de quebrar texto em várias linhas.**
+ *
+ * Pedido user (IMG_image_1779710232514, 25/05/2026): print mostrou as
+ * abas de Configurações exibindo "Regras / de / Ouro", "Critérios / do
+ * / Sistema", "Templates / de / Documentos" etc. — cada label
+ * estourando em 3 linhas verticais, layout ilegível.
+ *
+ * Causa-raiz: o container das abas era `flex gap-1` sem `overflow` nem
+ * `whitespace-nowrap`. Com 14 abas o flex squeeze cada botão até o
+ * texto quebrar nos espaços. O `flex-shrink` default é 1 (encolhe).
+ *
+ * **Fix** (`client/src/pages/Configuracoes.tsx` L425-447): wrapper
+ * externo `overflow-x-auto` + container interno `inline-flex
+ * min-w-full` (preserva o background cinza full-width quando há espaço
+ * sobrando) + botões com `flex-shrink-0 whitespace-nowrap` (cada tab
+ * mantém o tamanho intrínseco; quando passa do viewport, vira scroll
+ * horizontal). Ícone também `flex-shrink-0` por garantia. Zero mudança
+ * em lógica/estado/rotas.
+ *
+ * R-001/R-007/R-010 OK (frontend-only).
+ *
  * Rev. 2400 — **ALMOXARIFADO/CONFIG · Toggle global pra ligar/desligar
  * a exigência de senha + justificativa no controle de auditoria.**
  *
