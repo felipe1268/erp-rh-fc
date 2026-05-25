@@ -2,7 +2,8 @@ import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
 import { Button } from "@/components/ui/button";
-import { Warehouse, Tag, ExternalLink, ChevronRight, AlertTriangle, Loader2 } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { Warehouse, Tag, ExternalLink, ChevronRight, AlertTriangle, Loader2, ShieldAlert } from "lucide-react";
 import { toast } from "sonner";
 
 export function AlmoxarifadoConfigSection() {
@@ -17,6 +18,17 @@ export function AlmoxarifadoConfigSection() {
     trpc.compras.contarItensPorCategoria.useQuery({ companyId }, { enabled: !!companyId });
 
   const utils = trpc.useUtils();
+  // Rev. 2400 — Toggle global do controle de auditoria do Almoxarifado.
+  const auditCfgQ = trpc.compras.getAuditoriaConfig.useQuery(
+    { companyId }, { enabled: !!companyId }
+  );
+  const setAuditCfgMut = trpc.compras.setAuditoriaConfig.useMutation({
+    onSuccess: () => { auditCfgQ.refetch(); toast.success("Controle de auditoria atualizado."); },
+    onError: (e) => toast.error(e.message),
+  });
+  const exigeSenha = !!auditCfgQ.data?.exigeSenha;
+  const exigeJustificativa = !!auditCfgQ.data?.exigeJustificativa;
+
   const limparMut = trpc.compras.limparCategoriasOrfas.useMutation({
     onSuccess: (r: any) => {
       const n = Number(r?.itensMigrados ?? 0);
@@ -79,6 +91,48 @@ export function AlmoxarifadoConfigSection() {
           <ChevronRight className="w-4 h-4" />
         </div>
       </button>
+
+      {/* Rev. 2400 — Toggle de controle de auditoria (senha + justificativa). */}
+      <div className="border-t border-emerald-100 bg-white px-4 py-3">
+        <div className="flex items-start gap-3">
+          <ShieldAlert className="w-5 h-5 text-emerald-600 flex-shrink-0 mt-0.5" />
+          <div className="flex-1 min-w-0">
+            <div className="font-medium text-gray-800 text-sm">Controle de auditoria do Almoxarifado</div>
+            <p className="text-xs text-gray-500 mt-0.5">
+              Quando ligados, excluir item / excluir unidade / alterar quantidade manualmente pedem senha do usuário e/ou justificativa, e geram pendência pra validação por admin.
+            </p>
+            <div className="mt-3 space-y-2">
+              <label className="flex items-center justify-between gap-3 py-1.5 px-2 rounded hover:bg-emerald-50/40">
+                <div className="min-w-0">
+                  <div className="text-sm font-medium text-gray-800">Exigir senha do usuário</div>
+                  <p className="text-[11px] text-gray-500">Só se aplica a quem tem login local (OAuth nunca pede senha).</p>
+                </div>
+                <Switch
+                  checked={exigeSenha}
+                  disabled={!companyId || auditCfgQ.isLoading || setAuditCfgMut.isPending}
+                  onCheckedChange={(v) => setAuditCfgMut.mutate({ companyId, exigeSenha: !!v, exigeJustificativa })}
+                />
+              </label>
+              <label className="flex items-center justify-between gap-3 py-1.5 px-2 rounded hover:bg-emerald-50/40">
+                <div className="min-w-0">
+                  <div className="text-sm font-medium text-gray-800">Exigir justificativa</div>
+                  <p className="text-[11px] text-gray-500">Texto livre (mín. 10 caracteres) registrado no log de auditoria.</p>
+                </div>
+                <Switch
+                  checked={exigeJustificativa}
+                  disabled={!companyId || auditCfgQ.isLoading || setAuditCfgMut.isPending}
+                  onCheckedChange={(v) => setAuditCfgMut.mutate({ companyId, exigeSenha, exigeJustificativa: !!v })}
+                />
+              </label>
+            </div>
+            {!exigeSenha && !exigeJustificativa && (
+              <div className="mt-2 bg-amber-50 border border-amber-200 text-amber-800 text-[11px] rounded-md px-2.5 py-1.5">
+                ⚠ Controle desligado: exclusões/alterações ainda ficam no log, mas qualquer usuário pode confirmar sem senha nem justificativa.
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
 
       {/* Rev. 2395 — Banner de categorias órfãs (itens com string de categoria que não existe mais) */}
       {orfas.length > 0 && (

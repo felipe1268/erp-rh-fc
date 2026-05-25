@@ -2,6 +2,7 @@
 
 > Este arquivo guarda os one-liners das revisões antigas para manter o `replit.md` enxuto.
 
+- **Rev. 2392** — ALMOXARIFADO/UX · Após transferir TODO o estoque de um item de obra, o item SOME da lista (soft-delete via `ativo=false`). UPDATE em `createTransferencia`/`createTransferenciaLote` seta `ativo=false` via CASE WHEN quando obraId IS NOT NULL e saldo final ≤ 0; upsert no destino reativa via `ativo=true` evitando duplicata. Ver `shared/changelog.ts`.
 - **Rev. 2391** — OBRAS/GOVERNANÇA · Não permitir encerrar obra com estoque no Almoxarifado — pre-check `obras.checarEstoquePendente` + guard em `obras.update` (só na transição pra encerrador) + modal âmbar→laranja com CTA pra `/almoxarifado?obra=<id>`. Ver `shared/changelog.ts`.
 - **Rev. 2390** — ALMOXARIFADO/UX · Transferência em LOTE no sticky bar do modo seleção (N itens → 1 destino comum, qtd editável por linha). Novo `createTransferenciaLote` itera linha-a-linha reusando lógica do single; modal max-w-2xl roxo→indigo com painel de resultado parcial (sucessos/falhas). Ver `shared/changelog.ts`.
 - **Rev. 2389** — GOVERNANÇA/COMPRAS · Guarda determinística impede que OCs de SERVIÇO / ADMINISTRATIVO / TRIBUTO virem item de Almoxarifado. Função `classificarNaturezaItemAlmox` aplicada em `atualizarStatusOrdem` (per-item) + `warehouse.registerSmartEntry` (itemNovo). Ver `shared/changelog.ts`.

@@ -115,7 +115,14 @@ export default function AlmoxarifadoPage() {
   const [modalAuditoriaList, setModalAuditoriaList] = useState(false);
   const [auditoriaFiltroStatus, setAuditoriaFiltroStatus] = useState<"pendente" | "validado" | "rejeitado" | "todos">("pendente");
   const me = trpc.auth.me.useQuery();
-  const requerSenha = !!(me.data as any)?.hasLocalPassword;
+  // Rev. 2400 — Toggle global por empresa (senha + justificativa).
+  const auditCfgQ = trpc.compras.getAuditoriaConfig.useQuery(
+    { companyId }, { enabled: !!companyId }
+  );
+  const cfgExigeSenha = auditCfgQ.data?.exigeSenha ?? true;
+  const cfgExigeJustificativa = auditCfgQ.data?.exigeJustificativa ?? true;
+  const requerSenha = !!(me.data as any)?.hasLocalPassword && cfgExigeSenha;
+  const requerJustificativa = cfgExigeJustificativa;
   const meRole: string = (me.data as any)?.role ?? "";
   const isAdmin = meRole === "admin" || meRole === "admin_master";
   const pendenciasCount = trpc.compras.auditoriaPendenciasCount.useQuery(
@@ -4799,6 +4806,7 @@ export default function AlmoxarifadoPage() {
         descricao={modalAuditoria?.descricao ?? null}
         textoBotaoConfirmar={modalAuditoria?.textoBotao ?? "Confirmar"}
         requerSenha={requerSenha}
+        requerJustificativa={requerJustificativa}
         carregando={!!modalAuditoria?.carregando}
         erroExterno={modalAuditoria?.erro ?? null}
         onCancelar={() => setModalAuditoria(null)}

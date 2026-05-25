@@ -644,6 +644,14 @@ Regras:
           console.log(`[SyncSchema+] Coluna fornecedor_nome garantida em financial_entries (backfill: ${(bf as any)?.rowCount ?? "?"} linhas).`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA financial_entries fornecedor_nome:`, e?.message || e); }
 
+        // Rev. 2400 — Toggle global de auditoria do Almoxarifado (por empresa).
+        // Default 1 preserva comportamento da Rev. 2388.
+        try {
+          await db.execute(sql`ALTER TABLE companies ADD COLUMN IF NOT EXISTS almoxarifado_exige_senha SMALLINT NOT NULL DEFAULT 1`);
+          await db.execute(sql`ALTER TABLE companies ADD COLUMN IF NOT EXISTS almoxarifado_exige_justificativa SMALLINT NOT NULL DEFAULT 1`);
+          console.log(`[SyncSchema+] Colunas almoxarifado_exige_senha/justificativa garantidas em companies.`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA companies almoxarifado_exige_*:`, e?.message || e); }
+
         // Rev. 1592: bloco Escritório Central na avaliação anônima do Portal do Cliente.
         // Garantido aqui (e não só em ColFix) porque o version guard do ColFix pode
         // pular as migrations quando a versão já estiver aplicada.

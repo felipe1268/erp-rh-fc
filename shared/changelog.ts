@@ -1,6 +1,63 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2400 — **ALMOXARIFADO/CONFIG · Toggle global pra ligar/desligar
+ * a exigência de senha + justificativa no controle de auditoria.**
+ *
+ * Pedido user (IMG_image_1779708958699 + IMG_image_1779709008599,
+ * 25/05/2026): "preciso ter a opção de habilitar ou não a opção e pedir
+ * senha e justificativa para apagar ou revisar o almoxarifado.. quero
+ * poder controlar na tela de configurações gerais."
+ *
+ * Causa-raiz: a Rev. 2388 instituiu controle rígido (senha-se-local +
+ * justificativa min10) como hard-requirement em `excluirItem` /
+ * `excluirUnidade` / `atualizarItem` (quando qty muda manualmente). Não
+ * havia gating opcional — quem não queria a fricção precisava do controle
+ * desligado por completo. User pediu toggle granular em Configurações.
+ *
+ * **Schema** (`drizzle/schema.ts` + `server/_core/index.ts` SyncSchema+):
+ *   - Tabela `companies` ganha 2 colunas SMALLINT NOT NULL DEFAULT 1:
+ *     `almoxarifado_exige_senha` e `almoxarifado_exige_justificativa`.
+ *     ADD COLUMN IF NOT EXISTS no SyncSchema+ (não viola R-001 — DDL
+ *     idempotente, não destrutivo). Default 1 preserva o comportamento
+ *     da Rev. 2388 retroativamente.
+ *
+ * **Backend** (`server/routers/compras.ts`):
+ *   - Novo helper `getAlmoxAuditoriaConfig(companyId)` lê os 2 flags.
+ *   - `verificarSenhaSeLocal(ctx, senha, exigeSenha=true)` ganha 3º
+ *     parâmetro: quando `false`, retorna imediatamente sem checar nada.
+ *   - Novo helper `justificativaFinal(j, exige)`: se `exige=true` valida
+ *     min10 chars; se `false`, aceita vazio e troca por "Auditoria
+ *     desabilitada nas configurações da empresa." (o log de auditoria
+ *     CONTINUA sendo gravado — só a obrigatoriedade do texto que cai).
+ *   - `excluirItem` / `excluirUnidade` / `atualizarItem`: input
+ *     `justificativa` virou `z.string().optional()`; mutations lêem
+ *     cfg da empresa do item e despacham pros helpers acima.
+ *   - 2 endpoints novos: `compras.getAuditoriaConfig({companyId})`
+ *     (qualquer user da empresa lê) + `compras.setAuditoriaConfig(
+ *     {companyId, exigeSenha, exigeJustificativa})` (admin-only).
+ *
+ * **Frontend**:
+ *   - `client/src/components/almoxarifado/ModalConfirmacaoAuditoria.tsx`:
+ *     nova prop `requerJustificativa?: boolean` (default true). Quando
+ *     `false`, omite o textarea, omite a validação min10, e o banner
+ *     âmbar "Operação auditada" só aparece se algum dos 2 for exigido.
+ *   - `client/src/pages/almoxarifado/index.tsx`: query
+ *     `compras.getAuditoriaConfig`; `requerSenha = hasLocalPassword &&
+ *     cfg.exigeSenha`; `requerJustificativa = cfg.exigeJustificativa`;
+ *     ambos passados pro modal único da Rev. 2388 (que serve excluir
+ *     item single, excluir em lote/lasso, excluir unidade e alterar
+ *     qty manual — Revs. 2388/2392/2393).
+ *   - `client/src/pages/configuracoes/AlmoxarifadoConfigSection.tsx`:
+ *     bloco novo dentro da seção verde "ALMOXARIFADO" — 2 Switches
+ *     (Exigir senha / Exigir justificativa). Mutations otimistas via
+ *     refetch da query. Banner âmbar de aviso quando AMBOS estão off
+ *     ("⚠ Controle desligado: exclusões/alterações ainda ficam no log,
+ *     mas qualquer usuário pode confirmar sem senha nem justificativa.")
+ *
+ * Defaults preservam Rev. 2388 (ambos exigidos). R-001/R-007/R-010 OK
+ * (ADD COLUMN IF NOT EXISTS é DDL idempotente não-destrutivo).
+ *
  * Rev. 2399 — **FINANCEIRO/LANÇAMENTOS · Filtro por período LIVRE
  * (calendário aberto, passado E futuro) substitui o dropdown de mês.**
  *

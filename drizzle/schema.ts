@@ -462,6 +462,10 @@ export const companies = pgTable("companies", {
         gestorFinanceiroNome: varchar("gestor_financeiro_nome", { length: 255 }),
         gestorProjetoId: integer("gestor_projeto_id"),
         gestorProjetoNome: varchar("gestor_projeto_nome", { length: 255 }),
+        // Rev. 2400 — Toggle global de auditoria do Almoxarifado.
+        // Ambos default 1 (preserva comportamento da Rev. 2388).
+        almoxarifadoExigeSenha: smallint("almoxarifado_exige_senha").default(1).notNull(),
+        almoxarifadoExigeJustificativa: smallint("almoxarifado_exige_justificativa").default(1).notNull(),
 },
 (table) => [
         index("companies_cnpj_unique").on(table.cnpj),

@@ -8,6 +8,9 @@ interface Props {
   descricao: React.ReactNode;
   textoBotaoConfirmar: string;
   requerSenha: boolean;
+  /** Rev. 2400 — Quando false, o campo justificativa fica opcional/some.
+   *  Default true preserva o comportamento da Rev. 2388. */
+  requerJustificativa?: boolean;
   carregando?: boolean;
   /** Erro vindo da última tentativa (ex: "Senha incorreta") — mantém modal aberto pra retry. */
   erroExterno?: string | null;
@@ -18,7 +21,7 @@ interface Props {
 export function ModalConfirmacaoAuditoria(props: Props) {
   const {
     aberto, titulo, subtitulo, descricao, textoBotaoConfirmar,
-    requerSenha, carregando, erroExterno, onCancelar, onConfirmar,
+    requerSenha, requerJustificativa = true, carregando, erroExterno, onCancelar, onConfirmar,
   } = props;
   const [senha, setSenha] = useState("");
   const [justificativa, setJustificativa] = useState("");
@@ -34,7 +37,7 @@ export function ModalConfirmacaoAuditoria(props: Props) {
 
   function submeter() {
     const j = justificativa.trim();
-    if (j.length < 10) {
+    if (requerJustificativa && j.length < 10) {
       setErro("Justifique a operação com ao menos 10 caracteres.");
       return;
     }
@@ -64,28 +67,32 @@ export function ModalConfirmacaoAuditoria(props: Props) {
         </div>
         <div className="px-6 py-5 space-y-4 text-sm text-gray-700">
           <div className="leading-relaxed">{descricao}</div>
-          <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 flex gap-2 text-amber-900">
-            <ShieldAlert className="w-5 h-5 flex-shrink-0 mt-0.5" />
-            <div className="text-xs leading-relaxed">
-              <strong>Operação auditada.</strong> Esta ação fica registrada no log e precisa ser validada por um administrador da empresa.
+          {(requerSenha || requerJustificativa) && (
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 flex gap-2 text-amber-900">
+              <ShieldAlert className="w-5 h-5 flex-shrink-0 mt-0.5" />
+              <div className="text-xs leading-relaxed">
+                <strong>Operação auditada.</strong> Esta ação fica registrada no log e precisa ser validada por um administrador da empresa.
+              </div>
             </div>
-          </div>
+          )}
 
-          <div>
-            <label className="block text-xs font-semibold text-gray-700 mb-1">
-              Justificativa <span className="text-red-500">*</span>
-            </label>
-            <textarea
-              value={justificativa}
-              onChange={(e) => setJustificativa(e.target.value)}
-              placeholder="Ex.: Item duplicado no cadastro, registrado por engano em 23/05."
-              rows={3}
-              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-rose-400 focus:border-rose-400 outline-none resize-none"
-              autoFocus
-              disabled={carregando}
-            />
-            <p className="text-[11px] text-gray-400 mt-1">Mínimo 10 caracteres. ({justificativa.trim().length}/10)</p>
-          </div>
+          {requerJustificativa && (
+            <div>
+              <label className="block text-xs font-semibold text-gray-700 mb-1">
+                Justificativa <span className="text-red-500">*</span>
+              </label>
+              <textarea
+                value={justificativa}
+                onChange={(e) => setJustificativa(e.target.value)}
+                placeholder="Ex.: Item duplicado no cadastro, registrado por engano em 23/05."
+                rows={3}
+                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-rose-400 focus:border-rose-400 outline-none resize-none"
+                autoFocus
+                disabled={carregando}
+              />
+              <p className="text-[11px] text-gray-400 mt-1">Mínimo 10 caracteres. ({justificativa.trim().length}/10)</p>
+            </div>
+          )}
 
           {requerSenha && (
             <div>
