@@ -1,6 +1,99 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2408 — **EQUIPAMENTOS LOCADOS / UX · Filtro por LOCADORA
+ * (fornecedor) na toolbar da Visão Geral.**
+ *
+ * Pedido user (25/05/2026, sequência da Rev. 2407): "PRECISO PODER
+ * FILTRAR POR EMPRESA DE LOCAÇÃO TBM... PARA NÃO DAR ERRO. PRECISO
+ * DE UM CADASTRO DAS EMPRESAS DE LOCAÇÃO QUE JÁ EXISTE NO CADASTRO
+ * DE FORNECEDOR OU EMPRESAS TERCEIRAS É A MESMA COISA COM NOME
+ * DIFERENTE." Com 1267 equipamentos em locação e dezenas de
+ * locadoras misturadas (JALVES, MILLS, LOCAMERICA, etc.), o
+ * almoxarife não conseguia rapidamente isolar "tudo da JALVES pra
+ * conferir devolução". Os 2 filtros existentes (obra + categoria)
+ * não cobriam essa dimensão.
+ *
+ * **Cadastro reaproveitado, não criado** — o user enfatizou que
+ * "empresa de locação = fornecedor = empresa terceira". O ERP já
+ * tem o cadastro em `compras_fornecedores` (1190 registros em prod
+ * pro screenshot mostrado) e cada equipamento locado já carrega
+ * `fornecedorNome` desde a Rev. 2308. ZERO tabela nova. O filtro
+ * deriva a lista DIRETO dos próprios equipamentos (igual o filtro
+ * de categoria) — assim só aparecem locadoras realmente em uso, e
+ * o dropdown nunca fica com 1190 opções vazias.
+ *
+ * **Implementação** — 100% client-side em
+ * `client/src/pages/equipamentos/Locados.tsx`:
+ *
+ * 1. **State + pipeline** (L46-50, L92-100, L102/106/115):
+ *    `filtroFornecedor` ("" | "__null__" | "<NOME UPPERCASE>"). Novo
+ *    `dataPorFornecedor` useMemo inserido entre `dataPorCat` e
+ *    `data` (vencimento) — preserva a cadeia status→obra→categoria→
+ *    fornecedor→vencimento. Comparação case-insensitive
+ *    (`.trim().toUpperCase()`) pra resistir a inconsistências do
+ *    parser de PDF que ora cospe "Jalves" ora "JALVES LOCAÇÕES".
+ *    `data` useMemo agora itera sobre `dataPorFornecedor` em vez de
+ *    `dataPorCat`.
+ *
+ * 2. **`fornecedoresComItens` useMemo** (L998-1018): espelha o
+ *    pattern do `categoriasComItens` da Rev. 2337. Agrupa
+ *    `dataPorCat` (NÃO `dataPorFornecedor`, senão o select seria
+ *    auto-redutor a 1 opção) por nome normalizado, contando
+ *    unidades e somando `valorMensal`. Sort: "Sem locadora" no
+ *    final, demais por contagem desc. `fornecedorSelecionado`
+ *    auxilia o chip do filtro ativo.
+ *
+ * 3. **UI — grid de filtros 2→3 colunas** (L1546): `md:grid-cols-2`
+ *    → `md:grid-cols-3`. 3º select novo (L1584-1602) com ícone
+ *    `Truck` amber-400 (combina com o tema da seção locados que
+ *    usa amber pra Locados vs indigo pra Próprios). Estilo idêntico
+ *    aos 2 selects existentes — ring + bg-amber-50/40 quando ativo.
+ *
+ * 4. **Chip de filtro ativo** (L1646-1656): amber, padrão idêntico
+ *    aos chips de obra (emerald) e categoria (violet). Botão X
+ *    remove só esse filtro.
+ *
+ * 5. **Reset** (L1666): "limpar tudo" agora também chama
+ *    `setFiltroFornecedor("")`. Condição de visibilidade do bloco
+ *    de chips (L1605) também passou a incluir `filtroFornecedor`.
+ *
+ * **Decisões importantes**:
+ * - **Derivar do uso, não do cadastro completo**: poderíamos puxar
+ *   a lista de `compras.listarFornecedores` (já está disponível em
+ *   `fornecedoresCadastradosQ` desde a Rev. 2358), mas isso encheria
+ *   o select de 1190 opções vazias. O pattern "só mostra o que tem
+ *   item" é o que o user usa hoje em obra e categoria — mesma UX.
+ * - **Comparação por nome, não por id**: `equipamentos_locados` só
+ *   guarda `fornecedorNome` (string livre, vindo do PDF). Migrar pra
+ *   FK `fornecedorId` exigiria backfill + mutation de
+ *   reconciliação + tela de "merge de duplicatas" — escopo enorme,
+ *   adiado. Por ora, normalização inline (`toUpperCase().trim()`)
+ *   resolve 95% dos casos.
+ * - **Posição "categoria→fornecedor→vencimento"**: fornecedor entra
+ *   antes do vencimento pra que clicar "atrasados" + "JALVES"
+ *   funcione (vencimento limita só itens em_uso vencidos, dentro
+ *   do conjunto já filtrado por fornecedor).
+ * - **Sem mudança de KPIs**: os 5 cards do topo continuam
+ *   refletindo `dataAll`/`stats` — não são afetados pelo filtro de
+ *   fornecedor, igual obra e categoria também não os afetam.
+ *
+ * **R-001 / R-007 / R-010**: OK. Zero ALTER/DROP/DELETE, zero
+ * migration, zero backend novo. Pure UI/state refactor.
+ *
+ * **Follow-up potencial** (não pedido): unificar `fornecedorNome` em
+ * FK pra `compras_fornecedores`, com modal de merge de duplicatas
+ * ("JALVES" vs "JALVES LOCAÇÕES" vs "JALVES LOCACOES LTDA"). Hoje
+ * vivem como strings livres da IA.
+ *
+ * **Arquivos tocados**:
+ * - `client/src/pages/equipamentos/Locados.tsx`
+ * - `shared/version.ts` (2407 → 2408)
+ * - `shared/changelog.ts` (esta entrada)
+ * - `replit.md` (rotação 2+5)
+ *
+ * ---
+ *
  * Rev. 2407 — **EQUIPAMENTOS LOCADOS / IMPORT · Multi-PDF no modal
  * "Importar contratos de locação (PDF · IA)" — N arquivos da MESMA
  * empresa de uma vez, com acúmulo no preview.**

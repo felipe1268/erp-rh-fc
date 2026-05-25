@@ -41,6 +41,10 @@ export default function EquipamentosLocados() {
   const [filtroStatus, setFiltroStatus] = useState<string>("em_uso");
   // Rev. 2334 — filtro por obra ("" = todas; "__null__" = sem obra; "<id>" = obra ERP)
   const [filtroObra, setFiltroObra] = useState<string>("");
+  // Rev. 2408 — filtro por locadora/fornecedor (reaproveita o nome já gravado
+  // em cada locado; lista de seleção é derivada dos próprios equipamentos da
+  // empresa atual + opcionalmente do cadastro de fornecedores).
+  const [filtroFornecedor, setFiltroFornecedor] = useState<string>("");
   // Rev. 2337 — filtro por categoria ("" = todas; "__null__" = sem categoria; "<nome>" = nome exato)
   const [filtroCategoria, setFiltroCategoria] = useState<string>("");
   // Rev. 2361 — filtro por urgência de vencimento (só aplica sobre em_uso).
@@ -82,12 +86,21 @@ export default function EquipamentosLocados() {
     if (filtroCategoria === "__null__") return dataPorStatusEObra.filter(l => !l.categoria);
     return dataPorStatusEObra.filter(l => String(l.categoria || "") === filtroCategoria);
   }, [dataPorStatusEObra, filtroCategoria]);
+  // Rev. 2408 — pipeline: status → obra → categoria → fornecedor → vencimento.
+  // Comparação por NOME normalizado (uppercase trimmed) pra ser resiliente a
+  // diferenças de capitalização vindas do parser de PDF.
+  const dataPorFornecedor = useMemo(() => {
+    if (!filtroFornecedor) return dataPorCat;
+    if (filtroFornecedor === "__null__") return dataPorCat.filter(l => !l.fornecedorNome);
+    const alvo = filtroFornecedor.trim().toUpperCase();
+    return dataPorCat.filter(l => String(l.fornecedorNome || "").trim().toUpperCase() === alvo);
+  }, [dataPorCat, filtroFornecedor]);
   const data = useMemo(() => {
-    if (!filtroVencimento) return dataPorCat;
+    if (!filtroVencimento) return dataPorFornecedor;
     const hoje = Date.now();
     const lim5  = hoje + 5  * 86400 * 1000;
     const lim30 = hoje + 30 * 86400 * 1000;
-    return dataPorCat.filter(l => {
+    return dataPorFornecedor.filter(l => {
       if (l.status !== "em_uso") return false;
       const fim = new Date(l.dataFimPrevista).getTime();
       if (!isFinite(fim)) return false;
@@ -96,7 +109,7 @@ export default function EquipamentosLocados() {
       if (filtroVencimento === "30d")      return fim >= hoje && fim < lim30;
       return true;
     });
-  }, [dataPorCat, filtroVencimento]);
+  }, [dataPorFornecedor, filtroVencimento]);
 
   // Rev. 2344 — agrupamento por descrição+obra (key normalizada). Cada grupo
   // agrega: contagem, status mix, Σ valorMensal, foto representativa, lista
@@ -979,6 +992,28 @@ export default function EquipamentosLocados() {
     });
   }, [dataPorStatusEObra]);
   const categoriaSelecionada = useMemo(() => categoriasComItens.find(c => c.key === filtroCategoria) || null, [categoriasComItens, filtroCategoria]);
+  // Rev. 2408 — lista de locadoras (fornecedores) em uso nos equipamentos
+  // da empresa atual. Agrupa por NOME normalizado (uppercase trimmed) pra
+  // colapsar variações "Jalves" / "JALVES" / "jalves locações" → 1 entrada.
+  // Mantém o nome com a capitalização mais comum pra exibição.
+  const fornecedoresComItens = useMemo(() => {
+    const acc = new Map<string, { key: string; nome: string; count: number; valorMes: number }>();
+    for (const l of dataPorCat) {
+      const raw = String(l.fornecedorNome || "").trim();
+      const k = raw ? raw.toUpperCase() : "__null__";
+      const nome = raw || "— Sem locadora —";
+      const g = acc.get(k) || { key: k, nome, count: 0, valorMes: 0 };
+      g.count++;
+      g.valorMes += Number(l.valorMensal) || 0;
+      acc.set(k, g);
+    }
+    return Array.from(acc.values()).sort((a, b) => {
+      if (a.key === "__null__" && b.key !== "__null__") return 1;
+      if (b.key === "__null__" && a.key !== "__null__") return -1;
+      return b.count - a.count;
+    });
+  }, [dataPorCat]);
+  const fornecedorSelecionado = useMemo(() => fornecedoresComItens.find(f => f.key === filtroFornecedor) || null, [fornecedoresComItens, filtroFornecedor]);
   const totalSemCategoria = useMemo(() => (dataAll as any[]).filter(l => !l.categoria || String(l.categoria).trim() === "").length, [dataAll]);
   // Rev. 2340 — quantos itens NÃO têm foto (nem recebimento, nem IA)
   const totalSemFoto = useMemo(() => (dataAll as any[]).filter(l => {
@@ -1505,7 +1540,7 @@ export default function EquipamentosLocados() {
               </button>
             )}
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
             <div className="relative">
               <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
               <select
@@ -1543,9 +1578,28 @@ export default function EquipamentosLocados() {
               </select>
               <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
             </div>
+            {/* Rev. 2408 — filtro por locadora (fornecedor) */}
+            <div className="relative">
+              <Truck className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
+              <select
+                value={filtroFornecedor}
+                onChange={e => setFiltroFornecedor(e.target.value)}
+                className={`w-full pl-10 pr-8 py-2.5 border rounded-lg text-sm focus:ring-2 focus:ring-amber-500/30 outline-none transition appearance-none bg-white font-medium ${
+                  filtroFornecedor ? "border-amber-400 bg-amber-50/40 text-amber-900" : "border-slate-200 text-slate-700"
+                }`}
+                title="Filtrar por empresa de locação (fornecedor)">
+                <option value="">Todas as locadoras ({fmtN(dataPorCat.length)})</option>
+                {fornecedoresComItens.map(f => (
+                  <option key={f.key} value={f.key}>
+                    {f.nome} · {fmtN(f.count)} unid.{f.valorMes > 0 ? ` · ${fmtMoney(f.valorMes)}/mês` : ""}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
+            </div>
           </div>
           {/* Rev. 2334+2337+2361 — chips de filtros ativos com botão limpar */}
-          {(filtroObra || filtroCategoria || busca || filtroVencimento) && (
+          {(filtroObra || filtroCategoria || filtroFornecedor || busca || filtroVencimento) && (
             <div className="flex flex-wrap items-center gap-2 text-xs">
               <span className="text-slate-500">Filtros ativos:</span>
               {filtroVencimento && (
@@ -1586,6 +1640,17 @@ export default function EquipamentosLocados() {
                   </button>
                 </span>
               )}
+              {/* Rev. 2408 — chip de locadora */}
+              {filtroFornecedor && fornecedorSelecionado && (
+                <span className="inline-flex items-center gap-1.5 bg-amber-50 border border-amber-200 text-amber-800 rounded-full pl-3 pr-1.5 py-1 font-medium">
+                  <Truck className="h-3 w-3" />
+                  <span className="max-w-[200px] truncate" title={fornecedorSelecionado.nome}>{fornecedorSelecionado.nome}</span>
+                  <span className="text-amber-600 font-bold">· {fmtN(fornecedorSelecionado.count)}</span>
+                  <button onClick={() => setFiltroFornecedor("")} className="ml-1 bg-amber-200/70 hover:bg-amber-300 rounded-full p-0.5" title="Remover filtro de locadora">
+                    <X className="h-3 w-3" />
+                  </button>
+                </span>
+              )}
               {busca && (
                 <span className="inline-flex items-center gap-1.5 bg-slate-100 border border-slate-200 text-slate-700 rounded-full pl-3 pr-1.5 py-1 font-medium">
                   <Search className="h-3 w-3" />
@@ -1595,7 +1660,7 @@ export default function EquipamentosLocados() {
                   </button>
                 </span>
               )}
-              <button onClick={() => { setFiltroObra(""); setFiltroCategoria(""); setBusca(""); setFiltroVencimento(""); }} className="text-slate-500 hover:text-slate-700 underline ml-1">limpar tudo</button>
+              <button onClick={() => { setFiltroObra(""); setFiltroCategoria(""); setFiltroFornecedor(""); setBusca(""); setFiltroVencimento(""); }} className="text-slate-500 hover:text-slate-700 underline ml-1">limpar tudo</button>
             </div>
           )}
           {/* Rev. 2323 — Selecionar todos visíveis (cabeçalho da lista). */}
