@@ -89,17 +89,20 @@ export default function InventarioVisualBaias() {
   const utils = trpc.useUtils();
 
   const { data: obrasAtivas = [] } = trpc.obras.listActive.useQuery({ companyId }, { enabled: !!companyId });
-  // Rev. 2414 — obra agora é OBRIGATÓRIA (sessão é POR OBRA, igual ao
-  // Inventário Semanal). `null` = ainda não escolhida (mostra placeholder).
-  const [obraContexto, setObraContexto] = useState<number | null>(null);
+  // Rev. 2414 — sessão é POR OBRA (igual ao Inventário Semanal). `null` = ainda
+  // não escolhida (placeholder). Rev. 2416 — "all" = visão consolidada de TODAS
+  // as obras (read-only-ish: cards leem mas sem flow de sessão diária).
+  const [obraContexto, setObraContexto] = useState<number | "all" | null>(null);
   const [iniciadoLocal, setIniciadoLocal] = useState(false);
   const [gerenciarMode, setGerenciarMode] = useState(false);
+  const modoTodas = obraContexto === "all";
 
-  // Rev. 2415 — endpoint novo: traz itens agregados (areia/brita/pedra/…)
-  // recebidos na obra MAIS baias órfãs (preserva histórico de cadastros antigos).
-  // Itens sem baia ainda vêm com `id: null` — a 1ª leitura cria a baia.
+  // Rev. 2415/2416 — endpoint: traz itens agregados (areia/brita/pedra/…)
+  // recebidos na(s) obra(s) MAIS baias órfãs. Itens sem baia ainda vêm com
+  // `id: null` — a 1ª leitura cria a baia. `obraId: null` = todas as obras
+  // que o usuário tem acesso na empresa.
   const { data: baias = [], isLoading } = trpc.warehouse.baiaAgregadosListar.useQuery(
-    { companyId, obraId: obraContexto ?? 0 },
+    { companyId, obraId: modoTodas ? null : (obraContexto as number | null) },
     { enabled: !!companyId && obraContexto != null },
   );
 
@@ -145,7 +148,8 @@ export default function InventarioVisualBaias() {
 
   function abrirNova() {
     setEditando(null);
-    setForm({ obraId: obraContexto ?? 0, nome: "", material: "", unidade: "m³", capacidade: "", observacoes: "" });
+    const obraInicial = typeof obraContexto === "number" ? obraContexto : 0;
+    setForm({ obraId: obraInicial, nome: "", material: "", unidade: "m³", capacidade: "", observacoes: "" });
     setFotoFile(null);
     setModalNova(true);
   }
@@ -208,12 +212,15 @@ export default function InventarioVisualBaias() {
       // cria a baia automaticamente antes de registrar a leitura.
       let baiaId: number | null = leituraBaia.id;
       if (baiaId == null) {
-        if (!leituraBaia.itemId || obraContexto == null) {
+        // Rev. 2416 — usa obraId DA LINHA (suporta visão "Todas as obras",
+        // onde o contexto global é "all" mas cada card já carrega sua obra).
+        const obraDaBaia: number | null = typeof leituraBaia.obraId === "number" ? leituraBaia.obraId : null;
+        if (!leituraBaia.itemId || obraDaBaia == null) {
           toast.error("Item sem vínculo. Use o modo Gerenciar pra cadastrar manualmente.");
           return;
         }
         const r = await autoEnsureMut.mutateAsync({
-          companyId, obraId: obraContexto, itemId: leituraBaia.itemId,
+          companyId, obraId: obraDaBaia, itemId: leituraBaia.itemId,
         });
         baiaId = r.baiaId;
       }
@@ -245,9 +252,11 @@ export default function InventarioVisualBaias() {
   const sessaoIniciada = totalConferidas > 0 || iniciadoLocal;
   const sessaoConcluida = total > 0 && totalConferidas === total;
 
-  const nomeObra = obraContexto != null
-    ? (obrasAtivas.find((o: any) => o.id === obraContexto)?.nome ?? "Obra")
-    : "—";
+  const nomeObra = modoTodas
+    ? "Todas as obras"
+    : typeof obraContexto === "number"
+      ? (obrasAtivas.find((o: any) => o.id === obraContexto)?.nome ?? "Obra")
+      : "—";
   const dataHojeBr = new Date().toLocaleDateString("pt-BR");
 
   const renderCardBaia = (b: any, conferida: boolean) => {
@@ -372,16 +381,19 @@ export default function InventarioVisualBaias() {
         <div className="max-w-3xl mx-auto flex items-center gap-3">
           <HardHat className="h-4 w-4 text-amber-600 shrink-0" />
           <select
-            value={obraContexto ?? ""}
+            value={obraContexto == null ? "" : String(obraContexto)}
             onChange={e => {
               const v = e.target.value;
-              setObraContexto(v === "" ? null : Number(v));
+              if (v === "") setObraContexto(null);
+              else if (v === "all") setObraContexto("all");
+              else setObraContexto(Number(v));
               setIniciadoLocal(false);
               setGerenciarMode(false);
             }}
             className="flex-1 h-9 text-sm font-medium border border-gray-200 rounded-lg px-3 bg-white text-gray-800 outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-200"
           >
             <option value="">— escolher obra —</option>
+            <option value="all">📍 Todas as obras (visão consolidada)</option>
             {obrasAtivas.map((obra: any) => (
               <option key={obra.id} value={obra.id}>
                 🏗️ {obra.codigo ? `${obra.codigo} – ${obra.nome}` : obra.nome}
@@ -411,7 +423,7 @@ export default function InventarioVisualBaias() {
               </p>
             </div>
           </div>
-          {obraContexto != null && (
+          {obraContexto != null && !modoTodas && (
             <button
               onClick={() => setGerenciarMode(v => !v)}
               className={`flex items-center gap-1.5 px-3 py-2 rounded-xl border text-sm font-semibold active:scale-95 transition shrink-0 ${
@@ -433,7 +445,8 @@ export default function InventarioVisualBaias() {
             <Building2 className="w-14 h-14 text-gray-300 mx-auto" />
             <p className="text-base font-semibold text-gray-700">Selecione uma obra acima</p>
             <p className="text-sm text-gray-500">
-              A aferição visual é feita <span className="font-semibold">por obra</span>, todo dia.
+              A aferição visual é feita <span className="font-semibold">por obra</span>, todo dia.<br />
+              Ou escolha <span className="font-semibold">📍 Todas as obras</span> pra visão consolidada dos insumos em campo.
             </p>
           </div>
         )}
@@ -445,8 +458,71 @@ export default function InventarioVisualBaias() {
           </div>
         )}
 
-        {/* Obra sem agregado recebido (e sem baia manual) */}
-        {obraContexto != null && !isLoading && total === 0 && (
+        {/* MODO TODAS AS OBRAS — visão consolidada, sem flow de sessão */}
+        {modoTodas && !isLoading && (
+          <>
+            {total === 0 ? (
+              <div className="bg-white rounded-2xl border-2 border-dashed border-gray-300 p-10 text-center space-y-2">
+                <Package className="w-14 h-14 text-gray-300 mx-auto" />
+                <p className="text-base font-semibold text-gray-700">Nenhum agregado recebido em nenhuma obra</p>
+                <p className="text-sm text-gray-500">
+                  Areia, brita, pedra, lajota, cimento e afins aparecem aqui automaticamente conforme chegam às obras.
+                </p>
+              </div>
+            ) : (
+              <>
+                {/* Resumo geral — agrupa por obraId pra evitar colisão entre obras homônimas (architect Rev. 2416). */}
+                {(() => {
+                  const grupos = new Map<number, { obraNome: string; lista: any[] }>();
+                  for (const b of baias as any[]) {
+                    const oid: number = typeof b.obraId === "number" ? b.obraId : -1;
+                    const g = grupos.get(oid) ?? { obraNome: b.obraNome ?? "—", lista: [] };
+                    g.lista.push(b);
+                    grupos.set(oid, g);
+                  }
+                  const gruposOrdenados = Array.from(grupos.entries())
+                    .sort((a, b) => a[1].obraNome.localeCompare(b[1].obraNome, "pt-BR"));
+                  return (
+                    <>
+                      <div className="bg-white rounded-xl border p-4">
+                        <div className="flex justify-between text-sm font-medium mb-2">
+                          <span className="text-gray-600">Visão consolidada · {grupos.size} obra(s)</span>
+                          <span className="text-gray-900">{conferidas.length}/{total} conferidas hoje</span>
+                        </div>
+                        <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
+                          <div
+                            className="h-3 rounded-full transition-all duration-500"
+                            style={{ width: `${progresso}%`, background: progresso === 100 ? "#10b981" : "#f59e0b" }}
+                          />
+                        </div>
+                      </div>
+                      {gruposOrdenados.map(([oid, g]) => {
+                        const pend = g.lista.filter((b: any) => !isLeituraHoje(b?.ultimaLeitura?.lidaEm));
+                        const conf = g.lista.filter((b: any) => isLeituraHoje(b?.ultimaLeitura?.lidaEm));
+                        return (
+                          <div key={oid} className="space-y-2">
+                            <div className="flex items-center gap-2 px-1 pt-2">
+                              <HardHat className="w-4 h-4 text-amber-600" />
+                              <p className="text-sm font-bold text-slate-800">{g.obraNome}</p>
+                              <span className="text-xs text-slate-500">· {conf.length}/{g.lista.length} conferidas</span>
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                              {pend.map((b: any) => renderCardBaia(b, false))}
+                              {conf.map((b: any) => renderCardBaia(b, true))}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </>
+                  );
+                })()}
+              </>
+            )}
+          </>
+        )}
+
+        {/* Obra sem agregado recebido (e sem baia manual) — só no modo obra única */}
+        {!modoTodas && obraContexto != null && !isLoading && total === 0 && (
           <div className="bg-white rounded-2xl border-2 border-dashed border-gray-300 p-10 text-center space-y-3">
             <Package className="w-14 h-14 text-gray-300 mx-auto" />
             <div>
@@ -465,7 +541,7 @@ export default function InventarioVisualBaias() {
         )}
 
         {/* Tem baia(s) mas nenhuma leitura hoje → tela "Iniciar Aferição" */}
-        {obraContexto != null && !isLoading && total > 0 && !sessaoIniciada && (
+        {!modoTodas && obraContexto != null && !isLoading && total > 0 && !sessaoIniciada && (
           <div className="bg-white rounded-2xl border-2 border-dashed border-gray-300 p-10 text-center space-y-4">
             <ClipboardList className="w-16 h-16 text-gray-300 mx-auto" />
             <div>
@@ -488,7 +564,7 @@ export default function InventarioVisualBaias() {
         )}
 
         {/* Sessão em andamento ou concluída */}
-        {obraContexto != null && !isLoading && total > 0 && sessaoIniciada && (
+        {!modoTodas && obraContexto != null && !isLoading && total > 0 && sessaoIniciada && (
           <>
             {/* Barra de progresso */}
             <div className="bg-white rounded-xl border p-4 space-y-3">

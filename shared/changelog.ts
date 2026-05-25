@@ -1,6 +1,149 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2416 — **ALMOXARIFADO / INVENTÁRIO VISUAL DE BAIAS ·
+ * OPÇÃO "TODAS AS OBRAS" — visão consolidada dos insumos em
+ * campo.**
+ *
+ * Pedido user (25/05/2026, follow-up imediato após Rev. 2415,
+ * com screenshot do select mostrando só obras individuais):
+ * "coloca a opção de ver todas as obras tbm.. para garantir
+ * a visão total dos insumos em campo.."
+ *
+ * Contexto: a Rev. 2414 trocou o filtro antigo "todas" pelo
+ * seletor de obra OBRIGATÓRIO (sessão é por obra). A Rev. 2415
+ * fez agregados aparecerem sozinhos por obra. Faltava devolver
+ * pro gestor a visão global ("quanto de areia / brita / etc.
+ * tem distribuído entre as N obras agora?") — útil pra decidir
+ * remanejamento e antecipar pedido com fornecedor.
+ *
+ * **Decisão arquitetural — ZERO migration, ZERO endpoint novo:**
+ * `baiaAgregadosListar.input.obraId` vira `z.number().nullable()`.
+ * `null` significa "todas as obras que o usuário pode ver na
+ * empresa". A função resolve a lista de obras-alvo (`targetObras`)
+ * uma única vez no início e usa `inArray` em todas as queries
+ * subsequentes (itens, baias, entradas hoje). Mesma SQL, só
+ * troca `=` por `IN (...)`. Custo extra: 1 SELECT em `obras`
+ * + N chamadas a `userCanAccessObra` (≤ ~12 obras ativas FC,
+ * cacheado).
+ *
+ * **Backend — `server/routers/warehouse.ts` (~50 linhas alteradas):**
+ *
+ * 1. Schema: `z.object({ companyId, obraId: z.number().nullable() })`.
+ *
+ * 2. Resolução de `targetObras: {id, nome}[]`:
+ *    - `obraId == null`: lista todas as obras da empresa, filtra
+ *      via `userCanAccessObra` (helper já existente, respeita
+ *      role + vínculo gestor/responsável). Empty list → `return []`.
+ *    - `obraId` numérico: comportamento antigo (1 obra) preservado
+ *      tal e qual, com checagem `obra.companyId === input.companyId`
+ *      pra evitar cross-tenant.
+ *
+ * 3. Query de itens: `or(inArray(almoxItens.obraId, obraIds),
+ *    isNull(almoxItens.obraId))` — itens centrais (obraId=null)
+ *    são considerados pertencentes a TODAS as obras-alvo (mesma
+ *    semântica de antes).
+ *
+ * 4. Query de baias: `inArray(almoxBaias.obraId, obraIds)`.
+ *    Indexação agora por chave composta `${obraId}:${itemId}`
+ *    (`baiaPorObraItem`) em vez de só `itemId`, pra evitar colisão
+ *    quando 2 obras têm baia do mesmo item (cenário comum: areia
+ *    média em Obra A e Obra B). Baias órfãs (sem itemId)
+ *    indexadas em `baiasOrfasPorObra: Map<obraId, baia[]>`.
+ *
+ * 5. Query de entradas-hoje: `obra_id IN (...)` + `GROUP BY
+ *    item_id, obra_id`. Chave do map agora é `${itemId}:${obraId}`.
+ *    Mantém filtro de fuso `(criado_em AT TIME ZONE
+ *    'America/Sao_Paulo')::date = (NOW() AT TIME ZONE
+ *    'America/Sao_Paulo')::date` e `estornada_em IS NULL`.
+ *
+ * 6. Combine: outer loop em `targetObras` (preserva ordem da
+ *    consulta). Pra cada obra: gera 1 linha por item específico
+ *    dessa obra MAIS 1 linha por item central (replicado em
+ *    todas as obras). Depois adiciona baias órfãs daquela obra.
+ *    Por último, baias com itemId apontando pra item NÃO-agregado
+ *    (categoria mudou depois) são adicionadas com obraNome
+ *    resolvido por `obraNomeById.get(b.obraId) ?? "—"`.
+ *
+ * **Frontend — `client/src/pages/almoxarifado/InventarioVisual.tsx`:**
+ *
+ * 1. `obraContexto: number | "all" | null` (era `number | null`).
+ *    Novo derived `modoTodas = obraContexto === "all"`.
+ *
+ * 2. Query passa `obraId: modoTodas ? null : (obraContexto as
+ *    number | null)`. Enabled = `companyId && obraContexto != null`.
+ *
+ * 3. `<option value="all">📍 Todas as obras (visão consolidada)</option>`
+ *    adicionada logo após o placeholder "— escolher obra —" e
+ *    antes da lista de obras individuais. onChange trata 3 casos:
+ *    "" → null, "all" → "all", outro → Number(v).
+ *
+ * 4. `confirmarLeitura()`: o `autoEnsureMut` agora usa
+ *    `leituraBaia.obraId` (DA LINHA) em vez do contexto global —
+ *    crítico pro modo "all" onde o contexto é "all" mas cada
+ *    card já carrega sua obra. Toast de erro "Item sem vínculo"
+ *    se o row vier sem obraId numérico (não deveria, mas guarda).
+ *
+ * 5. `abrirNova()`: `obraInicial = typeof obraContexto === "number"
+ *    ? obraContexto : 0` — botão "Cadastrar baia manual" só fica
+ *    visível no modo obra única + gerenciar, então o caso "all"
+ *    é defensivo.
+ *
+ * 6. `nomeObra`: "Todas as obras" pro modo all, nome da obra
+ *    pro modo obra única, "—" pro null.
+ *
+ * 7. Botão "Gerenciar" escondido no modo "all" (sem sentido
+ *    cadastrar/editar baia sem contexto de obra única).
+ *
+ * 8. Bloco NOVO de UI pro modo "all": renderiza grupos por obra
+ *    via `Object.entries(baias.reduce((acc, b) => { ... }, {}))`
+ *    sortados por nome de obra (pt-BR locale). Cada grupo tem
+ *    header `<HardHat /> nome · X/Y conferidas` + grid 1/2 cols
+ *    com pendentes primeiro e conferidas depois (mesmo
+ *    `renderCardBaia` reaproveitado).
+ *
+ * 9. Cabeçalho "Visão consolidada · N obra(s)" + barra de
+ *    progresso global (X conferidas hoje / total) no topo, igual
+ *    ao da sessão obra-única mas sem o conceito de "iniciar".
+ *
+ * 10. Empty state específico: "Nenhum agregado recebido em
+ *     nenhuma obra".
+ *
+ * 11. Placeholder "Selecione uma obra acima" ganhou linha extra
+ *     com hint pra opção "Todas as obras".
+ *
+ * 12. Todas as condições do flow obra-única (Iniciar Aferição,
+ *     sessão em andamento, sessão concluída, empty state obra única)
+ *     ganharam guard `!modoTodas &&` pra não pegarem o caso all.
+ *
+ * **Não-mudanças (importante):** o endpoint `baiaAutoEnsureFromItem`
+ * (advisory lock + INSERT idempotente) NÃO foi tocado — continua
+ * recebendo `obraId` numérico obrigatório, agora vindo do
+ * `leituraBaia.obraId` em vez do contexto global. Schema do banco
+ * intacto. Helpers `hojeYmdLocal`/`isLeituraHoje` reaproveitados
+ * tal qual. R-001 / R-007 / R-010 OK — só SELECT + leitura
+ * agregada, nada destrutivo.
+ *
+ * **Edge cases tratados:**
+ *
+ * - User sem nenhuma obra → `targetObras = []` → `return []` →
+ *   empty state "Nenhum agregado recebido em nenhuma obra".
+ * - Item central (`obraId=null`) → replicado em CADA obra-alvo
+ *   no modo "all" (preserva semântica do modo obra única).
+ * - Baia "órfã" (sem itemId) em obra X → aparece no grupo da
+ *   obra X com origem="manual".
+ * - Baia com itemId apontando pra item NÃO-agregado (foi
+ *   reclassificado) → aparece com obraNome resolvido pela própria
+ *   `b.obraId` (não pela obra-alvo do loop principal).
+ *
+ * Arquivos: `server/routers/warehouse.ts` (baiaAgregadosListar
+ * refactored ~80→160 linhas no bloco), `client/src/pages/almoxarifado/
+ * InventarioVisual.tsx` (~12 trechos editados, novo bloco de UI
+ * pra modo all com ~50 linhas).
+ */
+export const CHANGELOG_REV_2416 = "modo Todas as obras no Inventário Visual de Baias";
+
+/**
  * Rev. 2415 — **ALMOXARIFADO / INVENTÁRIO VISUAL DE BAIAS ·
  * AGREGADOS APARECEM AUTOMATICAMENTE — almoxarife não cadastra
  * baia, só dá baixa.**

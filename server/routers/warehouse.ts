@@ -2559,7 +2559,9 @@ REGRAS:
   // schema rev. 2373 (almoxarifado_baias.itemId já existia).
   // ─────────────────────────────────────────────────────────────────────
   baiaAgregadosListar: protectedProcedure
-    .input(z.object({ companyId: z.number(), obraId: z.number() }))
+    // Rev. 2416 — `obraId` agora é nullable. null = TODAS as obras que o
+    // usuário tem acesso na empresa (visão consolidada dos insumos em campo).
+    .input(z.object({ companyId: z.number(), obraId: z.number().nullable() }))
     .query(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
@@ -2567,21 +2569,41 @@ REGRAS:
       if (!allowedCompanies.map((c: any) => c.id).includes(input.companyId)) {
         throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta empresa." });
       }
-      if (!(await userCanAccessObra(ctx.user.id, ctx.user.role, input.obraId))) {
-        throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta obra." });
-      }
-      const [obraRow] = await db.select({ id: obras.id, nome: obras.nome, companyId: obras.companyId }).from(obras).where(eq(obras.id, input.obraId));
-      if (!obraRow || obraRow.companyId !== input.companyId) {
-        throw new TRPCError({ code: "BAD_REQUEST", message: "Obra não pertence à empresa informada." });
-      }
-      const obraNome = obraRow.nome;
 
-      // 1) Itens da obra (ou sem obra = central) — só ativos.
-      const { or, isNull } = await import("drizzle-orm");
+      // Resolve a lista de obras-alvo + nome.
+      let targetObras: { id: number; nome: string }[];
+      if (input.obraId == null) {
+        const allObras = await db
+          .select({ id: obras.id, nome: obras.nome, companyId: obras.companyId })
+          .from(obras)
+          .where(eq(obras.companyId, input.companyId));
+        const filtered: { id: number; nome: string }[] = [];
+        for (const o of allObras) {
+          if (await userCanAccessObra(ctx.user.id, ctx.user.role, o.id)) {
+            filtered.push({ id: o.id, nome: o.nome });
+          }
+        }
+        targetObras = filtered;
+      } else {
+        if (!(await userCanAccessObra(ctx.user.id, ctx.user.role, input.obraId))) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta obra." });
+        }
+        const [obraRow] = await db.select({ id: obras.id, nome: obras.nome, companyId: obras.companyId }).from(obras).where(eq(obras.id, input.obraId));
+        if (!obraRow || obraRow.companyId !== input.companyId) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Obra não pertence à empresa informada." });
+        }
+        targetObras = [{ id: obraRow.id, nome: obraRow.nome }];
+      }
+      if (targetObras.length === 0) return [];
+      const obraIds = targetObras.map(o => o.id);
+      const obraNomeById = new Map(targetObras.map(o => [o.id, o.nome] as const));
+
+      // 1) Itens das obras-alvo (ou sem obra = central) — só ativos.
+      const { or, isNull, inArray } = await import("drizzle-orm");
       const itensRows = await db.select().from(almoxarifadoItens).where(and(
         eq(almoxarifadoItens.companyId, input.companyId),
         eq(almoxarifadoItens.ativo, true),
-        or(eq(almoxarifadoItens.obraId, input.obraId), isNull(almoxarifadoItens.obraId)),
+        or(inArray(almoxarifadoItens.obraId, obraIds), isNull(almoxarifadoItens.obraId)),
       ));
 
       // 2) Heurística de agregado/granel (JS, lista limitada).
@@ -2597,17 +2619,23 @@ REGRAS:
         return AGGR_RE.test(nome) || AGGR_RE.test(cat) || UNI_GRANEL.has(uni);
       });
 
-      // 3) Baias ativas dessa obra (qualquer baia, com ou sem itemId).
+      // 3) Baias ativas dessas obras (qualquer baia, com ou sem itemId).
       const baias = await db.select().from(almoxarifadoBaias).where(and(
         eq(almoxarifadoBaias.companyId, input.companyId),
-        eq(almoxarifadoBaias.obraId, input.obraId),
+        inArray(almoxarifadoBaias.obraId, obraIds),
         eq(almoxarifadoBaias.ativo, true),
       ));
-      const baiaPorItem = new Map<number, any>();
-      const baiasSemItem: any[] = [];
+      // Indexa baias por (obraId, itemId). Baias órfãs (sem itemId) por obra.
+      const baiaPorObraItem = new Map<string, any>(); // key: `${obraId}:${itemId}`
+      const baiasOrfasPorObra = new Map<number, any[]>();
       for (const b of baias) {
-        if (b.itemId != null) baiaPorItem.set(b.itemId, b);
-        else baiasSemItem.push(b);
+        if (b.itemId != null) {
+          baiaPorObraItem.set(`${b.obraId}:${b.itemId}`, b);
+        } else {
+          const list = baiasOrfasPorObra.get(b.obraId) ?? [];
+          list.push(b);
+          baiasOrfasPorObra.set(b.obraId, list);
+        }
       }
 
       // 4) Última + penúltima leitura por baia.
@@ -2637,22 +2665,24 @@ REGRAS:
         for (const r of (penultimas?.rows ?? [])) mapPenult.set(Number(r.baia_id), r);
       }
 
-      // 5) Entradas de hoje por item (badge "📦 chegou hoje").
+      // 5) Entradas de hoje por (item, obra) — badge "📦 chegou hoje".
       const itemIds = itensAgg.map((i: any) => i.id);
-      const mapEntradasHoje = new Map<number, number>();
-      if (itemIds.length > 0) {
+      const mapEntradasHoje = new Map<string, number>(); // key: `${itemId}:${obraId}`
+      if (itemIds.length > 0 && obraIds.length > 0) {
         const entradas: any = await db.execute(sql`
-          SELECT item_id, COALESCE(SUM(quantidade), 0)::float AS qtd
+          SELECT item_id, obra_id, COALESCE(SUM(quantidade), 0)::float AS qtd
           FROM almoxarifado_movimentacoes
           WHERE company_id = ${input.companyId}
             AND tipo = 'entrada'
-            AND obra_id = ${input.obraId}
+            AND obra_id IN (${sql.join(obraIds.map((id: number) => sql`${id}`), sql`, `)})
             AND item_id IN (${sql.join(itemIds.map((id: number) => sql`${id}`), sql`, `)})
             AND (criado_em AT TIME ZONE 'America/Sao_Paulo')::date = (NOW() AT TIME ZONE 'America/Sao_Paulo')::date
             AND estornada_em IS NULL
-          GROUP BY item_id
+          GROUP BY item_id, obra_id
         `);
-        for (const r of (entradas?.rows ?? [])) mapEntradasHoje.set(Number(r.item_id), Number(r.qtd) || 0);
+        for (const r of (entradas?.rows ?? [])) {
+          mapEntradasHoje.set(`${r.item_id}:${r.obra_id}`, Number(r.qtd) || 0);
+        }
       }
 
       const toCamel = (r: any) => r ? ({
@@ -2666,59 +2696,76 @@ REGRAS:
         lidaEm: r.lida_em ?? null,
       }) : null;
 
-      // 6) Combina: 1 linha por item agregado + 1 linha por baia órfã.
+      // 6) Combina: 1 linha por (obra × item agregado) + 1 linha por baia órfã.
       const result: any[] = [];
+      // Pre-agrupa itens por obraId (null = central, replica em todas as obras).
+      const itensCentrais = itensAgg.filter((it: any) => it.obraId == null);
+      const itensPorObra = new Map<number, any[]>();
       for (const it of itensAgg) {
-        const baia = baiaPorItem.get(it.id);
-        result.push({
-          id: baia?.id ?? null,                 // null = baia ainda não criada (1º clique cria)
-          itemId: it.id,
-          obraId: input.obraId,
-          obraNome,
-          nome: baia?.nome ?? it.nome,
-          material: baia?.material ?? it.nome,
-          unidade: baia?.unidade ?? it.unidade ?? "m³",
-          capacidadeEstimada: baia?.capacidadeEstimada ?? null,
-          fotoUrl: baia?.fotoUrl ?? it.fotoUrl ?? null,
-          observacoes: baia?.observacoes ?? null,
-          quantidadeAtual: Number(it.quantidadeAtual ?? 0),
-          entradaHoje: mapEntradasHoje.get(it.id) ?? 0,
-          ativo: true,
-          origem: "agregado_auto",
-          ultimaLeitura: baia ? toCamel(mapUlt.get(baia.id)) : null,
-          leituraAnterior: baia ? toCamel(mapPenult.get(baia.id)) : null,
-        });
+        if (it.obraId != null) {
+          const list = itensPorObra.get(it.obraId) ?? [];
+          list.push(it);
+          itensPorObra.set(it.obraId, list);
+        }
       }
-      // Baias órfãs (sem item ou item não-agregado) preservadas, pra não esconder histórico.
-      for (const b of baiasSemItem) {
-        result.push({
-          id: b.id,
-          itemId: null,
-          obraId: input.obraId,
-          obraNome,
-          nome: b.nome,
-          material: b.material,
-          unidade: b.unidade,
-          capacidadeEstimada: b.capacidadeEstimada,
-          fotoUrl: b.fotoUrl,
-          observacoes: b.observacoes,
-          quantidadeAtual: 0,
-          entradaHoje: 0,
-          ativo: b.ativo,
-          origem: "manual",
-          ultimaLeitura: toCamel(mapUlt.get(b.id)),
-          leituraAnterior: toCamel(mapPenult.get(b.id)),
-        });
+      for (const obra of targetObras) {
+        const itensDessaObra = [
+          ...(itensPorObra.get(obra.id) ?? []),
+          ...itensCentrais,
+        ];
+        for (const it of itensDessaObra) {
+          const baia = baiaPorObraItem.get(`${obra.id}:${it.id}`);
+          result.push({
+            id: baia?.id ?? null,                 // null = baia ainda não criada (1º clique cria)
+            itemId: it.id,
+            obraId: obra.id,
+            obraNome: obra.nome,
+            nome: baia?.nome ?? it.nome,
+            material: baia?.material ?? it.nome,
+            unidade: baia?.unidade ?? it.unidade ?? "m³",
+            capacidadeEstimada: baia?.capacidadeEstimada ?? null,
+            fotoUrl: baia?.fotoUrl ?? it.fotoUrl ?? null,
+            observacoes: baia?.observacoes ?? null,
+            quantidadeAtual: Number(it.quantidadeAtual ?? 0),
+            entradaHoje: mapEntradasHoje.get(`${it.id}:${obra.id}`) ?? 0,
+            ativo: true,
+            origem: "agregado_auto",
+            ultimaLeitura: baia ? toCamel(mapUlt.get(baia.id)) : null,
+            leituraAnterior: baia ? toCamel(mapPenult.get(baia.id)) : null,
+          });
+        }
+        // Baias órfãs (sem itemId) dessa obra
+        for (const b of (baiasOrfasPorObra.get(obra.id) ?? [])) {
+          result.push({
+            id: b.id,
+            itemId: null,
+            obraId: obra.id,
+            obraNome: obra.nome,
+            nome: b.nome,
+            material: b.material,
+            unidade: b.unidade,
+            capacidadeEstimada: b.capacidadeEstimada,
+            fotoUrl: b.fotoUrl,
+            observacoes: b.observacoes,
+            quantidadeAtual: 0,
+            entradaHoje: 0,
+            ativo: b.ativo,
+            origem: "manual",
+            ultimaLeitura: toCamel(mapUlt.get(b.id)),
+            leituraAnterior: toCamel(mapPenult.get(b.id)),
+          });
+        }
       }
-      // Baias com itemId que apontam pra item NÃO-agregado (categoria mudou depois)
-      // — também listar como manual pra preservar histórico.
+      // Baias com itemId apontando pra item NÃO-agregado (categoria mudou depois)
+      // — listar como manual pra preservar histórico, taggeadas pela obra da baia.
+      const itensAggIds = new Set(itensAgg.map((it: any) => it.id));
       for (const b of baias) {
-        if (b.itemId != null && !itensAgg.find((it: any) => it.id === b.itemId)) {
+        if (b.itemId != null && !itensAggIds.has(b.itemId)) {
           result.push({
             id: b.id,
             itemId: b.itemId,
-            obraId: input.obraId,
-            obraNome,
+            obraId: b.obraId,
+            obraNome: obraNomeById.get(b.obraId) ?? "—",
             nome: b.nome,
             material: b.material,
             unidade: b.unidade,
