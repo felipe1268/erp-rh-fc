@@ -283,10 +283,17 @@ export function parseMSProjectFull(text: string): {
         const num = parseFloat(limpo);
         if (Number.isFinite(num)) valorPorFid[fid] = num;
       }
-      // Ordem de prioridade: Texto10 (oficial) → Texto11 (templates antigos) → Texto6.
+      // Ordem de prioridade: Texto10 → Texto11 → Texto9 → Texto6.
+      // Rev. 2425 — Texto9 (188743749) adicionado entre Texto11 e Texto6 porque
+      // alguns templates LOTUS (ex.: HOTEL DO PAPA — PLN_783_01_2026_R01) não
+      // exportam Texto10/Texto11 e o engenheiro mantém o "% PREVISTO oficial"
+      // em Texto9 (4 casas, igual ao display do MSP). Sem este fallback, o
+      // ERP pegava Texto6 (versão arredondada/antiga, ex.: 32 %) e o painel
+      // mostrava 32 % no snapshot enquanto o MSP exibia 77 %.
       previstoMspRaiz =
         valorPorFid["188743750"] ??  // Texto10 — %PREVISTO (Round 4 casas)
         valorPorFid["188743997"] ??  // Texto11 — alguns templates customizados
+        valorPorFid["188743749"] ??  // Texto9  — %PREVISTO em templates LOTUS sem Texto10 (Rev. 2425)
         valorPorFid["188743746"] ??  // Texto6 — versão truncada Int(...) + "%"
         null;
       // Rev. 1675 — AD/(AD+RD) da raiz: precisão MSP-nativa do realizado.
@@ -431,7 +438,9 @@ function parseMSProjectTasksFromDoc(doc: Document): TarefaImportada[] {
     // %REALIZADO: Texto7 (188743747) — %Reali AUX, com 4 casas. Se ausente,
     // F2 abaixo usa AD/(AD+RD) com precisão MSP-nativa.
     let previstoMsp: number | undefined;
-    let previstoMspT6: number | undefined; // Rev. 2260 — fallback p/ XMLs sem Texto10
+    let previstoMspT11: number | undefined; // Rev. 2425 — alguns templates customizados
+    let previstoMspT9: number | undefined;  // Rev. 2425 — fallback p/ XMLs sem Texto10/11
+    let previstoMspT6: number | undefined;  // Rev. 2260 — fallback p/ XMLs sem Texto10
     let realizadoMsp: number | undefined;
     for (const child of Array.from(task.children)) {
       if (child.tagName !== "ExtendedAttribute") continue;
@@ -441,12 +450,16 @@ function parseMSProjectTasksFromDoc(doc: Document): TarefaImportada[] {
       // Limpa "%" (Texto6 vem como " 4%") e vírgula BR → ponto.
       const num = parseFloat(valRaw.replace(/%/g, "").replace(",", ".").trim());
       if (!Number.isFinite(num)) continue;
-      if (fid === "188743750") previstoMsp = Math.min(100, Math.max(0, num));        // Texto10 — %PREVISTO 4 casas
-      else if (fid === "188743746") previstoMspT6 = Math.min(100, Math.max(0, num)); // Texto6  — %PREVISTO inteiro (fallback)
-      else if (fid === "188743747") realizadoMsp = Math.min(100, Math.max(0, num));  // Texto7  — %Reali AUX
+      if (fid === "188743750") previstoMsp = Math.min(100, Math.max(0, num));         // Texto10 — %PREVISTO 4 casas
+      else if (fid === "188743997") previstoMspT11 = Math.min(100, Math.max(0, num)); // Texto11 — templates customizados (paridade com raiz)
+      else if (fid === "188743749") previstoMspT9 = Math.min(100, Math.max(0, num));  // Texto9  — %PREVISTO (templates LOTUS sem Texto10, Rev. 2425)
+      else if (fid === "188743746") previstoMspT6 = Math.min(100, Math.max(0, num));  // Texto6  — %PREVISTO inteiro (fallback)
+      else if (fid === "188743747") realizadoMsp = Math.min(100, Math.max(0, num));   // Texto7  — %Reali AUX
     }
-    // Texto10 preferido; Texto6 cobre LOTUS R05 e templates antigos.
-    if (previstoMsp === undefined && previstoMspT6 !== undefined) previstoMsp = previstoMspT6;
+    // Ordem (paridade total com a raiz, Rev. 2425): Texto10 → Texto11 → Texto9 → Texto6.
+    if (previstoMsp === undefined && previstoMspT11 !== undefined) previstoMsp = previstoMspT11;
+    if (previstoMsp === undefined && previstoMspT9  !== undefined) previstoMsp = previstoMspT9;
+    if (previstoMsp === undefined && previstoMspT6  !== undefined) previstoMsp = previstoMspT6;
 
     // Rev. 1674 — Fallback de alta precisão: ActualDuration / (ActualDuration +
     // RemainingDuration) é o que o MSP usa internamente pra calcular

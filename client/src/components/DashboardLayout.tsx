@@ -995,6 +995,18 @@ function DashboardLayoutContent({
     { companyIds: badgeCompanyIds },
     { enabled: badgeCompanyIds.length > 0, refetchInterval: 60_000, staleTime: 30_000 }
   );
+  // Rev. 2426 — Banner global de pendências de Auditoria do Almoxarifado.
+  // O endpoint `compras.auditoriaPendenciasCount` já filtra por admin/admin_master
+  // + obras permitidas, então a chamada é segura mesmo p/ users comuns (retorna 0).
+  // Banner ambar aparece acima do `<main>` em qualquer página enquanto houver
+  // pendentes — clique abre `/almoxarifado?auditoria=1` (página detecta param
+  // e abre o modal de validação automaticamente).
+  const almoxAuditoriaPendQ = trpc.compras.auditoriaPendenciasCount.useQuery(
+    { companyId: cId },
+    { enabled: cId > 0, refetchInterval: 60_000, staleTime: 30_000 }
+  );
+  const auditoriaPendentes = almoxAuditoriaPendQ.data?.count ?? 0;
+  const [auditoriaBannerOpen, setAuditoriaBannerOpen] = useState(true);
   const { activeModule, setActiveModule } = useModule();
   const { isModuleEnabled, isPageEnabled } = useModuleConfig();
   const hubToConfigKey: Record<string, string> = {
@@ -1956,6 +1968,30 @@ function DashboardLayoutContent({
 
       <SidebarInset>
         <CompanyHeader isMobile={isMobile} activeLabel={activeMenuItem?.label ?? "Menu"} />
+        {/* Rev. 2426 — Banner global de pendências de Auditoria do Almoxarifado. */}
+        {auditoriaPendentes > 0 && auditoriaBannerOpen && !location.startsWith("/almoxarifado") && (
+          <div className="bg-amber-50 border-b border-amber-200 px-3 sm:px-4 py-2 flex items-center gap-3 text-sm">
+            <ShieldAlert className="w-4 h-4 text-amber-600 shrink-0" />
+            <span className="text-amber-900 flex-1 leading-tight">
+              <strong>{auditoriaPendentes}</strong> {auditoriaPendentes === 1 ? "pendência" : "pendências"} de auditoria no Almoxarifado aguardando sua validação.
+            </span>
+            <button
+              type="button"
+              onClick={() => setLocation("/almoxarifado?auditoria=1")}
+              className="text-xs font-semibold bg-amber-600 hover:bg-amber-700 text-white px-3 py-1.5 rounded-md transition shrink-0"
+            >
+              Revisar agora
+            </button>
+            <button
+              type="button"
+              onClick={() => setAuditoriaBannerOpen(false)}
+              aria-label="Dispensar"
+              className="text-amber-700/60 hover:text-amber-900 p-1 shrink-0"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        )}
         <main className={`flex-1 ${noPadding ? "p-0 overflow-hidden" : "p-2 sm:p-3 md:p-4"}`}>{children}</main>
       </SidebarInset>
       <IAModuloAutoDetect location={location} />

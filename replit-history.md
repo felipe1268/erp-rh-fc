@@ -2,6 +2,8 @@
 
 > Este arquivo guarda os one-liners das revisões antigas para manter o `replit.md` enxuto.
 
+- **Rev. 2419** — ALMOXARIFADO/VALOR POR ALMOXARIFADO · Mostra TODAS as obras ativas, mesmo as zeradas. Removido `.filter(e => e.valor > 0)` em `almoxarifado/index.tsx` L1743-1768; zeradas com styling distinto (opacity-60). Ver `shared/changelog.ts`.
+- **Rev. 2418** — ALMOXARIFADO/VALOR TOTAL DO ESTOQUE · Exclui locados por padrão + respeita filtros visíveis. Default `filtroEquip=todos` → locados EXCLUÍDOS + badge "X locado(s) excluído(s)"; `locado`/`vinculado` → inclui; demais filtros → reflete lista filtrada. 5 blocos no `almoxarifado/index.tsx` (consolidado + por obra + banners + tfoot). Zero backend. Ver `shared/changelog.ts`.
 - **Rev. 2417** — ALMOXARIFADO/INVENTÁRIO VISUAL DE BAIAS · SÓ categoria "Agregados" + input numérico de volume + consumo do dia. ADD COLUMN `volume_estimado NUMERIC(14,3)`. Filtro `normalizarCat==="agregados"`, helper `calcConsumoHoje`, modal com `<Input inputMode=decimal>` grande. Histórico mostra volume em vez de %. Ver `shared/changelog.ts`.
 - **Rev. 2416** — ALMOXARIFADO/INVENTÁRIO VISUAL DE BAIAS · Opção "Todas as obras" (visão consolidada) de volta no seletor. `baiaAgregadosListar.input.obraId` vira `nullable()`, resolve `targetObras` via `userCanAccessObra`, indexação `${obraId}:${itemId}`, frontend grupado por obra. Zero migration. Ver `shared/changelog.ts`.
 - **Rev. 2415** — ALMOXARIFADO/INVENTÁRIO VISUAL · agregados aparecem automaticamente — almoxarife não cadastra baia, só dá baixa. 2 endpoints novos (`baiaAgregadosListar` + `baiaAutoEnsureFromItem`); filtro regex de vocabulário FC; cards com 3 badges (sky/amber/saldo). Ver `shared/changelog.ts`.

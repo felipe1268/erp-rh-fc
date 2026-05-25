@@ -114,6 +114,17 @@ export default function AlmoxarifadoPage() {
   }>(null);
   // Rev. 2388 — Auditoria: log + tela de validação por admin.
   const [modalAuditoriaList, setModalAuditoriaList] = useState(false);
+  // Rev. 2426 — Deep-link `/almoxarifado?auditoria=1` (banner global no
+  // DashboardLayout) abre o modal de validação automaticamente.
+  useEffect(() => {
+    const sp = new URLSearchParams(window.location.search);
+    if (sp.get("auditoria") === "1") {
+      setModalAuditoriaList(true);
+      sp.delete("auditoria");
+      const newSearch = sp.toString();
+      window.history.replaceState({}, "", window.location.pathname + (newSearch ? `?${newSearch}` : ""));
+    }
+  }, []);
   const [auditoriaFiltroStatus, setAuditoriaFiltroStatus] = useState<"pendente" | "validado" | "rejeitado" | "todos">("pendente");
   const me = trpc.auth.me.useQuery();
   // Rev. 2400 — Toggle global por empresa (senha + justificativa).

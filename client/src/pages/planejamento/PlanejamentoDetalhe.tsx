@@ -771,74 +771,22 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
   }, [semanaVisualizacao, cutoffDowTop, dataCorteInfo?.dataCorteOficial, refDateStr]);
 
   const avancoPrevistoDia = useMemo(() => {
-    // Rev. 2262 — REGRA DE OURO MSP (replit.md User preferences):
-    // PREVISTO = campo "% PREVISTO" calculado pelo MSP na tarefa-resumo (UID=0).
-    // Lido na ordem: Texto10 (188743750) → Texto11 (188743997) → Texto6
-    // (188743746). Quando esse snapshot existe e o envelope do projeto continua
-    // intacto, ESPELHAMOS o número diretamente — ZERO cálculo no ERP.
-    // Mesma lógica de fallback de `avancoAtual` (ver acima).
-    {
-      const _calMSP_P = parseCalendarioJson((proj as any)?.calendarioJson);
-      if (
-        !refisComIndiretasGlobal &&
-        _calMSP_P?.previstoMspSnapshot != null &&
-        _calMSP_P?.statusDateSnapshot &&
-        (!_calMSP_P.envelopeStartSnapshot  || _calMSP_P.envelopeStartSnapshot  === (proj as any)?.dataInicio) &&
-        (!_calMSP_P.envelopeFinishSnapshot || _calMSP_P.envelopeFinishSnapshot === (proj as any)?.dataTerminoContratual)
-      ) {
-        const sd = _calMSP_P.statusDateSnapshot;
-        const okSemana = !semanaVisualizacao
-          || (sd >= semanaVisualizacao && sd <= cutoffWeekFromMonday(semanaVisualizacao, cutoffDowTop).fim);
-        if (okSemana) return Math.min(100, Math.max(0, Number(_calMSP_P.previstoMspSnapshot)));
-      }
-    }
-    // Rev. 1646 — Paridade 100% MS Project: o "Avanço Previsto" no card do
-    // projeto agora replica EXATAMENTE a fórmula da coluna "%PREVISTO (Texto10)"
-    // do MS Project: `fracao_dias_uteis(inicio_projeto → ref) / total_dias_uteis_projeto`,
-    // aplicada no nível-resumo (raiz). NÃO mais média ponderada por
-    // `pesoFinanceiro` das folhas — essa rolagem produzia números diferentes
-    // do MSP (ex.: ERP 2,24% vs MSP 1,41% para REVTE-CIVIL em 07/05/2026,
-    // pois leaves caras com início futuro inflavam o denominador).
-    // Validado no XML: raiz 284 dias úteis, 4 decorridos → 4/284 = 1,41%.
-    const folhas = atividades.filter((a: any) =>
-      !a.isGrupo && !a.disabled && a.dataInicio && a.dataFim && (refisComIndiretasGlobal || !a.isIndireta)
-    );
-    if (!folhas.length) return null;
-    // Rev. 1656.1 — Top card PV acompanha a semana selecionada na aba Avanço
-    // Semanal E aplica a MESMA regra de clipping do card "PREVISTO (SEMANA)":
-    // semana CORRENTE (que contém o cutoff) clipa em refStr=cutoff (PV
-    // exigível PMBOK 7ª); semanas passadas/futuras usam semFim. Paridade
-    // absoluta: top bar = card grande nos 3 cenários (passada/corrente/futura).
-    // Sem semana selecionada, trava no cutoff oficial (Opção A do Rev. 1655).
-    const cutoffOficial = dataCorteInfo?.dataCorteOficial ?? null;
-    let refStr: string;
-    if (semanaVisualizacao) {
-      // Rev. 1842 — mesmo cutoffWeekFromMonday do card inferior (paridade absoluta).
-      const semFim = cutoffWeekFromMonday(semanaVisualizacao, cutoffDowTop).fim;
-      // Rev. 1823 — clipa só na semana corrente (ver nota em avancoAtual).
-      const naSemanaCorrente = !!cutoffOficial && cutoffOficial >= semanaVisualizacao && cutoffOficial <= semFim;
-      refStr = naSemanaCorrente ? cutoffOficial! : semFim;
-    } else {
-      refStr = cutoffOficial ?? refDateStr;
-      if (cutoffOficial && refDateStr < cutoffOficial) refStr = refDateStr;
-    }
-    // Rev. 1825 — PREVISTO LIVE = fórmula Texto6 da raiz do MSP (escolha
-    // explícita do usuário p/ paridade absoluta com a coluna "% PREVISTO"
-    // que ele criou no Project: FieldID=188743746). Calcula
-    //   du(projIni → ref) / du(projIni → projFim) × 100
-    // em DIAS ÚTEIS do calendário MSP, sem ponderar por custo, com casas
-    // decimais (sem o Int(...) do MSP nativo). Fallback p/ pvPonderado
-    // quando faltar dataInicio/dataTerminoContratual/calMSP.
-    const calMSP = parseCalendarioJson((proj as any)?.calendarioJson);
-    const projIniRaiz = (proj as any)?.dataInicio as string | null | undefined;
-    const projFimRaiz = (proj as any)?.dataTerminoContratual as string | null | undefined;
-    // Rev. 1825 — fallback p/ pvPonderado quando faltar calMSP também (sem
-    // calendário, pctRaizMSP cairia em dias corridos linear → perde paridade).
-    if (projIniRaiz && projFimRaiz && calMSP) {
-      return +pctRaizMSP(refStr, projIniRaiz, projFimRaiz, calMSP).toFixed(2);
-    }
-    return +pvPonderadoPorAtividade(refStr, folhas, usarPesoPorDuracao, calMSP).toFixed(2);
-  }, [atividades, refisComIndiretasGlobal, refDateStr, modoVisao, (proj as any)?.calendarioJson, (proj as any)?.dataInicio, (proj as any)?.dataTerminoContratual, dataCorteInfo?.dataCorteOficial, semanaVisualizacao, usarPesoPorDuracao, cutoffDowTop]);
+    // Rev. 2425 — REGRA DE OURO MSP (replit.md / Rev. 2265): o ERP NÃO calcula
+    // avanço, só LÊ o snapshot do XML do MS Project (Texto10 → Texto11 →
+    // Texto9 → Texto6 da raiz UID=0, persistido em `previstoMspSnapshot`).
+    // Removidos TODOS os fallbacks calculados (pctRaizMSP, pvPonderado) —
+    // antes o ERP caía em fórmula de dias úteis quando o snapshot estava
+    // ausente/stale e mostrava % discordante do MSP (ex.: HOTEL DO PAPA
+    // ERP 65,74 % vs MSP 77 %). Agora retorna null e a UI exibe "—".
+    if (refisComIndiretasGlobal) return null; // visão COM indiretas — snapshot é só diretas
+    const _calMSP_P = parseCalendarioJson((proj as any)?.calendarioJson);
+    if (!_calMSP_P || _calMSP_P.previstoMspSnapshot == null || !_calMSP_P.statusDateSnapshot) return null;
+    const envOk =
+      (!_calMSP_P.envelopeStartSnapshot  || _calMSP_P.envelopeStartSnapshot  === (proj as any)?.dataInicio) &&
+      (!_calMSP_P.envelopeFinishSnapshot || _calMSP_P.envelopeFinishSnapshot === (proj as any)?.dataTerminoContratual);
+    if (!envOk) return null;
+    return Math.min(100, Math.max(0, Number(_calMSP_P.previstoMspSnapshot)));
+  }, [refisComIndiretasGlobal, (proj as any)?.calendarioJson, (proj as any)?.dataInicio, (proj as any)?.dataTerminoContratual]);
 
   // ── Rev. 1715 — pvMacro elevado ao escopo do Inner ─────────────────────
   // A Rev. 1713 começou a propagar `pvMacro={pvMacro}` para `<Refis>` (L~1053)
@@ -6944,40 +6892,34 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
       return { previsto: null as number | null, realizado: null as number | null,
         missingReason: "XML do MS Project ainda não foi importado neste projeto. Importe o cronograma na aba Cronograma → Importar Cronograma." };
     }
-    // Rev. 2271 — PREVISTO desacoplado do snapshot. Se o XML/calendário existe
-    // (jornadas + feriados) + projIni/projFim, o card PREVISTO (SEMANA) sempre
-    // calcula via `pctRaizMSP` (mesma fórmula da barra do topo). REALIZADO
-    // continua dependente do snapshot (estatísticas empíricas). Assim, após
-    // "Limpar Avanços" (Rev. 2270), o card Previsto reflete o mesmo 1,35 %
-    // que a barra do topo, em vez de "—".
+    // Rev. 2425 — REVERTE Rev. 2271. User (25/05/2026, Hotel do Papa):
+    // "o ERP NÃO DEVE FAZER CÁLCULO ele deve simplemente fazer a leitura
+    // dos dados do MSP e apresentar para analise". Política nova alinhada
+    // 100 % com replit.md / Regra de Ouro MSP / Rev. 2265:
+    //
+    // PREVISTO: SÓ snapshot. Se `previstoMspSnapshot` existe e `envOk`,
+    // espelha o número direto do XML (Texto10 → Texto11 → Texto9 → Texto6).
+    // Para semanas posteriores ao StatusDate, repete o snapshot + chip
+    // "📸 Foto MSP de DD/MM" (mesmo tratamento do Realizado). Para semanas
+    // anteriores, "—" com motivo. NUNCA chama `pctRaizMSP` (era cálculo
+    // disfarçado de leitura).
+    //
+    // REALIZADO: mesma política de sempre — snapshot + chip stale.
     const snapshotOk = !!cal.statusDateSnapshot;
     const envOk = snapshotOk
       && (!cal.envelopeStartSnapshot  || projIni === cal.envelopeStartSnapshot)
       && (!cal.envelopeFinishSnapshot || projFim === cal.envelopeFinishSnapshot);
-    // Rev. 2268 — Política refinada:
-    //
-    // PREVISTO: sempre calculado via `pctRaizMSP(semanaFim, projIni, projFim,
-    // calMSP)` — MESMA fórmula que o MSP usa internamente (dias úteis no
-    // envelope, Texto10/Texto6). Quando `semanaFim === statusDateSnapshot`
-    // bate exatamente com o snapshot gravado (paridade absoluta com o XML).
-    // Para outras semanas, devolve o que o MSP mostraria se você mudasse o
-    // StatusDate pra aquela data. NÃO é "cálculo do ERP" — é a fórmula MSP
-    // replicada usando o `calendarioJson` (feriados, jornadas) gravado do
-    // próprio XML. Assim o card varia junto com a barra do topo (que já
-    // usa essa mesma fórmula desde a Rev. 2262).
-    //
-    // REALIZADO: só existe quando o engenheiro rodou o MSP e mediu — é dado
-    // empírico (AD/(AD+RD)), não calculável. Política:
-    //   - semanaFim < statusDate → "—" (não há foto histórica no XML).
-    //   - semanaFim === statusDate → snapshot fresco.
-    //   - semanaFim > statusDate → snapshot + `staleFromDate` (chip
-    //     "📸 Foto MSP de DD/MM").
-    const projIniM = (proj as any)?.dataInicio as string | null | undefined;
-    const projFimM = (proj as any)?.dataTerminoContratual as string | null | undefined;
     let prev: number | null = null;
-    if (projIniM && projFimM) {
-      prev = +pctRaizMSP(semanaFim, projIniM, projFimM, cal).toFixed(2);
-    } else if (cal.previstoMspSnapshot != null && snapshotOk && semanaFim === cal.statusDateSnapshot) {
+    let prevMissing: string | null = null;
+    if (!snapshotOk) {
+      prevMissing = "Previsto MSP indisponível — reimporte o XML do MS Project para popular o snapshot.";
+    } else if (!envOk) {
+      prevMissing = "Datas de início/término da obra foram alteradas no ERP após o último import. Reimporte o XML para restaurar o Previsto.";
+    } else if (cal.previstoMspSnapshot == null) {
+      prevMissing = "XML importado não contém o campo \"% PREVISTO\" da raiz (Texto10/Texto11/Texto9/Texto6 ausentes). Reimporte um XML com o campo preenchido.";
+    } else if (semanaFim < cal.statusDateSnapshot) {
+      prevMissing = `A semana visualizada (fim ${fmtBR(semanaFim)}) é anterior ao StatusDate do XML mais recente (${fmtBR(cal.statusDateSnapshot)}). O XML do MSP guarda apenas a última foto — não há snapshot histórico para o Previsto em semanas passadas.`;
+    } else {
       prev = Number(cal.previstoMspSnapshot);
     }
     // Rev. 2271 — Realizado só vive quando snapshotOk + envelope bate.
@@ -6997,10 +6939,18 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
     } else {
       realMissing = "Snapshot MSP sem % Realizado (AD/(AD+RD)) gravado. Reimporte o cronograma.";
     }
+    // Rev. 2425 — staleFromDate também vale pro Previsto agora (snapshot é
+    // a única fonte; quando a semana > StatusDate, repete o snapshot + chip).
+    let prevStaleFromDate: string | null = null;
+    if (prev != null && cal.statusDateSnapshot && semanaFim > cal.statusDateSnapshot) {
+      prevStaleFromDate = cal.statusDateSnapshot;
+    }
     return {
       previsto: prev != null ? Math.min(100, Math.max(0, prev)) : null,
       realizado: real != null ? Math.min(100, Math.max(0, real)) : null,
       staleFromDate,
+      prevStaleFromDate,
+      previstoMissing: prevMissing,
       missingReason: realMissing,
     };
   }, [proj, semanaFim]);
@@ -7759,7 +7709,7 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
           title={
             mspPrev != null
               ? `PREVISTO (SEMANA) = ${mspPrev.toFixed(2)}%\n\nFonte: snapshot "% PREVISTO" da tarefa-resumo (UID=0) do XML do MS Project — leitura direta, sem cálculo no ERP (User preference Rev. 2265).\nReferência: StatusDate ${fmtBR((parseCalendarioJson((proj as any)?.calendarioJson) as any)?.statusDateSnapshot ?? "")}.`
-              : `PREVISTO (SEMANA) — sem dado do MSP.\n\n${mspReadOnly.missingReason ?? ""}`
+              : `PREVISTO (SEMANA) — sem dado do MSP.\n\n${(mspReadOnly as any).previstoMissing ?? mspReadOnly.missingReason ?? ""}`
           }
         >
           <div className="flex items-center justify-between">
@@ -7858,7 +7808,7 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
                   </UiTooltipTrigger>
                   <UiTooltipContent side="bottom" className="max-w-[260px] text-xs">
                     <p className="font-semibold">Previsto (só diretas)</p>
-                    <p className="text-slate-400 mt-0.5">Snapshot "% PREVISTO" da raiz UID=0 do XML do MSP — leitura direta, sem cálculo no ERP (Rev. 2265).{mspPrev == null ? ` ${mspReadOnly.missingReason ?? ""}` : ""}</p>
+                    <p className="text-slate-400 mt-0.5">Snapshot "% PREVISTO" da raiz UID=0 do XML do MSP — leitura direta, sem cálculo no ERP (Rev. 2265).{mspPrev == null ? ` ${(mspReadOnly as any).previstoMissing ?? mspReadOnly.missingReason ?? ""}` : ""}</p>
                   </UiTooltipContent>
                 </UiTooltip>
                 <ChevronRight className="h-4 w-4 text-slate-300" />

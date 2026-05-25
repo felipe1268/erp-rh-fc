@@ -1,6 +1,176 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2426 — **ALMOXARIFADO · AUDITORIA · banner global de pendências
+ * acima do `<main>` do DashboardLayout + deep-link `?auditoria=1`.**
+ *
+ * Contexto: a Rev. 2388 entregou o ciclo completo de controle rígido do
+ * Almoxarifado — schema `almoxarifado_auditoria`, mutations
+ * `compras.excluirItem` / `excluirUnidade` / `atualizarItem` exigindo
+ * senha (quando user local) + justificativa, endpoints
+ * `auditoriaListar` / `auditoriaPendenciasCount` / `auditoriaValidar` e
+ * o modal de validação dentro de `client/src/pages/almoxarifado/index.tsx`.
+ * O único item do plano que ficou pendente era o **alerta global**:
+ * usuários admin/admin_master só viam pendências se ENTRASSEM no
+ * Almoxarifado — fora de lá, o sistema ficava silencioso.
+ *
+ * **Solução (2 arquivos, zero backend/schema):**
+ *
+ *  - `client/src/components/DashboardLayout.tsx`:
+ *    + Nova query `trpc.compras.auditoriaPendenciasCount.useQuery({ companyId })`
+ *      logo após `sstBadgeQ` (L1001-1012). Refetch 60s, staleTime 30s.
+ *      O endpoint já filtra por role (`admin`/`admin_master`) +
+ *      `getEffectiveAllowedObraIds` no servidor, então a chamada é
+ *      segura pra qualquer user (retorna 0 pra não-validadores).
+ *    + Novo state `auditoriaBannerOpen` p/ dispensar via "X".
+ *    + Banner ambar renderizado dentro de `<SidebarInset>` ENTRE o
+ *      `<CompanyHeader>` e o `<main>` (L1972-1997). Condições:
+ *      `auditoriaPendentes > 0 && auditoriaBannerOpen &&
+ *      !location.startsWith("/almoxarifado")` (esconde quando já
+ *      estamos na tela onde o modal vive, pra não duplicar).
+ *    + Conteúdo: `<ShieldAlert>` ambar, "{N} pendência(s) de auditoria
+ *      no Almoxarifado aguardando sua validação.", botão laranja
+ *      "Revisar agora" (`setLocation("/almoxarifado?auditoria=1")`)
+ *      e botão "X" pra dispensar (volta na próxima recarga).
+ *    + Ícones `ShieldAlert` e `X` já estavam importados de lucide-react.
+ *
+ *  - `client/src/pages/almoxarifado/index.tsx`:
+ *    + Novo `useEffect` único (L116-128) executado no mount: lê
+ *      `URLSearchParams(window.location.search)`, se `auditoria === "1"`
+ *      chama `setModalAuditoriaList(true)` e limpa o param via
+ *      `window.history.replaceState` (URL fica `/almoxarifado` sem
+ *      sujeira pro próximo reload).
+ *    + Zero side-effect além de abrir o modal — toda a infra de
+ *      `auditoriaQuery` + `validarAuditoriaMut` é da Rev. 2388.
+ *
+ * **Por que NÃO virou rota dedicada `/almoxarifado/auditoria`:** o
+ * modal viewer da Rev. 2388 (L4806-4920 de `almoxarifado/index.tsx`)
+ * já é uma janela full-screen com filtros (pendente/validado/rejeitado/
+ * todos) + cards expansíveis + comparativo antes/depois — fazer rota
+ * separada exigiria duplicar essa UI ou extrair como componente, e o
+ * user pediu "OU rota nova" como opção, não como obrigatoriedade.
+ *
+ * **R-001/R-007/R-010 OK** — zero schema, zero ALTER, zero migration.
+ * Mudança puramente client-side aproveitando endpoint já existente.
+ *
+ * **Follow-up natural:** quando user comum (não validador) executar
+ * uma ação que gera pendência, mostrar um toast "Pendência de
+ * auditoria registrada — aguarde validação do gestor" — hoje o toast
+ * já existe nos 3 fluxos (L573/897/1039 da página), mas seria útil
+ * uma confirmação visual de que a pendência chegou no validador.
+ *
+ * ─────────────────────────────────────────────────────────────────────
+ *
+ * Rev. 2425 — **PLANEJAMENTO · LEITURA PURA DO MSP · Texto9 adicionado
+ * na cadeia de fallback do "% PREVISTO" + removidos TODOS os fallbacks
+ * calculados (caso HOTEL DO PAPA).**
+ *
+ * Pedido user (25/05/2026, screenshot HOTEL DO PAPA - AMPLIAÇÃO DO 5
+ * PAV): painel "Avanço Físico" mostrava Previsto = **65,74 %** no topo
+ * e 70,37 % no card semanal, enquanto o MS Project exibia **77 %**.
+ * "O ERP NÃO DEVE FAZER CÁLCULO — ele deve simplemente fazer a leitura
+ * dos dados do MSP e apresentar para análise. Essa correção já foi
+ * feita anteriormente, inclusive na obra VITRA, e propagada para as
+ * demais obras." Hotel do Papa ficou de fora dessa propagação.
+ *
+ * **Diagnóstico (duas causas combinadas):**
+ *
+ *  1. **Importador não lia Texto9 (FieldID 188743749).** O XML do
+ *     Hotel do Papa (`PLN_783_01_2026_R01_BL_*.xml`) tem na raiz
+ *     UID=0 apenas Texto6=" 32%" (antigo, arredondado) e Texto9="77"
+ *     (atual, 4 casas — é o que o display do MSP mostra). A cadeia
+ *     do importador era Texto10 → Texto11 → Texto6 — ignorava Texto9.
+ *     Resultado: `previstoMspSnapshot = 32` (defasado em ~45 pp).
+ *
+ *  2. **Hook `mspReadOnly` recalculava dinamicamente via `pctRaizMSP`
+ *     (Rev. 2271).** Mesmo com snapshot disponível, a Rev. 2271 tinha
+ *     "desacoplado" o card PREVISTO (SEMANA) do snapshot, e passou a
+ *     SEMPRE chamar `pctRaizMSP(semanaFim, projIni, projFim, cal)` —
+ *     dias úteis decorridos / dias úteis totais. Para o Hotel do Papa
+ *     em 25/05/2026 isso resultava em ~66 % (Start=09/02, Finish atual
+ *     replanejado=14/07; baseline original ia até 19/06, daí o MSP no
+ *     Texto9 dar 77 % — denominador da baseline original era ~95 dias,
+ *     denominador do envelope atual já replanejado é ~112 dias úteis).
+ *     A Rev. 2271 foi um drift da regra absoluta do `replit.md`
+ *     (Rev. 2265: "PROIBIÇÃO ABSOLUTA DE CÁLCULO NO PLANEJAMENTO").
+ *
+ *  3. **`avancoPrevistoDia` (top bar) tinha o mesmo problema.** Quando
+ *     `previstoMspSnapshot` existia mas a semana selecionada estava
+ *     fora do range `[statusDate, fimSemanaCorrente]`, caía no bloco
+ *     `pctRaizMSP` da Rev. 1825 + último fallback `pvPonderadoPorAtividade`.
+ *     Por isso o topo (65,74 %) e o card (70,37 %) divergiam um do
+ *     outro também — datas de referência diferentes alimentavam a
+ *     mesma fórmula.
+ *
+ * **Solução (3 arquivos, ZERO backend/schema/migration):**
+ *
+ *  - `client/src/pages/planejamento/ImportarCronograma.tsx`:
+ *    + **Cadeia raiz (L289-301)** — inserido Texto9 entre Texto11 e
+ *      Texto6: `valorPorFid["188743750"] ?? ["188743997"] ??
+ *      ["188743749"] ?? ["188743746"] ?? null`. Comentário grande
+ *      explicando o caso HOTEL DO PAPA.
+ *    + **Cadeia por atividade (L443-462)** — mesmo tratamento:
+ *      `previstoMspT9` captura Texto9, e a resolução final fica
+ *      `Texto10 → Texto9 → Texto6`. Garante paridade entre raiz
+ *      e atividades em templates LOTUS sem Texto10.
+ *
+ *  - `client/src/pages/planejamento/PlanejamentoDetalhe.tsx`:
+ *    + **`mspReadOnly` (L6950-7011)** — reescrito PREVISTO:
+ *      - REVERTIDA a Rev. 2271. NÃO chama mais `pctRaizMSP`.
+ *      - Lê `cal.previstoMspSnapshot` direto quando `snapshotOk`
+ *        + `envOk` + `semanaFim >= statusDateSnapshot`.
+ *      - Para `semanaFim > statusDate` repete o snapshot e expõe
+ *        `prevStaleFromDate` (mesmo chip "📸 Foto MSP de DD/MM"
+ *        do Realizado).
+ *      - Casos de ausência viram null com `previstoMissing` específico
+ *        (snapshot inexistente, envelope mexido, semana anterior ao
+ *        statusDate, XML sem o campo).
+ *      - Novo retorno adiciona `previstoMissing` + `prevStaleFromDate`,
+ *        preserva `missingReason` (= realMissing) p/ retrocompat.
+ *    + **`avancoPrevistoDia` (top bar, L773-790)** — colapsado de
+ *      ~68 linhas para 14: SÓ leitura de snapshot, devolve null se
+ *      snapshot ausente ou envelope mexido. Removidos blocos de
+ *      `pctRaizMSP` e `pvPonderadoPorAtividade`. Visão "com
+ *      indiretas" também devolve null (snapshot é só diretas).
+ *    + **Tooltips L7764 e L7863** — trocadas referências a
+ *      `mspReadOnly.missingReason` por `previstoMissing` no contexto
+ *      do card PREVISTO (a mensagem de Realizado não cabe lá).
+ *
+ * **Impacto pro user (após reimportar o XML do Hotel do Papa):**
+ *  - Importador grava `previstoMspSnapshot = 77` (Texto9, paridade
+ *    com o que o MSP exibe).
+ *  - Painel topo "Live (...) 65,74 %" → "Snapshot MSP (DD/MM)
+ *    **77,00 %**" (mesmo número, sem cálculo).
+ *  - Card "PREVISTO (SEMANAL)" → **77,00 %** (semanas posteriores ao
+ *    statusDate mostram chip "📸 Foto MSP de 20/03/2026"). Semanas
+ *    anteriores ao statusDate mostram "—" (não há snapshot histórico
+ *    no XML — limitação documentada).
+ *  - Obras que JÁ tinham Texto10/Texto11/Texto6 (VITRA, REVTE-CIVIL):
+ *    zero mudança visível (cadeia mantém Texto10 com prioridade
+ *    absoluta, snapshot já era usado direto após Rev. 2262).
+ *
+ * **Por que NÃO virou o Wizard de Mapeamento MSP (proposta do user
+ * na mesma sessão):** o user pediu pra "estruturar a ideia primeiro
+ * antes de fazer o ajuste" + "isso vai mudar muito nosso fluxo,
+ * então vou deixar para mudar depois". Especificação completa do
+ * wizard (template ADMIN_MASTER + wizard de 3 passos + mapeamento
+ * por obra + plugins MSP/Custo RH/BIM 3D) ficou registrada na
+ * conversa para retomada como Rev. 2426+.
+ *
+ * **R-001/R-007/R-010 OK** — zero schema, zero ALTER, zero DROP, zero
+ * DELETE. Mudança puramente client-side.
+ *
+ * **Follow-ups:**
+ *  - Auditar outros pontos do PlanejamentoDetalhe.tsx que ainda
+ *    chamam `pctRaizMSP` (Curva S, REFIS, exports) — esses são
+ *    "consumidores internos" autorizados pela Rev. 2265, mas merecem
+ *    revisão pra garantir que nenhum CARD novo entrou usando.
+ *  - Atalho "Reimportar XML" no banner amarelo quando `previstoMissing`
+ *    aparece — hoje o user tem que ir manualmente em Cronograma →
+ *    Importar Cronograma.
+ *
+ * ─────────────────────────────────────────────────────────────────────
+ *
  * Rev. 2424 — **UX · PLANEJAMENTO/LISTA · substituído `window.confirm`
  * nativo por AlertDialog estilizado ao excluir projeto.**
  *
