@@ -48,47 +48,6 @@ export interface TarefaImportada {
   // fallback dinâmico (cálculo JS via du(envelope ∩ até cutoff)).
   previstoMsp?:     number;
   realizadoMsp?:    number;
-  // Rev. 2427 — Linha de Base NATIVA do MS Project (tag <Baseline Number=0>).
-  // Fonte primária do "planejado original" pra Curva S, Gantt comparativo e
-  // variação de prazo. Vem direto do XML — quando o engenheiro grava baseline
-  // no Project (Projeto > Definir Linha de Base > Linha de Base), o MSP cria
-  // este bloco por tarefa com Start/Finish/Duration/Work/Cost congelados.
-  // Number=1..10 = baselines alternativas (raramente usadas) — ignoradas.
-  // Ausente em projetos que nunca tiveram baseline gravada no MSP.
-  baseline?: {
-    start?:       string;   // YYYY-MM-DD
-    finish?:      string;   // YYYY-MM-DD
-    durationMin?: number;   // PT_H_M_S → minutos
-    workMin?:     number;   // PT_H_M_S → minutos
-    cost?:        number;   // BRL
-  };
-}
-
-// Rev. 2427 — Helper p/ ler <Baseline Number=0> filho direto de <Task>.
-// Ignora baselines 1..10 (alternativas). Retorna undefined se não houver.
-function lerBaselineDaTask(task: Element): TarefaImportada["baseline"] | undefined {
-  const parseDurMin = (s: string): number | undefined => {
-    const m = /^PT(\d+)H(\d+)M(\d+)S/.exec(s);
-    return m ? +m[1] * 60 + +m[2] + +m[3] / 60 : undefined;
-  };
-  for (const child of Array.from(task.children)) {
-    if (child.tagName !== "Baseline") continue;
-    const num = child.querySelector("Number")?.textContent?.trim() ?? "";
-    if (num !== "0") continue;
-    const start  = child.querySelector("Start")?.textContent?.trim()?.slice(0, 10);
-    const finish = child.querySelector("Finish")?.textContent?.trim()?.slice(0, 10);
-    const durRaw = child.querySelector("Duration")?.textContent?.trim() ?? "";
-    const wrkRaw = child.querySelector("Work")?.textContent?.trim() ?? "";
-    const cstRaw = child.querySelector("Cost")?.textContent?.trim() ?? "";
-    const cost   = parseFloat(cstRaw);
-    return {
-      start, finish,
-      durationMin: parseDurMin(durRaw),
-      workMin:     parseDurMin(wrkRaw),
-      cost:        Number.isFinite(cost) ? cost : undefined,
-    };
-  }
-  return undefined;
 }
 
 // ── Utilitários de parse ──────────────────────────────────────────────────────
@@ -307,19 +266,12 @@ export function parseMSProjectFull(text: string): {
   // Permite paridade absoluta entre o card "Realizado (Acum.)" do ERP e a
   // linha de projeto do MSP (ex.: REVTE-CIVIL → 1,3324% = 1,33% no MSP).
   let realizadoMspRaiz: number | null = null;
-  // Rev. 2427 — Linha de Base NATIVA da raiz (<Baseline Number=0>): envelope
-  // congelado pelo MSP quando o engenheiro gravou a baseline. Salvo no
-  // calendarioJson p/ uso em Curva S de baseline, Gantt comparativo e cálculo
-  // de variação de prazo (StartVariance/FinishVariance já estão no XML mas
-  // dependem do baseline pra fazer sentido). Zero migration: vai no jsonb.
-  let baselineRaiz: TarefaImportada["baseline"] | undefined;
   const taskEls = Array.from(doc.querySelectorAll("Task"));
   for (const t of taskEls) {
     const uid = t.querySelector("UID")?.textContent?.trim();
     if (uid === "0") {
       projetoStart  = t.querySelector("Start")?.textContent?.trim()?.slice(0, 10) || null;
       projetoFinish = t.querySelector("Finish")?.textContent?.trim()?.slice(0, 10) || null;
-      baselineRaiz  = lerBaselineDaTask(t);
       const eaList = Array.from(t.querySelectorAll("ExtendedAttribute"));
       const valorPorFid: Record<string, number> = {};
       for (const ea of eaList) {
@@ -332,22 +284,12 @@ export function parseMSProjectFull(text: string): {
         if (Number.isFinite(num)) valorPorFid[fid] = num;
       }
       // Ordem de prioridade: Texto10 → Texto11 → Texto9 → Texto6.
-      //
-      // Rev. 2425/2427 — Decisão semântica (Opção B, confirmada pelo user em
-      // 25/05/2026 após mapeamento canônico do XML HOTEL DO PAPA): Texto9 é
-      // tratado como OVERRIDE MANUAL do engenheiro sobre o "% PREVISTO".
-      //   • Texto6 (Alias "% PREVISTO") é o output CALCULADO pelo MSP via
-      //     fórmula Int(((StatusDate − BL_Start)/(BL_Finish − BL_Start))*100)
-      //     — fonte canônica matemática.
-      //   • Texto9 NÃO tem Alias nem Formula no schema do template — é campo
-      //     livre. Quando o engenheiro o preenche (raro: 2 de 602 tarefas no
-      //     HOTEL DO PAPA), está sobrescrevendo intencionalmente o valor do
-      //     MSP pq sabe que o número real é outro (ex.: 77 % no display do
-      //     MSP via coluna customizada, vs 32 % do Texto6 que ficou stale).
-      // Logo a ordem é: Texto10/11 (templates novos) > Texto9 (override) >
-      // Texto6 (cálculo MSP padrão). NÃO violar — qualquer card de Avanço
-      // Global no ERP DEVE refletir essa cadeia pra paridade com o MSP do
-      // engenheiro. Ver Rev. 2425/2427 no changelog pra contexto completo.
+      // Rev. 2425 — Texto9 (188743749) adicionado entre Texto11 e Texto6 porque
+      // alguns templates LOTUS (ex.: HOTEL DO PAPA — PLN_783_01_2026_R01) não
+      // exportam Texto10/Texto11 e o engenheiro mantém o "% PREVISTO oficial"
+      // em Texto9 (4 casas, igual ao display do MSP). Sem este fallback, o
+      // ERP pegava Texto6 (versão arredondada/antiga, ex.: 32 %) e o painel
+      // mostrava 32 % no snapshot enquanto o MSP exibia 77 %.
       previstoMspRaiz =
         valorPorFid["188743750"] ??  // Texto10 — %PREVISTO (Round 4 casas)
         valorPorFid["188743997"] ??  // Texto11 — alguns templates customizados
@@ -394,11 +336,6 @@ export function parseMSProjectFull(text: string): {
     envelopeFinishSnapshot: projetoFinish,
     // Rev. 1675 — snapshot do %Realizado raiz (AD/(AD+RD)) com precisão MSP.
     realizadoMspSnapshot:   realizadoMspRaiz,
-    // Rev. 2427 — Baseline NATIVA do MSP (raiz UID=0, <Baseline Number=0>).
-    // Start/Finish/Duration/Work/Cost congelados pelo Project. Pra ser usado em
-    // Curva S baseline, Gantt comparativo e variação de prazo (Δfim = Finish −
-    // baselineFinish). undefined quando o cronograma nunca teve baseline gravada.
-    baselineRaizSnapshot:   baselineRaiz ?? null,
   } : null;
   const calendarioJson = calComConfig ? JSON.stringify(calComConfig) : null;
   return { tarefas, statusDate, statusDateIso, calendarioJson, projetoStart, projetoFinish, previstoMspRaiz };
@@ -562,8 +499,6 @@ function parseMSProjectTasksFromDoc(doc: Document): TarefaImportada[] {
       durDias: parseDuration(durRaw), pred, recurso: res,
       isGrupo: summ, isMarco, eapCodigo: wbs, pesoFin: 0, percentConcluido,
       previstoMsp, realizadoMsp,
-      // Rev. 2427 — Baseline nativa por atividade (<Baseline Number=0>).
-      baseline: lerBaselineDaTask(task),
     });
   }
   return result;
