@@ -1,6 +1,119 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2428 — **UX · PLANEJAMENTO/LISTA · redesign do modal "Novo Projeto
+ * de Planejamento" com identidade FC, componentes shadcn e fim do scroll
+ * horizontal.**
+ *
+ * CONTEXTO
+ * - O modal "Novo Projeto" da tela `/planejamento` foi a primeira surface
+ *   de UI a destoar visualmente do resto do app depois das revisões 2106+
+ *   que padronizaram cabeçalho institucional FC (faixa #1B2A4A).
+ * - 3 problemas concretos relatados pelo usuário com screenshots:
+ *     (1) Header chapado branco/preto sem identidade visual nenhuma —
+ *         destoava dos modais do Almoxarifado (Rev. 2388/2426) e do
+ *         padrão de documentos institucionais.
+ *     (2) Scrollbar HORIZONTAL aparecendo dentro do modal sempre que o
+ *         nome da obra era longo (ex.: "CONDOMÍNIO RESIDENCIAL DE NOSSA
+ *         SENHORA DA CONCEIÇÃO APARECIDA"). Causa: `<select>` HTML
+ *         nativo + ausência de `min-w-0` nos containers do grid (Tailwind
+ *         flex/grid items têm `min-width: auto` por default, que NÃO
+ *         encolhe além do conteúdo intrínseco).
+ *     (3) Botão "Criar Projeto" usava `bg-blue-600` que tem contraste
+ *         baixo com o branco — parecia desabilitado mesmo quando estava
+ *         clicável (vide screenshot com obra selecionada).
+ * - Bônus: o modal misturava 2 `<select>` HTML nativos + 1 `<textarea>`
+ *   nativo com componentes shadcn no resto do app (incoerência de
+ *   sistema).
+ *
+ * DECISÃO
+ * - REGRA DE OURO FC (Rev. 2106+): cabeçalhos institucionais usam faixa
+ *   azul `#1B2A4A` full-width. Aplicar isso TAMBÉM em modais críticos
+ *   (não só em documentos imprimíveis). O `print-color-adjust:exact` da
+ *   regra original continua inline (não custa nada e protege em prints
+ *   eventuais do modal).
+ * - Substituir TODOS os controles HTML nativos pelos equivalentes
+ *   shadcn (`Select`, `Textarea`) — coerência sistêmica + acessibilidade
+ *   do Radix.
+ * - `min-w-0` cirúrgico em TODOS os flex/grid children que contêm texto
+ *   potencialmente longo (SelectTrigger, SelectValue, preview da obra,
+ *   card de orçamento). `SelectContent` clampado em
+ *   `--radix-select-trigger-width` pra dropdown não estourar o modal.
+ * - Botão primário com cor institucional `#1B2A4A` (mesma da faixa) em
+ *   vez de `bg-blue-600` genérico do Tailwind — alinha com o resto do
+ *   sistema e tem contraste melhor.
+ *
+ * MUDANÇAS — `client/src/pages/planejamento/PlanejamentoLista.tsx`
+ *
+ * Imports (L13-29):
+ *   + Select, SelectContent, SelectItem, SelectTrigger, SelectValue
+ *     (de @/components/ui/select)
+ *   + Textarea (de @/components/ui/textarea)
+ *   + DialogFooter (de @/components/ui/dialog)
+ *   + Ícones: FolderPlus (header + botão), FileText (orçamento vazio),
+ *     CheckCircle (orçamento vinculado)
+ *
+ * Estrutura do modal (L505-695):
+ *   - DialogContent: `max-w-lg p-0 gap-0 overflow-hidden` — zero
+ *     padding pra faixa ocupar toda a largura, sem gap entre header/
+ *     body/footer, sem overflow (radius do card).
+ *   - HEADER (faixa FC):
+ *       background: linear-gradient(135deg, #1B2A4A 0%, #243456 100%)
+ *       printColorAdjust: exact
+ *       border-bottom #0f1a30
+ *       Pill 40x40 bg-white/10 border-white/15 com <FolderPlus> branco
+ *       Título branco 16px semibold tracking-wide
+ *       Subtítulo "Cronograma · Curva S · REFIS · Controle de Avanço"
+ *         11px white/60 uppercase tracking-wider
+ *   - BODY: max-h-[70vh] overflow-y-auto space-y-4
+ *   - Alerta âmbar "nenhuma obra disponível": preservado, +min-w-0 no
+ *     wrapper interno pra evitar overflow quando expande.
+ *   - Select da Obra (shadcn): SelectTrigger h-10 bg-white com w-full
+ *     min-w-0; SelectValue truncate; SelectContent clampado em
+ *     --radix-select-trigger-width; cada SelectItem com span truncate
+ *     block max-w-full (segurança extra contra obras com nome+cliente
+ *     muito longos).
+ *   - Preview da obra: agora com gradient slate-50→slate-100, ícones
+ *     em #1B2A4A (institucional) em vez de slate-400 chapado, cada
+ *     linha com min-w-0+truncate; valor do contrato fica abaixo de um
+ *     divider sutil border-t border-slate-200/70 (separação visual).
+ *   - Grid 2 col (Orçamento + Status):
+ *       Orçamento: card h-10 align-middle com ícone <CheckCircle>
+ *         verde (vinculado) OU <FileText> cinza (vazio) + texto
+ *         truncado. Estado vazio simplificado: "Nenhum orçamento" em
+ *         vez de "Nenhum orçamento para esta obra" (caber em h-10).
+ *       Status: Select shadcn (mesmo padrão da Obra).
+ *   - Observações: <Textarea> shadcn (resize-none, rows=2).
+ *   - DialogFooter: px-6 py-4 border-t border-slate-200 bg-slate-50/60
+ *       Botão Cancelar (variant outline) com disabled durante mutation.
+ *       Botão Criar: bg-[#1B2A4A] hover:bg-[#243456] text-white gap-2
+ *         min-w-[130px] (estabilidade visual), com <FolderPlus> ícone
+ *         no estado normal e "Criando..." + Loader2 no isPending.
+ *
+ * RESULTADO ESPERADO
+ * - Scroll horizontal MORTO (causa raiz: min-width:auto + select nativo
+ *   inflexível; fix: Select shadcn truncado + min-w-0 em cada child).
+ * - Modal alinhado visualmente com Almoxarifado/Auditoria e com a
+ *   identidade institucional FC do resto do sistema (faixa #1B2A4A).
+ * - Botão "Criar Projeto" com contraste alto e cor institucional.
+ *
+ * COMPATIBILIDADE
+ * - Zero mudança em mutations, state, validações ou na lógica de
+ *   `obrasDisponiveis`/`orcamentoAutoVinculado`/`obraSelecionada`.
+ * - `criarMutation`, `handleCriar`, `resetForm` intocados.
+ * - Mesmo set de campos: obraId, status, descricao (form state idêntico).
+ *
+ * NÃO MEXIDO (escopo cirúrgico)
+ * - Card de listagem de projetos da tela (atrás do modal).
+ * - AlertDialog de excluir projeto (Rev. 2424 — já estilizado).
+ * - Outros modais do app — esta revisão é tática, focada no caso
+ *   reportado. Se outros modais com `<select>` nativo ou
+ *   `bg-blue-600` aparecerem, ataca-se um a um.
+ *
+ * ARQUIVO ÚNICO · ZERO BACKEND · ZERO MIGRATION · R-001/R-007/R-010 OK.
+ *
+ * ---
+ *
  * Rev. 2427 — **PLANEJAMENTO · REGRA DE OURO DEFINITIVA pra leitura de
  * XML do MS Project · `% PREVISTO` = `Texto6` puro e `% CONCLUÍDA` =
  * `PercentComplete` puro, em TODOS os níveis (raiz UID=0 + atividades),

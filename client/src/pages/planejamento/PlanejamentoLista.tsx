@@ -10,15 +10,19 @@ import { Input } from "@/components/ui/input";
 import {
   Plus, Search, Loader2, CalendarRange, Building2, User, DollarSign,
   TrendingUp, Clock, CheckCircle2, AlertTriangle, Trash2, Eye, MapPin, ArrowLeft, Pencil,
-  Info,
+  Info, FolderPlus, FileText, CheckCircle,
 } from "lucide-react";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
 import {
   AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle,
   AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction,
 } from "@/components/ui/alert-dialog";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 
 const n = (v: any) => parseFloat(v || "0") || 0;
@@ -495,19 +499,42 @@ export default function PlanejamentoLista() {
           </DialogContent>
         </Dialog>
 
-        {/* Modal novo projeto */}
+        {/* ───────────────────────────────────────────────────────────────
+            Modal novo projeto — Rev. 2428
+            Identidade FC (faixa #1B2A4A no header), shadcn Select/Textarea,
+            min-w-0 estratégico (mata scroll horizontal causado por nomes
+            longos de obra), DialogFooter separado com border-t.
+            ─────────────────────────────────────────────────────────────── */}
         <Dialog open={modalAberto} onOpenChange={open => { setModalAberto(open); if (!open) resetForm(); }}>
-          <DialogContent className="max-w-md">
-            <DialogHeader>
-              <DialogTitle>Novo Projeto de Planejamento</DialogTitle>
-            </DialogHeader>
+          <DialogContent className="max-w-lg p-0 gap-0 overflow-hidden">
+            {/* Faixa azul FC */}
+            <div
+              className="flex items-center gap-3 px-6 py-4 border-b border-[#0f1a30]"
+              style={{
+                background: "linear-gradient(135deg, #1B2A4A 0%, #243456 100%)",
+                printColorAdjust: "exact",
+              }}
+            >
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-white/10 border border-white/15">
+                <FolderPlus className="h-5 w-5 text-white" />
+              </div>
+              <div className="min-w-0">
+                <DialogTitle className="text-white text-base font-semibold leading-tight tracking-wide">
+                  Novo Projeto de Planejamento
+                </DialogTitle>
+                <p className="text-[11px] text-white/60 mt-0.5 tracking-wider uppercase">
+                  Cronograma · Curva S · REFIS · Controle de Avanço
+                </p>
+              </div>
+            </div>
 
-            <div className="grid grid-cols-1 gap-4 mt-1">
+            {/* Body */}
+            <div className="px-6 py-5 space-y-4 max-h-[70vh] overflow-y-auto">
 
               {obrasDisponiveis.length === 0 && (
                 <div className="flex gap-2.5 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
                   <Info className="h-4 w-4 shrink-0 text-amber-500 mt-0.5" />
-                  <div>
+                  <div className="min-w-0">
                     <p className="font-semibold mb-0.5">Nenhuma obra disponível para planejamento</p>
                     <p className="text-amber-700 leading-relaxed">
                       Para criar um planejamento, a obra precisa ter um <strong>orçamento cadastrado e vinculado</strong>.
@@ -518,58 +545,68 @@ export default function PlanejamentoLista() {
               )}
 
               {/* Seleção da Obra */}
-              <div>
-                <Label className="text-xs font-medium">Selecionar Obra *</Label>
-                <select
+              <div className="space-y-1.5 min-w-0">
+                <Label className="text-xs font-semibold text-slate-700 uppercase tracking-wide">
+                  Selecionar Obra <span className="text-red-500">*</span>
+                </Label>
+                <Select
                   value={form.obraId}
-                  onChange={e => setForm(f => ({ ...f, obraId: e.target.value }))}
-                  className="mt-1 w-full border border-input rounded-md px-3 py-2 text-sm bg-background"
+                  onValueChange={v => setForm(f => ({ ...f, obraId: v }))}
                   disabled={obrasDisponiveis.length === 0}
                 >
-                  <option value="">— Selecione uma obra —</option>
-                  {obrasDisponiveis.map((o: any) => (
-                    <option key={o.id} value={o.id}>
-                      {o.nome}{o.cliente ? ` · ${o.cliente}` : ""}
-                    </option>
-                  ))}
-                </select>
+                  <SelectTrigger className="w-full min-w-0 h-10 bg-white">
+                    <SelectValue placeholder="— Selecione uma obra —" className="truncate" />
+                  </SelectTrigger>
+                  <SelectContent className="max-w-[var(--radix-select-trigger-width)]">
+                    {obrasDisponiveis.map((o: any) => (
+                      <SelectItem key={o.id} value={String(o.id)}>
+                        <span className="truncate block max-w-full">
+                          {o.nome}{o.cliente ? ` · ${o.cliente}` : ""}
+                        </span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
 
               {/* Preview dos dados da obra selecionada */}
               {obraSelecionada && (
-                <div className="rounded-lg bg-slate-50 border border-slate-200 p-3 space-y-1.5 text-xs text-slate-600">
+                <div
+                  className="rounded-lg border border-slate-200 p-3.5 space-y-2 text-xs text-slate-700 min-w-0"
+                  style={{ background: "linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)" }}
+                >
                   {obraSelecionada.cliente && (
-                    <div className="flex items-center gap-2">
-                      <Building2 className="h-3.5 w-3.5 text-slate-400 shrink-0" />
-                      <span>{obraSelecionada.cliente}</span>
+                    <div className="flex items-center gap-2 min-w-0">
+                      <Building2 className="h-3.5 w-3.5 text-[#1B2A4A] shrink-0" />
+                      <span className="truncate">{obraSelecionada.cliente}</span>
                     </div>
                   )}
                   {obraSelecionada.responsavel && (
-                    <div className="flex items-center gap-2">
-                      <User className="h-3.5 w-3.5 text-slate-400 shrink-0" />
-                      <span>{obraSelecionada.responsavel}</span>
+                    <div className="flex items-center gap-2 min-w-0">
+                      <User className="h-3.5 w-3.5 text-[#1B2A4A] shrink-0" />
+                      <span className="truncate">{obraSelecionada.responsavel}</span>
                     </div>
                   )}
                   {(obraSelecionada.cidade || obraSelecionada.estado || obraSelecionada.endereco) && (
-                    <div className="flex items-center gap-2">
-                      <MapPin className="h-3.5 w-3.5 text-slate-400 shrink-0" />
-                      <span>
+                    <div className="flex items-center gap-2 min-w-0">
+                      <MapPin className="h-3.5 w-3.5 text-[#1B2A4A] shrink-0" />
+                      <span className="truncate">
                         {[obraSelecionada.cidade, obraSelecionada.estado].filter(Boolean).join(" / ")
                           || obraSelecionada.endereco}
                       </span>
                     </div>
                   )}
                   {(obraSelecionada.dataInicio || obraSelecionada.dataPrevisaoFim) && (
-                    <div className="flex items-center gap-2">
-                      <CalendarRange className="h-3.5 w-3.5 text-slate-400 shrink-0" />
-                      <span>
+                    <div className="flex items-center gap-2 min-w-0">
+                      <CalendarRange className="h-3.5 w-3.5 text-[#1B2A4A] shrink-0" />
+                      <span className="truncate">
                         {obraSelecionada.dataInicio ?? "—"} → {obraSelecionada.dataPrevisaoFim ?? "—"}
                       </span>
                     </div>
                   )}
                   {!hideFinancial && obraSelecionada.valorContrato && n(obraSelecionada.valorContrato) > 0 && (
-                    <div className="flex items-center gap-2">
-                      <DollarSign className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                    <div className="flex items-center gap-2 min-w-0 pt-1.5 border-t border-slate-200/70">
+                      <DollarSign className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
                       <span className="font-semibold text-emerald-700">
                         {formatBRL(n(obraSelecionada.valorContrato))}
                       </span>
@@ -579,54 +616,80 @@ export default function PlanejamentoLista() {
               )}
 
               {/* Orçamento auto-vinculado + Status */}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <Label className="text-xs font-medium">Orçamento vinculado</Label>
-                  <div className={`mt-1 w-full border rounded-md px-3 py-2 text-sm truncate ${
+              <div className="grid grid-cols-2 gap-3 min-w-0">
+                <div className="space-y-1.5 min-w-0">
+                  <Label className="text-xs font-semibold text-slate-700 uppercase tracking-wide">
+                    Orçamento vinculado
+                  </Label>
+                  <div className={`h-10 w-full border rounded-md px-3 flex items-center gap-2 text-xs min-w-0 ${
                     orcamentoAutoVinculado
-                      ? "border-emerald-300 bg-emerald-50 text-emerald-800 font-medium"
-                      : "border-input bg-muted/40 text-muted-foreground italic"
+                      ? "border-emerald-300 bg-emerald-50 text-emerald-800"
+                      : "border-slate-200 bg-slate-50 text-slate-400 italic"
                   }`}>
                     {orcamentoAutoVinculado
-                      ? (orcamentoAutoVinculado.descricao ?? orcamentoAutoVinculado.codigo ?? `#${orcamentoAutoVinculado.id}`)
-                      : "Nenhum orçamento para esta obra"}
+                      ? <CheckCircle className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                      : <FileText className="h-3.5 w-3.5 text-slate-300 shrink-0" />}
+                    <span className="truncate font-medium">
+                      {orcamentoAutoVinculado
+                        ? (orcamentoAutoVinculado.descricao ?? orcamentoAutoVinculado.codigo ?? `#${orcamentoAutoVinculado.id}`)
+                        : "Nenhum orçamento"}
+                    </span>
                   </div>
                 </div>
-                <div>
-                  <Label className="text-xs font-medium">Status</Label>
-                  <select
+                <div className="space-y-1.5 min-w-0">
+                  <Label className="text-xs font-semibold text-slate-700 uppercase tracking-wide">
+                    Status
+                  </Label>
+                  <Select
                     value={form.status}
-                    onChange={e => setForm(f => ({ ...f, status: e.target.value }))}
-                    className="mt-1 w-full border border-input rounded-md px-3 py-2 text-sm bg-background"
+                    onValueChange={v => setForm(f => ({ ...f, status: v }))}
                   >
-                    {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
-                  </select>
+                    <SelectTrigger className="w-full h-10 bg-white">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {STATUS_OPTIONS.map(s => (
+                        <SelectItem key={s} value={s}>{s}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
 
-              {/* Descrição */}
-              <div>
-                <Label className="text-xs font-medium">Observações (opcional)</Label>
-                <textarea
+              {/* Observações */}
+              <div className="space-y-1.5 min-w-0">
+                <Label className="text-xs font-semibold text-slate-700 uppercase tracking-wide">
+                  Observações <span className="font-normal text-slate-400 normal-case">(opcional)</span>
+                </Label>
+                <Textarea
                   value={form.descricao}
                   onChange={e => setForm(f => ({ ...f, descricao: e.target.value }))}
                   placeholder="Informações adicionais sobre o projeto..."
-                  className="mt-1 w-full border border-input rounded-md px-3 py-2 text-sm bg-background resize-none"
+                  className="resize-none text-sm bg-white"
                   rows={2}
                 />
               </div>
-
-              <div className="flex gap-2 justify-end pt-1">
-                <Button variant="outline" onClick={() => { setModalAberto(false); resetForm(); }}>Cancelar</Button>
-                <Button
-                  disabled={!form.obraId || criarMutation.isPending}
-                  onClick={handleCriar}
-                  className="bg-blue-600 hover:bg-blue-700"
-                >
-                  {criarMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Criar Projeto"}
-                </Button>
-              </div>
             </div>
+
+            {/* Footer */}
+            <DialogFooter className="px-6 py-4 border-t border-slate-200 bg-slate-50/60 gap-2 sm:gap-2">
+              <Button
+                variant="outline"
+                onClick={() => { setModalAberto(false); resetForm(); }}
+                disabled={criarMutation.isPending}
+              >
+                Cancelar
+              </Button>
+              <Button
+                disabled={!form.obraId || criarMutation.isPending}
+                onClick={handleCriar}
+                className="bg-[#1B2A4A] hover:bg-[#243456] text-white gap-2 min-w-[130px]"
+              >
+                {criarMutation.isPending
+                  ? <><Loader2 className="h-4 w-4 animate-spin" /> Criando...</>
+                  : <><FolderPlus className="h-4 w-4" /> Criar Projeto</>}
+              </Button>
+            </DialogFooter>
           </DialogContent>
         </Dialog>
 
