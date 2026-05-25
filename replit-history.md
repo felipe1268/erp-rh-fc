@@ -2,6 +2,7 @@
 
 > Este arquivo guarda os one-liners das revisões antigas para manter o `replit.md` enxuto.
 
+- **Rev. 2411** — EQUIPAMENTOS LOCADOS ↔ ALMOXARIFADO/BUGFIX · Devolução/exclusão de locado agora propaga pro almox + 3 novos statuses (aguardando_chegada/quebrado/solicitado_substituicao). 3 helpers em `server/lib/almoxEquipamentoSync.ts` (single + bulk + purge startup). `locadoDevolver` calcula `tempoNaObraDias` no evento. STATUS_* expandidos 5→8 pills com cyan/rose/fuchsia. Ver `shared/changelog.ts`.
 - **Rev. 2410** — AVALIAÇÃO INTELIGENTE/BUGFIX · `getDb()` chamado sem `await` em `carregarInputs` (server/routers/avaliacaoFuncionarios.ts L74). `db` virava Promise, quebrava "db.select is not a function" e zerava a tela. Fix 1 caractere: `await getDb()`. Único call site síncrono no server/. Ver `shared/changelog.ts`.
 - **Rev. 2409** — IA/PERFORMANCE · Desligado "modo thinking" do Gemini 2.5 Flash em `invokeGeminiVision` (server/_core/llm.ts). `thinkingConfig.thinkingBudget=0` + param `thinking?:"off"|"auto"` default "off" + guarda regex `gemini-2.5+`. Combate "trava em 99%": PDF pequeno 25-40s→8-15s. Ver `shared/changelog.ts`.
 - **Rev. 2408** — EQUIPAMENTOS LOCADOS/UX · Filtro por LOCADORA (fornecedor) na toolbar da Visão Geral. State `filtroFornecedor` + useMemo `dataPorFornecedor` (pipeline status→obra→cat→**fornecedor**→venc), `fornecedoresComItens` derivado dos próprios equipamentos (não dos 1190 cadastrados), comparação case-insensitive. UI: grid 2→3 cols, select amber Truck, chip amber. Zero backend. Ver `shared/changelog.ts`.

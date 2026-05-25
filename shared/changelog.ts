@@ -1,6 +1,73 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2418 — **ALMOXARIFADO / VALOR TOTAL DO ESTOQUE · EXCLUI
+ * EQUIPAMENTOS LOCADOS POR PADRÃO + RESPEITA FILTROS VISÍVEIS.**
+ *
+ * Pedido user (25/05/2026): "os valores dos equipamentos locados
+ * estão sendo computados no valor total do almoxarifado? se não
+ * preciso que esteja, se quando fazer o filtro o valor deve mostrar
+ * somente o que ta no filtro definido para analise ok.."
+ *
+ * **Diagnóstico:** sim, estavam. Em ambas as visões (consolidada
+ * "todos" e por obra), o Banner Verde "Valor Total do Estoque" e
+ * o tfoot "TOTAL GERAL" somavam a lista CRUA (`consItens` /
+ * `itens`), ignorando: (a) qualquer filtro UI aplicado — busca,
+ * categoria, abaixo do mínimo, vínculo equipamento; (b) o fato de
+ * que equipamentos LOCADOS são contratados de terceiros e seu
+ * "valor unitário" não compõe patrimônio do estoque da empresa.
+ *
+ * **Regra nova (unificada nas 2 visões):**
+ *
+ * - **Default (filtroEquip="todos"):** locados EXCLUÍDOS do total
+ *   (badge "X locado(s) excluído(s)" no rodapé do banner).
+ * - **filtroEquip="locado"** ou **"vinculado"**: incluí-los faz
+ *   sentido (user pediu pra ver explicitamente esse subgrupo) →
+ *   total reflete o que tá visível na lista.
+ * - **Demais filtros** (busca, categoria, abaixo do mínimo,
+ *   "proprio", "nenhum"): total reflete a lista filtrada visível
+ *   (badge "filtrado" no header do banner).
+ *
+ * **Frontend — `client/src/pages/almoxarifado/index.tsx`:**
+ *
+ * 1. **Visão consolidada (L1627-1662):** introduzido
+ *    `itensParaTotal` derivado de `consListFinal` (lista JÁ
+ *    filtrada por busca/categoria/abaixo/equip), filtrando
+ *    `equipamentoVinculadoTipo !== "locado"` quando
+ *    `filtroEquip` não é "locado"/"vinculado". `valorMap` e
+ *    `valorTotal` agora iteram sobre `itensParaTotal`. Helpers
+ *    auxiliares `totalReflectsFilter` e `qtdLocadosExcluidos`
+ *    pros badges.
+ * 2. **Banner verde consolidado (L1685-1698):** substituído
+ *    `consolidado.totalGeral` (servidor, sem filtros) por
+ *    `valorTotal` (recalculado). Rótulo ganhou badge "filtrado"
+ *    e contagem "X locado(s) excluído(s)".
+ * 3. **tfoot "TOTAL GERAL" da tabela consolidada (L1997-2008):**
+ *    `consolidado.totalGeral` → `valorTotal`, mesma sinalização.
+ *    Condição de renderização passou a ser `valorTotal > 0`.
+ * 4. **Visão por obra (L2030-2043):** `valorTotalObra` agora soma
+ *    `itensParaTotalObra` (derivado de `lista` filtrada com mesma
+ *    regra de locado). Banner verde "(este almoxarifado)"
+ *    L2070-2078 ganhou os mesmos badges.
+ *
+ * **Backend:** **ZERO** mudanças. `consolidado.totalGeral` continua
+ * sendo enviado pelo `listarItensConsolidado` pra outros consumidores
+ * (export, API externa) — mas o UI não usa mais. Sem migrations.
+ *
+ * R-001 / R-007 / R-010: OK — zero DDL, zero DELETE.
+ *
+ * Arquivos:
+ * - `client/src/pages/almoxarifado/index.tsx` (5 blocos editados:
+ *   visão consolidada cálculo + banner + tfoot, visão obra cálculo
+ *   + banner).
+ * - `shared/version.ts` (2417 → 2418).
+ * - `shared/changelog.ts` (esta entrada).
+ * - `replit.md` (rotação 2+5 — Rev. 2415 demovida pra history).
+ * - `replit-history.md` (Rev. 2411 adicionada — demovida das
+ *   one-liners).
+ *
+ * ─────────────────────────────────────────────────────────────
+ *
  * Rev. 2417 — **ALMOXARIFADO / INVENTÁRIO VISUAL DE BAIAS ·
  * SÓ CATEGORIA "AGREGADOS" + INPUT NUMÉRICO DE VOLUME +
  * CONSUMO DO DIA CALCULADO.**

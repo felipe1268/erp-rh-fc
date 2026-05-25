@@ -1621,13 +1621,21 @@ export default function AlmoxarifadoPage() {
             const n2 = parseFloat(s);
             return isNaN(n2) ? 0 : n2;
           };
+          // Rev. 2418 — Valor Total respeita filtros visíveis E exclui equipamentos
+          // LOCADOS por padrão (são contratados, não estoque-material da empresa).
+          // Regra: usa a lista JÁ FILTRADA (consListFinal) como fonte; se o usuário
+          // não filtrou explicitamente por "locado"/"vinculado", remove locados do total.
+          const incluirLocadosNoTotal = filtroEquip === "locado" || filtroEquip === "vinculado";
+          const itensParaTotal = incluirLocadosNoTotal
+            ? consListFinal
+            : consListFinal.filter((i: any) => i.equipamentoVinculadoTipo !== "locado");
           // Inicializa Central + todas as obras ativas (para sempre listar, mesmo com zero)
           const valorMap = new Map<string, { nome: string; valor: number; itens: number }>();
           valorMap.set("central", { nome: "Almoxarifado Central", valor: 0, itens: 0 });
           for (const o of (obrasAtivas as any[])) {
             valorMap.set(`obra:${o.id}`, { nome: o.nome || `Obra #${o.id}`, valor: 0, itens: 0 });
           }
-          for (const item of consItens) {
+          for (const item of itensParaTotal) {
             const vu = parseValor(item.valorUnitario);
             if (!vu) continue;
             for (const a of (item.almoxarifados ?? [])) {
@@ -1643,6 +1651,12 @@ export default function AlmoxarifadoPage() {
           }
           const valorPorAlmox = Array.from(valorMap.values()).sort((a, b) => b.valor - a.valor);
           const valorTotal = valorPorAlmox.reduce((s, e) => s + e.valor, 0);
+          // Flags p/ rótulos auxiliares no banner.
+          const totalReflectsFilter =
+            !!busca.trim() || filtroCateg !== "todas" || apenasAbaixo || filtroEquip !== "todos";
+          const qtdLocadosExcluidos = incluirLocadosNoTotal
+            ? 0
+            : consListFinal.filter((i: any) => i.equipamentoVinculadoTipo === "locado").length;
           const fmtBRL = (v: number) => v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
           return (
@@ -1669,9 +1683,15 @@ export default function AlmoxarifadoPage() {
             {consolidado && (
               <div className="bg-gradient-to-r from-emerald-700 to-emerald-500 rounded-2xl px-6 py-4 flex items-center justify-between text-white shadow-md">
                 <div>
-                  <p className="text-sm font-medium opacity-80">Valor Total do Estoque (empresa)</p>
-                  <p className="text-3xl font-black mt-1">R$ {consolidado.totalGeral.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</p>
-                  <p className="text-xs opacity-70 mt-1">{consolidado.itens.length} ite{consolidado.itens.length !== 1 ? "ns" : "m"} agrupado{consolidado.itens.length !== 1 ? "s" : ""} · {consolidado.itens.filter((i: any) => i.valorUnitario).length} com preço cadastrado</p>
+                  <p className="text-sm font-medium opacity-80">
+                    Valor Total do Estoque (empresa)
+                    {totalReflectsFilter && <span className="ml-2 text-[10px] uppercase tracking-wide bg-white/20 px-2 py-0.5 rounded-full">filtrado</span>}
+                  </p>
+                  <p className="text-3xl font-black mt-1">R$ {fmtBRL(valorTotal)}</p>
+                  <p className="text-xs opacity-70 mt-1">
+                    {itensParaTotal.length} ite{itensParaTotal.length !== 1 ? "ns" : "m"} considerado{itensParaTotal.length !== 1 ? "s" : ""} · {itensParaTotal.filter((i: any) => i.valorUnitario).length} com preço cadastrado
+                    {qtdLocadosExcluidos > 0 && <> · <span className="font-semibold">{qtdLocadosExcluidos} locado{qtdLocadosExcluidos !== 1 ? "s" : ""} excluído{qtdLocadosExcluidos !== 1 ? "s" : ""}</span></>}
+                  </p>
                 </div>
                 <div className="flex items-center gap-3">
                   {consolidado.itens.filter((i: any) => !i.valorUnitario || parseFloat(i.valorUnitario) === 0).length > 0 && (
@@ -1971,11 +1991,15 @@ export default function AlmoxarifadoPage() {
                         </tr>
                       ))}
                     </tbody>
-                    {consolidado && consolidado.totalGeral > 0 && (
+                    {valorTotal > 0 && (
                       <tfoot className="bg-emerald-50 border-t-2 border-emerald-200">
                         <tr>
-                          <td colSpan={6} className="px-4 py-3 font-bold text-emerald-800 text-sm">TOTAL GERAL DO ESTOQUE</td>
-                          <td className="px-4 py-3 text-right font-black text-emerald-700">R$ {consolidado.totalGeral.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</td>
+                          <td colSpan={6} className="px-4 py-3 font-bold text-emerald-800 text-sm">
+                            TOTAL GERAL DO ESTOQUE
+                            {totalReflectsFilter && <span className="ml-2 text-[10px] uppercase tracking-wide bg-emerald-200 text-emerald-800 px-2 py-0.5 rounded-full">filtrado</span>}
+                            {qtdLocadosExcluidos > 0 && <span className="ml-2 text-[10px] font-normal text-emerald-700/80">({qtdLocadosExcluidos} locado{qtdLocadosExcluidos !== 1 ? "s" : ""} excluído{qtdLocadosExcluidos !== 1 ? "s" : ""})</span>}
+                          </td>
+                          <td className="px-4 py-3 text-right font-black text-emerald-700">R$ {fmtBRL(valorTotal)}</td>
                         </tr>
                       </tfoot>
                     )}
@@ -2000,7 +2024,20 @@ export default function AlmoxarifadoPage() {
             const n2 = parseFloat(s);
             return isNaN(n2) ? 0 : n2;
           };
-          const valorTotalObra = itens.reduce((s, i: any) => s + n(i.quantidadeAtual) * parseValorI(i.valorUnitario), 0);
+          // Rev. 2418 — Total respeita filtros visíveis E exclui equipamentos LOCADOS
+          // por padrão (são contratados, não estoque-material da empresa). Quando o
+          // user filtra explicitamente "Apenas Locados" ou "Qualquer equipamento",
+          // o total volta a incluí-los pra refletir o filtro.
+          const incluirLocadosNoTotalI = filtroEquip === "locado" || filtroEquip === "vinculado";
+          const itensParaTotalObra = incluirLocadosNoTotalI
+            ? lista
+            : lista.filter((i: any) => (i as any).equipamentoVinculadoTipo !== "locado");
+          const valorTotalObra = itensParaTotalObra.reduce((s, i: any) => s + n(i.quantidadeAtual) * parseValorI(i.valorUnitario), 0);
+          const totalReflectsFilterObra =
+            !!busca.trim() || filtroCateg !== "todas" || apenasAbaixo || filtroEquip !== "todos";
+          const qtdLocadosExcluidosObra = incluirLocadosNoTotalI
+            ? 0
+            : lista.filter((i: any) => (i as any).equipamentoVinculadoTipo === "locado").length;
           const fmtBRLi = (v: number) => v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
           return (
         <div className="max-w-7xl mx-auto px-6 py-5 space-y-4">
@@ -2027,9 +2064,15 @@ export default function AlmoxarifadoPage() {
           {/* Banner de Valor Total do Estoque deste almoxarifado */}
           <div className="bg-gradient-to-r from-emerald-700 to-emerald-500 rounded-2xl px-6 py-4 flex items-center justify-between text-white shadow-md">
             <div>
-              <p className="text-sm font-medium opacity-80">Valor Total do Estoque (este almoxarifado)</p>
+              <p className="text-sm font-medium opacity-80">
+                Valor Total do Estoque (este almoxarifado)
+                {totalReflectsFilterObra && <span className="ml-2 text-[10px] uppercase tracking-wide bg-white/20 px-2 py-0.5 rounded-full">filtrado</span>}
+              </p>
               <p className="text-3xl font-black mt-1">R$ {fmtBRLi(valorTotalObra)}</p>
-              <p className="text-xs opacity-70 mt-1">{itens.length} ite{itens.length !== 1 ? "ns" : "m"} · {itens.filter((i: any) => parseValorI(i.valorUnitario) > 0).length} com preço cadastrado</p>
+              <p className="text-xs opacity-70 mt-1">
+                {itensParaTotalObra.length} ite{itensParaTotalObra.length !== 1 ? "ns" : "m"} considerado{itensParaTotalObra.length !== 1 ? "s" : ""} · {itensParaTotalObra.filter((i: any) => parseValorI(i.valorUnitario) > 0).length} com preço cadastrado
+                {qtdLocadosExcluidosObra > 0 && <> · <span className="font-semibold">{qtdLocadosExcluidosObra} locado{qtdLocadosExcluidosObra !== 1 ? "s" : ""} excluído{qtdLocadosExcluidosObra !== 1 ? "s" : ""}</span></>}
+              </p>
             </div>
             <div className="flex items-center gap-3">
               {itens.filter((i: any) => !i.valorUnitario || parseFloat(i.valorUnitario) === 0).length > 0 && (
