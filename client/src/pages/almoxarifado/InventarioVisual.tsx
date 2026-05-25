@@ -122,6 +122,8 @@ export default function InventarioVisualBaias() {
 
   const [historicoBaia, setHistoricoBaia] = useState<any | null>(null);
   const [excluindo, setExcluindo] = useState<any | null>(null);
+  // Rev. 2422 — leitura sendo desfeita (confirmação + estorno do almox).
+  const [desfazendoLeitura, setDesfazendoLeitura] = useState<any | null>(null);
 
   const criarMut = trpc.warehouse.baiaCriar.useMutation({
     onSuccess: () => { toast.success("Baia criada!"); utils.warehouse.baiaAgregadosListar.invalidate(); fecharForm(); },
@@ -137,6 +139,20 @@ export default function InventarioVisualBaias() {
   });
   const leituraMut = trpc.warehouse.baiaLeituraRegistrar.useMutation({
     onSuccess: () => { toast.success("Leitura registrada!"); utils.warehouse.baiaAgregadosListar.invalidate(); fecharLeitura(); },
+    onError: (e) => toast.error(e.message),
+  });
+  // Rev. 2422 — desfaz aferição e estorna almox.
+  const desfazerMut = trpc.warehouse.baiaLeituraDeletar.useMutation({
+    onSuccess: (r: any) => {
+      if (r?.estornado && r.estornado > 0) {
+        toast.success(`Aferição desfeita. ${Number(r.estornado).toLocaleString("pt-BR")} estornado(s) ao almoxarifado.`);
+      } else {
+        toast.success("Aferição desfeita.");
+      }
+      utils.warehouse.baiaAgregadosListar.invalidate();
+      utils.warehouse.baiaLeiturasListar.invalidate();
+      setDesfazendoLeitura(null);
+    },
     onError: (e) => toast.error(e.message),
   });
   // Rev. 2415 — cria/encontra baia ligada ao item agregado no 1º clique.
@@ -830,8 +846,10 @@ export default function InventarioVisualBaias() {
           <div className="space-y-2">
             {historicoLeituras.length === 0 ? (
               <p className="text-sm text-slate-500 italic text-center py-6">Nenhuma leitura ainda.</p>
-            ) : historicoLeituras.map((l: any) => {
+            ) : historicoLeituras.map((l: any, idx: number) => {
               const vol = l.volumeEstimado != null ? Number(l.volumeEstimado) : null;
+              // Rev. 2422 — só a leitura MAIS RECENTE (idx=0) pode ser desfeita.
+              const podeDesfazer = idx === 0;
               return (
                 <div key={l.id} className="flex items-start gap-3 p-3 border border-slate-200 rounded-lg">
                   <div className={`${corPorPct(Number(l.percentual))} text-white font-bold rounded-lg w-16 h-16 flex flex-col items-center justify-center flex-shrink-0`}>
@@ -851,11 +869,49 @@ export default function InventarioVisualBaias() {
                     <p className="text-sm font-semibold text-slate-900 truncate">{l.lidaPorNome || "—"}</p>
                     <p className="text-xs text-slate-500">{fmtData(l.lidaEm)}</p>
                     {l.observacoes && <p className="text-xs text-slate-700 mt-1 italic">{l.observacoes}</p>}
+                    {podeDesfazer && (
+                      <button
+                        onClick={() => setDesfazendoLeitura(l)}
+                        className="mt-2 inline-flex items-center gap-1 text-[11px] font-semibold text-red-600 hover:text-red-800 hover:underline"
+                        title="Apaga esta aferição e estorna a baixa do almoxarifado"
+                      >
+                        <Trash2 className="w-3 h-3" /> Desfazer aferição
+                      </button>
+                    )}
                   </div>
                 </div>
               );
             })}
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Rev. 2422 — Confirm desfazer aferição */}
+      <Dialog open={!!desfazendoLeitura} onOpenChange={v => !v && setDesfazendoLeitura(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader><DialogTitle>Desfazer aferição?</DialogTitle></DialogHeader>
+          <div className="text-sm text-slate-600 space-y-2">
+            <p>A última leitura da baia <span className="font-semibold">{historicoBaia?.nome}</span> será apagada.</p>
+            {desfazendoLeitura?.movimentacaoId != null ? (
+              <p className="text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-md p-2">
+                ✓ A baixa correspondente será <span className="font-semibold">estornada no almoxarifado</span> (entrada automática de estorno).
+              </p>
+            ) : (
+              <p className="text-amber-700 bg-amber-50 border border-amber-200 rounded-md p-2">
+                ⚠ Esta leitura não gerou baixa vinculada (anterior à Rev. 2422) — será só apagada, sem mexer no saldo do almox.
+              </p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDesfazendoLeitura(null)}>Cancelar</Button>
+            <Button
+              onClick={() => desfazendoLeitura && desfazerMut.mutate({ companyId, leituraId: desfazendoLeitura.id })}
+              disabled={desfazerMut.isPending}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              {desfazerMut.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Desfazer"}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

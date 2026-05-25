@@ -2607,7 +2607,7 @@ REGRAS:
               .select({ nome: obras.nome })
               .from(obras)
               .where(eq(obras.id, b.obraId));
-            await db.insert(almoxarifadoMovimentacoes).values({
+            const [movCriada] = await db.insert(almoxarifadoMovimentacoes).values({
               companyId: input.companyId,
               itemId: b.itemId,
               tipo: "saida",
@@ -2618,11 +2618,111 @@ REGRAS:
               usuarioId: ctx.user.id,
               usuarioNome: ctx.user.name ?? null,
               observacoes: input.observacoes ?? null,
-            } as any);
+            } as any).returning({ id: almoxarifadoMovimentacoes.id });
+            // Rev. 2422 — vincula a mov à leitura, p/ "Desfazer" estornar limpo.
+            if (movCriada?.id != null) {
+              await db.update(almoxarifadoBaiaLeituras)
+                .set({ movimentacaoId: movCriada.id } as any)
+                .where(eq(almoxarifadoBaiaLeituras.id, novo.id));
+            }
           }
         }
       }
       return { ...novo, consumoDebitado };
+    }),
+
+  // ─── Rev. 2422 — DESFAZER AFERIÇÃO ─────────────────────────────────────
+  // Pedido user (25/05/2026, follow-up Rev. 2421): "quero poder desfazer
+  // o apontamento". Deleta a leitura mais recente da baia E, se ela gerou
+  // movimentação de saída (Rev. 2421+), estorna o almox: cria mov inversa
+  // "entrada — estorno aferição" (auditável no histórico do item) +
+  // soma o valor de volta no saldo do `almoxarifado_itens`.
+  //
+  // Regras de segurança:
+  //  - Só a leitura MAIS RECENTE da baia pode ser desfeita (senão a
+  //    cadeia de consumo fica inconsistente — antVol da próxima ficaria
+  //    apontando pra valor inexistente).
+  //  - Quem pode: o próprio autor da leitura OU admin (role contém
+  //    "ADMIN" — pega Master + plataforma).
+  //  - Leituras antigas (sem `movimentacaoId` populado) podem ser
+  //    deletadas mas SEM estorno (retorna flag pra UI avisar).
+  // ─────────────────────────────────────────────────────────────────────
+  baiaLeituraDeletar: protectedProcedure
+    .input(z.object({ companyId: z.number(), leituraId: z.number() }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const allowedCompanies = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+      if (!allowedCompanies.map((c: any) => c.id).includes(input.companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta empresa." });
+      }
+      const [leit] = await db.select().from(almoxarifadoBaiaLeituras).where(and(
+        eq(almoxarifadoBaiaLeituras.id, input.leituraId),
+        eq(almoxarifadoBaiaLeituras.companyId, input.companyId),
+      ));
+      if (!leit) throw new TRPCError({ code: "NOT_FOUND" });
+      const [b] = await db.select().from(almoxarifadoBaias).where(eq(almoxarifadoBaias.id, leit.baiaId));
+      if (!b) throw new TRPCError({ code: "NOT_FOUND", message: "Baia da leitura não existe mais." });
+      if (!(await userCanAccessObra(ctx.user.id, ctx.user.role, b.obraId))) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta obra." });
+      }
+      // Permissão: autor da leitura OU admin.
+      const isAdmin = String(ctx.user.role ?? "").toUpperCase().includes("ADMIN");
+      if (!isAdmin && leit.lidaPorId !== ctx.user.id) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Só quem registrou a aferição (ou um admin) pode desfazê-la." });
+      }
+      // Garantia anti-inconsistência: só a leitura MAIS RECENTE pode ser desfeita.
+      const [ultima] = await db
+        .select({ id: almoxarifadoBaiaLeituras.id })
+        .from(almoxarifadoBaiaLeituras)
+        .where(eq(almoxarifadoBaiaLeituras.baiaId, leit.baiaId))
+        .orderBy(desc(almoxarifadoBaiaLeituras.lidaEm))
+        .limit(1);
+      if (ultima?.id !== leit.id) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Só é possível desfazer a leitura mais recente da baia. Desfaça as posteriores primeiro.",
+        });
+      }
+      // Estorno do almox (se a leitura gerou movimentação de saída).
+      let estornado = 0;
+      const movId = (leit as any).movimentacaoId as number | null;
+      if (movId != null && b.itemId != null) {
+        const [mov] = await db
+          .select({ quantidade: almoxarifadoMovimentacoes.quantidade })
+          .from(almoxarifadoMovimentacoes)
+          .where(eq(almoxarifadoMovimentacoes.id, movId));
+        if (mov?.quantidade != null) {
+          estornado = Number(mov.quantidade);
+          // 1) Soma de volta no saldo do item.
+          await db.update(almoxarifadoItens)
+            .set({
+              quantidadeAtual: sql`${almoxarifadoItens.quantidadeAtual}::numeric + ${estornado}`,
+            } as any)
+            .where(eq(almoxarifadoItens.id, b.itemId));
+          // 2) Registra mov de ENTRADA (estorno) — auditável no item.
+          const [obraRow] = await db
+            .select({ nome: obras.nome })
+            .from(obras)
+            .where(eq(obras.id, b.obraId));
+          await db.insert(almoxarifadoMovimentacoes).values({
+            companyId: input.companyId,
+            itemId: b.itemId,
+            tipo: "entrada",
+            quantidade: String(estornado),
+            obraId: b.obraId,
+            obraNome: obraRow?.nome ?? null,
+            motivo: `Estorno: aferição desfeita da baia "${b.nome}" (leitura #${leit.id})`,
+            usuarioId: ctx.user.id,
+            usuarioNome: ctx.user.name ?? null,
+            observacoes: null,
+          } as any);
+        }
+      }
+      // Deleta a leitura por último.
+      await db.delete(almoxarifadoBaiaLeituras)
+        .where(eq(almoxarifadoBaiaLeituras.id, leit.id));
+      return { ok: true, estornado, movimentacaoEstornadaId: movId };
     }),
 
   // ─────────────────────────────────────────────────────────────────────

@@ -1,6 +1,68 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2422 — **INVENTÁRIO VISUAL DE BAIAS · "DESFAZER AFERIÇÃO" COM
+ * ESTORNO AUTOMÁTICO DO ALMOXARIFADO.**
+ *
+ * Pedido user (25/05/2026, follow-up da Rev. 2421): "Preciso poder
+ * desfazer o apontamento... [primeiro disse delegar, depois corrigiu]
+ * era deletar, quero poder desfazer o apontamento". A Rev. 2421 deixou
+ * a baixa do almox correta no INSERT, mas se o almoxarife digitasse
+ * volume errado (50 em vez de 5) não tinha jeito de reverter sem
+ * mexer direto no DB.
+ *
+ * **Schema (não-destrutivo, R-001/R-007/R-010 OK).** Adicionada coluna
+ * `movimentacao_id INTEGER` em `almoxarifado_baia_leituras` (drizzle
+ * `movimentacaoId` + ALTER ADD COLUMN IF NOT EXISTS idempotente no
+ * SyncSchema+, server/_core/index.ts L2094). É o vínculo entre a
+ * leitura e a movimentação de saída que ela gerou (Rev. 2421). Sem
+ * isso, "desfazer" teria que adivinhar a mov por timing+motivo —
+ * frágil e propenso a estornar a mov errada.
+ *
+ * **Backend (server/routers/warehouse.ts):**
+ *  - `baiaLeituraRegistrar`: após criar a mov de saída, o
+ *    `.insert().returning({id})` já existia; agora UPDATE a leitura
+ *    com `movimentacaoId = mov.id`. 1 UPDATE extra por aferição
+ *    com débito — custo desprezível.
+ *  - **Novo:** `baiaLeituraDeletar({ companyId, leituraId })`. Fluxo:
+ *    (1) Valida acesso à empresa + obra (via `getCompaniesForUser` +
+ *    `userCanAccessObra`); (2) Permissão: autor da leitura
+ *    (`lidaPorId === ctx.user.id`) OU role contém "ADMIN" — pega
+ *    Master + plataforma. Senão FORBIDDEN; (3) Garantia
+ *    anti-inconsistência: só a leitura MAIS RECENTE da baia pode
+ *    ser desfeita (senão a próxima `antVol` da cadeia de consumo
+ *    apontaria pra valor inexistente). BAD_REQUEST se não for a
+ *    última; (4) Se `movimentacaoId != null` E `b.itemId != null`,
+ *    busca quantidade da mov, faz `UPDATE almoxarifado_itens SET qtd
+ *    = qtd + estornado` (sem clamp — entrada de estorno sempre soma)
+ *    + INSERT mov tipo "entrada" motivo `Estorno: aferição desfeita
+ *    da baia "X" (leitura #N)` (auditável no histórico do item);
+ *    (5) DELETE da leitura por último. Retorna `{ok, estornado,
+ *    movimentacaoEstornadaId}`. Leituras antigas (sem
+ *    `movimentacaoId` populado, pré-2422) são deletadas SEM estorno
+ *    e a UI avisa.
+ *
+ * **Frontend (client/src/pages/almoxarifado/InventarioVisual.tsx):**
+ *  - State `desfazendoLeitura` + mutation `baiaLeituraDeletar`.
+ *  - Modal histórico: na 1ª leitura da lista (índice 0, mais recente),
+ *    botão `<Trash2 /> Desfazer aferição` em vermelho 11pt abaixo de
+ *    observações. Demais leituras não têm botão (regra anti-inconsist).
+ *  - Modal de confirmação dedicado (small Dialog vermelho):
+ *    se `desfazendoLeitura.movimentacaoId != null` mostra banner verde
+ *    "✓ A baixa será estornada"; senão amber "⚠ Esta leitura não gerou
+ *    baixa vinculada (anterior à Rev. 2422) — só apaga".
+ *  - Toast success cita o valor estornado em pt-BR quando >0.
+ *
+ * **Arquivos:** drizzle/schema.ts (1 coluna),
+ * server/_core/index.ts (1 ALTER), server/routers/warehouse.ts
+ * (1 UPDATE no registrar + endpoint novo ~80 linhas),
+ * client/src/pages/almoxarifado/InventarioVisual.tsx (state,
+ * mutation, botão na lista, modal de confirmação), shared/version.ts
+ * (→ 2422), shared/changelog.ts (esta entrada), replit.md (rotação 2+5).
+ *
+ * R-001/R-007/R-010 OK (ADD COLUMN IF NOT EXISTS é não-destrutivo;
+ * o DELETE é em escopo isolado por id, sem WHERE genérico).
+ *
  * Rev. 2421 — **INVENTÁRIO VISUAL DE BAIAS · 3 BUGS NUMA SÓ REVISÃO:
  * (A) BAIXA AGORA DESCONTA DO ALMOXARIFADO, (B) CARD INTEIRO ABRE
  * HISTÓRICO COMPLETO NO CLIQUE, (C) MENU REAPARECE PARA USERS DE

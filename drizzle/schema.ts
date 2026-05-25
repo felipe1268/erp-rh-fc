@@ -5945,6 +5945,9 @@ export const almoxarifadoBaiaLeituras = pgTable("almoxarifado_baia_leituras", {
   lidaPorId:   integer("lida_por_id"),
   lidaPorNome: varchar("lida_por_nome", { length: 255 }),
   lidaEm:      timestamp("lida_em", { mode: 'string' }).defaultNow().notNull(),
+  // Rev. 2422 — vínculo com a movimentação de saída gerada (se houver),
+  // pra permitir "Desfazer aferição" com estorno limpo do almox.
+  movimentacaoId: integer("movimentacao_id"),
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
