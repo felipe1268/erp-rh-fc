@@ -2,6 +2,7 @@
 
 > Este arquivo guarda os one-liners das revisões antigas para manter o `replit.md` enxuto.
 
+- **Rev. 2404** — ALMOXARIFADO/EQUIPAMENTOS · Marcar item do almox como Equipamento Próprio/Locado direto do card. 3 colunas novas em `almoxarifado_itens` (`equipamento_vinculado_tipo/_id/_em` via ADD COLUMN IF NOT EXISTS). Novo `ModalVincularEquipamento.tsx` (toggle Próprio indigo / Locado amber) reaproveita nome→descrição, categoria, foto e valor unitário. Card ganha badge + botão `<Wrench/>` indigo entre Editar e Histórico. Ver `shared/changelog.ts`.
 - **Rev. 2403** — CONFIGURAÇÕES/UX · Abas viraram cards coloridos (1 cor por módulo) num grid responsivo 2/3/4/5/7 cols. `allTabs` ganhou campo `color` (14 cores); mapa estático `TAB_COLOR_STYLES` em `Configuracoes.tsx` L89-105 contorna o Tailwind JIT (não pega classes interpoladas). Card ativo: gradient `from-{c}-500 to-{c}-600` + ring + shadow + chip translúcido. Ver `shared/changelog.ts`.
 - **Rev. 2402** — CONFIGURAÇÕES/UX · Abas com `flex-wrap` (várias linhas) em vez de scroll horizontal. `overflow-x-auto`+`inline-flex` → `flex flex-wrap`, padding `px-4`→`px-3`. Aposentada pela Rev. 2403. Ver `shared/changelog.ts`.
 - **Rev. 2401** — CONFIGURAÇÕES/UX · Barra de abas com scroll horizontal em vez de quebrar texto vertical. Wrapper `overflow-x-auto` + container interno `inline-flex min-w-full` + botões `flex-shrink-0 whitespace-nowrap`. Aposentada pela Rev. 2402/2403. Ver `shared/changelog.ts`.

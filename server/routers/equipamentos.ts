@@ -561,7 +561,12 @@ export const equipamentosRouter = router({
       companyId: z.number(),
       id: z.number(),
       obraId: z.number().nullable().optional(),
-      status: z.enum(["em_uso", "devolvido", "atrasado", "em_renovacao", "localizacao_pendente", "em_manutencao"]).optional(),
+      // Rev. 2411 — adicionados aguardando_chegada / quebrado / solicitado_substituicao.
+      status: z.enum([
+        "em_uso", "devolvido", "atrasado", "em_renovacao",
+        "localizacao_pendente", "em_manutencao",
+        "aguardando_chegada", "quebrado", "solicitado_substituicao",
+      ]).optional(),
       dataFimPrevista: z.string().max(10).optional(),
       funcionarioResponsavelId: z.number().nullable().optional(),
       funcionarioResponsavelNome: z.string().max(255).nullable().optional(),
@@ -587,12 +592,22 @@ export const equipamentosRouter = router({
         .returning({ id: equipamentosLocados.id });
       if (r.length === 0) throw new TRPCError({ code: "NOT_FOUND" });
 
-      // Rev. 2405 — Sync com almoxarifado se obra mudou ou foi setada.
-      if (input.obraId !== undefined && input.obraId !== null) {
+      // Rev. 2411 — Se mudou pra devolvido, remove imediatamente do almox
+      // (o item parou de estar fisicamente na obra). Tem prioridade sobre
+      // o ensureAlmoxItemForEquipamento abaixo, que só cria/transfere.
+      if (input.status === "devolvido") {
+        const { removeAlmoxItemForEquipamento } = await import("../lib/almoxEquipamentoSync");
+        await removeAlmoxItemForEquipamento(db, {
+          companyId: input.companyId,
+          tipo: "locado",
+          equipamentoId: input.id,
+        });
+      } else if (input.obraId !== undefined && input.obraId !== null) {
+        // Rev. 2405 — Sync com almoxarifado se obra mudou ou foi setada.
         const [full] = await db.select().from(equipamentosLocados)
           .where(and(eq(equipamentosLocados.id, input.id), eq(equipamentosLocados.companyId, input.companyId)))
           .limit(1);
-        if (full) {
+        if (full && (full as any).status !== "devolvido") {
           const { ensureAlmoxItemForEquipamento } = await import("../lib/almoxEquipamentoSync");
           const fotos: any = (full as any).fotosRecebimentoJson;
           const firstFoto = Array.isArray(fotos) && fotos.length > 0 ? fotos[0]?.url : (full as any).fotoUrl ?? null;
@@ -692,7 +707,19 @@ export const equipamentosRouter = router({
           eq(equipamentosLocados.companyId, input.companyId),
         ))
         .returning({ id: equipamentosLocados.id });
-      return { ok: true as const, excluidos: deleted.length };
+      // Rev. 2411 — remove os itens equivalentes do almoxarifado (vínculo
+      // bidirecional). Sem isso o almox ficava com cards "Equipamento
+      // Locado #N" apontando pra IDs que não existem mais.
+      let almoxRemovidos = 0;
+      if (deleted.length > 0) {
+        const { removeAlmoxItemsForEquipamentos } = await import("../lib/almoxEquipamentoSync");
+        almoxRemovidos = await removeAlmoxItemsForEquipamentos(db, {
+          companyId: input.companyId,
+          tipo: "locado",
+          ids: deleted.map(d => d.id),
+        });
+      }
+      return { ok: true as const, excluidos: deleted.length, almoxRemovidos };
     }),
 
   locadoDevolver: protectedProcedure
@@ -726,17 +753,39 @@ export const equipamentosRouter = router({
         eq(equipamentosLocados.companyId, input.companyId),
       ));
 
+      // Rev. 2411 — calcula tempo na obra (dias) usando data_inicio do contrato
+      // como melhor referência simples (data_inicio é a data efetiva mais antiga
+      // que temos). Devolvido ao fornecedor = sai do almox local da obra.
+      const dataInicio = (eq_ as any).dataInicio
+        ? new Date((eq_ as any).dataInicio)
+        : null;
+      const dataFim = new Date(input.dataFimReal);
+      const tempoNaObraDias = dataInicio
+        ? Math.max(0, Math.round((dataFim.getTime() - dataInicio.getTime()) / 86400000))
+        : null;
+
       await db.insert(equipamentoLocadoEventos).values({
         companyId: input.companyId,
         equipamentoLocadoId: input.id,
         tipo: "DEVOLUCAO_FORNECEDOR",
         obraId: eq_.obraId,
         fotosJson: input.fotosDevolucao,
-        observacao: input.observacao ?? null,
+        observacao: tempoNaObraDias != null
+          ? `[Tempo na obra: ${tempoNaObraDias} dias] ${input.observacao ?? ""}`.trim()
+          : (input.observacao ?? null),
         usuarioId: ctx.user.id,
         usuarioNome: ctx.user.name || String(ctx.user.id),
       });
-      return { id: input.id, action: "devolvido" as const };
+
+      // Rev. 2411 — remove o item correspondente do almoxarifado (devolveu
+      // ao fornecedor = não está mais na obra).
+      const { removeAlmoxItemForEquipamento } = await import("../lib/almoxEquipamentoSync");
+      const almoxRemovidos = await removeAlmoxItemForEquipamento(db, {
+        companyId: input.companyId,
+        tipo: "locado",
+        equipamentoId: input.id,
+      });
+      return { id: input.id, action: "devolvido" as const, almoxRemovidos, tempoNaObraDias };
     }),
 
   locadoCheckIn: protectedProcedure

@@ -14,6 +14,10 @@ const fmtN = (n: number) => n.toLocaleString("pt-BR");
 const STATUS_LABELS: Record<string, string> = {
   em_uso: "Em uso", devolvido: "Devolvido", atrasado: "Atrasado",
   em_renovacao: "Em renovação", localizacao_pendente: "Local pendente", em_manutencao: "Manutenção",
+  // Rev. 2411 — novos statuses pra rastreabilidade do ciclo de vida.
+  aguardando_chegada: "Aguardando chegada",
+  quebrado: "Quebrado",
+  solicitado_substituicao: "Solicitada substituição",
 };
 const STATUS_COLORS: Record<string, string> = {
   em_uso: "bg-blue-100 text-blue-700",
@@ -22,6 +26,10 @@ const STATUS_COLORS: Record<string, string> = {
   em_renovacao: "bg-amber-100 text-amber-700",
   localizacao_pendente: "bg-orange-100 text-orange-700",
   em_manutencao: "bg-purple-100 text-purple-700",
+  // Rev. 2411
+  aguardando_chegada: "bg-cyan-100 text-cyan-700",
+  quebrado: "bg-rose-100 text-rose-700",
+  solicitado_substituicao: "bg-fuchsia-100 text-fuchsia-700",
 };
 
 const EMPTY = {
@@ -936,17 +944,23 @@ export default function EquipamentosLocados() {
   }, [dataPorCat]);
 
   const STATUS_PILLS: { key: string; label: string; color: string }[] = [
-    { key: "",             label: "Todos",       color: "from-slate-500 to-slate-700" },
-    { key: "em_uso",       label: "Em uso",      color: "from-blue-500 to-blue-700" },
-    { key: "em_renovacao", label: "Em renovação", color: "from-amber-500 to-amber-700" },
-    { key: "atrasado",     label: "Atrasados",   color: "from-red-500 to-red-700" },
-    { key: "devolvido",    label: "Devolvidos",  color: "from-slate-400 to-slate-600" },
+    { key: "",                       label: "Todos",         color: "from-slate-500 to-slate-700" },
+    { key: "em_uso",                 label: "Em uso",        color: "from-blue-500 to-blue-700" },
+    { key: "aguardando_chegada",     label: "Aguardando",    color: "from-cyan-500 to-cyan-700" },
+    { key: "em_renovacao",           label: "Em renovação",  color: "from-amber-500 to-amber-700" },
+    { key: "atrasado",               label: "Atrasados",     color: "from-red-500 to-red-700" },
+    { key: "quebrado",               label: "Quebrados",     color: "from-rose-500 to-rose-700" },
+    { key: "solicitado_substituicao", label: "Subst. solic.", color: "from-fuchsia-500 to-fuchsia-700" },
+    { key: "devolvido",              label: "Devolvidos",    color: "from-slate-400 to-slate-600" },
   ];
   // Contadores cross-filter — sempre sobre o universo completo (dataAll),
   // pra que cada pill mostre quantos existem em cada status independente
   // do filtro selecionado.
   const contStatus = useMemo(() => {
-    const c: Record<string, number> = { "": 0, em_uso: 0, em_renovacao: 0, atrasado: 0, devolvido: 0 };
+    const c: Record<string, number> = {
+      "": 0, em_uso: 0, em_renovacao: 0, atrasado: 0, devolvido: 0,
+      aguardando_chegada: 0, quebrado: 0, solicitado_substituicao: 0,
+    };
     for (const l of dataAll as any[]) { c[""]++; if (c[l.status] != null) c[l.status]++; }
     return c;
   }, [dataAll]);

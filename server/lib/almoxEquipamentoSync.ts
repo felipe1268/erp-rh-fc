@@ -183,3 +183,131 @@ export async function backfillAlmoxFromEquipamentos(
 
   return { locadosInseridos, propriosInseridos };
 }
+
+/**
+ * Rev. 2411 — Remove o item de almoxarifado vinculado a um equipamento
+ * (próprio ou locado) específico. Usado quando o locado é devolvido ao
+ * fornecedor ou excluído do cadastro — o item DEVE sumir do almox local
+ * porque deixou de estar fisicamente na obra.
+ *
+ * Idempotente: se não existe vínculo, retorna 0.
+ * R-001/R-007/R-010 OK — DELETE de linhas, sem DROP/ALTER.
+ */
+export async function removeAlmoxItemForEquipamento(
+  db: any,
+  params: { companyId: number; tipo: "proprio" | "locado"; equipamentoId: number },
+): Promise<number> {
+  try {
+    const r: any = await db.execute(sql`
+      DELETE FROM almoxarifado_itens
+      WHERE company_id = ${params.companyId}
+        AND equipamento_vinculado_tipo = ${params.tipo}
+        AND equipamento_vinculado_id = ${params.equipamentoId}
+      RETURNING id
+    `);
+    return r?.rows?.length ?? 0;
+  } catch (e: any) {
+    console.error("[removeAlmoxItemForEquipamento] falhou:", e?.message || e);
+    return 0;
+  }
+}
+
+/**
+ * Rev. 2411 — Versão bulk pra `locadosExcluirLote`. Remove TODOS os
+ * itens almox vinculados aos `ids` do tipo dado em 1 round-trip.
+ */
+export async function removeAlmoxItemsForEquipamentos(
+  db: any,
+  params: { companyId: number; tipo: "proprio" | "locado"; ids: number[] },
+): Promise<number> {
+  if (!params.ids || params.ids.length === 0) return 0;
+  try {
+    const r: any = await db.execute(sql`
+      DELETE FROM almoxarifado_itens
+      WHERE company_id = ${params.companyId}
+        AND equipamento_vinculado_tipo = ${params.tipo}
+        AND equipamento_vinculado_id = ANY(${params.ids}::int[])
+      RETURNING id
+    `);
+    return r?.rows?.length ?? 0;
+  } catch (e: any) {
+    console.error("[removeAlmoxItemsForEquipamentos] falhou:", e?.message || e);
+    return 0;
+  }
+}
+
+/**
+ * Rev. 2411 — Limpa vínculos órfãos no almox no startup. Remove items
+ * almox que apontam pra:
+ *  - locado que não existe mais no banco (excluído via DELETE),
+ *  - locado com status = 'devolvido' (devolvido ao fornecedor),
+ *  - próprio que não existe mais ou está inativo.
+ *
+ * Sintoma sem essa limpeza: depois que o user excluiu locados, almox
+ * continuou mostrando cards "Equipamento Locado #8221" apontando pra
+ * ID inexistente.
+ *
+ * R-001/R-007/R-010 OK — DELETE de linhas, sem DROP/ALTER.
+ */
+export async function purgeStaleAlmoxLinks(db: any): Promise<{
+  locadosRemovidos: number;
+  propriosRemovidos: number;
+}> {
+  let locadosRemovidos = 0;
+  let propriosRemovidos = 0;
+
+  const tablesCheck: any = await db.execute(sql`
+    SELECT table_name FROM information_schema.tables
+    WHERE table_schema='public'
+      AND table_name IN ('equipamentos_locados','equipamentos_proprios','almoxarifado_itens')
+  `);
+  const present = new Set<string>((tablesCheck?.rows ?? []).map((r: any) => String(r.table_name)));
+  if (!present.has("almoxarifado_itens")) return { locadosRemovidos: 0, propriosRemovidos: 0 };
+
+  if (present.has("equipamentos_locados")) {
+    try {
+      const r: any = await db.execute(sql`
+        DELETE FROM almoxarifado_itens ai
+        WHERE ai.equipamento_vinculado_tipo = 'locado'
+          AND (
+            NOT EXISTS (
+              SELECT 1 FROM equipamentos_locados el
+              WHERE el.id = ai.equipamento_vinculado_id
+                AND el.company_id = ai.company_id
+            )
+            OR EXISTS (
+              SELECT 1 FROM equipamentos_locados el
+              WHERE el.id = ai.equipamento_vinculado_id
+                AND el.company_id = ai.company_id
+                AND el.status = 'devolvido'
+            )
+          )
+        RETURNING id
+      `);
+      locadosRemovidos = r?.rows?.length ?? 0;
+    } catch (e: any) {
+      console.error("[purgeStaleAlmoxLinks] FALHA locados:", e?.message || e);
+    }
+  }
+
+  if (present.has("equipamentos_proprios")) {
+    try {
+      const r: any = await db.execute(sql`
+        DELETE FROM almoxarifado_itens ai
+        WHERE ai.equipamento_vinculado_tipo = 'proprio'
+          AND NOT EXISTS (
+            SELECT 1 FROM equipamentos_proprios ep
+            WHERE ep.id = ai.equipamento_vinculado_id
+              AND ep.company_id = ai.company_id
+              AND COALESCE(ep.ativo, true) = true
+          )
+        RETURNING id
+      `);
+      propriosRemovidos = r?.rows?.length ?? 0;
+    } catch (e: any) {
+      console.error("[purgeStaleAlmoxLinks] FALHA proprios:", e?.message || e);
+    }
+  }
+
+  return { locadosRemovidos, propriosRemovidos };
+}

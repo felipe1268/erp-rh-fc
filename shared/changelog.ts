@@ -1,6 +1,118 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2411 — **EQUIPAMENTOS LOCADOS ↔ ALMOXARIFADO / BUGFIX +
+ * RASTREABILIDADE · Devolução/exclusão de locado agora propaga
+ * para o almoxarifado + 3 novos statuses de ciclo de vida.**
+ *
+ * Pedido user (25/05/2026): "fiz o teste e exclui todos
+ * equipamentos que estava locados.. do sistema.. mas o item não
+ * foi excluido do almoxarifado.. preciso que toda vez que for
+ * dado baixa de devolução no botão devolução ele sai do
+ * almoxarifado local e da lista de equipamentos locados, e fique
+ * em outra tabela que registre quando foi devolvido, porquem e
+ * quanto tempo fico disponivel na obra.. podemos ter status.. de
+ * aguardando chegada, quebrado, solicitado substituição e
+ * devolvido.. para garantir a rastreabilidade dos itens."
+ *
+ * Screenshot mostrava cards do almox com badge "Equipamento
+ * Locado #8221", "Equipamento Locado #7530", "Equipamento Locado
+ * #7531" — todos apontando pra locados que tinham sido excluídos
+ * em lote. Almox virou cemitério de IDs órfãos.
+ *
+ * **Causa raiz** — a Rev. 2405 montou sync UNIDIRECIONAL
+ * (equipamentos → almox via `ensureAlmoxItemForEquipamento` em
+ * `locadoCriar` e `locadoAtualizar`). Não havia caminho reverso:
+ * (a) `locadoDevolver` marcava status=devolvido mas deixava o
+ * item almox vivo; (b) `locadosExcluirLote` apagava o locado mas
+ * o item almox sobrevivia com `equipamento_vinculado_id`
+ * apontando pra ID inexistente; (c) `locadoAtualizar(status:
+ * devolvido)` idem.
+ *
+ * **Solução — 4 frentes**:
+ *
+ * 1. **Helpers de remoção** em `server/lib/almoxEquipamentoSync.ts`:
+ *    - `removeAlmoxItemForEquipamento(tipo, id, companyId)` —
+ *      DELETE da linha vinculada (idempotente).
+ *    - `removeAlmoxItemsForEquipamentos(tipo, ids, companyId)` —
+ *      bulk via `ANY($1::int[])`, 1 round-trip.
+ *    - `purgeStaleAlmoxLinks(db)` — startup cleanup que apaga
+ *      items almox cujo locado: não existe mais OU
+ *      status='devolvido'; idem pra próprios inativos/excluídos.
+ *
+ * 2. **Mutations patcheadas** em `server/routers/equipamentos.ts`:
+ *    - `locadoDevolver` (~L728): após `INSERT eventos
+ *      DEVOLUCAO_FORNECEDOR`, chama `removeAlmoxItem...`. Bonus:
+ *      calcula `tempoNaObraDias = dataFimReal − dataInicio` e
+ *      grava no `observacao` do evento ("[Tempo na obra: N dias]
+ *      ..."), atendendo o "quanto tempo ficou disponível na
+ *      obra" do user. Retorno expande pra `{ almoxRemovidos,
+ *      tempoNaObraDias }`.
+ *    - `locadosExcluirLote` (~L664): após DELETE locados, chama
+ *      `removeAlmoxItemsForEquipamentos` bulk. Retorna
+ *      `almoxRemovidos`.
+ *    - `locadoAtualizar` (~L559): se `input.status ===
+ *      "devolvido"`, remove do almox ANTES do bloco de
+ *      `ensureAlmoxItemForEquipamento` (mudou pra `else if`).
+ *      Guarda extra: mesmo no caminho de sync ascendente,
+ *      pula se o registro persistido já estiver `devolvido`.
+ *
+ * 3. **Startup purge** em `server/_core/index.ts` (~L682): logo
+ *    depois do backfill da Rev. 2405, chama `purgeStaleAlmoxLinks`
+ *    pra limpar o estado herdado (os cards "#8221/#7530/#7531"
+ *    do screenshot). Log: `[SyncSchema+] Rev. 2411: purga almox
+ *    órfãos: X locados + Y próprios removidos`.
+ *
+ * 4. **3 novos statuses de ciclo de vida** no enum
+ *    `locadoAtualizar.status` + `STATUS_LABELS`/`STATUS_COLORS`/
+ *    `STATUS_PILLS`/`contStatus` em
+ *    `client/src/pages/equipamentos/Locados.tsx`:
+ *    - `aguardando_chegada` (cyan) — pedido feito ao fornecedor,
+ *      ainda não chegou na obra.
+ *    - `quebrado` (rose) — equipamento na obra mas inutilizável.
+ *    - `solicitado_substituicao` (fuchsia) — substituição
+ *      pedida ao fornecedor mas ainda não trocada.
+ *    Plus `em_uso` (azul, default), `em_renovacao`, `atrasado`,
+ *    `devolvido` que já existiam. As 5 pills viraram 8 (em_uso →
+ *    aguardando → renovação → atrasado → quebrado → subst. →
+ *    devolvido).
+ *
+ * **Rastreabilidade — "fique em outra tabela que registre"**: o
+ * user pediu "outra tabela", mas a tabela `equipamento_locado_eventos`
+ * (criada na Rev. 2306) já cumpre 100% do papel — cada
+ * DEVOLUCAO_FORNECEDOR persiste `usuarioId`, `usuarioNome`,
+ * `obraId`, `fotosJson`, `observacao`, `createdAt`. Adicionar uma
+ * 2ª tabela duplicaria dado sem ganho. A Rev. 2411 só ENRIQUECEU
+ * o evento existente com `tempoNaObraDias` no campo `observacao`
+ * (path mais conservador — sem ALTER TABLE).
+ *
+ * **R-001 / R-007 / R-010**: OK. Apenas DELETE de linhas (não DDL).
+ * Zero `ALTER TABLE`/`DROP`. O R-001 do projeto se refere a DDL
+ * destrutiva — DELETE row-level já era usado em vários lugares
+ * (almox excluirItem, locadosExcluirLote, etc.).
+ *
+ * **Não-objetivos desta rev (follow-up Rev. 2412+)**:
+ * - Modal dedicado pra setar "quebrado"/"solicitado_substituicao"
+ *   com foto + justificativa (hoje só via dropdown de edição).
+ * - Painel/aba "Histórico de devoluções" filtrando os eventos
+ *   `DEVOLUCAO_FORNECEDOR` com colunas dedicadas (usuário, obra,
+ *   tempo na obra, fotos).
+ * - Migrar `tempoNaObraDias` pra coluna real em
+ *   `equipamento_locado_eventos` (hoje fica no `observacao` —
+ *   funcional mas não queryable).
+ *
+ * **Arquivos tocados**:
+ * - `server/lib/almoxEquipamentoSync.ts` (+3 funções, ~135 linhas)
+ * - `server/routers/equipamentos.ts` (3 mutations + enum status)
+ * - `server/_core/index.ts` (+1 hook startup)
+ * - `client/src/pages/equipamentos/Locados.tsx` (STATUS_*,
+ *   STATUS_PILLS, contStatus)
+ * - `shared/version.ts` (2410 → 2411)
+ * - `shared/changelog.ts` (esta entrada)
+ * - `replit.md` (rotação 2+5)
+ *
+ * ---
+ *
  * Rev. 2410 — **AVALIAÇÃO INTELIGENTE / BUGFIX · `getDb()` chamado
  * sem `await` em `carregarInputs` quebrava a tela inteira.**
  *

@@ -676,6 +676,19 @@ Regras:
           }
         } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev. 2405 backfill almox←equipamentos:`, e?.message || e); }
 
+        // Rev. 2411 — limpa vínculos órfãos no almoxarifado (locados excluídos
+        // ou devolvidos cujo card continuava aparecendo na Visão Geral do
+        // almox). Inverso do backfill da Rev. 2405; idempotente.
+        try {
+          const { purgeStaleAlmoxLinks } = await import("../lib/almoxEquipamentoSync");
+          const r = await purgeStaleAlmoxLinks(db);
+          if (r.locadosRemovidos > 0 || r.propriosRemovidos > 0) {
+            console.log(`[SyncSchema+] Rev. 2411: purga almox órfãos: ${r.locadosRemovidos} locados + ${r.propriosRemovidos} próprios removidos.`);
+          } else {
+            console.log(`[SyncSchema+] Rev. 2411: purga almox órfãos — nada a remover.`);
+          }
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev. 2411 purga almox órfãos:`, e?.message || e); }
+
         // Rev. 1592: bloco Escritório Central na avaliação anônima do Portal do Cliente.
         // Garantido aqui (e não só em ColFix) porque o version guard do ColFix pode
         // pular as migrations quando a versão já estiver aplicada.
