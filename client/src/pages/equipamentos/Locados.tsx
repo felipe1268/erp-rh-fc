@@ -957,6 +957,14 @@ export default function EquipamentosLocados() {
   function fazerCheckIn() {
     checkIn.mutate({ companyId, id: modalCheckin.id, observacao: checkinObs || undefined });
   }
+  // Rev. 2420 — fecha o picker e LIMPA a seleção (evita state leak entre
+  // aberturas; achado do code review). Usado em todos os caminhos de
+  // fechamento (X, overlay, Cancelar, escolha single).
+  function fecharPickerDevolver() {
+    setPickerDevolver(false);
+    setSelecionadosLote(new Set());
+    setPickerDevolverBusca("");
+  }
   // Rev. 2420 — dispara devolução em lote dos ids em `modalDevLote`.
   function fazerDevolucaoLote() {
     if (!modalDevLote || modalDevLote.length === 0) return;
@@ -2452,7 +2460,7 @@ export default function EquipamentosLocados() {
           return fa - fb;
         });
         function escolherSingle(l: any) {
-          setPickerDevolver(false);
+          fecharPickerDevolver();
           setModalDev(l);
           setDevFotos([]);
           setDevObs("");
@@ -2488,7 +2496,7 @@ export default function EquipamentosLocados() {
         }
         const qtdSel = selecionadosLote.size;
         return (
-          <div className="fixed inset-0 bg-black/60 z-50 flex items-stretch justify-center p-0 sm:p-4" onClick={() => setPickerDevolver(false)}>
+          <div className="fixed inset-0 bg-black/60 z-50 flex items-stretch justify-center p-0 sm:p-4" onClick={() => fecharPickerDevolver()}>
             <div className="bg-white sm:rounded-2xl shadow-2xl w-full max-w-5xl max-h-full sm:max-h-[92vh] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
               {/* Header laranja grande pra ficar óbvio */}
               <div className="px-5 py-4 bg-gradient-to-r from-orange-500 to-orange-600 text-white flex items-center justify-between gap-3">
@@ -2499,7 +2507,7 @@ export default function EquipamentosLocados() {
                     <p className="text-[12px] sm:text-sm text-orange-50 leading-tight">Toque pra selecionar vários (ou use <b>DEVOLVER ESTE</b> pra 1 só).</p>
                   </div>
                 </div>
-                <button onClick={() => setPickerDevolver(false)} className="bg-white/20 hover:bg-white/30 rounded-full p-2 flex-shrink-0" aria-label="Fechar">
+                <button onClick={() => fecharPickerDevolver()} className="bg-white/20 hover:bg-white/30 rounded-full p-2 flex-shrink-0" aria-label="Fechar">
                   <X className="h-5 w-5" />
                 </button>
               </div>
@@ -2676,7 +2684,7 @@ export default function EquipamentosLocados() {
                       ? <><b>{fmtN(emUso.length)}</b> equipamento(s) em locação</>
                       : <><b>{fmtN(ordenados.length)}</b> de {fmtN(emUso.length)} mostrado(s)</>}
                   </p>
-                  <button onClick={() => setPickerDevolver(false)} className="px-4 py-2 text-sm border-2 border-slate-300 hover:bg-slate-100 rounded-lg font-semibold text-slate-700">
+                  <button onClick={() => fecharPickerDevolver()} className="px-4 py-2 text-sm border-2 border-slate-300 hover:bg-slate-100 rounded-lg font-semibold text-slate-700">
                     Cancelar
                   </button>
                 </div>

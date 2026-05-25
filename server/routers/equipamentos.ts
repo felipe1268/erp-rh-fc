@@ -826,10 +826,17 @@ export const equipamentosRouter = router({
       if (!input.fotosDevolucao || input.fotosDevolucao.length === 0) {
         throw new TRPCError({ code: "BAD_REQUEST", message: "Foto de devolução é obrigatória." });
       }
+      // Tenant isolation — confirma que a empresa pertence ao usuário
+      // (mesmo padrão de `locadosExcluirLote` L703-708).
+      const allowedCompanies = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+      const allowedCompanyIds = (allowedCompanies as any[]).map(c => c.id);
+      if (!allowedCompanyIds.includes(input.companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta empresa." });
+      }
       const { removeAlmoxItemForEquipamento } = await import("../lib/almoxEquipamentoSync");
-      // Pré-filtro por permissão: equipamentos cujo obraId o user não pode
-      // acessar saem da lista antes de processar (defense in depth — o
-      // locadosListar já filtra na origem, mas se o cliente forjar ids,
+      // Pré-filtro por permissão de obra: equipamentos cujo obraId o user
+      // não pode acessar saem da lista antes de processar (defense in depth
+      // — o locadosListar já filtra na origem, mas se o cliente forjar ids,
       // bloqueamos aqui também).
       const allowed = await getEffectiveAllowedObraIds(ctx.user.id, ctx.user.role);
       const ok: number[] = [];
