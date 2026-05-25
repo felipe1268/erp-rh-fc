@@ -470,11 +470,19 @@ export async function invokeGeminiVision(params: {
   maxTokens?: number;
   responseSchema?: Record<string, unknown>;
   model?: string;
+  // Rev. 2409 — `thinking` controla o modo de raciocínio do Gemini 2.5.
+  // Default: "off" (thinkingBudget=0) — corta 50-70% do tempo de resposta
+  // em tarefas de extração estruturada (que NÃO precisam de raciocínio
+  // multi-passo). Mantém qualidade pra OCR/parsing de layout. Caller pode
+  // passar "auto" pra deixar o modelo decidir (mais lento mas mais robusto
+  // em casos de reasoning complexo). Combate "trava em 99%" no import PDF.
+  thinking?: "off" | "auto";
 }): Promise<string> {
   const googleKey = process.env.GOOGLE_API_KEY;
   if (!googleKey) throw new Error("Google API key não configurada");
 
   const model = params.model ?? "gemini-2.5-flash";
+  const thinkingMode = params.thinking ?? "off";
   const body: Record<string, unknown> = {
     contents: [
       {
@@ -488,6 +496,15 @@ export async function invokeGeminiVision(params: {
     generationConfig: {
       maxOutputTokens: params.maxTokens ?? 8192,
       temperature: 0.1,
+      // Rev. 2409 — thinkingBudget=0 desliga o modo "extended thinking" do
+      // Gemini 2.5 (em que o modelo gera tokens de raciocínio invisíveis
+      // antes da resposta final, somando 30-90s em prompts longos com PDF
+      // grande). Pra extração JSON com schema, é puro overhead.
+      // Guarda: thinkingConfig só existe na família 2.5+; em modelos
+      // antigos (1.5, 2.0) a API retorna 400. Aplica só se o nome casar.
+      ...(thinkingMode === "off" && /^gemini-2\.[5-9]|^gemini-[3-9]/.test(model)
+        ? { thinkingConfig: { thinkingBudget: 0 } }
+        : {}),
       ...(params.responseSchema ? {
         responseMimeType: "application/json",
         responseSchema: params.responseSchema,

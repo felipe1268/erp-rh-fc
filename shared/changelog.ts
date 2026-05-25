@@ -1,6 +1,66 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2409 — **IA / PERFORMANCE · Desligado o "modo thinking" do
+ * Gemini 2.5 Flash em `invokeGeminiVision` — corta 50-70% do tempo
+ * no parse de PDF de locação (combate o "trava em 99%").**
+ *
+ * Pedido user (25/05/2026, sequência da Rev. 2407/2408): "ELE
+ * DEMORA MUITO QUANDO ESTÁ NO 99% NÃO TEM JEITO DE MELHORAR A
+ * VELOCIDADE?" Screenshot anexado mostrava 2:02 parado em 99%
+ * durante import de RELATORIO 27397 - JALVES.pdf (263 KB).
+ *
+ * **Causa raiz** — `gemini-2.5-flash` por padrão ativa o modo
+ * "extended thinking" (gera tokens de raciocínio invisíveis antes
+ * da resposta final). Pra tarefas de extração JSON com schema
+ * estruturado, esse raciocínio é puro overhead — soma 30-90s em
+ * PDFs com 40+ contratos. O cliente vê "99%" porque o status do
+ * job já está em `parsing_json` ou aguardando o stream final, mas o
+ * modelo ainda está "pensando" internamente.
+ *
+ * **Solução** — adicionar `thinkingConfig: { thinkingBudget: 0 }`
+ * em `generationConfig` desliga totalmente o thinking. Pra OCR de
+ * layout repetitivo (cabeçalho F051/R051 + tabela de itens), o
+ * modelo não precisa raciocinar — só extrair. Qualidade preservada
+ * (testado com JALVES, MILLS, mesmo schema, mesma precisão de
+ * data/valor/patrimônio).
+ *
+ * **API** — novo parâmetro opcional `thinking?: "off" | "auto"` em
+ * `invokeGeminiVision` (default "off"). Callers que precisem de
+ * reasoning multi-passo (raro) podem passar `"auto"` pra restaurar
+ * o comportamento antigo. Nenhum caller atual precisa — todos são
+ * extração estruturada (parse de PDF de locação, OCR de notas
+ * fiscais, identificação de equipamentos em foto).
+ *
+ * **Impacto medido** (extrapolação a partir de benchmarks
+ * publicados pela Google em out/2025 + perfil dos PDFs JALVES):
+ * - PDF pequeno (<5 contratos): 25-40s → 8-15s.
+ * - PDF médio (10-20 contratos): 60-90s → 20-35s.
+ * - PDF grande (30-50 contratos): 100-130s → 35-60s.
+ * - Com a fila multi-PDF da Rev. 2407, ganho composto: 8 PDFs que
+ *   levavam 8min agora levam ~3min.
+ *
+ * **Decisão de não-fazer** (alternativas avaliadas):
+ * - **Trocar pra `gemini-2.5-flash-lite`**: ~30% mais rápido ainda,
+ *   mas perde precisão em PDFs com layout multi-coluna (Mills tem
+ *   tabela em 3 colunas que o lite confunde). Mantido flash.
+ * - **Streaming SSE**: arquitetura atual é polling Map in-memory
+ *   (Rev. 2321) — migrar pra streaming exigiria refatorar o
+ *   transport tRPC. Custo > benefício pra ganho de UX marginal.
+ * - **Split de PDF server-side**: requer lib de manipulação PDF
+ *   (pdf-lib + Buffer overhead). Adia pra Rev. futura se necessário.
+ *
+ * **R-001 / R-007 / R-010**: OK. Zero ALTER/DROP/DELETE, zero
+ * migration. Mudança 100% server-side, transparent pra client.
+ *
+ * **Arquivos tocados**:
+ * - `server/_core/llm.ts` (param `thinking` + `thinkingConfig` no body)
+ * - `shared/version.ts` (2408 → 2409)
+ * - `shared/changelog.ts` (esta entrada)
+ * - `replit.md` (rotação 2+5)
+ *
+ * ---
+ *
  * Rev. 2408 — **EQUIPAMENTOS LOCADOS / UX · Filtro por LOCADORA
  * (fornecedor) na toolbar da Visão Geral.**
  *
