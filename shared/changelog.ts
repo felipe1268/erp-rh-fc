@@ -1,6 +1,52 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2413 — **EQUIPAMENTOS LOCADOS / IMPORT · Fornecedor
+ * (locadora) agora é OBRIGATÓRIO antes de cadastrar itens
+ * via PDF (IA).**
+ *
+ * Pedido user (25/05/2026): "quero que a indicação do
+ * fornecedor seja obrigatoria.. antes de cadastrar os itens
+ * para não ter erro." Screenshot mostra o card amber
+ * "Fornecedor (locadora) deste PDF" com campo + "Aplicar a
+ * todos" — funcional desde Rev. 2358, mas era OPCIONAL.
+ * Como o cabeçalho do PDF traz o LOCATÁRIO (FC Engenharia),
+ * não a LOCADORA, esse campo passa fácil em branco e o ERP
+ * cadastra equipamentos órfãos de locadora — quebra o filtro
+ * por fornecedor (Rev. 2408), agregados financeiros e
+ * rastreabilidade.
+ *
+ * **Mudanças** (`client/src/pages/equipamentos/Locados.tsx`):
+ *
+ * 1. **`confirmarImport()`** ganhou 2º guard após o de obra
+ *    (Rev. 2353): conta contratos com `fornecedorNome`
+ *    vazio/whitespace; se >0, popup `importErroDetalhe`
+ *    listando os 8 primeiros números de contrato pendentes
+ *    + instrução pra preencher e clicar "Aplicar a todos".
+ *
+ * 2. **Botão "Confirmar e cadastrar"** no footer do modal
+ *    incorpora `semForn` na lógica de `bloqueado` (já tinha
+ *    `semObra`). Prioridade visual: semObra > semForn > OK.
+ *    Quando bloqueado por fornecedor, botão fica vermelho
+ *    com label "⛔ N sem fornecedor — indique antes" e
+ *    tooltip explicando a ação.
+ *
+ * Reusa toda a infra existente (card amber, "Aplicar a
+ * todos", datalist de fornecedores cadastrados,
+ * `aplicarFornecedorPadraoATodos`). Zero backend, zero
+ * migration. Mesma simetria do bloqueio de obra — user já
+ * entende o pattern visual.
+ *
+ * **R-001 / R-007 / R-010**: OK. UI puro.
+ *
+ * **Arquivos tocados**:
+ * - `client/src/pages/equipamentos/Locados.tsx`
+ * - `shared/version.ts` (2412 → 2413)
+ * - `shared/changelog.ts` (esta entrada)
+ * - `replit.md` (rotação 2+5)
+ *
+ * ---
+ *
  * Rev. 2412 — **AVALIAÇÃO INTELIGENTE / UX · Modal "Score
  * Detalhado" modernizado seguindo identidade FC (faixa azul
  * #1B2A4A, hero card, 4 sub-cards coloridos por dimensão,

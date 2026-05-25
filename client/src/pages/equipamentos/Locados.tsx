@@ -768,6 +768,20 @@ export default function EquipamentosLocados() {
       );
       return;
     }
+    // Rev. 2413 — bloqueio: fornecedor (locadora) obrigatório.
+    // Sem isso o ERP cadastra item órfão de locadora e quebra a rastreabilidade
+    // (filtro por fornecedor da Rev. 2408, agregados financeiros etc).
+    const semForn = importPreview.filter((c: any) => !c.fornecedorNome || !String(c.fornecedorNome).trim());
+    if (semForn.length > 0) {
+      const nums = semForn.slice(0, 8).map((c: any) => c.numeroContrato || "(sem nº)").join(", ");
+      const extra = semForn.length > 8 ? ` (+${semForn.length - 8} outros)` : "";
+      setImportErroDetalhe(
+        `${semForn.length} contrato(s) sem fornecedor (locadora) indicado.\n\n` +
+        `Preencha o campo "Fornecedor (locadora) deste PDF" no topo e clique em "Aplicar a todos" antes de cadastrar. Sem isso o ERP cria itens órfãos de locadora e a rastreabilidade fica quebrada.\n\n` +
+        `Contratos pendentes: ${nums}${extra}.`
+      );
+      return;
+    }
     let semNumero = 0, semData = 0, semItens = 0, dataInvalida = 0;
     const limpos = importPreview
       .map(c => {
@@ -3399,20 +3413,30 @@ export default function EquipamentosLocados() {
                 {(() => {
                   // Rev. 2353 — desabilita "Confirmar" enquanto houver contrato
                   // sem obra (regra do user: nada de equipamento sem obra).
+                  // Rev. 2413 — idem para fornecedor (locadora). Sem isso o ERP
+                  // cria itens órfãos de locadora e quebra a rastreabilidade.
                   const semObra = importPreview ? importPreview.filter((c: any) => !c.obraId).length : 0;
-                  const bloqueado = !importPreview || importPreview.length === 0 || !!importLoteProgresso || semObra > 0;
+                  const semForn = importPreview ? importPreview.filter((c: any) => !c.fornecedorNome || !String(c.fornecedorNome).trim()).length : 0;
+                  const bloqueado = !importPreview || importPreview.length === 0 || !!importLoteProgresso || semObra > 0 || semForn > 0;
+                  const motivo = semObra > 0
+                    ? `${semObra} contrato(s) sem obra vinculada — selecione no campo "Obra ERP" de cada cartão`
+                    : semForn > 0
+                      ? `${semForn} contrato(s) sem fornecedor — preencha "Fornecedor (locadora) deste PDF" e clique em "Aplicar a todos"`
+                      : undefined;
                   return (
                     <button
                       onClick={confirmarImport}
                       disabled={bloqueado}
-                      title={semObra > 0 ? `${semObra} contrato(s) sem obra vinculada — selecione no campo "Obra ERP" de cada cartão` : undefined}
-                      className={`px-4 py-1.5 text-sm rounded disabled:opacity-50 inline-flex items-center gap-1 ${semObra > 0 ? "bg-red-500 hover:bg-red-600 text-white cursor-not-allowed" : "bg-emerald-600 hover:bg-emerald-700 text-white"}`}
+                      title={motivo}
+                      className={`px-4 py-1.5 text-sm rounded disabled:opacity-50 inline-flex items-center gap-1 ${(semObra > 0 || semForn > 0) ? "bg-red-500 hover:bg-red-600 text-white cursor-not-allowed" : "bg-emerald-600 hover:bg-emerald-700 text-white"}`}
                     >
                       {importLoteProgresso
                         ? `Cadastrando lote ${importLoteProgresso.lote}/${importLoteProgresso.totalLotes}…`
                         : semObra > 0
                           ? <>⛔ {fmtN(semObra)} sem obra — vincule antes</>
-                          : <><CheckCircle2 className="h-4 w-4" /> Confirmar e cadastrar</>}
+                          : semForn > 0
+                            ? <>⛔ {fmtN(semForn)} sem fornecedor — indique antes</>
+                            : <><CheckCircle2 className="h-4 w-4" /> Confirmar e cadastrar</>}
                     </button>
                   );
                 })()}
