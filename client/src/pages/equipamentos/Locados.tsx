@@ -411,6 +411,14 @@ export default function EquipamentosLocados() {
   const [importPreview, setImportPreview] = useState<any[] | null>(null);
   const [importProgresso, setImportProgresso] = useState(0); // Rev. 2310 — barra 0-100% animada
   const importFileRef = useRef<HTMLInputElement>(null);
+  // Rev. 2407 — Multi-PDF: processa N arquivos da MESMA empresa em série,
+  // acumulando contratos no mesmo preview. Refs pra escapar do closure
+  // stale do useEffect de polling.
+  const [importFilas, setImportFilas] = useState<Array<{ file: File }>>([]);
+  const [importTotalFiles, setImportTotalFiles] = useState(0); // total da batch
+  const [importFileIdx, setImportFileIdx] = useState(0); // 1-based índice atual
+  const importFilasRef = useRef<Array<{ file: File }>>([]);
+  useEffect(() => { importFilasRef.current = importFilas; }, [importFilas]);
   // Rev. 2358 — Fornecedor padrão do PDF: o cabeçalho do F051/R051 traz
   // o nome do LOCATÁRIO (ex: "6716-FC ENGENHARIA..."), não o da LOCADORA
   // (ex: JALVES). O parser muitas vezes confunde os 2. User indica aqui o
@@ -431,7 +439,18 @@ export default function EquipamentosLocados() {
   const [parseDiag, setParseDiag] = useState<{ phase: string; phaseElapsedMs: number; elapsedMs: number; pollCount: number; lastPollAt: number } | null>(null);
   const parsearStart = trpc.equipamentos.parsearContratoLocacaoPdfStart.useMutation({
     onSuccess: ({ jobId }) => { setParseJobId(jobId); },
-    onError: (e) => { setParsePending(false); setImportProgresso(0); setParseDiag(null); toast.error(e.message); },
+    onError: (e) => {
+      setParsePending(false); setImportProgresso(0); setParseDiag(null);
+      toast.error(`${importArquivo?.nome || "PDF"}: ${e.message}`);
+      // Rev. 2407 — Start falhou: não trava a fila, avança pro próximo.
+      const fila = importFilasRef.current;
+      if (fila.length > 0) {
+        const next = fila[0];
+        setImportFilas(fila.slice(1));
+        setImportFileIdx(idx => idx + 1);
+        setTimeout(() => { void processarArquivoPdf(next.file); }, 50);
+      } else { setImportTotalFiles(0); setImportFileIdx(0); }
+    },
   });
   useEffect(() => {
     if (!parseJobId) return;
@@ -462,16 +481,43 @@ export default function EquipamentosLocados() {
             if (m) { autoMatched++; return { ...c, obraId: m.obraId, obraMatchAuto: true, obraMatchScore: m.score }; }
             return { ...c, obraId: undefined, obraMatchAuto: false };
           });
-          setImportPreview(comMatch);
+          // Rev. 2407 — acumula no preview existente (multi-PDF da mesma empresa).
+          setImportPreview(prev => prev ? [...prev, ...comMatch] : comMatch);
           const tot = res.result.totalContratos;
           toast.success(`IA detectou ${tot} contrato(s) · ${res.result.totalItens} item(ns).${autoMatched > 0 ? ` ${autoMatched}/${tot} auto-vinculados à obra.` : ""}`);
           setParsePending(false); setParseJobId(null); setParseDiag(null);
+          // Rev. 2407 — avança pro próximo PDF da fila (multi-upload).
+          const fila = importFilasRef.current;
+          if (fila.length > 0) {
+            const next = fila[0];
+            setImportFilas(fila.slice(1));
+            setImportFileIdx(idx => idx + 1);
+            setTimeout(() => { void processarArquivoPdf(next.file); }, 50);
+          } else {
+            setImportTotalFiles(0);
+            setImportFileIdx(0);
+          }
         } else if (res.status === "error") {
-          toast.error(res.error || "Falha ao processar o PDF.");
+          toast.error(`${importArquivo?.nome || "PDF"}: ${res.error || "Falha ao processar o PDF."}`);
           setParsePending(false); setImportProgresso(0); setParseJobId(null); setParseDiag(null);
+          // Rev. 2407 — não trava a fila: pula pro próximo PDF.
+          const fila = importFilasRef.current;
+          if (fila.length > 0) {
+            const next = fila[0];
+            setImportFilas(fila.slice(1));
+            setImportFileIdx(idx => idx + 1);
+            setTimeout(() => { void processarArquivoPdf(next.file); }, 50);
+          } else { setImportTotalFiles(0); setImportFileIdx(0); }
         } else if (res.status === "expired") {
           toast.error("Job expirou. Tente novamente.");
           setParsePending(false); setImportProgresso(0); setParseJobId(null); setParseDiag(null);
+          const fila = importFilasRef.current;
+          if (fila.length > 0) {
+            const next = fila[0];
+            setImportFilas(fila.slice(1));
+            setImportFileIdx(idx => idx + 1);
+            setTimeout(() => { void processarArquivoPdf(next.file); }, 50);
+          } else { setImportTotalFiles(0); setImportFileIdx(0); }
         } else {
           setTimeout(poll, 2500);
         }
@@ -494,6 +540,10 @@ export default function EquipamentosLocados() {
     setImportArquivo(null);
     setImportPreview(null);
     setImportFornecedorPadrao(""); // Rev. 2358
+    // Rev. 2407 — limpa fila multi-PDF
+    setImportFilas([]);
+    setImportTotalFiles(0);
+    setImportFileIdx(0);
     setModalImport(true);
   }
   // Rev. 2358 — Aplica o fornecedor padrão a TODOS os contratos do preview.
@@ -503,20 +553,68 @@ export default function EquipamentosLocados() {
     setImportPreview(prev => prev ? prev.map(c => ({ ...c, fornecedorNome: nome })) : prev);
     toast.success(`Fornecedor "${nome}" aplicado a todos os contratos.`);
   }
-  async function handlePdfPick(file: File) {
-    if (file.size > 15 * 1024 * 1024) return toast.error("Arquivo > 15MB. Reduza ou divida o PDF.");
+  // Rev. 2407 — processa 1 arquivo (chamado pelo loop multi-PDF e pelo single).
+  // NÃO mexe em importPreview (o poll done já acumula).
+  async function processarArquivoPdf(file: File) {
+    if (file.size > 15 * 1024 * 1024) { toast.error(`${file.name}: > 15MB. Pule esse.`); return; }
     const okMimes = ["application/pdf", "image/jpeg", "image/png", "image/webp"];
-    if (!okMimes.includes(file.type)) return toast.error("Formato não suportado. Use PDF, JPG, PNG ou WEBP.");
+    if (!okMimes.includes(file.type)) { toast.error(`${file.name}: formato não suportado.`); return; }
     const buf = await file.arrayBuffer();
     const bytes = new Uint8Array(buf);
     let binary = "";
     for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
     const base64 = btoa(binary);
     setImportArquivo({ nome: file.name, mimeType: file.type, base64 });
-    setImportPreview(null);
     setImportProgresso(0);
     setParsePending(true);
     parsearStart.mutate({ companyId, pdfBase64: base64, mimeType: file.type as any, nomeArquivo: file.name });
+  }
+  // Rev. 2407 — entrypoint multi-PDF. Aceita 1..N arquivos da mesma empresa.
+  // `append=true` (vindo do botão "+ Adicionar PDFs"): NÃO zera preview e
+  // estende a fila atual em vez de criar uma nova batch. `append=false`
+  // (drop/select inicial): novo batch, zera preview.
+  async function handlePdfPickMultiple(files: File[], opts?: { append?: boolean }) {
+    if (!files.length) return;
+    const append = !!opts?.append;
+    const okMimes = ["application/pdf", "image/jpeg", "image/png", "image/webp"];
+    const validos = files.filter(f => {
+      if (f.size > 15 * 1024 * 1024) { toast.error(`${f.name}: > 15MB, ignorado.`); return false; }
+      if (!okMimes.includes(f.type)) { toast.error(`${f.name}: formato não suportado, ignorado.`); return false; }
+      return true;
+    });
+    if (!validos.length) return;
+
+    if (append) {
+      // Append: empilha na fila e atualiza total. Se um parse já está rodando
+      // OU se ainda há PDFs na fila, NÃO dispara aqui — o poll done/error
+      // continuará processando automaticamente. Se nada está rodando, dispara
+      // o 1º novo arquivo.
+      const filaAtual = importFilasRef.current;
+      const novosNaFila = [...filaAtual, ...validos.map(f => ({ file: f }))];
+      setImportTotalFiles(t => t + validos.length);
+      if (parsePending || filaAtual.length > 0) {
+        setImportFilas(novosNaFila);
+        toast.info(`+${validos.length} PDF${validos.length !== 1 ? "s" : ""} na fila.`);
+      } else {
+        // Nada rodando: pega o 1º novo e enfileira o resto.
+        setImportFilas(novosNaFila.slice(1));
+        setImportFileIdx(idx => idx + 1);
+        await processarArquivoPdf(novosNaFila[0].file);
+      }
+      return;
+    }
+
+    // Novo batch
+    setImportPreview(null);
+    setImportTotalFiles(validos.length);
+    setImportFileIdx(1);
+    setImportFilas(validos.slice(1).map(f => ({ file: f })));
+    if (validos.length > 1) toast.info(`${validos.length} PDFs na fila — processando 1 de cada vez.`);
+    await processarArquivoPdf(validos[0]);
+  }
+  // Shim retrocompatível (Rev. 2374 e drop-zone single ainda chamam).
+  async function handlePdfPick(file: File) {
+    return handlePdfPickMultiple([file]);
   }
 
   // Rev. 2311 — auto-abrir modal quando vier do Almoxarifado com ?action=receber|devolver.
@@ -2666,32 +2764,80 @@ export default function EquipamentosLocados() {
             </div>
 
             <div className="p-5 space-y-4">
+              {/* Rev. 2407 — input file SEMPRE montado pra o botão "+ Adicionar
+                  PDFs" funcionar (antes ficava só dentro do drop zone). */}
+              <input
+                ref={importFileRef}
+                type="file"
+                accept=".pdf,image/*"
+                multiple
+                className="hidden"
+                onChange={e => {
+                  const fs = Array.from(e.target.files || []);
+                  if (fs.length) {
+                    // append=true se já existe arquivo/preview em curso
+                    const isAppend = !!importArquivo || !!importPreview;
+                    handlePdfPickMultiple(fs, { append: isAppend });
+                  }
+                  e.target.value = "";
+                }}
+              />
               {!importArquivo && (
                 <div
                   onClick={() => importFileRef.current?.click()}
                   onDragOver={e => { e.preventDefault(); }}
-                  onDrop={e => { e.preventDefault(); const f = e.dataTransfer.files?.[0]; if (f) handlePdfPick(f); }}
+                  onDrop={e => { e.preventDefault(); const fs = Array.from(e.dataTransfer.files || []); if (fs.length) handlePdfPickMultiple(fs); }}
                   className="border-2 border-dashed border-indigo-300 rounded-lg p-10 text-center cursor-pointer hover:bg-indigo-50/50 transition"
                 >
                   <Upload className="h-10 w-10 text-indigo-400 mx-auto mb-3" />
-                  <div className="text-slate-700 font-medium">Arraste o PDF da locadora aqui</div>
-                  <div className="text-xs text-slate-500 mt-1">ou clique para selecionar · PDF/JPG/PNG até 15MB</div>
-                  <div className="text-[11px] text-slate-400 mt-3">A IA (Gemini) detecta automaticamente o layout — Jalves, Mills, Locamerica etc.</div>
-                  <input ref={importFileRef} type="file" accept=".pdf,image/*" className="hidden"
-                    onChange={e => { const f = e.target.files?.[0]; if (f) handlePdfPick(f); }} />
+                  <div className="text-slate-700 font-medium">Arraste 1 ou vários PDFs da locadora aqui</div>
+                  <div className="text-xs text-slate-500 mt-1">ou clique para selecionar · PDF/JPG/PNG até 15MB cada</div>
+                  <div className="text-[11px] text-slate-400 mt-3">A IA (Gemini) detecta o layout — Jalves, Mills, Locamerica etc. Multi-PDF: todos devem ser da MESMA empresa atualmente selecionada.</div>
                 </div>
               )}
 
               {importArquivo && (
                 <div className="flex items-center justify-between bg-slate-50 border rounded p-3 text-sm">
-                  <div className="flex items-center gap-2">
-                    <FileText className="h-4 w-4 text-indigo-600" />
-                    <span className="font-medium">{importArquivo.nome}</span>
-                    <span className="text-xs text-slate-500">({(importArquivo.base64.length * 0.75 / 1024).toFixed(0)} KB)</span>
+                  <div className="flex items-center gap-2 min-w-0">
+                    <FileText className="h-4 w-4 text-indigo-600 shrink-0" />
+                    {importTotalFiles > 1 && (
+                      <span className="px-1.5 py-0.5 text-[10px] font-bold bg-indigo-600 text-white rounded shrink-0">
+                        {importFileIdx}/{importTotalFiles}
+                      </span>
+                    )}
+                    <span className="font-medium truncate">{importArquivo.nome}</span>
+                    <span className="text-xs text-slate-500 shrink-0">({(importArquivo.base64.length * 0.75 / 1024).toFixed(0)} KB)</span>
                   </div>
                   {!parsearPdf.isPending && (
-                    <button onClick={() => { setImportArquivo(null); setImportPreview(null); }} className="text-xs text-red-600 hover:underline">Trocar arquivo</button>
+                    <div className="flex items-center gap-3 shrink-0">
+                      <button
+                        onClick={() => importFileRef.current?.click()}
+                        className="text-xs text-indigo-600 hover:underline"
+                        title="Adicionar mais PDFs ao preview atual"
+                      >
+                        + Adicionar PDFs
+                      </button>
+                      <button onClick={() => { setImportArquivo(null); setImportPreview(null); setImportFilas([]); setImportTotalFiles(0); setImportFileIdx(0); }} className="text-xs text-red-600 hover:underline">Limpar tudo</button>
+                    </div>
                   )}
+                </div>
+              )}
+              {/* Rev. 2407 — Fila de PDFs pendentes (multi-upload) */}
+              {importFilas.length > 0 && (
+                <div className="bg-indigo-50/60 border border-indigo-200 rounded p-2.5 text-xs">
+                  <div className="font-semibold text-indigo-900 mb-1.5">
+                    Fila: {importFilas.length} PDF{importFilas.length !== 1 ? "s" : ""} aguardando
+                  </div>
+                  <ul className="space-y-0.5 max-h-32 overflow-y-auto">
+                    {importFilas.map((q, i) => (
+                      <li key={i} className="flex items-center gap-2 text-indigo-800/80">
+                        <span className="w-5 text-right tabular-nums">{importFileIdx + 1 + i}.</span>
+                        <FileText className="h-3 w-3" />
+                        <span className="truncate flex-1">{q.file.name}</span>
+                        <span className="text-[10px] text-slate-500">{(q.file.size / 1024).toFixed(0)} KB</span>
+                      </li>
+                    ))}
+                  </ul>
                 </div>
               )}
 

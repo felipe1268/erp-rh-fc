@@ -1,6 +1,104 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2407 — **EQUIPAMENTOS LOCADOS / IMPORT · Multi-PDF no modal
+ * "Importar contratos de locação (PDF · IA)" — N arquivos da MESMA
+ * empresa de uma vez, com acúmulo no preview.**
+ *
+ * Pedido user (25/05/2026): "QUERO PODER IMPORTAR VARIOS PDFS DE
+ * UMA VEZ... SE FOR DA MESMA EMPRESA.. PARA MAIOR VELOCIDADE DE
+ * CADASTRO." Screenshot do modal `Importar contratos de locação
+ * (PDF · IA)` em `client/src/pages/equipamentos/Locados.tsx`. Hoje
+ * o usuário tem que fazer drop → esperar 30-60s do Gemini → confirmar
+ * → reabrir modal → repetir 8x. Com 8 PDFs da mesma locadora (típico
+ * fechamento de mês JALVES/MILLS), são 5-8 minutos de babá perdidos
+ * em cliques. Tudo client-side: backend já é idempotente por
+ * `nomeArquivo`, então a única coisa que faltava era a fila.
+ *
+ * **Implementação** — 100% client-side, zero alteração de backend.
+ * Aproveita o pipeline existente `parsearStart` → polling →
+ * `setImportPreview`, transformando-o em fila:
+ *
+ * 1. **Refs + state da fila** (L417-424): `importFilas: File[]`
+ *    (pendentes), `importTotalFiles` (n da batch atual),
+ *    `importFileIdx` (1-based, em processamento), `importFilasRef`
+ *    pra escapar do closure stale do `useEffect` de polling.
+ *
+ * 2. **`handlePdfPickMultiple(files)`** (L566-582): novo entrypoint.
+ *    Valida tamanho/mimetype em lote (toast agregado por inválido,
+ *    não bloqueia os válidos), zera preview, processa o 1º
+ *    imediatamente e enfileira os N-1 restantes. Toast informativo
+ *    quando N > 1.
+ *
+ * 3. **`processarArquivoPdf(file)`** (L550-562): extraído do antigo
+ *    `handlePdfPick` — só carrega base64 + dispara `parsearStart`.
+ *    Crucialmente NÃO mexe em `importPreview`, deixando o acúmulo
+ *    pro callback do poll. Shim retrocompat `handlePdfPick(file)`
+ *    delega pra `handlePdfPickMultiple([file])` — preserva o
+ *    `useEffect` da Rev. 2374 (importAlmox queue) que ainda chama
+ *    o nome antigo.
+ *
+ * 4. **Poll done branch** (L466-491): mudou de
+ *    `setImportPreview(comMatch)` pra `setImportPreview(prev =>
+ *    prev ? [...prev, ...comMatch] : comMatch)`. Após acumular,
+ *    consulta `importFilasRef.current` — se tem próximo, faz shift
+ *    + `setTimeout(processarArquivoPdf, 50)` (gap pra render). Senão
+ *    zera contadores.
+ *
+ * 5. **Poll error/expired branches** (L492-512): NÃO trava a fila.
+ *    Mesma lógica de avanço — toast com `${nomeArquivo}: erro`
+ *    e segue pro próximo. Convicção: é melhor cadastrar 7/8 PDFs
+ *    bons + listar 1 falho pra reupload do que abortar todos.
+ *
+ * 6. **UI — drop zone** (L2735-2749): `<input multiple>`, drop
+ *    handler troca `files?.[0]` por `Array.from(files)`, copy
+ *    "Arraste 1 ou vários PDFs". `e.target.value = ""` no onChange
+ *    pra permitir re-selecionar mesmo arquivo.
+ *
+ * 7. **UI — display do arquivo em processamento** (L2751-2776):
+ *    badge `1/8` indigo (só aparece se total > 1) na frente do nome,
+ *    botão `+ Adicionar PDFs` (abre seletor novamente) e
+ *    `Limpar tudo` (zera arquivo + preview + fila).
+ *
+ * 8. **UI — lista da fila pendente** (L2778-2795): card indigo
+ *    abaixo do "em processamento" listando os N restantes com
+ *    índice + nome truncado + tamanho. Max-h-32 + scroll.
+ *
+ * **Decisões importantes**:
+ * - **Serial, não paralelo**: o backend `parsearContratoLocacaoPdf*`
+ *   usa Gemini Vision com job único por chamada. Paralelizar
+ *   estouraria rate limit e perderia o painel de diagnóstico ao
+ *   vivo (parseDiag) que só rastreia 1 job.
+ * - **Sem zerar `importArquivo`** entre arquivos: o painel de
+ *   progresso e diagnóstico ao vivo (Rev. 2359) precisa do nome
+ *   do arquivo atual visível. O badge `X/N` indica multi-batch.
+ * - **Acúmulo no preview** (não substituição): user revisa N
+ *   contratos de uma vez e clica "Confirmar e cadastrar" 1 vez —
+ *   o `importarContratosLocacaoLote` da Rev. 2333 já paginar/chunka
+ *   o backend.
+ * - **`abrirImportar`** (L531-540) também reseta a fila — abrir o
+ *   modal sempre começa zerado.
+ *
+ * **Não tocado**: backend, schema, fluxo de confirmação (`confirmarImport`,
+ * `importarLote`), fornecedor padrão (Rev. 2358), auto-match obra
+ * (Rev. 2326), polling/diagnóstico (Rev. 2359). Tudo continua
+ * funcionando idêntico — só o front virou capaz de enfileirar.
+ *
+ * **R-001 / R-007 / R-010**: OK. Zero ALTER/DROP/DELETE, zero
+ * migration. Pure UI refactor + state machine client-side.
+ *
+ * **Follow-up potencial**: paralelizar 2-3 PDFs ao mesmo tempo se
+ * Google liberar quota (hoje ~1 req/s estável). Exigiria multi-job
+ * tracking no parseDiag — escopo bem maior. Adiado até user pedir.
+ *
+ * **Arquivos tocados**:
+ * - `client/src/pages/equipamentos/Locados.tsx`
+ * - `shared/version.ts` (2406 → 2407)
+ * - `shared/changelog.ts` (esta entrada)
+ * - `replit.md` (rotação 2+5)
+ *
+ * ---
+ *
  * Rev. 2406 — **ALMOXARIFADO/UX · Filtro por vínculo com Controle
  * de Equipamentos (Próprios / Locados / Qualquer / Sem vínculo)
  * nas 2 barras de filtro da Visão Geral.**
