@@ -16,6 +16,7 @@ import SmartEntry from "./SmartEntry";
 import AlertasAlmoxarifado from "./AlertasAlmoxarifado";
 import { inferirCategoria, CATEGORIA_KEYWORDS } from "./categoriaUtils";
 import { ModalConfirmacaoAuditoria } from "@/components/almoxarifado/ModalConfirmacaoAuditoria";
+import { ModalVincularEquipamento } from "@/components/almoxarifado/ModalVincularEquipamento";
 import { ShieldCheck, ShieldAlert } from "lucide-react";
 
 
@@ -1165,6 +1166,7 @@ export default function AlmoxarifadoPage() {
 
   // ── Modal Histórico ─────────────────────────────────────────────
   const [modalHist, setModalHist] = useState(false);
+  const [modalVincEquip, setModalVincEquip] = useState<{ id: number; nome: string; categoria?: string | null; fotoUrl?: string | null; valorUnitario?: string | number | null; obraId?: number | null } | null>(null);
   const [histItem, setHistItem] = useState<any>(null);
   const { data: movimentos = [], isLoading: loadHist } = trpc.compras.listarMovimentos.useQuery(
     { companyId, itemId: histItem?.id ?? 0 },
@@ -2275,6 +2277,16 @@ export default function AlmoxarifadoPage() {
                           </div>
                         );
                       })()}
+                      {(item as any).equipamentoVinculadoTipo && (
+                        <div className={`flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-md ${
+                          (item as any).equipamentoVinculadoTipo === "proprio"
+                            ? "bg-indigo-100 text-indigo-700"
+                            : "bg-amber-100 text-amber-700"
+                        }`} title={`Vinculado a Equipamento ${(item as any).equipamentoVinculadoTipo === "proprio" ? "Próprio" : "Locado"} #${(item as any).equipamentoVinculadoId}`}>
+                          <ShieldCheck className="h-3 w-3" />
+                          Equipamento {(item as any).equipamentoVinculadoTipo === "proprio" ? "Próprio" : "Locado"} #{(item as any).equipamentoVinculadoId}
+                        </div>
+                      )}
                       {/* Actions */}
                       <div className="flex gap-1 pt-1 border-t border-gray-50">
                         <button onClick={() => abrirMovimento(item, "entrada")} title="Entrada" className="flex-1 flex items-center justify-center gap-1 py-1 text-[11px] text-emerald-700 hover:bg-emerald-50 rounded transition">
@@ -2286,6 +2298,22 @@ export default function AlmoxarifadoPage() {
                         <button onClick={() => abrirEditar(item)} title="Editar item" className="px-1.5 py-1 text-blue-400 hover:text-blue-600 hover:bg-blue-50 rounded transition">
                           <Pencil className="h-3.5 w-3.5" />
                         </button>
+                        {!(item as any).equipamentoVinculadoTipo && (
+                          <button
+                            onClick={() => setModalVincEquip({
+                              id: item.id,
+                              nome: item.nome,
+                              categoria: item.categoria,
+                              fotoUrl: (item as any).fotoUrl,
+                              valorUnitario: (item as any).valorUnitario,
+                              obraId: item.obraId,
+                            })}
+                            title="Marcar como equipamento (Próprio ou Locado)"
+                            className="px-1.5 py-1 text-indigo-400 hover:text-indigo-600 hover:bg-indigo-50 rounded transition"
+                          >
+                            <Wrench className="h-3.5 w-3.5" />
+                          </button>
+                        )}
                         {(item as any).origem === "alugado" && (
                           <button onClick={() => abrirDevolverLocacao(item)} title="Devolver ao fornecedor" className="px-1.5 py-1 text-amber-500 hover:text-amber-700 hover:bg-amber-50 rounded transition">
                             <CheckCircle2 className="h-3.5 w-3.5" />
@@ -4981,6 +5009,12 @@ export default function AlmoxarifadoPage() {
           </div>
         );
       })()}
+      <ModalVincularEquipamento
+        aberto={!!modalVincEquip}
+        item={modalVincEquip}
+        onFechar={() => setModalVincEquip(null)}
+        onSucesso={() => { utils.compras.listarItens.invalidate(); }}
+      />
     </DashboardLayout>
   );
 }

@@ -24,6 +24,7 @@ import {
   parametrosCapex,
   comprasOrdens,
   comprasOrdensItens,
+  almoxarifadoItens,
 } from "../../drizzle/schema";
 import { storagePut } from "../storage";
 
@@ -2346,6 +2347,150 @@ Gere o JSON conforme o esquema. Não omita nenhuma descrição.`;
       if (input.mesReferencia) conds.push(eq(faturaLocacaoConferencia.mesReferencia, input.mesReferencia));
       return await db.select().from(faturaLocacaoConferencia).where(and(...conds))
         .orderBy(desc(faturaLocacaoConferencia.id));
+    }),
+
+  // ── Rev. 2404 — Marcar item de almoxarifado como Equipamento (Proprio/Locado) ──
+  // O item permanece na lista do almox, mas ganha vinculo com a tabela de
+  // equipamentos. Reaproveita foto/descricao/valor/categoria do item.
+  vincularItemAlmoxarifado: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      itemId: z.number(),
+      tipo: z.enum(["proprio", "locado"]),
+      proprio: z.object({
+        codigoPatrimonio: z.string().min(1).max(50),
+        numeroSerie: z.string().max(100).optional(),
+        marca: z.string().max(100).optional(),
+        modelo: z.string().max(100).optional(),
+        dataAquisicao: z.string().max(10).optional(),
+        valorAquisicao: z.number().optional(),
+        vidaUtilMeses: z.number().int().optional(),
+      }).optional(),
+      locado: z.object({
+        fornecedorNome: z.string().min(1).max(255),
+        obraId: z.number().optional(),
+        dataInicio: z.string().min(10).max(10),
+        dataFimPrevista: z.string().min(10).max(10),
+        valorMensal: z.number().optional(),
+        valorDiario: z.number().optional(),
+        codigoPatrimonioFornecedor: z.string().max(100).optional(),
+      }).optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const allowed = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+      if (allowed !== null && !allowed.includes(input.companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta empresa." });
+      }
+
+      const [item] = await db.select().from(almoxarifadoItens)
+        .where(and(eq(almoxarifadoItens.id, input.itemId), eq(almoxarifadoItens.companyId, input.companyId)))
+        .limit(1);
+      if (!item) throw new TRPCError({ code: "NOT_FOUND", message: "Item nao encontrado." });
+      if ((item as any).equipamentoVinculadoId) {
+        throw new TRPCError({ code: "CONFLICT", message: "Este item ja esta vinculado a um equipamento." });
+      }
+
+      const valorUnit = (item as any).valorUnitario != null ? parseFloat(String((item as any).valorUnitario)) : null;
+      const fotoUrl = (item as any).fotoUrl as string | null;
+      const fotosArr = fotoUrl ? [{ url: fotoUrl, legenda: "Foto do item de almoxarifado", uploadedAt: new Date().toISOString() }] : null;
+
+      let equipamentoId: number;
+
+      if (input.tipo === "proprio") {
+        if (!input.proprio) throw new TRPCError({ code: "BAD_REQUEST", message: "Dados do equipamento proprio obrigatorios." });
+        const [dup] = await db.select({ id: equipamentosProprios.id }).from(equipamentosProprios)
+          .where(and(
+            eq(equipamentosProprios.companyId, input.companyId),
+            eq(equipamentosProprios.codigoPatrimonio, input.proprio.codigoPatrimonio),
+          )).limit(1);
+        if (dup) throw new TRPCError({ code: "CONFLICT", message: "Patrimonio ja cadastrado." });
+        const [created] = await db.insert(equipamentosProprios).values({
+          companyId: input.companyId,
+          codigoPatrimonio: input.proprio.codigoPatrimonio,
+          descricao: item.nome,
+          categoria: item.categoria ?? null,
+          numeroSerie: input.proprio.numeroSerie ?? null,
+          marca: input.proprio.marca ?? null,
+          modelo: input.proprio.modelo ?? null,
+          dataAquisicao: input.proprio.dataAquisicao ?? null,
+          valorAquisicao: input.proprio.valorAquisicao != null ? String(input.proprio.valorAquisicao) : (valorUnit != null ? String(valorUnit) : null),
+          vidaUtilMeses: input.proprio.vidaUtilMeses ?? null,
+          fotosJson: fotosArr,
+          status: "disponivel",
+          localizacaoAtualTipo: "almoxarifado",
+          observacoes: `Cadastrado a partir do item de almoxarifado #${item.id} por ${ctx.user.name || ctx.user.id}.`,
+        }).returning({ id: equipamentosProprios.id });
+        equipamentoId = created.id;
+      } else {
+        if (!input.locado) throw new TRPCError({ code: "BAD_REQUEST", message: "Dados do equipamento locado obrigatorios." });
+        if (!fotosArr) throw new TRPCError({ code: "BAD_REQUEST", message: "Item precisa ter foto cadastrada antes de virar equipamento locado (foto de recebimento e obrigatoria)." });
+        const [created] = await db.insert(equipamentosLocados).values({
+          companyId: input.companyId,
+          obraId: input.locado.obraId ?? item.obraId ?? null,
+          fornecedorNome: input.locado.fornecedorNome,
+          codigoPatrimonioFornecedor: input.locado.codigoPatrimonioFornecedor ?? null,
+          descricao: item.nome,
+          categoria: item.categoria ?? null,
+          dataInicio: input.locado.dataInicio,
+          dataFimPrevista: input.locado.dataFimPrevista,
+          valorDiario: input.locado.valorDiario != null ? String(input.locado.valorDiario) : null,
+          valorMensal: input.locado.valorMensal != null ? String(input.locado.valorMensal) : null,
+          status: "em_uso",
+          fotosRecebimentoJson: fotosArr,
+          fotoUrl: fotoUrl ?? null,
+          observacoes: `Cadastrado a partir do item de almoxarifado #${item.id} por ${ctx.user.name || ctx.user.id}.`,
+        }).returning({ id: equipamentosLocados.id });
+        equipamentoId = created.id;
+
+        await db.insert(equipamentoLocadoEventos).values({
+          companyId: input.companyId,
+          equipamentoLocadoId: equipamentoId,
+          tipo: "RECEBIMENTO",
+          obraId: input.locado.obraId ?? item.obraId ?? null,
+          fotosJson: fotosArr,
+          observacao: "Vinculo automatico a partir do almoxarifado.",
+          usuarioId: ctx.user.id,
+          usuarioNome: ctx.user.name || String(ctx.user.id),
+        });
+      }
+
+      await db.update(almoxarifadoItens)
+        .set({
+          equipamentoVinculadoTipo: input.tipo,
+          equipamentoVinculadoId: equipamentoId,
+          equipamentoVinculadoEm: sql`now()` as any,
+          atualizadoEm: sql`now()` as any,
+          atualizadoPorId: ctx.user.id,
+          atualizadoPorNome: ctx.user.name || String(ctx.user.id),
+        } as any)
+        .where(and(eq(almoxarifadoItens.id, input.itemId), eq(almoxarifadoItens.companyId, input.companyId)));
+
+      return { equipamentoId, tipo: input.tipo };
+    }),
+
+  // Desfaz o vinculo do item com o equipamento (NAO apaga o equipamento).
+  desvincularItemAlmoxarifado: protectedProcedure
+    .input(z.object({ companyId: z.number(), itemId: z.number() }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const allowed = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+      if (allowed !== null && !allowed.includes(input.companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta empresa." });
+      }
+      await db.update(almoxarifadoItens)
+        .set({
+          equipamentoVinculadoTipo: null,
+          equipamentoVinculadoId: null,
+          equipamentoVinculadoEm: null,
+          atualizadoEm: sql`now()` as any,
+          atualizadoPorId: ctx.user.id,
+          atualizadoPorNome: ctx.user.name || String(ctx.user.id),
+        } as any)
+        .where(and(eq(almoxarifadoItens.id, input.itemId), eq(almoxarifadoItens.companyId, input.companyId)));
+      return { ok: true };
     }),
 });
 

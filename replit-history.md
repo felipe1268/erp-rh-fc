@@ -2,6 +2,7 @@
 
 > Este arquivo guarda os one-liners das revisões antigas para manter o `replit.md` enxuto.
 
+- **Rev. 2397** — FINANCEIRO/LANÇAMENTOS · Natureza (Fixo/Variável) herda da categoria via `financial_accounts.natureza`; `categoriasFiltradas` propaga campo + `useEffect` sincroniza `form.natureza`; Select fica `disabled` com chip "DA CATEGORIA". Ver `shared/changelog.ts`.
 - **Rev. 2396** — FINANCEIRO/CONTAS A PAGAR · Nome do fornecedor visível na lista e no detalhe. ADD COLUMN IF NOT EXISTS `fornecedor_nome` em `financial_entries` + backfill via JOIN com `financial_recurring_entries`; `createEntry`/`materializeRecorrentes` copiam o campo; UI mostra `" — {fornecedor}"` na lista e linha "🏢" no modal. Ver `shared/changelog.ts`.
 - **Rev. 2394** — ALMOXARIFADO/CONFIG · Cadastro de Categorias exposto em Configurações + `excluirCategoria` migra itens pra "Sem categoria" (UPDATE categoria=NULL) atomicamente em `db.transaction`. Ver `shared/changelog.ts`.
 - **Rev. 2393** — ALMOXARIFADO/UX · Drag-to-select (lasso) na grade de cards via Pointer Events + botão "Excluir" red→rose no sticky bar do modo seleção (reusa `ModalConfirmacaoAuditoria` da Rev. 2388). Ver `shared/changelog.ts`.

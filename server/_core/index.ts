@@ -652,6 +652,14 @@ Regras:
           console.log(`[SyncSchema+] Colunas almoxarifado_exige_senha/justificativa garantidas em companies.`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA companies almoxarifado_exige_*:`, e?.message || e); }
 
+        // Rev. 2404 — Vinculo de item de almoxarifado com Controle de Equipamentos.
+        try {
+          await db.execute(sql`ALTER TABLE almoxarifado_itens ADD COLUMN IF NOT EXISTS equipamento_vinculado_tipo VARCHAR(10)`);
+          await db.execute(sql`ALTER TABLE almoxarifado_itens ADD COLUMN IF NOT EXISTS equipamento_vinculado_id INTEGER`);
+          await db.execute(sql`ALTER TABLE almoxarifado_itens ADD COLUMN IF NOT EXISTS equipamento_vinculado_em TIMESTAMP`);
+          console.log(`[SyncSchema+] Colunas equipamento_vinculado_* garantidas em almoxarifado_itens.`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA almoxarifado_itens equipamento_vinculado_*:`, e?.message || e); }
+
         // Rev. 1592: bloco Escritório Central na avaliação anônima do Portal do Cliente.
         // Garantido aqui (e não só em ColFix) porque o version guard do ColFix pode
         // pular as migrations quando a versão já estiver aplicada.

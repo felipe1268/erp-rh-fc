@@ -5875,6 +5875,10 @@ export const almoxarifadoItens = pgTable("almoxarifado_itens", {
   tipoControle:               varchar("tipo_controle", { length: 20 }).default("estoque"),
   tipoControleClassificadoIa: boolean("tipo_controle_classificado_ia").default(false),
   tipoControleJustificativa:  text("tipo_controle_justificativa"),
+  // Rev. 2404 — Vinculo do item de almoxarifado com Controle de Equipamentos.
+  equipamentoVinculadoTipo:   varchar("equipamento_vinculado_tipo", { length: 10 }),
+  equipamentoVinculadoId:     integer("equipamento_vinculado_id"),
+  equipamentoVinculadoEm:     timestamp("equipamento_vinculado_em", { mode: 'string' }),
   criadoEm:             timestamp("criado_em", { mode: 'string' }).defaultNow().notNull(),
   atualizadoEm:         timestamp("atualizado_em", { mode: 'string' }).defaultNow().notNull(),
 });

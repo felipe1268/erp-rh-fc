@@ -1,6 +1,94 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2404 — **ALMOXARIFADO/EQUIPAMENTOS · Marcar item como
+ * equipamento (Próprio ou Locado) direto do card.**
+ *
+ * Pedido user: "no almoxarifado, quero poder marcar um item já
+ * cadastrado como equipamento próprio ou locado, e ele cair
+ * automaticamente no Controle de Equipamentos". Hoje o user
+ * tinha que cadastrar duas vezes (uma no almox como item, outra
+ * em /equipamentos/proprios ou /locados como ativo unitário).
+ *
+ * **Solução** — vínculo 1-pra-1 (não duplica, não copia):
+ *
+ * 1. **Schema** (`drizzle/schema.ts` L5841 `almoxarifadoItens`):
+ *    3 colunas novas opcionais — `equipamentoVinculadoTipo`
+ *    ('proprio'|'locado'), `equipamentoVinculadoId` (int) e
+ *    `equipamentoVinculadoEm` (timestamp). Item permanece na
+ *    lista do almox (pode ser ferramenta com qtd > 1 e ainda
+ *    assim ter 1 patrimônio), mas ganha badge "Vinculado" e
+ *    bloqueia novo vínculo (1 item = 1 equipamento).
+ *
+ * 2. **SyncSchema+** (`server/_core/index.ts` após bloco Rev.
+ *    2400): 3 `ALTER TABLE almoxarifado_itens ADD COLUMN IF
+ *    NOT EXISTS …` — R-001/R-007/R-010 OK (não destrutivo).
+ *
+ * 3. **Backend** (`server/routers/equipamentos.ts` no final do
+ *    router, após `faturasLocacaoListar`):
+ *    - `vincularItemAlmoxarifado({companyId, itemId, tipo,
+ *      proprio?, locado?})`: valida item existe + não está
+ *      vinculado, INSERT em `equipamentos_proprios` ou
+ *      `equipamentos_locados` reaproveitando `nome` →
+ *      `descricao`, `categoria`, `fotoUrl` → `fotosJson`
+ *      (também `fotosRecebimentoJson` no locado), e
+ *      `valorUnitario` → `valorAquisicao` (default se user
+ *      não digitar). Para locado, exige foto no item
+ *      (regra de negócio do locado: foto de recebimento
+ *      obrigatória). Cria evento `RECEBIMENTO` automático.
+ *      No fim, UPDATE no item gravando os 3 campos de
+ *      vínculo. Retorna `{equipamentoId, tipo}`.
+ *    - `desvincularItemAlmoxarifado({companyId, itemId})`:
+ *      desfaz o vínculo (NÃO apaga o equipamento — só zera
+ *      as 3 colunas pra liberar novo vínculo).
+ *
+ * 4. **Frontend** (`client/src/components/almoxarifado/`
+ *    `ModalVincularEquipamento.tsx` — componente novo,
+ *    ~270 linhas):
+ *    - Toggle 2 cards "Próprio" (indigo) / "Locado" (amber).
+ *    - Próprio: 1 campo obrigatório (codigoPatrimonio) +
+ *      marca/modelo/série/data aquisição/valor/vida útil
+ *      opcionais.
+ *    - Locado: 3 obrigatórios (fornecedor/início/fim
+ *      previsto) + valor mensal/diário/patrimônio fornec.
+ *    - Box informativo lista o que vai ser reaproveitado.
+ *    - Aviso âmbar se locado e item sem foto.
+ *    - Footer com botão gradient indigo/amber conforme tipo.
+ *
+ * 5. **Integração** (`client/src/pages/almoxarifado/index.tsx`
+ *    L2286-2300, card view):
+ *    - Badge novo acima das Actions: aparece se o item está
+ *      vinculado, mostra `Equipamento Próprio #ID` ou
+ *      `Equipamento Locado #ID` em pílula indigo/amber.
+ *    - Botão `<Wrench/>` (ícone chave) na linha de actions
+ *      — só aparece se ainda NÃO vinculado, ao lado do
+ *      botão Editar (Pencil).
+ *    - Modal renderizado no final, antes de `</DashboardLayout>`,
+ *      `onSucesso` invalida `compras.listarItens` pra refletir
+ *      o badge imediatamente.
+ *
+ * **Critérios de aceite**:
+ * - Card de item de almox tem ícone chave indigo entre Editar e
+ *   Histórico — abre modal com escolha Próprio/Locado.
+ * - Após confirmar, badge "Equipamento Próprio #N" aparece no
+ *   card e o ícone chave some.
+ * - Equipamento aparece imediatamente em /equipamentos/proprios
+ *   ou /equipamentos/locados com foto e descrição do item.
+ * - Tentar vincular item já vinculado → erro CONFLICT.
+ * - Locado sem foto → erro BAD_REQUEST claro.
+ *
+ * Arquivos: drizzle/schema.ts (L5878-5880), server/_core/index.ts
+ * (após L653), server/routers/equipamentos.ts (import +mutations
+ * no fim do router), client/src/components/almoxarifado/
+ * ModalVincularEquipamento.tsx (novo), client/src/pages/
+ * almoxarifado/index.tsx (import + state + badge + botão + render).
+ *
+ * R-001/R-007/R-010 OK — só ADD COLUMN IF NOT EXISTS + INSERTs;
+ * desvincular faz UPDATE setando NULL (sem DROP/DELETE).
+ */
+export const CHANGELOG_2404 = "Rev. 2404 marker";
+
+/**
  * Rev. 2403 — **CONFIGURAÇÕES/UX · Abas viraram cards coloridos (cor
  * por módulo) num grid responsivo.**
  *
