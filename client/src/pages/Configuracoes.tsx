@@ -86,6 +86,26 @@ const CATEGORIAS = [
 
 type TabKey = "criterios" | "senha" | "limpeza" | "regras" | "notificacoes" | "contrato_pj" | "sync_he" | "sindical" | "beneficios_alimentacao" | "modulos" | "backup" | "terceiros" | "portal_cliente" | "templates_docs";
 
+// Rev. 2403: mapa estático de cores das abas. CRÍTICO: Tailwind JIT só vê
+// classes LITERAIS no source — interpolação tipo `bg-${c}-500` não gera CSS.
+type TabColorStyle = { active: string; inactive: string; chip: string };
+const TAB_COLOR_STYLES: Record<string, TabColorStyle> = {
+  indigo:  { active: "bg-gradient-to-br from-indigo-500 to-indigo-600 text-white shadow-md shadow-indigo-500/30 ring-2 ring-indigo-400 ring-offset-1",   inactive: "bg-white text-gray-700 border border-gray-200 hover:border-indigo-300 hover:bg-indigo-50 hover:shadow-sm",   chip: "bg-indigo-100 text-indigo-600" },
+  amber:   { active: "bg-gradient-to-br from-amber-500 to-amber-600 text-white shadow-md shadow-amber-500/30 ring-2 ring-amber-400 ring-offset-1",         inactive: "bg-white text-gray-700 border border-gray-200 hover:border-amber-300 hover:bg-amber-50 hover:shadow-sm",         chip: "bg-amber-100 text-amber-600" },
+  blue:    { active: "bg-gradient-to-br from-blue-500 to-blue-600 text-white shadow-md shadow-blue-500/30 ring-2 ring-blue-400 ring-offset-1",             inactive: "bg-white text-gray-700 border border-gray-200 hover:border-blue-300 hover:bg-blue-50 hover:shadow-sm",             chip: "bg-blue-100 text-blue-600" },
+  sky:     { active: "bg-gradient-to-br from-sky-500 to-sky-600 text-white shadow-md shadow-sky-500/30 ring-2 ring-sky-400 ring-offset-1",                 inactive: "bg-white text-gray-700 border border-gray-200 hover:border-sky-300 hover:bg-sky-50 hover:shadow-sm",                 chip: "bg-sky-100 text-sky-600" },
+  emerald: { active: "bg-gradient-to-br from-emerald-500 to-emerald-600 text-white shadow-md shadow-emerald-500/30 ring-2 ring-emerald-400 ring-offset-1", inactive: "bg-white text-gray-700 border border-gray-200 hover:border-emerald-300 hover:bg-emerald-50 hover:shadow-sm", chip: "bg-emerald-100 text-emerald-600" },
+  violet:  { active: "bg-gradient-to-br from-violet-500 to-violet-600 text-white shadow-md shadow-violet-500/30 ring-2 ring-violet-400 ring-offset-1",     inactive: "bg-white text-gray-700 border border-gray-200 hover:border-violet-300 hover:bg-violet-50 hover:shadow-sm",     chip: "bg-violet-100 text-violet-600" },
+  teal:    { active: "bg-gradient-to-br from-teal-500 to-teal-600 text-white shadow-md shadow-teal-500/30 ring-2 ring-teal-400 ring-offset-1",             inactive: "bg-white text-gray-700 border border-gray-200 hover:border-teal-300 hover:bg-teal-50 hover:shadow-sm",             chip: "bg-teal-100 text-teal-600" },
+  orange:  { active: "bg-gradient-to-br from-orange-500 to-orange-600 text-white shadow-md shadow-orange-500/30 ring-2 ring-orange-400 ring-offset-1",     inactive: "bg-white text-gray-700 border border-gray-200 hover:border-orange-300 hover:bg-orange-50 hover:shadow-sm",     chip: "bg-orange-100 text-orange-600" },
+  cyan:    { active: "bg-gradient-to-br from-cyan-500 to-cyan-600 text-white shadow-md shadow-cyan-500/30 ring-2 ring-cyan-400 ring-offset-1",             inactive: "bg-white text-gray-700 border border-gray-200 hover:border-cyan-300 hover:bg-cyan-50 hover:shadow-sm",             chip: "bg-cyan-100 text-cyan-600" },
+  lime:    { active: "bg-gradient-to-br from-lime-500 to-lime-600 text-white shadow-md shadow-lime-500/30 ring-2 ring-lime-400 ring-offset-1",             inactive: "bg-white text-gray-700 border border-gray-200 hover:border-lime-300 hover:bg-lime-50 hover:shadow-sm",             chip: "bg-lime-100 text-lime-700" },
+  fuchsia: { active: "bg-gradient-to-br from-fuchsia-500 to-fuchsia-600 text-white shadow-md shadow-fuchsia-500/30 ring-2 ring-fuchsia-400 ring-offset-1", inactive: "bg-white text-gray-700 border border-gray-200 hover:border-fuchsia-300 hover:bg-fuchsia-50 hover:shadow-sm", chip: "bg-fuchsia-100 text-fuchsia-600" },
+  purple:  { active: "bg-gradient-to-br from-purple-500 to-purple-600 text-white shadow-md shadow-purple-500/30 ring-2 ring-purple-400 ring-offset-1",     inactive: "bg-white text-gray-700 border border-gray-200 hover:border-purple-300 hover:bg-purple-50 hover:shadow-sm",     chip: "bg-purple-100 text-purple-600" },
+  rose:    { active: "bg-gradient-to-br from-rose-500 to-rose-600 text-white shadow-md shadow-rose-500/30 ring-2 ring-rose-400 ring-offset-1",             inactive: "bg-white text-gray-700 border border-gray-200 hover:border-rose-300 hover:bg-rose-50 hover:shadow-sm",             chip: "bg-rose-100 text-rose-600" },
+  slate:   { active: "bg-gradient-to-br from-slate-500 to-slate-600 text-white shadow-md shadow-slate-500/30 ring-2 ring-slate-400 ring-offset-1",         inactive: "bg-white text-gray-700 border border-gray-200 hover:border-slate-300 hover:bg-slate-50 hover:shadow-sm",         chip: "bg-slate-100 text-slate-600" },
+};
+
 export default function Configuracoes() {
   const { user } = useAuth();
   const isMaster = user?.role === "admin_master";
@@ -299,20 +319,20 @@ export default function Configuracoes() {
   };
 
   const allTabs = [
-    { key: "modulos" as TabKey, label: "Módulos do Sistema", icon: ToggleRight, minRole: "admin" },
-    { key: "regras" as TabKey, label: "Regras de Ouro", icon: Shield, minRole: "admin" },
-    { key: "criterios" as TabKey, label: "Critérios do Sistema", icon: Scale, minRole: "admin" },
-    { key: "templates_docs" as TabKey, label: "Templates de Documentos", icon: FileText, minRole: "admin" },
-    { key: "senha" as TabKey, label: "Minha Senha", icon: Key, minRole: "user" },
-    { key: "notificacoes" as TabKey, label: "Notificações E-mail", icon: Bell, minRole: "admin" },
-    { key: "contrato_pj" as TabKey, label: "Contrato PJ", icon: FileText, minRole: "admin" },
-    { key: "sindical" as TabKey, label: "Sindical / Dissídio", icon: Landmark, minRole: "admin" },
-    { key: "sync_he" as TabKey, label: "Sincronizar HE", icon: RefreshCw, minRole: "admin" },
-    { key: "beneficios_alimentacao" as TabKey, label: "Benefícios Alimentação", icon: UtensilsCrossed, minRole: "admin" },
-    { key: "terceiros" as TabKey, label: "Terceiros / Gestores", icon: Building2, minRole: "admin" },
-    { key: "portal_cliente" as TabKey, label: "Portal do Cliente", icon: Shield, minRole: "admin" },
-    { key: "limpeza" as TabKey, label: "Limpeza de Dados", icon: Trash2, minRole: "admin_master" },
-    { key: "backup" as TabKey, label: "Backup do Banco", icon: Database, minRole: "admin" },
+    { key: "modulos" as TabKey, label: "Módulos do Sistema", icon: ToggleRight, minRole: "admin", color: "indigo" },
+    { key: "regras" as TabKey, label: "Regras de Ouro", icon: Shield, minRole: "admin", color: "amber" },
+    { key: "criterios" as TabKey, label: "Critérios do Sistema", icon: Scale, minRole: "admin", color: "blue" },
+    { key: "templates_docs" as TabKey, label: "Templates de Documentos", icon: FileText, minRole: "admin", color: "sky" },
+    { key: "senha" as TabKey, label: "Minha Senha", icon: Key, minRole: "user", color: "emerald" },
+    { key: "notificacoes" as TabKey, label: "Notificações E-mail", icon: Bell, minRole: "admin", color: "violet" },
+    { key: "contrato_pj" as TabKey, label: "Contrato PJ", icon: FileText, minRole: "admin", color: "teal" },
+    { key: "sindical" as TabKey, label: "Sindical / Dissídio", icon: Landmark, minRole: "admin", color: "orange" },
+    { key: "sync_he" as TabKey, label: "Sincronizar HE", icon: RefreshCw, minRole: "admin", color: "cyan" },
+    { key: "beneficios_alimentacao" as TabKey, label: "Benefícios Alimentação", icon: UtensilsCrossed, minRole: "admin", color: "lime" },
+    { key: "terceiros" as TabKey, label: "Terceiros / Gestores", icon: Building2, minRole: "admin", color: "fuchsia" },
+    { key: "portal_cliente" as TabKey, label: "Portal do Cliente", icon: Shield, minRole: "admin", color: "purple" },
+    { key: "limpeza" as TabKey, label: "Limpeza de Dados", icon: Trash2, minRole: "admin_master", color: "rose" },
+    { key: "backup" as TabKey, label: "Backup do Banco", icon: Database, minRole: "admin", color: "slate" },
   ];
   const tabs = allTabs.filter(tab => {
     if (tab.minRole === "user") return true;
@@ -422,24 +442,27 @@ export default function Configuracoes() {
           <PrintActions title="Configurações" />
         </div>
 
-        {/* Tabs — Rev. 2402: flex-wrap em 2+ linhas (sem scroll horizontal).
-            Cada botão mantém o texto numa linha só (whitespace-nowrap); o container
-            quebra pra próxima linha quando passa do viewport. */}
-        <div className="mb-6 flex flex-wrap gap-1 bg-gray-100 p-1 rounded-lg">
-          {tabs.map(tab => (
-            <button
-              key={tab.key}
-              onClick={() => setActiveTab(tab.key)}
-              className={`inline-flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors whitespace-nowrap ${
-                activeTab === tab.key
-                  ? "bg-white text-gray-900 shadow-sm"
-                  : "text-gray-500 hover:text-gray-700 hover:bg-gray-50"
-              }`}
-            >
-              <tab.icon className="w-4 h-4 flex-shrink-0" />
-              {tab.label}
-            </button>
-          ))}
+        {/* Tabs — Rev. 2403: grid de cards coloridos (cor por módulo).
+            Cada tab tem ícone num "chip" colorido + label; ativo ganha gradient + ring.
+            Auto-fit responsivo: muitas colunas no desktop, 2 no mobile.
+            IMPORTANTE: Tailwind JIT só detecta classes LITERAIS — mapa estático abaixo. */}
+        <div className="mb-6 grid gap-2 grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-7">
+          {tabs.map(tab => {
+            const isActive = activeTab === tab.key;
+            const styles = TAB_COLOR_STYLES[tab.color] ?? TAB_COLOR_STYLES.slate;
+            return (
+              <button
+                key={tab.key}
+                onClick={() => setActiveTab(tab.key)}
+                className={`group relative flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-left text-sm font-medium transition-all duration-150 ${isActive ? styles.active : styles.inactive}`}
+              >
+                <span className={`flex-shrink-0 inline-flex items-center justify-center w-8 h-8 rounded-lg transition-colors ${isActive ? "bg-white/20 text-white" : styles.chip}`}>
+                  <tab.icon className="w-4 h-4" />
+                </span>
+                <span className="leading-tight line-clamp-2 break-words">{tab.label}</span>
+              </button>
+            );
+          })}
         </div>
 
         {/* TAB: Módulos do Sistema */}

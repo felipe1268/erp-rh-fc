@@ -1,6 +1,37 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2403 — **CONFIGURAÇÕES/UX · Abas viraram cards coloridos (cor
+ * por módulo) num grid responsivo.**
+ *
+ * Pedido user (IMG_image_1779710801505, 25/05/2026): "quero o layout
+ * moderno e mais visual". A Rev. 2402 já resolveu o problema funcional
+ * (wrap em várias linhas), mas o visual era plano (pílulas cinzas
+ * idênticas). User queria identidade visual por módulo.
+ *
+ * **Fix** (`client/src/pages/Configuracoes.tsx`):
+ *   - `allTabs` ganhou campo `color` (indigo/amber/blue/sky/emerald/
+ *     violet/teal/orange/cyan/lime/fuchsia/purple/rose/slate) — 1 cor
+ *     única por aba.
+ *   - Container virou `grid` responsivo: 2 cols mobile → 3 sm → 4 md
+ *     → 5 lg → 7 xl. Sem scroll, sem wrap-feio.
+ *   - Cada aba é um card `rounded-xl` com chip de ícone (w-8 h-8
+ *     rounded-lg) à esquerda + label de 2 linhas à direita.
+ *   - **Inativo**: bg branco + border cinza + chip colorido pastel
+ *     (`bg-{c}-100 text-{c}-600`). Hover acende a borda da cor +
+ *     fundo `{c}-50`.
+ *   - **Ativo**: gradient `from-{c}-500 to-{c}-600`, texto branco,
+ *     `shadow-md shadow-{c}-500/30`, `ring-2 ring-{c}-400 ring-offset-1`,
+ *     chip branco translúcido `bg-white/20`.
+ *
+ * **Tailwind JIT trap evitado**: Tailwind só detecta classes LITERAIS
+ * no source — interpolação tipo `bg-${c}-500` NÃO gera CSS. Criamos
+ * mapa estático `TAB_COLOR_STYLES` (module-level, ~14 entradas) com
+ * `active/inactive/chip` por cor; o JSX só faz lookup, sem
+ * interpolar nomes de classe.
+ *
+ * R-001/R-007/R-010 OK (frontend-only).
+ *
  * Rev. 2402 — **CONFIGURAÇÕES/UX · Abas com `flex-wrap` (uma sobre a
  * outra) em vez de scroll horizontal.**
  *
