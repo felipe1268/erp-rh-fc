@@ -172,6 +172,9 @@ export default function AlmoxarifadoPage() {
   const [busca, setBusca] = useState("");
   const [filtroCateg, setFiltroCateg] = useState("todas");
   const [apenasAbaixo, setApenasAbaixo] = useState(false);
+  // Rev. 2406 — filtro por vínculo com Controle de Equipamentos.
+  // todos | proprio | locado | vinculado (qualquer) | nenhum (sem vínculo)
+  const [filtroEquip, setFiltroEquip] = useState<"todos" | "proprio" | "locado" | "vinculado" | "nenhum">("todos");
   const [viewMode, setViewMode] = useState<"cards" | "table">("cards");
   const [obraContexto, setObraContexto] = useState<number | null | "todos">(null);
   const [fotoExpandida, setFotoExpandida] = useState<{ url: string; nome: string } | null>(null);
@@ -830,6 +833,15 @@ export default function AlmoxarifadoPage() {
     if (filtroCateg === "__sem__") r = r.filter(i => !i.categoria || String(i.categoria).trim() === "");
     else if (filtroCateg !== "todas") r = r.filter(i => i.categoria === filtroCateg);
     if (apenasAbaixo) r = r.filter(i => n(i.quantidadeMinima) > 0 && n(i.quantidadeAtual) < n(i.quantidadeMinima));
+    // Rev. 2406 — filtro por vínculo Equipamento Próprio/Locado.
+    if (filtroEquip !== "todos") {
+      r = r.filter((i: any) => {
+        const t = i.equipamentoVinculadoTipo;
+        if (filtroEquip === "nenhum") return !t;
+        if (filtroEquip === "vinculado") return !!t;
+        return t === filtroEquip;
+      });
+    }
 
     const groups = new Map<string, any[]>();
     for (const item of r) {
@@ -864,7 +876,7 @@ export default function AlmoxarifadoPage() {
       }
     }
     return merged;
-  }, [itens, busca, filtroCateg, apenasAbaixo]);
+  }, [itens, busca, filtroCateg, apenasAbaixo, filtroEquip]);
   // Rev. 2393 — keep listaRef em sync pro async closure do executar (retry).
   useEffect(() => { listaRef.current = lista as any[]; }, [lista]);
 
@@ -1581,7 +1593,14 @@ export default function AlmoxarifadoPage() {
           const consFinal = filtroCateg === "__sem__"
             ? consFiltered.filter((i: any) => !i.categoria || String(i.categoria).trim() === "")
             : (filtroCateg !== "todas" ? consFiltered.filter((i: any) => i.categoria === filtroCateg) : consFiltered);
-          const consListFinal = apenasAbaixo ? consFinal.filter((i: any) => i.quantidadeMinima > 0 && i.quantidadeTotal < i.quantidadeMinima) : consFinal;
+          const consAfterMin = apenasAbaixo ? consFinal.filter((i: any) => i.quantidadeMinima > 0 && i.quantidadeTotal < i.quantidadeMinima) : consFinal;
+          // Rev. 2406 — filtro por vínculo Equipamento Próprio/Locado (consolidado).
+          const consListFinal = filtroEquip === "todos" ? consAfterMin : consAfterMin.filter((i: any) => {
+            const t = i.equipamentoVinculadoTipo;
+            if (filtroEquip === "nenhum") return !t;
+            if (filtroEquip === "vinculado") return !!t;
+            return t === filtroEquip;
+          });
 
           const consTotalItens = consItens.length;
           const consEstoqueOk = consItens.filter((i: any) => i.quantidadeMinima === 0 || i.quantidadeTotal >= i.quantidadeMinima).length;
@@ -1744,6 +1763,18 @@ export default function AlmoxarifadoPage() {
                 <option value="todas">Todas categorias</option>
                 <option value="__sem__">⚠️ Sem categoria</option>
                 {consCategs.map((c: any) => <option key={c} value={c}>{c}</option>)}
+              </select>
+              {/* Rev. 2406 — filtro por vínculo com Controle de Equipamentos. */}
+              <select
+                value={filtroEquip} onChange={e => setFiltroEquip(e.target.value as any)}
+                className="h-9 text-sm border border-gray-200 rounded-lg px-3 bg-white text-gray-700 outline-none focus:border-indigo-400"
+                title="Filtra itens vinculados ao Controle de Equipamentos"
+              >
+                <option value="todos">Todos vínculos</option>
+                <option value="vinculado">🔧 Qualquer equipamento</option>
+                <option value="proprio">🔧 Apenas Próprios</option>
+                <option value="locado">🔧 Apenas Locados</option>
+                <option value="nenhum">Sem vínculo</option>
               </select>
               {/* Rev. 2386 — IA sugere categorias quando filtro "Sem categoria" ativo */}
               {filtroCateg === "__sem__" && (
@@ -2064,6 +2095,18 @@ export default function AlmoxarifadoPage() {
               <option value="todas">Todas categorias</option>
               <option value="__sem__">⚠️ Sem categoria</option>
               {categorias.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+            {/* Rev. 2406 — filtro por vínculo com Controle de Equipamentos. */}
+            <select
+              value={filtroEquip} onChange={e => setFiltroEquip(e.target.value as any)}
+              className="h-9 text-sm border border-gray-200 rounded-lg px-3 bg-white text-gray-700 outline-none focus:border-indigo-400"
+              title="Filtra itens vinculados ao Controle de Equipamentos"
+            >
+              <option value="todos">Todos vínculos</option>
+              <option value="vinculado">🔧 Qualquer equipamento</option>
+              <option value="proprio">🔧 Apenas Próprios</option>
+              <option value="locado">🔧 Apenas Locados</option>
+              <option value="nenhum">Sem vínculo</option>
             </select>
             {/* Rev. 2386 — IA sugere categorias quando filtro "Sem categoria" ativo */}
             {filtroCateg === "__sem__" && (

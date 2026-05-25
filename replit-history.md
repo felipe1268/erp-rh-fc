@@ -627,3 +627,5 @@
 
 - **Rev. 2384** — FIX/UX · Badges "X pra receber" do ENTRADA e RECEBER LOCAÇÃO contam só OCs da obra em contexto (ou das obras permitidas); `obraId` opcional + `getEffectiveAllowedObraIds` + FORBIDDEN se fora do allowed (IDOR).
 - **Rev. 2383** — FEATURE · Multi-seleção também no view "Todos almoxarifados": Alterar categoria em lote (`atualizarCategoriaPorNomeEmLote` com `lower(nome) IN (...)`) + Próprio/Alugado no consolidado.
+
+- **Rev. 2399** — FINANCEIRO/LANÇAMENTOS · Filtro por período LIVRE (calendário aberto passado+futuro) substitui dropdown de mês fixo dos últimos 12. Toolbar com 2 `<Input type="date">` (De/Até) + 4 atalhos (Mês anterior/atual/próximo/Ano todo). `getEntries` passa `dataInicio`/`dataFim` em vez de `mesCompetencia`. Ver `shared/changelog.ts`.

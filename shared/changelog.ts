@@ -1,6 +1,79 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2406 — **ALMOXARIFADO/UX · Filtro por vínculo com Controle
+ * de Equipamentos (Próprios / Locados / Qualquer / Sem vínculo)
+ * nas 2 barras de filtro da Visão Geral.**
+ *
+ * Pedido user (25/05/2026, sequência das Revs. 2404/2405): "coloca
+ * um filtro de equipamentos locados ou próprios aqui tbm" — na
+ * mesma toolbar onde já tem "Todas categorias" e "Apenas abaixo
+ * do mínimo". Com 256+ itens vindo do backfill da Rev. 2405 (1218
+ * locados em prod), o almoxarife precisa segmentar rápido pra
+ * conferir só o que é equipamento de verdade vs. insumo/ferramenta
+ * comum.
+ *
+ * **Implementação** — 1 estado + lógica de 6 linhas + 2 selects
+ * idênticos:
+ *
+ * 1. Novo state `filtroEquip: "todos" | "proprio" | "locado" |
+ *    "vinculado" | "nenhum"` em `client/src/pages/almoxarifado/
+ *    index.tsx` L180. Default "todos" (não muda comportamento atual).
+ *
+ * 2. Filtro aplicado em DOIS pontos (cada um cobre uma view):
+ *    - `lista` useMemo (L824, view por-almoxarifado): após
+ *      filtro de categoria + mínimo, filtra por
+ *      `i.equipamentoVinculadoTipo` da Rev. 2404. Adicionado
+ *      `filtroEquip` ao array de deps do useMemo.
+ *    - `consListFinal` (L1599, view consolidada "Todos
+ *      almoxarifados"): mesma lógica, criada variável intermediária
+ *      `consAfterMin` pra manter legibilidade do encadeamento.
+ *
+ * 3. **Semântica dos 5 valores**:
+ *    - `todos` → sem filtro (default).
+ *    - `vinculado` → `!!t` (qualquer um dos 2 tipos).
+ *    - `proprio` → `t === "proprio"`.
+ *    - `locado` → `t === "locado"`.
+ *    - `nenhum` → `!t` (almox "puro", sem ligação com Controle de
+ *      Equipamentos — útil pra ver só insumos/ferramentas comuns).
+ *
+ * 4. **UI**: 2 `<select>` indigo-bordered (combina com o badge
+ *    indigo do card vinculado da Rev. 2404) inseridos LOGO APÓS
+ *    o select de categoria nas 2 barras (L1770-1781 consolidado,
+ *    L2102-2113 por-almox). Mesmas options/labels com emoji 🔧
+ *    pros 3 valores "com vínculo" pra deixar claro o que é
+ *    equipamento. `title` explicativo no select.
+ *
+ * **Por que NÃO mexer no backend**: o campo
+ * `equipamentoVinculadoTipo` já é retornado pelos endpoints
+ * `listarItens`/`listarConsolidado` (faz parte do SELECT * do
+ * `almoxarifado_itens` desde a Rev. 2404). Filtro 100% client-side
+ * é instantâneo (256 itens) e não exige round-trip nem invalidação
+ * de cache.
+ *
+ * **Por que `nenhum` separado de `todos`**: o user que quer "só
+ * equipamento" usa `vinculado`; o user que quer "esconder
+ * equipamento" (foco em consumíveis) usa `nenhum`. Opções
+ * espelhadas resolvem ambos os casos sem precisar inverter
+ * mentalmente.
+ *
+ * **Trade-off conhecido**: o contador "X resultados" da toolbar
+ * agora reflete o filtro de equipamento também (esperado). Os 4
+ * KPIs do topo (Total / OK / Baixo / Crítico) continuam refletindo
+ * o universo TOTAL (consItens sem filtro) — mantido intencional
+ * pra preservar visão macro do almoxarifado independente do filtro.
+ *
+ * **R-001/R-007/R-010**: OK, mudança 100% frontend, zero SQL.
+ *
+ * **Arquivos**: `client/src/pages/almoxarifado/index.tsx`
+ * (state + 2 filter blocks + 2 selects), `shared/version.ts`,
+ * `shared/changelog.ts`, `replit.md`.
+ *
+ * **Follow-up sugerido (não nesta rev.)**: replicar o filtro na
+ * aba **Tabela** (`viewMode === "table"`) se o user usar e na
+ * tela de **Movimentações** (filtrar entrada/saída só de
+ * equipamentos vinculados).
+ *
  * Rev. 2405 — **ALMOXARIFADO ← EQUIPAMENTOS · Sync reverso: todo
  * equipamento (próprio/locado) com obra indicada aparece como
  * item no almoxarifado daquela obra (vínculo bidirecional).**
