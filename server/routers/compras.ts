@@ -2903,6 +2903,49 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
       return map;
     }),
 
+  // Rev. 2395 — Limpa categorias ÓRFÃS: itens cuja string em
+  // `almoxarifado_itens.categoria` não bate com nenhum `nome` em
+  // `almoxarifado_categorias` (foram apagadas antes da Rev. 2394 ou
+  // direto no banco). Move tudo pra NULL ("Sem categoria"). Idempotente.
+  // Retorna count + lista das categorias órfãs encontradas.
+  limparCategoriasOrfas: protectedProcedure
+    .input(z.object({ companyId: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      const orfasRows = await db.execute(sql`
+        SELECT TRIM(categoria) AS categoria, COUNT(*)::int AS total
+          FROM almoxarifado_itens
+         WHERE company_id = ${input.companyId}
+           AND ativo = true
+           AND categoria IS NOT NULL
+           AND TRIM(categoria) <> ''
+           AND TRIM(categoria) NOT IN (
+             SELECT nome FROM almoxarifado_categorias WHERE company_id = ${input.companyId}
+           )
+         GROUP BY 1
+         ORDER BY 2 DESC
+      `);
+      const orfas: Array<{ categoria: string; total: number }> =
+        (((orfasRows as any).rows ?? orfasRows as any) as any[]).map((r: any) => ({
+          categoria: String(r.categoria),
+          total: Number(r.total),
+        }));
+      if (orfas.length === 0) return { itensMigrados: 0, categoriasOrfas: [] };
+      const upd = await db.execute(sql`
+        UPDATE almoxarifado_itens
+           SET categoria = NULL
+         WHERE company_id = ${input.companyId}
+           AND ativo = true
+           AND categoria IS NOT NULL
+           AND TRIM(categoria) <> ''
+           AND TRIM(categoria) NOT IN (
+             SELECT nome FROM almoxarifado_categorias WHERE company_id = ${input.companyId}
+           )
+      `);
+      const itensMigrados = Number((upd as any)?.rowCount ?? orfas.reduce((s, o) => s + o.total, 0));
+      return { itensMigrados, categoriasOrfas: orfas };
+    }),
+
   // ══════════════════════════════════════════════════════════════
   // UNIDADES DE MEDIDA DO ALMOXARIFADO (CRUD)
   // ══════════════════════════════════════════════════════════════

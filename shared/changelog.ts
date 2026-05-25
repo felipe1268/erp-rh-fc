@@ -1,6 +1,59 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2395 — **ALMOXARIFADO/CONFIG · Limpeza de categorias ÓRFÃS (itens
+ * cuja `categoria` é string que não existe mais em `almoxarifado_categorias`)
+ * — botão "Mover para Sem categoria" no card de Configurações.**
+ *
+ * Pedido user (IMG_1204, 24/05/2026 21:30): após apagar "Compras" pelo
+ * fluxo da Rev. 2394, os cards do Almoxarifado continuaram exibindo
+ * "Compras" abaixo do nome. Causa: a categoria "Compras" foi apagada
+ * ANTES da Rev. 2394 entrar (ou direto no banco), então o UPDATE
+ * atômico não rodou e os itens ficaram com `categoria='Compras'`
+ * como string órfã. A `excluirCategoria` da Rev. 2394 agora migra
+ * corretamente, mas o estado legado não foi corrigido. Pedido textual:
+ * "ajuste isso toda vez que uma categoria for deletada, vc precisa
+ * transferir para sem categoria".
+ *
+ * **Backend** (`server/routers/compras.ts` L2909-2950):
+ *   - Nova mutation `limparCategoriasOrfas({ companyId })`:
+ *     (1) SELECT TRIM(categoria), COUNT(*) das categorias órfãs
+ *     (item.categoria NOT IN almoxarifado_categorias.nome) pra ter
+ *     visibilidade do que vai mudar; (2) UPDATE almoxarifado_itens SET
+ *     categoria=NULL com o mesmo predicado; captura `rowCount` com
+ *     fallback pra soma dos counts. Idempotente — rodar de novo
+ *     retorna `{ itensMigrados: 0, categoriasOrfas: [] }`. Filtra
+ *     `ativo=true` (consistente com Rev. 2392 — não mexe em
+ *     soft-deletes).
+ *
+ * **Frontend** (`client/src/pages/configuracoes/AlmoxarifadoConfigSection
+ * .tsx`):
+ *   - Calcula `orfas` no client comparando keys de `contarItensPorCategoria`
+ *     com `Set(categorias.map(c => c.nome))` — não precisa nova query.
+ *   - Banner ambar (`border-t border-amber-200 bg-amber-50`) com
+ *     `AlertTriangle` aparece SÓ se houver órfãos, listando até 5
+ *     nomes ("Compras" (193), "EPIs" (10)…) + total + botão
+ *     `bg-amber-600` "Mover para Sem categoria".
+ *   - `limparMut.onSuccess` mostra toast com count + lista das
+ *     categorias removidas, invalida `contarItensPorCategoria` +
+ *     `listarCategoriasAlmoxarifado` + `listarItens` +
+ *     `listarItensConsolidado` (mesmo set cross-router da Rev. 2394) —
+ *     os cards do Almoxarifado atualizam na hora pra mostrar "Sem
+ *     categoria" no lugar de "Compras".
+ *
+ * Política R-010 OK: UPDATE em coluna não-key, com WHERE escopado por
+ * companyId, idempotente, sem ALTER/DROP/DELETE. Auditável: o
+ * `categoriasOrfas` retornado documenta exatamente o que foi mudado;
+ * usuário vê toast com a lista e pode verificar no log do navegador.
+ *
+ * Arquivos:
+ *   - `server/routers/compras.ts` (L2909-2950 — `limparCategoriasOrfas`)
+ *   - `client/src/pages/configuracoes/AlmoxarifadoConfigSection.tsx`
+ *     (banner + botão + handler)
+ *   - `shared/version.ts` → 2395 / `replit.md` rotacionado.
+ *
+ * ──────────────────────────────────────────────────────────────────
+ *
  * Rev. 2394 — **ALMOXARIFADO/CONFIG · Cadastro de Categorias exposto em
  * Configurações + exclusão de categoria migra itens automaticamente para
  * "Sem categoria" (NULL) ao invés de deixar string órfã.**
