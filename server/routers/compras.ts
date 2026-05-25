@@ -2859,13 +2859,48 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
       return { success: true };
     }),
 
+  // Rev. 2394 — Excluir categoria + migrar itens pra "Sem categoria" (NULL)
+  // de forma atômica. Antes só apagava a row da categoria deixando os itens
+  // com a string órfã, agora UPDATE compras_itens SET categoria=NULL primeiro,
+  // depois DELETE da row de categoria. Retorna count de itens migrados.
   excluirCategoria: protectedProcedure
     .input(z.object({ id: z.number(), companyId: z.number() }))
     .mutation(async ({ input }) => {
       const db = await getDb();
-      await db.delete(almoxarifadoCategorias)
-        .where(and(eq(almoxarifadoCategorias.id, input.id), eq(almoxarifadoCategorias.companyId, input.companyId)));
-      return { success: true };
+      return await db.transaction(async (tx: any) => {
+        const [cat] = await tx.select().from(almoxarifadoCategorias)
+          .where(and(eq(almoxarifadoCategorias.id, input.id), eq(almoxarifadoCategorias.companyId, input.companyId)));
+        if (!cat) throw new TRPCError({ code: "NOT_FOUND", message: "Categoria não encontrada" });
+        const migr = await tx.execute(sql`
+          UPDATE almoxarifado_itens
+             SET categoria = NULL
+           WHERE company_id = ${input.companyId} AND categoria = ${cat.nome}
+        `);
+        const itensMigrados = Number((migr as any)?.rowCount ?? (migr as any)?.affectedRows ?? 0);
+        await tx.delete(almoxarifadoCategorias)
+          .where(and(eq(almoxarifadoCategorias.id, input.id), eq(almoxarifadoCategorias.companyId, input.companyId)));
+        return { success: true, itensMigrados, categoriaNome: cat.nome };
+      });
+    }),
+
+  // Rev. 2394 — Conta itens por categoria (inclui "Sem categoria" como NULL/'').
+  // Usado pela UI de Configurações pra mostrar quantos itens cada categoria tem
+  // antes de excluir.
+  contarItensPorCategoria: protectedProcedure
+    .input(z.object({ companyId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      const rows = await db.execute(sql`
+        SELECT COALESCE(NULLIF(TRIM(categoria), ''), '__sem__') AS categoria, COUNT(*)::int AS total
+          FROM almoxarifado_itens
+         WHERE company_id = ${input.companyId} AND ativo = true
+         GROUP BY 1
+      `);
+      const map: Record<string, number> = {};
+      for (const r of (rows as any).rows ?? rows as any) {
+        map[String(r.categoria)] = Number(r.total);
+      }
+      return map;
     }),
 
   // ══════════════════════════════════════════════════════════════

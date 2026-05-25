@@ -26,9 +26,32 @@ export default function AlmoxarifadoCategorias() {
     { companyId }, { enabled: !!companyId }
   );
 
-  const criarMut   = trpc.compras.criarCategoria.useMutation({ onSuccess: () => { toast.success("Categoria criada!"); refetch(); setShowNova(false); setNome(""); }, onError: (e) => toast.error(e.message) });
-  const atualizarMut = trpc.compras.atualizarCategoria.useMutation({ onSuccess: () => { toast.success("Categoria atualizada!"); refetch(); setEditando(null); }, onError: (e) => toast.error(e.message) });
-  const excluirMut = trpc.compras.excluirCategoria.useMutation({ onSuccess: () => { toast.success("Categoria excluída!"); refetch(); setExcluindo(null); }, onError: (e) => toast.error(e.message) });
+  // Rev. 2394 — count de itens por categoria pra avisar antes da exclusão.
+  const { data: contagens = {} as Record<string, number>, refetch: refetchCount } =
+    trpc.compras.contarItensPorCategoria.useQuery({ companyId }, { enabled: !!companyId });
+
+  const utils = trpc.useUtils();
+  const invalidarTudo = () => {
+    refetch();
+    refetchCount();
+    utils.compras.listarCategoriasAlmoxarifado.invalidate({ companyId });
+    utils.compras.listarItens.invalidate();
+    utils.compras.listarItensConsolidado.invalidate();
+  };
+
+  const criarMut   = trpc.compras.criarCategoria.useMutation({ onSuccess: () => { toast.success("Categoria criada!"); invalidarTudo(); setShowNova(false); setNome(""); }, onError: (e) => toast.error(e.message) });
+  const atualizarMut = trpc.compras.atualizarCategoria.useMutation({ onSuccess: () => { toast.success("Categoria atualizada!"); invalidarTudo(); setEditando(null); }, onError: (e) => toast.error(e.message) });
+  const excluirMut = trpc.compras.excluirCategoria.useMutation({
+    onSuccess: (r: any) => {
+      const n = Number(r?.itensMigrados ?? 0);
+      toast.success(n > 0
+        ? `Categoria excluída! ${n} ${n === 1 ? "item movido" : "itens movidos"} para "Sem categoria".`
+        : "Categoria excluída!");
+      invalidarTudo();
+      setExcluindo(null);
+    },
+    onError: (e) => toast.error(e.message),
+  });
 
   const [showNova, setShowNova]   = useState(false);
   const [nome, setNome]           = useState("");
@@ -88,7 +111,10 @@ export default function AlmoxarifadoCategorias() {
                   {idx + 1}
                 </span>
                 <span className="flex-1 text-sm font-medium text-gray-800">{cat.nome}</span>
-                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                <span className="text-xs text-gray-400 font-mono mr-1">
+                  {(contagens[cat.nome] ?? 0)} {(contagens[cat.nome] ?? 0) === 1 ? "item" : "itens"}
+                </span>
+                <div className="flex gap-1 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
                   <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-gray-400 hover:text-blue-600 hover:bg-blue-50"
                     onClick={() => abrirEditar(cat)}>
                     <Pencil className="w-3.5 h-3.5" />
@@ -171,7 +197,12 @@ export default function AlmoxarifadoCategorias() {
               <AlertDialogTitle>Excluir Categoria</AlertDialogTitle>
               <AlertDialogDescription>
                 Tem certeza que deseja excluir a categoria <strong>"{excluindo?.nome}"</strong>?
-                Os itens que usam esta categoria não serão afetados, mas a categoria não estará mais disponível para seleção.
+                {(() => {
+                  const n = excluindo ? (contagens[excluindo.nome] ?? 0) : 0;
+                  return n > 0
+                    ? <> Os <strong>{n} {n === 1 ? "item que usa" : "itens que usam"}</strong> esta categoria serão movidos para <strong>"Sem categoria"</strong> e você poderá reclassificá-los depois.</>
+                    : <> Nenhum item usa esta categoria — a exclusão é segura.</>;
+                })()}
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>

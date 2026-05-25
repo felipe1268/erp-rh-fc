@@ -1,6 +1,102 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2394 — **ALMOXARIFADO/CONFIG · Cadastro de Categorias exposto em
+ * Configurações + exclusão de categoria migra itens automaticamente para
+ * "Sem categoria" (NULL) ao invés de deixar string órfã.**
+ *
+ * Pedido user (IMG_1200/1201, 24/05/2026, 21:03): (1) "Quero saber onde
+ * eu faço o cadastro das categorias, coloca isso em configurações para
+ * facilitar o acesso"; (2) "quero que apague a categoria compras e
+ * coloque todos os itens que estão nela, como sem categoria... que
+ * iremos ajustar depois". A página `/almoxarifado/categorias` (CRUD)
+ * já existia desde versões anteriores mas estava invisível — sem entry
+ * point nem em Configurações nem no próprio Almoxarifado. Além disso,
+ * o `excluirCategoria` antigo só fazia DELETE da row da `almoxarifado_
+ * categorias` mas deixava os itens com `categoria='Compras'` como string
+ * órfã — eles continuavam aparecendo agrupados sob "Compras" no dropdown
+ * de filtro (que lê DISTINCT da coluna) e em qualquer relatório, mesmo
+ * sem a categoria existir mais. Comportamento confuso e silencioso.
+ *
+ * **Backend** (`server/routers/compras.ts` L2862-2907):
+ *   1. `excluirCategoria` reescrita pra ser atômica via `db.transaction`:
+ *      (a) SELECT da row pra capturar o `nome` da categoria pelo `id`
+ *      (lookup escopado por `companyId` — se não achar, lança NOT_FOUND
+ *      explícito ao invés de no-op silencioso); (b) UPDATE
+ *      `almoxarifado_itens SET categoria=NULL WHERE company_id=X AND
+ *      categoria=<nome>` via `sql\`...\`` template — captura `rowCount`
+ *      pra reportar quantos itens foram migrados; (c) DELETE da row da
+ *      categoria. Retorna `{ success, itensMigrados, categoriaNome }`.
+ *      Transação garante que o DELETE só acontece se o UPDATE rodou; se
+ *      qualquer um falhar, rollback completo e categoria permanece.
+ *   2. Nova query `contarItensPorCategoria({ companyId })` retorna
+ *      `Record<categoria, count>` agrupando por `COALESCE(NULLIF(TRIM
+ *      (categoria), ''), '__sem__')` (mesma chave que o filtro usa pra
+ *      "Sem categoria" em `index.tsx` L822) e filtrando `ativo=true` pra
+ *      ignorar soft-deletes da Rev. 2392. Reaproveita a chave `__sem__`
+ *      do front pra mostrar "X sem categoria" como warning ambar no
+ *      card de Configurações.
+ *
+ * **Frontend Configurações** (`client/src/pages/configuracoes/
+ * AlmoxarifadoConfigSection.tsx` — NOVO, 60L):
+ *   - Card emerald (Warehouse icon) com mesmo visual de
+ *     `ComprasConfigSection` / `FinanceiroConfigSection`. Mostra count
+ *     de categorias cadastradas, chip ambar "⚠ N sem categoria" quando
+ *     houver itens sem classificação, e total de itens ativos. Clique
+ *     navega via `wouter` pra `/almoxarifado/categorias`. Mantém o
+ *     padrão de "configuração linka pra página dedicada" ao invés de
+ *     duplicar CRUD inline (rota já tinha `RouteGuard`/permissão).
+ *   - Registrado em `Configuracoes.tsx` L22 (import) + L658 (render
+ *     entre Compras e Financeiro na seção "Configurações por Módulo").
+ *
+ * **Frontend Cadastro** (`client/src/pages/almoxarifado/Categorias
+ * .tsx`):
+ *   - Nova query `contarItensPorCategoria` carregada em paralelo com
+ *     `listarCategorias`. Lista mostra "N itens" em font-mono cinza ao
+ *     lado de cada nome (sempre visível em mobile/iPad; desktop mantém
+ *     hover-reveal só pros botões de ação via `md:opacity-0
+ *     md:group-hover:opacity-100` — antes era hover-reveal pra TUDO,
+ *     então em iPad sem hover não dava pra clicar em Editar/Excluir).
+ *   - `excluirCategoria.onSuccess` lê `r.itensMigrados` e mostra toast
+ *     "Categoria excluída! N itens movidos para 'Sem categoria'.".
+ *     `AlertDialog` de confirmação agora avisa explicitamente quantos
+ *     itens serão migrados ANTES da ação (lendo `contagens[nome]`) ou
+ *     informa "Nenhum item usa esta categoria — a exclusão é segura."
+ *   - Novo helper `invalidarTudo()` invalida `listarCategorias` +
+ *     `contarItensPorCategoria` + `listarCategoriasAlmoxarifado` (filtro
+ *     do Almoxarifado em L804 de `index.tsx`) + `warehouse.listarItens`
+ *     em qualquer mutation, garantindo que o dropdown de categorias no
+ *     Almoxarifado atualiza na hora sem refresh.
+ *
+ * **Política R-010 / DELETE em produção**: `excluirCategoria` segue
+ * usando `db.delete()` (já era assim antes) — categorias são tabela
+ * de CONFIG, não dados transacionais; a tabela `almoxarifado_
+ * categorias` não tem FKs apontando pra ela (a relação é por string
+ * `nome` em `almoxarifado_itens.categoria`, agora corretamente
+ * desreferenciada via SET NULL antes do delete). O UPDATE pra NULL é
+ * idempotente e auditável via histórico de eventos do ERP. Zero
+ * mudança de schema (R-001/R-007 OK).
+ *
+ * **Como o user resolve o pedido específico**: abre Configurações →
+ * card "Almoxarifado" → "Categorias do Almoxarifado" → encontra
+ * "Compras" → ícone lixeira → modal mostra "Os N itens que usam esta
+ * categoria serão movidos para 'Sem categoria'" → confirma. Toast
+ * confirma quantos foram migrados e o filtro "✓ Compras" some
+ * imediatamente do dropdown do Almoxarifado.
+ *
+ * Arquivos:
+ *   - `server/routers/compras.ts` (L2862-2907 — `excluirCategoria`
+ *     reescrita + `contarItensPorCategoria` nova)
+ *   - `client/src/pages/configuracoes/AlmoxarifadoConfigSection.tsx`
+ *     (NOVO, 60L)
+ *   - `client/src/pages/Configuracoes.tsx` (L24 import + L658 render)
+ *   - `client/src/pages/almoxarifado/Categorias.tsx` (count query,
+ *     invalidação cross-router, toast com count, AlertDialog com aviso
+ *     de migração, hover-reveal só desktop)
+ *   - `shared/version.ts` → 2394 / `replit.md` rotacionado.
+ *
+ * ──────────────────────────────────────────────────────────────────
+ *
  * Rev. 2393 — **ALMOXARIFADO/UX · Drag-to-select (lasso) na grade de cards
  * + botão "Excluir" em lote no sticky bar do modo seleção.**
  *
