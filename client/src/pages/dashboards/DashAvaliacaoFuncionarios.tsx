@@ -344,62 +344,149 @@ export default function DashAvaliacaoFuncionarios() {
           </Card>
         )}
 
-        {/* Drill — detalhe individual */}
+        {/* Rev. 2412 — Drill modernizado seguindo identidade FC (faixa
+            azul #1B2A4A no topo, score circle ampliado, sub-cards com
+            gradientes por dimensão, dados brutos em tabela legível). */}
         <Dialog open={drillId != null} onOpenChange={(o) => !o && setDrillId(null)}>
-          <DialogContent className="max-w-2xl">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <Award className="h-5 w-5 text-indigo-600" />
-                Score Detalhado
-              </DialogTitle>
-              <DialogDescription>
-                {drillData ? `${drillData.nome} — ${drillData.funcao || 'sem função'}` : 'Carregando...'}
-              </DialogDescription>
+          <DialogContent className="max-w-3xl p-0 overflow-hidden gap-0 bg-white">
+            <DialogHeader className="p-0 space-y-0">
+              <div
+                className="px-6 py-4 text-white flex items-center gap-3"
+                style={{ background: "linear-gradient(135deg, #1B2A4A 0%, #2E4373 100%)" }}
+              >
+                <div className="h-10 w-10 rounded-lg bg-white/10 backdrop-blur flex items-center justify-center ring-1 ring-white/20">
+                  <Award className="h-5 w-5 text-white" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <DialogTitle className="text-white text-base font-bold uppercase tracking-wider">
+                    Score Detalhado
+                  </DialogTitle>
+                  <DialogDescription className="text-white/75 text-xs mt-0.5 truncate">
+                    {drillData ? `${drillData.nome} • ${drillData.funcao || 'sem função'}` : 'Carregando...'}
+                  </DialogDescription>
+                </div>
+                <Badge className="bg-white/15 text-white border-white/20 hover:bg-white/20 font-mono text-[10px] px-2 py-0.5 uppercase tracking-wider">
+                  últ. {periodoMeses}m
+                </Badge>
+              </div>
             </DialogHeader>
+
             {loadingDrill && (
-              <div className="flex items-center justify-center py-8 text-slate-500">
-                <Loader2 className="h-5 w-5 animate-spin mr-2" />
+              <div className="flex items-center justify-center py-16 text-slate-500">
+                <Loader2 className="h-6 w-6 animate-spin mr-2" />
+                <span className="text-sm">Calculando indicadores…</span>
               </div>
             )}
+
             {drillData && (
-              <div className="space-y-4">
-                <div className="flex items-center justify-center gap-4 p-4 rounded-lg bg-gradient-to-br from-slate-50 to-slate-100">
-                  <ScoreCircle value={drillData.geral} size={96} />
-                  <div>
-                    <Badge variant="outline" className={`${COR_CLASSIF[drillData.classificacao]} text-sm px-3 py-1`}>
-                      {drillData.classificacao}
-                    </Badge>
-                    <p className="text-xs text-slate-500 mt-2">Período: últimos {periodoMeses} meses</p>
+              <div className="p-6 space-y-5 max-h-[75vh] overflow-y-auto">
+                {/* Hero — score grande + classificação */}
+                <div
+                  className="relative overflow-hidden rounded-xl border border-slate-200 p-6"
+                  style={{
+                    background: `linear-gradient(135deg, ${COR_BG_CLASSIF[drillData.classificacao]}10 0%, #ffffff 60%)`,
+                  }}
+                >
+                  <div
+                    className="absolute top-0 right-0 w-32 h-32 rounded-full opacity-10 -translate-y-12 translate-x-12"
+                    style={{ background: COR_BG_CLASSIF[drillData.classificacao] }}
+                  />
+                  <div className="relative flex items-center gap-6">
+                    <ScoreCircle value={drillData.geral} size={120} />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-1">
+                        Classificação Geral
+                      </p>
+                      <div className="flex items-center gap-2 mb-3">
+                        <span
+                          className="inline-flex items-center px-3 py-1 rounded-full text-sm font-bold border-2"
+                          style={{
+                            color: COR_BG_CLASSIF[drillData.classificacao],
+                            borderColor: COR_BG_CLASSIF[drillData.classificacao],
+                            backgroundColor: `${COR_BG_CLASSIF[drillData.classificacao]}15`,
+                          }}
+                        >
+                          {drillData.classificacao}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1.5 text-xs text-slate-500">
+                        <Clock className="h-3.5 w-3.5" />
+                        Janela de avaliação: últimos {periodoMeses} meses
+                      </div>
+                    </div>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-2">
-                  <SubScoreBox icon={<Clock className="h-4 w-4" />} label="Frequência" value={drillData.sub.frequencia} />
-                  <SubScoreBox icon={<Heart className="h-4 w-4" />} label="Saúde" value={drillData.sub.saude} />
-                  <SubScoreBox icon={<Gavel className="h-4 w-4" />} label="Disciplina" value={drillData.sub.disciplina} />
-                  <SubScoreBox icon={<ShieldCheck className="h-4 w-4" />} label="Segurança" value={drillData.sub.seguranca} />
+                {/* Sub-scores em 4 cards coloridos por dimensão */}
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-2">
+                    4 Dimensões Avaliadas
+                  </p>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    <SubScoreCard color="blue"    icon={<Clock className="h-4 w-4" />}        label="Frequência"  value={drillData.sub.frequencia} />
+                    <SubScoreCard color="rose"    icon={<Heart className="h-4 w-4" />}        label="Saúde"       value={drillData.sub.saude} />
+                    <SubScoreCard color="violet"  icon={<Gavel className="h-4 w-4" />}        label="Disciplina"  value={drillData.sub.disciplina} />
+                    <SubScoreCard color="emerald" icon={<ShieldCheck className="h-4 w-4" />}  label="Segurança"   value={drillData.sub.seguranca} />
+                  </div>
                 </div>
 
                 {drillData.observacoes && drillData.observacoes.length > 0 && (
-                  <div className="p-3 rounded-lg bg-amber-50 border border-amber-200">
-                    <p className="text-sm font-semibold text-amber-900 mb-2">Observações automáticas (explicabilidade)</p>
-                    <ul className="text-sm text-amber-900 space-y-1 list-disc pl-5">
+                  <div className="rounded-xl border-2 border-amber-200 bg-gradient-to-br from-amber-50 to-amber-50/30 p-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Info className="h-4 w-4 text-amber-700" />
+                      <p className="text-sm font-bold text-amber-900 uppercase tracking-wider">
+                        Observações automáticas
+                      </p>
+                    </div>
+                    <ul className="text-sm text-amber-950 space-y-1 list-disc pl-5">
                       {drillData.observacoes.map((o: string, i: number) => <li key={i}>{o}</li>)}
                     </ul>
                   </div>
                 )}
 
-                <div className="text-xs text-slate-500 space-y-1 p-3 rounded bg-slate-50">
-                  <p><strong>Dados brutos do período</strong> (auditoria):</p>
-                  <p>Frequência → {drillData.inputs.frequencia.totalFaltasInjustificadas} falta(s), {drillData.inputs.frequencia.totalAtrasos} atraso(s), {drillData.inputs.frequencia.totalSaidasAntecipadas} saída(s) antecipada(s).</p>
-                  <p>Saúde → {drillData.inputs.saude.countAtestados} atestado(s) ({drillData.inputs.saude.diasAfastadoAtestado} dia(s)), {drillData.inputs.saude.countAcidentes} acidente(s) ({drillData.inputs.saude.diasAfastadoAcidente} dia(s)).</p>
-                  <p>Disciplina → {drillData.inputs.disciplina.countAdvertenciasLeves} leve(s), {drillData.inputs.disciplina.countAdvertenciasGraves} grave(s), {drillData.inputs.disciplina.countSuspensoes} suspensão(ões).</p>
-                  <p>Segurança → {drillData.inputs.seguranca.countAcidentesGraves} grave(s) + {drillData.inputs.seguranca.countAcidentesLeves} leve(s) + {drillData.inputs.seguranca.countAcidentesQuase} quase-acidente(s). DDS: {drillData.inputs.seguranca.ddsPresentes}/{drillData.inputs.seguranca.ddsConvocados}.</p>
+                {/* Dados brutos — tabela 2 cols por dimensão */}
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-2">
+                    Dados Brutos do Período (auditoria)
+                  </p>
+                  <div className="rounded-xl border border-slate-200 overflow-hidden divide-y divide-slate-100 text-sm">
+                    <DadoBrutoRow color="blue" icon={<Clock className="h-3.5 w-3.5" />} label="Frequência">
+                      {drillData.inputs.frequencia.totalFaltasInjustificadas} falta(s) ·
+                      {' '}{drillData.inputs.frequencia.totalAtrasos} atraso(s) ·
+                      {' '}{drillData.inputs.frequencia.totalSaidasAntecipadas} saída(s) antecipada(s)
+                    </DadoBrutoRow>
+                    <DadoBrutoRow color="rose" icon={<Heart className="h-3.5 w-3.5" />} label="Saúde">
+                      {drillData.inputs.saude.countAtestados} atestado(s) ({drillData.inputs.saude.diasAfastadoAtestado} dias) ·
+                      {' '}{drillData.inputs.saude.countAcidentes} acidente(s) ({drillData.inputs.saude.diasAfastadoAcidente} dias)
+                    </DadoBrutoRow>
+                    <DadoBrutoRow color="violet" icon={<Gavel className="h-3.5 w-3.5" />} label="Disciplina">
+                      {drillData.inputs.disciplina.countAdvertenciasLeves} leve(s) ·
+                      {' '}{drillData.inputs.disciplina.countAdvertenciasGraves} grave(s) ·
+                      {' '}{drillData.inputs.disciplina.countSuspensoes} suspensão(ões)
+                    </DadoBrutoRow>
+                    <DadoBrutoRow color="emerald" icon={<ShieldCheck className="h-3.5 w-3.5" />} label="Segurança">
+                      {drillData.inputs.seguranca.countAcidentesGraves} grave(s) ·
+                      {' '}{drillData.inputs.seguranca.countAcidentesLeves} leve(s) ·
+                      {' '}{drillData.inputs.seguranca.countAcidentesQuase} quase-acidente(s)
+                      {' · '}DDS {drillData.inputs.seguranca.ddsPresentes}/{drillData.inputs.seguranca.ddsConvocados}
+                    </DadoBrutoRow>
+                  </div>
                 </div>
+              </div>
+            )}
 
-                <div className="flex justify-end">
-                  <Button variant="outline" onClick={() => setDrillId(null)}>Fechar</Button>
-                </div>
+            {drillData && (
+              <div className="border-t border-slate-200 bg-slate-50 px-6 py-3 flex items-center justify-between">
+                <p className="text-[11px] text-slate-500">
+                  Decisão final é sempre humana · LGPD + CLT
+                </p>
+                <Button
+                  onClick={() => setDrillId(null)}
+                  className="text-white hover:opacity-90"
+                  style={{ background: "linear-gradient(135deg, #1B2A4A 0%, #2E4373 100%)" }}
+                >
+                  Fechar
+                </Button>
               </div>
             )}
           </DialogContent>
@@ -451,6 +538,54 @@ function SubScoreBox({ icon, label, value }: { icon: React.ReactNode; label: str
       <div className="flex-1">
         <p className="text-xs text-slate-500">{label}</p>
         <p className={`text-xl font-bold ${corScore(value)}`}>{value}<span className="text-xs text-slate-400 font-normal">/100</span></p>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Rev. 2412 — Card de sub-score por dimensão usado no drill modernizado.
+ * Cor por dimensão (não pelo valor) — frequência=blue, saúde=rose,
+ * disciplina=violet, segurança=emerald. Mantém pattern do design system.
+ */
+const SUBSCORE_COLOR_MAP: Record<string, { ring: string; bg: string; text: string; icon: string; bar: string }> = {
+  blue:    { ring: "ring-blue-200",    bg: "bg-blue-50/60",    text: "text-blue-700",    icon: "bg-blue-500",    bar: "bg-blue-500" },
+  rose:    { ring: "ring-rose-200",    bg: "bg-rose-50/60",    text: "text-rose-700",    icon: "bg-rose-500",    bar: "bg-rose-500" },
+  violet:  { ring: "ring-violet-200",  bg: "bg-violet-50/60",  text: "text-violet-700",  icon: "bg-violet-500",  bar: "bg-violet-500" },
+  emerald: { ring: "ring-emerald-200", bg: "bg-emerald-50/60", text: "text-emerald-700", icon: "bg-emerald-500", bar: "bg-emerald-500" },
+};
+
+function SubScoreCard({ color, icon, label, value }: { color: keyof typeof SUBSCORE_COLOR_MAP; icon: React.ReactNode; label: string; value: number }) {
+  const c = SUBSCORE_COLOR_MAP[color];
+  return (
+    <div className={`relative overflow-hidden rounded-xl ring-1 ${c.ring} ${c.bg} p-3`}>
+      <div className="flex items-center gap-2 mb-2">
+        <div className={`h-6 w-6 rounded-md ${c.icon} text-white flex items-center justify-center shadow-sm`}>
+          {icon}
+        </div>
+        <p className="text-[10px] font-bold uppercase tracking-widest text-slate-600 truncate">{label}</p>
+      </div>
+      <p className={`text-2xl font-extrabold tabular-nums ${c.text}`}>
+        {value}
+        <span className="text-xs text-slate-400 font-normal">/100</span>
+      </p>
+      <div className="mt-2 h-1.5 rounded-full bg-white/70 overflow-hidden">
+        <div className={`h-full ${c.bar} rounded-full transition-all`} style={{ width: `${Math.max(2, value)}%` }} />
+      </div>
+    </div>
+  );
+}
+
+function DadoBrutoRow({ color, icon, label, children }: { color: keyof typeof SUBSCORE_COLOR_MAP; icon: React.ReactNode; label: string; children: React.ReactNode }) {
+  const c = SUBSCORE_COLOR_MAP[color];
+  return (
+    <div className="flex items-start gap-3 px-4 py-2.5 hover:bg-slate-50 transition">
+      <div className={`mt-0.5 h-6 w-6 rounded-md ${c.icon} text-white flex items-center justify-center shadow-sm shrink-0`}>
+        {icon}
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className={`text-[10px] font-bold uppercase tracking-widest ${c.text}`}>{label}</p>
+        <p className="text-sm text-slate-700 leading-snug">{children}</p>
       </div>
     </div>
   );

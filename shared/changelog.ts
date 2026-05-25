@@ -1,6 +1,77 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2412 — **AVALIAÇÃO INTELIGENTE / UX · Modal "Score
+ * Detalhado" modernizado seguindo identidade FC (faixa azul
+ * #1B2A4A, hero card, 4 sub-cards coloridos por dimensão,
+ * dados brutos em linhas legíveis).**
+ *
+ * Pedido user (25/05/2026): "melhore este layout, deixando
+ * mais moderno e conforme as nossas regras de ouro." Screenshot
+ * do modal antigo: cabeçalho cinza, score circle pequeno num
+ * card slate-50 plano, 4 sub-scores em boxes brancos sem
+ * hierarquia, dados brutos como parágrafo cinza chumbo dentro
+ * de slate-50, botão Fechar outline genérico. Funcional mas
+ * sem identidade FC e sem hierarquia visual.
+ *
+ * **Mudanças** (`client/src/pages/dashboards/DashAvaliacaoFuncionarios.tsx`):
+ *
+ * 1. **Header faixa azul FC** (regra de ouro): gradient
+ *    `#1B2A4A → #2E4373` com ícone Award num quadrado de vidro
+ *    `bg-white/10 backdrop-blur`, título caixa alta letter-spacing
+ *    wider, nome+função em white/75, badge "últ. Nm" no canto.
+ *    `DialogContent` agora `p-0 overflow-hidden gap-0` pra faixa
+ *    encostar nas bordas.
+ *
+ * 2. **Hero card de score** com gradient da cor da classificação
+ *    (`COR_BG_CLASSIF[c]10`) + círculo decorativo opacity-10 no
+ *    canto, `ScoreCircle` ampliado de 96→120px, badge da
+ *    classificação com border-2 e cor dinâmica, info de período
+ *    com ícone Clock.
+ *
+ * 3. **4 sub-cards coloridos por dimensão** (`SubScoreCard`):
+ *    frequência=blue, saúde=rose, disciplina=violet,
+ *    segurança=emerald — cor é da DIMENSÃO, não do valor
+ *    (diferencia do score que usa cor-por-valor). Cada card:
+ *    ring + bg-50/60 + ícone num quadrado colorido + barra de
+ *    progresso no fundo refletindo o %. Grid responsivo
+ *    `grid-cols-2 md:grid-cols-4`. Mapa estático
+ *    `SUBSCORE_COLOR_MAP` (5 classes por cor) pra Tailwind JIT
+ *    pegar — mesmo pattern da Rev. 2403.
+ *
+ * 4. **Dados brutos como tabela legível** (`DadoBrutoRow`):
+ *    cada linha tem ícone colorido da dimensão + label uppercase
+ *    + texto separado por bullet "·" em vez do `→ ... ., ... .`
+ *    confuso do original. `divide-y` entre linhas, hover sutil.
+ *
+ * 5. **Footer com Fechar primary FC**: linha `border-t bg-slate-50`
+ *    com disclaimer "Decisão final é sempre humana · LGPD + CLT"
+ *    à esquerda + botão Fechar com gradient azul FC à direita.
+ *
+ * 6. **Largura aumentada** `max-w-2xl → max-w-3xl` (mais
+ *    espaço pros 4 sub-cards numa linha em md+) e
+ *    `max-h-[75vh] overflow-y-auto` no body pra não estourar
+ *    em telas pequenas.
+ *
+ * **Helpers novos**: `SubScoreCard` (sub-card com ring/bg/bar) e
+ * `DadoBrutoRow` (linha da tabela de auditoria) compartilham
+ * `SUBSCORE_COLOR_MAP`. `SubScoreBox` antigo MANTIDO (não
+ * referenciado mais, mas pode ser reusado em outras telas;
+ * remoção seria limpeza futura).
+ *
+ * **Zero backend, zero migration, zero novos endpoints**.
+ * Mesmo `getScoreFuncionario.useQuery` da Rev. 2410.
+ *
+ * **R-001 / R-007 / R-010**: OK. UI puro.
+ *
+ * **Arquivos tocados**:
+ * - `client/src/pages/dashboards/DashAvaliacaoFuncionarios.tsx`
+ * - `shared/version.ts` (2411 → 2412)
+ * - `shared/changelog.ts` (esta entrada)
+ * - `replit.md` (rotação 2+5)
+ *
+ * ---
+ *
  * Rev. 2411 — **EQUIPAMENTOS LOCADOS ↔ ALMOXARIFADO / BUGFIX +
  * RASTREABILIDADE · Devolução/exclusão de locado agora propaga
  * para o almoxarifado + 3 novos statuses de ciclo de vida.**
