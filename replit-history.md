@@ -2,6 +2,7 @@
 
 > Este arquivo guarda os one-liners das revisões antigas para manter o `replit.md` enxuto.
 
+- **Rev. 2417** — ALMOXARIFADO/INVENTÁRIO VISUAL DE BAIAS · SÓ categoria "Agregados" + input numérico de volume + consumo do dia. ADD COLUMN `volume_estimado NUMERIC(14,3)`. Filtro `normalizarCat==="agregados"`, helper `calcConsumoHoje`, modal com `<Input inputMode=decimal>` grande. Histórico mostra volume em vez de %. Ver `shared/changelog.ts`.
 - **Rev. 2416** — ALMOXARIFADO/INVENTÁRIO VISUAL DE BAIAS · Opção "Todas as obras" (visão consolidada) de volta no seletor. `baiaAgregadosListar.input.obraId` vira `nullable()`, resolve `targetObras` via `userCanAccessObra`, indexação `${obraId}:${itemId}`, frontend grupado por obra. Zero migration. Ver `shared/changelog.ts`.
 - **Rev. 2415** — ALMOXARIFADO/INVENTÁRIO VISUAL · agregados aparecem automaticamente — almoxarife não cadastra baia, só dá baixa. 2 endpoints novos (`baiaAgregadosListar` + `baiaAutoEnsureFromItem`); filtro regex de vocabulário FC; cards com 3 badges (sky/amber/saldo). Ver `shared/changelog.ts`.
 - **Rev. 2414** — ALMOXARIFADO/INVENTÁRIO VISUAL DE BAIAS · Reformatado pra MESMA LINGUAGEM do Inventário Semanal — sessão DIÁRIA por obra. ZERO backend (sessão derivada de `baia_leituras`). Helpers `hojeYmdLocal()` + `isLeituraHoje()`. 5 estados (placeholder/loading/sem baia/iniciar aferição/sessão), modo "Gerenciar" toggle. Ver `shared/changelog.ts`.

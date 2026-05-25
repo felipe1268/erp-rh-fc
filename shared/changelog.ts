@@ -1,6 +1,50 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2424 — **UX · PLANEJAMENTO/LISTA · substituído `window.confirm`
+ * nativo por AlertDialog estilizado ao excluir projeto.**
+ *
+ * Pedido user (25/05/2026, screenshot): o botão "Excluir" na lista de
+ * projetos (`/planejamento`) abria um `window.confirm()` nativo do
+ * navegador, que no Replit/iframe exibe o cabeçalho cru do domínio de
+ * preview ("b41aedae-6288-4323-b9df-...picard.replit.dev diz") seguido
+ * da mensagem técnica "Excluir este projeto e todos os seus dados?".
+ * Visual quebrado, sem branding FC, sem contexto do nome do projeto e
+ * sem aviso explícito de que a ação é destrutiva.
+ *
+ * **Solução** (zero backend, mudança puramente de UX):
+ *  - `client/src/pages/planejamento/PlanejamentoLista.tsx`:
+ *    + Imports: `AlertDialog*` do shadcn (componente já existente em
+ *      `client/src/components/ui/alert-dialog.tsx`).
+ *    + Novo state `confirmExclusao: { id, nome, cliente? } | null`
+ *      captura o projeto-alvo da exclusão.
+ *    + Botão Trash agora chama `setConfirmExclusao({ id, nome, cliente })`
+ *      no lugar de `confirm() + mutate()` direto — abre o modal.
+ *    + Renderizado `<AlertDialog>` no final do JSX: header vermelho com
+ *      ícone `AlertTriangle`, título "Excluir projeto", descrição
+ *      mostrando NOME + CLIENTE do projeto entre aspas + box de aviso
+ *      vermelho destacando que cronograma/curva S/REFIS serão removidos
+ *      e a ação não pode ser desfeita.
+ *    + Botões: "Cancelar" (outline shadcn) + "Excluir projeto"
+ *      (`bg-red-600`, com ícone Trash2 e estado loading com Loader2
+ *      durante a mutation). Ambos desabilitados enquanto `isPending`.
+ *    + `excluirMutation.onSuccess` também limpa `confirmExclusao` (além
+ *      do `excluindo` legado); adicionado `onError` que mostra alert
+ *      com a mensagem do servidor e fecha o modal (antes não tinha
+ *      tratamento de erro algum).
+ *    + `onOpenChange` do AlertDialog ignora fechamento enquanto a
+ *      mutation está em andamento (evita perder feedback do loading).
+ *
+ * **Por que NÃO virou uma feature mais ampla agora**: o user enviou
+ * em paralelo um plano grande de auditoria de almoxarifado (senha +
+ * justificativa + log antes/depois + tela de validação) — esse ficou
+ * reservado pra Rev. 2425+ como tarefa independente. Aqui foi só o
+ * ajuste cirúrgico de layout do confirm de projeto.
+ *
+ * R-001/R-007/R-010 OK — sem schema, sem migration, sem ALTER/DROP.
+ *
+ * ─────────────────────────────────────────────────────────────────────
+ *
  * Rev. 2423 — **AVISO PRÉVIO · TRABALHADO VOLTA A 30 DIAS FIXOS DE
  * CUMPRIMENTO (caso Myriélle).**
  *

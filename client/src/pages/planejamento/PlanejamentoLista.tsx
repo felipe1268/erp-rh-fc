@@ -15,6 +15,10 @@ import {
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction,
+} from "@/components/ui/alert-dialog";
 import { Label } from "@/components/ui/label";
 
 const n = (v: any) => parseFloat(v || "0") || 0;
@@ -54,6 +58,7 @@ export default function PlanejamentoLista() {
   const [busca, setBusca] = useState("");
   const [modalAberto, setModalAberto] = useState(false);
   const [excluindo, setExcluindo] = useState<number | null>(null);
+  const [confirmExclusao, setConfirmExclusao] = useState<{ id: number; nome: string; cliente?: string | null } | null>(null);
 
   // Formulário novo projeto
   const [form, setForm] = useState({
@@ -139,7 +144,8 @@ export default function PlanejamentoLista() {
     onError: (err) => { alert(err.message || "Erro ao criar planejamento."); },
   });
   const excluirMutation = trpc.planejamento.excluirProjeto.useMutation({
-    onSuccess: () => { utils.planejamento.listarProjetos.invalidate(); setExcluindo(null); },
+    onSuccess: () => { utils.planejamento.listarProjetos.invalidate(); setExcluindo(null); setConfirmExclusao(null); },
+    onError: (err) => { alert(err.message || "Erro ao excluir o projeto."); setConfirmExclusao(null); },
   });
 
   const editarMutation = trpc.planejamento.atualizarProjeto.useMutation({
@@ -345,7 +351,7 @@ export default function PlanejamentoLista() {
                     )}
                     {canDelete && (
                     <button
-                      onClick={e => { e.stopPropagation(); if (confirm("Excluir este projeto e todos os seus dados?")) excluirMutation.mutate({ id: projeto.id }); }}
+                      onClick={e => { e.stopPropagation(); setConfirmExclusao({ id: projeto.id, nome: projeto.nome, cliente: projeto.cliente }); }}
                       className="p-1 rounded hover:bg-red-50 text-red-400"
                       title="Excluir"
                     >
@@ -623,6 +629,48 @@ export default function PlanejamentoLista() {
             </div>
           </DialogContent>
         </Dialog>
+
+        {/* ── AlertDialog Excluir Projeto (substitui window.confirm nativo) ── */}
+        <AlertDialog
+          open={!!confirmExclusao}
+          onOpenChange={(open) => { if (!open && !excluirMutation.isPending) setConfirmExclusao(null); }}
+        >
+          <AlertDialogContent className="max-w-md">
+            <AlertDialogHeader>
+              <AlertDialogTitle className="flex items-center gap-2 text-red-600">
+                <AlertTriangle className="h-5 w-5" />
+                Excluir projeto
+              </AlertDialogTitle>
+              <AlertDialogDescription asChild>
+                <div className="space-y-3 pt-1 text-sm text-slate-600">
+                  <p>
+                    Tem certeza de que deseja excluir o projeto{" "}
+                    <span className="font-semibold text-slate-900">"{confirmExclusao?.nome}"</span>
+                    {confirmExclusao?.cliente ? <> — <span className="text-slate-700">{confirmExclusao.cliente}</span></> : null}?
+                  </p>
+                  <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+                    <strong>Atenção:</strong> esta ação remove permanentemente o cronograma, curva S, REFIS e demais dados vinculados ao projeto. <span className="font-semibold">Não pode ser desfeita.</span>
+                  </div>
+                </div>
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={excluirMutation.isPending}>Cancelar</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={(e) => {
+                  e.preventDefault();
+                  if (confirmExclusao) excluirMutation.mutate({ id: confirmExclusao.id });
+                }}
+                disabled={excluirMutation.isPending}
+                className="bg-red-600 hover:bg-red-700 focus:ring-red-600"
+              >
+                {excluirMutation.isPending
+                  ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />Excluindo...</>
+                  : <><Trash2 className="h-4 w-4 mr-2" />Excluir projeto</>}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </DashboardLayout>
   );
