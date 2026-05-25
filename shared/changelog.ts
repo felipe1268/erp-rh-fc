@@ -1,6 +1,44 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2410 — **AVALIAÇÃO INTELIGENTE / BUGFIX · `getDb()` chamado
+ * sem `await` em `carregarInputs` quebrava a tela inteira.**
+ *
+ * Pedido user (25/05/2026): screenshot da tela "Avaliação
+ * Inteligente de Funcionários" totalmente em branco — só o header e
+ * o disclaimer apareciam, nenhum dado. Log do servidor mostrava
+ * `[tRPC Error] avaliacaoFuncionarios.getResumo: db.select is not a
+ * function`.
+ *
+ * **Causa raiz** — `server/db.ts` exporta `getDb()` como função
+ * `async` (lazy init do pool Neon). O router
+ * `avaliacaoFuncionarios.ts` L74 chamava `const db = getDb()` SEM
+ * await, então `db` era na verdade uma `Promise<NeonDatabase>`, não
+ * a instância drizzle. Toda chamada `db.select(...)` estourava
+ * `TypeError: db.select is not a function`. Como `carregarInputs`
+ * roda nas 3 procedures (`getRanking`, `getResumo`,
+ * `getScoreFuncionario`), nada na tela renderizava — todos os
+ * useQueries entravam em error state.
+ *
+ * **Solução** — 1 caractere: `const db = await getDb();`. Único
+ * call site síncrono em todo `server/` (rg confirmou). Demais
+ * routers já usam `await getDb()` corretamente.
+ *
+ * **Por que só agora?** — o módulo é novo (Rev. 1971 Fase 1 MVP) e
+ * provavelmente pouco usado. A primeira tentativa real do user
+ * expôs o bug. O TS não pegou porque `Promise` tem propriedades
+ * arbitrárias acessíveis (não em compilação estrita).
+ *
+ * **R-001 / R-007 / R-010**: OK. Bugfix puro, zero schema/SQL.
+ *
+ * **Arquivos tocados**:
+ * - `server/routers/avaliacaoFuncionarios.ts` (L74: + await)
+ * - `shared/version.ts` (2409 → 2410)
+ * - `shared/changelog.ts` (esta entrada)
+ * - `replit.md` (rotação 2+5)
+ *
+ * ---
+ *
  * Rev. 2409 — **IA / PERFORMANCE · Desligado o "modo thinking" do
  * Gemini 2.5 Flash em `invokeGeminiVision` — corta 50-70% do tempo
  * no parse de PDF de locação (combate o "trava em 99%").**

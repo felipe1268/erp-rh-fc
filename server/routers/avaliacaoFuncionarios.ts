@@ -71,7 +71,10 @@ function mesRefInicio(meses: number): string {
  * de uma companyId em UMA passada de SQL por categoria.
  */
 async function carregarInputs(companyId: number, obraId: number | null | undefined, periodoMeses: number) {
-  const db = getDb();
+  // Rev. 2410 — `getDb()` é async (lazy init do pool Neon). Sem await,
+  // `db` virava Promise e quebrava com "db.select is not a function" na
+  // tela Avaliação Inteligente (página totalmente vazia).
+  const db = await getDb();
   const dataInicio = dataInicioPeriodo(periodoMeses);
   const mesInicio = mesRefInicio(periodoMeses);
 
