@@ -1,6 +1,144 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2417 — **ALMOXARIFADO / INVENTÁRIO VISUAL DE BAIAS ·
+ * SÓ CATEGORIA "AGREGADOS" + INPUT NUMÉRICO DE VOLUME +
+ * CONSUMO DO DIA CALCULADO.**
+ *
+ * Pedido user (25/05/2026, follow-up direto à Rev. 2416):
+ * (1) "define o seguinte, so vai para baia oque estiver na
+ * categoria agregados ok.. mais facil controlar desta forma";
+ * (2) trocar os 5 botões de % (VAZIA/1-4/METADE/3-4/CHEIA) por:
+ * foto + input numérico do volume restante + display do
+ * consumo diário (saldo_anterior + entrada_hoje − saldo_atual).
+ *
+ * **Decisão arquitetural — ADD COLUMN idempotente, zero
+ * destrutivo:** `almoxarifado_baia_leituras` ganha coluna nova
+ * `volume_estimado NUMERIC(14,3)` NULLABLE. A coluna `percentual`
+ * antiga continua NOT NULL (compat Rev. 2373) — quando o user só
+ * digita volume, o backend deriva o percentual via `vol/cap*100`
+ * (clamp 0–100, ou 0 se a baia não tem capacidadeEstimada) só
+ * pra preencher a NOT NULL e manter o bar visual do histórico.
+ * A verdade operacional passa a ser o `volumeEstimado` digitado.
+ *
+ * **Backend — `server/routers/warehouse.ts`:**
+ *
+ * 1. `baiaAgregadosListar` — filtro de itens reduzido a
+ *    `categoria === "agregados"` (normaliza NFD + lowercase +
+ *    trim pra tolerar "Agregados", "AGREGADOS", "agregados ").
+ *    AGGR_RE (regex de vocabulário) e UNI_GRANEL (Set de
+ *    unidades) da Rev. 2415 — removidos. Decisão explícita do
+ *    user: ele cuida da categorização, ERP confia no cadastro.
+ *
+ * 2. SELECTs de `mapUlt` / `mapPenult` agora incluem
+ *    `volume_estimado` (ambos: o DISTINCT ON e o
+ *    ROW_NUMBER OVER PARTITION).
+ *
+ * 3. `toCamel(r)` (ambas instâncias — `baiaListar` legado +
+ *    `baiaAgregadosListar`) expõe `volumeEstimado: Number(r.volume_estimado) ?? null`.
+ *
+ * 4. Novo helper `calcConsumoHoje(ult, ant, entradaHoje)` —
+ *    devolve `Math.max(0, antVol + entradaHoje − ultVol)` com 3
+ *    casas, ou `null` se faltar alguma das leituras de volume.
+ *    Aplicado nos 3 loops do combine (item-com-baia, baia-órfã,
+ *    baia-com-itemId-não-agregado).
+ *
+ * 5. `baiaLeituraRegistrar` — input ampliado:
+ *    - `percentual` agora `.optional()` (compat Rev. 2373).
+ *    - `volumeEstimado: z.number().nonnegative().optional()`.
+ *    - Guard: ao menos um dos dois é obrigatório
+ *      (`BAD_REQUEST "Informe o volume restante (m³) ou o percentual."`).
+ *    - Se vier percentual, mantém checagem dos 5 níveis canônicos.
+ *    - Cálculo de `percentualFinal`: se só veio volume e a baia
+ *      tem `capacidadeEstimada > 0`, deriva `round(vol/cap*100)`
+ *      clamped 0–100. Caso contrário, default 0.
+ *    - INSERT inclui `volumeEstimado: String(...)` (Drizzle
+ *      numeric quer string), `percentual: percentualFinal`.
+ *
+ * **SyncSchema+ — `server/_core/index.ts` (~L2092):**
+ * `ALTER TABLE almoxarifado_baia_leituras ADD COLUMN IF NOT
+ * EXISTS volume_estimado NUMERIC(14,3)`. Idempotente. Roda no
+ * boot junto com o CREATE TABLE da Rev. 2373.
+ *
+ * **Drizzle schema — `drizzle/schema.ts` (almoxarifadoBaiaLeituras):**
+ * adicionado `volumeEstimado: numeric("volume_estimado", { precision: 14, scale: 3 })`.
+ *
+ * **Frontend — `client/src/pages/almoxarifado/InventarioVisual.tsx`:**
+ *
+ * 1. Constante `NIVEIS` (5 botões coloridos) — DELETADA.
+ *    `corPorPct(pct)` mantida só pra cor de fallback do histórico
+ *    quando uma leitura antiga só tem percentual.
+ *
+ * 2. Estado da leitura:
+ *    - `leituraPct: number | null` → `leituraVolume: string`
+ *      (string p/ aceitar vírgula/ponto/zero sem brigar com `<Input type=number>`).
+ *    - `abrirLeitura(baia)` (sem 2º arg de pct) — pré-popula com
+ *      `ultimaLeitura.volumeEstimado` (almoxarife normalmente
+ *      ajusta um pouco a partir do valor anterior).
+ *    - `confirmarLeitura()` — `parseFloat(replace(",", "."))`,
+ *      valida `isFinite && >= 0`, manda `volumeEstimado: volNum`
+ *      em vez de `percentual`.
+ *    - Novo helper `fmtNum(n, dec=2)` p/ formatação pt-BR.
+ *
+ * 3. Card (`renderCardBaia`) — em vez do grid de 5 botões:
+ *    - 3 mini-cards coloridos em grid (sky/emerald/amber):
+ *      "Chegou hoje" (`+entradaHoje un`), "Restante"
+ *      (`volAtual un`), "Consumo dia" (`consumoHoje un`).
+ *    - Linha "Última leitura: X un · DD/MM HH:mm" abaixo (quando
+ *      `volAnt != null`).
+ *    - Botão único grande (amber se pendente / emerald-soft se
+ *      conferida) "Registrar baixa" / "Refazer leitura".
+ *    - "Ver histórico" preservado como link discreto abaixo.
+ *
+ * 4. Modal "Registrar baixa da baia":
+ *    - Header com gradiente amber→orange mostrando nome +
+ *      material + última leitura + entrada de hoje.
+ *    - `<Input type="text" inputMode="decimal" autoFocus>` grande
+ *      e centralizado p/ digitar o volume (placeholder dinâmico
+ *      com a unidade da baia, ex: "Ex: 12,5 m³").
+ *    - Hint: "Estime visualmente o volume que ainda está na baia."
+ *    - Foto + observação inalterados.
+ *
+ * 5. Histórico modal — cada linha mostra `volumeEstimado un`
+ *    quando disponível, fallback p/ `percentual%` em leituras
+ *    legadas.
+ *
+ * **R-001/R-007/R-010 OK** — apenas ADD COLUMN IF NOT EXISTS
+ * idempotente, nenhum DROP/DELETE.
+ *
+ * **Trade-off conhecido:** a coluna `percentual` continua NOT
+ * NULL com derivação automática. Quando a baia não tem
+ * `capacidadeEstimada` definida, o percentual gravado fica
+ * sempre 0 — o bar visual da Rev. 2373 vira inútil, mas o
+ * volume digitado (que é a verdade) está intacto. Solução: o
+ * almoxarife pode cadastrar capacidade no modo "Gerenciar" se
+ * quiser o bar visual de volta, ou ignorar — a UX nova é
+ * dirigida pelos números, não pela barra.
+ *
+ * **Arquivos tocados:**
+ * - `drizzle/schema.ts` (~L5937–5951): +1 coluna.
+ * - `server/_core/index.ts` (~L2092): +1 ALTER ADD COLUMN.
+ * - `server/routers/warehouse.ts`:
+ *   - L2504–2574 (`baiaLeituraRegistrar`): input + INSERT.
+ *   - L2612–2620 (filtro agregados): regex → categoria.
+ *   - L2645–2666 (SELECTs leituras): + volume_estimado.
+ *   - L2685–2718 (toCamel + calcConsumoHoje): mapeamento +
+ *     helper novo.
+ *   - L2740–2817 (combine loops): consumoHoje em 3 push.
+ *   - L2338–2348 (`baiaListar` toCamel legado): consistência.
+ * - `client/src/pages/almoxarifado/InventarioVisual.tsx`:
+ *   - Header docblock atualizado.
+ *   - NIVEIS removido.
+ *   - State `leituraVolume` substitui `leituraPct`.
+ *   - `abrirLeitura/fecharLeitura/confirmarLeitura` refatorados.
+ *   - `renderCardBaia` (3 mini-cards + botão único).
+ *   - Modal de leitura (input numérico + header gradiente).
+ *   - Histórico (volume com fallback p/ percentual).
+ * - `shared/version.ts` → 2417.
+ * - `replit.md` → rotação top-2 + one-liners + `replit-history.md`.
+ */
+
+/**
  * Rev. 2416 — **ALMOXARIFADO / INVENTÁRIO VISUAL DE BAIAS ·
  * OPÇÃO "TODAS AS OBRAS" — visão consolidada dos insumos em
  * campo.**

@@ -2336,6 +2336,7 @@ REGRAS:
         id: Number(r.id),
         baiaId: Number(r.baia_id),
         percentual: Number(r.percentual),
+        volumeEstimado: r.volume_estimado != null ? Number(r.volume_estimado) : null,
         fotoUrl: r.foto_url ?? null,
         observacoes: r.observacoes ?? null,
         lidaPorId: r.lida_por_id != null ? Number(r.lida_por_id) : null,
@@ -2501,7 +2502,11 @@ REGRAS:
     .input(z.object({
       companyId: z.number(),
       baiaId: z.number(),
-      percentual: z.number().int().min(0).max(100),
+      // Rev. 2417 — percentual virou OPCIONAL (legado dos 5 níveis Rev. 2373).
+      // O fluxo novo só pede volume estimado em m³/un (campo `volumeEstimado`).
+      // Se nenhum dos dois vier, é erro.
+      percentual: z.number().int().min(0).max(100).optional(),
+      volumeEstimado: z.number().nonnegative().optional(),
       observacoes: z.string().optional(),
       fotoBase64: z.string().optional(),
       fotoMime: z.string().optional(),
@@ -2509,10 +2514,15 @@ REGRAS:
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      // Validar percentual nos 5 níveis canônicos (0/25/50/75/100).
-      const niveis = [0, 25, 50, 75, 100];
-      if (!niveis.includes(input.percentual)) {
-        throw new TRPCError({ code: "BAD_REQUEST", message: "Percentual deve ser 0, 25, 50, 75 ou 100." });
+      if (input.percentual == null && input.volumeEstimado == null) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Informe o volume restante (m³) ou o percentual." });
+      }
+      // Se vier percentual, valida nos 5 níveis canônicos (compat Rev. 2373).
+      if (input.percentual != null) {
+        const niveis = [0, 25, 50, 75, 100];
+        if (!niveis.includes(input.percentual)) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Percentual deve ser 0, 25, 50, 75 ou 100." });
+        }
       }
       const allowedCompanies = await getCompaniesForUser(ctx.user.id, ctx.user.role);
       if (!allowedCompanies.map((c: any) => c.id).includes(input.companyId)) {
@@ -2535,10 +2545,23 @@ REGRAS:
         const { url } = await storagePut(key, buf, input.fotoMime);
         fotoUrl = url;
       }
+      // Rev. 2417 — quando só vem volumeEstimado, deriva percentual aproximado
+      // pra coluna NOT NULL (capacidade opcional → 0 fallback) usando regra
+      // simples min(100, round(vol/cap*100)). Não compromete a verdade — a
+      // verdade é o `volumeEstimado` digitado; percentual fica como bar visual.
+      let percentualFinal: number = input.percentual ?? 0;
+      if (input.percentual == null && input.volumeEstimado != null) {
+        const cap = b.capacidadeEstimada != null ? Number(b.capacidadeEstimada) : 0;
+        if (cap > 0) {
+          const pctRaw = Math.round((Number(input.volumeEstimado) / cap) * 100);
+          percentualFinal = Math.max(0, Math.min(100, pctRaw));
+        }
+      }
       const [novo] = await db.insert(almoxarifadoBaiaLeituras).values({
         companyId: input.companyId,
         baiaId: input.baiaId,
-        percentual: input.percentual,
+        percentual: percentualFinal,
+        volumeEstimado: input.volumeEstimado != null ? String(input.volumeEstimado) : null,
         fotoUrl,
         observacoes: input.observacoes ?? null,
         lidaPorId: ctx.user.id,
@@ -2606,18 +2629,17 @@ REGRAS:
         or(inArray(almoxarifadoItens.obraId, obraIds), isNull(almoxarifadoItens.obraId)),
       ));
 
-      // 2) Heurística de agregado/granel (JS, lista limitada).
-      // Rev. 2415 — heurística ampliada com vocabulário FC (rachão, pó-de-pedra,
-      // areia lavada/peneirada, bica corrida, etc.). Tudo em minúsculas, sem
-      // exigir acento (regex roda case-insensitive sobre o nome bruto).
-      const AGGR_RE = /areia|brita|pedra|pedrisco|p[óo]\s*[- ]?\s*de\s*[- ]?\s*pedra|rach[ãa]o|bica\s*corrida|seixo|lajota|tijolo|bloco|argamass|cimento|cal\b|cal hidrat|saibro|terra|entulho|concreto|agregado|granel|aglomerado|gnaisse|calc[áa]rio/i;
-      const UNI_GRANEL = new Set(["m³", "m3", "t", "ton", "tonelada", "tonelada(s)"]);
-      const itensAgg = itensRows.filter((it: any) => {
-        const nome = String(it.nome ?? "");
-        const cat = String(it.categoria ?? "");
-        const uni = String(it.unidade ?? "").toLowerCase();
-        return AGGR_RE.test(nome) || AGGR_RE.test(cat) || UNI_GRANEL.has(uni);
-      });
+      // Rev. 2417 — filtro AGORA é SÓ pela categoria "Agregados" (decisão user:
+      // "define o seguinte, so vai para baia oque estiver na categoria
+      // agregados ok.. mais facil controlar desta forma"). Heurística por
+      // nome/unidade da Rev. 2415 foi descontinuada — almoxarife controla
+      // explicitamente o que vira baia ao classificar o item.
+      // Tolerante a variações de cadastro: "Agregado", "Agregados", "AGREGADOS ",
+      // "agregado de construção" etc. — basta começar com "agregado".
+      const normalizarCat = (s: any) => String(s ?? "")
+        .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+        .trim().toLowerCase();
+      const itensAgg = itensRows.filter((it: any) => normalizarCat(it.categoria).startsWith("agregado"));
 
       // 3) Baias ativas dessas obras (qualquer baia, com ou sem itemId).
       const baias = await db.select().from(almoxarifadoBaias).where(and(
@@ -2644,7 +2666,7 @@ REGRAS:
       const mapPenult = new Map<number, any>();
       if (baiaIds.length > 0) {
         const ultimas: any = await db.execute(sql`
-          SELECT DISTINCT ON (baia_id) baia_id, id, percentual, foto_url, observacoes,
+          SELECT DISTINCT ON (baia_id) baia_id, id, percentual, volume_estimado, foto_url, observacoes,
                  lida_por_id, lida_por_nome, lida_em
           FROM almoxarifado_baia_leituras
           WHERE baia_id IN (${sql.join(baiaIds.map((id: number) => sql`${id}`), sql`, `)})
@@ -2652,10 +2674,10 @@ REGRAS:
         `);
         for (const r of (ultimas?.rows ?? [])) mapUlt.set(Number(r.baia_id), r);
         const penultimas: any = await db.execute(sql`
-          SELECT baia_id, id, percentual, foto_url, observacoes,
+          SELECT baia_id, id, percentual, volume_estimado, foto_url, observacoes,
                  lida_por_id, lida_por_nome, lida_em
           FROM (
-            SELECT baia_id, id, percentual, foto_url, observacoes,
+            SELECT baia_id, id, percentual, volume_estimado, foto_url, observacoes,
                    lida_por_id, lida_por_nome, lida_em,
                    ROW_NUMBER() OVER (PARTITION BY baia_id ORDER BY lida_em DESC) rn
             FROM almoxarifado_baia_leituras
@@ -2689,12 +2711,21 @@ REGRAS:
         id: Number(r.id),
         baiaId: Number(r.baia_id),
         percentual: Number(r.percentual),
+        volumeEstimado: r.volume_estimado != null ? Number(r.volume_estimado) : null,
         fotoUrl: r.foto_url ?? null,
         observacoes: r.observacoes ?? null,
         lidaPorId: r.lida_por_id != null ? Number(r.lida_por_id) : null,
         lidaPorNome: r.lida_por_nome ?? null,
         lidaEm: r.lida_em ?? null,
       }) : null;
+      // Rev. 2417 — consumo do dia = saldoAnterior + entradaHoje − saldoAtual
+      // (apenas se ambas as leituras existirem e tiverem volume registrado).
+      const calcConsumoHoje = (ult: any, ant: any, entradaHoje: number): number | null => {
+        if (!ult || ult.volumeEstimado == null) return null;
+        if (!ant || ant.volumeEstimado == null) return null;
+        const consumo = Number(ant.volumeEstimado) + Number(entradaHoje || 0) - Number(ult.volumeEstimado);
+        return Math.max(0, Number(consumo.toFixed(3)));
+      };
 
       // 6) Combina: 1 linha por (obra × item agregado) + 1 linha por baia órfã.
       const result: any[] = [];
@@ -2715,6 +2746,9 @@ REGRAS:
         ];
         for (const it of itensDessaObra) {
           const baia = baiaPorObraItem.get(`${obra.id}:${it.id}`);
+          const ult = baia ? toCamel(mapUlt.get(baia.id)) : null;
+          const ant = baia ? toCamel(mapPenult.get(baia.id)) : null;
+          const ent = mapEntradasHoje.get(`${it.id}:${obra.id}`) ?? 0;
           result.push({
             id: baia?.id ?? null,                 // null = baia ainda não criada (1º clique cria)
             itemId: it.id,
@@ -2727,15 +2761,18 @@ REGRAS:
             fotoUrl: baia?.fotoUrl ?? it.fotoUrl ?? null,
             observacoes: baia?.observacoes ?? null,
             quantidadeAtual: Number(it.quantidadeAtual ?? 0),
-            entradaHoje: mapEntradasHoje.get(`${it.id}:${obra.id}`) ?? 0,
+            entradaHoje: ent,
             ativo: true,
             origem: "agregado_auto",
-            ultimaLeitura: baia ? toCamel(mapUlt.get(baia.id)) : null,
-            leituraAnterior: baia ? toCamel(mapPenult.get(baia.id)) : null,
+            ultimaLeitura: ult,
+            leituraAnterior: ant,
+            consumoHoje: calcConsumoHoje(ult, ant, ent),
           });
         }
         // Baias órfãs (sem itemId) dessa obra
         for (const b of (baiasOrfasPorObra.get(obra.id) ?? [])) {
+          const ult = toCamel(mapUlt.get(b.id));
+          const ant = toCamel(mapPenult.get(b.id));
           result.push({
             id: b.id,
             itemId: null,
@@ -2751,8 +2788,9 @@ REGRAS:
             entradaHoje: 0,
             ativo: b.ativo,
             origem: "manual",
-            ultimaLeitura: toCamel(mapUlt.get(b.id)),
-            leituraAnterior: toCamel(mapPenult.get(b.id)),
+            ultimaLeitura: ult,
+            leituraAnterior: ant,
+            consumoHoje: calcConsumoHoje(ult, ant, 0),
           });
         }
       }
@@ -2761,6 +2799,8 @@ REGRAS:
       const itensAggIds = new Set(itensAgg.map((it: any) => it.id));
       for (const b of baias) {
         if (b.itemId != null && !itensAggIds.has(b.itemId)) {
+          const ult = toCamel(mapUlt.get(b.id));
+          const ant = toCamel(mapPenult.get(b.id));
           result.push({
             id: b.id,
             itemId: b.itemId,
@@ -2776,8 +2816,9 @@ REGRAS:
             entradaHoje: 0,
             ativo: b.ativo,
             origem: "manual",
-            ultimaLeitura: toCamel(mapUlt.get(b.id)),
-            leituraAnterior: toCamel(mapPenult.get(b.id)),
+            ultimaLeitura: ult,
+            leituraAnterior: ant,
+            consumoHoje: calcConsumoHoje(ult, ant, 0),
           });
         }
       }

@@ -5935,7 +5935,11 @@ export const almoxarifadoBaiaLeituras = pgTable("almoxarifado_baia_leituras", {
   id:          serial().primaryKey(),
   companyId:   integer("company_id").notNull(),
   baiaId:      integer("baia_id").notNull(),
-  percentual:  integer().notNull(),  // 0, 25, 50, 75, 100
+  percentual:  integer().notNull(),  // 0, 25, 50, 75, 100 (legado Rev. 2373)
+  // Rev. 2417 — VOLUME ESTIMADO em m³/un (digitado pelo almoxarife).
+  // Substitui o "feeling" dos 5 níveis. Permite calcular consumo do dia
+  // = saldoAnteriorVolume + entradaHoje - saldoAtualVolume.
+  volumeEstimado: numeric("volume_estimado", { precision: 14, scale: 3 }),
   fotoUrl:     text("foto_url"),
   observacoes: text(),
   lidaPorId:   integer("lida_por_id"),

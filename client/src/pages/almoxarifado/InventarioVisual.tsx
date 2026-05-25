@@ -16,6 +16,15 @@
 // nesta tela. A baia é criada por baixo dos panos no 1º clique de
 // nível (`baiaAutoEnsureFromItem`). Cadastro manual fica restrito ao
 // modo "Gerenciar" pra casos excepcionais.
+//
+// Rev. 2417 — Filtro AGORA é SÓ pela categoria "Agregados" (decisão
+// user: mais explícito, sem heurística por nome). Substituídos os 5
+// botões de % (VAZIA/1-4/METADE/3-4/CHEIA) por:
+//   1) Foto da baia (recomendada, mas opcional)
+//   2) Input numérico "Volume restante (m³/un)"
+//   3) Display do consumo do dia = saldoAnterior + entradaHoje − saldoAtual
+// O percentual da Rev. 2373 continua sendo persistido (derivado da
+// capacidade) só pro bar visual e compat — a verdade é o volume digitado.
 import DashboardLayout from "@/components/DashboardLayout";
 import { useState, useMemo } from "react";
 import { trpc } from "@/lib/trpc";
@@ -35,14 +44,7 @@ import {
 } from "@/components/ui/dialog";
 import { compressImageIfNeeded } from "@/lib/imageCompress";
 
-const NIVEIS = [
-  { pct: 0,   label: "VAZIA",   curto: "0",     cor: "bg-red-600 hover:bg-red-700 ring-red-300",       texto: "text-white" },
-  { pct: 25,  label: "1/4",     curto: "25%",   cor: "bg-orange-500 hover:bg-orange-600 ring-orange-300", texto: "text-white" },
-  { pct: 50,  label: "METADE",  curto: "50%",   cor: "bg-amber-500 hover:bg-amber-600 ring-amber-300",    texto: "text-white" },
-  { pct: 75,  label: "3/4",     curto: "75%",   cor: "bg-lime-600 hover:bg-lime-700 ring-lime-300",       texto: "text-white" },
-  { pct: 100, label: "CHEIA",   curto: "100%",  cor: "bg-emerald-600 hover:bg-emerald-700 ring-emerald-300", texto: "text-white" },
-] as const;
-
+// Rev. 2373 (legado, ainda usado pelo histórico p/ leituras antigas só com %).
 function corPorPct(pct: number | null | undefined) {
   if (pct == null) return "bg-slate-300";
   if (pct === 0) return "bg-red-600";
@@ -113,7 +115,8 @@ export default function InventarioVisualBaias() {
   const [uploadingFoto, setUploadingFoto] = useState(false);
 
   const [leituraBaia, setLeituraBaia] = useState<any | null>(null);
-  const [leituraPct, setLeituraPct] = useState<number | null>(null);
+  // Rev. 2417 — input numérico (string p/ não brigar com vírgula/zero) substitui os 5 níveis.
+  const [leituraVolume, setLeituraVolume] = useState<string>("");
   const [leituraObs, setLeituraObs] = useState("");
   const [leituraFoto, setLeituraFoto] = useState<File | null>(null);
 
@@ -196,17 +199,26 @@ export default function InventarioVisualBaias() {
     } finally { setUploadingFoto(false); }
   }
 
-  function abrirLeitura(baia: any, pct: number) {
+  function abrirLeitura(baia: any) {
     setLeituraBaia(baia);
-    setLeituraPct(pct);
+    // Pré-popula com o último volume registrado (almoxarife normalmente
+    // só ajusta um pouco a partir do anterior — economiza digitação).
+    const ultVol = baia?.ultimaLeitura?.volumeEstimado;
+    setLeituraVolume(ultVol != null ? String(ultVol).replace(".", ",") : "");
     setLeituraObs("");
     setLeituraFoto(null);
   }
   function fecharLeitura() {
-    setLeituraBaia(null); setLeituraPct(null); setLeituraObs(""); setLeituraFoto(null);
+    setLeituraBaia(null); setLeituraVolume(""); setLeituraObs(""); setLeituraFoto(null);
   }
   async function confirmarLeitura() {
-    if (!leituraBaia || leituraPct == null) return;
+    if (!leituraBaia) return;
+    // Aceita vírgula ou ponto. Rejeita vazio/NaN/negativo.
+    const volNum = parseFloat(String(leituraVolume).replace(",", "."));
+    if (!isFinite(volNum) || volNum < 0) {
+      toast.error("Digite um volume válido (ex: 12,5).");
+      return;
+    }
     try {
       // Rev. 2415 — se item agregado ainda não tem baia (id=null),
       // cria a baia automaticamente antes de registrar a leitura.
@@ -229,12 +241,20 @@ export default function InventarioVisualBaias() {
         const c = await compressImageIfNeeded(leituraFoto);
         fotoB64 = c.base64; fotoMime = c.contentType;
       }
+      // Rev. 2417 — manda volumeEstimado (o backend deriva o percentual
+      // pra coluna NOT NULL caso a baia tenha capacidadeEstimada).
       await leituraMut.mutateAsync({
-        companyId, baiaId, percentual: leituraPct,
+        companyId, baiaId, volumeEstimado: volNum,
         observacoes: leituraObs.trim() || undefined,
         fotoBase64: fotoB64, fotoMime,
       });
     } catch (e: any) { toast.error(e?.message || "Falha"); }
+  }
+
+  // Helpers Rev. 2417 — formata número com vírgula e até 3 casas.
+  function fmtNum(n: number | null | undefined, dec = 2): string {
+    if (n == null || !isFinite(Number(n))) return "—";
+    return Number(n).toLocaleString("pt-BR", { minimumFractionDigits: 0, maximumFractionDigits: dec });
   }
 
   // Rev. 2414 — sessão DIÁRIA derivada das próprias leituras.
@@ -268,6 +288,11 @@ export default function InventarioVisualBaias() {
     const semBaia = b.id == null;
     const entradaHoje = Number(b.entradaHoje ?? 0);
     const qtdAtual = Number(b.quantidadeAtual ?? 0);
+    // Rev. 2417 — saldo da baia em volume (digitado pelo almoxarife) +
+    // consumo do dia já calculado no backend.
+    const volAtual: number | null = ult?.volumeEstimado != null ? Number(ult.volumeEstimado) : null;
+    const volAnt: number | null = ant?.volumeEstimado != null ? Number(ant.volumeEstimado) : null;
+    const consumoHoje: number | null = b.consumoHoje != null ? Number(b.consumoHoje) : null;
     return (
       <div
         key={b.id ?? `item-${b.itemId}`}
@@ -343,28 +368,47 @@ export default function InventarioVisualBaias() {
             </div>
           )}
         </div>
-        {/* 5 botões grandes */}
-        <div className="p-3">
-          <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wide mb-2">
-            {conferida ? "Refazer leitura?" : semBaia ? "Quanto restou na baia?" : "Como está agora?"}
-          </p>
-          <div className="grid grid-cols-5 gap-1.5">
-            {NIVEIS.map(n => (
-              <button
-                key={n.pct}
-                onClick={() => abrirLeitura(b, n.pct)}
-                className={`${n.cor} ${n.texto} rounded-lg py-3 px-1 font-bold text-[11px] sm:text-xs shadow-sm hover:shadow active:scale-95 transition-all ring-2 ring-transparent hover:ring-offset-1 ${pctAtual === n.pct ? "ring-offset-2 " + n.cor.split(" ").pop() : ""}`}
-                title={`Marcar como ${n.label}`}
-              >
-                <div className="leading-tight">{n.label}</div>
-                <div className="text-[9px] opacity-80 font-medium">{n.curto}</div>
-              </button>
-            ))}
+        {/* Rev. 2417 — Painel de volume: chegou hoje / restante / consumo */}
+        <div className="p-3 space-y-2">
+          <div className="grid grid-cols-3 gap-1.5 text-center">
+            <div className="rounded-md bg-sky-50 border border-sky-100 px-1 py-1.5">
+              <div className="text-[9px] uppercase tracking-wide text-sky-700 font-bold">Chegou hoje</div>
+              <div className="text-sm font-black text-sky-900 leading-tight">
+                {entradaHoje > 0 ? `+${fmtNum(entradaHoje)}` : "—"}
+              </div>
+              <div className="text-[9px] text-sky-600">{b.unidade}</div>
+            </div>
+            <div className="rounded-md bg-emerald-50 border border-emerald-100 px-1 py-1.5">
+              <div className="text-[9px] uppercase tracking-wide text-emerald-700 font-bold">Restante</div>
+              <div className="text-sm font-black text-emerald-900 leading-tight">{fmtNum(volAtual)}</div>
+              <div className="text-[9px] text-emerald-600">{b.unidade}</div>
+            </div>
+            <div className="rounded-md bg-amber-50 border border-amber-100 px-1 py-1.5">
+              <div className="text-[9px] uppercase tracking-wide text-amber-700 font-bold">Consumo dia</div>
+              <div className="text-sm font-black text-amber-900 leading-tight">{fmtNum(consumoHoje)}</div>
+              <div className="text-[9px] text-amber-600">{b.unidade}</div>
+            </div>
           </div>
+          {volAnt != null && (
+            <div className="text-[10px] text-slate-500 text-center">
+              Última leitura: <span className="font-semibold text-slate-700">{fmtNum(volAnt)} {b.unidade}</span>
+              {ant?.lidaEm && <> · {fmtData(ant.lidaEm)}</>}
+            </div>
+          )}
+          <button
+            onClick={() => abrirLeitura(b)}
+            className={`w-full rounded-lg py-2.5 font-bold text-sm shadow-sm hover:shadow active:scale-[0.98] transition-all flex items-center justify-center gap-1.5 ${
+              conferida
+                ? "bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200"
+                : "bg-amber-500 text-white hover:bg-amber-600"
+            }`}
+          >
+            {conferida ? <><History className="w-4 h-4" /> Refazer leitura</> : <><ClipboardList className="w-4 h-4" /> Registrar baixa</>}
+          </button>
           {!semBaia && (
             <button
               onClick={() => setHistoricoBaia(b)}
-              className="mt-2 w-full text-[11px] text-slate-500 hover:text-slate-800 flex items-center justify-center gap-1 py-1"
+              className="w-full text-[11px] text-slate-500 hover:text-slate-800 flex items-center justify-center gap-1 py-0.5"
             >
               <History className="w-3 h-3" /> Ver histórico
             </button>
@@ -711,16 +755,38 @@ export default function InventarioVisualBaias() {
         </DialogContent>
       </Dialog>
 
-      {/* Modal Confirmar leitura */}
+      {/* Modal Confirmar leitura — Rev. 2417: volume + foto + obs */}
       <Dialog open={!!leituraBaia} onOpenChange={v => !v && fecharLeitura()}>
         <DialogContent className="max-w-md">
-          <DialogHeader><DialogTitle>Confirmar leitura</DialogTitle></DialogHeader>
-          {leituraBaia && leituraPct != null && (
+          <DialogHeader><DialogTitle>Registrar baixa da baia</DialogTitle></DialogHeader>
+          {leituraBaia && (
             <div className="space-y-3">
-              <div className={`rounded-xl p-4 ${corPorPct(leituraPct)} text-white text-center`}>
+              <div className="rounded-xl p-4 bg-gradient-to-br from-amber-500 to-orange-600 text-white">
                 <p className="text-xs uppercase tracking-wide opacity-90">{leituraBaia.nome}</p>
-                <p className="text-3xl font-black mt-1">{NIVEIS.find(n => n.pct === leituraPct)?.label}</p>
-                <p className="text-sm opacity-90">{leituraPct}%</p>
+                <p className="text-base font-semibold opacity-95">{leituraBaia.material}</p>
+                {leituraBaia.ultimaLeitura?.volumeEstimado != null && (
+                  <p className="text-xs mt-2 opacity-90">
+                    Última leitura: <span className="font-bold">{fmtNum(Number(leituraBaia.ultimaLeitura.volumeEstimado))} {leituraBaia.unidade}</span>
+                  </p>
+                )}
+                {Number(leituraBaia.entradaHoje ?? 0) > 0 && (
+                  <p className="text-xs opacity-90">
+                    Chegou hoje: <span className="font-bold">+{fmtNum(Number(leituraBaia.entradaHoje))} {leituraBaia.unidade}</span>
+                  </p>
+                )}
+              </div>
+              <div>
+                <Label className="text-xs font-bold">Quanto restou na baia agora? ({leituraBaia.unidade})</Label>
+                <Input
+                  type="text"
+                  inputMode="decimal"
+                  autoFocus
+                  value={leituraVolume}
+                  onChange={e => setLeituraVolume(e.target.value)}
+                  placeholder={`Ex: 12,5 ${leituraBaia.unidade}`}
+                  className="mt-1 text-lg font-bold h-12 text-center"
+                />
+                <p className="text-[11px] text-slate-500 mt-1">Estime visualmente o volume que ainda está na baia.</p>
               </div>
               <div>
                 <Label className="text-xs">Foto da baia (opcional, mas recomendado)</Label>
@@ -760,21 +826,31 @@ export default function InventarioVisualBaias() {
           <div className="space-y-2">
             {historicoLeituras.length === 0 ? (
               <p className="text-sm text-slate-500 italic text-center py-6">Nenhuma leitura ainda.</p>
-            ) : historicoLeituras.map((l: any) => (
-              <div key={l.id} className="flex items-start gap-3 p-3 border border-slate-200 rounded-lg">
-                <div className={`${corPorPct(Number(l.percentual))} text-white font-bold text-sm rounded-lg w-14 h-14 flex flex-col items-center justify-center flex-shrink-0`}>
-                  <span className="text-lg leading-none">{l.percentual}%</span>
+            ) : historicoLeituras.map((l: any) => {
+              const vol = l.volumeEstimado != null ? Number(l.volumeEstimado) : null;
+              return (
+                <div key={l.id} className="flex items-start gap-3 p-3 border border-slate-200 rounded-lg">
+                  <div className={`${corPorPct(Number(l.percentual))} text-white font-bold rounded-lg w-16 h-16 flex flex-col items-center justify-center flex-shrink-0`}>
+                    {vol != null ? (
+                      <>
+                        <span className="text-base leading-none">{fmtNum(vol)}</span>
+                        <span className="text-[9px] opacity-90 mt-0.5">{historicoBaia?.unidade ?? ""}</span>
+                      </>
+                    ) : (
+                      <span className="text-lg leading-none">{l.percentual}%</span>
+                    )}
+                  </div>
+                  {l.fotoUrl && (
+                    <img src={l.fotoUrl} alt="" className="w-14 h-14 rounded-lg object-cover flex-shrink-0" />
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-slate-900 truncate">{l.lidaPorNome || "—"}</p>
+                    <p className="text-xs text-slate-500">{fmtData(l.lidaEm)}</p>
+                    {l.observacoes && <p className="text-xs text-slate-700 mt-1 italic">{l.observacoes}</p>}
+                  </div>
                 </div>
-                {l.fotoUrl && (
-                  <img src={l.fotoUrl} alt="" className="w-14 h-14 rounded-lg object-cover flex-shrink-0" />
-                )}
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-slate-900 truncate">{l.lidaPorNome || "—"}</p>
-                  <p className="text-xs text-slate-500">{fmtData(l.lidaEm)}</p>
-                  {l.observacoes && <p className="text-xs text-slate-700 mt-1 italic">{l.observacoes}</p>}
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </DialogContent>
       </Dialog>

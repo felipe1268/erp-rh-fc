@@ -2086,7 +2086,9 @@ Regras:
           `);
           await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_almox_baia_leit_baia ON almoxarifado_baia_leituras (baia_id, lida_em DESC)`);
           await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_almox_baia_leit_company ON almoxarifado_baia_leituras (company_id, lida_em DESC)`);
-          console.log(`[SyncSchema+] Rev. 2373: tabelas almoxarifado_baias + almoxarifado_baia_leituras garantidas (inventário visual de granel).`);
+          // Rev. 2417 — coluna volume_estimado garantida (volume digitado em m³).
+          await db.execute(sql`ALTER TABLE almoxarifado_baia_leituras ADD COLUMN IF NOT EXISTS volume_estimado NUMERIC(14,3)`);
+          console.log(`[SyncSchema+] Rev. 2373/2417: tabelas almoxarifado_baias + almoxarifado_baia_leituras garantidas (inventário visual de granel + volume_estimado).`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.2319/2340/2355/2373 equipamentos_locados+baias (CREATE):`, e?.message || e); }
 
         // ── Rev. 2260 — Backfill `previsto_msp_pct` em obras antigas ──────
