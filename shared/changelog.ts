@@ -1,6 +1,49 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2399 — **FINANCEIRO/LANÇAMENTOS · Filtro por período LIVRE
+ * (calendário aberto, passado E futuro) substitui o dropdown de mês.**
+ *
+ * Pedido user (IMG_image_1779708822339, 25/05/2026): "todos os que eu
+ * lancei não aparece fica zerado, mas aparece no contas a pagar.
+ * Referente a data ela se limita no mês atual, preciso que deixe o
+ * campo aberto em calendário para que eu possa selecionar um período
+ * específico, podendo ser tanto de meses atrás, quanto meses à frente."
+ *
+ * Causa-raiz: o filtro padrão de Lançamentos era `mesCompetencia` (mês
+ * único via dropdown). O dropdown só listava os ÚLTIMOS 12 meses
+ * (`d.setMonth(d.getMonth() - i)`) — então lançamentos com
+ * `data_competencia` em mês futuro (ex: jun/2026 enquanto estamos em
+ * mai/2026) não tinham nem como ser selecionados. Resultado: cards
+ * "R$ 0,00" e "Nenhum lançamento encontrado" embora os mesmos títulos
+ * aparecessem em Contas a Pagar (que tem outro filtro).
+ *
+ * Solução: trocar o Select de mês por seletor de PERÍODO (dataInicio +
+ * dataFim) usando `<Input type="date">` nativo — sem teto/piso, user
+ * navega o calendário pra qualquer ano. O endpoint `financial.getEntries`
+ * já aceitava `dataInicio`/`dataFim` (filtro `e.data_competencia>=$`/
+ * `e.data_competencia<=$` em `server/routers/financial.ts` L509-510), só
+ * não estava sendo usado pelo client.
+ *
+ * **Frontend** (`client/src/pages/financeiro/FinanceiroLancamentos.tsx`):
+ *   - Novos helpers `getPrimeiroDiaMes()` / `getUltimoDiaMes()`
+ *     (formato YYYY-MM-DD, calendário do navegador é nativo).
+ *   - State `mes` removido → 2 states `dataInicio` (default = 1º dia do
+ *     mês atual) + `dataFim` (default = último dia do mês atual).
+ *   - `getEntries.useQuery`: passa `dataInicio`/`dataFim` em vez de
+ *     `mesCompetencia`; `limit` subiu de 200 → 500 (períodos longos
+ *     podem ter muito mais entries).
+ *   - Array `meses` (12 últimos) removido (não usado mais).
+ *   - Toolbar de filtros: 2 `<Input type="date">` (De / Até, labels
+ *     uppercase 10px) + 4 atalhos `Button outline sm` ("Mês anterior",
+ *     "Mês atual", "Próximo mês", "Ano todo") que setam ambos os states
+ *     de uma vez. Tipo + Status + Busca preservados.
+ *
+ * Zero mudança em backend (filtros pré-existentes). Default de UX
+ * mantém o mês atual (não muda comportamento padrão de quem já estava
+ * acostumado), mas agora qualquer período é possível. R-001/R-007/
+ * R-010 OK.
+ *
  * Rev. 2398 — **FINANCEIRO/LANÇAMENTOS · Botões de Editar e Excluir em
  * cada linha da lista de lançamentos (aba "Lançamentos").**
  *

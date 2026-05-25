@@ -36,6 +36,17 @@ function getMesAtual() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 }
 
+// Rev. 2399 — período livre (calendário aberto, passado E futuro).
+function getPrimeiroDiaMes() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
+}
+function getUltimoDiaMes() {
+  const d = new Date();
+  const last = new Date(d.getFullYear(), d.getMonth() + 1, 0);
+  return `${last.getFullYear()}-${String(last.getMonth() + 1).padStart(2, "0")}-${String(last.getDate()).padStart(2, "0")}`;
+}
+
 const STATUS_COLORS: Record<string, string> = {
   previsto: "bg-gray-100 text-gray-700",
   a_pagar: "bg-orange-100 text-orange-700",
@@ -84,7 +95,9 @@ export default function FinanceiroLancamentos() {
   const { toast } = useToast();
 
   const [aba, setAba] = useState<"lancamentos" | "recorrencias">("lancamentos");
-  const [mes, setMes] = useState(getMesAtual());
+  // Rev. 2399 — filtro por PERÍODO LIVRE (passado E futuro). Default = mês atual.
+  const [dataInicio, setDataInicio] = useState(getPrimeiroDiaMes());
+  const [dataFim, setDataFim] = useState(getUltimoDiaMes());
   const [tipo, setTipo] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
   const [search, setSearch] = useState("");
@@ -104,7 +117,15 @@ export default function FinanceiroLancamentos() {
   const [catForm, setCatForm] = useState({ nome: "", natureza: "variavel" as string, centroCustoId: "" as string });
 
   const { data, isLoading, refetch } = (trpc as any).financial.getEntries.useQuery(
-    { companyId, mesCompetencia: mes, tipo: tipo !== "all" ? tipo : undefined, status: statusFilter !== "all" ? statusFilter : undefined, limit: 200, offset: 0 },
+    {
+      companyId,
+      dataInicio: dataInicio || undefined,
+      dataFim: dataFim || undefined,
+      tipo: tipo !== "all" ? tipo : undefined,
+      status: statusFilter !== "all" ? statusFilter : undefined,
+      limit: 500,
+      offset: 0,
+    },
     { enabled: !!companyId }
   );
 
@@ -410,11 +431,30 @@ export default function FinanceiroLancamentos() {
     return (l.descricao ?? "").toLowerCase().includes(q) || (l.obraNome ?? "").toLowerCase().includes(q) || (l.contaNome ?? "").toLowerCase().includes(q);
   });
 
-  const meses = Array.from({ length: 12 }, (_, i) => {
+  // Rev. 2399 — atalhos de período (cliques rápidos).
+  function setPeriodoMesAtual() {
+    setDataInicio(getPrimeiroDiaMes());
+    setDataFim(getUltimoDiaMes());
+  }
+  function setPeriodoMesProximo() {
     const d = new Date();
-    d.setMonth(d.getMonth() - i);
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-  });
+    const pri = new Date(d.getFullYear(), d.getMonth() + 1, 1);
+    const ult = new Date(d.getFullYear(), d.getMonth() + 2, 0);
+    setDataInicio(`${pri.getFullYear()}-${String(pri.getMonth() + 1).padStart(2, "0")}-01`);
+    setDataFim(`${ult.getFullYear()}-${String(ult.getMonth() + 1).padStart(2, "0")}-${String(ult.getDate()).padStart(2, "0")}`);
+  }
+  function setPeriodoMesAnterior() {
+    const d = new Date();
+    const pri = new Date(d.getFullYear(), d.getMonth() - 1, 1);
+    const ult = new Date(d.getFullYear(), d.getMonth(), 0);
+    setDataInicio(`${pri.getFullYear()}-${String(pri.getMonth() + 1).padStart(2, "0")}-01`);
+    setDataFim(`${ult.getFullYear()}-${String(ult.getMonth() + 1).padStart(2, "0")}-${String(ult.getDate()).padStart(2, "0")}`);
+  }
+  function setPeriodoAnoAtual() {
+    const y = new Date().getFullYear();
+    setDataInicio(`${y}-01-01`);
+    setDataFim(`${y}-12-31`);
+  }
 
   const totalReceitas = lancamentos.filter((l: any) => l.tipo === "receita" && l.status !== "cancelado").reduce((s: number, l: any) => s + Number(l.valorPrevisto ?? 0), 0);
   const totalDespesas = lancamentos.filter((l: any) => l.tipo === "despesa" && l.status !== "cancelado").reduce((s: number, l: any) => s + Number(l.valorPrevisto ?? 0), 0);
@@ -512,13 +552,40 @@ export default function FinanceiroLancamentos() {
 
             <Card className="border-0 shadow-sm">
               <CardContent className="p-4">
-                <div className="flex flex-wrap gap-3">
-                  <Select value={mes} onValueChange={setMes}>
-                    <SelectTrigger className="w-36"><SelectValue placeholder="Mês" /></SelectTrigger>
-                    <SelectContent>
-                      {meses.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
+                <div className="flex flex-wrap gap-3 items-end">
+                  {/* Rev. 2399 — Período livre (calendário aberto, passado E futuro). */}
+                  <div className="flex flex-col">
+                    <label className="text-[10px] font-medium text-gray-500 uppercase tracking-wide mb-1">De</label>
+                    <Input
+                      type="date"
+                      value={dataInicio}
+                      onChange={(e) => setDataInicio(e.target.value)}
+                      className="w-[150px] h-9"
+                    />
+                  </div>
+                  <div className="flex flex-col">
+                    <label className="text-[10px] font-medium text-gray-500 uppercase tracking-wide mb-1">Até</label>
+                    <Input
+                      type="date"
+                      value={dataFim}
+                      onChange={(e) => setDataFim(e.target.value)}
+                      className="w-[150px] h-9"
+                    />
+                  </div>
+                  <div className="flex gap-1 items-center">
+                    <Button type="button" variant="outline" size="sm" className="h-9 text-xs" onClick={setPeriodoMesAnterior}>
+                      Mês anterior
+                    </Button>
+                    <Button type="button" variant="outline" size="sm" className="h-9 text-xs" onClick={setPeriodoMesAtual}>
+                      Mês atual
+                    </Button>
+                    <Button type="button" variant="outline" size="sm" className="h-9 text-xs" onClick={setPeriodoMesProximo}>
+                      Próximo mês
+                    </Button>
+                    <Button type="button" variant="outline" size="sm" className="h-9 text-xs" onClick={setPeriodoAnoAtual}>
+                      Ano todo
+                    </Button>
+                  </div>
                   <Select value={tipo} onValueChange={setTipo}>
                     <SelectTrigger className="w-36"><SelectValue placeholder="Tipo" /></SelectTrigger>
                     <SelectContent>
