@@ -417,8 +417,32 @@ export default function EquipamentosLocados() {
   // modalDev (fluxo de devolução já existente).
   const [pickerDevolver, setPickerDevolver] = useState(false);
   const [pickerDevolverBusca, setPickerDevolverBusca] = useState("");
+  // Rev. 2420 — multi-seleção dentro do picker. Set<id> dos equipamentos
+  // marcados pra devolução em lote. Tap no card alterna; botão "DEVOLVER
+  // ESTE" do footer do card preserva o fluxo "1 toque, modalDev direto".
+  const [selecionadosLote, setSelecionadosLote] = useState<Set<number>>(new Set());
+  const [modalDevLote, setModalDevLote] = useState<any[] | null>(null);
+  const [devLoteData, setDevLoteData] = useState<string>(new Date().toISOString().slice(0, 10));
+  const [devLoteFotos, setDevLoteFotos] = useState<FotoItem[]>([]);
+  const [devLoteObs, setDevLoteObs] = useState<string>("");
   const devolver = trpc.equipamentos.locadoDevolver.useMutation({
     onSuccess: () => { utils.equipamentos.locadosListar.invalidate(); setModalDev(null); setDevFotos([]); toast.success("Equipamento devolvido."); },
+    onError: (e) => toast.error(e.message),
+  });
+  const devolverLote = trpc.equipamentos.locadoDevolverEmLote.useMutation({
+    onSuccess: (res) => {
+      utils.equipamentos.locadosListar.invalidate();
+      setModalDevLote(null);
+      setDevLoteFotos([]);
+      setDevLoteObs("");
+      setSelecionadosLote(new Set());
+      setPickerDevolver(false);
+      if (res.falhas.length === 0) {
+        toast.success(`${res.ok.length} equipamento(s) devolvido(s).`);
+      } else {
+        toast.warning(`${res.ok.length} devolvido(s) · ${res.falhas.length} falha(s): ${res.falhas.slice(0, 3).map(f => `#${f.id} (${f.erro})`).join(", ")}${res.falhas.length > 3 ? "…" : ""}`);
+      }
+    },
     onError: (e) => toast.error(e.message),
   });
   const checkIn = trpc.equipamentos.locadoCheckIn.useMutation({
@@ -932,6 +956,18 @@ export default function EquipamentosLocados() {
   }
   function fazerCheckIn() {
     checkIn.mutate({ companyId, id: modalCheckin.id, observacao: checkinObs || undefined });
+  }
+  // Rev. 2420 — dispara devolução em lote dos ids em `modalDevLote`.
+  function fazerDevolucaoLote() {
+    if (!modalDevLote || modalDevLote.length === 0) return;
+    if (devLoteFotos.length === 0) return toast.error("Foto de devolução é obrigatória.");
+    devolverLote.mutate({
+      companyId,
+      ids: modalDevLote.map((l: any) => Number(l.id)),
+      dataFimReal: devLoteData,
+      fotosDevolucao: devLoteFotos,
+      observacao: devLoteObs || undefined,
+    });
   }
 
   // Rev. 2361 — stats lê de `dataPorCat` (pré-vencimento) pra que os contadores
@@ -2392,6 +2428,13 @@ export default function EquipamentosLocados() {
           baixa familiaridade — botão único enorme por card, sem busca
           obrigatória, sem rolagem horizontal, sem filtros adicionais. */}
       {pickerDevolver && (() => {
+        // Rev. 2420 — picker com MULTI-SELEÇÃO. Tap no card alterna seleção;
+        // botão "DEVOLVER ESTE" do card preserva atalho single (1-toque).
+        // Sticky bar inferior surge quando há ≥1 selecionado, com CTA grande
+        // "Devolver N selecionados" → abre `modalDevLote` (1 data, 1 foto,
+        // 1 obs comuns). Lista vem do `locadosListar` que já filtra por
+        // obras permitidas (Rev. 2420 backend) — encarregado de obra A não
+        // vê mais equipamento de obra B aqui.
         const emUso = (dataAll as any[]).filter(l => l.status === "em_uso");
         const hoje = Date.now();
         const busca = pickerDevolverBusca.trim().toLowerCase();
@@ -2408,13 +2451,42 @@ export default function EquipamentosLocados() {
           const fb = new Date(b.dataFimPrevista || 0).getTime() || Infinity;
           return fa - fb;
         });
-        function escolher(l: any) {
+        function escolherSingle(l: any) {
           setPickerDevolver(false);
           setModalDev(l);
           setDevFotos([]);
           setDevObs("");
           setDevData(new Date().toISOString().slice(0, 10));
         }
+        function toggleSelecionado(id: number) {
+          setSelecionadosLote(prev => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id); else next.add(id);
+            return next;
+          });
+        }
+        const idsVisiveis = ordenados.map(l => Number(l.id));
+        const todosVisiveisSelecionados = idsVisiveis.length > 0 && idsVisiveis.every(id => selecionadosLote.has(id));
+        function toggleSelecionarTodosVisiveis() {
+          setSelecionadosLote(prev => {
+            const next = new Set(prev);
+            if (todosVisiveisSelecionados) {
+              for (const id of idsVisiveis) next.delete(id);
+            } else {
+              for (const id of idsVisiveis) next.add(id);
+            }
+            return next;
+          });
+        }
+        function abrirModalDevLote() {
+          const selecionados = (dataAll as any[]).filter(l => selecionadosLote.has(Number(l.id)) && l.status === "em_uso");
+          if (selecionados.length === 0) return;
+          setModalDevLote(selecionados);
+          setDevLoteFotos([]);
+          setDevLoteObs("");
+          setDevLoteData(new Date().toISOString().slice(0, 10));
+        }
+        const qtdSel = selecionadosLote.size;
         return (
           <div className="fixed inset-0 bg-black/60 z-50 flex items-stretch justify-center p-0 sm:p-4" onClick={() => setPickerDevolver(false)}>
             <div className="bg-white sm:rounded-2xl shadow-2xl w-full max-w-5xl max-h-full sm:max-h-[92vh] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
@@ -2424,7 +2496,7 @@ export default function EquipamentosLocados() {
                   <div className="bg-white/20 rounded-xl p-2.5 flex-shrink-0"><RotateCcw className="h-6 w-6" /></div>
                   <div className="min-w-0">
                     <h2 className="font-bold text-lg sm:text-xl leading-tight truncate">Qual equipamento vai devolver?</h2>
-                    <p className="text-[12px] sm:text-sm text-orange-50 leading-tight">Toque no equipamento certo. Depois é só tirar a foto e confirmar.</p>
+                    <p className="text-[12px] sm:text-sm text-orange-50 leading-tight">Toque pra selecionar vários (ou use <b>DEVOLVER ESTE</b> pra 1 só).</p>
                   </div>
                 </div>
                 <button onClick={() => setPickerDevolver(false)} className="bg-white/20 hover:bg-white/30 rounded-full p-2 flex-shrink-0" aria-label="Fechar">
@@ -2432,9 +2504,9 @@ export default function EquipamentosLocados() {
                 </button>
               </div>
 
-              {/* Busca grande (opcional) */}
-              {emUso.length > 6 && (
-                <div className="px-4 sm:px-5 pt-3 pb-1 bg-orange-50/40 border-b border-orange-100">
+              {/* Busca + selecionar todos */}
+              <div className="px-4 sm:px-5 pt-3 pb-2 bg-orange-50/40 border-b border-orange-100 space-y-2">
+                {emUso.length > 6 && (
                   <div className="relative">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-orange-500" />
                     <input
@@ -2450,8 +2522,27 @@ export default function EquipamentosLocados() {
                       </button>
                     )}
                   </div>
-                </div>
-              )}
+                )}
+                {ordenados.length > 0 && (
+                  <div className="flex items-center justify-between gap-2 text-[12px] sm:text-sm">
+                    <button
+                      onClick={toggleSelecionarTodosVisiveis}
+                      className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border-2 border-orange-300 bg-white hover:bg-orange-50 text-orange-800 font-semibold transition">
+                      <span className={`inline-flex items-center justify-center w-5 h-5 rounded border-2 ${todosVisiveisSelecionados ? "bg-orange-500 border-orange-500 text-white" : "border-orange-400 bg-white"}`}>
+                        {todosVisiveisSelecionados && <Check className="h-3.5 w-3.5" />}
+                      </span>
+                      {todosVisiveisSelecionados ? "Desmarcar todos visíveis" : `Selecionar todos visíveis (${idsVisiveis.length})`}
+                    </button>
+                    {qtdSel > 0 && (
+                      <button
+                        onClick={() => setSelecionadosLote(new Set())}
+                        className="text-slate-600 hover:text-slate-900 underline underline-offset-2">
+                        Limpar seleção ({qtdSel})
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
 
               {/* Lista de cards GRANDES */}
               <div className="flex-1 overflow-y-auto p-3 sm:p-5">
@@ -2488,11 +2579,16 @@ export default function EquipamentosLocados() {
                         : vencendo5
                         ? "VENCE EM BREVE"
                         : "EM USO";
+                      const isSel = selecionadosLote.has(Number(l.id));
                       return (
-                        <button
+                        <div
                           key={l.id}
-                          onClick={() => escolher(l)}
-                          className="group relative text-left bg-white border-2 border-slate-200 hover:border-orange-500 hover:shadow-lg rounded-2xl overflow-hidden transition active:scale-[0.98]">
+                          onClick={() => toggleSelecionado(Number(l.id))}
+                          className={`group relative text-left bg-white border-2 hover:shadow-lg rounded-2xl overflow-hidden transition active:scale-[0.98] cursor-pointer ${isSel ? "border-orange-500 ring-4 ring-orange-200 shadow-md" : "border-slate-200 hover:border-orange-400"}`}>
+                          {/* Checkbox grande no canto */}
+                          <div className={`absolute top-2 right-2 z-10 w-9 h-9 rounded-xl border-2 flex items-center justify-center shadow ${isSel ? "bg-orange-500 border-orange-500 text-white" : "bg-white/90 border-slate-300 text-transparent"}`}>
+                            <Check className="h-5 w-5" />
+                          </div>
                           <div className="flex gap-3 p-3">
                             {/* Foto grande quadrada */}
                             <div className="w-28 h-28 sm:w-32 sm:h-32 flex-shrink-0 rounded-xl overflow-hidden bg-slate-100 ring-1 ring-slate-200 flex items-center justify-center">
@@ -2502,7 +2598,7 @@ export default function EquipamentosLocados() {
                                 <Camera className="h-10 w-10 text-slate-300" />
                               )}
                             </div>
-                            <div className="flex-1 min-w-0">
+                            <div className="flex-1 min-w-0 pr-10">
                               <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wider ${badgeTint} mb-1`}>{badgeText}</span>
                               <div className="font-bold text-base sm:text-lg text-slate-900 leading-tight line-clamp-2">
                                 {l.descricao || "(sem descrição)"}
@@ -2540,35 +2636,87 @@ export default function EquipamentosLocados() {
                               </div>
                             </div>
                           </div>
-                          {/* Footer "ESTE AQUI" — botão visual grande, todo o card é clicável */}
-                          <div className="px-4 py-2.5 bg-orange-50 group-hover:bg-orange-100 border-t border-orange-100 flex items-center justify-between transition">
+                          {/* Footer "DEVOLVER ESTE" — atalho 1-toque (single), não conta a seleção */}
+                          <button
+                            onClick={(e) => { e.stopPropagation(); escolherSingle(l); }}
+                            className="w-full px-4 py-2.5 bg-orange-50 hover:bg-orange-100 border-t border-orange-100 flex items-center justify-between transition">
                             <span className="text-orange-800 font-bold text-sm tracking-wide">DEVOLVER ESTE</span>
-                            <div className="bg-orange-500 group-hover:bg-orange-600 text-white rounded-full p-1.5 transition">
+                            <div className="bg-orange-500 hover:bg-orange-600 text-white rounded-full p-1.5 transition">
                               <RotateCcw className="h-4 w-4" />
                             </div>
-                          </div>
-                        </button>
+                          </button>
+                        </div>
                       );
                     })}
                   </div>
                 )}
               </div>
 
-              {/* Footer com contador + cancelar */}
-              <div className="px-4 sm:px-5 py-3 border-t bg-slate-50 flex items-center justify-between gap-3">
-                <p className="text-xs sm:text-sm text-slate-600">
-                  {ordenados.length === emUso.length
-                    ? <><b>{fmtN(emUso.length)}</b> equipamento(s) em locação</>
-                    : <><b>{fmtN(ordenados.length)}</b> de {fmtN(emUso.length)} mostrado(s)</>}
-                </p>
-                <button onClick={() => setPickerDevolver(false)} className="px-4 py-2 text-sm border-2 border-slate-300 hover:bg-slate-100 rounded-lg font-semibold text-slate-700">
-                  Cancelar
-                </button>
-              </div>
+              {/* Footer: sticky bar de lote quando há seleção, senão contador + cancelar */}
+              {qtdSel > 0 ? (
+                <div className="px-4 sm:px-5 py-3 border-t bg-orange-50 flex items-center justify-between gap-3 shadow-[0_-4px_12px_rgba(249,115,22,0.12)]">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="inline-flex items-center justify-center w-9 h-9 rounded-full bg-orange-500 text-white font-bold text-sm flex-shrink-0">{fmtN(qtdSel)}</span>
+                    <p className="text-sm text-orange-900 font-semibold truncate">
+                      {qtdSel === 1 ? "1 equipamento selecionado" : `${fmtN(qtdSel)} equipamentos selecionados`}
+                    </p>
+                  </div>
+                  <button
+                    onClick={abrirModalDevLote}
+                    className="px-5 py-3 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white rounded-xl font-bold text-sm sm:text-base shadow-lg inline-flex items-center gap-2 flex-shrink-0">
+                    <RotateCcw className="h-5 w-5" />
+                    <span className="hidden sm:inline">Devolver selecionados</span>
+                    <span className="sm:hidden">Devolver {fmtN(qtdSel)}</span>
+                  </button>
+                </div>
+              ) : (
+                <div className="px-4 sm:px-5 py-3 border-t bg-slate-50 flex items-center justify-between gap-3">
+                  <p className="text-xs sm:text-sm text-slate-600">
+                    {ordenados.length === emUso.length
+                      ? <><b>{fmtN(emUso.length)}</b> equipamento(s) em locação</>
+                      : <><b>{fmtN(ordenados.length)}</b> de {fmtN(emUso.length)} mostrado(s)</>}
+                  </p>
+                  <button onClick={() => setPickerDevolver(false)} className="px-4 py-2 text-sm border-2 border-slate-300 hover:bg-slate-100 rounded-lg font-semibold text-slate-700">
+                    Cancelar
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         );
       })()}
+
+      {/* Rev. 2420 — Modal de devolução em LOTE. 1 data + 1 set de fotos +
+          1 observação comuns aplicados a todos os ids em `modalDevLote`. */}
+      {modalDevLote && modalDevLote.length > 0 && (
+        <Modal
+          title={`Devolver ${modalDevLote.length} equipamento(s) em lote`}
+          onClose={() => setModalDevLote(null)}
+          onSave={fazerDevolucaoLote}
+          saveLabel={`Confirmar devolução (${modalDevLote.length})`}
+          loading={devolverLote.isPending}>
+          <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 mb-3 max-h-40 overflow-y-auto">
+            <p className="text-xs font-bold text-orange-800 mb-1.5 uppercase tracking-wide">Selecionados:</p>
+            <ul className="text-[13px] text-slate-700 space-y-0.5">
+              {modalDevLote.slice(0, 12).map((l: any) => (
+                <li key={l.id} className="truncate">
+                  • <b>{l.descricao || "(sem descrição)"}</b>
+                  {l.codigoPatrimonioFornecedor && <span className="text-slate-500 font-mono"> #{l.codigoPatrimonioFornecedor}</span>}
+                  {l.obraId && obrasMap.get(Number(l.obraId)) && <span className="text-emerald-700"> · {obrasMap.get(Number(l.obraId))}</span>}
+                </li>
+              ))}
+              {modalDevLote.length > 12 && <li className="text-slate-500 italic">+ {modalDevLote.length - 12} outro(s)…</li>}
+            </ul>
+          </div>
+          <Field label="Data devolução*">
+            <input type="date" value={devLoteData} onChange={e => setDevLoteData(e.target.value)} className="inp" />
+          </Field>
+          <Field label="Observação (aplicada a todos)">
+            <textarea value={devLoteObs} onChange={e => setDevLoteObs(e.target.value)} rows={2} className="inp" />
+          </Field>
+          <FotosUploader fotos={devLoteFotos} onChange={setDevLoteFotos} label="Fotos de devolução (aplicadas a todos)" required />
+        </Modal>
+      )}
 
       {/* Modal devolução */}
       {modalDev && (

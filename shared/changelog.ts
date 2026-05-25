@@ -1,6 +1,93 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2420 — **EQUIPAMENTOS LOCADOS / PICKER "QUAL EQUIPAMENTO VAI
+ * DEVOLVER?" · MULTI-SELEÇÃO PARA DEVOLUÇÃO EM LOTE + FILTRO DE
+ * PERMISSÃO DE OBRA.**
+ *
+ * Pedido user (25/05/2026, screenshot do modal laranja mostrando
+ * 1.314 equipamentos em locação, vários da obra HOTEL DO PAPA):
+ * "Precisa dar baixa com vários itens de uma vez, com múltipla
+ * seleção, e detalhe só pode aparecer os itens da obra que o usuário
+ * tem permissão hoje tá aparecendo todas obras que ele não tem
+ * permissão para ver".
+ *
+ * **Dois bugs resolvidos numa só revisão:**
+ *
+ * **(1) Bug de permissão de obra.** `equipamentos.locadosListar`
+ * (server/routers/equipamentos.ts L341+) NÃO chamava
+ * `getEffectiveAllowedObraIds(ctx)` — só filtrava por companyId. Um
+ * encarregado de obra A via TODOS os equipamentos da empresa,
+ * inclusive de obras restritas. O padrão usado em outros listings do
+ * sistema é o de `ocsLocacaoPendentes` (mesmo arquivo L394+): pega
+ * `allowed = getEffectiveAllowedObraIds()`, se `null` (admin)
+ * passa direto, se `[]` retorna `[]`, senão `inArray(obraId, allowed)`.
+ * Aplicado igual aqui. Quando vier `obraId` explícito no input,
+ * valida antes (IDOR-safe: pedir obra B sendo de obra A → []).
+ * Decisão consciente: para users restritos, equipamentos COM
+ * `obraId IS NULL` (cadastros novos não vinculados) ficam OCULTOS —
+ * segurança > conveniência, admin tem visão pra vincular. Mesma
+ * proteção replicada no `locadoDevolverEmLote` (defense in depth
+ * contra cliente forjar ids).
+ *
+ * **(2) Multi-seleção pra devolução em lote.** Picker original
+ * (Rev. 2372) era 1-clique-1-equipamento → fechava modal e abria
+ * single `modalDev`. Operador de obra com 50 painéis pra devolver
+ * tinha que repetir 50 vezes. Refactor:
+ *
+ * - **State novo (`client/src/pages/equipamentos/Locados.tsx` L423+):**
+ *   `selecionadosLote: Set<number>`, `modalDevLote: any[] | null`,
+ *   `devLoteData/Fotos/Obs` (espelha o single).
+ * - **Mutation nova (mesma página L435+):** `devolverLote = trpc
+ *   .equipamentos.locadoDevolverEmLote.useMutation()` com onSuccess
+ *   que mostra resumo `{ok, falhas}` (toast.warning se houver falhas
+ *   parciais com ids+motivos).
+ * - **UI do picker (L2433+):** card vira `<div>` clicável (era
+ *   `<button>`) que faz `toggleSelecionado(id)` no tap. Visual de
+ *   selecionado: `ring-4 ring-orange-200` + checkbox laranja 9x9
+ *   absoluto no canto top-right. Botão "DEVOLVER ESTE" do footer do
+ *   card preserva atalho 1-toque single (`stopPropagation` +
+ *   `escolherSingle`). Toolbar acima da lista: "Selecionar todos
+ *   visíveis (N)" / "Desmarcar todos visíveis" + "Limpar seleção (N)".
+ *   Sticky footer laranja aparece quando `qtdSel > 0`: avatar
+ *   circular com nº + CTA grande "Devolver selecionados" (responsivo
+ *   "Devolver N" no mobile). Quando `qtdSel = 0`, footer volta ao
+ *   modo contador + Cancelar (compat com Rev. 2372).
+ * - **Modal de devolução em lote (L2640+):** abre via
+ *   `abrirModalDevLote()`. Mostra preview dos primeiros 12
+ *   selecionados (descrição + #patrimônio + obra) com "+N outros…"
+ *   se passar disso. Inputs: data devolução, observação, fotos
+ *   (obrigatório). Aplica os MESMOS valores a todos os ids.
+ *
+ * - **Endpoint backend novo (`server/routers/equipamentos.ts` L810+):**
+ *   `locadoDevolverEmLote(companyId, ids[], dataFimReal, fotosDevolucao,
+ *   observacao?)`. Limite 200 ids/request. Itera sequencialmente,
+ *   reusando a lógica exata do single (UPDATE status=devolvido,
+ *   INSERT em `equipamento_locado_eventos` tipo DEVOLUCAO_FORNECEDOR
+ *   com prefixo "[Lote · Tempo na obra: Xd]", chamada a
+ *   `removeAlmoxItemForEquipamento` da Rev. 2411). Não-atômico de
+ *   propósito: se um item já foi devolvido / não tem permissão /
+ *   sumiu, registra em `falhas: [{id, erro}]` e segue. Retorno:
+ *   `{ok: number[], falhas: {id, erro}[], total: number}`. Frontend
+ *   usa esse retorno pra montar o toast (success limpo se zero
+ *   falhas, warning com primeiras 3 falhas se houver).
+ *
+ * **Schema/migration:** ZERO. Reusa tabelas existentes.
+ *
+ * R-001 / R-007 / R-010: OK. Nada de DROP/DELETE/ALTER destrutivo.
+ *
+ * Arquivos:
+ * - `server/routers/equipamentos.ts` (2 blocos: filtro em
+ *   `locadosListar` L341-389; endpoint novo `locadoDevolverEmLote`
+ *   L810-895).
+ * - `client/src/pages/equipamentos/Locados.tsx` (4 blocos: state +
+ *   mutation L421-450; helper `fazerDevolucaoLote` L963-974;
+ *   picker refatorado L2433-2638; modal de lote L2640-2670).
+ * - `shared/version.ts` (2419 → 2420).
+ * - `shared/changelog.ts` (esta entrada).
+ * - `replit.md` (rotação 2+5: 2420/2419 detalhadas; 2418 demovida).
+ * - `replit-history.md` (2413 movida pra cá).
+ *
  * Rev. 2419 — **ALMOXARIFADO / VALOR POR ALMOXARIFADO · MOSTRA
  * TODAS AS OBRAS ATIVAS (mesmo as zeradas).**
  *

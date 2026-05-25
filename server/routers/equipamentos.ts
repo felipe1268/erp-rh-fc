@@ -347,12 +347,11 @@ export const equipamentosRouter = router({
       vencendoEmDias: z.number().int().optional(),  // ex: 30 = vence nos próximos 30d
       busca: z.string().optional(),
     }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       const conds: any[] = [companyFilter(equipamentosLocados.companyId, input)];
       if (input.status) conds.push(eq(equipamentosLocados.status, input.status));
-      if (input.obraId) conds.push(eq(equipamentosLocados.obraId, input.obraId));
       if (input.fornecedorId) conds.push(eq(equipamentosLocados.fornecedorId, input.fornecedorId));
       if (input.ordemCompraId) conds.push(eq(equipamentosLocados.ordemCompraId, input.ordemCompraId));
       if (input.vencendoEmDias != null) {
@@ -366,6 +365,23 @@ export const equipamentosRouter = router({
       if (input.busca && input.busca.trim()) {
         const q = `%${input.busca.trim()}%`;
         conds.push(sql`(${equipamentosLocados.descricao} ILIKE ${q} OR ${equipamentosLocados.codigoPatrimonioFornecedor} ILIKE ${q} OR ${equipamentosLocados.codigoInternoErp} ILIKE ${q} OR ${equipamentosLocados.numeroSerie} ILIKE ${q})`);
+      }
+      // Rev. 2420 — filtro de autorização por obra. Admin/admin_master =>
+      // allowed === null => vê tudo (inclusive sem obra). Users restritos
+      // veem APENAS equipamentos vinculados a alguma das obras permitidas
+      // — isso fecha um buraco antigo no qual o picker "Qual equipamento vai
+      // devolver?" mostrava itens de obras sem permissão (ex: HOTEL DO PAPA
+      // pra encarregado da outra obra). Cadastros sem obra (obraId IS NULL)
+      // ficam ocultos pra restritos (segurança > conveniência: admin tem
+      // visão pra vincular). Quando vier `obraId` explícito, valida a
+      // permissão antes (IDOR-safe: pedir obra B sendo de obra A => []).
+      const allowed = await getEffectiveAllowedObraIds(ctx.user.id, ctx.user.role);
+      if (input.obraId != null) {
+        if (allowed !== null && !allowed.includes(input.obraId)) return [];
+        conds.push(eq(equipamentosLocados.obraId, input.obraId));
+      } else if (allowed !== null) {
+        if (allowed.length === 0) return [];
+        conds.push(inArray(equipamentosLocados.obraId, allowed));
       }
       return await db.select().from(equipamentosLocados).where(and(...conds)).orderBy(desc(equipamentosLocados.id));
     }),
@@ -786,6 +802,87 @@ export const equipamentosRouter = router({
         equipamentoId: input.id,
       });
       return { id: input.id, action: "devolvido" as const, almoxRemovidos, tempoNaObraDias };
+    }),
+
+  // Rev. 2420 — Devolução em LOTE. Recebe N ids + 1 data + 1 set de fotos +
+  // 1 observação comuns, aplica a cada equipamento sequencialmente reusando
+  // a mesma lógica do single (update status, evento DEVOLUCAO_FORNECEDOR,
+  // remoção do almox via `removeAlmoxItemForEquipamento`). Não-atômico de
+  // propósito: se um item já estava "devolvido" ou foi deletado, registra
+  // em `falhas` e segue com o resto. Frontend mostra resumo "X devolvidos,
+  // Y falhas". Cada id é re-validado por companyId (mesma trava IDOR do
+  // single). Limite de 200 ids por request pra evitar timeouts do proxy.
+  locadoDevolverEmLote: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      ids: z.array(z.number().int().positive()).min(1).max(200),
+      dataFimReal: z.string().min(10).max(10),
+      fotosDevolucao: fotoSchema,
+      observacao: z.string().optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      if (!input.fotosDevolucao || input.fotosDevolucao.length === 0) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Foto de devolução é obrigatória." });
+      }
+      const { removeAlmoxItemForEquipamento } = await import("../lib/almoxEquipamentoSync");
+      // Pré-filtro por permissão: equipamentos cujo obraId o user não pode
+      // acessar saem da lista antes de processar (defense in depth — o
+      // locadosListar já filtra na origem, mas se o cliente forjar ids,
+      // bloqueamos aqui também).
+      const allowed = await getEffectiveAllowedObraIds(ctx.user.id, ctx.user.role);
+      const ok: number[] = [];
+      const falhas: { id: number; erro: string }[] = [];
+      const idsUnicos = Array.from(new Set(input.ids));
+      for (const id of idsUnicos) {
+        try {
+          const [eq_] = await db.select().from(equipamentosLocados)
+            .where(and(eq(equipamentosLocados.id, id), eq(equipamentosLocados.companyId, input.companyId)))
+            .limit(1);
+          if (!eq_) { falhas.push({ id, erro: "Não encontrado" }); continue; }
+          if (eq_.status === "devolvido") { falhas.push({ id, erro: "Já devolvido" }); continue; }
+          if (allowed !== null && (eq_.obraId == null || !allowed.includes(eq_.obraId))) {
+            falhas.push({ id, erro: "Sem acesso à obra" });
+            continue;
+          }
+          await db.update(equipamentosLocados).set({
+            status: "devolvido",
+            dataFimReal: input.dataFimReal,
+            fotosDevolucaoJson: input.fotosDevolucao,
+            updatedAt: sql`now()`,
+          }).where(and(
+            eq(equipamentosLocados.id, id),
+            eq(equipamentosLocados.companyId, input.companyId),
+          ));
+          const dataInicio = (eq_ as any).dataInicio ? new Date((eq_ as any).dataInicio) : null;
+          const dataFim = new Date(input.dataFimReal);
+          const tempoNaObraDias = dataInicio
+            ? Math.max(0, Math.round((dataFim.getTime() - dataInicio.getTime()) / 86400000))
+            : null;
+          await db.insert(equipamentoLocadoEventos).values({
+            companyId: input.companyId,
+            equipamentoLocadoId: id,
+            tipo: "DEVOLUCAO_FORNECEDOR",
+            obraId: eq_.obraId,
+            fotosJson: input.fotosDevolucao,
+            observacao: tempoNaObraDias != null
+              ? `[Lote · Tempo na obra: ${tempoNaObraDias} dias] ${input.observacao ?? ""}`.trim()
+              : (input.observacao ? `[Lote] ${input.observacao}` : "[Lote]"),
+            usuarioId: ctx.user.id,
+            usuarioNome: ctx.user.name || String(ctx.user.id),
+          });
+          await removeAlmoxItemForEquipamento(db, {
+            companyId: input.companyId,
+            tipo: "locado",
+            equipamentoId: id,
+          });
+          ok.push(id);
+        } catch (e: any) {
+          falhas.push({ id, erro: e?.message || "Erro desconhecido" });
+        }
+      }
+      return { ok, falhas, total: idsUnicos.length };
     }),
 
   locadoCheckIn: protectedProcedure
