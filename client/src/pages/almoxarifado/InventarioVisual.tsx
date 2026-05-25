@@ -2,14 +2,22 @@
 // Operador olha a baia física e toca em 1 de 5 botões grandes:
 // VAZIA / 1/4 / METADE / 3/4 / CHEIA. Foto opcional. Histórico fica registrado.
 // Pensado pra operador de 4ª série: poucos cliques, contraste alto, sem digitação.
+//
+// Rev. 2414 — Reformatado pra MESMA LINGUAGEM do Inventário Semanal:
+// sessão DIÁRIA por obra (1 obra obrigatória, não "todas"), tela vazia
+// com botão grande "Iniciar Aferição", barra de progresso pendentes/
+// conferidas, lista separada (pendentes em destaque, conferidas abaixo)
+// e card final "Aferição do dia concluída". Estado de sessão derivado
+// das próprias leituras (sem migration): baia tem leitura hoje = conferida.
 import DashboardLayout from "@/components/DashboardLayout";
 import { useState, useMemo } from "react";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
 import { toast } from "sonner";
 import {
-  Package, Plus, Loader2, Camera, X, History, Building2, Pencil, Trash2,
+  Package, Plus, Loader2, Camera, History, Building2, Pencil, Trash2,
   TrendingUp, TrendingDown, Minus, ImagePlus, CheckCircle2,
+  ClipboardList, Play, HardHat, Settings,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -45,6 +53,27 @@ function fmtData(s?: string | null) {
   } catch { return s; }
 }
 
+// Rev. 2414 — sessão DIÁRIA derivada: comparamos `lidaEm` com o dia atual
+// no fuso local pra decidir se a baia já foi aferida hoje.
+function hojeYmdLocal(): string {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${dd}`;
+}
+function isLeituraHoje(lidaEm?: string | null): boolean {
+  if (!lidaEm) return false;
+  try {
+    const d = new Date(lidaEm);
+    if (isNaN(d.getTime())) return false;
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const dd = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${dd}` === hojeYmdLocal();
+  } catch { return false; }
+}
+
 const MATERIAIS_SUGERIDOS = ["Areia média", "Areia fina", "Brita 0", "Brita 1", "Brita 2", "Pedrisco", "Lajota cerâmica", "Tijolo", "Bloco de concreto", "Argamassa", "Cimento (granel)"];
 
 export default function InventarioVisualBaias() {
@@ -53,11 +82,15 @@ export default function InventarioVisualBaias() {
   const utils = trpc.useUtils();
 
   const { data: obrasAtivas = [] } = trpc.obras.listActive.useQuery({ companyId }, { enabled: !!companyId });
-  const [obraFiltro, setObraFiltro] = useState<number | "todas">("todas");
+  // Rev. 2414 — obra agora é OBRIGATÓRIA (sessão é POR OBRA, igual ao
+  // Inventário Semanal). `null` = ainda não escolhida (mostra placeholder).
+  const [obraContexto, setObraContexto] = useState<number | null>(null);
+  const [iniciadoLocal, setIniciadoLocal] = useState(false);
+  const [gerenciarMode, setGerenciarMode] = useState(false);
 
   const { data: baias = [], isLoading } = trpc.warehouse.baiaListar.useQuery(
-    { companyId, obraId: obraFiltro === "todas" ? undefined : obraFiltro },
-    { enabled: !!companyId },
+    { companyId, obraId: obraContexto ?? undefined },
+    { enabled: !!companyId && obraContexto != null },
   );
 
   const [modalNova, setModalNova] = useState(false);
@@ -98,7 +131,7 @@ export default function InventarioVisualBaias() {
 
   function abrirNova() {
     setEditando(null);
-    setForm({ obraId: obraFiltro !== "todas" ? Number(obraFiltro) : 0, nome: "", material: "", unidade: "m³", capacidade: "", observacoes: "" });
+    setForm({ obraId: obraContexto ?? 0, nome: "", material: "", unidade: "m³", capacidade: "", observacoes: "" });
     setFotoFile(null);
     setModalNova(true);
   }
@@ -170,140 +203,315 @@ export default function InventarioVisualBaias() {
     } catch (e: any) { toast.error(e?.message || "Falha"); }
   }
 
-  const baiasFiltradas = useMemo(() => {
-    if (obraFiltro === "todas") return baias;
-    return baias.filter((b: any) => b.obraId === obraFiltro);
-  }, [baias, obraFiltro]);
+  // Rev. 2414 — sessão DIÁRIA derivada das próprias leituras.
+  const pendentes = useMemo(
+    () => baias.filter((b: any) => !isLeituraHoje(b?.ultimaLeitura?.lidaEm)),
+    [baias],
+  );
+  const conferidas = useMemo(
+    () => baias.filter((b: any) => isLeituraHoje(b?.ultimaLeitura?.lidaEm)),
+    [baias],
+  );
+  const total = baias.length;
+  const totalConferidas = conferidas.length;
+  const progresso = total > 0 ? Math.round((totalConferidas / total) * 100) : 0;
+  const sessaoIniciada = totalConferidas > 0 || iniciadoLocal;
+  const sessaoConcluida = total > 0 && totalConferidas === total;
+
+  const nomeObra = obraContexto != null
+    ? (obrasAtivas.find((o: any) => o.id === obraContexto)?.nome ?? "Obra")
+    : "—";
+  const dataHojeBr = new Date().toLocaleDateString("pt-BR");
+
+  const renderCardBaia = (b: any, conferida: boolean) => {
+    const ult = b.ultimaLeitura;
+    const ant = b.leituraAnterior;
+    const pctAtual: number | null = ult ? Number(ult.percentual) : null;
+    const pctAnt: number | null = ant ? Number(ant.percentual) : null;
+    const delta = pctAtual != null && pctAnt != null ? pctAtual - pctAnt : null;
+    return (
+      <div
+        key={b.id}
+        className={`bg-white rounded-2xl border-2 overflow-hidden shadow-sm hover:shadow-lg transition-shadow ${
+          conferida ? "border-emerald-200" : "border-amber-300 ring-2 ring-amber-100"
+        }`}
+      >
+        {/* Foto */}
+        <div className="relative h-32 bg-gradient-to-br from-slate-100 to-slate-200">
+          {b.fotoUrl ? (
+            <img src={b.fotoUrl} alt={b.nome} className="w-full h-full object-cover" />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center text-slate-400">
+              <Camera className="w-12 h-12" />
+            </div>
+          )}
+          {gerenciarMode && (
+            <div className="absolute top-2 right-2 flex gap-1">
+              <button onClick={() => abrirEdicao(b)} className="bg-white/90 hover:bg-white p-1.5 rounded-lg shadow" title="Editar">
+                <Pencil className="w-3.5 h-3.5 text-slate-700" />
+              </button>
+              <button onClick={() => setExcluindo(b)} className="bg-white/90 hover:bg-white p-1.5 rounded-lg shadow" title="Remover">
+                <Trash2 className="w-3.5 h-3.5 text-red-600" />
+              </button>
+            </div>
+          )}
+          {conferida && (
+            <div className="absolute top-2 left-2 bg-emerald-500 text-white text-[11px] font-bold px-2 py-1 rounded-md shadow flex items-center gap-1">
+              <CheckCircle2 className="w-3 h-3" /> Conferida hoje
+            </div>
+          )}
+          {pctAtual != null && (
+            <div className="absolute bottom-0 left-0 right-0 bg-black/50 px-3 py-1.5 flex items-center gap-2">
+              <div className="flex-1 h-2 bg-white/30 rounded-full overflow-hidden">
+                <div className={`h-full ${corPorPct(pctAtual)} transition-all`} style={{ width: `${pctAtual}%` }} />
+              </div>
+              <span className="text-white text-xs font-bold">{pctAtual}%</span>
+              {delta != null && delta !== 0 && (
+                delta > 0 ? <TrendingUp className="w-3.5 h-3.5 text-emerald-300" /> :
+                <TrendingDown className="w-3.5 h-3.5 text-red-300" />
+              )}
+              {delta === 0 && <Minus className="w-3.5 h-3.5 text-slate-300" />}
+            </div>
+          )}
+        </div>
+        {/* Header info */}
+        <div className="p-3 border-b border-slate-100">
+          <p className="font-bold text-base text-slate-900 truncate">{b.nome}</p>
+          <div className="flex items-center justify-between gap-2 mt-1 text-xs">
+            <span className="inline-flex items-center gap-1 text-amber-700 font-semibold">
+              <Package className="w-3 h-3" /> {b.material}
+            </span>
+            <span className="text-slate-500">{b.unidade}{b.capacidadeEstimada ? ` · cap. ${b.capacidadeEstimada}` : ""}</span>
+          </div>
+          {ult && (
+            <div className="text-[11px] text-slate-500 mt-1">
+              Última: <span className="font-semibold text-slate-700">{ult.lidaPorNome || "—"}</span> · {fmtData(ult.lidaEm)}
+            </div>
+          )}
+        </div>
+        {/* 5 botões grandes */}
+        <div className="p-3">
+          <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wide mb-2">
+            {conferida ? "Refazer leitura?" : "Como está agora?"}
+          </p>
+          <div className="grid grid-cols-5 gap-1.5">
+            {NIVEIS.map(n => (
+              <button
+                key={n.pct}
+                onClick={() => abrirLeitura(b, n.pct)}
+                className={`${n.cor} ${n.texto} rounded-lg py-3 px-1 font-bold text-[11px] sm:text-xs shadow-sm hover:shadow active:scale-95 transition-all ring-2 ring-transparent hover:ring-offset-1 ${pctAtual === n.pct ? "ring-offset-2 " + n.cor.split(" ").pop() : ""}`}
+                title={`Marcar como ${n.label}`}
+              >
+                <div className="leading-tight">{n.label}</div>
+                <div className="text-[9px] opacity-80 font-medium">{n.curto}</div>
+              </button>
+            ))}
+          </div>
+          <button
+            onClick={() => setHistoricoBaia(b)}
+            className="mt-2 w-full text-[11px] text-slate-500 hover:text-slate-800 flex items-center justify-center gap-1 py-1"
+          >
+            <History className="w-3 h-3" /> Ver histórico
+          </button>
+        </div>
+      </div>
+    );
+  };
 
   return (
     <DashboardLayout>
-      <div className="p-4 sm:p-6 max-w-7xl mx-auto">
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-5">
+      {/* Seletor de obra (mesmo pattern do Inventário Semanal) */}
+      <div className="bg-white border-b border-gray-200 px-4 py-3">
+        <div className="max-w-3xl mx-auto flex items-center gap-3">
+          <HardHat className="h-4 w-4 text-amber-600 shrink-0" />
+          <select
+            value={obraContexto ?? ""}
+            onChange={e => {
+              const v = e.target.value;
+              setObraContexto(v === "" ? null : Number(v));
+              setIniciadoLocal(false);
+              setGerenciarMode(false);
+            }}
+            className="flex-1 h-9 text-sm font-medium border border-gray-200 rounded-lg px-3 bg-white text-gray-800 outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-200"
+          >
+            <option value="">— escolher obra —</option>
+            {obrasAtivas.map((obra: any) => (
+              <option key={obra.id} value={obra.id}>
+                🏗️ {obra.codigo ? `${obra.codigo} – ${obra.nome}` : obra.nome}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      <div className="space-y-4 max-w-3xl mx-auto px-2 sm:px-4 pt-4 pb-10">
+        {/* Cabeçalho */}
+        <div className="flex items-start justify-between gap-3">
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center shadow-md">
-              <Package className="w-6 h-6 text-white" />
+            <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center shadow-md shrink-0">
+              <Package className="w-5 h-5 text-white" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-slate-900">Inventário Visual</h1>
-              <p className="text-sm text-slate-600">Areia, pedra, lajota — olhou a baia, tocou no botão.</p>
+              <h1 className="text-2xl font-bold text-slate-900">Inventário Visual de Baias</h1>
+              <p className="text-sm text-slate-500 mt-0.5">
+                {obraContexto == null
+                  ? "Escolha a obra pra começar a aferição diária"
+                  : sessaoConcluida
+                    ? `${nomeObra} · Aferição de ${dataHojeBr} concluída`
+                    : sessaoIniciada
+                      ? `${nomeObra} · Aferição em andamento · ${dataHojeBr}`
+                      : `${nomeObra} · Nenhuma aferição iniciada hoje`}
+              </p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <select
-              value={obraFiltro}
-              onChange={e => setObraFiltro(e.target.value === "todas" ? "todas" : Number(e.target.value))}
-              className="h-11 px-3 text-sm border border-slate-300 rounded-lg bg-white"
+          {obraContexto != null && (
+            <button
+              onClick={() => setGerenciarMode(v => !v)}
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl border text-sm font-semibold active:scale-95 transition shrink-0 ${
+                gerenciarMode
+                  ? "border-slate-400 bg-slate-100 text-slate-700"
+                  : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+              }`}
+              title="Gerenciar cadastro de baias"
             >
-              <option value="todas">Todas as obras</option>
-              {obrasAtivas.map((o: any) => <option key={o.id} value={o.id}>{o.nome}</option>)}
-            </select>
-            <Button onClick={abrirNova} className="h-11 bg-emerald-600 hover:bg-emerald-700 text-white gap-2">
-              <Plus className="w-4 h-4" /> Nova baia
-            </Button>
-          </div>
+              <Settings className="w-4 h-4" />
+              <span className="hidden sm:inline">Gerenciar</span>
+            </button>
+          )}
         </div>
 
-        {/* Lista */}
-        {isLoading ? (
-          <div className="flex items-center justify-center py-20"><Loader2 className="w-8 h-8 animate-spin text-slate-400" /></div>
-        ) : baiasFiltradas.length === 0 ? (
-          <div className="rounded-2xl border-2 border-dashed border-slate-300 bg-white p-12 text-center">
-            <Package className="w-16 h-16 mx-auto text-slate-300 mb-3" />
-            <p className="text-lg font-semibold text-slate-700">Nenhuma baia cadastrada</p>
-            <p className="text-sm text-slate-500 mt-1 mb-4">Cadastre uma baia (areia, pedra, lajota…) pra começar a controlar visualmente.</p>
+        {/* Sem obra escolhida */}
+        {obraContexto == null && (
+          <div className="bg-white rounded-2xl border-2 border-dashed border-gray-300 p-10 text-center space-y-2">
+            <Building2 className="w-14 h-14 text-gray-300 mx-auto" />
+            <p className="text-base font-semibold text-gray-700">Selecione uma obra acima</p>
+            <p className="text-sm text-gray-500">
+              A aferição visual é feita <span className="font-semibold">por obra</span>, todo dia.
+            </p>
+          </div>
+        )}
+
+        {/* Loading */}
+        {obraContexto != null && isLoading && (
+          <div className="flex justify-center py-12">
+            <Loader2 className="w-10 h-10 animate-spin text-amber-500" />
+          </div>
+        )}
+
+        {/* Obra sem baia cadastrada */}
+        {obraContexto != null && !isLoading && total === 0 && (
+          <div className="bg-white rounded-2xl border-2 border-dashed border-gray-300 p-10 text-center space-y-3">
+            <Package className="w-14 h-14 text-gray-300 mx-auto" />
+            <div>
+              <p className="text-lg font-semibold text-gray-700">Nenhuma baia cadastrada nesta obra</p>
+              <p className="text-sm text-gray-500 mt-1">Cadastre as baias (areia, pedra, lajota…) pra começar a aferir diariamente.</p>
+            </div>
             <Button onClick={abrirNova} className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2">
               <Plus className="w-4 h-4" /> Cadastrar primeira baia
             </Button>
           </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-            {baiasFiltradas.map((b: any) => {
-              const ult = b.ultimaLeitura;
-              const ant = b.leituraAnterior;
-              const pctAtual: number | null = ult ? Number(ult.percentual) : null;
-              const pctAnt: number | null = ant ? Number(ant.percentual) : null;
-              const delta = pctAtual != null && pctAnt != null ? pctAtual - pctAnt : null;
-              return (
-                <div key={b.id} className="bg-white rounded-2xl border-2 border-slate-200 overflow-hidden shadow-sm hover:shadow-lg transition-shadow">
-                  {/* Foto */}
-                  <div className="relative h-40 bg-gradient-to-br from-slate-100 to-slate-200">
-                    {b.fotoUrl ? (
-                      <img src={b.fotoUrl} alt={b.nome} className="w-full h-full object-cover" />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center text-slate-400">
-                        <Camera className="w-14 h-14" />
-                      </div>
-                    )}
-                    <div className="absolute top-2 right-2 flex gap-1">
-                      <button onClick={() => abrirEdicao(b)} className="bg-white/90 hover:bg-white p-1.5 rounded-lg shadow" title="Editar">
-                        <Pencil className="w-3.5 h-3.5 text-slate-700" />
-                      </button>
-                      <button onClick={() => setExcluindo(b)} className="bg-white/90 hover:bg-white p-1.5 rounded-lg shadow" title="Remover">
-                        <Trash2 className="w-3.5 h-3.5 text-red-600" />
-                      </button>
-                    </div>
-                    {/* Barra de nível visual no canto inferior */}
-                    {pctAtual != null && (
-                      <div className="absolute bottom-0 left-0 right-0 bg-black/50 px-3 py-1.5 flex items-center gap-2">
-                        <div className="flex-1 h-2 bg-white/30 rounded-full overflow-hidden">
-                          <div className={`h-full ${corPorPct(pctAtual)} transition-all`} style={{ width: `${pctAtual}%` }} />
-                        </div>
-                        <span className="text-white text-xs font-bold">{pctAtual}%</span>
-                        {delta != null && delta !== 0 && (
-                          delta > 0 ? <TrendingUp className="w-3.5 h-3.5 text-emerald-300" /> :
-                          <TrendingDown className="w-3.5 h-3.5 text-red-300" />
-                        )}
-                        {delta === 0 && <Minus className="w-3.5 h-3.5 text-slate-300" />}
-                      </div>
-                    )}
-                  </div>
-                  {/* Header info */}
-                  <div className="p-3 border-b border-slate-100">
-                    <p className="font-bold text-base text-slate-900 truncate">{b.nome}</p>
-                    <div className="flex items-center justify-between gap-2 mt-1 text-xs">
-                      <span className="inline-flex items-center gap-1 text-amber-700 font-semibold">
-                        <Package className="w-3 h-3" /> {b.material}
-                      </span>
-                      <span className="text-slate-500">{b.unidade}{b.capacidadeEstimada ? ` · cap. ${b.capacidadeEstimada}` : ""}</span>
-                    </div>
-                    <div className="flex items-center gap-1 mt-1 text-[11px] text-slate-500">
-                      <Building2 className="w-3 h-3" />
-                      <span className="truncate">{b.obraNome ?? "Sem obra"}</span>
-                    </div>
-                    {ult && (
-                      <div className="text-[11px] text-slate-500 mt-1">
-                        Última leitura: <span className="font-semibold text-slate-700">{ult.lida_por_nome || "—"}</span> · {fmtData(ult.lida_em)}
-                      </div>
-                    )}
-                  </div>
-                  {/* 5 botões grandes */}
-                  <div className="p-3">
-                    <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wide mb-2">Como está agora?</p>
-                    <div className="grid grid-cols-5 gap-1.5">
-                      {NIVEIS.map(n => (
-                        <button
-                          key={n.pct}
-                          onClick={() => abrirLeitura(b, n.pct)}
-                          className={`${n.cor} ${n.texto} rounded-lg py-3 px-1 font-bold text-[11px] sm:text-xs shadow-sm hover:shadow active:scale-95 transition-all ring-2 ring-transparent hover:ring-offset-1 ${pctAtual === n.pct ? "ring-offset-2 " + n.cor.split(" ").pop() : ""}`}
-                          title={`Marcar como ${n.label}`}
-                        >
-                          <div className="leading-tight">{n.label}</div>
-                          <div className="text-[9px] opacity-80 font-medium">{n.curto}</div>
-                        </button>
-                      ))}
-                    </div>
-                    <button
-                      onClick={() => setHistoricoBaia(b)}
-                      className="mt-2 w-full text-[11px] text-slate-500 hover:text-slate-800 flex items-center justify-center gap-1 py-1"
-                    >
-                      <History className="w-3 h-3" /> Ver histórico
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
+        )}
+
+        {/* Tem baia(s) mas nenhuma leitura hoje → tela "Iniciar Aferição" */}
+        {obraContexto != null && !isLoading && total > 0 && !sessaoIniciada && (
+          <div className="bg-white rounded-2xl border-2 border-dashed border-gray-300 p-10 text-center space-y-4">
+            <ClipboardList className="w-16 h-16 text-gray-300 mx-auto" />
+            <div>
+              <p className="text-lg font-semibold text-gray-700">Nenhuma aferição de hoje</p>
+              <p className="text-sm text-gray-500 mt-1">
+                Inicie pra conferir as <span className="font-semibold">{total}</span> {total === 1 ? "baia" : "baias"} da obra
+              </p>
+            </div>
+            <button
+              className="bg-emerald-500 hover:bg-emerald-600 text-white font-bold px-8 py-4 rounded-xl text-lg flex items-center gap-2 mx-auto active:scale-95 transition"
+              onClick={() => setIniciadoLocal(true)}
+            >
+              <Play className="w-5 h-5" />
+              Iniciar Aferição
+            </button>
           </div>
+        )}
+
+        {/* Sessão em andamento ou concluída */}
+        {obraContexto != null && !isLoading && total > 0 && sessaoIniciada && (
+          <>
+            {/* Barra de progresso */}
+            <div className="bg-white rounded-xl border p-4 space-y-3">
+              <div className="flex justify-between text-sm font-medium">
+                <span className="text-gray-600">Progresso da aferição</span>
+                <span className="text-gray-900">{totalConferidas}/{total} {total === 1 ? "baia" : "baias"}</span>
+              </div>
+              <div className="w-full bg-gray-200 rounded-full h-4 overflow-hidden">
+                <div
+                  className="h-4 rounded-full transition-all duration-500"
+                  style={{
+                    width: `${progresso}%`,
+                    background: progresso === 100 ? "#10b981" : "#f59e0b",
+                  }}
+                />
+              </div>
+              <div className="flex gap-4 text-xs text-center">
+                <div className="flex-1 bg-amber-50 rounded-lg p-2">
+                  <p className="text-lg font-bold text-amber-700">{pendentes.length}</p>
+                  <p className="text-amber-600">Pendentes</p>
+                </div>
+                <div className="flex-1 bg-emerald-50 rounded-lg p-2">
+                  <p className="text-lg font-bold text-emerald-700">{totalConferidas}</p>
+                  <p className="text-emerald-600">Conferidas</p>
+                </div>
+                <div className="flex-1 bg-slate-50 rounded-lg p-2">
+                  <p className="text-lg font-bold text-slate-700">{total}</p>
+                  <p className="text-slate-600">Total</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Sessão concluída */}
+            {sessaoConcluida && (
+              <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-5 text-center">
+                <CheckCircle2 className="w-12 h-12 text-emerald-500 mx-auto mb-2" />
+                <p className="text-lg font-bold text-emerald-800">Aferição do dia concluída!</p>
+                <p className="text-sm text-emerald-600 mt-1">
+                  {totalConferidas} {totalConferidas === 1 ? "baia conferida" : "baias conferidas"} em {dataHojeBr}
+                </p>
+              </div>
+            )}
+
+            {/* Botão Nova baia (modo gerenciar) */}
+            {gerenciarMode && (
+              <div className="flex justify-end">
+                <Button onClick={abrirNova} className="h-10 bg-emerald-600 hover:bg-emerald-700 text-white gap-2">
+                  <Plus className="w-4 h-4" /> Nova baia
+                </Button>
+              </div>
+            )}
+
+            {/* Lista — pendentes em destaque */}
+            {pendentes.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-sm font-semibold text-amber-700 px-1 flex items-center gap-2">
+                  <ClipboardList className="w-4 h-4" />
+                  Aguardando aferição ({pendentes.length})
+                </p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {pendentes.map((b: any) => renderCardBaia(b, false))}
+                </div>
+              </div>
+            )}
+
+            {/* Lista — conferidas hoje */}
+            {conferidas.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-sm font-semibold text-emerald-700 px-1 mt-4 flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4" />
+                  Conferidas hoje ({conferidas.length})
+                </p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {conferidas.map((b: any) => renderCardBaia(b, true))}
+                </div>
+              </div>
+            )}
+          </>
         )}
       </div>
 

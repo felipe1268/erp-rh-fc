@@ -1,6 +1,102 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2414 — **ALMOXARIFADO / INVENTÁRIO VISUAL DE BAIAS ·
+ * Reformatado pra MESMA LINGUAGEM do Inventário Semanal —
+ * sessão DIÁRIA por obra (não mais lista solta de baias).**
+ *
+ * Pedido user (25/05/2026): "O CONTROLE DE VISUAL DE BAIAS,
+ * PRECISA SEGUIR A MESMA LOGICA DO INVENTARIO SEMANAL, ONDE
+ * O ALMOXARIFE TEM AS OS QUE DERAM ENTRADA NO DECORRER DO
+ * DIA, E FAZ A AFERIÇÃO DIRIA DA QUANTIDADE EM OBRA. QUERO
+ * O MESMO FORMATO PARA GARANTIR A MESMA LINGUAGEM DE
+ * UTILIZAÇÃO."
+ *
+ * O Inventário Semanal já tinha um pattern muito sólido pro
+ * almoxarife (tela vazia → "Iniciar Inventário" → barra de
+ * progresso → lista pendentes/conferidos → "Concluído"), e
+ * o Visual de Baias estava num formato diferente (grid de
+ * baias com 5 botões sempre visíveis, filtro "todas as
+ * obras"). User quer paridade de UX pra reduzir carga
+ * cognitiva — o almoxarife usa OS DOIS no mesmo dia.
+ *
+ * **Decisão arquitetural — ZERO backend novo:**
+ *
+ * A "sessão diária" é DERIVADA das próprias `baia_leituras`
+ * (que já existem desde Rev. 2373). Helper `isLeituraHoje()`
+ * compara `ultimaLeitura.lidaEm` com o dia atual no fuso
+ * local. Sem migration, sem tabela `baia_sessoes_diarias`,
+ * sem endpoint novo. A regra:
+ *
+ * - **Pendentes** = baias da obra sem leitura HOJE.
+ * - **Conferidas** = baias da obra com leitura HOJE.
+ * - **Sessão iniciada** = qualquer baia tem leitura hoje
+ *   OU `iniciadoLocal` (botão "Iniciar Aferição" clicado).
+ * - **Sessão concluída** = TODAS as baias têm leitura hoje.
+ *
+ * Cancelar/reabrir é trivial: refazer leitura sobrescreve.
+ * Histórico (rev. 2373) preservado intacto.
+ *
+ * **Mudanças** (`client/src/pages/almoxarifado/InventarioVisual.tsx`):
+ *
+ * 1. **Helpers `hojeYmdLocal()` + `isLeituraHoje(lidaEm)`**
+ *    no topo do arquivo — comparação por YMD local (sem TZ
+ *    drift, evita falso "hoje" pra leituras feitas ontem à
+ *    noite e ainda em UTC do dia atual).
+ *
+ * 2. **Filtro "todas as obras" → seletor OBRIGATÓRIO de
+ *    obra única.** `obraFiltro: number | "todas"` virou
+ *    `obraContexto: number | null`. `baiaListar` só dispara
+ *    quando `obraContexto != null`. Espelha o pattern
+ *    Central/Obra do Inventário Semanal — sessão é POR
+ *    contexto.
+ *
+ * 3. **Cabeçalho dinâmico** — mostra "Obra X · Aferição em
+ *    andamento · DD/MM/AAAA" ou "Aferição de DD/MM/AAAA
+ *    concluída" ou "Nenhuma aferição iniciada hoje" conforme
+ *    o estado derivado.
+ *
+ * 4. **5 estados de tela bem definidos (igual semanal):**
+ *    a. Sem obra → placeholder "Selecione uma obra acima".
+ *    b. Loading → spinner amber centralizado.
+ *    c. Obra sem baia cadastrada → empty state com botão
+ *       "Cadastrar primeira baia".
+ *    d. Tem baia mas zero leitura hoje → empty state com
+ *       botão VERDE GRANDE `bg-emerald-500 px-8 py-4
+ *       text-lg` "Iniciar Aferição" (clone idêntico do
+ *       botão "Iniciar Inventário" semanal).
+ *    e. Sessão em andamento/concluída → barra de progresso
+ *       3-col (Pendentes amber / Conferidas emerald / Total
+ *       slate) + card verde "Aferição do dia concluída"
+ *       quando 100% + duas seções de cards "Aguardando
+ *       aferição" e "Conferidas hoje".
+ *
+ * 5. **`renderCardBaia(b, conferida)`** unificado pros 2
+ *    grupos. Pendentes têm ring amber + sem badge top-left.
+ *    Conferidas têm ring/border emerald + badge verde
+ *    "Conferida hoje" no canto superior esquerdo da foto.
+ *    Footer label muda: "Como está agora?" vs "Refazer
+ *    leitura?". 5 botões NIVEIS preservados intactos.
+ *
+ * 6. **Modo "Gerenciar baias"** — botão `Settings` no
+ *    canto direito do cabeçalho toggle `gerenciarMode`.
+ *    Apenas nesse modo os ícones Pencil/Trash2 aparecem
+ *    sobre as fotos das baias E o botão "Nova baia" aparece
+ *    acima da lista. Mantém o foco da tela na AFERIÇÃO,
+ *    não no cadastro (que é raro).
+ *
+ * 7. **Bugfix lateral** — texto da última leitura nos cards
+ *    estava lendo `ult.lida_por_nome` / `ult.lida_em` (snake
+ *    case que o tRPC não retorna), agora lê `lidaPorNome` /
+ *    `lidaEm` consistente com o resto do código.
+ *
+ * 8. **`obraFiltro` → `obraContexto`** propagado pra
+ *    `abrirNova()` (preenche `form.obraId` automaticamente
+ *    com a obra do contexto atual).
+ *
+ * **R-001 / R-007 / R-010**: OK. UI puro, zero migration,
+ * zero backend novo. Histórico e leituras preservados.
+ *
  * Rev. 2413 — **EQUIPAMENTOS LOCADOS / IMPORT · Fornecedor
  * (locadora) agora é OBRIGATÓRIO antes de cadastrar itens
  * via PDF (IA).**
