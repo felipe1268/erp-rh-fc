@@ -519,6 +519,7 @@ export const financialRouter = router({
               e.origem_descricao AS "origemDescricao", e.forma_pagamento AS "formaPagamento",
               e.descricao, e.observacoes, e.conciliado, e.parcela_numero AS "parcelaNumero",
               e.parcela_total AS "parcelaTotal", e.cheque_status AS "chequeStatus",
+              e.fornecedor_nome AS "fornecedorNome",
               e.criado_por_nome AS "criadoPorNome", e.created_at AS "createdAt"
        FROM financial_entries e
        WHERE ${conds.join(" AND ")}
@@ -1439,6 +1440,84 @@ export const financialRouter = router({
   // protegido por confirmação na UI + motivo obrigatório + audit log
   // (criadoPorNome + ctx.user). Snapshot dos campos críticos vai pro audit
   // log pra rastreabilidade total ("quem excluiu o quê").
+  // Rev. 2398 — EDIÇÃO de lançamento manual. Permite alterar campos descritivos
+  // (descricao, valor, datas, categoria, obra, forma de pagamento, fornecedor,
+  // natureza, observacoes) em lançamentos NÃO pagos e NÃO cancelados.
+  // Bloqueia edição em entries vindos de OUTROS módulos (origem != null) pra
+  // evitar que user mascarem a origem (compras OC, folha, almox etc.) — única
+  // exceção é "recorrente" (que pode ser editado na aba Recorrências).
+  // Grava audit log com snapshot do antes pra rastrear "quem editou o quê".
+  updateEntry: protectedProcedure.input(z.object({
+    id: z.number(),
+    companyId: z.number(),
+    descricao: z.string().optional(),
+    valorPrevisto: z.number().optional(),
+    dataCompetencia: z.string().optional(),
+    dataVencimento: z.string().optional(),
+    contaNome: z.string().optional(),
+    obraNome: z.string().optional(),
+    formaPagamento: z.string().optional(),
+    fornecedorNome: z.string().optional(),
+    observacoes: z.string().optional(),
+    natureza: z.string().optional(),
+    tipo: z.string().optional(),
+  })).mutation(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    const r: any = await dbExecute(db,
+      `SELECT id, descricao, valor_previsto, data_competencia, data_vencimento,
+              conta_nome, obra_nome, forma_pagamento, fornecedor_nome, observacoes,
+              natureza, tipo, status, origem_modulo, origem_id
+       FROM financial_entries WHERE id=$1 AND company_id=$2`,
+      [input.id, input.companyId]
+    );
+    const before: any = (Array.isArray(r) ? r : r?.rows ?? [])[0];
+    if (!before) throw new TRPCError({ code: "NOT_FOUND", message: "Lançamento não encontrado." });
+    if (before.status === "pago" || before.status === "recebido") {
+      throw new TRPCError({ code: "FORBIDDEN", message: "Lançamento já pago/recebido — estorne antes de editar." });
+    }
+    if (before.status === "cancelado") {
+      throw new TRPCError({ code: "FORBIDDEN", message: "Lançamento cancelado não pode ser editado." });
+    }
+    if (before.origem_modulo && before.origem_modulo !== "recorrente") {
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message: `Lançamento vinculado a outro módulo (${before.origem_modulo}#${before.origem_id ?? "?"}) — edite na origem.`,
+      });
+    }
+    // Builder dinâmico de SET — só sobrescreve o que veio.
+    const sets: string[] = [];
+    const vals: any[] = [];
+    const push = (col: string, v: any) => { sets.push(`${col} = $${vals.length + 1}`); vals.push(v); };
+    if (input.descricao !== undefined) push("descricao", input.descricao || null);
+    if (input.valorPrevisto !== undefined) push("valor_previsto", input.valorPrevisto);
+    if (input.dataCompetencia !== undefined) push("data_competencia", input.dataCompetencia);
+    if (input.dataVencimento !== undefined) push("data_vencimento", input.dataVencimento || null);
+    if (input.contaNome !== undefined) push("conta_nome", input.contaNome || null);
+    if (input.obraNome !== undefined) push("obra_nome", input.obraNome || null);
+    if (input.formaPagamento !== undefined) push("forma_pagamento", input.formaPagamento || null);
+    if (input.fornecedorNome !== undefined) push("fornecedor_nome", input.fornecedorNome?.trim() || null);
+    if (input.observacoes !== undefined) push("observacoes", input.observacoes || null);
+    if (input.natureza !== undefined) push("natureza", input.natureza);
+    if (input.tipo !== undefined) push("tipo", input.tipo);
+    if (sets.length === 0) return { ok: true, changed: false };
+    sets.push(`updated_at = NOW()`);
+    vals.push(input.id, input.companyId);
+    await dbExecute(db,
+      `UPDATE financial_entries SET ${sets.join(", ")}
+       WHERE id = $${vals.length - 1} AND company_id = $${vals.length}`,
+      vals
+    );
+    const snap = `desc="${before.descricao ?? ""}" valor=${before.valor_previsto} venc=${before.data_vencimento ?? "-"} categ="${before.conta_nome ?? "-"}" fornec="${before.fornecedor_nome ?? "-"}"`;
+    await createAuditLog({
+      action: "financial_entry_updated",
+      userId: ctx.user?.id,
+      companyId: input.companyId,
+      details: `Entry ${input.id} EDITADO por ${ctx.user?.name ?? "?"} (id=${ctx.user?.id ?? "?"}) — snapshot antes: ${snap}`,
+    });
+    return { ok: true, changed: true };
+  }),
+
   // NÃO permite excluir status='pago' (proteção financeira — usar cancelEntry
   // pra estornar). Lançamentos vindos de OC/folha/etc podem ser excluídos
   // pra resolver duplicidade, mas o módulo de origem permanece intacto.
@@ -1455,12 +1534,12 @@ export const financialRouter = router({
       [input.id, input.companyId]
     ).then((r: any) => (Array.isArray(r) ? r : r?.rows ?? []));
     if (!entry) throw new TRPCError({ code: "NOT_FOUND", message: "Lançamento não encontrado." });
-    if (entry.status === "pago") {
-      throw new TRPCError({ code: "FORBIDDEN", message: "Lançamento já pago — use 'Cancelar' (estorno) em vez de excluir." });
+    if (entry.status === "pago" || entry.status === "recebido") {
+      throw new TRPCError({ code: "FORBIDDEN", message: "Lançamento já pago/recebido — use 'Cancelar' (estorno) em vez de excluir." });
     }
     const snapshot = `desc="${entry.descricao ?? ""}" valor=${entry.valor_previsto} venc=${entry.data_vencimento ?? "-"} origem=${entry.origem_modulo ?? "manual"}${entry.origem_id ? "#" + entry.origem_id : ""} categoria="${entry.conta_nome ?? "-"}"`;
     await dbExecute(db,
-      `DELETE FROM financial_entries WHERE id=$1 AND company_id=$2 AND status != 'pago'`,
+      `DELETE FROM financial_entries WHERE id=$1 AND company_id=$2 AND status NOT IN ('pago','recebido')`,
       [input.id, input.companyId]
     );
     await createAuditLog({

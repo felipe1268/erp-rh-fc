@@ -2,6 +2,8 @@
 
 > Este arquivo guarda os one-liners das revisões antigas para manter o `replit.md` enxuto.
 
+- **Rev. 2390** — ALMOXARIFADO/UX · Transferência em LOTE no sticky bar do modo seleção (N itens → 1 destino comum, qtd editável por linha). Novo `createTransferenciaLote` itera linha-a-linha reusando lógica do single; modal max-w-2xl roxo→indigo com painel de resultado parcial (sucessos/falhas). Ver `shared/changelog.ts`.
+- **Rev. 2389** — GOVERNANÇA/COMPRAS · Guarda determinística impede que OCs de SERVIÇO / ADMINISTRATIVO / TRIBUTO virem item de Almoxarifado. Função `classificarNaturezaItemAlmox` aplicada em `atualizarStatusOrdem` (per-item) + `warehouse.registerSmartEntry` (itemNovo). Ver `shared/changelog.ts`.
 - **Rev. 2388** — SEGURANÇA · Controle rígido de auditoria no Almoxarifado: excluir item/unidade + alterar qtd manualmente → senha (se user local) + justificativa; log com snapshot antes/depois; tela de admin pra validar/rejeitar. Nova tabela `almoxarifado_auditoria` (CREATE IF NOT EXISTS). Ver `shared/changelog.ts`.
 - **Rev. 2387** — UX · Substituídos os 2 `window.confirm()` nativos que sobravam no Almoxarifado por modais customizados (header red→rose + Trash2). Print iPad mostrava confirm nativo do Safari com URL Replit ocupando 3 linhas + opção "Bloquear caixas". Ver `shared/changelog.ts`.
 - **Rev. 2386** — FEATURE · IA sugere categorias para itens "Sem categoria" no Almoxarifado (em lote, com modal de revisão); vocabulário fechado (`almoxarifado_categorias`); apply POR IDS via `atualizarCategoriaEmLote`. Ver `shared/changelog.ts`.

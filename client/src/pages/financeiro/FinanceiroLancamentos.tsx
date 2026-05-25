@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -17,7 +17,7 @@ import {
   Plus, Search, X, CheckCircle, AlertTriangle, TrendingUp, TrendingDown, Filter,
   Repeat, Pause, Play, Edit2, Calendar, Zap, ArrowUpRight, ArrowDownRight,
   Building2, CreditCard, FileText, ChevronDown, ChevronUp, RefreshCw,
-  ArrowLeftRight, Landmark, PlusCircle, Tag, Loader2,
+  ArrowLeftRight, Landmark, PlusCircle, Tag, Loader2, Pencil, Trash2,
 } from "lucide-react";
 
 function formatBRL(v: number) {
@@ -92,6 +92,10 @@ export default function FinanceiroLancamentos() {
   const [showCancel, setShowCancel] = useState<{ id: number } | null>(null);
   const [motivo, setMotivo] = useState("");
   const [editRecId, setEditRecId] = useState<number | null>(null);
+  // Rev. 2398 — edição + exclusão de lançamento manual (na aba Lançamentos).
+  const [editEntryId, setEditEntryId] = useState<number | null>(null);
+  const [showDelete, setShowDelete] = useState<{ id: number; desc: string } | null>(null);
+  const [deleteMotivo, setDeleteMotivo] = useState("");
   const [showObs, setShowObs] = useState(false);
   const [form, setForm] = useState({ ...INITIAL_FORM });
 
@@ -135,6 +139,21 @@ export default function FinanceiroLancamentos() {
   const cancelMut = (trpc as any).financial.cancelEntry.useMutation({
     onSuccess: () => { toast({ title: "Lançamento cancelado" }); setShowCancel(null); refetch(); },
     onError: (e: any) => toast({ title: "Erro", description: e.message, variant: "destructive" }),
+  });
+
+  // Rev. 2398 — edit + delete de lançamento manual.
+  const updateEntryMut = (trpc as any).financial.updateEntry.useMutation({
+    onSuccess: () => { toast({ title: "Lançamento atualizado!" }); setShowNew(false); resetForm(); refetch(); },
+    onError: (e: any) => toast({ title: "Erro ao atualizar", description: e.message, variant: "destructive" }),
+  });
+  const deleteEntryMut = (trpc as any).financial.deleteEntry.useMutation({
+    onSuccess: () => {
+      toast({ title: "Lançamento excluído" });
+      setShowDelete(null);
+      setDeleteMotivo("");
+      refetch();
+    },
+    onError: (e: any) => toast({ title: "Erro ao excluir", description: e.message, variant: "destructive" }),
   });
 
   const paidMut = (trpc as any).financial.updateEntryStatus.useMutation({
@@ -187,7 +206,8 @@ export default function FinanceiroLancamentos() {
 
   // Categorias filtradas pelo tipo do lançamento atual (despesa/receita/imposto/transferência → conta_natureza correspondente).
   // Mostra TODAS se nenhum filtro fizer sentido, e dedup por nome (case-insensitive) para evitar duplicatas visuais.
-  const categoriasFiltradas: { id: number; nome: string; centroCustoId: number | null }[] = (() => {
+  // Rev. 2397 — também devolve `natureza` (fixo/variavel) pra herdar no form quando o user seleciona a categoria.
+  const categoriasFiltradas: { id: number; nome: string; natureza: string | null; centroCustoId: number | null }[] = (() => {
     const list: any[] = Array.isArray(accounts) ? accounts : [];
     const dedupSeen = new Set<string>();
     const out: any[] = [];
@@ -198,10 +218,30 @@ export default function FinanceiroLancamentos() {
       const k = String(a.nome || "").trim().toLowerCase();
       if (!k || dedupSeen.has(k)) continue;
       dedupSeen.add(k);
-      out.push({ id: a.id, nome: a.nome, centroCustoId: a.centroCustoId ?? null });
+      out.push({ id: a.id, nome: a.nome, natureza: a.natureza ?? null, centroCustoId: a.centroCustoId ?? null });
     }
     return out;
   })();
+
+  // Rev. 2397 — categoria atualmente selecionada (match exato case-insensitive)
+  // para herdar a `natureza` cadastrada e travar o Select.
+  const categoriaSelecionada = (() => {
+    const nome = (form.contaNome ?? "").trim().toLowerCase();
+    if (!nome) return null;
+    return categoriasFiltradas.find(c => String(c.nome).trim().toLowerCase() === nome) ?? null;
+  })();
+  const naturezaHerdada = categoriaSelecionada?.natureza === "fixo" || categoriaSelecionada?.natureza === "variavel"
+    ? categoriaSelecionada.natureza
+    : null;
+
+  // Rev. 2397 — quando o user seleciona uma categoria que tem natureza cadastrada,
+  // sincroniza form.natureza automaticamente. Se trocar pra outra categoria, atualiza.
+  // Se remover/limpar a categoria, mantém o último valor (usuário pode ajustar manualmente).
+  useEffect(() => {
+    if (naturezaHerdada && form.natureza !== naturezaHerdada) {
+      setForm(f => ({ ...f, natureza: naturezaHerdada }));
+    }
+  }, [naturezaHerdada]);
 
   function handleCadastrarCategoria() {
     const nome = catForm.nome.trim();
@@ -221,6 +261,51 @@ export default function FinanceiroLancamentos() {
   function resetForm() {
     setForm({ ...INITIAL_FORM });
     setEditRecId(null);
+    setEditEntryId(null);
+  }
+
+  // Rev. 2398 — abre o modal "Novo Lançamento" no modo edição, carregando
+  // os dados do lançamento manual. Só pra entries SEM origem (manual) ou
+  // origem='recorrente' (que ainda tem aba própria — aqui só edita a row).
+  function openEditEntry(l: any) {
+    if (l.origemModulo && l.origemModulo !== "recorrente") {
+      toast({
+        title: "Edição bloqueada",
+        description: `Lançamento vinculado a "${originLabel(l.origemModulo)}" — edite na origem.`,
+        variant: "destructive",
+      });
+      return;
+    }
+    if (l.status === "pago" || l.status === "recebido") {
+      toast({
+        title: "Lançamento já pago",
+        description: "Estorne o pagamento antes de editar.",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (l.status === "cancelado") {
+      toast({ title: "Lançamento cancelado não pode ser editado.", variant: "destructive" });
+      return;
+    }
+    setEditEntryId(l.id);
+    setForm({
+      ...INITIAL_FORM,
+      modoRecorrente: false,
+      tipo: l.tipo ?? "despesa",
+      natureza: l.natureza ?? "fixo",
+      valorPrevisto: String(l.valorPrevisto ?? ""),
+      dataCompetencia: (l.dataCompetencia ?? "").slice(0, 10) || new Date().toISOString().split("T")[0],
+      dataVencimento: (l.dataVencimento ?? "").slice(0, 10),
+      descricao: l.descricao ?? "",
+      contaNome: l.contaNome ?? "",
+      obraNome: l.obraNome ?? "",
+      formaPagamento: l.formaPagamento ?? "",
+      fornecedorNome: l.fornecedorNome ?? "",
+      observacoes: l.observacoes ?? "",
+      status: l.status ?? "a_pagar",
+    });
+    setShowNew(true);
   }
 
   function openNew() {
@@ -282,21 +367,40 @@ export default function FinanceiroLancamentos() {
         toast({ title: "Preencha a data de competência", variant: "destructive" });
         return;
       }
-      createEntryMut.mutate({
-        companyId,
-        tipo: form.tipo,
-        natureza: form.natureza,
-        valorPrevisto: parseFloat(form.valorPrevisto),
-        dataCompetencia: form.dataCompetencia,
-        dataVencimento: form.dataVencimento || undefined,
-        descricao: form.descricao || undefined,
-        contaNome: form.contaNome || undefined,
-        obraNome: form.obraNome || undefined,
-        formaPagamento: form.formaPagamento || undefined,
-        fornecedorNome: form.fornecedorNome || undefined,
-        observacoes: form.observacoes || undefined,
-        status: form.tipo === "receita" ? "a_receber" : form.status,
-      });
+      // Rev. 2398 — se editEntryId está setado, vai pra updateEntry; senão createEntry.
+      if (editEntryId) {
+        updateEntryMut.mutate({
+          id: editEntryId,
+          companyId,
+          tipo: form.tipo,
+          natureza: form.natureza,
+          valorPrevisto: parseFloat(form.valorPrevisto),
+          dataCompetencia: form.dataCompetencia,
+          dataVencimento: form.dataVencimento || undefined,
+          descricao: form.descricao || "",
+          contaNome: form.contaNome || "",
+          obraNome: form.obraNome || "",
+          formaPagamento: form.formaPagamento || "",
+          fornecedorNome: form.fornecedorNome || "",
+          observacoes: form.observacoes || "",
+        });
+      } else {
+        createEntryMut.mutate({
+          companyId,
+          tipo: form.tipo,
+          natureza: form.natureza,
+          valorPrevisto: parseFloat(form.valorPrevisto),
+          dataCompetencia: form.dataCompetencia,
+          dataVencimento: form.dataVencimento || undefined,
+          descricao: form.descricao || undefined,
+          contaNome: form.contaNome || undefined,
+          obraNome: form.obraNome || undefined,
+          formaPagamento: form.formaPagamento || undefined,
+          fornecedorNome: form.fornecedorNome || undefined,
+          observacoes: form.observacoes || undefined,
+          status: form.tipo === "receita" ? "a_receber" : form.status,
+        });
+      }
     }
   }
 
@@ -328,7 +432,7 @@ export default function FinanceiroLancamentos() {
     return s + v;
   }, 0);
 
-  const isPending = createEntryMut.isPending || createRecMut.isPending || updateRecMut.isPending;
+  const isPending = createEntryMut.isPending || createRecMut.isPending || updateRecMut.isPending || updateEntryMut.isPending;
 
   return (
     <DashboardLayout>
@@ -491,8 +595,34 @@ export default function FinanceiroLancamentos() {
                               <CheckCircle className="w-3 h-3 mr-1" />Receber
                             </Button>
                           )}
+                          {/* Rev. 2398 — Editar lançamento manual (bloqueado pra OC/folha/etc) */}
+                          {(!l.origemModulo || l.origemModulo === "recorrente") &&
+                           l.status !== "pago" && l.status !== "recebido" && l.status !== "cancelado" && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="text-blue-600 hover:text-blue-700 hover:bg-blue-50 h-7 w-7 p-0"
+                              title="Editar lançamento"
+                              onClick={() => openEditEntry(l)}
+                            >
+                              <Pencil className="w-3.5 h-3.5" />
+                            </Button>
+                          )}
+                          {/* Rev. 2398 — Excluir lançamento (não permite se pago) */}
+                          {l.status !== "pago" && l.status !== "recebido" && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="text-rose-600 hover:text-rose-700 hover:bg-rose-50 h-7 w-7 p-0"
+                              title="Excluir lançamento"
+                              onClick={() => { setDeleteMotivo(""); setShowDelete({ id: l.id, desc: l.descricao ?? l.contaNome ?? `#${l.id}` }); }}
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </Button>
+                          )}
                           {l.status !== "cancelado" && (
-                            <Button size="sm" variant="ghost" className="text-red-500 h-7 w-7 p-0"
+                            <Button size="sm" variant="ghost" className="text-gray-400 hover:text-gray-600 h-7 w-7 p-0"
+                              title="Cancelar (estornar)"
                               onClick={() => setShowCancel({ id: l.id })}>
                               <X className="w-4 h-4" />
                             </Button>
@@ -608,10 +738,10 @@ export default function FinanceiroLancamentos() {
             }`}>
               <div className="flex items-center justify-between mb-3">
                 <h2 className="text-base font-semibold text-gray-800">
-                  {editRecId ? "Editar Recorrência" : "Novo Lançamento"}
+                  {editRecId ? "Editar Recorrência" : editEntryId ? "Editar Lançamento" : "Novo Lançamento"}
                 </h2>
                 {/* Toggle Único / Recorrente */}
-                {!editRecId && (
+                {!editRecId && !editEntryId && (
                   <div className="flex rounded-full border border-gray-300 bg-white overflow-hidden text-xs">
                     <button type="button"
                       onClick={() => setForm(f => ({ ...f, modoRecorrente: false }))}
@@ -845,14 +975,42 @@ export default function FinanceiroLancamentos() {
                     </Select>
                   </div>
                   <div>
-                    <p className="text-[11px] text-gray-400 mb-1">Natureza</p>
-                    <Select value={form.natureza} onValueChange={v => setForm(f => ({ ...f, natureza: v }))}>
-                      <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                    <p className="text-[11px] text-gray-400 mb-1 flex items-center gap-1">
+                      Natureza
+                      {naturezaHerdada && (
+                        <span
+                          className="text-[9px] font-semibold bg-blue-50 text-blue-700 border border-blue-200 rounded px-1 py-[1px] uppercase"
+                          title={`Herdada da categoria "${categoriaSelecionada?.nome}". Para alterar, edite a categoria no cadastro.`}
+                        >
+                          Da categoria
+                        </span>
+                      )}
+                    </p>
+                    <Select
+                      value={form.natureza}
+                      onValueChange={v => setForm(f => ({ ...f, natureza: v }))}
+                      disabled={!!naturezaHerdada}
+                    >
+                      <SelectTrigger
+                        className={`h-9 ${naturezaHerdada ? "bg-blue-50/40 border-blue-200 text-blue-900 cursor-not-allowed" : ""}`}
+                        title={naturezaHerdada ? `Vem da categoria "${categoriaSelecionada?.nome}"` : undefined}
+                      >
+                        <SelectValue />
+                      </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="fixo">Fixo</SelectItem>
                         <SelectItem value="variavel">Variável</SelectItem>
                       </SelectContent>
                     </Select>
+                    {naturezaHerdada ? (
+                      <p className="text-[10px] text-blue-600 mt-1">
+                        Definida no cadastro da categoria.
+                      </p>
+                    ) : form.contaNome.trim() ? (
+                      <p className="text-[10px] text-gray-400 mt-1">
+                        Categoria não cadastrada — defina manualmente.
+                      </p>
+                    ) : null}
                   </div>
                 </div>
               </div>
@@ -972,6 +1130,44 @@ export default function FinanceiroLancamentos() {
                 className="bg-blue-600 hover:bg-blue-700 text-white"
               >
                 {createAccountMut.isPending ? <><Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />Salvando...</> : <><PlusCircle className="w-3.5 h-3.5 mr-1.5" />Cadastrar</>}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Rev. 2398 — Modal de EXCLUSÃO de lançamento (motivo obrigatório min 5 chars). */}
+        <Dialog open={!!showDelete} onOpenChange={(v) => { if (!v) { setShowDelete(null); setDeleteMotivo(""); } }}>
+          <DialogContent className="max-w-sm">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-rose-700">
+                <Trash2 className="w-4 h-4" />
+                Excluir Lançamento
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-3">
+              <div className="bg-rose-50 border border-rose-100 rounded-lg p-2.5 text-xs text-rose-700">
+                Esta ação <strong>remove definitivamente</strong> o lançamento <strong>"{showDelete?.desc}"</strong>. Para reverter um pagamento, use <em>Cancelar</em> em vez de Excluir.
+              </div>
+              <div>
+                <Label>Motivo da exclusão (obrigatório)</Label>
+                <Textarea
+                  value={deleteMotivo}
+                  onChange={(e) => setDeleteMotivo(e.target.value)}
+                  rows={3}
+                  placeholder="Ex: lançamento duplicado, erro de digitação..."
+                  className="mt-1"
+                />
+                <p className="text-[11px] text-gray-400 mt-1">{deleteMotivo.length}/5 caracteres mínimos</p>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => { setShowDelete(null); setDeleteMotivo(""); }}>Voltar</Button>
+              <Button
+                variant="destructive"
+                disabled={deleteMotivo.trim().length < 5 || deleteEntryMut.isPending}
+                onClick={() => deleteEntryMut.mutate({ id: showDelete!.id, companyId, motivo: deleteMotivo.trim() })}
+              >
+                {deleteEntryMut.isPending ? "Excluindo..." : "Confirmar Exclusão"}
               </Button>
             </DialogFooter>
           </DialogContent>

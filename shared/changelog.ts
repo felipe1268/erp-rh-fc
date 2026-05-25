@@ -1,6 +1,124 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2398 — **FINANCEIRO/LANÇAMENTOS · Botões de Editar e Excluir em
+ * cada linha da lista de lançamentos (aba "Lançamentos").**
+ *
+ * Pedido user (25/05/2026, msg "ainda em LANÇAMENTOS, insira tambem os
+ * botoes de editar e excluir"): a lista só tinha botão X (cancelar) +
+ * Pagar/Receber. Não dava pra corrigir um lançamento errado (tinha que
+ * cancelar + criar de novo) nem pra apagar duplicidade sem deixar
+ * row "cancelada" suja na lista.
+ *
+ * Causa-raiz: backend tinha `cancelEntry` (status='cancelado') e
+ * `deleteEntry` (DELETE definitivo, bloqueia status='pago'), mas **NÃO
+ * tinha `updateEntry`** — só `updateEntryStatus` (Pagar/Receber).
+ * Edição "geral" de lançamento manual era um buraco no fluxo.
+ *
+ * **Backend** (`server/routers/financial.ts` L1445-1517 — novo
+ * `updateEntry`):
+ *   - Input: id, companyId, + campos opcionais (descricao,
+ *     valorPrevisto, dataCompetencia, dataVencimento, contaNome,
+ *     obraNome, formaPagamento, fornecedorNome, observacoes, natureza,
+ *     tipo). Builder dinâmico de SET — só sobrescreve o que veio
+ *     (parcial-update friendly).
+ *   - Guards: bloqueia `status IN ('pago','recebido')` (FORBIDDEN — usar
+ *     estorno antes), bloqueia `status='cancelado'`, bloqueia
+ *     `origem_modulo IS NOT NULL AND origem_modulo != 'recorrente'` (NÃO
+ *     deixa mascarar entries vindos de OC/folha/almox — tem que editar
+ *     na origem). Recorrente continua editável pela aba Recorrências, mas
+ *     a row materializada também aceita patch direto aqui.
+ *   - Snapshot do `before` (desc/valor/venc/categoria/fornecedor) +
+ *     `createAuditLog({ action: "financial_entry_updated" })` com
+ *     `ctx.user?.name` pra rastreabilidade total.
+ *
+ * **Frontend** (`client/src/pages/financeiro/FinanceiroLancamentos.tsx`):
+ *   - Novo state: `editEntryId`, `showDelete`, `deleteMotivo`.
+ *   - `updateEntryMut` (trpc) + `deleteEntryMut` (trpc) — toasts pt-BR.
+ *   - `openEditEntry(l)`: valida origem/status na UI antes de abrir
+ *     modal (toast destructive se bloqueado), seta `editEntryId` +
+ *     preenche `form` com TODOS os campos do lançamento (incluindo
+ *     fornecedorNome herdado da Rev. 2396 + natureza herdada da Rev.
+ *     2397). Reusa o Dialog "Novo Lançamento" — header muda pra "Editar
+ *     Lançamento" e esconde o toggle Único/Recorrente.
+ *   - `handleSave` (caminho non-recorrente): se `editEntryId` está set,
+ *     chama `updateEntryMut`; senão `createEntryMut`.
+ *   - `resetForm()` zera `editEntryId` junto com `editRecId`.
+ *   - Lista de lançamentos (L601-632): 3 botões na ordem
+ *     **Editar (azul) → Excluir (rose) → Cancelar (cinza X)**:
+ *     - **Editar** (Pencil): só renderiza se `(!origemModulo ||
+ *       origemModulo==='recorrente') && status NOT IN
+ *       ('pago','recebido','cancelado')`.
+ *     - **Excluir** (Trash2): renderiza se `status NOT IN
+ *       ('pago','recebido')` — `deleteEntry` proíbe pago no backend.
+ *     - **Cancelar** (X): mantém comportamento antigo (status !=
+ *       'cancelado'), mas cor degradada pra cinza pra hierarquia
+ *       visual (excluir vermelho > cancelar cinza).
+ *   - Modal de exclusão (max-w-sm rose, Trash2 no título): badge
+ *     informativo "remove definitivamente" + Label "Motivo da exclusão"
+ *     + Textarea + contador "N/5 caracteres mínimos" abaixo. Botão
+ *     destructive `disabled={motivo.trim().length < 5 || isPending}`.
+ *     `deleteEntryMut.mutate({ id, companyId, motivo })`.
+ *
+ * Política: ADD endpoint novo (não-destrutivo, schema intacto), UPDATE
+ * com SET dinâmico em colunas non-key, audit log sempre. R-001/R-007/
+ * R-010 OK (zero ALTER/DROP/DELETE em prod schema; o DELETE de
+ * `deleteEntry` é user-driven em row específica com guard de pago).
+ *
+ * Rev. 2397 — **FINANCEIRO/LANÇAMENTOS · Natureza (Fixo/Variável) é
+ * herdada automaticamente da categoria selecionada.**
+ *
+ * Pedido user (IMG_image_1779707852143, 25/05/2026): "Aqui no
+ * lançamento seria bom puxar automaticamente as informações que coloquei
+ * na categoria quando criei, por exemplo selecionei a categoria Mão de
+ * obra Indireta, lá no cadastro que fiz em CATEGORIAS eu já coloquei
+ * que a Natureza é VARIÁVEL, então seria legal puxar isso quando eu
+ * selecionar a categoria. Caso eu não selecione a categoria aí sim eu
+ * coloco se é Fixa ou Variável."
+ *
+ * Causa-raiz: `getAccounts` já devolvia `natureza` por categoria
+ * (`financial_accounts.natureza`), mas o componente
+ * `FinanceiroLancamentos.tsx` mapeava apenas `{id, nome, centroCustoId}`
+ * em `categoriasFiltradas` e descartava o campo. Resultado: usuário
+ * tinha que escolher Fixo/Variável manualmente toda vez, mesmo já
+ * tendo cadastrado isso no Plano de Contas/Categorias — risco real de
+ * inconsistência (Plano diz "variável", lançamento sai "fixo").
+ *
+ * **Frontend** (`client/src/pages/financeiro/FinanceiroLancamentos.tsx`):
+ *   - `categoriasFiltradas` (L191-208): passa a propagar
+ *     `natureza: a.natureza ?? null` por categoria.
+ *   - Derivado `categoriaSelecionada` (L210-216): match exato
+ *     case-insensitive de `form.contaNome` contra a lista filtrada
+ *     pelo tipo do lançamento (despesa/receita). Compatível com
+ *     entrada via datalist ou digitação.
+ *   - Derivado `naturezaHerdada` (L217-219): só vale "fixo"/"variavel";
+ *     null se categoria sem natureza ou sem match.
+ *   - `useEffect` (L221-228): sincroniza `form.natureza` quando o user
+ *     seleciona uma categoria com natureza cadastrada. Mudança de
+ *     categoria reflete no Select; remover/limpar categoria mantém o
+ *     último valor (UX: usuário pode ajustar manualmente).
+ *   - Select de Natureza (L871-908): `disabled` quando há herança;
+ *     label ganha chip "DA CATEGORIA" (azul) + tooltip "Vem da
+ *     categoria {nome}"; legenda dinâmica abaixo do select muda entre
+ *     "Definida no cadastro da categoria." (azul) e "Categoria não
+ *     cadastrada — defina manualmente." (cinza, só quando o user
+ *     digitou algo em contaNome que não matchou).
+ *   - Import: `useEffect` adicionado.
+ *
+ * Política R-001/R-007/R-010 OK: zero mudança em schema/backend (campo
+ * já existia em `financial_accounts.natureza` e já era devolvido por
+ * `getAccounts`). Sem ALTER/DROP/DELETE.
+ *
+ * Não afeta: cadastro inline de categoria (`createAccountMut`) continua
+ * recebendo `catForm.natureza` do sub-dialog — usuário define no momento
+ * do cadastro e a herança passa a valer no próximo uso.
+ *
+ * Arquivos:
+ *   - `client/src/pages/financeiro/FinanceiroLancamentos.tsx`
+ *   - `shared/version.ts` → 2397 / `replit.md` rotacionado.
+ *
+ * ──────────────────────────────────────────────────────────────────
+ *
  * Rev. 2396 — **FINANCEIRO/CONTAS A PAGAR · Nome do fornecedor visível
  * na lista e no detalhe do título.**
  *
