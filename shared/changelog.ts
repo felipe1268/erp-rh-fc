@@ -1,6 +1,112 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2423 — **AVISO PRÉVIO · TRABALHADO VOLTA A 30 DIAS FIXOS DE
+ * CUMPRIMENTO (caso Myriélle).**
+ *
+ * Pedido user (25/05/2026, screenshot novo aviso da Myriélle Fialho
+ * Borges Arcanjo, 2 anos de casa, Empregador Trabalhado): "o aviso
+ * trabalhado está puxando data errada pra quem tem mais de 1 ano...
+ * o aviso é sempre 30 dias... o 6 dias a mais conta apenas para
+ * efeito do calculo de rescisao, mas nao quer dizer que ela tem que
+ * cumprir 36 dias". Tela mostrava "TÉRMINO DO AVISO 30/06/2026 |
+ * 36 dias de aviso" — incorreto operacionalmente.
+ *
+ * **Reverte parcialmente Rev. 1943/1965.** Aquelas revisões aplicaram
+ * a Lei 12.506/2011 (corrente majoritária TST: +3d/ano nas DUAS
+ * modalidades) também ao período CUMPRIDO do trabalhado, fazendo
+ * 2 anos → 36 dias, 10 anos → 60 dias trabalhados etc. O FC voltou
+ * a posicionamento prático: **CLT Art. 487 caput + Art. 488** —
+ * cumprimento físico = 30 dias fixos. Os +3·ano da Lei 12.506 são
+ * **verba indenizatória patrimonial** paga no acerto da rescisão
+ * (aviso indenizado complementar), sem estender a jornada.
+ *
+ * **Separação CUMPRIMENTO vs VERBA** (núcleo da revisão):
+ *  - **CUMPRIMENTO** (período em que o empregado trabalha): SEMPRE
+ *    30 dias para qualquer modalidade `_trabalhado` (empregador OU
+ *    empregado). Define `dataFimAviso`, "último dia trabalhado",
+ *    "término do aviso" mostrado nos cards, geração de documentos
+ *    (carta de aviso, redução 2h/7d).
+ *  - **VERBA** (valor financeiro pago): segue íntegro o total
+ *    proporcional 30+3·ano via `calcularDiasAvisoTotal`. Já está
+ *    correto desde Rev. 1943 em `calcularRescisaoCompleta`:
+ *    - tipo='empregador_indenizado' → avisoIndenizado = salarioDia ×
+ *      diasAvisoTotal (30+3·ano);
+ *    - tipo='empregador_trabalhado' → avisoIndenizado = salarioDia ×
+ *      **diasExtras** (3·ano, sem o piso de 30 que já foi pago como
+ *      saldo de salário trabalhado).
+ *    Resultado: o trabalhador continua recebendo o total proporcional,
+ *    a empresa continua pagando o total proporcional — só que os 30
+ *    iniciais entram como SALÁRIO e os 3·ano extras como INDENIZAÇÃO
+ *    (sem encargos patronais sobre a parte indenizada).
+ *
+ * **Arquivos tocados:**
+ *  - `server/utils/rescisaoCalc.ts` L260-271 — `calcularDiasAviso(anos, tipo)`
+ *    agora retorna 30 para QUALQUER `*_trabalhado` (antes só `empregado_*`
+ *    retornava 30; `empregador_trabalhado` retornava o total). Comentário
+ *    jsdoc atualizado explicando a distinção CUMPRIMENTO vs VERBA.
+ *    `calcularDiasAvisoTotal` e `calcularRescisaoCompleta` ficam intactos
+ *    — VERBA proporcional preservada.
+ *  - `client/src/pages/AvisoPrevio.tsx` L538-540 — geração de documento de
+ *    aviso (carta de comunicação ao empregado): `diasAviso = (isPedidoDemissao
+ *    || isTrabalhado) ? 30 : Math.min(30 + (anosServico * 3), 90)`. Usa o
+ *    `isTrabalhado` já declarado em L512. Comentário ref. ao caso Myriélle.
+ *  - `client/src/pages/AvisoPrevio.tsx` L2715-2717 — preview reativo no form
+ *    de criação (cards "Último Dia Trabalhado / Término do Aviso / Data de
+ *    Pagamento"): mesma lógica. Antes só `isEmpregadoIndenizado` zerava;
+ *    agora `isTrabalhado` força 30.
+ *  - `client/src/pages/AvisoPrevio.tsx` L2252-2355 — painel "Base Legal"
+ *    (expandível na criação) REESCRITO. Antes (Rev. 1943) afirmava
+ *    "Lei 12.506 aplica os +3d/ano às DUAS modalidades" e mostrava
+ *    "Trabalhado 30+3/ano vs Indenizado 30+3/ano" como se fossem iguais.
+ *    Agora explica a distinção: tabela com 2 colunas separadas — coluna
+ *    "Trabalhado (cumpre + paga)" mostra "30 + N" (30 cumpridos + N
+ *    indenizados) e "Indenizado (só paga)" mostra o total integral.
+ *    Aviso amarelo destaca o direito patrimonial vs obrigação de jornada.
+ *  - `server/routers/avisoPrevioFerias.ts` L944-951 — comparativo
+ *    "trabalhado vs indenizado" no modal de simulação: `diasAvisoTrab = 30`
+ *    fixo (antes `calcularDiasAvisoTotal(anos)`). `fatorPeriodoTrab`
+ *    consequentemente = 1, então `custoSalarioTrab = salarioBase × 1` e
+ *    encargos patronais cobram só sobre 1 salário (não 2 para 10 anos).
+ *    Custo total da empresa no trabalhado cai significativamente — mas
+ *    `prevTrab` (via calcularRescisaoCompleta) ainda paga `diasExtras` como
+ *    aviso indenizado complementar, então o EMPREGADO recebe o mesmo valor
+ *    bruto que receberia no indenizado (zero perda patrimonial).
+ *  - `server/routers/avisoPrevioFerias.ts` L1032 — observação textual no
+ *    objeto `trabalhado` do return atualizada: explica que cumpre 30 fixos
+ *    + ${diasExtras} dias proporcionais pagos como indenização complementar.
+ *  - `server/routers/dashboards.ts` L2530 — **CDM (Custo de Demissão em
+ *    Massa)** estava hardcoded em `calcularDiasAvisoTotal(anosBase)` para
+ *    ambos os tipos (Rev. 1943), recriando divergência de projeção de
+ *    férias/13º com o módulo oficial trabalhado pós-2423. Trocado por
+ *    `calcularDiasAviso(anosBase, tipo)` — helper canônico já corrigido,
+ *    então trabalhado→30 e indenizado→30+3·ano. Import de `calcularDiasAviso`
+ *    adicionado em L20. Captado pelo architect review.
+ *
+ * **Impacto contábil (caso Myriélle, 2 anos):**
+ *  - Antes Rev. 2423: cumpria 36 dias trabalhando + recebia avisoIndenizado=0
+ *    (`tipo='empregador_trabalhado'` paga só diasExtras=6, mas como cumpria
+ *    36 já estava "tudo dentro do saldo"). Total empresa: 36d salário + 36d
+ *    encargos = 1,2 salários cheios.
+ *  - Depois Rev. 2423: cumpre 30 dias trabalhando + recebe avisoIndenizado
+ *    = salarioDia × 6 (verba pura, sem encargos). Total empresa: 1 salário
+ *    cheio + encargos sobre 30d + 6 dias de indenização (≈ 1,2 salários
+ *    BRUTOS para a empregada — IGUAL ao cenário antigo — mas com ECONOMIA
+ *    nos encargos patronais sobre os 6 dias indenizados, que não incidem).
+ *    Para a Myriélle: zero impacto patrimonial; para a FC: ~R$ 80–200 de
+ *    economia em encargos sobre os 6 dias proporcionais.
+ *
+ * **R-001/R-007/R-010 OK.** Zero ALTER/DROP/DELETE. Mudança 100% em
+ * lógica de cálculo + UX. Nenhuma migration.
+ *
+ * **Não tocados (intencionalmente):**
+ *  - `calcularRescisaoCompleta`/`calcularRescisaoComplementar` (L307-509)
+ *    — já distinguiam corretamente desde Rev. 1943.
+ *  - Linha L1349 (preview do card "+ X dias indenizados") — já existia
+ *    e ficou semanticamente CORRETA agora (antes era meio redundante).
+ *  - Helpers `calcularDiasAvisoTotal`, `calcularDiasExtrasAviso` — verba
+ *    proporcional continua íntegra.
+ *
  * Rev. 2422 — **INVENTÁRIO VISUAL DE BAIAS · "DESFAZER AFERIÇÃO" COM
  * ESTORNO AUTOMÁTICO DO ALMOXARIFADO.**
  *

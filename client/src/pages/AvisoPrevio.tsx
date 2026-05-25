@@ -527,12 +527,14 @@ export default function AvisoPrevio({ mode = "aviso_previo" }: { mode?: AvisoPre
       const diff = dtAviso.getTime() - new Date(emp.dataAdmissao + "T00:00:00").getTime();
       return Math.max(0, Math.floor(diff / (365.25 * 24 * 60 * 60 * 1000)));
     })();
-    // Rev. 1943 — Corrente majoritária TST (Lei 12.506/2011 Art. 1º Parágrafo único):
-    // a lei NÃO distingue trabalhado vs indenizado. Os +3d/ano aplicam às DUAS
-    // modalidades. Antes (Rev. 1805) usava 30 fixos pra trabalhado (minoritária).
-    // Jurídico FC Engenharia 16/05/2026 alinhado. Pedido de demissão pelo empregado
-    // mantém 30 fixos (CLT Art. 487 §2º — empregado dá o aviso, não recebe extras).
-    const diasAviso = isPedidoDemissao ? 30 : Math.min(30 + (anosServico * 3), 90);
+    // Rev. 2423 — CUMPRIMENTO físico do aviso trabalhado é SEMPRE 30 dias
+    // (CLT Art. 487 caput + Art. 488). Os +3d/ano da Lei 12.506/2011 são
+    // VERBA INDENIZATÓRIA paga junto à rescisão — não obrigação de trabalhar
+    // 36/60/90 dias. Caso Myriélle (2 anos, 25/05/2026) mostrava 36d errado.
+    // Para INDENIZADO, o período nominal usa o total proporcional 30+3·ano.
+    const diasAviso = (isPedidoDemissao || isTrabalhado)
+      ? 30
+      : Math.min(30 + (anosServico * 3), 90);
 
     const dtInicio = new Date(dtAviso); dtInicio.setDate(dtInicio.getDate() + 1);
     const dtFim = new Date(dtInicio); dtFim.setDate(dtFim.getDate() + diasAviso - 1);
@@ -2244,16 +2246,15 @@ ${pdfData.aviso.observacoes ? '<div class="section"><div class="section-title">O
                 <p className="text-xs text-amber-700 mt-1">Preencha os dados abaixo conforme CLT Art. 487-491 e Lei 12.506/2011</p>
               </div>
 
-              {/* Rev. 1943 — Painel reescrito após orientação do jurídico FC Engenharia
-                  16/05/2026: a Lei 12.506/2011 NÃO distingue trabalhado vs indenizado,
-                  e a corrente majoritária do TST aplica os +3d/ano às DUAS modalidades.
-                  Antes (Rev. 1925) o painel afirmava "Trabalhado = 30 fixos" (corrente
-                  minoritária, MTE NT 184/2012 revogada em 2014) — risco jurídico alto. */}
+              {/* Rev. 2423 — Painel reescrito após esclarecimento FC Engenharia 25/05/2026:
+                  separar CUMPRIMENTO (sempre 30 dias) de VERBA (30 + 3·ano).
+                  Antes (Rev. 1943) o cumprimento físico do trabalhado herdava os +3d/ano,
+                  exibindo "36 dias de aviso" para 2 anos de casa — errado na prática. */}
               <details className="border-b bg-blue-50/60 group" data-testid="aviso-base-legal">
                 <summary className="cursor-pointer select-none px-6 py-3 text-xs font-semibold text-blue-900 hover:bg-blue-100/60 transition-colors flex items-center justify-between">
                   <span className="flex items-center gap-2">
                     <FileText className="h-4 w-4 text-blue-700" />
-                    📚 Base Legal — Lei 12.506/2011 aplica os +3 dias/ano às DUAS modalidades (Trabalhado e Indenizado)
+                    📚 Base Legal — Trabalhado: 30 dias fixos · Indenizado: 30 + 3/ano (verbas)
                   </span>
                   <span className="text-blue-700 text-[10px] group-open:hidden">▼ Expandir</span>
                   <span className="text-blue-700 text-[10px] hidden group-open:inline">▲ Recolher</span>
@@ -2270,23 +2271,25 @@ ${pdfData.aviso.observacoes ? '<div class="section"><div class="section-title">O
                       até 90 (noventa) dias."
                     </p>
                     <p className="text-[11px] text-blue-700">
-                      <b>A lei não distingue trabalhado vs indenizado</b> — fala apenas em
-                      "aviso prévio" genericamente. Pelo princípio <i>"lex non distinguit
-                      nec nos distinguere debemus"</i> (onde a lei não distingue, o
-                      intérprete não deve distinguir), os +3d/ano aplicam-se a AMBAS.
+                      <b>Importante:</b> os +3d/ano da Lei 12.506 representam um
+                      <b> direito patrimonial</b> do trabalhador (verba indenizatória),
+                      não uma obrigação de cumprir mais do que 30 dias trabalhando. Na
+                      prática FC: aviso TRABALHADO = 30 dias fixos cumpridos +
+                      proporcional pago em pecúnia na rescisão.
                     </p>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <div className="bg-white border border-blue-200 rounded p-3">
-                      <div className="font-bold text-blue-900 mb-1">🔵 Aviso Trabalhado — 30 + 3/ano</div>
+                      <div className="font-bold text-blue-900 mb-1">🔵 Aviso Trabalhado — 30 dias fixos</div>
                       <div className="text-[11px] text-blue-800 mb-2">
-                        Base: <b>Lei 12.506/2011</b> + <b>CLT Art. 487 II</b> + <b>CLT Art. 488</b>
+                        Base: <b>CLT Art. 487 caput</b> + <b>CLT Art. 488</b>
                       </div>
                       <p className="text-[11px] leading-relaxed">
-                        Empregado cumpre o aviso trabalhando normalmente pelo período
-                        proporcional (30 + 3 dias/ano), com direito a redução de{" "}
-                        <b>2 horas/dia</b> ou <b>7 dias corridos</b> ao final para procurar
-                        emprego (<b>CLT Art. 488</b>).
+                        Empregado cumpre exatamente <b>30 dias trabalhando</b>,
+                        com direito a redução de <b>2h/dia</b> ou <b>7 dias corridos</b>
+                        ao final (Art. 488). Os <b>+3 dias/ano</b> não estendem a
+                        jornada — são pagos como <b>aviso indenizado complementar</b>{" "}
+                        no acerto da rescisão (Lei 12.506/2011).
                       </p>
                     </div>
                     <div className="bg-white border border-red-200 rounded p-3">
@@ -2295,49 +2298,49 @@ ${pdfData.aviso.observacoes ? '<div class="section"><div class="section-title">O
                         Base: <b>Lei 12.506/2011</b> + <b>CLT Art. 487 §1º</b>
                       </div>
                       <p className="text-[11px] leading-relaxed">
-                        Empregado é dispensado de imediato e recebe TUDO em dinheiro
-                        (30 + 3 dias/ano). Mesmo número de dias do trabalhado — a
-                        diferença é só operacional (não trabalha, recebe à vista).
+                        Empregado é dispensado de imediato e <b>não trabalha nenhum
+                        dia</b>. Recebe o período proporcional <b>integral em pecúnia</b>{" "}
+                        (30 + 3 dias/ano, teto 90). A projeção de férias / 13º também
+                        usa o período total proporcional.
                       </p>
                     </div>
                   </div>
                   <div className="bg-white border border-blue-200 rounded overflow-hidden">
                     <div className="bg-blue-100 px-3 py-1.5 text-[11px] font-bold text-blue-900">
-                      Tabela de Dias de Aviso (Lei 12.506/2011 — aplicada às duas modalidades)
+                      Tabela — Dias CUMPRIDOS (trabalho) vs Dias PAGOS (verbas)
                     </div>
                     <table className="w-full text-[11px]">
                       <thead className="bg-blue-50">
                         <tr>
                           <th className="text-left py-1.5 px-3 font-semibold text-blue-900">Tempo de Casa</th>
-                          <th className="text-center py-1.5 px-3 font-semibold text-blue-900">Trabalhado</th>
-                          <th className="text-center py-1.5 px-3 font-semibold text-red-900">Indenizado</th>
+                          <th className="text-center py-1.5 px-3 font-semibold text-blue-900">Trabalhado<br/><span className="text-[9px] font-normal">(cumpre + paga)</span></th>
+                          <th className="text-center py-1.5 px-3 font-semibold text-red-900">Indenizado<br/><span className="text-[9px] font-normal">(só paga)</span></th>
                           <th className="text-left py-1.5 px-3 font-semibold text-blue-900">Cálculo</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-blue-100">
-                        <tr><td className="py-1 px-3">Até 1 ano</td><td className="text-center font-mono">30</td><td className="text-center font-mono text-red-700">30</td><td className="text-[10px] text-blue-700">base Art. 1º caput</td></tr>
-                        <tr><td className="py-1 px-3">2 anos</td><td className="text-center font-mono">33</td><td className="text-center font-mono text-red-700">33</td><td className="text-[10px] text-blue-700">30 + (1×3)</td></tr>
-                        <tr><td className="py-1 px-3">5 anos</td><td className="text-center font-mono">42</td><td className="text-center font-mono text-red-700">42</td><td className="text-[10px] text-blue-700">30 + (4×3)</td></tr>
-                        <tr className="bg-yellow-50"><td className="py-1 px-3 font-semibold">10 anos</td><td className="text-center font-mono font-bold">60</td><td className="text-center font-mono text-red-700 font-bold">60</td><td className="text-[10px] text-blue-700">30 + (10×3)</td></tr>
-                        <tr><td className="py-1 px-3">15 anos</td><td className="text-center font-mono">75</td><td className="text-center font-mono text-red-700">75</td><td className="text-[10px] text-blue-700">30 + (15×3)</td></tr>
-                        <tr className="bg-red-50/40"><td className="py-1 px-3 font-semibold">20 anos ou mais</td><td className="text-center font-mono font-bold">90 (teto)</td><td className="text-center font-mono text-red-700 font-bold">90 (teto)</td><td className="text-[10px] text-blue-700">limitado a 90 dias</td></tr>
+                        <tr><td className="py-1 px-3">Até 1 ano</td><td className="text-center font-mono">30 + 0</td><td className="text-center font-mono text-red-700">30</td><td className="text-[10px] text-blue-700">base Art. 1º caput</td></tr>
+                        <tr><td className="py-1 px-3">2 anos</td><td className="text-center font-mono">30 + 3</td><td className="text-center font-mono text-red-700">33</td><td className="text-[10px] text-blue-700">30 trabalha + 3 indeniz.</td></tr>
+                        <tr><td className="py-1 px-3">5 anos</td><td className="text-center font-mono">30 + 12</td><td className="text-center font-mono text-red-700">42</td><td className="text-[10px] text-blue-700">30 trabalha + 12 indeniz.</td></tr>
+                        <tr className="bg-yellow-50"><td className="py-1 px-3 font-semibold">10 anos</td><td className="text-center font-mono font-bold">30 + 30</td><td className="text-center font-mono text-red-700 font-bold">60</td><td className="text-[10px] text-blue-700">30 trabalha + 30 indeniz.</td></tr>
+                        <tr><td className="py-1 px-3">15 anos</td><td className="text-center font-mono">30 + 45</td><td className="text-center font-mono text-red-700">75</td><td className="text-[10px] text-blue-700">30 trabalha + 45 indeniz.</td></tr>
+                        <tr className="bg-red-50/40"><td className="py-1 px-3 font-semibold">20+ anos</td><td className="text-center font-mono font-bold">30 + 60</td><td className="text-center font-mono text-red-700 font-bold">90 (teto)</td><td className="text-[10px] text-blue-700">teto 60 dias extras</td></tr>
                       </tbody>
                     </table>
                   </div>
                   <div className="bg-amber-50 border border-amber-300 rounded p-2.5 text-[11px] text-amber-900">
-                    <b>⚖️ Histórico das interpretações:</b> em 2012 o MTE editou a Nota
-                    Técnica 184 dizendo que os +3d/ano só valiam para o indenizado —
-                    interpretação <b>revogada pelo próprio MTE em 2014</b> e nunca acolhida
-                    pelo TST. Hoje a jurisprudência consolidada (Súm. 441 TST + doutrina —
-                    Maurício Godinho Delgado) aplica o aviso proporcional às DUAS
-                    modalidades. Aplicar 30 fixos no trabalhado expõe a empresa a
-                    condenação retroativa em reclamatória trabalhista.
+                    <b>⚖️ Distinção essencial (Rev. 2423):</b> a Lei 12.506/2011 garante
+                    um <b>direito patrimonial</b> ao trabalhador (30 + 3·ano), mas <b>não
+                    obriga o empregado a trabalhar mais de 30 dias</b> no aviso. O
+                    cumprimento físico (CLT Art. 487 caput) é sempre 30 dias; a diferença
+                    proporcional é quitada como <b>aviso indenizado complementar</b> na
+                    rescisão, sem encargos patronais sobre os dias indenizados.
                   </div>
                   <div className="bg-blue-50 border border-blue-300 rounded p-2.5 text-[11px] text-blue-900">
-                    <b>📌 Exceção:</b> quando é o <b>empregado</b> quem pede demissão e
-                    indeniza a empresa (não cumpre o aviso), aplicam-se <b>30 dias fixos</b>{" "}
-                    (CLT Art. 487 §2º) — os +3d/ano são direito do trabalhador, não
-                    obrigação dele com o empregador.
+                    <b>📌 Exceção — pedido pelo empregado:</b> quando o <b>empregado</b>{" "}
+                    pede demissão e indeniza a empresa (não cumpre o aviso), aplicam-se{" "}
+                    <b>30 dias fixos</b> (CLT Art. 487 §2º) — os +3d/ano são direito do
+                    trabalhador, não obrigação dele com o empregador.
                   </div>
                   <div className="text-[10px] text-blue-700 italic pt-1 border-t border-blue-200">
                     Fontes oficiais: <a href="https://www.planalto.gov.br/ccivil_03/_ato2011-2014/2011/lei/l12506.htm" target="_blank" rel="noopener" className="underline hover:text-blue-900">Lei 12.506/2011</a>{" · "}
@@ -2703,8 +2706,13 @@ ${pdfData.aviso.observacoes ? '<div class="section"><div class="section-title">O
                   // Empregado indenizado = não cumpre aviso, sai no dia do pedido
                   const isEmpregadoIndenizado = form.tipo === 'empregado_indenizado';
                   const isTrabalhado = form.tipo?.includes('trabalhado');
-                  // Rev. 1943 — +3d/ano nas DUAS modalidades empregador (trab/ind), Lei 12.506 corrente majoritária TST. Pedido pelo empregado mantém 30 (CLT Art. 487 §2º).
-                  const diasAviso = isEmpregadoIndenizado ? 0 : (isPedidoDemissao ? 30 : Math.min(30 + (anosServico * 3), 90));
+                  // Rev. 2423 — Cumprimento físico do aviso trabalhado = 30 dias FIXOS
+                  // (CLT Art. 487 caput + Art. 488). Os +3d/ano (Lei 12.506) entram só
+                  // como verba indenizatória na rescisão, não estendem o prazo de
+                  // cumprimento. Indenizado pelo empregador segue total proporcional.
+                  const diasAviso = isEmpregadoIndenizado
+                    ? 0
+                    : ((isPedidoDemissao || isTrabalhado) ? 30 : Math.min(30 + (anosServico * 3), 90));
                   
                   // Data início do aviso = dia seguinte à data do aviso (exceto indenizado pelo empregado)
                   const dtInicio = new Date(dataAviso + 'T00:00:00');

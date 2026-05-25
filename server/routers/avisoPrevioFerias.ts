@@ -938,13 +938,14 @@ export const avisoPrevioFeriasRouter = router({
         // ============================================================
         // CENÁRIO 1: AVISO TRABALHADO
         // ============================================================
-        // Rev. 1943 — Corrente majoritária TST (Lei 12.506/2011 Art. 1º
-        // Parágrafo único — "ao aviso prévio... serão acrescidos 3 dias
-        // por ano"): a lei NÃO distingue trabalhado vs indenizado, então
-        // os +3d/ano aplicam-se às DUAS modalidades. Antes (Rev. 1921)
-        // usava 30 fixos pra trabalhado (corrente minoritária / MTE NT
-        // 184/2012 revogada). Jurídico FC Engenharia 16/05/2026 alinhado.
-        const diasAvisoTrab = calcularDiasAvisoTotal(anosServico);
+        // Rev. 2423 — CUMPRIMENTO físico do aviso trabalhado = 30 dias FIXOS.
+        // Os +3d/ano (Lei 12.506/2011) entram só como verba indenizatória
+        // complementar — pagos via `calcularRescisaoCompleta` para tipo
+        // 'empregador_trabalhado' (avisoIndenizado = salarioDia × diasExtras),
+        // sem estender o prazo de cumprimento. Antes (Rev. 1943) usava
+        // 30+3·ano também para cumprimento, gerando "36/60/90 dias trabalhados"
+        // — incorreto na prática FC e em CLT Art. 487 caput + Art. 488.
+        const diasAvisoTrab = 30;
         const dataInicioTrab = calcularDataInicioAviso(input.dataDesligamento);
         const dataFimTrab = calcularDataFim(dataInicioTrab, diasAvisoTrab);
         const dtFimTrab = new Date(dataFimTrab + 'T00:00:00');
@@ -1025,7 +1026,7 @@ export const avisoPrevioFeriasRouter = router({
             totalLiquido: totalLiquidoTrab.toFixed(2),
             custoTotalEmpresa: custoTotalEmpresaTrab.toFixed(2),
             encargosPatronais: encargosPatronaisTrab.toFixed(2),
-            observacao: `Funcionário trabalha ${diasAvisoTrab} dias (30 + ${calcularDiasExtrasAviso(anosServico)} dias pelos ${anosServico} anos de serviço — Lei 12.506/2011 corrente majoritária TST). Empresa arca com salário e encargos patronais (~36,8%) durante todo o período trabalhado.`,
+            observacao: `Funcionário cumpre 30 dias fixos (CLT Art. 487 caput + Art. 488). Os ${calcularDiasExtrasAviso(anosServico)} dias proporcionais (Lei 12.506/2011, ${anosServico} anos de casa) são pagos como aviso indenizado complementar na rescisão, sem estender o prazo de trabalho. Empresa arca com salário + encargos patronais (~36,8%) sobre os 30 dias trabalhados.`,
           },
           indenizado: {
             tipo: 'empregador_indenizado',

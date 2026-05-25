@@ -246,21 +246,24 @@ export function calcularDiasAvisoTotal(anosServico: number): number {
   return Math.min(30 + (anosServico * 3), 90);
 }
 
-/** Calcula dias de aviso prévio conforme o tipo.
- * Rev. 1965 — Alinha `empregador_trabalhado` ao Rev. 1943: Lei 12.506/2011
- * Art. 1º Parágrafo único aplica os +3d/ano nas DUAS modalidades empregador
- * (TST corrente majoritária / Jurídico FC). Antes, este helper retornava 30
- * fixos para qualquer string contendo 'trabalhado', causando subestimação no
- * proc `calcular` (modal de simulação) — `prevTrab`/`prevInd` (Rev. 1943) e
- * CDM (Rev. 1909+) já usavam `calcularDiasAvisoTotal`; só este helper ficou
- * para trás. Resultado: modal mostrava 13º=6/12 e férias=5/12 (baseado em
- * dataFimAviso=15/06 = 16/05+30d) enquanto CDM mostrava 7/12 e 6/12 (=15/07
- * com 60d). Diff ≈ R$ 2,6k pra Anderson. Empregado-side (empregado_*) segue
- * a regra clássica CLT: 30 fixos pra trabalhado, 0 pra indenizado. */
+/** Calcula dias de aviso prévio CUMPRIDOS (período de trabalho efetivo).
+ * Rev. 2423 — Reverte parcialmente Rev. 1965/1943: para QUALQUER modalidade
+ * "trabalhada", o cumprimento físico é SEMPRE 30 dias (CLT Art. 487 caput +
+ * Art. 488). Os +3d/ano da Lei 12.506/2011 NÃO viram obrigação de trabalhar
+ * 36/60/90 dias — eles contam apenas como VERBA INDENIZATÓRIA COMPLEMENTAR
+ * paga junto à rescisão (já tratada por `calcularRescisaoCompleta`, que para
+ * tipo='empregador_trabalhado' calcula avisoIndenizado = salarioDia × diasExtras).
+ * O TOTAL financeiro (30 + 3·ano) segue íntegro via `calcularDiasAvisoTotal`,
+ * mas a DURAÇÃO do período cumprido fica em 30 fixos. Para INDENIZADO, idem
+ * convenção CLT — empregado não cumpre nenhum dia, só recebe os 30+3·ano em
+ * dinheiro. Pedido FC Engenharia 25/05/2026 (caso Myriélle: 2 anos exibiam
+ * 36 dias de cumprimento — incorreto). */
 export function calcularDiasAviso(anosServico: number, tipo?: string): number {
   if (tipo === 'empregado_indenizado') return 0;
-  if (tipo === 'empregador_trabalhado') return calcularDiasAvisoTotal(anosServico);
-  if (tipo && tipo.startsWith('empregado_')) return 30;
+  // Toda modalidade "trabalhada" (empregador OU empregado) cumpre 30 dias fixos.
+  if (tipo && tipo.endsWith('_trabalhado')) return 30;
+  // Indenizado pelo empregador: período NOMINAL (usado por dataFimAviso e
+  // pelo cálculo de verbas proporcionais) é o total proporcional 30+3·ano.
   return calcularDiasAvisoTotal(anosServico);
 }
 

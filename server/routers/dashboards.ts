@@ -14,7 +14,7 @@ import {
 } from "../../drizzle/schema";
 import { eq, and, sql, gte, lte, desc, count, asc, isNull, inArray } from "drizzle-orm";
 import { parseBRL } from "../utils/parseBRL";
-import { calcularRescisaoCompleta, calcularRescisaoComplementar, calcularDiasAvisoTotal, calcularDescontosRescisao, type DescontosRescisaoContext } from "../utils/rescisaoCalc";
+import { calcularRescisaoCompleta, calcularRescisaoComplementar, calcularDiasAvisoTotal, calcularDiasAviso, calcularDescontosRescisao, type DescontosRescisaoContext } from "../utils/rescisaoCalc";
 import { invokeLLM } from "../_core/llm";
 
 const DESLIGADO_STATUSES = ['Desligado', 'Lista_Negra'];
@@ -2515,14 +2515,16 @@ async function getDashCustoDemissaoMassa(
       const anosBase = !isNaN(dtAdm.getTime())
         ? Math.max(0, Math.floor((dtFimAviso.getTime() - dtAdm.getTime()) / (1000 * 60 * 60 * 24 * 365.25)))
         : 0;
-      // Rev. 1943 — Corrente majoritária TST (Lei 12.506/2011 Art. 1º Parágrafo
-      // único): +3d/ano aplica nas DUAS modalidades (trabalhado E indenizado) —
-      // a lei NÃO distingue. Antes (Rev. 1921) usava 30 fixos pra trabalhado.
-      // Agora ambos = calcularDiasAvisoTotal(anos), espelhando avisoPrevioFerias
-      // L927+L953 (também atualizados na Rev. 1943). Resultado: Trabalhado e
-      // Indenizado têm a MESMA dataFimAviso → projeção de férias/13º/multa 40%
-      // bate (a diferença operacional fica só em "trabalha vs recebe sem trabalhar").
-      const diasAvisoEstimado = calcularDiasAvisoTotal(anosBase);
+      // Rev. 2423 — CUMPRIMENTO físico do trabalhado = 30 fixos; indenizado
+      // segue total proporcional 30+3·ano. Antes (Rev. 1943) ambos usavam o
+      // total, gerando paridade visual mas projeção de mês incorreta para o
+      // trabalhado (10 anos → mês saída 2 meses à frente). Agora delega ao
+      // helper canônico `calcularDiasAviso(anos, tipo)` — mesma fonte do
+      // módulo oficial Aviso Prévio (avisoPrevioFerias.ts L951/L1207), garante
+      // paridade dataFimAviso ↔ projeção férias/13º/multa 40%. VERBA financeira
+      // (avisoIndenizado) segue íntegra em calcularRescisaoCompleta (paga
+      // diasExtras pro trabalhado, diasAvisoTotal pro indenizado).
+      const diasAvisoEstimado = calcularDiasAviso(anosBase, tipo);
       const dtFimProjetada = new Date(dtFimAviso.getTime() + diasAvisoEstimado * 24 * 60 * 60 * 1000);
       const dataFimProjetada = dtFimProjetada.toISOString().slice(0, 10);
       // Rev. 1911 — Passa override real (default 0 quando funcionário não tem
