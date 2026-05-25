@@ -251,20 +251,32 @@ export function parseMSProjectFull(text: string): {
   // (ex.: alguma folha terminando depois do root oficial → 292 ≠ 284 dias úteis).
   let projetoStart: string | null = null;
   let projetoFinish: string | null = null;
-  // Rev. 1646.7 — captura o "%PREVISTO" calculado pelo MSP na tarefa raiz.
-  // O campo OFICIAL é **Texto10 / FieldID 188743750** (alias "%PREVISTO (Texto10)"
-  // no XML — valor BR "2,07" → 2.07). Tentamos primeiro Texto10; se não houver,
-  // caímos para Texto11 (188743997 — usado em alguns templates) e por fim Texto6
-  // (188743746 — versão truncada " 2%" como último fallback).
-  // BUG anterior (1646.4): líamos só 188743997, que NÃO EXISTE neste template
-  // REVTE-CIVIL — resultado: snapshot stale, divergência permanente após reimport.
+  // ──────────────────────────────────────────────────────────────────────────
+  // REGRA DE OURO — Leitura de cronograma e avanço (Rev. 2427+).
+  // VALE PRA TODAS AS OBRAS, presentes e futuras. NÃO ALTERAR sem aprovação.
+  //
+  //   • % PREVISTO  = Texto6 (FieldID 188743746) puro, lido do XML do MS Project.
+  //                   É o "% PREVISTO" calculado pelo MSP via fórmula
+  //                   Int(((StatusDate − BL_Start)/(BL_Finish − BL_Start))*100)
+  //                   sobre as datas da BASELINE. Aparece na coluna
+  //                   "% PREVISTO" da tela do Project — paridade exata.
+  //                   Texto10 (188743750) e Texto11 (188743997) são versões
+  //                   alternativas com mais casas decimais usadas por
+  //                   templates LOTUS modernos (ex.: REVTE-CIVIL) — ficam
+  //                   como FALLBACK quando Texto6 não existe.
+  //
+  //   • % CONCLUÍDA = PercentComplete nativo do MSP. Aparece na coluna
+  //                   "% concluída" da tela do Project — paridade exata.
+  //                   Vale tanto pra raiz (UID=0) quanto pra cada atividade.
+  //                   ZERO cálculo derivado (Texto7, AD/(AD+RD), Texto12,
+  //                   PhysicalPercentComplete etc. ficaram fora — não são
+  //                   o que o engenheiro vê na tela).
+  //
+  // Validação canônica feita no XML HOTEL DO PAPA (PLN_783_01_2026_R01 BL,
+  // StatusDate 25/05/2026): raiz 79%/79%, 02 80%/75%, 02.10 75%/79%,
+  // 02.19 19%/0%, 02.22 46%/23% — TODOS batendo XML × tela MSP.
+  // ──────────────────────────────────────────────────────────────────────────
   let previstoMspRaiz: number | null = null;
-  // Rev. 1675 — Snapshot do %REALIZADO ACUMULADO da tarefa raiz (UID=0)
-  // computado via ActualDuration / (ActualDuration + RemainingDuration).
-  // Tem precisão de minutos (4+ casas decimais) e é o número que o MSP usa
-  // internamente antes de arredondar pro PercentComplete inteiro display.
-  // Permite paridade absoluta entre o card "Realizado (Acum.)" do ERP e a
-  // linha de projeto do MSP (ex.: REVTE-CIVIL → 1,3324% = 1,33% no MSP).
   let realizadoMspRaiz: number | null = null;
   const taskEls = Array.from(doc.querySelectorAll("Task"));
   for (const t of taskEls) {
@@ -283,31 +295,24 @@ export function parseMSProjectFull(text: string): {
         const num = parseFloat(limpo);
         if (Number.isFinite(num)) valorPorFid[fid] = num;
       }
-      // Ordem de prioridade: Texto10 → Texto11 → Texto9 → Texto6.
-      // Rev. 2425 — Texto9 (188743749) adicionado entre Texto11 e Texto6 porque
-      // alguns templates LOTUS (ex.: HOTEL DO PAPA — PLN_783_01_2026_R01) não
-      // exportam Texto10/Texto11 e o engenheiro mantém o "% PREVISTO oficial"
-      // em Texto9 (4 casas, igual ao display do MSP). Sem este fallback, o
-      // ERP pegava Texto6 (versão arredondada/antiga, ex.: 32 %) e o painel
-      // mostrava 32 % no snapshot enquanto o MSP exibia 77 %.
-      previstoMspRaiz =
-        valorPorFid["188743750"] ??  // Texto10 — %PREVISTO (Round 4 casas)
-        valorPorFid["188743997"] ??  // Texto11 — alguns templates customizados
-        valorPorFid["188743749"] ??  // Texto9  — %PREVISTO em templates LOTUS sem Texto10 (Rev. 2425)
-        valorPorFid["188743746"] ??  // Texto6 — versão truncada Int(...) + "%"
+      // Rev. 2427 — REGRA DE OURO: Texto6 (puro) é o "% PREVISTO" do MSP.
+      // Texto10/Texto11 ficam como fallback p/ templates LOTUS modernos que
+      // não exportam Texto6 (raro). Texto9 SAIU (era override manual sem
+      // alias/fórmula — fonte instável). Ver bloco de regra acima.
+      const previstoRaw =
+        valorPorFid["188743746"] ??  // Texto6  — % PREVISTO (REGRA DE OURO)
+        valorPorFid["188743750"] ??  // Texto10 — fallback (4 casas, LOTUS moderno)
+        valorPorFid["188743997"] ??  // Texto11 — fallback (templates customizados)
         null;
-      // Rev. 1675 — AD/(AD+RD) da raiz: precisão MSP-nativa do realizado.
-      const parseDurMin = (s: string): number | null => {
-        const m = /^PT(\d+)H(\d+)M(\d+)S/.exec(s);
-        if (!m) return null;
-        return +m[1] * 60 + +m[2] + +m[3] / 60;
-      };
-      const adMin = parseDurMin(t.querySelector("ActualDuration")?.textContent?.trim() || "");
-      const rdMin = parseDurMin(t.querySelector("RemainingDuration")?.textContent?.trim() || "");
-      if (adMin != null && rdMin != null && adMin + rdMin > 0) {
-        const pct = (adMin / (adMin + rdMin)) * 100;
-        if (Number.isFinite(pct)) realizadoMspRaiz = Math.min(100, Math.max(0, pct));
-      }
+      previstoMspRaiz = previstoRaw != null && Number.isFinite(previstoRaw)
+        ? Math.min(100, Math.max(0, previstoRaw))
+        : null;
+      // Rev. 2427 — REGRA DE OURO: % CONCLUÍDA = PercentComplete puro do MSP.
+      // Substitui a heurística AD/(AD+RD) da Rev. 1675 — paridade absoluta
+      // com a coluna "% concluída" do Project (ex.: HOTEL DO PAPA raiz = 79).
+      const pcRaw = t.querySelector("PercentComplete")?.textContent?.trim() || "";
+      const pcNum = parseFloat(pcRaw);
+      if (Number.isFinite(pcNum)) realizadoMspRaiz = Math.min(100, Math.max(0, pcNum));
       break;
     }
   }
@@ -421,27 +426,22 @@ function parseMSProjectTasksFromDoc(doc: Document): TarefaImportada[] {
     const predWbs  = predUids.map(u => uidToWbs.get(u) ?? "").filter(Boolean);
     const pred     = predWbs.join(",");
 
-    // % Concluído — campo PercentComplete no XML do MS Project (0-100)
+    // Rev. 2427 — REGRA DE OURO (atividade): % CONCLUÍDA = PercentComplete
+    // puro do MSP. Vale tanto pra `percentConcluido` (usado no editor)
+    // quanto pra `realizadoMsp` (usado nos cards de avanço). Substitui a
+    // cadeia Texto7 → AD/(AD+RD) da Rev. 1674.
     const pctRaw = task.querySelector("PercentComplete")?.textContent ?? "";
-    const percentConcluido = pctRaw !== "" ? Math.min(100, Math.max(0, parseFloat(pctRaw) || 0)) : 0;
+    const pctNum = pctRaw !== "" ? parseFloat(pctRaw) : NaN;
+    const percentConcluido = Number.isFinite(pctNum) ? Math.min(100, Math.max(0, pctNum)) : 0;
+    const realizadoMsp: number | undefined =
+      Number.isFinite(pctNum) ? Math.min(100, Math.max(0, pctNum)) : undefined;
 
-    // Rev. 1670 — Snapshot por atividade (Texto10/Texto6 + Texto7) lido do XML.
-    // Não confundir com PercentComplete (campo nativo, granularidade inteira).
-    //
-    // %PREVISTO: tem 2 versões no template LOTUS:
-    //   • Texto10 (188743750) — Round 4 casas (template moderno).
-    //   • Texto6  (188743746) — Int(...) + "%", inteiro (template R05 e antigos).
-    // Lemos AMBOS e Texto10 ganha prioridade quando presente (mais preciso).
-    // Rev. 2260: muitos XMLs LOTUS (ex.: PLN_811_03 R05) NÃO trazem Texto10 —
-    // sem o fallback Texto6 o ERP perdia o snapshot e caía no cálculo dinâmico.
-    //
-    // %REALIZADO: Texto7 (188743747) — %Reali AUX, com 4 casas. Se ausente,
-    // F2 abaixo usa AD/(AD+RD) com precisão MSP-nativa.
+    // Rev. 2427 — REGRA DE OURO (atividade): % PREVISTO = Texto6 puro.
+    // Texto10/Texto11 ficam como fallback p/ templates LOTUS modernos que
+    // não exportam Texto6. Texto9 SAIU (override manual instável).
     let previstoMsp: number | undefined;
-    let previstoMspT11: number | undefined; // Rev. 2425 — alguns templates customizados
-    let previstoMspT9: number | undefined;  // Rev. 2425 — fallback p/ XMLs sem Texto10/11
-    let previstoMspT6: number | undefined;  // Rev. 2260 — fallback p/ XMLs sem Texto10
-    let realizadoMsp: number | undefined;
+    let previstoMspT10: number | undefined; // Fallback — LOTUS moderno (4 casas)
+    let previstoMspT11: number | undefined; // Fallback — templates customizados
     for (const child of Array.from(task.children)) {
       if (child.tagName !== "ExtendedAttribute") continue;
       const fid = child.querySelector("FieldID")?.textContent ?? "";
@@ -450,40 +450,12 @@ function parseMSProjectTasksFromDoc(doc: Document): TarefaImportada[] {
       // Limpa "%" (Texto6 vem como " 4%") e vírgula BR → ponto.
       const num = parseFloat(valRaw.replace(/%/g, "").replace(",", ".").trim());
       if (!Number.isFinite(num)) continue;
-      if (fid === "188743750") previstoMsp = Math.min(100, Math.max(0, num));         // Texto10 — %PREVISTO 4 casas
-      else if (fid === "188743997") previstoMspT11 = Math.min(100, Math.max(0, num)); // Texto11 — templates customizados (paridade com raiz)
-      else if (fid === "188743749") previstoMspT9 = Math.min(100, Math.max(0, num));  // Texto9  — %PREVISTO (templates LOTUS sem Texto10, Rev. 2425)
-      else if (fid === "188743746") previstoMspT6 = Math.min(100, Math.max(0, num));  // Texto6  — %PREVISTO inteiro (fallback)
-      else if (fid === "188743747") realizadoMsp = Math.min(100, Math.max(0, num));   // Texto7  — %Reali AUX
+      if (fid === "188743746") previstoMsp    = Math.min(100, Math.max(0, num)); // Texto6  — REGRA DE OURO
+      else if (fid === "188743750") previstoMspT10 = Math.min(100, Math.max(0, num)); // Texto10 — fallback
+      else if (fid === "188743997") previstoMspT11 = Math.min(100, Math.max(0, num)); // Texto11 — fallback
     }
-    // Ordem (paridade total com a raiz, Rev. 2425): Texto10 → Texto11 → Texto9 → Texto6.
+    if (previstoMsp === undefined && previstoMspT10 !== undefined) previstoMsp = previstoMspT10;
     if (previstoMsp === undefined && previstoMspT11 !== undefined) previstoMsp = previstoMspT11;
-    if (previstoMsp === undefined && previstoMspT9  !== undefined) previstoMsp = previstoMspT9;
-    if (previstoMsp === undefined && previstoMspT6  !== undefined) previstoMsp = previstoMspT6;
-
-    // Rev. 1674 — Fallback de alta precisão: ActualDuration / (ActualDuration +
-    // RemainingDuration) é o que o MSP usa internamente pra calcular
-    // PercentComplete antes de arredondar pro inteiro. Mesma precisão do
-    // Texto10 (4 casas), sem depender do template FC. Evita o gap de até
-    // ±0,5pp por atividade quando usuário tracka via %Concluída nativo.
-    // Ex.: WBS 4.1.1 do REVTE-CIVIL — AD=2160min, RD=150660min → 1,4134%,
-    // batendo com Texto10=1,41% (PercentComplete=1 perdia 0,41pp). Aplica
-    // só quando Texto7 ausente (Texto7 tem semântica diferente: qto/qt).
-    if (realizadoMsp === undefined) {
-      const adRaw = task.querySelector("ActualDuration")?.textContent ?? "";
-      const rdRaw = task.querySelector("RemainingDuration")?.textContent ?? "";
-      const parseDurMin = (s: string): number | null => {
-        const m = /^PT(\d+)H(\d+)M(\d+)S/.exec(s);
-        if (!m) return null;
-        return +m[1] * 60 + +m[2] + +m[3] / 60;
-      };
-      const adMin = parseDurMin(adRaw);
-      const rdMin = parseDurMin(rdRaw);
-      if (adMin != null && rdMin != null && adMin + rdMin > 0) {
-        const pct = (adMin / (adMin + rdMin)) * 100;
-        if (Number.isFinite(pct)) realizadoMsp = Math.min(100, Math.max(0, pct));
-      }
-    }
 
     // Pula a tarefa de nível 0 (cabeçalho do projeto)
     if (uid === "0" || name === "" || level === 0) continue;

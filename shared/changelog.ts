@@ -1,6 +1,116 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2427 — **PLANEJAMENTO · REGRA DE OURO DEFINITIVA pra leitura de
+ * XML do MS Project · `% PREVISTO` = `Texto6` puro e `% CONCLUÍDA` =
+ * `PercentComplete` puro, em TODOS os níveis (raiz UID=0 + atividades),
+ * pra TODAS as obras presentes e futuras.**
+ *
+ * **Contexto e motivação.** A Rev. 2425 (Texto9 na cadeia de fallback) foi
+ * baseada em diagnóstico parcial: na época o XML do HOTEL DO PAPA estava
+ * com StatusDate em 20/03/2026 e o Texto6 da raiz vinha 32 % (defasado),
+ * enquanto o engenheiro tinha gravado 77 % manualmente no Texto9. A
+ * solução cobriu o sintoma mas introduziu uma fonte instável (Texto9 não
+ * tem alias nem fórmula no schema do template LOTUS — é campo livre que
+ * o engenheiro pode ou não preencher). No XML novo (StatusDate atualizado
+ * pra 25/05/2026), o Texto6 voltou a bater com o display do MSP (79 %) e
+ * o Texto9 ficou em branco em 599 de 601 tarefas. O user pediu pra
+ * reavaliar e mapear canonicamente o que é "% PREVISTO" e "% concluída"
+ * pra estabilizar a leitura.
+ *
+ * **Validação canônica (XML PLN_783_01_2026_R01 BL, HOTEL DO PAPA,
+ * LastSaved 25/05/2026, StatusDate 25/05/2026, 601 tarefas + raiz UID=0):**
+ *
+ *   | Item                       | Tela %PREV | Tela %CONCL | XML Texto6 | XML PercentComplete |
+ *   |----------------------------|------------|-------------|------------|---------------------|
+ *   | RAIZ HOTEL DO PAPA         | 79 %       | 79 %        |  79 %      | 79                  |
+ *   | 02 AMPLIAÇÃO 5º PAVIMENTO  | 80 %       | 75 %        |  80 %      | 75                  |
+ *   | 02.09 AR-CONDICIONADO      | 100 %      | 100 %       |  100 %     | 100                 |
+ *   | 02.10 INSTALAÇÕES ELÉTRICAS| 75 %       | 79 %        |  75 %      | 79                  |
+ *   | 02.19 PINTURA INTERNA      | 19 %       | 0 %         |  19 %      | 0                   |
+ *   | 02.22 LOUÇAS, METAIS       | 46 %       | 23 %        |  46 %      | 23                  |
+ *
+ * Paridade 100 % nas 6 amostras (incluindo casos onde PREV > CONCL,
+ * PREV < CONCL, valores 0, 100 e intermediários). Conclusão definitiva,
+ * sem ambiguidade:
+ *
+ *   • Coluna **"% PREVISTO"** da tela do MSP = `Texto6` (FieldID
+ *     188743746) puro. O MSP calcula esse campo via fórmula
+ *     `Int(((StatusDate − BL_Start)/(BL_Finish − BL_Start))*100)` —
+ *     ou seja, JÁ usa as datas da BASELINE pra fazer a conta. **Não
+ *     precisa ler `<Baseline>` separado** pra esse fim (a fórmula
+ *     interna do MSP já faz o trabalho). Texto10/Texto11 são variantes
+ *     com mais casas decimais usadas por templates modernos
+ *     (ex.: REVTE-CIVIL) — ficam como fallback de compatibilidade.
+ *   • Coluna **"% concluída"** da tela do MSP = `PercentComplete`
+ *     nativo. Vale tanto pra raiz quanto pra cada atividade. ZERO
+ *     heurística derivada (Texto7 / AD/(AD+RD) / Texto9 / Texto12 /
+ *     PhysicalPercentComplete) — nenhuma é "% concluída" como o
+ *     engenheiro vê na tela.
+ *
+ * **Implementação (1 arquivo, zero backend, zero migration):**
+ *
+ *  - `client/src/pages/planejamento/ImportarCronograma.tsx`:
+ *    + Bloco "REGRA DE OURO" L257-281: documentação canônica que vale
+ *      pra TODAS as obras (presentes e futuras) — não alterar sem
+ *      aprovação. Cita validação no XML HOTEL DO PAPA.
+ *    + RAIZ — `previstoMspRaiz` (L305-309): cadeia reescrita pra
+ *      `Texto6 → Texto10 → Texto11`. Texto6 vira PREFERENCIAL (era
+ *      último fallback). Texto9 REMOVIDO da cadeia (era a Rev. 2425).
+ *    + RAIZ — `realizadoMspRaiz` (L313-315): `parseFloat(<PercentComplete>)`
+ *      direto, substituindo a heurística `ActualDuration / (AD + RD)`
+ *      da Rev. 1675 (~12 linhas → 3 linhas). Paridade absoluta com a
+ *      coluna "% concluída" do MSP.
+ *    + ATIVIDADE — `realizadoMsp` (L429-437): `parseFloat(<PercentComplete>)`
+ *      direto, unificado com `percentConcluido` (mesma fonte). Substitui
+ *      a cadeia `Texto7 → AD/(AD+RD)` da Rev. 1674.
+ *    + ATIVIDADE — `previstoMsp` (L439-458): cadeia reescrita pra
+ *      `Texto6 → Texto10 → Texto11`. Texto6 vira PREFERENCIAL. Texto9
+ *      REMOVIDO. Texto7 SAIU do loop (não era mais usado).
+ *
+ * **Onde NÃO mexi (de propósito):**
+ *
+ *  - `client/src/pages/planejamento/PlanejamentoDetalhe.tsx` — hooks
+ *    `mspReadOnly` (L6950+) e `avancoPrevistoDia` (L773+) já consomem
+ *    `previstoMspSnapshot` / `realizadoMspSnapshot` em leitura pura
+ *    desde Rev. 2425. Como a regra de ouro só MUDA O QUE É SNAPSHOTADO
+ *    (e não como o snapshot é consumido), nenhum hook precisa mudar.
+ *  - Schema Drizzle — zero `ALTER TABLE`. `calendarioJson` continua o
+ *    mesmo blob jsonb, só com `realizadoMspSnapshot` agora derivado de
+ *    PercentComplete em vez de AD/(AD+RD). Por atividade, a coluna
+ *    `realizado_msp` da `planejamento_atividades` recebe PercentComplete
+ *    no próximo `importarCronograma` — sem migration de dados.
+ *  - Texto7 ("% Reali AUX") — fica disponível no XML como dado
+ *    secundário (qto realizada / qto total), mas NÃO é fonte de
+ *    "% concluída". Quem quiser pode futuramente expor como métrica
+ *    física opcional, mas é decisão separada.
+ *  - `<Baseline Number=0>` nativos (1485 blocos no XML do HOTEL DO
+ *    PAPA, com Start/Finish/Duration/Work/Cost) — não lidos. Caso
+ *    apareça demanda futura pra Curva S de baseline ou Gantt
+ *    comparativo, é feature nova, não correção.
+ *
+ * **Diferença vs Rev. 2425.** A Rev. 2425 priorizava
+ * `Texto10 → Texto11 → Texto9 → Texto6` (Texto9 entrou no meio como
+ * salvação manual). A Rev. 2427 inverte: `Texto6 → Texto10 → Texto11`
+ * (Texto6 vira preferencial e Texto9 sai inteiro). Motivo: Texto6 é o
+ * único campo com Alias "% PREVISTO" + fórmula MSP — fonte estável,
+ * presente em 100 % dos templates LOTUS. Texto10/Texto11 são variantes
+ * de precisão usadas por templates modernos (mantidos como compat).
+ * Texto9 é campo livre — quando o engenheiro preenche, é override
+ * manual pontual, instável.
+ *
+ * **R-001/R-007/R-010:** zero `ALTER`, zero `DROP`, zero `DELETE`. Só
+ * leitura do XML mudou — todos os campos persistidos continuam os
+ * mesmos.
+ *
+ * Arquivos alterados:
+ *  - `client/src/pages/planejamento/ImportarCronograma.tsx` (~80 linhas
+ *    de delta — 4 blocos)
+ *  - `shared/version.ts` (Rev. 2426 → 2427)
+ *  - `replit.md` (rotação 2+5 + bloco "REGRA DE OURO" reescrito no
+ *    User preferences)
+ *  - `shared/changelog.ts` (esta entrada no topo)
+ *
  * Rev. 2426 — **ALMOXARIFADO · AUDITORIA · banner global de pendências
  * acima do `<main>` do DashboardLayout + deep-link `?auditoria=1`.**
  *
