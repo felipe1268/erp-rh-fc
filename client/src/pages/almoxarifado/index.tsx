@@ -1738,18 +1738,26 @@ export default function AlmoxarifadoPage() {
                   </div>
                 </div>
                 <div className="divide-y divide-emerald-100">
-                  {valorPorAlmox.filter(e => e.valor > 0).map((e, idx) => {
+                  {/* Rev. 2419 — user pediu TODAS as obras ativas visíveis aqui,
+                      mesmo as com valor zero. valorMap já inclui Central + todas
+                      as obras ativas (L1636-1640); só removemos o filtro de zero. */}
+                  {valorPorAlmox.map((e, idx) => {
                     const pct = valorTotal > 0 ? (e.valor / valorTotal) * 100 : 0;
+                    const zerado = e.valor <= 0;
                     return (
-                      <div key={idx} className="px-6 py-3 flex items-center gap-4">
+                      <div key={idx} className={`px-6 py-3 flex items-center gap-4 ${zerado ? "opacity-60" : ""}`}>
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm font-semibold text-gray-800 truncate">{e.nome}</p>
+                          <p className={`text-sm font-semibold truncate ${zerado ? "text-gray-500" : "text-gray-800"}`}>{e.nome}</p>
                           <div className="mt-1.5 h-1.5 bg-emerald-50 rounded-full overflow-hidden">
                             <div className="h-full bg-gradient-to-r from-emerald-600 to-teal-400" style={{ width: `${pct}%` }} />
                           </div>
                         </div>
                         <div className="text-right">
-                          <p className="text-base font-bold text-emerald-700">R$ {fmtBRL(e.valor)}</p>
+                          {zerado ? (
+                            <p className="text-base font-medium text-gray-400">R$ 0,00</p>
+                          ) : (
+                            <p className="text-base font-bold text-emerald-700">R$ {fmtBRL(e.valor)}</p>
+                          )}
                           <p className="text-[11px] text-gray-400">{pct.toFixed(1)}% · {e.itens} ite{e.itens !== 1 ? "ns" : "m"}</p>
                         </div>
                       </div>

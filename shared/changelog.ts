@@ -1,6 +1,49 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2419 — **ALMOXARIFADO / VALOR POR ALMOXARIFADO · MOSTRA
+ * TODAS AS OBRAS ATIVAS (mesmo as zeradas).**
+ *
+ * Pedido user (25/05/2026, follow-up imediato à Rev. 2418, screenshot
+ * do card mostrando só 6 obras com valor > 0): "JA COLOCA TODAS AS
+ * OBRAS APARENCO AQUI.. TODAS ATIVAS..".
+ *
+ * **Diagnóstico:** `valorMap` JÁ era pré-populado com Central + todas
+ * as obras ativas (L1636-1640, desde a Rev. 1609), mas a renderização
+ * fazia `valorPorAlmox.filter(e => e.valor > 0)` — escondendo
+ * qualquer obra sem item precificado. User quer visão completa pra
+ * confirmar que NÃO esqueceu nenhuma obra de cadastrar valor.
+ *
+ * **Mudança — `client/src/pages/almoxarifado/index.tsx` L1743-1768:**
+ *
+ * - Removido o `.filter(e => e.valor > 0)` da renderização do card
+ *   "Valor Total do Estoque por Almoxarifado".
+ * - Linhas zeradas ganham styling visualmente distinto pra não
+ *   competir com as quentes: `opacity-60`, nome em `text-gray-500`
+ *   (não bold-escuro), valor em `text-gray-400 font-medium` (não
+ *   `emerald-700 font-bold`) e exibido como "R$ 0,00".
+ * - Ordenação por valor desc preservada (linhas zeradas naturalmente
+ *   ficam no fim, mantendo as obras importantes no topo).
+ *
+ * **Backend:** ZERO. Sem schema, sem endpoint, sem migration.
+ *
+ * **Condição `valorTotal > 0` (L1709) preservada** — se TODOS os
+ * almoxarifados estão zerados, o card todo continua oculto e o
+ * placeholder "Nenhum almoxarifado com valor calculável ainda"
+ * (Rev. 1609) aparece em vez dele. Critério `valorPorAlmox.some(e =>
+ * e.valor > 0)` da L1709 também mantido pelo mesmo motivo.
+ *
+ * R-001 / R-007 / R-010: OK.
+ *
+ * Arquivos:
+ * - `client/src/pages/almoxarifado/index.tsx` (1 bloco, ~25 linhas).
+ * - `shared/version.ts` (2418 → 2419).
+ * - `shared/changelog.ts` (esta entrada).
+ * - `replit.md` (rotação 2+5).
+ * - `replit-history.md` (Rev. 2412 demovida).
+ *
+ * ─────────────────────────────────────────────────────────────
+ *
  * Rev. 2418 — **ALMOXARIFADO / VALOR TOTAL DO ESTOQUE · EXCLUI
  * EQUIPAMENTOS LOCADOS POR PADRÃO + RESPEITA FILTROS VISÍVEIS.**
  *
