@@ -1,6 +1,89 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2405 — **ALMOXARIFADO ← EQUIPAMENTOS · Sync reverso: todo
+ * equipamento (próprio/locado) com obra indicada aparece como
+ * item no almoxarifado daquela obra (vínculo bidirecional).**
+ *
+ * Pedido user (25/05/2026): "todos equipamentos que estão no
+ * módulo locados ou próprios e já tiverem obra indicada de onde
+ * estão devem aparecer no almoxarifado deles, garantindo que não
+ * teremos qualquer equipamento locado que não esteja indicado no
+ * almoxarifado correto". É o INVERSO da Rev. 2404 (que vinculava
+ * do almox → equipamento); agora qualquer entrada no Controle de
+ * Equipamentos com obraId materializa um item de almox vinculado.
+ *
+ * **Por que importa**: até a 2404 o almoxarife só via no almox
+ * o que ele cadastrou lá. Equipamento locado importado via PDF
+ * da locadora (Rev. 2308) ou criado direto no /equipamentos/locados
+ * com obra setada NÃO aparecia no almox da obra — quebrando a
+ * "visão única" que o almoxarife precisa pra conferência diária.
+ *
+ * **Solução** — 3 camadas:
+ *
+ * 1. **Helper idempotente** (`server/lib/almoxEquipamentoSync.ts` — novo):
+ *    - `ensureAlmoxItemForEquipamento(db, params)`:
+ *      - Se já existe item vinculado a este equipamento na obra
+ *        correta → no-op.
+ *      - Se existe vinculado em obra DIFERENTE (transferência) →
+ *        UPDATE obra_id.
+ *      - Se não existe → INSERT com quantidade_atual=1, origem=
+ *        'locacao'/'proprio', foto/categoria/valor reaproveitados,
+ *        e `equipamento_vinculado_tipo`/`_id`/`_em` populados.
+ *    - `backfillAlmoxFromEquipamentos(db)`: SQL bulk `INSERT
+ *      ... SELECT ... WHERE NOT EXISTS` pras 2 tabelas (locados
+ *      com `status <> 'devolvido'`, próprios com `ativo=true` e
+ *      `localizacao_atual_tipo='obra'`). Roda no startup.
+ *    - Try/catch silencia "relation does not exist" pra ambientes
+ *      dev sem `pnpm db:push`.
+ *
+ * 2. **Startup backfill** (`server/_core/index.ts` após bloco Rev.
+ *    2404, ~L666): import dinâmico do helper + log "X locados +
+ *    Y próprios inseridos" ou "sem trabalho (já sincronizado)".
+ *    Idempotente: o WHERE NOT EXISTS garante zero duplicação em
+ *    re-runs.
+ *
+ * 3. **Hooks nas mutations** (`server/routers/equipamentos.ts`):
+ *    - `locadoCriar` (L466): após INSERT do locado + evento
+ *      RECEBIMENTO, se `input.obraId` → chama helper com
+ *      categoria/foto/valorMensal/fornecedor do input.
+ *    - `locadoAtualizar` (L536): se input mexe em `obraId`,
+ *      re-SELECT do equipamento atualizado pra pegar dados
+ *      canônicos (descricao, categoria, foto, valores) e chama
+ *      helper. Suporta transferência entre obras (UPDATE obra_id
+ *      do item de almox).
+ *
+ * **Não tocado** (intencional):
+ *    - `locadosVincularObraLote` (bulk N ids): N round-trips ao
+ *      helper anularia a otimização de bulk-update da Rev. 2329.
+ *      O backfill de startup cobre o caso a cada boot — risco
+ *      aceitável (sync chega em ≤ próximo restart).
+ *    - `proprioAtualizar` (mudança de `localizacaoAtualObraId`):
+ *      próprios normalmente nascem no almox central e migram
+ *      pra obra via transferência — fluxo idem ao bulk: backfill
+ *      cobre no próximo boot.
+ *
+ * **Migration**: ZERO (helper só usa colunas já existentes da
+ * Rev. 2404 em `almoxarifado_itens` — `equipamento_vinculado_*`).
+ *
+ * **R-001/R-007/R-010 OK**: helper só faz INSERT + UPDATE não-
+ * destrutivo (UPDATE só do obra_id no caso de transferência).
+ * Backfill é INSERT puro com WHERE NOT EXISTS. Zero DELETE/DROP.
+ *
+ * **Arquivos**:
+ *  - server/lib/almoxEquipamentoSync.ts (NOVO, ~170 linhas)
+ *  - server/_core/index.ts (+13 linhas após Rev. 2404)
+ *  - server/routers/equipamentos.ts (+22 em locadoCriar,
+ *    +24 em locadoAtualizar)
+ *  - shared/version.ts (2404 → 2405)
+ *
+ * **Follow-up** (não bloqueante): se o user reportar que itens
+ * de almox vinculados a equipamentos locados precisam ser
+ * "removidos automaticamente quando o locado é devolvido", basta
+ * adicionar UPDATE quantidade_atual=0 + ativo=false no
+ * `locadoDevolver`. Hoje não fizemos pra preservar o histórico
+ * visual do item no almox (decisão conservadora).
+ *
  * Rev. 2404 — **ALMOXARIFADO/EQUIPAMENTOS · Marcar item como
  * equipamento (Próprio ou Locado) direto do card.**
  *

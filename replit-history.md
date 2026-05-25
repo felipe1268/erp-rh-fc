@@ -2,6 +2,7 @@
 
 > Este arquivo guarda os one-liners das revisões antigas para manter o `replit.md` enxuto.
 
+- **Rev. 2398** — FINANCEIRO/LANÇAMENTOS · Botões Editar/Excluir na lista. Backend novo `updateEntry` (SET dinâmico, audit log, bloqueia pago/recebido/cancelado/origem≠manual+recorrente) + `deleteEntry` endurecido. Frontend reusa Dialog "Novo Lançamento" + modal de exclusão rose com motivo min 5 chars. Ver `shared/changelog.ts`.
 - **Rev. 2397** — FINANCEIRO/LANÇAMENTOS · Natureza (Fixo/Variável) herda da categoria via `financial_accounts.natureza`; `categoriasFiltradas` propaga campo + `useEffect` sincroniza `form.natureza`; Select fica `disabled` com chip "DA CATEGORIA". Ver `shared/changelog.ts`.
 - **Rev. 2396** — FINANCEIRO/CONTAS A PAGAR · Nome do fornecedor visível na lista e no detalhe. ADD COLUMN IF NOT EXISTS `fornecedor_nome` em `financial_entries` + backfill via JOIN com `financial_recurring_entries`; `createEntry`/`materializeRecorrentes` copiam o campo; UI mostra `" — {fornecedor}"` na lista e linha "🏢" no modal. Ver `shared/changelog.ts`.
 - **Rev. 2394** — ALMOXARIFADO/CONFIG · Cadastro de Categorias exposto em Configurações + `excluirCategoria` migra itens pra "Sem categoria" (UPDATE categoria=NULL) atomicamente em `db.transaction`. Ver `shared/changelog.ts`.

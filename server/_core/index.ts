@@ -660,6 +660,22 @@ Regras:
           console.log(`[SyncSchema+] Colunas equipamento_vinculado_* garantidas em almoxarifado_itens.`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA almoxarifado_itens equipamento_vinculado_*:`, e?.message || e); }
 
+        // Rev. 2405 — Backfill: equipamentos (próprios/locados) com obra indicada
+        // ganham automaticamente um item no almoxarifado daquela obra (vínculo
+        // bidirecional via equipamento_vinculado_tipo/_id). Idempotente: re-runs
+        // não duplicam (WHERE NOT EXISTS). Pula silenciosamente em ambientes
+        // sem as tabelas equipamentos_locados/proprios (dev sem db:push).
+        // R-001/R-007/R-010 OK: só INSERT.
+        try {
+          const { backfillAlmoxFromEquipamentos } = await import("../lib/almoxEquipamentoSync");
+          const r = await backfillAlmoxFromEquipamentos(db);
+          if (r.locadosInseridos > 0 || r.propriosInseridos > 0) {
+            console.log(`[SyncSchema+] Rev. 2405: backfill almox←equipamentos: ${r.locadosInseridos} locados + ${r.propriosInseridos} próprios inseridos.`);
+          } else {
+            console.log(`[SyncSchema+] Rev. 2405: backfill almox←equipamentos sem trabalho (já sincronizado).`);
+          }
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev. 2405 backfill almox←equipamentos:`, e?.message || e); }
+
         // Rev. 1592: bloco Escritório Central na avaliação anônima do Portal do Cliente.
         // Garantido aqui (e não só em ColFix) porque o version guard do ColFix pode
         // pular as migrations quando a versão já estiver aplicada.

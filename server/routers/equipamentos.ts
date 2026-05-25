@@ -530,6 +530,29 @@ export const equipamentosRouter = router({
         usuarioId: ctx.user.id,
         usuarioNome: ctx.user.name || String(ctx.user.id),
       });
+
+      // Rev. 2405 — Sync com almoxarifado da obra (idempotente).
+      if (input.obraId) {
+        const { ensureAlmoxItemForEquipamento } = await import("../lib/almoxEquipamentoSync");
+        const firstFoto = Array.isArray(input.fotosRecebimento) && input.fotosRecebimento.length > 0
+          ? (input.fotosRecebimento[0] as any)?.url
+          : null;
+        await ensureAlmoxItemForEquipamento(db, {
+          companyId: input.companyId,
+          tipo: "locado",
+          equipamentoId: created.id,
+          obraId: input.obraId,
+          nome: input.descricao,
+          categoria: input.categoria ?? null,
+          fotoUrl: firstFoto,
+          fornecedorNome: input.fornecedorNome ?? null,
+          dataInicio: input.dataInicio,
+          dataFim: input.dataFimPrevista,
+          valorMensal: input.valorMensal ?? null,
+          userId: ctx.user.id,
+          userName: ctx.user.name || String(ctx.user.id),
+        });
+      }
       return { id: created.id };
     }),
 
@@ -563,6 +586,31 @@ export const equipamentosRouter = router({
         .where(and(eq(equipamentosLocados.id, input.id), eq(equipamentosLocados.companyId, input.companyId)))
         .returning({ id: equipamentosLocados.id });
       if (r.length === 0) throw new TRPCError({ code: "NOT_FOUND" });
+
+      // Rev. 2405 — Sync com almoxarifado se obra mudou ou foi setada.
+      if (input.obraId !== undefined && input.obraId !== null) {
+        const [full] = await db.select().from(equipamentosLocados)
+          .where(and(eq(equipamentosLocados.id, input.id), eq(equipamentosLocados.companyId, input.companyId)))
+          .limit(1);
+        if (full) {
+          const { ensureAlmoxItemForEquipamento } = await import("../lib/almoxEquipamentoSync");
+          const fotos: any = (full as any).fotosRecebimentoJson;
+          const firstFoto = Array.isArray(fotos) && fotos.length > 0 ? fotos[0]?.url : (full as any).fotoUrl ?? null;
+          await ensureAlmoxItemForEquipamento(db, {
+            companyId: input.companyId,
+            tipo: "locado",
+            equipamentoId: input.id,
+            obraId: input.obraId,
+            nome: (full as any).descricao,
+            categoria: (full as any).categoria ?? null,
+            fotoUrl: firstFoto,
+            fornecedorNome: (full as any).fornecedorNome ?? null,
+            dataInicio: (full as any).dataInicio ?? null,
+            dataFim: (full as any).dataFimPrevista ?? null,
+            valorMensal: (full as any).valorMensal ?? null,
+          });
+        }
+      }
       return { id: r[0].id };
     }),
 
