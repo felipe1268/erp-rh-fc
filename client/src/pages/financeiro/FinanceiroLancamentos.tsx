@@ -293,6 +293,7 @@ export default function FinanceiroLancamentos() {
         contaNome: form.contaNome || undefined,
         obraNome: form.obraNome || undefined,
         formaPagamento: form.formaPagamento || undefined,
+        fornecedorNome: form.fornecedorNome || undefined,
         observacoes: form.observacoes || undefined,
         status: form.tipo === "receita" ? "a_receber" : form.status,
       });

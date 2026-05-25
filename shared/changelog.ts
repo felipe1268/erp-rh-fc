@@ -1,6 +1,81 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2396 — **FINANCEIRO/CONTAS A PAGAR · Nome do fornecedor visível
+ * na lista e no detalhe do título.**
+ *
+ * Pedido user (IMG_image_1779706619633 + IMG_image_1779706702673,
+ * 25/05/2026): "para visualizar melhor seria bom aparecer o nome do
+ * fornecedor nessa parte circulada, eu coloquei o nome quando lancei,
+ * mas no contas a pagar não aparece"; e em seguida "quando eu clico
+ * para visualizar na conta lançada no contas a pagar também não vincula
+ * o lançamento que fiz com o nome do fornecedor".
+ *
+ * Causa-raiz: a tabela `financial_entries` não tinha coluna
+ * `fornecedor_nome`. O form `FinanceiroLancamentos.tsx` capturava
+ * `fornecedorNome` no datalist mas no caminho NÃO-recorrente nem
+ * enviava o campo pro backend, e o `createEntry` no backend nem aceitava
+ * o input. Para o caminho recorrente, o nome ficava só em
+ * `financial_recurring_entries` mas a `materializeRecorrentes` não
+ * carregava pra `financial_entries`, então qualquer materialização
+ * mensal perdia o vínculo. Resultado: Contas a Pagar mostrava
+ * "PGTO FORNECEDOR" sem nenhum identificador do fornecedor (lista
+ * + drill-down).
+ *
+ * **Schema** (`server/_core/index.ts` L633-648):
+ *   - `ALTER TABLE financial_entries ADD COLUMN IF NOT EXISTS
+ *     fornecedor_nome VARCHAR(255)` (additive, idempotente — padrão
+ *     SyncSchema+ do projeto).
+ *   - Backfill 1-shot: `UPDATE financial_entries fe SET
+ *     fornecedor_nome = rec.fornecedor_nome FROM
+ *     financial_recurring_entries rec WHERE fe.origem_modulo='recorrente'
+ *     AND fe.origem_id=rec.id AND fe.fornecedor_nome IS NULL` — pega as
+ *     rows mensais JÁ materializadas (incluindo as do screenshot do user)
+ *     e popula o nome a partir da recorrência pai. Idempotente.
+ *   - `drizzle/schema.ts` L6545: campo `fornecedorNome` adicionado em
+ *     `financialEntries`.
+ *
+ * **Backend** (`server/routers/financial.ts`):
+ *   - `createEntry` (L569+L581/582+L596): aceita `fornecedorNome` opcional
+ *     e grava na INSERT. Trim + null se vazio.
+ *   - `materializeRecorrentes` (L145-155): INSERT também copia
+ *     `rec.fornecedor_nome` (qualquer recorrência futura já nasce com o
+ *     vínculo).
+ *   - `getContasAPagarByYear` (L3196): SELECT inclui `fornecedor_nome AS
+ *     "fornecedorNome"` — lista chega no client com o campo.
+ *   - `getEntryDetalhe` (L660): mesma adição no SELECT do detalhe.
+ *
+ * **Frontend** (`client/src/pages/financeiro/`):
+ *   - `FinanceiroLancamentos.tsx` (L299): caminho não-recorrente agora
+ *     envia `fornecedorNome: form.fornecedorNome || undefined` —
+ *     o form já tinha o input com autocomplete via datalist de
+ *     fornecedores cadastrados (`compras.listarFornecedores`).
+ *   - `FinanceiroContasAPagar.tsx`:
+ *     - `describeEntry` (L116-137): concatena `" — {fornecedor}"` no
+ *       fim da descrição quando `fornecedorNome` está preenchido e ainda
+ *       não aparece no texto base (evita duplicar). Aparece na coluna
+ *       Descrição da lista.
+ *     - Detalhe (L1342-1345): linha "🏢 {fornecedorNome}" no header do
+ *       modal, acima do 📍 obra, com fonte text-slate-700 medium para
+ *       contraste.
+ *
+ * Política R-001/R-007/R-010 OK: `ALTER TABLE ... ADD COLUMN IF NOT
+ * EXISTS` é additive idempotente (mesmo padrão de Rev. 2003+/2008+
+ * em SyncSchema+); backfill é UPDATE em coluna não-key, idempotente,
+ * com WHERE escopado por `fornecedor_nome IS NULL`. Sem DROP, sem
+ * DELETE, sem mudança em FKs/PKs/constraints existentes.
+ *
+ * Arquivos:
+ *   - `server/_core/index.ts` (ALTER + backfill)
+ *   - `drizzle/schema.ts` (campo `fornecedorNome` em `financialEntries`)
+ *   - `server/routers/financial.ts` (createEntry, materializeRecorrentes,
+ *     getContasAPagarByYear, getEntryDetalhe)
+ *   - `client/src/pages/financeiro/FinanceiroLancamentos.tsx`
+ *   - `client/src/pages/financeiro/FinanceiroContasAPagar.tsx`
+ *   - `shared/version.ts` → 2396 / `replit.md` rotacionado.
+ *
+ * ──────────────────────────────────────────────────────────────────
+ *
  * Rev. 2395 — **ALMOXARIFADO/CONFIG · Limpeza de categorias ÓRFÃS (itens
  * cuja `categoria` é string que não existe mais em `almoxarifado_categorias`)
  * — botão "Mover para Sem categoria" no card de Configurações.**

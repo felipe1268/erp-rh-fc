@@ -627,6 +627,23 @@ Regras:
           console.log(`[SyncSchema+] Coluna documentos_extras garantida em funcionarios_terceiros.`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA funcionarios_terceiros documentos_extras:`, e?.message || e); }
 
+        // Rev. 2396 — fornecedor_nome em financial_entries + backfill 1-shot
+        // pra rows recorrentes JÁ materializadas (pega o nome do recurring pai).
+        try {
+          await db.execute(sql`ALTER TABLE financial_entries ADD COLUMN IF NOT EXISTS fornecedor_nome VARCHAR(255)`);
+          const bf = await db.execute(sql`
+            UPDATE financial_entries fe
+               SET fornecedor_nome = rec.fornecedor_nome
+              FROM financial_recurring_entries rec
+             WHERE fe.origem_modulo = 'recorrente'
+               AND fe.origem_id = rec.id
+               AND fe.fornecedor_nome IS NULL
+               AND rec.fornecedor_nome IS NOT NULL
+               AND TRIM(rec.fornecedor_nome) <> ''
+          `);
+          console.log(`[SyncSchema+] Coluna fornecedor_nome garantida em financial_entries (backfill: ${(bf as any)?.rowCount ?? "?"} linhas).`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA financial_entries fornecedor_nome:`, e?.message || e); }
+
         // Rev. 1592: bloco Escritório Central na avaliação anônima do Portal do Cliente.
         // Garantido aqui (e não só em ColFix) porque o version guard do ColFix pode
         // pular as migrations quando a versão já estiver aplicada.

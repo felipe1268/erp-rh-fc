@@ -111,17 +111,26 @@ function stripOcPrefix(text: string): string {
 }
 
 // Rev. 1619 — Descrição com fallback inteligente
+// Rev. 2396 — Concatena nome do fornecedor (quando preenchido no lançamento)
+// pra dar contexto na lista: "PGTO FORNECEDOR — Construtora XPTO Ltda".
 function describeEntry(c: any): string {
+  const fornec = (c.fornecedorNome ?? "").trim();
   const raw = (c.descricao ?? "").trim();
   const desc = stripOcPrefix(raw);
-  if (desc && desc !== "—") return desc;
-  const orig = stripOcPrefix((c.origemDescricao ?? "").trim());
-  if (orig) return orig;
-  if (c.contaNome && c.obraNome) return `${c.contaNome} — ${c.obraNome}`;
-  if (c.contaNome) return c.contaNome;
-  if (c.obraNome) return c.obraNome;
-  if (c.origemModulo) return `Lançamento ${ORIGEM_LABELS[c.origemModulo] ?? c.origemModulo}`;
-  return "—";
+  const base = (() => {
+    if (desc && desc !== "—") return desc;
+    const orig = stripOcPrefix((c.origemDescricao ?? "").trim());
+    if (orig) return orig;
+    if (c.contaNome && c.obraNome) return `${c.contaNome} — ${c.obraNome}`;
+    if (c.contaNome) return c.contaNome;
+    if (c.obraNome) return c.obraNome;
+    if (c.origemModulo) return `Lançamento ${ORIGEM_LABELS[c.origemModulo] ?? c.origemModulo}`;
+    return "—";
+  })();
+  if (fornec && !base.toLowerCase().includes(fornec.toLowerCase())) {
+    return `${base} — ${fornec}`;
+  }
+  return base;
 }
 
 // Rev. 1619 — Categoria (plano de contas) + fallback por origem
@@ -1327,6 +1336,10 @@ export default function FinanceiroContasAPagar() {
                         <h3 className="text-base font-bold text-slate-900 leading-tight">
                           {e.descricao || e.origemDescricao || e.contaNome || "—"}
                         </h3>
+                        {/* Rev. 2396 — Nome do fornecedor (quando preenchido no lançamento) */}
+                        {e.fornecedorNome && (
+                          <p className="text-xs text-slate-700 font-medium mt-1">🏢 {e.fornecedorNome}</p>
+                        )}
                         {e.obraNome && (
                           <p className="text-xs text-slate-600 mt-1">📍 {e.obraNome}</p>
                         )}

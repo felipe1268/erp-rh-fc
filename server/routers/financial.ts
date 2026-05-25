@@ -142,12 +142,13 @@ async function materializeRecorrentes(
           `INSERT INTO financial_entries
             (company_id, obra_id, obra_nome, conta_id, conta_nome, tipo, natureza,
              valor_previsto, data_competencia, data_vencimento, status,
-             origem_modulo, origem_id, origem_descricao, descricao)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'recorrente',$12,$13,$14)`,
+             origem_modulo, origem_id, origem_descricao, descricao, fornecedor_nome)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'recorrente',$12,$13,$14,$15)`,
           [companyId, rec.obra_id, rec.obra_nome, rec.conta_id, rec.conta_nome,
            rec.tipo, rec.natureza ?? "fixo", rec.valor, vencStr, vencStr,
            rec.tipo === "receita" ? "a_receber" : "a_pagar",
-           rec.id, `Recorrência: ${rec.descricao}`, rec.descricao]
+           rec.id, `Recorrência: ${rec.descricao}`, rec.descricao,
+           rec.fornecedor_nome ?? null]
         );
         count++;
       }
@@ -563,6 +564,7 @@ export const financialRouter = router({
     chequeTitular: z.string().optional(),
     chequeDataEmissao: z.string().optional(),
     chequeDataBomPara: z.string().optional(),
+    fornecedorNome: z.string().optional(),
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
@@ -574,8 +576,8 @@ export const financialRouter = router({
         parcela_numero, parcela_total, parcela_grupo_id,
         cheque_numero, cheque_banco, cheque_agencia, cheque_conta, cheque_titular,
         cheque_data_emissao, cheque_data_bom_para,
-        criado_por_id, criado_por_nome, created_at, updated_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,NOW(),NOW())
+        criado_por_id, criado_por_nome, fornecedor_nome, created_at, updated_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,NOW(),NOW())
        RETURNING id`,
       [
         input.companyId, input.obraId ?? null, input.obraNome ?? null,
@@ -589,6 +591,7 @@ export const financialRouter = router({
         input.chequeConta ?? null, input.chequeTitular ?? null,
         input.chequeDataEmissao ?? null, input.chequeDataBomPara ?? null,
         ctx.user?.id ?? null, ctx.user?.name ?? null,
+        input.fornecedorNome?.trim() || null,
       ]
     );
     const id = rows(res)[0]?.id;
@@ -651,6 +654,7 @@ export const financialRouter = router({
               criado_por_id AS "criadoPorId", criado_por_nome AS "criadoPorNome",
               aprovado_por_id AS "aprovadoPorId", aprovado_por_nome AS "aprovadoPorNome",
               vehicle_id AS "vehicleId",
+              fornecedor_nome AS "fornecedorNome",
               created_at AS "createdAt", updated_at AS "updatedAt",
               CASE WHEN data_vencimento < CURRENT_DATE AND status != 'pago' THEN CURRENT_DATE - data_vencimento ELSE 0 END AS "diasAtraso"
        FROM financial_entries
@@ -3187,6 +3191,7 @@ export const financialRouter = router({
               forma_pagamento AS "formaPagamento",
               origem_modulo AS "origemModulo", origem_id AS "origemId",
               origem_descricao AS "origemDescricao",
+              fornecedor_nome AS "fornecedorNome",
               tipo,
               CASE WHEN data_vencimento < CURRENT_DATE AND status != 'pago' THEN CURRENT_DATE - data_vencimento ELSE 0 END AS "diasAtraso"
        FROM financial_entries
