@@ -1,6 +1,68 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2421 — **INVENTÁRIO VISUAL DE BAIAS · 3 BUGS NUMA SÓ REVISÃO:
+ * (A) BAIXA AGORA DESCONTA DO ALMOXARIFADO, (B) CARD INTEIRO ABRE
+ * HISTÓRICO COMPLETO NO CLIQUE, (C) MENU REAPARECE PARA USERS DE
+ * GRUPO COM MÓDULO ALMOXARIFADO LIBERADO.**
+ *
+ * Pedido user (25/05/2026, screenshot do card "Conferida hoje" com
+ * RESTANTE 50 m³ mas saldo do item ainda em 100 — Rev. 2419):
+ * "Dei baixa mas não está baixando do almoxarifado, ainda mostra os
+ * 100 iniciais.. preciso que a baixa funcione corretamente... e quando
+ * eu clicar quero que apareça o histórico completo... e veja pq a
+ * função de conferir baías não está aparecendo para todos usuários
+ * que tem o módulo almoxarifado liberado".
+ *
+ * **(A) Baixa não descontava do estoque.** `baiaLeituraRegistrar`
+ * (server/routers/warehouse.ts L2505+) salvava só a linha em
+ * `almoxarifado_baia_leituras` — NUNCA criava movimentação de saída
+ * nem mexia em `almoxarifado_itens.quantidadeAtual`. Adicionado bloco
+ * pós-INSERT (Rev. 2421): se `baia.itemId != null` E há leitura
+ * anterior com `volumeEstimado` E novoVol < antVol, calcula
+ * `consumo = antVol - novoVol`, faz `UPDATE almoxarifado_itens SET
+ * quantidadeAtual = GREATEST(qtd - consumo, 0)` (clamp em 0) e
+ * INSERT em `almoxarifado_movimentacoes` (tipo "saida", obraId,
+ * obraNome, motivo "Inventário Visual de Baias — aferição (baia X)",
+ * usuarioId/Nome do ctx, observacoes herdadas). Regra deliberadamente
+ * conservadora: se volume SUBIU entre leituras, NÃO inferimos entrada
+ * (entradas vêm da NF). Primeira leitura nunca debita (sem baseline).
+ * Endpoint retorna `consumoDebitado` pra UI poder dar feedback. Import
+ * `ne` adicionado de drizzle-orm pra excluir a leitura recém-criada
+ * ao buscar a anterior.
+ *
+ * **(B) Histórico completo no clique do card.** O modal histórico já
+ * existia desde a Rev. 2373 (botão pequeno "Ver histórico" abaixo
+ * do CTA), mas em mobile fica fácil não enxergar. Card inteiro ganhou
+ * `onClick={() => setHistoricoBaia(b)}` + `cursor-pointer` + tooltip
+ * "Clique pra ver o histórico completo". Botões internos (Editar,
+ * Remover, Registrar baixa, Ver histórico explícito) ganharam
+ * `stopPropagation` pra não disparar dupla ação. `baiaLeiturasListar`
+ * bumpou default de 50 → 200 (user quer histórico COMPLETO).
+ *
+ * **(C) Item de menu sumia pra users em grupo.** `shared/modules.ts`
+ * NÃO registrava `/almoxarifado/inventario-visual` como feature do
+ * módulo Almoxarifado. Resultado: `groupCanAccessRoute("/almoxarifado/
+ * inventario-visual")` devolvia `false` em `PermissionsContext.tsx`
+ * L341+ (procura mod cujo `features.some(f => f.route === basePath)`),
+ * e `DashboardLayout.tsx` L1361-1364 escondia o item via
+ * `filterWithChildren`. Adicionado em `shared/modules.ts` L361-364
+ * (logo após "Inventário Semanal"): `{ key: "almoxarifado-inventario-
+ * visual", label: "Inventário Visual (Baias)", route: "/almoxarifado/
+ * inventario-visual", icon: "Package" }`. Como a permissão é por
+ * módulo (canAccessModule retorna boolean), qualquer user com módulo
+ * Almoxarifado liberado passa a ver o item sem precisar mexer em
+ * config de grupo individual.
+ *
+ * **Arquivos:** server/routers/warehouse.ts (import `ne`, bump limit,
+ * bloco de débito 50 linhas), client/src/pages/almoxarifado/
+ * InventarioVisual.tsx (card clicável + stopPropagation em 4 botões),
+ * shared/modules.ts (1 feature nova), shared/version.ts (→ 2421),
+ * shared/changelog.ts (esta entrada), replit.md (rotação 2+5).
+ *
+ * **Zero schema/migration.** R-001/R-007/R-010 OK (DEFAULT/UPDATE com
+ * GREATEST, sem DROP/ALTER destrutivo).
+ *
  * Rev. 2420 — **EQUIPAMENTOS LOCADOS / PICKER "QUAL EQUIPAMENTO VAI
  * DEVOLVER?" · MULTI-SELEÇÃO PARA DEVOLUÇÃO EM LOTE + FILTRO DE
  * PERMISSÃO DE OBRA.**

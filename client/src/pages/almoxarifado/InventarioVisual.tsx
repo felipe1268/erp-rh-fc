@@ -296,9 +296,13 @@ export default function InventarioVisualBaias() {
     return (
       <div
         key={b.id ?? `item-${b.itemId}`}
+        onClick={() => { if (!semBaia) setHistoricoBaia(b); }}
         className={`bg-white rounded-2xl border-2 overflow-hidden shadow-sm hover:shadow-lg transition-shadow ${
+          semBaia ? "" : "cursor-pointer"
+        } ${
           conferida ? "border-emerald-200" : "border-amber-300 ring-2 ring-amber-100"
         }`}
+        title={!semBaia ? "Clique pra ver o histórico completo" : undefined}
       >
         {/* Foto */}
         <div className="relative h-32 bg-gradient-to-br from-slate-100 to-slate-200">
@@ -311,10 +315,10 @@ export default function InventarioVisualBaias() {
           )}
           {gerenciarMode && !semBaia && (
             <div className="absolute top-2 right-2 flex gap-1">
-              <button onClick={() => abrirEdicao(b)} className="bg-white/90 hover:bg-white p-1.5 rounded-lg shadow" title="Editar">
+              <button onClick={e => { e.stopPropagation(); abrirEdicao(b); }} className="bg-white/90 hover:bg-white p-1.5 rounded-lg shadow" title="Editar">
                 <Pencil className="w-3.5 h-3.5 text-slate-700" />
               </button>
-              <button onClick={() => setExcluindo(b)} className="bg-white/90 hover:bg-white p-1.5 rounded-lg shadow" title="Remover">
+              <button onClick={e => { e.stopPropagation(); setExcluindo(b); }} className="bg-white/90 hover:bg-white p-1.5 rounded-lg shadow" title="Remover">
                 <Trash2 className="w-3.5 h-3.5 text-red-600" />
               </button>
             </div>
@@ -396,7 +400,7 @@ export default function InventarioVisualBaias() {
             </div>
           )}
           <button
-            onClick={() => abrirLeitura(b)}
+            onClick={e => { e.stopPropagation(); abrirLeitura(b); }}
             className={`w-full rounded-lg py-2.5 font-bold text-sm shadow-sm hover:shadow active:scale-[0.98] transition-all flex items-center justify-center gap-1.5 ${
               conferida
                 ? "bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200"
@@ -407,7 +411,7 @@ export default function InventarioVisualBaias() {
           </button>
           {!semBaia && (
             <button
-              onClick={() => setHistoricoBaia(b)}
+              onClick={e => { e.stopPropagation(); setHistoricoBaia(b); }}
               className="w-full text-[11px] text-slate-500 hover:text-slate-800 flex items-center justify-center gap-1 py-0.5"
             >
               <History className="w-3 h-3" /> Ver histórico

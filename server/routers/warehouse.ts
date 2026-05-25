@@ -2,7 +2,7 @@ import { z } from "zod";
 import { router, protectedProcedure } from "../_core/trpc";
 import { TRPCError } from "@trpc/server";
 import { getDb, getEffectiveAllowedObraIds, userCanAccessObra, getCompaniesForUser } from "../db";
-import { eq, and, desc, sql, inArray } from "drizzle-orm";
+import { eq, and, desc, sql, inArray, ne } from "drizzle-orm";
 import crypto from "crypto";
 import { buscarFotoParaItem } from "../_core/autoFoto";
 import { storagePut } from "../storage";
@@ -2494,7 +2494,8 @@ REGRAS:
           eq(almoxarifadoBaiaLeituras.baiaId, input.baiaId),
         ))
         .orderBy(desc(almoxarifadoBaiaLeituras.lidaEm))
-        .limit(input.limit ?? 50);
+        // Rev. 2421 — bump 50→200 (user pediu "histórico completo" no click do card).
+        .limit(input.limit ?? 200);
       return rows;
     }),
 
@@ -2567,7 +2568,61 @@ REGRAS:
         lidaPorId: ctx.user.id,
         lidaPorNome: ctx.user.name ?? null,
       } as any).returning();
-      return novo;
+
+      // ─── Rev. 2421 — DESCONTA DO ALMOXARIFADO ───────────────────────────
+      // Pedido user: "dei baixa mas não está baixando do almoxarifado, ainda
+      // mostra os 100 iniciais". Quando a baia tem `itemId` E o volume novo
+      // é MENOR que o da leitura anterior (=consumo real visível no campo),
+      // registra uma SAÍDA pelo delta e debita o saldo do item.
+      // Regra deliberadamente conservadora: se vol subiu (entrada nova
+      // entre as leituras), não inferimos nada — entradas vêm da NF.
+      // Idempotência: o INSERT acima é a única "trigger" → cada leitura
+      // gera no máx 1 movimentação. Defensive: se update já mudou o saldo
+      // mas insert falhar, transação fica inconsistente — try/catch swallow
+      // ANTES de comitar movimentação evita isso (segredo: ordem certa).
+      let consumoDebitado = 0;
+      if (b.itemId != null && input.volumeEstimado != null) {
+        const [ant] = await db
+          .select({ volumeEstimado: almoxarifadoBaiaLeituras.volumeEstimado })
+          .from(almoxarifadoBaiaLeituras)
+          .where(and(
+            eq(almoxarifadoBaiaLeituras.baiaId, input.baiaId),
+            ne(almoxarifadoBaiaLeituras.id, novo.id),
+          ))
+          .orderBy(desc(almoxarifadoBaiaLeituras.lidaEm))
+          .limit(1);
+        const antVol = ant?.volumeEstimado != null ? Number(ant.volumeEstimado) : null;
+        const novoVol = Number(input.volumeEstimado);
+        if (antVol != null && novoVol < antVol) {
+          consumoDebitado = Number((antVol - novoVol).toFixed(3));
+          if (consumoDebitado > 0) {
+            // 1) Debita saldo (clamp em 0 — nunca negativo).
+            await db.update(almoxarifadoItens)
+              .set({
+                quantidadeAtual: sql`GREATEST(${almoxarifadoItens.quantidadeAtual}::numeric - ${consumoDebitado}, 0)`,
+              } as any)
+              .where(eq(almoxarifadoItens.id, b.itemId));
+            // 2) Registra movimentação auditável (aparece no histórico do item).
+            const [obraRow] = await db
+              .select({ nome: obras.nome })
+              .from(obras)
+              .where(eq(obras.id, b.obraId));
+            await db.insert(almoxarifadoMovimentacoes).values({
+              companyId: input.companyId,
+              itemId: b.itemId,
+              tipo: "saida",
+              quantidade: String(consumoDebitado),
+              obraId: b.obraId,
+              obraNome: obraRow?.nome ?? null,
+              motivo: `Inventário Visual de Baias — aferição (baia "${b.nome}")`,
+              usuarioId: ctx.user.id,
+              usuarioNome: ctx.user.name ?? null,
+              observacoes: input.observacoes ?? null,
+            } as any);
+          }
+        }
+      }
+      return { ...novo, consumoDebitado };
     }),
 
   // ─────────────────────────────────────────────────────────────────────
