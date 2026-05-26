@@ -8,6 +8,7 @@ import {
   ArrowDownCircle, ArrowUpCircle, Loader2, Search, Filter,
   ArrowRightLeft, Calendar, User, MapPin, X, CalendarRange,
   CheckSquare, Square, Undo2, AlertTriangle, Ban,
+  Wrench, RotateCcw, Package, ArrowLeftRight, AlertOctagon,
 } from "lucide-react";
 
 // Rev. 2304 — helpers de data LOCAL (sem fuso, sem UTC) p/ filtros por período.
@@ -31,11 +32,26 @@ function brDate(iso: string): string {
 }
 
 type PeriodoPreset = "todos" | "hoje" | "7d" | "30d" | "mes" | "custom";
+type Fonte = "todos" | "movimentacao" | "emprestimo" | "insumo" | "transferencia";
 
-const TIPO_LABELS: Record<string, { label: string; cor: string; icon: any }> = {
-  entrada: { label: "Entrada", cor: "text-emerald-700 bg-emerald-50", icon: ArrowDownCircle },
-  saida:   { label: "Saída",   cor: "text-red-700 bg-red-50",         icon: ArrowUpCircle },
-  ajuste:  { label: "Ajuste",  cor: "text-blue-700 bg-blue-50",       icon: ArrowRightLeft },
+// Rev. 2457 — Metadata visual por TIPO (cobre todas as 4 fontes).
+const TIPO_LABELS: Record<string, { label: string; cor: string; icon: any; sinal?: "+" | "-" | "" }> = {
+  entrada:       { label: "Entrada",       cor: "text-emerald-700 bg-emerald-50", icon: ArrowDownCircle, sinal: "+" },
+  saida:         { label: "Saída",         cor: "text-red-700 bg-red-50",         icon: ArrowUpCircle,   sinal: "-" },
+  ajuste:        { label: "Ajuste",        cor: "text-blue-700 bg-blue-50",       icon: ArrowRightLeft,  sinal: "" },
+  emprestimo:    { label: "Empréstimo",    cor: "text-amber-700 bg-amber-50",     icon: Wrench,          sinal: "-" },
+  devolucao:     { label: "Devolução",     cor: "text-teal-700 bg-teal-50",       icon: RotateCcw,       sinal: "+" },
+  perdido:       { label: "Perdido",       cor: "text-rose-700 bg-rose-50",       icon: AlertOctagon,    sinal: "-" },
+  insumo:        { label: "Insumo p/ Func.", cor: "text-violet-700 bg-violet-50", icon: Package,         sinal: "-" },
+  transferencia: { label: "Transferência", cor: "text-sky-700 bg-sky-50",         icon: ArrowLeftRight,  sinal: "" },
+};
+
+const FONTE_LABEL: Record<Fonte, string> = {
+  todos:         "Todas as fontes",
+  movimentacao:  "Estoque (entrada/saída/ajuste)",
+  emprestimo:    "Ferramentas (empréstimo/devolução)",
+  insumo:        "Insumos p/ funcionário",
+  transferencia: "Transferências entre almox",
 };
 
 function n(v: any) { return parseFloat(v ?? "0") || 0; }
@@ -48,27 +64,46 @@ export default function AlmoxarifadoMovimentacoes() {
   const isAdmin = user?.role === "admin" || user?.role === "admin_master";
 
   const [busca, setBusca] = useState("");
+  const [filtroFonte, setFiltroFonte] = useState<Fonte>("todos");
   const [filtroTipo, setFiltroTipo] = useState("todos");
-  // Rev. 2303 — clicar na obra dentro de um card filtra a lista por obraId.
   const [filtroObra, setFiltroObra] = useState<{ id: number; nome: string } | null>(null);
-  // Rev. 2304 — filtro por período de recebimento.
   const [filtroPeriodo, setFiltroPeriodo] = useState<PeriodoPreset>("todos");
   const [dataInicio, setDataInicio] = useState<string>("");
   const [dataFim, setDataFim] = useState<string>("");
-  // Rev. 2305 — modo seleção múltipla + estorno.
   const [modoSelecao, setModoSelecao] = useState(false);
   const [selecionadas, setSelecionadas] = useState<Set<number>>(new Set());
   const [modalEstorno, setModalEstorno] = useState(false);
   const [motivoEstorno, setMotivoEstorno] = useState("");
 
-  // Limit subiu de 300 → 1500 p/ não cortar histórico em filtros longos (Este mês etc).
+  // Resolve range pra usar como dateFrom/dateTo no server-side.
+  const range = useMemo(() => {
+    const hoje = new Date();
+    if (filtroPeriodo === "todos") return null;
+    if (filtroPeriodo === "hoje")  return { ini: toLocalIso(hoje), fim: toLocalIso(hoje) };
+    if (filtroPeriodo === "7d")    return { ini: toLocalIso(addDays(hoje, -6)), fim: toLocalIso(hoje) };
+    if (filtroPeriodo === "30d")   return { ini: toLocalIso(addDays(hoje, -29)), fim: toLocalIso(hoje) };
+    if (filtroPeriodo === "mes")   return { ini: toLocalIso(startOfMonth(hoje)), fim: toLocalIso(hoje) };
+    if (filtroPeriodo === "custom") {
+      if (!dataInicio && !dataFim) return null;
+      const ini = dataInicio || "0000-01-01";
+      const fim = dataFim || "9999-12-31";
+      return ini <= fim ? { ini, fim } : { ini: fim, fim: ini };
+    }
+    return null;
+  }, [filtroPeriodo, dataInicio, dataFim]);
+
+  // Rev. 2457 — Timeline unificada (4 fontes via UNION ALL no backend).
   const utils = trpc.useUtils();
-  const { data: movs = [], isLoading } = trpc.warehouse.listMovements.useQuery(
-    { companyId, limit: 1500 },
+  const { data: timeline = [], isLoading } = trpc.warehouse.listTimeline.useQuery(
+    {
+      companyId,
+      limit: 1500,
+      dateFrom: range?.ini,
+      dateTo:   range?.fim,
+    },
     { enabled: !!companyId }
   );
 
-  // Rev. 2305 — Mutation de estorno em lote.
   const reverseMut = trpc.warehouse.reverseMovements.useMutation({
     onSuccess: (res) => {
       const { sucessos, erros, total } = res;
@@ -89,6 +124,7 @@ export default function AlmoxarifadoMovimentacoes() {
       setModoSelecao(false);
       setModalEstorno(false);
       setMotivoEstorno("");
+      utils.warehouse.listTimeline.invalidate();
       utils.warehouse.listMovements.invalidate();
       utils.warehouse.getDashboard.invalidate();
     },
@@ -97,9 +133,9 @@ export default function AlmoxarifadoMovimentacoes() {
 
   function toggleSel(id: number) {
     setSelecionadas(prev => {
-      const n = new Set(prev);
-      if (n.has(id)) n.delete(id); else n.add(id);
-      return n;
+      const n2 = new Set(prev);
+      if (n2.has(id)) n2.delete(id); else n2.add(id);
+      return n2;
     });
   }
   function sairModoSelecao() {
@@ -107,70 +143,59 @@ export default function AlmoxarifadoMovimentacoes() {
     setSelecionadas(new Set());
   }
 
-  // Resolve o range [dataInicio, dataFim] (YYYY-MM-DD) a partir do preset.
-  const range = useMemo(() => {
-    const hoje = new Date();
-    if (filtroPeriodo === "todos") return null;
-    if (filtroPeriodo === "hoje") {
-      const iso = toLocalIso(hoje);
-      return { ini: iso, fim: iso };
-    }
-    if (filtroPeriodo === "7d") return { ini: toLocalIso(addDays(hoje, -6)), fim: toLocalIso(hoje) };
-    if (filtroPeriodo === "30d") return { ini: toLocalIso(addDays(hoje, -29)), fim: toLocalIso(hoje) };
-    if (filtroPeriodo === "mes") return { ini: toLocalIso(startOfMonth(hoje)), fim: toLocalIso(hoje) };
-    if (filtroPeriodo === "custom") {
-      if (!dataInicio && !dataFim) return null;
-      const ini = dataInicio || "0000-01-01";
-      const fim = dataFim || "9999-12-31";
-      return ini <= fim ? { ini, fim } : { ini: fim, fim: ini };
-    }
-    return null;
-  }, [filtroPeriodo, dataInicio, dataFim]);
+  // Tipos disponíveis no select de TIPO dependem da fonte selecionada.
+  const tiposDoFiltroFonte: { v: string; l: string }[] = useMemo(() => {
+    if (filtroFonte === "movimentacao") return [
+      { v: "todos", l: "Todos" }, { v: "entrada", l: "Entradas" },
+      { v: "saida", l: "Saídas" }, { v: "ajuste", l: "Ajustes" },
+    ];
+    if (filtroFonte === "emprestimo") return [
+      { v: "todos", l: "Todos" }, { v: "emprestimo", l: "Em aberto" },
+      { v: "devolucao", l: "Devolvido" }, { v: "perdido", l: "Perdido" },
+    ];
+    return [{ v: "todos", l: "Todos" }];
+  }, [filtroFonte]);
 
   const lista = useMemo(() => {
-    let r = movs;
-    if (filtroObra) r = r.filter(m => m.obraId === filtroObra.id);
-    if (range) {
-      r = r.filter(m => {
-        if (!m.criadoEm) return false;
-        // m.criadoEm é ISO; recorta YYYY-MM-DD em UTC. Pra comparar com data
-        // local do usuário (presets calculados em fuso BR), converte via Date.
-        const d = new Date(m.criadoEm);
-        const iso = toLocalIso(d);
-        return iso >= range.ini && iso <= range.fim;
-      });
-    }
+    let r: any[] = timeline;
+    if (filtroFonte !== "todos") r = r.filter(m => m.fonte === filtroFonte);
+    if (filtroObra) r = r.filter(m => m.obra_id === filtroObra.id);
     if (busca) {
       const b = busca.toLowerCase();
       r = r.filter(m =>
-        (m.itemNome?.toLowerCase() ?? "").includes(b) ||
-        (m.usuarioNome?.toLowerCase() ?? "").includes(b) ||
-        (m.obraNome?.toLowerCase() ?? "").includes(b) ||
-        (m.motivo?.toLowerCase() ?? "").includes(b)
+        (m.item_nome?.toLowerCase()  ?? "").includes(b) ||
+        (m.quem?.toLowerCase()       ?? "").includes(b) ||
+        (m.obra_nome?.toLowerCase()  ?? "").includes(b) ||
+        (m.motivo?.toLowerCase()     ?? "").includes(b) ||
+        (m.contraparte?.toLowerCase()?? "").includes(b)
       );
     }
     if (filtroTipo !== "todos") r = r.filter(m => m.tipo === filtroTipo);
     return r;
-  }, [movs, busca, filtroTipo, filtroObra, range]);
+  }, [timeline, busca, filtroFonte, filtroTipo, filtroObra]);
 
-  // Rev. 2304 — resumo reflete a lista FILTRADA (período + obra + busca + tipo),
-  // assim os 3 cards no topo respondem aos filtros, inclusive ao recorte temporal.
   const resumo = useMemo(() => {
-    const entradas = lista.filter(m => m.tipo === "entrada").length;
-    const saidas   = lista.filter(m => m.tipo === "saida").length;
-    return { entradas, saidas, total: lista.length };
+    const porFonte: Record<string, number> = {};
+    for (const m of lista) porFonte[m.fonte] = (porFonte[m.fonte] ?? 0) + 1;
+    return {
+      total:        lista.length,
+      movimentacao: porFonte.movimentacao  ?? 0,
+      emprestimo:   porFonte.emprestimo    ?? 0,
+      insumo:       porFonte.insumo        ?? 0,
+      transferencia:porFonte.transferencia ?? 0,
+    };
   }, [lista]);
 
   return (
     <DashboardLayout>
       <div className="space-y-4 max-w-4xl mx-auto px-2">
-        {/* Cabeçalho */}
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Movimentações</h1>
-          <p className="text-sm text-gray-500 mt-1">Histórico completo de entradas e saídas</p>
+          <p className="text-sm text-gray-500 mt-1">
+            Histórico completo: estoque, ferramentas, insumos e transferências — quem fez, quando e o que.
+          </p>
         </div>
 
-        {/* Rev. 2305 — Toggle modo seleção (só admin) */}
         {isAdmin && (
           <div className="flex justify-end">
             {!modoSelecao ? (
@@ -178,10 +203,10 @@ export default function AlmoxarifadoMovimentacoes() {
                 type="button"
                 onClick={() => setModoSelecao(true)}
                 className="inline-flex items-center gap-1.5 text-xs font-medium text-gray-700 bg-white border border-gray-200 hover:border-emerald-300 hover:text-emerald-700 rounded-full px-3 py-1.5 transition"
-                title="Selecionar várias movimentações para estornar"
+                title="Selecionar várias movimentações para estornar (só fonte ESTOQUE)"
               >
                 <CheckSquare className="w-3.5 h-3.5" />
-                Selecionar
+                Selecionar p/ estornar
               </button>
             ) : (
               <button
@@ -196,23 +221,58 @@ export default function AlmoxarifadoMovimentacoes() {
           </div>
         )}
 
-        {/* Cards de resumo */}
-        <div className="grid grid-cols-3 gap-3">
-          <div className="bg-white rounded-xl border p-3 text-center">
-            <p className="text-2xl font-bold text-gray-900">{resumo.total}</p>
-            <p className="text-xs text-gray-500 mt-1">Total registros</p>
+        {/* Rev. 2457 — 5 cards de resumo (total + 4 fontes). */}
+        <div className="grid grid-cols-5 gap-2">
+          <div className="bg-white rounded-xl border p-2.5 text-center">
+            <p className="text-xl font-bold text-gray-900">{resumo.total}</p>
+            <p className="text-[10px] text-gray-500 mt-0.5">Total</p>
           </div>
-          <div className="bg-emerald-50 rounded-xl border border-emerald-200 p-3 text-center">
-            <p className="text-2xl font-bold text-emerald-700">{resumo.entradas}</p>
-            <p className="text-xs text-emerald-600 mt-1">Entradas</p>
+          <div className="bg-emerald-50 rounded-xl border border-emerald-200 p-2.5 text-center">
+            <p className="text-xl font-bold text-emerald-700">{resumo.movimentacao}</p>
+            <p className="text-[10px] text-emerald-700 mt-0.5">Estoque</p>
           </div>
-          <div className="bg-red-50 rounded-xl border border-red-200 p-3 text-center">
-            <p className="text-2xl font-bold text-red-700">{resumo.saidas}</p>
-            <p className="text-xs text-red-600 mt-1">Saídas</p>
+          <div className="bg-amber-50 rounded-xl border border-amber-200 p-2.5 text-center">
+            <p className="text-xl font-bold text-amber-700">{resumo.emprestimo}</p>
+            <p className="text-[10px] text-amber-700 mt-0.5">Ferramentas</p>
+          </div>
+          <div className="bg-violet-50 rounded-xl border border-violet-200 p-2.5 text-center">
+            <p className="text-xl font-bold text-violet-700">{resumo.insumo}</p>
+            <p className="text-[10px] text-violet-700 mt-0.5">Insumos</p>
+          </div>
+          <div className="bg-sky-50 rounded-xl border border-sky-200 p-2.5 text-center">
+            <p className="text-xl font-bold text-sky-700">{resumo.transferencia}</p>
+            <p className="text-[10px] text-sky-700 mt-0.5">Transfer.</p>
           </div>
         </div>
 
-        {/* Rev. 2304 — Filtro por PERÍODO de recebimento (pills + range custom) */}
+        {/* Rev. 2457 — Filtro por FONTE (chips horizontais) */}
+        <div className="bg-white border rounded-xl p-3 space-y-2">
+          <div className="flex items-center gap-2 text-xs font-semibold text-gray-600">
+            <Filter className="w-4 h-4 text-emerald-600" />
+            Fonte
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {(Object.keys(FONTE_LABEL) as Fonte[]).map(f => {
+              const ativo = filtroFonte === f;
+              return (
+                <button
+                  key={f}
+                  type="button"
+                  onClick={() => { setFiltroFonte(f); setFiltroTipo("todos"); }}
+                  className={`px-3 py-1.5 rounded-full text-xs font-medium border transition ${
+                    ativo
+                      ? "bg-gray-900 text-white border-gray-900 shadow-sm"
+                      : "bg-white text-gray-700 border-gray-200 hover:border-gray-400"
+                  }`}
+                >
+                  {FONTE_LABEL[f]}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Filtro por PERÍODO */}
         <div className="bg-white border rounded-xl p-3 space-y-2">
           <div className="flex items-center gap-2 text-xs font-semibold text-gray-600">
             <CalendarRange className="w-4 h-4 text-emerald-600" />
@@ -279,13 +339,12 @@ export default function AlmoxarifadoMovimentacoes() {
           )}
           {range && (
             <p className="text-[11px] text-emerald-700 font-medium pt-0.5">
-              Mostrando recebimentos de {brDate(range.ini)}
+              Mostrando movimentações de {brDate(range.ini)}
               {range.ini !== range.fim ? ` até ${brDate(range.fim)}` : ""}.
             </p>
           )}
         </div>
 
-        {/* Filtros */}
         {filtroObra && (
           <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-200 rounded-xl px-3 py-2 text-sm">
             <MapPin className="w-4 h-4 text-emerald-600 shrink-0" />
@@ -309,21 +368,22 @@ export default function AlmoxarifadoMovimentacoes() {
             <input
               type="search"
               className="w-full pl-9 pr-3 py-3 text-base border rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-400"
-              placeholder="Buscar item, obra, usuário..."
+              placeholder="Buscar item, obra, usuário, funcionário..."
               value={busca}
               onChange={e => setBusca(e.target.value)}
             />
           </div>
-          <select
-            className="px-3 py-3 border rounded-xl text-base bg-white min-w-[110px]"
-            value={filtroTipo}
-            onChange={e => setFiltroTipo(e.target.value)}
-          >
-            <option value="todos">Todos</option>
-            <option value="entrada">Entradas</option>
-            <option value="saida">Saídas</option>
-            <option value="ajuste">Ajustes</option>
-          </select>
+          {tiposDoFiltroFonte.length > 1 && (
+            <select
+              className="px-3 py-3 border rounded-xl text-base bg-white min-w-[110px]"
+              value={filtroTipo}
+              onChange={e => setFiltroTipo(e.target.value)}
+            >
+              {tiposDoFiltroFonte.map(t => (
+                <option key={t.v} value={t.v}>{t.l}</option>
+              ))}
+            </select>
+          )}
         </div>
 
         {/* Lista */}
@@ -339,19 +399,19 @@ export default function AlmoxarifadoMovimentacoes() {
         ) : (
           <div className={`space-y-2 ${modoSelecao && selecionadas.size > 0 ? "pb-24" : ""}`}>
             {lista.map(mov => {
-              const meta = TIPO_LABELS[mov.tipo] || TIPO_LABELS["ajuste"];
+              const meta = TIPO_LABELS[mov.tipo] || { label: mov.tipo, cor: "text-gray-700 bg-gray-100", icon: ArrowRightLeft, sinal: "" };
               const Icon = meta.icon;
-              const estornada = !!mov.estornadaEm;
-              // Rev. 2306 — Mov vinculada a OC não pode ser estornada
-              // por esta tela (dessincroniza qtd_entregue/status da OC).
-              // Marca visualmente pra economizar clique do user.
-              const vinculadaOc = /\boc[\s-]/i.test(String(mov.motivo || ""));
-              const sel = selecionadas.has(mov.id);
-              const podeSelecionar = modoSelecao && !estornada && !vinculadaOc;
+              const estornada = !!mov.estornada_em;
+              const isMovEstoque = mov.fonte === "movimentacao";
+              const vinculadaOc = isMovEstoque && /\boc[\s-]/i.test(String(mov.motivo || ""));
+              // Rev. 2457 — Estorno só rola na fonte 'movimentacao' (outras 3 não passam pela mutation reverseMovements).
+              const key = `${mov.fonte}-${mov.id}`;
+              const sel = isMovEstoque && selecionadas.has(mov.id);
+              const podeSelecionar = modoSelecao && isMovEstoque && !estornada && !vinculadaOc;
               const onCardClick = podeSelecionar ? () => toggleSel(mov.id) : undefined;
               return (
                 <div
-                  key={mov.id}
+                  key={key}
                   onClick={onCardClick}
                   className={`bg-white rounded-xl border p-4 flex gap-3 items-start transition ${
                     estornada ? "opacity-60 border-gray-200 bg-gray-50" : ""
@@ -365,14 +425,16 @@ export default function AlmoxarifadoMovimentacoes() {
                     <div
                       className="flex-shrink-0 pt-1"
                       title={
-                        estornada
+                        !isMovEstoque
+                          ? "Estorno disponível só para a fonte ESTOQUE"
+                          : estornada
                           ? "Já estornada"
                           : vinculadaOc
                           ? "Vinculada a OC — estorne pela tela de Recebimentos"
                           : sel ? "Desmarcar" : "Selecionar para estornar"
                       }
                     >
-                      {estornada || vinculadaOc ? (
+                      {!isMovEstoque || estornada || vinculadaOc ? (
                         <Ban className="w-5 h-5 text-gray-300" />
                       ) : sel ? (
                         <CheckSquare className="w-5 h-5 text-emerald-600" />
@@ -387,7 +449,7 @@ export default function AlmoxarifadoMovimentacoes() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className={`font-semibold truncate ${estornada ? "text-gray-500 line-through" : "text-gray-900"}`}>
-                        {mov.itemNome ?? "Item"}
+                        {mov.item_nome ?? "Item"}
                       </span>
                       <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${meta.cor}`}>
                         {meta.label}
@@ -395,55 +457,62 @@ export default function AlmoxarifadoMovimentacoes() {
                       {estornada && (
                         <span
                           className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-gray-200 text-gray-700 tracking-wider"
-                          title={mov.estornoMotivo ? `Motivo: ${mov.estornoMotivo}` : "Estornada"}
+                          title={mov.estorno_motivo ? `Motivo: ${mov.estorno_motivo}` : "Estornada"}
                         >
                           ESTORNADA
                         </span>
                       )}
                     </div>
                     <p className={`text-base font-bold mt-0.5 ${estornada ? "text-gray-400 line-through" : "text-gray-800"}`}>
-                      {mov.tipo === "entrada" ? "+" : "-"}{fmt(mov.quantidade)} {mov.unidade ?? "un"}
+                      {meta.sinal}{fmt(mov.quantidade)} {mov.unidade ?? "un"}
                     </p>
-                    {(mov.motivo || mov.obraNome) && (
+                    {mov.contraparte && (
+                      <p className="text-xs text-gray-600 mt-0.5 truncate">
+                        <User className="inline w-3 h-3 mr-1 -mt-0.5" />
+                        {mov.fonte === "emprestimo" ? "Funcionário:" : "Para:"} <span className="font-medium">{mov.contraparte}</span>
+                      </p>
+                    )}
+                    {(mov.motivo || mov.obra_nome) && (
                       <p className="text-xs text-gray-500 mt-0.5 truncate">
-                        {mov.obraNome && mov.obraId ? (
+                        {mov.obra_nome && mov.obra_id ? (
                           <button
                             type="button"
-                            onClick={(e) => { e.stopPropagation(); setFiltroObra({ id: mov.obraId!, nome: mov.obraNome! }); }}
+                            onClick={(e) => { e.stopPropagation(); setFiltroObra({ id: mov.obra_id, nome: mov.obra_nome }); }}
                             className="inline-flex items-center gap-1 px-1.5 py-0.5 -mx-1 rounded-md hover:bg-emerald-50 hover:text-emerald-700 active:bg-emerald-100 transition font-medium"
-                            title={`Filtrar pela obra ${mov.obraNome}`}
+                            title={`Filtrar pela obra ${mov.obra_nome}`}
                           >
                             <MapPin className="w-3 h-3" />
-                            {mov.obraNome}
+                            {mov.obra_nome}
                           </button>
-                        ) : mov.obraNome ? (
+                        ) : mov.obra_nome ? (
                           <span className="inline-flex items-center gap-1">
                             <MapPin className="w-3 h-3" />
-                            {mov.obraNome}
+                            {mov.obra_nome}
                           </span>
                         ) : null}
                         {mov.motivo ? ` — ${mov.motivo}` : ""}
                       </p>
                     )}
                     <div className="flex gap-3 mt-1 text-xs text-gray-400 flex-wrap">
-                      {mov.usuarioNome && (
+                      {mov.quem && (
                         <span className="flex items-center gap-1">
                           <User className="w-3 h-3" />
-                          {mov.usuarioNome}
+                          {mov.quem}
                         </span>
                       )}
-                      {mov.criadoEm && (
+                      {mov.quando && (
                         <span className="flex items-center gap-1">
                           <Calendar className="w-3 h-3" />
-                          {new Date(mov.criadoEm).toLocaleString("pt-BR", {
-                            day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit",
+                          {new Date(mov.quando).toLocaleString("pt-BR", {
+                            day: "2-digit", month: "2-digit", year: "2-digit",
+                            hour: "2-digit", minute: "2-digit",
                           })}
                         </span>
                       )}
-                      {estornada && mov.estornadaPorNome && (
+                      {estornada && mov.estornada_por_nome && (
                         <span className="flex items-center gap-1 text-gray-500">
                           <Undo2 className="w-3 h-3" />
-                          Estornada por {mov.estornadaPorNome}
+                          Estornada por {mov.estornada_por_nome}
                         </span>
                       )}
                     </div>
@@ -455,7 +524,6 @@ export default function AlmoxarifadoMovimentacoes() {
         )}
       </div>
 
-      {/* Rev. 2305 — Barra de ação flutuante quando há seleção */}
       {modoSelecao && selecionadas.size > 0 && (
         <div className="fixed bottom-0 left-0 right-0 z-40 bg-white border-t shadow-2xl px-3 py-3 flex items-center gap-2 sm:gap-3">
           <div className="flex-1 text-sm">
@@ -480,7 +548,6 @@ export default function AlmoxarifadoMovimentacoes() {
         </div>
       )}
 
-      {/* Rev. 2305 — Modal de confirmação de estorno */}
       {modalEstorno && (
         <div className="fixed inset-0 z-50 bg-black/50 flex items-end sm:items-center justify-center p-0 sm:p-4">
           <div className="bg-white w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl shadow-2xl max-h-[90vh] flex flex-col">
@@ -500,6 +567,7 @@ export default function AlmoxarifadoMovimentacoes() {
                 <ul className="list-disc pl-4 space-y-0.5">
                   <li>Recebimentos vinculados a OC (faça pela tela de Recebimentos)</li>
                   <li>Entradas cujo material já foi consumido (estoque atual menor que a quantidade)</li>
+                  <li>Empréstimos, insumos e transferências (cada um tem fluxo próprio de reversão)</li>
                 </ul>
               </div>
               <label className="block">
@@ -546,3 +614,4 @@ export default function AlmoxarifadoMovimentacoes() {
     </DashboardLayout>
   );
 }
+

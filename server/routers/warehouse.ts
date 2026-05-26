@@ -198,6 +198,147 @@ export const warehouseRouter = router({
     }),
 
   // ── HISTÓRICO DE MOVIMENTAÇÕES ─────────────────────────────────
+  // ── TIMELINE UNIFICADA (Rev. 2457) ────────────────────────────
+  // Une 4 fontes (movimentações de estoque, empréstimos de ferramenta,
+  // saídas de insumo, transferências) numa única linha do tempo pro
+  // gestor RASTREAR quem fez o quê e quando. Cada fonte mantém sua
+  // própria mutation; aqui só LEMOS via UNION ALL com colunas
+  // normalizadas. Estorno continua exclusivo da fonte 'movimentacao'
+  // (as outras 3 são read-only nesta tela).
+  listTimeline: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      limit:     z.number().default(1500),
+      dateFrom:  z.string().optional(), // YYYY-MM-DD (>=)
+      dateTo:    z.string().optional(), // YYYY-MM-DD (<=)
+    }))
+    .query(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      const cid = input.companyId;
+      const dFrom = input.dateFrom ?? null;
+      const dTo   = input.dateTo   ?? null;
+      const lim   = Math.min(Math.max(input.limit, 1), 5000);
+
+      // UNION ALL com colunas normalizadas (15 colunas em cada SELECT).
+      // ORDER BY quando DESC, LIMIT no final.
+      const rows = await db.execute(sql`
+        SELECT * FROM (
+          SELECT
+            'movimentacao'::text                          AS fonte,
+            m.id                                          AS id,
+            m.tipo                                        AS tipo,
+            m.criado_em                                   AS quando,
+            m.usuario_nome                                AS quem,
+            m.item_id                                     AS item_id,
+            COALESCE(i.nome, '(item removido)')           AS item_nome,
+            i.unidade                                     AS unidade,
+            m.quantidade                                  AS quantidade,
+            m.obra_id                                     AS obra_id,
+            m.obra_nome                                   AS obra_nome,
+            m.motivo                                      AS motivo,
+            NULL::text                                    AS contraparte,
+            m.estornada_em                                AS estornada_em,
+            m.estornada_por_nome                          AS estornada_por_nome,
+            m.estorno_motivo                              AS estorno_motivo
+          FROM almoxarifado_movimentacoes m
+          LEFT JOIN almoxarifado_itens i ON i.id = m.item_id
+          WHERE m.company_id = ${cid}
+
+          UNION ALL
+
+          SELECT
+            'emprestimo'::text                            AS fonte,
+            l.id                                          AS id,
+            CASE WHEN l.status = 'devolvido' THEN 'devolucao'
+                 WHEN l.status = 'perdido'   THEN 'perdido'
+                 ELSE 'emprestimo' END                    AS tipo,
+            l.created_at                                  AS quando,
+            COALESCE(l.almoxarife_nome, '—')              AS quem,
+            l.item_id                                     AS item_id,
+            l.item_nome                                   AS item_nome,
+            NULL::varchar                                 AS unidade,
+            l.quantidade                                  AS quantidade,
+            l.obra_id                                     AS obra_id,
+            NULL::varchar                                 AS obra_nome,
+            COALESCE(l.observacoes, NULL)                 AS motivo,
+            l.funcionario_nome ||
+              COALESCE(' (' || l.funcionario_codigo || ')', '')
+                                                          AS contraparte,
+            NULL::timestamp                               AS estornada_em,
+            NULL::varchar                                 AS estornada_por_nome,
+            NULL::text                                    AS estorno_motivo
+          FROM warehouse_loans l
+          WHERE l.company_id = ${cid}
+
+          UNION ALL
+
+          SELECT
+            'insumo'::text                                AS fonte,
+            s.id                                          AS id,
+            'insumo'::varchar                             AS tipo,
+            s.created_at                                  AS quando,
+            COALESCE(s.almoxarife_nome, '—')              AS quem,
+            s.item_id                                     AS item_id,
+            s.item_nome                                   AS item_nome,
+            s.unidade                                     AS unidade,
+            s.quantidade                                  AS quantidade,
+            s.obra_id                                     AS obra_id,
+            s.obra_nome                                   AS obra_nome,
+            s.motivo                                      AS motivo,
+            s.funcionario_nome ||
+              COALESCE(' (' || s.funcionario_codigo || ')', '')
+                                                          AS contraparte,
+            NULL::timestamp                               AS estornada_em,
+            NULL::varchar                                 AS estornada_por_nome,
+            NULL::text                                    AS estorno_motivo
+          FROM almoxarifado_saidas_insumo s
+          WHERE s.company_id = ${cid}
+
+          UNION ALL
+
+          SELECT
+            'transferencia'::text                         AS fonte,
+            t.id                                          AS id,
+            'transferencia'::varchar                      AS tipo,
+            t.created_at                                  AS quando,
+            COALESCE(t.almoxarife_nome, '—')              AS quem,
+            t.item_id_origem                              AS item_id,
+            t.item_nome                                   AS item_nome,
+            t.unidade                                     AS unidade,
+            t.quantidade                                  AS quantidade,
+            COALESCE(t.origem_obra_id, t.destino_obra_id) AS obra_id,
+            COALESCE(t.origem_obra_nome, 'Central') ||
+              ' → ' ||
+              COALESCE(t.destino_obra_nome, 'Central')    AS obra_nome,
+            t.motivo                                      AS motivo,
+            NULL::text                                    AS contraparte,
+            NULL::timestamp                               AS estornada_em,
+            NULL::varchar                                 AS estornada_por_nome,
+            NULL::text                                    AS estorno_motivo
+          FROM almoxarifado_transferencias t
+          WHERE t.company_id = ${cid}
+        ) timeline
+        WHERE
+          (${dFrom}::date IS NULL OR DATE(timeline.quando) >= ${dFrom}::date)
+          AND
+          (${dTo}::date IS NULL OR DATE(timeline.quando) <= ${dTo}::date)
+        ORDER BY timeline.quando DESC
+        LIMIT ${lim}
+      `);
+
+      const list = ((rows as any)?.rows ?? rows ?? []) as any[];
+
+      // Filtro de obras permitidas (mesma regra do listMovements).
+      // Registros sem obra (obra_id IS NULL) só aparecem pra admin/master.
+      const allowed = await getEffectiveAllowedObraIds(ctx.user.id, ctx.user.role);
+      if (allowed === null) return list;
+      if (allowed.length === 0) return list.filter((r) => r.obra_id == null);
+      const allowSet = new Set(allowed);
+      return list.filter((r) => r.obra_id == null || allowSet.has(r.obra_id));
+    }),
+
   listMovements: protectedProcedure
     .input(
       z.object({

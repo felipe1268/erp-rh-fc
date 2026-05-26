@@ -1,6 +1,91 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2457 — **ALMOXARIFADO · Tela de Movimentações agora é uma timeline
+ * UNIFICADA das 4 fontes (estoque, ferramentas, insumos, transferências).**
+ *
+ * PEDIDO (user, após oferta de assinatura+PDF nos 4 fluxos do Almox):
+ * "Com relação a auditoria do almoxarifado, só quero uma tela que eu consigo
+ * visualizar as movimentações, quem fez o que como foi feita… não vamos
+ * investir muito tempo nisso agora… só crie uma forma de rastrear ok".
+ *
+ * DIAGNÓSTICO: A tela `/almoxarifado/movimentacoes` já existia (Rev. 2304),
+ * mas só lia `almoxarifado_movimentacoes` (entrada/saída/ajuste). Ficavam
+ * INVISÍVEIS no histórico: empréstimos de ferramenta (`warehouse_loans`),
+ * saídas de insumo para funcionários (`almoxarifado_saidas_insumo`) e
+ * transferências entre almoxarifados (`almoxarifado_transferencias`). Pro
+ * gestor RASTREAR de fato quem fez o quê, precisava ver TUDO num único
+ * lugar.
+ *
+ * IMPLEMENTAÇÃO:
+ *
+ * BACKEND (`server/routers/warehouse.ts` L201+):
+ *  - Nova query `warehouse.listTimeline({ companyId, limit?, dateFrom?, dateTo? })`.
+ *  - UNION ALL de 4 SELECTs (15 colunas normalizadas em cada):
+ *      • `'movimentacao'` → almoxarifado_movimentacoes JOIN almoxarifado_itens
+ *        (tipos: entrada/saida/ajuste).
+ *      • `'emprestimo'`   → warehouse_loans (tipo deriva do status:
+ *        emprestado→emprestimo, devolvido→devolucao, perdido→perdido). Quem
+ *        registrou é o `almoxarife_nome`; "contraparte" é o funcionário que
+ *        pegou a ferramenta.
+ *      • `'insumo'`       → almoxarifado_saidas_insumo (tipo fixo 'insumo';
+ *        quem é o almoxarife, contraparte é o funcionário).
+ *      • `'transferencia'`→ almoxarifado_transferencias (tipo fixo
+ *        'transferencia'; obra_nome compõe "Origem → Destino", item via
+ *        item_id_origem).
+ *  - Filtro de período (dateFrom/dateTo) aplicado no envelope externo via
+ *    `DATE(quando) >= dFrom AND DATE(quando) <= dTo` (NULL = sem filtro).
+ *  - Ordenação `ORDER BY quando DESC` + LIMIT (default 1500, máx 5000).
+ *  - Authz mantém regra do `listMovements`: `getEffectiveAllowedObraIds`
+ *    filtra registros JS-side (mantém movs sem obra só pra admin/master).
+ *
+ * FRONTEND (`client/src/pages/almoxarifado/Movimentacoes.tsx` — reescrita):
+ *  - Trocou `trpc.warehouse.listMovements` por `trpc.warehouse.listTimeline`
+ *    (passa dateFrom/dateTo do range — filtro de período agora é server-side
+ *    de verdade, antes o "1500 últimos" cortava histórico longo).
+ *  - Novo filtro chips por FONTE (5 opções: Todas, Estoque, Ferramentas,
+ *    Insumos, Transferências). Ao mudar fonte, o sub-filtro de TIPO se
+ *    adapta: fonte=Estoque mostra Entradas/Saídas/Ajustes; fonte=Ferramentas
+ *    mostra Em aberto/Devolvido/Perdido; outras escondem o sub-filtro.
+ *  - 5 cards de resumo (Total + 1 por fonte) com cores próprias.
+ *  - Card de cada registro agora exibe `contraparte` (funcionário que
+ *    recebeu) quando aplicável, em linha dedicada com ícone User.
+ *  - TIPO_LABELS expandido com 5 novos tipos (emprestimo, devolucao,
+ *    perdido, insumo, transferencia) com ícones/cores distintos (Wrench,
+ *    RotateCcw, AlertOctagon, Package, ArrowLeftRight).
+ *  - Key da lista mudou pra `${fonte}-${id}` pra evitar colisão entre
+ *    tabelas (id=1 pode existir em todas).
+ *  - ESTORNO continua exclusivo da fonte 'movimentacao' (a mutation
+ *    `reverseMovements` só lida com `almoxarifado_movimentacoes`).
+ *    Checkbox de seleção fica como `Ban` cinza pras outras 3 fontes, com
+ *    tooltip "Estorno disponível só para a fonte ESTOQUE". Modal de
+ *    confirmação ganhou linha avisando que empréstimos/insumos/transfer.
+ *    têm fluxo próprio de reversão.
+ *  - Invalidate na success do estorno passa a invalidar `listTimeline`
+ *    também (além de listMovements/getDashboard).
+ *
+ * NOMENCLATURA — campos do retorno:
+ *   { fonte, id, tipo, quando, quem, item_id, item_nome, unidade, quantidade,
+ *     obra_id, obra_nome, motivo, contraparte, estornada_em,
+ *     estornada_por_nome, estorno_motivo }
+ *
+ * R-001/R-007/R-010 OK — zero `ALTER`/`DROP`/`DELETE`. Sem novas tabelas
+ * (só nova query SELECT). Sem mudança em mutations existentes.
+ *
+ * FOLLOW-UP (não nesta Rev): user havia escolhido opção C (assinatura+PDF
+ * em 4 fluxos do Almox) mas pivotou pra rastreabilidade enxuta. Se quiser
+ * voltar pra assinaturas, Rev. 2458+ retoma escopo (devolução de ferramenta
+ * primeiro, gêmea da Rev. 2453).
+ *
+ * Arquivos:
+ *  - `server/routers/warehouse.ts` (+ ~120 linhas — bloco listTimeline)
+ *  - `client/src/pages/almoxarifado/Movimentacoes.tsx` (reescrita)
+ *  - `shared/version.ts` (2456 → 2457)
+ *  - `shared/changelog.ts` (esta entrada)
+ *  - `replit.md`, `replit-history.md` (rotação 2+5)
+ *
+ * ─────────────────────────────────────────────────────────────────────────
+ *
  * Rev. 2456 — **DEVOLUÇÃO DE LOCAÇÃO · (a) autofill do entregador com o
  * user FC logado e (b) movimentação aparece no Raio-X do funcionário.**
  *
