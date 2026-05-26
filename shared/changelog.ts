@@ -1,6 +1,54 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2430 — **ALMOXARIFADO · INVENTÁRIO VISUAL · botão "Desfazer última"
+ * agora aparece DIRETO no card + card "Restante" com fallback pro saldo do
+ * sistema quando ainda não houve aferição visual.**
+ *
+ * CONTEXTO (caso real reportado pelo user — baia "Item TESTE -areia",
+ * ESCRITÓRIO CENTRAL, prints anexados):
+ * - Reclamação 1: "Não tô achando o botão para apagar ou desfazer o
+ *   lançamento". O `baiaLeituraDeletar` da Rev. 2422 funciona, mas o botão
+ *   "Desfazer aferição" estava ENTERRADO dentro do modal de Histórico —
+ *   visível só pra quem soubesse clicar no card pra abrir o histórico.
+ *   Resultado: usuário concluía que a feature não existia.
+ * - Reclamação 2: "Não tá aparecendo o volume atual". Card "Restante" mostra
+ *   "—" mesmo nas baias que tinham saldo no sistema mas nunca haviam sido
+ *   aferidas visualmente — o código lia SÓ `ultimaLeitura.volumeEstimado`
+ *   (Rev. 2417), e a linha "Saldo no sistema" só aparecia quando
+ *   `qtdAtual > 0`, deixando o card 100% vazio pra baias novas/zeradas
+ *   (sem contexto de POR QUE não tem valor).
+ *
+ * DECISÃO
+ * - Card "Restante": fallback p/ `qtdAtual` (saldo no sistema) quando ainda
+ *   não há aferição visual, com sufixo discreto "(sist.)" e tooltip
+ *   explicando origem. Sem aferição E sem saldo → "—" (caso real de baia
+ *   recém-criada sem entrada de almox).
+ * - Linha "Saldo no sistema" sempre visível abaixo do nome (mesmo quando 0
+ *   — fica em slate-400 pra não competir com o número real). Antes
+ *   desaparecia, deixando user sem contexto.
+ * - Atalho "Desfazer última" diretamente no rodapé do card (ao lado de
+ *   "Ver histórico"), abrindo o MESMO modal de confirmação da Rev. 2422
+ *   (`setDesfazendoLeitura(ult)`). Aparece sempre que `ultimaLeitura`
+ *   existe — não só pra "conferida hoje". Reaproveita 100% da lógica do
+ *   backend (`baiaLeituraDeletar` faz o estorno).
+ *
+ * ARQUIVOS
+ * - `client/src/pages/almoxarifado/InventarioVisual.tsx`:
+ *   - L380-384: linha "Saldo no sistema" sempre visível (cor varia).
+ *   - L401-422: card "Restante" com fallback `volAtual ?? qtdAtual` +
+ *     sufixo "(sist.)" + tooltip explicativo.
+ *   - L429-450: rodapé do card vira flex com 2 botões — "Ver histórico" à
+ *     esquerda + "Desfazer última" vermelho à direita (só se `ult` existe).
+ *
+ * VALIDAÇÃO
+ * - Zero backend, zero migration. Reaproveita endpoint existente
+ *   `warehouse.baiaLeituraDeletar` (guard de "só última leitura" + estorno
+ *   automático segue intocada — não há novos vetores de exclusão).
+ * - R-001/R-007/R-010 OK (zero ALTER/DROP/DELETE).
+ *
+ * ──────────────────────────────────────────────────────────────────────
+ *
  * Rev. 2429 — **ALMOXARIFADO · AUDITORIA · aprovadores delegados por obra
  * (engenheiro responsável + delegados que ele indicar podem aprovar/rejeitar
  * exclusões e ajustes manuais de estoque — antes era só admin/admin_master).**

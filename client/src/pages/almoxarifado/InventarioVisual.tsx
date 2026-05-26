@@ -377,9 +377,9 @@ export default function InventarioVisualBaias() {
             </span>
             <span className="text-slate-500">{b.unidade}{b.capacidadeEstimada ? ` · cap. ${b.capacidadeEstimada}` : ""}</span>
           </div>
-          {!semBaia && qtdAtual > 0 && (
+          {!semBaia && (
             <div className="text-[11px] text-slate-600 mt-1">
-              Saldo no sistema: <span className="font-semibold text-slate-800">{qtdAtual.toLocaleString("pt-BR")} {b.unidade}</span>
+              Saldo no sistema: <span className={`font-semibold ${qtdAtual > 0 ? "text-slate-800" : "text-slate-400"}`}>{qtdAtual.toLocaleString("pt-BR")} {b.unidade}</span>
             </div>
           )}
           {ult && (
@@ -398,10 +398,28 @@ export default function InventarioVisualBaias() {
               </div>
               <div className="text-[9px] text-sky-600">{b.unidade}</div>
             </div>
-            <div className="rounded-md bg-emerald-50 border border-emerald-100 px-1 py-1.5">
+            <div
+              className="rounded-md bg-emerald-50 border border-emerald-100 px-1 py-1.5"
+              title={
+                volAtual != null
+                  ? "Última aferição visual da baia"
+                  : qtdAtual > 0
+                    ? "Saldo do sistema — ainda sem aferição visual. Registre uma baixa pra calibrar."
+                    : "Sem aferição visual e sem saldo no sistema"
+              }
+            >
               <div className="text-[9px] uppercase tracking-wide text-emerald-700 font-bold">Restante</div>
-              <div className="text-sm font-black text-emerald-900 leading-tight">{fmtNum(volAtual)}</div>
-              <div className="text-[9px] text-emerald-600">{b.unidade}</div>
+              <div className="text-sm font-black text-emerald-900 leading-tight">
+                {/* Rev. 2430 — Fallback p/ saldo do sistema quando a baia ainda
+                    não teve aferição visual (caso "Item TESTE -areia" reportado
+                    pelo user — card mostrava "—" mesmo sem nunca ter sido
+                    aferida, sem contexto). */}
+                {volAtual != null ? fmtNum(volAtual) : qtdAtual > 0 ? fmtNum(qtdAtual) : "—"}
+              </div>
+              <div className="text-[9px] text-emerald-600">
+                {b.unidade}
+                {volAtual == null && qtdAtual > 0 && <span className="ml-0.5 text-slate-400">(sist.)</span>}
+              </div>
             </div>
             <div className="rounded-md bg-amber-50 border border-amber-100 px-1 py-1.5">
               <div className="text-[9px] uppercase tracking-wide text-amber-700 font-bold">Consumo dia</div>
@@ -426,12 +444,26 @@ export default function InventarioVisualBaias() {
             {conferida ? <><History className="w-4 h-4" /> Refazer leitura</> : <><ClipboardList className="w-4 h-4" /> Registrar baixa</>}
           </button>
           {!semBaia && (
-            <button
-              onClick={e => { e.stopPropagation(); setHistoricoBaia(b); }}
-              className="w-full text-[11px] text-slate-500 hover:text-slate-800 flex items-center justify-center gap-1 py-0.5"
-            >
-              <History className="w-3 h-3" /> Ver histórico
-            </button>
+            <div className="flex items-center justify-between gap-2 pt-0.5">
+              <button
+                onClick={e => { e.stopPropagation(); setHistoricoBaia(b); }}
+                className="text-[11px] text-slate-500 hover:text-slate-800 flex items-center gap-1 py-0.5"
+              >
+                <History className="w-3 h-3" /> Ver histórico
+              </button>
+              {/* Rev. 2430 — Atalho direto pra desfazer a última aferição
+                  (antes só aparecia DENTRO do modal de histórico, era
+                  praticamente invisível pra quem não sabia clicar no card). */}
+              {ult && (
+                <button
+                  onClick={e => { e.stopPropagation(); setDesfazendoLeitura(ult); }}
+                  className="text-[11px] text-red-600 hover:text-red-800 hover:underline flex items-center gap-1 py-0.5 font-semibold"
+                  title="Apaga a última aferição e estorna a baixa no almoxarifado"
+                >
+                  <Trash2 className="w-3 h-3" /> Desfazer última
+                </button>
+              )}
+            </div>
           )}
         </div>
       </div>

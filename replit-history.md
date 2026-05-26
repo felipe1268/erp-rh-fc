@@ -653,3 +653,5 @@
 - **Rev. 2399** — FINANCEIRO/LANÇAMENTOS · Filtro por período LIVRE (calendário aberto passado+futuro) substitui dropdown de mês fixo dos últimos 12. Toolbar com 2 `<Input type="date">` (De/Até) + 4 atalhos (Mês anterior/atual/próximo/Ano todo). `getEntries` passa `dataInicio`/`dataFim` em vez de `mesCompetencia`. Ver `shared/changelog.ts`.
 
 - **Rev. 2422** — INVENTÁRIO VISUAL DE BAIAS · "Desfazer aferição" com estorno automático do almox. ADD COLUMN `movimentacao_id` em `almoxarifado_baia_leituras` vincula leitura↔mov. Novo `baiaLeituraDeletar` (guard só última leitura, autor OU ADMIN, estorna mov entrada). Frontend: botão Trash vermelho + modal de confirmação. Ver `shared/changelog.ts`.
+
+- **Rev. 2423** — AVISO PRÉVIO · trabalhado volta a 30d fixos de CUMPRIMENTO (caso Myriélle 2 anos); VERBA segue 30+3·ano. `calcularDiasAviso(anos,tipo)→30` p/ qualquer `*_trabalhado`. AvisoPrevio.tsx + rescisaoCalc.ts + avisoPrevioFerias.ts + dashboards.ts (CDM). Ver `shared/changelog.ts`.
