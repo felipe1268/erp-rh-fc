@@ -39,19 +39,14 @@ import crypto from "crypto";
 
 const n = (v: any) => parseFloat(v ?? "0") || 0;
 
-async function gerarNumeroOC(db: any, companyId: number): Promise<string> {
-  const rows = await db.select().from(ocNumberConfig).where(eq(ocNumberConfig.companyId, companyId)).limit(1);
-  let config = rows?.[0];
-  if (!config) {
-    await db.insert(ocNumberConfig).values({ companyId, prefixo: "OC", separador: "-", proximo_numero: 1 } as any);
-    config = { prefixo: "OC", separador: "-", digitos_sequencial: 3, proximo_numero: 1, formato_ano: "4dig" };
-  }
-  const ano = new Date().getFullYear();
-  const anoStr = config.formatoAno === "2dig" ? String(ano).slice(-2) : String(ano);
-  const seq = String(config.proximoNumero || 1).padStart(config.digitosSequencial || 3, "0");
-  const numero = `${config.prefixo || "OC"}${config.separador || "-"}${anoStr}${config.separador || "-"}${seq}`;
-  await db.update(ocNumberConfig).set({ proximoNumero: (config.proximoNumero || 1) + 1 } as any).where(eq(ocNumberConfig.companyId, companyId));
-  return numero;
+// Rev. 2483 — Delegação pra fonte de verdade ÚNICA (compras.gerarProximoNumeroOC).
+// O gerador antigo aqui usava padStart(3) enquanto compras.ts usava padStart(4) sobre
+// o MESMO contador `ocNumberConfig.proximoNumero` — resultado: OCs visualmente
+// duplicadas (218 vs 0218). Agora ambos compartilham a mesma função com advisory
+// lock + persistência atômica + padStart(4).
+import { gerarProximoNumeroOC } from "./compras";
+async function gerarNumeroOC(_db: any, companyId: number): Promise<string> {
+  return await gerarProximoNumeroOC(companyId, "compra");
 }
 
 export const purchaseRouter = router({

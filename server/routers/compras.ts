@@ -264,7 +264,7 @@ setInterval(() => {
  * por simplicidade — disputa só com outro chamador desta mesma função na
  * mesma empresa, milissegundos).
  */
-async function gerarProximoNumeroOC(companyId: number, ordemTipo: "compra" | "servico" | "pacote"): Promise<string> {
+export async function gerarProximoNumeroOC(companyId: number, ordemTipo: "compra" | "servico" | "pacote"): Promise<string> {
   const db = await getDb();
   return await db.transaction(async (tx: any) => {
     // Rev. 2080 — cast `::int` em AMBOS os args. Postgres não tem overload
@@ -289,9 +289,23 @@ async function gerarProximoNumeroOC(companyId: number, ordemTipo: "compra" | "se
       const digitos = config?.digitosSequencial ?? 4;
       // Bootstrap: se proximoNumero é o default (1) e já existem OCs, calcula a partir do count atual.
       let proxMat = config?.proximoNumero ?? 1;
+      // Rev. 2483 — Bootstrap por MAX(seq parsed do numeroOc) ao invés de COUNT(*).
+      // COUNT(*) era inflado por rascunhos (RASCUNHO-YYYY-N) e desconsiderava OCs
+      // deletadas — podia subestimar/superestimar o próximo. Parsing do prefixo
+      // OC-YYYY- garante alinhamento real com o que o usuário vê.
       if (proxMat <= 1) {
-        const count = await tx.select({ c: sql<number>`count(*)` }).from(comprasOrdens).where(eq(comprasOrdens.companyId, companyId));
-        const atual = parseInt(String(count[0]?.c ?? 0));
+        // NB: barras duplas \\d são obrigatórias — em template literal JS, \d
+        // vira "d" (cooked string), então sem o escape o regex enviado ao
+        // Postgres seria '^OC-d{4}-(d+)$' e nunca casaria. Bug pego no code
+        // review da Rev. 2483.
+        const maxRow = await tx.execute(sql`
+          SELECT COALESCE(MAX(CAST(SUBSTRING(numero_oc FROM '^OC-\\d{4}-(\\d+)$') AS INTEGER)), 0) AS m
+          FROM compras_ordens
+          WHERE company_id = ${companyId}
+            AND numero_oc ~ '^OC-\\d{4}-\\d+$'
+        `);
+        const r = (maxRow as any).rows || maxRow;
+        const atual = parseInt(String(r?.[0]?.m ?? 0)) || 0;
         proxMat = Math.max(atual + 1, proxMat);
       }
       if (!config) {
@@ -7876,9 +7890,10 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
       if (!input.condicaoPagamento?.trim()) throw new TRPCError({ code: "BAD_REQUEST", message: "Condição de pagamento é obrigatória para gerar OC." });
       if (!input.prazoEntregaDias && !input.dataEntregaPrevista) throw new TRPCError({ code: "BAD_REQUEST", message: "Prazo de entrega é obrigatório para gerar OC." });
       const db = await getDb();
-      const count = await db.select({ c: sql<number>`count(*)` }).from(comprasOrdens).where(eq(comprasOrdens.companyId, input.companyId));
-      const seq = (parseInt(String(count[0]?.c ?? 0)) + 1).toString().padStart(4, "0");
-      const numeroOc = `OC-${new Date().getFullYear()}-${seq}`;
+      // Rev. 2483 — usa gerador atômico único (advisory lock + ocNumberConfig.proximoNumero
+      // persistido). Antes: COUNT(*)+1 racy + bypass do contador → duplicava com OCs
+      // criadas via purchaseRouter (218 vs 0218).
+      const numeroOc = await gerarProximoNumeroOC(input.companyId, "compra");
       const subtotal = input.itens.reduce((s, it) => s + n(it.quantidade) * n(it.precoUnitario), 0);
       const frete = n(input.frete);
       const outrasDespesas = n(input.outrasDespesas);
@@ -8033,10 +8048,9 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
         }
         return { id: input.id };
       } else {
-        const count = await db.select({ c: sql<number>`count(*)` })
-          .from(comprasOrdens).where(eq(comprasOrdens.companyId, input.companyId));
-        const seq = (parseInt(String(count[0]?.c ?? 0)) + 1).toString().padStart(4, "0");
-        const numeroOc = `RASCUNHO-${new Date().getFullYear()}-${seq}`;
+        // Rev. 2483 — Rascunho usa timestamp+random (não-sequencial, sem colisão e
+        // sem "queimar" número do contador OC pra um rascunho que pode nunca virar OC).
+        const numeroOc = `RASCUNHO-${new Date().getFullYear()}-${Date.now().toString(36)}${Math.floor(Math.random()*1000).toString(36)}`;
         const [oc] = await db.insert(comprasOrdens).values({
           companyId: input.companyId,
           numeroOc,
@@ -8107,11 +8121,8 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
       // Generate new OC number only if coming from rascunho; otherwise preserve existing number
       let numeroOc = oc.numeroOc ?? "";
       if (oc.status === "rascunho") {
-        const count = await db.select({ c: sql<number>`count(*)` })
-          .from(comprasOrdens)
-          .where(and(eq(comprasOrdens.companyId, input.companyId), sql`${comprasOrdens.status} != 'rascunho'`));
-        const seq = (parseInt(String(count[0]?.c ?? 0)) + 1).toString().padStart(4, "0");
-        numeroOc = `OC-${new Date().getFullYear()}-${seq}`;
+        // Rev. 2483 — usa gerador atômico único.
+        numeroOc = await gerarProximoNumeroOC(input.companyId, "compra");
       }
       const subtotal = (input.itens !== undefined ? input.itens : []).reduce((s, it) => s + n(it.quantidade) * n(it.precoUnitario), 0);
       const frete = n(input.frete ?? oc.frete);

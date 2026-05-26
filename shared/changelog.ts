@@ -1,6 +1,85 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2483 — **ORDENS DE COMPRA · BUG DE NUMERAÇÃO DUPLICADA CORRIGIDO
+ * (ex: `OC-2026-218` vs `OC-2026-0218`). Consolidação de 4 geradores
+ * inconsistentes em UMA fonte de verdade atômica.**
+ *
+ * PEDIDO/REPORT (user, IMG_1779817698104, 26/05/2026): print da tela
+ * "Ordens (OC / OS)" mostrando `OC-2026-218` (3 dígitos) coexistindo com
+ * `OC-2026-0218` (4 dígitos) — mesmo número sequencial, padding diferente,
+ * gerados por código diferente. Visualmente parece duplicado pro engenheiro
+ * e quebra unicidade lógica do número da OC.
+ *
+ * CAUSA-RAIZ (4 fontes de geração inconsistentes):
+ * 1. `server/routers/purchaseRouter.ts:42` `gerarNumeroOC` → `padStart(3, "0")`
+ *    default + lê/incrementa `ocNumberConfig.proximoNumero`. Gera `OC-2026-218`.
+ * 2. `server/routers/compras.ts:267` `gerarProximoNumeroOC` → `padStart(4, "0")`
+ *    + advisory lock + mesmo contador `ocNumberConfig.proximoNumero`. Gera
+ *    `OC-2026-0218`. Resultado: 2 chamadas com proximoNumero=218 geram strings
+ *    DIFERENTES — visualmente "duplicado" embora o int seja único.
+ * 3. `compras.ts:7880` `criarOrdemManual` → `COUNT(*)+1` racy, BYPASSA o contador.
+ *    Sob concorrência ou após exclusão de OC, gera número que colide com OCs
+ *    futuras do gerador atômico.
+ * 4. `compras.ts:8113` `confirmarRascunhoOrdem` → mesmo anti-pattern COUNT(*)+1.
+ *
+ * Bônus problema 5: `compras.ts:8038` `salvarRascunhoOrdem` usava COUNT(*)+1 pra
+ * número de RASCUNHO — racy mas baixo impacto (rascunho não vira número final).
+ *
+ * Bônus problema 6: bootstrap do `proximoNumero` no `gerarProximoNumeroOC` usava
+ * `COUNT(*)` de `comprasOrdens` — inflado por RASCUNHOs e desconsidera exclusões.
+ *
+ * MUDANÇAS:
+ *
+ * (A) `server/routers/compras.ts` L267 — `gerarProximoNumeroOC` agora é
+ *     **exportada** (era `async function` local) pra ser a ÚNICA fonte de verdade.
+ *
+ * (B) `server/routers/compras.ts` L290-308 — bootstrap do `proximoNumero` agora
+ *     usa `MAX(CAST(SUBSTRING(numero_oc FROM '^OC-\d{4}-(\d+)$') AS INTEGER))+1`
+ *     (regex captura o seq do prefixo OC-YYYY-) ao invés de `COUNT(*)`. Ignora
+ *     rascunhos (prefixo RASCUNHO-) e reflete o que o usuário REALMENTE vê.
+ *
+ * (C) `server/routers/purchaseRouter.ts` L42-55 — `gerarNumeroOC` virou
+ *     thin-wrapper: `return await gerarProximoNumeroOC(companyId, "compra")`.
+ *     Mantém assinatura `(db, companyId)` pra não quebrar `purchaseRouter.ts:345`.
+ *     Acabou a divergência de padding (sempre 4 dígitos agora).
+ *
+ * (D) `server/routers/compras.ts` L7880 `criarOrdemManual` — `COUNT(*)+1` racy
+ *     substituído por `await gerarProximoNumeroOC(input.companyId, "compra")`.
+ *
+ * (E) `server/routers/compras.ts` L8113 `confirmarRascunhoOrdem` — idem.
+ *
+ * (F) `server/routers/compras.ts` L8038 `salvarRascunhoOrdem` — número de
+ *     RASCUNHO virou `RASCUNHO-${year}-${timestamp36}${rand36}` (não
+ *     sequencial, sem colisão e sem "queimar" número do contador OC pra um
+ *     rascunho que pode nunca ser confirmado).
+ *
+ * ARQUIVOS TOCADOS:
+ * - `server/routers/compras.ts` (export + bootstrap MAX-seq + 3 spots ad-hoc)
+ * - `server/routers/purchaseRouter.ts` (delega pra compras.gerarProximoNumeroOC)
+ * - `shared/version.ts` (2482 → 2483)
+ * - `shared/changelog.ts` (este bloco)
+ * - `replit.md` (rotação 2+5)
+ * - `replit-history.md` (Rev. 2476 demovido)
+ *
+ * RACIONAL DE NÃO-MUDANÇA:
+ * - NÃO criei UNIQUE INDEX em (company_id, numero_oc) nesta rev. Justificativa:
+ *   R-001/R-007 proíbem DDL destrutivo; CREATE INDEX é seguro mas pode falhar
+ *   em PROD se já houver duplicatas pré-existentes (justamente o que o user
+ *   reportou). Próxima rev: (1) dedup script de inspeção das OCs duplicadas
+ *   existentes, (2) renumeração manual aprovada pelo user, (3) CREATE UNIQUE
+ *   INDEX CONCURRENTLY como rede de segurança.
+ * - L11826 `comprasCotacoes` COUNT(*)+1 NÃO foi corrigido — mesmo anti-pattern
+ *   mas escopo de cotação (não OC), user só reportou OC. Próxima rev se virar
+ *   dor.
+ *
+ * FOLLOW-UPS:
+ * - Inspecionar e renumerar OCs duplicadas existentes (`OC-YYYY-218` ↔
+ *   `OC-YYYY-0218`) em conjunto com o user (decisão: qual mantém o número
+ *   "canônico").
+ * - Adicionar UNIQUE INDEX CONCURRENTLY após dedup.
+ * - Refatorar `comprasCotacoes` COUNT(*)+1 (L11826) pro mesmo padrão atômico.
+ *
  * Rev. 2482 — **EQUIPE DA OBRA (modal `ObraEfetivo.tsx`) · funcionários
  * ordenados alfabeticamente por nome dentro de cada grupo de status.**
  *
