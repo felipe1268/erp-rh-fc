@@ -1,6 +1,43 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2439 — **ALMOXARIFADO · INVENTÁRIO SEMANAL · thumbnail da foto do
+ * item em cada card + overlay ampliado on-tap (facilita aferição visual
+ * no iPad).**
+ *
+ * CONTEXTO (print user, iPad 22:02, sessão Inventário Semanal Central
+ * W22/2026): cada card mostrava só o nome + qtd sistema + 2 botões
+ * (BATE / DIFERENTE). Sem foto, o operador precisava sair pra outra
+ * tela pra confirmar qual material era qual (especialmente em itens
+ * com nomes parecidos como "Cantoneira 1\"", "Filetes 1,20x0,04 com
+ * 2 Frizos" etc.).
+ *
+ * DECISÃO
+ * - Backend: `getInventorySessionItems` agora faz LEFT JOIN com
+ *   `almoxarifado_itens` trazendo `fotoUrl` e `unidade`. Mantém todos
+ *   os campos antigos da `warehouse_inventory_session_items` (select
+ *   explícito; sem regressão).
+ * - Frontend (`Inventario.tsx`):
+ *   - Card "pendente": thumb 56x56 substituindo o ícone Package; se
+ *     sem foto, cai no ícone como antes.
+ *   - Card "divergente": thumb 48x48 substituindo o AlertTriangle.
+ *   - Card "conferido": thumb 48x48 substituindo o CheckCircle2.
+ *   - Toque na thumb abre overlay fixed (`bg-black/85`) com imagem
+ *     ampliada + botão × pra fechar (toque-fora também fecha).
+ *   - `unidade` real vem do JOIN (antes hard-coded "un").
+ *
+ * ARQUIVOS
+ * - `server/routers/warehouse.ts` L922-951 (`getInventorySessionItems`).
+ * - `client/src/pages/almoxarifado/Inventario.tsx` L30-145 (componente
+ *   `ItemCard`).
+ *
+ * VALIDAÇÃO
+ * - `loading="lazy"` em todas as thumbs — sessão com 173 itens (print)
+ *   não fica pesada.
+ * - R-001/R-007/R-010 OK — só leitura adicional via JOIN, sem ALTER/DDL.
+ *
+ * ──────────────────────────────────────────────────────────────────────
+ *
  * Rev. 2438 — **ALMOXARIFADO · VISÃO GERAL · badge do item mostra o NOME
  * da obra onde o material está cadastrado (antes mostrava "Obra: 100"
  * genérico).**

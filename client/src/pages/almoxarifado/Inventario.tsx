@@ -37,12 +37,41 @@ function ItemCard({
   const [modo, setModo] = useState<"idle" | "divergente">("idle");
   const [qtdFisica, setQtdFisica] = useState("");
   const [obs, setObs] = useState("");
+  // Rev. 2439 — overlay de foto ampliada (toque na thumb).
+  const [fotoExpandida, setFotoExpandida] = useState<string | null>(null);
   const sistemaQtd = n(item.quantidadeSistema);
 
+  // Rev. 2439 — Overlay reutilizado pelos 3 states (conferido, divergente, idle).
+  const overlay = fotoExpandida ? (
+    <div
+      className="fixed inset-0 z-[100] bg-black/85 flex items-center justify-center p-4"
+      onClick={() => setFotoExpandida(null)}
+    >
+      <img src={fotoExpandida} alt="" className="max-w-full max-h-full object-contain rounded-lg" />
+      <button
+        className="absolute top-4 right-4 w-10 h-10 rounded-full bg-white/90 text-gray-800 font-bold shadow-lg flex items-center justify-center"
+        onClick={() => setFotoExpandida(null)}
+        aria-label="Fechar"
+      >×</button>
+    </div>
+  ) : null;
+
   if (item.status === "conferido") {
+    const fUrl = (item as any).itemFotoUrl as string | null | undefined;
     return (
       <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 flex items-center gap-3">
-        <CheckCircle2 className="w-8 h-8 text-emerald-500 flex-shrink-0" />
+        {overlay}
+        {fUrl ? (
+          <img
+            src={fUrl}
+            alt={item.itemNome ?? ""}
+            className="w-12 h-12 rounded-lg object-cover flex-shrink-0 border border-emerald-200 cursor-pointer"
+            loading="lazy"
+            onClick={() => setFotoExpandida(fUrl)}
+          />
+        ) : (
+          <CheckCircle2 className="w-8 h-8 text-emerald-500 flex-shrink-0" />
+        )}
         <div className="flex-1 min-w-0">
           <p className="font-semibold text-gray-900 truncate">{item.itemNome}</p>
           <p className="text-sm text-emerald-600">✅ Conferido — {fmt(item.quantidadeFisica)} un</p>
@@ -51,10 +80,26 @@ function ItemCard({
     );
   }
 
+  // Rev. 2439 — Thumbnail da foto do item (vem do JOIN com almoxarifado_itens).
+  // Clicável: abre overlay com foto ampliada (facilita aferição no iPad).
+  const fotoUrl: string | null = (item as any).itemFotoUrl ?? null;
+  const unidade: string = (item as any).itemUnidade ?? "un";
+
   if (item.status === "divergente") {
     return (
       <div className="bg-orange-50 border border-orange-200 rounded-xl p-4 flex items-center gap-3">
-        <AlertTriangle className="w-8 h-8 text-orange-500 flex-shrink-0" />
+        {overlay}
+        {fotoUrl ? (
+          <img
+            src={fotoUrl}
+            alt={item.itemNome ?? ""}
+            className="w-12 h-12 rounded-lg object-cover flex-shrink-0 border border-orange-200 cursor-pointer"
+            loading="lazy"
+            onClick={() => setFotoExpandida(fotoUrl)}
+          />
+        ) : (
+          <AlertTriangle className="w-8 h-8 text-orange-500 flex-shrink-0" />
+        )}
         <div className="flex-1 min-w-0">
           <p className="font-semibold text-gray-900 truncate">{item.itemNome}</p>
           <p className="text-sm text-orange-700">
@@ -68,13 +113,25 @@ function ItemCard({
 
   return (
     <div className="bg-white border rounded-xl p-4 space-y-3">
+      {overlay}
       <div className="flex items-center gap-3">
-        <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center flex-shrink-0">
-          <Package className="w-5 h-5 text-gray-500" />
-        </div>
+        {fotoUrl ? (
+          <img
+            src={fotoUrl}
+            alt={item.itemNome ?? ""}
+            className="w-14 h-14 rounded-lg object-cover flex-shrink-0 border border-gray-200 cursor-pointer hover:ring-2 hover:ring-emerald-300 transition"
+            loading="lazy"
+            onClick={() => setFotoExpandida(fotoUrl)}
+            title="Toque pra ampliar"
+          />
+        ) : (
+          <div className="w-14 h-14 bg-gray-100 rounded-lg flex items-center justify-center flex-shrink-0">
+            <Package className="w-6 h-6 text-gray-400" />
+          </div>
+        )}
         <div className="flex-1 min-w-0">
           <p className="font-semibold text-gray-900 truncate">{item.itemNome}</p>
-          <p className="text-sm text-gray-500">Sistema diz: <strong>{fmt(sistemaQtd)}</strong> un</p>
+          <p className="text-sm text-gray-500">Sistema diz: <strong>{fmt(sistemaQtd)}</strong> {unidade}</p>
         </div>
       </div>
 

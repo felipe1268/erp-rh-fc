@@ -671,3 +671,5 @@
 - **Rev. 2430** — ALMOXARIFADO · INVENTÁRIO VISUAL · botão "Desfazer última" no card + card "Restante" com fallback `volAtual ?? qtdAtual` + tooltip 3 estados. `InventarioVisual.tsx` (zero backend). Ver `shared/changelog.ts`.
 
 - **Rev. 2431** — ALMOXARIFADO · INVENTÁRIO VISUAL · preview visual da foto no modal "Registrar baixa da baia" (`<img>` h-44 + botões Trocar/Remover + badge "Foto pronta · NN KB"). `InventarioVisual.tsx`. Ver `shared/changelog.ts`.
+
+- **Rev. 2432** — ALMOXARIFADO · INVENTÁRIO SEMANAL · `window.confirm` nativo substituído por AlertDialog estilizado ao cancelar sessão (mostrava URL Replit + "Bloquear caixas de diálogo" no iOS). `Inventario.tsx`. Ver `shared/changelog.ts`.

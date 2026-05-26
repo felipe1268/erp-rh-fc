@@ -922,11 +922,29 @@ Retorne os até 5 melhores matches em ordem decrescente de similaridade. Se nenh
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
-      return db
-        .select()
+      // Rev. 2439 — LEFT JOIN com `almoxarifado_itens` pra trazer foto +
+      // unidade pra cada card do Inventário Semanal (facilita aferição
+      // visual no iPad sem precisar abrir o item separado).
+      const rows = await db
+        .select({
+          id: warehouseInventorySessionItems.id,
+          sessionId: warehouseInventorySessionItems.sessionId,
+          itemId: warehouseInventorySessionItems.itemId,
+          itemNome: warehouseInventorySessionItems.itemNome,
+          quantidadeSistema: warehouseInventorySessionItems.quantidadeSistema,
+          quantidadeFisica: warehouseInventorySessionItems.quantidadeFisica,
+          diferenca: warehouseInventorySessionItems.diferenca,
+          status: warehouseInventorySessionItems.status,
+          observacoes: warehouseInventorySessionItems.observacoes,
+          conferidoEm: warehouseInventorySessionItems.conferidoEm,
+          itemFotoUrl: almoxarifadoItens.fotoUrl,
+          itemUnidade: almoxarifadoItens.unidade,
+        })
         .from(warehouseInventorySessionItems)
+        .leftJoin(almoxarifadoItens, eq(almoxarifadoItens.id, warehouseInventorySessionItems.itemId))
         .where(eq(warehouseInventorySessionItems.sessionId, input.sessionId))
         .orderBy(warehouseInventorySessionItems.id);
+      return rows;
     }),
 
   confirmInventoryItem: protectedProcedure
