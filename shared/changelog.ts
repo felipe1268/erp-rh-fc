@@ -1,6 +1,76 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2456 — **DEVOLUÇÃO DE LOCAÇÃO · (a) autofill do entregador com o
+ * user FC logado e (b) movimentação aparece no Raio-X do funcionário.**
+ *
+ * PEDIDO (user, print IMG_1250 — modal etapa 2/2 com "Felipe" digitado à
+ * mão no Entregador): "O nome de quem está entregando deve ser o usuário
+ * que está logado no ERP, deve ser preenchido automaticamente. Preciso tb.
+ * que esta movimentação fique registrada e vai para a ficha do raio-x do
+ * funcionário, para controle total". [3ª parte do pedido — controle no
+ * Almoxarifado — fica pra próxima Rev, escopo a alinhar.]
+ *
+ * (a) AUTOFILL `devLoteEntNome` (`client/src/pages/equipamentos/Locados.tsx`):
+ *  - Import `useAuth` de `@/_core/hooks/useAuth` (L15).
+ *  - `const { user: meAuth } = useAuth()` no topo do componente (L54).
+ *  - 2 pontos de abertura do `modalDevLote` agora pré-preenchem com
+ *    `meAuth?.name`:
+ *      • `escolherSingle` (L2572) — atalho "DEVOLVER ESTE" no card.
+ *      • `abrirModalDevLote` (L2604-2608) — botão "Devolver N selecionados".
+ *  - User ainda pode editar (caso outro operador esteja fisicamente
+ *    entregando enquanto o admin opera o tablet). Mantém campo editável,
+ *    só ganha valor inicial.
+ *
+ * (b) RAIO-X (`server/routers/controleDocumentos.ts`):
+ *  - Import de `equipamentoLocadoEventos`, `equipamentosLocados`, `users`
+ *    (L6).
+ *  - Nova query `empDevolucoesLocacao` (L1415-1446) faz INNER JOIN
+ *    `users.id = evento.usuarioId` e filtra `users.email = emp.email`
+ *    + `tipo = 'DEVOLUCAO_FORNECEDOR'`. LEFT JOIN com `equipamentos_locados`
+ *    e `obras` traz descrição, fornecedor e nome da obra. Retorna lista
+ *    completa ordenada por `dataEvento desc`.
+ *  - Push na timeline agregada (L1550+) como `tipo: "Devolução Locação"`
+ *    cor laranja, ícone truck, descrição:
+ *    "Devolveu equipamento locado: <equip> para <fornecedor> — Obra: <obra>
+ *     (recebido por: <nome locadora>)".
+ *  - Novo campo `devolucoesLocacao` no retorno do `raioX` (L2161) — disponível
+ *    pro frontend `RaioXFuncionario` mesmo sem alterações de UI (já entra
+ *    automaticamente na Timeline).
+ *
+ * VÍNCULO USER→EMPLOYEE: o schema FC não tem `employees.userId` (employees
+ * é registro RH, users é login do ERP). Match feito por e-mail, que é a
+ * coluna comum mais estável. Se o user FC não tem employee correspondente
+ * por e-mail (caso típico de admin master operando o tablet), a entrada
+ * simplesmente não aparece em raio-x nenhum — sem regressão. Se aparece em
+ * dois raio-x (e-mail compartilhado, edge case), aparece em ambos — não há
+ * perda de informação.
+ *
+ * NOTA SOBRE NOME EDITADO: o autofill é apenas rótulo do comprovante PDF.
+ * O vínculo de autoria (e portanto o que aparece no Raio-X) é via `usuarioId`
+ * = user FC LOGADO. Se admin master edita o nome para outro operador, o
+ * comprovante mostra esse outro nome, mas o evento continua atribuído ao
+ * user que clicou no botão — comportamento esperado (auditoria irrefutável).
+ *
+ * FIX (code review) — TENANT ISOLATION: a query do Raio-X foi ENDURECIDA
+ * com filtro explícito `equipamentoLocadoEventos.companyId = emp.companyId`
+ * + join `equipamentosLocados` também restrito por companyId. Sem isso, 2
+ * empresas com mesmo email de user (ex: mesmo admin master cadastrado em
+ * tenants distintos) poderiam vazar comprovantes entre si — e como o
+ * `pdfComprovanteToken` é acessível via rota pública assinada, seria leak
+ * real. Também só consulta se `emp.email && emp.email.trim() !== ""`.
+ *
+ * R-001/R-007/R-010 OK — zero `ALTER`/`DROP`/`DELETE`. Reaproveita coluna
+ * `usuario_id` em `equipamento_locado_eventos` que já é gravada desde
+ * Rev. 2453 (locadoDevolverEmLote L891).
+ *
+ * Follow-up (Rev. 2457): adicionar mesmo controle de assinaturas +
+ * comprovante PDF no módulo Almoxarifado regular — escopo: `registerLoan`
+ * (empréstimo de ferramenta com responsável) é o caso mais análogo;
+ * insumo/saída-manual a confirmar com user.
+ *
+ * ─────────────────────────────────────────────────────────────────────────
+ *
  * Rev. 2455 — **DEVOLVER LOCAÇÃO · ao concluir, volta pro Almoxarifado da
  * MESMA obra de origem (não joga no Central).**
  *

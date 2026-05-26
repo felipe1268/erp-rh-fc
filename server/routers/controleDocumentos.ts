@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getDb, userCanSeeAvisoStatus } from "../db";
-import { asos, atestados, trainings, warnings, employees, timeRecords, payroll, epiDeliveries, epis, vrBenefits, advances, obraHorasRateio, obras, documentTemplates, extraPayments, employeeHistory, accidents, processosTrabalhistas, processosAndamentos, jobFunctions, terminationNotices, vacationPeriods, cipaMeetings, cipaMembers, cipaElections, pjContracts, pjPayments, epiDiscountAlerts, customExams, obraFuncionarios, warehouseLoans, almoxarifadoDescontoFolha, almoxarifadoSaidasInsumo, heSolicitacaoConfirmacoes, heSolicitacoes, pontoDescontos, notificationLogs, notificationRecipients, lancamentosParceiros, parceirosConveniados, ddsSessoes, ddsSessaoFuncionarios, signatureSessions, signatureSigners } from "../../drizzle/schema";
+import { asos, atestados, trainings, warnings, employees, timeRecords, payroll, epiDeliveries, epis, vrBenefits, advances, obraHorasRateio, obras, documentTemplates, extraPayments, employeeHistory, accidents, processosTrabalhistas, processosAndamentos, jobFunctions, terminationNotices, vacationPeriods, cipaMeetings, cipaMembers, cipaElections, pjContracts, pjPayments, epiDiscountAlerts, customExams, obraFuncionarios, warehouseLoans, almoxarifadoDescontoFolha, almoxarifadoSaidasInsumo, heSolicitacaoConfirmacoes, heSolicitacoes, pontoDescontos, notificationLogs, notificationRecipients, lancamentosParceiros, parceirosConveniados, ddsSessoes, ddsSessaoFuncionarios, signatureSessions, signatureSigners, equipamentoLocadoEventos, equipamentosLocados, users } from "../../drizzle/schema";
 import { eq, and, desc, sql, ne, isNull, inArray, gte, lte } from "drizzle-orm";
 import { resolveCompanyIds, companyFilter } from "../companyHelper";
 import { storagePut } from "../storage";
@@ -1409,6 +1409,49 @@ export const controleDocumentosRouter = router({
       const empInsumos = await db.select().from(almoxarifadoSaidasInsumo)
         .where(eq(almoxarifadoSaidasInsumo.funcionarioId, input.employeeId))
         .orderBy(desc(almoxarifadoSaidasInsumo.createdAt));
+      // Rev. 2456 — Devoluções de equipamento LOCADO (fornecedor externo) em
+      // que ESTE funcionário operou como entregador FC. Match user→employee
+      // via e-mail (FC não tem coluna `employeeId` em users hoje). Mostra na
+      // ficha tudo que o cara assinou pra devolver pra locadora, com obra,
+      // descrição do equipamento e link pro comprovante PDF público.
+      let empDevolucoesLocacao: any[] = [];
+      // Rev. 2456 — só consulta se employee tem email válido (email NULL não
+      // pode virar chave de match, senão `users.email = NULL` é sempre false
+      // mas qualquer string vazia abriria cross-match acidental).
+      // Rev. 2456 (fix code review) — TENANT ISOLATION: filtra explicitamente
+      // por `equipamentoLocadoEventos.companyId = emp.companyId`. Sem isso,
+      // 2 empresas diferentes com o mesmo email de user vazariam comprovantes
+      // (que têm pdfComprovanteToken acessível via rota pública) entre tenants.
+      if (emp.email && emp.email.trim() !== "") {
+        empDevolucoesLocacao = await db
+          .select({
+            id:                       equipamentoLocadoEventos.id,
+            companyId:                equipamentoLocadoEventos.companyId,
+            dataEvento:               equipamentoLocadoEventos.dataEvento,
+            obraId:                   equipamentoLocadoEventos.obraId,
+            obraNome:                 obras.nome,
+            equipamentoLocadoId:      equipamentoLocadoEventos.equipamentoLocadoId,
+            equipamentoDescricao:     equipamentosLocados.descricao,
+            fornecedorNome:           equipamentosLocados.fornecedorNome,
+            codigoPatrimonio:         equipamentosLocados.codigoPatrimonioFornecedor,
+            observacao:               equipamentoLocadoEventos.observacao,
+            assinaturaRecebedorNome:  equipamentoLocadoEventos.assinaturaRecebedorNome,
+            pdfComprovanteToken:      equipamentoLocadoEventos.pdfComprovanteToken,
+          })
+          .from(equipamentoLocadoEventos)
+          .innerJoin(users, eq(users.id, equipamentoLocadoEventos.usuarioId))
+          .leftJoin(equipamentosLocados, and(
+            eq(equipamentosLocados.id, equipamentoLocadoEventos.equipamentoLocadoId),
+            eq(equipamentosLocados.companyId, emp.companyId),
+          ))
+          .leftJoin(obras, eq(obras.id, equipamentoLocadoEventos.obraId))
+          .where(and(
+            eq(equipamentoLocadoEventos.companyId, emp.companyId),
+            eq(equipamentoLocadoEventos.tipo, "DEVOLUCAO_FORNECEDOR"),
+            eq(users.email, emp.email),
+          ))
+          .orderBy(desc(equipamentoLocadoEventos.dataEvento));
+      }
       // VR - TODOS
       const empVR = await db.select().from(vrBenefits).where(eq(vrBenefits.employeeId, input.employeeId)).orderBy(desc(vrBenefits.mesReferencia));
       // Adiantamentos - TODOS
@@ -1513,6 +1556,23 @@ export const controleDocumentosRouter = router({
         const obraInfo = (l as any).obraNome ? ` — Obra: ${(l as any).obraNome}` : "";
         timeline.push({ data: l.dataEmprestimo, tipo: "Empréstimo", descricao: `Retirou: ${l.itemNome} — Qtd: ${parseFloat(l.quantidade as any) || 1} un${obraInfo}${l.almoxarifeNome ? ` (Almoxarife: ${l.almoxarifeNome})` : ""}`, cor: "blue", icone: "wrench" });
         if (l.dataDevolucao) timeline.push({ data: l.dataDevolucao, tipo: "Devolução", descricao: `Devolveu: ${l.itemNome}${obraInfo}`, cor: "gray", icone: "check-circle" });
+      });
+      // Rev. 2456 — Devoluções de equipamento LOCADO (fornecedor externo)
+      // que este funcionário assinou como entregador FC.
+      empDevolucoesLocacao.forEach((d: any) => {
+        const dataDev = (d.dataEvento || "").toString().slice(0, 10);
+        if (!dataDev) return;
+        const equip = d.equipamentoDescricao || `Equip. #${d.equipamentoLocadoId}`;
+        const obraInfo = d.obraNome ? ` — Obra: ${d.obraNome}` : "";
+        const forn = d.fornecedorNome ? ` para ${d.fornecedorNome}` : "";
+        const rec = d.assinaturaRecebedorNome ? ` (recebido por: ${d.assinaturaRecebedorNome})` : "";
+        timeline.push({
+          data: dataDev,
+          tipo: "Devolução Locação",
+          descricao: `Devolveu equipamento locado: ${equip}${forn}${obraInfo}${rec}`,
+          cor: "orange",
+          icone: "truck",
+        });
       });
 
       // Ordenar timeline por data (mais recente primeiro)
@@ -2122,6 +2182,8 @@ export const controleDocumentosRouter = router({
         descontosAlmox: empDescontosAlmox,
         insumosAlmox: empInsumos,
         parceirosLancamentos: empParceirosLanc,
+        // Rev. 2456 — devoluções de locação assinadas por este funcionário
+        devolucoesLocacao: empDevolucoesLocacao,
       };
     }),
 

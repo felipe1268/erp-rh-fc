@@ -9,6 +9,7 @@ import type { ReactNode } from "react";
 import { FotosUploader, FotoItem, fmtMoney, fmtDate, Spinner } from "./_shared";
 import { compressImageIfNeeded } from "@/lib/imageCompress";
 import { SignaturePad } from "@/components/SignaturePad"; // Rev. 2453
+import { useAuth } from "@/_core/hooks/useAuth"; // Rev. 2456
 
 // Rev. 2346 — formata inteiros pt-BR (≥1000 ganha separador "." de milhar). Ex: 1220 → "1.220".
 const fmtN = (n: number) => n.toLocaleString("pt-BR");
@@ -46,6 +47,8 @@ const EMPTY = {
 
 export default function EquipamentosLocados() {
   const { selectedCompany } = useCompany();
+  // Rev. 2456 — autofill nome do entregador com o user FC logado (admin/encarregado).
+  const { user: meAuth } = useAuth();
   const companyId = Number(selectedCompany?.id) || 0;
   const [busca, setBusca] = useState("");
   const [filtroStatus, setFiltroStatus] = useState<string>("em_uso");
@@ -2562,7 +2565,8 @@ export default function EquipamentosLocados() {
           setDevLoteFotos([]);
           setDevLoteObs("");
           setDevLoteEtapa(1);
-          setDevLoteEntNome(""); setDevLoteEntSig(null);
+          // Rev. 2456 — autofill entregador com user logado (operador FC).
+          setDevLoteEntNome((meAuth as any)?.name || ""); setDevLoteEntSig(null);
           setDevLoteRecNome(""); setDevLoteRecSig(null);
           setDevLoteData(new Date().toISOString().slice(0, 10));
           setModalDevLote([l]);
@@ -2594,6 +2598,11 @@ export default function EquipamentosLocados() {
           setDevLoteFotos([]);
           setDevLoteObs("");
           setDevLoteData(new Date().toISOString().slice(0, 10));
+          // Rev. 2456 — autofill entregador com user logado (operador FC).
+          setDevLoteEntNome((meAuth as any)?.name || "");
+          setDevLoteEntSig(null);
+          setDevLoteRecNome(""); setDevLoteRecSig(null);
+          setDevLoteEtapa(1);
         }
         const qtdSel = selecionadosLote.size;
         return (

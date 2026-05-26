@@ -2,6 +2,7 @@
 
 > Este arquivo guarda os one-liners das revisões antigas para manter o `replit.md` enxuto.
 
+- **Rev. 2449** — DEVOLVER LOCAÇÃO · volta pro Almoxarifado ao fechar/concluir + chip sólido emerald pra nome da obra no card. Ver `shared/changelog.ts`.
 - **Rev. 2448** — [BUG GRAVE] DASHBOARD ALMOX & EQUIP · "Valor parado" e gráficos por categoria ficavam R$ 0,00 — campos `saldoAtual` vs `quantidadeAtual`. `DashAlmoxarifadoEquipamentos.tsx` L229-241. Ver `shared/changelog.ts`.
 - **Rev. 2447** — ALMOXARIFADO · INVENTÁRIO VISUAL · banner "Rotina diária" fixo no rodapé. `InventarioVisual.tsx` L825-840. Ver `shared/changelog.ts`.
 - **Rev. 2446** — ALMOXARIFADO · INVENTÁRIO VISUAL · cards padronizados em altura uniforme (CTA "Registrar baixa" ancorado no rodapé). `InventarioVisual.tsx` L375/L439/L463/L509. Ver `shared/changelog.ts`.
