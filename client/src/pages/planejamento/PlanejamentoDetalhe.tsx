@@ -11209,6 +11209,59 @@ export function EfetivoObraView({ equipeRaw, isLoading, docsMap = {}, companyId,
     removeMut.mutate({ employeeId, motivo: `Removido via Planejamento (${obraNome || `obra #${obraId}`})` });
   };
 
+  // Rev. 2484 — Seleção múltipla + Transferência em lote.
+  // Pedido user (IMG_1295, 26/05/2026): "Preciso poder selecionar os
+  // funcionários em múltipla seleção e ter opção de transferir para outra
+  // obra". Reusa `obras.allocateEmployee` em loop (mutateAsync) — sem novo
+  // endpoint backend, mantém autorização por funcionário e auto-fecha
+  // alocação anterior dentro da própria procedure. Terceiros são
+  // desabilitados (mesma regra do botão por linha).
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [bulkObraDest, setBulkObraDest] = useState<number>(0);
+  const [bulkMotivo, setBulkMotivo] = useState<string>("");
+  const [bulkRunning, setBulkRunning] = useState(false);
+  const obrasBulkQ = trpc.obras.listActive.useQuery(
+    { companyId: companyId || 0 },
+    { enabled: bulkOpen && !!companyId }
+  );
+  const bulkTransferMut = trpc.obras.allocateEmployee.useMutation();
+  const toggleSelect = (empId: number) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(empId)) next.delete(empId); else next.add(empId);
+      return next;
+    });
+  };
+  const handleBulkTransfer = async () => {
+    if (!companyId || !bulkObraDest || selectedIds.size === 0) return;
+    if (bulkObraDest === obraId) { toast.error("Selecione uma obra diferente da atual"); return; }
+    setBulkRunning(true);
+    const ids = [...selectedIds];
+    let ok = 0; const fails: string[] = [];
+    for (const empId of ids) {
+      try {
+        await bulkTransferMut.mutateAsync({
+          obraId: bulkObraDest,
+          employeeId: empId,
+          companyId,
+          motivo: bulkMotivo || `Transferência em lote via Planejamento (origem: ${obraNome || `obra #${obraId}`})`,
+        });
+        ok++;
+      } catch (e: any) { fails.push(`#${empId}: ${e?.message || "erro"}`); }
+    }
+    setBulkRunning(false);
+    utils.obras.equipeObra.invalidate();
+    utils.obras.efetivoPorObra.invalidate();
+    utils.obras.funcionarios.invalidate();
+    if (fails.length === 0) {
+      toast.success(`${ok} funcionário(s) transferido(s) com sucesso`);
+    } else {
+      toast.error(`Transferidos ${ok}/${ids.length}. Falhas: ${fails.slice(0,3).join("; ")}${fails.length>3?"...":""}`);
+    }
+    setSelectedIds(new Set()); setBulkOpen(false); setBulkObraDest(0); setBulkMotivo("");
+  };
+
   const [busca, setBusca] = useState("");
   const [filtroStatus, setFiltroStatus] = useState<string>("todos");
   // Rev. 2288 — Zoom da foto do funcionário (lightbox). Estado movido pra
@@ -11462,7 +11515,7 @@ export function EfetivoObraView({ equipeRaw, isLoading, docsMap = {}, companyId,
           </div>
 
           <div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
-            <div className="px-4 py-2.5 border-b border-slate-100 flex items-center gap-2 bg-slate-50/50">
+            <div className="px-4 py-2.5 border-b border-slate-100 flex items-center gap-2 bg-slate-50/50 flex-wrap">
               <Users className="h-4 w-4 text-blue-500" />
               <span className="text-xs font-semibold text-slate-600">Lista de Funcionários</span>
               <span className="text-[10px] text-slate-400">({listaFiltrada.length})</span>
@@ -11471,12 +11524,70 @@ export function EfetivoObraView({ equipeRaw, isLoading, docsMap = {}, companyId,
                   {STATUS_LABELS[filtroStatus]}
                 </span>
               )}
+              {/* Rev. 2484 — Barra de ações em lote (aparece só quando há seleção) */}
+              {selectedIds.size > 0 && (
+                <div className="ml-auto flex items-center gap-2 bg-blue-50 border border-blue-200 rounded-lg px-3 py-1">
+                  <span className="text-[11px] font-semibold text-blue-800">
+                    {selectedIds.size} selecionado(s)
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => { setBulkOpen(true); setBulkObraDest(0); setBulkMotivo(""); }}
+                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-semibold transition"
+                    title="Transferir selecionados para outra obra"
+                  >
+                    <ArrowRightLeft className="h-3 w-3" /> Transferir
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedIds(new Set())}
+                    className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-blue-700 hover:bg-blue-100 text-[11px] font-medium transition"
+                    title="Limpar seleção"
+                  >
+                    <X className="h-3 w-3" /> Limpar
+                  </button>
+                </div>
+              )}
             </div>
             <div className="overflow-y-auto" style={{ maxHeight: "calc(100vh - 480px)", minHeight: 200 }}>
               <table className="w-full text-sm">
                 <thead className="bg-slate-50 border-b border-slate-200 sticky top-0 z-10">
                   <tr>
                     <th className="w-8" />
+                    {/* Rev. 2484 — Coluna de seleção múltipla (apenas não-terceiros) */}
+                    <th className="w-8 px-2 text-center">
+                      {(() => {
+                        const elegiveis = listaFiltrada.filter((e: any) => {
+                          const t = String(e.tipoContrato || "").toUpperCase();
+                          return !(t === "TERCEIRO" || t === "TERC") && Number.isFinite(Number(e.id));
+                        });
+                        const todosSelecionados = elegiveis.length > 0 && elegiveis.every((e: any) => selectedIds.has(Number(e.id)));
+                        return (
+                          <input
+                            type="checkbox"
+                            checked={todosSelecionados}
+                            disabled={elegiveis.length === 0}
+                            onChange={(ev) => {
+                              if (ev.target.checked) {
+                                setSelectedIds(prev => {
+                                  const next = new Set(prev);
+                                  elegiveis.forEach((e: any) => next.add(Number(e.id)));
+                                  return next;
+                                });
+                              } else {
+                                setSelectedIds(prev => {
+                                  const next = new Set(prev);
+                                  elegiveis.forEach((e: any) => next.delete(Number(e.id)));
+                                  return next;
+                                });
+                              }
+                            }}
+                            className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
+                            title="Selecionar todos os visíveis (exceto terceiros)"
+                          />
+                        );
+                      })()}
+                    </th>
                     <th className="text-left px-4 py-2 text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Foto</th>
                     <th className="text-left px-4 py-2 text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Nome</th>
                     <th className="text-left px-4 py-2 text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Função / Cargo</th>
@@ -11518,7 +11629,7 @@ export function EfetivoObraView({ equipeRaw, isLoading, docsMap = {}, companyId,
                     const podeExpandir = !isTerceiro && (aso || (docs.treinamentos && docs.treinamentos.length > 0) || docs.integracao);
                     return (
                     <React.Fragment key={e.id || i}>
-                    <tr className="hover:bg-blue-50/30 transition-colors">
+                    <tr className={`hover:bg-blue-50/30 transition-colors ${Number.isFinite(empId) && selectedIds.has(empId) ? "bg-blue-50/50" : ""}`}>
                       <td className="px-2 py-2 text-center align-top pt-3">
                         {podeExpandir ? (
                           <button
@@ -11529,6 +11640,20 @@ export function EfetivoObraView({ equipeRaw, isLoading, docsMap = {}, companyId,
                             {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                           </button>
                         ) : null}
+                      </td>
+                      {/* Rev. 2484 — Checkbox de seleção (terceiros não podem) */}
+                      <td className="px-2 py-2 text-center align-top pt-3">
+                        {isTerceiro || !Number.isFinite(empId) ? (
+                          <span className="text-slate-200" title="Terceiros não podem ser transferidos">—</span>
+                        ) : (
+                          <input
+                            type="checkbox"
+                            checked={selectedIds.has(empId)}
+                            onChange={() => toggleSelect(empId)}
+                            className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                            title="Selecionar para transferência em lote"
+                          />
+                        )}
                       </td>
                       <td className="px-4 py-2">
                         {e.fotoUrl ? (
@@ -11655,7 +11780,7 @@ export function EfetivoObraView({ equipeRaw, isLoading, docsMap = {}, companyId,
                     </tr>
                     {expanded && podeExpandir && (
                       <tr className="bg-slate-50/60">
-                        <td colSpan={11} className="px-6 py-4">
+                        <td colSpan={12} className="px-6 py-4">
                           <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 text-xs">
                             {/* Rev. 1590 — Integração de Segurança SST.
                                 Módulo Planejamento (engenheiro): mostra
@@ -11747,7 +11872,7 @@ export function EfetivoObraView({ equipeRaw, isLoading, docsMap = {}, companyId,
                     );
                   })}
                   {listaFiltrada.length === 0 && (
-                    <tr><td colSpan={11} className="text-center py-10 text-slate-400 text-sm">Nenhum funcionário encontrado</td></tr>
+                    <tr><td colSpan={12} className="text-center py-10 text-slate-400 text-sm">Nenhum funcionário encontrado</td></tr>
                   )}
                 </tbody>
               </table>
@@ -11853,6 +11978,95 @@ export function EfetivoObraView({ equipeRaw, isLoading, docsMap = {}, companyId,
               >
                 {transferMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRightLeft className="h-4 w-4" />}
                 Transferir
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Rev. 2484 — Modal de Transferência EM LOTE (N funcionários → mesma obra de destino) */}
+      {bulkOpen && (
+        <div
+          className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in"
+          onClick={() => !bulkRunning && setBulkOpen(false)}
+          role="dialog"
+          aria-modal="true"
+        >
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg" onClick={(ev) => ev.stopPropagation()}>
+            <div className="px-5 py-4 border-b border-slate-100 flex items-center gap-2">
+              <ArrowRightLeft className="h-5 w-5 text-blue-600" />
+              <h3 className="text-base font-bold text-slate-800">Transferir em Lote</h3>
+              <span className="ml-auto inline-flex items-center rounded-full bg-blue-100 text-blue-800 px-2.5 py-0.5 text-[11px] font-bold">
+                {selectedIds.size} selecionado(s)
+              </span>
+            </div>
+            <div className="px-5 py-4 space-y-4">
+              <div className="rounded-lg bg-slate-50 border border-slate-200 px-3 py-2.5 text-sm">
+                <div className="text-[11px] text-slate-500 uppercase tracking-wide font-semibold mb-1">Funcionários ({selectedIds.size})</div>
+                <div className="max-h-32 overflow-y-auto text-[12px] text-slate-700 space-y-0.5">
+                  {(() => {
+                    const nomes = listaFiltrada
+                      .filter((e: any) => selectedIds.has(Number(e.id)))
+                      .map((e: any) => e.nomeCompleto || `#${e.id}`)
+                      .sort((a: string, b: string) => a.localeCompare(b, "pt-BR"));
+                    if (nomes.length === 0) return <span className="text-slate-400 italic">Nenhum funcionário visível corresponde à seleção (filtro pode estar escondendo).</span>;
+                    return nomes.map((nm: string, i: number) => <div key={i} className="truncate">• {nm}</div>);
+                  })()}
+                </div>
+                <div className="text-[11px] text-slate-500 mt-2 pt-2 border-t border-slate-200">
+                  De: <span className="font-medium text-slate-700">{obraNome || `Obra #${obraId}`}</span>
+                </div>
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-slate-700 block mb-1.5">
+                  Obra de destino <span className="text-rose-600">*</span>
+                </label>
+                <select
+                  value={bulkObraDest || ""}
+                  onChange={(ev) => setBulkObraDest(parseInt(ev.target.value, 10) || 0)}
+                  disabled={obrasBulkQ.isLoading || bulkRunning}
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">{obrasBulkQ.isLoading ? "Carregando obras..." : "— Selecione a obra de destino —"}</option>
+                  {(obrasBulkQ.data || [])
+                    .filter((o: any) => o.id !== obraId)
+                    .map((o: any) => (
+                      <option key={o.id} value={o.id}>{o.nome}</option>
+                    ))}
+                </select>
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-slate-700 block mb-1.5">Motivo (opcional)</label>
+                <textarea
+                  value={bulkMotivo}
+                  onChange={(ev) => setBulkMotivo(ev.target.value)}
+                  disabled={bulkRunning}
+                  rows={2}
+                  placeholder="Ex: realocação para nova frente de serviço"
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                />
+              </div>
+              <div className="rounded-md bg-amber-50 border border-amber-200 px-3 py-2 text-[11px] text-amber-800">
+                As transferências são executadas uma a uma. Em caso de falha parcial, os funcionários que falharem continuam na obra atual.
+              </div>
+            </div>
+            <div className="px-5 py-3 border-t border-slate-100 flex items-center justify-end gap-2 bg-slate-50/50 rounded-b-xl">
+              <button
+                type="button"
+                onClick={() => setBulkOpen(false)}
+                disabled={bulkRunning}
+                className="px-4 py-2 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-100 transition disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleBulkTransfer}
+                disabled={!bulkObraDest || bulkRunning || selectedIds.size === 0}
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {bulkRunning ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRightLeft className="h-4 w-4" />}
+                {bulkRunning ? `Transferindo...` : `Transferir ${selectedIds.size}`}
               </button>
             </div>
           </div>

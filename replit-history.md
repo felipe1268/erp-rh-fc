@@ -2,6 +2,7 @@
 
 > Este arquivo guarda os one-liners das revisões antigas para manter o `replit.md` enxuto.
 
+- **Rev. 2477** — CONTROLE DE DOCUMENTOS · foto real nas 4 tabelas (ASO/Trein./Atest./Advert.). Ver `shared/changelog.ts`.
 - **Rev. 2476** — PAINEL RH · foto real em TODOS os 7 MODAIS expandidos (drill-down full-screen). Ver `shared/changelog.ts`.
 - **Rev. 2475** — PAINEL RH · foto real em TODOS os 7 cards-resumo restantes. `fotoUrl` em 9 data sources + `<PersonPhoto size="xs">` em 9 listas. Ver `shared/changelog.ts`.
 - **Rev. 2474** — PAINEL RH · "Avisos Prévios em Andamento" ganham foto real ao lado do nome. `fotoUrl` em `avisosPrevios` + `<PersonPhoto size="xs">`. Ver `shared/changelog.ts`.

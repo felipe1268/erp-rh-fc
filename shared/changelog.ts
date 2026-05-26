@@ -1,6 +1,87 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2484 — **EFETIVO DA OBRA (Planejamento, `EfetivoObraView`) · SELEÇÃO
+ * MÚLTIPLA + TRANSFERÊNCIA EM LOTE de funcionários entre obras.**
+ *
+ * PEDIDO (user, IMG_1295, 26/05/2026): "Preciso poder selecionar os
+ * funcionários em múltipla seleção e ter opção de transferir para outra
+ * obra". Antes (Rev. 2480) só existia o botão Transferir individual por
+ * linha — fluxo cansativo quando precisava mover 10+ funcionários pra
+ * mesma obra de destino.
+ *
+ * MUDANÇAS em `client/src/pages/planejamento/PlanejamentoDetalhe.tsx`
+ * (componente `EfetivoObraView`):
+ *
+ * (1) Estado novo (~L11215): `selectedIds: Set<number>`, `bulkOpen`,
+ *     `bulkObraDest`, `bulkMotivo`, `bulkRunning`. Query `obrasBulkQ`
+ *     (trpc.obras.listActive, enabled só quando modal abre). Mutation
+ *     `bulkTransferMut = trpc.obras.allocateEmployee.useMutation()`
+ *     SEM onSuccess (controlado manualmente no handler em lote).
+ *
+ * (2) Handler `handleBulkTransfer`: itera `mutateAsync` para cada
+ *     `employeeId` selecionado (loop sequencial — server `allocateEmployee`
+ *     já fecha alocação anterior automaticamente). Coleta `ok` e `fails[]`,
+ *     invalida queries UMA vez ao final (não a cada item), toast resumo
+ *     ("X/Y transferidos" ou "falhas: A; B; C..."), limpa seleção e fecha
+ *     modal. Reutiliza autorização per-funcionário do `allocateEmployee`
+ *     (zero novo endpoint backend, zero migração).
+ *
+ * (3) Coluna nova de checkbox no header (~L11560) com select-all que
+ *     marca/desmarca **apenas os elegíveis visíveis** (filtra Terceiros e
+ *     ids não-finitos — não podem ser transferidos via `allocateEmployee`).
+ *     `<input type="checkbox">` nativo estilizado tailwind (sem nova
+ *     dependência shadcn).
+ *
+ * (4) Coluna de checkbox por linha (~L11647): aparece traço "—" pra
+ *     Terceiros (com tooltip "Terceiros não podem ser transferidos"),
+ *     checkbox interativo pros demais. Linha selecionada ganha bg
+ *     `bg-blue-50/50` pra feedback visual.
+ *
+ * (5) Barra de ações em lote no header da seção "Lista de Funcionários"
+ *     (~L11530): aparece SÓ quando `selectedIds.size > 0`. Mostra
+ *     contagem + botão "Transferir" (abre modal) + "Limpar" (zera seleção).
+ *
+ * (6) Modal de transferência em lote (~L11990): preview da lista de nomes
+ *     selecionados (ordem alfabética pt-BR, max-h-32 com scroll), select
+ *     de obra destino (filtra obra atual), textarea de motivo opcional,
+ *     aviso âmbar "execução uma a uma, falhas parciais não revertem", botão
+ *     "Transferir N" com spinner + label dinâmica "Transferindo..." durante
+ *     a execução. Bloqueia fechamento (click backdrop, ESC) enquanto
+ *     `bulkRunning` pra não interromper o loop.
+ *
+ * (7) Ajustes `colSpan={11}` → `colSpan={12}` nas 2 linhas que ocupam toda
+ *     a largura da tabela (linha expandida ASO/Trein. + estado vazio
+ *     "Nenhum funcionário encontrado").
+ *
+ * ARQUIVOS TOCADOS:
+ * - `client/src/pages/planejamento/PlanejamentoDetalhe.tsx` (1 arquivo, ~150
+ *   linhas adicionadas — state, handler, 2 checkboxes, action bar, modal)
+ * - `shared/version.ts` (2483 → 2484)
+ * - `shared/changelog.ts` (este bloco)
+ * - `replit.md` (rotação 2+5)
+ * - `replit-history.md` (Rev. 2477 demovido)
+ *
+ * RACIONAL:
+ * - Loop client-side de `allocateEmployee` em vez de novo endpoint bulk:
+ *   (a) zero novo backend code/teste, (b) reutiliza authz por funcionário
+ *   (escopo de obra já validado dentro de `allocateEmployee`), (c)
+ *   `allocateEmployee` já é idempotente e fecha alocação anterior, (d)
+ *   falha de um não derruba os outros (try/catch por iteração).
+ * - Trade-off: N round-trips em vez de 1. Para o volume típico (até 60
+ *   funcionários — ver IMG_1295), o impacto é aceitável (<3s). Se virar
+ *   gargalo, próxima rev cria `obras.allocateEmployeesBulk` server-side.
+ * - Terceiros excluídos da seleção pelo mesmo critério usado no botão
+ *   individual (Rev. 2480): id "terc-N" não é employeeId interno e o
+ *   endpoint `allocateEmployee` espera int.
+ *
+ * FOLLOW-UPS POSSÍVEIS (NÃO entregues nesta rev):
+ * - Endpoint `obras.allocateEmployeesBulk(employeeIds[], obraId)` numa
+ *   única transação se o uso virar gargalo.
+ * - Espelhar multi-select também em `client/src/pages/ObraEfetivo.tsx`
+ *   (Obras → Efetivo) — só foi entregue aqui no Planejamento que é onde o
+ *   user reportou.
+ *
  * Rev. 2483 — **ORDENS DE COMPRA · BUG DE NUMERAÇÃO DUPLICADA CORRIGIDO
  * (ex: `OC-2026-218` vs `OC-2026-0218`). Consolidação de 4 geradores
  * inconsistentes em UMA fonte de verdade atômica.**
