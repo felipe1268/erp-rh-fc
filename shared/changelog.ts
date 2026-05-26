@@ -1,6 +1,75 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2480 — **EFETIVO DA OBRA (PLANEJAMENTO) · botão TRANSFERIR e REMOVER
+ * por linha — gerenciamento de alocação direto da aba do engenheiro.**
+ *
+ * PEDIDO (user, IMG_1290, 26/05/2026): "Preciso poder fazer a transferência
+ * de efetivo por aqui... e quero que os status de cada funcionário apareça
+ * aqui, se tá de férias, afastado ou cipa... preciso ver tudo para definir
+ * as frentes de atividades". O status real (Ativo/Aviso/AvisoDispensado/
+ * Férias/Afastado/Licença) e o badge CIPA já estavam funcionando após
+ * Rev. 2479 — o screenshot IMG_1290 mostra "0 Aviso, 0 Férias, 0 Afastados"
+ * porque nessa obra específica não há ninguém nesses status (dado real, não
+ * bug). O que faltava era a **ação de transferência inline** — antes o
+ * engenheiro precisava navegar até `/obras/efetivo` para mover funcionários
+ * entre obras, perdendo o contexto do planejamento.
+ *
+ * MUDANÇAS (todas em `client/src/pages/planejamento/PlanejamentoDetalhe.tsx`,
+ * componente `EfetivoObraView`):
+ *
+ * 1. **Nova coluna "Ações"** na tabela "Lista de Funcionários" — após
+ *    "Tempo de Empresa". Cada linha CLT/PJ ganha 2 botões:
+ *    - **Transferir** (azul, ícone `ArrowRightLeft`): abre modal pra
+ *      escolher obra de destino + motivo opcional. Reusa procedure
+ *      `obras.allocateEmployee` (server já fecha alocação ativa anterior
+ *      automaticamente — mesmo fluxo de `/obras/efetivo`).
+ *    - **Remover** (vermelho, ícone `Trash2`): chama `obras.removeEmployee`
+ *      após `confirm()` — deixa funcionário sem obra.
+ *    - **Terceiros** ficam com "—" desabilitado (id "terc-N" não é
+ *      employeeId interno; são gerenciados no módulo Terceiros).
+ *
+ * 2. **Modal de Transferência** (`{transferTarget && (...)}`) — overlay
+ *    fixed inset-0 com card de 512px:
+ *    - Header: ícone + "Transferir Funcionário".
+ *    - Box de origem (read-only): nome do funcionário + "De: {obraNome}".
+ *    - `<select>` de obra destino (alimentado por `obras.listActive`
+ *      enabled só quando modal aberto — query lazy, evita chamada
+ *      desnecessária em cada render da aba). Filtra a obra atual.
+ *    - `<textarea>` de motivo opcional (default: "Transferência via
+ *      Planejamento (origem: {obraNome})").
+ *    - Validação: bloqueia confirmar se mesma obra destino. Bloqueia se
+ *      sem `companyId`.
+ *    - onSuccess: invalida `obras.equipeObra`, `efetivoPorObra`,
+ *      `funcionarios` (reflete no Total/Direta/Indireta na hora).
+ *
+ * 3. **Props expandidas em `EfetivoObraView`**: agora aceita
+ *    `companyId?`, `obraId?`, `obraNome?` (vindos de `EfetivoObraTab` via
+ *    `proj.obraId` e `proj.obraNome || proj.nome`). Necessário pro modal
+ *    saber a obra de origem e a empresa pra carregar listActive.
+ *
+ * 4. **Import novo**: `ArrowRightLeft` adicionado ao bloco `lucide-react`
+ *    (L29-48). `Trash2` já estava importado (usado em outros lugares).
+ *
+ * 5. **Authz por escopo de obras nas 2 mutations** (`server/routers.ts`
+ *    L1738/1755): adicionado check `getEffectiveAllowedObraIds(ctx.user.id,
+ *    ctx.user.role)` em `allocateEmployee` (valida `input.obraId`) e
+ *    `removeEmployee` (busca obra ativa via `obraFuncionarios` e valida).
+ *    Admin Master (`allowedObras === null`) passa direto — restritos
+ *    recebem `FORBIDDEN` se tentarem mutar obra fora do escopo. Fechou
+ *    IDOR horizontal pré-existente que afetava também `/obras/efetivo`
+ *    (apontado pelo code review architect).
+ *
+ * 6. **Empty-state colSpan**: corrigido `colSpan={10}` → `colSpan={11}`
+ *    no "Nenhum funcionário encontrado" da tabela (após adicionar coluna
+ *    Ações).
+ *
+ * REGRAS R-001/R-007/R-010 OK — sem `ALTER TABLE`/`DROP`/`DELETE` em
+ * produção. Tudo passa pelas mutations existentes (`allocateEmployee` /
+ * `removeEmployee`) que já têm validação de status (bloqueia Desligado/
+ * Lista_Negra) e gravam histórico em `obra_funcionarios_eventos` via
+ * `allocateEmployeeToObra`/`removeEmployeeFromObra` em `server/db.ts`.
+ *
  * Rev. 2479 — **EFETIVO/EQUIPE DA OBRA · foto real + status + badge CIPA nas
  * duas telas que ainda exibiam só inicial colorida ou ainda não tinham CIPA:
  * (1) modal "Equipe — {obra}" do `ObraEfetivo.tsx` (drill-down dos cards de

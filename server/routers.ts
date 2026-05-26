@@ -44,7 +44,7 @@ import {
 import { DEFAULT_PERMISSIONS, MODULE_KEYS } from "../shared/modules";
 import { getDb, encerrarContratosPjDoFuncionario } from "./db";
 import { normalizeCidadeInput } from "../shared/normalizeCidade";
-import { obraSns, employees, blacklistReactivationRequests, companies, employeeSiteHistory, employeeTerminationChecklist, asos, trainings, sstIntegracaoRegistros, employeeIntegrations, contractCounters, almoxarifadoItens } from "../drizzle/schema";
+import { obraSns, employees, blacklistReactivationRequests, companies, employeeSiteHistory, employeeTerminationChecklist, asos, trainings, sstIntegracaoRegistros, employeeIntegrations, contractCounters, almoxarifadoItens, obraFuncionarios } from "../drizzle/schema";
 import { eq, and, sql, or, ilike, isNull, inArray } from "drizzle-orm";
 import { resolveCompanyIds, companyFilter } from "./companyHelper";
 import type { ProfileType } from "../shared/modules";
@@ -1733,6 +1733,11 @@ export const appRouter = router({
       dataInicio: z.string().optional(),
       motivo: z.string().optional(),
     })).mutation(async ({ input, ctx }) => {
+      // Rev. 2480 — authz por escopo de obras permitidas (admin master = null = sem restrição)
+      const allowedObras = await getEffectiveAllowedObraIds(ctx.user.id, ctx.user.role);
+      if (allowedObras !== null && !allowedObras.includes(input.obraId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para alocar funcionários nesta obra." });
+      }
       // === VALIDAÇÃO: bloquear funcionários desligados/lista negra ===
       const db = await getDb();
       if (db) {
@@ -1744,7 +1749,22 @@ export const appRouter = router({
       }
       return allocateEmployeeToObra({ ...input, registradoPor: ctx.user.name ?? 'Sistema', registradoPorUserId: ctx.user.id });
     }),
-    removeEmployee: protectedProcedure.input(z.object({ employeeId: z.number(), motivo: z.string().optional() })).mutation(({ input, ctx }) => removeEmployeeFromObra(input.employeeId, input.motivo, ctx.user.name ?? 'Sistema', ctx.user.id)),
+    removeEmployee: protectedProcedure.input(z.object({ employeeId: z.number(), motivo: z.string().optional() })).mutation(async ({ input, ctx }) => {
+      // Rev. 2480 — authz: descobrir obra atual e validar escopo permitido
+      const allowedObras = await getEffectiveAllowedObraIds(ctx.user.id, ctx.user.role);
+      if (allowedObras !== null) {
+        const db = await getDb();
+        if (db) {
+          const [aloc] = await db.select({ obraId: obraFuncionarios.obraId })
+            .from(obraFuncionarios)
+            .where(and(eq(obraFuncionarios.employeeId, input.employeeId), eq(obraFuncionarios.isActive, 1)));
+          if (aloc && !allowedObras.includes(aloc.obraId)) {
+            throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para remover funcionários desta obra." });
+          }
+        }
+      }
+      return removeEmployeeFromObra(input.employeeId, input.motivo, ctx.user.name ?? 'Sistema', ctx.user.id);
+    }),
     // Histórico de alocações de um funcionário
     employeeHistory: protectedProcedure.input(z.object({ employeeId: z.number() })).query(({ input }) => getEmployeeSiteHistory(input.employeeId)),
     // Atualizar condições de trabalho individuais (override por alocação)

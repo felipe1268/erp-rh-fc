@@ -38,7 +38,7 @@ import {
   Calendar, CalendarDays, CalendarCheck, History, ThumbsUp, ThumbsDown, BookOpen,
   ChevronLeft, RotateCcw, CloudLightning, Thermometer, Eye, EyeOff, Printer, CheckSquare,
   RectangleVertical, RectangleHorizontal,
-  TrendingDown, ArrowUpRight, ArrowDownRight, CalendarClock, Network,
+  TrendingDown, ArrowUpRight, ArrowDownRight, CalendarClock, Network, ArrowRightLeft,
   Users, HardHat, CheckCircle, Calculator, Info, Box,
   FileCheck2, FileX2, FileWarning, GraduationCap,
   Star, Smile, Meh, Frown, ListTree, Target,
@@ -11158,10 +11158,57 @@ function EfetivoObraTab({ proj }: { proj: any }) {
     { enabled: companyId > 0 && empIds.length > 0 }
   );
 
-  return <EfetivoObraView equipeRaw={equipeMerged as any[]} isLoading={isLoading || isLoadingTerc} docsMap={docsMap as any} />;
+  return <EfetivoObraView equipeRaw={equipeMerged as any[]} isLoading={isLoading || isLoadingTerc} docsMap={docsMap as any} companyId={companyId} obraId={obraId} obraNome={proj?.obraNome || proj?.nome || ""} />;
 }
 
-export function EfetivoObraView({ equipeRaw, isLoading, docsMap = {} }: { equipeRaw: any[]; isLoading: boolean; docsMap?: Record<number, { aso: any | null; treinamentos: any[]; integracao?: any | null }> }) {
+export function EfetivoObraView({ equipeRaw, isLoading, docsMap = {}, companyId, obraId, obraNome }: { equipeRaw: any[]; isLoading: boolean; docsMap?: Record<number, { aso: any | null; treinamentos: any[]; integracao?: any | null }>; companyId?: number; obraId?: number; obraNome?: string }) {
+  // Rev. 2480 — Transferência de funcionário direto da tela Efetivo da Obra
+  // (Planejamento). Pedido user (IMG_1290): "Preciso poder fazer a transferência
+  // de efetivo por aqui". Reusa procedure obras.allocateEmployee (server detecta
+  // alocação ativa anterior e fecha automaticamente). Terceiros ficam desabilitados
+  // (id "terc-N" não é employeeId interno).
+  const utils = trpc.useUtils();
+  const [transferTarget, setTransferTarget] = useState<{ employeeId: number; nome: string } | null>(null);
+  const [transferObraDest, setTransferObraDest] = useState<number>(0);
+  const [transferMotivo, setTransferMotivo] = useState<string>("");
+  const obrasListaQ = trpc.obras.listActive.useQuery(
+    { companyId: companyId || 0 },
+    { enabled: !!transferTarget && !!companyId }
+  );
+  const transferMut = trpc.obras.allocateEmployee.useMutation({
+    onSuccess: () => {
+      toast.success("Funcionário transferido com sucesso");
+      utils.obras.equipeObra.invalidate();
+      utils.obras.efetivoPorObra.invalidate();
+      utils.obras.funcionarios.invalidate();
+      setTransferTarget(null); setTransferObraDest(0); setTransferMotivo("");
+    },
+    onError: (e: any) => toast.error(e.message || "Falha ao transferir"),
+  });
+  const removeMut = trpc.obras.removeEmployee.useMutation({
+    onSuccess: () => {
+      toast.success("Funcionário removido da obra");
+      utils.obras.equipeObra.invalidate();
+      utils.obras.efetivoPorObra.invalidate();
+      utils.obras.funcionarios.invalidate();
+    },
+    onError: (e: any) => toast.error(e.message || "Falha ao remover"),
+  });
+  const handleConfirmTransfer = () => {
+    if (!transferTarget || !companyId || !transferObraDest) return;
+    if (transferObraDest === obraId) { toast.error("Selecione uma obra diferente da atual"); return; }
+    transferMut.mutate({
+      obraId: transferObraDest,
+      employeeId: transferTarget.employeeId,
+      companyId,
+      motivo: transferMotivo || `Transferência via Planejamento (origem: ${obraNome || `obra #${obraId}`})`,
+    });
+  };
+  const handleRemove = (employeeId: number, nome: string) => {
+    if (!confirm(`Remover ${nome} desta obra?\n\nO funcionário ficará sem obra alocada.`)) return;
+    removeMut.mutate({ employeeId, motivo: `Removido via Planejamento (${obraNome || `obra #${obraId}`})` });
+  };
+
   const [busca, setBusca] = useState("");
   const [filtroStatus, setFiltroStatus] = useState<string>("todos");
   // Rev. 2288 — Zoom da foto do funcionário (lightbox). Estado movido pra
@@ -11439,6 +11486,7 @@ export function EfetivoObraView({ equipeRaw, isLoading, docsMap = {} }: { equipe
                     <th className="text-center px-4 py-2 text-[11px] font-semibold text-slate-500 uppercase tracking-wide">ASO</th>
                     <th className="text-center px-4 py-2 text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Trein.</th>
                     <th className="text-left px-4 py-2 text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Tempo de Empresa</th>
+                    <th className="text-center px-4 py-2 text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Ações</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -11578,10 +11626,36 @@ export function EfetivoObraView({ equipeRaw, isLoading, docsMap = {} }: { equipe
                         if (dias > 0 || parts.length === 0) parts.push(`${dias}d`);
                         return parts.join(" ");
                       })()}</td>
+                      <td className="px-2 py-2 text-center whitespace-nowrap">
+                        {isTerceiro ? (
+                          <span className="text-[10px] text-slate-300" title="Terceiros são gerenciados no módulo Terceiros">—</span>
+                        ) : (
+                          <div className="inline-flex items-center gap-1">
+                            <button
+                              type="button"
+                              onClick={() => { setTransferTarget({ employeeId: empId, nome: e.nomeCompleto || `#${empId}` }); setTransferObraDest(0); setTransferMotivo(""); }}
+                              disabled={!companyId || !Number.isFinite(empId)}
+                              className="inline-flex items-center gap-1 px-2 py-1 rounded-md border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 text-[11px] font-semibold transition disabled:opacity-40 disabled:cursor-not-allowed"
+                              title="Transferir para outra obra"
+                            >
+                              <ArrowRightLeft className="h-3 w-3" /> Transferir
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleRemove(empId, e.nomeCompleto || `#${empId}`)}
+                              disabled={!Number.isFinite(empId) || removeMut.isPending}
+                              className="inline-flex items-center justify-center h-7 w-7 rounded-md border border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100 transition disabled:opacity-40 disabled:cursor-not-allowed"
+                              title="Remover da obra (deixa sem obra)"
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </button>
+                          </div>
+                        )}
+                      </td>
                     </tr>
                     {expanded && podeExpandir && (
                       <tr className="bg-slate-50/60">
-                        <td colSpan={10} className="px-6 py-4">
+                        <td colSpan={11} className="px-6 py-4">
                           <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 text-xs">
                             {/* Rev. 1590 — Integração de Segurança SST.
                                 Módulo Planejamento (engenheiro): mostra
@@ -11673,7 +11747,7 @@ export function EfetivoObraView({ equipeRaw, isLoading, docsMap = {} }: { equipe
                     );
                   })}
                   {listaFiltrada.length === 0 && (
-                    <tr><td colSpan={10} className="text-center py-10 text-slate-400 text-sm">Nenhum funcionário encontrado</td></tr>
+                    <tr><td colSpan={11} className="text-center py-10 text-slate-400 text-sm">Nenhum funcionário encontrado</td></tr>
                   )}
                 </tbody>
               </table>
@@ -11707,6 +11781,80 @@ export function EfetivoObraView({ equipeRaw, isLoading, docsMap = {} }: { equipe
               className="max-w-[90vw] max-h-[80vh] rounded-lg shadow-2xl object-contain bg-slate-900"
             />
             <span className="text-white/90 text-sm font-medium">{fotoZoom.nome}</span>
+          </div>
+        </div>
+      )}
+
+      {/* Rev. 2480 — Modal de Transferência de funcionário entre obras */}
+      {transferTarget && (
+        <div
+          className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in"
+          onClick={() => !transferMut.isPending && setTransferTarget(null)}
+          role="dialog"
+          aria-modal="true"
+        >
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg" onClick={(ev) => ev.stopPropagation()}>
+            <div className="px-5 py-4 border-b border-slate-100 flex items-center gap-2">
+              <ArrowRightLeft className="h-5 w-5 text-blue-600" />
+              <h3 className="text-base font-bold text-slate-800">Transferir Funcionário</h3>
+            </div>
+            <div className="px-5 py-4 space-y-4">
+              <div className="rounded-lg bg-slate-50 border border-slate-200 px-3 py-2.5 text-sm">
+                <div className="text-[11px] text-slate-500 uppercase tracking-wide font-semibold mb-0.5">Funcionário</div>
+                <div className="font-semibold text-slate-800">{transferTarget.nome}</div>
+                <div className="text-[11px] text-slate-500 mt-1">
+                  De: <span className="font-medium text-slate-700">{obraNome || `Obra #${obraId}`}</span>
+                </div>
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-slate-700 block mb-1.5">
+                  Obra de destino <span className="text-rose-600">*</span>
+                </label>
+                <select
+                  value={transferObraDest || ""}
+                  onChange={(ev) => setTransferObraDest(parseInt(ev.target.value, 10) || 0)}
+                  disabled={obrasListaQ.isLoading || transferMut.isPending}
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">{obrasListaQ.isLoading ? "Carregando obras..." : "— Selecione a obra de destino —"}</option>
+                  {(obrasListaQ.data || [])
+                    .filter((o: any) => o.id !== obraId)
+                    .map((o: any) => (
+                      <option key={o.id} value={o.id}>{o.nome}</option>
+                    ))}
+                </select>
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-slate-700 block mb-1.5">Motivo (opcional)</label>
+                <textarea
+                  value={transferMotivo}
+                  onChange={(ev) => setTransferMotivo(ev.target.value)}
+                  disabled={transferMut.isPending}
+                  rows={2}
+                  placeholder="Ex: realocação para nova frente de serviço"
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                />
+              </div>
+            </div>
+            <div className="px-5 py-3 border-t border-slate-100 flex items-center justify-end gap-2 bg-slate-50/50 rounded-b-xl">
+              <button
+                type="button"
+                onClick={() => setTransferTarget(null)}
+                disabled={transferMut.isPending}
+                className="px-4 py-2 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-100 transition disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmTransfer}
+                disabled={!transferObraDest || transferMut.isPending}
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {transferMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRightLeft className="h-4 w-4" />}
+                Transferir
+              </button>
+            </div>
           </div>
         </div>
       )}
