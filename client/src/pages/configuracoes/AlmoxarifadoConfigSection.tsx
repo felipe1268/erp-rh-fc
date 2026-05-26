@@ -28,6 +28,12 @@ export function AlmoxarifadoConfigSection() {
   });
   const exigeSenha = !!auditCfgQ.data?.exigeSenha;
   const exigeJustificativa = !!auditCfgQ.data?.exigeJustificativa;
+  // Rev. 2462 — toggle independente de "Exigir aprovação do gestor".
+  // Default true (preserva comportamento anterior) quando ainda não há
+  // resposta do servidor / coluna ainda não populada.
+  const exigeAprovacao = auditCfgQ.data
+    ? (auditCfgQ.data as any).exigeAprovacao !== false
+    : true;
 
   const limparMut = trpc.compras.limparCategoriasOrfas.useMutation({
     onSuccess: (r: any) => {
@@ -99,7 +105,7 @@ export function AlmoxarifadoConfigSection() {
           <div className="flex-1 min-w-0">
             <div className="font-medium text-gray-800 text-sm">Controle de auditoria do Almoxarifado</div>
             <p className="text-xs text-gray-500 mt-0.5">
-              Quando ligados, excluir item / excluir unidade / alterar quantidade manualmente pedem senha do usuário e/ou justificativa, e geram pendência pra validação por admin.
+              Toda exclusão / alteração manual fica registrada no log com usuário, horário e IP — independente dos toggles abaixo. Os toggles controlam apenas o que é exigido na hora da ação e se a aprovação do gestor é necessária.
             </p>
             <div className="mt-3 space-y-2">
               <label className="flex items-center justify-between gap-3 py-1.5 px-2 rounded hover:bg-emerald-50/40">
@@ -110,7 +116,7 @@ export function AlmoxarifadoConfigSection() {
                 <Switch
                   checked={exigeSenha}
                   disabled={!companyId || auditCfgQ.isLoading || setAuditCfgMut.isPending}
-                  onCheckedChange={(v) => setAuditCfgMut.mutate({ companyId, exigeSenha: !!v, exigeJustificativa })}
+                  onCheckedChange={(v) => setAuditCfgMut.mutate({ companyId, exigeSenha: !!v, exigeJustificativa, exigeAprovacao })}
                 />
               </label>
               <label className="flex items-center justify-between gap-3 py-1.5 px-2 rounded hover:bg-emerald-50/40">
@@ -121,13 +127,30 @@ export function AlmoxarifadoConfigSection() {
                 <Switch
                   checked={exigeJustificativa}
                   disabled={!companyId || auditCfgQ.isLoading || setAuditCfgMut.isPending}
-                  onCheckedChange={(v) => setAuditCfgMut.mutate({ companyId, exigeSenha, exigeJustificativa: !!v })}
+                  onCheckedChange={(v) => setAuditCfgMut.mutate({ companyId, exigeSenha, exigeJustificativa: !!v, exigeAprovacao })}
+                />
+              </label>
+              {/* Rev. 2462 — toggle de aprovação do gestor (independente). */}
+              <label className="flex items-center justify-between gap-3 py-1.5 px-2 rounded hover:bg-emerald-50/40">
+                <div className="min-w-0">
+                  <div className="text-sm font-medium text-gray-800">Exigir aprovação do gestor</div>
+                  <p className="text-[11px] text-gray-500">Quando ligado, cada ação entra como <b>pendente</b> e o gestor da obra precisa aprovar/rejeitar em <i>Almoxarifado › Auditoria</i>. Quando desligado, o registro vai direto como <b>validado</b> (log continua).</p>
+                </div>
+                <Switch
+                  checked={exigeAprovacao}
+                  disabled={!companyId || auditCfgQ.isLoading || setAuditCfgMut.isPending}
+                  onCheckedChange={(v) => setAuditCfgMut.mutate({ companyId, exigeSenha, exigeJustificativa, exigeAprovacao: !!v })}
                 />
               </label>
             </div>
-            {!exigeSenha && !exigeJustificativa && (
+            {!exigeAprovacao && (
+              <div className="mt-2 bg-blue-50 border border-blue-200 text-blue-800 text-[11px] rounded-md px-2.5 py-1.5">
+                ℹ Aprovação dispensada: ações vão direto como validadas. O log completo (usuário, horário, IP, antes/depois) continua sendo gravado.
+              </div>
+            )}
+            {!exigeSenha && !exigeJustificativa && exigeAprovacao && (
               <div className="mt-2 bg-amber-50 border border-amber-200 text-amber-800 text-[11px] rounded-md px-2.5 py-1.5">
-                ⚠ Controle desligado: exclusões/alterações ainda ficam no log, mas qualquer usuário pode confirmar sem senha nem justificativa.
+                ⚠ Senha e justificativa desligadas: qualquer usuário pode confirmar a ação sem barreira no momento — mas o gestor ainda precisa aprovar depois.
               </div>
             )}
           </div>

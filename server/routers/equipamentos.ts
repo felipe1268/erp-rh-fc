@@ -1017,6 +1017,23 @@ export const equipamentosRouter = router({
           usuarioId: ctx.user.id,
           usuarioNome: ctx.user.name || String(ctx.user.id),
         });
+        // Rev. 2462 — auto-valida quando a empresa não exige aprovação
+        // do gestor (companies.almoxarifadoExigeAprovacao = 0). Lemos
+        // inline pra evitar cross-import com `compras.ts`.
+        let auditExtra: Record<string, any> = {};
+        const [cfgRow] = await tx.select({
+          a: companies.almoxarifadoExigeAprovacao,
+        }).from(companies).where(eq(companies.id, input.companyId));
+        const exigeAprov = cfgRow ? Number(cfgRow.a ?? 1) === 1 : true;
+        if (!exigeAprov) {
+          auditExtra = {
+            statusValidacao: "validado",
+            validadoPorId: ctx.user.id,
+            validadoPorNome: ctx.user.name || null,
+            validadoEm: new Date().toISOString(),
+            observacaoValidacao: "Auto-validado: aprovação não exigida pela empresa.",
+          };
+        }
         await tx.insert(almoxarifadoAuditoria).values({
           companyId: input.companyId,
           obraId: eq_.obraId,
@@ -1030,6 +1047,7 @@ export const equipamentosRouter = router({
           dadosDepois: { status: "em_uso", dataFimReal: null, fotosDevolucaoJson: null } as any,
           justificativa: motivoFinal,
           ip,
+          ...auditExtra,
         });
       });
       return { success: true };

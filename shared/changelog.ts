@@ -1,6 +1,75 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2462 — **AUDITORIA DO ALMOXARIFADO · toggle independente "Exigir
+ * aprovação do gestor" (log sempre, aprovação opcional).**
+ *
+ * PEDIDO (user, IMG_1255 + IMG_1256): "quero poder habilitar/desabilitar
+ * a obrigatoriedade de aprovar as ações do almoxarifado, mantendo o
+ * registro completo (usuário, horário, IP)… por ora dispensar a aprovação".
+ *
+ * DIAGNÓSTICO:
+ *  - Toggles existentes (`almoxarifadoExigeSenha`/`...Justificativa`,
+ *    Rev. 2400) controlavam só o que era pedido na hora da ação. Mesmo
+ *    com ambos OFF, o INSERT em `almoxarifadoAuditoria` caía no default
+ *    `statusValidacao='pendente'` → criava pendência pro gestor.
+ *  - User mostrou prints com "Auditoria desabilitada nas configurações
+ *    da empresa." como justificativa MAS entradas seguiam PENDENTES
+ *    aguardando aprovar/rejeitar — comportamento contra-intuitivo.
+ *
+ * IMPLEMENTAÇÃO:
+ *
+ * 1) SCHEMA (`drizzle/schema.ts`) — nova coluna em `companies`:
+ *    `almoxarifadoExigeAprovacao: smallint default 1 notnull`.
+ *    Mecanismo `syncSchema+` adiciona automaticamente em prod
+ *    (ALTER TABLE ADD COLUMN IF NOT EXISTS) — zero migration manual.
+ *
+ * 2) BACKEND (`server/routers/compras.ts`):
+ *    - `getAlmoxAuditoriaConfig` agora retorna `exigeAprovacao` também.
+ *    - Novo helper exportado `getAuditoriaInicialFields(companyId, ctx)`:
+ *      retorna `{}` quando aprovação é exigida (default 'pendente' do
+ *      banco prevalece) OU `{statusValidacao:'validado', validadoPorId,
+ *      validadoPorNome, validadoEm, observacaoValidacao:"Auto-validado:
+ *      aprovação não exigida pela empresa."}` quando dispensada.
+ *    - 3 insert calls patched (spread `...auditExtra` no values):
+ *      `atualizarItem` L1888, `excluirItem` L2288, `excluirUnidade` L3118.
+ *    - `setAuditoriaConfig` aceita `exigeAprovacao?: boolean` opcional
+ *      (backwards compat — clients antigos seguem funcionando).
+ *
+ * 3) BACKEND (`server/routers/equipamentos.ts`):
+ *    - `locadoDesfazerDevolucao` ganhou leitura inline da coluna nova
+ *      DENTRO da transação (mesmo padrão da Rev. 2460 — evita
+ *      cross-import entre routers). Spread `...auditExtra` no INSERT.
+ *
+ * 4) FRONTEND (`client/src/pages/configuracoes/AlmoxarifadoConfigSection.tsx`):
+ *    - 3º toggle "Exigir aprovação do gestor" abaixo dos 2 existentes.
+ *    - Descrição refeita: "Toda exclusão / alteração manual fica
+ *      registrada no log com usuário, horário e IP — independente dos
+ *      toggles abaixo." (deixa claro que LOG é incondicional).
+ *    - 2 alertas contextuais:
+ *      • Azul informativo quando `!exigeAprovacao` ("ℹ Aprovação
+ *        dispensada: ações vão direto como validadas. Log completo
+ *        continua sendo gravado.").
+ *      • Âmbar quando senha+justif OFF mas aprovação ON ("⚠ qualquer
+ *        usuário pode confirmar sem barreira — gestor aprova depois.").
+ *    - As 3 mutations passam `{exigeSenha, exigeJustificativa,
+ *      exigeAprovacao}` sempre (em vez de só 2).
+ *
+ * DECISÃO: Quando aprovação é dispensada, gravamos `validadoPorId =
+ * userId que fez a ação` (auto-aprovação) + observação clara. Isso
+ * preserva a integridade do log: na tela de Auditoria, as ações
+ * aparecerão na aba "Validados" com indicação clara de quem fez +
+ * carimbo "Auto-validado" — sem perder nenhum dado pro rastreio.
+ *
+ * R-001/R-007/R-010 OK — ALTER TABLE ADD COLUMN é idempotente
+ * (gerenciado pelo syncSchema, zero DROP/DELETE).
+ *
+ * Arquivos: `drizzle/schema.ts`, `server/routers/compras.ts`,
+ *           `server/routers/equipamentos.ts`,
+ *           `client/src/pages/configuracoes/AlmoxarifadoConfigSection.tsx`.
+ *
+ * ─────────────────────────────────────────────────────────────────
+ *
  * Rev. 2461 — **COMPROVANTE DE DEVOLUÇÃO (PDF) · layout modernizado +
  * logo FC garantido + NOME DA LOCADORA em destaque pro rastreio.**
  *

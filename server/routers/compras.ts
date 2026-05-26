@@ -17,15 +17,36 @@ function classifKey(orcId: number, compId: number) { return `${compId}-${orcId}`
 // Rev. 2400 — Toggle global por empresa (exigeSenha / exigeJustificativa).
 async function getAlmoxAuditoriaConfig(companyId: number) {
   const db = await getDb();
-  if (!db) return { exigeSenha: true, exigeJustificativa: true };
+  if (!db) return { exigeSenha: true, exigeJustificativa: true, exigeAprovacao: true };
   const { companies } = await import("../../drizzle/schema");
   const [row] = await db.select({
     s: companies.almoxarifadoExigeSenha,
     j: companies.almoxarifadoExigeJustificativa,
+    a: companies.almoxarifadoExigeAprovacao,
   }).from(companies).where(eq(companies.id, companyId));
   return {
     exigeSenha: row ? Number(row.s ?? 1) === 1 : true,
     exigeJustificativa: row ? Number(row.j ?? 1) === 1 : true,
+    exigeAprovacao: row ? Number(row.a ?? 1) === 1 : true,
+  };
+}
+
+// Rev. 2462 — Quando a empresa NÃO exige aprovação do gestor, o registro
+// de auditoria entra direto como `validado` (auto-aprovado pelo próprio
+// usuário que executou a ação). Mantém o rastro completo (user, hora,
+// IP, antes/depois) mas não gera pendência pro gestor.
+export async function getAuditoriaInicialFields(
+  companyId: number,
+  ctx: { user: { id: number; name?: string | null } }
+): Promise<Record<string, any>> {
+  const cfg = await getAlmoxAuditoriaConfig(companyId);
+  if (cfg.exigeAprovacao) return {};
+  return {
+    statusValidacao: "validado",
+    validadoPorId: ctx.user.id,
+    validadoPorNome: ctx.user.name || null,
+    validadoEm: new Date().toISOString(),
+    observacaoValidacao: "Auto-validado: aprovação não exigida pela empresa.",
   };
 }
 async function verificarSenhaSeLocal(ctx: any, senha: string | undefined, exigeSenha: boolean = true) {
@@ -1859,6 +1880,8 @@ export const comprasRouter = router({
       if (qtdMudou && justificativaUsada) {
         const [itemDb] = await db.select().from(almoxarifadoItens).where(eq(almoxarifadoItens.id, id));
         if (itemDb) {
+          // Rev. 2462 — auto-validado quando aprovação não é exigida.
+          const auditExtra = await getAuditoriaInicialFields(itemDb.companyId, ctx);
           await db.insert(almoxarifadoAuditoria).values({
             companyId: itemDb.companyId,
             obraId: itemDb.obraId,
@@ -1872,6 +1895,7 @@ export const comprasRouter = router({
             dadosDepois: { quantidadeAtual: qtdNova } as any,
             justificativa: justificativaUsada,
             ip: getClientIp(ctx),
+            ...auditExtra,
           });
         }
       }
@@ -2256,6 +2280,8 @@ export const comprasRouter = router({
         .set({ ativo: false, atualizadoEm: new Date().toISOString() } as any)
         .where(and(eq(almoxarifadoBaias.itemId, input.id), eq(almoxarifadoBaias.ativo, true)))
         .returning({ id: almoxarifadoBaias.id, nome: almoxarifadoBaias.nome, obraId: almoxarifadoBaias.obraId });
+      // Rev. 2462 — auto-validado quando aprovação não é exigida.
+      const auditExtraItem = await getAuditoriaInicialFields(item.companyId, ctx);
       await db.insert(almoxarifadoAuditoria).values({
         companyId: item.companyId,
         obraId: item.obraId,
@@ -2269,6 +2295,7 @@ export const comprasRouter = router({
         dadosDepois: { ativo: false, baiasDesativadas } as any,
         justificativa: justUsada,
         ip: getClientIp(ctx),
+        ...auditExtraItem,
       });
       return { success: true, baiasDesativadas: baiasDesativadas.length };
     }),
@@ -3083,6 +3110,8 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
       await verificarSenhaSeLocal(ctx, input.senha, cfg.exigeSenha);
       await db.delete(almoxarifadoUnidades)
         .where(and(eq(almoxarifadoUnidades.id, input.id), eq(almoxarifadoUnidades.companyId, input.companyId)));
+      // Rev. 2462 — auto-validado quando aprovação não é exigida.
+      const auditExtraUnid = await getAuditoriaInicialFields(input.companyId, ctx);
       await db.insert(almoxarifadoAuditoria).values({
         companyId: input.companyId,
         obraId: null,
@@ -3096,6 +3125,7 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
         dadosDepois: null,
         justificativa: justUsada,
         ip: getClientIp(ctx),
+        ...auditExtraUnid,
       });
       return { success: true };
     }),
@@ -13779,6 +13809,8 @@ Responda APENAS com JSON válido, sem markdown, no formato:
       companyId: z.number(),
       exigeSenha: z.boolean(),
       exigeJustificativa: z.boolean(),
+      // Rev. 2462 — toggle independente: dispensa aprovação do gestor.
+      exigeAprovacao: z.boolean().optional(),
     }))
     .mutation(async ({ input, ctx }) => {
       if (!["admin", "admin_master"].includes(ctx.user.role)) {
@@ -13791,11 +13823,15 @@ Responda APENAS com JSON válido, sem markdown, no formato:
         throw new TRPCError({ code: "FORBIDDEN" });
       }
       const { companies } = await import("../../drizzle/schema");
-      await db.update(companies).set({
+      const patch: Record<string, any> = {
         almoxarifadoExigeSenha: input.exigeSenha ? 1 : 0,
         almoxarifadoExigeJustificativa: input.exigeJustificativa ? 1 : 0,
         updatedAt: new Date().toISOString(),
-      }).where(eq(companies.id, input.companyId));
+      };
+      if (typeof input.exigeAprovacao === "boolean") {
+        patch.almoxarifadoExigeAprovacao = input.exigeAprovacao ? 1 : 0;
+      }
+      await db.update(companies).set(patch).where(eq(companies.id, input.companyId));
       return { success: true };
     }),
 

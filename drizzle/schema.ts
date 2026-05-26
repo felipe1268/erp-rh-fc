@@ -466,6 +466,12 @@ export const companies = pgTable("companies", {
         // Ambos default 1 (preserva comportamento da Rev. 2388).
         almoxarifadoExigeSenha: smallint("almoxarifado_exige_senha").default(1).notNull(),
         almoxarifadoExigeJustificativa: smallint("almoxarifado_exige_justificativa").default(1).notNull(),
+        // Rev. 2462 — Independente dos toggles de senha/justificativa, a
+        // empresa pode dispensar a APROVAÇÃO do gestor: o evento ainda é
+        // logado (user, hora, IP, antes/depois) mas entra direto como
+        // `validado` (não vira pendência). Default 1 = aprovação exigida
+        // (preserva comportamento das Revs. 2388–2461).
+        almoxarifadoExigeAprovacao: smallint("almoxarifado_exige_aprovacao").default(1).notNull(),
 },
 (table) => [
         index("companies_cnpj_unique").on(table.cnpj),
