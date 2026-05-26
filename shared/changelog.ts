@@ -1,6 +1,67 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2473 — **DASHBOARD AVISO PRÉVIO · foto real do colaborador
+ * ao lado do nome no modal de drill-down (click amplia em
+ * lightbox).**
+ *
+ * PEDIDO (user, ref. visual IMG_1264_1779808733378.png — Painel
+ * RH com cards de colaboradores): "Quero que coloque a foto ao
+ * lado de cada nome, e quando clicar na foto, quero que ela
+ * amplie para melhor visualização… isso em todas as telas que
+ * tiver nome do colaborador."
+ *
+ * ESTRATÉGIA: o ERP já tinha o componente `PersonPhoto` (Rev.
+ * 2297) — fallback automático pra iniciais quando sem foto +
+ * lightbox on-click com ESC pra fechar. Esta Rev. começa
+ * aplicando no modal de drill-down do Aviso Prévio (entregue na
+ * Rev. 2472, onde fiz avatar de gradient genérico). Outras telas
+ * podem ganhar o mesmo tratamento nas próximas revisões à medida
+ * que o user pedir.
+ *
+ * MUDANÇAS:
+ *
+ * 1. **Backend** (`server/routers/dashboards.ts` L2780+, dentro
+ *    de `getDashAvisoPrevio`):
+ *    - Adicionado `fotoUrl: employees.fotoUrl` ao select de
+ *      `terminationNotices` (já fazia `leftJoin(employees)`, então
+ *      basta acrescentar o campo — zero impacto em performance).
+ *
+ * 2. **Frontend** (`client/src/pages/dashboards/DashAvisoPrevio.tsx`):
+ *    - Import `PersonPhoto` do `@/components/PersonPhoto`.
+ *    - No card do drill-down (Rev. 2472), substituído o avatar
+ *      custom de gradient + iniciais por `<PersonPhoto>` size=md:
+ *      ```
+ *      <PersonPhoto
+ *        src={a.fotoUrl}
+ *        alt={a.nomeCompleto}
+ *        size="md"
+ *        caption={[a.funcao, a.setor].filter(Boolean).join(' · ')}
+ *      />
+ *      ```
+ *      Quando o user clica na foto, abre lightbox fullscreen com
+ *      backdrop blur (ESC fecha, click no backdrop fecha).
+ *      Fallback automático pra iniciais com gradient blue-FC
+ *      quando `fotoUrl` é null.
+ *    - Limpa o array `avatarGradients` e a função de hash que
+ *      ficaram órfãs.
+ *
+ * REGRAS R-001 / R-007 / R-010 OK — só SELECT (adição de campo) e
+ * JSX (componente reutilizado, zero novo CSS); nenhum
+ * ALTER/DROP/DELETE; coluna `employees.foto_url` já existe há
+ * MUITAS revisões (varchar 500).
+ *
+ * FOLLOW-UP NATURAL (quando o user pedir explicitamente):
+ * aplicar o mesmo padrão (`PersonPhoto` + select de `fotoUrl`)
+ * em outras listas de colaboradores — Painel RH (cards de
+ * Aniversariantes, ASOs, Movimentações, Férias, Aniversários de
+ * Empresa, Advertências Recentes), modal de Combo de Demissões,
+ * dashboards de Férias / Documentos / Competências, lista
+ * principal do RH, e quaisquer drill-downs que ainda mostrem só
+ * iniciais.
+ *
+ * ─────────────────────────────────────────────────────────────
+ *
  * Rev. 2472 — **DASHBOARD AVISO PRÉVIO · modal de drill-down
  * ganha layout ultra moderno (header com gradient temático por
  * tipo/urgência, avatares com gradient único, cards polidos com

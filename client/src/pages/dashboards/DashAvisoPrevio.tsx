@@ -39,6 +39,7 @@ import {
   Calculator, Stethoscope, ListChecks, Search, X as XIcon } from "lucide-react";
 import { Link } from "wouter";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { PersonPhoto } from "@/components/PersonPhoto";
 import { Button } from "@/components/ui/button";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import RaioXFuncionario from "@/components/RaioXFuncionario";
@@ -1324,15 +1325,6 @@ export default function DashAvisoPrevio() {
                     'Avisos prévios filtrados';
                   const total = drillDownAvisosOrdenados.reduce((sum: number, a: any) => sum + parseFloat(a.valorEstimadoTotal || '0'), 0);
                   const media = drillDownAvisosOrdenados.length > 0 ? total / drillDownAvisosOrdenados.length : 0;
-                  // Paleta de gradients pros avatares (hash mod 6)
-                  const avatarGradients = [
-                    'linear-gradient(135deg, #6366F1 0%, #8B5CF6 100%)',
-                    'linear-gradient(135deg, #06B6D4 0%, #3B82F6 100%)',
-                    'linear-gradient(135deg, #10B981 0%, #0EA5E9 100%)',
-                    'linear-gradient(135deg, #F59E0B 0%, #EF4444 100%)',
-                    'linear-gradient(135deg, #EC4899 0%, #8B5CF6 100%)',
-                    'linear-gradient(135deg, #14B8A6 0%, #6366F1 100%)',
-                  ];
                   return (
                     <>
                       {/* HEADER — gradient temático com glassmorphism */}
@@ -1377,9 +1369,6 @@ export default function DashAvisoPrevio() {
                           <div className="space-y-2.5">
                             {drillDownAvisosOrdenados.map((a: any) => {
                               const diasFim = diasAteVencer(a.dataFim);
-                              const iniciais = (a.nomeCompleto || '?').split(' ').map((p: string) => p[0]).filter(Boolean).slice(0, 2).join('').toUpperCase();
-                              const seed = String(a.id || a.nomeCompleto || 'x').split('').reduce((acc: number, c: string) => acc + c.charCodeAt(0), 0);
-                              const avatarGrad = avatarGradients[seed % avatarGradients.length];
                               const corBadgeUrg = diasFim === null ? '' :
                                 diasFim < 0 ? 'bg-red-600 text-white border-red-700' :
                                 diasFim <= 7 ? 'bg-red-50 text-red-700 border-red-200' :
@@ -1395,12 +1384,15 @@ export default function DashAvisoPrevio() {
                                   key={a.id}
                                   className="group flex items-stretch gap-4 p-4 rounded-2xl border border-slate-200 bg-white hover:border-violet-300 hover:shadow-lg hover:-translate-y-0.5 transition-all"
                                 >
-                                  {/* Avatar com gradient único */}
-                                  <div
-                                    className="h-12 w-12 rounded-xl shrink-0 self-start flex items-center justify-center text-white text-sm font-bold tracking-wide shadow-sm"
-                                    style={{ background: avatarGrad }}
-                                  >
-                                    {iniciais}
+                                  {/* Rev. 2473 — Foto real do colaborador (PersonPhoto: click amplia em lightbox).
+                                      Fallback automático pra iniciais quando sem foto. */}
+                                  <div className="shrink-0 self-start">
+                                    <PersonPhoto
+                                      src={a.fotoUrl}
+                                      alt={a.nomeCompleto || 'Colaborador'}
+                                      size="md"
+                                      caption={[a.funcao, a.setor].filter(Boolean).join(' · ') || undefined}
+                                    />
                                   </div>
 
                                   {/* Bloco central */}

@@ -2776,6 +2776,9 @@ async function getDashAvisoPrevio(companyId: number, ano?: number, companyIds?: 
     cargo: employees.cargo,
     dataAdmissao: employees.dataAdmissao,
     empSalarioBase: employees.salarioBase,
+    // Rev. 2473 — foto do colaborador pra renderizar avatar no
+    // modal de drill-down (PersonPhoto com zoom on-click).
+    fotoUrl: employees.fotoUrl,
   }).from(terminationNotices)
     .leftJoin(employees, eq(terminationNotices.employeeId, employees.id))
     .where(and(companyWhere(terminationNotices, companyId, companyIds), isNull(terminationNotices.deletedAt)))
