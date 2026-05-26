@@ -2596,10 +2596,31 @@ REGRAS:
         if (antVol != null && novoVol < antVol) {
           consumoDebitado = Number((antVol - novoVol).toFixed(3));
           if (consumoDebitado > 0) {
-            // 1) Debita saldo (clamp em 0 — nunca negativo).
+            // Rev. 2436 — VALIDAÇÃO DURA de saldo. Antes o UPDATE usava
+            // `GREATEST(... - consumo, 0)` (clamp silencioso): se o user
+            // pedisse baixa de 50 num saldo de 10, o ERP debitava só 10 e
+            // fingia sucesso, perdendo 40 m³ de consumo da auditoria. Agora
+            // recusa a leitura ANTES de inserir mov + ANTES de mexer no saldo.
+            // Defesa em profundidade junto com o bloqueio do frontend (Rev. 2435).
+            const [itemRow] = await db
+              .select({ qtd: almoxarifadoItens.quantidadeAtual, nome: almoxarifadoItens.nome, unid: almoxarifadoItens.unidade })
+              .from(almoxarifadoItens)
+              .where(eq(almoxarifadoItens.id, b.itemId));
+            const saldoAtual = itemRow?.qtd != null ? Number(itemRow.qtd) : 0;
+            if (consumoDebitado > saldoAtual + 1e-9) {
+              // Rollback do INSERT da leitura — a leitura SÓ existe se a baixa
+              // for válida. Sem isso, ficaria uma leitura órfã sem mov.
+              await db.delete(almoxarifadoBaiaLeituras)
+                .where(eq(almoxarifadoBaiaLeituras.id, novo.id));
+              throw new TRPCError({
+                code: "BAD_REQUEST",
+                message: `Baixa de ${consumoDebitado.toLocaleString("pt-BR")} ${itemRow?.unid ?? ""} excede o saldo do almoxarifado (${saldoAtual.toLocaleString("pt-BR")} ${itemRow?.unid ?? ""}) do item "${itemRow?.nome ?? ""}". Registre primeiro a entrada do material ou ajuste a leitura.`,
+              });
+            }
+            // 1) Debita saldo (validado acima — pode subtrair direto, sem clamp).
             await db.update(almoxarifadoItens)
               .set({
-                quantidadeAtual: sql`GREATEST(${almoxarifadoItens.quantidadeAtual}::numeric - ${consumoDebitado}, 0)`,
+                quantidadeAtual: sql`${almoxarifadoItens.quantidadeAtual}::numeric - ${consumoDebitado}`,
               } as any)
               .where(eq(almoxarifadoItens.id, b.itemId));
             // 2) Registra movimentação auditável (aparece no histórico do item).

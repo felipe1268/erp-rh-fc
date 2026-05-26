@@ -665,3 +665,5 @@
 - **Rev. 2427** — PLANEJAMENTO · REGRA DE OURO DEFINITIVA · `% PREVISTO`=Texto6 puro + `% CONCLUÍDA`=PercentComplete puro para TODAS as obras. Mapeamento canônico XML HOTEL DO PAPA validado (paridade 100% XML × tela MSP). `ImportarCronograma.tsx` bloco L257-281. Ver `shared/changelog.ts`.
 
 - **Rev. 2428** — UX · PLANEJAMENTO/LISTA · modal "Novo Projeto" redesenhado com identidade FC (faixa azul #1B2A4A) + shadcn Select/Textarea + fim do scroll horizontal. `PlanejamentoLista.tsx`. Ver `shared/changelog.ts`.
+
+- **Rev. 2429** — ALMOXARIFADO · AUDITORIA · aprovadores delegados por obra (engenheiro responsável + delegados podem validar exclusões/ajustes de estoque). Nova tabela `obra_responsaveis_estoque` (N:N obra↔users, principal/delegado) + 4 endpoints CRUD + auditoriaValidar/PendenciasCount adaptados. Modal `ModalAprovadoresEstoque` na tela Obras. Ver `shared/changelog.ts`.

@@ -1,6 +1,45 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2436 — **ALMOXARIFADO · INVENTÁRIO VISUAL · validação dura de saldo
+ * no BACKEND (Rev. 2435 cobriu só o frontend e o user reportou que ainda
+ * passava).**
+ *
+ * CONTEXTO: na Rev. 2435 adicionei bloqueio no frontend (`confirmarLeitura`
+ * + painel ao vivo). User testou e voltou: "o sistema ainda está permitindo
+ * dar baixa em quantia acima do disponível". Olhando o backend
+ * (`baiaLeituraRegistrar` em `server/routers/warehouse.ts` L2596-2604), o
+ * UPDATE no saldo usava `GREATEST(quantidadeAtual - consumo, 0)` —
+ * CLAMP SILENCIOSO: se a baixa fosse 50 num saldo de 10, o ERP debitava
+ * só 10, criava a leitura + a movimentação como se tudo desse certo, e
+ * 40 m³ de consumo simplesmente sumiam da auditoria. Frontend antigo
+ * ou ataque via API direta passavam liso.
+ *
+ * DECISÃO
+ * - Trocar o clamp por VALIDAÇÃO DURA: antes do UPDATE no saldo, faz
+ *   SELECT do `quantidadeAtual` do item; se `consumoDebitado > saldoAtual`,
+ *   joga `TRPCError BAD_REQUEST` com mensagem clara incluindo nome+unidade
+ *   do item.
+ * - Como o INSERT da leitura já aconteceu (L2561), faz DELETE da leitura
+ *   recém-criada ANTES do throw, pra não deixar leitura órfã sem
+ *   movimentação no histórico da baia.
+ * - UPDATE do saldo agora é `quantidadeAtual::numeric - consumo` direto
+ *   (validado), sem clamp — qualquer regressão futura explode em vez de
+ *   silenciar.
+ *
+ * ARQUIVOS
+ * - `server/routers/warehouse.ts` L2594-2620 (bloco `baiaLeituraRegistrar`,
+ *   trecho "DESCONTA DO ALMOXARIFADO").
+ *
+ * VALIDAÇÃO
+ * - Frontend (Rev. 2435) e backend (Rev. 2436) ficam em defesa em
+ *   profundidade: cliente bloqueia 99% dos casos com UX clara, backend
+ *   garante invariante (saldo nunca negativo).
+ * - R-001/R-007/R-010 OK — só ajuste de SQL em UPDATE, sem ALTER/DROP/DELETE
+ *   em produção. O DELETE no rollback é da própria linha recém-inserida.
+ *
+ * ──────────────────────────────────────────────────────────────────────
+ *
  * Rev. 2435 — **ALMOXARIFADO · INVENTÁRIO VISUAL · bloqueio de baixa que
  * zeraria o saldo do almoxarifado pra negativo + feedback ao vivo no
  * modal "Registrar baixa da baia".**
