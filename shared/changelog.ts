@@ -1,6 +1,61 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2476 — **PAINEL RH · foto real do colaborador em TODOS
+ * os 7 MODAIS EXPANDIDOS (drill-down em tela cheia) do Painel
+ * RH. Click amplia em lightbox.**
+ *
+ * PEDIDO (user, ref. IMG_1267_1779810285626.png — modal Férias —
+ * Período Aquisitivo expandido): "Quero fotos aqui tbm". Extensão
+ * natural da Rev. 2475 — agora a foto está nos cards-resumo E
+ * nos modais full-screen de drill-down.
+ *
+ * MUDANÇAS:
+ *
+ * 1. **Backend** (`server/routers/homeData.ts`) — endpoint extra
+ *    `getAniversariantesMes` (usado pelo modal expandido com
+ *    navegador de meses) também ganha `fotoUrl: e.fotoUrl || null`
+ *    no map (L775). Os outros 6 modais já consumiam `homeData.*`
+ *    que recebeu `fotoUrl` na Rev. 2475 — backend zero extra.
+ *
+ * 2. **Frontend** (`client/src/pages/PainelRH.tsx`, dentro do
+ *    `<FullScreenDialog>` controlado por `cardExpand`) —
+ *    `<PersonPhoto size="md">` adicionado em 8 listas
+ *    (versão grande, próprio dos modais full-screen):
+ *    a. **Aniversariantes do Mês** (L807+) — número de ordem
+ *       virou pílula 5×, foto md ao lado, 🎂 grande quando
+ *       `isHoje`. `stopPropagation` na foto.
+ *    b. **Férias - Painel Rápido / De Férias Agora** (L838+) —
+ *       foto à esquerda do nome.
+ *    c. **Férias - Painel Rápido / Próximas Agendadas** (L857+)
+ *       — idem.
+ *    d. **ASOs - Atenção Necessária / lista principal** (L897+)
+ *       — foto antes do ícone HeartPulse (que diminuiu pra 8×8).
+ *    e. **ASOs / sem ASO** (L916+) — foto substitui o avatar
+ *       genérico User.
+ *    f. **Férias - Período Aquisitivo** (L942+) — número de
+ *       ordem virou label texto inline, foto md ao lado.
+ *    g. **Movimentações 30 dias** (L963+) — foto antes do
+ *       ícone ↑/↓ (que diminuiu pra 8×8).
+ *    h. **Aniversários de Empresa** (L989+) — número virou
+ *       label inline, foto md, Trophy inline quando `isHoje`.
+ *       `stopPropagation` na foto.
+ *    i. **Advertências Recentes** (L1018+) — foto antes do
+ *       ícone ShieldAlert.
+ *    Em todas: fallback automático pras iniciais blue-FC quando
+ *    `fotoUrl` é null; click na foto abre lightbox fullscreen
+ *    (ESC/backdrop fecham).
+ *
+ * R-001/R-007/R-010 OK — só ajuste de SELECT (`fotoUrl`) e JSX.
+ *
+ * Com 2473/2474/2475/2476, o Painel RH está 100% coberto
+ * (cards-resumo + modais full-screen + drill-downs).
+ * Próximas telas naturais quando user pedir: modal de Combo de
+ * Demissões, lista principal de RH, dashboards Férias/
+ * Documentos/Competências.
+ *
+ * ─────────────────────────────────────────────────────────────
+ *
  * Rev. 2475 — **PAINEL RH · foto real do colaborador em TODOS
  * os 7 cards restantes (Aniversariantes do Mês, Férias - Painel
  * Rápido, ASOs - Atenção Necessária, Férias - Período Aquisitivo,

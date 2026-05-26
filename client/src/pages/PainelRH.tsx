@@ -804,9 +804,11 @@ export default function PainelRH() {
               ) : anivMesData.map((a: any, i: number) => (
                 <div key={a.id} onClick={() => { setCardExpand(null); navigate('/colaboradores'); }}
                   className={`flex items-center gap-4 px-4 py-3 rounded-lg border cursor-pointer transition-all hover:shadow-sm ${a.isHoje ? 'border-pink-300 bg-pink-50 hover:bg-pink-100' : a.jaPassou ? 'border-border bg-muted/30 opacity-60' : 'border-border bg-card hover:bg-accent/50'}`}>
-                  <div className={`h-10 w-10 rounded-full flex items-center justify-center shrink-0 font-bold text-sm ${a.isHoje ? 'bg-pink-200 text-pink-800' : 'bg-slate-100 text-slate-500'}`}>
-                    {a.isHoje ? '🎂' : <span>{i + 1}</span>}
+                  <span className="text-xs font-bold text-muted-foreground w-5 text-center shrink-0">{i + 1}</span>
+                  <div onClick={(e) => e.stopPropagation()} className="shrink-0">
+                    <PersonPhoto src={a.fotoUrl} alt={a.nome} size="md" />
                   </div>
+                  {a.isHoje ? <span className="text-2xl shrink-0">🎂</span> : null}
                   <div className="flex-1 min-w-0">
                     <p className="font-semibold text-base flex items-center gap-1.5 flex-wrap">{a.nome}<EmpStatusBadge status={a.status} /></p>
                     <p className="text-sm text-muted-foreground">
@@ -831,12 +833,15 @@ export default function PainelRH() {
                   <h3 className="text-sm font-semibold text-blue-600 uppercase mb-3 flex items-center gap-2"><Plane className="h-4 w-4" /> De Férias Agora ({homeData!.feriasDashboard.emAndamento.length})</h3>
                   <div className="space-y-2">
                     {homeData!.feriasDashboard.emAndamento.map((f: any) => (
-                      <div key={f.id} className="flex items-center justify-between px-4 py-3 rounded-lg bg-blue-50 border border-blue-100">
-                        <div>
-                          <p className="font-semibold text-base">{f.nome}</p>
-                          {f.funcao && <p className="text-sm text-muted-foreground">{f.funcao}</p>}
+                      <div key={f.id} className="flex items-center justify-between px-4 py-3 rounded-lg bg-blue-50 border border-blue-100 gap-4">
+                        <div className="flex items-center gap-3 min-w-0 flex-1">
+                          <PersonPhoto src={f.fotoUrl} alt={f.nome} size="md" />
+                          <div className="min-w-0">
+                            <p className="font-semibold text-base truncate">{f.nome}</p>
+                            {f.funcao && <p className="text-sm text-muted-foreground truncate">{f.funcao}</p>}
+                          </div>
                         </div>
-                        <Badge className="bg-blue-100 text-blue-700 border border-blue-300 text-sm px-3">volta em {f.diasRestantes}d</Badge>
+                        <Badge className="bg-blue-100 text-blue-700 border border-blue-300 text-sm px-3 shrink-0">volta em {f.diasRestantes}d</Badge>
                       </div>
                     ))}
                   </div>
@@ -847,12 +852,15 @@ export default function PainelRH() {
                   <h3 className="text-sm font-semibold text-green-600 uppercase mb-3 flex items-center gap-2"><Calendar className="h-4 w-4" /> Próximas Agendadas ({homeData!.feriasDashboard.agendadas.length})</h3>
                   <div className="space-y-2">
                     {homeData!.feriasDashboard.agendadas.map((f: any) => (
-                      <div key={f.id} className="flex items-center justify-between px-4 py-3 rounded-lg border border-border bg-card hover:bg-accent/50">
-                        <div>
-                          <p className="font-semibold text-base">{f.nome}</p>
-                          {f.funcao && <p className="text-sm text-muted-foreground">{f.funcao}</p>}
+                      <div key={f.id} className="flex items-center justify-between px-4 py-3 rounded-lg border border-border bg-card hover:bg-accent/50 gap-4">
+                        <div className="flex items-center gap-3 min-w-0 flex-1">
+                          <PersonPhoto src={f.fotoUrl} alt={f.nome} size="md" />
+                          <div className="min-w-0">
+                            <p className="font-semibold text-base truncate">{f.nome}</p>
+                            {f.funcao && <p className="text-sm text-muted-foreground truncate">{f.funcao}</p>}
+                          </div>
                         </div>
-                        <div className="text-right">
+                        <div className="text-right shrink-0">
                           <Badge className="bg-green-100 text-green-700 border border-green-300 text-sm px-3">{f.diasGozo}d de gozo</Badge>
                           <p className="text-xs text-muted-foreground mt-1">começa em {f.diasAteInicio}d</p>
                         </div>
@@ -885,8 +893,9 @@ export default function PainelRH() {
                 <>
                   {(homeData?.asosAlerta ?? []).map((a: any) => (
                     <div key={a.employeeId} className={`flex items-center gap-4 px-4 py-3 rounded-lg border ${a.vencido ? 'border-red-200 bg-red-50' : a.diasRestantes <= 15 ? 'border-orange-200 bg-orange-50' : 'border-border bg-card'}`}>
-                      <div className={`h-10 w-10 rounded-full flex items-center justify-center shrink-0 font-bold text-sm ${a.vencido ? 'bg-red-100 text-red-700' : a.diasRestantes <= 15 ? 'bg-orange-100 text-orange-700' : 'bg-yellow-100 text-yellow-700'}`}>
-                        <HeartPulse className="h-5 w-5" />
+                      <PersonPhoto src={a.fotoUrl} alt={a.nome} size="md" />
+                      <div className={`h-8 w-8 rounded-full flex items-center justify-center shrink-0 ${a.vencido ? 'bg-red-100 text-red-700' : a.diasRestantes <= 15 ? 'bg-orange-100 text-orange-700' : 'bg-yellow-100 text-yellow-700'}`}>
+                        <HeartPulse className="h-4 w-4" />
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="font-semibold text-base flex items-center gap-1.5 flex-wrap">{a.nome}<EmpStatusBadge status={a.status} /></p>
@@ -903,9 +912,7 @@ export default function PainelRH() {
                       <div className="space-y-2">
                         {homeData!.semAso!.map((e: any) => (
                           <div key={e.id} className="flex items-center gap-4 px-4 py-3 rounded-lg border border-gray-200 bg-gray-50">
-                            <div className="h-10 w-10 rounded-full bg-gray-100 flex items-center justify-center shrink-0">
-                              <User className="h-5 w-5 text-gray-500" />
-                            </div>
+                            <PersonPhoto src={e.fotoUrl} alt={e.nome} size="md" />
                             <div className="flex-1 min-w-0">
                               <p className="font-semibold text-base flex items-center gap-1.5 flex-wrap">{e.nome}<EmpStatusBadge status={e.status} /></p>
                               {e.funcao && <p className="text-sm text-muted-foreground">{e.funcao}</p>}
@@ -931,7 +938,8 @@ export default function PainelRH() {
                 </div>
               ) : homeData.feriasAlerta.map((f: any, i: number) => (
                 <div key={f.id} className={`flex items-center gap-4 px-4 py-3 rounded-lg border ${f.urgente ? (f.diasParaVencer <= 0 ? 'border-red-200 bg-red-50' : 'border-amber-200 bg-amber-50') : 'border-border bg-card'}`}>
-                  <div className={`h-10 w-10 rounded-full flex items-center justify-center shrink-0 font-bold text-sm ${f.urgente ? (f.diasParaVencer <= 0 ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700') : 'bg-slate-100 text-slate-500'}`}>{i + 1}</div>
+                  <span className={`text-xs font-bold w-5 text-center shrink-0 ${f.urgente ? (f.diasParaVencer <= 0 ? 'text-red-700' : 'text-amber-700') : 'text-slate-500'}`}>{i + 1}</span>
+                  <PersonPhoto src={f.fotoUrl} alt={f.nome} size="md" />
                   <div className="flex-1 min-w-0">
                     <p className="font-semibold text-base">{f.nome}</p>
                     <p className="text-sm text-muted-foreground">{f.funcao} · {f.periodoAquisitivo}º período aquisitivo</p>
@@ -951,8 +959,9 @@ export default function PainelRH() {
                 <p className="text-center text-muted-foreground py-12">Nenhuma movimentação nos últimos 30 dias</p>
               ) : homeData.movimentacoes.map((m: any, i: number) => (
                 <div key={`${m.tipo}-${m.id}-${i}`} className="flex items-center gap-4 px-4 py-3 rounded-lg border border-border bg-card hover:bg-accent/50 transition-all">
-                  <div className={`h-10 w-10 rounded-full flex items-center justify-center shrink-0 ${m.tipo === 'admissao' ? 'bg-green-100' : 'bg-red-100'}`}>
-                    {m.tipo === 'admissao' ? <ArrowUpRight className="h-5 w-5 text-green-600" /> : <ArrowDownRight className="h-5 w-5 text-red-600" />}
+                  <PersonPhoto src={m.fotoUrl} alt={m.nome} size="md" />
+                  <div className={`h-8 w-8 rounded-full flex items-center justify-center shrink-0 ${m.tipo === 'admissao' ? 'bg-green-100' : 'bg-red-100'}`}>
+                    {m.tipo === 'admissao' ? <ArrowUpRight className="h-4 w-4 text-green-600" /> : <ArrowDownRight className="h-4 w-4 text-red-600" />}
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="font-semibold text-base">{m.nome}</p>
@@ -977,9 +986,11 @@ export default function PainelRH() {
               ) : homeData.aniversariosEmpresa.map((a: any, i: number) => (
                 <div key={a.id} onClick={() => { setCardExpand(null); navigate('/colaboradores'); }}
                   className={`flex items-center gap-4 px-4 py-3 rounded-lg border cursor-pointer transition-all hover:shadow-sm ${a.isHoje ? 'border-amber-300 bg-amber-50 hover:bg-amber-100' : 'border-border bg-card hover:bg-accent/50'}`}>
-                  <div className={`h-10 w-10 rounded-full flex items-center justify-center shrink-0 font-bold text-sm ${a.isHoje ? 'bg-amber-200 text-amber-800' : 'bg-slate-100 text-slate-500'}`}>
-                    {a.isHoje ? <Trophy className="h-5 w-5 text-amber-600" /> : <span>{i + 1}</span>}
+                  <span className={`text-xs font-bold w-5 text-center shrink-0 ${a.isHoje ? 'text-amber-800' : 'text-slate-500'}`}>{i + 1}</span>
+                  <div onClick={(e) => e.stopPropagation()} className="shrink-0">
+                    <PersonPhoto src={a.fotoUrl} alt={a.nome} size="md" />
                   </div>
+                  {a.isHoje ? <Trophy className="h-5 w-5 text-amber-600 shrink-0" /> : null}
                   <div className="flex-1 min-w-0">
                     <p className={`font-semibold text-base flex items-center gap-1.5 flex-wrap ${a.isHoje ? 'text-amber-800' : ''}`}>{a.nome}<EmpStatusBadge status={a.status} /></p>
                     <p className="text-sm text-muted-foreground">{a.funcao}{a.obra ? ` · ${a.obra}` : ''}</p>
@@ -1003,8 +1014,9 @@ export default function PainelRH() {
                 <p className="text-center text-muted-foreground py-12">Nenhuma advertência recente</p>
               ) : homeData.advertenciasRecentes.map((a: any) => (
                 <div key={a.id} className="flex items-center gap-4 px-4 py-3 rounded-lg border border-border bg-card hover:bg-accent/50 transition-all">
-                  <div className="h-10 w-10 rounded-full bg-orange-100 flex items-center justify-center shrink-0">
-                    <ShieldAlert className="h-5 w-5 text-orange-600" />
+                  <PersonPhoto src={a.fotoUrl} alt={a.nome} size="md" />
+                  <div className="h-8 w-8 rounded-full bg-orange-100 flex items-center justify-center shrink-0">
+                    <ShieldAlert className="h-4 w-4 text-orange-600" />
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="font-semibold text-base flex items-center gap-1.5 flex-wrap">{a.nome}<EmpStatusBadge status={a.empStatus} /></p>

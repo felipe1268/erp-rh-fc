@@ -2,6 +2,7 @@
 
 > Este arquivo guarda os one-liners das revisões antigas para manter o `replit.md` enxuto.
 
+- **Rev. 2469** — COTAÇÕES · modal "Selecionar do Estoque" virou tela cheia (full-viewport). `DialogContent` 100vw×100vh, flex column, header/footer `shrink-0` + border, tabela `flex-1 min-h-0 overflow-y-auto`. Ver `shared/changelog.ts`.
 - **Rev. 2468** — HOTFIX REAL DA Rev. 2466 (COTAÇÕES) · `<Dialog>` do estoque-picker estava no return principal mas o BOTÃO está dentro do bloco fullscreen (`if (showDetalhe !== null)`) que faz early-return — Dialog nunca montava. Movido pra dentro do bloco fullscreen antes do `</DashboardLayout>`. Ver `shared/changelog.ts`.
 - **Rev. 2467** — HOTFIX SEGUROS DA FROTA · `vehicleId: z.number().optional()` adicionado ao input zod de `frotas.updateInsurance` (estava sendo descartado silenciosamente, deixando o vínculo manual sem salvar). Bônus: hotfix de TDZ em `Cotacoes.tsx` L1157 (`listEstoqueDisponivel` referenciava `detalheFullscreen` fora de escopo). Ver `shared/changelog.ts`.
 - **Rev. 2466** — COTAÇÕES · botão "Atender pelo Estoque" passa a abrir modal de seleção do almoxarifado (checkboxes + busca) em vez de auto-match cego. Backend: nova query `listEstoqueDisponivel` + input opcional `almoxItemIds` em `adicionarEstoqueAoMapa` (whitelist via `inArray`). **NOTA:** a entrega do modal em si só ficou completa na Rev. 2468 (hotfix do scope-bug do Dialog). Ver `shared/changelog.ts`.

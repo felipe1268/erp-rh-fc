@@ -769,6 +769,7 @@ export const homeDataRouter = router({
             nome: e.nomeCompleto,
             funcao: e.funcao,
             status: e.status,
+            fotoUrl: e.fotoUrl || null,
             obra: homeEmpObraMap.has(e.id) ? obraMap.get(homeEmpObraMap.get(e.id)!) || null : null,
             dia,
             isHoje,
