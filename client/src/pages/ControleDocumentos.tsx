@@ -26,6 +26,7 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import RaioXFuncionario from "@/components/RaioXFuncionario";
 import FullScreenDialog from "@/components/FullScreenDialog";
 import DocumentPreviewDialog, { canPreviewFile } from "@/components/DocumentPreviewDialog";
+import PersonPhoto from "@/components/PersonPhoto";
 import TermosResponsabilidadePanel from "@/components/controleDocumentos/TermosResponsabilidadePanel";
 import { TRAINING_RULES, TRAINING_CATEGORIES, calcularDataValidade, type TrainingRule } from "../../../shared/trainingRules";
 
@@ -2520,8 +2521,13 @@ export default function ControleDocumentos() {
                         <tr key={a.id} className={`border-b last:border-0 hover:bg-muted/30 ${a.isHistorico ? "opacity-60" : ""}`}>
                           <td className="py-2 text-muted-foreground">{idx + 1}</td>
                           <td className="py-2">
-                            <div className="font-medium text-blue-700 cursor-pointer hover:underline" onClick={() => setRaioXEmployeeId(a.employeeId)}>{a.nomeCompleto}</div>
-                            <div className="text-xs text-muted-foreground">{formatCPF(a.cpf)}</div>
+                            <div className="flex items-center gap-2.5">
+                              <PersonPhoto src={a.fotoUrl} alt={a.nomeCompleto} size="sm" />
+                              <div className="min-w-0">
+                                <div className="font-medium text-blue-700 cursor-pointer hover:underline truncate" onClick={() => setRaioXEmployeeId(a.employeeId)}>{a.nomeCompleto}</div>
+                                <div className="text-xs text-muted-foreground">{formatCPF(a.cpf)}</div>
+                              </div>
+                            </div>
                           </td>
                           <td className="py-2">{formatTipoASO(a.tipo)}</td>
                           <td className="py-2">{formatDate(a.dataExame)}</td>
@@ -2597,8 +2603,13 @@ export default function ControleDocumentos() {
                       ) : filteredTrein.map((t: any) => (
                         <tr key={t.id} className="border-b last:border-0 hover:bg-muted/30">
                           <td className="py-2">
-                            <div className="font-medium text-blue-700 cursor-pointer hover:underline" onClick={() => setRaioXEmployeeId(t.employeeId)}>{t.nomeCompleto}</div>
-                            <div className="text-xs text-muted-foreground">{t.funcao || "-"}</div>
+                            <div className="flex items-center gap-2.5">
+                              <PersonPhoto src={t.fotoUrl} alt={t.nomeCompleto} size="sm" />
+                              <div className="min-w-0">
+                                <div className="font-medium text-blue-700 cursor-pointer hover:underline truncate" onClick={() => setRaioXEmployeeId(t.employeeId)}>{t.nomeCompleto}</div>
+                                <div className="text-xs text-muted-foreground">{t.funcao || "-"}</div>
+                              </div>
+                            </div>
                           </td>
                           <td className="py-2 font-medium">{t.nome}</td>
                           <td className="py-2">{t.norma || "-"}</td>
@@ -2689,7 +2700,7 @@ export default function ControleDocumentos() {
                     </thead>
                     <tbody>
                       {filteredAtest.length === 0 ? (
-                        <tr><td colSpan={11} className="py-8 text-center text-muted-foreground">Nenhum atestado cadastrado</td></tr>
+                        <tr><td colSpan={12} className="py-8 text-center text-muted-foreground">Nenhum atestado cadastrado</td></tr>
                       ) : filteredAtest.map((a: any) => (
                         <tr key={a.id} className={`border-b last:border-0 hover:bg-muted/30 ${selectedAtestIds.includes(a.id) ? "bg-blue-50" : ""}`}>
                           <td className="py-2">
@@ -2697,7 +2708,12 @@ export default function ControleDocumentos() {
                               {selectedAtestIds.includes(a.id) ? <CheckSquare className="h-4 w-4 text-blue-600" /> : <Square className="h-4 w-4 text-muted-foreground" />}
                             </button>
                           </td>
-                          <td className="py-2 font-medium text-blue-700 cursor-pointer hover:underline" onClick={() => setRaioXEmployeeId(a.employeeId)}>{a.nomeCompleto}</td>
+                          <td className="py-2">
+                            <div className="flex items-center gap-2.5">
+                              <PersonPhoto src={a.fotoUrl} alt={a.nomeCompleto} size="sm" />
+                              <div className="font-medium text-blue-700 cursor-pointer hover:underline truncate" onClick={() => setRaioXEmployeeId(a.employeeId)}>{a.nomeCompleto}</div>
+                            </div>
+                          </td>
                           <td className="py-2">{formatCPF(a.cpf)}</td>
                           <td className="py-2">{a.tipo}</td>
                           <td className="py-2">{formatDate(a.dataEmissao)}</td>
@@ -2798,7 +2814,12 @@ export default function ControleDocumentos() {
                         const nextStep = empAdvCount >= 3 ? "Suspensão" : empAdvCount >= 4 ? "Justa Causa" : null;
                         return (
                         <tr key={a.id} className={`border-b last:border-0 hover:bg-muted/30 ${a.tipoAdvertencia === "Suspensao" ? "bg-red-50/50" : a.tipoAdvertencia === "JustaCausa" ? "bg-red-100/50" : ""}`}>
-                          <td className="py-2 font-medium text-blue-700 cursor-pointer hover:underline" onClick={() => setRaioXEmployeeId(a.employeeId)}>{a.nomeCompleto}</td>
+                          <td className="py-2">
+                            <div className="flex items-center gap-2.5">
+                              <PersonPhoto src={a.fotoUrl} alt={a.nomeCompleto} size="sm" />
+                              <div className="font-medium text-blue-700 cursor-pointer hover:underline truncate" onClick={() => setRaioXEmployeeId(a.employeeId)}>{a.nomeCompleto}</div>
+                            </div>
+                          </td>
                           <td className="py-2">{formatCPF(a.cpf)}</td>
                           <td className="py-2">
                             <Badge variant={a.tipoAdvertencia === "Suspensao" || a.tipoAdvertencia === "JustaCausa" ? "destructive" : a.tipoAdvertencia === "Escrita" ? "secondary" : "outline"}

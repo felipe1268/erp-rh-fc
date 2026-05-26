@@ -1,6 +1,40 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2477 — **CONTROLE DE DOCUMENTOS · foto real do colaborador
+ * nas 4 tabelas principais (ASOs, Treinamentos, Atestados,
+ * Advertências). Click amplia em lightbox.**
+ *
+ * PEDIDO (user, ref. IMG_1272_1779810349637.png — aba ASO da tela
+ * Controle de Documentos): "Quero em todas estas telas tbm".
+ * Extensão natural da Rev. 2476 — Painel RH 100% coberto, agora
+ * a tela de Controle de Documentos também.
+ *
+ * MUDANÇAS:
+ *
+ * 1. **Backend** (`server/routers/controleDocumentos.ts`) —
+ *    `fotoUrl: employees.fotoUrl` adicionado ao `select` dos 4
+ *    list endpoints (custo zero, já tem `innerJoin(employees)`):
+ *    - `asos.list` (L422)
+ *    - `atestados.list` (L721)
+ *    - `treinamentos.list` (L874)
+ *    - `advertencias.list` (L1015)
+ *
+ * 2. **Frontend** (`client/src/pages/ControleDocumentos.tsx`) —
+ *    `import PersonPhoto from "@/components/PersonPhoto"` no topo;
+ *    `<PersonPhoto size="sm">` em flex-row com o nome dentro do
+ *    `<td>` de Colaborador nas 4 tabelas:
+ *    - **ASOs** (L2522+) — foto + nome/CPF na mesma célula.
+ *    - **Treinamentos** (L2603+) — foto + nome/função.
+ *    - **Atestados** (L2691+) — foto + nome.
+ *    - **Advertências** (L2796+) — foto + nome.
+ *    Fallback automático pras iniciais blue-FC quando `fotoUrl`
+ *    é null; click na foto abre lightbox fullscreen.
+ *
+ * R-001/R-007/R-010 OK — só ajuste de SELECT (`fotoUrl`) e JSX.
+ *
+ * ─────────────────────────────────────────────────────────────
+ *
  * Rev. 2476 — **PAINEL RH · foto real do colaborador em TODOS
  * os 7 MODAIS EXPANDIDOS (drill-down em tela cheia) do Painel
  * RH. Click amplia em lightbox.**
