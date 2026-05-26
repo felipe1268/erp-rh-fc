@@ -1,6 +1,52 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2452 — **DEVOLVER LOCAÇÃO · respeita o almoxarifado/obra selecionado
+ * no contexto do Almoxarifado pra evitar devolver equipamento da obra errada.**
+ *
+ * SINTOMA (print user 23:41): user estava em `/almoxarifado` com contexto
+ * "Almoxarifado Central" selecionado (IMG_1245/IMG_1246), clicou em
+ * "DEVOLVER LOCAÇÃO" e o picker abriu mostrando os 1.314 equipamentos de
+ * TODAS as obras (HOTEL DO PAPA inteiro, IMG_1244). Isso é perigoso: o
+ * operador pode dar baixa num equipamento da obra errada sem perceber.
+ * Além disso, Almoxarifado Central nem RECEBE locação (locados são
+ * sempre vinculados a obra), então o botão não devia abrir picker geral
+ * a partir do Central.
+ *
+ * MUDANÇAS
+ *
+ * 1. `client/src/pages/almoxarifado/index.tsx` L1721-1743 — botão DEVOLVER
+ *    LOCAÇÃO agora respeita `obraContexto`:
+ *    - `"central"` → toast.warning e NÃO navega ("Almoxarifado Central
+ *      não recebe locações. Selecione uma obra pra devolver…").
+ *    - `number` (obraId) → `setLocation("/equipamentos/locados?action=devolver&obraId=X")`.
+ *    - `"todos"` ou null → comportamento atual (picker sem filtro).
+ *
+ * 2. `client/src/pages/equipamentos/Locados.tsx` L705-719 — useEffect do
+ *    `?action=devolver` lê `obraId` param (regex `^\d+$`) e seta
+ *    `setFiltroObra(obraIdParam)` pra travar o filtro de obra.
+ *
+ * 3. `client/src/pages/equipamentos/Locados.tsx` L2484-2493 — picker
+ *    filtra `emUso` por `obraIdLock` (deriva de `filtroObra` quando
+ *    numérico). Antes só usava `dataAll.filter(status="em_uso")` sem
+ *    respeitar filtroObra.
+ *
+ * 4. `client/src/pages/equipamentos/Locados.tsx` L2564-2586 — banner
+ *    verde EXPLÍCITO no topo do picker quando `nomeObraLock` é resolvido
+ *    via `obrasMap`: "Mostrando apenas equipamentos da obra X · N itens"
+ *    + CTA "Ver todas" (`setFiltroObra("")`) pra liberar o filtro caso
+ *    o operador precise procurar em outra obra (raro, mas defensivo).
+ *
+ * RACIONAL: o backend `equipamentos.locadosListar` (Rev. 2420) já filtra
+ * por `inArray(obraId, allowedObras)` — encarregado de obra A não vê
+ * locados da obra B. Esta revisão adiciona a 2ª camada de defesa pro
+ * admin/admin_master que tem acesso múltiplo: o picker passa a ser
+ * cirúrgico pra obra do contexto, não um caldeirão de 1.314 itens.
+ *
+ * R-001/R-007/R-010 OK — zero backend, zero DB.
+ *
+ * ─────────────────────────────────────────────────────────────────────────
+ *
  * Rev. 2451 — **[BUG GRAVE] ALMOXARIFADO · tela quebrava com ReferenceError
  * "Can't find variable: consListFinal" ao entrar na visão consolidada com
  * `modoClassificarEquip` ativo.**

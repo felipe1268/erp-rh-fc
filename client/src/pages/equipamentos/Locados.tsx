@@ -707,6 +707,13 @@ export default function EquipamentosLocados() {
       setFiltroStatus("em_uso");
       setPickerDevolver(true);
       setReturnToAlmoxAfterClose(true);
+      // Rev. 2452 — respeita o almoxarifado/obra de origem: se veio com
+      // `&obraId=X` do botão DEVOLVER LOCAÇÃO do Almox, pré-filtra o picker
+      // por essa obra pra evitar devolver equipamento da obra errada.
+      const obraIdParam = params.get("obraId");
+      if (obraIdParam && /^\d+$/.test(obraIdParam)) {
+        setFiltroObra(obraIdParam);
+      }
     } else if (action === "importar") {
       // Rev. 2313 — vem do botão "IMPORTAR PDF (IA)" do Almoxarifado.
       setImportArquivo(null);
@@ -2471,7 +2478,16 @@ export default function EquipamentosLocados() {
         // 1 obs comuns). Lista vem do `locadosListar` que já filtra por
         // obras permitidas (Rev. 2420 backend) — encarregado de obra A não
         // vê mais equipamento de obra B aqui.
-        const emUso = (dataAll as any[]).filter(l => l.status === "em_uso");
+        // Rev. 2452 — Picker respeita `filtroObra` quando setado (vem do
+        // botão DEVOLVER LOCAÇÃO do Almoxarifado com `?obraId=X`). Antes,
+        // user no contexto da obra Y via os 1.314 itens de TODAS as obras
+        // e podia devolver da obra errada por engano.
+        const emUsoTodas = (dataAll as any[]).filter(l => l.status === "em_uso");
+        const obraIdLock = filtroObra && /^\d+$/.test(filtroObra) ? Number(filtroObra) : null;
+        const emUso = obraIdLock !== null
+          ? emUsoTodas.filter(l => Number(l.obraId) === obraIdLock)
+          : emUsoTodas;
+        const nomeObraLock = obraIdLock !== null ? (obrasMap.get(obraIdLock) || `Obra #${obraIdLock}`) : null;
         const hoje = Date.now();
         const busca = pickerDevolverBusca.trim().toLowerCase();
         const filtrados = busca
@@ -2542,6 +2558,29 @@ export default function EquipamentosLocados() {
 
               {/* Busca + selecionar todos */}
               <div className="px-4 sm:px-5 pt-3 pb-2 bg-orange-50/40 border-b border-orange-100 space-y-2">
+                {/* Rev. 2452 — Banner verde quando o picker veio com obra
+                    travada do Almoxarifado (?obraId=X). Deixa explícito
+                    pro user qual obra está sendo mostrada e dá um CTA pra
+                    ver todas (ex.: equipamento veio devolvido por engano
+                    pra outra obra e ele precisa achar). */}
+                {nomeObraLock && (
+                  <div className="flex items-center justify-between gap-2 px-3 py-2 rounded-lg bg-emerald-50 border-2 border-emerald-300">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <MapPin className="h-4 w-4 text-emerald-700 flex-shrink-0" />
+                      <span className="text-[12px] sm:text-sm text-emerald-900 leading-tight min-w-0">
+                        Mostrando apenas equipamentos da obra <b className="break-words">{nomeObraLock}</b>
+                        <span className="text-emerald-700"> · {emUso.length} item{emUso.length !== 1 ? "ns" : ""}</span>
+                      </span>
+                    </div>
+                    <button
+                      onClick={() => setFiltroObra("")}
+                      className="text-[11px] sm:text-xs font-bold text-emerald-800 hover:text-emerald-900 underline underline-offset-2 flex-shrink-0"
+                      title="Mostrar equipamentos de TODAS as obras permitidas"
+                    >
+                      Ver todas
+                    </button>
+                  </div>
+                )}
                 {emUso.length > 6 && (
                   <div className="relative">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-orange-500" />

@@ -1715,8 +1715,24 @@ export default function AlmoxarifadoPage() {
               </span>
             </button>
             {/* Rev. 2316 — DEVOLVER/ENTREGAR LOCAÇÃO (baixa de saída do equipamento locado) */}
+            {/* Rev. 2452 — passa o contexto atual do almoxarifado pro picker:
+                - Almoxarifado Central NÃO recebe locações (locados são por obra) →
+                  bloqueia com toast e não navega.
+                - Obra específica → passa `obraId` pra pré-filtrar o picker
+                  e evitar devolver equipamento da obra errada (1.314 itens
+                  rolando juntos confunde o operador).
+                - "Todos" → picker sem filtro (comportamento atual). */}
             <button
-              onClick={() => setLocation("/equipamentos/locados?action=devolver")}
+              onClick={() => {
+                if (obraContexto === "central") {
+                  toast.warning("Almoxarifado Central não recebe locações. Selecione uma obra pra devolver equipamento alugado.");
+                  return;
+                }
+                const qs = typeof obraContexto === "number"
+                  ? `?action=devolver&obraId=${obraContexto}`
+                  : `?action=devolver`;
+                setLocation(`/equipamentos/locados${qs}`);
+              }}
               className="flex flex-col items-center justify-center gap-2 bg-gradient-to-br from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 active:scale-95 text-white rounded-2xl p-4 min-h-[80px] font-bold text-sm shadow-md transition text-center leading-tight"
             >
               <ArrowUpCircle className="w-8 h-8" />
