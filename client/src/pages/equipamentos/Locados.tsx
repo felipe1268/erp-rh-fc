@@ -1,5 +1,6 @@
 import DashboardLayout from "@/components/DashboardLayout";
 import { useState, useMemo, useRef, useEffect } from "react";
+import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
 import { toast } from "sonner";
@@ -417,6 +418,15 @@ export default function EquipamentosLocados() {
   // modalDev (fluxo de devolução já existente).
   const [pickerDevolver, setPickerDevolver] = useState(false);
   const [pickerDevolverBusca, setPickerDevolverBusca] = useState("");
+  // Rev. 2449 — quando o picker é aberto via `?action=devolver` do botão
+  // "DEVOLVER LOCAÇÃO" do Almoxarifado, o user espera VOLTAR pro Almox
+  // ao concluir/fechar (não ficar parado em /equipamentos/locados que ele
+  // nem sabe que existe). Esta flag é setada no useEffect do action=devolver
+  // e consumida pelo helper `voltarParaAlmoxSeNecessario()` em todos os
+  // pontos de fechamento (X do picker, Cancelar, devolução single ok,
+  // devolução em lote ok, fechar modalDev sem salvar).
+  const [returnToAlmoxAfterClose, setReturnToAlmoxAfterClose] = useState(false);
+  const [, navegar] = useLocation();
   // Rev. 2420 — multi-seleção dentro do picker. Set<id> dos equipamentos
   // marcados pra devolução em lote. Tap no card alterna; botão "DEVOLVER
   // ESTE" do footer do card preserva o fluxo "1 toque, modalDev direto".
@@ -426,7 +436,12 @@ export default function EquipamentosLocados() {
   const [devLoteFotos, setDevLoteFotos] = useState<FotoItem[]>([]);
   const [devLoteObs, setDevLoteObs] = useState<string>("");
   const devolver = trpc.equipamentos.locadoDevolver.useMutation({
-    onSuccess: () => { utils.equipamentos.locadosListar.invalidate(); setModalDev(null); setDevFotos([]); toast.success("Equipamento devolvido."); },
+    onSuccess: () => {
+      utils.equipamentos.locadosListar.invalidate();
+      setModalDev(null); setDevFotos([]);
+      toast.success("Equipamento devolvido.");
+      voltarParaAlmoxSeNecessario(); // Rev. 2449
+    },
     onError: (e) => toast.error(e.message),
   });
   const devolverLote = trpc.equipamentos.locadoDevolverEmLote.useMutation({
@@ -442,9 +457,19 @@ export default function EquipamentosLocados() {
       } else {
         toast.warning(`${res.ok.length} devolvido(s) · ${res.falhas.length} falha(s): ${res.falhas.slice(0, 3).map(f => `#${f.id} (${f.erro})`).join(", ")}${res.falhas.length > 3 ? "…" : ""}`);
       }
+      voltarParaAlmoxSeNecessario(); // Rev. 2449
     },
     onError: (e) => toast.error(e.message),
   });
+  // Rev. 2449 — helper compartilhado. Quando aberto via Almoxarifado
+  // (?action=devolver), retorna pra /almoxarifado ao concluir/fechar.
+  // Caso contrário, fica na própria página de Locados (fluxo legado).
+  function voltarParaAlmoxSeNecessario() {
+    if (returnToAlmoxAfterClose) {
+      setReturnToAlmoxAfterClose(false);
+      navegar("/almoxarifado");
+    }
+  }
   const checkIn = trpc.equipamentos.locadoCheckIn.useMutation({
     onSuccess: () => { utils.equipamentos.locadosListar.invalidate(); setModalCheckin(null); setCheckinObs(""); toast.success("Check-in registrado."); },
     onError: (e) => toast.error(e.message),
@@ -678,8 +703,10 @@ export default function EquipamentosLocados() {
       // Rev. 2372 — em vez de só filtrar+toast (operador de 4ª série não
       // entendia que tinha que rolar a tabela e achar o botão "Devolver"
       // na linha), abre direto o picker visual com cards grandes.
+      // Rev. 2449 — marca pra VOLTAR pro Almox ao fechar/concluir.
       setFiltroStatus("em_uso");
       setPickerDevolver(true);
+      setReturnToAlmoxAfterClose(true);
     } else if (action === "importar") {
       // Rev. 2313 — vem do botão "IMPORTAR PDF (IA)" do Almoxarifado.
       setImportArquivo(null);
@@ -964,6 +991,7 @@ export default function EquipamentosLocados() {
     setPickerDevolver(false);
     setSelecionadosLote(new Set());
     setPickerDevolverBusca("");
+    voltarParaAlmoxSeNecessario(); // Rev. 2449
   }
   // Rev. 2420 — dispara devolução em lote dos ids em `modalDevLote`.
   function fazerDevolucaoLote() {
@@ -2611,14 +2639,19 @@ export default function EquipamentosLocados() {
                               <div className="font-bold text-base sm:text-lg text-slate-900 leading-tight line-clamp-2">
                                 {l.descricao || "(sem descrição)"}
                               </div>
+                              {/* Rev. 2449 — Obra com destaque ALTO (chip
+                                  verde sólido). Operador precisa ENXERGAR
+                                  a obra antes de confirmar baixa pra não
+                                  devolver equipamento de obra errada.
+                                  "Sem obra" vira chip amber pra contraste. */}
                               {obraNome ? (
-                                <div className="mt-1.5 flex items-center gap-1.5 text-[13px] text-emerald-800 font-semibold truncate">
-                                  <MapPin className="h-3.5 w-3.5 flex-shrink-0" />
+                                <div className="mt-1.5 inline-flex items-center gap-1.5 max-w-full px-2 py-1 rounded-md bg-emerald-100 border border-emerald-300 text-emerald-900 font-bold text-[13px] sm:text-sm shadow-sm">
+                                  <MapPin className="h-4 w-4 flex-shrink-0" />
                                   <span className="truncate">{obraNome}</span>
                                 </div>
                               ) : (
-                                <div className="mt-1.5 flex items-center gap-1.5 text-[13px] text-amber-700 italic truncate">
-                                  <MapPin className="h-3.5 w-3.5 flex-shrink-0" /> Sem obra
+                                <div className="mt-1.5 inline-flex items-center gap-1.5 max-w-full px-2 py-1 rounded-md bg-amber-100 border border-amber-300 text-amber-900 font-bold text-[13px]">
+                                  <MapPin className="h-4 w-4 flex-shrink-0" /> Sem obra cadastrada
                                 </div>
                               )}
                               {l.fornecedorNome && (
@@ -2728,7 +2761,7 @@ export default function EquipamentosLocados() {
 
       {/* Modal devolução */}
       {modalDev && (
-        <Modal title={`Devolver: ${modalDev.descricao}`} onClose={() => setModalDev(null)} onSave={fazerDevolucao}
+        <Modal title={`Devolver: ${modalDev.descricao}`} onClose={() => { setModalDev(null); voltarParaAlmoxSeNecessario(); /* Rev. 2449 */ }} onSave={fazerDevolucao}
           saveLabel="Confirmar devolução" loading={devolver.isPending}>
           <Field label="Data devolução*">
             <input type="date" value={devData} onChange={e => setDevData(e.target.value)} className="inp" />

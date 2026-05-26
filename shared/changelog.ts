@@ -1,6 +1,63 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2449 — **DEVOLVER LOCAÇÃO · volta pro Almoxarifado ao fechar/concluir
+ * + nome da obra com destaque ALTO no card pra evitar baixa de obra
+ * errada + reforço da auth-by-obra que já existia no backend.**
+ *
+ * CONTEXTO (prints user 23:11/23:13): user clicou "DEVOLVER LOCAÇÃO" no
+ * Almoxarifado Central → ERP abriu o picker visual em /equipamentos/locados,
+ * mas ao fechar ficava parado nessa página (que o user nem reconhecia)
+ * em vez de voltar pro Almox. Além disso, no card de cada equipamento o
+ * nome da obra ("HOTEL DO PAPA — AMPLIAÇÃO DO 5 PAV") aparecia em texto
+ * verde pequeno (`text-[13px] text-emerald-800`) — fácil de ignorar e
+ * dar baixa em obra errada num lote de 1.314 equipamentos.
+ *
+ * MUDANÇAS — `client/src/pages/equipamentos/Locados.tsx`
+ *
+ * 1. NAVEGAÇÃO DE RETORNO
+ *    - L2: `import { useLocation } from "wouter"`.
+ *    - L424-432: estado `returnToAlmoxAfterClose` + hook `navegar`.
+ *    - L709-712: `useEffect` do `?action=devolver` agora seta a flag.
+ *    - L467-475: helper `voltarParaAlmoxSeNecessario()` consome a flag
+ *      uma vez e faz `navegar("/almoxarifado")`.
+ *    - Chamado em TODOS os caminhos de saída:
+ *        · `fecharPickerDevolver()` L997 (X, overlay, Cancelar).
+ *        · `devolver.onSuccess` L446 (devolução single OK).
+ *        · `devolverLote.onSuccess` L463 (devolução em lote OK).
+ *        · `modalDev.onClose` L2762 (fechar modal de devolução single
+ *          sem salvar).
+ *    Quem entra na página DIRETO (sem `?action=devolver`) tem o fluxo
+ *    legado preservado — flag fica false, helper é no-op.
+ *
+ * 2. DESTAQUE DA OBRA NO CARD DO PICKER (L2645-2659)
+ *    Trocado o texto verde simples por um CHIP SÓLIDO:
+ *      - bg-emerald-100 / border-emerald-300 / text-emerald-900 bold
+ *      - ícone MapPin maior (h-4)
+ *      - shadow-sm, padding interno (px-2 py-1)
+ *    "Sem obra" agora também é chip (amber-100 / amber-900) com copy
+ *    "Sem obra cadastrada" — não mais itálico baixo-contraste.
+ *
+ * 3. AUTH-BY-OBRA (não exigiu mudança — só validação)
+ *    Backend `server/routers/equipamentos.ts` L378-385 (`locadosListar`)
+ *    já filtra por `getEffectiveAllowedObraIds(user)`:
+ *      - admin/admin_master => allowed=null => vê tudo (caso do print).
+ *      - users restritos => `inArray(obraId, allowed)` + cadastros sem
+ *        obra ficam ocultos (segurança > conveniência).
+ *      - `obraId` explícito vindo do cliente é validado (IDOR-safe).
+ *    Filtro implementado na Rev. 2420; permanece intacto. O destaque
+ *    visual do item (#2) é a segunda camada de defesa pro admin não
+ *    devolver de obra errada por engano.
+ *
+ * VALIDAÇÃO
+ * - R-001/R-007/R-010 OK — frontend puro, zero schema/backend novo.
+ * - Cliques no botão "DEVOLVER LOCAÇÃO" da hero da própria página
+ *   (`/equipamentos/locados`, sem `?action`) continuam fechando o
+ *   picker SEM redirect — flag não é setada nesse caminho.
+ * - Lint OK; useLocation já é usado em outras páginas com mesma assinatura.
+ *
+ * ──────────────────────────────────────────────────────────────────────
+ *
  * Rev. 2448 — **[BUG GRAVE] DASHBOARD ALMOX & EQUIP · "Valor parado" e
  * gráficos de estoque por categoria ficavam SEMPRE R$ 0,00 — leitura
  * de campos com nomes errados do schema.**

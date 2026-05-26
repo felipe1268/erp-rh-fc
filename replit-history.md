@@ -682,3 +682,4 @@
 - **Rev. 2439** — ALMOXARIFADO · INVENTÁRIO SEMANAL · thumbnail da foto do item no card + overlay ampliado on-tap. Backend `warehouse.ts` L922-951 (LEFT JOIN) + `Inventario.tsx` L30-145. Ver `shared/changelog.ts`.
 - **Rev. 2440** — ALMOXARIFADO · VISÃO GERAL · card limpo (3 badges + "+N locais") e card/linha clicáveis abrem modal completo de edição. `index.tsx` L1877-2065. Ver `shared/changelog.ts`.
 - **Rev. 2441** — ALMOXARIFADO · Combobox filtrável de categoria (digite pra achar) no cadastro/edição + 2 modais "Alterar categoria em lote". `index.tsx` L50-145/L2766/L4377/L4469. Ver `shared/changelog.ts`.
+- **Rev. 2442** — ALMOXARIFADO · VISÃO GERAL · Shift+clique seleciona INTERVALO de cards (range select estilo Finder) + botões "Marcar todos visíveis" / "Limpar". `index.tsx` L317-366/L2009/L4456-4475. Ver `shared/changelog.ts`.
