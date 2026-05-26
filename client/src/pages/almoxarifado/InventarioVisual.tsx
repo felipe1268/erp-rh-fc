@@ -26,7 +26,7 @@
 // O percentual da Rev. 2373 continua sendo persistido (derivado da
 // capacidade) só pro bar visual e compat — a verdade é o volume digitado.
 import DashboardLayout from "@/components/DashboardLayout";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
 import { toast } from "sonner";
@@ -119,6 +119,10 @@ export default function InventarioVisualBaias() {
   const [leituraVolume, setLeituraVolume] = useState<string>("");
   const [leituraObs, setLeituraObs] = useState("");
   const [leituraFoto, setLeituraFoto] = useState<File | null>(null);
+  // Rev. 2431 — Preview da foto selecionada (antes mostrava só o nome do
+  // arquivo). createObjectURL + revoke no unmount/troca de foto.
+  const leituraFotoUrl = useMemo(() => leituraFoto ? URL.createObjectURL(leituraFoto) : null, [leituraFoto]);
+  useEffect(() => () => { if (leituraFotoUrl) URL.revokeObjectURL(leituraFotoUrl); }, [leituraFotoUrl]);
 
   const [historicoBaia, setHistoricoBaia] = useState<any | null>(null);
   const [excluindo, setExcluindo] = useState<any | null>(null);
@@ -842,15 +846,36 @@ export default function InventarioVisualBaias() {
               </div>
               <div>
                 <Label className="text-xs">Foto da baia (opcional, mas recomendado)</Label>
-                <label className="mt-1 flex items-center justify-center gap-2 h-20 border-2 border-dashed border-slate-300 rounded-lg cursor-pointer hover:bg-slate-50">
-                  <input type="file" accept="image/*" capture="environment" className="hidden"
-                    onChange={e => setLeituraFoto(e.target.files?.[0] ?? null)} />
-                  {leituraFoto ? (
-                    <span className="text-sm text-emerald-700 flex items-center gap-1"><CheckCircle2 className="w-4 h-4" /> {leituraFoto.name}</span>
-                  ) : (
+                {/* Rev. 2431 — Preview visual da foto selecionada (antes só
+                    mostrava o nome do arquivo, sem confirmação visual). */}
+                {leituraFotoUrl ? (
+                  <div className="mt-1 relative rounded-lg overflow-hidden border-2 border-emerald-300 bg-slate-50">
+                    <img src={leituraFotoUrl} alt="Pré-visualização da baia" className="w-full h-44 object-cover" />
+                    <div className="absolute top-2 right-2 flex gap-1.5">
+                      <label className="bg-white/95 hover:bg-white text-slate-700 text-[11px] font-semibold px-2.5 py-1 rounded-md shadow cursor-pointer inline-flex items-center gap-1">
+                        <input type="file" accept="image/*" capture="environment" className="hidden"
+                          onChange={e => setLeituraFoto(e.target.files?.[0] ?? null)} />
+                        <Camera className="w-3 h-3" /> Trocar
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => setLeituraFoto(null)}
+                        className="bg-white/95 hover:bg-white text-red-600 text-[11px] font-semibold px-2.5 py-1 rounded-md shadow inline-flex items-center gap-1"
+                      >
+                        <Trash2 className="w-3 h-3" /> Remover
+                      </button>
+                    </div>
+                    <div className="absolute bottom-2 left-2 bg-emerald-600/90 text-white text-[10px] font-bold px-2 py-0.5 rounded-md shadow inline-flex items-center gap-1">
+                      <CheckCircle2 className="w-3 h-3" /> Foto pronta · {(leituraFoto!.size / 1024).toFixed(0)} KB
+                    </div>
+                  </div>
+                ) : (
+                  <label className="mt-1 flex items-center justify-center gap-2 h-20 border-2 border-dashed border-slate-300 rounded-lg cursor-pointer hover:bg-slate-50">
+                    <input type="file" accept="image/*" capture="environment" className="hidden"
+                      onChange={e => setLeituraFoto(e.target.files?.[0] ?? null)} />
                     <span className="text-sm text-slate-500 flex items-center gap-1"><Camera className="w-4 h-4" /> Tirar foto agora</span>
-                  )}
-                </label>
+                  </label>
+                )}
               </div>
               <div>
                 <Label className="text-xs">Observação (opcional)</Label>

@@ -1,6 +1,41 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2431 — **ALMOXARIFADO · INVENTÁRIO VISUAL · preview visual da foto no
+ * modal "Registrar baixa da baia" (antes só mostrava o nome do arquivo).**
+ *
+ * CONTEXTO (caso real, print anexado pelo user — modal de "Registrar baixa
+ * da baia" em QIU 2 - FASE 4, baia "Item TESTE -areia"):
+ * - Após anexar a foto, o input mostrava SÓ "✓ image.jpg" (nome do arquivo).
+ *   Usuário não tem confirmação visual de QUAL foto foi anexada — pode ter
+ *   selecionado a foto errada, foto preta, foto sem foco etc. Especialmente
+ *   crítico em mobile (capture="environment") onde a câmera dispara e o user
+ *   precisa confirmar se ficou boa antes de confirmar a baixa.
+ *
+ * DECISÃO
+ * - Quando há foto selecionada, renderiza um `<img>` com `URL.createObjectURL`
+ *   (h-44 object-cover) no lugar do dropzone, com 2 botões sobrepostos:
+ *   "Trocar" (input file escondido reaproveitado, troca a foto sem precisar
+ *   remover antes) e "Remover" vermelho. Badge inferior mostra "Foto pronta
+ *   · NN KB" pra confirmar tamanho.
+ * - Cleanup do `URL.createObjectURL` via useEffect (revoke no unmount ou na
+ *   troca da foto) — sem memory leak.
+ * - Quando NÃO há foto, mantém o dropzone original (h-20 dashed) com texto
+ *   "Tirar foto agora".
+ *
+ * ARQUIVOS
+ * - `client/src/pages/almoxarifado/InventarioVisual.tsx`:
+ *   - Import: + `useEffect` no React.
+ *   - L121-125: estado `leituraFotoUrl` com useMemo + useEffect cleanup.
+ *   - L823-855: bloco da foto reescrito (preview + trocar + remover).
+ *
+ * VALIDAÇÃO
+ * - Zero backend, zero migration. Fluxo de upload no submit (compressão +
+ *   upload) segue intocado — só a apresentação do input mudou.
+ * - R-001/R-007/R-010 OK.
+ *
+ * ──────────────────────────────────────────────────────────────────────
+ *
  * Rev. 2430 — **ALMOXARIFADO · INVENTÁRIO VISUAL · botão "Desfazer última"
  * agora aparece DIRETO no card + card "Restante" com fallback pro saldo do
  * sistema quando ainda não houve aferição visual.**

@@ -655,3 +655,5 @@
 - **Rev. 2422** — INVENTÁRIO VISUAL DE BAIAS · "Desfazer aferição" com estorno automático do almox. ADD COLUMN `movimentacao_id` em `almoxarifado_baia_leituras` vincula leitura↔mov. Novo `baiaLeituraDeletar` (guard só última leitura, autor OU ADMIN, estorna mov entrada). Frontend: botão Trash vermelho + modal de confirmação. Ver `shared/changelog.ts`.
 
 - **Rev. 2423** — AVISO PRÉVIO · trabalhado volta a 30d fixos de CUMPRIMENTO (caso Myriélle 2 anos); VERBA segue 30+3·ano. `calcularDiasAviso(anos,tipo)→30` p/ qualquer `*_trabalhado`. AvisoPrevio.tsx + rescisaoCalc.ts + avisoPrevioFerias.ts + dashboards.ts (CDM). Ver `shared/changelog.ts`.
+
+- **Rev. 2424** — UX · PLANEJAMENTO/LISTA · `window.confirm` nativo substituído por AlertDialog estilizado ao excluir projeto (com nome+cliente, aviso destrutivo, Loader2). `PlanejamentoLista.tsx`. Ver `shared/changelog.ts`.
