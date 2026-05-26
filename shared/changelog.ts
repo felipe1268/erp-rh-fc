@@ -1,6 +1,60 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2464 — **HOTFIX build de produção · `SignaturePad` sem `export
+ * default` nem `SignaturePadHandle` quebrava `vite build`.**
+ *
+ * PEDIDO (user): "My deployment build failed to publish. Help me debug
+ * the error." (IMG_1258 mostra o Publishing parado em "There was an
+ * issue publishing your artifact").
+ *
+ * BUG RAIZ: `client/src/pages/AssinarDocumento.tsx` (L6) importa
+ * `SignaturePad` como **default export** e o tipo `SignaturePadHandle`
+ * (ref imperativo com `toDataURL()` e prop `disabled`), mas
+ * `client/src/components/SignaturePad.tsx` (criado na Rev. 2453 só
+ * pro fluxo de devolução de equipamento locado) só expunha um
+ * **named export** `SignaturePad` no modelo controlado
+ * (`value`/`onChange`). Rollup falhou em `vite build` com:
+ *   `"default" is not exported by "client/src/components/SignaturePad.tsx"`
+ * → build de produção abortava com exit 1 → Publishing falhava no
+ * passo "Build the artifact" (3º step da pipeline de deploy).
+ *
+ * `pnpm dev` não pegou porque o dev server (esbuild) é mais
+ * permissivo com imports default/named mistos; o erro só explode no
+ * Rollup do build de produção.
+ *
+ * FIX (`client/src/components/SignaturePad.tsx`): estendido o
+ * componente pra suportar AS DUAS APIs sem breaking change:
+ *  1) Controlada (Locados.tsx Rev. 2453+): `<SignaturePad value=
+ *     {...} onChange={...} label="..." />`. Inalterado.
+ *  2) Imperativa por ref (AssinarDocumento.tsx): `<SignaturePad
+ *     ref={padRef} disabled={submitting} height={180} />` com
+ *     leitura via `padRef.current?.toDataURL()`.
+ * Mudanças concretas:
+ *  - `function SignaturePad(...)` virou `forwardRef<SignaturePadHandle,
+ *    SignaturePadProps>(...)`.
+ *  - `value` e `onChange` viraram OPCIONAIS (`onChange?.()` em todos
+ *    os call sites pra não quebrar quando ausente).
+ *  - Nova interface exportada `SignaturePadHandle` com `toDataURL()`,
+ *    `clear()` e `hasInk()`. `toDataURL` respeita o gate
+ *    `MIN_INK_DISTANCE` da Rev. 2453 (retorna null se traço < 30px).
+ *  - Nova prop `disabled?: boolean`: bloqueia pointer events
+ *    (`onDown`/`onMove`), esconde botão "Limpar" e aplica
+ *    `opacity-60 pointer-events-none` no container.
+ *  - Re-export default no final do arquivo (`export default
+ *    SignaturePad`) — convive com o named export.
+ *
+ * Verificação: `pnpm build` (Vite 7 + esbuild) passou em 1m 6s,
+ * gerou `dist/index.js` (8.6MB) sem erros do Rollup. Único warning
+ * remanescente é o de chunk-size (>3MB do vendor-webifc, pré-
+ * existente e fora de scope).
+ *
+ * R-001/R-007/R-010 OK — nenhum ALTER/DROP/DELETE, só edição de TSX.
+ *
+ * Arquivo único: `client/src/components/SignaturePad.tsx`.
+ *
+ * --------------------------------------------------------------------
+ *
  * Rev. 2463 — **HOTFIX Rev. 2462 · toggle "Exigir aprovação do gestor"
  * estava travado (coluna não criada no Neon).**
  *

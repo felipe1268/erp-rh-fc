@@ -2,6 +2,7 @@
 
 > Este arquivo guarda os one-liners das revisões antigas para manter o `replit.md` enxuto.
 
+- **Rev. 2457** — ALMOXARIFADO · `/almoxarifado/movimentacoes` virou timeline UNIFICADA das 4 fontes (estoque, ferramentas, insumos, transferências). Nova query `warehouse.listTimeline` com UNION ALL + chips FONTE no front. Ver `shared/changelog.ts`.
 - **Rev. 2456** — DEVOLUÇÃO DE LOCAÇÃO · (a) autofill do entregador com user FC logado em `Locados.tsx` + (b) movimentação aparece no Raio-X do funcionário via nova query `empDevolucoesLocacao` em `controleDocumentos.ts`. Ver `shared/changelog.ts`.
 - **Rev. 2455** — DEVOLVER LOCAÇÃO · ao concluir, volta pro Almoxarifado da MESMA obra de origem (não joga no Central). `returnToAlmoxObraId` em `Locados.tsx` grava obraId do query param e `voltarParaAlmoxSeNecessario` monta destino `/almoxarifado?obra=X`. Ver `shared/changelog.ts`.
 - **Rev. 2454** — [BUG GRAVE — Rev. 2453 fallout] DEVOLVER ESTE (single do card) fechava a tela sem abrir modal de assinatura. `escolherSingle` agora envia o item pelo caminho do lote (`setModalDevLote([l])`) → ganha 2 etapas + assinaturas + comprovante PDF. Ver `shared/changelog.ts`.

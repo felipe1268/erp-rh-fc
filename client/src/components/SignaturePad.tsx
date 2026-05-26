@@ -1,21 +1,40 @@
 // ============================================================================
 // Rev. 2453 — SignaturePad: canvas inline para assinatura touch/mouse.
 // ============================================================================
-// Usado no fluxo de devolução de equipamentos locados (entregador + recebedor).
-// Retorna a assinatura como dataURL PNG (base64) via onChange.
+// Usado no fluxo de devolução de equipamentos locados (entregador + recebedor)
+// e em AssinarDocumento (assinatura pública de envelope).
+//
+// Suporta DUAS APIs (sem breaking changes):
+//   1) Controlada: <SignaturePad value={...} onChange={...} label="..." />
+//      — usada em Locados.tsx (Rev. 2453+).
+//   2) Imperativa por ref: <SignaturePad ref={ref} disabled height={180} />
+//      — usada em AssinarDocumento.tsx. Leitura via ref.current?.toDataURL().
 // Sem dependências externas — usa pointer events nativos.
 // ============================================================================
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, forwardRef, useImperativeHandle } from "react";
 import { Eraser } from "lucide-react";
 
 interface SignaturePadProps {
-  value: string | null;          // dataURL PNG ou null
-  onChange: (dataUrl: string | null) => void;
+  value?: string | null;          // dataURL PNG ou null (modo controlado)
+  onChange?: (dataUrl: string | null) => void;
   label?: string;
   height?: number;
+  disabled?: boolean;
 }
 
-export function SignaturePad({ value, onChange, label, height = 140 }: SignaturePadProps) {
+export interface SignaturePadHandle {
+  /** Retorna dataURL PNG da assinatura atual ou null se vazia. */
+  toDataURL: () => string | null;
+  /** Limpa o canvas. */
+  clear: () => void;
+  /** True se há traço suficiente registrado. */
+  hasInk: () => boolean;
+}
+
+export const SignaturePad = forwardRef<SignaturePadHandle, SignaturePadProps>(function SignaturePad(
+  { value, onChange, label, height = 140, disabled = false },
+  ref,
+) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const drawingRef = useRef(false);
   const lastPtRef = useRef<{ x: number; y: number } | null>(null);
@@ -66,6 +85,7 @@ export function SignaturePad({ value, onChange, label, height = 140 }: Signature
   }
 
   function onDown(e: React.PointerEvent<HTMLCanvasElement>) {
+    if (disabled) return;
     e.preventDefault();
     drawingRef.current = true;
     lastPtRef.current = getPt(e);
@@ -73,6 +93,7 @@ export function SignaturePad({ value, onChange, label, height = 140 }: Signature
   }
 
   function onMove(e: React.PointerEvent<HTMLCanvasElement>) {
+    if (disabled) return;
     if (!drawingRef.current) return;
     const ctx = canvasRef.current?.getContext("2d");
     if (!ctx || !lastPtRef.current) return;
@@ -105,7 +126,7 @@ export function SignaturePad({ value, onChange, label, height = 140 }: Signature
       return;
     }
     const dataUrl = canvas.toDataURL("image/png");
-    onChange(dataUrl);
+    onChange?.(dataUrl);
   }
 
   function limpar() {
@@ -116,15 +137,26 @@ export function SignaturePad({ value, onChange, label, height = 140 }: Signature
     ctx.clearRect(0, 0, canvas.clientWidth, canvas.clientHeight);
     inkDistanceRef.current = 0;
     setHasInk(false);
-    onChange(null);
+    onChange?.(null);
   }
+
+  useImperativeHandle(ref, () => ({
+    toDataURL: () => {
+      const canvas = canvasRef.current;
+      if (!canvas) return null;
+      if (inkDistanceRef.current < MIN_INK_DISTANCE && !value) return null;
+      return canvas.toDataURL("image/png");
+    },
+    clear: limpar,
+    hasInk: () => hasInk,
+  }), [hasInk, value]);
 
   return (
     <div className="space-y-1.5">
       {label && (
         <div className="flex items-center justify-between">
           <label className="text-xs font-semibold text-slate-700">{label}</label>
-          {hasInk && (
+          {hasInk && !disabled && (
             <button
               type="button"
               onClick={limpar}
@@ -136,7 +168,7 @@ export function SignaturePad({ value, onChange, label, height = 140 }: Signature
         </div>
       )}
       <div
-        className="rounded-lg border-2 border-dashed border-slate-300 bg-white relative touch-none"
+        className={`rounded-lg border-2 border-dashed border-slate-300 bg-white relative touch-none ${disabled ? "opacity-60 pointer-events-none" : ""}`}
         style={{ height }}
       >
         <canvas
@@ -156,4 +188,6 @@ export function SignaturePad({ value, onChange, label, height = 140 }: Signature
       </div>
     </div>
   );
-}
+});
+
+export default SignaturePad;
