@@ -6163,9 +6163,20 @@ export default function Cotacoes() {
         (central + obra atual) com saldo > 0; user marca itens e os
         IDs vão pra mutation `adicionarEstoqueAoMapa` como whitelist. */}
     <Dialog open={showEstoquePicker} onOpenChange={(o) => { if (!o) { setShowEstoquePicker(false); setEstoquePickerIds(new Set()); setEstoquePickerSearch(""); } }}>
-      <DialogContent className="max-w-4xl border-gray-200" style={{ background: "#fff", color: "#111827" }}>
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-gray-900">
+      <DialogContent
+        className="border-gray-200 p-0 gap-0 flex flex-col"
+        style={{
+          background: "#fff",
+          color: "#111827",
+          width: "100vw",
+          height: "100vh",
+          maxWidth: "100vw",
+          maxHeight: "100vh",
+          borderRadius: 0,
+        }}
+      >
+        <DialogHeader className="px-6 pt-5 pb-3 border-b border-gray-200 shrink-0">
+          <DialogTitle className="flex items-center gap-2 text-gray-900 text-lg">
             <Package className="h-5 w-5 text-violet-600" />
             Selecionar do Estoque
           </DialogTitle>
@@ -6173,8 +6184,8 @@ export default function Cotacoes() {
             Marque os itens do almoxarifado que deseja usar pra atender esta solicitação. O sistema cruza automaticamente com os itens da SC.
           </p>
         </DialogHeader>
-        <div className="space-y-3">
-          <div className="relative">
+        <div className="flex-1 min-h-0 flex flex-col gap-3 px-6 pt-4 overflow-hidden">
+          <div className="relative shrink-0">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
             <Input
               placeholder="Buscar por nome, código ou categoria…"
@@ -6201,15 +6212,15 @@ export default function Cotacoes() {
               return <p className="text-sm text-gray-400 text-center py-12">Nenhum item encontrado para "{estoquePickerSearch}".</p>;
             }
             return (
-              <>
-                <div className="flex items-center justify-between text-xs text-gray-500 px-1">
+              <div className="flex-1 min-h-0 flex flex-col gap-2">
+                <div className="flex items-center justify-between text-xs text-gray-500 px-1 shrink-0">
                   <span>{filtrados.length} item(s) {filtrados.length !== itens.length ? `de ${itens.length}` : ""}</span>
                   <div className="flex gap-2">
                     <button type="button" className="text-violet-600 hover:underline" onClick={() => setEstoquePickerIds(new Set(filtrados.map((it: any) => it.id)))}>Marcar todos</button>
                     <button type="button" className="text-gray-500 hover:underline" onClick={() => setEstoquePickerIds(new Set())}>Limpar</button>
                   </div>
                 </div>
-                <div className="border border-gray-200 rounded-lg overflow-hidden max-h-[420px] overflow-y-auto bg-white">
+                <div className="flex-1 min-h-0 border border-gray-200 rounded-lg overflow-y-auto bg-white">
                   <table className="w-full text-sm">
                     <thead className="bg-gray-50 sticky top-0 z-10">
                       <tr className="text-left text-xs font-semibold text-gray-600">
@@ -6257,11 +6268,11 @@ export default function Cotacoes() {
                     </tbody>
                   </table>
                 </div>
-              </>
+              </div>
             );
           })()}
         </div>
-        <DialogFooter className="gap-2">
+        <DialogFooter className="gap-2 px-6 py-4 border-t border-gray-200 shrink-0 bg-white">
           <Button variant="outline" onClick={() => { setShowEstoquePicker(false); setEstoquePickerIds(new Set()); setEstoquePickerSearch(""); }}>Cancelar</Button>
           <Button
             disabled={estoquePickerIds.size === 0 || adicionarEstoque.isPending || !showDetalhe}

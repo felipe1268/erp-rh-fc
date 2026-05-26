@@ -1,6 +1,33 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2469 — **COTAÇÕES · modal "Selecionar do Estoque" virou
+ * tela cheia (full-viewport).**
+ *
+ * PEDIDO (user, IMG image_1779801470272): "deixe em tela cheia".
+ * O modal anterior (max-w-4xl, ~896px) ficava acanhado quando a
+ * obra tem 605+ itens no almoxarifado — a tabela mostrava só ~6
+ * linhas por vez e a área de busca/cabeçalho ocupava grande parte
+ * da altura útil.
+ *
+ * FIX (UX): `DialogContent` agora ocupa 100vw × 100vh com
+ * `borderRadius: 0`, `padding: 0` e layout em flex column:
+ *   - Header fixo (DialogHeader com `shrink-0` + border-b).
+ *   - Área central `flex-1 min-h-0` com `Input` de busca no topo
+ *     (`shrink-0`) e container da tabela `flex-1 min-h-0`
+ *     `overflow-y-auto` — tabela cresce pra ocupar todo o espaço
+ *     disponível, fim do `max-h-[420px]` que limitava artificial-
+ *     mente.
+ *   - Footer fixo (`DialogFooter` com `shrink-0` + border-t +
+ *     bg-white) — botões Cancelar/Confirmar sempre visíveis.
+ * Wrapper interno do bloco filtrado virou `<div className="flex-1
+ * min-h-0 flex flex-col gap-2">` em vez de Fragment, pra
+ * propagar o flex pros filhos.
+ *
+ * R-001/R-007/R-010 OK — só CSS/JSX.
+ *
+ * ----------------------------------------------------------------
+ *
  * Rev. 2468 — **HOTFIX REAL DA Rev. 2466 (COTAÇÕES) · "Atender pelo
  * Estoque" agora abre o modal de seleção.**
  *
