@@ -2653,7 +2653,13 @@ Sempre retorne JSON válido, sem markdown.`;
     }),
 
   updateInsurance: protectedProcedure
-    .input(z.object({ id: z.number(), companyId: z.number(), seguradora: z.string().optional(),
+    .input(z.object({ id: z.number(), companyId: z.number(),
+      // Rev. 2467 — `vehicleId` faltava aqui, então quando o user trocava
+      // o veículo da apólice na tela "Editar Seguro" o campo era descartado
+      // pelo zod (strip silencioso) e o UPDATE nunca tocava `vehicle_id`.
+      // Ao reabrir a apólice, o veículo aparentava "ter sumido".
+      vehicleId: z.number().optional(),
+      seguradora: z.string().optional(),
       numeroApolice: z.string().optional(), tipoCobertura: z.string().optional(),
       dataInicio: z.string().optional(), dataFim: z.string().optional(),
       valorPremio: z.string().optional(), franquia: z.string().optional(),

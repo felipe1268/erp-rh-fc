@@ -1,6 +1,65 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2467 — **HOTFIX SEGUROS DA FROTA · ao trocar o veículo
+ * vinculado a uma apólice e salvar, a mudança era descartada
+ * silenciosamente; ao reabrir a tela, o veículo "sumia".**
+ *
+ * PEDIDO (user, IMG_1779800120335 + IMG_1779800168606 + IMG_1779800227158):
+ *   "ao vincular manualemnte um veículo na apolice de seguro.. nao
+ *    está salvando.... quando eu volto na tela, o veivulo que eu
+ *    seleciono, desaparece"
+ *
+ * BUG RAIZ: O zod input schema de `frotas.updateInsurance`
+ * (`server/routers/frotas.ts` L2655-2662) NÃO declarava
+ * `vehicleId`. O frontend (`client/src/pages/frotas/Seguros.tsx`
+ * L106) envia `{ id, vehicleId, seguradora, ... }`, mas zod por
+ * padrão faz strip de chaves não declaradas — então `vehicleId`
+ * era jogado fora ANTES de chegar no `db.update().set(data)`. O
+ * UPDATE rodava sem tocar `vehicle_id`. Pro user, "salvou" (toast
+ * de sucesso vinha do INSERT/UPDATE em si), mas ao reabrir a
+ * apólice o select aparecia vazio porque vehicle_id no banco era
+ * NULL (ou continuava o valor antigo se já existia).
+ *
+ * Foi um pulo do gato evolutivo: a tela ganhou a feature de
+ * "vincular manualmente" depois que o schema do update foi
+ * congelado pra cadastro inicial (que só vinha via importação de
+ * PDF e já tinha vehicleId resolvido lá). Ninguém esticou o input.
+ *
+ * IMPLEMENTAÇÃO: 1 linha funcional (mais comentário longo de
+ * regressão) em `server/routers/frotas.ts` —
+ *   `vehicleId: z.number().optional(),`
+ * adicionada ao input schema de `updateInsurance`. O resto da
+ * mutation já estava correto: `const { id, companyId, ...data }
+ * = input` automaticamente passa `vehicleId` (e qualquer outro
+ * campo opcional) pro `db.update(fleetInsurance).set({...data})`.
+ *
+ * R-001/R-007/R-010 OK — sem ALTER/DROP/DELETE. Coluna
+ * `vehicle_id` já existe no schema (`fleetInsurance` em
+ * `drizzle/schema.ts`).
+ *
+ * ---
+ *
+ * BÔNUS Rev. 2467 — HOTFIX REGRESSÃO DA Rev. 2466 (Cotações).
+ * Logs do dev server reportaram `ReferenceError: detalheFullscreen
+ * is not defined` em `client/src/pages/compras/Cotacoes.tsx` L1157
+ * ao abrir `/compras/cotacoes?destaque=244` (error boundary
+ * estourava antes do detalhe renderizar).
+ *
+ * Causa raiz: na Rev. 2466 adicionei o `useQuery` de
+ * `listEstoqueDisponivel` no top-level do componente referenciando
+ * `(detalheFullscreen as any)?.obraId`. Mas `detalheFullscreen` só
+ * é declarado DENTRO do bloco `if (showDetalhe !== null)` em
+ * L2487 (`const detalheFullscreen = detalheQ.data`). Como o
+ * useQuery roda no top-level antes daquele bloco, JS dispara TDZ
+ * ReferenceError em cada render — derrubando a tela toda.
+ *
+ * Fix: trocado por `(detalheQ.data as any)?.obraId` (mesma fonte,
+ * mas a variável `detalheQ` está declarada em L981, já em escopo).
+ * Padrão idêntico ao que já é usado em L983 (saldosObraQ).
+ *
+ * ----------------------------------------------------------------
+ *
  * Rev. 2466 — **COTAÇÕES · botão "Atender pelo Estoque" agora abre
  * modal de seleção do almoxarifado em vez de auto-matchear cego.**
  *

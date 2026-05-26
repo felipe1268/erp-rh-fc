@@ -1153,8 +1153,11 @@ export default function Cotacoes() {
   const [showEstoquePicker, setShowEstoquePicker] = useState(false);
   const [estoquePickerSearch, setEstoquePickerSearch] = useState("");
   const [estoquePickerIds, setEstoquePickerIds] = useState<Set<number>>(new Set());
+  // Rev. 2467 HOTFIX — usar `detalheQ.data` (top-level, L981) em vez de
+  // `detalheFullscreen` (que só existe dentro do bloco `if (showDetalhe !== null)`
+  // em L2487). Antes quebrava com TDZ ReferenceError ao renderizar a tela.
   const estoqueDisponivelQ = trpc.compras.listEstoqueDisponivel.useQuery(
-    { companyId, obraId: (detalheFullscreen as any)?.obraId ?? undefined },
+    { companyId, obraId: (detalheQ.data as any)?.obraId ?? undefined },
     { enabled: showEstoquePicker },
   );
   const [salvarProgress, setSalvarProgress] = useState<number | null>(null);
