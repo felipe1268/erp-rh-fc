@@ -427,6 +427,10 @@ export default function EquipamentosLocados() {
   // pontos de fechamento (X do picker, Cancelar, devolução single ok,
   // devolução em lote ok, fechar modalDev sem salvar).
   const [returnToAlmoxAfterClose, setReturnToAlmoxAfterClose] = useState(false);
+  // Rev. 2455 — guarda o obraId de origem (vem do `?obraId=X` do botão
+  // DEVOLVER LOCAÇÃO do Almox) pra devolver pra MESMA obra no contexto
+  // do Almoxarifado ao concluir, em vez de pular pro Central.
+  const [returnToAlmoxObraId, setReturnToAlmoxObraId] = useState<number | null>(null);
   const [, navegar] = useLocation();
   // Rev. 2420 — multi-seleção dentro do picker. Set<id> dos equipamentos
   // marcados pra devolução em lote. Tap no card alterna; botão "DEVOLVER
@@ -487,7 +491,13 @@ export default function EquipamentosLocados() {
   function voltarParaAlmoxSeNecessario() {
     if (returnToAlmoxAfterClose) {
       setReturnToAlmoxAfterClose(false);
-      navegar("/almoxarifado");
+      // Rev. 2455 — preserva o contexto da obra ao voltar pro Almox.
+      // O Almox lê `?obra=X` (L1515-1524) e seta obraContexto =X.
+      const dest = returnToAlmoxObraId
+        ? `/almoxarifado?obra=${returnToAlmoxObraId}`
+        : "/almoxarifado";
+      setReturnToAlmoxObraId(null);
+      navegar(dest);
     }
   }
   const checkIn = trpc.equipamentos.locadoCheckIn.useMutation({
@@ -733,6 +743,7 @@ export default function EquipamentosLocados() {
       const obraIdParam = params.get("obraId");
       if (obraIdParam && /^\d+$/.test(obraIdParam)) {
         setFiltroObra(obraIdParam);
+        setReturnToAlmoxObraId(Number(obraIdParam)); // Rev. 2455
       }
     } else if (action === "importar") {
       // Rev. 2313 — vem do botão "IMPORTAR PDF (IA)" do Almoxarifado.
@@ -2539,11 +2550,22 @@ export default function EquipamentosLocados() {
           return fa - fb;
         });
         function escolherSingle(l: any) {
-          fecharPickerDevolver();
-          setModalDev(l);
-          setDevFotos([]);
-          setDevObs("");
-          setDevData(new Date().toISOString().slice(0, 10));
+          // Rev. 2454 — DEVOLVER ESTE agora também passa pelo modal de
+          // lote (com 1 item só) pra ganhar assinaturas + comprovante PDF.
+          // Bug anterior: fecharPickerDevolver() navegava pro Almox antes
+          // do modalDev abrir (quando aberto via ?action=devolver) — a tela
+          // simplesmente "fechava". Solução: fecha SÓ o picker (sem navegar)
+          // e abre o modal de lote com [l].
+          setPickerDevolver(false);
+          setSelecionadosLote(new Set());
+          setPickerDevolverBusca("");
+          setDevLoteFotos([]);
+          setDevLoteObs("");
+          setDevLoteEtapa(1);
+          setDevLoteEntNome(""); setDevLoteEntSig(null);
+          setDevLoteRecNome(""); setDevLoteRecSig(null);
+          setDevLoteData(new Date().toISOString().slice(0, 10));
+          setModalDevLote([l]);
         }
         function toggleSelecionado(id: number) {
           setSelecionadosLote(prev => {

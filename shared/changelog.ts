@@ -1,6 +1,76 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2455 — **DEVOLVER LOCAÇÃO · ao concluir, volta pro Almoxarifado da
+ * MESMA obra de origem (não joga no Central).**
+ *
+ * SINTOMA (user 00:08): após devolução iniciada do contexto "QIU 2 - FASE 4",
+ * o ERP voltava pra `/almoxarifado` sem query string → o useState
+ * `obraContexto` (que vive só na memória da página de Almox) renderizava
+ * com valor inicial e o user via "Almoxarifado Central" em vez da obra
+ * dele.
+ *
+ * CAUSA: `voltarParaAlmoxSeNecessario` (Rev. 2449) navegava pra
+ * `/almoxarifado` puro. O Almox já tem deep-link `?obra=X` (L1515-1524),
+ * só faltava o Locados PASSAR essa info.
+ *
+ * FIX (`client/src/pages/equipamentos/Locados.tsx`):
+ *  - Novo state `returnToAlmoxObraId` (L429-433).
+ *  - useEffect do `action=devolver` (L734-737) grava o `obraId` do query
+ *    param no novo state, junto com `returnToAlmoxAfterClose=true`.
+ *  - `voltarParaAlmoxSeNecessario` (L487-498) monta destino como
+ *    `/almoxarifado?obra=${returnToAlmoxObraId}` quando temos a obra,
+ *    senão `/almoxarifado` puro (fluxo "todos"). Reseta o state.
+ *
+ * Combinado com Rev. 2452 (picker pré-filtra pela obra) + Rev. 2454
+ * (DEVOLVER ESTE também passa pelo lote/assinaturas), o ciclo completo
+ * Almox(obraX) → devolução assinada + PDF → volta Almox(obraX) preserva
+ * o contexto end-to-end.
+ *
+ * R-001/R-007/R-010 OK — zero backend.
+ *
+ * ─────────────────────────────────────────────────────────────────────────
+ *
+ * Rev. 2454 — **[BUG GRAVE — Rev. 2453 fallout] DEVOLVER ESTE (atalho single
+ * do card) fechava a tela sem abrir o modal de assinatura.**
+ *
+ * SINTOMA (user 00:05/00:06 — IMG_1248/IMG_1249): user em `/almoxarifado`
+ * (contexto QIU 2 - FASE 4) clica "DEVOLVER LOCAÇÃO" → picker abre
+ * filtrado pela obra (Rev. 2452 OK) → busca "Bala" → clica em "DEVOLVER
+ * ESTE" no footer do card de "VIGA PARA 3 MTS P/ BALANCINHO" → a tela
+ * fecha sem abrir modal de assinatura.
+ *
+ * CAUSA-RAIZ: o atalho `escolherSingle` (L2541-2547) chamava
+ * `fecharPickerDevolver()` ANTES de `setModalDev(l)`. O
+ * `fecharPickerDevolver` (Rev. 2449) executa `voltarParaAlmoxSeNecessario()`,
+ * que quando o picker foi aberto via `?action=devolver` (caso da IMG)
+ * faz `navegar("/almoxarifado")`. Resultado: navega ANTES do React
+ * conseguir abrir o `modalDev` (que vivia em /equipamentos/locados,
+ * sumindo do DOM). Bug latente desde Rev. 2449, ficou crítico agora
+ * que assinatura é obrigatória — user esperava ver a etapa 2.
+ *
+ * Segundo problema relacionado: mesmo se o `modalDev` abrisse, ele NÃO
+ * tinha o fluxo de assinaturas (só o `modalDevLote` ganhou as 2 etapas
+ * na Rev. 2453). User não devia ter 2 fluxos com regras diferentes pra
+ * mesma operação.
+ *
+ * FIX (`client/src/pages/equipamentos/Locados.tsx` L2541-2561):
+ * `escolherSingle` agora envia o item pelo MESMO caminho do lote
+ * (`setModalDevLote([l])`) — ganha as 2 etapas + assinaturas + comprovante
+ * PDF compartilhável. Limpa estado local sem chamar `voltarParaAlmox` (o
+ * `returnToAlmoxAfterClose` permanece setado e é consumido normalmente
+ * pelo `devolverLote.onSuccess`/`onClose`). O `modalDev` legado segue
+ * existindo pra outros entry points (botão verde do detalhe, etc.) mas
+ * não é mais o fluxo do picker.
+ *
+ * Consequência: TODO fluxo de devolução iniciado do Almoxarifado (single
+ * ou lote) passa pelas assinaturas + gera comprovante PDF. Comportamento
+ * uniforme, sem caminhos paralelos.
+ *
+ * R-001/R-007/R-010 OK — zero backend, zero DB.
+ *
+ * ─────────────────────────────────────────────────────────────────────────
+ *
  * Rev. 2453 — **DEVOLUÇÃO DE LOCAÇÃO · fluxo completo com assinaturas
  * (entregador FC + recebedor da locadora) + comprovante PDF compartilhável
  * via WhatsApp.**
