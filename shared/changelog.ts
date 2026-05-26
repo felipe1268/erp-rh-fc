@@ -1,6 +1,71 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2466 — **COTAÇÕES · botão "Atender pelo Estoque" agora abre
+ * modal de seleção do almoxarifado em vez de auto-matchear cego.**
+ *
+ * PEDIDO (user, IMG_1779799532073 — tela COT-2026-0138 MAT "Resma
+ * Papel Sulfite"):
+ *   "botão nao esta funcionando, ao clicar nele ele deve deixar eu
+ *    selecionar dentro do meu estoque o item que preciso"
+ * Esclarecimento via user_query (opções A/B/C): user escolheu **B —
+ * Modal abre mostrando o almoxarifado completo (todos os itens com
+ * saldo). Eu marco os itens que quero usar e ele cruza automaticamente
+ * com a SC.**
+ *
+ * BUG RAIZ: O botão (`client/src/pages/compras/Cotacoes.tsx` L3585+)
+ * disparava direto `adicionarEstoqueAoMapa.mutate()`, que rodava
+ * auto-match heurístico (codigo/nome/contém) sobre TODO o almox da
+ * empresa+obra. Resultado típico: zero matches encontrados → linha
+ * "Estoque" criada com totalOrcado=R$ 0,00 e respostas com qty=0
+ * pra todos os itens. Pro user parecia "não fazer nada" porque o
+ * toast só dizia "Estoque adicionado ao mapa (R$ 0,00)" e a linha
+ * vazia sumia visualmente. Sem nenhuma UI de seleção, o user não
+ * tinha como dizer "use ESTE item daqui".
+ *
+ * IMPLEMENTAÇÃO (2 arquivos editados):
+ *
+ * 1. **server/routers/compras.ts**:
+ *    - NOVO `listEstoqueDisponivel({ companyId, obraId? })` query —
+ *      retorna itens do almoxarifado da empresa filtrados por
+ *      central + obra atual (mesmo padrão de filtro do auto-match
+ *      existente: `obraId IS NULL OR obraId = X`), apenas com
+ *      `quantidadeAtual > 0`, ordenado por nome. Devolve `{ id,
+ *      nome, codigoInterno, unidade, quantidadeAtual, valorUnitario,
+ *      obraId, categoria, isCentral }`.
+ *    - `adicionarEstoqueAoMapa` ganhou input OPCIONAL
+ *      `almoxItemIds: number[]`. Quando presente, vira whitelist no
+ *      query do almox (`inArray(almoxarifadoItens.id, ids)`),
+ *      restringindo o auto-match aos itens escolhidos pelo user.
+ *      Retrocompat preservada: sem o parâmetro, comportamento idêntico
+ *      (varre almox inteiro como antes).
+ *
+ * 2. **client/src/pages/compras/Cotacoes.tsx**:
+ *    - Botão "Atender pelo Estoque" deixa de chamar `mutate` direto e
+ *      passa a abrir novo modal `showEstoquePicker`.
+ *    - 3 states novos: `showEstoquePicker`, `estoquePickerSearch`,
+ *      `estoquePickerIds: Set<number>`.
+ *    - Nova query `listEstoqueDisponivel.useQuery` (enabled apenas
+ *      quando modal aberto, pra não puxar dados toa).
+ *    - Modal (`Dialog` shadcn, max-w-4xl, footer com Cancelar +
+ *      Confirmar): busca por nome/código/categoria, tabela
+ *      scrollável (max-h 420px) com checkboxes click-on-row, pílulas
+ *      "Central" (azul) / "Obra" (verde), preço médio formatado,
+ *      botões "Marcar todos" / "Limpar". Botão Confirmar mostra
+ *      contador `({size})` e fica disabled com 0 selecionados.
+ *    - `adicionarEstoque.onSuccess` agora também fecha o picker e
+ *      limpa a seleção.
+ *
+ * UX: User clica → modal abre carregando → marca os itens → confirma
+ * → backend faz auto-match SC ↔ almox MAS só sobre os IDs marcados
+ * → linha "Estoque" criada com totalOrcado real → toast com valor
+ * total → modal fecha. Itens da SC que não derem match em nenhum
+ * dos selecionados aparecem com qty=0 (já era comportamento).
+ *
+ * R-001/R-007/R-010 OK — ZERO ALTER/DROP/DELETE.
+ *
+ * ----------------------------------------------------------------
+ *
  * Rev. 2465 — **RECEBIMENTO DE EQUIPAMENTO LOCADO · espelho do fluxo
  * de devolução (Rev. 2453+2461) com assinaturas + comprovante PDF
  * compartilhável + Nº DA OC em destaque.**

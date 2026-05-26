@@ -5016,12 +5016,77 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
   // limitando a quantidade ao saldo disponível. Se o item não existir no almox
   // (sem match por nome/codigoInterno), insere com preço=0 e qty=0 — o usuário
   // verá esse item como "sem cobertura no estoque" no mapa.
+  // Rev. 2466 — Query auxiliar pro modal "Selecionar do Estoque" (botão
+  // "Atender pelo Estoque" no Mapa de Cotação). Retorna itens do almoxarifado
+  // da empresa (filtra por obra: só central + obra atual), apenas com
+  // saldo > 0, ordenado por nome. Frontend exibe checkboxes pro user marcar
+  // o que deseja usar; IDs marcados são enviados pra `adicionarEstoqueAoMapa`
+  // via `almoxItemIds` que restringe o auto-match a esses itens.
+  listEstoqueDisponivel: protectedProcedure
+    .input(z.object({ companyId: z.number(), obraId: z.number().optional() }))
+    .query(async ({ ctx, input }) => {
+      await _assertCompanyAccess(ctx.user, input.companyId);
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const conds: any[] = [
+        eq(almoxarifadoItens.companyId, input.companyId),
+        eq(almoxarifadoItens.ativo, true),
+      ];
+      if (input.obraId) conds.push(or(isNull(almoxarifadoItens.obraId), eq(almoxarifadoItens.obraId, input.obraId))!);
+      const itens = await db.select({
+        id: almoxarifadoItens.id,
+        nome: almoxarifadoItens.nome,
+        codigoInterno: almoxarifadoItens.codigoInterno,
+        unidade: almoxarifadoItens.unidade,
+        quantidadeAtual: almoxarifadoItens.quantidadeAtual,
+        valorUnitario: almoxarifadoItens.valorUnitario,
+        obraId: almoxarifadoItens.obraId,
+        categoria: almoxarifadoItens.categoria,
+      }).from(almoxarifadoItens).where(and(...conds));
+      return itens
+        .filter(i => parseFloat(String(i.quantidadeAtual) || "0") > 0)
+        .map(i => ({
+          id: i.id,
+          nome: i.nome,
+          codigoInterno: i.codigoInterno,
+          unidade: i.unidade,
+          quantidadeAtual: parseFloat(String(i.quantidadeAtual) || "0"),
+          valorUnitario: parseFloat(String(i.valorUnitario) || "0"),
+          obraId: i.obraId,
+          categoria: i.categoria,
+          isCentral: i.obraId == null,
+        }))
+        .sort((a, b) => (a.nome || "").localeCompare(b.nome || ""));
+    }),
+
   adicionarEstoqueAoMapa: protectedProcedure
-    .input(z.object({ cotacaoId: z.number(), companyId: z.number(), obraId: z.number().optional() }))
-    .mutation(async ({ input }) => {
+    .input(z.object({
+      cotacaoId: z.number(),
+      companyId: z.number(),
+      obraId: z.number().optional(),
+      // Rev. 2466 — IDs dos itens do almoxarifado escolhidos pelo user no
+      // modal de seleção. Quando presente, o auto-match passa a restringir
+      // aos itens dessa lista (em vez de varrer o almox inteiro). Mantém
+      // retrocompat: ausente = comportamento original (varredura completa).
+      almoxItemIds: z.array(z.number()).optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      await _assertCompanyAccess(ctx.user, input.companyId);
+      // Rev. 2466 — Quando o cliente envia `almoxItemIds` presente mas
+      // vazio, é bug (botão Confirmar deveria estar disabled). NÃO podemos
+      // fazer fallback silencioso pra varredura total — viola a semântica
+      // de "seleção explícita". Rejeita com BAD_REQUEST.
+      if (input.almoxItemIds !== undefined && input.almoxItemIds.length === 0) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Selecione ao menos um item do estoque." });
+      }
       const db = await getDb();
       const [cot] = await db.select().from(comprasCotacoes).where(eq(comprasCotacoes.id, input.cotacaoId));
       if (!cot) throw new TRPCError({ code: "NOT_FOUND", message: "Cotação não encontrada" });
+      // Defesa extra: cotação deve pertencer à empresa do input (impede
+      // que um usuário com acesso a 2 empresas force cotação alheia).
+      if ((cot as any).companyId !== input.companyId) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Cotação não pertence a esta empresa." });
+      }
       const obraId = input.obraId ?? cot.obraId ?? null;
 
       // Já existe linha de Estoque?
@@ -5050,6 +5115,11 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
       // Carrega itens do almoxarifado da empresa (filtra por obra quando aplicável)
       const almoxConds = [eq(almoxarifadoItens.companyId, input.companyId), eq(almoxarifadoItens.ativo, true)];
       if (obraId) almoxConds.push(or(isNull(almoxarifadoItens.obraId), eq(almoxarifadoItens.obraId, obraId))!);
+      // Rev. 2466 — Quando o user escolheu manualmente quais itens usar,
+      // restringe a varredura a esses IDs (vira whitelist explícita).
+      if (input.almoxItemIds && input.almoxItemIds.length > 0) {
+        almoxConds.push(inArray(almoxarifadoItens.id, input.almoxItemIds));
+      }
       const almox = await db.select().from(almoxarifadoItens).where(and(...almoxConds));
       const norm = (x: string|null|undefined) => (x ?? "").toLowerCase().trim().replace(/\s+/g," ");
       const byCodigo = new Map<string, typeof almox[0]>();

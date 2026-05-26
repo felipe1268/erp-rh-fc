@@ -2,6 +2,7 @@
 
 > Este arquivo guarda os one-liners das revisões antigas para manter o `replit.md` enxuto.
 
+- **Rev. 2459** — TIMELINE do equipamento locado · recibo de devolução assinado + botão "Gerar/compartilhar PDF" dentro do card do evento. Filtro `f?.url && length>20`, bloco "Recibo de devolução" com PNGs das assinaturas, CTA verde reúso do `modalShareComprovante`. Ver `shared/changelog.ts`.
 - **Rev. 2458** — COMPROVANTE DE DEVOLUÇÃO (PDF) · layout padrão FC + fotos dos equipamentos + fim da página em branco. Header logo+razão social+faixa azul, coluna FOTO (8%) com thumb 32x32pt, rodapé deslocado pra y+5 (sem 2ª página). Ver `shared/changelog.ts`.
 - **Rev. 2457** — ALMOXARIFADO · `/almoxarifado/movimentacoes` virou timeline UNIFICADA das 4 fontes (estoque, ferramentas, insumos, transferências). Nova query `warehouse.listTimeline` com UNION ALL + chips FONTE no front. Ver `shared/changelog.ts`.
 - **Rev. 2456** — DEVOLUÇÃO DE LOCAÇÃO · (a) autofill do entregador com user FC logado em `Locados.tsx` + (b) movimentação aparece no Raio-X do funcionário via nova query `empDevolucoesLocacao` em `controleDocumentos.ts`. Ver `shared/changelog.ts`.

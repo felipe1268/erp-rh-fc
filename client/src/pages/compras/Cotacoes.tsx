@@ -1139,9 +1139,24 @@ export default function Cotacoes() {
       if (data?.jaExistia) toast.info("Estoque já está no mapa.");
       else toast.success(`Estoque adicionado ao mapa (R$ ${(data?.totalEstoque ?? 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}).`);
       mapaQ.refetch();
+      // Rev. 2466 — Fecha o picker e limpa seleção ao concluir.
+      setShowEstoquePicker(false);
+      setEstoquePickerIds(new Set());
+      setEstoquePickerSearch("");
     },
     onError: (e) => toast.error(e.message),
   });
+  // Rev. 2466 — Modal "Selecionar do Estoque": user marca itens do
+  // almoxarifado (com saldo > 0) que deseja usar pra atender a SC. Os IDs
+  // marcados são enviados pra mutation, que restringe o auto-match a esses
+  // itens (em vez de varrer o almox inteiro).
+  const [showEstoquePicker, setShowEstoquePicker] = useState(false);
+  const [estoquePickerSearch, setEstoquePickerSearch] = useState("");
+  const [estoquePickerIds, setEstoquePickerIds] = useState<Set<number>>(new Set());
+  const estoqueDisponivelQ = trpc.compras.listEstoqueDisponivel.useQuery(
+    { companyId, obraId: (detalheFullscreen as any)?.obraId ?? undefined },
+    { enabled: showEstoquePicker },
+  );
   const [salvarProgress, setSalvarProgress] = useState<number | null>(null);
   const salvarProgressRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const salvarRespostas = trpc.compras.salvarRespostasLote.useMutation({
@@ -3584,10 +3599,17 @@ export default function Cotacoes() {
                       {showDetalhe && !(mapa?.participantes ?? []).some((p: any) => p.isEstoque) && (
                         <Button
                           type="button"
-                          onClick={() => adicionarEstoque.mutate({ cotacaoId: showDetalhe, companyId, obraId: (detalheFullscreen as any)?.obraId ?? undefined })}
+                          onClick={() => {
+                            // Rev. 2466 — Abre modal de seleção em vez de
+                            // chamar a mutation direto (que antes fazia
+                            // auto-match cego sobre o almox inteiro).
+                            setEstoquePickerIds(new Set());
+                            setEstoquePickerSearch("");
+                            setShowEstoquePicker(true);
+                          }}
                           disabled={adicionarEstoque.isPending}
                           className="bg-violet-600 hover:bg-violet-500 text-white gap-2"
-                          title="Atender esta SC com saldo do almoxarifado, sem fornecedor externo"
+                          title="Escolher itens do almoxarifado pra atender esta SC"
                         >
                           {adicionarEstoque.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Package className="h-4 w-4" />}
                           Atender pelo Estoque
@@ -6928,6 +6950,132 @@ export default function Cotacoes() {
           })() : (
             <p className="text-sm text-red-500 py-4">Erro ao calcular split MAT/MDO.</p>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Rev. 2466 — Modal "Selecionar do Estoque" ───────────────────
+          Lista almoxarifado da empresa (central + obra atual) com saldo > 0.
+          User marca os itens que quer usar e confirma — IDs vão pra mutation
+          adicionarEstoqueAoMapa, que restringe o auto-match a essa whitelist
+          em vez de varrer o almox inteiro. */}
+      <Dialog open={showEstoquePicker} onOpenChange={(o) => { if (!o) { setShowEstoquePicker(false); setEstoquePickerIds(new Set()); setEstoquePickerSearch(""); } }}>
+        <DialogContent className="max-w-4xl border-gray-200" style={{ background: "#fff", color: "#111827" }}>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-gray-900">
+              <Package className="h-5 w-5 text-violet-600" />
+              Selecionar do Estoque
+            </DialogTitle>
+            <p className="text-xs text-gray-500 mt-1">
+              Marque os itens do almoxarifado que deseja usar pra atender esta solicitação. O sistema cruza automaticamente com os itens da SC.
+            </p>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <Input
+                placeholder="Buscar por nome, código ou categoria…"
+                value={estoquePickerSearch}
+                onChange={(e) => setEstoquePickerSearch(e.target.value)}
+                className="pl-10 bg-white border-gray-300 text-gray-900"
+              />
+            </div>
+            {estoqueDisponivelQ.isLoading ? (
+              <div className="flex items-center justify-center py-12 text-gray-500"><Loader2 className="h-6 w-6 animate-spin" /></div>
+            ) : (() => {
+              const itens = (estoqueDisponivelQ.data ?? []) as any[];
+              const filtrados = itens.filter((it) => {
+                if (!estoquePickerSearch) return true;
+                const q = estoquePickerSearch.toLowerCase();
+                return (it.nome ?? "").toLowerCase().includes(q)
+                  || (it.codigoInterno ?? "").toLowerCase().includes(q)
+                  || (it.categoria ?? "").toLowerCase().includes(q);
+              });
+              if (itens.length === 0) {
+                return <p className="text-sm text-gray-500 text-center py-12">Nenhum item do almoxarifado com saldo disponível.</p>;
+              }
+              if (filtrados.length === 0) {
+                return <p className="text-sm text-gray-400 text-center py-12">Nenhum item encontrado para "{estoquePickerSearch}".</p>;
+              }
+              return (
+                <>
+                  <div className="flex items-center justify-between text-xs text-gray-500 px-1">
+                    <span>{filtrados.length} item(s) {filtrados.length !== itens.length ? `de ${itens.length}` : ""}</span>
+                    <div className="flex gap-2">
+                      <button type="button" className="text-violet-600 hover:underline" onClick={() => setEstoquePickerIds(new Set(filtrados.map((it: any) => it.id)))}>Marcar todos</button>
+                      <button type="button" className="text-gray-500 hover:underline" onClick={() => setEstoquePickerIds(new Set())}>Limpar</button>
+                    </div>
+                  </div>
+                  <div className="border border-gray-200 rounded-lg overflow-hidden max-h-[420px] overflow-y-auto bg-white">
+                    <table className="w-full text-sm">
+                      <thead className="bg-gray-50 sticky top-0 z-10">
+                        <tr className="text-left text-xs font-semibold text-gray-600">
+                          <th className="px-3 py-2 w-10"></th>
+                          <th className="px-3 py-2">Item</th>
+                          <th className="px-3 py-2 w-24 text-right">Saldo</th>
+                          <th className="px-3 py-2 w-28 text-right">Preço médio</th>
+                          <th className="px-3 py-2 w-20 text-center">Origem</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {filtrados.map((it: any) => {
+                          const marcado = estoquePickerIds.has(it.id);
+                          return (
+                            <tr
+                              key={it.id}
+                              onClick={() => {
+                                const ns = new Set(estoquePickerIds);
+                                if (marcado) ns.delete(it.id); else ns.add(it.id);
+                                setEstoquePickerIds(ns);
+                              }}
+                              className={`cursor-pointer hover:bg-violet-50 ${marcado ? "bg-violet-50/60" : ""}`}
+                            >
+                              <td className="px-3 py-2"><input type="checkbox" checked={marcado} onChange={() => {}} className="h-4 w-4 accent-violet-600" /></td>
+                              <td className="px-3 py-2">
+                                <div className="font-medium text-gray-900">{it.nome}</div>
+                                <div className="text-[11px] text-gray-500">
+                                  {it.codigoInterno ? `${it.codigoInterno} · ` : ""}{it.categoria || "—"}
+                                </div>
+                              </td>
+                              <td className="px-3 py-2 text-right tabular-nums text-gray-700">
+                                {it.quantidadeAtual.toLocaleString("pt-BR")} <span className="text-xs text-gray-400">{it.unidade || ""}</span>
+                              </td>
+                              <td className="px-3 py-2 text-right tabular-nums text-gray-700">
+                                {it.valorUnitario > 0 ? `R$ ${it.valorUnitario.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}` : <span className="text-gray-400">—</span>}
+                              </td>
+                              <td className="px-3 py-2 text-center">
+                                <span className={`text-[10px] px-1.5 py-0.5 rounded ${it.isCentral ? "bg-blue-100 text-blue-700" : "bg-emerald-100 text-emerald-700"}`}>
+                                  {it.isCentral ? "Central" : "Obra"}
+                                </span>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
+              );
+            })()}
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => { setShowEstoquePicker(false); setEstoquePickerIds(new Set()); setEstoquePickerSearch(""); }}>Cancelar</Button>
+            <Button
+              disabled={estoquePickerIds.size === 0 || adicionarEstoque.isPending || !showDetalhe}
+              onClick={() => {
+                if (!showDetalhe) return;
+                adicionarEstoque.mutate({
+                  cotacaoId: showDetalhe,
+                  companyId,
+                  obraId: (detalheFullscreen as any)?.obraId ?? undefined,
+                  almoxItemIds: Array.from(estoquePickerIds),
+                });
+              }}
+              className="bg-violet-600 hover:bg-violet-500 text-white gap-2"
+            >
+              {adicionarEstoque.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+              Confirmar ({estoquePickerIds.size})
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
