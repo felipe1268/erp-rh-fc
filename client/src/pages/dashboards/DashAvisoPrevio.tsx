@@ -1269,21 +1269,38 @@ export default function DashAvisoPrevio() {
             </Card>
 
             {/* ===== DRILL-DOWN DIALOG (Rev. 1944 — layout redesenhado) ===== */}
+            {/* Rev. 2472 — Layout ultra moderno: header com gradient
+                temático (urgência/status), avatares com gradient único por
+                funcionário, cards polidos com hover-lift, footer com
+                resumo financeiro destacado. Largura ampliada (3xl→5xl). */}
             <Dialog open={!!drillDown} onOpenChange={(open) => !open && setDrillDown(null)}>
-              <DialogContent className="max-w-3xl max-h-[85vh] p-0 overflow-hidden flex flex-col gap-0">
+              <DialogContent
+                className="max-w-5xl max-h-[88vh] p-0 overflow-hidden flex flex-col gap-0 border-0"
+                style={{ background: "#F8FAFC" }}
+              >
                 {(() => {
                   const isVenc7 = drillDown?.type === 'venc7';
                   const isVenc30 = drillDown?.type === 'venc30';
                   const isUrgente = isVenc7 || isVenc30;
-                  const headerBg = isVenc7 ? 'bg-red-50 border-red-200' : isVenc30 ? 'bg-amber-50 border-amber-200' : 'bg-slate-50 border-slate-200';
+                  // Gradient temático por tipo do drill-down
+                  const headerGradient =
+                    isVenc7 ? 'linear-gradient(135deg, #7F1D1D 0%, #B91C1C 50%, #DC2626 100%)' :
+                    isVenc30 ? 'linear-gradient(135deg, #78350F 0%, #B45309 50%, #D97706 100%)' :
+                    drillDown?.type === 'status' && drillDown?.label === 'concluido' ? 'linear-gradient(135deg, #064E3B 0%, #047857 50%, #059669 100%)' :
+                    drillDown?.type === 'status' && drillDown?.label === 'cancelado' ? 'linear-gradient(135deg, #7F1D1D 0%, #991B1B 50%, #B91C1C 100%)' :
+                    drillDown?.type === 'status' && drillDown?.label === 'em_andamento' ? 'linear-gradient(135deg, #1E3A8A 0%, #1D4ED8 50%, #2563EB 100%)' :
+                    drillDown?.type === 'funcao' ? 'linear-gradient(135deg, #581C87 0%, #6B21A8 50%, #7C3AED 100%)' :
+                    drillDown?.type === 'setor' || drillDown?.type === 'custoSetor' ? 'linear-gradient(135deg, #164E63 0%, #155E75 50%, #0891B2 100%)' :
+                    drillDown?.type === 'finTotal' ? 'linear-gradient(135deg, #1E1B4B 0%, #312E81 45%, #4C1D95 100%)' :
+                    'linear-gradient(135deg, #0F172A 0%, #1E293B 50%, #334155 100%)';
                   const headerIcon =
-                    drillDown?.type === 'funcao' ? <Briefcase className="h-5 w-5 text-purple-600" /> :
-                    drillDown?.type === 'setor' || drillDown?.type === 'custoSetor' ? <Building2 className="h-5 w-5 text-blue-600" /> :
-                    drillDown?.type === 'status' || drillDown?.type === 'finStatus' ? <BarChart3 className="h-5 w-5 text-blue-600" /> :
-                    drillDown?.type === 'finTotal' ? <DollarSign className="h-5 w-5 text-blue-600" /> :
-                    isVenc7 ? <ShieldAlert className="h-5 w-5 text-red-600" /> :
-                    isVenc30 ? <CalendarDays className="h-5 w-5 text-amber-600" /> :
-                    <AlertTriangle className="h-5 w-5 text-amber-600" />;
+                    drillDown?.type === 'funcao' ? <Briefcase className="h-6 w-6 text-white" /> :
+                    drillDown?.type === 'setor' || drillDown?.type === 'custoSetor' ? <Building2 className="h-6 w-6 text-white" /> :
+                    drillDown?.type === 'status' || drillDown?.type === 'finStatus' ? <BarChart3 className="h-6 w-6 text-white" /> :
+                    drillDown?.type === 'finTotal' ? <DollarSign className="h-6 w-6 text-white" /> :
+                    isVenc7 ? <ShieldAlert className="h-6 w-6 text-white" /> :
+                    isVenc30 ? <CalendarDays className="h-6 w-6 text-white" /> :
+                    <AlertTriangle className="h-6 w-6 text-white" />;
                   const headerTitle =
                     drillDown?.type === 'funcao' ? `Função: ${drillDown?.label}` :
                     drillDown?.type === 'setor' || drillDown?.type === 'custoSetor' ? `Setor: ${drillDown?.label}` :
@@ -1302,108 +1319,140 @@ export default function DashAvisoPrevio() {
                   const headerSubtitle =
                     isVenc7 ? 'Atenção imediata — providenciar acerto/encaminhamento antes do prazo' :
                     isVenc30 ? 'Planejamento de caixa do próximo mês' :
-                    null;
+                    drillDown?.type === 'status' ? 'Avisos prévios neste status' :
+                    drillDown?.type === 'finTotal' ? 'Visão financeira consolidada' :
+                    'Avisos prévios filtrados';
                   const total = drillDownAvisosOrdenados.reduce((sum: number, a: any) => sum + parseFloat(a.valorEstimadoTotal || '0'), 0);
+                  const media = drillDownAvisosOrdenados.length > 0 ? total / drillDownAvisosOrdenados.length : 0;
+                  // Paleta de gradients pros avatares (hash mod 6)
+                  const avatarGradients = [
+                    'linear-gradient(135deg, #6366F1 0%, #8B5CF6 100%)',
+                    'linear-gradient(135deg, #06B6D4 0%, #3B82F6 100%)',
+                    'linear-gradient(135deg, #10B981 0%, #0EA5E9 100%)',
+                    'linear-gradient(135deg, #F59E0B 0%, #EF4444 100%)',
+                    'linear-gradient(135deg, #EC4899 0%, #8B5CF6 100%)',
+                    'linear-gradient(135deg, #14B8A6 0%, #6366F1 100%)',
+                  ];
                   return (
                     <>
-                      {/* Header colorido por urgência */}
-                      <DialogHeader className={`px-5 py-3 border-b ${headerBg} space-y-1`}>
-                        <DialogTitle className="flex items-center gap-2 text-base font-bold text-foreground">
-                          <span className="h-8 w-8 rounded-md bg-white border border-current/20 flex items-center justify-center shrink-0">
-                            {headerIcon}
-                          </span>
-                          <span className="flex-1 min-w-0 truncate">{headerTitle}</span>
-                          <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${isVenc7 ? 'bg-red-600 text-white' : isVenc30 ? 'bg-amber-600 text-white' : 'bg-slate-700 text-white'}`}>
+                      {/* HEADER — gradient temático com glassmorphism */}
+                      <DialogHeader
+                        className="px-7 py-5 shrink-0 space-y-0 border-b border-slate-200"
+                        style={{ background: headerGradient, color: '#fff' }}
+                      >
+                        <div className="flex items-center justify-between gap-4">
+                          <div className="flex items-center gap-4 min-w-0">
+                            <div
+                              className="flex h-12 w-12 items-center justify-center rounded-xl shrink-0"
+                              style={{ background: 'rgba(255,255,255,0.14)', backdropFilter: 'blur(8px)', border: '1px solid rgba(255,255,255,0.22)' }}
+                            >
+                              {headerIcon}
+                            </div>
+                            <div className="min-w-0">
+                              <DialogTitle className="text-white text-xl font-bold tracking-tight truncate">{headerTitle}</DialogTitle>
+                              <p className="text-xs text-white/70 mt-0.5 truncate">{headerSubtitle}</p>
+                            </div>
+                          </div>
+                          <div
+                            className="shrink-0 px-4 py-2 rounded-full text-xs font-semibold tracking-wide flex items-center gap-2"
+                            style={{ background: 'rgba(255,255,255,0.14)', border: '1px solid rgba(255,255,255,0.22)' }}
+                          >
+                            <span className={`h-2 w-2 rounded-full ${isUrgente ? 'bg-amber-300' : 'bg-emerald-300'} animate-pulse`} />
                             {drillDownAvisosOrdenados.length} {drillDownAvisosOrdenados.length === 1 ? 'aviso' : 'avisos'}
-                          </span>
-                        </DialogTitle>
-                        {headerSubtitle && (
-                          <p className="text-[11px] text-muted-foreground pl-10">{headerSubtitle}</p>
-                        )}
+                          </div>
+                        </div>
                       </DialogHeader>
 
-                      {/* Lista scroll */}
-                      <div className="flex-1 overflow-y-auto px-5 py-3">
+                      {/* LISTA — cards modernos com avatar gradient */}
+                      <div className="flex-1 overflow-y-auto px-7 py-5">
                         {drillDownAvisosOrdenados.length === 0 ? (
-                          <div className="flex flex-col items-center justify-center py-12 text-center">
-                            <div className="h-12 w-12 rounded-full bg-green-50 flex items-center justify-center mb-2">
-                              <ShieldAlert className="h-6 w-6 text-green-600" />
+                          <div className="flex flex-col items-center justify-center py-20 text-center">
+                            <div className="h-16 w-16 rounded-2xl bg-emerald-50 flex items-center justify-center mb-3">
+                              <ShieldAlert className="h-7 w-7 text-emerald-600" />
                             </div>
-                            <p className="text-sm font-medium text-foreground">Nenhum aviso neste filtro</p>
-                            <p className="text-xs text-muted-foreground mt-1">Não há avisos prévios que correspondam aos critérios selecionados.</p>
+                            <p className="text-sm font-semibold text-slate-700">Nenhum aviso neste filtro</p>
+                            <p className="text-xs text-slate-500 mt-1">Não há avisos prévios que correspondam aos critérios selecionados.</p>
                           </div>
                         ) : (
-                          <div className="space-y-1.5">
+                          <div className="space-y-2.5">
                             {drillDownAvisosOrdenados.map((a: any) => {
                               const diasFim = diasAteVencer(a.dataFim);
                               const iniciais = (a.nomeCompleto || '?').split(' ').map((p: string) => p[0]).filter(Boolean).slice(0, 2).join('').toUpperCase();
+                              const seed = String(a.id || a.nomeCompleto || 'x').split('').reduce((acc: number, c: string) => acc + c.charCodeAt(0), 0);
+                              const avatarGrad = avatarGradients[seed % avatarGradients.length];
                               const corBadgeUrg = diasFim === null ? '' :
-                                diasFim < 0 ? 'bg-red-600 text-white' :
-                                diasFim <= 7 ? 'bg-red-100 text-red-800 border border-red-300' :
-                                diasFim <= 30 ? 'bg-amber-100 text-amber-800 border border-amber-300' :
-                                'bg-slate-100 text-slate-700 border border-slate-200';
+                                diasFim < 0 ? 'bg-red-600 text-white border-red-700' :
+                                diasFim <= 7 ? 'bg-red-50 text-red-700 border-red-200' :
+                                diasFim <= 30 ? 'bg-amber-50 text-amber-700 border-amber-200' :
+                                'bg-slate-50 text-slate-600 border-slate-200';
                               const labelUrg = diasFim === null ? null :
                                 diasFim < 0 ? `Atrasado ${Math.abs(diasFim)}d` :
                                 diasFim === 0 ? 'Vence hoje' :
                                 diasFim === 1 ? 'Vence amanhã' :
                                 `Vence em ${diasFim}d`;
                               return (
-                                <div key={a.id} className="group flex items-stretch gap-3 p-2.5 rounded-lg border border-border bg-white hover:border-foreground/20 hover:shadow-sm transition-all">
-                                  {/* Avatar com inicial */}
-                                  <div className="h-10 w-10 rounded-md bg-gradient-to-br from-slate-100 to-slate-200 flex items-center justify-center shrink-0 self-start mt-0.5">
-                                    <span className="text-[11px] font-bold text-slate-600">{iniciais}</span>
+                                <div
+                                  key={a.id}
+                                  className="group flex items-stretch gap-4 p-4 rounded-2xl border border-slate-200 bg-white hover:border-violet-300 hover:shadow-lg hover:-translate-y-0.5 transition-all"
+                                >
+                                  {/* Avatar com gradient único */}
+                                  <div
+                                    className="h-12 w-12 rounded-xl shrink-0 self-start flex items-center justify-center text-white text-sm font-bold tracking-wide shadow-sm"
+                                    style={{ background: avatarGrad }}
+                                  >
+                                    {iniciais}
                                   </div>
 
                                   {/* Bloco central */}
-                                  <div className="min-w-0 flex-1 space-y-1">
-                                    {/* Linha 1: Nome (clica → Raio-X) + chips */}
-                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                  <div className="min-w-0 flex-1 space-y-2">
+                                    <div className="flex items-center gap-2 flex-wrap">
                                       <button
                                         type="button"
                                         onClick={() => { setRaioXEmployeeId(a.employeeId || a.funcionarioId || null); }}
-                                        className="text-sm font-semibold text-foreground hover:text-blue-700 hover:underline truncate text-left"
+                                        className="text-sm font-bold text-slate-900 hover:text-violet-700 hover:underline truncate text-left tracking-tight"
                                         title="Clique para ver o raio-X do funcionário"
                                       >
                                         {a.nomeCompleto}
                                       </button>
-                                      <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded border ${tipoChipColor(a.tipo)}`}>
+                                    </div>
+                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                      <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${tipoChipColor(a.tipo)}`}>
                                         {fmtTipoLabel(a.tipo)}
                                       </span>
-                                      <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-200">
+                                      <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200">
                                         {a.diasAviso}d
                                       </span>
                                       {a.reducaoJornada && a.reducaoJornada !== 'nenhuma' && (
-                                        <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-purple-50 text-purple-700 border border-purple-200" title="Redução de jornada (Art. 488 CLT)">
+                                        <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-purple-50 text-purple-700 border border-purple-200" title="Redução de jornada (Art. 488 CLT)">
                                           ⏱ {fmtReducaoLabel(a.reducaoJornada)}
                                         </span>
                                       )}
                                     </div>
-                                    {/* Linha 2: período + função/obra se houver */}
-                                    <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+                                    <div className="flex items-center gap-2 text-[11px] text-slate-500">
                                       <CalendarDays className="h-3 w-3 shrink-0" />
-                                      <span className="tabular-nums">
+                                      <span className="tabular-nums font-medium">
                                         {a.dataInicio ? new Date(a.dataInicio + 'T00:00:00').toLocaleDateString('pt-BR') : '—'}
-                                        <span className="mx-1 text-muted-foreground/60">→</span>
+                                        <span className="mx-1.5 text-slate-300">→</span>
                                         {a.dataFim ? new Date(a.dataFim + 'T00:00:00').toLocaleDateString('pt-BR') : '—'}
                                       </span>
                                       {(a.funcao || a.setor) && (
-                                        <span className="truncate text-muted-foreground/80">· {a.funcao || a.setor}</span>
+                                        <span className="truncate text-slate-500">· {a.funcao || a.setor}</span>
                                       )}
                                     </div>
                                   </div>
 
                                   {/* Bloco direito: valor + status + urgência */}
-                                  <div className="flex flex-col items-end gap-1 shrink-0 self-center">
-                                    <p className={`font-bold text-sm tabular-nums ${isUrgente ? 'text-red-700' : 'text-foreground'}`}>
+                                  <div className="flex flex-col items-end gap-2 shrink-0 self-center">
+                                    <p className={`font-bold text-base tabular-nums leading-none ${isUrgente ? 'text-red-700' : 'text-slate-900'}`}>
                                       {fmtValorStr(a.valorEstimadoTotal)}
                                     </p>
-                                    <div className="flex items-center gap-1">
+                                    <div className="flex items-center gap-1.5">
                                       {labelUrg && isUrgente && (
-                                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${corBadgeUrg}`}>
+                                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${corBadgeUrg}`}>
                                           {labelUrg}
                                         </span>
                                       )}
-                                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${statusColor(a.status)}`}>
+                                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${statusColor(a.status)}`}>
                                         {fmtStatus(a.status)}
                                       </span>
                                     </div>
@@ -1415,17 +1464,36 @@ export default function DashAvisoPrevio() {
                         )}
                       </div>
 
-                      {/* Footer sticky com total */}
+                      {/* FOOTER — resumo financeiro destacado */}
                       {drillDownAvisosOrdenados.length > 0 && (
-                        <div className={`px-5 py-2.5 border-t flex items-center justify-between ${isVenc7 ? 'bg-red-50/60' : isVenc30 ? 'bg-amber-50/60' : 'bg-slate-50'}`}>
-                          <span className="text-[11px] text-muted-foreground">
-                            <strong className="text-foreground">{drillDownAvisosOrdenados.length}</strong> {drillDownAvisosOrdenados.length === 1 ? 'aviso prévio' : 'avisos prévios'}
-                            {isUrgente && <span className="ml-1">· ordenados por proximidade do vencimento</span>}
-                          </span>
-                          <span className="text-sm">
-                            <span className="text-[11px] text-muted-foreground mr-1.5">Total:</span>
-                            <strong className={`tabular-nums ${isVenc7 ? 'text-red-700' : isVenc30 ? 'text-amber-800' : 'text-foreground'}`}>{fmtBRL(total)}</strong>
-                          </span>
+                        <div className="px-7 py-4 shrink-0 border-t border-slate-200 bg-white">
+                          <div className="flex items-center justify-between gap-4">
+                            <div className="flex items-center gap-6">
+                              <div>
+                                <div className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">Avisos prévios</div>
+                                <div className="text-2xl font-bold text-slate-900 tabular-nums leading-none mt-1">
+                                  {drillDownAvisosOrdenados.length}
+                                  {isUrgente && (
+                                    <span className="text-[10px] font-medium text-slate-400 ml-2">ordenados por vencimento</span>
+                                  )}
+                                </div>
+                              </div>
+                              {media > 0 && (
+                                <div className="border-l border-slate-200 pl-6">
+                                  <div className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">Custo médio</div>
+                                  <div className="text-lg font-semibold text-slate-700 tabular-nums leading-none mt-1">
+                                    {fmtBRL(media)}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                            <div className="text-right">
+                              <div className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">Total estimado</div>
+                              <div className={`text-2xl font-bold tabular-nums leading-none mt-1 ${isVenc7 ? 'text-red-600' : isVenc30 ? 'text-amber-600' : 'text-emerald-600'}`}>
+                                {fmtBRL(total)}
+                              </div>
+                            </div>
+                          </div>
                         </div>
                       )}
                     </>

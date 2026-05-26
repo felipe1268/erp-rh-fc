@@ -2,6 +2,7 @@
 
 > Este arquivo guarda os one-liners das revisões antigas para manter o `replit.md` enxuto.
 
+- **Rev. 2465** — RECEBIMENTO DE EQUIPAMENTO LOCADO · espelho do fluxo de devolução (Rev. 2453+2461) com assinaturas + comprovante PDF + Nº DA OC em destaque. Inputs opcionais (`assinaturaEntregador/Recebedor{Nome,Url}`) em `locadoCriar`, novo `equipmentReceiptPdf.ts` (faixa verde, cards invertidos, Nº OC via JOIN comprasOrdens), rota pública `/api/comprovante-recebimento/:eventoId/:token.pdf`, modal 2-etapas em Locados.tsx. Ver `shared/changelog.ts`.
 - **Rev. 2464** — HOTFIX build de produção · `SignaturePad` sem `export default` nem `SignaturePadHandle` quebrava `vite build`. Componente virou `forwardRef<SignaturePadHandle, SignaturePadProps>` com `value/onChange` opcionais + `toDataURL()/clear()/hasInk()` (respeita gate `MIN_INK_DISTANCE`) + prop `disabled` + `export default`. Ver `shared/changelog.ts`.
 - **Rev. 2463** — HOTFIX Rev. 2462 · toggle "Exigir aprovação do gestor" travado (coluna não criada no Neon). 3º `ALTER TABLE companies ADD COLUMN IF NOT EXISTS almoxarifado_exige_aprovacao SMALLINT NOT NULL DEFAULT 1` no bloco `SyncSchema+` de `server/_core/index.ts`. Ver `shared/changelog.ts`.
 - **Rev. 2462** — AUDITORIA DO ALMOXARIFADO · 3º toggle independente "Exigir aprovação do gestor" (log sempre, aprovação opcional). Schema `companies.almoxarifadoExigeAprovacao` + helper `getAuditoriaInicialFields` (auto-validação quando dispensada) aplicado em `atualizarItem`/`excluirItem`/`excluirUnidade`. Ver `shared/changelog.ts`.

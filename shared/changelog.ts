@@ -1,6 +1,79 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2472 — **DASHBOARD AVISO PRÉVIO · modal de drill-down
+ * ganha layout ultra moderno (header com gradient temático por
+ * tipo/urgência, avatares com gradient único, cards polidos com
+ * hover-lift, footer com resumo financeiro destacado).**
+ *
+ * PEDIDO (user, refs visuais image_1779807368743 + 1779807495773
+ * + 1779807533761 — modais "Status: Concluído / Cancelado / Em
+ * Andamento / Todos os Avisos do Ano" do Dashboard Aviso Prévio):
+ * "esta tela tbm" (3x). Após user_query confirmando, redesign do
+ * componente único reutilizado por todos esses modais.
+ *
+ * REDESIGN (`client/src/pages/dashboards/DashAvisoPrevio.tsx`,
+ * bloco `<Dialog>` de drill-down L1272+):
+ *
+ * 1. **Largura ampliada** (`max-w-3xl → max-w-5xl`, `max-h-85vh
+ *    → 88vh`); background da shell `#F8FAFC` (slate-50); borda 0
+ *    pra perder o look "antigo".
+ *
+ * 2. **Header com gradient temático** full-width, padding 7×5,
+ *    cor varia por tipo do drill-down:
+ *    - `venc7` → red 900→700→600 (urgência crítica)
+ *    - `venc30` → amber 900→700→600 (atenção)
+ *    - `status: concluido` → emerald 900→700→600
+ *    - `status: cancelado` → red 900→800→700
+ *    - `status: em_andamento` → blue 900→700→600
+ *    - `funcao` → purple 900→800→violet 600
+ *    - `setor / custoSetor` → cyan 900→800→600
+ *    - `finTotal` → indigo 950→900→violet 900 (mesma paleta do
+ *      estoque-picker Rev. 2471)
+ *    - default → slate 900→800→600
+ *    Ícone em pill glassmorphism 48×48 (rgba 0.14 + blur 8px +
+ *    border 0.22 branco). Título 20pt bold tracking-tight. Sub-
+ *    título branco 70% explicando contexto. Badge contador à dir
+ *    com pulse-dot (emerald idle, amber se urgente).
+ *
+ * 3. **Cards de aviso** (em vez do compact-row antigo):
+ *    - rounded-2xl, border slate-200, padding 4, gap 4.
+ *    - Hover: border violet-300, shadow-lg, translate-y -0.5.
+ *    - **Avatar 48×48 com gradient ÚNICO POR FUNCIONÁRIO** (hash
+ *      do id+nome mod 6 → 6 paletas: indigo/violet, cyan/blue,
+ *      emerald/sky, amber/red, pink/violet, teal/indigo) com
+ *      iniciais brancas bold tracking-wide.
+ *    - Nome clicável (hover violet-700 → abre Raio-X), abaixo
+ *      pílulas rounded-full do tipo + dias + redução.
+ *    - Período com calendar-icon, separador `→` slate-300.
+ *    - Coluna direita: valor 16pt bold (red-700 se urgente), badge
+ *      urgência rounded-full + status rounded-full.
+ *
+ * 4. **Footer com resumo financeiro** (bg-white, border-top):
+ *    - Coluna esq: "AVISOS PRÉVIOS" (10pt uppercase tracking-wider
+ *      slate-400) + contador 24pt bold slate-900; quando urgente
+ *      adiciona "ordenados por vencimento" pequeno.
+ *    - Coluna meio (border-left): "CUSTO MÉDIO" + valor 18pt
+ *      semibold slate-700 (só se média > 0).
+ *    - Coluna dir: "TOTAL ESTIMADO" + valor 24pt bold em cor
+ *      semântica (emerald default; red se venc7; amber se venc30).
+ *
+ * 5. **Empty state** modernizado: ícone 64×64 emerald rounded-2xl
+ *    + texto explicativo padronizado.
+ *
+ * REGRAS R-001 / R-007 / R-010 OK — mudança puramente de JSX/CSS,
+ * nenhum ALTER/DROP/DELETE; queries tRPC intocadas. Componente é
+ * reutilizado por TODOS os drill-downs do dashboard (status,
+ * finStatus, finTotal, funcao, setor, custoSetor, venc7, venc30,
+ * tipo, dias, anos, mes, reducao) — uma única edição cobre as 4
+ * variações que o user mandou + as outras 10.
+ *
+ * FOLLOW-UPS POSSÍVEIS: aplicar mesmo padrão visual aos OUTROS
+ * modais do ERP (combo de demissões, raio-X funcionário etc.)
+ * quando o user pedir explicitamente.
+ *
+ * ─────────────────────────────────────────────────────────────
+ *
  * Rev. 2471 — **COTAÇÕES · estoque-picker ganha layout ultra
  * moderno (cards em grid, gradient header, chips de filtro por
  * origem, footer com resumo financeiro).**
