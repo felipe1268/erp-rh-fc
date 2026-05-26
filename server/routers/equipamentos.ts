@@ -918,6 +918,123 @@ export const equipamentosRouter = router({
       };
     }),
 
+  // Rev. 2460 — Desfaz uma devolução de equipamento locado.
+  // Reverte status="devolvido" → "em_uso", limpa dataFimReal e
+  // fotosDevolucaoJson, registra evento `REVERSAO_DEVOLUCAO` com o
+  // motivo + grava log em `almoxarifado_auditoria` (mesmo padrão de
+  // excluir_item da Rev. 2388: senha local se exigido + justificativa
+  // ≥10 chars). NÃO repõe o item no almoxarifado central — quem precisar
+  // refaz o fluxo de saída/transferência manual.
+  locadoDesfazerDevolucao: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      id: z.number().int().positive(),
+      senha: z.string().optional(),
+      motivo: z.string().optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      // Tenant isolation.
+      const allowedCompanies = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+      const allowedCompanyIds = (allowedCompanies as any[]).map(c => c.id);
+      if (!allowedCompanyIds.includes(input.companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta empresa." });
+      }
+      const [eq_] = await db.select().from(equipamentosLocados)
+        .where(and(eq(equipamentosLocados.id, input.id), eq(equipamentosLocados.companyId, input.companyId)))
+        .limit(1);
+      if (!eq_) throw new TRPCError({ code: "NOT_FOUND", message: "Equipamento não encontrado." });
+      if (eq_.status !== "devolvido") {
+        throw new TRPCError({ code: "BAD_REQUEST", message: `Só é possível desfazer devoluções. Status atual: ${eq_.status}.` });
+      }
+      const allowed = await getEffectiveAllowedObraIds(ctx.user.id, ctx.user.role);
+      if (allowed !== null && (eq_.obraId == null || !allowed.includes(eq_.obraId))) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso à obra deste equipamento." });
+      }
+      // Carrega config de auditoria + valida senha/motivo (mesma lógica
+      // dos helpers em compras.ts — replicada inline pra não criar
+      // dependência cruzada entre routers).
+      const { companies, almoxarifadoAuditoria, users } = await import("../../drizzle/schema");
+      const [cfgRow] = await db.select({
+        s: companies.almoxarifadoExigeSenha,
+        j: companies.almoxarifadoExigeJustificativa,
+      }).from(companies).where(eq(companies.id, input.companyId));
+      const exigeSenha = cfgRow ? Number(cfgRow.s ?? 1) === 1 : true;
+      const exigeJustificativa = cfgRow ? Number(cfgRow.j ?? 1) === 1 : true;
+      const motivoTrim = (input.motivo ?? "").trim();
+      if (exigeJustificativa && motivoTrim.length < 10) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Motivo obrigatório (≥10 caracteres)." });
+      }
+      const motivoFinal = motivoTrim.length > 0 ? motivoTrim : "Auditoria desabilitada nas configurações da empresa.";
+      if (exigeSenha) {
+        const [user] = await db.select().from(users).where(eq(users.id, ctx.user.id));
+        if (!user) throw new TRPCError({ code: "UNAUTHORIZED" });
+        if (user.password) {
+          if (!input.senha) throw new TRPCError({ code: "BAD_REQUEST", message: "Senha obrigatória." });
+          const bcrypt = await import("bcryptjs");
+          if (!bcrypt.compareSync(input.senha, user.password)) {
+            throw new TRPCError({ code: "UNAUTHORIZED", message: "Senha incorreta." });
+          }
+        }
+      }
+      // Snapshot ANTES (pra auditoria).
+      const dadosAntes = {
+        status: eq_.status,
+        dataFimReal: (eq_ as any).dataFimReal,
+        fotosDevolucaoJson: (eq_ as any).fotosDevolucaoJson,
+      };
+      const req = (ctx as any)?.req;
+      const xf = req?.headers?.["x-forwarded-for"];
+      const ip = (typeof xf === "string" && xf.length > 0
+        ? xf.split(",")[0].trim()
+        : (req?.ip || req?.socket?.remoteAddress || null) ?? null)?.slice(0, 64) ?? null;
+      // Atomicidade (Rev. 2460): UPDATE + INSERT evento + INSERT auditoria
+      // numa única tx pra garantir rastreabilidade completa. UPDATE
+      // condicionado a `status='devolvido'` blinda contra dupla reversão
+      // concorrente (se outra requisição já mudou pra `em_uso`,
+      // `rowCount=0` → throw e tx rola back).
+      await db.transaction(async (tx: any) => {
+        const upd = await tx.update(equipamentosLocados).set({
+          status: "em_uso",
+          dataFimReal: null,
+          fotosDevolucaoJson: null,
+          updatedAt: sql`now()`,
+        } as any).where(and(
+          eq(equipamentosLocados.id, input.id),
+          eq(equipamentosLocados.companyId, input.companyId),
+          eq(equipamentosLocados.status, "devolvido"),
+        )).returning({ id: equipamentosLocados.id });
+        if (!upd || upd.length === 0) {
+          throw new TRPCError({ code: "CONFLICT", message: "O equipamento não está mais com status 'devolvido' — possivelmente outra reversão foi concluída antes." });
+        }
+        await tx.insert(equipamentoLocadoEventos).values({
+          companyId: input.companyId,
+          equipamentoLocadoId: input.id,
+          tipo: "REVERSAO_DEVOLUCAO",
+          obraId: eq_.obraId,
+          observacao: `Devolução desfeita. Motivo: ${motivoFinal}`,
+          usuarioId: ctx.user.id,
+          usuarioNome: ctx.user.name || String(ctx.user.id),
+        });
+        await tx.insert(almoxarifadoAuditoria).values({
+          companyId: input.companyId,
+          obraId: eq_.obraId,
+          userId: ctx.user.id,
+          userNome: ctx.user.name || null,
+          acao: "desfazer_devolucao_locacao",
+          entidadeTipo: "equipamento_locado",
+          entidadeId: input.id,
+          entidadeNome: (eq_ as any).descricao || `#${input.id}`,
+          dadosAntes: dadosAntes as any,
+          dadosDepois: { status: "em_uso", dataFimReal: null, fotosDevolucaoJson: null } as any,
+          justificativa: motivoFinal,
+          ip,
+        });
+      });
+      return { success: true };
+    }),
+
   locadoCheckIn: protectedProcedure
     .input(z.object({
       companyId: z.number(),

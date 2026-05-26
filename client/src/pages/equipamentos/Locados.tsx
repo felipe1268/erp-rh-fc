@@ -4,7 +4,8 @@ import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
 import { toast } from "sonner";
-import { Plus, Search, X, Truck, CheckCircle2, RotateCcw, ClipboardCheck, Eye, FileText, Upload, Sparkles, Trash2, Activity, Clock, AlertTriangle, DollarSign, Calendar, Hash, Building2, User as UserIcon, MapPin, Camera, StickyNote, ChevronDown, Tag, Loader2, Layers, Boxes, ImagePlus, Library, Check, Globe, RefreshCw, ZoomIn, type LucideIcon } from "lucide-react";
+import { Plus, Search, X, Truck, CheckCircle2, RotateCcw, ClipboardCheck, Eye, FileText, Upload, Sparkles, Trash2, Activity, Clock, AlertTriangle, DollarSign, Calendar, Hash, Building2, User as UserIcon, MapPin, Camera, StickyNote, ChevronDown, Tag, Loader2, Layers, Boxes, ImagePlus, Library, Check, Globe, RefreshCw, ZoomIn, Undo2, type LucideIcon } from "lucide-react";
+import { ModalConfirmacaoAuditoria } from "@/components/almoxarifado/ModalConfirmacaoAuditoria";
 import type { ReactNode } from "react";
 import { FotosUploader, FotoItem, fmtMoney, fmtDate, Spinner } from "./_shared";
 import { compressImageIfNeeded } from "@/lib/imageCompress";
@@ -217,6 +218,16 @@ export default function EquipamentosLocados() {
     { companyId, equipamentoLocadoId: modalEventos?.id || 0 },
     { enabled: !!modalEventos }
   );
+
+  // Rev. 2460 — Desfazer devolução (senha + motivo, padrão auditoria almox).
+  const [modalDesfazerDev, setModalDesfazerDev] = useState<any>(null); // recebe `l` (equipamento)
+  const [desfazerErro, setDesfazerErro] = useState<string | null>(null);
+  const meQ = trpc.auth.me.useQuery();
+  const auditCfgQ = trpc.compras.getAuditoriaConfig.useQuery(
+    { companyId }, { enabled: !!companyId }
+  );
+  const requerSenhaAud = !!(meQ.data as any)?.hasLocalPassword && (auditCfgQ.data?.exigeSenha ?? true);
+  const requerJustAud = auditCfgQ.data?.exigeJustificativa ?? true;
 
   // Rev. 2323 — Obras ativas (pra mostrar nome no card + dropdown de vínculo em lote).
   const obrasAtivasQ = trpc.obras.listActive.useQuery({ companyId }, { enabled: !!companyId });
@@ -501,6 +512,19 @@ export default function EquipamentosLocados() {
     },
     onError: (e) => toast.error(e.message),
   });
+  // Rev. 2460 — Mutation pra desfazer devolução.
+  const desfazerDev = trpc.equipamentos.locadoDesfazerDevolucao.useMutation({
+    onSuccess: () => {
+      utils.equipamentos.locadosListar.invalidate();
+      utils.equipamentos.eventosListar.invalidate();
+      setModalDesfazerDev(null);
+      setDesfazerErro(null);
+      setModalEventos(null);
+      toast.success("Devolução desfeita. Equipamento voltou para 'Em uso'.");
+    },
+    onError: (e) => setDesfazerErro(e.message),
+  });
+
   // Rev. 2449 — helper compartilhado. Quando aberto via Almoxarifado
   // (?action=devolver), retorna pra /almoxarifado ao concluir/fechar.
   // Caso contrário, fica na própria página de Locados (fluxo legado).
@@ -2992,6 +3016,35 @@ export default function EquipamentosLocados() {
       )}
 
       {/* Modal check-in */}
+      {/* Rev. 2460 — Modal de auditoria pra desfazer devolução. */}
+      <ModalConfirmacaoAuditoria
+        aberto={!!modalDesfazerDev}
+        titulo="Desfazer devolução"
+        subtitulo={modalDesfazerDev ? `${modalDesfazerDev.descricao} (#${modalDesfazerDev.id})` : undefined}
+        descricao={
+          <div className="space-y-2">
+            <p>Esta ação <b>reverte a devolução</b>: o equipamento volta para o status <b>“Em uso”</b>, a data fim real e as fotos de devolução serão apagadas.</p>
+            <p className="text-xs text-slate-500">A reversão é registrada na timeline (evento <b>“Devolução desfeita”</b>) e no log de auditoria do almoxarifado. O item <u>não</u> retorna automaticamente ao estoque central — se precisar, refaça a saída manualmente.</p>
+          </div>
+        }
+        textoBotaoConfirmar="Desfazer devolução"
+        requerSenha={requerSenhaAud}
+        requerJustificativa={requerJustAud}
+        carregando={desfazerDev.isPending}
+        erroExterno={desfazerErro}
+        onCancelar={() => { setModalDesfazerDev(null); setDesfazerErro(null); }}
+        onConfirmar={({ senha, justificativa }) => {
+          if (!modalDesfazerDev) return;
+          setDesfazerErro(null);
+          desfazerDev.mutate({
+            companyId,
+            id: modalDesfazerDev.id,
+            senha,
+            motivo: justificativa,
+          });
+        }}
+      />
+
       {modalCheckin && (
         <Modal title={`Check-in: ${modalCheckin.descricao}`} onClose={() => setModalCheckin(null)} onSave={fazerCheckIn}
           saveLabel="Confirmar presença" loading={checkIn.isPending}>
@@ -3028,6 +3081,7 @@ export default function EquipamentosLocados() {
           RECEBIMENTO:           { label: "Recebimento",            color: "text-emerald-700", bg: "bg-emerald-100", ring: "ring-emerald-200", icon: Truck },
           CHECK_IN_OBRA:         { label: "Check-in semanal",       color: "text-blue-700",    bg: "bg-blue-100",    ring: "ring-blue-200",    icon: ClipboardCheck },
           DEVOLUCAO_FORNECEDOR:  { label: "Devolução ao fornecedor", color: "text-slate-700",  bg: "bg-slate-200",   ring: "ring-slate-300",   icon: RotateCcw },
+          REVERSAO_DEVOLUCAO:    { label: "Devolução desfeita",      color: "text-orange-700", bg: "bg-orange-100",  ring: "ring-orange-200",  icon: Undo2 },
           RENOVACAO:             { label: "Renovação de contrato",  color: "text-amber-700",   bg: "bg-amber-100",   ring: "ring-amber-200",   icon: Calendar },
           MANUTENCAO:            { label: "Manutenção",              color: "text-purple-700", bg: "bg-purple-100",  ring: "ring-purple-200",  icon: Activity },
           VINCULO_OBRA:          { label: "Vinculação à obra",       color: "text-indigo-700", bg: "bg-indigo-100",  ring: "ring-indigo-200",  icon: MapPin },
@@ -3283,6 +3337,16 @@ export default function EquipamentosLocados() {
                       <RotateCcw className="h-4 w-4" /> Devolver
                     </button>
                   </>
+                )}
+                {/* Rev. 2460 — Desfazer devolução (volta status pra em_uso, pede senha+motivo, log de auditoria). */}
+                {l.status === "devolvido" && (
+                  <button
+                    onClick={() => { setDesfazerErro(null); setModalDesfazerDev(l); }}
+                    className="px-4 py-2 text-sm bg-orange-600 hover:bg-orange-700 text-white rounded-md font-semibold inline-flex items-center gap-2 transition"
+                    title="Reverte a devolução. Exige senha do usuário e motivo (auditado)."
+                  >
+                    <Undo2 className="h-4 w-4" /> Desfazer devolução
+                  </button>
                 )}
                 <button onClick={() => setModalEventos(null)} className="px-4 py-2 text-sm border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 rounded-md font-medium">Fechar</button>
               </div>

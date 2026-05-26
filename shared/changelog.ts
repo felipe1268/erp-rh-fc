@@ -1,6 +1,80 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2460 — **EQUIPAMENTO LOCADO · botão "Desfazer devolução" no
+ * modal Raio-X, com senha + motivo obrigatórios (auditado).**
+ *
+ * PEDIDO (user, print IMG_1252 — equip "VIGA P/ 3 MTS" com status
+ * `devolvido` no Raio-X): "preciso reverter essa devolução, registrei
+ * por engano. Que tenha senha e motivo claro pra ficar tudo auditado".
+ *
+ * DIAGNÓSTICO:
+ *  - Até a Rev. 2459 não havia caminho reverso pra `locadoDevolverEmLote`.
+ *    Quando o usuário concluía uma devolução por engano, o equipamento
+ *    ficava preso em status `devolvido` (sem como voltar pra `em_uso`),
+ *    forçando suporte/SQL manual — risco alto de bagunça e zero rastro.
+ *  - Já existia padrão de auditoria consolidado (Rev. 2388/2450): tabela
+ *    `almoxarifado_auditoria` + componente `ModalConfirmacaoAuditoria`
+ *    (senha do user local + justificativa ≥10 chars). Reusar.
+ *
+ * IMPLEMENTAÇÃO:
+ *
+ * 1) BACKEND (`server/routers/equipamentos.ts`, nova mutation
+ *    `locadoDesfazerDevolucao({ companyId, id, senha?, motivo })`):
+ *    - Tenant isolation (companyId entre allowedCompanies) +
+ *      `getEffectiveAllowedObraIds` (impede desfazer numa obra que o
+ *      user não enxerga).
+ *    - Valida `status === "devolvido"` (rejeita qualquer outro estado).
+ *    - Lê `companies.almoxarifadoExigeSenha / .almoxarifadoExigeJustificativa`
+ *      e replica inline os helpers `verificarSenhaSeLocal` /
+ *      `justificativaFinal` (compras.ts não exporta — evitamos cross-
+ *      import entre routers). Justificativa < 10 chars → 400.
+ *    - UPDATE `equipamentosLocados`: status="em_uso", `dataFimReal=null`,
+ *      `fotosDevolucaoJson=null` + bump `updatedAt`.
+ *    - INSERT evento `REVERSAO_DEVOLUCAO` na timeline com
+ *      `observacao = "Devolução desfeita. Motivo: ..."`, `usuarioId`/
+ *      `usuarioNome` do logado.
+ *    - INSERT `almoxarifadoAuditoria` com `acao="desfazer_devolucao_locacao"`,
+ *      `entidadeTipo="equipamento_locado"`, `dadosAntes`={status,
+ *      dataFimReal, fotosDevolucaoJson} e `dadosDepois`={status:"em_uso",
+ *      ...nulls}. IP capturado de `x-forwarded-for` / `req.ip`.
+ *    - DECISÃO: NÃO re-cria item no almoxarifado central (a Rev. 2450
+ *      `removeAlmoxItemForEquipamento` faz um match heurístico por
+ *      descrição/locador/obra; re-inserir sem o contrato original geraria
+ *      duplicata). Se precisar repor o item, o usuário refaz a saída
+ *      manualmente — comportamento documentado no card.
+ *
+ * 2) FRONTEND (`client/src/pages/equipamentos/Locados.tsx`):
+ *    - Novo TIPO_META `REVERSAO_DEVOLUCAO`: label "Devolução desfeita",
+ *      ícone `Undo2` laranja (`text-orange-700` / `bg-orange-100`),
+ *      pra timeline renderizar.
+ *    - Queries `auth.me` + `compras.getAuditoriaConfig` (mesmo padrão de
+ *      `almoxarifado/index.tsx` L224-232) → derivam `requerSenhaAud`
+ *      (`hasLocalPassword && exigeSenha`) e `requerJustAud`.
+ *    - Mutation `locadoDesfazerDevolucao` invalida `locadosListar` +
+ *      `eventosListar`, fecha o modal Raio-X, toast verde.
+ *    - Botão "Desfazer devolução" (laranja, `Undo2`) no footer do modal
+ *      Raio-X, visível **só** quando `l.status === "devolvido"`.
+ *    - Reusa `ModalConfirmacaoAuditoria` (Rev. 2388) com descrição
+ *      explicitando o que vai acontecer (status volta pra em_uso, fotos
+ *      apagam, item NÃO reaparece no estoque central). Erro de senha
+ *      mantém modal aberto via `erroExterno`.
+ *
+ * SEGURANÇA / R-001/R-007/R-010:
+ *  - Zero ALTER/DROP/DELETE em produção. INSERT/UPDATE puros.
+ *  - Senha bcrypt comparada com `bcrypt.compareSync` (mesmo padrão dos
+ *    outros fluxos auditados — Rev. 2388).
+ *
+ * FOLLOW-UPS:
+ *  - Se virar regra retornar item ao estoque central, criar mutation
+ *    separada que recria o item via fluxo de entrada (com nota fiscal
+ *    sintética). Por enquanto, fica manual.
+ *
+ * Arquivos tocados: `server/routers/equipamentos.ts`,
+ * `client/src/pages/equipamentos/Locados.tsx`, `shared/version.ts`.
+ *
+ * ─────────────────────────────────────────────────────────────────
+ *
  * Rev. 2459 — **TIMELINE do equipamento locado · recibo de devolução
  * assinado in-loco + botão "Gerar/compartilhar PDF" no card do evento.**
  *
