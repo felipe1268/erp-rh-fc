@@ -1,6 +1,37 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2434 — **ALMOXARIFADO · INVENTÁRIO VISUAL · datas/horas em fuso de
+ * Brasília (antes mostravam UTC: leitura às 21:37 BRT aparecia como 00:37
+ * do dia seguinte).**
+ *
+ * CONTEXTO (print anexado pelo user — iPad Safari, 21:38 BRT, histórico da
+ * baia "Item TESTE -areia"): cabeçalho do card "Histórico" mostrava
+ * "26/05/2026 00:37" para uma leitura recém-registrada no mesmo dia (25/05
+ * ~21:37). Linha "Última: Felipe Costa Alves · 26/05/2026 00:37" no card
+ * exibia o mesmo problema. O backend grava `lidaEm` em UTC (padrão do
+ * Postgres), e o `fmtData` usava `toLocaleDateString/toLocaleTimeString`
+ * sem `timeZone` explícito — em iPad, o JS Safari pode herdar UTC do
+ * runtime/proxy em alguns contextos, exibindo a hora UTC crua.
+ *
+ * DECISÃO
+ * - `fmtData` força `timeZone: "America/Sao_Paulo"` em ambos os
+ *   `toLocale*` (data + hora), independente do TZ do navegador.
+ * - Se a string vier SEM indicador de timezone (ex: "2026-05-26 00:37:00"
+ *   direto do Postgres), normaliza pra ISO com "Z" antes de instanciar o
+ *   Date — garante que seja interpretada como UTC, não como local.
+ * - Mantém locale "pt-BR" → DD/MM/AAAA + HH:mm.
+ *
+ * ARQUIVOS
+ * - `client/src/pages/almoxarifado/InventarioVisual.tsx` L57-73 (função
+ *   `fmtData`). Todos os 3 callsites do arquivo (card "Última", card
+ *   "Última leitura", linha do histórico) passam a exibir BRT.
+ *
+ * VALIDAÇÃO
+ * - Zero backend, zero migration. R-001/R-007/R-010 OK.
+ *
+ * ──────────────────────────────────────────────────────────────────────
+ *
  * Rev. 2433 — **ALMOXARIFADO · INVENTÁRIO VISUAL · fix de layout: foto da
  * baia vazando sobre o nome + mini-cards (Chegou hoje / Restante / Consumo)
  * no Safari iPad.**

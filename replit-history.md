@@ -661,3 +661,5 @@
 - **Rev. 2425** — PLANEJAMENTO · LEITURA PURA DO MSP · Texto9 na cadeia de fallback + revertido cálculo dinâmico `mspReadOnly`/`avancoPrevistoDia` (caso HOTEL DO PAPA). Texto9 depois removido na Rev. 2427. Ver `shared/changelog.ts`.
 
 - **Rev. 2426** — ALMOXARIFADO · AUDITORIA · banner global de pendências acima do `<main>` do DashboardLayout + deep-link `?auditoria=1`. Query `compras.auditoriaPendenciasCount` refetch 60s; banner ambar dismissable com botão "Revisar agora". Ver `shared/changelog.ts`.
+
+- **Rev. 2427** — PLANEJAMENTO · REGRA DE OURO DEFINITIVA · `% PREVISTO`=Texto6 puro + `% CONCLUÍDA`=PercentComplete puro para TODAS as obras. Mapeamento canônico XML HOTEL DO PAPA validado (paridade 100% XML × tela MSP). `ImportarCronograma.tsx` bloco L257-281. Ver `shared/changelog.ts`.

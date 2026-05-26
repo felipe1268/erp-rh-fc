@@ -57,8 +57,16 @@ function corPorPct(pct: number | null | undefined) {
 function fmtData(s?: string | null) {
   if (!s) return "—";
   try {
-    const d = new Date(s);
-    return d.toLocaleDateString("pt-BR") + " " + d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+    // Rev. 2434 — força fuso America/Sao_Paulo (antes herdava do navegador
+    // e em iPad mostrava UTC: leitura às 21:37 de Brasília aparecia como
+    // 00:37 do dia seguinte). Se a string vier sem indicador de TZ
+    // (formato "2026-05-26 00:37:00" do Postgres), assume UTC explícito.
+    const hasTz = /[zZ]|[+-]\d{2}:?\d{2}$/.test(s);
+    const iso = hasTz ? s : s.replace(" ", "T") + "Z";
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return s;
+    return d.toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" }) +
+      " " + d.toLocaleTimeString("pt-BR", { timeZone: "America/Sao_Paulo", hour: "2-digit", minute: "2-digit" });
   } catch { return s; }
 }
 
