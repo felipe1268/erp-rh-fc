@@ -1,6 +1,120 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2453 — **DEVOLUÇÃO DE LOCAÇÃO · fluxo completo com assinaturas
+ * (entregador FC + recebedor da locadora) + comprovante PDF compartilhável
+ * via WhatsApp.**
+ *
+ * PEDIDO (user 25/05 print IMG_1247): "Quando clicar em devolver, quero
+ * selecionar os produtos, clicar em devolver, tirar foto de tudo que foi
+ * devolvido, e colher assinatura do responsável que entregou e de quem
+ * recebeu… usando tudo o FCSign… e quero poder gerar PDF e compartilhar
+ * via WhatsApp o comprovante de devolução."
+ *
+ * SOLUÇÃO: o fluxo de devolução em LOTE (Rev. 2420) ganha 2 etapas no
+ * modal e um modal pós-sucesso de compartilhamento. Não foi usado o
+ * FCSign legado (focado em envio remoto de links pra assinar) porque a
+ * devolução é PRESENCIAL — a assinatura é colhida no momento, no próprio
+ * device do operador (canvas inline com pointer events). Sem dependência
+ * externa, sem fricção de "enviar link e esperar". O PDF final fica
+ * disponível via URL pública assinada (token HMAC-like) pra locadora
+ * abrir do WhatsApp sem precisar de login.
+ *
+ * SCHEMA (`drizzle/schema.ts` L8778-8785 + migration em `server/_core/index.ts`
+ * L2046-2051):
+ *   - `equipamento_locado_eventos.assinatura_entregador_nome` VARCHAR(255)
+ *   - `equipamento_locado_eventos.assinatura_entregador_url`  TEXT (dataURL PNG)
+ *   - `equipamento_locado_eventos.assinatura_recebedor_nome`  VARCHAR(255)
+ *   - `equipamento_locado_eventos.assinatura_recebedor_url`   TEXT (dataURL PNG)
+ *   - `equipamento_locado_eventos.pdf_comprovante_token`      VARCHAR(64)
+ *   ADD COLUMN IF NOT EXISTS — idempotente, R-001/R-007/R-010 OK.
+ *
+ * BACKEND
+ * 1. `server/routers/equipamentos.ts` L818-922 — `locadoDevolverEmLote`
+ *    aceita `assinaturaEntregadorNome/Url` + `assinaturaRecebedorNome/Url`
+ *    (opcionais; se ambas as URLs vierem, gera 1 `pdfComprovanteToken`
+ *    crypto.randomBytes(24).hex compartilhado por TODOS os eventos do
+ *    mesmo lote). Persiste em cada evento inserido (loop atual). Retorna
+ *    `{ ok, falhas, total, comprovante: { eventoId, token } | null }` —
+ *    eventoId é o 1º evento inserido (servirá de "chave" do lote).
+ *
+ * 2. `server/services/equipmentReturnReceiptPdf.ts` (NOVO) — gerador
+ *    PDF com pdfkit (mesmo padrão de `purchaseOrderPdf.ts`):
+ *      - Header azul institucional (#1B2A4A) com logo + razão social +
+ *        CNPJ + endereço + caixa "COMPROVANTE Nº NNNNNN · data/hora".
+ *      - Seção "Partes Envolvidas" (entregador FC com obra · recebedor
+ *        com fornecedor/CNPJ).
+ *      - Tabela de equipamentos (descrição · patrimônio · obra · dias na
+ *        obra extraídos da observação do evento).
+ *      - Observação livre (sem prefixo "[Lote]").
+ *      - Caixas de assinatura (PNG embedado das dataURLs) com nome e
+ *        rótulo abaixo.
+ *      - Rodapé: "Documento gerado digitalmente. As assinaturas foram
+ *        coletadas eletronicamente no momento da devolução."
+ *    Lote: agrupa por (companyId, tipo=DEVOLUCAO_FORNECEDOR, mesmo
+ *    usuário, ±60s do createdAt do evento âncora). Esse padrão evita
+ *    precisar criar uma tabela "lote" só pra isso.
+ *
+ * 3. `server/_core/index.ts` L477-508 — rota pública
+ *    `GET /api/comprovante-devolucao/:eventoId/:token.pdf`. Valida
+ *    eventoId existe + tipo=DEVOLUCAO_FORNECEDOR + token bate com o
+ *    gravado. Stream PDF inline. Sem auth — token aleatório 192 bits é
+ *    a única chave (suficiente pra compartilhar via WhatsApp).
+ *
+ * FRONTEND
+ * 4. `client/src/components/SignaturePad.tsx` (NOVO) — canvas com
+ *    pointer events nativos (toque + mouse), exporta PNG dataURL no
+ *    onPointerUp. Botão "Limpar" + placeholder "assine aqui" quando
+ *    vazio. devicePixelRatio scaling pra ficar nítido em iPad/iPhone.
+ *    Zero dependências.
+ *
+ * 5. `client/src/pages/equipamentos/Locados.tsx`:
+ *    - L442-450: states novos (`devLoteEtapa`, `devLoteEntNome`, `Sig`,
+ *      `devLoteRecNome`, `Sig`, `modalShareComprovante`).
+ *    - L460-486: `devolverLote.onSuccess` agora limpa os states novos
+ *      e, se `res.comprovante` veio, abre `modalShareComprovante` com
+ *      URL pública montada (`${origin}/api/comprovante-devolucao/.../.pdf`).
+ *      Senão segue fluxo legado (`voltarParaAlmoxSeNecessario`).
+ *    - L1026-1052: `avancarOuDevolverLote` substitui `fazerDevolucaoLote`.
+ *      Etapa 1 valida fotos+data e avança; etapa 2 valida nomes+sigs e
+ *      dispara mutation.
+ *    - L2809-2872: modal `Devolver N · Etapa 1/2 ou 2/2` com stepper
+ *      visual (2 barras), seção condicional por etapa, botão "← Voltar"
+ *      na etapa 2. Caixas separadas slate (entregador) + emerald
+ *      (recebedor) usando o SignaturePad.
+ *    - L2874-2929: modal pós-sucesso "Comprovante de devolução gerado"
+ *      com CTA principal "📱 Compartilhar via WhatsApp" (tenta
+ *      `navigator.share` PWA first; fallback `wa.me/?text=`) +
+ *      "Visualizar PDF" (target=_blank) + "Baixar PDF" (download attr)
+ *      + "Copiar link" (clipboard).
+ *
+ * RACIONAL DAS DECISÕES TÉCNICAS
+ *
+ * - **Assinatura como dataURL PNG inline na coluna TEXT** (vs upload em
+ *   storage): cada assinatura tem ~20-40KB compactada; 2 por evento ×
+ *   alguns milhares de eventos/ano é trivial pro Postgres. Elimina
+ *   round-trip de upload + URL temporária + race condition. Igual ao
+ *   padrão usado em outros lugares do ERP (fotos canônicas, signatures).
+ *
+ * - **Token aleatório 192 bits** (vs HMAC sobre JWT_SECRET): mais
+ *   simples (gera 1× na devolução, grava, compara byte-a-byte). HMAC
+ *   exigiria armazenar versionado pra rotation. 192 bits aleatórios são
+ *   inquebráveis na prática.
+ *
+ * - **Lote agrupado por ±60s do mesmo usuário** (vs tabela `lote_devolucao`):
+ *   o atual loop de `locadoDevolverEmLote` insere N eventos sem parent.
+ *   Criar tabela só pra "lote" seria over-engineering. A heurística é
+ *   determinística (mesma transação cliente → mesmos createdAt em
+ *   milissegundos), e o filtro garante 1 PDF por click do user.
+ *
+ * - **2 etapas no modal** (vs 1 página rolável): forçar etapa 2 só após
+ *   etapa 1 OK evita cancelamentos no meio (operador investiu nas
+ *   assinaturas), e o stepper deixa claro o progresso pro user de iPad.
+ *
+ * R-001/R-007/R-010 OK — apenas ADD COLUMN IF NOT EXISTS.
+ *
+ * ─────────────────────────────────────────────────────────────────────────
+ *
  * Rev. 2452 — **DEVOLVER LOCAÇÃO · respeita o almoxarifado/obra selecionado
  * no contexto do Almoxarifado pra evitar devolver equipamento da obra errada.**
  *

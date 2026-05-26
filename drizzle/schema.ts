@@ -8772,6 +8772,14 @@ export const equipamentoLocadoEventos = pgTable("equipamento_locado_eventos", {
   observacao:           text(),
   usuarioId:            integer("usuario_id"),
   usuarioNome:          varchar("usuario_nome", { length: 255 }),
+  // Rev. 2453 — Assinaturas inline (PNG base64) + URL do comprovante PDF.
+  // Usadas pelo evento DEVOLUCAO_FORNECEDOR para gerar o comprovante
+  // compartilhável via WhatsApp pela locadora.
+  assinaturaEntregadorNome: varchar("assinatura_entregador_nome", { length: 255 }),
+  assinaturaEntregadorUrl:  text("assinatura_entregador_url"),  // dataURL PNG
+  assinaturaRecebedorNome:  varchar("assinatura_recebedor_nome", { length: 255 }),
+  assinaturaRecebedorUrl:   text("assinatura_recebedor_url"),   // dataURL PNG
+  pdfComprovanteToken:      varchar("pdf_comprovante_token", { length: 64 }),
   createdAt:            timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
 }, (table) => [
   index("idx_equip_evt_equip").on(table.equipamentoLocadoId),

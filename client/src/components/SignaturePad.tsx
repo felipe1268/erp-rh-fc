@@ -1,112 +1,159 @@
-import { useRef, useState, useEffect, useImperativeHandle, forwardRef } from "react";
+// ============================================================================
+// Rev. 2453 — SignaturePad: canvas inline para assinatura touch/mouse.
+// ============================================================================
+// Usado no fluxo de devolução de equipamentos locados (entregador + recebedor).
+// Retorna a assinatura como dataURL PNG (base64) via onChange.
+// Sem dependências externas — usa pointer events nativos.
+// ============================================================================
+import { useEffect, useRef, useState } from "react";
 import { Eraser } from "lucide-react";
-import { Button } from "@/components/ui/button";
 
-export type SignaturePadHandle = {
-  toDataURL: () => string | null;
-  clear: () => void;
-  isEmpty: () => boolean;
-};
+interface SignaturePadProps {
+  value: string | null;          // dataURL PNG ou null
+  onChange: (dataUrl: string | null) => void;
+  label?: string;
+  height?: number;
+}
 
-type Props = { height?: number; disabled?: boolean };
-
-const SignaturePad = forwardRef<SignaturePadHandle, Props>(function SignaturePad({ height = 200, disabled = false }, ref) {
+export function SignaturePad({ value, onChange, label, height = 140 }: SignaturePadProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const drawing = useRef(false);
-  const last = useRef<{ x: number; y: number } | null>(null);
-  const [hasInk, setHasInk] = useState(false);
+  const drawingRef = useRef(false);
+  const lastPtRef = useRef<{ x: number; y: number } | null>(null);
+  // Rev. 2453 — distância acumulada na corrente de pointer (em px CSS).
+  // Só consideramos "assinatura real" se passou de MIN_INK_DISTANCE — bloqueia
+  // bypass por toque rápido (down/up sem move) que gera PNG visualmente vazio.
+  const inkDistanceRef = useRef(0);
+  const MIN_INK_DISTANCE = 30; // px somados
+  const [hasInk, setHasInk] = useState(!!value);
 
+  // Restaura value (ex: navegação de etapas) — desenha PNG salvo no canvas.
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const dpr = window.devicePixelRatio || 1;
-    const rect = canvas.getBoundingClientRect();
-    canvas.width = rect.width * dpr;
-    canvas.height = rect.height * dpr;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
-    ctx.scale(dpr, dpr);
-    ctx.lineWidth = 2.2;
+    // Ajusta resolução pra densidade do device
+    const dpr = window.devicePixelRatio || 1;
+    const cssW = canvas.clientWidth;
+    const cssH = canvas.clientHeight;
+    if (canvas.width !== cssW * dpr || canvas.height !== cssH * dpr) {
+      canvas.width = cssW * dpr;
+      canvas.height = cssH * dpr;
+      ctx.scale(dpr, dpr);
+    }
+    ctx.lineWidth = 2;
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
-    ctx.strokeStyle = "#111827";
+    ctx.strokeStyle = "#0f172a";
+    if (value) {
+      const img = new Image();
+      img.onload = () => {
+        ctx.clearRect(0, 0, cssW, cssH);
+        ctx.drawImage(img, 0, 0, cssW, cssH);
+        setHasInk(true);
+      };
+      img.src = value;
+    } else {
+      ctx.clearRect(0, 0, cssW, cssH);
+      setHasInk(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const getPoint = (e: React.PointerEvent<HTMLCanvasElement>) => {
-    const rect = canvasRef.current!.getBoundingClientRect();
-    return { x: e.clientX - rect.left, y: e.clientY - rect.top };
-  };
+  function getPt(e: React.PointerEvent<HTMLCanvasElement>): { x: number; y: number } {
+    const r = canvasRef.current!.getBoundingClientRect();
+    return { x: e.clientX - r.left, y: e.clientY - r.top };
+  }
 
-  const onDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
-    if (disabled) return;
+  function onDown(e: React.PointerEvent<HTMLCanvasElement>) {
+    e.preventDefault();
+    drawingRef.current = true;
+    lastPtRef.current = getPt(e);
     (e.target as HTMLCanvasElement).setPointerCapture(e.pointerId);
-    drawing.current = true;
-    last.current = getPoint(e);
-  };
-  const onMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
-    if (!drawing.current || disabled) return;
-    const ctx = canvasRef.current!.getContext("2d");
-    if (!ctx || !last.current) return;
-    const p = getPoint(e);
-    ctx.beginPath();
-    ctx.moveTo(last.current.x, last.current.y);
-    ctx.lineTo(p.x, p.y);
-    ctx.stroke();
-    last.current = p;
-    if (!hasInk) setHasInk(true);
-  };
-  const onUp = () => { drawing.current = false; last.current = null; };
+  }
 
-  const clear = () => {
+  function onMove(e: React.PointerEvent<HTMLCanvasElement>) {
+    if (!drawingRef.current) return;
+    const ctx = canvasRef.current?.getContext("2d");
+    if (!ctx || !lastPtRef.current) return;
+    const pt = getPt(e);
+    const dx = pt.x - lastPtRef.current.x;
+    const dy = pt.y - lastPtRef.current.y;
+    inkDistanceRef.current += Math.hypot(dx, dy);
+    ctx.beginPath();
+    ctx.moveTo(lastPtRef.current.x, lastPtRef.current.y);
+    ctx.lineTo(pt.x, pt.y);
+    ctx.stroke();
+    lastPtRef.current = pt;
+    if (inkDistanceRef.current >= MIN_INK_DISTANCE) setHasInk(true);
+  }
+
+  function onUp(e: React.PointerEvent<HTMLCanvasElement>) {
+    if (!drawingRef.current) return;
+    drawingRef.current = false;
+    lastPtRef.current = null;
+    try { (e.target as HTMLCanvasElement).releasePointerCapture(e.pointerId); } catch {}
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    // Rev. 2453 — só "salva" se houve traço real (>= MIN_INK_DISTANCE px).
+    // Toque rápido sem mover NÃO gera assinatura — evita bypass da validação
+    // `if (!devLoteEntSig)` no fluxo de devolução.
+    if (inkDistanceRef.current < MIN_INK_DISTANCE) {
+      // Limpa pixels de qualquer ponto isolado e mantém valor null.
+      const ctx = canvas.getContext("2d");
+      if (ctx) ctx.clearRect(0, 0, canvas.clientWidth, canvas.clientHeight);
+      return;
+    }
+    const dataUrl = canvas.toDataURL("image/png");
+    onChange(dataUrl);
+  }
+
+  function limpar() {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.clearRect(0, 0, canvas.clientWidth, canvas.clientHeight);
+    inkDistanceRef.current = 0;
     setHasInk(false);
-  };
-
-  useImperativeHandle(ref, () => ({
-    toDataURL: () => {
-      if (!hasInk || !canvasRef.current) return null;
-      // Compor canvas branco + assinatura preta pra economizar bytes
-      const src = canvasRef.current;
-      const out = document.createElement("canvas");
-      out.width = src.width;
-      out.height = src.height;
-      const octx = out.getContext("2d")!;
-      octx.fillStyle = "#ffffff";
-      octx.fillRect(0, 0, out.width, out.height);
-      octx.drawImage(src, 0, 0);
-      return out.toDataURL("image/png");
-    },
-    clear,
-    isEmpty: () => !hasInk,
-  }), [hasInk]);
+    onChange(null);
+  }
 
   return (
-    <div className="relative">
-      <canvas
-        ref={canvasRef}
-        style={{ height, width: "100%", touchAction: "none" }}
-        className="border-2 border-dashed border-slate-300 rounded-lg bg-white cursor-crosshair"
-        onPointerDown={onDown}
-        onPointerMove={onMove}
-        onPointerUp={onUp}
-        onPointerLeave={onUp}
-      />
-      {!hasInk && (
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-          <span className="text-slate-400 text-sm italic">Desenhe sua assinatura no campo acima</span>
+    <div className="space-y-1.5">
+      {label && (
+        <div className="flex items-center justify-between">
+          <label className="text-xs font-semibold text-slate-700">{label}</label>
+          {hasInk && (
+            <button
+              type="button"
+              onClick={limpar}
+              className="text-[11px] text-slate-500 hover:text-rose-600 flex items-center gap-1"
+            >
+              <Eraser className="w-3 h-3" /> Limpar
+            </button>
+          )}
         </div>
       )}
-      <div className="flex justify-end mt-2">
-        <Button type="button" variant="ghost" size="sm" onClick={clear} disabled={disabled || !hasInk}>
-          <Eraser className="h-3.5 w-3.5 mr-1.5" /> Limpar
-        </Button>
+      <div
+        className="rounded-lg border-2 border-dashed border-slate-300 bg-white relative touch-none"
+        style={{ height }}
+      >
+        <canvas
+          ref={canvasRef}
+          onPointerDown={onDown}
+          onPointerMove={onMove}
+          onPointerUp={onUp}
+          onPointerCancel={onUp}
+          className="w-full h-full rounded-lg cursor-crosshair"
+          style={{ touchAction: "none" }}
+        />
+        {!hasInk && (
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+            <span className="text-xs text-slate-400 italic">assine aqui</span>
+          </div>
+        )}
       </div>
     </div>
   );
-});
-
-export default SignaturePad;
+}

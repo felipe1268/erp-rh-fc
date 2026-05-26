@@ -471,6 +471,39 @@ Regras:
     }
   });
 
+  // Rev. 2453 — Comprovante de devolução de equipamento (PDF público assinado).
+  // Acesso via /api/comprovante-devolucao/:eventoId/:token.pdf. O token é gerado
+  // na hora da devolução em lote e gravado em equipamento_locado_eventos.
+  // Locadora abre direto do link compartilhado no WhatsApp, sem login.
+  app.get("/api/comprovante-devolucao/:eventoId/:token.pdf", async (req: any, res: any) => {
+    try {
+      const eventoId = Number(req.params.eventoId);
+      const token = String(req.params.token || "");
+      if (!Number.isFinite(eventoId) || !token) return res.status(400).send("ID/token inválido");
+      const { getDb } = await import("../db");
+      const { equipamentoLocadoEventos } = await import("../../drizzle/schema");
+      const { eq: drizzleEq } = await import("drizzle-orm");
+      const db = await getDb();
+      if (!db) return res.status(500).send("DB indisponível");
+      const [ev] = await db.select().from(equipamentoLocadoEventos)
+        .where(drizzleEq(equipamentoLocadoEventos.id, eventoId));
+      if (!ev || ev.tipo !== "DEVOLUCAO_FORNECEDOR") return res.status(404).send("Comprovante não encontrado");
+      if (!ev.pdfComprovanteToken || ev.pdfComprovanteToken !== token) {
+        return res.status(403).send("Token inválido");
+      }
+      const { fetchReturnReceiptData, generateReturnReceiptPdf } = await import("../services/equipmentReturnReceiptPdf");
+      const data = await fetchReturnReceiptData(eventoId);
+      const doc = generateReturnReceiptPdf(data);
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `inline; filename="comprovante-devolucao-${eventoId}.pdf"`);
+      doc.pipe(res);
+      doc.end();
+    } catch (e: any) {
+      console.error("[comprovante-devolucao]", e);
+      res.status(500).send(`Erro: ${e?.message || "desconhecido"}`);
+    }
+  });
+
   app.use("/uploads", express.static(path.join(process.cwd(), "server/uploads")));
 
   app.use("/uploads", async (req: any, res: any) => {
@@ -2040,6 +2073,12 @@ Regras:
           await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_equip_evt_equip ON equipamento_locado_eventos (equipamento_locado_id)`);
           await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_equip_evt_tipo_data ON equipamento_locado_eventos (tipo, data_evento)`);
           await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_equip_evt_company ON equipamento_locado_eventos (company_id)`);
+          // Rev. 2453 — colunas de assinatura + token do PDF de comprovante.
+          await db.execute(sql`ALTER TABLE equipamento_locado_eventos ADD COLUMN IF NOT EXISTS assinatura_entregador_nome VARCHAR(255)`);
+          await db.execute(sql`ALTER TABLE equipamento_locado_eventos ADD COLUMN IF NOT EXISTS assinatura_entregador_url TEXT`);
+          await db.execute(sql`ALTER TABLE equipamento_locado_eventos ADD COLUMN IF NOT EXISTS assinatura_recebedor_nome VARCHAR(255)`);
+          await db.execute(sql`ALTER TABLE equipamento_locado_eventos ADD COLUMN IF NOT EXISTS assinatura_recebedor_url TEXT`);
+          await db.execute(sql`ALTER TABLE equipamento_locado_eventos ADD COLUMN IF NOT EXISTS pdf_comprovante_token VARCHAR(64)`);
 
           // ADDs idempotentes (caso a tabela já existisse de uma versão antiga sem essas colunas).
           await db.execute(sql`ALTER TABLE equipamentos_locados ADD COLUMN IF NOT EXISTS numero_contrato_fornecedor VARCHAR(50)`);

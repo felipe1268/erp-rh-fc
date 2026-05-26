@@ -2,6 +2,7 @@
 
 > Este arquivo guarda os one-liners das revisões antigas para manter o `replit.md` enxuto.
 
+- **Rev. 2446** — ALMOXARIFADO · INVENTÁRIO VISUAL · cards padronizados em altura uniforme (CTA "Registrar baixa" ancorado no rodapé). `InventarioVisual.tsx` L375/L439/L463/L509. Ver `shared/changelog.ts`.
 - **Rev. 2445** — ALMOXARIFADO · CASCADE excluirItem desativa baias vinculadas + defensivo no listar esconde baias órfãs. `compras.ts` L122/L2253-2272 + `warehouse.ts` L3050-3057. Ver `shared/changelog.ts`.
 - **Rev. 2444** — [BUG GRAVE] ALMOXARIFADO · INVENTÁRIO VISUAL · itens do almoxarifado CENTRAL não duplicam mais em todas as 24 obras. `warehouse.ts → baiaAgregadosListar` L2930-2952/L2974-2997. Ver `shared/changelog.ts`.
 - **Rev. 2443** — ALMOXARIFADO · INVENTÁRIO VISUAL · dropdown só mostra obras ATIVAS com ≥1 item alocado, contagem inline ("· 4 itens"), visão consolidada suprimida quando vazio. `InventarioVisual.tsx` L122-149/L558-574. Ver `shared/changelog.ts`.

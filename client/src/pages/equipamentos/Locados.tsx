@@ -8,6 +8,7 @@ import { Plus, Search, X, Truck, CheckCircle2, RotateCcw, ClipboardCheck, Eye, F
 import type { ReactNode } from "react";
 import { FotosUploader, FotoItem, fmtMoney, fmtDate, Spinner } from "./_shared";
 import { compressImageIfNeeded } from "@/lib/imageCompress";
+import { SignaturePad } from "@/components/SignaturePad"; // Rev. 2453
 
 // Rev. 2346 — formata inteiros pt-BR (≥1000 ganha separador "." de milhar). Ex: 1220 → "1.220".
 const fmtN = (n: number) => n.toLocaleString("pt-BR");
@@ -435,6 +436,15 @@ export default function EquipamentosLocados() {
   const [devLoteData, setDevLoteData] = useState<string>(new Date().toISOString().slice(0, 10));
   const [devLoteFotos, setDevLoteFotos] = useState<FotoItem[]>([]);
   const [devLoteObs, setDevLoteObs] = useState<string>("");
+  // Rev. 2453 — etapas do modal de devolução + assinaturas + nome.
+  // Etapa 1: fotos/data/obs. Etapa 2: nomes + assinaturas (entregador + recebedor).
+  const [devLoteEtapa, setDevLoteEtapa] = useState<1 | 2>(1);
+  const [devLoteEntNome, setDevLoteEntNome] = useState<string>("");
+  const [devLoteEntSig,  setDevLoteEntSig]  = useState<string | null>(null);
+  const [devLoteRecNome, setDevLoteRecNome] = useState<string>("");
+  const [devLoteRecSig,  setDevLoteRecSig]  = useState<string | null>(null);
+  // Rev. 2453 — modal pós-sucesso para compartilhar/baixar/ver o comprovante PDF.
+  const [modalShareComprovante, setModalShareComprovante] = useState<{ url: string; qtd: number } | null>(null);
   const devolver = trpc.equipamentos.locadoDevolver.useMutation({
     onSuccess: () => {
       utils.equipamentos.locadosListar.invalidate();
@@ -450,6 +460,9 @@ export default function EquipamentosLocados() {
       setModalDevLote(null);
       setDevLoteFotos([]);
       setDevLoteObs("");
+      setDevLoteEtapa(1);
+      setDevLoteEntNome(""); setDevLoteEntSig(null);
+      setDevLoteRecNome(""); setDevLoteRecSig(null);
       setSelecionadosLote(new Set());
       setPickerDevolver(false);
       if (res.falhas.length === 0) {
@@ -457,7 +470,14 @@ export default function EquipamentosLocados() {
       } else {
         toast.warning(`${res.ok.length} devolvido(s) · ${res.falhas.length} falha(s): ${res.falhas.slice(0, 3).map(f => `#${f.id} (${f.erro})`).join(", ")}${res.falhas.length > 3 ? "…" : ""}`);
       }
-      voltarParaAlmoxSeNecessario(); // Rev. 2449
+      // Rev. 2453 — se assinou, abre modal de compartilhamento ANTES de
+      // voltar pro almoxarifado. Caso contrário, segue fluxo legado.
+      if (res.comprovante) {
+        const url = `${window.location.origin}/api/comprovante-devolucao/${res.comprovante.eventoId}/${res.comprovante.token}.pdf`;
+        setModalShareComprovante({ url, qtd: res.ok.length });
+      } else {
+        voltarParaAlmoxSeNecessario(); // Rev. 2449
+      }
     },
     onError: (e) => toast.error(e.message),
   });
@@ -1000,16 +1020,31 @@ export default function EquipamentosLocados() {
     setPickerDevolverBusca("");
     voltarParaAlmoxSeNecessario(); // Rev. 2449
   }
-  // Rev. 2420 — dispara devolução em lote dos ids em `modalDevLote`.
-  function fazerDevolucaoLote() {
+  // Rev. 2420/2453 — dispara devolução em lote dos ids em `modalDevLote`.
+  // Etapa 1 valida fotos/data e avança pra etapa 2 (assinaturas).
+  // Etapa 2 valida nomes+assinaturas e dispara a mutation.
+  function avancarOuDevolverLote() {
     if (!modalDevLote || modalDevLote.length === 0) return;
-    if (devLoteFotos.length === 0) return toast.error("Foto de devolução é obrigatória.");
+    if (devLoteEtapa === 1) {
+      if (devLoteFotos.length === 0) return toast.error("Foto de devolução é obrigatória.");
+      if (!devLoteData) return toast.error("Data é obrigatória.");
+      setDevLoteEtapa(2);
+      return;
+    }
+    if (!devLoteEntNome.trim()) return toast.error("Nome do entregador é obrigatório.");
+    if (!devLoteEntSig)         return toast.error("Assinatura do entregador é obrigatória.");
+    if (!devLoteRecNome.trim()) return toast.error("Nome do recebedor é obrigatório.");
+    if (!devLoteRecSig)         return toast.error("Assinatura do recebedor é obrigatória.");
     devolverLote.mutate({
       companyId,
       ids: modalDevLote.map((l: any) => Number(l.id)),
       dataFimReal: devLoteData,
       fotosDevolucao: devLoteFotos,
       observacao: devLoteObs || undefined,
+      assinaturaEntregadorNome: devLoteEntNome.trim(),
+      assinaturaEntregadorUrl:  devLoteEntSig,
+      assinaturaRecebedorNome:  devLoteRecNome.trim(),
+      assinaturaRecebedorUrl:   devLoteRecSig,
     });
   }
 
@@ -2770,11 +2805,16 @@ export default function EquipamentosLocados() {
           1 observação comuns aplicados a todos os ids em `modalDevLote`. */}
       {modalDevLote && modalDevLote.length > 0 && (
         <Modal
-          title={`Devolver ${modalDevLote.length} equipamento(s) em lote`}
-          onClose={() => setModalDevLote(null)}
-          onSave={fazerDevolucaoLote}
-          saveLabel={`Confirmar devolução (${modalDevLote.length})`}
+          title={`Devolver ${modalDevLote.length} equipamento(s) · Etapa ${devLoteEtapa}/2`}
+          onClose={() => { setModalDevLote(null); setDevLoteEtapa(1); }}
+          onSave={avancarOuDevolverLote}
+          saveLabel={devLoteEtapa === 1 ? "Avançar para assinaturas →" : `Confirmar devolução (${modalDevLote.length})`}
           loading={devolverLote.isPending}>
+          {/* Stepper */}
+          <div className="flex items-center gap-2 mb-3 text-xs">
+            <div className={`flex-1 h-1.5 rounded-full ${devLoteEtapa >= 1 ? "bg-orange-500" : "bg-slate-200"}`} />
+            <div className={`flex-1 h-1.5 rounded-full ${devLoteEtapa >= 2 ? "bg-orange-500" : "bg-slate-200"}`} />
+          </div>
           <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 mb-3 max-h-40 overflow-y-auto">
             <p className="text-xs font-bold text-orange-800 mb-1.5 uppercase tracking-wide">Selecionados:</p>
             <ul className="text-[13px] text-slate-700 space-y-0.5">
@@ -2788,13 +2828,108 @@ export default function EquipamentosLocados() {
               {modalDevLote.length > 12 && <li className="text-slate-500 italic">+ {modalDevLote.length - 12} outro(s)…</li>}
             </ul>
           </div>
-          <Field label="Data devolução*">
-            <input type="date" value={devLoteData} onChange={e => setDevLoteData(e.target.value)} className="inp" />
-          </Field>
-          <Field label="Observação (aplicada a todos)">
-            <textarea value={devLoteObs} onChange={e => setDevLoteObs(e.target.value)} rows={2} className="inp" />
-          </Field>
-          <FotosUploader fotos={devLoteFotos} onChange={setDevLoteFotos} label="Fotos de devolução (aplicadas a todos)" required />
+
+          {devLoteEtapa === 1 && (
+            <>
+              <Field label="Data devolução*">
+                <input type="date" value={devLoteData} onChange={e => setDevLoteData(e.target.value)} className="inp" />
+              </Field>
+              <Field label="Observação (aplicada a todos)">
+                <textarea value={devLoteObs} onChange={e => setDevLoteObs(e.target.value)} rows={2} className="inp" />
+              </Field>
+              <FotosUploader fotos={devLoteFotos} onChange={setDevLoteFotos} label="Fotos de devolução (aplicadas a todos)" required />
+            </>
+          )}
+
+          {devLoteEtapa === 2 && (
+            <>
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-xs text-slate-600">
+                  Colete a assinatura de quem entregou (FC) e de quem recebeu (locadora). Será gerado um comprovante PDF compartilhável via WhatsApp.
+                </p>
+                <button type="button" onClick={() => setDevLoteEtapa(1)} className="text-xs text-slate-500 hover:text-slate-700 underline whitespace-nowrap ml-2">← Voltar</button>
+              </div>
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 mb-3">
+                <p className="text-[11px] font-bold text-slate-600 uppercase tracking-wide mb-2">Entregador (FC Engenharia)</p>
+                <Field label="Nome completo*">
+                  <input type="text" value={devLoteEntNome} onChange={e => setDevLoteEntNome(e.target.value)} className="inp" placeholder="Quem está entregando o equipamento" />
+                </Field>
+                <SignaturePad value={devLoteEntSig} onChange={setDevLoteEntSig} label="Assinatura*" />
+              </div>
+              <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3">
+                <p className="text-[11px] font-bold text-emerald-700 uppercase tracking-wide mb-2">Recebedor (Locadora)</p>
+                <Field label="Nome do responsável da locadora*">
+                  <input type="text" value={devLoteRecNome} onChange={e => setDevLoteRecNome(e.target.value)} className="inp" placeholder="Quem está recebendo pela locadora" />
+                </Field>
+                <SignaturePad value={devLoteRecSig} onChange={setDevLoteRecSig} label="Assinatura*" />
+              </div>
+            </>
+          )}
+        </Modal>
+      )}
+
+      {/* Rev. 2453 — Modal pós-sucesso: compartilhar/baixar/ver comprovante PDF. */}
+      {modalShareComprovante && (
+        <Modal
+          title="Comprovante de devolução gerado"
+          onClose={() => { setModalShareComprovante(null); voltarParaAlmoxSeNecessario(); }}
+          saveLabel="Fechar"
+          onSave={() => { setModalShareComprovante(null); voltarParaAlmoxSeNecessario(); }}
+        >
+          <div className="text-center py-3">
+            <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-emerald-100 mb-2">
+              <CheckCircle2 className="w-8 h-8 text-emerald-600" />
+            </div>
+            <p className="text-sm font-semibold text-slate-800">
+              {modalShareComprovante.qtd} equipamento(s) devolvido(s) com sucesso.
+            </p>
+            <p className="text-xs text-slate-500 mt-1">Compartilhe o comprovante assinado com a locadora:</p>
+          </div>
+          <div className="grid grid-cols-1 gap-2">
+            <button
+              type="button"
+              onClick={async () => {
+                const url = modalShareComprovante.url;
+                const txt = `Comprovante de devolução de equipamentos · FC Engenharia\n${url}`;
+                // Tenta Web Share API (mobile); senão abre WhatsApp Web.
+                if ((navigator as any).share) {
+                  try {
+                    await (navigator as any).share({ title: "Comprovante de devolução", text: txt, url });
+                    return;
+                  } catch { /* user cancelou — segue p/ wa.me */ }
+                }
+                window.open(`https://wa.me/?text=${encodeURIComponent(txt)}`, "_blank");
+              }}
+              className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 rounded-lg flex items-center justify-center gap-2 text-sm"
+            >
+              📱 Compartilhar via WhatsApp
+            </button>
+            <a
+              href={modalShareComprovante.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold py-2.5 rounded-lg flex items-center justify-center gap-2 text-sm border border-slate-300"
+            >
+              <Eye className="w-4 h-4" /> Visualizar PDF
+            </a>
+            <a
+              href={modalShareComprovante.url}
+              download
+              className="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold py-2.5 rounded-lg flex items-center justify-center gap-2 text-sm border border-slate-300"
+            >
+              <FileText className="w-4 h-4" /> Baixar PDF
+            </a>
+            <button
+              type="button"
+              onClick={() => {
+                navigator.clipboard.writeText(modalShareComprovante.url);
+                toast.success("Link copiado!");
+              }}
+              className="w-full text-slate-500 hover:text-slate-700 text-xs underline py-1"
+            >
+              Copiar link
+            </button>
+          </div>
         </Modal>
       )}
 

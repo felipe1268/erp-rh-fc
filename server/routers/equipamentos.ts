@@ -819,6 +819,11 @@ export const equipamentosRouter = router({
       dataFimReal: z.string().min(10).max(10),
       fotosDevolucao: fotoSchema,
       observacao: z.string().optional(),
+      // Rev. 2453 — assinaturas (PNG dataURL) + nomes
+      assinaturaEntregadorNome: z.string().min(1).max(255).optional(),
+      assinaturaEntregadorUrl:  z.string().optional(),
+      assinaturaRecebedorNome:  z.string().min(1).max(255).optional(),
+      assinaturaRecebedorUrl:   z.string().optional(),
     }))
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
@@ -842,6 +847,13 @@ export const equipamentosRouter = router({
       const ok: number[] = [];
       const falhas: { id: number; erro: string }[] = [];
       const idsUnicos = Array.from(new Set(input.ids));
+      // Rev. 2453 — token HMAC compartilhado por todos os eventos do lote
+      // (permite ao recebedor abrir o comprovante via URL pública assinada).
+      const temAssinaturas = !!(input.assinaturaEntregadorUrl && input.assinaturaRecebedorUrl);
+      const pdfToken = temAssinaturas
+        ? crypto.randomBytes(24).toString("hex")
+        : null;
+      let primeiroEventoId: number | null = null;
       for (const id of idsUnicos) {
         try {
           const [eq_] = await db.select().from(equipamentosLocados)
@@ -867,7 +879,7 @@ export const equipamentosRouter = router({
           const tempoNaObraDias = dataInicio
             ? Math.max(0, Math.round((dataFim.getTime() - dataInicio.getTime()) / 86400000))
             : null;
-          await db.insert(equipamentoLocadoEventos).values({
+          const [insEv] = await db.insert(equipamentoLocadoEventos).values({
             companyId: input.companyId,
             equipamentoLocadoId: id,
             tipo: "DEVOLUCAO_FORNECEDOR",
@@ -878,7 +890,13 @@ export const equipamentosRouter = router({
               : (input.observacao ? `[Lote] ${input.observacao}` : "[Lote]"),
             usuarioId: ctx.user.id,
             usuarioNome: ctx.user.name || String(ctx.user.id),
-          });
+            assinaturaEntregadorNome: input.assinaturaEntregadorNome || null,
+            assinaturaEntregadorUrl:  input.assinaturaEntregadorUrl  || null,
+            assinaturaRecebedorNome:  input.assinaturaRecebedorNome  || null,
+            assinaturaRecebedorUrl:   input.assinaturaRecebedorUrl   || null,
+            pdfComprovanteToken:      pdfToken,
+          }).returning({ id: equipamentoLocadoEventos.id });
+          if (primeiroEventoId == null && insEv) primeiroEventoId = insEv.id;
           await removeAlmoxItemForEquipamento(db, {
             companyId: input.companyId,
             tipo: "locado",
@@ -889,7 +907,15 @@ export const equipamentosRouter = router({
           falhas.push({ id, erro: e?.message || "Erro desconhecido" });
         }
       }
-      return { ok, falhas, total: idsUnicos.length };
+      return {
+        ok,
+        falhas,
+        total: idsUnicos.length,
+        // Rev. 2453 — retorna primeiro evento + token pra montar URL do comprovante
+        comprovante: (primeiroEventoId != null && pdfToken)
+          ? { eventoId: primeiroEventoId, token: pdfToken }
+          : null,
+      };
     }),
 
   locadoCheckIn: protectedProcedure
