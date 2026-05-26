@@ -224,11 +224,16 @@ export default function DashAlmoxarifadoEquipamentos() {
     let unidadesEstoque = 0, valorTotal = 0, abaixoMin = 0, semEstoque = 0;
     const porCategoria = new Map<string, { qtd: number; valor: number }>();
     for (const it of itens) {
-      const saldo = Number(it.saldoAtual ?? it.quantidade ?? 0);
-      const preco = Number(it.precoMedio ?? it.precoUnitario ?? 0);
+      // Rev. 2448 — Fields corretos do schema `almoxarifado_itens`:
+      // `quantidadeAtual` (não saldoAtual) e `valorUnitario` (não precoMedio).
+      // Antes da fix tudo vinha como `undefined → 0`, e a coluna "Valor parado"
+      // ficava R$ 0,00 pra todas as categorias, mesmo com itens de valor
+      // cadastrado. Aceita aliases legados como fallback defensivo.
+      const saldo = Number(it.quantidadeAtual ?? it.saldoAtual ?? it.quantidade ?? 0);
+      const preco = Number(it.valorUnitario ?? it.precoMedio ?? it.precoUnitario ?? 0);
       unidadesEstoque += saldo;
       valorTotal += saldo * preco;
-      const min = Number(it.estoqueMinimo ?? 0);
+      const min = Number(it.quantidadeMinima ?? it.estoqueMinimo ?? 0);
       if (saldo <= 0) semEstoque += 1;
       else if (min > 0 && saldo < min) abaixoMin += 1;
       const cat = String(it.categoria || "— sem categoria —");

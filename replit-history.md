@@ -681,3 +681,4 @@
 - **Rev. 2438** — ALMOXARIFADO · VISÃO GERAL · badge mostra NOME real da obra (lookup `obrasAtivas`) com truncate+title. `index.tsx` L1932-2010. Ver `shared/changelog.ts`.
 - **Rev. 2439** — ALMOXARIFADO · INVENTÁRIO SEMANAL · thumbnail da foto do item no card + overlay ampliado on-tap. Backend `warehouse.ts` L922-951 (LEFT JOIN) + `Inventario.tsx` L30-145. Ver `shared/changelog.ts`.
 - **Rev. 2440** — ALMOXARIFADO · VISÃO GERAL · card limpo (3 badges + "+N locais") e card/linha clicáveis abrem modal completo de edição. `index.tsx` L1877-2065. Ver `shared/changelog.ts`.
+- **Rev. 2441** — ALMOXARIFADO · Combobox filtrável de categoria (digite pra achar) no cadastro/edição + 2 modais "Alterar categoria em lote". `index.tsx` L50-145/L2766/L4377/L4469. Ver `shared/changelog.ts`.

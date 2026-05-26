@@ -1,6 +1,61 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2448 — **[BUG GRAVE] DASHBOARD ALMOX & EQUIP · "Valor parado" e
+ * gráficos de estoque por categoria ficavam SEMPRE R$ 0,00 — leitura
+ * de campos com nomes errados do schema.**
+ *
+ * CONTEXTO (print user 23:04): aba "Estoque" da Dashboard Almox &
+ * Equipamentos com tabela "Categorias — detalhe" mostrando ITENS corretos
+ * (343, 1.190, 130, 46 etc.) mas TODAS as 18 linhas com "VALOR PARADO:
+ * R$ 0,00". O mesmo bug zerava o gráfico "Valor do estoque por categoria
+ * (top 10)" e os KPIs "Valor do estoque", "Valor total" e "Cobertura
+ * mensal (R$)" no topo da aba.
+ *
+ * CAUSA RAIZ
+ * Em `client/src/pages/dashboards/DashAlmoxarifadoEquipamentos.tsx` o
+ * useMemo `stockAgg` (L221) lia os itens retornados pela tRPC
+ * `compras.listarItens` (que devolve as colunas raw do `select()`)
+ * usando nomes que NÃO existem no schema:
+ *   - `it.saldoAtual` / `it.quantidade`  → schema tem `quantidadeAtual`
+ *   - `it.precoMedio` / `it.precoUnitario` → schema tem `valorUnitario`
+ *   - `it.estoqueMinimo` → schema tem `quantidadeMinima`
+ * `Number(undefined ?? undefined ?? 0)` retorna 0, então `saldo * preco`
+ * = 0 pra TODOS os itens. O bug existe desde a criação do dashboard
+ * (provavelmente herdou os nomes de outro módulo que usa essa
+ * convenção). Os KPIs de quantidade (Itens cadastrados, Categorias)
+ * funcionavam porque `itens.length` e `porCategoria.size` não dependem
+ * de nenhum campo numérico.
+ *
+ * FIX
+ * `DashAlmoxarifadoEquipamentos.tsx` L229-241: agora lê os 3 campos
+ * corretos com fallback defensivo pros nomes antigos:
+ *   - `it.quantidadeAtual ?? it.saldoAtual ?? it.quantidade ?? 0`
+ *   - `it.valorUnitario   ?? it.precoMedio ?? it.precoUnitario ?? 0`
+ *   - `it.quantidadeMinima ?? it.estoqueMinimo ?? 0`
+ *
+ * IMPACTO
+ * - "Valor do estoque" / "Valor total" / "Cobertura mensal" passam a
+ *   refletir o saldo × valorUnitario real dos itens cadastrados.
+ * - Tabela "Categorias — detalhe": coluna "Valor parado" deixa de ser
+ *   R$ 0,00.
+ * - Gráficos "Valor do estoque por categoria (top 10)" (horizontalBar)
+ *   e "Itens por categoria (top 10)" (doughnut) recebem dados não-zero.
+ * - "Abaixo do mínimo" / "Sem estoque" / "Unidades em estoque" também
+ *   passam a ler quantidade real (antes contavam tudo como semEstoque
+ *   porque saldo=0 → caía no `if (saldo <= 0)`).
+ *
+ * VALIDAÇÃO
+ * - R-001/R-007/R-010 OK — frontend puro, zero schema/backend.
+ * - Itens sem `valorUnitario` cadastrado continuam contribuindo com R$ 0,
+ *   mas isso agora é VERDADE (não cadastraram o preço), não bug de
+ *   leitura — copy "Valor parado" reflete realidade do almoxarifado.
+ * - Sugestão FUTURA: complementar com `precoMedioPonderado` calculado
+ *   por NF de entrada (server-side), pra itens sem valor cadastrado
+ *   ainda terem valor estimado. Fora do escopo dessa rev.
+ *
+ * ──────────────────────────────────────────────────────────────────────
+ *
  * Rev. 2447 — **ALMOXARIFADO · INVENTÁRIO VISUAL · banner "Rotina diária"
  * fixo no rodapé reforça que a aferição é uma tarefa de TODO DIA.**
  *
