@@ -1,6 +1,42 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2435 — **ALMOXARIFADO · INVENTÁRIO VISUAL · bloqueio de baixa que
+ * zeraria o saldo do almoxarifado pra negativo + feedback ao vivo no
+ * modal "Registrar baixa da baia".**
+ *
+ * CONTEXTO (print do user — iPad Safari, 21:39 BRT, modal "Registrar
+ * baixa da baia" do item TESTE -areia): última leitura 5 m³, saldo no
+ * sistema 10 m³, e o user podia digitar qualquer valor (ex: -3) ou
+ * deixar a baixa proposta excedendo o saldo do almoxarifado — gerando
+ * estoque negativo silenciosamente.
+ *
+ * DECISÃO
+ * - Frontend valida antes do submit: `baixa = max(0, volAnterior − volNum)`;
+ *   se `baixa > saldoSistema`, recusa com toast contextualizado
+ *   ("Baixa de X excede o saldo de Y. Registre a entrada do material ou
+ *   ajuste a leitura.", 6s).
+ * - Painel ao vivo logo abaixo do input mostrando "Baixa proposta",
+ *   "Saldo no sistema" e "Saldo depois" em verde (OK) ou vermelho
+ *   (excedeu, com aviso ⚠️). Só aparece quando há baixa > 0 (não polui
+ *   o modal em reposição visual ou leitura idêntica).
+ * - Decisão consciente de NÃO desabilitar o botão Confirmar — preferimos
+ *   feedback visual claro + toast pra evitar o "botão morto sem motivo".
+ *
+ * ARQUIVOS
+ * - `client/src/pages/almoxarifado/InventarioVisual.tsx`
+ *   - L245-268 (`confirmarLeitura`): validação de saldo após.
+ *   - L881-916: painel ao vivo de "Baixa proposta".
+ *
+ * VALIDAÇÃO
+ * - Zero backend, zero migration. R-001/R-007/R-010 OK.
+ * - Backend `warehouse.registrarLeitura` continua sendo a fonte oficial
+ *   do consumo — esta camada é defensiva no cliente. Próximo passo
+ *   natural (não nesta rev): mesma validação no procedure pra cortar
+ *   também ajustes via API direta.
+ *
+ * ──────────────────────────────────────────────────────────────────────
+ *
  * Rev. 2434 — **ALMOXARIFADO · INVENTÁRIO VISUAL · datas/horas em fuso de
  * Brasília (antes mostravam UTC: leitura às 21:37 BRT aparecia como 00:37
  * do dia seguinte).**

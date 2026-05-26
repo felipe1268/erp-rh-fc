@@ -247,6 +247,22 @@ export default function InventarioVisualBaias() {
       toast.error("Digite um volume válido (ex: 12,5).");
       return;
     }
+    // Rev. 2435 — bloqueia baixa que zeraria pra negativo no almoxarifado.
+    // Baixa = volumeAnterior − volumeAgora (só conta consumo, nunca reposição).
+    // Saldo após = saldoSistema − baixa. Se < 0, recusa com mensagem clara.
+    const volAnterior = leituraBaia?.ultimaLeitura?.volumeEstimado != null
+      ? Number(leituraBaia.ultimaLeitura.volumeEstimado) : null;
+    const saldoSistema = Number(leituraBaia?.quantidadeAtual ?? 0);
+    const baixa = volAnterior != null ? Math.max(0, volAnterior - volNum) : 0;
+    if (baixa > saldoSistema + 1e-9) {
+      const unid = leituraBaia.unidade || "";
+      toast.error(
+        `Baixa de ${fmtNum(baixa)} ${unid} excede o saldo do almoxarifado (${fmtNum(saldoSistema)} ${unid}). ` +
+        `Registre primeiro a entrada do material ou ajuste a leitura.`,
+        { duration: 6000 },
+      );
+      return;
+    }
     try {
       // Rev. 2415 — se item agregado ainda não tem baia (id=null),
       // cria a baia automaticamente antes de registrar a leitura.
@@ -859,6 +875,42 @@ export default function InventarioVisualBaias() {
                   className="mt-1 text-lg font-bold h-12 text-center"
                 />
                 <p className="text-[11px] text-slate-500 mt-1">Estime visualmente o volume que ainda está na baia.</p>
+                {/* Rev. 2435 — Feedback ao vivo da baixa proposta + alerta de saldo negativo */}
+                {(() => {
+                  const volN = parseFloat(String(leituraVolume).replace(",", "."));
+                  if (!isFinite(volN) || volN < 0) return null;
+                  const volAnt = leituraBaia.ultimaLeitura?.volumeEstimado != null
+                    ? Number(leituraBaia.ultimaLeitura.volumeEstimado) : null;
+                  const saldo = Number(leituraBaia.quantidadeAtual ?? 0);
+                  const baixa = volAnt != null ? Math.max(0, volAnt - volN) : 0;
+                  const saldoApos = saldo - baixa;
+                  const unid = leituraBaia.unidade || "";
+                  const excede = baixa > saldo + 1e-9;
+                  if (baixa === 0) return null;
+                  return (
+                    <div className={`mt-2 rounded-lg border-2 px-3 py-2 text-xs ${
+                      excede ? "border-red-300 bg-red-50 text-red-800" : "border-emerald-200 bg-emerald-50 text-emerald-800"
+                    }`}>
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold">Baixa proposta</span>
+                        <span className="font-black">−{fmtNum(baixa)} {unid}</span>
+                      </div>
+                      <div className="flex items-center justify-between mt-0.5 opacity-90">
+                        <span>Saldo no sistema</span>
+                        <span className="font-semibold">{fmtNum(saldo)} {unid}</span>
+                      </div>
+                      <div className="flex items-center justify-between mt-0.5 font-semibold">
+                        <span>Saldo depois</span>
+                        <span>{fmtNum(saldoApos)} {unid}</span>
+                      </div>
+                      {excede && (
+                        <div className="mt-1.5 pt-1.5 border-t border-red-200 font-bold">
+                          ⚠️ Excede o saldo. Registre a entrada do material antes de baixar.
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
               </div>
               <div>
                 <Label className="text-xs">Foto da baia (opcional, mas recomendado)</Label>

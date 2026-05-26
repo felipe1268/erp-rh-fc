@@ -663,3 +663,5 @@
 - **Rev. 2426** — ALMOXARIFADO · AUDITORIA · banner global de pendências acima do `<main>` do DashboardLayout + deep-link `?auditoria=1`. Query `compras.auditoriaPendenciasCount` refetch 60s; banner ambar dismissable com botão "Revisar agora". Ver `shared/changelog.ts`.
 
 - **Rev. 2427** — PLANEJAMENTO · REGRA DE OURO DEFINITIVA · `% PREVISTO`=Texto6 puro + `% CONCLUÍDA`=PercentComplete puro para TODAS as obras. Mapeamento canônico XML HOTEL DO PAPA validado (paridade 100% XML × tela MSP). `ImportarCronograma.tsx` bloco L257-281. Ver `shared/changelog.ts`.
+
+- **Rev. 2428** — UX · PLANEJAMENTO/LISTA · modal "Novo Projeto" redesenhado com identidade FC (faixa azul #1B2A4A) + shadcn Select/Textarea + fim do scroll horizontal. `PlanejamentoLista.tsx`. Ver `shared/changelog.ts`.
