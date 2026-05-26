@@ -1,6 +1,96 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2429 — **ALMOXARIFADO · AUDITORIA · aprovadores delegados por obra
+ * (engenheiro responsável + delegados que ele indicar podem aprovar/rejeitar
+ * exclusões e ajustes manuais de estoque — antes era só admin/admin_master).**
+ *
+ * CONTEXTO
+ * - Desde a Rev. 2388 toda exclusão de item/unidade e todo ajuste manual de
+ *   quantidade gera 1 linha em `almoxarifado_auditoria` com status `pendente`,
+ *   e admin precisava validar/rejeitar pra efetivar.
+ * - A Rev. 2426 adicionou banner global de pendências.
+ * - Problema reportado pelo usuário: o admin virou GARGALO. Quem entende do
+ *   estoque OPERACIONAL da obra é o **engenheiro responsável da obra** (cadastro
+ *   `obras.responsavel_id`) ou alguém que ele delegue — não o admin master que
+ *   nem está na obra. Pedido explícito: criar um "critério" pra indicar quem
+ *   pode aprovar a revisão manual do estoque por obra.
+ * - Análise das 3 opções apresentadas ao user (A = só responsável da obra,
+ *   B = responsável + delegados em tabela própria, C = feature granular no
+ *   sistema de permissões geral). User escolheu **B**.
+ *
+ * DECISÃO
+ * - Nova tabela `obra_responsaveis_estoque` (N:N obra↔users) com 2 tipos:
+ *   `principal` (no máximo 1 por obra) e `delegado` (N por obra). Aponta pra
+ *   `users.id` (quem LOGA), não pra `employees.id` — porque autorizar acesso
+ *   precisa do user logado. Não há auto-seed automático a partir de
+ *   `obras.responsavel_id` (que é employee), justamente porque os dois mundos
+ *   não têm vínculo formal no schema. Quem gerencia a lista é admin OU o
+ *   principal da obra.
+ * - Helpers/regras nos 3 endpoints de auditoria:
+ *     - `auditoriaPendenciasCount`: admin enxerga obras permitidas + auditorias
+ *       sem obra; não-admin enxerga SÓ as obras onde é aprovador (delegado ou
+ *       principal). Se não é admin e não é aprovador em nada → 0 (não aparece
+ *       banner).
+ *     - `auditoriaValidar`: admin OK sempre; não-admin OK se for aprovador da
+ *       obra da auditoria. Auditoria SEM obraId (excluir_unidade/global) segue
+ *       só admin — não tem responsável de obra pra delegar.
+ *     - `auditoriaListar`: mantém filtro por obras permitidas (não precisa de
+ *       mudança — listar não é igual a validar).
+ * - 4 endpoints novos em `compras.ts`:
+ *     - `responsaveisAuditoriaListar({obraId})` — público dentro do escopo de
+ *       obras permitidas, pra qualquer user da empresa ver quem aprova o quê.
+ *     - `responsaveisAuditoriaAdicionar({companyId, obraId, userId, tipo})` —
+ *       só admin OU principal da obra. Tipo `principal` rebaixa o anterior pra
+ *       `delegado` (UPSERT semântico). Idempotente em duplicata.
+ *     - `responsaveisAuditoriaRemover({id})` — só admin, principal da obra OU
+ *       o próprio user (auto-remoção).
+ *     - `responsaveisAuditoriaCandidatos({companyId, obraId, busca})` — users
+ *       da empresa que AINDA NÃO são aprovadores da obra, p/ autocomplete.
+ * - Frontend: novo componente reutilizável
+ *   `client/src/components/obras/ModalAprovadoresEstoque.tsx` — modal próprio
+ *   com identidade FC (faixa azul #1B2A4A) que lista aprovadores atuais
+ *   (principal destacado em âmbar/coroa, delegados em slate), barra de busca
+ *   pra adicionar candidatos, 2 botões (Delegado / Principal — este só aparece
+ *   se a obra ainda não tem principal). Confirmação separada pra remover.
+ * - Integração mínima no `Obras.tsx`: botão pequeno "Aprovadores de auditoria"
+ *   no header do campo "Engenheiro / Responsável" do modal de edição (só
+ *   aparece se editando obra existente — não faz sentido pra obra que ainda
+ *   não foi criada). Usa ícone `ShieldCheck`.
+ *
+ * ARQUIVOS
+ * - `drizzle/schema.ts` L8875-8895 (nova tabela `obraResponsaveisEstoque`).
+ * - `server/_core/index.ts` L594-613 (SyncSchema+ CREATE TABLE IF NOT EXISTS
+ *   `obra_responsaveis_estoque` + 3 índices, unique em (obra_id, user_id)).
+ * - `server/routers/compras.ts` L119-123 (import `obraResponsaveisEstoque`);
+ *   L13518-13700+ (bloco AUDITORIA reescrito: 4 endpoints CRUD novos +
+ *   `auditoriaPendenciasCount` adaptado pra checar aprovadores delegados +
+ *   `auditoriaValidar` adaptado pra autorizar engenheiro/delegado).
+ * - `client/src/components/obras/ModalAprovadoresEstoque.tsx` — NOVO (~250
+ *   linhas). Self-contained: faz 4 tRPC queries/mutations, próprio Dialog,
+ *   próprio sub-Dialog de confirmação de remoção.
+ * - `client/src/pages/Obras.tsx` L17-18 (imports ShieldCheck + componente novo);
+ *   L110-112 (estado `aprovadoresModal`); L805-825 (botão no header do campo
+ *   responsável, só aparece se `editingId`); L1326-1333 (render do componente
+ *   ao lado dos outros Dialogs auxiliares).
+ *
+ * VALIDAÇÃO
+ * - SyncSchema+ rodou no boot: `[SyncSchema+] Tabela obra_responsaveis_estoque
+ *   garantida.` — tabela criada com 3 índices, sem erro.
+ * - R-001/R-007/R-010 OK: CREATE TABLE IF NOT EXISTS + CREATE INDEX IF NOT
+ *   EXISTS — sem ALTER em tabela existente, sem DROP, sem DELETE.
+ *
+ * FOLLOW-UPS POTENCIAIS
+ * - Mostrar na tela de auditoria do almox o nome do aprovador (principal/
+ *   delegado) que validou cada registro — atualmente já grava em
+ *   `validadoPorNome`, mas não distingue se foi admin ou delegado.
+ * - Sugestão inteligente: ao abrir o modal de aprovadores numa obra sem
+ *   principal, oferecer "Adicionar [nome do engenheiro responsável] como
+ *   principal?" — só funciona se conseguirmos linkar `employees.cpf/email`
+ *   com `users.email` (não há FK hoje).
+ *
+ * ──────────────────────────────────────────────────────────────────────
+ *
  * Rev. 2428 — **UX · PLANEJAMENTO/LISTA · redesign do modal "Novo Projeto
  * de Planejamento" com identidade FC, componentes shadcn e fim do scroll
  * horizontal.**

@@ -8868,3 +8868,25 @@ export const almoxarifadoAuditoria = pgTable("almoxarifado_auditoria", {
   index("idx_alm_aud_company_status").on(table.companyId, table.statusValidacao),
   index("idx_alm_aud_obra").on(table.obraId),
 ]);
+
+// Rev. 2429 — Aprovadores delegados de Auditoria do Almoxarifado por obra.
+// Antes: só admin/admin_master validava auditorias (hardcoded).
+// Agora: cada obra tem N aprovadores (1 principal + N delegados) que também
+// podem validar/rejeitar. admin_master continua podendo tudo como rede de
+// proteção. Auditorias SEM obraId (excluir_unidade, etc.) seguem só admin.
+// Convenção: userId aponta pra `users` (quem loga), não pra `employees`.
+export const obraResponsaveisEstoque = pgTable("obra_responsaveis_estoque", {
+  id:           serial().primaryKey(),
+  companyId:    integer("company_id").notNull(),
+  obraId:       integer("obra_id").notNull(),
+  userId:       integer("user_id").notNull(),
+  userNome:     varchar("user_nome", { length: 255 }),
+  // 'principal' | 'delegado'
+  tipo:         varchar({ length: 20 }).notNull().default("delegado"),
+  criadoPorId:  integer("criado_por_id"),
+  criadoPorNome: varchar("criado_por_nome", { length: 255 }),
+  createdAt:    timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
+}, (table) => [
+  index("idx_resp_estoque_obra").on(table.obraId),
+  index("idx_resp_estoque_user").on(table.userId),
+]);

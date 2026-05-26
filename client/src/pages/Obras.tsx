@@ -11,7 +11,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { trpc } from "@/lib/trpc";
-import { Plus, Search, Pencil, Trash2, Landmark, MapPin, Calendar, Loader2, Wifi, X, AlertCircle, CheckCircle, ArrowLeft, FileText, Brain, BookOpen, Wrench, UserCheck, ChevronDown, Merge, Upload, Image as ImageIcon, Building, PackageOpen, ArrowLeftRight } from "lucide-react";
+import { Plus, Search, Pencil, Trash2, Landmark, MapPin, Calendar, Loader2, Wifi, X, AlertCircle, CheckCircle, ArrowLeft, FileText, Brain, BookOpen, Wrench, UserCheck, ChevronDown, Merge, Upload, Image as ImageIcon, Building, PackageOpen, ArrowLeftRight, ShieldCheck } from "lucide-react";
+import ModalAprovadoresEstoque from "@/components/obras/ModalAprovadoresEstoque";
 import { useLocation } from "wouter";
 import FullScreenDialog from "@/components/FullScreenDialog";
 import { useState, useMemo, useCallback, useRef, useEffect } from "react";
@@ -104,6 +105,8 @@ export default function Obras() {
   });
 
   const [saving, setSaving] = useState(false);
+  // Rev. 2429 — Modal de aprovadores delegados de auditoria do estoque por obra.
+  const [aprovadoresModal, setAprovadoresModal] = useState<{ open: boolean; obraId: number; obraNome: string }>({ open: false, obraId: 0, obraNome: "" });
   const createMut = trpc.obras.create.useMutation({
     onSuccess: () => { obrasQ.refetch(); allSnsQ.refetch(); availableSnsQ.refetch(); setSaving(false); setDialogOpen(false); toast.success("Obra criada com sucesso!"); },
     onError: (err) => { setSaving(false); toast.error(err.message || "Erro ao criar obra"); },
@@ -798,11 +801,25 @@ export default function Obras() {
 
             {/* ── ENGENHEIRO RESPONSÁVEL ── */}
             <div className="sm:col-span-2" ref={responsavelRef}>
-              <Label className="flex items-center gap-1.5">
-                <UserCheck className="h-3.5 w-3.5 text-emerald-600" />
-                Engenheiro / Responsável
-                {!editingId && liderancas.length === 0 && <span className="text-xs text-slate-400 font-normal ml-1">(cadastre colaboradores com cargos de liderança em RH)</span>}
-              </Label>
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <Label className="flex items-center gap-1.5">
+                  <UserCheck className="h-3.5 w-3.5 text-emerald-600" />
+                  Engenheiro / Responsável
+                  {!editingId && liderancas.length === 0 && <span className="text-xs text-slate-400 font-normal ml-1">(cadastre colaboradores com cargos de liderança em RH)</span>}
+                </Label>
+                {/* Rev. 2429 — Atalho pra gerenciar aprovadores de auditoria do estoque desta obra. */}
+                {editingId && (
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-1.5 text-xs font-medium text-[#1B2A4A] hover:text-[#243456] border border-slate-200 hover:border-[#1B2A4A] rounded-md px-2.5 py-1 hover:bg-slate-50"
+                    onClick={() => setAprovadoresModal({ open: true, obraId: editingId, obraNome: form.nome || "" })}
+                    title="Gerenciar quem pode aprovar exclusões e ajustes manuais de estoque desta obra"
+                  >
+                    <ShieldCheck className="h-3.5 w-3.5" />
+                    Aprovadores de auditoria
+                  </button>
+                )}
+              </div>
               <div className="relative mt-1">
                 <Input
                   value={responsavelOpen ? responsavelBusca : form.responsavel}
@@ -1302,6 +1319,14 @@ export default function Obras() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Rev. 2429 — Modal de aprovadores delegados de auditoria do estoque por obra. */}
+      <ModalAprovadoresEstoque
+        open={aprovadoresModal.open}
+        onOpenChange={(v) => setAprovadoresModal((s) => ({ ...s, open: v }))}
+        obraId={aprovadoresModal.obraId}
+        obraNome={aprovadoresModal.obraNome}
+      />
 
       {/* Diálogo de Mesclagem de Obras */}
       <Dialog open={mesclarDialog.open} onOpenChange={(open) => { if (!open) { setMesclarDialog({ open: false, sourceObra: null }); setMesclarTargetId(null); } }}>

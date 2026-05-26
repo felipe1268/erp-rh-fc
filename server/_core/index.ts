@@ -588,6 +588,31 @@ Regras:
           console.log(`[SyncSchema+] Tabela dds_participacoes_terceiros garantida.`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA dds_participacoes_terceiros:`, e?.message || e); }
 
+        // Rev. 2429 — Aprovadores delegados de Auditoria do Almoxarifado por obra.
+        try {
+          await db.execute(sql`
+            CREATE TABLE IF NOT EXISTS obra_responsaveis_estoque (
+              id SERIAL PRIMARY KEY,
+              company_id INTEGER NOT NULL,
+              obra_id INTEGER NOT NULL,
+              user_id INTEGER NOT NULL,
+              user_nome VARCHAR(255),
+              tipo VARCHAR(20) NOT NULL DEFAULT 'delegado',
+              criado_por_id INTEGER,
+              criado_por_nome VARCHAR(255),
+              created_at TIMESTAMP DEFAULT NOW() NOT NULL
+            )
+          `);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_resp_estoque_obra ON obra_responsaveis_estoque(obra_id)`);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_resp_estoque_user ON obra_responsaveis_estoque(user_id)`);
+          await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS uniq_resp_estoque_obra_user ON obra_responsaveis_estoque(obra_id, user_id)`);
+          // Rev. 2429.1 — 1 só principal por obra (índice parcial). Fecha race
+          // condition do UPSERT de principal — duas inserções concorrentes
+          // falham na segunda em vez de criar 2 principais.
+          await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS uniq_resp_estoque_principal ON obra_responsaveis_estoque(obra_id) WHERE tipo = 'principal'`);
+          console.log(`[SyncSchema+] Tabela obra_responsaveis_estoque garantida.`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA obra_responsaveis_estoque:`, e?.message || e); }
+
         // Rev. 2003 — integracao_cliente_doc_url em funcionarios_terceiros (controle separado de integração no cliente)
         try {
           await db.execute(sql`ALTER TABLE funcionarios_terceiros ADD COLUMN IF NOT EXISTS integracao_cliente_doc_url VARCHAR(500)`);

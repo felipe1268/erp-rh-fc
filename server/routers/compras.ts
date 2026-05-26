@@ -117,6 +117,7 @@ import {
   fornecedores, avaliacoesFornecedor, almoxarifadoItens, almoxarifadoMovimentacoes,
   almoxarifadoCategorias, almoxarifadoUnidades, almoxarifadoRecebimentos,
   almoxarifadoAuditoria,
+  obraResponsaveisEstoque,
   comprasSolicitacoes, comprasSolicitacoesItens,
   comprasCotacoes, comprasCotacoesItens,
   comprasCotacaoFornecedores, comprasCotacaoRespostas,
@@ -13513,7 +13514,182 @@ Responda APENAS com JSON válido, sem markdown, no formato:
 
   // ══════════════════════════════════════════════════════════════
   // Rev. 2388 — AUDITORIA DO ALMOXARIFADO (controle rígido)
+  // Rev. 2429 — Aprovadores delegados por obra (engenheiro responsável
+  //   + delegados que ele indicar). admin_master sempre OK; admin
+  //   continua OK (compat). Auditoria SEM obraId (excluir_unidade)
+  //   segue só admin. Helper: `_obraIdsQuePossoValidar`.
   // ══════════════════════════════════════════════════════════════
+
+  // Rev. 2429.1 — Helper interno: carrega a obra, valida que o user tem acesso
+  // (companyId via _assertCompanyAccess + obras permitidas), retorna a obra.
+  // Usado pra amarrar obraId↔companyId em todos os endpoints de responsáveis
+  // (fecha IDOR onde caller podia passar companyId A com obraId de B).
+  // Não exporta — só usado dentro deste router.
+
+  // Retorna a lista de aprovadores de uma obra (principal + delegados).
+  // Qualquer user com acesso à obra pode ver — não é dado sensível, e a tela
+  // de Obras mostra esse atalho dentro do form de edição.
+  responsaveisAuditoriaListar: protectedProcedure
+    .input(z.object({ obraId: z.number().int().positive() }))
+    .query(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      // Rev. 2429.1 — Carrega a obra pra extrair companyId e validar acesso à empresa.
+      const { obras } = await import("../../drizzle/schema");
+      const [obra] = await db.select({ id: obras.id, companyId: obras.companyId })
+        .from(obras).where(eq(obras.id, input.obraId));
+      if (!obra) throw new TRPCError({ code: "NOT_FOUND", message: "Obra não encontrada." });
+      await _assertCompanyAccess(ctx.user, obra.companyId);
+      const allowed = await getEffectiveAllowedObraIds(ctx.user.id, ctx.user.role);
+      if (allowed !== null && !allowed.includes(input.obraId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta obra." });
+      }
+      return await db.select().from(obraResponsaveisEstoque)
+        .where(eq(obraResponsaveisEstoque.obraId, input.obraId))
+        .orderBy(asc(obraResponsaveisEstoque.tipo), asc(obraResponsaveisEstoque.userNome));
+    }),
+
+  responsaveisAuditoriaAdicionar: protectedProcedure
+    .input(z.object({
+      obraId: z.number().int().positive(),
+      userId: z.number().int().positive(),
+      tipo: z.enum(["principal", "delegado"]).default("delegado"),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      // Rev. 2429.1 — companyId DERIVADO da obra (não vem do client). Fecha IDOR
+      // onde caller podia gravar vínculo cross-company (companyId A, obraId B).
+      const { obras, users, userCompanies: uc } = await import("../../drizzle/schema");
+      const [obra] = await db.select({ id: obras.id, companyId: obras.companyId })
+        .from(obras).where(eq(obras.id, input.obraId));
+      if (!obra) throw new TRPCError({ code: "NOT_FOUND", message: "Obra não encontrada." });
+      await _assertCompanyAccess(ctx.user, obra.companyId);
+
+      const isAdmin = ["admin", "admin_master"].includes(ctx.user.role);
+      if (!isAdmin) {
+        const [principal] = await db.select({ id: obraResponsaveisEstoque.id })
+          .from(obraResponsaveisEstoque)
+          .where(and(
+            eq(obraResponsaveisEstoque.obraId, input.obraId),
+            eq(obraResponsaveisEstoque.userId, ctx.user.id),
+            eq(obraResponsaveisEstoque.tipo, "principal"),
+          ));
+        if (!principal) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Apenas admin ou o aprovador principal da obra pode gerenciar delegados." });
+        }
+      }
+
+      // Rev. 2429.1 — Valida que o user candidato pertence à mesma empresa da obra
+      // (evita adicionar user de outra empresa como aprovador).
+      const [u] = await db.select({ id: users.id, name: users.name, email: users.email })
+        .from(users)
+        .innerJoin(uc, eq(uc.userId, users.id))
+        .where(and(eq(users.id, input.userId), eq(uc.companyId, obra.companyId)));
+      if (!u) throw new TRPCError({ code: "NOT_FOUND", message: "Usuário não encontrado ou não pertence à empresa desta obra." });
+
+      // Bloqueia duplicata (idempotente).
+      const [existe] = await db.select({ id: obraResponsaveisEstoque.id })
+        .from(obraResponsaveisEstoque)
+        .where(and(
+          eq(obraResponsaveisEstoque.obraId, input.obraId),
+          eq(obraResponsaveisEstoque.userId, input.userId),
+        ));
+      if (existe) return { success: true, id: existe.id, duplicado: true };
+
+      // Rev. 2429.1 — Promoção a principal em TRANSAÇÃO + retry em race condition.
+      // O unique index parcial `uniq_resp_estoque_principal` garante 1 só
+      // principal por obra; transação garante rebaixar+inserir atômico.
+      const novoId = await db.transaction(async (tx) => {
+        if (input.tipo === "principal") {
+          await tx.update(obraResponsaveisEstoque)
+            .set({ tipo: "delegado" })
+            .where(and(
+              eq(obraResponsaveisEstoque.obraId, input.obraId),
+              eq(obraResponsaveisEstoque.tipo, "principal"),
+            ));
+        }
+        const [novo] = await tx.insert(obraResponsaveisEstoque).values({
+          companyId: obra.companyId,
+          obraId: input.obraId,
+          userId: input.userId,
+          userNome: u.name || u.email || `User#${input.userId}`,
+          tipo: input.tipo,
+          criadoPorId: ctx.user.id,
+          criadoPorNome: ctx.user.name || null,
+        }).returning({ id: obraResponsaveisEstoque.id });
+        return novo.id;
+      });
+      return { success: true, id: novoId, duplicado: false };
+    }),
+
+  responsaveisAuditoriaRemover: protectedProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const [reg] = await db.select().from(obraResponsaveisEstoque)
+        .where(eq(obraResponsaveisEstoque.id, input.id));
+      if (!reg) throw new TRPCError({ code: "NOT_FOUND" });
+      await _assertCompanyAccess(ctx.user, reg.companyId);
+      const isAdmin = ["admin", "admin_master"].includes(ctx.user.role);
+      if (!isAdmin) {
+        // Só o principal da obra OU o próprio user (auto-remoção) pode tirar.
+        const [souPrincipal] = await db.select({ id: obraResponsaveisEstoque.id })
+          .from(obraResponsaveisEstoque)
+          .where(and(
+            eq(obraResponsaveisEstoque.obraId, reg.obraId),
+            eq(obraResponsaveisEstoque.userId, ctx.user.id),
+            eq(obraResponsaveisEstoque.tipo, "principal"),
+          ));
+        const souEu = reg.userId === ctx.user.id;
+        if (!souPrincipal && !souEu) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Apenas admin, o aprovador principal ou você mesmo pode remover este vínculo." });
+        }
+      }
+      await db.delete(obraResponsaveisEstoque).where(eq(obraResponsaveisEstoque.id, input.id));
+      return { success: true };
+    }),
+
+  // Pra UI listar candidatos: users da empresa que ainda não são aprovadores
+  // daquela obra. Usado no autocomplete da tela "Gerenciar aprovadores".
+  // Rev. 2429.1 — companyId DERIVADO da obra (não vem do client).
+  responsaveisAuditoriaCandidatos: protectedProcedure
+    .input(z.object({ obraId: z.number().int().positive(), busca: z.string().optional() }))
+    .query(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) return [];
+      const { obras, users, userCompanies } = await import("../../drizzle/schema");
+      const [obra] = await db.select({ id: obras.id, companyId: obras.companyId })
+        .from(obras).where(eq(obras.id, input.obraId));
+      if (!obra) throw new TRPCError({ code: "NOT_FOUND", message: "Obra não encontrada." });
+      await _assertCompanyAccess(ctx.user, obra.companyId);
+      const jaSao = await db.select({ userId: obraResponsaveisEstoque.userId })
+        .from(obraResponsaveisEstoque)
+        .where(eq(obraResponsaveisEstoque.obraId, input.obraId));
+      const jaSaoIds = jaSao.map(r => r.userId);
+      const conds: any[] = [
+        eq(userCompanies.companyId, obra.companyId),
+        isNull(users.deletedAt),
+      ];
+      if (input.busca && input.busca.trim()) {
+        const q = `%${input.busca.trim()}%`;
+        conds.push(or(ilike(users.name, q), ilike(users.email, q), ilike(users.username, q)));
+      }
+      if (jaSaoIds.length > 0) {
+        conds.push(sql`${users.id} NOT IN (${sql.join(jaSaoIds.map(i => sql`${i}`), sql`, `)})`);
+      }
+      const rows = await db.select({
+        id: users.id, name: users.name, email: users.email, role: users.role,
+      })
+        .from(users)
+        .innerJoin(userCompanies, eq(userCompanies.userId, users.id))
+        .where(and(...conds))
+        .orderBy(asc(users.name))
+        .limit(50);
+      return rows;
+    }),
+
   auditoriaListar: protectedProcedure
     .input(z.object({
       companyId: z.number(),
@@ -13547,15 +13723,30 @@ Responda APENAS com JSON válido, sem markdown, no formato:
       if (!db) return { count: 0 };
       const allowedCompanies = await getCompaniesForUser(ctx.user.id, ctx.user.role);
       if (!(allowedCompanies as any[]).map(c => c.id).includes(input.companyId)) return { count: 0 };
-      // Só admin/admin_master é "validador" — pra evitar floods de UI pra users comuns.
-      if (!["admin", "admin_master"].includes(ctx.user.role)) return { count: 0 };
+      // Rev. 2429 — Validador = admin/admin_master OU aprovador delegado de alguma obra.
+      const isAdmin = ["admin", "admin_master"].includes(ctx.user.role);
+      const minhasObrasComoAprovador = await db.select({ obraId: obraResponsaveisEstoque.obraId })
+        .from(obraResponsaveisEstoque)
+        .where(and(
+          eq(obraResponsaveisEstoque.companyId, input.companyId),
+          eq(obraResponsaveisEstoque.userId, ctx.user.id),
+        ));
+      const obrasAprovador = minhasObrasComoAprovador.map(r => r.obraId);
+      if (!isAdmin && obrasAprovador.length === 0) return { count: 0 };
+
       const allowed = await getEffectiveAllowedObraIds(ctx.user.id, ctx.user.role);
       const conds: any[] = [
         eq(almoxarifadoAuditoria.companyId, input.companyId),
         eq(almoxarifadoAuditoria.statusValidacao, "pendente"),
       ];
-      if (allowed !== null) {
-        conds.push(or(isNull(almoxarifadoAuditoria.obraId), inArray(almoxarifadoAuditoria.obraId, allowed)));
+      if (isAdmin) {
+        // Admin: pendências de obras permitidas + sem obra.
+        if (allowed !== null) {
+          conds.push(or(isNull(almoxarifadoAuditoria.obraId), inArray(almoxarifadoAuditoria.obraId, allowed)));
+        }
+      } else {
+        // Não-admin: SÓ obras onde é aprovador delegado (auditoria sem obra é só admin).
+        conds.push(inArray(almoxarifadoAuditoria.obraId, obrasAprovador));
       }
       const rows = await db.select({ id: almoxarifadoAuditoria.id }).from(almoxarifadoAuditoria).where(and(...conds));
       return { count: rows.length };
@@ -13608,14 +13799,28 @@ Responda APENAS com JSON válido, sem markdown, no formato:
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      if (!["admin", "admin_master"].includes(ctx.user.role)) {
-        throw new TRPCError({ code: "FORBIDDEN", message: "Apenas admin pode validar auditorias." });
-      }
       const [reg] = await db.select().from(almoxarifadoAuditoria).where(eq(almoxarifadoAuditoria.id, input.id));
       if (!reg) throw new TRPCError({ code: "NOT_FOUND" });
       const allowedCompanies = await getCompaniesForUser(ctx.user.id, ctx.user.role);
       if (!(allowedCompanies as any[]).map(c => c.id).includes(reg.companyId)) {
         throw new TRPCError({ code: "FORBIDDEN" });
+      }
+      // Rev. 2429 — Validador = admin/admin_master OU aprovador delegado da obra
+      // da auditoria. Auditoria SEM obraId (excluir_unidade/global) segue só admin.
+      const isAdmin = ["admin", "admin_master"].includes(ctx.user.role);
+      if (!isAdmin) {
+        if (reg.obraId == null) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Esta auditoria não está vinculada a nenhuma obra — apenas administradores podem validar." });
+        }
+        const [souAprovador] = await db.select({ id: obraResponsaveisEstoque.id })
+          .from(obraResponsaveisEstoque)
+          .where(and(
+            eq(obraResponsaveisEstoque.obraId, reg.obraId),
+            eq(obraResponsaveisEstoque.userId, ctx.user.id),
+          ));
+        if (!souAprovador) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Você não é aprovador desta obra. Solicite ao engenheiro responsável que adicione você como delegado." });
+        }
       }
       if (reg.statusValidacao !== "pendente") {
         throw new TRPCError({ code: "BAD_REQUEST", message: "Este registro já foi validado." });
