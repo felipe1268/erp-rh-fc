@@ -14,6 +14,19 @@ import { useAuth } from "@/_core/hooks/useAuth"; // Rev. 2456
 // Rev. 2346 — formata inteiros pt-BR (≥1000 ganha separador "." de milhar). Ex: 1220 → "1.220".
 const fmtN = (n: number) => n.toLocaleString("pt-BR");
 
+// Rev. 2459 — sanitiza URLs renderizadas em <img src> e <a href> na timeline.
+// Aceita só: https?:, /uploads/, /api/, data:image/(png|jpeg|jpg|webp);base64,
+// Bloqueia javascript:, file:, data:text/html, etc. Teto 3MB pra dataURL
+// (assinatura típica ~30-150KB; tampa pra evitar travada de render).
+function safeMediaUrl(u: any): boolean {
+  if (!u || typeof u !== "string") return false;
+  if (u.length < 8 || u.length > 3 * 1024 * 1024) return false;
+  if (/^https?:\/\//i.test(u)) return true;
+  if (u.startsWith("/uploads/") || u.startsWith("/api/")) return true;
+  if (/^data:image\/(png|jpe?g|webp);base64,/i.test(u)) return true;
+  return false;
+}
+
 const STATUS_LABELS: Record<string, string> = {
   em_uso: "Em uso", devolvido: "Devolvido", atrasado: "Atrasado",
   em_renovacao: "Em renovação", localizacao_pendente: "Local pendente", em_manutencao: "Manutenção",
@@ -3179,11 +3192,12 @@ export default function EquipamentosLocados() {
                                 </div>
                                 {e.observacao && <div className="text-sm text-slate-700 mt-1.5 whitespace-pre-wrap">{e.observacao}</div>}
                                 {e.usuarioNome && <div className="text-[11px] text-slate-500 mt-1 inline-flex items-center gap-1"><UserIcon className="h-3 w-3" /> {e.usuarioNome}</div>}
-                                {/* Rev. 2459 — filtra fotos sem URL real (evita "quadrado preto" de dataURL vazio/quebrado). */}
-                                {Array.isArray(e.fotosJson) && e.fotosJson.filter((f: any) => f?.url && typeof f.url === "string" && f.url.length > 20).length > 0 && (
+                                {/* Rev. 2459 — filtra fotos sem URL real (evita "quadrado preto" de dataURL vazio/quebrado).
+                                    Sanitização: só permite https?:, /uploads/, /api/ e data:image/(png|jpeg|webp). Teto 2MB pra dataURL. */}
+                                {Array.isArray(e.fotosJson) && e.fotosJson.filter((f: any) => safeMediaUrl(f?.url)).length > 0 && (
                                   <div className="flex flex-wrap gap-1.5 mt-2">
                                     {e.fotosJson
-                                      .filter((f: any) => f?.url && typeof f.url === "string" && f.url.length > 20)
+                                      .filter((f: any) => safeMediaUrl(f?.url))
                                       .slice(0, 6)
                                       .map((f: any, i: number) => (
                                         <a key={i} href={f.url} target="_blank" rel="noreferrer" className="block">
@@ -3207,8 +3221,8 @@ export default function EquipamentosLocados() {
                                       <div className="grid grid-cols-2 gap-2 mb-2">
                                         <div className="bg-slate-50 border border-slate-200 rounded-lg p-2">
                                           <div className="text-[9px] text-slate-500 uppercase tracking-wider font-bold mb-1">Entregador (FC)</div>
-                                          {e.assinaturaEntregadorUrl ? (
-                                            <img src={e.assinaturaEntregadorUrl} className="w-full h-12 object-contain bg-white rounded ring-1 ring-slate-200" alt="Assinatura entregador" />
+                                          {safeMediaUrl(e.assinaturaEntregadorUrl) ? (
+                                            <img src={e.assinaturaEntregadorUrl} className="w-full h-12 object-contain bg-white rounded ring-1 ring-slate-200" alt="Assinatura entregador" onError={(ev) => { (ev.currentTarget as HTMLImageElement).style.display = "none"; }} />
                                           ) : (
                                             <div className="h-12 flex items-center justify-center text-[10px] text-slate-400 italic bg-white rounded ring-1 ring-slate-200">sem assinatura</div>
                                           )}
@@ -3218,8 +3232,8 @@ export default function EquipamentosLocados() {
                                         </div>
                                         <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-2">
                                           <div className="text-[9px] text-emerald-700 uppercase tracking-wider font-bold mb-1">Recebedor (Locadora)</div>
-                                          {e.assinaturaRecebedorUrl ? (
-                                            <img src={e.assinaturaRecebedorUrl} className="w-full h-12 object-contain bg-white rounded ring-1 ring-emerald-200" alt="Assinatura recebedor" />
+                                          {safeMediaUrl(e.assinaturaRecebedorUrl) ? (
+                                            <img src={e.assinaturaRecebedorUrl} className="w-full h-12 object-contain bg-white rounded ring-1 ring-emerald-200" alt="Assinatura recebedor" onError={(ev) => { (ev.currentTarget as HTMLImageElement).style.display = "none"; }} />
                                           ) : (
                                             <div className="h-12 flex items-center justify-center text-[10px] text-slate-400 italic bg-white rounded ring-1 ring-emerald-200">sem assinatura</div>
                                           )}
