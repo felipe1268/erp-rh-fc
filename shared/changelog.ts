@@ -1,6 +1,67 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2459 — **TIMELINE do equipamento locado · recibo de devolução
+ * assinado in-loco + botão "Gerar/compartilhar PDF" no card do evento.**
+ *
+ * PEDIDO (user, print IMG_1251 — modal "Raio-X" do equip #1314 com card
+ * do evento DEVOLUCAO_FORNECEDOR mostrando só um "quadrado preto" no
+ * lugar das fotos): "Aqui precisa aparecer. O recibo de entrada, com as
+ * assinaturas, e modal para geral PDF e enviar via WhatsApp".
+ *
+ * DIAGNÓSTICO:
+ *  - O card do evento `DEVOLUCAO_FORNECEDOR` renderizava só `e.fotosJson`,
+ *    e como o salvamento legado às vezes guarda `{ url: "" }` ou
+ *    `{ url: "data:image/png;base64," }` (PNG vazio), o `<img>` ficava
+ *    com fundo preto/quebrado.
+ *  - As assinaturas (entregador FC + recebedor locadora) e o
+ *    `pdfComprovanteToken` já existiam no row do evento (campos da
+ *    Rev. 2453), mas NÃO estavam sendo exibidos — então o gestor não
+ *    tinha como ver o recibo nem reimprimir/reenviar o PDF.
+ *
+ * IMPLEMENTAÇÃO (`client/src/pages/equipamentos/Locados.tsx` L3185+):
+ *
+ * 1) FOTOS BLINDADAS:
+ *    - `fotosJson` agora é filtrado por `f?.url && typeof f.url === "string"
+ *      && f.url.length > 20` ANTES de renderizar (entradas vazias somem).
+ *    - Cada `<img>` ganhou `onError` que esconde o link inteiro se a
+ *      imagem falhar em carregar (mata o "quadrado preto" residual).
+ *    - Fundo do thumb passou a `bg-slate-100` (placeholder claro
+ *      enquanto carrega).
+ *
+ * 2) BLOCO "RECIBO DE DEVOLUÇÃO" (só pra eventos DEVOLUCAO_FORNECEDOR):
+ *    - Renderizado depois do `fotosJson` quando existir
+ *      `assinaturaEntregadorUrl || assinaturaRecebedorUrl ||
+ *      pdfComprovanteToken`.
+ *    - Header com ícone `FileText` + "Recibo de devolução" em uppercase.
+ *    - Grid 2 cols: card cinza (Entregador FC) + card emerald (Recebedor
+ *      Locadora). Cada um exibe a assinatura PNG (h-12 object-contain
+ *      sobre fundo branco) + nome em negrito. Fallback "sem assinatura"
+ *      em italic cinza quando o campo é null.
+ *    - Botão CTA verde "Gerar / compartilhar PDF" (full-width) — só
+ *      aparece se existe `pdfComprovanteToken`. Click monta a URL
+ *      `${origin}/api/comprovante-devolucao/${e.id}/${token}.pdf` e
+ *      abre o `modalShareComprovante` EXISTENTE (mesmo modal da
+ *      Rev. 2453: WhatsApp / visualizar / baixar / copiar link).
+ *
+ * 3) REÚSO DO MODAL DE COMPARTILHAMENTO:
+ *    - Não precisou criar novo modal — o `modalShareComprovante` já tem
+ *      todos os 4 CTAs e o close handler chama
+ *      `voltarParaAlmoxSeNecessario()`, que é no-op quando NÃO veio do
+ *      almox (flag `returnToAlmoxAfterClose` fica false ao reabrir pela
+ *      timeline). Sem side-effect quando o user abre pela ficha do equip.
+ *
+ * R-001/R-007/R-010 OK — zero `ALTER`/`DROP`/`DELETE`, zero mudança em
+ * tabelas, zero mudança em mutations. Frontend-only.
+ *
+ * Arquivos:
+ *  - `client/src/pages/equipamentos/Locados.tsx` (bloco do timeline event)
+ *  - `shared/version.ts` (2458 → 2459)
+ *  - `shared/changelog.ts` (esta entrada)
+ *  - `replit.md`, `replit-history.md` (rotação 2+5)
+ *
+ * ─────────────────────────────────────────────────────────────────────────
+ *
  * Rev. 2458 — **COMPROVANTE DE DEVOLUÇÃO (PDF) · layout institucional FC
  * com FOTOS dos equipamentos + sem página em branco.**
  *

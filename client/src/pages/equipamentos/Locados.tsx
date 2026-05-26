@@ -3179,13 +3179,68 @@ export default function EquipamentosLocados() {
                                 </div>
                                 {e.observacao && <div className="text-sm text-slate-700 mt-1.5 whitespace-pre-wrap">{e.observacao}</div>}
                                 {e.usuarioNome && <div className="text-[11px] text-slate-500 mt-1 inline-flex items-center gap-1"><UserIcon className="h-3 w-3" /> {e.usuarioNome}</div>}
-                                {Array.isArray(e.fotosJson) && e.fotosJson.length > 0 && (
+                                {/* Rev. 2459 — filtra fotos sem URL real (evita "quadrado preto" de dataURL vazio/quebrado). */}
+                                {Array.isArray(e.fotosJson) && e.fotosJson.filter((f: any) => f?.url && typeof f.url === "string" && f.url.length > 20).length > 0 && (
                                   <div className="flex flex-wrap gap-1.5 mt-2">
-                                    {e.fotosJson.slice(0, 6).map((f: any, i: number) => (
-                                      <a key={i} href={f.url} target="_blank" rel="noreferrer" className="block">
-                                        <img src={f.url} className="w-14 h-14 object-cover rounded ring-1 ring-slate-200 hover:ring-emerald-400 transition" alt="" />
-                                      </a>
-                                    ))}
+                                    {e.fotosJson
+                                      .filter((f: any) => f?.url && typeof f.url === "string" && f.url.length > 20)
+                                      .slice(0, 6)
+                                      .map((f: any, i: number) => (
+                                        <a key={i} href={f.url} target="_blank" rel="noreferrer" className="block">
+                                          <img
+                                            src={f.url}
+                                            className="w-14 h-14 object-cover rounded ring-1 ring-slate-200 hover:ring-emerald-400 transition bg-slate-100"
+                                            alt=""
+                                            onError={(ev) => { (ev.currentTarget.parentElement as HTMLElement).style.display = "none"; }}
+                                          />
+                                        </a>
+                                      ))}
+                                  </div>
+                                )}
+                                {/* Rev. 2459 — DEVOLUCAO_FORNECEDOR: mostra recibo assinado (entregador FC + recebedor locadora) + botão pra gerar/compartilhar PDF via WhatsApp. */}
+                                {e.tipo === "DEVOLUCAO_FORNECEDOR" && (e.assinaturaEntregadorUrl || e.assinaturaRecebedorUrl || e.pdfComprovanteToken) && (
+                                  <div className="mt-3 border-t border-slate-100 pt-3">
+                                    <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-2 flex items-center gap-1.5">
+                                      <FileText className="h-3 w-3" /> Recibo de devolução
+                                    </div>
+                                    {(e.assinaturaEntregadorUrl || e.assinaturaRecebedorUrl) && (
+                                      <div className="grid grid-cols-2 gap-2 mb-2">
+                                        <div className="bg-slate-50 border border-slate-200 rounded-lg p-2">
+                                          <div className="text-[9px] text-slate-500 uppercase tracking-wider font-bold mb-1">Entregador (FC)</div>
+                                          {e.assinaturaEntregadorUrl ? (
+                                            <img src={e.assinaturaEntregadorUrl} className="w-full h-12 object-contain bg-white rounded ring-1 ring-slate-200" alt="Assinatura entregador" />
+                                          ) : (
+                                            <div className="h-12 flex items-center justify-center text-[10px] text-slate-400 italic bg-white rounded ring-1 ring-slate-200">sem assinatura</div>
+                                          )}
+                                          <div className="text-[11px] font-semibold text-slate-700 truncate mt-1" title={e.assinaturaEntregadorNome || "—"}>
+                                            {e.assinaturaEntregadorNome || "—"}
+                                          </div>
+                                        </div>
+                                        <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-2">
+                                          <div className="text-[9px] text-emerald-700 uppercase tracking-wider font-bold mb-1">Recebedor (Locadora)</div>
+                                          {e.assinaturaRecebedorUrl ? (
+                                            <img src={e.assinaturaRecebedorUrl} className="w-full h-12 object-contain bg-white rounded ring-1 ring-emerald-200" alt="Assinatura recebedor" />
+                                          ) : (
+                                            <div className="h-12 flex items-center justify-center text-[10px] text-slate-400 italic bg-white rounded ring-1 ring-emerald-200">sem assinatura</div>
+                                          )}
+                                          <div className="text-[11px] font-semibold text-emerald-800 truncate mt-1" title={e.assinaturaRecebedorNome || "—"}>
+                                            {e.assinaturaRecebedorNome || "—"}
+                                          </div>
+                                        </div>
+                                      </div>
+                                    )}
+                                    {e.pdfComprovanteToken && (
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          const url = `${window.location.origin}/api/comprovante-devolucao/${e.id}/${e.pdfComprovanteToken}.pdf`;
+                                          setModalShareComprovante({ url, qtd: 1 });
+                                        }}
+                                        className="w-full bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold py-2 rounded-md inline-flex items-center justify-center gap-1.5 transition shadow-sm"
+                                      >
+                                        <FileText className="h-3.5 w-3.5" /> Gerar / compartilhar PDF
+                                      </button>
+                                    )}
                                   </div>
                                 )}
                               </div>
