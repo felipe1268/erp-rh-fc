@@ -3167,9 +3167,15 @@ export default function Cotacoes() {
     }
     const gruposAgrupados = Object.values(agrupados).filter(g => g.qtdTotal > 0);
 
+    const fullscreenMapa = abaAtiva === "mapa";
+    const Wrapper: React.FC<{ children: React.ReactNode }> = fullscreenMapa
+      ? ({ children }) => (
+          <div className="fixed inset-0 z-50 bg-gray-50 overflow-auto">{children}</div>
+        )
+      : ({ children }) => <DashboardLayout>{children}</DashboardLayout>;
     return (
-      <DashboardLayout>
-        <div className={`${abaAtiva === "mapa" ? "px-3 py-3 space-y-3" : "p-6 space-y-5"} bg-gray-50 min-h-screen`}>
+      <Wrapper>
+        <div className={`${fullscreenMapa ? "px-3 py-3 space-y-3" : "p-6 space-y-5"} bg-gray-50 min-h-screen`}>
           {/* Breadcrumb */}
           <div className="flex items-center gap-3">
             <button onClick={() => { setShowDetalhe(null); setAbaAtiva("detalhes"); }}
