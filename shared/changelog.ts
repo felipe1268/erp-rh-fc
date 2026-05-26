@@ -1,6 +1,40 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2468 — **HOTFIX REAL DA Rev. 2466 (COTAÇÕES) · "Atender pelo
+ * Estoque" agora abre o modal de seleção.**
+ *
+ * PEDIDO (user, IMG image_1779800786361): "o botao ATENDER PELO
+ * ESTOQUE ainda nao funciona... ao clicar nele, nao aparece a lista
+ * do almoxarifado".
+ *
+ * BUG RAIZ (real, escapou da Rev. 2467): o componente `Cotacoes` tem
+ * dois retornos JSX — o bloco `if (showDetalhe !== null) return (...)`
+ * em L2486 (tela cheia da cotação) e o `return` principal em L6163
+ * (lista). O `<Dialog>` do estoque-picker que eu adicionei na
+ * Rev. 2466 ficou DENTRO do return principal (L6964), mas o BOTÃO
+ * "Atender pelo Estoque" só existe DENTRO do bloco fullscreen
+ * (L3618). Como `if (showDetalhe !== null)` faz early-return, o JSX
+ * do principal nunca monta quando o user está numa cotação. Clicar
+ * no botão setava `showEstoquePicker=true` mas o Dialog estava
+ * desmontado → nada aparecia na tela.
+ *
+ * Bônus: o `onClick` do botão Confirmar dentro do Dialog usava
+ * `(detalheFullscreen as any)?.obraId`. Como o Dialog estava no
+ * scope errado, isso também daria TDZ ReferenceError se algum dia
+ * o Dialog chegasse a renderizar.
+ *
+ * FIX: movido o `<Dialog open={showEstoquePicker}>` (~125 linhas)
+ * pra DENTRO do bloco fullscreen, logo antes do `</DashboardLayout>`
+ * que fecha o retorno em L6159. Agora `detalheFullscreen` está em
+ * escopo (declarado em L2487) E o Dialog monta quando o user está na
+ * tela da cotação. Comentário-âncora deixado na posição antiga pra
+ * sinalizar o motivo de não estar lá.
+ *
+ * R-001/R-007/R-010 OK — só JSX, sem ALTER/DROP/DELETE.
+ *
+ * ----------------------------------------------------------------
+ *
  * Rev. 2467 — **HOTFIX SEGUROS DA FROTA · ao trocar o veículo
  * vinculado a uma apólice e salvar, a mudança era descartada
  * silenciosamente; ao reabrir a tela, o veículo "sumia".**

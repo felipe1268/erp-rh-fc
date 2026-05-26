@@ -2,6 +2,7 @@
 
 > Este arquivo guarda os one-liners das revisões antigas para manter o `replit.md` enxuto.
 
+- **Rev. 2461** — COMPROVANTE DE DEVOLUÇÃO (PDF) · layout modernizado + logo FC garantido + NOME DA LOCADORA em destaque pro rastreio. `fetchReturnReceiptData` popula todos fornecedores via `inArray`, header novo, cards de partes com pílula, tabela zebra striping. Ver `shared/changelog.ts`.
 - **Rev. 2460** — EQUIPAMENTO LOCADO · botão "Desfazer devolução" no Raio-X com senha + motivo (auditado). Nova mutation `locadoDesfazerDevolucao` em `equipamentos.ts` (tx atômica + UPDATE condicionado + evento `REVERSAO_DEVOLUCAO` + auditoria) + botão laranja no footer do modal + reuso `ModalConfirmacaoAuditoria`. Ver `shared/changelog.ts`.
 - **Rev. 2459** — TIMELINE do equipamento locado · recibo de devolução assinado + botão "Gerar/compartilhar PDF" dentro do card do evento. Filtro `f?.url && length>20`, bloco "Recibo de devolução" com PNGs das assinaturas, CTA verde reúso do `modalShareComprovante`. Ver `shared/changelog.ts`.
 - **Rev. 2458** — COMPROVANTE DE DEVOLUÇÃO (PDF) · layout padrão FC + fotos dos equipamentos + fim da página em branco. Header logo+razão social+faixa azul, coluna FOTO (8%) com thumb 32x32pt, rodapé deslocado pra y+5 (sem 2ª página). Ver `shared/changelog.ts`.
