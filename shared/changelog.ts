@@ -1,6 +1,45 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2446 — **ALMOXARIFADO · INVENTÁRIO VISUAL · cards padronizados em
+ * altura uniforme: CTA "Registrar baixa" sempre ancorado no rodapé,
+ * conteúdo variável (Saldo no sistema / Última leitura) não desalinha
+ * mais a grade.**
+ *
+ * CONTEXTO (print user 22:46): na obra "QIU 2 – FASE 4" os 2 cards de
+ * cada linha tinham alturas diferentes (Areia × Areia Média Lavada,
+ * Pó de Pedra × Pedra de Mão) porque alguns têm "Saldo no sistema:
+ * 100 m³" + "Última: ... · 25/05" e outros não. CSS Grid `grid-cols-2`
+ * sem `auto-rows-fr` faz cada célula medir a altura do conteúdo
+ * próprio, causando o "balanço" visual reportado como bagunçado.
+ *
+ * DECISÃO (CSS-only, sem mexer nas fotos)
+ * - Card root vira `h-full flex flex-col`: ocupa a altura inteira da
+ *   linha do grid (CSS Grid já garante `auto-rows: 1fr` quando o item
+ *   é `h-full`).
+ * - Header info ganha `flex-shrink-0` pra não esticar nem encolher.
+ * - Painel inferior (chegou hoje / restante / consumo + CTA) vira
+ *   `flex-1 flex flex-col` — absorve o espaço sobrante.
+ * - Botão "Registrar baixa" / "Refazer leitura" ganha `mt-auto`,
+ *   travando ele no rodapé independente do conteúdo acima.
+ *
+ * ARQUIVOS
+ * - `client/src/pages/almoxarifado/InventarioVisual.tsx`
+ *   - L375: card root `h-full flex flex-col`.
+ *   - L439: header `flex-shrink-0`.
+ *   - L458-463: painel inferior `flex-1 flex flex-col`.
+ *   - L509: botão CTA `mt-auto`.
+ *
+ * VALIDAÇÃO
+ * - R-001/R-007/R-010 OK — só CSS, zero backend.
+ * - Funciona em iPad Safari (CSS Grid + flexbox padrão, sem hack).
+ * - Compatível com o caso "Ver histórico / Desfazer última" (linha
+ *   condicional) — fica logo abaixo do CTA, sem afetar o ancoramento.
+ * - Fotos com fundo branco (Areia, Areia Média Lavada) seguem como
+ *   estão; user escolheu não trocá-las nessa rev.
+ *
+ * ──────────────────────────────────────────────────────────────────────
+ *
  * Rev. 2445 — **ALMOXARIFADO · CASCADE de exclusão de item: deletar item
  * agora DESATIVA todas as baias vinculadas + defensivo no listar
  * esconde baias órfãs apontando pra item inativo.**

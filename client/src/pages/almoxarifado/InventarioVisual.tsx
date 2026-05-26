@@ -369,7 +369,7 @@ export default function InventarioVisualBaias() {
       <div
         key={b.id ?? `item-${b.itemId}`}
         onClick={() => { if (!semBaia) setHistoricoBaia(b); }}
-        className={`bg-white rounded-2xl border-2 overflow-hidden shadow-sm hover:shadow-lg transition-shadow ${
+        className={`bg-white rounded-2xl border-2 overflow-hidden shadow-sm hover:shadow-lg transition-shadow h-full flex flex-col ${
           semBaia ? "" : "cursor-pointer"
         } ${
           conferida ? "border-emerald-200" : "border-amber-300 ring-2 ring-amber-100"
@@ -433,7 +433,7 @@ export default function InventarioVisualBaias() {
           )}
         </div>
         {/* Header info */}
-        <div className="p-3 border-b border-slate-100">
+        <div className="p-3 border-b border-slate-100 flex-shrink-0">
           <p className="font-bold text-base text-slate-900 truncate">{b.nome}</p>
           <div className="flex items-center justify-between gap-2 mt-1 text-xs">
             <span className="inline-flex items-center gap-1 text-amber-700 font-semibold">
@@ -452,8 +452,12 @@ export default function InventarioVisualBaias() {
             </div>
           )}
         </div>
-        {/* Rev. 2417 — Painel de volume: chegou hoje / restante / consumo */}
-        <div className="p-3 space-y-2">
+        {/* Rev. 2417 — Painel de volume: chegou hoje / restante / consumo
+            Rev. 2446 — `flex-1 flex flex-col` + `mt-auto` no botão pra travar
+            o CTA "Registrar baixa" no rodapé de TODOS os cards, mesmo
+            quando alguns têm "Saldo no sistema"/"Última leitura" e outros
+            não. Garante altura uniforme com `grid-cols-2` do pai. */}
+        <div className="p-3 space-y-2 flex-1 flex flex-col">
           <div className="grid grid-cols-3 gap-1.5 text-center">
             <div className="rounded-md bg-sky-50 border border-sky-100 px-1 py-1.5">
               <div className="text-[9px] uppercase tracking-wide text-sky-700 font-bold">Chegou hoje</div>
@@ -499,7 +503,7 @@ export default function InventarioVisualBaias() {
           )}
           <button
             onClick={e => { e.stopPropagation(); abrirLeitura(b); }}
-            className={`w-full rounded-lg py-2.5 font-bold text-sm shadow-sm hover:shadow active:scale-[0.98] transition-all flex items-center justify-center gap-1.5 ${
+            className={`w-full rounded-lg py-2.5 font-bold text-sm shadow-sm hover:shadow active:scale-[0.98] transition-all flex items-center justify-center gap-1.5 mt-auto ${
               conferida
                 ? "bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200"
                 : "bg-amber-500 text-white hover:bg-amber-600"
