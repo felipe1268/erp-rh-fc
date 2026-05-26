@@ -1,6 +1,42 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2451 — **[BUG GRAVE] ALMOXARIFADO · tela quebrava com ReferenceError
+ * "Can't find variable: consListFinal" ao entrar na visão consolidada com
+ * `modoClassificarEquip` ativo.**
+ *
+ * SINTOMA (print user 23:36): ao acessar `/almoxarifado`, React renderizava
+ * o fallback de erro com `ReferenceError: Can't find variable: consListFinal`
+ * apontando pra `pages/almoxarifado/index.tsx:333:41`. Toda a tela do
+ * almoxarifado ficava inacessível.
+ *
+ * CAUSA RAIZ: na Rev. 2406 o filtro por vínculo Equipamento Próprio/Locado
+ * foi adicionado DENTRO do IIFE da visão consolidada (`{obraContexto === "todos" && (() => { ... })()}`,
+ * L1727). A variável `consListFinal` vivia nesse escopo local. Depois, a
+ * Rev. 2442 adicionou a barra inferior "modoClassificarEquip" (L4441+) que
+ * referencia `consListFinal` em 3 pontos (`marcarTodosClassif(consListFinal)`,
+ * `disabled={consListFinal.length === 0}`, `Marcar todos ({consListFinal.length})`).
+ * Como essa barra é montada FORA do IIFE (sibling do bloco da visão
+ * consolidada, sempre presente quando `modoClassificarEquip` é true), o
+ * bundler tentava resolver `consListFinal` no escopo do componente e falhava.
+ * Erro só não aparecia antes porque, em dev, o Vite às vezes hoista TDZ de
+ * forma diferente — mas no iPad/Safari (print user) o erro era fatal.
+ *
+ * FIX: hoistei `consListFinal` pra escopo do componente como `useMemo` logo
+ * após a declaração de `consolidado` (L443-464), com deps
+ * `[consolidado, busca, filtroCateg, apenasAbaixo, filtroEquip]`. Removi a
+ * declaração local de DENTRO do IIFE (L1738 antiga) — o IIFE agora fecha
+ * sobre a outer via closure, mantendo todas as ~10 referências internas
+ * (L1770/1771/1799/1964/1991/1998/2006/2123/2125) funcionando sem mudança.
+ *
+ * ARQUIVOS
+ * - `client/src/pages/almoxarifado/index.tsx` L443-464 (NOVO useMemo) +
+ *   L1752-1755 (remoção do bloco local que vivia antes do `consTotalItens`).
+ *
+ * R-001/R-007/R-010 OK — nada tocado em prod/DB.
+ *
+ * ─────────────────────────────────────────────────────────────────────────
+ *
  * Rev. 2450 — **AUDITORIA DO ALMOXARIFADO · tela de validação + banner global
  * pra gestor (admin/admin_master ou responsável de estoque da obra) revisar
  * exclusões e baixas manuais de saldo.**

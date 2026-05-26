@@ -437,6 +437,28 @@ export default function AlmoxarifadoPage() {
     { companyId, busca: busca || undefined },
     { enabled: !!companyId && obraContexto === "todos" }
   );
+  // Rev. 2451 — Hoist da lista consolidada filtrada pra escopo do componente.
+  // Antes (Rev. 2406+) ela vivia DENTRO do IIFE da visão consolidada (L1727),
+  // mas a barra inferior "modoClassificarEquip" (L4441+) referencia `consListFinal`
+  // FORA do IIFE → ReferenceError "Can't find variable: consListFinal" quando
+  // a barra ficava montada após sair do escopo. Centraliza aqui via useMemo.
+  const consListFinal = useMemo(() => {
+    const consItens = consolidado?.itens ?? [];
+    const consBusca = busca.toLowerCase();
+    const consFiltered = consBusca
+      ? consItens.filter((i: any) => i.nome.toLowerCase().includes(consBusca) || i.categoria?.toLowerCase().includes(consBusca) || i.codigoInterno?.toLowerCase().includes(consBusca))
+      : consItens;
+    const consFinal = filtroCateg === "__sem__"
+      ? consFiltered.filter((i: any) => !i.categoria || String(i.categoria).trim() === "")
+      : (filtroCateg !== "todas" ? consFiltered.filter((i: any) => i.categoria === filtroCateg) : consFiltered);
+    const consAfterMin = apenasAbaixo ? consFinal.filter((i: any) => i.quantidadeMinima > 0 && i.quantidadeTotal < i.quantidadeMinima) : consFinal;
+    return filtroEquip === "todos" ? consAfterMin : consAfterMin.filter((i: any) => {
+      const t = i.equipamentoVinculadoTipo;
+      if (filtroEquip === "nenhum") return !t;
+      if (filtroEquip === "vinculado") return !!t;
+      return t === filtroEquip;
+    });
+  }, [consolidado, busca, filtroCateg, apenasAbaixo, filtroEquip]);
   const [sugerindoPreco, setSugerindoPreco] = useState(false);
   const sugerirPrecoMut = trpc.compras.sugerirPrecoIA.useMutation({
     onSuccess: (d: any) => {
@@ -1725,22 +1747,9 @@ export default function AlmoxarifadoPage() {
 
         {/* ════════════ VISÃO CONSOLIDADA ════════════ */}
         {obraContexto === "todos" && (() => {
+          // Rev. 2451 — `consListFinal` agora é useMemo no escopo do componente
+          // (ver L443+), pra ser reutilizado pela barra inferior modoClassificarEquip.
           const consItens = consolidado?.itens ?? [];
-          const consBusca = busca.toLowerCase();
-          const consFiltered = consBusca
-            ? consItens.filter((i: any) => i.nome.toLowerCase().includes(consBusca) || i.categoria?.toLowerCase().includes(consBusca) || i.codigoInterno?.toLowerCase().includes(consBusca))
-            : consItens;
-          const consFinal = filtroCateg === "__sem__"
-            ? consFiltered.filter((i: any) => !i.categoria || String(i.categoria).trim() === "")
-            : (filtroCateg !== "todas" ? consFiltered.filter((i: any) => i.categoria === filtroCateg) : consFiltered);
-          const consAfterMin = apenasAbaixo ? consFinal.filter((i: any) => i.quantidadeMinima > 0 && i.quantidadeTotal < i.quantidadeMinima) : consFinal;
-          // Rev. 2406 — filtro por vínculo Equipamento Próprio/Locado (consolidado).
-          const consListFinal = filtroEquip === "todos" ? consAfterMin : consAfterMin.filter((i: any) => {
-            const t = i.equipamentoVinculadoTipo;
-            if (filtroEquip === "nenhum") return !t;
-            if (filtroEquip === "vinculado") return !!t;
-            return t === filtroEquip;
-          });
 
           const consTotalItens = consItens.length;
           const consEstoqueOk = consItens.filter((i: any) => i.quantidadeMinima === 0 || i.quantidadeTotal >= i.quantidadeMinima).length;
