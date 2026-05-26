@@ -1607,7 +1607,10 @@ const statusBg: Record<string, string> = { Ativo: '#d4edda', Aviso: '#fee2e2', A
                   <div className="space-y-4">
                     {sortedKeys.map(st => {
                       const cfg = statusGroups[st] || { label: st, color: "text-gray-700", bgColor: "bg-gray-50", borderColor: "border-gray-200", icon: "⚪" };
-                      const items = grouped[st];
+                      // Rev. 2482 — ordem alfabética por nome dentro de cada grupo de status
+                      const items = [...grouped[st]].sort((a: any, b: any) =>
+                        (a.employee?.nomeCompleto || "").localeCompare(b.employee?.nomeCompleto || "", "pt-BR")
+                      );
                       return (
                         <div key={st} className="bg-white rounded-xl border shadow-sm overflow-hidden">
                           <div className={`${cfg.bgColor} ${cfg.borderColor} border-b px-4 py-2.5 flex items-center gap-2`}>

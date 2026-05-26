@@ -1,6 +1,22 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2482 — **EQUIPE DA OBRA (modal `ObraEfetivo.tsx`) · funcionários
+ * ordenados alfabeticamente por nome dentro de cada grupo de status.**
+ *
+ * PEDIDO (user, IMG_1293, 26/05/2026): "Coloque os nomes em ordem
+ * alfabética". Antes a tela "Equipe — {obra}" renderizava na ordem que o
+ * backend retornava (que era por `dataInicio` da alocação), dificultando
+ * localizar funcionário visualmente.
+ *
+ * MUDANÇA (`client/src/pages/ObraEfetivo.tsx` L1611-1616): no `map` de
+ * `sortedKeys` (grupos de status: Ativo, Aviso, Férias, etc), o `items`
+ * agora é `[...grouped[st]].sort((a,b) => a.employee?.nomeCompleto
+ * .localeCompare(b.employee?.nomeCompleto, "pt-BR"))`. Mantém o
+ * agrupamento por status (que o user já curte — Rev. 2479) e só ordena
+ * dentro de cada grupo. `pt-BR` garante ordenação correta com acentos
+ * (Á antes de B, etc).
+ *
  * Rev. 2481 — **EQUIPE DA OBRA (modal `ObraEfetivo.tsx`) · coluna FUNÇÃO
  * passa a mostrar o cargo do CADASTRO do funcionário, não o override por
  * alocação (`funcaoNaObra`).**

@@ -51,16 +51,16 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 ### Top 2 detalhadas
 
 
+- **Rev. 2482** — **EQUIPE DA OBRA (modal `ObraEfetivo.tsx`) · funcionários em ordem alfabética dentro de cada grupo de status.** User (IMG_1293): "Coloque os nomes em ordem alfabética". Antes vinha por `dataInicio` da alocação. Mudança em `client/src/pages/ObraEfetivo.tsx` L1611-1616: no `map` de `sortedKeys`, `items` virou `[...grouped[st]].sort((a,b) => a.employee?.nomeCompleto.localeCompare(b.employee?.nomeCompleto, "pt-BR"))`. Agrupamento por status mantido — só ordena dentro de cada grupo. Locale `pt-BR` pra acentos. Detalhe: `shared/changelog.ts`.
 - **Rev. 2481** — **EQUIPE DA OBRA (modal `ObraEfetivo.tsx`) · coluna FUNÇÃO mostra cargo do CADASTRO, não o override por alocação (`funcaoNaObra`).** User (IMG_1292): "Revisar as funções conforme cadastro... Darcy tá como PEDREIRO III aqui mas no cadastro é ENCARREGADO DE OBRAS". Causa: `funcaoNaObra` (preenchido em importações antigas) vinha primeiro. Mudança em 5 spots de `client/src/pages/ObraEfetivo.tsx`: inverter prioridade pra `f.employee?.cargo || f.employee?.funcao || f.funcaoNaObra` (export CSV L1419, print/PDF L1467, caption PersonPhoto L1643, mobile L1656, desktop L1662). `funcaoNaObra` continua salvo no banco e usado pelo filtro de busca (L1559). Módulo Planejamento já estava correto (`e.funcao || e.cargo` no L11560). Detalhe: `shared/changelog.ts`.
-- **Rev. 2480** — **EFETIVO DA OBRA (PLANEJAMENTO) · botão TRANSFERIR + REMOVER por linha — gerenciamento de alocação direto da aba do engenheiro.** User (IMG_1290): "Preciso poder fazer a transferência de efetivo por aqui... preciso ver tudo para definir as frentes de atividades". Status real (Aviso/Férias/Afastado/Licença) e badge CIPA já estavam OK após Rev. 2479. **Mudanças** (`client/src/pages/planejamento/PlanejamentoDetalhe.tsx`, `EfetivoObraView`): (1) Nova coluna "Ações" com botões **Transferir** (azul, `ArrowRightLeft`) + **Remover** (vermelho, `Trash2`); terceiros ficam "—". (2) Modal de Transferência reusa `obras.allocateEmployee` (server auto-fecha alocação anterior); `obras.listActive` é lazy. (3) Props expandidas (`companyId`, `obraId`, `obraNome`). (4) Backend (`server/routers.ts`): authz por escopo via `getEffectiveAllowedObraIds` nas 2 mutations (`allocateEmployee` + `removeEmployee`) — fecha IDOR horizontal pré-existente. Admin Master inalterado. R-001/R-007/R-010 OK. Detalhe: `shared/changelog.ts`.
 
 ### Revisões recentes (one-liners)
 
-- **Rev. 2479** — EFETIVO/EQUIPE DA OBRA · foto real + badge CIPA nas 2 telas drill-down por obra (modal Equipe do `ObraEfetivo.tsx` + `EfetivoObraView` do Planejamento). Backend enrich CIPA em `getObraFuncionarios` + `getEquipeObra`. Ver `shared/changelog.ts`.
+- **Rev. 2480** — EFETIVO DA OBRA (Planejamento) · botão Transferir + Remover por linha em `EfetivoObraView`. Authz por escopo nas 2 mutations via `getEffectiveAllowedObraIds`. Ver `shared/changelog.ts`.
+- **Rev. 2479** — EFETIVO/EQUIPE DA OBRA · foto real + badge CIPA nas 2 telas drill-down por obra. Backend enrich CIPA em `getObraFuncionarios` + `getEquipeObra`. Ver `shared/changelog.ts`.
 - **Rev. 2478** — CIPA · badge ATIVO (verde) / ESTABILIDADE (âmbar) em 23 spots (Painel RH + Controle Documentos). Helper `server/_core/cipaStatus.ts` + componente `CipaBadge.tsx`. Ver `shared/changelog.ts`.
 - **Rev. 2477** — CONTROLE DE DOCUMENTOS · foto real nas 4 tabelas (ASO/Trein./Atest./Advert.). Ver `shared/changelog.ts`.
 - **Rev. 2476** — PAINEL RH · foto real em TODOS os 7 MODAIS expandidos (drill-down full-screen). Ver `shared/changelog.ts`.
-- **Rev. 2475** — PAINEL RH · foto real em TODOS os 7 cards-resumo restantes. Ver `shared/changelog.ts`.
 
 ### REGRA DE OURO — Cabeçalho de documentos institucionais FC (Rev. 2106+)
 
