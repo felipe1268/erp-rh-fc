@@ -1,6 +1,73 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2485 — **ORDENS DE COMPRA · Reparo de DUPLICATAS EXISTENTES de
+ * numeração (follow-up da Rev. 2483).**
+ *
+ * PEDIDO (user, image_1779818361385.png + image_1779818366975.png,
+ * 26/05/2026): "Ainda tem OC-2026-218 e OC-2026-0218 coexistindo na
+ * lista — o fix da 2483 só impediu novas". A Rev. 2483 corrigiu o
+ * GERADOR (4 spots inconsistentes → fonte única `gerarProximoNumeroOC`
+ * com advisory lock + bootstrap por MAX(seq)) mas NÃO tocou nas OCs
+ * antigas que já estavam no banco com numeração colidida. Esta revisão
+ * adiciona a ferramenta de reparo retroativa.
+ *
+ * ESCOLHAS DE DESIGN:
+ *
+ * (a) Endpoint backend, NÃO SQL ad-hoc em prod. R-001/R-007 proíbem
+ *     ALTER/DROP/DELETE direto; UPDATE é permitido, mas executar via
+ *     console SQL em produção é frágil (sem autorização, sem
+ *     auditoria, sem rollback transacional limpo). Solução: mutation
+ *     tRPC `compras.repararDuplicatasNumeroOC` com `adminProcedure`
+ *     (gating server-side: `ctx.user.role in {admin, admin_master}`)
+ *     que roda diretamente no Neon de produção via conexão do app.
+ *
+ * (b) `dryRun: boolean` (default `true`). Primeira chamada SEMPRE
+ *     retorna preview ({encontradas, renumeradas: [{id, deNumero,
+ *     paraNumero, status}], novoProximo}) sem tocar no banco. UI
+ *     mostra a tabela e exige confirmação explícita pra executar.
+ *     Idempotente: rodar 2x seguidas com dryRun=true não muda nada;
+ *     rodar dryRun=false 2x — a segunda não acha nada e é no-op.
+ *
+ * (c) Regra de conservação: MANTÉM a OC com `id` MENOR (mais antiga
+ *     = paperwork emitido primeiro, mais provável de ter NF/medição
+ *     já vinculada) e renumera as DEMAIS pra próxima vaga. Numerações
+ *     novas sempre 4 dígitos (`padStart(4, "0")`), alinhado com Rev. 2483.
+ *
+ * (d) Advisory lock `pg_advisory_xact_lock(companyId, 1001)` — mesmo
+ *     escopo do `gerarProximoNumeroOC`. Evita corrida com criação
+ *     concorrente de OC durante o reparo. Lock é por transação (xact),
+ *     liberado no COMMIT/ROLLBACK.
+ *
+ * (e) Após renumerar, sincroniza `ocNumberConfig.proximoNumero` =
+ *     MAX(seq do ano corrente) + 1. Defensivo: o gerador da Rev. 2483
+ *     já faz bootstrap por MAX em casos `<=1`, mas alinhar
+ *     explicitamente evita janela onde duas chamadas concorrentes
+ *     possam re-divergir.
+ *
+ * ARQUIVOS:
+ *  - `server/routers/compras.ts` (+ ~115 linhas, ANTES do `});` final
+ *    do `comprasRouter`): mutation nova `repararDuplicatasNumeroOC`.
+ *    Import de `adminProcedure` adicionado ao `import` de `_core/trpc`.
+ *  - `client/src/pages/compras/Ordens.tsx`:
+ *     - novo botão "Reparar duplicatas" (ícone Wrench, outline âmbar)
+ *       no `DraggableCommandBar` da aba OC, ao lado de "Nova OC Manual".
+ *     - novo componente `RepararDuplicatasDialog` (definido antes do
+ *       `export default function Ordens`): on-open dispara dryRun
+ *       automático, mostra tabela `de → para` com status, botão
+ *       "Executar correção" só aparece se houver renumeradas.
+ *     - 2 useState novos: `showRepararDup`, `repararPreview`.
+ *
+ * FOLLOW-UP DEIXADO EM ABERTO (já listado na Rev. 2483, ainda válido):
+ * `CREATE UNIQUE INDEX CONCURRENTLY` em `compras_ordens(company_id,
+ * numero_oc)` — bloqueado pela R-001 (DDL em produção). Quando o
+ * usuário decidir aceitar, fazer fora-de-banda durante janela
+ * curta + validar zero violações via este endpoint dryRun antes.
+ *
+ * SEM MIGRAÇÃO. SEM ALTER. SEM DELETE. Só UPDATE em linhas existentes.
+ */
+
+/**
  * Rev. 2484 — **EFETIVO DA OBRA (Planejamento, `EfetivoObraView`) · SELEÇÃO
  * MÚLTIPLA + TRANSFERÊNCIA EM LOTE de funcionários entre obras.**
  *

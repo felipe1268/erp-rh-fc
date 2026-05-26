@@ -121,6 +121,130 @@ function gerarParcelas(n: number, total: number, primeiroVenc: string): ParcelaF
 }
 const newItem = (): ItemForm => ({ descricao: "", unidade: "un", quantidade: "1", precoUnitario: "" });
 
+// ════════════════════════════════════════════════════════════════════
+// Rev. 2485 — Diálogo de reparo de duplicatas de numeração de OC.
+// Fluxo: 1) abre → roda dryRun automaticamente → exibe preview;
+//        2) usuário confirma → roda dryRun=false → toast + refetch.
+// ════════════════════════════════════════════════════════════════════
+type RepararPreviewState = {
+  encontradas: number;
+  novoProximo: number | null;
+  renumeradas: Array<{ id: number; deNumero: string; paraNumero: string; status: string }>;
+} | null;
+
+function RepararDuplicatasDialog({
+  open, onClose, companyId, onDone, preview, setPreview,
+}: {
+  open: boolean;
+  onClose: () => void;
+  companyId: number;
+  onDone: () => void;
+  preview: RepararPreviewState;
+  setPreview: (p: RepararPreviewState) => void;
+}) {
+  const reparar = trpc.compras.repararDuplicatasNumeroOC.useMutation();
+  const [loadingPreview, setLoadingPreview] = useState(false);
+  const [executando, setExecutando] = useState(false);
+
+  useEffect(() => {
+    if (!open || !companyId) return;
+    if (preview !== null) return;
+    setLoadingPreview(true);
+    reparar.mutateAsync({ companyId, dryRun: true })
+      .then(res => setPreview(res as RepararPreviewState))
+      .catch(err => { toast.error(`Falha ao analisar: ${err?.message || "erro"}`); onClose(); })
+      .finally(() => setLoadingPreview(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, companyId]);
+
+  const handleExecutar = async () => {
+    if (!preview || preview.renumeradas.length === 0) return;
+    setExecutando(true);
+    try {
+      const res = await reparar.mutateAsync({ companyId, dryRun: false });
+      toast.success(`${res.renumeradas.length} OC(s) renumeradas. Próximo número: ${res.novoProximo ?? "—"}`);
+      onDone();
+      onClose();
+    } catch (err: any) {
+      toast.error(`Falha ao executar: ${err?.message || "erro"}`);
+    } finally {
+      setExecutando(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
+      <DialogContent className="max-w-2xl bg-white">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-amber-700">
+            <Wrench className="h-5 w-5" /> Reparar duplicatas de numeração de OC
+          </DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3">
+          <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+            Detecta OCs com o mesmo número sequencial dentro de um mesmo ano (ex: <b>OC-2026-218</b> e <b>OC-2026-0218</b>) e renumera a mais nova (id maior) pra próxima vaga disponível. A OC mais antiga preserva o número original. Operação atômica e idempotente.
+          </div>
+
+          {loadingPreview && (
+            <div className="flex items-center gap-2 text-sm text-gray-600 py-6 justify-center">
+              <Loader2 className="h-4 w-4 animate-spin" /> Analisando…
+            </div>
+          )}
+
+          {!loadingPreview && preview && preview.renumeradas.length === 0 && (
+            <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800 flex items-center gap-2">
+              <CheckCircle className="h-4 w-4" /> Nenhuma duplicata encontrada. Está tudo certo.
+            </div>
+          )}
+
+          {!loadingPreview && preview && preview.renumeradas.length > 0 && (
+            <>
+              <div className="text-xs text-gray-600">
+                <b>{preview.encontradas}</b> grupo(s) com duplicata. <b>{preview.renumeradas.length}</b> OC(s) serão renumeradas.
+                {preview.novoProximo != null && <> Próximo número ficará: <b>OC-{new Date().getFullYear()}-{String(preview.novoProximo).padStart(4, "0")}</b>.</>}
+              </div>
+              <div className="max-h-80 overflow-auto rounded-lg border border-gray-200">
+                <Table>
+                  <TableHeader className="bg-gray-50 sticky top-0">
+                    <TableRow>
+                      <TableHead className="text-xs">ID</TableHead>
+                      <TableHead className="text-xs">De</TableHead>
+                      <TableHead className="text-xs">Para</TableHead>
+                      <TableHead className="text-xs">Status</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {preview.renumeradas.map(r => (
+                      <TableRow key={r.id}>
+                        <TableCell className="text-xs text-gray-500">{r.id}</TableCell>
+                        <TableCell className="text-xs font-mono text-red-600">{r.deNumero}</TableCell>
+                        <TableCell className="text-xs font-mono text-emerald-700 font-semibold">→ {r.paraNumero}</TableCell>
+                        <TableCell className="text-xs text-gray-600">{r.status}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </>
+          )}
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose} disabled={executando}>Cancelar</Button>
+          {preview && preview.renumeradas.length > 0 && (
+            <Button
+              onClick={handleExecutar}
+              disabled={executando || loadingPreview}
+              className="bg-amber-600 hover:bg-amber-500 text-white gap-2"
+            >
+              {executando ? <><Loader2 className="h-4 w-4 animate-spin" /> Executando…</> : <><Wrench className="h-4 w-4" /> Executar correção</>}
+            </Button>
+          )}
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export default function Ordens() {
   const { selectedCompanyId } = useCompany();
   const companyId = parseInt(selectedCompanyId || "0");
@@ -139,6 +263,8 @@ export default function Ordens() {
   // Rev. 2307 — Filtro por TIPO (Material/MDO/Pacote/Equipamento)
   const [filtroTipo, setFiltroTipo] = useState<"todos" | "compra" | "servico" | "pacote" | "equipamento">("todos");
   const [showNova, setShowNova] = useState(false);
+  const [showRepararDup, setShowRepararDup] = useState(false);
+  const [repararPreview, setRepararPreview] = useState<RepararPreviewState>(null);
   const [rascunhoId, setRascunhoId] = useState<number | null>(null);
   const [showGuardDialog, setShowGuardDialog] = useState(false);
   const [showDetalhe, setShowDetalhe] = useState<number | null>(null);
@@ -666,9 +792,20 @@ export default function Ordens() {
         {abaAtiva === "oc" && (
           <DraggableCommandBar barId="ordens-compra" items={[
             { id: "nova", node: <Button onClick={() => setShowNova(true)} className="bg-emerald-600 hover:bg-emerald-500 text-white gap-2"><Plus className="h-4 w-4" /> Nova OC Manual</Button> },
+            { id: "reparar-dup", node: <Button onClick={() => { setShowRepararDup(true); setRepararPreview(null); }} variant="outline" className="border-amber-300 text-amber-700 hover:bg-amber-50 gap-2" title="Detectar e corrigir OCs com numeração duplicada (admin)"><Wrench className="h-4 w-4" /> Reparar duplicatas</Button> },
           ]} />
         )}
       </div>
+
+      {/* Rev. 2485 — Modal de reparo de duplicatas de numeração de OC */}
+      <RepararDuplicatasDialog
+        open={showRepararDup}
+        onClose={() => { setShowRepararDup(false); setRepararPreview(null); }}
+        companyId={companyId}
+        onDone={() => { q.refetch(); }}
+        preview={repararPreview}
+        setPreview={setRepararPreview}
+      />
 
       {/* Tabs OC / OS */}
       <div className="flex gap-1 bg-white rounded-xl border border-gray-200 p-1 shadow-sm w-fit">

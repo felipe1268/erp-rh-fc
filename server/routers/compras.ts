@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { router, protectedProcedure } from "../_core/trpc";
+import { router, protectedProcedure, adminProcedure } from "../_core/trpc";
 import { getDb, getCompaniesForUser, getEffectiveAllowedObraIds, getUserCompanyLinks } from "../db";
 import { triggerFinancialSync } from "../services/financialEventTrigger";
 import { criarParcelasFinanceiras } from "../services/purchaseFinancialBridge";
@@ -13969,5 +13969,121 @@ Responda APENAS com JSON válido, sem markdown, no formato:
         observacaoValidacao: input.observacao || null,
       }).where(eq(almoxarifadoAuditoria.id, input.id));
       return { success: true };
+    }),
+
+  // ════════════════════════════════════════════════════════════════════
+  // Rev. 2485 — REPARAR DUPLICATAS DE NUMERAÇÃO DE OC
+  // ════════════════════════════════════════════════════════════════════
+  // Follow-up da Rev. 2483: o fix daquela rev impede a CRIAÇÃO de novas
+  // duplicatas (gerador único + bootstrap por MAX(seq)), mas as OCs antigas
+  // que já existiam com o bug (ex: OC-2026-218 coexistindo com OC-2026-0218)
+  // continuam no banco. Este endpoint detecta e renumera UMA das duplicatas
+  // de cada par/grupo (mantém a MAIS ANTIGA — id menor — e renumera as
+  // demais pra próxima sequência disponível).
+  //
+  // Estratégia:
+  //  - Lock advisory (mesmo escopo 1001 do gerador) evita corrida com
+  //    criação concorrente de OC.
+  //  - Agrupa por (year, seq_int) parseado do `numero_oc`. Mantém o
+  //    `id` mínimo (criada primeiro = paperwork mais antigo) e gera novo
+  //    número pra cada duplicata adicional, sempre 4 dígitos.
+  //  - `dryRun=true` (default): só retorna o preview do que SERIA feito.
+  //  - `dryRun=false`: executa UPDATEs + sincroniza `ocNumberConfig.proximoNumero`
+  //    pro MAX+1 do ano corrente.
+  //  - Tudo em uma transação — falha total ou success total.
+  repararDuplicatasNumeroOC: adminProcedure
+    .input(z.object({
+      companyId: z.number(),
+      dryRun:    z.boolean().default(true),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      return await db.transaction(async (tx: any) => {
+        await tx.execute(sql`SELECT pg_advisory_xact_lock(${input.companyId}::int, 1001::int)`);
+
+        // 1) Detecta duplicatas (escape \\d obrigatório — vide Rev. 2483).
+        const dupRowsRaw = await tx.execute(sql`
+          WITH parsed AS (
+            SELECT id, numero_oc, status, fornecedor_id, obra_id,
+                   SUBSTRING(numero_oc FROM '^OC-(\\d{4})-') AS yr,
+                   CAST(SUBSTRING(numero_oc FROM '^OC-\\d{4}-(\\d+)$') AS INTEGER) AS seq_int
+            FROM compras_ordens
+            WHERE company_id = ${input.companyId}
+              AND numero_oc ~ '^OC-\\d{4}-\\d+$'
+          )
+          SELECT yr, seq_int,
+                 array_agg(id ORDER BY id) AS ids,
+                 array_agg(numero_oc ORDER BY id) AS nums,
+                 array_agg(status ORDER BY id) AS sts
+          FROM parsed
+          GROUP BY yr, seq_int
+          HAVING COUNT(*) > 1
+          ORDER BY yr, seq_int
+        `);
+        const dups = ((dupRowsRaw as any).rows || dupRowsRaw || []) as Array<{
+          yr: string; seq_int: number; ids: number[]; nums: string[]; sts: string[];
+        }>;
+
+        if (dups.length === 0) {
+          return { encontradas: 0, renumeradas: [], novoProximo: null, dryRun: input.dryRun };
+        }
+
+        // 2) MAX(seq) por ano — usado pra alocar próximas vagas.
+        const maxRowsRaw = await tx.execute(sql`
+          SELECT SUBSTRING(numero_oc FROM '^OC-(\\d{4})-') AS yr,
+                 MAX(CAST(SUBSTRING(numero_oc FROM '^OC-\\d{4}-(\\d+)$') AS INTEGER)) AS m
+          FROM compras_ordens
+          WHERE company_id = ${input.companyId}
+            AND numero_oc ~ '^OC-\\d{4}-\\d+$'
+          GROUP BY SUBSTRING(numero_oc FROM '^OC-(\\d{4})-')
+        `);
+        const maxRows = ((maxRowsRaw as any).rows || maxRowsRaw || []) as Array<{ yr: string; m: number }>;
+        const maxByYear = new Map<string, number>();
+        maxRows.forEach(r => maxByYear.set(String(r.yr), parseInt(String(r.m)) || 0));
+
+        const DIGITOS = 4;
+        const renumeradas: Array<{ id: number; deNumero: string; paraNumero: string; status: string }> = [];
+
+        for (const grp of dups) {
+          const yr = String(grp.yr);
+          for (let i = 1; i < grp.ids.length; i++) {
+            const novoSeq = (maxByYear.get(yr) || 0) + 1;
+            maxByYear.set(yr, novoSeq);
+            const novoNum = `OC-${yr}-${String(novoSeq).padStart(DIGITOS, "0")}`;
+            renumeradas.push({
+              id: grp.ids[i],
+              deNumero: grp.nums[i],
+              paraNumero: novoNum,
+              status: grp.sts[i],
+            });
+            if (!input.dryRun) {
+              await tx.execute(sql`UPDATE compras_ordens SET numero_oc = ${novoNum} WHERE id = ${grp.ids[i]}`);
+            }
+          }
+        }
+
+        // 3) Sincroniza contador do ano corrente (defensivo — gerador já
+        //    faz bootstrap por MAX, mas alinha imediatamente o ocNumberConfig).
+        const currentYear = String(new Date().getFullYear());
+        const novoProximo = (maxByYear.get(currentYear) || 0) + 1;
+        if (!input.dryRun) {
+          const [config] = await tx.select().from(ocNumberConfig).where(eq(ocNumberConfig.companyId, input.companyId)).limit(1);
+          if (config) {
+            const alvo = Math.max(novoProximo, config.proximoNumero || 1);
+            await tx.update(ocNumberConfig)
+              .set({ proximoNumero: alvo, updatedAt: new Date().toISOString() } as any)
+              .where(eq(ocNumberConfig.companyId, input.companyId));
+          } else {
+            await tx.insert(ocNumberConfig).values({ companyId: input.companyId, proximoNumero: novoProximo, prefixo: "OC" } as any);
+          }
+        }
+
+        return {
+          encontradas: dups.length,
+          renumeradas,
+          novoProximo,
+          dryRun: input.dryRun,
+        };
+      });
     }),
 });
