@@ -3169,7 +3169,7 @@ export default function Cotacoes() {
 
     return (
       <DashboardLayout>
-        <div className="p-6 space-y-5 bg-gray-50 min-h-screen">
+        <div className={`${abaAtiva === "mapa" ? "px-3 py-3 space-y-3" : "p-6 space-y-5"} bg-gray-50 min-h-screen`}>
           {/* Breadcrumb */}
           <div className="flex items-center gap-3">
             <button onClick={() => { setShowDetalhe(null); setAbaAtiva("detalhes"); }}
@@ -4627,87 +4627,36 @@ export default function Cotacoes() {
                                             {it._groupCount} composições
                                           </span>
                                         )}
-                                        {!it._grouped && (it as any).parentEapDescricao && ((it as any).parentEapDescricao || "").trim() !== (it.descricao || "").trim() && (
-                                          <div className="text-[10px] text-violet-700 mt-0.5 leading-tight font-medium" title="Item da EAP ao qual esta solicitação está vinculada">
-                                            ↳ Item EAP{(it as any).parentEapCodigo ? ` ${(it as any).parentEapCodigo}` : ""}: {(it as any).parentEapDescricao}
-                                          </div>
-                                        )}
-                                        {!it._grouped && it.eapPath && (
-                                          <div className="text-[10px] text-gray-400 mt-0.5 leading-tight" title="Etapa (caminho da EAP)">{it.eapPath}</div>
-                                        )}
-                                        {!it._grouped && (
-                                          <RastreabilidadeTag
-                                            scNumero={(it as any).scNumero}
-                                            eapCodigo={(it as any).eapCodigo}
-                                            origemEap={(it as any).origemEap}
-                                          />
-                                        )}
-                                        {(it as any).semVerba && (
-                                          <div className="mt-1 flex items-center gap-1.5">
-                                            {(it as any).motivoSemVerba === "avulso" ? (
-                                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-orange-100 text-orange-700 border border-orange-200">
-                                                ⚠ FORA DO ORÇAMENTO
-                                              </span>
-                                            ) : (
-                                              <>
-                                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-red-100 text-red-700 border border-red-200">
-                                                  SEM VERBA
-                                                </span>
-                                                {(it as any).motivoSemVerba && (
-                                                  <span className="text-[9px] text-red-500 italic">
-                                                    {(it as any).motivoSemVerba === "quebra_dano" ? "Quebra/Dano" : (it as any).motivoSemVerba === "furto" ? "Furto" : (it as any).motivoSemVerba === "erro_orcamento" ? "Erro Orçamento" : (it as any).motivoSemVerba === "qtd_insuficiente" ? "Qtd Insuficiente" : (it as any).motivoSemVerba === "retrabalho" ? "Retrabalho" : "Outro"}
-                                                  </span>
-                                                )}
-                                              </>
-                                            )}
-                                          </div>
-                                        )}
-                                        {!it._grouped && (mapa?.itensJaEmOC ?? []).includes(it.id) && (
-                                          <span className="mt-1 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-100 text-emerald-700 border border-emerald-200">
-                                            ✓ Em OC
-                                          </span>
-                                        )}
-                                        {(it as any).qtdOrcada > 0 && (() => {
-                                          const orcada = (it as any).qtdOrcada;
-                                          const estaSC = parseFloat(it.quantidade ?? "0");
-                                          const totalSolic = (it as any).qtdTotalSolicitada;
-                                          const outrasSC = Math.max(0, totalSolic - estaSC);
-                                          const saldoRestanteRaw = orcada - totalSolic;
-                                          const saldoRestante = Math.abs(saldoRestanteRaw) < 0.01 ? 0 : saldoRestanteRaw;
-                                          const rawPctEsta = (estaSC / orcada) * 100;
-                                          const rawPctOutras = (outrasSC / orcada) * 100;
-                                          const rawTotal = rawPctEsta + rawPctOutras;
-                                          const scale = rawTotal > 100 ? 100 / rawTotal : 1;
-                                          const pctEsta = rawPctEsta * scale;
-                                          const pctOutras = rawPctOutras * scale;
-                                          const isTotal = totalSolic >= orcada - 0.01;
-                                          const isEstouro = totalSolic > orcada + 0.01;
-                                          return (
-                                            <div className="mt-1.5 space-y-0.5">
-                                              <div className="flex items-center gap-1.5">
-                                                <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden flex">
-                                                  {pctOutras > 0 && <div className="h-full bg-blue-300" style={{ width: `${pctOutras}%` }} title={`Outras SCs: ${outrasSC}`} />}
-                                                  <div className={`h-full ${isEstouro ? "bg-red-500" : "bg-amber-500"}`} style={{ width: `${pctEsta}%` }} title={`Esta SC: ${estaSC}`} />
-                                                </div>
-                                                <span className={`text-[10px] font-bold shrink-0 ${isEstouro ? "text-red-600" : isTotal ? "text-emerald-600" : "text-amber-600"}`}>
-                                                  {Math.round(((totalSolic) / orcada) * 100)}%
-                                                </span>
-                                              </div>
-                                              {/* Rev. 1989 — Linha condensada: 1 frase resumida + tooltip com breakdown completo. */}
-                                              <div
-                                                className="text-[9px] text-gray-400 truncate"
-                                                title={`Orçado: ${orcada} · Esta SC: ${estaSC}${outrasSC > 0 ? ` · Outras SCs: ${outrasSC}` : ""} · Saldo: ${saldoRestante.toFixed(1)}`}
-                                              >
-                                                {isEstouro ? (
-                                                  <span className="text-red-600 font-medium">Estouro de {Math.abs(saldoRestante).toFixed(1)} {it.unidade || "un"}</span>
-                                                ) : isTotal ? (
-                                                  <span className="text-emerald-600 font-medium">Compra total do orçamento</span>
-                                                ) : (
-                                                  <span><span className="text-amber-600 font-medium">Esta SC: {estaSC}</span> de {orcada} · falta {Math.max(0, saldoRestante)}</span>
-                                                )}
-                                              </div>
-                                            </div>
-                                          );
+                                        {/* Rev. 2488 — célula limpa: badges de rastreabilidade (SC/EAP), barra
+                                            de progresso, "Em OC" e "Sem verba" foram movidos pro TOOLTIP do título e
+                                            pro ícone Info abaixo, pra deixar o mapa enxuto estilo ERP de mercado. */}
+                                        {(() => {
+                                          const partes: string[] = [];
+                                          if (!it._grouped) {
+                                            if ((it as any).parentEapDescricao && ((it as any).parentEapDescricao || "").trim() !== (it.descricao || "").trim()) {
+                                              partes.push(`↳ Item EAP${(it as any).parentEapCodigo ? ` ${(it as any).parentEapCodigo}` : ""}: ${(it as any).parentEapDescricao}`);
+                                            }
+                                            if (it.eapPath) partes.push(`Etapa: ${it.eapPath}`);
+                                            if ((it as any).scNumero) partes.push(`SC: ${(it as any).scNumero}`);
+                                            if ((mapa?.itensJaEmOC ?? []).includes(it.id)) partes.push("✓ Já em OC");
+                                            const orcada = (it as any).qtdOrcada ?? 0;
+                                            const totalSolic = (it as any).qtdTotalSolicitada ?? 0;
+                                            if (orcada > 0) {
+                                              const pct = Math.round((totalSolic / orcada) * 100);
+                                              partes.push(`Solicitado: ${totalSolic} de ${orcada} (${pct}%)`);
+                                            }
+                                            if ((it as any).semVerba) {
+                                              partes.push((it as any).motivoSemVerba === "avulso" ? "⚠ FORA DO ORÇAMENTO" : "⚠ SEM VERBA");
+                                            }
+                                          }
+                                          return partes.length > 0 ? (
+                                            <span
+                                              className="ml-1 inline-flex items-center text-[10px] text-gray-300 hover:text-gray-500 cursor-help align-middle"
+                                              title={partes.join("\n")}
+                                            >
+                                              <Info className="h-3 w-3" />
+                                            </span>
+                                          ) : null;
                                         })()}
                                       </div>
                                       <HistoricoPrecoPopover companyId={companyId} descricao={it.descricao} />

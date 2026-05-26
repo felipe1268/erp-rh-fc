@@ -722,3 +722,5 @@
 - **Rev. 2440** — ALMOXARIFADO · VISÃO GERAL · card limpo (3 badges + "+N locais") e card/linha clicáveis abrem modal completo de edição. `index.tsx` L1877-2065. Ver `shared/changelog.ts`.
 - **Rev. 2441** — ALMOXARIFADO · Combobox filtrável de categoria (digite pra achar) no cadastro/edição + 2 modais "Alterar categoria em lote". `index.tsx` L50-145/L2766/L4377/L4469. Ver `shared/changelog.ts`.
 - **Rev. 2442** — ALMOXARIFADO · VISÃO GERAL · Shift+clique seleciona INTERVALO de cards (range select estilo Finder) + botões "Marcar todos visíveis" / "Limpar". `index.tsx` L317-366/L2009/L4456-4475. Ver `shared/changelog.ts`.
+
+- **Rev. 2481** — EQUIPE DA OBRA (modal `ObraEfetivo.tsx`) · coluna FUNÇÃO mostra cargo do CADASTRO, não o override `funcaoNaObra`. Inverter prioridade em 5 spots: `f.employee?.cargo || f.employee?.funcao || f.funcaoNaObra`. Ver `shared/changelog.ts`.

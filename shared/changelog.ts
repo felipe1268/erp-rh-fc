@@ -1,6 +1,111 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2488 — **COTAÇÕES · Mapa de Cotação em fullscreen + célula de
+ * Item enxuta (estilo ERP de mercado).**
+ *
+ * PEDIDO (user, image_1779826710559/886/990, 26/05/2026): "quero apenas
+ * que redistribua o tamanho da tela no mapa de cotação, que ao clicar
+ * em MAPA DE COTAÇÃO, ele abra em tela full. Nos itens em si, no MAPA
+ * DE COTAÇÃO, nao preciso que apareça todas as informaçoes circuladas
+ * da imagem 2, dessa forma, fica muito 'poluído'... deixe apenas o item
+ * (material que está sendo cotado), veja o exemplo da imagem 3 (mapa de
+ * cotaçao de outro erp)". A imagem 2 circulou em vermelho o bloco
+ * embaixo do nome de cada item: "↳ Item EAP 01.04: Máquinas, equipamentos
+ * e ferramentas / INSTALAÇÕES PROVISÓRIAS E CUSTO INDIRETO" + badges
+ * `SC-2026-0196` e `EAP 01.04` + badge verde "✓ Em OC" + barra colorida
+ * "Estouro de 1260.0 un / 126100%". A imagem 3 mostra o mapa de um ERP
+ * concorrente onde a coluna Item tem APENAS código + descrição + unidade
+ * (uma linha) — nada de rastreabilidade visual no corpo da tabela.
+ *
+ * O QUE MUDOU
+ *
+ *  (1) **Container fullscreen quando aba=mapa.** O wrapper externo do
+ *      detalhe da cotação (`<div className="p-6 space-y-5 ...">` na L3172
+ *      de `client/src/pages/compras/Cotacoes.tsx`) agora é condicional:
+ *      quando `abaAtiva === "mapa"` ele vira `px-3 py-3 space-y-3` (era
+ *      `p-6 space-y-5`). Resultado: -36px de padding lateral e -8px de
+ *      gap vertical, dando ~70px a mais de largura útil pra tabela sem
+ *      mexer no `DashboardLayout` (que já é fluido). A aba "Detalhes"
+ *      mantém o padding generoso original (não é tabelona — não precisa).
+ *
+ *  (2) **Célula do Item enxuta — bloco poluído virou tooltip + ícone
+ *      Info.** Removidos do corpo da `<td>` Item (L4630-4711 antigos):
+ *      - `↳ Item EAP NN.NN: <descrição da etapa>` (parentEapDescricao)
+ *      - `<eapPath>` (caminho da etapa em texto cinza)
+ *      - `<RastreabilidadeTag>` (badges SC-AAAA-NNNN + EAP NN.NN coloridas)
+ *      - Badge verde "✓ Em OC"
+ *      - Badges "SEM VERBA" / "FORA DO ORÇAMENTO"
+ *      - Barra de progresso bicolor (azul/amarelo/vermelho) + "Estouro
+ *        de X.X un" / "Compra total do orçamento" / "Esta SC: X de Y"
+ *
+ *      No lugar entrou 1 ícone `<Info className="h-3 w-3">` colado à
+ *      direita da descrição (`text-gray-300 hover:text-gray-500
+ *      cursor-help`) com tooltip `title` agregando todas essas info em
+ *      texto multi-linha:
+ *
+ *      ```
+ *      ↳ Item EAP 01.04: Máquinas, equipamentos e ferramentas
+ *      Etapa: ...
+ *      SC: SC-2026-0196
+ *      ✓ Já em OC
+ *      Solicitado: 12600 de 10 (126000%)
+ *      ⚠ SEM VERBA
+ *      ```
+ *
+ *      O ícone só renderiza se houver ≥1 parte a mostrar (return null
+ *      caso contrário, evitando ruído em itens "limpos"). Para itens
+ *      `_grouped` (agrupar itens iguais ON) o bloco inteiro é omitido,
+ *      pois cada um pode ter rastreabilidade divergente — preservado
+ *      via `if (!it._grouped)` guard logo na entrada do IIFE.
+ *
+ * O QUE FOI PRESERVADO
+ *  - Badge `PACOTE · N insumos` (composição) e `N composições` (agrupar)
+ *    continuam visíveis ao lado da descrição — são metadados de
+ *    cardinalidade que mudam a interpretação da linha inteira, não
+ *    "rastreabilidade fofocosa".
+ *  - `<HistoricoPrecoPopover>` (botão Clock à direita) intacto.
+ *  - Coluna "Saldo Orç." (cor cinza laranja) intacta — é o resumo do
+ *    saldo já com tooltip rico, e o user não circulou ela como poluição.
+ *  - Coluna "Meta MAT (Orçamento)" intacta — informação numérica
+ *    estruturada, não é a "fofoca textual" que polui.
+ *  - Backend, schema, query, autorização: ZERO mudança.
+ *
+ * POR QUÊ MOVER PRA TOOLTIP EM VEZ DE DELETAR
+ *  Rastreabilidade SC↔EAP↔OC é o coração do controle de compras FC; é
+ *  o que diferencia esse ERP dos concorrentes. Apagar essa info do DOM
+ *  faria o engenheiro de obra ter que abrir o popover de detalhes pra
+ *  cada item — pior fluxo. Mantendo em `title=` HTML nativo: zero custo
+ *  visual, hover instantâneo, copy/paste pra WhatsApp continua possível
+ *  via Inspect, screen-reader continua tendo acesso. Ganhou-se densidade
+ *  sem perder auditabilidade.
+ *
+ * ARQUIVOS
+ *  - `client/src/pages/compras/Cotacoes.tsx`
+ *    - L3175 (fullscreen condicional do container)
+ *    - L4633-4663 (IIFE Info tooltip substituindo bloco poluído)
+ *
+ * IMPACTO / RISCO
+ *  - Bundle: -0 (mesmo código React, só re-arranjo).
+ *  - Visual: imagem 2 → imagem 3 (estilo enxuto). Confirmar manualmente
+ *    em COT-2026-0169 que: (a) aba Mapa abre full; (b) cada linha tem
+ *    só descrição + badges PACOTE/N composições + ícone Info à direita;
+ *    (c) hover no Info mostra SC/EAP/Em OC/saldo em texto cinza.
+ *  - Acessibilidade: tooltip via `title=` é A11y default; quem usa NVDA
+ *    /JAWS continua ouvindo. Nada quebra.
+ *  - Reversível: 1 PR removendo o IIFE e restaurando o bloco antigo
+ *    volta tudo (sem migração, sem schema).
+ *
+ * FOLLOW-UP PROVÁVEL
+ *  - Se user pedir "ver SC/EAP visível em alguns itens" (ex: só nos
+ *    com SEM VERBA), adicionar prop `mostrarRastreabilidade` no card e
+ *    expandir só quando flag de risco ativo.
+ *  - Se for fechado pelo user como definitivo, considerar aplicar mesma
+ *    higienização em Solicitações (lá ainda tem badges visíveis) e em
+ *    Ordens (tabela de itens da OC).
+ *
+ * ----------------------------------------------------------------------
+ *
  * Rev. 2487 — **COMPRAS · Ordenação clicável por coluna em Cotações e
  * Ordens de Compra (mesmo padrão da tela de SC, Rev. 2089/2295).**
  *
