@@ -14,6 +14,7 @@ import DiagnosticoEapOrcCron from "@/components/planejamento/DiagnosticoEapOrcCr
 import { parseCalendarioJson, fracaoDecorridaMs, pvPonderadoPorAtividade, pctRaizMSP } from "../../../../shared/diasUteis";
 import { ProgramacaoSemanal } from "./ProgramacaoSemanal";
 import { DiagramaRede } from "./DiagramaRede";
+import { CipaBadge } from "@/components/CipaBadge";
 const BimViewer = React.lazy(() => import("./BimViewer"));
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11497,7 +11498,17 @@ export function EfetivoObraView({ equipeRaw, isLoading, docsMap = {} }: { equipe
                           </div>
                         )}
                       </td>
-                      <td className="px-4 py-2 font-medium text-slate-800 text-[13px]">{e.nomeCompleto}</td>
+                      <td className="px-4 py-2 font-medium text-slate-800 text-[13px]">
+                        <span className="inline-flex items-center gap-1.5 flex-wrap">
+                          <span>{e.nomeCompleto}</span>
+                          <CipaBadge
+                            ativo={e.cipaAtivo}
+                            estabilidade={e.cipaEstabilidade}
+                            fim={e.cipaFimEstabilidade}
+                            cargo={e.cipaCargo}
+                          />
+                        </span>
+                      </td>
                       <td className="px-4 py-2 text-slate-600 text-[13px]">{e.funcao || e.cargo || "—"}</td>
                       <td className="px-4 py-2 text-center">
                         <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold border ${vincCls}`}>

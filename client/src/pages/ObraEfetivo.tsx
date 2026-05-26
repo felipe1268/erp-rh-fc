@@ -24,6 +24,8 @@ import { useState, useMemo } from "react";
 import { toast } from "sonner";
 import { useCompany } from "@/contexts/CompanyContext";
 import { fmtNum } from "@/lib/formatters";
+import { PersonPhoto } from "@/components/PersonPhoto";
+import { CipaBadge } from "@/components/CipaBadge";
 
 export default function ObraEfetivo() {
   const { selectedCompanyId, getCompanyIdsForQuery } = useCompany();
@@ -1631,20 +1633,21 @@ const statusBg: Record<string, string> = { Ativo: '#d4edda', Aviso: '#fee2e2', A
                                 <tr key={f.id} className={`hover:bg-slate-50/50 ${rowBg}`} style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' as any }}>
                                   <td className="px-4 py-2.5">
                                     <div className="flex items-center gap-3">
-                                      <div className={`h-8 w-8 rounded-full flex items-center justify-center shrink-0 ${
-                                        empStatus === 'Aviso' ? 'bg-gradient-to-br from-red-500 to-red-600' :
-                                        empStatus === 'AvisoDispensado' ? 'bg-gradient-to-br from-orange-500 to-orange-600' :
-                                        empStatus === 'Ferias' ? 'bg-gradient-to-br from-amber-400 to-amber-500' :
-                                        empStatus === 'Afastado' ? 'bg-gradient-to-br from-purple-500 to-purple-600' :
-                                        empStatus === 'Licenca' ? 'bg-gradient-to-br from-cyan-500 to-cyan-600' :
-                                        empStatus === 'Recluso' ? 'bg-gradient-to-br from-gray-500 to-gray-600' :
-                                        'bg-gradient-to-br from-[#1B2A4A] to-[#2d4a7a]'
-                                      }`}>
-                                        <span className="text-white text-[11px] font-bold">{(f.employee?.nomeCompleto || '?')[0]}</span>
-                                      </div>
-                                      <div>
-                                        <p className="font-medium text-sm text-blue-700 cursor-pointer hover:underline" onClick={() => setRaioXEmployeeId(f.employeeId)}>
-                                          {f.employee?.nomeCompleto || "—"}
+                                      <PersonPhoto
+                                        src={f.employee?.fotoUrl}
+                                        alt={f.employee?.nomeCompleto || "—"}
+                                        size="sm"
+                                        caption={f.funcaoNaObra || f.employee?.funcao || f.employee?.cargo || undefined}
+                                      />
+                                      <div className="min-w-0">
+                                        <p className="font-medium text-sm text-blue-700 cursor-pointer hover:underline inline-flex items-center gap-1.5 flex-wrap" onClick={() => setRaioXEmployeeId(f.employeeId)}>
+                                          <span className="truncate">{f.employee?.nomeCompleto || "—"}</span>
+                                          <CipaBadge
+                                            ativo={f.cipaAtivo ?? f.employee?.cipaAtivo}
+                                            estabilidade={f.cipaEstabilidade ?? f.employee?.cipaEstabilidade}
+                                            fim={f.cipaFimEstabilidade ?? f.employee?.cipaFimEstabilidade}
+                                            cargo={f.cipaCargo ?? f.employee?.cipaCargo}
+                                          />
                                         </p>
                                         <p className="text-[11px] text-muted-foreground md:hidden">
                                           {f.funcaoNaObra || f.employee?.funcao || "—"}

@@ -1,4 +1,5 @@
 import { eq, and, like, ilike, or, desc, asc, sql, isNull, isNotNull, inArray } from "drizzle-orm";
+import { getCipaStatusByEmployeeIds, projectCipaFields } from "./_core/cipaStatus";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 import {
@@ -1928,6 +1929,9 @@ export async function getObraFuncionarios(obraId: number, obraIds?: number[]) {
   const feriasMap = new Map<number, { dataInicio: string | null; dataFim: string | null }>();
   for (const r of feriasRows) feriasMap.set(r.employeeId, { dataInicio: r.dataInicio, dataFim: r.dataFim });
 
+  // Rev. 2479 — enrich com status CIPA (ativo/estabilidade).
+  const cipaMap = await getCipaStatusByEmployeeIds(db, companyIdsArr, empIds);
+
   return allocs
     .filter(a => empMap[a.employeeId])
     .map(a => {
@@ -1938,14 +1942,16 @@ export async function getObraFuncionarios(obraId: number, obraIds?: number[]) {
       if (avisoInfo) {
         effectiveStatus = avisoInfo.dispensado ? 'AvisoDispensado' : 'Aviso';
       } else if (feriasInfo) effectiveStatus = 'Ferias';
+      const cipa = projectCipaFields(cipaMap, a.employeeId);
       return {
         ...a,
-        employee: { ...emp, status: effectiveStatus as any },
+        employee: { ...emp, status: effectiveStatus as any, ...cipa },
         avisoDataFim: avisoInfo?.dataFim || null,
         avisoTipo: avisoInfo?.tipo || null,
         avisoDispensado: avisoInfo?.dispensado || false,
         feriasDataInicio: feriasInfo?.dataInicio || null,
         feriasDataFim: feriasInfo?.dataFim || null,
+        ...cipa,
       };
     });
 }
@@ -2925,6 +2931,9 @@ export async function getEquipeObra(obraId: number, companyId: number, obraIds?:
     feriasMap.set(r.employeeId, { dataInicio: r.dataInicio, dataFim: r.dataFim });
   }
 
+  // Rev. 2479 — enrich com status CIPA (ativo/estabilidade).
+  const cipaMap = await getCipaStatusByEmployeeIds(db, idsCompany, empIds);
+
   const allocMap = Object.fromEntries(allocs.map(a => [a.employeeId, a]));
   return emps.map(e => {
     // Determine effective status: Aviso > Ferias > original status
@@ -2937,6 +2946,7 @@ export async function getEquipeObra(obraId: number, companyId: number, obraIds?:
     return {
       ...e,
       status: effectiveStatus,
+      effectiveStatus,
       dataInicioObra: allocMap[e.id]?.dataInicio || null,
       avisoDataFim: avisoInfo?.dataFim || null,
       avisoTipo: avisoInfo?.tipo || null,
@@ -2944,6 +2954,7 @@ export async function getEquipeObra(obraId: number, companyId: number, obraIds?:
       feriasDataInicio: feriasInfo?.dataInicio || null,
       feriasDataFim: feriasInfo?.dataFim || null,
       categoria: categoriaDe(e.funcao || e.cargo),
+      ...projectCipaFields(cipaMap, e.id),
     };
   }).sort((a, b) => (a.nomeCompleto || '').localeCompare(b.nomeCompleto || ''));
 }

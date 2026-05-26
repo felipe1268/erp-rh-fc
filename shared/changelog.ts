@@ -1,6 +1,62 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2479 — **EFETIVO/EQUIPE DA OBRA · foto real + status + badge CIPA nas
+ * duas telas que ainda exibiam só inicial colorida ou ainda não tinham CIPA:
+ * (1) modal "Equipe — {obra}" do `ObraEfetivo.tsx` (drill-down dos cards de
+ * Efetivo por Obra) e (2) tabela "Lista de Funcionários" do `EfetivoObraView`
+ * dentro do PlanejamentoDetalhe (aba Efetivo da Obra).**
+ *
+ * PEDIDO (user, IMG_1278/1279/1280, 26/05/2026): "Quero que tenha fotos de
+ * todos os funcionários nestas telas, e considerar a legenda de status de
+ * cada um, e quem é cipa tbm". Extensão natural das Rev. 2473→2478 — agora
+ * também nos drill-downs por obra.
+ *
+ * MUDANÇAS:
+ *
+ * 1. **Backend `getObraFuncionarios`** (`server/db.ts` L1864) — alimenta o
+ *    modal Equipe do `ObraEfetivo.tsx`. Já trazia `employee.fotoUrl` (vinha
+ *    no spread `...emp`). Adicionado enrich CIPA via
+ *    `getCipaStatusByEmployeeIds(db, companyIdsArr, empIds)` + projeção dos
+ *    4 campos `{cipaAtivo, cipaEstabilidade, cipaFimEstabilidade, cipaCargo}`
+ *    tanto em `row.employee.*` quanto no row top-level (spread duplo —
+ *    permite acesso `f.cipaAtivo` ou `f.employee.cipaAtivo` indistintamente).
+ *
+ * 2. **Backend `getEquipeObra`** (`server/db.ts` L2831) — alimenta a aba
+ *    Efetivo da Obra do Planejamento. Já trazia `fotoUrl`, `status`,
+ *    `effectiveStatus`. Adicionado enrich CIPA via mesmo helper +
+ *    `...projectCipaFields(cipaMap, e.id)` no spread final. Custo: 1 query
+ *    extra batched por chamada, zero N+1.
+ *
+ * 3. **Frontend `ObraEfetivo.tsx`** (modal Equipe — IMG_1278/1279) — célula
+ *    Funcionário (linhas 1632-1660): substituído avatar gradiente com
+ *    inicial colorida (`<div className="h-8 w-8 rounded-full bg-gradient-
+ *    to-br...">`) por `<PersonPhoto src={f.employee.fotoUrl} size="sm">` —
+ *    foto real com click→lightbox e fallback automático pras iniciais blue-
+ *    FC. Adicionado `<CipaBadge>` ao lado do nome (chip xs verde ATIVO ou
+ *    âmbar ESTABILIDADE com tooltip CF Art. 10 II 'a' ADCT). Status do
+ *    funcionário continua sendo evidenciado por (a) agrupamento por seção
+ *    ("Ativos (51)", "Aviso Prévio (1)", etc.) e (b) tinte da linha — não
+ *    precisou de novo `<EmpStatusBadge>` aqui (redundância evitada).
+ *
+ * 4. **Frontend `PlanejamentoDetalhe.tsx`** (`EfetivoObraView` — IMG_1280) —
+ *    coluna NOME da Lista de Funcionários (L11500): nome envolvido em
+ *    `<span inline-flex items-center gap-1.5>` com `<CipaBadge>`. Foto e
+ *    status já estavam presentes (FOTO column L11485 + STATUS column L11521).
+ *
+ * 5. **Imports adicionados** — `client/src/pages/ObraEfetivo.tsx`:
+ *    `PersonPhoto` (de `@/components/PersonPhoto`) + `CipaBadge`.
+ *    `client/src/pages/planejamento/PlanejamentoDetalhe.tsx`: `CipaBadge`.
+ *
+ * COBERTURA TOTAL (após esta revisão): foto real + status + CIPA badge agora
+ * em TODOS os 23 spots do Painel RH e Controle de Documentos (Rev. 2475-2478)
+ * **mais** os 2 drill-downs por obra (Rev. 2479). Single-source-of-truth do
+ * helper CIPA (`server/_core/cipaStatus.ts`) mantém custo O(1 query)
+ * independente do tamanho da equipe.
+ *
+ * R-001/R-007/R-010 OK — só SELECT no backend, JSX no frontend, zero
+ * ALTER/DROP/DELETE em produção.
+ *
  * Rev. 2478 — **CIPA · badge identificando membros ATIVOS e ex-membros
  * em ESTABILIDADE pós-mandato em TODAS as telas do Painel RH (cards-
  * resumo + drill-downs full-screen) e do Controle de Documentos (4
