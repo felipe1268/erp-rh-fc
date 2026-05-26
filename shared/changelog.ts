@@ -1,6 +1,35 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2463 — **HOTFIX Rev. 2462 · toggle "Exigir aprovação do gestor"
+ * estava travado (coluna não criada no Neon).**
+ *
+ * PEDIDO (user, IMG_1257): "Não consigo desligar a função de aprovação,
+ * fica cinza.. vc pode ajustar isso?"
+ *
+ * BUG RAIZ: a Rev. 2462 adicionou a coluna `almoxarifadoExigeAprovacao`
+ * apenas no `drizzle/schema.ts`, mas o sync automático em produção
+ * (Neon) é feito pelo bloco `SyncSchema+` em `server/_core/index.ts`
+ * L708-710, que tem ALTER hardcoded para as 2 colunas antigas. Sem o
+ * 3º ALTER, o SELECT em `getAlmoxAuditoriaConfig` lançava erro de
+ * coluna inexistente → query `getAuditoriaConfig` ficava em estado
+ * de erro permanente no frontend → `auditCfgQ.data` undefined →
+ * toggle congelado em ON (fallback `true` do `useMemo`) e mutation
+ * `setAuditoriaConfig` também explodia ao tentar UPDATE da coluna.
+ *
+ * FIX (server/_core/index.ts L711-715): adicionado 3º ALTER:
+ *   `ALTER TABLE companies ADD COLUMN IF NOT EXISTS
+ *    almoxarifado_exige_aprovacao SMALLINT NOT NULL DEFAULT 1`.
+ * Log atualizado pra "Colunas almoxarifado_exige_senha/justificativa
+ * /aprovacao garantidas em companies." Verificado no restart:
+ * Neon confirmou a criação da coluna.
+ *
+ * R-001/R-007/R-010 OK — ALTER ADD COLUMN IF NOT EXISTS idempotente.
+ *
+ * Arquivo único: `server/_core/index.ts`.
+ *
+ * ─────────────────────────────────────────────────────────────────
+ *
  * Rev. 2462 — **AUDITORIA DO ALMOXARIFADO · toggle independente "Exigir
  * aprovação do gestor" (log sempre, aprovação opcional).**
  *

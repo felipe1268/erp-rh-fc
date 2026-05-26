@@ -707,7 +707,9 @@ Regras:
         try {
           await db.execute(sql`ALTER TABLE companies ADD COLUMN IF NOT EXISTS almoxarifado_exige_senha SMALLINT NOT NULL DEFAULT 1`);
           await db.execute(sql`ALTER TABLE companies ADD COLUMN IF NOT EXISTS almoxarifado_exige_justificativa SMALLINT NOT NULL DEFAULT 1`);
-          console.log(`[SyncSchema+] Colunas almoxarifado_exige_senha/justificativa garantidas em companies.`);
+          // Rev. 2463 — Toggle independente "Exigir aprovação do gestor".
+          await db.execute(sql`ALTER TABLE companies ADD COLUMN IF NOT EXISTS almoxarifado_exige_aprovacao SMALLINT NOT NULL DEFAULT 1`);
+          console.log(`[SyncSchema+] Colunas almoxarifado_exige_senha/justificativa/aprovacao garantidas em companies.`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA companies almoxarifado_exige_*:`, e?.message || e); }
 
         // Rev. 2404 — Vinculo de item de almoxarifado com Controle de Equipamentos.
