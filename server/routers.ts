@@ -112,6 +112,7 @@ import { iaCronogramaRouter } from "./routers/iaCronograma";
 import { comprasRouter } from "./routers/compras";
 import { purchaseRouter } from "./routers/purchaseRouter";
 import { warehouseRouter } from "./routers/warehouse";
+import { auditoriaAlmoxarifadoRouter } from "./routers/auditoriaAlmoxarifado";
 import { equipamentosRouter } from "./routers/equipamentos";
 import { ferramentasTerceirosRouter } from "./routers/ferramentasTerceiros";
 import { clientesRouter } from "./routers/clientes";
@@ -180,6 +181,7 @@ export const appRouter = router({
   compras: comprasRouter,
   purchase: purchaseRouter,
   warehouse: warehouseRouter,
+  auditoriaAlmoxarifado: auditoriaAlmoxarifadoRouter, // Rev. 2450
   equipamentos: equipamentosRouter,
   ferramentasTerceiros: ferramentasTerceirosRouter,
   clientes: clientesRouter,

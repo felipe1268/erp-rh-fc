@@ -2,6 +2,8 @@
 
 > Este arquivo guarda os one-liners das revisões antigas para manter o `replit.md` enxuto.
 
+- **Rev. 2443** — ALMOXARIFADO · INVENTÁRIO VISUAL · dropdown só mostra obras ATIVAS com ≥1 item alocado, contagem inline ("· 4 itens"), visão consolidada suprimida quando vazio. `InventarioVisual.tsx` L122-149/L558-574. Ver `shared/changelog.ts`.
+
 - **Rev. 2421** — INVENTÁRIO VISUAL DE BAIAS · 3 bugs (baixa não debitava → bloco pós-INSERT cria mov saída; card vira clicável p/ histórico; menu sumia em grupo → feature `almoxarifado-inventario-visual` em `shared/modules.ts`). Ver `shared/changelog.ts`.
 - **Rev. 2420** — EQUIPAMENTOS LOCADOS/Picker "Devolver" · MULTI-SELEÇÃO + filtro de permissão de obra. `equipamentos.locadosListar` ganha `getEffectiveAllowedObraIds()`; picker vira toggle multi com sticky footer laranja; endpoint novo `locadoDevolverEmLote` (200 ids, sequencial, reusa lógica single). Ver `shared/changelog.ts`.
 - **Rev. 2419** — ALMOXARIFADO/VALOR POR ALMOXARIFADO · Mostra TODAS as obras ativas, mesmo as zeradas. Removido `.filter(e => e.valor > 0)` em `almoxarifado/index.tsx` L1743-1768; zeradas com styling distinto (opacity-60). Ver `shared/changelog.ts`.

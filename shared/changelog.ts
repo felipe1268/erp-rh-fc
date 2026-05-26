@@ -1,6 +1,93 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2450 — **AUDITORIA DO ALMOXARIFADO · tela de validação + banner global
+ * pra gestor (admin/admin_master ou responsável de estoque da obra) revisar
+ * exclusões e baixas manuais de saldo.**
+ *
+ * CONTEXTO: as Revs. 2388/2400/2429/2445 já tinham montado TODA a camada de
+ * gravação da auditoria — tabela `almoxarifado_auditoria` com
+ * `statusValidacao/validadoPorId/validadoEm/observacaoValidacao`, mutations
+ * `excluirItem`/`excluirUnidade`/`atualizarItem` em `compras.ts` gravando
+ * antes/depois/IP/justificativa, `obra_responsaveis_estoque` pra delegar
+ * aprovação por obra e o `ModalConfirmacaoAuditoria` integrado em
+ * `almoxarifado/index.tsx`. Faltavam DUAS coisas pra fechar o ciclo: o gestor
+ * descobrir que tinha pendência e ter onde aprovar/rejeitar.
+ *
+ * MUDANÇAS
+ *
+ * 1. NOVO ROUTER tRPC `auditoriaAlmoxarifado` — `server/routers/auditoriaAlmoxarifado.ts`
+ *    + mount em `server/routers.ts` L118/L187.
+ *    - `listar({ companyId, status?, obraId?, limit })`: join com `obras`
+ *      pra trazer nome. Restritos só veem auditorias das obras permitidas
+ *      via `getEffectiveAllowedObraIds`; admin vê tudo.
+ *    - `minhasPendencias({ companyId? })`: count + top 50 das pendentes em
+ *      que o user atual é validador legítimo (admin/admin_master OU vínculo
+ *      em `obra_responsaveis_estoque`). Auditorias sem `obraId` (excluir
+ *      unidade/item central) ficam restritas a admin.
+ *    - `validar({ id, aprovar, observacao? })`: idempotente — rejeita se
+ *      já foi validado. NÃO desfaz a operação no estoque (a exclusão/baixa
+ *      já ocorreu); a rejeição serve pra sinalizar que a equipe precisa
+ *      tomar ação manual (recontagem, abrir SC de reposição, restaurar via
+ *      tela `/auditoria` geral).
+ *
+ * 2. TELA `/almoxarifado/auditoria` — `client/src/pages/almoxarifado/Auditoria.tsx`
+ *    + lazy import em `client/src/App.tsx` L262 + rota L528.
+ *    - KPIs por status (pendente/validado/rejeitado) clicáveis como filtro
+ *      rápido.
+ *    - Busca textual em item/usuário/obra/justificativa.
+ *    - Cards detalhados com badge de ação (excluiu item / excluiu unidade /
+ *      alterou quantidade), nome do operador, obra, timestamp, IP, e DIFF
+ *      visual quando a ação foi `alterar_quantidade` (mostra `antes →
+ *      depois (Δ)` em mono com cor por sinal).
+ *    - Botões Aprovar/Rejeitar com modal de confirmação; rejeição exige
+ *      observação mínima de 5 chars; aprovação aceita observação opcional.
+ *    - Vazio: empty state amigável ("Equipe está em dia") quando filtra
+ *      por pendente sem resultado.
+ *
+ * 3. BANNER GLOBAL — `client/src/components/AuditoriaAlmoxPendingAlert.tsx`
+ *    + mount em `client/src/components/DashboardLayout.tsx` L53/L947.
+ *    - Sticky no topo (z-40, abaixo de modais), faixa amber→orange com
+ *      ícone ShieldAlert + count + resumo da última pendência (quem/o
+ *      quê/qual obra) + CTA "Revisar agora" → `/almoxarifado/auditoria`.
+ *    - Refetch 90s + on window focus.
+ *    - Dispensável por sessão (`sessionStorage[fc:auditoriaAlmox:dismissedAtCount]`)
+ *      mas REAPARECE automaticamente quando o count aumenta (nova
+ *      pendência) — não dá pra "esquecer" no canto.
+ *    - Suprimido na própria tela `/almoxarifado/auditoria` (já está lá).
+ *
+ * 4. LIMPEZA DA REGRESSÃO — `DashboardLayout.tsx`
+ *    O banner legado Rev. 2426 (query `compras.auditoriaPendenciasCount`
+ *    + state `auditoriaBannerOpen` + bloco JSX no `SidebarInset` com CTA
+ *    pra `/almoxarifado?auditoria=1`) FOI REMOVIDO. Mantinha-se em
+ *    paralelo ao novo componente e gerava duplo alerta com regra de
+ *    visibilidade divergente. Endpoint `compras.auditoriaPendenciasCount`
+ *    fica em pé porque `ModalAprovadoresEstoque` ainda chama `invalidate`
+ *    nele e o deep-link `?auditoria=1` na própria página do almox segue
+ *    funcionando como fallback (compat). Linhas removidas: ~1000-1011 +
+ *    ~1973-1996. (Achado #3 do code review.)
+ *
+ * 5. ENDURECIMENTO MULTI-TENANT — `auditoriaAlmoxarifado` router
+ *    Novo helper `assertCompanyAccess(userId, role, companyId)`: admin_master
+ *    atravessa empresas; demais (incluindo `admin`) precisam ter vínculo
+ *    via `getCompaniesForUser`. Aplicado em `listar` (sobre `input.companyId`)
+ *    e em `validar` (sobre `aud.companyId` carregado do banco — não confia
+ *    no client). Evita IDOR de tenant onde um admin da empresa A consegue
+ *    listar/validar auditoria da empresa B. Também trocado `total = rows.length`
+ *    em `minhasPendencias` por `COUNT(*)::int` separado pra o banner detectar
+ *    aumento de pendências mesmo passando de 50. (Achados #2 e #3 do segundo
+ *    code review.)
+ *
+ * RACIONAL: o user (admin) só descobria que alguém tinha excluído item ou
+ * mexido em saldo se entrasse manualmente no log — e não havia onde
+ * validar/rejeitar. Agora o ciclo fecha: operador justifica (modal Rev.
+ * 2388) → admin recebe banner persistente → revisa numa tela dedicada
+ * com diff visual → aprova/rejeita com observação.
+ *
+ * REGRAS DE OURO RESPEITADAS
+ * - R-001/R-007/R-010: zero ALTER/DROP/DELETE — schema já existia desde
+ *   Rev. 2388.
+ *
  * Rev. 2449 — **DEVOLVER LOCAÇÃO · volta pro Almoxarifado ao fechar/concluir
  * + nome da obra com destaque ALTO no card pra evitar baixa de obra
  * errada + reforço da auth-by-obra que já existia no backend.**
