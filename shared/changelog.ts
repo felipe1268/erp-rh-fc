@@ -1,6 +1,55 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2487 — **COMPRAS · Ordenação clicável por coluna em Cotações e
+ * Ordens de Compra (mesmo padrão da tela de SC, Rev. 2089/2295).**
+ *
+ * PEDIDO (user, image_1779824678770/690/700, 26/05/2026): "no menu de
+ * ordem de compra e cotação, insira os filtros circulados da imagem 1".
+ * Imagem 1 = cabeçalho da tela de SC com setinhas ↑↓ ao lado de Tipo,
+ * Prioridade, Status, Número, Título/Setor — i.e., ordenação clicável
+ * por coluna que SC já tinha mas as duas outras telas de Compras não.
+ *
+ * IMPLEMENTAÇÃO 100% FRONTEND — `client/src/pages/compras/Cotacoes.tsx`
+ * e `client/src/pages/compras/Ordens.tsx`. Reusou o exato padrão visual
+ * e de UX da tela de SC (`Solicitacoes.tsx` L2609-2637): ícone ArrowUp/
+ * ArrowDown quando ativo, ArrowUpDown opaco (40%) quando inativo;
+ * primeiro clique muda coluna (com default sensato — DESC pra
+ * data/número/total, ASC pra textos); cliques subsequentes na mesma
+ * coluna alternam direção.
+ *
+ * (a) Cotações (`Cotacoes.tsx`):
+ *  - Tipo `CotSortKey = "numeroCotacao" | "descricao" | "obra" |
+ *    "fornecedor" | "total" | "validade" | "status"`.
+ *  - State `[sortKey, sortDir]` + `toggleSort` (default DESC pra
+ *    `numeroCotacao` | `total` | `validade`).
+ *  - Helpers de lookup `nomeObraSort`/`nomeFornSort` resolvem ID→nome
+ *    pra ordenação alfabética; `cmp` usa `localeCompare("pt-BR",
+ *    {numeric:true, sensitivity:"base"})` (case/diacritic-insensitive,
+ *    natural number sort).
+ *  - `filt` virou `filtBase` (filtragem inalterada) + `filt = sort(...)`.
+ *  - 7 `<TableHead>` estáticos viraram `.map()` com botão clicável
+ *    (hover azul casando com o tema Cotações).
+ *
+ * (b) Ordens de Compra (`Ordens.tsx`):
+ *  - Tipo `OcSortKey = "numeroOc" | "obra" | "fornecedor" | "origem"
+ *    | "total" | "entregaPrevista" | "status"`.
+ *  - State + `toggleSort` análogos (default DESC pra `numeroOc` |
+ *    `total` | `entregaPrevista`).
+ *  - `valForSortOc` resolve "Origem" como `COT-{id}` ou "Manual" (mesmo
+ *    rótulo da coluna visível, então a ordenação bate com o que o user
+ *    vê).
+ *  - `filt` → `filtBase` + sort. Hover verde casando com tema OC.
+ *
+ * NULL/EMPTY handling: valores vazios/null vão pro FIM em ambos os
+ * sentidos (asc e desc) — evita aparecer "—" no topo quando o user
+ * ordena por uma coluna esparsa (ex.: entrega prevista vazia).
+ *
+ * ZERO mudança em backend/schema/filtros/contadores/seleção em lote
+ * (toggleSelectAll continua usando o mesmo `filt`, agora ordenado).
+ */
+
+/**
  * Rev. 2486 — **ORDENS DE COMPRA · Form de itens agrupado por ETAPA (EAP) —
  * 1 EAP × N itens, em vez de 1 EAP por item.**
  *

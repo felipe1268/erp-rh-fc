@@ -17,7 +17,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { toast } from "sonner";
 import { normalizarTexto } from "@shared/textNormalization";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Plus, Search, Trash2, FileText, ChevronRight, ChevronDown, Loader2, CheckCircle, X, XCircle, Building2, Trophy, UserPlus, Save, BarChart3, ChevronsUpDown, Paperclip, ExternalLink, AlertTriangle, TrendingDown, TrendingUp, Package, Undo2, History, Link2, RefreshCw, Phone, Mail, User, Smartphone, Sparkles, Star, ShieldCheck, ShieldAlert, Settings, DollarSign, Pencil, Check, ClipboardList, FileSearch, ShoppingCart, RotateCcw, Pin, GitBranch, Zap, PenTool, CreditCard, Banknote, Calendar, Truck, Target, BarChart2, Clock, Wallet, Layers, ArrowLeftRight, Warehouse, HardHat, type LucideIcon } from "lucide-react";
+import { Plus, Search, Trash2, FileText, ChevronRight, ChevronDown, Loader2, CheckCircle, X, XCircle, Building2, Trophy, UserPlus, Save, BarChart3, ChevronsUpDown, ArrowUp, ArrowDown, ArrowUpDown, Paperclip, ExternalLink, AlertTriangle, TrendingDown, TrendingUp, Package, Undo2, History, Link2, RefreshCw, Phone, Mail, User, Smartphone, Sparkles, Star, ShieldCheck, ShieldAlert, Settings, DollarSign, Pencil, Check, ClipboardList, FileSearch, ShoppingCart, RotateCcw, Pin, GitBranch, Zap, PenTool, CreditCard, Banknote, Calendar, Truck, Target, BarChart2, Clock, Wallet, Layers, ArrowLeftRight, Warehouse, HardHat, type LucideIcon } from "lucide-react";
 import { TIPOS_PAGAMENTO, getTipoPagamentoInfo, calcularParcelas, formatCurrency } from "../../../../shared/paymentConditions";
 import { PurchaseTimeline, TimelineBadge } from "@/components/compras/PurchaseTimeline";
 
@@ -797,6 +797,18 @@ export default function Cotacoes() {
   const [filtroStatus, setFiltroStatus] = useState("todos");
   // Rev. 2298 — filtro por tipo (material/servico/pacote/equipamento)
   const [filtroTipo, setFiltroTipo] = useState<"todos" | "material" | "servico" | "pacote" | "equipamento">("todos");
+  // Rev. 2487 — Ordenação clicável por coluna na tabela de Cotações.
+  type CotSortKey = "numeroCotacao" | "descricao" | "obra" | "fornecedor" | "total" | "validade" | "status";
+  const [sortKey, setSortKey] = useState<CotSortKey>("numeroCotacao");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+  function toggleSort(k: CotSortKey) {
+    if (sortKey === k) {
+      setSortDir(d => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortKey(k);
+      setSortDir(["numeroCotacao", "total", "validade"].includes(k) ? "desc" : "asc");
+    }
+  }
   const [showNova, setShowNova] = useState(false);
   const [showDetalhe, setShowDetalhe] = useState<number | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
@@ -1509,10 +1521,55 @@ export default function Cotacoes() {
   }, {});
   const countTodosTipo = baseStatusFiltered.length;
 
-  const filt = listaSearched.filter(c =>
+  const filtBase = listaSearched.filter(c =>
     (filtroStatus === "todos" || statusOf(c) === filtroStatus) &&
     (filtroTipo === "todos" || tipoOf(c) === filtroTipo)
   );
+  // Rev. 2487 — Ordenação clicável por coluna.
+  const fornecedoresList = fornQ.data ?? [];
+  const obrasList = obrasQ.data ?? [];
+  function nomeObraSort(id: any) {
+    if (id === null || id === undefined) return "";
+    const o = obrasList.find((x: any) => x.id === id);
+    return (o?.nome || "").toString();
+  }
+  function nomeFornSort(id: any) {
+    if (id === null || id === undefined) return "";
+    const f = fornecedoresList.find((x: any) => x.id === id);
+    return (f?.nomeFantasia || f?.razaoSocial || "").toString();
+  }
+  function isEmpty(v: any): boolean {
+    return v === null || v === undefined || v === "" || (typeof v === "number" && !isFinite(v));
+  }
+  function cmp(a: any, b: any): number {
+    if (typeof a === "number" && typeof b === "number") return a - b;
+    return String(a).localeCompare(String(b), "pt-BR", { numeric: true, sensitivity: "base" });
+  }
+  function valForSort(c: any): any {
+    switch (sortKey) {
+      case "numeroCotacao": return c.numeroCotacao ?? null;
+      case "descricao":     return c.descricao ?? null;
+      case "obra":          return nomeObraSort((c as any).obraId) || null;
+      case "fornecedor":    return nomeFornSort(c.fornecedorId) || null;
+      case "total":         { const v = parseFloat((c as any).total ?? ""); return isNaN(v) ? null : v; }
+      case "validade":      return ((c as any).validadeAte ?? null) || null;
+      case "status":        return statusOf(c) || null;
+      default:              return null;
+    }
+  }
+  // Vazios SEMPRE no fim (independente de asc/desc) — comparação de
+  // vazio acontece ANTES da inversão de sinal.
+  const filt = [...filtBase].sort((a, b) => {
+    const va = valForSort(a);
+    const vb = valForSort(b);
+    const ea = isEmpty(va);
+    const eb = isEmpty(vb);
+    if (ea && eb) return 0;
+    if (ea) return 1;
+    if (eb) return -1;
+    const r = cmp(va, vb);
+    return sortDir === "asc" ? r : -r;
+  });
 
   const allFilteredIds = filt.map(c => c.id);
   const allSelected = allFilteredIds.length > 0 && allFilteredIds.every(id => selectedIds.has(id));
@@ -6632,13 +6689,32 @@ export default function Cotacoes() {
               <TableHead className="w-10 px-2">
                 <Checkbox checked={allSelected} onCheckedChange={toggleSelectAll} aria-label="Selecionar todas" />
               </TableHead>
-              <TableHead className="text-gray-500 text-xs font-semibold uppercase tracking-wider">Número</TableHead>
-              <TableHead className="text-gray-500 text-xs font-semibold uppercase tracking-wider">Descrição / SC</TableHead>
-              <TableHead className="text-gray-500 text-xs font-semibold uppercase tracking-wider">Obra</TableHead>
-              <TableHead className="text-gray-500 text-xs font-semibold uppercase tracking-wider">Fornecedor</TableHead>
-              <TableHead className="text-gray-500 text-xs font-semibold uppercase tracking-wider">Total</TableHead>
-              <TableHead className="text-gray-500 text-xs font-semibold uppercase tracking-wider">Validade</TableHead>
-              <TableHead className="text-gray-500 text-xs font-semibold uppercase tracking-wider">Status</TableHead>
+              {/* Rev. 2487 — Cabeçalhos ordenáveis (mesmo padrão da tela de SC). */}
+              {([
+                { k: "numeroCotacao", label: "Número" },
+                { k: "descricao",     label: "Descrição / SC" },
+                { k: "obra",          label: "Obra" },
+                { k: "fornecedor",    label: "Fornecedor" },
+                { k: "total",         label: "Total" },
+                { k: "validade",      label: "Validade" },
+                { k: "status",        label: "Status" },
+              ] as { k: CotSortKey; label: string }[]).map(col => {
+                const active = sortKey === col.k;
+                const Icon = active ? (sortDir === "asc" ? ArrowUp : ArrowDown) : ArrowUpDown;
+                return (
+                  <TableHead key={col.k} className="text-gray-500 text-xs font-semibold uppercase tracking-wider">
+                    <button
+                      type="button"
+                      onClick={() => toggleSort(col.k)}
+                      title={`Ordenar por ${col.label}${active ? (sortDir === "asc" ? " (crescente)" : " (decrescente)") : ""}`}
+                      className={`inline-flex items-center gap-1 hover:text-blue-700 transition-colors ${active ? "text-blue-700" : ""}`}
+                    >
+                      {col.label}
+                      <Icon className={`h-3 w-3 ${active ? "opacity-100" : "opacity-40"}`} />
+                    </button>
+                  </TableHead>
+                );
+              })}
               <TableHead className="w-8"></TableHead>
             </TableRow>
           </TableHeader>

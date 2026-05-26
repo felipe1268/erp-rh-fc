@@ -18,7 +18,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { toast } from "sonner";
 import { normalizarTexto } from "@shared/textNormalization";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Plus, Search, Trash2, ShoppingBag, ChevronRight, Loader2, CheckCircle, Truck, PackageCheck, Building2, AlertTriangle, Clock, CircleDot, Phone, Mail, User, Smartphone, FileDown, Printer, Receipt, DollarSign, Wrench, ExternalLink, ChevronsUpDown, Check, Paperclip, Upload, X, FileText, Save, Edit3, ClipboardCheck, Calendar, RotateCcw } from "lucide-react";
+import { Plus, Search, Trash2, ShoppingBag, ChevronRight, Loader2, CheckCircle, Truck, PackageCheck, Building2, AlertTriangle, Clock, CircleDot, Phone, Mail, User, Smartphone, FileDown, Printer, Receipt, DollarSign, Wrench, ExternalLink, ChevronsUpDown, ArrowUp, ArrowDown, ArrowUpDown, Check, Paperclip, Upload, X, FileText, Save, Edit3, ClipboardCheck, Calendar, RotateCcw } from "lucide-react";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { calcularSemaforo, semaforoCor, semaforoTooltip, type SemaforoResult } from "@/lib/semaforoEntrega";
 import { PurchaseTimeline } from "@/components/compras/PurchaseTimeline";
@@ -302,6 +302,18 @@ export default function Ordens() {
   const [filtroAtrasadas, setFiltroAtrasadas] = useState(false);
   // Rev. 2307 — Filtro por TIPO (Material/MDO/Pacote/Equipamento)
   const [filtroTipo, setFiltroTipo] = useState<"todos" | "compra" | "servico" | "pacote" | "equipamento">("todos");
+  // Rev. 2487 — Ordenação clicável por coluna na tabela de OC.
+  type OcSortKey = "numeroOc" | "obra" | "fornecedor" | "origem" | "total" | "entregaPrevista" | "status";
+  const [sortKey, setSortKey] = useState<OcSortKey>("numeroOc");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+  function toggleSort(k: OcSortKey) {
+    if (sortKey === k) {
+      setSortDir(d => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortKey(k);
+      setSortDir(["numeroOc", "total", "entregaPrevista"].includes(k) ? "desc" : "asc");
+    }
+  }
   const [showNova, setShowNova] = useState(false);
   const [showRepararDup, setShowRepararDup] = useState(false);
   const [repararPreview, setRepararPreview] = useState<RepararPreviewState>(null);
@@ -737,7 +749,7 @@ export default function Ordens() {
   const fornecedores = fornQ.data ?? [];
   const obras = obrasQ.data ?? [];
   const lista = q.data ?? [];
-  const filt = lista.filter(o => {
+  const filtBase = lista.filter(o => {
     if (busca && !o.numeroOc?.toLowerCase().includes(busca.toLowerCase())) return false;
     if (filtroFornecedor) {
       const forn = fornecedores.find((f: any) => f.id === o.fornecedorId);
@@ -768,6 +780,49 @@ export default function Ordens() {
       if (filtroTipo === "compra" ? tipoOc !== "compra" : tipoOc !== filtroTipo) return false;
     }
     return true;
+  });
+  // Rev. 2487 — Ordenação clicável por coluna.
+  function nomeObraSort(id: any) {
+    if (id === null || id === undefined) return "";
+    const o = obras.find((x: any) => x.id === id);
+    return (o?.nome || "").toString();
+  }
+  function nomeFornSort(id: any) {
+    if (id === null || id === undefined) return "";
+    const f = fornecedores.find((x: any) => x.id === id);
+    return (f?.nomeFantasia || f?.razaoSocial || "").toString();
+  }
+  function isEmptyOc(v: any): boolean {
+    return v === null || v === undefined || v === "" || (typeof v === "number" && !isFinite(v));
+  }
+  function cmpOc(a: any, b: any): number {
+    if (typeof a === "number" && typeof b === "number") return a - b;
+    return String(a).localeCompare(String(b), "pt-BR", { numeric: true, sensitivity: "base" });
+  }
+  function valForSortOc(o: any): any {
+    switch (sortKey) {
+      case "numeroOc":         return o.numeroOc ?? null;
+      case "obra":             return nomeObraSort((o as any).obraId) || null;
+      case "fornecedor":       return nomeFornSort(o.fornecedorId) || null;
+      // "Origem" sempre tem valor (Manual ou COT-N), nunca vazio.
+      case "origem":           return (o as any).cotacaoId ? `COT-${(o as any).cotacaoId}` : "Manual";
+      case "total":            { const v = parseFloat((o as any).total ?? ""); return isNaN(v) ? null : v; }
+      case "entregaPrevista":  return ((o as any).dataEntregaPrevista ?? null) || null;
+      case "status":           return (o.status ?? null) || null;
+      default:                 return null;
+    }
+  }
+  // Vazios SEMPRE no fim (independente de asc/desc).
+  const filt = [...filtBase].sort((a, b) => {
+    const va = valForSortOc(a);
+    const vb = valForSortOc(b);
+    const ea = isEmptyOc(va);
+    const eb = isEmptyOc(vb);
+    if (ea && eb) return 0;
+    if (ea) return 1;
+    if (eb) return -1;
+    const r = cmpOc(va, vb);
+    return sortDir === "asc" ? r : -r;
   });
   // Rev. 2307 — Contadores por tipo (após status/busca/obra/etc, antes do filtro de tipo).
   const contadoresTipo = (() => {
@@ -1067,13 +1122,32 @@ export default function Ordens() {
                 <Checkbox checked={allSelected} onCheckedChange={toggleSelectAll} aria-label="Selecionar todas" />
               </TableHead>
               <TableHead className="text-gray-500 text-xs font-semibold uppercase tracking-wider w-10"></TableHead>
-              <TableHead className="text-gray-500 text-xs font-semibold uppercase tracking-wider">Número OC</TableHead>
-              <TableHead className="text-gray-500 text-xs font-semibold uppercase tracking-wider">Obra</TableHead>
-              <TableHead className="text-gray-500 text-xs font-semibold uppercase tracking-wider">Fornecedor</TableHead>
-              <TableHead className="text-gray-500 text-xs font-semibold uppercase tracking-wider">Origem</TableHead>
-              <TableHead className="text-gray-500 text-xs font-semibold uppercase tracking-wider">Total</TableHead>
-              <TableHead className="text-gray-500 text-xs font-semibold uppercase tracking-wider">Entrega Prevista</TableHead>
-              <TableHead className="text-gray-500 text-xs font-semibold uppercase tracking-wider">Status</TableHead>
+              {/* Rev. 2487 — Cabeçalhos ordenáveis (mesmo padrão da tela de SC). */}
+              {([
+                { k: "numeroOc",        label: "Número OC" },
+                { k: "obra",            label: "Obra" },
+                { k: "fornecedor",      label: "Fornecedor" },
+                { k: "origem",          label: "Origem" },
+                { k: "total",           label: "Total" },
+                { k: "entregaPrevista", label: "Entrega Prevista" },
+                { k: "status",          label: "Status" },
+              ] as { k: OcSortKey; label: string }[]).map(col => {
+                const active = sortKey === col.k;
+                const Icon = active ? (sortDir === "asc" ? ArrowUp : ArrowDown) : ArrowUpDown;
+                return (
+                  <TableHead key={col.k} className="text-gray-500 text-xs font-semibold uppercase tracking-wider whitespace-nowrap">
+                    <button
+                      type="button"
+                      onClick={() => toggleSort(col.k)}
+                      title={`Ordenar por ${col.label}${active ? (sortDir === "asc" ? " (crescente)" : " (decrescente)") : ""}`}
+                      className={`inline-flex items-center gap-1 hover:text-emerald-700 transition-colors ${active ? "text-emerald-700" : ""}`}
+                    >
+                      {col.label}
+                      <Icon className={`h-3 w-3 ${active ? "opacity-100" : "opacity-40"}`} />
+                    </button>
+                  </TableHead>
+                );
+              })}
               <TableHead className="w-8"></TableHead>
             </TableRow>
           </TableHeader>
