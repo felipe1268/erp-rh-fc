@@ -1,6 +1,76 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2458 — **COMPROVANTE DE DEVOLUÇÃO (PDF) · layout institucional FC
+ * com FOTOS dos equipamentos + sem página em branco.**
+ *
+ * PEDIDO (user, print IMG_1375 — comprovante Nº 011147 aberto no Safari iOS):
+ * "Ajuste o layout da página de impressão de forma qlareca a lista completa
+ * de todos itens devolvidos, e as fotos dos produtos, não quero páginas em
+ * branco, quero nossa comunicação visual alinhada e conforme o nosso padrão".
+ *
+ * DIAGNÓSTICO:
+ *  - O rodapé do PDF era posicionado em `pageH - 35` (= y=807pt num A4).
+ *    Como o conteúdo terminava em ~y=440, o PDFKit auto-quebrava texto
+ *    longo do rodapé pra uma SEGUNDA página (a "página em branco" que o
+ *    user via embaixo). A 2ª página tinha SÓ o rodapé.
+ *  - A tabela de equipamentos tinha apenas Descrição/Patrimônio/Obra/Dias.
+ *    Sem fotos, o gestor da locadora não conseguia bater o item visual no
+ *    momento da entrega.
+ *  - Header estava alinhado à esquerda (logo+razão social) com caixa Nº
+ *    flutuando à direita — fugia do padrão FC oficial (cabeçalho centrado
+ *    + faixa azul full-width definido em `replit.md` "REGRA DE OURO").
+ *
+ * IMPLEMENTAÇÃO (`server/services/equipmentReturnReceiptPdf.ts`):
+ *
+ * 1) CABEÇALHO PADRÃO FC CENTRADO:
+ *    - Logo 50pt centralizado no topo.
+ *    - Razão social 13pt bold UPPERCASE centralizada.
+ *    - CNPJ 8pt cinza centralizado.
+ *    - Endereço completo 7.5pt cinza claro UPPERCASE centralizado.
+ *    - Faixa azul `#1B2A4A` full-width (cW) 30pt altura com título
+ *      "COMPROVANTE DE DEVOLUÇÃO" 11pt bold branco + letter-spacing 2.5.
+ *    - Linha abaixo: `Nº NNNNNN` (esquerda) ──── `Data de Emissão: …`
+ *      (direita).
+ *
+ * 2) COLUNA FOTO NA TABELA DE EQUIPAMENTOS:
+ *    - Nova coluna FOTO (8% da largura) na primeira posição. Thumb 32x32pt
+ *      centralizada na célula. Altura da linha passou de 18 → 38pt pra
+ *      acomodar.
+ *    - Pré-resolução das fotos em `fetchReturnReceiptData` (assíncrona),
+ *      mantendo o gerador `generateReturnReceiptPdf` síncrono. Cada
+ *      equipamento ganha 1 Buffer em `fotosBuffers: Map<id, Buffer>`.
+ *    - Prioridade de fonte:
+ *        a) primeira URL de `fotosDevolucaoJson`
+ *        b) primeira URL de `fotosRecebimentoJson`
+ *        c) foto canônica da empresa (`equipamentos_fotos_canonicas`,
+ *           match por descrição normalizada — NFD + uppercase + collapse)
+ *        d) `fotoUrl` legado (Rev. 2340 IA)
+ *    - Helper `resolveImageBuffer` suporta `data:image`, `/uploads/`
+ *      local e URLs `http(s)` remotas (fetch com timeout 4s + valida
+ *      magic bytes JPG/PNG pra não estourar o PDFKit).
+ *    - Sem foto: placeholder com box vazia + "—" cinza claro.
+ *
+ * 3) RODAPÉ LOGO APÓS ASSINATURAS (FIM DA PÁGINA EM BRANCO):
+ *    - Removido `const footY = pageH - 35`. Rodapé agora desenha em
+ *      `y + 5` após o bloco de assinaturas, no FIM real do conteúdo.
+ *    - Conteúdo passa a ocupar a página de cima pra baixo de forma
+ *      contínua — sem segunda página vazia.
+ *    - Page break do loop de equipamentos preserva 220pt (assinaturas
+ *      ~170 + rodapé ~50) e do bloco assinaturas 170pt.
+ *
+ * R-001/R-007/R-010 OK — zero `ALTER`/`DROP`/`DELETE`. Sem novas tabelas
+ * (lê `equipamentos_fotos_canonicas` que já existia da Rev. 2355). Sem
+ * mudanças em mutations.
+ *
+ * Arquivos:
+ *  - `server/services/equipmentReturnReceiptPdf.ts` (reescrita)
+ *  - `shared/version.ts` (2457 → 2458)
+ *  - `shared/changelog.ts` (esta entrada)
+ *  - `replit.md`, `replit-history.md` (rotação 2+5)
+ *
+ * ─────────────────────────────────────────────────────────────────────────
+ *
  * Rev. 2457 — **ALMOXARIFADO · Tela de Movimentações agora é uma timeline
  * UNIFICADA das 4 fontes (estoque, ferramentas, insumos, transferências).**
  *
