@@ -47,6 +47,101 @@ const EMPTY_MOV = {
 function n(v: any) { return parseFloat(v ?? "0") || 0; }
 function norm(s: string) { return s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[.\-\/\[\]]/g, "").toLowerCase().trim(); }
 
+/**
+ * Rev. 2441 — Combobox de categoria com filtro on-type.
+ * - Digita pra filtrar a lista (busca por substring sem acento).
+ * - Clique no item seleciona; Enter no input aceita o 1º match.
+ * - `allowFree=true` (default) permite digitar categoria nova; quando false
+ *   (modais em lote), só aceita item da lista.
+ */
+function CategoriaCombobox({
+  value, onChange, opcoes, disabled, placeholder, allowFree = true, autoFocus = false,
+  className = "",
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  opcoes: string[];
+  disabled?: boolean;
+  placeholder?: string;
+  allowFree?: boolean;
+  autoFocus?: boolean;
+  className?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState<string>(value || "");
+  const wrapRef = useRef<HTMLDivElement>(null);
+  useEffect(() => { setQuery(value || ""); }, [value]);
+  useEffect(() => {
+    function handler(e: MouseEvent) {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) {
+        setOpen(false);
+        if (!allowFree && query !== value) setQuery(value || "");
+      }
+    }
+    if (open) document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open, allowFree, query, value]);
+  const filtradas = useMemo(() => {
+    const q = norm(query);
+    if (!q) return opcoes;
+    return opcoes.filter(o => norm(o).includes(q));
+  }, [opcoes, query]);
+  const exata = useMemo(() => opcoes.find(o => norm(o) === norm(query)), [opcoes, query]);
+  return (
+    <div ref={wrapRef} className={`relative ${className}`}>
+      <input
+        type="text"
+        value={query}
+        disabled={disabled}
+        autoFocus={autoFocus}
+        placeholder={placeholder ?? "Digite para buscar…"}
+        onFocus={() => setOpen(true)}
+        onChange={(e) => { setQuery(e.target.value); setOpen(true); if (allowFree) onChange(e.target.value); }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            const pick = exata ?? filtradas[0];
+            if (pick) { onChange(pick); setQuery(pick); setOpen(false); }
+            else if (allowFree) { onChange(query); setOpen(false); }
+          } else if (e.key === "Escape") { setOpen(false); }
+        }}
+        className="w-full h-11 px-3 pr-9 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-emerald-400 focus:border-emerald-400 outline-none disabled:bg-gray-50"
+      />
+      <button
+        type="button"
+        tabIndex={-1}
+        disabled={disabled}
+        onClick={() => setOpen(o => !o)}
+        className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600"
+        aria-label="Abrir lista"
+      >
+        <ChevronRight className={`h-4 w-4 transition ${open ? "rotate-90" : "rotate-90"}`} style={{ transform: open ? "rotate(270deg)" : "rotate(90deg)" }} />
+      </button>
+      {open && filtradas.length > 0 && (
+        <div className="absolute z-[200] mt-1 left-0 right-0 bg-white border border-gray-200 rounded-lg shadow-xl max-h-60 overflow-y-auto">
+          {filtradas.map((o) => (
+            <button
+              key={o}
+              type="button"
+              onClick={() => { onChange(o); setQuery(o); setOpen(false); }}
+              className={`w-full text-left px-3 py-2 text-sm hover:bg-emerald-50 ${o === value ? "bg-emerald-50 font-semibold text-emerald-700" : "text-gray-700"}`}
+            >
+              {o}
+            </button>
+          ))}
+        </div>
+      )}
+      {open && filtradas.length === 0 && (
+        <div className="absolute z-[200] mt-1 left-0 right-0 bg-white border border-gray-200 rounded-lg shadow-xl p-3 text-xs text-gray-500">
+          {allowFree
+            ? <>Nenhuma encontrada — pressione <kbd className="px-1 bg-gray-100 rounded text-[10px] font-mono">Enter</kbd> para usar "<span className="font-medium text-gray-700">{query}</span>" como categoria nova.</>
+            : <>Nenhuma categoria encontrada.</>}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function compressImage(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -2763,13 +2858,14 @@ export default function AlmoxarifadoPage() {
                           </span>
                         )}
                       </div>
-                      <select
-                        className={`w-full h-9 text-sm border rounded-lg px-3 bg-white outline-none text-gray-900 ${categoriaAutoSugerida && !categoriaManualment ? "border-violet-300 focus:border-violet-400" : "border-gray-200 focus:border-emerald-400"}`}
-                        value={formItem.categoria} onChange={e => { setFormItem(p => ({ ...p, categoria: e.target.value })); setCategoriaManualment(true); setCategoriaAutoSugerida(false); }}
-                      >
-                        <option value="">— Selecionar —</option>
-                        {categorias.map(c => <option key={c} value={c}>{c}</option>)}
-                      </select>
+                      {/* Rev. 2441 — Combobox filtrável (digite pra achar / criar nova). */}
+                      <CategoriaCombobox
+                        value={formItem.categoria}
+                        onChange={(v) => { setFormItem(p => ({ ...p, categoria: v })); setCategoriaManualment(true); setCategoriaAutoSugerida(false); }}
+                        opcoes={categorias as string[]}
+                        placeholder="Digite ou escolha uma categoria…"
+                        allowFree
+                      />
                     </div>
                   </div>
 
@@ -4374,15 +4470,16 @@ export default function AlmoxarifadoPage() {
             <div className="px-6 py-5 space-y-4 text-sm text-gray-700">
               <div>
                 <label className="block text-xs font-semibold text-gray-600 mb-1.5">Nova categoria</label>
-                <select
+                {/* Rev. 2441 — Combobox filtrável (só categorias existentes). */}
+                <CategoriaCombobox
                   value={modalAltCategConsol.categoria}
-                  onChange={(e) => setModalAltCategConsol(s => s ? { ...s, categoria: e.target.value } : s)}
+                  onChange={(v) => setModalAltCategConsol(s => s ? { ...s, categoria: v } : s)}
+                  opcoes={categorias as string[]}
                   disabled={modalAltCategConsol.aplicando}
-                  className="w-full h-11 px-3 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-emerald-400 focus:border-emerald-400 outline-none disabled:bg-gray-50"
-                >
-                  <option value="">— escolha uma categoria —</option>
-                  {(categorias as string[]).map(c => <option key={c} value={c}>{c}</option>)}
-                </select>
+                  placeholder="Digite pra filtrar…"
+                  allowFree={false}
+                  autoFocus
+                />
                 <p className="text-[11px] text-gray-500 mt-1.5">A categoria será aplicada a todos os itens com esses nomes, em qualquer obra/almoxarifado.</p>
               </div>
             </div>
@@ -4466,15 +4563,16 @@ export default function AlmoxarifadoPage() {
             <div className="px-6 py-5 space-y-4 text-sm text-gray-700">
               <div>
                 <label className="block text-xs font-semibold text-gray-600 mb-1.5">Nova categoria</label>
-                <select
+                {/* Rev. 2441 — Combobox filtrável (só categorias existentes). */}
+                <CategoriaCombobox
                   value={modalAltCateg.categoria}
-                  onChange={(e) => setModalAltCateg(s => s ? { ...s, categoria: e.target.value } : s)}
+                  onChange={(v) => setModalAltCateg(s => s ? { ...s, categoria: v } : s)}
+                  opcoes={categorias as string[]}
                   disabled={modalAltCateg.aplicando}
-                  className="w-full h-11 px-3 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-emerald-400 focus:border-emerald-400 outline-none disabled:bg-gray-50"
-                >
-                  <option value="">— escolha uma categoria —</option>
-                  {(categorias as string[]).map(c => <option key={c} value={c}>{c}</option>)}
-                </select>
+                  placeholder="Digite pra filtrar…"
+                  allowFree={false}
+                  autoFocus
+                />
                 <p className="text-[11px] text-gray-500 mt-1.5">A categoria selecionada será aplicada a todos os itens marcados.</p>
               </div>
             </div>

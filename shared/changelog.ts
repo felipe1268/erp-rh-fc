@@ -1,6 +1,46 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2441 — **ALMOXARIFADO · Combobox filtrável de categoria
+ * (digite pra achar) no cadastro/edição de item + nos 2 modais de
+ * "Alterar categoria em lote".**
+ *
+ * CONTEXTO (print user, iPad 22:17, modal "Alterar categoria em lote"):
+ * o `<select>` nativo do iOS abria roleta gigante com TODAS as categorias
+ * (~30+ entradas) sem nenhuma busca, obrigando o operador a rolar
+ * tudo a dedo pra achar "Andaimes" ou "Equipamento Locado". Mesmo
+ * problema no modal de cadastro/edição de item.
+ *
+ * DECISÃO
+ * - Novo componente local `CategoriaCombobox` em `client/src/pages/
+ *   almoxarifado/index.tsx`: input com filtro on-type (norm sem acento)
+ *   + dropdown clicável; Enter aceita o 1º match; click-fora fecha.
+ * - 3 pontos de uso atualizados:
+ *   1. Modal Cadastrar/Editar Item (label "Categoria"): `allowFree=true`
+ *      — operador pode digitar uma categoria nova se nenhuma servir.
+ *   2. Modal "Alterar categoria em lote" (multi-seleção por linhas):
+ *      `allowFree=false` + `autoFocus` — força escolha da lista
+ *      existente (evita criar duplicata por erro de digitação).
+ *   3. Modal "Alterar categoria em lote" CONSOLIDADO (multi-seleção
+ *      por nome agregado): mesmo padrão do 2.
+ *
+ * UX
+ * - Tooltip de estado vazio: quando `allowFree=true` mostra
+ *   "Pressione Enter para usar X como categoria nova"; quando false
+ *   só "Nenhuma categoria encontrada".
+ *
+ * ARQUIVOS
+ * - `client/src/pages/almoxarifado/index.tsx` L50-145 (componente
+ *   `CategoriaCombobox`) + L2766-2780 (modal item) + L4377-4388
+ *   (modal lote consolidado) + L4469-4480 (modal lote por linhas).
+ *
+ * VALIDAÇÃO
+ * - R-001/R-007/R-010 OK — só UI.
+ * - Sem mudança de schema/mutation: o `onChange` continua devolvendo
+ *   string (vazia ou nome da categoria) exatamente como antes.
+ *
+ * ──────────────────────────────────────────────────────────────────────
+ *
  * Rev. 2440 — **ALMOXARIFADO · VISÃO GERAL · card limpo (3 badges + "+N
  * locais"), card/linha clicáveis abrem modal completo de edição (foto,
  * nome, categoria, código, unidade, qtd, preço, locação etc.).**
