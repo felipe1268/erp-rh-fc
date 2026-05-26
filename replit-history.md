@@ -2,6 +2,7 @@
 
 > Este arquivo guarda os one-liners das revisões antigas para manter o `replit.md` enxuto.
 
+- **Rev. 2454** — [BUG GRAVE — Rev. 2453 fallout] DEVOLVER ESTE (single do card) fechava a tela sem abrir modal de assinatura. `escolherSingle` agora envia o item pelo caminho do lote (`setModalDevLote([l])`) → ganha 2 etapas + assinaturas + comprovante PDF. Ver `shared/changelog.ts`.
 - **Rev. 2453** — DEVOLUÇÃO DE LOCAÇÃO · fluxo completo com assinaturas (entregador FC + recebedor locadora) + comprovante PDF compartilhável via WhatsApp. `SignaturePad.tsx` + `equipmentReturnReceiptPdf.ts` + modal 2 etapas + rota pública assinada. Ver `shared/changelog.ts`.
 - **Rev. 2452** — DEVOLVER LOCAÇÃO respeita o almoxarifado/obra do contexto pra evitar baixa em obra errada. `almoxarifado/index.tsx` + `Locados.tsx` (filtro+banner). Ver `shared/changelog.ts`.
 - **Rev. 2451** — [BUG GRAVE] ALMOXARIFADO · tela quebrava com `ReferenceError: Can't find variable: consListFinal` em iOS Safari. Hoist do `consListFinal` para `useMemo` no escopo do componente. Ver `shared/changelog.ts`.

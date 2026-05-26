@@ -1,6 +1,71 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2461 — **COMPROVANTE DE DEVOLUÇÃO (PDF) · layout modernizado +
+ * logo FC garantido + NOME DA LOCADORA em destaque pro rastreio.**
+ *
+ * PEDIDO (user, print IMG_1253, comprovante Nº 011147 com "Teste" como
+ * recebedor sem indicar qual locadora): "melhore o layout, coloque o
+ * logo da FC, deixa moderno, e precisa aparecer o nome da empresa que
+ * alugou pra facilitar o rastreio".
+ *
+ * DIAGNÓSTICO:
+ *  - O comprovante só carregava o `fornecedor` quando havia EXATAMENTE
+ *    1 locadora (`fornIds.length === 1`). Quando havia ≥2 ou quando o
+ *    campo não estava preenchido, exibia só o nome do recebedor humano
+ *    ("Teste") — gestor não conseguia identificar qual empresa.
+ *  - Logo da FC dependia de `company.logoUrl` cadastrado. Sem isso, o
+ *    cabeçalho ficava sem logo (caso comum em emissões iniciais).
+ *  - Layout legado: cabeçalho centralizado, sem visual hierarchy.
+ *
+ * IMPLEMENTAÇÃO (`server/services/equipmentReturnReceiptPdf.ts`):
+ *
+ * 1) FORNECEDORES — fetch de TODOS (não só quando size===1):
+ *    - Novo `fornecedoresMap: Map<id, row>` populado via `inArray`.
+ *    - `fornecedor` (singular) ainda usado pro card quando há só uma
+ *      locadora; quando há ≥2, card mostra "N locadoras envolvidas" +
+ *      sub "Ver coluna LOCADOR na tabela abaixo".
+ *    - Fallback final: nome denormalizado `equipamento.fornecedorNome`.
+ *
+ * 2) LOGO FC GARANTIDO — `resolveLogoSource` agora tem fallback pra
+ *    `client/public/logo-fc.jpg` (e `public/logo-fc.jpg`) quando a
+ *    company não tem `logoUrl`. Mesmo padrão da REGRA DE OURO do
+ *    cabeçalho institucional (replit.md L2106+).
+ *
+ * 3) HEADER MODERNIZADO:
+ *    - Logo (58pt) à ESQUERDA + bloco textual à direita: razão social
+ *      14pt, CNPJ + endereço cinza claro. Quebra `align: "center"`
+ *      legado pra ganhar visual hierarchy.
+ *    - Linha accent azul (`#2563EB`) curta + linha cinza completa
+ *      separa header da faixa azul.
+ *    - Faixa azul COMPACTA (40pt) com barra accent à esquerda + título
+ *      + Nº/Data DENTRO da própria faixa (sem linha solta abaixo).
+ *
+ * 4) PARTES ENVOLVIDAS — 2 cards modernos lado a lado:
+ *    - Card cinza claro (`#F8FAFC`) com pílula colorida à esquerda.
+ *    - Card 1 (Entregador): pílula azul institucional + nome bold 11pt
+ *      + Obra + Data.
+ *    - Card 2 (LOCADORA): pílula azul accent + NOME EMPRESA bold 11pt
+ *      (a info que faltava!) + CNPJ + sub "Recebido por: <nome>".
+ *
+ * 5) TABELA DE EQUIPAMENTOS:
+ *    - Header agora azul institucional (não mais cinza claro) com texto
+ *      branco — mais legível e profissional.
+ *    - Zebra striping (alterna `#F1F5F9`) pra leitura.
+ *    - Coluna LOCADOR adicionada CONDICIONALMENTE (só quando há ≥2
+ *      locadoras no lote) — preserva largura da DESCRIÇÃO quando há só 1.
+ *    - Descrição agora bold 8.5pt + categoria cinza abaixo.
+ *    - Dias em 10pt bold azul institucional (destaque do KPI).
+ *
+ * 6) SEÇÕES — `sectionTitle` redesenhada: pílula accent à esquerda +
+ *    título cinza escuro + linha sutil (substituiu título azul +
+ *    underline accent).
+ *
+ * R-001/R-007/R-010 OK — frontend de PDF, zero ALTER/DROP/DELETE.
+ * Arquivo único: `server/services/equipmentReturnReceiptPdf.ts`.
+ *
+ * ─────────────────────────────────────────────────────────────────
+ *
  * Rev. 2460 — **EQUIPAMENTO LOCADO · botão "Desfazer devolução" no
  * modal Raio-X, com senha + motivo obrigatórios (auditado).**
  *

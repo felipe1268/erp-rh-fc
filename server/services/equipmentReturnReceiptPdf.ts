@@ -46,15 +46,24 @@ const fmtDateTime = (d: string | null | undefined): string => {
 };
 
 function resolveLogoSource(logoUrl: string | null | undefined): string | Buffer | null {
-  if (!logoUrl) return null;
-  if (logoUrl.startsWith("data:image")) {
-    const m = logoUrl.match(/^data:image\/\w+;base64,(.+)$/);
-    if (m?.[1]) return Buffer.from(m[1], "base64");
-    return null;
+  // Rev. 2461 — fallback pro logo institucional FC quando a company não
+  // tem `logoUrl` cadastrado (caso comum em emissões iniciais).
+  if (logoUrl) {
+    if (logoUrl.startsWith("data:image")) {
+      const m = logoUrl.match(/^data:image\/\w+;base64,(.+)$/);
+      if (m?.[1]) return Buffer.from(m[1], "base64");
+    } else if (logoUrl.startsWith("/uploads/")) {
+      const localPath = path.join(process.cwd(), "server", logoUrl);
+      if (fs.existsSync(localPath)) return localPath;
+    }
   }
-  if (logoUrl.startsWith("/uploads/")) {
-    const localPath = path.join(process.cwd(), "server", logoUrl);
-    if (fs.existsSync(localPath)) return localPath;
+  // Fallback: logo institucional FC publicado em client/public.
+  const fallbacks = [
+    path.join(process.cwd(), "client", "public", "logo-fc.jpg"),
+    path.join(process.cwd(), "public", "logo-fc.jpg"),
+  ];
+  for (const p of fallbacks) {
+    try { if (fs.existsSync(p)) return p; } catch {}
   }
   return null;
 }
@@ -116,6 +125,9 @@ export interface ReturnReceiptData {
   company: any | null;
   obra: any | null;
   fornecedor: any | null;
+  /** Rev. 2461 — todos os fornecedores envolvidos, indexados por id (nome
+   *  da locadora por equipamento quando há mais de uma no lote). */
+  fornecedoresMap: Map<number, any>;
   /** Map equipId → Buffer da foto (pré-resolvida pra não tornar o gerador async). */
   fotosBuffers: Map<number, Buffer>;
 }
@@ -174,11 +186,16 @@ export async function fetchReturnReceiptData(eventoId: number): Promise<ReturnRe
     obra = oRows[0] ?? null;
   }
 
+  // Rev. 2461 — buscamos TODOS os fornecedores envolvidos pra exibir o
+  // nome da locadora no card "Partes envolvidas" e também por equipamento
+  // na tabela (rastreio quando há múltiplas locadoras no mesmo lote).
   let fornecedor: any = null;
-  const fornIds = Array.from(new Set(equipamentos.map(e => (e as any).fornecedorId).filter(Boolean)));
-  if (fornIds.length === 1) {
-    const fRows = await db.select().from(fornecedores).where(eq(fornecedores.id, fornIds[0] as number));
-    fornecedor = fRows[0] ?? null;
+  let fornecedoresMap: Map<number, any> = new Map();
+  const fornIds = Array.from(new Set(equipamentos.map(e => (e as any).fornecedorId).filter(Boolean))) as number[];
+  if (fornIds.length > 0) {
+    const fRows = await db.select().from(fornecedores).where(inArray(fornecedores.id, fornIds));
+    for (const f of fRows) fornecedoresMap.set(f.id, f);
+    if (fornIds.length === 1) fornecedor = fornecedoresMap.get(fornIds[0]) ?? null;
   }
 
   // Rev. 2458 — pré-buscar fotos canônicas da empresa pra fallback.
@@ -224,11 +241,11 @@ export async function fetchReturnReceiptData(eventoId: number): Promise<ReturnRe
     }
   }));
 
-  return { evento, eventos, equipamentos, company, obra, fornecedor, fotosBuffers };
+  return { evento, eventos, equipamentos, company, obra, fornecedor, fornecedoresMap, fotosBuffers };
 }
 
 export function generateReturnReceiptPdf(data: ReturnReceiptData): PDFKit.PDFDocument {
-  const { evento, eventos, equipamentos, company, obra, fornecedor, fotosBuffers } = data;
+  const { evento, eventos, equipamentos, company, obra, fornecedor, fornecedoresMap, fotosBuffers } = data;
   const doc = new PDFDocument({ size: "A4", margin: 40 });
 
   const pageW = doc.page.width;
@@ -236,181 +253,253 @@ export function generateReturnReceiptPdf(data: ReturnReceiptData): PDFKit.PDFDoc
   const mL = 40, mR = 40;
   const cW = pageW - mL - mR;
 
-  const primary = "#1B2A4A";      // azul institucional FC
-  const accent  = "#2980b9";
-  const dark    = "#1a1a2e";
-  const midGray = "#666666";
-  const lightGray = "#f8f9fa";
-  const borderColor = "#dee2e6";
-  const white = "#ffffff";
+  // Rev. 2461 — paleta modernizada (mais contraste, accent azul claro).
+  const primary    = "#1B2A4A";   // azul institucional FC
+  const accent     = "#2563EB";   // azul accent (linhas/divisores)
+  const dark       = "#0F172A";   // texto principal
+  const midGray    = "#64748B";
+  const lightGray  = "#F1F5F9";
+  const cardBg     = "#F8FAFC";
+  const borderColor= "#E2E8F0";
+  const white      = "#ffffff";
 
   function drawHLine(y: number, color = borderColor, width = 0.5) {
     doc.strokeColor(color).lineWidth(width).moveTo(mL, y).lineTo(pageW - mR, y).stroke();
   }
 
   function sectionTitle(title: string, y: number): number {
-    doc.font("Helvetica-Bold").fontSize(9).fillColor(primary).text(title.toUpperCase(), mL, y);
-    y += 13;
-    drawHLine(y, accent, 0.8);
-    return y + 6;
+    // Rev. 2461 — pílula colorida à esquerda + título cinza escuro + linha sutil.
+    const pillW = 3;
+    const pillH = 11;
+    doc.rect(mL, y + 1, pillW, pillH).fill(accent);
+    doc.font("Helvetica-Bold").fontSize(9.5).fillColor(dark)
+      .text(title.toUpperCase(), mL + pillW + 6, y + 1, { characterSpacing: 0.8 });
+    y += 14;
+    drawHLine(y, borderColor, 0.6);
+    return y + 8;
   }
 
-  // ── CABEÇALHO PADRÃO FC (Rev. 2106+) — CENTRADO ─────────────────────────
-  // Logo centralizado em cima, razão social, CNPJ, endereço — tudo centrado.
-  // Faixa azul full-width com TÍTULO + Nº + Data.
-  let y = 18;
+  // ── CABEÇALHO MODERNO FC (Rev. 2461) ────────────────────────────────────
+  // Logo à ESQUERDA + razão social + CNPJ + endereço à DIREITA (split),
+  // linha accent fina abaixo, faixa azul gradient-feel com título + Nº/Data
+  // dentro da própria faixa (mais compacto, sem linha solta).
+  let y = 22;
   const logoSrc = resolveLogoSource(company?.logoUrl);
-  const logoSize = 50;
+  const logoSize = 58;
+  const headerX = logoSrc ? mL + logoSize + 14 : mL;
+  const headerW = pageW - mR - headerX;
+
   if (logoSrc) {
     try {
-      doc.image(logoSrc, (pageW - logoSize) / 2, y, { fit: [logoSize, logoSize] });
-      y += logoSize + 4;
+      doc.image(logoSrc, mL, y, { fit: [logoSize, logoSize] });
     } catch { /* sem logo */ }
   }
 
-  doc.font("Helvetica-Bold").fontSize(13).fillColor(dark)
-    .text((company?.razaoSocial || "FC ENGENHARIA").toUpperCase(), mL, y, { width: cW, align: "center" });
-  y += 16;
-
+  // Bloco textual à direita do logo
+  let yh = y + 2;
+  doc.font("Helvetica-Bold").fontSize(14).fillColor(dark)
+    .text((company?.razaoSocial || "FC ENGENHARIA").toUpperCase(), headerX, yh, {
+      width: headerW, align: "left", characterSpacing: 0.3,
+    });
+  yh += 17;
   if (company?.cnpj) {
-    doc.font("Helvetica").fontSize(8).fillColor(midGray)
-      .text(`CNPJ: ${company.cnpj}`, mL, y, { width: cW, align: "center" });
-    y += 10;
+    doc.font("Helvetica").fontSize(8.5).fillColor(midGray)
+      .text(`CNPJ ${company.cnpj}`, headerX, yh, { width: headerW, align: "left" });
+    yh += 11;
   }
   if (company?.endereco) {
     let addr = company.endereco;
-    if (company.cidade) addr += ` — ${company.cidade}`;
+    if (company.cidade) addr += ` · ${company.cidade}`;
     if (company.estado) addr += `/${company.estado}`;
-    if (company.cep)    addr += ` — CEP: ${company.cep}`;
-    doc.font("Helvetica").fontSize(7.5).fillColor("#8a8a8a")
-      .text(addr.toUpperCase(), mL, y, { width: cW, align: "center" });
-    y += 10;
+    if (company.cep)    addr += ` · CEP ${company.cep}`;
+    doc.font("Helvetica").fontSize(7.5).fillColor("#94A3B8")
+      .text(addr, headerX, yh, { width: headerW, align: "left" });
+    yh += 11;
   }
+  y = Math.max(y + logoSize, yh) + 6;
 
-  // Faixa azul institucional
-  y += 6;
-  const stripH = 30;
+  // Linha accent fina (separa header da faixa)
+  doc.strokeColor(accent).lineWidth(1.5).moveTo(mL, y).lineTo(mL + 60, y).stroke();
+  doc.strokeColor(borderColor).lineWidth(0.5).moveTo(mL + 60, y).lineTo(pageW - mR, y).stroke();
+  y += 12;
+
+  // Faixa azul institucional COMPACTA — agora abriga título + Nº + data
+  const stripH = 40;
   doc.rect(mL, y, cW, stripH).fill(primary);
-  doc.font("Helvetica-Bold").fontSize(11).fillColor(white)
-    .text("COMPROVANTE DE DEVOLUÇÃO", mL, y + 9, {
-      width: cW, align: "center", characterSpacing: 2.5,
-    });
-  y += stripH + 4;
+  // Barra accent à esquerda dentro da faixa
+  doc.rect(mL, y, 4, stripH).fill(accent);
 
-  // Linha Nº / Data de Emissão
-  doc.font("Helvetica-Bold").fontSize(9).fillColor(dark)
-    .text(`Nº ${String(evento.id).padStart(6, "0")}`, mL, y, { width: cW / 2, align: "left" });
-  doc.font("Helvetica").fontSize(9).fillColor(midGray)
-    .text(`Data de Emissão: ${fmtDateTime(evento.createdAt)}`, mL + cW / 2, y, {
-      width: cW / 2, align: "right",
+  doc.font("Helvetica-Bold").fontSize(12).fillColor(white)
+    .text("COMPROVANTE DE DEVOLUÇÃO", mL + 14, y + 7, {
+      width: cW - 28, align: "left", characterSpacing: 2,
     });
-  y += 18;
+  // Linha inferior dentro da faixa: Nº (esq) + Data (dir)
+  doc.font("Helvetica").fontSize(8).fillColor("#CBD5E1")
+    .text(`Nº ${String(evento.id).padStart(6, "0")}`, mL + 14, y + 24, {
+      width: (cW - 28) / 2, align: "left",
+    });
+  doc.font("Helvetica").fontSize(8).fillColor("#CBD5E1")
+    .text(`Emitido em ${fmtDateTime(evento.createdAt)}`,
+      mL + 14 + (cW - 28) / 2, y + 24, { width: (cW - 28) / 2, align: "right" });
+  y += stripH + 14;
 
-  // ── SEÇÃO 1: PARTES ENVOLVIDAS ──────────────────────────────────────────
+  // ── SEÇÃO 1: PARTES ENVOLVIDAS (cards modernos lado a lado) ─────────────
   y = sectionTitle("Partes Envolvidas", y);
 
-  const col2 = cW / 2;
-  // Entregador (FC)
-  doc.font("Helvetica").fontSize(6.5).fillColor(midGray).text("ENTREGADOR (FC ENGENHARIA)", mL, y);
-  doc.font("Helvetica-Bold").fontSize(9).fillColor(dark)
-    .text(evento.assinaturaEntregadorNome || evento.usuarioNome || "—", mL, y + 9, { width: col2 - 8 });
+  const gap = 12;
+  const cardW = (cW - gap) / 2;
+  // Card 1 — ENTREGADOR (FC) ───────────────────────────────────
+  const card1H = 56;
+  doc.rect(mL, y, cardW, card1H).fill(cardBg);
+  doc.rect(mL, y, 3, card1H).fill(primary);
+  doc.font("Helvetica-Bold").fontSize(6.5).fillColor(primary)
+    .text("ENTREGADOR · FC ENGENHARIA", mL + 10, y + 7, { width: cardW - 16, characterSpacing: 0.6 });
+  doc.font("Helvetica-Bold").fontSize(11).fillColor(dark)
+    .text(evento.assinaturaEntregadorNome || evento.usuarioNome || "—",
+      mL + 10, y + 18, { width: cardW - 16, ellipsis: true });
   if (obra?.nome) {
-    doc.font("Helvetica").fontSize(7.5).fillColor(midGray)
-      .text(`Obra: ${obra.nome}`, mL, y + 22, { width: col2 - 8 });
+    doc.font("Helvetica").fontSize(8).fillColor(midGray)
+      .text(`Obra: ${obra.nome}`, mL + 10, y + 33, { width: cardW - 16, ellipsis: true });
   }
-  // Recebedor (locadora)
-  doc.font("Helvetica").fontSize(6.5).fillColor(midGray).text("RECEBEDOR (LOCADORA)", mL + col2, y);
-  doc.font("Helvetica-Bold").fontSize(9).fillColor(dark)
-    .text(evento.assinaturaRecebedorNome || "—", mL + col2, y + 9, { width: col2 - 8 });
-  if (fornecedor) {
-    const fornLabel = fornecedor.razaoSocial || fornecedor.nomeFantasia || "—";
-    doc.font("Helvetica").fontSize(7.5).fillColor(midGray)
-      .text(`${fornLabel}${fornecedor.cnpj ? `  ·  CNPJ ${fornecedor.cnpj}` : ""}`, mL + col2, y + 22, { width: col2 - 8 });
-  }
-  y += 42;
+  doc.font("Helvetica").fontSize(7).fillColor("#94A3B8")
+    .text(`Data: ${fmtDateTime(evento.createdAt)}`, mL + 10, y + 44, { width: cardW - 16 });
 
-  // ── SEÇÃO 2: EQUIPAMENTOS DEVOLVIDOS (com FOTO) ─────────────────────────
+  // Card 2 — LOCADORA ─────────────────────────────────────────
+  // Rev. 2461 — agora destaca o NOME DA EMPRESA locadora (rastreio),
+  // não só quem assinou. Quando há múltiplas locadoras no lote, lista
+  // "X locadoras" com link pra tabela abaixo.
+  const card2X = mL + cardW + gap;
+  doc.rect(card2X, y, cardW, card1H).fill(cardBg);
+  doc.rect(card2X, y, 3, card1H).fill(accent);
+  doc.font("Helvetica-Bold").fontSize(6.5).fillColor(accent)
+    .text("LOCADORA", card2X + 10, y + 7, { width: cardW - 16, characterSpacing: 0.6 });
+
+  let locadoraNome = "—";
+  let locadoraSubtitulo = "";
+  if (fornecedor) {
+    locadoraNome = (fornecedor.razaoSocial || fornecedor.nomeFantasia || "—").toString();
+    locadoraSubtitulo = fornecedor.cnpj ? `CNPJ ${fornecedor.cnpj}` : "";
+  } else if (fornecedoresMap && fornecedoresMap.size > 1) {
+    locadoraNome = `${fornecedoresMap.size} locadoras envolvidas`;
+    locadoraSubtitulo = "Ver coluna LOCADOR na tabela abaixo";
+  } else {
+    // Fallback: nome denormalizado do primeiro equipamento.
+    const fallback = equipamentos.find((e: any) => e.fornecedorNome);
+    if (fallback) locadoraNome = fallback.fornecedorNome;
+  }
+  doc.font("Helvetica-Bold").fontSize(11).fillColor(dark)
+    .text(locadoraNome, card2X + 10, y + 18, { width: cardW - 16, ellipsis: true });
+  if (locadoraSubtitulo) {
+    doc.font("Helvetica").fontSize(8).fillColor(midGray)
+      .text(locadoraSubtitulo, card2X + 10, y + 33, { width: cardW - 16, ellipsis: true });
+  }
+  doc.font("Helvetica").fontSize(7).fillColor("#94A3B8")
+    .text(`Recebido por: ${evento.assinaturaRecebedorNome || "—"}`,
+      card2X + 10, y + 44, { width: cardW - 16, ellipsis: true });
+
+  y += card1H + 14;
+
+  // ── SEÇÃO 2: EQUIPAMENTOS DEVOLVIDOS (com FOTO + LOCADOR) ───────────────
   y = sectionTitle(`Equipamentos devolvidos (${equipamentos.length})`, y);
 
-  // Larguras de coluna — agora com FOTO (8%)
-  const colFotoW = cW * 0.08;
-  const colDescW = cW * 0.47;
-  const colPatW  = cW * 0.15;
+  // Rev. 2461 — adicionada coluna LOCADOR (essencial pro rastreio).
+  // Larguras de coluna recalibradas (some 8pt da OBRA, vira coluna LOCADOR).
+  const hasMultiLocadora = fornecedoresMap && fornecedoresMap.size > 1;
+  const colFotoW = cW * 0.07;
+  const colDescW = cW * (hasMultiLocadora ? 0.34 : 0.46);
+  const colPatW  = cW * 0.13;
+  const colLocW  = cW * (hasMultiLocadora ? 0.16 : 0.00);
   const colObraW = cW * 0.22;
-  const colDiasW = cW * 0.08;
+  const colDiasW = cW - colFotoW - colDescW - colPatW - colLocW - colObraW;
 
   // Header da tabela
-  doc.rect(mL, y, cW, 16).fill(lightGray);
-  doc.font("Helvetica-Bold").fontSize(7.5).fillColor(dark);
-  doc.text("FOTO",          mL + 4,                                              y + 4.5, { width: colFotoW - 8, align: "center" });
-  doc.text("DESCRIÇÃO",     mL + colFotoW + 4,                                   y + 4.5, { width: colDescW - 8 });
-  doc.text("PATRIMÔNIO",    mL + colFotoW + colDescW + 4,                        y + 4.5, { width: colPatW - 8 });
-  doc.text("OBRA",          mL + colFotoW + colDescW + colPatW + 4,              y + 4.5, { width: colObraW - 8 });
-  doc.text("DIAS",          mL + colFotoW + colDescW + colPatW + colObraW + 4,   y + 4.5, { width: colDiasW - 8, align: "right" });
-  y += 16;
+  doc.rect(mL, y, cW, 18).fill(primary);
+  doc.font("Helvetica-Bold").fontSize(7.5).fillColor(white);
+  let cx = mL + 6;
+  doc.text("FOTO",       cx,                                                       y + 5.5, { width: colFotoW - 8, align: "center" });
+  doc.text("DESCRIÇÃO",  mL + colFotoW + 6,                                        y + 5.5, { width: colDescW - 8, characterSpacing: 0.5 });
+  doc.text("PATRIMÔNIO", mL + colFotoW + colDescW + 6,                             y + 5.5, { width: colPatW - 8, characterSpacing: 0.5 });
+  if (hasMultiLocadora) {
+    doc.text("LOCADOR",  mL + colFotoW + colDescW + colPatW + 6,                   y + 5.5, { width: colLocW - 8, characterSpacing: 0.5 });
+  }
+  doc.text("OBRA",       mL + colFotoW + colDescW + colPatW + colLocW + 6,         y + 5.5, { width: colObraW - 8, characterSpacing: 0.5 });
+  doc.text("DIAS",       mL + colFotoW + colDescW + colPatW + colLocW + colObraW + 6, y + 5.5, { width: colDiasW - 8, align: "right", characterSpacing: 0.5 });
+  y += 18;
 
   const evByEquipId = new Map<number, any>();
   eventos.forEach(e => evByEquipId.set(e.equipamentoLocadoId, e));
 
-  const rowH = 38; // altura maior pra acomodar a thumb 32x32
+  const rowH = 40;
+  let zebra = false;
   for (const eq_ of equipamentos) {
-    // Page break preserva o bloco assinaturas (~180pt) + rodapé (~40pt).
-    if (y + rowH > pageH - 220) { doc.addPage(); y = 40; }
+    if (y + rowH > pageH - 220) { doc.addPage(); y = 40; zebra = false; }
+
+    // Zebra striping (alterna lightGray)
+    if (zebra) doc.rect(mL, y, cW, rowH).fill(lightGray);
+    zebra = !zebra;
 
     const ev_ = evByEquipId.get(eq_.id);
     const obs = ev_?.observacao || "";
     const diasMatch = obs.match(/Tempo na obra: (\d+) dias/);
     const dias = diasMatch ? diasMatch[1] : "—";
 
-    // FOTO (thumb 32x32 centralizada na célula)
+    // FOTO
     const fotoBuf = fotosBuffers.get(eq_.id);
     const thumb = 32;
+    const thumbX = mL + (colFotoW - thumb) / 2;
+    const thumbY = y + (rowH - thumb) / 2;
     if (fotoBuf) {
       try {
-        doc.image(fotoBuf, mL + (colFotoW - thumb) / 2, y + (rowH - thumb) / 2, {
-          fit: [thumb, thumb],
-        });
+        doc.image(fotoBuf, thumbX, thumbY, { fit: [thumb, thumb] });
       } catch {
-        // Placeholder se imagem corromper
-        doc.rect(mL + (colFotoW - thumb) / 2, y + (rowH - thumb) / 2, thumb, thumb)
-          .lineWidth(0.5).strokeColor(borderColor).stroke();
+        doc.rect(thumbX, thumbY, thumb, thumb).lineWidth(0.5).strokeColor(borderColor).stroke();
       }
     } else {
-      // Placeholder vazio com "—"
-      doc.rect(mL + (colFotoW - thumb) / 2, y + (rowH - thumb) / 2, thumb, thumb)
-        .lineWidth(0.5).strokeColor(borderColor).stroke();
-      doc.font("Helvetica").fontSize(7).fillColor("#cccccc")
-        .text("—", mL, y + rowH / 2 - 4, { width: colFotoW, align: "center" });
+      doc.rect(thumbX, thumbY, thumb, thumb).lineWidth(0.5).strokeColor(borderColor).stroke();
     }
 
-    // DESCRIÇÃO (até 2 linhas)
-    doc.font("Helvetica").fontSize(8).fillColor(dark);
+    // DESCRIÇÃO
+    doc.font("Helvetica-Bold").fontSize(8.5).fillColor(dark);
     doc.text(eq_.descricao || "(sem descrição)",
-      mL + colFotoW + 4, y + 6,
-      { width: colDescW - 8, height: rowH - 12, ellipsis: true });
+      mL + colFotoW + 6, y + 8,
+      { width: colDescW - 10, height: rowH - 14, ellipsis: true });
+    if (eq_.categoria) {
+      doc.font("Helvetica").fontSize(6.5).fillColor(midGray)
+        .text(eq_.categoria, mL + colFotoW + 6, y + 23, { width: colDescW - 10, ellipsis: true });
+    }
 
     // PATRIMÔNIO
-    doc.font("Helvetica").fontSize(8).fillColor(midGray);
+    doc.font("Helvetica").fontSize(8).fillColor(dark);
     doc.text(eq_.codigoPatrimonioFornecedor || "—",
-      mL + colFotoW + colDescW + 4, y + rowH / 2 - 5,
+      mL + colFotoW + colDescW + 6, y + rowH / 2 - 4,
       { width: colPatW - 8, ellipsis: true });
 
+    // LOCADOR (só quando múltiplas)
+    if (hasMultiLocadora) {
+      const eqForn = (eq_ as any).fornecedorId ? fornecedoresMap.get((eq_ as any).fornecedorId) : null;
+      const eqFornNome = eqForn?.razaoSocial || eqForn?.nomeFantasia || (eq_ as any).fornecedorNome || "—";
+      doc.font("Helvetica").fontSize(7.5).fillColor(midGray);
+      doc.text(eqFornNome,
+        mL + colFotoW + colDescW + colPatW + 6, y + rowH / 2 - 4,
+        { width: colLocW - 8, ellipsis: true });
+    }
+
     // OBRA
-    const obraNome = obra?.nome || "—";
-    doc.text(obraNome,
-      mL + colFotoW + colDescW + colPatW + 4, y + rowH / 2 - 5,
+    doc.font("Helvetica").fontSize(8).fillColor(midGray);
+    doc.text(obra?.nome || "—",
+      mL + colFotoW + colDescW + colPatW + colLocW + 6, y + rowH / 2 - 4,
       { width: colObraW - 8, ellipsis: true });
 
     // DIAS
-    doc.font("Helvetica-Bold").fontSize(9).fillColor(primary);
+    doc.font("Helvetica-Bold").fontSize(10).fillColor(primary);
     doc.text(String(dias),
-      mL + colFotoW + colDescW + colPatW + colObraW + 4, y + rowH / 2 - 5,
-      { width: colDiasW - 8, align: "right" });
+      mL + colFotoW + colDescW + colPatW + colLocW + colObraW + 6, y + rowH / 2 - 5,
+      { width: colDiasW - 12, align: "right" });
 
     y += rowH;
-    drawHLine(y);
+    drawHLine(y, borderColor, 0.3);
   }
-  y += 8;
+  y += 10;
 
   // ── SEÇÃO 3: OBSERVAÇÃO ─────────────────────────────────────────────────
   const obsLote = (evento.observacao || "").replace(/^\[Lote(?: · Tempo na obra: \d+ dias)?\]\s*/, "");
