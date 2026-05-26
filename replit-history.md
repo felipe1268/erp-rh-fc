@@ -676,3 +676,4 @@
 - **Rev. 2433** — ALMOXARIFADO · INVENTÁRIO VISUAL · fix layout foto baia vazando sobre mini-cards no Safari iPad — wrapper `overflow-hidden flex-shrink-0` + img `absolute inset-0` + `loading="lazy"`. `InventarioVisual.tsx` L327-345. Ver `shared/changelog.ts`.
 - **Rev. 2434** — ALMOXARIFADO · INVENTÁRIO VISUAL · `fmtData` força `timeZone: "America/Sao_Paulo"` (datas mostravam UTC no iPad: 21:37 BRT virava 00:37 do dia seguinte). `InventarioVisual.tsx` L57-73. Ver `shared/changelog.ts`.
 - **Rev. 2435** — ALMOXARIFADO · INVENTÁRIO VISUAL · bloqueio de baixa que zeraria saldo pra negativo + feedback ao vivo no modal "Registrar baixa" (precursor da validação correta da Rev. 2437). `InventarioVisual.tsx`. Ver `shared/changelog.ts`.
+- **Rev. 2436** — ALMOXARIFADO · INVENTÁRIO VISUAL · validação DURA de saldo no BACKEND (precursor da Rev. 2437 — só pegava BAIXA, não pegava leitura subindo). `server/routers/warehouse.ts` L2594-2620. Ver `shared/changelog.ts`.

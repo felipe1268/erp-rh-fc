@@ -116,6 +116,35 @@ export default function InventarioVisualBaias() {
     { enabled: !!companyId && obraContexto != null },
   );
 
+  // Rev. 2443 — Query LEVE consolidada (sempre ligada) só pra saber QUAIS
+  // obras têm baias/insumos — o dropdown fica enxuto e mostra só obras ATIVAS
+  // com pelo menos 1 item alocado. Quando o user escolhe "all" reusa cache.
+  const { data: baiasTodasIdx = [] } = trpc.warehouse.baiaAgregadosListar.useQuery(
+    { companyId, obraId: null },
+    { enabled: !!companyId, staleTime: 60_000 },
+  );
+  const baiasPorObra = useMemo(() => {
+    const m = new Map<number, number>();
+    for (const b of (baiasTodasIdx as any[])) {
+      const oid = typeof b.obraId === "number" ? b.obraId : null;
+      if (oid == null) continue;
+      m.set(oid, (m.get(oid) || 0) + 1);
+    }
+    return m;
+  }, [baiasTodasIdx]);
+  // Obras ativas COM item alocado (baia/agregado). Se a obra atualmente
+  // selecionada já tem leitura mas nenhum item, mantemos ela visível pra não
+  // sumir o contexto do usuário.
+  const obrasComItem = useMemo(() => {
+    const base = (obrasAtivas as any[]).filter(o => baiasPorObra.has(o.id));
+    if (typeof obraContexto === "number" && !base.some(o => o.id === obraContexto)) {
+      const atual = (obrasAtivas as any[]).find(o => o.id === obraContexto);
+      if (atual) return [...base, atual];
+    }
+    return base;
+  }, [obrasAtivas, baiasPorObra, obraContexto]);
+  const temAlguma = obrasComItem.length > 0;
+
   const [modalNova, setModalNova] = useState(false);
   const [editando, setEditando] = useState<any | null>(null);
   const [form, setForm] = useState({ obraId: 0, nome: "", material: "", unidade: "m³", capacidade: "", observacoes: "" });
@@ -524,12 +553,22 @@ export default function InventarioVisualBaias() {
             className="flex-1 h-9 text-sm font-medium border border-gray-200 rounded-lg px-3 bg-white text-gray-800 outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-200"
           >
             <option value="">— escolher obra —</option>
-            <option value="all">📍 Todas as obras (visão consolidada)</option>
-            {obrasAtivas.map((obra: any) => (
-              <option key={obra.id} value={obra.id}>
-                🏗️ {obra.codigo ? `${obra.codigo} – ${obra.nome}` : obra.nome}
-              </option>
-            ))}
+            {/* Rev. 2443 — visão consolidada só aparece se houver ao menos 1 obra com item. */}
+            {temAlguma && (
+              <option value="all">📍 Todas as obras com baias ({obrasComItem.length})</option>
+            )}
+            {obrasComItem.map((obra: any) => {
+              const n = baiasPorObra.get(obra.id) ?? 0;
+              const label = obra.codigo ? `${obra.codigo} – ${obra.nome}` : obra.nome;
+              return (
+                <option key={obra.id} value={obra.id}>
+                  🏗️ {label}{n > 0 ? ` · ${n} ite${n > 1 ? "ns" : "m"}` : ""}
+                </option>
+              );
+            })}
+            {!temAlguma && (
+              <option value="" disabled>Nenhuma obra ativa com item alocado</option>
+            )}
           </select>
         </div>
       </div>

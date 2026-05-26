@@ -1,6 +1,46 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2443 — **ALMOXARIFADO · INVENTÁRIO VISUAL DE BAIAS · dropdown
+ * de obra agora mostra SÓ obras ATIVAS com pelo menos 1 item alocado
+ * (baia/agregado), com contagem inline e visão consolidada
+ * suprimida quando não há nada pra consolidar.**
+ *
+ * CONTEXTO (print user, iPad 22:24, "Inventário Visual de Baias"):
+ * o `<select>` listava TODAS as obras ativas da empresa — mesmo as
+ * que nunca receberam areia/brita/pedra. No campo, o operador
+ * tinha que rolar dezenas de obras pra achar as 3-4 que realmente
+ * têm baias.
+ *
+ * DECISÃO
+ * - Nova query LEVE consolidada (`baiaAgregadosListar({obraId: null})`,
+ *   `staleTime: 60s`) sempre ligada, usada SÓ pra construir
+ *   `baiasPorObra: Map<obraId, qtdItens>`.
+ * - Dropdown derivado `obrasComItem = obrasAtivas.filter(o =>
+ *   baiasPorObra.has(o.id))`. Se a obra atualmente selecionada não
+ *   está no Set (ex.: usuário escolheu e depois removeu o último
+ *   item), mantém ela visível pra não sumir o contexto.
+ * - Cada `<option>` mostra a contagem ("· 4 itens") pra ajudar a
+ *   priorizar visualmente.
+ * - Opção "📍 Todas as obras com baias (N)" só aparece se
+ *   houver ≥1 obra elegível; quando o set tá vazio, mostra
+ *   placeholder disabled "Nenhuma obra ativa com item alocado".
+ * - Reuso do mesmo endpoint: a query "all" do modo consolidado
+ *   reaproveita o cache do indexer (mesma chave React Query).
+ *
+ * ARQUIVOS
+ * - `client/src/pages/almoxarifado/InventarioVisual.tsx`
+ *   L122-149 (novo indexer + `baiasPorObra` + `obrasComItem` +
+ *   `temAlguma`) e L558-574 (render do `<select>` com filtro).
+ *
+ * VALIDAÇÃO
+ * - R-001/R-007/R-010 OK — só UI + 1 query READ que já existia.
+ * - Sem alteração de backend, schema ou mutation.
+ * - Não quebra o fluxo de "Gerenciar baias" (CTA segue em
+ *   `obraContexto != null && !modoTodas`).
+ *
+ * ──────────────────────────────────────────────────────────────────────
+ *
  * Rev. 2442 — **ALMOXARIFADO · VISÃO GERAL · Shift+clique pra
  * selecionar INTERVALO de cards + botões "Marcar todos visíveis" /
  * "Limpar" na barra de seleção (consolidado).**
