@@ -1140,9 +1140,11 @@ export default function Cotacoes() {
       else toast.success(`Estoque adicionado ao mapa (R$ ${(data?.totalEstoque ?? 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}).`);
       mapaQ.refetch();
       // Rev. 2466 — Fecha o picker e limpa seleção ao concluir.
+      // Rev. 2471 — reset também do chip de origem.
       setShowEstoquePicker(false);
       setEstoquePickerIds(new Set());
       setEstoquePickerSearch("");
+      setEstoquePickerOrigem("todas");
     },
     onError: (e) => toast.error(e.message),
   });
@@ -1153,6 +1155,8 @@ export default function Cotacoes() {
   const [showEstoquePicker, setShowEstoquePicker] = useState(false);
   const [estoquePickerSearch, setEstoquePickerSearch] = useState("");
   const [estoquePickerIds, setEstoquePickerIds] = useState<Set<number>>(new Set());
+  // Rev. 2471 — chip de origem: "todas" | "central" | "<obraId>"
+  const [estoquePickerOrigem, setEstoquePickerOrigem] = useState<string>("todas");
   // Rev. 2467 HOTFIX — usar `detalheQ.data` (top-level, L981) em vez de
   // `detalheFullscreen` (que só existe dentro do bloco `if (showDetalhe !== null)`
   // em L2487). Antes quebrava com TDZ ReferenceError ao renderizar a tela.
@@ -3608,6 +3612,7 @@ export default function Cotacoes() {
                             // auto-match cego sobre o almox inteiro).
                             setEstoquePickerIds(new Set());
                             setEstoquePickerSearch("");
+                            setEstoquePickerOrigem("todas");
                             setShowEstoquePicker(true);
                           }}
                           disabled={adicionarEstoque.isPending}
@@ -6162,12 +6167,16 @@ export default function Cotacoes() {
         causa do early-return acima). Lista almoxarifado da empresa
         (central + obra atual) com saldo > 0; user marca itens e os
         IDs vão pra mutation `adicionarEstoqueAoMapa` como whitelist. */}
-    <Dialog open={showEstoquePicker} onOpenChange={(o) => { if (!o) { setShowEstoquePicker(false); setEstoquePickerIds(new Set()); setEstoquePickerSearch(""); } }}>
+    {/* Rev. 2471 — Layout ultra moderno: header com gradient, busca destacada,
+        chips de filtro por origem (Todas/Central/Obras), grid de cards com
+        avatar circular gradient (iniciais), badges de origem com nome da
+        obra, saldo grande, footer com resumo (qtd + valor estimado total). */}
+    <Dialog open={showEstoquePicker} onOpenChange={(o) => { if (!o) { setShowEstoquePicker(false); setEstoquePickerIds(new Set()); setEstoquePickerSearch(""); setEstoquePickerOrigem("todas"); } }}>
       <DialogContent
-        className="border-gray-200 p-0 gap-0 flex flex-col"
+        className="border-0 p-0 gap-0 flex flex-col"
         style={{
-          background: "#fff",
-          color: "#111827",
+          background: "#F8FAFC",
+          color: "#0F172A",
           width: "100vw",
           height: "100vh",
           maxWidth: "100vw",
@@ -6175,125 +6184,327 @@ export default function Cotacoes() {
           borderRadius: 0,
         }}
       >
-        <DialogHeader className="px-6 pt-5 pb-3 border-b border-gray-200 shrink-0">
-          <DialogTitle className="flex items-center gap-2 text-gray-900 text-lg">
-            <Package className="h-5 w-5 text-violet-600" />
-            Selecionar do Estoque
-          </DialogTitle>
-          <p className="text-xs text-gray-500 mt-1">
-            Marque os itens do almoxarifado que deseja usar pra atender esta solicitação. O sistema cruza automaticamente com os itens da SC.
-          </p>
-        </DialogHeader>
-        <div className="flex-1 min-h-0 flex flex-col gap-3 px-6 pt-4 overflow-hidden">
-          <div className="relative shrink-0">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-            <Input
-              placeholder="Buscar por nome, código ou categoria…"
-              value={estoquePickerSearch}
-              onChange={(e) => setEstoquePickerSearch(e.target.value)}
-              className="pl-10 bg-white border-gray-300 text-gray-900"
-            />
+        {/* HEADER — gradient indigo→violet com ícone bordeau, título, subtítulo e badge contador */}
+        <DialogHeader
+          className="px-8 py-5 shrink-0 border-b border-slate-200"
+          style={{
+            background: "linear-gradient(135deg, #1E1B4B 0%, #312E81 45%, #4C1D95 100%)",
+            color: "#fff",
+          }}
+        >
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-4 min-w-0">
+              <div
+                className="flex h-12 w-12 items-center justify-center rounded-xl shrink-0"
+                style={{ background: "rgba(255,255,255,0.12)", backdropFilter: "blur(8px)", border: "1px solid rgba(255,255,255,0.18)" }}
+              >
+                <Package className="h-6 w-6 text-white" />
+              </div>
+              <div className="min-w-0">
+                <DialogTitle className="text-white text-xl font-bold tracking-tight">Selecionar do Estoque</DialogTitle>
+                <p className="text-xs text-white/70 mt-0.5 truncate">
+                  Marque os itens do almoxarifado pra atender esta solicitação — cruzamento automático com os itens da SC
+                </p>
+              </div>
+            </div>
+            {(() => {
+              const totalDisp = ((estoqueDisponivelQ.data ?? []) as any[]).length;
+              return (
+                <div
+                  className="shrink-0 px-4 py-2 rounded-full text-xs font-semibold tracking-wide flex items-center gap-2"
+                  style={{ background: "rgba(255,255,255,0.14)", border: "1px solid rgba(255,255,255,0.22)" }}
+                >
+                  <span className="h-2 w-2 rounded-full bg-emerald-300 animate-pulse" />
+                  {totalDisp.toLocaleString("pt-BR")} {totalDisp === 1 ? "item disponível" : "itens disponíveis"}
+                </div>
+              );
+            })()}
           </div>
-          {estoqueDisponivelQ.isLoading ? (
-            <div className="flex items-center justify-center py-12 text-gray-500"><Loader2 className="h-6 w-6 animate-spin" /></div>
-          ) : (() => {
-            const itens = (estoqueDisponivelQ.data ?? []) as any[];
-            const filtrados = itens.filter((it) => {
-              if (!estoquePickerSearch) return true;
+        </DialogHeader>
+
+        {/* TOOLBAR — busca + chips de origem + ações marcar/limpar */}
+        {(() => {
+          const itensAll = (estoqueDisponivelQ.data ?? []) as any[];
+          const obrasUnicas = Array.from(new Map(
+            itensAll.filter((i) => !i.isCentral && i.obraId).map((i) => [i.obraId, { id: i.obraId, nome: i.obraNome || "Obra" }])
+          ).values()).sort((a, b) => (a.nome || "").localeCompare(b.nome || ""));
+          const countCentral = itensAll.filter((i) => i.isCentral).length;
+          const countObra = (obraId: number) => itensAll.filter((i) => i.obraId === obraId).length;
+          const filtrados = itensAll.filter((it) => {
+            if (estoquePickerOrigem === "central" && !it.isCentral) return false;
+            if (estoquePickerOrigem !== "todas" && estoquePickerOrigem !== "central") {
+              const oId = Number(estoquePickerOrigem);
+              if (!Number.isNaN(oId) && it.obraId !== oId) return false;
+            }
+            if (estoquePickerSearch) {
               const q = estoquePickerSearch.toLowerCase();
               return (it.nome ?? "").toLowerCase().includes(q)
                 || (it.codigoInterno ?? "").toLowerCase().includes(q)
-                || (it.categoria ?? "").toLowerCase().includes(q);
-            });
-            if (itens.length === 0) {
-              return <p className="text-sm text-gray-500 text-center py-12">Nenhum item do almoxarifado com saldo disponível.</p>;
+                || (it.categoria ?? "").toLowerCase().includes(q)
+                || (it.obraNome ?? "").toLowerCase().includes(q);
             }
-            if (filtrados.length === 0) {
-              return <p className="text-sm text-gray-400 text-center py-12">Nenhum item encontrado para "{estoquePickerSearch}".</p>;
-            }
-            return (
-              <div className="flex-1 min-h-0 flex flex-col gap-2">
-                <div className="flex items-center justify-between text-xs text-gray-500 px-1 shrink-0">
-                  <span>{filtrados.length} item(s) {filtrados.length !== itens.length ? `de ${itens.length}` : ""}</span>
-                  <div className="flex gap-2">
-                    <button type="button" className="text-violet-600 hover:underline" onClick={() => setEstoquePickerIds(new Set(filtrados.map((it: any) => it.id)))}>Marcar todos</button>
-                    <button type="button" className="text-gray-500 hover:underline" onClick={() => setEstoquePickerIds(new Set())}>Limpar</button>
+            return true;
+          });
+          // Rev. 2471 — somar sobre TODOS os ids marcados (não só filtrados),
+          // senão footer diverge do payload de confirmação que envia ids
+          // completos (inclusive itens fora do filtro/busca atual).
+          const valorTotalSelecionado = itensAll
+            .filter((it) => estoquePickerIds.has(it.id))
+            .reduce((acc, it) => acc + (Number(it.valorUnitario) || 0) * (Number(it.quantidadeAtual) || 0), 0);
+
+          return (
+            <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+              <div className="px-8 pt-5 pb-4 shrink-0 space-y-3 border-b border-slate-200 bg-white">
+                <div className="flex items-center gap-3">
+                  <div className="relative flex-1">
+                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                    <Input
+                      placeholder="Buscar por nome, código, categoria ou obra…"
+                      value={estoquePickerSearch}
+                      onChange={(e) => setEstoquePickerSearch(e.target.value)}
+                      className="pl-11 h-11 bg-slate-50 border-slate-200 text-slate-900 text-sm rounded-xl focus-visible:ring-2 focus-visible:ring-violet-500/40 focus-visible:border-violet-400"
+                    />
                   </div>
+                  <button
+                    type="button"
+                    className="h-11 px-4 rounded-xl text-xs font-semibold text-violet-700 bg-violet-50 hover:bg-violet-100 border border-violet-200 transition-colors"
+                    onClick={() => setEstoquePickerIds(new Set(filtrados.map((it: any) => it.id)))}
+                  >
+                    Marcar todos
+                  </button>
+                  <button
+                    type="button"
+                    className="h-11 px-4 rounded-xl text-xs font-semibold text-slate-600 bg-slate-50 hover:bg-slate-100 border border-slate-200 transition-colors"
+                    onClick={() => setEstoquePickerIds(new Set())}
+                  >
+                    Limpar
+                  </button>
                 </div>
-                <div className="flex-1 min-h-0 border border-gray-200 rounded-lg overflow-y-auto bg-white">
-                  <table className="w-full text-sm">
-                    <thead className="bg-gray-50 sticky top-0 z-10">
-                      <tr className="text-left text-xs font-semibold text-gray-600">
-                        <th className="px-3 py-2 w-10"></th>
-                        <th className="px-3 py-2">Item</th>
-                        <th className="px-3 py-2 w-24 text-right">Saldo</th>
-                        <th className="px-3 py-2 w-28 text-right">Preço médio</th>
-                        <th className="px-3 py-2 w-56">Origem</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100">
+                <div className="flex items-center gap-2 overflow-x-auto pb-1 -mx-1 px-1">
+                  {(() => {
+                    const chip = (key: string, label: string, count: number, color: "violet" | "blue" | "emerald") => {
+                      const ativo = estoquePickerOrigem === key;
+                      const palette = color === "violet"
+                        ? { active: "bg-violet-600 text-white border-violet-600", idle: "bg-white text-slate-700 border-slate-200 hover:border-violet-300 hover:text-violet-700" }
+                        : color === "blue"
+                        ? { active: "bg-blue-600 text-white border-blue-600", idle: "bg-white text-slate-700 border-slate-200 hover:border-blue-300 hover:text-blue-700" }
+                        : { active: "bg-emerald-600 text-white border-emerald-600", idle: "bg-white text-slate-700 border-slate-200 hover:border-emerald-300 hover:text-emerald-700" };
+                      return (
+                        <button
+                          key={key}
+                          type="button"
+                          onClick={() => setEstoquePickerOrigem(key)}
+                          className={`shrink-0 px-3.5 py-1.5 rounded-full text-xs font-semibold border transition-all flex items-center gap-1.5 ${ativo ? palette.active : palette.idle}`}
+                        >
+                          <span className="truncate max-w-[200px]">{label}</span>
+                          <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${ativo ? "bg-white/20" : "bg-slate-100 text-slate-500"}`}>{count}</span>
+                        </button>
+                      );
+                    };
+                    return (
+                      <>
+                        {chip("todas", "Todas as origens", itensAll.length, "violet")}
+                        {chip("central", "Escritório Central", countCentral, "blue")}
+                        {obrasUnicas.map((o) => chip(String(o.id), o.nome, countObra(o.id), "emerald"))}
+                      </>
+                    );
+                  })()}
+                </div>
+              </div>
+
+              {/* CONTEÚDO — grid de cards */}
+              <div className="flex-1 min-h-0 overflow-y-auto px-8 py-5">
+                {estoqueDisponivelQ.isLoading ? (
+                  <div className="flex items-center justify-center py-24 text-slate-500"><Loader2 className="h-7 w-7 animate-spin" /></div>
+                ) : itensAll.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-24 text-center">
+                    <div className="h-16 w-16 rounded-2xl bg-slate-100 flex items-center justify-center mb-3">
+                      <Package className="h-7 w-7 text-slate-400" />
+                    </div>
+                    <p className="text-sm font-medium text-slate-700">Nenhum item do almoxarifado com saldo disponível</p>
+                    <p className="text-xs text-slate-500 mt-1">Verifique se há itens cadastrados com quantidade &gt; 0</p>
+                  </div>
+                ) : filtrados.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-24 text-center">
+                    <div className="h-16 w-16 rounded-2xl bg-slate-100 flex items-center justify-center mb-3">
+                      <Search className="h-7 w-7 text-slate-400" />
+                    </div>
+                    <p className="text-sm font-medium text-slate-700">Nenhum item encontrado</p>
+                    <p className="text-xs text-slate-500 mt-1">Tente outra busca ou troque a origem nos chips acima</p>
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex items-center justify-between mb-3 text-xs text-slate-500">
+                      <span>
+                        Exibindo <span className="font-semibold text-slate-900">{filtrados.length.toLocaleString("pt-BR")}</span>
+                        {filtrados.length !== itensAll.length && <> de <span className="font-semibold text-slate-700">{itensAll.length.toLocaleString("pt-BR")}</span></>} itens
+                      </span>
+                      <span className="font-semibold text-violet-700">{estoquePickerIds.size} selecionado(s)</span>
+                    </div>
+                    <div className="grid gap-3 grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
                       {filtrados.map((it: any) => {
                         const marcado = estoquePickerIds.has(it.id);
+                        const iniciais = (it.nome || "?")
+                          .split(/\s+/)
+                          .filter(Boolean)
+                          .slice(0, 2)
+                          .map((s: string) => s[0])
+                          .join("")
+                          .toUpperCase();
+                        const seed = String(it.id || it.nome || "x").split("").reduce((a: number, c: string) => a + c.charCodeAt(0), 0);
+                        const gradients = [
+                          "linear-gradient(135deg, #6366F1 0%, #8B5CF6 100%)",
+                          "linear-gradient(135deg, #06B6D4 0%, #3B82F6 100%)",
+                          "linear-gradient(135deg, #10B981 0%, #0EA5E9 100%)",
+                          "linear-gradient(135deg, #F59E0B 0%, #EF4444 100%)",
+                          "linear-gradient(135deg, #EC4899 0%, #8B5CF6 100%)",
+                          "linear-gradient(135deg, #14B8A6 0%, #6366F1 100%)",
+                        ];
+                        const grad = gradients[seed % gradients.length];
+                        const subtotal = (Number(it.valorUnitario) || 0) * (Number(it.quantidadeAtual) || 0);
                         return (
-                          <tr
+                          <div
                             key={it.id}
+                            role="checkbox"
+                            aria-checked={marcado}
+                            aria-label={`${it.nome} — saldo ${it.quantidadeAtual} ${it.unidade || ""}, origem ${it.isCentral ? "Escritório Central" : (it.obraNome || "Obra")}`}
+                            tabIndex={0}
                             onClick={() => {
                               const ns = new Set(estoquePickerIds);
                               if (marcado) ns.delete(it.id); else ns.add(it.id);
                               setEstoquePickerIds(ns);
                             }}
-                            className={`cursor-pointer hover:bg-violet-50 ${marcado ? "bg-violet-50/60" : ""}`}
+                            onKeyDown={(e) => {
+                              if (e.key === " " || e.key === "Enter") {
+                                e.preventDefault();
+                                const ns = new Set(estoquePickerIds);
+                                if (marcado) ns.delete(it.id); else ns.add(it.id);
+                                setEstoquePickerIds(ns);
+                              }
+                            }}
+                            className={`relative cursor-pointer rounded-2xl border bg-white p-4 transition-all group focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-2 ${marcado ? "border-violet-500 ring-2 ring-violet-500/20 shadow-lg shadow-violet-500/10" : "border-slate-200 hover:border-violet-300 hover:shadow-md hover:-translate-y-0.5"}`}
                           >
-                            <td className="px-3 py-2"><input type="checkbox" checked={marcado} onChange={() => {}} className="h-4 w-4 accent-violet-600" /></td>
-                            <td className="px-3 py-2">
-                              <div className="font-medium text-gray-900">{it.nome}</div>
-                              <div className="text-[11px] text-gray-500">
-                                {it.codigoInterno ? `${it.codigoInterno} · ` : ""}{it.categoria || "—"}
+                            {/* Checkbox custom */}
+                            <div className={`absolute top-3 right-3 h-5 w-5 rounded-md border-2 flex items-center justify-center transition-all ${marcado ? "bg-violet-600 border-violet-600" : "bg-white border-slate-300 group-hover:border-violet-400"}`}>
+                              {marcado && <Check className="h-3 w-3 text-white" strokeWidth={3} />}
+                            </div>
+
+                            <div className="flex items-start gap-3 mb-3 pr-7">
+                              <div
+                                className="h-11 w-11 rounded-xl shrink-0 flex items-center justify-center text-white text-sm font-bold tracking-wide shadow-sm"
+                                style={{ background: grad }}
+                              >
+                                {iniciais || "?"}
                               </div>
-                            </td>
-                            <td className="px-3 py-2 text-right tabular-nums text-gray-700">
-                              {it.quantidadeAtual.toLocaleString("pt-BR")} <span className="text-xs text-gray-400">{it.unidade || ""}</span>
-                            </td>
-                            <td className="px-3 py-2 text-right tabular-nums text-gray-700">
-                              {it.valorUnitario > 0 ? `R$ ${it.valorUnitario.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}` : <span className="text-gray-400">—</span>}
-                            </td>
-                            <td className="px-3 py-2">
+                              <div className="min-w-0 flex-1">
+                                <div className="font-semibold text-slate-900 text-sm leading-tight line-clamp-2" title={it.nome}>
+                                  {it.nome}
+                                </div>
+                                {it.codigoInterno && (
+                                  <div className="text-[10px] font-mono text-slate-400 mt-0.5 tracking-tight">#{it.codigoInterno}</div>
+                                )}
+                              </div>
+                            </div>
+
+                            <div className="flex flex-wrap gap-1.5 mb-3">
                               <span
-                                className={`inline-block max-w-full truncate text-[10px] px-1.5 py-0.5 rounded ${it.isCentral ? "bg-blue-100 text-blue-700" : "bg-emerald-100 text-emerald-700"}`}
+                                className={`inline-flex items-center gap-1 max-w-full text-[10px] font-semibold px-2 py-0.5 rounded-full ${it.isCentral ? "bg-blue-50 text-blue-700 border border-blue-200" : "bg-emerald-50 text-emerald-700 border border-emerald-200"}`}
                                 title={it.isCentral ? "Escritório Central" : (it.obraNome || "Obra")}
                               >
-                                {it.isCentral ? "Central" : (it.obraNome || "Obra")}
+                                <span className={`h-1.5 w-1.5 rounded-full ${it.isCentral ? "bg-blue-500" : "bg-emerald-500"}`} />
+                                <span className="truncate">{it.isCentral ? "Central" : (it.obraNome || "Obra")}</span>
                               </span>
-                            </td>
-                          </tr>
+                              {it.categoria && (
+                                <span className="inline-flex items-center text-[10px] font-medium px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200 truncate max-w-[140px]" title={it.categoria}>
+                                  {it.categoria}
+                                </span>
+                              )}
+                            </div>
+
+                            <div className="flex items-end justify-between pt-3 border-t border-slate-100">
+                              <div>
+                                <div className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">Saldo</div>
+                                <div className="text-lg font-bold text-slate-900 tabular-nums leading-none mt-0.5">
+                                  {Number(it.quantidadeAtual).toLocaleString("pt-BR")}
+                                  <span className="text-xs font-medium text-slate-400 ml-1">{it.unidade || ""}</span>
+                                </div>
+                              </div>
+                              <div className="text-right">
+                                <div className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">Preço médio</div>
+                                <div className="text-sm font-semibold text-slate-700 tabular-nums leading-none mt-0.5">
+                                  {it.valorUnitario > 0
+                                    ? `R$ ${Number(it.valorUnitario).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                                    : <span className="text-slate-300">—</span>}
+                                </div>
+                                {subtotal > 0 && (
+                                  <div className="text-[10px] text-slate-400 tabular-nums mt-0.5">
+                                    ≈ R$ {subtotal.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </div>
                         );
                       })}
-                    </tbody>
-                  </table>
+                    </div>
+                  </>
+                )}
+              </div>
+
+              {/* FOOTER — resumo + ações */}
+              <div className="px-8 py-4 shrink-0 border-t border-slate-200 bg-white">
+                <div className="flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-6">
+                    <div>
+                      <div className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">Selecionados</div>
+                      <div className="text-2xl font-bold text-slate-900 tabular-nums leading-none mt-1">
+                        {estoquePickerIds.size}
+                        <span className="text-sm font-medium text-slate-400 ml-1">de {itensAll.length}</span>
+                      </div>
+                    </div>
+                    {valorTotalSelecionado > 0 && (
+                      <div className="border-l border-slate-200 pl-6">
+                        <div className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">Valor estimado</div>
+                        <div className="text-2xl font-bold text-emerald-600 tabular-nums leading-none mt-1">
+                          R$ {valorTotalSelecionado.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      className="h-11 px-5 rounded-xl border-slate-200 text-slate-700 hover:bg-slate-50"
+                      onClick={() => { setShowEstoquePicker(false); setEstoquePickerIds(new Set()); setEstoquePickerSearch(""); setEstoquePickerOrigem("todas"); }}
+                    >
+                      Cancelar
+                    </Button>
+                    <Button
+                      disabled={estoquePickerIds.size === 0 || adicionarEstoque.isPending || !showDetalhe}
+                      onClick={() => {
+                        if (!showDetalhe) return;
+                        adicionarEstoque.mutate({
+                          cotacaoId: showDetalhe,
+                          companyId,
+                          obraId: (detalheFullscreen as any)?.obraId ?? undefined,
+                          almoxItemIds: Array.from(estoquePickerIds),
+                        });
+                      }}
+                      className="h-11 px-6 rounded-xl text-white gap-2 font-semibold shadow-lg shadow-violet-500/30 hover:shadow-violet-500/40 disabled:opacity-50 disabled:shadow-none transition-all"
+                      style={{ background: "linear-gradient(135deg, #6366F1 0%, #8B5CF6 100%)" }}
+                    >
+                      {adicionarEstoque.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                      Confirmar seleção
+                      {estoquePickerIds.size > 0 && (
+                        <span className="ml-1 bg-white/20 px-2 py-0.5 rounded-full text-xs tabular-nums">{estoquePickerIds.size}</span>
+                      )}
+                    </Button>
+                  </div>
                 </div>
               </div>
-            );
-          })()}
-        </div>
-        <DialogFooter className="gap-2 px-6 py-4 border-t border-gray-200 shrink-0 bg-white">
-          <Button variant="outline" onClick={() => { setShowEstoquePicker(false); setEstoquePickerIds(new Set()); setEstoquePickerSearch(""); }}>Cancelar</Button>
-          <Button
-            disabled={estoquePickerIds.size === 0 || adicionarEstoque.isPending || !showDetalhe}
-            onClick={() => {
-              if (!showDetalhe) return;
-              adicionarEstoque.mutate({
-                cotacaoId: showDetalhe,
-                companyId,
-                obraId: (detalheFullscreen as any)?.obraId ?? undefined,
-                almoxItemIds: Array.from(estoquePickerIds),
-              });
-            }}
-            className="bg-violet-600 hover:bg-violet-500 text-white gap-2"
-          >
-            {adicionarEstoque.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-            Confirmar ({estoquePickerIds.size})
-          </Button>
-        </DialogFooter>
+            </div>
+          );
+        })()}
       </DialogContent>
     </Dialog>
       </DashboardLayout>

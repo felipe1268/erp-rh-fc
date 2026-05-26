@@ -1,6 +1,72 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2471 — **COTAÇÕES · estoque-picker ganha layout ultra
+ * moderno (cards em grid, gradient header, chips de filtro por
+ * origem, footer com resumo financeiro).**
+ *
+ * PEDIDO (user, ref. visual image_1779807289838.png — modal
+ * "Status: Em Andamento" do Dashboard Aviso Prévio): "quero um
+ * layout ultra moderno, seguindo as nossas regras de ouro".
+ *
+ * REDESIGN (`client/src/pages/compras/Cotacoes.tsx`):
+ *
+ * 1. **Header com gradient indigo→violet** (`#1E1B4B → #312E81
+ *    → #4C1D95`) ocupando full-width; ícone Package em pill
+ *    glassmorphism (rgba 0.12 + backdrop-blur + border 0.18);
+ *    título 20pt bold tracking-tight; subtítulo branco 70%
+ *    explicando o cruzamento automático; badge contador "X
+ *    itens disponíveis" à direita com pulse-dot verde.
+ *
+ * 2. **Toolbar (bg-white com border-bottom)**:
+ *    - Busca grande (h-11, rounded-xl, ícone Search à esq, bg
+ *      slate-50, focus ring violet) — agora também busca pelo
+ *      NOME DA OBRA.
+ *    - Botões "Marcar todos" (violet pill) e "Limpar" (slate
+ *      pill), ambos rounded-xl.
+ *    - **Chips de origem** (scroll-x horizontal): "Todas as
+ *      origens" (violet), "Escritório Central" (blue), e UM
+ *      CHIP POR OBRA distinta (emerald) — cada um com badge
+ *      contador interno. Estado ativo = cor sólida + texto
+ *      branco; idle = bg-white com hover de borda.
+ *
+ * 3. **Grid de cards** (em vez de tabela): responsivo
+ *    `grid-cols-1 md:2 xl:3 2xl:4`. Cada card:
+ *    - Checkbox custom no canto sup-dir (rounded-md violet
+ *      quando marcado, com check branco; idle slate).
+ *    - **Avatar circular 44x44** com gradient ÚNICO POR ITEM
+ *      (hash mod 6 → indigo/cyan/emerald/orange/pink/teal) e
+ *      iniciais do nome em branco bold.
+ *    - Nome em slate-900 sm bold line-clamp-2 + código
+ *      monoespaçado embaixo com `#`.
+ *    - Pílulas de origem (Central=blue dot, Obra=emerald dot
+ *      com NOME COMPLETO DA OBRA) + categoria (slate).
+ *    - Rodapé do card: **Saldo grande (text-lg bold tabular)**
+ *      à esq + **Preço médio + subtotal estimado** à dir.
+ *    - Estado marcado: borda violet-500, ring violet 20% e
+ *      shadow violet glow. Hover idle: translate-y -0.5 +
+ *      shadow.
+ *
+ * 4. **Footer ultra polido (bg-white border-top)**:
+ *    - "Selecionados X de Y" em 24pt bold à esq.
+ *    - "Valor estimado R$ X.XXX,XX" em emerald-600 bold
+ *      (somatório de saldo × preço médio dos marcados) com
+ *      separador vertical à esq.
+ *    - Botão "Cancelar" outline slate; botão "Confirmar
+ *      seleção" gradient indigo→violet, shadow glow, badge
+ *      contador interno.
+ *
+ * 5. **Empty states reformulados**: ícone Package/Search em
+ *    quadrado bg-slate-100 rounded-2xl + título + dica.
+ *
+ * Novo state: `estoquePickerOrigem` (`"todas" | "central" |
+ * "<obraId>"`) controla o chip ativo, faz parte do reset no
+ * onOpenChange + handlers de Cancelar/Confirmar.
+ *
+ * R-001/R-007/R-010 OK — só JSX/CSS, sem schema/queries.
+ *
+ * ----------------------------------------------------------------
+ *
  * Rev. 2470 — **COTAÇÕES · estoque-picker agora lista TODO o
  * almoxarifado (Central + TODAS as obras) e mostra o NOME da obra
  * na pílula de origem.**
