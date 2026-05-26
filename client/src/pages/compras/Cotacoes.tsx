@@ -6228,7 +6228,7 @@ export default function Cotacoes() {
                         <th className="px-3 py-2">Item</th>
                         <th className="px-3 py-2 w-24 text-right">Saldo</th>
                         <th className="px-3 py-2 w-28 text-right">Preço médio</th>
-                        <th className="px-3 py-2 w-20 text-center">Origem</th>
+                        <th className="px-3 py-2 w-56">Origem</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
@@ -6257,9 +6257,12 @@ export default function Cotacoes() {
                             <td className="px-3 py-2 text-right tabular-nums text-gray-700">
                               {it.valorUnitario > 0 ? `R$ ${it.valorUnitario.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}` : <span className="text-gray-400">—</span>}
                             </td>
-                            <td className="px-3 py-2 text-center">
-                              <span className={`text-[10px] px-1.5 py-0.5 rounded ${it.isCentral ? "bg-blue-100 text-blue-700" : "bg-emerald-100 text-emerald-700"}`}>
-                                {it.isCentral ? "Central" : "Obra"}
+                            <td className="px-3 py-2">
+                              <span
+                                className={`inline-block max-w-full truncate text-[10px] px-1.5 py-0.5 rounded ${it.isCentral ? "bg-blue-100 text-blue-700" : "bg-emerald-100 text-emerald-700"}`}
+                                title={it.isCentral ? "Escritório Central" : (it.obraNome || "Obra")}
+                              >
+                                {it.isCentral ? "Central" : (it.obraNome || "Obra")}
                               </span>
                             </td>
                           </tr>

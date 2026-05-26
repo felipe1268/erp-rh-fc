@@ -5025,14 +5025,17 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
   listEstoqueDisponivel: protectedProcedure
     .input(z.object({ companyId: z.number(), obraId: z.number().optional() }))
     .query(async ({ ctx, input }) => {
+      // Rev. 2470 — Lista TODO o estoque disponível da empresa (Central
+      // + TODAS as obras) com saldo > 0. O `obraId` do input é mantido
+      // por retrocompat mas IGNORADO no filtro: o user reportou que itens
+      // da Central / de outras obras não apareciam quando a cotação era
+      // de uma obra X (filtro antigo: `OR(isNull(obraId), eq(obraId, X))`
+      // descartava o resto). A UI tem busca por nome e pílula com a
+      // origem (Central ou nome da obra), então mostrar tudo é seguro.
       await _assertCompanyAccess(ctx.user, input.companyId);
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      const conds: any[] = [
-        eq(almoxarifadoItens.companyId, input.companyId),
-        eq(almoxarifadoItens.ativo, true),
-      ];
-      if (input.obraId) conds.push(or(isNull(almoxarifadoItens.obraId), eq(almoxarifadoItens.obraId, input.obraId))!);
+      const { obras } = await import("../../drizzle/schema");
       const itens = await db.select({
         id: almoxarifadoItens.id,
         nome: almoxarifadoItens.nome,
@@ -5041,8 +5044,14 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
         quantidadeAtual: almoxarifadoItens.quantidadeAtual,
         valorUnitario: almoxarifadoItens.valorUnitario,
         obraId: almoxarifadoItens.obraId,
+        obraNome: obras.nome,
         categoria: almoxarifadoItens.categoria,
-      }).from(almoxarifadoItens).where(and(...conds));
+      }).from(almoxarifadoItens)
+        .leftJoin(obras, eq(obras.id, almoxarifadoItens.obraId))
+        .where(and(
+          eq(almoxarifadoItens.companyId, input.companyId),
+          eq(almoxarifadoItens.ativo, true),
+        ));
       return itens
         .filter(i => parseFloat(String(i.quantidadeAtual) || "0") > 0)
         .map(i => ({
@@ -5053,6 +5062,7 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
           quantidadeAtual: parseFloat(String(i.quantidadeAtual) || "0"),
           valorUnitario: parseFloat(String(i.valorUnitario) || "0"),
           obraId: i.obraId,
+          obraNome: i.obraNome ?? null,
           categoria: i.categoria,
           isCentral: i.obraId == null,
         }))

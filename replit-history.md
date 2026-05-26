@@ -2,6 +2,7 @@
 
 > Este arquivo guarda os one-liners das revisões antigas para manter o `replit.md` enxuto.
 
+- **Rev. 2463** — HOTFIX Rev. 2462 · toggle "Exigir aprovação do gestor" travado (coluna não criada no Neon). 3º `ALTER TABLE companies ADD COLUMN IF NOT EXISTS almoxarifado_exige_aprovacao SMALLINT NOT NULL DEFAULT 1` no bloco `SyncSchema+` de `server/_core/index.ts`. Ver `shared/changelog.ts`.
 - **Rev. 2462** — AUDITORIA DO ALMOXARIFADO · 3º toggle independente "Exigir aprovação do gestor" (log sempre, aprovação opcional). Schema `companies.almoxarifadoExigeAprovacao` + helper `getAuditoriaInicialFields` (auto-validação quando dispensada) aplicado em `atualizarItem`/`excluirItem`/`excluirUnidade`. Ver `shared/changelog.ts`.
 - **Rev. 2461** — COMPROVANTE DE DEVOLUÇÃO (PDF) · layout modernizado + logo FC garantido + NOME DA LOCADORA em destaque pro rastreio. `fetchReturnReceiptData` popula todos fornecedores via `inArray`, header novo, cards de partes com pílula, tabela zebra striping. Ver `shared/changelog.ts`.
 - **Rev. 2460** — EQUIPAMENTO LOCADO · botão "Desfazer devolução" no Raio-X com senha + motivo (auditado). Nova mutation `locadoDesfazerDevolucao` em `equipamentos.ts` (tx atômica + UPDATE condicionado + evento `REVERSAO_DEVOLUCAO` + auditoria) + botão laranja no footer do modal + reuso `ModalConfirmacaoAuditoria`. Ver `shared/changelog.ts`.

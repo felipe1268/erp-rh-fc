@@ -1,6 +1,46 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2470 — **COTAÇÕES · estoque-picker agora lista TODO o
+ * almoxarifado (Central + TODAS as obras) e mostra o NOME da obra
+ * na pílula de origem.**
+ *
+ * PEDIDO (user, IMG image_1779801482993 + image_1779801605591 +
+ * image_1779801739481): "o estoque nao está aparecendo o estoque do
+ * escritorio central... tenho estoque de papel sulfite (chamex),
+ * porem nao aparece na lista. tambem preciso que apareça qual obra!
+ * pois aparece 'Obra', mas nao fala qual".
+ *
+ * BUG RAIZ (Rev. 2466 carryover): a query `listEstoqueDisponivel`
+ * em `server/routers/compras.ts` L5028 filtrava com
+ * `OR(isNull(obraId), eq(obraId, input.obraId))` quando o input
+ * trazia obraId — ou seja, mostrava só Central + obra-atual-da-
+ * cotação. Itens cadastrados em qualquer OUTRA obra (caso do
+ * Chamex 500 folhas, 7 un, que ficava na obra "FC ENGENHARIA
+ * PROJETO" enquanto a cotação aberta era de outra) sumiam.
+ * Bônus: a pílula de origem só dizia "Central"/"Obra" — sem
+ * identificar QUAL obra.
+ *
+ * FIX:
+ * 1. Query `listEstoqueDisponivel` (`server/routers/compras.ts`):
+ *    - REMOVIDO o filtro de obra. Agora lista todo `almoxarifadoItens`
+ *      da empresa (ativo=true, saldo>0). `obraId` do input mantido
+ *      por retrocompat mas IGNORADO. UI já tem busca + chip de
+ *      origem, então mostrar o universo todo é seguro.
+ *    - Adicionado `leftJoin(obras)` pra trazer `obraNome` no payload.
+ *    - Comentário explicando o porquê inline.
+ * 2. UI do modal (`client/src/pages/compras/Cotacoes.tsx`):
+ *    - Coluna "Origem" aumentada de `w-20 text-center` pra `w-56`
+ *      pra caber nomes de obras.
+ *    - Pílula passa a renderizar `it.obraNome || "Obra"` (em vez
+ *      do label genérico "Obra") com `truncate` + `title` pra
+ *      hover tooltip mostrando nome completo. Central segue
+ *      mostrando "Central" (com title "Escritório Central").
+ *
+ * R-001/R-007/R-010 OK — só SELECT/JOIN + JSX, sem ALTER/DROP/DELETE.
+ *
+ * ----------------------------------------------------------------
+ *
  * Rev. 2469 — **COTAÇÕES · modal "Selecionar do Estoque" virou
  * tela cheia (full-viewport).**
  *
