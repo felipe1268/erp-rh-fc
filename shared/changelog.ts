@@ -1,6 +1,30 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2481 — **EQUIPE DA OBRA (modal `ObraEfetivo.tsx`) · coluna FUNÇÃO
+ * passa a mostrar o cargo do CADASTRO do funcionário, não o override por
+ * alocação (`funcaoNaObra`).**
+ *
+ * PEDIDO (user, IMG_1292, 26/05/2026): "Revisar as funções conforme
+ * cadastro... exemplo o Darcy tá como PEDREIRO III aqui mas no cadastro
+ * ele é ENCARREGADO DE OBRAS". Causa: o modal "Equipe — {obra}" estava
+ * priorizando `f.funcaoNaObra` (campo de alocação, preenchido em
+ * importações antigas com função antiga/incorreta) sobre o `cargo`/`funcao`
+ * do cadastro do funcionário.
+ *
+ * MUDANÇA (`client/src/pages/ObraEfetivo.tsx`, 5 spots): inverter
+ * prioridade de `f.funcaoNaObra || f.employee?.funcao || f.employee?.cargo`
+ * para `f.employee?.cargo || f.employee?.funcao || f.funcaoNaObra`.
+ * Locais: (1) export CSV (L1419), (2) print/PDF (L1467→), (3) caption do
+ * `<PersonPhoto>` (L1643), (4) linha mobile (L1656), (5) coluna desktop
+ * principal (L1662).
+ *
+ * `funcaoNaObra` continua salvo no banco — fica como último fallback
+ * (caso cadastro não tenha cargo) e ainda é usado pelo filtro de busca
+ * (L1559) pra não quebrar buscas por funções antigas. O módulo
+ * Planejamento (`EfetivoObraView` em `PlanejamentoDetalhe.tsx` L11560)
+ * já usava `e.funcao || e.cargo` (cadastro) — sem mudança necessária.
+ *
  * Rev. 2480 — **EFETIVO DA OBRA (PLANEJAMENTO) · botão TRANSFERIR e REMOVER
  * por linha — gerenciamento de alocação direto da aba do engenheiro.**
  *

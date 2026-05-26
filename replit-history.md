@@ -2,6 +2,7 @@
 
 > Este arquivo guarda os one-liners das revisões antigas para manter o `replit.md` enxuto.
 
+- **Rev. 2474** — PAINEL RH · "Avisos Prévios em Andamento" ganham foto real ao lado do nome. `fotoUrl` em `avisosPrevios` + `<PersonPhoto size="xs">`. Ver `shared/changelog.ts`.
 - **Rev. 2473** — DASHBOARD AVISO PRÉVIO · foto real no modal de drill-down. `fotoUrl` no select de `getDashAvisoPrevio`; avatar custom→`<PersonPhoto>`. Ver `shared/changelog.ts`.
 - **Rev. 2472** — DASHBOARD AVISO PRÉVIO · modal de drill-down ganha layout ultra moderno (header gradient temático, avatares com gradient único, cards polidos, footer com resumo financeiro). Reutilizado por todos os 13 drill-downs do dashboard. Ver `shared/changelog.ts`.
 - **Rev. 2471** — COTAÇÕES · estoque-picker ganha layout ultra moderno (cards em grid, gradient header, chips de filtro por origem, footer com resumo financeiro). Header `#1E1B4B→#312E81→#4C1D95`, chips de origem (Todas/Central/UM POR OBRA), avatar gradient único (hash mod 6), footer com botão Confirmar gradient. Ver `shared/changelog.ts`.

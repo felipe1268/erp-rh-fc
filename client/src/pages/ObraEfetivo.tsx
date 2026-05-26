@@ -1413,7 +1413,7 @@ export default function ObraEfetivo() {
               const obraNome = efetivo.find((e: any) => e.obraId === selectedObraId)?.obraNome || "";
               const rows = funcObra.map((f: any) => ({
                 nome: f.employee?.nomeCompleto || "—",
-                funcao: f.funcaoNaObra || f.employee?.funcao || f.employee?.cargo || "—",
+                funcao: f.employee?.cargo || f.employee?.funcao || f.funcaoNaObra || "—",
                 status: f.employee?.status || "Ativo",
                 desde: f.dataInicio ? new Date(f.dataInicio + "T12:00:00").toLocaleDateString("pt-BR") : "—",
                 infoStatus: f.avisoDataFim ? `Fim: ${new Date(f.avisoDataFim + 'T12:00:00').toLocaleDateString('pt-BR')}` : f.feriasDataFim ? `Retorno: ${new Date(f.feriasDataFim + 'T12:00:00').toLocaleDateString('pt-BR')}` : '',
@@ -1464,7 +1464,7 @@ const statusBg: Record<string, string> = { Ativo: '#d4edda', Aviso: '#fee2e2', A
               const obraNome = efetivo.find((e: any) => e.obraId === selectedObraId)?.obraNome || "";
               const rows = funcObra.map((f: any) => ({
                 nome: f.employee?.nomeCompleto || "—",
-                funcao: f.funcaoNaObra || f.employee?.funcao || f.employee?.cargo || "—",
+                funcao: f.employee?.cargo || f.employee?.funcao || f.funcaoNaObra || "—",
                 status: f.employee?.status || "Ativo",
                 desde: f.dataInicio ? new Date(f.dataInicio + "T12:00:00").toLocaleDateString("pt-BR") : "—",
                 infoStatus: f.avisoDataFim ? `Fim: ${new Date(f.avisoDataFim + 'T12:00:00').toLocaleDateString('pt-BR')}` : f.feriasDataFim ? `Retorno: ${new Date(f.feriasDataFim + 'T12:00:00').toLocaleDateString('pt-BR')}` : '',
@@ -1637,7 +1637,7 @@ const statusBg: Record<string, string> = { Ativo: '#d4edda', Aviso: '#fee2e2', A
                                         src={f.employee?.fotoUrl}
                                         alt={f.employee?.nomeCompleto || "—"}
                                         size="sm"
-                                        caption={f.funcaoNaObra || f.employee?.funcao || f.employee?.cargo || undefined}
+                                        caption={f.employee?.cargo || f.employee?.funcao || f.funcaoNaObra || undefined}
                                       />
                                       <div className="min-w-0">
                                         <p className="font-medium text-sm text-blue-700 cursor-pointer hover:underline inline-flex items-center gap-1.5 flex-wrap" onClick={() => setRaioXEmployeeId(f.employeeId)}>
@@ -1650,13 +1650,13 @@ const statusBg: Record<string, string> = { Ativo: '#d4edda', Aviso: '#fee2e2', A
                                           />
                                         </p>
                                         <p className="text-[11px] text-muted-foreground md:hidden">
-                                          {f.funcaoNaObra || f.employee?.funcao || "—"}
+                                          {f.employee?.cargo || f.employee?.funcao || f.funcaoNaObra || "—"}
                                         </p>
                                       </div>
                                     </div>
                                   </td>
                                   <td className="px-4 py-2.5 text-sm text-muted-foreground hidden md:table-cell">
-                                    {f.funcaoNaObra || f.employee?.funcao || f.employee?.cargo || "—"}
+                                    {f.employee?.cargo || f.employee?.funcao || f.funcaoNaObra || "—"}
                                   </td>
                                   <td className="px-4 py-2.5 text-sm text-muted-foreground hidden md:table-cell">
                                     {f.dataInicio ? new Date(f.dataInicio + "T12:00:00").toLocaleDateString("pt-BR") : "—"}
