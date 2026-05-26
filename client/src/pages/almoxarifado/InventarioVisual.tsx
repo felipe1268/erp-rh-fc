@@ -247,17 +247,16 @@ export default function InventarioVisualBaias() {
       toast.error("Digite um volume válido (ex: 12,5).");
       return;
     }
-    // Rev. 2435 — bloqueia baixa que zeraria pra negativo no almoxarifado.
-    // Baixa = volumeAnterior − volumeAgora (só conta consumo, nunca reposição).
-    // Saldo após = saldoSistema − baixa. Se < 0, recusa com mensagem clara.
-    const volAnterior = leituraBaia?.ultimaLeitura?.volumeEstimado != null
-      ? Number(leituraBaia.ultimaLeitura.volumeEstimado) : null;
+    // Rev. 2437 — VALIDAÇÃO: volume estimado <= saldo do almoxarifado.
+    // Não tem como ter mais material visualmente na baia do que o ERP
+    // registra. Cobre os 2 cenários: (a) baixa que zeraria pra negativo,
+    // (b) leitura "subindo" sem entrada formal — caso reportado: digitou
+    // "restou 80" num item com saldo 10. Espelha a validação do backend.
     const saldoSistema = Number(leituraBaia?.quantidadeAtual ?? 0);
-    const baixa = volAnterior != null ? Math.max(0, volAnterior - volNum) : 0;
-    if (baixa > saldoSistema + 1e-9) {
+    if (volNum > saldoSistema + 1e-9) {
       const unid = leituraBaia.unidade || "";
       toast.error(
-        `Baixa de ${fmtNum(baixa)} ${unid} excede o saldo do almoxarifado (${fmtNum(saldoSistema)} ${unid}). ` +
+        `Volume de ${fmtNum(volNum)} ${unid} é maior que o saldo do almoxarifado (${fmtNum(saldoSistema)} ${unid}). ` +
         `Registre primeiro a entrada do material ou ajuste a leitura.`,
         { duration: 6000 },
       );
@@ -875,7 +874,9 @@ export default function InventarioVisualBaias() {
                   className="mt-1 text-lg font-bold h-12 text-center"
                 />
                 <p className="text-[11px] text-slate-500 mt-1">Estime visualmente o volume que ainda está na baia.</p>
-                {/* Rev. 2435 — Feedback ao vivo da baixa proposta + alerta de saldo negativo */}
+                {/* Rev. 2437 — Painel ao vivo: mostra volume estimado x saldo
+                    + baixa proposta. Bloqueio vermelho quando volume > saldo
+                    (cobre tanto subir sem entrada quanto baixar pra negativo). */}
                 {(() => {
                   const volN = parseFloat(String(leituraVolume).replace(",", "."));
                   if (!isFinite(volN) || volN < 0) return null;
@@ -883,29 +884,31 @@ export default function InventarioVisualBaias() {
                     ? Number(leituraBaia.ultimaLeitura.volumeEstimado) : null;
                   const saldo = Number(leituraBaia.quantidadeAtual ?? 0);
                   const baixa = volAnt != null ? Math.max(0, volAnt - volN) : 0;
-                  const saldoApos = saldo - baixa;
                   const unid = leituraBaia.unidade || "";
-                  const excede = baixa > saldo + 1e-9;
-                  if (baixa === 0) return null;
+                  const excede = volN > saldo + 1e-9;
+                  // Não mostra nada se o volume é razoável E não há baixa significativa
+                  if (!excede && baixa === 0) return null;
                   return (
                     <div className={`mt-2 rounded-lg border-2 px-3 py-2 text-xs ${
                       excede ? "border-red-300 bg-red-50 text-red-800" : "border-emerald-200 bg-emerald-50 text-emerald-800"
                     }`}>
                       <div className="flex items-center justify-between">
-                        <span className="font-bold">Baixa proposta</span>
-                        <span className="font-black">−{fmtNum(baixa)} {unid}</span>
+                        <span className="font-bold">Volume informado</span>
+                        <span className="font-black">{fmtNum(volN)} {unid}</span>
                       </div>
                       <div className="flex items-center justify-between mt-0.5 opacity-90">
                         <span>Saldo no sistema</span>
                         <span className="font-semibold">{fmtNum(saldo)} {unid}</span>
                       </div>
-                      <div className="flex items-center justify-between mt-0.5 font-semibold">
-                        <span>Saldo depois</span>
-                        <span>{fmtNum(saldoApos)} {unid}</span>
-                      </div>
+                      {baixa > 0 && (
+                        <div className="flex items-center justify-between mt-0.5 font-semibold">
+                          <span>Baixa proposta</span>
+                          <span>−{fmtNum(baixa)} {unid}</span>
+                        </div>
+                      )}
                       {excede && (
                         <div className="mt-1.5 pt-1.5 border-t border-red-200 font-bold">
-                          ⚠️ Excede o saldo. Registre a entrada do material antes de baixar.
+                          ⚠️ Impossível: a baia não pode ter mais material do que o sistema registra. Registre a entrada do material antes.
                         </div>
                       )}
                     </div>

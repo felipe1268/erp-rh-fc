@@ -667,3 +667,5 @@
 - **Rev. 2428** — UX · PLANEJAMENTO/LISTA · modal "Novo Projeto" redesenhado com identidade FC (faixa azul #1B2A4A) + shadcn Select/Textarea + fim do scroll horizontal. `PlanejamentoLista.tsx`. Ver `shared/changelog.ts`.
 
 - **Rev. 2429** — ALMOXARIFADO · AUDITORIA · aprovadores delegados por obra (engenheiro responsável + delegados podem validar exclusões/ajustes de estoque). Nova tabela `obra_responsaveis_estoque` (N:N obra↔users, principal/delegado) + 4 endpoints CRUD + auditoriaValidar/PendenciasCount adaptados. Modal `ModalAprovadoresEstoque` na tela Obras. Ver `shared/changelog.ts`.
+
+- **Rev. 2430** — ALMOXARIFADO · INVENTÁRIO VISUAL · botão "Desfazer última" no card + card "Restante" com fallback `volAtual ?? qtdAtual` + tooltip 3 estados. `InventarioVisual.tsx` (zero backend). Ver `shared/changelog.ts`.

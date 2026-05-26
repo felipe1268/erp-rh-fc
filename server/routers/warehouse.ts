@@ -2558,6 +2558,29 @@ REGRAS:
           percentualFinal = Math.max(0, Math.min(100, pctRaw));
         }
       }
+      // ─── Rev. 2437 — VALIDAÇÃO: volume estimado <= saldo do almoxarifado ──
+      // Bug reportado: user digitou "restou 80 m³" num item com saldo 10 m³
+      // e o ERP aceitou silenciosamente — porque a Rev. 2436 só validava o
+      // caso de BAIXA (novoVol < antVol). Aqui o volume SUBIU em relação à
+      // leitura anterior, então não passou pela validação de baixa, mas
+      // ficou um estado FISICAMENTE IMPOSSÍVEL: 80 m³ visualmente na baia
+      // sem ter 80 m³ no almoxarifado. Validação correta: o volume estimado
+      // NUNCA pode exceder o saldo do item — se exceder, ou a leitura está
+      // errada ou faltou registrar entrada de material.
+      if (b.itemId != null && input.volumeEstimado != null) {
+        const [itemPre] = await db
+          .select({ qtd: almoxarifadoItens.quantidadeAtual, nome: almoxarifadoItens.nome, unid: almoxarifadoItens.unidade })
+          .from(almoxarifadoItens)
+          .where(eq(almoxarifadoItens.id, b.itemId));
+        const saldoItem = itemPre?.qtd != null ? Number(itemPre.qtd) : 0;
+        const volNovo = Number(input.volumeEstimado);
+        if (volNovo > saldoItem + 1e-9) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: `Volume estimado de ${volNovo.toLocaleString("pt-BR")} ${itemPre?.unid ?? ""} é maior que o saldo do almoxarifado (${saldoItem.toLocaleString("pt-BR")} ${itemPre?.unid ?? ""}) do item "${itemPre?.nome ?? ""}". Registre primeiro a entrada do material ou ajuste a leitura.`,
+          });
+        }
+      }
       const [novo] = await db.insert(almoxarifadoBaiaLeituras).values({
         companyId: input.companyId,
         baiaId: input.baiaId,

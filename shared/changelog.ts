@@ -1,6 +1,50 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2437 — **ALMOXARIFADO · INVENTÁRIO VISUAL · validação correta:
+ * volume estimado da baia ≤ saldo do almoxarifado (cobre o caso "subir
+ * sem entrada formal", que a Rev. 2436 deixou passar).**
+ *
+ * CONTEXTO (print do user — iPad 21:51 BRT, baia "Item TESTE -areia",
+ * saldo no sistema 10 m³): user digitou "restou 80 m³" e o ERP aceitou
+ * silenciosamente. Card passou a mostrar RESTANTE 80 m³ + histórico com
+ * leitura de 80 m³, mas saldo do item continuou 10 m³ (estado
+ * fisicamente impossível). A Rev. 2436 só validava o caso de BAIXA
+ * (`novoVol < antVol`); quando o volume SUBIU (5 → 80) o backend nem
+ * entrava no bloco de validação — interpretou como "entrada externa
+ * que veio da NF" e gravou direto.
+ *
+ * DECISÃO
+ * - Validação CORRETA: o volume estimado NUNCA pode exceder o saldo
+ *   do item no almoxarifado. Cobre os 2 cenários num só if: (a) baixa
+ *   que zeraria pra negativo (Rev. 2436), (b) leitura "subindo" sem
+ *   entrada formal (este bug). Se o engenheiro vê 80 m³ na baia mas
+ *   o ERP só tem 10 m³ registrados, ou a leitura está errada ou faltou
+ *   dar entrada — em ambos os casos NÃO grava.
+ * - Backend: validação posicionada ANTES do INSERT da leitura (não
+ *   precisa mais do DELETE de rollback da Rev. 2436 — leitura inválida
+ *   nunca chega a entrar). A validação anterior (do consumo > saldo)
+ *   fica como defesa adicional mas dificilmente é atingida agora.
+ * - Frontend: `confirmarLeitura` espelha a mesma regra
+ *   (`volNum > saldoSistema` → toast); painel ao vivo reformulado pra
+ *   mostrar "Volume informado · Saldo no sistema · Baixa proposta" e
+ *   aviso ⚠️ "Impossível: a baia não pode ter mais material do que o
+ *   sistema registra".
+ *
+ * ARQUIVOS
+ * - `server/routers/warehouse.ts` L2564-2586 (bloco antes do INSERT em
+ *   `baiaLeituraRegistrar`).
+ * - `client/src/pages/almoxarifado/InventarioVisual.tsx`
+ *   - L253-266 (`confirmarLeitura`): troca da validação de baixa por
+ *     validação de volume ≤ saldo.
+ *   - L881-919: painel ao vivo reformulado.
+ *
+ * VALIDAÇÃO
+ * - R-001/R-007/R-010 OK — zero migration, só ajuste de procedure.
+ * - Defesa em profundidade mantida: frontend (UX) + backend (invariante).
+ *
+ * ──────────────────────────────────────────────────────────────────────
+ *
  * Rev. 2436 — **ALMOXARIFADO · INVENTÁRIO VISUAL · validação dura de saldo
  * no BACKEND (Rev. 2435 cobriu só o frontend e o user reportou que ainda
  * passava).**
