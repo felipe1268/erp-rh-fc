@@ -1929,13 +1929,25 @@ export default function AlmoxarifadoPage() {
                             </p>
                           )}
                         </div>
+                        {/* Rev. 2438 — Badge mostra o NOME da obra (não "Obra:"
+                            genérico). Tooltip com nome completo + qtd. */}
                         <div className="text-[10px] text-gray-400 border-t border-gray-50 pt-1 mt-1">
                           <div className="flex flex-wrap gap-1">
-                            {item.almoxarifados.map((a: any, ai: number) => (
-                              <span key={ai} className={`font-medium px-1.5 py-0.5 rounded-full ${a.tipo === "central" ? "bg-emerald-100 text-emerald-700" : "bg-blue-100 text-blue-700"}`}>
-                                {a.tipo === "central" ? "Central" : "Obra"}: {a.quantidade % 1 === 0 ? a.quantidade : a.quantidade.toFixed(2)}
-                              </span>
-                            ))}
+                            {item.almoxarifados.map((a: any, ai: number) => {
+                              const nomeObra = a.tipo === "central"
+                                ? "Central"
+                                : ((obrasAtivas as any[]).find((o: any) => o.id === a.obraId)?.nome || `Obra #${a.obraId}`);
+                              const qtdTxt = a.quantidade % 1 === 0 ? a.quantidade : a.quantidade.toFixed(2);
+                              return (
+                                <span
+                                  key={ai}
+                                  title={`${nomeObra}: ${qtdTxt} ${item.unidade ?? ""}`}
+                                  className={`font-medium px-1.5 py-0.5 rounded-full max-w-[140px] truncate inline-block ${a.tipo === "central" ? "bg-emerald-100 text-emerald-700" : "bg-blue-100 text-blue-700"}`}
+                                >
+                                  {nomeObra}: {qtdTxt}
+                                </span>
+                              );
+                            })}
                           </div>
                         </div>
                       </div>
@@ -1989,12 +2001,23 @@ export default function AlmoxarifadoPage() {
                             <StatusBadge atual={item.quantidadeTotal} minimo={item.quantidadeMinima} />
                           </td>
                           <td className="px-3 py-3 text-center">
+                            {/* Rev. 2438 — Mesma regra do card: nome real da obra. */}
                             <div className="flex flex-wrap gap-1 justify-center">
-                              {item.almoxarifados.map((a: any, ai: number) => (
-                                <span key={ai} className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ${a.tipo === "central" ? "bg-emerald-100 text-emerald-700" : "bg-blue-100 text-blue-700"}`}>
-                                  {a.tipo === "central" ? "Central" : "Obra"}: {a.quantidade % 1 === 0 ? a.quantidade : a.quantidade.toFixed(2)}
-                                </span>
-                              ))}
+                              {item.almoxarifados.map((a: any, ai: number) => {
+                                const nomeObra = a.tipo === "central"
+                                  ? "Central"
+                                  : ((obrasAtivas as any[]).find((o: any) => o.id === a.obraId)?.nome || `Obra #${a.obraId}`);
+                                const qtdTxt = a.quantidade % 1 === 0 ? a.quantidade : a.quantidade.toFixed(2);
+                                return (
+                                  <span
+                                    key={ai}
+                                    title={`${nomeObra}: ${qtdTxt} ${item.unidade ?? ""}`}
+                                    className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full max-w-[180px] truncate inline-block ${a.tipo === "central" ? "bg-emerald-100 text-emerald-700" : "bg-blue-100 text-blue-700"}`}
+                                  >
+                                    {nomeObra}: {qtdTxt}
+                                  </span>
+                                );
+                              })}
                             </div>
                           </td>
                           <td className="px-4 py-3 text-right">

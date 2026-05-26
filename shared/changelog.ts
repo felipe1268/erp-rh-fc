@@ -1,6 +1,40 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2438 — **ALMOXARIFADO · VISÃO GERAL · badge do item mostra o NOME
+ * da obra onde o material está cadastrado (antes mostrava "Obra: 100"
+ * genérico).**
+ *
+ * CONTEXTO (print user, iPad 21:57 BRT, busca em todos almoxarifados →
+ * card Areia Lavada agregado): badge inferior do card mostrava só
+ * "Central: 100" e quando o item estava em obra mostrava "Obra: 100" —
+ * sem o nome da obra. Engenheiro não conseguia bater o olho e saber se
+ * aquele material está no Hotel do Papa, na QIU 2 Fase 4, etc. — tinha
+ * que clicar pra abrir o item.
+ *
+ * DECISÃO
+ * - Badge passa a renderizar o nome real do almoxarifado:
+ *   - `tipo === "central"` → "Central: NN"
+ *   - senão → "${nomeObra}: NN" (lookup em `obrasAtivas` por `a.obraId`,
+ *     com fallback `Obra #${id}` se a obra não estiver mais ativa).
+ * - `max-w-[140px]` (card) / `max-w-[180px]` (tabela) + `truncate` pra
+ *   não estourar o layout em obras com nome longo.
+ * - `title` (tooltip nativo) sempre com nome completo + qtd + unidade —
+ *   no iPad o long-press abre o tooltip e no desktop o hover funciona
+ *   normal.
+ *
+ * ARQUIVOS
+ * - `client/src/pages/almoxarifado/index.tsx`
+ *   - Cards (consolidado, view "Cards") — L1932-1950 reformulado.
+ *   - Tabela (consolidado, view "Tabela") — L1991-2010 reformulado.
+ *
+ * VALIDAÇÃO
+ * - `obrasAtivas` já estava no escopo (usado no agregador
+ *   `valorPorAlmox` L1646-1657), reaproveitado direto — zero query nova.
+ * - R-001/R-007/R-010 OK — só UI, sem backend.
+ *
+ * ──────────────────────────────────────────────────────────────────────
+ *
  * Rev. 2437 — **ALMOXARIFADO · INVENTÁRIO VISUAL · validação correta:
  * volume estimado da baia ≤ saldo do almoxarifado (cobre o caso "subir
  * sem entrada formal", que a Rev. 2436 deixou passar).**

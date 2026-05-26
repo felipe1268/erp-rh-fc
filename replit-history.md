@@ -669,3 +669,5 @@
 - **Rev. 2429** — ALMOXARIFADO · AUDITORIA · aprovadores delegados por obra (engenheiro responsável + delegados podem validar exclusões/ajustes de estoque). Nova tabela `obra_responsaveis_estoque` (N:N obra↔users, principal/delegado) + 4 endpoints CRUD + auditoriaValidar/PendenciasCount adaptados. Modal `ModalAprovadoresEstoque` na tela Obras. Ver `shared/changelog.ts`.
 
 - **Rev. 2430** — ALMOXARIFADO · INVENTÁRIO VISUAL · botão "Desfazer última" no card + card "Restante" com fallback `volAtual ?? qtdAtual` + tooltip 3 estados. `InventarioVisual.tsx` (zero backend). Ver `shared/changelog.ts`.
+
+- **Rev. 2431** — ALMOXARIFADO · INVENTÁRIO VISUAL · preview visual da foto no modal "Registrar baixa da baia" (`<img>` h-44 + botões Trocar/Remover + badge "Foto pronta · NN KB"). `InventarioVisual.tsx`. Ver `shared/changelog.ts`.
