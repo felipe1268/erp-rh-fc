@@ -113,6 +113,7 @@ export const homeDataRouter = router({
             nome: e.nomeCompleto,
             funcao: e.funcao,
             status: e.status,
+            fotoUrl: e.fotoUrl || null,
             obra: homeEmpObraMap.has(e.id) ? obraMap.get(homeEmpObraMap.get(e.id)!) || null : null,
             dia,
             isHoje,
@@ -153,6 +154,7 @@ export const homeDataRouter = router({
             nome: e.nomeCompleto,
             funcao: e.funcao,
             status: e.status,
+            fotoUrl: e.fotoUrl || null,
             obra: homeEmpObraMap.has(e.id) ? obraMap.get(homeEmpObraMap.get(e.id)!) || null : null,
             dia,
             anosEmpresa,
@@ -202,6 +204,7 @@ export const homeDataRouter = router({
         nome: string;
         funcao: string | null;
         status: string | null;
+        fotoUrl: string | null;
         dataValidade: string;
         diasRestantes: number;
         vencido: boolean;
@@ -231,6 +234,7 @@ export const homeDataRouter = router({
             nome: emp.nomeCompleto,
             funcao: emp.funcao,
             status: emp.status,
+            fotoUrl: emp.fotoUrl || null,
             dataValidade: validadeStr,
             diasRestantes,
             vencido: diasRestantes < 0,
@@ -243,7 +247,7 @@ export const homeDataRouter = router({
       // Rev. 1845 — exclui Reclusos e Afastados >15 dias (alertableEmpIds)
       const semAso = todosNaoDesligados
         .filter(e => alertableEmpIds.has(e.id) && !asoMap.has(e.id))
-        .map(e => ({ id: e.id, nome: e.nomeCompleto, funcao: e.funcao, status: e.status }));
+        .map(e => ({ id: e.id, nome: e.nomeCompleto, funcao: e.funcao, status: e.status, fotoUrl: e.fotoUrl || null }));
 
       // ============================================================
       // 4. ALERTAS DE FÉRIAS (funcionários com mais de 11 meses sem férias)
@@ -269,6 +273,7 @@ export const homeDataRouter = router({
             id: e.id,
             nome: e.nomeCompleto,
             funcao: e.funcao,
+            fotoUrl: e.fotoUrl || null,
             dataAdmissao: toDateStr(e.dataAdmissao!),
             mesesTrabalhados,
             periodoAquisitivo: anosCompletos + 1,
@@ -321,6 +326,7 @@ export const homeDataRouter = router({
             employeeId: v.employeeId,
             nome: emp?.nomeCompleto || 'Funcionário',
             funcao: emp?.funcao || '-',
+            fotoUrl: emp?.fotoUrl || null,
             dataInicio: diStr,
             dataFim: toDateStr(v.dataFim!),
             diasGozo: v.diasGozo,
@@ -352,6 +358,7 @@ export const homeDataRouter = router({
             employeeId: v.employeeId,
             nome: emp?.nomeCompleto || 'Funcionário',
             funcao: emp?.funcao || '-',
+            fotoUrl: emp?.fotoUrl || null,
             dataInicio: toDateStr(v.dataInicio!),
             dataFim: dfStr,
             diasRestantes: Math.max(0, diasRestantes),
@@ -419,7 +426,7 @@ export const homeDataRouter = router({
           if (!e.dataAdmissao) return false;
           return toDateStr(e.dataAdmissao) >= ha30diasStr;
         })
-        .map(e => ({ id: e.id, nome: e.nomeCompleto, funcao: e.funcao, data: toDateStr(e.dataAdmissao!), tipo: "admissao" as const }))
+        .map(e => ({ id: e.id, nome: e.nomeCompleto, funcao: e.funcao, fotoUrl: e.fotoUrl || null, data: toDateStr(e.dataAdmissao!), tipo: "admissao" as const }))
         .sort((a, b) => b.data.localeCompare(a.data));
 
       const demissoesRecentes = allEmps
@@ -427,7 +434,7 @@ export const homeDataRouter = router({
           if (!e.dataDemissao) return false;
           return toDateStr(e.dataDemissao) >= ha30diasStr;
         })
-        .map(e => ({ id: e.id, nome: e.nomeCompleto, funcao: e.funcao, data: toDateStr(e.dataDemissao!), tipo: "demissao" as const }))
+        .map(e => ({ id: e.id, nome: e.nomeCompleto, funcao: e.funcao, fotoUrl: e.fotoUrl || null, data: toDateStr(e.dataDemissao!), tipo: "demissao" as const }))
         .sort((a, b) => b.data.localeCompare(a.data));
 
       const movimentacoes = [...admissoesRecentes, ...demissoesRecentes]
@@ -452,6 +459,7 @@ export const homeDataRouter = router({
             employeeId: w.employeeId,
             nome: emp?.nomeCompleto || "Desconhecido",
             empStatus: emp?.status || null,
+            fotoUrl: emp?.fotoUrl || null,
             tipo: w.tipoAdvertencia,
             data: toDateStr(w.dataOcorrencia!),
           };

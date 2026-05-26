@@ -439,10 +439,13 @@ export default function PainelRH() {
                         <div className="space-y-2 max-h-48 overflow-y-auto">
                           {homeData.aniversariantes.map((a: any) => (
                             <div key={a.id} className={`flex items-center justify-between text-xs px-2 py-1.5 rounded cursor-pointer hover:bg-accent/50 ${a.isHoje ? "bg-pink-50 border border-pink-200" : ""}`} onClick={() => navigate("/colaboradores")}>
-                              <div className="flex items-center gap-2">
-                                {a.isHoje ? <span className="text-base">🎂</span> : null}
-                                <div>
-                                  <span className="font-medium flex items-center gap-1">{a.nome}<EmpStatusBadge status={a.status} /></span>
+                              <div className="flex items-center gap-2 min-w-0 flex-1">
+                                <div onClick={(e) => e.stopPropagation()} className="shrink-0">
+                                  <PersonPhoto src={a.fotoUrl} alt={a.nome} size="xs" />
+                                </div>
+                                {a.isHoje ? <span className="text-base shrink-0">🎂</span> : null}
+                                <div className="min-w-0">
+                                  <span className="font-medium flex items-center gap-1"><span className="truncate">{a.nome}</span><EmpStatusBadge status={a.status} /></span>
                                   {a.funcao ? <span className="text-muted-foreground ml-1">({a.funcao})</span> : null}
                                   {a.obra ? <span className="block text-[10px] text-blue-600 font-medium mt-0.5">📍 {a.obra}</span> : null}
                                 </div>
@@ -473,9 +476,12 @@ export default function PainelRH() {
                           <p className="text-[10px] font-semibold text-blue-600 uppercase mb-1">De férias agora</p>
                           <div className="space-y-1">
                             {homeData!.feriasDashboard.emAndamento.slice(0, 4).map((f: any) => (
-                              <div key={f.id} className="flex items-center justify-between text-xs px-2 py-1 rounded bg-blue-50 border border-blue-100">
-                                <span className="font-medium">{f.nome}</span>
-                                <span className="text-blue-600 font-mono text-[10px]">volta em {f.diasRestantes}d</span>
+                              <div key={f.id} className="flex items-center justify-between text-xs px-2 py-1 rounded bg-blue-50 border border-blue-100 gap-2">
+                                <div className="flex items-center gap-2 min-w-0 flex-1">
+                                  <PersonPhoto src={f.fotoUrl} alt={f.nome} size="xs" />
+                                  <span className="font-medium truncate">{f.nome}</span>
+                                </div>
+                                <span className="text-blue-600 font-mono text-[10px] shrink-0">volta em {f.diasRestantes}d</span>
                               </div>
                             ))}
                           </div>
@@ -486,12 +492,15 @@ export default function PainelRH() {
                           <p className="text-[10px] font-semibold text-green-600 uppercase mb-1">Próximas agendadas</p>
                           <div className="space-y-1 max-h-32 overflow-y-auto">
                             {homeData!.feriasDashboard.agendadas.slice(0, 5).map((f: any) => (
-                              <div key={f.id} className="flex items-center justify-between text-xs px-2 py-1 rounded">
-                                <div>
-                                  <span className="font-medium">{f.nome}</span>
-                                  <span className="text-muted-foreground ml-1 text-[10px]">{f.diasGozo}d</span>
+                              <div key={f.id} className="flex items-center justify-between text-xs px-2 py-1 rounded gap-2">
+                                <div className="flex items-center gap-2 min-w-0 flex-1">
+                                  <PersonPhoto src={f.fotoUrl} alt={f.nome} size="xs" />
+                                  <div className="min-w-0">
+                                    <span className="font-medium truncate">{f.nome}</span>
+                                    <span className="text-muted-foreground ml-1 text-[10px]">{f.diasGozo}d</span>
+                                  </div>
                                 </div>
-                                <span className="text-green-600 font-mono text-[10px]">em {f.diasAteInicio}d</span>
+                                <span className="text-green-600 font-mono text-[10px] shrink-0">em {f.diasAteInicio}d</span>
                               </div>
                             ))}
                           </div>
@@ -531,9 +540,12 @@ export default function PainelRH() {
                       ) : (
                         <div className="space-y-1 max-h-48 overflow-y-auto">
                           {homeData?.asosAlerta?.slice(0, 8).map((a: any) => (
-                            <div key={a.employeeId} className={`flex items-center justify-between text-xs px-2 py-1.5 rounded ${a.vencido ? "bg-red-50 border border-red-200" : a.diasRestantes <= 15 ? "bg-orange-50" : ""}`}>
-                              <span className="font-medium">{a.nome}</span>
-                              <span className={`font-mono text-[10px] ${a.vencido ? "text-red-600 font-bold" : a.diasRestantes <= 15 ? "text-orange-600 font-semibold" : "text-muted-foreground"}`}>
+                            <div key={a.employeeId} className={`flex items-center justify-between text-xs px-2 py-1.5 rounded gap-2 ${a.vencido ? "bg-red-50 border border-red-200" : a.diasRestantes <= 15 ? "bg-orange-50" : ""}`}>
+                              <div className="flex items-center gap-2 min-w-0 flex-1">
+                                <PersonPhoto src={a.fotoUrl} alt={a.nome} size="xs" />
+                                <span className="font-medium truncate">{a.nome}</span>
+                              </div>
+                              <span className={`font-mono text-[10px] shrink-0 ${a.vencido ? "text-red-600 font-bold" : a.diasRestantes <= 15 ? "text-orange-600 font-semibold" : "text-muted-foreground"}`}>
                                 {a.vencido ? `Vencido há ${Math.abs(a.diasRestantes)}d` : `${a.diasRestantes}d restantes`}
                               </span>
                             </div>
@@ -541,7 +553,7 @@ export default function PainelRH() {
                           {(homeData?.semAso?.length ?? 0) > 0 ? (
                             <div className="mt-2 pt-2 border-t">
                               <p className="text-[10px] text-red-600 font-semibold mb-1">{homeData!.semAso!.length} funcionário{homeData!.semAso!.length !== 1 ? "s" : ""} sem ASO:</p>
-                              {homeData!.semAso!.slice(0, 3).map((e: any) => <div key={e.id} className="text-xs text-muted-foreground pl-2 flex items-center gap-1">{e.nome}<EmpStatusBadge status={e.status} /></div>)}
+                              {homeData!.semAso!.slice(0, 3).map((e: any) => <div key={e.id} className="text-xs text-muted-foreground pl-2 flex items-center gap-2"><PersonPhoto src={e.fotoUrl} alt={e.nome} size="xs" /><span className="truncate">{e.nome}</span><EmpStatusBadge status={e.status} /></div>)}
                               {homeData!.semAso!.length > 3 ? <div className="text-[10px] text-muted-foreground pl-2">e mais {homeData!.semAso!.length - 3}...</div> : null}
                             </div>
                           ) : null}
@@ -567,12 +579,15 @@ export default function PainelRH() {
                       ) : (
                         <div className="space-y-1 max-h-40 overflow-y-auto">
                           {homeData.feriasAlerta.slice(0, 6).map((f: any) => (
-                            <div key={f.id} className={`flex items-center justify-between text-xs px-2 py-1.5 rounded ${f.urgente ? "bg-amber-50 border border-amber-200" : ""}`}>
-                              <div>
-                                <span className="font-medium">{f.nome}</span>
-                                <span className="text-muted-foreground ml-1 text-[10px]">{f.periodoAquisitivo}º período</span>
+                            <div key={f.id} className={`flex items-center justify-between text-xs px-2 py-1.5 rounded gap-2 ${f.urgente ? "bg-amber-50 border border-amber-200" : ""}`}>
+                              <div className="flex items-center gap-2 min-w-0 flex-1">
+                                <PersonPhoto src={f.fotoUrl} alt={f.nome} size="xs" />
+                                <div className="min-w-0">
+                                  <span className="font-medium truncate">{f.nome}</span>
+                                  <span className="text-muted-foreground ml-1 text-[10px]">{f.periodoAquisitivo}º período</span>
+                                </div>
                               </div>
-                              <span className={`font-mono text-[10px] ${f.urgente ? "text-red-600 font-bold" : "text-amber-600"}`}>
+                              <span className={`font-mono text-[10px] shrink-0 ${f.urgente ? "text-red-600 font-bold" : "text-amber-600"}`}>
                                 {f.diasParaVencer <= 0 ? "VENCIDO" : `${f.diasParaVencer}d`}
                               </span>
                             </div>
@@ -603,6 +618,7 @@ export default function PainelRH() {
                           {homeData.movimentacoes.slice(0, 6).map((m: any, i: number) => (
                             <div key={`${m.tipo}-${m.id}-${i}`} className="flex items-center gap-2 text-xs">
                               {m.tipo === "admissao" ? <ArrowUpRight className="h-3.5 w-3.5 text-green-600 shrink-0" /> : <ArrowDownRight className="h-3.5 w-3.5 text-red-600 shrink-0" />}
+                              <PersonPhoto src={m.fotoUrl} alt={m.nome} size="xs" />
                               <div className="flex-1 min-w-0">
                                 <span className="font-medium truncate block">{m.nome}</span>
                                 <span className="text-muted-foreground text-[10px]">{m.funcao} · {new Date(m.data + "T00:00:00").toLocaleDateString("pt-BR")}</span>
@@ -640,9 +656,10 @@ export default function PainelRH() {
                         <div className="space-y-2">
                           {homeData.aniversariosEmpresa.slice(0, 6).map((a: any) => (
                             <div key={a.id} onClick={() => navigate("/colaboradores")} className={`flex items-center gap-2 text-xs rounded-lg px-2 py-1.5 cursor-pointer transition-all ${a.isHoje ? 'bg-amber-50 border border-amber-200 hover:bg-amber-100' : 'hover:bg-accent/60 hover:shadow-sm'}`}>
-                              <div className={`h-7 w-7 rounded-full flex items-center justify-center shrink-0 ${a.isHoje ? 'bg-amber-100' : 'bg-slate-100'}`}>
-                                {a.isHoje ? <Trophy className="h-3.5 w-3.5 text-amber-600" /> : <Star className="h-3.5 w-3.5 text-slate-400" />}
+                              <div onClick={(e) => e.stopPropagation()} className="shrink-0">
+                                <PersonPhoto src={a.fotoUrl} alt={a.nome} size="xs" />
                               </div>
+                              {a.isHoje ? <Trophy className="h-3.5 w-3.5 text-amber-600 shrink-0" /> : null}
                               <div className="flex-1 min-w-0">
                                 <span className={`font-medium truncate block ${a.isHoje ? 'text-amber-800' : ''}`}>{a.nome} <EmpStatusBadge status={a.status} /></span>
                                 <span className="text-muted-foreground text-[10px]">{a.funcao}{a.obra ? ` · ${a.obra}` : ''}</span>
@@ -683,9 +700,12 @@ export default function PainelRH() {
                       <CardContent>
                         <div className="space-y-1">
                           {homeData!.advertenciasRecentes!.map((a: any) => (
-                            <div key={a.id} className="flex items-center justify-between text-xs px-2 py-1 rounded hover:bg-accent/50">
-                              <span className="font-medium flex items-center gap-1">{a.nome}<EmpStatusBadge status={a.empStatus} /></span>
-                              <div className="flex items-center gap-2">
+                            <div key={a.id} className="flex items-center justify-between text-xs px-2 py-1 rounded hover:bg-accent/50 gap-2">
+                              <div className="flex items-center gap-2 min-w-0 flex-1">
+                                <PersonPhoto src={a.fotoUrl} alt={a.nome} size="xs" />
+                                <span className="font-medium flex items-center gap-1 min-w-0"><span className="truncate">{a.nome}</span><EmpStatusBadge status={a.empStatus} /></span>
+                              </div>
+                              <div className="flex items-center gap-2 shrink-0">
                                 <Badge variant="outline" className="text-[10px]">{a.tipo}</Badge>
                                 <span className="text-muted-foreground text-[10px]">{a.data ? new Date(a.data + "T00:00:00").toLocaleDateString("pt-BR") : ""}</span>
                               </div>

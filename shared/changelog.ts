@@ -1,6 +1,66 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2475 — **PAINEL RH · foto real do colaborador em TODOS
+ * os 7 cards restantes (Aniversariantes do Mês, Férias - Painel
+ * Rápido, ASOs - Atenção Necessária, Férias - Período Aquisitivo,
+ * Movimentações 30 dias, Aniversários de Empresa, Advertências
+ * Recentes). Click amplia em lightbox.**
+ *
+ * PEDIDO (user, ref. IMG_1266_1779809914072.png): "Falta a foto
+ * aqui nestes cards coloque em todos". Finalização da estratégia
+ * iniciada nas Revs. 2473/2474 — Painel RH agora tem foto em
+ * 100% das listas de colaboradores.
+ *
+ * MUDANÇAS:
+ *
+ * 1. **Backend** (`server/routers/homeData.ts`) — adicionado
+ *    `fotoUrl` em 9 data sources:
+ *    - `aniversariantes` (L119) — `e.fotoUrl` de `todosNaoDesligados`.
+ *    - `aniversariosEmpresa` (L160) — idem.
+ *    - `asosAlerta` (L210 type + L240 push) — `emp.fotoUrl` de empMap.
+ *    - `semAso` (L253) — `e.fotoUrl` de `todosNaoDesligados`.
+ *    - `feriasAlerta` (L279) — `e.fotoUrl` de `ativos`.
+ *    - `feriasAgendadas` (L332) — `emp?.fotoUrl` de `ativos`.
+ *    - `feriasEmAndamento` (L364) — `emp?.fotoUrl` de `allEmps`.
+ *    - `admissoesRecentes` + `demissoesRecentes` (L432/L440) —
+ *      `e.fotoUrl` (→ `movimentacoes` herda).
+ *    - `advertenciasRecentes` (L465) — `emp?.fotoUrl` de empMap.
+ *    Custo ZERO em todos: tabelas já estão em memória.
+ *
+ * 2. **Frontend** (`client/src/pages/PainelRH.tsx`) — adicionado
+ *    `<PersonPhoto size="xs">` em 8 listas (a-h):
+ *    a. **Aniversariantes do Mês** — foto antes do 🎂. Wrapper
+ *       com `stopPropagation` (card abre `/colaboradores`).
+ *    b. **Férias - Painel Rápido / de férias agora** — foto à
+ *       esquerda do nome.
+ *    c. **Férias - Painel Rápido / próximas agendadas** — idem.
+ *    d. **ASOs - Atenção Necessária** (lista principal).
+ *    e. **ASOs / "X sem ASO"** (lista secundária).
+ *    f. **Férias - Período Aquisitivo**.
+ *    g. **Movimentações (30 dias)** — foto entre o ícone
+ *       Admissão/Demissão e o nome.
+ *    h. **Aniversários de Empresa** — `PersonPhoto` substitui o
+ *       avatar Star/Trophy genérico (`Trophy` fica como ícone
+ *       inline quando `isHoje`). `stopPropagation` no wrapper.
+ *    i. **Advertências Recentes** — foto à esquerda do nome.
+ *    Em todas: nome ganha `truncate`, badge/data ficam
+ *    `shrink-0`. Fallback automático pras iniciais blue-FC.
+ *    Click na foto abre lightbox fullscreen (ESC/backdrop
+ *    fecham); `stopPropagation` impede que dispare o `onClick`
+ *    do card pai quando ele existe.
+ *
+ * R-001/R-007/R-010 OK — só adições de campo no SELECT (sem
+ * `ALTER/DROP/DELETE`) e JSX puro. Coluna `employees.foto_url`
+ * varchar(500) existe desde sempre.
+ *
+ * Com esta Rev., o Painel RH está 100% coberto. Próximas telas
+ * naturais: modal de Combo de Demissões, lista principal de RH,
+ * dashboards Férias/Documentos/Competências, drill-downs de
+ * outros dashboards.
+ *
+ * ─────────────────────────────────────────────────────────────
+ *
  * Rev. 2474 — **PAINEL RH · cards de "Avisos Prévios em Andamento"
  * ganham foto real do colaborador ao lado do nome (click amplia em
  * lightbox).**
