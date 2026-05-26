@@ -818,6 +818,23 @@ export default function InventarioVisualBaias() {
             )}
           </>
         )}
+
+        {/* Rev. 2447 — Lembrete diário fixo no rodapé. Reforça que a
+            aferição é uma rotina TODO DIA, independente do estado da
+            tela (sem obra, sessão concluída, modo "todas as obras"). */}
+        <div className="mt-6 rounded-2xl border border-amber-200 bg-amber-50/70 px-4 py-3 flex items-start gap-3">
+          <div className="w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center shrink-0">
+            <ClipboardList className="w-4 h-4 text-amber-700" />
+          </div>
+          <div className="text-sm leading-snug">
+            <p className="font-bold text-amber-900">Rotina diária</p>
+            <p className="text-amber-800/90 mt-0.5">
+              A aferição visual das baias deve ser feita <span className="font-semibold">todos os dias</span>,
+              em <span className="font-semibold">cada obra</span>. É o que mantém o saldo do almoxarifado
+              fiel ao que está no campo e dispara os alertas de consumo anormal.
+            </p>
+          </div>
+        </div>
       </div>
 
       {/* Modal Nova/Editar Baia */}

@@ -1,6 +1,43 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2447 — **ALMOXARIFADO · INVENTÁRIO VISUAL · banner "Rotina diária"
+ * fixo no rodapé reforça que a aferição é uma tarefa de TODO DIA.**
+ *
+ * CONTEXTO (print user 22:49): tela vazia ("— escolher obra —") mostrava
+ * o aviso "A aferição visual é feita por obra, todo dia." no card
+ * placeholder do meio, mas SUMIA assim que o user escolhia uma obra.
+ * Pedido: deixar o lembrete visível no final da página, em qualquer
+ * estado, pra fixar a rotina diária na cabeça da equipe de campo.
+ *
+ * DECISÃO
+ * - Bloco amber discreto (`mt-6 rounded-2xl border border-amber-200
+ *   bg-amber-50/70 px-4 py-3`) no FINAL do wrapper `.space-y-4 ... pb-10`,
+ *   logo após todo o conteúdo de sessão/listagem, antes do fechamento
+ *   da div principal.
+ * - Ícone `ClipboardList` em círculo amber-100, título "Rotina diária"
+ *   em amber-900 bold e copy curto em amber-800.
+ * - Visível em TODOS os estados: sem obra escolhida, obra sem baia,
+ *   sessão iniciada/concluída, modo "Todas as obras".
+ * - NÃO é sticky/fixed — só rodapé natural, pra não competir com o
+ *   CTA "Registrar baixa" dos cards no iPad.
+ *
+ * COPY
+ * "A aferição visual das baias deve ser feita TODOS OS DIAS, em CADA
+ *  OBRA. É o que mantém o saldo do almoxarifado fiel ao que está no
+ *  campo e dispara os alertas de consumo anormal."
+ *
+ * ARQUIVOS
+ * - `client/src/pages/almoxarifado/InventarioVisual.tsx` L825-840
+ *   (bloco novo logo antes do `</div>` que fecha o wrapper `pb-10`).
+ *
+ * VALIDAÇÃO
+ * - R-001/R-007/R-010 OK — frontend puro, zero schema/backend.
+ * - Não afeta o flow de aferição (botões/cards continuam acima).
+ * - Funciona em iPad Safari (flexbox padrão, sem hack).
+ *
+ * ──────────────────────────────────────────────────────────────────────
+ *
  * Rev. 2446 — **ALMOXARIFADO · INVENTÁRIO VISUAL · cards padronizados em
  * altura uniforme: CTA "Registrar baixa" sempre ancorado no rodapé,
  * conteúdo variável (Saldo no sistema / Última leitura) não desalinha

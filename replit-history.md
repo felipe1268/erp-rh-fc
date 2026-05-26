@@ -680,3 +680,4 @@
 - **Rev. 2437** — ALMOXARIFADO · INVENTÁRIO VISUAL · validação CORRETA `volumeEstimado ≤ saldoItem` (back+front) — cobre num só if "subir sem entrada" e "baixar pra negativo". `warehouse.ts` L2564-2586 + `InventarioVisual.tsx` L253-266/L881-919. Ver `shared/changelog.ts`.
 - **Rev. 2438** — ALMOXARIFADO · VISÃO GERAL · badge mostra NOME real da obra (lookup `obrasAtivas`) com truncate+title. `index.tsx` L1932-2010. Ver `shared/changelog.ts`.
 - **Rev. 2439** — ALMOXARIFADO · INVENTÁRIO SEMANAL · thumbnail da foto do item no card + overlay ampliado on-tap. Backend `warehouse.ts` L922-951 (LEFT JOIN) + `Inventario.tsx` L30-145. Ver `shared/changelog.ts`.
+- **Rev. 2440** — ALMOXARIFADO · VISÃO GERAL · card limpo (3 badges + "+N locais") e card/linha clicáveis abrem modal completo de edição. `index.tsx` L1877-2065. Ver `shared/changelog.ts`.
