@@ -620,6 +620,7 @@ export const homeDataRouter = router({
           nome: emp?.nomeCompleto || 'Funcionário',
           funcao: emp?.funcao || '-',
           empStatus: emp?.status || null,
+          fotoUrl: emp?.fotoUrl || null,
           tipo: a.tipo,
           dataInicio: toDateStr(a.dataInicio!),
           dataFim: dataFimStr,

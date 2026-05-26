@@ -1,6 +1,53 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2474 — **PAINEL RH · cards de "Avisos Prévios em Andamento"
+ * ganham foto real do colaborador ao lado do nome (click amplia em
+ * lightbox).**
+ *
+ * PEDIDO (user, ref. IMG_1265_1779809601303.png — Painel RH com a
+ * faixa de cards KELLEN LARISSA / GISLEI RODRIGO / ENIVALDO):
+ * "Cadê as fotos dos funcionários neste card de alerta?"
+ *
+ * Continuação da estratégia da Rev. 2473 — aplicar `PersonPhoto`
+ * em TODAS as listas de colaboradores incrementalmente, conforme
+ * o user vai apontando cada tela.
+ *
+ * MUDANÇAS:
+ *
+ * 1. **Backend** (`server/routers/homeData.ts` L626, dentro do
+ *    map de `avisosAtivos → avisosPrevios`):
+ *    - Adicionado `fotoUrl: emp?.fotoUrl || null` ao objeto
+ *      retornado. `allEmps` já é `db.select().from(employees)` →
+ *      `fotoUrl` já está disponível em memória, custo ZERO.
+ *
+ * 2. **Frontend** (`client/src/pages/PainelRH.tsx` L317+, card
+ *    "Avisos Prévios em Andamento"):
+ *    - Import `PersonPhoto`.
+ *    - Header de cada mini-card refatorado: avatar `size="xs"`
+ *      (32×32) antes do nome, badge de urgência fica no canto
+ *      direito (continua `shrink-0`). Nome ganha `truncate` pra
+ *      não estourar.
+ *    - **stopPropagation** no wrapper da foto pra impedir que o
+ *      click pra ampliar dispare o `onClick` do card (que abre
+ *      o `AvisoRescisaoDialog`).
+ *    - Click na foto abre lightbox fullscreen do `PersonPhoto`,
+ *      ESC/backdrop fecham. Fallback automático pras iniciais
+ *      em blue-FC quando o funcionário não tem foto cadastrada.
+ *
+ * R-001/R-007/R-010 OK — só adição de campo no SELECT (sem
+ * ALTER/DROP/DELETE) + JSX puro. Coluna `employees.foto_url`
+ * varchar(500) existe há muitas revisões.
+ *
+ * PRÓXIMAS TELAS (do mesmo Painel RH, ainda sem foto):
+ * Aniversariantes do Mês, ASOs, Movimentações (30 dias), Férias
+ * - Painel Rápido, Férias - Período Aquisitivo, Aniversários de
+ * Empresa, Advertências Recentes. Mais o modal de Combo de
+ * Demissões e dashboards de Férias / Competências. Espero o
+ * user apontar cada um.
+ *
+ * ─────────────────────────────────────────────────────────────
+ *
  * Rev. 2473 — **DASHBOARD AVISO PRÉVIO · foto real do colaborador
  * ao lado do nome no modal de drill-down (click amplia em
  * lightbox).**

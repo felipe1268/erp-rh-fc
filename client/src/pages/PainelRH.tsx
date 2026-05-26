@@ -1,6 +1,7 @@
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useState, useEffect } from "react";
 import { EmpStatusBadge } from "@/components/EmpStatusBadge";
+import { PersonPhoto } from "@/components/PersonPhoto";
 import DashboardLayout from "@/components/DashboardLayout";
 import { usePermissions } from "@/contexts/PermissionsContext";
 import FullScreenDialog from "@/components/FullScreenDialog";
@@ -365,9 +366,18 @@ export default function PainelRH() {
                             a.urgencia === 'urgente' ? 'bg-orange-50 border-orange-200' :
                             'bg-white border-gray-200'
                           }`}>
-                            <div className="flex items-center justify-between mb-1">
-                              <span className="text-xs font-bold text-foreground flex items-center gap-1">{a.nome}<EmpStatusBadge status={a.empStatus} /></span>
-                              <Badge className={`text-[9px] ${
+                            <div className="flex items-start justify-between mb-1 gap-2">
+                              <div className="flex items-center gap-2 min-w-0 flex-1">
+                                {/* Rev. 2474 — Foto real (click amplia em lightbox) ao lado do nome. */}
+                                <div onClick={(e) => e.stopPropagation()} className="shrink-0">
+                                  <PersonPhoto src={a.fotoUrl} alt={a.nome} size="xs" />
+                                </div>
+                                <span className="text-xs font-bold text-foreground flex items-center gap-1 min-w-0 truncate">
+                                  <span className="truncate">{a.nome}</span>
+                                  <EmpStatusBadge status={a.empStatus} />
+                                </span>
+                              </div>
+                              <Badge className={`text-[9px] shrink-0 ${
                                 isAguardando ? 'bg-amber-500 text-white' :
                                 a.urgencia === 'vencido' ? 'bg-red-600 text-white' :
                                 a.urgencia === 'critico' ? 'bg-red-500 text-white' :
