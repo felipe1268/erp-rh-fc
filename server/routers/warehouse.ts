@@ -2924,6 +2924,30 @@ REGRAS:
         }
       }
 
+      // Rev. 2444 — HISTÓRICO de entradas por (item, obra), sem corte de data.
+      // Usado pra decidir se um item CENTRAL (obraId=null) deve aparecer numa
+      // obra na visão consolidada. Critério: aparece SÓ se já foi recebido
+      // fisicamente lá (entrada ≠ estornada) OU se já existe baia explícita.
+      // Antes: itens centrais eram REPLICADOS em todas as obras (bug do user
+      // 22:30 — Brita/Pó de Pedra apareciam em 24 obras sem terem ido lá).
+      const obrasComEntradaPorItem = new Map<number, Set<number>>();
+      if (itemIds.length > 0 && obraIds.length > 0) {
+        const histEntradas: any = await db.execute(sql`
+          SELECT DISTINCT item_id, obra_id
+          FROM almoxarifado_movimentacoes
+          WHERE company_id = ${input.companyId}
+            AND tipo = 'entrada'
+            AND obra_id IN (${sql.join(obraIds.map((id: number) => sql`${id}`), sql`, `)})
+            AND item_id IN (${sql.join(itemIds.map((id: number) => sql`${id}`), sql`, `)})
+            AND estornada_em IS NULL
+        `);
+        for (const r of (histEntradas?.rows ?? [])) {
+          const iid = Number(r.item_id); const oid = Number(r.obra_id);
+          const s = obrasComEntradaPorItem.get(iid) ?? new Set<number>();
+          s.add(oid); obrasComEntradaPorItem.set(iid, s);
+        }
+      }
+
       const toCamel = (r: any) => r ? ({
         id: Number(r.id),
         baiaId: Number(r.baia_id),
@@ -2946,7 +2970,9 @@ REGRAS:
 
       // 6) Combina: 1 linha por (obra × item agregado) + 1 linha por baia órfã.
       const result: any[] = [];
-      // Pre-agrupa itens por obraId (null = central, replica em todas as obras).
+      // Rev. 2444 — itens centrais (obraId=null) NÃO replicam mais em todas
+      // as obras. Aparecem só onde houve entrada física histórica OU onde
+      // já existe baia explícita.
       const itensCentrais = itensAgg.filter((it: any) => it.obraId == null);
       const itensPorObra = new Map<number, any[]>();
       for (const it of itensAgg) {
@@ -2957,9 +2983,14 @@ REGRAS:
         }
       }
       for (const obra of targetObras) {
+        const centraisDessaObra = itensCentrais.filter((it: any) => {
+          const teveEntrada = obrasComEntradaPorItem.get(it.id)?.has(obra.id) ?? false;
+          const temBaia = baiaPorObraItem.has(`${obra.id}:${it.id}`);
+          return teveEntrada || temBaia;
+        });
         const itensDessaObra = [
           ...(itensPorObra.get(obra.id) ?? []),
-          ...itensCentrais,
+          ...centraisDessaObra,
         ];
         for (const it of itensDessaObra) {
           const baia = baiaPorObraItem.get(`${obra.id}:${it.id}`);

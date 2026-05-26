@@ -1,6 +1,68 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2444 — **[BUG GRAVE] ALMOXARIFADO · INVENTÁRIO VISUAL DE BAIAS ·
+ * visão consolidada NÃO REPLICA MAIS itens do almoxarifado CENTRAL em
+ * todas as obras. Item central só aparece numa obra se já houve
+ * entrada física lá (movimentação) OU se já tem baia explícita.**
+ *
+ * CONTEXTO (prints user 22:30):
+ * o "Pó de Pedra", "Brita 0", "Areia Lavada" e "Pedra de Mão" estavam
+ * cadastrados como itens do almoxarifado CENTRAL da empresa (`obraId
+ * IS NULL`). Na visão "Todas as obras com baias" o ERP listava CARAMURU
+ * – HH – ANGRA DOS REIS COM os 4 cards, depois CARAMURU – HH com os
+ * MESMOS 4 cards, e assim por diante pra TODAS as 24 obras — mesmo
+ * que a maioria delas nunca tivesse recebido um grão de areia.
+ *
+ * CAUSA RAIZ
+ * `server/routers/warehouse.ts` → `baiaAgregadosListar` (antes desta
+ * Rev., L2949-2963): no loop de montagem do resultado, pra cada obra
+ * o backend concatenava `...itensCentrais` (todos os itens da categoria
+ * Agregados com `obraId IS NULL`). Isso era cross-join puro: N obras
+ * × M itens centrais = M*N cards fantasma, todos como "Sem mínimo /
+ * sem leitura" (porque nunca houve aferição lá).
+ *
+ * DECISÃO
+ * - Item central só vira card numa obra X se UM dos critérios for
+ *   verdade:
+ *   1. Houve `tipo='entrada'` do item naquela obra em
+ *      `almoxarifado_movimentacoes` (sem estorno) — recebimento físico
+ *      histórico, qualquer data.
+ *   2. Já existe uma baia explícita em `almoxarifado_baias` ligada
+ *      a (`obraId`, `itemId`) — o usuário criou manualmente ou
+ *      a auto-criação da 1ª aferição já rodou.
+ * - Itens já vinculados a uma obra específica (`obraId IS NOT NULL`)
+ *   continuam aparecendo só nessa obra, como sempre.
+ * - Baias órfãs (sem `itemId`) continuam aparecendo na obra delas.
+ *
+ * IMPLEMENTAÇÃO
+ * - Novo mapa `obrasComEntradaPorItem: Map<itemId, Set<obraId>>`
+ *   construído via `SELECT DISTINCT item_id, obra_id FROM
+ *   almoxarifado_movimentacoes WHERE tipo='entrada' AND estornada_em
+ *   IS NULL AND item_id IN (...) AND obra_id IN (...)`. Sem corte
+ *   de data — basta UMA entrada histórica pra justificar o card.
+ * - Loop de montagem agora filtra `itensCentrais` por obra antes de
+ *   concatenar. Linhas que apareciam só por "ser central" somem;
+ *   linhas reais (entrada histórica + baia criada) permanecem.
+ *
+ * ARQUIVOS
+ * - `server/routers/warehouse.ts`
+ *   - L2930-2952: nova query `histEntradas` + `obrasComEntradaPorItem`.
+ *   - L2974-2997: substituição do `...itensCentrais` cego pelo filtro
+ *     por obra (`centraisDessaObra`).
+ *
+ * VALIDAÇÃO
+ * - R-001/R-007/R-010 OK — só LEITURA extra (`SELECT DISTINCT`). Zero
+ *   `ALTER/DROP/DELETE`. Zero mudança de schema/migration.
+ * - Performance: a query é leve (DISTINCT, mesma WHERE da query de
+ *   "entradas de hoje"), índices existentes (`company_id, tipo,
+ *   obra_id, item_id, estornada_em`) cobrem o WHERE.
+ * - Compatível com a Rev. 2443 (dropdown só lista obras com baia/
+ *   item — agora a contagem `baiasPorObra` reflete a realidade
+ *   correta, sem inflar com obras-fantasma).
+ *
+ * ──────────────────────────────────────────────────────────────────────
+ *
  * Rev. 2443 — **ALMOXARIFADO · INVENTÁRIO VISUAL DE BAIAS · dropdown
  * de obra agora mostra SÓ obras ATIVAS com pelo menos 1 item alocado
  * (baia/agregado), com contagem inline e visão consolidada
