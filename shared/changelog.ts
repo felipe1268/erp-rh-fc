@@ -1,6 +1,127 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2465 — **RECEBIMENTO DE EQUIPAMENTO LOCADO · espelho do fluxo
+ * de devolução (Rev. 2453+2461) com assinaturas + comprovante PDF
+ * compartilhável + Nº DA OC em destaque.**
+ *
+ * PEDIDO (user, após Rev. 2464):
+ *   "Desenhamos o fluxo para devolução dos equipamentos locados,
+ *    preciso do mesmo procedimento, para o recebimento."
+ *   E clarificação:
+ *   "A única diferença do recebimento é que precisa puxar o número
+ *    da OS E SEGUIR os mesmos critérios de recebimento de material,
+ *    porém com as melhorias q fizemos."
+ * Anexos: IMG_1259 (modal "Receber Locação na Obra" atual, sem
+ * assinaturas) e IMG_1260 (modal "Receber Material" do Almoxarifado
+ * com 3 opções: Foto NF / Via OC / Manual — referência da UX que o
+ * user quer paridade pro equipamento locado).
+ *
+ * CONTEXTO: A Rev. 2453 (devolução em lote) já tinha implementado o
+ * padrão "2 etapas + 2 assinaturas + PDF público assinado + modal
+ * share via WhatsApp" — e a Rev. 2461 modernizou o PDF (logo FC,
+ * cards de partes, nome da locadora em destaque). Recebimento ainda
+ * usava o modal antigo (single-step, sem assinatura, sem
+ * comprovante). User quer paridade total + rastreio da OC vinculada
+ * (que já existe via `ordemCompraId` mas não aparecia no PDF).
+ *
+ * IMPLEMENTAÇÃO (5 arquivos editados + 1 novo):
+ *
+ * 1. **server/routers/equipamentos.ts** — extensão de `locadoCriar`:
+ *    - 4 inputs novos OPCIONAIS (zod): `assinaturaEntregadorNome`,
+ *      `assinaturaEntregadorUrl` (PNG dataURL), `assinaturaRecebedorNome`,
+ *      `assinaturaRecebedorUrl`. Opcionais pra preservar retrocompat
+ *      com importação em lote do PDF (que cria N equipamentos via
+ *      `criar.mutate` sem passar pela tela).
+ *    - Geração de `pdfComprovanteToken` via `crypto.randomBytes(24)`
+ *      SOMENTE quando ambas as URLs de assinatura estão presentes
+ *      (mesmo gate do `locadoDevolverEmLote`).
+ *    - Persistência dos 4 campos + token no INSERT do evento
+ *      RECEBIMENTO (colunas Rev. 2453 já existem em
+ *      `equipamentoLocadoEventos`).
+ *    - Return type estendido: `{ id, comprovante: { eventoId, token } | null }`.
+ *
+ * 2. **server/services/equipmentReceiptPdf.ts** (NOVO) — clone
+ *    enxuto do `equipmentReturnReceiptPdf.ts` (Rev. 2461) com
+ *    adaptações para recebimento:
+ *    - Título da faixa: "COMPROVANTE DE RECEBIMENTO" (vs DEVOLUÇÃO).
+ *    - Faixa lateral VERDE (`#059669` accentRec) — devolução é azul.
+ *    - Cards de partes INVERTIDOS:
+ *        Card 1 = ENTREGADOR · LOCADORA (azul, vs FC azul na devolução)
+ *        Card 2 = RECEBEDOR · FC ENGENHARIA (verde recebimento)
+ *    - **Nº DA OC em destaque** (atendendo pedido "puxar o número da OS"):
+ *        - 1 OC única → caixa verde claro no topo "ORDEM DE COMPRA · Nº X"
+ *          ANTES dos cards de partes, fonte 13pt bold, alta visibilidade.
+ *        - Múltiplas OCs → caixa indicativa + coluna dedicada na tabela.
+ *    - JOIN com `ordensCompra` via `inArray(ordemCompraId)` pra puxar
+ *      `numeroOc` de cada equipamento → `ocsMap: Map<equipId, numeroOc>`.
+ *    - Tabela: coluna `DIAS` (cálculo de duração da devolução)
+ *      substituída por `DATA INÍCIO` (data início da locação — info
+ *      relevante pro recebimento, não pra devolução).
+ *    - Filtro `evento.tipo === "RECEBIMENTO"` (vs DEVOLUCAO_FORNECEDOR).
+ *    - Fotos: `fotosRecebimentoJson` direto (sem fallback de
+ *      `fotosDevolucaoJson`).
+ *    - Agrupamento por `pdfComprovanteToken` mantido (recebimento é
+ *      tipicamente 1 equipamento, mas estrutura permite batch futuro).
+ *
+ * 3. **server/_core/index.ts** — nova rota pública assinada
+ *    `GET /api/comprovante-recebimento/:eventoId/:token.pdf` espelho
+ *    EXATO da `/api/comprovante-devolucao/...` (Rev. 2453): valida
+ *    `evento.tipo === "RECEBIMENTO"` + token, importa dinamicamente
+ *    `fetchReceiptData`+`generateReceiptPdf`, pipa pra res. Sem
+ *    autenticação — locadora abre via link compartilhado no WhatsApp.
+ *
+ * 4. **client/src/pages/equipamentos/Locados.tsx** — restructure do
+ *    modal "Receber Locação na Obra" para 2 etapas:
+ *    - Novos states: `recEtapa: 1|2`, `recEntNome`/`recEntSig` (locadora),
+ *      `recRecNome`/`recRecSig` (FC).
+ *    - Helper `resetRecAssinaturas()` chamado no onSuccess e onClose.
+ *    - `salvar()`: se Etapa 1 com tudo OK e NÃO está em fluxo de
+ *      importação em lote → avança pra Etapa 2 (autofill `recRecNome`
+ *      com `meAuth.name`, padrão da Rev. 2456). Etapa 2 valida os 4
+ *      campos + dispara `criar.mutate` com sigs.
+ *    - Importação em lote (`importQueue.length > 0` ou `importTotal > 0`):
+ *      mantém comportamento legado single-step SEM sigs (PDF batch
+ *      não captura assinatura individual).
+ *    - Stepper visual (2 pílulas emerald) no topo do modal.
+ *    - Etapa 2: stepper + botão "← Voltar", banner verde mostrando
+ *      OC vinculada quando `ocSelecionada` (transparência pro user),
+ *      2 cards (azul Locadora / verde FC) com input nome + SignaturePad.
+ *    - `criar.useMutation.onSuccess`: se `res.comprovante` presente
+ *      (= sigs capturadas) → abre `modalShareComprovante` com
+ *      `tipo: "recebimento"` e URL `/api/comprovante-recebimento/...`.
+ *    - State `modalShareComprovante` estendido com `tipo?: "devolucao"|"recebimento"`
+ *      pra reuso: títulos/textos/mensagem WhatsApp/título Web Share
+ *      condicionais por tipo. Sem tipo → comportamento devolução (compat).
+ *    - Fluxo "voltarParaAlmoxSeNecessario" só dispara no fluxo de
+ *      devolução (recebimento não tem este caminho).
+ *
+ * 5. **shared/version.ts** + **shared/changelog.ts** + **replit.md**
+ *    (esta entrada).
+ *
+ * REGRAS DE OURO:
+ * - **R-001 / R-007 / R-010 OK** — ZERO ALTER/DROP/DELETE. Colunas
+ *   de assinatura/token em `equipamento_locado_eventos` já foram
+ *   criadas pela Rev. 2453 (eram usadas pela devolução em lote);
+ *   a Rev. 2465 só ESCREVE nelas pelo lado do RECEBIMENTO. Schema
+ *   sync via ADD COLUMN IF NOT EXISTS já idempotente.
+ * - **Retrocompat preservada**: `assinaturaEntregador*`/
+ *   `assinaturaRecebedor*` opcionais no zod → todas as call sites
+ *   existentes de `locadoCriar` (importação em lote, fila do
+ *   Almoxarifado) continuam funcionando sem mudança. Quando sigs
+ *   ausentes, `pdfComprovanteToken` fica null e nenhum modal share
+ *   é aberto (fluxo legado intacto).
+ *
+ * FOLLOW-UPS POSSÍVEIS (não escopo desta Rev.):
+ * - Adicionar campo dedicado pra "Nº da nota fiscal" no modal de
+ *   recebimento (paridade total com IMG_1260 "Foto da Nota Fiscal").
+ * - Modal de recebimento via OC LISTA (3 opções: Foto NF / Via OC /
+ *   Manual), como no Almoxarifado. Hoje a UX é "lista de OCs
+ *   pendentes inline" + "manual" — funciona, mas o user pode
+ *   querer paridade visual completa com IMG_1260 numa próxima rev.
+ *
+ * ----------------------------------------------------------------
+ *
  * Rev. 2464 — **HOTFIX build de produção · `SignaturePad` sem `export
  * default` nem `SignaturePadHandle` quebrava `vite build`.**
  *

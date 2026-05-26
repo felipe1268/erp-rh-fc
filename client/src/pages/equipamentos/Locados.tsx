@@ -412,7 +412,7 @@ export default function EquipamentosLocados() {
   }
 
   const criar = trpc.equipamentos.locadoCriar.useMutation({
-    onSuccess: () => {
+    onSuccess: (res) => {
       utils.equipamentos.locadosListar.invalidate();
       utils.equipamentos.ocsLocacaoPendentes.invalidate(); // Rev. 2371 — OC selecionada some da lista após recebimento
       // Rev. 2374 — fila de importação do Almoxarifado: avança pro próximo item.
@@ -420,15 +420,24 @@ export default function EquipamentosLocados() {
         const [next, ...rest] = importQueue;
         setImportQueue(rest);
         setOcSelecionada(null);
+        resetRecAssinaturas(); // Rev. 2465
         setTimeout(() => preencherFormDoItemAlmox(next), 200);
         toast.success("Cadastrado! Próximo da fila…");
       } else {
         setModal(false); setForm({ ...EMPTY }); setFotos([]); setOcSelecionada(null);
+        resetRecAssinaturas(); // Rev. 2465
         if (importTotal > 0) {
           toast.success(`${importTotal} equipamento${importTotal !== 1 ? "s" : ""} locado${importTotal !== 1 ? "s" : ""} importado${importTotal !== 1 ? "s" : ""} do Almoxarifado.`);
           setImportTotal(0);
         } else {
           toast.success("Equipamento locado cadastrado!");
+        }
+        // Rev. 2465 — comprovante PDF assinado (só quando o user passou pela
+        // etapa 2 e capturou assinaturas). Abre modal de compartilhamento.
+        if ((res as any)?.comprovante) {
+          const c = (res as any).comprovante;
+          const url = `${window.location.origin}/api/comprovante-recebimento/${c.eventoId}/${c.token}.pdf`;
+          setModalShareComprovante({ url, qtd: 1, tipo: "recebimento" });
         }
       }
     },
@@ -475,7 +484,23 @@ export default function EquipamentosLocados() {
   const [devLoteRecNome, setDevLoteRecNome] = useState<string>("");
   const [devLoteRecSig,  setDevLoteRecSig]  = useState<string | null>(null);
   // Rev. 2453 — modal pós-sucesso para compartilhar/baixar/ver o comprovante PDF.
-  const [modalShareComprovante, setModalShareComprovante] = useState<{ url: string; qtd: number } | null>(null);
+  // Rev. 2465 — `tipo` opcional pra reusar o modal no fluxo de RECEBIMENTO
+  // (textos/cores condicionais). Default "devolucao" mantém retrocompat.
+  const [modalShareComprovante, setModalShareComprovante] = useState<{ url: string; qtd: number; tipo?: "devolucao" | "recebimento" } | null>(null);
+  // Rev. 2465 — Estado das etapas do modal de RECEBIMENTO. Espelha o
+  // padrão da devolução (Rev. 2453): Etapa 1 = dados+fotos | Etapa 2 =
+  // assinaturas (entregador locadora + recebedor FC). Sigs são opcionais
+  // (skip etapa 2 não é permitido na UI normal mas backend aceita).
+  const [recEtapa,    setRecEtapa]    = useState<1 | 2>(1);
+  const [recEntNome,  setRecEntNome]  = useState<string>(""); // locadora
+  const [recEntSig,   setRecEntSig]   = useState<string | null>(null);
+  const [recRecNome,  setRecRecNome]  = useState<string>(""); // FC (operador)
+  const [recRecSig,   setRecRecSig]   = useState<string | null>(null);
+  function resetRecAssinaturas() {
+    setRecEtapa(1);
+    setRecEntNome(""); setRecEntSig(null);
+    setRecRecNome(""); setRecRecSig(null);
+  }
   const devolver = trpc.equipamentos.locadoDevolver.useMutation({
     onSuccess: () => {
       utils.equipamentos.locadosListar.invalidate();
@@ -1006,9 +1031,25 @@ export default function EquipamentosLocados() {
   }
 
   function salvar() {
+    // Rev. 2465 — Etapa 1 valida dados+fotos e avança pra etapa 2 (assinaturas).
+    // Importação em lote (importQueue) pula a etapa 2 — fluxo legado preservado.
+    const noFluxoImport = importQueue.length > 0 || importTotal > 0;
     if (!form.descricao.trim()) return toast.error("Descrição é obrigatória.");
     if (!form.dataFimPrevista) return toast.error("Data fim prevista é obrigatória.");
     if (fotos.length === 0) return toast.error("Foto de recebimento é obrigatória.");
+    if (!noFluxoImport && recEtapa === 1) {
+      // Autofill o recebedor FC com o user logado ao entrar na etapa 2.
+      if (!recRecNome.trim()) setRecRecNome((meAuth as any)?.name || "");
+      setRecEtapa(2);
+      return;
+    }
+    // Rev. 2465 — Etapa 2 (ou fluxo legado): valida sigs quando aplicável.
+    if (!noFluxoImport) {
+      if (!recEntNome.trim()) return toast.error("Nome do entregador (locadora) é obrigatório.");
+      if (!recEntSig)         return toast.error("Assinatura do entregador é obrigatória.");
+      if (!recRecNome.trim()) return toast.error("Nome do recebedor (FC) é obrigatório.");
+      if (!recRecSig)         return toast.error("Assinatura do recebedor é obrigatória.");
+    }
     criar.mutate({
       companyId,
       descricao: form.descricao,
@@ -1025,6 +1066,13 @@ export default function EquipamentosLocados() {
       observacoes: form.observacoes || undefined,
       fotosRecebimento: fotos,
       ordemCompraId: ocSelecionada?.id, // Rev. 2371 — vincula OC quando o user clicou em "Receber esta OC"
+      // Rev. 2465 — assinaturas só quando não é fluxo de importação em lote.
+      ...(!noFluxoImport && recEntSig && recRecSig ? {
+        assinaturaEntregadorNome: recEntNome.trim(),
+        assinaturaEntregadorUrl:  recEntSig,
+        assinaturaRecebedorNome:  recRecNome.trim(),
+        assinaturaRecebedorUrl:   recRecSig,
+      } : {}),
     });
   }
   // Rev. 2371 — Pré-preenche o form a partir de uma OC de locação pendente.
@@ -2401,9 +2449,28 @@ export default function EquipamentosLocados() {
         </div>
       )}
 
-      {/* Modal receber locação — seções com ícones */}
-      {modal && (
-        <Modal title={importTotal > 0 ? `Cadastrar Equipamento Alugado (${importTotal - importQueue.length} de ${importTotal})` : "Receber Locação na Obra"} onClose={() => { setModal(false); setOcSelecionada(null); }} onSave={salvar} loading={criar.isPending} saveLabel={importQueue.length > 0 ? "Salvar e próximo" : "Confirmar recebimento"}>
+      {/* Modal receber locação — seções com ícones.
+          Rev. 2465 — 2 etapas (dados+fotos → assinaturas + comprovante PDF)
+          espelhando o fluxo da devolução. Etapa 2 só ativa no fluxo manual
+          (importação em lote do PDF pula direto pra cadastro). */}
+      {modal && (() => {
+        const noFluxoImport = importQueue.length > 0 || importTotal > 0;
+        const titulo = noFluxoImport
+          ? `Cadastrar Equipamento Alugado (${importTotal - importQueue.length} de ${importTotal})`
+          : `Receber Locação na Obra · Etapa ${recEtapa}/2`;
+        const saveLbl = noFluxoImport
+          ? (importQueue.length > 0 ? "Salvar e próximo" : "Confirmar recebimento")
+          : (recEtapa === 1 ? "Avançar para assinaturas →" : "Confirmar recebimento");
+        return (
+        <Modal title={titulo} onClose={() => { setModal(false); setOcSelecionada(null); resetRecAssinaturas(); }} onSave={salvar} loading={criar.isPending} saveLabel={saveLbl}>
+          {!noFluxoImport && (
+            <div className="flex items-center gap-2 mb-3 text-xs">
+              <div className={`flex-1 h-1.5 rounded-full ${recEtapa >= 1 ? "bg-emerald-500" : "bg-slate-200"}`} />
+              <div className={`flex-1 h-1.5 rounded-full ${recEtapa >= 2 ? "bg-emerald-500" : "bg-slate-200"}`} />
+            </div>
+          )}
+          {/* ───── ETAPA 1 (dados+fotos) ou modo importação em lote ───── */}
+          {(noFluxoImport || recEtapa === 1) && (<>
           {/* Rev. 2374 — Banner da fila de importação do Almoxarifado */}
           {importTotal > 0 && (
             <div className="bg-orange-50 border-2 border-orange-300 rounded-lg px-3 py-2 flex items-center gap-3 -mt-1 mb-2">
@@ -2544,8 +2611,44 @@ export default function EquipamentosLocados() {
             <p className="text-xs text-slate-500 mb-2">Foto obrigatória — comprovação visual do estado do equipamento ao chegar na obra.</p>
             <FotosUploader fotos={fotos} onChange={setFotos} label="" required />
           </Section>
+          </>)}
+
+          {/* ───── ETAPA 2 (assinaturas + comprovante PDF) — Rev. 2465 ───── */}
+          {!noFluxoImport && recEtapa === 2 && (
+            <>
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-xs text-slate-600">
+                  Colete a assinatura de quem entregou (locadora) e de quem recebeu (FC). Será gerado um comprovante PDF compartilhável via WhatsApp.
+                </p>
+                <button type="button" onClick={() => setRecEtapa(1)} className="text-xs text-slate-500 hover:text-slate-700 underline whitespace-nowrap ml-2">← Voltar</button>
+              </div>
+              {ocSelecionada && (
+                <div className="rounded-lg border border-emerald-200 bg-emerald-50/60 p-2 mb-3 flex items-center gap-2">
+                  <FileText className="h-3.5 w-3.5 text-emerald-700 shrink-0" />
+                  <p className="text-[11px] text-emerald-800">
+                    Esta locação está vinculada à OC <span className="font-mono font-bold">{ocSelecionada.numeroOc}</span> — o número aparecerá no comprovante PDF.
+                  </p>
+                </div>
+              )}
+              <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 mb-3">
+                <p className="text-[11px] font-bold text-blue-700 uppercase tracking-wide mb-2">Entregador (Locadora)</p>
+                <Field label="Nome do responsável da locadora*">
+                  <input type="text" value={recEntNome} onChange={e => setRecEntNome(e.target.value)} className="inp" placeholder="Quem está entregando o equipamento na obra" />
+                </Field>
+                <SignaturePad value={recEntSig} onChange={setRecEntSig} label="Assinatura*" />
+              </div>
+              <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3">
+                <p className="text-[11px] font-bold text-emerald-700 uppercase tracking-wide mb-2">Recebedor (FC Engenharia)</p>
+                <Field label="Nome completo*">
+                  <input type="text" value={recRecNome} onChange={e => setRecRecNome(e.target.value)} className="inp" placeholder="Quem está conferindo e recebendo pela FC" />
+                </Field>
+                <SignaturePad value={recRecSig} onChange={setRecRecSig} label="Assinatura*" />
+              </div>
+            </>
+          )}
         </Modal>
-      )}
+        );
+      })()}
 
       {/* Rev. 2372 — PICKER VISUAL DE DEVOLUÇÃO. Aberto pelo botão
           "DEVOLVER LOCAÇÃO" do Almoxarifado (?action=devolver) ou pelo botão
@@ -2936,33 +3039,52 @@ export default function EquipamentosLocados() {
         </Modal>
       )}
 
-      {/* Rev. 2453 — Modal pós-sucesso: compartilhar/baixar/ver comprovante PDF. */}
-      {modalShareComprovante && (
+      {/* Rev. 2453 — Modal pós-sucesso: compartilhar/baixar/ver comprovante PDF.
+          Rev. 2465 — Textos condicionais por `tipo` (devolução vs recebimento). */}
+      {modalShareComprovante && (() => {
+        const ehRecebimento = modalShareComprovante.tipo === "recebimento";
+        const tituloModal = ehRecebimento ? "Comprovante de recebimento gerado" : "Comprovante de devolução gerado";
+        const linhaSucesso = ehRecebimento
+          ? `${modalShareComprovante.qtd} equipamento(s) recebido(s) com sucesso.`
+          : `${modalShareComprovante.qtd} equipamento(s) devolvido(s) com sucesso.`;
+        const ctaText = ehRecebimento
+          ? "Compartilhe o comprovante assinado com a locadora (rastreio do que foi entregue):"
+          : "Compartilhe o comprovante assinado com a locadora:";
+        const tituloShare = ehRecebimento ? "Comprovante de recebimento" : "Comprovante de devolução";
+        const textoShare = ehRecebimento
+          ? `Comprovante de recebimento de equipamentos · FC Engenharia\n${modalShareComprovante.url}`
+          : `Comprovante de devolução de equipamentos · FC Engenharia\n${modalShareComprovante.url}`;
+        // No recebimento NÃO existe fluxo "volta pro Almox" — só fecha o modal.
+        const fechar = () => {
+          setModalShareComprovante(null);
+          if (!ehRecebimento) voltarParaAlmoxSeNecessario();
+        };
+        return (
         <Modal
-          title="Comprovante de devolução gerado"
-          onClose={() => { setModalShareComprovante(null); voltarParaAlmoxSeNecessario(); }}
+          title={tituloModal}
+          onClose={fechar}
           saveLabel="Fechar"
-          onSave={() => { setModalShareComprovante(null); voltarParaAlmoxSeNecessario(); }}
+          onSave={fechar}
         >
           <div className="text-center py-3">
             <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-emerald-100 mb-2">
               <CheckCircle2 className="w-8 h-8 text-emerald-600" />
             </div>
             <p className="text-sm font-semibold text-slate-800">
-              {modalShareComprovante.qtd} equipamento(s) devolvido(s) com sucesso.
+              {linhaSucesso}
             </p>
-            <p className="text-xs text-slate-500 mt-1">Compartilhe o comprovante assinado com a locadora:</p>
+            <p className="text-xs text-slate-500 mt-1">{ctaText}</p>
           </div>
           <div className="grid grid-cols-1 gap-2">
             <button
               type="button"
               onClick={async () => {
                 const url = modalShareComprovante.url;
-                const txt = `Comprovante de devolução de equipamentos · FC Engenharia\n${url}`;
+                const txt = textoShare;
                 // Tenta Web Share API (mobile); senão abre WhatsApp Web.
                 if ((navigator as any).share) {
                   try {
-                    await (navigator as any).share({ title: "Comprovante de devolução", text: txt, url });
+                    await (navigator as any).share({ title: tituloShare, text: txt, url });
                     return;
                   } catch { /* user cancelou — segue p/ wa.me */ }
                 }
@@ -2999,7 +3121,8 @@ export default function EquipamentosLocados() {
             </button>
           </div>
         </Modal>
-      )}
+        );
+      })()}
 
       {/* Modal devolução */}
       {modalDev && (

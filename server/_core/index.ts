@@ -504,6 +504,39 @@ Regras:
     }
   });
 
+  // Rev. 2465 — Comprovante de RECEBIMENTO de equipamento locado (PDF
+  // público assinado). Espelha a rota de devolução: token gerado em
+  // `locadoCriar` quando assinaturas são capturadas. Locadora abre direto
+  // pelo link compartilhado no WhatsApp, sem login.
+  app.get("/api/comprovante-recebimento/:eventoId/:token.pdf", async (req: any, res: any) => {
+    try {
+      const eventoId = Number(req.params.eventoId);
+      const token = String(req.params.token || "");
+      if (!Number.isFinite(eventoId) || !token) return res.status(400).send("ID/token inválido");
+      const { getDb } = await import("../db");
+      const { equipamentoLocadoEventos } = await import("../../drizzle/schema");
+      const { eq: drizzleEq } = await import("drizzle-orm");
+      const db = await getDb();
+      if (!db) return res.status(500).send("DB indisponível");
+      const [ev] = await db.select().from(equipamentoLocadoEventos)
+        .where(drizzleEq(equipamentoLocadoEventos.id, eventoId));
+      if (!ev || ev.tipo !== "RECEBIMENTO") return res.status(404).send("Comprovante não encontrado");
+      if (!ev.pdfComprovanteToken || ev.pdfComprovanteToken !== token) {
+        return res.status(403).send("Token inválido");
+      }
+      const { fetchReceiptData, generateReceiptPdf } = await import("../services/equipmentReceiptPdf");
+      const data = await fetchReceiptData(eventoId);
+      const doc = generateReceiptPdf(data);
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `inline; filename="comprovante-recebimento-${eventoId}.pdf"`);
+      doc.pipe(res);
+      doc.end();
+    } catch (e: any) {
+      console.error("[comprovante-recebimento]", e);
+      res.status(500).send(`Erro: ${e?.message || "desconhecido"}`);
+    }
+  });
+
   app.use("/uploads", express.static(path.join(process.cwd(), "server/uploads")));
 
   app.use("/uploads", async (req: any, res: any) => {

@@ -501,10 +501,24 @@ export const equipamentosRouter = router({
       funcionarioResponsavelNome: z.string().max(255).optional(),
       observacoes: z.string().optional(),
       ocAnteriorId: z.number().optional(),
+      // Rev. 2465 — assinaturas (PNG dataURL) + nomes. Recebimento espelha
+      // o fluxo da Rev. 2453 (devolução): ENTREGADOR = locadora (quem entrega
+      // o equipamento na obra), RECEBEDOR = operador FC (quem confere).
+      assinaturaEntregadorNome: z.string().min(1).max(255).optional(),
+      assinaturaEntregadorUrl:  z.string().optional(),
+      assinaturaRecebedorNome:  z.string().min(1).max(255).optional(),
+      assinaturaRecebedorUrl:   z.string().optional(),
     }))
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      // Rev. 2465 — Tenant isolation (hardening apontado pelo code review).
+      // Confirma que a empresa pertence ao usuário antes de qualquer insert.
+      const allowedCompanies = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+      const allowedIds = (allowedCompanies as any[]).map(c => c.id);
+      if (!allowedIds.includes(input.companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta empresa." });
+      }
       // Foto OBRIGATÓRIA no recebimento (regra de negócio do user)
       if (!input.fotosRecebimento || input.fotosRecebimento.length === 0) {
         throw new TRPCError({ code: "BAD_REQUEST", message: "Foto de recebimento é obrigatória." });
@@ -533,8 +547,15 @@ export const equipamentosRouter = router({
         ocAnteriorId: input.ocAnteriorId ?? null,
       }).returning({ id: equipamentosLocados.id });
 
+      // Rev. 2465 — Token HMAC pro comprovante PDF público (só quando há
+      // par completo de assinaturas). Mesmo padrão da `locadoDevolverEmLote`.
+      const temAssinaturas = !!(input.assinaturaEntregadorUrl && input.assinaturaRecebedorUrl);
+      const pdfToken = temAssinaturas
+        ? crypto.randomBytes(24).toString("hex")
+        : null;
+
       // Registra evento RECEBIMENTO automaticamente
-      await db.insert(equipamentoLocadoEventos).values({
+      const [insEv] = await db.insert(equipamentoLocadoEventos).values({
         companyId: input.companyId,
         equipamentoLocadoId: created.id,
         tipo: "RECEBIMENTO",
@@ -545,7 +566,13 @@ export const equipamentosRouter = router({
         funcionarioNome: input.funcionarioResponsavelNome ?? null,
         usuarioId: ctx.user.id,
         usuarioNome: ctx.user.name || String(ctx.user.id),
-      });
+        // Rev. 2465 — assinaturas + token (null quando não capturadas)
+        assinaturaEntregadorNome: input.assinaturaEntregadorNome || null,
+        assinaturaEntregadorUrl:  input.assinaturaEntregadorUrl  || null,
+        assinaturaRecebedorNome:  input.assinaturaRecebedorNome  || null,
+        assinaturaRecebedorUrl:   input.assinaturaRecebedorUrl   || null,
+        pdfComprovanteToken:      pdfToken,
+      }).returning({ id: equipamentoLocadoEventos.id });
 
       // Rev. 2405 — Sync com almoxarifado da obra (idempotente).
       if (input.obraId) {
@@ -569,7 +596,13 @@ export const equipamentosRouter = router({
           userName: ctx.user.name || String(ctx.user.id),
         });
       }
-      return { id: created.id };
+      return {
+        id: created.id,
+        // Rev. 2465 — comprovante PDF público (só quando assinaturas capturadas).
+        comprovante: (insEv && pdfToken)
+          ? { eventoId: insEv.id, token: pdfToken }
+          : null,
+      };
     }),
 
   locadoAtualizar: protectedProcedure
