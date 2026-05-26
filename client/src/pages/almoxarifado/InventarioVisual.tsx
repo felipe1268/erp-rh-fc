@@ -324,12 +324,20 @@ export default function InventarioVisualBaias() {
         }`}
         title={!semBaia ? "Clique pra ver o histórico completo" : undefined}
       >
-        {/* Foto */}
-        <div className="relative h-32 bg-gradient-to-br from-slate-100 to-slate-200">
+        {/* Foto — Rev. 2433: `overflow-hidden` + `absolute inset-0` na img
+            pra evitar que fotos com proporção estranha vazem sobre os mini-
+            cards no Safari iPad (caso reportado pelo user: foto da areia
+            cobrindo nome + Chegou hoje / Restante / Consumo). */}
+        <div className="relative h-32 bg-gradient-to-br from-slate-100 to-slate-200 overflow-hidden flex-shrink-0">
           {b.fotoUrl ? (
-            <img src={b.fotoUrl} alt={b.nome} className="w-full h-full object-cover" />
+            <img
+              src={b.fotoUrl}
+              alt={b.nome}
+              className="absolute inset-0 w-full h-full object-cover block"
+              loading="lazy"
+            />
           ) : (
-            <div className="w-full h-full flex items-center justify-center text-slate-400">
+            <div className="absolute inset-0 flex items-center justify-center text-slate-400">
               <Camera className="w-12 h-12" />
             </div>
           )}

@@ -1,6 +1,42 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2433 — **ALMOXARIFADO · INVENTÁRIO VISUAL · fix de layout: foto da
+ * baia vazando sobre o nome + mini-cards (Chegou hoje / Restante / Consumo)
+ * no Safari iPad.**
+ *
+ * CONTEXTO (print anexado pelo user — iPad Safari, tela "Inventário Visual
+ * de Baias" em QIU 2 - FASE 4): o card da baia com foto (areia) renderizava
+ * a imagem cobrindo TODO o card, deixando o nome, badge de material, linha
+ * "Saldo no sistema" e o grid de mini-cards (Chegou hoje / Restante /
+ * Consumo dia) ESCONDIDOS atrás da foto. O card sem foto, do lado, ficava
+ * perfeito.
+ *
+ * CAUSA-RAIZ
+ * - Div da foto era `relative h-32 bg-gradient-...` SEM `overflow-hidden`
+ *   próprio. A `<img>` era `w-full h-full object-cover`. Em Safari iPad,
+ *   quando a imagem tem proporção natural muito vertical, o `h-full` na
+ *   img filha falha intermitentemente (a img assume altura próxima da
+ *   natural), e como o pai não tinha `overflow-hidden`, a imagem
+ *   transbordava pra cima dos demais blocos do card.
+ *
+ * DECISÃO
+ * - Pattern bulletproof: `overflow-hidden flex-shrink-0` no wrapper +
+ *   `absolute inset-0 w-full h-full object-cover block` na img. A img passa
+ *   a ser absolutamente posicionada dentro do retângulo de 128px do
+ *   wrapper — independente da proporção natural ou bug do user-agent, ela
+ *   FICA dentro do retângulo. `block` na img elimina o gap inline.
+ * - Mesmo tratamento no placeholder do ícone Camera (`absolute inset-0`).
+ * - `loading="lazy"` aproveitado de bonus pra economizar dados em mobile.
+ *
+ * ARQUIVOS
+ * - `client/src/pages/almoxarifado/InventarioVisual.tsx` L327-345.
+ *
+ * VALIDAÇÃO
+ * - Zero backend, mudança 100% CSS/JSX. R-001/R-007/R-010 OK.
+ *
+ * ──────────────────────────────────────────────────────────────────────
+ *
  * Rev. 2432 — **ALMOXARIFADO · INVENTÁRIO SEMANAL · `window.confirm` nativo
  * substituído por AlertDialog estilizado ao cancelar a sessão (mostrava
  * URL do host Replit + "Bloquear caixas de diálogo" no iOS — feio e o user
