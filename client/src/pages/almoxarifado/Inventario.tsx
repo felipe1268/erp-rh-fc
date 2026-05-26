@@ -7,6 +7,10 @@ import {
   ClipboardList, Loader2, CheckCircle2, AlertTriangle,
   Play, Package, ChevronRight, XCircle, Building2, HardHat,
 } from "lucide-react";
+import {
+  AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction,
+} from "@/components/ui/alert-dialog";
 
 function n(v: any) { return parseFloat(v ?? "0") || 0; }
 function fmt(v: any) { return n(v).toLocaleString("pt-BR", { maximumFractionDigits: 3 }); }
@@ -135,6 +139,8 @@ export default function AlmoxarifadoInventario() {
   const utils = trpc.useUtils();
 
   const [obraContexto, setObraContexto] = useState<number | null>(null);
+  // Rev. 2432 — abre AlertDialog estilizado no lugar do window.confirm nativo.
+  const [confirmCancelar, setConfirmCancelar] = useState(false);
 
   const { data: obrasAtivas = [] } = trpc.obras.listActive.useQuery(
     { companyId, companyIds: [companyId] }, { enabled: !!companyId }
@@ -250,11 +256,7 @@ export default function AlmoxarifadoInventario() {
             <button
               className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-red-200 text-red-600 bg-red-50 hover:bg-red-100 text-sm font-semibold active:scale-95 transition disabled:opacity-50"
               disabled={cancelSession.isPending}
-              onClick={() => {
-                if (window.confirm("Cancelar o inventário desta semana? Todos os dados registrados serão apagados.")) {
-                  cancelSession.mutate({ sessionId: session.id });
-                }
-              }}
+              onClick={() => setConfirmCancelar(true)}
             >
               {cancelSession.isPending
                 ? <Loader2 className="w-4 h-4 animate-spin" />
@@ -263,6 +265,42 @@ export default function AlmoxarifadoInventario() {
             </button>
           )}
         </div>
+
+        {/* Rev. 2432 — AlertDialog substitui window.confirm nativo (mostrava
+            URL do host + "Bloquear caixas de diálogo" no iOS). */}
+        <AlertDialog open={confirmCancelar} onOpenChange={setConfirmCancelar}>
+          <AlertDialogContent className="max-w-md">
+            <AlertDialogHeader>
+              <AlertDialogTitle className="flex items-center gap-2 text-red-600">
+                <AlertTriangle className="w-5 h-5" /> Cancelar inventário desta semana?
+              </AlertDialogTitle>
+              <AlertDialogDescription className="space-y-2 pt-2">
+                <span className="block">
+                  Todos os dados registrados nesta sessão serão <span className="font-semibold text-red-600">apagados</span> e a contagem terá que ser refeita do zero.
+                </span>
+                {session && (
+                  <span className="block text-xs text-slate-500">
+                    Semana <span className="font-mono font-semibold text-slate-700">{session.semanaRef}</span> · {nomeContexto}
+                  </span>
+                )}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={cancelSession.isPending}>Manter inventário</AlertDialogCancel>
+              <AlertDialogAction
+                disabled={cancelSession.isPending}
+                onClick={() => {
+                  if (session) cancelSession.mutate({ sessionId: session.id });
+                  setConfirmCancelar(false);
+                }}
+                className="bg-red-600 hover:bg-red-700 focus:ring-red-600"
+              >
+                {cancelSession.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <XCircle className="w-4 h-4 mr-2" />}
+                Sim, cancelar
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
 
         {/* Sem sessão ativa */}
         {!session && (

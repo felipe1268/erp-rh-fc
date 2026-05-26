@@ -657,3 +657,5 @@
 - **Rev. 2423** — AVISO PRÉVIO · trabalhado volta a 30d fixos de CUMPRIMENTO (caso Myriélle 2 anos); VERBA segue 30+3·ano. `calcularDiasAviso(anos,tipo)→30` p/ qualquer `*_trabalhado`. AvisoPrevio.tsx + rescisaoCalc.ts + avisoPrevioFerias.ts + dashboards.ts (CDM). Ver `shared/changelog.ts`.
 
 - **Rev. 2424** — UX · PLANEJAMENTO/LISTA · `window.confirm` nativo substituído por AlertDialog estilizado ao excluir projeto (com nome+cliente, aviso destrutivo, Loader2). `PlanejamentoLista.tsx`. Ver `shared/changelog.ts`.
+
+- **Rev. 2425** — PLANEJAMENTO · LEITURA PURA DO MSP · Texto9 na cadeia de fallback + revertido cálculo dinâmico `mspReadOnly`/`avancoPrevistoDia` (caso HOTEL DO PAPA). Texto9 depois removido na Rev. 2427. Ver `shared/changelog.ts`.

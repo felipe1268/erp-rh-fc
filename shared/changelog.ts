@@ -1,6 +1,42 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2432 — **ALMOXARIFADO · INVENTÁRIO SEMANAL · `window.confirm` nativo
+ * substituído por AlertDialog estilizado ao cancelar a sessão (mostrava
+ * URL do host Replit + "Bloquear caixas de diálogo" no iOS — feio e o user
+ * podia clicar em "Bloquear" e travar todos os confirms da app).**
+ *
+ * CONTEXTO (print anexado pelo user — iPad Safari, tela de Inventário
+ * Semanal): ao clicar em "Cancelar" no header da sessão ativa, abria o
+ * `window.confirm` nativo do iOS exibindo:
+ *   - Título: "b41aedae-...replit.dev diz" (URL crua do host)
+ *   - Texto: "Cancelar o inventário desta semana? Todos os dados...
+ *     serão apagados."
+ *   - Botões: OK · Cancelar · **Bloquear caixas de diálogo** (em
+ *     vermelho)
+ * Problema duplo: visual quebrado (URL exposta) + risco do user clicar em
+ * "Bloquear" e perder TODOS os confirms da app pelo resto da sessão.
+ *
+ * DECISÃO
+ * - Trocar `window.confirm` por `AlertDialog` do shadcn (mesmo padrão da
+ *   Rev. 2424 em `PlanejamentoLista`). Header com ícone `AlertTriangle`
+ *   vermelho, texto destacando "apagados", linha de contexto com
+ *   semana+obra, botão "Manter inventário" (cancel) + "Sim, cancelar"
+ *   vermelho com Loader2 enquanto a mutation roda.
+ *
+ * ARQUIVOS
+ * - `client/src/pages/almoxarifado/Inventario.tsx`:
+ *   - L9-12: imports AlertDialog/Action/Cancel/Description/Footer/Header/Title.
+ *   - L142-144: estado `confirmCancelar`.
+ *   - L260: onClick passa a abrir o modal (em vez de window.confirm).
+ *   - L270-304: bloco AlertDialog novo logo após o header.
+ *
+ * VALIDAÇÃO
+ * - Zero backend. Mutation `warehouse.cancelInventorySession` intocada.
+ * - R-001/R-007/R-010 OK.
+ *
+ * ──────────────────────────────────────────────────────────────────────
+ *
  * Rev. 2431 — **ALMOXARIFADO · INVENTÁRIO VISUAL · preview visual da foto no
  * modal "Registrar baixa da baia" (antes só mostrava o nome do arquivo).**
  *
