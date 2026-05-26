@@ -678,3 +678,4 @@
 - **Rev. 2435** — ALMOXARIFADO · INVENTÁRIO VISUAL · bloqueio de baixa que zeraria saldo pra negativo + feedback ao vivo no modal "Registrar baixa" (precursor da validação correta da Rev. 2437). `InventarioVisual.tsx`. Ver `shared/changelog.ts`.
 - **Rev. 2436** — ALMOXARIFADO · INVENTÁRIO VISUAL · validação DURA de saldo no BACKEND (precursor da Rev. 2437 — só pegava BAIXA, não pegava leitura subindo). `server/routers/warehouse.ts` L2594-2620. Ver `shared/changelog.ts`.
 - **Rev. 2437** — ALMOXARIFADO · INVENTÁRIO VISUAL · validação CORRETA `volumeEstimado ≤ saldoItem` (back+front) — cobre num só if "subir sem entrada" e "baixar pra negativo". `warehouse.ts` L2564-2586 + `InventarioVisual.tsx` L253-266/L881-919. Ver `shared/changelog.ts`.
+- **Rev. 2438** — ALMOXARIFADO · VISÃO GERAL · badge mostra NOME real da obra (lookup `obrasAtivas`) com truncate+title. `index.tsx` L1932-2010. Ver `shared/changelog.ts`.

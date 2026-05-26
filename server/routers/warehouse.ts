@@ -3044,9 +3044,14 @@ REGRAS:
       }
       // Baias com itemId apontando pra item NÃO-agregado (categoria mudou depois)
       // — listar como manual pra preservar histórico, taggeadas pela obra da baia.
+      // Rev. 2445 — DEFENSIVO: filtra baias cujo itemId aponta pra item
+      // INATIVO/INEXISTENTE. Antes (bug user 22:38), item deletado deixava
+      // baia órfã visível eternamente no Inventário Visual.
       const itensAggIds = new Set(itensAgg.map((it: any) => it.id));
+      const itensAtivosIds = new Set(itensRows.filter((it: any) => it.ativo).map((it: any) => it.id));
       for (const b of baias) {
         if (b.itemId != null && !itensAggIds.has(b.itemId)) {
+          if (!itensAtivosIds.has(b.itemId)) continue; // item deletado → baia some
           const ult = toCamel(mapUlt.get(b.id));
           const ant = toCamel(mapPenult.get(b.id));
           result.push({

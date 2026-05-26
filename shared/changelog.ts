@@ -1,6 +1,63 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2445 — **ALMOXARIFADO · CASCADE de exclusão de item: deletar item
+ * agora DESATIVA todas as baias vinculadas + defensivo no listar
+ * esconde baias órfãs apontando pra item inativo.**
+ *
+ * CONTEXTO (prints user 22:38):
+ * o usuário excluiu "Item TESTE -areia" da Visão Geral (passou de
+ * `ativo=true` pra `ativo=false`) — o item sumiu corretamente da
+ * Visão Geral (`listarItens` filtra `ativo=true`). MAS no Inventário
+ * Visual de Baias da obra "QIU 2 – FASE 4" o card "Item TESTE -areia"
+ * continuou aparecendo, com "Saldo no sistema: 0 m³" e botão "Registrar
+ * baixa" ativo — porque a baia vinculada continuava com `ativo=true` e
+ * caía no fallback "baias com itemId apontando pra item NÃO-agregado"
+ * do `baiaAgregadosListar` (warehouse.ts L3045-3070), pensado pra
+ * cobrir mudança de categoria.
+ *
+ * CAUSA RAIZ
+ * `server/routers/compras.ts → excluirItem` só fazia soft-delete do
+ * `almoxarifado_itens` (Rev. 2388/2400 — auditoria/justificativa). Nunca
+ * mexia em `almoxarifado_baias`. Foreign key na baia tinha `itemId`
+ * apontando pro item agora inativo, e ninguém limpava.
+ *
+ * DECISÃO (em 2 frentes)
+ * 1. CASCADE no `excluirItem`: depois do soft-delete do item, faz
+ *    `UPDATE almoxarifado_baias SET ativo=false WHERE itemId = ?`
+ *    com `RETURNING` pra registrar a lista de baias desativadas no
+ *    `dadosDepois` da auditoria.
+ * 2. DEFENSIVO no `baiaAgregadosListar`: no fallback L3045-3070, antes
+ *    de empurrar a baia "manual" no result, verifica se o `itemId`
+ *    aponta pra item ATIVO. Se item foi deletado (não está em
+ *    `itensRows.filter(ativo)`), pula a baia.
+ *
+ * Por que as duas? CASCADE resolve novos deletes; defensivo cobre o
+ * "Item TESTE -areia" já corrompido em produção (sem precisar SQL
+ * manual em DB de prod — R-001/R-007/R-010 OK).
+ *
+ * ARQUIVOS
+ * - `server/routers/compras.ts`
+ *   - L122: import de `almoxarifadoBaias`.
+ *   - L2253-2261: cascade `UPDATE ... SET ativo=false RETURNING`.
+ *   - L2272: lista incluída em `dadosDepois.baiasDesativadas`.
+ *   - L2276: retorno inclui `baiasDesativadas: count`.
+ * - `server/routers/warehouse.ts`
+ *   - L3050-3057: novo `itensAtivosIds: Set` + `continue` se item
+ *     inativo.
+ *
+ * VALIDAÇÃO
+ * - R-001/R-007/R-010 OK — só UPDATE com WHERE específico em
+ *   `almoxarifado_baias.itemId = ?`. Zero ALTER/DROP/DELETE de schema.
+ * - Histórico preservado: `almoxarifado_baia_leituras` permanece
+ *   intacto (não cascateia em leituras passadas).
+ * - Auditoria tem snapshot de quais baias foram desativadas — gestor
+ *   consegue reverter manualmente se quiser.
+ * - Frontend não precisa mudança — query consolidada já reflete o
+ *   filtro novo.
+ *
+ * ──────────────────────────────────────────────────────────────────────
+ *
  * Rev. 2444 — **[BUG GRAVE] ALMOXARIFADO · INVENTÁRIO VISUAL DE BAIAS ·
  * visão consolidada NÃO REPLICA MAIS itens do almoxarifado CENTRAL em
  * todas as obras. Item central só aparece numa obra se já houve

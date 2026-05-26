@@ -116,7 +116,7 @@ import { eq, and, desc, asc, ilike, or, sql, gte, lte, inArray, isNull } from "d
 import {
   fornecedores, avaliacoesFornecedor, almoxarifadoItens, almoxarifadoMovimentacoes,
   almoxarifadoCategorias, almoxarifadoUnidades, almoxarifadoRecebimentos,
-  almoxarifadoAuditoria,
+  almoxarifadoAuditoria, almoxarifadoBaias,
   obraResponsaveisEstoque,
   comprasSolicitacoes, comprasSolicitacoesItens,
   comprasCotacoes, comprasCotacoesItens,
@@ -2247,6 +2247,15 @@ export const comprasRouter = router({
       await db.update(almoxarifadoItens)
         .set({ ativo: false, atualizadoEm: new Date().toISOString() })
         .where(eq(almoxarifadoItens.id, input.id));
+      // Rev. 2445 — CASCADE: desativa baias vinculadas ao item.
+      // Antes (bug user 22:38): user deletava "Item TESTE -areia" mas a
+      // baia ligada continuava ativa e aparecia no Inventário Visual via
+      // fallback "baias com itemId apontando pra item NÃO-agregado".
+      // Item deletado → baia some de tudo.
+      const baiasDesativadas = await db.update(almoxarifadoBaias)
+        .set({ ativo: false, atualizadoEm: new Date().toISOString() } as any)
+        .where(and(eq(almoxarifadoBaias.itemId, input.id), eq(almoxarifadoBaias.ativo, true)))
+        .returning({ id: almoxarifadoBaias.id, nome: almoxarifadoBaias.nome, obraId: almoxarifadoBaias.obraId });
       await db.insert(almoxarifadoAuditoria).values({
         companyId: item.companyId,
         obraId: item.obraId,
@@ -2257,11 +2266,11 @@ export const comprasRouter = router({
         entidadeId: item.id,
         entidadeNome: item.nome,
         dadosAntes: item as any,
-        dadosDepois: { ativo: false } as any,
+        dadosDepois: { ativo: false, baiasDesativadas } as any,
         justificativa: justUsada,
         ip: getClientIp(ctx),
       });
-      return { success: true };
+      return { success: true, baiasDesativadas: baiasDesativadas.length };
     }),
 
   // ══════════════════════════════════════════════════════════════
