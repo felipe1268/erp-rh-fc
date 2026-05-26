@@ -6519,7 +6519,7 @@ export default function Cotacoes() {
         })()}
       </DialogContent>
     </Dialog>
-      </DashboardLayout>
+      </Wrapper>
     );
   }
 
