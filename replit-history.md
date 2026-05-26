@@ -673,3 +673,4 @@
 - **Rev. 2431** — ALMOXARIFADO · INVENTÁRIO VISUAL · preview visual da foto no modal "Registrar baixa da baia" (`<img>` h-44 + botões Trocar/Remover + badge "Foto pronta · NN KB"). `InventarioVisual.tsx`. Ver `shared/changelog.ts`.
 
 - **Rev. 2432** — ALMOXARIFADO · INVENTÁRIO SEMANAL · `window.confirm` nativo substituído por AlertDialog estilizado ao cancelar sessão (mostrava URL Replit + "Bloquear caixas de diálogo" no iOS). `Inventario.tsx`. Ver `shared/changelog.ts`.
+- **Rev. 2433** — ALMOXARIFADO · INVENTÁRIO VISUAL · fix layout foto baia vazando sobre mini-cards no Safari iPad — wrapper `overflow-hidden flex-shrink-0` + img `absolute inset-0` + `loading="lazy"`. `InventarioVisual.tsx` L327-345. Ver `shared/changelog.ts`.

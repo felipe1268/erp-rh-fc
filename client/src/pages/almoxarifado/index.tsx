@@ -1874,16 +1874,17 @@ export default function AlmoxarifadoPage() {
                   return (
                     <div
                       key={idx}
-                      onClick={modoClassificarEquip ? () => toggleSelClassif(item) : undefined}
-                      className={`bg-white rounded-xl border shadow-sm overflow-hidden flex flex-col transition hover:shadow-md ${
+                      onClick={modoClassificarEquip ? () => toggleSelClassif(item) : () => abrirEditar(item)}
+                      className={`bg-white rounded-xl border shadow-sm overflow-hidden flex flex-col transition hover:shadow-md cursor-pointer ${
                         isSel ? "border-blue-500 ring-2 ring-blue-300" :
                         abaixo ? "border-red-200" : "border-gray-100"
-                      } ${modoClassificarEquip ? "cursor-pointer" : ""}`}
+                      }`}
+                      title={modoClassificarEquip ? undefined : "Clique para ver detalhes / editar"}
                     >
                       <div
-                        className={`relative bg-gray-50 flex items-center justify-center ${!modoClassificarEquip && item.fotoUrl ? "cursor-pointer group" : ""}`}
+                        className={`relative bg-gray-50 flex items-center justify-center ${!modoClassificarEquip && item.fotoUrl ? "group" : ""}`}
                         style={{ height: 140 }}
-                        onClick={modoClassificarEquip ? undefined : () => { if (item.fotoUrl) setFotoExpandida({ url: item.fotoUrl, nome: item.nome }); }}
+                        onClick={modoClassificarEquip ? undefined : (e) => { if (item.fotoUrl) { e.stopPropagation(); setFotoExpandida({ url: item.fotoUrl, nome: item.nome }); } }}
                       >
                         {item.fotoUrl ? (
                           <>
@@ -1929,25 +1930,44 @@ export default function AlmoxarifadoPage() {
                             </p>
                           )}
                         </div>
-                        {/* Rev. 2438 — Badge mostra o NOME da obra (não "Obra:"
-                            genérico). Tooltip com nome completo + qtd. */}
+                        {/* Rev. 2440 — Badges limitados a 3 (cards) — restante
+                            como "+N locais" abrindo modal de detalhes. Tooltip
+                            consolidado lista TODOS os locais. */}
                         <div className="text-[10px] text-gray-400 border-t border-gray-50 pt-1 mt-1">
                           <div className="flex flex-wrap gap-1">
-                            {item.almoxarifados.map((a: any, ai: number) => {
-                              const nomeObra = a.tipo === "central"
-                                ? "Central"
-                                : ((obrasAtivas as any[]).find((o: any) => o.id === a.obraId)?.nome || `Obra #${a.obraId}`);
-                              const qtdTxt = a.quantidade % 1 === 0 ? a.quantidade : a.quantidade.toFixed(2);
+                            {(() => {
+                              const locais = (item.almoxarifados as any[]).map((a: any) => {
+                                const nomeObra = a.tipo === "central"
+                                  ? "Central"
+                                  : ((obrasAtivas as any[]).find((o: any) => o.id === a.obraId)?.nome || `Obra #${a.obraId}`);
+                                const qtdTxt = a.quantidade % 1 === 0 ? a.quantidade : a.quantidade.toFixed(2);
+                                return { nomeObra, qtdTxt, tipo: a.tipo };
+                              });
+                              const visiveis = locais.slice(0, 3);
+                              const restante = locais.length - visiveis.length;
+                              const tooltipFull = locais.map(l => `${l.nomeObra}: ${l.qtdTxt} ${item.unidade ?? ""}`).join("\n");
                               return (
-                                <span
-                                  key={ai}
-                                  title={`${nomeObra}: ${qtdTxt} ${item.unidade ?? ""}`}
-                                  className={`font-medium px-1.5 py-0.5 rounded-full max-w-[140px] truncate inline-block ${a.tipo === "central" ? "bg-emerald-100 text-emerald-700" : "bg-blue-100 text-blue-700"}`}
-                                >
-                                  {nomeObra}: {qtdTxt}
-                                </span>
+                                <>
+                                  {visiveis.map((l, ai) => (
+                                    <span
+                                      key={ai}
+                                      title={`${l.nomeObra}: ${l.qtdTxt} ${item.unidade ?? ""}`}
+                                      className={`font-medium px-1.5 py-0.5 rounded-full max-w-[140px] truncate inline-block ${l.tipo === "central" ? "bg-emerald-100 text-emerald-700" : "bg-blue-100 text-blue-700"}`}
+                                    >
+                                      {l.nomeObra}: {l.qtdTxt}
+                                    </span>
+                                  ))}
+                                  {restante > 0 && (
+                                    <span
+                                      title={tooltipFull}
+                                      className="font-semibold px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200"
+                                    >
+                                      +{restante} {restante === 1 ? "local" : "locais"}
+                                    </span>
+                                  )}
+                                </>
                               );
-                            })}
+                            })()}
                           </div>
                         </div>
                       </div>
@@ -1974,11 +1994,16 @@ export default function AlmoxarifadoPage() {
                       {consListFinal.length === 0 ? (
                         <tr><td colSpan={7} className="text-center py-12 text-gray-400">Nenhum item no estoque</td></tr>
                       ) : consListFinal.map((item: any, idx: number) => (
-                        <tr key={idx} className={`border-b border-gray-50 hover:bg-gray-50/70 ${item.quantidadeMinima > 0 && item.quantidadeTotal < item.quantidadeMinima ? "bg-red-50/20" : ""}`}>
+                        <tr
+                          key={idx}
+                          onClick={() => abrirEditar(item)}
+                          className={`border-b border-gray-50 hover:bg-emerald-50/40 cursor-pointer ${item.quantidadeMinima > 0 && item.quantidadeTotal < item.quantidadeMinima ? "bg-red-50/20" : ""}`}
+                          title="Clique para ver detalhes / editar"
+                        >
                           <td className="px-3 py-2">
                             <div
                               className={`w-10 h-10 rounded-lg overflow-hidden border border-gray-100 bg-gray-50 flex items-center justify-center ${item.fotoUrl ? "cursor-pointer hover:ring-2 hover:ring-emerald-300 transition" : ""}`}
-                              onClick={() => { if (item.fotoUrl) setFotoExpandida({ url: item.fotoUrl, nome: item.nome }); }}
+                              onClick={(e) => { if (item.fotoUrl) { e.stopPropagation(); setFotoExpandida({ url: item.fotoUrl, nome: item.nome }); } }}
                             >
                               {item.fotoUrl
                                 ? <img src={item.fotoUrl} alt={item.nome} className="w-full h-full object-cover" />
@@ -2001,23 +2026,38 @@ export default function AlmoxarifadoPage() {
                             <StatusBadge atual={item.quantidadeTotal} minimo={item.quantidadeMinima} />
                           </td>
                           <td className="px-3 py-3 text-center">
-                            {/* Rev. 2438 — Mesma regra do card: nome real da obra. */}
+                            {/* Rev. 2440 — Tabela também limitada a 4 badges + "+N". */}
                             <div className="flex flex-wrap gap-1 justify-center">
-                              {item.almoxarifados.map((a: any, ai: number) => {
-                                const nomeObra = a.tipo === "central"
-                                  ? "Central"
-                                  : ((obrasAtivas as any[]).find((o: any) => o.id === a.obraId)?.nome || `Obra #${a.obraId}`);
-                                const qtdTxt = a.quantidade % 1 === 0 ? a.quantidade : a.quantidade.toFixed(2);
+                              {(() => {
+                                const locais = (item.almoxarifados as any[]).map((a: any) => {
+                                  const nomeObra = a.tipo === "central"
+                                    ? "Central"
+                                    : ((obrasAtivas as any[]).find((o: any) => o.id === a.obraId)?.nome || `Obra #${a.obraId}`);
+                                  const qtdTxt = a.quantidade % 1 === 0 ? a.quantidade : a.quantidade.toFixed(2);
+                                  return { nomeObra, qtdTxt, tipo: a.tipo };
+                                });
+                                const visiveis = locais.slice(0, 4);
+                                const restante = locais.length - visiveis.length;
+                                const tooltipFull = locais.map(l => `${l.nomeObra}: ${l.qtdTxt} ${item.unidade ?? ""}`).join("\n");
                                 return (
-                                  <span
-                                    key={ai}
-                                    title={`${nomeObra}: ${qtdTxt} ${item.unidade ?? ""}`}
-                                    className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full max-w-[180px] truncate inline-block ${a.tipo === "central" ? "bg-emerald-100 text-emerald-700" : "bg-blue-100 text-blue-700"}`}
-                                  >
-                                    {nomeObra}: {qtdTxt}
-                                  </span>
+                                  <>
+                                    {visiveis.map((l, ai) => (
+                                      <span
+                                        key={ai}
+                                        title={`${l.nomeObra}: ${l.qtdTxt} ${item.unidade ?? ""}`}
+                                        className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full max-w-[180px] truncate inline-block ${l.tipo === "central" ? "bg-emerald-100 text-emerald-700" : "bg-blue-100 text-blue-700"}`}
+                                      >
+                                        {l.nomeObra}: {l.qtdTxt}
+                                      </span>
+                                    ))}
+                                    {restante > 0 && (
+                                      <span title={tooltipFull} className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-600">
+                                        +{restante}
+                                      </span>
+                                    )}
+                                  </>
                                 );
-                              })}
+                              })()}
                             </div>
                           </td>
                           <td className="px-4 py-3 text-right">

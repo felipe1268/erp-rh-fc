@@ -1,6 +1,50 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2440 — **ALMOXARIFADO · VISÃO GERAL · card limpo (3 badges + "+N
+ * locais"), card/linha clicáveis abrem modal completo de edição (foto,
+ * nome, categoria, código, unidade, qtd, preço, locação etc.).**
+ *
+ * CONTEXTO (prints user, iPad 22:08, ANDAIME E ESCORAMENTO, 28 itens):
+ * cards estavam VERTICALMENTE GIGANTES — material com 30+ vínculos
+ * (HOTEL DO PAPA, LUCIANA, REVTE-CIVIL etc.) gerava lista de 30 badges
+ * empilhados por card, deixando o grid completamente desalinhado e
+ * impossível de ler. Pior: pra editar foto/preço/mínimo, user tinha
+ * que sair pelo botão de edição que nem aparece no contexto agregado.
+ *
+ * DECISÃO (zero backend, zero query nova)
+ * 1. **Card clicável** (Visão Geral, modo Cards): clique em qualquer
+ *    parte do card chama `abrirEditar(item)` — modal já existente com
+ *    TODOS os campos editáveis (foto via `handleFotoChange` com
+ *    compressão+IA, nome, categoria, unidade, código, qtd atual com
+ *    auditoria, qtd mínima, valor unitário, locação completa). Clique
+ *    na foto continua abrindo o overlay ampliado (com `stopPropagation`
+ *    pra não disparar a edição).
+ * 2. **Linha clicável** (Visão Geral, modo Tabela): mesma regra — linha
+ *    inteira abre o modal de edição; thumbnail mantém o preview
+ *    ampliado via stopPropagation. Hover `bg-emerald-50/40`.
+ * 3. **Badges limitados** (cards: 3 max + "+N locais"; tabela: 4 max
+ *    + "+N"). Chip "+N" tem `title` com a lista COMPLETA dos locais
+ *    (long-press no iPad mostra tudo). Restante fica acessível ao
+ *    abrir o item (cards ficam altura uniforme e o grid volta a ser
+ *    útil visualmente).
+ *
+ * Modo "Classificar Equipamentos" preservado: nele o clique no card
+ * segue marcando/desmarcando (toggleSelClassif), não abrindo edição.
+ *
+ * ARQUIVOS
+ * - `client/src/pages/almoxarifado/index.tsx` L1877-1976 (card clicável
+ *   + badges agregados) e L1999-2065 (linha clicável + badges tabela).
+ *
+ * VALIDAÇÃO
+ * - `abrirEditar` já era usada pelos botões de ação antigos — nenhuma
+ *   regressão de fluxo.
+ * - Auditoria de quantidade (Rev. 2388 + 2400) continua disparando ao
+ *   alterar qty no modal — fluxo intocado.
+ * - R-001/R-007/R-010 OK — só UI, sem ALTER/DDL/DELETE.
+ *
+ * ──────────────────────────────────────────────────────────────────────
+ *
  * Rev. 2439 — **ALMOXARIFADO · INVENTÁRIO SEMANAL · thumbnail da foto do
  * item em cada card + overlay ampliado on-tap (facilita aferição visual
  * no iPad).**
