@@ -1,6 +1,51 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2442 — **ALMOXARIFADO · VISÃO GERAL · Shift+clique pra
+ * selecionar INTERVALO de cards + botões "Marcar todos visíveis" /
+ * "Limpar" na barra de seleção (consolidado).**
+ *
+ * CONTEXTO (print user, iPad 22:18 com teclado Bluetooth):
+ * no modo "Selecionar" do consolidado o operador precisava tocar
+ * card-por-card pra marcar dezenas de itens (ex.: todos os
+ * andaimes / escoramento da página). Pediu: "quero apertar Shift do
+ * telhado pra selecionar tudo de uma vez, quero ganhar tempo".
+ *
+ * DECISÃO
+ * - Range select estilo Finder/Explorer: o 1º clique vira a "âncora"
+ *   (`lastSelClassifIdxRef`). Clique seguinte com **Shift segurado**
+ *   marca TODOS os cards entre âncora..idxAtual da lista visível
+ *   (`consListFinal`, já com filtros de busca/categoria aplicados).
+ *   Range só ADICIONA — nunca remove (igual macOS Finder).
+ * - Cliques sem Shift mantêm o toggle clássico (marca/desmarca um
+ *   por vez) e atualizam a âncora.
+ * - Atalhos novos na barra sticky inferior:
+ *   - "Marcar todos (N)" — adiciona todos os itens da lista visível
+ *     ao Map de seleção, respeitando filtros ativos.
+ *   - "Limpar" — esvazia a seleção e zera a âncora (aparece só
+ *     quando há algo selecionado).
+ * - Hint textual atualizado: "Toque pra escolher · Shift+clique pra
+ *   marcar um intervalo."
+ *
+ * ARQUIVOS
+ * - `client/src/pages/almoxarifado/index.tsx`:
+ *   - L317-366 — `lastSelClassifIdxRef`, `toggleSelClassif(item, idx,
+ *     shift, visibleList)`, `marcarTodosClassif`, `limparSelClassif`,
+ *     `sairModoClassif` (limpa a ref).
+ *   - L2009 — card consolidado: `onClick={(e) => toggleSelClassif(
+ *     item, idx, e.shiftKey, consListFinal)}`.
+ *   - L4456-4475 — barra sticky: botões "Marcar todos" / "Limpar"
+ *     + hint atualizado.
+ *
+ * VALIDAÇÃO
+ * - R-001/R-007/R-010 OK — só UI, sem schema/mutation/backend.
+ * - Sem afetar `modoSelecao` por id (linhas de obra única) — mexe
+ *   só no modo CONSOLIDADO que é o do print do user.
+ * - iPad com teclado físico Bluetooth: `e.shiftKey` é propagado
+ *   normalmente em onClick (Safari iPadOS 16+).
+ *
+ * ──────────────────────────────────────────────────────────────────────
+ *
  * Rev. 2441 — **ALMOXARIFADO · Combobox filtrável de categoria
  * (digite pra achar) no cadastro/edição de item + nos 2 modais de
  * "Alterar categoria em lote".**

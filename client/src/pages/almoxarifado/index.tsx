@@ -313,9 +313,30 @@ export default function AlmoxarifadoPage() {
   // normalizado (consolidado não tem id único, agrega N almoxarifados).
   const [modoClassificarEquip, setModoClassificarEquip] = useState(false);
   const [selecClassif, setSelecClassif] = useState<Map<string, { nome: string; fotoUrl: string; categoria: string }>>(new Map());
-  function toggleSelClassif(item: any) {
+  // Rev. 2442 — guarda o último índice clicado pra dar suporte a Shift+click
+  // (range select estilo Finder/Explorer). Reset quando entra/sai do modo.
+  const lastSelClassifIdxRef = useRef<number | null>(null);
+  function toggleSelClassif(item: any, idx?: number, shift?: boolean, visibleList?: any[]) {
     const k = String(item?.nome || "").toLowerCase().trim();
     if (!k) return;
+    // Rev. 2442 — Shift+click: seleciona TODOS os itens entre lastIdx..idx
+    // do `visibleList` (não toggla; sempre marca).
+    if (shift && typeof idx === "number" && typeof lastSelClassifIdxRef.current === "number" && visibleList && visibleList.length) {
+      const a = Math.min(lastSelClassifIdxRef.current, idx);
+      const b = Math.max(lastSelClassifIdxRef.current, idx);
+      setSelecClassif(prev => {
+        const m = new Map(prev);
+        for (let i = a; i <= b; i++) {
+          const it = visibleList[i];
+          const kk = String(it?.nome || "").toLowerCase().trim();
+          if (kk && !m.has(kk)) m.set(kk, { nome: it.nome, fotoUrl: it.fotoUrl || "", categoria: it.categoria || "" });
+        }
+        return m;
+      });
+      lastSelClassifIdxRef.current = idx;
+      return;
+    }
+    if (typeof idx === "number") lastSelClassifIdxRef.current = idx;
     setSelecClassif(prev => {
       const m = new Map(prev);
       if (m.has(k)) m.delete(k);
@@ -323,9 +344,22 @@ export default function AlmoxarifadoPage() {
       return m;
     });
   }
+  // Rev. 2442 — marca/desmarca em massa baseado na lista atualmente visível.
+  function marcarTodosClassif(visibleList: any[]) {
+    setSelecClassif(prev => {
+      const m = new Map(prev);
+      for (const it of visibleList) {
+        const k = String(it?.nome || "").toLowerCase().trim();
+        if (k && !m.has(k)) m.set(k, { nome: it.nome, fotoUrl: it.fotoUrl || "", categoria: it.categoria || "" });
+      }
+      return m;
+    });
+  }
+  function limparSelClassif() { setSelecClassif(new Map()); lastSelClassifIdxRef.current = null; }
   function sairModoClassif() {
     setModoClassificarEquip(false);
     setSelecClassif(new Map());
+    lastSelClassifIdxRef.current = null;
   }
   function classificarComo(tipo: "proprio" | "alugado") {
     const arr = Array.from(selecClassif.values());
@@ -1969,7 +2003,7 @@ export default function AlmoxarifadoPage() {
                   return (
                     <div
                       key={idx}
-                      onClick={modoClassificarEquip ? () => toggleSelClassif(item) : () => abrirEditar(item)}
+                      onClick={modoClassificarEquip ? (e) => toggleSelClassif(item, idx, e.shiftKey, consListFinal as any[]) : () => abrirEditar(item)}
                       className={`bg-white rounded-xl border shadow-sm overflow-hidden flex flex-col transition hover:shadow-md cursor-pointer ${
                         isSel ? "border-blue-500 ring-2 ring-blue-300" :
                         abaixo ? "border-red-200" : "border-gray-100"
@@ -4413,10 +4447,29 @@ export default function AlmoxarifadoPage() {
               </p>
               <p className="text-[11px] text-gray-500 leading-tight">
                 {selecClassif.size === 0
-                  ? "Toque nos cards pra escolher."
+                  ? "Toque pra escolher · Shift+clique pra marcar um intervalo."
                   : "Escolha a ação abaixo."}
               </p>
             </div>
+            {/* Rev. 2442 — atalhos de seleção: marca todos os itens visíveis
+                (respeita filtro de categoria/busca) ou limpa a seleção. */}
+            <button
+              onClick={() => marcarTodosClassif(consListFinal as any[])}
+              disabled={consListFinal.length === 0}
+              className="inline-flex items-center gap-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 px-3 py-2.5 rounded-lg font-semibold text-xs disabled:opacity-40 disabled:cursor-not-allowed transition"
+              title="Marcar todos os itens visíveis (respeita filtros)"
+            >
+              <CheckSquare className="h-3.5 w-3.5" /> Marcar todos ({consListFinal.length})
+            </button>
+            {selecClassif.size > 0 && (
+              <button
+                onClick={limparSelClassif}
+                className="inline-flex items-center gap-1.5 bg-white hover:bg-gray-100 text-gray-700 border border-gray-300 px-3 py-2.5 rounded-lg font-semibold text-xs transition"
+                title="Limpar seleção"
+              >
+                <Square className="h-3.5 w-3.5" /> Limpar
+              </button>
+            )}
             <button
               onClick={() => {
                 if (selecClassif.size === 0) { toast.warning("Selecione ao menos 1 item."); return; }
