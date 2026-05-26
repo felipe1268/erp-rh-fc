@@ -2,6 +2,7 @@
 
 > Este arquivo guarda os one-liners das revisões antigas para manter o `replit.md` enxuto.
 
+- **Rev. 2479** — EFETIVO/EQUIPE DA OBRA · foto real + badge CIPA nas 2 telas drill-down por obra. Backend enrich CIPA em `getObraFuncionarios` + `getEquipeObra`. Ver `shared/changelog.ts`.
 - **Rev. 2478** — CIPA · badge ATIVO (verde) / ESTABILIDADE (âmbar) em 23 spots (Painel RH + Controle Documentos). Helper `server/_core/cipaStatus.ts` + componente `CipaBadge.tsx`. Ver `shared/changelog.ts`.
 - **Rev. 2477** — CONTROLE DE DOCUMENTOS · foto real nas 4 tabelas (ASO/Trein./Atest./Advert.). Ver `shared/changelog.ts`.
 - **Rev. 2476** — PAINEL RH · foto real em TODOS os 7 MODAIS expandidos (drill-down full-screen). Ver `shared/changelog.ts`.

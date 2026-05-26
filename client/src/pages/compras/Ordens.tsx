@@ -121,6 +121,46 @@ function gerarParcelas(n: number, total: number, primeiroVenc: string): ParcelaF
 }
 const newItem = (): ItemForm => ({ descricao: "", unidade: "un", quantidade: "1", precoUnitario: "" });
 
+// Rev. 2486 — Grupos de itens por etapa (EAP). Cada grupo carrega 1 EAP
+// (opcional) e N itens. No submit é "achatado" pra `itens[]` com `eapCodigo`
+// por item (formato que o backend já espera — zero mudança de schema/router).
+type GrupoForm = { eapCodigo?: string; eapDescricao?: string; itens: ItemForm[] };
+const newGrupo = (): GrupoForm => ({ itens: [newItem()] });
+function flattenGrupos(grupos: GrupoForm[]): ItemForm[] {
+  return grupos.flatMap(g =>
+    g.itens.map(i => ({
+      ...i,
+      eapCodigo: g.eapCodigo,
+      eapDescricao: g.eapDescricao,
+    }))
+  );
+}
+// Reagrupa itens vindos do backend por `eapCodigo` em blocos CONTÍGUOS.
+// Items com mesmo EAP separados por outro EAP no meio ficam em grupos
+// distintos (preserva ordem de aparição da OC original — round-trip
+// estável; ex.: [A,B,A] continua [A]+[B]+[A], não vira [A,A]+[B]).
+// Items sem EAP seguem a mesma regra (key undefined também forma blocos).
+function agruparItens(itens: ItemForm[]): GrupoForm[] {
+  if (itens.length === 0) return [newGrupo()];
+  const grupos: GrupoForm[] = [];
+  for (const it of itens) {
+    const last = grupos[grupos.length - 1];
+    const mesmoEap = last && (last.eapCodigo ?? null) === (it.eapCodigo ?? null);
+    const itemPuro: ItemForm = {
+      descricao: it.descricao,
+      unidade: it.unidade,
+      quantidade: it.quantidade,
+      precoUnitario: it.precoUnitario,
+    };
+    if (mesmoEap) {
+      last!.itens.push(itemPuro);
+    } else {
+      grupos.push({ eapCodigo: it.eapCodigo, eapDescricao: it.eapDescricao, itens: [itemPuro] });
+    }
+  }
+  return grupos;
+}
+
 // ════════════════════════════════════════════════════════════════════
 // Rev. 2485 — Diálogo de reparo de duplicatas de numeração de OC.
 // Fluxo: 1) abre → roda dryRun automaticamente → exibe preview;
@@ -300,11 +340,15 @@ export default function Ordens() {
     condicaoPagamento: "", prazoEntregaDias: "", numeroNf: "",
     formaPagamento: "", contaBancariaId: "",
   });
-  const [itens, setItens] = useState<ItemForm[]>([newItem()]);
+  // Rev. 2486 — Grupos por etapa. `itens` legado computado via flatten()
+  // pra preservar compatibilidade com leitores existentes (formHasData,
+  // payload, etc).
+  const [grupos, setGrupos] = useState<GrupoForm[]>([newGrupo()]);
+  const itens = flattenGrupos(grupos);
   const [numParc, setNumParc] = useState(1);
   const [parcelas, setParcelas] = useState<ParcelaForm[]>([]);
   const [fornecedorPopoverOpen, setFornecedorPopoverOpen] = useState(false);
-  const [eapPopoverIdx, setEapPopoverIdx] = useState<number | null>(null);
+  const [eapPopoverGi, setEapPopoverGi] = useState<number | null>(null);
   const [anexosForm, setAnexosForm] = useState<AnexoOC[]>([]);
   const [uploadingAnexo, setUploadingAnexo] = useState(false);
   const [dragOver, setDragOver] = useState(false);
@@ -473,7 +517,7 @@ export default function Ordens() {
 
   function resetForm() {
     setForm({ obraId: "", fornecedorId: "", dataEntregaPrevista: "", dataVencimento: "", observacoes: "", frete: "", outrasDespesas: "", impostos: "", desconto: "", condicaoPagamento: "", prazoEntregaDias: "", numeroNf: "", formaPagamento: "", contaBancariaId: "" });
-    setItens([newItem()]);
+    setGrupos([newGrupo()]);
     setNumParc(1);
     setParcelas([]);
     setAnexosForm([]);
@@ -572,15 +616,17 @@ export default function Ordens() {
       contaBancariaId: (ocDetalhe as any).contaBancariaId ? String((ocDetalhe as any).contaBancariaId) : "",
     });
     if (ocDetalhe.itens && ocDetalhe.itens.length > 0) {
-      setItens(ocDetalhe.itens.map((it: any) => ({
+      // Rev. 2486 — reagrupa por eapCodigo ao carregar.
+      const flat: ItemForm[] = ocDetalhe.itens.map((it: any) => ({
         descricao: it.descricao,
         unidade: it.unidade ?? "un",
         quantidade: String(it.quantidade),
         precoUnitario: String(it.precoUnitario),
         eapCodigo: (it as any).insumoCodigo ?? undefined,
-      })));
+      }));
+      setGrupos(agruparItens(flat));
     } else {
-      setItens([newItem()]);
+      setGrupos([newGrupo()]);
     }
     setAnexosForm((ocDetalhe.anexos as AnexoOC[]) ?? []);
     setNumParc(ocDetalhe.numeroParcelas ?? 1);
@@ -660,10 +706,32 @@ export default function Ordens() {
     });
   }
 
-  function addItem() { setItens(p => [...p, newItem()]); }
-  function removeItem(idx: number) { setItens(p => p.filter((_, i) => i !== idx)); }
-  function updateItem(idx: number, field: keyof ItemForm, val: string) {
-    setItens(p => p.map((it, i) => i === idx ? { ...it, [field]: val } : it));
+  // Rev. 2486 — Helpers por GRUPO (etapa).
+  function addGrupo() { setGrupos(p => [...p, newGrupo()]); }
+  function removeGrupo(gi: number) {
+    setGrupos(p => {
+      const next = p.filter((_, i) => i !== gi);
+      return next.length === 0 ? [newGrupo()] : next;
+    });
+  }
+  function setEapDoGrupo(gi: number, eapCodigo: string | undefined, eapDescricao: string | undefined) {
+    setGrupos(p => p.map((g, i) => i === gi ? { ...g, eapCodigo, eapDescricao } : g));
+  }
+  function addItemNoGrupo(gi: number) {
+    setGrupos(p => p.map((g, i) => i === gi ? { ...g, itens: [...g.itens, newItem()] } : g));
+  }
+  function removeItem(gi: number, ii: number) {
+    setGrupos(p => p.map((g, i) => {
+      if (i !== gi) return g;
+      const next = g.itens.filter((_, j) => j !== ii);
+      return { ...g, itens: next.length === 0 ? [newItem()] : next };
+    }));
+  }
+  function updateItem(gi: number, ii: number, field: keyof ItemForm, val: string) {
+    setGrupos(p => p.map((g, i) => i !== gi ? g : ({
+      ...g,
+      itens: g.itens.map((it, j) => j === ii ? { ...it, [field]: val } : it),
+    })));
   }
 
   const fornecedores = fornQ.data ?? [];
@@ -1237,102 +1305,130 @@ export default function Ordens() {
               </div>
             </div>
 
-            {/* Itens */}
+            {/* Itens — Rev. 2486: agrupados por ETAPA (EAP) */}
             <div className="space-y-3">
               <div className="flex items-center justify-between">
-                <Label className="text-gray-700 font-semibold text-sm">Itens *</Label>
-                <Button type="button" size="sm" variant="outline" onClick={addItem} className="border-gray-300 text-gray-600 hover:bg-gray-50 gap-1 text-xs">
-                  <Plus className="h-3 w-3" /> Adicionar
+                <Label className="text-gray-700 font-semibold text-sm">Itens por Etapa *</Label>
+                <Button type="button" size="sm" variant="outline" onClick={addGrupo} className="border-violet-300 text-violet-700 hover:bg-violet-50 gap-1 text-xs">
+                  <Plus className="h-3 w-3" /> Nova etapa
                 </Button>
               </div>
-              {/* EAP items flat list for search — only when obra is selected */}
               {(() => {
                 const eapItems = (eapQ.data?.items ?? []).filter((e: any) => e.descricao?.trim());
+                const obraSelecionada = !!(form.obraId && form.obraId !== "none");
                 return (
-                  <div className="space-y-2">
-                    {itens.map((it, idx) => (
-                      <div key={idx} className="p-3 rounded-lg bg-gray-50 border border-gray-200 space-y-2">
-                        {/* EAP selector — visible only when obraId is set */}
-                        {form.obraId && form.obraId !== "none" && (
-                          <Popover open={eapPopoverIdx === idx} onOpenChange={open => setEapPopoverIdx(open ? idx : null)}>
-                            <PopoverTrigger asChild>
-                              <button
-                                type="button"
-                                className={`flex w-full items-center gap-2 rounded border px-2 py-1.5 text-xs transition-colors ${it.eapCodigo ? "border-violet-300 bg-violet-50 text-violet-700 hover:bg-violet-100" : "border-dashed border-gray-300 bg-white text-gray-400 hover:border-gray-400 hover:text-gray-600"}`}
-                              >
-                                <Search className="h-3 w-3 shrink-0" />
-                                {it.eapCodigo ? (
-                                  <span><code className="font-mono font-semibold">{it.eapCodigo}</code> — {it.eapDescricao || eapItems.find((e: any) => e.eapCodigo === it.eapCodigo)?.descricao || ""}</span>
-                                ) : (
-                                  eapQ.isLoading ? "Carregando itens do orçamento..." : eapItems.length === 0 ? "Obra sem orçamento vinculado" : "Selecionar item do orçamento para alocação de custo"
-                                )}
-                                {it.eapCodigo && (
-                                  <span
-                                    onClick={e => { e.stopPropagation(); setItens(p => p.map((x, i) => i === idx ? { ...x, eapCodigo: undefined, eapDescricao: undefined } : x)); }}
-                                    className="ml-auto text-violet-400 hover:text-red-500"
-                                    title="Remover vínculo"
-                                  >✕</span>
-                                )}
-                              </button>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-[--radix-popover-trigger-width] p-0 bg-white border-gray-200 shadow-lg" align="start">
-                              <Command>
-                                <CommandInput placeholder="Buscar por código ou descrição..." className="h-9" />
-                                <CommandList className="max-h-60">
-                                  <CommandEmpty>Nenhum item encontrado.</CommandEmpty>
-                                  <CommandGroup>
-                                    {eapItems.map((e: any) => (
-                                      <CommandItem
-                                        key={e.id}
-                                        value={`${e.eapCodigo ?? ""} ${e.descricao ?? ""}`}
-                                        onSelect={() => {
-                                          setItens(p => p.map((x, i) => i === idx ? {
-                                            ...x,
-                                            eapCodigo: e.eapCodigo ?? "",
-                                            eapDescricao: e.descricao ?? "",
-                                            descricao: x.descricao || (e.descricao ?? ""),
-                                            unidade: x.unidade !== "un" ? x.unidade : (e.unidade || "un"),
-                                          } : x));
-                                          setEapPopoverIdx(null);
-                                        }}
-                                        className="cursor-pointer"
-                                      >
-                                        <Check className={`mr-2 h-3 w-3 shrink-0 ${it.eapCodigo === e.eapCodigo ? "opacity-100 text-violet-600" : "opacity-0"}`} />
-                                        <div className="flex flex-col min-w-0">
-                                          <div className="flex items-center gap-2">
-                                            {e.eapCodigo && <code className="text-[10px] font-mono text-violet-600 bg-violet-50 px-1 rounded shrink-0">{e.eapCodigo}</code>}
-                                            <span className="text-xs font-medium truncate">{e.descricao}</span>
-                                          </div>
-                                          {(e.unidade || e.quantidade) && (
-                                            <span className="text-[10px] text-gray-400">{e.unidade}{e.quantidade ? ` · Qtd: ${parseFloat(e.quantidade).toLocaleString("pt-BR")}` : ""}</span>
-                                          )}
-                                        </div>
-                                      </CommandItem>
-                                    ))}
-                                  </CommandGroup>
-                                </CommandList>
-                              </Command>
-                            </PopoverContent>
-                          </Popover>
-                        )}
-                        <div className="flex gap-2">
-                          <Input className="flex-1 bg-white border-gray-300 text-gray-900 text-sm" placeholder="Descrição *" value={it.descricao} onChange={e => updateItem(idx, "descricao", e.target.value)} onBlur={e => updateItem(idx, "descricao", normalizarTexto(e.target.value))} />
-                          {itens.length > 1 && (
-                            <button onClick={() => removeItem(idx)} className="p-1 text-gray-400 hover:text-red-500"><Trash2 className="h-4 w-4" /></button>
+                  <div className="space-y-3">
+                    {grupos.map((g, gi) => (
+                      <div key={gi} className="rounded-lg border-2 border-violet-200 bg-violet-50/40 overflow-hidden">
+                        {/* Header da etapa */}
+                        <div className="flex items-center gap-2 px-3 py-2 bg-violet-100/60 border-b border-violet-200">
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-violet-700">Etapa #{gi + 1}</span>
+                          <div className="flex-1">
+                            {obraSelecionada ? (
+                              <Popover open={eapPopoverGi === gi} onOpenChange={open => setEapPopoverGi(open ? gi : null)}>
+                                <PopoverTrigger asChild>
+                                  <button
+                                    type="button"
+                                    className={`flex w-full items-center gap-2 rounded border px-2 py-1.5 text-xs transition-colors ${g.eapCodigo ? "border-violet-300 bg-white text-violet-700 hover:bg-violet-50" : "border-dashed border-violet-300 bg-white text-gray-500 hover:border-violet-400"}`}
+                                  >
+                                    <Search className="h-3 w-3 shrink-0" />
+                                    {g.eapCodigo ? (
+                                      <span className="truncate"><code className="font-mono font-semibold">{g.eapCodigo}</code> — {g.eapDescricao || eapItems.find((e: any) => e.eapCodigo === g.eapCodigo)?.descricao || ""}</span>
+                                    ) : (
+                                      eapQ.isLoading ? "Carregando itens do orçamento..." : eapItems.length === 0 ? "Obra sem orçamento vinculado" : "Selecionar etapa do orçamento (EAP)"
+                                    )}
+                                    {g.eapCodigo && (
+                                      <span
+                                        onClick={e => { e.stopPropagation(); setEapDoGrupo(gi, undefined, undefined); }}
+                                        className="ml-auto text-violet-400 hover:text-red-500"
+                                        title="Remover etapa"
+                                      >✕</span>
+                                    )}
+                                  </button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-[--radix-popover-trigger-width] p-0 bg-white border-gray-200 shadow-lg" align="start">
+                                  <Command>
+                                    <CommandInput placeholder="Buscar por código ou descrição..." className="h-9" />
+                                    <CommandList className="max-h-60">
+                                      <CommandEmpty>Nenhum item encontrado.</CommandEmpty>
+                                      <CommandGroup>
+                                        {eapItems.map((e: any) => (
+                                          <CommandItem
+                                            key={e.id}
+                                            value={`${e.eapCodigo ?? ""} ${e.descricao ?? ""}`}
+                                            onSelect={() => {
+                                              setEapDoGrupo(gi, e.eapCodigo ?? "", e.descricao ?? "");
+                                              setEapPopoverGi(null);
+                                            }}
+                                            className="cursor-pointer"
+                                          >
+                                            <Check className={`mr-2 h-3 w-3 shrink-0 ${g.eapCodigo === e.eapCodigo ? "opacity-100 text-violet-600" : "opacity-0"}`} />
+                                            <div className="flex flex-col min-w-0">
+                                              <div className="flex items-center gap-2">
+                                                {e.eapCodigo && <code className="text-[10px] font-mono text-violet-600 bg-violet-50 px-1 rounded shrink-0">{e.eapCodigo}</code>}
+                                                <span className="text-xs font-medium truncate">{e.descricao}</span>
+                                              </div>
+                                              {(e.unidade || e.quantidade) && (
+                                                <span className="text-[10px] text-gray-400">{e.unidade}{e.quantidade ? ` · Qtd: ${parseFloat(e.quantidade).toLocaleString("pt-BR")}` : ""}</span>
+                                              )}
+                                            </div>
+                                          </CommandItem>
+                                        ))}
+                                      </CommandGroup>
+                                    </CommandList>
+                                  </Command>
+                                </PopoverContent>
+                              </Popover>
+                            ) : (
+                              <span className="text-[11px] text-gray-500 italic">Selecione a obra acima pra escolher a etapa</span>
+                            )}
+                          </div>
+                          {grupos.length > 1 && (
+                            <button
+                              type="button"
+                              onClick={() => removeGrupo(gi)}
+                              className="p-1 text-violet-400 hover:text-red-500 shrink-0"
+                              title="Remover etapa inteira"
+                            >
+                              <X className="h-4 w-4" />
+                            </button>
                           )}
                         </div>
-                        <div className="flex gap-2 items-center">
-                          <Select value={it.unidade} onValueChange={v => updateItem(idx, "unidade", v)}>
-                            <SelectTrigger className="w-20 bg-white border-gray-300 text-gray-900 text-sm h-8"><SelectValue /></SelectTrigger>
-                            <SelectContent className="bg-white border-gray-200">
-                              {UNIDADES.map(u => <SelectItem key={u} value={u}>{u}</SelectItem>)}
-                            </SelectContent>
-                          </Select>
-                          <Input className="w-24 bg-white border-gray-300 text-gray-900 text-sm h-8" type="number" min="0" placeholder="Qtd" value={it.quantidade} onChange={e => updateItem(idx, "quantidade", e.target.value)} />
-                          <Input className="flex-1 bg-white border-gray-300 text-gray-900 text-sm h-8" type="number" min="0" step="0.01" placeholder="Preço unit. (R$)" value={it.precoUnitario} onChange={e => updateItem(idx, "precoUnitario", e.target.value)} />
-                          <span className="text-emerald-700 text-sm font-medium w-28 text-right">
-                            {((parseFloat(it.quantidade) || 0) * (parseFloat(it.precoUnitario) || 0)).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
-                          </span>
+
+                        {/* Itens da etapa */}
+                        <div className="p-2 space-y-2">
+                          {g.itens.map((it, ii) => (
+                            <div key={ii} className="p-2.5 rounded bg-white border border-gray-200 space-y-2">
+                              <div className="flex gap-2">
+                                <Input className="flex-1 bg-white border-gray-300 text-gray-900 text-sm" placeholder="Descrição *" value={it.descricao} onChange={e => updateItem(gi, ii, "descricao", e.target.value)} onBlur={e => updateItem(gi, ii, "descricao", normalizarTexto(e.target.value))} />
+                                {g.itens.length > 1 && (
+                                  <button onClick={() => removeItem(gi, ii)} className="p-1 text-gray-400 hover:text-red-500" title="Remover item"><Trash2 className="h-4 w-4" /></button>
+                                )}
+                              </div>
+                              <div className="flex gap-2 items-center">
+                                <Select value={it.unidade} onValueChange={v => updateItem(gi, ii, "unidade", v)}>
+                                  <SelectTrigger className="w-20 bg-white border-gray-300 text-gray-900 text-sm h-8"><SelectValue /></SelectTrigger>
+                                  <SelectContent className="bg-white border-gray-200">
+                                    {UNIDADES.map(u => <SelectItem key={u} value={u}>{u}</SelectItem>)}
+                                  </SelectContent>
+                                </Select>
+                                <Input className="w-24 bg-white border-gray-300 text-gray-900 text-sm h-8" type="number" min="0" placeholder="Qtd" value={it.quantidade} onChange={e => updateItem(gi, ii, "quantidade", e.target.value)} />
+                                <Input className="flex-1 bg-white border-gray-300 text-gray-900 text-sm h-8" type="number" min="0" step="0.01" placeholder="Preço unit. (R$)" value={it.precoUnitario} onChange={e => updateItem(gi, ii, "precoUnitario", e.target.value)} />
+                                <span className="text-emerald-700 text-sm font-medium w-28 text-right">
+                                  {((parseFloat(it.quantidade) || 0) * (parseFloat(it.precoUnitario) || 0)).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+                                </span>
+                              </div>
+                            </div>
+                          ))}
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => addItemNoGrupo(gi)}
+                            className="w-full justify-center text-violet-700 hover:bg-violet-100 hover:text-violet-800 gap-1 text-xs border border-dashed border-violet-300"
+                          >
+                            <Plus className="h-3 w-3" /> Adicionar item nesta etapa
+                          </Button>
                         </div>
                       </div>
                     ))}

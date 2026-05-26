@@ -1,6 +1,79 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2486 — **ORDENS DE COMPRA · Form de itens agrupado por ETAPA (EAP) —
+ * 1 EAP × N itens, em vez de 1 EAP por item.**
+ *
+ * PEDIDO (user, image_1779820584237.png, 26/05/2026): "preciso que ajuste
+ * a lógica de forma que consiga colocar mais de um item dentro da mesma
+ * etapa, sem precisar ficar selecionando em cada item adicionado". Antes,
+ * cada linha de item carregava seu próprio seletor de EAP (a faixa lilás
+ * "Q 01.01.07 — Canteiro..."), forçando o user a re-escolher a etapa
+ * a cada `+ Adicionar`. Fluxo cansativo quando o pedido tinha 5+ itens
+ * da mesma etapa.
+ *
+ * NOVO FLUXO: o form vira uma lista de GRUPOS por etapa. Cada grupo tem
+ * 1 seletor EAP no topo + N itens embaixo + botão "Adicionar item nesta
+ * etapa". Botão "Nova etapa" no header da seção cria novo grupo.
+ *
+ * IMPLEMENTAÇÃO 100% FRONTEND — `client/src/pages/compras/Ordens.tsx`:
+ *
+ * (a) Tipo + helpers novos (L127-164): `GrupoForm = { eapCodigo?,
+ *     eapDescricao?, itens: ItemForm[] }`, `newGrupo()`,
+ *     `flattenGrupos(grupos)` (achata pra `itens[]` com eapCodigo por
+ *     item — formato que o backend já espera), `agruparItens(itens)`
+ *     (reagrupa por eapCodigo em blocos CONTÍGUOS ao carregar OC
+ *     existente — round-trip estável: [A,B,A] continua [A]+[B]+[A]
+ *     em vez de consolidar globalmente em [A,A]+[B]).
+ *
+ * (b) State refatorado (L345-353): `[itens, setItens]` → `[grupos,
+ *     setGrupos]`. Variável `itens` derivada via `flattenGrupos(grupos)`
+ *     (mantém legibilidade pros leitores existentes — `formHasData`,
+ *     `validos.filter`, etc). `eapPopoverIdx` → `eapPopoverGi` (índice
+ *     de GRUPO, não de item).
+ *
+ * (c) Helpers de manipulação (L711-737): `addGrupo`, `removeGrupo(gi)`
+ *     (recria 1 vazio se ficar zero), `setEapDoGrupo(gi, ...)`,
+ *     `addItemNoGrupo(gi)`, `removeItem(gi, ii)` (recria 1 vazio se
+ *     ficar zero), `updateItem(gi, ii, field, val)`.
+ *
+ * (d) `resetForm` (L522): `setItens([newItem()])` → `setGrupos([newGrupo()])`.
+ *
+ * (e) `abrirEditarRascunho` (L620-632): carrega itens do backend, aplica
+ *     `agruparItens` pra reconstruir grupos por eapCodigo. OC antiga
+ *     com items de várias etapas misturadas vira N grupos automaticamente.
+ *
+ * (f) UI (L1310-1444): card lilás por grupo com header "Etapa #N" +
+ *     Popover de EAP + botão X (remover etapa inteira); embaixo o
+ *     stack de itens (cada um com Trash2 individual) + botão "+ Adicionar
+ *     item nesta etapa" (ghost violeta tracejado). Botão "Nova etapa"
+ *     no header da seção (outline violeta). Seletor de EAP só aparece
+ *     com obra selecionada (caso contrário mostra "Selecione a obra
+ *     acima").
+ *
+ * COMPATIBILIDADE TOTAL:
+ *  - Payload `criarOrdemManual` / `salvarRascunhoOrdem` /
+ *    `confirmarRascunhoOrdem` INTACTO — `itens.map(i => ({..., insumoCodigo:
+ *    i.eapCodigo}))` continua funcionando porque `itens` é derivado via
+ *    flatten que injeta `eapCodigo` em cada item.
+ *  - Backend `server/routers/compras.ts`: ZERO mudança.
+ *  - Schema `compras_ordens_itens.insumoCodigo`: ZERO mudança.
+ *  - OCs existentes carregam normalmente — items com mesmo EAP viram
+ *    1 grupo, items sem EAP viram 1 grupo "vazio" (mostra como "Etapa
+ *    sem EAP selecionada" → user pode escolher uma agora ou deixar).
+ *
+ * EDGE CASES COBERTOS:
+ *  - Apagar último item de um grupo → grupo continua com 1 item vazio.
+ *  - Apagar última etapa → recria uma vazia (sempre ≥ 1 grupo).
+ *  - Trocar EAP de grupo já populado → atualiza só o eapCodigo, itens
+ *    ficam intactos.
+ *  - Items sem EAP permitidos (continua o comportamento de hoje).
+ *
+ * NÃO INCLUÍDO (escopo): drag-drop pra mover item entre etapas (workaround:
+ * deletar e re-adicionar na outra etapa).
+ */
+
+/**
  * Rev. 2485 — **ORDENS DE COMPRA · Reparo de DUPLICATAS EXISTENTES de
  * numeração (follow-up da Rev. 2483).**
  *
