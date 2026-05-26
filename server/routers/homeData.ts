@@ -4,6 +4,7 @@ import { getDb, userCanSeeAvisoStatus } from "../db";
 import { employees, asos, warnings, processosTrabalhistas, obraSns, obras, vacationPeriods, terminationNotices, obraFuncionarios } from "../../drizzle/schema";
 import { eq, and, sql, gte, lte, desc, inArray, isNull } from "drizzle-orm";
 import { resolveCompanyIds, companyFilter } from "../companyHelper";
+import { getCipaStatusByEmployeeIds, projectCipaFields } from "../_core/cipaStatus";
 
 // O driver pg retorna colunas date como objetos Date (não strings).
 // Drizzle's { mode: 'string' } não tem mapFromDriverValue, então passam como Date.
@@ -705,20 +706,53 @@ export const homeDataRouter = router({
         avisosPreviosAguardando: avisosPrevios.filter(a => a.urgencia === 'aguardando_pagamento').length,
       };
 
+      // ============================================================
+      // Rev. 2478 — Status CIPA (membro ativo OU em estabilidade pós-mandato)
+      // ============================================================
+      // Coleta todos os employeeIds que aparecem nas listas de saída e faz
+      // 1 query batched. Custo zero por linha. Quem não está na CIPA fica
+      // com cipaAtivo=false, cipaEstabilidade=false, cipaFimEstabilidade=null.
+      const allOutputEmpIds = new Set<number>();
+      for (const a of aniversariantes) allOutputEmpIds.add((a as any).id);
+      for (const a of aniversariosEmpresa) allOutputEmpIds.add((a as any).id);
+      for (const a of asosAlerta) allOutputEmpIds.add(a.employeeId);
+      for (const a of semAso) allOutputEmpIds.add(a.id);
+      for (const f of feriasAlerta) allOutputEmpIds.add(f.id);
+      for (const f of feriasEmAndamento) allOutputEmpIds.add((f as any).employeeId);
+      for (const f of feriasAgendadas) allOutputEmpIds.add((f as any).employeeId);
+      for (const m of movimentacoes) allOutputEmpIds.add((m as any).id);
+      for (const w of advertenciasRecentes) allOutputEmpIds.add(w.employeeId);
+      for (const e of experiencias) allOutputEmpIds.add((e as any).id);
+      for (const a of avisosPrevios) allOutputEmpIds.add(a.employeeId);
+      const cipaMap = await getCipaStatusByEmployeeIds(
+        db,
+        input,
+        Array.from(allOutputEmpIds)
+      );
+      const wCipa = <T extends { id?: number; employeeId?: number }>(row: T): T => {
+        const eid: number | undefined = (row as any).employeeId ?? (row as any).id;
+        if (typeof eid !== "number") return row;
+        return { ...row, ...projectCipaFields(cipaMap, eid) } as T;
+      };
+
       return {
         stats: statsConsolidados,
-        aniversariantes,
-        aniversariosEmpresa,
-        asosAlerta,
-        semAso,
-        feriasAlerta,
-        feriasDashboard,
+        aniversariantes: aniversariantes.map(wCipa),
+        aniversariosEmpresa: aniversariosEmpresa.map(wCipa),
+        asosAlerta: asosAlerta.map(wCipa),
+        semAso: semAso.map(wCipa),
+        feriasAlerta: feriasAlerta.map(wCipa),
+        feriasDashboard: {
+          ...feriasDashboard,
+          emAndamento: (feriasDashboard.emAndamento || []).map(wCipa),
+          agendadas: (feriasDashboard.agendadas || []).map(wCipa),
+        },
         proximasAudiencias,
-        movimentacoes,
-        advertenciasRecentes,
-        experiencias,
+        movimentacoes: movimentacoes.map(wCipa),
+        advertenciasRecentes: advertenciasRecentes.map(wCipa),
+        experiencias: experiencias.map((e) => (e ? wCipa(e as any) : e)),
         obrasProximasFim,
-        avisosPrevios,
+        avisosPrevios: avisosPrevios.map(wCipa),
       };
     }),
 
@@ -778,6 +812,13 @@ export const homeDataRouter = router({
         })
         .sort((a, b) => a.dia - b.dia);
 
-      return lista;
+      // Rev. 2478 — enriquecimento CIPA também no modal full-screen
+      // (Aniversariantes do Mês expandido).
+      const cipaMap = await getCipaStatusByEmployeeIds(
+        db,
+        input,
+        lista.map((e) => e.id)
+      );
+      return lista.map((e) => ({ ...e, ...projectCipaFields(cipaMap, e.id) }));
     }),
 });

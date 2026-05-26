@@ -2,6 +2,7 @@
 
 > Este arquivo guarda os one-liners das revisões antigas para manter o `replit.md` enxuto.
 
+- **Rev. 2471** — COTAÇÕES · estoque-picker ganha layout ultra moderno (cards em grid, gradient header, chips de filtro por origem, footer com resumo financeiro). Header `#1E1B4B→#312E81→#4C1D95`, chips de origem (Todas/Central/UM POR OBRA), avatar gradient único (hash mod 6), footer com botão Confirmar gradient. Ver `shared/changelog.ts`.
 - **Rev. 2470** — COTAÇÕES · estoque-picker lista TODO almoxarifado (Central + TODAS as obras) e pílula mostra o NOME da obra. Query `listEstoqueDisponivel` sem filtro de obra + `leftJoin(obras)` pra `obraNome`. Ver `shared/changelog.ts`.
 - **Rev. 2469** — COTAÇÕES · modal "Selecionar do Estoque" virou tela cheia (full-viewport). `DialogContent` 100vw×100vh, flex column, header/footer `shrink-0` + border, tabela `flex-1 min-h-0 overflow-y-auto`. Ver `shared/changelog.ts`.
 - **Rev. 2468** — HOTFIX REAL DA Rev. 2466 (COTAÇÕES) · `<Dialog>` do estoque-picker estava no return principal mas o BOTÃO está dentro do bloco fullscreen (`if (showDetalhe !== null)`) que faz early-return — Dialog nunca montava. Movido pra dentro do bloco fullscreen antes do `</DashboardLayout>`. Ver `shared/changelog.ts`.

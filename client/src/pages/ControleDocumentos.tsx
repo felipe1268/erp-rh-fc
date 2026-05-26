@@ -27,6 +27,7 @@ import RaioXFuncionario from "@/components/RaioXFuncionario";
 import FullScreenDialog from "@/components/FullScreenDialog";
 import DocumentPreviewDialog, { canPreviewFile } from "@/components/DocumentPreviewDialog";
 import PersonPhoto from "@/components/PersonPhoto";
+import { CipaBadge } from "@/components/CipaBadge";
 import TermosResponsabilidadePanel from "@/components/controleDocumentos/TermosResponsabilidadePanel";
 import { TRAINING_RULES, TRAINING_CATEGORIES, calcularDataValidade, type TrainingRule } from "../../../shared/trainingRules";
 
@@ -2524,7 +2525,7 @@ export default function ControleDocumentos() {
                             <div className="flex items-center gap-2.5">
                               <PersonPhoto src={a.fotoUrl} alt={a.nomeCompleto} size="sm" />
                               <div className="min-w-0">
-                                <div className="font-medium text-blue-700 cursor-pointer hover:underline truncate" onClick={() => setRaioXEmployeeId(a.employeeId)}>{a.nomeCompleto}</div>
+                                <div className="inline-flex items-center gap-1.5 flex-wrap"><span className="font-medium text-blue-700 cursor-pointer hover:underline truncate" onClick={() => setRaioXEmployeeId(a.employeeId)}>{a.nomeCompleto}</span><CipaBadge ativo={a.cipaAtivo} estabilidade={a.cipaEstabilidade} fim={a.cipaFimEstabilidade} cargo={a.cipaCargo} /></div>
                                 <div className="text-xs text-muted-foreground">{formatCPF(a.cpf)}</div>
                               </div>
                             </div>
@@ -2606,7 +2607,7 @@ export default function ControleDocumentos() {
                             <div className="flex items-center gap-2.5">
                               <PersonPhoto src={t.fotoUrl} alt={t.nomeCompleto} size="sm" />
                               <div className="min-w-0">
-                                <div className="font-medium text-blue-700 cursor-pointer hover:underline truncate" onClick={() => setRaioXEmployeeId(t.employeeId)}>{t.nomeCompleto}</div>
+                                <div className="inline-flex items-center gap-1.5 flex-wrap"><span className="font-medium text-blue-700 cursor-pointer hover:underline truncate" onClick={() => setRaioXEmployeeId(t.employeeId)}>{t.nomeCompleto}</span><CipaBadge ativo={t.cipaAtivo} estabilidade={t.cipaEstabilidade} fim={t.cipaFimEstabilidade} cargo={t.cipaCargo} /></div>
                                 <div className="text-xs text-muted-foreground">{t.funcao || "-"}</div>
                               </div>
                             </div>
@@ -2711,7 +2712,7 @@ export default function ControleDocumentos() {
                           <td className="py-2">
                             <div className="flex items-center gap-2.5">
                               <PersonPhoto src={a.fotoUrl} alt={a.nomeCompleto} size="sm" />
-                              <div className="font-medium text-blue-700 cursor-pointer hover:underline truncate" onClick={() => setRaioXEmployeeId(a.employeeId)}>{a.nomeCompleto}</div>
+                              <div className="inline-flex items-center gap-1.5 flex-wrap"><span className="font-medium text-blue-700 cursor-pointer hover:underline truncate" onClick={() => setRaioXEmployeeId(a.employeeId)}>{a.nomeCompleto}</span><CipaBadge ativo={a.cipaAtivo} estabilidade={a.cipaEstabilidade} fim={a.cipaFimEstabilidade} cargo={a.cipaCargo} /></div>
                             </div>
                           </td>
                           <td className="py-2">{formatCPF(a.cpf)}</td>
@@ -2817,7 +2818,7 @@ export default function ControleDocumentos() {
                           <td className="py-2">
                             <div className="flex items-center gap-2.5">
                               <PersonPhoto src={a.fotoUrl} alt={a.nomeCompleto} size="sm" />
-                              <div className="font-medium text-blue-700 cursor-pointer hover:underline truncate" onClick={() => setRaioXEmployeeId(a.employeeId)}>{a.nomeCompleto}</div>
+                              <div className="inline-flex items-center gap-1.5 flex-wrap"><span className="font-medium text-blue-700 cursor-pointer hover:underline truncate" onClick={() => setRaioXEmployeeId(a.employeeId)}>{a.nomeCompleto}</span><CipaBadge ativo={a.cipaAtivo} estabilidade={a.cipaEstabilidade} fim={a.cipaFimEstabilidade} cargo={a.cipaCargo} /></div>
                             </div>
                           </td>
                           <td className="py-2">{formatCPF(a.cpf)}</td>

@@ -1,6 +1,105 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2478 — **CIPA · badge identificando membros ATIVOS e ex-membros
+ * em ESTABILIDADE pós-mandato em TODAS as telas do Painel RH (cards-
+ * resumo + drill-downs full-screen) e do Controle de Documentos (4
+ * tabelas — ASO, Treinamentos, Atestados, Advertências).**
+ *
+ * PEDIDO (user, extensão das Rev. 2475/2476/2477 sobre fotos): "quero
+ * em todas estas telas também um badge marcando quem é da CIPA ativa
+ * e quem não é mais da CIPA mas ainda tem imunidade/estabilidade pós-
+ * mandato". Justificativa: visibilidade contínua pra evitar dispensa
+ * indevida — proteção CF Art. 10 II 'a' ADCT + CLT Art. 165 + Súmula
+ * 339 TST (estabilidade desde registro de candidatura até 1 ano após
+ * fim do mandato, só para representantes dos empregados).
+ *
+ * MUDANÇAS:
+ *
+ * 1. **Helper backend novo** (`server/_core/cipaStatus.ts`) —
+ *    `getCipaStatusByEmployeeIds(db, companyScope, employeeIds)` faz UMA
+ *    única query batched (JOIN cipa_members → cipa_elections) e devolve
+ *    `Map<employeeId, { ativo, estabilidade, fim, cargo, representacao }>`.
+ *    `companyScope` aceita `number | number[] | { companyId, companyIds? }`
+ *    para suportar tanto single-company quanto **modo construtoras** (multi-
+ *    empresa) — alinhado com `companyFilter` de `companyHelper.ts`.
+ *    Regra: ATIVO = `statusMembro='Ativo'` E `mandatoFim >= hoje` E
+ *    `mandatoInicio <= hoje`; ESTABILIDADE = ex-membro `representacao=
+ *    'Empregados'` com `fimEstabilidade >= hoje`. Prioridade ATIVO >
+ *    ESTABILIDADE (se está em mandato vigente, mostra CIPA, não estab).
+ *    Helper auxiliar `projectCipaFields(map, empId)` projeta os 4 campos
+ *    flat `{ cipaAtivo, cipaEstabilidade, cipaFimEstabilidade, cipaCargo }`
+ *    pra spread direto nos rows.
+ *
+ * 2. **Backend Painel RH** (`server/routers/homeData.ts`) — `getData`
+ *    coleta TODOS os employeeIds que aparecem nos 11 arrays de saída
+ *    (aniversariantes, aniversariosEmpresa, asosAlerta, semAso, ferias-
+ *    Alerta, feriasDashboard.emAndamento/agendadas, movimentacoes,
+ *    advertenciasRecentes, experiencias, avisosPrevios), faz 1 batched
+ *    query via `getCipaStatusByEmployeeIds`, e usa um wrapper `wCipa()`
+ *    que projeta os 4 campos em cada row. `getAniversariantesMes`
+ *    (modal full-screen com navegador de meses) também enriquecido.
+ *
+ * 3. **Backend Controle Documentos** (`server/routers/controleDocumentos.ts`)
+ *    — flags CIPA adicionadas aos 4 list endpoints: `asos.list` (L470),
+ *    `atestados.list` (L750), `treinamentos.list` (L905),
+ *    `advertencias.list` (L1052). `atestados.list` e `advertencias.list`
+ *    foram convertidos de `return db.select(...)` direto para
+ *    `const rows = await ...; return rows.map(...)` pra permitir o
+ *    enriquecimento. Import dinâmico (`await import("../_core/cipaStatus")`)
+ *    para evitar ciclos.
+ *
+ * 4. **Frontend componente novo** (`client/src/components/CipaBadge.tsx`)
+ *    — props `{ ativo, estabilidade, fim, cargo, size?: "xs" | "sm" }`.
+ *    Render condicional:
+ *    - `ativo=true` → chip verde sólido `bg-emerald-50 text-emerald-800
+ *      border-emerald-300` com ícone `<ShieldCheck>` + texto "CIPA"
+ *      (tooltip mostra cargo + fim de estabilidade se houver).
+ *    - `estabilidade=true` (e não ativo) → chip âmbar `bg-amber-50
+ *      text-amber-800 border-amber-300` "estab. DD/MM/AAAA" (tooltip
+ *      cita CF Art. 10 II 'a' ADCT).
+ *    - Nenhum → retorna `null` (safe em qualquer linha sem if externo).
+ *    Tamanhos: `xs` (mini-cards, text-[10px]), `sm` (modais, text-[11px]).
+ *
+ * 5. **Frontend Painel RH** (`client/src/pages/PainelRH.tsx`) —
+ *    `<CipaBadge>` adicionado em 19 spots: 10 mini-cards (size `xs`)
+ *    e 9 drill-downs full-screen (size `sm`):
+ *    - Mini-cards: AvisosPrevios, Aniversariantes, Férias-Painel/em-
+ *      gozo, Férias-Painel/agendadas, ASOs, semASO, Férias-Período,
+ *      Movimentações, Aniversários Empresa, Advertências.
+ *    - Modais: Aniversariantes-Mes, Férias-Painel emAndamento/
+ *      agendadas, ASOs lista, semASO, Férias-Período, Movimentações,
+ *      Aniversários Empresa, Advertências.
+ *    Posição padronizada: ao lado do `<EmpStatusBadge>` (ou logo após
+ *    o nome quando não tem status badge). Wrap automático via
+ *    `flex-wrap`.
+ *
+ * 6. **Frontend Controle Documentos** (`client/src/pages/ControleDocumentos.tsx`)
+ *    — `<CipaBadge>` (size default `xs`) inline com o nome nas 4 tabelas
+ *    (ASOs, Treinamentos, Atestados, Advertências). Posição: dentro do
+ *    `<div>` que envolve o link clicável do nome, com `inline-flex
+ *    items-center gap-1.5 flex-wrap`.
+ *
+ * IMPACTO:
+ * - Custo: 1 query extra por procedure (batched, O(1) independente do
+ *   N° de colaboradores). Zero N+1.
+ * - LGPD/R-001/R-007/R-010: apenas SELECT — zero ALTER/DROP/DELETE.
+ * - Backward-compat: linhas sem entry na CIPA recebem
+ *   `cipaAtivo=false, cipaEstabilidade=false` e o badge nem renderiza
+ *   (componente safe by design).
+ *
+ * ARQUIVOS TOCADOS:
+ * - `server/_core/cipaStatus.ts` (NOVO)
+ * - `client/src/components/CipaBadge.tsx` (NOVO)
+ * - `server/routers/homeData.ts` (import + 11 outputs enriquecidos +
+ *   getAniversariantesMes)
+ * - `server/routers/controleDocumentos.ts` (4 list endpoints)
+ * - `client/src/pages/PainelRH.tsx` (import + 19 render points)
+ * - `client/src/pages/ControleDocumentos.tsx` (import + 4 render points)
+ * - `shared/version.ts` (Rev. 2477 → Rev. 2478)
+ * - `shared/changelog.ts` (esta entrada)
+ * - `replit.md` (convenção 2+5)
+ *
  * Rev. 2477 — **CONTROLE DE DOCUMENTOS · foto real do colaborador
  * nas 4 tabelas principais (ASOs, Treinamentos, Atestados,
  * Advertências). Click amplia em lightbox.**

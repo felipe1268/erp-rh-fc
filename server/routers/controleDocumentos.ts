@@ -456,6 +456,14 @@ export const controleDocumentosRouter = router({
         // Demissional é terminal mas não invalida histórico do colaborador ativo (mantemos visível).
         const TIPOS_SUBSTITUTIVOS = new Set(["Admissional", "Periodico", "Retorno", "Mudanca_Funcao"]);
 
+        // Rev. 2478 — status CIPA (ativo ou estabilidade pós-mandato).
+        const { getCipaStatusByEmployeeIds, projectCipaFields } = await import("../_core/cipaStatus");
+        const cipaMap = await getCipaStatusByEmployeeIds(
+          db,
+          input,
+          rows.map((r: any) => r.employeeId)
+        );
+
         return rows.map((r: any) => {
           const key = `${r.employeeId}_${r.tipo}`;
           const isLatestOfType = latestByEmployeeTipo.get(key) === r.id.toString();
@@ -474,16 +482,18 @@ export const controleDocumentosRouter = router({
             calcularStatusASO(a.dataValidade).status !== "VENCIDO"
           );
 
+          const cipaFlat = projectCipaFields(cipaMap, r.employeeId);
+
           if (hasNewerSupersedingAso) {
-            return { ...r, status: "SUBSTITUÍDO", diasRestantes: statusCalc.diasRestantes, isHistorico: true };
+            return { ...r, ...cipaFlat, status: "SUBSTITUÍDO", diasRestantes: statusCalc.diasRestantes, isHistorico: true };
           }
 
           // Caso legado: VENCIDO sem substituto válido mas que não é o mais recente DO MESMO TIPO
           if (statusCalc.status === "VENCIDO" && !isLatestOfType) {
-            return { ...r, status: "SUBSTITUÍDO", diasRestantes: statusCalc.diasRestantes, isHistorico: true };
+            return { ...r, ...cipaFlat, status: "SUBSTITUÍDO", diasRestantes: statusCalc.diasRestantes, isHistorico: true };
           }
 
-          return { ...r, ...statusCalc, isHistorico: !isLatestOfType };
+          return { ...r, ...cipaFlat, ...statusCalc, isHistorico: !isLatestOfType };
         });
       }),
 
@@ -707,7 +717,7 @@ export const controleDocumentosRouter = router({
       .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() }))
       .query(async ({ input }) => {
         const db = (await getDb())!;
-        return db
+        const rows = await db
           .select({
             id: atestados.id,
             companyId: atestados.companyId,
@@ -734,6 +744,10 @@ export const controleDocumentosRouter = router({
           .innerJoin(employees, eq(atestados.employeeId, employees.id))
           .where(and(companyFilter(atestados.companyId, input), isNull(employees.deletedAt), isNull(atestados.deletedAt)))
           .orderBy(desc(atestados.dataEmissao));
+        // Rev. 2478 — anexa flags CIPA (ativo + estabilidade pós-mandato).
+        const { getCipaStatusByEmployeeIds, projectCipaFields } = await import("../_core/cipaStatus");
+        const cipaMap = await getCipaStatusByEmployeeIds(db, input, rows.map((r: any) => r.employeeId));
+        return rows.map((r: any) => ({ ...r, ...projectCipaFields(cipaMap, r.employeeId) }));
       }),
 
     create: protectedProcedure
@@ -885,12 +899,17 @@ export const controleDocumentosRouter = router({
           .where(and(companyFilter(trainings.companyId, input), isNull(employees.deletedAt), isNull(trainings.deletedAt)))
           .orderBy(desc(trainings.dataRealizacao));
 
+        // Rev. 2478 — flags CIPA por colaborador.
+        const { getCipaStatusByEmployeeIds, projectCipaFields } = await import("../_core/cipaStatus");
+        const cipaMap = await getCipaStatusByEmployeeIds(db, input, rows.map((r: any) => r.employeeId));
+
         return rows.map((r: any) => {
+          const cipaFlat = projectCipaFields(cipaMap, r.employeeId);
           if (r.dataValidade) {
             const { status, diasRestantes } = calcularStatusASO(r.dataValidade);
-            return { ...r, statusCalculado: status, diasRestantes };
+            return { ...r, ...cipaFlat, statusCalculado: status, diasRestantes };
           }
-          return { ...r, statusCalculado: "SEM VALIDADE", diasRestantes: 0 };
+          return { ...r, ...cipaFlat, statusCalculado: "SEM VALIDADE", diasRestantes: 0 };
         });
       }),
 
@@ -1000,7 +1019,7 @@ export const controleDocumentosRouter = router({
       .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() }))
       .query(async ({ input }) => {
         const db = (await getDb())!;
-        return db
+        const rows = await db
           .select({
             id: warnings.id,
             companyId: warnings.companyId,
@@ -1027,6 +1046,10 @@ export const controleDocumentosRouter = router({
           .innerJoin(employees, eq(warnings.employeeId, employees.id))
           .where(and(companyFilter(warnings.companyId, input), isNull(employees.deletedAt), isNull(warnings.deletedAt)))
           .orderBy(desc(warnings.dataOcorrencia));
+        // Rev. 2478 — flags CIPA por colaborador.
+        const { getCipaStatusByEmployeeIds, projectCipaFields } = await import("../_core/cipaStatus");
+        const cipaMap = await getCipaStatusByEmployeeIds(db, input, rows.map((r: any) => r.employeeId));
+        return rows.map((r: any) => ({ ...r, ...projectCipaFields(cipaMap, r.employeeId) }));
       }),
 
     create: protectedProcedure
