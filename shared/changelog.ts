@@ -1,6 +1,84 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2496 — **FOLHA · Desligados em aviso prévio passam a entrar na folha
+ * mensal cheia (espelha lógica do `gerarVale`), eliminando "vale órfão".**
+ *
+ * PEDIDO (user, image_1779889692506 + image_1779889833192, 27/05/2026):
+ * "não está gerando folha de pagamento para quem está de aviso (mariana e
+ * myrielle), por que?" + "elizeu foi desligado, não sei por que está
+ * considerando ele na folha de adiantamento e pagamento". Aviso amarelo na
+ * tela de Pagamento/Saldo (Mai/2026) listava 3 funcionários com vale
+ * calculado MAS fora da folha mensal — bruto R$ 3.387,13 / líquido R$ 3.115.
+ * Após análise (com confirmação explícita do user via user_query, opção A),
+ * decidiu-se UNIFICAR a regra: quem entra no vale por causa do aviso
+ * prévio também entra na folha mensal — assim o vale é descontado
+ * normalmente e o módulo Rescisão lida só com as verbas rescisórias.
+ *
+ * CAUSA RAIZ (descompasso entre 2 rotinas do `payrollEngine.ts`)
+ *
+ *   - `gerarVale` (L2101-2122) INCLUI desligados com `termination_notice`
+ *     cujo `dataFim` cai no mês de referência — calcula vale proporcional
+ *     aos dias trabalhados.
+ *   - `simularPagamento` (L2920-2927) só considerava `status IN
+ *     ('Ativo','Ferias')` — IGNORAVA os mesmos desligados.
+ *   - Resultado: o vale era gerado mas não tinha folha pra descontar →
+ *     "vale órfão" → aviso amarelo permanente até o usuário cancelar o vale
+ *     manualmente. UX confusa, contábil errado.
+ *
+ * O QUE MUDOU
+ *
+ *  - **`server/routers/payrollEngine.ts` L2884-2953 (`simularPagamento`)**:
+ *      - Computa `primeiroDiaMesAviso` / `ultimoDiaMesAviso` a partir de
+ *        `parseMesRef(input.mesReferencia)`.
+ *      - WHERE da query principal de funcionários CLT trocou
+ *        `status IN ('Ativo','Ferias')` por:
+ *        ```
+ *        status IN ('Ativo','Ferias')
+ *        OR (
+ *          status = 'Desligado'
+ *          AND EXISTS (
+ *            SELECT 1 FROM termination_notices tn
+ *            WHERE tn."employeeId" = employees.id
+ *              AND tn."deletedAt" IS NULL
+ *              AND tn.status NOT IN ('cancelado')
+ *              AND tn."dataFim"    >= primeiroDiaMes::date
+ *              AND tn."dataInicio" <= ultimoDiaMes::date
+ *          )
+ *        )
+ *        ```
+ *      - Mesmas condições/janela usadas pelo `gerarVale` (single-source-of-
+ *        truth de "quem é elegível por causa do aviso prévio").
+ *      - Implementação via subquery EXISTS (não JOIN/UNION) pra preservar
+ *        o shape do select (~25 colunas) e evitar refatoração maior do
+ *        pipeline de cálculo posterior (vt/va/banco/pix/pensão etc).
+ *
+ * O QUE NÃO MUDOU
+ *  - `gerarVale` — continua igual (já estava correto).
+ *  - `divergenciaAtivosSemFolha` (L5109) — filtro `status NOT IN
+ *    ('Desligado','Lista_Negra')` segue como está; desligados-com-aviso
+ *    nunca foram flagados aqui (só no warning de "vale órfão", que some
+ *    sozinho pq agora geram folha).
+ *  - Schema do DB intacto. Sem migration.
+ *  - Cálculo proporcional aos dias trabalhados — o pipeline de
+ *    `simularPagamento` já lida com ponto/admissão/demissão na sequência
+ *    (auto-processamento de timecard, prorate de DSR etc), então
+ *    receber um desligado com poucos dias úteis no mês "just works".
+ *
+ * COMO VALIDAR
+ *  1. Em Mai/2026, abrir Pagamento/Saldo → clicar "Resimular Folha".
+ *  2. Mariana, Myriélle e Elizeu agora aparecem com bruto/líquido
+ *     calculados (proporcionais aos dias trabalhados até o `dataFim` do
+ *     aviso prévio).
+ *  3. O aviso amarelo "vale calculado mas fora da folha mensal" some
+ *     (vale agora é descontado da folha).
+ *  4. Total de funcionários da folha sobe (94 → 97 no exemplo do user).
+ *
+ * FOLLOW-UP POSSÍVEL
+ *  - Auditar se o módulo de Rescisão precisa subtrair os valores já pagos
+ *    pela folha mensal (proventos do mês de desligamento) pra não pagar
+ *    em duplicidade. Provavelmente já faz, mas vale conferir.
+ *
  * Rev. 2495 — **TERCEIROS · Padronização — nomes SEMPRE em MAIÚSCULAS +
  * lista SEMPRE em ordem alfabética por nome.**
  *

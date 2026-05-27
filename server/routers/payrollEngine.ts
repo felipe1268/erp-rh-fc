@@ -2884,6 +2884,13 @@ export const payrollEngineRouter = router({
       const nextMes = getNextMesRef(input.mesReferencia);
       const nextParsed = parseMesRef(nextMes);
 
+      // Rev. 2496 — Desligados em aviso prévio com `dataFim` dentro do mês
+      // devem ENTRAR na folha mensal (espelha a lógica do `gerarVale` L2101+).
+      // Antes, o filtro `status IN ('Ativo','Ferias')` excluía-os e o vale
+      // gerado ficava órfão (aviso amarelo "vale calculado mas fora da folha").
+      const primeiroDiaMesAviso = `${year}-${String(month).padStart(2, '0')}-01`;
+      const ultimoDiaMesAviso = `${year}-${String(month).padStart(2, '0')}-${new Date(year, month, 0).getDate()}`;
+
       const allCltAtivos = await db.select({
         id: employees.id,
         nomeCompleto: employees.nomeCompleto,
@@ -2921,8 +2928,24 @@ export const payrollEngineRouter = router({
         and(
           companyFilter(employees.companyId, input),
           eq(employees.tipoContrato, "CLT"),
-          sql`${employees.status} IN ('Ativo', 'Ferias')`,
           sql`${employees.deletedAt} IS NULL`,
+          // Rev. 2496 — Ativos/Férias OU Desligados com aviso prévio
+          // que se sobrepõe ao mês de referência (entram pra cálculo
+          // proporcional aos dias efetivamente trabalhados).
+          sql`(
+            ${employees.status} IN ('Ativo', 'Ferias')
+            OR (
+              ${employees.status} = 'Desligado'
+              AND EXISTS (
+                SELECT 1 FROM termination_notices tn
+                WHERE tn."employeeId" = ${employees.id}
+                  AND tn."deletedAt" IS NULL
+                  AND tn.status NOT IN ('cancelado')
+                  AND tn."dataFim" >= ${primeiroDiaMesAviso}::date
+                  AND tn."dataInicio" <= ${ultimoDiaMesAviso}::date
+              )
+            )
+          )`,
         )
       );
 
