@@ -1,6 +1,54 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2502 — **COLABORADORES · Campo "Tipo de Remuneração"
+ * (Mensalista / Horista) na aba Profissional + CLÁUSULA 2ª do Contrato
+ * de Experiência adaptada ao regime.**
+ *
+ * PEDIDO (user, 27/05/2026):
+ *  - "preciso de um lugar para marcaçao MENSALISTA OU HORISTA, preciso
+ *     de um campo para selecionar..."
+ *  - "caso eu selecione horista, no contrato de experiência o texto deve
+ *     ser: 'DA REMUNERAÇÃO. O(A) EMPREGADO(A) receberá a título de
+ *     remuneração por hora no valor de R$ xx,xx (descrever valor por
+ *     extenso) pago até o 5º dia útil do mês subsequente ao trabalhado,
+ *     com os descontos legais previstos em lei.'"
+ *  - "caso ele seja mensalista, o texto deve ser mantido como está hoje"
+ *
+ * CONTEXTO PRÉ-EXISTENTE
+ *  - `employees.tipoRemuneracao` JÁ existia no schema (Drizzle L960, default
+ *    'horista') e JÁ era consumido pelo backend de folha:
+ *    `server/routers/payrollEngine.ts` L2089/2097/2109/2119/2158/2178/2368/2381
+ *    e `server/routers/financial.ts` L957/961/995/1167. Faltava apenas o
+ *    campo no formulário do Colaborador e a adaptação do contrato.
+ *
+ * O QUE MUDOU
+ *  - `client/src/pages/Colaboradores.tsx` L1855-1870: novo `<Select>` "Tipo
+ *    de Remuneração" (horista / mensalista, default horista) logo após
+ *    "Tipo de Contrato" na aba Profissional. Setado via `set('tipoRemuneracao'
+ *    as any, v)` → o spread genérico do form em L752/766 leva o campo direto
+ *    para `updateMut` / `createMut`.
+ *  - `server/db.ts` L686: `"tipoRemuneracao"` adicionado à whitelist
+ *    `validFields` do `updateEmployee`. Sem isso, o backend filtrava o
+ *    campo silenciosamente e edições não persistiam (achado do code review).
+ *  - `client/src/pages/Colaboradores.tsx` L2072-2083: CLÁUSULA 2ª do
+ *    template do Contrato de Experiência virou IIFE condicional:
+ *      • horista → "...remuneração por hora no valor de R$ {valorHora}
+ *        ({valorHoraExtenso})..." usando `formatBRL(form.valorHora)` e
+ *        `valorPorExtenso(form.valorHora)` (`@/lib/numeroExtenso`).
+ *      • mensalista → texto legado intacto (salarioBase mensal).
+ *  - Os campos Salário Base ↔ Valor da Hora ↔ Horas Mensais continuam
+ *    auto-sincronizando (L1799-1834), então a validação atual
+ *    `validarPreReqsContratoExperiencia` em L2147-2148 (checa salarioBase>0)
+ *    continua coberta para horistas (auto-calculado a partir do valorHora).
+ *
+ * SEM REGRESSÃO
+ *  - Default 'horista' do schema preservado → cadastros antigos que não
+ *    foram tocados saem como horista no contrato (que era o pedido — a UI
+ *    de Valor da Hora já dizia "todos CLT são horistas"). Para usar o
+ *    texto antigo basta marcar Mensalista.
+ *  - Sem schema change. Sem migração. Sem mudança em mutations.
+ *
  * Rev. 2501 — **COTAÇÕES · BUGFIX "Selecionar do Estoque" não conseguia
  * finalizar cotação por falta de fallback de vencedor quando estoque era
  * o único participante.**

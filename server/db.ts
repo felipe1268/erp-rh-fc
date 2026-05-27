@@ -680,7 +680,7 @@ export async function updateEmployee(id: number, companyId: number, data: Partia
     // Profissional
     "cargo", "funcao", "setor", "codigoInterno", "codigoContabil",
     "dataAdmissao", "dataDemissao", "tipoContrato", "jornadaTrabalho",
-    "salarioBase", "valorHora", "horasMensais",
+    "salarioBase", "valorHora", "horasMensais", "tipoRemuneracao",
     // Desligamento
     "motivoDesligamento", "categoriaDesligamento", "dataDesligamentoEfetiva",
     "desligadoPor", "desligadoUserId",

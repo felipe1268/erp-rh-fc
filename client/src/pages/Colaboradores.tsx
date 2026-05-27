@@ -1849,6 +1849,22 @@ ${obs ? `<div class="box"><strong>Observações / Justificativa do Enquadramento
                     </SelectContent>
                   </Select>
                 </div>
+                {/* Rev. 2502 — Tipo de Remuneração (Mensalista / Horista). Determina o
+                    texto da CLÁUSULA 2ª do Contrato de Experiência e o regime de cálculo
+                    da folha (campo já consumido por payrollEngine.ts / financial.ts). */}
+                <div>
+                  <Label className="text-xs font-medium text-muted-foreground">Tipo de Remuneração</Label>
+                  <Select value={(form as any).tipoRemuneracao || "horista"} onValueChange={v => set("tipoRemuneracao" as any, v)}>
+                    <SelectTrigger className="bg-input mt-1"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="horista">Horista</SelectItem>
+                      <SelectItem value="mensalista">Mensalista</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <span className="text-[10px] text-muted-foreground mt-0.5 block">
+                    Horista: remuneração por hora trabalhada. Mensalista: salário mensal fixo.
+                  </span>
+                </div>
               </div>
 
               {/* Contrato de Experiência CLT */}
@@ -2050,7 +2066,18 @@ ${obs ? `<div class="box"><strong>Observações / Justificativa do Enquadramento
 
 <p style="margin-top:14px"><strong>CLÁUSULA 1ª — DA FUNÇÃO.</strong> O(A) EMPREGADO(A) é admitido(a) para exercer a função de <strong>${esc(empFuncao || '________________')}</strong>, obrigando-se a executar as tarefas inerentes à função para a qual foi contratado(a), bem como as que forem compatíveis com a sua condição pessoal.</p>
 
-<p style="margin-top:8px"><strong>CLÁUSULA 2ª — DA REMUNERAÇÃO.</strong> O(A) EMPREGADO(A) receberá a título de remuneração mensal o valor de <strong>R$ ${esc(empSalarioBRL)}</strong> (${esc(empSalarioExtenso)}), pago até o 5º dia útil do mês subsequente ao trabalhado, com os descontos legais previstos em lei.</p>
+${(() => {
+  // Rev. 2502 — CLÁUSULA 2ª varia conforme tipoRemuneracao.
+  //  - Horista: remuneração POR HORA (valorHora).
+  //  - Mensalista (default legado): remuneração MENSAL (salarioBase).
+  const tipoRem = ((form as any).tipoRemuneracao || 'horista').toLowerCase();
+  if (tipoRem === 'horista') {
+    const valorHoraBRL = formatBRL(form.valorHora);
+    const valorHoraExtenso = valorPorExtenso(form.valorHora);
+    return `<p style="margin-top:8px"><strong>CLÁUSULA 2ª — DA REMUNERAÇÃO.</strong> O(A) EMPREGADO(A) receberá a título de remuneração por hora no valor de <strong>R$ ${esc(valorHoraBRL)}</strong> (${esc(valorHoraExtenso)}), pago até o 5º dia útil do mês subsequente ao trabalhado, com os descontos legais previstos em lei.</p>`;
+  }
+  return `<p style="margin-top:8px"><strong>CLÁUSULA 2ª — DA REMUNERAÇÃO.</strong> O(A) EMPREGADO(A) receberá a título de remuneração mensal o valor de <strong>R$ ${esc(empSalarioBRL)}</strong> (${esc(empSalarioExtenso)}), pago até o 5º dia útil do mês subsequente ao trabalhado, com os descontos legais previstos em lei.</p>`;
+})()}
 
 <p style="margin-top:8px"><strong>CLÁUSULA 3ª — DA JORNADA DE TRABALHO.</strong> A jornada ordinária de trabalho do(a) EMPREGADO(A) será cumprida <strong>${esc(jornadaDesc || '________________')}</strong>, respeitados os intervalos legais para repouso e alimentação, nos termos do Art. 71 da CLT.</p>
 
