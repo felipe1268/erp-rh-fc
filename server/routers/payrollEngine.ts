@@ -2117,6 +2117,11 @@ export const payrollEngineRouter = router({
           AND e.status = 'Desligado'
           AND e."deletedAt" IS NULL
           AND ((e."valorHora" IS NOT NULL AND e."valorHora" != '') OR e."tipoRemuneracao" = 'mensalista')
+          -- Rev. 2497 — Só aviso TRABALHADO (funcionário cumpre o aviso até dataFim).
+          -- Indenizado: empresa paga, funcionário sai imediatamente em dataInicio-1.
+          -- Sem este filtro, aviso indenizado de março com dataFim projetada em
+          -- maio entraria na folha de maio (bug que afetou Elizeu).
+          AND tn.tipo NOT LIKE '%indenizado%'
           AND tn."dataFim" >= ${primeiroDiaMesAviso}::date
           AND tn."dataInicio" <= ${ultimoDiaMesAviso}::date
       `)) as any).rows || [];
@@ -2929,9 +2934,11 @@ export const payrollEngineRouter = router({
           companyFilter(employees.companyId, input),
           eq(employees.tipoContrato, "CLT"),
           sql`${employees.deletedAt} IS NULL`,
-          // Rev. 2496 — Ativos/Férias OU Desligados com aviso prévio
-          // que se sobrepõe ao mês de referência (entram pra cálculo
-          // proporcional aos dias efetivamente trabalhados).
+          // Rev. 2496/2497 — Ativos/Férias OU Desligados com aviso TRABALHADO
+          // que se sobrepõe ao mês de referência. Aviso INDENIZADO fica de
+          // fora porque o funcionário sai imediatamente (último dia trabalhado
+          // = dataInicio - 1) — o dataFim é só projeção legal pra cálculo de
+          // 13º/férias proporcionais, ele não trabalha no período.
           sql`(
             ${employees.status} IN ('Ativo', 'Ferias')
             OR (
@@ -2941,6 +2948,7 @@ export const payrollEngineRouter = router({
                 WHERE tn."employeeId" = ${employees.id}
                   AND tn."deletedAt" IS NULL
                   AND tn.status NOT IN ('cancelado')
+                  AND tn.tipo NOT LIKE '%indenizado%'
                   AND tn."dataFim" >= ${primeiroDiaMesAviso}::date
                   AND tn."dataInicio" <= ${ultimoDiaMesAviso}::date
               )

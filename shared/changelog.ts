@@ -1,6 +1,51 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2497 — **FOLHA + VALE · Aviso INDENIZADO excluído da repesca de
+ * desligados (fix do bug histórico que arrastou Elizeu pra folha/vale de
+ * maio após desligamento em março).**
+ *
+ * PEDIDO (user, 27/05/2026 logo após Rev. 2496):
+ * "mas o elizeu foi desligado em março, ele nao deveria aparecer na
+ * folha.... pq está aparecendo?" — feedback imediato pós Rev. 2496.
+ *
+ * CAUSA RAIZ (bug que vivia escondido no `gerarVale` desde Rev. 1764+):
+ *  - Pra desligados, a query usava SÓ `tn.dataFim` como janela de
+ *    elegibilidade, sem distinguir tipo de aviso.
+ *  - Mas `dataFim` tem semântica DIFERENTE pra cada tipo:
+ *      • TRABALHADO  → último dia que o funcionário efetivamente trabalha.
+ *      • INDENIZADO  → só projeção legal (pro cálculo de 13º/férias prop).
+ *        O funcionário SAI EM `dataInicio - 1` (véspera da comunicação).
+ *  - Elizeu: comunicado em março, aviso INDENIZADO de 60 dias →
+ *    `dataInicio≈2026-03-15, dataFim≈2026-05-14`. Como dataFim cai em maio,
+ *    a query repescava ele indevidamente — ele já tinha saído em 14/mar.
+ *  - Rev. 2496 propagou esse mesmo bug pra `simularPagamento` (era
+ *    intencional, mas só agora o bug ficou visível na folha).
+ *  - Convenção confirmada em `server/routers/homeData.ts` L595-608
+ *    (Rev. 1764): "tipo indenizado: não cumpre o aviso, último dia =
+ *    véspera do início (dia da comunicação)".
+ *
+ * O QUE MUDOU
+ *  - **`server/routers/payrollEngine.ts`**:
+ *      - `gerarVale` (~L2114-2122): query SQL ganhou
+ *        `AND tn.tipo NOT LIKE '%indenizado%'`.
+ *      - `simularPagamento` (~L2935-2951): subquery EXISTS ganhou a mesma
+ *        cláusula.
+ *  - Mesmo padrão `LIKE '%indenizado%'` usado em `homeData.ts` L599 —
+ *    pega tanto `empregador_indenizado` quanto `empregado_indenizado`.
+ *
+ * O QUE NÃO MUDOU
+ *  - Aviso TRABALHADO continua entrando no vale + folha mensal proporcional
+ *    aos dias trabalhados (Mariana, Myriélle — comportamento desejado).
+ *  - Cálculo de rescisão (verbas indenizatórias) intacto.
+ *  - Schema do DB intacto. Sem migration.
+ *
+ * COMO VALIDAR
+ *  1. Maio/2026 → resimular folha. Elizeu (indenizado) NÃO aparece.
+ *  2. Maio/2026 → gerar vale. Elizeu NÃO aparece.
+ *  3. Mariana e Myriélle (trabalhado, dataFim em maio) seguem aparecendo
+ *     normalmente em folha + vale com proporcional.
+ *
  * Rev. 2496 — **FOLHA · Desligados em aviso prévio passam a entrar na folha
  * mensal cheia (espelha lógica do `gerarVale`), eliminando "vale órfão".**
  *

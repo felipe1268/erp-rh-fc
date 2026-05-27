@@ -2,6 +2,7 @@
 
 > Este arquivo guarda os one-liners das revisões antigas para manter o `replit.md` enxuto.
 
+- **Rev. 2490** — USUÁRIOS & PERMISSÕES · "Dashboards RH" explodido em 13 entradas (master + 12 dashboard_*) em `shared/modulePages.ts` módulo `rh.pages`. `PageRouteMap` intacto. Ver `shared/changelog.ts`.
 - **Rev. 2489** — FOLHA · Cálculo Interno + Consolidações persistindo de verdade — helper `ensurePeriodExists` chamado em 11 mutations (gerarVale, realizarAfericao×2, simularPagamento + 8 consolidar/desconsolidar) corrige UPDATEs que afetavam 0 linhas. `server/routers/payrollEngine.ts` L204-251. Ver `shared/changelog.ts`.
 - **Rev. 2488** — COTAÇÕES · Mapa de Cotação em fullscreen + célula de Item enxuta (estilo ERP de mercado). Em `Cotacoes.tsx`: wrapper condicional `abaAtiva==="mapa"` (`px-3 py-3`) + bloco poluído da célula Item virou tooltip+ícone Info. Ver `shared/changelog.ts`.
 - **Rev. 2487** — COMPRAS · Ordenação clicável por coluna em Cotações (`Cotacoes.tsx`) e OCs (`Ordens.tsx`) com setinhas ↑↓ no padrão SC. `[sortKey,sortDir]` + `toggleSort`, `localeCompare("pt-BR",{numeric:true,sensitivity:"base"})`. Ver `shared/changelog.ts`.
