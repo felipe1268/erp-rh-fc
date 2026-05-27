@@ -1,6 +1,76 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2492 — **EFETIVO DA OBRA (Planejamento) · Gráfico "Distribuição por
+ * Função" virou interativo — clique na barra/nome da função filtra a Lista
+ * de Funcionários abaixo (cross-filter visual).**
+ *
+ * PEDIDO (user, image_1779886994646, 27/05/2026): "quero poder filtrar por
+ * função quando clicar no nome da função.. ajuste isso". Screenshot
+ * mostrava a tela Efetivo da Obra com o card "Distribuição por Função"
+ * (~17 barras em 2 colunas) e a Lista de Funcionários logo abaixo. Os
+ * 3 filtros existentes (Status, Direto/Indireto, Vínculo) já cruzavam
+ * com a lista, MAS a função (a dimensão mais granular e a que dispara
+ * mais o "quem é esse?") era só visual — sem clique.
+ *
+ * O QUE MUDOU (100% frontend, em `client/src/pages/planejamento/PlanejamentoDetalhe.tsx`):
+ *
+ *  1. **Novo state `filtroFuncao: string`** (L11287) — default `"todos"`,
+ *     no mesmo padrão dos outros 3 filtros (Status/Cat/Vinc).
+ *
+ *  2. **Filtro aplicado em `listaFiltrada`** (L11340) — comparação direta
+ *     contra `e.funcao || e.cargo || "Não informado"`, mesmíssima
+ *     normalização usada no `funcaoMap` (L11321) — garante que o que
+ *     a barra mostra é exatamente o que a lista filtra (sem mismatch
+ *     case-sensitive / trim / null). Adicionado às deps do useMemo.
+ *
+ *  3. **`funcaoMap` INTOCADO de propósito** — o agregado das barras NÃO
+ *     re-aplica `filtroFuncao`. Se aplicasse, clicar em "Servente"
+ *     colapsaria o gráfico pra uma barra só (UX morta). Mantendo o
+ *     mapa completo, o user sempre vê o panorama e pode trocar de
+ *     função com 1 clique.
+ *
+ *  4. **Barras viraram `<button>`** (L11530-11555) — `aria-pressed`,
+ *     `title` contextual ("Filtrar lista por X (qtd)" ou "Limpar filtro"),
+ *     toggle (clicar de novo desativa). Visual:
+ *      - Barra ATIVA: `ring-1 ring-blue-300` + `bg-blue-50` no wrapper,
+ *        gradient da barra `from-blue-700 to-blue-500` (escuro), label
+ *        em `text-blue-800 font-semibold`.
+ *      - Demais barras quando há filtro ATIVO: `opacity-40` (apagadas)
+ *        com `hover:opacity-100` pra leitura sob demanda.
+ *      - Estado neutro: `hover:bg-slate-50` + gradient mais escuro no hover.
+ *
+ *  5. **Pill removível no título do card** (L11510-11522) — ao filtrar,
+ *     aparece chip azul `{filtroFuncao} [×]` junto com os outros breadcrumbs
+ *     de filtro (Status/Cat/Vinc). Clicar no × limpa só este filtro.
+ *
+ *  6. **Botão "Limpar" da barra de pills global** (L11464-11467) agora
+ *     resetam `filtroFuncao` junto com os outros 3.
+ *
+ * Coverage: o filtro só altera `listaFiltrada` (consumida pela tabela e
+ * pelo modal "Transferir em Lote" Rev. 2491). Os 4 cards Mão de Obra
+ * Direta/Indireta + as 2 caixas grandes ficam INTACTOS pq são totais
+ * absolutos do header, não respondem aos filtros (paridade com Rev. 1596).
+ *
+ * ARQUIVOS TOCADOS (1 arquivo, 5 hunks, sem mudança de imports — `X` e
+ * `BarChart3` já estavam disponíveis):
+ *  - `client/src/pages/planejamento/PlanejamentoDetalhe.tsx`
+ *    - L11284-11287: state.
+ *    - L11340: filtro em `listaFiltrada`.
+ *    - L11351: deps do useMemo.
+ *    - L11464-11465: limpar global inclui `filtroFuncao`.
+ *    - L11510-11555: pill no título + barras clicáveis com 3 estados visuais.
+ *
+ * NÃO MUDOU
+ *  - Backend (nenhum endpoint novo).
+ *  - Lógica de seleção múltipla / transferência em lote (Rev. 2484/2491).
+ *  - `funcaoMap` (gráfico continua mostrando o panorama completo).
+ *
+ * FOLLOW-UP POSSÍVEL
+ *  - Replicar padrão clicável nos outros gráficos do Painel RH
+ *    (DashFuncionarios "Análise por Função" já tem dropdown — converter
+ *    pra clique nas barras seria coerente).
+ *
  * Rev. 2491 — **EFETIVO DA OBRA (Planejamento) · Redesign do modal
  * "Transferir em Lote" com regras de ouro FC + barra de progresso real
  * + atalhos de teclado + layout De→Para visual.**

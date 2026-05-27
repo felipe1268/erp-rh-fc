@@ -11278,6 +11278,10 @@ export function EfetivoObraView({ equipeRaw, isLoading, docsMap = {}, companyId,
   // Rev. 2289 — Filtro por vínculo (CLT / PJ / TERCEIRO). Pedido user
   // (23/05/2026, IMG_1078): "Quero o filtro, para terceiros tbm".
   const [filtroVinc, setFiltroVinc] = useState<"todos" | "CLT" | "PJ" | "TERCEIRO">("todos");
+  // Rev. 2492 — Filtro por função (clique nas barras de "Distribuição por
+  // Função"). Pedido user (image_1779886994646, 27/05/2026): "quero poder
+  // filtrar por função quando clicar no nome da função".
+  const [filtroFuncao, setFiltroFuncao] = useState<string>("todos");
   const vincOf = (e: any): "CLT" | "PJ" | "TERCEIRO" | "OUTRO" => {
     const t = String(e?.tipoContrato || "").toUpperCase();
     if (t === "CLT") return "CLT";
@@ -11330,6 +11334,7 @@ export function EfetivoObraView({ equipeRaw, isLoading, docsMap = {}, companyId,
     let lista = filtroStatus === "todos" ? [...equipe] : equipe.filter((e: any) => e.effectiveStatus === filtroStatus);
     if (filtroCat !== "todos") lista = lista.filter((e: any) => (e.categoria || "Direto") === filtroCat);
     if (filtroVinc !== "todos") lista = lista.filter((e: any) => vincOf(e) === filtroVinc);
+    if (filtroFuncao !== "todos") lista = lista.filter((e: any) => (e.funcao || e.cargo || "Não informado") === filtroFuncao);
     if (busca) {
       const q = busca.toLowerCase();
       lista = lista.filter((e: any) =>
@@ -11340,7 +11345,7 @@ export function EfetivoObraView({ equipeRaw, isLoading, docsMap = {}, companyId,
     }
     lista.sort((a: any, b: any) => (a.nomeCompleto || "").localeCompare(b.nomeCompleto || ""));
     return lista;
-  }, [equipe, filtroStatus, filtroCat, filtroVinc, busca]);
+  }, [equipe, filtroStatus, filtroCat, filtroVinc, filtroFuncao, busca]);
 
   const maxBar = funcaoMap.length > 0 ? funcaoMap[0][1] : 1;
 
@@ -11453,8 +11458,8 @@ export function EfetivoObraView({ equipeRaw, isLoading, docsMap = {}, companyId,
                 </button>
               );
             })}
-            {(filtroStatus !== "todos" || filtroCat !== "todos" || filtroVinc !== "todos") && (
-              <button onClick={() => { setFiltroStatus("todos"); setFiltroCat("todos"); setFiltroVinc("todos"); }} className="ml-auto text-[10px] text-slate-400 hover:text-slate-600 flex items-center gap-1">
+            {(filtroStatus !== "todos" || filtroCat !== "todos" || filtroVinc !== "todos" || filtroFuncao !== "todos") && (
+              <button onClick={() => { setFiltroStatus("todos"); setFiltroCat("todos"); setFiltroVinc("todos"); setFiltroFuncao("todos"); }} className="ml-auto text-[10px] text-slate-400 hover:text-slate-600 flex items-center gap-1">
                 <X className="h-3 w-3" /> Limpar
               </button>
             )}
@@ -11499,22 +11504,53 @@ export function EfetivoObraView({ equipeRaw, isLoading, docsMap = {}, companyId,
               {filtroStatus !== "todos" && <span className="text-[10px] font-normal text-slate-400">— {statusPills.find(p => p.key === filtroStatus)?.label}</span>}
               {filtroCat !== "todos" && <span className="text-[10px] font-normal text-slate-400">— {filtroCat === "Direto" ? "Direto" : "Indireto"}</span>}
               {filtroVinc !== "todos" && <span className="text-[10px] font-normal text-slate-400">— {filtroVinc}</span>}
+              {filtroFuncao !== "todos" && (
+                <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-blue-700 bg-blue-50 border border-blue-200 px-1.5 py-0.5 rounded-full">
+                  {filtroFuncao}
+                  <button
+                    type="button"
+                    onClick={() => setFiltroFuncao("todos")}
+                    className="hover:text-blue-900"
+                    title="Remover filtro de função"
+                  >
+                    <X className="h-2.5 w-2.5" />
+                  </button>
+                </span>
+              )}
               <span className="text-[10px] font-normal text-slate-400 ml-auto">{funcaoMap.reduce((s, [, c]) => s + c, 0)} funcionários em {funcaoMap.length} funções</span>
             </p>
+            {/* Rev. 2492 — Barras clicáveis filtram a Lista de Funcionários */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1">
-              {funcaoMap.map(([funcao, qtd]) => (
-                <div key={funcao} className="flex items-center gap-2 py-0.5">
-                  <span className="text-[11px] text-slate-600 w-40 truncate text-right shrink-0" title={funcao}>{funcao}</span>
-                  <div className="flex-1 h-5 bg-slate-100 rounded overflow-hidden">
-                    <div
-                      className="h-full bg-gradient-to-r from-blue-500 to-blue-400 rounded flex items-center justify-end pr-1.5 text-[10px] font-bold text-white transition-all"
-                      style={{ width: `${Math.max((qtd / maxBar) * 100, 10)}%`, minWidth: 24 }}
-                    >
-                      {qtd}
+              {funcaoMap.map(([funcao, qtd]) => {
+                const ativo = filtroFuncao === funcao;
+                const apagado = filtroFuncao !== "todos" && !ativo;
+                return (
+                  <button
+                    key={funcao}
+                    type="button"
+                    onClick={() => setFiltroFuncao(ativo ? "todos" : funcao)}
+                    aria-pressed={ativo}
+                    title={ativo ? `Limpar filtro · ${funcao}` : `Filtrar lista por ${funcao} (${qtd})`}
+                    className={`group flex items-center gap-2 py-0.5 rounded transition-all text-left ${
+                      ativo ? "bg-blue-50 ring-1 ring-blue-300 px-1" : "hover:bg-slate-50 px-1"
+                    } ${apagado ? "opacity-40 hover:opacity-100" : ""}`}
+                  >
+                    <span className={`text-[11px] w-40 truncate text-right shrink-0 ${ativo ? "text-blue-800 font-semibold" : "text-slate-600 group-hover:text-slate-900"}`} title={funcao}>{funcao}</span>
+                    <div className="flex-1 h-5 bg-slate-100 rounded overflow-hidden">
+                      <div
+                        className={`h-full rounded flex items-center justify-end pr-1.5 text-[10px] font-bold text-white transition-all ${
+                          ativo
+                            ? "bg-gradient-to-r from-blue-700 to-blue-500"
+                            : "bg-gradient-to-r from-blue-500 to-blue-400 group-hover:from-blue-600 group-hover:to-blue-500"
+                        }`}
+                        style={{ width: `${Math.max((qtd / maxBar) * 100, 10)}%`, minWidth: 24 }}
+                      >
+                        {qtd}
+                      </div>
                     </div>
-                  </div>
-                </div>
-              ))}
+                  </button>
+                );
+              })}
               {funcaoMap.length === 0 && <p className="text-xs text-slate-400 text-center py-4 col-span-2">Nenhum resultado</p>}
             </div>
           </div>
