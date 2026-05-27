@@ -1,6 +1,56 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2490 — **USUÁRIOS & PERMISSÕES · Dashboards RH explodidos em 12 entradas
+ * individuais na tela de Permissões (`shared/modulePages.ts`, módulo `rh`).**
+ *
+ * PEDIDO (user, image_1779886092320 + image_1779886100088, 27/05/2026):
+ * "detalhe as opções de dash ta faltando muitas opções". O screenshot da
+ * tela `/usuarios` mostrava UMA única linha "Dashboards RH" com 4 checkboxes
+ * (view/—/—/—), enquanto o `DashboardIndex.tsx` (`/dashboards`) lista 12
+ * dashboards reais (Visão Panorâmica + 11 módulos analíticos). O gestor
+ * precisava granular o acesso a cada um.
+ *
+ * O QUE MUDOU
+ *
+ *  Em `shared/modulePages.ts`, módulo `rh.pages`, a linha única
+ *  `{ id: "dashboards", label: "Dashboards RH", actions: ["view"] }` foi
+ *  expandida pra 13 linhas (a original + 12 dashboards individuais):
+ *
+ *    - `dashboards` — Acesso ao Centro de Comando (master/root)
+ *    - `dashboard_visao_panoramica` — CEO/Diretoria (hero card azul)
+ *    - `dashboard_funcionarios` — Quadro de Pessoal
+ *    - `dashboard_cartao_ponto` — Frequência & Assiduidade
+ *    - `dashboard_folha_pagamento` — Custos & Encargos
+ *    - `dashboard_epis` — Segurança & Estoque
+ *    - `dashboard_juridico` — Risco & Provisão
+ *    - `dashboard_aviso_previo` — Rescisões & Custos
+ *    - `dashboard_ferias` — Planejamento & Custos
+ *    - `dashboard_efetivo_obra` — Alocação & Efetivo
+ *    - `dashboard_controle_documentos` — Compliance & Validade
+ *    - `dashboard_competencias` — Anual & Rateio
+ *    - `dashboard_parceiros` — Convênios & Descontos
+ *
+ *  Todas com `actions: ["view"]` (consistente com o padrão dos demais
+ *  dashboards do sistema — SST, Jurídico, Trabalhista, Tributário, Civil,
+ *  Competências, Parceiros). Labels descritivos com subtítulo entre
+ *  parênteses pra dar contexto na tela de permissões (UX padrão FC).
+ *
+ *  Mapeamento de telas reais (`PageRouteMap` em modulePages L473-483):
+ *  os paths `/dashboards/*` já estão mapeados pro id master `"dashboards"`
+ *  — comportamento de visibilidade do menu/rotas NÃO MUDA. As 12 novas
+ *  entradas são meta-permissões granulares pro Painel de Controle do Menu
+ *  e pra futura granularização de visibilidade individual (já preparado).
+ *
+ * NÃO TOCADO
+ *  - `PageRouteMap` (rotas → ids mestres) intacto — rotas continuam
+ *    governadas por `"dashboards"` master.
+ *  - `DashboardIndex.tsx` não muda — visibilidade já é por
+ *    `isDashboardVisible(d.path, mainRoute)` + `groupCanAccessRoute`.
+ *  - Demais módulos (`sst`, `juridico*`, `gestao-competencias`,
+ *    `parceiros`) continuam com 1 linha "Dashboards X" pq cada um expõe
+ *    APENAS 1 dashboard consolidado (não há múltiplos cards como em RH).
+ *
  * Rev. 2489 — **FOLHA · Cálculo Interno persistindo de verdade — auto-criação
  * da row em `payroll_periods` antes das mutations gerarVale, realizarAfericao
  * e simularPagamento.**
