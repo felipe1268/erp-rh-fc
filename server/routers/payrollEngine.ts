@@ -971,6 +971,12 @@ export const payrollEngineRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
 
+      // Garante que payroll_periods existe pra mesReferencia E prevMes (a aferição
+      // UPDATEa ambos). Sem isso o UPDATE silenciosamente afetava 0 linhas.
+      const _prevMesEnsure = getPrevMesRef(input.mesReferencia);
+      await ensurePeriodExists(db, resolveCompanyIds(input), input.mesReferencia);
+      await ensurePeriodExists(db, resolveCompanyIds(input), _prevMesEnsure);
+
       // --- GUARD: block re-aferição if consolidated ---
       const ppGuard = ((await db.execute(sql`
         SELECT "afericaoConsolidadoEm" FROM payroll_periods
@@ -2062,6 +2068,11 @@ export const payrollEngineRouter = router({
       try {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+
+      // Garante que payroll_periods existe — sem isso o UPDATE no fim da mutation
+      // afetava 0 linhas e os dados de Vale não eram persistidos.
+      await ensurePeriodExists(db, resolveCompanyIds(input), input.mesReferencia);
+
       const criteria = await getPayrollCriteria(db, input.companyId);
       const { year, month } = parseMesRef(input.mesReferencia);
       const diasUteis = getDiasUteisNoMes(year, month);
@@ -2846,6 +2857,10 @@ export const payrollEngineRouter = router({
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+
+      // Garante que payroll_periods existe — sem isso UPDATEs de simulação
+      // de pagamento afetavam 0 linhas e o card ficava 0% pós-reload.
+      await ensurePeriodExists(db, resolveCompanyIds(input), input.mesReferencia);
 
       // --- GUARD: block re-simulation if pagamento is consolidated ---
       const ppPagGuard = ((await db.execute(sql`
@@ -5177,6 +5192,7 @@ Responda EXATAMENTE no formato JSON abaixo:`;
     .input(z.object({ companyId: z.number(), mesReferencia: z.string() }))
     .mutation(async ({ input, ctx }) => {
       const db = (await getDb())!;
+      await ensurePeriodExists(db, resolveCompanyIds(input), input.mesReferencia);
       const agora = new Date().toISOString().replace("T", " ").substring(0, 19);
       const quem = ctx.user?.name || "Sistema";
 
@@ -5208,6 +5224,7 @@ Responda EXATAMENTE no formato JSON abaixo:`;
     .input(z.object({ companyId: z.number(), mesReferencia: z.string() }))
     .mutation(async ({ input }) => {
       const db = (await getDb())!;
+      await ensurePeriodExists(db, resolveCompanyIds(input), input.mesReferencia);
 
       // Reverte payroll_periods para vale_gerado
       await db.execute(sql`
@@ -5238,6 +5255,7 @@ Responda EXATAMENTE no formato JSON abaixo:`;
     .input(z.object({ companyId: z.number(), mesReferencia: z.string() }))
     .mutation(async ({ input, ctx }) => {
       const db = (await getDb())!;
+      await ensurePeriodExists(db, resolveCompanyIds(input), input.mesReferencia);
       const agora = new Date().toISOString().replace("T", " ").substring(0, 19);
       const quem = ctx.user?.name || "Sistema";
       await db.execute(sql`
@@ -5253,6 +5271,7 @@ Responda EXATAMENTE no formato JSON abaixo:`;
     .input(z.object({ companyId: z.number(), mesReferencia: z.string() }))
     .mutation(async ({ input }) => {
       const db = (await getDb())!;
+      await ensurePeriodExists(db, resolveCompanyIds(input), input.mesReferencia);
       await db.execute(sql`
         UPDATE payroll_periods
         SET "heConsolidadoEm" = NULL,
@@ -5266,6 +5285,7 @@ Responda EXATAMENTE no formato JSON abaixo:`;
     .input(z.object({ companyId: z.number(), mesReferencia: z.string() }))
     .mutation(async ({ input, ctx }) => {
       const db = (await getDb())!;
+      await ensurePeriodExists(db, resolveCompanyIds(input), input.mesReferencia);
       const agora = new Date().toISOString().replace("T", " ").substring(0, 19);
       const quem = ctx.user?.name || "Sistema";
       await db.execute(sql`
@@ -5281,6 +5301,7 @@ Responda EXATAMENTE no formato JSON abaixo:`;
     .input(z.object({ companyId: z.number(), mesReferencia: z.string() }))
     .mutation(async ({ input }) => {
       const db = (await getDb())!;
+      await ensurePeriodExists(db, resolveCompanyIds(input), input.mesReferencia);
       await db.execute(sql`
         UPDATE payroll_periods
         SET "afericaoConsolidadoEm" = NULL,
@@ -5294,6 +5315,7 @@ Responda EXATAMENTE no formato JSON abaixo:`;
     .input(z.object({ companyId: z.number(), mesReferencia: z.string() }))
     .mutation(async ({ input, ctx }) => {
       const db = (await getDb())!;
+      await ensurePeriodExists(db, resolveCompanyIds(input), input.mesReferencia);
       const agora = new Date().toISOString().replace("T", " ").substring(0, 19);
       const quem = ctx.user?.name || "Sistema";
       await db.execute(sql`
@@ -5309,6 +5331,7 @@ Responda EXATAMENTE no formato JSON abaixo:`;
     .input(z.object({ companyId: z.number(), mesReferencia: z.string() }))
     .mutation(async ({ input }) => {
       const db = (await getDb())!;
+      await ensurePeriodExists(db, resolveCompanyIds(input), input.mesReferencia);
       await db.execute(sql`
         UPDATE payroll_periods
         SET "pagamentoConsolidadoEm" = NULL,

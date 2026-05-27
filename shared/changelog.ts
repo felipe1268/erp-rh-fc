@@ -1,6 +1,116 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2489 — **FOLHA · Cálculo Interno persistindo de verdade — auto-criação
+ * da row em `payroll_periods` antes das mutations gerarVale, realizarAfericao
+ * e simularPagamento.**
+ *
+ * PEDIDO (user, image_1779881409349, 27/05/2026): "vale e o aferir no escuro
+ * nao está salvando. Pois o vale, inclusive, foi fechado junto com as horas
+ * extras e deveria estar aparecendo os valores pagos na tela". O screenshot
+ * (Mai/2026, empresa 60002) mostrava o card "Calcular Vale" com barra de
+ * progresso 100% e link "Ver Resultado" presente, MAS o círculo do step 1
+ * estava laranja "1" (não verde com CheckCircle), o botão dizia "Calcular
+ * Vale" (não "Recalcular") e a caixinha laranja com "Funcionários / Total
+ * Vale" não renderizava. "Aferir Escuro" estava em 0% mesmo após o user
+ * tê-lo executado. "Hora Extra" mostrava normalmente (64 funcionários,
+ * R$ 5.742,10) porque o módulo HE vive em outra tabela.
+ *
+ * CAUSA-RAIZ
+ *
+ *  (1) **Não existia row em `payroll_periods` para o mês aberto (2026-05).**
+ *      A tabela só tinha rows para 2026-03 e 2026-04 (confirmado via psql
+ *      direto no Neon: `SELECT id, mesReferencia FROM payroll_periods` →
+ *      apenas 3 linhas, nenhuma 2026-05).
+ *
+ *  (2) **As mutations `gerarVale` (L2004), `realizarAfericao` (L919) e
+ *      `simularPagamento` (L2785) fazem `UPDATE payroll_periods SET ...
+ *      WHERE companyId = X AND mesReferencia = Y` PURO — sem INSERT prévio
+ *      nem UPSERT.** Sem a row, o `UPDATE` afeta **0 linhas silenciosamente**
+ *      (Postgres não retorna erro). A mutation continua, calcula tudo
+ *      direitinho e retorna o payload completo pro frontend.
+ *
+ *  (3) **No frontend (FolhaPagamento.tsx L562-575), o `onSuccess` chama
+ *      `setValeResult(data)` e `finishProgress('vale')` (que seta
+ *      `stepProgress['vale']=100`) ANTES do `payrollPeriod.refetch()`.**
+ *      Isso explica o estado inconsistente do card:
+ *        - `valeResult` truthy → "Ver Resultado" aparece
+ *        - `stepProgress['vale']=100` → barra cheia
+ *        - `pd.valeGeradoEm` continua null → `valeOk=false` → círculo
+ *          laranja "1", sem caixa de totais, botão segue "Calcular Vale"
+ *
+ *  (4) **Mesmo padrão pra Aferir Escuro:** o `realizarAfericao` no backend
+ *      faz UPDATE em `mesReferencia` E em `prevMes`. Sem ambos os rows,
+ *      `afericaoRealizada` e `afericaoResultJson` nunca persistem, e na
+ *      próxima abertura da tela o card volta a 0%.
+ *
+ * SOLUÇÃO — Helper `ensurePeriodExists(db, cids, mesRef)` em
+ * `server/routers/payrollEngine.ts` (L204-251).
+ *
+ *  (a) Idempotente: faz `SELECT id` por (cid, mesRef); se já existe, pula.
+ *
+ *  (b) Se ausente, calcula `pontoInicio/Fim`, `escuroInicio/Fim` e
+ *      `totalFuncionarios` (CLT Ativo/Ferias não soft-deleted) da mesma
+ *      forma que `openPeriod` (L396-439) e faz `INSERT ... status='aberta'`.
+ *
+ *  (c) Usa `getPayrollCriteria(db, cid)` POR EMPRESA porque cada empresa
+ *      pode ter `diaCorte` diferente em `system_criteria`.
+ *
+ *  (d) Acionado no início de cada mutation que UPDATEa `payroll_periods`,
+ *      ANTES de qualquer GUARD ou operação que dependa da row. Cobertura
+ *      ampliada após code review (architect detectou o mesmo silent-fail em
+ *      todas as consolidações — relevante porque o user reclamou que "vale
+ *      foi fechado junto com as horas extras"):
+ *        Cálculo (3):
+ *        - `gerarVale` (~L2070)
+ *        - `simularPagamento` (~L2860)
+ *        - `realizarAfericao` (~L971) — chama 2x: `mesReferencia` E
+ *          `prevMes` (porque aferição UPDATEa ambos os meses)
+ *        Consolidação/Desconsolidação (8):
+ *        - `consolidarVale` / `desconsolidarVale`
+ *        - `consolidarHE` / `desconsolidarHE`
+ *        - `consolidarAfericao` / `desconsolidarAfericao`
+ *        - `consolidarPagamento` / `desconsolidarPagamento`
+ *      Total: 11 chamadas adicionadas, helper único.
+ *
+ *  (e) Performance: cada chamada faz no MÁXIMO `companyIds × (1 SELECT +
+ *      1 getPayrollCriteria SELECT + 1 COUNT + 1 INSERT)` = ~4 queries leves
+ *      por empresa SÓ no primeiro acesso. Depois o SELECT inicial vê a row
+ *      e dá curto-circuito (1 query). Custo desprezível.
+ *
+ *  (f) Por que não usar `ON CONFLICT DO NOTHING`? A tabela `payroll_periods`
+ *      NÃO tem unique constraint em `(companyId, mesReferencia)` (verificado
+ *      via `pg_constraint`). Manter o padrão SELECT-then-INSERT (mesmo do
+ *      `openPeriod`) evita ter que criar constraint retroativa em produção
+ *      (regra R-001/R-007).
+ *
+ *  (g) **NÃO modifica** `payroll_periods` em produção retroativamente —
+ *      rows ausentes serão criadas na hora pelo próximo Calcular Vale /
+ *      Aferir Escuro / Simular Pagamento. ZERO migration, ZERO ALTER TABLE.
+ *
+ * ARQUIVOS TOCADOS
+ *  - `server/routers/payrollEngine.ts` — helper `ensurePeriodExists` novo
+ *    (~50 linhas) + 3 chamadas no início das mutations afetadas.
+ *  - `shared/version.ts` → 2489
+ *  - `shared/changelog.ts` → esta entrada
+ *  - `replit.md` → rotação 2+5
+ *
+ * NÃO TOCADO
+ *  - Frontend (`FolhaPagamento.tsx`): a UI já funciona — o bug era 100%
+ *    backend (UPDATE em 0 linhas). Após o fix, o `payrollPeriod.refetch()`
+ *    que já existe no `onSuccess` traz `valeGeradoEm`/`valeResultJson`/
+ *    `afericaoRealizada`/`afericaoResultJson` populados e o card renderiza
+ *    o estado correto naturalmente.
+ *  - Schema / migrations / outras mutations / hePeriods.
+ *
+ * FOLLOW-UPS (opcionais, NÃO entrarão nesta rev)
+ *  - Adicionar `UNIQUE(companyId, mesReferencia)` em `payroll_periods` numa
+ *    revisão futura (depois de garantir que não há duplicatas históricas).
+ *  - Considerar chamar `openPeriod` automaticamente no `useEffect` de mount
+ *    da página de Folha quando `pd.data === null` — atualmente o usuário
+ *    pode ficar perdido se nunca clicou em "Abrir Competência" (embora o
+ *    fluxo de gerarVale/realizarAfericao agora resolva isso transparente).
+ *
  * Rev. 2488 — **COTAÇÕES · Mapa de Cotação em fullscreen + célula de
  * Item enxuta (estilo ERP de mercado).**
  *
