@@ -541,6 +541,9 @@ export const terceirosRouter = router({
           fotoUrl = up.url;
         }
 
+        // Rev. 2495 — Padronização: nome SEMPRE em MAIÚSCULAS + trim
+        // (espaços nas pontas distorcem ordenação alfabética).
+        if (rest.nome) rest.nome = String(rest.nome).trim().toUpperCase();
         const values: any = { ...rest, numeroInterno };
         if (fotoUrl) values.fotoUrl = fotoUrl;
         const [result] = await db.insert(funcionariosTerceiros).values(values).returning({ id: funcionariosTerceiros.id });
@@ -588,6 +591,9 @@ export const terceirosRouter = router({
       .mutation(async ({ input }) => {
         const db = (await getDb())!;
         const { id, ...data } = input;
+        // Rev. 2495 — Padronização: nome SEMPRE em MAIÚSCULAS + trim
+        // (espaços nas pontas distorcem ordenação alfabética).
+        if (typeof data.nome === "string") data.nome = data.nome.trim().toUpperCase();
         // Remove chaves undefined (não sobrescreve com NULL inadvertidamente).
         const clean: any = {};
         for (const [k, v] of Object.entries(data)) if (v !== undefined) clean[k] = v;

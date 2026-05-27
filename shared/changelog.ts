@@ -1,6 +1,49 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2495 — **TERCEIROS · Padronização — nomes SEMPRE em MAIÚSCULAS +
+ * lista SEMPRE em ordem alfabética por nome.**
+ *
+ * PEDIDO (user, image_1779887776356, 27/05/2026): "QUERO QUE TODOS OS NOMES
+ * SEMPRE FIQUEM EM MAIUSCULO PARA PADRONIZAÇÃO.. E SEMPRE FIQUE ORGANIZADO
+ * EM ORDEM ALFABETICA.." — screenshot da lista de Funcionários Terceiros
+ * (30 cadastros) misturando "AILTON NASCIMENTO S. COSTA" (uppercase),
+ * "Alessandro Ferreira Da Silva" (Title Case), "Anderson Gonçalves Benedito"
+ * etc. + ordem aparentemente arbitrária.
+ *
+ * O QUE MUDOU
+ *
+ *  1. **Backend — `server/routers/terceiros.ts` (`funcionarios.create` e
+ *     `funcionarios.update`)**:
+ *      - Normaliza `nome` para `toUpperCase()` antes de persistir.
+ *      - Single-source-of-truth: qualquer caller (UI, importadores futuros,
+ *        scripts) grava maiúsculo sem depender de pré-processamento.
+ *
+ *  2. **Frontend — `client/src/pages/terceiros/FuncionariosTerceiros.tsx`**:
+ *      - Input "Nome Completo": `onChange` converte pra uppercase em tempo
+ *        real + `style={{ textTransform: "uppercase" }}` (UX visual imediata
+ *        enquanto digita, sem flicker entre eventos).
+ *      - `<h3>{func.nome}</h3>` agora `(func.nome || "").toUpperCase()` —
+ *        cobre registros LEGADOS que estavam em Title Case (Alessandro,
+ *        Anderson, Ari etc) sem precisar de migration de DB.
+ *      - `filtered` (useMemo): adicionado `.sort()` no fim do pipeline com
+ *        `localeCompare("pt-BR", { sensitivity: "base" })` — alfabética
+ *        pt-BR, acento-insensitive, case-insensitive. Filtros existentes
+ *        (busca, aptidão, empresa) continuam aplicando ANTES do sort. Cria
+ *        cópia (`[...list]`) pra não mutar o array da query.
+ *
+ * NÃO MUDOU
+ *  - Schema do banco (`funcionariosTerceiros.nome` continua `varchar`).
+ *  - Nenhum UPDATE em massa nos 30 registros existentes (a normalização
+ *    no `toUpperCase()` do display cobre legacy; novos saves uppercase).
+ *  - Outros módulos (Colaboradores, Empresas Terceiras, Fornecedores) —
+ *    fora do escopo desta revisão. Pode ser estendido se o user pedir.
+ *
+ * ARQUIVOS TOCADOS
+ *  - `server/routers/terceiros.ts` (create L544 + update L591-600).
+ *  - `client/src/pages/terceiros/FuncionariosTerceiros.tsx` (filtered L152,
+ *    h3 nome L455, input nome L564).
+ *
  * Rev. 2494 — **TERCEIROS · Bugfix CRÍTICO — clicar "Atualizar" no form de
  * Funcionário Terceiro não salvava nada (falha silenciosa da validação Zod
  * + ausência de `onError` no frontend). Schema relaxado pra aceitar `null` +

@@ -152,12 +152,19 @@ export default function FuncionariosTerceiros() {
   const filtered = useMemo(() => {
     let list = funcionarios;
     if (filterAptidao !== "all") list = list.filter((f: any) => f.statusAptidao === filterAptidao);
-    if (!search) return list;
-    const s = search.toLowerCase();
-    return list.filter((f: any) =>
-      f.nome?.toLowerCase().includes(s) ||
-      f.cpf?.includes(s) ||
-      f.funcao?.toLowerCase().includes(s)
+    if (search) {
+      const s = search.toLowerCase();
+      list = list.filter((f: any) =>
+        f.nome?.toLowerCase().includes(s) ||
+        f.cpf?.includes(s) ||
+        f.funcao?.toLowerCase().includes(s)
+      );
+    }
+    // Rev. 2495 — Padronização: lista SEMPRE em ordem alfabética por nome
+    // (pt-BR, acento-insensitive, case-insensitive). Cria cópia antes do
+    // sort pra não mutar o array da query.
+    return [...list].sort((a: any, b: any) =>
+      (a.nome || "").trim().localeCompare((b.nome || "").trim(), "pt-BR", { sensitivity: "base" })
     );
   }, [funcionarios, search, filterAptidao]);
 
@@ -452,7 +459,10 @@ export default function FuncionariosTerceiros() {
                     />
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <h3 className="font-semibold text-foreground">{func.nome}</h3>
+                        {/* Rev. 2495 — Padronização: nome SEMPRE renderizado em
+                            MAIÚSCULAS (cobre registros legados gravados antes
+                            da normalização do backend). */}
+                        <h3 className="font-semibold text-foreground">{(func.nome || "").toUpperCase()}</h3>
                         {func.numeroInterno && (
                           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-mono font-semibold bg-blue-50 text-blue-700 border border-blue-200" title="Número interno do funcionário">
                             <BadgeCheck className="h-3 w-3" />{func.numeroInterno}
@@ -561,7 +571,9 @@ export default function FuncionariosTerceiros() {
                       </SelectContent>
                     </Select>
                   </div>
-                  <div><Label>Nome Completo *</Label><Input value={form.nome || ""} onChange={(e) => setForm({ ...form, nome: e.target.value })} /></div>
+                  {/* Rev. 2495 — Padronização: nome digita-se em qualquer
+                      caso mas é gravado/exibido SEMPRE em MAIÚSCULAS. */}
+                  <div><Label>Nome Completo *</Label><Input value={form.nome || ""} onChange={(e) => setForm({ ...form, nome: e.target.value.toUpperCase() })} style={{ textTransform: "uppercase" }} /></div>
                   <div><Label>CPF</Label><Input value={form.cpf || ""} onChange={(e) => setForm({ ...form, cpf: e.target.value })} /></div>
                   <div><Label>RG</Label><Input value={form.rg || ""} onChange={(e) => setForm({ ...form, rg: e.target.value })} /></div>
                   <div><Label>Data de Nascimento</Label><Input type="date" value={form.dataNascimento ? String(form.dataNascimento).slice(0, 10) : ""} onChange={(e) => setForm({ ...form, dataNascimento: e.target.value })} /></div>
