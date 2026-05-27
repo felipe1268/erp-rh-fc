@@ -198,6 +198,55 @@ function parseBRLLocal(v: string | null | undefined): number {
   return isNaN(n) ? 0 : n;
 }
 
+/**
+ * Garante que payroll_periods tem row pra cada (companyId, mesReferencia) da lista.
+ * Sem isso, mutations como gerarVale/realizarAfericao/simularPagamento rodam UPDATE
+ * em 0 linhas silenciosamente (frontend mostra os números mas DB não persiste — bug
+ * histórico onde Vale aparecia 100% sem totais e Aferir Escuro reabria em 0%).
+ * Idempotente: se já existe, pula. Usa criteria da empresa pra calcular pontoInicio/Fim.
+ */
+async function ensurePeriodExists(
+  db: any,
+  companyIds: number[],
+  mesReferencia: string,
+) {
+  for (const cid of companyIds) {
+    const existing = ((await db.execute(sql`
+      SELECT id FROM payroll_periods
+      WHERE "companyId" = ${cid} AND "mesReferencia" = ${mesReferencia}
+      LIMIT 1
+    `)) as any).rows || [];
+    if (existing[0]) continue;
+
+    const criteria = await getPayrollCriteria(db, cid);
+    const { year, month } = parseMesRef(mesReferencia);
+    const prevMonth = month === 1 ? 12 : month - 1;
+    const prevYear = month === 1 ? year - 1 : year;
+    const diaCorte = criteria.diaCorte;
+    const pontoInicioDate = new Date(Date.UTC(prevYear, prevMonth - 1, diaCorte));
+    pontoInicioDate.setUTCDate(pontoInicioDate.getUTCDate() + 1);
+    const pontoInicio = pontoInicioDate.toISOString().slice(0, 10);
+    const pontoFim = `${year}-${String(month).padStart(2, "0")}-${String(diaCorte).padStart(2, "0")}`;
+    const lastDay = new Date(year, month, 0).getDate();
+    const escuroInicio = `${year}-${String(month).padStart(2, "0")}-${String(diaCorte + 1).padStart(2, "0")}`;
+    const escuroFim = `${year}-${String(month).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
+
+    const empCount = ((await db.execute(sql`
+      SELECT COUNT(*) as total FROM employees
+      WHERE "companyId" = ${cid}
+      AND "tipoContrato" = 'CLT'
+      AND status IN ('Ativo', 'Ferias')
+      AND "deletedAt" IS NULL
+    `)) as any).rows || [];
+    const totalFunc = empCount[0]?.total || 0;
+
+    await db.execute(sql`
+      INSERT INTO payroll_periods ("companyId", "mesReferencia", "pontoInicio", "pontoFim", "escuroInicio", "escuroFim", status, "totalFuncionarios")
+      VALUES (${cid}, ${mesReferencia}, ${pontoInicio}, ${pontoFim}, ${escuroInicio}, ${escuroFim}, 'aberta', ${totalFunc})
+    `);
+  }
+}
+
 // Get payroll criteria from systemCriteria table
 // Maps the actual DB keys (system_criteria.chave) to the engine's internal names
 async function getPayrollCriteria(db: any, companyId: number) {
