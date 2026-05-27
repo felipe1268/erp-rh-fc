@@ -60,8 +60,17 @@ export default function FuncionariosTerceiros() {
     { companyId: companyId ?? 0 },
     { enabled: !!companyId }
   );
-  const createMut = trpc.terceiros.funcionarios.create.useMutation({ onSuccess: () => { refetch(); setShowForm(false); toast.success("Funcionário cadastrado!"); } });
-  const updateMut = trpc.terceiros.funcionarios.update.useMutation({ onSuccess: () => { refetch(); setShowForm(false); toast.success("Funcionário atualizado!"); } });
+  // Rev. 2494 — onError adicionado nas 2 mutations: o bug de "clicar
+  // Atualizar e nada acontecer" (image_1779887735657) era falha silenciosa
+  // da validação Zod no backend. Agora qualquer erro vira toast visível.
+  const createMut = trpc.terceiros.funcionarios.create.useMutation({
+    onSuccess: () => { refetch(); setShowForm(false); toast.success("Funcionário cadastrado!"); },
+    onError: (e) => toast.error(`Erro ao cadastrar: ${e.message}`),
+  });
+  const updateMut = trpc.terceiros.funcionarios.update.useMutation({
+    onSuccess: () => { refetch(); setShowForm(false); toast.success("Funcionário atualizado!"); },
+    onError: (e) => toast.error(`Erro ao atualizar: ${e.message}`),
+  });
   // Rev. 2300 — bulk update silencioso (sem toast/refetch por item — usado pela barra de ações múltipla).
   const bulkUpdateMut = trpc.terceiros.funcionarios.update.useMutation();
   const deleteMut = trpc.terceiros.funcionarios.delete.useMutation({ onSuccess: () => { refetch(); toast.success("Funcionário excluído!"); } });

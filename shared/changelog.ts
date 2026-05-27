@@ -1,6 +1,88 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2494 — **TERCEIROS · Bugfix CRÍTICO — clicar "Atualizar" no form de
+ * Funcionário Terceiro não salvava nada (falha silenciosa da validação Zod
+ * + ausência de `onError` no frontend). Schema relaxado pra aceitar `null` +
+ * `empresaTerceiraId` adicionado + toast de erro em create/update.**
+ *
+ * PEDIDO (user, image_1779887735657, 27/05/2026): "TO CLICANDO EM ATUALIZAR,
+ * MAS ELE NÃO ESTA SALVANDO AS ALTERAÇÕES.. PQ?" — screenshot do form de
+ * edição do terceiro AILTON (Promatel) com todos os campos preenchidos.
+ *
+ * CAUSA RAIZ (combo de 2 bugs antigos que ficaram escondidos até hoje):
+ *
+ *   1. **Schema Zod do `terceiros.funcionarios.update` rejeitava `null`.**
+ *      Os campos eram declarados como `z.string().optional()` — que aceita
+ *      `string | undefined`, NÃO `string | null`. Mas o `openEdit` faz
+ *      `setForm({...func})` espalhando a linha do banco direto, e campos
+ *      vazios voltam do Postgres como `null` (cpf, rg, email, cep, rgEmissor,
+ *      etc). Resultado: toda edição de um terceiro que tinha QUALQUER campo
+ *      NULL falhava na validação Zod do tRPC e a mutation rejeitava o
+ *      payload inteiro.
+ *
+ *   2. **Frontend NÃO tinha `onError` nas mutations.** O `useMutation`
+ *      definia só `onSuccess` (toast verde "Funcionário atualizado!").
+ *      Quando o tRPC rejeitava com `TRPCError(BAD_REQUEST, ZodError)`,
+ *      o erro era engolido — nenhum toast, nenhum console.log visível,
+ *      botão voltava ao estado normal. UX: "cliquei e não aconteceu nada".
+ *
+ *   3. **Bônus**: `empresaTerceiraId` estava no form (Select no topo) mas
+ *      NÃO no schema do update. Zod default `.strip()` removia o campo
+ *      silenciosamente — user não conseguia trocar o terceiro de empresa,
+ *      mesmo se os outros campos passassem.
+ *
+ * O QUE MUDOU
+ *
+ *  1. **`server/routers/terceiros.ts` L553-600 — schema do
+ *     `funcionarios.update` (Rev. 2494)**:
+ *      - Todos os `z.string().optional()` viraram `z.string().nullish()`
+ *        (aceita `string | null | undefined`) — 17 campos no total.
+ *      - Idem `obraId` (number), `statusAptidao` (enum), `status` (enum).
+ *      - **NOVO** `empresaTerceiraId: z.number().nullish()` — permite trocar
+ *        de empresa pelo form (UX que já existia no JSX).
+ *      - No mutation handler, novo passo de limpeza: percorre `data` e só
+ *        envia ao `db.update().set()` as chaves cujo valor é `!== undefined`
+ *        (impede que um spread parcial sobrescreva colunas pra NULL sem
+ *        intenção). `null` PASSA (intencional — limpar campo).
+ *      - Early-return `{ success: true }` se o payload limpo ficar vazio
+ *        (evita `UPDATE … SET WHERE id=X` sem colunas, que o pg rejeita).
+ *
+ *  2. **`client/src/pages/terceiros/FuncionariosTerceiros.tsx` L66-76 —
+ *     `createMut` e `updateMut` ganharam `onError`**:
+ *      - `onError: (e) => toast.error(\`Erro ao [cadastrar|atualizar]: ${e.message}\`)`.
+ *      - Garante que qualquer ZodError / TRPCError / DB error futuro vira
+ *        toast vermelho visível em vez de sumir.
+ *
+ * NÃO MUDOU
+ *  - Schema do `create` (mantém `.optional()`, formulário "Novo" começa
+ *    vazio sem nulls).
+ *  - Field names / tipos das colunas (`funcionariosTerceiros.*` continuam
+ *    como estavam).
+ *  - Lógica de salvamento (continua `updateMut.mutate({ id, ...form })` no
+ *    handleSave — a correção é no contrato do backend, não no shape do
+ *    payload).
+ *
+ * ARQUIVOS TOCADOS
+ *  - `server/routers/terceiros.ts` (schema + handler do update).
+ *  - `client/src/pages/terceiros/FuncionariosTerceiros.tsx` (onError nas
+ *    2 mutations).
+ *
+ * COMO VALIDAR
+ *  1. Abrir um terceiro com pelo menos 1 campo vazio (ex: AILTON, sem RG).
+ *  2. Trocar a função no novo combobox (Rev. 2493).
+ *  3. Clicar Atualizar → toast verde "Funcionário atualizado!" +
+ *     listagem atualiza com a nova função.
+ *  4. Se algo falhar agora, vai aparecer toast vermelho com o motivo
+ *     (graças ao onError).
+ *
+ * FOLLOW-UP POSSÍVEL
+ *  - Auditar outros routers do projeto que fazem
+ *    `z.string().optional()` em campos que vêm do banco como NULL —
+ *    mesmo bug pode estar latente em forms similares (provavelmente
+ *    Cadastro de Colaboradores, Fornecedores, Clientes — alta prioridade
+ *    de verificação dado o impacto).
+ *
  * Rev. 2493 — **TERCEIROS · Campo "Função" no cadastro de Funcionários
  * Terceiros virou Combobox vinculado ao catálogo `jobFunctions` (mesmo
  * que Colaboradores PJ/CLT usam), saindo de `<Input>` texto livre.**

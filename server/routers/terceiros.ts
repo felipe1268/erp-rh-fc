@@ -547,40 +547,52 @@ export const terceirosRouter = router({
         return { id: result.id, numeroInterno };
       }),
 
+    // Rev. 2494 — Schema relaxado pra aceitar `null` (rg/email/cep etc voltam
+     // como NULL do banco) + `empresaTerceiraId` adicionado (UI permitia trocar,
+     // mas backend estripava silenciosamente). Bug: clicar "Atualizar" não
+     // salvava nada — Zod rejeitava o payload inteiro por causa de `null`
+     // em string().optional() e a mutation falhava em silêncio (faltava
+     // onError no frontend). Pedido user (image_1779887735657): "TO CLICANDO
+     // EM ATUALIZAR, MAS ELE NÃO ESTA SALVANDO AS ALTERAÇÕES.. PQ?".
     update: protectedProcedure
       .input(z.object({
         id: z.number(),
-        nome: z.string().optional(),
-        cpf: z.string().optional(),
-        rg: z.string().optional(),
-        dataNascimento: z.string().optional(),
-        funcao: z.string().optional(),
-        telefone: z.string().optional(),
-        email: z.string().optional(),
+        empresaTerceiraId: z.number().nullish(),
+        nome: z.string().nullish(),
+        cpf: z.string().nullish(),
+        rg: z.string().nullish(),
+        dataNascimento: z.string().nullish(),
+        funcao: z.string().nullish(),
+        telefone: z.string().nullish(),
+        email: z.string().nullish(),
         // Rev. 2008 — endereço residencial
-        cep: z.string().optional(),
-        logradouro: z.string().optional(),
-        numeroEndereco: z.string().optional(),
-        complemento: z.string().optional(),
-        bairro: z.string().optional(),
-        cidade: z.string().optional(),
-        uf: z.string().optional(),
-        obraId: z.number().optional(),
-        obraNome: z.string().optional(),
-        statusAptidao: z.enum(["apto", "inapto", "pendente"]).optional(),
-        motivoInapto: z.string().optional(),
-        status: z.enum(["ativo", "inativo", "afastado"]).optional(),
-        asoUrl: z.string().optional(),
-        asoValidade: z.string().optional(),
-        treinamentoNrUrl: z.string().optional(),
-        treinamentoNrValidade: z.string().optional(),
-        certificadosUrl: z.string().optional(),
-        fotoUrl: z.string().optional(),
+        cep: z.string().nullish(),
+        logradouro: z.string().nullish(),
+        numeroEndereco: z.string().nullish(),
+        complemento: z.string().nullish(),
+        bairro: z.string().nullish(),
+        cidade: z.string().nullish(),
+        uf: z.string().nullish(),
+        obraId: z.number().nullish(),
+        obraNome: z.string().nullish(),
+        statusAptidao: z.enum(["apto", "inapto", "pendente"]).nullish(),
+        motivoInapto: z.string().nullish(),
+        status: z.enum(["ativo", "inativo", "afastado"]).nullish(),
+        asoUrl: z.string().nullish(),
+        asoValidade: z.string().nullish(),
+        treinamentoNrUrl: z.string().nullish(),
+        treinamentoNrValidade: z.string().nullish(),
+        certificadosUrl: z.string().nullish(),
+        fotoUrl: z.string().nullish(),
       }))
       .mutation(async ({ input }) => {
         const db = (await getDb())!;
         const { id, ...data } = input;
-        await db.update(funcionariosTerceiros).set(data as any).where(eq(funcionariosTerceiros.id, id));
+        // Remove chaves undefined (não sobrescreve com NULL inadvertidamente).
+        const clean: any = {};
+        for (const [k, v] of Object.entries(data)) if (v !== undefined) clean[k] = v;
+        if (Object.keys(clean).length === 0) return { success: true };
+        await db.update(funcionariosTerceiros).set(clean).where(eq(funcionariosTerceiros.id, id));
         return { success: true };
       }),
 
