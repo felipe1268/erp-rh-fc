@@ -11221,6 +11221,8 @@ export function EfetivoObraView({ equipeRaw, isLoading, docsMap = {}, companyId,
   const [bulkObraDest, setBulkObraDest] = useState<number>(0);
   const [bulkMotivo, setBulkMotivo] = useState<string>("");
   const [bulkRunning, setBulkRunning] = useState(false);
+  // Rev. 2491 — Progresso real (X / N) durante a transferência em lote.
+  const [bulkProgress, setBulkProgress] = useState<{ done: number; total: number }>({ done: 0, total: 0 });
   const obrasBulkQ = trpc.obras.listActive.useQuery(
     { companyId: companyId || 0 },
     { enabled: bulkOpen && !!companyId }
@@ -11238,6 +11240,7 @@ export function EfetivoObraView({ equipeRaw, isLoading, docsMap = {}, companyId,
     if (bulkObraDest === obraId) { toast.error("Selecione uma obra diferente da atual"); return; }
     setBulkRunning(true);
     const ids = [...selectedIds];
+    setBulkProgress({ done: 0, total: ids.length });
     let ok = 0; const fails: string[] = [];
     for (const empId of ids) {
       try {
@@ -11249,8 +11252,10 @@ export function EfetivoObraView({ equipeRaw, isLoading, docsMap = {}, companyId,
         });
         ok++;
       } catch (e: any) { fails.push(`#${empId}: ${e?.message || "erro"}`); }
+      setBulkProgress(prev => ({ done: prev.done + 1, total: prev.total }));
     }
     setBulkRunning(false);
+    setBulkProgress({ done: 0, total: 0 });
     utils.obras.equipeObra.invalidate();
     utils.obras.efetivoPorObra.invalidate();
     utils.obras.funcionarios.invalidate();
@@ -11984,94 +11989,209 @@ export function EfetivoObraView({ equipeRaw, isLoading, docsMap = {}, companyId,
         </div>
       )}
 
-      {/* Rev. 2484 — Modal de Transferência EM LOTE (N funcionários → mesma obra de destino) */}
-      {bulkOpen && (
-        <div
-          className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in"
-          onClick={() => !bulkRunning && setBulkOpen(false)}
-          role="dialog"
-          aria-modal="true"
-        >
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg" onClick={(ev) => ev.stopPropagation()}>
-            <div className="px-5 py-4 border-b border-slate-100 flex items-center gap-2">
-              <ArrowRightLeft className="h-5 w-5 text-blue-600" />
-              <h3 className="text-base font-bold text-slate-800">Transferir em Lote</h3>
-              <span className="ml-auto inline-flex items-center rounded-full bg-blue-100 text-blue-800 px-2.5 py-0.5 text-[11px] font-bold">
-                {selectedIds.size} selecionado(s)
-              </span>
-            </div>
-            <div className="px-5 py-4 space-y-4">
-              <div className="rounded-lg bg-slate-50 border border-slate-200 px-3 py-2.5 text-sm">
-                <div className="text-[11px] text-slate-500 uppercase tracking-wide font-semibold mb-1">Funcionários ({selectedIds.size})</div>
-                <div className="max-h-32 overflow-y-auto text-[12px] text-slate-700 space-y-0.5">
-                  {(() => {
-                    const nomes = listaFiltrada
-                      .filter((e: any) => selectedIds.has(Number(e.id)))
-                      .map((e: any) => e.nomeCompleto || `#${e.id}`)
-                      .sort((a: string, b: string) => a.localeCompare(b, "pt-BR"));
-                    if (nomes.length === 0) return <span className="text-slate-400 italic">Nenhum funcionário visível corresponde à seleção (filtro pode estar escondendo).</span>;
-                    return nomes.map((nm: string, i: number) => <div key={i} className="truncate">• {nm}</div>);
-                  })()}
-                </div>
-                <div className="text-[11px] text-slate-500 mt-2 pt-2 border-t border-slate-200">
-                  De: <span className="font-medium text-slate-700">{obraNome || `Obra #${obraId}`}</span>
-                </div>
-              </div>
-              <div>
-                <label className="text-xs font-semibold text-slate-700 block mb-1.5">
-                  Obra de destino <span className="text-rose-600">*</span>
-                </label>
-                <select
-                  value={bulkObraDest || ""}
-                  onChange={(ev) => setBulkObraDest(parseInt(ev.target.value, 10) || 0)}
-                  disabled={obrasBulkQ.isLoading || bulkRunning}
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="">{obrasBulkQ.isLoading ? "Carregando obras..." : "— Selecione a obra de destino —"}</option>
-                  {(obrasBulkQ.data || [])
-                    .filter((o: any) => o.id !== obraId)
-                    .map((o: any) => (
-                      <option key={o.id} value={o.id}>{o.nome}</option>
-                    ))}
-                </select>
-              </div>
-              <div>
-                <label className="text-xs font-semibold text-slate-700 block mb-1.5">Motivo (opcional)</label>
-                <textarea
-                  value={bulkMotivo}
-                  onChange={(ev) => setBulkMotivo(ev.target.value)}
-                  disabled={bulkRunning}
-                  rows={2}
-                  placeholder="Ex: realocação para nova frente de serviço"
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
-                />
-              </div>
-              <div className="rounded-md bg-amber-50 border border-amber-200 px-3 py-2 text-[11px] text-amber-800">
-                As transferências são executadas uma a uma. Em caso de falha parcial, os funcionários que falharem continuam na obra atual.
-              </div>
-            </div>
-            <div className="px-5 py-3 border-t border-slate-100 flex items-center justify-end gap-2 bg-slate-50/50 rounded-b-xl">
-              <button
-                type="button"
-                onClick={() => setBulkOpen(false)}
-                disabled={bulkRunning}
-                className="px-4 py-2 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-100 transition disabled:opacity-50"
+      {/* Rev. 2491 — Modal de Transferência EM LOTE — redesign:
+          header institucional FC (faixa #1B2A4A), layout De→Para com seta visual,
+          lista em chips, barra de progresso real, atalhos ESC/Ctrl+Enter, responsivo. */}
+      {bulkOpen && (() => {
+        const nomesSelecionados = listaFiltrada
+          .filter((e: any) => selectedIds.has(Number(e.id)))
+          .map((e: any) => e.nomeCompleto || `#${e.id}`)
+          .sort((a: string, b: string) => a.localeCompare(b, "pt-BR"));
+        const obraDestObj = (obrasBulkQ.data || []).find((o: any) => o.id === bulkObraDest);
+        const pct = bulkProgress.total > 0 ? Math.round((bulkProgress.done / bulkProgress.total) * 100) : 0;
+        return (
+          <div
+            className="fixed inset-0 z-[100] bg-slate-900/70 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 animate-in fade-in"
+            onClick={() => !bulkRunning && setBulkOpen(false)}
+            onKeyDown={(ev) => {
+              if (ev.key === "Escape" && !bulkRunning) { ev.preventDefault(); setBulkOpen(false); }
+              if (ev.key === "Enter" && (ev.ctrlKey || ev.metaKey) && bulkObraDest && !bulkRunning) {
+                ev.preventDefault(); handleBulkTransfer();
+              }
+            }}
+            tabIndex={-1}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="bulk-transfer-title"
+          >
+            <div
+              className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[92vh] flex flex-col overflow-hidden"
+              onClick={(ev) => ev.stopPropagation()}
+            >
+              {/* Header institucional FC — faixa azul #1B2A4A */}
+              <div
+                className="px-5 sm:px-6 py-4 flex items-center gap-3 text-white"
+                style={{ background: "linear-gradient(135deg, #1B2A4A 0%, #2C4170 100%)" }}
               >
-                Cancelar
-              </button>
-              <button
-                type="button"
-                onClick={handleBulkTransfer}
-                disabled={!bulkObraDest || bulkRunning || selectedIds.size === 0}
-                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {bulkRunning ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRightLeft className="h-4 w-4" />}
-                {bulkRunning ? `Transferindo...` : `Transferir ${selectedIds.size}`}
-              </button>
+                <div className="h-10 w-10 rounded-lg bg-white/15 backdrop-blur flex items-center justify-center shrink-0">
+                  <ArrowRightLeft className="h-5 w-5" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <h3 id="bulk-transfer-title" className="text-base sm:text-lg font-bold tracking-tight">Transferir em Lote</h3>
+                  <p className="text-[11px] sm:text-xs text-white/70 mt-0.5">Realocar funcionários selecionados para outra obra</p>
+                </div>
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-white/15 backdrop-blur px-3 py-1 text-xs font-bold shrink-0">
+                  <Users className="h-3.5 w-3.5" />
+                  {selectedIds.size}
+                </span>
+              </div>
+
+              {/* Conteúdo scrollável */}
+              <div className="px-5 sm:px-6 py-5 space-y-5 overflow-y-auto flex-1">
+                {/* Fluxo visual De → Para */}
+                <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto_1fr] gap-3 items-stretch">
+                  <div className="rounded-xl border-2 border-slate-200 bg-slate-50 px-3.5 py-3">
+                    <div className="text-[10px] uppercase tracking-wider font-bold text-slate-500 mb-1">De</div>
+                    <div className="flex items-start gap-2">
+                      <HardHat className="h-4 w-4 text-slate-500 shrink-0 mt-0.5" />
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-slate-800 leading-tight truncate" title={obraNome || `Obra #${obraId}`}>
+                          {obraNome || `Obra #${obraId}`}
+                        </p>
+                        <p className="text-[10px] text-slate-500 mt-0.5">Obra atual</p>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-center text-slate-400">
+                    <div className="hidden sm:block"><ArrowRightLeft className="h-5 w-5" /></div>
+                    <div className="sm:hidden text-center text-[10px] uppercase tracking-wider font-bold text-slate-400 py-1">↓ Transferir para ↓</div>
+                  </div>
+                  <div className={`rounded-xl border-2 px-3.5 py-3 transition-all ${bulkObraDest ? "border-blue-400 bg-blue-50" : "border-dashed border-slate-300 bg-white"}`}>
+                    <div className={`text-[10px] uppercase tracking-wider font-bold mb-1 ${bulkObraDest ? "text-blue-700" : "text-slate-400"}`}>Para</div>
+                    <div className="flex items-start gap-2">
+                      <HardHat className={`h-4 w-4 shrink-0 mt-0.5 ${bulkObraDest ? "text-blue-600" : "text-slate-300"}`} />
+                      <div className="min-w-0">
+                        <p className={`text-sm font-semibold leading-tight truncate ${bulkObraDest ? "text-blue-900" : "text-slate-400 italic"}`} title={obraDestObj?.nome || ""}>
+                          {obraDestObj?.nome || "Selecione abaixo…"}
+                        </p>
+                        <p className={`text-[10px] mt-0.5 ${bulkObraDest ? "text-blue-600" : "text-slate-400"}`}>Obra de destino</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Lista de funcionários — chips compactos */}
+                <div>
+                  <div className="flex items-baseline justify-between mb-2">
+                    <label className="text-xs font-bold text-slate-700 uppercase tracking-wide">
+                      Funcionários selecionados
+                    </label>
+                    <span className="text-[11px] text-slate-400">{nomesSelecionados.length} {nomesSelecionados.length === 1 ? "pessoa" : "pessoas"}</span>
+                  </div>
+                  <div className="rounded-lg bg-slate-50 border border-slate-200 p-2.5 max-h-32 overflow-y-auto">
+                    {nomesSelecionados.length === 0 ? (
+                      <p className="text-[11px] text-slate-400 italic text-center py-2">
+                        Nenhum funcionário visível corresponde à seleção (filtro pode estar escondendo).
+                      </p>
+                    ) : (
+                      <div className="flex flex-wrap gap-1.5">
+                        {nomesSelecionados.map((nm: string, i: number) => (
+                          <span
+                            key={i}
+                            className="inline-flex items-center gap-1 rounded-full bg-white border border-slate-200 px-2 py-0.5 text-[11px] text-slate-700 max-w-full"
+                            title={nm}
+                          >
+                            <span className="truncate max-w-[180px]">{nm}</span>
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Step 1 — Obra de destino */}
+                <div>
+                  <label className="text-xs font-bold text-slate-700 uppercase tracking-wide block mb-1.5">
+                    1. Obra de destino <span className="text-rose-600 normal-case font-normal">*obrigatório</span>
+                  </label>
+                  <select
+                    value={bulkObraDest || ""}
+                    onChange={(ev) => setBulkObraDest(parseInt(ev.target.value, 10) || 0)}
+                    disabled={obrasBulkQ.isLoading || bulkRunning}
+                    autoFocus
+                    className="w-full border-2 border-slate-200 rounded-lg px-3 py-2.5 text-sm bg-white focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition disabled:bg-slate-50 disabled:cursor-not-allowed"
+                  >
+                    <option value="">{obrasBulkQ.isLoading ? "Carregando obras…" : "— Selecione a obra de destino —"}</option>
+                    {(obrasBulkQ.data || [])
+                      .filter((o: any) => o.id !== obraId)
+                      .map((o: any) => (
+                        <option key={o.id} value={o.id}>{o.nome}</option>
+                      ))}
+                  </select>
+                </div>
+
+                {/* Step 2 — Motivo */}
+                <div>
+                  <label className="text-xs font-bold text-slate-700 uppercase tracking-wide block mb-1.5">
+                    2. Motivo <span className="text-slate-400 normal-case font-normal">(opcional)</span>
+                  </label>
+                  <textarea
+                    value={bulkMotivo}
+                    onChange={(ev) => setBulkMotivo(ev.target.value)}
+                    disabled={bulkRunning}
+                    rows={2}
+                    placeholder="Ex: realocação para nova frente de serviço"
+                    className="w-full border-2 border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition resize-none disabled:bg-slate-50"
+                  />
+                </div>
+
+                {/* Aviso */}
+                <div className="rounded-lg bg-amber-50 border border-amber-200 px-3 py-2.5 flex gap-2 text-[11px] text-amber-800">
+                  <AlertCircle className="h-4 w-4 shrink-0 mt-0.5 text-amber-600" />
+                  <p>
+                    As transferências são executadas uma a uma. Em caso de falha parcial, os funcionários que falharem <strong>continuam na obra atual</strong>.
+                  </p>
+                </div>
+
+                {/* Barra de progresso (durante execução) */}
+                {bulkRunning && bulkProgress.total > 0 && (
+                  <div className="rounded-lg bg-blue-50 border border-blue-200 px-3 py-2.5">
+                    <div className="flex items-center justify-between text-[11px] font-semibold text-blue-800 mb-1.5">
+                      <span className="inline-flex items-center gap-1.5">
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        Transferindo…
+                      </span>
+                      <span>{bulkProgress.done} / {bulkProgress.total} ({pct}%)</span>
+                    </div>
+                    <div className="h-2 rounded-full bg-blue-100 overflow-hidden">
+                      <div
+                        className="h-full bg-gradient-to-r from-blue-500 to-blue-600 transition-all duration-300"
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Footer */}
+              <div className="px-5 sm:px-6 py-3.5 border-t border-slate-100 flex items-center justify-between gap-2 bg-slate-50">
+                <span className="hidden sm:inline text-[10px] text-slate-400">
+                  <kbd className="px-1.5 py-0.5 rounded border border-slate-300 bg-white font-mono">Esc</kbd> cancelar · <kbd className="px-1.5 py-0.5 rounded border border-slate-300 bg-white font-mono">Ctrl+↵</kbd> confirmar
+                </span>
+                <div className="flex items-center gap-2 ml-auto">
+                  <button
+                    type="button"
+                    onClick={() => setBulkOpen(false)}
+                    disabled={bulkRunning}
+                    className="px-4 py-2 rounded-lg text-sm font-semibold text-slate-600 hover:bg-slate-200 transition disabled:opacity-50"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleBulkTransfer}
+                    disabled={!bulkObraDest || bulkRunning || selectedIds.size === 0}
+                    className="inline-flex items-center gap-1.5 px-4 sm:px-5 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white text-sm font-bold shadow-sm transition disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {bulkRunning ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRightLeft className="h-4 w-4" />}
+                    {bulkRunning ? `${bulkProgress.done}/${bulkProgress.total}` : `Transferir ${selectedIds.size}`}
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
     </div>
   );
 }

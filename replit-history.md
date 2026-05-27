@@ -2,6 +2,7 @@
 
 > Este arquivo guarda os one-liners das revisões antigas para manter o `replit.md` enxuto.
 
+- **Rev. 2484** — EFETIVO DA OBRA (Planejamento, `EfetivoObraView`) · seleção múltipla + transferência EM LOTE entre obras. Checkbox + barra de ações + modal lote. Reusa `obras.allocateEmployee`. Ver `shared/changelog.ts`.
 - **Rev. 2483** — ORDENS DE COMPRA · gerador unificado `gerarProximoNumeroOC` (advisory lock + bootstrap por MAX(seq)) corrige criação de novas duplicatas. 4 spots consolidados, rascunhos não-sequenciais. Ver `shared/changelog.ts`.
 - **Rev. 2480** — EFETIVO DA OBRA (Planejamento) · botão Transferir + Remover por linha em `EfetivoObraView`. Authz por escopo nas 2 mutations via `getEffectiveAllowedObraIds`. Ver `shared/changelog.ts`.
 - **Rev. 2479** — EFETIVO/EQUIPE DA OBRA · foto real + badge CIPA nas 2 telas drill-down por obra. Backend enrich CIPA em `getObraFuncionarios` + `getEquipeObra`. Ver `shared/changelog.ts`.

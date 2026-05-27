@@ -1,6 +1,85 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2491 — **EFETIVO DA OBRA (Planejamento) · Redesign do modal
+ * "Transferir em Lote" com regras de ouro FC + barra de progresso real
+ * + atalhos de teclado + layout De→Para visual.**
+ *
+ * PEDIDO (user, image_1779886579164, 27/05/2026): "quero que melhore este
+ * layout considerando uma tela de fácil interação de layout conforme regras
+ * de ouro". Screenshot mostrava o modal Rev. 2484 (lista de 43 selecionados
+ * sendo transferidos): visualmente carregado, sem fluxo claro de "de onde
+ * vem → pra onde vai", sem feedback de progresso durante execução one-by-one,
+ * sem atalhos.
+ *
+ * O QUE MUDOU (100% frontend, em `client/src/pages/planejamento/PlanejamentoDetalhe.tsx`):
+ *
+ *  1. **Header institucional FC** — faixa em gradient `#1B2A4A → #2C4170`
+ *     (paleta oficial dos documentos institucionais), inline-styled pra
+ *     sobreviver a print/DOMPurify, ícone em chip translúcido + subtítulo
+ *     contextual + badge com contador `<Users />`.
+ *
+ *  2. **Fluxo visual "De → Para"** — grid `1fr_auto_1fr` com 2 cards lado
+ *     a lado e seta `<ArrowRightLeft />` no meio (vira ↓ em mobile). Card
+ *     "Para" muda border/bg de slate-dashed → blue-solid quando o user
+ *     seleciona a obra (feedback imediato). Resolve o problema da versão
+ *     antiga em que "obra atual" estava enterrada num bloco cinza no
+ *     rodapé da lista.
+ *
+ *  3. **Lista de selecionados em chips** — substituiu os bullets verticais
+ *     (• Nome) por chips pill (border, max-w-180px, truncate+title) com
+ *     `flex-wrap`. Caso típico de 43 pessoas vira uma malha compacta de
+ *     ~4 linhas (vs ~25 linhas antes). Empty-state explicita que filtro
+ *     pode estar escondendo.
+ *
+ *  4. **Steps numerados** — "1. Obra de destino *obrigatório*" e
+ *     "2. Motivo (opcional)" — wizard sutil sem usar componente de stepper.
+ *     Select com `autoFocus` (usuário já chega digitando o nome da obra).
+ *     Inputs com `border-2` e `focus:ring-2 ring-blue-100` (mais Material/Polaris).
+ *
+ *  5. **Barra de progresso REAL** — novo state `bulkProgress: {done,total}`
+ *     que incrementa após cada `mutateAsync` no loop. UI exibe X/N + %
+ *     numérico + barra azul animada `transition-all duration-300`. Antes
+ *     o user via só "Transferindo…" estático sem saber se travou.
+ *     Botão CTA também muda label pra `4/43` durante execução.
+ *
+ *  6. **Atalhos de teclado** — `Esc` cancela (se não rodando), `Ctrl+Enter`
+ *     (ou Cmd+Enter no Mac) confirma. Hint visível no footer com `<kbd>`
+ *     em mono-font (oculto em mobile pra economizar espaço).
+ *
+ *  7. **Responsividade real** — `max-w-2xl` (era `max-w-lg`), padding
+ *     `p-2 sm:p-4` no overlay, padding interno `px-5 sm:px-6`, header
+ *     `text-base sm:text-lg`, fluxo De→Para vira coluna em mobile.
+ *     `max-h-[92vh]` + `flex flex-col` + body com `overflow-y-auto flex-1`
+ *     pra rolagem só do conteúdo, mantendo header/footer fixos.
+ *
+ *  8. **Aviso com ícone** — `<AlertCircle />` âmbar + "continuam na obra
+ *     atual" em strong (era um bloco amber chapado).
+ *
+ * Backend INTACTO. Mutation `obras.allocateEmployee` continua sendo chamada
+ * uma a uma em loop (mesma autorização por funcionário, mesma idempotência
+ * de fechar alocação anterior). Nenhuma migration.
+ *
+ * ARQUIVOS TOCADOS
+ *  - `client/src/pages/planejamento/PlanejamentoDetalhe.tsx`
+ *    - L11226-11228: novo state `bulkProgress`.
+ *    - L11246, L11258, L11261: incremento de progresso no loop + reset.
+ *    - L11995-12180 (aprox.): JSX do modal totalmente reescrito.
+ *
+ * NÃO MUDOU
+ *  - Lógica de seleção múltipla, terceiros bloqueados, invalidate
+ *    de queries pós-transferência.
+ *  - Autorização: a mutation chamada continua validando por funcionário.
+ *  - Outros modais do sistema (BulkObraDest, formulários compras etc.)
+ *    não usam ainda este padrão — adoção será orgânica conforme aparecerem
+ *    pedidos.
+ *
+ * FOLLOW-UP POSSÍVEL
+ *  - Migrar `<select>` por `<Combobox>` (shadcn/ui) com busca interna pra
+ *    obras — relevante quando o user tiver 50+ obras ativas.
+ *  - Extrair `<TransferirEmLoteModal>` pra `components/planejamento/` se
+ *    surgir necessidade de reuso (hoje só este lugar usa).
+ *
  * Rev. 2490 — **USUÁRIOS & PERMISSÕES · Dashboards RH explodidos em 12 entradas
  * individuais na tela de Permissões (`shared/modulePages.ts`, módulo `rh`).**
  *
