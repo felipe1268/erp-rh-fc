@@ -2,6 +2,7 @@
 
 > Este arquivo guarda os one-liners das revisões antigas para manter o `replit.md` enxuto.
 
+- **Rev. 2486** — ORDENS DE COMPRA · Form de itens AGRUPADO POR ETAPA (EAP) — 1 etapa × N itens. Refatoração 100% frontend em `Ordens.tsx`: `GrupoForm`, helpers `flattenGrupos`/`agruparItens`, UI card lilás por etapa com Popover EAP no header + stack de itens. Backend/payload INTACTOS. Ver `shared/changelog.ts`.
 - **Rev. 2485** — ORDENS DE COMPRA · mutation `repararDuplicatasNumeroOC` (adminProcedure, dryRun default) + dialog Wrench âmbar no command bar. Renumera duplicatas retroativas mantendo id menor; advisory lock 1001 + sync `ocNumberConfig.proximoNumero`. Ver `shared/changelog.ts`.
 - **Rev. 2484** — EFETIVO DA OBRA (Planejamento, `EfetivoObraView`) · seleção múltipla + transferência EM LOTE entre obras. Checkbox + barra de ações + modal lote. Reusa `obras.allocateEmployee`. Ver `shared/changelog.ts`.
 - **Rev. 2483** — ORDENS DE COMPRA · gerador unificado `gerarProximoNumeroOC` (advisory lock + bootstrap por MAX(seq)) corrige criação de novas duplicatas. 4 spots consolidados, rascunhos não-sequenciais. Ver `shared/changelog.ts`.

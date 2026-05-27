@@ -15,6 +15,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { Users, Plus, Search, Edit, Trash2, Upload, FileText, CheckCircle, XCircle, Clock, ShieldCheck, Building2, HardHat, Camera, BadgeCheck, User as UserIcon, X, Heart, Award, BookOpen, ClipboardCheck, AlertTriangle, Calendar, Phone, Briefcase, Loader2 } from "lucide-react";
 import { PersonPhoto } from "@/components/PersonPhoto";
+import { FuncaoCombobox } from "@/components/FuncaoCombobox";
 
 export default function FuncionariosTerceiros() {
   const { user } = useAuth();
@@ -46,6 +47,16 @@ export default function FuncionariosTerceiros() {
     { enabled: !!companyId }
   );
   const { data: obras = [] } = trpc.obras.list.useQuery(
+    { companyId: companyId ?? 0 },
+    { enabled: !!companyId }
+  );
+  // Rev. 2493 — Catálogo de funções (jobFunctions) pra o FuncaoCombobox.
+  // Pedido user (image_1779887618252+, 27/05/2026): a função do terceiro
+  // DEVE vir do mesmo cadastro que os colaboradores usam (/funcoes), não
+  // pode ser texto livre (evita "ENCARREGADO DE OBRAS" vs "Encarregado de
+  // Obras" vs "Encarregado Obras" — quebrava agrupamento em Painel RH,
+  // Distribuição por Função, mapeamento de EPI/NR-1, etc).
+  const { data: funcoesList = [] } = trpc.jobFunctions.list.useQuery(
     { companyId: companyId ?? 0 },
     { enabled: !!companyId }
   );
@@ -545,7 +556,16 @@ export default function FuncionariosTerceiros() {
                   <div><Label>CPF</Label><Input value={form.cpf || ""} onChange={(e) => setForm({ ...form, cpf: e.target.value })} /></div>
                   <div><Label>RG</Label><Input value={form.rg || ""} onChange={(e) => setForm({ ...form, rg: e.target.value })} /></div>
                   <div><Label>Data de Nascimento</Label><Input type="date" value={form.dataNascimento ? String(form.dataNascimento).slice(0, 10) : ""} onChange={(e) => setForm({ ...form, dataNascimento: e.target.value })} /></div>
-                  <div><Label>Função</Label><Input value={form.funcao || ""} onChange={(e) => setForm({ ...form, funcao: e.target.value })} /></div>
+                  {/* Rev. 2493 — Função vinculada ao catálogo `jobFunctions`
+                      (mesma usada em Colaboradores) ao invés de texto livre. */}
+                  <div>
+                    <Label>Função</Label>
+                    <FuncaoCombobox
+                      value={form.funcao || ""}
+                      onChange={(v) => setForm({ ...form, funcao: v })}
+                      options={(funcoesList ?? []).filter((f: any) => f.isActive !== false)}
+                    />
+                  </div>
                   <div className="md:col-span-2 lg:col-span-3 xl:col-span-4">
                     <div className="rounded-xl border-2 border-emerald-200 bg-gradient-to-r from-emerald-50/70 to-teal-50/40 p-3 sm:p-4">
                       <div className="flex items-center gap-2 mb-3">

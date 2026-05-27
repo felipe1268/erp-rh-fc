@@ -1,6 +1,81 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2493 — **TERCEIROS · Campo "Função" no cadastro de Funcionários
+ * Terceiros virou Combobox vinculado ao catálogo `jobFunctions` (mesmo
+ * que Colaboradores PJ/CLT usam), saindo de `<Input>` texto livre.**
+ *
+ * PEDIDO (user, image_1779887618252 + 631987 + 678443, 27/05/2026, all-caps
+ * = ênfase): "A FUNÇÃO DOS TERCEIROS NÃO QUERO PODER DIGITAR.. QUERO QUE
+ * SIGA AS FUNÇÕES QUE JÁ TEMOS NO NOSSO BANCO DE DADOS". Screenshots:
+ *   (1) campo "Função" no form do terceiro AILTON NASCIMENTO S. COSTA
+ *       (Empresa Promatel) era um `<Input>` puro digitado "ENCARREGADO
+ *       DE OBRAS".
+ *   (2) tela `/funcoes` mostrando 43 funções catalogadas (AJUDANTE DE
+ *       BOMBA DE CONCRETO, ALMOXARIFE, ANALISTA DE DADOS, ARMADOR,
+ *       ARQUITETO URBANISTA, ...) — esse é o catálogo "oficial" com
+ *       CBO + NR-1 + classificação Direta/Indireta.
+ *
+ * CAUSA RAIZ DO IMPACTO. Texto livre em Terceiros gerava 3 problemas em
+ * cascata:
+ *   - Painel RH e "Distribuição por Função" (Rev. 2492 — gráfico clicável
+ *     em Efetivo da Obra) agrupavam "Encarregado de Obras" / "ENCARREGADO
+ *     DE OBRAS" / "Encarregado Obras" como 3 funções distintas.
+ *   - Kits de EPI por função (epiAvancado.ts L321+) e mapeamento NR-1
+ *     dependem de match exato com `jobFunctions.nome` — terceiro digitado
+ *     ficava sem kit/análise de risco automática.
+ *   - Filtro de função em Efetivo (Rev. 2492 `filtroFuncao`) ficava
+ *     fragmentado quando terceiro escrevia variação do mesmo cargo.
+ *
+ * O QUE MUDOU
+ *
+ *  1. **Novo componente compartilhado `client/src/components/FuncaoCombobox.tsx`**
+ *     — extraído da função interna `FuncaoCombobox` que vivia inline em
+ *     `Colaboradores.tsx` (Rev. 2169, L4118-4205). API idêntica:
+ *     `{ value, onChange, options, placeholder?, triggerClassName? }`.
+ *     Mesmo padrão Popover+cmdk com filtro acento-insensitive, largura
+ *     herdada do trigger, item "— Selecione —" pra limpar, ícone CBO
+ *     no rail direito quando disponível (bonus pra terceiros que vão
+ *     usar muito a busca por CBO).
+ *
+ *  2. **`Colaboradores.tsx`** — removida implementação inline (88 linhas),
+ *     substituída por `import { FuncaoCombobox } from "@/components/FuncaoCombobox"`.
+ *     Comentário curto de breadcrumb mantido. Behavior 100% idêntico.
+ *
+ *  3. **`FuncionariosTerceiros.tsx`** —
+ *     - L17: import do `FuncaoCombobox`.
+ *     - L52-58: nova query `trpc.jobFunctions.list({ companyId })` —
+ *       MESMO endpoint que Colaboradores usa, MESMO `companyId` (da FC,
+ *       não da empresa terceira, pq o catálogo de funções é da FC).
+ *     - L555-562: `<Input>` da função substituído por `<FuncaoCombobox>`
+ *       com filtro `f.isActive !== false` (espelha Colaboradores L1762).
+ *     - Field name `form.funcao` INTOCADO — backend já aceita string,
+ *       continua salvando o `nome` da função (não o id) pra preservar
+ *       compatibilidade com agregados existentes (Painel RH, Efetivo
+ *       da Obra, EPI Avançado etc).
+ *
+ * NÃO MUDOU
+ *  - Schema (`funcionariosTerceiros.funcao` continua VARCHAR).
+ *  - Backend (nenhum endpoint novo — reusa `jobFunctions.list`).
+ *  - Registros já cadastrados com função "livre" — continuam exibidos
+ *     como estavam; ao editar, se o texto bater com algum nome no
+ *     catálogo o combobox abre com ele selecionado, senão o user escolhe
+ *     o canônico e o registro é "regularizado" no save.
+ *
+ * ARQUIVOS TOCADOS
+ *  - `client/src/components/FuncaoCombobox.tsx` (NOVO — 108 linhas).
+ *  - `client/src/pages/Colaboradores.tsx` (import + remoção de 88 linhas
+ *     da implementação inline).
+ *  - `client/src/pages/terceiros/FuncionariosTerceiros.tsx` (import +
+ *     query `jobFunctions.list` + troca do `<Input>` por `<FuncaoCombobox>`).
+ *
+ * FOLLOW-UP POSSÍVEL
+ *  - Auditar outros forms com `<Input value={...funcao}>` (`SolicitacaoMDO`
+ *     já usa `trpc.jobFunctions`, mas confirmar UX) e padronizar.
+ *  - Migration opcional: normalizar `funcionariosTerceiros.funcao` UPPER
+ *     pra casar com nomes do catálogo (apenas dry-run, sem ALTER em prod
+ *     — R-001).
+ *
  * Rev. 2492 — **EFETIVO DA OBRA (Planejamento) · Gráfico "Distribuição por
  * Função" virou interativo — clique na barra/nome da função filtra a Lista
  * de Funcionários abaixo (cross-filter visual).**

@@ -20,6 +20,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { cn } from "@/lib/utils";
 import FullScreenDialog from "@/components/FullScreenDialog";
+import { FuncaoCombobox } from "@/components/FuncaoCombobox";
 import { Badge } from "@/components/ui/badge";
 import { useState, useEffect, useMemo, useRef, type ReactNode } from "react";
 import { toast } from "sonner";
@@ -4115,90 +4116,5 @@ function HistoricoAlteracoesTab({ employeeId }: { employeeId: number }) {
   );
 }
 
-// Rev. 2169 — Combobox pesquisável de Função (substitui o Select nativo no form
-// de Pessoal). Padrão idêntico ao PlanoDeContaCombobox: Popover + cmdk com
-// filtro case/acento-insensitive, largura herdada do trigger, item "—" pra limpar.
-function FuncaoCombobox({
-  value,
-  onChange,
-  options,
-}: {
-  value: string;
-  onChange: (v: string) => void;
-  options: any[];
-}) {
-  const [open, setOpen] = useState(false);
-  const sorted = useMemo(
-    () => options.slice().sort((a: any, b: any) => String(a.nome).localeCompare(String(b.nome), "pt-BR")),
-    [options],
-  );
-  return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <button
-          type="button"
-          role="combobox"
-          aria-expanded={open}
-          className={cn(
-            "mt-1 h-9 w-full flex items-center justify-between rounded-md border px-3 text-sm bg-input transition-colors",
-            open ? "border-blue-400 ring-2 ring-blue-100" : "border-input hover:border-gray-300",
-          )}
-        >
-          <span className={cn("truncate text-left", !value && "text-muted-foreground")}>
-            {value || "Selecione a função"}
-          </span>
-          <div className="flex items-center gap-1 shrink-0">
-            {value && (
-              <span
-                className="text-gray-400 hover:text-red-500 px-1"
-                role="button"
-                tabIndex={-1}
-                onClick={(e) => { e.stopPropagation(); e.preventDefault(); onChange(""); setOpen(false); }}
-              >
-                ×
-              </span>
-            )}
-            <ChevronsUpDown className="w-3.5 h-3.5 text-gray-400" />
-          </div>
-        </button>
-      </PopoverTrigger>
-      <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start" sideOffset={4}>
-        <Command
-          filter={(itemValue, search) => {
-            const s = search.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-            const v = itemValue.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-            return v.includes(s) ? 1 : 0;
-          }}
-        >
-          <CommandInput placeholder="Buscar função..." />
-          <CommandList className="max-h-72">
-            <CommandEmpty className="py-6 text-center text-sm text-muted-foreground">
-              Nenhuma função encontrada.
-            </CommandEmpty>
-            <CommandGroup>
-              <CommandItem
-                value="--limpar--"
-                onSelect={() => { onChange(""); setOpen(false); }}
-                className="text-xs text-muted-foreground italic"
-              >
-                <Check className={cn("w-3.5 h-3.5 mr-2", !value ? "opacity-100" : "opacity-0")} />
-                — Selecione a função —
-              </CommandItem>
-              {sorted.map((f: any) => (
-                <CommandItem
-                  key={f.id}
-                  value={String(f.nome)}
-                  onSelect={() => { onChange(String(f.nome)); setOpen(false); }}
-                  className="text-xs"
-                >
-                  <Check className={cn("w-3.5 h-3.5 mr-2", f.nome === value ? "opacity-100" : "opacity-0")} />
-                  {f.nome}
-                </CommandItem>
-              ))}
-            </CommandGroup>
-          </CommandList>
-        </Command>
-      </PopoverContent>
-    </Popover>
-  );
-}
+// Rev. 2169 → Rev. 2493 — FuncaoCombobox extraído pra `@/components/FuncaoCombobox`
+// (reuso no form de Terceiros). Implementação idêntica vive lá.
