@@ -2117,11 +2117,14 @@ export const payrollEngineRouter = router({
           AND e.status = 'Desligado'
           AND e."deletedAt" IS NULL
           AND ((e."valorHora" IS NOT NULL AND e."valorHora" != '') OR e."tipoRemuneracao" = 'mensalista')
-          -- Rev. 2497 — Só aviso TRABALHADO (funcionário cumpre o aviso até dataFim).
-          -- Indenizado: empresa paga, funcionário sai imediatamente em dataInicio-1.
-          -- Sem este filtro, aviso indenizado de março com dataFim projetada em
-          -- maio entraria na folha de maio (bug que afetou Elizeu).
+          -- Rev. 2497 — Aviso INDENIZADO: empresa paga, funcionario sai em
+          -- dataInicio-1; dataFim eh so projecao legal (13o/ferias). Fora.
           AND tn.tipo NOT LIKE '%indenizado%'
+          -- Rev. 2498 — Cap por dataDesligamentoEfetiva: se RH ja efetivou
+          -- a saida antes do mes, nao entra (mesmo com tn.dataFim projetada
+          -- la na frente). Espelha homeData.ts L601.
+          AND (e."dataDesligamentoEfetiva" IS NULL
+               OR e."dataDesligamentoEfetiva" >= ${primeiroDiaMesAviso}::date)
           AND tn."dataFim" >= ${primeiroDiaMesAviso}::date
           AND tn."dataInicio" <= ${ultimoDiaMesAviso}::date
       `)) as any).rows || [];
@@ -2934,15 +2937,17 @@ export const payrollEngineRouter = router({
           companyFilter(employees.companyId, input),
           eq(employees.tipoContrato, "CLT"),
           sql`${employees.deletedAt} IS NULL`,
-          // Rev. 2496/2497 — Ativos/Férias OU Desligados com aviso TRABALHADO
-          // que se sobrepõe ao mês de referência. Aviso INDENIZADO fica de
-          // fora porque o funcionário sai imediatamente (último dia trabalhado
-          // = dataInicio - 1) — o dataFim é só projeção legal pra cálculo de
-          // 13º/férias proporcionais, ele não trabalha no período.
+          // Rev. 2496/2497/2498 — Ativos/Férias OU Desligados com aviso
+          // TRABALHADO sobrepondo o mês E que não tenham `dataDesligamento
+          // Efetiva` ANTERIOR ao mês (se o RH já efetivou a saída antes do
+          // período, ele não entra na folha por mais que o aviso projete em
+          // diante). Aviso INDENIZADO sempre fora (dataFim só projeção).
           sql`(
             ${employees.status} IN ('Ativo', 'Ferias')
             OR (
               ${employees.status} = 'Desligado'
+              AND (${employees.dataDesligamentoEfetiva} IS NULL
+                   OR ${employees.dataDesligamentoEfetiva} >= ${primeiroDiaMesAviso}::date)
               AND EXISTS (
                 SELECT 1 FROM termination_notices tn
                 WHERE tn."employeeId" = ${employees.id}

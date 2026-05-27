@@ -1,6 +1,48 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2498 — **FOLHA + VALE · `employees.dataDesligamentoEfetiva` virou
+ * cap superior na repesca de desligados (caso Elizeu — aviso TRABALHADO
+ * com `dataFim` projetada em maio mas saída efetiva em março).**
+ *
+ * PEDIDO (user, 27/05/2026 pós Rev. 2497):
+ * "nao, o aviso dele (elizeu) foi trabalhado" — Rev. 2497 (filtro de
+ * indenizado) não cobria o caso dele.
+ *
+ * CAUSA RAIZ
+ *  - Quando o RH efetiva o desligamento ANTES do `dataFim` originalmente
+ *    projetado no `termination_notice` (saída antecipada, mudança de
+ *    decisão, etc.), grava `employees.dataDesligamentoEfetiva` mas NÃO
+ *    necessariamente reduz o `tn.dataFim`. Resultado: o notice fica com
+ *    a data PLANEJADA original (lá na frente).
+ *  - O Elizeu provavelmente tem `dataDesligamentoEfetiva = 2026-03-XX`
+ *    e `tn.dataFim ≈ 2026-05-XX` (planejamento inicial não atualizado).
+ *  - A query só olhava `tn.dataFim` → repescava ele em maio mesmo já
+ *    desligado de fato em março.
+ *  - `homeData.ts` L601 já trata `dataDesligamentoEfetiva` como fonte de
+ *    verdade do "último dia trabalhado" — replicamos a mesma convenção.
+ *
+ * O QUE MUDOU (server/routers/payrollEngine.ts)
+ *  - `gerarVale` (~L2122): adicionado
+ *    `AND (e."dataDesligamentoEfetiva" IS NULL
+ *          OR e."dataDesligamentoEfetiva" >= primeiroDiaMes::date)`
+ *  - `simularPagamento` (~L2950): mesma condição usando
+ *    `employees.dataDesligamentoEfetiva` no drizzle template.
+ *  - Filtro de aviso indenizado da Rev. 2497 mantido (continua válido).
+ *
+ * O QUE NÃO MUDOU
+ *  - Aviso TRABALHADO sem `dataDesligamentoEfetiva` preenchido segue
+ *    entrando normal (Mariana/Myriélle — RH ainda não baixou).
+ *  - Funcionários que saíram efetivamente DENTRO do mês de ref entram
+ *    com proporcional ao dia da saída (>= primeiroDiaMes cobre isso).
+ *  - Schema do DB intacto. Sem migration.
+ *
+ * COMO VALIDAR (maio/2026)
+ *  1. Resimular folha → Elizeu (dataDesligamentoEfetiva=março) sai.
+ *  2. Gerar vale → Elizeu sai também.
+ *  3. Mariana, Myriélle (sem dataDesligamentoEfetiva ou >= 01/05)
+ *     seguem aparecendo com proporcional.
+ *
  * Rev. 2497 — **FOLHA + VALE · Aviso INDENIZADO excluído da repesca de
  * desligados (fix do bug histórico que arrastou Elizeu pra folha/vale de
  * maio após desligamento em março).**
