@@ -3209,8 +3209,12 @@ ${pdfData.aviso.observacoes ? '<div class="section"><div class="section-title">O
                   <FileText className="h-4 w-4" /> Gerar Documento
                 </Button>
               )}
-              <Button className="h-11 px-8 bg-amber-600 hover:bg-amber-700 text-white font-semibold" onClick={handleSubmit} disabled={createAviso.isPending}>
-                {createAviso.isPending ? "Salvando..." : (isPedidoDemissao ? "Registrar Pedido de Demissão" : "Criar Aviso Prévio")}
+              <Button className="h-11 px-8 bg-amber-600 hover:bg-amber-700 text-white font-semibold" onClick={handleSubmit} disabled={createAviso.isPending || updateAviso.isPending}>
+                {(createAviso.isPending || updateAviso.isPending)
+                  ? "Salvando..."
+                  : editingItem
+                    ? "Salvar Alterações"
+                    : (isPedidoDemissao ? "Registrar Pedido de Demissão" : "Criar Aviso Prévio")}
               </Button>
             </div>
           </div>

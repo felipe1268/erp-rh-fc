@@ -1,6 +1,54 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2499 — **AVISO PRÉVIO · UX · Botão do modal agora mostra "Salvar
+ * Alterações" quando em modo edição (em vez de sempre "Criar Aviso
+ * Prévio") + disabled/loading state passa a respeitar `updateAviso.isPending`.**
+ *
+ * PEDIDO (user, 27/05/2026):
+ * "está dando erro ao salvar o aviso ... o aviso da kellen ja foi criado,
+ * porem nao havia selecionado o tipo de redução de jornada (2h ou 7 dias),
+ * eu quero atualizar essa informação, mas nao tem botao SALVAR, entao
+ * quando eu clico em CRIAR AVISO PREVIO ele dá esse erro [Failed to
+ * execute 'json' on 'Response': Unexpected end of JSON input], acredito
+ * que seja pelo fato do aviso ja ter sido criado anteriormente"
+ *
+ * CAUSA RAIZ (UX)
+ *  - O botão primário do modal de Aviso Prévio (`AvisoPrevio.tsx` L3212-3214)
+ *    sempre exibia "Criar Aviso Prévio" (ou "Registrar Pedido de Demissão"
+ *    para pedido de demissão), mesmo quando `editingItem` estava setado
+ *    (modal aberto via lápis de uma linha existente).
+ *  - O `handleSubmit` (L449) JÁ tratava o caso corretamente: se
+ *    `editingItem`, chama `updateAviso.mutate(...)`; senão, `createAviso`.
+ *    Ou seja, a lógica funcionava — só o LABEL era enganoso.
+ *  - Além disso, `disabled` e o spinner só olhavam `createAviso.isPending`,
+ *    então durante um UPDATE o botão continuava clicável e sem feedback
+ *    de "Salvando...".
+ *  - O erro "Unexpected end of JSON input" do toast da Kellen é sintoma
+ *    independente (provavelmente disparado num fluxo onde a usuária abriu
+ *    o "+" criar novo achando que era a única forma de mudar a redução, e
+ *    o backend rejeitou a duplicata sem resposta JSON limpa). Com o botão
+ *    "Salvar Alterações" agora visível no fluxo do lápis, a usuária para
+ *    de cair nesse caminho.
+ *
+ * O QUE MUDOU (client/src/pages/AvisoPrevio.tsx L3215-3221)
+ *  - Label condicional:
+ *      isPending → "Salvando..."
+ *      editingItem → "Salvar Alterações"
+ *      isPedidoDemissao → "Registrar Pedido de Demissão"
+ *      default → "Criar Aviso Prévio"
+ *  - `disabled` agora respeita `createAviso.isPending || updateAviso.isPending`.
+ *
+ * VALIDAÇÃO
+ *  - Fluxo lápis → modal abre com `editingItem` setado, form pré-preenchido
+ *    (L800-818), botão agora exibe "Salvar Alterações".
+ *  - Fluxo + (novo) → `editingItem` null, botão segue "Criar Aviso Prévio".
+ *  - Não há schema change, não há mudança em backend. R-001/R-007/R-010 OK.
+ *
+ * SEM REGRESSÃO
+ *  - Convenções da Rev. 2496-2498 (folha/vale + desligados em aviso)
+ *    seguem intactas — esta revisão é puramente frontend label/state.
+ *
  * Rev. 2498 — **FOLHA + VALE · `employees.dataDesligamentoEfetiva` virou
  * cap superior na repesca de desligados (caso Elizeu — aviso TRABALHADO
  * com `dataFim` projetada em maio mas saída efetiva em março).**
