@@ -2729,7 +2729,12 @@ export default function Cotacoes() {
         if (!b) return c;
         return (parseFloat(c.totalOrcado ?? "0") < parseFloat(b.totalOrcado ?? "0")) ? c : b;
       }, null as any);
-      const vencForBackend = vencSelecionado ?? fallback;
+      // Rev. 2501 — Estoque (Almoxarifado) não tem totalOrcado (não é proposta monetária),
+      // então cai fora do fallback acima. Se ele é o único participante ou todos os
+      // fornecedores ficaram sem proposta com preço, ele é o vencedor de facto e o
+      // flow correto é abrir o modal de Transferência (não "Aprovar e Gerar OC").
+      const estoqueParticipante = participantes.find(p => p.isEstoque);
+      const vencForBackend = vencSelecionado ?? fallback ?? estoqueParticipante;
       const vencEst = !!vencForBackend?.isEstoque;
       if (vencEst) {
         setTransfObraOrigemId(undefined);

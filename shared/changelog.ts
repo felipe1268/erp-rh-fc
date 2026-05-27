@@ -1,6 +1,102 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2501 — **COTAÇÕES · BUGFIX "Selecionar do Estoque" não conseguia
+ * finalizar cotação por falta de fallback de vencedor quando estoque era
+ * o único participante.**
+ *
+ * PEDIDO (user, 27/05/2026):
+ * "erro ao selecionar do estoque nao deixa finalizar cotação, porque nao
+ * existe um fornecedor vencedor" — toast "Nenhum fornecedor vencedor
+ * identificado" ao clicar "Aprovar e Gerar OC" numa cotação onde o único
+ * participante era "Estoque (Almoxarifado)".
+ *
+ * CAUSA RAIZ (`client/src/pages/compras/Cotacoes.tsx` L2709-2740)
+ *  - O fluxo do botão tem 2 camadas:
+ *    1. `handleAprovarGerarOC` detecta se vencedor é estoque (`vencEst`)
+ *       e curto-circuita pra abrir o modal de Transferência (em vez do
+ *       fluxo OC normal).
+ *    2. Se não detectou estoque, abre `showConfirmarTipoCotDialog` →
+ *       `handleConfirmarTotal` → `validarCondicoesVencedor` (L2599) que
+ *       falha com "Nenhum fornecedor vencedor identificado" quando
+ *       `fornParaSaldo` é null.
+ *  - A detecção do estoque em (1) montava `vencForBackend` como
+ *    `vencSelecionado ?? fallback`. O `fallback` só considerava
+ *    participantes com `totalOrcado > 0` (proposta monetária).
+ *  - Estoque NÃO tem proposta monetária — `isEstoque: true` é só fonte
+ *    interna do Almoxarifado. Resultado: fallback null + sem seleção
+ *    explícita → `vencForBackend` null → `vencEst` false → cai no flow
+ *    de fornecedor → validação dispara o toast errado.
+ *
+ * O QUE MUDOU (`client/src/pages/compras/Cotacoes.tsx` L2735-2740)
+ *  - Adicionado novo nível de fallback APÓS o fallback monetário:
+ *    `const estoqueParticipante = participantes.find(p => p.isEstoque);`
+ *    `const vencForBackend = vencSelecionado ?? fallback ?? estoqueParticipante;`
+ *  - Ou seja: se nenhum fornecedor tem proposta com preço E existe um
+ *    participante isEstoque, ele é o vencedor de facto → curto-circuita
+ *    pro modal de Transferência (escolher obra de origem).
+ *  - Selecionar como Vencedor explícito (vencSelecionado) e a melhor
+ *    proposta monetária (fallback) continuam tendo precedência — não há
+ *    regressão pra cotações mistas estoque+fornecedor com preços.
+ *
+ * SEM REGRESSÃO
+ *  - Backend (`criarOrdemDeCotacao` / fluxo de transferência) intacto.
+ *  - Validação `validarCondicoesVencedor` (L2599) mantida — só não é
+ *    mais alcançada quando o vencedor é estoque (correto, porque modo
+ *    transferência não exige prazo/forma de pagamento de fornecedor).
+ *  - Sem schema change.
+ *
+ * Rev. 2500 — **CONTRATO DE EXPERIÊNCIA · BUGFIX cálculo off-by-one nas
+ * datas fim1/fim2 (calendário deve ser respeitado).**
+ *
+ * PEDIDO (user, 27/05/2026):
+ * "CONTRATO DE EXPERIENCIA ESTÁ CALCULANDO ERRADO.... O MÊS DE MAIO TEM
+ * 31 DIAS, PORTANTO, DEVE CONSIDERAR ESSA QUESTAO" + "esse erro de
+ * contagem nao pode acontecer em hipótese alguma, o calendario deve ser
+ * considerado a risca! se o mês tem 28 dias, tem que contar 28, se tem 30
+ * dias, tem que contar 30 e se tem 31 dias, tem que contar 31."
+ *
+ * EVIDÊNCIAS (Painel RH > Contratos de Experiência):
+ *  - JAMES: 30+30 · Início 04/05/2026 · Fim 1º exibido 03/06 (correto 02/06)
+ *  - WILLIANS: 30+30 · Início 25/05/2026 · Fim 1º exibido 24/06 (correto 23/06)
+ *  - LILIAN: 45+45 · Início 18/05/2026 · Fim 1º exibido 02/07 (correto 01/07)
+ *
+ * CAUSA RAIZ
+ *  - Convenção CLT: o dia do início CONTA como dia 1 do contrato. Logo,
+ *    contrato de 30 dias iniciando em 04/05 termina em 02/06 (04/05 conta
+ *    como o "dia 1", o dia 30 é 02/06). Sistema fazia `setDate(start + 30)`
+ *    sem subtrair 1 → resultado off-by-one para frente em TODOS os casos.
+ *  - O bug NÃO é "ignorar meses de 31 dias" — `Date.setDate()` é
+ *    calendar-aware nativamente (transborda corretamente para o mês
+ *    seguinte). O sintoma percebido pelo user (mês de 31 sendo tratado
+ *    como 30) é colateral: como 04/05 + 30 dias dá 03/06 (jun=31º dia),
+ *    parecia que estávamos contando maio como 30 dias.
+ *
+ * O QUE MUDOU (3 lugares, mesma correção)
+ *  - `server/routers/homeData.ts` L538-541: cálculo do fim1/fim2 dinâmico
+ *    exibido nos cards de Contratos de Experiência (PainelRH + Home).
+ *    `+ dias1` → `+ dias1 - 1` (idem dias2).
+ *  - `client/src/pages/Colaboradores.tsx` L1875-1876: auto-fill de
+ *    `experienciaFim1/Fim2` ao trocar Tipo de Experiência no form.
+ *  - `client/src/pages/Colaboradores.tsx` L1900-1901: auto-fill ao trocar
+ *    Início da Experiência no form.
+ *  - Convenção alinhada com `Ferias.tsx` L204/L224 (`+ dias - 1`),
+ *    `AvisoPrevio.tsx` L540/L2726 (`+ diasAviso - 1`) e
+ *    `server/utils/rescisaoCalc.ts` L278.
+ *
+ * IMPACTO EM DADOS EXISTENTES
+ *  - Tela (Painel RH / Home): conserto IMEDIATO — homeData calcula
+ *    dinamicamente sobre `experienciaInicio` (não lê fim1/fim2 do DB).
+ *  - Documento impresso do contrato (Colaboradores L2057): lê
+ *    `experienciaFim1/Fim2` do DB. Contratos já SALVOS no DB com data
+ *    errada continuam errados até o RH reabrir o cadastro e salvar de
+ *    novo (o form recalcula no onChange). Contratos já ASSINADOS são
+ *    imutáveis. Sem backfill SQL nesta rev (R-001/R-007/R-010 cautela).
+ *
+ * SEM REGRESSÃO
+ *  - Ferias / AvisoPrevio / rescisaoCalc já usavam `- 1` (não tocados).
+ *  - Sem schema change. Sem mudança em mutations.
+ *
  * Rev. 2499 — **AVISO PRÉVIO · UX · Botão do modal agora mostra "Salvar
  * Alterações" quando em modo edição (em vez de sempre "Criar Aviso
  * Prévio") + disabled/loading state passa a respeitar `updateAviso.isPending`.**

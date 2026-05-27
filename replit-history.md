@@ -2,6 +2,8 @@
 
 > Este arquivo guarda os one-liners das revisões antigas para manter o `replit.md` enxuto.
 
+- **Rev. 2494** — TERCEIROS · BUGFIX `Atualizar` não salvava por falha silenciosa Zod (`null` em `string().optional()`) + ausência de `onError`. Schema relaxado pra `.nullish()` + `empresaTerceiraId` adicionado + handler limpa `undefined` antes do set + toast de erro. Ver `shared/changelog.ts`.
+- **Rev. 2493** — TERCEIROS · Campo "Função" virou Combobox vinculado ao catálogo `jobFunctions` (saiu de texto livre). Novo `FuncaoCombobox.tsx` compartilhado entre Colaboradores e FuncionariosTerceiros. Ver `shared/changelog.ts`.
 - **Rev. 2492** — EFETIVO DA OBRA (Planejamento) · Gráfico "Distribuição por Função" virou clicável — filtra Lista de Funcionários (cross-filter), pill removível, "Limpar" global zera 4 filtros. `PlanejamentoDetalhe.tsx` L11287/11340/11530. Ver `shared/changelog.ts`.
 - **Rev. 2491** — EFETIVO DA OBRA · Redesign modal "Transferir em Lote" — header FC #1B2A4A, fluxo De→Para, chips, progresso real (bulkProgress), atalhos Esc/Ctrl+Enter, responsivo. `PlanejamentoDetalhe.tsx`. Ver `shared/changelog.ts`.
 - **Rev. 2490** — USUÁRIOS & PERMISSÕES · "Dashboards RH" explodido em 13 entradas (master + 12 dashboard_*) em `shared/modulePages.ts` módulo `rh.pages`. `PageRouteMap` intacto. Ver `shared/changelog.ts`.

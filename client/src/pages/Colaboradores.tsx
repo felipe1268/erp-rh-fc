@@ -1868,8 +1868,9 @@ ${obs ? `<div class="box"><strong>Observações / Justificativa do Enquadramento
                           const dias1 = v === '30_30' ? 30 : 45;
                           const dias2 = v === '30_30' ? 60 : 90;
                           const dtInicio = new Date(inicio + 'T12:00:00');
-                          const dtFim1 = new Date(dtInicio); dtFim1.setDate(dtFim1.getDate() + dias1);
-                          const dtFim2 = new Date(dtInicio); dtFim2.setDate(dtFim2.getDate() + dias2);
+                          // Rev. 2500 — CLT: dia do início conta como dia 1 (30 dias a partir de 04/05 → fim 02/06).
+                          const dtFim1 = new Date(dtInicio); dtFim1.setDate(dtFim1.getDate() + dias1 - 1);
+                          const dtFim2 = new Date(dtInicio); dtFim2.setDate(dtFim2.getDate() + dias2 - 1);
                           set('experienciaFim1' as any, dtFim1.toISOString().split('T')[0]);
                           set('experienciaFim2' as any, dtFim2.toISOString().split('T')[0]);
                           if (!(form as any).experienciaInicio) set('experienciaInicio' as any, inicio);
@@ -1892,8 +1893,9 @@ ${obs ? `<div class="box"><strong>Observações / Justificativa do Enquadramento
                           const dias1 = tipo === '30_30' ? 30 : 45;
                           const dias2 = tipo === '30_30' ? 60 : 90;
                           const dtInicio = new Date(e.target.value + 'T12:00:00');
-                          const dtFim1 = new Date(dtInicio); dtFim1.setDate(dtFim1.getDate() + dias1);
-                          const dtFim2 = new Date(dtInicio); dtFim2.setDate(dtFim2.getDate() + dias2);
+                          // Rev. 2500 — CLT: dia do início conta como dia 1 (ver Tipo de Experiência acima).
+                          const dtFim1 = new Date(dtInicio); dtFim1.setDate(dtFim1.getDate() + dias1 - 1);
+                          const dtFim2 = new Date(dtInicio); dtFim2.setDate(dtFim2.getDate() + dias2 - 1);
                           set('experienciaFim1' as any, dtFim1.toISOString().split('T')[0]);
                           set('experienciaFim2' as any, dtFim2.toISOString().split('T')[0]);
                         }

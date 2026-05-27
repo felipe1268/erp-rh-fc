@@ -529,10 +529,13 @@ export const homeDataRouter = router({
           const dias2 = tipo === '30_30' ? 60 : 90;
 
           const dtInicio = new Date(inicio + 'T12:00:00');
+          // Rev. 2500 — CLT: dia do início conta como dia 1. Contrato de 30
+          // dias iniciando 04/05 termina 02/06 (não 03/06). Calendar-aware:
+          // setDate respeita meses de 28/29/30/31 nativamente.
           const dtFim1 = new Date(dtInicio);
-          dtFim1.setDate(dtFim1.getDate() + dias1);
+          dtFim1.setDate(dtFim1.getDate() + dias1 - 1);
           const dtFim2 = new Date(dtInicio);
-          dtFim2.setDate(dtFim2.getDate() + dias2);
+          dtFim2.setDate(dtFim2.getDate() + dias2 - 1);
 
           const fim1Str = dtFim1.toISOString().split('T')[0];
           const fim2Str = dtFim2.toISOString().split('T')[0];
