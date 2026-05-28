@@ -1,6 +1,57 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2520 — **FOLHA DE PAGAMENTO · LOG DIAGNÓSTICO no import do PDF
+ * quando parser devolve 0 registros. Instrumentação temporária pra
+ * descobrir o formato real do texto extraído pelo pdf-parse 1.1.1
+ * nos PDFs do user (Sintético/Analítico PRONUS).**
+ *
+ * SINTOMA (user, screenshot pós-Rev. 2519 com toast cinza
+ * "0 funcionários processados | 0 vinculados — Arquivos:
+ * Sintético (Lista): 0, Sintético (Lista): 0"): após Rev. 2519
+ * destravar o `require is not defined`, o PDF É lido sem erro mas
+ * `parseSinteticoPDF` devolve array vazio. Detecção auto OK
+ * (`text.includes("Relação de líquido")` → sintético), mas nenhum
+ * regex bateu (`matchNew` tab-separated nem `matchOld` 2+ spaces).
+ *
+ * HIPÓTESE: `pdf-parse@1.1.1` (CJS, instalado no repo) extrai texto
+ * com whitespace collapsado pra 1 space simples em algumas
+ * combinações de layout PDF — o `\s{2,}` do `matchOld` falha. Mas
+ * não dá pra confirmar sem ver o texto real (PDFs não chegaram nos
+ * attached_assets, só o screenshot).
+ *
+ * MUDANÇA (instrumentação, server/routers/folhaPagamento.ts ~L878-897)
+ *  - Após `parseAnaliticoPDF`/`parseSinteticoPDF`, se `parsed.length
+ *    === 0`, logar no console:
+ *      `[FolhaImport][DIAG] <TIPO> 0 registros · arquivo=... ·
+ *       textLen=N · primeiras 60 linhas não-vazias:`
+ *    seguido de `L01..L60` com cada linha `JSON.stringify`-ada
+ *    (preserva \t, espaços, caracteres especiais) e cortada em 300
+ *    chars pra não estourar o stdout.
+ *  - Custo: ZERO em runtime feliz (gated em parsed.length === 0).
+ *  - Permite ao agente ler `refresh_all_logs` na próxima tentativa
+ *    do user e ajustar o regex em 1 commit cirúrgico.
+ *
+ * ARQUIVOS TOCADOS
+ *  - `server/routers/folhaPagamento.ts` (+12 linhas em 2 blocos
+ *    paralelos: ramo analítico L878-883, ramo sintético L892-897).
+ *  - `shared/version.ts` (2519 → 2520).
+ *  - `shared/changelog.ts` (esta entrada).
+ *  - `replit.md` (rotação 2+5: 2520+2519 detalhadas; 2518 vira
+ *    one-liner; 2513 desce pra `replit-history.md`).
+ *
+ * FOLLOW-UP
+ *  - User precisa reimportar o(s) PDF(s) UMA vez. Agente lê os logs
+ *    com `refresh_all_logs`, vê o formato real, ajusta `matchOld`/
+ *    `matchNew` e remove o `console.log` na Rev. seguinte (não deixar
+ *    log permanente em produção).
+ *
+ * REGRAS DE OURO RESPEITADAS
+ *  - Zero ALTER/DROP/DELETE. Edit single-file. Sem mudança de
+ *    contrato/tipos. Log gated por contador 0 → não polui produção.
+ *
+ * ─────────────────────────────────────────────────────────────────────────
+ *
  * Rev. 2519 — **FOLHA DE PAGAMENTO · FIX "require is not defined" no
  * import do PDF da contabilidade. Hotfix bloqueante.**
  *

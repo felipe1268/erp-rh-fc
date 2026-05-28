@@ -872,6 +872,12 @@ export const folhaPagamentoRouter = router({
           const parsed = parseAnaliticoPDF(text);
           analiticoData = parsed;
           processedFiles.push({ fileName: arquivo.fileName, tipo: "Anal\u00edtico (Espelho)", registros: parsed.length });
+          // Rev. 2520 — diagnóstico: parser retornou 0, logar amostra
+          if (parsed.length === 0) {
+            const sample = text.split("\n").filter(l => l.trim()).slice(0, 60);
+            console.log(`[FolhaImport][DIAG] ANALITICO 0 registros · arquivo=${arquivo.fileName} · textLen=${text.length} · primeiras 60 linhas não-vazias:`);
+            sample.forEach((l, i) => console.log(`[FolhaImport][DIAG] L${String(i+1).padStart(2,"0")}: ${JSON.stringify(l).slice(0, 300)}`));
+          }
           // Link upload
           await db.update(folhaLancamentos)
             .set({ analiticoUploadId: upId })
@@ -880,6 +886,12 @@ export const folhaPagamentoRouter = router({
           const parsed = parseSinteticoPDF(text);
           sinteticoData = parsed;
           processedFiles.push({ fileName: arquivo.fileName, tipo: "Sint\u00e9tico (Lista)", registros: parsed.length });
+          // Rev. 2520 — diagnóstico: parser retornou 0, logar amostra
+          if (parsed.length === 0) {
+            const sample = text.split("\n").filter(l => l.trim()).slice(0, 60);
+            console.log(`[FolhaImport][DIAG] SINTETICO 0 registros · arquivo=${arquivo.fileName} · textLen=${text.length} · primeiras 60 linhas não-vazias:`);
+            sample.forEach((l, i) => console.log(`[FolhaImport][DIAG] L${String(i+1).padStart(2,"0")}: ${JSON.stringify(l).slice(0, 300)}`));
+          }
           // Link upload
           await db.update(folhaLancamentos)
             .set({ sinteticoUploadId: upId })
