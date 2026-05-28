@@ -1,6 +1,66 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2531 — **BUILD · `vite build` estourava heap (OOM) durante o
+ * deploy: `max-old-space-size` subiu de 4096 MB → 8192 MB.**
+ *
+ * MOTIVAÇÃO (user em 28/05/2026):
+ *   "My deployment build failed to publish."
+ *
+ * REPRODUÇÃO LOCAL
+ *   - `pnpm check` (tsc default ~2 GB) → `FATAL ERROR: Ineffective
+ *     mark-compacts near heap limit Allocation failed - JavaScript
+ *     heap out of memory`.
+ *   - `pnpm build` com `NODE_OPTIONS='--max-old-space-size=4096'` →
+ *     Vite trava em `transforming...` e o processo morre silencioso
+ *     (mesmo padrão OOM, sem flush no log porque o V8 mata antes).
+ *   - Com `--max-old-space-size=8192` → build COMPLETA em 1m14s
+ *     produzindo `dist/index.js` 8,6 MB + ~70 chunks no client.
+ *
+ * CAUSA-RAIZ
+ *   - O bundle cresceu muito ao longo das últimas centenas de
+ *     revisões. Hoje há vários chunks acima de 500 KB e alguns
+ *     gigantes (>3 MB) que pressionam o heap do Rollup/Vite 7
+ *     durante a fase de transform + bundle:
+ *       `vendor-webifc`                3.488 KB
+ *       `vendor-xlsx`                  1.371 KB
+ *       `index-KhQ-bKsV`               1.326 KB
+ *       `DashboardAtestadosAcidentes`  1.190 KB
+ *       `PlanejamentoDetalhe`          1.119 KB
+ *       `FolhaPagamento`                 864 KB
+ *       `index-CGEkCGiK`                 745 KB
+ *       `FechamentoPonto`                563 KB
+ *       `Epis` / `Cotacoes` / `vendor-charts` ~540-580 KB
+ *   - O Replit Deployments roda `pnpm build` em container com RAM
+ *     limitada; 4 GB de heap já não cabe.
+ *
+ * MUDANÇA
+ *   - `package.json` script `build`:
+ *       antes: `NODE_OPTIONS='--max-old-space-size=4096' vite build && esbuild …`
+ *       depois: `NODE_OPTIONS='--max-old-space-size=8192' vite build &&
+ *                NODE_OPTIONS='--max-old-space-size=4096' esbuild server/_core/index.ts …`
+ *   - Mantemos 1 GB no `dev`/`start` (sem mudança); o overhead extra
+ *     existe apenas no momento do `build`.
+ *
+ * VALIDAÇÃO
+ *   - `pnpm build` rodando local: ✓ 1m14s, sem OOM, `dist/index.js`
+ *     8,6 MB + `dist/public/assets/*` ~70 arquivos. Warning de
+ *     chunks >3 MB persiste (esperado — não impede o build).
+ *
+ * FOLLOW-UPS (não bloqueantes do deploy)
+ *   - Considerar code-split agressivo dos vendors gigantes
+ *     (`vendor-webifc`, `vendor-xlsx`) com `manualChunks` ou
+ *     dynamic import — reduziria heap E tempo de download.
+ *   - `pnpm check` ainda OOMa em 2 GB (tsc default); se quiser
+ *     CI/lint, vai precisar de `NODE_OPTIONS='--max-old-space-size=4096'`
+ *     ou `tsc --incremental`. Fora do escopo desta revisão.
+ *
+ * ARQUIVOS
+ *   - `package.json` L11.
+ *
+ * COMPLIANCE
+ *   - Zero ALTER/DROP/DELETE. Não toca banco.
+ *
  * Rev. 2530 — **INVENTÁRIO SEMANAL · BUSCA + LEITOR DE CÓDIGO DE BARRAS
  * (scan → baixa BATE automática).**
  *
