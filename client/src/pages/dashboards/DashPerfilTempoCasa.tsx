@@ -1,4 +1,5 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
+import { Progress } from "@/components/ui/progress";
 import { CHART_PALETTE, getChartColors, SEMANTIC_COLORS } from "@/lib/chartColors";
 import DashboardLayout from "@/components/DashboardLayout";
 import DashChart, { DashKpi } from "@/components/DashChart";
@@ -62,21 +63,67 @@ export default function DashPerfilTempoCasa() {
   const [showIA, setShowIA] = useState(false);
   const [expandedPositive, setExpandedPositive] = useState<number | null>(null);
   const [expandedNegative, setExpandedNegative] = useState<number | null>(null);
+  const [iaProgress, setIaProgress] = useState(0);
+  const iaIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const iaResetTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const { data, isLoading } = trpc.dashboards.perfilTempoCasa.useQuery(
     { companyId: queryCompanyId, ...(isConstrutoras ? { companyIds } : {}) },
     { enabled: isConstrutoras ? companyIds.length > 0 : companyId > 0 }
   );
 
+  const clearIaTimers = () => {
+    if (iaIntervalRef.current) {
+      clearInterval(iaIntervalRef.current);
+      iaIntervalRef.current = null;
+    }
+    if (iaResetTimeoutRef.current) {
+      clearTimeout(iaResetTimeoutRef.current);
+      iaResetTimeoutRef.current = null;
+    }
+  };
+
+  const stopIaProgress = (finalValue: number) => {
+    clearIaTimers();
+    setIaProgress(finalValue);
+    if (finalValue >= 100 || finalValue === 0) {
+      iaResetTimeoutRef.current = setTimeout(() => {
+        setIaProgress(0);
+        iaResetTimeoutRef.current = null;
+      }, 800);
+    }
+  };
+
   const analiseMutation = trpc.dashboards.analiseIAPerfil.useMutation({
+    onMutate: () => {
+      clearIaTimers();
+      setIaProgress(2);
+      iaIntervalRef.current = setInterval(() => {
+        setIaProgress((prev) => {
+          if (prev >= 95) return prev;
+          const remaining = 95 - prev;
+          const step = Math.max(0.4, remaining * 0.04);
+          return Math.min(95, prev + step);
+        });
+      }, 250);
+    },
     onSuccess: () => {
+      stopIaProgress(100);
       setShowIA(true);
       toast.success("Análise IA concluída!");
     },
     onError: (err) => {
+      stopIaProgress(0);
       toast.error("Erro na análise IA: " + err.message);
     },
   });
+
+  useEffect(() => {
+    return () => {
+      clearIaTimers();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const faixas = (data?.faixas || []) as FaixaData[];
   const totalAtivos = data?.totalAtivos || 0;
@@ -628,6 +675,15 @@ export default function DashPerfilTempoCasa() {
                 <div className="text-center">
                   <p className="font-semibold text-purple-700 dark:text-purple-300">Analisando perfis dos funcionários...</p>
                   <p className="text-sm text-muted-foreground mt-1">A IA está cruzando dados de tempo de casa, advertências, atestados e perfil demográfico</p>
+                </div>
+                <div className="w-full max-w-md mt-2">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="text-xs font-medium text-purple-700 dark:text-purple-300">Progresso</span>
+                    <span className="text-xs font-semibold text-purple-700 dark:text-purple-300 tabular-nums">
+                      {Math.round(iaProgress)}%
+                    </span>
+                  </div>
+                  <Progress value={iaProgress} className="h-2 bg-purple-100 dark:bg-purple-950" />
                 </div>
               </div>
             </CardContent>

@@ -1,6 +1,55 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2506 — **DASHBOARD PERFIL POR TEMPO DE CASA · UX — Barra de progresso
+ * 0→100% no card "Analisando perfis dos funcionários...".**
+ *
+ * PEDIDO (user, 28/05/2026, via iPad):
+ *  - "Na tela de carregamento, quero de 0 a 100%" + screenshot do dashboard
+ *    "Análise de Perfil por Tempo de Casa" com o botão "Analisando..." sem
+ *    feedback visual de quanto falta.
+ *
+ * CAUSA / CONTEXTO
+ *  - O card de loading da Análise IA mostrava só Brain pulsando + Sparkles +
+ *    texto "Analisando perfis dos funcionários...". A chamada ao Claude
+ *    (`dashboards.analiseIAPerfil`) leva 15-40s — sem indicador de progresso,
+ *    o usuário fica achando que travou (especialmente em iPad/mobile com rede
+ *    instável).
+ *  - A Anthropic API NÃO expõe progresso real (a resposta vem inteira no fim).
+ *    Solução padrão: progresso simulado assintótico que sobe rápido no início,
+ *    desacelera perto de 95%, e completa em 100% no `onSuccess`.
+ *
+ * O QUE MUDOU
+ *  - `client/src/pages/dashboards/DashPerfilTempoCasa.tsx`:
+ *      • Novo state `iaProgress` + `iaIntervalRef` (typed `ReturnType<typeof setInterval>`).
+ *      • `analiseMutation.onMutate`: inicia interval de 250ms que incrementa
+ *        com curva `step = max(0.4, (95 - prev) * 0.04)` — cresce ~3pts/s no
+ *        começo e satura em 95% pra deixar margem pro fim real.
+ *      • `onSuccess`: helper `stopIaProgress(100)` que limpa interval, fixa em
+ *        100% e reseta pra 0 após 800ms (transição suave do unmount do card).
+ *      • `onError`: `stopIaProgress(0)` (zera imediatamente).
+ *      • `useEffect` de cleanup garante que o interval morre se o componente
+ *        desmontar durante a chamada.
+ *      • UI: bloco novo dentro do card de loading com header "Progresso" +
+ *        valor `{Math.round(iaProgress)}%` tabular-nums (não pula) +
+ *        `<Progress value={iaProgress} className="h-2 bg-purple-100" />`
+ *        seguindo a paleta roxa do card.
+ *      • Import novo: `Progress` de `@/components/ui/progress`, `useEffect`,
+ *        `useRef` de `react`.
+ *
+ * FORA DE ESCOPO
+ *  - Outros dashboards com análise IA (`DashAvaliacaoFuncionarios`,
+ *    `DashSinistralidade` etc.) podem se beneficiar do mesmo padrão — fica
+ *    como follow-up se o user pedir. Padrão pode virar hook `useFakeProgress`
+ *    se reutilizado em 3+ telas.
+ *
+ * FILES
+ *  - `client/src/pages/dashboards/DashPerfilTempoCasa.tsx` (M)
+ *  - `shared/version.ts` (M — 2505 → 2506)
+ *  - `shared/changelog.ts` (M — nova entrada no topo)
+ *  - `replit.md` (M — rotação 2+5)
+ *  - `replit-history.md` (M — Rev. 2499 demovida)
+ *
  * Rev. 2505 — **AVALIAÇÃO INTELIGENTE DE FUNCIONÁRIOS · FASE 2 — 2 NOVOS PILARES
  * (Capacitação + Lealdade) elevando o score de 4 → 6 dimensões.**
  *
