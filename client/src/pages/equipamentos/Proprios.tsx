@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import {
   Plus, Search, Pencil, X, HardHat, Camera, ChevronDown, ChevronUp,
   Sparkles, Trash2, Boxes, Wrench, CheckCircle2, Layers, Hash,
+  Building2, User as UserIcon,
 } from "lucide-react";
 import { FotosUploader, FotoItem, compressImage, fmtMoney, fmtDate, Spinner } from "./_shared";
 
@@ -29,6 +30,8 @@ const EMPTY_FORM = {
   vidaUtilMeses: "", observacoes: "",
   // Rev. 2512 — status editável no modal
   status: "disponivel" as StatusEquip,
+  // Rev. 2514 — obra atual (só usada quando status="em_obra"; senão NULL).
+  localizacaoAtualObraId: null as number | null,
 };
 
 // Rev. 2364 — chips de categoria de toque rápido (servente toca em vez de digitar).
@@ -86,6 +89,18 @@ export default function EquipamentosProprios() {
   const [modal, setModal] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [form, setForm] = useState({ ...EMPTY_FORM });
+  // Rev. 2514 — meta de auditoria do registro em edição (read-only no modal).
+  const [editingMeta, setEditingMeta] = useState<{ criadoPorNome: string | null; createdAt: string | null }>({
+    criadoPorNome: null, createdAt: null,
+  });
+  // Rev. 2514 — obras pra picker quando status="em_obra".
+  const { data: obrasData = [] } = trpc.obras.list.useQuery(
+    { companyId }, { enabled: !!companyId }
+  );
+  const obrasAtivas = useMemo(
+    () => (obrasData as any[]).filter(o => o?.status !== "encerrada" && o?.status !== "arquivada"),
+    [obrasData]
+  );
   const [fotos, setFotos] = useState<FotoItem[]>([]);
   const [mostrarDetalhes, setMostrarDetalhes] = useState(false);
   const fotoInputRef = useRef<HTMLInputElement>(null);
@@ -239,9 +254,15 @@ export default function EquipamentosProprios() {
       vidaUtilMeses: p.vidaUtilMeses ? String(p.vidaUtilMeses) : "",
       observacoes: up(p.observacoes || ""),
       status: toStatus(p.status), // Rev. 2512 — type-safe (sem `any`)
+      // Rev. 2514 — obra atual (number|null pro <select>).
+      localizacaoAtualObraId: p.localizacaoAtualObraId ?? null,
     });
     setFotos((p.fotosJson as FotoItem[]) || []);
     setEditingId(p.id);
+    setEditingMeta({
+      criadoPorNome: p.criadoPorNome ?? null,
+      createdAt: p.createdAt ?? null,
+    });
     setMostrarDetalhes(false); // Rev. 2512 — começa colapsado pra caber sem scroll
     setModal(true);
   }
@@ -291,6 +312,12 @@ export default function EquipamentosProprios() {
     const valor = parseFloat(form.valorAquisicao.replace(",", ".")) || undefined;
     const vida = parseInt(form.vidaUtilMeses) || undefined;
     if (editingId) {
+      // Rev. 2514 — coerência status×obra: quando NÃO está "em_obra", força
+      // localização=almoxarifado e obraId=null (evita órfãos visuais).
+      const emObra = form.status === "em_obra";
+      if (emObra && !form.localizacaoAtualObraId) {
+        return toast.error("Selecione a obra onde o equipamento está.");
+      }
       atualizar.mutate({
         companyId, id: editingId,
         descricao: form.descricao,
@@ -301,6 +328,8 @@ export default function EquipamentosProprios() {
         vidaUtilMeses: vida ?? null,
         observacoes: form.observacoes || null,
         status: form.status, // Rev. 2512 — status editável
+        localizacaoAtualTipo: emObra ? "obra" : "almoxarifado",
+        localizacaoAtualObraId: emObra ? form.localizacaoAtualObraId : null,
         fotos: fotos.length > 0 ? fotos : undefined,
       });
     } else {
@@ -473,7 +502,7 @@ export default function EquipamentosProprios() {
                       </button>
                     </div>
                     <h3 className="font-semibold text-slate-800 text-sm leading-snug line-clamp-2 uppercase">{p.descricao}</h3>
-                    <div className="flex items-center justify-between gap-2 mt-auto">
+                    <div className="flex items-center justify-between gap-2">
                       <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold ${STATUS_COLORS[p.status] || "bg-slate-100 ring-1 ring-slate-200"}`}>
                         {STATUS_LABELS[p.status] || p.status}
                       </span>
@@ -481,12 +510,38 @@ export default function EquipamentosProprios() {
                         {p.categoria || "—"}
                       </span>
                     </div>
-                    {(p.valorAquisicao || p.dataAquisicao) && (
-                      <div className="flex items-center justify-between text-[11px] text-slate-500 pt-1.5 border-t border-slate-100">
-                        <span>{p.valorAquisicao ? fmtMoney(p.valorAquisicao) : "—"}</span>
-                        <span>{fmtDate(p.dataAquisicao) || "—"}</span>
-                      </div>
-                    )}
+                    {/* Rev. 2514 — LOCALIZAÇÃO: badge azul "OBRA: <nome>" quando
+                        em_obra; senão chip cinza "ALMOX." pra ficar rastreável
+                        sem precisar abrir o modal. */}
+                    <div className="flex items-center gap-1.5">
+                      {p.status === "em_obra" && p.obraNome ? (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-50 text-blue-800 ring-1 ring-blue-200 truncate max-w-full">
+                          <Building2 className="h-2.5 w-2.5 shrink-0" />
+                          <span className="truncate uppercase">OBRA: {p.obraNome}</span>
+                        </span>
+                      ) : p.status === "em_obra" ? (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-50 text-amber-800 ring-1 ring-amber-200">
+                          <Building2 className="h-2.5 w-2.5" /> OBRA NÃO DEFINIDA
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-100 text-slate-600 ring-1 ring-slate-200">
+                          <Boxes className="h-2.5 w-2.5" /> ALMOX.
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center justify-between gap-2 mt-auto pt-1.5 border-t border-slate-100">
+                      <span className="inline-flex items-center gap-1 text-[10px] text-slate-500 truncate uppercase">
+                        <UserIcon className="h-2.5 w-2.5 shrink-0" />
+                        <span className="truncate">{p.criadoPorNome || "—"}</span>
+                      </span>
+                      {(p.valorAquisicao || p.dataAquisicao) && (
+                        <span className="text-[10px] text-slate-500 shrink-0">
+                          {p.valorAquisicao ? fmtMoney(p.valorAquisicao) : ""}
+                          {p.valorAquisicao && p.dataAquisicao ? " · " : ""}
+                          {fmtDate(p.dataAquisicao) || ""}
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
               );
@@ -673,6 +728,35 @@ export default function EquipamentosProprios() {
                         );
                       })}
                     </div>
+                    {/* Rev. 2514 — Obra picker aparece SÓ quando status="em_obra". */}
+                    {form.status === "em_obra" && (
+                      <div className="mt-2">
+                        <label className="block text-[11px] font-semibold text-slate-700 mb-1 inline-flex items-center gap-1">
+                          <Building2 className="h-3 w-3 text-blue-700" /> Obra atual *
+                        </label>
+                        <select
+                          value={form.localizacaoAtualObraId ?? ""}
+                          onChange={e => setForm(p => ({
+                            ...p,
+                            localizacaoAtualObraId: e.target.value ? Number(e.target.value) : null,
+                          }))}
+                          className="w-full px-2 py-2 border-2 border-blue-200 focus:border-blue-500 focus:outline-none rounded-lg text-sm bg-blue-50/30"
+                        >
+                          <option value="">— Selecione a obra —</option>
+                          {obrasAtivas.map((o: any) => (
+                            <option key={o.id} value={o.id}>{o.nome}</option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+                    {/* Rev. 2514 — Auditoria read-only: quem cadastrou + quando. */}
+                    {(editingMeta.criadoPorNome || editingMeta.createdAt) && (
+                      <p className="mt-2 text-[10.5px] text-slate-500 inline-flex items-center gap-1 uppercase tracking-wide">
+                        <UserIcon className="h-3 w-3" />
+                        Cadastrado por <strong className="text-slate-700">{editingMeta.criadoPorNome || "—"}</strong>
+                        {editingMeta.createdAt && <> em <strong className="text-slate-700">{fmtDate(editingMeta.createdAt)}</strong></>}
+                      </p>
+                    )}
                   </div>
                 ) : <div />}
 

@@ -8678,6 +8678,10 @@ export const equipamentosProprios = pgTable("equipamentos_proprios", {
   fotosJson:               jsonb("fotos_json"),
   observacoes:             text(),
   ativo:                   boolean().default(true),
+  // Rev. 2514 — rastreabilidade: quem cadastrou (snapshot do nome p/ não
+  // depender de JOIN em users; user_id mantém o link forte).
+  criadoPorUserId:         integer("criado_por_user_id"),
+  criadoPorNome:           varchar("criado_por_nome", { length: 255 }),
   createdAt:               timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
   updatedAt:               timestamp("updated_at", { mode: "string" }).defaultNow().notNull(),
 }, (table) => [

@@ -261,7 +261,48 @@ export const equipamentosRouter = router({
         const q = `%${input.busca.trim()}%`;
         conds.push(sql`(${equipamentosProprios.descricao} ILIKE ${q} OR ${equipamentosProprios.codigoPatrimonio} ILIKE ${q} OR ${equipamentosProprios.numeroSerie} ILIKE ${q})`);
       }
-      return await db.select().from(equipamentosProprios).where(and(...conds)).orderBy(desc(equipamentosProprios.id));
+      // Rev. 2514 — LEFT JOIN obras pra trazer o nome da obra atual (sem
+      // round-trip extra no client). Tabela obras tem coluna "companyId"
+      // (camelCase) — usar SQL bruto na expressão pra evitar conflito de
+      // helper Drizzle. `obraNome` retorna NULL quando localizacao_atual_obra_id
+      // é NULL ou aponta pra obra de outra empresa (filtro multi-tenant).
+      const result = await db.execute(sql`
+        SELECT ep.*,
+               o.nome AS obra_nome
+        FROM equipamentos_proprios ep
+        LEFT JOIN obras o
+          ON o.id = ep.localizacao_atual_obra_id
+         AND o."companyId" = ep.company_id
+        ${conds.length > 0 ? sql`WHERE ${and(...conds)}` : sql``}
+        ORDER BY ep.id DESC
+      `);
+      // Normaliza camelCase pro front (matching Drizzle .select())
+      return (result as any[]).map((r: any) => ({
+        id: r.id,
+        companyId: r.company_id,
+        codigoPatrimonio: r.codigo_patrimonio,
+        descricao: r.descricao,
+        categoria: r.categoria,
+        numeroSerie: r.numero_serie,
+        marca: r.marca,
+        modelo: r.modelo,
+        dataAquisicao: r.data_aquisicao,
+        valorAquisicao: r.valor_aquisicao,
+        vidaUtilMeses: r.vida_util_meses,
+        custoManutencaoMedioMes: r.custo_manut_medio_mes,
+        custoSeguroMedioMes: r.custo_seguro_medio_mes,
+        localizacaoAtualTipo: r.localizacao_atual_tipo,
+        localizacaoAtualObraId: r.localizacao_atual_obra_id,
+        status: r.status,
+        fotosJson: r.fotos_json,
+        observacoes: r.observacoes,
+        ativo: r.ativo,
+        criadoPorUserId: r.criado_por_user_id,
+        criadoPorNome: r.criado_por_nome,
+        createdAt: r.created_at,
+        updatedAt: r.updated_at,
+        obraNome: r.obra_nome, // Rev. 2514 — campo novo derivado do JOIN
+      }));
     }),
 
   proprioById: protectedProcedure
@@ -296,7 +337,7 @@ export const equipamentosRouter = router({
       fotos: fotoSchema,
       observacoes: z.string().optional(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       // Rev. 2513 — guarda defensiva pós-normalização: rejeita descrição
@@ -325,6 +366,10 @@ export const equipamentosRouter = router({
         observacoes: upperBR(input.observacoes) ?? null,
         status: "disponivel" as const,
         localizacaoAtualTipo: "almoxarifado" as const,
+        // Rev. 2514 — rastreabilidade: quem cadastrou (snapshot do nome
+        // pra histórico estável + user_id pro link forte).
+        criadoPorUserId: ctx.user.id,
+        criadoPorNome: ctx.user.name || String(ctx.user.id),
       };
       let lastErr: any = null;
       for (let attempt = 0; attempt < 8; attempt++) {

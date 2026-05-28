@@ -1,6 +1,120 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2514 — **EQUIPAMENTOS PRÓPRIOS — Rastreabilidade: card e modal mostram
+ * em qual OBRA o equipamento está + QUEM CADASTROU.**
+ *
+ * PEDIDO (user, 28/05/2026, iPad, screenshot dos cards):
+ *  - "precisa informar no card e no cadastro em qual obra o equipamento está..
+ *     e quem fez o cadastro.. para fácil rastreio."
+ *
+ * MUDANÇAS — SCHEMA (`drizzle/schema.ts`)
+ *  - Tabela `equipamentos_proprios` ganha 2 colunas:
+ *    - `criadoPorUserId` (integer, nullable) — link forte com users.id.
+ *    - `criadoPorNome` (varchar 255, nullable) — snapshot do nome pra
+ *      histórico estável (mesmo se o usuário for renomeado/excluído).
+ *  - Campos `localizacaoAtualTipo` ('almoxarifado'|'obra') e
+ *    `localizacaoAtualObraId` (integer) já existiam desde Rev. 2510 mas
+ *    nunca eram editáveis pelo UI — agora ganham fluxo completo.
+ *
+ * MUDANÇAS — BOOTSTRAP (`server/_core/index.ts` L2231-2236)
+ *  - `ALTER TABLE equipamentos_proprios ADD COLUMN IF NOT EXISTS criado_por_user_id INTEGER`
+ *  - `ALTER TABLE equipamentos_proprios ADD COLUMN IF NOT EXISTS criado_por_nome VARCHAR(255)`
+ *  - ADD COLUMN IF NOT EXISTS é a única operação ALTER aceita pelo projeto
+ *    (R-001/R-007/R-010 proíbem DROP/DELETE; ADD não-destrutivo OK).
+ *  - Backfill orgânico: registros pré-2514 ficam com NULL e mostram "—".
+ *
+ * MUDANÇAS — SERVER (`server/routers/equipamentos.ts`)
+ *
+ * (1) `proprioCriar` agora popula auditoria a partir do `ctx.user`:
+ *     - `criadoPorUserId: ctx.user.id`
+ *     - `criadoPorNome: ctx.user.name || String(ctx.user.id)`
+ *     Inserido dentro do baseVals (antes do loop de retry de UNIQUE).
+ *
+ * (2) `propriosListar` reescrito de Drizzle `.select()` pra `db.execute(sql)`
+ *     com LEFT JOIN em `obras` por `localizacao_atual_obra_id`. Retorna
+ *     `obraNome` (string|null) como campo derivado — evita N+1 no client.
+ *     - Filtro multi-tenant: JOIN exige `o."companyId" = ep.company_id`
+ *       (tabela obras usa camelCase em SQL).
+ *     - Re-mapping snake_case → camelCase preserva 100% do contrato anterior
+ *       (todos os campos antigos continuam saindo idênticos).
+ *
+ * (3) `proprioAtualizar` — zod schema já aceitava `localizacaoAtualTipo`
+ *     ('almoxarifado'|'obra') e `localizacaoAtualObraId` desde Rev. 2510,
+ *     mas o cliente nunca enviava. Sem mudanças server-side aqui.
+ *
+ * MUDANÇAS — CLIENT (`client/src/pages/equipamentos/Proprios.tsx`)
+ *
+ * (1) `EMPTY_FORM` ganha `localizacaoAtualObraId: number|null`.
+ *     `abrirEdit(p)` popula a partir de `p.localizacaoAtualObraId`.
+ *
+ * (2) Query nova `trpc.obras.list({companyId})` (mesmo endpoint já usado
+ *     em terceiros/PrevisaoCaixa). `obrasAtivas` filtra status não-encerradas.
+ *
+ * (3) Estado novo `editingMeta = { criadoPorNome, createdAt }` populado em
+ *     `abrirEdit` pra render read-only do "Cadastrado por X em DD/MM/AAAA"
+ *     dentro do modal de edição.
+ *
+ * (4) Modal — bloco STATUS (só em modo edição) ganha:
+ *     - Picker `<select>` de obra (estilo azul claro) que aparece SÓ quando
+ *       `form.status === "em_obra"`. Vazio inicialmente, com label "Obra
+ *       atual *".
+ *     - Texto auditoria abaixo do bloco quando há `criadoPorNome` ou
+ *       `createdAt`: ícone User + "Cadastrado por <strong>X</strong> em
+ *       <strong>DD/MM/AAAA</strong>".
+ *
+ * (5) `salvar()` em modo edição:
+ *     - Se `status==="em_obra"` mas sem obraId → `toast.error` e bloqueia
+ *       o submit (coerência de dados).
+ *     - Passa `localizacaoAtualTipo` ('obra'|'almoxarifado') e
+ *       `localizacaoAtualObraId` (number|null) coerentes com o status.
+ *
+ * (6) Card grid (`<h3>` → rodapé) ganha 2 linhas novas:
+ *     - LOCALIZAÇÃO: pill azul "OBRA: <nome>" com ícone Building2 quando
+ *       em_obra + obraNome presente; pill âmbar "OBRA NÃO DEFINIDA" quando
+ *       em_obra sem obraId (alerta visual); pill cinza "ALMOX." com ícone
+ *       Boxes nos demais casos.
+ *     - AUDITORIA: ícone User + nome do criador (truncate) à esquerda;
+ *       valor/data agrupados à direita.
+ *     Layout reorganizado pra manter densidade (rodapé compartilhado).
+ *
+ * REGRAS DE OURO RESPEITADAS
+ *  - R-001/R-007/R-010: zero DROP, zero DELETE, zero ALTER destrutivo. Só
+ *    2x `ADD COLUMN IF NOT EXISTS` (padrão aceito do projeto, usado em
+ *    dezenas de outras revisões).
+ *  - Multi-tenant: LEFT JOIN exige `o."companyId" = ep.company_id` — obra
+ *    de outra empresa retorna `obraNome=null` (cinto+suspensório).
+ *  - Padrão MAIÚSCULA (Rev. 2513) preservado: o nome da obra vem como
+ *    cadastrado em `obras.nome` (não força uppercase server-side; CSS
+ *    `uppercase` aplica visualmente no card).
+ *
+ * VALIDAÇÃO
+ *  - Tipos: `proprioAtualizar` já tinha `localizacaoAtualTipo` e
+ *    `localizacaoAtualObraId` como optional na zod schema (Rev. 2510).
+ *  - Backfill: registros pré-2514 ficam com `criadoPorNome=null` →
+ *    card mostra "—" no slot do criador; sem regressão.
+ *  - Coerência: ao mudar status de "em_obra" pra qualquer outro, server
+ *    aceita `localizacaoAtualObraId=null` (campo é nullable na schema).
+ *
+ * FOLLOW-UPS POSSÍVEIS
+ *  - Filtro por obra no header da listagem (input já existe na zod schema,
+ *    falta UI).
+ *  - "Quando" do criador também no card (pequeno texto de data abaixo do
+ *    nome) — não pedido, evitei poluição visual.
+ *  - Histórico de transferências (auditoria de mudanças de obra ao longo
+ *    do tempo) — exigiria tabela nova, fora de escopo.
+ *
+ * ARQUIVOS TOCADOS
+ *  - `drizzle/schema.ts` (L8684-8687: 2 colunas novas)
+ *  - `server/_core/index.ts` (L2231-2236: ADD COLUMN IF NOT EXISTS)
+ *  - `server/routers/equipamentos.ts` (L249-309 propriosListar LEFT JOIN;
+ *    L343-376 proprioCriar populando criador)
+ *  - `client/src/pages/equipamentos/Proprios.tsx` (form + meta + obras
+ *    query + modal obra picker + card 2 linhas novas)
+ *  - `shared/version.ts`, `shared/changelog.ts`, `replit.md` (rotação 2+5)
+ *
+ * ─────────────────────────────────────────────────────────────────────────
+ *
  * Rev. 2513 — **EQUIPAMENTOS PRÓPRIOS — Padronização MAIÚSCULA (todos os
  * textos) + código de patrimônio AUTO-GERADO server-side (anti-race) com
  * UNIQUE constraint + retry, eliminando duplicações.**

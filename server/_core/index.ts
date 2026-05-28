@@ -2225,7 +2225,12 @@ Regras:
           await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS uq_equip_proprio_company_patrimonio ON equipamentos_proprios (company_id, codigo_patrimonio)`);
           await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_equip_proprio_company_status ON equipamentos_proprios (company_id, status)`);
           await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_equip_proprio_categoria ON equipamentos_proprios (categoria)`);
-          console.log(`[SyncSchema+] Rev. 2510: tabela equipamentos_proprios garantida (+ uniq patrimônio + índices).`);
+          // Rev. 2514 — rastreabilidade (quem cadastrou). ADD COLUMN IF NOT
+          // EXISTS é a única operação ALTER permitida pelo padrão do projeto
+          // (R-001/R-007/R-010 proíbem DROP/DELETE, não ADD não-destrutivo).
+          await db.execute(sql`ALTER TABLE equipamentos_proprios ADD COLUMN IF NOT EXISTS criado_por_user_id INTEGER`);
+          await db.execute(sql`ALTER TABLE equipamentos_proprios ADD COLUMN IF NOT EXISTS criado_por_nome VARCHAR(255)`);
+          console.log(`[SyncSchema+] Rev. 2510/2514: tabela equipamentos_proprios garantida (+ uniq patrimônio + índices + criado_por).`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.2319/2340/2355/2373/2510 equipamentos_locados+proprios+baias (CREATE):`, e?.message || e); }
 
         // ── Rev. 2260 — Backfill `previsto_msp_pct` em obras antigas ──────

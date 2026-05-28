@@ -2,6 +2,7 @@
 
 > Este arquivo guarda os one-liners das revisões antigas para manter o `replit.md` enxuto.
 
+- **Rev. 2507** — PERSON PHOTO · LIGHTBOX — Foto ampliada usa quase 100% da tela (`max-w-[96vw] max-h-[96vh]`) e respeita EXIF (`imageOrientation:'from-image'`). User (iPad): "A foto está sendo cortada". Fix defensivo em `client/src/components/PersonPhoto.tsx`. Ver `shared/changelog.ts`.
 - **Rev. 2506** — DASHBOARD PERFIL POR TEMPO DE CASA · UX — Barra de progresso 0→100% no card "Analisando perfis..." (Anthropic não expõe progresso real → curva assintótica simulada 250ms, satura em 95%, fixa em 100% no `onSuccess`, reset em 800ms). Refs separados (interval + reset timeout), helper `clearIaTimers`, cleanup no unmount. Ver `shared/changelog.ts`.
 - **Rev. 2505** — AVALIAÇÃO INTELIGENTE FUNCIONÁRIOS · FASE 2 — 2 novos pilares (Capacitação + Lealdade) elevando score de 4→6 dimensões. `employeeScore.ts` ganha `scoreCapacitacao` (base 70 + 6/válido + 3/recente − 12/vencido) + `scoreLealdade` (escala <6m=60 → 10a+=100, piso 60 LGPD). `PESOS_DEFAULT` 4 core 20% + 2 complementares 10%. UI: 6 KPIs + colunas Capac./Leald. + drill 6 sub-cards. Ver `shared/changelog.ts`.
 - **Rev. 2504** — DASHBOARD PERFIL POR TEMPO DE CASA · BUGFIX "Erro na análise IA" (JSON do Claude vinha envolto em fence ```json...```). Novo helper `parseLLMJson` em `server/routers/dashboards.ts` (remove fence + fallback extrai `{...}`/`[...]`). Catch re-throw em vez de engolir. Ver `shared/changelog.ts`.
