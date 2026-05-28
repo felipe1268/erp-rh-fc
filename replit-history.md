@@ -2,6 +2,7 @@
 
 > Este arquivo guarda os one-liners das revisões antigas para manter o `replit.md` enxuto.
 
+- **Rev. 2512** — EQUIPAMENTOS PRÓPRIOS — Modal redesenhado em 2 colunas (cabe sem scroll) + cadastro de NOVAS categorias (localStorage por company) + seletor de STATUS no modal de edição. `client/src/pages/equipamentos/Proprios.tsx`. Ver `shared/changelog.ts`.
 - **Rev. 2511** — EQUIPAMENTOS PRÓPRIOS — Botão Excluir (soft delete via `ativo=false`) no modal de edição. Server `proprioExcluir` filtrando por company; client `confirmarExcluir` no footer vermelho à esquerda apenas em modo edição. Ver `shared/changelog.ts`.
 - **Rev. 2510** — EQUIPAMENTOS PRÓPRIOS — Bugfix CREATE TABLE faltante no bootstrap (`equipamentos_proprios`) + redesign completo da tela com identidade FC (faixa azul #1B2A4A, KPIs com ring colorido, grid de cards, header e modal estilizados). `server/_core/index.ts` ~L2197 + `client/src/pages/equipamentos/Proprios.tsx`. Ver `shared/changelog.ts`.
 - **Rev. 2509** — AVALIAÇÃO INTELIGENTE · RANKING — Foto do funcionário ao lado do nome em Top 10, Bottom 10, busca e tabela completa (click amplia via PersonPhoto). `avaliacaoFuncionariosRouter.getRanking` agora seleciona `employees.fotoUrl`. Ver `shared/changelog.ts`.

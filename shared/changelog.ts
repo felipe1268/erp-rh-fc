@@ -1,6 +1,54 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2519 — **FOLHA DE PAGAMENTO · FIX "require is not defined" no
+ * import do PDF da contabilidade. Hotfix bloqueante.**
+ *
+ * SINTOMA (user, screenshot da tela /folha-pagamento com toast
+ * vermelho "Erro na importação: require is not defined" no canto
+ * inferior esquerdo + logs do servidor:
+ * `[tRPC Error] folha.importarFolhaAuto: require is not defined`):
+ * o botão "Importar Folha da Contabilidade" reintroduzido na Rev. 2517
+ * fazia upload do PDF mas estourava no parsing. Nada chegava a ser
+ * gravado.
+ *
+ * CAUSA-RAIZ
+ *  - `server/routers/folhaPagamento.ts` L49 usava `require('pdf-parse')`
+ *    dentro de `extractTextFromPDF`. O servidor roda em ESM (`tsx watch
+ *    server/_core/index.ts`, package.json `"type":"module"`), então
+ *    `require` simplesmente não existe no escopo — `ReferenceError`.
+ *  - O erro existia desde a 1ª importação (não é regressão da 2517 —
+ *    era latente; a 2517 só restaurou o BOTÃO que dispara o fluxo).
+ *
+ * MUDANÇA (1 hunk, `server/routers/folhaPagamento.ts` L51-59)
+ *  - Trocado `const pdfParse = require('pdf-parse')` por dynamic import
+ *    ESM-safe:
+ *      `const mod: any = await import("pdf-parse");`
+ *      `const pdfParse = mod?.default || mod;`
+ *  - `pdf-parse` é CommonJS, então o namespace ESM expõe o módulo em
+ *    `.default`; fallback `|| mod` cobre eventual mudança pra ESM puro
+ *    em versão futura.
+ *
+ * ARQUIVOS TOCADOS
+ *  - `server/routers/folhaPagamento.ts` (L51-59, +4 linhas net).
+ *  - `shared/version.ts` (2518 → 2519).
+ *  - `shared/changelog.ts` (esta entrada).
+ *  - `replit.md` (rotação 2+5: 2519+2518 detalhadas; 2517 vira
+ *    one-liner; 2512 desce pra `replit-history.md`).
+ *
+ * VALIDAÇÃO ESPERADA
+ *  - Servidor reinicia sem `require is not defined` no boot.
+ *  - Reimportar o PDF analítico/sintético no card "Conferência com
+ *    Contabilidade" → mutation `folha.importarFolhaAuto` completa sem
+ *    erro; KPIs Funcionários(Folha) + Divergências passam de "—" pra
+ *    números reais; pílulas Analítico/Sintético acendem.
+ *
+ * REGRAS DE OURO RESPEITADAS
+ *  - Zero ALTER/DROP/DELETE. Edit single-file. Sem mudança de
+ *    contrato/tipos.
+ *
+ * ─────────────────────────────────────────────────────────────────────────
+ *
  * Rev. 2518 — **EQUIPAMENTOS LOCADOS · RENOMEAR LOCADORA em lote
  * direto do chip de filtro (pílula com ícone Pencil). Bulk UPDATE
  * server-side case-insensitive em todas as unidades cujo

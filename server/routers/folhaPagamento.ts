@@ -46,7 +46,11 @@ function normalizeNome(nome: string): string {
 }
 
 async function extractTextFromPDF(buffer: Buffer): Promise<string> {
-  const pdfParse = require('pdf-parse');
+  // Rev. 2519 — fix "require is not defined": o servidor roda em ESM
+  // (tsx watch), então `require` não existe. Trocado por dynamic
+  // import. `pdf-parse` é CommonJS, vem em `.default` no namespace ESM.
+  const mod: any = await import("pdf-parse");
+  const pdfParse = mod?.default || mod;
   const data = await pdfParse(buffer);
   return data.text;
 }
