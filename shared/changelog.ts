@@ -1,6 +1,62 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2522 — **FOLHA DE PAGAMENTO · PARSER SINTÉTICO COM REGEX
+ * FALLBACK PERMISSIVO (resolve "0 funcionários processados").**
+ *
+ * USER (screenshot do toast preto "0 funcionários processados | 0
+ * vinculados — Arquivos: Sintético (Lista): 0, Sintético (Lista):
+ * 0"): "está dando erro, a IA não está fazendo a análise".
+ *
+ * CAUSA-RAIZ
+ *  - Os 2 regex existentes em `parseSinteticoPDF` exigiam separadores
+ *    rígidos: `matchNew` precisa de `\t` entre NOME e CÓDIGO;
+ *    `matchOld` exige `\s{2,}` (2+ espaços) entre todas as colunas.
+ *  - `pdf-parse@1.1.1` em vários layouts de PDF gerado pela
+ *    contabilidade colapsa o whitespace pra UM espaço — nenhum dos 2
+ *    regex bate e o parser devolve `[]`.
+ *
+ * MUDANÇA (1 arquivo: `server/routers/folhaPagamento.ts` L353-374,
+ *  +22 linhas, dentro do `parseSinteticoPDF`)
+ *  - **3ª tentativa `matchFlex` (fallback)**, executada só se
+ *    `matchNew` e `matchOld` falharem:
+ *      `/^(.+?)\s+(\d{2}\/\d{2}\/\d{4})\s+(.+?)\s+([\d.]*\d,\d{2})\s*_*\s*$/`
+ *    Ancora em DOIS marcadores inconfundíveis de linha de
+ *    funcionário: **data dd/mm/yyyy** + **valor monetário BR** (com
+ *    `,XX` final obrigatório). Aceita qualquer whitespace entre os
+ *    campos.
+ *  - Extração de `codigo` é tentada nas DUAS posições do prefixo
+ *    `head`:
+ *      • `codFirst` — código no INÍCIO (formato antigo "123 NOME");
+ *      • `codLast` — código no FIM (formato novo "NOME 123").
+ *    Se nenhum bate, pula a linha.
+ *  - **Sanity check**: `nome` precisa ter pelo menos 2 palavras alfa
+ *    contíguas (`\w+\s+\w+`) — evita falso-positivo em linhas de
+ *    totais/rodapé que casualmente tenham data+valor.
+ *  - `funcao` e `nome` passam por `replace(/\s+/g, " ")` pra
+ *    normalizar whitespace colapsado.
+ *
+ * NÃO REGRESSÃO
+ *  - Os 2 regex anteriores (`matchNew`/`matchOld`) ficaram intactos
+ *    em primeira posição — layouts que já funcionavam continuam
+ *    igual, fallback só roda quando necessário.
+ *  - Log diagnóstico da Rev. 2520 **permanece ativo**: se até o
+ *    fallback falhar em algum PDF, ainda capturamos as primeiras 60
+ *    linhas no log do servidor pra investigar.
+ *  - `parseAnaliticoPDF` não foi tocado (problema reportado é só com
+ *    o sintético).
+ *  - Zero ALTER/DROP/DELETE.
+ *
+ * ARQUIVOS TOCADOS
+ *  - `server/routers/folhaPagamento.ts` (+22 / -0 em
+ *    `parseSinteticoPDF`).
+ *  - `shared/version.ts` (2521 → 2522).
+ *  - `shared/changelog.ts` (esta entrada).
+ *  - `replit.md` (rotação 2+5: 2522+2521 detalhadas; 2520 vira
+ *    one-liner; 2515 desce pra `replit-history.md`).
+ *
+ * ─────────────────────────────────────────────────────────────────────────
+ *
  * Rev. 2521 — **FOLHA DE PAGAMENTO · BARRA DE PROGRESSO 0→100% no
  * import do PDF da contabilidade (substitui o spinner "Processando
  * PDFs…").**

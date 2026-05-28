@@ -2,6 +2,7 @@
 
 > Este arquivo guarda os one-liners das revisões antigas para manter o `replit.md` enxuto.
 
+- **Rev. 2515** — EQUIPAMENTOS PRÓPRIOS — Lightbox ao clicar na foto do card (overlay z-[60] com setas + Esc/←/→ + contador) + bloco FOTOS movido pra fora do collapse "Mais detalhes" e sem gating `{editingId}` (sempre visível em criar e editar). `client/src/pages/equipamentos/Proprios.tsx`. Ver `shared/changelog.ts`.
 - **Rev. 2514** — EQUIPAMENTOS PRÓPRIOS — Rastreabilidade: card e modal informam OBRA + criador (`criadoPorUserId`/`criadoPorNome` via ADD COLUMN IF NOT EXISTS + LEFT JOIN em obras multi-tenant). `server/routers/equipamentos.ts` + `client/src/pages/equipamentos/Proprios.tsx`. Ver `shared/changelog.ts`.
 - **Rev. 2513** — EQUIPAMENTOS PRÓPRIOS — Padronização MAIÚSCULA em todos os textos + código de patrimônio AUTO-GERADO server-side com UNIQUE constraint + retry de 8 tentativas em PG 23505 (anti-race entre dispositivos). `server/routers/equipamentos.ts` (helpers `upperBR` + `proximoCodigoPatrimonio`) + `client/src/pages/equipamentos/Proprios.tsx`. Ver `shared/changelog.ts`.
 - **Rev. 2512** — EQUIPAMENTOS PRÓPRIOS — Modal redesenhado em 2 colunas (cabe sem scroll) + cadastro de NOVAS categorias (localStorage por company) + seletor de STATUS no modal de edição. `client/src/pages/equipamentos/Proprios.tsx`. Ver `shared/changelog.ts`.

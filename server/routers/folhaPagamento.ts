@@ -346,6 +346,29 @@ function parseSinteticoPDF(text: string): Array<{
       });
       continue;
     }
+
+    // Rev. 2522 — FALLBACK PERMISSIVO: ancora em DD/MM/YYYY + valor monetário BR (X,XX) no fim.
+    // Aceita qualquer whitespace (1+ espaço/tab) — cobre layouts onde pdf-parse v1 collapsa
+    // whitespace e quebra os regex matchNew/matchOld. Código pode vir no INÍCIO (formato antigo)
+    // ou no FIM do prefixo (formato novo "NOME\tCODIGO").
+    const matchFlex = trimmed.match(/^(.+?)\s+(\d{2}\/\d{2}\/\d{4})\s+(.+?)\s+([\d.]*\d,\d{2})\s*_*\s*$/);
+    if (matchFlex) {
+      const head = matchFlex[1].replace(/\s+/g, " ").trim();
+      const dataAdmissao = matchFlex[2];
+      const funcao = matchFlex[3].replace(/\s+/g, " ").trim();
+      const liquido = matchFlex[4];
+      // Tenta código no início: "123 NOME COMPLETO"
+      let codigo = "", nome = "";
+      const codFirst = head.match(/^(\d{1,5})\s+(.+)$/);
+      const codLast = head.match(/^(.+?)\s+(\d{1,5})$/);
+      if (codFirst) { codigo = codFirst[1]; nome = codFirst[2]; }
+      else if (codLast) { codigo = codLast[2]; nome = codLast[1]; }
+      else { continue; } // sem código identificável, pula
+      // Sanity: nome precisa ter pelo menos 2 palavras alfa (evita capturar linha de cabeçalho/total)
+      if (!/[A-ZÁÉÍÓÚÂÊÔÃÕÇÑa-záéíóúâêôãõçñ]{2,}\s+[A-ZÁÉÍÓÚÂÊÔÃÕÇÑa-záéíóúâêôãõçñ]/.test(nome)) continue;
+      results.push({ codigo, nome, dataAdmissao, funcao, liquido });
+      continue;
+    }
   }
 
   return results;
