@@ -2,6 +2,7 @@
 
 > Este arquivo guarda os one-liners das revisões antigas para manter o `replit.md` enxuto.
 
+- **Rev. 2522** — FOLHA DE PAGAMENTO — Parser sintético com regex fallback permissivo `matchFlex` (ancora em data dd/mm/yyyy + valor BR `,XX`); resolve "0 funcionários processados" quando `pdf-parse@1.1.1` colapsa whitespace. `server/routers/folhaPagamento.ts` L353-374. Substituído pela 2523 com matchGlued. Ver `shared/changelog.ts`.
 - **Rev. 2521** — FOLHA DE PAGAMENTO — Barra de progresso 0→100% no import de PDFs da contabilidade (substitui spinner "Processando PDFs…"). Progresso CLIENTE estimado (sem SSE/WS), curva assintótica até 90% via interval 250ms, snap 100/0 no onSuccess/onError. `client/src/pages/FolhaPagamento.tsx` L371-403 + L7121 + L7198. Ver `shared/changelog.ts`.
 - **Rev. 2520** — FOLHA DE PAGAMENTO — Log diagnóstico no import do PDF quando parser devolve 0 registros (gated em `parsed.length===0`, loga primeiras 60 linhas com `JSON.stringify`). `server/routers/folhaPagamento.ts` L878-897. Mantido ativo após Rev. 2522 como rede de segurança. Ver `shared/changelog.ts`.
 - **Rev. 2519** — FOLHA DE PAGAMENTO — Hotfix `require is not defined` no parser do PDF da contabilidade (Rev. 2517 reintroduziu o botão, mas `require('pdf-parse')` quebrava em ESM). Trocado por `await import("pdf-parse")` com fallback `.default || mod`. `server/routers/folhaPagamento.ts` L51-59. Ver `shared/changelog.ts`.

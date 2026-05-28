@@ -562,6 +562,7 @@ export const homeDataRouter = router({
             nome: e.nomeCompleto,
             funcao: e.funcao,
             empStatus: e.status,
+            fotoUrl: e.fotoUrl || null, // Rev. 2529 — foto pra avatar no card
             tipo,
             inicio,
             fim1: fim1Str,

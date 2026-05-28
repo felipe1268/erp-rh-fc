@@ -1,6 +1,38 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2529 — **PAINEL RH · CONTRATOS DE EXPERIÊNCIA: AVATAR DO
+ * FUNCIONÁRIO À ESQUERDA DE CADA LINHA.**
+ *
+ * MOTIVAÇÃO (user em 28/05/2026, com print do card "Contratos de
+ * Experiência" mostrando JAMES / WILLIANS / LILIAN sem foto):
+ *   "Quero ver a foto aqui de cada funcionário."
+ *
+ * MUDANÇA
+ *   - Server `server/routers/homeData.ts` (~L560): adicionado
+ *     `fotoUrl: e.fotoUrl || null` ao retorno de cada item de
+ *     `experiencias` (já tem o campo no schema `employees.fotoUrl`,
+ *     mesma fonte usada por aniversariantes / férias / etc).
+ *   - Client `client/src/pages/PainelRH.tsx` (~L242): row agora começa
+ *     com `<PersonPhoto src={exp.fotoUrl} alt={exp.nome} size="sm" />`
+ *     em wrapper `shrink-0`. Container do nome/badges movido pra
+ *     dentro de novo flex `gap-3` pra alinhar verticalmente o avatar
+ *     com o bloco de texto. Tipo do contrato (30+30/45+45) e datas
+ *     ficam abaixo, sem alteração.
+ *
+ * Padrão `PersonPhoto` é o mesmo já usado nos cards de
+ * Aniversariantes (L446), Férias (L483, L500) e Funcionários no
+ * acordeon (L374) — fallback de iniciais quando `fotoUrl` é nulo.
+ *
+ * ARQUIVOS
+ *  - `server/routers/homeData.ts` (~L560 — +fotoUrl no return).
+ *  - `client/src/pages/PainelRH.tsx` (~L242-254 — avatar + wrapper).
+ *  - `shared/version.ts` 2529.
+ *
+ * Zero ALTER/DROP/DELETE. Zero migração.
+ *
+ * — Rev. 2528 (anterior) abaixo —
+ *
  * Rev. 2528 — **PAINEL RH · ANIVERSARIANTES: SÓ ATIVOS (remove
  * Afastado/Recluso/Férias/Lista Negra das duas listas).**
  *

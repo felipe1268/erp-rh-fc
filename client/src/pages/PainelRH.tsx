@@ -240,7 +240,11 @@ export default function PainelRH() {
                         const urgTextColors: Record<string, string> = { vencido: 'text-red-700 font-bold', urgente: 'text-orange-700 font-bold', atencao: 'text-yellow-700 font-semibold', normal: 'text-muted-foreground' };
                         return (
                           <div key={exp.id} className={`flex flex-col sm:flex-row sm:items-center justify-between px-3 py-2.5 rounded-lg border ${urgColors[exp.urgencia] || urgColors.normal} gap-2`}>
-                            <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-3 flex-1 min-w-0">
+                              <div className="shrink-0">
+                                <PersonPhoto src={exp.fotoUrl} alt={exp.nome} size="sm" />
+                              </div>
+                              <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2 flex-wrap">
                                 <span className="text-sm font-semibold">{exp.nome}</span>
                                 <EmpStatusBadge status={exp.empStatus} />
@@ -251,6 +255,7 @@ export default function PainelRH() {
                               </div>
                               <div className="text-[10px] text-muted-foreground mt-0.5">
                                 {exp.tipo === '30_30' ? '30+30' : '45+45'} dias · Início: {new Date(exp.inicio + 'T12:00:00').toLocaleDateString('pt-BR')} · Fim 1º: {new Date(exp.fim1 + 'T12:00:00').toLocaleDateString('pt-BR')} · Fim 2º: {new Date(exp.fim2 + 'T12:00:00').toLocaleDateString('pt-BR')}
+                              </div>
                               </div>
                             </div>
                             <div className="flex items-center gap-2 shrink-0">
