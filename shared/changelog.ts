@@ -1,6 +1,111 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2518 — **EQUIPAMENTOS LOCADOS · RENOMEAR LOCADORA em lote
+ * direto do chip de filtro (pílula com ícone Pencil). Bulk UPDATE
+ * server-side case-insensitive em todas as unidades cujo
+ * `fornecedorNome` bate com o nome atual.**
+ *
+ * PEDIDO (user, 28/05/2026, screenshot do dropdown "Todas as locadoras"
+ * mostrando 5 fornecedores incluindo "Minas Locc" — claro typo):
+ *  - "quero poder trocar o nome do fornecedor, quando tiver cadastro
+ *     errado".
+ *
+ * CONTEXTO
+ *  - O dropdown de locadoras (Rev. 2408) agrupa por `UPPER(TRIM(nome))`,
+ *    então "Jalves", "JALVES" e "jalves locações" já apareciam como UMA
+ *    única locadora no filtro — porém o nome PERSISTIDO em cada
+ *    `equipamentos_locados.fornecedor_nome` continuava variado. A IA do
+ *    parser de OC (Rev. 2337+) às vezes interpreta "Minas Locc" em vez
+ *    de "MINAS LOCAÇÕES LTDA"; o import via XML/Excel também produz
+ *    capitalizações inconsistentes. Antes, corrigir exigia editar
+ *    unidade por unidade ou rodar SQL direto no Neon (proibido por
+ *    R-001/R-007).
+ *
+ * MUDANÇA — SERVER (`server/routers/equipamentos.ts` ~L853-928)
+ *  - Nova procedure `locadosRenomearFornecedor`:
+ *    input `{ companyId, nomeAtual: string(1-255), nomeNovo: string(1-255) }`.
+ *    Tenant-isolation via `getCompaniesForUser` (mesmo padrão de
+ *    `locadosVincularObraLote`).
+ *  - **Access control por OBRA (fix code-review):** aplica
+ *    `getEffectiveAllowedObraIds` no WHERE — admin/admin_master =>
+ *    allowed===null => sem restrição; users restritos só renomeiam
+ *    unidades cujo `obraId IN allowed`. Sem isso, encarregado de obra A
+ *    poderia renomear linhas de obra B da mesma empresa (escalada
+ *    horizontal). Mesma regra de `locadosListar` (L491-507) e
+ *    `locadoDevolverEmLote` (L1039+L1057).
+ *  - Match com `UPPER(TRIM(fornecedor_nome)) = nomeAtual.toUpperCase()`
+ *    pra pegar TODAS as variantes de capitalização. UPDATE bulk
+ *    + `updatedAt: sql\`now()\``. Curto-circuito `{semMudanca: true}`
+ *    se nomeNovo (UPPER) === nomeAtual (UPPER) — evita query inútil.
+ *  - **Sync ALMOXARIFADO (fix code-review):** após o UPDATE, roda
+ *    `UPDATE almoxarifado_itens SET fornecedor_locacao = novo` filtrando
+ *    `equipamento_vinculado_tipo='locado'` + `equipamento_vinculado_id =
+ *    ANY(updated.ids)`. Sem isso, telas e relatórios do almox continuam
+ *    mostrando o nome ANTIGO enquanto o cadastro de equipamentos já
+ *    mudou (desincronia detectada pelo architect). Não-bloqueante
+ *    (catch interno + log); retorna `almoxAtualizados` no payload.
+ *  - Histórico de `equipamento_locado_eventos` PRESERVADO — não cria
+ *    evento (rename é correção administrativa, não evento operacional;
+ *    poluiria a timeline).
+ *
+ * MUDANÇA — CLIENT (`client/src/pages/equipamentos/Locados.tsx`)
+ *  (1) **State** — `renomearForn: { nomeAtual, count, valorMes,
+ *      nomeNovo } | null` + `renomearFornMut`. `onSuccess` mostra
+ *      contagem REAL retornada pelo servidor (`r.atualizados` — pode
+ *      diferir do preview do modal pq o servidor escopa por obra) +
+ *      `r.almoxAtualizados` quando > 0 (transparência da sync) +
+ *      `invalidate()` + atualiza `filtroFornecedor` pro novo nome
+ *      UPPER pra continuar filtrando no que renomeou. `onError` toast.
+ *  (2) **Trigger** — pílula com ícone `Pencil` âmbar inserida DENTRO
+ *      do chip de "filtro ativo de locadora" (já existia desde Rev.
+ *      2408), à ESQUERDA do X de remover filtro. Só aparece quando
+ *      `fornecedorSelecionado.key !== "__null__"` (não faz sentido
+ *      renomear "Sem locadora"). Click abre o modal com nome atual
+ *      pré-preenchido pro user só editar.
+ *  (3) **Modal** — fixed inset z-[60], card âmbar (Truck icon),
+ *      bloco slate com "Nome atual" + "Unidades afetadas (N unid. ·
+ *      R$ X/mês)", input do novo nome (autoFocus, maxLength 255,
+ *      Enter = submit), aviso âmbar "substitui em todas as N
+ *      unidade(s), qualquer variação de maiúscula/minúscula —
+ *      histórico de eventos preservado". Footer: Cancelar (slate) +
+ *      Renomear (âmbar com `Loader2` enquanto pending). Botão
+ *      Renomear desabilita se vazio OU se nomeNovo (UPPER) === nome
+ *      atual (UPPER). Backdrop fecha (exceto enquanto pending). Aviso
+ *      âmbar reformulado pra deixar claro: "dentro do seu escopo de
+ *      obras autorizadas" + "preview reflete os filtros atuais — a
+ *      contagem final virá no aviso de sucesso" + "almoxarifado é
+ *      sincronizado automaticamente".
+ *
+ * REGRAS DE OURO RESPEITADAS
+ *  - **Zero ALTER/DROP/DELETE** — só UPDATE numa coluna existente.
+ *  - **Multi-tenant** — `getCompaniesForUser` no servidor.
+ *  - **Idempotência** — case-insensitive match impede que rodar 2×
+ *    seguidas duplique trabalho; 2ª chamada → `semMudanca: true`.
+ *
+ * ARQUIVOS TOCADOS
+ *  - `server/routers/equipamentos.ts` (+38 linhas, L853-889).
+ *  - `client/src/pages/equipamentos/Locados.tsx` (+12 linhas no state
+ *    L226-237, +16 linhas no chip L1911-1927, +63 linhas no modal
+ *    L2418-2480).
+ *  - `shared/version.ts` (2517 → 2518).
+ *  - `shared/changelog.ts` (esta entrada no topo).
+ *  - `replit.md` (rotação 2+5: 2518+2517 detalhadas; 2516 vira
+ *    one-liner; 2511 desce pra `replit-history.md`).
+ *
+ * VALIDAÇÃO MANUAL ESPERADA
+ *  - Abrir /equipamentos/locados, selecionar locadora "Minas Locc"
+ *    (1 unid. R$ 249,00/mês do screenshot do user).
+ *  - Chip âmbar mostra pílula Pencil ao lado do X de fechar filtro.
+ *  - Click no Pencil abre modal; input pré-preenchido com "Minas Locc".
+ *  - Editar pra "MINAS LOCAÇÕES LTDA" + Enter (ou botão Renomear).
+ *  - Toast verde "Locadora renomeada em 1 unidade(s)"; lista refaz
+ *    fetch; filtro pula pro novo nome automaticamente.
+ *  - Reabrir dropdown: "Minas Locc" desapareceu; "MINAS LOCAÇÕES LTDA"
+ *    aparece no lugar com mesmas N unidades.
+ *
+ * ─────────────────────────────────────────────────────────────────────────
+ *
  * Rev. 2517 — **FOLHA DE PAGAMENTO · CONFERÊNCIA COM CONTABILIDADE
  * RESTAURADA — bloco de UI removido na Rev. 2194 reintegrado a pedido do
  * usuário com 3 relatórios de inconsistências detalhadas (Verificação

@@ -847,6 +847,82 @@ export const equipamentosRouter = router({
       return { ok: true as const, vinculados: total };
     }),
 
+  // Rev. 2518 — Renomear locadora (fornecedor) em lote.
+  // Sobrescreve `fornecedorNome` em TODAS as unidades da empresa cujo
+  // nome atual (uppercase + trim) bate com `nomeAtual`. Pedido user:
+  // "quero poder trocar o nome do fornecedor, quando tiver cadastro
+  // errado". Útil quando a IA / import gerou variações erradas
+  // ("Minas Locc" → "MINAS LOCAÇÕES LTDA") ou typos.
+  //
+  // Segurança (code review Rev. 2518): aplica `getEffectiveAllowedObraIds`
+  // — usuários restritos a obras só renomeiam unidades dentro do seu
+  // escopo (mesmo padrão de `locadoDevolverEmLote` L1039). Match
+  // case-insensitive na coluna pra pegar todas as variantes ("Jalves",
+  // "JALVES", "jalves" → todas viram o novoNome).
+  //
+  // Sincronização (code review Rev. 2518): após o UPDATE em
+  // `equipamentos_locados`, sincroniza `almoxarifado_itens.fornecedor_locacao`
+  // dos itens vinculados (equipamento_vinculado_tipo='locado' +
+  // equipamento_vinculado_id IN ids) — evita desincronia entre o
+  // cadastro de equipamentos e a tela do almoxarifado.
+  locadosRenomearFornecedor: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      nomeAtual: z.string().min(1).max(255),
+      nomeNovo: z.string().min(1).max(255),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const allowedCompanies = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+      const allowedCompanyIds = (allowedCompanies as any[]).map(c => c.id);
+      if (!allowedCompanyIds.includes(input.companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta empresa." });
+      }
+      const alvo = input.nomeAtual.trim().toUpperCase();
+      const novo = input.nomeNovo.trim();
+      if (!novo) throw new TRPCError({ code: "BAD_REQUEST", message: "Novo nome vazio." });
+      if (alvo === novo.toUpperCase()) {
+        return { ok: true as const, atualizados: 0, semMudanca: true };
+      }
+      // Filtro por obra autorizada — admin/admin_master => allowed === null
+      // => sem restrição. Restritos: só obras permitidas. Sem obra
+      // (obraId IS NULL) fica oculto pra restritos (mesma regra de
+      // `locadosListar` L491-507 e `locadoDevolverEmLote` L1057).
+      const allowed = await getEffectiveAllowedObraIds(ctx.user.id, ctx.user.role);
+      const where: any[] = [
+        eq(equipamentosLocados.companyId, input.companyId),
+        sql`UPPER(TRIM(${equipamentosLocados.fornecedorNome})) = ${alvo}`,
+      ];
+      if (allowed !== null) {
+        if (allowed.length === 0) return { ok: true as const, atualizados: 0 };
+        where.push(inArray(equipamentosLocados.obraId, allowed));
+      }
+      const updated = await db.update(equipamentosLocados)
+        .set({ fornecedorNome: novo, updatedAt: sql`now()` })
+        .where(and(...where))
+        .returning({ id: equipamentosLocados.id });
+      // Sincroniza almox vinculado (fornecedor_locacao) — só pra IDs
+      // efetivamente atualizados. Não-bloqueante (catch interno).
+      let almoxAtualizados = 0;
+      if (updated.length > 0) {
+        try {
+          const r: any = await db.execute(sql`
+            UPDATE almoxarifado_itens
+               SET fornecedor_locacao = ${novo}, atualizado_em = NOW()
+             WHERE company_id = ${input.companyId}
+               AND equipamento_vinculado_tipo = 'locado'
+               AND equipamento_vinculado_id = ANY(${updated.map(u => u.id)}::int[])
+            RETURNING id
+          `);
+          almoxAtualizados = r?.rows?.length ?? 0;
+        } catch (e: any) {
+          console.error("[locadosRenomearFornecedor] sync almox falhou:", e?.message || e);
+        }
+      }
+      return { ok: true as const, atualizados: updated.length, almoxAtualizados };
+    }),
+
   locadosExcluirLote: protectedProcedure
     .input(z.object({
       companyId: z.number(),

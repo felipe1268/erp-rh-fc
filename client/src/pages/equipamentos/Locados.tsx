@@ -220,6 +220,26 @@ export default function EquipamentosLocados() {
   // indicar a obra que ele ta cadastrada").
   const [editandoObraGrupo, setEditandoObraGrupo] = useState(false);
   const [novaObraGrupo, setNovaObraGrupo] = useState<string>(""); // "" | "__null__" | "<id>"
+  // Rev. 2518 — renomear locadora (fornecedor) em lote. Pedido user:
+  // "quero poder trocar o nome do fornecedor, quando tiver cadastro errado".
+  const [renomearForn, setRenomearForn] = useState<null | { nomeAtual: string; count: number; valorMes: number; nomeNovo: string }>(null);
+  const renomearFornMut = trpc.equipamentos.locadosRenomearFornecedor.useMutation({
+    onSuccess: (r: any) => {
+      // Mensagem usa a contagem REAL retornada pelo servidor (pode diferir
+      // do preview do modal, pois o servidor escopa por obra autorizada).
+      // Mostra almoxAtualizados quando > 0 pra transparência da sync.
+      if (r.semMudanca) toast.success("Nome inalterado.");
+      else if (r.atualizados === 0) toast("Nenhuma unidade renomeada (sem acesso ou sem match).");
+      else toast.success(
+        `Locadora renomeada em ${r.atualizados} unidade(s)` +
+        (r.almoxAtualizados > 0 ? ` + ${r.almoxAtualizados} item(ns) no almox.` : "."),
+      );
+      utils.equipamentos.locadosListar.invalidate();
+      if (renomearForn) setFiltroFornecedor(renomearForn.nomeNovo.trim().toUpperCase());
+      setRenomearForn(null);
+    },
+    onError: (e) => toast.error(formatTrpcError(e)),
+  });
   const eventos = trpc.equipamentos.eventosListar.useQuery(
     { companyId, equipamentoLocadoId: modalEventos?.id || 0 },
     { enabled: !!modalEventos }
@@ -1893,6 +1913,23 @@ export default function EquipamentosLocados() {
                   <Truck className="h-3 w-3" />
                   <span className="max-w-[200px] truncate" title={fornecedorSelecionado.nome}>{fornecedorSelecionado.nome}</span>
                   <span className="text-amber-600 font-bold">· {fmtN(fornecedorSelecionado.count)}</span>
+                  {/* Rev. 2518 — pílula "Renomear" pra corrigir o nome do
+                      fornecedor em lote (sobrescreve em todas as N unidades).
+                      Só aparece se a locadora não for "__null__" (sem locadora). */}
+                  {fornecedorSelecionado.key !== "__null__" && (
+                    <button
+                      onClick={() => setRenomearForn({
+                        nomeAtual: fornecedorSelecionado.nome,
+                        count: fornecedorSelecionado.count,
+                        valorMes: fornecedorSelecionado.valorMes,
+                        nomeNovo: fornecedorSelecionado.nome,
+                      })}
+                      className="ml-1 bg-amber-200/70 hover:bg-amber-300 rounded-full p-0.5"
+                      title="Renomear locadora em todas as unidades"
+                    >
+                      <Pencil className="h-3 w-3" />
+                    </button>
+                  )}
                   <button onClick={() => setFiltroFornecedor("")} className="ml-1 bg-amber-200/70 hover:bg-amber-300 rounded-full p-0.5" title="Remover filtro de locadora">
                     <X className="h-3 w-3" />
                   </button>
@@ -2378,6 +2415,72 @@ export default function EquipamentosLocados() {
             <div className="px-6 py-3 bg-slate-50 border-t border-slate-200 flex items-center justify-between text-xs text-slate-600 flex-shrink-0">
               <div>{fmtN(modalGrupo.unidades.length)} unidade(s) · {fmtMoney(modalGrupo.valorMensalTotal)}/mês total</div>
               <button onClick={() => setModalGrupo(null)} className="px-3 py-1.5 rounded-md bg-slate-200 hover:bg-slate-300 text-slate-700 font-medium transition">Fechar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Rev. 2518 — Modal de renomear LOCADORA (bulk update do fornecedorNome
+          em todas as unidades cujo nome bate, case-insensitive). */}
+      {renomearForn && (
+        <div className="fixed inset-0 z-[60] bg-black/50 flex items-center justify-center p-4" onClick={() => !renomearFornMut.isPending && setRenomearForn(null)}>
+          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="bg-amber-50 border-b-2 border-amber-200 px-5 py-4 flex items-center gap-3">
+              <div className="h-10 w-10 rounded-full bg-amber-100 flex items-center justify-center flex-shrink-0">
+                <Truck className="h-5 w-5 text-amber-700" />
+              </div>
+              <div className="min-w-0">
+                <h3 className="font-bold text-amber-900">Renomear locadora</h3>
+                <p className="text-xs text-amber-700">Corrige o nome do fornecedor em todas as unidades.</p>
+              </div>
+            </div>
+            <div className="px-5 py-4 space-y-3">
+              <div className="bg-slate-50 border border-slate-200 rounded-md p-3 text-xs space-y-1">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-slate-500">Nome atual:</span>
+                  <span className="font-semibold text-slate-800 truncate" title={renomearForn.nomeAtual}>{renomearForn.nomeAtual}</span>
+                </div>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-slate-500">Unidades afetadas:</span>
+                  <span className="font-bold text-amber-700">{fmtN(renomearForn.count)} unid.{renomearForn.valorMes > 0 ? ` · ${fmtMoney(renomearForn.valorMes)}/mês` : ""}</span>
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Novo nome do fornecedor</label>
+                <input
+                  type="text"
+                  autoFocus
+                  value={renomearForn.nomeNovo}
+                  maxLength={255}
+                  onChange={e => setRenomearForn(s => s ? { ...s, nomeNovo: e.target.value } : s)}
+                  onKeyDown={e => {
+                    if (e.key === "Enter" && renomearForn.nomeNovo.trim() && !renomearFornMut.isPending) {
+                      renomearFornMut.mutate({ companyId, nomeAtual: renomearForn.nomeAtual, nomeNovo: renomearForn.nomeNovo.trim() });
+                    }
+                  }}
+                  placeholder="Ex: JALVES LOCAÇÕES LTDA"
+                  className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-2 focus:ring-amber-500/30 outline-none"
+                />
+              </div>
+              <div className="bg-amber-50 border border-amber-200 rounded-md p-3 text-[11px] text-amber-900 leading-snug">
+                <strong>ℹ Atenção:</strong> o novo nome substitui o atual em todas as unidades dessa locadora <strong>dentro do seu escopo de obras autorizadas</strong> (qualquer variação de maiúscula/minúscula). O preview de <strong>{fmtN(renomearForn.count)} unid.</strong> reflete os filtros atuais — a contagem final virá no aviso de sucesso. O almoxarifado é sincronizado automaticamente. Histórico de eventos preservado.
+              </div>
+            </div>
+            <div className="px-5 py-3 bg-slate-50 border-t border-slate-200 flex items-center justify-end gap-2">
+              <button
+                onClick={() => setRenomearForn(null)}
+                disabled={renomearFornMut.isPending}
+                className="px-4 py-2 text-sm border border-slate-300 rounded-md text-slate-700 hover:bg-white disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => renomearForn && renomearFornMut.mutate({ companyId, nomeAtual: renomearForn.nomeAtual, nomeNovo: renomearForn.nomeNovo.trim() })}
+                disabled={renomearFornMut.isPending || !renomearForn.nomeNovo.trim() || renomearForn.nomeNovo.trim().toUpperCase() === renomearForn.nomeAtual.trim().toUpperCase()}
+                className="px-4 py-2 text-sm bg-amber-600 hover:bg-amber-700 text-white rounded-md font-semibold inline-flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {renomearFornMut.isPending ? <><Loader2 className="h-4 w-4 animate-spin" /> Renomeando…</> : <><Pencil className="h-4 w-4" /> Renomear</>}
+              </button>
             </div>
           </div>
         </div>
