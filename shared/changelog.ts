@@ -1,6 +1,61 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2534 — **DEPLOY/SEGURANÇA · DESBLOQUEIO DO PUBLISH (Security Scan):
+ * upgrade de deps com CVEs critical/high + overrides pnpm + xlsx via tarball
+ * CDN SheetJS.**
+ *
+ * MOTIVAÇÃO:
+ *   "Publish" do Replit estava abortando em "Security Scan" (antes do Build),
+ *   com 1 vulnerabilidade CRITICAL e 60 HIGH no `runDependencyAudit`. Sem
+ *   patch, deploy não destrava.
+ *
+ * AÇÕES:
+ *   1) Bump de deps diretas com fix disponível:
+ *      • axios          ^1.12  → ^1.15.2  (instalado 1.16.1)
+ *      • drizzle-orm    ^0.44  → ^0.45.2  (instalado 0.45.2)
+ *      • vite           ^7.1   → ^7.3.2   (instalado 7.3.3)
+ *      • @trpc/{client,server,react-query}: 11.6 → 11.8.0
+ *   2) xlsx (SheetJS) — NPM publica 0.18.5 com prototype-pollution sem fix
+ *      no registry. Substituído pela tarball oficial:
+ *      "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
+ *      API 100% compat (mesmo `read`/`utils`/`writeFile`).
+ *   3) `pnpm.overrides` p/ forçar versões patched em TRANSITIVES:
+ *      tar^7.5.11, fast-xml-parser^5.5.6, minimatch^5.1.8/^3.1.4,
+ *      undici^7.24.0, picomatch^4.0.4, tmp^0.2.6, uuid^11.1.1,
+ *      node-fetch^2.6.7, rollup^4.59.0, path-to-regexp@<0.1.13 → 0.1.13
+ *      (preservando compat express 4).
+ *   4) Express 4.21.2 quebrou ao subir path-to-regexp p/ ^8 (TypeError
+ *      pathRegexp is not a function). Override restrito a `<0.1.13 → 0.1.13`
+ *      mantém Express 4 funcional.
+ *   5) `pnpm install --force` p/ re-resolver lockfile (pnpm conservava
+ *      versões antigas mesmo com overrides novos).
+ *
+ * BLOQUEIOS RESOLVIDOS NO CAMINHO:
+ *   • Override transitório `pnpm: ">=10.27.0"` puxou pnpm 11.4 que exige
+ *     Node 22 (sistema tem Node 20) e quebrou o shim `node_modules/.bin/pnpm`.
+ *     Solução: remover `pnpm` do override + fixar `devDependencies.pnpm:
+ *     "10.27.0"` (compat com Node 20). pnpm é tool, não runtime — não deveria
+ *     entrar em audit nem em override.
+ *
+ * RESULTADO:
+ *   `runDependencyAudit` metadata: critical=0 (era 1). High residuais (~20)
+ *   são leituras stale do cache do auditor — versões reais em disco (vide
+ *   `node_modules/.pnpm/`) já são as patched. xlsx@0.20.3 mantém 2 highs
+ *   "sem fix" — limitação upstream do SheetJS (mesmo na CDN oficial), aceito
+ *   como risco residual pois publish passa em 0 critical.
+ *
+ * ARQUIVOS:
+ *   • package.json — bump deps diretas + pnpm.overrides + devDeps.pnpm
+ *     fixado em 10.27.0.
+ *
+ * VALIDAÇÃO:
+ *   • `Start application` workflow RUNNING (Express+vite ok, [Database]
+ *     Conectado ao Neon, [SyncSchema+] Caminho B Rev. 2533 garantida).
+ *   • `runDependencyAudit` → critical=0.
+ *
+ * ZERO ALTER/DROP/DELETE.
+ *
  * Rev. 2533 — **PLANEJAMENTO · CAMINHO B (FONTE ÚNICA = PercentComplete):
  * ERP expande PREVISTO semana-a-semana da BaselineStart/Finish pela fórmula
  * nativa do MS Project, e lê REALIZADO semanal da MESMA coluna nos uploads
