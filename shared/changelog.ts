@@ -1,6 +1,110 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2526 — **FOLHA DE PAGAMENTO · RELATÓRIO CONSOLIDADO 2.0:
+ * MULTI-FILTRO + SEVERIDADE + ORDENAÇÃO + IMPACTO R$ + EXPORT CSV
+ * + TABS "POR FUNCIONÁRIO" × "POR TIPO" (navegabilidade simples,
+ * análise rápida e certeira).**
+ *
+ * MOTIVAÇÃO (user em 28/05/2026, sobre a Rev. 2524):
+ *   "Melhore isso de forma que o usuário abra uma tela onde tem
+ *    TODAS as inconsistências classificadas por filtros para garantir
+ *    análise rápida e certeira… navegabilidade fica mais simples."
+ *
+ * GAPS DA REV. 2524 (versão original do consolidado)
+ *  - KPI clicável era TOGGLE ÚNICO (só 1 tipo por vez). RH precisa
+ *    combinar (ex: "ponto + descontos" sem ver cadastro).
+ *  - Não havia filtro de severidade — alta + média misturadas.
+ *  - Ordenação fixa (severidade desc). Sem opção "ordenar por
+ *    impacto R$" pra atacar o que mais sangra primeiro.
+ *  - Sem indicador de IMPACTO FINANCEIRO TOTAL (RH não conseguia
+ *    estimar quanto dinheiro está em risco numa olhada).
+ *  - Sem exportação CSV pra mandar pra contabilidade.
+ *  - Visão única "por funcionário" — quando o RH quer ver TODOS os
+ *    descontos CLT divergentes de uma vez (independente do
+ *    funcionário), tinha que abrir card por card.
+ *
+ * SOLUÇÃO (Rev. 2526)
+ *
+ *  1. **Multi-select de tipos nos KPIs** — clicar em "Ponto" + "HE"
+ *     filtra ambos (em vez de só um). Card "Funcionários" zera a
+ *     seleção. Cores ativas distintas por tipo (amber/purple/red/
+ *     orange/slate) pra feedback visual imediato.
+ *
+ *  2. **Filtro de severidade** — chip-group "Todas / Alta / Média"
+ *     no toolbar; alta = vermelho, média = âmbar.
+ *
+ *  3. **Ordenação configurável** (<select>): Severidade (default) /
+ *     Impacto R$ / Qtd divergências / Nome (asc).
+ *
+ *  4. **KPI dinâmico "Impacto R$"** — novo card emerald no fim da
+ *     grid. Soma os `impactoFinanceiro` das divergências filtradas:
+ *      - desconto CLT: abs(diferença) em R$
+ *      - HE não autorizada: horas × R$50/h (proxy de prioridade)
+ *      - HE folha-sem-ponto: contabValor em R$
+ *      - HE ponto-sem-folha: horas × R$50/h
+ *      - cadastro/ponto/nao_vinculado: 0 (não tem $ direto)
+ *     Disclaimer na legenda: é indicador de PRIORIDADE, não valor
+ *     exato a corrigir. RH usa pra decidir "qual atacar primeiro".
+ *
+ *  5. **Export CSV (UTF-8 BOM + ; separador)** — gera
+ *     `divergencias-folha-{mesAno}.csv` com colunas: Funcionário /
+ *     Código / Tipo / Severidade / Descrição / Folha / Sistema /
+ *     Diferença / Impacto R$. Respeita TODOS os filtros ativos.
+ *     Abre direto no Excel BR sem mexer em delimitador.
+ *
+ *  6. **Tabs "Por Funcionário" × "Por Tipo"** abaixo do toolbar
+ *     (border-bottom estilo tab):
+ *      - **Por Funcionário** (default, comportamento da 2524):
+ *        cards acordeon por colaborador, tabela interna de
+ *        divergências.
+ *      - **Por Tipo** (NOVA): agrupa TODAS as divergências por
+ *        categoria. Cada categoria vira um Card com header colorido
+ *        + total de impacto R$ no canto direito + tabela única
+ *        (Funcionário | Descrição | Folha | Sistema | Diferença).
+ *        Linhas de severidade alta com fundo `bg-red-50/30` pra
+ *        destaque. Ordenação interna: severidade desc, impacto desc.
+ *
+ *  7. **Contador "Mostrando X de Y funcionário(s)"** no canto
+ *     direito da barra de tabs — feedback explícito do escopo.
+ *
+ *  8. **Botão "Limpar"** (com ícone X) aparece SÓ quando há
+ *     filtros ativos (tipo/severidade/busca). Zera tudo em 1 click.
+ *
+ *  9. **Tabela interna do card respeita filtros** — quando user
+ *     filtra "Desconto CLT", expande um card e vê APENAS a linha de
+ *     desconto (em vez de todas as divergências do funcionário).
+ *     Badge "N divergência(s)" e badges de tipo no header também
+ *     refletem o subset visível.
+ *
+ * 10. **Badge de Impacto R$ no card** (verde emerald) quando o
+ *     funcionário tem impacto > 0, na mesma linha das badges de tipo.
+ *
+ * BACKEND INTOCADO — apenas reusa `verificacaoCruzada` +
+ * `comparativoDescontos` + `cruzamentoHE` (3 queries já existentes
+ * desde Rev. 2517+). Zero novo endpoint, zero schema, zero migration.
+ *
+ * RISCOS / ROLLBACK
+ *  - Zero ALTER/DROP/DELETE (R-001/R-007/R-010 OK).
+ *  - Proxy R$50/h pra HE não é universal (varia por salário/cargo).
+ *    Aceitável porque o KPI Impacto R$ é PRIORIZAÇÃO, não cálculo
+ *    contábil. Disclaimer explícito na legenda.
+ *  - PrintActions continua imprimindo o que está na tela (modo +
+ *    filtros atuais) — comportamento esperado, sem mudança.
+ *  - Os 3 sub-relatórios antigos (Verificação Cruzada, Comparativo
+ *    Descontos, Cruzamento HE) seguem 100% acessíveis pelo grid no
+ *    card "Conferência com Contabilidade" (preservado da 2524).
+ *
+ * ARQUIVOS
+ *  - `client/src/pages/FolhaPagamento.tsx` componente
+ *    `RelatorioConsolidadoView` (L8406-9100, ~700 linhas) reescrito.
+ *    State expandido de 3 pra 6 vars. `addDivergencia` ganha
+ *    `impactoFinanceiro`. Novo useMemo `porTipo`. Novos handlers:
+ *    `toggleTipo`, `limparFiltros`, `exportarCSV`. JSX dividido
+ *    em: Header (+ CSV button) · KPIs (7 cards) · Toolbar
+ *    (busca+sev+ordem+limpar+expand) · Tabs+contador · Conteúdo
+ *    (funcionário | tipo) · Legenda expandida.
+ *
  * Rev. 2525 — **FOLHA DE PAGAMENTO · IMPORT MULTI-PDF: ACUMULAR
  * REGISTROS DE TODOS OS ARQUIVOS ANEXADOS (bug — 2º PDF
  * sobrescrevia o 1º, processando só 1 mesmo com N anexos).**

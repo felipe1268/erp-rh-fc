@@ -8417,19 +8417,27 @@ function RelatorioConsolidadoView({ companyId, mesAno, lancamentoId, onBack }: {
     { enabled: companyId > 0 }
   );
 
-  const [filtroTipo, setFiltroTipo] = useState<"todos" | "cadastro" | "ponto" | "desconto" | "he" | "nao_vinculado">("todos");
+  type TipoDiv = "cadastro" | "ponto" | "desconto" | "he" | "nao_vinculado";
+  const TODOS_TIPOS: TipoDiv[] = ["nao_vinculado", "cadastro", "ponto", "desconto", "he"];
+
+  // Rev. 2526 — filtros multi + severidade + ordenação + modo visão
+  const [tiposSelecionados, setTiposSelecionados] = useState<Set<TipoDiv>>(new Set());
+  const [filtroSeveridade, setFiltroSeveridade] = useState<"todas" | "alta" | "media">("todas");
+  const [ordenarPor, setOrdenarPor] = useState<"severidade" | "impacto" | "qtd" | "nome">("severidade");
+  const [modoVisao, setModoVisao] = useState<"funcionario" | "tipo">("funcionario");
   const [search, setSearch] = useState("");
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
   const isLoading = verif.isLoading || descCLT.isLoading || heCruz.isLoading;
 
   type Divergencia = {
-    tipo: "cadastro" | "ponto" | "desconto" | "he" | "nao_vinculado";
+    tipo: TipoDiv;
     severidade: "alta" | "media" | "baixa";
     titulo: string;
     folha?: string;
     sistema?: string;
     diferenca?: string;
+    impactoFinanceiro?: number; // R$ pra ranking/soma (HE em horas é convertido a ~R$50/h proxy)
   };
 
   type LinhaConsolidada = {
@@ -8530,6 +8538,7 @@ function RelatorioConsolidadoView({ companyId, mesAno, lancamentoId, onBack }: {
           sistema: `R$ ${Number(c.sistemaTotal || 0).toFixed(2)}`,
           folha: `R$ ${Number(c.contabTotal || 0).toFixed(2)}`,
           diferenca: `R$ ${Number(c.diferenca || 0).toFixed(2)}`,
+          impactoFinanceiro: Math.abs(Number(c.diferenca || 0)),
         });
       }
     }
@@ -8556,6 +8565,7 @@ function RelatorioConsolidadoView({ companyId, mesAno, lancamentoId, onBack }: {
             sistema: `${sistemaH.toFixed(1)}h registradas`,
             folha: `${aprovadoH.toFixed(1)}h aprovadas`,
             diferenca: `${naoAutH.toFixed(1)}h sem aprovação`,
+            impactoFinanceiro: Math.round(naoAutH * 50), // proxy R$50/h
           });
         }
 
@@ -8568,6 +8578,7 @@ function RelatorioConsolidadoView({ companyId, mesAno, lancamentoId, onBack }: {
             sistema: "0h registradas",
             folha: `R$ ${contabValor.toFixed(2)} pagos`,
             diferenca: `R$ ${contabValor.toFixed(2)}`,
+            impactoFinanceiro: contabValor,
           });
         }
 
@@ -8580,6 +8591,7 @@ function RelatorioConsolidadoView({ companyId, mesAno, lancamentoId, onBack }: {
             sistema: `${sistemaH.toFixed(1)}h registradas`,
             folha: "R$ 0,00 pagos",
             diferenca: `${sistemaH.toFixed(1)}h a apurar`,
+            impactoFinanceiro: Math.round(sistemaH * 50),
           });
         }
       }
@@ -8611,14 +8623,116 @@ function RelatorioConsolidadoView({ companyId, mesAno, lancamentoId, onBack }: {
     return k;
   }, [linhas]);
 
+  const tipoLabel: Record<TipoDiv, { label: string; cls: string; icon: any; chipActive: string }> = {
+    cadastro: { label: "Cadastro", cls: "bg-amber-100 text-amber-800 border-amber-300", chipActive: "bg-amber-500 text-white border-amber-500", icon: User },
+    ponto: { label: "Ponto", cls: "bg-purple-100 text-purple-800 border-purple-300", chipActive: "bg-purple-600 text-white border-purple-600", icon: Clock },
+    desconto: { label: "Desconto CLT", cls: "bg-red-100 text-red-800 border-red-300", chipActive: "bg-red-600 text-white border-red-600", icon: Scale },
+    he: { label: "Hora Extra", cls: "bg-orange-100 text-orange-800 border-orange-300", chipActive: "bg-orange-600 text-white border-orange-600", icon: TrendingUp },
+    nao_vinculado: { label: "Não vinculado", cls: "bg-slate-200 text-slate-800 border-slate-300", chipActive: "bg-slate-700 text-white border-slate-700", icon: XCircle },
+  };
+
+  // Rev. 2526 (revisão pós-architect) — TUDO que envolve métricas de
+  // linha (ordenação, KPI Impacto, badges) usa SÓ o subset visível
+  // após filtros de tipo+severidade. Pra evitar recálculo, gero um
+  // Map(key→divsVisiveis[]) uma única vez por mudança de filtro.
+  const divsVisiveisPorLinha = useMemo(() => {
+    const tipos = tiposSelecionados;
+    const map = new Map<string, LinhaConsolidada["divergencias"]>();
+    for (const l of linhas) {
+      const filtradas = l.divergencias.filter(d =>
+        (tipos.size === 0 || tipos.has(d.tipo)) &&
+        (filtroSeveridade === "todas" || d.severidade === filtroSeveridade)
+      );
+      map.set(l.key, filtradas);
+    }
+    return map;
+  }, [linhas, tiposSelecionados, filtroSeveridade]);
+
+  // Helpers que operam APENAS no subset visível
+  const impactoVisivel = (l: LinhaConsolidada) =>
+    (divsVisiveisPorLinha.get(l.key) || []).reduce((s, d) => s + (d.impactoFinanceiro || 0), 0);
+  const severidadeRankVisivel = (l: LinhaConsolidada) => {
+    let r = 0;
+    for (const d of divsVisiveisPorLinha.get(l.key) || []) {
+      if (d.severidade === "alta") r = Math.max(r, 2);
+      else if (d.severidade === "media") r = Math.max(r, 1);
+    }
+    return r;
+  };
+  const qtdVisivel = (l: LinhaConsolidada) => (divsVisiveisPorLinha.get(l.key) || []).length;
+  const temAltaVisivel = (l: LinhaConsolidada) =>
+    (divsVisiveisPorLinha.get(l.key) || []).some(d => d.severidade === "alta");
+
+  // Filtros + ordenação aplicados (sobre o subset visível)
   const linhasFiltradas = useMemo(() => {
     const s = search.trim().toLowerCase();
-    return linhas.filter(l => {
-      if (filtroTipo !== "todos" && !l.divergencias.some(d => d.tipo === filtroTipo)) return false;
+    const filtradas = linhas.filter(l => {
+      if (qtdVisivel(l) === 0) return false;
       if (s && !l.nome.toLowerCase().includes(s) && !(l.codigo || "").toLowerCase().includes(s)) return false;
       return true;
     });
-  }, [linhas, filtroTipo, search]);
+
+    return filtradas.sort((a, b) => {
+      switch (ordenarPor) {
+        case "impacto":
+          return impactoVisivel(b) - impactoVisivel(a);
+        case "qtd":
+          return qtdVisivel(b) - qtdVisivel(a);
+        case "nome":
+          return a.nome.localeCompare(b.nome, "pt-BR");
+        case "severidade":
+        default: {
+          const so = severidadeRankVisivel(b) - severidadeRankVisivel(a);
+          if (so !== 0) return so;
+          return qtdVisivel(b) - qtdVisivel(a);
+        }
+      }
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [linhas, divsVisiveisPorLinha, search, ordenarPor]);
+
+  // Impacto total das linhas filtradas (KPI dinâmico) — subset visível
+  const impactoTotal = useMemo(
+    () => linhasFiltradas.reduce((s, l) => s + impactoVisivel(l), 0),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [linhasFiltradas, divsVisiveisPorLinha]
+  );
+
+  // Agregado "Por Tipo" — todas as divergências planas, agrupadas por tipo, ordenadas por impacto desc
+  type DivFlat = LinhaConsolidada["divergencias"][number] & { funcionarioNome: string; funcionarioCodigo?: string; key: string };
+  const porTipo = useMemo(() => {
+    const map: Record<TipoDiv, DivFlat[]> = { cadastro: [], ponto: [], desconto: [], he: [], nao_vinculado: [] };
+    for (const l of linhasFiltradas) {
+      for (const d of l.divergencias) {
+        if (tiposSelecionados.size > 0 && !tiposSelecionados.has(d.tipo)) continue;
+        if (filtroSeveridade !== "todas" && d.severidade !== filtroSeveridade) continue;
+        map[d.tipo].push({ ...d, funcionarioNome: l.nome, funcionarioCodigo: l.codigo, key: `${l.key}#${d.tipo}#${map[d.tipo].length}` });
+      }
+    }
+    for (const t of TODOS_TIPOS) {
+      map[t].sort((a, b) => {
+        const so = (b.severidade === "alta" ? 2 : b.severidade === "media" ? 1 : 0)
+                 - (a.severidade === "alta" ? 2 : a.severidade === "media" ? 1 : 0);
+        if (so !== 0) return so;
+        return (b.impactoFinanceiro || 0) - (a.impactoFinanceiro || 0);
+      });
+    }
+    return map;
+  }, [linhasFiltradas, tiposSelecionados, filtroSeveridade]);
+
+  const toggleTipo = (t: TipoDiv) => {
+    setTiposSelecionados(prev => {
+      const n = new Set(prev);
+      if (n.has(t)) n.delete(t); else n.add(t);
+      return n;
+    });
+  };
+  const limparFiltros = () => {
+    setTiposSelecionados(new Set());
+    setFiltroSeveridade("todas");
+    setSearch("");
+  };
+  const filtrosAtivos = tiposSelecionados.size > 0 || filtroSeveridade !== "todas" || search.trim() !== "";
 
   const toggleExpand = (key: string) => {
     setExpanded(prev => {
@@ -8627,17 +8741,44 @@ function RelatorioConsolidadoView({ companyId, mesAno, lancamentoId, onBack }: {
       return n;
     });
   };
-
   const expandAll = () => setExpanded(new Set(linhasFiltradas.map(l => l.key)));
   const collapseAll = () => setExpanded(new Set());
 
-  const tipoLabel: Record<string, { label: string; cls: string; icon: any }> = {
-    cadastro: { label: "Cadastro", cls: "bg-amber-100 text-amber-800 border-amber-300", icon: User },
-    ponto: { label: "Ponto", cls: "bg-purple-100 text-purple-800 border-purple-300", icon: Clock },
-    desconto: { label: "Desconto CLT", cls: "bg-red-100 text-red-800 border-red-300", icon: Scale },
-    he: { label: "Hora Extra", cls: "bg-orange-100 text-orange-800 border-orange-300", icon: TrendingUp },
-    nao_vinculado: { label: "Não vinculado", cls: "bg-slate-200 text-slate-800 border-slate-300", icon: XCircle },
+  // Export CSV (divergências planas filtradas)
+  const exportarCSV = () => {
+    const headers = ["Funcionário", "Código", "Tipo", "Severidade", "Descrição", "Folha (Contabilidade)", "Sistema (ERP)", "Diferença", "Impacto R$"];
+    const rows: string[][] = [];
+    for (const l of linhasFiltradas) {
+      for (const d of l.divergencias) {
+        if (tiposSelecionados.size > 0 && !tiposSelecionados.has(d.tipo)) continue;
+        if (filtroSeveridade !== "todas" && d.severidade !== filtroSeveridade) continue;
+        rows.push([
+          l.nome,
+          l.codigo || "",
+          tipoLabel[d.tipo].label,
+          d.severidade.toUpperCase(),
+          d.titulo,
+          d.folha || "",
+          d.sistema || "",
+          d.diferenca || "",
+          d.impactoFinanceiro ? d.impactoFinanceiro.toFixed(2) : "",
+        ]);
+      }
+    }
+    const esc = (v: string) => `"${String(v).replace(/"/g, '""')}"`;
+    const csv = "\uFEFF" + [headers, ...rows].map(r => r.map(esc).join(";")).join("\r\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `divergencias-folha-${mesAno}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   };
+
+  const fmtBRL = (n: number) => `R$ ${n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
   return (
     <div className="space-y-4">
@@ -8656,41 +8797,53 @@ function RelatorioConsolidadoView({ companyId, mesAno, lancamentoId, onBack }: {
             </p>
           </div>
         </div>
-        <PrintActions title={`Relatório Consolidado - ${mesAno}`} />
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={exportarCSV} disabled={isLoading || linhasFiltradas.length === 0}>
+            <FileDown className="h-3.5 w-3.5 mr-1" /> Exportar CSV
+          </Button>
+          <PrintActions title={`Relatório Consolidado - ${mesAno}`} />
+        </div>
       </div>
 
-      {/* KPIs */}
-      <div className="grid grid-cols-2 sm:grid-cols-6 gap-2">
+      {/* KPIs (clicáveis pra filtrar — multi-select) */}
+      <div className="grid grid-cols-2 sm:grid-cols-7 gap-2">
         <button
-          onClick={() => setFiltroTipo("todos")}
-          className={`rounded-lg p-3 text-center border-2 transition-all ${filtroTipo === "todos" ? "border-[#1B2A4A] bg-[#1B2A4A]/5" : "border-slate-200 hover:border-slate-300 bg-white"}`}
+          onClick={() => setTiposSelecionados(new Set())}
+          className={`rounded-lg p-3 text-center border-2 transition-all ${tiposSelecionados.size === 0 ? "border-[#1B2A4A] bg-[#1B2A4A]/5" : "border-slate-200 hover:border-slate-300 bg-white"}`}
         >
-          <p className="text-[10px] font-medium uppercase tracking-wide text-slate-500">Total Funcionários</p>
+          <p className="text-[10px] font-medium uppercase tracking-wide text-slate-500">Funcionários</p>
           <p className="text-2xl font-black text-[#1B2A4A] mt-0.5">{kpis.total}</p>
         </button>
-        {(["nao_vinculado", "cadastro", "ponto", "desconto", "he"] as const).map(tipo => {
+        {TODOS_TIPOS.map(tipo => {
           const meta = tipoLabel[tipo];
           const Icon = meta.icon;
           const v = kpis[tipo];
-          const active = filtroTipo === tipo;
+          const active = tiposSelecionados.has(tipo);
           return (
             <button
               key={tipo}
-              onClick={() => setFiltroTipo(active ? "todos" : tipo)}
-              className={`rounded-lg p-3 text-center border-2 transition-all ${active ? `${meta.cls.replace('bg-', 'border-').split(' ')[0].replace('-100', '-500')} ${meta.cls.split(' ')[0]}` : "border-slate-200 hover:border-slate-300 bg-white"}`}
+              onClick={() => toggleTipo(tipo)}
+              className={`rounded-lg p-3 text-center border-2 transition-all ${active ? `${meta.chipActive}` : "border-slate-200 hover:border-slate-300 bg-white"}`}
             >
-              <p className="text-[10px] font-medium uppercase tracking-wide text-slate-500 flex items-center justify-center gap-1">
+              <p className={`text-[10px] font-medium uppercase tracking-wide flex items-center justify-center gap-1 ${active ? "text-white/90" : "text-slate-500"}`}>
                 <Icon className="h-3 w-3" /> {meta.label}
               </p>
-              <p className={`text-2xl font-black mt-0.5 ${v > 0 ? "text-red-700" : "text-slate-400"}`}>{v}</p>
+              <p className={`text-2xl font-black mt-0.5 ${active ? "text-white" : v > 0 ? "text-red-700" : "text-slate-400"}`}>{v}</p>
             </button>
           );
         })}
+        {/* Impacto Financeiro (KPI dinâmico) */}
+        <div className="rounded-lg p-3 text-center border-2 border-emerald-300 bg-emerald-50">
+          <p className="text-[10px] font-medium uppercase tracking-wide text-emerald-700 flex items-center justify-center gap-1">
+            <DollarSign className="h-3 w-3" /> Impacto R$
+          </p>
+          <p className="text-lg font-black mt-0.5 text-emerald-800">{fmtBRL(impactoTotal)}</p>
+        </div>
       </div>
 
       {/* Toolbar */}
-      <div className="flex flex-col sm:flex-row sm:items-center gap-2">
-        <div className="flex-1 relative">
+      <div className="flex flex-col sm:flex-row sm:items-center gap-2 flex-wrap">
+        <div className="flex-1 min-w-[200px] relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             placeholder="Buscar por nome ou código..."
@@ -8699,17 +8852,70 @@ function RelatorioConsolidadoView({ companyId, mesAno, lancamentoId, onBack }: {
             className="pl-9"
           />
         </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={expandAll}>
-            <ChevronDown className="h-3.5 w-3.5 mr-1" /> Expandir todos
-          </Button>
-          <Button variant="outline" size="sm" onClick={collapseAll}>
-            <ChevronUp className="h-3.5 w-3.5 mr-1" /> Recolher
-          </Button>
+        {/* Severidade — chips */}
+        <div className="flex items-center gap-1 rounded-md border border-slate-200 bg-white p-1">
+          {(["todas", "alta", "media"] as const).map(s => (
+            <button
+              key={s}
+              onClick={() => setFiltroSeveridade(s)}
+              className={`text-xs px-2.5 py-1 rounded transition-colors ${filtroSeveridade === s
+                ? s === "alta" ? "bg-red-600 text-white" : s === "media" ? "bg-amber-500 text-white" : "bg-slate-800 text-white"
+                : "text-slate-600 hover:bg-slate-100"}`}
+            >
+              {s === "todas" ? "Todas severidades" : s === "alta" ? "Alta" : "Média"}
+            </button>
+          ))}
         </div>
+        {/* Ordenação */}
+        <select
+          value={ordenarPor}
+          onChange={e => setOrdenarPor(e.target.value as any)}
+          className="text-xs border border-slate-200 rounded-md px-2 py-2 bg-white"
+        >
+          <option value="severidade">Ordenar: Severidade</option>
+          <option value="impacto">Ordenar: Impacto R$</option>
+          <option value="qtd">Ordenar: Qtd divergências</option>
+          <option value="nome">Ordenar: Nome</option>
+        </select>
+        {filtrosAtivos && (
+          <Button variant="ghost" size="sm" onClick={limparFiltros} className="text-slate-600">
+            <X className="h-3.5 w-3.5 mr-1" /> Limpar
+          </Button>
+        )}
+        {modoVisao === "funcionario" && (
+          <div className="flex items-center gap-1 ml-auto">
+            <Button variant="outline" size="sm" onClick={expandAll}>
+              <ChevronDown className="h-3.5 w-3.5 mr-1" /> Expandir
+            </Button>
+            <Button variant="outline" size="sm" onClick={collapseAll}>
+              <ChevronUp className="h-3.5 w-3.5 mr-1" /> Recolher
+            </Button>
+          </div>
+        )}
       </div>
 
-      {/* Lista */}
+      {/* Tabs Por Funcionário / Por Tipo + contador */}
+      <div className="flex items-center justify-between gap-2 border-b border-slate-200">
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => setModoVisao("funcionario")}
+            className={`px-3 py-2 text-sm font-medium border-b-2 transition-colors ${modoVisao === "funcionario" ? "border-[#1B2A4A] text-[#1B2A4A]" : "border-transparent text-slate-500 hover:text-slate-700"}`}
+          >
+            <User className="inline h-3.5 w-3.5 mr-1" /> Por Funcionário
+          </button>
+          <button
+            onClick={() => setModoVisao("tipo")}
+            className={`px-3 py-2 text-sm font-medium border-b-2 transition-colors ${modoVisao === "tipo" ? "border-[#1B2A4A] text-[#1B2A4A]" : "border-transparent text-slate-500 hover:text-slate-700"}`}
+          >
+            <Filter className="inline h-3.5 w-3.5 mr-1" /> Por Tipo
+          </button>
+        </div>
+        <p className="text-xs text-muted-foreground pr-1">
+          Mostrando <strong>{linhasFiltradas.length}</strong> de <strong>{linhas.length}</strong> funcionário(s)
+        </p>
+      </div>
+
+      {/* Conteúdo */}
       {isLoading ? (
         <div className="flex justify-center py-16">
           <RefreshCw className="w-6 h-6 animate-spin text-primary" />
@@ -8719,14 +8925,16 @@ function RelatorioConsolidadoView({ companyId, mesAno, lancamentoId, onBack }: {
           <CheckCircle className="w-12 h-12 mx-auto mb-3 text-green-600" />
           <p className="font-semibold text-green-700">Nenhuma divergência encontrada</p>
           <p className="text-xs mt-1">
-            {filtroTipo !== "todos" || search ? "Tente limpar os filtros." : "Folha conferida sem inconsistências."}
+            {filtrosAtivos ? "Tente limpar os filtros." : "Folha conferida sem inconsistências."}
           </p>
         </div>
-      ) : (
+      ) : modoVisao === "funcionario" ? (
         <div className="space-y-2">
           {linhasFiltradas.map(linha => {
             const isOpen = expanded.has(linha.key);
-            const sevAlta = linha.divergencias.some(d => d.severidade === "alta");
+            const divsVisiveis = divsVisiveisPorLinha.get(linha.key) || [];
+            const sevAlta = temAltaVisivel(linha);
+            const impacto = impactoVisivel(linha);
             return (
               <Card key={linha.key} className={`border-l-4 ${sevAlta ? "border-l-red-500" : "border-l-amber-400"}`}>
                 <button
@@ -8744,8 +8952,8 @@ function RelatorioConsolidadoView({ companyId, mesAno, lancamentoId, onBack }: {
                         {linha.funcao && <p className="text-[11px] text-muted-foreground truncate">{linha.funcao}</p>}
                       </div>
                     </div>
-                    <div className="flex items-center gap-1 flex-wrap">
-                      {Array.from(new Set(linha.divergencias.map(d => d.tipo))).map(t => {
+                    <div className="flex items-center gap-1 flex-wrap justify-end">
+                      {Array.from(new Set(divsVisiveis.map(d => d.tipo))).map(t => {
                         const meta = tipoLabel[t];
                         return (
                           <Badge key={t} variant="outline" className={`text-[10px] ${meta.cls}`}>
@@ -8753,14 +8961,19 @@ function RelatorioConsolidadoView({ companyId, mesAno, lancamentoId, onBack }: {
                           </Badge>
                         );
                       })}
+                      {impacto > 0 && (
+                        <Badge variant="outline" className="text-[10px] bg-emerald-50 text-emerald-800 border-emerald-300 font-mono">
+                          {fmtBRL(impacto)}
+                        </Badge>
+                      )}
                       <Badge className={`text-[10px] ${sevAlta ? "bg-red-600 text-white" : "bg-amber-500 text-white"}`}>
-                        {linha.divergencias.length} divergência(s)
+                        {divsVisiveis.length} divergência(s)
                       </Badge>
                     </div>
                   </div>
                 </button>
                 {isOpen && (
-                  <div className="border-t border-slate-200 bg-slate-50/50">
+                  <div className="border-t border-slate-200 bg-slate-50/50 overflow-x-auto">
                     <table className="w-full text-xs">
                       <thead>
                         <tr className="border-b border-slate-200 text-left text-slate-500 uppercase tracking-wide text-[10px]">
@@ -8772,7 +8985,7 @@ function RelatorioConsolidadoView({ companyId, mesAno, lancamentoId, onBack }: {
                         </tr>
                       </thead>
                       <tbody>
-                        {linha.divergencias.map((d, i) => {
+                        {divsVisiveis.map((d, i) => {
                           const meta = tipoLabel[d.tipo];
                           return (
                             <tr key={i} className="border-b last:border-0 border-slate-200">
@@ -8798,6 +9011,60 @@ function RelatorioConsolidadoView({ companyId, mesAno, lancamentoId, onBack }: {
             );
           })}
         </div>
+      ) : (
+        // ===== MODO POR TIPO =====
+        <div className="space-y-4">
+          {TODOS_TIPOS.map(tipo => {
+            const itens = porTipo[tipo];
+            if (itens.length === 0) return null;
+            const meta = tipoLabel[tipo];
+            const Icon = meta.icon;
+            const somaImpacto = itens.reduce((s, d) => s + (d.impactoFinanceiro || 0), 0);
+            return (
+              <Card key={tipo}>
+                <div className={`px-4 py-2.5 border-b flex items-center justify-between ${meta.cls}`}>
+                  <div className="flex items-center gap-2">
+                    <Icon className="h-4 w-4" />
+                    <h3 className="font-semibold text-sm">{meta.label}</h3>
+                    <Badge variant="outline" className="bg-white/80 text-[10px] font-mono">{itens.length} divergência(s)</Badge>
+                  </div>
+                  {somaImpacto > 0 && (
+                    <span className="text-xs font-mono font-semibold">Impacto: {fmtBRL(somaImpacto)}</span>
+                  )}
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="border-b border-slate-200 text-left text-slate-500 uppercase tracking-wide text-[10px] bg-slate-50">
+                        <th className="px-4 py-2 font-medium">Funcionário</th>
+                        <th className="px-3 py-2 font-medium">Descrição</th>
+                        <th className="px-3 py-2 font-medium text-right">Folha</th>
+                        <th className="px-3 py-2 font-medium text-right">Sistema</th>
+                        <th className="px-3 py-2 font-medium text-right">Diferença</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {itens.map(d => (
+                        <tr key={d.key} className={`border-b last:border-0 border-slate-200 ${d.severidade === "alta" ? "bg-red-50/30" : ""}`}>
+                          <td className="px-4 py-2">
+                            <p className="font-medium text-slate-800">{d.funcionarioNome}</p>
+                            {d.funcionarioCodigo && <p className="font-mono text-[10px] text-slate-500">#{d.funcionarioCodigo}</p>}
+                          </td>
+                          <td className="px-3 py-2 text-slate-700">
+                            <span className={d.severidade === "alta" ? "font-semibold text-red-700" : ""}>{d.titulo}</span>
+                          </td>
+                          <td className="px-3 py-2 text-right font-mono">{d.folha || "—"}</td>
+                          <td className="px-3 py-2 text-right font-mono">{d.sistema || "—"}</td>
+                          <td className="px-3 py-2 text-right font-mono font-semibold text-red-700">{d.diferenca || "—"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </Card>
+            );
+          })}
+        </div>
       )}
 
       {/* Legenda */}
@@ -8805,7 +9072,9 @@ function RelatorioConsolidadoView({ companyId, mesAno, lancamentoId, onBack }: {
         <p><strong>Como ler este relatório:</strong></p>
         <p>• <strong>Folha (Contabilidade)</strong> = valor importado do PDF emitido pela contabilidade.</p>
         <p>• <strong>Sistema (ERP)</strong> = valor calculado pelo ERP (ponto, cadastro, motor CLT).</p>
+        <p>• <strong>Impacto R$</strong> = soma dos R$ em jogo (descontos CLT divergentes + HE em risco @ R$50/h proxy). É um indicador de prioridade, não o valor exato a corrigir.</p>
         <p>• Borda <span className="text-red-700 font-semibold">vermelha</span> = alta severidade (ação obrigatória do RH); <span className="text-amber-700 font-semibold">âmbar</span> = revisão recomendada.</p>
+        <p>• KPIs no topo são <strong>clicáveis</strong> e combinam (multi-select). Combine com Severidade + Busca pra isolar exatamente o que precisa.</p>
       </div>
     </div>
   );
