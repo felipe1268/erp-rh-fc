@@ -1080,6 +1080,9 @@ Retorne os até 5 melhores matches em ordem decrescente de similaridade. Se nenh
           conferidoEm: warehouseInventorySessionItems.conferidoEm,
           itemFotoUrl: almoxarifadoItens.fotoUrl,
           itemUnidade: almoxarifadoItens.unidade,
+          // Rev. 2530 — códigos pra busca/scanner de código de barras
+          itemCodigoBarras: almoxarifadoItens.codigoBarras,
+          itemCodigoInterno: almoxarifadoItens.codigoInterno,
         })
         .from(warehouseInventorySessionItems)
         .leftJoin(almoxarifadoItens, eq(almoxarifadoItens.id, warehouseInventorySessionItems.itemId))

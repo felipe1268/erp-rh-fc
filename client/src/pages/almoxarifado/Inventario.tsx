@@ -1,11 +1,12 @@
 import DashboardLayout from "@/components/DashboardLayout";
-import { useState } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
 import { toast } from "sonner";
 import {
   ClipboardList, Loader2, CheckCircle2, AlertTriangle,
   Play, Package, ChevronRight, XCircle, Building2, HardHat,
+  Search, ScanLine, X,
 } from "lucide-react";
 import {
   AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle,
@@ -198,6 +199,9 @@ export default function AlmoxarifadoInventario() {
   const [obraContexto, setObraContexto] = useState<number | null>(null);
   // Rev. 2432 — abre AlertDialog estilizado no lugar do window.confirm nativo.
   const [confirmCancelar, setConfirmCancelar] = useState(false);
+  // Rev. 2530 — campo de busca / leitor de código de barras.
+  const [busca, setBusca] = useState("");
+  const buscaRef = useRef<HTMLInputElement>(null);
 
   const { data: obrasAtivas = [] } = trpc.obras.listActive.useQuery(
     { companyId, companyIds: [companyId] }, { enabled: !!companyId }
@@ -261,8 +265,32 @@ export default function AlmoxarifadoInventario() {
   const divergentes = sessionItems.filter(i => i.status === "divergente").length;
   const total = sessionItems.length;
   const progresso = total > 0 ? Math.round((conferidos / total) * 100) : 0;
-  const pendentes = sessionItems.filter(i => i.status === "pendente");
-  const finalizados = sessionItems.filter(i => i.status !== "pendente");
+  const pendentesAll = sessionItems.filter(i => i.status === "pendente");
+  const finalizadosAll = sessionItems.filter(i => i.status !== "pendente");
+
+  // Rev. 2530 — Busca por nome / código interno / código de barras.
+  // Suporta scanner USB/Bluetooth (digita e dispara Enter): se a query
+  // bater EXATAMENTE 1 pendente por código de barras OU código interno,
+  // confirma BATE automaticamente (qtd física = qtd sistema) e limpa
+  // o input para o próximo scan.
+  const norm = (s: any) => (s ?? "").toString().trim().toLowerCase();
+  const filterFn = (i: any, q: string) => {
+    if (!q) return true;
+    return (
+      norm(i.itemNome).includes(q) ||
+      norm(i.itemCodigoBarras).includes(q) ||
+      norm(i.itemCodigoInterno).includes(q)
+    );
+  };
+  const qNorm = norm(busca);
+  const pendentes = useMemo(
+    () => pendentesAll.filter(i => filterFn(i, qNorm)),
+    [pendentesAll, qNorm]
+  );
+  const finalizados = useMemo(
+    () => finalizadosAll.filter(i => filterFn(i, qNorm)),
+    [finalizadosAll, qNorm]
+  );
 
   const nomeContexto = obraContexto === null
     ? "Central"
@@ -417,6 +445,76 @@ export default function AlmoxarifadoInventario() {
                 </div>
               </div>
             </div>
+
+            {/* Rev. 2530 — Busca / Leitor de código de barras.
+                Scanners USB/Bluetooth digitam o código e disparam Enter:
+                quando bater EXATAMENTE 1 pendente por código (barras ou
+                interno), confirma BATE automaticamente. */}
+            {session.status === "em_andamento" && (
+              <div className="bg-white rounded-xl border p-3">
+                <div className="relative">
+                  <ScanLine className="w-5 h-5 text-emerald-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <input
+                    ref={buscaRef}
+                    type="text"
+                    autoFocus
+                    inputMode="search"
+                    autoComplete="off"
+                    autoCorrect="off"
+                    autoCapitalize="off"
+                    spellCheck={false}
+                    value={busca}
+                    onChange={e => setBusca(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key !== "Enter") return;
+                      const q = norm(busca);
+                      if (!q) return;
+                      // Match exato por código (scanner) tem prioridade
+                      const exato = pendentesAll.filter(
+                        (i: any) =>
+                          norm(i.itemCodigoBarras) === q ||
+                          norm(i.itemCodigoInterno) === q
+                      );
+                      const alvo = exato.length === 1
+                        ? exato[0]
+                        : pendentes.length === 1
+                          ? pendentes[0]
+                          : null;
+                      if (alvo) {
+                        const sistemaQtd = n((alvo as any).quantidadeSistema);
+                        confirmItem.mutate({
+                          sessionItemId: alvo.id,
+                          quantidadeFisica: sistemaQtd,
+                        });
+                        setBusca("");
+                        setTimeout(() => buscaRef.current?.focus(), 50);
+                      } else if (pendentes.length === 0) {
+                        toast.error("Nenhum item pendente encontrado");
+                      } else {
+                        toast.message(`${pendentes.length} itens correspondem — refine a busca`);
+                      }
+                    }}
+                    placeholder="Buscar por nome, código interno ou escanear código de barras…"
+                    className="w-full h-11 pl-10 pr-10 text-sm border border-gray-200 rounded-lg bg-white text-gray-800 outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100"
+                  />
+                  {busca && (
+                    <button
+                      onClick={() => { setBusca(""); buscaRef.current?.focus(); }}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 w-7 h-7 flex items-center justify-center rounded-full hover:bg-gray-100 text-gray-500"
+                      aria-label="Limpar"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+                {busca && (
+                  <p className="text-[11px] text-gray-500 mt-1.5 px-1">
+                    {pendentes.length} pendente{pendentes.length !== 1 ? "s" : ""} · {finalizados.length} já conferido{finalizados.length !== 1 ? "s" : ""}
+                    {" · "}<span className="text-emerald-600 font-medium">Enter confirma BATE quando 1 só item bate</span>
+                  </p>
+                )}
+              </div>
+            )}
 
             {/* Botão concluir */}
             {session.status === "em_andamento" && conferidos === total && total > 0 && (

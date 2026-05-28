@@ -1,6 +1,61 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2530 — **INVENTÁRIO SEMANAL · BUSCA + LEITOR DE CÓDIGO DE BARRAS
+ * (scan → baixa BATE automática).**
+ *
+ * MOTIVAÇÃO (user em 28/05/2026, com prints da tela de Inventário
+ * Semanal e do form de cadastro de item):
+ *   "Preciso de um campo de busca que leia código de barras para
+ *    facilitar a busca e baixa do material."
+ *
+ * MUDANÇA
+ *   - SERVER `server/routers/warehouse.ts` `getInventorySessionItems`
+ *     (~L1086-1088): query agora também retorna `itemCodigoBarras` e
+ *     `itemCodigoInterno` (campos já existentes em
+ *     `almoxarifado_itens`, mesmo LEFT JOIN da Rev. 2439).
+ *
+ *   - CLIENT `client/src/pages/almoxarifado/Inventario.tsx` (~L271-293
+ *     + L452-520): novo input com ícone `ScanLine` emerald embaixo da
+ *     barra de progresso. Filtra `pendentes` e `finalizados` em tempo
+ *     real por `nome`/`codigoInterno`/`codigoBarras` (case-insensitive,
+ *     substring). `autoFocus` + `autoComplete=off` /`autoCapitalize=off`
+ *     pra ser scanner-friendly (scanners USB/Bluetooth digitam o
+ *     código e disparam Enter).
+ *
+ *   - AUTO-CONFIRMAÇÃO BATE no Enter
+ *     1. Match EXATO por código (barras OU interno) tem prioridade
+ *        — esse é o caminho do scanner.
+ *     2. Se só houver 1 pendente filtrado (busca por nome convergiu),
+ *        também confirma esse único.
+ *     3. `confirmItem.mutate({ quantidadeFisica: sistemaQtd })` →
+ *        backend marca status=`conferido` (diff=0).
+ *     4. Limpa input + refoca pro próximo scan.
+ *     5. Se 0 pendentes → toast erro; se >1 → toast pra refinar.
+ *
+ * UX
+ *   - Hint sob o input: "X pendentes · Y já conferidos · Enter
+ *     confirma BATE quando 1 só item bate".
+ *   - Botão X pra limpar a busca.
+ *   - Input só aparece se a sessão estiver `em_andamento`.
+ *
+ * REUSO
+ *   - Mutation `confirmInventoryItem` intacta (já calcula status pelo
+ *     diff). Zero alteração no schema. Indices `idx_almox_itens_codigo_barras`
+ *     já existentes da criação do campo.
+ *
+ * ARQUIVOS
+ *  - `server/routers/warehouse.ts` ~L1086-1088 (+2 colunas no select).
+ *  - `client/src/pages/almoxarifado/Inventario.tsx`:
+ *      L2 (useMemo/useRef/useEffect), L12 (Search/ScanLine/X icons),
+ *      L205-207 (state busca + ref), L268-293 (filter + useMemo),
+ *      L452-520 (UI input + handler Enter).
+ *  - `shared/version.ts` 2530.
+ *
+ * Zero ALTER/DROP/DELETE. Zero migração.
+ *
+ * — Rev. 2529 (anterior) abaixo —
+ *
  * Rev. 2529 — **PAINEL RH · CONTRATOS DE EXPERIÊNCIA: AVATAR DO
  * FUNCIONÁRIO À ESQUERDA DE CADA LINHA.**
  *
