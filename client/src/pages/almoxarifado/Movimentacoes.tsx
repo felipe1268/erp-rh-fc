@@ -9,7 +9,11 @@ import {
   ArrowRightLeft, Calendar, User, MapPin, X, CalendarRange,
   CheckSquare, Square, Undo2, AlertTriangle, Ban,
   Wrench, RotateCcw, Package, ArrowLeftRight, AlertOctagon,
+  EyeOff, Eye,
 } from "lucide-react";
+// Rev. 2508 — filtro defensivo: esconde itens não-material (serviços,
+// topografia, mão-de-obra, etc.) que vazaram pra timeline.
+import { classificarNaturezaItemAlmox } from "../../../../shared/naturezaItemAlmox";
 
 // Rev. 2304 — helpers de data LOCAL (sem fuso, sem UTC) p/ filtros por período.
 function toLocalIso(d: Date): string {
@@ -74,6 +78,9 @@ export default function AlmoxarifadoMovimentacoes() {
   const [selecionadas, setSelecionadas] = useState<Set<number>>(new Set());
   const [modalEstorno, setModalEstorno] = useState(false);
   const [motivoEstorno, setMotivoEstorno] = useState("");
+  // Rev. 2508 — admin pode revelar movimentações de itens não-material
+  // (serviços/MDO/topografia) que o filtro padrão esconde.
+  const [mostrarNaoMaterial, setMostrarNaoMaterial] = useState(false);
 
   // Resolve range pra usar como dateFrom/dateTo no server-side.
   const range = useMemo(() => {
@@ -156,8 +163,27 @@ export default function AlmoxarifadoMovimentacoes() {
     return [{ v: "todos", l: "Todos" }];
   }, [filtroFonte]);
 
+  // Rev. 2508 — anota cada linha com `_naturezaMaterial` + `_naturezaMotivo`
+  // ANTES de aplicar os filtros visíveis ao usuário. Isso permite contar
+  // quantas movimentações foram ocultas e expor o toggle "Mostrar itens
+  // não-material" pro admin sem refazer o trabalho a cada render.
+  const timelineAnotada = useMemo(() => {
+    return (timeline as any[]).map(m => {
+      const cls = classificarNaturezaItemAlmox(m.item_nome ?? "", m.unidade);
+      return { ...m, _naturezaMaterial: cls.material, _naturezaMotivo: cls.motivo };
+    });
+  }, [timeline]);
+
+  // Quantas linhas o filtro de natureza esconderia (independente de busca/obra/tipo).
+  const ocultasNaoMaterialCount = useMemo(() => {
+    return timelineAnotada.filter(m => !m._naturezaMaterial).length;
+  }, [timelineAnotada]);
+
   const lista = useMemo(() => {
-    let r: any[] = timeline;
+    let r: any[] = timelineAnotada;
+    // Rev. 2508 — filtro de natureza vem PRIMEIRO. Por padrão esconde
+    // serviços/MDO/topografia que vazaram pra timeline. Admin pode revelar.
+    if (!mostrarNaoMaterial) r = r.filter(m => m._naturezaMaterial);
     if (filtroFonte !== "todos") r = r.filter(m => m.fonte === filtroFonte);
     if (filtroObra) r = r.filter(m => m.obra_id === filtroObra.id);
     if (busca) {
@@ -172,7 +198,7 @@ export default function AlmoxarifadoMovimentacoes() {
     }
     if (filtroTipo !== "todos") r = r.filter(m => m.tipo === filtroTipo);
     return r;
-  }, [timeline, busca, filtroFonte, filtroTipo, filtroObra]);
+  }, [timelineAnotada, mostrarNaoMaterial, busca, filtroFonte, filtroTipo, filtroObra]);
 
   const resumo = useMemo(() => {
     const porFonte: Record<string, number> = {};
@@ -385,6 +411,32 @@ export default function AlmoxarifadoMovimentacoes() {
             </select>
           )}
         </div>
+
+        {/* Rev. 2508 — Banner de natureza: alerta visual quando há linhas
+            ocultas por serem itens não-material (serviço/MDO/topografia).
+            Toggle só aparece pra admin pra evitar poluir visão do gestor. */}
+        {ocultasNaoMaterialCount > 0 && (
+          <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 text-sm">
+            {mostrarNaoMaterial
+              ? <Eye className="w-4 h-4 text-amber-700 shrink-0" />
+              : <EyeOff className="w-4 h-4 text-amber-700 shrink-0" />}
+            <span className="text-amber-900 flex-1">
+              {mostrarNaoMaterial
+                ? <><strong>{ocultasNaoMaterialCount}</strong> linha(s) de itens <strong>não-material</strong> (serviço/MDO/topografia) sendo exibida(s).</>
+                : <><strong>{ocultasNaoMaterialCount}</strong> linha(s) ocultada(s) — itens classificados como <strong>não-material</strong> (serviço, mão-de-obra, topografia etc.) não pertencem ao almoxarifado.</>}
+            </span>
+            {isAdmin && (
+              <button
+                type="button"
+                onClick={() => setMostrarNaoMaterial(v => !v)}
+                className="shrink-0 inline-flex items-center gap-1 text-xs text-amber-800 hover:text-amber-900 bg-white hover:bg-amber-100 border border-amber-300 rounded-md px-2 py-1 transition font-medium"
+                title={mostrarNaoMaterial ? "Voltar a esconder não-material" : "Revelar não-material (admin)"}
+              >
+                {mostrarNaoMaterial ? "Esconder" : "Mostrar"}
+              </button>
+            )}
+          </div>
+        )}
 
         {/* Lista */}
         {isLoading ? (

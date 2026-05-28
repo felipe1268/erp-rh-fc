@@ -87,51 +87,10 @@ function getClientIp(ctx: any): string | null {
 // item + unidade. Retorna razão pra logar quando bloqueia. Aplicada em:
 // (1) `atualizarStatusOrdem` (OC entregue → almox) e (2) `warehouse.registerSmartEntry`
 // (criação manual de item novo no recebimento inteligente).
-export function classificarNaturezaItemAlmox(
-  descricao: string,
-  unidade?: string | null,
-): { material: boolean; motivo: string | null } {
-  const desc = (descricao ?? "").toLowerCase().trim();
-  const un = (unidade ?? "").toLowerCase().trim();
-  if (!desc) return { material: false, motivo: "descrição vazia" };
-
-  // Keywords de SERVIÇO / ADMINISTRATIVO / IMPOSTOS (word-boundary onde faz sentido).
-  const padroes: { rx: RegExp; motivo: string }[] = [
-    { rx: /\b(servi[cç]o|servi[cç]os)\b/i,           motivo: "descrição contém 'serviço'" },
-    { rx: /\bmensalidade\b/i,                         motivo: "mensalidade (serviço recorrente)" },
-    { rx: /\bassinatura\b/i,                          motivo: "assinatura (serviço recorrente)" },
-    { rx: /\binternet\b/i,                            motivo: "Internet (serviço)" },
-    { rx: /\bmanuten[cç][aã]o\b/i,                    motivo: "manutenção (serviço)" },
-    { rx: /\bconsultoria\b/i,                         motivo: "consultoria (serviço)" },
-    { rx: /\bhonor[aá]rio(s)?\b/i,                    motivo: "honorário (serviço)" },
-    { rx: /\bhora[- ]?t[eé]cnica\b/i,                 motivo: "hora técnica (serviço)" },
-    { rx: /\bm[aã]o[- ]de[- ]obra\b|\bmdo\b/i,        motivo: "mão de obra (serviço)" },
-    { rx: /\btaxa(s)?\b/i,                            motivo: "taxa (tributo/serviço)" },
-    { rx: /\bimposto(s)?\b/i,                         motivo: "imposto (tributo)" },
-    { rx: /\bmulta(s)?\b/i,                           motivo: "multa (tributo/penalidade)" },
-    { rx: /\btarifa(s)?\b/i,                          motivo: "tarifa (serviço)" },
-    { rx: /\bped[aá]gio\b/i,                          motivo: "pedágio (serviço)" },
-    { rx: /\bseguro\b/i,                              motivo: "seguro (serviço)" },
-    { rx: /\bcorreio(s)?\b|\bsedex\b/i,               motivo: "correios/sedex (serviço)" },
-    { rx: /\bpapel\s+timbrado\b/i,                    motivo: "papel timbrado (gráfica/serviço)" },
-    { rx: /\bponto\s+(facial|biom[eé]trico|eletr[oô]nico)\b/i, motivo: "ponto facial/biométrico (serviço)" },
-    { rx: /\b(host(ing)?|hospedagem|dom[ií]nio|cloud|saas|software\s+como\s+servi[cç]o)\b/i, motivo: "TI/SaaS (serviço)" },
-    { rx: /\b(licen[cç]a\s+de\s+software|licen[cç]a\s+anual)\b/i, motivo: "licença de software (serviço)" },
-    { rx: /\b(loca[cç][aã]o\s+de\s+(software|sistema))\b/i, motivo: "locação de software (serviço)" },
-    { rx: /\bfrete\b/i,                                motivo: "frete (serviço logístico)" },
-    { rx: /\b(an[aá]lise|laudo|ensaio|inspe[cç][aã]o)\b/i, motivo: "ensaio/laudo (serviço técnico)" },
-    { rx: /\bcurso(s)?\b|\btreinamento(s)?\b/i,        motivo: "curso/treinamento (serviço)" },
-  ];
-
-  for (const p of padroes) {
-    if (p.rx.test(desc)) return { material: false, motivo: p.motivo };
-  }
-  // Unidades típicas de serviço/tempo.
-  if (["h", "hora", "horas", "mês", "mes", "mensal", "ano", "anos", "serv", "vb", "verba"].includes(un)) {
-    return { material: false, motivo: `unidade '${un}' é de serviço/tempo` };
-  }
-  return { material: true, motivo: null };
-}
+// Rev. 2508 — implementação movida pra `shared/naturezaItemAlmox.ts`
+// (passou a ser reusada também no client, na timeline de Movimentações).
+// Re-exportada aqui pra manter compat com os imports legados.
+export { classificarNaturezaItemAlmox } from "../../shared/naturezaItemAlmox";
 import crypto from "crypto";
 import { eq, and, desc, asc, ilike, or, sql, gte, lte, inArray, isNull } from "drizzle-orm";
 import {

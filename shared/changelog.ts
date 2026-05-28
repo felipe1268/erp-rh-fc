@@ -1,6 +1,88 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2508 — **ALMOXARIFADO · MOVIMENTAÇÕES — Filtro defensivo esconde itens
+ * não-material (serviço/MDO/topografia) e amplia o classificador de natureza.**
+ *
+ * PEDIDO (user, 28/05/2026, iPad — Almoxarifado > Movimentações):
+ *  - "Nas movimentações precisa aparecer as movimentações do dia a dia, entrega
+ *    de ferramenta, saída de ferramentas… atenção para itens que não tem nada
+ *    a ver com almoxarifado, tipo serviço de topografia… crie a lógica para
+ *    garantir isso." + screenshot listando "Levantamento Topográfico para As
+ *    Built", "Serviços de Confecção de Placas Diversas", "Alçapão (Material e
+ *    Mão de Obra)" como entrega válida no almox.
+ *
+ * CAUSA
+ *  - Já existia `classificarNaturezaItemAlmox` (`server/routers/compras.ts`
+ *    L90+) bloqueando serviço/MDO/tributo no gateway OC→Almox (Rev. 2389) e
+ *    no SmartEntry (Rev. 1607), MAS:
+ *      a) O regex não cobria "topografia/levantamento/as built/sondagem/
+ *         projeto/locação de equipamento" — daí o "Levantamento Topográfico"
+ *         passou batido.
+ *      b) HISTÓRICO: dezenas de movimentações já existiam no banco DE ANTES
+ *         do gateway entrar em vigor (Rev. <2389) — vazaram pra tabela
+ *         `almoxarifado_movimentacoes` e continuam aparecendo na timeline.
+ *      c) Composições mistas tipo "Alçapão (Material e Mão de Obra)" passavam
+ *         no /m[aã]o de obra/ — OK no gateway novo, mas legado já no banco.
+ *  - R-001/R-007/R-010 PROÍBEM ALTER/DROP/DELETE em produção, então não dá
+ *    pra "limpar" o histórico. Solução: filtro DEFENSIVO no read da timeline.
+ *
+ * O QUE MUDOU
+ *  1. **`shared/naturezaItemAlmox.ts` (NOVO)** — extrai a função
+ *     `classificarNaturezaItemAlmox` pra `shared/` (mesma fonte de verdade
+ *     usada pelo backend e agora pelo client). Patterns AMPLIADOS pra Rev.
+ *     2508:
+ *       • `\btopogr[aá]f(ia|ico|ica)\b` — topografia.
+ *       • `\blevantamento(s)?\b` — levantamento (planialtimétrico, cadastral).
+ *       • `\bas[- ]built\b` — as built.
+ *       • `\bgeorreferenc[ií]a(mento)?\b` — georreferenciamento.
+ *       • `\bsondagem\b|\bspt\b` — sondagem / SPT.
+ *       • `\bprojeto\s+(arquitet[oô]nico|estrutural|el[eé]trico|hidr[aá]ulico|executivo)\b` — projeto.
+ *       • `\bart\s+crea\b` — ART CREA (taxa profissional).
+ *       • `\b(loca[cç][aã]o|aluguel)\s+de\s+(equipamento|m[aá]quina|caminh[aã]o|guindaste|grua|bomba|gerador|compressor|empilhadeira|retroescavadeira|escavadeira)\b` — locação de equipamento (vai pro módulo Controle de Equipamentos, não almox).
+ *       • `\bhora[- ]?m[aá]quina\b` — hora-máquina.
+ *     Unidades de serviço ampliadas: `hr`, `hrs`, `meses`, `diária`, `hh`.
+ *     `UNIDADES_SERVICO` virou Set pra lookup O(1).
+ *
+ *  2. **`server/routers/compras.ts`** — função interna removida, agora
+ *     `export { classificarNaturezaItemAlmox } from "../../shared/naturezaItemAlmox"`.
+ *     Os 2 callers existentes (`atualizarStatusOrdem` L8368 e
+ *     `warehouse.registerSmartEntry` via dynamic import) seguem funcionando
+ *     SEM MUDANÇA (re-export preserva assinatura).
+ *
+ *  3. **`client/src/pages/almoxarifado/Movimentacoes.tsx`** — novo useMemo
+ *     `timelineAnotada` anota cada linha com `_naturezaMaterial` +
+ *     `_naturezaMotivo` antes dos demais filtros. `lista` aplica
+ *     `if (!mostrarNaoMaterial) r = r.filter(m => m._naturezaMaterial)` em
+ *     PRIMEIRO lugar. Novo state `mostrarNaoMaterial` (default false).
+ *     `ocultasNaoMaterialCount` mede quantas linhas o filtro escondeu.
+ *     UI: banner âmbar antes da lista mostrando contagem + (admin only)
+ *     botão "Mostrar/Esconder" pra revelar linhas não-material caso queira
+ *     auditar o que foi escondido. Imports novos: `Eye`, `EyeOff`,
+ *     `classificarNaturezaItemAlmox` (via path relativo `../../../../shared/`).
+ *
+ * GARANTIAS / R-001
+ *  - Zero ALTER/DROP/DELETE. Movimentações continuam no banco intactas (a
+ *    UI só ESCONDE; admin pode revelar). Reclassificar/limpar fica como
+ *    follow-up (mutation explicitamente solicitada, não automática).
+ *  - O gateway OC→Almox (L8368) e o SmartEntry continuam BLOQUEANDO essas
+ *    naturezas na origem — então o estoque de novos itens fica limpo.
+ *
+ * FOLLOW-UPS POSSÍVEIS (não implementados nesta rev.)
+ *  - Botão "Reclassificar e estornar" pra admin: limpa em lote
+ *    movimentações ocultadas (estorno auditável, não DELETE).
+ *  - Aplicar o mesmo filtro defensivo na tela de Inventário e nos
+ *    dashboards (`DashAlmoxarifadoEquipamentos`).
+ *
+ * FILES
+ *  - `shared/naturezaItemAlmox.ts` (NOVO)
+ *  - `server/routers/compras.ts` (M — função interna → re-export)
+ *  - `client/src/pages/almoxarifado/Movimentacoes.tsx` (M)
+ *  - `shared/version.ts` (M — 2507 → 2508)
+ *  - `shared/changelog.ts` (M)
+ *  - `replit.md` (M — rotação 2+5)
+ *  - `replit-history.md` (M — Rev. 2501 demovida)
+ *
  * Rev. 2507 — **PERSON PHOTO · LIGHTBOX — Foto ampliada usa quase 100% da tela
  * e respeita EXIF para evitar corte visual.**
  *
