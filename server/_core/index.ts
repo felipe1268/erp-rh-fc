@@ -718,6 +718,16 @@ Regras:
           console.log(`[SyncSchema+] Coluna documentos_extras garantida em funcionarios_terceiros.`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA funcionarios_terceiros documentos_extras:`, e?.message || e); }
 
+        // Rev. 2533 — Caminho B (planejamento): baseline_start/finish em
+        // atividades + snapshot expandido do previsto semana-a-semana no projeto.
+        try {
+          await db.execute(sql`ALTER TABLE planejamento_atividades ADD COLUMN IF NOT EXISTS baseline_start DATE`);
+          await db.execute(sql`ALTER TABLE planejamento_atividades ADD COLUMN IF NOT EXISTS baseline_finish DATE`);
+          await db.execute(sql`ALTER TABLE planejamento_projetos ADD COLUMN IF NOT EXISTS previsto_semanas_json TEXT`);
+          await db.execute(sql`ALTER TABLE planejamento_projetos ADD COLUMN IF NOT EXISTS previsto_semanas_gerado_em TIMESTAMP`);
+          console.log(`[SyncSchema+] Caminho B (Rev. 2533) — colunas baseline_start/finish + previsto_semanas_json garantidas.`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA Caminho B Rev. 2533:`, e?.message || e); }
+
         // Rev. 2396 — fornecedor_nome em financial_entries + backfill 1-shot
         // pra rows recorrentes JÁ materializadas (pega o nome do recurring pai).
         try {

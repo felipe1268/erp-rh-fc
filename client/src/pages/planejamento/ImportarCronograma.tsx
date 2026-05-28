@@ -48,6 +48,13 @@ export interface TarefaImportada {
   // fallback dinâmico (cálculo JS via du(envelope ∩ até cutoff)).
   previstoMsp?:     number;
   realizadoMsp?:    number;
+  // Rev. 2533 — Caminho B: BaselineStart/BaselineFinish da BASELINE 0 do MSP
+  // (tag <Baseline Number="0"><Start>/<Finish>). Usado pelo server pra expandir
+  // o PREVISTO semana-a-semana pela fórmula nativa do MSP
+  // Int(((semana − BL_Start)/(BL_Finish − BL_Start))*100). Quando ausente
+  // (atividades sem baseline salva no MSP), o ERP cai no Start/Finish vigente.
+  baselineStart?:   string;
+  baselineFinish?:  string;
 }
 
 // ── Utilitários de parse ──────────────────────────────────────────────────────
@@ -457,6 +464,28 @@ function parseMSProjectTasksFromDoc(doc: Document): TarefaImportada[] {
     if (previstoMsp === undefined && previstoMspT10 !== undefined) previstoMsp = previstoMspT10;
     if (previstoMsp === undefined && previstoMspT11 !== undefined) previstoMsp = previstoMspT11;
 
+    // Rev. 2533 — Caminho B: lê BaselineStart/BaselineFinish da Baseline 0
+    // (primária) salva no MSP. O MSP exporta como:
+    //   <Baseline><Number>0</Number><Start>...</Start><Finish>...</Finish></Baseline>
+    // Quando o engenheiro NÃO salvou baseline, MSP devolve "NA" ou ano 2049 —
+    // tratamos como ausente. Fallback (sem baseline): usa o próprio Start/Finish
+    // vigente (Project sem baseline = baseline implícita = plano corrente).
+    let baselineStart: string | undefined;
+    let baselineFinish: string | undefined;
+    for (const child of Array.from(task.children)) {
+      if (child.tagName !== "Baseline") continue;
+      const num = child.querySelector("Number")?.textContent?.trim() ?? "";
+      if (num !== "0") continue;
+      const bs = (child.querySelector("Start")?.textContent ?? "").trim();
+      const bf = (child.querySelector("Finish")?.textContent ?? "").trim();
+      // MSP usa "NA" ou data 2049-12-31 quando não há baseline salva.
+      if (bs && !bs.startsWith("2049") && bs !== "NA") baselineStart = fmtDate(bs);
+      if (bf && !bf.startsWith("2049") && bf !== "NA") baselineFinish = fmtDate(bf);
+      break;
+    }
+    if (!baselineStart && start) baselineStart = start;
+    if (!baselineFinish && fin)  baselineFinish = fin;
+
     // Pula a tarefa de nível 0 (cabeçalho do projeto)
     if (uid === "0" || name === "" || level === 0) continue;
 
@@ -471,6 +500,7 @@ function parseMSProjectTasksFromDoc(doc: Document): TarefaImportada[] {
       durDias: parseDuration(durRaw), pred, recurso: res,
       isGrupo: summ, isMarco, eapCodigo: wbs, pesoFin: 0, percentConcluido,
       previstoMsp, realizadoMsp,
+      baselineStart, baselineFinish,
     });
   }
   return result;
@@ -1014,6 +1044,9 @@ export default function ImportarCronograma({ projetoId, revisaoAtiva, orcamentoI
       // Rev. 1670 — snapshot por atividade vindo do XML MSP
       previstoMspPct:      t.previstoMsp,
       realizadoMspPct:     t.realizadoMsp,
+      // Rev. 2533 — Caminho B: envia baseline pra expansão semanal no server.
+      baselineStart:       t.baselineStart,
+      baselineFinish:      t.baselineFinish,
     }));
 
     iniciarProgresso(tarefas.length);
@@ -1053,6 +1086,9 @@ export default function ImportarCronograma({ projetoId, revisaoAtiva, orcamentoI
           // Rev. 1670 — snapshot Texto10/Texto7 também no modo mesclar
           previstoMspPct:   a.previstoMspPct,
           realizadoMspPct:  a.realizadoMspPct,
+          // Rev. 2533 — Caminho B: baseline propagada também no mesclar
+          baselineStart:    a.baselineStart,
+          baselineFinish:   a.baselineFinish,
         })),
       }, {
         onSuccess: () => finalizarProgresso(true),

@@ -90,6 +90,147 @@ async function limparSnapshotMspDoProjeto(db: any, projetoId: number) {
   }).where(eq(planejamentoProjetos.id, projetoId));
 }
 
+/**
+ * Rev. 2533 — Caminho B: expande o PREVISTO semana-a-semana aplicando a fórmula
+ * nativa do MS Project `Int(((semana − BaselineStart) / (BaselineFinish −
+ * BaselineStart)) * 100)` sobre cada folha do cronograma. O resultado é
+ * matematicamente idêntico ao que o engenheiro veria se varresse a "Data do
+ * Status" no MSP semana a semana — ou seja, a MESMA coluna `PercentComplete`
+ * que o XML semanal traz, só que projetada da baseline em vez de lida direto.
+ *
+ * Grava o snapshot em `planejamento_projetos.previsto_semanas_json` como:
+ *   { semanas: ["YYYY-MM-DD"...], raiz: [pct...],
+ *     porAtividadeId: { "<id>": [pct...] }, diaCorteSemana, geradoEm }
+ *
+ * Janela: cutoff (default Quinta) de min(BL_Start) até max(BL_Finish), inclusivo.
+ * Raiz: média ponderada por `peso_financeiro` das folhas que têm baseline válida.
+ * Atividades sem baseline são puladas (snapshot vazio pra elas — UI mostra "—").
+ */
+async function regenerarPrevistoSemanasCaminhoB(
+  db: any,
+  projetoId: number,
+  revisaoId: number,
+): Promise<{ semanas: number; folhas: number } | null> {
+  const [proj] = await db.select({
+    id: planejamentoProjetos.id,
+    diaCorteSemana: planejamentoProjetos.diaCorteSemana,
+  }).from(planejamentoProjetos).where(eq(planejamentoProjetos.id, projetoId)).limit(1);
+  if (!proj) return null;
+  const diaCorte = proj.diaCorteSemana ?? 4;
+
+  const ativs = await db.select({
+    id: planejamentoAtividades.id,
+    isGrupo: planejamentoAtividades.isGrupo,
+    disabled: planejamentoAtividades.disabled,
+    pesoFinanceiro: planejamentoAtividades.pesoFinanceiro,
+    baselineStart: planejamentoAtividades.baselineStart,
+    baselineFinish: planejamentoAtividades.baselineFinish,
+  }).from(planejamentoAtividades)
+    .where(eq(planejamentoAtividades.revisaoId, revisaoId));
+
+  const folhas = (ativs as any[])
+    .filter(a => !a.isGrupo && !a.disabled && a.baselineStart && a.baselineFinish)
+    .map(a => ({
+      ...a,
+      _bs: toUtc(a.baselineStart),
+      _bf: toUtc(a.baselineFinish, true),
+    }))
+    .filter(a => !isNaN(a._bs) && !isNaN(a._bf));
+  if (folhas.length === 0) {
+    await db.update(planejamentoProjetos)
+      .set({ previstoSemanasJson: null as any, previstoSemanasGeradoEm: null as any })
+      .where(eq(planejamentoProjetos.id, projetoId));
+    return { semanas: 0, folhas: 0 };
+  }
+
+  // Rev. 2533 — Drizzle date() pode devolver Date OU string; normaliza
+  // pra "YYYY-MM-DD" antes de carimbar UTC midnight/EoD. Sem isso, um Date
+  // virava "Sun May 10..." e o parse retornava NaN → snapshot vazio.
+  const toDateStr = (v: any): string | null => {
+    if (v == null) return null;
+    if (v instanceof Date) {
+      if (isNaN(v.getTime())) return null;
+      return v.toISOString().slice(0, 10);
+    }
+    const s = String(v);
+    const m = s.match(/^\d{4}-\d{2}-\d{2}/);
+    if (m) return m[0];
+    const d = new Date(s);
+    return isNaN(d.getTime()) ? null : d.toISOString().slice(0, 10);
+  };
+  const toUtc = (v: any, endOfDay = false): number => {
+    const s = toDateStr(v);
+    if (!s) return NaN;
+    return new Date(s + (endOfDay ? "T23:59:59Z" : "T00:00:00Z")).getTime();
+  };
+
+  let minStart = Number.POSITIVE_INFINITY;
+  let maxFinish = Number.NEGATIVE_INFINITY;
+  for (const a of folhas) {
+    if (a._bs < minStart) minStart = a._bs;
+    if (a._bf > maxFinish) maxFinish = a._bf;
+  }
+
+  const DAY = 86400000;
+  const minDate = new Date(minStart);
+  const dow = minDate.getUTCDay();
+  const delta = (diaCorte - dow + 7) % 7;
+  let cur = new Date(Date.UTC(
+    minDate.getUTCFullYear(), minDate.getUTCMonth(), minDate.getUTCDate() + delta,
+  )).getTime();
+  // Garante que o último cutoff cobre o fim da última atividade.
+  const semanas: string[] = [];
+  let guard = 0;
+  while (cur <= maxFinish + 7 * DAY && guard < 1000) {
+    semanas.push(new Date(cur).toISOString().slice(0, 10));
+    cur += 7 * DAY;
+    guard++;
+  }
+  if (semanas.length === 0) return { semanas: 0, folhas: folhas.length };
+
+  const pesos = folhas.map(a => parseFloat(a.pesoFinanceiro || "0") || 0);
+  const pesoTot = pesos.reduce((s, p) => s + p, 0);
+  const porAtividadeId: Record<string, number[]> = {};
+  const raiz: number[] = new Array(semanas.length).fill(0);
+
+  for (let i = 0; i < folhas.length; i++) {
+    const a = folhas[i];
+    const bs = a._bs;
+    const bf = a._bf;
+    const dur = bf - bs;
+    const arr: number[] = new Array(semanas.length).fill(0);
+    for (let j = 0; j < semanas.length; j++) {
+      const w = toUtc(semanas[j], true);
+      let pct: number;
+      if (dur <= 0)      pct = w >= bf ? 100 : 0;
+      else if (w <= bs)  pct = 0;
+      else if (w >= bf)  pct = 100;
+      else               pct = Math.floor(((w - bs) / dur) * 100);
+      pct = Math.max(0, Math.min(100, pct));
+      arr[j] = pct;
+      if (pesoTot > 0) raiz[j] += (pesos[i] * pct) / pesoTot;
+    }
+    porAtividadeId[String(a.id)] = arr;
+  }
+
+  const snap = {
+    semanas,
+    raiz: raiz.map(v => +v.toFixed(4)),
+    porAtividadeId,
+    diaCorteSemana: diaCorte,
+    geradoEm: new Date().toISOString(),
+    revisaoId,
+  };
+  await db.update(planejamentoProjetos)
+    .set({
+      previstoSemanasJson: JSON.stringify(snap),
+      previstoSemanasGeradoEm: new Date(),
+    })
+    .where(eq(planejamentoProjetos.id, projetoId));
+
+  return { semanas: semanas.length, folhas: folhas.length };
+}
+
 export const planejamentoRouter = router({
 
   // ── Projetos ──────────────────────────────────────────────────────────────
@@ -1189,6 +1330,9 @@ export const planejamentoRouter = router({
         // null e o ERP cai no fallback dinâmico.
         previstoMspPct:      z.preprocess(v => v == null ? null : Number(v), z.number().min(0).max(100).nullish()),
         realizadoMspPct:     z.preprocess(v => v == null ? null : Number(v), z.number().min(0).max(100).nullish()),
+        // Rev. 2533 — Caminho B: BaselineStart/Finish da Baseline 0 do MSP.
+        baselineStart:       z.string().nullish(),
+        baselineFinish:      z.string().nullish(),
       })),
     }))
     .mutation(async ({ input, ctx }) => {
@@ -1247,6 +1391,9 @@ export const planejamentoRouter = router({
           // Rev. 1670 — snapshot por atividade (string p/ Drizzle numeric)
           previstoMspPct:      a.previstoMspPct == null ? null : String(Number(a.previstoMspPct).toFixed(4)),
           realizadoMspPct:     a.realizadoMspPct == null ? null : String(Number(a.realizadoMspPct).toFixed(4)),
+          // Rev. 2533 — Caminho B: baseline lida do MSP (tag <Baseline Number=0>).
+          baselineStart:       (a as any).baselineStart ?? null,
+          baselineFinish:      (a as any).baselineFinish ?? null,
         };
       });
 
@@ -1433,7 +1580,9 @@ export const planejamentoRouter = router({
                 ${cases("responsavel_lotus", r => r.responsavelLotus === undefined ? "responsavel_lotus" : esc(r.responsavelLotus))},
                 ${cases("disabled", r => escBool(r.disabled))},
                 ${cases("previsto_msp_pct", r => escNumNull(r.previstoMspPct))},
-                ${cases("realizado_msp_pct", r => escNumNull(r.realizadoMspPct))}
+                ${cases("realizado_msp_pct", r => escNumNull(r.realizadoMspPct))},
+                ${cases("baseline_start", r => r.baselineStart ? esc(r.baselineStart) : "NULL")},
+                ${cases("baseline_finish", r => r.baselineFinish ? esc(r.baselineFinish) : "NULL")}
               WHERE id IN (${batchIds.join(",")})
                 AND revisao_id = ${input.revisaoId}
             `));
@@ -1451,6 +1600,22 @@ export const planejamentoRouter = router({
           }
         }
       });
+
+      // Rev. 2533 — Caminho B: expande PREVISTO semana-a-semana logo após
+      // salvar atividades+baselines. Falha silenciosa (snapshot é benefit-add;
+      // ausência cai no comportamento legado de leitura de Texto6).
+      try {
+        const res = await regenerarPrevistoSemanasCaminhoB(db, input.projetoId, input.revisaoId);
+        if (res) {
+          if (res.folhas > 0 && res.semanas === 0) {
+            console.error(`[Caminho B] ALERTA projeto ${input.projetoId} rev ${input.revisaoId}: ${res.folhas} folha(s) com baseline mas snapshot ficou vazio (semanas=0). Verifique formato das datas de baseline.`);
+          } else {
+            console.log(`[Caminho B] Projeto ${input.projetoId} rev ${input.revisaoId}: snapshot gerado (${res.semanas} semanas × ${res.folhas} folhas).`);
+          }
+        }
+      } catch (e: any) {
+        console.error(`[Caminho B] FALHA regenerarPrevistoSemanas projeto ${input.projetoId}:`, e?.message || e);
+      }
 
       // ─── Importar % Concluído do arquivo como avanço da semana atual ─────────
       const atividadesComAvanco = input.atividades.filter(a => (a.percentConcluido ?? 0) > 0 && !a.isGrupo);
@@ -1617,6 +1782,9 @@ export const planejamentoRouter = router({
         // Rev. 1670 — Snapshot Texto10/Texto7 por atividade
         previstoMspPct:   z.preprocess(v => v == null ? null : Number(v), z.number().min(0).max(100).nullish()),
         realizadoMspPct:  z.preprocess(v => v == null ? null : Number(v), z.number().min(0).max(100).nullish()),
+        // Rev. 2533 — Caminho B: baseline propagada também no mesclar.
+        baselineStart:    z.string().nullish(),
+        baselineFinish:   z.string().nullish(),
       })),
     }))
     .mutation(async ({ input, ctx }) => {
@@ -1711,6 +1879,11 @@ export const planejamentoRouter = router({
                 // Rev. 1670 — snapshot por atividade SEMPRE atualizado pelo XML
                 previstoMspPct,
                 realizadoMspPct,
+                // Rev. 2533 — Caminho B: baseline também propagada no mesclar
+                // (XML semanal pode trazer baseline regravada se eng rodou
+                // "Definir Linha de Base" de novo — preserva consistência).
+                baselineStart:  (a as any).baselineStart ?? null,
+                baselineFinish: (a as any).baselineFinish ?? null,
               }).where(eq(planejamentoAtividades.id, id));
               atualizados++;
             } else {
@@ -1743,6 +1916,9 @@ export const planejamentoRouter = router({
                 disabled:       false,
                 previstoMspPct,
                 realizadoMspPct,
+                // Rev. 2533 — Caminho B: baseline em inserts via mesclar.
+                baselineStart:  (a as any).baselineStart ?? null,
+                baselineFinish: (a as any).baselineFinish ?? null,
               });
               inseridos++;
             }

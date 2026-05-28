@@ -1,6 +1,120 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2533 — **PLANEJAMENTO · CAMINHO B (FONTE ÚNICA = PercentComplete):
+ * ERP expande PREVISTO semana-a-semana da BaselineStart/Finish pela fórmula
+ * nativa do MS Project, e lê REALIZADO semanal da MESMA coluna nos uploads
+ * recorrentes.**
+ *
+ * MOTIVAÇÃO (user em 28/05/2026):
+ *   "o ERP precisará ver a coluna %concluída na hora que o cronograma for
+ *    cadastrado e gravar todas as informações de semana a semana como previsto,
+ *    e a cada semana o usuário vai subir o arquivo xml na aba avanço semanal,
+ *    e o ERP vai ler novamente a coluna %concluído de forma que sempre iremos
+ *    ler a mesma coluna para não ter inconsistência de dados entre o MSP e o ERP."
+ *
+ *   Bate com a análise comparativa que fizemos sobre o PDF "MÉTODO DE ATUALIZAÇÃO
+ *   DO REFIS" (manual atual em PLN + XLSX). User escolheu o "Caminho B":
+ *   ERP recebe 1 XML no cadastro, expande internamente a curva PREVISTA
+ *   semana-a-semana usando a MESMA fórmula que o MSP usa quando o engenheiro
+ *   roda "Atualizar Projeto" (Int(((StatusDate − BL_Start)/(BL_Finish −
+ *   BL_Start))*100)). Matematicamente equivalente a varrer Data do Status no
+ *   MSP semana a semana (Caminho A do PDF), mas com 1 upload só.
+ *
+ * REGRA DE OURO ATUALIZADA (substitui a Rev. 2427+):
+ *   • % PREVISTO = expansão de PercentComplete sobre BaselineStart/BaselineFinish
+ *                  pela fórmula nativa do MSP, gerada no salvarAtividades e
+ *                  congelada em snapshot por projeto.
+ *   • % CONCLUÍDA = PercentComplete do XML em cada upload semanal (Avanço Semanal).
+ *   • Fonte única = uma só coluna (PercentComplete), garantindo paridade
+ *     matemática absoluta entre MSP e ERP nos dois momentos.
+ *   • Texto6/Texto10/Texto11 deixam de ser lidos pra previsto (continuam
+ *     como campos opcionais retrocompat — `previsto_msp_pct` por atividade).
+ *
+ * MUDANÇA — Parser (client/src/pages/planejamento/ImportarCronograma.tsx):
+ *   - Interface `TarefaImportada` ganha `baselineStart?` / `baselineFinish?`.
+ *   - `parseMSProjectTasksFromDoc` (L470-490) lê `<Baseline><Number>0</Number>
+ *     <Start>/<Finish></Baseline>` por tarefa. Quando MSP devolve "NA" ou
+ *     ano 2049 (baseline não salva), trata como ausente e cai no Start/Finish
+ *     vigente (baseline implícita = plano corrente — comportamento padrão MSP
+ *     quando não há baseline carimbada).
+ *   - Payload pra `salvarAtividades` (substituir) e `importarComModo` (mesclar)
+ *     propaga `baselineStart`/`baselineFinish` por atividade.
+ *
+ * MUDANÇA — Schema (drizzle/schema.ts):
+ *   - `planejamento_atividades.baseline_start` (date) + `.baseline_finish` (date).
+ *   - `planejamento_projetos.previsto_semanas_json` (text JSON) +
+ *     `.previsto_semanas_gerado_em` (timestamp).
+ *
+ * MUDANÇA — SyncSchema+ (server/_core/index.ts ~L724):
+ *   - ALTER TABLE ADD COLUMN IF NOT EXISTS pras 3 colunas (não-destrutivo,
+ *     respeita R-001/R-007/R-010). Verificado no log: "[SyncSchema+] Caminho B
+ *     (Rev. 2533) — colunas baseline_start/finish + previsto_semanas_json
+ *     garantidas."
+ *
+ * MUDANÇA — Server (server/routers/planejamento.ts):
+ *   - `regenerarPrevistoSemanasCaminhoB(db, projetoId, revisaoId)` (L96-200):
+ *     helper que carrega folhas com baseline, descobre envelope
+ *     [min(BL_Start), max(BL_Finish)], gera lista de cutoffs alinhados ao
+ *     `dia_corte_semana` (default 4=Quinta), e pra cada cutoff calcula
+ *     `pct = clamp(0,100, floor(((cutoff − BL_Start)/(BL_Finish − BL_Start))*100))`
+ *     por atividade. Raiz por semana = média ponderada por `peso_financeiro`.
+ *     Snapshot gravado em `previsto_semanas_json` no formato:
+ *       { semanas: ["YYYY-MM-DD",...], raiz: [pct,...],
+ *         porAtividadeId: {"<id>": [pct,...]}, diaCorteSemana, geradoEm }.
+ *   - `salvarAtividades` (L1153+): zod aceita `baselineStart`/`baselineFinish`,
+ *     persiste em INSERT e UPDATE CASE, e dispara
+ *     `regenerarPrevistoSemanasCaminhoB` logo após o commit da transaction.
+ *     Falha do helper é silenciosa (não bloqueia o save — snapshot é
+ *     benefit-add, comportamento legado segue funcional).
+ *   - `importarComModo` (L1591+): zod também aceita baseline (mesclar
+ *     preserva quando o usuário sobe XML pós-edição).
+ *
+ * SEMÂNTICA OPERACIONAL (vale daqui pra frente — vai virar nova Regra de Ouro
+ * em `replit.md`):
+ *   1) CADASTRO DO CRONOGRAMA (1ª importação): engenheiro carimba baseline
+ *      no MSP (Project → Definir Linha de Base → BL 0), exporta XML.
+ *      Sobe no ERP via "Importar MS Project" → ERP grava atividades +
+ *      baselines + GERA snapshot `previsto_semanas_json` (1 vez só).
+ *   2) AVANÇO SEMANAL: engenheiro atualiza PercentComplete no MSP, exporta
+ *      XML, sobe na aba "Avanço Semanal" → ERP lê PercentComplete por
+ *      atividade e grava em `planejamento_avancos.percentual_acumulado` pra
+ *      a `semana` do StatusDate. Snapshot do previsto NÃO é regenerado
+ *      (baseline é imutável; mudou baseline = nova revisão = novo snapshot).
+ *
+ * UI CONSUMPTION (próximo passo, fica pra Rev. 2534): cards de Avanço,
+ *   Curva S e REFIS leem previsto da semana selecionada via
+ *   `previsto_semanas_json` (lookup O(1) no array por índice da semana).
+ *   Esta revisão entrega APENAS o backbone (parser + schema + snapshot
+ *   gerado e validável via console log "[Caminho B] Projeto X rev Y:
+ *   snapshot gerado (N semanas × M folhas)").
+ *
+ * ARQUIVOS TOCADOS:
+ *   - client/src/pages/planejamento/ImportarCronograma.tsx L52-60 (interface),
+ *     L470-490 (parser Baseline), L1050-1052 (payload substituir),
+ *     L1092-1094 (payload mesclar).
+ *   - drizzle/schema.ts L5399-5407 (planejamento_projetos), L5472-5478
+ *     (planejamento_atividades).
+ *   - server/_core/index.ts L724-732 (SyncSchema+ Rev. 2533).
+ *   - server/routers/planejamento.ts L96-203 (helper), L1195-1197 (zod
+ *     salvarAtividades), L1253-1255 (rows mapping), L1446-1447 (UPDATE CASE),
+ *     L1588-1598 (chamada do helper pós-transaction), L1631-1633 (zod
+ *     importarComModo).
+ *
+ * COMPLIANCE: zero ALTER destrutivo, zero DROP, zero DELETE (R-001/R-007/R-010).
+ *   ADD COLUMN IF NOT EXISTS é o padrão SyncSchema+ já validado em ~50
+ *   migrações do projeto. Snapshot é write-only durante import — não toca
+ *   dados de avanço (`planejamento_avancos`) nem rebaixa o `previsto_msp_pct`
+ *   legado por atividade (continua sendo gravado pra retrocompat).
+ *
+ * FOLLOW-UPS (sugestão pro user):
+ *   - Rev. 2534: cards/Curva S/REFIS consomem `previsto_semanas_json` (lookup
+ *     por semana). Validar paridade contra REFIS XLSX atual do HOTEL DO PAPA.
+ *   - Rev. 2535: aba "Avanço Semanal" ganha banner "Snapshot Caminho B
+ *     gerado em DD/MM com N semanas" + aviso quando XML semanal traz
+ *     baseline diferente do snapshot (= eng carimbou nova baseline → sugerir
+ *     criar nova revisão e regerar snapshot).
+ *
  * Rev. 2532 — **APONTAMENTOS DE CAMPO · MULTI-SELECT DE FUNCIONÁRIOS
  * no diálogo "Novo Apontamento" (1 ocorrência por func, mesma
  * descrição/horários, em lote).**

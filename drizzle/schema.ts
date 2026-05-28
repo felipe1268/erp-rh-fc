@@ -5393,6 +5393,15 @@ export const planejamentoProjetos = pgTable("planejamento_projetos", {
   cutoffConsolidado:        boolean("cutoff_consolidado").default(false),
   cutoffConsolidadoEm:      timestamp("cutoff_consolidado_em"),
   cutoffConsolidadoPor:     varchar("cutoff_consolidado_por", { length: 200 }),
+  // Rev. 2533 — Caminho B: snapshot expandido do PREVISTO semana-a-semana.
+  // JSON: { semanas: ["2026-05-07", ...], raiz: [0, 2, 5, ...],
+  //         porAtividadeId: { "<id>": [0, 0, 5, ...] }, geradoEm: ISO }.
+  // Gerado no salvarAtividades aplicando Int(((sem − BL_Start)/(BL_Finish −
+  // BL_Start))*100) por atividade. SEMPRE a partir da MESMA coluna que o XML
+  // semanal traz (PercentComplete) — só que via fórmula sobre baseline em vez
+  // de leitura direta. Garante paridade matemática MSP×ERP em ambos momentos.
+  previstoSemanasJson:      text("previsto_semanas_json"),
+  previstoSemanasGeradoEm:  timestamp("previsto_semanas_gerado_em"),
   criadoEm:               timestamp("criado_em").defaultNow(),
   atualizadoEm:           timestamp("atualizado_em").defaultNow(),
 });
@@ -5466,6 +5475,13 @@ export const planejamentoAtividades = pgTable("planejamento_atividades", {
   // dinâmico nas atividades sem snapshot, ex.: cronograma legado).
   previstoMspPct:       numeric("previsto_msp_pct", { precision: 8, scale: 4 }),
   realizadoMspPct:      numeric("realizado_msp_pct", { precision: 8, scale: 4 }),
+  // Rev. 2533 — Caminho B: BaselineStart/BaselineFinish lidos do MSP (tag
+  // <Baseline Number="0">). Fonte ÚNICA do PREVISTO semana-a-semana, expandido
+  // pela fórmula nativa Int(((semana − BL_Start)/(BL_Finish − BL_Start))*100)
+  // no momento do salvarAtividades. Sem isso, cai no Start/Finish vigente
+  // (baseline implícita = plano corrente).
+  baselineStart:        date("baseline_start"),
+  baselineFinish:       date("baseline_finish"),
   disabled:             boolean("disabled").default(false),
   // Rev. 1875 — Override granular de fim de semana trabalhado por atividade.
   // JSON array de datas ISO "YYYY-MM-DD" que devem ser tratadas como DIA ÚTIL
