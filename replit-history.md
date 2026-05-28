@@ -2,6 +2,7 @@
 
 > Este arquivo guarda os one-liners das revisões antigas para manter o `replit.md` enxuto.
 
+- **Rev. 2509** — AVALIAÇÃO INTELIGENTE · RANKING — Foto do funcionário ao lado do nome em Top 10, Bottom 10, busca e tabela completa (click amplia via PersonPhoto). `avaliacaoFuncionariosRouter.getRanking` agora seleciona `employees.fotoUrl`. Ver `shared/changelog.ts`.
 - **Rev. 2508** — ALMOXARIFADO · MOVIMENTAÇÕES — Filtro defensivo esconde itens não-material (serviço/MDO/topografia) + classificador `classificarNaturezaItemAlmox` ampliado movido pra `shared/naturezaItemAlmox.ts` com 9 novos patterns (as built/sondagem/projeto/locação) + unidades hr/meses/diária/hh. Ver `shared/changelog.ts`.
 - **Rev. 2507** — PERSON PHOTO · LIGHTBOX — Foto ampliada usa quase 100% da tela (`max-w-[96vw] max-h-[96vh]`) e respeita EXIF (`imageOrientation:'from-image'`). User (iPad): "A foto está sendo cortada". Fix defensivo em `client/src/components/PersonPhoto.tsx`. Ver `shared/changelog.ts`.
 - **Rev. 2506** — DASHBOARD PERFIL POR TEMPO DE CASA · UX — Barra de progresso 0→100% no card "Analisando perfis..." (Anthropic não expõe progresso real → curva assintótica simulada 250ms, satura em 95%, fixa em 100% no `onSuccess`, reset em 800ms). Refs separados (interval + reset timeout), helper `clearIaTimers`, cleanup no unmount. Ver `shared/changelog.ts`.

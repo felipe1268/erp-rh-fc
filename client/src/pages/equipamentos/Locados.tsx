@@ -4,7 +4,7 @@ import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
 import { toast } from "sonner";
-import { Plus, Search, X, Truck, CheckCircle2, RotateCcw, ClipboardCheck, Eye, FileText, Upload, Sparkles, Trash2, Activity, Clock, AlertTriangle, DollarSign, Calendar, Hash, Building2, User as UserIcon, MapPin, Camera, StickyNote, ChevronDown, Tag, Loader2, Layers, Boxes, ImagePlus, Library, Check, Globe, RefreshCw, ZoomIn, Undo2, type LucideIcon } from "lucide-react";
+import { Plus, Search, X, Truck, CheckCircle2, RotateCcw, ClipboardCheck, Eye, FileText, Upload, Sparkles, Trash2, Activity, Clock, AlertTriangle, DollarSign, Calendar, Hash, Building2, User as UserIcon, MapPin, Camera, StickyNote, ChevronDown, Tag, Loader2, Layers, Boxes, ImagePlus, Library, Check, Globe, RefreshCw, ZoomIn, Undo2, Pencil, type LucideIcon } from "lucide-react";
 import { ModalConfirmacaoAuditoria } from "@/components/almoxarifado/ModalConfirmacaoAuditoria";
 import type { ReactNode } from "react";
 import { FotosUploader, FotoItem, fmtMoney, fmtDate, Spinner } from "./_shared";
@@ -214,6 +214,12 @@ export default function EquipamentosLocados() {
   const [checkinObs, setCheckinObs] = useState("");
 
   const [modalEventos, setModalEventos] = useState<any>(null);
+  // Rev. 2516 — editor inline de OBRA dentro do modal de GRUPO. Permite
+  // vincular/trocar/desvincular a obra de todas as unidades do grupo de
+  // uma vez (pedido user: "quando clicar na edição quer poder editar e
+  // indicar a obra que ele ta cadastrada").
+  const [editandoObraGrupo, setEditandoObraGrupo] = useState(false);
+  const [novaObraGrupo, setNovaObraGrupo] = useState<string>(""); // "" | "__null__" | "<id>"
   const eventos = trpc.equipamentos.eventosListar.useQuery(
     { companyId, equipamentoLocadoId: modalEventos?.id || 0 },
     { enabled: !!modalEventos }
@@ -2211,7 +2217,7 @@ export default function EquipamentosLocados() {
       {/* Rev. 2344 — Modal drill-down do GRUPO (descrição+obra). Lista as
           unidades individuais com ações idênticas ao card individual. */}
       {modalGrupo && (
-        <div className="fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setModalGrupo(null)}>
+        <div className="fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => { setEditandoObraGrupo(false); setModalGrupo(null); }}>
           <div className="bg-white rounded-2xl shadow-2xl max-w-5xl w-full max-h-[90vh] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
             <div className="bg-gradient-to-r from-emerald-600 to-teal-600 text-white px-6 py-4 flex items-start justify-between gap-3 flex-shrink-0">
               <div className="flex items-start gap-3 min-w-0">
@@ -2225,13 +2231,81 @@ export default function EquipamentosLocados() {
                 <div className="min-w-0">
                   <div className="text-[10px] uppercase tracking-wider opacity-80 font-bold">Grupo · {fmtN(modalGrupo.unidades.length)} unidade(s)</div>
                   <h2 className="text-lg font-bold truncate" title={modalGrupo.descricao}>{modalGrupo.descricao}</h2>
-                  <div className="text-xs opacity-90 flex items-center gap-1.5 mt-0.5 truncate">
-                    <MapPin className="h-3 w-3" />
-                    {modalGrupo.obraId ? (obrasMap.get(modalGrupo.obraId) || `Obra #${modalGrupo.obraId}`) : "Sem obra vinculada"}
+                  {/* Rev. 2516 — Linha OBRA com editor inline. Click no
+                      lápis abre <select> + Salvar/Cancelar. Salva via
+                      vincularLote pra TODAS as unidades do grupo. */}
+                  <div className="text-xs opacity-90 mt-0.5">
+                    {!editandoObraGrupo ? (
+                      <div className="flex items-center gap-1.5 truncate">
+                        <MapPin className="h-3 w-3 flex-shrink-0" />
+                        <span className="truncate">
+                          {modalGrupo.obraId ? (obrasMap.get(modalGrupo.obraId) || `Obra #${modalGrupo.obraId}`) : "Sem obra vinculada"}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setNovaObraGrupo(modalGrupo.obraId ? String(modalGrupo.obraId) : "__null__");
+                            setEditandoObraGrupo(true);
+                          }}
+                          className="ml-1 inline-flex items-center gap-1 bg-white/15 hover:bg-white/30 text-white text-[10px] font-semibold px-2 py-0.5 rounded-full transition"
+                          title="Editar obra do grupo"
+                        >
+                          <Pencil className="h-3 w-3" /> Editar
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-1.5 flex-wrap" onClick={e => e.stopPropagation()}>
+                        <MapPin className="h-3 w-3 flex-shrink-0" />
+                        <select
+                          value={novaObraGrupo}
+                          onChange={e => setNovaObraGrupo(e.target.value)}
+                          disabled={vincularLote.isPending}
+                          className="text-slate-800 text-xs px-2 py-1 rounded-md border border-white/40 bg-white min-w-[200px] max-w-[300px] focus:outline-none focus:ring-2 focus:ring-white/60"
+                        >
+                          <option value="">— Selecione —</option>
+                          <option value="__null__">— Sem obra vinculada —</option>
+                          {((obrasAtivasQ.data || []) as any[]).map((o: any) => (
+                            <option key={o.id} value={String(o.id)}>{o.nome}</option>
+                          ))}
+                        </select>
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            if (!novaObraGrupo) { toast.error("Selecione uma obra (ou Sem obra)."); return; }
+                            const obraId = novaObraGrupo === "__null__" ? null : (parseInt(novaObraGrupo) || null);
+                            if (obraId === null && novaObraGrupo !== "__null__") { toast.error("Obra inválida."); return; }
+                            const ids = modalGrupo.unidades.map((u: any) => Number(u.id));
+                            try {
+                              await vincularLote.mutateAsync({ companyId, ids, obraId });
+                              await utils.equipamentos.locadosListar.invalidate();
+                              toast.success(obraId === null
+                                ? `${ids.length} unidade(s) desvinculada(s) da obra.`
+                                : `${ids.length} unidade(s) vinculada(s) à obra "${obrasMap.get(obraId) || obraId}".`);
+                              setEditandoObraGrupo(false);
+                              setModalGrupo(null); // fecha pra recarregar a lista (key do grupo muda com obra)
+                            } catch (e: any) {
+                              toast.error(formatTrpcError(e));
+                            }
+                          }}
+                          disabled={vincularLote.isPending || !novaObraGrupo}
+                          className="inline-flex items-center gap-1 bg-white text-emerald-700 text-[11px] font-bold px-2.5 py-1 rounded-md hover:bg-emerald-50 disabled:opacity-50 transition"
+                        >
+                          {vincularLote.isPending ? "Salvando…" : "Salvar"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => { setEditandoObraGrupo(false); setNovaObraGrupo(""); }}
+                          disabled={vincularLote.isPending}
+                          className="inline-flex items-center gap-1 bg-white/15 hover:bg-white/25 text-white text-[11px] font-medium px-2.5 py-1 rounded-md disabled:opacity-50 transition"
+                        >
+                          Cancelar
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
-              <button onClick={() => setModalGrupo(null)} className="text-white/80 hover:text-white p-1 rounded-lg hover:bg-white/15 transition flex-shrink-0" title="Fechar">
+              <button onClick={() => { setEditandoObraGrupo(false); setModalGrupo(null); }} className="text-white/80 hover:text-white p-1 rounded-lg hover:bg-white/15 transition flex-shrink-0" title="Fechar">
                 <X className="h-5 w-5" />
               </button>
             </div>

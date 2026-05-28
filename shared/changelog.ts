@@ -1,6 +1,89 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2516 — **EQUIPAMENTOS LOCADOS — Editor inline de OBRA no modal de
+ * GRUPO (drill-down). Vincula/troca/desvincula a obra de todas as unidades
+ * do grupo de uma vez, sem precisar abrir a action bar de seleção em lote.**
+ *
+ * PEDIDO (user, 28/05/2026, screenshot do modal "Esmilhadeira Angular 5″"
+ * com 1 unidade e "Sem obra vinculada"):
+ *  - "quando clicar na edição quer poder editar e indicar a obra que ele
+ *     ta cadastrada..."
+ *
+ * CONTEXTO
+ *  - Modal de GRUPO (Rev. 2344) abre quando o user clica num card agregado
+ *    descrição+obra. Mostra header com nome + "Sem obra vinculada" + KPIs +
+ *    tabela das unidades.
+ *  - Pra mudar a obra, antes o user precisava: fechar o modal → marcar
+ *    checkboxes na grid → action bar flutuante → escolher obra → Vincular.
+ *    Fluxo muito longo pra caso simples de 1 unidade.
+ *
+ * MUDANÇAS — CLIENT (`client/src/pages/equipamentos/Locados.tsx`)
+ *
+ * (1) STATE — 2 estados novos logo após `modalEventos`:
+ *     - `editandoObraGrupo: boolean` — toggle do modo de edição inline.
+ *     - `novaObraGrupo: string` — valor do `<select>` ("" | "__null__" | id).
+ *
+ * (2) HEADER do modal de GRUPO — linha "Sem obra vinculada" agora tem:
+ *     - Botão pílula "Editar" (ícone Pencil) à direita do texto.
+ *     - Click → abre `<select>` com todas as obras ativas + opção
+ *       "— Sem obra vinculada —" (permite desvincular) + Salvar/Cancelar.
+ *     - `<select>` pré-selecionado com a obra atual (ou __null__ se vazia).
+ *
+ * (3) SAVE handler — reusa `vincularLote` (mutation já existente da action
+ *     bar): chama com `ids = modalGrupo.unidades.map(u => u.id)` + `obraId`.
+ *     - Sucesso: `invalidate()` da lista + toast com nome da obra +
+ *       fecha o modal (a key do grupo muda quando a obra muda, então
+ *       reabrir o mesmo grupo não faria sentido).
+ *     - Erro: toast com `formatTrpcError`.
+ *     - Loading: botões desabilitados, texto "Salvando…".
+ *
+ * (4) BACKDROP / CLOSE — `setEditandoObraGrupo(false)` em todos os caminhos
+ *     de fechamento (click no backdrop, botão X, botão Fechar) pra não
+ *     deixar o picker pendurado quando o user reabrir o modal.
+ *
+ * (5) IMPORT — adicionado `Pencil` ao import único de `lucide-react`.
+ *
+ * REGRAS DE OURO RESPEITADAS
+ *  - Zero ALTER/DROP/DELETE/CREATE TABLE. 100% client-side.
+ *  - Server inalterado — `locadosVincularObraLote` já existia desde Rev.
+ *    2323/2326 e aceita N ids + obraId nullable.
+ *  - Multi-tenant: mutation usa `companyId` do contexto + `obrasAtivasQ`
+ *    já filtra por company.
+ *  - UX consistente — mesma terminologia ("Vincular obra") e mesmo
+ *    componente de mutation usado na action bar flutuante.
+ *
+ * VALIDAÇÃO MANUAL
+ *  - Grupo sem obra → "Editar" → select vem pré-selecionado em "Sem obra"
+ *    → escolher obra → Salvar → toast verde + lista recarrega + grupo
+ *    aparece agora na seção "com obra".
+ *  - Grupo com obra → "Editar" → select pré-selecionado na obra atual →
+ *    escolher OUTRA obra → Salvar → todas as unidades migram.
+ *  - Grupo com obra → "Editar" → escolher "Sem obra vinculada" → Salvar
+ *    → desvincula todas.
+ *  - Cancel limpa o estado sem alterar nada.
+ *  - z-[60] preservado, modal não vaza pra trás do header.
+ *
+ * ARQUIVOS TOCADOS
+ *  - `client/src/pages/equipamentos/Locados.tsx`
+ *    - State (linha ~219-225)
+ *    - Header modalGrupo (linha ~2237-2310)
+ *    - Backdrop close + X close (linha ~2223, ~2316)
+ *    - Import Pencil (linha 7)
+ *  - `shared/version.ts` (2515 → 2516)
+ *  - `shared/changelog.ts` (esta entrada)
+ *  - `replit.md` (rotação 2+5: 2516+2515 detalhadas; 2514 vira one-liner;
+ *    2509 desce pra `replit-history.md`)
+ *
+ * FOLLOW-UPS POSSÍVEIS
+ *  - Editor inline por unidade (na tabela do grupo) — útil quando 1
+ *    unidade tem que ir pra obra diferente do resto do grupo. Hoje a
+ *    edição é coletiva.
+ *  - Suportar mesma operação dentro de `modalEventos` (Detalhes da
+ *    unidade individual fora do agrupamento).
+ *
+ * ─────────────────────────────────────────────────────────────────────────
+ *
  * Rev. 2515 — **EQUIPAMENTOS PRÓPRIOS — Lightbox no card + FOTOS sempre
  * visíveis no modal de edição/cadastro (saiu de dentro de "Mais detalhes").**
  *
