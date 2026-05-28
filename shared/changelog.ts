@@ -1,6 +1,91 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2513 — **EQUIPAMENTOS PRÓPRIOS — Padronização MAIÚSCULA (todos os
+ * textos) + código de patrimônio AUTO-GERADO server-side (anti-race) com
+ * UNIQUE constraint + retry, eliminando duplicações.**
+ *
+ * PEDIDO (user, 28/05/2026, iPad):
+ *  - "independe de como o usuário digitar o texto quero que o ERP garanta
+ *     que haverá um padrão.. quero todos os textos em letra maiuscula e na
+ *     tela precisa ter o codigo de cada equipamento, gerado de forma
+ *     automaticamente a cada cadastro, garantindo que não teremos
+ *     duplicações de numeração.."
+ *
+ * MUDANÇAS — SERVER (`server/routers/equipamentos.ts`)
+ *
+ * (1) HELPER `upperBR(v)` exportado
+ *  - Trim + collapse de whitespace (`\s+` → 1 espaço) + `toLocaleUpperCase("pt-BR")`.
+ *  - Acentos preservados (CARÁTER → CARÁTER, não vira CARATER).
+ *  - Vazio vira `null` (mantém semântica do banco).
+ *
+ * (2) HELPER `proximoCodigoPatrimonio(db, companyId)` exportado
+ *  - SELECT `codigoPatrimonio` WHERE companyId=?; regex `/^EQP-(\d+)$/i`
+ *    extrai N, retorna `EQP-${(max+1).padStart(4,'0')}`.
+ *  - Por COMPANY (multi-tenant safe).
+ *
+ * (3) `proprioCriar` REESCRITO
+ *  - `codigoPatrimonio` ficou OPCIONAL no zod (cliente nem manda mais).
+ *  - Loop de até 8 tentativas: `proximoCodigoPatrimonio` → INSERT.
+ *    Se UNIQUE violation (PG code 23505 ou `uq_equip_proprio_company_patrimonio`
+ *    ou /duplicate key/), incrementa attempt e tenta de novo (outro device
+ *    pegou o N entre o SELECT e o INSERT).
+ *  - Outros erros propagam normalmente.
+ *  - Todos os campos textuais passam por `upperBR` antes do INSERT.
+ *  - Após 8 tentativas, lança CONFLICT com mensagem amigável.
+ *
+ * (4) `proprioAtualizar`
+ *  - Novo helper `mapUpper(k, v)` aplica `upperBR` em descricao/categoria/
+ *    marca/modelo/observacoes antes do UPDATE.
+ *
+ * MUDANÇAS — CLIENT (`client/src/pages/equipamentos/Proprios.tsx`)
+ *
+ * (1) HELPER `up(v)` — `v.toLocaleUpperCase("pt-BR")` sem trim (preserva
+ *     espaços durante digitação).
+ *
+ * (2) INPUTS uppercase live
+ *  - Descricao, Marca, Modelo, N° Série, Observações, Nova categoria:
+ *    `onChange` aplica `up()` ANTES de setForm + `style={{ textTransform: "uppercase" }}`
+ *    no input (placeholder visual também). Usuário digita "furadeira" e vê
+ *    "FURADEIRA" imediatamente.
+ *
+ * (3) IMPORT do Almoxarifado + `abrirEdit`
+ *  - `preencherFormDoItem` aplica `up()` no nome/categoria vindos.
+ *  - `abrirEdit` aplica `up()` em todos os textos (uppercase defensivo
+ *    pra registros legados pré-2513).
+ *
+ * (4) CAMPO PATRIMÔNIO no modal — visual READ-ONLY (display puro)
+ *  - Removido `<input>` editável + botão "Auto"; agora é uma "pill" cinza
+ *    com ícone Hash + número monospace + badge "AUTO" (criação) ou
+ *    "imutável" (edição).
+ *  - Em criação mostra `gerarPatrimonioAuto()` (preview client-side baseado
+ *    em `totalList`); valor REAL será gerado pelo server no INSERT.
+ *
+ * (5) `salvar()` na criação NÃO envia mais `codigoPatrimonio`
+ *  - Server é a source-of-truth. Cliente envia apenas os outros campos.
+ *
+ * (6) CARDS na grid
+ *  - `<h3>` da descrição ganha `uppercase` CSS; categoria também.
+ *  - Garantia visual de padronização inclusive pra registros legados que
+ *    ainda estão em mixed case no banco (uppercase em runtime).
+ *
+ * RACIONAL — POR QUE SERVER-SIDE
+ *  - Anti-race: 2 dispositivos cadastrando simultâneo viam o mesmo MAX
+ *    no client e geravam EQP-NNNN duplicado. UNIQUE constraint da Rev.
+ *    2510 bloqueava o segundo INSERT com erro feio.
+ *  - Agora: server SELECT+INSERT em uma única request; se UNIQUE viola,
+ *    loop reage e tenta de novo. Cliente nem fica sabendo da retry.
+ *
+ * RACIONAL — POR QUE CSS uppercase NOS CARDS
+ *  - Registros pré-2513 podem estar em mixed case ("Batedor de massa").
+ *    UPDATE em massa seria possível (UPDATE não está no R-001/R-007/R-010
+ *    de proibições), mas é desnecessário: `text-transform:uppercase`
+ *    resolve visualmente sem mutar dados; quando o usuário editar, o
+ *    `abrirEdit` + `salvar` normaliza pra MAIÚSCULA no banco.
+ *
+ * ZERO ALTER/DROP/CREATE TABLE/DELETE. UNIQUE constraint já existia desde
+ * Rev. 2510. Backfill é orgânico (a cada edição), sem migration explícita.
+ *
  * Rev. 2512 — **EQUIPAMENTOS PRÓPRIOS — Modal redesenhado em 2 colunas
  * (cabe sem scroll) + cadastro de NOVAS categorias (localStorage por
  * company) + seletor de STATUS dentro do modal de edição

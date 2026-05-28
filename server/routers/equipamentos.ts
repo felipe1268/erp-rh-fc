@@ -28,6 +28,37 @@ import {
 } from "../../drizzle/schema";
 import { storagePut } from "../storage";
 
+// Rev. 2513 — Normalização de textos pra MAIÚSCULA (padrão FC).
+// Aplicada em INSERT/UPDATE de equipamentos próprios (descricao, categoria,
+// marca, modelo, observacoes). Acentos preservados (pt-BR), espaços extras
+// colapsados. Vazio vira null pra manter a semântica do banco.
+export function upperBR(v: string | null | undefined): string | null {
+  if (v == null) return null;
+  const t = String(v).trim().replace(/\s+/g, " ");
+  if (!t) return null;
+  return t.toLocaleUpperCase("pt-BR");
+}
+
+// Rev. 2513 — Gera próximo código de patrimônio (EQP-NNNN) por company.
+// Combinado com UNIQUE constraint uq_equip_proprio_company_patrimonio +
+// retry no chamador, garante zero duplicação mesmo em race entre
+// dispositivos.
+//
+// PERFORMANCE: cálculo no banco via MAX(NULLIF(substring(...),'')::int)
+// filtrando apenas códigos no padrão EQP-\d+. O(1) com índice por
+// company_id, vs. O(N) varrendo em memória (problema apontado pelo
+// architect na Rev. 2513 — fix imediato).
+export async function proximoCodigoPatrimonio(db: any, companyId: number): Promise<string> {
+  const [row] = await db.execute(sql`
+    SELECT COALESCE(MAX(NULLIF(substring(codigo_patrimonio FROM '^EQP-(\d+)$'), '')::int), 0) AS max
+    FROM equipamentos_proprios
+    WHERE company_id = ${companyId}
+      AND codigo_patrimonio ~ '^EQP-\d+$'
+  `);
+  const max = Number((row as any)?.max ?? 0) || 0;
+  return `EQP-${String(max + 1).padStart(4, "0")}`;
+}
+
 // Rev. 2355 — Normaliza descrição para chave canônica da biblioteca de fotos.
 // NFD + remove diacríticos + uppercase + collapse espaços + trim.
 // Ex.: "Painel NR18 1,5x1,0 com Degrau " → "PAINEL NR18 1,5X1,0 COM DEGRAU"
@@ -248,7 +279,10 @@ export const equipamentosRouter = router({
   proprioCriar: protectedProcedure
     .input(z.object({
       companyId: z.number(),
-      codigoPatrimonio: z.string().min(1).max(50),
+      // Rev. 2513 — codigoPatrimonio agora é OPCIONAL: servidor sempre gera
+      // automaticamente (EQP-NNNN, contador por company, com retry em
+      // UNIQUE violation pra anti-race entre dispositivos).
+      codigoPatrimonio: z.string().max(50).optional(),
       descricao: z.string().min(1).max(255),
       categoria: z.string().max(100).optional(),
       numeroSerie: z.string().max(100).optional(),
@@ -265,32 +299,51 @@ export const equipamentosRouter = router({
     .mutation(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      // Garante unicidade de patrimônio
-      const [dup] = await db.select({ id: equipamentosProprios.id }).from(equipamentosProprios)
-        .where(and(
-          eq(equipamentosProprios.companyId, input.companyId),
-          eq(equipamentosProprios.codigoPatrimonio, input.codigoPatrimonio),
-        )).limit(1);
-      if (dup) throw new TRPCError({ code: "CONFLICT", message: "Patrimônio já cadastrado." });
-      const [created] = await db.insert(equipamentosProprios).values({
+      // Rev. 2513 — guarda defensiva pós-normalização: rejeita descrição
+      // que vire vazia depois do upperBR (ex: payload só com espaços).
+      if (!upperBR(input.descricao)) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Descrição não pode estar vazia." });
+      }
+      // Rev. 2513 — INSERT com auto-gen + retry de UNIQUE violation.
+      // Política: server SEMPRE manda; valor enviado do cliente é descartado.
+      // Garantia: UNIQUE constraint uq_equip_proprio_company_patrimonio
+      // (criada na Rev. 2510) + loop de até 8 tentativas pra cobrir race
+      // entre dispositivos.
+      const baseVals = {
         companyId: input.companyId,
-        codigoPatrimonio: input.codigoPatrimonio,
-        descricao: input.descricao,
-        categoria: input.categoria ?? null,
-        numeroSerie: input.numeroSerie ?? null,
-        marca: input.marca ?? null,
-        modelo: input.modelo ?? null,
+        descricao: upperBR(input.descricao) || input.descricao,
+        categoria: upperBR(input.categoria) ?? null,
+        numeroSerie: upperBR(input.numeroSerie) ?? null,
+        marca: upperBR(input.marca) ?? null,
+        modelo: upperBR(input.modelo) ?? null,
         dataAquisicao: input.dataAquisicao ?? null,
         valorAquisicao: input.valorAquisicao != null ? String(input.valorAquisicao) : null,
         vidaUtilMeses: input.vidaUtilMeses ?? null,
         custoManutencaoMedioMes: input.custoManutencaoMedioMes != null ? String(input.custoManutencaoMedioMes) : "0",
         custoSeguroMedioMes: input.custoSeguroMedioMes != null ? String(input.custoSeguroMedioMes) : "0",
         fotosJson: input.fotos ?? null,
-        observacoes: input.observacoes ?? null,
-        status: "disponivel",
-        localizacaoAtualTipo: "almoxarifado",
-      }).returning({ id: equipamentosProprios.id });
-      return { id: created.id };
+        observacoes: upperBR(input.observacoes) ?? null,
+        status: "disponivel" as const,
+        localizacaoAtualTipo: "almoxarifado" as const,
+      };
+      let lastErr: any = null;
+      for (let attempt = 0; attempt < 8; attempt++) {
+        const cod = await proximoCodigoPatrimonio(db, input.companyId);
+        try {
+          const [created] = await db.insert(equipamentosProprios).values({
+            ...baseVals,
+            codigoPatrimonio: cod,
+          }).returning({ id: equipamentosProprios.id, codigoPatrimonio: equipamentosProprios.codigoPatrimonio });
+          return { id: created.id, codigoPatrimonio: created.codigoPatrimonio };
+        } catch (e: any) {
+          // 23505 = unique_violation (Postgres). Outro device pegou o N. — retry.
+          const msg = String(e?.message || "");
+          const isUnique = e?.code === "23505" || /uq_equip_proprio_company_patrimonio|duplicate key/i.test(msg);
+          if (!isUnique) throw e;
+          lastErr = e;
+        }
+      }
+      throw new TRPCError({ code: "CONFLICT", message: "Não foi possível gerar um patrimônio único após 8 tentativas. Tente novamente.", cause: lastErr });
     }),
 
   proprioAtualizar: protectedProcedure
@@ -316,10 +369,15 @@ export const equipamentosRouter = router({
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       const update: any = { updatedAt: sql`now()` };
       const map = (k: string, v: any) => { if (v !== undefined) update[k] = v; };
-      map("descricao", input.descricao);
-      map("categoria", input.categoria);
-      map("marca", input.marca);
-      map("modelo", input.modelo);
+      // Rev. 2513 — normaliza textos pra MAIÚSCULA (descricao/categoria/marca/modelo/observacoes).
+      const mapUpper = (k: string, v: string | null | undefined) => {
+        if (v === undefined) return;
+        update[k] = v === null ? null : (upperBR(v) ?? null);
+      };
+      mapUpper("descricao", input.descricao);
+      mapUpper("categoria", input.categoria);
+      mapUpper("marca", input.marca);
+      mapUpper("modelo", input.modelo);
       if (input.valorAquisicao !== undefined) update.valorAquisicao = input.valorAquisicao != null ? String(input.valorAquisicao) : null;
       map("vidaUtilMeses", input.vidaUtilMeses);
       if (input.custoManutencaoMedioMes !== undefined) update.custoManutencaoMedioMes = input.custoManutencaoMedioMes != null ? String(input.custoManutencaoMedioMes) : null;
@@ -327,7 +385,7 @@ export const equipamentosRouter = router({
       map("status", input.status);
       map("localizacaoAtualTipo", input.localizacaoAtualTipo);
       map("localizacaoAtualObraId", input.localizacaoAtualObraId);
-      map("observacoes", input.observacoes);
+      mapUpper("observacoes", input.observacoes);
       if (input.fotos !== undefined) update.fotosJson = input.fotos ?? null;
       const r = await db.update(equipamentosProprios).set(update)
         .where(and(eq(equipamentosProprios.id, input.id), eq(equipamentosProprios.companyId, input.companyId)))

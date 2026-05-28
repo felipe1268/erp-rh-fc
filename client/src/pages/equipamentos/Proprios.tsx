@@ -16,6 +16,13 @@ function toStatus(v: unknown): StatusEquip {
   return typeof v === "string" && (STATUS_SET as Set<string>).has(v) ? (v as StatusEquip) : "disponivel";
 }
 
+// Rev. 2513 — Normaliza texto pra MAIÚSCULA (espelha `upperBR` do server).
+// Usado nos onChange dos inputs pra mostrar imediatamente o valor que será
+// gravado. Não trima durante digitação (pra permitir espaço entre palavras).
+function up(v: string): string {
+  return v.toLocaleUpperCase("pt-BR");
+}
+
 const EMPTY_FORM = {
   codigoPatrimonio: "", descricao: "", categoria: "", numeroSerie: "",
   marca: "", modelo: "", dataAquisicao: "", valorAquisicao: "",
@@ -136,6 +143,9 @@ export default function EquipamentosProprios() {
     }
   }
 
+  // Rev. 2513 — Preview do próximo patrimônio. O VALOR REAL é gerado pelo
+  // servidor (com retry em UNIQUE violation) — aqui só pra mostrar ao usuário
+  // qual será o código antes de salvar.
   function gerarPatrimonioAuto() {
     let maxN = 0;
     for (const p of (totalList || []) as any[]) {
@@ -160,8 +170,9 @@ export default function EquipamentosProprios() {
   function preencherFormDoItem(it: { nome: string; fotoUrl: string; categoria: string }) {
     setForm({
       ...EMPTY_FORM,
-      descricao: it.nome,
-      categoria: it.categoria || "",
+      // Rev. 2513 — normaliza textos vindos do Almoxarifado pra MAIÚSCULA.
+      descricao: up(it.nome || ""),
+      categoria: up(it.categoria || ""),
       codigoPatrimonio: gerarPatrimonioAuto(),
     });
     setFotos(it.fotoUrl ? [{ url: it.fotoUrl, uploadedAt: new Date().toISOString() }] : []);
@@ -215,17 +226,18 @@ export default function EquipamentosProprios() {
     e.target.value = "";
   }
   function abrirEdit(p: any) {
+    // Rev. 2513 — uppercase defensivo pra registros legados (pré-2513).
     setForm({
       codigoPatrimonio: p.codigoPatrimonio,
-      descricao: p.descricao,
-      categoria: p.categoria || "",
-      numeroSerie: p.numeroSerie || "",
-      marca: p.marca || "",
-      modelo: p.modelo || "",
+      descricao: up(p.descricao || ""),
+      categoria: up(p.categoria || ""),
+      numeroSerie: up(p.numeroSerie || ""),
+      marca: up(p.marca || ""),
+      modelo: up(p.modelo || ""),
       dataAquisicao: (p.dataAquisicao || "").slice(0, 10),
       valorAquisicao: p.valorAquisicao ? String(Number(p.valorAquisicao)).replace(".", ",") : "",
       vidaUtilMeses: p.vidaUtilMeses ? String(p.vidaUtilMeses) : "",
-      observacoes: p.observacoes || "",
+      observacoes: up(p.observacoes || ""),
       status: toStatus(p.status), // Rev. 2512 — type-safe (sem `any`)
     });
     setFotos((p.fotosJson as FotoItem[]) || []);
@@ -274,10 +286,8 @@ export default function EquipamentosProprios() {
 
   function salvar() {
     if (!form.descricao.trim()) return toast.error("Diga o que é o equipamento (descrição).");
-    if (!editingId && !form.codigoPatrimonio.trim() && !totalFetched) {
-      return toast.error("Carregando lista de patrimônios… tente em 1s.");
-    }
-    const patrimonio = form.codigoPatrimonio.trim() || gerarPatrimonioAuto();
+    // Rev. 2513 — patrimônio agora é SEMPRE gerado pelo servidor (auto-gen
+    // + retry em UNIQUE violation). Cliente nem manda mais o campo.
     const valor = parseFloat(form.valorAquisicao.replace(",", ".")) || undefined;
     const vida = parseInt(form.vidaUtilMeses) || undefined;
     if (editingId) {
@@ -296,7 +306,7 @@ export default function EquipamentosProprios() {
     } else {
       criar.mutate({
         companyId,
-        codigoPatrimonio: patrimonio,
+        // codigoPatrimonio omitido propositalmente — servidor gera (Rev. 2513).
         descricao: form.descricao,
         categoria: form.categoria || undefined,
         numeroSerie: form.numeroSerie || undefined,
@@ -462,12 +472,12 @@ export default function EquipamentosProprios() {
                         <Pencil className="h-3.5 w-3.5" />
                       </button>
                     </div>
-                    <h3 className="font-semibold text-slate-800 text-sm leading-snug line-clamp-2">{p.descricao}</h3>
+                    <h3 className="font-semibold text-slate-800 text-sm leading-snug line-clamp-2 uppercase">{p.descricao}</h3>
                     <div className="flex items-center justify-between gap-2 mt-auto">
                       <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold ${STATUS_COLORS[p.status] || "bg-slate-100 ring-1 ring-slate-200"}`}>
                         {STATUS_LABELS[p.status] || p.status}
                       </span>
-                      <span className="text-[11px] text-slate-500 truncate">
+                      <span className="text-[11px] text-slate-500 truncate uppercase">
                         {p.categoria || "—"}
                       </span>
                     </div>
@@ -612,34 +622,30 @@ export default function EquipamentosProprios() {
                   </label>
                   <input
                     value={form.descricao}
-                    onChange={e => setForm(p => ({ ...p, descricao: e.target.value }))}
-                    placeholder="Ex: Furadeira Bosch GSB 550, Andaime tubular 1,5m…"
+                    onChange={e => setForm(p => ({ ...p, descricao: up(e.target.value) }))}
+                    placeholder="EX: FURADEIRA BOSCH GSB 550, ANDAIME TUBULAR 1,5M…"
                     autoFocus
+                    style={{ textTransform: "uppercase" }}
                     className="w-full px-3 py-2 border-2 border-slate-200 focus:border-blue-500 focus:outline-none rounded-lg text-sm"
                   />
                 </div>
 
-                {/* PATRIMÔNIO */}
+                {/* PATRIMÔNIO — Rev. 2513: SEMPRE auto-gerado pelo servidor.
+                   Em criação mostra preview do próximo número (placeholder).
+                   Em edição mostra o código real (read-only). */}
                 <div>
                   <label className="block text-xs font-semibold text-slate-800 mb-1">
-                    Patrimônio {!editingId && <span className="font-normal text-slate-500">(auto)</span>}
+                    Patrimônio <span className="font-normal text-slate-500">({editingId ? "imutável" : "auto"})</span>
                   </label>
-                  <div className="flex gap-1.5">
-                    <input
-                      value={form.codigoPatrimonio}
-                      disabled={!!editingId}
-                      onChange={e => setForm(p => ({ ...p, codigoPatrimonio: e.target.value }))}
-                      placeholder={editingId ? "" : gerarPatrimonioAuto()}
-                      className="flex-1 px-3 py-2 border rounded-lg text-sm font-mono disabled:bg-slate-100"
-                    />
+                  <div className="flex items-center gap-2 px-3 py-2 border-2 border-slate-200 bg-slate-50 rounded-lg">
+                    <Hash className="h-4 w-4 text-slate-400 shrink-0" />
+                    <span className="font-mono text-sm font-semibold text-slate-700 truncate">
+                      {editingId ? form.codigoPatrimonio : (totalFetched ? gerarPatrimonioAuto() : "EQP-…")}
+                    </span>
                     {!editingId && (
-                      <button
-                        type="button"
-                        onClick={() => setForm(p => ({ ...p, codigoPatrimonio: gerarPatrimonioAuto() }))}
-                        className="px-2.5 py-2 border-2 border-blue-200 hover:border-blue-400 text-blue-700 rounded-lg text-xs font-medium inline-flex items-center gap-1"
-                      >
-                        <Sparkles className="h-3.5 w-3.5" /> Auto
-                      </button>
+                      <span className="ml-auto inline-flex items-center gap-1 text-[10px] font-semibold text-blue-700">
+                        <Sparkles className="h-3 w-3" /> AUTO
+                      </span>
                     )}
                   </div>
                 </div>
@@ -728,7 +734,8 @@ export default function EquipamentosProprios() {
                       <input
                         autoFocus
                         value={novaCatTxt}
-                        onChange={e => setNovaCatTxt(e.target.value)}
+                        onChange={e => setNovaCatTxt(up(e.target.value))}
+                        style={{ textTransform: "uppercase" }}
                         onKeyDown={e => {
                           if (e.key === "Enter") { e.preventDefault(); adicionarCategoria(); }
                           if (e.key === "Escape") { setNovaCatOpen(false); setNovaCatTxt(""); }
@@ -772,15 +779,18 @@ export default function EquipamentosProprios() {
                   <div className="pt-2 grid grid-cols-2 sm:grid-cols-4 gap-2">
                     <Field label="N° Série">
                       <input value={form.numeroSerie} disabled={!!editingId}
-                        onChange={e => setForm(p => ({ ...p, numeroSerie: e.target.value }))}
+                        onChange={e => setForm(p => ({ ...p, numeroSerie: up(e.target.value) }))}
+                        style={{ textTransform: "uppercase" }}
                         className="w-full px-2 py-1.5 border rounded text-sm disabled:bg-slate-100" />
                     </Field>
                     <Field label="Marca">
-                      <input value={form.marca} onChange={e => setForm(p => ({ ...p, marca: e.target.value }))}
+                      <input value={form.marca} onChange={e => setForm(p => ({ ...p, marca: up(e.target.value) }))}
+                        style={{ textTransform: "uppercase" }}
                         className="w-full px-2 py-1.5 border rounded text-sm" />
                     </Field>
                     <Field label="Modelo">
-                      <input value={form.modelo} onChange={e => setForm(p => ({ ...p, modelo: e.target.value }))}
+                      <input value={form.modelo} onChange={e => setForm(p => ({ ...p, modelo: up(e.target.value) }))}
+                        style={{ textTransform: "uppercase" }}
                         className="w-full px-2 py-1.5 border rounded text-sm col-span-2" />
                     </Field>
                     <Field label="Data Aquisição">
@@ -798,8 +808,9 @@ export default function EquipamentosProprios() {
                     </Field>
                     <div className="col-span-2 sm:col-span-4">
                       <Field label="Observações">
-                        <textarea value={form.observacoes} onChange={e => setForm(p => ({ ...p, observacoes: e.target.value }))}
-                          rows={2} className="w-full px-2 py-1.5 border rounded text-sm" />
+                        <textarea value={form.observacoes} onChange={e => setForm(p => ({ ...p, observacoes: up(e.target.value) }))}
+                          rows={2} style={{ textTransform: "uppercase" }}
+                          className="w-full px-2 py-1.5 border rounded text-sm" />
                       </Field>
                     </div>
                     {editingId && (
