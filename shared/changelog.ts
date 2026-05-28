@@ -1,6 +1,74 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2523 — **FOLHA DE PAGAMENTO · PARSER SINTÉTICO COM REGEX
+ * "GLUED" pro layout SCI Novo Visual / Grupo Pronus (resolve
+ * definitivamente "0 funcionários processados").**
+ *
+ * AMOSTRA REAL (capturada via log diagnóstico Rev. 2520, user enviou
+ * 2 PDFs em 28/05/2026):
+ *   L06: "   ANA BEATRIZ SILVA DA CONCEICAO902/01/2014   AUXADMINISTRATIVO1.075,00  "
+ *   L15: "   DARCY AUGUSTO RIBEIRO2301/11/2016   ENCARREGADO DE OBR1.952,00  "
+ *   L39: "   JULIO CESAR FERRAZ DE ARAUJO101/11/1999    SOCIO1.443,00  "
+ *
+ * CAUSA-RAIZ DEFINITIVA
+ *  - `pdf-parse@1.1.1` extrai esse layout específico GRUDANDO os
+ *    campos sem whitespace entre NOME↔CÓDIGO, CÓDIGO↔DATA e
+ *    FUNÇÃO↔VALOR. Único espaço preservado é entre DATA e FUNÇÃO
+ *    (3+ espaços).
+ *  - `matchFlex` da Rev. 2522 exigia `\s+` entre os 4 campos →
+ *    quebra completamente nesse layout. Por isso seguia devolvendo
+ *    `[]` mesmo após Rev. 2522.
+ *
+ * MUDANÇA (1 arquivo: `server/routers/folhaPagamento.ts` L353-374,
+ *  SUBSTITUI o matchFlex por matchGlued, sem +linhas)
+ *  - **Regex `matchGlued`** (3ª tentativa, após matchNew e matchOld):
+ *      `/^\s*([^\d]+?)\s*(\d{1,4}?)(\d{2}\/\d{2}\/\d{4})\s*([^\d]+?)\s*([\d.]*\d,\d{2})\s*_*\s*$/`
+ *  - **Ancora em 2 invariantes inconfundíveis**: data DD/MM/YYYY +
+ *    valor monetário BR no fim (`,XX` obrigatório).
+ *  - **Nome** = `[^\d]+?` (não-dígitos lazy) — para automaticamente
+ *    quando encontra o 1º dígito (início do código).
+ *  - **Código** = `\d{1,4}?` (1-4 dígitos LAZY) — crítico: lazy
+ *    impede que código "como" 20 cause backtracking que confunde
+ *    dia da data (testado com codigo=1 + data=01/11/1999, codigo=10
+ *    + data=11/11/1999, codigo=128 + data=27/09/2022 — todos
+ *    corretos).
+ *  - **Função** = `[^\d]+?` (lazy não-dígito) — para quando encontra
+ *    o 1º dígito do valor.
+ *  - **Valor** = `[\d.]*\d,\d{2}` — formato BR com `.` como
+ *    milhar opcional + `,XX` obrigatório.
+ *  - **Sanity check duplo**: nome precisa ter `\w{2,}\s+\w` (2
+ *    palavras alfa) E função precisa ter `\w{2,}` (rejeita
+ *    cabeçalhos/totais que casualmente tenham data+valor).
+ *
+ * NÃO REGRESSÃO
+ *  - `matchNew` (tab) e `matchOld` (\s{2,}) ficam intactos em 1ª e 2ª
+ *    posição — layouts modernos pdf-parse v2 e pdftotext -layout
+ *    continuam funcionando.
+ *  - matchGlued é mais permissivo que matchFlex (Rev. 2522), cobre
+ *    os layouts dele E o glued — substituição segura.
+ *  - Log diagnóstico Rev. 2520 PERMANECE ativo (rede de segurança).
+ *  - `parseAnaliticoPDF` intocado.
+ *  - Zero ALTER/DROP/DELETE.
+ *
+ * NOTA LATERAL (não-código)
+ *  - Investigação do bug "DARC não aparece em Pedido de Demissão"
+ *    revelou: DARCY AUGUSTO RIBEIRO é da empresa "JULIO FERRAZ
+ *    PROJETOS E OBRAS LTDA" (CNPJ 03.426.403/0001-95) — empresa NÃO
+ *    cadastrada na base do ERP (só existe "FC ENGENHARIA E
+ *    CONSTRUCAO LTDA" id=1). Filtro de funcionários funciona
+ *    corretamente; é gap de cadastro de empresa. Sem ação code-side.
+ *
+ * ARQUIVOS TOCADOS
+ *  - `server/routers/folhaPagamento.ts` (substitui matchFlex por
+ *    matchGlued em parseSinteticoPDF).
+ *  - `shared/version.ts` (2522 → 2523).
+ *  - `shared/changelog.ts` (esta entrada).
+ *  - `replit.md` (rotação 2+5: 2523+2522 detalhadas; 2521 vira
+ *    one-liner; 2516 desce pra `replit-history.md`).
+ *
+ * ─────────────────────────────────────────────────────────────────────────
+ *
  * Rev. 2522 — **FOLHA DE PAGAMENTO · PARSER SINTÉTICO COM REGEX
  * FALLBACK PERMISSIVO (resolve "0 funcionários processados").**
  *

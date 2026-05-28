@@ -347,25 +347,27 @@ function parseSinteticoPDF(text: string): Array<{
       continue;
     }
 
-    // Rev. 2522 — FALLBACK PERMISSIVO: ancora em DD/MM/YYYY + valor monetário BR (X,XX) no fim.
-    // Aceita qualquer whitespace (1+ espaço/tab) — cobre layouts onde pdf-parse v1 collapsa
-    // whitespace e quebra os regex matchNew/matchOld. Código pode vir no INÍCIO (formato antigo)
-    // ou no FIM do prefixo (formato novo "NOME\tCODIGO").
-    const matchFlex = trimmed.match(/^(.+?)\s+(\d{2}\/\d{2}\/\d{4})\s+(.+?)\s+([\d.]*\d,\d{2})\s*_*\s*$/);
-    if (matchFlex) {
-      const head = matchFlex[1].replace(/\s+/g, " ").trim();
-      const dataAdmissao = matchFlex[2];
-      const funcao = matchFlex[3].replace(/\s+/g, " ").trim();
-      const liquido = matchFlex[4];
-      // Tenta código no início: "123 NOME COMPLETO"
-      let codigo = "", nome = "";
-      const codFirst = head.match(/^(\d{1,5})\s+(.+)$/);
-      const codLast = head.match(/^(.+?)\s+(\d{1,5})$/);
-      if (codFirst) { codigo = codFirst[1]; nome = codFirst[2]; }
-      else if (codLast) { codigo = codLast[2]; nome = codLast[1]; }
-      else { continue; } // sem código identificável, pula
-      // Sanity: nome precisa ter pelo menos 2 palavras alfa (evita capturar linha de cabeçalho/total)
+    // Rev. 2523 — FALLBACK "GLUED": cobre o layout que o pdf-parse v1.1.1 produz
+    // pra PDFs SCI Novo Visual / Grupo Pronus, onde NOME, CÓDIGO, DATA, FUNÇÃO e
+    // VALOR vêm GRUDADOS sem whitespace (ex: "ANA BEATRIZ DA CONCEICAO902/01/2014
+    // AUXADMINISTRATIVO1.075,00"). Confirmado via log diagnóstico Rev. 2520.
+    //
+    // Estratégia: ancora em (data DD/MM/YYYY) + (valor BR X,XX). Tudo antes da
+    // data = nome + código (não-dígitos pra nome, 1-4 dígitos pra código). Tudo
+    // entre data e valor = função (não-dígitos). `\d{1,4}?` lazy garante o split
+    // correto mesmo quando código + dia colidem (ex: codigo=1 + data=01/11/1999).
+    const matchGlued = trimmed.match(/^\s*([^\d]+?)\s*(\d{1,4}?)(\d{2}\/\d{2}\/\d{4})\s*([^\d]+?)\s*([\d.]*\d,\d{2})\s*_*\s*$/);
+    if (matchGlued) {
+      const nome = matchGlued[1].replace(/\s+/g, " ").trim();
+      const codigo = matchGlued[2];
+      const dataAdmissao = matchGlued[3];
+      const funcao = matchGlued[4].replace(/\s+/g, " ").trim();
+      const liquido = matchGlued[5];
+      // Sanity: nome precisa ter pelo menos 2 palavras alfa contíguas (evita
+      // capturar cabeçalhos/totais que casualmente tenham data+valor).
       if (!/[A-ZÁÉÍÓÚÂÊÔÃÕÇÑa-záéíóúâêôãõçñ]{2,}\s+[A-ZÁÉÍÓÚÂÊÔÃÕÇÑa-záéíóúâêôãõçñ]/.test(nome)) continue;
+      // Sanity: função precisa ter pelo menos 2 chars alfa
+      if (!/[A-ZÁÉÍÓÚÂÊÔÃÕÇÑa-záéíóúâêôãõçñ]{2,}/.test(funcao)) continue;
       results.push({ codigo, nome, dataAdmissao, funcao, liquido });
       continue;
     }
