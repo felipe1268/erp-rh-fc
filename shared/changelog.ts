@@ -59,7 +59,11 @@
  *     UI: banner âmbar antes da lista mostrando contagem + (admin only)
  *     botão "Mostrar/Esconder" pra revelar linhas não-material caso queira
  *     auditar o que foi escondido. Imports novos: `Eye`, `EyeOff`,
- *     `classificarNaturezaItemAlmox` (via path relativo `../../../../shared/`).
+ *     `classificarNaturezaItemAlmox` (via alias `@shared/naturezaItemAlmox`
+ *     mapeado em `vite.config.ts` + `tsconfig.json paths`). Tentativa
+ *     inicial com path relativo `../../../../shared/` quebrou o bundle no
+ *     iPad com "TypeError: Importing a module script failed" porque o Vite
+ *     `root` é `client/` e não enxerga paths que sobem além da raiz.
  *
  * GARANTIAS / R-001
  *  - Zero ALTER/DROP/DELETE. Movimentações continuam no banco intactas (a

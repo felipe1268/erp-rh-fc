@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 // Rev. 2508 — filtro defensivo: esconde itens não-material (serviços,
 // topografia, mão-de-obra, etc.) que vazaram pra timeline.
-import { classificarNaturezaItemAlmox } from "../../../../shared/naturezaItemAlmox";
+import { classificarNaturezaItemAlmox } from "@shared/naturezaItemAlmox";
 
 // Rev. 2304 — helpers de data LOCAL (sem fuso, sem UTC) p/ filtros por período.
 function toLocalIso(d: Date): string {
