@@ -178,6 +178,19 @@ export default function EquipamentosProprios() {
     onSuccess: () => { utils.equipamentos.propriosListar.invalidate(); setModal(false); toast.success("Atualizado."); },
     onError: (e) => toast.error(e.message),
   });
+  // Rev. 2511 — soft delete (server marca ativo=false, listagem filtra).
+  const excluir = trpc.equipamentos.proprioExcluir.useMutation({
+    onSuccess: () => { utils.equipamentos.propriosListar.invalidate(); setModal(false); toast.success("Equipamento excluído."); },
+    onError: (e) => toast.error(e.message),
+  });
+  function confirmarExcluir() {
+    if (!editingId) return;
+    const ok = window.confirm(
+      `Excluir "${form.descricao}" (${form.codigoPatrimonio})?\n\nO equipamento sairá da lista. O histórico fica preservado.`
+    );
+    if (!ok) return;
+    excluir.mutate({ companyId, id: editingId });
+  }
 
   function salvar() {
     if (!form.descricao.trim()) return toast.error("Diga o que é o equipamento (descrição).");
@@ -636,13 +649,26 @@ export default function EquipamentosProprios() {
               </div>
             </div>
 
-            <div className="px-5 py-3 border-t bg-slate-50 flex items-center justify-end gap-2 sticky bottom-0">
-              <button onClick={() => setModal(false)} className="px-4 py-2 text-sm border rounded-lg hover:bg-slate-100">Cancelar</button>
-              <button onClick={salvar} disabled={criar.isPending || atualizar.isPending}
-                className="px-6 py-2.5 text-base font-semibold bg-[#1B2A4A] hover:bg-[#2E4373] text-white rounded-lg shadow disabled:opacity-50 inline-flex items-center gap-2">
-                {(criar.isPending || atualizar.isPending) && <Spinner />}
-                {criar.isPending || atualizar.isPending ? "Salvando…" : "Salvar"}
-              </button>
+            <div className="px-5 py-3 border-t bg-slate-50 flex items-center justify-between gap-2 sticky bottom-0">
+              {/* Rev. 2511 — Excluir só aparece em modo edição (esquerda) */}
+              {editingId ? (
+                <button
+                  onClick={confirmarExcluir}
+                  disabled={excluir.isPending || atualizar.isPending || criar.isPending}
+                  className="px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50 border-2 border-red-200 hover:border-red-400 rounded-lg disabled:opacity-50 inline-flex items-center gap-1.5"
+                >
+                  <Trash2 className="h-4 w-4" />
+                  {excluir.isPending ? "Excluindo…" : "Excluir"}
+                </button>
+              ) : <span />}
+              <div className="flex items-center gap-2">
+                <button onClick={() => setModal(false)} className="px-4 py-2 text-sm border rounded-lg hover:bg-slate-100">Cancelar</button>
+                <button onClick={salvar} disabled={criar.isPending || atualizar.isPending || excluir.isPending}
+                  className="px-6 py-2.5 text-base font-semibold bg-[#1B2A4A] hover:bg-[#2E4373] text-white rounded-lg shadow disabled:opacity-50 inline-flex items-center gap-2">
+                  {(criar.isPending || atualizar.isPending) && <Spinner />}
+                  {criar.isPending || atualizar.isPending ? "Salvando…" : "Salvar"}
+                </button>
+              </div>
             </div>
           </div>
         </div>

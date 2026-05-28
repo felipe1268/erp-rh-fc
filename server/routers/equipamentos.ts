@@ -336,6 +336,25 @@ export const equipamentosRouter = router({
       return { id: r[0].id };
     }),
 
+  // Rev. 2511 — Soft delete: marca ativo=false. `propriosListar` já filtra
+  // por `ativo=true`, então o equipamento some da UI mas histórico fica
+  // intacto (R-001/R-007/R-010: zero DELETE).
+  proprioExcluir: protectedProcedure
+    .input(z.object({ companyId: z.number(), id: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const r = await db.update(equipamentosProprios)
+        .set({ ativo: false, updatedAt: sql`now()` })
+        .where(and(
+          eq(equipamentosProprios.id, input.id),
+          eq(equipamentosProprios.companyId, input.companyId),
+        ))
+        .returning({ id: equipamentosProprios.id });
+      if (r.length === 0) throw new TRPCError({ code: "NOT_FOUND" });
+      return { id: r[0].id };
+    }),
+
   // ── EQUIPAMENTOS LOCADOS ──────────────────────────────────────────────────
 
   locadosListar: protectedProcedure

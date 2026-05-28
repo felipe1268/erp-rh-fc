@@ -1,6 +1,44 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2511 — **EQUIPAMENTOS PRÓPRIOS — Botão Excluir (soft delete via
+ * ativo=false) no modal de edição.**
+ *
+ * PEDIDO (user, 28/05/2026, iPad, sequência da Rev. 2510):
+ *  - "preciso poder editar e excluir o equipamento."
+ *  - Edit já existia desde Rev. 2364 (toque no card → modal). Faltava
+ *    apenas o botão Excluir.
+ *
+ * MUDANÇAS
+ *  - `server/routers/equipamentos.ts` (após `proprioAtualizar`, L341+):
+ *      • Nova mutation `proprioExcluir` (input: companyId + id).
+ *      • Soft delete: `UPDATE equipamentos_proprios SET ativo=false,
+ *        updated_at=now()` filtrando por id + companyId (multi-tenant safe).
+ *      • `propriosListar` já tinha `eq(equipamentosProprios.ativo, true)`
+ *        no WHERE (L225), então o equipamento some da UI imediatamente.
+ *      • Retorno NOT_FOUND se nenhum row foi atingido (defensa).
+ *    R-001/R-007/R-010 OK: zero DELETE — só UPDATE de flag boolean. O
+ *    histórico (fotos, custos, movimentações futuras) fica preservado.
+ *
+ *  - `client/src/pages/equipamentos/Proprios.tsx`:
+ *      • Novo `excluir = trpc.equipamentos.proprioExcluir.useMutation` com
+ *        invalidate + close modal + toast "Equipamento excluído.".
+ *      • Função `confirmarExcluir()` com `window.confirm` mostrando
+ *        descrição + patrimônio + nota "histórico fica preservado".
+ *      • Footer do modal mudou de `justify-end` pra `justify-between`:
+ *        botão Excluir vermelho à esquerda (border-2 red-200, hover red-50,
+ *        ícone Trash2 já importado) APENAS em modo edição (`editingId`).
+ *        Em modo criação, renderiza `<span />` pra manter o flex layout.
+ *      • Cancelar + Salvar viraram um sub-grupo flex à direita.
+ *      • Salvar `disabled` agora também considera `excluir.isPending` pra
+ *        evitar race condition (clicar Salvar enquanto Exclui processa).
+ *
+ * RACIONAL — SOFT DELETE em vez de DELETE
+ *  - R-001/R-007/R-010 proíbe DELETE em produção.
+ *  - Equipamento próprio pode ter histórico financeiro (CAPEX, depreciação),
+ *    fotos canônicas, links com almoxarifado. Deletar fisicamente quebraria
+ *    integridade. `ativo=false` é o padrão FC pra "ocultar sem perder".
+ *
  * Rev. 2510 — **EQUIPAMENTOS PRÓPRIOS — Bugfix CREATE TABLE faltante no
  * bootstrap (cadastro quebrado por "relation does not exist") + redesign
  * completo da tela com identidade FC (faixa azul #1B2A4A, regra de ouro).**
