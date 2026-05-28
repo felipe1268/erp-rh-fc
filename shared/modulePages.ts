@@ -258,6 +258,12 @@ export const MODULE_PAGE_CONFIG: Record<string, ModulePageConfig> = {
       { id: "prog_semanal",      label: "Programação Semanal",                    actions: ["view","create","edit","delete"] },
       { id: "diagrama_rede",     label: "Diagrama de Rede",                       actions: ["view"] },
       { id: "custo_rh",          label: "Custo RH",                               actions: ["view"] },
+      // Rev. 2503 — Aba "Efetivo" (dentro do projeto, /planejamento/:id?tab=efetivo).
+      // Antes não existia aqui, e como `TAB_TO_PAGEID["efetivo"] = "efetivo"`
+      // (PlanejamentoDetalhe.tsx L275), `canViewPage("planejamento","efetivo")`
+      // sempre retornava false pra grupos não-admin (Engenheiro de Campo etc),
+      // escondendo a aba silenciosamente.
+      { id: "efetivo",           label: "Efetivo da Obra (alocação no projeto)", actions: ["view","create","edit","delete"] },
       { id: "revisoes",          label: "Revisões",                               actions: ["view","create","edit","delete"] },
       { id: "refis",             label: "REFIS",                                  actions: ["view","create","edit","delete"] },
       { id: "simulador",         label: "Simulador",                              actions: ["view"] },
@@ -599,6 +605,7 @@ export const ROUTE_TO_PAGEID: Record<string, Record<string, string>> = {
     "/planejamento?tab=prog-semanal": "prog_semanal",
     "/planejamento?tab=diagrama-rede": "diagrama_rede",
     "/planejamento?tab=custo-rh": "custo_rh",
+    "/planejamento?tab=efetivo": "efetivo",
     "/planejamento?tab=revisoes": "revisoes",
     "/planejamento?tab=refis": "refis",
     "/planejamento?tab=simulador": "simulador",

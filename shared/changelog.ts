@@ -1,6 +1,57 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2503 — **PLANEJAMENTO · BUGFIX aba "Efetivo" invisível para qualquer
+ * grupo que não fosse Admin Master (incluindo Engenheiro de Campo).**
+ *
+ * PEDIDO (user, 28/05/2026):
+ *  - "Os usuários que estão no grupo engenheiro de campo não estão vendo
+ *     todos os detalhes do módulo planejamento, reveja todos critérios
+ *     para garantir que todos usuários terão acesso as [abas] que eles
+ *     têm permissão de acesso."
+ *  - Screenshot: Mateus Oliveira em QIU 2 — FASE 4 SEM a aba "Efetivo"
+ *    no menu de abas do projeto (Revisões e REFIS também faltavam, mas
+ *    esses dependem da configuração do grupo — Efetivo era bug de sistema).
+ *
+ * CAUSA RAIZ
+ *  - `client/src/pages/planejamento/PlanejamentoDetalhe.tsx` L275 mapeia
+ *    a aba "efetivo" → pageId "efetivo" via `TAB_TO_PAGEID`.
+ *  - O gate `canViewTab` chama `canViewPage("planejamento", "efetivo")`
+ *    (PermissionsContext.tsx L204-211), que faz lookup em
+ *    `perm.pages?.["efetivo"]?.view`. Como `level==='custom'` (grupo
+ *    Engenheiro de Campo), o `?? false` final descartava a aba.
+ *  - **`shared/modulePages.ts["planejamento"].pages` NÃO continha "efetivo"** —
+ *    a página só existia em `obras.efetivo_obra` (módulo diferente). Sem
+ *    a entrada na definição do módulo, o admin sequer conseguia LIBERAR a
+ *    aba no UI de permissões (Usuarios.tsx). Resultado: aba escondida
+ *    silenciosamente pra qualquer não-admin-master.
+ *  - Auditoria das demais entradas de `TAB_TO_PAGEID` (visao_geral,
+ *    cronograma, gantt, financeiro, curva_s, avanco_semanal, caminho_critico,
+ *    previsao_medicao, prog_semanal, diagrama_rede, custo_rh, revisoes,
+ *    refis, bim_3d, avaliacao_cliente) — todas existem em modulePages.
+ *    "efetivo" era a única órfã.
+ *
+ * O QUE MUDOU
+ *  - `shared/modulePages.ts` L264-269: nova página `efetivo` no módulo
+ *    `planejamento` com actions `["view","create","edit","delete"]` (espelha
+ *    o que o componente faz internamente — transferências em lote, alocação,
+ *    desalocação).
+ *  - `shared/modulePages.ts` L611: nova entrada
+ *    `"/planejamento?tab=efetivo": "efetivo"` no `ROUTE_TO_PAGEID` para o
+ *    `RouteGuard` reconhecer a rota com query string.
+ *  - Backend (`server/routers/planejamento.ts`) não precisou mudar — o
+ *    filtro `allowedObraIds` (L96-152 `listarProjetos`, L6044-6090
+ *    dashboard) já está correto: Engenheiro de Campo só vê obras vinculadas.
+ *
+ * AÇÃO MANUAL PÓS-DEPLOY
+ *  - Para grupos `level === 'custom'` (Engenheiro de Campo, etc.) o admin
+ *    precisa abrir Cadastro › Usuários › Grupo "Engenheiro de Campo" ›
+ *    módulo Planejamento e marcar "Efetivo da Obra (alocação no projeto)"
+ *    explicitamente (a página agora aparece na lista, antes não aparecia).
+ *  - Grupos `level === 'admin'` ou `viewer` no módulo planejamento já
+ *    enxergam Efetivo automaticamente pelo curto-circuito do
+ *    `canViewPage` (L208 do PermissionsContext).
+ *
  * Rev. 2502 — **COLABORADORES · Campo "Tipo de Remuneração"
  * (Mensalista / Horista) na aba Profissional + CLÁUSULA 2ª do Contrato
  * de Experiência adaptada ao regime.**
