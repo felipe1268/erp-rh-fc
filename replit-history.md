@@ -2,6 +2,7 @@
 
 > Este arquivo guarda os one-liners das revisões antigas para manter o `replit.md` enxuto.
 
+- **Rev. 2497** — FOLHA + VALE · Aviso INDENIZADO excluído da repesca de desligados (`tn.tipo NOT LIKE '%indenizado%'` em `gerarVale` L2114-2122 e `simularPagamento` L2935-2951). Convenção `homeData.ts` L595-608. Ver `shared/changelog.ts`.
 - **Rev. 2496** — FOLHA · Desligados em aviso prévio passam a entrar na folha mensal cheia (espelha `gerarVale`), eliminando "vale órfão". WHERE de `simularPagamento` trocado pra `status IN ('Ativo','Ferias') OR (status='Desligado' AND EXISTS termination_notices ...)` via subquery EXISTS. Ver `shared/changelog.ts`.
 - **Rev. 2495** — TERCEIROS · Padronização: nomes SEMPRE em MAIÚSCULAS + lista SEMPRE em ordem alfabética por nome. Backend `terceiros.ts` create/update normaliza `.trim().toUpperCase()` + frontend input com `onChange` UPPERCASE + `<h3>` defensivo + `.sort()` localeCompare pt-BR. Ver `shared/changelog.ts`.
 - **Rev. 2494** — TERCEIROS · BUGFIX `Atualizar` não salvava por falha silenciosa Zod (`null` em `string().optional()`) + ausência de `onError`. Schema relaxado pra `.nullish()` + `empresaTerceiraId` adicionado + handler limpa `undefined` antes do set + toast de erro. Ver `shared/changelog.ts`.

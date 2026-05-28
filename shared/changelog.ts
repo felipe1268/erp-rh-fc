@@ -1,6 +1,75 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2504 — **DASHBOARD PERFIL POR TEMPO DE CASA · BUGFIX "Erro na análise IA"
+ * (JSON do Claude vinha envolto em fence markdown ```json ... ```).**
+ *
+ * PEDIDO (user, 28/05/2026, iPad):
+ *  - "Tá com erro a tela" + screenshot do Dashboard "Perfil por Tempo de Casa"
+ *    com toast vermelho "Erro na análise IA: Load failed".
+ *
+ * CAUSA RAIZ
+ *  - `server/_core/llm.ts` — `invokeAnthropic` IGNORA o param `response_format`
+ *    (não há JSON mode nativo na API do Anthropic, diferente do OpenAI/Gemini).
+ *    Só `invokeGemini` consome `response_format`. Resultado: o Claude responde
+ *    em texto livre e frequentemente envolve a resposta JSON em fence markdown
+ *    (```json ... ```) — comportamento default do modelo pra "código".
+ *  - `server/routers/dashboards.ts` L3553-3555 fazia `JSON.parse(content)`
+ *    cru. Quando vinha com fence, quebrava com `SyntaxError: Unexpected
+ *    token '`', "```json ..."`.
+ *  - O catch retornava silenciosamente `{ analise: null }` em vez de re-throw,
+ *    então no frontend a mutation parecia ter sucesso mas a UI ficava vazia.
+ *    O "Load failed" do toast veio de uma tentativa anterior que estourou
+ *    timeout de proxy/Safari (caso isolado), mas o problema real é o JSON.
+ *  - Confirmado nos logs de produção:
+ *    `[IA Perfil] Erro: SyntaxError: Unexpected token '`', "```json ...
+ *      is not valid JSON ... at getAnaliseIAPerfil`.
+ *
+ * O QUE MUDOU
+ *  - `server/routers/dashboards.ts`: novo helper `parseLLMJson(raw)` (definido
+ *    logo após `getAnaliseIAPerfil`) com estratégia em 2 níveis:
+ *      1. Detecta e remove fence markdown via regex
+ *         `^```(?:json)?\s*([\s\S]*?)\s*```$/i` e tenta `JSON.parse` no miolo.
+ *      2. Fallback: extrai o primeiro `{...}` OU `[...]` do texto via regex
+ *         gulosa (`/\{[\s\S]*\}/` e `/\[[\s\S]*\]/`) e parsa o que aparecer
+ *         primeiro. Cobre casos em que o Claude prefacia com "Aqui está
+ *         a análise:" ou similar antes do JSON.
+ *  - `getAnaliseIAPerfil` agora chama `parseLLMJson(content)` em vez de
+ *    `JSON.parse(content)`.
+ *  - Catch agora **re-throw** em vez de retornar `{ analise: null }`
+ *    silenciosamente. O frontend (`DashPerfilTempoCasa.tsx` L76-78) já tem
+ *    `onError` com toast — agora o usuário vê a mensagem real ("Falha ao
+ *    gerar análise IA: <detalhe>") em vez de UI vazia ou "Load failed"
+ *    confuso.
+ *
+ * ARQUIVOS TOCADOS
+ *  - `server/routers/dashboards.ts` L3553-3590 (parser tolerante + re-throw).
+ *  - `shared/version.ts` (2503 → 2504).
+ *  - `shared/changelog.ts` (esta entrada no topo).
+ *  - `replit.md` (rotação 2+5).
+ *  - `replit-history.md` (Rev. 2497 demovida).
+ *
+ * NOTAS DE DESIGN
+ *  - **Scope deliberadamente cirúrgico**: só consertei `getAnaliseIAPerfil`,
+ *    que é o caso reportado pelo user. Existem outros lugares no codebase
+ *    (`server/routers/iaCronograma.ts`, `iaModulos.ts`, `oraculo.ts`, etc.)
+ *    que parseiam JSON do Claude da mesma forma e provavelmente têm o mesmo
+ *    bug latente. Vale auditar e estender `parseLLMJson` pra um helper
+ *    compartilhado em `server/_core/llm.ts` numa próxima revisão — mas
+ *    consertar em massa fora do pedido viola "Do what has been asked".
+ *  - **Não mexi em `invokeAnthropic` pra forçar JSON mode** — a API do
+ *    Anthropic não tem isso (só "prefill assistant message" como hack).
+ *    Adicionar prefill alteraria o comportamento de TODAS as callers de
+ *    Claude, com risco de regressão. Parser tolerante no caller é mais
+ *    seguro e localizado.
+ *
+ * FOLLOW-UPS (não cobertos nesta rev)
+ *  - Mover `parseLLMJson` pra `server/_core/llm.ts` como utilitário
+ *    exportado e migrar outras callers de Claude.
+ *  - Investigar se o "Load failed" original (1779926546073 nos logs de prod)
+ *    era timeout de proxy iOS Safari (>60s) — se for recorrente, considerar
+ *    streaming SSE pra IA pesada.
+ *
  * Rev. 2503 — **PLANEJAMENTO · BUGFIX aba "Efetivo" invisível para qualquer
  * grupo que não fosse Admin Master (incluindo Engenheiro de Campo).**
  *

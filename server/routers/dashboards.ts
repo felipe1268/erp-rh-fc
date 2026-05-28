@@ -3552,12 +3552,37 @@ Foque em:
 
     const content = result.choices?.[0]?.message?.content;
     if (content && typeof content === 'string') {
-      return { analise: JSON.parse(content) };
+      return { analise: parseLLMJson(content) };
     }
     return { analise: null };
-  } catch (err) {
+  } catch (err: any) {
     console.error('[IA Perfil] Erro:', err);
-    return { analise: null };
+    throw new Error('Falha ao gerar análise IA: ' + (err?.message || 'erro desconhecido'));
+  }
+}
+
+// Rev. 2504 — Parser tolerante para JSON retornado pelo Claude.
+// invokeAnthropic ignora `response_format` (não há JSON mode nativo na API),
+// então o Claude frequentemente envolve a resposta em fence markdown
+// (```json ... ```) ou adiciona texto antes/depois. JSON.parse puro quebra.
+// Estratégia: (1) remove fence ```json/```; (2) se ainda falhar, extrai o
+// primeiro {...} ou [...] balanceado via regex e tenta de novo.
+function parseLLMJson(raw: string): any {
+  const trimmed = raw.trim();
+  // Strip ```json ... ``` ou ``` ... ```
+  const fenced = trimmed.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
+  const candidate = fenced ? fenced[1].trim() : trimmed;
+  try {
+    return JSON.parse(candidate);
+  } catch {
+    // Fallback: encontra primeiro objeto ou array no texto
+    const objMatch = candidate.match(/\{[\s\S]*\}/);
+    const arrMatch = candidate.match(/\[[\s\S]*\]/);
+    const pick = objMatch && arrMatch
+      ? (objMatch.index! < arrMatch.index! ? objMatch[0] : arrMatch[0])
+      : (objMatch?.[0] || arrMatch?.[0]);
+    if (pick) return JSON.parse(pick);
+    throw new Error('Resposta da IA não contém JSON válido');
   }
 }
 
