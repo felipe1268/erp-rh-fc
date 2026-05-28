@@ -1,6 +1,49 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2509 — **AVALIAÇÃO INTELIGENTE · RANKING — Foto do funcionário ao lado
+ * do nome em Top 10, Bottom 10, busca e tabela completa (click amplia via
+ * PersonPhoto).**
+ *
+ * PEDIDO (user, 28/05/2026, iPad — Dashboard Avaliação Inteligente):
+ *  - "Quero foto de todos funcionários ao lado do nome, e quando eu clicar
+ *    ela deve aumentar de tamanho." + 2 screenshots (Top 10/Bottom 10 e
+ *    Ranking Completo) sem nenhuma foto, só ScoreCircle.
+ *
+ * CAUSA
+ *  - `avaliacaoFuncionariosRouter.getRanking` não selecionava `fotoUrl` da
+ *    tabela `employees` (Fase 1 MVP focou só em score). O `montarLinhaScore`
+ *    também não propagava o campo. Resultado: ranking chegava sem foto no
+ *    client, então RankingCard + busca + Ranking Completo só mostravam nome
+ *    e função.
+ *
+ * MUDANÇAS
+ *  - `server/routers/avaliacaoFuncionarios.ts`:
+ *      • `carregarInputs()` (L92-98): SELECT adicional de `employees.fotoUrl`.
+ *      • `montarLinhaScore()` (L304): retorna `fotoUrl: emp.fotoUrl ?? null`.
+ *    Zero impacto em score/peso/classificação — só propaga URL.
+ *  - `client/src/pages/dashboards/DashAvaliacaoFuncionarios.tsx`:
+ *      • Import `PersonPhoto` from "@/components/PersonPhoto".
+ *      • `RankingCard` (L535): `<PersonPhoto size="sm" caption=funcao>` entre
+ *        ScoreCircle e nome — usado por Top 10 e Bottom 10.
+ *      • Busca livre (L276): mesmo padrão, dentro da linha clicável.
+ *      • Ranking Completo (L322-327): wrap da TableCell "Funcionário" num
+ *        flex com `<PersonPhoto size="sm">` + nome.
+ *    `PersonPhoto` já tem `e.stopPropagation()` no handler de click (L89 do
+ *    componente), então clicar na foto abre o lightbox sem disparar o drill
+ *    do funcionário — UX intuitiva.
+ *
+ * GARANTIAS / R-001
+ *  - Zero ALTER/DROP/DELETE. Coluna `employees.fotoUrl` já existia (text() —
+ *    `drizzle/schema.ts` L973), apenas passou a ser lida na query.
+ *  - Funcionários sem foto continuam funcionando (PersonPhoto cai no
+ *    fallback de iniciais em fundo azul-FC, `clickable=false` automático).
+ *
+ * FOLLOW-UPS POSSÍVEIS
+ *  - Estender pra outros dashboards de RH (Frequência, Disciplina, Saúde)
+ *    onde nome do funcionário aparece sem foto.
+ *
+ *
  * Rev. 2508 — **ALMOXARIFADO · MOVIMENTAÇÕES — Filtro defensivo esconde itens
  * não-material (serviço/MDO/topografia) e amplia o classificador de natureza.**
  *

@@ -23,6 +23,8 @@ import {
   Heart, Clock, Gavel, ChevronRight, Award, Search, GraduationCap, History,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
+// Rev. 2509 — foto do funcionário ao lado do nome (click amplia via PersonPhoto)
+import { PersonPhoto } from "@/components/PersonPhoto";
 
 const PERIODOS = [
   { label: "Últimos 3 meses", value: 3 },
@@ -261,20 +263,25 @@ export default function DashAvaliacaoFuncionarios() {
                   {buscaFiltrada.length === 0 ? (
                     <p className="text-sm text-slate-500">Nenhum resultado.</p>
                   ) : buscaFiltrada.map((r: any) => (
-                    <button
+                    // Rev. 2509 — div+role="button" p/ permitir <PersonPhoto> aninhado.
+                    <div
                       key={r.employeeId}
+                      role="button"
+                      tabIndex={0}
                       onClick={() => setDrillId(r.employeeId)}
-                      className="w-full flex items-center justify-between p-2 rounded hover:bg-slate-50 text-left"
+                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setDrillId(r.employeeId); } }}
+                      className="w-full flex items-center justify-between p-2 rounded hover:bg-slate-50 text-left cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
                     >
                       <div className="flex items-center gap-2">
                         <ScoreCircle value={r.geral} size={36} />
+                        <PersonPhoto src={r.fotoUrl} alt={r.nome} size="sm" caption={r.funcao || undefined} />
                         <div>
                           <p className="text-sm font-medium text-slate-900">{r.nome}</p>
                           <p className="text-xs text-slate-500">{r.funcao}</p>
                         </div>
                       </div>
                       <Badge variant="outline" className={COR_CLASSIF[r.classificacao]}>{r.classificacao}</Badge>
-                    </button>
+                    </div>
                   ))}
                 </div>
               )}
@@ -313,7 +320,12 @@ export default function DashAvaliacaoFuncionarios() {
                     {ranking.map((r: any, i: number) => (
                       <TableRow key={r.employeeId} className="cursor-pointer hover:bg-slate-50" onClick={() => setDrillId(r.employeeId)}>
                         <TableCell className="text-slate-500 tabular-nums">{i + 1}</TableCell>
-                        <TableCell className="font-medium text-blue-700 hover:underline">{r.nome}</TableCell>
+                        <TableCell className="font-medium text-blue-700 hover:underline">
+                          <div className="flex items-center gap-2">
+                            <PersonPhoto src={r.fotoUrl} alt={r.nome} size="sm" caption={r.funcao || undefined} />
+                            <span>{r.nome}</span>
+                          </div>
+                        </TableCell>
                         <TableCell className="text-slate-600 text-sm">{r.funcao || '—'}</TableCell>
                         <TableCell className={`text-center font-medium tabular-nums ${corScore(r.sub.frequencia)}`}>{r.sub.frequencia}</TableCell>
                         <TableCell className={`text-center font-medium tabular-nums ${corScore(r.sub.saude)}`}>{r.sub.saude}</TableCell>
@@ -519,21 +531,27 @@ function RankingCard({ title, icon, rows, onClick, accent }: { title: string; ic
         ) : (
           <div className="divide-y">
             {rows.map((r, i) => (
-              <button
+              // Rev. 2509 — div+role="button" (não <button>) p/ permitir
+              // <PersonPhoto> aninhado (que renderiza <button> quando clickable).
+              <div
                 key={r.employeeId}
+                role="button"
+                tabIndex={0}
                 onClick={() => onClick(r.employeeId)}
-                className={`w-full flex items-center justify-between px-4 py-2 text-left hover:bg-${accent}-50 transition`}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(r.employeeId); } }}
+                className={`w-full flex items-center justify-between px-4 py-2 text-left hover:bg-${accent}-50 transition cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-blue-500`}
               >
                 <div className="flex items-center gap-3 min-w-0">
                   <span className="text-xs font-semibold text-slate-400 w-6 tabular-nums">{i + 1}</span>
                   <ScoreCircle value={r.geral} size={40} />
+                  <PersonPhoto src={r.fotoUrl} alt={r.nome} size="sm" caption={r.funcao || undefined} />
                   <div className="min-w-0">
                     <p className="text-sm font-medium text-slate-900 truncate">{r.nome}</p>
                     <p className="text-xs text-slate-500 truncate">{r.funcao || '—'}</p>
                   </div>
                 </div>
                 <ChevronRight className="h-4 w-4 text-slate-400 shrink-0" />
-              </button>
+              </div>
             ))}
           </div>
         )}

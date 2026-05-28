@@ -91,6 +91,7 @@ async function carregarInputs(companyId: number, obraId: number | null | undefin
     nome: employees.nomeCompleto,
     funcao: employees.funcao,
     dataAdmissao: employees.dataAdmissao,
+    fotoUrl: employees.fotoUrl,
   }).from(employees).where(and(...empConds));
 
   if (emps.length === 0) return { emps: [], freqMap: new Map(), saudeMap: new Map(), discMap: new Map(), segMap: new Map(), capMap: new Map(), lealMap: new Map() };
@@ -297,6 +298,7 @@ function montarLinhaScore(
     nome: emp.nome,
     funcao: emp.funcao,
     dataAdmissao: emp.dataAdmissao,
+    fotoUrl: (emp as any).fotoUrl ?? null,
     sub,
     geral,
     classificacao: classificar(geral),
