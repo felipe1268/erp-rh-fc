@@ -1,6 +1,93 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2524 — **FOLHA DE PAGAMENTO · RELATÓRIO CONSOLIDADO DE
+ * DIVERGÊNCIAS (UMA tela com TODAS as inconsistências por
+ * funcionário, pronta pra análise do RH).**
+ *
+ * MOTIVAÇÃO (user em 28/05/2026, screenshot do card "Conferência
+ * com Contabilidade" mostrando 6 divergências pendentes):
+ *   "Quero uma tela que liste TODAS as inconsistências em um lugar
+ *    pra eu analisar — hoje preciso abrir Verificação Cruzada,
+ *    depois Descontos CLT, depois Cruzamento HE e cruzar na cabeça."
+ *
+ * SOLUÇÃO
+ *  - Novo botão DESTAQUE "Relatório Consolidado de Divergências"
+ *    no topo do card "Conferência com Contabilidade", acima do
+ *    grid dos 3 sub-relatórios existentes (Verificação Cruzada,
+ *    Descontos CLT, Cruzamento HE — preservados).
+ *  - Banner em gradient red→rose→amber, ícone AlertTriangle em
+ *    quadrado vermelho FC, badge dinâmica "{N} pendente(s)"
+ *    reaproveitando a contagem `divPendentes` já existente.
+ *  - Nova view `viewMode === "consolidado"` renderiza
+ *    `<RelatorioConsolidadoView />` que dispara em paralelo:
+ *      * `trpc.folha.verificacaoCruzada` (alertas de cadastro,
+ *         ponto e funcionários não-vinculados)
+ *      * `trpc.folha.comparativoDescontos` (Sistema × Contabilidade)
+ *      * `trpc.folha.cruzamentoHE` (Ponto × Folha)
+ *  - Merge por funcionário (chave `employeeId` quando existe,
+ *    fallback `nome`) — TODAS as divergências do mesmo colaborador
+ *    aparecem agrupadas, sem duplicação.
+ *  - Categorização em 5 tipos: cadastro (salário/função/status),
+ *    ponto (faltas/sem registro), desconto (CLT divergente), he
+ *    (hora extra Ponto×Folha), nao_vinculado.
+ *  - Severidade automática (alta/media) por tipo + magnitude do
+ *    delta (R$ 50 e 5h como threshold pra "alta").
+ *  - Ordenação: severidade alta primeiro, depois nº de divergências
+ *    desc.
+ *
+ * UI/UX
+ *  - 6 KPIs clicáveis (Total + 5 tipos) — clique no card filtra.
+ *  - Campo de busca por nome/código + botões "Expandir todos" e
+ *    "Recolher" (acordeon por linha).
+ *  - Cada card: borda esquerda vermelha (severidade alta) ou âmbar,
+ *    badges por tipo, contador de divergências. Ao expandir, tabela
+ *    interna com 5 colunas: Tipo / Descrição / Folha (Contabilidade)
+ *    / Sistema (ERP) / Diferença.
+ *  - Empty state verde com `CheckCircle` quando zero divergências
+ *    (ou filtros sem resultado).
+ *  - Legenda final explicando origem de cada coluna + significado
+ *    das cores de borda.
+ *  - `PrintActions` mantido (suporta imprimir/PDF).
+ *
+ * CORREÇÕES DO ARCHITECT (pós-review)
+ *  - **HE shape mismatch**: o server `cruzamentoHE` retorna
+ *    `sistemaHoras` (string!), `aprovadoHoras` (string!),
+ *    `contabTotalValor` (R$) e `heNaoAutorizadaMin` (min) — NÃO
+ *    `heSistema/heFolha/valorSistema/valorFolha` como eu havia
+ *    assumido. Reescrevi o bloco HE para 3 casos reais:
+ *      A) HE registrada sem solicitação aprovada (naoAutMin > 0)
+ *      B) Folha pagou HE sem registro no ponto (contab > 0 &&
+ *         sistema ≈ 0)
+ *      C) Ponto registrou HE mas folha não pagou (sistema > 0 &&
+ *         contab ≈ 0)
+ *  - **Anti-homonímia**: helper `findLinha(empId, nome)` SEMPRE
+ *    prioriza employeeId quando ambos lados têm ID; nome SÓ é
+ *    usado como fallback se AMBOS os lados estão sem ID (caso de
+ *    funcionário não-vinculado). Normalização `trim+upper+collapse
+ *    whitespace`. Chave do Map também migrada para `emp:{id}` /
+ *    `nome:{NORMALIZADO}` pra unificar de origem.
+ *  - **Server `verificacaoCruzada` agora retorna `employeeId`**
+ *    (campo ADITIVO em `server/routers/folhaPagamento.ts` L1413)
+ *    — sem este campo o merge entre verificacao e desconto/HE não
+ *    casava porque eu setava `employeeId: null` para TODA linha.
+ *
+ * ARQUIVOS TOCADOS
+ *  - `client/src/pages/FolhaPagamento.tsx`:
+ *     * L74 — `ViewMode` ganha `"consolidado"`.
+ *     * L2245-2253 — handler `viewMode === "consolidado"` antes do
+ *       `cruzamento_he`.
+ *     * L7158-7184 — banner CTA acima do grid de 3 cards.
+ *     * L8404-FIM — novo componente `RelatorioConsolidadoView`
+ *       (~340 linhas, padrão dos componentes irmãos).
+ *  - `server/routers/folhaPagamento.ts` L1413 — adiciona
+ *    `employeeId` no return do `verificacaoCruzada` (aditivo).
+ *
+ * NÃO TOCADO (zero risco de regressão)
+ *  - Os 3 sub-relatórios antigos (Verificação Cruzada, Descontos
+ *    CLT, Cruzamento HE) permanecem 100% intactos.
+ *  - Sem ALTER/DROP/DELETE. R-001/R-007/R-010 ✓.
+ *
  * Rev. 2523 — **FOLHA DE PAGAMENTO · PARSER SINTÉTICO COM REGEX
  * "GLUED" pro layout SCI Novo Visual / Grupo Pronus (resolve
  * definitivamente "0 funcionários processados").**

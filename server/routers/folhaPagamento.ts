@@ -1407,6 +1407,7 @@ export const folhaPagamentoRouter = router({
 
         return {
           id: item.id,
+          employeeId: item.employeeId ?? null,
           nome: item.nomeColaborador,
           codigo: item.codigoContabil,
           funcaoFolha: item.funcao,

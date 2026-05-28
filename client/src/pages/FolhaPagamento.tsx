@@ -68,7 +68,7 @@ function parseBRLNum(val: string | number | null | undefined): number {
   return parseFloat(str) || 0;
 }
 
-type ViewMode = "resumo" | "detalhes" | "custos_obra" | "horas_extras" | "verificacao" | "descontos_clt" | "cruzamento_he" | "descontos_epi" | "calculo_vale" | "calculo_pagamento" | "alertas_afericao" | "he_modulo" | "auditoria_folha" | "aprovacoes_rh";
+type ViewMode = "resumo" | "detalhes" | "custos_obra" | "horas_extras" | "verificacao" | "descontos_clt" | "cruzamento_he" | "consolidado" | "descontos_epi" | "calculo_vale" | "calculo_pagamento" | "alertas_afericao" | "he_modulo" | "auditoria_folha" | "aprovacoes_rh";
 
 type CampoDesconto = 'vale' | 'inss' | 'ir' | 'faltas' | 'atrasos' | 'sindicato' | 'pensao' | 'vt' | 'convenio' | 'epi' | 'outros';
 
@@ -2239,6 +2239,16 @@ export default function FolhaPagamento() {
   }
 
   // ===== CRUZAMENTO HE VIEW =====
+  if (viewMode === "consolidado" && viewLancId) {
+    return (
+      <DashboardLayout>
+        <PrintHeader />
+        {fileInputs}
+        <RelatorioConsolidadoView companyId={companyId} mesAno={mesAno} lancamentoId={viewLancId} onBack={() => setViewMode("resumo")} />
+      </DashboardLayout>
+    );
+  }
+
   if (viewMode === "cruzamento_he" && viewLancId) {
     return (
       <DashboardLayout>
@@ -7142,6 +7152,34 @@ export default function FolhaPagamento() {
                   </div>
                 ) : (
                   <>
+                    {/* Rev. 2524 — Banner do Relatório Consolidado (CTA principal pra RH) */}
+                    <button
+                      onClick={() => openView("consolidado", pag!.id)}
+                      className="w-full mb-3 rounded-lg border-2 border-red-300 bg-gradient-to-r from-red-50 via-rose-50 to-amber-50 hover:from-red-100 hover:via-rose-100 hover:to-amber-100 transition-all p-4 text-left group shadow-sm"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="h-11 w-11 rounded-lg bg-red-600 group-hover:bg-red-700 flex items-center justify-center shrink-0">
+                          <AlertTriangle className="h-5 w-5 text-white" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <p className="font-bold text-sm text-red-900">Relatório Consolidado de Divergências</p>
+                            {divPendentes > 0 && (
+                              <Badge className="bg-red-600 text-white text-[10px]">
+                                {divPendentes} pendente(s)
+                              </Badge>
+                            )}
+                          </div>
+                          <p className="text-[11px] text-red-800/80 leading-tight mt-0.5">
+                            Visão unificada de TODAS as inconsistências (cadastro, ponto, descontos CLT e horas extras) por funcionário, pronta pra análise detalhada do RH.
+                          </p>
+                        </div>
+                        <span className="text-[11px] text-red-700 font-bold whitespace-nowrap group-hover:underline">
+                          Abrir →
+                        </span>
+                      </div>
+                    </button>
+
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
                       <button
                         onClick={() => openView("verificacao", pag!.id)}
@@ -8356,6 +8394,419 @@ function DescontosEPIView({ companyId, mesAno, onBack }: { companyId: number; me
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </div>
+  );
+}
+
+// ============================================================================
+// Rev. 2524 — RELATÓRIO CONSOLIDADO DE DIVERGÊNCIAS
+// Consolida verificacaoCruzada (cadastro/ponto) + comparativoDescontos (CLT) +
+// cruzamentoHE (hora extra) em UMA tela por funcionário, pra análise do RH.
+// ============================================================================
+function RelatorioConsolidadoView({ companyId, mesAno, lancamentoId, onBack }: { companyId: number; mesAno: string; lancamentoId: number; onBack: () => void }) {
+  const verif = trpc.folha.verificacaoCruzada.useQuery(
+    { folhaLancamentoId: lancamentoId, companyId, mesReferencia: mesAno },
+    { enabled: companyId > 0 && lancamentoId > 0 }
+  );
+  const descCLT = trpc.folha.comparativoDescontos.useQuery(
+    { companyId, mesReferencia: mesAno },
+    { enabled: companyId > 0 }
+  );
+  const heCruz = trpc.folha.cruzamentoHE.useQuery(
+    { companyId, mesReferencia: mesAno },
+    { enabled: companyId > 0 }
+  );
+
+  const [filtroTipo, setFiltroTipo] = useState<"todos" | "cadastro" | "ponto" | "desconto" | "he" | "nao_vinculado">("todos");
+  const [search, setSearch] = useState("");
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+
+  const isLoading = verif.isLoading || descCLT.isLoading || heCruz.isLoading;
+
+  type Divergencia = {
+    tipo: "cadastro" | "ponto" | "desconto" | "he" | "nao_vinculado";
+    severidade: "alta" | "media" | "baixa";
+    titulo: string;
+    folha?: string;
+    sistema?: string;
+    diferenca?: string;
+  };
+
+  type LinhaConsolidada = {
+    key: string;
+    employeeId: number | null;
+    nome: string;
+    codigo?: string;
+    funcao?: string;
+    liquido?: string;
+    divergencias: Divergencia[];
+  };
+
+  const linhas = useMemo<LinhaConsolidada[]>(() => {
+    const mapByEmp = new Map<string, LinhaConsolidada>();
+
+    // 1) Verificação cruzada (cadastro + ponto + não-vinculado)
+    if (verif.data?.verificacoes) {
+      for (const v of verif.data.verificacoes as any[]) {
+        const key = v.id ? `item:${v.id}` : `nome:${v.nome}`;
+        const divs: Divergencia[] = [];
+        for (const alerta of (v.alertas || [])) {
+          const a = String(alerta);
+          if (a.startsWith("Funcionário não vinculado")) {
+            divs.push({ tipo: "nao_vinculado", severidade: "alta", titulo: "Não vinculado ao cadastro do ERP", folha: v.nome });
+          } else if (a.startsWith("Funcionário com status")) {
+            divs.push({ tipo: "cadastro", severidade: "alta", titulo: a });
+          } else if (a.startsWith("Salário divergente")) {
+            divs.push({
+              tipo: "cadastro", severidade: "alta", titulo: "Salário divergente",
+              folha: v.salarioFolha ? `R$ ${v.salarioFolha}` : "—",
+              sistema: v.salarioCadastro ? `R$ ${v.salarioCadastro}` : "—",
+            });
+          } else if (a.startsWith("Função divergente")) {
+            divs.push({
+              tipo: "cadastro", severidade: "media", titulo: "Função divergente",
+              folha: v.funcaoFolha || "—",
+              sistema: v.funcaoCadastro || "—",
+            });
+          } else if (a.includes("falta")) {
+            divs.push({ tipo: "ponto", severidade: "media", titulo: a, sistema: v.ponto ? `${v.ponto.faltas} falta(s)` : undefined });
+          } else if (a.startsWith("Sem registros de ponto")) {
+            divs.push({ tipo: "ponto", severidade: "alta", titulo: "Sem registros de ponto no mês" });
+          } else {
+            divs.push({ tipo: "cadastro", severidade: "media", titulo: a });
+          }
+        }
+        if (divs.length === 0) continue;
+        const empId = v.employeeId ?? null;
+        const baseKey = empId ? `emp:${empId}` : `nome:${(v.nome || "").trim().toUpperCase().replace(/\s+/g, " ")}`;
+        mapByEmp.set(baseKey, {
+          key: baseKey,
+          employeeId: empId,
+          nome: v.nome,
+          codigo: v.codigo || undefined,
+          funcao: v.funcaoFolha || v.funcaoCadastro || undefined,
+          liquido: v.liquido,
+          divergencias: divs,
+        });
+      }
+    }
+
+    // Helper de lookup endurecido (anti-homonímia):
+    //  - SEMPRE prioriza employeeId quando os dois lados têm ID.
+    //  - Fallback por nome SÓ quando AMBOS lados não têm employeeId
+    //    (caso de funcionário não-vinculado na verificacaoCruzada).
+    const normNome = (s: string) => (s || "").trim().toUpperCase().replace(/\s+/g, " ");
+    const findLinha = (empId: number | null | undefined, nome: string): LinhaConsolidada | null => {
+      if (empId) {
+        for (const l of mapByEmp.values()) if (l.employeeId === empId) return l;
+        return null; // tem ID e não achou → cria nova, não cola em homônimo
+      }
+      const n = normNome(nome);
+      if (!n) return null;
+      for (const l of mapByEmp.values()) if (!l.employeeId && normNome(l.nome) === n) return l;
+      return null;
+    };
+    const addDivergencia = (empId: number | null | undefined, nome: string, funcao: string | undefined, div: Divergencia) => {
+      const existing = findLinha(empId, nome);
+      if (existing) {
+        existing.divergencias.push(div);
+        return;
+      }
+      const key = empId ? `emp:${empId}` : `nome:${normNome(nome)}`;
+      mapByEmp.set(key, {
+        key, employeeId: empId ?? null, nome, funcao,
+        divergencias: [div],
+      });
+    };
+
+    // 2) Comparativo de Descontos CLT
+    if (descCLT.data?.comparativo) {
+      for (const c of descCLT.data.comparativo as any[]) {
+        if (c.status === "ok") continue;
+        addDivergencia(c.employeeId, c.nome, c.cargo, {
+          tipo: "desconto",
+          severidade: Math.abs(c.diferenca) > 50 ? "alta" : "media",
+          titulo: c.status === "sistema_maior" ? "Descontos CLT: Sistema > Contabilidade" : "Descontos CLT: Contabilidade > Sistema",
+          sistema: `R$ ${Number(c.sistemaTotal || 0).toFixed(2)}`,
+          folha: `R$ ${Number(c.contabTotal || 0).toFixed(2)}`,
+          diferenca: `R$ ${Number(c.diferenca || 0).toFixed(2)}`,
+        });
+      }
+    }
+
+    // 3) Cruzamento HE — server retorna sistemaHoras (string), aprovadoHoras (string),
+    //    contabTotalValor (R$ number), heNaoAutorizadaMin (number).
+    //    Unidades diferentes (h × R$) → divergência principal é HE NÃO AUTORIZADA
+    //    (registrada no ponto sem solicitação aprovada). Também alerto quando a folha
+    //    paga HE mas o ponto não registrou nada (e vice-versa).
+    if (heCruz.data?.cruzamento) {
+      for (const h of heCruz.data.cruzamento as any[]) {
+        const sistemaH = parseFloat(String(h.sistemaHoras || "0"));
+        const aprovadoH = parseFloat(String(h.aprovadoHoras || "0"));
+        const contabValor = Number(h.contabTotalValor || 0);
+        const naoAutMin = Number(h.heNaoAutorizadaMin || 0);
+        const naoAutH = naoAutMin / 60;
+
+        // Caso A: HE não autorizada (ponto > aprovado)
+        if (naoAutMin > 0) {
+          addDivergencia(h.employeeId, h.nome, h.cargo, {
+            tipo: "he",
+            severidade: naoAutH > 5 ? "alta" : "media",
+            titulo: "Horas extras registradas sem solicitação aprovada",
+            sistema: `${sistemaH.toFixed(1)}h registradas`,
+            folha: `${aprovadoH.toFixed(1)}h aprovadas`,
+            diferenca: `${naoAutH.toFixed(1)}h sem aprovação`,
+          });
+        }
+
+        // Caso B: folha pagou HE mas ponto não registrou
+        if (contabValor > 0 && sistemaH < 0.1) {
+          addDivergencia(h.employeeId, h.nome, h.cargo, {
+            tipo: "he",
+            severidade: contabValor > 100 ? "alta" : "media",
+            titulo: "Folha pagou HE sem registro no ponto",
+            sistema: "0h registradas",
+            folha: `R$ ${contabValor.toFixed(2)} pagos`,
+            diferenca: `R$ ${contabValor.toFixed(2)}`,
+          });
+        }
+
+        // Caso C: ponto tem HE mas folha não pagou nada
+        if (sistemaH > 0.1 && contabValor < 0.01) {
+          addDivergencia(h.employeeId, h.nome, h.cargo, {
+            tipo: "he",
+            severidade: sistemaH > 5 ? "alta" : "media",
+            titulo: "Ponto registrou HE mas folha não pagou",
+            sistema: `${sistemaH.toFixed(1)}h registradas`,
+            folha: "R$ 0,00 pagos",
+            diferenca: `${sistemaH.toFixed(1)}h a apurar`,
+          });
+        }
+      }
+    }
+
+    return Array.from(mapByEmp.values()).sort((a, b) => {
+      const sevOrder = (l: LinhaConsolidada) => {
+        if (l.divergencias.some(d => d.severidade === "alta")) return 0;
+        if (l.divergencias.some(d => d.severidade === "media")) return 1;
+        return 2;
+      };
+      const so = sevOrder(a) - sevOrder(b);
+      if (so !== 0) return so;
+      return b.divergencias.length - a.divergencias.length;
+    });
+  }, [verif.data, descCLT.data, heCruz.data]);
+
+  // KPIs por tipo
+  const kpis = useMemo(() => {
+    const k = { total: linhas.length, cadastro: 0, ponto: 0, desconto: 0, he: 0, nao_vinculado: 0 };
+    for (const l of linhas) {
+      const tipos = new Set(l.divergencias.map(d => d.tipo));
+      if (tipos.has("cadastro")) k.cadastro++;
+      if (tipos.has("ponto")) k.ponto++;
+      if (tipos.has("desconto")) k.desconto++;
+      if (tipos.has("he")) k.he++;
+      if (tipos.has("nao_vinculado")) k.nao_vinculado++;
+    }
+    return k;
+  }, [linhas]);
+
+  const linhasFiltradas = useMemo(() => {
+    const s = search.trim().toLowerCase();
+    return linhas.filter(l => {
+      if (filtroTipo !== "todos" && !l.divergencias.some(d => d.tipo === filtroTipo)) return false;
+      if (s && !l.nome.toLowerCase().includes(s) && !(l.codigo || "").toLowerCase().includes(s)) return false;
+      return true;
+    });
+  }, [linhas, filtroTipo, search]);
+
+  const toggleExpand = (key: string) => {
+    setExpanded(prev => {
+      const n = new Set(prev);
+      if (n.has(key)) n.delete(key); else n.add(key);
+      return n;
+    });
+  };
+
+  const expandAll = () => setExpanded(new Set(linhasFiltradas.map(l => l.key)));
+  const collapseAll = () => setExpanded(new Set());
+
+  const tipoLabel: Record<string, { label: string; cls: string; icon: any }> = {
+    cadastro: { label: "Cadastro", cls: "bg-amber-100 text-amber-800 border-amber-300", icon: User },
+    ponto: { label: "Ponto", cls: "bg-purple-100 text-purple-800 border-purple-300", icon: Clock },
+    desconto: { label: "Desconto CLT", cls: "bg-red-100 text-red-800 border-red-300", icon: Scale },
+    he: { label: "Hora Extra", cls: "bg-orange-100 text-orange-800 border-orange-300", icon: TrendingUp },
+    nao_vinculado: { label: "Não vinculado", cls: "bg-slate-200 text-slate-800 border-slate-300", icon: XCircle },
+  };
+
+  return (
+    <div className="space-y-4">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <Button variant="ghost" size="sm" onClick={onBack}>
+            <ArrowLeft className="h-4 w-4 mr-1" /> Voltar
+          </Button>
+          <div>
+            <h1 className="text-base sm:text-xl font-bold flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-red-600" /> Relatório Consolidado de Divergências
+            </h1>
+            <p className="text-xs sm:text-sm text-muted-foreground">
+              Cadastro × Ponto × Descontos CLT × Hora Extra — {mesAno}
+            </p>
+          </div>
+        </div>
+        <PrintActions title={`Relatório Consolidado - ${mesAno}`} />
+      </div>
+
+      {/* KPIs */}
+      <div className="grid grid-cols-2 sm:grid-cols-6 gap-2">
+        <button
+          onClick={() => setFiltroTipo("todos")}
+          className={`rounded-lg p-3 text-center border-2 transition-all ${filtroTipo === "todos" ? "border-[#1B2A4A] bg-[#1B2A4A]/5" : "border-slate-200 hover:border-slate-300 bg-white"}`}
+        >
+          <p className="text-[10px] font-medium uppercase tracking-wide text-slate-500">Total Funcionários</p>
+          <p className="text-2xl font-black text-[#1B2A4A] mt-0.5">{kpis.total}</p>
+        </button>
+        {(["nao_vinculado", "cadastro", "ponto", "desconto", "he"] as const).map(tipo => {
+          const meta = tipoLabel[tipo];
+          const Icon = meta.icon;
+          const v = kpis[tipo];
+          const active = filtroTipo === tipo;
+          return (
+            <button
+              key={tipo}
+              onClick={() => setFiltroTipo(active ? "todos" : tipo)}
+              className={`rounded-lg p-3 text-center border-2 transition-all ${active ? `${meta.cls.replace('bg-', 'border-').split(' ')[0].replace('-100', '-500')} ${meta.cls.split(' ')[0]}` : "border-slate-200 hover:border-slate-300 bg-white"}`}
+            >
+              <p className="text-[10px] font-medium uppercase tracking-wide text-slate-500 flex items-center justify-center gap-1">
+                <Icon className="h-3 w-3" /> {meta.label}
+              </p>
+              <p className={`text-2xl font-black mt-0.5 ${v > 0 ? "text-red-700" : "text-slate-400"}`}>{v}</p>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Toolbar */}
+      <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+        <div className="flex-1 relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Buscar por nome ou código..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            className="pl-9"
+          />
+        </div>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={expandAll}>
+            <ChevronDown className="h-3.5 w-3.5 mr-1" /> Expandir todos
+          </Button>
+          <Button variant="outline" size="sm" onClick={collapseAll}>
+            <ChevronUp className="h-3.5 w-3.5 mr-1" /> Recolher
+          </Button>
+        </div>
+      </div>
+
+      {/* Lista */}
+      {isLoading ? (
+        <div className="flex justify-center py-16">
+          <RefreshCw className="w-6 h-6 animate-spin text-primary" />
+        </div>
+      ) : linhasFiltradas.length === 0 ? (
+        <div className="text-center py-16 text-muted-foreground border border-dashed border-green-300 bg-green-50/50 rounded-lg">
+          <CheckCircle className="w-12 h-12 mx-auto mb-3 text-green-600" />
+          <p className="font-semibold text-green-700">Nenhuma divergência encontrada</p>
+          <p className="text-xs mt-1">
+            {filtroTipo !== "todos" || search ? "Tente limpar os filtros." : "Folha conferida sem inconsistências."}
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {linhasFiltradas.map(linha => {
+            const isOpen = expanded.has(linha.key);
+            const sevAlta = linha.divergencias.some(d => d.severidade === "alta");
+            return (
+              <Card key={linha.key} className={`border-l-4 ${sevAlta ? "border-l-red-500" : "border-l-amber-400"}`}>
+                <button
+                  onClick={() => toggleExpand(linha.key)}
+                  className="w-full p-3 text-left hover:bg-slate-50 transition-colors"
+                >
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                      {isOpen ? <ChevronDown className="h-4 w-4 text-slate-500 shrink-0" /> : <ChevronRight className="h-4 w-4 text-slate-500 shrink-0" />}
+                      <div className="min-w-0">
+                        <p className="font-semibold text-sm truncate">
+                          {linha.codigo && <span className="font-mono text-xs text-slate-500 mr-2">#{linha.codigo}</span>}
+                          {linha.nome}
+                        </p>
+                        {linha.funcao && <p className="text-[11px] text-muted-foreground truncate">{linha.funcao}</p>}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1 flex-wrap">
+                      {Array.from(new Set(linha.divergencias.map(d => d.tipo))).map(t => {
+                        const meta = tipoLabel[t];
+                        return (
+                          <Badge key={t} variant="outline" className={`text-[10px] ${meta.cls}`}>
+                            {meta.label}
+                          </Badge>
+                        );
+                      })}
+                      <Badge className={`text-[10px] ${sevAlta ? "bg-red-600 text-white" : "bg-amber-500 text-white"}`}>
+                        {linha.divergencias.length} divergência(s)
+                      </Badge>
+                    </div>
+                  </div>
+                </button>
+                {isOpen && (
+                  <div className="border-t border-slate-200 bg-slate-50/50">
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="border-b border-slate-200 text-left text-slate-500 uppercase tracking-wide text-[10px]">
+                          <th className="px-4 py-2 font-medium">Tipo</th>
+                          <th className="px-3 py-2 font-medium">Descrição</th>
+                          <th className="px-3 py-2 font-medium text-right">Folha (Contabilidade)</th>
+                          <th className="px-3 py-2 font-medium text-right">Sistema (ERP)</th>
+                          <th className="px-3 py-2 font-medium text-right">Diferença</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {linha.divergencias.map((d, i) => {
+                          const meta = tipoLabel[d.tipo];
+                          return (
+                            <tr key={i} className="border-b last:border-0 border-slate-200">
+                              <td className="px-4 py-2">
+                                <Badge variant="outline" className={`text-[10px] ${meta.cls}`}>
+                                  {meta.label}
+                                </Badge>
+                              </td>
+                              <td className="px-3 py-2 text-slate-700">
+                                <span className={d.severidade === "alta" ? "font-semibold text-red-700" : ""}>{d.titulo}</span>
+                              </td>
+                              <td className="px-3 py-2 text-right font-mono">{d.folha || "—"}</td>
+                              <td className="px-3 py-2 text-right font-mono">{d.sistema || "—"}</td>
+                              <td className="px-3 py-2 text-right font-mono font-semibold text-red-700">{d.diferenca || "—"}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </Card>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Legenda */}
+      <div className="text-[11px] text-muted-foreground bg-slate-50 border border-slate-200 rounded-lg p-3 space-y-1">
+        <p><strong>Como ler este relatório:</strong></p>
+        <p>• <strong>Folha (Contabilidade)</strong> = valor importado do PDF emitido pela contabilidade.</p>
+        <p>• <strong>Sistema (ERP)</strong> = valor calculado pelo ERP (ponto, cadastro, motor CLT).</p>
+        <p>• Borda <span className="text-red-700 font-semibold">vermelha</span> = alta severidade (ação obrigatória do RH); <span className="text-amber-700 font-semibold">âmbar</span> = revisão recomendada.</p>
+      </div>
     </div>
   );
 }
