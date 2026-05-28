@@ -7082,10 +7082,7 @@ export default function FolhaPagamento() {
                     <Button
                       className="w-full bg-[#1B2A4A] hover:bg-[#1B2A4A]/90 gap-2"
                       disabled={isPending}
-                      onClick={() => {
-                        setUploading("pagamento");
-                        pagInputRef.current?.click();
-                      }}
+                      onClick={() => pagInputRef.current?.click()}
                     >
                       {isPending
                         ? <><RefreshCw className="h-4 w-4 animate-spin" /> Processando PDFs…</>
@@ -7151,10 +7148,7 @@ export default function FolhaPagamento() {
                         variant="outline"
                         className="gap-1.5 text-[#1B2A4A] border-[#1B2A4A]/30 hover:bg-[#1B2A4A]/5"
                         disabled={isPending}
-                        onClick={() => {
-                          setUploading("pagamento");
-                          pagInputRef.current?.click();
-                        }}
+                        onClick={() => pagInputRef.current?.click()}
                       >
                         {isPending
                           ? <><RefreshCw className="h-3 w-3 animate-spin" /> Processando…</>

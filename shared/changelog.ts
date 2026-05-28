@@ -79,6 +79,16 @@
  *        (`<CruzamentoHEView>` L7789+).
  *      + Footer cinza com link "Reimportar" pra sobrescrever os PDFs.
  *
+ *  (5b) **Fix code-review (architect)** — primeira versão chamava
+ *      `setUploading("pagamento")` ANTES de `pagInputRef.click()`. Se o
+ *      usuário cancelasse o file picker, `onChange` não dispararia
+ *      `handleFileSelect` (que reseta via `onSuccess/onError`) e o
+ *      estado ficava preso ("Processando importação..." pra sempre).
+ *      Fix: removidos os dois `setUploading("pagamento")` redundantes;
+ *      `handleFileSelect` (L1176) já faz `setUploading(tipo)` quando
+ *      há `files.length > 0`. `isPending` continua válido porque
+ *      `setUploading` ocorre síncrono antes da mutation.
+ *
  *  (5) **Sem state novo** — todos os estados/refs/mutations (`statusMes`,
  *      `divergenciasFolha`, `pagInputRef`, `uploading`, `setUploading`,
  *      `importarAutoMut`, `openView`) já existiam. IIFE inline mantém o
