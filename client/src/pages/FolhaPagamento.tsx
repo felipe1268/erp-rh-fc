@@ -6978,6 +6978,196 @@ export default function FolhaPagamento() {
           </DialogContent>
         </Dialog>
 
+        {/* ============================================================
+            CONFERÊNCIA COM CONTABILIDADE (Rev. 2517 — restaurado)
+            Bloco removido na Rev. 2194 e reintegrado a pedido do usuário.
+            Compara o que o ERP calculou (Pagamento simulado) com o PDF da
+            folha emitido pela contabilidade. Backend intacto desde 2194:
+            • trpc.folha.importarFolhaAuto (upload analítico/sintético)
+            • trpc.folha.verificacaoCruzada (Folha × Ponto × Cadastro)
+            • trpc.folha.comparativoDescontos (descontos CLT × ERP)
+            • trpc.folha.cruzamentoHE (HE folha × ponto)
+            ============================================================ */}
+        {(() => {
+          const pag = statusMes.data?.pagamento;
+          const uploadsList = (statusMes.data as any)?.uploads || [];
+          const uploadsPagamento = uploadsList.filter((u: any) =>
+            u.category === "espelho_folha_analitico" || u.category === "folha_sintetico"
+          );
+          const temAnalitico = !!(pag?.analiticoUploadId) || uploadsPagamento.some((u: any) => u.category === "espelho_folha_analitico");
+          const temSintetico = !!(pag?.sinteticoUploadId) || uploadsPagamento.some((u: any) => u.category === "folha_sintetico");
+          const importado = !!(pag && pag.id && (pag.totalFuncionarios || 0) > 0);
+          const totalDiv = pag?.totalDivergencias || 0;
+          const divResolvidas = pag?.divergenciasResolvidas || 0;
+          const divPendentes = Math.max(0, totalDiv - divResolvidas);
+          const totalFunc = pag?.totalFuncionarios || 0;
+          const ativos = (divergenciasFolha.data as any)?.ativos ?? null;
+          const isPending = importarAutoMut.isPending && uploading === "pagamento";
+
+          return (
+            <Card className="border-2 border-[#1B2A4A]/20 bg-gradient-to-r from-emerald-50/40 to-blue-50/40">
+              <CardContent className="p-5">
+                <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
+                  <div className="flex items-center gap-3">
+                    <div className="h-10 w-10 rounded-lg bg-[#1B2A4A] flex items-center justify-center">
+                      <ShieldCheck className="h-5 w-5 text-white" />
+                    </div>
+                    <div>
+                      <p className="font-bold text-base text-[#1B2A4A]">Conferência com Contabilidade</p>
+                      <p className="text-xs text-muted-foreground">
+                        Comparativo entre o pagamento simulado do ERP e a folha emitida pela contabilidade ({formatMesAno(mesAno)}).
+                      </p>
+                    </div>
+                  </div>
+                  {importado ? (
+                    <Badge className={divPendentes > 0 ? "bg-red-100 text-red-700" : "bg-green-100 text-green-700"}>
+                      {divPendentes > 0
+                        ? <><AlertTriangle className="h-3 w-3 mr-1" /> {divPendentes} divergência(s) pendente(s)</>
+                        : <><CheckCircle className="h-3 w-3 mr-1" /> Conferido sem divergências</>}
+                    </Badge>
+                  ) : (
+                    <Badge className="bg-amber-100 text-amber-700">
+                      <AlertTriangle className="h-3 w-3 mr-1" /> Folha da contabilidade não importada
+                    </Badge>
+                  )}
+                </div>
+
+                {/* KPIs */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+                  <div className="bg-white rounded-lg border border-slate-200 p-3 text-center">
+                    <p className="text-[10px] text-slate-500 font-medium uppercase tracking-wide">Funcionários (Folha)</p>
+                    <p className="text-2xl font-black text-[#1B2A4A] mt-0.5">{importado ? totalFunc : "—"}</p>
+                  </div>
+                  <div className="bg-white rounded-lg border border-slate-200 p-3 text-center">
+                    <p className="text-[10px] text-slate-500 font-medium uppercase tracking-wide">Funcionários (ERP Ativos)</p>
+                    <p className="text-2xl font-black text-[#1B2A4A] mt-0.5">{ativos ?? "—"}</p>
+                  </div>
+                  <div className={`rounded-lg border p-3 text-center ${divPendentes > 0 ? "bg-red-50 border-red-200" : "bg-green-50 border-green-200"}`}>
+                    <p className="text-[10px] font-medium uppercase tracking-wide text-slate-500">Divergências</p>
+                    <p className={`text-2xl font-black mt-0.5 ${divPendentes > 0 ? "text-red-700" : "text-green-700"}`}>
+                      {importado ? divPendentes : "—"}
+                    </p>
+                    {importado && divResolvidas > 0 && (
+                      <p className="text-[9px] text-emerald-600 mt-0.5">{divResolvidas} resolvida(s)</p>
+                    )}
+                  </div>
+                  <div className="bg-white rounded-lg border border-slate-200 p-3 text-center">
+                    <p className="text-[10px] text-slate-500 font-medium uppercase tracking-wide">Arquivos</p>
+                    <div className="flex items-center justify-center gap-2 mt-1">
+                      <Badge variant="outline" className={`text-[9px] px-1.5 ${temAnalitico ? "border-green-400 text-green-700 bg-green-50" : "border-slate-300 text-slate-400"}`}>
+                        {temAnalitico ? <CheckCircle className="h-2.5 w-2.5 mr-0.5" /> : <XCircle className="h-2.5 w-2.5 mr-0.5" />}
+                        Analítico
+                      </Badge>
+                      <Badge variant="outline" className={`text-[9px] px-1.5 ${temSintetico ? "border-green-400 text-green-700 bg-green-50" : "border-slate-300 text-slate-400"}`}>
+                        {temSintetico ? <CheckCircle className="h-2.5 w-2.5 mr-0.5" /> : <XCircle className="h-2.5 w-2.5 mr-0.5" />}
+                        Sintético
+                      </Badge>
+                    </div>
+                  </div>
+                </div>
+
+                {/* AÇÕES */}
+                {!importado ? (
+                  <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+                    <div className="flex items-start gap-3 mb-3">
+                      <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
+                      <div className="flex-1">
+                        <p className="text-sm font-semibold text-amber-900">Importe os PDFs da contabilidade para liberar a conferência</p>
+                        <p className="text-xs text-amber-700 mt-0.5">
+                          Aceita o <strong>Espelho/Analítico</strong> (com proventos e descontos por funcionário) e/ou o <strong>Sintético</strong> (relação de líquidos).
+                          Selecione múltiplos PDFs ao mesmo tempo — o sistema detecta o tipo e o mês de referência automaticamente.
+                        </p>
+                      </div>
+                    </div>
+                    <Button
+                      className="w-full bg-[#1B2A4A] hover:bg-[#1B2A4A]/90 gap-2"
+                      disabled={isPending}
+                      onClick={() => {
+                        setUploading("pagamento");
+                        pagInputRef.current?.click();
+                      }}
+                    >
+                      {isPending
+                        ? <><RefreshCw className="h-4 w-4 animate-spin" /> Processando PDFs…</>
+                        : <><FileText className="h-4 w-4" /> Importar Folha da Contabilidade ({formatMesAno(mesAno)})</>}
+                    </Button>
+                  </div>
+                ) : (
+                  <>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
+                      <button
+                        onClick={() => openView("verificacao", pag!.id)}
+                        className="bg-white rounded-lg border-2 border-blue-200 hover:border-blue-400 hover:bg-blue-50/50 transition-all p-4 text-left group"
+                      >
+                        <div className="flex items-center gap-2 mb-2">
+                          <div className="h-8 w-8 rounded-lg bg-blue-100 group-hover:bg-blue-200 flex items-center justify-center">
+                            <ShieldCheck className="h-4 w-4 text-blue-700" />
+                          </div>
+                          <p className="font-bold text-sm text-blue-900">Verificação Cruzada</p>
+                        </div>
+                        <p className="text-[11px] text-slate-600 leading-tight">
+                          Confronta a folha da contabilidade com o ponto consolidado e o cadastro do funcionário (salário, função, faltas).
+                        </p>
+                        <p className="text-[10px] text-blue-700 font-semibold mt-2 group-hover:underline">Abrir relatório →</p>
+                      </button>
+
+                      <button
+                        onClick={() => openView("descontos_clt", pag!.id)}
+                        className="bg-white rounded-lg border-2 border-purple-200 hover:border-purple-400 hover:bg-purple-50/50 transition-all p-4 text-left group"
+                      >
+                        <div className="flex items-center gap-2 mb-2">
+                          <div className="h-8 w-8 rounded-lg bg-purple-100 group-hover:bg-purple-200 flex items-center justify-center">
+                            <FileCheck className="h-4 w-4 text-purple-700" />
+                          </div>
+                          <p className="font-bold text-sm text-purple-900">Comparativo de Descontos</p>
+                        </div>
+                        <p className="text-[11px] text-slate-600 leading-tight">
+                          Confronta os descontos CLT calculados pelo ERP (INSS, IRRF, FGTS, faltas) com os valores da folha da contabilidade.
+                        </p>
+                        <p className="text-[10px] text-purple-700 font-semibold mt-2 group-hover:underline">Abrir relatório →</p>
+                      </button>
+
+                      <button
+                        onClick={() => openView("cruzamento_he", pag!.id)}
+                        className="bg-white rounded-lg border-2 border-orange-200 hover:border-orange-400 hover:bg-orange-50/50 transition-all p-4 text-left group"
+                      >
+                        <div className="flex items-center gap-2 mb-2">
+                          <div className="h-8 w-8 rounded-lg bg-orange-100 group-hover:bg-orange-200 flex items-center justify-center">
+                            <TrendingUp className="h-4 w-4 text-orange-700" />
+                          </div>
+                          <p className="font-bold text-sm text-orange-900">Cruzamento Hora Extra</p>
+                        </div>
+                        <p className="text-[11px] text-slate-600 leading-tight">
+                          Compara as horas extras pagas na folha da contabilidade com as horas apuradas pelo ponto eletrônico do ERP.
+                        </p>
+                        <p className="text-[10px] text-orange-700 font-semibold mt-2 group-hover:underline">Abrir relatório →</p>
+                      </button>
+                    </div>
+
+                    <div className="flex items-center justify-between gap-3 text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
+                      <span>Importou a folha errada? Reimporte os PDFs para sobrescrever os dados.</span>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="gap-1.5 text-[#1B2A4A] border-[#1B2A4A]/30 hover:bg-[#1B2A4A]/5"
+                        disabled={isPending}
+                        onClick={() => {
+                          setUploading("pagamento");
+                          pagInputRef.current?.click();
+                        }}
+                      >
+                        {isPending
+                          ? <><RefreshCw className="h-3 w-3 animate-spin" /> Processando…</>
+                          : <><RefreshCw className="h-3 w-3" /> Reimportar</>}
+                      </Button>
+                    </div>
+                  </>
+                )}
+              </CardContent>
+            </Card>
+          );
+        })()}
+
         {/* FECHAR FOLHA PARA MO */}
         <div className="bg-white border border-slate-200 rounded-xl p-5">
           <div className="flex items-center justify-between mb-3">

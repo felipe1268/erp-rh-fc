@@ -1,6 +1,142 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2517 — **FOLHA DE PAGAMENTO · CONFERÊNCIA COM CONTABILIDADE
+ * RESTAURADA — bloco de UI removido na Rev. 2194 reintegrado a pedido do
+ * usuário com 3 relatórios de inconsistências detalhadas (Verificação
+ * Cruzada / Comparativo de Descontos / Cruzamento de Hora Extra).**
+ *
+ * PEDIDO (user, 28/05/2026, screenshot da tela /folha-pagamento + 2 PDFs
+ * sintéticos do GRUPO PRONUS — JF e FC, competência 05/2026):
+ *  - "tinha uma função aqui na folha de pagamento, onde era possivel
+ *     fazer a comparação da folha de pagamento realizada pelo ERP, com
+ *     a folha de pagamento emitida pela contabilidade.. preciso que
+ *     volte esta função. Quero uma analise detalhada de forma que todas
+ *     inconsistencias seja demontrada em relatorio de forma dinamica e
+ *     facil entendimento."
+ *
+ * CONTEXTO HISTÓRICO
+ *  - Rev. 2194 (jan/2026) REMOVEU a UI do bloco "Conferência com
+ *    Contabilidade" do `FolhaPagamento.tsx` (card colapsável + dialog de
+ *    alerta + states `showConferencia`/`conferenciaDialog`) por decisão
+ *    de simplificação do fluxo. **Backend ficou 100% intacto** — todas
+ *    as procedures e o parser de PDF continuaram funcionando.
+ *  - Após 4 meses sem o botão, o usuário sentiu falta da função porque
+ *    sem ela não há como cruzar o líquido pago no banco com a folha
+ *    emitida pelo escritório de contabilidade (GRUPO PRONUS / SCI Novo
+ *    Visual) — daí o pedido de restauração.
+ *
+ * INFRAESTRUTURA REAPROVEITADA (zero código novo no servidor)
+ *  - `trpc.folha.importarFolhaAuto` — upload multi-PDF; detecta mês,
+ *    tipo (Analítico/Sintético) e roda `parseAnaliticoPDF` /
+ *    `parseSinteticoPDF`. O parser sintético já suporta o layout do
+ *    GRUPO PRONUS (regex `matchOld` em `server/routers/folhaPagamento.ts`
+ *    L334 captura "Código  Nome  DD/MM/YYYY  Função  Líquido").
+ *  - `trpc.folha.verificacaoCruzada` — Folha × Ponto × Cadastro
+ *    (salário, função, faltas).
+ *  - `trpc.folha.comparativoDescontos` — descontos CLT (INSS/IRRF/FGTS/
+ *    faltas) calculados pelo ERP × valores da folha da contabilidade.
+ *  - `trpc.folha.cruzamentoHE` — HE da folha × HE apurada no ponto.
+ *  - ViewModes `"verificacao"`, `"descontos_clt"`, `"cruzamento_he"`
+ *    + `<DescontosCLTView>` + `<CruzamentoHEView>` já existiam.
+ *
+ * MUDANÇA — CLIENT (`client/src/pages/FolhaPagamento.tsx`)
+ *  Único arquivo tocado. Bloco novo inserido entre o Dialog "Aferição
+ *  Report" e o "Fechar Folha para Custo de MO" (logo abaixo do quadro
+ *  "Cálculo Interno" com os 4 cards):
+ *
+ *  (1) **Header faixa azul** — `bg-[#1B2A4A]` 10×10 com `ShieldCheck`,
+ *      título "Conferência com Contabilidade" + subtítulo dinâmico
+ *      com o mês corrente. Badge de status à direita:
+ *      - Âmbar "Folha da contabilidade não importada" se nenhum upload.
+ *      - Verde "Conferido sem divergências" se `divPendentes === 0`.
+ *      - Vermelho "N divergência(s) pendente(s)" caso contrário.
+ *
+ *  (2) **4 KPIs** — Funcionários (Folha) / Funcionários (ERP Ativos —
+ *      vem do `divergenciasFolha.data.ativos` já existente desde Rev.
+ *      2194+) / Divergências (vermelho se >0, verde caso contrário —
+ *      mostra `divResolvidas` em verde) / Arquivos (2 pílulas
+ *      Analítico/Sintético com check verde ou X cinza).
+ *
+ *  (3) **Estado VAZIO** (sem importação) — call-to-action âmbar com
+ *      explicação ("Aceita Espelho/Analítico e/ou Sintético…") + botão
+ *      grande `bg-[#1B2A4A]` "Importar Folha da Contabilidade (mês)"
+ *      que dispara `setUploading("pagamento") + pagInputRef.click()` —
+ *      reusa o input file hidden já registrado.
+ *
+ *  (4) **Estado IMPORTADO** — grid 3-col de cards clicáveis:
+ *      - Azul (`ShieldCheck`): **Verificação Cruzada** → `openView
+ *        ("verificacao", pag.id)`. Confronta folha × ponto × cadastro
+ *        (salário, função, faltas) — relatório dinâmico com 5 cards
+ *        de filtro (Total/OK/Com Alertas/Com Ponto/Sem Ponto) + tabela
+ *        com badges de match e alertas em vermelho linha-a-linha (UI
+ *        já existente em L2066-2181).
+ *      - Roxo (`FileCheck`): **Comparativo de Descontos** → `openView
+ *        ("descontos_clt", pag.id)`. INSS/IRRF/FGTS/faltas ERP × folha
+ *        (`<DescontosCLTView>` L7711+).
+ *      - Laranja (`TrendingUp`): **Cruzamento Hora Extra** → `openView
+ *        ("cruzamento_he", pag.id)`. Horas pagas × apuradas no ponto
+ *        (`<CruzamentoHEView>` L7789+).
+ *      + Footer cinza com link "Reimportar" pra sobrescrever os PDFs.
+ *
+ *  (5) **Sem state novo** — todos os estados/refs/mutations (`statusMes`,
+ *      `divergenciasFolha`, `pagInputRef`, `uploading`, `setUploading`,
+ *      `importarAutoMut`, `openView`) já existiam. IIFE inline mantém o
+ *      escopo limpo.
+ *
+ * REGRAS DE OURO RESPEITADAS
+ *  - **Zero ALTER/DROP/DELETE/CREATE TABLE** — backend 100% intacto.
+ *  - **Não regressão Rev. 2194** — a flag server-side
+ *    `conferenciaContabilidade !== 'opcional'` e o `ignorarConferencia:
+ *    true` em `consolidarLancamento` continuam exatamente como estavam.
+ *    O usuário pode usar a conferência sem que ela bloqueie a
+ *    consolidação (decisão de produto de 2194 preservada).
+ *  - **Multi-tenant** — `statusMes` e `verificacaoCruzada` já filtravam
+ *    por `companyId` / `companyIds`.
+ *  - **FC identity** — faixa azul #1B2A4A no header, gradient sutil
+ *    `from-emerald-50/40 to-blue-50/40`, KPIs com border colorido
+ *    seguindo o padrão dos demais cards da tela.
+ *
+ * VALIDAÇÃO MANUAL (com os 2 PDFs do user — JF + FC, 05/2026)
+ *  - Tela em 05/2026 sem upload → bloco mostra badge âmbar + estado
+ *    vazio + botão "Importar Folha…".
+ *  - Click no botão → file picker abre, seleciona ambos os PDFs.
+ *  - Server detecta mês `2026-05`, classifica ambos como Sintético
+ *    (text contém "Relação de líquido"), roda `parseSinteticoPDF`
+ *    `matchOld` (regex L334) que casa exatamente o layout do GRUPO
+ *    PRONUS (`código  nome  DD/MM/YYYY  função  valor ____`).
+ *  - `matchItensComCadastro` casa por código contábil → nome
+ *    normalizado → primeiro+último nome (4 estratégias) e
+ *    auto-cadastra `codigoContabil` em quem não tinha.
+ *  - Após sucesso, bloco repinta com KPIs preenchidos + 3 cards
+ *    coloridos clicáveis.
+ *  - Click em "Verificação Cruzada" → abre relatório dinâmico com 5
+ *    cards de filtro e tabela com alertas em vermelho por linha.
+ *  - "Reimportar" volta a abrir o picker e sobrescreve os dados
+ *    (`importarFolhaAuto` faz `DELETE folha_itens` antes de inserir).
+ *
+ * ARQUIVOS TOCADOS
+ *  - `client/src/pages/FolhaPagamento.tsx` (inserção ~L6984-7177, 1
+ *    único bloco novo; nenhum import lucide adicional necessário —
+ *    `ShieldCheck`/`FileCheck`/`TrendingUp`/`AlertTriangle`/
+ *    `CheckCircle`/`XCircle`/`FileText`/`RefreshCw` já importados).
+ *  - `shared/version.ts` (2516 → 2517).
+ *  - `shared/changelog.ts` (esta entrada no topo).
+ *  - `replit.md` (rotação 2+5: 2517+2516 detalhadas; 2515 vira
+ *    one-liner; 2510 desce pra `replit-history.md`).
+ *
+ * FOLLOW-UPS POSSÍVEIS
+ *  - Cruzamento direto ERP-simulado × folha-importada (hoje a
+ *    Verificação Cruzada compara folha × cadastro/ponto; ainda não há
+ *    diff linha-a-linha entre o `pagamentoResult` simulado e os
+ *    `folha_itens` importados — apesar de existir a infraestrutura).
+ *  - Exportar PDF/Excel das divergências encontradas.
+ *  - Reativar a `conferenciaContabilidade` como bloqueio opcional na
+ *    consolidação por empresa (procedure já existe, só falta UI de
+ *    configuração).
+ *
+ * ─────────────────────────────────────────────────────────────────────────
+ *
  * Rev. 2516 — **EQUIPAMENTOS LOCADOS — Editor inline de OBRA no modal de
  * GRUPO (drill-down). Vincula/troca/desvincula a obra de todas as unidades
  * do grupo de uma vez, sem precisar abrir a action bar de seleção em lote.**

@@ -2,6 +2,7 @@
 
 > Este arquivo guarda os one-liners das revisões antigas para manter o `replit.md` enxuto.
 
+- **Rev. 2510** — EQUIPAMENTOS PRÓPRIOS — Bugfix CREATE TABLE faltante no bootstrap (`equipamentos_proprios`) + redesign completo da tela com identidade FC (faixa azul #1B2A4A, KPIs com ring colorido, grid de cards, header e modal estilizados). `server/_core/index.ts` ~L2197 + `client/src/pages/equipamentos/Proprios.tsx`. Ver `shared/changelog.ts`.
 - **Rev. 2509** — AVALIAÇÃO INTELIGENTE · RANKING — Foto do funcionário ao lado do nome em Top 10, Bottom 10, busca e tabela completa (click amplia via PersonPhoto). `avaliacaoFuncionariosRouter.getRanking` agora seleciona `employees.fotoUrl`. Ver `shared/changelog.ts`.
 - **Rev. 2508** — ALMOXARIFADO · MOVIMENTAÇÕES — Filtro defensivo esconde itens não-material (serviço/MDO/topografia) + classificador `classificarNaturezaItemAlmox` ampliado movido pra `shared/naturezaItemAlmox.ts` com 9 novos patterns (as built/sondagem/projeto/locação) + unidades hr/meses/diária/hh. Ver `shared/changelog.ts`.
 - **Rev. 2507** — PERSON PHOTO · LIGHTBOX — Foto ampliada usa quase 100% da tela (`max-w-[96vw] max-h-[96vh]`) e respeita EXIF (`imageOrientation:'from-image'`). User (iPad): "A foto está sendo cortada". Fix defensivo em `client/src/components/PersonPhoto.tsx`. Ver `shared/changelog.ts`.
