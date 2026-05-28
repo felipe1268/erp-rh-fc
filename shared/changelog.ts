@@ -1,6 +1,82 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2525 — **FOLHA DE PAGAMENTO · IMPORT MULTI-PDF: ACUMULAR
+ * REGISTROS DE TODOS OS ARQUIVOS ANEXADOS (bug — 2º PDF
+ * sobrescrevia o 1º, processando só 1 mesmo com N anexos).**
+ *
+ * MOTIVAÇÃO (user em 28/05/2026):
+ *   "O ERP precisa analisar todos PDFs que forem anexados e fazer
+ *    a análise correta, hoje está fazendo somente a análise de
+ *    apenas 1 PDF mesmo quando eu anexo 2 arquivos simultaneamente."
+ *
+ * CAUSA-RAIZ
+ *  - `server/routers/folhaPagamento.ts` mutation `importarFolhaAuto`
+ *    (L845-930) já recebia `arquivos: z.array(...).min(1).max(5)` e
+ *    iterava com `for (let i = 0; i < input.arquivos.length; i++)`,
+ *    mas DENTRO do loop fazia `analiticoData = parsed` (atribuição
+ *    direta) em vez de acumular. Resultado: a cada iteração os
+ *    registros do PDF anterior eram DESCARTADOS, sobrando só o
+ *    último.
+ *  - O bloco de persistência fora do loop (L932+ "Process analítico
+ *    data") inserta `itensToInsert` a partir de `analiticoData` ÚNICO,
+ *    então o efeito visível era: 2 PDFs anexados → só ~37 ou ~94
+ *    funcionários no card "Conferência" (qualquer que fosse o último
+ *    processado), nunca o total somado.
+ *  - O cliente (`client/src/pages/FolhaPagamento.tsx` L1209-1234
+ *    `handleFileSelect`) já estava correto: lia `files.length`,
+ *    convertia TODOS pra base64 e enviava o array — bug 100% no
+ *    server.
+ *
+ * SOLUÇÃO (Rev. 2525)
+ *  - Trocado `analiticoData = parsed` e `sinteticoData = parsed` por
+ *    PUSH acumulado em laço.
+ *  - Dedup defensiva por chave `${codigo}|${normalizeNome(nome)}|
+ *    ${dataAdmissao}` usando `Set` antes de cada push, pra evitar
+ *    duplicar funcionários caso o user anexe o MESMO PDF duas vezes
+ *    por engano (cenário comum no RH com drag-and-drop).
+ *  - Capturada `registrosEsteArquivo = parsed.length` ANTES do merge
+ *    pra que `payrollUploads.recordsProcessed` registre a contagem
+ *    REAL daquele arquivo específico (antes usava
+ *    `analiticoData.length` que, depois do fix, seria o acumulado
+ *    de todos — métrica errada por upload).
+ *  - `processedFiles.push({..., registros: parsed.length})` mantido
+ *    como está: já era per-file e continua correto pra retornar ao
+ *    cliente a contagem "Arquivo X processado: N registros".
+ *  - `analiticoUploadId` / `sinteticoUploadId` em `folhaLancamentos`
+ *    continuam apontando pro ÚLTIMO upload do tipo correspondente
+ *    (comportamento prévio preservado — esses campos são metadados
+ *    de "qual foi o último PDF que tocou no lançamento", não a
+ *    fonte dos dados).
+ *
+ * EXEMPLO CONCRETO
+ *  ANTES: 2 PDFs analíticos (FC ENGENHARIA com 94 func + FC
+ *    INCORPORAÇÕES com 37 func) → ERP gravava só 37 (último).
+ *  AGORA: ERP grava 131 funcionários (94 + 37, sem duplicatas).
+ *
+ * ESCOPO PRESERVADO
+ *  - Detecção de mês por PDF (L799-820): inalterada — itera todos
+ *    e usa o 1º que detectar (comportamento prévio).
+ *  - Detecção analítico/sintético per-file (L859-873): inalterada.
+ *  - Upload S3 per-file: inalterado.
+ *  - Match com cadastro (`matchItensComCadastro` L971/1006): roda 1×
+ *    no fim com o array acumulado completo — mais eficiente que
+ *    rodar N× com fragmentos.
+ *
+ * RISCOS / ROLLBACK
+ *  - Zero ALTER/DROP/DELETE (R-001/R-007/R-010 OK).
+ *  - Caso o user reimporte SUBSTITUINDO (ex: subiu PDF 1, depois
+ *    sobe só PDF 1 corrigido), o `db.delete(folhaItens)` no início
+ *    do bloco de persistência (L938) limpa tudo do lançamento e
+ *    re-insere apenas o array do upload atual — comportamento
+ *    correto, sem zumbis.
+ *  - Bug irmão potencial em `CruzamentoHEView` (campos errados desde
+ *    Rev. 2517) NÃO escopado — fica pra próxima.
+ *
+ * ARQUIVOS
+ *  - `server/routers/folhaPagamento.ts` L899-952 (acumulação + dedup
+ *    + recordsProcessed per-file).
+ *
  * Rev. 2524 — **FOLHA DE PAGAMENTO · RELATÓRIO CONSOLIDADO DE
  * DIVERGÊNCIAS (UMA tela com TODAS as inconsistências por
  * funcionário, pronta pra análise do RH).**

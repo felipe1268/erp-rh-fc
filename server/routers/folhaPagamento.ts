@@ -893,9 +893,21 @@ export const folhaPagamentoRouter = router({
         const upId = Number(uploadRecord.id);
         uploadIds.push(upId);
 
+        // Rev. 2525 — ACUMULAR registros de TODOS os PDFs anexados (antes
+        // `analiticoData = parsed` SOBRESCREVIA, e o 2º PDF apagava o 1º).
+        // Dedup por chave (codigo|nome+admissao) pra evitar duplicar caso o
+        // user envie acidentalmente o mesmo PDF duas vezes.
+        let registrosEsteArquivo = 0;
         if (finalTipo === "analitico") {
           const parsed = parseAnaliticoPDF(text);
-          analiticoData = parsed;
+          registrosEsteArquivo = parsed.length;
+          const seen = new Set(analiticoData.map((p: any) => `${p.codigo || ""}|${normalizeNome(p.nome || "")}|${p.dataAdmissao || ""}`));
+          for (const p of parsed) {
+            const k = `${p.codigo || ""}|${normalizeNome(p.nome || "")}|${p.dataAdmissao || ""}`;
+            if (seen.has(k)) continue;
+            seen.add(k);
+            analiticoData.push(p);
+          }
           processedFiles.push({ fileName: arquivo.fileName, tipo: "Anal\u00edtico (Espelho)", registros: parsed.length });
           // Rev. 2520 — diagnóstico: parser retornou 0, logar amostra
           if (parsed.length === 0) {
@@ -903,13 +915,20 @@ export const folhaPagamentoRouter = router({
             console.log(`[FolhaImport][DIAG] ANALITICO 0 registros · arquivo=${arquivo.fileName} · textLen=${text.length} · primeiras 60 linhas não-vazias:`);
             sample.forEach((l, i) => console.log(`[FolhaImport][DIAG] L${String(i+1).padStart(2,"0")}: ${JSON.stringify(l).slice(0, 300)}`));
           }
-          // Link upload
+          // Link upload (mantém referência ao ÚLTIMO analítico enviado)
           await db.update(folhaLancamentos)
             .set({ analiticoUploadId: upId })
             .where(eq(folhaLancamentos.id, lancamentoId));
         } else {
           const parsed = parseSinteticoPDF(text);
-          sinteticoData = parsed;
+          registrosEsteArquivo = parsed.length;
+          const seen = new Set(sinteticoData.map((p: any) => `${p.codigo || ""}|${normalizeNome(p.nome || "")}|${p.dataAdmissao || ""}`));
+          for (const p of parsed) {
+            const k = `${p.codigo || ""}|${normalizeNome(p.nome || "")}|${p.dataAdmissao || ""}`;
+            if (seen.has(k)) continue;
+            seen.add(k);
+            sinteticoData.push(p);
+          }
           processedFiles.push({ fileName: arquivo.fileName, tipo: "Sint\u00e9tico (Lista)", registros: parsed.length });
           // Rev. 2520 — diagnóstico: parser retornou 0, logar amostra
           if (parsed.length === 0) {
@@ -917,15 +936,16 @@ export const folhaPagamentoRouter = router({
             console.log(`[FolhaImport][DIAG] SINTETICO 0 registros · arquivo=${arquivo.fileName} · textLen=${text.length} · primeiras 60 linhas não-vazias:`);
             sample.forEach((l, i) => console.log(`[FolhaImport][DIAG] L${String(i+1).padStart(2,"0")}: ${JSON.stringify(l).slice(0, 300)}`));
           }
-          // Link upload
+          // Link upload (mantém referência ao ÚLTIMO sintético enviado)
           await db.update(folhaLancamentos)
             .set({ sinteticoUploadId: upId })
             .where(eq(folhaLancamentos.id, lancamentoId));
         }
 
-        // Update upload record
+        // Update upload record (Rev. 2525 — registra contagem REAL deste
+        // arquivo, não o acumulado de todos)
         await db.update(payrollUploads)
-          .set({ uploadStatus: "processado", recordsProcessed: finalTipo === "analitico" ? analiticoData.length : sinteticoData.length })
+          .set({ uploadStatus: "processado", recordsProcessed: registrosEsteArquivo })
           .where(eq(payrollUploads.id, upId));
       }
 
