@@ -1,6 +1,86 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2515 — **EQUIPAMENTOS PRÓPRIOS — Lightbox no card + FOTOS sempre
+ * visíveis no modal de edição/cadastro (saiu de dentro de "Mais detalhes").**
+ *
+ * PEDIDO (user, 28/05/2026, iPad, screenshot do modal de edição):
+ *  - "quando clicar na foto, quero que ela aumente de tamanho pra facilitar
+ *     a visualiação.. e quando estou clicando na tela de edição, a foto
+ *     precisa aparecer tbm. ate porque posso precisar adicionar novas fotos,
+ *     ou trocar.. portanto preciso ter todas informações na tela.."
+ *
+ * MUDANÇAS — CLIENT (`client/src/pages/equipamentos/Proprios.tsx`)
+ *
+ * (1) LIGHTBOX (novo) — estado `lightbox: {urls, index} | null` + helper
+ *     `openLightbox(urls, index)`. Overlay full-screen z-[60] (acima do
+ *     modal de edição z-50). Backdrop bg-black/90, foto centralizada com
+ *     `maxWidth:96vw / maxHeight:96vh / object-contain / imageOrientation:
+ *     from-image` (respeita EXIF, padrão Rev. 2507/PersonPhoto).
+ *     - Botão X canto sup-direito.
+ *     - Quando `urls.length > 1`: setas ‹ › laterais + contador
+ *       "N / total" no rodapé.
+ *     - Navegação por teclado: useEffect adiciona keydown listener (Esc
+ *       fecha, ←/→ navegam, cleanup no unmount).
+ *     - Click no backdrop fecha; click na foto/setas tem stopPropagation.
+ *
+ * (2) CARD — thumbnail virou `<button>` (era `<div>` sem semântica):
+ *     - `onClick={e => { e.stopPropagation(); openLightbox(...) }}` —
+ *       stopPropagation impede que dispare o `abrirEdit(p)` do card pai.
+ *     - `disabled` quando não há foto (sem cursor pointer, sem hover).
+ *     - Hover state: overlay translúcido + pílula "Ampliar" pra dar
+ *       affordance visual (antes não havia indicação de que era clicável).
+ *     - Mantém badge "+N" no canto quando há mais de 1 foto.
+ *
+ * (3) MODAL — bloco FOTOS movido pra FORA de "Mais detalhes":
+ *     - ANTES: `FotosUploader` ficava dentro do collapse "Mais detalhes
+ *       (opcional)" E só renderizava `{editingId && (...)}`. Resultado:
+ *       cadastro novo NUNCA mostrava upload de foto; edição precisava
+ *       abrir o accordeon (que começa colapsado pra caber sem scroll desde
+ *       Rev. 2512). User não conseguia ver/adicionar/trocar fotos sem
+ *       2 cliques extras.
+ *     - AGORA: novo bloco `<div className="border-t pt-3">` LOGO APÓS o
+ *       collapse de "Mais detalhes", sempre renderiza (criar + editar).
+ *     - Grid de thumbnails 6-col abaixo do `FotosUploader` (cada thumb é
+ *       `<button>` que abre o lightbox no índice clicado).
+ *     - Hint "Toque numa foto pra ampliar." (ícone Camera) quando há foto.
+ *
+ * REGRAS DE OURO RESPEITADAS
+ *  - Zero ALTER/DROP/DELETE/CREATE TABLE. Mudança 100% client-side.
+ *  - Schema/server inalterados — `fotosJson` já existia (Rev. 2510).
+ *  - Padrão MAIÚSCULA (Rev. 2513) preservado.
+ *  - Multi-tenant: não há query nova, só UI.
+ *  - PersonPhoto (`client/src/components/PersonPhoto.tsx`) tem lightbox
+ *    próprio (Rev. 2507) mas não foi reaproveitado porque ele assume 1
+ *    foto + URL única; equipamento tem array com navegação. Padrão
+ *    visual idêntico (96vw/96vh + imageOrientation:from-image).
+ *
+ * VALIDAÇÃO MANUAL
+ *  - Card sem foto: botão fica `disabled`, sem hover, click não faz nada.
+ *  - Card com 1 foto: click amplia, sem setas, sem contador.
+ *  - Card com 2+ fotos: setas + "1/N", teclado ←→ navega, Esc fecha.
+ *  - Modal novo: bloco FOTOS visível na hora; pode adicionar antes mesmo
+ *    de salvar a 1ª vez.
+ *  - Modal editar: bloco FOTOS visível, thumbs ampliam sem fechar o modal.
+ *  - z-index: lightbox (60) cobre o modal (50) — correto, fecha lightbox
+ *    primeiro, depois fecha o modal.
+ *
+ * ARQUIVOS TOCADOS
+ *  - `client/src/pages/equipamentos/Proprios.tsx` (lightbox state + handler,
+ *    card thumbnail virou button, bloco FOTOS no modal, overlay JSX)
+ *  - `shared/version.ts` (2514 → 2515)
+ *  - `shared/changelog.ts` (esta entrada)
+ *  - `replit.md` (rotação 2+5: 2514+2515 detalhadas; 2513 vira one-liner;
+ *    2508 desce pra `replit-history.md`)
+ *
+ * FOLLOW-UPS POSSÍVEIS
+ *  - Swipe gesture no iPad (touch start/end Δx > 50 navega) — pedido
+ *    futuro, hoje só teclado funciona.
+ *  - Legenda da foto (`FotoItem.legenda` já existe no tipo) — exibir no
+ *    rodapé do lightbox; sem UI hoje pra editar, então não exibido.
+ *
+ * ─────────────────────────────────────────────────────────────────────────
+ *
  * Rev. 2514 — **EQUIPAMENTOS PRÓPRIOS — Rastreabilidade: card e modal mostram
  * em qual OBRA o equipamento está + QUEM CADASTROU.**
  *

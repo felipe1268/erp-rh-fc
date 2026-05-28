@@ -89,6 +89,23 @@ export default function EquipamentosProprios() {
   const [modal, setModal] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [form, setForm] = useState({ ...EMPTY_FORM });
+  // Rev. 2515 — lightbox: foto clicada amplia em overlay full-screen.
+  const [lightbox, setLightbox] = useState<{ urls: string[]; index: number } | null>(null);
+  function openLightbox(urls: string[], index = 0) {
+    if (!urls.length) return;
+    setLightbox({ urls, index });
+  }
+  // Navegação por teclado no lightbox (← → / Esc)
+  useEffect(() => {
+    if (!lightbox) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setLightbox(null);
+      else if (e.key === "ArrowRight") setLightbox(p => p ? { ...p, index: (p.index + 1) % p.urls.length } : p);
+      else if (e.key === "ArrowLeft")  setLightbox(p => p ? { ...p, index: (p.index - 1 + p.urls.length) % p.urls.length } : p);
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [lightbox]);
   // Rev. 2514 — meta de auditoria do registro em edição (read-only no modal).
   const [editingMeta, setEditingMeta] = useState<{ criadoPorNome: string | null; createdAt: string | null }>({
     criadoPorNome: null, createdAt: null,
@@ -474,9 +491,27 @@ export default function EquipamentosProprios() {
                   tabIndex={0}
                   onKeyDown={(e) => { if (e.key === "Enter") abrirEdit(p); }}
                 >
-                  <div className="w-28 sm:w-32 shrink-0 bg-gradient-to-br from-slate-100 to-slate-200 relative">
+                  {/* Rev. 2515 — Foto clicável: amplia em lightbox em vez
+                      de abrir edição. stopPropagation impede que o click
+                      borbulhe pro card. Aria-label pra acessibilidade. */}
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (pFotos.length > 0) openLightbox(pFotos.map(f => f.url), 0);
+                    }}
+                    disabled={pFotos.length === 0}
+                    aria-label={pFotos.length > 0 ? `Ampliar foto de ${p.descricao}` : "Sem foto"}
+                    className="w-28 sm:w-32 shrink-0 bg-gradient-to-br from-slate-100 to-slate-200 relative group/foto disabled:cursor-default"
+                  >
                     {foto ? (
-                      <img src={foto.url} alt={p.descricao} className="w-full h-full object-cover" />
+                      <>
+                        <img src={foto.url} alt={p.descricao} className="w-full h-full object-cover transition group-hover/foto:opacity-90" />
+                        {/* hint visual ao passar o mouse */}
+                        <span className="absolute inset-0 bg-black/0 group-hover/foto:bg-black/20 transition flex items-center justify-center opacity-0 group-hover/foto:opacity-100">
+                          <span className="bg-white/95 text-slate-800 text-[10px] font-semibold px-2 py-1 rounded-full shadow">Ampliar</span>
+                        </span>
+                      </>
                     ) : (
                       <div className="w-full h-full flex items-center justify-center text-slate-400">
                         <HardHat className="h-10 w-10" />
@@ -487,7 +522,7 @@ export default function EquipamentosProprios() {
                         +{pFotos.length - 1}
                       </span>
                     )}
-                  </div>
+                  </button>
                   <div className="flex-1 min-w-0 p-3 flex flex-col gap-1.5">
                     <div className="flex items-start justify-between gap-2">
                       <span className="inline-flex items-center gap-1 text-[10px] font-mono font-semibold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">
@@ -897,11 +932,35 @@ export default function EquipamentosProprios() {
                           className="w-full px-2 py-1.5 border rounded text-sm" />
                       </Field>
                     </div>
-                    {editingId && (
-                      <div className="col-span-2 sm:col-span-4">
-                        <FotosUploader fotos={fotos} onChange={setFotos} label="Fotos do equipamento" />
-                      </div>
-                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Rev. 2515 — FOTOS sempre visíveis (criar + editar). Antes
+                  estavam escondidas dentro de "Mais detalhes" e só apareciam
+                  em modo edição — user (iPad) precisava ver/adicionar fotos
+                  sem precisar abrir o accordeon. Cada thumb é clicável pra
+                  ampliar via lightbox. */}
+              <div className="border-t pt-3">
+                <FotosUploader fotos={fotos} onChange={setFotos} label="Fotos do equipamento" />
+                {fotos.length > 0 && (
+                  <p className="mt-1.5 text-[10.5px] text-slate-500 inline-flex items-center gap-1">
+                    <Camera className="h-3 w-3" /> Toque numa foto pra ampliar.
+                  </p>
+                )}
+                {fotos.length > 0 && (
+                  <div className="mt-2 grid grid-cols-6 gap-1.5">
+                    {fotos.map((f, i) => (
+                      <button
+                        key={`thumb-${i}`}
+                        type="button"
+                        onClick={() => openLightbox(fotos.map(x => x.url), i)}
+                        className="relative aspect-square overflow-hidden rounded border border-slate-200 hover:border-blue-500 transition"
+                        aria-label={`Ampliar foto ${i + 1}`}
+                      >
+                        <img src={f.url} alt={`foto-${i + 1}`} className="w-full h-full object-cover" />
+                      </button>
+                    ))}
                   </div>
                 )}
               </div>
@@ -929,6 +988,55 @@ export default function EquipamentosProprios() {
               </div>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Rev. 2515 — LIGHTBOX: foto ampliada quase tela cheia (96vw/96vh).
+          Click no backdrop fecha; setas navegam quando há +1 foto; respeita
+          EXIF (`imageOrientation: from-image`) seguindo padrão do PersonPhoto
+          (Rev. 2507). z-index 60 fica acima do modal de edição (z-50). */}
+      {lightbox && (
+        <div
+          className="fixed inset-0 bg-black/90 z-[60] flex items-center justify-center p-2"
+          onClick={() => setLightbox(null)}
+          role="dialog"
+          aria-modal="true"
+          aria-label="Foto ampliada"
+        >
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); setLightbox(null); }}
+            aria-label="Fechar"
+            className="absolute top-3 right-3 p-2 rounded-full bg-white/10 hover:bg-white/20 text-white"
+          >
+            <X className="h-6 w-6" />
+          </button>
+          {lightbox.urls.length > 1 && (
+            <>
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); setLightbox(p => p ? { ...p, index: (p.index - 1 + p.urls.length) % p.urls.length } : p); }}
+                aria-label="Foto anterior"
+                className="absolute left-3 p-3 rounded-full bg-white/10 hover:bg-white/20 text-white text-2xl font-bold"
+              >‹</button>
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); setLightbox(p => p ? { ...p, index: (p.index + 1) % p.urls.length } : p); }}
+                aria-label="Próxima foto"
+                className="absolute right-3 p-3 rounded-full bg-white/10 hover:bg-white/20 text-white text-2xl font-bold"
+              >›</button>
+              <span className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-white/15 text-white text-xs px-3 py-1 rounded-full font-medium">
+                {lightbox.index + 1} / {lightbox.urls.length}
+              </span>
+            </>
+          )}
+          <img
+            src={lightbox.urls[lightbox.index]}
+            alt="Foto ampliada"
+            onClick={(e) => e.stopPropagation()}
+            style={{ imageOrientation: "from-image", maxWidth: "96vw", maxHeight: "96vh" }}
+            className="object-contain rounded shadow-2xl"
+          />
         </div>
       )}
     </DashboardLayout>
