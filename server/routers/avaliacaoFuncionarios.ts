@@ -16,13 +16,14 @@ import { TRPCError } from "@trpc/server";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getDb, getCompaniesForUser } from "../db";
 import {
-  employees, pontoDescontosResumo, atestados, accidents, warnings, ddsSessaoFuncionarios, ddsSessoes,
+  employees, pontoDescontosResumo, atestados, accidents, warnings, ddsSessaoFuncionarios, ddsSessoes, trainings,
 } from "../../drizzle/schema";
 import { and, eq, gte, isNull, sql, inArray } from "drizzle-orm";
 import {
-  scoreFrequencia, scoreSaude, scoreDisciplina, scoreSeguranca, scoreGeral,
+  scoreFrequencia, scoreSaude, scoreDisciplina, scoreSeguranca, scoreCapacitacao, scoreLealdade, scoreGeral,
   classificar, gerarObservacoes, PESOS_DEFAULT,
   type FrequenciaInputs, type SaudeInputs, type DisciplinaInputs, type SegurancaInputs,
+  type CapacitacaoInputs, type LealdadeInputs,
   type PesosScore,
 } from "../utils/employeeScore";
 
@@ -51,6 +52,8 @@ const periodoInput = z.object({
     saude: z.number().min(0).max(1),
     disciplina: z.number().min(0).max(1),
     seguranca: z.number().min(0).max(1),
+    capacitacao: z.number().min(0).max(1),
+    lealdade: z.number().min(0).max(1),
   }).optional(),
 });
 
@@ -90,9 +93,10 @@ async function carregarInputs(companyId: number, obraId: number | null | undefin
     dataAdmissao: employees.dataAdmissao,
   }).from(employees).where(and(...empConds));
 
-  if (emps.length === 0) return { emps: [], freqMap: new Map(), saudeMap: new Map(), discMap: new Map(), segMap: new Map() };
+  if (emps.length === 0) return { emps: [], freqMap: new Map(), saudeMap: new Map(), discMap: new Map(), segMap: new Map(), capMap: new Map(), lealMap: new Map() };
 
   const empIds = emps.map(e => e.id);
+  const hoje = new Date().toISOString().slice(0, 10);
 
   // 2) Frequência — soma de pontoDescontosResumo no período (mesReferencia YYYY-MM)
   const freqRows = await db.select({
@@ -219,19 +223,73 @@ async function carregarInputs(companyId: number, obraId: number | null | undefin
     s.ddsPresentes = Number(r.presentes) || 0;
   });
 
-  return { emps, freqMap, saudeMap, discMap, segMap };
+  // 6) Capacitação — trainings (válidos / vencidos / recentes)
+  // Rev. 2505 — Snapshot agregado por funcionário em UMA SQL via CASE WHEN.
+  // Considera-se "válido" quem tem dataValidade NULL (vitalício) OU >= hoje.
+  // "Vencido" = dataValidade < hoje. "Recente" = dataRealizacao dentro do período.
+  const treinoRows = await db.select({
+    employeeId: trainings.employeeId,
+    validos: sql<number>`sum(case when ${trainings.dataValidade} is null or ${trainings.dataValidade} >= ${hoje} then 1 else 0 end)::int`,
+    vencidos: sql<number>`sum(case when ${trainings.dataValidade} is not null and ${trainings.dataValidade} < ${hoje} then 1 else 0 end)::int`,
+    recentes: sql<number>`sum(case when ${trainings.dataRealizacao} >= ${dataInicio} then 1 else 0 end)::int`,
+  }).from(trainings).where(and(
+    eq(trainings.companyId, companyId),
+    inArray(trainings.employeeId, empIds),
+    isNull(trainings.deletedAt),
+  )).groupBy(trainings.employeeId);
+  const capMap = new Map<number, CapacitacaoInputs>();
+  empIds.forEach(id => capMap.set(id, { countTreinamentosValidos: 0, countTreinamentosVencidos: 0, countTreinamentosRecentes: 0 }));
+  treinoRows.forEach(r => {
+    capMap.set(r.employeeId, {
+      countTreinamentosValidos: Number(r.validos) || 0,
+      countTreinamentosVencidos: Number(r.vencidos) || 0,
+      countTreinamentosRecentes: Number(r.recentes) || 0,
+    });
+  });
+
+  // 7) Lealdade — mesesDeCasa derivado de employees.dataAdmissao (já carregada).
+  // Sem query extra: pura aritmética de data. dataAdmissao ausente → 0 (piso 60).
+  const lealMap = new Map<number, LealdadeInputs>();
+  const agora = new Date();
+  emps.forEach(e => {
+    let meses = 0;
+    if (e.dataAdmissao) {
+      const adm = new Date(e.dataAdmissao);
+      if (!isNaN(adm.getTime())) {
+        meses = (agora.getFullYear() - adm.getFullYear()) * 12 + (agora.getMonth() - adm.getMonth());
+        if (agora.getDate() < adm.getDate()) meses -= 1;
+        if (meses < 0) meses = 0;
+      }
+    }
+    lealMap.set(e.id, { mesesDeCasa: meses });
+  });
+
+  return { emps, freqMap, saudeMap, discMap, segMap, capMap, lealMap };
 }
 
-function montarLinhaScore(emp: any, freqMap: Map<number, FrequenciaInputs>, saudeMap: Map<number, SaudeInputs>, discMap: Map<number, DisciplinaInputs>, segMap: Map<number, SegurancaInputs>, pesos: PesosScore) {
+function montarLinhaScore(
+  emp: any,
+  freqMap: Map<number, FrequenciaInputs>,
+  saudeMap: Map<number, SaudeInputs>,
+  discMap: Map<number, DisciplinaInputs>,
+  segMap: Map<number, SegurancaInputs>,
+  capMap: Map<number, CapacitacaoInputs>,
+  lealMap: Map<number, LealdadeInputs>,
+  pesos: PesosScore,
+) {
   const f = freqMap.get(emp.id) || { totalFaltasInjustificadas: 0, totalAtrasos: 0, totalSaidasAntecipadas: 0, totalMinutosAtraso: 0 };
   const s = saudeMap.get(emp.id) || { countAtestados: 0, diasAfastadoAtestado: 0, countAcidentes: 0, diasAfastadoAcidente: 0 };
   const d = discMap.get(emp.id) || { countAdvertenciasLeves: 0, countAdvertenciasGraves: 0, countSuspensoes: 0, diasSuspensao: 0 };
   const g = segMap.get(emp.id) || { countAcidentesLeves: 0, countAcidentesGraves: 0, countAcidentesQuase: 0, ddsConvocados: 0, ddsPresentes: 0 };
+  const c = capMap.get(emp.id) || { countTreinamentosValidos: 0, countTreinamentosVencidos: 0, countTreinamentosRecentes: 0 };
+  const l = lealMap.get(emp.id) || { mesesDeCasa: 0 };
   const sub = {
     frequencia: scoreFrequencia(f),
     saude: scoreSaude(s),
     disciplina: scoreDisciplina(d),
     seguranca: scoreSeguranca(g),
+    capacitacao: scoreCapacitacao(c),
+    lealdade: scoreLealdade(l),
   };
   const geral = scoreGeral(sub, pesos);
   return {
@@ -242,7 +300,7 @@ function montarLinhaScore(emp: any, freqMap: Map<number, FrequenciaInputs>, saud
     sub,
     geral,
     classificacao: classificar(geral),
-    inputs: { frequencia: f, saude: s, disciplina: d, seguranca: g },
+    inputs: { frequencia: f, saude: s, disciplina: d, seguranca: g, capacitacao: c, lealdade: l },
   };
 }
 
@@ -252,8 +310,8 @@ export const avaliacaoFuncionariosRouter = router({
     .query(async ({ input, ctx }) => {
       await ensureCompanyAccess(ctx.user, input.companyId);
       const pesos = input.pesos || PESOS_DEFAULT;
-      const { emps, freqMap, saudeMap, discMap, segMap } = await carregarInputs(input.companyId, input.obraId, input.periodoMeses);
-      const linhas = emps.map(e => montarLinhaScore(e, freqMap, saudeMap, discMap, segMap, pesos));
+      const { emps, freqMap, saudeMap, discMap, segMap, capMap, lealMap } = await carregarInputs(input.companyId, input.obraId, input.periodoMeses);
+      const linhas = emps.map(e => montarLinhaScore(e, freqMap, saudeMap, discMap, segMap, capMap, lealMap, pesos));
       linhas.sort((a, b) => b.geral - a.geral);
       return linhas;
     }),
@@ -263,8 +321,8 @@ export const avaliacaoFuncionariosRouter = router({
     .query(async ({ input, ctx }) => {
       await ensureCompanyAccess(ctx.user, input.companyId);
       const pesos = input.pesos || PESOS_DEFAULT;
-      const { emps, freqMap, saudeMap, discMap, segMap } = await carregarInputs(input.companyId, input.obraId, input.periodoMeses);
-      const linhas = emps.map(e => montarLinhaScore(e, freqMap, saudeMap, discMap, segMap, pesos));
+      const { emps, freqMap, saudeMap, discMap, segMap, capMap, lealMap } = await carregarInputs(input.companyId, input.obraId, input.periodoMeses);
+      const linhas = emps.map(e => montarLinhaScore(e, freqMap, saudeMap, discMap, segMap, capMap, lealMap, pesos));
       const n = linhas.length;
       const avg = (arr: number[]) => n > 0 ? Math.round(arr.reduce((s, v) => s + v, 0) / n) : 0;
       const dist = { Excelente: 0, Bom: 0, 'Atenção': 0, 'Crítico': 0, 'Alto Risco': 0 };
@@ -276,6 +334,8 @@ export const avaliacaoFuncionariosRouter = router({
         mediaSaude: avg(linhas.map(l => l.sub.saude)),
         mediaDisciplina: avg(linhas.map(l => l.sub.disciplina)),
         mediaSeguranca: avg(linhas.map(l => l.sub.seguranca)),
+        mediaCapacitacao: avg(linhas.map(l => l.sub.capacitacao)),
+        mediaLealdade: avg(linhas.map(l => l.sub.lealdade)),
         distribuicao: dist,
       };
     }),
@@ -287,18 +347,20 @@ export const avaliacaoFuncionariosRouter = router({
       periodoMeses: z.number().min(1).max(36).default(6),
       pesos: z.object({
         frequencia: z.number(), saude: z.number(), disciplina: z.number(), seguranca: z.number(),
+        capacitacao: z.number(), lealdade: z.number(),
       }).optional(),
     }))
     .query(async ({ input, ctx }) => {
       await ensureCompanyAccess(ctx.user, input.companyId);
       const pesos = input.pesos || PESOS_DEFAULT;
-      const { emps, freqMap, saudeMap, discMap, segMap } = await carregarInputs(input.companyId, null, input.periodoMeses);
+      const { emps, freqMap, saudeMap, discMap, segMap, capMap, lealMap } = await carregarInputs(input.companyId, null, input.periodoMeses);
       const emp = emps.find(e => e.id === input.employeeId);
       if (!emp) return null;
-      const linha = montarLinhaScore(emp, freqMap, saudeMap, discMap, segMap, pesos);
+      const linha = montarLinhaScore(emp, freqMap, saudeMap, discMap, segMap, capMap, lealMap, pesos);
       const observacoes = gerarObservacoes(
         linha.inputs.frequencia, linha.inputs.saude,
         linha.inputs.disciplina, linha.inputs.seguranca,
+        linha.inputs.capacitacao, linha.inputs.lealdade,
       );
       return { ...linha, observacoes };
     }),

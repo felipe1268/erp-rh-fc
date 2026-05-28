@@ -1,6 +1,98 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2505 — **AVALIAÇÃO INTELIGENTE DE FUNCIONÁRIOS · FASE 2 — 2 NOVOS PILARES
+ * (Capacitação + Lealdade) elevando o score de 4 → 6 dimensões.**
+ *
+ * PEDIDO (user, 28/05/2026):
+ *  - "Quero mais indicadores, para fazer uma análise mais detalhada" na tela
+ *    "Avaliação Inteligente de Funcionários". Via `user_query`, escolheu:
+ *    "Novos pilares de score (ex: Produtividade, Tempo de Casa, Treinamentos,
+ *    EPIs, Atestados, Advertências detalhadas)" + "Me surpreenda".
+ *
+ * DECISÕES DE ESCOPO
+ *  - Os pilares Frequência/Saúde/Disciplina/Segurança já mapeiam o que o ERP
+ *    tem de mais sensível (risco operacional/legal). Para "surpreender" sem
+ *    inflar o score com ruído, foram adicionados DOIS pilares NOVOS que (a)
+ *    têm dado limpo e indexado no banco e (b) abrem dimensões qualitativas
+ *    que não estavam representadas:
+ *      • **Capacitação** (tabela `trainings`): treinamentos válidos vs vencidos
+ *        vs recentes — mede a higiene de reciclagem (NR-35, NR-10 etc.).
+ *      • **Lealdade** (employees.dataAdmissao): tempo de casa em meses —
+ *        contextualiza retenção SEM penalizar idade (regra LGPD).
+ *  - Pilares descartados nessa rev (justificativa):
+ *      • Produtividade individual: depende de meta por função/obra, não há
+ *        dataset consolidado.
+ *      • EPI por funcionário: não existe tabela `epi_entregas` rastreando
+ *        entrega individual; o que há é estoque agregado por obra.
+ *      • Atestados/Advertências "detalhados": já cobertos por Saúde/Disciplina.
+ *
+ * O QUE MUDOU
+ *  - `server/utils/employeeScore.ts`:
+ *      • Novas interfaces `CapacitacaoInputs` (3 campos: válidos / vencidos /
+ *        recentes) e `LealdadeInputs` (mesesDeCasa).
+ *      • `scoreCapacitacao`: base 70 + 6 por válido + 3 por recente − 12 por
+ *        vencido (clamp 0-100). Funcionário sem treinamento NÃO é punido —
+ *        cai pra 70 (neutro positivo) em vez de zero.
+ *      • `scoreLealdade`: tabela escalonada com PISO 60 — <6m=60, 6-12m=75,
+ *        1-3a=85, 3-5a=92, 5-10a=97, 10a+=100. **Nunca pune** quem está
+ *        em adaptação (LGPD: nunca recomendar desligamento por idade/tempo).
+ *      • `SubScores`/`PesosScore` expandidos pra 6 campos. `PESOS_DEFAULT`
+ *        rebalanceado: 4 "core" (Freq/Saúde/Disc/Seg) 20% cada + 2 "complementares"
+ *        (Cap/Lealdade) 10% cada = 100%. Mantém os pilares de risco operacional
+ *        dominando o score; os novos contextualizam sem inverter decisões.
+ *      • `gerarObservacoes` recebe agora `cap?` e `leal?` opcionais e gera
+ *        observações novas (treinamentos vencidos, anos de casa, adaptação).
+ *  - `server/routers/avaliacaoFuncionarios.ts`:
+ *      • `carregarInputs` ganhou bloco "6) Capacitação" — UMA query agregada
+ *        em `trainings` com 3 `CASE WHEN` (válidos/vencidos/recentes) por
+ *        funcionário, filtrada por companyId + empIds + soft-delete.
+ *      • Bloco "7) Lealdade" — derivado da `employees.dataAdmissao` já
+ *        carregada (sem query extra), com cálculo cuidadoso de meses (ajusta
+ *        −1 quando o dia atual ainda não atingiu o dia da admissão no mês).
+ *      • `montarLinhaScore`, `getRanking`, `getResumo`, `getScoreFuncionario`
+ *        repassam os novos maps. `getResumo` expõe `mediaCapacitacao` e
+ *        `mediaLealdade`. Schema Zod de `pesos` expandido pra exigir os 6.
+ *  - `client/src/pages/dashboards/DashAvaliacaoFuncionarios.tsx`:
+ *      • Header agora declara "6 pilares".
+ *      • KPIs reorganizados em 2 linhas: linha 1 = "Funcionários" + "Score
+ *        Médio Geral" (card largo com circle 72px); linha 2 = grid 6 colunas
+ *        com KPI por pilar (novo helper `KpiPilarCard`). Antes era um grid
+ *        achatado de 5 cards com KPIs e Geral misturados — agora "Geral"
+ *        ganha hierarquia visual e os 6 pilares ficam comparáveis.
+ *      • Tabela Ranking Completo: adicionadas colunas "Capac." e "Leald.".
+ *      • Drill modal: grid de sub-scores virou 6 cards (2x3 mobile, 3x2 md+)
+ *        com SubScoreCard nas cores novas `amber` (Capacitação) e `indigo`
+ *        (Lealdade), adicionadas ao `SUBSCORE_COLOR_MAP`.
+ *      • "Dados Brutos do Período": novas linhas Capacitação ("X válido(s) ·
+ *        Y vencido(s) · Z no período") e Lealdade ("X anos e Y meses de casa
+ *        · admitido em DD/MM/AAAA"). Usa render IIFE pra formatar plurais.
+ *      • Ícones novos: `GraduationCap` (Capacitação), `History` (Lealdade)
+ *        do `lucide-react`.
+ *  - Pesos backwards-compatible: chamadas sem `pesos` continuam usando
+ *    `PESOS_DEFAULT` — qualquer caller existente vai automaticamente passar
+ *    a considerar os 6 pilares.
+ *
+ * AUDITORIA / RISCO
+ *  - Zero ALTER/DROP/DELETE. Tudo SELECT (trainings).
+ *  - Re-execução do `getRanking` em 1 empresa com 100 funcionários adiciona
+ *    UMA query agregada em `trainings` (indexada por companyId/employeeId).
+ *  - Frontend tolera campos novos ausentes (`?? 0`) caso o backend antigo
+ *    venha a responder durante deploy escalonado.
+ *
+ * ARQUIVOS PRINCIPAIS
+ *  - `server/utils/employeeScore.ts`
+ *  - `server/routers/avaliacaoFuncionarios.ts`
+ *  - `client/src/pages/dashboards/DashAvaliacaoFuncionarios.tsx`
+ *  - `shared/version.ts` (2504 → 2505)
+ *
+ * FOLLOW-UPS (próximas revs, se demandado)
+ *  - Pilar Produtividade: precisa de "meta por função/obra" — exige modelagem.
+ *  - UI de ajuste de pesos persistido por empresa (atualmente PESOS_DEFAULT
+ *    é hard-coded; o backend já aceita override via input.pesos).
+ *  - Drill por pilar (clicar Capacitação abre lista dos treinamentos do
+ *    funcionário com status).
+ *
  * Rev. 2504 — **DASHBOARD PERFIL POR TEMPO DE CASA · BUGFIX "Erro na análise IA"
  * (JSON do Claude vinha envolto em fence markdown ```json ... ```).**
  *

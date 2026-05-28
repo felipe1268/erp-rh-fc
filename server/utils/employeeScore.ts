@@ -1,22 +1,27 @@
 /**
- * Motor de Score de Funcionário — Rev. 1971 (Fase 1 MVP).
+ * Motor de Score de Funcionário — Rev. 2505 (Fase 2 — 6 pilares).
  *
- * 4 sub-scores determinísticos (0-100, MAIOR = MELHOR) calculados sobre dados
+ * 6 sub-scores determinísticos (0-100, MAIOR = MELHOR) calculados sobre dados
  * que JÁ existem no ERP. Sem IA, sem ML, sem rede neural. Cada score é uma
  * função pura `(inputs) => número`, fácil de auditar, explicar e ajustar.
  *
- *   • Frequência → faltas + atrasos (tabela `ponto_descontos_resumo`).
- *   • Saúde     → atestados + acidentes (dias afastado).
- *   • Disciplina → advertências formais (tabela `warnings`).
- *   • Segurança → acidentes (gravidade) + presença em DDS.
+ *   • Frequência   → faltas + atrasos (tabela `ponto_descontos_resumo`).
+ *   • Saúde        → atestados + acidentes (dias afastado).
+ *   • Disciplina   → advertências formais (tabela `warnings`).
+ *   • Segurança    → acidentes (gravidade) + presença em DDS.
+ *   • Capacitação  → treinamentos válidos vs vencidos (tabela `trainings`). [NOVO Rev. 2505]
+ *   • Lealdade     → tempo de casa em meses (employees.dataAdmissao).        [NOVO Rev. 2505]
  *
- * Score Geral = média ponderada (default 25% cada — RH ajusta no futuro).
+ * Score Geral = média ponderada (default: 20% cada pilar "core" + 10% cada
+ * pilar "complementar" — RH ajusta no futuro). Total = 100%.
  *
  * REGRAS DE OURO (LGPD + CLT):
  *   1. NUNCA recomendar desligamento por idade.
  *   2. Decisão sempre humana — o sistema só sinaliza.
  *   3. Todos os pesos e fórmulas estão NESTE arquivo, auditável.
  *   4. Inputs zerados → score neutro 100 (não pune funcionário recém-admitido).
+ *   5. Lealdade é PRÊMIO de retenção, não punição: funcionário com pouco tempo
+ *      de casa começa em base neutra (60) e cresce, não cai abaixo disso.
  */
 
 export interface FrequenciaInputs {
@@ -46,6 +51,21 @@ export interface SegurancaInputs {
   countAcidentesQuase: number;
   ddsConvocados: number;
   ddsPresentes: number;
+}
+
+// Rev. 2505 — Pilares novos
+export interface CapacitacaoInputs {
+  /** Treinamentos com dataValidade no futuro OU sem validade (vitalícios). */
+  countTreinamentosValidos: number;
+  /** Treinamentos com dataValidade < hoje (perdidos por falta de reciclagem). */
+  countTreinamentosVencidos: number;
+  /** Treinamentos realizados na janela do período (recência). */
+  countTreinamentosRecentes: number;
+}
+
+export interface LealdadeInputs {
+  /** Tempo de casa em meses, calculado de dataAdmissao até hoje. */
+  mesesDeCasa: number;
 }
 
 export const SCORE_LIMIAR = {
@@ -122,11 +142,48 @@ export function scoreSeguranca(i: SegurancaInputs): number {
   return clamp(Math.round(base * fator));
 }
 
+/**
+ * Capacitação — base 70 (qualquer funcionário recém-admitido começa "OK").
+ *   +6 por treinamento válido (cap em 100).
+ *   -12 por treinamento VENCIDO (reciclagem perdida = risco SST/operacional).
+ *   +3 bônus por treinamento feito DENTRO da janela do período (recência).
+ * Faixa típica: 40 (vários vencidos) a 100 (todos válidos + reciclagem em dia).
+ */
+export function scoreCapacitacao(i: CapacitacaoInputs): number {
+  const score = 70
+    + i.countTreinamentosValidos * 6
+    + i.countTreinamentosRecentes * 3
+    - i.countTreinamentosVencidos * 12;
+  return clamp(Math.round(score));
+}
+
+/**
+ * Lealdade — prêmio por tempo de casa (retenção). NUNCA pune: piso 60.
+ *   <  6 meses → 60 (período de adaptação, score neutro positivo).
+ *   6-12      → 75.
+ *   1-3 anos  → 85.
+ *   3-5 anos  → 92.
+ *   5-10 anos → 97.
+ *   10+ anos  → 100.
+ * Funcionários sem dataAdmissao (raro) ficam em 60.
+ */
+export function scoreLealdade(i: LealdadeInputs): number {
+  const m = i.mesesDeCasa;
+  if (m < 6) return 60;
+  if (m < 12) return 75;
+  if (m < 36) return 85;
+  if (m < 60) return 92;
+  if (m < 120) return 97;
+  return 100;
+}
+
 export interface SubScores {
   frequencia: number;
   saude: number;
   disciplina: number;
   seguranca: number;
+  capacitacao: number;
+  lealdade: number;
 }
 
 export interface PesosScore {
@@ -134,23 +191,33 @@ export interface PesosScore {
   saude: number;
   disciplina: number;
   seguranca: number;
+  capacitacao: number;
+  lealdade: number;
 }
 
+// Rev. 2505 — 4 pilares "core" 20% cada + 2 pilares "complementares" 10% cada.
+// Frequência/Saúde/Disciplina/Segurança seguem dominando o score (representam
+// risco operacional/legal); Capacitação e Lealdade contextualizam sem
+// dominar a decisão.
 export const PESOS_DEFAULT: PesosScore = {
-  frequencia: 0.25,
-  saude: 0.25,
-  disciplina: 0.25,
-  seguranca: 0.25,
+  frequencia: 0.20,
+  saude: 0.20,
+  disciplina: 0.20,
+  seguranca: 0.20,
+  capacitacao: 0.10,
+  lealdade: 0.10,
 };
 
 export function scoreGeral(sub: SubScores, pesos: PesosScore = PESOS_DEFAULT): number {
-  const total = pesos.frequencia + pesos.saude + pesos.disciplina + pesos.seguranca;
+  const total = pesos.frequencia + pesos.saude + pesos.disciplina + pesos.seguranca + pesos.capacitacao + pesos.lealdade;
   if (total <= 0) return 0;
   const soma =
     sub.frequencia * pesos.frequencia +
     sub.saude * pesos.saude +
     sub.disciplina * pesos.disciplina +
-    sub.seguranca * pesos.seguranca;
+    sub.seguranca * pesos.seguranca +
+    sub.capacitacao * pesos.capacitacao +
+    sub.lealdade * pesos.lealdade;
   return clamp(Math.round(soma / total));
 }
 
@@ -163,6 +230,8 @@ export function gerarObservacoes(
   saude: SaudeInputs,
   disc: DisciplinaInputs,
   seg: SegurancaInputs,
+  cap?: CapacitacaoInputs,
+  leal?: LealdadeInputs,
 ): string[] {
   const obs: string[] = [];
   if (freq.totalFaltasInjustificadas >= 3) obs.push(`${freq.totalFaltasInjustificadas} faltas injustificadas no período.`);
@@ -174,5 +243,12 @@ export function gerarObservacoes(
   if (seg.countAcidentesGraves >= 1) obs.push(`${seg.countAcidentesGraves} acidente(s) grave(s) — revisar análise SST.`);
   const pct = seg.ddsConvocados > 0 ? Math.round((seg.ddsPresentes / seg.ddsConvocados) * 100) : null;
   if (pct !== null && pct < 70) obs.push(`Presença em DDS abaixo do esperado: ${pct}%.`);
+  if (cap && cap.countTreinamentosVencidos >= 1) obs.push(`${cap.countTreinamentosVencidos} treinamento(s) vencido(s) — reciclagem pendente.`);
+  if (cap && cap.countTreinamentosValidos === 0 && cap.countTreinamentosVencidos === 0) obs.push(`Nenhum treinamento formal registrado.`);
+  if (leal) {
+    const anos = Math.floor(leal.mesesDeCasa / 12);
+    if (leal.mesesDeCasa >= 60) obs.push(`${anos} anos de casa — funcionário com forte retenção.`);
+    else if (leal.mesesDeCasa < 6) obs.push(`Em período de adaptação (${leal.mesesDeCasa} meses de casa).`);
+  }
   return obs;
 }

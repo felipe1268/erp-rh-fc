@@ -20,7 +20,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Button } from "@/components/ui/button";
 import {
   Trophy, AlertTriangle, Users, ClipboardCheck, Loader2, Info, ShieldCheck,
-  Heart, Clock, Gavel, ChevronRight, Award, Search,
+  Heart, Clock, Gavel, ChevronRight, Award, Search, GraduationCap, History,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 
@@ -128,7 +128,7 @@ export default function DashAvaliacaoFuncionarios() {
               </div>
               <div>
                 <h1 className="text-2xl font-bold text-slate-900">Avaliação Inteligente de Funcionários</h1>
-                <p className="text-sm text-slate-500">Score 0-100 baseado em frequência, saúde, disciplina e segurança — Fase 1 MVP</p>
+                <p className="text-sm text-slate-500">Score 0-100 baseado em 6 pilares: frequência, saúde, disciplina, segurança, capacitação e lealdade</p>
               </div>
             </div>
           </div>
@@ -159,52 +159,36 @@ export default function DashAvaliacaoFuncionarios() {
           </div>
         )}
 
-        {/* KPIs */}
+        {/* KPIs — Rev. 2505: 6 pilares (Frequência/Saúde/Disciplina/Segurança/Capacitação/Lealdade) */}
         {!loading && resumo && (
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-            <Card>
-              <CardContent className="p-4">
-                <p className="text-xs text-slate-500 mb-1">Funcionários avaliados</p>
-                <p className="text-2xl font-bold text-slate-900">{resumo.total}</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="p-4 flex items-center gap-3">
-                <ScoreCircle value={resumo.mediaGeral} />
-                <div>
-                  <p className="text-xs text-slate-500">Score Médio Geral</p>
-                  <p className="text-lg font-semibold text-slate-900">/100</p>
-                </div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="p-4">
-                <div className="flex items-center gap-2 mb-1">
-                  <Clock className="h-4 w-4 text-slate-500" />
-                  <p className="text-xs text-slate-500">Frequência</p>
-                </div>
-                <p className={`text-2xl font-bold ${corScore(resumo.mediaFrequencia)}`}>{resumo.mediaFrequencia}</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="p-4">
-                <div className="flex items-center gap-2 mb-1">
-                  <Heart className="h-4 w-4 text-slate-500" />
-                  <p className="text-xs text-slate-500">Saúde</p>
-                </div>
-                <p className={`text-2xl font-bold ${corScore(resumo.mediaSaude)}`}>{resumo.mediaSaude}</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="p-4">
-                <div className="flex items-center gap-2 mb-1">
-                  <Gavel className="h-4 w-4 text-slate-500" />
-                  <p className="text-xs text-slate-500">Disciplina</p>
-                </div>
-                <p className={`text-2xl font-bold ${corScore(resumo.mediaDisciplina)}`}>{resumo.mediaDisciplina}</p>
-              </CardContent>
-            </Card>
-          </div>
+          <>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <Card>
+                <CardContent className="p-4">
+                  <p className="text-xs text-slate-500 mb-1">Funcionários avaliados</p>
+                  <p className="text-2xl font-bold text-slate-900">{resumo.total}</p>
+                </CardContent>
+              </Card>
+              <Card className="md:col-span-3">
+                <CardContent className="p-4 flex items-center gap-4">
+                  <ScoreCircle value={resumo.mediaGeral} size={72} />
+                  <div>
+                    <p className="text-xs text-slate-500 uppercase tracking-wide">Score Médio Geral</p>
+                    <p className="text-lg font-semibold text-slate-900">{resumo.mediaGeral}<span className="text-sm text-slate-400 font-normal">/100</span></p>
+                    <p className="text-xs text-slate-500 mt-0.5">Média ponderada dos 6 pilares na empresa.</p>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
+              <KpiPilarCard icon={<Clock className="h-4 w-4" />}         label="Frequência"  value={resumo.mediaFrequencia} />
+              <KpiPilarCard icon={<Heart className="h-4 w-4" />}         label="Saúde"        value={resumo.mediaSaude} />
+              <KpiPilarCard icon={<Gavel className="h-4 w-4" />}         label="Disciplina"   value={resumo.mediaDisciplina} />
+              <KpiPilarCard icon={<ShieldCheck className="h-4 w-4" />}   label="Segurança"    value={resumo.mediaSeguranca} />
+              <KpiPilarCard icon={<GraduationCap className="h-4 w-4" />} label="Capacitação"  value={resumo.mediaCapacitacao ?? 0} />
+              <KpiPilarCard icon={<History className="h-4 w-4" />}       label="Lealdade"     value={resumo.mediaLealdade ?? 0} />
+            </div>
+          </>
         )}
 
         {/* Distribuição por Classificação */}
@@ -319,6 +303,8 @@ export default function DashAvaliacaoFuncionarios() {
                       <TableHead className="text-center">Saúde</TableHead>
                       <TableHead className="text-center">Disc.</TableHead>
                       <TableHead className="text-center">Seg.</TableHead>
+                      <TableHead className="text-center">Capac.</TableHead>
+                      <TableHead className="text-center">Leald.</TableHead>
                       <TableHead className="text-center">Geral</TableHead>
                       <TableHead>Classificação</TableHead>
                     </TableRow>
@@ -333,6 +319,8 @@ export default function DashAvaliacaoFuncionarios() {
                         <TableCell className={`text-center font-medium tabular-nums ${corScore(r.sub.saude)}`}>{r.sub.saude}</TableCell>
                         <TableCell className={`text-center font-medium tabular-nums ${corScore(r.sub.disciplina)}`}>{r.sub.disciplina}</TableCell>
                         <TableCell className={`text-center font-medium tabular-nums ${corScore(r.sub.seguranca)}`}>{r.sub.seguranca}</TableCell>
+                        <TableCell className={`text-center font-medium tabular-nums ${corScore(r.sub.capacitacao ?? 0)}`}>{r.sub.capacitacao ?? 0}</TableCell>
+                        <TableCell className={`text-center font-medium tabular-nums ${corScore(r.sub.lealdade ?? 0)}`}>{r.sub.lealdade ?? 0}</TableCell>
                         <TableCell className="text-center"><ScoreCircle value={r.geral} size={42} /></TableCell>
                         <TableCell><Badge variant="outline" className={COR_CLASSIF[r.classificacao]}>{r.classificacao}</Badge></TableCell>
                       </TableRow>
@@ -417,16 +405,18 @@ export default function DashAvaliacaoFuncionarios() {
                   </div>
                 </div>
 
-                {/* Sub-scores em 4 cards coloridos por dimensão */}
+                {/* Sub-scores em 6 cards coloridos por dimensão (Rev. 2505) */}
                 <div>
                   <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-2">
-                    4 Dimensões Avaliadas
+                    6 Dimensões Avaliadas
                   </p>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                    <SubScoreCard color="blue"    icon={<Clock className="h-4 w-4" />}        label="Frequência"  value={drillData.sub.frequencia} />
-                    <SubScoreCard color="rose"    icon={<Heart className="h-4 w-4" />}        label="Saúde"       value={drillData.sub.saude} />
-                    <SubScoreCard color="violet"  icon={<Gavel className="h-4 w-4" />}        label="Disciplina"  value={drillData.sub.disciplina} />
-                    <SubScoreCard color="emerald" icon={<ShieldCheck className="h-4 w-4" />}  label="Segurança"   value={drillData.sub.seguranca} />
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                    <SubScoreCard color="blue"    icon={<Clock className="h-4 w-4" />}         label="Frequência"  value={drillData.sub.frequencia} />
+                    <SubScoreCard color="rose"    icon={<Heart className="h-4 w-4" />}         label="Saúde"       value={drillData.sub.saude} />
+                    <SubScoreCard color="violet"  icon={<Gavel className="h-4 w-4" />}         label="Disciplina"  value={drillData.sub.disciplina} />
+                    <SubScoreCard color="emerald" icon={<ShieldCheck className="h-4 w-4" />}   label="Segurança"   value={drillData.sub.seguranca} />
+                    <SubScoreCard color="amber"   icon={<GraduationCap className="h-4 w-4" />} label="Capacitação" value={drillData.sub.capacitacao ?? 0} />
+                    <SubScoreCard color="indigo"  icon={<History className="h-4 w-4" />}       label="Lealdade"    value={drillData.sub.lealdade ?? 0} />
                   </div>
                 </div>
 
@@ -470,6 +460,27 @@ export default function DashAvaliacaoFuncionarios() {
                       {' '}{drillData.inputs.seguranca.countAcidentesQuase} quase-acidente(s)
                       {' · '}DDS {drillData.inputs.seguranca.ddsPresentes}/{drillData.inputs.seguranca.ddsConvocados}
                     </DadoBrutoRow>
+                    {drillData.inputs.capacitacao && (
+                      <DadoBrutoRow color="amber" icon={<GraduationCap className="h-3.5 w-3.5" />} label="Capacitação">
+                        {drillData.inputs.capacitacao.countTreinamentosValidos} treinamento(s) válido(s) ·
+                        {' '}{drillData.inputs.capacitacao.countTreinamentosVencidos} vencido(s) ·
+                        {' '}{drillData.inputs.capacitacao.countTreinamentosRecentes} no período
+                      </DadoBrutoRow>
+                    )}
+                    {drillData.inputs.lealdade && (
+                      <DadoBrutoRow color="indigo" icon={<History className="h-3.5 w-3.5" />} label="Lealdade">
+                        {(() => {
+                          const m = drillData.inputs.lealdade.mesesDeCasa;
+                          const anos = Math.floor(m / 12);
+                          const restoMeses = m % 12;
+                          const txt = anos > 0
+                            ? `${anos} ano${anos > 1 ? 's' : ''}${restoMeses > 0 ? ` e ${restoMeses} mês${restoMeses > 1 ? 'es' : ''}` : ''}`
+                            : `${m} mês${m !== 1 ? 'es' : ''}`;
+                          const adm = drillData.dataAdmissao ? new Date(drillData.dataAdmissao + 'T00:00:00').toLocaleDateString('pt-BR') : '—';
+                          return <>{txt} de casa · admitido em {adm}</>;
+                        })()}
+                      </DadoBrutoRow>
+                    )}
                   </div>
                 </div>
               </div>
@@ -553,7 +564,23 @@ const SUBSCORE_COLOR_MAP: Record<string, { ring: string; bg: string; text: strin
   rose:    { ring: "ring-rose-200",    bg: "bg-rose-50/60",    text: "text-rose-700",    icon: "bg-rose-500",    bar: "bg-rose-500" },
   violet:  { ring: "ring-violet-200",  bg: "bg-violet-50/60",  text: "text-violet-700",  icon: "bg-violet-500",  bar: "bg-violet-500" },
   emerald: { ring: "ring-emerald-200", bg: "bg-emerald-50/60", text: "text-emerald-700", icon: "bg-emerald-500", bar: "bg-emerald-500" },
+  amber:   { ring: "ring-amber-200",   bg: "bg-amber-50/60",   text: "text-amber-700",   icon: "bg-amber-500",   bar: "bg-amber-500" },
+  indigo:  { ring: "ring-indigo-200",  bg: "bg-indigo-50/60",  text: "text-indigo-700",  icon: "bg-indigo-500",  bar: "bg-indigo-500" },
 };
+
+function KpiPilarCard({ icon, label, value }: { icon: React.ReactNode; label: string; value: number }) {
+  return (
+    <Card>
+      <CardContent className="p-3">
+        <div className="flex items-center gap-2 mb-1">
+          <div className="text-slate-500">{icon}</div>
+          <p className="text-xs text-slate-500 truncate">{label}</p>
+        </div>
+        <p className={`text-2xl font-bold tabular-nums ${corScore(value)}`}>{value}</p>
+      </CardContent>
+    </Card>
+  );
+}
 
 function SubScoreCard({ color, icon, label, value }: { color: keyof typeof SUBSCORE_COLOR_MAP; icon: React.ReactNode; label: string; value: number }) {
   const c = SUBSCORE_COLOR_MAP[color];
