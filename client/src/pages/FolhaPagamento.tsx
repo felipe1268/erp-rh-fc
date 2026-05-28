@@ -365,6 +365,39 @@ export default function FolhaPagamento() {
   const decimo1InputRef = useRef<HTMLInputElement>(null);
   const decimo2InputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState<"vale" | "pagamento" | "decimo_terceiro_1" | "decimo_terceiro_2" | null>(null);
+  // Rev. 2521 — progresso estimado 0→100% do import de PDFs da folha
+  const [uploadProgress, setUploadProgress] = useState<number>(0);
+  const [uploadPhase, setUploadPhase] = useState<string>("");
+  const uploadFilesCountRef = useRef<number>(0);
+  const uploadTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const stopUploadProgress = useCallback((final: number = 100) => {
+    if (uploadTimerRef.current) { clearInterval(uploadTimerRef.current); uploadTimerRef.current = null; }
+    setUploadProgress(final);
+    setTimeout(() => { setUploadProgress(0); setUploadPhase(""); }, 600);
+  }, []);
+  const startUploadProgress = useCallback((nFiles: number) => {
+    if (uploadTimerRef.current) clearInterval(uploadTimerRef.current);
+    uploadFilesCountRef.current = nFiles;
+    setUploadProgress(2);
+    setUploadPhase(`Lendo ${nFiles} PDF${nFiles > 1 ? "s" : ""}…`);
+    // Duração estimada: ~4s por PDF + 3s de match. Tick 250ms, avança assintótico até 90.
+    const totalMs = Math.max(6000, nFiles * 4000 + 3000);
+    const tickMs = 250;
+    const ticks = totalMs / tickMs;
+    let t = 0;
+    uploadTimerRef.current = setInterval(() => {
+      t++;
+      // curva assintótica: alvo 90, velocidade decai
+      setUploadProgress(prev => {
+        const target = 90;
+        const next = prev + Math.max(0.4, (target - prev) / (ticks - t + 4));
+        return Math.min(next, target);
+      });
+      // troca de fase em ~40% e ~75%
+      if (t === Math.floor(ticks * 0.35)) setUploadPhase("Extraindo texto e classificando…");
+      if (t === Math.floor(ticks * 0.7)) setUploadPhase("Vinculando funcionários e salvando…");
+    }, tickMs);
+  }, []);
   const [pagamentoSubView, setPagamentoSubView] = useState<"geral" | "por_banco">("geral");
   const [pagamentoSearch, setPagamentoSearch] = useState("");
   const [pagamentoFuncao, setPagamentoFuncao] = useState<string>("__all__");
@@ -1020,10 +1053,12 @@ export default function FolhaPagamento() {
       statusMes.refetch();
       lancamentos.refetch();
       mesesComLanc.refetch();
+      stopUploadProgress(100);
       setUploading(null);
     },
     onError: (err) => {
       toast.error(`Erro na importação: ${err.message}`);
+      stopUploadProgress(0);
       setUploading(null);
     },
   });
@@ -1174,6 +1209,7 @@ export default function FolhaPagamento() {
   const handleFileSelect = useCallback(async (files: FileList | null, tipo: "vale" | "pagamento" | "decimo_terceiro_1" | "decimo_terceiro_2") => {
     if (!files || files.length === 0) return;
     setUploading(tipo);
+    startUploadProgress(files.length);
 
     const arquivos: Array<{ fileName: string; fileBase64: string; mimeType: string }> = [];
     for (let i = 0; i < files.length; i++) {
@@ -1196,7 +1232,7 @@ export default function FolhaPagamento() {
     if (tipo === "pagamento" && pagInputRef.current) pagInputRef.current.value = "";
     if (tipo === "decimo_terceiro_1" && decimo1InputRef.current) decimo1InputRef.current.value = "";
     if (tipo === "decimo_terceiro_2" && decimo2InputRef.current) decimo2InputRef.current.value = "";
-  }, [companyId, mesAno, importarAutoMut]);
+  }, [companyId, mesAno, importarAutoMut, startUploadProgress]);
 
   function openView(mode: ViewMode, lancId?: number, tipo?: string) {
     setViewMode(mode);
@@ -7079,15 +7115,30 @@ export default function FolhaPagamento() {
                         </p>
                       </div>
                     </div>
-                    <Button
-                      className="w-full bg-[#1B2A4A] hover:bg-[#1B2A4A]/90 gap-2"
-                      disabled={isPending}
-                      onClick={() => pagInputRef.current?.click()}
-                    >
-                      {isPending
-                        ? <><RefreshCw className="h-4 w-4 animate-spin" /> Processando PDFs…</>
-                        : <><FileText className="h-4 w-4" /> Importar Folha da Contabilidade ({formatMesAno(mesAno)})</>}
-                    </Button>
+                    {isPending ? (
+                      <div className="w-full rounded-lg bg-[#1B2A4A] text-white px-4 py-3 shadow-sm">
+                        <div className="flex items-center justify-between text-xs font-semibold mb-2">
+                          <span className="flex items-center gap-2">
+                            <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                            {uploadPhase || "Processando PDFs…"}
+                          </span>
+                          <span className="tabular-nums">{Math.round(uploadProgress)}%</span>
+                        </div>
+                        <div className="h-2 w-full rounded-full bg-white/15 overflow-hidden">
+                          <div
+                            className="h-full bg-gradient-to-r from-amber-400 to-green-400 transition-[width] duration-300 ease-out"
+                            style={{ width: `${Math.max(2, Math.min(100, uploadProgress))}%` }}
+                          />
+                        </div>
+                      </div>
+                    ) : (
+                      <Button
+                        className="w-full bg-[#1B2A4A] hover:bg-[#1B2A4A]/90 gap-2"
+                        onClick={() => pagInputRef.current?.click()}
+                      >
+                        <FileText className="h-4 w-4" /> Importar Folha da Contabilidade ({formatMesAno(mesAno)})
+                      </Button>
+                    )}
                   </div>
                 ) : (
                   <>
@@ -7141,20 +7192,35 @@ export default function FolhaPagamento() {
                       </button>
                     </div>
 
-                    <div className="flex items-center justify-between gap-3 text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
-                      <span>Importou a folha errada? Reimporte os PDFs para sobrescrever os dados.</span>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="gap-1.5 text-[#1B2A4A] border-[#1B2A4A]/30 hover:bg-[#1B2A4A]/5"
-                        disabled={isPending}
-                        onClick={() => pagInputRef.current?.click()}
-                      >
-                        {isPending
-                          ? <><RefreshCw className="h-3 w-3 animate-spin" /> Processando…</>
-                          : <><RefreshCw className="h-3 w-3" /> Reimportar</>}
-                      </Button>
-                    </div>
+                    {isPending ? (
+                      <div className="w-full rounded-lg bg-[#1B2A4A] text-white px-4 py-3 shadow-sm">
+                        <div className="flex items-center justify-between text-xs font-semibold mb-2">
+                          <span className="flex items-center gap-2">
+                            <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                            {uploadPhase || "Processando PDFs…"}
+                          </span>
+                          <span className="tabular-nums">{Math.round(uploadProgress)}%</span>
+                        </div>
+                        <div className="h-2 w-full rounded-full bg-white/15 overflow-hidden">
+                          <div
+                            className="h-full bg-gradient-to-r from-amber-400 to-green-400 transition-[width] duration-300 ease-out"
+                            style={{ width: `${Math.max(2, Math.min(100, uploadProgress))}%` }}
+                          />
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-between gap-3 text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
+                        <span>Importou a folha errada? Reimporte os PDFs para sobrescrever os dados.</span>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="gap-1.5 text-[#1B2A4A] border-[#1B2A4A]/30 hover:bg-[#1B2A4A]/5"
+                          onClick={() => pagInputRef.current?.click()}
+                        >
+                          <RefreshCw className="h-3 w-3" /> Reimportar
+                        </Button>
+                      </div>
+                    )}
                   </>
                 )}
               </CardContent>

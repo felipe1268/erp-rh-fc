@@ -1,6 +1,65 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2521 — **FOLHA DE PAGAMENTO · BARRA DE PROGRESSO 0→100% no
+ * import do PDF da contabilidade (substitui o spinner "Processando
+ * PDFs…").**
+ *
+ * USER (screenshot da /folha-pagamento durante upload, com botão azul
+ * full-width "🔄 Processando PDFs..." sem feedback de tempo): "quero
+ * um processamento de 0 a 100 %".
+ *
+ * DECISÃO TÉCNICA
+ *  - `folha.importarFolhaAuto` é UMA mutation tRPC sem streaming —
+ *    não dá pra reportar progresso real do servidor sem
+ *    SSE/WebSocket. Refatorar pra isso seria caro pra um único
+ *    fluxo.
+ *  - Solução: progresso CLIENTE estimado por tempo decorrido, com
+ *    curva assintótica até 90% e snap pra 100% no onSuccess (ou 0%
+ *    no onError). Indistinguível de progresso real pro user típico,
+ *    custo zero, sem mudança de contrato server-side.
+ *
+ * MUDANÇA (1 arquivo: `client/src/pages/FolhaPagamento.tsx`)
+ *  - **Estado novo (L371-403)**: `uploadProgress: number` (0-100) +
+ *    `uploadPhase: string` + `uploadTimerRef` (interval).
+ *  - **`startUploadProgress(nFiles)`**: limpa interval anterior, fixa
+ *    progress=2%, fase "Lendo N PDFs…", calcula `totalMs = max(6000,
+ *    nFiles*4000 + 3000)` (4s por PDF + 3s de match), tick 250ms.
+ *    Cada tick avança assintótico: `next = prev + max(0.4, (90-prev)
+ *    / (ticks-t+4))` — começa rápido, desacelera ao se aproximar de
+ *    90%. Fase muda em 35% ("Extraindo texto e classificando…") e
+ *    70% ("Vinculando funcionários e salvando…").
+ *  - **`stopUploadProgress(final)`**: clear interval, set final
+ *    (100/0), reseta pra 0 + "" após 600ms (deixa user ver 100%).
+ *  - **Hooks no `importarAutoMut`** (L1059, L1064): `onSuccess →
+ *    stopUploadProgress(100)`; `onError → stopUploadProgress(0)`.
+ *  - **Hook no `handleFileSelect`** (L1215): após `setUploading(tipo)`,
+ *    chama `startUploadProgress(files.length)`.
+ *  - **UI nova (2 lugares)**: substitui `<Button disabled>` com
+ *    spinner por bloco `<div bg-[#1B2A4A] text-white>`:
+ *      • header: ícone RefreshCw spin + fase ("Lendo 2 PDFs…", etc) +
+ *        `{Math.round(uploadProgress)}%` tabular-nums à direita;
+ *      • trilha `h-2 bg-white/15` com barra de progresso
+ *        `bg-gradient-to-r from-amber-400 to-green-400`, transition
+ *        `[width] 300ms ease-out`, `width: max(2,min(100,p))%`.
+ *    Aplicado tanto no card de estado VAZIO (L7121-7144) quanto no
+ *    rodapé "Reimportar" do estado IMPORTADO (L7198-7226).
+ *
+ * ARQUIVOS TOCADOS
+ *  - `client/src/pages/FolhaPagamento.tsx` (+~70 / -10).
+ *  - `shared/version.ts` (2520 → 2521).
+ *  - `shared/changelog.ts` (esta entrada).
+ *  - `replit.md` (rotação 2+5: 2521+2520 detalhadas; 2519 vira
+ *    one-liner; 2514 desce pra `replit-history.md`).
+ *
+ * NÃO REGRESSÃO
+ *  - Log diagnóstico da Rev. 2520 permanece (será removido junto com
+ *    o ajuste do regex do parser na Rev. seguinte, quando user
+ *    enviar o PDF amostra).
+ *  - Zero ALTER/DROP/DELETE.
+ *
+ * ─────────────────────────────────────────────────────────────────────────
+ *
  * Rev. 2520 — **FOLHA DE PAGAMENTO · LOG DIAGNÓSTICO no import do PDF
  * quando parser devolve 0 registros. Instrumentação temporária pra
  * descobrir o formato real do texto extraído pelo pdf-parse 1.1.1
