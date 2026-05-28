@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -137,8 +137,9 @@ export default function ApontamentosCampo() {
   const [busca, setBusca] = useState("");
   const [expandedStats, setExpandedStats] = useState(true);
 
-  const [novoEmployeeId, setNovoEmployeeId] = useState<number | null>(null);
+  const [novoEmployeeIds, setNovoEmployeeIds] = useState<number[]>([]);
   const [novoEmployeeSearch, setNovoEmployeeSearch] = useState("");
+  const novoEmployeeSearchRef = useRef<HTMLInputElement>(null);
   const [novoObraId, setNovoObraId] = useState<number | null>(null);
   const [novoData, setNovoData] = useState(new Date().toISOString().split("T")[0]);
   const [novoTipo, setNovoTipo] = useState<string>("falta");
@@ -191,13 +192,6 @@ export default function ApontamentosCampo() {
   const utils = trpc.useUtils();
 
   const createMut = trpc.fieldNotes.create.useMutation({
-    onSuccess: () => {
-      toast.success("Apontamento registrado com sucesso!");
-      utils.fieldNotes.list.invalidate();
-      utils.fieldNotes.stats.invalidate();
-      setShowNovoDialog(false);
-      resetNovoForm();
-    },
     onError: (e) => toast.error("Erro: " + e.message),
   });
 
@@ -259,12 +253,14 @@ export default function ApontamentosCampo() {
   });
 
   function resetNovoForm() {
-    setNovoEmployeeId(null);
+    setNovoEmployeeIds([]);
+    setNovoEmployeeSearch("");
     setNovoObraId(null);
     setNovoData(new Date().toISOString().split("T")[0]);
     setNovoTipo("falta");
     setNovoPrioridade("media");
     setNovoDescricao("");
+    setNovoEntrada1(""); setNovoSaida1(""); setNovoEntrada2(""); setNovoSaida2("");
   }
 
   // Filter list by search
@@ -308,7 +304,7 @@ export default function ApontamentosCampo() {
               Registro de ocorrências pelo gestor de campo para resolução pelo RH
             </p>
           </div>
-          <Button onClick={() => { setNovoEntrada1(""); setNovoSaida1(""); setNovoEntrada2(""); setNovoSaida2(""); setNovoEmployeeSearch(""); setNovoEmployeeId(null); setShowNovoDialog(true); }} className="bg-[#1B2A4A] hover:bg-[#2a3d66]">
+          <Button onClick={() => { resetNovoForm(); setShowNovoDialog(true); }} className="bg-[#1B2A4A] hover:bg-[#2a3d66]">
             <Plus className="h-4 w-4 mr-2" /> Novo Apontamento
           </Button>
         </div>
@@ -553,28 +549,47 @@ export default function ApontamentosCampo() {
             </DialogHeader>
             <div className="space-y-3">
               <div className="relative">
-                <label className="text-sm font-medium">Funcionário *</label>
+                <label className="text-sm font-medium">
+                  Funcionário(s) * {novoEmployeeIds.length > 0 && (
+                    <span className="ml-1 text-xs text-muted-foreground">({novoEmployeeIds.length} selecionado{novoEmployeeIds.length > 1 ? "s" : ""})</span>
+                  )}
+                </label>
+                {novoEmployeeIds.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mt-1 mb-1.5">
+                    {novoEmployeeIds.map((id) => {
+                      const emp = employees.find((e: any) => e.id === id);
+                      if (!emp) return null;
+                      return (
+                        <span key={id} className="inline-flex items-center gap-1 rounded-full bg-blue-100 text-blue-900 text-xs px-2 py-0.5 border border-blue-300">
+                          <span className="font-medium truncate max-w-[160px]">{emp.nomeCompleto}</span>
+                          <button type="button" className="hover:text-red-700"
+                            onClick={() => setNovoEmployeeIds((prev) => prev.filter((x) => x !== id))}
+                            aria-label={`Remover ${emp.nomeCompleto}`}>
+                            <XIcon className="h-3 w-3" />
+                          </button>
+                        </span>
+                      );
+                    })}
+                  </div>
+                )}
                 <div className="relative mt-1">
                   <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground pointer-events-none" />
                   <input
+                    ref={novoEmployeeSearchRef}
                     type="text"
                     value={novoEmployeeSearch}
-                    onChange={(e) => { setNovoEmployeeSearch(e.target.value); setNovoEmployeeId(null); }}
-                    placeholder="Digite o nome do funcionário..."
+                    onChange={(e) => setNovoEmployeeSearch(e.target.value)}
+                    placeholder={novoEmployeeIds.length > 0 ? "Adicionar outro funcionário..." : "Digite o nome do funcionário..."}
                     className="w-full border rounded pl-8 pr-3 py-2 text-sm"
                     autoComplete="off"
                   />
-                  {novoEmployeeId && (
-                    <button type="button" className="absolute right-2 top-2 text-muted-foreground hover:text-foreground"
-                      onClick={() => { setNovoEmployeeId(null); setNovoEmployeeSearch(""); }}>
-                      <XIcon className="h-4 w-4" />
-                    </button>
-                  )}
                 </div>
-                {novoEmployeeSearch && !novoEmployeeId && (() => {
+                {novoEmployeeSearch && (() => {
                   const s = novoEmployeeSearch.toLowerCase();
                   const filtered = employees.filter((e: any) =>
-                    e.nomeCompleto?.toLowerCase().includes(s) || e.funcao?.toLowerCase().includes(s) || e.cpf?.includes(s)
+                    !novoEmployeeIds.includes(e.id) && (
+                      e.nomeCompleto?.toLowerCase().includes(s) || e.funcao?.toLowerCase().includes(s) || e.cpf?.includes(s)
+                    )
                   ).slice(0, 15);
                   return filtered.length > 0 ? (
                     <div className="absolute z-50 w-full mt-1 bg-white border rounded-lg shadow-lg max-h-48 overflow-y-auto">
@@ -582,9 +597,10 @@ export default function ApontamentosCampo() {
                         <button key={e.id} type="button"
                           className="w-full text-left px-3 py-2 text-sm hover:bg-blue-50 border-b border-gray-100 last:border-0"
                           onClick={() => {
-                            setNovoEmployeeId(e.id);
-                            setNovoEmployeeSearch(`${e.nomeCompleto} — ${e.funcao || "Sem função"}`);
-                            if (e.obraAtualId) setNovoObraId(e.obraAtualId);
+                            setNovoEmployeeIds((prev) => prev.includes(e.id) ? prev : [...prev, e.id]);
+                            if (novoEmployeeIds.length === 0 && e.obraAtualId) setNovoObraId(e.obraAtualId);
+                            setNovoEmployeeSearch("");
+                            setTimeout(() => novoEmployeeSearchRef.current?.focus(), 0);
                           }}>
                           <span className="font-medium">{e.nomeCompleto}</span>
                           <span className="text-muted-foreground ml-2">— {e.funcao || "Sem função"}</span>
@@ -678,19 +694,18 @@ export default function ApontamentosCampo() {
               <Button variant="outline" onClick={() => setShowNovoDialog(false)}>Cancelar</Button>
               <Button
                 className="bg-[#1B2A4A] hover:bg-[#2a3d66]"
-                disabled={!novoEmployeeId || !novoDescricao.trim() || createMut.isPending || (
+                disabled={novoEmployeeIds.length === 0 || !novoDescricao.trim() || createMut.isPending || (
                   ['falta', 'atraso', 'saida_antecipada', 'abandono_posto', 'esqueceu_bater', 'outro'].includes(novoTipo) && !novoEntrada1 && !novoSaida1 && !novoEntrada2 && !novoSaida2
                 )}
-                onClick={() => {
-                  if (!novoEmployeeId || !novoDescricao.trim()) return;
+                onClick={async () => {
+                  if (novoEmployeeIds.length === 0 || !novoDescricao.trim()) return;
                   const tiposComPonto = ['falta', 'atraso', 'saida_antecipada', 'abandono_posto', 'esqueceu_bater', 'outro'];
                   if (tiposComPonto.includes(novoTipo) && !novoEntrada1 && !novoSaida1 && !novoEntrada2 && !novoSaida2) {
                     toast.error("Preencha pelo menos um horário.");
                     return;
                   }
-                  createMut.mutate({
+                  const payloadBase = {
                     companyId: companyId!,
-                    employeeId: novoEmployeeId,
                     obraId: novoObraId || undefined,
                     data: novoData,
                     tipoOcorrencia: novoTipo as any,
@@ -700,10 +715,26 @@ export default function ApontamentosCampo() {
                     saida1: novoSaida1 || undefined,
                     entrada2: novoEntrada2 || undefined,
                     saida2: novoSaida2 || undefined,
-                  });
+                  };
+                  const results = await Promise.allSettled(
+                    novoEmployeeIds.map((eid) => createMut.mutateAsync({ ...payloadBase, employeeId: eid }))
+                  );
+                  const ok = results.filter((r) => r.status === "fulfilled").length;
+                  const fail = results.length - ok;
+                  utils.fieldNotes.list.invalidate();
+                  utils.fieldNotes.stats.invalidate();
+                  if (ok > 0 && fail === 0) {
+                    toast.success(ok === 1 ? "Apontamento registrado com sucesso!" : `${ok} apontamentos registrados com sucesso!`);
+                    setShowNovoDialog(false);
+                    resetNovoForm();
+                  } else if (ok > 0 && fail > 0) {
+                    toast.warning(`${ok} apontamento(s) registrado(s), ${fail} falhou(aram). Veja erros e tente novamente.`);
+                  }
                 }}
               >
-                {createMut.isPending ? "Registrando..." : "Registrar Apontamento"}
+                {createMut.isPending
+                  ? (novoEmployeeIds.length > 1 ? `Registrando ${novoEmployeeIds.length}...` : "Registrando...")
+                  : (novoEmployeeIds.length > 1 ? `Registrar ${novoEmployeeIds.length} Apontamentos` : "Registrar Apontamento")}
               </Button>
             </DialogFooter>
           </DialogContent>

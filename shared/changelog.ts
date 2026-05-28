@@ -1,6 +1,72 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2532 — **APONTAMENTOS DE CAMPO · MULTI-SELECT DE FUNCIONÁRIOS
+ * no diálogo "Novo Apontamento" (1 ocorrência por func, mesma
+ * descrição/horários, em lote).**
+ *
+ * MOTIVAÇÃO (user em 28/05/2026, print do dialog atual):
+ *   "Em apontamento de campo, preciso ter a opção de selecionar
+ *    mais de 01 colaborador."
+ *
+ * CONTEXTO
+ *   - Caso típico: o gestor anota a MESMA falta/atraso pro time
+ *     inteiro (chuva, paralisação parcial etc.) e tinha que abrir
+ *     o dialog 1x por funcionário — muito atrito.
+ *
+ * MUDANÇA
+ *   - State único `novoEmployeeIds: number[]` substitui o antigo
+ *     `novoEmployeeId: number|null`. Reset agora também limpa
+ *     horários (entrada/saída) — antes ficava resíduo entre aberturas.
+ *   - UI do bloco Funcionário:
+ *       • Label vira "Funcionário(s) *" + contador "(N selecionados)".
+ *       • Chips azuis pill (X p/ remover individual) listados acima
+ *         do input. `max-w-[160px] truncate` evita overflow.
+ *       • Input de busca permanece, agora com placeholder
+ *         adaptativo ("Adicionar outro funcionário…" depois do
+ *         primeiro) e `ref` para refocar pós-seleção.
+ *       • Sugestão exclui quem já está selecionado.
+ *       • Click numa sugestão ADICIONA ao array, limpa o input
+ *         e refoca (setTimeout 0) — permite enfileirar rápido,
+ *         compatível com cenário scanner-like (digita, escolhe,
+ *         digita o próximo).
+ *       • `obraAtualId` só pre-seleciona a obra do PRIMEIRO
+ *         funcionário adicionado (evita sobrescrita surpresa).
+ *   - Submit:
+ *       • `Promise.allSettled` rodando `createMut.mutateAsync` 1×
+ *         por id, payload base idêntico (data, tipo, prioridade,
+ *         descrição, horários de ponto, obra).
+ *       • Após todos: 1 invalidate em `list`/`stats`, 1 toast
+ *         agregado ("N apontamentos registrados com sucesso!"),
+ *         fecha dialog + reset. Parciais geram `toast.warning`
+ *         e mantêm o dialog aberto.
+ *       • Botão mostra "Registrar N Apontamentos" / "Registrando
+ *         N…" quando há +1 selecionado.
+ *   - `createMut` agora SÓ trata erro; sucesso é orquestrado pelo
+ *     handler do botão (antes fechava dialog/resetava por mutação,
+ *     o que disparava toast×N e fechamento na 1ª resposta).
+ *   - Botão "Novo Apontamento" do header passa a chamar
+ *     `resetNovoForm()` (que já cobre horários + chips).
+ *
+ * VALIDAÇÃO
+ *   - HMR aplicado, server sem erro.
+ *   - Sem `novoEmployeeId` resíduo (rg confirmou).
+ *
+ * COMPATIBILIDADE
+ *   - Endpoint `fieldNotes.create` inalterado (continua 1 doc por
+ *     chamada). Multi-doc é orquestração de cliente.
+ *   - Demais fluxos (Resolver/Editar/Detalhes/Reabrir) intocados.
+ *
+ * ARQUIVOS
+ *   - `client/src/pages/ApontamentosCampo.tsx` L1 (import useRef) +
+ *     L143-145 (state ids + ref) + L197-199 (createMut só onError) +
+ *     L258-267 (resetNovoForm) + L310 (botão Novo) + L554-616
+ *     (bloco Funcionário multi-select) + L698-740 (botão submit
+ *     em lote).
+ *
+ * COMPLIANCE
+ *   - Zero ALTER/DROP/DELETE. Não toca banco nem router.
+ *
  * Rev. 2531 — **BUILD · `vite build` estourava heap (OOM) durante o
  * deploy: `max-old-space-size` subiu de 4096 MB → 8192 MB.**
  *
