@@ -1,6 +1,96 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2510 — **EQUIPAMENTOS PRÓPRIOS — Bugfix CREATE TABLE faltante no
+ * bootstrap (cadastro quebrado por "relation does not exist") + redesign
+ * completo da tela com identidade FC (faixa azul #1B2A4A, regra de ouro).**
+ *
+ * PEDIDO (user, 28/05/2026, iPad, screenshot da tela de equipamentos com
+ * erro tRPC):
+ *  - "Está com erro no cadastro das ferramentas próprias, já arrume tbm o
+ *    layout da tela, quero um layout inovador e seguindo os critérios da
+ *    regras de ouro, fácil acesso e fácil usuabilidade."
+ *  - O erro exibido era um "Failed query: select id from equipamentos_proprios
+ *    where company_id=$1 and codigo_patrimonio=$2 limit $3" — o pre-check de
+ *    duplicata em `proprioCriar` quebrava ANTES do INSERT.
+ *
+ * CAUSA RAIZ — Tabela `equipamentos_proprios` NUNCA EXISTIU no banco
+ *  - `drizzle/schema.ts` L8659 declara a tabela completa (com uniqueIndex
+ *    `uq_equip_proprio_company_patrimonio`, índices de status/categoria, etc).
+ *  - `server/_core/index.ts` L2030-2195 (bootstrap SyncSchema+) tem
+ *    CREATE TABLE IF NOT EXISTS para `equipamentos_locados`,
+ *    `equipamento_locado_eventos`, `equipamentos_fotos_canonicas` e
+ *    `almoxarifado_baias/leituras` (Rev. 2319/2340/2355/2373), MAS esqueceu
+ *    de criar `equipamentos_proprios`. A tabela só nasceria via
+ *    `pnpm db:push` — que nunca rodou em nenhum ambiente da FC.
+ *  - `executeSql` confirmou: `to_regclass('public.equipamentos_proprios') = NULL`.
+ *  - Resultado: qualquer tentativa de cadastrar/listar equipamento próprio
+ *    quebrava com "relation does not exist" mascarado como "Failed query".
+ *
+ * MUDANÇAS
+ *  - `server/_core/index.ts` (após o bloco Rev. 2373 das baias, dentro do
+ *    mesmo try/catch que já cobre os equipamentos):
+ *      • CREATE TABLE IF NOT EXISTS `equipamentos_proprios` com todas as
+ *        colunas do schema drizzle (id, company_id, codigo_patrimonio
+ *        VARCHAR(50) NOT NULL, descricao, categoria, numero_serie, marca,
+ *        modelo, data_aquisicao, valor_aquisicao NUMERIC(14,2), vida_util_meses,
+ *        custo_manut/seguro_medio_mes default 0, localizacao_atual_tipo/obra_id,
+ *        status default 'disponivel', fotos_json JSONB, observacoes, ativo,
+ *        created_at, updated_at).
+ *      • CREATE UNIQUE INDEX IF NOT EXISTS `uq_equip_proprio_company_patrimonio`
+ *        ON (company_id, codigo_patrimonio) — bate com schema.ts L8687.
+ *      • CREATE INDEX IF NOT EXISTS `idx_equip_proprio_company_status` e
+ *        `idx_equip_proprio_categoria`.
+ *      • Log: "[SyncSchema+] Rev. 2510: tabela equipamentos_proprios garantida
+ *        (+ uniq patrimônio + índices).".
+ *      • Catch message ampliado pra incluir Rev. 2510 na FALHA log.
+ *    R-001/R-007/R-010 OK: apenas CREATE TABLE/INDEX IF NOT EXISTS — nenhum
+ *    ALTER/DROP/DELETE. Tabela vazia em produção (nunca existiu), então
+ *    nenhum dado pra preservar.
+ *
+ *  - `client/src/pages/equipamentos/Proprios.tsx` — REDESIGN seguindo regra
+ *    de ouro FC (faixa azul #1B2A4A, identidade institucional):
+ *      • HEADER: faixa horizontal full-width com `background: linear-gradient
+ *        (135deg, #1B2A4A 0%, #2E4373 100%)`, ícone HardHat em badge
+ *        translúcido (h-11 w-11 ring-white/20), título uppercase letter-
+ *        spacing 0.2em branco, subtítulo "Parque permanente da FC". Botão
+ *        "Cadastrar" CTA branco com texto azul institucional.
+ *        `printColorAdjust: exact` inline (faixa preserva cor no print).
+ *      • KPIs (4 cards): grid 2 col mobile / 4 col desktop. Cada card com
+ *        ring colorido (slate/blue/emerald/amber), ícone em badge sólido,
+ *        label uppercase tracking-widest, número 3xl extrabold tabular-nums.
+ *      • FILTROS: barra sticky com search lucide-icon + 5 pills de status
+ *        (Todos/Disponíveis/Em obra/Manutenção/Baixados). Pill ativa fica
+ *        #1B2A4A; inativas mantêm cor do status (border outlined).
+ *      • LISTA: substituída TABELA por GRID DE CARDS (1/2/3 col responsivo).
+ *        Cada card: foto à esquerda 28 sm:32 (gradiente fallback HardHat),
+ *        badge de patrimônio mono no topo, descrição line-clamp-2, badge de
+ *        status colorido ring-1, valor + data no rodapé com border-top.
+ *        Click no card abre edit; botão pencil aparece on hover.
+ *      • EMPTY STATE: HardHat gigante slate-300 + CTA "Cadastrar primeiro
+ *        equipamento" #1B2A4A. Distingue empty real vs filtros ativos.
+ *      • MODAL: header também com faixa azul #1B2A4A gradient (consistente),
+ *        ícone HardHat em badge, título uppercase "Novo Equipamento" / "Editar
+ *        Equipamento" + patrimônio no subtítulo. Footer Salvar agora #1B2A4A
+ *        (era blue-600). Conteúdo do modal (foto, descrição, chips categoria,
+ *        patrimônio auto, mais detalhes collapsible) mantido — funcionava
+ *        bem desde Rev. 2364. Chip de categoria ativo virou #1B2A4A.
+ *      • Ícones novos: Wrench, CheckCircle2, Layers, Hash (KPIs + card chip).
+ *      • Componente `KpiCard` substituiu o antigo `Stat` (mais visual).
+ *
+ * NOTA DE ESCOPO — Regra de ouro FC nasceu pra DOCUMENTOS institucionais
+ * (contratos, advertências, comunicados — Rev. 2106). A aplicação em telas
+ * operacionais segue o ESPÍRITO da regra (faixa azul #1B2A4A no topo,
+ * identidade visual consistente, badge translúcido, tipografia uppercase
+ * letter-spacing) sem replicar elementos de papel timbrado (CNPJ, endereço,
+ * nº de documento). Single source of truth visual da FC: cor #1B2A4A.
+ *
+ * AÇÃO PRA O USUÁRIO
+ *  - Atualizar a página: o bootstrap cria a tabela no próximo restart do
+ *    servidor (já restartado nesta revisão). Cadastros que falharam não
+ *    precisam ser refeitos (a tela retornava erro ANTES do INSERT — nada
+ *    foi persistido em estado parcial).
+ *
  * Rev. 2509 — **AVALIAÇÃO INTELIGENTE · RANKING — Foto do funcionário ao lado
  * do nome em Top 10, Bottom 10, busca e tabela completa (click amplia via
  * PersonPhoto).**

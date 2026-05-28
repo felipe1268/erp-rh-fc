@@ -2190,7 +2190,43 @@ Regras:
           // Rev. 2422 — coluna movimentacao_id garantida (vínculo p/ "Desfazer aferição").
           await db.execute(sql`ALTER TABLE almoxarifado_baia_leituras ADD COLUMN IF NOT EXISTS movimentacao_id INTEGER`);
           console.log(`[SyncSchema+] Rev. 2373/2417/2422: tabelas almoxarifado_baias + almoxarifado_baia_leituras garantidas (inventário visual + volume_estimado + movimentacao_id).`);
-        } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.2319/2340/2355/2373 equipamentos_locados+baias (CREATE):`, e?.message || e); }
+
+          // Rev. 2510 — CREATE TABLE IF NOT EXISTS para equipamentos_proprios
+          // (a tabela foi adicionada ao drizzle/schema.ts mas nunca tinha
+          // bootstrap no SyncSchema+ — quebrava cadastro em qualquer ambiente
+          // sem `pnpm db:push`, com erro "relation equipamentos_proprios does
+          // not exist" mascarado como "Failed query: select id from ...").
+          // R-001/R-007/R-010: OK (apenas CREATE TABLE/INDEX IF NOT EXISTS).
+          await db.execute(sql`
+            CREATE TABLE IF NOT EXISTS equipamentos_proprios (
+              id SERIAL PRIMARY KEY,
+              company_id INTEGER NOT NULL,
+              codigo_patrimonio VARCHAR(50) NOT NULL,
+              descricao VARCHAR(255) NOT NULL,
+              categoria VARCHAR(100),
+              numero_serie VARCHAR(100),
+              marca VARCHAR(100),
+              modelo VARCHAR(100),
+              data_aquisicao VARCHAR(10),
+              valor_aquisicao NUMERIC(14,2),
+              vida_util_meses INTEGER,
+              custo_manut_medio_mes NUMERIC(14,2) DEFAULT 0,
+              custo_seguro_medio_mes NUMERIC(14,2) DEFAULT 0,
+              localizacao_atual_tipo VARCHAR(20) DEFAULT 'almoxarifado',
+              localizacao_atual_obra_id INTEGER,
+              status VARCHAR(20) NOT NULL DEFAULT 'disponivel',
+              fotos_json JSONB,
+              observacoes TEXT,
+              ativo BOOLEAN DEFAULT TRUE,
+              created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+              updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+            )
+          `);
+          await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS uq_equip_proprio_company_patrimonio ON equipamentos_proprios (company_id, codigo_patrimonio)`);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_equip_proprio_company_status ON equipamentos_proprios (company_id, status)`);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_equip_proprio_categoria ON equipamentos_proprios (categoria)`);
+          console.log(`[SyncSchema+] Rev. 2510: tabela equipamentos_proprios garantida (+ uniq patrimônio + índices).`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.2319/2340/2355/2373/2510 equipamentos_locados+proprios+baias (CREATE):`, e?.message || e); }
 
         // ── Rev. 2260 — Backfill `previsto_msp_pct` em obras antigas ──────
         // Decisão user (23/05/2026): a regra "PREVISTO = % PREVISTO do MSP /

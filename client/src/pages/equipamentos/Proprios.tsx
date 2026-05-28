@@ -3,7 +3,10 @@ import { useState, useMemo, useRef, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
 import { toast } from "sonner";
-import { Plus, Search, Pencil, X, HardHat, Camera, ChevronDown, ChevronUp, Sparkles, Trash2, Boxes } from "lucide-react";
+import {
+  Plus, Search, Pencil, X, HardHat, Camera, ChevronDown, ChevronUp,
+  Sparkles, Trash2, Boxes, Wrench, CheckCircle2, Layers, Hash,
+} from "lucide-react";
 import { FotosUploader, FotoItem, compressImage, fmtMoney, fmtDate, Spinner } from "./_shared";
 
 const EMPTY_FORM = {
@@ -23,10 +26,10 @@ const STATUS_LABELS: Record<string, string> = {
   disponivel: "Disponível", em_obra: "Em obra", manutencao: "Manutenção", baixado: "Baixado",
 };
 const STATUS_COLORS: Record<string, string> = {
-  disponivel: "bg-emerald-100 text-emerald-700",
-  em_obra: "bg-blue-100 text-blue-700",
-  manutencao: "bg-amber-100 text-amber-700",
-  baixado: "bg-slate-200 text-slate-700",
+  disponivel: "bg-emerald-100 text-emerald-700 ring-1 ring-emerald-200",
+  em_obra:    "bg-blue-100 text-blue-700 ring-1 ring-blue-200",
+  manutencao: "bg-amber-100 text-amber-700 ring-1 ring-amber-200",
+  baixado:    "bg-slate-200 text-slate-700 ring-1 ring-slate-300",
 };
 
 export default function EquipamentosProprios() {
@@ -41,8 +44,6 @@ export default function EquipamentosProprios() {
     { enabled: !!companyId }
   );
   // Rev. 2364 — segunda query SEM filtros pra contagem total real (auto-ID).
-  // Não pode usar `data.length` porque essa lista é filtrada por busca/status
-  // (gera colisões com patrimônios já existentes fora do filtro ativo).
   const { data: totalList = [], isFetched: totalFetched } =
     trpc.equipamentos.propriosListar.useQuery(
       { companyId },
@@ -56,9 +57,6 @@ export default function EquipamentosProprios() {
   const [mostrarDetalhes, setMostrarDetalhes] = useState(false);
   const fotoInputRef = useRef<HTMLInputElement>(null);
 
-  // Rev. 2364 — gera patrimônio automático "EQP-NNNN" baseado no count TOTAL
-  // (não na lista filtrada). Olha o maior `EQP-N` já cadastrado e soma 1 pra
-  // evitar colisão quando IDs antigos foram apagados ou misturados.
   function gerarPatrimonioAuto() {
     let maxN = 0;
     for (const p of (totalList || []) as any[]) {
@@ -77,10 +75,7 @@ export default function EquipamentosProprios() {
     setMostrarDetalhes(false); setModal(true);
   }
 
-  // Rev. 2374 — Fila de importação vinda do Almoxarifado (?importAlmox=1).
-  // O usuário marcou N equipamentos no Almoxarifado, clicou "É PRÓPRIO da FC"
-  // e foi parar aqui — abrimos o modal pré-preenchido com nome+categoria+foto
-  // do 1º item, e a cada save avançamos pro próximo até esvaziar a fila.
+  // Rev. 2374 — Fila de importação vinda do Almoxarifado.
   const [importQueue, setImportQueue] = useState<Array<{ nome: string; fotoUrl: string; categoria: string }>>([]);
   const [importTotal, setImportTotal] = useState(0);
   function preencherFormDoItem(it: { nome: string; fotoUrl: string; categoria: string }) {
@@ -97,7 +92,7 @@ export default function EquipamentosProprios() {
   }
   useEffect(() => {
     if (!companyId) return;
-    if (!totalFetched) return; // espera contagem pro EQP-NNNN não colidir
+    if (!totalFetched) return;
     const url = new URL(window.location.href);
     if (url.searchParams.get("importAlmox") !== "1") return;
     try {
@@ -106,7 +101,6 @@ export default function EquipamentosProprios() {
       if (!raw || tipo !== "proprio") return;
       const payload = JSON.parse(raw) as { companyId: number; itens: Array<{ nome: string; fotoUrl: string; categoria: string }> };
       const arr = payload?.itens;
-      // Rev. 2374 — rejeita se a empresa atual ≠ empresa de origem (anti-contaminação).
       if (!payload || payload.companyId !== companyId) {
         sessionStorage.removeItem("fc:importAlmoxEquip:queue");
         sessionStorage.removeItem("fc:importAlmoxEquip:tipo");
@@ -156,19 +150,16 @@ export default function EquipamentosProprios() {
     });
     setFotos((p.fotosJson as FotoItem[]) || []);
     setEditingId(p.id);
-    setMostrarDetalhes(true); // ao editar, abre detalhes pra ver tudo
+    setMostrarDetalhes(true);
     setModal(true);
   }
 
   const criar = trpc.equipamentos.proprioCriar.useMutation({
     onSuccess: () => {
       utils.equipamentos.propriosListar.invalidate();
-      // Rev. 2374 — se há fila de importação do Almoxarifado, avança pro próximo
-      // item em vez de fechar o modal. Quando a fila esvazia, fecha + toast final.
       if (importQueue.length > 0) {
         const [next, ...rest] = importQueue;
         setImportQueue(rest);
-        // pequeno delay pra dar tempo do invalidate atualizar `totalList` (EQP-NNNN)
         setTimeout(() => preencherFormDoItem(next), 250);
         toast.success("Cadastrado! Próximo da fila…");
       } else {
@@ -190,9 +181,6 @@ export default function EquipamentosProprios() {
 
   function salvar() {
     if (!form.descricao.trim()) return toast.error("Diga o que é o equipamento (descrição).");
-    // Rev. 2364 — patrimônio auto-preenchido se vazio. Aguarda a query de
-    // contagem total chegar (totalFetched) pra evitar colisão com EQP-0001
-    // quando o usuário salva antes do load inicial.
     if (!editingId && !form.codigoPatrimonio.trim() && !totalFetched) {
       return toast.error("Carregando lista de patrimônios… tente em 1s.");
     }
@@ -241,115 +229,210 @@ export default function EquipamentosProprios() {
 
   return (
     <DashboardLayout>
-      <div className="max-w-6xl mx-auto px-4 py-6 space-y-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
-              <HardHat className="h-6 w-6 text-blue-600" /> Equipamentos Próprios
-            </h1>
-            <p className="text-sm text-slate-600">Cadastro unitário do parque próprio da empresa.</p>
+      {/* Rev. 2510 — Header com identidade FC (faixa azul #1B2A4A, regra de ouro) */}
+      <div
+        className="text-white shadow-lg"
+        style={{
+          background: "linear-gradient(135deg, #1B2A4A 0%, #2E4373 100%)",
+          printColorAdjust: "exact" as any,
+        }}
+      >
+        <div className="max-w-7xl mx-auto px-4 py-5 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="h-11 w-11 rounded-lg bg-white/10 backdrop-blur flex items-center justify-center ring-1 ring-white/20 shrink-0">
+              <HardHat className="h-6 w-6 text-white" />
+            </div>
+            <div className="min-w-0">
+              <h1 className="text-white text-base sm:text-lg font-bold uppercase tracking-[0.2em] truncate">
+                Equipamentos Próprios
+              </h1>
+              <p className="text-white/70 text-xs mt-0.5 truncate">
+                Parque permanente da FC · controle unitário com foto, patrimônio e CAPEX
+              </p>
+            </div>
           </div>
-          <button onClick={abrirNovo} className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded shadow-sm">
-            <Plus className="h-4 w-4" /> Novo
+          <button
+            onClick={abrirNovo}
+            className="inline-flex items-center gap-2 bg-white text-[#1B2A4A] hover:bg-blue-50 active:scale-[0.98] px-4 py-2.5 rounded-lg font-semibold shadow-md transition shrink-0"
+          >
+            <Plus className="h-5 w-5" /> <span className="hidden sm:inline">Cadastrar</span><span className="sm:hidden">Novo</span>
           </button>
-        </div>
-
-        <div className="grid grid-cols-4 gap-3">
-          <Stat title="Total" value={stats.total} color="text-slate-800" />
-          <Stat title="Em obra" value={stats.em_obra} color="text-blue-700" />
-          <Stat title="Disponíveis" value={stats.disponivel} color="text-emerald-700" />
-          <Stat title="Manutenção" value={stats.manutencao} color="text-amber-700" />
-        </div>
-
-        <div className="bg-white border rounded-lg shadow-sm p-3 flex items-center gap-3">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-            <input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar por descrição, patrimônio, série…"
-              className="w-full pl-9 pr-3 py-2 border rounded text-sm" />
-          </div>
-          <select value={filtroStatus} onChange={e => setFiltroStatus(e.target.value)} className="px-3 py-2 border rounded text-sm">
-            <option value="">Todos os status</option>
-            <option value="disponivel">Disponíveis</option>
-            <option value="em_obra">Em obra</option>
-            <option value="manutencao">Manutenção</option>
-            <option value="baixado">Baixados</option>
-          </select>
-        </div>
-
-        <div className="bg-white border rounded-lg shadow-sm overflow-hidden">
-          {isLoading ? (
-            <div className="p-8 flex justify-center"><Spinner /></div>
-          ) : data.length === 0 ? (
-            <div className="p-8 text-center text-sm text-slate-500">Nenhum equipamento cadastrado.</div>
-          ) : (
-            <table className="w-full text-sm">
-              <thead className="bg-slate-50">
-                <tr className="text-left text-xs text-slate-600 uppercase">
-                  <th className="px-3 py-2">Foto</th>
-                  <th className="px-3 py-2">Patrimônio</th>
-                  <th className="px-3 py-2">Descrição</th>
-                  <th className="px-3 py-2">Categoria</th>
-                  <th className="px-3 py-2">Status</th>
-                  <th className="px-3 py-2 text-right">Valor aquis.</th>
-                  <th className="px-3 py-2">Aquisição</th>
-                  <th className="px-3 py-2"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {(data as any[]).map(p => {
-                  const fotos = (p.fotosJson as FotoItem[]) || [];
-                  return (
-                    <tr key={p.id} className="border-t hover:bg-slate-50">
-                      <td className="px-3 py-2">
-                        {fotos[0]
-                          ? <img src={fotos[0].url} className="w-10 h-10 object-cover rounded" />
-                          : <div className="w-10 h-10 rounded bg-slate-100 flex items-center justify-center text-slate-400 text-xs">—</div>}
-                      </td>
-                      <td className="px-3 py-2 font-mono text-xs">{p.codigoPatrimonio}</td>
-                      <td className="px-3 py-2 font-medium text-slate-800">{p.descricao}</td>
-                      <td className="px-3 py-2 text-slate-600">{p.categoria || "—"}</td>
-                      <td className="px-3 py-2">
-                        <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${STATUS_COLORS[p.status] || "bg-slate-100"}`}>
-                          {STATUS_LABELS[p.status] || p.status}
-                        </span>
-                      </td>
-                      <td className="px-3 py-2 text-right">{p.valorAquisicao ? fmtMoney(p.valorAquisicao) : "—"}</td>
-                      <td className="px-3 py-2 text-slate-600">{fmtDate(p.dataAquisicao)}</td>
-                      <td className="px-3 py-2 text-right">
-                        <button onClick={() => abrirEdit(p)} className="text-blue-600 hover:bg-blue-50 p-1 rounded">
-                          <Pencil className="h-4 w-4" />
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          )}
         </div>
       </div>
 
+      <div className="max-w-7xl mx-auto px-4 py-5 space-y-5">
+        {/* KPIs com ícones coloridos */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <KpiCard icon={<Layers className="h-4 w-4" />}        label="Total"        value={stats.total}      color="slate"   />
+          <KpiCard icon={<HardHat className="h-4 w-4" />}       label="Em obra"      value={stats.em_obra}    color="blue"    />
+          <KpiCard icon={<CheckCircle2 className="h-4 w-4" />}  label="Disponíveis"  value={stats.disponivel} color="emerald" />
+          <KpiCard icon={<Wrench className="h-4 w-4" />}        label="Manutenção"   value={stats.manutencao} color="amber"   />
+        </div>
+
+        {/* Filtros sticky no topo da lista */}
+        <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-3 flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
+            <input
+              value={busca}
+              onChange={e => setBusca(e.target.value)}
+              placeholder="Buscar por descrição, patrimônio ou nº de série…"
+              className="w-full pl-9 pr-3 py-2.5 border border-slate-200 focus:border-blue-500 focus:ring-1 focus:ring-blue-200 outline-none rounded-lg text-sm transition"
+            />
+          </div>
+          <div className="flex gap-2">
+            {[
+              { v: "",           l: "Todos",        c: "border-slate-300 text-slate-700" },
+              { v: "disponivel", l: "Disponíveis",  c: "border-emerald-300 text-emerald-700" },
+              { v: "em_obra",    l: "Em obra",      c: "border-blue-300 text-blue-700" },
+              { v: "manutencao", l: "Manutenção",   c: "border-amber-300 text-amber-700" },
+              { v: "baixado",    l: "Baixados",     c: "border-slate-400 text-slate-600" },
+            ].map(opt => {
+              const active = filtroStatus === opt.v;
+              return (
+                <button
+                  key={opt.v || "all"}
+                  onClick={() => setFiltroStatus(opt.v)}
+                  className={`px-3 py-2 rounded-lg text-xs font-semibold border-2 transition whitespace-nowrap ${
+                    active
+                      ? "bg-[#1B2A4A] text-white border-[#1B2A4A] shadow"
+                      : `bg-white hover:bg-slate-50 ${opt.c}`
+                  }`}
+                >
+                  {opt.l}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Grid de cards visuais (foto grande à esquerda, dados à direita) */}
+        {isLoading ? (
+          <div className="p-12 bg-white border border-slate-200 rounded-xl shadow-sm flex justify-center">
+            <Spinner />
+          </div>
+        ) : data.length === 0 ? (
+          <div className="p-12 bg-white border border-slate-200 rounded-xl shadow-sm text-center">
+            <HardHat className="h-16 w-16 text-slate-300 mx-auto mb-3" />
+            <p className="text-sm font-medium text-slate-600 mb-1">Nenhum equipamento cadastrado</p>
+            <p className="text-xs text-slate-500 mb-4">
+              {busca || filtroStatus ? "Tente limpar os filtros." : "Toque em \"Cadastrar\" pra começar."}
+            </p>
+            {!busca && !filtroStatus && (
+              <button
+                onClick={abrirNovo}
+                className="inline-flex items-center gap-2 bg-[#1B2A4A] hover:bg-[#2E4373] text-white px-4 py-2 rounded-lg text-sm font-semibold"
+              >
+                <Plus className="h-4 w-4" /> Cadastrar primeiro equipamento
+              </button>
+            )}
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+            {(data as any[]).map(p => {
+              const pFotos = (p.fotosJson as FotoItem[]) || [];
+              const foto = pFotos[0];
+              return (
+                <div
+                  key={p.id}
+                  className="group bg-white border border-slate-200 hover:border-blue-400 hover:shadow-md rounded-xl overflow-hidden shadow-sm transition cursor-pointer flex"
+                  onClick={() => abrirEdit(p)}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => { if (e.key === "Enter") abrirEdit(p); }}
+                >
+                  <div className="w-28 sm:w-32 shrink-0 bg-gradient-to-br from-slate-100 to-slate-200 relative">
+                    {foto ? (
+                      <img src={foto.url} alt={p.descricao} className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-slate-400">
+                        <HardHat className="h-10 w-10" />
+                      </div>
+                    )}
+                    {pFotos.length > 1 && (
+                      <span className="absolute bottom-1 right-1 bg-black/60 text-white text-[10px] px-1.5 py-0.5 rounded">
+                        +{pFotos.length - 1}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0 p-3 flex flex-col gap-1.5">
+                    <div className="flex items-start justify-between gap-2">
+                      <span className="inline-flex items-center gap-1 text-[10px] font-mono font-semibold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">
+                        <Hash className="h-3 w-3" /> {p.codigoPatrimonio}
+                      </span>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); abrirEdit(p); }}
+                        aria-label="Editar"
+                        className="p-1 rounded text-slate-400 hover:text-blue-600 hover:bg-blue-50 opacity-0 group-hover:opacity-100 transition"
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                    <h3 className="font-semibold text-slate-800 text-sm leading-snug line-clamp-2">{p.descricao}</h3>
+                    <div className="flex items-center justify-between gap-2 mt-auto">
+                      <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold ${STATUS_COLORS[p.status] || "bg-slate-100 ring-1 ring-slate-200"}`}>
+                        {STATUS_LABELS[p.status] || p.status}
+                      </span>
+                      <span className="text-[11px] text-slate-500 truncate">
+                        {p.categoria || "—"}
+                      </span>
+                    </div>
+                    {(p.valorAquisicao || p.dataAquisicao) && (
+                      <div className="flex items-center justify-between text-[11px] text-slate-500 pt-1.5 border-t border-slate-100">
+                        <span>{p.valorAquisicao ? fmtMoney(p.valorAquisicao) : "—"}</span>
+                        <span>{fmtDate(p.dataAquisicao) || "—"}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Modal — Rev. 2510 com faixa azul FC no topo (regra de ouro) */}
       {modal && (
         <div
-          className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center sm:p-4"
+          className="fixed inset-0 bg-black/60 z-50 flex items-end sm:items-center justify-center sm:p-4"
           onClick={() => setModal(false)}
           role="dialog"
           aria-modal="true"
           aria-labelledby="prop-modal-title"
         >
           <div
-            className="bg-white rounded-t-2xl sm:rounded-2xl shadow-xl max-w-xl w-full max-h-[92dvh] overflow-y-auto"
+            className="bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl max-w-xl w-full max-h-[92dvh] overflow-y-auto"
             onClick={e => e.stopPropagation()}
           >
-            <div className="px-5 py-3 border-b flex items-center justify-between sticky top-0 bg-white z-10">
-              <h2 id="prop-modal-title" className="font-semibold text-slate-800 text-lg">
-                {editingId ? "Editar Equipamento" : "Cadastrar Equipamento"}
-              </h2>
-              <button onClick={() => setModal(false)} aria-label="Fechar">
-                <X className="h-6 w-6 text-slate-500" />
+            <div
+              className="px-5 py-4 text-white flex items-center justify-between sticky top-0 z-10"
+              style={{
+                background: "linear-gradient(135deg, #1B2A4A 0%, #2E4373 100%)",
+                printColorAdjust: "exact" as any,
+              }}
+            >
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="h-9 w-9 rounded-lg bg-white/10 backdrop-blur flex items-center justify-center ring-1 ring-white/20 shrink-0">
+                  <HardHat className="h-5 w-5" />
+                </div>
+                <div className="min-w-0">
+                  <h2 id="prop-modal-title" className="text-white text-sm font-bold uppercase tracking-[0.2em] truncate">
+                    {editingId ? "Editar Equipamento" : "Novo Equipamento"}
+                  </h2>
+                  <p className="text-white/70 text-[10px] mt-0.5 truncate">
+                    {editingId ? `Patrimônio ${form.codigoPatrimonio}` : "Parque próprio FC"}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setModal(false)}
+                aria-label="Fechar"
+                className="p-1.5 rounded-lg hover:bg-white/10 transition shrink-0"
+              >
+                <X className="h-5 w-5" />
               </button>
             </div>
-            {/* Rev. 2374 — Banner da fila de importação do Almoxarifado */}
+
             {importTotal > 0 && (
               <div className="bg-emerald-50 border-b-2 border-emerald-300 px-5 py-3 flex items-center gap-3">
                 <Boxes className="h-5 w-5 text-emerald-700 shrink-0" />
@@ -371,7 +454,7 @@ export default function EquipamentosProprios() {
             )}
 
             <div className="p-5 space-y-5">
-              {/* 1) FOTO — destaque máximo. Servente toca, abre câmera traseira. */}
+              {/* 1) FOTO */}
               {!editingId && (
                 <div>
                   <input
@@ -426,7 +509,7 @@ export default function EquipamentosProprios() {
                 </div>
               )}
 
-              {/* 2) DESCRIÇÃO — único campo obrigatório, em destaque */}
+              {/* 2) DESCRIÇÃO */}
               <div>
                 <label className="block text-sm font-semibold text-slate-800 mb-1.5">
                   O que é? <span className="text-red-600">*</span>
@@ -440,7 +523,7 @@ export default function EquipamentosProprios() {
                 />
               </div>
 
-              {/* 3) CATEGORIA — chips de toque rápido */}
+              {/* 3) CATEGORIA */}
               <div>
                 <label className="block text-sm font-semibold text-slate-800 mb-1.5">Categoria</label>
                 <div className="flex flex-wrap gap-2">
@@ -453,7 +536,7 @@ export default function EquipamentosProprios() {
                         onClick={() => setForm(p => ({ ...p, categoria: active ? "" : cat }))}
                         className={`px-3 py-2 rounded-full text-sm font-medium border-2 transition ${
                           active
-                            ? "bg-blue-600 text-white border-blue-600 shadow"
+                            ? "bg-[#1B2A4A] text-white border-[#1B2A4A] shadow"
                             : "bg-white text-slate-700 border-slate-200 hover:border-blue-400"
                         }`}
                       >
@@ -462,7 +545,6 @@ export default function EquipamentosProprios() {
                     );
                   })}
                 </div>
-                {/* permite categoria livre digitada se não bater com nenhum chip */}
                 {form.categoria && !CATEGORIAS_QUICK.some(c => c.toLowerCase() === form.categoria.toLowerCase()) && (
                   <input
                     value={form.categoria}
@@ -473,7 +555,7 @@ export default function EquipamentosProprios() {
                 )}
               </div>
 
-              {/* 4) PATRIMÔNIO — auto-gerado, mas editável */}
+              {/* 4) PATRIMÔNIO */}
               <div>
                 <label className="block text-sm font-semibold text-slate-800 mb-1.5">
                   Patrimônio {!editingId && <span className="text-xs font-normal text-slate-500">(deixe vazio pra gerar automático)</span>}
@@ -490,8 +572,7 @@ export default function EquipamentosProprios() {
                     <button
                       type="button"
                       onClick={() => setForm(p => ({ ...p, codigoPatrimonio: gerarPatrimonioAuto() }))}
-                      className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg flex items-center gap-1 text-sm"
-                      title="Gerar patrimônio automático"
+                      className="px-3 py-2 border-2 border-blue-200 hover:border-blue-400 text-blue-700 rounded-lg text-sm font-medium inline-flex items-center gap-1"
                     >
                       <Sparkles className="h-4 w-4" /> Auto
                     </button>
@@ -499,7 +580,7 @@ export default function EquipamentosProprios() {
                 </div>
               </div>
 
-              {/* 5) MAIS DETALHES — collapsible, fechado por default */}
+              {/* 5) MAIS DETALHES */}
               <div className="border-t pt-3">
                 <button
                   type="button"
@@ -558,7 +639,8 @@ export default function EquipamentosProprios() {
             <div className="px-5 py-3 border-t bg-slate-50 flex items-center justify-end gap-2 sticky bottom-0">
               <button onClick={() => setModal(false)} className="px-4 py-2 text-sm border rounded-lg hover:bg-slate-100">Cancelar</button>
               <button onClick={salvar} disabled={criar.isPending || atualizar.isPending}
-                className="px-6 py-2 text-base font-semibold bg-blue-600 hover:bg-blue-700 text-white rounded-lg shadow disabled:opacity-50">
+                className="px-6 py-2.5 text-base font-semibold bg-[#1B2A4A] hover:bg-[#2E4373] text-white rounded-lg shadow disabled:opacity-50 inline-flex items-center gap-2">
+                {(criar.isPending || atualizar.isPending) && <Spinner />}
                 {criar.isPending || atualizar.isPending ? "Salvando…" : "Salvar"}
               </button>
             </div>
@@ -569,14 +651,27 @@ export default function EquipamentosProprios() {
   );
 }
 
-function Stat({ title, value, color }: { title: string; value: number; color: string }) {
+const KPI_COLOR: Record<string, { bg: string; ring: string; text: string; icon: string }> = {
+  slate:   { bg: "bg-slate-50",   ring: "ring-slate-200",   text: "text-slate-800",   icon: "bg-slate-500"   },
+  blue:    { bg: "bg-blue-50",    ring: "ring-blue-200",    text: "text-blue-700",    icon: "bg-blue-500"    },
+  emerald: { bg: "bg-emerald-50", ring: "ring-emerald-200", text: "text-emerald-700", icon: "bg-emerald-500" },
+  amber:   { bg: "bg-amber-50",   ring: "ring-amber-200",   text: "text-amber-700",   icon: "bg-amber-500"   },
+};
+function KpiCard({ icon, label, value, color }: { icon: React.ReactNode; label: string; value: number; color: keyof typeof KPI_COLOR }) {
+  const c = KPI_COLOR[color];
   return (
-    <div className="bg-white border rounded-lg shadow-sm p-3">
-      <div className="text-xs text-slate-500 uppercase">{title}</div>
-      <div className={`text-2xl font-bold ${color}`}>{value}</div>
+    <div className={`relative overflow-hidden rounded-xl ring-1 ${c.ring} ${c.bg} p-3`}>
+      <div className="flex items-center gap-2 mb-1.5">
+        <div className={`h-6 w-6 rounded-md ${c.icon} text-white flex items-center justify-center shadow-sm`}>
+          {icon}
+        </div>
+        <p className="text-[10px] font-bold uppercase tracking-widest text-slate-600 truncate">{label}</p>
+      </div>
+      <p className={`text-3xl font-extrabold tabular-nums ${c.text}`}>{value}</p>
     </div>
   );
 }
+
 function Field({ label, children, disabled }: { label: string; children: React.ReactNode; disabled?: boolean }) {
   return (
     <div>

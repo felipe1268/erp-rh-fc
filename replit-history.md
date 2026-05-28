@@ -2,6 +2,7 @@
 
 > Este arquivo guarda os one-liners das revisões antigas para manter o `replit.md` enxuto.
 
+- **Rev. 2503** — PLANEJAMENTO · BUGFIX aba "Efetivo" invisível para grupos custom — página `efetivo` faltava em `modulePages.planejamento.pages`. Adicionada com actions view/create/edit/delete + rota `/planejamento?tab=efetivo`. Ver `shared/changelog.ts`.
 - **Rev. 2502** — COLABORADORES · Campo "Tipo de Remuneração" (Mensalista/Horista) na aba Profissional + CLÁUSULA 2ª do Contrato de Experiência adaptada ao regime. `Colaboradores.tsx` L1855-1870, IIFE L2072-2083, whitelist `server/db.ts` L686. Ver `shared/changelog.ts`.
 - **Rev. 2501** — COTAÇÕES · BUGFIX "Selecionar do Estoque" não finalizava cotação por falta de fallback de vencedor. Novo `estoqueParticipante = participantes.find(p => p.isEstoque)` em `Cotacoes.tsx` L2735-2740. Ver `shared/changelog.ts`.
 - **Rev. 2500** — CONTRATO DE EXPERIÊNCIA · BUGFIX off-by-one no cálculo das datas fim1/fim2 (CLT: dia do início conta como dia 1). Fix `+ dias - 1` em `homeData.ts` L538-541 e `Colaboradores.tsx` L1875-1876/L1900-1901. Ver `shared/changelog.ts`.
