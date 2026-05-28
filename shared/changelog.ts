@@ -1,6 +1,77 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2527 — **FOLHA DE PAGAMENTO · COMPARATIVO FOLHA × ERP (verba por
+ * verba, 1 linha por funcionário com expand pra detalhamento completo).**
+ *
+ * MOTIVAÇÃO (user em 28/05/2026):
+ *   "Quero uma tela comparativa Folha × ERP."
+ *   Escolha em user_query: "Visão COMPLETA — junta linha por funcionário
+ *   com expand pra ver o detalhamento por verba."
+ *
+ * GAP: o ERP já tinha 3 telas de cruzamento (Verificação Cruzada,
+ * Comparativo de Descontos CLT, Cruzamento HE) + o Relatório Consolidado
+ * de Divergências (Rev. 2526). Mas nenhuma mostra LADO A LADO, verba por
+ * verba, o que veio do PDF da contabilidade × o que o ERP calculou.
+ * Auditoria contábil profunda (CFO/contador) precisa abrir 1 funcionário,
+ * ver TODAS as verbas (proventos + descontos) com Folha | ERP | Diferença
+ * em colunas paralelas — e isso não existia.
+ *
+ * SOLUÇÃO
+ *  - Nova ViewMode `comparativo_completo` em `FolhaPagamento.tsx` (L74).
+ *  - Novo banner azul (gradient blue→sky→cyan, ícone Scale) embaixo do
+ *    banner vermelho do Relatório Consolidado no card "Conferência com
+ *    Contabilidade" — assim os 2 grandes relatórios ficam visíveis no
+ *    mesmo bloco.
+ *  - Novo handler dispatch em ~L2255 logo após o consolidado.
+ *  - Novo componente `ComparativoFolhaErpView` (~370 linhas, fim do
+ *    arquivo) com:
+ *      • 5 KPIs (Funcionários / Líquido Folha / Líquido ERP parcial /
+ *        Soma diferenças / Com divergência).
+ *      • Toolbar: busca por nome+código, checkbox "Só com divergência",
+ *        `<select>` de ordenação (nome / maior diferença / maior líquido),
+ *        contador "Mostrando X · Y com divergência".
+ *      • Tabela: 1 linha por funcionário com 10 colunas (Func, Sal.Base
+ *        Folha/ERP, HE Folha/ERP, Desc.Folha/ERP, Líquido Folha,
+ *        Diferença). Cell vermelha negrito quando diff > R$1.
+ *      • Click na linha expande pra `<DetalhamentoVerbasFuncionario>` —
+ *        2 colunas (Proventos / Descontos) com TODAS as verbas do PDF
+ *        listadas (loop em `proventos[]` / `descontos[]` JSON do
+ *        `folha_itens`) + INSS/IRRF/FGTS fixos + total de descontos
+ *        operacionais + rodapé com Líquido oficial do PDF.
+ *      • Export CSV (UTF-8 BOM + `;` BR) respeitando filtros.
+ *      • Print PDF/Retrato/Paisagem via PrintActions.
+ *      • Legenda explícita: ERP só recalcula Sal.Base, HE (proxy R$50/h)
+ *        e Descontos operacionais (faltas/atrasos/DSR via motor CLT) —
+ *        INSS/IRRF/FGTS o ERP NÃO recalcula (mostra "—").
+ *
+ * BACKEND: ZERO mudança. Reusa 100% dos 3 endpoints existentes:
+ *   - `folha.listarItens` (folha_itens com proventos[]/descontos[] JSON,
+ *     salarioBase, valorInss/Irrf/Fgts, liquido + employee enriquecido)
+ *   - `folha.comparativoDescontos` (sistemaTotal × contabTotal)
+ *   - `folha.cruzamentoHE` (sistemaHoras × contabTotalValor)
+ *
+ * HONESTIDADE EDITORIAL
+ *  - "Líquido ERP parcial" é EXPLICITAMENTE marcado com asterisco e
+ *    nota grande na legenda — não é o líquido real, é Sal.Base + HE −
+ *    Desc.Operacionais (sem INSS/IRRF/FGTS). Serve só como referência
+ *    de prioridade pra auditoria.
+ *  - HE ERP é proxy R$50/h (mesmo do Relatório Consolidado Rev. 2526) —
+ *    indicador de magnitude, não valor a corrigir.
+ *  - Tolerância de R$1 pra marcar "tem divergência" (evita ruído de
+ *    arredondamento centavos).
+ *
+ * ARQUIVOS TOCADOS
+ *  - `client/src/pages/FolhaPagamento.tsx`:
+ *      L74 (ViewMode), L2255-2263 (handler dispatch), L7196-7215 (banner
+ *      azul), L9117-9568 (componentes `ComparativoFolhaErpView` +
+ *      `DetalhamentoVerbasFuncionario`).
+ *  - `shared/version.ts` 2527.
+ *
+ * Zero ALTER/DROP/DELETE. Zero migração. Backend INTOCADO.
+ *
+ * — Rev. 2526 (anterior) abaixo —
+ *
  * Rev. 2526 — **FOLHA DE PAGAMENTO · RELATÓRIO CONSOLIDADO 2.0:
  * MULTI-FILTRO + SEVERIDADE + ORDENAÇÃO + IMPACTO R$ + EXPORT CSV
  * + TABS "POR FUNCIONÁRIO" × "POR TIPO" (navegabilidade simples,

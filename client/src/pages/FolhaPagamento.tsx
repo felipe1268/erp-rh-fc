@@ -68,7 +68,7 @@ function parseBRLNum(val: string | number | null | undefined): number {
   return parseFloat(str) || 0;
 }
 
-type ViewMode = "resumo" | "detalhes" | "custos_obra" | "horas_extras" | "verificacao" | "descontos_clt" | "cruzamento_he" | "consolidado" | "descontos_epi" | "calculo_vale" | "calculo_pagamento" | "alertas_afericao" | "he_modulo" | "auditoria_folha" | "aprovacoes_rh";
+type ViewMode = "resumo" | "detalhes" | "custos_obra" | "horas_extras" | "verificacao" | "descontos_clt" | "cruzamento_he" | "consolidado" | "comparativo_completo" | "descontos_epi" | "calculo_vale" | "calculo_pagamento" | "alertas_afericao" | "he_modulo" | "auditoria_folha" | "aprovacoes_rh";
 
 type CampoDesconto = 'vale' | 'inss' | 'ir' | 'faltas' | 'atrasos' | 'sindicato' | 'pensao' | 'vt' | 'convenio' | 'epi' | 'outros';
 
@@ -2245,6 +2245,16 @@ export default function FolhaPagamento() {
         <PrintHeader />
         {fileInputs}
         <RelatorioConsolidadoView companyId={companyId} mesAno={mesAno} lancamentoId={viewLancId} onBack={() => setViewMode("resumo")} />
+      </DashboardLayout>
+    );
+  }
+
+  if (viewMode === "comparativo_completo" && viewLancId) {
+    return (
+      <DashboardLayout>
+        <PrintHeader />
+        {fileInputs}
+        <ComparativoFolhaErpView companyId={companyId} mesAno={mesAno} lancamentoId={viewLancId} onBack={() => setViewMode("resumo")} />
       </DashboardLayout>
     );
   }
@@ -7180,6 +7190,27 @@ export default function FolhaPagamento() {
                       </div>
                     </button>
 
+                    {/* Rev. 2527 — Banner Comparativo Folha × ERP (verba por verba) */}
+                    <button
+                      onClick={() => openView("comparativo_completo", pag!.id)}
+                      className="w-full mb-3 rounded-lg border-2 border-blue-300 bg-gradient-to-r from-blue-50 via-sky-50 to-cyan-50 hover:from-blue-100 hover:via-sky-100 hover:to-cyan-100 transition-all p-4 text-left group shadow-sm"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="h-11 w-11 rounded-lg bg-blue-600 group-hover:bg-blue-700 flex items-center justify-center shrink-0">
+                          <Scale className="h-5 w-5 text-white" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-bold text-sm text-blue-900">Comparativo Folha × ERP (verba por verba)</p>
+                          <p className="text-[11px] text-blue-800/80 leading-tight mt-0.5">
+                            Tabela completa por funcionário: Salário Base, HE, Descontos e Líquido lado a lado. Expanda cada linha pra ver o detalhamento por verba do PDF.
+                          </p>
+                        </div>
+                        <span className="text-[11px] text-blue-700 font-bold whitespace-nowrap group-hover:underline">
+                          Abrir →
+                        </span>
+                      </div>
+                    </button>
+
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
                       <button
                         onClick={() => openView("verificacao", pag!.id)}
@@ -9075,6 +9106,463 @@ function RelatorioConsolidadoView({ companyId, mesAno, lancamentoId, onBack }: {
         <p>• <strong>Impacto R$</strong> = soma dos R$ em jogo (descontos CLT divergentes + HE em risco @ R$50/h proxy). É um indicador de prioridade, não o valor exato a corrigir.</p>
         <p>• Borda <span className="text-red-700 font-semibold">vermelha</span> = alta severidade (ação obrigatória do RH); <span className="text-amber-700 font-semibold">âmbar</span> = revisão recomendada.</p>
         <p>• KPIs no topo são <strong>clicáveis</strong> e combinam (multi-select). Combine com Severidade + Busca pra isolar exatamente o que precisa.</p>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// Rev. 2527 — COMPARATIVO FOLHA × ERP (verba por verba)
+// Tela única com 1 linha por funcionário e expand pra detalhamento por verba.
+// Reusa: listarItens (PDF analítico) + comparativoDescontos + cruzamentoHE.
+// ERP recalcula APENAS: Salário Base (do cadastro), HE (proxy R$50/h),
+// Descontos operacionais (faltas/atrasos/DSR via motor CLT).
+// INSS/IRRF/FGTS NÃO são recalculados (ERP exibe "—" + nota na legenda).
+// ============================================================================
+function ComparativoFolhaErpView({ companyId, mesAno, lancamentoId, onBack }: { companyId: number; mesAno: string; lancamentoId: number; onBack: () => void }) {
+  const itens = trpc.folha.listarItens.useQuery(
+    { folhaLancamentoId: lancamentoId },
+    { enabled: lancamentoId > 0 }
+  );
+  const descCLT = trpc.folha.comparativoDescontos.useQuery(
+    { companyId, mesReferencia: mesAno },
+    { enabled: companyId > 0 }
+  );
+  const heCruz = trpc.folha.cruzamentoHE.useQuery(
+    { companyId, mesReferencia: mesAno },
+    { enabled: companyId > 0 }
+  );
+
+  const [search, setSearch] = useState("");
+  const [somenteDivergencia, setSomenteDivergencia] = useState(false);
+  const [ordenarPor, setOrdenarPor] = useState<"nome" | "diferenca" | "liquido">("nome");
+  const [expanded, setExpanded] = useState<Set<number>>(new Set());
+
+  const isLoading = itens.isLoading || descCLT.isLoading || heCruz.isLoading;
+
+  const descMap = useMemo(() => {
+    const m = new Map<number, any>();
+    for (const c of ((descCLT.data?.comparativo as any[]) || [])) {
+      if (c.employeeId) m.set(c.employeeId, c);
+    }
+    return m;
+  }, [descCLT.data]);
+
+  const heMap = useMemo(() => {
+    const m = new Map<number, any>();
+    for (const h of ((heCruz.data?.cruzamento as any[]) || [])) {
+      if (h.employeeId) m.set(h.employeeId, h);
+    }
+    return m;
+  }, [heCruz.data]);
+
+  const linhas = useMemo(() => {
+    return ((itens.data as any[]) || []).map((it) => {
+      const empId = it.employeeId;
+      const desc = empId ? descMap.get(empId) : null;
+      const he = empId ? heMap.get(empId) : null;
+
+      const salFolha = parseFloat(String(it.salarioBase || "0"));
+      const salErp = it.employee ? parseFloat(String(it.employee.salario || "0")) : 0;
+      const liqFolha = parseFloat(String(it.liquido || "0"));
+
+      const heSistemaH = he ? parseFloat(String(he.sistemaHoras || "0")) : 0;
+      const heContabValor = he ? Number(he.contabTotalValor || 0) : 0;
+      // Proxy honesto: usa (salário/220)*1.5 quando há cadastro; fallback R$50/h.
+      const heHoraBase = salErp > 0 ? (salErp / 220) : 50;
+      const heErpValor = heSistemaH * heHoraBase * 1.5;
+
+      const descContab = desc ? Number(desc.contabTotal || 0) : 0;
+      const descErp = desc ? Number(desc.sistemaTotal || 0) : 0;
+
+      // Líquido ERP parcial: Sal. Base + HE − Descontos operacionais (sem INSS/IRRF/FGTS)
+      const liqErpParcial = salErp + heErpValor - descErp;
+
+      const diffSal = salErp > 0 ? Math.abs(salFolha - salErp) : 0;
+      const diffHe = he ? Math.abs(heContabValor - heErpValor) : 0;
+      const diffDesc = desc ? Math.abs(descContab - descErp) : 0;
+      const diffTotal = diffSal + diffHe + diffDesc;
+
+      return {
+        id: it.id as number,
+        empId,
+        nome: it.nome as string,
+        codigo: (it.codigo || "") as string,
+        cargo: (it.funcao || it.employee?.cargo || "") as string,
+        item: it,
+        salFolha, salErp, diffSal,
+        heContabValor, heErpValor, heSistemaH, diffHe,
+        descContab, descErp, diffDesc,
+        liqFolha, liqErpParcial,
+        diffTotal,
+        temDivergencia: diffTotal > 1, // tolerância R$1
+      };
+    });
+  }, [itens.data, descMap, heMap]);
+
+  const linhasFiltradas = useMemo(() => {
+    const s = search.trim().toLowerCase();
+    const arr = linhas.filter(l => {
+      if (somenteDivergencia && !l.temDivergencia) return false;
+      if (s && !l.nome.toLowerCase().includes(s) && !l.codigo.toLowerCase().includes(s)) return false;
+      return true;
+    });
+    arr.sort((a, b) => {
+      switch (ordenarPor) {
+        case "diferenca": return b.diffTotal - a.diffTotal;
+        case "liquido": return b.liqFolha - a.liqFolha;
+        case "nome":
+        default: return a.nome.localeCompare(b.nome, "pt-BR");
+      }
+    });
+    return arr;
+  }, [linhas, search, somenteDivergencia, ordenarPor]);
+
+  const totais = useMemo(() => {
+    let liqFolha = 0, liqErp = 0, diff = 0, comDiv = 0;
+    for (const l of linhasFiltradas) {
+      liqFolha += l.liqFolha;
+      liqErp += l.liqErpParcial;
+      diff += l.diffTotal;
+      if (l.temDivergencia) comDiv++;
+    }
+    return { liqFolha, liqErp, diff, count: linhasFiltradas.length, comDiv };
+  }, [linhasFiltradas]);
+
+  const fmtBRL = (n: number) => `R$ ${Number(n || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const toggle = (id: number) => setExpanded(prev => {
+    const n = new Set(prev);
+    if (n.has(id)) n.delete(id); else n.add(id);
+    return n;
+  });
+
+  const exportarCSV = () => {
+    const headers = ["Funcionário", "Código", "Cargo", "Sal.Base Folha", "Sal.Base ERP", "HE Folha", "HE ERP (proxy)", "Descontos Folha", "Descontos ERP", "Líquido Folha", "Líquido ERP parcial", "Diferença total", "Status"];
+    const rows = linhasFiltradas.map(l => [
+      l.nome, l.codigo, l.cargo,
+      l.salFolha.toFixed(2), l.salErp.toFixed(2),
+      l.heContabValor.toFixed(2), l.heErpValor.toFixed(2),
+      l.descContab.toFixed(2), l.descErp.toFixed(2),
+      l.liqFolha.toFixed(2), l.liqErpParcial.toFixed(2),
+      l.diffTotal.toFixed(2),
+      l.temDivergencia ? "DIVERGÊNCIA" : "OK",
+    ]);
+    const esc = (v: string) => `"${String(v).replace(/"/g, '""')}"`;
+    const csv = "\uFEFF" + [headers, ...rows].map(r => r.map(esc).join(";")).join("\r\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `comparativo-folha-erp-${mesAno}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  return (
+    <div className="space-y-4">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <Button variant="ghost" size="sm" onClick={onBack}>
+            <ArrowLeft className="h-4 w-4 mr-1" /> Voltar
+          </Button>
+          <div>
+            <h1 className="text-base sm:text-xl font-bold flex items-center gap-2">
+              <Scale className="h-5 w-5 text-blue-700" /> Comparativo Folha × ERP
+            </h1>
+            <p className="text-xs sm:text-sm text-muted-foreground">
+              Verba por verba, por funcionário — {mesAno}
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={exportarCSV} disabled={isLoading || linhasFiltradas.length === 0}>
+            <FileDown className="h-3.5 w-3.5 mr-1" /> Exportar CSV
+          </Button>
+          <PrintActions title={`Comparativo Folha × ERP - ${mesAno}`} />
+        </div>
+      </div>
+
+      {/* KPIs */}
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+        <div className="rounded-lg p-3 text-center border-2 border-slate-200 bg-white">
+          <p className="text-[10px] uppercase tracking-wide text-slate-500">Funcionários</p>
+          <p className="text-2xl font-black text-[#1B2A4A]">{totais.count}</p>
+        </div>
+        <div className="rounded-lg p-3 text-center border-2 border-blue-200 bg-blue-50">
+          <p className="text-[10px] uppercase tracking-wide text-blue-700">Líquido Folha</p>
+          <p className="text-base font-black text-blue-900">{fmtBRL(totais.liqFolha)}</p>
+        </div>
+        <div className="rounded-lg p-3 text-center border-2 border-indigo-200 bg-indigo-50">
+          <p className="text-[10px] uppercase tracking-wide text-indigo-700">Líquido ERP parcial*</p>
+          <p className="text-base font-black text-indigo-900">{fmtBRL(totais.liqErp)}</p>
+        </div>
+        <div className="rounded-lg p-3 text-center border-2 border-amber-200 bg-amber-50">
+          <p className="text-[10px] uppercase tracking-wide text-amber-700">Soma diferenças</p>
+          <p className="text-base font-black text-amber-900">{fmtBRL(totais.diff)}</p>
+        </div>
+        <div className="rounded-lg p-3 text-center border-2 border-red-200 bg-red-50">
+          <p className="text-[10px] uppercase tracking-wide text-red-700">Com divergência</p>
+          <p className="text-2xl font-black text-red-900">{totais.comDiv}</p>
+        </div>
+      </div>
+
+      {/* Toolbar */}
+      <div className="flex flex-col sm:flex-row gap-2 flex-wrap">
+        <div className="flex-1 min-w-[200px] relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Buscar por nome ou código..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            className="pl-9"
+          />
+        </div>
+        <label className="flex items-center gap-2 text-xs px-3 py-2 border border-slate-200 rounded-md bg-white cursor-pointer hover:bg-slate-50 select-none">
+          <input
+            type="checkbox"
+            checked={somenteDivergencia}
+            onChange={e => setSomenteDivergencia(e.target.checked)}
+            className="cursor-pointer"
+          />
+          Só com divergência
+        </label>
+        <select
+          value={ordenarPor}
+          onChange={e => setOrdenarPor(e.target.value as any)}
+          className="text-xs border border-slate-200 rounded-md px-2 py-2 bg-white"
+        >
+          <option value="nome">Ordenar: Nome</option>
+          <option value="diferenca">Ordenar: Maior diferença</option>
+          <option value="liquido">Ordenar: Maior líquido</option>
+        </select>
+        <p className="text-xs text-muted-foreground self-center ml-auto">
+          Mostrando <strong>{totais.count}</strong> funcionário(s) · <strong className="text-red-700">{totais.comDiv}</strong> com divergência
+        </p>
+      </div>
+
+      {/* Tabela */}
+      {isLoading ? (
+        <div className="flex justify-center py-16">
+          <RefreshCw className="w-6 h-6 animate-spin text-primary" />
+        </div>
+      ) : linhasFiltradas.length === 0 ? (
+        <div className="text-center py-16 text-muted-foreground border border-dashed border-slate-300 rounded-lg">
+          <p className="font-semibold">Nenhum funcionário encontrado.</p>
+          <p className="text-xs mt-1">
+            {somenteDivergencia ? "Tente desmarcar 'Só com divergência'." : "Importe a folha do mês ou ajuste a busca."}
+          </p>
+        </div>
+      ) : (
+        <Card className="overflow-x-auto">
+          <table className="w-full text-xs">
+            <thead className="bg-slate-50 border-b border-slate-200 sticky top-0">
+              <tr className="text-left text-slate-500 uppercase tracking-wide text-[10px]">
+                <th className="px-2 py-2 font-medium w-8"></th>
+                <th className="px-3 py-2 font-medium">Funcionário</th>
+                <th className="px-3 py-2 font-medium text-right">Sal. Base Folha</th>
+                <th className="px-3 py-2 font-medium text-right">Sal. Base ERP</th>
+                <th className="px-3 py-2 font-medium text-right">HE Folha</th>
+                <th className="px-3 py-2 font-medium text-right">HE ERP*</th>
+                <th className="px-3 py-2 font-medium text-right">Desc. Folha</th>
+                <th className="px-3 py-2 font-medium text-right">Desc. ERP</th>
+                <th className="px-3 py-2 font-medium text-right border-l border-slate-200">Líquido Folha</th>
+                <th className="px-3 py-2 font-medium text-right">Diferença</th>
+              </tr>
+            </thead>
+            <tbody>
+              {linhasFiltradas.flatMap(l => {
+                const isOpen = expanded.has(l.id);
+                const rows: any[] = [
+                  <tr
+                    key={`row-${l.id}`}
+                    className={`border-b border-slate-100 hover:bg-slate-50 cursor-pointer ${l.temDivergencia ? "bg-red-50/40" : ""}`}
+                    onClick={() => toggle(l.id)}
+                  >
+                    <td className="px-2 py-2">
+                      {isOpen ? <ChevronDown className="h-3.5 w-3.5 text-slate-500" /> : <ChevronRight className="h-3.5 w-3.5 text-slate-500" />}
+                    </td>
+                    <td className="px-3 py-2">
+                      <p className="font-semibold text-slate-800">
+                        {l.codigo && <span className="font-mono text-[10px] text-slate-500 mr-1">#{l.codigo}</span>}
+                        {l.nome}
+                      </p>
+                      {l.cargo && <p className="text-[10px] text-muted-foreground">{l.cargo}</p>}
+                    </td>
+                    <td className="px-3 py-2 text-right font-mono">{fmtBRL(l.salFolha)}</td>
+                    <td className={`px-3 py-2 text-right font-mono ${l.diffSal > 1 ? "text-red-700 font-semibold" : "text-slate-600"}`}>
+                      {l.salErp > 0 ? fmtBRL(l.salErp) : <span className="text-slate-400">—</span>}
+                    </td>
+                    <td className="px-3 py-2 text-right font-mono">{l.heContabValor > 0 ? fmtBRL(l.heContabValor) : <span className="text-slate-400">—</span>}</td>
+                    <td className={`px-3 py-2 text-right font-mono ${l.diffHe > 1 ? "text-red-700 font-semibold" : "text-slate-600"}`}>
+                      {l.heErpValor > 0 ? fmtBRL(l.heErpValor) : <span className="text-slate-400">—</span>}
+                    </td>
+                    <td className="px-3 py-2 text-right font-mono">{l.descContab > 0 ? fmtBRL(l.descContab) : <span className="text-slate-400">—</span>}</td>
+                    <td className={`px-3 py-2 text-right font-mono ${l.diffDesc > 1 ? "text-red-700 font-semibold" : "text-slate-600"}`}>
+                      {l.descErp > 0 ? fmtBRL(l.descErp) : <span className="text-slate-400">—</span>}
+                    </td>
+                    <td className="px-3 py-2 text-right font-mono font-bold text-blue-900 border-l border-slate-200">{fmtBRL(l.liqFolha)}</td>
+                    <td className={`px-3 py-2 text-right font-mono font-bold ${l.temDivergencia ? "text-red-700" : "text-emerald-700"}`}>
+                      {l.diffTotal > 0.01 ? fmtBRL(l.diffTotal) : "OK"}
+                    </td>
+                  </tr>
+                ];
+                if (isOpen) {
+                  rows.push(
+                    <tr key={`exp-${l.id}`} className="border-b border-slate-200 bg-slate-50/70">
+                      <td colSpan={10} className="px-4 py-3">
+                        <DetalhamentoVerbasFuncionario linha={l} />
+                      </td>
+                    </tr>
+                  );
+                }
+                return rows;
+              })}
+            </tbody>
+          </table>
+        </Card>
+      )}
+
+      {/* Legenda */}
+      <div className="text-[11px] text-muted-foreground bg-slate-50 border border-slate-200 rounded-lg p-3 space-y-1">
+        <p><strong>Como ler este comparativo:</strong></p>
+        <p>• <strong>Folha</strong> = valores importados do PDF da contabilidade (verdade fiscal).</p>
+        <p>• <strong>ERP</strong> = valores calculados pelo ERP. <strong>Apenas Sal. Base (do cadastro), HE (proxy = salário ÷ 220 × 1,5/h; fallback R$50/h) e Descontos operacionais (faltas/atrasos/DSR via motor CLT) são recalculados.</strong> INSS, IRRF e FGTS o ERP NÃO recalcula (exibe "—").</p>
+        <p>• <strong>Líquido ERP parcial</strong>* = Sal. Base ERP + HE ERP − Descontos ERP. NÃO inclui INSS/IRRF/FGTS, então é maior que o líquido real do PDF — usar SÓ como referência de prioridade.</p>
+        <p>• Linha <span className="bg-red-50/60 px-1 rounded font-semibold">vermelha</span> = diferença total &gt; R$ 1,00 nos campos comparáveis.</p>
+        <p>• Clique em qualquer linha pra expandir o detalhamento completo (proventos e descontos verba-por-verba do PDF).</p>
+      </div>
+    </div>
+  );
+}
+
+function DetalhamentoVerbasFuncionario({ linha }: { linha: any }) {
+  const item = linha.item;
+  const proventos: any[] = Array.isArray(item.proventos) ? item.proventos : [];
+  const descontos: any[] = Array.isArray(item.descontos) ? item.descontos : [];
+  const fmt = (n: number) => `R$ ${Number(n || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+  const proventosExtras = proventos.filter(p => {
+    const d = String(p.descricao || "").toLowerCase();
+    return !d.includes("salário base") && !d.includes("salario base");
+  });
+  const descontosExtras = descontos.filter(d => {
+    const desc = String(d.descricao || "").toLowerCase();
+    return !desc.includes("inss") && !desc.includes("irrf") && !desc.includes("imposto de renda") && !desc.includes("fgts");
+  });
+
+  return (
+    <div className="grid md:grid-cols-2 gap-4">
+      {/* PROVENTOS */}
+      <div>
+        <p className="text-[11px] font-bold uppercase tracking-wide text-emerald-700 mb-1 flex items-center gap-1">
+          <TrendingUp className="h-3 w-3" /> Proventos (Folha)
+        </p>
+        <table className="w-full text-[11px]">
+          <thead>
+            <tr className="border-b border-slate-200 text-slate-500 uppercase text-[10px]">
+              <th className="px-2 py-1 text-left font-medium">Verba</th>
+              <th className="px-2 py-1 text-right font-medium">Folha</th>
+              <th className="px-2 py-1 text-right font-medium">ERP</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr className="border-b border-slate-100">
+              <td className="px-2 py-1 font-medium">Salário Base</td>
+              <td className="px-2 py-1 text-right font-mono">{fmt(linha.salFolha)}</td>
+              <td className={`px-2 py-1 text-right font-mono ${linha.diffSal > 1 ? "text-red-700 font-semibold" : ""}`}>
+                {linha.salErp > 0 ? fmt(linha.salErp) : <span className="text-slate-400">—</span>}
+              </td>
+            </tr>
+            {proventosExtras.length === 0 ? (
+              <tr><td colSpan={3} className="px-2 py-2 text-center text-slate-400 italic">Nenhum provento adicional no PDF.</td></tr>
+            ) : proventosExtras.map((p, i) => {
+              const d = String(p.descricao || "").toLowerCase();
+              const isHE = d.includes("hora extra") || d.startsWith("h.e") || d.includes("h. extra") || d.includes("h.extra");
+              return (
+                <tr key={i} className="border-b border-slate-100">
+                  <td className="px-2 py-1">{p.descricao}</td>
+                  <td className="px-2 py-1 text-right font-mono">{fmt(Number(p.valor || 0))}</td>
+                  <td className="px-2 py-1 text-right font-mono">
+                    {isHE && linha.heErpValor > 0
+                      ? <span className="text-slate-600">~{fmt(linha.heErpValor)}</span>
+                      : <span className="text-slate-400">—</span>}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      {/* DESCONTOS */}
+      <div>
+        <p className="text-[11px] font-bold uppercase tracking-wide text-red-700 mb-1 flex items-center gap-1">
+          <TrendingDown className="h-3 w-3" /> Descontos (Folha)
+        </p>
+        <table className="w-full text-[11px]">
+          <thead>
+            <tr className="border-b border-slate-200 text-slate-500 uppercase text-[10px]">
+              <th className="px-2 py-1 text-left font-medium">Verba</th>
+              <th className="px-2 py-1 text-right font-medium">Folha</th>
+              <th className="px-2 py-1 text-right font-medium">ERP</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr className="border-b border-slate-100">
+              <td className="px-2 py-1 font-medium">INSS</td>
+              <td className="px-2 py-1 text-right font-mono">{fmt(Number(item.valorInss || 0))}</td>
+              <td className="px-2 py-1 text-right font-mono text-slate-400">—</td>
+            </tr>
+            <tr className="border-b border-slate-100">
+              <td className="px-2 py-1 font-medium">IRRF</td>
+              <td className="px-2 py-1 text-right font-mono">{fmt(Number(item.valorIrrf || 0))}</td>
+              <td className="px-2 py-1 text-right font-mono text-slate-400">—</td>
+            </tr>
+            <tr className="border-b border-slate-100">
+              <td className="px-2 py-1 font-medium" title="FGTS é informativo — não desconta do líquido">FGTS (informativo)</td>
+              <td className="px-2 py-1 text-right font-mono">{fmt(Number(item.valorFgts || 0))}</td>
+              <td className="px-2 py-1 text-right font-mono text-slate-400">—</td>
+            </tr>
+            {descontosExtras.length === 0 ? (
+              <tr><td colSpan={3} className="px-2 py-2 text-center text-slate-400 italic">Nenhum outro desconto no PDF.</td></tr>
+            ) : descontosExtras.map((d, i) => {
+              const desc = String(d.descricao || "").toLowerCase();
+              const isOper = desc.includes("falta") || desc.includes("atraso") || desc.includes("dsr");
+              return (
+                <tr key={i} className="border-b border-slate-100">
+                  <td className="px-2 py-1">{d.descricao}</td>
+                  <td className="px-2 py-1 text-right font-mono">{fmt(Number(d.valor || 0))}</td>
+                  <td className="px-2 py-1 text-right font-mono">
+                    {isOper && linha.descErp > 0
+                      ? <span className={`${linha.diffDesc > 1 ? "text-red-700 font-semibold" : "text-slate-600"}`}>~{fmt(linha.descErp)}*</span>
+                      : <span className="text-slate-400">—</span>}
+                  </td>
+                </tr>
+              );
+            })}
+            <tr className="border-t-2 border-slate-300 bg-slate-100">
+              <td className="px-2 py-1 font-bold">Total Descontos Oper. (CLT)</td>
+              <td className="px-2 py-1 text-right font-mono font-bold">{fmt(linha.descContab)}</td>
+              <td className={`px-2 py-1 text-right font-mono font-bold ${linha.diffDesc > 1 ? "text-red-700" : ""}`}>
+                {linha.descErp > 0 ? fmt(linha.descErp) : "—"}
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      {/* Rodapé — LÍQUIDO oficial */}
+      <div className="md:col-span-2 mt-2 pt-2 border-t border-slate-300 flex items-center justify-between gap-3 flex-wrap">
+        <p className="text-[11px] text-muted-foreground max-w-xl">
+          *ERP só recalcula HE (proxy = salário ÷ 220 × 1,5/h; fallback R$50/h) e Descontos Operacionais (faltas/atrasos/DSR pelo motor CLT). INSS, IRRF e FGTS são lidos do PDF — o ERP não os recalcula. Use este detalhamento como ponto de partida pra auditoria contábil.
+        </p>
+        <div className="text-right">
+          <p className="text-[10px] uppercase text-slate-500">Líquido Folha (oficial — PDF)</p>
+          <p className="text-base font-black text-blue-900 font-mono">{fmt(linha.liqFolha)}</p>
+        </div>
       </div>
     </div>
   );
