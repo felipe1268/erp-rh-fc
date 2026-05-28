@@ -1,6 +1,47 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2528 — **PAINEL RH · ANIVERSARIANTES: SÓ ATIVOS (remove
+ * Afastado/Recluso/Férias/Lista Negra das duas listas).**
+ *
+ * MOTIVAÇÃO (user em 28/05/2026, com print da tela de Aniversariantes
+ * do mês de Julho):
+ *   "Quem foi desligado não precisa aparecer somente os ativos."
+ *
+ * O print mostrou JERRYALITON AUGUSTO BEZERRA com badge "Afastado",
+ * e BRUNO SERRA GALVAO / GENESIO DA SILVA CARVALHO / MAURICIO BENEDITO
+ * ELESBAO com badge "Lista Negra" — embora o filtro `STATUS_FORA_NORM`
+ * já excluísse `listanegra` normalizado, alguns registros escapavam
+ * (variantes não cobertas ou status estampado diferente da flag boolean
+ * `listaNegra`).
+ *
+ * CAUSA-RAIZ: as duas listas (`aniversariantes` L99-133 e
+ * `aniversariosEmpresa` L138-174 do `server/routers/homeData.ts`)
+ * usavam `todosNaoDesligados` como fonte. Esse conjunto é PROPOSITAL
+ * pra KPIs e quadro geral (inclui Afastados, Reclusos, Férias) — mas
+ * pra um card "celebração de aniversário" o user só quer quem ESTÁ
+ * trabalhando hoje.
+ *
+ * SOLUÇÃO (cirúrgica, 2 linhas)
+ *   - L105 e L145 trocadas: `todosNaoDesligados` → `ativos`.
+ *   - `ativos` (L49) já filtra estritamente `e.status === "Ativo"`,
+ *     então sai naturalmente todo Afastado/Recluso/Férias/Lista Negra/
+ *     Desligado/Inativo.
+ *   - KPIs `aniversariantesHoje/Mes` e `aniversariosEmpresaHoje/Mes`
+ *     em L697-700 são derivados desses arrays, então os números do
+ *     header também passam a refletir só Ativos.
+ *   - Nenhuma outra lista da Central de Alertas (ASOs, NRs, etc) foi
+ *     tocada — `alertableEmpIds` permanece intacto.
+ *
+ * ARQUIVOS
+ *  - `server/routers/homeData.ts` (L105, L145).
+ *  - `shared/version.ts` 2528.
+ *
+ * Zero ALTER/DROP/DELETE. Zero migração. Apenas frontend-driven query
+ * filter change no servidor.
+ *
+ * — Rev. 2527 (anterior) abaixo —
+ *
  * Rev. 2527 — **FOLHA DE PAGAMENTO · COMPARATIVO FOLHA × ERP (verba por
  * verba, 1 linha por funcionário com expand pra detalhamento completo).**
  *

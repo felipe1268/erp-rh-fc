@@ -96,7 +96,10 @@ export const homeDataRouter = router({
         .from(obraFuncionarios).where(and(companyFilter(obraFuncionarios.companyId, input), eq(obraFuncionarios.isActive, 1)));
       const homeEmpObraMap = new Map(homeAlocs.map(a => [a.employeeId, a.obraId]));
 
-      const aniversariantes = todosNaoDesligados
+      // Rev. 2528 — User pediu: aniversariantes só dos ATIVOS (sem
+       // Afastado/Recluso/Férias/Lista Negra/Desligado). Antes usava
+       // `todosNaoDesligados` que ainda exibia Afastados e Reclusos.
+      const aniversariantes = ativos
         .filter(e => {
           if (!e.dataNascimento) return false;
           const dn = toDateStr(e.dataNascimento);
@@ -135,7 +138,8 @@ export const homeDataRouter = router({
       // ============================================================
       // 2B. ANIVERSÁRIOS DE EMPRESA (anos de casa)
       // ============================================================
-      const aniversariosEmpresa = todosNaoDesligados
+      // Rev. 2528 — Mesma regra dos aniversariantes pessoais: só ATIVOS.
+      const aniversariosEmpresa = ativos
         .filter(e => {
           if (!e.dataAdmissao) return false;
           const da = toDateStr(e.dataAdmissao);

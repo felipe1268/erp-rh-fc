@@ -2,6 +2,7 @@
 
 > Este arquivo guarda os one-liners das revisões antigas para manter o `replit.md` enxuto.
 
+- **Rev. 2521** — FOLHA DE PAGAMENTO — Barra de progresso 0→100% no import de PDFs da contabilidade (substitui spinner "Processando PDFs…"). Progresso CLIENTE estimado (sem SSE/WS), curva assintótica até 90% via interval 250ms, snap 100/0 no onSuccess/onError. `client/src/pages/FolhaPagamento.tsx` L371-403 + L7121 + L7198. Ver `shared/changelog.ts`.
 - **Rev. 2520** — FOLHA DE PAGAMENTO — Log diagnóstico no import do PDF quando parser devolve 0 registros (gated em `parsed.length===0`, loga primeiras 60 linhas com `JSON.stringify`). `server/routers/folhaPagamento.ts` L878-897. Mantido ativo após Rev. 2522 como rede de segurança. Ver `shared/changelog.ts`.
 - **Rev. 2519** — FOLHA DE PAGAMENTO — Hotfix `require is not defined` no parser do PDF da contabilidade (Rev. 2517 reintroduziu o botão, mas `require('pdf-parse')` quebrava em ESM). Trocado por `await import("pdf-parse")` com fallback `.default || mod`. `server/routers/folhaPagamento.ts` L51-59. Ver `shared/changelog.ts`.
 - **Rev. 2518** — EQUIPAMENTOS LOCADOS — Renomear LOCADORA em lote direto do chip de filtro (pílula Pencil âmbar). Server `locadosRenomearFornecedor` em `server/routers/equipamentos.ts` ~L853 (bulk UPDATE case-insensitive via `UPPER(TRIM(fornecedor_nome))`, tenant-isolation, sem evento porque é correção administrativa). Modal âmbar com aviso "substitui em todas as N unidade(s)". `client/src/pages/equipamentos/Locados.tsx`. Ver `shared/changelog.ts`.
