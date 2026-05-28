@@ -1,6 +1,52 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2507 — **PERSON PHOTO · LIGHTBOX — Foto ampliada usa quase 100% da tela
+ * e respeita EXIF para evitar corte visual.**
+ *
+ * PEDIDO (user, 28/05/2026, iPad — Controle de Documentos > Advertências):
+ *  - "A foto está sendo cortada, isso não pode" + screenshot do lightbox da
+ *    foto do GISLEI com a cabeça/face cortada no topo. Via `user_query`
+ *    respondeu "Apareceu inline sem clicar" (provável tap acidental no avatar
+ *    `<PersonPhoto size="sm">` da tabela de advertências — touch screen).
+ *
+ * CAUSA / ANÁLISE
+ *  - O lightbox de `PersonPhoto.tsx` (componente único reutilizado em TODAS
+ *    as fotos de pessoa do ERP — Rev. 2297) já usava `object-contain`,
+ *    portanto nenhum corte CSS deveria ocorrer.
+ *  - Investigação: upload (`server/routers.ts` L769-785) é raw `storagePut`
+ *    sem `sharp`/crop/resize — a foto vai pro storage exatamente como o
+ *    usuário enviou. Logo, se a face está cortada no display, a fonte original
+ *    do arquivo TAMBÉM está cortada.
+ *  - Mesmo assim, o lightbox dava POUCO espaço pra foto (`max-h-[78vh]
+ *    max-w-[92vw]` + figcaption empurrando a imagem pra cima), e não
+ *    declarava `imageOrientation`, o que em alguns iPads/safari pode causar
+ *    má interpretação de fotos com EXIF orientation tag.
+ *
+ * O QUE MUDOU (fix defensivo + UX)
+ *  - `client/src/components/PersonPhoto.tsx` (lightbox modal, ~L132-152):
+ *      • `figure` agora `max-w-[96vw] max-h-[96vh]` (era 92/92).
+ *      • `<img>` ganhou style explícito `{ maxHeight: 'calc(96vh - 70px)',
+ *        maxWidth: '96vw', width: 'auto', height: 'auto', imageOrientation:
+ *        'from-image' }` — garante que o navegador respeite EXIF e use
+ *        toda a área livre (descontando a caption de ~70px) sem stretch.
+ *      • `object-contain` mantido + `bg-white` mantido (letterbox limpo).
+ *      • Avatares clicáveis (`size="sm"` na tabela) NÃO mexidos —
+ *        continuam `object-cover object-top` (correto pra thumb redondo).
+ *
+ * RESSALVA PRO USUÁRIO
+ *  - Se a foto ainda aparecer com a face cortada após este fix, é porque o
+ *    arquivo enviado no upload da Foto 3x4 já estava cortado (o ERP não
+ *    processa/corta imagens — `server/storage.ts` é byte-for-byte). Solução
+ *    nesse caso: reenviar a foto via Colaboradores > Editar > campo Foto 3x4.
+ *
+ * FILES
+ *  - `client/src/components/PersonPhoto.tsx` (M)
+ *  - `shared/version.ts` (M — 2506 → 2507)
+ *  - `shared/changelog.ts` (M)
+ *  - `replit.md` (M — rotação 2+5)
+ *  - `replit-history.md` (M — Rev. 2500 demovida)
+ *
  * Rev. 2506 — **DASHBOARD PERFIL POR TEMPO DE CASA · UX — Barra de progresso
  * 0→100% no card "Analisando perfis dos funcionários...".**
  *

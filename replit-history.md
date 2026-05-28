@@ -2,6 +2,7 @@
 
 > Este arquivo guarda os one-liners das revisões antigas para manter o `replit.md` enxuto.
 
+- **Rev. 2500** — CONTRATO DE EXPERIÊNCIA · BUGFIX off-by-one no cálculo das datas fim1/fim2 (CLT: dia do início conta como dia 1). Fix `+ dias - 1` em `homeData.ts` L538-541 e `Colaboradores.tsx` L1875-1876/L1900-1901. Ver `shared/changelog.ts`.
 - **Rev. 2499** — AVISO PRÉVIO · UX · Botão do modal mostra "Salvar Alterações" no modo edição (em vez de sempre "Criar Aviso Prévio") + disabled/loading respeita `updateAviso.isPending`. `AvisoPrevio.tsx` L3215-3221. Ver `shared/changelog.ts`.
 - **Rev. 2498** — FOLHA + VALE · `employees.dataDesligamentoEfetiva` virou cap superior na repesca de desligados (caso Elizeu — aviso TRABALHADO com `dataFim` projetada em maio mas saída efetiva em março). `gerarVale` ~L2122 e `simularPagamento` ~L2950 em `payrollEngine.ts`. Ver `shared/changelog.ts`.
 - **Rev. 2497** — FOLHA + VALE · Aviso INDENIZADO excluído da repesca de desligados (`tn.tipo NOT LIKE '%indenizado%'` em `gerarVale` L2114-2122 e `simularPagamento` L2935-2951). Convenção `homeData.ts` L595-608. Ver `shared/changelog.ts`.
