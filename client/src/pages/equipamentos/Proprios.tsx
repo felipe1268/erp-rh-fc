@@ -9,10 +9,19 @@ import {
 } from "lucide-react";
 import { FotosUploader, FotoItem, compressImage, fmtMoney, fmtDate, Spinner } from "./_shared";
 
+// Rev. 2512 — type-safety do enum de status (espelha server zod).
+type StatusEquip = "disponivel" | "em_obra" | "manutencao" | "baixado";
+const STATUS_SET = new Set<StatusEquip>(["disponivel", "em_obra", "manutencao", "baixado"]);
+function toStatus(v: unknown): StatusEquip {
+  return typeof v === "string" && (STATUS_SET as Set<string>).has(v) ? (v as StatusEquip) : "disponivel";
+}
+
 const EMPTY_FORM = {
   codigoPatrimonio: "", descricao: "", categoria: "", numeroSerie: "",
   marca: "", modelo: "", dataAquisicao: "", valorAquisicao: "",
   vidaUtilMeses: "", observacoes: "",
+  // Rev. 2512 — status editável no modal
+  status: "disponivel" as StatusEquip,
 };
 
 // Rev. 2364 — chips de categoria de toque rápido (servente toca em vez de digitar).
@@ -21,6 +30,16 @@ const CATEGORIAS_QUICK = [
   "Andaime", "Betoneira", "Compressor", "Gerador",
   "Compactador", "Serra", "Furadeira", "Ferramenta elétrica",
 ];
+
+// Rev. 2512 — categorias custom persistem em localStorage por company.
+const CAT_CUSTOM_KEY = (cid: number) => `fc:proprios:cat-custom:${cid}`;
+function loadCatCustom(cid: number): string[] {
+  try { return JSON.parse(localStorage.getItem(CAT_CUSTOM_KEY(cid)) || "[]"); }
+  catch { return []; }
+}
+function saveCatCustom(cid: number, list: string[]) {
+  try { localStorage.setItem(CAT_CUSTOM_KEY(cid), JSON.stringify(list)); } catch {}
+}
 
 const STATUS_LABELS: Record<string, string> = {
   disponivel: "Disponível", em_obra: "Em obra", manutencao: "Manutenção", baixado: "Baixado",
@@ -31,6 +50,13 @@ const STATUS_COLORS: Record<string, string> = {
   manutencao: "bg-amber-100 text-amber-700 ring-1 ring-amber-200",
   baixado:    "bg-slate-200 text-slate-700 ring-1 ring-slate-300",
 };
+// Rev. 2512 — opções pro seletor de status dentro do modal (edição).
+const STATUS_OPTIONS: ReadonlyArray<{ v: StatusEquip; l: string; border: string; bg: string; text: string; activeBg: string }> = [
+  { v: "disponivel", l: "Disponível", border: "border-emerald-300", bg: "bg-emerald-50", text: "text-emerald-700", activeBg: "bg-emerald-600" },
+  { v: "em_obra",    l: "Em obra",    border: "border-blue-300",    bg: "bg-blue-50",    text: "text-blue-700",    activeBg: "bg-blue-600" },
+  { v: "manutencao", l: "Manutenção", border: "border-amber-300",   bg: "bg-amber-50",   text: "text-amber-700",   activeBg: "bg-amber-600" },
+  { v: "baixado",    l: "Baixado",    border: "border-slate-400",   bg: "bg-slate-50",   text: "text-slate-700",   activeBg: "bg-slate-600" },
+];
 
 export default function EquipamentosProprios() {
   const { selectedCompany } = useCompany();
@@ -56,6 +82,59 @@ export default function EquipamentosProprios() {
   const [fotos, setFotos] = useState<FotoItem[]>([]);
   const [mostrarDetalhes, setMostrarDetalhes] = useState(false);
   const fotoInputRef = useRef<HTMLInputElement>(null);
+  // Rev. 2512 — categorias custom (localStorage por company) + UI de "+ Nova"
+  const [catCustom, setCatCustom] = useState<string[]>([]);
+  const [novaCatOpen, setNovaCatOpen] = useState(false);
+  const [novaCatTxt, setNovaCatTxt] = useState("");
+  // Rev. 2512 — guarda companyId=0: limpa estado e evita escrever em key fc:proprios:cat-custom:0.
+  useEffect(() => {
+    if (companyId > 0) setCatCustom(loadCatCustom(companyId));
+    else setCatCustom([]);
+  }, [companyId]);
+  // Categorias derivadas dos próprios equipamentos já cadastrados
+  const catFromItems = useMemo(() => {
+    const s = new Set<string>();
+    for (const p of (totalList || []) as any[]) {
+      const c = String(p.categoria || "").trim();
+      if (c) s.add(c);
+    }
+    return Array.from(s);
+  }, [totalList]);
+  // União ordenada: defaults + custom + derivadas (case-insensitive uniq)
+  const categoriasAll = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const c of [...CATEGORIAS_QUICK, ...catCustom, ...catFromItems]) {
+      const k = c.trim().toLowerCase();
+      if (k && !map.has(k)) map.set(k, c.trim());
+    }
+    return Array.from(map.values());
+  }, [catCustom, catFromItems]);
+  function adicionarCategoria() {
+    if (companyId <= 0) { toast.error("Selecione uma empresa antes."); return; }
+    const v = novaCatTxt.trim();
+    if (!v) return;
+    if (categoriasAll.some(c => c.toLowerCase() === v.toLowerCase())) {
+      toast.info("Essa categoria já existe.");
+      setForm(p => ({ ...p, categoria: v }));
+      setNovaCatOpen(false); setNovaCatTxt("");
+      return;
+    }
+    const next = [...catCustom, v];
+    setCatCustom(next);
+    saveCatCustom(companyId, next);
+    setForm(p => ({ ...p, categoria: v }));
+    setNovaCatOpen(false); setNovaCatTxt("");
+    toast.success(`Categoria "${v}" criada.`);
+  }
+  function removerCategoriaCustom(cat: string) {
+    if (companyId <= 0) return;
+    const next = catCustom.filter(c => c.toLowerCase() !== cat.toLowerCase());
+    setCatCustom(next);
+    saveCatCustom(companyId, next);
+    if (form.categoria.toLowerCase() === cat.toLowerCase()) {
+      setForm(p => ({ ...p, categoria: "" }));
+    }
+  }
 
   function gerarPatrimonioAuto() {
     let maxN = 0;
@@ -147,10 +226,11 @@ export default function EquipamentosProprios() {
       valorAquisicao: p.valorAquisicao ? String(Number(p.valorAquisicao)).replace(".", ",") : "",
       vidaUtilMeses: p.vidaUtilMeses ? String(p.vidaUtilMeses) : "",
       observacoes: p.observacoes || "",
+      status: toStatus(p.status), // Rev. 2512 — type-safe (sem `any`)
     });
     setFotos((p.fotosJson as FotoItem[]) || []);
     setEditingId(p.id);
-    setMostrarDetalhes(true);
+    setMostrarDetalhes(false); // Rev. 2512 — começa colapsado pra caber sem scroll
     setModal(true);
   }
 
@@ -210,6 +290,7 @@ export default function EquipamentosProprios() {
         valorAquisicao: valor ?? null,
         vidaUtilMeses: vida ?? null,
         observacoes: form.observacoes || null,
+        status: form.status, // Rev. 2512 — status editável
         fotos: fotos.length > 0 ? fotos : undefined,
       });
     } else {
@@ -414,7 +495,7 @@ export default function EquipamentosProprios() {
           aria-labelledby="prop-modal-title"
         >
           <div
-            className="bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl max-w-xl w-full max-h-[92dvh] overflow-y-auto"
+            className="bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl max-w-3xl w-full max-h-[92dvh] flex flex-col"
             onClick={e => e.stopPropagation()}
           >
             <div
@@ -466,7 +547,7 @@ export default function EquipamentosProprios() {
               </div>
             )}
 
-            <div className="p-5 space-y-5">
+            <div className="p-4 space-y-3 flex-1 overflow-y-auto min-h-0">
               {/* 1) FOTO */}
               {!editingId && (
                 <div>
@@ -522,127 +603,209 @@ export default function EquipamentosProprios() {
                 </div>
               )}
 
-              {/* 2) DESCRIÇÃO */}
-              <div>
-                <label className="block text-sm font-semibold text-slate-800 mb-1.5">
-                  O que é? <span className="text-red-600">*</span>
-                </label>
-                <input
-                  value={form.descricao}
-                  onChange={e => setForm(p => ({ ...p, descricao: e.target.value }))}
-                  placeholder="Ex: Furadeira Bosch GSB 550, Andaime tubular 1,5m…"
-                  autoFocus
-                  className="w-full px-3 py-3 border-2 border-slate-200 focus:border-blue-500 focus:outline-none rounded-lg text-base"
-                />
-              </div>
-
-              {/* 3) CATEGORIA */}
-              <div>
-                <label className="block text-sm font-semibold text-slate-800 mb-1.5">Categoria</label>
-                <div className="flex flex-wrap gap-2">
-                  {CATEGORIAS_QUICK.map(cat => {
-                    const active = form.categoria.toLowerCase() === cat.toLowerCase();
-                    return (
-                      <button
-                        key={cat}
-                        type="button"
-                        onClick={() => setForm(p => ({ ...p, categoria: active ? "" : cat }))}
-                        className={`px-3 py-2 rounded-full text-sm font-medium border-2 transition ${
-                          active
-                            ? "bg-[#1B2A4A] text-white border-[#1B2A4A] shadow"
-                            : "bg-white text-slate-700 border-slate-200 hover:border-blue-400"
-                        }`}
-                      >
-                        {cat}
-                      </button>
-                    );
-                  })}
+              {/* Rev. 2512 — Layout 2 colunas em sm+, denso pra caber sem scroll */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {/* DESCRIÇÃO — col-span-2 */}
+                <div className="sm:col-span-2">
+                  <label className="block text-xs font-semibold text-slate-800 mb-1">
+                    O que é? <span className="text-red-600">*</span>
+                  </label>
+                  <input
+                    value={form.descricao}
+                    onChange={e => setForm(p => ({ ...p, descricao: e.target.value }))}
+                    placeholder="Ex: Furadeira Bosch GSB 550, Andaime tubular 1,5m…"
+                    autoFocus
+                    className="w-full px-3 py-2 border-2 border-slate-200 focus:border-blue-500 focus:outline-none rounded-lg text-sm"
+                  />
                 </div>
-                {form.categoria && !CATEGORIAS_QUICK.some(c => c.toLowerCase() === form.categoria.toLowerCase()) && (
-                  <input
-                    value={form.categoria}
-                    onChange={e => setForm(p => ({ ...p, categoria: e.target.value }))}
-                    placeholder="Outra categoria"
-                    className="mt-2 w-full px-3 py-2 border rounded text-sm"
-                  />
-                )}
-              </div>
 
-              {/* 4) PATRIMÔNIO */}
-              <div>
-                <label className="block text-sm font-semibold text-slate-800 mb-1.5">
-                  Patrimônio {!editingId && <span className="text-xs font-normal text-slate-500">(deixe vazio pra gerar automático)</span>}
-                </label>
-                <div className="flex gap-2">
-                  <input
-                    value={form.codigoPatrimonio}
-                    disabled={!!editingId}
-                    onChange={e => setForm(p => ({ ...p, codigoPatrimonio: e.target.value }))}
-                    placeholder={editingId ? "" : gerarPatrimonioAuto()}
-                    className="flex-1 px-3 py-2.5 border rounded-lg text-base font-mono disabled:bg-slate-100"
-                  />
-                  {!editingId && (
-                    <button
-                      type="button"
-                      onClick={() => setForm(p => ({ ...p, codigoPatrimonio: gerarPatrimonioAuto() }))}
-                      className="px-3 py-2 border-2 border-blue-200 hover:border-blue-400 text-blue-700 rounded-lg text-sm font-medium inline-flex items-center gap-1"
-                    >
-                      <Sparkles className="h-4 w-4" /> Auto
-                    </button>
+                {/* PATRIMÔNIO */}
+                <div>
+                  <label className="block text-xs font-semibold text-slate-800 mb-1">
+                    Patrimônio {!editingId && <span className="font-normal text-slate-500">(auto)</span>}
+                  </label>
+                  <div className="flex gap-1.5">
+                    <input
+                      value={form.codigoPatrimonio}
+                      disabled={!!editingId}
+                      onChange={e => setForm(p => ({ ...p, codigoPatrimonio: e.target.value }))}
+                      placeholder={editingId ? "" : gerarPatrimonioAuto()}
+                      className="flex-1 px-3 py-2 border rounded-lg text-sm font-mono disabled:bg-slate-100"
+                    />
+                    {!editingId && (
+                      <button
+                        type="button"
+                        onClick={() => setForm(p => ({ ...p, codigoPatrimonio: gerarPatrimonioAuto() }))}
+                        className="px-2.5 py-2 border-2 border-blue-200 hover:border-blue-400 text-blue-700 rounded-lg text-xs font-medium inline-flex items-center gap-1"
+                      >
+                        <Sparkles className="h-3.5 w-3.5" /> Auto
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* STATUS — Rev. 2512, só em modo edição */}
+                {editingId ? (
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-800 mb-1">Status</label>
+                    <div className="flex flex-wrap gap-1.5">
+                      {STATUS_OPTIONS.map(opt => {
+                        const active = form.status === opt.v;
+                        return (
+                          <button
+                            key={opt.v}
+                            type="button"
+                            onClick={() => setForm(p => ({ ...p, status: opt.v }))}
+                            className={`px-2.5 py-2 rounded-lg text-xs font-semibold border-2 transition ${
+                              active
+                                ? `${opt.activeBg} text-white border-transparent shadow`
+                                : `bg-white ${opt.text} ${opt.border} hover:bg-slate-50`
+                            }`}
+                          >
+                            {opt.l}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ) : <div />}
+
+                {/* CATEGORIA — col-span-2 */}
+                <div className="sm:col-span-2">
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-xs font-semibold text-slate-800">Categoria</label>
+                    {!novaCatOpen && (
+                      <button
+                        type="button"
+                        onClick={() => { setNovaCatOpen(true); setNovaCatTxt(""); }}
+                        className="text-[11px] font-semibold text-blue-700 hover:text-blue-900 inline-flex items-center gap-1"
+                      >
+                        <Plus className="h-3 w-3" /> Nova categoria
+                      </button>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {categoriasAll.map(cat => {
+                      const active = form.categoria.toLowerCase() === cat.toLowerCase();
+                      const isCustom = catCustom.some(c => c.toLowerCase() === cat.toLowerCase());
+                      return (
+                        <span
+                          key={cat}
+                          className={`inline-flex items-center rounded-full text-xs font-medium border-2 transition overflow-hidden ${
+                            active
+                              ? "bg-[#1B2A4A] text-white border-[#1B2A4A] shadow"
+                              : "bg-white text-slate-700 border-slate-200 hover:border-blue-400"
+                          }`}
+                        >
+                          <button
+                            type="button"
+                            onClick={() => setForm(p => ({ ...p, categoria: active ? "" : cat }))}
+                            className="px-2.5 py-1.5"
+                          >
+                            {cat}
+                          </button>
+                          {isCustom && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (window.confirm(`Remover a categoria "${cat}" da lista?\n\nOs equipamentos já marcados com ela continuam com o texto.`)) {
+                                  removerCategoriaCustom(cat);
+                                }
+                              }}
+                              aria-label={`Remover ${cat}`}
+                              className={`pr-1.5 pl-0.5 py-1.5 ${active ? "text-white/70 hover:text-white" : "text-slate-400 hover:text-red-600"}`}
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          )}
+                        </span>
+                      );
+                    })}
+                  </div>
+                  {novaCatOpen && (
+                    <div className="mt-2 flex gap-1.5">
+                      <input
+                        autoFocus
+                        value={novaCatTxt}
+                        onChange={e => setNovaCatTxt(e.target.value)}
+                        onKeyDown={e => {
+                          if (e.key === "Enter") { e.preventDefault(); adicionarCategoria(); }
+                          if (e.key === "Escape") { setNovaCatOpen(false); setNovaCatTxt(""); }
+                        }}
+                        placeholder="Ex: Caminhão betoneira, Mini-escavadeira…"
+                        maxLength={100}
+                        className="flex-1 px-3 py-2 border-2 border-blue-300 focus:border-blue-500 focus:outline-none rounded-lg text-sm"
+                      />
+                      <button
+                        type="button"
+                        onClick={adicionarCategoria}
+                        className="px-3 py-2 bg-[#1B2A4A] hover:bg-[#2E4373] text-white rounded-lg text-xs font-semibold inline-flex items-center gap-1"
+                      >
+                        <Plus className="h-3.5 w-3.5" /> Criar
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { setNovaCatOpen(false); setNovaCatTxt(""); }}
+                        className="px-3 py-2 border rounded-lg text-xs hover:bg-slate-100"
+                      >
+                        Cancelar
+                      </button>
+                    </div>
                   )}
                 </div>
               </div>
 
-              {/* 5) MAIS DETALHES */}
-              <div className="border-t pt-3">
+              {/* 5) MAIS DETALHES — Rev. 2512: 2 colunas internas pra adensar */}
+              <div className="border-t pt-2">
                 <button
                   type="button"
                   onClick={() => setMostrarDetalhes(v => !v)}
                   aria-expanded={mostrarDetalhes}
-                  className="w-full flex items-center justify-between py-2 text-sm font-medium text-slate-600 hover:text-slate-900"
+                  className="w-full flex items-center justify-between py-1.5 text-xs font-medium text-slate-600 hover:text-slate-900"
                 >
                   <span>Mais detalhes (opcional)</span>
                   {mostrarDetalhes ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
                 </button>
 
                 {mostrarDetalhes && (
-                  <div className="space-y-3 pt-2">
-                    <div className="grid grid-cols-2 gap-3">
-                      <Field label="N° Série">
-                        <input value={form.numeroSerie} disabled={!!editingId}
-                          onChange={e => setForm(p => ({ ...p, numeroSerie: e.target.value }))}
-                          className="w-full px-2 py-1.5 border rounded text-sm disabled:bg-slate-100" />
-                      </Field>
-                      <Field label="Marca">
-                        <input value={form.marca} onChange={e => setForm(p => ({ ...p, marca: e.target.value }))}
-                          className="w-full px-2 py-1.5 border rounded text-sm" />
-                      </Field>
-                    </div>
-                    <Field label="Modelo">
-                      <input value={form.modelo} onChange={e => setForm(p => ({ ...p, modelo: e.target.value }))}
+                  <div className="pt-2 grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    <Field label="N° Série">
+                      <input value={form.numeroSerie} disabled={!!editingId}
+                        onChange={e => setForm(p => ({ ...p, numeroSerie: e.target.value }))}
+                        className="w-full px-2 py-1.5 border rounded text-sm disabled:bg-slate-100" />
+                    </Field>
+                    <Field label="Marca">
+                      <input value={form.marca} onChange={e => setForm(p => ({ ...p, marca: e.target.value }))}
                         className="w-full px-2 py-1.5 border rounded text-sm" />
                     </Field>
-                    <div className="grid grid-cols-3 gap-3">
-                      <Field label="Data Aquisição">
-                        <input type="date" value={form.dataAquisicao} disabled={!!editingId}
-                          onChange={e => setForm(p => ({ ...p, dataAquisicao: e.target.value }))}
-                          className="w-full px-2 py-1.5 border rounded text-sm disabled:bg-slate-100" />
-                      </Field>
-                      <Field label="Valor (R$)">
-                        <input value={form.valorAquisicao} onChange={e => setForm(p => ({ ...p, valorAquisicao: e.target.value }))}
-                          placeholder="0,00" className="w-full px-2 py-1.5 border rounded text-sm" />
-                      </Field>
-                      <Field label="Vida útil (meses)">
-                        <input value={form.vidaUtilMeses} onChange={e => setForm(p => ({ ...p, vidaUtilMeses: e.target.value }))}
-                          placeholder="ex: 84" className="w-full px-2 py-1.5 border rounded text-sm" />
+                    <Field label="Modelo">
+                      <input value={form.modelo} onChange={e => setForm(p => ({ ...p, modelo: e.target.value }))}
+                        className="w-full px-2 py-1.5 border rounded text-sm col-span-2" />
+                    </Field>
+                    <Field label="Data Aquisição">
+                      <input type="date" value={form.dataAquisicao} disabled={!!editingId}
+                        onChange={e => setForm(p => ({ ...p, dataAquisicao: e.target.value }))}
+                        className="w-full px-2 py-1.5 border rounded text-sm disabled:bg-slate-100" />
+                    </Field>
+                    <Field label="Valor (R$)">
+                      <input value={form.valorAquisicao} onChange={e => setForm(p => ({ ...p, valorAquisicao: e.target.value }))}
+                        placeholder="0,00" className="w-full px-2 py-1.5 border rounded text-sm" />
+                    </Field>
+                    <Field label="Vida útil (meses)">
+                      <input value={form.vidaUtilMeses} onChange={e => setForm(p => ({ ...p, vidaUtilMeses: e.target.value }))}
+                        placeholder="ex: 84" className="w-full px-2 py-1.5 border rounded text-sm" />
+                    </Field>
+                    <div className="col-span-2 sm:col-span-4">
+                      <Field label="Observações">
+                        <textarea value={form.observacoes} onChange={e => setForm(p => ({ ...p, observacoes: e.target.value }))}
+                          rows={2} className="w-full px-2 py-1.5 border rounded text-sm" />
                       </Field>
                     </div>
-                    <Field label="Observações">
-                      <textarea value={form.observacoes} onChange={e => setForm(p => ({ ...p, observacoes: e.target.value }))}
-                        rows={2} className="w-full px-2 py-1.5 border rounded text-sm" />
-                    </Field>
                     {editingId && (
-                      <FotosUploader fotos={fotos} onChange={setFotos} label="Fotos do equipamento" />
+                      <div className="col-span-2 sm:col-span-4">
+                        <FotosUploader fotos={fotos} onChange={setFotos} label="Fotos do equipamento" />
+                      </div>
                     )}
                   </div>
                 )}

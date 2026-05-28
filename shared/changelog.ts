@@ -1,6 +1,69 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2512 — **EQUIPAMENTOS PRÓPRIOS — Modal redesenhado em 2 colunas
+ * (cabe sem scroll) + cadastro de NOVAS categorias (localStorage por
+ * company) + seletor de STATUS dentro do modal de edição
+ * (disponível/em obra/manutenção/baixado).**
+ *
+ * PEDIDO (user, 28/05/2026, iPad, screenshot do modal com scroll feio):
+ *  - "melhore este layout da tela, considerando um ajuste no tamanho da
+ *     tela, sem precisar uma barra de rolagem.. preciso tbm ter um forma
+ *     de cadastrar novas categorias, e ter a opção de alterar o status..
+ *     se o equipamento, esta disponivel em manutenção em fim.."
+ *
+ * MUDANÇAS — `client/src/pages/equipamentos/Proprios.tsx`
+ *
+ * (1) MODAL FIT-SCREEN
+ *  - Container: `max-w-xl` → `max-w-3xl`; perdeu `overflow-y-auto` no
+ *    root e ganhou `flex flex-col`; body recebeu
+ *    `flex-1 overflow-y-auto min-h-0` (só body rola se MUITO conteúdo;
+ *    no caso típico de edição cabe sem scroll na viewport iPad).
+ *  - Padding 5→4, gap 5→3.
+ *  - Reorganização em GRID 2-col (sm+): linha 1 = Descrição (col-span-2);
+ *    linha 2 = Patrimônio + Status; linha 3 = Categoria (col-span-2).
+ *  - "Mais detalhes" também virou grid 4-col interno (N° Série/Marca/
+ *    Modelo·col2/Data/Valor/Vida); começa COLAPSADO em edição (antes
+ *    estava `setMostrarDetalhes(true)` — era o principal causador do scroll).
+ *
+ * (2) CADASTRO DE NOVA CATEGORIA
+ *  - Helpers `loadCatCustom/saveCatCustom` com key
+ *    `fc:proprios:cat-custom:{companyId}` em localStorage.
+ *  - Estado `catCustom` + `novaCatOpen` + `novaCatTxt`.
+ *  - `categoriasAll` (useMemo) = união case-insensitive UNIQ de
+ *    CATEGORIAS_QUICK (defaults) + `catCustom` (localStorage) +
+ *    `catFromItems` (extraídas dos próprios equipamentos cadastrados —
+ *    `totalList`).
+ *  - Botão "+ Nova categoria" no header da seção Categoria → abre input
+ *    inline (Enter cria, Esc cancela) com botão "Criar" + "Cancelar".
+ *  - Categorias custom ganham um × pra remover (com confirm), categorias
+ *    default são imutáveis.
+ *  - Helper `adicionarCategoria` valida duplicata case-insensitive,
+ *    persiste, marca a categoria no form e toast.
+ *  - Categoria escolhida vai pro campo texto `categoria` do INSERT/UPDATE
+ *    normalmente — server aceita `z.string().max(100).nullable()`.
+ *
+ * (3) SELETOR DE STATUS NO MODAL (EDIÇÃO)
+ *  - Novo `EMPTY_FORM.status` tipado como
+ *    `"disponivel" | "em_obra" | "manutencao" | "baixado"` default
+ *    `"disponivel"`.
+ *  - `abrirEdit` popula `status: p.status || "disponivel"`.
+ *  - `salvar()` no branch `editingId` passa `status: form.status`
+ *    pro `proprioAtualizar.mutate` — mutation já aceitava
+ *    `status: z.enum([...])` desde sempre, só não havia UI.
+ *  - Nova const `STATUS_OPTIONS` (verde/azul/âmbar/cinza) renderiza 4
+ *    chips na coluna direita (linha 2 do grid), ao lado de Patrimônio.
+ *    Apenas em modo edição; em criação, célula vira `<div/>` placeholder.
+ *
+ * RACIONAL — LOCALSTORAGE em vez de tabela de categorias
+ *  - R-001/R-007/R-010: nada de novo schema/tabela. Categorias custom são
+ *    "atalhos de digitação" — não há lookup no banco (campo é texto).
+ *  - Para que apareçam mesmo sem ainda terem item, persistimos em
+ *    localStorage. Para items existentes, derivamos do próprio
+ *    `propriosListar` — então uma categoria digitada em qualquer máquina
+ *    aparece pra todo mundo assim que existe pelo menos 1 equipamento
+ *    com ela.
+ *
  * Rev. 2511 — **EQUIPAMENTOS PRÓPRIOS — Botão Excluir (soft delete via
  * ativo=false) no modal de edição.**
  *

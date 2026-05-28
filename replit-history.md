@@ -2,6 +2,7 @@
 
 > Este arquivo guarda os one-liners das revisões antigas para manter o `replit.md` enxuto.
 
+- **Rev. 2505** — AVALIAÇÃO INTELIGENTE FUNCIONÁRIOS · FASE 2 — 2 novos pilares (Capacitação + Lealdade) elevando score de 4→6 dimensões. `employeeScore.ts` ganha `scoreCapacitacao` (base 70 + 6/válido + 3/recente − 12/vencido) + `scoreLealdade` (escala <6m=60 → 10a+=100, piso 60 LGPD). `PESOS_DEFAULT` 4 core 20% + 2 complementares 10%. UI: 6 KPIs + colunas Capac./Leald. + drill 6 sub-cards. Ver `shared/changelog.ts`.
 - **Rev. 2504** — DASHBOARD PERFIL POR TEMPO DE CASA · BUGFIX "Erro na análise IA" (JSON do Claude vinha envolto em fence ```json...```). Novo helper `parseLLMJson` em `server/routers/dashboards.ts` (remove fence + fallback extrai `{...}`/`[...]`). Catch re-throw em vez de engolir. Ver `shared/changelog.ts`.
 - **Rev. 2503** — PLANEJAMENTO · BUGFIX aba "Efetivo" invisível para grupos custom — página `efetivo` faltava em `modulePages.planejamento.pages`. Adicionada com actions view/create/edit/delete + rota `/planejamento?tab=efetivo`. Ver `shared/changelog.ts`.
 - **Rev. 2502** — COLABORADORES · Campo "Tipo de Remuneração" (Mensalista/Horista) na aba Profissional + CLÁUSULA 2ª do Contrato de Experiência adaptada ao regime. `Colaboradores.tsx` L1855-1870, IIFE L2072-2083, whitelist `server/db.ts` L686. Ver `shared/changelog.ts`.
