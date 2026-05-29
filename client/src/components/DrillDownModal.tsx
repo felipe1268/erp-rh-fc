@@ -3,7 +3,30 @@ import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
 import { Loader2, Users } from "lucide-react";
 import { useLocation } from "wouter";
+import { useState, useEffect } from "react";
 import FullScreenDialog from "@/components/FullScreenDialog";
+
+// Rev. 2557 — avatar com foto do funcionário (fallback: inicial do nome).
+function EmpAvatar({ src, nome }: { src?: string | null; nome?: string }) {
+  const [err, setErr] = useState(false);
+  useEffect(() => { setErr(false); }, [src]);
+  if (src && !err) {
+    return (
+      <img
+        src={src}
+        alt={nome || ""}
+        loading="lazy"
+        onError={() => setErr(true)}
+        className="h-8 w-8 rounded-full object-cover shrink-0 border border-gray-200 bg-gray-100"
+      />
+    );
+  }
+  return (
+    <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 text-xs font-bold shrink-0">
+      {nome?.charAt(0) || "?"}
+    </div>
+  );
+}
 
 interface DrillDownModalProps {
   open: boolean;
@@ -93,9 +116,7 @@ export default function DrillDownModal({ open, onOpenChange, title, filterType, 
                     <td className="py-3 px-4 text-xs text-gray-400 font-mono">{i + 1}</td>
                     <td className="py-3 px-4">
                       <div className="flex items-center gap-3">
-                        <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 text-xs font-bold shrink-0">
-                          {emp.nome?.charAt(0) || "?"}
-                        </div>
+                        <EmpAvatar src={emp.fotoUrl} nome={emp.nome} />
                         <span className="font-semibold text-sm text-gray-800">{emp.nome}</span>
                       </div>
                     </td>

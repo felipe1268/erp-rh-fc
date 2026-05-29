@@ -2198,6 +2198,7 @@ async function getDrillDown(companyId: number, filterType: string, filterValue: 
   const results = await db.select({
     id: employees.id,
     nome: employees.nomeCompleto,
+    fotoUrl: employees.fotoUrl,
     funcao: employees.funcao,
     setor: employees.setor,
     status: employees.status,

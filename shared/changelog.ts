@@ -1,6 +1,46 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2557 — **RH & DP · DASHBOARDS · DRILL-DOWN DE FUNCIONÁRIOS AGORA MOSTRA
+ * A FOTO DO FUNCIONÁRIO (ex.: tela "Admissões em MM/AAAA").**
+ *
+ * MOTIVAÇÃO (relato do usuário):
+ *   Ao clicar num card/gráfico do dashboard de Funcionários (rota
+ *   `/dashboards/funcionarios`) o ERP abre um drill-down em tela cheia listando
+ *   os funcionários daquele filtro (ex.: "Admissões em 05/2026"). Na coluna
+ *   NOME cada linha mostrava apenas um círculo azul com a INICIAL do nome
+ *   (B/D/E…). O usuário pediu para exibir a FOTO real do funcionário.
+ *
+ * CAUSA:
+ *   (1) O componente `client/src/components/DrillDownModal.tsx` renderizava um
+ *       avatar fixo de inicial (`<div … >{emp.nome?.charAt(0)}</div>`), sem
+ *       nunca tentar usar uma imagem.
+ *   (2) A procedure que alimenta a tabela (`getDrillDown` em
+ *       `server/routers/dashboards.ts`, exposta como `dashboards.drillDown`)
+ *       não projetava a coluna `employees.fotoUrl` no SELECT — então a foto
+ *       sequer chegava ao client.
+ *
+ * FIX (não-destrutivo — ZERO ALTER/DROP/DELETE, somente leitura/UI):
+ *   SERVER `server/routers/dashboards.ts` (`getDrillDown`):
+ *     - Adicionado `fotoUrl: employees.fotoUrl` ao `db.select({…})` (coluna já
+ *       existente em `employees`, schema intocado). Nenhuma outra query afetada.
+ *   CLIENT `client/src/components/DrillDownModal.tsx`:
+ *     - Novo subcomponente `EmpAvatar({ src, nome })`: renderiza `<img>` com a
+ *       `fotoUrl` (rounded-full, object-cover, lazy) quando houver; faz
+ *       FALLBACK para o círculo azul com a inicial quando `fotoUrl` é vazio OU
+ *       quando a imagem falha ao carregar (`onError` → estado local `err`).
+ *     - A célula NOME passou a usar `<EmpAvatar src={emp.fotoUrl} nome={emp.nome} />`
+ *       no lugar do `<div>` de inicial.
+ *   Sem mudança de contrato da query além do campo adicional. Sem schema.
+ *   Sem fallback matemático/silencioso. Aplica-se a TODOS os drill-downs de
+ *   funcionário (status, sexo, setor, função, admissão/demissão por mês, etc.).
+ *
+ * ARQUIVOS:
+ *   - server/routers/dashboards.ts  (SELECT de `getDrillDown` + fotoUrl)
+ *   - client/src/components/DrillDownModal.tsx  (EmpAvatar + uso na coluna NOME)
+ *   - shared/version.ts (bump → Rev. 2557)
+ *   - shared/changelog.ts (esta entrada) / replit.md (convenção 2+5)
+ *
  * Rev. 2556 — **RH & DP · AVISO PRÉVIO / CUSTO DE DEMISSÃO EM MASSA · FÉRIAS
  * VENCIDAS JÁ PAGAS NÃO PODEM MAIS INFLAR O CUSTO POR FUNCIONÁRIO.**
  *
