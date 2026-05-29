@@ -1,6 +1,40 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2548 — **ATESTADOS · AFASTAMENTO POR HORAS · CLAREZA NA FICHA DO RAIO-X
+ * (TELA + PDF).**
+ *
+ * MOTIVAÇÃO (user):
+ *   Pediu que o atestado "de horas" (afastamento parcial, ex.: 0h48min) fique
+ *   claro tanto no cadastro quanto na ficha do Raio-X do colaborador. No print,
+ *   a tabela de Atestados do Raio-X exibia a coluna "Dias Afastamento" com "0"
+ *   para todos os atestados de horas — sem indicar que era afastamento parcial.
+ *
+ * SITUAÇÃO ANTERIOR:
+ *   O CADASTRO já suportava horas: o form em `ControleDocumentos.tsx` tem um
+ *   toggle "Dia(s) inteiro(s)" / "Horas (parcial)" com input HH:MM, e o schema
+ *   `atestados` já tinha `afastamentoTipo` ("dia"/"horas") e `horasAfastamento`
+ *   (numeric). O `docs.raioX` já devolvia esses campos (select() completo). O
+ *   gap era SÓ a exibição: a tabela e o PDF do Raio-X mostravam apenas dias.
+ *
+ * CORREÇÃO (client puro, `RaioXFuncionario.tsx`):
+ *   1) Helpers de módulo: `fmtHorasAfast(dec)` → "Xh Ymin" (com carry de
+ *      arredondamento p/ não gerar "Xh 60min") e `fmtAfastamentoAtestado(a)` →
+ *      horas (parcial) ou "N dia(s)" com pluralização.
+ *   2) Tabela de Atestados: coluna "Dias Afastamento" renomeada para
+ *      "Afastamento"; célula mostra BADGE âmbar com ícone `Clock` + "Xh Ymin"
+ *      quando `afastamentoTipo==='horas'`, senão "N dia(s)".
+ *   3) Exportação PDF/impressão (`generateHTML`): mesma coluna "Afastamento",
+ *      com sufixo "(horas)" nos parciais.
+ *
+ * ESCOPO: client puro, 1 arquivo. Zero schema (campos já existiam). Zero
+ * ALTER/DROP/DELETE.
+ *
+ * ARQUIVOS: client/src/components/RaioXFuncionario.tsx, shared/version.ts
+ *   (→2548), replit.md, replit-history.md.
+ *
+ * ============================================================================
+ *
  * Rev. 2547 — **RAIO-X DO COLABORADOR · VISUALIZAR DOCUMENTO (ATESTADOS) · FIX
  * "Rendered more hooks than during the previous render" (CRASH DA TELA).**
  *

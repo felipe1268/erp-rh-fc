@@ -34,6 +34,24 @@ function formatDate(d: string | null | undefined) {
   return d;
 }
 
+// Formata afastamento de horas (decimal → "Xh Ymin") — usado nos atestados parciais.
+function fmtHorasAfast(dec: number | string | null | undefined): string {
+  const total = Number(dec) || 0;
+  let h = Math.floor(total);
+  let m = Math.round((total - h) * 60);
+  if (m === 60) { h += 1; m = 0; } // carry de arredondamento (evita "Xh 60min")
+  if (h > 0 && m > 0) return `${h}h ${String(m).padStart(2, "0")}min`;
+  if (h > 0) return `${h}h`;
+  return `${m}min`;
+}
+
+// Texto único de afastamento do atestado: "Xh Ymin" (parcial) ou "N dia(s)".
+function fmtAfastamentoAtestado(a: any): string {
+  if (a?.afastamentoTipo === "horas") return fmtHorasAfast(a?.horasAfastamento);
+  const dias = Number(a?.diasAfastamento) || 0;
+  return `${dias} dia${dias === 1 ? "" : "s"}`;
+}
+
 function parseBRNumber(val: string | null | undefined): number {
   if (!val) return 0;
   const s = String(val).trim();
@@ -505,9 +523,10 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
 
     // ATESTADOS
     if (atestados.length > 0) {
-      html += `<div class="section"><div class="section-title">\u{1F4CB} Atestados (${atestados.length})</div><table><thead><tr><th>Tipo</th><th>Data</th><th>Dias Afast.</th><th>Retorno</th><th>CID</th><th>M\u00E9dico</th><th>Observa\u00E7\u00F5es</th></tr></thead><tbody>`;
+      html += `<div class="section"><div class="section-title">\u{1F4CB} Atestados (${atestados.length})</div><table><thead><tr><th>Tipo</th><th>Data</th><th>Afastamento</th><th>Retorno</th><th>CID</th><th>M\u00E9dico</th><th>Observa\u00E7\u00F5es</th></tr></thead><tbody>`;
       atestados.forEach((a: any) => {
-        html += `<tr><td>${a.tipo}</td><td>${formatDate(a.dataEmissao)}</td><td style="text-align:center;font-weight:600">${a.diasAfastamento || 0}</td><td>${formatDate(a.dataRetorno)}</td><td>${a.cid || "-"}</td><td>${a.medico || "-"}</td><td>${a.observacoes || a.descricao || "-"}</td></tr>`;
+        const afastTxt = a.afastamentoTipo === "horas" ? `${fmtHorasAfast(a.horasAfastamento)} (horas)` : fmtAfastamentoAtestado(a);
+        html += `<tr><td>${a.tipo}</td><td>${formatDate(a.dataEmissao)}</td><td style="text-align:center;font-weight:600">${afastTxt}</td><td>${formatDate(a.dataRetorno)}</td><td>${a.cid || "-"}</td><td>${a.medico || "-"}</td><td>${a.observacoes || a.descricao || "-"}</td></tr>`;
       });
       html += `</tbody></table></div>`;
     }
@@ -1479,7 +1498,7 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                       <thead><tr className="bg-purple-50 border-b">
                         <th className="p-3 text-left font-semibold text-purple-900">Tipo</th>
                         <th className="p-3 text-left font-semibold text-purple-900">Data</th>
-                        <th className="p-3 text-center font-semibold text-purple-900">Dias Afastamento</th>
+                        <th className="p-3 text-center font-semibold text-purple-900">Afastamento</th>
                         <th className="p-3 text-left font-semibold text-purple-900">Retorno</th>
                         <th className="p-3 text-left font-semibold text-purple-900">CID</th>
                         <th className="p-3 text-left font-semibold text-purple-900">Médico</th>
@@ -1491,7 +1510,15 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                           <tr key={a.id} className="border-b last:border-0 hover:bg-muted/30">
                             <td className="p-3 font-medium">{a.tipo}</td>
                             <td className="p-3">{formatDate(a.dataEmissao)}</td>
-                            <td className="p-3 text-center font-semibold">{a.diasAfastamento || 0}</td>
+                            <td className="p-3 text-center">
+                              {a.afastamentoTipo === "horas" ? (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-xs font-semibold whitespace-nowrap">
+                                  <Clock className="h-3 w-3" /> {fmtHorasAfast(a.horasAfastamento)}
+                                </span>
+                              ) : (
+                                <span className="font-semibold">{fmtAfastamentoAtestado(a)}</span>
+                              )}
+                            </td>
                             <td className="p-3">{formatDate(a.dataRetorno)}</td>
                             <td className="p-3">{a.cid || "-"}</td>
                             <td className="p-3">{a.medico || "-"}</td>
