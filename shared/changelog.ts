@@ -1,6 +1,46 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2568 — **RH & DP · PAINEL RH · CENTRAL DE ALERTAS (modal full-screen com
+ * abas Todos/ASOs/Férias/Experiência/Avisos/HE/MO) · OS CARDS DE ALERTA POR
+ * FUNCIONÁRIO PASSAM A EXIBIR A FOTO DO CADASTRO.**
+ *
+ * MOTIVAÇÃO (relato do usuário, com 5 screenshots da Central de Alertas — abas
+ * Todos/ASOs/Férias/Experiência/Avisos):
+ *   "Quero todos com fotos do cadastro."
+ *
+ * CAUSA-RAIZ:
+ *   - Os cards em grid da Central de Alertas (`client/src/pages/PainelRH.tsx`,
+ *     ~L1163) renderizavam só o NOME (`alerta.nome`) — sem avatar. O componente
+ *     `PersonPhoto` (foto + lightbox + fallback de iniciais) já era usado em
+ *     ~30 outros pontos do MESMO arquivo (seções de ASO/Férias/Experiência/
+ *     Aviso), mas NÃO na Central de Alertas.
+ *   - O array `alertasList` (montado em ~L100-125) NÃO carregava o campo
+ *     `fotoUrl` ao fazer `push` de cada alerta, embora as fontes do servidor
+ *     (`homeData.asosAlerta`, `.semAso`, `.feriasAlerta`, `.experiencias`,
+ *     `.avisosPrevios` — todas de `server/routers/homeData.ts`) JÁ retornem
+ *     `fotoUrl` (usado nas outras seções). Ou seja: o dado já chegava ao client,
+ *     só não era propagado para o item do alerta.
+ *
+ * FIX (não-destrutivo, SÓ CLIENT — zero schema, zero ALTER/DROP/DELETE,
+ * servidor 100% intocado):
+ *   - `PainelRH.tsx`: o tipo de `alertasList` ganhou `fotoUrl?: string | null`;
+ *     os 6 `push` derivados de `homeData` (ASO vencido, ASO vencendo, sem ASO,
+ *     férias, experiência, aviso prévio) passam a incluir `fotoUrl: x.fotoUrl`.
+ *   - No render do card (grid de 5 colunas), a linha do nome virou condicional:
+ *     para alertas de FUNCIONÁRIO renderiza `<PersonPhoto src={alerta.fotoUrl}
+ *     alt={alerta.nome} size="sm" caption={alerta.titulo} />` + nome ao lado
+ *     (foto clicável com lightbox, fallback de iniciais quando sem foto). Os
+ *     alertas de Solicitação (HE/MO), que NÃO são pessoas do cadastro, mantêm o
+ *     layout antigo (só nome/função) — sem avatar.
+ *   - `PersonPhoto` já estava importado no arquivo; nenhuma query nova.
+ *
+ * ARQUIVOS:
+ *   - `client/src/pages/PainelRH.tsx` (tipo + 6 push ~L100-125; render do card
+ *     ~L1197).
+ *   - `shared/version.ts` (→ Rev. 2568), `shared/changelog.ts` (esta entrada),
+ *     `replit.md` (convenção 2+5).
+ *
  * Rev. 2567 — **ALMOXARIFADO · VISÃO GERAL (rota `/almoxarifado`) · O ALERTA
  * "N LOCAÇÕES A VENCER" (cabeçalho) PASSA A SER CLICÁVEL E ABRE UM MODAL COM
  * OS DETALHES DE CADA LOCAÇÃO.**

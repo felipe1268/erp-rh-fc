@@ -94,31 +94,31 @@ export default function PainelRH() {
   const totalAlertas = (s?.asosVencidos ?? 0) + (s?.asosVencendo ?? 0) + (s?.semAso ?? 0) + (s?.feriasAlerta ?? 0) + (s?.experienciasVencidas ?? 0) + (s?.experienciasUrgentes ?? 0) + (s?.avisosPreviosVencendo ?? 0);
 
   // Montar lista de alertas para o Dialog
-  const alertasList: { id: string; tipo: string; titulo: string; nome: string; empStatus?: string; descricao: string; urgencia: string; link: string }[] = [];
+  const alertasList: { id: string; tipo: string; titulo: string; nome: string; empStatus?: string; descricao: string; urgencia: string; link: string; fotoUrl?: string | null }[] = [];
   if (homeData) {
     // ASOs vencidos
     (homeData.asosAlerta ?? []).filter((a: any) => a.vencido).forEach((a: any) => {
-      alertasList.push({ id: `aso-v-${a.employeeId}`, tipo: 'aso', titulo: `ASO Vencido`, nome: a.nome, empStatus: a.status, descricao: `Vencido há ${Math.abs(a.diasRestantes)} dias. Função: ${a.funcao || '-'}`, urgencia: 'critico', link: '/controle-documentos' });
+      alertasList.push({ id: `aso-v-${a.employeeId}`, tipo: 'aso', titulo: `ASO Vencido`, nome: a.nome, empStatus: a.status, descricao: `Vencido há ${Math.abs(a.diasRestantes)} dias. Função: ${a.funcao || '-'}`, urgencia: 'critico', link: '/controle-documentos', fotoUrl: a.fotoUrl });
     });
     // ASOs vencendo
     (homeData.asosAlerta ?? []).filter((a: any) => !a.vencido).forEach((a: any) => {
-      alertasList.push({ id: `aso-e-${a.employeeId}`, tipo: 'aso', titulo: `ASO Vencendo`, nome: a.nome, empStatus: a.status, descricao: `Vence em ${a.diasRestantes} dias. Função: ${a.funcao || '-'}`, urgencia: a.diasRestantes <= 15 ? 'urgente' : 'atencao', link: '/controle-documentos' });
+      alertasList.push({ id: `aso-e-${a.employeeId}`, tipo: 'aso', titulo: `ASO Vencendo`, nome: a.nome, empStatus: a.status, descricao: `Vence em ${a.diasRestantes} dias. Função: ${a.funcao || '-'}`, urgencia: a.diasRestantes <= 15 ? 'urgente' : 'atencao', link: '/controle-documentos', fotoUrl: a.fotoUrl });
     });
     // Sem ASO
     (homeData.semAso ?? []).forEach((e: any) => {
-      alertasList.push({ id: `sem-aso-${e.id}`, tipo: 'aso', titulo: `Sem ASO`, nome: e.nome, empStatus: e.status, descricao: `Funcionário sem ASO cadastrado. Função: ${e.funcao || '-'}`, urgencia: 'atencao', link: '/controle-documentos' });
+      alertasList.push({ id: `sem-aso-${e.id}`, tipo: 'aso', titulo: `Sem ASO`, nome: e.nome, empStatus: e.status, descricao: `Funcionário sem ASO cadastrado. Função: ${e.funcao || '-'}`, urgencia: 'atencao', link: '/controle-documentos', fotoUrl: e.fotoUrl });
     });
     // Férias vencendo
     (homeData.feriasAlerta ?? []).forEach((f: any) => {
-      alertasList.push({ id: `ferias-${f.id}`, tipo: 'ferias', titulo: `Férias ${f.diasParaVencer <= 0 ? 'VENCIDAS' : 'Vencendo'}`, nome: f.nome, empStatus: f.status, descricao: `${f.periodoAquisitivo}º período aquisitivo. ${f.diasParaVencer <= 0 ? 'Já venceu!' : `Vence em ${f.diasParaVencer} dias`}`, urgencia: f.diasParaVencer <= 0 ? 'critico' : f.urgente ? 'urgente' : 'atencao', link: '/ferias' });
+      alertasList.push({ id: `ferias-${f.id}`, tipo: 'ferias', titulo: `Férias ${f.diasParaVencer <= 0 ? 'VENCIDAS' : 'Vencendo'}`, nome: f.nome, empStatus: f.status, descricao: `${f.periodoAquisitivo}º período aquisitivo. ${f.diasParaVencer <= 0 ? 'Já venceu!' : `Vence em ${f.diasParaVencer} dias`}`, urgencia: f.diasParaVencer <= 0 ? 'critico' : f.urgente ? 'urgente' : 'atencao', link: '/ferias', fotoUrl: f.fotoUrl });
     });
     // Experiências vencidas/urgentes/atenção (até 30 dias)
     (homeData.experiencias ?? []).filter((e: any) => e.urgencia === 'vencido' || e.urgencia === 'urgente' || e.urgencia === 'atencao').forEach((e: any) => {
-      alertasList.push({ id: `exp-${e.id}`, tipo: 'experiencia', titulo: `Contrato Experiência ${e.urgencia === 'vencido' ? 'VENCIDO' : e.urgencia === 'urgente' ? 'Urgente' : 'Vencendo'}`, nome: e.nome, empStatus: e.empStatus, descricao: `Tipo: ${e.tipo}. ${e.urgencia === 'vencido' ? 'Prazo expirado!' : `${e.diasRestantes} dias restantes`}`, urgencia: e.urgencia === 'vencido' ? 'critico' : e.urgencia === 'urgente' ? 'urgente' : 'atencao', link: '/colaboradores' });
+      alertasList.push({ id: `exp-${e.id}`, tipo: 'experiencia', titulo: `Contrato Experiência ${e.urgencia === 'vencido' ? 'VENCIDO' : e.urgencia === 'urgente' ? 'Urgente' : 'Vencendo'}`, nome: e.nome, empStatus: e.empStatus, descricao: `Tipo: ${e.tipo}. ${e.urgencia === 'vencido' ? 'Prazo expirado!' : `${e.diasRestantes} dias restantes`}`, urgencia: e.urgencia === 'vencido' ? 'critico' : e.urgencia === 'urgente' ? 'urgente' : 'atencao', link: '/colaboradores', fotoUrl: e.fotoUrl });
     });
     // Avisos prévios vencendo
     (homeData.avisosPrevios ?? []).filter((a: any) => a.urgencia === 'critico' || a.urgencia === 'vencido').forEach((a: any) => {
-      alertasList.push({ id: `aviso-${a.id}`, tipo: 'aviso', titulo: `Aviso Prévio ${a.urgencia === 'vencido' ? 'VENCIDO' : 'Crítico'}`, nome: a.nome, empStatus: a.empStatus, descricao: `Tipo: ${a.tipo.replace(/_/g, ' ')}. ${a.diasRestantes <= 0 ? 'Prazo expirado!' : `${a.diasRestantes} dias restantes`}`, urgencia: 'critico', link: '/aviso-previo' });
+      alertasList.push({ id: `aviso-${a.id}`, tipo: 'aviso', titulo: `Aviso Prévio ${a.urgencia === 'vencido' ? 'VENCIDO' : 'Crítico'}`, nome: a.nome, empStatus: a.empStatus, descricao: `Tipo: ${a.tipo.replace(/_/g, ' ')}. ${a.diasRestantes <= 0 ? 'Prazo expirado!' : `${a.diasRestantes} dias restantes`}`, urgencia: 'critico', link: '/aviso-previo', fotoUrl: a.fotoUrl });
     });
   }
   // Rev. 1271 — Solicitações de Hora Extra pendentes
@@ -1191,7 +1191,14 @@ export default function PainelRH() {
                         {alerta.urgencia === 'critico' ? 'CRÍTICO' : alerta.urgencia === 'urgente' ? 'URGENTE' : 'ATENÇÃO'}
                       </Badge>
                     </div>
-                    <p className="text-xs font-semibold text-foreground leading-tight line-clamp-2">{alerta.nome}</p>
+                    {alerta.tipo === 'solicitacao_he' || alerta.tipo === 'solicitacao_mo' ? (
+                      <p className="text-xs font-semibold text-foreground leading-tight line-clamp-2">{alerta.nome}</p>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <PersonPhoto src={alerta.fotoUrl} alt={alerta.nome} size="sm" caption={alerta.titulo} />
+                        <p className="text-xs font-semibold text-foreground leading-tight line-clamp-2 flex-1 min-w-0">{alerta.nome}</p>
+                      </div>
+                    )}
                     <p className="text-[10px] text-muted-foreground leading-tight">{alerta.descricao}</p>
                   </div>
                 ))}
