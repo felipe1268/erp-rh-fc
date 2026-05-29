@@ -1,6 +1,34 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2571 — **RH & DP · CONTROLE DE ANIVERSÁRIOS · TELA CHEIA "ANIVERSARIANTES
+ * — <MÊS>" · SÓ MONITORAR FUNCIONÁRIOS ATIVOS (exclui Desligado, Lista Negra e
+ * Inativo).**
+ *
+ * MOTIVAÇÃO (relato do usuário, com 1 screenshot da tela "Aniversariantes —
+ * Maio"): "Quem tá com status de desligado, lista negra.. não pode aparecer no
+ * controle de aniversário... só vamos monitorar quem está ATIVO." No print, os 3
+ * primeiros da lista (Edivaldo, Adeildo, Emerson) apareciam com badge "Lista
+ * Negra".
+ *
+ * CAUSA-RAIZ: a procedure `home.getAniversariantesMes`
+ * (`server/routers/homeData.ts` ~L797), que alimenta o modal/tela cheia de
+ * aniversariantes do mês, filtrava apenas `e.status !== "Desligado"` —
+ * deixando passar "Lista Negra", "Inativo" e demais status não-ativos. Já os
+ * cards da Home/Painel RH (`getData`) montam `aniversariantes` a partir de
+ * `ativos = allEmps.filter(e => e.status === "Ativo")` (estritamente ATIVO),
+ * gerando drift entre card e tela cheia.
+ *
+ * FIX (não-destrutivo, só leitura — zero schema, zero ALTER/DROP/DELETE):
+ *   - `getAniversariantesMes` passou a usar o MESMO check estrito dos cards
+ *     (`e.status === "Ativo"`), mais a exclusão explícita de Lista Negra
+ *     (`listaNegra !== 1`) pedida pelo usuário. Resultado: a tela cheia fica
+ *     consistente com os cards (só ATIVOS), excluindo Desligado/Lista Negra/
+ *     Inativo/Afastado/Férias/Licença/Recluso.
+ *
+ * ARQUIVOS: `server/routers/homeData.ts` (`getAniversariantesMes`),
+ * `shared/version.ts` (→2571), `shared/changelog.ts`, `replit.md`.
+ *
  * Rev. 2570 — **RH & DP · HORA EXTRA · ANÁLISE DA SOLICITAÇÃO (tela
  * "Análise da Solicitação HE-NNNNN") · FUNCIONÁRIO DE CARGO DE CONFIANÇA NÃO
  * GERA VALOR DE HORA EXTRA A PAGAR (CLT art. 62, II).**

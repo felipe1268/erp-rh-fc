@@ -794,7 +794,15 @@ export const homeDataRouter = router({
 
       const allEmps = await db.select().from(employees)
         .where(and(companyFilter(employees.companyId, input), sql`${employees.deletedAt} IS NULL`));
-      const todosNaoDesligados = allEmps.filter(e => e.status !== "Desligado");
+      // Rev. 2571 — Só monitorar quem está ATIVO no controle de aniversários.
+      // Mesmo check estrito dos cards da Home (`getData`: ativos = status === "Ativo"),
+      // mais a exclusão explícita de Lista Negra (flag listaNegra=1) pedida pelo
+      // usuário. Resultado: tela cheia consistente com os cards, sem Desligado/
+      // Lista Negra/Inativo/Afastado/Férias/Licença/Recluso.
+      const todosNaoDesligados = allEmps.filter(e => {
+        if ((e as any).listaNegra === 1) return false;
+        return e.status === "Ativo";
+      });
 
       const allObras = await db.select().from(obras).where(companyFilter(obras.companyId, input));
       const obraMap = new Map(allObras.map(o => [o.id, o.nome]));
