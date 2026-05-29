@@ -2224,8 +2224,12 @@ export const controleDocumentosRouter = router({
       // data de hoje no fuso de Brasília.
       const hojeStr = new Date().toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
       const timelinePassados = timeline.filter((ev) => {
-        const d = String(ev.data || "").slice(0, 10);
-        return d === "" ? true : d <= hojeStr;
+        const raw = String(ev.data || "");
+        // Só corta datas em formato ISO (YYYY-MM-DD[...]); cobre data-only e
+        // timestamp. Datas vazias ou em outro formato (legado DD/MM/AAAA) são
+        // MANTIDAS — evita falso-negativo escondendo evento passado por engano.
+        if (!/^\d{4}-\d{2}-\d{2}/.test(raw)) return true;
+        return raw.slice(0, 10) <= hojeStr;
       });
 
       return {
@@ -2246,7 +2250,7 @@ export const controleDocumentosRouter = router({
         historicoFuncional: empHistorico,
         acidentes: empAcidentes,
         processos: processosComAndamentos,
-        timeline,
+        timeline: timelinePassados,
         valeAlimentacao: empVR,
         adiantamentos: empAdiantamentos,
         rateioObras: empRateio,

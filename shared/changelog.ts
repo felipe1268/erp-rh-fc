@@ -1,6 +1,46 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2545 — **RAIO-X DO COLABORADOR · TIMELINE · MOSTRAR SOMENTE EVENTOS QUE
+ * JÁ PASSARAM (OCULTAR EVENTOS FUTUROS/AGENDADOS).**
+ *
+ * MOTIVAÇÃO (user):
+ *   A timeline cronológica do dossiê estava exibindo eventos FUTUROS (ex.: no
+ *   print, hoje 29/05/2026, apareciam "Férias — Retorno" em 07/10/2026 e
+ *   "Férias — Início Gozo" em 08/09/2026). O user pediu que a timeline mostre
+ *   APENAS o que já aconteceu — o que está por vir não pode aparecer.
+ *
+ * CAUSA:
+ *   A montagem da timeline em `docs.raioX` (controleDocumentos.ts) faz ~40
+ *   `timeline.push` a partir de várias fontes (admissão, ASOs, treinamentos,
+ *   advertências, férias, aviso prévio, HE, etc.). Algumas fontes têm datas
+ *   AGENDADAS no futuro (férias programadas, retorno previsto, aviso prévio com
+ *   data-fim futura). Nenhum filtro temporal era aplicado antes do retorno, então
+ *   esses eventos futuros entravam na lista.
+ *
+ * CORREÇÃO (server, controleDocumentos.ts — logo após o sort final ~L2222):
+ *   Calcula `hojeStr` = data de hoje em `YYYY-MM-DD` no fuso "America/Sao_Paulo"
+ *   (`toLocaleDateString("en-CA", { timeZone })`). Filtra a timeline mantendo
+ *   apenas eventos cuja parte-data (`raw.slice(0,10)` — cobre tanto data-only
+ *   quanto timestamp) seja `<= hojeStr`. DEFESA (sugestão do code review): o corte
+ *   só é aplicado quando `raw` casa com `^\d{4}-\d{2}-\d{2}` (ISO); datas vazias ou
+ *   em outro formato (ex.: legado DD/MM/AAAA em campos varchar de empréstimo) são
+ *   MANTIDAS — evita falso-negativo escondendo evento passado por engano. O return
+ *   passa a usar `timeline: timelinePassados`.
+ *
+ * ESCOPO / NÃO-OBJETIVOS:
+ *   - Comparação lexicográfica de strings ISO (YYYY-MM-DD) é correta e estável.
+ *   - Inclui o dia de HOJE (`<=`) — eventos de hoje continuam visíveis.
+ *   - Não altera as demais seções do dossiê (Férias, Aviso Prévio etc. seguem
+ *     listando seus registros completos nas próprias abas); o filtro é só na
+ *     timeline cronológica.
+ *   - Zero schema. Zero ALTER/DROP/DELETE. Mudança puramente de leitura/return.
+ *
+ * ARQUIVOS: server/routers/controleDocumentos.ts (~L2222-2252),
+ *   shared/version.ts (→2545), replit.md, replit-history.md.
+ *
+ * ============================================================================
+ *
  * Rev. 2544 — **RAIO-X DO COLABORADOR · TIMELINE · MODAL DE DETALHE DO EVENTO ·
  * REDESIGN MODERNO (SEM ROLAGEM HORIZONTAL) + FIX DE FORMATAÇÃO DE DATA/HORA.**
  *
