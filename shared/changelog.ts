@@ -1,6 +1,72 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2542 — **ALMOXARIFADO · INVENTÁRIO VISUAL (BAIAS) · OBRAS NÃO APARECIAM
+ * PARA USUÁRIOS ALOCADOS (mas não responsáveis) — dropdown de obra vazio.**
+ *
+ * MOTIVAÇÃO (user):
+ *   Os usuários Wesley e Leonardo não conseguiam ver NENHUMA obra no dropdown da
+ *   tela Almoxarifado › Inventário Visual (Baias) — a lista vinha vazia, sem
+ *   nenhuma obra para escolher, impedindo a aferição visual diária das baias.
+ *
+ * CAUSA-RAIZ:
+ *   A tela (`client/src/pages/almoxarifado/InventarioVisual.tsx`) carregava as
+ *   obras via `trpc.obras.listActive`. Para usuários NÃO-admin, `listActive`
+ *   filtra por `getEffectiveAllowedObraIds` (server/db.ts), que só reconhece uma
+ *   obra como "permitida" em três casos: (1) usuário pertence a grupo com
+ *   `acesso_todas_obras=1`; (2) obra está em `users.allowed_obra_ids`; (3) o
+ *   usuário (match por e-mail → employee) é o `responsavelId` da obra. Esse
+ *   helper IGNORA a alocação operacional via `obra_funcionarios` — então quem
+ *   está ALOCADO à obra como membro da equipe (caso de Wesley/Leonardo) mas NÃO
+ *   é o responsável, e não tem `allowed_obra_ids` nem grupo "todas as obras",
+ *   recebia conjunto VAZIO → dropdown sem obras.
+ *
+ * CORREÇÃO (duas frentes — o code review mostrou que a tela depende de AMBAS):
+ *   1) CLIENT — Trocado `trpc.obras.listActive` → `trpc.obras.listForAlmoxarifado`
+ *      em `InventarioVisual.tsx`. `listForAlmoxarifado` (server/routers.ts) é a
+ *      fonte canônica de obras das telas operacionais do Almoxarifado (já usado
+ *      pela Visão Geral em `almoxarifado/index.tsx`); inclui alocação via
+ *      `obra_funcionarios`. Isso preenche `obrasAtivas`.
+ *   2) SERVER — A tela NÃO renderiza o select de `obrasAtivas` puro: ela usa
+ *      `obrasComItem` = INTERSEÇÃO de `obrasAtivas` com as obras que têm baia,
+ *      derivadas de `warehouse.baiaAgregadosListar({obraId:null})`. Esse
+ *      procedure filtrava as obras-alvo por `userCanAccessObra` →
+ *      `getEffectiveAllowedObraIds` (sem `obra_funcionarios`), então para o
+ *      usuário só-alocado as baias voltavam vazias e a interseção ficava vazia
+ *      mesmo com o fix (1). Além disso, ao SELECIONAR a obra, o branch de obra
+ *      específica e TODAS as mutations de baia (criar/editar/desativar/listar
+ *      leituras/registrar/deletar/autoEnsure) lançavam FORBIDDEN pelo mesmo
+ *      `userCanAccessObra`. Criados em `server/db.ts` dois helpers
+ *      allocation-aware ESPECÍFICOS do almoxarifado: `getAlmoxAllowedObraIdSet`
+ *      (= `getEffectiveAllowedObraIds` ∪ alocação `obra_funcionarios` por
+ *      e-mail; `null` = admin) e `userCanAccessObraAlmox`. O fluxo de Baias em
+ *      `server/routers/warehouse.ts` passou a usá-los: branch `obraId=null` do
+ *      `baiaAgregadosListar` usa o set; branch específico + as 7 mutations de
+ *      baia usam `userCanAccessObraAlmox`. NÃO há fallback "todas as obras" no
+ *      guard de operação (ausência de vínculo ⇒ nenhum acesso = seguro).
+ *   O filtro `obrasComItem` e o gating do MÓDULO (canAccessModule) permanecem.
+ *
+ * ESCOPO / NÃO INCLUÍDO:
+ *   - Inventário Semanal (`almoxarifado/Inventario.tsx`) usa o MESMO `listActive`
+ *     e tem o bug idêntico, mas o pedido foi específico para a guia de Baias —
+ *     deixado fora desta revisão para confirmação do usuário.
+ *   - `getEffectiveAllowedObraIds` e `userCanAccessObra` NÃO foram alterados: são
+ *     guard de segurança de várias mutations em todo o ERP; ampliá-los afetaria
+ *     autorização global. A correção é local ao fluxo de Baias do almoxarifado.
+ *   - Transferências/empréstimos do warehouse (que também usam `userCanAccessObra`)
+ *     ficaram INTACTOS — fora do escopo da tela de Baias.
+ *
+ * ARQUIVOS:
+ *   - client/src/pages/almoxarifado/InventarioVisual.tsx (listActive → listForAlmoxarifado)
+ *   - server/db.ts (helpers `getAlmoxAllowedObraIdSet` + `userCanAccessObraAlmox`)
+ *   - server/routers/warehouse.ts (baiaAgregadosListar branch null + específico;
+ *     baiaCriar/Editar/Desativar/LeiturasListar/LeituraRegistrar/LeituraDeletar/
+ *     AutoEnsureFromItem → `userCanAccessObraAlmox`)
+ *
+ * Zero schema. Zero ALTER/DROP/DELETE.
+ *
+ * ─────────────────────────────────────────────────────────────────────────────
+ *
  * Rev. 2541 — **PERMISSÕES · PROPAGAÇÃO DE MELHORIAS PARA TODOS OS USUÁRIOS COM
  * ACESSO AO MÓDULO (corrige features novas aparecendo de forma seletiva).**
  *

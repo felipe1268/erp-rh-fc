@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { router, protectedProcedure } from "../_core/trpc";
 import { TRPCError } from "@trpc/server";
-import { getDb, getEffectiveAllowedObraIds, userCanAccessObra, getCompaniesForUser } from "../db";
+import { getDb, getEffectiveAllowedObraIds, userCanAccessObra, userCanAccessObraAlmox, getAlmoxAllowedObraIdSet, getCompaniesForUser } from "../db";
 import { eq, and, desc, sql, inArray, ne } from "drizzle-orm";
 import crypto from "crypto";
 import { buscarFotoParaItem } from "../_core/autoFoto";
@@ -2534,7 +2534,7 @@ REGRAS:
       if (!allowedCompanies.map((c: any) => c.id).includes(input.companyId)) {
         throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta empresa." });
       }
-      if (!(await userCanAccessObra(ctx.user.id, ctx.user.role, input.obraId))) {
+      if (!(await userCanAccessObraAlmox(ctx.user.id, ctx.user.role, ctx.user.email, input.obraId))) {
         throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta obra." });
       }
       const [obraRow] = await db.select({ id: obras.id, companyId: obras.companyId }).from(obras).where(eq(obras.id, input.obraId));
@@ -2591,7 +2591,7 @@ REGRAS:
         eq(almoxarifadoBaias.companyId, input.companyId),
       ));
       if (!existing) throw new TRPCError({ code: "NOT_FOUND" });
-      if (!(await userCanAccessObra(ctx.user.id, ctx.user.role, existing.obraId))) {
+      if (!(await userCanAccessObraAlmox(ctx.user.id, ctx.user.role, ctx.user.email, existing.obraId))) {
         throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta obra." });
       }
       const patch: any = { atualizadoEm: new Date().toISOString() };
@@ -2626,7 +2626,7 @@ REGRAS:
         eq(almoxarifadoBaias.companyId, input.companyId),
       ));
       if (!existing) throw new TRPCError({ code: "NOT_FOUND" });
-      if (!(await userCanAccessObra(ctx.user.id, ctx.user.role, existing.obraId))) {
+      if (!(await userCanAccessObraAlmox(ctx.user.id, ctx.user.role, ctx.user.email, existing.obraId))) {
         throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta obra." });
       }
       await db.update(almoxarifadoBaias).set({ ativo: false, atualizadoEm: new Date().toISOString() } as any).where(eq(almoxarifadoBaias.id, input.id));
@@ -2647,7 +2647,7 @@ REGRAS:
         eq(almoxarifadoBaias.companyId, input.companyId),
       ));
       if (!b) throw new TRPCError({ code: "NOT_FOUND" });
-      if (!(await userCanAccessObra(ctx.user.id, ctx.user.role, b.obraId))) {
+      if (!(await userCanAccessObraAlmox(ctx.user.id, ctx.user.role, ctx.user.email, b.obraId))) {
         throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta obra." });
       }
       const rows = await db.select().from(almoxarifadoBaiaLeituras)
@@ -2696,7 +2696,7 @@ REGRAS:
         eq(almoxarifadoBaias.companyId, input.companyId),
       ));
       if (!b) throw new TRPCError({ code: "NOT_FOUND" });
-      if (!(await userCanAccessObra(ctx.user.id, ctx.user.role, b.obraId))) {
+      if (!(await userCanAccessObraAlmox(ctx.user.id, ctx.user.role, ctx.user.email, b.obraId))) {
         throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta obra." });
       }
       let fotoUrl: string | null = null;
@@ -2869,7 +2869,7 @@ REGRAS:
       if (!leit) throw new TRPCError({ code: "NOT_FOUND" });
       const [b] = await db.select().from(almoxarifadoBaias).where(eq(almoxarifadoBaias.id, leit.baiaId));
       if (!b) throw new TRPCError({ code: "NOT_FOUND", message: "Baia da leitura não existe mais." });
-      if (!(await userCanAccessObra(ctx.user.id, ctx.user.role, b.obraId))) {
+      if (!(await userCanAccessObraAlmox(ctx.user.id, ctx.user.role, ctx.user.email, b.obraId))) {
         throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta obra." });
       }
       // Permissão: autor da leitura OU admin.
@@ -2961,15 +2961,19 @@ REGRAS:
           .select({ id: obras.id, nome: obras.nome, companyId: obras.companyId })
           .from(obras)
           .where(eq(obras.companyId, input.companyId));
+        // Rev. 2542 — usa o set allocation-aware do almoxarifado (inclui obra
+        // via `obra_funcionarios`) em vez de `userCanAccessObra`, para que
+        // membros da equipe ALOCADOS (não-responsáveis) vejam as baias da obra.
+        const allowedSet = await getAlmoxAllowedObraIdSet(ctx.user.id, ctx.user.role, ctx.user.email);
         const filtered: { id: number; nome: string }[] = [];
         for (const o of allObras) {
-          if (await userCanAccessObra(ctx.user.id, ctx.user.role, o.id)) {
+          if (allowedSet === null || allowedSet.has(o.id)) {
             filtered.push({ id: o.id, nome: o.nome });
           }
         }
         targetObras = filtered;
       } else {
-        if (!(await userCanAccessObra(ctx.user.id, ctx.user.role, input.obraId))) {
+        if (!(await userCanAccessObraAlmox(ctx.user.id, ctx.user.role, ctx.user.email, input.obraId))) {
           throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta obra." });
         }
         const [obraRow] = await db.select({ id: obras.id, nome: obras.nome, companyId: obras.companyId }).from(obras).where(eq(obras.id, input.obraId));
@@ -3234,7 +3238,7 @@ REGRAS:
       if (!allowedCompanies.map((c: any) => c.id).includes(input.companyId)) {
         throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta empresa." });
       }
-      if (!(await userCanAccessObra(ctx.user.id, ctx.user.role, input.obraId))) {
+      if (!(await userCanAccessObraAlmox(ctx.user.id, ctx.user.role, ctx.user.email, input.obraId))) {
         throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta obra." });
       }
       const [obraRow] = await db.select({ id: obras.id, companyId: obras.companyId }).from(obras).where(eq(obras.id, input.obraId));

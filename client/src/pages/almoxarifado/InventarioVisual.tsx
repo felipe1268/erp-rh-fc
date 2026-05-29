@@ -98,7 +98,14 @@ export default function InventarioVisualBaias() {
   const companyId = selectedCompany?.id ?? 0;
   const utils = trpc.useUtils();
 
-  const { data: obrasAtivas = [] } = trpc.obras.listActive.useQuery({ companyId }, { enabled: !!companyId });
+  // Rev. 2542 — usa `listForAlmoxarifado` (não `listActive`): o Inventário Visual
+  // (Baias) é tela operacional de campo. `listActive` filtra por
+  // `getEffectiveAllowedObraIds`, que só reconhece obras via grupo "todas as
+  // obras", `allowed_obra_ids` ou onde o user é RESPONSÁVEL — ignora a alocação
+  // via `obra_funcionarios`. Usuários alocados à obra (mas não responsáveis) viam
+  // o dropdown VAZIO. `listForAlmoxarifado` tem o fallback de alocação do
+  // funcionário (igual à Visão Geral do Almoxarifado em `index.tsx`).
+  const { data: obrasAtivas = [] } = trpc.obras.listForAlmoxarifado.useQuery({ companyId }, { enabled: !!companyId });
   // Rev. 2414 — sessão é POR OBRA (igual ao Inventário Semanal). `null` = ainda
   // não escolhida (placeholder). Rev. 2416 — "all" = visão consolidada de TODAS
   // as obras (read-only-ish: cards leem mas sem flow de sessão diária).

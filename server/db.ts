@@ -392,6 +392,63 @@ export async function userCanAccessObra(
 }
 
 /**
+ * Rev. 2542 — Conjunto de obras acessíveis para o ALMOXARIFADO (telas
+ * operacionais de campo: Baias, Inventário, etc.). Diferente de
+ * `getEffectiveAllowedObraIds` (guard de segurança geral), este helper SOMA a
+ * alocação OPERACIONAL via `obra_funcionarios` (match por e-mail → employee),
+ * espelhando a fonte `obras.listForAlmoxarifado`. Assim um membro da equipe
+ * ALOCADO à obra (mesmo sem ser responsável, sem `allowed_obra_ids` e sem grupo
+ * "todas as obras") consegue operar o almoxarifado da sua obra.
+ *
+ * Retorna `null` = sem restrição (admin/admin_master). Caso contrário, um Set de
+ * ids permitidos (pode ser vazio). NÃO aplica o fallback "todas as obras" do
+ * `listForAlmoxarifado` — aqui é guard de operação, então ausência de qualquer
+ * vínculo ⇒ nenhum acesso (seguro).
+ */
+export async function getAlmoxAllowedObraIdSet(
+  userId: number,
+  role: string | null | undefined,
+  email: string | null | undefined,
+): Promise<Set<number> | null> {
+  const base = await getEffectiveAllowedObraIds(userId, role);
+  if (base === null) return null; // admin/admin_master
+  const set = new Set<number>(base);
+  const db = await getDb();
+  if (db && email) {
+    try {
+      const empRes = await db.execute(sql`SELECT id FROM employees WHERE LOWER(email) = LOWER(${email}) AND "deletedAt" IS NULL`);
+      const empRows: any[] = (empRes as any)?.rows ?? (empRes as any) ?? [];
+      const empIds = empRows.map((e: any) => Number(e.id)).filter(Number.isFinite);
+      if (empIds.length > 0) {
+        const allocRes = await db.execute(sql`SELECT DISTINCT "obraId" FROM obra_funcionarios WHERE "employeeId" = ANY(${empIds}) AND "isActive" = 1`);
+        const allocRows: any[] = (allocRes as any)?.rows ?? (allocRes as any) ?? [];
+        for (const r of allocRows) {
+          const n = Number(r.obraId);
+          if (Number.isFinite(n)) set.add(n);
+        }
+      }
+    } catch {}
+  }
+  return set;
+}
+
+/**
+ * Rev. 2542 — Predicado de acesso a obra para o ALMOXARIFADO (allocation-aware).
+ * Use nos guards do fluxo de Baias/Inventário em vez de `userCanAccessObra`.
+ */
+export async function userCanAccessObraAlmox(
+  userId: number,
+  role: string | null | undefined,
+  email: string | null | undefined,
+  obraId: number | null | undefined,
+): Promise<boolean> {
+  const set = await getAlmoxAllowedObraIdSet(userId, role, email);
+  if (set === null) return true;
+  if (obraId == null) return false;
+  return set.has(Number(obraId));
+}
+
+/**
  * Resolve o mapa de `moduleAccess` efetivo do usuário (grupo "novo sistema" >
  * individual), espelhando `userManagement.getMyPermissions`. Usado em guards
  * server-side de nível de módulo.
