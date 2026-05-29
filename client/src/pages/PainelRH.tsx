@@ -22,7 +22,7 @@ import {
   Printer, Plane, DollarSign, ClipboardCheck, UserPlus, Ban, RefreshCw,
   Bell, FileText, CheckCircle2, XCircle, User, Calendar, TrendingDown, Info,
   BarChart2, ArrowRight, TrendingUp, Minus, GitCompareArrows, Award, Trophy, Star,
-  Maximize2, Save, X, ChevronLeft
+  Maximize2, Save, X, ChevronLeft, MapPin
 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -249,6 +249,15 @@ export default function PainelRH() {
                                 <span className="text-sm font-semibold">{exp.nome}</span>
                                 <EmpStatusBadge status={exp.empStatus} />
                                 <Badge variant="outline" className="text-[10px]">{exp.funcao || '-'}</Badge>
+                                {exp.obra ? (
+                                  <Badge variant="outline" className="text-[10px] border-emerald-300 text-emerald-700 bg-emerald-50 gap-1">
+                                    <MapPin className="h-2.5 w-2.5" /> {exp.obra}
+                                  </Badge>
+                                ) : (
+                                  <Badge variant="outline" className="text-[10px] border-gray-200 text-muted-foreground gap-1">
+                                    <MapPin className="h-2.5 w-2.5" /> Sem obra
+                                  </Badge>
+                                )}
                                 <Badge className={`text-[10px] ${exp.status === 'prorrogado' ? 'bg-blue-100 text-blue-700' : 'bg-orange-100 text-orange-700'}`}>
                                   {exp.status === 'prorrogado' ? '2º período' : '1º período'}
                                 </Badge>

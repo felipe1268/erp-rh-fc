@@ -2,6 +2,7 @@
 
 > Este arquivo guarda os one-liners das revisões antigas para manter o `replit.md` enxuto.
 
+- **Rev. 2528** — PAINEL RH — Aniversariantes só de Ativos (remove Afastado/Recluso/Férias/Lista Negra). 2 linhas em `server/routers/homeData.ts` L105+L145: `todosNaoDesligados` → `ativos`. KPIs derivados refletem automaticamente. Central de Alertas intacta. Ver `shared/changelog.ts`.
 - **Rev. 2527** — FOLHA DE PAGAMENTO — Comparativo Folha × ERP (verba por verba, 1 linha por func com expand). ViewMode `comparativo_completo` + banner azul Scale + `ComparativoFolhaErpView`+`DetalhamentoVerbasFuncionario` reusando `listarItens`+`comparativoDescontos`+`cruzamentoHE`. 5 KPIs, 10 cols, export CSV. HE ERP proxy `(sal÷220)×1,5`. `client/src/pages/FolhaPagamento.tsx` L74/L2255/L7196/L9117. Ver `shared/changelog.ts`.
 - **Rev. 2526** — FOLHA DE PAGAMENTO — Relatório Consolidado 2.0: multi-select KPIs, chips severidade, ordenação configurável, KPI Impacto R$, export CSV, tabs Por Funcionário × Por Tipo. Reusa 3 queries existentes. `client/src/pages/FolhaPagamento.tsx` `RelatorioConsolidadoView`. Ver `shared/changelog.ts`.
 - **Rev. 2525** — FOLHA DE PAGAMENTO — Import multi-PDF acumulando registros de TODOS os arquivos anexados (bug: 2º PDF sobrescrevia o 1º). Causa em `importarFolhaAuto` server L899-946 — `analiticoData = parsed` descartava o PDF anterior. Fix: PUSH com dedup defensiva por `${codigo}|${normalizeNome}|${dataAdmissao}` (Set). `recordsProcessed` agora registra contagem real daquele upload. `server/routers/folhaPagamento.ts`. Ver `shared/changelog.ts`.

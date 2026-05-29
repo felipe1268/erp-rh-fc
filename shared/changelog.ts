@@ -1,6 +1,30 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2535 — **PAINEL RH · OBRA DO FUNCIONÁRIO NOS CONTRATOS DE EXPERIÊNCIA.**
+ *
+ * MOTIVAÇÃO (user em 29/05/2026):
+ *   "Quero que indique a obra que o funcionário está" — no card "Contratos de
+ *   Experiência" do Painel RH cada linha mostrava nome, status, função e período,
+ *   mas não a obra onde o colaborador está alocado. RH precisa saber a obra pra
+ *   decidir prorrogação/efetivação/desligamento sem sair da tela.
+ *
+ * IMPLEMENTAÇÃO:
+ *   • Server `server/routers/homeData.ts` (~L569): adicionado campo `obra` no
+ *     objeto de cada experiência, reusando o `homeEmpObraMap` + `obraMap` JÁ
+ *     existentes na mesma função (alocações ativas em `obraFuncionarios` →
+ *     nome da obra). Zero query nova. `null` quando sem alocação ativa.
+ *   • Client `client/src/pages/PainelRH.tsx` (~L255): novo Badge emerald com
+ *     ícone MapPin ao lado da função; "Sem obra" (cinza) quando `exp.obra` é
+ *     null. Import `MapPin` adicionado ao lucide-react.
+ *
+ * ARQUIVOS:
+ *   • server/routers/homeData.ts — campo obra no map de experiencias.
+ *   • client/src/pages/PainelRH.tsx — badge obra + import MapPin.
+ *
+ * VALIDAÇÃO: workflow `Start application` RUNNING. Mudança type-safe
+ * (campo string|null). Zero ALTER/DROP/DELETE.
+ *
  * Rev. 2534 — **DEPLOY/SEGURANÇA · DESBLOQUEIO DO PUBLISH (Security Scan):
  * upgrade de deps com CVEs critical/high + overrides pnpm + xlsx via tarball
  * CDN SheetJS.**

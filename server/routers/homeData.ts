@@ -563,6 +563,7 @@ export const homeDataRouter = router({
             funcao: e.funcao,
             empStatus: e.status,
             fotoUrl: e.fotoUrl || null, // Rev. 2529 — foto pra avatar no card
+            obra: homeEmpObraMap.has(e.id) ? obraMap.get(homeEmpObraMap.get(e.id)!) || null : null, // Rev. 2535 — obra do funcionário
             tipo,
             inicio,
             fim1: fim1Str,
