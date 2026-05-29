@@ -1,6 +1,35 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2546 — **ALMOXARIFADO · INVENTÁRIO SEMANAL · FIX "Rendered more hooks than
+ * during the previous render" (CRASH DA TELA).**
+ *
+ * MOTIVAÇÃO (user):
+ *   A tela Almoxarifado › Inventário quebrava com tela de erro "Ocorreu um erro
+ *   inesperado — Error: Rendered more hooks than during the previous render"
+ *   (stack em `Inventario.tsx:395`).
+ *
+ * CAUSA-RAIZ (violação das Rules of Hooks):
+ *   Em `client/src/pages/almoxarifado/Inventario.tsx` havia um EARLY RETURN
+ *   `if (loadingSession) return <Loader/>` ANTES de dois `useMemo` (pendentes e
+ *   finalizados). No 1º render (`loadingSession=true`) o componente retornava
+ *   cedo e os dois `useMemo` NÃO eram chamados; quando a query resolvia
+ *   (`loadingSession=false`) os `useMemo` passavam a ser chamados → o React
+ *   detecta MAIS hooks que no render anterior e derruba a árvore com o erro.
+ *
+ * CORREÇÃO:
+ *   O early return de loading foi MOVIDO para DEPOIS de todos os hooks (logo
+ *   antes do `return` principal, após o cálculo de `nomeContexto`). Agora a
+ *   ordem/quantidade de hooks é idêntica em todos os renders. Nenhuma lógica de
+ *   dados mudou — apenas a posição do guard de loading.
+ *
+ * ESCOPO: client puro, 1 arquivo. Zero schema. Zero ALTER/DROP/DELETE.
+ *
+ * ARQUIVOS: client/src/pages/almoxarifado/Inventario.tsx, shared/version.ts
+ *   (→2546), replit.md, replit-history.md.
+ *
+ * ============================================================================
+ *
  * Rev. 2545 — **RAIO-X DO COLABORADOR · TIMELINE · MOSTRAR SOMENTE EVENTOS QUE
  * JÁ PASSARAM (OCULTAR EVENTOS FUTUROS/AGENDADOS).**
  *

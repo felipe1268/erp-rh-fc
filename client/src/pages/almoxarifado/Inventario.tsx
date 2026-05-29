@@ -1,5 +1,5 @@
 import DashboardLayout from "@/components/DashboardLayout";
-import { useState, useMemo, useRef, useEffect } from "react";
+import { useState, useMemo, useRef } from "react";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
 import { toast } from "sonner";
@@ -251,16 +251,6 @@ export default function AlmoxarifadoInventario() {
     onError: (e) => toast.error(e.message),
   });
 
-  if (loadingSession) {
-    return (
-      <DashboardLayout>
-        <div className="flex items-center justify-center h-64">
-          <Loader2 className="w-10 h-10 animate-spin text-emerald-500" />
-        </div>
-      </DashboardLayout>
-    );
-  }
-
   const conferidos = sessionItems.filter(i => i.status !== "pendente").length;
   const divergentes = sessionItems.filter(i => i.status === "divergente").length;
   const total = sessionItems.length;
@@ -295,6 +285,18 @@ export default function AlmoxarifadoInventario() {
   const nomeContexto = obraContexto === null
     ? "Central"
     : obrasAtivas.find((o: any) => o.id === obraContexto)?.nome ?? "Obra";
+
+  // Rev. 2546 — early return DEPOIS de todos os hooks (era antes dos useMemo
+  // de pendentes/finalizados → "Rendered more hooks than during the previous render").
+  if (loadingSession) {
+    return (
+      <DashboardLayout>
+        <div className="flex items-center justify-center h-64">
+          <Loader2 className="w-10 h-10 animate-spin text-emerald-500" />
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout>
