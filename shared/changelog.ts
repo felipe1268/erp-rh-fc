@@ -47,10 +47,18 @@
  *     (Ana Beatriz, Anderson, Darcy, Douglas, Enivaldo, Francisco, Geraldo,
  *     Henrique, João Paulo, José Benedito, Marcos Roberto). Casos com os DOIS
  *     cadastros na MESMA obra: Darcy (90002), Geraldo (90004), Marcos (90004).
- *   - LIMPEZA DE DADOS NÃO EXECUTADA NESTA REV.: decidir qual cadastro/empresa
- *     é o autoritativo para cada pessoa é decisão de NEGÓCIO (cross-company,
- *     ambígua) — desativar a alocação errada seria destrutivo/arriscado.
- *     Reportado ao usuário para confirmação antes de qualquer UPDATE.
+ *   - LIMPEZA DE DADOS (AUTORIZADA PELO USUÁRIO, SÓ UPDATE/INSERT — ZERO
+ *     DELETE/ALTER/DROP): por ser decisão de NEGÓCIO (cross-company, ambígua),
+ *     perguntei ao usuário; ele escolheu limpar os casos com os DOIS cadastros
+ *     na MESMA obra. Script tsx no Neon (`NEON_DATABASE_URL`) em transação +
+ *     `FOR UPDATE`: para cada caso, MANTÉM o cadastro da empresa DONA da obra e
+ *     DESATIVA (`isActive=0, dataFim=CURRENT_DATE`) a alocação do cadastro da
+ *     OUTRA empresa, gravando 'saida' em `employee_site_history`. 3 alocações
+ *     desativadas: aloc 56 (Darcy emp 1200004, obra 90002), aloc 58 (Geraldo
+ *     emp 1200007, obra 90004), aloc 180007 (Marcos emp 1200011, obra 90004) —
+ *     todas da company 60005 (JULIO FERRAZ) em obras da 60002 (FC ENGENHARIA).
+ *     Recontagem mesma-obra pós = 0. Os outros 8 casos (cadastros em obras
+ *     DIFERENTES) NÃO foram tocados (fora do escopo solicitado).
  *
  * FIX (não-destrutivo, só UI/cliente; ZERO schema, ZERO ALTER/DROP/DELETE):
  *   - `client/src/pages/ObraEfetivo.tsx`: novo helper de módulo
