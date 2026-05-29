@@ -1,6 +1,67 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2565 — **OBRAS · EFETIVO · REALOCAÇÃO DE MÃO DE OBRA (tela "Alocar
+ * Funcionários", rota `/obras/efetivo`) · PICKER "OBRA DE DESTINO" PASSA A
+ * MOSTRAR TODAS AS OBRAS ATIVAS DA EMPRESA PARA QUALQUER ENGENHEIRO DE CAMPO,
+ * SEM FILTRO DE allowed_obra_ids.**
+ *
+ * MOTIVAÇÃO (relato do usuário, com screenshot da tela "Alocar Funcionários"
+ * mostrando o seletor "Obra de Destino"):
+ *   "na tela de realocação de mão de obra quero que todo engenheiro de campo
+ *    possa ver todas as obras ativas para fazer a realocação de equipe."
+ *
+ * CAUSA-RAIZ:
+ *   - O seletor "Obra de Destino" (`<Select>` Radix em
+ *     `client/src/pages/ObraEfetivo.tsx`, ~L1185) era populado pela variável
+ *     `obrasAtivas`, vinda de `trpc.obras.listActive` (L78). Essa query, no
+ *     servidor (`server/routers.ts` L1398-1409), para usuários NÃO-admin filtra
+ *     o resultado por `getEffectiveAllowedObraIds(ctx.user.id)` — ou seja, o
+ *     engenheiro só via no picker as obras às quais já tinha permissão explícita
+ *     (allowed_obra_ids / responsável / grupo acesso_todas_obras). Logo, não
+ *     conseguia selecionar obras de destino fora do seu escopo.
+ *   - IMPORTANTE: o servidor JÁ permitia a alocação para qualquer obra. O botão
+ *     "Alocar (N)" usa `executeAllocation` → `batchAllocMut` →
+ *     `trpc.obras.transferirEmLote` (`server/routers.ts` L1974-1993), que NÃO
+ *     tem nenhuma checagem de `getEffectiveAllowedObraIds` (só bloqueia
+ *     desligado/lista-negra/inativo). O único bloqueio real, portanto, era a
+ *     VISIBILIDADE no picker. (A mutation single `obras.allocateEmployee`
+ *     L1729-1752 — que TEM o gate FORBIDDEN por obra — NÃO é usada por esta tela
+ *     no caminho de alocação; foi deixada INTOCADA.)
+ *
+ * FIX (não-destrutivo, aditivo — zero schema, zero ALTER/DROP/DELETE):
+ *   - SERVER (`server/routers.ts`): nova query `obras.listActiveAll`, irmã de
+ *     `listActive`, que retorna `getObrasByCompanyActive(companyId, companyIds)`
+ *     SEM o filtro de allowed_obra_ids. Mantém o escopo por EMPRESA e por STATUS
+ *     ativo (isActive=1, deletedAt IS NULL, status='Em_Andamento'). Só LISTA —
+ *     a alocação em si segue por `transferirEmLote` (já irrestrita por obra).
+ *     NÃO alterei `listActive` (usado por ~25 telas/dropdowns que devem
+ *     continuar respeitando a permissão), para evitar efeito colateral global.
+ *   - CLIENT (`client/src/pages/ObraEfetivo.tsx`): nova query
+ *     `obrasTodasQ = trpc.obras.listActiveAll.useQuery(...)` → `obrasTodas`. O
+ *     picker "Obra de Destino" e TODOS os lookups dependentes do destino passam
+ *     a usar `obrasTodas`:
+ *       · render do `<SelectItem>` do picker (~L1185);
+ *       · card "Condições de Trabalho" da obra de destino (`obraDest`, ~L1209);
+ *       · resumo "Pronto para alocar … na obra <nome>" (~L1257);
+ *       · nome da nova obra na confirmação de transferência (`novaObraNome`,
+ *         ~L1396).
+ *     As listas de VISUALIZAÇÃO seguem em `obrasAtivas` (filtrado por
+ *     permissão): o filtro lateral "Filtrar por obra" (~L701) e o diálogo de
+ *     condições por funcionário (~L1781) — pois dizem respeito ao que o usuário
+ *     gerencia/visualiza, não ao destino da realocação.
+ *
+ * IMPACTO: qualquer engenheiro de campo (não-admin) agora enxerga e seleciona
+ * TODAS as obras ativas da empresa como destino na realocação de equipe, sem
+ * depender de allowed_obra_ids. Nada muda para admins (que já viam tudo) nem
+ * para as demais telas que usam `listActive`.
+ *
+ * Arquivos: `server/routers.ts` (nova `obras.listActiveAll`),
+ * `client/src/pages/ObraEfetivo.tsx` (query `obrasTodas` + 4 usos no destino),
+ * `shared/version.ts` (2565), `shared/changelog.ts` (esta entrada), `replit.md`.
+ *
+ * ----------------------------------------------------------------------------
+ *
  * Rev. 2564 — **ALMOXARIFADO · EQUIPAMENTOS PRÓPRIOS · MODAL "EDITAR
  * EQUIPAMENTO" · PICKER "OBRA ATUAL" PASSA A APARECER SEMPRE (TAMBÉM NA
  * EDIÇÃO), PERMITINDO INDICAR A OBRA DIRETO SEM TER QUE CLICAR EM "EM OBRA"

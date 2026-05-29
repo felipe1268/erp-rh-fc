@@ -74,6 +74,12 @@ export default function ObraEfetivo() {
   // Queries
   const obrasQ = trpc.obras.listActive.useQuery({ companyId, companyIds }, { enabled: !!companyId });
   const obrasAtivas = obrasQ.data ?? [];
+  // Rev. 2565 — picker "Obra de Destino" mostra TODAS as obras ativas da empresa
+  // (sem filtro de allowed_obra_ids) para que qualquer engenheiro de campo possa
+  // realocar equipe para qualquer obra. A lista de VISUALIZAÇÃO (obrasAtivas)
+  // segue respeitando a permissão do usuário.
+  const obrasTodasQ = trpc.obras.listActiveAll.useQuery({ companyId, companyIds }, { enabled: !!companyId });
+  const obrasTodas = obrasTodasQ.data ?? [];
   const efetivoQ = trpc.obras.efetivoPorObra.useQuery({ companyId, companyIds }, { enabled: !!companyId, staleTime: 0 });
   const efetivo = efetivoQ.data ?? [];
   const semObraQ = trpc.obras.semObra.useQuery({ companyId, companyIds }, { enabled: !!companyId });
@@ -1173,7 +1179,7 @@ export default function ObraEfetivo() {
                       <SelectValue placeholder="Selecione a obra..." />
                     </SelectTrigger>
                     <SelectContent>
-                      {obrasAtivas.map((obra: any) => (
+                      {obrasTodas.map((obra: any) => (
                         <SelectItem key={obra.id} value={String(obra.id)}>
                           <div className="flex items-center gap-2">
                             <HardHat className="h-3.5 w-3.5 text-muted-foreground" />
@@ -1197,7 +1203,7 @@ export default function ObraEfetivo() {
 
             {/* Condições da obra selecionada */}
             {allocForm.obraId > 0 && (() => {
-              const obraDest = obrasAtivas.find((o: any) => o.id === allocForm.obraId);
+              const obraDest = obrasTodas.find((o: any) => o.id === allocForm.obraId);
               if (!obraDest) return null;
               const temIns = obraDest.insalubridadeGrau && obraDest.insalubridadeGrau !== "none";
               const temPer = obraDest.periculosidade === 1;
@@ -1245,7 +1251,7 @@ export default function ObraEfetivo() {
                       Pronto para alocar {selectedEmployees.length} funcionário(s)
                     </p>
                     <p className="text-xs text-green-600 mt-1">
-                      na obra <strong>{obrasAtivas.find((o: any) => o.id === allocForm.obraId)?.nome}</strong>
+                      na obra <strong>{obrasTodas.find((o: any) => o.id === allocForm.obraId)?.nome}</strong>
                       {allocForm.dataInicio ? ` a partir de ${allocForm.dataInicio.split('-').reverse().join('/')}` : ''}
                     </p>
                   </div>
@@ -1384,7 +1390,7 @@ export default function ObraEfetivo() {
               </p>
               <div className="space-y-2 max-h-[260px] overflow-y-auto pr-1">
                 {employeesWithAllocation.map((emp: any) => {
-                  const novaObraNome = obrasAtivas.find((o: any) => o.id === allocForm.obraId)?.nome || 'Nova obra';
+                  const novaObraNome = obrasTodas.find((o: any) => o.id === allocForm.obraId)?.nome || 'Nova obra';
                   return (
                     <div key={emp.employeeId} className="bg-white rounded-lg px-3 py-2.5 border border-amber-100 min-w-0">
                       <div className="flex items-center gap-3 min-w-0">

@@ -1404,6 +1404,15 @@ export const appRouter = router({
       const allowedSet = new Set(allowed);
       return (allObras as any[]).filter((o: any) => allowedSet.has(Number(o.id)));
     }),
+    // Rev. 2565 — picker "Obra de Destino" da realocação de mão de obra
+    // (/obras/efetivo): TODA obra ativa da empresa fica visível, sem filtro de
+    // allowed_obra_ids, para que qualquer engenheiro de campo possa realocar
+    // equipe para qualquer obra. Só LISTA (a alocação em lote `transferirEmLote`
+    // já não restringe destino por obra). Mantém escopo por empresa + status
+    // ativo via getObrasByCompanyActive (isActive=1, deletedAt NULL, Em_Andamento).
+    listActiveAll: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() })).query(async ({ input }) => {
+      return getObrasByCompanyActive(input.companyId, input.companyIds);
+    }),
     listForAlmoxarifado: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() })).query(async ({ input, ctx }) => {
       const isAdmin = ctx.user.role === 'admin' || ctx.user.role === 'admin_master';
       if (isAdmin) return getObrasByCompanyActive(input.companyId, input.companyIds);
