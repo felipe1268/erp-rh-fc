@@ -36,10 +36,16 @@
  *     "Mostrar todas as fontes").
  *   - `setFiltroTipo("todos")` no clique mantém coerência com o comportamento
  *     já existente dos chips (trocar de fonte reseta o sub-filtro de tipo).
- *   - SERVER INTOCADO: a filtragem de fonte é 100% client-side no `useMemo`
- *     `lista` (`if (filtroFonte !== "todos") r = r.filter(m => m.fonte === ...)`).
- *     `resumo` (contagens) continua derivado de `lista`, então os números dos
- *     cards refletem os demais filtros ativos (período/obra/busca) como antes.
+ *   - REFINAMENTO UX (cards comparativos): para que ao clicar num card os
+ *     OUTROS não zerassem (o que impediria alternar de fonte), o `useMemo`
+ *     `lista` foi dividido em dois: `listaBase` (aplica natureza/obra/busca,
+ *     SEM fonte/tipo) e `lista` (= `listaBase` + fonte + tipo). O `resumo`
+ *     (contagens dos cards) passou a derivar de `listaBase` → cada card sempre
+ *     mostra sua contagem no contexto de período/obra/busca/natureza,
+ *     independente da fonte selecionada; só a LISTA exibida abaixo é filtrada
+ *     por fonte+tipo.
+ *   - SERVER INTOCADO: a filtragem de fonte é 100% client-side; período segue
+ *     server-side via `range` na query `warehouse.listTimeline`.
  *
  * ARQUIVOS:
  *   - `client/src/pages/almoxarifado/Movimentacoes.tsx` (bloco dos 5 cards de

@@ -179,12 +179,16 @@ export default function AlmoxarifadoMovimentacoes() {
     return timelineAnotada.filter(m => !m._naturezaMaterial).length;
   }, [timelineAnotada]);
 
-  const lista = useMemo(() => {
+  // Rev. 2566 — base SEM o filtro por FONTE/TIPO. Os 5 cards de resumo
+  // (filtros clicáveis) contam sobre esta base para permanecerem
+  // comparativos: ao selecionar uma fonte, os outros cards continuam
+  // mostrando suas contagens (no contexto de período/obra/busca/natureza),
+  // permitindo alternar entre fontes. A `lista` exibida aplica fonte+tipo.
+  const listaBase = useMemo(() => {
     let r: any[] = timelineAnotada;
     // Rev. 2508 — filtro de natureza vem PRIMEIRO. Por padrão esconde
     // serviços/MDO/topografia que vazaram pra timeline. Admin pode revelar.
     if (!mostrarNaoMaterial) r = r.filter(m => m._naturezaMaterial);
-    if (filtroFonte !== "todos") r = r.filter(m => m.fonte === filtroFonte);
     if (filtroObra) r = r.filter(m => m.obra_id === filtroObra.id);
     if (busca) {
       const b = busca.toLowerCase();
@@ -196,21 +200,27 @@ export default function AlmoxarifadoMovimentacoes() {
         (m.contraparte?.toLowerCase()?? "").includes(b)
       );
     }
+    return r;
+  }, [timelineAnotada, mostrarNaoMaterial, busca, filtroObra]);
+
+  const lista = useMemo(() => {
+    let r: any[] = listaBase;
+    if (filtroFonte !== "todos") r = r.filter(m => m.fonte === filtroFonte);
     if (filtroTipo !== "todos") r = r.filter(m => m.tipo === filtroTipo);
     return r;
-  }, [timelineAnotada, mostrarNaoMaterial, busca, filtroFonte, filtroTipo, filtroObra]);
+  }, [listaBase, filtroFonte, filtroTipo]);
 
   const resumo = useMemo(() => {
     const porFonte: Record<string, number> = {};
-    for (const m of lista) porFonte[m.fonte] = (porFonte[m.fonte] ?? 0) + 1;
+    for (const m of listaBase) porFonte[m.fonte] = (porFonte[m.fonte] ?? 0) + 1;
     return {
-      total:        lista.length,
+      total:        listaBase.length,
       movimentacao: porFonte.movimentacao  ?? 0,
       emprestimo:   porFonte.emprestimo    ?? 0,
       insumo:       porFonte.insumo        ?? 0,
       transferencia:porFonte.transferencia ?? 0,
     };
-  }, [lista]);
+  }, [listaBase]);
 
   return (
     <DashboardLayout>
