@@ -1,6 +1,59 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2552 — **ALMOXARIFADO · EQUIPAMENTOS PRÓPRIOS · FIX DO CRASH
+ * "(intermediate value) is not iterable" AO SALVAR NOVO EQUIPAMENTO + NOVO
+ * CAMPO "OBRA ATUAL" JÁ NO CADASTRO (antes só na edição).**
+ *
+ * MOTIVAÇÃO (relato do usuário):
+ *   (1) Ao clicar "Salvar" no cadastro de NOVO equipamento próprio, dava erro
+ *       "(intermediate value) is not iterable". (2) Faltava um campo para indicar
+ *       em qual OBRA o equipamento está logo no cadastro de criação — só existia
+ *       na edição.
+ *
+ * CAUSA-RAIZ (bug #1):
+ *   O driver do banco é `drizzle-orm/node-postgres` (Pool do `pg`), onde
+ *   `db.execute(sql\`…\`)` retorna um QueryResult `{ rows, rowCount, … }` — NÃO um
+ *   array iterável. O helper `proximoCodigoPatrimonio` (server/routers/
+ *   equipamentos.ts) fazia `const [row] = await db.execute(…)` para ler o
+ *   MAX(patrimônio); como o QueryResult não é iterável, a desestruturação de
+ *   array lançava "(intermediate value) is not iterable". Esse helper é chamado
+ *   logo no início de `proprioCriar`, então TODO cadastro novo quebrava antes do
+ *   INSERT. O mesmo padrão errado estava em `propriosListar` (`(result as any[])
+ *   .map(…)`), que fazia a LISTA vir vazia silenciosamente (QueryResult não tem
+ *   `.map`). O restante do arquivo já lia defensivamente via `(res.rows || res)`
+ *   (ex.: L1595, L916) — só esses dois pontos (Rev. 2513/2514) tinham ficado com
+ *   a suposição errada de array direto.
+ *
+ * FIX (bug #1 — server, não-destrutivo):
+ *   - `proximoCodigoPatrimonio`: `const res = await db.execute(…); const row =
+ *     (res?.rows ?? res ?? [])[0];` — lê via `.rows` com fallback p/ array.
+ *   - `propriosListar`: `const rows = ((result as any)?.rows ?? result ?? []) as
+ *     any[]; return rows.map(…)` — idem.
+ *
+ * FEATURE (bug #2 — obra no cadastro):
+ *   - SERVER `proprioCriar`: input zod estendido com `status` (enum disponivel/
+ *     em_obra/manutencao/baixado) e `localizacaoAtualObraId` (number|null),
+ *     ambos opcionais. baseVals deixou de fixar status="disponivel"/
+ *     localizacao="almoxarifado": agora usa `input.status ?? "disponivel"` e,
+ *     com a MESMA coerência da edição, só grava obra quando status==="em_obra"
+ *     (tipo "obra" + obraId); demais status forçam almoxarifado + obraId null
+ *     (sem órfão visual).
+ *   - CLIENT `Proprios.tsx`: o seletor de Status + picker de Obra (que só
+ *     aparecia em `editingId`) agora é exibido também no cadastro; a auditoria
+ *     "Cadastrado por … em …" continua restrita à edição (`editingId &&`).
+ *     `salvar()` no ramo de criação valida obra obrigatória quando "em_obra" e
+ *     envia `status` + `localizacaoAtualObraId`.
+ *
+ * ARQUIVOS:
+ *   - server/routers/equipamentos.ts (proximoCodigoPatrimonio, propriosListar,
+ *     proprioCriar input+baseVals).
+ *   - client/src/pages/equipamentos/Proprios.tsx (salvar() criar, modal status/
+ *     obra sempre visível, auditoria edit-only).
+ *
+ * GARANTIAS: zero schema novo; zero ALTER/DROP/DELETE (R-001/R-007/R-010). Edição
+ * de equipamento intacta. Multi-tenant intacto (filtros por company preservados).
+ *
  * Rev. 2551 — **RH & DP · NOVA FEATURE "CONVENÇÃO COLETIVA (IA)" — UPLOAD DO
  * PDF DA CCT/CIRCULAR → IA EXTRAI TODAS AS MUDANÇAS → RELATÓRIO/DIFF REVISÁVEL
  * → APLICAÇÃO EM MASSA DE SALÁRIO (VIA MOTOR DE DISSÍDIO) + BENEFÍCIOS, COM

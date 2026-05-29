@@ -49,12 +49,17 @@ export function upperBR(v: string | null | undefined): string | null {
 // company_id, vs. O(N) varrendo em memória (problema apontado pelo
 // architect na Rev. 2513 — fix imediato).
 export async function proximoCodigoPatrimonio(db: any, companyId: number): Promise<string> {
-  const [row] = await db.execute(sql`
+  // Rev. 2552 — `db.execute` (node-postgres) retorna QueryResult `{ rows }`,
+  // NÃO um array iterável. `const [row] = await db.execute(...)` quebrava com
+  // "(intermediate value) is not iterable", impedindo o cadastro. Lê via
+  // `.rows` (com fallback p/ drivers que devolvem array direto).
+  const res: any = await db.execute(sql`
     SELECT COALESCE(MAX(NULLIF(substring(codigo_patrimonio FROM '^EQP-(\d+)$'), '')::int), 0) AS max
     FROM equipamentos_proprios
     WHERE company_id = ${companyId}
       AND codigo_patrimonio ~ '^EQP-\d+$'
   `);
+  const row = (res?.rows ?? res ?? [])[0];
   const max = Number((row as any)?.max ?? 0) || 0;
   return `EQP-${String(max + 1).padStart(4, "0")}`;
 }
@@ -282,8 +287,12 @@ export const equipamentosRouter = router({
         ${conds.length > 0 ? sql`WHERE ${and(...conds)}` : sql``}
         ORDER BY equipamentos_proprios.id DESC
       `);
+      // Rev. 2552 — `db.execute` (node-postgres) devolve QueryResult `{ rows }`;
+      // ler via `.rows` (fallback p/ array direto). Sem isso, `.map` quebrava e
+      // a lista vinha vazia.
+      const rows = ((result as any)?.rows ?? result ?? []) as any[];
       // Normaliza camelCase pro front (matching Drizzle .select())
-      return (result as any[]).map((r: any) => ({
+      return rows.map((r: any) => ({
         id: r.id,
         companyId: r.company_id,
         codigoPatrimonio: r.codigo_patrimonio,
@@ -342,6 +351,10 @@ export const equipamentosRouter = router({
       custoSeguroMedioMes: z.number().optional(),
       fotos: fotoSchema,
       observacoes: z.string().optional(),
+      // Rev. 2552 — status + obra atual já no CADASTRO (antes só na edição).
+      // Quando status="em_obra" exige obra; senão força almoxarifado/null.
+      status: z.enum(["disponivel", "em_obra", "manutencao", "baixado"]).optional(),
+      localizacaoAtualObraId: z.number().nullable().optional(),
     }))
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
@@ -350,6 +363,23 @@ export const equipamentosRouter = router({
       // que vire vazia depois do upperBR (ex: payload só com espaços).
       if (!upperBR(input.descricao)) {
         throw new TRPCError({ code: "BAD_REQUEST", message: "Descrição não pode estar vazia." });
+      }
+      // Rev. 2552 — coerência status×obra no SERVIDOR (não confiar só no client).
+      // Quando status="em_obra": obra é obrigatória e DEVE pertencer à mesma
+      // empresa (fecha vetor cross-tenant pelo novo campo de obra no cadastro).
+      if (input.status === "em_obra") {
+        if (!input.localizacaoAtualObraId) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Selecione a obra onde o equipamento está." });
+        }
+        const obraRes: any = await db.execute(sql`
+          SELECT id FROM obras
+          WHERE id = ${input.localizacaoAtualObraId} AND "companyId" = ${input.companyId}
+          LIMIT 1
+        `);
+        const obraRow = (obraRes?.rows ?? obraRes ?? [])[0];
+        if (!obraRow) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Obra inválida ou de outra empresa." });
+        }
       }
       // Rev. 2513 — INSERT com auto-gen + retry de UNIQUE violation.
       // Política: server SEMPRE manda; valor enviado do cliente é descartado.
@@ -370,8 +400,11 @@ export const equipamentosRouter = router({
         custoSeguroMedioMes: input.custoSeguroMedioMes != null ? String(input.custoSeguroMedioMes) : "0",
         fotosJson: input.fotos ?? null,
         observacoes: upperBR(input.observacoes) ?? null,
-        status: "disponivel" as const,
-        localizacaoAtualTipo: "almoxarifado" as const,
+        // Rev. 2552 — status/obra opcionais no cadastro. Coerência: só "em_obra"
+        // grava obra; demais status forçam almoxarifado/null (sem órfão visual).
+        status: input.status ?? "disponivel",
+        localizacaoAtualTipo: input.status === "em_obra" ? ("obra" as const) : ("almoxarifado" as const),
+        localizacaoAtualObraId: input.status === "em_obra" ? (input.localizacaoAtualObraId ?? null) : null,
         // Rev. 2514 — rastreabilidade: quem cadastrou (snapshot do nome
         // pra histórico estável + user_id pro link forte).
         criadoPorUserId: ctx.user.id,

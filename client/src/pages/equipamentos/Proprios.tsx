@@ -350,6 +350,12 @@ export default function EquipamentosProprios() {
         fotos: fotos.length > 0 ? fotos : undefined,
       });
     } else {
+      // Rev. 2552 — status/obra já no cadastro. Mesma coerência da edição:
+      // se "em_obra" exige obra selecionada.
+      const emObra = form.status === "em_obra";
+      if (emObra && !form.localizacaoAtualObraId) {
+        return toast.error("Selecione a obra onde o equipamento está.");
+      }
       criar.mutate({
         companyId,
         // codigoPatrimonio omitido propositalmente — servidor gera (Rev. 2513).
@@ -363,6 +369,8 @@ export default function EquipamentosProprios() {
         vidaUtilMeses: vida,
         fotos: fotos.length > 0 ? fotos : undefined,
         observacoes: form.observacoes || undefined,
+        status: form.status,
+        localizacaoAtualObraId: emObra ? form.localizacaoAtualObraId : null,
       });
     }
   }
@@ -740,9 +748,8 @@ export default function EquipamentosProprios() {
                   </div>
                 </div>
 
-                {/* STATUS — Rev. 2512, só em modo edição */}
-                {editingId ? (
-                  <div>
+                {/* STATUS — Rev. 2512 (edição) / Rev. 2552 (também no cadastro) */}
+                <div>
                     <label className="block text-xs font-semibold text-slate-800 mb-1">Status</label>
                     <div className="flex flex-wrap gap-1.5">
                       {STATUS_OPTIONS.map(opt => {
@@ -784,8 +791,8 @@ export default function EquipamentosProprios() {
                         </select>
                       </div>
                     )}
-                    {/* Rev. 2514 — Auditoria read-only: quem cadastrou + quando. */}
-                    {(editingMeta.criadoPorNome || editingMeta.createdAt) && (
+                    {/* Rev. 2514 — Auditoria read-only: quem cadastrou + quando (só edição). */}
+                    {editingId && (editingMeta.criadoPorNome || editingMeta.createdAt) && (
                       <p className="mt-2 text-[10.5px] text-slate-500 inline-flex items-center gap-1 uppercase tracking-wide">
                         <UserIcon className="h-3 w-3" />
                         Cadastrado por <strong className="text-slate-700">{editingMeta.criadoPorNome || "—"}</strong>
@@ -793,7 +800,6 @@ export default function EquipamentosProprios() {
                       </p>
                     )}
                   </div>
-                ) : <div />}
 
                 {/* CATEGORIA — col-span-2 */}
                 <div className="sm:col-span-2">
