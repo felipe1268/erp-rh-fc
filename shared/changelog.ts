@@ -1,6 +1,44 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2550 — **ALMOXARIFADO · INVENTÁRIO SEMANAL · REMOÇÃO DA BUSCA/SCANNER
+ * DE CÓDIGO DE BARRAS — "VOLTA COMO ESTAVA" (PRÉ-REV. 2530).**
+ *
+ * MOTIVAÇÃO (user):
+ *   "Cancela a opção de código de barras para o módulo de inventário, volta
+ *   como estava — quero analisar esta questão melhor depois." Ou seja: remover
+ *   por completo a caixa de busca/leitor (scanner) introduzida na Rev. 2530 e
+ *   restaurar a tela do Inventário Semanal ao comportamento anterior, sem o
+ *   campo de busca no topo da sessão em andamento.
+ *
+ * CONTEXTO:
+ *   A Rev. 2530 adicionou um <input> de busca/scanner (nome/código interno) com
+ *   confirmação automática ao escanear; a Rev. 2549 já havia retirado a parte
+ *   de código de barras (coluna inexistente) que quebrava a query, mantendo a
+ *   busca por código interno. Agora o usuário pediu para remover a feature
+ *   inteira e reavaliar depois.
+ *
+ * CORREÇÃO (client puro, zero schema, zero ALTER/DROP/DELETE):
+ *   `client/src/pages/almoxarifado/Inventario.tsx`:
+ *   1) UI — removido todo o bloco `{session.status === "em_andamento" && (...)}`
+ *      da caixa de busca/scanner (input com ScanLine, botão limpar com X e a
+ *      legenda de contagem). A tela volta a listar pendentes/finalizados sem
+ *      filtro.
+ *   2) ESTADO — removidos `const [busca,setBusca]` e `buscaRef` (useRef).
+ *   3) LÓGICA — `pendentes`/`finalizados` voltam a ser derivados diretos de
+ *      `sessionItems.filter(...)` (sem `pendentesAll`/`finalizadosAll`,
+ *      `norm`, `filterFn`, `qNorm` nem os `useMemo` de filtragem).
+ *   4) IMPORTS — limpos os símbolos órfãos: `useMemo` e `useRef` (react),
+ *      `Search`, `ScanLine`, `X` (lucide-react).
+ *   5) Comentário stale do early return (Rev. 2546) ajustado para não citar
+ *      mais os useMemo removidos.
+ *
+ * RULES OF HOOKS: o early return de `loadingSession` continua DEPOIS de todos
+ *   os hooks (não há hooks após ele), então a ordem de hooks segue estável.
+ *
+ * ARQUIVOS: `client/src/pages/almoxarifado/Inventario.tsx`,
+ *   `shared/version.ts`, `shared/changelog.ts`, `replit.md`.
+ *
  * Rev. 2549 — **ALMOXARIFADO · INVENTÁRIO SEMANAL · "INICIAR INVENTÁRIO NÃO
  * FUNCIONA" — FIX DO CRASH QUE IMPEDIA A LISTA DE ITENS DE CARREGAR.**
  *
