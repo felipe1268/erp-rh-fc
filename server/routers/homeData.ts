@@ -279,6 +279,7 @@ export const homeDataRouter = router({
             nome: e.nomeCompleto,
             funcao: e.funcao,
             fotoUrl: e.fotoUrl || null,
+            obra: homeEmpObraMap.has(e.id) ? obraMap.get(homeEmpObraMap.get(e.id)!) || null : null,
             dataAdmissao: toDateStr(e.dataAdmissao!),
             mesesTrabalhados,
             periodoAquisitivo: anosCompletos + 1,
@@ -332,6 +333,7 @@ export const homeDataRouter = router({
             nome: emp?.nomeCompleto || 'Funcionário',
             funcao: emp?.funcao || '-',
             fotoUrl: emp?.fotoUrl || null,
+            obra: homeEmpObraMap.has(v.employeeId) ? obraMap.get(homeEmpObraMap.get(v.employeeId)!) || null : null,
             dataInicio: diStr,
             dataFim: toDateStr(v.dataFim!),
             diasGozo: v.diasGozo,
@@ -364,6 +366,7 @@ export const homeDataRouter = router({
             nome: emp?.nomeCompleto || 'Funcionário',
             funcao: emp?.funcao || '-',
             fotoUrl: emp?.fotoUrl || null,
+            obra: homeEmpObraMap.has(v.employeeId) ? obraMap.get(homeEmpObraMap.get(v.employeeId)!) || null : null,
             dataInicio: toDateStr(v.dataInicio!),
             dataFim: dfStr,
             diasRestantes: Math.max(0, diasRestantes),
@@ -431,7 +434,7 @@ export const homeDataRouter = router({
           if (!e.dataAdmissao) return false;
           return toDateStr(e.dataAdmissao) >= ha30diasStr;
         })
-        .map(e => ({ id: e.id, nome: e.nomeCompleto, funcao: e.funcao, fotoUrl: e.fotoUrl || null, data: toDateStr(e.dataAdmissao!), tipo: "admissao" as const }))
+        .map(e => ({ id: e.id, nome: e.nomeCompleto, funcao: e.funcao, fotoUrl: e.fotoUrl || null, obra: homeEmpObraMap.has(e.id) ? obraMap.get(homeEmpObraMap.get(e.id)!) || null : null, data: toDateStr(e.dataAdmissao!), tipo: "admissao" as const }))
         .sort((a, b) => b.data.localeCompare(a.data));
 
       const demissoesRecentes = allEmps
@@ -439,7 +442,7 @@ export const homeDataRouter = router({
           if (!e.dataDemissao) return false;
           return toDateStr(e.dataDemissao) >= ha30diasStr;
         })
-        .map(e => ({ id: e.id, nome: e.nomeCompleto, funcao: e.funcao, fotoUrl: e.fotoUrl || null, data: toDateStr(e.dataDemissao!), tipo: "demissao" as const }))
+        .map(e => ({ id: e.id, nome: e.nomeCompleto, funcao: e.funcao, fotoUrl: e.fotoUrl || null, obra: homeEmpObraMap.has(e.id) ? obraMap.get(homeEmpObraMap.get(e.id)!) || null : null, data: toDateStr(e.dataDemissao!), tipo: "demissao" as const }))
         .sort((a, b) => b.data.localeCompare(a.data));
 
       const movimentacoes = [...admissoesRecentes, ...demissoesRecentes]

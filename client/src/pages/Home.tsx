@@ -538,9 +538,12 @@ export default function Home() {
                               className={`flex items-center justify-between text-xs px-2 py-1.5 rounded cursor-pointer hover:shadow-sm transition-all ${f.urgente ? "bg-amber-50 border border-amber-200 hover:bg-amber-100" : "hover:bg-muted/50"}`}
                               onClick={() => navigate("/ferias")}
                             >
-                              <div className="flex items-center gap-1 flex-wrap">
-                                <span className="font-medium">{f.nome}</span>
-                                <span className="text-muted-foreground text-[10px]">{f.periodoAquisitivo}º período</span>
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-1 flex-wrap">
+                                  <span className="font-medium">{f.nome}</span>
+                                  <span className="text-muted-foreground text-[10px]">{f.periodoAquisitivo}º período</span>
+                                </div>
+                                {f.obra && <span className="block text-[10px] text-blue-600 font-medium">📍 {f.obra}</span>}
                               </div>
                               <div className="flex items-center gap-1">
                                 <span className={`font-mono text-[10px] ${f.urgente ? "text-red-600 font-bold" : "text-amber-600"}`}>
@@ -574,7 +577,10 @@ export default function Home() {
                           <div className="space-y-1">
                             {homeData!.feriasDashboard.emAndamento.slice(0, 4).map((f: any) => (
                               <div key={f.id} className="flex items-center justify-between text-xs px-2 py-1 rounded bg-blue-50 border border-blue-100 cursor-pointer hover:bg-blue-100 transition-all" onClick={() => navigate("/ferias")}>
-                                <span className="font-medium">{f.nome}</span>
+                                <div className="min-w-0">
+                                  <span className="font-medium">{f.nome}</span>
+                                  {f.obra && <span className="block text-[10px] text-blue-600 font-medium">📍 {f.obra}</span>}
+                                </div>
                                 <div className="flex items-center gap-1">
                                   <span className="text-blue-600 font-mono text-[10px]">volta em {f.diasRestantes}d</span>
                                   <ChevronRight className="h-3 w-3 text-muted-foreground" />
@@ -591,9 +597,10 @@ export default function Home() {
                           <div className="space-y-1 max-h-32 overflow-y-auto">
                             {homeData!.feriasDashboard.agendadas.slice(0, 5).map((f: any) => (
                               <div key={f.id} className="flex items-center justify-between text-xs px-2 py-1 rounded cursor-pointer hover:bg-muted/50 transition-all" onClick={() => navigate("/ferias")}>
-                                <div>
+                                <div className="min-w-0">
                                   <span className="font-medium">{f.nome}</span>
                                   <span className="text-muted-foreground ml-1 text-[10px]">{f.diasGozo}d</span>
+                                  {f.obra && <span className="block text-[10px] text-blue-600 font-medium">📍 {f.obra}</span>}
                                 </div>
                                 <div className="flex items-center gap-1">
                                   <span className="text-green-600 font-mono text-[10px]">em {f.diasAteInicio}d</span>
@@ -648,6 +655,7 @@ export default function Home() {
                                 <span className="text-muted-foreground text-[10px]">
                                   {m.funcao} · {new Date(m.data + "T00:00:00").toLocaleDateString("pt-BR")}
                                 </span>
+                                {m.obra && <span className="block text-[10px] text-blue-600 font-medium">📍 {m.obra}</span>}
                               </div>
                               <Badge className={`text-[10px] shrink-0 ${m.tipo === "admissao" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>
                                 {m.tipo === "admissao" ? "Admissão" : "Demissão"}

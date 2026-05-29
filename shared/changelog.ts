@@ -1,6 +1,42 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2573 — **RH & DP · PAINEL RH / HOME · OS PAINÉIS "FÉRIAS — PAINEL RÁPIDO"
+ * (DE FÉRIAS AGORA + PRÓXIMAS AGENDADAS), "FÉRIAS — PERÍODO AQUISITIVO" E
+ * "MOVIMENTAÇÕES (30 DIAS)" PASSAM A EXIBIR A OBRA DE CADA FUNCIONÁRIO.**
+ *
+ * MOTIVAÇÃO (pedido do usuário): "mostrar a obra de cada pessoa nesses painéis
+ * para fácil localização". Os cards de aniversariantes/aniversário de empresa já
+ * exibiam a obra (selo azul com 📍), mas os painéis de Férias (Painel Rápido e
+ * Período Aquisitivo) e o de Movimentações mostravam só nome/função/data — sem a
+ * obra onde a pessoa está alocada, dificultando localizá-la.
+ *
+ * CAUSA: as procedures que alimentam esses painéis em `home.getData`
+ * (`server/routers/homeData.ts`) não projetavam o campo `obra` nas listas
+ * `feriasAlerta` (período aquisitivo), `feriasDashboard.agendadas`,
+ * `feriasDashboard.emAndamento`, `admissoesRecentes` e `demissoesRecentes`
+ * (que compõem `movimentacoes`) — embora os mapas `homeEmpObraMap`
+ * (employeeId→obraId) e `obraMap` (obraId→nome) já estivessem em escopo e
+ * fossem usados pelas listas de aniversariantes.
+ *
+ * FIX (não-destrutivo, só leitura):
+ * - SERVER (`server/routers/homeData.ts`): cada uma das 5 listas passou a incluir
+ *   `obra: homeEmpObraMap.has(id) ? obraMap.get(homeEmpObraMap.get(id)!) || null : null`,
+ *   idêntico ao padrão já usado nos aniversariantes. Para demissões a obra pode
+ *   ser `null` (desligado) — fallback já tratado. O wrapper `wCipa` faz `...row`,
+ *   então o campo `obra` é preservado na saída de `feriasDashboard`/`movimentacoes`.
+ * - CLIENT (`client/src/pages/PainelRH.tsx` e `client/src/pages/Home.tsx`): nos
+ *   cards e nas telas cheias (`cardExpand` 'ferias-painel'/'ferias-periodo'/
+ *   'movimentacoes' no PainelRH) cada item passou a renderizar a obra abaixo do
+ *   nome/função no estilo azul consistente com os aniversariantes
+ *   (`📍 {obra}`, `text-blue-600 font-medium`), condicional a `obra` existir.
+ *
+ * Zero schema. Zero ALTER/DROP/DELETE. Zero novo cálculo. Arquivos:
+ * `server/routers/homeData.ts`, `client/src/pages/PainelRH.tsx`,
+ * `client/src/pages/Home.tsx`.
+ *
+ * ---
+ *
  * Rev. 2572 — **GLOBAL · COMPONENTE `<PersonPhoto>` · LIGHTBOX (FOTO AMPLIADA)
  * NÃO CORTA MAIS A CABEÇA/PÉS DA PESSOA NO iPad/SAFARI MOBILE.**
  *

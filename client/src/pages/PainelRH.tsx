@@ -495,8 +495,10 @@ export default function PainelRH() {
                               <div key={f.id} className="flex items-center justify-between text-xs px-2 py-1 rounded bg-blue-50 border border-blue-100 gap-2">
                                 <div className="flex items-center gap-2 min-w-0 flex-1">
                                   <PersonPhoto src={f.fotoUrl} alt={f.nome} size="xs" />
-                                  <span className="font-medium truncate">{f.nome}</span>
-                                  <CipaBadge ativo={f.cipaAtivo} estabilidade={f.cipaEstabilidade} fim={f.cipaFimEstabilidade} cargo={f.cipaCargo} />
+                                  <div className="min-w-0">
+                                    <span className="font-medium truncate inline-flex items-center gap-1 flex-wrap">{f.nome}<CipaBadge ativo={f.cipaAtivo} estabilidade={f.cipaEstabilidade} fim={f.cipaFimEstabilidade} cargo={f.cipaCargo} /></span>
+                                    {f.obra ? <span className="block text-[10px] text-blue-600 font-medium">📍 {f.obra}</span> : null}
+                                  </div>
                                 </div>
                                 <span className="text-blue-600 font-mono text-[10px] shrink-0">volta em {f.diasRestantes}d</span>
                               </div>
@@ -513,8 +515,8 @@ export default function PainelRH() {
                                 <div className="flex items-center gap-2 min-w-0 flex-1">
                                   <PersonPhoto src={f.fotoUrl} alt={f.nome} size="xs" />
                                   <div className="min-w-0">
-                                    <span className="font-medium truncate inline-flex items-center gap-1 flex-wrap">{f.nome}<CipaBadge ativo={f.cipaAtivo} estabilidade={f.cipaEstabilidade} fim={f.cipaFimEstabilidade} cargo={f.cipaCargo} /></span>
-                                    <span className="text-muted-foreground ml-1 text-[10px]">{f.diasGozo}d</span>
+                                    <span className="font-medium truncate inline-flex items-center gap-1 flex-wrap">{f.nome}<CipaBadge ativo={f.cipaAtivo} estabilidade={f.cipaEstabilidade} fim={f.cipaFimEstabilidade} cargo={f.cipaCargo} /><span className="text-muted-foreground text-[10px]">{f.diasGozo}d</span></span>
+                                    {f.obra ? <span className="block text-[10px] text-blue-600 font-medium">📍 {f.obra}</span> : null}
                                   </div>
                                 </div>
                                 <span className="text-green-600 font-mono text-[10px] shrink-0">em {f.diasAteInicio}d</span>
@@ -600,8 +602,8 @@ export default function PainelRH() {
                               <div className="flex items-center gap-2 min-w-0 flex-1">
                                 <PersonPhoto src={f.fotoUrl} alt={f.nome} size="xs" />
                                 <div className="min-w-0">
-                                  <span className="font-medium truncate inline-flex items-center gap-1 flex-wrap">{f.nome}<CipaBadge ativo={f.cipaAtivo} estabilidade={f.cipaEstabilidade} fim={f.cipaFimEstabilidade} cargo={f.cipaCargo} /></span>
-                                  <span className="text-muted-foreground ml-1 text-[10px]">{f.periodoAquisitivo}º período</span>
+                                  <span className="font-medium truncate inline-flex items-center gap-1 flex-wrap">{f.nome}<CipaBadge ativo={f.cipaAtivo} estabilidade={f.cipaEstabilidade} fim={f.cipaFimEstabilidade} cargo={f.cipaCargo} /><span className="text-muted-foreground text-[10px]">{f.periodoAquisitivo}º período</span></span>
+                                  {f.obra ? <span className="block text-[10px] text-blue-600 font-medium">📍 {f.obra}</span> : null}
                                 </div>
                               </div>
                               <span className={`font-mono text-[10px] shrink-0 ${f.urgente ? "text-red-600 font-bold" : "text-amber-600"}`}>
@@ -639,6 +641,7 @@ export default function PainelRH() {
                               <div className="flex-1 min-w-0">
                                 <span className="font-medium truncate inline-flex items-center gap-1 flex-wrap">{m.nome}<CipaBadge ativo={m.cipaAtivo} estabilidade={m.cipaEstabilidade} fim={m.cipaFimEstabilidade} cargo={m.cipaCargo} /></span>
                                 <span className="block text-muted-foreground text-[10px]">{m.funcao} · {new Date(m.data + "T00:00:00").toLocaleDateString("pt-BR")}</span>
+                                {m.obra ? <span className="block text-[10px] text-blue-600 font-medium">📍 {m.obra}</span> : null}
                               </div>
                               <Badge className={`text-[10px] shrink-0 ${m.tipo === "admissao" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>
                                 {m.tipo === "admissao" ? "Admissão" : "Demissão"}
@@ -856,6 +859,7 @@ export default function PainelRH() {
                           <div className="min-w-0">
                             <p className="font-semibold text-base inline-flex items-center gap-1.5 flex-wrap"><span className="truncate">{f.nome}</span><CipaBadge ativo={f.cipaAtivo} estabilidade={f.cipaEstabilidade} fim={f.cipaFimEstabilidade} cargo={f.cipaCargo} size="sm" /></p>
                             {f.funcao && <p className="text-sm text-muted-foreground truncate">{f.funcao}</p>}
+                            {f.obra ? <p className="text-xs text-blue-600 font-medium truncate">📍 {f.obra}</p> : null}
                           </div>
                         </div>
                         <Badge className="bg-blue-100 text-blue-700 border border-blue-300 text-sm px-3 shrink-0">volta em {f.diasRestantes}d</Badge>
@@ -875,6 +879,7 @@ export default function PainelRH() {
                           <div className="min-w-0">
                             <p className="font-semibold text-base inline-flex items-center gap-1.5 flex-wrap"><span className="truncate">{f.nome}</span><CipaBadge ativo={f.cipaAtivo} estabilidade={f.cipaEstabilidade} fim={f.cipaFimEstabilidade} cargo={f.cipaCargo} size="sm" /></p>
                             {f.funcao && <p className="text-sm text-muted-foreground truncate">{f.funcao}</p>}
+                            {f.obra ? <p className="text-xs text-blue-600 font-medium truncate">📍 {f.obra}</p> : null}
                           </div>
                         </div>
                         <div className="text-right shrink-0">
@@ -960,6 +965,7 @@ export default function PainelRH() {
                   <div className="flex-1 min-w-0">
                     <p className="font-semibold text-base inline-flex items-center gap-1.5 flex-wrap"><span className="truncate">{f.nome}</span><CipaBadge ativo={f.cipaAtivo} estabilidade={f.cipaEstabilidade} fim={f.cipaFimEstabilidade} cargo={f.cipaCargo} size="sm" /></p>
                     <p className="text-sm text-muted-foreground">{f.funcao} · {f.periodoAquisitivo}º período aquisitivo</p>
+                    {f.obra ? <p className="text-xs text-blue-600 font-medium truncate">📍 {f.obra}</p> : null}
                   </div>
                   <Badge className={`text-sm px-3 shrink-0 ${f.diasParaVencer <= 0 ? 'bg-red-100 text-red-700 border border-red-300' : f.urgente ? 'bg-amber-100 text-amber-700 border border-amber-300' : 'bg-yellow-100 text-yellow-700 border border-yellow-300'}`}>
                     {f.diasParaVencer <= 0 ? 'VENCIDO!' : `${f.diasParaVencer}d para vencer`}
@@ -983,6 +989,7 @@ export default function PainelRH() {
                   <div className="flex-1 min-w-0">
                     <p className="font-semibold text-base inline-flex items-center gap-1.5 flex-wrap"><span className="truncate">{m.nome}</span><CipaBadge ativo={m.cipaAtivo} estabilidade={m.cipaEstabilidade} fim={m.cipaFimEstabilidade} cargo={m.cipaCargo} size="sm" /></p>
                     <p className="text-sm text-muted-foreground">{m.funcao}</p>
+                    {m.obra ? <p className="text-xs text-blue-600 font-medium truncate">📍 {m.obra}</p> : null}
                   </div>
                   <div className="text-right shrink-0">
                     <Badge className={`text-sm px-3 ${m.tipo === 'admissao' ? 'bg-green-100 text-green-700 border border-green-300' : 'bg-red-100 text-red-700 border border-red-300'}`}>
