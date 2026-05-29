@@ -1,6 +1,52 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2566 — **ALMOXARIFADO · MOVIMENTAÇÕES (rota `/almoxarifado/movimentacoes`)
+ * · OS 5 CARDS DE RESUMO (TOTAL / ESTOQUE / FERRAMENTAS / INSUMOS / TRANSFER.)
+ * PASSAM A SER FILTROS CLICÁVEIS POR FONTE.**
+ *
+ * MOTIVAÇÃO (relato do usuário, com 2 screenshots da tela "Movimentações"
+ * destacando a faixa dos 5 cards de resumo no topo):
+ *   "preciso que estes filtros sejam responsivos.. quando clicar apareça as
+ *    informações pertinentes."
+ *
+ * CAUSA-RAIZ:
+ *   - Os 5 cards de resumo no topo de `client/src/pages/almoxarifado/
+ *     Movimentacoes.tsx` eram `<div>` PUROS (estáticos) — apenas exibiam as
+ *     contagens `resumo.total / .movimentacao / .emprestimo / .insumo /
+ *     .transferencia`. O usuário esperava que fossem clicáveis e filtrassem a
+ *     timeline pela fonte correspondente (comportamento "responsivo").
+ *   - O estado de filtro por fonte já existia (`filtroFonte: Fonte`) e já era
+ *     controlado pelos chips horizontais da seção "Fonte" logo abaixo. Os cards
+ *     simplesmente não estavam ligados a esse estado.
+ *
+ * FIX (não-destrutivo, SÓ CLIENT — zero schema, zero ALTER/DROP/DELETE):
+ *   - `Movimentacoes.tsx`: os 5 `<div>` viraram `<button type="button">`
+ *     geradas por `.map` sobre um array de config (`{ fonte, valor, label,
+ *     cardBg, border, num, txt, ring }`). Cada card faz
+ *     `onClick={() => { setFiltroFonte(c.fonte); setFiltroTipo("todos"); }}`,
+ *     mapeando Total→"todos", Estoque→"movimentacao", Ferramentas→"emprestimo",
+ *     Insumos→"insumo", Transfer.→"transferencia". Reaproveita EXATAMENTE o
+ *     mesmo `filtroFonte` dos chips "Fonte" → clicar num card destaca o card E
+ *     o chip correspondente (estados sincronizados, fonte única de verdade).
+ *   - Card ativo ganha `ring-2` na cor do tema + `shadow-sm` + `border` reforçado
+ *     (`aria-pressed={ativo}`); inativos ganham `hover:shadow-md` +
+ *     `hover:border-gray-400`. Visual idêntico ao anterior fora o realce de
+ *     seleção e o cursor de clique. `title` por card ("Filtrar por X" /
+ *     "Mostrar todas as fontes").
+ *   - `setFiltroTipo("todos")` no clique mantém coerência com o comportamento
+ *     já existente dos chips (trocar de fonte reseta o sub-filtro de tipo).
+ *   - SERVER INTOCADO: a filtragem de fonte é 100% client-side no `useMemo`
+ *     `lista` (`if (filtroFonte !== "todos") r = r.filter(m => m.fonte === ...)`).
+ *     `resumo` (contagens) continua derivado de `lista`, então os números dos
+ *     cards refletem os demais filtros ativos (período/obra/busca) como antes.
+ *
+ * ARQUIVOS:
+ *   - `client/src/pages/almoxarifado/Movimentacoes.tsx` (bloco dos 5 cards de
+ *     resumo, ~L253-279).
+ *   - `shared/version.ts` (→ Rev. 2566), `shared/changelog.ts` (esta entrada),
+ *     `replit.md` (convenção 2+5).
+ *
  * Rev. 2565 — **OBRAS · EFETIVO · REALOCAÇÃO DE MÃO DE OBRA (tela "Alocar
  * Funcionários", rota `/obras/efetivo`) · PICKER "OBRA DE DESTINO" PASSA A
  * MOSTRAR TODAS AS OBRAS ATIVAS DA EMPRESA PARA QUALQUER ENGENHEIRO DE CAMPO,

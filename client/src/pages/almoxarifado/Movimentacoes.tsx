@@ -247,28 +247,32 @@ export default function AlmoxarifadoMovimentacoes() {
           </div>
         )}
 
-        {/* Rev. 2457 — 5 cards de resumo (total + 4 fontes). */}
+        {/* Rev. 2566 — 5 cards de resumo CLICÁVEIS (filtram por fonte).
+            Sincronizados com os chips "Fonte" abaixo via o mesmo estado
+            filtroFonte: clicar no card destaca o card + o chip correspondente. */}
         <div className="grid grid-cols-5 gap-2">
-          <div className="bg-white rounded-xl border p-2.5 text-center">
-            <p className="text-xl font-bold text-gray-900">{resumo.total}</p>
-            <p className="text-[10px] text-gray-500 mt-0.5">Total</p>
-          </div>
-          <div className="bg-emerald-50 rounded-xl border border-emerald-200 p-2.5 text-center">
-            <p className="text-xl font-bold text-emerald-700">{resumo.movimentacao}</p>
-            <p className="text-[10px] text-emerald-700 mt-0.5">Estoque</p>
-          </div>
-          <div className="bg-amber-50 rounded-xl border border-amber-200 p-2.5 text-center">
-            <p className="text-xl font-bold text-amber-700">{resumo.emprestimo}</p>
-            <p className="text-[10px] text-amber-700 mt-0.5">Ferramentas</p>
-          </div>
-          <div className="bg-violet-50 rounded-xl border border-violet-200 p-2.5 text-center">
-            <p className="text-xl font-bold text-violet-700">{resumo.insumo}</p>
-            <p className="text-[10px] text-violet-700 mt-0.5">Insumos</p>
-          </div>
-          <div className="bg-sky-50 rounded-xl border border-sky-200 p-2.5 text-center">
-            <p className="text-xl font-bold text-sky-700">{resumo.transferencia}</p>
-            <p className="text-[10px] text-sky-700 mt-0.5">Transfer.</p>
-          </div>
+          {([
+            { fonte: "todos",         valor: resumo.total,        label: "Total",       cardBg: "bg-white",       border: "border",                    num: "text-gray-900",   txt: "text-gray-500",   ring: "ring-gray-900 border-gray-900" },
+            { fonte: "movimentacao",  valor: resumo.movimentacao, label: "Estoque",     cardBg: "bg-emerald-50",  border: "border border-emerald-200", num: "text-emerald-700", txt: "text-emerald-700", ring: "ring-emerald-500 border-emerald-400" },
+            { fonte: "emprestimo",    valor: resumo.emprestimo,   label: "Ferramentas", cardBg: "bg-amber-50",    border: "border border-amber-200",   num: "text-amber-700",  txt: "text-amber-700",  ring: "ring-amber-500 border-amber-400" },
+            { fonte: "insumo",        valor: resumo.insumo,       label: "Insumos",     cardBg: "bg-violet-50",   border: "border border-violet-200",  num: "text-violet-700", txt: "text-violet-700", ring: "ring-violet-500 border-violet-400" },
+            { fonte: "transferencia", valor: resumo.transferencia,label: "Transfer.",   cardBg: "bg-sky-50",      border: "border border-sky-200",     num: "text-sky-700",    txt: "text-sky-700",    ring: "ring-sky-500 border-sky-400" },
+          ] as { fonte: Fonte; valor: number; label: string; cardBg: string; border: string; num: string; txt: string; ring: string }[]).map(c => {
+            const ativo = filtroFonte === c.fonte;
+            return (
+              <button
+                key={c.fonte}
+                type="button"
+                onClick={() => { setFiltroFonte(c.fonte); setFiltroTipo("todos"); }}
+                aria-pressed={ativo}
+                title={c.fonte === "todos" ? "Mostrar todas as fontes" : `Filtrar por ${c.label}`}
+                className={`${c.cardBg} rounded-xl ${c.border} p-2.5 text-center transition hover:shadow-md focus:outline-none ${ativo ? `ring-2 ${c.ring} shadow-sm` : "hover:border-gray-400"}`}
+              >
+                <p className={`text-xl font-bold ${c.num}`}>{c.valor}</p>
+                <p className={`text-[10px] ${c.txt} mt-0.5`}>{c.label}</p>
+              </button>
+            );
+          })}
         </div>
 
         {/* Rev. 2457 — Filtro por FONTE (chips horizontais) */}
