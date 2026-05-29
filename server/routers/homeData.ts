@@ -613,6 +613,16 @@ export const homeDataRouter = router({
           const d = new Date(dataInicioStr + 'T00:00:00');
           d.setDate(d.getDate() - 1);
           ultimoDiaTrabalhadoStr = d.toISOString().slice(0, 10);
+        } else if (a.reducaoJornada === '7_dias_corridos') {
+          // Rev. 2563 — Redução de jornada de 7 dias corridos (Art. 488 CLT):
+          // o empregado é DISPENSADO nos últimos 7 dias do aviso trabalhado,
+          // então o último dia trabalhado = dataFim - 7 (calculado
+          // automaticamente). A redução de 2h/dia (ou nenhuma) mantém todos os
+          // dias normais → último dia = dataFim. Mesmo cálculo já usado em
+          // server/db.ts, AvisoPrevio.tsx e DashAvisoPrevio.tsx.
+          const d = new Date(dataFimStr + 'T00:00:00');
+          d.setDate(d.getDate() - 7);
+          ultimoDiaTrabalhadoStr = d.toISOString().slice(0, 10);
         } else {
           ultimoDiaTrabalhadoStr = dataFimStr;
         }

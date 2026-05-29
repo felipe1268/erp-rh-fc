@@ -1,6 +1,55 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2563 — **RH & DP · AVISO PRÉVIO · CARD "AVISOS PRÉVIOS EM ANDAMENTO"
+ * (PainelRH / Home) · "ÚLTIMO DIA TRABALHADO" PASSA A SER CALCULADO
+ * AUTOMATICAMENTE QUANDO O EMPREGADO OPTA PELA REDUÇÃO DE 7 DIAS CORRIDOS
+ * (Art. 488 CLT).**
+ *
+ * MOTIVAÇÃO (relato do usuário):
+ *   "preciso que tenha o último dia de trabalho, exemplo se o funcionário optar
+ *   por redução de jornada menos 2h segue normal os dias, porém se ele definir
+ *   redução dos 7 dias.. a data do último dia trabalhado deve ser calculado
+ *   automaticamente." Screenshot do card "Avisos Prévios em Andamento" do
+ *   PainelRH onde o "Último dia trab." vinha igual ao "Término".
+ *
+ * REGRA DE NEGÓCIO (Art. 488 CLT — aviso prévio TRABALHADO dado pelo
+ * empregador):
+ *   - Redução de 2h/dia: o empregado trabalha TODOS os dias do aviso, saindo 2h
+ *     mais cedo → último dia trabalhado = dataFim (término). Sem mudança.
+ *   - Redução de 7 dias corridos: o empregado é DISPENSADO dos últimos 7 dias
+ *     do aviso → último dia trabalhado = dataFim − 7 (cálculo automático).
+ *
+ * CAUSA-RAIZ:
+ *   - O card "Avisos Prévios em Andamento" (`client/src/pages/PainelRH.tsx`,
+ *     L411-417) renderiza `a.ultimoDiaTrabalhado` vindo do servidor
+ *     (`homeData.avisosPrevios`).
+ *   - O cálculo de `ultimoDiaTrabalhado` em `server/routers/homeData.ts`
+ *     (L604-618) cobria só 3 casos: (a) `emp.dataDesligamentoEfetiva` se
+ *     existir, (b) indenizado → dataInicio − 1, (c) trabalhado → dataFim — mas
+ *     NÃO considerava `reducaoJornada === '7_dias_corridos'`, então um aviso
+ *     trabalhado com redução de 7 dias mostrava o último dia = término (errado).
+ *   - O mesmo cálculo (dataFim − 7) JÁ existia e estava correto em outros
+ *     pontos: `server/db.ts` (L2032/2585/3068), `AvisoPrevio.tsx` (L2731-2734
+ *     e tabela L1177) e `DashAvisoPrevio.tsx` (L1242-1244). Era uma INCONSISTÊN-
+ *     CIA pontual do card do PainelRH.
+ *
+ * FIX (não-destrutivo, só LEITURA/CÁLCULO no servidor; ZERO schema, ZERO
+ * ALTER/DROP/DELETE):
+ *   - `server/routers/homeData.ts`: novo ramo no cálculo de
+ *     `ultimoDiaTrabalhadoStr` — quando NÃO há `dataDesligamentoEfetiva`, NÃO é
+ *     indenizado e `a.reducaoJornada === '7_dias_corridos'`, o último dia
+ *     trabalhado = `dataFim − 7` (mesma fórmula dos demais pontos). 2h/dia e
+ *     "nenhuma" continuam caindo no `else` (último dia = dataFim).
+ *   - Bônus: `diasRestantes` (L626) usa `ultimoDiaTrabalhadoStr` como
+ *     referência, então o badge "Xd restantes"/urgência do card passa a contar
+ *     corretamente até o último dia EFETIVO de trabalho (consistente com o
+ *     comentário da Rev. 1855). O campo `reducaoJornada` já vinha no
+ *     `db.select().from(terminationNotices)` (L592, select de todas as colunas),
+ *     então nenhuma query nova foi necessária.
+ *
+ * Zero schema. Zero ALTER/DROP/DELETE. Validação via esbuild isolado (tsc OOM).
+ *
  * Rev. 2562 — **OBRAS · EFETIVO · DIALOG "EQUIPE" · (1) HARDENING DO TOAST DE
  * REMOÇÃO ("Failed to execute 'json' on 'Response': Unexpected end of JSON
  * input") + (2) DIAGNÓSTICO DO "FUNCIONÁRIO DUPLICADO" (CASO DARCY) =
