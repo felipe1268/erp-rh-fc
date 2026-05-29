@@ -2,7 +2,7 @@ import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getDb, userCanSeeAvisoStatus, userCanAccessEmployeeDossier } from "../db";
 import { TRPCError } from "@trpc/server";
-import { asos, atestados, trainings, warnings, employees, timeRecords, payroll, epiDeliveries, epis, vrBenefits, advances, obraHorasRateio, obras, documentTemplates, extraPayments, employeeHistory, accidents, processosTrabalhistas, processosAndamentos, jobFunctions, terminationNotices, vacationPeriods, cipaMeetings, cipaMembers, cipaElections, pjContracts, pjPayments, epiDiscountAlerts, customExams, obraFuncionarios, warehouseLoans, almoxarifadoDescontoFolha, almoxarifadoSaidasInsumo, heSolicitacaoConfirmacoes, heSolicitacoes, pontoDescontos, notificationLogs, notificationRecipients, lancamentosParceiros, parceirosConveniados, ddsSessoes, ddsSessaoFuncionarios, signatureSessions, signatureSigners, equipamentoLocadoEventos, equipamentosLocados, users } from "../../drizzle/schema";
+import { asos, atestados, trainings, warnings, employees, timeRecords, payroll, epiDeliveries, epis, vrBenefits, advances, obraHorasRateio, obras, documentTemplates, extraPayments, employeeHistory, accidents, processosTrabalhistas, processosAndamentos, jobFunctions, terminationNotices, vacationPeriods, cipaMeetings, cipaMembers, cipaElections, pjContracts, pjPayments, epiDiscountAlerts, customExams, obraFuncionarios, warehouseLoans, almoxarifadoDescontoFolha, almoxarifadoSaidasInsumo, heSolicitacaoConfirmacoes, heSolicitacoes, heSolicitacaoFuncionarios, pontoDescontos, notificationLogs, notificationRecipients, lancamentosParceiros, parceirosConveniados, ddsSessoes, ddsSessaoFuncionarios, signatureSessions, signatureSigners, equipamentoLocadoEventos, equipamentosLocados, users } from "../../drizzle/schema";
 import { eq, and, desc, sql, ne, isNull, inArray, gte, lte } from "drizzle-orm";
 import { resolveCompanyIds, companyFilter } from "../companyHelper";
 import { storagePut } from "../storage";
@@ -1519,8 +1519,28 @@ export const controleDocumentosRouter = router({
         statusSol: heSolicitacoes.status,
       }).from(heSolicitacaoConfirmacoes)
         .innerJoin(heSolicitacoes, eq(heSolicitacoes.id, heSolicitacaoConfirmacoes.solicitacaoId))
-        .where(eq(heSolicitacaoConfirmacoes.employeeId, input.employeeId))
+        // Rev. 2543 — BUG FIX: só conta se o funcionário AINDA é participante da solicitação.
+        // `heSolicitacoes.editar` apaga/reinsere he_solicitacao_funcionarios, mas NUNCA remove
+        // a confirmação correspondente → ela ficava órfã e gerava evento fantasma na timeline
+        // ("HE — Ausência Confirmada" de uma HE que o funcionário não faz mais parte).
+        .innerJoin(heSolicitacaoFuncionarios, and(
+          eq(heSolicitacaoFuncionarios.solicitacaoId, heSolicitacaoConfirmacoes.solicitacaoId),
+          eq(heSolicitacaoFuncionarios.employeeId, heSolicitacaoConfirmacoes.employeeId),
+        ))
+        .where(and(
+          eq(heSolicitacaoConfirmacoes.employeeId, input.employeeId),
+          // Rev. 2543 — solicitações canceladas/rejeitadas NÃO geram evento (registro "não existe").
+          ne(heSolicitacoes.status, 'cancelada'),
+          ne(heSolicitacoes.status, 'rejeitada'),
+        ))
         .orderBy(desc(heSolicitacaoConfirmacoes.confirmedAt));
+
+      // Rev. 2543 — dedup defensivo por id da confirmação: a tabela he_solicitacao_funcionarios
+      // não tem UNIQUE(solicitacaoId, employeeId), então um vínculo duplicado faria o innerJoin
+      // multiplicar a MESMA confirmação. Garante 1 evento por confirmação na timeline.
+      const empHeConfirmacoesUnicas = Array.from(
+        new Map(empHeConfirmacoes.map(c => [c.id, c])).values()
+      );
 
       // HORAS EXTRAS - TODOS os registros de pagamentos extras tipo HE
       const empHorasExtras = await db.select().from(extraPayments)
@@ -1556,12 +1576,14 @@ export const controleDocumentosRouter = router({
       }
 
       // TIMELINE CRONOLÓGICA - Montar eventos de TODAS as fontes
-      const timeline: Array<{ data: string; tipo: string; descricao: string; cor: string; icone: string }> = [];
+      // Rev. 2543 — refTipo/refId/meta dão RASTREABILIDADE: ao clicar no item da timeline,
+      // o client abre um modal com TODAS as informações da fonte (meta) e o identificador (refTipo/refId).
+      const timeline: Array<{ data: string; tipo: string; descricao: string; cor: string; icone: string; refTipo?: string; refId?: number | string | null; meta?: Record<string, any> }> = [];
 
       // Admissão
-      if (emp.dataAdmissao) timeline.push({ data: emp.dataAdmissao, tipo: "Admissão", descricao: `Admitido como ${emp.funcao || emp.cargo || "-"} no setor ${emp.setor || "-"}`, cor: "green", icone: "user-plus" });
+      if (emp.dataAdmissao) timeline.push({ data: emp.dataAdmissao, tipo: "Admissão", descricao: `Admitido como ${emp.funcao || emp.cargo || "-"} no setor ${emp.setor || "-"}`, cor: "green", icone: "user-plus", refTipo: "admissao", refId: emp.id, meta: { dataAdmissao: emp.dataAdmissao, funcao: emp.funcao, cargo: emp.cargo, setor: emp.setor, matricula: (emp as any).matricula, tipoContrato: emp.tipoContrato } });
       // Demissão
-      if (emp.dataDemissao) timeline.push({ data: emp.dataDemissao, tipo: "Desligamento", descricao: `Desligado da empresa`, cor: "red", icone: "user-minus" });
+      if (emp.dataDemissao) timeline.push({ data: emp.dataDemissao, tipo: "Desligamento", descricao: `Desligado da empresa`, cor: "red", icone: "user-minus", refTipo: "desligamento", refId: emp.id, meta: { dataDemissao: emp.dataDemissao, motivoDemissao: (emp as any).motivoDemissao ?? null, status: emp.status } });
       // Histórico funcional
       empHistorico.forEach(h => {
         const tipoLabel: Record<string, string> = { Admissao: "Admissão", Promocao: "Promoção", Transferencia: "Transferência", Mudanca_Funcao: "Mudança de Função", Mudanca_Setor: "Mudança de Setor", Mudanca_Salario: "Alteração Salarial", Afastamento: "Afastamento", Retorno: "Retorno", Ferias: "Férias", Desligamento: "Desligamento", Outros: "Outros" };
@@ -1569,28 +1591,28 @@ export const controleDocumentosRouter = router({
         if (h.valorAnterior && h.valorNovo) desc += `: ${h.valorAnterior} → ${h.valorNovo}`;
         if (h.descricao) desc += ` — ${h.descricao}`;
         const corMap: Record<string, string> = { Promocao: "green", Mudanca_Salario: "blue", Mudanca_Funcao: "purple", Transferencia: "indigo", Afastamento: "amber", Retorno: "teal", Ferias: "cyan", Desligamento: "red" };
-        timeline.push({ data: h.dataEvento, tipo: tipoLabel[h.tipo] || h.tipo, descricao: desc, cor: corMap[h.tipo] || "gray", icone: "history" });
+        timeline.push({ data: h.dataEvento, tipo: tipoLabel[h.tipo] || h.tipo, descricao: desc, cor: corMap[h.tipo] || "gray", icone: "history", refTipo: "historico", refId: h.id, meta: h });
       });
       // ASOs
-      empAsos.forEach(a => timeline.push({ data: a.dataExame, tipo: "ASO", descricao: `${a.tipo || "Exame"} — ${a.resultado || "Pendente"}`, cor: "blue", icone: "stethoscope" }));
+      empAsos.forEach(a => timeline.push({ data: a.dataExame, tipo: "ASO", descricao: `${a.tipo || "Exame"} — ${a.resultado || "Pendente"}`, cor: "blue", icone: "stethoscope", refTipo: "aso", refId: a.id, meta: a }));
       // Treinamentos
-      empTreinamentos.forEach(t => timeline.push({ data: t.dataRealizacao, tipo: "Treinamento", descricao: `${t.nome}${t.norma ? ` (${t.norma})` : ""}`, cor: "emerald", icone: "graduation-cap" }));
+      empTreinamentos.forEach(t => timeline.push({ data: t.dataRealizacao, tipo: "Treinamento", descricao: `${t.nome}${t.norma ? ` (${t.norma})` : ""}`, cor: "emerald", icone: "graduation-cap", refTipo: "treinamento", refId: t.id, meta: t }));
       // Advertências
       empAdvertencias.forEach(a => {
         const tipoAdv = a.tipoAdvertencia === "Suspensao" ? "Suspensão" : a.tipoAdvertencia === "JustaCausa" ? "Justa Causa" : a.tipoAdvertencia;
-        timeline.push({ data: a.dataOcorrencia, tipo: `Advertência (${tipoAdv})`, descricao: a.motivo || "-", cor: a.tipoAdvertencia === "Suspensao" || a.tipoAdvertencia === "JustaCausa" ? "red" : "orange", icone: "alert-triangle" });
+        timeline.push({ data: a.dataOcorrencia, tipo: `Advertência (${tipoAdv})`, descricao: a.motivo || "-", cor: a.tipoAdvertencia === "Suspensao" || a.tipoAdvertencia === "JustaCausa" ? "red" : "orange", icone: "alert-triangle", refTipo: "advertencia", refId: a.id, meta: a });
       });
       // Atestados
-      empAtestados.forEach(a => timeline.push({ data: a.dataEmissao, tipo: "Atestado", descricao: `${a.tipo || "Médico"} — ${a.diasAfastamento || 0} dia(s)${a.cid ? ` (CID: ${a.cid})` : ""}`, cor: "purple", icone: "clipboard" }));
+      empAtestados.forEach(a => timeline.push({ data: a.dataEmissao, tipo: "Atestado", descricao: `${a.tipo || "Médico"} — ${a.diasAfastamento || 0} dia(s)${a.cid ? ` (CID: ${a.cid})` : ""}`, cor: "purple", icone: "clipboard", refTipo: "atestado", refId: a.id, meta: a }));
       // Acidentes
-      empAcidentes.forEach(a => timeline.push({ data: a.dataAcidente, tipo: "Acidente", descricao: `${a.tipoAcidente} (${a.gravidade})${a.diasAfastamento ? ` — ${a.diasAfastamento} dias afastado` : ""}`, cor: "red", icone: "alert-circle" }));
+      empAcidentes.forEach(a => timeline.push({ data: a.dataAcidente, tipo: "Acidente", descricao: `${a.tipoAcidente} (${a.gravidade})${a.diasAfastamento ? ` — ${a.diasAfastamento} dias afastado` : ""}`, cor: "red", icone: "alert-circle", refTipo: "acidente", refId: a.id, meta: a }));
       // EPIs
-      empEpis.forEach(e => { if (e.dataEntrega) timeline.push({ data: e.dataEntrega, tipo: "EPI", descricao: `Entrega: ${e.nomeEpi || "EPI"}${e.ca ? ` (CA: ${e.ca})` : ""} — Qtd: ${e.quantidade || 1}`, cor: "teal", icone: "hard-hat" }); });
+      empEpis.forEach(e => { if (e.dataEntrega) timeline.push({ data: e.dataEntrega, tipo: "EPI", descricao: `Entrega: ${e.nomeEpi || "EPI"}${e.ca ? ` (CA: ${e.ca})` : ""} — Qtd: ${e.quantidade || 1}`, cor: "teal", icone: "hard-hat", refTipo: "epi", refId: e.id, meta: e }); });
       // Empréstimos de ferramentas/equipamentos
       empEmprestimos.forEach(l => {
         const obraInfo = (l as any).obraNome ? ` — Obra: ${(l as any).obraNome}` : "";
-        timeline.push({ data: l.dataEmprestimo, tipo: "Empréstimo", descricao: `Retirou: ${l.itemNome} — Qtd: ${parseFloat(l.quantidade as any) || 1} un${obraInfo}${l.almoxarifeNome ? ` (Almoxarife: ${l.almoxarifeNome})` : ""}`, cor: "blue", icone: "wrench" });
-        if (l.dataDevolucao) timeline.push({ data: l.dataDevolucao, tipo: "Devolução", descricao: `Devolveu: ${l.itemNome}${obraInfo}`, cor: "gray", icone: "check-circle" });
+        timeline.push({ data: l.dataEmprestimo, tipo: "Empréstimo", descricao: `Retirou: ${l.itemNome} — Qtd: ${parseFloat(l.quantidade as any) || 1} un${obraInfo}${l.almoxarifeNome ? ` (Almoxarife: ${l.almoxarifeNome})` : ""}`, cor: "blue", icone: "wrench", refTipo: "emprestimo", refId: l.id, meta: l });
+        if (l.dataDevolucao) timeline.push({ data: l.dataDevolucao, tipo: "Devolução", descricao: `Devolveu: ${l.itemNome}${obraInfo}`, cor: "gray", icone: "check-circle", refTipo: "emprestimo", refId: l.id, meta: l });
       });
       // Rev. 2456 — Devoluções de equipamento LOCADO (fornecedor externo)
       // que este funcionário assinou como entregador FC.
@@ -1607,6 +1629,7 @@ export const controleDocumentosRouter = router({
           descricao: `Devolveu equipamento locado: ${equip}${forn}${obraInfo}${rec}`,
           cor: "orange",
           icone: "truck",
+          refTipo: "devolucaoLocacao", refId: d.id ?? d.equipamentoLocadoId, meta: d,
         });
       });
 
@@ -1679,7 +1702,7 @@ export const controleDocumentosRouter = router({
         const desc = qtd > 1
           ? `${qtd} falta(s) no dia — sem registro de presença no ponto`
           : `Falta registrada no cartão de ponto`;
-        timeline.push({ data: f.data, tipo: "Falta", descricao: desc, cor: "red", icone: "user-x" });
+        timeline.push({ data: f.data, tipo: "Falta", descricao: desc, cor: "red", icone: "user-x", refTipo: "falta", refId: f.data, meta: f });
       });
 
       // AVISO PRÉVIO — Rev. 2208: respeita sigilo (zera lista se sem clearance)
@@ -1824,14 +1847,14 @@ export const controleDocumentosRouter = router({
           cancelado: { label: 'Cancelado', cor: 'red' },
         };
         const st = statusMap[a.status] || { label: a.status, cor: 'orange' };
-        timeline.push({ data: a.dataInicio, tipo: 'Aviso Prévio', descricao: `${quem} — ${a.diasAviso || 30} dias — Status: ${st.label}`, cor: st.cor, icone: 'alert-triangle' });
+        timeline.push({ data: a.dataInicio, tipo: 'Aviso Prévio', descricao: `${quem} — ${a.diasAviso || 30} dias — Status: ${st.label}`, cor: st.cor, icone: 'alert-triangle', refTipo: 'avisoPrevio', refId: a.id, meta: a });
         // Se concluído, adicionar evento de conclusão
         if (a.status === 'concluido' && a.dataFim) {
-          timeline.push({ data: a.dataFim, tipo: 'Aviso Prévio Concluído', descricao: `Aviso prévio encerrado (${quem})`, cor: 'green', icone: 'check-circle' });
+          timeline.push({ data: a.dataFim, tipo: 'Aviso Prévio Concluído', descricao: `Aviso prévio encerrado (${quem})`, cor: 'green', icone: 'check-circle', refTipo: 'avisoPrevio', refId: a.id, meta: a });
         }
         // Se cancelado, adicionar evento de cancelamento
         if (a.status === 'cancelado') {
-          timeline.push({ data: a.updatedAt ? new Date(a.updatedAt).toISOString().split('T')[0] : a.dataInicio, tipo: 'Aviso Prévio Cancelado', descricao: `Aviso prévio cancelado (${quem})`, cor: 'red', icone: 'x-circle' });
+          timeline.push({ data: a.updatedAt ? new Date(a.updatedAt).toISOString().split('T')[0] : a.dataInicio, tipo: 'Aviso Prévio Cancelado', descricao: `Aviso prévio cancelado (${quem})`, cor: 'red', icone: 'x-circle', refTipo: 'avisoPrevio', refId: a.id, meta: a });
         }
       });
       // FÉRIAS - Rev. 2066: emite até 3 eventos (período aquisitivo, gozo, retorno)
@@ -1844,16 +1867,17 @@ export const controleDocumentosRouter = router({
             descricao: `Iniciou período aquisitivo (concessivo até ${f.periodoConcessivoFim || '-'})`,
             cor: 'sky',
             icone: 'calendar',
+            refTipo: 'ferias', refId: f.id, meta: f,
           });
         }
         // 2) Início do gozo (se já agendado)
         if (f.dataInicio) {
           const desc = `${f.diasGozo || 30} dias${f.abonoPecuniario ? ' + abono pecuniário' : ''}${f.dataFim ? ` (até ${f.dataFim})` : ''} — Status: ${f.status || 'pendente'}`;
-          timeline.push({ data: f.dataInicio, tipo: 'Férias — Início Gozo', descricao: desc, cor: 'cyan', icone: 'palmtree' });
+          timeline.push({ data: f.dataInicio, tipo: 'Férias — Início Gozo', descricao: desc, cor: 'cyan', icone: 'palmtree', refTipo: 'ferias', refId: f.id, meta: f });
         }
         // 3) Retorno (fim do gozo)
         if (f.dataFim) {
-          timeline.push({ data: f.dataFim, tipo: 'Férias — Retorno', descricao: `Retornou das férias`, cor: 'teal', icone: 'check-circle' });
+          timeline.push({ data: f.dataFim, tipo: 'Férias — Retorno', descricao: `Retornou das férias`, cor: 'teal', icone: 'check-circle', refTipo: 'ferias', refId: f.id, meta: f });
         }
       });
 
@@ -1868,6 +1892,7 @@ export const controleDocumentosRouter = router({
           descricao: `Competência ${p.mesReferencia || '-'} — Líquido: ${liq}`,
           cor: 'green',
           icone: 'dollar-sign',
+          refTipo: 'folha', refId: p.id, meta: p,
         });
       });
 
@@ -1882,6 +1907,7 @@ export const controleDocumentosRouter = router({
           descricao: `Competência ${v.mesReferencia || '-'} — Total: R$ ${v.valorTotal || '0'} (${v.diasUteis || 0} dias úteis${operadora}) — ${v.status || 'pendente'}`,
           cor: 'lime',
           icone: 'shopping-cart',
+          refTipo: 'vr', refId: v.id, meta: v,
         });
       });
 
@@ -1896,6 +1922,7 @@ export const controleDocumentosRouter = router({
           descricao: `Competência ${a.mesReferencia || '-'} — Valor: R$ ${valor}${a.aprovado ? ` (${a.aprovado})` : ''}`,
           cor: 'yellow',
           icone: 'wallet',
+          refTipo: 'adiantamento', refId: a.id, meta: a,
         });
       });
 
@@ -1909,6 +1936,7 @@ export const controleDocumentosRouter = router({
           descricao: `${r.nomeObra || `Obra #${r.obraId}`} — ${r.diasTrabalhados || 0} dias · ${r.horasNormais || '0'}h normais + ${r.horasExtras || '0'}h extras (total ${r.totalHoras || '0'}h)`,
           cor: 'blue',
           icone: 'building',
+          refTipo: 'rateio', refId: r.id, meta: r,
         });
       });
 
@@ -1922,6 +1950,7 @@ export const controleDocumentosRouter = router({
           descricao: `Recebeu: ${i.itemNome || 'Insumo'} — Qtd: ${parseFloat(i.quantidade as any) || 1}${i.unidade ? ` ${i.unidade}` : ''}${i.obraNome ? ` — Obra: ${i.obraNome}` : ''}${i.motivo ? ` (${i.motivo})` : ''}`,
           cor: 'orange',
           icone: 'package',
+          refTipo: 'insumo', refId: i.id, meta: i,
         });
       });
 
@@ -1935,6 +1964,7 @@ export const controleDocumentosRouter = router({
           descricao: `${d.itemNome || 'Item'} — R$ ${d.valorDesconto || '0'} — ${d.status || 'Pendente'}${d.descricao ? ` (${d.descricao})` : ''}`,
           cor: 'red',
           icone: 'minus-circle',
+          refTipo: 'descontoAlmox', refId: d.id, meta: d,
         });
       });
 
@@ -1947,6 +1977,7 @@ export const controleDocumentosRouter = router({
           descricao: `Atraso de ${a.atraso}${a.entrada1 ? ` (entrada ${a.entrada1})` : ''}`,
           cor: 'amber',
           icone: 'clock',
+          refTipo: 'atraso', refId: a.data, meta: a,
         });
       });
 
@@ -1960,6 +1991,7 @@ export const controleDocumentosRouter = router({
           descricao: `${p.tipo || 'Pagamento'} · ${p.mesReferencia || '-'} — R$ ${p.valor || '0'} (${p.status || 'pendente'})${p.descricao ? ` — ${p.descricao}` : ''}`,
           cor: 'indigo',
           icone: 'file-text',
+          refTipo: 'pjPagamento', refId: p.id, meta: p,
         });
       });
       // DDS na timeline (Rev. 1768) — 1 evento por sessão
@@ -1989,53 +2021,54 @@ export const controleDocumentosRouter = router({
           descricao: `${d.tituloTema}${horaTxt}${obra}${d.instrutor ? ` — Instrutor: ${d.instrutor}` : ''} (${statusBits.join(' · ')})`,
           cor,
           icone: 'message-square',
+          refTipo: 'dds', refId: d.sessaoId, meta: d,
         });
       });
 
       // CIPA - participação
       empCipa.forEach(c => {
         if (c.mandatoInicio) {
-          timeline.push({ data: c.mandatoInicio, tipo: 'CIPA', descricao: `Membro CIPA — ${c.cargoCipa || 'Membro'} (${c.representacao || '-'}) — Status: ${c.statusMembro || '-'}`, cor: 'emerald', icone: 'shield' });
+          timeline.push({ data: c.mandatoInicio, tipo: 'CIPA', descricao: `Membro CIPA — ${c.cargoCipa || 'Membro'} (${c.representacao || '-'}) — Status: ${c.statusMembro || '-'}`, cor: 'emerald', icone: 'shield', refTipo: 'cipa', refId: c.id, meta: c });
         }
       });
       // PJ CONTRATOS
       empPjContratos.forEach(c => {
         if (c.dataInicio) {
-          timeline.push({ data: c.dataInicio, tipo: 'Contrato PJ', descricao: `Contrato PJ — ${c.status || 'Ativo'}${c.dataFim ? ` (até ${c.dataFim})` : ''}`, cor: 'indigo', icone: 'file-signature' });
+          timeline.push({ data: c.dataInicio, tipo: 'Contrato PJ', descricao: `Contrato PJ — ${c.status || 'Ativo'}${c.dataFim ? ` (até ${c.dataFim})` : ''}`, cor: 'indigo', icone: 'file-signature', refTipo: 'pjContrato', refId: c.id, meta: c });
         }
       });
       // HORAS EXTRAS
       empHorasExtras.forEach(h => {
         const heData = h.dataPagamento || (h.mesReferencia ? `${h.mesReferencia}-01` : null);
         if (heData) {
-          timeline.push({ data: heData, tipo: 'Hora Extra', descricao: `${parseFloat(h.quantidadeHoras || '0').toFixed(1)}h — ${h.descricao || 'Sem descrição'}`, cor: 'amber', icone: 'clock' });
+          timeline.push({ data: heData, tipo: 'Hora Extra', descricao: `${parseFloat(h.quantidadeHoras || '0').toFixed(1)}h — ${h.descricao || 'Sem descrição'}`, cor: 'amber', icone: 'clock', refTipo: 'horaExtra', refId: h.id, meta: h });
         }
       });
       // DESCONTO EPI
       empEpiDiscountAlerts.forEach(d => {
         if (d.createdAt) {
           const dataStr = new Date(d.createdAt).toISOString().split('T')[0];
-          timeline.push({ data: dataStr, tipo: 'Desconto EPI', descricao: `${d.epiNome || 'EPI'} — R$ ${d.valorTotal || '0'} — ${d.status || 'Pendente'}`, cor: d.status === 'confirmado' ? 'red' : 'amber', icone: 'hard-hat' });
+          timeline.push({ data: dataStr, tipo: 'Desconto EPI', descricao: `${d.epiNome || 'EPI'} — R$ ${d.valorTotal || '0'} — ${d.status || 'Pendente'}`, cor: d.status === 'confirmado' ? 'red' : 'amber', icone: 'hard-hat', refTipo: 'descontoEpi', refId: d.id, meta: d });
         }
       });
       // PROCESSOS TRABALHISTAS
       processosComAndamentos.forEach((p: any) => {
         if (p.dataAbertura) {
-          timeline.push({ data: p.dataAbertura, tipo: 'Processo Trabalhista', descricao: `Processo nº ${p.numeroProcesso || '-'} — ${p.status || '-'}`, cor: 'red', icone: 'gavel' });
+          timeline.push({ data: p.dataAbertura, tipo: 'Processo Trabalhista', descricao: `Processo nº ${p.numeroProcesso || '-'} — ${p.status || '-'}`, cor: 'red', icone: 'gavel', refTipo: 'processo', refId: p.id, meta: p });
         }
       });
 
-      empHeConfirmacoes.forEach(c => {
+      empHeConfirmacoesUnicas.forEach(c => {
         const dataEvt = c.dataSolicitacao || (c.confirmedAt ? new Date(c.confirmedAt).toISOString().split("T")[0] : null);
         if (!dataEvt) return;
         const horario = c.horaInicio && c.horaFim ? ` (${c.horaInicio}–${c.horaFim})` : "";
         const alertaAss = c.assinaturaDivergente ? ` ⚠️ ASSINATURA DIVERGENTE (${c.similaridade || 0}% similaridade)` : "";
         if (c.compareceu === false) {
-          timeline.push({ data: dataEvt, tipo: "HE — Ausência Confirmada", descricao: `Confirmou presença na HE${horario} mas NÃO compareceu. Motivo HE: ${c.motivo || "-"}${c.observacao ? `. Obs: ${c.observacao}` : ""}${alertaAss}`, cor: "red", icone: "user-x" });
+          timeline.push({ data: dataEvt, tipo: "HE — Ausência Confirmada", descricao: `Confirmou presença na HE${horario} mas NÃO compareceu. Motivo HE: ${c.motivo || "-"}${c.observacao ? `. Obs: ${c.observacao}` : ""}${alertaAss}`, cor: "red", icone: "user-x", refTipo: "heConfirmacao", refId: c.id, meta: c });
         } else if (c.compareceu === true) {
-          timeline.push({ data: dataEvt, tipo: "HE — Presença Confirmada", descricao: `Confirmou e compareceu à HE${horario}. Motivo: ${c.motivo || "-"}${alertaAss}`, cor: "green", icone: "user-check" });
+          timeline.push({ data: dataEvt, tipo: "HE — Presença Confirmada", descricao: `Confirmou e compareceu à HE${horario}. Motivo: ${c.motivo || "-"}${alertaAss}`, cor: "green", icone: "user-check", refTipo: "heConfirmacao", refId: c.id, meta: c });
         } else {
-          timeline.push({ data: dataEvt, tipo: "HE — Assinatura Confirmação", descricao: `Assinou confirmação de presença para HE${horario}. Aguardando registro de comparecimento.${alertaAss}`, cor: c.assinaturaDivergente ? "red" : "amber", icone: c.assinaturaDivergente ? "alert-triangle" : "pen-tool" });
+          timeline.push({ data: dataEvt, tipo: "HE — Assinatura Confirmação", descricao: `Assinou confirmação de presença para HE${horario}. Aguardando registro de comparecimento.${alertaAss}`, cor: c.assinaturaDivergente ? "red" : "amber", icone: c.assinaturaDivergente ? "alert-triangle" : "pen-tool", refTipo: "heConfirmacao", refId: c.id, meta: c });
         }
       });
 
@@ -2092,6 +2125,7 @@ export const controleDocumentosRouter = router({
           descricao: `Compra em ${l.parceiroNomeExibicao} — ${valNum.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}${itensInfo} (${stLbl})${compInfo}`,
           cor,
           icone: 'handshake',
+          refTipo: 'parceiro', refId: l.id, meta: l,
         });
       });
 
@@ -2150,6 +2184,7 @@ export const controleDocumentosRouter = router({
             descricao: `${s.documentTitle} — enviado p/ assinatura por ${s.createdByName}`,
             cor: 'blue',
             icone: 'file-text',
+            refTipo: 'fcsign', refId: s.id, meta: { ...s, signers: fcsignSignersBySession.get(s.id) || [] },
           });
         }
         for (const sg of (fcsignSignersBySession.get(s.id) || [])) {
@@ -2162,6 +2197,7 @@ export const controleDocumentosRouter = router({
             descricao: `${sg.nome} (${sg.role}) assinou: ${s.documentTitle}`,
             cor: 'emerald',
             icone: 'check',
+            refTipo: 'fcsign', refId: s.id, meta: { ...s, signer: sg, signers: fcsignSignersBySession.get(s.id) || [] },
           });
         }
         if (s.status === 'completo' && s.completedAt) {
@@ -2173,6 +2209,7 @@ export const controleDocumentosRouter = router({
               descricao: `${s.documentTitle} — todas as partes assinaram`,
               cor: 'emerald',
               icone: 'check-circle',
+              refTipo: 'fcsign', refId: s.id, meta: { ...s, signers: fcsignSignersBySession.get(s.id) || [] },
             });
           }
         }

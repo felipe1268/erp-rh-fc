@@ -68,10 +68,11 @@ export const heSolicitacoesRouter = router({
 
     const solicitacaoId = result.id;
 
-    // Vincular funcionários
-    if (input.funcionarioIds.length > 0) {
+    // Vincular funcionários (Rev. 2543 — dedup p/ evitar vínculo duplicado → join 1:N no Raio-X)
+    const funcionarioIdsCreate = Array.from(new Set(input.funcionarioIds));
+    if (funcionarioIdsCreate.length > 0) {
       await db.insert(heSolicitacaoFuncionarios).values(
-        input.funcionarioIds.map(empId => ({
+        funcionarioIdsCreate.map(empId => ({
           solicitacaoId: Number(solicitacaoId),
           employeeId: empId,
           status: "pendente" as const,
@@ -804,9 +805,11 @@ export const heSolicitacoesRouter = router({
     await db.update(heSolicitacoes).set(updateData).where(eq(heSolicitacoes.id, input.id));
 
     if (input.funcionarioIds && input.funcionarioIds.length > 0) {
+      // Rev. 2543 — dedup p/ evitar vínculo duplicado (sem UNIQUE na tabela) → join 1:N no Raio-X
+      const funcionarioIdsUpdate = Array.from(new Set(input.funcionarioIds));
       await db.delete(heSolicitacaoFuncionarios).where(eq(heSolicitacaoFuncionarios.solicitacaoId, input.id));
       await db.insert(heSolicitacaoFuncionarios).values(
-        input.funcionarioIds.map(empId => ({
+        funcionarioIdsUpdate.map(empId => ({
           solicitacaoId: input.id,
           employeeId: empId,
           status: "pendente" as const,

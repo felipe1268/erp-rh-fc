@@ -248,6 +248,8 @@ export default function RaioXFuncionario({ employeeId, open, onClose }: RaioXPro
   const [reprovarModal, setReprovarModal] = useState<{ id: number } | null>(null);
   const [reprovarMotivo, setReprovarMotivo] = useState("");
   const [atestPreviewDoc, setAtestPreviewDoc] = useState<{ url: string; name: string; title: string } | null>(null);
+  // Rev. 2543 — rastreabilidade: evento da timeline selecionado p/ modal de detalhe
+  const [timelineEvt, setTimelineEvt] = useState<any | null>(null);
 
   const utils = trpc.useContext();
   const criarDescontoMut = trpc.warehouse.criarDescontoFolha.useMutation({
@@ -1344,18 +1346,24 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                       <div className="absolute left-4 top-0 bottom-0 w-0.5 bg-gray-200" />
                       <div className="space-y-3">
                         {timeline.map((ev: any, idx: number) => (
-                          <div key={idx} className="flex items-start gap-4 ml-0">
+                          <button
+                            key={idx}
+                            type="button"
+                            onClick={() => setTimelineEvt(ev)}
+                            className="w-full flex items-start gap-4 ml-0 text-left group focus:outline-none"
+                            title="Ver detalhes do registro"
+                          >
                             <div className={`shrink-0 w-9 h-9 rounded-full ${TIMELINE_COLORS[ev.cor] || "bg-gray-400"} flex items-center justify-center z-10`}>
                               <ChevronRight className="h-4 w-4 text-white" />
                             </div>
-                            <div className="flex-1 bg-gray-50 rounded-lg p-3 border border-gray-100">
+                            <div className="flex-1 bg-gray-50 rounded-lg p-3 border border-gray-100 transition-all group-hover:border-indigo-300 group-hover:bg-indigo-50/40 group-hover:shadow-sm">
                               <div className="flex items-center justify-between">
                                 <span className="text-xs font-bold text-gray-500">{formatDate(ev.data)}</span>
                                 <Badge variant="outline" className="text-[10px]">{ev.tipo}</Badge>
                               </div>
                               <p className="text-sm text-gray-700 mt-1">{ev.descricao}</p>
                             </div>
-                          </div>
+                          </button>
                         ))}
                       </div>
                     </div>
@@ -3987,6 +3995,84 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
         fileName={atestPreviewDoc?.name || null}
         title={atestPreviewDoc?.title}
       />
+
+      {/* Rev. 2543 — MODAL DE DETALHE DO EVENTO DA TIMELINE (rastreabilidade) */}
+      <Dialog open={!!timelineEvt} onOpenChange={(o) => { if (!o) setTimelineEvt(null); }}>
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <span className={`shrink-0 w-7 h-7 rounded-full ${TIMELINE_COLORS[timelineEvt?.cor] || "bg-gray-400"} flex items-center justify-center`}>
+                <ChevronRight className="h-4 w-4 text-white" />
+              </span>
+              {timelineEvt?.tipo || "Detalhe do registro"}
+            </DialogTitle>
+          </DialogHeader>
+          {timelineEvt && (() => {
+            const PII_KEYS = /(cpf|rg|pis|ctps|nascimento|endereco|logradouro|bairro|cep|telefone|celular|email|conta|agencia|pix|salario|remuneracao|nomemae|nomepai|eleitor|cnh|passaporte|dependente|beneficiario|dadosbancarios|valoranterior|valornovo)/i;
+            const SKIP_KEYS = /^(_|employeeId$|funcionarioId$|companyId$|deletedAt$|updatedBy$|createdBy$)/i;
+            const friendlyKey = (k: string) => k
+              .replace(/([A-Z])/g, " $1")
+              .replace(/_/g, " ")
+              .replace(/\b\w/g, (c) => c.toUpperCase())
+              .replace(/\bId\b/g, "ID")
+              .trim();
+            const isISODate = (v: string) => /^\d{4}-\d{2}-\d{2}([T ]|$)/.test(v);
+            const fmtVal = (v: any): string => {
+              if (v === null || v === undefined || v === "") return "—";
+              if (typeof v === "boolean") return v ? "Sim" : "Não";
+              if (typeof v === "number") return String(v);
+              if (typeof v === "string") return isISODate(v) ? formatDate(v) : v;
+              // Objetos/arrays aninhados podem conter PII (ex.: signatários FCSign com e-mail/CPF).
+              // Sob hidePersonal, NÃO serializa o conteúdo cru.
+              if (typeof v === "object" && hidePersonal) return "[oculto]";
+              try { return JSON.stringify(v); } catch { return String(v); }
+            };
+            const meta = (timelineEvt.meta && typeof timelineEvt.meta === "object") ? timelineEvt.meta : {};
+            const entries = Object.entries(meta).filter(([k, v]) => {
+              if (SKIP_KEYS.test(k)) return false;
+              if (v === null || v === undefined || v === "") return false;
+              if (typeof v === "function") return false;
+              if (hidePersonal && PII_KEYS.test(k)) return false;
+              return true;
+            });
+            return (
+              <div className="space-y-4 pt-1">
+                <div className="rounded-lg border bg-gray-50 p-3">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-xs font-bold text-gray-500">{formatDate(timelineEvt.data)}</span>
+                    <Badge variant="outline" className="text-[10px]">{timelineEvt.tipo}</Badge>
+                  </div>
+                  <p className="text-sm text-gray-700">{timelineEvt.descricao}</p>
+                </div>
+
+                <div>
+                  <div className="text-[11px] font-bold uppercase tracking-wider text-gray-500 mb-2">
+                    Dados completos do registro{timelineEvt.refTipo ? ` · ${timelineEvt.refTipo}${timelineEvt.refId != null ? ` #${timelineEvt.refId}` : ""}` : ""}
+                  </div>
+                  {entries.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">Sem detalhes adicionais disponíveis para este registro.</p>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2">
+                      {entries.map(([k, v]) => (
+                        <div key={k} className="flex flex-col border-b border-gray-100 pb-1.5">
+                          <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">{friendlyKey(k)}</span>
+                          <span className="text-sm text-gray-800 break-words whitespace-pre-wrap">{fmtVal(v)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {hidePersonal && (
+                    <p className="text-[11px] text-amber-600 mt-3">Alguns dados pessoais sensíveis foram ocultados conforme suas permissões (LGPD).</p>
+                  )}
+                </div>
+              </div>
+            );
+          })()}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setTimelineEvt(null)}>Fechar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* LIGHTBOX DA FOTO DO COLABORADOR */}
       {fotoAmpliada && emp?.fotoUrl && (

@@ -1,6 +1,72 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2543 — **RAIO-X DO COLABORADOR · TIMELINE · (1) BUG da CONFIRMAÇÃO DE HE
+ * FANTASMA + (2) RASTREABILIDADE: cada evento da timeline agora é CLICÁVEL e abre
+ * um modal com TODOS os dados do registro de origem.**
+ *
+ * MOTIVAÇÃO (user):
+ *   No Raio-X (dossiê) de um colaborador, a timeline mostrava um evento de
+ *   "HE — Assinatura Confirmação" (Hora Extra) que NÃO deveria existir — uma
+ *   confirmação fantasma, sem solicitação de HE válida vinculada àquele
+ *   colaborador. Além disso o user pediu (a) que cada item da timeline seja
+ *   clicável e abra um modal com TODAS as informações daquele lançamento
+ *   (rastreabilidade ponta-a-ponta) e (b) garantir que o ERP não gere registros
+ *   equivocados como esse.
+ *
+ * CAUSA-RAIZ DO BUG (confirmada via código — produção é réplica com dados-semente
+ * de CPFs fictícios, então o reparo foi guiado pelo código, não pelo dado):
+ *   `heSolicitacoes.editar` (server/routers/heSolicitacoes.ts ~L804-815) ao editar
+ *   uma solicitação de HE APAGA e REINSERE as linhas de `he_solicitacao_funcionarios`
+ *   (participantes), mas NUNCA remove as linhas correspondentes de
+ *   `he_solicitacao_confirmacoes`. Resultado: se um colaborador é removido da
+ *   solicitação (ou a solicitação é cancelada/rejeitada), a confirmação dele fica
+ *   ÓRFÃ na tabela de confirmações. A query da timeline do Raio-X
+ *   (`empHeConfirmacoes` em controleDocumentos.ts) lia `he_solicitacao_confirmacoes`
+ *   por `employeeId` SEM (a) filtrar o status da solicitação-mãe (incluía
+ *   cancelada/rejeitada) e SEM (b) checar se o colaborador AINDA é participante da
+ *   solicitação → a confirmação órfã aparecia como evento fantasma na timeline.
+ *
+ * CORREÇÃO DO BUG (read-side, NÃO-destrutiva — preserva a confirmação para
+ * auditoria; apenas deixa de EXIBIR a órfã):
+ *   Na query `empHeConfirmacoes` (controleDocumentos.ts) foi adicionado:
+ *   (1) `innerJoin` com `he_solicitacao_funcionarios` casando
+ *   (solicitacaoId + employeeId) — só mostra confirmação de quem É participante
+ *   ATUAL da solicitação; (2) `ne(status,'cancelada')` e `ne(status,'rejeitada')`
+ *   na solicitação-mãe. Import de `heSolicitacaoFuncionarios` adicionado.
+ *   DECISÃO consciente: NÃO foi adicionado cascade-delete de confirmações no
+ *   `editar` (isso APAGARIA trilha de auditoria); o fix é puramente de leitura, o
+ *   que também blinda contra órfãs já existentes no banco sem rodar DELETE.
+ *
+ * FEATURE — RASTREABILIDADE (timeline clicável + modal):
+ *   - SERVER (controleDocumentos.ts `docs.raioX`): TODOS os 40 `timeline.push`
+ *     passaram a carregar `refTipo` (categoria do registro), `refId` (id de origem)
+ *     e `meta` (o objeto-fonte completo do forEach). Tipos cobertos: admissao,
+ *     desligamento, historico, aso, treinamento, advertencia, atestado, acidente,
+ *     epi, emprestimo, devolucaoLocacao, falta, avisoPrevio, ferias, folha, vr,
+ *     adiantamento, rateio, insumo, descontoAlmox, atraso, pjPagamento, dds, cipa,
+ *     pjContrato, horaExtra, descontoEpi, processo, heConfirmacao, parceiro,
+ *     fcsign (este com `signers`/`signer` no meta).
+ *   - CLIENT (RaioXFuncionario.tsx): cada item da timeline virou `<button>` com
+ *     hover-state; ao clicar abre um `Dialog` (estado `timelineEvt`) que mostra
+ *     cabeçalho (data/tipo/descrição) + grade key-value com TODOS os campos do
+ *     `meta`. Formatação: camelCase→Título, datas ISO→formatDate, boolean→Sim/Não,
+ *     objetos→JSON. RESPEITA LGPD: quando `hidePersonal` (sem clearance de dados
+ *     pessoais), campos sensíveis (cpf/rg/pis/salário/endereço/conta/etc.) são
+ *     ocultados e exibido aviso. Chaves internas (_*, employeeId, companyId,
+ *     deletedAt, created/updatedBy) são omitidas.
+ *
+ * GARANTIA "ERP não gera lançamento equivocado": a confirmação fantasma não era
+ * um lançamento gerado errado, e sim um registro órfão deixado pelo `editar` sem
+ * limpeza + uma leitura permissiva. O fix de leitura (join + filtros de status)
+ * impede QUALQUER confirmação órfã/de solicitação inválida de reaparecer no
+ * dossiê, sem tocar em dados existentes.
+ *
+ * ARQUIVOS: server/routers/controleDocumentos.ts (query `empHeConfirmacoes` +
+ * import + 40 pushes c/ refTipo/refId/meta), client/src/components/RaioXFuncionario.tsx
+ * (timeline clicável + modal de detalhe + estado `timelineEvt`).
+ * Zero schema. Zero ALTER/DROP/DELETE.
+ *
  * Rev. 2542 — **ALMOXARIFADO · INVENTÁRIO VISUAL (BAIAS) · OBRAS NÃO APARECIAM
  * PARA USUÁRIOS ALOCADOS (mas não responsáveis) — dropdown de obra vazio.**
  *
