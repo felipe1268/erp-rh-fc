@@ -2,6 +2,7 @@
 
 > Este arquivo guarda os one-liners das revisões antigas para manter o `replit.md` enxuto.
 
+- **Rev. 2530** — INVENTÁRIO SEMANAL — Busca + leitor de código de barras (scan → baixa BATE automática). Server `warehouse.getInventorySessionItems` ~L1086 +`itemCodigoBarras`+`itemCodigoInterno`; client `almoxarifado/Inventario.tsx` ~L452-520 input emerald ScanLine, Enter auto-confirma quando match EXATO por código OU 1 só pendente filtrado. Ver `shared/changelog.ts`.
 - **Rev. 2529** — PAINEL RH — Contratos de Experiência com avatar do funcionário à esquerda. Server `homeData.ts` ~L560 +`fotoUrl` no return de experiencias; client `PainelRH.tsx` ~L242 row em flex gap-3 com `<PersonPhoto size="sm" />`. Padrão igual Aniversariantes/Férias. Ver `shared/changelog.ts`.
 - **Rev. 2528** — PAINEL RH — Aniversariantes só de Ativos (remove Afastado/Recluso/Férias/Lista Negra). 2 linhas em `server/routers/homeData.ts` L105+L145: `todosNaoDesligados` → `ativos`. KPIs derivados refletem automaticamente. Central de Alertas intacta. Ver `shared/changelog.ts`.
 - **Rev. 2527** — FOLHA DE PAGAMENTO — Comparativo Folha × ERP (verba por verba, 1 linha por func com expand). ViewMode `comparativo_completo` + banner azul Scale + `ComparativoFolhaErpView`+`DetalhamentoVerbasFuncionario` reusando `listarItens`+`comparativoDescontos`+`cruzamentoHE`. 5 KPIs, 10 cols, export CSV. HE ERP proxy `(sal÷220)×1,5`. `client/src/pages/FolhaPagamento.tsx` L74/L2255/L7196/L9117. Ver `shared/changelog.ts`.

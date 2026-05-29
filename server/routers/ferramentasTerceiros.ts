@@ -8,7 +8,7 @@
 import { z } from "zod";
 import { router, protectedProcedure } from "../_core/trpc";
 import { TRPCError } from "@trpc/server";
-import { getDb } from "../db";
+import { getDb, getUserCompanyLinks } from "../db";
 import { sql } from "drizzle-orm";
 import { storagePut } from "../storage";
 import { auditLogs } from "../../drizzle/schema";
@@ -63,12 +63,25 @@ const itemInputSchema = z.object({
   message: "Foto obrigatória.",
 });
 
-// Rev. 1884 (hardening pós-review architect) — guard multi-tenant explícito.
-// Bloqueia qualquer tentativa de manipular `input.companyId` para acessar dados
-// de outra empresa. Aplicado em TODOS os procedures que recebem companyId.
-function assertSameCompany(ctx: { user: { companyId?: number | null } }, companyId: number) {
-  if (!ctx.user?.companyId || ctx.user.companyId !== companyId) {
-    throw new TRPCError({ code: "FORBIDDEN", message: "Acesso negado: empresa não autorizada." });
+// Rev. 2537 — guard multi-tenant alinhado ao resto do ERP (grupo empresarial).
+// ANTES (Rev. 1884) só comparava `ctx.user.companyId === companyId` — empresa
+// ÚNICA "casa" do usuário. Isso quebrava p/ usuários multi-empresa: quem operava
+// numa empresa do grupo diferente da casa dele tomava "empresa não autorizada"
+// e o módulo Terceiros aparecia VAZIO. Novo check espelha `terceiros._assertCompanyAccess`:
+//  - admin / admin_master → libera (roles globais).
+//  - usuário com vínculos em `user_companies` → enforça membership real.
+//  - usuário SEM vínculos explícitos → libera (acesso global controlado por grupo/módulo).
+async function assertCompanyAccess(ctx: { user: { id: number; role?: string | null } }, companyId: number) {
+  if (!ctx.user?.id) throw new TRPCError({ code: "UNAUTHORIZED", message: "Sessão inválida." });
+  if (ctx.user.role === "admin" || ctx.user.role === "admin_master") return;
+  const links = await getUserCompanyLinks(ctx.user.id);
+  const allowedIds = (links as any[]).map((l: any) => l.companyId).filter((v: any) => typeof v === "number");
+  if (allowedIds.length === 0) return; // sem vínculos = acesso global por grupo/módulo
+  if (!new Set<number>(allowedIds).has(companyId)) {
+    console.error("[ferramentasTerceiros.assertCompanyAccess] BLOQUEADO", {
+      userId: ctx.user.id, role: ctx.user.role, inputCompanyId: companyId, allowedIds,
+    });
+    throw new TRPCError({ code: "FORBIDDEN", message: `Sem acesso a esta empresa. (user=${ctx.user.id} req=${companyId} allowed=[${allowedIds.join(",")}])` });
   }
 }
 
@@ -106,7 +119,7 @@ export const ferramentasTerceirosRouter = router({
   meuLancador: protectedProcedure
     .input(z.object({ companyId: z.number() }))
     .query(async ({ input, ctx }) => {
-      assertSameCompany(ctx, input.companyId);
+      await assertCompanyAccess(ctx, input.companyId);
       const db = (await getDb())!;
       const codigoInterno = await lookupCodigoInterno(db, ctx.user.id, input.companyId);
       return {
@@ -120,7 +133,7 @@ export const ferramentasTerceirosRouter = router({
   kpis: protectedProcedure
     .input(z.object({ companyId: z.number(), obraId: z.number().optional().nullable() }))
     .query(async ({ input, ctx }) => {
-      assertSameCompany(ctx, input.companyId);
+      await assertCompanyAccess(ctx, input.companyId);
       const db = (await getDb())!;
       const obraFilter = input.obraId ? sql`AND r.obra_id = ${input.obraId}` : sql``;
       // Itens "na obra": items com status_item='na_obra' cujo registro pai (ENTRADA) não foi deletado.
@@ -171,7 +184,7 @@ export const ferramentasTerceirosRouter = router({
       limit: z.number().int().min(1).max(200).default(100),
     }))
     .query(async ({ input, ctx }) => {
-      assertSameCompany(ctx, input.companyId);
+      await assertCompanyAccess(ctx, input.companyId);
       const db = (await getDb())!;
       const obraFilter = input.obraId ? sql`AND r.obra_id = ${input.obraId}` : sql``;
       const tipoFilter = input.tipo ? sql`AND r.tipo = ${input.tipo}` : sql``;
@@ -203,7 +216,7 @@ export const ferramentasTerceirosRouter = router({
   getById: protectedProcedure
     .input(z.object({ companyId: z.number(), id: z.number() }))
     .query(async ({ input, ctx }) => {
-      assertSameCompany(ctx, input.companyId);
+      await assertCompanyAccess(ctx, input.companyId);
       const db = (await getDb())!;
       const regRes = await db.execute(sql`
         SELECT * FROM ferramentas_terceiros_registros
@@ -223,7 +236,7 @@ export const ferramentasTerceirosRouter = router({
   itensNaObraPorRegistro: protectedProcedure
     .input(z.object({ companyId: z.number(), registroPaiId: z.number() }))
     .query(async ({ input, ctx }) => {
-      assertSameCompany(ctx, input.companyId);
+      await assertCompanyAccess(ctx, input.companyId);
       const db = (await getDb())!;
       // Confirma que o registro pai é uma ENTRADA da mesma company (multi-tenant defense).
       const paiRes = await db.execute(sql`
@@ -246,7 +259,7 @@ export const ferramentasTerceirosRouter = router({
   entradasEmAberto: protectedProcedure
     .input(z.object({ companyId: z.number() }))
     .query(async ({ input, ctx }) => {
-      assertSameCompany(ctx, input.companyId);
+      await assertCompanyAccess(ctx, input.companyId);
       const db = (await getDb())!;
       const res = await db.execute(sql`
         SELECT r.id, r.empresa_terceira, r.empresa_terceira_id, r.responsavel_nome, r.data_hora, r.obra_nome,
@@ -288,7 +301,7 @@ export const ferramentasTerceirosRouter = router({
       itens: z.array(itemInputSchema).min(1, "Adicione ao menos 1 ferramenta."),
     }))
     .mutation(async ({ input, ctx }) => {
-      assertSameCompany(ctx, input.companyId);
+      await assertCompanyAccess(ctx, input.companyId);
       const db = (await getDb())!;
 
       // 1) Upload das fotos PRIMEIRO (todas falham junto se uma falhar — evita
@@ -428,7 +441,7 @@ export const ferramentasTerceirosRouter = router({
         }),
     }))
     .mutation(async ({ input, ctx }) => {
-      assertSameCompany(ctx, input.companyId);
+      await assertCompanyAccess(ctx, input.companyId);
       const db = (await getDb())!;
 
       // 1) Valida pai pertence à company.
@@ -670,7 +683,7 @@ REGRAS:
   remover: protectedProcedure
     .input(z.object({ companyId: z.number(), id: z.number() }))
     .mutation(async ({ input, ctx }) => {
-      assertSameCompany(ctx, input.companyId);
+      await assertCompanyAccess(ctx, input.companyId);
       if (ctx.user.role !== "admin" && ctx.user.role !== "admin_master") {
         throw new TRPCError({ code: "FORBIDDEN", message: "Apenas admin pode remover registros." });
       }

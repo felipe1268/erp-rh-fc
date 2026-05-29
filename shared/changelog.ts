@@ -1,6 +1,47 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2537 — **FERRAMENTAS DE TERCEIROS · CORREÇÃO DO "Acesso negado: empresa
+ * não autorizada" (guard multi-tenant estrito demais).**
+ *
+ * MOTIVAÇÃO (user em 29/05/2026):
+ *   "Ferramentas de terceiros (e a nossa registrada ontem) não estão
+ *   aparecendo." O módulo Almoxarifado › Ferramentas › Terceiros aparecia
+ *   VAZIO (sem registros, KPIs zerados, ferramenta cadastrada ontem sumida).
+ *   Logs de produção mostravam em loop:
+ *     [tRPC Error] ferramentasTerceiros.kpis: Acesso negado: empresa não autorizada.
+ *     [tRPC Error] ferramentasTerceiros.listarRegistros: Acesso negado: empresa não autorizada.
+ *     [tRPC Error] ferramentasTerceiros.meuLancador: Acesso negado: empresa não autorizada.
+ *
+ * CAUSA-RAIZ:
+ *   O guard `assertSameCompany` (Rev. 1884) comparava `ctx.user.companyId ===
+ *   input.companyId` — ou seja, exigia que a empresa selecionada fosse EXATAMENTE
+ *   a empresa "casa" gravada na linha do usuário. Mas o ERP é multi-empresa
+ *   (grupo empresarial): acesso é governado pela tabela de vínculos
+ *   `user_companies`, não pela coluna única `users.company_id`. Usuário operando
+ *   numa empresa do grupo diferente da casa dele (ou com `companyId` nulo)
+ *   tomava FORBIDDEN em TODOS os 9 procedures → tela vazia. Todo o resto do ERP
+ *   já usava o padrão correto (ex.: `terceiros._assertCompanyAccess`).
+ *
+ * CORREÇÃO:
+ *   `assertSameCompany` → `assertCompanyAccess` (async), espelhando
+ *   `terceiros._assertCompanyAccess`:
+ *     • admin / admin_master → libera (roles globais);
+ *     • usuário COM vínculos em `user_companies` → enforça membership real
+ *       (input.companyId ∈ allowedIds);
+ *     • usuário SEM vínculos explícitos → libera (acesso global por grupo/módulo).
+ *   Os 9 callsites passaram a `await assertCompanyAccess(ctx, input.companyId)`.
+ *   Renomeada de propósito p/ forçar erro de compilação em qualquer callsite
+ *   esquecido (segurança: função virou async — sem await não bloquearia).
+ *   Import de `getUserCompanyLinks` adicionado.
+ *
+ * ARQUIVOS:
+ *   • server/routers/ferramentasTerceiros.ts — guard + import + 9 callsites.
+ *
+ * VALIDAÇÃO: workflow `Start application` RUNNING (recompilou sem erro TS).
+ * Isolamento multi-tenant preservado (vínculos reais). Zero ALTER/DROP/DELETE —
+ * dados sempre estiveram no banco; só a leitura estava bloqueada.
+ *
  * Rev. 2536 — **EQUIPAMENTOS PRÓPRIOS · CORREÇÃO DA LISTAGEM QUEBRADA
  * (alias de tabela conflitando com helpers Drizzle).**
  *
