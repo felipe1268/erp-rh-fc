@@ -27,6 +27,18 @@ import { fmtNum } from "@/lib/formatters";
 import { PersonPhoto } from "@/components/PersonPhoto";
 import { CipaBadge } from "@/components/CipaBadge";
 
+// Rev. 2562 — defesa em profundidade no toast de remoção. O erro
+// "Failed to execute 'json' on 'Response': Unexpected end of JSON input"
+// (corpo de resposta VAZIO) acontece quando o worker do dev server reinicia
+// no meio do request ou há blip de rede — NÃO é falha de lógica/SQL. A
+// remoção é IDEMPOTENTE no servidor (WHERE isActive=1), então mesmo após
+// um corte ela pode ter sido concluída. Para esses casos mostramos uma
+// mensagem acionável em vez do paredão técnico cru.
+function isTransientNetErr(err: any): boolean {
+  const msg = String(err?.message ?? "");
+  return /Unexpected end of JSON input|Failed to execute 'json'|Failed to fetch|Load failed|NetworkError|network error/i.test(msg);
+}
+
 export default function ObraEfetivo() {
   const { selectedCompanyId, getCompanyIdsForQuery } = useCompany();
   const companyIds = getCompanyIdsForQuery();
@@ -132,7 +144,16 @@ export default function ObraEfetivo() {
       toast.success("Funcionário removido da obra!");
       efetivoQ.refetch(); semObraQ.refetch(); funcObraQ.refetch(); allEmpsQ.refetch();
     },
-    onError: (err) => toast.error(err.message),
+    onError: (err) => {
+      if (isTransientNetErr(err)) {
+        // Corpo vazio/cortado após esgotar os retries. A remoção é idempotente,
+        // então pode ter sido concluída — atualizamos a lista e orientamos.
+        efetivoQ.refetch(); semObraQ.refetch(); funcObraQ.refetch(); allEmpsQ.refetch();
+        toast.warning("Conexão instável ao remover. A lista foi atualizada — se o funcionário ainda aparecer, tente remover novamente.");
+        return;
+      }
+      toast.error(err.message);
+    },
   });
 
   const updateCondicoesMut = trpc.obras.updateObraFuncionarioCondicoes.useMutation({

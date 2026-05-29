@@ -1,6 +1,70 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2562 — **OBRAS · EFETIVO · DIALOG "EQUIPE" · (1) HARDENING DO TOAST DE
+ * REMOÇÃO ("Failed to execute 'json' on 'Response': Unexpected end of JSON
+ * input") + (2) DIAGNÓSTICO DO "FUNCIONÁRIO DUPLICADO" (CASO DARCY) =
+ * DUPLICAÇÃO DE CADASTRO ENTRE EMPRESAS DO GRUPO, NÃO BUG DE ALOCAÇÃO.**
+ *
+ * MOTIVAÇÃO (relato do usuário):
+ *   "verifica o erro.. e precisa verificar que ainda tem funcionário
+ *   duplicado.. veja o caso o darcy." Screenshot do dialog "Equipe — LUCIANA -
+ *   FINAL BLOCO B" (rota `/obras/efetivo`) com o toast de erro ao clicar
+ *   "Remover" no DARCY AUGUSTO RIBEIRO.
+ *
+ * DIAGNÓSTICO (1) — o erro de remoção:
+ *   - "Failed to execute 'json' on 'Response': Unexpected end of JSON input" =
+ *     corpo de resposta VAZIO no `httpBatchLink` (`JSON.parse('')`). MESMO
+ *     padrão das Rev. 2558/2559: worker do `tsx watch` reiniciando no meio do
+ *     request (esta sessão teve vários restarts) ou blip de rede — NÃO é falha
+ *     de lógica/SQL.
+ *   - O servidor já está correto: `removeEmployeeFromObra` (`server/db.ts`
+ *     L2195) retorna `{ success: true }` (payload não-vazio garantido, Rev.
+ *     2558) e é IDEMPOTENTE (`WHERE isActive=1` → 2ª chamada vira no-op). O
+ *     `removeMut` (`client/src/pages/ObraEfetivo.tsx`) já tinha `retry`
+ *     idempotente (até 2x, 800ms) em msgs transitórias. A lacuna: ao ESGOTAR os
+ *     retries (restart longo de vários segundos), o `onError` mostrava o
+ *     `err.message` cru (paredão técnico ilegível).
+ *
+ * DIAGNÓSTICO (2) — o "duplicado" do Darcy (verificação no Neon via
+ * `NEON_DATABASE_URL`):
+ *   - NÃO é violação do invariante "1 funcionário = 1 obra ativa" (Rev. 2560):
+ *     o índice único parcial `uniq_obra_func_active_employee` é por
+ *     `employeeId`, e o check global confirmou **0 funcionários com >1
+ *     alocação ativa**.
+ *   - O Darcy são DOIS CADASTROS DISTINTOS (employeeIds diferentes) da MESMA
+ *     pessoa, em DUAS empresas do grupo, AMBOS alocados na MESMA obra 90002
+ *     ("LUCIANA - FINAL BLOCO B", company 60002):
+ *       · emp 10 — company 60002 (FC ENGENHARIA PROJETOS E OBRAS), status
+ *         "Aviso" → aparece no grupo "Aviso Prévio" da dialog.
+ *       · emp 1200004 — company 60005 (JULIO FERRAZ PROJETOS E OBRAS LTDA),
+ *         status "Ativo" → aparece no grupo "Ativos" da dialog.
+ *   - A dialog "Equipe" carrega por `obraId` (`trpc.obras.funcionarios`) e o
+ *     efetivo é multi-empresa (grupo/holding: `efetivoPorObra({companyId,
+ *     companyIds})`), por isso os DOIS cadastros do Darcy aparecem na mesma
+ *     obra — daí a sensação de "duplicado".
+ *   - PADRÃO MAIOR: 11 pessoas têm 2 cadastros ativos cada entre 60002 e 60005
+ *     (Ana Beatriz, Anderson, Darcy, Douglas, Enivaldo, Francisco, Geraldo,
+ *     Henrique, João Paulo, José Benedito, Marcos Roberto). Casos com os DOIS
+ *     cadastros na MESMA obra: Darcy (90002), Geraldo (90004), Marcos (90004).
+ *   - LIMPEZA DE DADOS NÃO EXECUTADA NESTA REV.: decidir qual cadastro/empresa
+ *     é o autoritativo para cada pessoa é decisão de NEGÓCIO (cross-company,
+ *     ambígua) — desativar a alocação errada seria destrutivo/arriscado.
+ *     Reportado ao usuário para confirmação antes de qualquer UPDATE.
+ *
+ * FIX (não-destrutivo, só UI/cliente; ZERO schema, ZERO ALTER/DROP/DELETE):
+ *   - `client/src/pages/ObraEfetivo.tsx`: novo helper de módulo
+ *     `isTransientNetErr(err)` (detecta "Unexpected end of JSON input" /
+ *     "Failed to execute 'json'" / "Failed to fetch" / "Load failed" /
+ *     "NetworkError"). No `onError` do `removeMut`, quando o erro é transitório
+ *     (corpo vazio após esgotar retries), em vez do paredão técnico: refetch da
+ *     lista (a remoção é idempotente → pode ter concluído) + `toast.warning`
+ *     acionável ("Conexão instável ao remover. A lista foi atualizada — se o
+ *     funcionário ainda aparecer, tente remover novamente."). Erros REAIS
+ *     (não-transitórios) seguem mostrando `err.message`.
+ *
+ * VALIDAÇÃO: esbuild bundle de `ObraEfetivo.tsx` OK (tsc dá OOM no projeto).
+ *
  * Rev. 2561 — **ALMOXARIFADO · EQUIPAMENTOS PRÓPRIOS · FIX "ERRO FEIO" (PAREDÃO
  * DE BASE64) AO CADASTRAR/EDITAR EQUIPAMENTO PRÓPRIO (rota `/equipamentos`,
  * `Proprios.tsx`).**

@@ -1,3 +1,5 @@
+- **Rev. 2555** — ALMOXARIFADO · EQUIPAMENTOS PRÓPRIOS · PICKER "OBRA ATUAL" SÓ MOSTRA OBRAS EM ANDAMENTO E PERMITIDAS AO USUÁRIO. User (seguimento da Rev. 2554): "só deve aparecer as obras que estão em status de andamento, e que o usuário tem permissão de acesso." CAUSA: picker usava `trpc.obras.list` (TODAS as obras, sem filtro de permissão/status) + filtro client inócuo. FIX (não-destrutivo): CLIENT `Proprios.tsx` troca para `trpc.obras.listForAlmoxarifado` (respeita permissão + só `status='Em_Andamento'`/`isActive=1`/`deletedAt IS NULL`); SERVER `obras.listForAlmoxarifado` ganhou `AND o.status='Em_Andamento'` no branch `allowed_obra_ids`. Zero schema. Zero ALTER/DROP/DELETE. Ver `shared/changelog.ts`.
+
 # Histórico de revisões antigas — ERP RH & DP FC Engenharia
 
 > Este arquivo guarda os one-liners das revisões antigas para manter o `replit.md` enxuto.
