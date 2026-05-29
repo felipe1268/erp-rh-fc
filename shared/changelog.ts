@@ -1,6 +1,53 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2554 — **ALMOXARIFADO · EQUIPAMENTOS PRÓPRIOS · INDICAR A OBRA DIRETO NO
+ * CADASTRO DO ITEM (campo de obra sempre visível ao criar).**
+ *
+ * MOTIVAÇÃO (relato do usuário):
+ *   "Preciso poder indicar a obra no cadastro do item." No modal "Novo
+ *   Equipamento" o status vem como "Disponível" por padrão e o seletor de obra
+ *   (Rev. 2514) só aparecia DEPOIS de clicar em "Em obra" — escondido, o usuário
+ *   não tinha como descobrir que precisava trocar o status antes de poder
+ *   escolher a obra. Resultado prático: não conseguia indicar a obra ao cadastrar.
+ *
+ * CAUSA:
+ *   O picker de obra em `client/src/pages/equipamentos/Proprios.tsx` era
+ *   renderizado apenas com a condição `form.status === "em_obra"`. Como o
+ *   cadastro nasce em "disponivel", o campo ficava oculto até uma ação não óbvia
+ *   (selecionar o status "Em obra"). A procedure de criação (`proprioCriar`) já
+ *   aceitava `localizacaoAtualObraId` desde a Rev. 2552 — o gap era só de UI/UX.
+ *
+ * FIX (client puro, não-destrutivo — `Proprios.tsx`):
+ *   - Condição de exibição do picker passou de `form.status === "em_obra"` para
+ *     `form.status === "em_obra" || !editingId` → no CADASTRO (novo item) o campo
+ *     "Obra atual" aparece SEMPRE; na EDIÇÃO segue o comportamento antigo (só
+ *     quando "em_obra").
+ *   - `onChange` do select agora também ajusta o status automaticamente:
+ *     escolher uma obra ⇒ `status = "em_obra"`; limpar a seleção ⇒ volta a
+ *     `"disponivel"` (quando estava em_obra). Mantém a coerência status×obra
+ *     que o `salvar()` já exige (em_obra ⇒ obra obrigatória; senão obra=null).
+ *   - Label dinâmico: "Obra atual *" (vermelho) quando em_obra; "(opcional)"
+ *     cinza caso contrário. Opção vazia renomeada de "— Selecione a obra —" para
+ *     "— Almoxarifado (sem obra) —" (deixa explícito o destino padrão). Hint
+ *     curto sob o select no cadastro quando ainda não é em_obra.
+ *   - Sem mudança no `salvar()` (a coerção já existia): `emObra` continua sendo
+ *     `form.status === "em_obra"` e, com o auto-set, fica verdadeiro assim que a
+ *     obra é escolhida.
+ *   - Code review (melhoria de coerência visual): clicar num status ≠ "em_obra"
+ *     limpa `localizacaoAtualObraId` (o dropdown nunca exibe uma obra que não
+ *     seria gravada). Vale também na edição.
+ *
+ * ARQUIVOS:
+ *   client/src/pages/equipamentos/Proprios.tsx (bloco do picker ~L776-815),
+ *   shared/version.ts (2554).
+ *
+ * NÃO-OBJETIVOS / GARANTIAS:
+ *   - Zero schema. Zero ALTER/DROP/DELETE. Server intocado.
+ *   - Edição de item inalterada (picker só em "em_obra", como antes).
+ *
+ * ──────────────────────────────────────────────────────────────────────────
+ *
  * Rev. 2553 — **ALMOXARIFADO · EQUIPAMENTOS LOCADOS · "TROCAR FORNECEDOR" POR
  * ITEM (no painel de detalhes).**
  *

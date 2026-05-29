@@ -758,7 +758,13 @@ export default function EquipamentosProprios() {
                           <button
                             key={opt.v}
                             type="button"
-                            onClick={() => setForm(p => ({ ...p, status: opt.v }))}
+                            onClick={() => setForm(p => ({
+                              ...p,
+                              status: opt.v,
+                              // Rev. 2554 — coerência visual: status ≠ "em_obra"
+                              // limpa a obra (não seria gravada de qualquer forma).
+                              localizacaoAtualObraId: opt.v === "em_obra" ? p.localizacaoAtualObraId : null,
+                            }))}
                             className={`px-2.5 py-2 rounded-lg text-xs font-semibold border-2 transition ${
                               active
                                 ? `${opt.activeBg} text-white border-transparent shadow`
@@ -770,25 +776,44 @@ export default function EquipamentosProprios() {
                         );
                       })}
                     </div>
-                    {/* Rev. 2514 — Obra picker aparece SÓ quando status="em_obra". */}
-                    {form.status === "em_obra" && (
+                    {/* Rev. 2514 — Obra picker aparece quando status="em_obra".
+                        Rev. 2554 — no CADASTRO (novo item) aparece SEMPRE, pra o
+                        usuário poder indicar a obra direto; escolher uma obra
+                        marca o status "Em obra" automaticamente. */}
+                    {(form.status === "em_obra" || !editingId) && (
                       <div className="mt-2">
                         <label className="block text-[11px] font-semibold text-slate-700 mb-1 inline-flex items-center gap-1">
-                          <Building2 className="h-3 w-3 text-blue-700" /> Obra atual *
+                          <Building2 className="h-3 w-3 text-blue-700" /> Obra atual{" "}
+                          {form.status === "em_obra"
+                            ? <span className="text-red-500">*</span>
+                            : <span className="font-normal text-slate-400">(opcional)</span>}
                         </label>
                         <select
                           value={form.localizacaoAtualObraId ?? ""}
-                          onChange={e => setForm(p => ({
-                            ...p,
-                            localizacaoAtualObraId: e.target.value ? Number(e.target.value) : null,
-                          }))}
+                          onChange={e => {
+                            const obraId = e.target.value ? Number(e.target.value) : null;
+                            setForm(p => ({
+                              ...p,
+                              localizacaoAtualObraId: obraId,
+                              // Rev. 2554 — escolher obra ⇒ "em_obra"; limpar ⇒
+                              // volta a "disponivel" (almoxarifado).
+                              status: obraId
+                                ? "em_obra"
+                                : (p.status === "em_obra" ? "disponivel" : p.status),
+                            }));
+                          }}
                           className="w-full px-2 py-2 border-2 border-blue-200 focus:border-blue-500 focus:outline-none rounded-lg text-sm bg-blue-50/30"
                         >
-                          <option value="">— Selecione a obra —</option>
+                          <option value="">— Almoxarifado (sem obra) —</option>
                           {obrasAtivas.map((o: any) => (
                             <option key={o.id} value={o.id}>{o.nome}</option>
                           ))}
                         </select>
+                        {!editingId && form.status !== "em_obra" && (
+                          <p className="mt-1 text-[10.5px] text-slate-500">
+                            Selecione a obra se o equipamento já vai pra obra. Sem obra, fica no almoxarifado.
+                          </p>
+                        )}
                       </div>
                     )}
                     {/* Rev. 2514 — Auditoria read-only: quem cadastrou + quando (só edição). */}
