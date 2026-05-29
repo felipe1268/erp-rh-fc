@@ -199,7 +199,8 @@ export default function AlmoxarifadoInventario() {
   const [obraContexto, setObraContexto] = useState<number | null>(null);
   // Rev. 2432 — abre AlertDialog estilizado no lugar do window.confirm nativo.
   const [confirmCancelar, setConfirmCancelar] = useState(false);
-  // Rev. 2530 — campo de busca / leitor de código de barras.
+  // Rev. 2530 — campo de busca / leitor (scanner) por código interno.
+  // Rev. 2549 — busca por código de barras removida (coluna inexistente).
   const [busca, setBusca] = useState("");
   const buscaRef = useRef<HTMLInputElement>(null);
 
@@ -258,9 +259,9 @@ export default function AlmoxarifadoInventario() {
   const pendentesAll = sessionItems.filter(i => i.status === "pendente");
   const finalizadosAll = sessionItems.filter(i => i.status !== "pendente");
 
-  // Rev. 2530 — Busca por nome / código interno / código de barras.
+  // Rev. 2530 — Busca por nome / código interno.
   // Suporta scanner USB/Bluetooth (digita e dispara Enter): se a query
-  // bater EXATAMENTE 1 pendente por código de barras OU código interno,
+  // bater EXATAMENTE 1 pendente por código interno,
   // confirma BATE automaticamente (qtd física = qtd sistema) e limpa
   // o input para o próximo scan.
   const norm = (s: any) => (s ?? "").toString().trim().toLowerCase();
@@ -447,10 +448,10 @@ export default function AlmoxarifadoInventario() {
               </div>
             </div>
 
-            {/* Rev. 2530 — Busca / Leitor de código de barras.
+            {/* Rev. 2530 — Busca / Leitor (scanner) por código interno.
                 Scanners USB/Bluetooth digitam o código e disparam Enter:
-                quando bater EXATAMENTE 1 pendente por código (barras ou
-                interno), confirma BATE automaticamente. */}
+                quando bater EXATAMENTE 1 pendente por código interno,
+                confirma automaticamente. */}
             {session.status === "em_andamento" && (
               <div className="bg-white rounded-xl border p-3">
                 <div className="relative">
