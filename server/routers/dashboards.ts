@@ -2492,6 +2492,7 @@ async function getDashCustoDemissaoMassa(
           AND status NOT IN ('concluida', 'cancelada', 'em_gozo')
           AND "periodoAquisitivoFim" IS NOT NULL
           AND "periodoAquisitivoFim" < ${dataRef}
+          AND ("dataPagamento" IS NULL OR "dataPagamento" > ${dataRef})
           AND "deletedAt" IS NULL
         GROUP BY "employeeId"
       `)) as any).rows || [];

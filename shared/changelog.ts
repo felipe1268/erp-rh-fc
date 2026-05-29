@@ -1,6 +1,52 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2556 — **RH & DP · AVISO PRÉVIO / CUSTO DE DEMISSÃO EM MASSA · FÉRIAS
+ * VENCIDAS JÁ PAGAS NÃO PODEM MAIS INFLAR O CUSTO POR FUNCIONÁRIO.**
+ *
+ * MOTIVAÇÃO (relato do usuário):
+ *   No dashboard "Custo de Demissão em Massa" (CDM), o custo de cada funcionário
+ *   estava contando FÉRIAS VENCIDAS QUE JÁ FORAM PAGAS como se ainda estivessem
+ *   em aberto, inflando o "Custo Total" de cada encarregado.
+ *
+ * CAUSA:
+ *   A contagem de "períodos de férias vencidas" usada no cálculo de rescisão
+ *   (override `periodosVencidosOverride` de `calcularRescisaoCompleta`) filtrava
+ *   apenas `status NOT IN ('concluida','cancelada','em_gozo')` +
+ *   `periodoAquisitivoFim < <cutoff>`, mas NÃO excluía os períodos JÁ PAGOS.
+ *   Uma férias paga cujo status não tenha migrado para 'concluida'/'em_gozo'
+ *   (ex.: ainda 'pendente' / 'agendada' / 'vencida' / 'aguardando_pagamento',
+ *   porém com `dataPagamento` gravada) continuava sendo contada como vencida em
+ *   aberto. Isso contradiz a própria definição de "pago" do módulo (Rev. 1879):
+ *   pago = status concluida/em_gozo OU `dataPagamento <= hoje`.
+ *
+ * FIX (não-destrutivo, somente SQL de leitura — ZERO ALTER/DROP/DELETE):
+ *   Adicionado em TODAS as queries que contam/listam períodos vencidos para o
+ *   cálculo de rescisão o predicado
+ *     `AND ("dataPagamento" IS NULL OR "dataPagamento" > <cutoff>)`
+ *   (com a MESMA data de referência já usada em cada query), de forma que uma
+ *   férias paga até o cutoff deixa de ser contada como vencida em aberto.
+ *   Aplicado de forma idêntica nos 8 sites para preservar a paridade canônica
+ *   "dashboard CDM × modal Aviso Prévio" (1:1):
+ *     SERVER `server/routers/dashboards.ts`:
+ *       - `getDashCustoDemissaoMassa` → query `vpCountByEmp` (cutoff `dataRef`).
+ *     SERVER `server/routers/avisoPrevioFerias.ts`:
+ *       - batch correlacionado `vpCountMap` (LEFT JOIN, cutoff `p.data_fim`);
+ *       - contagem por funcionário na listagem (cutoff `dataFimParaCalculo`);
+ *       - `periodosVencidosDetalhes` (SELECT de detalhe, cutoff `dataFimAviso`);
+ *       - preview de cálculo (cutoff `input.dataDesligamento`);
+ *       - criação/atualização/reconciliação do aviso (3× cutoff `dataFim`).
+ *   A contagem e a lista de detalhe ficam coerentes entre si e com a regra de
+ *   "pago" da Rev. 1879. Sem mudança de schema. Sem fallback matemático novo
+ *   (override continua sempre vindo do banco — BUG-001 Rev. 716 preservado).
+ *
+ * ARQUIVOS:
+ *   - server/routers/dashboards.ts
+ *   - server/routers/avisoPrevioFerias.ts
+ *   - shared/version.ts (Rev. 2556) · replit.md (convenção 2+5) · este changelog.
+ *
+ * ---------------------------------------------------------------------------
+ *
  * Rev. 2555 — **ALMOXARIFADO · EQUIPAMENTOS PRÓPRIOS · PICKER "OBRA ATUAL" SÓ
  * MOSTRA OBRAS EM ANDAMENTO E PERMITIDAS AO USUÁRIO.**
  *

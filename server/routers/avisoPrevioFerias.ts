@@ -398,6 +398,7 @@ export const avisoPrevioFeriasRouter = router({
                   AND vp.status NOT IN ('concluida', 'cancelada', 'em_gozo')
                   AND vp."periodoAquisitivoFim" IS NOT NULL
                   AND vp."periodoAquisitivoFim" < p.data_fim
+                  AND (vp."dataPagamento" IS NULL OR vp."dataPagamento" > p.data_fim)
                   AND vp."deletedAt" IS NULL
                 GROUP BY p.emp_id, p.data_fim
               `)) as any).rows || [];
@@ -506,6 +507,7 @@ export const avisoPrevioFeriasRouter = router({
                   AND status NOT IN ('concluida', 'cancelada', 'em_gozo')
                   AND "periodoAquisitivoFim" IS NOT NULL
                   AND "periodoAquisitivoFim" < ${dataFimParaCalculo}
+                  AND ("dataPagamento" IS NULL OR "dataPagamento" > ${dataFimParaCalculo})
                   AND "deletedAt" IS NULL
               `)) as any).rows || [];
               periodosVencidosRealById = Number(vpById[0]?.total ?? 0);
@@ -767,6 +769,7 @@ export const avisoPrevioFeriasRouter = router({
               AND status NOT IN ('concluida', 'cancelada', 'em_gozo')
               AND "periodoAquisitivoFim" IS NOT NULL
               AND "periodoAquisitivoFim" < ${dataFimAviso}
+              AND ("dataPagamento" IS NULL OR "dataPagamento" > ${dataFimAviso})
               AND "deletedAt" IS NULL
             ORDER BY "periodoAquisitivoFim" ASC
           `)) as any).rows || [];
@@ -930,6 +933,7 @@ export const avisoPrevioFeriasRouter = router({
               AND status NOT IN ('concluida', 'cancelada', 'em_gozo')
               AND "periodoAquisitivoFim" IS NOT NULL
               AND "periodoAquisitivoFim" < ${input.dataDesligamento}
+              AND ("dataPagamento" IS NULL OR "dataPagamento" > ${input.dataDesligamento})
               AND "deletedAt" IS NULL
           `)) as any).rows || [];
           periodosVencidosRealComp = Number(vpRowsComp[0]?.total ?? 0);
@@ -1215,6 +1219,7 @@ export const avisoPrevioFeriasRouter = router({
               AND status NOT IN ('concluida', 'cancelada', 'em_gozo')
               AND "periodoAquisitivoFim" IS NOT NULL
               AND "periodoAquisitivoFim" < ${dataFim}
+              AND ("dataPagamento" IS NULL OR "dataPagamento" > ${dataFim})
               AND "deletedAt" IS NULL
           `)) as any).rows || [];
           periodosVencidosRealCreate = Number(vpCr[0]?.total ?? 0);
@@ -1386,6 +1391,7 @@ export const avisoPrevioFeriasRouter = router({
                 AND status NOT IN ('concluida', 'cancelada', 'em_gozo')
                 AND "periodoAquisitivoFim" IS NOT NULL
                 AND "periodoAquisitivoFim" < ${dataFim}
+                AND ("dataPagamento" IS NULL OR "dataPagamento" > ${dataFim})
                 AND "deletedAt" IS NULL
             `)) as any).rows || [];
             periodosVencidosRealUpd = Number(vpUpd[0]?.total ?? 0);
@@ -1511,6 +1517,7 @@ export const avisoPrevioFeriasRouter = router({
                   AND status NOT IN ('concluida', 'cancelada', 'em_gozo')
                   AND "periodoAquisitivoFim" IS NOT NULL
                   AND "periodoAquisitivoFim" < ${dataFim}
+                  AND ("dataPagamento" IS NULL OR "dataPagamento" > ${dataFim})
                   AND "deletedAt" IS NULL
               `)) as any).rows || [];
               periodosVencidosRealRec = Number(vpRec[0]?.total ?? 0);
