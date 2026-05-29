@@ -53,12 +53,11 @@ export default function DocumentPreviewDialog({
     setPdfZoom(100);
   }, [fileUrl, open]);
 
-  if (!fileUrl || !fileName) return null;
-
-  const showPdf = isPdf(fileUrl) || isPdf(fileName);
-  const showImage = isImage(fileUrl) || isImage(fileName);
+  const showPdf = !!(fileUrl && fileName) && (isPdf(fileUrl) || isPdf(fileName));
+  const showImage = !!(fileUrl && fileName) && (isImage(fileUrl) || isImage(fileName));
 
   const handleDownload = () => {
+    if (!fileUrl) return;
     const a = document.createElement("a");
     a.href = fileUrl;
     a.download = fileName || "arquivo";
@@ -118,6 +117,10 @@ export default function DocumentPreviewDialog({
     return () => window.removeEventListener("keydown", onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, showImage]);
+
+  // Rev. 2547 — early return DEPOIS de todos os hooks (estava entre os dois
+  // useEffect → "Rendered more hooks than during the previous render").
+  if (!fileUrl || !fileName) return null;
 
   const zoomPercent = Math.round(zoom * 100);
 

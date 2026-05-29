@@ -1,6 +1,41 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2547 — **RAIO-X DO COLABORADOR · VISUALIZAR DOCUMENTO (ATESTADOS) · FIX
+ * "Rendered more hooks than during the previous render" (CRASH DA TELA).**
+ *
+ * MOTIVAÇÃO (user):
+ *   Ao clicar para ver os atestados no Raio-X do colaborador a tela quebrava com
+ *   "Ocorreu um erro inesperado — Error: Rendered more hooks than during the
+ *   previous render" (stack `DocumentPreviewDialog.tsx:14` chamado de
+ *   `RaioXFuncionario.tsx:181`).
+ *
+ * CAUSA-RAIZ (violação das Rules of Hooks):
+ *   Em `client/src/components/DocumentPreviewDialog.tsx` o early return
+ *   `if (!fileUrl || !fileName) return null;` estava posicionado ENTRE os dois
+ *   `useEffect` do componente — depois do 1º (reset de zoom/rotação) e ANTES do
+ *   2º (listener de atalhos de teclado). Quando o dialog renderiza sem arquivo
+ *   (`fileUrl=null`) ele retorna cedo e o 2º `useEffect` NÃO é chamado; quando
+ *   passa a ter arquivo, o 2º `useEffect` passa a ser chamado → o React detecta
+ *   MAIS hooks que no render anterior e derruba a árvore.
+ *
+ * CORREÇÃO:
+ *   1) O early return foi MOVIDO para DEPOIS de todos os hooks (logo após o 2º
+ *      `useEffect`, antes de `const zoomPercent`). Ordem/quantidade de hooks
+ *      idêntica em todos os renders.
+ *   2) `showPdf`/`showImage` (lidos pelo 2º useEffect via deps `[open,showImage]`)
+ *      foram guardados com `!!(fileUrl && fileName) && ...` para continuarem
+ *      seguros quando avaliados antes do early return.
+ *   3) `handleDownload` ganhou guard `if (!fileUrl) return;` (era narrowado pelo
+ *      early return antigo; agora protege explicitamente).
+ *
+ * ESCOPO: client puro, 1 arquivo. Zero schema. Zero ALTER/DROP/DELETE.
+ *
+ * ARQUIVOS: client/src/components/DocumentPreviewDialog.tsx, shared/version.ts
+ *   (→2547), replit.md, replit-history.md.
+ *
+ * ============================================================================
+ *
  * Rev. 2546 — **ALMOXARIFADO · INVENTÁRIO SEMANAL · FIX "Rendered more hooks than
  * during the previous render" (CRASH DA TELA).**
  *
