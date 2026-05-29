@@ -1,6 +1,55 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2553 — **ALMOXARIFADO · EQUIPAMENTOS LOCADOS · "TROCAR FORNECEDOR" POR
+ * ITEM (no painel de detalhes).**
+ *
+ * MOTIVAÇÃO (relato do usuário):
+ *   "Não estou conseguindo trocar o fornecedor — por exemplo o martelete de
+ *   16KG é da Minas Locc mas está marcado como nosso (FC Engenharia)." Itens
+ *   importados/cadastrados ficaram com a locadora errada e não havia NENHUMA
+ *   forma de corrigir o fornecedor de UMA unidade: o único caminho existente
+ *   era o rename em LOTE (`locadosRenomearFornecedor`, Rev. 2518), que exige
+ *   filtrar por uma locadora existente e sobrescreve TODAS as unidades com
+ *   aquele nome — inadequado quando só um item está errado entre vários de
+ *   fornecedores distintos.
+ *
+ * CAUSA-RAIZ:
+ *   A procedure `locadoAtualizar` (server/routers/equipamentos.ts) NÃO aceitava
+ *   nem gravava `fornecedorNome` (só obra/status/datas/responsável/observações/
+ *   códigos). O painel de DETALHES (`modalEventos` em Locados.tsx) exibia o
+ *   fornecedor apenas como texto read-only. Resultado: não existia caminho
+ *   por item para corrigir a locadora.
+ *
+ * FIX/FEATURE (não-destrutivo):
+ *   - SERVER `locadoAtualizar`: input zod estendido com `fornecedorNome`
+ *     (string.max(255).nullable().optional()); normaliza (trim, ou null quando
+ *     vazio) e grava via o mesmo `update`. Após o UPDATE, sincroniza o item
+ *     vinculado no almoxarifado (`almoxarifado_itens.fornecedor_locacao` onde
+ *     equipamento_vinculado_tipo='locado' AND equipamento_vinculado_id=id),
+ *     espelhando a sync do rename em lote — não-bloqueante (try/catch + log).
+ *     Tenant preservado: UPDATE já filtra por companyId (e o sync do almox
+ *     também). db.execute lido via padrão do driver node-postgres.
+ *   - CLIENT `Locados.tsx`: novo estado `editForn` + mutation
+ *     `atualizarLocadoMut` (trpc.equipamentos.locadoAtualizar) com onSuccess
+ *     que invalida `locadosListar`, atualiza o `modalEventos` aberto localmente
+ *     (via variables) e toast. Na seção "Fornecedor" do painel de detalhes, um
+ *     botão "Trocar" (Pencil) abre edição inline: input com `<datalist>` das
+ *     locadoras já em uso (`fornecedoresComItens`, exclui "__null__") + botões
+ *     Salvar (Loader2 enquanto pendente) / Cancelar. Salvar manda
+ *     `fornecedorNome: val.trim() || null` só para AQUELE id.
+ *
+ * GARANTIAS: zero schema novo; zero ALTER/DROP/DELETE (R-001/R-007/R-010); a
+ * coluna `fornecedorNome` já existia em `equipamentos_locados`. O rename em
+ * lote (Rev. 2518) segue intacto para correções de typo em massa; este é o
+ * complemento por item.
+ *
+ * ARQUIVOS: server/routers/equipamentos.ts (locadoAtualizar input+map+sync),
+ * client/src/pages/equipamentos/Locados.tsx (editForn, atualizarLocadoMut,
+ * UI inline no painel de detalhes), shared/version.ts (2553).
+ *
+ * ---
+ *
  * Rev. 2552 — **ALMOXARIFADO · EQUIPAMENTOS PRÓPRIOS · FIX DO CRASH
  * "(intermediate value) is not iterable" AO SALVAR NOVO EQUIPAMENTO + NOVO
  * CAMPO "OBRA ATUAL" JÁ NO CADASTRO (antes só na edição).**

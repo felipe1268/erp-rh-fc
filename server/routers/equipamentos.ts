@@ -783,10 +783,22 @@ export const equipamentosRouter = router({
       observacoes: z.string().nullable().optional(),
       codigoInternoErp: z.string().max(50).nullable().optional(),
       codigoPatrimonioFornecedor: z.string().max(100).nullable().optional(),
+      // Rev. 2553 — permite corrigir o fornecedor (locadora) de UMA unidade
+      // (ex.: item importado/cadastrado com locadora errada — "nosso" em vez
+      // de "Minas Locc"). Diferente do rename em lote, atinge só este item.
+      fornecedorNome: z.string().max(255).nullable().optional(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      // Rev. 2553 — guarda de tenant: confirma que a empresa pertence ao
+      // usuário (mesmo padrão de locadosVincularObraLote/RenomearFornecedor).
+      // Necessário pois esta procedure passou a ser o caminho de troca de
+      // fornecedor por item — antes não tinha chamador no client.
+      const allowedCompanies = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+      if (!(allowedCompanies as any[]).map(c => c.id).includes(input.companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta empresa." });
+      }
       const update: any = { updatedAt: sql`now()` };
       const map = (k: string, v: any) => { if (v !== undefined) update[k] = v; };
       map("obraId", input.obraId);
@@ -797,6 +809,12 @@ export const equipamentosRouter = router({
       map("observacoes", input.observacoes);
       map("codigoInternoErp", input.codigoInternoErp);
       map("codigoPatrimonioFornecedor", input.codigoPatrimonioFornecedor);
+      // Rev. 2553 — normaliza fornecedor: trim, ou null quando vazio.
+      if (input.fornecedorNome !== undefined) {
+        update.fornecedorNome = input.fornecedorNome && input.fornecedorNome.trim()
+          ? input.fornecedorNome.trim()
+          : null;
+      }
       const r = await db.update(equipamentosLocados).set(update)
         .where(and(eq(equipamentosLocados.id, input.id), eq(equipamentosLocados.companyId, input.companyId)))
         .returning({ id: equipamentosLocados.id });
@@ -834,6 +852,22 @@ export const equipamentosRouter = router({
             dataFim: (full as any).dataFimPrevista ?? null,
             valorMensal: (full as any).valorMensal ?? null,
           });
+        }
+      }
+      // Rev. 2553 — quando o fornecedor (locadora) muda, sincroniza o item
+      // vinculado no almoxarifado (fornecedor_locacao). Não-bloqueante.
+      if (input.fornecedorNome !== undefined) {
+        try {
+          const novoForn = update.fornecedorNome ?? null;
+          await db.execute(sql`
+            UPDATE almoxarifado_itens
+               SET fornecedor_locacao = ${novoForn}, atualizado_em = NOW()
+             WHERE company_id = ${input.companyId}
+               AND equipamento_vinculado_tipo = 'locado'
+               AND equipamento_vinculado_id = ${input.id}
+          `);
+        } catch (e: any) {
+          console.error("[locadoAtualizar] sync fornecedor almox falhou:", e?.message || e);
         }
       }
       return { id: r[0].id };

@@ -240,6 +240,22 @@ export default function EquipamentosLocados() {
     },
     onError: (e) => toast.error(formatTrpcError(e)),
   });
+  // Rev. 2553 — trocar o fornecedor (locadora) de UMA unidade, direto no
+  // painel de detalhes. Pedido user: "não consigo trocar o fornecedor — o
+  // martelete é da Minas Locc mas está marcado como nosso". Diferente do
+  // rename em lote, atinge só o item aberto.
+  const [editForn, setEditForn] = useState<null | { id: number; val: string }>(null);
+  const atualizarLocadoMut = trpc.equipamentos.locadoAtualizar.useMutation({
+    onSuccess: (_data, variables: any) => {
+      utils.equipamentos.locadosListar.invalidate();
+      const novo = variables.fornecedorNome ?? null;
+      setModalEventos((prev: any) =>
+        prev && prev.id === variables.id ? { ...prev, fornecedorNome: novo } : prev);
+      setEditForn(null);
+      toast.success("Fornecedor atualizado.");
+    },
+    onError: (e) => toast.error(formatTrpcError(e)),
+  });
   const eventos = trpc.equipamentos.eventosListar.useQuery(
     { companyId, equipamentoLocadoId: modalEventos?.id || 0 },
     { enabled: !!modalEventos }
@@ -3477,8 +3493,49 @@ export default function EquipamentosLocados() {
                     <div className={`text-sm font-semibold ${obraNome ? "text-emerald-800" : "text-amber-700 italic"}`}>{obraNome || "Sem obra vinculada"}</div>
                     {l.localObra && <div className="text-xs text-slate-600">{l.localObra}</div>}
                     <hr className="border-slate-100" />
-                    <div className="text-[11px] uppercase tracking-wider text-slate-500 font-bold flex items-center gap-1.5"><Building2 className="h-3.5 w-3.5" /> Fornecedor</div>
-                    <div className="text-sm font-semibold text-slate-800">{l.fornecedorNome || <span className="italic text-slate-500 font-normal">Sem fornecedor cadastrado</span>}</div>
+                    <div className="text-[11px] uppercase tracking-wider text-slate-500 font-bold flex items-center justify-between gap-1.5">
+                      <span className="flex items-center gap-1.5"><Building2 className="h-3.5 w-3.5" /> Fornecedor</span>
+                      {editForn?.id !== l.id && (
+                        <button
+                          onClick={() => setEditForn({ id: l.id, val: l.fornecedorNome || "" })}
+                          className="normal-case inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-600 hover:text-emerald-700"
+                          title="Corrigir o fornecedor (locadora) deste item">
+                          <Pencil className="h-3 w-3" /> Trocar
+                        </button>
+                      )}
+                    </div>
+                    {editForn?.id === l.id ? (
+                      <div className="space-y-2">
+                        <input
+                          list="forn-edit-datalist"
+                          value={editForn.val}
+                          onChange={e => setEditForn(prev => prev ? { ...prev, val: e.target.value } : prev)}
+                          className="w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none"
+                          placeholder="Nome da locadora (ex: Minas Locc)"
+                          autoFocus
+                        />
+                        <datalist id="forn-edit-datalist">
+                          {fornecedoresComItens.filter(f => f.key !== "__null__").map(f => (
+                            <option key={f.key} value={f.nome} />
+                          ))}
+                        </datalist>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => atualizarLocadoMut.mutate({ companyId, id: l.id, fornecedorNome: editForn.val.trim() || null })}
+                            disabled={atualizarLocadoMut.isPending}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-semibold hover:bg-emerald-700 disabled:opacity-50">
+                            {atualizarLocadoMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />} Salvar
+                          </button>
+                          <button
+                            onClick={() => setEditForn(null)}
+                            className="px-3 py-1.5 rounded-lg bg-slate-100 text-slate-600 text-xs font-semibold hover:bg-slate-200">
+                            Cancelar
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="text-sm font-semibold text-slate-800">{l.fornecedorNome || <span className="italic text-slate-500 font-normal">Sem fornecedor cadastrado</span>}</div>
+                    )}
                     {l.numeroContrato && <div className="text-xs text-slate-600">Contrato: <span className="font-mono font-medium">{l.numeroContrato}</span></div>}
                   </div>
                   <div className="bg-white rounded-xl ring-1 ring-slate-200 p-4 space-y-3">
