@@ -1799,6 +1799,7 @@ ${input.foco ? `Foco solicitado pelo usuário: "${input.foco}". Priorize temas d
       // duplicata ativa cross-obra). Tudo em transação com advisory lock por
       // funcionário (mesmo padrão de `allocateEmployeeToObra`).
       const hoje = new Date().toISOString().slice(0, 10);
+      try {
       return await db.transaction(async (tx) => {
         await tx.execute(sql`SELECT pg_advisory_xact_lock(${input.employeeId})`);
         // Vínculo nesta obra (ativo ou inativo)? — pega o mais recente
@@ -1834,6 +1835,14 @@ ${input.foco ? `Foco solicitado pelo usuário: "${input.foco}". Priorize temas d
         } as any);
         return { ok: true, reativado: false, tipo: "clt" as const };
       });
+      } catch (e: any) {
+        // Backstop de banco (Rev. 2560): unique violation do índice parcial
+        // `uniq_obra_func_active_employee` (≤1 alocação ativa por funcionário).
+        if (e?.code === '23505' && String(e?.constraint ?? e?.detail ?? '').includes('uniq_obra_func_active_employee')) {
+          throw new TRPCError({ code: "CONFLICT", message: "Este funcionário já está alocado em outra obra (cada funcionário só pode estar em 1 obra ativa). Atualize a tela e tente novamente." });
+        }
+        throw e;
+      }
     }),
 
   // Rev. 1731 — Acidentes recentes (default últimos 7 dias) que potencialmente exigem DDS de análise (Lei art. 157 CLT, NR-1).

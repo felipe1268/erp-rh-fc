@@ -726,6 +726,20 @@ Regras:
           console.log(`[SyncSchema+] Tabela obra_responsaveis_estoque garantida.`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA obra_responsaveis_estoque:`, e?.message || e); }
 
+        // Rev. 2560 — BACKSTOP DE BANCO: 1 só alocação ATIVA por funcionário.
+        // Índice único parcial fecha de vez "mesmo funcionário em 2 obras ao
+        // mesmo tempo": qualquer write futuro que tente ativar uma 2ª alocação
+        // sem desativar a anterior FALHA (unique violation) em vez de duplicar.
+        // Os dois caminhos legítimos (allocateEmployeeToObra em server/db.ts e
+        // o vínculo CLT em server/routers/dds.ts) já desativam todas as ativas
+        // dentro da MESMA transação antes de inserir/reativar — então nunca há
+        // 2 linhas isActive=1 simultâneas e o índice nunca é violado por eles.
+        // Pré-requisito: dados sem duplicata ativa (limpos na Rev. 2559).
+        try {
+          await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS uniq_obra_func_active_employee ON obra_funcionarios("employeeId") WHERE "isActive" = 1`);
+          console.log(`[SyncSchema+] Rev. 2560: índice único parcial uniq_obra_func_active_employee garantido (≤1 alocação ativa por funcionário).`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev. 2560 uniq_obra_func_active_employee (provável duplicata ativa pré-existente — rodar limpeza):`, e?.message || e); }
+
         // Rev. 2003 — integracao_cliente_doc_url em funcionarios_terceiros (controle separado de integração no cliente)
         try {
           await db.execute(sql`ALTER TABLE funcionarios_terceiros ADD COLUMN IF NOT EXISTS integracao_cliente_doc_url VARCHAR(500)`);

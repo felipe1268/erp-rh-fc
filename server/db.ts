@@ -2123,6 +2123,7 @@ export async function allocateEmployeeToObra(data: { obraId: number; employeeId:
   // JSON input") ou requisições concorrentes, sobravam várias ativas.
   // Agora: desativa TODAS as alocações ativas do funcionário e cria UMA nova,
   // garantindo o invariante "no máximo 1 alocação ativa por funcionário".
+  try {
   return await db.transaction(async (tx) => {
     // Lock por funcionário (advisory, escopo da transação) — serializa chamadas
     // concorrentes do MESMO funcionário, fechando a janela de corrida do
@@ -2178,6 +2179,17 @@ export async function allocateEmployeeToObra(data: { obraId: number; employeeId:
     } as any);
     return { id: inserted.id, isTransferencia, obraOrigemId };
   });
+  } catch (e: any) {
+    // Backstop de banco (Rev. 2560): o índice único parcial
+    // `uniq_obra_func_active_employee` impede 2 alocações ativas simultâneas. Os
+    // fluxos legítimos desativam tudo antes de inserir (nunca disparam), mas se
+    // um caminho concorrente fora do padrão violar (23505), traduz para uma
+    // mensagem de domínio clara em vez de erro cru de banco.
+    if (e?.code === '23505' && String(e?.constraint ?? e?.detail ?? '').includes('uniq_obra_func_active_employee')) {
+      throw new Error('Este funcionário já está alocado em outra obra (cada funcionário só pode estar em 1 obra ativa). Atualize a tela e tente novamente.');
+    }
+    throw e;
+  }
 }
 
 export async function removeEmployeeFromObra(employeeId: number, motivo?: string, registradoPor?: string, registradoPorUserId?: number) {

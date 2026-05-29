@@ -1,6 +1,72 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2560 — **OBRAS · EFETIVO · AUDITORIA + GARANTIA DEFINITIVA "1 FUNCIONÁRIO
+ * = 1 OBRA ATIVA" (mesmo funcionário NÃO pode estar em 2 obras ao mesmo tempo).**
+ *
+ * MOTIVAÇÃO (relato do usuário):
+ *   "Precisa fazer uma auditoria no ERP para garantir que o mesmo funcionário não
+ *   pode estar em 2 obras ao mesmo tempo. Hoje isso está acontecendo e não pode.
+ *   Resolva isso de vez, e garanta que isso não irá acontecer." Segue a Rev. 2559
+ *   (que corrigiu os 2 caminhos de escrita e limpou duplicatas), agora exigindo
+ *   AUDITORIA do estado real + um BACKSTOP que torne impossível reincidir.
+ *
+ * AUDITORIA (script tsx pontual no Neon via `NEON_DATABASE_URL` — `executeSql`
+ * aponta pro Postgres local VAZIO):
+ *   - Funcionários com >1 alocação ATIVA (qualquer obra): 0.
+ *   - Funcionários ATIVOS em 2+ OBRAS DIFERENTES (cross-obra): 0.
+ *   - Total de alocações ativas no sistema: 132.
+ *   => Dados JÁ limpos pela Rev. 2559. Nada a corrigir nos dados.
+ *
+ * AUDITORIA DE CÓDIGO (todos os writes em `obra_funcionarios`):
+ *   - ATIVAM (`isActive=1`): SOMENTE `server/db.ts` (`allocateEmployeeToObra`,
+ *     L2142 desativa TODAS antes / L2166 insere 1) e `server/routers/dds.ts`
+ *     (vínculo CLT, L1813 desativa TODAS antes / L1824 reativa / L1828 insere).
+ *     Ambos já em `db.transaction` + `pg_advisory_xact_lock(employeeId)` (Rev. 2559).
+ *   - DESATIVAM apenas (`isActive=0`): `server/db.ts` L2202 (removeEmployeeFromObra),
+ *     `server/routers/avisoPrevioFerias.ts` L1716 (darBaixa), `server/routers.ts`
+ *     L1636 (SQL cru ao fechar obra). Nenhum cria/ativa duplicata.
+ *
+ * GARANTIA DEFINITIVA (BACKSTOP DE BANCO — não-destrutivo, ZERO ALTER/DROP/DELETE):
+ *   - `CREATE UNIQUE INDEX IF NOT EXISTS uniq_obra_func_active_employee ON
+ *     obra_funcionarios("employeeId") WHERE "isActive" = 1` — índice único PARCIAL
+ *     que garante NO MÁXIMO 1 alocação ativa por funcionário a nível de banco.
+ *     Mesmo padrão já usado no projeto (ex.: `uniq_resp_estoque_principal`,
+ *     Rev. 2429.1). Qualquer write FUTURO que tente ativar uma 2ª alocação sem
+ *     desativar a anterior FALHA com unique violation (erro alto, visível) em vez
+ *     de duplicar silenciosamente. Os 2 caminhos legítimos desativam tudo dentro
+ *     da MESMA transação antes de inserir/reativar → nunca há 2 `isActive=1`
+ *     simultâneas → o índice nunca os bloqueia.
+ *   - Criado imediatamente no Neon (produção) — dados limpos, criação OK, índice
+ *     verificado existente. Também adicionado ao `SyncSchema+` de startup
+ *     (`server/_core/index.ts`, bloco Rev. 2560) com `IF NOT EXISTS` → persiste em
+ *     todo boot/deploy e em qualquer ambiente. Boot verificado no log:
+ *     "[SyncSchema+] Rev. 2560: índice único parcial uniq_obra_func_active_employee
+ *     garantido (≤1 alocação ativa por funcionário)".
+ *
+ * MENSAGEM DE DOMÍNIO (UX do backstop — recomendação do code review):
+ *   - Os 2 caminhos legítimos NUNCA disparam o índice (desativam tudo antes de
+ *     inserir na mesma transação), mas se um caminho concorrente FUTURO fora do
+ *     padrão violar o índice, o erro cru de banco (23505) viraria um stack feio.
+ *     Por isso `allocateEmployeeToObra` (`server/db.ts`) e o vínculo CLT
+ *     (`server/routers/dds.ts`) ganharam `try/catch` que detecta
+ *     `e.code === '23505'` + nome do índice (`constraint`/`detail`) e traduz para
+ *     mensagem acionável: "Este funcionário já está alocado em outra obra (cada
+ *     funcionário só pode estar em 1 obra ativa). Atualize a tela e tente
+ *     novamente." (Error simples no db.ts; `TRPCError CONFLICT` no router dds.ts).
+ *     Erros não-23505 são re-lançados intactos.
+ *
+ * RESULTADO: tripla camada — (1) dados limpos (Rev. 2559); (2) app-level
+ * (transação + advisory lock nos 2 únicos writes ativadores); (3) DB-level
+ * (índice único parcial). "Mesmo funcionário em 2 obras ao mesmo tempo" agora é
+ * IMPOSSÍVEL. CWE-362 (race) coberto em todas as camadas.
+ *
+ * ARQUIVOS: `server/_core/index.ts` (índice no startup); `server/db.ts` +
+ * `server/routers/dds.ts` (tradução do 23505 → mensagem de domínio). DB Neon
+ * (índice criado). Zero schema de tabela. Zero ALTER/DROP/DELETE. Zero mudança de UI.
+ *
+ * ---------------------------------------------------------------------------
+ *
  * Rev. 2559 — **OBRAS · EFETIVO · FIX FUNCIONÁRIOS DUPLICADOS NA OBRA
  * (mesmo funcionário aparecendo 2-3x na dialog "Equipe", rota `/obras/efetivo`)
  * + LIMPEZA DOS DUPLICADOS EXISTENTES.**
