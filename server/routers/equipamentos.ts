@@ -266,15 +266,21 @@ export const equipamentosRouter = router({
       // (camelCase) — usar SQL bruto na expressão pra evitar conflito de
       // helper Drizzle. `obraNome` retorna NULL quando localizacao_atual_obra_id
       // é NULL ou aponta pra obra de outra empresa (filtro multi-tenant).
+      // Rev. 2536 — SEM alias `ep`: o WHERE é montado por helpers Drizzle
+      // (companyFilter/eq) que qualificam pelo NOME REAL da tabela
+      // ("equipamentos_proprios"."company_id"). Aliasar a tabela pra `ep`
+      // quebrava com `invalid reference to FROM-clause entry` (Postgres exige
+      // o alias quando ele existe). Referenciar pelo nome real casa com o
+      // Drizzle e mantém o LEFT JOIN de obras intacto.
       const result = await db.execute(sql`
-        SELECT ep.*,
+        SELECT equipamentos_proprios.*,
                o.nome AS obra_nome
-        FROM equipamentos_proprios ep
+        FROM equipamentos_proprios
         LEFT JOIN obras o
-          ON o.id = ep.localizacao_atual_obra_id
-         AND o."companyId" = ep.company_id
+          ON o.id = equipamentos_proprios.localizacao_atual_obra_id
+         AND o."companyId" = equipamentos_proprios.company_id
         ${conds.length > 0 ? sql`WHERE ${and(...conds)}` : sql``}
-        ORDER BY ep.id DESC
+        ORDER BY equipamentos_proprios.id DESC
       `);
       // Normaliza camelCase pro front (matching Drizzle .select())
       return (result as any[]).map((r: any) => ({

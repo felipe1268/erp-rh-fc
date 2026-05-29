@@ -1,6 +1,41 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2536 — **EQUIPAMENTOS PRÓPRIOS · CORREÇÃO DA LISTAGEM QUEBRADA
+ * (alias de tabela conflitando com helpers Drizzle).**
+ *
+ * MOTIVAÇÃO (user em 29/05/2026):
+ *   "Tinha equipamentos próprios lançados porém agora sumiu. Pq?" — a tela
+ *   Almoxarifado › Controle de Equipamentos › Próprios mostrava "Nenhum
+ *   equipamento cadastrado" (TOTAL=0) mesmo com registros no banco. Logs de
+ *   produção acusavam em loop:
+ *     [tRPC Error] equipamentos.propriosListar: DB error: invalid reference
+ *     to FROM-clause entry for table "equipamentos_proprios"
+ *
+ * CAUSA-RAIZ:
+ *   A query `propriosListar` (server/routers/equipamentos.ts ~L269) usava SQL
+ *   bruto com alias `FROM equipamentos_proprios ep`, mas o WHERE é montado por
+ *   helpers Drizzle — `companyFilter(equipamentosProprios.companyId, input)`,
+ *   `eq(equipamentosProprios.ativo, true)`, status/categoria/obraId — que
+ *   geram referências qualificadas pelo NOME REAL da tabela
+ *   (`"equipamentos_proprios"."company_id"`). No Postgres, quando uma tabela
+ *   recebe alias na cláusula FROM, o nome original deixa de ser uma referência
+ *   válida (só o alias `ep` vale) → erro "invalid reference to FROM-clause
+ *   entry". A query SEMPRE falhava; o client tratava o erro como lista vazia.
+ *   Regressão introduzida na Rev. 2514 (LEFT JOIN obras com alias `ep`).
+ *
+ * CORREÇÃO:
+ *   Removido o alias `ep`. SELECT/JOIN/ORDER BY passam a referenciar a tabela
+ *   pelo nome real `equipamentos_proprios`, casando exatamente com o que os
+ *   helpers Drizzle emitem no WHERE. O LEFT JOIN de `obras o` (obra_nome) é
+ *   preservado intacto. Nenhuma mudança no client nem no schema.
+ *
+ * ARQUIVOS:
+ *   • server/routers/equipamentos.ts (~L269) — query propriosListar sem alias.
+ *
+ * VALIDAÇÃO: workflow `Start application` RUNNING. Zero ALTER/DROP/DELETE —
+ * dados nunca saíram do banco; só a leitura estava quebrada.
+ *
  * Rev. 2535 — **PAINEL RH · OBRA DO FUNCIONÁRIO NOS CONTRATOS DE EXPERIÊNCIA.**
  *
  * MOTIVAÇÃO (user em 29/05/2026):
