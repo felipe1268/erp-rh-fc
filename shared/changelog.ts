@@ -1,6 +1,52 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2564 — **ALMOXARIFADO · EQUIPAMENTOS PRÓPRIOS · MODAL "EDITAR
+ * EQUIPAMENTO" · PICKER "OBRA ATUAL" PASSA A APARECER SEMPRE (TAMBÉM NA
+ * EDIÇÃO), PERMITINDO INDICAR A OBRA DIRETO SEM TER QUE CLICAR EM "EM OBRA"
+ * ANTES.**
+ *
+ * MOTIVAÇÃO (relato do usuário, com screenshot do modal "Editar Equipamento"
+ * da "PISTOLA FINCA PINO - ANCORA", status "Disponível"):
+ *   "precisa ter a opção de indicar a obra que o equipamento está..."
+ *
+ * CAUSA-RAIZ:
+ *   - O picker "Obra atual" (`<select>` que consome `trpc.obras.listForAlmoxarifado`)
+ *     já existia em `client/src/pages/equipamentos/Proprios.tsx`, mas a condição
+ *     de render era `(form.status === "em_obra" || !editingId)` — ou seja, na
+ *     EDIÇÃO de um equipamento existente ele só aparecia se o status JÁ fosse
+ *     "Em obra". Como no screenshot o equipamento estava "Disponível", o picker
+ *     ficava oculto e o usuário não tinha como indicar a obra direto: teria que
+ *     primeiro clicar no botão de status "Em obra" pra o picker surgir.
+ *
+ * FIX (não-destrutivo, SÓ CLIENT — zero schema, zero ALTER/DROP/DELETE):
+ *   - `Proprios.tsx`: condição de render do picker trocada de
+ *     `(form.status === "em_obra" || !editingId)` para sempre verdadeira (`{(`),
+ *     então o picker "Obra atual" aparece SEMPRE — tanto no cadastro quanto na
+ *     edição, independente do status atual.
+ *   - A lógica de coerência já existente no `onChange` do `<select>` cuida do
+ *     resto: escolher uma obra marca o status "Em obra" automaticamente; limpar
+ *     (— Almoxarifado (sem obra) —) volta a "Disponível". O label mostra "*"
+ *     (obrigatório) quando em_obra e "(opcional)" caso contrário.
+ *   - Texto de ajuda ("Selecione a obra se o equipamento já vai pra obra...")
+ *     antes restrito ao cadastro (`!editingId && form.status !== "em_obra"`)
+ *     passa a aparecer sempre que `form.status !== "em_obra"` (cadastro E edição).
+ *
+ * SERVIDOR: nenhuma mudança necessária. As mutations `proprioCriar` /
+ * `proprioAtualizar` (`server/routers/equipamentos.ts`) já aceitam
+ * `localizacaoAtualObraId` / `localizacaoAtualTipo`, validam que a obra pertence
+ * à mesma empresa (companyId) e aplicam a coerência status×obra (status ≠
+ * "em_obra" ⇒ localização volta a "almoxarifado" e obraId = null). Colunas
+ * `localizacao_atual_tipo` / `localizacao_atual_obra_id` já existem no schema
+ * (`drizzle/schema.ts` `equipamentos_proprios`).
+ *
+ * ARQUIVOS:
+ *   - `client/src/pages/equipamentos/Proprios.tsx` (render do picker ~L797-838).
+ *   - `shared/version.ts` (→ 2564), `shared/changelog.ts` (esta entrada),
+ *     `replit.md` (convenção 2+5).
+ *
+ * VALIDAÇÃO: esbuild isolado do `Proprios.tsx` OK (tsc dá OOM no ambiente).
+ *
  * Rev. 2563 — **RH & DP · AVISO PRÉVIO · CARD "AVISOS PRÉVIOS EM ANDAMENTO"
  * (PainelRH / Home) · "ÚLTIMO DIA TRABALHADO" PASSA A SER CALCULADO
  * AUTOMATICAMENTE QUANDO O EMPREGADO OPTA PELA REDUÇÃO DE 7 DIAS CORRIDOS

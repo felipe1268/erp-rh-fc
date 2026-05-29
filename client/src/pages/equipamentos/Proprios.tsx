@@ -792,10 +792,12 @@ export default function EquipamentosProprios() {
                       })}
                     </div>
                     {/* Rev. 2514 — Obra picker aparece quando status="em_obra".
-                        Rev. 2554 — no CADASTRO (novo item) aparece SEMPRE, pra o
-                        usuário poder indicar a obra direto; escolher uma obra
-                        marca o status "Em obra" automaticamente. */}
-                    {(form.status === "em_obra" || !editingId) && (
+                        Rev. 2554 — no CADASTRO (novo item) aparece SEMPRE.
+                        Rev. 2564 — agora aparece SEMPRE também na EDIÇÃO, pra o
+                        usuário poder indicar a obra direto sem ter que clicar em
+                        "Em obra" antes; escolher uma obra marca o status "Em obra"
+                        automaticamente. */}
+                    {(
                       <div className="mt-2">
                         <label className="block text-[11px] font-semibold text-slate-700 mb-1 inline-flex items-center gap-1">
                           <Building2 className="h-3 w-3 text-blue-700" /> Obra atual{" "}
@@ -824,7 +826,7 @@ export default function EquipamentosProprios() {
                             <option key={o.id} value={o.id}>{o.nome}</option>
                           ))}
                         </select>
-                        {!editingId && form.status !== "em_obra" && (
+                        {form.status !== "em_obra" && (
                           <p className="mt-1 text-[10.5px] text-slate-500">
                             Selecione a obra se o equipamento já vai pra obra. Sem obra, fica no almoxarifado.
                           </p>
