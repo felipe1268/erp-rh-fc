@@ -1,6 +1,77 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2570 — **RH & DP · HORA EXTRA · ANÁLISE DA SOLICITAÇÃO (tela
+ * "Análise da Solicitação HE-NNNNN") · FUNCIONÁRIO DE CARGO DE CONFIANÇA NÃO
+ * GERA VALOR DE HORA EXTRA A PAGAR (CLT art. 62, II).**
+ *
+ * MOTIVAÇÃO (relato do usuário): "o ERP precisa verificar se o funcionário é de
+ * cargo de confiança ou não, se for não tem valor a ser pago de hora extra,
+ * verifique isso nos critérios de cadastro do funcionário."
+ *
+ * CONTEXTO LEGAL: empregados em cargo de confiança / gestão (CLT art. 62, II)
+ * não estão sujeitos ao controle de jornada e NÃO fazem jus a adicional de hora
+ * extra. O cadastro do colaborador já tem o campo `cargo_confianca` (smallint
+ * 0/1) + `cargo_confianca_inciso` (I/II/III) — preenchidos na tela Colaboradores
+ * (Rev. 1874/1878). A tela de Análise de HE, porém, calculava o custo de HE
+ * para TODOS os funcionários da solicitação, sem olhar esse critério.
+ *
+ * CAUSA-RAIZ:
+ *   - `heSolicitacoes.getById` (`server/routers/heSolicitacoes.ts`, select de
+ *     `funcs`) NÃO projetava `cargoConfianca`/`cargoConfiancaInciso`, então o
+ *     dado nem chegava ao client.
+ *   - `client/src/pages/SolicitacaoHE.tsx` (modal de Análise, tabela de
+ *     funcionários ~L1690 + cards de resumo) calculava `custoHE`, `custoNormal`,
+ *     `custoExtra`, `custoTotal`, `totalNormalGlobal` para todos sem exceção.
+ *
+ * FIX (não-destrutivo — zero schema, zero ALTER/DROP/DELETE):
+ *   - SERVER: `getById` passou a projetar `employeeCargoConfianca` e
+ *     `employeeCargoConfiancaInciso` (colunas já existentes; nenhuma outra query
+ *     afetada).
+ *   - CLIENT: helper `isCargoConfianca(f)` (= `Number(f.employeeCargoConfianca)
+ *     === 1`); `confiancaList` derivado. Os reduces de `custoTotal` e
+ *     `totalNormalGlobal` agora PULAM funcionários de cargo de confiança (não há
+ *     HE a pagar). Por linha: `custoHE=0`/`custoExtra=0`; as 3 colunas de custo
+ *     (Custo Normal/Custo HE/Diferença) são substituídas por um selo "Isento de
+ *     hora extra — nada a pagar (CLT art. 62)" (`colSpan={3}`), a linha ganha
+ *     leve realce violeta e a coluna Função exibe badge "Cargo de confiança · art.
+ *     62, <inciso>". Card de resumo "Funcionários" ganhou nota "N cargo de
+ *     confiança (sem HE)". `semSalario` passou a excluir cargo de confiança (não
+ *     é pendência de cadastro).
+ *
+ * ESCOPO: apenas a tela de Análise/Custo Previsto da solicitação de HE. O motor
+ * de pagamento/folha (payrollEngine) NÃO foi alterado nesta revisão.
+ *
+ * ARQUIVOS: `server/routers/heSolicitacoes.ts` (select do `getById`),
+ * `client/src/pages/SolicitacaoHE.tsx` (helper + totais + tabela + resumo),
+ * `shared/version.ts` (→2570), `shared/changelog.ts`, `replit.md`.
+ *
+ * Rev. 2569 — **RH & DP · HORA EXTRA · ANÁLISE DA SOLICITAÇÃO (tela
+ * "Análise da Solicitação HE-NNNNN") · A TABELA DE FUNCIONÁRIOS PASSA A EXIBIR A
+ * FOTO DO CADASTRO DE CADA COLABORADOR.**
+ *
+ * MOTIVAÇÃO (relato do usuário, com 1 screenshot da tela "Análise da Solicitação
+ * HE-120020"): "quero as fotos dos colaboradores."
+ *
+ * CAUSA-RAIZ:
+ *   - A coluna "Nome" da tabela de funcionários da Análise
+ *     (`client/src/pages/SolicitacaoHE.tsx` ~L1715) mostrava só o nome (texto
+ *     azul clicável → abre Raio-X), sem avatar.
+ *   - `heSolicitacoes.getById` (`server/routers/heSolicitacoes.ts`) NÃO
+ *     projetava `fotoUrl` no select de `funcs`, então a foto nem chegava ao
+ *     client (a query de listagem `getAll` já trazia `fotoUrl`, mas o `getById`
+ *     usado pelo modal de Análise não).
+ *
+ * FIX (não-destrutivo, leitura/UI — zero schema, zero ALTER/DROP/DELETE):
+ *   - SERVER: `getById` passou a projetar `employeeFotoUrl: employees.fotoUrl`.
+ *   - CLIENT: import de `PersonPhoto`; na coluna "Nome", o nome agora vem
+ *     precedido de `<PersonPhoto src={f.employeeFotoUrl} alt={nome} size="sm"
+ *     caption={função} />` (lightbox ao clicar + fallback de iniciais quando sem
+ *     foto). O nome segue clicável para o Raio-X.
+ *
+ * ARQUIVOS: `server/routers/heSolicitacoes.ts` (select do `getById`),
+ * `client/src/pages/SolicitacaoHE.tsx` (import + coluna Nome).
+ *
  * Rev. 2568 — **RH & DP · PAINEL RH · CENTRAL DE ALERTAS (modal full-screen com
  * abas Todos/ASOs/Férias/Experiência/Avisos/HE/MO) · OS CARDS DE ALERTA POR
  * FUNCIONÁRIO PASSAM A EXIBIR A FOTO DO CADASTRO.**

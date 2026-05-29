@@ -480,6 +480,7 @@ export const heSolicitacoesRouter = router({
       employeeName: employees.nomeCompleto,
       employeeCpf: employees.cpf,
       employeeFuncao: employees.funcao,
+      employeeFotoUrl: employees.fotoUrl,
       employeeSalarioBase: employees.salarioBase,
       employeeValorHora: employees.valorHora,
       employeeHeNormal50: employees.heNormal50,
@@ -487,6 +488,8 @@ export const heSolicitacoesRouter = router({
       employeeHeFeriado: employees.heFeriado,
       employeeHeNoturna: employees.heNoturna,
       employeeAcordoHE: employees.acordoHoraExtra,
+      employeeCargoConfianca: employees.cargoConfianca,
+      employeeCargoConfiancaInciso: employees.cargoConfiancaInciso,
     }).from(heSolicitacaoFuncionarios)
       .leftJoin(employees, eq(heSolicitacaoFuncionarios.employeeId, employees.id))
       .where(eq(heSolicitacaoFuncionarios.solicitacaoId, sol.id));

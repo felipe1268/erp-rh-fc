@@ -3,6 +3,7 @@ import DashboardLayout from "@/components/DashboardLayout";
 import FullScreenDialog from "@/components/FullScreenDialog";
 import PrintFooterLGPD from "@/components/PrintFooterLGPD";
 import RaioXFuncionario from "@/components/RaioXFuncionario";
+import { PersonPhoto } from "@/components/PersonPhoto";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -1596,21 +1597,32 @@ export default function SolicitacaoHE() {
                   const info = getValorHoraInfo(f);
                   return info.fonte ? info.vh : null;
                 }
+                // Rev. 2570 — Cargo de confiança (CLT art. 62, II): funcionário de
+                // cargo de confiança NÃO recebe hora extra. Sem valor a pagar.
+                const isCargoConfianca = (f: any) => Number(f.employeeCargoConfianca) === 1;
+                const confiancaList = funcs.filter(isCargoConfianca);
                 // custoTotal usa o percentual cadastrado de cada funcionário
+                // (cargo de confiança NÃO entra — não há HE a pagar)
                 const custoTotal = funcs.reduce((acc: number, f: any) => {
+                  if (isCargoConfianca(f)) return acc;
                   const vh = getValorHora(f);
                   if (!vh || horasHE === 0) return acc;
                   const pStr = isWeekend ? (f.employeeHe100 ?? f.employeeHeFeriado ?? "100") : (f.employeeHeNormal50 ?? "50");
                   const pct  = parseFloat(String(pStr).replace(",", ".")) || percentHE;
                   return acc + vh * (1 + pct / 100) * horasHE;
                 }, 0);
-                // totalNormal = base de comparação: VH × horas para todos (sem adicional)
+                // totalNormal = base de comparação: VH × horas (sem adicional);
+                // cargo de confiança fora (não há HE).
                 const totalNormalGlobal = funcs.reduce((acc: number, f: any) => {
+                  if (isCargoConfianca(f)) return acc;
                   const vh = getValorHora(f);
                   return acc + (vh && horasHE > 0 ? vh * horasHE : 0);
                 }, 0);
                 const totalExtraGlobal = custoTotal - totalNormalGlobal;
-                const semSalario = funcs.filter((f: any) => getValorHora(f) === null);
+                const semSalario = funcs.filter((f: any) => !isCargoConfianca(f) && getValorHora(f) === null);
+                // elegíveis = funcionários que efetivamente entram nos totais monetários
+                // (têm salário E não são cargo de confiança)
+                const elegiveis = funcs.filter((f: any) => !isCargoConfianca(f) && getValorHora(f) !== null);
 
                 return (
                   <div className="space-y-4">
@@ -1690,6 +1702,8 @@ export default function SolicitacaoHE() {
                             {funcs.map((f: any, i: number) => {
                               const info = getValorHoraInfo(f);
                               const vh = info.fonte ? info.vh : null;
+                              // Rev. 2570 — cargo de confiança não recebe HE
+                              const confianca = isCargoConfianca(f);
                               // custoNormal = VH × horas (sempre, é a base de comparação)
                               const custoNormal = vh && horasHE > 0 ? custoNormalPorFuncionario(vh) : null;
                               // percentual individual do funcionário; fallback 50%/100%
@@ -1697,26 +1711,34 @@ export default function SolicitacaoHE() {
                                 ? (f.employeeHe100 ?? f.employeeHeFeriado ?? "100")
                                 : (f.employeeHeNormal50 ?? "50");
                               const pctFunc     = parseFloat(String(pctFuncStr).replace(",", ".")) || percentHE;
-                              const custoHE     = vh && horasHE > 0 ? vh * (1 + pctFunc / 100) * horasHE : null;
+                              const custoHE     = confianca ? 0 : (vh && horasHE > 0 ? vh * (1 + pctFunc / 100) * horasHE : null);
                               // diferença = quanto a mais foi pago por causa do adicional
-                              const custoExtra  = custoNormal != null && custoHE != null ? custoHE - custoNormal : null;
+                              const custoExtra  = confianca ? 0 : (custoNormal != null && custoHE != null ? custoHE - custoNormal : null);
                               return (
-                                <tr key={f.employeeId} className={`border-t transition-colors ${isWeekend ? "hover:bg-orange-50" : "hover:bg-blue-50"}`}>
-                                  <td className="px-3 py-3 text-muted-foreground text-xs">{i + 1}</td>
+                                <tr key={f.employeeId} className={`border-t transition-colors ${confianca ? "bg-violet-50/40 hover:bg-violet-50" : isWeekend ? "hover:bg-orange-50" : "hover:bg-blue-50"}`}>
+                                  <td className="px-3 py-3 text-muted-foreground text-xs align-top">{i + 1}</td>
                                   <td className="px-3 py-3">
-                                    <span
-                                      className="text-blue-700 font-medium cursor-pointer hover:underline"
-                                      onClick={() => setRaioXEmployeeId(f.employeeId)}
-                                    >
-                                      {f.employeeName || `ID ${f.employeeId}`}
-                                    </span>
+                                    <div className="flex items-center gap-2">
+                                      <PersonPhoto src={f.employeeFotoUrl} alt={f.employeeName || `ID ${f.employeeId}`} size="sm" caption={f.employeeFuncao || undefined} />
+                                      <span
+                                        className="text-blue-700 font-medium cursor-pointer hover:underline"
+                                        onClick={() => setRaioXEmployeeId(f.employeeId)}
+                                      >
+                                        {f.employeeName || `ID ${f.employeeId}`}
+                                      </span>
+                                    </div>
                                   </td>
-                                  <td className="px-3 py-3 text-muted-foreground text-xs">
+                                  <td className="px-3 py-3 text-muted-foreground text-xs align-top">
                                     {f.employeeFuncao || <span className="italic text-slate-400">—</span>}
+                                    {confianca && (
+                                      <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-violet-100 text-violet-700 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide">
+                                        Cargo de confiança{f.employeeCargoConfiancaInciso ? ` · art. 62, ${f.employeeCargoConfiancaInciso}` : " · CLT art. 62"}
+                                      </span>
+                                    )}
                                   </td>
                                   {horasHE > 0 && (<>
                                     {/* Valor/hora */}
-                                    <td className="px-3 py-3 text-right">
+                                    <td className="px-3 py-3 text-right align-top">
                                       {vh != null ? (
                                         <div className="flex flex-col items-end gap-0.5">
                                           <span className="font-mono text-sm font-semibold text-slate-800">R$ {fmtNum(vh)}</span>
@@ -1730,45 +1752,54 @@ export default function SolicitacaoHE() {
                                         <span className="text-xs text-red-400 italic">sem cadastro</span>
                                       )}
                                     </td>
-                                    {/* Custo Normal — base de comparação (VH × horas, sem adicional) */}
-                                    <td className="px-3 py-3 text-right">
-                                      {custoNormal != null ? (
-                                        <div className="flex flex-col items-end gap-0.5">
-                                          <span className="font-mono text-sm font-semibold text-slate-700">R$ {fmtNum(custoNormal)}</span>
-                                          <span className="text-[10px] text-slate-400">R$ {fmtNum(vh!)} × {horasHE.toFixed(1)}h</span>
-                                        </div>
-                                      ) : <span className="text-xs text-slate-300">—</span>}
-                                    </td>
-                                    {/* Custo HE — com adicional do funcionário */}
-                                    <td className="px-3 py-3 text-right">
-                                      {custoHE != null ? (
-                                        <div className="flex flex-col items-end gap-0.5">
-                                          <span className={`font-bold text-sm font-mono ${isWeekend ? "text-orange-700" : "text-blue-800"}`}>
-                                            R$ {fmtNum(custoHE)}
-                                          </span>
-                                          <span className="text-[10px] text-slate-400">
-                                            R$ {fmtNum(vh!)} × {(1 + pctFunc / 100).toFixed(2)} × {horasHE.toFixed(1)}h
-                                          </span>
-                                        </div>
-                                      ) : <span className="text-xs text-slate-300">—</span>}
-                                    </td>
-                                    {/* Diferença — quanto a mais sai por causa do adicional */}
-                                    <td className="px-3 py-3 text-right">
-                                      {custoExtra != null ? (
-                                        <div className="flex flex-col items-end gap-0.5">
-                                          <span className="font-mono text-sm font-bold text-red-600">+R$ {fmtNum(custoExtra)}</span>
-                                          <span className="text-[10px] text-slate-400">
-                                            {pctFunc}% de R$ {fmtNum(custoNormal ?? 0)}
-                                          </span>
-                                        </div>
-                                      ) : <span className="text-xs text-slate-300">—</span>}
-                                    </td>
+                                    {confianca ? (
+                                      /* Cargo de confiança — não há HE a pagar (CLT art. 62, II) */
+                                      <td colSpan={3} className="px-3 py-3 text-center align-middle">
+                                        <span className="inline-flex items-center gap-1.5 rounded-lg bg-violet-100 text-violet-700 px-3 py-1.5 text-xs font-semibold">
+                                          Isento de hora extra — nada a pagar (CLT art. 62)
+                                        </span>
+                                      </td>
+                                    ) : (<>
+                                      {/* Custo Normal — base de comparação (VH × horas, sem adicional) */}
+                                      <td className="px-3 py-3 text-right align-top">
+                                        {custoNormal != null ? (
+                                          <div className="flex flex-col items-end gap-0.5">
+                                            <span className="font-mono text-sm font-semibold text-slate-700">R$ {fmtNum(custoNormal)}</span>
+                                            <span className="text-[10px] text-slate-400">R$ {fmtNum(vh!)} × {horasHE.toFixed(1)}h</span>
+                                          </div>
+                                        ) : <span className="text-xs text-slate-300">—</span>}
+                                      </td>
+                                      {/* Custo HE — com adicional do funcionário */}
+                                      <td className="px-3 py-3 text-right align-top">
+                                        {custoHE != null ? (
+                                          <div className="flex flex-col items-end gap-0.5">
+                                            <span className={`font-bold text-sm font-mono ${isWeekend ? "text-orange-700" : "text-blue-800"}`}>
+                                              R$ {fmtNum(custoHE)}
+                                            </span>
+                                            <span className="text-[10px] text-slate-400">
+                                              R$ {fmtNum(vh!)} × {(1 + pctFunc / 100).toFixed(2)} × {horasHE.toFixed(1)}h
+                                            </span>
+                                          </div>
+                                        ) : <span className="text-xs text-slate-300">—</span>}
+                                      </td>
+                                      {/* Diferença — quanto a mais sai por causa do adicional */}
+                                      <td className="px-3 py-3 text-right align-top">
+                                        {custoExtra != null ? (
+                                          <div className="flex flex-col items-end gap-0.5">
+                                            <span className="font-mono text-sm font-bold text-red-600">+R$ {fmtNum(custoExtra)}</span>
+                                            <span className="text-[10px] text-slate-400">
+                                              {pctFunc}% de R$ {fmtNum(custoNormal ?? 0)}
+                                            </span>
+                                          </div>
+                                        ) : <span className="text-xs text-slate-300">—</span>}
+                                      </td>
+                                    </>)}
                                   </>)}
                                 </tr>
                               );
                             })}
                           </tbody>
-                          {horasHE > 0 && custoTotal > 0 && (
+                          {horasHE > 0 && (
                             <tfoot className={`border-t-2 ${isWeekend ? "border-orange-300 bg-orange-50" : "border-slate-300 bg-slate-100"}`}>
                               <tr>
                                 <td colSpan={3} className="px-3 py-2.5 text-xs font-bold text-slate-600 text-right uppercase tracking-wide">
@@ -1824,11 +1855,17 @@ export default function SolicitacaoHE() {
                               </p>
                             </div>
                             <div className="bg-white rounded p-2 border border-slate-200">
-                              <p className="text-muted-foreground mb-1">Funcionários</p>
-                              <p className="font-bold text-base">{funcs.length - semSalario.length}<span className="text-xs font-normal text-muted-foreground">/{funcs.length}</span></p>
-                              {semSalario.length > 0
-                                ? <p className="text-[10px] text-red-500">{semSalario.length} sem salário</p>
-                                : <p className="text-[10px] text-green-600">Todos com salário</p>}
+                              <p className="text-muted-foreground mb-1">Funcionários (com HE)</p>
+                              <p className="font-bold text-base">{elegiveis.length}<span className="text-xs font-normal text-muted-foreground">/{funcs.length}</span></p>
+                              {semSalario.length > 0 && (
+                                <p className="text-[10px] text-red-500">{semSalario.length} sem salário</p>
+                              )}
+                              {confiancaList.length > 0 && (
+                                <p className="text-[10px] text-violet-600">{confiancaList.length} cargo de confiança (sem HE)</p>
+                              )}
+                              {semSalario.length === 0 && confiancaList.length === 0 && (
+                                <p className="text-[10px] text-green-600">Todos com salário</p>
+                              )}
                             </div>
                             <div className="bg-white rounded p-2 border border-slate-200">
                               <p className="text-muted-foreground mb-1">Base salarial</p>
@@ -1856,7 +1893,7 @@ export default function SolicitacaoHE() {
                                 R$ {fmtNum(totalNormalGlobal)}
                               </p>
                               <p className="text-[10px] text-slate-400 mt-1">
-                                VH × {horasHE.toFixed(1)}h × {funcs.length - semSalario.length} func.
+                                VH × {horasHE.toFixed(1)}h × {elegiveis.length} func.
                               </p>
                             </div>
                             <div className={`rounded-lg p-3 border-2 ${isWeekend ? "border-orange-400 bg-orange-50" : "border-blue-400 bg-white"}`}>
