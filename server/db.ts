@@ -2115,49 +2115,69 @@ export async function allocateEmployeeToObra(data: { obraId: number; employeeId:
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   const hoje = data.dataInicio || new Date().toISOString().split('T')[0];
-  // Buscar alocação ativa anterior
-  const [alocAnterior] = await db.select().from(obraFuncionarios).where(and(eq(obraFuncionarios.employeeId, data.employeeId), eq(obraFuncionarios.isActive, 1)));
-  const obraOrigemId = alocAnterior?.obraId || null;
-  const isTransferencia = !!alocAnterior;
-  // Encerrar alocação anterior
-  if (alocAnterior) {
-    await db.update(obraFuncionarios).set({ isActive: 0, dataFim: hoje } as any).where(eq(obraFuncionarios.id, alocAnterior.id));
-    // Registrar saída no histórico
-    await db.insert(employeeSiteHistory).values({
+  // Rev. 2559 — TUDO numa transação para fechar a janela de corrida que gerava
+  // funcionários DUPLICADOS na obra (2+ linhas isActive=1 para o mesmo
+  // funcionário). Antes: lia/desativava só a PRIMEIRA alocação ativa
+  // (`[alocAnterior]`) e inseria uma nova — então, sob duplo-submit (o usuário
+  // reclica "Alocar/Transferir" ao ver o erro transitório "Unexpected end of
+  // JSON input") ou requisições concorrentes, sobravam várias ativas.
+  // Agora: desativa TODAS as alocações ativas do funcionário e cria UMA nova,
+  // garantindo o invariante "no máximo 1 alocação ativa por funcionário".
+  return await db.transaction(async (tx) => {
+    // Lock por funcionário (advisory, escopo da transação) — serializa chamadas
+    // concorrentes do MESMO funcionário, fechando a janela de corrida do
+    // isolamento READ COMMITTED (duas tx lendo "0 ativas" e ambas inserindo).
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(${data.employeeId})`);
+    // Buscar TODAS as alocações ativas anteriores (pode haver duplicatas legadas).
+    // Ordenado para tornar a "origem" determinística (a mais recente).
+    const ativasAnteriores = await tx.select().from(obraFuncionarios)
+      .where(and(eq(obraFuncionarios.employeeId, data.employeeId), eq(obraFuncionarios.isActive, 1)))
+      .orderBy(desc(obraFuncionarios.dataInicio), desc(obraFuncionarios.id));
+    // "Origem" = a alocação ativa mais recente — para fins de histórico
+    const alocAnterior = ativasAnteriores[0];
+    const obraOrigemId = alocAnterior?.obraId || null;
+    const isTransferencia = !!alocAnterior;
+    // Encerrar TODAS as alocações ativas anteriores (não só a primeira)
+    if (ativasAnteriores.length > 0) {
+      await tx.update(obraFuncionarios).set({ isActive: 0, dataFim: hoje } as any)
+        .where(and(eq(obraFuncionarios.employeeId, data.employeeId), eq(obraFuncionarios.isActive, 1)));
+      // Registrar saída no histórico (uma vez, referente à alocação de origem)
+      await tx.insert(employeeSiteHistory).values({
+        companyId: data.companyId,
+        employeeId: data.employeeId,
+        obraId: alocAnterior.obraId,
+        tipo: 'saida',
+        dataInicio: alocAnterior.dataInicio || hoje,
+        dataFim: hoje,
+        motivoTransferencia: data.motivo || (isTransferencia ? 'Transferência para outra obra' : null),
+        registradoPor: data.registradoPor || null,
+        registradoPorUserId: data.registradoPorUserId || null,
+      } as any);
+    }
+    // Criar nova alocação (única ativa)
+    const insertData: any = {
+      obraId: data.obraId,
+      employeeId: data.employeeId,
+      companyId: data.companyId,
+      funcaoNaObra: data.funcaoNaObra || null,
+      dataInicio: hoje,
+      isActive: 1,
+    };
+    const [inserted] = await tx.insert(obraFuncionarios).values(insertData).returning({ id: obraFuncionarios.id });
+    // Registrar entrada no histórico
+    await tx.insert(employeeSiteHistory).values({
       companyId: data.companyId,
       employeeId: data.employeeId,
-      obraId: alocAnterior.obraId,
-      tipo: 'saida',
-      dataInicio: alocAnterior.dataInicio || hoje,
-      dataFim: hoje,
-      motivoTransferencia: data.motivo || (isTransferencia ? 'Transferência para outra obra' : null),
+      obraId: data.obraId,
+      tipo: isTransferencia ? 'transferencia' : 'alocacao',
+      dataInicio: hoje,
+      obraOrigemId: obraOrigemId,
+      motivoTransferencia: data.motivo || null,
       registradoPor: data.registradoPor || null,
       registradoPorUserId: data.registradoPorUserId || null,
     } as any);
-  }
-  // Criar nova alocação
-  const insertData: any = {
-    obraId: data.obraId,
-    employeeId: data.employeeId,
-    companyId: data.companyId,
-    funcaoNaObra: data.funcaoNaObra || null,
-    dataInicio: hoje,
-    isActive: 1,
-  };
-  const [inserted] = await db.insert(obraFuncionarios).values(insertData).returning({ id: obraFuncionarios.id });
-  // Registrar entrada no histórico
-  await db.insert(employeeSiteHistory).values({
-    companyId: data.companyId,
-    employeeId: data.employeeId,
-    obraId: data.obraId,
-    tipo: isTransferencia ? 'transferencia' : 'alocacao',
-    dataInicio: hoje,
-    obraOrigemId: obraOrigemId,
-    motivoTransferencia: data.motivo || null,
-    registradoPor: data.registradoPor || null,
-    registradoPorUserId: data.registradoPorUserId || null,
-  } as any);
-  return { id: inserted.id, isTransferencia, obraOrigemId };
+    return { id: inserted.id, isTransferencia, obraOrigemId };
+  });
 }
 
 export async function removeEmployeeFromObra(employeeId: number, motivo?: string, registradoPor?: string, registradoPorUserId?: number) {

@@ -1,6 +1,88 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2559 — **OBRAS · EFETIVO · FIX FUNCIONÁRIOS DUPLICADOS NA OBRA
+ * (mesmo funcionário aparecendo 2-3x na dialog "Equipe", rota `/obras/efetivo`)
+ * + LIMPEZA DOS DUPLICADOS EXISTENTES.**
+ *
+ * MOTIVAÇÃO (relato do usuário):
+ *   Na obra "HOTEL DO PAPA - AMPLIAÇÃO DO 5 PAV" vários funcionários apareciam
+ *   repetidos: DESILDO DA COSTA SANTOS 2x e GERALDO CANDIDO DA SILVA 3x
+ *   (mesma obra, mesma data 26/05/2026). "tem vários funcionários repetidos".
+ *
+ * DIAGNÓSTICO (causa-raiz):
+ *   `allocateEmployeeToObra` (`server/db.ts`) buscava apenas a PRIMEIRA alocação
+ *   ativa do funcionário (`const [alocAnterior] = await db.select()... isActive=1`),
+ *   desativava SÓ ESSA e inseria uma nova linha ativa — sem transação e sem
+ *   garantir o invariante "≤1 alocação ativa por funcionário". Sob duplo-submit
+ *   (o usuário reclica "Alocar/Transferir" ao ver o erro transitório
+ *   "Unexpected end of JSON input" da Rev. 2558) OU requisições concorrentes
+ *   (duas chamadas leem 0/1 ativa ao mesmo tempo, ambas inserem), acumulavam-se
+ *   múltiplas linhas `isActive=1` para o mesmo funcionário. Como a desativação
+ *   atingia só `[alocAnterior]` (a 1ª), as linhas extras nunca eram encerradas e
+ *   inflavam tanto a lista da dialog "Equipe" quanto a contagem de efetivo
+ *   (`getEfetivoPorObra`). `transferirFuncionariosEmLote` chama essa mesma função
+ *   em loop, então herdava a falha.
+ *
+ * VERIFICAÇÃO NO BANCO (Neon, via script tsx pontual conectando em
+ * `NEON_DATABASE_URL` — `executeSql`/ferramenta de DB aponta para o Postgres
+ * local/Replit `DATABASE_URL`, que está VAZIO e NÃO serve para ler/ajustar os
+ * dados do app):
+ *   4 funcionários com >1 alocação ativa (4 linhas extras):
+ *     - emp 13  MARCOS ROBERTO CORREA DE FREITAS — POS OBRA (22/03) + HOTEL DO PAPA (26/05)
+ *     - emp 15  GERALDO CANDIDO DA SILVA — HOTEL DO PAPA 2x (26/05)
+ *     - emp 420076 AGOSTINHO DIJALMA FERREIRA — HOTEL DO PAPA (26/05) + LUCIANA (28/02)
+ *     - emp 420105 DESILDO DA COSTA SANTOS — HOTEL DO PAPA 2x (26/05)
+ *   OBS importante: os `id` NÃO são monotônicos com a data (ex.: rowId 30067 tem
+ *   `dataInicio` 28/02, anterior ao rowId 51 de 26/05) — provável legado de
+ *   import. Por isso a deduplicação usa `dataInicio` (não `id`) como critério.
+ *
+ * FIX 1 — RAIZ (não-destrutivo, ZERO ALTER/DROP/DELETE):
+ *   SERVER `server/db.ts` (`allocateEmployeeToObra`):
+ *     - Envolve TODO o fluxo em `db.transaction(async (tx) => {...})` para fechar
+ *       a janela de corrida (read-deactivate-insert atômico).
+ *     - `pg_advisory_xact_lock(employeeId)` como 1ª query da transação: serializa
+ *       chamadas concorrentes do MESMO funcionário (sob READ COMMITTED duas tx
+ *       poderiam ler "0 ativas" e ambas inserir). Garante o invariante mesmo sem
+ *       constraint única (que exigiria CREATE INDEX / ALTER — proibido).
+ *     - Desativa TODAS as alocações ativas do funcionário
+ *       (`UPDATE ... SET isActive=0, dataFim=hoje WHERE employeeId=? AND isActive=1`),
+ *       não só a primeira. Select das ativas com `orderBy(desc(dataInicio),
+ *       desc(id))` → "origem" (`ativasAnteriores[0]`) determinística; histórico de
+ *       "saida" registrado uma vez referente à alocação mais recente.
+ *     - Resultado: a função vira IDEMPOTENTE para a mesma obra e AUTO-CURA
+ *       duplicatas legadas no próximo allocate/transfer do funcionário. Mantém o
+ *       invariante "no máximo 1 alocação ativa por funcionário".
+ *   SERVER `server/routers/dds.ts` (branch CLT do vínculo colaborador↔obra):
+ *     - Era o OUTRO caminho de escrita que inseria/reativava `obra_funcionarios`
+ *       direto, SEM desativar outras ativas → podia recriar duplicata ativa
+ *       cross-obra (funcionário ativo na obra A, vinculado à B). Reescrito no
+ *       mesmo padrão: `db.transaction` + `pg_advisory_xact_lock(employeeId)` +
+ *       desativa TODAS as ativas do funcionário + reativa a linha desta obra
+ *       (`reativado` = era inativo antes) OU insere UMA nova. Invariante fechado
+ *       em ambos os caminhos (confirmado por code review: são os únicos writes
+ *       que ativam `isActive=1`).
+ *
+ * FIX 2 — LIMPEZA DOS DUPLICADOS EXISTENTES (somente UPDATE — permitido pelas
+ * regras R-001/R-007/R-010; nada de DELETE; linhas preservadas, apenas
+ * `isActive=0`):
+ *   Script tsx pontual contra o Neon, dentro de transação com verificação:
+ *     - Para cada funcionário com >1 ativa, MANTÉM a alocação mais recente
+ *       (`ORDER BY "dataInicio" DESC, id DESC`) e desativa as demais
+ *       (`SET isActive=0, dataFim=CURRENT_DATE`).
+ *     - 4 linhas atualizadas; recontagem pós-UPDATE = 0 funcionários com >1
+ *       ativa → COMMIT. Linhas mantidas refletem a obra mais recente de cada um
+ *       (HOTEL DO PAPA para emp 13/15/420076/420105; emp 420076 mantido em HOTEL
+ *       26/05 sobre LUCIANA 28/02). Script removido após execução.
+ *
+ * ARQUIVOS:
+ *   - server/db.ts — `allocateEmployeeToObra` reescrita (transação + desativa
+ *     todas as ativas). `transferirFuncionariosEmLote` herda o fix sem alteração.
+ *
+ * VALIDAÇÃO:
+ *   - esbuild isolado de `server/db.ts` OK (tsc dá OOM no projeto).
+ *   - Recontagem no Neon: 0 funcionários com alocação ativa duplicada.
+ *
  * Rev. 2558 — **OBRAS · EFETIVO · FIX "Unexpected end of JSON input" AO
  * REMOVER FUNCIONÁRIO DA OBRA (dialog "Equipe — POS OBRA", rota
  * `/obras/efetivo`).**

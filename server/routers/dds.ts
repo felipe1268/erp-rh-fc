@@ -1794,29 +1794,46 @@ ${input.foco ? `Foco solicitado pelo usuário: "${input.foco}". Priorize temas d
       if (["Desligado", "Lista_Negra", "ListaNegra"].includes(emp.status as any)) {
         throw new TRPCError({ code: "BAD_REQUEST", message: "Colaborador desligado não pode ser vinculado." });
       }
-      // Já existe vínculo (ativo ou inativo)?
-      const [exist] = await db.select({ id: obraFuncionarios.id, isActive: obraFuncionarios.isActive })
-        .from(obraFuncionarios).where(and(
-          eq(obraFuncionarios.companyId, input.companyId),
-          eq(obraFuncionarios.obraId, input.obraId),
-          eq(obraFuncionarios.employeeId, input.employeeId),
-        )).limit(1);
-      if (exist) {
-        if (exist.isActive === 1) return { ok: true, reativado: false, tipo: "clt" as const };
-        await db.update(obraFuncionarios)
-          .set({ isActive: 1, dataFim: null as any })
-          .where(eq(obraFuncionarios.id, exist.id));
-        return { ok: true, reativado: true, tipo: "clt" as const };
-      }
+      // Rev. 2559 — garantir o invariante "≤1 alocação ativa por funcionário"
+      // também neste caminho (antes inseria/reativava direto, podendo criar
+      // duplicata ativa cross-obra). Tudo em transação com advisory lock por
+      // funcionário (mesmo padrão de `allocateEmployeeToObra`).
       const hoje = new Date().toISOString().slice(0, 10);
-      await db.insert(obraFuncionarios).values({
-        obraId: input.obraId,
-        employeeId: input.employeeId,
-        companyId: input.companyId,
-        dataInicio: hoje,
-        isActive: 1,
-      } as any);
-      return { ok: true, reativado: false, tipo: "clt" as const };
+      return await db.transaction(async (tx) => {
+        await tx.execute(sql`SELECT pg_advisory_xact_lock(${input.employeeId})`);
+        // Vínculo nesta obra (ativo ou inativo)? — pega o mais recente
+        const [exist] = await tx.select({ id: obraFuncionarios.id, isActive: obraFuncionarios.isActive })
+          .from(obraFuncionarios).where(and(
+            eq(obraFuncionarios.companyId, input.companyId),
+            eq(obraFuncionarios.obraId, input.obraId),
+            eq(obraFuncionarios.employeeId, input.employeeId),
+          )).orderBy(desc(obraFuncionarios.id)).limit(1);
+        // Desativa TODAS as alocações ativas do funcionário (qualquer obra /
+        // duplicatas), deixando o caminho criar/reativar exatamente UMA.
+        await tx.update(obraFuncionarios)
+          .set({ isActive: 0, dataFim: hoje } as any)
+          .where(and(
+            eq(obraFuncionarios.employeeId, input.employeeId),
+            eq(obraFuncionarios.isActive, 1),
+          ));
+        if (exist) {
+          // Reativa a linha desta obra (a escolhida). `reativado` = true só
+          // quando ela estava inativa antes (preserva a semântica original).
+          const eraInativo = exist.isActive !== 1;
+          await tx.update(obraFuncionarios)
+            .set({ isActive: 1, dataFim: null as any })
+            .where(eq(obraFuncionarios.id, exist.id));
+          return { ok: true, reativado: eraInativo, tipo: "clt" as const };
+        }
+        await tx.insert(obraFuncionarios).values({
+          obraId: input.obraId,
+          employeeId: input.employeeId,
+          companyId: input.companyId,
+          dataInicio: hoje,
+          isActive: 1,
+        } as any);
+        return { ok: true, reativado: false, tipo: "clt" as const };
+      });
     }),
 
   // Rev. 1731 — Acidentes recentes (default últimos 7 dias) que potencialmente exigem DDS de análise (Lei art. 157 CLT, NR-1).
