@@ -2218,6 +2218,16 @@ export const controleDocumentosRouter = router({
       // Re-sort timeline
       timeline.sort((a, b) => (b.data || "").localeCompare(a.data || ""));
 
+      // Rev. 2545 — timeline mostra SOMENTE eventos que já passaram (até hoje).
+      // Eventos futuros (ex.: férias agendadas, retorno previsto) NÃO aparecem.
+      // Compara a parte data (YYYY-MM-DD) — cobre data-only e timestamp — com a
+      // data de hoje no fuso de Brasília.
+      const hojeStr = new Date().toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
+      const timelinePassados = timeline.filter((ev) => {
+        const d = String(ev.data || "").slice(0, 10);
+        return d === "" ? true : d <= hojeStr;
+      });
+
       return {
         funcionario: { ...emp, obraAtualNome },
         funcaoDetalhes,
