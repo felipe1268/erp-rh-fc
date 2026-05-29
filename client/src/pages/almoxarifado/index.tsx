@@ -1172,6 +1172,8 @@ export default function AlmoxarifadoPage() {
   const [modalDevolverLocacao, setModalDevolverLocacao] = useState(false);
   const [itemDevolverLocacao, setItemDevolverLocacao] = useState<any>(null);
   const [obsDevolucaoLocacao, setObsDevolucaoLocacao] = useState("");
+  // Rev. 2567 — modal aberto ao clicar no alerta "N locações a vencer".
+  const [modalLocacoesVencendo, setModalLocacoesVencendo] = useState(false);
 
   const criarMut = trpc.compras.criarItem.useMutation({
     onSuccess: () => { refetch(); setModalItem(false); toast.success("Item criado!"); },
@@ -1551,10 +1553,15 @@ export default function AlmoxarifadoPage() {
             <div className="flex items-center gap-3">
               <AlertasAlmoxarifado companyId={companyId} />
               {itensLocadosVencendo.length > 0 && (
-                <div className="flex items-center gap-2 bg-amber-50 border border-amber-300 rounded-lg px-3 py-1.5" title={itensLocadosVencendo.map((i: any) => `${i.nome} — vence em ${i.diasParaVencimento <= 0 ? "VENCIDO" : `${i.diasParaVencimento}d`}`).join("\n")}>
+                <button
+                  type="button"
+                  onClick={() => setModalLocacoesVencendo(true)}
+                  className="flex items-center gap-2 bg-amber-50 border border-amber-300 rounded-lg px-3 py-1.5 transition hover:bg-amber-100 hover:border-amber-400 cursor-pointer"
+                  title="Ver detalhes das locações a vencer"
+                >
                   <AlertTriangle className="h-4 w-4 text-amber-600" />
                   <span className="text-xs font-semibold text-amber-700">{itensLocadosVencendo.length} locação{itensLocadosVencendo.length > 1 ? "ões" : ""} a vencer</span>
-                </div>
+                </button>
               )}
               {totalCriticos > 0 && (
                 <div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-lg px-3 py-1.5">
@@ -4388,6 +4395,76 @@ export default function AlmoxarifadoPage() {
               </div>
             )}
 
+          </div>
+        </div>
+      )}
+
+      {/* ── Modal Locações a Vencer (Rev. 2567) ────────────────────── */}
+      {modalLocacoesVencendo && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="fixed inset-0 bg-black/50" onClick={() => setModalLocacoesVencendo(false)} />
+          <div className="relative bg-white rounded-xl border border-gray-200 shadow-xl w-full max-w-lg mx-4 max-h-[85vh] flex flex-col">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+              <h2 className="text-base font-semibold text-gray-900 flex items-center gap-2">
+                <AlertTriangle className="h-5 w-5 text-amber-500" />
+                Locações a Vencer ({itensLocadosVencendo.length})
+              </h2>
+              <button onClick={() => setModalLocacoesVencendo(false)} className="text-gray-400 hover:text-gray-600"><X className="h-5 w-5" /></button>
+            </div>
+            <div className="p-4 space-y-2 overflow-y-auto">
+              {itensLocadosVencendo.length === 0 ? (
+                <p className="text-sm text-gray-500 text-center py-6">Nenhuma locação a vencer.</p>
+              ) : itensLocadosVencendo.map((i: any) => {
+                const vencido = i.diasParaVencimento <= 0;
+                return (
+                  <div key={i.id} className={`rounded-lg border p-3 ${vencido ? "bg-red-50 border-red-200" : "bg-amber-50 border-amber-200"}`}>
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-semibold text-gray-900 truncate">{i.nome}</p>
+                        {i.fornecedorLocacao && (
+                          <p className="text-xs text-gray-600 mt-0.5">Fornecedor: <span className="font-medium">{i.fornecedorLocacao}</span></p>
+                        )}
+                        {i.dataVencimentoLocacao && (
+                          <p className="text-xs text-gray-600">
+                            Vencimento: <span className="font-medium">{new Date(i.dataVencimentoLocacao + "T00:00:00").toLocaleDateString("pt-BR")}</span>
+                          </p>
+                        )}
+                        {i.valorLocacaoMensal != null && (
+                          <p className="text-xs text-gray-600">
+                            Valor mensal: <span className="font-medium">R$ {Number(i.valorLocacaoMensal).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                          </p>
+                        )}
+                      </div>
+                      <div className="shrink-0 text-right">
+                        <span className={`inline-block text-xs font-bold px-2 py-1 rounded-full ${vencido ? "bg-red-600 text-white" : "bg-amber-500 text-white"}`}>
+                          {vencido
+                            ? `Vencido${i.diasParaVencimento < 0 ? ` há ${Math.abs(i.diasParaVencimento)}d` : ""}`
+                            : `${i.diasParaVencimento}d`}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="flex justify-end mt-2">
+                      <button
+                        type="button"
+                        onClick={() => { setModalLocacoesVencendo(false); abrirDevolverLocacao(i); }}
+                        className="inline-flex items-center gap-1.5 text-xs font-medium text-amber-800 bg-white hover:bg-amber-100 border border-amber-300 rounded-md px-2.5 py-1 transition"
+                      >
+                        <CheckCircle2 className="h-3.5 w-3.5" /> Devolver
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="flex gap-3 px-5 py-4 border-t border-gray-100">
+              <button onClick={() => setModalLocacoesVencendo(false)} className="flex-1 h-9 text-sm border border-gray-200 rounded-lg bg-white text-gray-600 hover:bg-gray-50 font-medium transition">Fechar</button>
+              <button
+                onClick={() => { setModalLocacoesVencendo(false); setLocation("/equipamentos/locados"); }}
+                className="flex-1 h-9 text-sm rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-semibold transition"
+              >
+                Ver Equipamentos Locados
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -1,6 +1,48 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2567 — **ALMOXARIFADO · VISÃO GERAL (rota `/almoxarifado`) · O ALERTA
+ * "N LOCAÇÕES A VENCER" (cabeçalho) PASSA A SER CLICÁVEL E ABRE UM MODAL COM
+ * OS DETALHES DE CADA LOCAÇÃO.**
+ *
+ * MOTIVAÇÃO (relato do usuário, com 2 screenshots — a Visão Geral inteira e o
+ * close-up do badge "2 locaçãoões a vencer"):
+ *   "Quero poder clicar no alerta e ver as informações pertinentes."
+ *
+ * CAUSA-RAIZ:
+ *   - O alerta no cabeçalho de `client/src/pages/almoxarifado/index.tsx`
+ *     (~L1553) era um `<div>` ESTÁTICO; a única forma de ver o detalhe era o
+ *     `title` (tooltip nativo) com a lista concatenada — não clicável, ruim no
+ *     mobile (onde o usuário tirou o print). Os dados completos já existiam no
+ *     client via `trpc.compras.getItensLocadosVencendo` (`itensLocadosVencendo`,
+ *     L1168), que retorna cada item locado (`almoxarifado_itens` origem
+ *     'alugado') + `diasParaVencimento` + `alertaDias`.
+ *
+ * FIX (não-destrutivo, SÓ CLIENT — zero schema, zero ALTER/DROP/DELETE):
+ *   - `index.tsx`: novo estado `modalLocacoesVencendo`. O `<div>` do alerta
+ *     virou `<button type="button">` com `onClick={() =>
+ *     setModalLocacoesVencendo(true)}` (+ hover/cursor; mantém o ícone e o
+ *     texto "N locação(ões) a vencer").
+ *   - Novo modal (inserido antes do "Modal Devolução de Locação", ~L4405) lista
+ *     cada locação a vencer com: nome do item, fornecedor, data de vencimento
+ *     (`toLocaleDateString pt-BR`), valor mensal (`toLocaleString` inline — NÃO
+ *     usa o `fmtBRL` da L1832, que é de escopo local de outro bloco) e um badge
+ *     de dias restantes (âmbar) / "Vencido há Nd" (vermelho). Card fica vermelho
+ *     quando `diasParaVencimento <= 0`. Ordenação já vem do servidor (mais
+ *     urgente primeiro).
+ *   - Ações no modal: por item, botão "Devolver" → fecha o modal e chama
+ *     `abrirDevolverLocacao(i)` (reaproveita o fluxo de devolução já existente,
+ *     L1247); no rodapé, "Ver Equipamentos Locados" → `setLocation(
+ *     "/equipamentos/locados")`. Botão "Fechar" + clique no backdrop fecham.
+ *   - SERVER INTOCADO: nenhuma query/rota nova; reaproveita
+ *     `getItensLocadosVencendo` e a mutation de devolução já existentes.
+ *
+ * ARQUIVOS:
+ *   - `client/src/pages/almoxarifado/index.tsx` (estado ~L1178; botão do alerta
+ *     ~L1558; modal ~L4405).
+ *   - `shared/version.ts` (→ Rev. 2567), `shared/changelog.ts` (esta entrada),
+ *     `replit.md` (convenção 2+5).
+ *
  * Rev. 2566 — **ALMOXARIFADO · MOVIMENTAÇÕES (rota `/almoxarifado/movimentacoes`)
  * · OS 5 CARDS DE RESUMO (TOTAL / ESTOQUE / FERRAMENTAS / INSUMOS / TRANSFER.)
  * PASSAM A SER FILTROS CLICÁVEIS POR FONTE.**
