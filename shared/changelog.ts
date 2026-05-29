@@ -1,6 +1,57 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2539 — **LGPD · RAIO-X DO COLABORADOR · GUARD SERVER-SIDE DE OBRA NO
+ * DOSSIÊ (engenheiro de campo não acessa documentação de quem está fora das
+ * suas obras).**
+ *
+ * MOTIVAÇÃO (user):
+ *   O Raio-X (dossiê completo do colaborador: dados pessoais, ASOs, treinamentos,
+ *   advertências, documentos, integrações SST, contratos, etc.) tinha o filtro de
+ *   obra APENAS no client (RaioXPage filtra a LISTA pelas obras liberadas). A
+ *   procedure `docs.raioX({ employeeId })` não tinha NENHUM guard de obra — só a
+ *   máscara de aviso prévio (Rev. 2208). Logo, qualquer usuário autenticado podia
+ *   puxar o dossiê de QUALQUER colaborador por ID, ex.: pela rota direta
+ *   `/raio-x/:id` (RaioXDirectPage), burlando o filtro visual da lista. Furo de
+ *   LGPD: exposição de documentação de colaboradores fora da gestão do usuário.
+ *
+ * CAUSA-RAIZ:
+ *   `server/routers/controleDocumentos.ts` — `raioX: protectedProcedure` recebia
+ *   só `employeeId` e devolvia o dossiê inteiro sem checar se o solicitante tem
+ *   acesso à obra atual do colaborador.
+ *
+ * CORREÇÃO:
+ *   1. `server/db.ts` — novos helpers:
+ *      - `getUserModuleAccessMap(userId)` (privado): resolve o `moduleAccess`
+ *        efetivo (grupo "novo sistema" > individual), espelhando
+ *        `userManagement.getMyPermissions`.
+ *      - `userIsRhOrAdmin(userId, role)`: espelha o `isRhOrAdmin` do client
+ *        (RaioXPage) — `admin_master`/`admin` (role) OU admin do módulo `rh-dp`
+ *        (nível via `normalizeModulePerm` de `shared/modulePages`) enxergam TODOS
+ *        os colaboradores. CRÍTICO: RH costuma ter role `user` + admin de `rh-dp`,
+ *        por isso o check de módulo é SEPARADO do role — senão o guard quebraria o
+ *        RH (que não tem obras liberadas e seria barrado por `getEffectiveAllowedObraIds`).
+ *      - `userCanAccessEmployeeDossier(userId, role, employeeId)`: RH/Admin → tudo;
+ *        demais → libera só se ALGUMA obra com alocação ATIVA (`obra_funcionarios
+ *        isActive=1`) do colaborador estiver entre as obras liberadas. Colaborador
+ *        sem obra ativa fica restrito (paridade exata com o filtro client da lista).
+ *   2. `server/routers/controleDocumentos.ts` — guard no início de `raioX`:
+ *      lança `TRPCError FORBIDDEN` antes de qualquer query quando o acesso é negado.
+ *
+ * IMPACTO / NÃO-REGRESSÃO:
+ *   - RH (admin de `rh-dp`) e Admin/Master: acesso total, inalterado.
+ *   - Engenheiro de campo: dossiê liberado só p/ colaboradores nas suas obras.
+ *   - UI: na rota direta `/raio-x/:id` para colaborador fora da gestão, o componente
+ *     `RaioXFuncionario` cai no estado já existente "Funcionário não encontrado"
+ *     (sem tela branca) pois `raioX` vem indefinido.
+ *   - `employees.list` (lista global usada em muitas telas) NÃO foi alterada — o
+ *     guard é só no dossiê. Zero schema. Zero ALTER/DROP/DELETE.
+ *
+ * ARQUIVOS:
+ *   - server/db.ts (helpers `getUserModuleAccessMap`, `userIsRhOrAdmin`,
+ *     `userCanAccessEmployeeDossier` + import `normalizeModulePerm`)
+ *   - server/routers/controleDocumentos.ts (guard em `raioX` + imports)
+ *
  * Rev. 2538 — **COMPRAS · ORDENS · CORREÇÃO DO "classificarNaturezaItemAlmox
  * is not defined" (re-export ESM sem binding local) ao marcar OC entregue.**
  *

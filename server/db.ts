@@ -33,6 +33,7 @@ type InsertSector = typeof sectors.$inferInsert;
 type InsertJobFunction = typeof jobFunctions.$inferInsert;
 import { ENV } from './_core/env';
 import { normalizeCidadeInput } from '../shared/normalizeCidade';
+import { normalizeModulePerm } from '../shared/modulePages';
 
 let _db: ReturnType<typeof drizzle> | null = null;
 let _pool: Pool | null = null;
@@ -388,6 +389,75 @@ export async function userCanAccessObra(
   if (allowed === null) return true;
   if (obraId == null) return false;
   return allowed.includes(Number(obraId));
+}
+
+/**
+ * Resolve o mapa de `moduleAccess` efetivo do usuário (grupo "novo sistema" >
+ * individual), espelhando `userManagement.getMyPermissions`. Usado em guards
+ * server-side de nível de módulo.
+ */
+async function getUserModuleAccessMap(userId: number): Promise<Record<string, unknown>> {
+  const db = await getDb();
+  if (!db) return {};
+  let moduleAccess: Record<string, unknown> = {};
+  try {
+    const groupPerms = await getUserEffectiveGroupPermissions(userId);
+    if (groupPerms.groups.length > 0) {
+      const groupIds = groupPerms.groups.map((g: any) => g.id as number);
+      const groupRows = await db
+        .select({ id: userGroups.id, moduleAccess: (userGroups as any).moduleAccess })
+        .from(userGroups)
+        .where(inArray(userGroups.id, groupIds));
+      for (const gr of groupRows) {
+        if ((gr as any).moduleAccess) {
+          try { Object.assign(moduleAccess, JSON.parse((gr as any).moduleAccess as string)); } catch {}
+        }
+      }
+    }
+    if (Object.keys(moduleAccess).length === 0) {
+      const [u] = await db.select({ modulesAccess: users.modulesAccess }).from(users).where(eq(users.id, userId));
+      if ((u as any)?.modulesAccess) { try { moduleAccess = JSON.parse((u as any).modulesAccess); } catch {} }
+    }
+  } catch {}
+  return moduleAccess;
+}
+
+/**
+ * Espelha o `isRhOrAdmin` do client (RaioXPage): Admin Master / admin (role) OU
+ * admin do módulo `rh-dp` enxergam TODOS os colaboradores. Demais usuários ficam
+ * restritos às obras liberadas. CRÍTICO: RH costuma ter role `user` + admin de
+ * `rh-dp` — por isso o check de módulo é separado do role.
+ */
+export async function userIsRhOrAdmin(userId: number, role?: string | null): Promise<boolean> {
+  if (role === "admin_master" || role === "admin") return true;
+  const ma = await getUserModuleAccessMap(userId);
+  const perm = normalizeModulePerm("rh-dp", (ma as any)["rh-dp"]);
+  return perm?.level === "admin";
+}
+
+/**
+ * LGPD — Raio-X / dossiê do colaborador: decide se `userId` pode acessar a
+ * documentação completa de `employeeId`. RH/Admin: tudo. Demais: somente se
+ * ALGUMA obra com alocação ATIVA do colaborador estiver entre as obras liberadas
+ * do usuário. Colaborador sem obra ativa fica restrito (igual ao filtro
+ * client-side da lista do Raio-X).
+ */
+export async function userCanAccessEmployeeDossier(
+  userId: number,
+  role: string | null | undefined,
+  employeeId: number,
+): Promise<boolean> {
+  if (await userIsRhOrAdmin(userId, role)) return true;
+  const allowed = await getEffectiveAllowedObraIds(userId, role);
+  if (allowed === null) return true;
+  const db = await getDb();
+  if (!db) return false;
+  const alocs = await db
+    .select({ obraId: obraFuncionarios.obraId })
+    .from(obraFuncionarios)
+    .where(and(eq(obraFuncionarios.employeeId, employeeId), eq(obraFuncionarios.isActive, 1)));
+  if (alocs.length === 0) return false;
+  return alocs.some((a) => allowed.includes(Number(a.obraId)));
 }
 
 /**

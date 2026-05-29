@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
-import { getDb, userCanSeeAvisoStatus } from "../db";
+import { getDb, userCanSeeAvisoStatus, userCanAccessEmployeeDossier } from "../db";
+import { TRPCError } from "@trpc/server";
 import { asos, atestados, trainings, warnings, employees, timeRecords, payroll, epiDeliveries, epis, vrBenefits, advances, obraHorasRateio, obras, documentTemplates, extraPayments, employeeHistory, accidents, processosTrabalhistas, processosAndamentos, jobFunctions, terminationNotices, vacationPeriods, cipaMeetings, cipaMembers, cipaElections, pjContracts, pjPayments, epiDiscountAlerts, customExams, obraFuncionarios, warehouseLoans, almoxarifadoDescontoFolha, almoxarifadoSaidasInsumo, heSolicitacaoConfirmacoes, heSolicitacoes, pontoDescontos, notificationLogs, notificationRecipients, lancamentosParceiros, parceirosConveniados, ddsSessoes, ddsSessaoFuncionarios, signatureSessions, signatureSigners, equipamentoLocadoEventos, equipamentosLocados, users } from "../../drizzle/schema";
 import { eq, and, desc, sql, ne, isNull, inArray, gte, lte } from "drizzle-orm";
 import { resolveCompanyIds, companyFilter } from "../companyHelper";
@@ -1327,6 +1328,13 @@ export const controleDocumentosRouter = router({
   raioX: protectedProcedure
     .input(z.object({ employeeId: z.number() }))
     .query(async ({ input, ctx }) => {
+      // Rev. 2539 — LGPD: engenheiro de campo (e demais não-RH/Admin) só acessa o
+      // dossiê de colaboradores alocados nas obras a que tem acesso. Fecha o vetor
+      // de acesso por ID (rota /raio-x/:id) que burlava o filtro client-side da
+      // lista do Raio-X. RH (admin de rh-dp) e Admin/Master seguem com acesso total.
+      if (!(await userCanAccessEmployeeDossier(ctx.user.id, ctx.user.role, input.employeeId))) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Acesso negado: este colaborador não está alocado em uma obra sob sua gestão." });
+      }
       // Rev. 2208 — sigilo Aviso Prévio no Raio-X: para usuários sem o flag
       // verStatusAviso (e não Master), o array `avisosPrevios` é zerado e
       // mascaramos `emp.status = 'Ativo'` se for 'Aviso'. Cobre banner vermelho
