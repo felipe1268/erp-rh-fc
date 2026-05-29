@@ -163,6 +163,7 @@ const menuSectionsRHDP: MenuSection[] = [
     title: "Inteligência Artificial",
     items: [
       { icon: Scale, label: "Comparativo Convenções", path: "/comparativo-convencoes" },
+      { icon: FileSearch, label: "Convenção Coletiva (IA)", path: "/convencao-ia" },
     ],
   },
 ];

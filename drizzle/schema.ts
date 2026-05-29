@@ -711,6 +711,60 @@ export const dissidios = pgTable("dissidios", {
         index("diss_status").on(table.companyId, table.status),
 ]);
 
+// ============================================================
+// CONVENÇÃO COLETIVA COM IA (Rev. 2551) — análise por IA do PDF da CCT/circular
+// e aplicação em massa de reajuste salarial (via dissídio) + benefícios.
+// ============================================================
+export const convencaoAnalises = pgTable("convencao_analises", {
+        id: serial().notNull(),
+        companyId: integer().notNull(),
+        anoReferencia: integer().notNull(),
+        documentoUrl: text(),
+        documentoNome: varchar({ length: 255 }),
+        // JSON bruto retornado pela IA
+        extracaoBrutaJson: text(),
+        // JSON normalizado/revisado pelo usuário antes de aplicar
+        extracaoRevisadaJson: text(),
+        // processando | analisado | aplicado | erro
+        status: text().default('processando').notNull(),
+        erroMensagem: text(),
+        // metadados rápidos pra listagem
+        sindicato: varchar({ length: 255 }),
+        numeroCct: varchar({ length: 100 }),
+        percentualReajuste: varchar({ length: 10 }),
+        pisoSalarial: varchar({ length: 20 }),
+        // vínculo com o dissídio criado na aplicação (salário)
+        dissidioId: integer(),
+        criadoPor: varchar({ length: 255 }),
+        criadoPorUserId: integer(),
+        aplicadoPor: varchar({ length: 255 }),
+        aplicadoEm: timestamp({ mode: 'string' }),
+        createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
+        updatedAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
+},
+(table) => [
+        index("ca_company_ano").on(table.companyId, table.anoReferencia),
+        index("ca_status").on(table.companyId, table.status),
+]);
+
+export const convencaoAnaliseItens = pgTable("convencao_analise_itens", {
+        id: serial().notNull(),
+        analiseId: integer().notNull(),
+        companyId: integer().notNull(),
+        employeeId: integer().notNull(),
+        // salario | va | vr | vt | seguroVida | auxFarmacia
+        campo: varchar({ length: 30 }).notNull(),
+        valorAnterior: varchar({ length: 30 }),
+        valorNovo: varchar({ length: 30 }),
+        aplicadoEm: timestamp({ mode: 'string' }),
+        createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
+},
+(table) => [
+        index("cai_analise").on(table.analiseId),
+        index("cai_employee").on(table.employeeId),
+        index("cai_company").on(table.companyId),
+]);
+
 export const dixiAfdImportacoes = pgTable("dixi_afd_importacoes", {
         id: serial().notNull(),
         companyId: integer().notNull(),

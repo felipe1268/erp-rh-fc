@@ -178,6 +178,7 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
       { key: "dissidio", label: "Dissídio", route: "/dissidio", icon: "TrendingUp" },
       // === Inteligência Artificial ===
       { key: "comparativo-convencoes", label: "Comparativo Convenções (IA)", route: "/comparativo-convencoes", icon: "Scale" },
+      { key: "convencao-ia", label: "Convenção Coletiva (IA)", route: "/convencao-ia", icon: "FileSearch" },
       // === Dixi Ponto (legado) ===
       { key: "dixi-ponto", label: "Dixi Ponto", route: "/dixi-ponto", icon: "Wifi" },
       // === Comunicação Interna e Recrutamento ===

@@ -85,6 +85,7 @@ import { employeeDocumentsRouter } from "./routers/employeeDocuments";
 import { pjMedicoesRouter } from "./routers/pjMedicoes";
 import { pjConformidadeRouter } from "./routers/pjConformidade";
 import { dissidioRouter } from "./routers/dissidio";
+import { convencaoIARouter } from "./routers/convencaoIA";
 import { sindicalRouter } from "./routers/sindical";
 import { seguroVidaRouter } from "./routers/seguroVida";
 import { avaliacaoRouter } from "./routers/avaliacao";
@@ -2822,6 +2823,7 @@ export const appRouter = router({
   pjMedicoes: pjMedicoesRouter,
   pjConformidade: pjConformidadeRouter,
   dissidio: dissidioRouter,
+  convencaoIA: convencaoIARouter,
   sindical: sindicalRouter,
   seguroVida: seguroVidaRouter,
   datajudAutoCheck: datajudAutoCheckRouter,

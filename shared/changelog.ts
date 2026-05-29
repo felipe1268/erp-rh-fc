@@ -1,6 +1,86 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2551 — **RH & DP · NOVA FEATURE "CONVENÇÃO COLETIVA (IA)" — UPLOAD DO
+ * PDF DA CCT/CIRCULAR → IA EXTRAI TODAS AS MUDANÇAS → RELATÓRIO/DIFF REVISÁVEL
+ * → APLICAÇÃO EM MASSA DE SALÁRIO (VIA MOTOR DE DISSÍDIO) + BENEFÍCIOS, COM
+ * AUDITORIA POR FUNCIONÁRIO/CAMPO, STATUS E HISTÓRICO POR ANO.**
+ *
+ * MOTIVAÇÃO (Task #54):
+ *   Toda virada de data-base o RH recebe a CCT/circular do sindicato e precisa
+ *   reajustar salários + benefícios de TODO o efetivo manualmente. Pediu-se uma
+ *   aba nova onde se sobe o PDF, a IA lê e extrai TUDO (% reajuste, piso, VA/VR/
+ *   VT, cesta/café, seguro de vida, adicionais, contribuição assistencial, data-
+ *   base, sindicato, nº CCT, vigência), gera um relatório/diff revisável, permite
+ *   simular por funcionário (desmarcando pessoas/campos) e aplicar em 1 clique —
+ *   salário pelo fluxo de dissídio já existente e benefícios pelas colunas do
+ *   funcionário — com rastreabilidade total, status (analisado→aplicado), sem
+ *   reaplicar, e histórico por ano. Fundamentação: Art. 611/611-A/614 CLT (CCT)
+ *   e Art. 468 CLT (não-regressão).
+ *
+ * ARQUITETURA / DECISÕES:
+ *   - Feature DISTINTA do CRUD de convenções pré-existente (namespace
+ *     `trpc.sprint1.convencao` + páginas ConvencoesColetivas/ComparativoConvencoes).
+ *     Esta usa namespace próprio `trpc.convencaoIA.*` e rota `/convencao-ia`.
+ *   - IA: helper local `extrairCctComIA(base64, mimeType)` em
+ *     `server/routers/convencaoIA.ts` que chama `invokeAnthropicVision` (Claude,
+ *     PDF base64) com FALLBACK para `invokeGeminiVision` (responseSchema JSON).
+ *     CRÍTICO: `invokeLLM` NÃO trata `file_url`/PDF (só texto+image_url) — por isso
+ *     usam-se os helpers de visão com base64. Sem fallback silencioso: se as duas
+ *     IAs falharem, a análise é gravada com status 'erro' e mensagem clara.
+ *   - SALÁRIO via motor de dissídio: na aplicação, cria (ou reaproveita) um
+ *     `dissidios` do ano a partir dos dados extraídos, respeitando a regra de
+ *     não-regressão (Art. 468 — bloqueia % menor que o do ano anterior) e gravando
+ *     a auditoria em `dissidio_funcionarios` (mesma matemática de `dissidio.aplicar`:
+ *     salário*(1+%/100), respeita piso, retroativo por meses, valorHora=salário/220).
+ *   - BENEFÍCIOS via colunas de `employees`: va→vaValor, vr→vrBeneficio,
+ *     vt→vtValorDiario, seguroVida→seguroVida, auxFarmacia→auxFarmaciaValor. Só
+ *     aplica valores numéricos > 0; cesta/café e adicionais aparecem no relatório
+ *     mas não têm coluna-alvo (não aplicados — exibidos para conferência).
+ *   - AUDITORIA: cada alteração vira 1 linha em `convencao_analise_itens`
+ *     (analiseId, employeeId, campo, valorAnterior, valorNovo, aplicadoEm).
+ *   - GUARDAS: `aplicar`/`excluir` exigem `role==='admin_master'`; análise
+ *     'aplicado' é imutável (não reedita, não reaplica, não exclui). Funcionários:
+ *     status='Ativo' E tipoContrato != 'PJ'.
+ *
+ * SCHEMA (Rev. 2551, novas tabelas — SyncSchema+ cria via CREATE TABLE IF NOT
+ *   EXISTS em `server/_core/index.ts`; R-001/R-007/R-010 respeitados, ZERO ALTER/
+ *   DROP/DELETE destrutivo):
+ *   - `convencao_analises` (id, companyId, anoReferencia, documentoUrl/Nome,
+ *     extracaoBrutaJson, extracaoRevisadaJson, status, erroMensagem, sindicato,
+ *     numeroCct, percentualReajuste, pisoSalarial, dissidioId, criadoPor/UserId,
+ *     aplicadoPor, aplicadoEm, created/updatedAt) + índices ca_company_ano/ca_status.
+ *   - `convencao_analise_itens` (id, analiseId, companyId, employeeId, campo,
+ *     valorAnterior, valorNovo, aplicadoEm, createdAt) + índices cai_*.
+ *
+ * BACKEND (`server/routers/convencaoIA.ts`, registrado em `server/routers.ts`
+ *   como `convencaoIA`): listar (histórico ano desc), buscarPorId (com extração +
+ *   itens), processarPdf (storagePut + IA → cria análise 'analisado' ou 'erro'),
+ *   atualizarExtracao (revisão), simular (antes/depois por funcionário de salário
+ *   + benefícios + resumo de custo), aplicar (admin_master, dissídio+benefícios+
+ *   auditoria, marca 'aplicado'), excluir (admin_master, só não-aplicada).
+ *
+ * FRONTEND (`client/src/pages/ConvencaoColetivaIA.tsx`): tela de histórico com
+ *   cards por ano + badges de status/percentual; dialog de upload (ano + PDF, lê
+ *   base64 via FileReader); RelatorioView com campos extraídos editáveis agrupados
+ *   (Identificação/Salário/Benefícios/Adicionais/Sindical), cards-resumo de custo,
+ *   filtro de campos a aplicar, grade de simulação por funcionário (checkbox por
+ *   pessoa + diff de salário/retroativo/benefícios) e dialog de confirmação de
+ *   aplicação. Estado 'aplicado' fica somente-leitura.
+ *
+ * WIRING: `client/src/App.tsx` (lazy import + Route `/convencao-ia`),
+ *   `client/src/components/DashboardLayout.tsx` (item "Convenção Coletiva (IA)" na
+ *   seção Inteligência Artificial, ícone FileSearch), `client/src/contexts/
+ *   ModuleContext.tsx` (rota → "rh-dp"), `shared/modules.ts` (feature),
+ *   `shared/modulePages.ts` (pageId `convencao_ia` + ROUTE_TO_PAGEID).
+ *
+ * ARQUIVOS: `drizzle/schema.ts`, `server/routers/convencaoIA.ts`,
+ *   `server/routers.ts`, `server/_core/index.ts`,
+ *   `client/src/pages/ConvencaoColetivaIA.tsx`, `client/src/App.tsx`,
+ *   `client/src/components/DashboardLayout.tsx`, `client/src/contexts/ModuleContext.tsx`,
+ *   `shared/modules.ts`, `shared/modulePages.ts`, `shared/version.ts`,
+ *   `shared/changelog.ts`, `replit.md`.
+ *
  * Rev. 2550 — **ALMOXARIFADO · INVENTÁRIO SEMANAL · REMOÇÃO DA BUSCA/SCANNER
  * DE CÓDIGO DE BARRAS — "VOLTA COMO ESTAVA" (PRÉ-REV. 2530).**
  *

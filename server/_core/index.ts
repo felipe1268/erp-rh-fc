@@ -654,6 +654,53 @@ Regras:
           console.log(`[SyncSchema+] Tabela dds_participacoes_terceiros garantida.`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA dds_participacoes_terceiros:`, e?.message || e); }
 
+        // Rev. 2551 — Convenção Coletiva com IA: análises + itens de auditoria.
+        try {
+          await db.execute(sql`
+            CREATE TABLE IF NOT EXISTS convencao_analises (
+              id SERIAL PRIMARY KEY,
+              company_id INTEGER NOT NULL,
+              ano_referencia INTEGER NOT NULL,
+              documento_url TEXT,
+              documento_nome VARCHAR(255),
+              extracao_bruta_json TEXT,
+              extracao_revisada_json TEXT,
+              status TEXT NOT NULL DEFAULT 'processando',
+              erro_mensagem TEXT,
+              sindicato VARCHAR(255),
+              numero_cct VARCHAR(100),
+              percentual_reajuste VARCHAR(10),
+              piso_salarial VARCHAR(20),
+              dissidio_id INTEGER,
+              criado_por VARCHAR(255),
+              criado_por_user_id INTEGER,
+              aplicado_por VARCHAR(255),
+              aplicado_em TIMESTAMP,
+              created_at TIMESTAMP DEFAULT NOW() NOT NULL,
+              updated_at TIMESTAMP DEFAULT NOW() NOT NULL
+            )
+          `);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS ca_company_ano ON convencao_analises(company_id, ano_referencia)`);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS ca_status ON convencao_analises(company_id, status)`);
+          await db.execute(sql`
+            CREATE TABLE IF NOT EXISTS convencao_analise_itens (
+              id SERIAL PRIMARY KEY,
+              analise_id INTEGER NOT NULL,
+              company_id INTEGER NOT NULL,
+              employee_id INTEGER NOT NULL,
+              campo VARCHAR(30) NOT NULL,
+              valor_anterior VARCHAR(30),
+              valor_novo VARCHAR(30),
+              aplicado_em TIMESTAMP,
+              created_at TIMESTAMP DEFAULT NOW() NOT NULL
+            )
+          `);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS cai_analise ON convencao_analise_itens(analise_id)`);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS cai_employee ON convencao_analise_itens(employee_id)`);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS cai_company ON convencao_analise_itens(company_id)`);
+          console.log(`[SyncSchema+] Rev. 2551: tabelas convencao_analises + convencao_analise_itens garantidas (Convenção Coletiva com IA).`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA convencao_analises/itens:`, e?.message || e); }
+
         // Rev. 2429 — Aprovadores delegados de Auditoria do Almoxarifado por obra.
         try {
           await db.execute(sql`

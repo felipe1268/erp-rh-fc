@@ -140,6 +140,7 @@ const Feriados = lazy(() => import("./pages/Feriados"));
 const ComunicadosInternos = lazy(() => import("./pages/ComunicadosInternos"));
 const Curriculos = lazy(() => import("./pages/Curriculos"));
 const Dissidio = lazy(() => import("./pages/Dissidio"));
+const ConvencaoColetivaIA = lazy(() => import("./pages/ConvencaoColetivaIA"));
 const PJMedicoes = lazy(() => import("./pages/PJMedicoes"));
 const ConformidadePJ = lazy(() => import("./pages/ConformidadePJ"));
 const ConformidadePJDashboard = lazy(() => import("./pages/ConformidadePJDashboard"));
@@ -427,6 +428,7 @@ function Router() {
         <Route path={"/apontamentos-campo"} component={() => <RouteGuard component={ApontamentosCampo} route="/apontamentos-campo" />} />
         <Route path={"/feriados"} component={() => <RouteGuard component={Feriados} route="/feriados" />} />
         <Route path={"/dissidio"} component={() => <RouteGuard component={Dissidio} route="/dissidio" />} />
+        <Route path={"/convencao-ia"} component={() => <RouteGuard component={ConvencaoColetivaIA} route="/convencao-ia" />} />
         <Route path={"/pj-medicoes"} component={() => <RouteGuard component={PJMedicoes} route="/pj-medicoes" />} />
         <Route path={"/terceiros/pj/conformidade"} component={() => <RouteGuard component={ConformidadePJ} route="/terceiros/pj/conformidade" />} />
         <Route path={"/terceiros/pj/dashboard-conformidade"} component={() => <RouteGuard component={ConformidadePJDashboard} route="/terceiros/pj/dashboard-conformidade" />} />
