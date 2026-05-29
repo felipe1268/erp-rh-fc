@@ -127,7 +127,7 @@ export function PersonPhoto({
           </button>
 
           <figure
-            className="flex flex-col items-center gap-3 max-w-[96vw] max-h-[96vh]"
+            className="flex flex-col items-center gap-3 max-w-[96vw] max-h-[96dvh]"
             onClick={(e) => e.stopPropagation()}
           >
             <img
@@ -135,7 +135,7 @@ export function PersonPhoto({
               alt={alt}
               className="rounded-xl shadow-2xl object-contain bg-white"
               style={{
-                maxHeight: "calc(96vh - 70px)",
+                maxHeight: "calc(96dvh - 96px)",
                 maxWidth: "96vw",
                 width: "auto",
                 height: "auto",

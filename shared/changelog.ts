@@ -1,6 +1,37 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2572 — **GLOBAL · COMPONENTE `<PersonPhoto>` · LIGHTBOX (FOTO AMPLIADA)
+ * NÃO CORTA MAIS A CABEÇA/PÉS DA PESSOA NO iPad/SAFARI MOBILE.**
+ *
+ * MOTIVAÇÃO (relato do usuário, 2 screenshots de iPad na tela Controle de
+ * Documentos → aba Advertências): "Tá com bug quando clico para ampliar a
+ * foto". No print, ao ampliar a foto de DARCY AUGUSTO RIBEIRO, a lightbox
+ * mostrava só o TORSO — a cabeça aparecia cortada no topo e as pernas no rodapé,
+ * com a pessoa centralizada e estourando a área visível.
+ *
+ * CAUSA-RAIZ: a lightbox do `<PersonPhoto>` (`client/src/components/PersonPhoto.tsx`)
+ * dimensionava a `<img>` com `maxHeight: calc(96vh - 70px)` e a `<figure>` com
+ * `max-h-[96vh]`. No Safari mobile/iPad, `100vh` corresponde à viewport MÁXIMA
+ * (sem as barras de endereço/abas), que é MAIOR que a área realmente visível
+ * quando as barras estão presentes. Resultado: a imagem (retrato) podia ficar
+ * mais alta que a área visível e, como o overlay usa `flex items-center`, ela
+ * era centralizada e clipada igualmente em cima (cabeça) e embaixo (pés),
+ * deixando só o torso à mostra.
+ *
+ * FIX (não-destrutivo, SÓ CLIENT/CSS — zero schema, zero ALTER/DROP/DELETE):
+ *   - Troca de `vh` por unidades de viewport DINÂMICAS (`dvh`), que descontam
+ *     automaticamente as barras do navegador: `<figure>` → `max-h-[96dvh]`;
+ *     `<img>` → `maxHeight: calc(96dvh - 96px)` (folga extra p/ a legenda).
+ *   - `maxWidth` segue em `vw` (largura não sofre do mesmo problema). Como a
+ *     `<img>` usa `object-contain` + `width/height: auto`, a imagem agora cabe
+ *     inteira na área visível e a pessoa aparece da cabeça aos pés.
+ *   - Correção é global: vale para TODA tela que usa `<PersonPhoto>` (Painel RH,
+ *     Análise HE, Controle de Documentos, Raio-X, Efetivo, Terceiros, etc.).
+ *
+ * ARQUIVOS: `client/src/components/PersonPhoto.tsx` (lightbox),
+ * `shared/version.ts` (→2572), `shared/changelog.ts`, `replit.md`.
+ *
  * Rev. 2571 — **RH & DP · CONTROLE DE ANIVERSÁRIOS · TELA CHEIA "ANIVERSARIANTES
  * — <MÊS>" · SÓ MONITORAR FUNCIONÁRIOS ATIVOS (exclui Desligado, Lista Negra e
  * Inativo).**
