@@ -1427,7 +1427,7 @@ export const appRouter = router({
           const obrasResult = await db.execute(sql`
             SELECT DISTINCT o.id, o.nome, o.codigo, o."companyId"
             FROM obras o
-            WHERE o.id IN (${sql.raw(obraIds.join(","))}) AND o."companyId" = ${input.companyId} AND o."deletedAt" IS NULL AND o."isActive" = 1
+            WHERE o.id IN (${sql.raw(obraIds.join(","))}) AND o."companyId" = ${input.companyId} AND o."deletedAt" IS NULL AND o."isActive" = 1 AND o.status = 'Em_Andamento'
             ORDER BY o.nome
           `);
           const rows = (obrasResult?.rows ?? obrasResult ?? []) as any[];

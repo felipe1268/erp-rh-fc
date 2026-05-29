@@ -1,6 +1,46 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2555 — **ALMOXARIFADO · EQUIPAMENTOS PRÓPRIOS · PICKER "OBRA ATUAL" SÓ
+ * MOSTRA OBRAS EM ANDAMENTO E PERMITIDAS AO USUÁRIO.**
+ *
+ * MOTIVAÇÃO (relato do usuário):
+ *   Seguimento da Rev. 2554. "Só deve aparecer as obras que estão em status de
+ *   andamento, e que o usuário tem permissão de acesso." O dropdown do cadastro
+ *   de Equipamento Próprio listava TODAS as obras da empresa (REVTE-CIVIL, VITRA,
+ *   POS OBRA, etc.), inclusive obras que não estão mais em andamento e/ou que o
+ *   usuário logado não tem permissão de acessar.
+ *
+ * CAUSA:
+ *   1) O picker usava `trpc.obras.list` (= `getObras(companyId)`), que devolve
+ *      TODAS as obras da empresa SEM filtro de permissão nem de status.
+ *   2) O filtro client `obrasAtivas` excluía status "encerrada"/"arquivada" —
+ *      valores que NEM EXISTEM no enum real de obra
+ *      (`Planejamento | Em_Andamento | Paralisada | Concluida | Cancelada`),
+ *      portanto era inócuo: nada era filtrado.
+ *
+ * FIX (não-destrutivo):
+ *   CLIENT (`client/src/pages/equipamentos/Proprios.tsx`):
+ *     - Troca a query de `trpc.obras.list` → `trpc.obras.listForAlmoxarifado`
+ *       (mesma procedure usada no Inventário Visual desde a Rev. 2542), que:
+ *         (a) RESPEITA A PERMISSÃO do usuário — admin vê tudo; senão lê
+ *             `users.allowed_obra_ids` e, no fallback, a alocação em
+ *             `obra_funcionarios`; e
+ *         (b) devolve SÓ obras com `status = 'Em_Andamento'` + `isActive=1` +
+ *             `deletedAt IS NULL`, com guarda de tenant (`getCompaniesForUser`).
+ *     - `obrasAtivas` deixa de aplicar o filtro inócuo (server já filtra status
+ *       e permissão) e passa a ser alias direto de `obrasData`.
+ *   SERVER (`server/routers.ts` — `obras.listForAlmoxarifado`):
+ *     - Fecha um gap latente: o branch `allowed_obra_ids` filtrava `isActive=1` +
+ *       `deletedAt IS NULL` mas NÃO o status. Adicionado `AND o.status =
+ *       'Em_Andamento'` para deixar TODOS os branches (admin/allowed/alocação)
+ *       consistentes — só obras em andamento. Beneficia também os demais callers
+ *       de almoxarifado (Inventário Visual, almoxarifado/index), onde operar em
+ *       obra concluída/cancelada não fazia sentido.
+ *
+ * IMPACTO: zero schema, zero ALTER/DROP/DELETE. Apenas SELECT mais restrito +
+ * troca de procedure no client.
+ *
  * Rev. 2554 — **ALMOXARIFADO · EQUIPAMENTOS PRÓPRIOS · INDICAR A OBRA DIRETO NO
  * CADASTRO DO ITEM (campo de obra sempre visível ao criar).**
  *

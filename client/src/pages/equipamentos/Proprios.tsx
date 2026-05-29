@@ -110,14 +110,16 @@ export default function EquipamentosProprios() {
   const [editingMeta, setEditingMeta] = useState<{ criadoPorNome: string | null; createdAt: string | null }>({
     criadoPorNome: null, createdAt: null,
   });
-  // Rev. 2514 — obras pra picker quando status="em_obra".
-  const { data: obrasData = [] } = trpc.obras.list.useQuery(
+  // Rev. 2555 — obras pro picker. Usa `listForAlmoxarifado` (não `list`):
+  //  (1) respeita a PERMISSÃO do usuário (allowed_obra_ids + alocação em
+  //      obra_funcionarios), e
+  //  (2) o server já devolve SÓ obras EM ANDAMENTO (status='Em_Andamento').
+  // O filtro client antigo por "encerrada"/"arquivada" era inócuo (esses
+  // valores nem existem no enum real Planejamento/Em_Andamento/Paralisada/…).
+  const { data: obrasData = [] } = trpc.obras.listForAlmoxarifado.useQuery(
     { companyId }, { enabled: !!companyId }
   );
-  const obrasAtivas = useMemo(
-    () => (obrasData as any[]).filter(o => o?.status !== "encerrada" && o?.status !== "arquivada"),
-    [obrasData]
-  );
+  const obrasAtivas = obrasData as any[];
   const [fotos, setFotos] = useState<FotoItem[]>([]);
   const [mostrarDetalhes, setMostrarDetalhes] = useState(false);
   const fotoInputRef = useRef<HTMLInputElement>(null);
