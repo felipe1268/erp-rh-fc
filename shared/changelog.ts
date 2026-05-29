@@ -1,6 +1,75 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2541 — **PERMISSÕES · PROPAGAÇÃO DE MELHORIAS PARA TODOS OS USUÁRIOS COM
+ * ACESSO AO MÓDULO (corrige features novas aparecendo de forma seletiva).**
+ *
+ * MOTIVAÇÃO (user):
+ *   "O ERP precisa garantir que todas as melhorias apareçam para todos os
+ *   usuários que têm acesso ao sistema, respeitando as regras de controle.
+ *   Ultimamente as melhorias estão seletivas e não estão sendo propagadas para
+ *   todos os usuários que têm acesso ao módulo."
+ *
+ * CAUSA-RAIZ:
+ *   O sistema de permissões granular (module_access) tem 3 níveis por módulo:
+ *   `admin`, `viewer` e `custom`. Para `admin`/`viewer`, qualquer página/feature
+ *   nova aparece automaticamente (não dependem do mapa de páginas). Já para
+ *   `custom`, a visibilidade de cada página depende de o respectivo `pageId`
+ *   estar PRESENTE e com `view:true` no JSON salvo do usuário/grupo. Quando uma
+ *   revisão adiciona uma página/aba/feature NOVA (novo `pageId` em
+ *   `MODULE_PAGE_CONFIG`/`ROUTE_TO_PAGEID`), esse `pageId` NÃO existe no JSON
+ *   salvo dos usuários `custom` (configurado antes da feature existir) → os
+ *   checks `canViewPage` (L210) e `groupCanAccessRoute` (L372/L377) caíam em
+ *   default-deny (`?? false` / `=== true`). Resultado: a melhoria só aparecia
+ *   para admin/viewer e para quem fosse reconfigurado manualmente — exatamente o
+ *   "seletivo" relatado.
+ *
+ *   Por que ausência ⇒ "feature nova" e NÃO "negada de propósito": toda perm
+ *   `custom` NASCE completa — em `Usuarios.tsx` só se chega a `custom` ligando o
+ *   módulo (vira `admin`, que grava TODAS as páginas via `defaultPagesForLevel`)
+ *   e então trocando o nível para `custom` (preserva `cur.pages`). Negação
+ *   intencional de uma página grava `{view:false}` (fica PRESENTE). Logo, um
+ *   `pageId` AUSENTE do JSON só pode ter sido adicionado ao app DEPOIS da última
+ *   configuração daquele usuário — i.e., é uma feature nova. Mesma filosofia já
+ *   adotada nos shims de remap (Rev. 1761 — `normalizeModulePerm`).
+ *
+ * CORREÇÃO (`client/src/contexts/PermissionsContext.tsx`):
+ *   - `canViewPage`: página AUSENTE da perm `custom` HERDA o acesso ao módulo
+ *     (visível) SÓ quando o módulo está EFETIVAMENTE acessível — mesma regra de
+ *     `canAccessModule`: `Object.values(perm.pages).some(p => p.view)`. Página
+ *     PRESENTE respeita o flag explícito.
+ *   - `groupCanAccessRoute` (novo sistema, nível `custom`):
+ *       • branch de abas: se NENHUMA aba mapeada da rota existir na perm (todas
+ *         novas) → libera SÓ se `some(view)`; se ALGUMA existir, respeita os flags.
+ *       • branch de página: `pageId` AUSENTE → libera SÓ se `some(view)`; PRESENTE
+ *         respeita o flag.
+ *   - O GATE `some(view)` é o ponto-chave: alinha a liberação de página/rota nova
+ *     ao `canAccessModule`. Um `custom` com ALGUMA página liberada vê a feature
+ *     nova (propaga ✓); um `custom` com TUDO negado NÃO abre a rota nova nem por
+ *     URL direta (fecha brecha de sobre-exposição apontada no code review).
+ *   - Ações de ESCRITA (criar/editar/excluir) permanecem default-deny
+ *     (`canCreate/Edit/DeletePage` + `groupCanEdit/Create/Delete` intactos): uma
+ *     feature nova fica VISÍVEL, mas operações de escrita ainda exigem concessão
+ *     explícita — "respeitando as regras de controle".
+ *
+ * O QUE NÃO MUDOU (deliberado):
+ *   - `canAccessModule` segue baseado nas páginas SALVAS: um `custom` com TUDO
+ *     negado não ganha o módulo só porque surgiu uma página nova (respeita a
+ *     negação total) — e agora `canViewPage`/`groupCanAccessRoute` estão
+ *     CONSISTENTES com ele.
+ *   - Negações explícitas (`{view:false}`) continuam ocultando.
+ *   - Guard server-side de OBRA no dossiê/Raio-X (Rev. 2539) e `sensitiveHidden`
+ *     (LGPD) seguem valendo no server — dados sensíveis continuam protegidos.
+ *   - Módulos NOVOS (não apenas páginas) continuam exigindo concessão explícita
+ *     (não se auto-libera um módulo inteiro a quem nunca o teve).
+ *
+ * ARQUIVOS:
+ *   - client/src/contexts/PermissionsContext.tsx (canViewPage, groupCanAccessRoute)
+ *
+ * Zero schema. Zero ALTER/DROP/DELETE.
+ *
+ * ─────────────────────────────────────────────────────────────────────────────
+ *
  * Rev. 2540 — **FINANCEIRO · CONTA BANCÁRIA NA BAIXA (Contas a Pagar E Contas a
  * Receber): puxa a conta do lançamento e permite alterar para qualquer conta.**
  *

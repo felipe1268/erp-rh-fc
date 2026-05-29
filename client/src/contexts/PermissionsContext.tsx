@@ -207,7 +207,17 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
     if (!perm) return false;
     if (perm.level === "admin" || perm.level === "viewer") return true;
     const page = getPagePerm(moduleId, pageId);
-    return page?.view ?? false;
+    // Rev. 2541 — Propagação de melhorias: página AUSENTE da perm custom = feature
+    // nova adicionada DEPOIS que o acesso do usuário foi configurado. Como toda
+    // perm custom nasce completa (defaultPagesForLevel grava todas as páginas
+    // existentes na época), ausência ⇒ "feature nova", não "negada de propósito"
+    // (negação intencional grava {view:false} e fica PRESENTE). Página PRESENTE
+    // respeita o flag explícito. AUSENTE herda o acesso ao módulo — MAS só quando
+    // o módulo está efetivamente acessível (mesma regra de canAccessModule:
+    // ALGUMA página com view:true). Assim um custom com TUDO negado não ganha a
+    // feature nova por URL direta (fecha brecha de sobre-exposição).
+    if (page == null) return Object.values(perm.pages || {}).some(p => p.view);
+    return page.view ?? false;
   };
 
   const canCreatePage = (moduleId: string, pageId: string): boolean => {
@@ -369,12 +379,22 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
           .filter(([k]) => k.split("?")[0] === basePath && k.includes("?"))
           .map(([, v]) => v);
         if (tabPageIds.length > 0) {
+          // Rev. 2541 — se NENHUMA das abas existe na perm (todas novas), herda o
+          // acesso ao módulo SÓ quando o módulo está efetivamente acessível
+          // (alguma página com view:true); caso contrário respeita os flags.
+          const anyPresent = tabPageIds.some(pid => perm.pages?.[pid] != null);
+          if (!anyPresent) return Object.values(perm.pages || {}).some(p => p.view === true);
           return tabPageIds.some(pid => perm.pages?.[pid]?.view === true);
         }
         // Rota dentro do módulo sem mapeamento de página específico → nega por segurança
         return false;
       }
-      return perm.pages?.[pageId]?.view === true;
+      // Rev. 2541 — página AUSENTE (= feature nova) herda o acesso ao módulo SÓ
+      // quando o módulo está efetivamente acessível (alguma página com view:true);
+      // página PRESENTE respeita o flag explícito (deny intencional continua deny).
+      // Sem o gate, um custom com TUDO negado abriria a rota nova por URL direta.
+      if (perm.pages?.[pageId] == null) return Object.values(perm.pages || {}).some(p => p.view === true);
+      return perm.pages[pageId].view === true;
     }
 
     // Sistema legado (user_group_permissions salvo via GruposUsuarios.tsx)
