@@ -89,8 +89,13 @@ function getClientIp(ctx: any): string | null {
 // (criação manual de item novo no recebimento inteligente).
 // Rev. 2508 — implementação movida pra `shared/naturezaItemAlmox.ts`
 // (passou a ser reusada também no client, na timeline de Movimentações).
-// Re-exportada aqui pra manter compat com os imports legados.
-export { classificarNaturezaItemAlmox } from "../../shared/naturezaItemAlmox";
+// Rev. 2538 — IMPORT local (não re-export puro): `export { X } from "..."`
+// NÃO cria binding no escopo do módulo, então o uso direto em
+// `atualizarStatusOrdem` (L8327) quebrava em produção com
+// "classificarNaturezaItemAlmox is not defined". Importamos pro escopo local
+// E re-exportamos pra manter compat com `warehouse.ts` (import dinâmico).
+import { classificarNaturezaItemAlmox } from "../../shared/naturezaItemAlmox";
+export { classificarNaturezaItemAlmox };
 import crypto from "crypto";
 import { eq, and, desc, asc, ilike, or, sql, gte, lte, inArray, isNull } from "drizzle-orm";
 import {

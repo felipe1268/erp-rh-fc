@@ -2,6 +2,7 @@
 
 > Este arquivo guarda os one-liners das revisões antigas para manter o `replit.md` enxuto.
 
+- **Rev. 2531** — BUILD — OOM no `vite build` durante o deploy: heap 4096→8192 MB no vite, +4096 no esbuild. `package.json` L11 `NODE_OPTIONS=--max-old-space-size`. Causa: bundle ~70 chunks (vendor-webifc 3,48 MB, vendor-xlsx 1,37 MB, index 1,32 MB). Build validado 1m14s. Ver `shared/changelog.ts`.
 - **Rev. 2530** — INVENTÁRIO SEMANAL — Busca + leitor de código de barras (scan → baixa BATE automática). Server `warehouse.getInventorySessionItems` ~L1086 +`itemCodigoBarras`+`itemCodigoInterno`; client `almoxarifado/Inventario.tsx` ~L452-520 input emerald ScanLine, Enter auto-confirma quando match EXATO por código OU 1 só pendente filtrado. Ver `shared/changelog.ts`.
 - **Rev. 2529** — PAINEL RH — Contratos de Experiência com avatar do funcionário à esquerda. Server `homeData.ts` ~L560 +`fotoUrl` no return de experiencias; client `PainelRH.tsx` ~L242 row em flex gap-3 com `<PersonPhoto size="sm" />`. Padrão igual Aniversariantes/Férias. Ver `shared/changelog.ts`.
 - **Rev. 2528** — PAINEL RH — Aniversariantes só de Ativos (remove Afastado/Recluso/Férias/Lista Negra). 2 linhas em `server/routers/homeData.ts` L105+L145: `todosNaoDesligados` → `ativos`. KPIs derivados refletem automaticamente. Central de Alertas intacta. Ver `shared/changelog.ts`.

@@ -1,6 +1,39 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2538 — **COMPRAS · ORDENS · CORREÇÃO DO "classificarNaturezaItemAlmox
+ * is not defined" (re-export ESM sem binding local) ao marcar OC entregue.**
+ *
+ * MOTIVAÇÃO (user em 29/05/2026, print do app publicado):
+ *   Na tela Compras › Ordens, ao operar uma ordem (atualizar status — ex.:
+ *   "Marcar Entregue"), aparecia o toast de erro:
+ *     "classificarNaturezaItemAlmox is not defined".
+ *   O fluxo OC→Almoxarifado (criação/baixa de itens no recebimento) abortava.
+ *
+ * CAUSA-RAIZ:
+ *   `server/routers/compras.ts` L93 fazia RE-EXPORT puro:
+ *     export { classificarNaturezaItemAlmox } from "../../shared/naturezaItemAlmox";
+ *   Em ESM, `export { X } from "..."` re-exporta o símbolo MAS **não cria um
+ *   binding local** no escopo do módulo. O próprio `compras.ts`, porém, USA a
+ *   função localmente em `atualizarStatusOrdem` (L8327:
+ *   `classificarNaturezaItemAlmox(item.descricao, item.unidade)`). No bundle de
+ *   produção (esbuild) isso vira ReferenceError em runtime. Em dev (tsx) passava
+ *   despercebido, daí só estourar no app publicado.
+ *
+ * CORREÇÃO:
+ *   Trocado o re-export puro por IMPORT local + re-export explícito:
+ *     import { classificarNaturezaItemAlmox } from "../../shared/naturezaItemAlmox";
+ *     export { classificarNaturezaItemAlmox };
+ *   Agora o símbolo existe no escopo do módulo (uso direto em L8332 funciona) E
+ *   continua exportado, preservando o import dinâmico de `warehouse.ts`
+ *   (`const { classificarNaturezaItemAlmox } = await import("./compras")`, L2174).
+ *
+ * ARQUIVOS:
+ *   • server/routers/compras.ts — L93→import+export local (lógica intacta).
+ *
+ * VALIDAÇÃO: workflow `Start application` reiniciado e RUNNING (Neon conectado,
+ * sem erro TS). Zero mudança de schema. Zero ALTER/DROP/DELETE.
+ *
  * Rev. 2537 — **FERRAMENTAS DE TERCEIROS · CORREÇÃO DO "Acesso negado: empresa
  * não autorizada" (guard multi-tenant estrito demais).**
  *
