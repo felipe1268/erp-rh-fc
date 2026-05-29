@@ -1,6 +1,57 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2558 — **OBRAS · EFETIVO · FIX "Unexpected end of JSON input" AO
+ * REMOVER FUNCIONÁRIO DA OBRA (dialog "Equipe — POS OBRA", rota
+ * `/obras/efetivo`).**
+ *
+ * MOTIVAÇÃO (relato do usuário):
+ *   Na tela `/obras/efetivo`, dentro da dialog "Equipe — POS OBRA", ao clicar
+ *   em "Remover" num funcionário aparecia o toast de erro
+ *   "Unexpected end of JSON input" — mesmo quando a remoção, em alguns casos,
+ *   chegava a acontecer no banco.
+ *
+ * DIAGNÓSTICO:
+ *   A mensagem "Unexpected end of JSON input" é o `JSON.parse('')` do
+ *   `httpBatchLink` quando o CORPO da resposta HTTP vem VAZIO. Investigação:
+ *     - Código da procedure (`obras.removeEmployee` em `server/routers.ts`) e da
+ *       função (`removeEmployeeFromObra` em `server/db.ts`) está correto.
+ *     - Schema/constraints de `employee_site_history` conferidos: todas as
+ *       colunas do INSERT existem e a nullability bate (companyId/employeeId/
+ *       obraId/tipo/dataInicio NOT NULL são fornecidos; createdAt tem default;
+ *       dataFim nullable). Logo NÃO há erro de constraint.
+ *     - `superjson.serialize(undefined)` → `{"json":null,"meta":{"values":
+ *       ["undefined"]}}`, que JSON.parse aceita — ou seja o retorno `void` NÃO
+ *       gera corpo inválido por si só.
+ *     - Nenhum `[tRPC Error] obras.removeEmployee` nos logs e nenhum stack de
+ *       crash/uncaughtException. Para admin_master o bloco de authz da Rev. 2480
+ *       é pulado (`getEffectiveAllowedObraIds` retorna null).
+ *   Conclusão: corpo vazio + zero log no servidor = resposta CORTADA — request
+ *   atingiu um worker que estava reiniciando (dev usa `tsx watch`; houve vários
+ *   restarts na sessão por edições/checkpoint) OU um blip de rede. Não é bug de
+ *   lógica/SQL; é fragilidade do fluxo a respostas transitórias vazias.
+ *
+ * FIX (não-destrutivo — ZERO ALTER/DROP/DELETE):
+ *   SERVER `server/db.ts` (`removeEmployeeFromObra`):
+ *     - Passa a `return { success: true }` em vez de `void`, garantindo um
+ *       payload explícito e não-vazio no `httpBatchLink`/superjson (alinha com a
+ *       convenção das demais mutations: `allocateEmployeeToObra`,
+ *       `updateObraFuncionarioCondicoes`).
+ *   CLIENT `client/src/pages/ObraEfetivo.tsx` (`removeMut`):
+ *     - Adicionado `retry` IDEMPOTENTE: reexecuta a remoção (até 2x, delay 800ms)
+ *       SOMENTE quando a mensagem é transitória ("Unexpected end of JSON input",
+ *       "Failed to fetch", "Load failed", "NetworkError"). É seguro porque a
+ *       função do servidor é idempotente — a 2ª chamada não acha alocação ativa
+ *       (`WHERE isActive=1`) e vira no-op, sem duplicar histórico nem o estado.
+ *       Assim, quando o server volta do restart, a 2ª tentativa conclui e o
+ *       usuário vê sucesso em vez do erro espúrio. Erros reais (FORBIDDEN, etc.)
+ *       NÃO são reexecutados e seguem mostrando o toast normal.
+ *   Sem schema. Sem ALTER/DROP/DELETE.
+ *
+ * ARQUIVOS:
+ *   - server/db.ts                    (`removeEmployeeFromObra` → `{success:true}`)
+ *   - client/src/pages/ObraEfetivo.tsx (`removeMut` → retry idempotente em erro transitório)
+ *
  * Rev. 2557 — **RH & DP · DASHBOARDS · DRILL-DOWN DE FUNCIONÁRIOS AGORA MOSTRA
  * A FOTO DO FUNCIONÁRIO (ex.: tela "Admissões em MM/AAAA").**
  *

@@ -2180,6 +2180,10 @@ export async function removeEmployeeFromObra(employeeId: number, motivo?: string
     } as any);
   }
   await db.update(obraFuncionarios).set({ isActive: 0, dataFim: hoje } as any).where(and(eq(obraFuncionarios.employeeId, employeeId), eq(obraFuncionarios.isActive, 1)));
+  // Rev. 2558 — retornar payload explícito (em vez de void) para garantir
+  // corpo de resposta não-vazio no httpBatchLink/superjson. Idempotente: 2ª
+  // chamada não acha alocação ativa (WHERE isActive=1) e vira no-op silencioso.
+  return { success: true };
 }
 
 // Rateio de horas

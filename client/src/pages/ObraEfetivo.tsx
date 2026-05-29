@@ -117,6 +117,17 @@ export default function ObraEfetivo() {
   });
 
   const removeMut = trpc.obras.removeEmployee.useMutation({
+    // Rev. 2558 — a remoção é IDEMPOTENTE no servidor (WHERE isActive=1: 2ª
+    // chamada vira no-op, sem duplicar histórico). Por isso podemos reexecutar
+    // com segurança quando a resposta vier vazia/cortada (ex.: dev server
+    // reiniciando no meio do request → "Unexpected end of JSON input", ou blip
+    // de rede). Sem isso, o usuário via erro mesmo quando a remoção funcionava.
+    retry: (count, err: any) => {
+      const msg = String(err?.message ?? "");
+      const transient = /Unexpected end of JSON input|Failed to fetch|Load failed|NetworkError|network error/i.test(msg);
+      return transient && count < 2;
+    },
+    retryDelay: 800,
     onSuccess: () => {
       toast.success("Funcionário removido da obra!");
       efetivoQ.refetch(); semObraQ.refetch(); funcObraQ.refetch(); allEmpsQ.refetch();
