@@ -10,6 +10,19 @@ import {
 } from "lucide-react";
 import { FotosUploader, FotoItem, compressImage, fmtMoney, fmtDate, Spinner } from "./_shared";
 
+// Rev. 2561 — sanitiza mensagem de erro pro toast. Se vier o dump cru do
+// Drizzle ("Failed query… params:" com base64 das fotos) ou algo gigantesco,
+// mostra uma mensagem genérica em vez do PAREDÃO ilegível. O server já traduz
+// os erros conhecidos; isso é defesa em profundidade.
+function errMsg(e: { message?: string } | unknown): string {
+  const raw = (e as any)?.message ? String((e as any).message) : "";
+  if (!raw) return "Não foi possível salvar. Tente novamente.";
+  if (/Failed query|data:image\/|;base64,/i.test(raw) || raw.length > 300) {
+    return "Não foi possível salvar o equipamento. Verifique os dados e tente novamente.";
+  }
+  return raw;
+}
+
 // Rev. 2512 — type-safety do enum de status (espelha server zod).
 type StatusEquip = "disponivel" | "em_obra" | "manutencao" | "baixado";
 const STATUS_SET = new Set<StatusEquip>(["disponivel", "em_obra", "manutencao", "baixado"]);
@@ -304,16 +317,16 @@ export default function EquipamentosProprios() {
         }
       }
     },
-    onError: (e) => toast.error(e.message),
+    onError: (e) => toast.error(errMsg(e)),
   });
   const atualizar = trpc.equipamentos.proprioAtualizar.useMutation({
     onSuccess: () => { utils.equipamentos.propriosListar.invalidate(); setModal(false); toast.success("Atualizado."); },
-    onError: (e) => toast.error(e.message),
+    onError: (e) => toast.error(errMsg(e)),
   });
   // Rev. 2511 — soft delete (server marca ativo=false, listagem filtra).
   const excluir = trpc.equipamentos.proprioExcluir.useMutation({
     onSuccess: () => { utils.equipamentos.propriosListar.invalidate(); setModal(false); toast.success("Equipamento excluído."); },
-    onError: (e) => toast.error(e.message),
+    onError: (e) => toast.error(errMsg(e)),
   });
   function confirmarExcluir() {
     if (!editingId) return;

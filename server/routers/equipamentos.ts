@@ -171,6 +171,51 @@ const fotoSchema = z.array(z.object({
   uploadedAt: z.string().optional(),
 })).optional();
 
+// Rev. 2561 — Extrai o erro PG "limpo" de dentro de um erro do Drizzle.
+// O Drizzle embrulha a falha numa mensagem "Failed query: <sql> params: <todos
+// os parâmetros>" — que, no caso de equipamentos, inclui o BASE64 das fotos +
+// dados do usuário. Se esse `e.message` vazar pro client (toast), vira um
+// PAREDÃO ilegível. A causa real (curta) está em `e.cause` (o erro do pg).
+function pgInfo(e: any): { code?: string; message: string } {
+  const pgErr = e?.cause ?? e;
+  return { code: pgErr?.code ?? e?.code, message: String(pgErr?.message ?? e?.message ?? "") };
+}
+
+// Rev. 2561 — Converte um erro de banco num TRPCError com mensagem CURTA e
+// acionável em pt-BR (nunca expõe SQL/params/base64). A causa real continua
+// logada server-side pelo `onError` do tRPC (`server/_core/index.ts`).
+function cleanDbError(e: any, acao: string): TRPCError {
+  const { code, message } = pgInfo(e);
+  let motivo: string;
+  switch (code) {
+    case "22001": motivo = "um campo de texto excedeu o tamanho máximo permitido"; break;
+    case "22003": motivo = "um valor numérico é grande demais (confira o valor de aquisição e a vida útil)"; break;
+    case "23502": motivo = "um campo obrigatório ficou em branco"; break;
+    case "22P02": motivo = "um valor está em formato inválido"; break;
+    case "53400":
+    case "57014":
+    case "40001":   // serialization_failure
+    case "40P01": motivo = "a operação demorou demais ou foi interrompida — tente novamente"; break;
+    default: {
+      // Mensagem do pg costuma ser curta (1 linha) e SEM base64. Blindagem:
+      // se ainda assim vier o dump do Drizzle (SQL/params/base64) — ex.: erro
+      // sem `cause` — NUNCA eco-a o conteúdo cru; usa motivo genérico fixo.
+      const first = message ? message.split("\n")[0] : "";
+      motivo = /Failed query|params:|data:image\/|;base64,/i.test(first) || !first
+        ? "erro inesperado no banco de dados"
+        : first.slice(0, 180);
+    }
+  }
+  // Loga o motivo REAL server-side (code + 1ª linha truncada). O `onError` do
+  // tRPC só veria a `message` limpa (não começa com "Failed query:"), então
+  // registramos aqui o diagnóstico — sem despejar base64/params no log.
+  const logLine = (message ? message.split("\n")[0] : "").slice(0, 200);
+  console.error(`[equipamentos] erro ao ${acao}: code=${code ?? "?"} | ${logLine}`);
+  // `cause: e` preserva o erro original para qualquer consumidor downstream,
+  // sem expô-lo na `message` ao cliente.
+  return new TRPCError({ code: "BAD_REQUEST", message: `Não foi possível ${acao}: ${motivo}.`, cause: e });
+}
+
 const eventoTipoSchema = z.enum([
   "RECEBIMENTO",
   "SAIDA_ALMOX",
@@ -421,9 +466,13 @@ export const equipamentosRouter = router({
           return { id: created.id, codigoPatrimonio: created.codigoPatrimonio };
         } catch (e: any) {
           // 23505 = unique_violation (Postgres). Outro device pegou o N. — retry.
-          const msg = String(e?.message || "");
-          const isUnique = e?.code === "23505" || /uq_equip_proprio_company_patrimonio|duplicate key/i.test(msg);
-          if (!isUnique) throw e;
+          // Rev. 2561 — lê código/mensagem do erro pg DENTRO do wrapper Drizzle
+          // (`e.cause`), pois `e.code`/`e.message` do Drizzle não trazem o code
+          // real e a `message` é o dump "Failed query… params:" (com base64).
+          const { code, message } = pgInfo(e);
+          const isUnique = code === "23505" || /uq_equip_proprio_company_patrimonio|duplicate key/i.test(message);
+          // Erro NÃO-unique: traduz pra mensagem limpa (nunca vaza base64/params).
+          if (!isUnique) throw cleanDbError(e, "cadastrar o equipamento");
           lastErr = e;
         }
       }
@@ -471,9 +520,16 @@ export const equipamentosRouter = router({
       map("localizacaoAtualObraId", input.localizacaoAtualObraId);
       mapUpper("observacoes", input.observacoes);
       if (input.fotos !== undefined) update.fotosJson = input.fotos ?? null;
-      const r = await db.update(equipamentosProprios).set(update)
-        .where(and(eq(equipamentosProprios.id, input.id), eq(equipamentosProprios.companyId, input.companyId)))
-        .returning({ id: equipamentosProprios.id });
+      // Rev. 2561 — traduz erro de banco pra mensagem limpa (sem vazar
+      // SQL/params/base64 no toast do cliente).
+      let r;
+      try {
+        r = await db.update(equipamentosProprios).set(update)
+          .where(and(eq(equipamentosProprios.id, input.id), eq(equipamentosProprios.companyId, input.companyId)))
+          .returning({ id: equipamentosProprios.id });
+      } catch (e: any) {
+        throw cleanDbError(e, "atualizar o equipamento");
+      }
       if (r.length === 0) throw new TRPCError({ code: "NOT_FOUND" });
       return { id: r[0].id };
     }),

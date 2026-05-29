@@ -1,6 +1,72 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2561 — **ALMOXARIFADO · EQUIPAMENTOS PRÓPRIOS · FIX "ERRO FEIO" (PAREDÃO
+ * DE BASE64) AO CADASTRAR/EDITAR EQUIPAMENTO PRÓPRIO (rota `/equipamentos`,
+ * `Proprios.tsx`).**
+ *
+ * MOTIVAÇÃO (relato do usuário):
+ *   "Quando eu tento cadastrar uma das ferramentas está dando esse erro para
+ *   salvar." Screenshot do modal "Novo Equipamento" com um TOAST gigante = um
+ *   PAREDÃO ilegível de base64 + dados do usuário (id 2880439, nome), sem
+ *   nenhuma mensagem acionável.
+ *
+ * DIAGNÓSTICO (causa-raiz do PAREDÃO — confirmado):
+ *   - O `FotosUploader` (`client/src/pages/equipamentos/_shared.tsx`) salva as
+ *     fotos como BASE64 data URL (`canvas.toDataURL("image/jpeg",0.78)`, resize
+ *     ≤800px) dentro de `fotosJson` (jsonb).
+ *   - `proprioCriar` (`server/routers/equipamentos.ts`) re-lançava o erro CRU do
+ *     Drizzle (`throw e`) quando o INSERT falhava por motivo NÃO-unique. A
+ *     `.message` desse erro é o dump `"Failed query: <sql> params: <todos os
+ *     parâmetros>"` — que inclui o BASE64 das fotos + `criadoPorUserId` +
+ *     `criadoPorNome`. O `onError` do tRPC (`server/_core/index.ts` L578-589)
+ *     só LOGA o motivo real (`pgErr.message`), mas NÃO reformata o que vai ao
+ *     cliente; e o `onError` do client (`Proprios.tsx`) fazia `toast.error(
+ *     e.message)` → exibia o dump inteiro. Resultado: paredão.
+ *   - VERIFICAÇÃO no Neon (script tsx via `NEON_DATABASE_URL`; `executeSql`
+ *     aponta pro Postgres local VAZIO): todas as colunas de `equipamentos_proprios`
+ *     existem e o INSERT com base64 de 5/12/30 MB passa SEM erro (rollback). Ou
+ *     seja, o banco aceita o cadastro normal — o "erro feio" é um erro
+ *     TRANSIENTE/data-dependent sendo MASCARADO pelo dump cru. A tentativa do
+ *     usuário (17:50) coincidiu com restarts do `tsx watch` durante a Rev. 2560
+ *     (edições em server/*), padrão idêntico ao da Rev. 2558 (worker em restart
+ *     → conexão derrubada → "Failed query"). Log já rotacionado, sem registro.
+ *
+ * FIX (não-destrutivo, ZERO ALTER/DROP/DELETE — server + client):
+ *   1. SERVER `server/routers/equipamentos.ts`:
+ *      - Novos helpers `pgInfo(e)` (lê code/message do erro pg DENTRO do wrapper
+ *        Drizzle via `e.cause`, pois `e.code`/`e.message` do Drizzle não trazem
+ *        o code real e a message é o dump com base64) e `cleanDbError(e, acao)`
+ *        (converte num `TRPCError BAD_REQUEST` com mensagem CURTA e acionável em
+ *        pt-BR, NUNCA expõe SQL/params/base64; mapeia 22001/22003/23502/22P02/
+ *        53400/57014/40001/40P01).
+ *      - `proprioCriar`: detecção de unique agora usa `pgInfo` (e.cause); erro
+ *        NÃO-unique passa por `cleanDbError(e, "cadastrar o equipamento")` em
+ *        vez de `throw e`.
+ *      - `proprioAtualizar`: UPDATE envolto em try/catch → `cleanDbError(e,
+ *        "atualizar o equipamento")`.
+ *      - AJUSTES DO CODE REVIEW (architect PASS): (a) `cleanDbError` seta
+ *        `cause: e` no `TRPCError` (preserva o erro original p/ downstream);
+ *        (b) BLINDAGEM do fallback `default` — se a 1ª linha do `pg.message`
+ *        contiver `Failed query|params:|data:image/|;base64,` (cenário sem
+ *        `cause`), usa motivo genérico fixo em vez de eco-ar o cru (fecha o
+ *        vazamento residual via API); (c) `cleanDbError` LOGA o motivo real
+ *        (code + 1ª linha truncada 200, sem base64) server-side, já que o
+ *        `onError` do tRPC só veria a `message` limpa; (d) +códigos transitórios
+ *        `40001`/`40P01` ("tente novamente").
+ *   2. CLIENT `client/src/pages/equipamentos/Proprios.tsx` (defesa em
+ *      profundidade): novo helper `errMsg(e)` — se a msg parecer dump
+ *      (`Failed query`/`data:image/`/`;base64,`) ou for > 300 chars, mostra
+ *      "Não foi possível salvar o equipamento. Verifique os dados e tente
+ *      novamente." em vez do paredão. Aplicado nos 3 `onError` (criar/atualizar/
+ *      excluir).
+ *
+ * RESULTADO: o usuário nunca mais vê o paredão de base64; em vez disso recebe a
+ * causa real em pt-BR curto (ex.: campo grande demais / valor numérico fora de
+ * faixa / obrigatório em branco) ou uma mensagem genérica acionável, e pode
+ * corrigir e salvar. Cadastro normal (testado) funciona. Zero schema. Zero
+ * ALTER/DROP/DELETE. Validação esbuild OK (server + client).
+ *
  * Rev. 2560 — **OBRAS · EFETIVO · AUDITORIA + GARANTIA DEFINITIVA "1 FUNCIONÁRIO
  * = 1 OBRA ATIVA" (mesmo funcionário NÃO pode estar em 2 obras ao mesmo tempo).**
  *
