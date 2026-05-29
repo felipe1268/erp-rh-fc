@@ -1,6 +1,59 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2544 — **RAIO-X DO COLABORADOR · TIMELINE · MODAL DE DETALHE DO EVENTO ·
+ * REDESIGN MODERNO (SEM ROLAGEM HORIZONTAL) + FIX DE FORMATAÇÃO DE DATA/HORA.**
+ *
+ * MOTIVAÇÃO (user):
+ *   O modal de detalhe do evento da timeline (entregue na Rev. 2543) estava
+ *   exigindo BARRA DE ROLAGEM HORIZONTAL para ler todos os dados, e o user pediu
+ *   um layout "mais moderno" sem precisar rolar pros lados pra analisar o registro.
+ *   No print enviado (evento DDS #32) também aparecia um bug de data: o campo
+ *   "Assinado Em" exibia "28 00:28:36.47334/05/2026" — um timestamp embaralhado.
+ *
+ * CAUSA-RAIZ DO BUG DE DATA:
+ *   O componente RaioXFuncionario.tsx tem um `formatDate` LOCAL (L30) ingênuo que
+ *   faz `d.split("-")` e remonta como `${p[2]}/${p[1]}/${p[0]}`. Para uma data-only
+ *   ("2026-05-28") funciona, mas para um TIMESTAMP ("2026-05-28 00:28:36.47334")
+ *   o split em "-" gera ["2026","05","28 00:28:36.47334"], remontado como
+ *   "28 00:28:36.47334/05/2026". O `fmtVal` do modal chamava esse `formatDate`
+ *   para qualquer string que casasse com o prefixo de data ISO, incluindo
+ *   timestamps → saída embaralhada.
+ *
+ * CORREÇÃO DO BUG (client, RaioXFuncionario.tsx — IIFE do modal):
+ *   Novo helper `fmtDateSmart`: se a string é data-only (`^\d{4}-\d{2}-\d{2}$`)
+ *   usa o `formatDate` (DD/MM/AAAA); se é timestamp (`^\d{4}-\d{2}-\d{2}[T ]HH:MM`)
+ *   formata como "DD/MM/AAAA HH:mm" via regex de captura (descarta segundos/micros);
+ *   senão devolve a string crua. O `fmtVal` passou a usar `fmtDateSmart`.
+ *   O cabeçalho do modal também usa `fmtDateSmart(timelineEvt.data)`.
+ *
+ * REDESIGN DO MODAL (sem rolagem horizontal + visual moderno):
+ *   - DialogContent: `w-[95vw] max-w-3xl max-h-[88vh] overflow-x-hidden
+ *     overflow-y-auto p-0 gap-0 rounded-2xl` — largura responsiva, NUNCA rola na
+ *     horizontal, cantos arredondados.
+ *   - Cabeçalho redesenhado: faixa com gradiente sutil, ícone em "pill" arredondado
+ *     na cor do evento (TIMELINE_COLORS), título + data + badge refTipo/#refId,
+ *     descrição logo abaixo. Tudo com `min-w-0`/`break-words` (não estoura largura).
+ *   - Corpo: os pares chave/valor viraram TILES responsivos
+ *     (`grid grid-cols-1 sm:grid-cols-2 gap-2`), cada um em card arredondado
+ *     `bg-gray-50/70` com `min-w-0` + label `truncate` + valor `break-words
+ *     whitespace-pre-wrap`. Isso elimina o overflow horizontal que existia quando
+ *     um valor longo (ex.: timestamp/JSON) não tinha ponto de quebra.
+ *   - Aviso LGPD em "chip" âmbar; rodapé com botão Fechar em faixa separada.
+ *   - `JSON.stringify(v, null, 2)` para objetos visíveis (legível, com quebras).
+ *
+ * ESCOPO / NÃO-OBJETIVOS:
+ *   - Mantida toda a lógica de PII/LGPD da Rev. 2543 (PII_KEYS/SKIP_KEYS, redação
+ *     de objetos aninhados sob hidePersonal). Nada de permissão mudou.
+ *   - Não mexi no `formatDate` local global (L30) pra não impactar os ~40 outros
+ *     usos (relatórios/PDF que recebem só data-only). O fix é localizado no modal.
+ *   - Zero schema. Zero ALTER/DROP/DELETE. Mudança puramente de client/UI.
+ *
+ * ARQUIVOS: client/src/components/RaioXFuncionario.tsx (IIFE do modal ~L4002-4100),
+ *   shared/version.ts (→2544), replit.md, replit-history.md.
+ *
+ * ============================================================================
+ *
  * Rev. 2543 — **RAIO-X DO COLABORADOR · TIMELINE · (1) BUG da CONFIRMAÇÃO DE HE
  * FANTASMA + (2) RASTREABILIDADE: cada evento da timeline agora é CLICÁVEL e abre
  * um modal com TODOS os dados do registro de origem.**
