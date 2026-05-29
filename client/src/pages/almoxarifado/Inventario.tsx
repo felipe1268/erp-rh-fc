@@ -268,7 +268,6 @@ export default function AlmoxarifadoInventario() {
     if (!q) return true;
     return (
       norm(i.itemNome).includes(q) ||
-      norm(i.itemCodigoBarras).includes(q) ||
       norm(i.itemCodigoInterno).includes(q)
     );
   };
@@ -474,7 +473,6 @@ export default function AlmoxarifadoInventario() {
                       // Match exato por código (scanner) tem prioridade
                       const exato = pendentesAll.filter(
                         (i: any) =>
-                          norm(i.itemCodigoBarras) === q ||
                           norm(i.itemCodigoInterno) === q
                       );
                       const alvo = exato.length === 1
@@ -496,7 +494,7 @@ export default function AlmoxarifadoInventario() {
                         toast.message(`${pendentes.length} itens correspondem — refine a busca`);
                       }
                     }}
-                    placeholder="Buscar por nome, código interno ou escanear código de barras…"
+                    placeholder="Buscar por nome ou código interno (escanear)…"
                     className="w-full h-11 pl-10 pr-10 text-sm border border-gray-200 rounded-lg bg-white text-gray-800 outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100"
                   />
                   {busca && (

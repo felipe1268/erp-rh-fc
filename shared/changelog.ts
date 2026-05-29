@@ -1,6 +1,62 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2549 — **ALMOXARIFADO · INVENTÁRIO SEMANAL · "INICIAR INVENTÁRIO NÃO
+ * FUNCIONA" — FIX DO CRASH QUE IMPEDIA A LISTA DE ITENS DE CARREGAR.**
+ *
+ * MOTIVAÇÃO (user):
+ *   No Almoxarifado › Inventário Semanal, ao clicar em "Iniciar Inventário" a
+ *   tela "não funcionava" — o usuário clicava repetidamente e nada de útil
+ *   aparecia (constatado no banco: sessões DUPLICADAS em_andamento para a mesma
+ *   obra+semana, ex.: ids 11&12 obra 90001, 6&7 obra 90004 — sinal clássico de
+ *   clique repetido porque a tela nunca carregava os itens a conferir).
+ *
+ * ROOT CAUSE (independente de banco):
+ *   `warehouse.getInventorySessionItems` (server/routers/warehouse.ts) montava o
+ *   `select()` com `itemCodigoBarras: almoxarifadoItens.codigoBarras` (adicionado
+ *   na Rev. 2530 para o scanner). PORÉM a coluna `codigo_barras` NÃO existe em
+ *   `almoxarifado_itens` — nem no schema Drizzle (`drizzle/schema.ts`, a tabela
+ *   só define `codigoInterno`) nem no banco Neon real (confirmado por
+ *   introspecção: 36 colunas, nenhuma `codigo_barras`). Logo
+ *   `almoxarifadoItens.codigoBarras` resolvia para `undefined`, e o Drizzle
+ *   lançava "Cannot convert undefined or null to object" em TODA chamada da
+ *   query. Resultado: sempre que havia uma sessão ativa, a lista de itens NUNCA
+ *   carregava → o inventário ficou inutilizável desde a Rev. 2530. (Log de prod
+ *   confirmou: `[tRPC Error] warehouse.getInventorySessionItems: Cannot convert
+ *   undefined or null to object`.) O botão "Iniciar" CRIAVA a sessão
+ *   normalmente — o que quebrava era a leitura subsequente dos itens.
+ *
+ * CORREÇÃO (não-destrutiva, zero schema, zero ALTER/DROP/DELETE):
+ *   1) SERVER (`warehouse.ts`, getInventorySessionItems): removida a linha
+ *      `itemCodigoBarras: almoxarifadoItens.codigoBarras` do projection do
+ *      `select()`. Restam apenas colunas que existem de fato (incl.
+ *      `itemCodigoInterno`). Sem a referência `undefined`, o Drizzle monta a
+ *      query normalmente e a lista de itens da sessão carrega.
+ *   2) CLIENT (`Inventario.tsx`): removidas as referências mortas a
+ *      `i.itemCodigoBarras` (filtro de busca em `filterFn` e match-exato do
+ *      scanner no `onKeyDown`). Busca/scanner seguem funcionando por
+ *      `itemCodigoInterno` (código que de fato existe). Placeholder do input
+ *      ajustado para "Buscar por nome ou código interno (escanear)…".
+ *
+ * VERIFICAÇÃO:
+ *   - `tsx watch` recompilou sem erros; HTTP probe do endpoint retorna 401
+ *     (auth), NÃO mais 500 por coluna inexistente; sem novas ocorrências do erro
+ *     no log após o reload.
+ *   - Banco Neon real: `almoxarifado_itens` tem 2022 itens (1952 ativos);
+ *     sessões de inventário existem e agora seus itens carregam.
+ *
+ * NOTA (fora de escopo): as sessões duplicadas em_andamento já gravadas NÃO
+ *   foram tocadas (R-001/R-007/R-010 — sem DELETE). Um eventual guard de
+ *   idempotência no `startInventorySession` (reaproveitar sessão existente da
+ *   semana+obra em vez de criar nova) fica como follow-up.
+ *
+ * ESCOPO: 2 arquivos (1 server, 1 client). Zero schema. Zero ALTER/DROP/DELETE.
+ *
+ * ARQUIVOS: server/routers/warehouse.ts, client/src/pages/almoxarifado/
+ *   Inventario.tsx, shared/version.ts (→2549), replit.md, replit-history.md.
+ *
+ * ============================================================================
+ *
  * Rev. 2548 — **ATESTADOS · AFASTAMENTO POR HORAS · CLAREZA NA FICHA DO RAIO-X
  * (TELA + PDF).**
  *

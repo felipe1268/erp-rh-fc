@@ -1080,8 +1080,13 @@ Retorne os até 5 melhores matches em ordem decrescente de similaridade. Se nenh
           conferidoEm: warehouseInventorySessionItems.conferidoEm,
           itemFotoUrl: almoxarifadoItens.fotoUrl,
           itemUnidade: almoxarifadoItens.unidade,
-          // Rev. 2530 — códigos pra busca/scanner de código de barras
-          itemCodigoBarras: almoxarifadoItens.codigoBarras,
+          // Rev. 2530 — código interno pra busca/scanner no inventário.
+          // Rev. 2549 — `itemCodigoBarras` REMOVIDO: a coluna `codigo_barras`
+          // não existe em almoxarifado_itens (nem no schema Drizzle nem no
+          // banco Neon). Selecionar `almoxarifadoItens.codigoBarras` (=undefined)
+          // fazia o Drizzle lançar "Cannot convert undefined or null to object"
+          // em TODA chamada → a lista de itens da sessão NUNCA carregava
+          // (inventário inutilizável desde a Rev. 2530).
           itemCodigoInterno: almoxarifadoItens.codigoInterno,
         })
         .from(warehouseInventorySessionItems)
