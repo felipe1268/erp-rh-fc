@@ -608,6 +608,7 @@ export const financialRouter = router({
     valorRealizado: z.number().optional(),
     formaPagamento: z.string().optional(),
     comprovanteUrl: z.string().optional(),
+    contaBancariaId: z.number().nullable().optional(),
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
@@ -617,10 +618,12 @@ export const financialRouter = router({
            valor_realizado=COALESCE($3, valor_realizado),
            forma_pagamento=COALESCE($4, forma_pagamento),
            comprovante_url=COALESCE($5, comprovante_url),
+           conta_bancaria_id=COALESCE($6, conta_bancaria_id),
            updated_at=NOW()
-       WHERE id=$6 AND company_id=$7`,
+       WHERE id=$7 AND company_id=$8`,
       [input.status, input.dataPagamento ?? null, input.valorRealizado ?? null,
-       input.formaPagamento ?? null, input.comprovanteUrl ?? null, input.id, input.companyId]
+       input.formaPagamento ?? null, input.comprovanteUrl ?? null,
+       input.contaBancariaId ?? null, input.id, input.companyId]
     );
     await createAuditLog({ action: "financial_entry_status_updated", userId: ctx.user?.id, companyId: input.companyId, details: `Entry ${input.id} → ${input.status}` });
     return { ok: true };
@@ -1814,6 +1817,7 @@ export const financialRouter = router({
     valorRecebido:   z.number(),
     dataRecebimento: z.string(),  // "YYYY-MM-DD"
     formaPagamento:  z.string().optional(),
+    contaBancariaId: z.number().nullable().optional(),
     frId:            z.number().nullable().optional(),  // se já existe financial_revenue
     observacoes:     z.string().optional(),
   })).mutation(async ({ input, ctx }) => {
@@ -1828,19 +1832,22 @@ export const financialRouter = router({
              valor_recebido=$1,
              data_recebimento=$2,
              forma_pagamento=COALESCE($3, forma_pagamento),
+             conta_bancaria_id=COALESCE($4, conta_bancaria_id),
              updated_at=NOW()
-         WHERE id=$4 AND company_id=$5`,
+         WHERE id=$5 AND company_id=$6`,
         [input.valorRecebido, input.dataRecebimento, input.formaPagamento ?? null,
-         input.frId, input.companyId]
+         input.contaBancariaId ?? null, input.frId, input.companyId]
       );
       await dbExecute(db,
         `UPDATE financial_entries
          SET status='recebido',
              valor_realizado=$1,
              data_pagamento=$2,
+             conta_bancaria_id=COALESCE($3, conta_bancaria_id),
              updated_at=NOW()
-         WHERE origem_modulo='revenue' AND origem_id=$3 AND company_id=$4`,
-        [input.valorRecebido, input.dataRecebimento, input.frId, input.companyId]
+         WHERE origem_modulo='revenue' AND origem_id=$4 AND company_id=$5`,
+        [input.valorRecebido, input.dataRecebimento, input.contaBancariaId ?? null,
+         input.frId, input.companyId]
       );
       // Sync planejamento_medicoes → marcar competência como confirmada
       // Nota: parâmetros são listados com índices únicos ($4,$5,$6) para evitar
@@ -1872,12 +1879,13 @@ export const financialRouter = router({
       `INSERT INTO financial_revenue
        (company_id, obra_id, obra_nome, cliente_nome, valor_contrato,
         valor_medicao, valor_recebido, data_vencimento, data_recebimento,
-        forma_pagamento, status, observacoes, created_at, updated_at)
-       VALUES ($1,$2,$3,$4,NULL,$5,$6,$7::date,$8,$9,'recebido_total',$10,NOW(),NOW())
+        forma_pagamento, status, observacoes, conta_bancaria_id, created_at, updated_at)
+       VALUES ($1,$2,$3,$4,NULL,$5,$6,$7::date,$8,$9,'recebido_total',$10,$11,NOW(),NOW())
        RETURNING id`,
       [input.companyId, obraId, obraNome, input.clienteNome ?? null,
        input.valorPrevisto, input.valorRecebido, mesDate,
-       input.dataRecebimento, input.formaPagamento ?? null, input.observacoes ?? null]
+       input.dataRecebimento, input.formaPagamento ?? null, input.observacoes ?? null,
+       input.contaBancariaId ?? null]
     );
     const newFrId = rows(revRes)[0]?.id;
 
@@ -1887,17 +1895,18 @@ export const financialRouter = router({
          (company_id, obra_id, obra_nome, conta_nome, tipo, natureza,
           valor_previsto, valor_realizado, data_competencia, data_vencimento,
           data_pagamento, status, origem_modulo, origem_id, origem_descricao,
-          descricao, created_at, updated_at)
+          descricao, conta_bancaria_id, created_at, updated_at)
          VALUES ($1,$2,$3,'Faturamento de Obras','receita','variavel',
                  $4,$5,$6::date,$7::date,$8,'recebido',
-                 'revenue',$9,$10,$11,NOW(),NOW())`,
+                 'revenue',$9,$10,$11,$12,NOW(),NOW())`,
         [input.companyId, obraId, obraNome,
          input.valorPrevisto, input.valorRecebido,
          mesDate, mesDate,
          input.dataRecebimento,
          newFrId,
          `Recebimento — ${obraNome}`,
-         `Baixa: ${obraNome}`]
+         `Baixa: ${obraNome}`,
+         input.contaBancariaId ?? null]
       );
     }
 
@@ -3271,6 +3280,7 @@ export const financialRouter = router({
               origem_modulo AS "origemModulo", origem_id AS "origemId",
               origem_descricao AS "origemDescricao",
               fornecedor_nome AS "fornecedorNome",
+              conta_bancaria_id AS "contaBancariaId",
               tipo,
               CASE WHEN data_vencimento < CURRENT_DATE AND status != 'pago' THEN CURRENT_DATE - data_vencimento ELSE 0 END AS "diasAtraso"
        FROM financial_entries
@@ -4276,7 +4286,8 @@ export const financialRouter = router({
              pm.status AS status_medicao,
              fr.id AS fr_id, fr.status AS status_financeiro,
              fr.nf_numero, fr.data_vencimento, fr.data_recebimento,
-             fr.valor_recebido, fr.valor_medicao AS fr_valor_medicao
+             fr.valor_recebido, fr.valor_medicao AS fr_valor_medicao,
+             fr.conta_bancaria_id AS conta_bancaria_id
       FROM planejamento_medicoes pm
       JOIN planejamento_projetos pp ON pp.id = pm.projeto_id
       LEFT JOIN financial_revenue fr ON fr.medicao_id = pm.id
@@ -4296,7 +4307,8 @@ export const financialRouter = router({
              fr.id, fr.obra_id, fr.obra_nome,
              TO_CHAR(fr.data_vencimento, 'YYYY-MM') AS competencia,
              fr.status, fr.data_recebimento, fr.valor_recebido,
-             fr.valor_medicao, fr.forma_pagamento, fr.nf_numero, fr.data_vencimento
+             fr.valor_medicao, fr.forma_pagamento, fr.nf_numero, fr.data_vencimento,
+             fr.conta_bancaria_id
       FROM financial_revenue fr
       WHERE fr.company_id = $1
         AND fr.medicao_id IS NULL
@@ -4975,6 +4987,7 @@ export const financialRouter = router({
             let valorRecebido = 0;
             let dataVencimento: string | null = null;
             let nfNumero: string | null = null;
+            let contaBancariaId: number | null = null;
             if (med) {
               sf = med.status_financeiro ?? med.status_medicao ?? "previsto";
               frId = med.fr_id ?? null;
@@ -4982,6 +4995,7 @@ export const financialRouter = router({
               valorRecebido = parseFloat(med.valor_recebido ?? "0") || 0;
               dataVencimento = med.data_vencimento ?? null;
               nfNumero = med.nf_numero ?? null;
+              contaBancariaId = med.conta_bancaria_id ?? null;
               // PM confirmada mas sem FR vinculado (registrarRecebimento cria FR com
               // medicao_id=NULL, então o LEFT JOIN não encontra). Mescla dados do FR
               // standalone SOMENTE se o FR for 'recebido_total' — nunca 'a_faturar'.
@@ -4993,6 +5007,7 @@ export const financialRouter = router({
                 valorRecebido = parseFloat(standaloneFr.valor_recebido ?? "0") || 0;
                 dataVencimento = standaloneFr.data_vencimento ?? null;
                 nfNumero = standaloneFr.nf_numero ?? null;
+                contaBancariaId = standaloneFr.conta_bancaria_id ?? null;
               } else if (!med.fr_id && !med.status_financeiro && sf === "confirmado") {
                 // Sem FR standalone também: trata como recebido_total para exibição correta
                 sf = "recebido_total";
@@ -5005,6 +5020,7 @@ export const financialRouter = router({
               valorRecebido = parseFloat(standaloneFr.valor_recebido ?? "0") || 0;
               dataVencimento = standaloneFr.data_vencimento ?? null;
               nfNumero = standaloneFr.nf_numero ?? null;
+              contaBancariaId = standaloneFr.conta_bancaria_id ?? null;
             } else {
               sf = previsto > 0 ? "previsto" : (previsao > 0 ? "previsao_faturamento" : null);
             }
@@ -5020,6 +5036,7 @@ export const financialRouter = router({
               dataVencimento,
               dataRecebimento,
               valorRecebido,
+              contaBancariaId,
             }];
           })),
           // Medições salvas (compatibilidade com painel lateral)

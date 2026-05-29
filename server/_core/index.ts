@@ -3342,6 +3342,7 @@ Regras:
             ALTER TABLE financial_revenue ADD COLUMN IF NOT EXISTS data_aprovacao      DATE;
             ALTER TABLE financial_revenue ADD COLUMN IF NOT EXISTS medicao_enviada_em  DATE;
             ALTER TABLE financial_revenue ADD COLUMN IF NOT EXISTS glosa               DECIMAL(15,2) DEFAULT 0;
+            ALTER TABLE financial_revenue ADD COLUMN IF NOT EXISTS conta_bancaria_id   INTEGER;
           EXCEPTION WHEN OTHERS THEN NULL;
           END $$
         `);

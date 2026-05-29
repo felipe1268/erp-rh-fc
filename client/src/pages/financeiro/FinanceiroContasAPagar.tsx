@@ -191,6 +191,8 @@ export default function FinanceiroContasAPagar() {
   const [showPay, setShowPay] = useState<any | null>(null);
   const [dataPagamento, setDataPagamento] = useState(hoje.toISOString().split("T")[0]);
   const [formaPagamento, setFormaPagamento] = useState("pix");
+  // Rev. 2540 — conta bancária na baixa (puxa a do lançamento; permite alterar)
+  const [contaBancariaId, setContaBancariaId] = useState<number | null>(null);
   // Rev. 1620 — seleção em lote (Onda 2)
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [showBulkPay, setShowBulkPay] = useState(false);
@@ -232,6 +234,16 @@ export default function FinanceiroContasAPagar() {
     onSuccess: () => { toast({ title: "Pagamento registrado!" }); setShowPay(null); refetch(); },
     onError: (e: any) => toast({ title: "Erro", description: e.message, variant: "destructive" }),
   });
+
+  // Rev. 2540 — contas bancárias para o seletor da baixa
+  const { data: bankAccounts } = (trpc as any).financial.getBankAccounts.useQuery(
+    { companyId },
+    { enabled: !!companyId }
+  );
+  // Sincroniza conta bancária do lançamento ao abrir o diálogo (permite alterar)
+  useEffect(() => {
+    setContaBancariaId(showPay?.contaBancariaId ?? null);
+  }, [showPay]);
 
   // Rev. 1620 — limpar seleção ao mudar mês/ano para evitar pagar item de outro escopo
   useEffect(() => { setSelectedIds(new Set()); }, [mesSel, ano]);
@@ -1898,12 +1910,29 @@ export default function FinanceiroContasAPagar() {
                     </SelectContent>
                   </Select>
                 </div>
+                <div>
+                  <Label>Conta Bancária</Label>
+                  <Select
+                    value={contaBancariaId != null ? String(contaBancariaId) : "none"}
+                    onValueChange={v => setContaBancariaId(v === "none" ? null : Number(v))}
+                  >
+                    <SelectTrigger><SelectValue placeholder="Selecione a conta" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">— Não informar —</SelectItem>
+                      {(bankAccounts ?? []).filter((a: any) => a.ativo).map((a: any) => (
+                        <SelectItem key={a.id} value={String(a.id)}>
+                          {[a.descricao || a.banco, a.agencia ? `Ag ${a.agencia}` : null, a.conta ? `CC ${a.conta}` : null].filter(Boolean).join(" · ")}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
             )}
             <DialogFooter>
               <Button variant="outline" onClick={() => setShowPay(null)}>Cancelar</Button>
               <Button className="bg-green-600 hover:bg-green-700 text-white" disabled={payMut.isPending}
-                onClick={() => payMut.mutate({ id: showPay.id, companyId, status: "pago", dataPagamento, formaPagamento })}>
+                onClick={() => payMut.mutate({ id: showPay.id, companyId, status: "pago", dataPagamento, formaPagamento, contaBancariaId })}>
                 {payMut.isPending ? "Registrando..." : "Confirmar Pagamento"}
               </Button>
             </DialogFooter>

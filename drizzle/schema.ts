@@ -6616,6 +6616,7 @@ export const financialRevenue = pgTable("financial_revenue", {
   retencaoIR: numeric("retencao_ir", { precision: 10, scale: 2 }).default("0"),
   retencaoTotal: numeric("retencao_total", { precision: 10, scale: 2 }).default("0"),
   valorLiquidoReceber: numeric("valor_liquido_receber", { precision: 15, scale: 2 }),
+  contaBancariaId: integer("conta_bancaria_id"),
   observacoes: text(),
   createdAt: timestamp({ mode: "string" }).defaultNow().notNull(),
   updatedAt: timestamp({ mode: "string" }).defaultNow().notNull(),

@@ -1,6 +1,60 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2540 — **FINANCEIRO · CONTA BANCÁRIA NA BAIXA (Contas a Pagar E Contas a
+ * Receber): puxa a conta do lançamento e permite alterar para qualquer conta.**
+ *
+ * MOTIVAÇÃO (user):
+ *   No Financeiro, ao dar baixa (Registrar Pagamento em Contas a Pagar e
+ *   Registrar/Editar Recebimento em Contas a Receber), não havia como informar/
+ *   confirmar em QUAL conta bancária o dinheiro saiu/entrou. O campo deve vir
+ *   pré-preenchido com a conta já cadastrada no lançamento, mas permitir trocar
+ *   por qualquer conta cadastrada da empresa.
+ *
+ * CORREÇÃO:
+ *   CONTAS A PAGAR (fluxo simples, financial_entries):
+ *     - server `financial.updateEntryStatus`: novo input `contaBancariaId`
+ *       (number|null, opcional); UPDATE grava `conta_bancaria_id=COALESCE($8,
+ *       conta_bancaria_id)` (não apaga se não enviado).
+ *     - server `financial.getContasAPagarByYear`: SELECT passa a retornar
+ *       `conta_bancaria_id AS "contaBancariaId"` para o prefill na lista.
+ *     - client `FinanceiroContasAPagar.tsx`: state `contaBancariaId`, query
+ *       `getBankAccounts`, useEffect sincroniza de `showPay.contaBancariaId` ao
+ *       abrir o diálogo, novo Select "Conta Bancária" (opção "— Não informar —"
+ *       = null), passa `contaBancariaId` no `payMut.mutate`.
+ *
+ *   CONTAS A RECEBER (matriz de medições, financial_revenue + financial_entries):
+ *     - schema: nova coluna `financial_revenue.conta_bancaria_id INTEGER`
+ *       (drizzle/schema.ts) + ALTER ADD COLUMN IF NOT EXISTS idempotente no
+ *       SyncSchema+ (server/_core/index.ts, bloco financial_revenue). Zero
+ *       ALTER/DROP/DELETE destrutivo (R-001/R-007/R-010).
+ *     - server `financial.registrarRecebimento`: novo input `contaBancariaId`;
+ *       grava em financial_revenue E financial_entries nas DUAS branches
+ *       (UPDATE de fr existente + INSERT de fr novo), via COALESCE no UPDATE.
+ *     - server `financial.getContasReceberMatrix`: as duas SELECTs de fr
+ *       (medição + standalone) passam a trazer `fr.conta_bancaria_id`; o cell
+ *       building propaga `contaBancariaId` e o objeto da célula retorna o campo
+ *       para o prefill (modo edição).
+ *     - client `FinanceiroContasAReceber.tsx`: tipo `MedicaoCell` + cell build
+ *       ganham `contaBancariaId`; `DarBaixaModal` tem state inicializado de
+ *       `cell.contaBancariaId`, query `getBankAccounts`, novo Select "Conta
+ *       bancária" e inclui `contaBancariaId` no payload do `onSave`
+ *       (registrarRecebimento).
+ *
+ * ARQUIVOS:
+ *   server/routers/financial.ts (updateEntryStatus, getContasAPagarByYear,
+ *     registrarRecebimento, getContasReceberMatrix),
+ *   server/_core/index.ts (SyncSchema+ financial_revenue.conta_bancaria_id),
+ *   drizzle/schema.ts (financialRevenue.contaBancariaId),
+ *   client/src/pages/financeiro/FinanceiroContasAPagar.tsx,
+ *   client/src/pages/financeiro/FinanceiroContasAReceber.tsx.
+ *
+ * NOTAS:
+ *   - `conta_bancaria_id` (conta do banco onde o dinheiro entra/sai) é DIFERENTE
+ *     de `conta_id` (plano de contas / categoria) — não confundir.
+ *   - Baixa em lote (bulkUpdateStatus) NÃO recebeu o campo nesta revisão (escopo
+ *     = diálogo individual de baixa, conforme pedido do user).
+ *
  * Rev. 2539 — **LGPD · RAIO-X DO COLABORADOR · GUARD SERVER-SIDE DE OBRA NO
  * DOSSIÊ (engenheiro de campo não acessa documentação de quem está fora das
  * suas obras).**

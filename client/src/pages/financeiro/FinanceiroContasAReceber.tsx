@@ -122,6 +122,7 @@ interface MedicaoCell {
   dataVencimento: string | null;
   dataRecebimento: string | null;
   valorRecebido: number;
+  contaBancariaId: number | null;
   valor: number;
 }
 
@@ -193,6 +194,7 @@ export default function FinanceiroContasAReceber() {
         dataVencimento: r.dataVencimento ?? null,
         dataRecebimento: r.dataRecebimento ?? null,
         valorRecebido: r.valorRecebido ?? 0,
+        contaBancariaId: r.contaBancariaId ?? null,
         valor: valorDisplay,
       };
     }
@@ -1442,8 +1444,15 @@ function DarBaixaModal({ obra, mes, cell, companyId, isPending, onClose, onSave,
   const [data, setData] = useState(isEdit && cell.dataRecebimento ? cell.dataRecebimento.slice(0, 10) : hoje);
   const [forma, setForma] = useState("PIX");
   const [obs, setObs] = useState("");
+  const [contaBancariaId, setContaBancariaId] = useState<number | null>(cell.contaBancariaId ?? null);
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [step, setStep] = useState<"form" | "carry">("form");
+
+  // Rev. 2540 — contas bancárias para o seletor da baixa
+  const { data: bankAccounts } = (trpc as any).financial.getBankAccounts.useQuery(
+    { companyId },
+    { enabled: !!companyId }
+  );
 
   const valorNum = parseBRL(valorStr);
   const valido = valorNum > 0 && data;
@@ -1463,6 +1472,7 @@ function DarBaixaModal({ obra, mes, cell, companyId, isPending, onClose, onSave,
       valorRecebido: valorNum,
       dataRecebimento: data,
       formaPagamento: forma,
+      contaBancariaId,
       frId: cell.frId,
       observacoes: [obs, carryNote].filter(Boolean).join(" | ") || undefined,
     });
@@ -1579,6 +1589,27 @@ function DarBaixaModal({ obra, mes, cell, companyId, isPending, onClose, onSave,
               <SelectContent>
                 {FORMAS_PAGAMENTO.map(f => (
                   <SelectItem key={f} value={f}>{f}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Conta bancária (Rev. 2540) */}
+          <div>
+            <Label className="text-xs text-gray-600 font-semibold mb-1 block">Conta bancária</Label>
+            <Select
+              value={contaBancariaId != null ? String(contaBancariaId) : "none"}
+              onValueChange={v => setContaBancariaId(v === "none" ? null : Number(v))}
+            >
+              <SelectTrigger className="h-9 text-sm">
+                <SelectValue placeholder="Selecione a conta" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">— Não informar —</SelectItem>
+                {(bankAccounts ?? []).filter((a: any) => a.ativo).map((a: any) => (
+                  <SelectItem key={a.id} value={String(a.id)}>
+                    {[a.descricao || a.banco, a.agencia ? `Ag ${a.agencia}` : null, a.conta ? `CC ${a.conta}` : null].filter(Boolean).join(" · ")}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
