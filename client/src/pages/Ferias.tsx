@@ -13,6 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { toast } from "sonner";
 import FullScreenDialog from "@/components/FullScreenDialog";
 import RaioXFuncionario from "@/components/RaioXFuncionario";
+import { PersonPhoto } from "@/components/PersonPhoto";
 import { formatCPF, formatMoeda, fmtNum } from "@/lib/formatters";
 import { removeAccents } from "@/lib/searchUtils";
 import { dataLimiteInicioGozoFerias } from "@/lib/dateUtils";
@@ -1154,18 +1155,23 @@ export default function Ferias() {
                         return (
                           <tr key={f.id} className={`border-b last:border-0 hover:bg-muted/20 ${isVencida ? "bg-red-50/50" : isPrimeiroVencido ? "bg-amber-50/40" : ""}`}>
                             <td className="p-3">
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <div className="font-medium text-blue-700 cursor-pointer hover:underline" onClick={() => setGanttEmployeeId(f.employeeId)}>{f.employeeName}</div>
-                                {perdeuFerias && (
-                                  <Badge
-                                    className="bg-pink-100 text-pink-700 border border-pink-300 text-[10px] gap-1"
-                                    title={`Afastado há ${_diasAfast} dias (desde ${formatDate(f.employeeLicencaDataInicio)}). Conforme Art. 133, IV da CLT, o empregado que recebe auxílio-doença/INSS por mais de 6 meses (mesmo descontínuos) dentro do período aquisitivo perde o direito às férias daquele período. Reinicia a contagem após o retorno.`}
-                                  >
-                                    <AlertTriangle className="h-3 w-3" /> Direito de férias perdido — afastado há {_diasAfast} dias (Art. 133, IV CLT)
-                                  </Badge>
-                                )}
+                              <div className="flex items-center gap-2.5">
+                                <PersonPhoto src={f.employeeFotoUrl} alt={f.employeeName} size="sm" />
+                                <div className="min-w-0">
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <div className="font-medium text-blue-700 cursor-pointer hover:underline" onClick={() => setGanttEmployeeId(f.employeeId)}>{f.employeeName}</div>
+                                    {perdeuFerias && (
+                                      <Badge
+                                        className="bg-pink-100 text-pink-700 border border-pink-300 text-[10px] gap-1"
+                                        title={`Afastado há ${_diasAfast} dias (desde ${formatDate(f.employeeLicencaDataInicio)}). Conforme Art. 133, IV da CLT, o empregado que recebe auxílio-doença/INSS por mais de 6 meses (mesmo descontínuos) dentro do período aquisitivo perde o direito às férias daquele período. Reinicia a contagem após o retorno.`}
+                                      >
+                                        <AlertTriangle className="h-3 w-3" /> Direito de férias perdido — afastado há {_diasAfast} dias (Art. 133, IV CLT)
+                                      </Badge>
+                                    )}
+                                  </div>
+                                  <div className="text-xs text-muted-foreground">{f.employeeCargo || f.employeeFuncao || "-"}</div>
+                                </div>
                               </div>
-                              <div className="text-xs text-muted-foreground">{f.employeeCargo || f.employeeFuncao || "-"}</div>
                             </td>
                             <td className="p-3 text-xs">{formatDate(f.periodoAquisitivoInicio)} a {formatDate(f.periodoAquisitivoFim)}</td>
                             <td className="p-3">
@@ -1319,6 +1325,7 @@ export default function Ferias() {
                       <CardContent className="p-4">
                         <div className="flex items-center justify-between mb-3">
                           <div className="flex items-center gap-3">
+                            <PersonPhoto src={grupo.employee.fotoUrl} alt={grupo.employee.nome} size="md" />
                             <div>
                               <div className="flex items-center gap-2 flex-wrap">
                                 <p className="font-semibold text-blue-700 cursor-pointer hover:underline" onClick={() => setGanttEmployeeId(grupo.employee.id)}>

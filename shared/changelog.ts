@@ -1,6 +1,41 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2574 — **RH & DP · CONTROLE DE FÉRIAS (`/ferias`) · A TABELA PRINCIPAL
+ * "LISTA DE FÉRIAS" E OS CARDS DA ABA "FÉRIAS VENCIDAS" PASSAM A EXIBIR A FOTO
+ * DO CADASTRO DE CADA COLABORADOR.**
+ *
+ * MOTIVAÇÃO (pedido do usuário, 6 screenshots de iPad da tela Controle de
+ * Férias — abas A Vencer / Agendada / Vencida / Em Gozo / Todos / Férias
+ * Vencidas): "Quero fotos de todos os colaboradores aqui tbm." A coluna
+ * "Colaborador" mostrava só nome (azul, clicável p/ Raio-X) + cargo em texto,
+ * sem a foto, diferente dos demais painéis de RH que já trazem `<PersonPhoto>`.
+ *
+ * CAUSA: a coluna Colaborador da tabela principal (`client/src/pages/Ferias.tsx`
+ * ~L1160) e o cabeçalho dos cards da aba Vencidas (~L1330) renderizavam só
+ * texto. A query que alimenta a tabela principal é `avisoPrevio.ferias.list`
+ * (sub-router `ferias`, `server/routers/avisoPrevioFerias.ts` ~L2337) — NÃO
+ * confundir com a `avisoPrevio.avisoPrevio.list` (~L288, outra procedure que já
+ * trazia `employeeFotoUrl`). A `ferias.list` (~L2403) e a `listarVencidas`
+ * (~L3486) NÃO projetavam a foto.
+ *
+ * FIX (não-destrutivo, só leitura/UI):
+ * - SERVER (`server/routers/avisoPrevioFerias.ts`): a `ferias.list` (~L2407)
+ *   passou a projetar `employeeFotoUrl: employees.fotoUrl`; a `listarVencidas`
+ *   passou a projetar `employeeFotoUrl` e a incluir `fotoUrl: r.employeeFotoUrl
+ *   || null` no objeto `employee` agrupado.
+ * - CLIENT (`client/src/pages/Ferias.tsx`): import de `PersonPhoto`; a coluna
+ *   Colaborador da tabela principal renderiza `<PersonPhoto size="sm">` à
+ *   esquerda do nome/cargo (lightbox + fallback), preservando o badge "Direito
+ *   de férias perdido"; os cards da aba Vencidas ganham `<PersonPhoto size="md">`
+ *   ao lado do nome/CPF/admissão. Demais abas (Calendário/Fluxo de Caixa) usam
+ *   layout de grade/texto e ficaram fora do escopo.
+ *
+ * Zero schema. Zero ALTER/DROP/DELETE. Arquivos:
+ * `server/routers/avisoPrevioFerias.ts`, `client/src/pages/Ferias.tsx`.
+ *
+ * ---
+ *
  * Rev. 2573 — **RH & DP · PAINEL RH / HOME · OS PAINÉIS "FÉRIAS — PAINEL RÁPIDO"
  * (DE FÉRIAS AGORA + PRÓXIMAS AGENDADAS), "FÉRIAS — PERÍODO AQUISITIVO" E
  * "MOVIMENTAÇÕES (30 DIAS)" PASSAM A EXIBIR A OBRA DE CADA FUNCIONÁRIO.**

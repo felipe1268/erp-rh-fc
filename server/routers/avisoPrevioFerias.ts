@@ -2401,6 +2401,7 @@ export const avisoPrevioFeriasRouter = router({
           employeeCpf: employees.cpf,
           employeeCargo: employees.cargo,
           employeeFuncao: employees.funcao,
+          employeeFotoUrl: employees.fotoUrl,
           employeeSetor: employees.setor,
           employeeSalario: employees.salarioBase,
           // Rev. 1701 — exposição p/ tag "Direito de férias perdido por afastamento >180 dias"
@@ -3486,6 +3487,7 @@ export const avisoPrevioFeriasRouter = router({
           employeeName: employees.nomeCompleto,
           employeeCpf: employees.cpf,
           employeeCargo: employees.cargo,
+          employeeFotoUrl: employees.fotoUrl,
           employeeDataAdmissao: employees.dataAdmissao,
           // Rev. 1694 — exposição p/ tag "Direito de férias perdido por afastamento >180 dias"
           // (CLT Art. 133, IV — auxílio-doença/INSS por mais de 6 meses no período aquisitivo)
@@ -3529,6 +3531,7 @@ export const avisoPrevioFeriasRouter = router({
                 nome: r.employeeName,
                 cpf: r.employeeCpf,
                 cargo: r.employeeCargo,
+                fotoUrl: r.employeeFotoUrl || null,
                 dataAdmissao: r.employeeDataAdmissao,
                 status: r.employeeStatus,
                 licencaDataInicio: r.employeeLicencaDataInicio,
