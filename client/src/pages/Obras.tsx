@@ -340,6 +340,22 @@ export default function Obras() {
     return gerenciadoras.filter((g: any) => (g.nome || "").toLowerCase().includes(q)).slice(0, 20);
   }, [gerenciadoras, gerencBusca]);
 
+  // Rev. 2606 — Ao EDITAR uma obra cujo nome de gerenciadora bate com o cadastro
+  // mas sem logo salvo na obra (criada antes do cadastro existir), resolve o logo
+  // a partir do cadastro UMA VEZ por abertura do diálogo. O ref evita brigar com
+  // o botão de remover (X) e com a digitação manual.
+  const gerencLogoResolvedRef = useRef(false);
+  useEffect(() => {
+    if (!dialogOpen) { gerencLogoResolvedRef.current = false; return; }
+    if (gerencLogoResolvedRef.current) return;
+    if (gerenciadoras.length === 0) return;
+    const nome = (form.gerenciadoraNome || "").trim().toLowerCase();
+    if (!nome || form.gerenciadoraLogoUrl) { gerencLogoResolvedRef.current = true; return; }
+    const match = gerenciadoras.find((g: any) => (g.nome || "").trim().toLowerCase() === nome);
+    if (match?.logoUrl) setForm(f => (f.gerenciadoraLogoUrl ? f : { ...f, gerenciadoraLogoUrl: match.logoUrl }));
+    gerencLogoResolvedRef.current = true;
+  }, [dialogOpen, gerenciadoras, form.gerenciadoraNome, form.gerenciadoraLogoUrl]);
+
   const handleSave = async () => {
     if (saving) return;
     const nomeEfetivo = form.nome.trim() || form.numOrcamento.trim();
