@@ -830,6 +830,16 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
     // ausente/stale e mostrava % discordante do MSP (ex.: HOTEL DO PAPA
     // ERP 65,74 % vs MSP 77 %). Agora retorna null e a UI exibe "—".
     if (refisComIndiretasGlobal) return null; // visão COM indiretas — snapshot é só diretas
+    // Rev. 2599 — A barra superior PASSA A LER a curva CAMINHO B
+    // (`previsto_semanas_json`) na data de referência do modo (Live = cutoff de
+    // hoje; Oficial = StatusDate). Antes lia SÓ o snapshot único da raiz UID=0,
+    // congelado na StatusDate do último XML — por isso o "Previsto" do topo
+    // travava em ~1% mesmo no modo Live. Continua "ERP só LÊ": apenas lê a curva
+    // gerada no cadastro. Snapshot vira FALLBACK quando a curva está ausente.
+    if (previstoCurva && topRefStr) {
+      const c = previstoCurva.raizAt(topRefStr);
+      if (c != null) return Math.min(100, Math.max(0, c));
+    }
     const _calMSP_P = parseCalendarioJson((proj as any)?.calendarioJson);
     if (!_calMSP_P || _calMSP_P.previstoMspSnapshot == null || !_calMSP_P.statusDateSnapshot) return null;
     const envOk =
@@ -837,7 +847,7 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
       (!_calMSP_P.envelopeFinishSnapshot || _calMSP_P.envelopeFinishSnapshot === (proj as any)?.dataTerminoContratual);
     if (!envOk) return null;
     return Math.min(100, Math.max(0, Number(_calMSP_P.previstoMspSnapshot)));
-  }, [refisComIndiretasGlobal, (proj as any)?.calendarioJson, (proj as any)?.dataInicio, (proj as any)?.dataTerminoContratual]);
+  }, [refisComIndiretasGlobal, previstoCurva, topRefStr, (proj as any)?.calendarioJson, (proj as any)?.dataInicio, (proj as any)?.dataTerminoContratual]);
 
   // ── Rev. 1715 — pvMacro elevado ao escopo do Inner ─────────────────────
   // A Rev. 1713 começou a propagar `pvMacro={pvMacro}` para `<Refis>` (L~1053)
@@ -1298,6 +1308,7 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
             onLocalAvancoChange={setAvancoLocalLive}
             usarPesoPorDuracao={usarPesoPorDuracao}
             dataCorteInfo={dataCorteInfo}
+            previstoCurva={previstoCurva}
           />
         )}
         {canViewTab(aba) && aba === "revisoes" && (
@@ -6277,7 +6288,7 @@ function CurvaS({ curvaData, curvaLoading, curvaFetching, proj, avancoAtual, fPc
 // ═════════════════════════════════════════════════════════════════════════════
 // ABA: AVANÇO SEMANAL
 // ═════════════════════════════════════════════════════════════════════════════
-function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, utils, onSemanaChange, onLocalAvancoChange, usarPesoPorDuracao, dataCorteInfo }: any) {
+function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, utils, onSemanaChange, onLocalAvancoChange, usarPesoPorDuracao, dataCorteInfo, previstoCurva }: any) {
   // Rev. 1645 — calMSP no escopo do componente para que `prevIndRef` use
   // dias úteis do calendário do MSP (paridade com MS Project).
   const calMSP = useMemo(() => parseCalendarioJson((proj as any)?.calendarioJson), [proj]);

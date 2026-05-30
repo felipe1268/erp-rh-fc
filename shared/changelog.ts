@@ -1,6 +1,49 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2600 — **PLANEJAMENTO · HOTFIX DA REV. 2599: (1) CORRIGE O CRASH
+ * `ReferenceError: Can't find variable: previstoCurva` QUE DERRUBAVA A TELA
+ * INTEIRA; (2) DESTRAVA O PREVISTO DA BARRA SUPERIOR (ANTES CONGELADO EM ~1%).**
+ *
+ * SINTOMA (usuário, screenshots IMG_1415/IMG_1416): ao abrir o Planejamento a
+ * página quebrava com "Ocorreu um erro inesperado · ReferenceError: Can't find
+ * variable: previstoCurva" (stack em `AvancoSemanal`); quando carregava, a barra
+ * superior "Avanço Físico" continuava com Previsto travado em 1,00% (e o badge
+ * "-1.00% atrasado") mesmo no modo Live (30/05/2026).
+ *
+ * CAUSA-RAIZ:
+ *  1) CRASH — A Rev. 2599 definiu o leitor `previstoCurva` no componente
+ *     PRINCIPAL (`PlanejamentoDetalheInner`), mas as referências vivem dentro do
+ *     componente SEPARADO `AvancoSemanal` (funções irmãs, não aninhadas — não
+ *     compartilham escopo léxico). Em runtime `previstoCurva` resolvia para a
+ *     global inexistente → ReferenceError derrubando toda a página. (esbuild não
+ *     pega: é erro de escopo em runtime, não de sintaxe.)
+ *  2) BARRA SUPERIOR — O previsto do topo vem de `avancoPrevistoDia`
+ *     (`PlanejamentoDetalheInner`), que lia SÓ o snapshot único da raiz UID=0
+ *     (`previstoMspSnapshot`, congelado na StatusDate do último XML = 07/05) —
+ *     logo travava em ~1% mesmo navegando/em Live. A Rev. 2599 só tocou o
+ *     componente `AvancoSemanal`; o topo ficou de fora.
+ *
+ * DECISÃO MANTIDA: CAMINHO B FICA — "ERP só LÊ, não calcula". Este hotfix NÃO
+ * altera a geração da curva; só faz o topo LÊ-la e corrige o escopo.
+ *
+ * FIX (SÓ CLIENT — `client/src/pages/planejamento/PlanejamentoDetalhe.tsx`;
+ * ZERO SERVER/SCHEMA/ALTER/DROP/DELETE):
+ *  - (1) `previstoCurva` (def única no `PlanejamentoDetalheInner`) passa a ser
+ *    PROPAGADO como prop `previstoCurva={previstoCurva}` para `<AvancoSemanal>`,
+ *    e `AvancoSemanal` o recebe na desestruturação dos props. Todas as refs
+ *    (`previstoRealizadoSemana`, `mspReadOnly`, coluna % por atividade) passam a
+ *    resolver via prop — sem duplicar o useMemo. Nenhuma def morta restante.
+ *  - (2) `avancoPrevistoDia` (topo) passa a LER `previstoCurva.raizAt(topRefStr)`
+ *    na data de referência do modo (Live = cutoff de hoje; Oficial = StatusDate),
+ *    com o snapshot UID=0 como FALLBACK quando a curva está ausente. Deps do
+ *    useMemo ganham `previstoCurva` + `topRefStr`. Isso cascateia para o card
+ *    "Avanço Físico" da Visão Geral, o badge de atraso e o SPI.
+ *
+ * Validado: esbuild client transform exit 0; grep confirma que toda referência a
+ * `previstoCurva` está na def única + prop + usos in-scope; workflow reiniciado
+ * sem erros no console/servidor.
+ *
  * Rev. 2599 — **PLANEJAMENTO · AVANÇO SEMANAL · PREVISTO DESTRAVADO: A TELA
  * PASSA A LER A CURVA CAMINHO B (`previsto_semanas_json`) POR SEMANA — ANTES
  * FICAVA CONGELADA EM ~1% (SNAPSHOT ÚNICO DA RAIZ UID=0) E NÃO MUDAVA AO
