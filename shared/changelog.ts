@@ -1,6 +1,63 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2584 — **PLANEJAMENTO · ABA "EFETIVO × IA" · CORRIGE O BANNER DE ERRO
+ * CRÍPTICO "The string did not match the expected pattern." NO SIMULADOR DE MÃO
+ * DE OBRA (E NO DIAGNÓSTICO/ASSISTENTE) NO iPad/iOS SAFARI — AGORA EXIBE UMA
+ * MENSAGEM CLARA E ACIONÁVEL.**
+ *
+ * MOTIVAÇÃO (screenshot do usuário, ambiente DEV, obra "HOTEL QIU 2 - 4 FASE",
+ * Revisão 0, 47 alocados, ajustes SERVENTE -7 / PEDREIRO -2 / CONTROLADOR -1):
+ * ao tocar em "Simular previsão" no iPad, a aba mostrava um banner VERMELHO com a
+ * DOMException nativa do WebKit "The string did not match the expected pattern."
+ * — sem qualquer texto útil sobre o que fazer.
+ *
+ * DIAGNÓSTICO (auditoria exaustiva — o banner é `mut.isError` da mutation
+ * `simularEfetivo`, NÃO o `erroIa` âmbar nem o ErrorBoundary global full-screen):
+ *  - SERVER (`simularEfetivo` + `coletarEfetivoCronograma` + `getObraFuncionarios`
+ *    + `salvarAnaliseEfetivo` + `invokeLLM`): TODO o caminho de rejeição foi lido
+ *    e está limpo — todas as datas usam `parseDt` com guarda `isNaN`, `geradoEm` é
+ *    `new Date().toISOString()` (STRING), falhas da IA caem em `erroIa` (âmbar,
+ *    sucesso da mutation) e nunca em rejeição. O Node (V8) NÃO produz a mensagem
+ *    "did not match the expected pattern" (é nativa de iOS/JSC); ela não existe em
+ *    node_modules/server/shared (só em comentários).
+ *  - RESPOSTA: comprovado EMPIRICAMENTE via `superjson.serialize()` que a resposta
+ *    do `simularEfetivo` gera `meta: undefined` (zero tipos especiais) → o client
+ *    NÃO faz nenhum `new Date` na desserialização; e mesmo um `Date` real seria
+ *    serializado como ISO completo (T+Z), iOS-safe.
+ *  - CLIENT (`AnaliseEfetivoIA.tsx`): zero `new Date`/`<input type="color">`; só
+ *    `formatDateTime` (try/catch iOS-safe); `simular()` só monta `{projetoId,
+ *    companyId, ajustes:[{cargo,delta}]}` (sem datas). Sem service worker/PWA, sem
+ *    `superjson.registerCustom`, sem link tRPC custom (só o `fetch` com
+ *    AbortController de 5min — cuja mensagem de timeout é OUTRA, em pt-BR).
+ *  - CONCLUSÃO: a DOMException é uma falha de TRANSPORTE/RUNTIME do iOS Safari (a
+ *    chamada de IA é longa/pesada — Rev. 2583 trouxe o `planoAtaque` com maxTokens
+ *    8000 — e o WebKit do iPad pode abortar/derrubar a requisição), exibida CRUA no
+ *    banner. Não há bug rastreável no nosso pipeline a "consertar".
+ *
+ * O QUE MUDOU (SÓ CLIENT, ADITIVO — ZERO SCHEMA, ZERO SERVER, ZERO ALTER/DROP/
+ * DELETE), em `client/src/pages/planejamento/AnaliseEfetivoIA.tsx`:
+ *  - Novo helper `msgErroIA(err, fallback, acao)` que detecta mensagens crípticas
+ *    de transporte/runtime do iOS ("did not match the expected pattern", "load
+ *    failed", "failed to fetch", "networkerror", "network connection", "the
+ *    operation couldn't be completed", "the operation was aborted", "aborted",
+ *    "timed out", "tempo limite" e string vazia) e as troca por um texto claro e
+ *    acionável: "A IA demorou demais ou a conexão caiu durante o processamento —
+ *    comum no iPad/Safari em análises longas. {ação}. Se persistir, use um
+ *    navegador atualizado ou o computador." O `{ação}` é parametrizado por
+ *    call-site (evita instrução errada): "Toque em 'Gerar análise' novamente",
+ *    "Toque em 'Simular previsão' novamente" e "Envie a pergunta novamente".
+ *    Mensagens de erro reais (ex.: validação do servidor) continuam sendo
+ *    exibidas intactas (fallback para `err.message`). Nota: o padrão amplo "the
+ *    operation" foi descartado em favor das variantes específicas para reduzir
+ *    falso positivo (sugestão do code review).
+ *  - Aplicado nos 3 pontos de erro de IA do arquivo: banner do Diagnóstico
+ *    (`analisarEfetivo`), banner do Simulador (`simularEfetivo`) e o chat do
+ *    Assistente de Dúvidas (`perguntarEfetivo`).
+ *
+ * Validado via esbuild isolado (server + client, exit 0; `tsc` dá OOM neste
+ * monorepo). Reversível trivialmente (1 helper + 3 call-sites).
+ *
  * Rev. 2583 — **PLANEJAMENTO · ABA "EFETIVO × IA" · SIMULADOR DE MÃO DE OBRA
  * GANHA "PLANO DE ATAQUE" — A IA MONTA UMA CAMPANHA ESTILO GUERRA, BASEADA EM
  * LINHA DE BALANÇO, PARA MANTER O PRAZO MESMO COM O EFETIVO REDUZIDO.**

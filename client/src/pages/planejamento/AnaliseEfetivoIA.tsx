@@ -114,6 +114,37 @@ export default function AnaliseEfetivoIA({ projetoId, companyId }: Props) {
 }
 
 /* ──────────────────────────────────────────────────────────────────────────
+ * Traduz erros crípticos de TRANSPORTE/RUNTIME do iOS Safari numa mensagem
+ * clara e acionável. As chamadas de IA (diagnóstico/simulação) são longas e
+ * pesadas; o WebKit do iPad/iOS pode derrubar/abortar a requisição e expor a
+ * DOMException nativa crua ("The string did not match the expected pattern.",
+ * "Load failed", "The operation was aborted." etc.) direto no banner de erro,
+ * sem que haja qualquer bug no nosso pipeline (server/superjson/render foram
+ * auditados e estão livres de datas iOS-inseguras). Aqui amaciamos a mensagem.
+ * ──────────────────────────────────────────────────────────────────────── */
+function msgErroIA(err: any, fallback: string, acao = "Tente novamente"): string {
+  const raw = String(err?.message ?? "").trim();
+  const low = raw.toLowerCase();
+  const ehTransporteIos =
+    raw === "" ||
+    low.includes("did not match the expected pattern") ||
+    low.includes("load failed") ||
+    low.includes("failed to fetch") ||
+    low.includes("networkerror") ||
+    low.includes("network connection") ||
+    low.includes("the operation couldn't be completed") ||
+    low.includes("the operation couldn’t be completed") ||
+    low.includes("the operation was aborted") ||
+    low.includes("aborted") ||
+    low.includes("timed out") ||
+    low.includes("tempo limite");
+  if (ehTransporteIos) {
+    return `A IA demorou demais ou a conexão caiu durante o processamento — comum no iPad/Safari em análises longas. ${acao}. Se persistir, use um navegador atualizado ou o computador.`;
+  }
+  return raw || fallback;
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
  * Hook de progresso simulado (0–100%) reusado pelo diagnóstico e simulador
  * ──────────────────────────────────────────────────────────────────────── */
 function useProgressoSimulado(isPending: boolean, isSuccess: boolean) {
@@ -235,7 +266,7 @@ function Diagnostico({ projetoId, companyId }: Props) {
       {mut.isError && (
         <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700 flex items-start gap-2">
           <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
-          <span>{(mut.error as any)?.message ?? "Erro ao gerar a análise."}</span>
+          <span>{msgErroIA(mut.error, "Erro ao gerar a análise.", "Toque em \u201CGerar análise\u201D novamente")}</span>
         </div>
       )}
 
@@ -574,7 +605,7 @@ function Simulador({ projetoId, companyId }: Props) {
       {mut.isError && (
         <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700 flex items-start gap-2">
           <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
-          <span>{(mut.error as any)?.message ?? "Erro ao gerar a simulação."}</span>
+          <span>{msgErroIA(mut.error, "Erro ao gerar a simulação.", "Toque em \u201CSimular previsão\u201D novamente")}</span>
         </div>
       )}
 
@@ -1335,7 +1366,7 @@ function PerguntarIA({ projetoId, companyId }: Props) {
     onSuccess: (d: any, vars: any) =>
       setChat((c) => [...c, { q: vars.pergunta, a: d.resposta, erro: d.erroIa }]),
     onError: (e: any, vars: any) =>
-      setChat((c) => [...c, { q: vars.pergunta, a: "", erro: e?.message ?? "Erro ao responder." }]),
+      setChat((c) => [...c, { q: vars.pergunta, a: "", erro: msgErroIA(e, "Erro ao responder.", "Envie a pergunta novamente") }]),
   });
 
   useEffect(() => {
