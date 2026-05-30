@@ -798,6 +798,22 @@ Regras:
           console.log(`[SyncSchema+] Rev. 2607: coluna logo_url garantida em clientes.`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev. 2607 clientes.logo_url:`, e?.message || e); }
 
+        // Rev. 2611 — dados da Receita (BrasilAPI) puxados pelo CNPJ em gerenciadoras.
+        // ADITIVO; sem estes guards a query `gerenciadoras.list` (db.select() lê todas
+        // as colunas do schema) quebra quando as colunas não existem e a tela some.
+        try {
+          await db.execute(sql`ALTER TABLE gerenciadoras ADD COLUMN IF NOT EXISTS razao_social TEXT`);
+          await db.execute(sql`ALTER TABLE gerenciadoras ADD COLUMN IF NOT EXISTS nome_fantasia TEXT`);
+          await db.execute(sql`ALTER TABLE gerenciadoras ADD COLUMN IF NOT EXISTS endereco TEXT`);
+          await db.execute(sql`ALTER TABLE gerenciadoras ADD COLUMN IF NOT EXISTS bairro VARCHAR(120)`);
+          await db.execute(sql`ALTER TABLE gerenciadoras ADD COLUMN IF NOT EXISTS municipio VARCHAR(120)`);
+          await db.execute(sql`ALTER TABLE gerenciadoras ADD COLUMN IF NOT EXISTS uf VARCHAR(2)`);
+          await db.execute(sql`ALTER TABLE gerenciadoras ADD COLUMN IF NOT EXISTS cep VARCHAR(10)`);
+          await db.execute(sql`ALTER TABLE gerenciadoras ADD COLUMN IF NOT EXISTS situacao_cadastral VARCHAR(60)`);
+          await db.execute(sql`ALTER TABLE gerenciadoras ADD COLUMN IF NOT EXISTS socios JSON`);
+          console.log(`[SyncSchema+] Rev. 2611: colunas Receita (razao_social/endereco/socios…) garantidas em gerenciadoras.`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev. 2611 gerenciadoras (Receita):`, e?.message || e); }
+
         // Rev. 2396 — fornecedor_nome em financial_entries + backfill 1-shot
         // pra rows recorrentes JÁ materializadas (pega o nome do recurring pai).
         try {

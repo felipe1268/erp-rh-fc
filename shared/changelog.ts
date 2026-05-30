@@ -1,6 +1,49 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2611 — **GERENCIADORAS · AO DIGITAR O CNPJ OS DADOS SÃO PUXADOS
+ * AUTOMATICAMENTE DA RECEITA FEDERAL (RAZÃO SOCIAL, NOME FANTASIA, ENDEREÇO
+ * COMPLETO, MUNICÍPIO/UF/CEP, SITUAÇÃO CADASTRAL, TELEFONE, E-MAIL E QUADRO
+ * SOCIETÁRIO/SÓCIOS) + MODAL REDESENHADO EM 2 COLUNAS PARA CABER SEM BARRA DE
+ * ROLAGEM.**
+ *
+ * PEDIDO (usuário, no form Editar Gerenciadora): "quando digitar o CNPJ deve
+ * puxar todos os dados automaticamente, endereço, sócios.. etc.. tudo que
+ * precisamos saber.. ajuste tbm o layout da página.. não quero precisar de
+ * barra de rolagem".
+ *
+ * IMPLEMENTAÇÃO:
+ *  - SCHEMA (`drizzle/schema.ts`, tabela `gerenciadoras`): novas colunas
+ *    ADITIVAS `razao_social`, `nome_fantasia`, `endereco`, `bairro`,
+ *    `municipio`, `uf`, `cep`, `situacao_cadastral` (text/varchar) e `socios`
+ *    (json com [{nome, qualificacao}]). 100% aditivo — R-001/R-007/R-010
+ *    (NENHUM ALTER destrutivo/DROP/DELETE).
+ *  - SELF-HEAL (`server/_core/index.ts`, bloco `[SyncSchema+] Rev. 2611`):
+ *    `ALTER TABLE gerenciadoras ADD COLUMN IF NOT EXISTS …` para cada coluna
+ *    nova (mesmo padrão da Rev. 2607 logo_url em clientes). NECESSÁRIO porque o
+ *    `gerenciadoras.list` faz `db.select()` (lê todas as colunas do schema) e
+ *    quebraria se a coluna não existisse no banco — o auto `syncSchema()` não
+ *    pegou as colunas de forma confiável neste restart, então o guard explícito
+ *    garante dev + produção.
+ *  - ROUTER (`server/routers/gerenciadoras.ts`): `criar`/`atualizar` aceitam os
+ *    novos campos (`razaoSocial`, `nomeFantasia`, `endereco`, `bairro`,
+ *    `municipio`, `uf`, `cep`, `situacaoCadastral`, `socios`); `criar` passou a
+ *    espalhar `...data` (em vez de listar campo a campo).
+ *  - CLIENT (`client/src/pages/Gerenciadoras.tsx`): `fetchCnpjData` faz fetch
+ *    direto à BrasilAPI (`https://brasilapi.com.br/api/cnpj/v1/{14dígitos}`),
+ *    mesmo padrão de Empresas/Clientes/Fornecedores; ao completar 14 dígitos do
+ *    CNPJ preenche razão social, nome fantasia, endereço, bairro, município, UF,
+ *    CEP, situação cadastral, telefone, e-mail e o quadro societário (mapeado de
+ *    `data.qsa` → {nome_socio, qualificacao_socio}). `lastFetched` evita refetch
+ *    repetido. MODAL ampliado para `max-w-3xl` com grid de 2 colunas, CNPJ em
+ *    destaque com spinner/badge de situação, sócios em lista compacta — cabe sem
+ *    barra de rolagem (`max-h-[92vh]` apenas como teto de segurança). Cards da
+ *    listagem ganham município/UF e contagem de sócios; busca também por razão
+ *    social e município. Logo no update envia `null` quando vazio.
+ *
+ * Validado: esbuild client + server + schema (exit 0); workflow reiniciado;
+ * colunas confirmadas no Neon via information_schema.
+ *
  * Rev. 2610 — **CADASTRO · NOVA PÁGINA/MENU "GERENCIADORAS" — O CADASTRO DE
  * GERENCIADORAS (NOME + LOGO + CNPJ/TELEFONE/E-MAIL) DEIXA DE EXISTIR SÓ COMO
  * MINI-MODAL DENTRO DO FORM DE OBRA E GANHA UMA PÁGINA DEDICADA NO MENU LATERAL

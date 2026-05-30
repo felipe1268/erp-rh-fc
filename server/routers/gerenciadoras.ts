@@ -20,39 +20,53 @@ export const gerenciadorasRouter = router({
 
   criar: protectedProcedure
     .input(z.object({
-      companyId:   z.number(),
-      nome:        z.string(),
-      logoUrl:     z.string().optional(),
-      cnpj:        z.string().optional(),
-      telefone:    z.string().optional(),
-      email:       z.string().optional(),
-      observacoes: z.string().optional(),
+      companyId:         z.number(),
+      nome:              z.string(),
+      logoUrl:           z.string().optional(),
+      cnpj:              z.string().optional(),
+      telefone:          z.string().optional(),
+      email:             z.string().optional(),
+      observacoes:       z.string().optional(),
+      razaoSocial:       z.string().nullable().optional(),
+      nomeFantasia:      z.string().nullable().optional(),
+      endereco:          z.string().nullable().optional(),
+      bairro:            z.string().nullable().optional(),
+      municipio:         z.string().nullable().optional(),
+      uf:                z.string().nullable().optional(),
+      cep:               z.string().nullable().optional(),
+      situacaoCadastral: z.string().nullable().optional(),
+      socios:            z.array(z.object({ nome: z.string().optional(), qualificacao: z.string().optional() })).nullable().optional(),
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();
+      const { companyId, ...data } = input;
       const [row] = await db.insert(gerenciadoras).values({
-        companyId:   input.companyId,
-        nome:        input.nome,
-        logoUrl:     input.logoUrl,
-        cnpj:        input.cnpj,
-        telefone:    input.telefone,
-        email:       input.email,
-        observacoes: input.observacoes,
+        companyId,
+        ...data,
       }).returning();
       return row;
     }),
 
   atualizar: protectedProcedure
     .input(z.object({
-      id:          z.number(),
-      companyId:   z.number(),
-      nome:        z.string().optional(),
-      logoUrl:     z.string().nullable().optional(),
-      cnpj:        z.string().optional(),
-      telefone:    z.string().optional(),
-      email:       z.string().optional(),
-      observacoes: z.string().optional(),
-      ativo:       z.boolean().optional(),
+      id:                z.number(),
+      companyId:         z.number(),
+      nome:              z.string().optional(),
+      logoUrl:           z.string().nullable().optional(),
+      cnpj:              z.string().optional(),
+      telefone:          z.string().optional(),
+      email:             z.string().optional(),
+      observacoes:       z.string().optional(),
+      razaoSocial:       z.string().nullable().optional(),
+      nomeFantasia:      z.string().nullable().optional(),
+      endereco:          z.string().nullable().optional(),
+      bairro:            z.string().nullable().optional(),
+      municipio:         z.string().nullable().optional(),
+      uf:                z.string().nullable().optional(),
+      cep:               z.string().nullable().optional(),
+      situacaoCadastral: z.string().nullable().optional(),
+      socios:            z.array(z.object({ nome: z.string().optional(), qualificacao: z.string().optional() })).nullable().optional(),
+      ativo:             z.boolean().optional(),
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();

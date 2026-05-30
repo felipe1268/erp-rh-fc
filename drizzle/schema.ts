@@ -5895,17 +5895,27 @@ export const clientes = pgTable("clientes", {
 // (nome + logo + contatos) e reaproveita em qualquer obra futura, com o logo
 // preenchido automaticamente ao selecionar. 100% aditivo (CREATE TABLE).
 export const gerenciadoras = pgTable("gerenciadoras", {
-  id:           serial().primaryKey(),
-  companyId:    integer("company_id").notNull(),
-  nome:         varchar({ length: 255 }).notNull(),
-  logoUrl:      text("logo_url"),
-  cnpj:         varchar({ length: 18 }),
-  telefone:     varchar({ length: 20 }),
-  email:        varchar({ length: 255 }),
-  observacoes:  text(),
-  ativo:        boolean().default(true),
-  criadoEm:     timestamp("criado_em", { mode: "string" }).defaultNow().notNull(),
-  atualizadoEm: timestamp("atualizado_em", { mode: "string" }).defaultNow().notNull(),
+  id:                serial().primaryKey(),
+  companyId:         integer("company_id").notNull(),
+  nome:              varchar({ length: 255 }).notNull(),
+  logoUrl:           text("logo_url"),
+  cnpj:              varchar({ length: 18 }),
+  telefone:          varchar({ length: 20 }),
+  email:             varchar({ length: 255 }),
+  observacoes:       text(),
+  // Rev. 2611 — dados puxados automaticamente da Receita (BrasilAPI) ao digitar o CNPJ
+  razaoSocial:       text("razao_social"),
+  nomeFantasia:      text("nome_fantasia"),
+  endereco:          text(),
+  bairro:            varchar({ length: 120 }),
+  municipio:         varchar({ length: 120 }),
+  uf:                varchar({ length: 2 }),
+  cep:               varchar({ length: 10 }),
+  situacaoCadastral: varchar("situacao_cadastral", { length: 60 }),
+  socios:            json(),
+  ativo:             boolean().default(true),
+  criadoEm:          timestamp("criado_em", { mode: "string" }).defaultNow().notNull(),
+  atualizadoEm:      timestamp("atualizado_em", { mode: "string" }).defaultNow().notNull(),
 });
 
 export const employeeIntegrations = pgTable("employee_integrations", {
