@@ -405,6 +405,7 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
     features: [
       { key: "cadastro-empresas",           label: "Empresas",                  route: "/empresas",                icon: "Building2" },
       { key: "cadastro-clientes",           label: "Clientes",                  route: "/clientes",                icon: "Users" },
+      { key: "cadastro-gerenciadoras",      label: "Gerenciadoras",             route: "/gerenciadoras",           icon: "Network" },
       { key: "cadastro-obras",              label: "Obras",                     route: "/obras",                   icon: "Landmark" },
       { key: "cadastro-obras-efetivo",      label: "Efetivo por Obra",          route: "/obras/efetivo",           icon: "HardHat" },
       { key: "cadastro-colaboradores",      label: "Colaboradores",             route: "/colaboradores",           icon: "Users" },

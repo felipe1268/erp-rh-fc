@@ -1,2 +1,3 @@
 - [Which DB the app uses](db-connection.md) — `executeSql` tool hits the Replit Postgres (`DATABASE_URL`/helium), but the app reads `NEON_DATABASE_URL`. To inspect REAL app data, query Neon.
+- [Sidebar menu visibility](sidebar-menu-visibility.md) — new menu item needs permission registration in `shared/modules.ts` + `sharedPaths` too, or non-master users won't see it; admin-master bypasses filters.
 - [Drizzle column → Neon self-heal guard](drizzle-schema-neon-sync.md) — adding a column to drizzle/schema.ts needs an explicit `ADD COLUMN IF NOT EXISTS` guard in `[SyncSchema+]`; otherwise `db.select()` lists break and render empty.

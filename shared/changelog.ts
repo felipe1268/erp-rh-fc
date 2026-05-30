@@ -1,6 +1,35 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2610 — **CADASTRO · NOVA PÁGINA/MENU "GERENCIADORAS" — O CADASTRO DE
+ * GERENCIADORAS (NOME + LOGO + CNPJ/TELEFONE/E-MAIL) DEIXA DE EXISTIR SÓ COMO
+ * MINI-MODAL DENTRO DO FORM DE OBRA E GANHA UMA PÁGINA DEDICADA NO MENU LATERAL
+ * "CADASTRO", LOGO ABAIXO DE "CLIENTES" — IGUAL AO CADASTRO DE CLIENTES.**
+ *
+ * PEDIDO (usuário, no Canvas, sobre o menu CADASTRO): "coloca aqui tbm o campo
+ * para cadastro da gerenciadora".
+ *
+ * CONTEXTO: a tabela `gerenciadoras` e o router tRPC `gerenciadoras`
+ * (list/criar/atualizar/excluir) já existiam desde a Rev. 2606, mas só eram
+ * acessíveis pelo combobox "+ Cadastrar" dentro do form "Nova Obra". Não havia
+ * uma tela central para gerenciar (editar/excluir/ver) todas as gerenciadoras.
+ *
+ * IMPLEMENTAÇÃO (SÓ CLIENT; ZERO SERVER/SCHEMA/ALTER/DROP/DELETE — reaproveita o
+ * router existente):
+ *  - `client/src/pages/Gerenciadoras.tsx` (NOVO): página de cards no mesmo
+ *    padrão visual de `Clientes.tsx` — busca, contador "Total", grid de cards
+ *    com logo/CNPJ/telefone/e-mail, botões Editar/Excluir já com a correção de
+ *    visibilidade no touch (`opacity-100 md:opacity-0 md:group-hover:opacity-100`),
+ *    e modal de cadastro/edição com upload de logo (FileReader → dataURL, máx.
+ *    2MB) reaproveitando o bloco de logo do cadastro de cliente.
+ *  - `client/src/App.tsx`: lazy import + rota `/gerenciadoras` (RouteGuard
+ *    `route="/empresas"`, mesma permissão de Clientes).
+ *  - `client/src/components/DashboardLayout.tsx`: novo item de menu
+ *    "Gerenciadoras" (ícone `Network`) na seção "Cadastro", logo abaixo de
+ *    "Clientes".
+ *
+ * Validado: esbuild client da nova página (exit 0) + workflow reiniciado.
+ *
  * Rev. 2609 — **CLIENTES · BOTÕES "EDITAR" E "EXCLUIR" DOS CARDS PASSAM A FICAR
  * SEMPRE VISÍVEIS NO TOUCH (iPad/CELULAR) — ANTES SÓ APARECIAM NO HOVER DO
  * MOUSE, ENTÃO NO TABLET "SUMIAM" E NÃO HAVIA COMO EDITAR/APAGAR UM CLIENTE.**

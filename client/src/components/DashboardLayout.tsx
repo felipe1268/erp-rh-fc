@@ -672,6 +672,7 @@ const menuSectionsCadastro: MenuSection[] = [
       { icon: Building2,     label: "Empresas",            path: "/empresas"             },
       { icon: Users,         label: "Colaboradores",       path: "/colaboradores"        },
       { icon: UserCheck,     label: "Clientes",            path: "/clientes"             },
+      { icon: Network,       label: "Gerenciadoras",       path: "/gerenciadoras"        },
       { icon: Landmark,      label: "Obras",               path: "/obras"                },
       { icon: HardHat,       label: "Efetivo por Obra",    path: "/obras/efetivo"        },
       { icon: Layers,        label: "Setores",             path: "/setores"              },
@@ -1377,7 +1378,7 @@ function DashboardLayoutContent({
           if (adminOnlyPaths.includes(item.path) || item.path === '/revisoes') return true;
           if (item.path === '/painel' || item.path.startsWith('/painel/')) return true;
           if (item.path === '/ajuda') return true;
-          const sharedPaths = ['/empresas', '/obras', '/obras/efetivo', '/setores', '/funcoes', '/clientes'];
+          const sharedPaths = ['/empresas', '/obras', '/obras/efetivo', '/setores', '/funcoes', '/clientes', '/gerenciadoras'];
           if (sharedPaths.includes(item.path)) return accessibleModules.length > 0;
           if (item.path === '/dashboards') return accessibleModules.length > 0;
           const itemBasePath = item.path.split('?')[0];

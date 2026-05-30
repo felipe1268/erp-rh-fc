@@ -91,6 +91,7 @@ const MenuConfig = lazy(() => import("./pages/MenuConfig"));
 const Migration = lazy(() => import("./pages/Migration"));
 const Obras = lazy(() => import("./pages/Obras"));
 const Clientes = lazy(() => import("./pages/Clientes"));
+const Gerenciadoras = lazy(() => import("./pages/Gerenciadoras"));
 const ObraEfetivo = lazy(() => import("./pages/ObraEfetivo"));
 const FechamentoPonto = lazy(() => import("./pages/FechamentoPonto"));
 const EspelhoPonto = lazy(() => import("./pages/EspelhoPonto"));
@@ -363,6 +364,7 @@ function Router() {
         <Route path={"/empresas"} component={() => <RouteGuard component={Empresas} route="/empresas" />} />
         <Route path={"/colaboradores"} component={() => <RouteGuard component={Colaboradores} route="/colaboradores" />} />
         <Route path={"/clientes"} component={() => <RouteGuard component={Clientes} route="/empresas" />} />
+        <Route path={"/gerenciadoras"} component={() => <RouteGuard component={Gerenciadoras} route="/empresas" />} />
         <Route path={"/obras"} component={() => <RouteGuard component={Obras} route="/obras" />} />
         <Route path={"/obras/efetivo"} component={() => <RouteGuard component={ObraEfetivo} route="/obras/efetivo" />} />
         <Route path={"/setores"} component={() => <RouteGuard component={Setores} route="/setores" />} />
