@@ -1,6 +1,42 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2605 — **PLANEJAMENTO · REFIS · O "PREVISTO ACUMULADO" DO RELATÓRIO
+ * PASSA A LER A MESMA CURVA CAMINHO B DA BARRA "AVANÇO FÍSICO" DO TOPO — ANTES
+ * RECALCULAVA O PV NO CLIENT E DIVERGIA (REFIS 3,13% vs TOPO 3,00% NO PROJETO
+ * 35 REVTE-CIVIL), GERANDO DUPLA INFORMAÇÃO PRA O ENGENHEIRO.**
+ *
+ * PEDIDO (usuário, screenshot da aba REFIS): "os valores do refis não estão
+ * padronizados com a barra de avanço que está no topo… garanta que todas as
+ * informações leem a mesma coisa, pra não ter dupla informação".
+ *
+ * DIAGNÓSTICO: o REALIZADO já espelhava o topo (Rev. 2272 — REFIS usa a prop
+ * `avancoAtual`). O PREVISTO, não: o useMemo `avancoPrevisto` recalculava
+ * `pctRaizMSP(semanaFimRefis, proj.dataInicio, proj.dataTerminoContratual,
+ * calMSP)` — fórmula NATIVA do MSP, porém sobre o ENVELOPE CONTRATUAL do
+ * projeto. Já a barra do topo (`avancoPrevistoDia`) LÊ a curva CAMINHO B
+ * persistida (`previsto_semanas_json`), que a Rev. 2603 passou a gerar sobre a
+ * BASELINE (min BL_Start / max BL_Finish das folhas), NÃO sobre o envelope
+ * contratual. Endpoints diferentes → frações diferentes → 3,13% vs 3,00%.
+ * Como `semanaFimRefis` já recebe o `topRefStr` do parent (Rev. 2248), a única
+ * fonte de divergência restante era a FÓRMULA, não a data.
+ *
+ * FIX (SÓ CLIENT — `client/src/pages/planejamento/PlanejamentoDetalhe.tsx`;
+ * ZERO SERVER/SCHEMA/ALTER/DROP/DELETE): a prop `previstoCurva` (já computada no
+ * parent e propagada ao `<AvancoSemanal>` desde a Rev. 2600) passa a ser
+ * propagada também ao `<Refis>`. Os useMemos `avancoPrevisto` (acumulado da
+ * semana) e `avancoPrevAntes` (acumulado da semana anterior, base do delta
+ * semanal) passam a LER `previstoCurva.raizAt(semanaFimRefis|semAntesFim)`
+ * primeiro (clamp 0–100); o `pctRaizMSP`/`pvPonderadoPorAtividade` viram
+ * FALLBACK só quando a curva está ausente (XML antigo / revisão sem snapshot).
+ * Como `previstoCurva` é guardada por revisão (descartada quando `revisaoId`
+ * não bate, L490), projetos sem curva caem no fallback de forma uniforme.
+ * Resultado: REFIS = topo = curva = MSP, fonte única absoluta. O modo
+ * "comIndiretas" (`refisPrevistoComInd`) ficou intocado (caminho proprietário;
+ * o topo nem exibe previsto nesse modo).
+ *
+ * VALIDAÇÃO: esbuild isolado no client (exit 0) + workflow reiniciado.
+ *
  * Rev. 2604 — **PLANEJAMENTO · AVANÇO SEMANAL · O REALIZADO IMPORTADO DO MS
  * PROJECT PASSA A LER SOMENTE A COLUNA "% CONCLUÍDA" (PercentComplete). ANTES
  * O IMPORT PRIORIZAVA "%REALI AUX" (Texto7) E "DURAÇÃO REAL" (AD/(AD+RD)),

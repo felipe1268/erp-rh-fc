@@ -1348,6 +1348,7 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
             refDateTop={refDateStr}
             modoVisao={modoVisao}
             topRefStr={topRefStr}
+            previstoCurva={previstoCurva}
           />
         )}
         {canViewTab(aba) && aba === "cronograma-financeiro" && (
@@ -13527,7 +13528,7 @@ function Revisoes({ projetoId, revisoes, revisaoAtiva, utils, isAdminMaster, pro
 // ═════════════════════════════════════════════════════════════════════════════
 // ABA: REFIS
 // ═════════════════════════════════════════════════════════════════════════════
-function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, revisaoAtiva, curvaData, curvaMedicoes = [], utils, fmt, fPct: fPct_, isAdminMaster, hideFinancial, initialSemana, onInitialSemanaConsumed, onSemanaChange, usarPesoPorDuracao, refisComIndiretas, setRefisComIndiretas, dataCorteInfo, pvMacro, refDateTop, modoVisao, topRefStr }: any) {
+function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, revisaoAtiva, curvaData, curvaMedicoes = [], utils, fmt, fPct: fPct_, isAdminMaster, hideFinancial, initialSemana, onInitialSemanaConsumed, onSemanaChange, usarPesoPorDuracao, refisComIndiretas, setRefisComIndiretas, dataCorteInfo, pvMacro, refDateTop, modoVisao, topRefStr, previstoCurva }: any) {
   // Rev. 1656.2 — calMSP no escopo do componente para que `prevIndRef` (L~10731)
   // use dias úteis do calendário do MSP (paridade com MS Project). Sem esta
   // declaração, qualquer render que avalie `prevIndRef` lançava ReferenceError.
@@ -13826,16 +13827,25 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
   // longas com início futuro inflavam o denominador. Fallback per-atividade
   // só quando pvMacro não está disponível (sem MSP/sem datas oficiais).
   const avancoPrevisto = useMemo(() => {
-    // Rev. 1815 — FONTE ÚNICA: pvPonderadoPorAtividade (compat. fix de
-    // cobertura parcial de pesoFinanceiro). Removido o cálculo local com
-    // calcPesoTotal/prevIndRef que sofria do mesmo bug saturando QIU 2 em 100%.
+    // Rev. 2605 — FONTE ÚNICA com a barra "Avanço Físico" do topo: lê a curva
+    // CAMINHO B (`previsto_semanas_json`) na MESMA data de referência do topo
+    // (`semanaFimRefis` === `topRefStr` quando o parent o injeta). Antes o REFIS
+    // RECALCULAVA via `pctRaizMSP(semanaFimRefis, proj.dataInicio,
+    // proj.dataTerminoContratual)` sobre o ENVELOPE CONTRATUAL, enquanto a curva
+    // do topo é gerada sobre a BASELINE (min BL_Start / max BL_Finish, Rev. 2603)
+    // → divergência 3,13% REFIS vs 3,00% topo. Agora REFIS só LÊ a mesma curva.
+    // Fallback legado (pctRaizMSP / ponderado) só quando a curva está ausente.
+    if (previstoCurva) {
+      const c = previstoCurva.raizAt(semanaFimRefis);
+      if (c != null) return Math.min(100, Math.max(0, c));
+    }
     const folhas = atividades.filter((a: any) => !a.isGrupo && !a.isIndireta && !a.disabled && a.dataInicio && a.dataFim);
     // Rev. 1825 — Texto6 raiz (paridade MSP) c/ fallback ponderado.
     const _ini = (proj as any)?.dataInicio as string | null | undefined;
     const _fim = (proj as any)?.dataTerminoContratual as string | null | undefined;
     if (_ini && _fim && calMSP) return pctRaizMSP(semanaFimRefis, _ini, _fim, calMSP);
     return pvPonderadoPorAtividade(semanaFimRefis, folhas, usarPesoPorDuracao, calMSP);
-  }, [atividades, semanaFimRefis, usarPesoPorDuracao, calMSP, proj]);
+  }, [atividades, semanaFimRefis, usarPesoPorDuracao, calMSP, proj, previstoCurva]);
 
   const semIdx   = semanas.indexOf(semana);
   const semAntes = semIdx > 0 ? semanas[semIdx - 1] : null;
@@ -13851,13 +13861,20 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
 
   const avancoPrevAntes = useMemo(() => {
     if (!semAntesFim) return 0;
+    // Rev. 2605 — mesma FONTE ÚNICA do `avancoPrevisto`: lê a curva CAMINHO B
+    // na semana anterior pra que o delta semanal do previsto também bata com o
+    // topo. Fallback legado (pctRaizMSP / ponderado) só sem curva.
+    if (previstoCurva) {
+      const c = previstoCurva.raizAt(semAntesFim);
+      if (c != null) return Math.min(100, Math.max(0, c));
+    }
     // Rev. 1825 — Texto6 raiz (paridade MSP) c/ fallback ponderado.
     const _ini = (proj as any)?.dataInicio as string | null | undefined;
     const _fim = (proj as any)?.dataTerminoContratual as string | null | undefined;
     if (_ini && _fim && calMSP) return pctRaizMSP(semAntesFim, _ini, _fim, calMSP);
     const folhas = atividades.filter((a: any) => !a.isGrupo && !a.isIndireta && !a.disabled && a.dataInicio && a.dataFim);
     return pvPonderadoPorAtividade(semAntesFim, folhas, usarPesoPorDuracao, calMSP);
-  }, [atividades, semAntesFim, usarPesoPorDuracao, calMSP, proj]);
+  }, [atividades, semAntesFim, usarPesoPorDuracao, calMSP, proj, previstoCurva]);
 
   const avancoPrevSemanal = Math.max(0, avancoPrevisto - avancoPrevAntes);
 
