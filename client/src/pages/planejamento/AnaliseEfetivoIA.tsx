@@ -1,17 +1,28 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
   Sparkles, Loader2, Users, HardHat, TrendingUp, TrendingDown, Minus,
   AlertTriangle, CheckCircle2, ArrowUpRight, ArrowDownRight, Lightbulb,
-  ClipboardList, RefreshCw, Building2,
+  ClipboardList, RefreshCw, Building2, Database, GitCompareArrows, Brain, ListChecks,
 } from "lucide-react";
 
 type Props = {
   projetoId: number;
   companyId: number;
 };
+
+// Etapas exibidas durante o processamento (progresso simulado no cliente — a IA
+// é uma única chamada async, então animamos as fases até o retorno e fechamos
+// em 100% no sucesso). `ate` = teto de % onde a etapa fica "em andamento".
+const ETAPAS: { label: string; detalhe: string; ate: number; Icon: React.ComponentType<{ className?: string }> }[] = [
+  { label: "Lendo o efetivo alocado na obra",       detalhe: "Funcionários ativos por função, categoria MO e vínculo", ate: 22, Icon: Database },
+  { label: "Cruzando com o cronograma",             detalhe: "Atividades em andamento + próximas 8 semanas",          ate: 45, Icon: GitCompareArrows },
+  { label: "Agregando por função e categoria",      detalhe: "Consolidando o quadro atual da equipe",                 ate: 62, Icon: Users },
+  { label: "Consultando a IA",                       detalhe: "Diagnóstico de dimensionamento (contratar/reduzir/manter)", ate: 90, Icon: Brain },
+  { label: "Montando recomendações",                detalhe: "Indicadores, frentes críticas, riscos e ações",          ate: 100, Icon: ListChecks },
+];
 
 type Indicador = { label: string; valor: string; status?: string; descricao?: string };
 type CargoLinha = { cargo: string; categoria?: string; atual: number; recomendado: number; delta: number; acao: string; justificativa?: string };
@@ -38,9 +49,44 @@ function statusDot(status?: string) {
 
 export default function AnaliseEfetivoIA({ projetoId, companyId }: Props) {
   const [result, setResult] = useState<any>(null);
+  const [progresso, setProgresso] = useState(0);
+  const [mostrarProgresso, setMostrarProgresso] = useState(false);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
   const mut = trpc.iaCronograma.analisarEfetivo.useMutation({
     onSuccess: (d) => setResult(d),
   });
+
+  // Progresso simulado (visibilidade desacoplada de `isPending` p/ o 100%
+  // aparecer): enquanto pendente, sobe suave até 95% (a IA não reporta progresso
+  // real); ao concluir com sucesso, fecha em 100% e mantém o painel por ~900ms.
+  useEffect(() => {
+    if (mut.isPending) {
+      setMostrarProgresso(true);
+      setProgresso(4);
+      timerRef.current = setInterval(() => {
+        setProgresso((p) => {
+          if (p >= 95) return 95;
+          const passo = p < 45 ? 3.2 : p < 70 ? 1.6 : p < 88 ? 0.9 : 0.4;
+          return Math.min(95, +(p + passo).toFixed(1));
+        });
+      }, 180);
+      return () => { if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; } };
+    }
+
+    if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+    if (mut.isSuccess) {
+      setProgresso(100);
+      const t = setTimeout(() => { setMostrarProgresso(false); setProgresso(0); }, 900);
+      return () => clearTimeout(t);
+    }
+    // erro ou estado inicial
+    setMostrarProgresso(false);
+    setProgresso(0);
+  }, [mut.isPending, mut.isSuccess]);
+
+  const etapaAtualIdx = ETAPAS.findIndex((e) => progresso < e.ate);
+  const etapaIdx = etapaAtualIdx === -1 ? ETAPAS.length - 1 : etapaAtualIdx;
 
   const gerar = () => mut.mutate({ projetoId, companyId });
 
@@ -80,6 +126,49 @@ export default function AnaliseEfetivoIA({ projetoId, companyId }: Props) {
           </div>
         )}
       </div>
+
+      {/* Progresso (0–100%) com etapas */}
+      {mostrarProgresso && (
+        <div className="rounded-xl border border-slate-200 bg-white p-5">
+          <div className="flex items-center justify-between gap-3 mb-2">
+            <span className="text-sm font-semibold text-slate-700 inline-flex items-center gap-2">
+              <Sparkles className="h-4 w-4 text-blue-600" /> Analisando efetivo × cronograma…
+            </span>
+            <span className="text-sm font-bold text-blue-700 tabular-nums">{Math.round(progresso)}%</span>
+          </div>
+          <div className="h-2.5 w-full rounded-full bg-slate-100 overflow-hidden">
+            <div
+              className="h-full rounded-full bg-gradient-to-r from-blue-500 to-blue-600 transition-all duration-200 ease-out"
+              style={{ width: `${progresso}%` }}
+            />
+          </div>
+
+          <div className="mt-4 space-y-2.5">
+            {ETAPAS.map((e, i) => {
+              const concluida = i < etapaIdx;
+              const ativa = i === etapaIdx;
+              const EtapaIcon = e.Icon;
+              return (
+                <div key={i} className={`flex items-start gap-3 ${!concluida && !ativa ? "opacity-40" : ""}`}>
+                  <div className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border ${
+                    concluida ? "border-emerald-200 bg-emerald-50 text-emerald-600"
+                    : ativa ? "border-blue-200 bg-blue-50 text-blue-600"
+                    : "border-slate-200 bg-slate-50 text-slate-400"
+                  }`}>
+                    {concluida ? <CheckCircle2 className="h-3.5 w-3.5" />
+                      : ativa ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      : <EtapaIcon className="h-3.5 w-3.5" />}
+                  </div>
+                  <div className="min-w-0">
+                    <p className={`text-sm font-medium leading-tight ${ativa ? "text-slate-800" : "text-slate-600"}`}>{e.label}</p>
+                    <p className="text-xs text-slate-400 leading-snug mt-0.5">{e.detalhe}</p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Erro de mutation */}
       {mut.isError && (

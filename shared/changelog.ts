@@ -1,6 +1,26 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2577 — **PLANEJAMENTO · ABA "EFETIVO × IA" · BARRA DE PROGRESSO 0–100%
+ * COM AS ETAPAS DO PROCESSAMENTO ENQUANTO A IA ANALISA.**
+ *
+ * MOTIVAÇÃO (pedido do usuário, screenshot do botão travado em "Analisando…"):
+ * "Quero de 0 a 100% e mostrar os detalhes que estão sendo feitos." Antes o CTA
+ * só virava "Analisando…" sem nenhum feedback de andamento — análises de IA
+ * demoram alguns segundos e a tela parecia parada.
+ *
+ * O QUE MUDOU (SÓ CLIENT, `client/src/pages/planejamento/AnaliseEfetivoIA.tsx`):
+ * adicionado painel de progresso exibido enquanto `mutation.isPending`: barra
+ * 0–100% + percentual numérico + lista das 5 etapas (Lendo efetivo → Cruzando
+ * com cronograma → Agregando por função → Consultando IA → Montando
+ * recomendações), cada uma com ícone, spinner na etapa ativa e check nas
+ * concluídas. Como a IA é uma única chamada async (não reporta progresso real),
+ * o avanço é SIMULADO no cliente: `setInterval` sobe suave até 95% enquanto
+ * pendente (passo decrescente conforme aproxima do fim) e fecha em 100% no
+ * `onSuccess`. Zero servidor, zero schema, zero ALTER/DROP/DELETE.
+ *
+ * ---
+ *
  * Rev. 2576 — **PLANEJAMENTO · NOVA ABA "EFETIVO × IA" (Planejamento Detalhe,
  * `/planejamento/:id`) · CRUZA O EFETIVO ATUAL DA OBRA COM O CRONOGRAMA E A IA
  * ANALISA SE A EQUIPE ESTÁ DIMENSIONADA (CONTRATAR / REDUZIR / MANTER).**
