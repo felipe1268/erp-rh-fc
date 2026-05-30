@@ -155,6 +155,35 @@ function extrairJsonIa(raw: string): { parsed: any; erroIa: string | null } {
   }
 }
 
+// ── Datas SEMPRE no padrão brasileiro ──────────────────────────────────────
+// `isoParaBR` converte UMA string ISO ("YYYY-MM-DD", com ou sem hora) em
+// "DD/MM/AAAA". `brDatasTexto` troca TODAS as ocorrências de datas ISO dentro
+// de um texto livre (ex.: respostas da IA que ecoam a data crua). `brDatasDeep`
+// percorre recursivamente o JSON da IA aplicando a conversão em toda string —
+// garante que nenhuma data ISO vaze para a tela. Tudo aditivo e iOS-safe (não
+// usa `new Date` na exibição, só regex de string).
+function isoParaBR(s: any): string {
+  const str = String(s ?? "").slice(0, 10);
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(str);
+  return m ? `${m[3]}/${m[2]}/${m[1]}` : String(s ?? "");
+}
+function brDatasTexto(s: string): string {
+  // Captura datas ISO isoladas no meio do texto (com limites de palavra),
+  // ignorando a parte de hora se houver. Ex.: "entrega em 2026-12-10" → "10/12/2026".
+  return s.replace(/(?<![\d])(\d{4})-(\d{2})-(\d{2})(?:[T ]\d{2}:\d{2}(?::\d{2})?)?(?![\d])/g,
+    (_full, y, mo, d) => `${d}/${mo}/${y}`);
+}
+function brDatasDeep<T>(obj: T): T {
+  if (typeof obj === "string") return brDatasTexto(obj) as unknown as T;
+  if (Array.isArray(obj)) return obj.map((v) => brDatasDeep(v)) as unknown as T;
+  if (obj && typeof obj === "object") {
+    const out: any = {};
+    for (const [k, v] of Object.entries(obj as any)) out[k] = brDatasDeep(v);
+    return out;
+  }
+  return obj;
+}
+
 // ── Coleta efetivo da obra × cronograma (compartilhado) ────────────────────
 // Lê projeto+obra, escolhe a revisão (baseline > aprovada > última), agrega o
 // efetivo atual por função/categoria MO/vínculo/status e separa as atividades
@@ -260,7 +289,7 @@ async function coletarEfetivoCronograma(db: any, projetoId: number, companyId: n
   emAndamento.sort((a, b) => peso(b) - peso(a));
   proximas.sort((a, b) => peso(b) - peso(a));
   const fmtAtiv = (a: any) =>
-    `  - [${a.eapCodigo ?? "?"}] ${a.nome} (${String(a.dataInicio).slice(0, 10)} → ${String(a.dataFim).slice(0, 10)}) | Peso ${peso(a).toFixed(2)}%${a.recursoPrincipal ? ` | Recurso: ${a.recursoPrincipal}` : ""}`;
+    `  - [${a.eapCodigo ?? "?"}] ${a.nome} (${isoParaBR(a.dataInicio)} → ${isoParaBR(a.dataFim)}) | Peso ${peso(a).toFixed(2)}%${a.recursoPrincipal ? ` | Recurso: ${a.recursoPrincipal}` : ""}`;
 
   // 5. Blocos textuais para os prompts
   const efetivoTxt = porCargo.length === 0
@@ -1449,12 +1478,12 @@ Responda EXATAMENTE neste formato (seja conciso e direto):
 
 Considere: o histograma típico de mão de obra por tipo de serviço (mobilização, fundação/estrutura, alvenaria, instalações, acabamento, etc.), a produtividade usual de cada função, o peso financeiro de cada frente (frentes pesadas exigem mais gente), o vínculo (CLT vs terceiro) e quantos estão indisponíveis (férias/aviso/afastado). Seja realista e conservador: só recomende contratar quando houver evidência clara de gargalo, e só reduzir quando houver folga evidente.
 
-Responda SEMPRE em português brasileiro, técnico, direto e específico. Responda APENAS com JSON válido no formato pedido, sem nenhum texto fora do JSON.`;
+Responda SEMPRE em português brasileiro, técnico, direto e específico. TODAS as datas SEMPRE no padrão brasileiro DD/MM/AAAA (jamais ISO/AAAA-MM-DD). Responda APENAS com JSON válido no formato pedido, sem nenhum texto fora do JSON.`;
 
       const userPrompt = `# Análise de Efetivo × Cronograma
 **Obra:** ${obra?.nome ?? "—"}
 **Projeto:** ${projeto.nome ?? "—"} (Revisão ${revisao.numero ?? "?"})
-**Data de referência:** ${hoje.toISOString().slice(0, 10)}
+**Data de referência:** ${isoParaBR(hoje.toISOString())}
 
 ## EFETIVO ATUAL ALOCADO (total: ${totalEfetivo} | ativos: ${totalAtivos} | indisponíveis: ${totalIndisponiveis})
 ${efetivoTxt}
@@ -1511,7 +1540,7 @@ Regras: inclua em "porCargo" TODAS as funções listadas no efetivo (mesmo as qu
           ? content
           : Array.isArray(content) ? ((content[0] as any)?.text ?? "") : "";
         const r = extrairJsonIa(raw);
-        parsed = r.parsed;
+        parsed = r.parsed ? brDatasDeep(r.parsed) : r.parsed;
         erroIa = r.erroIa;
       } catch (err: any) {
         erroIa = err?.message?.includes("Nenhuma chave")
@@ -1656,12 +1685,12 @@ MISSÃO ESPECIAL — PLANO DE ATAQUE (quando o efetivo é REDUZIDO ou se mantém
 
 No plano de ataque, BUSQUE CENÁRIOS NÃO ÓBVIOS — combinações de sequenciamento, processo construtivo, automação e logística que um engenheiro NÃO enxergaria na correria do dia a dia. Cada manobra deve ter ação concreta, como executar, impacto no prazo e o ajuste correspondente na Linha de Balanço.
 
-Seja realista, quantitativo e conservador. Aponte EXPLICITAMENTE quando o cenário simulado tende a NÃO entregar o ganho esperado (ex.: superlotação de uma frente, gargalo deslocado para outra função, função-restrição não ajustada, contratação que só rende após curva de aprendizado). Responda SEMPRE em português brasileiro e APENAS com JSON válido no formato pedido, sem nenhum texto fora do JSON.`;
+Seja realista, quantitativo e conservador. Aponte EXPLICITAMENTE quando o cenário simulado tende a NÃO entregar o ganho esperado (ex.: superlotação de uma frente, gargalo deslocado para outra função, função-restrição não ajustada, contratação que só rende após curva de aprendizado). TODAS as datas SEMPRE no padrão brasileiro DD/MM/AAAA (jamais ISO/AAAA-MM-DD). Responda SEMPRE em português brasileiro e APENAS com JSON válido no formato pedido, sem nenhum texto fora do JSON.`;
 
       const userPrompt = `# Simulação de Cenário de Efetivo
 **Obra:** ${obra?.nome ?? "—"}
 **Projeto:** ${projeto.nome ?? "—"} (Revisão ${revisao.numero ?? "?"})
-**Data de referência:** ${hoje.toISOString().slice(0, 10)}
+**Data de referência:** ${isoParaBR(hoje.toISOString())}
 
 ## EFETIVO ATUAL ALOCADO (total: ${totalEfetivo} | ativos: ${totalAtivos} | indisponíveis: ${totalIndisponiveis})
 ${efetivoTxt}
@@ -1747,7 +1776,7 @@ PLANO DE ATAQUE (campo "planoAtaque", OBRIGATÓRIO): ${deltaTotal < 0 ? `ESTE CE
           ? content
           : Array.isArray(content) ? ((content[0] as any)?.text ?? "") : "";
         const r = extrairJsonIa(raw);
-        parsed = r.parsed;
+        parsed = r.parsed ? brDatasDeep(r.parsed) : r.parsed;
         erroIa = r.erroIa;
       } catch (err: any) {
         erroIa = err?.message?.includes("Nenhuma chave")
@@ -1856,7 +1885,8 @@ PLANO DE ATAQUE (campo "planoAtaque", OBRIGATÓRIO): ${deltaTotal < 0 ? `ESTE CE
         .where(where)
         .limit(1);
       if (!row) throw new Error("Análise não encontrada.");
-      return row;
+      // Datas SEMPRE em BR — converte também análises ANTIGAS salvas em ISO.
+      return { ...row, resultado: brDatasDeep((row as any).resultado) };
     }),
 
   // ── Pergunte à IA — Q&A em linguagem natural sobre o efetivo × cronograma ──
@@ -1885,11 +1915,11 @@ PLANO DE ATAQUE (campo "planoAtaque", OBRIGATÓRIO): ${deltaTotal < 0 ? `ESTE CE
         efetivoTxt, emAndTxt, proxTxt,
       } = await coletarEfetivoCronograma(db, input.projetoId, companyId);
 
-      const systemPrompt = `Você é JULINHO, engenheiro sênior de planejamento e gestão de mão de obra da FC Engenharia (construção civil pesada brasileira). O usuário está olhando a tela "Efetivo × Cronograma (IA)" e tem uma DÚVIDA. Responda de forma DIRETA, DIDÁTICA e curta (no máximo ~6 frases, ou uma lista curta), em português brasileiro, usando SOMENTE os dados do contexto desta obra (efetivo atual e cronograma). Se a pergunta pedir algo que não está nos dados, diga claramente que essa informação não está disponível nesta tela. NÃO invente números: cite apenas valores presentes no contexto. Quando fizer sentido, fundamente em literatura consagrada (PMBOK/PMI, TCPO, CII/overmanning, Lei de Brooks, Koskela/Ballard/Lean), mas sem encher de jargão. Não use markdown pesado; texto limpo.`;
+      const systemPrompt = `Você é JULINHO, engenheiro sênior de planejamento e gestão de mão de obra da FC Engenharia (construção civil pesada brasileira). O usuário está olhando a tela "Efetivo × Cronograma (IA)" e tem uma DÚVIDA. Responda de forma DIRETA, DIDÁTICA e curta (no máximo ~6 frases, ou uma lista curta), em português brasileiro, usando SOMENTE os dados do contexto desta obra (efetivo atual e cronograma). Se a pergunta pedir algo que não está nos dados, diga claramente que essa informação não está disponível nesta tela. NÃO invente números: cite apenas valores presentes no contexto. Quando fizer sentido, fundamente em literatura consagrada (PMBOK/PMI, TCPO, CII/overmanning, Lei de Brooks, Koskela/Ballard/Lean), mas sem encher de jargão. TODAS as datas SEMPRE no padrão brasileiro DD/MM/AAAA (jamais ISO/AAAA-MM-DD). Não use markdown pesado; texto limpo.`;
 
       const userPrompt = `# Contexto da obra
 **Obra:** ${obra?.nome ?? "—"} | **Projeto:** ${projeto.nome ?? "—"} (Revisão ${revisao.numero ?? "?"})
-**Data de referência:** ${hoje.toISOString().slice(0, 10)}
+**Data de referência:** ${isoParaBR(hoje.toISOString())}
 
 ## EFETIVO ATUAL ALOCADO (total: ${totalEfetivo} | ativos: ${totalAtivos} | indisponíveis: ${totalIndisponiveis})
 ${efetivoTxt}
@@ -1914,9 +1944,9 @@ DÚVIDA DO USUÁRIO: ${input.pergunta}`;
           maxTokens: 1000,
         });
         const content = result.choices?.[0]?.message?.content;
-        resposta = (typeof content === "string"
+        resposta = brDatasTexto((typeof content === "string"
           ? content
-          : Array.isArray(content) ? ((content[0] as any)?.text ?? "") : "").trim();
+          : Array.isArray(content) ? ((content[0] as any)?.text ?? "") : "").trim());
       } catch (err: any) {
         erroIa = err?.message?.includes("Nenhuma chave")
           ? "Nenhuma chave de IA configurada. Configure ANTHROPIC_API_KEY ou GOOGLE_API_KEY nas secrets para usar o assistente."

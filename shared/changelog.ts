@@ -1,6 +1,43 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2586 — **PLANEJAMENTO · ABA "EFETIVO × IA" · DATAS SEMPRE NO PADRÃO
+ * BRASILEIRO (DD/MM/AAAA) EM TODA A SAÍDA DA IA — DIAGNÓSTICO, SIMULADOR (PLANO
+ * DE ATAQUE), ASSISTENTE E HISTÓRICO.**
+ *
+ * MOTIVAÇÃO (screenshot do usuário — Plano de Ataque, obra "HOTEL QIU 2 - 4
+ * FASE"): a "Missão" exibia a data de entrega em formato ISO cru
+ * ("...entrega da FASE 4 em 2026-12-10...") em vez do padrão brasileiro
+ * ("10/12/2026"). Pedido: "Data sempre no padrão brasileiro."
+ *
+ * CAUSA-RAIZ: o cronograma alimentava a IA com datas em ISO (AAAA-MM-DD —
+ * `fmtAtiv`, "Data de referência" via `hoje.toISOString().slice(0,10)`), então
+ * a IA naturalmente ECOAVA essas datas em ISO dentro dos textos livres que gera
+ * (missão, manobras, condições de vitória etc.). Não havia nenhuma normalização
+ * de data na saída.
+ *
+ * O QUE MUDOU (SÓ SERVER, ADITIVO — ZERO SCHEMA, ZERO ALTER/DROP/DELETE), em
+ * `server/routers/iaCronograma.ts`:
+ *  - Novos helpers de módulo: `isoParaBR(s)` (converte UMA string ISO em
+ *    "DD/MM/AAAA"), `brDatasTexto(s)` (regex troca TODAS as datas ISO embutidas
+ *    em texto livre, ignorando a parte de hora, com limites de dígito p/ não
+ *    quebrar números) e `brDatasDeep(obj)` (percorre recursivamente o JSON da IA
+ *    aplicando a conversão em toda string). Tudo iOS-safe (só regex de string,
+ *    sem `new Date` na exibição).
+ *  - ENTRADA do prompt em BR: `fmtAtiv` (datas das atividades) e as 3 "Data de
+ *    referência" (diagnóstico, simulador, assistente) passam por `isoParaBR` —
+ *    a IA já recebe tudo em DD/MM/AAAA.
+ *  - SAÍDA da IA normalizada: `analisarEfetivo` e `simularEfetivo` envolvem o
+ *    `parsed` em `brDatasDeep`; o assistente `perguntarEfetivo` envolve a
+ *    `resposta` em `brDatasTexto` — rede de segurança caso a IA ainda ecoe ISO.
+ *  - HISTÓRICO retroativo: `getAnaliseEfetivo` aplica `brDatasDeep` no
+ *    `resultado` lido — converte também análises ANTIGAS já salvas em ISO.
+ *  - Reforço nos 3 system prompts: "TODAS as datas SEMPRE no padrão brasileiro
+ *    DD/MM/AAAA (jamais ISO/AAAA-MM-DD)".
+ *
+ * ESCOPO: só a aba "Efetivo × IA". Validado via esbuild (exit 0; tsc dá OOM no
+ * monorepo). Zero client.
+ *
  * Rev. 2585 — **PLANEJAMENTO · ABA "EFETIVO × IA" · CORRIGE A "TRAVA EM 95%" DO
  * SIMULADOR DE MÃO DE OBRA NO iPad/iOS — A SIMULAÇÃO AGORA CONCLUI EM VEZ DE
  * FICAR PENDURADA E CAIR EM ERRO.**
