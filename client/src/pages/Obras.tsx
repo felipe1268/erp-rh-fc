@@ -153,7 +153,7 @@ export default function Obras() {
   const [mesclarTargetId, setMesclarTargetId] = useState<number | null>(null);
   const [form, setForm] = useState<ObraForm>(emptyForm);
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState("Todos");
+  const [statusFilter, setStatusFilter] = useState("Em_Andamento");
   const [buscandoCep, setBuscandoCep] = useState(false);
   const [newSn, setNewSn] = useState("");
   const [newSnApelido, setNewSnApelido] = useState("");
