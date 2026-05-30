@@ -1114,7 +1114,7 @@ export async function permanentDeleteEmployee(id: number, companyId: number) {
 
 export async function getEmployeeStats(companyId: number, companyIds?: number[]) {
   const db = await getDb();
-  if (!db) return { total: 0, ativos: 0, ferias: 0, afastados: 0, licenca: 0, desligados: 0, reclusos: 0, aviso: 0, blacklist: 0, clt: 0, pj: 0, porStatus: {} as Record<string, number> };
+  if (!db) return { total: 0, naEmpresa: 0, ativos: 0, ferias: 0, afastados: 0, licenca: 0, desligados: 0, reclusos: 0, aviso: 0, blacklist: 0, clt: 0, pj: 0, porStatus: {} as Record<string, number> };
   const ids = companyIds && companyIds.length > 0 ? companyIds : [companyId];
 
   // Query única agrupada por (status, listaNegra) — fonte de verdade para todos os badges.
@@ -1147,6 +1147,7 @@ export async function getEmployeeStats(companyId: number, companyIds?: number[])
 
   const stats = {
     total: 0,
+    naEmpresa: 0,   // Vínculo ativo: total − desligados − blacklist (todos que AINDA têm conexão com a empresa)
     ativos: 0,
     ferias: 0,
     afastados: 0,
@@ -1189,6 +1190,10 @@ export async function getEmployeeStats(companyId: number, companyIds?: number[])
     if (r.tipoContrato === 'CLT') stats.clt = r.cnt;
     else if (r.tipoContrato === 'PJ') stats.pj = r.cnt;
   }
+
+  // Vínculo ativo na empresa = todos que ainda têm conexão = total − dispensados (desligados + blacklist).
+  // Equivale a Ativos + Férias + Afastados + Licença + Aviso + Reclusos (+ eventuais "Sem Status").
+  stats.naEmpresa = stats.total - stats.desligados - stats.blacklist;
 
   return stats;
 }

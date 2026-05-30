@@ -1,6 +1,34 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2608 — **COLABORADORES · NOVO CARD "NA EMPRESA" — SOMATÓRIA DE TODOS OS
+ * FUNCIONÁRIOS QUE AINDA TÊM VÍNCULO/CONEXÃO COM A EMPRESA (TODOS MENOS OS
+ * DISPENSADOS), PARA SABER A QUANTIDADE TOTAL ATUAL NA EMPRESA.**
+ *
+ * PEDIDO (usuário): "mantem como esta so inclua mais um.. considerando a
+ * somatória de todos funcionários que de certa forma ainda tem conexão com a
+ * empresa.. (seria somar todos, menos os dispensados).. para saber a quantidade
+ * total na empresa". Os cards existentes (Total, Ativos, CLT, PJ, Férias,
+ * Afastados, Licença, Aviso, Desligados, Blacklist, Reclusos) foram mantidos
+ * exatamente como estavam — apenas foi ADICIONADO um novo card.
+ *
+ * DEFINIÇÃO: "Na Empresa" = `total − desligados − blacklist` (dispensados =
+ * desligados + blacklist). Equivale matematicamente à soma de quem ainda tem
+ * vínculo: Ativos + Férias + Afastados + Licença + Aviso + Reclusos (+ eventuais
+ * "Sem Status"). Ex.: 306 total − 161 desligados − 23 blacklist = 122.
+ *
+ * IMPLEMENTAÇÃO (fonte única no servidor):
+ *  - `server/db.ts` (`getEmployeeStats`): novo campo `naEmpresa` calculado a
+ *    partir das contagens reais já agregadas por (status, listaNegra) — sem nova
+ *    query, sem estimativa: `stats.naEmpresa = total − desligados − blacklist`.
+ *    Campo também adicionado ao fallback `if (!db)`.
+ *  - `client/src/pages/Colaboradores.tsx`: novo card "Na Empresa" (ícone
+ *    `UsersRound`, cor teal) inserido logo após "Total". Sem filtro de clique
+ *    (é um agregado, não um status). Fallback no client recalcula o valor caso o
+ *    campo não venha do servidor (retrocompat).
+ *
+ * VALIDADO: esbuild server + client (exit 0) + workflow reiniciado.
+ *
  * Rev. 2607 — **CLIENTES · CADASTRO DE LOGO NO PRÓPRIO CLIENTE (UMA VEZ SÓ) —
  * O FORM "EDITAR/NOVO CLIENTE" GANHA UPLOAD DE LOGO; AO SELECIONAR/EDITAR UMA
  * OBRA DAQUELE CLIENTE, O LOGO É PREENCHIDO AUTOMATICAMENTE — IGUAL JÁ ACONTECE
