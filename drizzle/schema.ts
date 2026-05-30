@@ -5736,6 +5736,25 @@ export const iaCronogramaMonitoramento = pgTable("ia_cronograma_monitoramento", 
   criadoEm:     timestamp("criado_em").defaultNow(),
 });
 
+// Histórico persistido das análises de Efetivo × IA (diagnóstico + simulações).
+// Aditiva (CREATE TABLE) — nunca ALTER/DROP/DELETE. `resultado` guarda o retorno
+// completo da procedure (analise/previsao + contexto) p/ reabrir no histórico.
+export const planejamentoAnalisesEfetivo = pgTable("planejamento_analises_efetivo", {
+  id:            serial().primaryKey(),
+  projetoId:     integer("projeto_id").notNull(),
+  companyId:     integer("company_id"),
+  tipo:          varchar({ length: 20 }).notNull(),          // 'diagnostico' | 'simulacao'
+  veredito:      varchar({ length: 40 }),                     // diagnostico/veredito da IA
+  titulo:        varchar({ length: 400 }),
+  obra:          varchar({ length: 300 }),
+  revisaoNumero: integer("revisao_numero"),
+  resultado:     json("resultado").default({}),
+  contexto:      json("contexto").default({}),
+  erroIa:        text("erro_ia"),
+  criadoPor:     varchar("criado_por", { length: 200 }),
+  criadoEm:      timestamp("criado_em").defaultNow(),
+});
+
 export const orcamentoParametros = pgTable("orcamento_parametros", {
   id:           serial().notNull().primaryKey(),
   companyId:    integer().notNull().unique(),

@@ -12,6 +12,7 @@ import {
   planejamentoRevisoes,
   planejamentoProjetos,
   planejamentoAvancos,
+  planejamentoAnalisesEfetivo,
   lobConfig,
   orcamentos,
   jobFunctions,
@@ -280,6 +281,40 @@ async function coletarEfetivoCronograma(db: any, projetoId: number, companyId: n
     emAndamento, proximas, hoje,
     efetivoTxt, emAndTxt, proxTxt,
   };
+}
+
+// Persiste uma análise de Efetivo × IA (diagnóstico ou simulação) p/ consulta
+// futura. BEST-EFFORT: nunca derruba a resposta principal — erros (ex.: tabela
+// ausente em algum ambiente) são apenas logados. `resultado` guarda o retorno
+// completo da procedure p/ reabrir o detalhe no histórico. SOMENTE INSERT.
+async function salvarAnaliseEfetivo(
+  db: any,
+  rec: {
+    projetoId: number; companyId: number; tipo: "diagnostico" | "simulacao";
+    veredito: string | null; titulo: string | null; obra: string | null;
+    revisaoNumero: number | null; resultado: any; erroIa: string | null;
+    criadoPor: string | null;
+  },
+): Promise<number | null> {
+  try {
+    const [row] = await db.insert(planejamentoAnalisesEfetivo).values({
+      projetoId:     rec.projetoId,
+      companyId:     rec.companyId,
+      tipo:          rec.tipo,
+      veredito:      rec.veredito ?? null,
+      titulo:        (rec.titulo ?? "").slice(0, 400) || null,
+      obra:          (rec.obra ?? "").slice(0, 300) || null,
+      revisaoNumero: rec.revisaoNumero ?? null,
+      resultado:     rec.resultado ?? {},
+      contexto:      {},
+      erroIa:        rec.erroIa ?? null,
+      criadoPor:     rec.criadoPor ?? null,
+    }).returning({ id: planejamentoAnalisesEfetivo.id });
+    return row?.id ?? null;
+  } catch (err: any) {
+    console.error("[salvarAnaliseEfetivo] falha ao persistir (ignorado):", err?.message ?? err);
+    return null;
+  }
 }
 
 // ── Detect if activity is weather-sensitive ───────────────────────────────
@@ -1446,10 +1481,19 @@ Com base no cruzamento acima, retorne um JSON EXATAMENTE nesta estrutura (sem co
     { "atividade": "string", "periodo": "string", "necessidade": "string — que mão de obra essa frente exige" }
   ],
   "riscos": [ "string" ],
-  "recomendacoes": [ "string — ações práticas e priorizadas" ]
+  "recomendacoes": [ "string — ações práticas e priorizadas" ],
+  "referenciaPrincipal": {
+    "autor": "string — autor(es)/instituição MAIS RENOMADO(A) DO MUNDO neste assunto",
+    "obra": "string — título da obra/norma/princípio consagrado",
+    "ano": "string — ano (ou período) da publicação, se souber",
+    "porque": "string — por que é A referência mais renomada do mundo em dimensionamento de mão de obra na construção E como ela fundamenta ESTE diagnóstico específico"
+  },
+  "referencias": [
+    { "fonte": "string — outra literatura/princípio de apoio", "aplicacao": "string — como se aplica a este caso" }
+  ]
 }
 
-Regras: inclua em "porCargo" TODAS as funções listadas no efetivo (mesmo as que ficam "manter", com delta 0); "delta" = recomendado - atual (negativo = reduzir). Em "indicadores" gere de 3 a 5 cards. Seja específico e quantitativo.`;
+Regras: inclua em "porCargo" TODAS as funções listadas no efetivo (mesmo as que ficam "manter", com delta 0); "delta" = recomendado - atual (negativo = reduzir). Em "indicadores" gere de 3 a 5 cards. SEMPRE preencha "referenciaPrincipal" citando a referência/autor MAIS RENOMADO(A) mundialmente sobre dimensionamento de mão de obra na construção (ex.: PMBOK/PMI para nivelamento de recursos, TCPO para rendimentos, Construction Industry Institute para produtividade/overmanning, Koskela/Ballard para Lean/Last Planner) e explique por que é a mais consagrada no tema — escolha a que melhor se aplica a ESTE caso. Gere ainda de 2 a 3 "referencias" de apoio. Seja específico e quantitativo.`;
 
       let parsed: any = null;
       let erroIa: string | null = null;
@@ -1475,7 +1519,7 @@ Regras: inclua em "porCargo" TODAS as funções listadas no efetivo (mesmo as qu
           : `Não foi possível gerar a análise de IA: ${err?.message ?? "erro desconhecido"}.`;
       }
 
-      return {
+      const resultado = {
         obra:    obra?.nome ?? "",
         projeto: projeto.nome ?? "",
         revisao: revisao.numero ?? null,
@@ -1494,6 +1538,25 @@ Regras: inclua em "porCargo" TODAS as funções listadas no efetivo (mesmo as qu
         analise: parsed,
         erroIa,
       };
+
+      // Persiste a análise p/ consulta futura (só quando a IA produziu resultado).
+      let analiseId: number | null = null;
+      if (parsed) {
+        analiseId = await salvarAnaliseEfetivo(db, {
+          projetoId: input.projetoId,
+          companyId,
+          tipo: "diagnostico",
+          veredito: parsed?.diagnostico ?? null,
+          titulo: parsed?.tituloDiagnostico ?? null,
+          obra: obra?.nome ?? null,
+          revisaoNumero: revisao.numero ?? null,
+          resultado,
+          erroIa,
+          criadoPor: (ctx.user as any).name ?? null,
+        });
+      }
+
+      return { ...resultado, analiseId };
     }),
 
   // ── Efetivo atual (somente leitura, sem IA) — alimenta o Simulador ──────────
@@ -1625,12 +1688,18 @@ Projete o impacto do CENÁRIO SIMULADO frente às atividades acima e retorne um 
   ],
   "riscos": [ "string" ],
   "recomendacoes": [ "string — ações práticas para o cenário dar certo" ],
+  "referenciaPrincipal": {
+    "autor": "string — autor(es)/instituição MAIS RENOMADO(A) DO MUNDO sobre o efeito principal deste cenário",
+    "obra": "string — título da obra/princípio consagrado (ex: 'The Mythical Man-Month', 'CII RS252-1')",
+    "ano": "string — ano (ou período) da publicação, se souber",
+    "porque": "string — por que é A referência mais renomada do mundo sobre o efeito central deste cenário E como ela fundamenta esta previsão"
+  },
   "referencias": [
     { "fonte": "string — nome da literatura/princípio (ex: 'Lei de Brooks', 'CII — overmanning')", "aplicacao": "string — como se aplica a ESTE cenário" }
   ]
 }
 
-Regras: em "porCargo" inclua TODAS as funções do cenário usando os números do CENÁRIO SIMULADO fornecido (atual → simulado). Gere de 3 a 5 "indicadores" e de 2 a 4 "referencias" citando literaturas REAIS aplicadas a este caso específico. Seja específico e quantitativo; se a Lei de Brooks, superlotação (overmanning) ou gargalo deslocado se aplicarem, diga claramente.`;
+Regras: em "porCargo" inclua TODAS as funções do cenário usando os números do CENÁRIO SIMULADO fornecido (atual → simulado). Gere de 3 a 5 "indicadores". SEMPRE preencha "referenciaPrincipal" com a referência/autor MAIS RENOMADO(A) do mundo sobre o efeito central deste cenário (ex.: Frederick Brooks — Lei de Brooks p/ contratações tardias; CII p/ overmanning/trade stacking; Mosaic/PMI p/ aceleração; Koskela/Ballard p/ Lean/fluxo) e explique por que é a mais consagrada no tema. Gere ainda de 2 a 4 "referencias" de apoio citando literaturas REAIS. Seja específico e quantitativo; se a Lei de Brooks, superlotação (overmanning) ou gargalo deslocado se aplicarem, diga claramente.`;
 
       let parsed: any = null;
       let erroIa: string | null = null;
@@ -1656,7 +1725,7 @@ Regras: em "porCargo" inclua TODAS as funções do cenário usando os números d
           : `Não foi possível gerar a simulação de IA: ${err?.message ?? "erro desconhecido"}.`;
       }
 
-      return {
+      const resultado = {
         obra:    obra?.nome ?? "",
         projeto: projeto.nome ?? "",
         revisao: revisao.numero ?? null,
@@ -1667,6 +1736,97 @@ Regras: em "porCargo" inclua TODAS as funções do cenário usando os números d
         previsao: parsed,
         erroIa,
       };
+
+      // Persiste a simulação p/ consulta futura (só quando a IA produziu resultado).
+      let analiseId: number | null = null;
+      if (parsed) {
+        const titulo = parsed?.tituloCenario
+          ?? `Cenário ${totalAtualCen} → ${totalSimulado} (${deltaTotal > 0 ? "+" : ""}${deltaTotal})`;
+        analiseId = await salvarAnaliseEfetivo(db, {
+          projetoId: input.projetoId,
+          companyId,
+          tipo: "simulacao",
+          veredito: parsed?.veredito ?? null,
+          titulo,
+          obra: obra?.nome ?? null,
+          revisaoNumero: revisao.numero ?? null,
+          resultado,
+          erroIa,
+          criadoPor: (ctx.user as any).name ?? null,
+        });
+      }
+
+      return { ...resultado, analiseId };
+    }),
+
+  // ── Histórico de análises de Efetivo × IA (diagnósticos + simulações) ───────
+  listarAnalisesEfetivo: protectedProcedure
+    .input(z.object({ projetoId: z.number(), companyId: z.number() }))
+    .query(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new Error("Banco de dados indisponível.");
+      const companyId = input.companyId;
+      const isAdmin = ctx.user.role === "admin" || ctx.user.role === "admin_master";
+      if (!isAdmin && String((ctx.user as any).companyId ?? "") !== String(companyId)) {
+        throw new Error("Sem permissão para esta empresa.");
+      }
+      try {
+        const rows = await db
+          .select({
+            id: planejamentoAnalisesEfetivo.id,
+            tipo: planejamentoAnalisesEfetivo.tipo,
+            veredito: planejamentoAnalisesEfetivo.veredito,
+            titulo: planejamentoAnalisesEfetivo.titulo,
+            obra: planejamentoAnalisesEfetivo.obra,
+            revisaoNumero: planejamentoAnalisesEfetivo.revisaoNumero,
+            criadoPor: planejamentoAnalisesEfetivo.criadoPor,
+            criadoEm: planejamentoAnalisesEfetivo.criadoEm,
+          })
+          .from(planejamentoAnalisesEfetivo)
+          .where(and(
+            eq(planejamentoAnalisesEfetivo.projetoId, input.projetoId),
+            eq(planejamentoAnalisesEfetivo.companyId, companyId),
+          ))
+          .orderBy(desc(planejamentoAnalisesEfetivo.criadoEm))
+          .limit(100);
+        return rows;
+      } catch (err: any) {
+        console.error("[listarAnalisesEfetivo] falha (retornando vazio):", err?.message ?? err);
+        return [];
+      }
+    }),
+
+  // Detalhe de uma análise salva (reabre o resultado completo no histórico).
+  getAnaliseEfetivo: protectedProcedure
+    .input(z.object({ id: z.number(), companyId: z.number() }))
+    .query(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new Error("Banco de dados indisponível.");
+      const companyId = input.companyId;
+      const isAdmin = ctx.user.role === "admin" || ctx.user.role === "admin_master";
+      // Só o admin_master cruza empresas; demais (inclusive admin) ficam presos à própria.
+      const isAdminMaster = ctx.user.role === "admin_master";
+      if (!isAdmin && String((ctx.user as any).companyId ?? "") !== String(companyId)) {
+        throw new Error("Sem permissão para esta empresa.");
+      }
+      // Anti-IDOR: filtra company NA QUERY (exceto admin_master), sem depender de
+      // checagem pós-leitura. Para não-admin_master, escopo = própria empresa.
+      const empresaEscopo = isAdminMaster
+        ? null
+        : (isAdmin ? companyId : (ctx.user as any).companyId);
+      const where = empresaEscopo == null
+        ? eq(planejamentoAnalisesEfetivo.id, input.id)
+        : and(
+            eq(planejamentoAnalisesEfetivo.id, input.id),
+            eq(planejamentoAnalisesEfetivo.companyId, Number(empresaEscopo)),
+          );
+      const [row] = await db
+        .select()
+        .from(planejamentoAnalisesEfetivo)
+        .where(where)
+        .limit(1);
+      if (!row) throw new Error("Análise não encontrada.");
+      return row;
     }),
 
   // ── Programação Semanal — Alertas IA das próximas semanas ────────────────

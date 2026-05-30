@@ -1,6 +1,59 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2580 — **PLANEJAMENTO · ABA "EFETIVO × IA" · (1) TODA ANÁLISE PASSA A
+ * CITAR A REFERÊNCIA MAIS RENOMADA DO MUNDO NO ASSUNTO; (2) ANÁLISES FICAM
+ * SALVAS PARA CONSULTA FUTURA (NOVA ABA "HISTÓRICO"); (3) GRÁFICOS COM OS KPIs
+ * DAS INDICAÇÕES (EFETIVO ATUAL × SUGERIDO/SIMULADO + DISTRIBUIÇÃO DAS AÇÕES).**
+ *
+ * MOTIVAÇÃO (pedido do usuário): (1) que o diagnóstico e a simulação sempre
+ * apontem a referência/autor MAIS consagrado(a) mundialmente que fundamenta
+ * cada análise; (2) que toda análise gerada fique salva para consulta posterior
+ * (até então cada análise era efêmera, perdida ao recarregar/refazer); (3)
+ * gráficos visuais com os KPIs das indicações, não só tabelas.
+ *
+ * O QUE MUDOU:
+ *
+ * SCHEMA (`drizzle/schema.ts`) — ADITIVO, ZERO ALTER/DROP/DELETE:
+ * - Nova tabela `planejamentoAnalisesEfetivo` (`planejamento_analises_efetivo`):
+ *   id, projeto_id, company_id, tipo ('diagnostico'|'simulacao'), veredito,
+ *   titulo, obra, revisao_numero, resultado (json — retorno COMPLETO da
+ *   procedure, p/ reabrir no histórico), contexto (json), erro_ia, criado_por,
+ *   criado_em. Tabela física criada via `CREATE TABLE IF NOT EXISTS` + índice
+ *   `idx_analises_efetivo_projeto` (sem `db:push`, evitando ALTER por drift).
+ *
+ * SERVER (`server/routers/iaCronograma.ts`):
+ * - Prompts de `analisarEfetivo` e `simularEfetivo` ganham `referenciaPrincipal`
+ *   {autor, obra, ano, porque} — instrução explícita p/ a IA citar a referência
+ *   MAIS renomada do mundo no tema (PMBOK/PMI p/ nivelamento, TCPO p/ rendimentos,
+ *   CII p/ overmanning/produtividade, Koskela/Ballard p/ Lean; Brooks p/
+ *   contratações tardias no simulador) e justificar por que é a mais consagrada.
+ *   O diagnóstico também passa a emitir `referencias` (2-3 de apoio); o simulador
+ *   já tinha `referencias` e agora soma a `referenciaPrincipal`.
+ * - Novo helper `salvarAnaliseEfetivo(db, rec)` (best-effort try/catch, SOMENTE
+ *   INSERT; nunca derruba a request) que grava o resultado completo e retorna o id.
+ * - `analisarEfetivo` e `simularEfetivo` chamam o save (só quando a IA produziu
+ *   `parsed` — evita salvar lixo de fallback) e retornam `analiseId`.
+ * - Novas queries `listarAnalisesEfetivo({projetoId,companyId})` (lista enxuta,
+ *   `desc(criadoEm)`, limit 100, try/catch → [] em falha) e
+ *   `getAnaliseEfetivo({id,companyId})` (detalhe completo). Mesma tenancy das
+ *   demais (admin/admin_master livre; demais só a própria empresa; anti-IDOR no get).
+ *
+ * CLIENT (`client/src/pages/planejamento/AnaliseEfetivoIA.tsx`):
+ * - Render dos resultados extraído p/ `DiagnosticoView` e `SimuladorView` (views
+ *   PURAS), reutilizadas tanto pela geração ao vivo quanto pelo histórico.
+ * - Novo card `ReferenciaPrincipal` em destaque (faixa âmbar com troféu) no topo
+ *   de todo diagnóstico e simulação; `ReferenciasApoio` lista as de apoio.
+ * - Gráficos `recharts`: no diagnóstico, barras horizontais "Efetivo atual ×
+ *   sugerido por função" + pizza "Distribuição das indicações" (contratar/
+ *   reduzir/manter); no simulador, barras "Efetivo atual × simulado por função".
+ * - 3ª aba "Histórico": lista as análises salvas (badge tipo, título, obra, rev.,
+ *   autor, data); clicar abre o detalhe completo reusando as views; botão Voltar.
+ *
+ * GARANTIAS: ZERO ALTER/DROP/DELETE (R-001/R-007/R-010). Save é best-effort e não
+ * quebra a geração. Tenancy validado em todas as novas queries. Validado via
+ * esbuild isolado (server + client OK; tsc dá OOM no projeto).
+ *
  * Rev. 2579 — **PLANEJAMENTO · ABA "EFETIVO × IA" · NOVO "SIMULADOR DE MÃO DE
  * OBRA" — AJUSTE O EFETIVO POR FUNÇÃO (+/-) E A IA PROJETA O IMPACTO NO PRAZO,
  * PRODUTIVIDADE, CUSTO E QUALIDADE, FUNDAMENTADA NAS MELHORES LITERATURAS DE

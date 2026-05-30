@@ -7,7 +7,12 @@ import {
   AlertTriangle, CheckCircle2, ArrowUpRight, ArrowDownRight, Lightbulb,
   ClipboardList, RefreshCw, Building2, Database, GitCompareArrows, Brain, ListChecks,
   Plus, Calculator, BookOpen, CalendarClock, DollarSign, Activity, ShieldCheck, RotateCcw,
+  Award, History, Clock, BarChart3, ArrowLeft,
 } from "lucide-react";
+import {
+  ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
+  Cell, PieChart, Pie,
+} from "recharts";
 
 type Props = {
   projetoId: number;
@@ -70,33 +75,37 @@ function statusDot(status?: string) {
 }
 
 export default function AnaliseEfetivoIA({ projetoId, companyId }: Props) {
-  const [modo, setModo] = useState<"diagnostico" | "simulador">("diagnostico");
+  const [modo, setModo] = useState<"diagnostico" | "simulador" | "historico">("diagnostico");
+
+  const TABS: { id: typeof modo; label: string; Icon: React.ComponentType<{ className?: string }> }[] = [
+    { id: "diagnostico", label: "Diagnóstico", Icon: Sparkles },
+    { id: "simulador",   label: "Simulador",   Icon: Calculator },
+    { id: "historico",   label: "Histórico",   Icon: History },
+  ];
 
   return (
     <div className="space-y-5">
       {/* Alternador de modo */}
       <div className="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-1">
-        <button
-          onClick={() => setModo("diagnostico")}
-          className={`inline-flex items-center gap-1.5 rounded-md px-3.5 py-1.5 text-sm font-medium transition-colors ${
-            modo === "diagnostico" ? "bg-white text-slate-800 shadow-sm" : "text-slate-500 hover:text-slate-700"
-          }`}
-        >
-          <Sparkles className="h-3.5 w-3.5" /> Diagnóstico
-        </button>
-        <button
-          onClick={() => setModo("simulador")}
-          className={`inline-flex items-center gap-1.5 rounded-md px-3.5 py-1.5 text-sm font-medium transition-colors ${
-            modo === "simulador" ? "bg-white text-slate-800 shadow-sm" : "text-slate-500 hover:text-slate-700"
-          }`}
-        >
-          <Calculator className="h-3.5 w-3.5" /> Simulador
-        </button>
+        {TABS.map((t) => {
+          const TabIcon = t.Icon;
+          return (
+            <button
+              key={t.id}
+              onClick={() => setModo(t.id)}
+              className={`inline-flex items-center gap-1.5 rounded-md px-3.5 py-1.5 text-sm font-medium transition-colors ${
+                modo === t.id ? "bg-white text-slate-800 shadow-sm" : "text-slate-500 hover:text-slate-700"
+              }`}
+            >
+              <TabIcon className="h-3.5 w-3.5" /> {t.label}
+            </button>
+          );
+        })}
       </div>
 
-      {modo === "diagnostico"
-        ? <Diagnostico projetoId={projetoId} companyId={companyId} />
-        : <Simulador projetoId={projetoId} companyId={companyId} />}
+      {modo === "diagnostico" && <Diagnostico projetoId={projetoId} companyId={companyId} />}
+      {modo === "simulador" && <Simulador projetoId={projetoId} companyId={companyId} />}
+      {modo === "historico" && <Historico projetoId={projetoId} companyId={companyId} />}
     </div>
   );
 }
@@ -183,7 +192,7 @@ function PainelProgresso({
 }
 
 /* ──────────────────────────────────────────────────────────────────────────
- * Modo DIAGNÓSTICO (comportamento original)
+ * Modo DIAGNÓSTICO
  * ──────────────────────────────────────────────────────────────────────── */
 function Diagnostico({ projetoId, companyId }: Props) {
   const [result, setResult] = useState<any>(null);
@@ -194,8 +203,6 @@ function Diagnostico({ projetoId, companyId }: Props) {
 
   const gerar = () => mut.mutate({ projetoId, companyId });
   const analise = result?.analise;
-  const diag = DIAG_META[analise?.diagnostico] ?? DIAG_META.misto;
-  const DiagIcon = diag.Icon;
 
   return (
     <div className="space-y-5">
@@ -218,16 +225,6 @@ function Diagnostico({ projetoId, companyId }: Props) {
             {mut.isPending ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Analisando…</> : <><Sparkles className="h-4 w-4 mr-2" /> {result ? "Refazer análise" : "Gerar análise"}</>}
           </Button>
         </div>
-
-        {result && (
-          <div className="flex items-center gap-4 flex-wrap mt-4 text-xs text-slate-500">
-            {result.obra && <span className="inline-flex items-center gap-1"><Building2 className="h-3.5 w-3.5" /> {result.obra}</span>}
-            {result.revisao != null && <span>Revisão {result.revisao}</span>}
-            <span className="inline-flex items-center gap-1"><Users className="h-3.5 w-3.5" /> {result.efetivoResumo?.total ?? 0} alocados · {result.efetivoResumo?.ativos ?? 0} ativos</span>
-            <span className="inline-flex items-center gap-1"><ClipboardList className="h-3.5 w-3.5" /> {result.atividadesResumo?.emAndamento ?? 0} em andamento · {result.atividadesResumo?.proximas ?? 0} próximas</span>
-            {result.geradoEm && <span>· gerado {new Date(result.geradoEm).toLocaleString("pt-BR")}</span>}
-          </div>
-        )}
       </div>
 
       {mostrar && <PainelProgresso progresso={progresso} etapas={ETAPAS} titulo="Analisando efetivo × cronograma…" />}
@@ -239,17 +236,39 @@ function Diagnostico({ projetoId, companyId }: Props) {
         </div>
       )}
 
-      {result?.erroIa && (
-        <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 flex items-start gap-2">
-          <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
-          <span>{result.erroIa}</span>
-        </div>
-      )}
-
       {!result && !mut.isPending && (
         <div className="rounded-xl border border-dashed border-slate-200 bg-white p-10 text-center">
           <HardHat className="h-8 w-8 text-slate-300 mx-auto mb-3" />
           <p className="text-sm text-slate-500">Clique em <strong>Gerar análise</strong> para a IA cruzar o efetivo da obra com o cronograma.</p>
+        </div>
+      )}
+
+      {result && <DiagnosticoView result={result} />}
+    </div>
+  );
+}
+
+// Render puro do resultado do diagnóstico — reusado pela aba e pelo histórico.
+function DiagnosticoView({ result }: { result: any }) {
+  const analise = result?.analise;
+  const diag = DIAG_META[analise?.diagnostico] ?? DIAG_META.misto;
+  const DiagIcon = diag.Icon;
+
+  return (
+    <div className="space-y-5">
+      {/* Metadados */}
+      <div className="flex items-center gap-4 flex-wrap text-xs text-slate-500">
+        {result.obra && <span className="inline-flex items-center gap-1"><Building2 className="h-3.5 w-3.5" /> {result.obra}</span>}
+        {result.revisao != null && <span>Revisão {result.revisao}</span>}
+        <span className="inline-flex items-center gap-1"><Users className="h-3.5 w-3.5" /> {result.efetivoResumo?.total ?? 0} alocados · {result.efetivoResumo?.ativos ?? 0} ativos</span>
+        <span className="inline-flex items-center gap-1"><ClipboardList className="h-3.5 w-3.5" /> {result.atividadesResumo?.emAndamento ?? 0} em andamento · {result.atividadesResumo?.proximas ?? 0} próximas</span>
+        {result.geradoEm && <span>· gerado {new Date(result.geradoEm).toLocaleString("pt-BR")}</span>}
+      </div>
+
+      {result?.erroIa && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 flex items-start gap-2">
+          <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+          <span>{result.erroIa}</span>
         </div>
       )}
 
@@ -264,20 +283,14 @@ function Diagnostico({ projetoId, companyId }: Props) {
             {analise.resumoExecutivo && <p className="text-sm mt-1.5 opacity-90 leading-relaxed">{analise.resumoExecutivo}</p>}
           </div>
 
+          <ReferenciaPrincipal ref0={analise.referenciaPrincipal} />
+
           {Array.isArray(analise.indicadores) && analise.indicadores.length > 0 && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              {analise.indicadores.map((ind: Indicador, i: number) => (
-                <div key={i} className="rounded-xl border border-slate-200 bg-white p-4">
-                  <div className="flex items-center gap-1.5 mb-1">
-                    <span className={`h-2 w-2 rounded-full ${statusDot(ind.status)}`} />
-                    <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{ind.label}</span>
-                  </div>
-                  <div className="text-xl font-bold text-slate-800">{ind.valor}</div>
-                  {ind.descricao && <p className="text-xs text-slate-500 mt-1 leading-snug">{ind.descricao}</p>}
-                </div>
-              ))}
-            </div>
+            <IndicadoresKPI indicadores={analise.indicadores} />
           )}
+
+          {/* Gráficos: Atual × Sugerido + distribuição de ações */}
+          <GraficosDiagnostico porCargo={analise.porCargo} />
 
           {Array.isArray(analise.porCargo) && analise.porCargo.length > 0 && (
             <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
@@ -348,6 +361,8 @@ function Diagnostico({ projetoId, companyId }: Props) {
           )}
 
           <RiscosRecomendacoes riscos={analise.riscos} recomendacoes={analise.recomendacoes} />
+
+          <ReferenciasApoio referencias={analise.referencias} />
         </div>
       )}
 
@@ -401,10 +416,6 @@ function Simulador({ projetoId, companyId }: Props) {
     if (ajustes.length === 0) return;
     mut.mutate({ projetoId, companyId, ajustes });
   };
-
-  const prev = result?.previsao;
-  const ver = VEREDITO_META[prev?.veredito] ?? VEREDITO_META.neutro;
-  const VerIcon = ver.Icon;
 
   return (
     <div className="space-y-5">
@@ -552,6 +563,29 @@ function Simulador({ projetoId, companyId }: Props) {
           <span>{(mut.error as any)?.message ?? "Erro ao gerar a simulação."}</span>
         </div>
       )}
+
+      {result && <SimuladorView result={result} />}
+    </div>
+  );
+}
+
+// Render puro do resultado da simulação — reusado pela aba e pelo histórico.
+function SimuladorView({ result }: { result: any }) {
+  const prev = result?.previsao;
+  const ver = VEREDITO_META[prev?.veredito] ?? VEREDITO_META.neutro;
+  const VerIcon = ver.Icon;
+
+  return (
+    <div className="space-y-5">
+      {result.obra && (
+        <div className="flex items-center gap-4 flex-wrap text-xs text-slate-500">
+          <span className="inline-flex items-center gap-1"><Building2 className="h-3.5 w-3.5" /> {result.obra}</span>
+          {result.revisao != null && <span>Revisão {result.revisao}</span>}
+          {result.cenario && <span className="inline-flex items-center gap-1"><Users className="h-3.5 w-3.5" /> {result.cenario.totalAtual} → {result.cenario.totalSimulado} ({result.cenario.deltaTotal > 0 ? "+" : ""}{result.cenario.deltaTotal})</span>}
+          {result.geradoEm && <span>· gerado {new Date(result.geradoEm).toLocaleString("pt-BR")}</span>}
+        </div>
+      )}
+
       {result?.erroIa && (
         <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 flex items-start gap-2">
           <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
@@ -559,7 +593,6 @@ function Simulador({ projetoId, companyId }: Props) {
         </div>
       )}
 
-      {/* Resultado da previsão */}
       {prev && (
         <div className="space-y-5">
           <div className={`rounded-xl border p-5 ${ver.cls}`}>
@@ -570,6 +603,8 @@ function Simulador({ projetoId, companyId }: Props) {
             {prev.tituloCenario && <h3 className="text-lg font-semibold leading-snug">{prev.tituloCenario}</h3>}
             {prev.resumoExecutivo && <p className="text-sm mt-1.5 opacity-90 leading-relaxed">{prev.resumoExecutivo}</p>}
           </div>
+
+          <ReferenciaPrincipal ref0={prev.referenciaPrincipal} />
 
           {/* Impactos */}
           {prev.impactos && (
@@ -583,19 +618,11 @@ function Simulador({ projetoId, companyId }: Props) {
 
           {/* Indicadores */}
           {Array.isArray(prev.indicadores) && prev.indicadores.length > 0 && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              {prev.indicadores.map((ind: Indicador, i: number) => (
-                <div key={i} className="rounded-xl border border-slate-200 bg-white p-4">
-                  <div className="flex items-center gap-1.5 mb-1">
-                    <span className={`h-2 w-2 rounded-full ${statusDot(ind.status)}`} />
-                    <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{ind.label}</span>
-                  </div>
-                  <div className="text-xl font-bold text-slate-800">{ind.valor}</div>
-                  {ind.descricao && <p className="text-xs text-slate-500 mt-1 leading-snug">{ind.descricao}</p>}
-                </div>
-              ))}
-            </div>
+            <IndicadoresKPI indicadores={prev.indicadores} />
           )}
+
+          {/* Gráfico Atual × Simulado */}
+          <GraficoAtualSimulado porCargo={prev.porCargo} />
 
           {/* Efeito por função */}
           {Array.isArray(prev.porCargo) && prev.porCargo.length > 0 && (
@@ -638,23 +665,128 @@ function Simulador({ projetoId, companyId }: Props) {
 
           <RiscosRecomendacoes riscos={prev.riscos} recomendacoes={prev.recomendacoes} />
 
-          {/* Referências (literatura) */}
-          {Array.isArray(prev.referencias) && prev.referencias.length > 0 && (
-            <div className="rounded-xl border border-slate-200 bg-white p-4">
-              <div className="flex items-center gap-2 mb-3">
-                <BookOpen className="h-4 w-4 text-violet-500" />
-                <span className="text-sm font-semibold text-slate-700">Fundamentação (literatura de gestão de obras)</span>
-              </div>
-              <div className="space-y-2.5">
-                {prev.referencias.map((r: any, i: number) => (
-                  <div key={i} className="rounded-lg border border-slate-100 bg-slate-50/50 p-3">
-                    <p className="text-sm font-medium text-slate-700">{r.fonte}</p>
-                    {r.aplicacao && <p className="text-xs text-slate-500 mt-0.5 leading-snug">{r.aplicacao}</p>}
+          <ReferenciasApoio referencias={prev.referencias} titulo="Fundamentação (literatura de gestão de obras)" />
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+ * Modo HISTÓRICO — análises salvas
+ * ──────────────────────────────────────────────────────────────────────── */
+const TIPO_META: Record<string, { label: string; cls: string; Icon: React.ComponentType<{ className?: string }> }> = {
+  diagnostico: { label: "Diagnóstico", cls: "bg-blue-50 text-blue-700 border-blue-200", Icon: Sparkles },
+  simulacao:   { label: "Simulação",   cls: "bg-violet-50 text-violet-700 border-violet-200", Icon: Calculator },
+};
+
+function Historico({ projetoId, companyId }: Props) {
+  const listaQ = trpc.iaCronograma.listarAnalisesEfetivo.useQuery({ projetoId, companyId });
+  const [abertaId, setAbertaId] = useState<number | null>(null);
+  const detalheQ = trpc.iaCronograma.getAnaliseEfetivo.useQuery(
+    { id: abertaId ?? 0, companyId },
+    { enabled: abertaId != null },
+  );
+
+  if (abertaId != null) {
+    const reg: any = detalheQ.data;
+    const resultado = reg?.resultado;
+    return (
+      <div className="space-y-4">
+        <Button variant="outline" size="sm" onClick={() => setAbertaId(null)}>
+          <ArrowLeft className="h-3.5 w-3.5 mr-1.5" /> Voltar ao histórico
+        </Button>
+        {detalheQ.isLoading && (
+          <div className="rounded-xl border border-slate-200 bg-white p-10 text-center text-sm text-slate-500">
+            <Loader2 className="h-5 w-5 animate-spin mx-auto mb-2 text-slate-400" /> Carregando análise…
+          </div>
+        )}
+        {detalheQ.isError && (
+          <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700 flex items-start gap-2">
+            <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+            <span>{(detalheQ.error as any)?.message ?? "Erro ao carregar a análise."}</span>
+          </div>
+        )}
+        {reg && resultado && (
+          reg.tipo === "simulacao"
+            ? <SimuladorView result={resultado} />
+            : <DiagnosticoView result={resultado} />
+        )}
+        {reg && !resultado && (
+          <div className="rounded-xl border border-dashed border-slate-200 bg-white p-10 text-center text-sm text-slate-500">
+            Esta análise não tem detalhe salvo.
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="rounded-xl border border-slate-200 bg-gradient-to-br from-slate-50 to-white p-5">
+        <div className="flex items-start gap-3">
+          <div className="rounded-lg bg-slate-600/10 p-2.5">
+            <History className="h-5 w-5 text-slate-600" />
+          </div>
+          <div>
+            <h2 className="text-base font-semibold text-slate-800">Histórico de análises</h2>
+            <p className="text-sm text-slate-500 max-w-2xl mt-0.5">
+              Todos os diagnósticos e simulações gerados ficam salvos aqui. Clique em uma análise para reabrir
+              o resultado completo (indicadores, gráficos, recomendações e referência).
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {listaQ.isLoading && (
+        <div className="rounded-xl border border-slate-200 bg-white p-10 text-center text-sm text-slate-500">
+          <Loader2 className="h-5 w-5 animate-spin mx-auto mb-2 text-slate-400" /> Carregando histórico…
+        </div>
+      )}
+      {listaQ.isError && (
+        <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700 flex items-start gap-2">
+          <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+          <span>{(listaQ.error as any)?.message ?? "Erro ao carregar o histórico."}</span>
+        </div>
+      )}
+      {listaQ.data && listaQ.data.length === 0 && (
+        <div className="rounded-xl border border-dashed border-slate-200 bg-white p-10 text-center">
+          <History className="h-8 w-8 text-slate-300 mx-auto mb-3" />
+          <p className="text-sm text-slate-500">Nenhuma análise salva ainda. Gere um diagnóstico ou uma simulação para começar o histórico.</p>
+        </div>
+      )}
+      {listaQ.data && listaQ.data.length > 0 && (
+        <div className="space-y-2.5">
+          {listaQ.data.map((a: any) => {
+            const meta = TIPO_META[a.tipo] ?? TIPO_META.diagnostico;
+            const TipoIcon = meta.Icon;
+            return (
+              <button
+                key={a.id}
+                onClick={() => setAbertaId(a.id)}
+                className="w-full text-left rounded-xl border border-slate-200 bg-white p-4 hover:border-slate-300 hover:bg-slate-50/50 transition-colors"
+              >
+                <div className="flex items-start justify-between gap-3 flex-wrap">
+                  <div className="flex items-start gap-3 min-w-0">
+                    <span className={`mt-0.5 inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium shrink-0 ${meta.cls}`}>
+                      <TipoIcon className="h-3 w-3" /> {meta.label}
+                    </span>
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-slate-700 leading-snug">{a.titulo || "Análise de efetivo"}</p>
+                      <div className="flex items-center gap-3 flex-wrap text-xs text-slate-400 mt-1">
+                        {a.obra && <span className="inline-flex items-center gap-1"><Building2 className="h-3 w-3" /> {a.obra}</span>}
+                        {a.revisaoNumero != null && <span>Rev. {a.revisaoNumero}</span>}
+                        {a.criadoPor && <span>· {a.criadoPor}</span>}
+                      </div>
+                    </div>
                   </div>
-                ))}
-              </div>
-            </div>
-          )}
+                  <span className="inline-flex items-center gap-1 text-xs text-slate-400 shrink-0">
+                    <Clock className="h-3 w-3" /> {a.criadoEm ? new Date(a.criadoEm).toLocaleString("pt-BR") : "—"}
+                  </span>
+                </div>
+              </button>
+            );
+          })}
         </div>
       )}
     </div>
@@ -662,6 +794,165 @@ function Simulador({ projetoId, companyId }: Props) {
 }
 
 /* ── Subcomponentes compartilhados ─────────────────────────────────────── */
+
+// Referência mais renomada do mundo no assunto (destaque em toda análise).
+function ReferenciaPrincipal({ ref0 }: { ref0?: any }) {
+  if (!ref0 || (!ref0.autor && !ref0.obra && !ref0.porque)) return null;
+  return (
+    <div className="rounded-xl border border-amber-200 bg-gradient-to-br from-amber-50 to-white p-5">
+      <div className="flex items-center gap-2 mb-2">
+        <Award className="h-4 w-4 text-amber-600" />
+        <span className="text-[11px] font-semibold uppercase tracking-wide text-amber-700">Referência mais renomada no assunto</span>
+      </div>
+      <p className="text-base font-semibold text-slate-800 leading-snug">
+        {ref0.obra || ref0.autor}
+      </p>
+      {(ref0.autor || ref0.ano) && (
+        <p className="text-sm text-slate-500 mt-0.5">
+          {ref0.autor}{ref0.autor && ref0.ano ? " · " : ""}{ref0.ano}
+        </p>
+      )}
+      {ref0.porque && <p className="text-sm text-slate-600 mt-2 leading-relaxed">{ref0.porque}</p>}
+    </div>
+  );
+}
+
+// Referências de apoio (literatura).
+function ReferenciasApoio({ referencias, titulo }: { referencias?: any[]; titulo?: string }) {
+  if (!Array.isArray(referencias) || referencias.length === 0) return null;
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white p-4">
+      <div className="flex items-center gap-2 mb-3">
+        <BookOpen className="h-4 w-4 text-violet-500" />
+        <span className="text-sm font-semibold text-slate-700">{titulo ?? "Outras referências de apoio"}</span>
+      </div>
+      <div className="space-y-2.5">
+        {referencias.map((r: any, i: number) => (
+          <div key={i} className="rounded-lg border border-slate-100 bg-slate-50/50 p-3">
+            <p className="text-sm font-medium text-slate-700">{r.fonte}</p>
+            {r.aplicacao && <p className="text-xs text-slate-500 mt-0.5 leading-snug">{r.aplicacao}</p>}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// KPIs (indicadores) em cards.
+function IndicadoresKPI({ indicadores }: { indicadores: Indicador[] }) {
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+      {indicadores.map((ind: Indicador, i: number) => (
+        <div key={i} className="rounded-xl border border-slate-200 bg-white p-4">
+          <div className="flex items-center gap-1.5 mb-1">
+            <span className={`h-2 w-2 rounded-full ${statusDot(ind.status)}`} />
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{ind.label}</span>
+          </div>
+          <div className="text-xl font-bold text-slate-800">{ind.valor}</div>
+          {ind.descricao && <p className="text-xs text-slate-500 mt-1 leading-snug">{ind.descricao}</p>}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// Card que envolve um gráfico.
+function GraficoCard({ titulo, children }: { titulo: string; children: React.ReactNode }) {
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white p-4">
+      <div className="flex items-center gap-2 mb-3">
+        <BarChart3 className="h-4 w-4 text-blue-500" />
+        <span className="text-sm font-semibold text-slate-700">{titulo}</span>
+      </div>
+      {children}
+    </div>
+  );
+}
+
+// Gráficos do diagnóstico: barras Atual × Sugerido + pizza de distribuição de ações.
+function GraficosDiagnostico({ porCargo }: { porCargo?: CargoLinha[] }) {
+  const dados = useMemo(
+    () => (Array.isArray(porCargo) ? porCargo : [])
+      .map((c) => ({ cargo: c.cargo, atual: Number(c.atual) || 0, sugerido: Number(c.recomendado) || 0 }))
+      .filter((c) => c.atual > 0 || c.sugerido > 0)
+      .slice(0, 14),
+    [porCargo],
+  );
+  const acoes = useMemo(() => {
+    const cnt: Record<string, number> = { contratar: 0, reduzir: 0, manter: 0 };
+    (Array.isArray(porCargo) ? porCargo : []).forEach((c) => {
+      const a = (c.acao || "manter").toLowerCase();
+      if (cnt[a] != null) cnt[a] += 1; else cnt.manter += 1;
+    });
+    return [
+      { name: "Contratar", value: cnt.contratar, fill: "#10b981" },
+      { name: "Reduzir",   value: cnt.reduzir,   fill: "#f59e0b" },
+      { name: "Manter",    value: cnt.manter,    fill: "#94a3b8" },
+    ].filter((s) => s.value > 0);
+  }, [porCargo]);
+
+  if (dados.length === 0) return null;
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      <div className="lg:col-span-2">
+        <GraficoCard titulo="Efetivo atual × sugerido por função">
+          <ResponsiveContainer width="100%" height={Math.max(220, dados.length * 34)}>
+            <BarChart data={dados} layout="vertical" margin={{ left: 8, right: 16, top: 4, bottom: 4 }}>
+              <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
+              <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11, fill: "#94a3b8" }} />
+              <YAxis type="category" dataKey="cargo" width={120} tick={{ fontSize: 11, fill: "#64748b" }} />
+              <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #e2e8f0" }} />
+              <Legend wrapperStyle={{ fontSize: 12 }} />
+              <Bar dataKey="atual" name="Atual" fill="#94a3b8" radius={[0, 3, 3, 0]} />
+              <Bar dataKey="sugerido" name="Sugerido" fill="#3b82f6" radius={[0, 3, 3, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </GraficoCard>
+      </div>
+      {acoes.length > 0 && (
+        <GraficoCard titulo="Distribuição das indicações">
+          <ResponsiveContainer width="100%" height={240}>
+            <PieChart>
+              <Pie data={acoes} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} innerRadius={44} paddingAngle={2} label={(e: any) => `${e.name}: ${e.value}`} labelLine={false}>
+                {acoes.map((s, i) => <Cell key={i} fill={s.fill} />)}
+              </Pie>
+              <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #e2e8f0" }} />
+            </PieChart>
+          </ResponsiveContainer>
+        </GraficoCard>
+      )}
+    </div>
+  );
+}
+
+// Gráfico do simulador: barras Atual × Simulado por função.
+function GraficoAtualSimulado({ porCargo }: { porCargo?: any[] }) {
+  const dados = useMemo(
+    () => (Array.isArray(porCargo) ? porCargo : [])
+      .map((c) => ({ cargo: c.cargo, atual: Number(c.atual) || 0, simulado: Number(c.simulado) || 0 }))
+      .filter((c) => c.atual > 0 || c.simulado > 0)
+      .slice(0, 14),
+    [porCargo],
+  );
+  if (dados.length === 0) return null;
+  return (
+    <GraficoCard titulo="Efetivo atual × simulado por função">
+      <ResponsiveContainer width="100%" height={Math.max(220, dados.length * 34)}>
+        <BarChart data={dados} layout="vertical" margin={{ left: 8, right: 16, top: 4, bottom: 4 }}>
+          <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
+          <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11, fill: "#94a3b8" }} />
+          <YAxis type="category" dataKey="cargo" width={120} tick={{ fontSize: 11, fill: "#64748b" }} />
+          <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #e2e8f0" }} />
+          <Legend wrapperStyle={{ fontSize: 12 }} />
+          <Bar dataKey="atual" name="Atual" fill="#94a3b8" radius={[0, 3, 3, 0]} />
+          <Bar dataKey="simulado" name="Simulado" fill="#8b5cf6" radius={[0, 3, 3, 0]} />
+        </BarChart>
+      </ResponsiveContainer>
+    </GraficoCard>
+  );
+}
+
 function ImpactoCard({ titulo, Icon, imp }: { titulo: string; Icon: React.ComponentType<{ className?: string }>; imp?: any }) {
   const st = IMPACTO_STATUS[imp?.status] ?? IMPACTO_STATUS.neutro;
   return (
