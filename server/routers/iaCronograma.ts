@@ -17,8 +17,9 @@ import {
   orcamentos,
   jobFunctions,
   obras,
+  vacationPeriods,
 } from "../../drizzle/schema";
-import { eq, and, or, ilike, desc, sql, isNull } from "drizzle-orm";
+import { eq, and, or, ilike, desc, sql, isNull, inArray } from "drizzle-orm";
 
 // ── WMO weather codes severity ────────────────────────────────────────────
 function wmoSeverity(code: number, chuva: number, probChuva: number, vento: number): { tipo: string; sev: string; msg: string } | null {
@@ -237,6 +238,8 @@ async function coletarEfetivoCronograma(db: any, projetoId: number, companyId: n
 
   type CargoAgg = { cargo: string; categoria: string; total: number; ativos: number; indisponiveis: number; clt: number; terceiro: number };
   const porCargoMap = new Map<string, CargoAgg>();
+  // empId → dados básicos do alocado (p/ cruzar com férias na seção 4b).
+  const empInfoById = new Map<number, { nome: string; cargo: string; categoria: string }>();
   let totalEfetivo = 0, totalAtivos = 0, totalIndisponiveis = 0;
   for (const a of allocs as any[]) {
     const emp: any = a.employee;
@@ -254,6 +257,13 @@ async function coletarEfetivoCronograma(db: any, projetoId: number, companyId: n
     const vinc = String(emp.tipoContrato || "").toUpperCase();
     if (vinc.includes("CLT")) g.clt++;
     else if (vinc) g.terceiro++;
+    if (emp.id != null && !empInfoById.has(emp.id)) {
+      empInfoById.set(emp.id, {
+        nome: String(emp.nomeCompleto || emp.nome || "Funcionário").trim(),
+        cargo: cargoNome,
+        categoria: catLabel(catMap.get(key) || ""),
+      });
+    }
   }
   const porCargo = Array.from(porCargoMap.values()).sort((a, b) => b.total - a.total);
 
@@ -291,6 +301,64 @@ async function coletarEfetivoCronograma(db: any, projetoId: number, companyId: n
   const fmtAtiv = (a: any) =>
     `  - [${a.eapCodigo ?? "?"}] ${a.nome} (${isoParaBR(a.dataInicio)} → ${isoParaBR(a.dataFim)}) | Peso ${peso(a).toFixed(2)}%${a.recursoPrincipal ? ` | Recurso: ${a.recursoPrincipal}` : ""}`;
 
+  // 4b. Férias dos alocados (RH › Férias) × impacto no efetivo/prazo. Cruza os
+  // funcionários alocados com `vacation_periods`, lista os períodos de gozo ainda
+  // relevantes (fim >= hoje) com a ORDEM do parcelamento (1º/2º/3º período).
+  // REGRA DE NEGÓCIO (definida pelo usuário): 2º período é INADIÁVEL — o
+  // funcionário SAI de férias; 1º período PODE ser remanejado/negociado SE a
+  // função for imprescindível pra manter o prazo. SOMENTE LEITURA.
+  type FeriasPeriodo = {
+    nome: string; cargo: string; categoria: string; ordem: number;
+    inicio: Date; fim: Date; dias: number; status: string;
+    bucket: "em_gozo" | "proximas" | "futuro"; impactaProximas: boolean;
+  };
+  const feriasPeriodos: FeriasPeriodo[] = [];
+  const empIdsAlloc = Array.from(empInfoById.keys());
+  if (empIdsAlloc.length > 0) {
+    const vps = await db.select({
+      employeeId:     vacationPeriods.employeeId,
+      dataInicio:     vacationPeriods.dataInicio,
+      dataFim:        vacationPeriods.dataFim,
+      periodo2Inicio: vacationPeriods.periodo2Inicio,
+      periodo2Fim:    vacationPeriods.periodo2Fim,
+      periodo3Inicio: vacationPeriods.periodo3Inicio,
+      periodo3Fim:    vacationPeriods.periodo3Fim,
+      status:         vacationPeriods.status,
+    }).from(vacationPeriods).where(and(
+      eq(vacationPeriods.companyId, companyId),
+      inArray(vacationPeriods.employeeId, empIdsAlloc),
+      sql`${vacationPeriods.status} IN ('pendente','agendada','em_gozo')`,
+      isNull(vacationPeriods.deletedAt),
+    ));
+    const diffDias = (a: Date, b: Date) => Math.round((b.getTime() - a.getTime()) / 86400000) + 1;
+    for (const v of vps as any[]) {
+      const info = empInfoById.get(v.employeeId);
+      if (!info) continue;
+      const pares: Array<[number, any, any]> = [
+        [1, v.dataInicio, v.dataFim],
+        [2, v.periodo2Inicio, v.periodo2Fim],
+        [3, v.periodo3Inicio, v.periodo3Fim],
+      ];
+      for (const [ordem, ini, fim] of pares) {
+        const di = parseDt(ini), df = parseDt(fim);
+        if (!di || !df) continue;
+        if (df < hoje) continue; // período já encerrado — irrelevante
+        const emGozo = di <= hoje && df >= hoje;
+        const prox = di > hoje && di <= horizonte;
+        feriasPeriodos.push({
+          nome: info.nome, cargo: info.cargo, categoria: info.categoria, ordem,
+          inicio: di, fim: df, dias: diffDias(di, df), status: v.status,
+          bucket: emGozo ? "em_gozo" : prox ? "proximas" : "futuro",
+          impactaProximas: emGozo || prox,
+        });
+      }
+    }
+    feriasPeriodos.sort((a, b) => a.inicio.getTime() - b.inicio.getTime());
+  }
+  const fmtDBR = (d: Date) => `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
+  const ordemLabel = (o: number) => o === 1 ? "1º período (REMANEJÁVEL se imprescindível)" : o === 2 ? "2º período (INADIÁVEL — sai de férias)" : `${o}º período`;
+  const bucketLabel = (b: string) => b === "em_gozo" ? "EM GOZO AGORA" : b === "proximas" ? "PRÓXIMAS 8 SEMANAS" : "FUTURO";
+
   // 5. Blocos textuais para os prompts
   const efetivoTxt = porCargo.length === 0
     ? "(Nenhum funcionário alocado nesta obra atualmente.)"
@@ -304,11 +372,32 @@ async function coletarEfetivoCronograma(db: any, projetoId: number, companyId: n
     ? "  (Nenhuma atividade iniciando nas próximas 8 semanas.)"
     : proximas.slice(0, 35).map(fmtAtiv).join("\n") + (proximas.length > 35 ? `\n  ... e mais ${proximas.length - 35} atividades nas próximas semanas.` : "");
 
+  const feriasTxt = feriasPeriodos.length === 0
+    ? "  (Nenhuma férias agendada/em gozo para os funcionários alocados nesta obra.)"
+    : feriasPeriodos.slice(0, 40).map(f =>
+        `  - ${f.nome} [${f.cargo} · ${f.categoria}] — ${ordemLabel(f.ordem)} | ${fmtDBR(f.inicio)} → ${fmtDBR(f.fim)} (${f.dias}d) | ${bucketLabel(f.bucket)} | status: ${f.status}`
+      ).join("\n") + (feriasPeriodos.length > 40 ? `\n  ... e mais ${feriasPeriodos.length - 40} períodos de férias.` : "");
+
+  // Resumo: pessoas distintas de férias por função no horizonte (próximas 8 sem
+  // + em gozo). É o impacto direto na disponibilidade do efetivo.
+  const ausentesPorCargo = new Map<string, Set<string>>();
+  for (const f of feriasPeriodos) {
+    if (!f.impactaProximas) continue;
+    if (!ausentesPorCargo.has(f.cargo)) ausentesPorCargo.set(f.cargo, new Set());
+    ausentesPorCargo.get(f.cargo)!.add(f.nome);
+  }
+  const feriasResumoTxt = ausentesPorCargo.size === 0
+    ? "  (Nenhum impacto de férias previsto no horizonte das próximas 8 semanas.)"
+    : Array.from(ausentesPorCargo.entries()).sort((a, b) => b[1].size - a[1].size)
+        .map(([cargo, set]) => `  - ${cargo}: ${set.size} pessoa(s) de férias no horizonte`).join("\n");
+  const totalFeriasHorizonte = Array.from(ausentesPorCargo.values()).reduce((acc, s) => acc + s.size, 0);
+
   return {
     projeto, obra, revisao, porCargo,
     totalEfetivo, totalAtivos, totalIndisponiveis,
     emAndamento, proximas, hoje,
     efetivoTxt, emAndTxt, proxTxt,
+    feriasPeriodos, feriasTxt, feriasResumoTxt, totalFeriasHorizonte,
   };
 }
 
@@ -1472,11 +1561,18 @@ Responda EXATAMENTE neste formato (seja conciso e direto):
         totalEfetivo, totalAtivos, totalIndisponiveis,
         emAndamento, proximas, hoje,
         efetivoTxt, emAndTxt, proxTxt,
+        feriasTxt, feriasResumoTxt, totalFeriasHorizonte,
       } = await coletarEfetivoCronograma(db, input.projetoId, companyId);
 
       const systemPrompt = `Você é JULINHO, engenheiro sênior de planejamento e gestão de mão de obra de obras da FC Engenharia (construção civil pesada brasileira). Sua especialidade é DIMENSIONAMENTO DE EQUIPE: cruzar o EFETIVO atual alocado numa obra com as ATIVIDADES do cronograma (em andamento e das próximas semanas) e dizer, com precisão técnica, se a equipe está SUBdimensionada (precisa contratar), SUPERdimensionada (pode reduzir) ou EQUILIBRADA — analisando POR FUNÇÃO/CARGO.
 
 Considere: o histograma típico de mão de obra por tipo de serviço (mobilização, fundação/estrutura, alvenaria, instalações, acabamento, etc.), a produtividade usual de cada função, o peso financeiro de cada frente (frentes pesadas exigem mais gente), o vínculo (CLT vs terceiro) e quantos estão indisponíveis (férias/aviso/afastado). Seja realista e conservador: só recomende contratar quando houver evidência clara de gargalo, e só reduzir quando houver folga evidente.
+
+## FÉRIAS — REGRA OBRIGATÓRIA (impacto no prazo)
+Você RECEBE a lista de férias agendadas/em gozo dos alocados, com a ORDEM do parcelamento (1º/2º/3º período) e as datas. SEMPRE leve as férias em conta no efetivo DISPONÍVEL: quem está de férias no período de uma atividade NÃO conta como mão de obra naquela frente. Para cada férias que impacta o prazo aplique esta regra de negócio da FC:
+- **2º (ou 3º) período = INADIÁVEL**: por lei já é o saldo final; o funcionário SAI de férias na data marcada — NÃO sugira adiar/remanejar. Planeje a obra CONTANDO com a ausência dele (repor com outro, antecipar a frente, terceirizar, redistribuir).
+- **1º período = NEGOCIÁVEL**: SE a função for IMPRESCINDÍVEL para manter o prazo daquela frente, sugira remanejar/reagendar o 1º período (ou trocar por quem não é gargalo). Se a função NÃO for crítica, deixe o funcionário sair normalmente.
+O OBJETIVO É SEMPRE manter o PRAZO FINAL e a obra em andamento — toda análise deve dizer como absorver as férias sem estourar a data de entrega.
 
 Responda SEMPRE em português brasileiro, técnico, direto e específico. TODAS as datas SEMPRE no padrão brasileiro DD/MM/AAAA (jamais ISO/AAAA-MM-DD). Responda APENAS com JSON válido no formato pedido, sem nenhum texto fora do JSON.`;
 
@@ -1494,6 +1590,12 @@ ${emAndTxt}
 ## ATIVIDADES DAS PRÓXIMAS 8 SEMANAS (${proximas.length})
 ${proxTxt}
 
+## FÉRIAS DOS ALOCADOS (impacto no prazo — ${totalFeriasHorizonte} pessoa(s) ausente(s) no horizonte)
+### Resumo por função (no horizonte)
+${feriasResumoTxt}
+### Detalhe dos períodos
+${feriasTxt}
+
 ---
 Com base no cruzamento acima, retorne um JSON EXATAMENTE nesta estrutura (sem comentários, sem markdown):
 {
@@ -1509,6 +1611,12 @@ Com base no cruzamento acima, retorne um JSON EXATAMENTE nesta estrutura (sem co
   "atividadesCriticas": [
     { "atividade": "string", "periodo": "string", "necessidade": "string — que mão de obra essa frente exige" }
   ],
+  "impactoFerias": {
+    "resumo": "string — leitura geral do impacto das férias no prazo (ou 'Sem férias no horizonte que impactem o prazo')",
+    "itens": [
+      { "funcionario": "string", "cargo": "string", "periodo": "1º" | "2º" | "3º", "datas": "string DD/MM/AAAA → DD/MM/AAAA", "inadiavel": boolean, "impacto": "string — em que frente/atividade do cronograma essa ausência pesa", "acao": "string — o que fazer para MANTER O PRAZO: 2º/3º período é inadiável (repor/antecipar/terceirizar/redistribuir); 1º período só remaneje se a função for imprescindível" }
+    ]
+  },
   "riscos": [ "string" ],
   "recomendacoes": [ "string — ações práticas e priorizadas" ],
   "referenciaPrincipal": {
@@ -1637,6 +1745,7 @@ Regras: inclua em "porCargo" TODAS as funções listadas no efetivo (mesmo as qu
         totalEfetivo, totalAtivos, totalIndisponiveis,
         emAndamento, proximas, hoje,
         efetivoTxt, emAndTxt, proxTxt,
+        feriasTxt, feriasResumoTxt, totalFeriasHorizonte,
       } = await coletarEfetivoCronograma(db, input.projetoId, companyId);
 
       // Aplica os ajustes simulados por cargo (clamp em 0). Cargos não presentes
@@ -1685,6 +1794,8 @@ MISSÃO ESPECIAL — PLANO DE ATAQUE (quando o efetivo é REDUZIDO ou se mantém
 
 No plano de ataque, BUSQUE CENÁRIOS NÃO ÓBVIOS — combinações de sequenciamento, processo construtivo, automação e logística que um engenheiro NÃO enxergaria na correria do dia a dia. Cada manobra deve ter ação concreta, como executar, impacto no prazo e o ajuste correspondente na Linha de Balanço.
 
+FÉRIAS — REGRA OBRIGATÓRIA NO PLANO: você recebe a lista de férias agendadas/em gozo dos alocados, com a ORDEM do parcelamento (1º/2º/3º período). Quem está de férias no período de uma frente NÃO conta como efetivo disponível ali — subtraia essas ausências do cenário simulado. Aplique a regra de negócio da FC: o 2º (ou 3º) período é INADIÁVEL (o funcionário SAI na data; planeje a obra repondo/antecipando/terceirizando/redistribuindo); o 1º período só deve ser remanejado/reagendado SE a função for IMPRESCINDÍVEL para manter o prazo daquela frente. O plano de ataque deve absorver as férias e ainda assim MANTER O PRAZO FINAL.
+
 Seja realista, quantitativo e conservador. Aponte EXPLICITAMENTE quando o cenário simulado tende a NÃO entregar o ganho esperado (ex.: superlotação de uma frente, gargalo deslocado para outra função, função-restrição não ajustada, contratação que só rende após curva de aprendizado). TODAS as datas SEMPRE no padrão brasileiro DD/MM/AAAA (jamais ISO/AAAA-MM-DD). Responda SEMPRE em português brasileiro e APENAS com JSON válido no formato pedido, sem nenhum texto fora do JSON.`;
 
       const userPrompt = `# Simulação de Cenário de Efetivo
@@ -1703,6 +1814,12 @@ ${emAndTxt}
 
 ## ATIVIDADES DAS PRÓXIMAS 8 SEMANAS (${proximas.length})
 ${proxTxt}
+
+## FÉRIAS DOS ALOCADOS (impacto no prazo — ${totalFeriasHorizonte} pessoa(s) ausente(s) no horizonte)
+### Resumo por função (no horizonte)
+${feriasResumoTxt}
+### Detalhe dos períodos
+${feriasTxt}
 
 ---
 Projete o impacto do CENÁRIO SIMULADO frente às atividades acima e retorne um JSON EXATAMENTE nesta estrutura (sem comentários, sem markdown):
@@ -1736,6 +1853,7 @@ Projete o impacto do CENÁRIO SIMULADO frente às atividades acima e retorne um 
     "processosConstrutivos": [ { "atual": "string — método atual", "proposto": "string — método melhor (pré-fab, kit, mecanização)", "ganho": "string — homem-hora/prazo economizado" } ],
     "automacoes": [ { "item": "string — automação/tecnologia", "aplicacao": "string — onde aplicar na obra", "ganho": "string — efeito no efetivo/prazo" } ],
     "cenariosNaoObvios": [ "string — insight/combinação que um engenheiro NÃO veria no dia a dia" ],
+    "absorcaoFerias": [ { "funcionario": "string", "cargo": "string", "periodo": "1º" | "2º" | "3º", "datas": "string DD/MM/AAAA → DD/MM/AAAA", "inadiavel": boolean, "acao": "string — como absorver a ausência mantendo o prazo: 2º/3º período é inadiável (repor/antecipar/terceirizar/redistribuir); 1º período só remaneje se a função for imprescindível" } ],
     "linhaBalancoPlano": "string — o novo plano de ritmo: takt proposto, nº de frentes simultâneas e a nova sequência para manter o prazo com a equipe enxuta",
     "kpisAcompanhamento": [ { "kpi": "string", "meta": "string", "frequencia": "string (ex.: 'semanal no lookahead')" } ],
     "condicoesDeVitoria": [ "string — condições objetivas para considerar a campanha vencida (prazo mantido)" ],
@@ -1913,9 +2031,10 @@ PLANO DE ATAQUE (campo "planoAtaque", OBRIGATÓRIO): ${deltaTotal < 0 ? `ESTE CE
         totalEfetivo, totalAtivos, totalIndisponiveis,
         emAndamento, proximas, hoje,
         efetivoTxt, emAndTxt, proxTxt,
+        feriasTxt, feriasResumoTxt, totalFeriasHorizonte,
       } = await coletarEfetivoCronograma(db, input.projetoId, companyId);
 
-      const systemPrompt = `Você é JULINHO, engenheiro sênior de planejamento e gestão de mão de obra da FC Engenharia (construção civil pesada brasileira). O usuário está olhando a tela "Efetivo × Cronograma (IA)" e tem uma DÚVIDA. Responda de forma DIRETA, DIDÁTICA e curta (no máximo ~6 frases, ou uma lista curta), em português brasileiro, usando SOMENTE os dados do contexto desta obra (efetivo atual e cronograma). Se a pergunta pedir algo que não está nos dados, diga claramente que essa informação não está disponível nesta tela. NÃO invente números: cite apenas valores presentes no contexto. Quando fizer sentido, fundamente em literatura consagrada (PMBOK/PMI, TCPO, CII/overmanning, Lei de Brooks, Koskela/Ballard/Lean), mas sem encher de jargão. TODAS as datas SEMPRE no padrão brasileiro DD/MM/AAAA (jamais ISO/AAAA-MM-DD). Não use markdown pesado; texto limpo.`;
+      const systemPrompt = `Você é JULINHO, engenheiro sênior de planejamento e gestão de mão de obra da FC Engenharia (construção civil pesada brasileira). O usuário está olhando a tela "Efetivo × Cronograma (IA)" e tem uma DÚVIDA. Responda de forma DIRETA, DIDÁTICA e curta (no máximo ~6 frases, ou uma lista curta), em português brasileiro, usando SOMENTE os dados do contexto desta obra (efetivo atual, cronograma e férias dos alocados). Se a pergunta pedir algo que não está nos dados, diga claramente que essa informação não está disponível nesta tela. NÃO invente números: cite apenas valores presentes no contexto. Sobre FÉRIAS, aplique a regra da FC: o 2º/3º período é INADIÁVEL (o funcionário sai na data; planeje repondo/antecipando/terceirizando/redistribuindo) e o 1º período só se remaneja se a função for IMPRESCINDÍVEL para o prazo; o objetivo é sempre MANTER O PRAZO FINAL. Quando fizer sentido, fundamente em literatura consagrada (PMBOK/PMI, TCPO, CII/overmanning, Lei de Brooks, Koskela/Ballard/Lean), mas sem encher de jargão. TODAS as datas SEMPRE no padrão brasileiro DD/MM/AAAA (jamais ISO/AAAA-MM-DD). Não use markdown pesado; texto limpo.`;
 
       const userPrompt = `# Contexto da obra
 **Obra:** ${obra?.nome ?? "—"} | **Projeto:** ${projeto.nome ?? "—"} (Revisão ${revisao.numero ?? "?"})
@@ -1929,6 +2048,12 @@ ${emAndTxt}
 
 ## ATIVIDADES DAS PRÓXIMAS 8 SEMANAS (${proximas.length})
 ${proxTxt}
+
+## FÉRIAS DOS ALOCADOS (impacto no prazo — ${totalFeriasHorizonte} pessoa(s) ausente(s) no horizonte)
+### Resumo por função (no horizonte)
+${feriasResumoTxt}
+### Detalhe dos períodos
+${feriasTxt}
 
 ---
 DÚVIDA DO USUÁRIO: ${input.pergunta}`;
