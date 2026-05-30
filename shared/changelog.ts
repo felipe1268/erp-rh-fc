@@ -1,6 +1,56 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2597 — **PLANEJAMENTO · ABA "EFETIVO × IA" · PLANO DE ATAQUE ENXUTO: FICA
+ * SÓ O GUIA PASSO A PASSO + O PLANO TÁTICO + A LINHA DE BALANÇO; AS DEMAIS SEÇÕES
+ * NARRATIVAS DA "MESA DE GUERRA" SÃO REMOVIDAS DA TELA.**
+ *
+ * PEDIDO (usuário): "Guia passo a passo — até um estagiário consegue seguir. Só
+ * deixa o guia passo a passo." Em duas perguntas de confirmação o usuário definiu
+ * o alcance: (1) NÃO apagar a Linha de Balanço nem o Plano Tático (mantê-los junto
+ * do Guia); (2) remover todo o resto do "Plano de Ataque".
+ *
+ * CONTEXTO: o "Plano de Ataque" do Simulador (componente `PlanoAtaque` em
+ * `client/src/pages/planejamento/AnaliseEfetivoIA.tsx`) tinha acumulado ~16 seções
+ * (Rev. 2590–2596): Guia, Centro de Gravidade, Princípio Guia, Frentes Críticas,
+ * Mesa de Guerra (alocação nas frentes), Manobras (timeline), Plano Tático, Linha
+ * de Balanço por pavimento + gráfico, Realocação de equipes, Assertividade global,
+ * "Novo plano de Linha de Balanço" (texto), Processos construtivos + Automações,
+ * Cenários não óbvios, Absorção das férias, KPIs e Condições de vitória/Se piorar.
+ * Ficou denso/poluído demais para o engenheiro; o usuário quer só o essencial
+ * acionável.
+ *
+ * FIX (SÓ CLIENT — UI; ZERO SERVER/SCHEMA/ALTER/DROP/DELETE; o prompt da IA em
+ * `iaCronograma.ts` NÃO foi tocado, ele continua gerando os campos, apenas não são
+ * mais renderizados):
+ *
+ * `client/src/pages/planejamento/AnaliseEfetivoIA.tsx` (componente `PlanoAtaque`):
+ *  - MANTIDO: cabeçalho do card (título "Plano de Ataque" + badge de veredito de
+ *    prazo + "Missão"), "Guia passo a passo", "Plano Tático" e a "Linha de Balanço"
+ *    (gráfico por pavimento `LinhaBalancoPavimentoChart` + gráfico geral
+ *    `LinhaBalancoChart`).
+ *  - REMOVIDO da renderização: Centro de Gravidade + Princípio Guia, Frentes
+ *    Críticas, Mesa de Guerra (alocação nas frentes), Manobras, Realocação de
+ *    equipes, Assertividade global, "Novo plano de Linha de Balanço" (bloco de
+ *    texto), Processos construtivos + Automações, Cenários não óbvios, Absorção das
+ *    férias, KPIs de acompanhamento e Condições de vitória/Se piorar.
+ *  - Limpeza: removidos os `const` que ficaram sem uso (`manobras`, `frentes`,
+ *    `alocacao`, `processos`, `automacoes`, `naoObvios`, `ferias`, `kpis`,
+ *    `vitoria`, `sePiorar`, `realocacao`, `assertGlobal`); `temAlgo` recalculado só
+ *    com as seções mantidas (`missao || tatico || guia || lobAtivs || lobPavAtivs`).
+ *    Imports de ícones NÃO foram mexidos (vários são compartilhados por outros
+ *    componentes do mesmo arquivo).
+ *
+ * NOTA: simulações antigas não precisam ser refeitas — os campos seguem no JSON
+ * salvo, apenas deixaram de aparecer na tela. Se no futuro o usuário quiser alguma
+ * seção de volta, basta re-renderizar o bloco correspondente (dado preservado).
+ *
+ * Validado via esbuild isolado do componente (exit 0, 104.6kb) + grep confirmando
+ * zero referências órfãs aos consts removidos. tsc completo segue indisponível
+ * (OOM) — validação por esbuild conforme convenção do projeto.
+ *
+ * ---
+ *
  * Rev. 2596 — **PLANEJAMENTO · ABA "EFETIVO × IA" · PLANO DE ATAQUE · LINHA DE
  * BALANÇO POR PAVIMENTO: O EIXO Y PASSA A USAR OS NOMES/NUMERAÇÃO REAIS DO
  * CRONOGRAMA (NÃO MAIS "PAVIMENTO 1..N" GENÉRICOS INVENTADOS PELA IA).**

@@ -1,5 +1,1 @@
-- [tRPC tenancy / companyId](trpc-tenancy.md) — derive companyId from ctx.user, never trust input.companyId (IDOR); convention across routers.
-- [iOS Safari timestamp crash](ios-safari-timestamp-bug.md) — never `new Date(pgTimestamp).toLocale*()`; use formatDateTime from dateUtils.ts (space→T) or WebKit throws.
-- [Best-effort save swallows errors](best-effort-save-swallows-errors.md) — "não está salvando" pode ser INSERT falhando silencioso (texto de IA estourando varchar estreito); trunque no code, nunca ALTER.
-- [SVG LOB window clamp](svg-lob-window-clamp.md) — em gráfico SVG indexado por linha, clampar índice fora da janela colapsa séries no mesmo Y; omita as fora da janela e suba o cap.
-- [Férias classificação legal](ferias-classificacao-legal.md) — INADIÁVEL × REMANEJÁVEL não é só ordem (1º/2º/3º): vencida/concessivo expirado/vencendo ≤45d/em gozo também travam o gozo.
+- [Validação TS sem tsc](validacao-esbuild.md) — tsc estoura OOM neste repo; valide edições compilando o arquivo isolado via esbuild + grep de refs órfãs.
