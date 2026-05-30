@@ -130,6 +130,158 @@ function repararJsonTruncado(s: string): string | null {
   }
 }
 
+// ── Extrai JSON da resposta da IA (com reparo de truncamento) ──────────────
+// Centraliza o parse usado por `analisarEfetivo` e `simularEfetivo`: limpa
+// cercas markdown, recorta do 1º "{" ao último "}" e, se o JSON vier cortado
+// por estouro de tokens, tenta reparar com `repararJsonTruncado` (resultado
+// PARCIAL + aviso suave). Lança se nem o reparo for aproveitável.
+function extrairJsonIa(raw: string): { parsed: any; erroIa: string | null } {
+  const cleaned = (raw || "").trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
+  const firstBrace = cleaned.indexOf("{");
+  const lastBrace = cleaned.lastIndexOf("}");
+  const jsonStr = firstBrace >= 0 && lastBrace > firstBrace ? cleaned.slice(firstBrace, lastBrace + 1) : cleaned;
+  try {
+    return { parsed: JSON.parse(jsonStr), erroIa: null };
+  } catch (parseErr) {
+    const reparado = repararJsonTruncado(firstBrace >= 0 ? cleaned.slice(firstBrace) : cleaned);
+    if (reparado) {
+      return {
+        parsed: JSON.parse(reparado),
+        erroIa: "A resposta foi gerada de forma parcial (a IA atingiu o limite de tamanho da resposta). Alguns itens podem estar incompletos — gere novamente se precisar do detalhamento completo.",
+      };
+    }
+    throw parseErr;
+  }
+}
+
+// ── Coleta efetivo da obra × cronograma (compartilhado) ────────────────────
+// Lê projeto+obra, escolhe a revisão (baseline > aprovada > última), agrega o
+// efetivo atual por função/categoria MO/vínculo/status e separa as atividades
+// folha em andamento + próximas 8 semanas (56d). SOMENTE LEITURA. Reusado por
+// `analisarEfetivo`, `efetivoAtual` e `simularEfetivo`. A validação de tenancy
+// fica na procedure (este helper assume o companyId já autorizado).
+async function coletarEfetivoCronograma(db: any, projetoId: number, companyId: number) {
+  // 1. Projeto + obra vinculada (escopado à empresa)
+  const [projeto] = await db.select({
+    id:     planejamentoProjetos.id,
+    nome:   planejamentoProjetos.nome,
+    obraId: planejamentoProjetos.obraId,
+  }).from(planejamentoProjetos)
+    .where(and(
+      eq(planejamentoProjetos.id, projetoId),
+      eq(planejamentoProjetos.companyId, companyId),
+    ))
+    .limit(1);
+  if (!projeto) throw new Error("Projeto de planejamento não encontrado.");
+  if (!projeto.obraId) throw new Error("Este cronograma não está vinculado a uma obra. Vincule a obra ao projeto para analisar o efetivo.");
+
+  const [obra] = await db.select({ nome: obras.nome })
+    .from(obras).where(eq(obras.id, projeto.obraId)).limit(1);
+
+  // 2. Revisão a analisar: baseline > última aprovada > última
+  const revisoes = await db.select({
+    id:         planejamentoRevisoes.id,
+    numero:     planejamentoRevisoes.numero,
+    status:     planejamentoRevisoes.status,
+    isBaseline: planejamentoRevisoes.isBaseline,
+  }).from(planejamentoRevisoes)
+    .where(eq(planejamentoRevisoes.projetoId, projeto.id))
+    .orderBy(desc(planejamentoRevisoes.numero));
+  const revisao = revisoes.find((r: any) => r.isBaseline)
+    ?? revisoes.find((r: any) => r.status === "aprovada")
+    ?? revisoes[0];
+  if (!revisao) throw new Error("Nenhuma revisão de cronograma encontrada para este projeto. Importe o cronograma primeiro.");
+
+  // 3. Efetivo atual da obra → agrega por função/cargo
+  const allocs = await getObraFuncionarios(projeto.obraId);
+  const jfs = await db.select({ nome: jobFunctions.nome, categoriaMO: jobFunctions.categoriaMO })
+    .from(jobFunctions).where(eq(jobFunctions.companyId, companyId));
+  const norm = (s: string) => (s || "").trim().toUpperCase();
+  const catMap = new Map<string, string>();
+  for (const jf of jfs) if (jf.nome) catMap.set(norm(jf.nome), jf.categoriaMO || "");
+  const catLabel = (c: string) =>
+    c === "direto" ? "Direto"
+    : c === "indireta_obra" ? "Indireto (obra)"
+    : c === "escritorio_central" ? "Indireto (escritório)"
+    : "—";
+
+  type CargoAgg = { cargo: string; categoria: string; total: number; ativos: number; indisponiveis: number; clt: number; terceiro: number };
+  const porCargoMap = new Map<string, CargoAgg>();
+  let totalEfetivo = 0, totalAtivos = 0, totalIndisponiveis = 0;
+  for (const a of allocs as any[]) {
+    const emp: any = a.employee;
+    if (!emp) continue;
+    totalEfetivo++;
+    const cargoNome = String(emp.funcao || emp.cargo || "Sem função").trim();
+    const key = norm(cargoNome);
+    if (!porCargoMap.has(key)) {
+      porCargoMap.set(key, { cargo: cargoNome, categoria: catLabel(catMap.get(key) || ""), total: 0, ativos: 0, indisponiveis: 0, clt: 0, terceiro: 0 });
+    }
+    const g = porCargoMap.get(key)!;
+    g.total++;
+    if (emp.status === "Ativo") { g.ativos++; totalAtivos++; }
+    else { g.indisponiveis++; totalIndisponiveis++; }
+    const vinc = String(emp.tipoContrato || "").toUpperCase();
+    if (vinc.includes("CLT")) g.clt++;
+    else if (vinc) g.terceiro++;
+  }
+  const porCargo = Array.from(porCargoMap.values()).sort((a, b) => b.total - a.total);
+
+  // 4. Atividades folha — em andamento + próximas 8 semanas (56 dias)
+  const ativsRaw = await db.select({
+    nome:             planejamentoAtividades.nome,
+    eapCodigo:        planejamentoAtividades.eapCodigo,
+    dataInicio:       planejamentoAtividades.dataInicio,
+    dataFim:          planejamentoAtividades.dataFim,
+    pesoFinanceiro:   planejamentoAtividades.pesoFinanceiro,
+    recursoPrincipal: planejamentoAtividades.recursoPrincipal,
+    isGrupo:          planejamentoAtividades.isGrupo,
+    isMarco:          planejamentoAtividades.isMarco,
+  }).from(planejamentoAtividades).where(eq(planejamentoAtividades.revisaoId, revisao.id));
+
+  const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
+  const horizonte = new Date(hoje); horizonte.setDate(horizonte.getDate() + 56);
+  const parseDt = (s: any): Date | null => {
+    if (!s) return null;
+    const d = new Date(String(s).slice(0, 10) + "T00:00:00");
+    return isNaN(d.getTime()) ? null : d;
+  };
+  const peso = (a: any) => parseFloat(a.pesoFinanceiro || "0") || 0;
+  const emAndamento: any[] = [];
+  const proximas: any[] = [];
+  for (const a of ativsRaw as any[]) {
+    if (a.isGrupo || a.isMarco) continue;
+    const ini = parseDt(a.dataInicio), fim = parseDt(a.dataFim);
+    if (!ini || !fim) continue;
+    if (ini <= hoje && fim >= hoje) emAndamento.push(a);
+    else if (ini > hoje && ini <= horizonte) proximas.push(a);
+  }
+  emAndamento.sort((a, b) => peso(b) - peso(a));
+  proximas.sort((a, b) => peso(b) - peso(a));
+  const fmtAtiv = (a: any) =>
+    `  - [${a.eapCodigo ?? "?"}] ${a.nome} (${String(a.dataInicio).slice(0, 10)} → ${String(a.dataFim).slice(0, 10)}) | Peso ${peso(a).toFixed(2)}%${a.recursoPrincipal ? ` | Recurso: ${a.recursoPrincipal}` : ""}`;
+
+  // 5. Blocos textuais para os prompts
+  const efetivoTxt = porCargo.length === 0
+    ? "(Nenhum funcionário alocado nesta obra atualmente.)"
+    : porCargo.map(c =>
+        `  - ${c.cargo} [${c.categoria}]: ${c.total} (ativos: ${c.ativos}, indisponíveis: ${c.indisponiveis}, CLT: ${c.clt}, terceiro: ${c.terceiro})`
+      ).join("\n");
+  const emAndTxt = emAndamento.length === 0
+    ? "  (Nenhuma atividade em andamento na data de hoje.)"
+    : emAndamento.slice(0, 35).map(fmtAtiv).join("\n") + (emAndamento.length > 35 ? `\n  ... e mais ${emAndamento.length - 35} atividades em andamento.` : "");
+  const proxTxt = proximas.length === 0
+    ? "  (Nenhuma atividade iniciando nas próximas 8 semanas.)"
+    : proximas.slice(0, 35).map(fmtAtiv).join("\n") + (proximas.length > 35 ? `\n  ... e mais ${proximas.length - 35} atividades nas próximas semanas.` : "");
+
+  return {
+    projeto, obra, revisao, porCargo,
+    totalEfetivo, totalAtivos, totalIndisponiveis,
+    emAndamento, proximas, hoje,
+    efetivoTxt, emAndTxt, proxTxt,
+  };
+}
+
 // ── Detect if activity is weather-sensitive ───────────────────────────────
 const ATIVIDADES_EXTERNAS = [
   "concreto", "concretagem", "concret", "escav", "fundaç", "fundacao",
@@ -1251,118 +1403,12 @@ Responda EXATAMENTE neste formato (seja conciso e direto):
         throw new Error("Sem permissão para esta empresa.");
       }
 
-      // 1. Projeto + obra vinculada (escopado à empresa do usuário)
-      const [projeto] = await db.select({
-        id:      planejamentoProjetos.id,
-        nome:    planejamentoProjetos.nome,
-        obraId:  planejamentoProjetos.obraId,
-      }).from(planejamentoProjetos)
-        .where(and(
-          eq(planejamentoProjetos.id, input.projetoId),
-          eq(planejamentoProjetos.companyId, companyId),
-        ))
-        .limit(1);
-      if (!projeto) throw new Error("Projeto de planejamento não encontrado.");
-      if (!projeto.obraId) throw new Error("Este cronograma não está vinculado a uma obra. Vincule a obra ao projeto para analisar o efetivo.");
-
-      const [obra] = await db.select({ nome: obras.nome })
-        .from(obras).where(eq(obras.id, projeto.obraId)).limit(1);
-
-      // 2. Revisão a analisar: baseline > última aprovada > última
-      const revisoes = await db.select({
-        id:         planejamentoRevisoes.id,
-        numero:     planejamentoRevisoes.numero,
-        status:     planejamentoRevisoes.status,
-        isBaseline: planejamentoRevisoes.isBaseline,
-      }).from(planejamentoRevisoes)
-        .where(eq(planejamentoRevisoes.projetoId, projeto.id))
-        .orderBy(desc(planejamentoRevisoes.numero));
-      const revisao = revisoes.find(r => r.isBaseline)
-        ?? revisoes.find(r => r.status === "aprovada")
-        ?? revisoes[0];
-      if (!revisao) throw new Error("Nenhuma revisão de cronograma encontrada para este projeto. Importe o cronograma primeiro.");
-
-      // 3. Efetivo atual da obra → agrega por função/cargo
-      const allocs = await getObraFuncionarios(projeto.obraId);
-      const jfs = await db.select({ nome: jobFunctions.nome, categoriaMO: jobFunctions.categoriaMO })
-        .from(jobFunctions).where(eq(jobFunctions.companyId, companyId));
-      const norm = (s: string) => (s || "").trim().toUpperCase();
-      const catMap = new Map<string, string>();
-      for (const jf of jfs) if (jf.nome) catMap.set(norm(jf.nome), jf.categoriaMO || "");
-      const catLabel = (c: string) =>
-        c === "direto" ? "Direto"
-        : c === "indireta_obra" ? "Indireto (obra)"
-        : c === "escritorio_central" ? "Indireto (escritório)"
-        : "—";
-
-      type CargoAgg = { cargo: string; categoria: string; total: number; ativos: number; indisponiveis: number; clt: number; terceiro: number };
-      const porCargoMap = new Map<string, CargoAgg>();
-      let totalEfetivo = 0, totalAtivos = 0, totalIndisponiveis = 0;
-      for (const a of allocs as any[]) {
-        const emp: any = a.employee;
-        if (!emp) continue;
-        totalEfetivo++;
-        const cargoNome = String(emp.funcao || emp.cargo || "Sem função").trim();
-        const key = norm(cargoNome);
-        if (!porCargoMap.has(key)) {
-          porCargoMap.set(key, { cargo: cargoNome, categoria: catLabel(catMap.get(key) || ""), total: 0, ativos: 0, indisponiveis: 0, clt: 0, terceiro: 0 });
-        }
-        const g = porCargoMap.get(key)!;
-        g.total++;
-        if (emp.status === "Ativo") { g.ativos++; totalAtivos++; }
-        else { g.indisponiveis++; totalIndisponiveis++; }
-        const vinc = String(emp.tipoContrato || "").toUpperCase();
-        if (vinc.includes("CLT")) g.clt++;
-        else if (vinc) g.terceiro++;
-      }
-      const porCargo = Array.from(porCargoMap.values()).sort((a, b) => b.total - a.total);
-
-      // 4. Atividades folha — em andamento + próximas 8 semanas (56 dias)
-      const ativsRaw = await db.select({
-        nome:             planejamentoAtividades.nome,
-        eapCodigo:        planejamentoAtividades.eapCodigo,
-        dataInicio:       planejamentoAtividades.dataInicio,
-        dataFim:          planejamentoAtividades.dataFim,
-        pesoFinanceiro:   planejamentoAtividades.pesoFinanceiro,
-        recursoPrincipal: planejamentoAtividades.recursoPrincipal,
-        isGrupo:          planejamentoAtividades.isGrupo,
-        isMarco:          planejamentoAtividades.isMarco,
-      }).from(planejamentoAtividades).where(eq(planejamentoAtividades.revisaoId, revisao.id));
-
-      const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
-      const horizonte = new Date(hoje); horizonte.setDate(horizonte.getDate() + 56);
-      const parseDt = (s: any): Date | null => {
-        if (!s) return null;
-        const d = new Date(String(s).slice(0, 10) + "T00:00:00");
-        return isNaN(d.getTime()) ? null : d;
-      };
-      const peso = (a: any) => parseFloat(a.pesoFinanceiro || "0") || 0;
-      const emAndamento: any[] = [];
-      const proximas: any[] = [];
-      for (const a of ativsRaw as any[]) {
-        if (a.isGrupo || a.isMarco) continue;
-        const ini = parseDt(a.dataInicio), fim = parseDt(a.dataFim);
-        if (!ini || !fim) continue;
-        if (ini <= hoje && fim >= hoje) emAndamento.push(a);
-        else if (ini > hoje && ini <= horizonte) proximas.push(a);
-      }
-      emAndamento.sort((a, b) => peso(b) - peso(a));
-      proximas.sort((a, b) => peso(b) - peso(a));
-      const fmtAtiv = (a: any) =>
-        `  - [${a.eapCodigo ?? "?"}] ${a.nome} (${String(a.dataInicio).slice(0, 10)} → ${String(a.dataFim).slice(0, 10)}) | Peso ${peso(a).toFixed(2)}%${a.recursoPrincipal ? ` | Recurso: ${a.recursoPrincipal}` : ""}`;
-
-      // 5. Monta payload textual
-      const efetivoTxt = porCargo.length === 0
-        ? "(Nenhum funcionário alocado nesta obra atualmente.)"
-        : porCargo.map(c =>
-            `  - ${c.cargo} [${c.categoria}]: ${c.total} (ativos: ${c.ativos}, indisponíveis: ${c.indisponiveis}, CLT: ${c.clt}, terceiro: ${c.terceiro})`
-          ).join("\n");
-      const emAndTxt = emAndamento.length === 0
-        ? "  (Nenhuma atividade em andamento na data de hoje.)"
-        : emAndamento.slice(0, 35).map(fmtAtiv).join("\n") + (emAndamento.length > 35 ? `\n  ... e mais ${emAndamento.length - 35} atividades em andamento.` : "");
-      const proxTxt = proximas.length === 0
-        ? "  (Nenhuma atividade iniciando nas próximas 8 semanas.)"
-        : proximas.slice(0, 35).map(fmtAtiv).join("\n") + (proximas.length > 35 ? `\n  ... e mais ${proximas.length - 35} atividades nas próximas semanas.` : "");
+      const {
+        projeto, obra, revisao, porCargo,
+        totalEfetivo, totalAtivos, totalIndisponiveis,
+        emAndamento, proximas, hoje,
+        efetivoTxt, emAndTxt, proxTxt,
+      } = await coletarEfetivoCronograma(db, input.projetoId, companyId);
 
       const systemPrompt = `Você é JULINHO, engenheiro sênior de planejamento e gestão de mão de obra de obras da FC Engenharia (construção civil pesada brasileira). Sua especialidade é DIMENSIONAMENTO DE EQUIPE: cruzar o EFETIVO atual alocado numa obra com as ATIVIDADES do cronograma (em andamento e das próximas semanas) e dizer, com precisão técnica, se a equipe está SUBdimensionada (precisa contratar), SUPERdimensionada (pode reduzir) ou EQUILIBRADA — analisando POR FUNÇÃO/CARGO.
 
@@ -1406,7 +1452,6 @@ Com base no cruzamento acima, retorne um JSON EXATAMENTE nesta estrutura (sem co
 Regras: inclua em "porCargo" TODAS as funções listadas no efetivo (mesmo as que ficam "manter", com delta 0); "delta" = recomendado - atual (negativo = reduzir). Em "indicadores" gere de 3 a 5 cards. Seja específico e quantitativo.`;
 
       let parsed: any = null;
-      let raw = "";
       let erroIa: string | null = null;
       try {
         const result = await invokeLLM({
@@ -1418,26 +1463,12 @@ Regras: inclua em "porCargo" TODAS as funções listadas no efetivo (mesmo as qu
           response_format: { type: "json_object" },
         });
         const content = result.choices?.[0]?.message?.content;
-        raw = typeof content === "string"
+        const raw = typeof content === "string"
           ? content
           : Array.isArray(content) ? ((content[0] as any)?.text ?? "") : "";
-        const cleaned = raw.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
-        const firstBrace = cleaned.indexOf("{");
-        const lastBrace = cleaned.lastIndexOf("}");
-        const jsonStr = firstBrace >= 0 && lastBrace > firstBrace ? cleaned.slice(firstBrace, lastBrace + 1) : cleaned;
-        try {
-          parsed = JSON.parse(jsonStr);
-        } catch (parseErr) {
-          // JSON truncado (estouro de tokens): tenta reparar fechando os
-          // containers abertos a partir do último valor completo.
-          const reparado = repararJsonTruncado(firstBrace >= 0 ? cleaned.slice(firstBrace) : cleaned);
-          if (reparado) {
-            parsed = JSON.parse(reparado);
-            erroIa = "A análise foi gerada de forma parcial (a IA atingiu o limite de tamanho da resposta). Alguns itens podem estar incompletos — gere novamente se precisar do detalhamento completo.";
-          } else {
-            throw parseErr;
-          }
-        }
+        const r = extrairJsonIa(raw);
+        parsed = r.parsed;
+        erroIa = r.erroIa;
       } catch (err: any) {
         erroIa = err?.message?.includes("Nenhuma chave")
           ? "Nenhuma chave de IA configurada. Configure ANTHROPIC_API_KEY ou GOOGLE_API_KEY nas secrets para usar a análise."
@@ -1461,6 +1492,179 @@ Regras: inclua em "porCargo" TODAS as funções listadas no efetivo (mesmo as qu
         },
         porCargoAtual: porCargo,
         analise: parsed,
+        erroIa,
+      };
+    }),
+
+  // ── Efetivo atual (somente leitura, sem IA) — alimenta o Simulador ──────────
+  efetivoAtual: protectedProcedure
+    .input(z.object({ projetoId: z.number(), companyId: z.number() }))
+    .query(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new Error("Banco de dados indisponível.");
+      const companyId = input.companyId;
+      const isAdmin = ctx.user.role === "admin" || ctx.user.role === "admin_master";
+      if (!isAdmin && String((ctx.user as any).companyId ?? "") !== String(companyId)) {
+        throw new Error("Sem permissão para esta empresa.");
+      }
+      const {
+        projeto, obra, revisao, porCargo,
+        totalEfetivo, totalAtivos, totalIndisponiveis,
+        emAndamento, proximas,
+      } = await coletarEfetivoCronograma(db, input.projetoId, companyId);
+      return {
+        obra: obra?.nome ?? "",
+        projeto: projeto.nome ?? "",
+        revisao: revisao.numero ?? null,
+        efetivoResumo: { total: totalEfetivo, ativos: totalAtivos, indisponiveis: totalIndisponiveis, cargos: porCargo.length },
+        atividadesResumo: { emAndamento: emAndamento.length, proximas: proximas.length },
+        porCargoAtual: porCargo,
+      };
+    }),
+
+  // ── Simulador de efetivo — previsão de impacto pela IA (literatura) ─────────
+  // Recebe ajustes (+/-) por função, monta o cenário simulado e pede à IA a
+  // projeção de impacto (prazo/produtividade/custo/qualidade) fundamentada nas
+  // melhores literaturas de gestão da construção. SOMENTE LEITURA + IA.
+  simularEfetivo: protectedProcedure
+    .input(z.object({
+      projetoId: z.number(),
+      companyId: z.number(),
+      ajustes: z.array(z.object({ cargo: z.string(), delta: z.number().int() })).min(1),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new Error("Banco de dados indisponível.");
+      const companyId = input.companyId;
+      const isAdmin = ctx.user.role === "admin" || ctx.user.role === "admin_master";
+      if (!isAdmin && String((ctx.user as any).companyId ?? "") !== String(companyId)) {
+        throw new Error("Sem permissão para esta empresa.");
+      }
+      const {
+        projeto, obra, revisao, porCargo,
+        totalEfetivo, totalAtivos, totalIndisponiveis,
+        emAndamento, proximas, hoje,
+        efetivoTxt, emAndTxt, proxTxt,
+      } = await coletarEfetivoCronograma(db, input.projetoId, companyId);
+
+      // Aplica os ajustes simulados por cargo (clamp em 0). Cargos não presentes
+      // no efetivo mas pedidos nos ajustes (contratação de função nova) entram.
+      const norm = (s: string) => (s || "").trim().toUpperCase();
+      // Descarta ajustes inválidos (cargo vazio ou delta 0) — defensivo contra
+      // payloads de clientes customizados.
+      const ajustesValidos = input.ajustes.filter((a) => a.cargo.trim().length > 0 && a.delta !== 0);
+      if (ajustesValidos.length === 0) throw new Error("Informe ao menos um ajuste de efetivo válido para simular.");
+      const cenarioMap = new Map<string, { cargo: string; categoria: string; atual: number; delta: number }>();
+      for (const c of porCargo) cenarioMap.set(norm(c.cargo), { cargo: c.cargo, categoria: c.categoria, atual: c.total, delta: 0 });
+      for (const aj of ajustesValidos) {
+        const key = norm(aj.cargo);
+        const cur = cenarioMap.get(key);
+        if (cur) cur.delta += aj.delta;
+        else cenarioMap.set(key, { cargo: aj.cargo.trim(), categoria: "—", atual: 0, delta: aj.delta });
+      }
+      const cenario = Array.from(cenarioMap.values()).map(c => {
+        const simulado = Math.max(0, c.atual + c.delta);
+        return { cargo: c.cargo, categoria: c.categoria, atual: c.atual, simulado, delta: simulado - c.atual };
+      });
+      const totalAtualCen = cenario.reduce((s, c) => s + c.atual, 0);
+      const totalSimulado = cenario.reduce((s, c) => s + c.simulado, 0);
+      const deltaTotal = totalSimulado - totalAtualCen;
+
+      const cenarioTxt = cenario.map(c =>
+        `  - ${c.cargo} [${c.categoria}]: ${c.atual} → ${c.simulado} (${c.delta > 0 ? "+" : ""}${c.delta})`
+      ).join("\n");
+
+      const systemPrompt = `Você é JULINHO, engenheiro sênior de planejamento e gestão de produção de obras da FC Engenharia (construção civil pesada brasileira), especialista em DIMENSIONAMENTO DE MÃO DE OBRA e em PREVISÃO DE IMPACTO de cenários de efetivo.
+
+O usuário está SIMULANDO uma mudança no efetivo da obra (reduzir e/ou aumentar pessoas por função) e quer que você PROJETE os impactos dessa decisão sobre PRAZO, PRODUTIVIDADE, CUSTO e QUALIDADE/SEGURANÇA — fundamentando o raciocínio nas MELHORES LITERATURAS MUNDIAIS de gestão da construção, entre elas:
+- Lei de Brooks (Brooks's Law): adicionar gente a uma frente já atrasada nem sempre acelera — há custo de integração e curva de aprendizado.
+- Curva de aprendizado (learning curve) da mão de obra recém-alocada.
+- Histograma de mão de obra e nivelamento de recursos (resource leveling — PMBOK/PMI).
+- Linha de Balanço (Line of Balance / LOB) e ritmo de produção (takt) em serviços repetitivos.
+- Rendimentos da TCPO e composição de cuadrillas (relação pedreiro/servente).
+- Estudos do Construction Industry Institute (CII) sobre overmanning, congestionamento de frentes (trade stacking) e perda de produtividade por superlotação.
+- Efeito da fadiga / horas extras prolongadas sobre a produtividade.
+- Fluxo de produção da Lean Construction (Lei de Little, redução de WIP).
+
+Seja realista, quantitativo e conservador. Aponte EXPLICITAMENTE quando o cenário simulado tende a NÃO entregar o ganho esperado (ex.: superlotação de uma frente, gargalo deslocado para outra função, função-restrição não ajustada, contratação que só rende após curva de aprendizado). Responda SEMPRE em português brasileiro e APENAS com JSON válido no formato pedido, sem nenhum texto fora do JSON.`;
+
+      const userPrompt = `# Simulação de Cenário de Efetivo
+**Obra:** ${obra?.nome ?? "—"}
+**Projeto:** ${projeto.nome ?? "—"} (Revisão ${revisao.numero ?? "?"})
+**Data de referência:** ${hoje.toISOString().slice(0, 10)}
+
+## EFETIVO ATUAL ALOCADO (total: ${totalEfetivo} | ativos: ${totalAtivos} | indisponíveis: ${totalIndisponiveis})
+${efetivoTxt}
+
+## CENÁRIO SIMULADO PELO USUÁRIO (efetivo total ${totalAtualCen} → ${totalSimulado} | Δ ${deltaTotal > 0 ? "+" : ""}${deltaTotal})
+${cenarioTxt}
+
+## ATIVIDADES EM ANDAMENTO HOJE (${emAndamento.length})
+${emAndTxt}
+
+## ATIVIDADES DAS PRÓXIMAS 8 SEMANAS (${proximas.length})
+${proxTxt}
+
+---
+Projete o impacto do CENÁRIO SIMULADO frente às atividades acima e retorne um JSON EXATAMENTE nesta estrutura (sem comentários, sem markdown):
+{
+  "veredito": "favoravel" | "neutro" | "arriscado",
+  "tituloCenario": "string curta resumindo o cenário e seu efeito principal",
+  "resumoExecutivo": "string — 2 a 4 frases: o que acontece com a obra ao aplicar este efetivo",
+  "impactos": {
+    "prazo":              { "status": "positivo" | "neutro" | "negativo", "estimativa": "string (ex: '-2 a -3 semanas', 'sem ganho real', '+1 semana')", "texto": "1 a 2 frases" },
+    "produtividade":      { "status": "positivo" | "neutro" | "negativo", "texto": "1 a 2 frases" },
+    "custo":              { "status": "positivo" | "neutro" | "negativo", "estimativa": "string (ex: 'reduz custo de MO', '+ custo mensal de equipe')", "texto": "1 a 2 frases" },
+    "qualidadeSeguranca": { "status": "positivo" | "neutro" | "negativo", "texto": "1 a 2 frases" }
+  },
+  "indicadores": [
+    { "label": "string curto", "valor": "string", "status": "ok" | "alerta" | "critico", "descricao": "1 frase" }
+  ],
+  "porCargo": [
+    { "cargo": "string", "atual": number, "simulado": number, "delta": number, "efeito": "string — efeito prático deste ajuste nesta função" }
+  ],
+  "riscos": [ "string" ],
+  "recomendacoes": [ "string — ações práticas para o cenário dar certo" ],
+  "referencias": [
+    { "fonte": "string — nome da literatura/princípio (ex: 'Lei de Brooks', 'CII — overmanning')", "aplicacao": "string — como se aplica a ESTE cenário" }
+  ]
+}
+
+Regras: em "porCargo" inclua TODAS as funções do cenário usando os números do CENÁRIO SIMULADO fornecido (atual → simulado). Gere de 3 a 5 "indicadores" e de 2 a 4 "referencias" citando literaturas REAIS aplicadas a este caso específico. Seja específico e quantitativo; se a Lei de Brooks, superlotação (overmanning) ou gargalo deslocado se aplicarem, diga claramente.`;
+
+      let parsed: any = null;
+      let erroIa: string | null = null;
+      try {
+        const result = await invokeLLM({
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user",   content: userPrompt },
+          ],
+          maxTokens: 8000,
+          response_format: { type: "json_object" },
+        });
+        const content = result.choices?.[0]?.message?.content;
+        const raw = typeof content === "string"
+          ? content
+          : Array.isArray(content) ? ((content[0] as any)?.text ?? "") : "";
+        const r = extrairJsonIa(raw);
+        parsed = r.parsed;
+        erroIa = r.erroIa;
+      } catch (err: any) {
+        erroIa = err?.message?.includes("Nenhuma chave")
+          ? "Nenhuma chave de IA configurada. Configure ANTHROPIC_API_KEY ou GOOGLE_API_KEY nas secrets para usar a simulação."
+          : `Não foi possível gerar a simulação de IA: ${err?.message ?? "erro desconhecido"}.`;
+      }
+
+      return {
+        obra:    obra?.nome ?? "",
+        projeto: projeto.nome ?? "",
+        revisao: revisao.numero ?? null,
+        geradoEm: new Date().toISOString(),
+        efetivoResumo: { total: totalEfetivo, ativos: totalAtivos, indisponiveis: totalIndisponiveis },
+        atividadesResumo: { emAndamento: emAndamento.length, proximas: proximas.length },
+        cenario: { porCargo: cenario, totalAtual: totalAtualCen, totalSimulado, deltaTotal },
+        previsao: parsed,
         erroIa,
       };
     }),

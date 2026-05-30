@@ -1,6 +1,57 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2579 — **PLANEJAMENTO · ABA "EFETIVO × IA" · NOVO "SIMULADOR DE MÃO DE
+ * OBRA" — AJUSTE O EFETIVO POR FUNÇÃO (+/-) E A IA PROJETA O IMPACTO NO PRAZO,
+ * PRODUTIVIDADE, CUSTO E QUALIDADE, FUNDAMENTADA NAS MELHORES LITERATURAS DE
+ * GESTÃO DE OBRAS.**
+ *
+ * MOTIVAÇÃO (pedido do usuário): além do diagnóstico atual (que diz onde
+ * contratar/reduzir/manter), o engenheiro queria poder SIMULAR cenários — "quero
+ * reduzir X serventes" ou "aumentar Y pedreiros" — e ver a previsão de impacto
+ * "segundo as melhores literaturas do mundo" de gestão de produção de obra.
+ *
+ * O QUE MUDOU:
+ *
+ * SERVER (`server/routers/iaCronograma.ts`):
+ * - Refatoração não-destrutiva: a coleta de dados (projeto+obra, escolha da
+ *   revisão baseline>aprovada>última, agregação do efetivo por função/categoria
+ *   MO/vínculo/status, atividades folha em andamento + próximas 8 semanas e os
+ *   blocos textuais p/ o prompt) foi EXTRAÍDA para o helper module-level
+ *   `coletarEfetivoCronograma(db, projetoId, companyId)` (somente leitura). O
+ *   parse de JSON da IA com reparo de truncamento foi extraído para
+ *   `extrairJsonIa(raw)` (reusa `repararJsonTruncado` da Rev. 2578). `analisarEfetivo`
+ *   foi reescrita p/ usar os dois helpers — comportamento IDÊNTICO ao anterior.
+ * - Nova query `efetivoAtual({projetoId,companyId})` (SEM IA): retorna o efetivo
+ *   atual por função + resumos, alimentando o editor do simulador imediatamente.
+ * - Nova mutation `simularEfetivo({projetoId,companyId,ajustes:[{cargo,delta}]})`:
+ *   monta o cenário simulado (atual+delta, clamp em 0; cargo novo entra como
+ *   contratação), chama `invokeLLM` (Claude→fallback Gemini, json_object,
+ *   maxTokens 8000) com prompt que PROJETA impacto em prazo/produtividade/custo/
+ *   qualidade fundamentado em literatura REAL (Lei de Brooks, curva de
+ *   aprendizado, histograma/nivelamento de recursos PMBOK, Linha de Balanço/takt,
+ *   TCPO/cuadrillas, overmanning & trade stacking do CII, fadiga/overtime, Lean/
+ *   Lei de Little). Retorna `previsao` estruturada (veredito, impactos, indicadores,
+ *   porCargo c/ efeito, riscos, recomendações, `referencias`) + `cenario` calculado.
+ *   Mesmo padrão de tenancy de `analisarEfetivo` (admin/admin_master livre; demais
+ *   só a própria empresa). Reusa `extrairJsonIa` → também tolera truncamento.
+ *
+ * CLIENT (`client/src/pages/planejamento/AnaliseEfetivoIA.tsx`):
+ * - Alternador "Diagnóstico | Simulador" no topo da aba. Diagnóstico mantém o
+ *   comportamento original (extraído p/ subcomponente). Simulador carrega o
+ *   efetivo via `efetivoAtual`, lista as funções com stepper +/- (input editável,
+ *   nunca deixa simulado < 0), mostra total atual→simulado e Δ, botão "Simular
+ *   previsão" (habilitado só com ≥1 ajuste) e "Limpar". Resultado renderiza o
+ *   veredito, 4 cards de impacto (prazo/produtividade/custo/qualidade),
+ *   indicadores, efeito por função, riscos/recomendações e um bloco de
+ *   "Fundamentação (literatura)". Hook de progresso 0–100% e o painel de etapas
+ *   foram extraídos e reusados (etapas próprias p/ o simulador).
+ *
+ * Zero schema. Zero ALTER/DROP/DELETE (somente SELECT + chamada de IA). Validado
+ * via esbuild isolado (server + client) — tsc dá OOM neste repo.
+ *
+ * ---
+ *
  * Rev. 2578 — **PLANEJAMENTO · ABA "EFETIVO × IA" · CORREÇÃO DO ERRO "Não foi
  * possível gerar a análise de IA: Expected ',' or ']' after array element in
  * JSON at position 9887" — JSON DA IA VINHA TRUNCADO POR ESTOURO DE TOKENS.**

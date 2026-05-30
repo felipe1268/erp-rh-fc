@@ -1,11 +1,12 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import {
   Sparkles, Loader2, Users, HardHat, TrendingUp, TrendingDown, Minus,
   AlertTriangle, CheckCircle2, ArrowUpRight, ArrowDownRight, Lightbulb,
   ClipboardList, RefreshCw, Building2, Database, GitCompareArrows, Brain, ListChecks,
+  Plus, Calculator, BookOpen, CalendarClock, DollarSign, Activity, ShieldCheck, RotateCcw,
 } from "lucide-react";
 
 type Props = {
@@ -22,6 +23,14 @@ const ETAPAS: { label: string; detalhe: string; ate: number; Icon: React.Compone
   { label: "Agregando por função e categoria",      detalhe: "Consolidando o quadro atual da equipe",                 ate: 62, Icon: Users },
   { label: "Consultando a IA",                       detalhe: "Diagnóstico de dimensionamento (contratar/reduzir/manter)", ate: 90, Icon: Brain },
   { label: "Montando recomendações",                detalhe: "Indicadores, frentes críticas, riscos e ações",          ate: 100, Icon: ListChecks },
+];
+
+const ETAPAS_SIM: { label: string; detalhe: string; ate: number; Icon: React.ComponentType<{ className?: string }> }[] = [
+  { label: "Montando o cenário simulado",           detalhe: "Aplicando os ajustes por função sobre o efetivo atual", ate: 22, Icon: Calculator },
+  { label: "Cruzando com o cronograma",             detalhe: "Atividades em andamento + próximas 8 semanas",          ate: 45, Icon: GitCompareArrows },
+  { label: "Aplicando a literatura de gestão",      detalhe: "Brooks, curva de aprendizado, LOB, overmanning (CII)",  ate: 62, Icon: BookOpen },
+  { label: "Consultando a IA",                       detalhe: "Projeção de prazo, produtividade, custo e qualidade",   ate: 90, Icon: Brain },
+  { label: "Montando o prognóstico",                detalhe: "Impactos, indicadores, riscos e referências",           ate: 100, Icon: ListChecks },
 ];
 
 type Indicador = { label: string; valor: string; status?: string; descricao?: string };
@@ -41,6 +50,19 @@ const DIAG_META: Record<string, { label: string; cls: string; Icon: React.Compon
   misto:       { label: "Ajustes mistos",      cls: "bg-violet-50 text-violet-700 border-violet-200",    Icon: RefreshCw },
 };
 
+// Veredito do simulador
+const VEREDITO_META: Record<string, { label: string; cls: string; Icon: React.ComponentType<{ className?: string }> }> = {
+  favoravel: { label: "Cenário favorável",  cls: "bg-emerald-50 text-emerald-700 border-emerald-200", Icon: CheckCircle2 },
+  neutro:    { label: "Impacto neutro",     cls: "bg-slate-50 text-slate-600 border-slate-200",        Icon: Minus },
+  arriscado: { label: "Cenário arriscado",  cls: "bg-amber-50 text-amber-700 border-amber-200",        Icon: AlertTriangle },
+};
+
+const IMPACTO_STATUS: Record<string, { dot: string; txt: string }> = {
+  positivo: { dot: "bg-emerald-500", txt: "text-emerald-700" },
+  neutro:   { dot: "bg-slate-400",   txt: "text-slate-600" },
+  negativo: { dot: "bg-amber-500",   txt: "text-amber-700" },
+};
+
 function statusDot(status?: string) {
   if (status === "critico") return "bg-red-500";
   if (status === "alerta")  return "bg-amber-500";
@@ -48,21 +70,48 @@ function statusDot(status?: string) {
 }
 
 export default function AnaliseEfetivoIA({ projetoId, companyId }: Props) {
-  const [result, setResult] = useState<any>(null);
+  const [modo, setModo] = useState<"diagnostico" | "simulador">("diagnostico");
+
+  return (
+    <div className="space-y-5">
+      {/* Alternador de modo */}
+      <div className="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-1">
+        <button
+          onClick={() => setModo("diagnostico")}
+          className={`inline-flex items-center gap-1.5 rounded-md px-3.5 py-1.5 text-sm font-medium transition-colors ${
+            modo === "diagnostico" ? "bg-white text-slate-800 shadow-sm" : "text-slate-500 hover:text-slate-700"
+          }`}
+        >
+          <Sparkles className="h-3.5 w-3.5" /> Diagnóstico
+        </button>
+        <button
+          onClick={() => setModo("simulador")}
+          className={`inline-flex items-center gap-1.5 rounded-md px-3.5 py-1.5 text-sm font-medium transition-colors ${
+            modo === "simulador" ? "bg-white text-slate-800 shadow-sm" : "text-slate-500 hover:text-slate-700"
+          }`}
+        >
+          <Calculator className="h-3.5 w-3.5" /> Simulador
+        </button>
+      </div>
+
+      {modo === "diagnostico"
+        ? <Diagnostico projetoId={projetoId} companyId={companyId} />
+        : <Simulador projetoId={projetoId} companyId={companyId} />}
+    </div>
+  );
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+ * Hook de progresso simulado (0–100%) reusado pelo diagnóstico e simulador
+ * ──────────────────────────────────────────────────────────────────────── */
+function useProgressoSimulado(isPending: boolean, isSuccess: boolean) {
   const [progresso, setProgresso] = useState(0);
-  const [mostrarProgresso, setMostrarProgresso] = useState(false);
+  const [mostrar, setMostrar] = useState(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const mut = trpc.iaCronograma.analisarEfetivo.useMutation({
-    onSuccess: (d) => setResult(d),
-  });
-
-  // Progresso simulado (visibilidade desacoplada de `isPending` p/ o 100%
-  // aparecer): enquanto pendente, sobe suave até 95% (a IA não reporta progresso
-  // real); ao concluir com sucesso, fecha em 100% e mantém o painel por ~900ms.
   useEffect(() => {
-    if (mut.isPending) {
-      setMostrarProgresso(true);
+    if (isPending) {
+      setMostrar(true);
       setProgresso(4);
       timerRef.current = setInterval(() => {
         setProgresso((p) => {
@@ -73,23 +122,77 @@ export default function AnaliseEfetivoIA({ projetoId, companyId }: Props) {
       }, 180);
       return () => { if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; } };
     }
-
     if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
-    if (mut.isSuccess) {
+    if (isSuccess) {
       setProgresso(100);
-      const t = setTimeout(() => { setMostrarProgresso(false); setProgresso(0); }, 900);
+      const t = setTimeout(() => { setMostrar(false); setProgresso(0); }, 900);
       return () => clearTimeout(t);
     }
-    // erro ou estado inicial
-    setMostrarProgresso(false);
+    setMostrar(false);
     setProgresso(0);
-  }, [mut.isPending, mut.isSuccess]);
+  }, [isPending, isSuccess]);
 
-  const etapaAtualIdx = ETAPAS.findIndex((e) => progresso < e.ate);
-  const etapaIdx = etapaAtualIdx === -1 ? ETAPAS.length - 1 : etapaAtualIdx;
+  return { progresso, mostrar };
+}
+
+function PainelProgresso({
+  progresso, etapas, titulo,
+}: { progresso: number; etapas: typeof ETAPAS; titulo: string }) {
+  const etapaAtualIdx = etapas.findIndex((e) => progresso < e.ate);
+  const etapaIdx = etapaAtualIdx === -1 ? etapas.length - 1 : etapaAtualIdx;
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white p-5">
+      <div className="flex items-center justify-between gap-3 mb-2">
+        <span className="text-sm font-semibold text-slate-700 inline-flex items-center gap-2">
+          <Sparkles className="h-4 w-4 text-blue-600" /> {titulo}
+        </span>
+        <span className="text-sm font-bold text-blue-700 tabular-nums">{Math.round(progresso)}%</span>
+      </div>
+      <div className="h-2.5 w-full rounded-full bg-slate-100 overflow-hidden">
+        <div
+          className="h-full rounded-full bg-gradient-to-r from-blue-500 to-blue-600 transition-all duration-200 ease-out"
+          style={{ width: `${progresso}%` }}
+        />
+      </div>
+      <div className="mt-4 space-y-2.5">
+        {etapas.map((e, i) => {
+          const concluida = i < etapaIdx;
+          const ativa = i === etapaIdx;
+          const EtapaIcon = e.Icon;
+          return (
+            <div key={i} className={`flex items-start gap-3 ${!concluida && !ativa ? "opacity-40" : ""}`}>
+              <div className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border ${
+                concluida ? "border-emerald-200 bg-emerald-50 text-emerald-600"
+                : ativa ? "border-blue-200 bg-blue-50 text-blue-600"
+                : "border-slate-200 bg-slate-50 text-slate-400"
+              }`}>
+                {concluida ? <CheckCircle2 className="h-3.5 w-3.5" />
+                  : ativa ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  : <EtapaIcon className="h-3.5 w-3.5" />}
+              </div>
+              <div className="min-w-0">
+                <p className={`text-sm font-medium leading-tight ${ativa ? "text-slate-800" : "text-slate-600"}`}>{e.label}</p>
+                <p className="text-xs text-slate-400 leading-snug mt-0.5">{e.detalhe}</p>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+ * Modo DIAGNÓSTICO (comportamento original)
+ * ──────────────────────────────────────────────────────────────────────── */
+function Diagnostico({ projetoId, companyId }: Props) {
+  const [result, setResult] = useState<any>(null);
+  const mut = trpc.iaCronograma.analisarEfetivo.useMutation({
+    onSuccess: (d) => setResult(d),
+  });
+  const { progresso, mostrar } = useProgressoSimulado(mut.isPending, mut.isSuccess);
 
   const gerar = () => mut.mutate({ projetoId, companyId });
-
   const analise = result?.analise;
   const diag = DIAG_META[analise?.diagnostico] ?? DIAG_META.misto;
   const DiagIcon = diag.Icon;
@@ -127,50 +230,8 @@ export default function AnaliseEfetivoIA({ projetoId, companyId }: Props) {
         )}
       </div>
 
-      {/* Progresso (0–100%) com etapas */}
-      {mostrarProgresso && (
-        <div className="rounded-xl border border-slate-200 bg-white p-5">
-          <div className="flex items-center justify-between gap-3 mb-2">
-            <span className="text-sm font-semibold text-slate-700 inline-flex items-center gap-2">
-              <Sparkles className="h-4 w-4 text-blue-600" /> Analisando efetivo × cronograma…
-            </span>
-            <span className="text-sm font-bold text-blue-700 tabular-nums">{Math.round(progresso)}%</span>
-          </div>
-          <div className="h-2.5 w-full rounded-full bg-slate-100 overflow-hidden">
-            <div
-              className="h-full rounded-full bg-gradient-to-r from-blue-500 to-blue-600 transition-all duration-200 ease-out"
-              style={{ width: `${progresso}%` }}
-            />
-          </div>
+      {mostrar && <PainelProgresso progresso={progresso} etapas={ETAPAS} titulo="Analisando efetivo × cronograma…" />}
 
-          <div className="mt-4 space-y-2.5">
-            {ETAPAS.map((e, i) => {
-              const concluida = i < etapaIdx;
-              const ativa = i === etapaIdx;
-              const EtapaIcon = e.Icon;
-              return (
-                <div key={i} className={`flex items-start gap-3 ${!concluida && !ativa ? "opacity-40" : ""}`}>
-                  <div className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border ${
-                    concluida ? "border-emerald-200 bg-emerald-50 text-emerald-600"
-                    : ativa ? "border-blue-200 bg-blue-50 text-blue-600"
-                    : "border-slate-200 bg-slate-50 text-slate-400"
-                  }`}>
-                    {concluida ? <CheckCircle2 className="h-3.5 w-3.5" />
-                      : ativa ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      : <EtapaIcon className="h-3.5 w-3.5" />}
-                  </div>
-                  <div className="min-w-0">
-                    <p className={`text-sm font-medium leading-tight ${ativa ? "text-slate-800" : "text-slate-600"}`}>{e.label}</p>
-                    <p className="text-xs text-slate-400 leading-snug mt-0.5">{e.detalhe}</p>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* Erro de mutation */}
       {mut.isError && (
         <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700 flex items-start gap-2">
           <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
@@ -178,7 +239,6 @@ export default function AnaliseEfetivoIA({ projetoId, companyId }: Props) {
         </div>
       )}
 
-      {/* Erro de IA (mas dados de efetivo vieram) */}
       {result?.erroIa && (
         <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 flex items-start gap-2">
           <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
@@ -186,7 +246,6 @@ export default function AnaliseEfetivoIA({ projetoId, companyId }: Props) {
         </div>
       )}
 
-      {/* Estado vazio */}
       {!result && !mut.isPending && (
         <div className="rounded-xl border border-dashed border-slate-200 bg-white p-10 text-center">
           <HardHat className="h-8 w-8 text-slate-300 mx-auto mb-3" />
@@ -194,10 +253,8 @@ export default function AnaliseEfetivoIA({ projetoId, companyId }: Props) {
         </div>
       )}
 
-      {/* Resultado da IA */}
       {analise && (
         <div className="space-y-5">
-          {/* Diagnóstico */}
           <div className={`rounded-xl border p-5 ${diag.cls}`}>
             <div className="flex items-center gap-2 mb-1.5">
               <DiagIcon className="h-5 w-5" />
@@ -207,7 +264,6 @@ export default function AnaliseEfetivoIA({ projetoId, companyId }: Props) {
             {analise.resumoExecutivo && <p className="text-sm mt-1.5 opacity-90 leading-relaxed">{analise.resumoExecutivo}</p>}
           </div>
 
-          {/* Indicadores */}
           {Array.isArray(analise.indicadores) && analise.indicadores.length > 0 && (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               {analise.indicadores.map((ind: Indicador, i: number) => (
@@ -223,7 +279,6 @@ export default function AnaliseEfetivoIA({ projetoId, companyId }: Props) {
             </div>
           )}
 
-          {/* Por cargo */}
           {Array.isArray(analise.porCargo) && analise.porCargo.length > 0 && (
             <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
               <div className="px-4 py-3 border-b border-slate-100 flex items-center gap-2">
@@ -272,7 +327,6 @@ export default function AnaliseEfetivoIA({ projetoId, companyId }: Props) {
             </div>
           )}
 
-          {/* Atividades críticas */}
           {Array.isArray(analise.atividadesCriticas) && analise.atividadesCriticas.length > 0 && (
             <div className="rounded-xl border border-slate-200 bg-white p-4">
               <div className="flex items-center gap-2 mb-3">
@@ -293,50 +347,131 @@ export default function AnaliseEfetivoIA({ projetoId, companyId }: Props) {
             </div>
           )}
 
-          {/* Riscos + Recomendações */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            {Array.isArray(analise.riscos) && analise.riscos.length > 0 && (
-              <div className="rounded-xl border border-slate-200 bg-white p-4">
-                <div className="flex items-center gap-2 mb-3">
-                  <AlertTriangle className="h-4 w-4 text-amber-500" />
-                  <span className="text-sm font-semibold text-slate-700">Riscos</span>
-                </div>
-                <ul className="space-y-2">
-                  {analise.riscos.map((r: string, i: number) => (
-                    <li key={i} className="flex items-start gap-2 text-sm text-slate-600">
-                      <span className="mt-1.5 h-1.5 w-1.5 rounded-full bg-amber-400 shrink-0" />
-                      <span>{r}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-            {Array.isArray(analise.recomendacoes) && analise.recomendacoes.length > 0 && (
-              <div className="rounded-xl border border-slate-200 bg-white p-4">
-                <div className="flex items-center gap-2 mb-3">
-                  <Lightbulb className="h-4 w-4 text-blue-500" />
-                  <span className="text-sm font-semibold text-slate-700">Recomendações</span>
-                </div>
-                <ul className="space-y-2">
-                  {analise.recomendacoes.map((r: string, i: number) => (
-                    <li key={i} className="flex items-start gap-2 text-sm text-slate-600">
-                      <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 text-blue-400 shrink-0" />
-                      <span>{r}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-          </div>
+          <RiscosRecomendacoes riscos={analise.riscos} recomendacoes={analise.recomendacoes} />
         </div>
       )}
 
-      {/* Sem IA mas com efetivo bruto (fallback) */}
       {!analise && result?.porCargoAtual?.length > 0 && (
+        <EfetivoBruto porCargoAtual={result.porCargoAtual} />
+      )}
+    </div>
+  );
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+ * Modo SIMULADOR
+ * ──────────────────────────────────────────────────────────────────────── */
+function Simulador({ projetoId, companyId }: Props) {
+  const efetivoQ = trpc.iaCronograma.efetivoAtual.useQuery({ projetoId, companyId });
+  const [deltas, setDeltas] = useState<Record<string, number>>({});
+  const [result, setResult] = useState<any>(null);
+
+  const mut = trpc.iaCronograma.simularEfetivo.useMutation({
+    onSuccess: (d) => setResult(d),
+  });
+  const { progresso, mostrar } = useProgressoSimulado(mut.isPending, mut.isSuccess);
+
+  const porCargo: any[] = efetivoQ.data?.porCargoAtual ?? [];
+  const keyOf = (cargo: string) => cargo.trim().toUpperCase();
+
+  const setDelta = (cargo: string, d: number) =>
+    setDeltas((prev) => ({ ...prev, [keyOf(cargo)]: d }));
+  const bump = (cargo: string, atual: number, inc: number) => {
+    const k = keyOf(cargo);
+    const cur = deltas[k] ?? 0;
+    const next = Math.max(-atual, cur + inc); // não deixa simulado < 0
+    setDelta(cargo, next);
+  };
+
+  const ajustes = useMemo(
+    () => porCargo
+      .map((c) => ({ cargo: c.cargo, delta: deltas[keyOf(c.cargo)] ?? 0 }))
+      .filter((a) => a.delta !== 0),
+    [porCargo, deltas],
+  );
+  const totalAtual = useMemo(() => porCargo.reduce((s, c) => s + c.total, 0), [porCargo]);
+  const totalSimulado = useMemo(
+    () => porCargo.reduce((s, c) => s + Math.max(0, c.total + (deltas[keyOf(c.cargo)] ?? 0)), 0),
+    [porCargo, deltas],
+  );
+  const deltaTotal = totalSimulado - totalAtual;
+
+  const limpar = () => { setDeltas({}); setResult(null); };
+  const simular = () => {
+    if (ajustes.length === 0) return;
+    mut.mutate({ projetoId, companyId, ajustes });
+  };
+
+  const prev = result?.previsao;
+  const ver = VEREDITO_META[prev?.veredito] ?? VEREDITO_META.neutro;
+  const VerIcon = ver.Icon;
+
+  return (
+    <div className="space-y-5">
+      {/* Cabeçalho */}
+      <div className="rounded-xl border border-slate-200 bg-gradient-to-br from-violet-50/60 to-white p-5">
+        <div className="flex items-start gap-3">
+          <div className="rounded-lg bg-violet-600/10 p-2.5">
+            <Calculator className="h-5 w-5 text-violet-600" />
+          </div>
+          <div>
+            <h2 className="text-base font-semibold text-slate-800">Simulador de Mão de Obra (IA)</h2>
+            <p className="text-sm text-slate-500 max-w-2xl mt-0.5">
+              Ajuste o efetivo por função (reduza ou aumente) e a IA projeta os impactos no
+              prazo, produtividade, custo e qualidade — fundamentada nas melhores literaturas
+              de gestão de obras (Lei de Brooks, curva de aprendizado, Linha de Balanço, overmanning/CII).
+            </p>
+          </div>
+        </div>
+        {efetivoQ.data && (
+          <div className="flex items-center gap-4 flex-wrap mt-4 text-xs text-slate-500">
+            {efetivoQ.data.obra && <span className="inline-flex items-center gap-1"><Building2 className="h-3.5 w-3.5" /> {efetivoQ.data.obra}</span>}
+            {efetivoQ.data.revisao != null && <span>Revisão {efetivoQ.data.revisao}</span>}
+            <span className="inline-flex items-center gap-1"><Users className="h-3.5 w-3.5" /> {efetivoQ.data.efetivoResumo?.total ?? 0} alocados</span>
+            <span className="inline-flex items-center gap-1"><ClipboardList className="h-3.5 w-3.5" /> {efetivoQ.data.atividadesResumo?.emAndamento ?? 0} em andamento · {efetivoQ.data.atividadesResumo?.proximas ?? 0} próximas</span>
+          </div>
+        )}
+      </div>
+
+      {/* Carregando efetivo */}
+      {efetivoQ.isLoading && (
+        <div className="rounded-xl border border-slate-200 bg-white p-10 text-center text-sm text-slate-500">
+          <Loader2 className="h-5 w-5 animate-spin mx-auto mb-2 text-slate-400" /> Carregando efetivo da obra…
+        </div>
+      )}
+      {efetivoQ.isError && (
+        <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700 flex items-start gap-2">
+          <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+          <span>{(efetivoQ.error as any)?.message ?? "Erro ao carregar o efetivo."}</span>
+        </div>
+      )}
+
+      {/* Editor de cenário */}
+      {efetivoQ.data && porCargo.length === 0 && (
+        <div className="rounded-xl border border-dashed border-slate-200 bg-white p-10 text-center">
+          <HardHat className="h-8 w-8 text-slate-300 mx-auto mb-3" />
+          <p className="text-sm text-slate-500">Nenhum funcionário alocado nesta obra para simular.</p>
+        </div>
+      )}
+
+      {efetivoQ.data && porCargo.length > 0 && (
         <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
-          <div className="px-4 py-3 border-b border-slate-100 flex items-center gap-2">
-            <Users className="h-4 w-4 text-slate-500" />
-            <span className="text-sm font-semibold text-slate-700">Efetivo atual por função</span>
+          <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between gap-3 flex-wrap">
+            <span className="text-sm font-semibold text-slate-700 inline-flex items-center gap-2">
+              <Users className="h-4 w-4 text-slate-500" /> Ajuste o efetivo por função
+            </span>
+            <div className="flex items-center gap-3">
+              <span className="text-xs text-slate-500">
+                Total <span className="font-semibold text-slate-700">{totalAtual}</span> →{" "}
+                <span className="font-semibold text-violet-700">{totalSimulado}</span>{" "}
+                <span className={`font-semibold ${deltaTotal > 0 ? "text-emerald-600" : deltaTotal < 0 ? "text-amber-600" : "text-slate-400"}`}>
+                  ({deltaTotal > 0 ? `+${deltaTotal}` : deltaTotal})
+                </span>
+              </span>
+              <Button variant="outline" size="sm" onClick={limpar} disabled={ajustes.length === 0 && !result}>
+                <RotateCcw className="h-3.5 w-3.5 mr-1.5" /> Limpar
+              </Button>
+            </div>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -344,24 +479,275 @@ export default function AnaliseEfetivoIA({ projetoId, companyId }: Props) {
                 <tr className="text-left text-[11px] uppercase tracking-wide text-slate-400 border-b border-slate-100">
                   <th className="px-4 py-2 font-medium">Função</th>
                   <th className="px-4 py-2 font-medium">Categoria</th>
-                  <th className="px-4 py-2 font-medium text-center">Total</th>
-                  <th className="px-4 py-2 font-medium text-center">Ativos</th>
+                  <th className="px-4 py-2 font-medium text-center">Atual</th>
+                  <th className="px-4 py-2 font-medium text-center">Ajuste</th>
+                  <th className="px-4 py-2 font-medium text-center">Simulado</th>
+                  <th className="px-4 py-2 font-medium text-center">Δ</th>
                 </tr>
               </thead>
               <tbody>
-                {result.porCargoAtual.map((c: any, i: number) => (
-                  <tr key={i} className="border-b border-slate-50 last:border-0">
-                    <td className="px-4 py-2.5 font-medium text-slate-700">{c.cargo}</td>
-                    <td className="px-4 py-2.5 text-slate-500 text-xs">{c.categoria || "—"}</td>
-                    <td className="px-4 py-2.5 text-center text-slate-700">{c.total}</td>
-                    <td className="px-4 py-2.5 text-center text-slate-700">{c.ativos}</td>
-                  </tr>
-                ))}
+                {porCargo.map((c: any, i: number) => {
+                  const k = keyOf(c.cargo);
+                  const d = deltas[k] ?? 0;
+                  const simulado = Math.max(0, c.total + d);
+                  return (
+                    <tr key={i} className="border-b border-slate-50 last:border-0 hover:bg-slate-50/50">
+                      <td className="px-4 py-2.5 font-medium text-slate-700">{c.cargo}</td>
+                      <td className="px-4 py-2.5 text-slate-500 text-xs">{c.categoria || "—"}</td>
+                      <td className="px-4 py-2.5 text-center text-slate-700">{c.total}</td>
+                      <td className="px-4 py-2.5">
+                        <div className="flex items-center justify-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => bump(c.cargo, c.total, -1)}
+                            disabled={simulado <= 0}
+                            className="flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 text-slate-600 hover:bg-amber-50 hover:border-amber-200 hover:text-amber-700 disabled:opacity-40 disabled:hover:bg-transparent"
+                          >
+                            <Minus className="h-3.5 w-3.5" />
+                          </button>
+                          <Input
+                            type="number"
+                            value={d}
+                            onChange={(e) => {
+                              const v = parseInt(e.target.value, 10);
+                              setDelta(c.cargo, Math.max(-c.total, isNaN(v) ? 0 : v));
+                            }}
+                            className="h-7 w-14 text-center px-1 tabular-nums"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => bump(c.cargo, c.total, +1)}
+                            className="flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 text-slate-600 hover:bg-emerald-50 hover:border-emerald-200 hover:text-emerald-700"
+                          >
+                            <Plus className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      </td>
+                      <td className="px-4 py-2.5 text-center font-semibold text-violet-700">{simulado}</td>
+                      <td className={`px-4 py-2.5 text-center font-semibold ${d > 0 ? "text-emerald-600" : d < 0 ? "text-amber-600" : "text-slate-400"}`}>
+                        {d > 0 ? `+${d}` : d}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
+          <div className="px-4 py-3 border-t border-slate-100 flex items-center justify-between gap-3 flex-wrap">
+            <span className="text-xs text-slate-400">
+              {ajustes.length === 0 ? "Ajuste pelo menos uma função para simular." : `${ajustes.length} função(ões) ajustada(s).`}
+            </span>
+            <Button onClick={simular} disabled={mut.isPending || ajustes.length === 0} className="bg-violet-600 hover:bg-violet-700">
+              {mut.isPending ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Simulando…</> : <><Sparkles className="h-4 w-4 mr-2" /> Simular previsão</>}
+            </Button>
+          </div>
         </div>
       )}
+
+      {mostrar && <PainelProgresso progresso={progresso} etapas={ETAPAS_SIM} titulo="Projetando o cenário…" />}
+
+      {mut.isError && (
+        <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700 flex items-start gap-2">
+          <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+          <span>{(mut.error as any)?.message ?? "Erro ao gerar a simulação."}</span>
+        </div>
+      )}
+      {result?.erroIa && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 flex items-start gap-2">
+          <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+          <span>{result.erroIa}</span>
+        </div>
+      )}
+
+      {/* Resultado da previsão */}
+      {prev && (
+        <div className="space-y-5">
+          <div className={`rounded-xl border p-5 ${ver.cls}`}>
+            <div className="flex items-center gap-2 mb-1.5">
+              <VerIcon className="h-5 w-5" />
+              <span className="text-xs font-semibold uppercase tracking-wide opacity-80">{ver.label}</span>
+            </div>
+            {prev.tituloCenario && <h3 className="text-lg font-semibold leading-snug">{prev.tituloCenario}</h3>}
+            {prev.resumoExecutivo && <p className="text-sm mt-1.5 opacity-90 leading-relaxed">{prev.resumoExecutivo}</p>}
+          </div>
+
+          {/* Impactos */}
+          {prev.impactos && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              <ImpactoCard titulo="Prazo" Icon={CalendarClock} imp={prev.impactos.prazo} />
+              <ImpactoCard titulo="Produtividade" Icon={Activity} imp={prev.impactos.produtividade} />
+              <ImpactoCard titulo="Custo" Icon={DollarSign} imp={prev.impactos.custo} />
+              <ImpactoCard titulo="Qualidade & Segurança" Icon={ShieldCheck} imp={prev.impactos.qualidadeSeguranca} />
+            </div>
+          )}
+
+          {/* Indicadores */}
+          {Array.isArray(prev.indicadores) && prev.indicadores.length > 0 && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {prev.indicadores.map((ind: Indicador, i: number) => (
+                <div key={i} className="rounded-xl border border-slate-200 bg-white p-4">
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <span className={`h-2 w-2 rounded-full ${statusDot(ind.status)}`} />
+                    <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{ind.label}</span>
+                  </div>
+                  <div className="text-xl font-bold text-slate-800">{ind.valor}</div>
+                  {ind.descricao && <p className="text-xs text-slate-500 mt-1 leading-snug">{ind.descricao}</p>}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Efeito por função */}
+          {Array.isArray(prev.porCargo) && prev.porCargo.length > 0 && (
+            <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
+              <div className="px-4 py-3 border-b border-slate-100 flex items-center gap-2">
+                <Users className="h-4 w-4 text-slate-500" />
+                <span className="text-sm font-semibold text-slate-700">Efeito por função no cenário</span>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-left text-[11px] uppercase tracking-wide text-slate-400 border-b border-slate-100">
+                      <th className="px-4 py-2 font-medium">Função</th>
+                      <th className="px-4 py-2 font-medium text-center">Atual</th>
+                      <th className="px-4 py-2 font-medium text-center">Simulado</th>
+                      <th className="px-4 py-2 font-medium text-center">Δ</th>
+                      <th className="px-4 py-2 font-medium">Efeito</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {prev.porCargo.map((c: any, i: number) => {
+                      const delta = typeof c.delta === "number" ? c.delta : (c.simulado - c.atual);
+                      return (
+                        <tr key={i} className="border-b border-slate-50 last:border-0 hover:bg-slate-50/50">
+                          <td className="px-4 py-2.5 font-medium text-slate-700">{c.cargo}</td>
+                          <td className="px-4 py-2.5 text-center text-slate-700">{c.atual}</td>
+                          <td className="px-4 py-2.5 text-center text-slate-700 font-semibold">{c.simulado}</td>
+                          <td className={`px-4 py-2.5 text-center font-semibold ${delta > 0 ? "text-emerald-600" : delta < 0 ? "text-amber-600" : "text-slate-400"}`}>
+                            {delta > 0 ? `+${delta}` : delta}
+                          </td>
+                          <td className="px-4 py-2.5 text-slate-500 text-xs max-w-md">{c.efeito || "—"}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          <RiscosRecomendacoes riscos={prev.riscos} recomendacoes={prev.recomendacoes} />
+
+          {/* Referências (literatura) */}
+          {Array.isArray(prev.referencias) && prev.referencias.length > 0 && (
+            <div className="rounded-xl border border-slate-200 bg-white p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <BookOpen className="h-4 w-4 text-violet-500" />
+                <span className="text-sm font-semibold text-slate-700">Fundamentação (literatura de gestão de obras)</span>
+              </div>
+              <div className="space-y-2.5">
+                {prev.referencias.map((r: any, i: number) => (
+                  <div key={i} className="rounded-lg border border-slate-100 bg-slate-50/50 p-3">
+                    <p className="text-sm font-medium text-slate-700">{r.fonte}</p>
+                    {r.aplicacao && <p className="text-xs text-slate-500 mt-0.5 leading-snug">{r.aplicacao}</p>}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ── Subcomponentes compartilhados ─────────────────────────────────────── */
+function ImpactoCard({ titulo, Icon, imp }: { titulo: string; Icon: React.ComponentType<{ className?: string }>; imp?: any }) {
+  const st = IMPACTO_STATUS[imp?.status] ?? IMPACTO_STATUS.neutro;
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white p-4">
+      <div className="flex items-center gap-1.5 mb-1.5">
+        <Icon className="h-4 w-4 text-slate-400" />
+        <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{titulo}</span>
+        <span className={`ml-auto h-2 w-2 rounded-full ${st.dot}`} />
+      </div>
+      {imp?.estimativa && <div className={`text-base font-bold ${st.txt}`}>{imp.estimativa}</div>}
+      <p className="text-xs text-slate-500 mt-1 leading-snug">{imp?.texto || "—"}</p>
+    </div>
+  );
+}
+
+function RiscosRecomendacoes({ riscos, recomendacoes }: { riscos?: string[]; recomendacoes?: string[] }) {
+  const temR = Array.isArray(riscos) && riscos.length > 0;
+  const temRec = Array.isArray(recomendacoes) && recomendacoes.length > 0;
+  if (!temR && !temRec) return null;
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      {temR && (
+        <div className="rounded-xl border border-slate-200 bg-white p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <AlertTriangle className="h-4 w-4 text-amber-500" />
+            <span className="text-sm font-semibold text-slate-700">Riscos</span>
+          </div>
+          <ul className="space-y-2">
+            {riscos!.map((r, i) => (
+              <li key={i} className="flex items-start gap-2 text-sm text-slate-600">
+                <span className="mt-1.5 h-1.5 w-1.5 rounded-full bg-amber-400 shrink-0" />
+                <span>{r}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {temRec && (
+        <div className="rounded-xl border border-slate-200 bg-white p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <Lightbulb className="h-4 w-4 text-blue-500" />
+            <span className="text-sm font-semibold text-slate-700">Recomendações</span>
+          </div>
+          <ul className="space-y-2">
+            {recomendacoes!.map((r, i) => (
+              <li key={i} className="flex items-start gap-2 text-sm text-slate-600">
+                <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 text-blue-400 shrink-0" />
+                <span>{r}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function EfetivoBruto({ porCargoAtual }: { porCargoAtual: any[] }) {
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
+      <div className="px-4 py-3 border-b border-slate-100 flex items-center gap-2">
+        <Users className="h-4 w-4 text-slate-500" />
+        <span className="text-sm font-semibold text-slate-700">Efetivo atual por função</span>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="text-left text-[11px] uppercase tracking-wide text-slate-400 border-b border-slate-100">
+              <th className="px-4 py-2 font-medium">Função</th>
+              <th className="px-4 py-2 font-medium">Categoria</th>
+              <th className="px-4 py-2 font-medium text-center">Total</th>
+              <th className="px-4 py-2 font-medium text-center">Ativos</th>
+            </tr>
+          </thead>
+          <tbody>
+            {porCargoAtual.map((c: any, i: number) => (
+              <tr key={i} className="border-b border-slate-50 last:border-0">
+                <td className="px-4 py-2.5 font-medium text-slate-700">{c.cargo}</td>
+                <td className="px-4 py-2.5 text-slate-500 text-xs">{c.categoria || "—"}</td>
+                <td className="px-4 py-2.5 text-center text-slate-700">{c.total}</td>
+                <td className="px-4 py-2.5 text-center text-slate-700">{c.ativos}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
