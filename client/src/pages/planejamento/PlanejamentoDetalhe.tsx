@@ -10,6 +10,7 @@ import PrintHeader from "@/components/PrintHeader";
 import PlanejamentoPrintHeader from "@/components/PlanejamentoPrintHeader";
 import PrintActions from "@/components/PrintActions";
 import ImportarCronograma, { parseMSProjectXML, parseMSProjectXLSX, parseMSProjectFull, TarefaImportada } from "./ImportarCronograma";
+import AnaliseEfetivoIA from "./AnaliseEfetivoIA";
 import DiagnosticoEapOrcCron from "@/components/planejamento/DiagnosticoEapOrcCron";
 import { parseCalendarioJson, fracaoDecorridaMs, pvPonderadoPorAtividade, pctRaizMSP } from "../../../../shared/diasUteis";
 import { ProgramacaoSemanal } from "./ProgramacaoSemanal";
@@ -54,7 +55,7 @@ const n = (v: any) => parseFloat(v || "0") || 0;
 function fmt(v: number) { return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }); }
 function fPct(v: number) { return `${n(v).toFixed(2)}%`; }
 
-type Tab = "visao-geral" | "cronograma" | "gantt" | "curva-s" | "avanco" | "revisoes" | "refis" | "caminho-critico" | "compras" | "cronograma-financeiro" | "prev-medicao" | "prog-semanal" | "diagrama-rede" | "custo-rh" | "efetivo" | "bim-3d" | "avaliacao-cliente";
+type Tab = "visao-geral" | "cronograma" | "gantt" | "curva-s" | "avanco" | "revisoes" | "refis" | "caminho-critico" | "compras" | "cronograma-financeiro" | "prev-medicao" | "prog-semanal" | "diagrama-rede" | "custo-rh" | "efetivo" | "efetivo-ia" | "bim-3d" | "avaliacao-cliente";
 
 // ── Cálculo de desvio de prazo ────────────────────────────────────────────────
 function calcDesvio(dataTermino: string | null) {
@@ -214,6 +215,7 @@ const TAB_DEFS: { id: Tab; label: string; Icon: React.ComponentType<{ className?
   { id: "diagrama-rede",        label: "Diagrama de Rede",   Icon: Network },
   { id: "custo-rh",             label: "Custo RH",           Icon: Users },
   { id: "efetivo",              label: "Efetivo",            Icon: HardHat },
+  { id: "efetivo-ia",           label: "Efetivo × IA",       Icon: Sparkles },
   { id: "revisoes",             label: "Revisões",           Icon: GitBranch },
   { id: "refis",                label: "REFIS",              Icon: FileText },
   { id: "bim-3d",               label: "BIM 3D",             Icon: Box },
@@ -1220,6 +1222,9 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
             utils={utils}
             orcamentoId={proj?.orcamentoId ?? null}
           />
+        )}
+        {canViewTab(aba) && aba === "efetivo-ia" && (
+          <AnaliseEfetivoIA projetoId={projetoId} companyId={companyId} />
         )}
         {canViewTab(aba) && aba === "gantt" && (
           <GanttCronograma

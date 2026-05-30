@@ -1,0 +1,1 @@
+- [tRPC tenancy / companyId](trpc-tenancy.md) — derive companyId from ctx.user, never trust input.companyId (IDOR); convention across routers.

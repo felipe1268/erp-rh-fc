@@ -1,6 +1,53 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2576 — **PLANEJAMENTO · NOVA ABA "EFETIVO × IA" (Planejamento Detalhe,
+ * `/planejamento/:id`) · CRUZA O EFETIVO ATUAL DA OBRA COM O CRONOGRAMA E A IA
+ * ANALISA SE A EQUIPE ESTÁ DIMENSIONADA (CONTRATAR / REDUZIR / MANTER).**
+ *
+ * MOTIVAÇÃO (pedido do usuário, screenshots das telas de Efetivo da obra e do
+ * Cronograma Rev.01): "Quero criar uma nova aba que cruza a informação do
+ * efetivo com o cronograma e analisa via IA se o efetivo atual está compatível
+ * com as atividades a serem feitas... indicadores para saber se podemos reduzir
+ * efetivo, ou se deve contratar, se tem mão de obra sobrando... uma análise
+ * completa e detalhada." Não existia nenhuma leitura cruzada efetivo×cronograma.
+ *
+ * O QUE MUDOU:
+ * - SERVER (`server/routers/iaCronograma.ts`): nova mutation `analisarEfetivo({
+ *   projetoId, companyId })` — SOMENTE LEITURA. (1) resolve o projeto e a obra
+ *   vinculada (`planejamento_projetos.obra_id`); (2) escolhe a revisão (baseline
+ *   > última aprovada > última); (3) lê o efetivo atual via `getObraFuncionarios`
+ *   e agrega POR FUNÇÃO/CARGO (total, ativos, indisponíveis, CLT, terceiro) com
+ *   a categoria MO mapeada de `job_functions.categoria_mo`; (4) lê as atividades
+ *   FOLHA da revisão (exclui grupos e marcos) e separa as EM ANDAMENTO hoje das
+ *   PRÓXIMAS 8 SEMANAS (56 dias), ordenadas por peso financeiro, com EAP, datas,
+ *   peso% e recurso; (5) monta prompt e chama `invokeLLM` (Claude → fallback
+ *   Gemini) com `response_format json_object`, pedindo um JSON estruturado
+ *   (diagnóstico, resumo executivo, indicadores, recomendação por cargo com
+ *   delta/ação, frentes críticas, riscos, recomendações). Parse robusto (limpa
+ *   cercas ```json e fatia do 1º "{" ao último "}"); se a IA falhar, retorna o
+ *   efetivo bruto + `erroIa` (sem quebrar a tela). Zero gravação.
+ * - CLIENT (`client/src/pages/planejamento/AnaliseEfetivoIA.tsx`, NOVO):
+ *   componente com CTA "Gerar análise", cabeçalho com resumo (obra, revisão,
+ *   totais), badge de diagnóstico colorido, cards de indicadores (status
+ *   ok/alerta/crítico), tabela "Recomendação por função" (atual × sugerido × Δ
+ *   × ação contratar/reduzir/manter + justificativa), frentes críticas, e
+ *   blocos de riscos + recomendações. Fallback exibe o efetivo bruto por função
+ *   quando a IA não responde.
+ * - CLIENT (`client/src/pages/planejamento/PlanejamentoDetalhe.tsx`): nova aba
+ *   "Efetivo × IA" (`efetivo-ia`, ícone Sparkles) no `Tab`/`TAB_DEFS`, import do
+ *   componente e render condicional passando `projetoId`/`companyId`. A lógica
+ *   pesada vive em arquivo separado pra não inchar o arquivo de 20k linhas.
+ *
+ * IA: usa `ANTHROPIC_API_KEY` quando presente; com só `GOOGLE_API_KEY` o
+ * `invokeLLM` cai automaticamente no Gemini.
+ *
+ * Zero schema. Zero ALTER/DROP/DELETE. Arquivos:
+ * `server/routers/iaCronograma.ts`, `client/src/pages/planejamento/AnaliseEfetivoIA.tsx`,
+ * `client/src/pages/planejamento/PlanejamentoDetalhe.tsx`.
+ *
+ * ---
+ *
  * Rev. 2575 — **RH & DP · BANCO DE HORAS (`/banco-horas`, aba "Saldos") ·
  * SELEÇÃO MÚLTIPLA DE FUNCIONÁRIOS + "DAR BAIXA NOS SELECIONADOS" (ZERA O SALDO
  * EM LOTE) PARA HORAS JÁ PAGAS NA FOLHA.**
