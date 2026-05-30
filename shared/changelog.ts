@@ -1,6 +1,71 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2583 — **PLANEJAMENTO · ABA "EFETIVO × IA" · SIMULADOR DE MÃO DE OBRA
+ * GANHA "PLANO DE ATAQUE" — A IA MONTA UMA CAMPANHA ESTILO GUERRA, BASEADA EM
+ * LINHA DE BALANÇO, PARA MANTER O PRAZO MESMO COM O EFETIVO REDUZIDO.**
+ *
+ * MOTIVAÇÃO (pedido do usuário): "No simulador, faça sugestão da Linha de
+ * Balanço de forma que, mesmo com a redução de mão de obra, o ERP + IA gerem um
+ * plano de ataque para manter o prazo — sugerindo processos construtivos
+ * melhores, automações, cenários que um humano não veria no dia a dia. Quero um
+ * plano de ataque detalhado, igual uma guerra. O ideal é ter efetivo sobrando no
+ * campo de batalha, mas se não tiver, temos que vencer a guerra com o que temos.
+ * Junte as melhores literaturas de planejamento, estratégia de guerra e
+ * resolução de problemas."
+ *
+ * O QUE MUDOU (ADITIVO — ZERO SCHEMA, ZERO ALTER/DROP/DELETE):
+ *
+ * 1) SERVER (`server/routers/iaCronograma.ts`, mutation `simularEfetivo`):
+ *    - systemPrompt ganhou uma "MISSÃO ESPECIAL — PLANO DE ATAQUE" instruindo a
+ *      IA (JULINHO) a pensar como estrategista militar quando o efetivo é
+ *      reduzido, COMBINANDO três corpos de conhecimento: (a) ESTRATÉGIA DE
+ *      GUERRA — Sun Tzu (concentração de força no ponto decisivo, conhecer o
+ *      terreno), Clausewitz (centro de gravidade / Schwerpunkt), doutrina de
+ *      manobra (massa × economia de forças), ciclo OODA de John Boyd, "amadores
+ *      discutem tática, profissionais discutem logística"; (b) RESOLUÇÃO DE
+ *      PROBLEMAS / RESTRIÇÕES — Teoria das Restrições de Goldratt ("A Meta" /
+ *      Corrente Crítica — explorar/elevar o gargalo), primeiros princípios, TRIZ
+ *      (automação p/ contornar restrições), 5 Porquês; (c) PLANEJAMENTO DE
+ *      PRODUÇÃO — Linha de Balanço/takt, Last Planner/lookahead, fast-tracking e
+ *      crashing seletivos, pré-fabricação/kits/mecanização. Pede explicitamente
+ *      CENÁRIOS NÃO ÓBVIOS que um engenheiro não veria na correria do dia a dia.
+ *    - O JSON de saída ganhou o objeto `planoAtaque` com: `missao`,
+ *      `vereditoPrazo` ("mantem" | "risco_parcial" | "inviavel_sem_acao"),
+ *      `centroDeGravidade`, `principioGuia`, `frentesCriticas[]`,
+ *      `manobras[]` (sequenciadas por `ordem`/`fase` com `tipo`, `acao`,
+ *      `comoExecutar`, `impactoPrazo`, `linhaBalanco`, `fundamento`),
+ *      `processosConstrutivos[]`, `automacoes[]`, `cenariosNaoObvios[]`,
+ *      `linhaBalancoPlano` (novo takt/nº de frentes/sequência), `kpisAcompanhamento[]`,
+ *      `condicoesDeVitoria[]` e `sePiorar[]`.
+ *    - Regra final do userPrompt adapta o tom conforme `deltaTotal`: se REDUÇÃO
+ *      (Δ<0), exige plano AGRESSIVO p/ manter o prazo ORIGINAL com a equipe
+ *      enxuta; caso contrário, plano de execução eficiente. `maxTokens` mantido
+ *      em 8000 e o parse tolerante (`extrairJsonIa` + `repararJsonTruncado`) já
+ *      cobre eventual truncamento (planoAtaque vem antes de referências).
+ *    - A simulação continua sendo PERSISTIDA por `salvarAnaliseEfetivo`, então o
+ *      plano de ataque também aparece ao reabrir a simulação no HISTÓRICO.
+ *
+ * 2) CLIENT (`client/src/pages/planejamento/AnaliseEfetivoIA.tsx`): novo
+ *    componente `PlanoAtaque` (estética "sala de guerra" — card escuro
+ *    slate-900) renderizado no `SimuladorView` após Riscos/Recomendações, com:
+ *    cabeçalho (ícone Swords + missão + badge de veredito de prazo), centro de
+ *    gravidade + princípio guia, frentes críticas, MANOBRAS como linha do tempo
+ *    numerada (badge de tipo: Sequenciamento/Processo/Automação/Logística/
+ *    Recurso/Contingência, fase, impacto no prazo, ajuste na Linha de Balanço,
+ *    fundamento), novo plano de Linha de Balanço, processos construtivos
+ *    (atual→proposto+ganho), automações & tecnologia, "cenários que um humano
+ *    não veria", KPIs de acompanhamento, e condições de vitória × se piorar.
+ *    Todos os blocos são guardados por `Array.isArray`/checagem de campo, então a
+ *    seção some graciosamente se a IA não preencher. Como `SimuladorView` é
+ *    reusada no Histórico, o plano aparece também nas simulações salvas. Novos
+ *    ícones lucide: Swords, Target, Flag, Zap, Wrench, Route, Siren, Crosshair.
+ *
+ * VALIDAÇÃO: esbuild isolado server + client = exit 0 (tsc dá OOM no ambiente).
+ * Zero schema. Zero ALTER/DROP/DELETE (R-001/R-007/R-010).
+ *
+ * ---
+ *
  * Rev. 2582 — **PLANEJAMENTO · ABA "EFETIVO × IA" · REDESIGN MAIS DINÂMICO E
  * MODERNO: (1) LEGENDA INTERATIVA + ASSISTENTE DE DÚVIDAS (Q&A COM A IA), (2)
  * VÁRIOS GRÁFICOS ILUSTRATIVOS (PANORAMA DO EFETIVO) E (3) CARDS DE INSIGHT.**

@@ -1649,6 +1649,13 @@ O usuário está SIMULANDO uma mudança no efetivo da obra (reduzir e/ou aumenta
 - Efeito da fadiga / horas extras prolongadas sobre a produtividade.
 - Fluxo de produção da Lean Construction (Lei de Little, redução de WIP).
 
+MISSÃO ESPECIAL — PLANO DE ATAQUE (quando o efetivo é REDUZIDO ou se mantém com menos gente do que o ideal): pense como um ESTRATEGISTA MILITAR planejando uma campanha. O cenário ideal é ter efetivo de sobra "no campo de batalha", mas quando NÃO há, é preciso VENCER A GUERRA COM O QUE SE TEM — mantendo o prazo mesmo com a equipe enxuta. Para isso, monte um PLANO DE ATAQUE DETALHADO E SEQUENCIADO, combinando o melhor de TRÊS corpos de conhecimento:
+- ESTRATÉGIA DE GUERRA: Sun Tzu (A Arte da Guerra — conhecer o terreno, concentração de força no ponto decisivo, vencer antes de lutar); Clausewitz (centro de gravidade / Schwerpunkt — focar o esforço onde decide a campanha); doutrina de manobra (massa e economia de forças); ciclo OODA de John Boyd (observar-orientar-decidir-agir mais rápido que o problema); o princípio de que "amadores discutem tática, profissionais discutem logística".
+- RESOLUÇÃO DE PROBLEMAS / RESTRIÇÕES: Teoria das Restrições de Goldratt ("A Meta"/Corrente Crítica — identificar e explorar o gargalo, subordinar tudo a ele, elevá-lo); pensamento por primeiros princípios; TRIZ (inovação sistemática p/ contornar restrições com automação/tecnologia); 5 Porquês p/ causa-raiz.
+- PLANEJAMENTO DE PRODUÇÃO: Linha de Balanço (LOB) e takt para reequilibrar o RITMO das frentes; Last Planner / lookahead; fast-tracking e crashing seletivos; pré-fabricação, kits e mecanização para reduzir homem-hora por unidade.
+
+No plano de ataque, BUSQUE CENÁRIOS NÃO ÓBVIOS — combinações de sequenciamento, processo construtivo, automação e logística que um engenheiro NÃO enxergaria na correria do dia a dia. Cada manobra deve ter ação concreta, como executar, impacto no prazo e o ajuste correspondente na Linha de Balanço.
+
 Seja realista, quantitativo e conservador. Aponte EXPLICITAMENTE quando o cenário simulado tende a NÃO entregar o ganho esperado (ex.: superlotação de uma frente, gargalo deslocado para outra função, função-restrição não ajustada, contratação que só rende após curva de aprendizado). Responda SEMPRE em português brasileiro e APENAS com JSON válido no formato pedido, sem nenhum texto fora do JSON.`;
 
       const userPrompt = `# Simulação de Cenário de Efetivo
@@ -1688,6 +1695,23 @@ Projete o impacto do CENÁRIO SIMULADO frente às atividades acima e retorne um 
   ],
   "riscos": [ "string" ],
   "recomendacoes": [ "string — ações práticas para o cenário dar certo" ],
+  "planoAtaque": {
+    "missao": "string — o objetivo da campanha em 1 frase (ex.: 'Manter a entrega de DD/MM mesmo com o efetivo reduzido para N pessoas')",
+    "vereditoPrazo": "mantem" | "risco_parcial" | "inviavel_sem_acao",
+    "centroDeGravidade": "string — a função/frente DECISIVA (gargalo / centro de gravidade) onde concentrar o esforço, e por quê",
+    "principioGuia": "string — princípio central que orienta o plano (ex.: Teoria das Restrições: explorar o gargalo / concentração de forças de Sun Tzu)",
+    "frentesCriticas": [ { "frente": "string — atividade/frente crítica", "porque": "string", "acao": "string — manobra imediata" } ],
+    "manobras": [
+      { "ordem": number, "fase": "string — janela temporal (ex.: 'D-0 a D+7 — Mobilização')", "titulo": "string curto", "tipo": "sequenciamento" | "processo_construtivo" | "automacao" | "logistica" | "recurso" | "contingencia", "acao": "string — o que fazer", "comoExecutar": "string — passos práticos no campo", "impactoPrazo": "string — ex.: 'recupera ~1,5 semana'", "linhaBalanco": "string — como ajusta o takt/ritmo/sequência de frentes na LOB", "fundamento": "string — literatura que embasa (Goldratt, Sun Tzu, Lean/LOB, TCPO, TRIZ...)" }
+    ],
+    "processosConstrutivos": [ { "atual": "string — método atual", "proposto": "string — método melhor (pré-fab, kit, mecanização)", "ganho": "string — homem-hora/prazo economizado" } ],
+    "automacoes": [ { "item": "string — automação/tecnologia", "aplicacao": "string — onde aplicar na obra", "ganho": "string — efeito no efetivo/prazo" } ],
+    "cenariosNaoObvios": [ "string — insight/combinação que um engenheiro NÃO veria no dia a dia" ],
+    "linhaBalancoPlano": "string — o novo plano de ritmo: takt proposto, nº de frentes simultâneas e a nova sequência para manter o prazo com a equipe enxuta",
+    "kpisAcompanhamento": [ { "kpi": "string", "meta": "string", "frequencia": "string (ex.: 'semanal no lookahead')" } ],
+    "condicoesDeVitoria": [ "string — condições objetivas para considerar a campanha vencida (prazo mantido)" ],
+    "sePiorar": [ "string — plano de contingência se o cenário degradar (ponto de não retorno + gatilho de ação)" ]
+  },
   "referenciaPrincipal": {
     "autor": "string — autor(es)/instituição MAIS RENOMADO(A) DO MUNDO sobre o efeito principal deste cenário",
     "obra": "string — título da obra/princípio consagrado (ex: 'The Mythical Man-Month', 'CII RS252-1')",
@@ -1699,7 +1723,9 @@ Projete o impacto do CENÁRIO SIMULADO frente às atividades acima e retorne um 
   ]
 }
 
-Regras: em "porCargo" inclua TODAS as funções do cenário usando os números do CENÁRIO SIMULADO fornecido (atual → simulado). Gere de 3 a 5 "indicadores". SEMPRE preencha "referenciaPrincipal" com a referência/autor MAIS RENOMADO(A) do mundo sobre o efeito central deste cenário (ex.: Frederick Brooks — Lei de Brooks p/ contratações tardias; CII p/ overmanning/trade stacking; Mosaic/PMI p/ aceleração; Koskela/Ballard p/ Lean/fluxo) e explique por que é a mais consagrada no tema. Gere ainda de 2 a 4 "referencias" de apoio citando literaturas REAIS. Seja específico e quantitativo; se a Lei de Brooks, superlotação (overmanning) ou gargalo deslocado se aplicarem, diga claramente.`;
+Regras: em "porCargo" inclua TODAS as funções do cenário usando os números do CENÁRIO SIMULADO fornecido (atual → simulado). Gere de 3 a 5 "indicadores". SEMPRE preencha "referenciaPrincipal" com a referência/autor MAIS RENOMADO(A) do mundo sobre o efeito central deste cenário (ex.: Frederick Brooks — Lei de Brooks p/ contratações tardias; CII p/ overmanning/trade stacking; Mosaic/PMI p/ aceleração; Koskela/Ballard p/ Lean/fluxo) e explique por que é a mais consagrada no tema. Gere ainda de 2 a 4 "referencias" de apoio citando literaturas REAIS. Seja específico e quantitativo; se a Lei de Brooks, superlotação (overmanning) ou gargalo deslocado se aplicarem, diga claramente.
+
+PLANO DE ATAQUE (campo "planoAtaque", OBRIGATÓRIO): ${deltaTotal < 0 ? `ESTE CENÁRIO É UMA REDUÇÃO DE EFETIVO (Δ ${deltaTotal}). Trate como uma CAMPANHA a ser vencida com menos gente: monte um plano de ataque COMPLETO e AGRESSIVO para MANTER O PRAZO ORIGINAL mesmo com a equipe reduzida.` : `Mesmo neste cenário (Δ ${deltaTotal > 0 ? "+" : ""}${deltaTotal}), entregue um plano de ataque para EXECUTAR o efetivo da forma mais eficiente possível e proteger o prazo.`} Preencha TODOS os campos do "planoAtaque". Gere de 4 a 7 "manobras" SEQUENCIADAS por "ordem" e por "fase" (linha do tempo da campanha), cada uma com ação concreta, comoExecutar prático, impactoPrazo e o ajuste na Linha de Balanço. Identifique o "centroDeGravidade" (a função/frente-gargalo decisiva) e concentre o esforço nela (Teoria das Restrições + Sun Tzu). Em "processosConstrutivos" e "automacoes" proponha de 2 a 4 itens REAIS e aplicáveis a obra de construção civil pesada (pré-fabricação, kits, formas industrializadas, mecanização, drones/medição, apps de campo etc.). Em "cenariosNaoObvios" traga de 2 a 4 insights que um engenheiro NÃO veria na correria do dia a dia. "linhaBalancoPlano" deve descrever o novo takt, nº de frentes simultâneas e a nova sequência. Seja específico, quantitativo e executável no canteiro — nada genérico.`;
 
       let parsed: any = null;
       let erroIa: string | null = null;

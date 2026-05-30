@@ -9,6 +9,7 @@ import {
   Plus, Calculator, BookOpen, CalendarClock, DollarSign, Activity, ShieldCheck, RotateCcw,
   Award, History, Clock, BarChart3, ArrowLeft,
   HelpCircle, Send, ChevronDown, Layers, UserCheck, Briefcase, Trophy, Gauge,
+  Swords, Target, Flag, Zap, Wrench, Route, Siren, Crosshair,
 } from "lucide-react";
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
@@ -678,6 +679,8 @@ function SimuladorView({ result }: { result: any }) {
 
           <RiscosRecomendacoes riscos={prev.riscos} recomendacoes={prev.recomendacoes} />
 
+          <PlanoAtaque plano={prev.planoAtaque} />
+
           <ReferenciasApoio referencias={prev.referencias} titulo="Fundamentação (literatura de gestão de obras)" />
         </div>
       )}
@@ -1019,6 +1022,260 @@ function RiscosRecomendacoes({ riscos, recomendacoes }: { riscos?: string[]; rec
           </ul>
         </div>
       )}
+    </div>
+  );
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+ * PLANO DE ATAQUE — campanha estilo guerra p/ manter o prazo com efetivo enxuto
+ * (Linha de Balanço + estratégia militar + Teoria das Restrições)
+ * ──────────────────────────────────────────────────────────────────────── */
+const MANOBRA_TIPO_META: Record<string, { label: string; cls: string; Icon: React.ComponentType<{ className?: string }> }> = {
+  sequenciamento:       { label: "Sequenciamento",       cls: "bg-blue-50 text-blue-700 border-blue-200",       Icon: Route },
+  processo_construtivo: { label: "Processo construtivo", cls: "bg-emerald-50 text-emerald-700 border-emerald-200", Icon: Wrench },
+  automacao:            { label: "Automação",            cls: "bg-violet-50 text-violet-700 border-violet-200", Icon: Zap },
+  logistica:            { label: "Logística",            cls: "bg-amber-50 text-amber-700 border-amber-200",    Icon: Layers },
+  recurso:              { label: "Recurso",              cls: "bg-sky-50 text-sky-700 border-sky-200",          Icon: Users },
+  contingencia:         { label: "Contingência",         cls: "bg-rose-50 text-rose-700 border-rose-200",       Icon: Siren },
+};
+
+const VEREDITO_PRAZO_META: Record<string, { label: string; cls: string; Icon: React.ComponentType<{ className?: string }> }> = {
+  mantem:            { label: "Prazo mantido",       cls: "bg-emerald-500/15 text-emerald-300 border-emerald-400/30", Icon: CheckCircle2 },
+  risco_parcial:     { label: "Risco parcial",       cls: "bg-amber-500/15 text-amber-300 border-amber-400/30",      Icon: AlertTriangle },
+  inviavel_sem_acao: { label: "Inviável sem ação",   cls: "bg-rose-500/15 text-rose-300 border-rose-400/30",         Icon: AlertTriangle },
+};
+
+function PlanoAtaque({ plano }: { plano: any }) {
+  if (!plano || typeof plano !== "object") return null;
+  const manobras = Array.isArray(plano.manobras) ? plano.manobras : [];
+  const frentes = Array.isArray(plano.frentesCriticas) ? plano.frentesCriticas : [];
+  const processos = Array.isArray(plano.processosConstrutivos) ? plano.processosConstrutivos : [];
+  const automacoes = Array.isArray(plano.automacoes) ? plano.automacoes : [];
+  const naoObvios = Array.isArray(plano.cenariosNaoObvios) ? plano.cenariosNaoObvios : [];
+  const kpis = Array.isArray(plano.kpisAcompanhamento) ? plano.kpisAcompanhamento : [];
+  const vitoria = Array.isArray(plano.condicoesDeVitoria) ? plano.condicoesDeVitoria : [];
+  const sePiorar = Array.isArray(plano.sePiorar) ? plano.sePiorar : [];
+  const temAlgo = plano.missao || plano.centroDeGravidade || manobras.length || frentes.length ||
+    processos.length || automacoes.length || naoObvios.length || plano.linhaBalancoPlano;
+  if (!temAlgo) return null;
+
+  const ver = VEREDITO_PRAZO_META[plano.vereditoPrazo];
+
+  return (
+    <div className="rounded-2xl border border-slate-700 bg-gradient-to-br from-slate-900 to-slate-800 text-slate-100 overflow-hidden shadow-sm">
+      {/* Cabeçalho "sala de guerra" */}
+      <div className="px-5 py-4 border-b border-white/10 flex items-start gap-3">
+        <div className="rounded-lg bg-white/10 p-2.5 shrink-0">
+          <Swords className="h-5 w-5 text-amber-300" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <h3 className="text-base font-semibold tracking-tight">Plano de Ataque</h3>
+            {ver && (
+              <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium ${ver.cls}`}>
+                <ver.Icon className="h-3 w-3" /> {ver.label}
+              </span>
+            )}
+          </div>
+          <p className="text-[11px] text-slate-400 mt-0.5">Vencer a guerra com o efetivo que se tem — Linha de Balanço + estratégia + restrições</p>
+          {plano.missao && <p className="text-sm text-slate-200 mt-2 leading-relaxed"><span className="text-amber-300 font-medium">Missão:</span> {plano.missao}</p>}
+        </div>
+      </div>
+
+      <div className="p-5 space-y-5">
+        {/* Centro de gravidade + princípio guia */}
+        {(plano.centroDeGravidade || plano.principioGuia) && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {plano.centroDeGravidade && (
+              <div className="rounded-xl border border-amber-400/30 bg-amber-400/10 p-3.5">
+                <div className="flex items-center gap-1.5 mb-1 text-amber-300 text-xs font-semibold uppercase tracking-wide">
+                  <Crosshair className="h-3.5 w-3.5" /> Centro de gravidade
+                </div>
+                <p className="text-sm text-slate-200 leading-relaxed">{plano.centroDeGravidade}</p>
+              </div>
+            )}
+            {plano.principioGuia && (
+              <div className="rounded-xl border border-white/10 bg-white/5 p-3.5">
+                <div className="flex items-center gap-1.5 mb-1 text-slate-300 text-xs font-semibold uppercase tracking-wide">
+                  <Target className="h-3.5 w-3.5" /> Princípio guia
+                </div>
+                <p className="text-sm text-slate-200 leading-relaxed">{plano.principioGuia}</p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Frentes críticas */}
+        {frentes.length > 0 && (
+          <div>
+            <div className="flex items-center gap-1.5 mb-2 text-slate-300 text-xs font-semibold uppercase tracking-wide">
+              <Flag className="h-3.5 w-3.5" /> Frentes críticas
+            </div>
+            <div className="space-y-2">
+              {frentes.map((f: any, i: number) => (
+                <div key={i} className="rounded-lg border border-white/10 bg-white/5 p-3">
+                  <p className="text-sm font-medium text-slate-100">{f.frente}</p>
+                  {f.porque && <p className="text-xs text-slate-400 mt-0.5">{f.porque}</p>}
+                  {f.acao && <p className="text-xs text-emerald-300 mt-1.5 flex items-start gap-1"><ArrowUpRight className="h-3.5 w-3.5 mt-px shrink-0" />{f.acao}</p>}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Manobras — linha do tempo da campanha */}
+        {manobras.length > 0 && (
+          <div>
+            <div className="flex items-center gap-1.5 mb-2.5 text-slate-300 text-xs font-semibold uppercase tracking-wide">
+              <ListChecks className="h-3.5 w-3.5" /> Manobras (sequência da campanha)
+            </div>
+            <ol className="space-y-2.5">
+              {manobras.map((m: any, i: number) => {
+                const meta = MANOBRA_TIPO_META[m.tipo] ?? { label: m.tipo || "Manobra", cls: "bg-slate-100 text-slate-600 border-slate-200", Icon: ListChecks };
+                return (
+                  <li key={i} className="rounded-xl border border-white/10 bg-white/5 p-3.5">
+                    <div className="flex items-center gap-2 flex-wrap mb-1.5">
+                      <span className="inline-flex items-center justify-center h-6 w-6 rounded-full bg-amber-300 text-slate-900 text-xs font-bold shrink-0">{m.ordem ?? i + 1}</span>
+                      <span className="text-sm font-semibold text-slate-100">{m.titulo || "Manobra"}</span>
+                      <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium ${meta.cls}`}>
+                        <meta.Icon className="h-3 w-3" /> {meta.label}
+                      </span>
+                      {m.fase && <span className="text-[11px] text-slate-400 inline-flex items-center gap-1"><Clock className="h-3 w-3" />{m.fase}</span>}
+                    </div>
+                    {m.acao && <p className="text-sm text-slate-200 leading-relaxed">{m.acao}</p>}
+                    {m.comoExecutar && <p className="text-xs text-slate-400 mt-1.5"><span className="text-slate-300 font-medium">Como executar: </span>{m.comoExecutar}</p>}
+                    <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-[11px]">
+                      {m.impactoPrazo && <span className="inline-flex items-center gap-1 text-emerald-300"><CalendarClock className="h-3.5 w-3.5" />{m.impactoPrazo}</span>}
+                      {m.linhaBalanco && <span className="inline-flex items-center gap-1 text-sky-300"><BarChart3 className="h-3.5 w-3.5" />{m.linhaBalanco}</span>}
+                    </div>
+                    {m.fundamento && <p className="text-[11px] text-slate-500 mt-1.5 italic flex items-start gap-1"><BookOpen className="h-3 w-3 mt-px shrink-0" />{m.fundamento}</p>}
+                  </li>
+                );
+              })}
+            </ol>
+          </div>
+        )}
+
+        {/* Novo plano de Linha de Balanço */}
+        {plano.linhaBalancoPlano && (
+          <div className="rounded-xl border border-sky-400/30 bg-sky-400/10 p-3.5">
+            <div className="flex items-center gap-1.5 mb-1 text-sky-300 text-xs font-semibold uppercase tracking-wide">
+              <BarChart3 className="h-3.5 w-3.5" /> Novo plano de Linha de Balanço (ritmo/takt)
+            </div>
+            <p className="text-sm text-slate-200 leading-relaxed">{plano.linhaBalancoPlano}</p>
+          </div>
+        )}
+
+        {/* Processos construtivos + automações */}
+        {(processos.length > 0 || automacoes.length > 0) && (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+            {processos.length > 0 && (
+              <div className="rounded-xl border border-white/10 bg-white/5 p-3.5">
+                <div className="flex items-center gap-1.5 mb-2 text-emerald-300 text-xs font-semibold uppercase tracking-wide">
+                  <Wrench className="h-3.5 w-3.5" /> Processos construtivos melhores
+                </div>
+                <ul className="space-y-2.5">
+                  {processos.map((p: any, i: number) => (
+                    <li key={i} className="text-sm">
+                      <div className="flex items-center gap-1.5 text-slate-300 text-xs">
+                        <span className="line-through opacity-70">{p.atual}</span>
+                        <ArrowUpRight className="h-3.5 w-3.5 text-emerald-300" />
+                        <span className="text-slate-100 font-medium">{p.proposto}</span>
+                      </div>
+                      {p.ganho && <p className="text-[11px] text-emerald-300 mt-0.5">Ganho: {p.ganho}</p>}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {automacoes.length > 0 && (
+              <div className="rounded-xl border border-white/10 bg-white/5 p-3.5">
+                <div className="flex items-center gap-1.5 mb-2 text-violet-300 text-xs font-semibold uppercase tracking-wide">
+                  <Zap className="h-3.5 w-3.5" /> Automações & tecnologia
+                </div>
+                <ul className="space-y-2.5">
+                  {automacoes.map((a: any, i: number) => (
+                    <li key={i} className="text-sm">
+                      <p className="text-slate-100 font-medium">{a.item}</p>
+                      {a.aplicacao && <p className="text-[11px] text-slate-400">{a.aplicacao}</p>}
+                      {a.ganho && <p className="text-[11px] text-violet-300 mt-0.5">Ganho: {a.ganho}</p>}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Cenários não óbvios */}
+        {naoObvios.length > 0 && (
+          <div className="rounded-xl border border-amber-400/30 bg-amber-400/10 p-3.5">
+            <div className="flex items-center gap-1.5 mb-2 text-amber-300 text-xs font-semibold uppercase tracking-wide">
+              <Lightbulb className="h-3.5 w-3.5" /> Cenários que um humano não veria
+            </div>
+            <ul className="space-y-2">
+              {naoObvios.map((c: string, i: number) => (
+                <li key={i} className="flex items-start gap-2 text-sm text-slate-200">
+                  <Lightbulb className="h-3.5 w-3.5 mt-0.5 text-amber-300 shrink-0" />
+                  <span>{c}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {/* KPIs de acompanhamento */}
+        {kpis.length > 0 && (
+          <div>
+            <div className="flex items-center gap-1.5 mb-2 text-slate-300 text-xs font-semibold uppercase tracking-wide">
+              <Gauge className="h-3.5 w-3.5" /> KPIs de acompanhamento
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+              {kpis.map((k: any, i: number) => (
+                <div key={i} className="rounded-lg border border-white/10 bg-white/5 p-3">
+                  <p className="text-sm font-medium text-slate-100">{k.kpi}</p>
+                  {k.meta && <p className="text-[11px] text-emerald-300 mt-0.5">Meta: {k.meta}</p>}
+                  {k.frequencia && <p className="text-[11px] text-slate-400">{k.frequencia}</p>}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Condições de vitória + se piorar */}
+        {(vitoria.length > 0 || sePiorar.length > 0) && (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+            {vitoria.length > 0 && (
+              <div className="rounded-xl border border-emerald-400/30 bg-emerald-400/10 p-3.5">
+                <div className="flex items-center gap-1.5 mb-2 text-emerald-300 text-xs font-semibold uppercase tracking-wide">
+                  <Trophy className="h-3.5 w-3.5" /> Condições de vitória
+                </div>
+                <ul className="space-y-1.5">
+                  {vitoria.map((v: string, i: number) => (
+                    <li key={i} className="flex items-start gap-2 text-sm text-slate-200">
+                      <CheckCircle2 className="h-3.5 w-3.5 mt-0.5 text-emerald-300 shrink-0" /><span>{v}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {sePiorar.length > 0 && (
+              <div className="rounded-xl border border-rose-400/30 bg-rose-400/10 p-3.5">
+                <div className="flex items-center gap-1.5 mb-2 text-rose-300 text-xs font-semibold uppercase tracking-wide">
+                  <Siren className="h-3.5 w-3.5" /> Se o cenário piorar
+                </div>
+                <ul className="space-y-1.5">
+                  {sePiorar.map((s: string, i: number) => (
+                    <li key={i} className="flex items-start gap-2 text-sm text-slate-200">
+                      <AlertTriangle className="h-3.5 w-3.5 mt-0.5 text-rose-300 shrink-0" /><span>{s}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
