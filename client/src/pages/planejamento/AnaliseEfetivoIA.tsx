@@ -186,8 +186,14 @@ function PainelProgresso({
 }: { progresso: number; etapas: typeof ETAPAS; titulo: string }) {
   const etapaAtualIdx = etapas.findIndex((e) => progresso < e.ate);
   const etapaIdx = etapaAtualIdx === -1 ? etapas.length - 1 : etapaAtualIdx;
+  // Rev. 2591 — no iPad o painel pode nascer abaixo da tabela longa de funções;
+  // rola ele para a vista assim que aparece, pra o usuário ver o 0–100% + etapas.
+  const ref = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    ref.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, []);
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-5">
+    <div ref={ref} className="rounded-xl border border-slate-200 bg-white p-5">
       <div className="flex items-center justify-between gap-3 mb-2">
         <span className="text-sm font-semibold text-slate-700 inline-flex items-center gap-2">
           <Sparkles className="h-4 w-4 text-blue-600" /> {titulo}
@@ -277,7 +283,7 @@ function Diagnostico({ projetoId, companyId }: Props) {
             </div>
           </div>
           <Button onClick={gerar} disabled={mut.isPending} className="shrink-0">
-            {mut.isPending ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Analisando…</> : <><Sparkles className="h-4 w-4 mr-2" /> {result ? "Refazer análise" : "Gerar análise"}</>}
+            {mut.isPending ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Analisando… {Math.round(progresso)}%</> : <><Sparkles className="h-4 w-4 mr-2" /> {result ? "Refazer análise" : "Gerar análise"}</>}
           </Button>
         </div>
       </div>
@@ -641,7 +647,7 @@ function Simulador({ projetoId, companyId }: Props) {
               {ajustes.length === 0 ? "Ajuste pelo menos uma função para simular." : `${ajustes.length} função(ões) ajustada(s).`}
             </span>
             <Button onClick={simular} disabled={mut.isPending || ajustes.length === 0} className="bg-violet-600 hover:bg-violet-700">
-              {mut.isPending ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Simulando…</> : <><Sparkles className="h-4 w-4 mr-2" /> Simular previsão</>}
+              {mut.isPending ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Simulando… {Math.round(progresso)}%</> : <><Sparkles className="h-4 w-4 mr-2" /> Simular previsão</>}
             </Button>
           </div>
         </div>

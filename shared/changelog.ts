@@ -1,6 +1,32 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2591 — **PLANEJAMENTO · ABA "EFETIVO × IA" · O PROGRESSO 0–100% (COM TODAS
+ * AS ETAPAS EM ANDAMENTO) FICA VISÍVEL NO iPad TAMBÉM NO SIMULADOR: (1) O PAINEL
+ * 0–100% ROLA AUTOMATICAMENTE PARA A VISTA QUANDO A SIMULAÇÃO/DIAGNÓSTICO COMEÇA;
+ * (2) O PRÓPRIO BOTÃO PASSA A MOSTRAR O % ("SIMULANDO… 42%" / "ANALISANDO… 42%").**
+ *
+ * MOTIVAÇÃO (pedido do usuário, screenshot da obra QIU 2 — FASE 4): "Quero um % de
+ * 0 a 100% e ver todos processo em andamento". O painel de progresso (barra 0–100%
+ * + as 5 etapas com ícone/spinner) JÁ EXISTIA (Rev. 2577/2585), mas no Simulador
+ * ele nasce ABAIXO da tabela longa de ~47 funções: o usuário toca em "Simular
+ * previsão" no rodapé da tabela e o painel aparece fora da área visível, dando a
+ * impressão de que só há o botão "Simulando…" parado.
+ *
+ * O QUE MUDOU (SÓ CLIENT, ZERO SERVER/SCHEMA/ALTER/DROP/DELETE) em
+ * `client/src/pages/planejamento/AnaliseEfetivoIA.tsx`:
+ *  - `PainelProgresso` ganha um `ref` + `useEffect` que faz `scrollIntoView`
+ *    ({behavior:"smooth", block:"center"}) ao montar — assim que `mostrar` vira
+ *    true, o painel 0–100% entra na tela sozinho. Vale para Diagnóstico e
+ *    Simulador (componente compartilhado).
+ *  - Os botões passam a exibir o percentual enquanto processam: Simulador
+ *    "Simulando… {progresso}%" e Diagnóstico "Analisando… {progresso}%" — o %
+ *    aparece exatamente onde o usuário toca, mesmo antes de rolar.
+ *  - Nenhuma mudança na lógica do progresso (`useProgressoSimulado`) nem nas
+ *    chamadas de IA — puramente de visibilidade/UX.
+ *
+ * VALIDAÇÃO: esbuild isolado do client (tsc dá OOM neste projeto) — exit 0.
+ *
  * Rev. 2590 — **PLANEJAMENTO · ABA "EFETIVO × IA" · SIMULADOR DE MÃO DE OBRA:
  * (1) VOLTA A USAR A IA DO CLAUDE; (2) SEM LIMITE DE INFORMAÇÃO (NÃO TRUNCA MAIS
  * A RESPOSTA — "ATINGIU O LIMITE DE TAMANHO"); (3) O ERP AGORA DESENHA A LINHA DE
