@@ -9,7 +9,7 @@ import {
   Plus, Calculator, BookOpen, CalendarClock, DollarSign, Activity, ShieldCheck, RotateCcw,
   Award, History, Clock, BarChart3, ArrowLeft,
   HelpCircle, Send, ChevronDown, Layers, UserCheck, Briefcase, Trophy, Gauge,
-  Swords, Target, Flag, Zap, Wrench, Route, Siren, Crosshair,
+  Swords, Target, Flag, Zap, Wrench, Route, Siren, Crosshair, Umbrella,
 } from "lucide-react";
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
@@ -406,6 +406,8 @@ function DiagnosticoView({ result }: { result: any }) {
               </div>
             </div>
           )}
+
+          <ImpactoFerias impacto={analise.impactoFerias} />
 
           <RiscosRecomendacoes riscos={analise.riscos} recomendacoes={analise.recomendacoes} />
 
@@ -1017,6 +1019,41 @@ function ImpactoCard({ titulo, Icon, imp }: { titulo: string; Icon: React.Compon
   );
 }
 
+function ImpactoFerias({ impacto }: { impacto?: any }) {
+  if (!impacto || typeof impacto !== "object") return null;
+  const itens = Array.isArray(impacto.itens) ? impacto.itens : [];
+  if (!impacto.resumo && itens.length === 0) return null;
+  return (
+    <div className="rounded-xl border border-cyan-200 bg-cyan-50/40 p-4">
+      <div className="flex items-center gap-2 mb-3">
+        <Umbrella className="h-4 w-4 text-cyan-600" />
+        <span className="text-sm font-semibold text-slate-700">Impacto das férias no prazo</span>
+      </div>
+      {impacto.resumo && <p className="text-sm text-slate-600 mb-3 leading-relaxed">{impacto.resumo}</p>}
+      {itens.length > 0 && (
+        <div className="space-y-2">
+          {itens.map((f: any, i: number) => (
+            <div key={i} className="rounded-lg border border-cyan-100 bg-white p-3">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-sm font-medium text-slate-700">{f.funcionario}</span>
+                {f.cargo && <span className="text-[11px] text-slate-400">{f.cargo}</span>}
+                {f.periodo && (
+                  <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium ${f.inadiavel ? "bg-rose-50 text-rose-600 border-rose-200" : "bg-amber-50 text-amber-600 border-amber-200"}`}>
+                    {f.periodo} período · {f.inadiavel ? "INADIÁVEL" : "remanejável"}
+                  </span>
+                )}
+                {f.datas && <span className="text-[11px] text-slate-400 inline-flex items-center gap-1"><CalendarClock className="h-3 w-3" />{f.datas}</span>}
+              </div>
+              {f.impacto && <p className="text-xs text-slate-500 mt-1">{f.impacto}</p>}
+              {f.acao && <p className="text-xs text-cyan-700 mt-1.5 flex items-start gap-1"><ArrowUpRight className="h-3.5 w-3.5 mt-px shrink-0" />{f.acao}</p>}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function RiscosRecomendacoes({ riscos, recomendacoes }: { riscos?: string[]; recomendacoes?: string[] }) {
   const temR = Array.isArray(riscos) && riscos.length > 0;
   const temRec = Array.isArray(recomendacoes) && recomendacoes.length > 0;
@@ -1085,6 +1122,7 @@ function PlanoAtaque({ plano }: { plano: any }) {
   const processos = Array.isArray(plano.processosConstrutivos) ? plano.processosConstrutivos : [];
   const automacoes = Array.isArray(plano.automacoes) ? plano.automacoes : [];
   const naoObvios = Array.isArray(plano.cenariosNaoObvios) ? plano.cenariosNaoObvios : [];
+  const ferias = Array.isArray(plano.absorcaoFerias) ? plano.absorcaoFerias : [];
   const kpis = Array.isArray(plano.kpisAcompanhamento) ? plano.kpisAcompanhamento : [];
   const vitoria = Array.isArray(plano.condicoesDeVitoria) ? plano.condicoesDeVitoria : [];
   const sePiorar = Array.isArray(plano.sePiorar) ? plano.sePiorar : [];
@@ -1254,6 +1292,32 @@ function PlanoAtaque({ plano }: { plano: any }) {
                 </li>
               ))}
             </ul>
+          </div>
+        )}
+
+        {/* Absorção das férias */}
+        {ferias.length > 0 && (
+          <div className="rounded-xl border border-cyan-400/30 bg-cyan-400/10 p-3.5">
+            <div className="flex items-center gap-1.5 mb-2 text-cyan-300 text-xs font-semibold uppercase tracking-wide">
+              <Umbrella className="h-3.5 w-3.5" /> Absorção das férias (manter o prazo)
+            </div>
+            <div className="space-y-2">
+              {ferias.map((f: any, i: number) => (
+                <div key={i} className="rounded-lg border border-white/10 bg-white/5 p-3">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-sm font-medium text-slate-100">{f.funcionario}</span>
+                    {f.cargo && <span className="text-[11px] text-slate-400">{f.cargo}</span>}
+                    {f.periodo && (
+                      <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium ${f.inadiavel ? "bg-rose-400/15 text-rose-200 border-rose-400/30" : "bg-amber-400/15 text-amber-200 border-amber-400/30"}`}>
+                        {f.periodo} período · {f.inadiavel ? "INADIÁVEL" : "remanejável"}
+                      </span>
+                    )}
+                    {f.datas && <span className="text-[11px] text-slate-400 inline-flex items-center gap-1"><CalendarClock className="h-3 w-3" />{f.datas}</span>}
+                  </div>
+                  {f.acao && <p className="text-xs text-cyan-200 mt-1.5 flex items-start gap-1"><ArrowUpRight className="h-3.5 w-3.5 mt-px shrink-0" />{f.acao}</p>}
+                </div>
+              ))}
+            </div>
           </div>
         )}
 

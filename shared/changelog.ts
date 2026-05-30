@@ -1,6 +1,53 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2587 — **PLANEJAMENTO · ABA "EFETIVO × IA" · A IA AGORA CONSIDERA AS
+ * FÉRIAS DOS FUNCIONÁRIOS ALOCADOS (RH › FÉRIAS) NO CÁLCULO DO EFETIVO, MEDE O
+ * IMPACTO NO PRAZO E APLICA A REGRA DE NEGÓCIO POR PERÍODO (1º REMANEJÁVEL / 2º
+ * E 3º INADIÁVEIS) PARA MANTER O PRAZO FINAL.**
+ *
+ * MOTIVAÇÃO (pedido do usuário): no cálculo do efetivo da aba "Efetivo × IA", a
+ * IA precisa CONSIDERAR as férias dos funcionários alocados, dizer o impacto no
+ * prazo e em QUAL período cada um está (1º/2º/3º). Regra de negócio: o 2º (e o
+ * 3º) período é INADIÁVEL — o funcionário SAI de férias na data; o 1º período
+ * PODE ser remanejado/negociado SE a função for imprescindível para o prazo. O
+ * objetivo é a IA sempre entregar uma análise que MANTENHA O PRAZO FINAL e a
+ * obra em andamento mesmo com as ausências.
+ *
+ * O QUE MUDOU (ADITIVO — ZERO SCHEMA, ZERO ALTER/DROP/DELETE; SOMENTE LEITURA de
+ * `vacation_periods`):
+ *  - SERVER (`server/routers/iaCronograma.ts`), `coletarEfetivoCronograma`:
+ *     o loop de `porCargo` agora popula `empInfoById` (id → {nome, cargo,
+ *     categoria}). Nova SEÇÃO 4b: lê `vacationPeriods` (status
+ *     pendente/agendada/em_gozo, `deletedAt` nulo) dos `employeeId` alocados;
+ *     extrai até 3 períodos por registro (dataInicio/Fim = 1º,
+ *     periodo2Inicio/Fim = 2º, periodo3Inicio/Fim = 3º), descarta períodos já
+ *     encerrados (fim < hoje) e classifica o bucket (EM GOZO / PRÓXIMAS 8 SEM /
+ *     FUTURO). Helpers `fmtDBR` (data BR), `ordemLabel` (1º = REMANEJÁVEL se
+ *     imprescindível; 2º = INADIÁVEL — sai de férias) e `bucketLabel`. Retorna
+ *     `feriasPeriodos`, `feriasTxt` (detalhe por período), `feriasResumoTxt`
+ *     (pessoas distintas de férias por função no horizonte) e
+ *     `totalFeriasHorizonte`.
+ *  - SERVER, `analisarEfetivo`: systemPrompt ganha bloco "FÉRIAS — REGRA
+ *     OBRIGATÓRIA"; userPrompt ganha a seção "## FÉRIAS DOS ALOCADOS"; o JSON de
+ *     saída ganha o campo `impactoFerias` { resumo, itens[{ funcionario, cargo,
+ *     periodo, datas, inadiavel, impacto, acao }] }.
+ *  - SERVER, `simularEfetivo`: destructuring + seção de férias no userPrompt +
+ *     regra no systemPrompt + novo campo `absorcaoFerias` dentro do
+ *     `planoAtaque` (como absorver cada ausência mantendo o prazo).
+ *  - SERVER, `perguntarEfetivo` (assistente Q&A): destructuring + seção de
+ *     férias no userPrompt + regra no systemPrompt (a IA responde dúvidas sobre
+ *     férias respeitando a regra 1º/2º/3º).
+ *  - CLIENT (`client/src/pages/planejamento/AnaliseEfetivoIA.tsx`): novo
+ *     componente `ImpactoFerias` renderizado no `DiagnosticoView` (resumo +
+ *     itens com badge INADIÁVEL/remanejável por período e datas BR); novo bloco
+ *     "Absorção das férias" no `PlanoAtaque` lendo `absorcaoFerias`. Ícone
+ *     `Umbrella`.
+ *
+ * ESCOPO: só a aba "Efetivo × IA". Datas exibidas em DD/MM/AAAA (iOS-safe via
+ * `fmtDBR` no server e strings no client). Validado via esbuild server + client
+ * (exit 0; tsc dá OOM no monorepo).
+ *
  * Rev. 2586 — **PLANEJAMENTO · ABA "EFETIVO × IA" · DATAS SEMPRE NO PADRÃO
  * BRASILEIRO (DD/MM/AAAA) EM TODA A SAÍDA DA IA — DIAGNÓSTICO, SIMULADOR (PLANO
  * DE ATAQUE), ASSISTENTE E HISTÓRICO.**

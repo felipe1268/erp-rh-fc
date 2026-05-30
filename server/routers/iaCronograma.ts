@@ -308,7 +308,7 @@ async function coletarEfetivoCronograma(db: any, projetoId: number, companyId: n
   // funcionário SAI de férias; 1º período PODE ser remanejado/negociado SE a
   // função for imprescindível pra manter o prazo. SOMENTE LEITURA.
   type FeriasPeriodo = {
-    nome: string; cargo: string; categoria: string; ordem: number;
+    empId: number; nome: string; cargo: string; categoria: string; ordem: number;
     inicio: Date; fim: Date; dias: number; status: string;
     bucket: "em_gozo" | "proximas" | "futuro"; impactaProximas: boolean;
   };
@@ -346,7 +346,7 @@ async function coletarEfetivoCronograma(db: any, projetoId: number, companyId: n
         const emGozo = di <= hoje && df >= hoje;
         const prox = di > hoje && di <= horizonte;
         feriasPeriodos.push({
-          nome: info.nome, cargo: info.cargo, categoria: info.categoria, ordem,
+          empId: v.employeeId, nome: info.nome, cargo: info.cargo, categoria: info.categoria, ordem,
           inicio: di, fim: df, dias: diffDias(di, df), status: v.status,
           bucket: emGozo ? "em_gozo" : prox ? "proximas" : "futuro",
           impactaProximas: emGozo || prox,
@@ -380,11 +380,11 @@ async function coletarEfetivoCronograma(db: any, projetoId: number, companyId: n
 
   // Resumo: pessoas distintas de férias por função no horizonte (próximas 8 sem
   // + em gozo). É o impacto direto na disponibilidade do efetivo.
-  const ausentesPorCargo = new Map<string, Set<string>>();
+  const ausentesPorCargo = new Map<string, Set<number>>();
   for (const f of feriasPeriodos) {
     if (!f.impactaProximas) continue;
     if (!ausentesPorCargo.has(f.cargo)) ausentesPorCargo.set(f.cargo, new Set());
-    ausentesPorCargo.get(f.cargo)!.add(f.nome);
+    ausentesPorCargo.get(f.cargo)!.add(f.empId);
   }
   const feriasResumoTxt = ausentesPorCargo.size === 0
     ? "  (Nenhum impacto de férias previsto no horizonte das próximas 8 semanas.)"
