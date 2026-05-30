@@ -1,6 +1,56 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2596 — **PLANEJAMENTO · ABA "EFETIVO × IA" · PLANO DE ATAQUE · LINHA DE
+ * BALANÇO POR PAVIMENTO: O EIXO Y PASSA A USAR OS NOMES/NUMERAÇÃO REAIS DO
+ * CRONOGRAMA (NÃO MAIS "PAVIMENTO 1..N" GENÉRICOS INVENTADOS PELA IA).**
+ *
+ * PEDIDO (usuário, screenshot IMG_1412): "Revê a Linha de Balanço e numere o
+ * pavimento CORRETO seguindo o cronograma — veja os NOMES dos pavimentos que
+ * foram informados lá." O gráfico "Linha de Balanço por Pavimento" mostrava no
+ * eixo Y "Pavimento 1".."Pavimento 8" GENÉRICOS, em vez dos nomes reais da obra
+ * (ex.: "Térreo", "Pav. 1", "Cobertura").
+ *
+ * CAUSA-RAIZ: o ERP JÁ detecta os pavimentos reais a partir dos nomes/EAP das
+ * atividades (helper `detectarPavimento` → `pavimentosDetectados`, Rev. 2593) e os
+ * envia para a IA. MAS o gráfico desenha `linhaBalancoPavimentos.pavimentos`
+ * preenchido PELA IA, que parafraseava os rótulos ("Pav. 6" → "Pavimento 6") ou
+ * renumerava tudo como "Pavimento 1..N". O eixo, portanto, refletia a paráfrase da
+ * IA e não a fonte real (o cronograma).
+ *
+ * FIX (ADITIVO, ZERO SCHEMA/ALTER/DROP/DELETE — só leitura + IA + pós-processo no
+ * server; CLIENT INTOCADO):
+ *
+ * SERVER (`server/routers/iaCronograma.ts`):
+ *  - Novos helpers: `normalizarChavePav` (lowercase + remove acentos NFD iOS-safe +
+ *    "pavimento"/"andar" → "pav" + tira pontuação), `indicePavPorNome` (resolve um
+ *    nome de pavimento para o índice na lista real: match normalizado exato →
+ *    match por número ("pavimento 6" ~ "pav 6") → contains) e `forcarPavimentosReais`
+ *    que, quando `pavimentosDetectados` não é vazio, SOBRESCREVE
+ *    `parsed.planoAtaque.linhaBalancoPavimentos.pavimentos` com a lista REAL
+ *    (base→topo) e REALINHA cada `atividade` resolvendo `pavInicio`/`pavFim` por
+ *    NOME (com fallback para o índice numérico antigo clampado).
+ *  - O schema JSON de `simularEfetivo` (`linhaBalancoPavimentos.atividades[]`)
+ *    ganhou `pavInicioNome`/`pavFimNome` (NOME EXATO do pavimento, copiado da lista
+ *    detectada); `pavInicio`/`pavFim` numéricos seguem como fallback.
+ *  - A instrução textual de `linhaBalancoPavimentos` agora MANDA a IA copiar
+ *    LITERALMENTE os nomes de PAVIMENTOS DETECTADAS, sem parafrasear/renumerar, e
+ *    informar `pavInicioNome`/`pavFimNome`.
+ *  - `forcarPavimentosReais(parsed, pavimentosDetectados)` é chamado logo após o
+ *    parse (`brDatasDeep`) em `simularEfetivo`, antes de montar/salvar `resultado`.
+ *
+ * CLIENT (`client/src/pages/planejamento/AnaliseEfetivoIA.tsx`): NENHUMA mudança —
+ * `LinhaBalancoPavimentoChart` já lê `lob.pavimentos` (agora os nomes reais) +
+ * `pavInicio`/`pavFim` (agora realinhados pelo server).
+ *
+ * NOTA: simulações ANTIGAS já salvas não são reescritas (só novas); basta
+ * re-simular. Quando a detecção vier vazia (XML sem pistas de pavimento), o
+ * comportamento de fallback da IA (inferir 3–8 unidades) é mantido.
+ *
+ * Validado via esbuild isolado (server exit 0). Sem migração.
+ *
+ * ─────────────────────────────────────────────────────────────────────────────
+ *
  * Rev. 2595 — **PLANEJAMENTO · ABA "EFETIVO × IA" · PLANO DE ATAQUE: (1) O BADGE
  * DE FÉRIAS PASSA A MOSTRAR O *MOTIVO* DA INADIABILIDADE (POR QUE UM 1º PERÍODO É
  * INADIÁVEL); (2) AS LINHAS DE BALANÇO FICAM RESPONSIVAS AO CLIQUE/TOQUE; (3)

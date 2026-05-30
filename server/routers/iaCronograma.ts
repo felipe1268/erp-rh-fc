@@ -518,6 +518,68 @@ function detectarPavimento(texto: string): { label: string; ordem: number } | nu
   return null;
 }
 
+// Rev. 2596 — A fonte ÚNICA dos NOMES e da NUMERAÇÃO dos pavimentos é o ERP
+// (`pavimentosDetectados`, extraídos do cronograma real). A IA costuma parafrasear
+// os rótulos ("Pav. 6" → "Pavimento 6") ou inventar "Pavimento 1..N", o que fazia
+// a Linha de Balanço mostrar nome/numeração ERRADOS. Aqui forçamos o eixo do
+// gráfico a usar os nomes REAIS do cronograma e realinhamos as diagonais por NOME
+// (match normalizado/por número), com fallback por índice.
+function normalizarChavePav(s: string): string {
+  return (s || "")
+    .toLowerCase()
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // remove acentos (iOS-safe)
+    .replace(/pavimento/g, "pav")
+    .replace(/andar/g, "pav")
+    .replace(/(\d)\s*[ºo°]/g, "$1") // ordinal após dígito (6º/6o/6°) → 6 (NÃO remove "o" comum)
+    .replace(/[º°.\-_/]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+function indicePavPorNome(nome: string, pavList: string[]): number {
+  const alvo = normalizarChavePav(nome);
+  if (!alvo) return -1;
+  // 1) match normalizado exato
+  let i = pavList.findIndex(p => normalizarChavePav(p) === alvo);
+  if (i >= 0) return i;
+  // 2) match por número (ex.: "pavimento 6" ~ "pav 6")
+  const nAlvo = (alvo.match(/(\d+)/) || [])[1];
+  if (nAlvo) {
+    i = pavList.findIndex(p => {
+      const k = normalizarChavePav(p);
+      const np = (k.match(/(\d+)/) || [])[1];
+      return np === nAlvo && /pav/.test(k);
+    });
+    if (i >= 0) return i;
+  }
+  // 3) contains (um contém o outro)
+  i = pavList.findIndex(p => { const k = normalizarChavePav(p); return k.includes(alvo) || alvo.includes(k); });
+  return i;
+}
+// Reescreve `linhaBalancoPavimentos` para usar os pavimentos REAIS do cronograma.
+function forcarPavimentosReais(parsed: any, pavimentosDetectados: string[]): void {
+  if (!parsed || typeof parsed !== "object" || !Array.isArray(pavimentosDetectados) || pavimentosDetectados.length === 0) return;
+  const lob = parsed?.planoAtaque?.linhaBalancoPavimentos;
+  if (!lob || typeof lob !== "object") return;
+  const iaPavs: string[] = Array.isArray(lob.pavimentos) ? lob.pavimentos.map((p: any) => String(p ?? "")) : [];
+  const pavList = [...pavimentosDetectados];
+  const ativs = Array.isArray(lob.atividades) ? lob.atividades : [];
+  const clamp = (idx: number) => Math.max(0, Math.min(pavList.length - 1, idx));
+  for (const a of ativs) {
+    if (!a || typeof a !== "object") continue;
+    const oldIni = Math.round(Number(a.pavInicio)) || 1;
+    const oldFim = Math.round(Number(a.pavFim)) || oldIni;
+    const nomeIni = String(a.pavInicioNome ?? iaPavs[oldIni - 1] ?? "").trim();
+    const nomeFim = String(a.pavFimNome ?? iaPavs[oldFim - 1] ?? "").trim();
+    let pi = indicePavPorNome(nomeIni, pavList);
+    let pf = indicePavPorNome(nomeFim, pavList);
+    if (pi < 0) pi = clamp(oldIni - 1);
+    if (pf < 0) pf = clamp(oldFim - 1);
+    a.pavInicio = pi + 1;
+    a.pavFim = pf + 1;
+  }
+  lob.pavimentos = pavList;
+}
+
 // ── Build AI system prompt ────────────────────────────────────────────────
 function buildSystemPrompt(conhecimentos: any[]): string {
   const baseKnowledge = conhecimentos.length > 0
@@ -1955,7 +2017,7 @@ Projete o impacto do CENÁRIO SIMULADO frente às atividades acima e retorne um 
       "horizonteSemanas": number,
       "pavimentos": [ "string — TODOS os pavimentos/unidades, ORDENADOS da base para o topo (use a lista PAVIMENTOS DETECTADAS acima)" ],
       "atividades": [
-        { "atividade": "string — serviço repetitivo (ex.: 'Chapisco', 'Emboço', 'Revestimento cerâmico')", "equipe": "string — resumo curto da quadrilha (ex.: '1 PED + 2 SERV')", "ritmo": "string — ritmo (ex.: '1 pav/sem')", "pavInicio": number, "pavFim": number, "semanaInicio": number, "semanaFim": number, "assertividade": number }
+        { "atividade": "string — serviço repetitivo (ex.: 'Chapisco', 'Emboço', 'Revestimento cerâmico')", "equipe": "string — resumo curto da quadrilha (ex.: '1 PED + 2 SERV')", "ritmo": "string — ritmo (ex.: '1 pav/sem')", "pavInicioNome": "string — NOME EXATO do pavimento de INÍCIO, copiado LITERALMENTE de PAVIMENTOS DETECTADAS (ex.: 'Térreo', 'Pav. 6', 'Cobertura') — NÃO parafraseie nem renumere", "pavFimNome": "string — NOME EXATO do pavimento de TÉRMINO, copiado LITERALMENTE de PAVIMENTOS DETECTADAS", "pavInicio": number, "pavFim": number, "semanaInicio": number, "semanaFim": number, "assertividade": number }
       ],
       "leitura": "string — como ler a Linha de Balanço por pavimento: cada linha diagonal é uma equipe subindo (ou descendo) os pavimentos ao longo do tempo; linhas paralelas = fluxo saudável; linhas que se cruzam = colisão/gargalo"
     },
@@ -1996,7 +2058,7 @@ PLANO TÁTICO POR ATIVIDADE — "planoTatico" (OBRIGATÓRIO): desça da frente p
 
 LINHA DE BALANÇO — "linhaBalanco" (OBRIGATÓRIO — o ERP vai DESENHAR o gráfico a partir destes dados): defina "unidade" repetitiva, "inicioRef" (data BR da Semana 1), "horizonteSemanas" (cobrindo o horizonte das atividades) e, em "atividades", para CADA serviço relevante o "inicioSemana"/"fimSemana" (inteiros 1-based dentro do horizonte), o "ritmo" e a "equipe" resumida. As janelas devem refletir o sequenciamento e o takt do plano (serviços em paralelo se sobrepõem no tempo; serviços dependentes começam depois). Em "leitura", explique o gráfico para um leigo.
 
-LINHA DE BALANÇO POR PAVIMENTO — "linhaBalancoPavimentos" (OBRIGATÓRIO — DINÂMICA, o ERP DESENHA o gráfico real de LOB): este é o gráfico que o usuário pediu. Use a lista PAVIMENTOS DETECTADAS acima — preencha "pavimentos" com TODOS eles ORDENADOS da base para o topo (se a lista vier vazia, infira de 3 a 8 unidades plausíveis a partir das atividades). Para CADA serviço repetitivo (chapisco, emboço, contrapiso, revestimento, gesso, pintura, etc.) crie uma linha em "atividades" definindo "pavInicio"/"pavFim" (1-based, índices na lista de pavimentos, base→topo) e "semanaInicio"/"semanaFim" (1-based no horizonte) — isso traça a DIAGONAL da equipe subindo os pavimentos ao longo do tempo, com a inclinação refletindo o "ritmo" (1 pav/sem = diagonal de 1 pavimento por semana). Respeite o sequenciamento construtivo (um serviço só começa num pavimento depois do anterior) e EVITE colisões (duas equipes não ocupam o mesmo pavimento na mesma semana, salvo se compatíveis). Atribua "assertividade" (0-100) por linha. "leitura" deve explicar o gráfico ao engenheiro.
+LINHA DE BALANÇO POR PAVIMENTO — "linhaBalancoPavimentos" (OBRIGATÓRIO — DINÂMICA, o ERP DESENHA o gráfico real de LOB): este é o gráfico que o usuário pediu. Use a lista PAVIMENTOS DETECTADAS acima — preencha "pavimentos" copiando LITERALMENTE TODOS os nomes de lá, ORDENADOS da base para o topo, SEM parafrasear, renumerar ou abreviar (ex.: se vier "Térreo", "Pav. 6", "Cobertura", use EXATAMENTE essas strings — NÃO escreva "Pavimento 1", "Pavimento 2"...). Só se a lista vier vazia infira de 3 a 8 unidades plausíveis a partir das atividades. Para CADA serviço repetitivo (chapisco, emboço, contrapiso, revestimento, gesso, pintura, etc.) crie uma linha em "atividades" informando "pavInicioNome"/"pavFimNome" (o NOME EXATO do pavimento, copiado da lista) E "pavInicio"/"pavFim" (1-based, índices na lista de pavimentos, base→topo) e "semanaInicio"/"semanaFim" (1-based no horizonte) — isso traça a DIAGONAL da equipe subindo os pavimentos ao longo do tempo, com a inclinação refletindo o "ritmo" (1 pav/sem = diagonal de 1 pavimento por semana). Respeite o sequenciamento construtivo (um serviço só começa num pavimento depois do anterior) e EVITE colisões (duas equipes não ocupam o mesmo pavimento na mesma semana, salvo se compatíveis). Atribua "assertividade" (0-100) por linha. "leitura" deve explicar o gráfico ao engenheiro.
 
 REALOCAÇÃO DE EQUIPES — "realocacaoEquipes" (OBRIGATÓRIO — onde alocar a MDO, por quanto tempo, e DEPOIS realocar): para CADA quadrilha-chave (3 a 6 equipes), liste a "composicao" (cargo + qtd, do CENÁRIO SIMULADO, sem estourar o efetivo), o "totalPessoas" e a sequência de "movimentos" ORDENADA: em cada movimento diga o "pavimento" (ou frente) onde a equipe entra, a "atividade", a "janela" em datas BR, a "duracao" e a "meta" que a equipe entrega ANTES de ser realocada para o próximo pavimento. Encadeie os movimentos como um fluxo de takt (a equipe termina o pav N e sobe para o N+1). Dê "assertividade" (0-100) e "baseEstatistica" por equipe.
 
@@ -2033,6 +2095,9 @@ DIDÁTICA GERAL (obrigatória em TODA a resposta): escreva para ser fácil de en
           : Array.isArray(content) ? ((content[0] as any)?.text ?? "") : "";
         const r = extrairJsonIa(raw);
         parsed = r.parsed ? brDatasDeep(r.parsed) : r.parsed;
+        // Rev. 2596 — força o eixo da Linha de Balanço a usar os NOMES REAIS do
+        // cronograma (pavimentosDetectados), realinhando as diagonais por nome.
+        forcarPavimentosReais(parsed, pavimentosDetectados);
         erroIa = r.erroIa;
       } catch (err: any) {
         erroIa = err?.message?.includes("Nenhuma chave")
