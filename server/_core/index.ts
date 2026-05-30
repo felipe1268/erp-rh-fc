@@ -789,6 +789,15 @@ Regras:
           console.log(`[SyncSchema+] Caminho B (Rev. 2533) — colunas baseline_start/finish + previsto_semanas_json garantidas.`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA Caminho B Rev. 2533:`, e?.message || e); }
 
+        // Rev. 2607 — logo_url em clientes (cadastro de logo no próprio cliente,
+        // replicado nas obras). ADITIVO; sem este guard a query `clientes.list`
+        // (db.select() lê todas as colunas do schema) quebra quando a coluna não
+        // existe no banco e a tela de Clientes aparece vazia.
+        try {
+          await db.execute(sql`ALTER TABLE clientes ADD COLUMN IF NOT EXISTS logo_url TEXT`);
+          console.log(`[SyncSchema+] Rev. 2607: coluna logo_url garantida em clientes.`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev. 2607 clientes.logo_url:`, e?.message || e); }
+
         // Rev. 2396 — fornecedor_nome em financial_entries + backfill 1-shot
         // pra rows recorrentes JÁ materializadas (pega o nome do recurring pai).
         try {

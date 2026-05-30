@@ -38,11 +38,22 @@
  *    gerenciadora". O upload continua só nos cadastros (Clientes + mini-modal de
  *    gerenciadora).
  *
+ * HOTFIX (mesma Rev. 2607): a tela de Clientes apareceu VAZIA (0 clientes)
+ * após a 1ª parte. CAUSA-RAIZ: a coluna `logo_url` foi adicionada ao schema
+ * Drizzle mas NÃO existia no banco Neon (o `[SyncSchema]` genérico não cobre a
+ * tabela `clientes`), e como `clientes.list` faz `db.select()` (lê TODAS as
+ * colunas do schema), a query passou a referenciar `logo_url` inexistente e
+ * QUEBROU — o front exibia 0. Dados 100% intactos (5 clientes preservados). FIX
+ * (ADITIVO, R-001/R-007/R-010): `ALTER TABLE clientes ADD COLUMN IF NOT EXISTS
+ * logo_url TEXT` aplicado no Neon + guard de self-heal permanente em
+ * `server/_core/index.ts` (bloco `[SyncSchema+] Rev. 2607`) para produção e
+ * futuros restarts nunca repetirem a falha.
+ *
  * IMPACTO: logo cadastrado uma única vez no cliente aparece automaticamente em
  * toda obra daquele cliente, nos mesmos locais de exibição de hoje (PrintHeader,
  * Programação Semanal Lótus, Portal do Cliente etc., que já leem
  * `obras.cliente_logo_url`). Compatível com obras existentes. Validado: esbuild
- * server (exit 0) + workflow reiniciado.
+ * server (exit 0) + workflow reiniciado (log confirma coluna garantida).
  *
  * Rev. 2606 — **OBRAS · CADASTRO REUTILIZÁVEL DE GERENCIADORAS (COM LOGO) —
  * O CAMPO "GERENCIADORA" DO FORM "NOVA OBRA" DEIXA DE SER TEXTO LIVRE E VIRA UM
