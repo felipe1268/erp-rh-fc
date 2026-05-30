@@ -1,6 +1,45 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2602 — **PLANEJAMENTO · AO EXCLUIR O CRONOGRAMA, O PREVISTO DAQUELA
+ * REVISÃO É APAGADO JUNTO. ANTES A BARRA SUPERIOR "AVANÇO FÍSICO" CONTINUAVA
+ * EXIBINDO O PREVISTO ANTIGO (EX.: 18,37%) MESMO COM 0 ATIVIDADES.**
+ *
+ * SINTOMA (usuário, screenshots projeto 35 REVTE-CIVIL): após excluir/limpar o
+ * cronograma (Cronograma com "0 atividades", Avanço Semanal sem nenhuma
+ * atividade), a barra superior "Avanço Físico" seguia mostrando Previsto 18,37%.
+ * Pedido: "quando excluir o cronograma as atividades previstas devem ser
+ * apagadas também".
+ *
+ * CAUSA-RAIZ: a mutation `limparCronograma` (server/routers/planejamento.ts)
+ * apagava apenas as linhas de `planejamento_atividades` + `planejamento_avancos`
+ * da revisão (e rastros em tabelas-filhas), mas NÃO tocava na curva CAMINHO B
+ * `planejamento_projetos.previsto_semanas_json` nem no snapshot MSP do
+ * `calendario_json`. Como a barra superior lê a curva (`previstoCurva`, Rev.
+ * 2599/2600) com o snapshot UID=0 como fallback, o previsto antigo continuava
+ * "vivo" no banco e era exibido mesmo sem nenhuma atividade.
+ *
+ * FIX (SÓ SERVER — `server/routers/planejamento.ts`; ZERO CLIENT/SCHEMA/ALTER/
+ * DROP/DELETE de schema): em `limparCronograma`, após apagar atividades/avanços,
+ * se a curva armazenada PERTENCE à revisão excluída (`snap.revisaoId ===
+ * input.revisaoId`), zera `previsto_semanas_json`/`previsto_semanas_gerado_em`
+ * (UPDATE da própria coluna via função do app — permitido) e chama o helper já
+ * existente `limparSnapshotMspDoProjeto` (remove `previstoMspSnapshot`/
+ * `realizadoMspSnapshot`/`statusDateSnapshot`/envelope do `calendario_json` +
+ * zera `data_corte_*`). Curvas de OUTRAS revisões ficam intactas (limpeza
+ * condicionada ao `revisaoId`). O retorno ganha `previstoLimpo` (telemetria).
+ *
+ * CLEANUP DO ESTADO RESIDUAL (UPDATE só da coluna JSON via script node→Neon —
+ * permitido, NÃO é ALTER/DROP/DELETE): o projeto 35 já estava no estado quebrado
+ * (0 atividades em todas as revisões + curva revisaoId=50 gravada no backfill da
+ * Rev. 2601). Script varreu os projetos com `previsto_semanas_json` não-nulo e
+ * zerou a curva de quem tem a revisão da curva SEM atividades — projeto 35 LIMPO
+ * (snapshot do calendarioJson já estava vazio).
+ *
+ * Validado: esbuild server transform exit 0; workflow reiniciado sem erros;
+ * verificação SQL (projeto 35 com curva nula + 0 atividades) → barra superior
+ * passa a exibir "—".
+ *
  * Rev. 2601 — **PLANEJAMENTO · A CAUSA-RAIZ REAL DO PREVISTO TRAVADO EM ~1%:
  * UM BUG DE ZONA MORTA TEMPORAL (TDZ) NO SERVIDOR IMPEDIA A CURVA CAMINHO B DE
  * SER GERADA/GRAVADA. AS REV. 2599/2600 (CLIENT) ESTAVAM CERTAS — SÓ FALTAVA O

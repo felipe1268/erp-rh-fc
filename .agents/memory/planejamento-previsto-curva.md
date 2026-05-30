@@ -26,3 +26,16 @@ Self-heal writes the same JSON column via an app function (an UPDATE, allowed) �
 it is NOT an ALTER/DROP/DELETE, so it respects R-001/R-007/R-010. Guard it with
 a baseline-leaf COUNT before regenerating so baseline-less projects don't rewrite
 null→null on every read.
+
+**Deleting/clearing a cronograma must clear the previsto in lockstep.** Any
+mutation that wipes a revision's activity rows (`limparCronograma`, and by the
+same logic `excluirRevisao`) MUST also clear `previsto_semanas_json` AND the MSP
+snapshot in `calendario_json` (via `limparSnapshotMspDoProjeto`) when the stored
+curve belongs to that revision (`snap.revisaoId === input.revisaoId`). Otherwise
+the top bar "Avanço Físico" keeps showing the old Previsto (e.g. 18,37%) with 0
+activities, because it reads the curve first and falls back to the snapshot —
+deleting only the activity rows leaves both alive.
+**Why:** the curve + snapshot are project-level columns, decoupled from the
+activity rows; nothing cascades. **How to apply:** gate the clear on the
+revisaoId match so curves of OTHER revisions survive; do it best-effort
+(try/catch that only logs) so the core deletion never fails because of it.

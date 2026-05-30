@@ -475,10 +475,42 @@ export const planejamentoRouter = router({
           .where(eq(planejamentoAvancos.revisaoId, input.revisaoId));
         const delAt = await db.delete(planejamentoAtividades)
           .where(eq(planejamentoAtividades.revisaoId, input.revisaoId));
+
+        // Rev. 2602 — Ao excluir o cronograma, o PREVISTO daquela revisão deve
+        // sumir junto. Sem isso, a curva CAMINHO B (`previsto_semanas_json`) e o
+        // snapshot MSP (`calendarioJson`) ficavam no banco e a barra superior
+        // "Avanço Físico" seguia exibindo o previsto antigo (ex.: 18,37%) mesmo
+        // com 0 atividades. Só limpa quando a curva armazenada PERTENCE à revisão
+        // excluída (preserva curvas de outras revisões intactas).
+        let previstoLimpo = false;
+        try {
+          const [projAtual] = await db.select({
+            previstoSemanasJson: planejamentoProjetos.previstoSemanasJson,
+          }).from(planejamentoProjetos)
+            .where(eq(planejamentoProjetos.id, input.projetoId));
+          let curvaDaRevisao = false;
+          if (projAtual?.previstoSemanasJson) {
+            try {
+              const snap = JSON.parse(projAtual.previstoSemanasJson as any);
+              curvaDaRevisao = Number(snap?.revisaoId) === Number(input.revisaoId);
+            } catch { /* json inválido: trata como não pertencente */ }
+          }
+          if (curvaDaRevisao) {
+            await db.update(planejamentoProjetos)
+              .set({ previstoSemanasJson: null as any, previstoSemanasGeradoEm: null as any })
+              .where(eq(planejamentoProjetos.id, input.projetoId));
+            await limparSnapshotMspDoProjeto(db, input.projetoId);
+            previstoLimpo = true;
+          }
+        } catch (e) {
+          console.error("[limparCronograma] Falha ao limpar previsto:", e);
+        }
+
         return {
           success: true,
           atividades: (delAt as any)?.rowCount ?? 0,
           avancos:    (delAv as any)?.rowCount ?? 0,
+          previstoLimpo,
         };
       } catch (e: any) {
         console.error("[limparCronograma] Falha:", e);
