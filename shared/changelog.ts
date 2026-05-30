@@ -1,6 +1,56 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2592 — **PLANEJAMENTO · ABA "EFETIVO × IA" · CORRIGE "ESTÁ DANDO ERRO E
+ * NÃO ESTÁ SALVANDO AS VERIFICAÇÕES E SIMULAÇÕES" NO iPad: O DIAGNÓSTICO E O
+ * SIMULADOR VOLTAM A CONCLUIR (E A SER SALVOS NO HISTÓRICO) EM VEZ DE ESTOURAR
+ * O TIMEOUT.**
+ *
+ * SINTOMA (usuário, screenshot do Simulador no iPad): ao gerar/simular a tela
+ * "dá erro" e nada aparece no Histórico — nem os diagnósticos nem as simulações
+ * ficam salvos.
+ *
+ * CAUSA-RAIZ: a Rev. 2590 REMOVEU o caminho rápido (`fast`) do `simularEfetivo`
+ * para atender ao pedido de "usar Claude + sem limite de informação", subindo
+ * `maxTokens` para 16000. O `invokeLLM` usa Claude Sonnet NÃO-STREAMING, lento
+ * demais para um payload desse tamanho → estoura o timeout do proxy/iOS no iPad
+ * ANTES de retornar (mesmo padrão das Rev. 2584/2585/2589). O `analisarEfetivo`
+ * (diagnóstico, `maxTokens` 8000) também rodava sem `fast` e sofria o mesmo. E,
+ * como a persistência (`salvarAnaliseEfetivo`) só ocorre `if (parsed)`, no
+ * timeout `parsed` fica null → NADA é salvo no Histórico. Daí os DOIS sintomas
+ * de uma só causa.
+ *
+ * FIX (SÓ SERVER, ADITIVO, ZERO SCHEMA/ALTER/DROP/DELETE) em
+ * `server/routers/iaCronograma.ts`:
+ *  - `analisarEfetivo` e `simularEfetivo` voltam a passar `fast: true` ao
+ *    `invokeLLM` → caminho `invokeGeminiFast` (Gemini 2.5 Flash, `thinkingBudget=0`,
+ *    `responseMimeType:"application/json"`). É rápido o bastante para responder
+ *    dentro do timeout do iPad E aceita o teto alto de tokens (8000/16000), então
+ *    o plano completo (plano tático + linha de balanço + guia + mesa de guerra)
+ *    continua saindo sem truncar. Claude segue como FALLBACK dentro do `invokeLLM`.
+ *  - Com a chamada concluindo, `parsed` deixa de ser null → `salvarAnaliseEfetivo`
+ *    volta a persistir diagnósticos e simulações no Histórico.
+ *  - Mantida a estrutura completa de saída da Rev. 2590 — só muda QUAL modelo
+ *    responde primeiro (rápido), não O QUE é gerado.
+ *
+ * SEGUNDA CAUSA (descoberta nos logs de produção durante esta revisão): mesmo
+ * quando a IA concluía, o "não está salvando" ACONTECIA também por um motivo
+ * INDEPENDENTE do timeout. A coluna `planejamento_analises_efetivo.veredito` é
+ * `varchar(40)`, mas o `salvarAnaliseEfetivo` gravava `veredito` SEM truncar (só
+ * `titulo`/`obra` eram cortados). O `analisarEfetivo` mapeia `veredito` a partir
+ * do `diagnostico` da IA — uma FRASE longa (ex.: 73 chars) → o INSERT estourava
+ * `value too long for type character varying(40)`; como o `salvarAnaliseEfetivo`
+ * é best-effort (try/catch que só loga), o erro era engolido e NADA salvava no
+ * Histórico. Reproduzido via INSERT direto (falha com 73 chars, sucesso com 40).
+ * FIX (code-only, ZERO SCHEMA/ALTER/DROP/DELETE — não podemos alargar a coluna por
+ * R-001/R-007/R-010): `salvarAnaliseEfetivo` passa a truncar `veredito` a 40 chars
+ * (`(rec.veredito ?? "").slice(0, 40) || null`), igual a `titulo`/`obra`. O texto
+ * completo do diagnóstico continua íntegro no `resultado` (json) — `veredito` é só
+ * o rótulo curto.
+ *
+ * VALIDAÇÃO: esbuild isolado do server (tsc dá OOM neste projeto) — exit 0; INSERT
+ * de teste confirmando que 40 chars persiste (e 73 chars falhava antes).
+ *
  * Rev. 2591 — **PLANEJAMENTO · ABA "EFETIVO × IA" · O PROGRESSO 0–100% (COM TODAS
  * AS ETAPAS EM ANDAMENTO) FICA VISÍVEL NO iPad TAMBÉM NO SIMULADOR: (1) O PAINEL
  * 0–100% ROLA AUTOMATICAMENTE PARA A VISTA QUANDO A SIMULAÇÃO/DIAGNÓSTICO COMEÇA;

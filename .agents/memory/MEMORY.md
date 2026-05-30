@@ -1,2 +1,3 @@
 - [tRPC tenancy / companyId](trpc-tenancy.md) — derive companyId from ctx.user, never trust input.companyId (IDOR); convention across routers.
 - [iOS Safari timestamp crash](ios-safari-timestamp-bug.md) — never `new Date(pgTimestamp).toLocale*()`; use formatDateTime from dateUtils.ts (space→T) or WebKit throws.
+- [Best-effort save swallows errors](best-effort-save-swallows-errors.md) — "não está salvando" pode ser INSERT falhando silencioso (texto de IA estourando varchar estreito); trunque no code, nunca ALTER.

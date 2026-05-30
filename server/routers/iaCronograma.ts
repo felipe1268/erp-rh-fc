@@ -419,7 +419,12 @@ async function salvarAnaliseEfetivo(
       projetoId:     rec.projetoId,
       companyId:     rec.companyId,
       tipo:          rec.tipo,
-      veredito:      rec.veredito ?? null,
+      // Rev. 2592: `veredito` é varchar(40). A IA às vezes devolve uma frase
+      // longa (ex.: o `diagnostico` do analisarEfetivo) → INSERT estourava
+      // "value too long for type character varying(40)" e o catch best-effort
+      // engolia o erro → NADA salvava no Histórico. Truncar a 40 (como
+      // titulo/obra). Code-only, ZERO schema/ALTER/DROP/DELETE.
+      veredito:      (rec.veredito ?? "").slice(0, 40) || null,
       titulo:        (rec.titulo ?? "").slice(0, 400) || null,
       obra:          (rec.obra ?? "").slice(0, 300) || null,
       revisaoNumero: rec.revisaoNumero ?? null,
@@ -1642,6 +1647,12 @@ Regras: inclua em "porCargo" TODAS as funções listadas no efetivo (mesmo as qu
           ],
           maxTokens: 8000,
           response_format: { type: "json_object" },
+          // Rev. 2592 — Diagnóstico volta ao caminho rápido (Gemini 2.5 Flash). O
+          // Claude não-streaming estourava o timeout do proxy/iOS no iPad → o
+          // diagnóstico "dava erro" e, como a persistência só ocorre com `parsed`,
+          // nada era salvo no Histórico. Gemini responde dentro do timeout e
+          // aguenta o teto de tokens (Claude segue como fallback no invokeLLM).
+          fast: true,
         });
         const content = result.choices?.[0]?.message?.content;
         const raw = typeof content === "string"
@@ -1910,15 +1921,18 @@ DIDÁTICA GERAL (obrigatória em TODA a resposta): escreva para ser fácil de en
             { role: "system", content: systemPrompt },
             { role: "user",   content: userPrompt },
           ],
-          // Rev. 2590 — o usuário pediu EXPLICITAMENTE a IA do Claude e "sem
-          // limite de informação" (a resposta vinha truncada — "atingiu o limite
-          // de tamanho da resposta"). Removido o caminho rápido (Gemini): agora
-          // usa Claude (claude-sonnet-4) com teto de tokens alto para o plano sair
-          // completo (plano tático por atividade + linha de balanço + guia). A
-          // simulação é PERSISTIDA mesmo se o cliente cair no timeout do iOS, e a
-          // tela restaura a última análise salva (Rev. 2588) — rede de proteção.
+          // Rev. 2590 — o usuário pediu "sem limite de informação" (a resposta
+          // vinha truncada — "atingiu o limite de tamanho"). Teto de tokens alto
+          // p/ o plano sair completo (plano tático + linha de balanço + guia).
+          // Rev. 2592 — o Claude não-streaming usado pela 2590 estourava o timeout
+          // do proxy/iOS no iPad → a simulação "dava erro" e, como a persistência
+          // só ocorre com `parsed`, NADA era salvo no Histórico. Voltamos ao
+          // caminho rápido (Gemini 2.5 Flash): responde dentro do timeout E aguenta
+          // os 16000 tokens, então o plano sai completo sem travar (Claude segue
+          // como fallback dentro do invokeLLM).
           maxTokens: 16000,
           response_format: { type: "json_object" },
+          fast: true,
         });
         const content = result.choices?.[0]?.message?.content;
         const raw = typeof content === "string"
