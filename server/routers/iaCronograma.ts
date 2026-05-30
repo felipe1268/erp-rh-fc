@@ -328,7 +328,9 @@ async function coletarEfetivoCronograma(db: any, projetoId: number, companyId: n
     empId: number; nome: string; cargo: string; categoria: string; ordem: number;
     inicio: Date; fim: Date; dias: number; status: string;
     bucket: "em_gozo" | "proximas" | "futuro"; impactaProximas: boolean;
+    inadiavel: boolean; motivoInadiavel: string;
   };
+  const fmtDBR = (d: Date) => `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
   const feriasPeriodos: FeriasPeriodo[] = [];
   const empIdsAlloc = Array.from(empInfoById.keys());
   if (empIdsAlloc.length > 0) {
@@ -341,6 +343,8 @@ async function coletarEfetivoCronograma(db: any, projetoId: number, companyId: n
       periodo3Inicio: vacationPeriods.periodo3Inicio,
       periodo3Fim:    vacationPeriods.periodo3Fim,
       status:         vacationPeriods.status,
+      concessivoFim:  vacationPeriods.periodoConcessivoFim,
+      vencida:        vacationPeriods.vencida,
     }).from(vacationPeriods).where(and(
       eq(vacationPeriods.companyId, companyId),
       inArray(vacationPeriods.employeeId, empIdsAlloc),
@@ -351,6 +355,10 @@ async function coletarEfetivoCronograma(db: any, projetoId: number, companyId: n
     for (const v of vps as any[]) {
       const info = empInfoById.get(v.employeeId);
       if (!info) continue;
+      // Situação legal da FÉRIA (vale pra todas as frações da mesma linha):
+      // prazo concessivo (deadline legal pra gozar) e flag de vencida.
+      const concFim = parseDt(v.concessivoFim);
+      const statusVencida = String(v.status || "").toLowerCase() === "vencida" || Number(v.vencida) === 1;
       const pares: Array<[number, any, any]> = [
         [1, v.dataInicio, v.dataFim],
         [2, v.periodo2Inicio, v.periodo2Fim],
@@ -362,18 +370,29 @@ async function coletarEfetivoCronograma(db: any, projetoId: number, companyId: n
         if (df < hoje) continue; // período já encerrado — irrelevante
         const emGozo = di <= hoje && df >= hoje;
         const prox = di > hoje && di <= horizonte;
+        // Classificação INADIÁVEL × REMANEJÁVEL — ROBUSTA, não depende só da ordem:
+        // um 1º período também é INADIÁVEL quando a lei obriga o gozo (já vencida
+        // ou prazo concessivo vencendo) ou quando já está em gozo. Margem de 45
+        // dias entre o fim do gozo e o concessivo = "sem folga legal pra adiar".
+        const diasAteVencer = concFim ? Math.round((concFim.getTime() - df.getTime()) / 86400000) : null;
+        const concExpirado = concFim != null && concFim < hoje;       // prazo legal JÁ passou
+        const vencendo = diasAteVencer != null && diasAteVencer >= 0 && diasAteVencer <= 45; // a ≤45d de estourar
+        let inadiavel = false, motivoInadiavel = "";
+        if (ordem >= 2) { inadiavel = true; motivoInadiavel = `${ordem}º período — saldo final por lei`; }
+        else if (emGozo) { inadiavel = true; motivoInadiavel = "já em gozo (não interromper)"; }
+        else if (statusVencida || concExpirado) { inadiavel = true; motivoInadiavel = `férias VENCIDAS${concFim ? ` — prazo concessivo expirou em ${fmtDBR(concFim)}` : ""} — gozo obrigatório (passivo em dobro)`; }
+        else if (vencendo) { inadiavel = true; motivoInadiavel = `prazo concessivo vence ${concFim ? fmtDBR(concFim) : "em breve"} — sem folga p/ adiar`; }
         feriasPeriodos.push({
           empId: v.employeeId, nome: info.nome, cargo: info.cargo, categoria: info.categoria, ordem,
           inicio: di, fim: df, dias: diffDias(di, df), status: v.status,
           bucket: emGozo ? "em_gozo" : prox ? "proximas" : "futuro",
           impactaProximas: emGozo || prox,
+          inadiavel, motivoInadiavel,
         });
       }
     }
     feriasPeriodos.sort((a, b) => a.inicio.getTime() - b.inicio.getTime());
   }
-  const fmtDBR = (d: Date) => `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
-  const ordemLabel = (o: number) => o === 1 ? "1º período (REMANEJÁVEL se imprescindível)" : o === 2 ? "2º período (INADIÁVEL — sai de férias)" : `${o}º período`;
   const bucketLabel = (b: string) => b === "em_gozo" ? "EM GOZO AGORA" : b === "proximas" ? "PRÓXIMAS 8 SEMANAS" : "FUTURO";
 
   // 5. Blocos textuais para os prompts
@@ -392,7 +411,7 @@ async function coletarEfetivoCronograma(db: any, projetoId: number, companyId: n
   const feriasTxt = feriasPeriodos.length === 0
     ? "  (Nenhuma férias agendada/em gozo para os funcionários alocados nesta obra.)"
     : feriasPeriodos.slice(0, 40).map(f =>
-        `  - ${f.nome} [${f.cargo} · ${f.categoria}] — ${ordemLabel(f.ordem)} | ${fmtDBR(f.inicio)} → ${fmtDBR(f.fim)} (${f.dias}d) | ${bucketLabel(f.bucket)} | status: ${f.status}`
+        `  - ${f.nome} [${f.cargo} · ${f.categoria}] — ${f.ordem}º período | ${f.inadiavel ? `INADIÁVEL (${f.motivoInadiavel})` : "REMANEJÁVEL se imprescindível"} | ${fmtDBR(f.inicio)} → ${fmtDBR(f.fim)} (${f.dias}d) | ${bucketLabel(f.bucket)} | status: ${f.status}`
       ).join("\n") + (feriasPeriodos.length > 40 ? `\n  ... e mais ${feriasPeriodos.length - 40} períodos de férias.` : "");
 
   // Resumo: pessoas distintas de férias por função no horizonte (próximas 8 sem
@@ -1621,6 +1640,7 @@ Considere: o histograma típico de mão de obra por tipo de serviço (mobilizaç
 Você RECEBE a lista de férias agendadas/em gozo dos alocados, com a ORDEM do parcelamento (1º/2º/3º período) e as datas. SEMPRE leve as férias em conta no efetivo DISPONÍVEL: quem está de férias no período de uma atividade NÃO conta como mão de obra naquela frente. Para cada férias que impacta o prazo aplique esta regra de negócio da FC:
 - **2º (ou 3º) período = INADIÁVEL**: por lei já é o saldo final; o funcionário SAI de férias na data marcada — NÃO sugira adiar/remanejar. Planeje a obra CONTANDO com a ausência dele (repor com outro, antecipar a frente, terceirizar, redistribuir).
 - **1º período = NEGOCIÁVEL**: SE a função for IMPRESCINDÍVEL para manter o prazo daquela frente, sugira remanejar/reagendar o 1º período (ou trocar por quem não é gargalo). Se a função NÃO for crítica, deixe o funcionário sair normalmente.
+- **MARCAÇÃO LEGAL DO ERP (PRIORITÁRIA) — RESPEITE SEMPRE:** cada férias já vem rotulada na lista como INADIÁVEL ou REMANEJÁVEL. Quando o ERP marcar INADIÁVEL — INCLUSIVE um 1º período por "férias VENCIDAS" ou "prazo concessivo vence ..." — a lei OBRIGA o gozo na data marcada (adiar gera férias EM DOBRO e passivo trabalhista): JAMAIS sugira remanejar/adiar; planeje a obra repondo/antecipando/terceirizando/redistribuindo. Só trate como negociável o 1º período EXPLICITAMENTE marcado REMANEJÁVEL. No campo "inadiavel" do JSON, copie SEMPRE a marcação do ERP.
 O OBJETIVO É SEMPRE manter o PRAZO FINAL e a obra em andamento — toda análise deve dizer como absorver as férias sem estourar a data de entrega.
 
 Responda SEMPRE em português brasileiro, técnico, direto e específico. TODAS as datas SEMPRE no padrão brasileiro DD/MM/AAAA (jamais ISO/AAAA-MM-DD). Responda APENAS com JSON válido no formato pedido, sem nenhum texto fora do JSON.`;
@@ -1850,7 +1870,7 @@ MISSÃO ESPECIAL — PLANO DE ATAQUE (quando o efetivo é REDUZIDO ou se mantém
 
 No plano de ataque, BUSQUE CENÁRIOS NÃO ÓBVIOS — combinações de sequenciamento, processo construtivo, automação e logística que um engenheiro NÃO enxergaria na correria do dia a dia. Cada manobra deve ter ação concreta, como executar, impacto no prazo e o ajuste correspondente na Linha de Balanço.
 
-FÉRIAS — REGRA OBRIGATÓRIA NO PLANO: você recebe a lista de férias agendadas/em gozo dos alocados, com a ORDEM do parcelamento (1º/2º/3º período). Quem está de férias no período de uma frente NÃO conta como efetivo disponível ali — subtraia essas ausências do cenário simulado. Aplique a regra de negócio da FC: o 2º (ou 3º) período é INADIÁVEL (o funcionário SAI na data; planeje a obra repondo/antecipando/terceirizando/redistribuindo); o 1º período só deve ser remanejado/reagendado SE a função for IMPRESCINDÍVEL para manter o prazo daquela frente. O plano de ataque deve absorver as férias e ainda assim MANTER O PRAZO FINAL.
+FÉRIAS — REGRA OBRIGATÓRIA NO PLANO: você recebe a lista de férias agendadas/em gozo dos alocados, com a ORDEM do parcelamento (1º/2º/3º período). Quem está de férias no período de uma frente NÃO conta como efetivo disponível ali — subtraia essas ausências do cenário simulado. Aplique a regra de negócio da FC: o 2º (ou 3º) período é INADIÁVEL (o funcionário SAI na data; planeje a obra repondo/antecipando/terceirizando/redistribuindo); o 1º período só deve ser remanejado/reagendado SE a função for IMPRESCINDÍVEL para manter o prazo daquela frente. ATENÇÃO — MARCAÇÃO LEGAL PRIORITÁRIA: cada férias já vem rotulada como INADIÁVEL ou REMANEJÁVEL pelo ERP; RESPEITE essa marcação. Um 1º período rotulado INADIÁVEL por "férias VENCIDAS" ou "prazo concessivo vence ..." NÃO pode ser adiado (a lei obriga o gozo; adiar gera férias em dobro e passivo) — planeje repondo/antecipando/terceirizando, e copie a marcação no campo "inadiavel" do JSON. O plano de ataque deve absorver as férias e ainda assim MANTER O PRAZO FINAL.
 
 Seja realista, quantitativo e conservador. Aponte EXPLICITAMENTE quando o cenário simulado tende a NÃO entregar o ganho esperado (ex.: superlotação de uma frente, gargalo deslocado para outra função, função-restrição não ajustada, contratação que só rende após curva de aprendizado). TODAS as datas SEMPRE no padrão brasileiro DD/MM/AAAA (jamais ISO/AAAA-MM-DD). Responda SEMPRE em português brasileiro e APENAS com JSON válido no formato pedido, sem nenhum texto fora do JSON.`;
 

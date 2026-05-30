@@ -1,6 +1,64 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2594 — **PLANEJAMENTO · ABA "EFETIVO × IA" · "IMPACTO DAS FÉRIAS NO PRAZO":
+ * A CLASSIFICAÇÃO INADIÁVEL × REMANEJÁVEL DEIXA DE OLHAR SÓ A ORDEM DA FRAÇÃO E
+ * PASSA A CONSIDERAR A SITUAÇÃO LEGAL (VENCIDA / CONCESSIVO VENCENDO / EM GOZO).**
+ *
+ * PEDIDO (usuário, screenshot do bloco "Impacto das férias no prazo"): a info das
+ * férias estava ERRADA — "Anderson Júnior" aparecia como "1º período · remanejável"
+ * sendo que o concessivo dele está VENCENDO (logo o gozo é obrigatório, não dá pra
+ * adiar), e o ERP não detectou. "Garanta essa lógica melhor para não ter erro."
+ *
+ * DIAGNÓSTICO (via Neon real — os bancos dev/prod-replica do Replit estão vazios):
+ *  Anderson dos Anjos Alkmin Junior (employee 420056) — férias agendada
+ *  01/06→30/06/2026, fracionamento=1, período aquisitivo 16/07/2024→15/07/2025,
+ *  prazo concessivo até 15/07/2026, flag `vencida=0`, status `agendada`. Ou seja:
+ *  é um 1º período, mas o prazo concessivo (deadline legal pra gozar) está a ~15
+ *  dias do fim do gozo — gozo OBRIGATÓRIO, não pode ser remanejado. CAUSA-RAIZ: a
+ *  classificação INADIÁVEL/REMANEJÁVEL usava SÓ a ordem do parcelamento
+ *  (1º = remanejável, 2º/3º = inadiável) e ignorava a situação legal da férias
+ *  (já vencida, concessivo vencendo, ou já em gozo).
+ *
+ * FIX (ADITIVO, ZERO SCHEMA/ALTER/DROP/DELETE — SOMENTE LEITURA de `vacation_periods`
+ * + IA + texto; nenhuma mudança de client necessária, o badge já lê `inadiavel`):
+ *
+ * SERVER (`server/routers/iaCronograma.ts`):
+ *  - `coletarEfetivoCronograma` — o `type FeriasPeriodo` ganhou `inadiavel: boolean`
+ *    e `motivoInadiavel: string`. O SELECT de `vacationPeriods` passou a trazer
+ *    `concessivoFim` (`periodoConcessivoFim`) e `vencida`. Para cada linha calcula
+ *    a situação legal UMA vez (`concFim` = prazo concessivo; `statusVencida` =
+ *    status "vencida" OU flag `vencida=1`) e, por fração, define a classificação
+ *    de forma ROBUSTA (não só pela ordem):
+ *      • ordem ≥ 2 → INADIÁVEL ("saldo final por lei");
+ *      • senão, EM GOZO → INADIÁVEL ("já em gozo — não interromper");
+ *      • senão, VENCIDA → INADIÁVEL ("férias VENCIDAS — gozo obrigatório, passivo
+ *        em dobro");
+ *      • senão, CONCESSIVO VENCENDO (≤ 45 dias entre o fim do gozo e o
+ *        `concessivoFim`) → INADIÁVEL ("prazo concessivo vence DD/MM/AAAA — sem
+ *        folga p/ adiar");
+ *      • caso contrário → 1º período REMANEJÁVEL se imprescindível.
+ *    Removido o helper `ordemLabel` (que rotulava só pela ordem) e o `fmtDBR`
+ *    duplicado; `fmtDBR` foi movido pra ANTES do loop pra ficar disponível no
+ *    cálculo do motivo. O `feriasTxt` (lista enviada ao prompt) agora mostra a
+ *    classificação real ("INADIÁVEL (motivo)" / "REMANEJÁVEL se imprescindível")
+ *    em vez do rótulo fixo por ordem.
+ *  - Prompts `analisarEfetivo` e `simularEfetivo` ganharam a regra "MARCAÇÃO LEGAL
+ *    DO ERP (PRIORITÁRIA)": a IA deve RESPEITAR a marcação INADIÁVEL/REMANEJÁVEL
+ *    que já vem na lista — inclusive um 1º período INADIÁVEL por "férias VENCIDAS"
+ *    ou "prazo concessivo vence ..." JAMAIS pode ser sugerido pra adiar/remanejar
+ *    (adiar gera férias EM DOBRO + passivo trabalhista); deve copiar a marcação no
+ *    campo `inadiavel` do JSON. Só o 1º período EXPLICITAMENTE marcado REMANEJÁVEL
+ *    é negociável.
+ *
+ * CLIENT: nenhuma mudança — `ImpactoFerias`/seção "Absorção das férias" em
+ * `client/src/pages/planejamento/AnaliseEfetivoIA.tsx` já renderizam o badge
+ * INADIÁVEL × remanejável a partir do flag `inadiavel` retornado pela IA; com o
+ * server marcando corretamente e o prompt mandando copiar, o caso do Anderson
+ * passa a aparecer como INADIÁVEL.
+ *
+ * Validado via esbuild server (exit 0).
+ *
  * Rev. 2593 — **PLANEJAMENTO · ABA "EFETIVO × IA" · SIMULADOR: LINHA DE BALANÇO
  * AGORA É DINÂMICA POR PAVIMENTO, PLANO DE ATAQUE GANHA REALOCAÇÃO DE EQUIPES
  * (FLUXO DE TAKT) E TODO O PLANO PASSA A EXIBIR % DE ASSERTIVIDADE BASEADO EM
