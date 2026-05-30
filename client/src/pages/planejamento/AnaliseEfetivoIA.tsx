@@ -1094,12 +1094,15 @@ function ImpactoFerias({ impacto }: { impacto?: any }) {
                 <span className="text-sm font-medium text-slate-700">{f.funcionario}</span>
                 {f.cargo && <span className="text-[11px] text-slate-400">{f.cargo}</span>}
                 {f.periodo && (
-                  <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium ${f.inadiavel ? "bg-rose-50 text-rose-600 border-rose-200" : "bg-amber-50 text-amber-600 border-amber-200"}`}>
+                  <span title={f.inadiavel && f.motivoInadiavel ? f.motivoInadiavel : undefined} className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium ${f.inadiavel ? "bg-rose-50 text-rose-600 border-rose-200" : "bg-amber-50 text-amber-600 border-amber-200"}`}>
                     {f.periodo} período · {f.inadiavel ? "INADIÁVEL" : "remanejável"}
                   </span>
                 )}
                 {f.datas && <span className="text-[11px] text-slate-400 inline-flex items-center gap-1"><CalendarClock className="h-3 w-3" />{f.datas}</span>}
               </div>
+              {f.inadiavel && f.motivoInadiavel && (
+                <p className="text-[11px] text-rose-500 mt-1 flex items-start gap-1"><AlertTriangle className="h-3 w-3 mt-px shrink-0" /><span><span className="font-medium">Por que é inadiável:</span> {f.motivoInadiavel}</span></p>
+              )}
               {f.impacto && <p className="text-xs text-slate-500 mt-1">{f.impacto}</p>}
               {f.acao && <p className="text-xs text-cyan-700 mt-1.5 flex items-start gap-1"><ArrowUpRight className="h-3.5 w-3.5 mt-px shrink-0" />{f.acao}</p>}
             </div>
@@ -1176,6 +1179,7 @@ const VEREDITO_PRAZO_META: Record<string, { label: string; cls: string; Icon: Re
 // do início ao fim da sua janela — quanto mais inclinada, mais rápido o ritmo.
 const LOB_CORES = ["#38bdf8", "#34d399", "#fbbf24", "#f472b6", "#a78bfa", "#fb923c", "#22d3ee", "#a3e635", "#f87171", "#c084fc"];
 function LinhaBalancoChart({ lob, atividades }: { lob: any; atividades: any[] }) {
+  const [sel, setSel] = useState<number | null>(null);
   const ativs = (atividades || [])
     .filter((a: any) => a && typeof a === "object")
     .map((a: any) => {
@@ -1245,14 +1249,17 @@ function LinhaBalancoChart({ lob, atividades }: { lob: any; atividades: any[] })
             const bandW = Math.max(colW * 0.6, xEnd - xStart);
             const labelTxt = String(a.atividade ?? "");
             const labelShort = labelTxt.length > 20 ? labelTxt.slice(0, 19) + "…" : labelTxt;
+            const ativo = sel === i;
+            const apagado = sel !== null && !ativo;
+            const op = apagado ? 0.18 : 1;
             return (
-              <g key={`a${i}`}>
+              <g key={`a${i}`} onClick={() => setSel(ativo ? null : i)} style={{ cursor: "pointer" }} opacity={op}>
                 {/* faixa de fundo */}
-                <rect x={xStart} y={top} width={bandW} height={bottom - top} rx={5} fill={cor} fillOpacity={0.16} stroke={cor} strokeOpacity={0.5} strokeWidth={1} />
+                <rect x={xStart} y={top} width={bandW} height={bottom - top} rx={5} fill={cor} fillOpacity={ativo ? 0.28 : 0.16} stroke={cor} strokeOpacity={ativo ? 0.9 : 0.5} strokeWidth={ativo ? 2 : 1} />
                 {/* linha de produção (diagonal) */}
-                <line x1={xStart + 2} y1={bottom} x2={xStart + bandW - 2} y2={top} stroke={cor} strokeWidth={2.5} strokeLinecap="round" />
-                <circle cx={xStart + 2} cy={bottom} r={3} fill={cor} />
-                <circle cx={xStart + bandW - 2} cy={top} r={3} fill={cor} />
+                <line x1={xStart + 2} y1={bottom} x2={xStart + bandW - 2} y2={top} stroke={cor} strokeWidth={ativo ? 4 : 2.5} strokeLinecap="round" />
+                <circle cx={xStart + 2} cy={bottom} r={ativo ? 4 : 3} fill={cor} />
+                <circle cx={xStart + bandW - 2} cy={top} r={ativo ? 4 : 3} fill={cor} />
                 {/* rótulo da atividade à esquerda */}
                 <text x={6} y={(top + bottom) / 2 + 3} fontSize={11} fill="#e2e8f0" fontWeight={600}>{labelShort}</text>
                 {/* ritmo/equipe sobre a faixa */}
@@ -1266,17 +1273,26 @@ function LinhaBalancoChart({ lob, atividades }: { lob: any; atividades: any[] })
           <text x={labelW + (weeks * colW) / 2} y={height - 6} textAnchor="middle" fontSize={10} fill="#94a3b8">Semanas →</text>
         </svg>
       </div>
-      {/* Legenda equipe por atividade */}
-      <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2.5">
-        {ativs.map((a, i) => (
-          (a.ritmo || a.equipe) ? (
-            <span key={i} className="inline-flex items-center gap-1.5 text-[11px] text-slate-400">
-              <span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: LOB_CORES[i % LOB_CORES.length] }} />
-              <span className="text-slate-300">{a.atividade}</span>
-              {a.equipe && <span>· {a.equipe}</span>}
-            </span>
-          ) : null
-        ))}
+      {/* Legenda clicável equipe por atividade */}
+      <p className="text-[10px] text-slate-500 mt-2.5 mb-1">Toque em uma atividade (na legenda ou no gráfico) para destacar a faixa; toque de novo para limpar.</p>
+      <div className="flex flex-wrap gap-1.5">
+        {ativs.map((a, i) => {
+          const ativo = sel === i;
+          const apagado = sel !== null && !ativo;
+          return (
+            <button
+              type="button"
+              key={i}
+              onClick={() => setSel(ativo ? null : i)}
+              className={`inline-flex items-center gap-1.5 text-[11px] rounded-md border px-2 py-1 transition ${ativo ? "border-sky-400/60 bg-sky-400/15 text-slate-100" : apagado ? "border-white/5 bg-white/[0.02] text-slate-500 opacity-60" : "border-white/10 bg-white/5 text-slate-300 hover:bg-white/10"}`}
+            >
+              <span className="inline-block h-2.5 w-2.5 rounded-sm shrink-0" style={{ backgroundColor: LOB_CORES[i % LOB_CORES.length] }} />
+              <span className="font-medium">{a.atividade}</span>
+              {a.ritmo && <span className="text-slate-400">· {a.ritmo}</span>}
+              {a.equipe && <span className="text-slate-400">· {a.equipe}</span>}
+            </button>
+          );
+        })}
       </div>
     </div>
   );
@@ -1305,6 +1321,7 @@ function AssertBadge({ valor, titulo }: { valor: any; titulo?: string }) {
 // (pavInicio, semanaInicio) → (pavFim, semanaFim): a equipe "sobe" os pavimentos
 // ao longo do tempo. Linhas paralelas = fluxo saudável; cruzamentos = colisão.
 function LinhaBalancoPavimentoChart({ lob }: { lob: any }) {
+  const [sel, setSel] = useState<number | null>(null);
   if (!lob || typeof lob !== "object") return null;
   const pavimentos = (Array.isArray(lob.pavimentos) ? lob.pavimentos : [])
     .filter((p: any) => typeof p === "string" && p.trim().length > 0)
@@ -1393,12 +1410,16 @@ function LinhaBalancoPavimentoChart({ lob }: { lob: any }) {
             const x2 = xSem(a.sf) + colW, y2 = yPav(a.pf);
             const midX = (x1 + x2) / 2, midY = (y1 + y2) / 2;
             const labelTxt = String(a.atividade ?? "");
+            const ativo = sel === i;
+            const apagado = sel !== null && !ativo;
+            const op = apagado ? 0.13 : ativo ? 1 : 0.9;
+            const labelTxtCurto = labelTxt.length > 14 ? labelTxt.slice(0, 13) + "…" : labelTxt;
             return (
-              <g key={`la${i}`}>
-                <line x1={x1} y1={y1} x2={x2} y2={y2} stroke={cor} strokeWidth={3} strokeLinecap="round" opacity={0.9} />
-                <circle cx={x1} cy={y1} r={3.5} fill={cor} />
-                <circle cx={x2} cy={y2} r={3.5} fill={cor} />
-                {Math.abs(x2 - x1) > 60 && <text x={midX} y={midY - 4} textAnchor="middle" fontSize={9} fill="#e2e8f0">{labelTxt.length > 14 ? labelTxt.slice(0, 13) + "…" : labelTxt}</text>}
+              <g key={`la${i}`} onClick={() => setSel(ativo ? null : i)} style={{ cursor: "pointer" }}>
+                <line x1={x1} y1={y1} x2={x2} y2={y2} stroke={cor} strokeWidth={ativo ? 5 : 3} strokeLinecap="round" opacity={op} />
+                <circle cx={x1} cy={y1} r={ativo ? 4.5 : 3.5} fill={cor} opacity={op} />
+                <circle cx={x2} cy={y2} r={ativo ? 4.5 : 3.5} fill={cor} opacity={op} />
+                {(ativo || (sel === null && Math.abs(x2 - x1) > 60)) && <text x={midX} y={midY - 4} textAnchor="middle" fontSize={ativo ? 10 : 9} fontWeight={ativo ? 700 : 400} fill="#e2e8f0" opacity={op}>{ativo ? labelTxt : labelTxtCurto}</text>}
                 <title>{`${labelTxt} — Pav ${a.pi}→${a.pf} · S${a.si}→S${a.sf}${a.ritmo ? ` · ${a.ritmo}` : ""}${a.equipe ? ` · ${a.equipe}` : ""}`}</title>
               </g>
             );
@@ -1406,17 +1427,27 @@ function LinhaBalancoPavimentoChart({ lob }: { lob: any }) {
           <text x={labelW + (weeks * colW) / 2} y={height - 6} textAnchor="middle" fontSize={10} fill="#94a3b8">Semanas →</text>
         </svg>
       </div>
-      {/* Legenda por atividade + assertividade */}
-      <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2.5">
-        {ativsVis.map((a: any, i: number) => (
-          <span key={i} className="inline-flex items-center gap-1.5 text-[11px] text-slate-400">
-            <span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: LOB_CORES[i % LOB_CORES.length] }} />
-            <span className="text-slate-300">{a.atividade}</span>
-            {a.ritmo && <span>· {a.ritmo}</span>}
-            {a.equipe && <span>· {a.equipe}</span>}
-            <AssertBadge valor={a.assertividade} titulo="Assertividade da linha" />
-          </span>
-        ))}
+      {/* Legenda clicável por atividade + assertividade */}
+      <p className="text-[10px] text-slate-500 mt-2.5 mb-1">Toque em uma atividade (na legenda ou no gráfico) para destacar a linha; toque de novo para limpar.</p>
+      <div className="flex flex-wrap gap-1.5">
+        {ativsVis.map((a: any, i: number) => {
+          const ativo = sel === i;
+          const apagado = sel !== null && !ativo;
+          return (
+            <button
+              type="button"
+              key={i}
+              onClick={() => setSel(ativo ? null : i)}
+              className={`inline-flex items-center gap-1.5 text-[11px] rounded-md border px-2 py-1 transition ${ativo ? "border-sky-400/60 bg-sky-400/15 text-slate-100" : apagado ? "border-white/5 bg-white/[0.02] text-slate-500 opacity-60" : "border-white/10 bg-white/5 text-slate-300 hover:bg-white/10"}`}
+            >
+              <span className="inline-block h-2.5 w-2.5 rounded-sm shrink-0" style={{ backgroundColor: LOB_CORES[i % LOB_CORES.length] }} />
+              <span className="font-medium">{a.atividade}</span>
+              {a.ritmo && <span className="text-slate-400">· {a.ritmo}</span>}
+              {a.equipe && <span className="text-slate-400">· {a.equipe}</span>}
+              <AssertBadge valor={a.assertividade} titulo="Assertividade da linha" />
+            </button>
+          );
+        })}
       </div>
     </div>
   );
@@ -1851,12 +1882,15 @@ function PlanoAtaque({ plano }: { plano: any }) {
                     <span className="text-sm font-medium text-slate-100">{f.funcionario}</span>
                     {f.cargo && <span className="text-[11px] text-slate-400">{f.cargo}</span>}
                     {f.periodo && (
-                      <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium ${f.inadiavel ? "bg-rose-400/15 text-rose-200 border-rose-400/30" : "bg-amber-400/15 text-amber-200 border-amber-400/30"}`}>
+                      <span title={f.inadiavel && f.motivoInadiavel ? f.motivoInadiavel : undefined} className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium ${f.inadiavel ? "bg-rose-400/15 text-rose-200 border-rose-400/30" : "bg-amber-400/15 text-amber-200 border-amber-400/30"}`}>
                         {f.periodo} período · {f.inadiavel ? "INADIÁVEL" : "remanejável"}
                       </span>
                     )}
                     {f.datas && <span className="text-[11px] text-slate-400 inline-flex items-center gap-1"><CalendarClock className="h-3 w-3" />{f.datas}</span>}
                   </div>
+                  {f.inadiavel && f.motivoInadiavel && (
+                    <p className="text-[11px] text-rose-300 mt-1 flex items-start gap-1"><AlertTriangle className="h-3 w-3 mt-px shrink-0" /><span><span className="font-medium">Por que é inadiável:</span> {f.motivoInadiavel}</span></p>
+                  )}
                   {f.acao && <p className="text-xs text-cyan-200 mt-1.5 flex items-start gap-1"><ArrowUpRight className="h-3.5 w-3.5 mt-px shrink-0" />{f.acao}</p>}
                 </div>
               ))}

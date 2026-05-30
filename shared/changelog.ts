@@ -1,6 +1,45 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2595 — **PLANEJAMENTO · ABA "EFETIVO × IA" · PLANO DE ATAQUE: (1) O BADGE
+ * DE FÉRIAS PASSA A MOSTRAR O *MOTIVO* DA INADIABILIDADE (POR QUE UM 1º PERÍODO É
+ * INADIÁVEL); (2) AS LINHAS DE BALANÇO FICAM RESPONSIVAS AO CLIQUE/TOQUE; (3)
+ * LEGENDAS CLICÁVEIS NOS DOIS GRÁFICOS LOB.**
+ *
+ * PEDIDO (usuário, screenshots IMG_1410/IMG_1411): (1) estranhou o rótulo
+ * "1º período · INADIÁVEL" — achava que "inadiável" deveria ser só 2º período;
+ * faltava EXPLICAR no próprio badge POR QUE aquele 1º período é inadiável (a
+ * Rev. 2594 já calcula o motivo — concessivo vencendo / vencida / em gozo — mas o
+ * client não exibia). (2) Queria a Linha de Balanço "responsiva ao clique" e (3)
+ * legendas mais úteis (os rótulos dentro do gráfico vinham truncados).
+ *
+ * FIX (ADITIVO, ZERO SCHEMA/ALTER/DROP/DELETE — IA + UI; nenhuma migração):
+ *
+ * SERVER (`server/routers/iaCronograma.ts`):
+ *  - Os schemas JSON dos prompts `analisarEfetivo` (`impactoFerias.itens[]`) e
+ *    `simularEfetivo` (`absorcaoFerias[]`) ganharam o campo `motivoInadiavel`
+ *    (string). As instruções de FÉRIAS dos dois prompts mandam a IA COPIAR para
+ *    esse campo o motivo que já vem entre parênteses na lista do ERP (ex.: "prazo
+ *    concessivo vence 15/07/2026 — sem folga p/ adiar"), para o usuário entender
+ *    POR QUE o período é inadiável. A marcação `inadiavel` continua sendo copiada
+ *    do ERP (regra da Rev. 2594).
+ *
+ * CLIENT (`client/src/pages/planejamento/AnaliseEfetivoIA.tsx`):
+ *  - REQ1 — `ImpactoFerias` e o bloco "Absorção das férias" (em `PlanoAtaque`)
+ *    passam a renderizar, abaixo do badge, uma linha "Por que é inadiável: …"
+ *    (ícone AlertTriangle, cor rose) quando `inadiavel && motivoInadiavel`; o badge
+ *    também ganhou `title` com o motivo (tooltip).
+ *  - REQ2+3 — `LinhaBalancoPavimentoChart` e `LinhaBalancoChart` ganharam estado
+ *    `sel` (useState antes dos early-returns). Clicar numa linha/faixa do SVG OU num
+ *    item da legenda destaca aquela atividade (opacidade 1 + traço mais grosso +
+ *    rótulo completo) e apaga as demais (opacidade ~0.13–0.18); clicar de novo
+ *    limpa. A legenda virou botões clicáveis (cursor-pointer, ring/bg sky no ativo)
+ *    com dica "Toque em uma atividade … para destacar". Mantidos os `<title>` (SVG
+ *    tooltip) e o `AssertBadge` por item.
+ *
+ * Validado via esbuild isolado (server exit 0 + client exit 0). Sem mudança de
+ * banco. Convenção 2+5 aplicada.
+ *
  * Rev. 2594 — **PLANEJAMENTO · ABA "EFETIVO × IA" · "IMPACTO DAS FÉRIAS NO PRAZO":
  * A CLASSIFICAÇÃO INADIÁVEL × REMANEJÁVEL DEIXA DE OLHAR SÓ A ORDEM DA FRAÇÃO E
  * PASSA A CONSIDERAR A SITUAÇÃO LEGAL (VENCIDA / CONCESSIVO VENCENDO / EM GOZO).**
