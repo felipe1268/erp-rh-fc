@@ -1847,6 +1847,9 @@ Projete o impacto do CENÁRIO SIMULADO frente às atividades acima e retorne um 
     "centroDeGravidade": "string — a função/frente DECISIVA (gargalo / centro de gravidade) onde concentrar o esforço, e por quê",
     "principioGuia": "string — princípio central que orienta o plano (ex.: Teoria das Restrições: explorar o gargalo / concentração de forças de Sun Tzu)",
     "frentesCriticas": [ { "frente": "string — atividade/frente crítica", "porque": "string", "acao": "string — manobra imediata" } ],
+    "alocacaoFrentes": [
+      { "frente": "string — nome da frente/serviço (ex.: 'Estrutura — Torre A', 'Revestimento interno — Pav. 3-6')", "local": "string — onde fisicamente (pavimento/eixo/bloco/trecho)", "objetivo": "string — meta concreta desta frente no período (o que precisa estar pronto)", "equipe": [ { "cargo": "string", "qtd": number, "papel": "string — o que essa função faz NESTA frente" } ], "totalPessoas": number, "ritmo": "string — takt/meta de produção (ex.: '1 pavimento/semana', '40 m²/dia')", "duracao": "string — janela da frente (ex.: 'D-0 a D+14' ou 'Sem 1 a 3')", "dependeDe": "string — frente/pré-requisito que precisa terminar antes (ou '—')", "risco": "string — principal risco desta alocação e como mitigar" }
+    ],
     "manobras": [
       { "ordem": number, "fase": "string — janela temporal (ex.: 'D-0 a D+7 — Mobilização')", "titulo": "string curto", "tipo": "sequenciamento" | "processo_construtivo" | "automacao" | "logistica" | "recurso" | "contingencia", "acao": "string — o que fazer", "comoExecutar": "string — passos práticos no campo", "impactoPrazo": "string — ex.: 'recupera ~1,5 semana'", "linhaBalanco": "string — como ajusta o takt/ritmo/sequência de frentes na LOB", "fundamento": "string — literatura que embasa (Goldratt, Sun Tzu, Lean/LOB, TCPO, TRIZ...)" }
     ],
@@ -1872,7 +1875,9 @@ Projete o impacto do CENÁRIO SIMULADO frente às atividades acima e retorne um 
 
 Regras: em "porCargo" inclua TODAS as funções do cenário usando os números do CENÁRIO SIMULADO fornecido (atual → simulado). Gere de 3 a 5 "indicadores". SEMPRE preencha "referenciaPrincipal" com a referência/autor MAIS RENOMADO(A) do mundo sobre o efeito central deste cenário (ex.: Frederick Brooks — Lei de Brooks p/ contratações tardias; CII p/ overmanning/trade stacking; Mosaic/PMI p/ aceleração; Koskela/Ballard p/ Lean/fluxo) e explique por que é a mais consagrada no tema. Gere ainda de 2 a 4 "referencias" de apoio citando literaturas REAIS. Seja específico e quantitativo; se a Lei de Brooks, superlotação (overmanning) ou gargalo deslocado se aplicarem, diga claramente.
 
-PLANO DE ATAQUE (campo "planoAtaque", OBRIGATÓRIO): ${deltaTotal < 0 ? `ESTE CENÁRIO É UMA REDUÇÃO DE EFETIVO (Δ ${deltaTotal}). Trate como uma CAMPANHA a ser vencida com menos gente: monte um plano de ataque COMPLETO e AGRESSIVO para MANTER O PRAZO ORIGINAL mesmo com a equipe reduzida.` : `Mesmo neste cenário (Δ ${deltaTotal > 0 ? "+" : ""}${deltaTotal}), entregue um plano de ataque para EXECUTAR o efetivo da forma mais eficiente possível e proteger o prazo.`} Preencha TODOS os campos do "planoAtaque". Gere de 4 a 7 "manobras" SEQUENCIADAS por "ordem" e por "fase" (linha do tempo da campanha), cada uma com ação concreta, comoExecutar prático, impactoPrazo e o ajuste na Linha de Balanço. Identifique o "centroDeGravidade" (a função/frente-gargalo decisiva) e concentre o esforço nela (Teoria das Restrições + Sun Tzu). Em "processosConstrutivos" e "automacoes" proponha de 2 a 4 itens REAIS e aplicáveis a obra de construção civil pesada (pré-fabricação, kits, formas industrializadas, mecanização, drones/medição, apps de campo etc.). Em "cenariosNaoObvios" traga de 2 a 4 insights que um engenheiro NÃO veria na correria do dia a dia. "linhaBalancoPlano" deve descrever o novo takt, nº de frentes simultâneas e a nova sequência. Seja específico, quantitativo e executável no canteiro — nada genérico.`;
+PLANO DE ATAQUE (campo "planoAtaque", OBRIGATÓRIO): ${deltaTotal < 0 ? `ESTE CENÁRIO É UMA REDUÇÃO DE EFETIVO (Δ ${deltaTotal}). Trate como uma CAMPANHA a ser vencida com menos gente: monte um plano de ataque COMPLETO e AGRESSIVO para MANTER O PRAZO ORIGINAL mesmo com a equipe reduzida.` : `Mesmo neste cenário (Δ ${deltaTotal > 0 ? "+" : ""}${deltaTotal}), entregue um plano de ataque para EXECUTAR o efetivo da forma mais eficiente possível e proteger o prazo.`} Preencha TODOS os campos do "planoAtaque". Gere de 4 a 7 "manobras" SEQUENCIADAS por "ordem" e por "fase" (linha do tempo da campanha), cada uma com ação concreta, comoExecutar prático, impactoPrazo e o ajuste na Linha de Balanço. Identifique o "centroDeGravidade" (a função/frente-gargalo decisiva) e concentre o esforço nela (Teoria das Restrições + Sun Tzu). Em "processosConstrutivos" e "automacoes" proponha de 2 a 4 itens REAIS e aplicáveis a obra de construção civil pesada (pré-fabricação, kits, formas industrializadas, mecanização, drones/medição, apps de campo etc.). Em "cenariosNaoObvios" traga de 2 a 4 insights que um engenheiro NÃO veria na correria do dia a dia. "linhaBalancoPlano" deve descrever o novo takt, nº de frentes simultâneas e a nova sequência. Seja específico, quantitativo e executável no canteiro — nada genérico.
+
+MESA DE GUERRA — "alocacaoFrentes" (OBRIGATÓRIO e DETALHADO): este é o coração do plano — distribua FISICAMENTE as pessoas do CENÁRIO SIMULADO nas frentes de trabalho, como um comandante posicionando tropas no terreno. Gere de 3 a 6 frentes cobrindo as atividades em andamento e as das próximas semanas. Para CADA frente, monte a "equipe" listando função + quantidade + papel (o que cada função faz ali), respeitando as cuadrillas/relações de produção da TCPO (ex.: proporção pedreiro/servente) e SEM estourar o total de cada função no cenário simulado — a soma das quantidades de uma mesma função em todas as frentes NÃO pode exceder o efetivo simulado daquela função. Desconte quem está de FÉRIAS no período da frente. Calcule "totalPessoas" por frente, defina "ritmo" (takt/meta de produção), "duracao" (janela), "dependeDe" (sequenciamento entre frentes) e "risco". Seja DIDÁTICO: explique o porquê de cada alocação em linguagem clara para o engenheiro entender de bate-pronto. O conjunto das frentes deve formar um plano coerente que MANTÉM O PRAZO FINAL com a equipe disponível.`;
 
       let parsed: any = null;
       let erroIa: string | null = null;
@@ -2005,6 +2010,47 @@ PLANO DE ATAQUE (campo "planoAtaque", OBRIGATÓRIO): ${deltaTotal < 0 ? `ESTE CE
       if (!row) throw new Error("Análise não encontrada.");
       // Datas SEMPRE em BR — converte também análises ANTIGAS salvas em ISO.
       return { ...row, resultado: brDatasDeep((row as any).resultado) };
+    }),
+
+  // Última análise salva de um tipo (diagnostico|simulacao) — usada para
+  // RESTAURAR o resultado na aba ao reabrir a tela (antes a análise se perdia ao
+  // sair, pois ficava só no state local). SOMENTE LEITURA; retorna null se não há.
+  ultimaAnaliseEfetivo: protectedProcedure
+    .input(z.object({
+      projetoId: z.number(),
+      companyId: z.number(),
+      tipo: z.enum(["diagnostico", "simulacao"]),
+    }))
+    .query(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new Error("Banco de dados indisponível.");
+      const companyId = input.companyId;
+      const isAdmin = ctx.user.role === "admin" || ctx.user.role === "admin_master";
+      if (!isAdmin && String((ctx.user as any).companyId ?? "") !== String(companyId)) {
+        throw new Error("Sem permissão para esta empresa.");
+      }
+      try {
+        const [row] = await db
+          .select()
+          .from(planejamentoAnalisesEfetivo)
+          .where(and(
+            eq(planejamentoAnalisesEfetivo.projetoId, input.projetoId),
+            eq(planejamentoAnalisesEfetivo.companyId, companyId),
+            eq(planejamentoAnalisesEfetivo.tipo, input.tipo),
+          ))
+          .orderBy(desc(planejamentoAnalisesEfetivo.criadoEm))
+          .limit(1);
+        if (!row) return null;
+        return {
+          id: (row as any).id,
+          criadoEm: (row as any).criadoEm,
+          criadoPor: (row as any).criadoPor ?? null,
+          resultado: brDatasDeep((row as any).resultado),
+        };
+      } catch (err: any) {
+        console.error("[ultimaAnaliseEfetivo] falha (retornando null):", err?.message ?? err);
+        return null;
+      }
     }),
 
   // ── Pergunte à IA — Q&A em linguagem natural sobre o efetivo × cronograma ──

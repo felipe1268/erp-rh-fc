@@ -10,6 +10,7 @@ import {
   Award, History, Clock, BarChart3, ArrowLeft,
   HelpCircle, Send, ChevronDown, Layers, UserCheck, Briefcase, Trophy, Gauge,
   Swords, Target, Flag, Zap, Wrench, Route, Siren, Crosshair, Umbrella,
+  MapPin, Archive,
 } from "lucide-react";
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
@@ -232,8 +233,26 @@ function PainelProgresso({
  * ──────────────────────────────────────────────────────────────────────── */
 function Diagnostico({ projetoId, companyId }: Props) {
   const [result, setResult] = useState<any>(null);
+  const [restauradaEm, setRestauradaEm] = useState<string | null>(null);
+  // Restaura a última análise salva ao reabrir a tela (antes se perdia: ficava
+  // só no state local). SOMENTE LEITURA; não regenera nem chama a IA.
+  const ultimaQ = trpc.iaCronograma.ultimaAnaliseEfetivo.useQuery(
+    { projetoId, companyId, tipo: "diagnostico" },
+    { staleTime: 60_000 },
+  );
+  // Restaura UMA vez no primeiro carregamento. Depois disso o usuário manda no
+  // estado (refazer/limpar não devem ser "revividos" pela query em cache).
+  const restaurouRef = useRef(false);
+  useEffect(() => {
+    if (restaurouRef.current || ultimaQ.data === undefined) return;
+    restaurouRef.current = true;
+    if (!result && ultimaQ.data?.resultado) {
+      setResult(ultimaQ.data.resultado);
+      setRestauradaEm(ultimaQ.data.criadoEm ?? null);
+    }
+  }, [ultimaQ.data, result]);
   const mut = trpc.iaCronograma.analisarEfetivo.useMutation({
-    onSuccess: (d) => setResult(d),
+    onSuccess: (d) => { setResult(d); setRestauradaEm(null); },
   });
   const { progresso, mostrar } = useProgressoSimulado(mut.isPending, mut.isSuccess);
 
@@ -262,6 +281,13 @@ function Diagnostico({ projetoId, companyId }: Props) {
           </Button>
         </div>
       </div>
+
+      {restauradaEm && result && !mut.isPending && (
+        <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-2.5 text-xs text-slate-500 flex items-center gap-2">
+          <Archive className="h-3.5 w-3.5 shrink-0" />
+          <span>Análise salva exibida (gerada em {formatDateTime(restauradaEm)}). Toque em <strong>Refazer análise</strong> para atualizar.</span>
+        </div>
+      )}
 
       {mostrar && <PainelProgresso progresso={progresso} etapas={ETAPAS} titulo="Analisando efetivo × cronograma…" />}
 
@@ -429,9 +455,26 @@ function Simulador({ projetoId, companyId }: Props) {
   const efetivoQ = trpc.iaCronograma.efetivoAtual.useQuery({ projetoId, companyId });
   const [deltas, setDeltas] = useState<Record<string, number>>({});
   const [result, setResult] = useState<any>(null);
+  const [restauradaEm, setRestauradaEm] = useState<string | null>(null);
+  // Restaura a última simulação salva ao reabrir a tela (antes se perdia).
+  const ultimaQ = trpc.iaCronograma.ultimaAnaliseEfetivo.useQuery(
+    { projetoId, companyId, tipo: "simulacao" },
+    { staleTime: 60_000 },
+  );
+  // Restaura UMA vez no primeiro carregamento. Depois o usuário manda no estado
+  // (simular/limpar não devem ser "revividos" pela query em cache).
+  const restaurouRef = useRef(false);
+  useEffect(() => {
+    if (restaurouRef.current || ultimaQ.data === undefined) return;
+    restaurouRef.current = true;
+    if (!result && ultimaQ.data?.resultado) {
+      setResult(ultimaQ.data.resultado);
+      setRestauradaEm(ultimaQ.data.criadoEm ?? null);
+    }
+  }, [ultimaQ.data, result]);
 
   const mut = trpc.iaCronograma.simularEfetivo.useMutation({
-    onSuccess: (d) => setResult(d),
+    onSuccess: (d) => { setResult(d); setRestauradaEm(null); },
   });
   const { progresso, mostrar } = useProgressoSimulado(mut.isPending, mut.isSuccess);
 
@@ -460,7 +503,7 @@ function Simulador({ projetoId, companyId }: Props) {
   );
   const deltaTotal = totalSimulado - totalAtual;
 
-  const limpar = () => { setDeltas({}); setResult(null); };
+  const limpar = () => { setDeltas({}); setResult(null); setRestauradaEm(null); };
   const simular = () => {
     if (ajustes.length === 0) return;
     mut.mutate({ projetoId, companyId, ajustes });
@@ -601,6 +644,13 @@ function Simulador({ projetoId, companyId }: Props) {
               {mut.isPending ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Simulando…</> : <><Sparkles className="h-4 w-4 mr-2" /> Simular previsão</>}
             </Button>
           </div>
+        </div>
+      )}
+
+      {restauradaEm && result && !mut.isPending && (
+        <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-2.5 text-xs text-slate-500 flex items-center gap-2">
+          <Archive className="h-3.5 w-3.5 shrink-0" />
+          <span>Última simulação salva exibida (gerada em {formatDateTime(restauradaEm)}). Ajuste o efetivo e toque em <strong>Simular previsão</strong> para uma nova.</span>
         </div>
       )}
 
@@ -1119,6 +1169,7 @@ function PlanoAtaque({ plano }: { plano: any }) {
   if (!plano || typeof plano !== "object") return null;
   const manobras = Array.isArray(plano.manobras) ? plano.manobras : [];
   const frentes = Array.isArray(plano.frentesCriticas) ? plano.frentesCriticas : [];
+  const alocacao = Array.isArray(plano.alocacaoFrentes) ? plano.alocacaoFrentes : [];
   const processos = Array.isArray(plano.processosConstrutivos) ? plano.processosConstrutivos : [];
   const automacoes = Array.isArray(plano.automacoes) ? plano.automacoes : [];
   const naoObvios = Array.isArray(plano.cenariosNaoObvios) ? plano.cenariosNaoObvios : [];
@@ -1127,7 +1178,7 @@ function PlanoAtaque({ plano }: { plano: any }) {
   const vitoria = Array.isArray(plano.condicoesDeVitoria) ? plano.condicoesDeVitoria : [];
   const sePiorar = Array.isArray(plano.sePiorar) ? plano.sePiorar : [];
   const temAlgo = plano.missao || plano.centroDeGravidade || manobras.length || frentes.length ||
-    processos.length || automacoes.length || naoObvios.length || plano.linhaBalancoPlano;
+    alocacao.length || processos.length || automacoes.length || naoObvios.length || plano.linhaBalancoPlano;
   if (!temAlgo) return null;
 
   const ver = VEREDITO_PRAZO_META[plano.vereditoPrazo];
@@ -1190,6 +1241,60 @@ function PlanoAtaque({ plano }: { plano: any }) {
                   {f.acao && <p className="text-xs text-emerald-300 mt-1.5 flex items-start gap-1"><ArrowUpRight className="h-3.5 w-3.5 mt-px shrink-0" />{f.acao}</p>}
                 </div>
               ))}
+            </div>
+          </div>
+        )}
+
+        {/* MESA DE GUERRA — alocação de funcionários nas frentes */}
+        {alocacao.length > 0 && (
+          <div className="rounded-xl border border-amber-400/30 bg-slate-900/40 p-3.5">
+            <div className="flex items-center gap-1.5 mb-1 text-amber-300 text-xs font-semibold uppercase tracking-wide">
+              <MapPin className="h-3.5 w-3.5" /> Mesa de guerra — alocação nas frentes
+            </div>
+            <p className="text-[11px] text-slate-400 mb-3 leading-relaxed">
+              Como distribuir a equipe disponível pelas frentes para manter o prazo: quem vai onde, em que ritmo e em que ordem. Cada cartão é uma frente de trabalho com a tropa designada.
+            </p>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+              {alocacao.map((fr: any, i: number) => {
+                const equipe = Array.isArray(fr.equipe) ? fr.equipe : [];
+                const total = fr.totalPessoas ?? equipe.reduce((s: number, e: any) => s + (Number(e.qtd) || 0), 0);
+                return (
+                  <div key={i} className="rounded-xl border border-white/10 bg-white/5 p-3.5 flex flex-col">
+                    <div className="flex items-start justify-between gap-2 flex-wrap">
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-slate-100 leading-snug">{fr.frente}</p>
+                        {fr.local && <p className="text-[11px] text-slate-400 inline-flex items-center gap-1 mt-0.5"><MapPin className="h-3 w-3" />{fr.local}</p>}
+                      </div>
+                      <span className="inline-flex items-center gap-1 rounded-full bg-amber-300 text-slate-900 px-2 py-0.5 text-[11px] font-bold shrink-0">
+                        <Users className="h-3 w-3" /> {total}
+                      </span>
+                    </div>
+
+                    {fr.objetivo && <p className="text-xs text-slate-300 mt-2 leading-relaxed"><span className="text-emerald-300 font-medium">Objetivo: </span>{fr.objetivo}</p>}
+
+                    {equipe.length > 0 && (
+                      <div className="mt-2.5 space-y-1.5">
+                        {equipe.map((e: any, j: number) => (
+                          <div key={j} className="flex items-start gap-2 text-xs">
+                            <span className="inline-flex items-center justify-center min-w-[1.5rem] h-5 px-1 rounded bg-slate-700 text-amber-200 font-bold shrink-0">{e.qtd}</span>
+                            <div className="min-w-0">
+                              <span className="text-slate-100 font-medium">{e.cargo}</span>
+                              {e.papel && <span className="text-slate-400"> — {e.papel}</span>}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2.5 text-[11px]">
+                      {fr.ritmo && <span className="inline-flex items-center gap-1 text-sky-300"><BarChart3 className="h-3.5 w-3.5" />{fr.ritmo}</span>}
+                      {fr.duracao && <span className="inline-flex items-center gap-1 text-slate-300"><Clock className="h-3.5 w-3.5" />{fr.duracao}</span>}
+                    </div>
+                    {fr.dependeDe && fr.dependeDe !== "—" && <p className="text-[11px] text-slate-400 mt-1.5 inline-flex items-start gap-1"><Route className="h-3 w-3 mt-px shrink-0" /><span>Depende de: {fr.dependeDe}</span></p>}
+                    {fr.risco && <p className="text-[11px] text-rose-300 mt-1 inline-flex items-start gap-1"><AlertTriangle className="h-3 w-3 mt-px shrink-0" /><span>{fr.risco}</span></p>}
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}

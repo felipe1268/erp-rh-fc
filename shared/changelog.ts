@@ -1,6 +1,55 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2588 — **PLANEJAMENTO · ABA "EFETIVO × IA" · (1) A ANÁLISE/SIMULAÇÃO
+ * AGORA FICA SALVA E É RESTAURADA AO REABRIR A TELA (ANTES SE PERDIA); (2) O
+ * "PLANO DE ATAQUE" GANHA UMA "MESA DE GUERRA" QUE ALOCA OS FUNCIONÁRIOS NAS
+ * FRENTES, MAIS DETALHADA E DIDÁTICA.**
+ *
+ * MOTIVAÇÃO (pedido do usuário): (a) "Quero que a análise fique salva, hoje ela
+ * está se perdendo toda vez que saio da tela." (b) "No plano de ataque quero um
+ * plano mais detalhado, tudo uma mesa de guerra... alocando os funcionários nas
+ * frentes." (c) "Quero algo mais didático."
+ *
+ * DIAGNÓSTICO DO (a): o Diagnóstico e o Simulador JÁ persistiam no banco (aba
+ * Histórico via `salvarAnaliseEfetivo`), mas as views guardavam o resultado
+ * apenas em `useState` local — ao trocar de aba/sair, o componente desmontava e
+ * o resultado sumia, dando a sensação de "perdeu". Faltava RESTAURAR a última
+ * análise salva ao montar.
+ *
+ * O QUE MUDOU (ADITIVO — ZERO SCHEMA, ZERO ALTER/DROP/DELETE; SOMENTE LEITURA da
+ * tabela `planejamento_analises_efetivo` já existente):
+ *  - SERVER (`server/routers/iaCronograma.ts`): novo endpoint SOMENTE LEITURA
+ *     `ultimaAnaliseEfetivo` (query) — recebe { projetoId, companyId, tipo:
+ *     "diagnostico" | "simulacao" }, valida empresa (anti-IDOR igual aos demais
+ *     endpoints da aba), lê a linha mais recente daquele tipo (orderBy criadoEm
+ *     desc, limit 1), aplica `brDatasDeep` (datas BR) e devolve { id, criadoEm,
+ *     criadoPor, resultado } ou null. Best-effort: erro → null, nunca derruba a
+ *     tela.
+ *  - CLIENT (`client/src/pages/planejamento/AnaliseEfetivoIA.tsx`): `Diagnostico`
+ *     e `Simulador` passam a consultar `ultimaAnaliseEfetivo` (staleTime 60s) e,
+ *     se ainda não há resultado em tela, semeiam o `result` com o `resultado`
+ *     salvo + guardam `restauradaEm`. Banner discreto ("Análise salva exibida
+ *     (gerada em …) — Refazer/Simular para atualizar"). Ao gerar nova análise, o
+ *     banner some (setRestauradaEm(null)). O formato do `resultado` salvo é
+ *     idêntico ao retorno das procedures, então `DiagnosticoView`/`SimuladorView`
+ *     renderizam sem adaptação.
+ *  - SERVER, `simularEfetivo`: o JSON do `planoAtaque` ganha o array
+ *     `alocacaoFrentes` [{ frente, local, objetivo, equipe:[{ cargo, qtd, papel }],
+ *     totalPessoas, ritmo, duracao, dependeDe, risco }] + instrução "MESA DE
+ *     GUERRA" no prompt: distribuir FISICAMENTE as pessoas do CENÁRIO SIMULADO
+ *     pelas frentes (3 a 6), respeitando cuadrillas TCPO, SEM estourar o efetivo
+ *     simulado de cada função, descontando férias, com ritmo/takt, janela,
+ *     sequenciamento e risco — DIDÁTICO.
+ *  - CLIENT, `PlanoAtaque`: nova seção "Mesa de guerra — alocação nas frentes"
+ *     (intro didático + grid de cartões por frente: badge de total de pessoas,
+ *     objetivo, lista equipe com qtd/cargo/papel, ritmo, duração, dependência e
+ *     risco). Render defensivo (arrays opcionais). Ícones `MapPin`/`Archive`
+ *     adicionados.
+ *
+ * VALIDAÇÃO: esbuild isolado server + client (exit 0). tsc não roda (OOM no
+ * monorepo). Zero ALTER/DROP/DELETE (R-001/R-007/R-010).
+ *
  * Rev. 2587 — **PLANEJAMENTO · ABA "EFETIVO × IA" · A IA AGORA CONSIDERA AS
  * FÉRIAS DOS FUNCIONÁRIOS ALOCADOS (RH › FÉRIAS) NO CÁLCULO DO EFETIVO, MEDE O
  * IMPACTO NO PRAZO E APLICA A REGRA DE NEGÓCIO POR PERÍODO (1º REMANEJÁVEL / 2º
