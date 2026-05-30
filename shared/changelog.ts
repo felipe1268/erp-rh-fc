@@ -1,6 +1,44 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2578 — **PLANEJAMENTO · ABA "EFETIVO × IA" · CORREÇÃO DO ERRO "Não foi
+ * possível gerar a análise de IA: Expected ',' or ']' after array element in
+ * JSON at position 9887" — JSON DA IA VINHA TRUNCADO POR ESTOURO DE TOKENS.**
+ *
+ * MOTIVAÇÃO (pedido do usuário, screenshot do banner de erro na aba): ao clicar
+ * em "Gerar/Refazer análise" a tela mostrava o aviso "Não foi possível gerar a
+ * análise de IA: Expected ',' or ']' after array element in JSON at position
+ * 9887." e caía no fallback (só "Efetivo atual por função"). CAUSA-RAIZ: a
+ * resposta da IA estourava o `maxTokens: 4000` da chamada `invokeLLM` e voltava
+ * CORTADA no meio de um array — o prompt pede `porCargo` com TODAS as funções da
+ * obra (esta tinha ~20+), cada uma com `justificativa`, mais `indicadores`,
+ * `atividadesCriticas`, `riscos` e `recomendacoes`. JSON incompleto → `JSON.parse`
+ * lança no offset onde foi cortado.
+ *
+ * O QUE MUDOU (SÓ SERVER, `server/routers/iaCronograma.ts`, procedure
+ * `analisarEfetivo`):
+ * - `maxTokens` da chamada `invokeLLM` 4000 → 8000, reduzindo a chance de o JSON
+ *   ser cortado em obras com muitas funções.
+ * - Novo helper module-level `repararJsonTruncado(str)`: varre a string uma vez
+ *   rastreando a pilha de `{`/`[` abertos, o estado `inString`/escape e o ÚLTIMO
+ *   ponto seguro (fim de um VALOR completo fora de string — número/literal/string
+ *   de valor, fechamento de container, ou imediatamente antes de uma vírgula).
+ *   Distingue CHAVE de VALOR com lookahead (chave é seguida de `:` → não é ponto
+ *   seguro), trunca no último ponto seguro, remove a vírgula pendente e fecha os
+ *   containers ainda abertos. Retorna `null` quando não há nada estruturalmente
+ *   truncado ou nada aproveitável (nunca corrompe — prefere descartar).
+ * - O parse passou a ter try/catch interno: em falha, tenta `repararJsonTruncado`
+ *   e, se reparar, usa a análise PARCIAL e seta `erroIa` como AVISO suave ("A
+ *   análise foi gerada de forma parcial… gere novamente se precisar do
+ *   detalhamento completo."). O cliente já renderiza `analise` + `erroIa` juntos,
+ *   então o usuário vê a análise recuperada com um aviso âmbar em vez de só o
+ *   fallback bruto. Se o reparo falhar, re-lança e mantém o comportamento antigo.
+ * - Reparo validado isoladamente em 6 casos (truncamento mid-value-string,
+ *   mid-key, mid-number, após vírgula, aninhamento profundo, e JSON completo →
+ *   `null`). Zero client, zero schema, zero ALTER/DROP/DELETE.
+ *
+ * ---
+ *
  * Rev. 2577 — **PLANEJAMENTO · ABA "EFETIVO × IA" · BARRA DE PROGRESSO 0–100%
  * COM AS ETAPAS DO PROCESSAMENTO ENQUANTO A IA ANALISA.**
  *

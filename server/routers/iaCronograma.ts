@@ -30,6 +30,106 @@ function wmoSeverity(code: number, chuva: number, probChuva: number, vento: numb
   return null;
 }
 
+// ── Reparo de JSON truncado da IA ─────────────────────────────────────────
+// Quando o LLM estoura o limite de tokens, o JSON volta cortado no meio de um
+// array/objeto (ex.: "... at position 9887"). Este helper é um mini-parser
+// recursivo-descendente que percorre a string e registra o ÚLTIMO ponto seguro
+// — a posição logo após um VALOR completo (string de valor, número, literal ou
+// container fechado), nunca após uma chave ou ':' nem no meio de um token —
+// junto dos containers abertos nesse ponto. Ao detectar truncamento, trunca no
+// último ponto seguro, remove a vírgula pendente e fecha os containers. Retorna
+// o JSON reparado, ou null se o JSON estava completo (nada a reparar) ou se não
+// há nada aproveitável. Nunca produz token incompleto (nunca corrompe).
+function repararJsonTruncado(s: string): string | null {
+  const n = s.length;
+  let i = 0;
+  const openers: ("}" | "]")[] = []; // closers pendentes, na ordem de abertura
+  let lastSafe = -1;
+  let lastSafeClosers = "";
+  const TRUNC = Symbol("trunc");
+
+  const isWs = (c: string) => c === " " || c === "\t" || c === "\n" || c === "\r";
+  const skipWs = () => { while (i < n && isWs(s[i])) i++; };
+  const markSafe = (pos: number) => { lastSafe = pos; lastSafeClosers = [...openers].reverse().join(""); };
+  const fail = (): never => { throw TRUNC; };
+
+  // String: assume s[i] === '"'. Retorna índice após a aspa de fechamento ou -1.
+  const consumeString = (): number => {
+    let j = i + 1;
+    while (j < n) {
+      const c = s[j];
+      if (c === "\\") { j += 2; continue; }
+      if (c === '"') return j + 1;
+      j++;
+    }
+    return -1; // sem fechamento → truncado
+  };
+  // Número: só é "completo" se for um token válido E seguido por delimitador
+  // (não pelo fim do buffer — aí pode estar cortado, ex.: "12" de "1234").
+  const consumeNumber = (): number => {
+    let j = i;
+    while (j < n && /[0-9eE+.\-]/.test(s[j])) j++;
+    if (j >= n) return -1; // chegou ao fim → ambíguo/truncado
+    const tok = s.slice(i, j);
+    return /^-?(0|[1-9][0-9]*)(\.[0-9]+)?([eE][+-]?[0-9]+)?$/.test(tok) ? j : -1;
+  };
+  const consumeLiteral = (): number => {
+    for (const lit of ["true", "false", "null"]) if (s.startsWith(lit, i)) return i + lit.length;
+    return -1;
+  };
+
+  const parseValue = (): void => {
+    skipWs();
+    if (i >= n) fail();
+    const c = s[i];
+    if (c === '"') { const e = consumeString(); if (e < 0) fail(); i = e; markSafe(i); return; }
+    if (c === "{") { parseObject(); return; }
+    if (c === "[") { parseArray(); return; }
+    if (c === "-" || (c >= "0" && c <= "9")) { const e = consumeNumber(); if (e < 0) fail(); i = e; markSafe(i); return; }
+    const e = consumeLiteral(); if (e < 0) fail(); i = e; markSafe(i);
+  };
+
+  function parseObject(): void {
+    i++; openers.push("}"); markSafe(i);          // objeto vazio já é fechável
+    skipWs(); if (i >= n) fail();
+    if (s[i] === "}") { i++; openers.pop(); markSafe(i); return; }
+    while (true) {
+      skipWs(); if (i >= n) fail();
+      if (s[i] !== '"') fail();                   // esperava chave
+      const e = consumeString(); if (e < 0) fail(); i = e; // chave: NÃO marca seguro
+      skipWs(); if (i >= n || s[i] !== ":") fail(); i++;
+      parseValue();                               // valor: marca seguro
+      skipWs(); if (i >= n) fail();
+      if (s[i] === ",") { i++; continue; }
+      if (s[i] === "}") { i++; openers.pop(); markSafe(i); return; }
+      fail();
+    }
+  }
+
+  function parseArray(): void {
+    i++; openers.push("]"); markSafe(i);          // array vazio já é fechável
+    skipWs(); if (i >= n) fail();
+    if (s[i] === "]") { i++; openers.pop(); markSafe(i); return; }
+    while (true) {
+      parseValue();                               // elemento: marca seguro
+      skipWs(); if (i >= n) fail();
+      if (s[i] === ",") { i++; continue; }
+      if (s[i] === "]") { i++; openers.pop(); markSafe(i); return; }
+      fail();
+    }
+  }
+
+  try {
+    parseValue();
+    return null; // parse completo → não estava truncado, nada a reparar
+  } catch (e) {
+    if (e !== TRUNC) throw e;
+    if (lastSafe < 0) return null;
+    const head = s.slice(0, lastSafe).replace(/,\s*$/, "");
+    return head + lastSafeClosers;
+  }
+}
+
 // ── Detect if activity is weather-sensitive ───────────────────────────────
 const ATIVIDADES_EXTERNAS = [
   "concreto", "concretagem", "concret", "escav", "fundaç", "fundacao",
@@ -1314,7 +1414,7 @@ Regras: inclua em "porCargo" TODAS as funções listadas no efetivo (mesmo as qu
             { role: "system", content: systemPrompt },
             { role: "user",   content: userPrompt },
           ],
-          maxTokens: 4000,
+          maxTokens: 8000,
           response_format: { type: "json_object" },
         });
         const content = result.choices?.[0]?.message?.content;
@@ -1325,7 +1425,19 @@ Regras: inclua em "porCargo" TODAS as funções listadas no efetivo (mesmo as qu
         const firstBrace = cleaned.indexOf("{");
         const lastBrace = cleaned.lastIndexOf("}");
         const jsonStr = firstBrace >= 0 && lastBrace > firstBrace ? cleaned.slice(firstBrace, lastBrace + 1) : cleaned;
-        parsed = JSON.parse(jsonStr);
+        try {
+          parsed = JSON.parse(jsonStr);
+        } catch (parseErr) {
+          // JSON truncado (estouro de tokens): tenta reparar fechando os
+          // containers abertos a partir do último valor completo.
+          const reparado = repararJsonTruncado(firstBrace >= 0 ? cleaned.slice(firstBrace) : cleaned);
+          if (reparado) {
+            parsed = JSON.parse(reparado);
+            erroIa = "A análise foi gerada de forma parcial (a IA atingiu o limite de tamanho da resposta). Alguns itens podem estar incompletos — gere novamente se precisar do detalhamento completo.";
+          } else {
+            throw parseErr;
+          }
+        }
       } catch (err: any) {
         erroIa = err?.message?.includes("Nenhuma chave")
           ? "Nenhuma chave de IA configurada. Configure ANTHROPIC_API_KEY ou GOOGLE_API_KEY nas secrets para usar a análise."
