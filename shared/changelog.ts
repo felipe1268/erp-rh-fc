@@ -1,6 +1,71 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2599 — **PLANEJAMENTO · AVANÇO SEMANAL · PREVISTO DESTRAVADO: A TELA
+ * PASSA A LER A CURVA CAMINHO B (`previsto_semanas_json`) POR SEMANA — ANTES
+ * FICAVA CONGELADA EM ~1% (SNAPSHOT ÚNICO DA RAIZ UID=0) E NÃO MUDAVA AO
+ * NAVEGAR ENTRE AS SEMANAS.**
+ *
+ * SINTOMA (usuário): no card "PREVISTO (SEMANA)" e nos derivados (Variação,
+ * Avanço Global, "Previsto acumulado", coluna % Previsto por atividade) o
+ * previsto ficava travado em ~1% e NÃO se alterava ao trocar a semana
+ * selecionada, mesmo com a baseline inteira cadastrada.
+ *
+ * DIAGNÓSTICO (duas causas somadas):
+ *  1) CLIENT nunca lia a coluna `previsto_semanas_json` (curva CAMINHO B gerada
+ *     no cadastro pela fórmula nativa do MSP sobre a baseline). O `mspReadOnly`
+ *     e os useMemos de previsto liam APENAS o snapshot único da raiz UID=0
+ *     (`previstoMspSnapshot` do `calendarioJson`), congelado na StatusDate —
+ *     logo o mesmo número se repetia em todas as semanas.
+ *  2) BANCO: `previsto_semanas_json` estava NULL em TODOS os projetos (curva
+ *     nunca persistida — projetos cadastrados antes da Rev. 2533 ou cujo
+ *     regenerar pós-transaction não pegou as colunas baseline a tempo).
+ *  (App usa NEON_DATABASE_URL; DATABASE_URL é legado. REVTE-CIVIL = projeto 35,
+ *   revisão 50 numero 0 status=aprovada is_baseline=true, 66 folhas com baseline
+ *   04/05/2026→23/06/2027; curva validada subindo 1,61%→…→100% em ~60 semanas.)
+ *
+ * DECISÃO DO USUÁRIO (mantida): CAMINHO B FICA — o PREVISTO é a curva inteira
+ * gerada no CADASTRO via `regenerarPrevistoSemanasCaminhoB` (fórmula MSP sobre a
+ * baseline). "O ERP só LÊ, não calcula." Esta revisão NÃO altera a geração da
+ * curva — apenas faz a tela LER a curva por semana e popula a coluna quando
+ * ausente. A CAMINHO A ("ler %concluída por semana") está MORTA: os XMLs reais
+ * provaram `PercentComplete=0` em todo o cadastro.
+ *
+ * FIX-A (CLIENT — leitura por semana; ZERO cálculo novo, ZERO schema):
+ * `client/src/pages/planejamento/PlanejamentoDetalhe.tsx`
+ *  - NOVO useMemo `previstoCurva` (definido cedo, logo após `baselineRev`, p/
+ *    evitar TDZ): faz parse de `proj.previstoSemanasJson` ({ semanas[], raiz[],
+ *    porAtividadeId{}, revisaoId }) e expõe `raizAt(alvo)` / `ativAt(id, alvo)`
+ *    com `idxAt` = maior cutoff `<=` alvo (degrau acumulado; antes do 1º cutoff
+ *    → 0%; após o último → último valor). `semanaFim` é o cutoff de Quinta, que
+ *    casa EXATAMENTE com `semanas[]` (mesma origem do StatusDate do XML).
+ *  - `mspReadOnly`: o PREVISTO passa a vir de `previstoCurva.raizAt(semanaFim)`
+ *    quando disponível (snapshot único da raiz vira só FALLBACK); quando a curva
+ *    responde, NÃO marca `prevStaleFromDate` (não há "foto congelada"). O
+ *    early-return `!cal` também devolve o previsto da curva (REALIZADO segue
+ *    dependendo do `calendarioJson`). Dep `previstoCurva` adicionada.
+ *  - `previstoRealizadoSemana`: Δsemanal = `raizAt(semanaFim) − raizAt(semanaAtual)`;
+ *    `previstoAcumulado` = `raizAt(semanaFim)` (SEM clipping no Status Date — a
+ *    curva É o plano e deve progredir); `pvAcum` (débito) = `raizAt(semanaAtual)`.
+ *    Fórmulas legadas (`pctRaizMSP`/ponderação) viram fallback. Dep adicionada.
+ *  - Coluna % PREVISTO por atividade: usa `ativAt(a.id, semanaFim)` quando a
+ *    curva é da revisão exibida (`previstoCurva.revisaoId === revisaoAtiva?.id`);
+ *    senão mantém o snapshot/interpolação legado.
+ *
+ * FIX-B (SERVER — self-heal da coluna; UPDATE da própria coluna JSON via função
+ * do app, NÃO é ALTER/DROP/DELETE; ZERO schema):
+ * `server/routers/planejamento.ts` (`getProjetoById`)
+ *  - Após carregar projeto + revisões, se `previsto_semanas_json` está NULL,
+ *    chama `regenerarPrevistoSemanasCaminhoB` UMA vez para a revisão que o client
+ *    exibe (is_baseline → última aprovada → 1ª), re-lê as colunas e retorna a
+ *    curva fresca. Erros são logados e não quebram a query (try/catch).
+ *
+ * INTOCADOS: REFIS (já lê snapshots MSP), indiretas (mantêm estimativa do ERP —
+ * única exceção, sem coluna no XML), TOP BAR (lê UID=0, não é semana-dependente),
+ * `regenerarPrevistoSemanasCaminhoB` (geração da curva), servidores de avanço.
+ * Simulações/avanços antigos não precisam ser refeitos. Validado via esbuild
+ * client + server (exit 0). Detalhe técnico acima.
+ *
  * Rev. 2598 — **PLANEJAMENTO · AVANÇO SEMANAL = LEITURA PURA DO MS PROJECT:
  * REMOVIDA A AUTO-DISTRIBUIÇÃO (Rev. 2237) QUE INVENTAVA AS SEMANAS PASSADAS A
  * PARTIR DA CURVA PREVISTA DA ATIVIDADE.**

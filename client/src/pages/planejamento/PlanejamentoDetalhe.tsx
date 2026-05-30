@@ -464,6 +464,54 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
     return aprovadas[0] ?? null;
   }, [proj, revisaoAtiva]);
 
+  // Rev. 2599 — Curva PREVISTO (Caminho B) lida do snapshot do servidor
+  // (`previsto_semanas_json`, gerado no cadastro pela fórmula nativa do MSP
+  // sobre a baseline). FONTE ÚNICA do % PREVISTO por semana — o ERP só LÊ,
+  // não calcula. `semanas[]` são os cutoffs (Quinta, diaCorte=4); `raiz[]` é
+  // o % acumulado ponderado da raiz; `porAtividadeId{}` o acumulado por folha.
+  // Antes a tela nunca lia esta coluna e usava o snapshot ÚNICO da raiz UID=0
+  // (congelado na StatusDate), travando o card "PREVISTO (SEMANA)" em ~1%.
+  // Definida cedo (antes dos useMemos de previsto) para evitar TDZ.
+  const previstoCurva = useMemo(() => {
+    const raw = (proj as any)?.previstoSemanasJson;
+    if (!raw) return null;
+    let snap: any;
+    try { snap = typeof raw === "string" ? JSON.parse(raw) : raw; } catch { return null; }
+    const semanas: string[] = Array.isArray(snap?.semanas) ? snap.semanas : [];
+    const raiz: number[] = Array.isArray(snap?.raiz) ? snap.raiz : [];
+    if (semanas.length === 0 || raiz.length === 0) return null;
+    // Rev. 2599 — Guarda de revisão: a curva é específica de UMA revisão (suas
+    // folhas/baseline próprias). Quando a coluna guarda a curva de uma revisão
+    // diferente da exibida (`revisaoAtiva`), descartamos AQUI — assim TODOS os
+    // consumidores (cards agregados + grade por atividade) caem no fallback de
+    // forma uniforme, evitando misturar "agregado da curva" com "linhas do
+    // snapshot legado". Snapshots desta função sempre carregam `revisaoId`.
+    const revId = snap?.revisaoId ?? null;
+    if (revId != null && revisaoAtiva?.id != null && revId !== revisaoAtiva.id) return null;
+    const porAtividadeId: Record<string, number[]> = snap?.porAtividadeId ?? {};
+    // Índice do degrau acumulado: maior cutoff <= alvo. Antes do 1º cutoff = -1.
+    const idxAt = (alvo: string): number => {
+      if (!alvo || alvo < semanas[0]) return -1;
+      let idx = -1;
+      for (let i = 0; i < semanas.length; i++) {
+        if (semanas[i] <= alvo) idx = i; else break;
+      }
+      return idx;
+    };
+    const valAt = (arr: number[] | undefined, alvo: string): number | null => {
+      if (!arr) return null;
+      const i = idxAt(alvo);
+      if (i < 0) return alvo && alvo < semanas[0] ? 0 : null; // antes do início → 0%
+      return arr[i] ?? null;
+    };
+    return {
+      semanas, raiz, porAtividadeId,
+      revisaoId: snap?.revisaoId ?? null,
+      raizAt: (alvo: string) => valAt(raiz, alvo),
+      ativAt: (id: number | string, alvo: string) => valAt(porAtividadeId[String(id)], alvo),
+    };
+  }, [proj, revisaoAtiva]);
+
   const { data: atividades = [], isLoading: loadingAtiv } = trpc.planejamento.listarAtividades.useQuery(
     { revisaoId: revisaoAtiva?.id ?? 0 },
     { enabled: !!revisaoAtiva }
@@ -6617,28 +6665,43 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
     // semana — semanas inteiramente futuras dão Δ=0 (não há PV exigível além
     // do Status Date). Semana já fechada usa semanaFim/semanaAtual originais.
     {
-      const cutoffStr = dataCorteInfo?.dataCorteOficial ?? null;
-      const refFim = (cutoffStr && cutoffStr < semanaFim) ? cutoffStr : semanaFim;
-      const refIni = (cutoffStr && cutoffStr < semanaAtual) ? cutoffStr : semanaAtual;
-      // Rev. 1825 — Texto6 raiz (paridade absoluta MSP) c/ fallback ponderado.
-      const usarRaiz = !!(projIniIso && projFimIso && calMSP);
-      prev = usarRaiz
-        ? Math.max(0, pctRaizMSP(refFim, projIniIso, projFimIso, calMSP)
-                    - pctRaizMSP(refIni, projIniIso, projFimIso, calMSP))
-        : Math.max(0, pvPonderadoPorAtividade(refFim, folhas, usarPesoPorDuracao, calMSP)
-                    - pvPonderadoPorAtividade(refIni, folhas, usarPesoPorDuracao, calMSP));
+      // Rev. 2599 — Δsem PREVISTO da curva Caminho B: acum no cutoff da semana
+      // (semanaFim) − acum no cutoff da semana anterior (semanaAtual=Segunda →
+      // degrau da semana passada). O ERP só LÊ. Fallback legado quando ausente.
+      const cAcumFim = previstoCurva ? previstoCurva.raizAt(semanaFim) : null;
+      const cAcumIni = previstoCurva ? previstoCurva.raizAt(semanaAtual) : null;
+      if (cAcumFim != null) {
+        prev = Math.max(0, cAcumFim - (cAcumIni ?? 0));
+      } else {
+        const cutoffStr = dataCorteInfo?.dataCorteOficial ?? null;
+        const refFim = (cutoffStr && cutoffStr < semanaFim) ? cutoffStr : semanaFim;
+        const refIni = (cutoffStr && cutoffStr < semanaAtual) ? cutoffStr : semanaAtual;
+        // Rev. 1825 — Texto6 raiz (paridade absoluta MSP) c/ fallback ponderado.
+        const usarRaiz = !!(projIniIso && projFimIso && calMSP);
+        prev = usarRaiz
+          ? Math.max(0, pctRaizMSP(refFim, projIniIso, projFimIso, calMSP)
+                      - pctRaizMSP(refIni, projIniIso, projFimIso, calMSP))
+          : Math.max(0, pvPonderadoPorAtividade(refFim, folhas, usarPesoPorDuracao, calMSP)
+                      - pvPonderadoPorAtividade(refIni, folhas, usarPesoPorDuracao, calMSP));
+      }
     }
     // ── Previsto ACUMULADO até a janela cobrável da semana ──────────────────
     // Rev. 1811 — também via curva S ponderada. refFimAcum clipa no cutoff
     // sempre que este for antes do fim da semana selecionada.
     const cutoffStrAcum = dataCorteInfo?.dataCorteOficial ?? null;
     const refFimAcum = (cutoffStrAcum && cutoffStrAcum < semanaFim) ? cutoffStrAcum : semanaFim;
+    // Rev. 2599 — PREVISTO acumulado da curva Caminho B (raiz no cutoff da
+    // semana). O ERP só LÊ; SEM clipping no Status Date (a curva É o plano e
+    // deve progredir ao navegar as semanas). Fallback legado quando ausente.
+    const curvaAcum = previstoCurva ? previstoCurva.raizAt(semanaFim) : null;
     // Rev. 1825 — Texto6 raiz (paridade MSP) c/ fallback ponderado.
-    const previstoAcumulado = folhas.length > 0
-      ? (projIniIso && projFimIso && calMSP
-          ? pctRaizMSP(refFimAcum, projIniIso, projFimIso, calMSP)
-          : pvPonderadoPorAtividade(refFimAcum, folhas, usarPesoPorDuracao, calMSP))
-      : 0;
+    const previstoAcumulado = folhas.length === 0
+      ? 0
+      : curvaAcum != null
+        ? curvaAcum
+        : (projIniIso && projFimIso && calMSP
+            ? pctRaizMSP(refFimAcum, projIniIso, projFimIso, calMSP)
+            : pvPonderadoPorAtividade(refFimAcum, folhas, usarPesoPorDuracao, calMSP));
 
     // Rev. 1656.4 — Aderência alinhada ao top bar/card grande (SPI EVM clássico):
     // numerador = realizado ACUMULADO até o fim da semana (`realAcum`),
@@ -6652,16 +6715,23 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
     // PMBOK 7ª/AACE 23R-02: PV é imutável (baseline); débito = PV − EV.
     let pvAcum = 0;
     {
-      // Rev. 1811 — débito acumulado via curva S ponderada (mesma fórmula
-      // do PREVISTO). PV até o INÍCIO desta semana (= fim da anterior),
-      // clipando no cutoff oficial para semanas futuras (não cobra débito
-      // do que ainda não era exigível pelo Status Date).
-      const cutoffStr = dataCorteInfo?.dataCorteOficial ?? null;
-      const refSemAnt = (cutoffStr && cutoffStr < semanaAtual) ? cutoffStr : semanaAtual;
-      // Rev. 1825 — Texto6 raiz (paridade MSP) c/ fallback ponderado.
-      pvAcum = (projIniIso && projFimIso && calMSP)
-        ? pctRaizMSP(refSemAnt, projIniIso, projFimIso, calMSP)
-        : pvPonderadoPorAtividade(refSemAnt, folhas, usarPesoPorDuracao, calMSP);
+      // Rev. 2599 — PV acumulado até o INÍCIO da semana (= cutoff da semana
+      // anterior) via curva Caminho B. Fallback legado quando ausente.
+      const curvaPvAnt = previstoCurva ? previstoCurva.raizAt(semanaAtual) : null;
+      if (curvaPvAnt != null) {
+        pvAcum = curvaPvAnt;
+      } else {
+        // Rev. 1811 — débito acumulado via curva S ponderada (mesma fórmula
+        // do PREVISTO). PV até o INÍCIO desta semana (= fim da anterior),
+        // clipando no cutoff oficial para semanas futuras (não cobra débito
+        // do que ainda não era exigível pelo Status Date).
+        const cutoffStr = dataCorteInfo?.dataCorteOficial ?? null;
+        const refSemAnt = (cutoffStr && cutoffStr < semanaAtual) ? cutoffStr : semanaAtual;
+        // Rev. 1825 — Texto6 raiz (paridade MSP) c/ fallback ponderado.
+        pvAcum = (projIniIso && projFimIso && calMSP)
+          ? pctRaizMSP(refSemAnt, projIniIso, projFimIso, calMSP)
+          : pvPonderadoPorAtividade(refSemAnt, folhas, usarPesoPorDuracao, calMSP);
+      }
     }
     let evAcum = 0;
     folhas.forEach((a: any) => {
@@ -6676,7 +6746,7 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
     const debitoAcumulado = Math.max(0, pvAcum - evAcum);
     const metaRecuperacao = prev + debitoAcumulado;
     return { previsto: prev, previstoAcumulado, realizado: real, realizadoAcumulado: realAcum, aderencia, debitoAcumulado, metaRecuperacao, semIniDate, semFimDate };
-  }, [folhas, avancos, semanaAtual, semanaFim, usarPesoPorDuracao, calMSP, dataCorteInfo?.dataCorteOficial, projIniIso, projFimIso]);
+  }, [folhas, avancos, semanaAtual, semanaFim, usarPesoPorDuracao, calMSP, dataCorteInfo?.dataCorteOficial, projIniIso, projFimIso, previstoCurva]);
 
   // Rev. 1534 — Janela de Recovery Schedule (AACE 23R-02). Lê do mesmo
   // revisaoAtiva.recoveryWindowSemanas que ProgramacaoSemanal usa, para que
@@ -6895,7 +6965,12 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
     const projIni = (proj as any)?.dataInicio as string | null | undefined;
     const projFim = (proj as any)?.dataTerminoContratual as string | null | undefined;
     if (!cal) {
-      return { previsto: null as number | null, realizado: null as number | null,
+      // Rev. 2599 — Sem calendarioJson o REALIZADO some, mas o PREVISTO ainda
+      // pode vir da curva Caminho B (previsto_semanas_json).
+      const curvaPrevSC = previstoCurva ? previstoCurva.raizAt(semanaFim) : null;
+      return { previsto: curvaPrevSC != null ? Math.min(100, Math.max(0, curvaPrevSC)) : null,
+        realizado: null as number | null, staleFromDate: null, prevStaleFromDate: null,
+        previstoMissing: curvaPrevSC == null ? "Curva PREVISTO (Caminho B) ainda não gerada. Recadastre/importe o cronograma na aba Cronograma." : null,
         missingReason: "XML do MS Project ainda não foi importado neste projeto. Importe o cronograma na aba Cronograma → Importar Cronograma." };
     }
     // Rev. 2425 — REVERTE Rev. 2271. User (25/05/2026, Hotel do Papa):
@@ -6917,7 +6992,14 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
       && (!cal.envelopeFinishSnapshot || projFim === cal.envelopeFinishSnapshot);
     let prev: number | null = null;
     let prevMissing: string | null = null;
-    if (!snapshotOk) {
+    // Rev. 2599 — FONTE ÚNICA do PREVISTO (semana): curva Caminho B
+    // (previsto_semanas_json), gerada no cadastro pela fórmula nativa do MSP
+    // sobre a baseline. Varia por semana (degrau acumulado no cutoff). O ERP
+    // só LÊ — sem cálculo. O snapshot único da raiz UID=0 vira só fallback.
+    const curvaPrev = previstoCurva ? previstoCurva.raizAt(semanaFim) : null;
+    if (curvaPrev != null) {
+      prev = curvaPrev;
+    } else if (!snapshotOk) {
       prevMissing = "Previsto MSP indisponível — reimporte o XML do MS Project para popular o snapshot.";
     } else if (!envOk) {
       prevMissing = "Datas de início/término da obra foram alteradas no ERP após o último import. Reimporte o XML para restaurar o Previsto.";
@@ -6948,7 +7030,7 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
     // Rev. 2425 — staleFromDate também vale pro Previsto agora (snapshot é
     // a única fonte; quando a semana > StatusDate, repete o snapshot + chip).
     let prevStaleFromDate: string | null = null;
-    if (prev != null && cal.statusDateSnapshot && semanaFim > cal.statusDateSnapshot) {
+    if (curvaPrev == null && prev != null && cal.statusDateSnapshot && semanaFim > cal.statusDateSnapshot) {
       prevStaleFromDate = cal.statusDateSnapshot;
     }
     return {
@@ -6959,7 +7041,7 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
       previstoMissing: prevMissing,
       missingReason: realMissing,
     };
-  }, [proj, semanaFim]);
+  }, [proj, semanaFim, previstoCurva]);
   const mspPrev = mspReadOnly.previsto;
   const mspReal = mspReadOnly.realizado;
   const mspDelta = (mspPrev != null && mspReal != null) ? +(mspReal - mspPrev).toFixed(2) : null;
@@ -8015,7 +8097,14 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
               // paridade com Texto10 (=Previsto), porém o display ERP mostrava
               // 29 vs 33,33 → variação fantasma -0,08%. Agora 29 vs 28,57 → ~0.
               let prevInd = 0;
-              if (a.dataInicio && a.dataFim) {
+              // Rev. 2599 — % PREVISTO por atividade = curva Caminho B
+              // (porAtividadeId no cutoff da semana), quando a curva é da
+              // revisão exibida. O ERP só LÊ. Fallback p/ snapshot/interpolação.
+              const curvaAtiv = (previstoCurva && previstoCurva.revisaoId === revisaoAtiva?.id)
+                ? previstoCurva.ativAt(a.id, semanaFim) : null;
+              if (curvaAtiv != null) {
+                prevInd = Math.min(100, Math.max(0, curvaAtiv));
+              } else if (a.dataInicio && a.dataFim) {
                 // Rev. 1673 — `envOk` espelha o guard project-level de L617/L4902:
                 // se o envelope (dataInicio/dataTerminoContratual) foi editado
                 // depois do import, snapshots ficam stale e devolvemos ao recalc.

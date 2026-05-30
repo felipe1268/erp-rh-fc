@@ -521,7 +521,51 @@ export const planejamentoRouter = router({
           : Promise.resolve(null),
       ]);
 
-      return { ...projeto, revisoes, orcamento, obra };
+      // Rev. 2599 — Self-heal da curva PREVISTO (Caminho B): projetos cadastrados
+      // antes da Rev. 2533 (ou cujo regenerar pós-transaction falhou por timing
+      // das colunas baseline) ficaram com previsto_semanas_json NULL, travando o
+      // card "PREVISTO (SEMANA)" no snapshot único da raiz. Regenera UMA vez
+      // (UPDATE da própria coluna JSON via função do app — NÃO é ALTER/DROP/DELETE).
+      // ALVO = a MESMA revisão que o client trata como ativa (`revisaoAtiva` =
+      // última aprovada → 1ª revisão), pois o client gateia a curva por
+      // `revisaoId === revisaoAtiva.id`; gerar p/ outra revisão faria a guarda
+      // nunca casar. Antes de regenerar, conta folhas com baseline: sem nenhuma,
+      // pula (a função gravaria null→null a cada leitura = write churn inútil).
+      let previstoSemanasJson = (projeto as any).previstoSemanasJson ?? null;
+      let previstoSemanasGeradoEm = (projeto as any).previstoSemanasGeradoEm ?? null;
+      if (!previstoSemanasJson) {
+        const revs = revisoes as any[];
+        const aprovadas = revs.filter((r: any) => r.status === "aprovada");
+        const alvo = aprovadas[aprovadas.length - 1] ?? revs[0];
+        if (alvo?.id) {
+          try {
+            const [cnt] = await db.select({ n: sql<number>`count(*)::int` })
+              .from(planejamentoAtividades)
+              .where(and(
+                eq(planejamentoAtividades.revisaoId, alvo.id),
+                isNotNull(planejamentoAtividades.baselineStart),
+                isNotNull(planejamentoAtividades.baselineFinish),
+              ));
+            const res = (cnt?.n ?? 0) > 0
+              ? await regenerarPrevistoSemanasCaminhoB(db, input.id, alvo.id)
+              : null;
+            if (res && res.semanas > 0) {
+              const [fresh] = await db.select({
+                j: planejamentoProjetos.previstoSemanasJson,
+                g: planejamentoProjetos.previstoSemanasGeradoEm,
+              }).from(planejamentoProjetos).where(eq(planejamentoProjetos.id, input.id)).limit(1);
+              if (fresh) {
+                previstoSemanasJson = fresh.j ?? null;
+                previstoSemanasGeradoEm = fresh.g ?? null;
+              }
+            }
+          } catch (e: any) {
+            console.error(`[Caminho B self-heal] projeto ${input.id}:`, e?.message || e);
+          }
+        }
+      }
+
+      return { ...projeto, previstoSemanasJson, previstoSemanasGeradoEm, revisoes, orcamento, obra };
     }),
 
   // ── Revisões ──────────────────────────────────────────────────────────────

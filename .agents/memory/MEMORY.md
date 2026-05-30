@@ -1,1 +1,2 @@
-- [Validação TS sem tsc](validacao-esbuild.md) — tsc estoura OOM neste repo; valide edições compilando o arquivo isolado via esbuild + grep de refs órfãs.
+- [Planejamento previsto curve revision coupling](planejamento-previsto-curva.md) — the previsto curve guard (client) and self-heal target (server) must both key off the SAME "revisão ativa" selection or the curve silently disables.
+- [Build validation quirk](build-validation.md) — `tsc` OOMs on this repo; validate edits with isolated `esbuild` per file instead.
