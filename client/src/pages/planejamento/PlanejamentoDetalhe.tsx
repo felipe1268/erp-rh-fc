@@ -7129,8 +7129,6 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
       const newLocal: Record<number, number> = {};
       let matchUid = 0, matchEap = 0, matchNome = 0, semMatch = 0;
       const semMatchNomes: string[] = [];
-      // Rev. 2237 — guarda referência à atividade pra distribuição multi-semana
-      const matched: Array<{ a: any; pct: number }> = [];
       // Rev. 2243 — Pares pra backfill de msp_uid (atividades que casaram
       // por eapCodigo ou nome mas estão com mspUid null no banco).
       const backfillPares: Array<{ atividadeId: number; mspUid: string }> = [];
@@ -7154,7 +7152,6 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
         if (pct !== undefined) {
           const clamped = Math.min(100, Math.max(0, pct));
           newLocal[a.id] = clamped;
-          matched.push({ a, pct: clamped });
           if (uidViaFallback) backfillPares.push({ atividadeId: a.id, mspUid: uidViaFallback });
         } else {
           semMatch++;
@@ -7195,113 +7192,15 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
       const pctFolhasUid  = folhasComInd.length > 0 ? folhasComUid / folhasComInd.length : 1;
       const driftDetectado = xmlUids > 10 && pctFolhasUid < 0.30;
 
-      // Rev. 2237 — DISTRIBUIÇÃO automática em semanas passadas seguindo a
-      // CURVA PREVISTA da atividade. Quando user importa o snapshot da
-      // semana N (ex.: SEMANA_03.xml), preenche as semanas 1..N-1 com o
-      // cumulativo PLANEJADO da atividade no fim de cada semana (clampado
-      // pelo cumulativo importado), de modo que a Programação Semanal
-      // reflita "atividade andou conforme o plano até aqui" em vez de
-      // dizer "Não exec." em semanas 1 e 2 e jogar 100% do realizado na
-      // semana 3. A semana ATUAL fica em `avancoLocal` (pendente de
-      // Salvar) preservando o fluxo de revisão atual.
-      //
-      // Algoritmo por atividade:
-      //   - imp = cumulativo importado
-      //   - planAtW = fracaoDecorridaMs(ini, fim_semana, fim_planejado) * 100
-      //   - cumW = min(planAtW, imp)
-      //   - semanal_W = max(0, cumW - cum_W-1)
-      let semanasAutoSalvas = 0;
-      let avancosAutoSalvos = 0;
-      let avancosPreservados = 0;
-      const idxAtual = semanas.indexOf(semanaAtual);
-      const semanasPassadas = idxAtual > 0 ? semanas.slice(0, idxAtual) : [];
-      if (matched.length > 0 && semanasPassadas.length > 0 && revisaoAtiva?.id) {
-        // Rev. 2237.1 — fim-de-semana ALINHADO AO CUTOFF (não monday+6).
-        // O módulo usa janela cutoff (ex.: Sex→Qui); usar Sun como fim
-        // inflaria `planAtW` por 3 dias e distorceria deltas.
-        const fimSemPorMon = new Map<string, string>(
-          semanasPassadas.map(s => [s, cutoffWeekFromMonday(s, cutoffDow).fim])
-        );
-
-        // Rev. 2237.1 — set de avanços JÁ EXISTENTES na revisão ativa
-        // (lançamentos manuais ou de imports prévios). NÃO sobrescrever
-        // — pular esses pares (semana, atividade) para preservar o
-        // histórico do user.
-        const existKey = new Set<string>();
-        for (const av of (avancos as any[])) {
-          existKey.add(`${av.semana}::${av.atividadeId}`);
-        }
-
-        // Pré-calcula cumulativo planejado por atividade x semana.
-        // Rev. 2237.1 — cumPlanByAct guarda o cumulativo TEÓRICO da
-        // semana anterior (para cálculo de delta). Usado independente
-        // de sucesso/falha do save da semana N para que falha em W não
-        // distorça o delta de W+1.
-        const cumPorSemana = new Map<string, Map<number, number>>();
-        for (const semMon of semanasPassadas) {
-          const fimSem = fimSemPorMon.get(semMon)!;
-          const fimMs  = new Date(fimSem + "T23:59:59Z").getTime();
-          const mapAct = new Map<number, number>();
-          for (const { a, pct: imp } of matched) {
-            if (!a.dataInicio || !a.dataFim) continue;
-            const iniMs = new Date(a.dataInicio + "T00:00:00Z").getTime();
-            const fimAtMs = new Date(a.dataFim    + "T23:59:59Z").getTime();
-            let planPct: number;
-            if (calMSP) {
-              planPct = fracaoDecorridaMs(iniMs, fimMs, fimAtMs, calMSP) * 100;
-            } else if (fimAtMs > iniMs) {
-              planPct = ((Math.min(fimMs, fimAtMs) - iniMs) / (fimAtMs - iniMs)) * 100;
-            } else {
-              // Rev. 2237.1 — marco/atividade pontual (dataInicio==dataFim):
-              // 100% se a semana já passou da data, 0% se ainda não chegou.
-              planPct = fimMs >= iniMs ? 100 : 0;
-            }
-            const cum = Math.min(imp, Math.max(0, Math.min(100, planPct)));
-            mapAct.set(a.id, +cum.toFixed(2));
-          }
-          if (mapAct.size > 0) cumPorSemana.set(semMon, mapAct);
-        }
-
-        // Dispara salvarAvancoLote por semana (sequencial). `prevCumTeo`
-        // é o cumulativo TEÓRICO acumulado independente de falha — assim
-        // o delta de W+1 fica consistente mesmo se W falhar.
-        const prevCumTeo = new Map<number, number>();
-        for (const semMon of semanasPassadas) {
-          const mapAct = cumPorSemana.get(semMon);
-          if (!mapAct || mapAct.size === 0) continue;
-          const itens: Array<{ atividadeId: number; percentualAcumulado: number; percentualSemanal: number }> = [];
-          for (const [atividadeId, cum] of mapAct.entries()) {
-            const prev = prevCumTeo.get(atividadeId) ?? 0;
-            // Sempre atualiza cumulativo teórico (para o delta de W+1)
-            prevCumTeo.set(atividadeId, cum);
-            // Skip se já existe avanço manual nessa (semana, atividade)
-            if (existKey.has(`${semMon}::${atividadeId}`)) {
-              avancosPreservados++;
-              continue;
-            }
-            // Skip cumulativos zerados (atividade ainda não começou)
-            if (cum <= 0) continue;
-            itens.push({
-              atividadeId,
-              percentualAcumulado: cum,
-              percentualSemanal:   +Math.max(0, cum - prev).toFixed(2),
-            });
-          }
-          if (itens.length === 0) continue;
-          try {
-            await salvarLoteMutation.mutateAsync({
-              projetoId,
-              revisaoId: revisaoAtiva.id,
-              semana:    semMon,
-              itens,
-            });
-            semanasAutoSalvas++;
-            avancosAutoSalvos += itens.length;
-          } catch (e) {
-            console.error(`[importarDoMSProject] falha auto-salvar semana=${semMon}`, e);
-          }
-        }
-      }
+      // Rev. 2598 — LEITURA PURA (substitui a auto-distribuição da Rev. 2237).
+      // Decisão do usuário: o Avanço Semanal é ESPELHO EXATO do XML — o ERP
+      // só LÊ a `% Concluída` (PercentComplete) e a deixa em `avancoLocal`
+      // para a semana selecionada (revisão + Salvar). NÃO calcula nem
+      // preenche semanas anteriores com curva planejada: semana que o
+      // usuário não enviar fica SEM dado (o ERP não inventa pra tapar buraco).
+      // O previsto da 1ª à última semana já é definido no CADASTRO pelo
+      // CAMINHO B (fórmula nativa do MSP sobre a baseline). Indiretas são a
+      // única exceção (estimativa do ERP), pois não têm coluna no XML.
 
       // Rev. 2266 — REGRAVA o `calendarioJson` no banco com o snapshot
       // FRESCO da raiz UID=0 (previstoMspSnapshot / realizadoMspSnapshot
@@ -7333,19 +7232,13 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
         ? ` (${matchUid} via UID${matchEap ? ` · ${matchEap} via Item` : ""}${matchNome ? ` · ${matchNome} via nome` : ""}${semMatch ? ` · ${semMatch} sem correspondência` : ""}; fontes: ${srcTexto7} %Reali AUX, ${srcDurNat} Duração Real, ${srcPctNat} %Concluído${srcVazio ? `, ${srcVazio} sem dado` : ""}${backfillAtualizados ? `; 🔗 ${backfillAtualizados} msp_uid gravado(s)` : ""}${snapshotRegravado ? `; 📸 snapshot MSP atualizado` : ""})`
         : "";
       const aviso = semMatch > 0 ? ` ⚠️ ${semMatch} atividade(s) sem match — ex.: ${semMatchNomes.slice(0, 3).join("; ")}.` : "";
-      const autoMsg = semanasAutoSalvas > 0
-        ? ` 🔁 ${avancosAutoSalvos} avanço(s) distribuído(s) automaticamente em ${semanasAutoSalvas} semana(s) anterior(es) seguindo a curva prevista.`
-        : "";
-      const preservMsg = avancosPreservados > 0
-        ? ` 🛡️ ${avancosPreservados} avanço(s) anterior(es) preservado(s) (já lançados — não sobrescritos).`
-        : "";
       // Rev. 2242 — Prefixo de alerta de drift (toast vermelho via ok=false
       // pra forçar atenção, mas mantém os dados importados que casaram).
       if (driftDetectado) {
         const driftMsg = `⛔ DRIFT msp_uid DETECTADO: XML traz ${xmlUids} UIDs do MSP, mas apenas ${folhasComUid}/${folhasComInd.length} atividades do ERP (${(pctFolhasUid * 100).toFixed(0)}%) têm UID gravado. Atividades sem Item NÃO casarão. AÇÃO: Reimportar o CRONOGRAMA COMPLETO (Importar MO) primeiro pra popular os UIDs, depois reimportar este XML de avanço. — `;
-        setImportStatus({ ok: false, msg: `${driftMsg}${count} de ${folhasComInd.length} atividade${count !== 1 ? "s" : ""} preenchida${count !== 1 ? "s" : ""}${breakdown}.${aviso}${autoMsg}${preservMsg}` });
+        setImportStatus({ ok: false, msg: `${driftMsg}${count} de ${folhasComInd.length} atividade${count !== 1 ? "s" : ""} preenchida${count !== 1 ? "s" : ""}${breakdown}.${aviso}` });
       } else {
-        setImportStatus({ ok: true, msg: `${count} de ${folhasComInd.length} atividade${count !== 1 ? "s" : ""} preenchida${count !== 1 ? "s" : ""}${breakdown}.${aviso}${autoMsg}${preservMsg} Revise e salve a semana atual.` });
+        setImportStatus({ ok: true, msg: `${count} de ${folhasComInd.length} atividade${count !== 1 ? "s" : ""} preenchida${count !== 1 ? "s" : ""}${breakdown}.${aviso} Revise e salve a semana atual.` });
       }
     } catch (e: any) {
       setImportStatus({ ok: false, msg: e.message ?? "Erro ao processar o arquivo." });

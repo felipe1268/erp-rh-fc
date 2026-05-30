@@ -1,6 +1,53 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2598 — **PLANEJAMENTO · AVANÇO SEMANAL = LEITURA PURA DO MS PROJECT:
+ * REMOVIDA A AUTO-DISTRIBUIÇÃO (Rev. 2237) QUE INVENTAVA AS SEMANAS PASSADAS A
+ * PARTIR DA CURVA PREVISTA DA ATIVIDADE.**
+ *
+ * PEDIDO (usuário): redesenhar o fluxo de Planejamento para "o ERP só LÊ a
+ * coluna do MS Project, não calcula" e garantir paridade absoluta com o MSP.
+ * Decisão confirmada na pergunta pivotal: o PREVISTO é a curva inteira gerada
+ * no CADASTRO aplicando a fórmula nativa do MSP sobre a baseline (= o CAMINHO B
+ * que já existe) — portanto o previsto NÃO muda e o CAMINHO B NÃO é aposentado.
+ *
+ * DIAGNÓSTICO (parser node nos 2 XMLs reais — CADASTRO + SEMANA 01):
+ *  - No CADASTRO, `PercentComplete` = 0 em TODAS as 115 atividades → é
+ *    impossível tirar o previsto da "% concluída"; ela só ganha valor nos
+ *    arquivos semanais.
+ *  - O previsto do MSP é a coluna SEPARADA `Texto6` ("% PREVISTO", FieldID
+ *    188743746), uma fórmula do próprio MSP (ProjDateDiff sobre a baseline).
+ *  - O realizado é `PercentComplete`; os agregados já vêm prontos na raiz
+ *    UID=0 e nas linhas-resumo de grupo.
+ *  - A ÚNICA violação do "não calcular" era a auto-distribuição da Rev. 2237 no
+ *    import semanal (client): ao subir a SEMANA N, ela preenchia as semanas
+ *    1..N-1 com o cumulativo PLANEJADO (via `fracaoDecorridaMs` / fallback dias
+ *    úteis), clampado pelo importado. Isso FABRICAVA avanço que o XML não tinha.
+ *    (O REFIS já lê os snapshots MSP — `pctRaizMSP` p/ previsto e `avancoAtual`
+ *    da raiz UID=0 p/ realizado, com ponderação só como fallback — e o servidor
+ *    `salvarAvancoLote` / `importarAvancosDoArquivo` só persistem a semana do
+ *    StatusDate; não havia 2ª distribuição no server.)
+ *
+ * FIX (SÓ CLIENT — UI/import; ZERO SERVER/SCHEMA/ALTER/DROP/DELETE):
+ * `client/src/pages/planejamento/PlanejamentoDetalhe.tsx` (`importarDoMSProject`):
+ *  - REMOVIDO o bloco de auto-distribuição (semanas passadas + `cumPorSemana` +
+ *    `prevCumTeo` + chamadas `salvarLoteMutation` por semana anterior).
+ *  - REMOVIDOS o array `matched` (e seu `push`) e os contadores
+ *    `semanasAutoSalvas` / `avancosAutoSalvos` / `avancosPreservados`, além das
+ *    mensagens de toast `autoMsg` / `preservMsg` que os reportavam.
+ *  - O import agora só popula `avancoLocal` da semana selecionada (fluxo de
+ *    revisão + Salvar) e regrava o snapshot fresco da raiz UID=0
+ *    (`calendarioJson`) como antes. Semana que o usuário não enviar fica SEM
+ *    dado — o ERP não inventa pra tapar buraco.
+ *
+ * INALTERADO: PREVISTO (CAMINHO B — `regenerarPrevistoSemanasCaminhoB`, curva
+ * gerada no cadastro), REFIS (já lê snapshots MSP) e INDIRETAS (seguem com
+ * estimativa do ERP — única exceção, pois não têm coluna no XML).
+ *
+ * Avanços já gravados por imports anteriores NÃO são reescritos (limpar e
+ * reimportar semana a semana se quiser o espelho puro). Validado via esbuild
+ * client transform (exit 0) + grep zero refs órfãs.
+ *
  * Rev. 2597 — **PLANEJAMENTO · ABA "EFETIVO × IA" · PLANO DE ATAQUE ENXUTO: FICA
  * SÓ O GUIA PASSO A PASSO + O PLANO TÁTICO + A LINHA DE BALANÇO; AS DEMAIS SEÇÕES
  * NARRATIVAS DA "MESA DE GUERRA" SÃO REMOVIDAS DA TELA.**
