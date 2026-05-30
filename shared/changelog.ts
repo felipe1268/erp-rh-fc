@@ -1,6 +1,45 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2604 — **PLANEJAMENTO · AVANÇO SEMANAL · O REALIZADO IMPORTADO DO MS
+ * PROJECT PASSA A LER SOMENTE A COLUNA "% CONCLUÍDA" (PercentComplete). ANTES
+ * O IMPORT PRIORIZAVA "%REALI AUX" (Texto7) E "DURAÇÃO REAL" (AD/(AD+RD)),
+ * GRAVANDO VALORES FRACIONADOS (EX.: 48,89% / 9,97% / 22,51%) QUE DIVERGIAM
+ * DO QUE O ENGENHEIRO CADASTRA/ACOMPANHA NO PROJECT.**
+ *
+ * SINTOMA (usuário, projeto 35 REVTE-CIVIL): após eu mostrar os avanços
+ * gravados, o usuário respondeu "esses não foram os valores que cadastramos".
+ *
+ * DIAGNÓSTICO (consulta READ-ONLY ao Neon): os avanços por atividade tinham
+ * casas decimais quebradas — 48,8889% / 9,9715% / 22,5071% / 35,4921%. A
+ * coluna "% Concluída" (PercentComplete) do MS Project é SEMPRE INTEIRA; logo
+ * esses valores fracionados NÃO podiam ter vindo dela. Olhando o importer,
+ * confirmou-se a cascata de prioridade (Rev. 2235): 1º "%Reali AUX" (Texto7,
+ * FieldID 188743747, 4 casas), 2º "Duração Real" (ActualDuration/(AD+RD)),
+ * 3º PercentComplete só como última opção. Ou seja, o ERP lia o campo errado
+ * e contrariava a REGRA DE OURO (Rev. 2533+: realizado = PercentComplete).
+ *
+ * DECISÃO (usuário, confirmada via pergunta): travar a importação semanal pra
+ * ler SOMENTE a coluna "% Concluída".
+ *
+ * FIX (SÓ CLIENT — `client/src/pages/planejamento/PlanejamentoDetalhe.tsx`,
+ * função `importarDoMSProject`; ZERO SERVER/SCHEMA/ALTER/DROP/DELETE): removida
+ * a cascata Texto7→ActualDuration→PercentComplete; agora o realizado de cada
+ * tarefa é lido EXCLUSIVAMENTE de `PercentComplete` (clamp 0–100). Removidas
+ * as variáveis de contagem `srcTexto7`/`srcDurNat` e o helper `parseDurMin`
+ * (sem mais uso); a mensagem de breakdown do toast foi simplificada para
+ * "fonte: N %Concluído". O ramo de import .xlsx (que já lia uma coluna de
+ * percentual) ficou intocado. O matching por UID/Item/nome (Rev. 2235/2243)
+ * e o backfill de msp_uid também ficaram intocados.
+ *
+ * IMPORTANTE (dados legados): os avanços JÁ gravados (projeto 35 e quaisquer
+ * outros importados antes desta Rev.) continuam com os valores antigos —
+ * o ERP NÃO recalcula retroativamente. Para corrigir, o usuário deve
+ * REIMPORTAR cada XML semanal (aba "Avanço Semanal" → importar → "Salvar
+ * Avanços"), que agora gravará o PercentComplete correto.
+ *
+ * VALIDAÇÃO: esbuild isolado no client (exit 0) + workflow reiniciado.
+ *
  * Rev. 2603 — **PLANEJAMENTO · A CURVA DO PREVISTO (CAMINHO B) PASSA A USAR O
  * MESMO MOTOR DE TEMPO ÚTIL DO MSP QUE O TOP BAR JÁ USA — ANTES CALCULAVA EM
  * DIAS CORRIDOS + RAIZ POR MÉDIA PONDERADA, POR ISSO DIVERGIA DO MSP SEMANA A

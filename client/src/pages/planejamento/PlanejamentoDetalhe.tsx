@@ -7095,17 +7095,9 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
       const uidByNome: Record<string, string | null> = {};
       const pctByUid:  Record<string, number> = {};
       const normNome = (s: string) => (s ?? "").toString().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLowerCase().replace(/\s+/g, " ");
-      let srcTexto7  = 0;
-      let srcDurNat  = 0;
       let srcPctNat  = 0;
       let srcVazio   = 0;
       let tasksProcessadas = 0;
-
-      const parseDurMin = (s: string): number | null => {
-        const m = /^PT(\d+)H(\d+)M(\d+)S/.exec(s);
-        if (!m) return null;
-        return +m[1] * 60 + +m[2] + +m[3] / 60;
-      };
 
       // Rev. 2266 — texto do XML guardado pra REGRAVAR o `calendarioJson`
       // ao final do import. Sem isso, o snapshot MSP da raiz UID=0 fica
@@ -7137,32 +7129,16 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
 
           tasksProcessadas++;
 
-          // 1ª prioridade: Texto7 (%Reali AUX, FieldID 188743747) — 4 casas, vírgula BR
+          // Rev. 2604 — REGRA DE OURO (replit.md): o REALIZADO da semana =
+          // SOMENTE a coluna "% Concluída" (PercentComplete) do MS Project,
+          // que é a coluna que o engenheiro acompanha e que é SEMPRE INTEIRA.
+          // Removidas as fontes "%Reali AUX" (Texto7, FieldID 188743747) e
+          // "Duração Real" (ActualDuration/(AD+RD)) que tinham prioridade
+          // ANTES e gravavam valores FRACIONADOS (ex.: 48,89% / 9,97%)
+          // divergentes do que o usuário cadastrou no Project. (Rev. 2235.)
           let pct: number | undefined;
-          let fonte: "t7" | "ad" | "pc" | "" = "";
-          for (const child of Array.from(task.children)) {
-            if (child.tagName !== "ExtendedAttribute") continue;
-            const fid = child.querySelector("FieldID")?.textContent ?? "";
-            if (fid !== "188743747") continue;
-            const val = (child.querySelector("Value")?.textContent ?? "").trim();
-            if (!val) continue;
-            const n = parseFloat(val.replace(",", "."));
-            if (Number.isFinite(n)) { pct = Math.min(100, Math.max(0, n)); fonte = "t7"; }
-            break;
-          }
-
-          // 2ª prioridade: ActualDuration / (AD+RD) — precisão MSP nativa.
-          if (pct === undefined) {
-            const adMin = parseDurMin(task.querySelector("ActualDuration")?.textContent ?? "");
-            const rdMin = parseDurMin(task.querySelector("RemainingDuration")?.textContent ?? "");
-            if (adMin != null && rdMin != null && adMin + rdMin > 0) {
-              const v = (adMin / (adMin + rdMin)) * 100;
-              if (Number.isFinite(v)) { pct = Math.min(100, Math.max(0, v)); fonte = "ad"; }
-            }
-          }
-
-          // 3ª prioridade: PercentComplete nativo (inteiro — última opção).
-          if (pct === undefined) {
+          let fonte: "pc" | "" = "";
+          {
             const pctRaw = task.querySelector("PercentComplete")?.textContent ?? "";
             if (pctRaw !== "") {
               const v = parseFloat(pctRaw);
@@ -7171,8 +7147,6 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
           }
 
           if (pct === undefined) { srcVazio++; return; }
-          if (fonte === "t7") srcTexto7++;
-          else if (fonte === "ad") srcDurNat++;
           else if (fonte === "pc") srcPctNat++;
 
           // Rev. 2235 — popula AMBOS os maps. Matching prioriza UID.
@@ -7322,7 +7296,7 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
       }
 
       const breakdown = ext === "xml"
-        ? ` (${matchUid} via UID${matchEap ? ` · ${matchEap} via Item` : ""}${matchNome ? ` · ${matchNome} via nome` : ""}${semMatch ? ` · ${semMatch} sem correspondência` : ""}; fontes: ${srcTexto7} %Reali AUX, ${srcDurNat} Duração Real, ${srcPctNat} %Concluído${srcVazio ? `, ${srcVazio} sem dado` : ""}${backfillAtualizados ? `; 🔗 ${backfillAtualizados} msp_uid gravado(s)` : ""}${snapshotRegravado ? `; 📸 snapshot MSP atualizado` : ""})`
+        ? ` (${matchUid} via UID${matchEap ? ` · ${matchEap} via Item` : ""}${matchNome ? ` · ${matchNome} via nome` : ""}${semMatch ? ` · ${semMatch} sem correspondência` : ""}; fonte: ${srcPctNat} %Concluído${srcVazio ? `, ${srcVazio} sem dado` : ""}${backfillAtualizados ? `; 🔗 ${backfillAtualizados} msp_uid gravado(s)` : ""}${snapshotRegravado ? `; 📸 snapshot MSP atualizado` : ""})`
         : "";
       const aviso = semMatch > 0 ? ` ⚠️ ${semMatch} atividade(s) sem match — ex.: ${semMatchNomes.slice(0, 3).join("; ")}.` : "";
       // Rev. 2242 — Prefixo de alerta de drift (toast vermelho via ok=false
