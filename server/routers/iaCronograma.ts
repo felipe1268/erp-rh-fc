@@ -2113,6 +2113,9 @@ DÚVIDA DO USUÁRIO: ${input.pergunta}`;
             { role: "user",   content: userPrompt },
           ],
           maxTokens: 1000,
+          // Caminho rápido (Gemini 2.5 Flash): evita o timeout do proxy/iOS que
+          // derrubava as perguntas no iPad/Safari (resposta crua "did not match…").
+          fast: true,
         });
         const content = result.choices?.[0]?.message?.content;
         resposta = brDatasTexto((typeof content === "string"
@@ -2124,6 +2127,30 @@ DÚVIDA DO USUÁRIO: ${input.pergunta}`;
           : `Não foi possível responder agora: ${err?.message ?? "erro desconhecido"}.`;
       }
       if (!resposta && !erroIa) erroIa = "A IA não retornou resposta. Tente reformular a pergunta.";
+
+      // Auditoria/Telemetria: registra a pergunta do usuário (e a resposta) em
+      // `ia_modulo_conversas` (mesma tabela do chat dos módulos) para aparecer na
+      // tela "Telemetria & Analytics › Analytics da IA". Best-effort: nunca
+      // derruba a resposta. Só grava quando houve resposta efetiva.
+      if (resposta) {
+        try {
+          await db.execute(sql`
+            INSERT INTO ia_modulo_conversas (
+              company_id, user_id, user_name, modulo, pergunta, resposta, projeto_id
+            ) VALUES (
+              ${companyId},
+              ${(ctx.user as any)?.id ?? 0},
+              ${(ctx.user as any)?.name ?? ""},
+              ${"planejamento"},
+              ${input.pergunta},
+              ${resposta},
+              ${input.projetoId}
+            )
+          `);
+        } catch (e) {
+          console.warn("[perguntarEfetivo] Erro ao salvar auditoria/telemetria:", e);
+        }
+      }
 
       return {
         resposta,

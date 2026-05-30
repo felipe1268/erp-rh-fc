@@ -1,6 +1,47 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2589 — **PLANEJAMENTO · ABA "EFETIVO × IA" · (1) CORRIGE O "TIRE SUAS
+ * DÚVIDAS COM A IA" QUE NÃO RESPONDIA NO iPad/SAFARI (TIMEOUT); (2) TODA
+ * PERGUNTA DIGITADA PELO USUÁRIO PASSA A SER REGISTRADA E FICA VISÍVEL EM
+ * "TELEMETRIA & ANALYTICS › ANALYTICS DA IA" (HISTÓRICO + RANKING + USO POR
+ * MÓDULO).**
+ *
+ * MOTIVAÇÃO (pedido do usuário, screenshots): (a) "As perguntas não estão
+ * funcionando" — o assistente caía no aviso "A IA demorou demais ou a conexão
+ * caiu durante o processamento — comum no iPad/Safari em análises longas". (b)
+ * "Quero que todas as perguntas registradas fiquem salvas na tela de telemetria…
+ * salvar e ver tudo que cada usuário digitar para analisar".
+ *
+ * DIAGNÓSTICO (a): o endpoint `perguntarEfetivo` chamava `invokeLLM` SEM a flag
+ * `fast` (Rev. 2585), então usava Claude Sonnet NÃO-STREAMING — lento o bastante
+ * para estourar o timeout do proxy/iOS antes de retornar, exibindo a mensagem
+ * crítica do `msgErroIA`. DIAGNÓSTICO (b): `perguntarEfetivo` NÃO gravava em
+ * `ia_modulo_conversas` (a tabela que alimenta a Telemetria), então as perguntas
+ * do assistente nunca apareciam lá — só o chat dos módulos (`iaModulos.chat`)
+ * gravava.
+ *
+ * O QUE MUDOU (ADITIVO — ZERO SCHEMA, ZERO ALTER/DROP/DELETE; só leitura + INSERT
+ * na tabela `ia_modulo_conversas` já existente):
+ *  - SERVER (`server/routers/iaCronograma.ts`), `perguntarEfetivo`:
+ *     (1) a chamada `invokeLLM` ganha `fast: true` → caminho rápido Gemini 2.5
+ *     Flash (`thinkingBudget=0`), que responde antes do timeout do iOS; Claude
+ *     segue como fallback se o rápido falhar. O formato de retorno é o mesmo
+ *     (`choices[0].message.content` string), então o parse existente não muda.
+ *     (2) após obter `resposta`, faz um INSERT best-effort em
+ *     `ia_modulo_conversas` (company_id, user_id, user_name, modulo:
+ *     "planejamento", pergunta, resposta, projeto_id) — try/catch isola falha,
+ *     nunca derruba a resposta, e só grava quando houve resposta efetiva. Assim
+ *     a pergunta passa a contar no Total de Conversas, no Ranking de Uso da IA,
+ *     no Uso por Módulo e no Histórico de Conversas (busca + expandir) da tela
+ *     "Telemetria & Analytics › Analytics da IA" (que já lia essa tabela).
+ *  - CLIENT: nenhuma mudança necessária — a tela de Telemetria
+ *     (`client/src/pages/Telemetria.tsx`) já renderiza `ultimasPerguntas`
+ *     (últimas 100, com busca e linhas expansíveis pergunta/resposta).
+ *
+ * VALIDAÇÃO: esbuild isolado server (exit 0). tsc não roda (OOM no monorepo).
+ * Zero ALTER/DROP/DELETE (R-001/R-007/R-010).
+ *
  * Rev. 2588 — **PLANEJAMENTO · ABA "EFETIVO × IA" · (1) A ANÁLISE/SIMULAÇÃO
  * AGORA FICA SALVA E É RESTAURADA AO REABRIR A TELA (ANTES SE PERDIA); (2) O
  * "PLANO DE ATAQUE" GANHA UMA "MESA DE GUERRA" QUE ALOCA OS FUNCIONÁRIOS NAS
