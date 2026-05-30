@@ -8438,7 +8438,11 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt, hideFinanc
           next[comp] = {
             confirmado: true,
             data: m.atualizadoEm
-              ? new Date(m.atualizadoEm).toISOString().substring(0, 10)
+              ? (typeof m.atualizadoEm === "string"
+                  // string crua do Postgres "YYYY-MM-DD HH:MM:SS" → pega só a data
+                  // (evita new Date(espaço) que estoura no WebKit/iOS Safari)
+                  ? String(m.atualizadoEm).slice(0, 10)
+                  : new Date(m.atualizadoEm).toISOString().substring(0, 10))
               : m.competencia + "-01",
             valor: val,
           };
@@ -12538,7 +12542,7 @@ function Compras({ projetoId, proj, utils, fmt, revisoes: revisoesAgendamento }:
           {revExibida && (
             <span className="text-[10px] text-slate-400 ml-2">
               {revExibida.totalItens} itens · {fmt(revExibida.totalCusto)} ·{" "}
-              {revExibida.geradoEm ? new Date(revExibida.geradoEm).toLocaleDateString("pt-BR") : ""}
+              {revExibida.geradoEm ? fmtTimestampBR(revExibida.geradoEm) : ""}
               {revExibida.descricao ? ` — ${revExibida.descricao}` : ""}
             </span>
           )}
@@ -17658,7 +17662,7 @@ function IAGestora({ projetoId, proj, atividades, avancos, revisaoAtiva, utils, 
                               <div key={c.id} className="flex items-center justify-between bg-slate-50 rounded-lg px-3 py-2 gap-2">
                                 <div className="min-w-0">
                                   <p className="text-[11px] font-semibold text-slate-700 truncate">{c.titulo}</p>
-                                  <p className="text-[10px] text-slate-400">{new Date(c.criadoEm).toLocaleDateString("pt-BR")} · {c.criadoPor}</p>
+                                  <p className="text-[10px] text-slate-400">{fmtTimestampBR(c.criadoEm)} · {c.criadoPor}</p>
                                 </div>
                                 <div className="flex gap-1.5 shrink-0">
                                   {parsed?.diagnostico && (
@@ -17904,7 +17908,7 @@ function IAGestora({ projetoId, proj, atividades, avancos, revisaoAtiva, utils, 
                             <span>{tipoEmoji[c.tipoCenario] ?? "📋"}</span> {c.titulo}
                           </p>
                           <p className="text-[10px] text-slate-400 mt-0.5">
-                            Aprovado em {c.aprovadoEm ? new Date(c.aprovadoEm).toLocaleDateString("pt-BR") : "—"} por {c.aprovadoPor ?? c.criadoPor}
+                            Aprovado em {c.aprovadoEm ? fmtTimestampBR(c.aprovadoEm) : "—"} por {c.aprovadoPor ?? c.criadoPor}
                           </p>
                         </div>
                         <button
@@ -18046,7 +18050,7 @@ function IAGestora({ projetoId, proj, atividades, avancos, revisaoAtiva, utils, 
                       <div className="min-w-0">
                         <p className="text-xs font-semibold text-slate-700 truncate">{c.titulo}</p>
                         <p className="text-[10px] text-slate-400 mt-0.5">
-                          {new Date(c.criadoEm).toLocaleDateString("pt-BR")} · {c.criadoPor}
+                          {fmtTimestampBR(c.criadoEm)} · {c.criadoPor}
                           {c.tipoCenario && ` · ${c.tipoCenario.replace(/_/g," ")}`}
                         </p>
                       </div>

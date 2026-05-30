@@ -30,6 +30,22 @@
  * - Nenhuma mudança de servidor, schema ou contrato. Comportamento idêntico,
  *   apenas robusto ao WebKit do iOS.
  *
+ * REFINO (mesma Rev. 2581, sem bump): o erro PERSISTIA mesmo após blindar o
+ * `AnaliseEfetivoIA.tsx` (que ficou comprovadamente limpo). Investigação
+ * descartou a aba "Efetivo × IA" como fonte: (a) o client usa `superjson` como
+ * transformer (Date faz round-trip por ISO — seguro no Safari); (b) Node/V8 NÃO
+ * lança essa mensagem (é WebKit-only); (c) os endpoints `efetivoAtual`/
+ * `simularEfetivo` não retornam TIMESTAMP cru. A VERDADEIRA fonte era OUTRO
+ * "simulador" — o Simulador de Cenários de Compras em
+ * `client/src/pages/planejamento/PlanejamentoDetalhe.tsx` —, cujo subtree
+ * renderizava `new Date(c.criadoEm/c.aprovadoEm).toLocaleDateString("pt-BR")` e
+ * `new Date(revExibida.geradoEm).toLocaleDateString("pt-BR")` direto sobre o
+ * TIMESTAMP cru do Postgres (4 pontos: L12541/L17661/L17907/L18049). FIX: trocados
+ * pelo helper iOS-safe já existente `fmtTimestampBR` (normaliza espaço→'T',
+ * trata Invalid Date→"—"). Hardening preventivo extra: `new Date(m.atualizadoEm)
+ * .toISOString()` (~L8441) passa a fatiar a string crua direto (slice 0,10) quando
+ * vem como string, evitando `new Date(espaço)` no WebKit. Só client, zero schema/servidor.
+ *
  * Validado via esbuild (client). Detalhe: este arquivo.
  *
  * Rev. 2580 — **PLANEJAMENTO · ABA "EFETIVO × IA" · (1) TODA ANÁLISE PASSA A

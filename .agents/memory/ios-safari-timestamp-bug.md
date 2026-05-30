@@ -25,3 +25,11 @@ still better routed through the helper for uniformity.
 style column reintroduces it. When adding any new timestamp display, reach for the helper
 by default. This has been fixed many times across the project (search changelog for the
 phrase).
+
+**Gotcha — the crash site is often a SIBLING feature, not the tab you're testing.**
+A page can host several sub-features ("simuladores", histórico panels, revisão selectors)
+that each render timestamps. When a WebKit date crash "persists" after you cleaned the
+obvious component, grep the WHOLE page file for `new Date(<var>).toLocale*` — the raw call
+is usually in a different sub-panel (e.g. a Compras "Cenários" simulator) that happens to
+be visible at the same time. Also: superjson round-trips real `Date` objects via ISO (Safari-safe), so the
+crash is only from columns that arrive as raw STRINGS — narrow your search to those.
