@@ -1,6 +1,36 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2612 — **COLABORADORES · O CARD "NA EMPRESA" PASSA A SER CLICÁVEL E
+ * FILTRA A LISTA (TODOS COM VÍNCULO = TOTAL − DESLIGADOS − BLACKLIST) — ANTES
+ * NÃO ACONTECIA NADA AO CLICAR (ERA O ÚNICO CARD INERTE).**
+ *
+ * PEDIDO (usuário, screenshot da tela Colaboradores): "quero poder clicar no
+ * card e ele filtrar tudo… o card NA EMPRESA não está responsivo, quando eu
+ * clico no card não acontece nada".
+ *
+ * CAUSA-RAIZ: o card "Na Empresa" (criado na Rev. 2608) foi adicionado com
+ * `filter: null`, então o `onClick={() => item.filter && setStatusFilter(...)}`
+ * era no-op e o card recebia `cursor-default`. Todos os outros cards já tinham
+ * um `filter` válido.
+ *
+ * IMPLEMENTAÇÃO (SÓ CLIENT — `client/src/pages/Colaboradores.tsx`; ZERO
+ * SERVER/SCHEMA/ALTER/DROP/DELETE):
+ *  - Card "Na Empresa" ganha `filter: "NaEmpresa"` (novo valor sintético de
+ *    `statusFilter`, não é status real do banco).
+ *  - `serverStatus` (que decide o que vai pro `employees.list`) passa a tratar
+ *    "NaEmpresa" como `undefined` (igual a Todos/CLT/PJ/Socio/ListaNegra): busca
+ *    todos e filtra no client.
+ *  - `displayEmployees`: `if (statusFilter === "NaEmpresa") list.filter(e =>
+ *    !isInativo(e))` — `isInativo` já cobre Desligado + Lista_Negra/blacklist,
+ *    então "Na Empresa" = Ativos + Férias + Afastados + Licença + Aviso +
+ *    Reclusos (mesma definição do contador da Rev. 2608, agora coerente).
+ *  - Dropdown de status ganha `<SelectItem value="NaEmpresa">Na Empresa</…>`
+ *    para o select exibir o rótulo correto quando o filtro está ativo (em vez de
+ *    ficar em branco).
+ *
+ * Validado: esbuild client (exit 0).
+ *
  * Rev. 2611 — **GERENCIADORAS · AO DIGITAR O CNPJ OS DADOS SÃO PUXADOS
  * AUTOMATICAMENTE DA RECEITA FEDERAL (RAZÃO SOCIAL, NOME FANTASIA, ENDEREÇO
  * COMPLETO, MUNICÍPIO/UF/CEP, SITUAÇÃO CADASTRAL, TELEFONE, E-MAIL E QUADRO

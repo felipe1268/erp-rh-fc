@@ -275,7 +275,7 @@ export default function Colaboradores() {
     { companyId: queryCompanyId, companyIds: isConstrutoras ? queryCompanyIds : undefined },
     { enabled: hasValidSelection }
   );
-  const serverStatus = statusFilter !== "Todos" && statusFilter !== "CLT" && statusFilter !== "PJ" && statusFilter !== "Socio" && statusFilter !== "ListaNegra" ? statusFilter : undefined;
+  const serverStatus = statusFilter !== "Todos" && statusFilter !== "NaEmpresa" && statusFilter !== "CLT" && statusFilter !== "PJ" && statusFilter !== "Socio" && statusFilter !== "ListaNegra" ? statusFilter : undefined;
   const { data: employees, isLoading } = trpc.employees.list.useQuery(
     { companyId: queryCompanyId, companyIds: isConstrutoras ? queryCompanyIds : undefined, search: search || undefined, status: serverStatus },
     { enabled: hasValidSelection }
@@ -308,6 +308,8 @@ export default function Colaboradores() {
     }
     if (skillEmployeeIds) list = list.filter(e => skillEmployeeIds.has(e.id));
     const isInativo = (e: any) => e.status === "Desligado" || e.status === "Lista_Negra" || e.listaNegra === 1 || e.listaNegra === true;
+    // "Na Empresa" = todos que ainda têm vínculo (exclui desligados e blacklist)
+    if (statusFilter === "NaEmpresa") list = list.filter(e => !isInativo(e));
     if (statusFilter === "CLT") list = list.filter(e => (e as any).tipoContrato === "CLT" && !isInativo(e));
     if (statusFilter === "PJ") list = list.filter(e => (e as any).tipoContrato === "PJ" && !isInativo(e));
     if (statusFilter === "Socio") list = list.filter(e => (e as any).tipoContrato === "Socio" && !isInativo(e));
@@ -978,7 +980,7 @@ ${obs ? `<div class="box"><strong>Observações / Justificativa do Enquadramento
             <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-9 gap-2.5">
               {[
                 { label: "Total", value: statsQ.data.total, icon: Users, color: "text-slate-700", bg: "bg-slate-50 border-slate-200", filter: "Todos" },
-                { label: "Na Empresa", value: statsQ.data.naEmpresa ?? (statsQ.data.total - statsQ.data.desligados - (statsQ.data.blacklist || 0)), icon: UsersRound, color: "text-teal-700", bg: "bg-teal-50 border-teal-200", filter: null },
+                { label: "Na Empresa", value: statsQ.data.naEmpresa ?? (statsQ.data.total - statsQ.data.desligados - (statsQ.data.blacklist || 0)), icon: UsersRound, color: "text-teal-700", bg: "bg-teal-50 border-teal-200", filter: "NaEmpresa" },
                 { label: "Ativos", value: statsQ.data.ativos, icon: UserCheck, color: "text-green-700", bg: "bg-green-50 border-green-200", filter: "Ativo" },
                 { label: "CLT", value: statsQ.data.clt, icon: FileText, color: "text-sky-700", bg: "bg-sky-50 border-sky-200", filter: "CLT" },
                 { label: "PJ", value: statsQ.data.pj, icon: Building2, color: "text-indigo-700", bg: "bg-indigo-50 border-indigo-200", filter: "PJ" },
@@ -1023,6 +1025,7 @@ ${obs ? `<div class="box"><strong>Observações / Justificativa do Enquadramento
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="Todos">Todos</SelectItem>
+              <SelectItem value="NaEmpresa">Na Empresa</SelectItem>
               <SelectItem value="CLT">CLT</SelectItem>
               <SelectItem value="PJ">PJ</SelectItem>
               <SelectItem value="Socio">Sócio</SelectItem>
