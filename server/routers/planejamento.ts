@@ -118,6 +118,31 @@ async function regenerarPrevistoSemanasCaminhoB(
   if (!proj) return null;
   const diaCorte = proj.diaCorteSemana ?? 4;
 
+  // Rev. 2601 — Helpers de data DECLARADOS ANTES de `folhas` (eram definidos
+  // depois → `folhas` chamava `toUtc` na zona morta temporal do `const` →
+  // "Cannot access 'toUtc' before initialization" → regenerar SEMPRE lançava
+  // → `previsto_semanas_json` nunca era gravado → curva PREVISTO travada).
+  // Rev. 2533 — Drizzle date() pode devolver Date OU string; normaliza
+  // pra "YYYY-MM-DD" antes de carimbar UTC midnight/EoD. Sem isso, um Date
+  // virava "Sun May 10..." e o parse retornava NaN → snapshot vazio.
+  const toDateStr = (v: any): string | null => {
+    if (v == null) return null;
+    if (v instanceof Date) {
+      if (isNaN(v.getTime())) return null;
+      return v.toISOString().slice(0, 10);
+    }
+    const s = String(v);
+    const m = s.match(/^\d{4}-\d{2}-\d{2}/);
+    if (m) return m[0];
+    const d = new Date(s);
+    return isNaN(d.getTime()) ? null : d.toISOString().slice(0, 10);
+  };
+  const toUtc = (v: any, endOfDay = false): number => {
+    const s = toDateStr(v);
+    if (!s) return NaN;
+    return new Date(s + (endOfDay ? "T23:59:59Z" : "T00:00:00Z")).getTime();
+  };
+
   const ativs = await db.select({
     id: planejamentoAtividades.id,
     isGrupo: planejamentoAtividades.isGrupo,
@@ -142,27 +167,6 @@ async function regenerarPrevistoSemanasCaminhoB(
       .where(eq(planejamentoProjetos.id, projetoId));
     return { semanas: 0, folhas: 0 };
   }
-
-  // Rev. 2533 — Drizzle date() pode devolver Date OU string; normaliza
-  // pra "YYYY-MM-DD" antes de carimbar UTC midnight/EoD. Sem isso, um Date
-  // virava "Sun May 10..." e o parse retornava NaN → snapshot vazio.
-  const toDateStr = (v: any): string | null => {
-    if (v == null) return null;
-    if (v instanceof Date) {
-      if (isNaN(v.getTime())) return null;
-      return v.toISOString().slice(0, 10);
-    }
-    const s = String(v);
-    const m = s.match(/^\d{4}-\d{2}-\d{2}/);
-    if (m) return m[0];
-    const d = new Date(s);
-    return isNaN(d.getTime()) ? null : d.toISOString().slice(0, 10);
-  };
-  const toUtc = (v: any, endOfDay = false): number => {
-    const s = toDateStr(v);
-    if (!s) return NaN;
-    return new Date(s + (endOfDay ? "T23:59:59Z" : "T00:00:00Z")).getTime();
-  };
 
   let minStart = Number.POSITIVE_INFINITY;
   let maxFinish = Number.NEGATIVE_INFINITY;

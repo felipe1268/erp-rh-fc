@@ -1,6 +1,64 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2601 — **PLANEJAMENTO · A CAUSA-RAIZ REAL DO PREVISTO TRAVADO EM ~1%:
+ * UM BUG DE ZONA MORTA TEMPORAL (TDZ) NO SERVIDOR IMPEDIA A CURVA CAMINHO B DE
+ * SER GERADA/GRAVADA. AS REV. 2599/2600 (CLIENT) ESTAVAM CERTAS — SÓ FALTAVA O
+ * DADO, QUE NUNCA EXISTIU.**
+ *
+ * SINTOMA (usuário, screenshots IMG_1418–1421, projeto 35 REVTE-CIVIL): mesmo
+ * após as Rev. 2599/2600, o Previsto seguia travado em ~1% em TODAS as semanas
+ * (1ª, 2ª, 37ª); os cards "PREVISTO (SEMANA)" exibiam "Lido do snapshot MS
+ * Project (UID=0)" (= fallback, curva NÃO usada) e o rodapé "Semana N — Previsto
+ * (Acum.): 1,39%" era idêntico em toda semana (cálculo legado clipado no cutoff).
+ *
+ * INVESTIGAÇÃO (read-only no Neon — banco do app — + logs do servidor):
+ *  - `planejamento_projetos.previsto_semanas_json` estava NULL para o projeto 35
+ *    (e p/ TODOS os projetos), apesar de a rev. baseline (50) ter 66 folhas com
+ *    `baseline_start`/`baseline_finish` preenchidos e peso somando 100%.
+ *  - Replicando a lógica de `regenerarPrevistoSemanasCaminhoB` SOBRE OS DADOS
+ *    REAIS, a curva sai PERFEITA: 60 semanas, raiz 1,61% → 7,85% → 15,54% → … →
+ *    100%. Logo a matemática e os dados estavam corretos — faltava só persistir.
+ *  - Os logs do servidor entregaram a causa em texto puro, repetida a cada
+ *    carregamento: `[Caminho B self-heal] projeto 35: Cannot access 'toUtc'
+ *    before initialization` e `[Caminho B] FALHA regenerarPrevistoSemanas
+ *    projeto 35: Cannot access 'toUtc' before initialization`.
+ *
+ * CAUSA-RAIZ (TDZ — Temporal Dead Zone): em `regenerarPrevistoSemanasCaminhoB`
+ * a construção de `folhas` chamava `toUtc(a.baselineStart)` / `toUtc(...,true)`,
+ * mas `toUtc` e `toDateStr` eram declarados como `const` LOGO DEPOIS, abaixo do
+ * bloco `folhas`. Em JS, usar um `const` antes da sua linha de declaração lança
+ * `ReferenceError: Cannot access 'X' before initialization`. Resultado: a função
+ * lançava SEMPRE — tanto no cadastro (`salvarAtividades`) quanto no self-heal de
+ * `getProjetoById` — e a coluna NUNCA era gravada. Como o esbuild isolado por
+ * arquivo (validação padrão deste repo, já que o tsc dá OOM) NÃO executa o
+ * código, o erro passou batido nas revisões anteriores. Por isso as Rev. 2599
+ * (client lê a curva) e 2600 (hotfix de escopo do client) não resolveram: o
+ * problema sempre esteve na GERAÇÃO/PERSISTÊNCIA no servidor, não na leitura.
+ *
+ * DECISÃO DO USUÁRIO: conversado um plano antes de qualquer código; usuário
+ * cogitou "apagar tudo e refazer" mas, diante do diagnóstico (dado perfeito, bug
+ * de 1 reordenação), aprovou o FIX CIRÚRGICO. CAMINHO B MANTIDO — "ERP só LÊ".
+ *
+ * FIX (SÓ SERVER — `server/routers/planejamento.ts`; ZERO CLIENT/SCHEMA/ALTER/
+ * DROP/DELETE):
+ *  - Mover as declarações de `toDateStr` e `toUtc` para ANTES da construção de
+ *    `folhas` (logo após `const diaCorte`). Uma única reordenação resolve o TDZ
+ *    e a função volta a gerar e gravar a curva. Nenhuma outra mudança de lógica.
+ *
+ * BACKFILL (UPDATE da própria coluna JSON via função do app — permitido, NÃO é
+ * ALTER/DROP/DELETE): script read-then-write que replica EXATAMENTE a lógica do
+ * self-heal (alvo = última revisão aprovada → 1ª; `diaCorteSemana` do projeto) e
+ * popula `previsto_semanas_json` para os projetos com a coluna NULL. Projeto 35
+ * GRAVADO (60 semanas, raiz 1,61% → 100%, revisaoId=50 casando com a revisão
+ * ativa do client → guarda de revisão passa). Projetos 29/33/36/38 ficaram sem
+ * curva porque NÃO têm baseline em NENHUMA revisão (estado de dado — XML sem
+ * baseline; a UI já exibe "—"/CTA de reimportar). Daqui pra frente o self-heal
+ * de `getProjetoById` (agora funcional) popula qualquer projeto ao abrir.
+ *
+ * Validado: esbuild server transform exit 0; workflow reiniciado SEM o erro de
+ * TDZ nos logs; verificação SQL confirmando a curva gravada do projeto 35.
+ *
  * Rev. 2600 — **PLANEJAMENTO · HOTFIX DA REV. 2599: (1) CORRIGE O CRASH
  * `ReferenceError: Can't find variable: previstoCurva` QUE DERRUBAVA A TELA
  * INTEIRA; (2) DESTRAVA O PREVISTO DA BARRA SUPERIOR (ANTES CONGELADO EM ~1%).**
