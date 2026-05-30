@@ -350,23 +350,25 @@ export default function Clientes() {
                   <span className="text-[10px] text-slate-400">
                     {new Date(c.criadoEm).toLocaleDateString("pt-BR")}
                   </span>
-                  <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <div className="flex gap-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
                     <button
                       onClick={() => abrirEditar(c)}
-                      className="p-1 rounded hover:bg-amber-50 text-amber-500"
+                      className="p-1.5 rounded-md border border-amber-200 bg-amber-50 hover:bg-amber-100 text-amber-600 flex items-center gap-1"
                       title="Editar"
                     >
                       <Pencil className="h-3.5 w-3.5" />
+                      <span className="text-[11px] font-medium md:hidden">Editar</span>
                     </button>
                     <button
                       onClick={() => {
                         if (confirm(`Excluir o cliente "${c.razaoSocial}"?`))
                           excluirMut.mutate({ id: c.id, companyId });
                       }}
-                      className="p-1 rounded hover:bg-red-50 text-red-400"
+                      className="p-1.5 rounded-md border border-red-200 bg-red-50 hover:bg-red-100 text-red-500 flex items-center gap-1"
                       title="Excluir"
                     >
                       <Trash2 className="h-3.5 w-3.5" />
+                      <span className="text-[11px] font-medium md:hidden">Excluir</span>
                     </button>
                   </div>
                 </div>

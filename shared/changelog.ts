@@ -1,6 +1,26 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2609 — **CLIENTES · BOTÕES "EDITAR" E "EXCLUIR" DOS CARDS PASSAM A FICAR
+ * SEMPRE VISÍVEIS NO TOUCH (iPad/CELULAR) — ANTES SÓ APARECIAM NO HOVER DO
+ * MOUSE, ENTÃO NO TABLET "SUMIAM" E NÃO HAVIA COMO EDITAR/APAGAR UM CLIENTE.**
+ *
+ * PEDIDO (usuário, no iPad): "Cadê a opção de apagar, editar as informações".
+ * CAUSA-RAIZ: no `client/src/pages/Clientes.tsx` o container dos dois botões
+ * (Pencil/Trash2) usava `opacity-0 group-hover:opacity-100` — em dispositivos
+ * touch não existe hover, então os botões ficavam invisíveis o tempo todo. A
+ * lógica de editar (`abrirEditar`) e excluir (`excluirMut` com confirm) já
+ * existia e funcionava; era puramente um problema de VISIBILIDADE na UI.
+ *
+ * FIX (SÓ CLIENT — `client/src/pages/Clientes.tsx`; ZERO SERVER/SCHEMA/ALTER/
+ * DROP/DELETE): os botões agora usam `opacity-100 md:opacity-0
+ * md:group-hover:opacity-100` — SEMPRE visíveis em telas pequenas/touch (<md),
+ * mantendo o comportamento elegante de aparecer-no-hover no desktop (≥md). Além
+ * disso, ganharam estilo de "pílula" com borda/fundo (âmbar p/ Editar, vermelho
+ * p/ Excluir) e rótulo de texto ("Editar"/"Excluir") visível só no mobile
+ * (`md:hidden`) para ficar inequívoco no toque. Validado: esbuild client
+ * (exit 0) + workflow reiniciado.
+ *
  * Rev. 2608 — **COLABORADORES · NOVO CARD "NA EMPRESA" — SOMATÓRIA DE TODOS OS
  * FUNCIONÁRIOS QUE AINDA TÊM VÍNCULO/CONEXÃO COM A EMPRESA (TODOS MENOS OS
  * DISPENSADOS), PARA SABER A QUANTIDADE TOTAL ATUAL NA EMPRESA.**
