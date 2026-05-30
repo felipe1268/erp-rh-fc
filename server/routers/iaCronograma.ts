@@ -298,8 +298,25 @@ async function coletarEfetivoCronograma(db: any, projetoId: number, companyId: n
   }
   emAndamento.sort((a, b) => peso(b) - peso(a));
   proximas.sort((a, b) => peso(b) - peso(a));
+
+  // Rev. 2593: anota cada atividade com o PAVIMENTO inferido (nome + EAP) e monta
+  // a lista ordenada de pavimentos detectados (base → topo) p/ a IA desenhar a
+  // Linha de Balanço e o Plano por Pavimento sobre as unidades REAIS da obra.
+  const pavOrdem = new Map<string, number>();
+  for (const a of [...emAndamento, ...proximas]) {
+    const p = detectarPavimento(`${a.nome ?? ""} ${a.eapCodigo ?? ""}`);
+    (a as any).__pav = p ? p.label : null;
+    if (p && !pavOrdem.has(p.label)) pavOrdem.set(p.label, p.ordem);
+  }
+  const pavimentosDetectados = Array.from(pavOrdem.entries())
+    .sort((x, y) => x[1] - y[1])
+    .map(([label]) => label);
+  const pavimentosTxt = pavimentosDetectados.length === 0
+    ? "  (Não foi possível inferir pavimentos a partir dos nomes/EAP das atividades — trate a obra como uma frente única ou use blocos/eixos.)"
+    : pavimentosDetectados.map((p, i) => `  ${i + 1}. ${p}`).join("\n");
+
   const fmtAtiv = (a: any) =>
-    `  - [${a.eapCodigo ?? "?"}] ${a.nome} (${isoParaBR(a.dataInicio)} → ${isoParaBR(a.dataFim)}) | Peso ${peso(a).toFixed(2)}%${a.recursoPrincipal ? ` | Recurso: ${a.recursoPrincipal}` : ""}`;
+    `  - [${a.eapCodigo ?? "?"}] ${a.nome} (${isoParaBR(a.dataInicio)} → ${isoParaBR(a.dataFim)}) | Peso ${peso(a).toFixed(2)}%${(a as any).__pav ? ` | Pavimento: ${(a as any).__pav}` : ""}${a.recursoPrincipal ? ` | Recurso: ${a.recursoPrincipal}` : ""}`;
 
   // 4b. Férias dos alocados (RH › Férias) × impacto no efetivo/prazo. Cruza os
   // funcionários alocados com `vacation_periods`, lista os períodos de gozo ainda
@@ -367,10 +384,10 @@ async function coletarEfetivoCronograma(db: any, projetoId: number, companyId: n
       ).join("\n");
   const emAndTxt = emAndamento.length === 0
     ? "  (Nenhuma atividade em andamento na data de hoje.)"
-    : emAndamento.slice(0, 35).map(fmtAtiv).join("\n") + (emAndamento.length > 35 ? `\n  ... e mais ${emAndamento.length - 35} atividades em andamento.` : "");
+    : emAndamento.slice(0, 50).map(fmtAtiv).join("\n") + (emAndamento.length > 50 ? `\n  ... e mais ${emAndamento.length - 50} atividades em andamento.` : "");
   const proxTxt = proximas.length === 0
     ? "  (Nenhuma atividade iniciando nas próximas 8 semanas.)"
-    : proximas.slice(0, 35).map(fmtAtiv).join("\n") + (proximas.length > 35 ? `\n  ... e mais ${proximas.length - 35} atividades nas próximas semanas.` : "");
+    : proximas.slice(0, 50).map(fmtAtiv).join("\n") + (proximas.length > 50 ? `\n  ... e mais ${proximas.length - 50} atividades nas próximas semanas.` : "");
 
   const feriasTxt = feriasPeriodos.length === 0
     ? "  (Nenhuma férias agendada/em gozo para os funcionários alocados nesta obra.)"
@@ -398,6 +415,7 @@ async function coletarEfetivoCronograma(db: any, projetoId: number, companyId: n
     emAndamento, proximas, hoje,
     efetivoTxt, emAndTxt, proxTxt,
     feriasPeriodos, feriasTxt, feriasResumoTxt, totalFeriasHorizonte,
+    pavimentosDetectados, pavimentosTxt,
   };
 }
 
@@ -453,6 +471,32 @@ const ATIVIDADES_EXTERNAS = [
 function isAtividadeExterna(nome: string): boolean {
   const n = nome.toLowerCase();
   return ATIVIDADES_EXTERNAS.some(k => n.includes(k));
+}
+
+// ── Detecta o PAVIMENTO/unidade repetitiva a partir do nome/EAP da atividade ──
+// Rev. 2593: a Linha de Balanço e o Plano por Pavimento precisam saber em QUE
+// pavimento cada atividade acontece. Como o cronograma não tem uma coluna de
+// pavimento, inferimos do texto (nome + código EAP). Retorna um rótulo
+// normalizado e uma `ordem` numérica para ordenar de baixo (subsolo) para cima
+// (cobertura). iOS-safe (sem new Date / lookbehind).
+function detectarPavimento(texto: string): { label: string; ordem: number } | null {
+  const t = (texto || "").toLowerCase();
+  // Subsolo (com ou sem número): subsolo, 2º subsolo, subsolo 1
+  let m = t.match(/(\d+)\s*[ºo°]?\s*subsolo/) || t.match(/subsolo\s*(\d+)/);
+  if (m) { const n = parseInt(m[1], 10) || 1; return { label: `${n}º Subsolo`, ordem: -100 - n }; }
+  if (/\bsubsolo\b/.test(t)) return { label: "Subsolo", ordem: -100 };
+  if (/\bembasamento\b|\bfunda(ç|c)(ã|a)o\b|\bbaldrame\b/.test(t)) return { label: "Embasamento", ordem: -50 };
+  if (/\bt(é|e)rreo\b|pavimento\s+t(é|e)rreo|\bpav\.?\s*t(é|e)rreo/.test(t)) return { label: "Térreo", ordem: 0 };
+  if (/\bmezanino\b/.test(t)) return { label: "Mezanino", ordem: 1 };
+  // Pavimento/andar numerado: "pavimento 6", "pav 6", "6º pavimento", "6° andar", "6 pav"
+  m = t.match(/pavimento\s*(\d+)/) || t.match(/\bpav\.?\s*(\d+)/) || t.match(/(\d+)\s*[ºo°]\s*(?:pav|pavimento|andar)/) || t.match(/(\d+)\s*[ºo°]?\s*andar/);
+  if (m) { const n = parseInt(m[1], 10); if (!isNaN(n)) return { label: `Pav. ${n}`, ordem: n + 10 }; }
+  if (/casa\s+de\s+m(á|a)quinas|\bcasa\s+m(á|a)q/.test(t)) return { label: "Casa de Máquinas", ordem: 9300 };
+  if (/\bbarrilete\b/.test(t)) return { label: "Barrilete", ordem: 9200 };
+  if (/reservat(ó|o)rio\s+superior|\bbarril(é|e)te\b/.test(t)) return { label: "Reservatório", ordem: 9100 };
+  if (/\b(á|a)tico\b/.test(t)) return { label: "Ático", ordem: 9050 };
+  if (/\bcobertura\b/.test(t)) return { label: "Cobertura", ordem: 9000 };
+  return null;
 }
 
 // ── Build AI system prompt ────────────────────────────────────────────────
@@ -1757,6 +1801,7 @@ Regras: inclua em "porCargo" TODAS as funções listadas no efetivo (mesmo as qu
         emAndamento, proximas, hoje,
         efetivoTxt, emAndTxt, proxTxt,
         feriasTxt, feriasResumoTxt, totalFeriasHorizonte,
+        pavimentosDetectados, pavimentosTxt,
       } = await coletarEfetivoCronograma(db, input.projetoId, companyId);
 
       // Aplica os ajustes simulados por cargo (clamp em 0). Cargos não presentes
@@ -1832,6 +1877,9 @@ ${feriasResumoTxt}
 ### Detalhe dos períodos
 ${feriasTxt}
 
+## PAVIMENTOS / UNIDADES REPETITIVAS DETECTADAS (${pavimentosDetectados.length}) — base → topo
+${pavimentosTxt}
+
 ---
 Projete o impacto do CENÁRIO SIMULADO frente às atividades acima e retorne um JSON EXATAMENTE nesta estrutura (sem comentários, sem markdown):
 {
@@ -1870,7 +1918,7 @@ Projete o impacto do CENÁRIO SIMULADO frente às atividades acima e retorne um 
     "absorcaoFerias": [ { "funcionario": "string", "cargo": "string", "periodo": "1º" | "2º" | "3º", "datas": "string DD/MM/AAAA → DD/MM/AAAA", "inadiavel": boolean, "acao": "string — como absorver a ausência mantendo o prazo: 2º/3º período é inadiável (repor/antecipar/terceirizar/redistribuir); 1º período só remaneje se a função for imprescindível" } ],
     "linhaBalancoPlano": "string — o novo plano de ritmo: takt proposto, nº de frentes simultâneas e a nova sequência para manter o prazo com a equipe enxuta",
     "planoTatico": [
-      { "atividade": "string — nome EXATO de uma atividade do cronograma (use as ATIVIDADES EM ANDAMENTO e das PRÓXIMAS SEMANAS listadas acima)", "frente": "string — frente/local físico (pavimento/bloco/eixo/trecho)", "periodo": "string — janela em datas BR (DD/MM/AAAA → DD/MM/AAAA)", "equipe": [ { "cargo": "string", "qtd": number } ], "totalPessoas": number, "meta": "string — o que precisa ficar pronto / quanto produzir no período", "ritmo": "string — takt/produção (ex.: '40 m²/dia', '1 pav/sem')", "comoFazer": "string — passo a passo SIMPLES e didático, em linguagem de canteiro, de como a equipe executa", "porQue": "string — por que alocar assim, em 1 frase clara", "checagem": "string — como o responsável confere no fim do dia/semana se está no ritmo" }
+      { "atividade": "string — nome EXATO de uma atividade do cronograma (use as ATIVIDADES EM ANDAMENTO e das PRÓXIMAS SEMANAS listadas acima)", "frente": "string — frente/local físico (pavimento/bloco/eixo/trecho)", "periodo": "string — janela em datas BR (DD/MM/AAAA → DD/MM/AAAA)", "equipe": [ { "cargo": "string", "qtd": number } ], "totalPessoas": number, "meta": "string — o que precisa ficar pronto / quanto produzir no período", "ritmo": "string — takt/produção (ex.: '40 m²/dia', '1 pav/sem')", "comoFazer": "string — passo a passo SIMPLES e didático, em linguagem de canteiro, de como a equipe executa", "porQue": "string — por que alocar assim, em 1 frase clara", "checagem": "string — como o responsável confere no fim do dia/semana se está no ritmo", "assertividade": number, "baseAssertividade": "string — em que estatística/rendimento (TCPO, histórico, folga de prazo) esse % se baseia" }
     ],
     "linhaBalanco": {
       "unidade": "string — unidade repetitiva da obra (ex.: 'pavimento', 'bloco', 'trecho', 'eixo')",
@@ -1880,6 +1928,25 @@ Projete o impacto do CENÁRIO SIMULADO frente às atividades acima e retorne um 
         { "atividade": "string — atividade/serviço", "inicioSemana": number, "fimSemana": number, "ritmo": "string — ritmo de produção (ex.: '1 pav/sem')", "equipe": "string — resumo curto da equipe (ex.: '4 PED + 8 SERV')" }
       ],
       "leitura": "string — explicação DIDÁTICA de como ler este gráfico de Linha de Balanço para quem nunca viu"
+    },
+    "linhaBalancoPavimentos": {
+      "unidade": "string — nome da unidade repetitiva (ex.: 'Pavimento')",
+      "inicioRef": "string — data BR (DD/MM/AAAA) correspondente à Semana 1",
+      "horizonteSemanas": number,
+      "pavimentos": [ "string — TODOS os pavimentos/unidades, ORDENADOS da base para o topo (use a lista PAVIMENTOS DETECTADAS acima)" ],
+      "atividades": [
+        { "atividade": "string — serviço repetitivo (ex.: 'Chapisco', 'Emboço', 'Revestimento cerâmico')", "equipe": "string — resumo curto da quadrilha (ex.: '1 PED + 2 SERV')", "ritmo": "string — ritmo (ex.: '1 pav/sem')", "pavInicio": number, "pavFim": number, "semanaInicio": number, "semanaFim": number, "assertividade": number }
+      ],
+      "leitura": "string — como ler a Linha de Balanço por pavimento: cada linha diagonal é uma equipe subindo (ou descendo) os pavimentos ao longo do tempo; linhas paralelas = fluxo saudável; linhas que se cruzam = colisão/gargalo"
+    },
+    "realocacaoEquipes": [
+      { "equipe": "string — nome da quadrilha/equipe (ex.: 'Equipe de Revestimento A')", "composicao": [ { "cargo": "string", "qtd": number } ], "totalPessoas": number, "movimentos": [ { "ordem": number, "pavimento": "string — onde alocar", "atividade": "string — o que fará ali", "janela": "string — datas BR (DD/MM/AAAA → DD/MM/AAAA)", "duracao": "string — quanto tempo fica (ex.: '2 semanas')", "meta": "string — o que entrega antes de realocar" } ], "assertividade": number, "baseEstatistica": "string — em que rendimento/estatística se baseia a previsão de tempo desta equipe" }
+    ],
+    "assertividadeGlobal": {
+      "percentual": number,
+      "classe": "alta" | "media" | "baixa",
+      "base": "string — em que estatísticas o % se apoia (rendimentos TCPO, folga/buffer do cronograma, viabilidade do paralelismo, impacto de férias, histórico de obras similares)",
+      "fatores": [ { "fator": "string", "impacto": "positivo" | "negativo", "peso": "string — alto/médio/baixo + 1 frase" } ]
     },
     "guiaEstagiario": [
       { "passo": number, "titulo": "string curto", "oQueFazer": "string — instrução clara e direta", "comoConferir": "string — como saber que o passo deu certo" }
@@ -1908,6 +1975,12 @@ MESA DE GUERRA — "alocacaoFrentes" (OBRIGATÓRIO e DETALHADO): este é o cora�
 PLANO TÁTICO POR ATIVIDADE — "planoTatico" (OBRIGATÓRIO): desça da frente para a ATIVIDADE do cronograma. Para as ATIVIDADES EM ANDAMENTO e das PRÓXIMAS SEMANAS listadas acima (use os NOMES EXATOS), aloque a equipe do CENÁRIO SIMULADO (cargo + qtd), respeitando as cuadrillas da TCPO e SEM estourar o efetivo de cada função quando atividades acontecem em paralelo. Em cada item informe período em datas BR, meta, ritmo/takt, um "comoFazer" PASSO A PASSO e SIMPLES (linguagem de canteiro, sem jargão) e uma "checagem" diária/semanal. Gere de 4 a 8 itens, do mais crítico/imediato para o mais distante.
 
 LINHA DE BALANÇO — "linhaBalanco" (OBRIGATÓRIO — o ERP vai DESENHAR o gráfico a partir destes dados): defina "unidade" repetitiva, "inicioRef" (data BR da Semana 1), "horizonteSemanas" (cobrindo o horizonte das atividades) e, em "atividades", para CADA serviço relevante o "inicioSemana"/"fimSemana" (inteiros 1-based dentro do horizonte), o "ritmo" e a "equipe" resumida. As janelas devem refletir o sequenciamento e o takt do plano (serviços em paralelo se sobrepõem no tempo; serviços dependentes começam depois). Em "leitura", explique o gráfico para um leigo.
+
+LINHA DE BALANÇO POR PAVIMENTO — "linhaBalancoPavimentos" (OBRIGATÓRIO — DINÂMICA, o ERP DESENHA o gráfico real de LOB): este é o gráfico que o usuário pediu. Use a lista PAVIMENTOS DETECTADAS acima — preencha "pavimentos" com TODOS eles ORDENADOS da base para o topo (se a lista vier vazia, infira de 3 a 8 unidades plausíveis a partir das atividades). Para CADA serviço repetitivo (chapisco, emboço, contrapiso, revestimento, gesso, pintura, etc.) crie uma linha em "atividades" definindo "pavInicio"/"pavFim" (1-based, índices na lista de pavimentos, base→topo) e "semanaInicio"/"semanaFim" (1-based no horizonte) — isso traça a DIAGONAL da equipe subindo os pavimentos ao longo do tempo, com a inclinação refletindo o "ritmo" (1 pav/sem = diagonal de 1 pavimento por semana). Respeite o sequenciamento construtivo (um serviço só começa num pavimento depois do anterior) e EVITE colisões (duas equipes não ocupam o mesmo pavimento na mesma semana, salvo se compatíveis). Atribua "assertividade" (0-100) por linha. "leitura" deve explicar o gráfico ao engenheiro.
+
+REALOCAÇÃO DE EQUIPES — "realocacaoEquipes" (OBRIGATÓRIO — onde alocar a MDO, por quanto tempo, e DEPOIS realocar): para CADA quadrilha-chave (3 a 6 equipes), liste a "composicao" (cargo + qtd, do CENÁRIO SIMULADO, sem estourar o efetivo), o "totalPessoas" e a sequência de "movimentos" ORDENADA: em cada movimento diga o "pavimento" (ou frente) onde a equipe entra, a "atividade", a "janela" em datas BR, a "duracao" e a "meta" que a equipe entrega ANTES de ser realocada para o próximo pavimento. Encadeie os movimentos como um fluxo de takt (a equipe termina o pav N e sobe para o N+1). Dê "assertividade" (0-100) e "baseEstatistica" por equipe.
+
+ASSERTIVIDADE — "assertividadeGlobal" + campos "assertividade" por item (OBRIGATÓRIO, BASEADO EM ESTATÍSTICA): atribua a CADA item de "planoTatico", a cada linha de "linhaBalancoPavimentos" e a cada equipe de "realocacaoEquipes" um % de assertividade (0-100) com sua base ("baseAssertividade"/"baseEstatistica"). Em "assertividadeGlobal" dê o "percentual" consolidado, a "classe" (alta ≥80 / media 60-79 / baixa <60), a "base" (rendimentos TCPO, folga/buffer do cronograma, viabilidade do paralelismo, impacto das férias, histórico de obras similares) e de 2 a 5 "fatores" (positivos/negativos com peso). Seja honesto: paralelismo agressivo, equipe enxuta ou muitas férias DERRUBAM a assertividade.
 
 GUIA DO ESTAGIÁRIO — "guiaEstagiario" (OBRIGATÓRIO e DIDÁTICO): um roteiro NUMERADO de 5 a 8 passos tão claro que um ESTAGIÁRIO consiga conduzir a análise e tocar o plano sozinho — o que olhar, o que fazer, em que ordem, e como conferir se cada passo deu certo. Linguagem simples, direta, sem jargão.
 

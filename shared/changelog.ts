@@ -1,6 +1,61 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2593 — **PLANEJAMENTO · ABA "EFETIVO × IA" · SIMULADOR: LINHA DE BALANÇO
+ * AGORA É DINÂMICA POR PAVIMENTO, PLANO DE ATAQUE GANHA REALOCAÇÃO DE EQUIPES
+ * (FLUXO DE TAKT) E TODO O PLANO PASSA A EXIBIR % DE ASSERTIVIDADE BASEADO EM
+ * ESTATÍSTICA.**
+ *
+ * PEDIDO (usuário): (1) melhorar a Linha de Balanço para que seja DINÂMICA,
+ * analisando TODOS os pavimentos e atividades; (2) Plano de Ataque POR PAVIMENTO,
+ * mostrando onde alocar a mão de obra, por quanto tempo, e DEPOIS realocar; (3)
+ * plano altamente tático com % de assertividade fundamentado em estatística.
+ *
+ * IMPLEMENTAÇÃO (ADITIVA, ZERO SCHEMA/ALTER/DROP/DELETE — só leitura + IA + UI):
+ *
+ * SERVER (`server/routers/iaCronograma.ts`):
+ *  - Novo helper module-level `detectarPavimento(texto)` (regex iOS-safe, sem
+ *    `new Date`/lookbehind): infere o pavimento/unidade a partir do nome + EAP da
+ *    atividade (subsolo, embasamento, térreo, mezanino, Pav. N, cobertura, ático,
+ *    barrilete, casa de máquinas) retornando `{label, ordem}` para ordenar a obra
+ *    da base ao topo.
+ *  - `coletarEfetivoCronograma` (compartilhado por analisar/simular/perguntar)
+ *    anota cada atividade em andamento/próxima com `__pav`, monta
+ *    `pavimentosDetectados` (ordenado base→topo) + `pavimentosTxt`, inclui o
+ *    pavimento no `fmtAtiv` e retorna os dois novos campos. Não há coluna de
+ *    pavimento no schema — a inferência é feita por texto, sem tocar no banco.
+ *  - `simularEfetivo`: injeta o bloco "PAVIMENTOS / UNIDADES REPETITIVAS
+ *    DETECTADAS" no prompt; estende o JSON do `planoAtaque` com
+ *    `linhaBalancoPavimentos` (unidade/inicioRef/horizonteSemanas/pavimentos[]/
+ *    atividades[{atividade,equipe,ritmo,pavInicio,pavFim,semanaInicio,semanaFim,
+ *    assertividade}]/leitura), `realocacaoEquipes` ([{equipe,composicao,totalPessoas,
+ *    movimentos[{ordem,pavimento,atividade,janela,duracao,meta}],assertividade,
+ *    baseEstatistica}]), `assertividadeGlobal` ({percentual,classe,base,fatores[]})
+ *    e `assertividade`+`baseAssertividade` por item de `planoTatico`. Quatro novas
+ *    instruções dedicadas orientam a IA a desenhar a LOB diagonal por pavimento,
+ *    encadear a realocação como fluxo de takt e ancorar a assertividade em
+ *    rendimentos TCPO, folga/buffer do cronograma, viabilidade do paralelismo,
+ *    impacto das férias e histórico de obras similares.
+ *
+ * CLIENT (`client/src/pages/planejamento/AnaliseEfetivoIA.tsx`):
+ *  - Novo `AssertBadge` (verde ≥80 / âmbar 60-79 / vermelho <60, tolerante a
+ *    valor ausente) usado no plano tático, na legenda da LOB por pavimento e na
+ *    realocação de equipes.
+ *  - Novo `LinhaBalancoPavimentoChart`: gráfico SVG de Linha de Balanço clássica
+ *    (Y = pavimentos base→topo, X = semanas) — cada atividade vira uma DIAGONAL
+ *    ligando (pavInicio,semanaInicio)→(pavFim,semanaFim); caps defensivos
+ *    (24 pavimentos / 40 semanas) com aviso de truncamento.
+ *  - Nova seção "Realocação de equipes — fluxo de takt" (cartões com composição,
+ *    sequência ordenada de movimentos pavimento a pavimento e base estatística) e
+ *    novo cartão "Assertividade do plano" (percentual + classe + base + fatores
+ *    positivos/negativos). `LinhaBalancoChart` legado mantido como fallback.
+ *  - Sem novos imports — reaproveita ícones lucide já presentes (Layers, Route,
+ *    Gauge, Target, MapPin, Clock, TrendingUp/Down).
+ *
+ * Validação: esbuild isolado do server (exit 0) e do client (exit 0) — `tsc`
+ * completo dá OOM no ambiente. Convenção replit.md "2+5" aplicada e
+ * `shared/version.ts` bumpado para Rev. 2593.
+ *
  * Rev. 2592 — **PLANEJAMENTO · ABA "EFETIVO × IA" · CORRIGE "ESTÁ DANDO ERRO E
  * NÃO ESTÁ SALVANDO AS VERIFICAÇÕES E SIMULAÇÕES" NO iPad: O DIAGNÓSTICO E O
  * SIMULADOR VOLTAM A CONCLUIR (E A SER SALVOS NO HISTÓRICO) EM VEZ DE ESTOURAR

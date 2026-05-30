@@ -1282,6 +1282,146 @@ function LinhaBalancoChart({ lob, atividades }: { lob: any; atividades: any[] })
   );
 }
 
+// Badge de % de assertividade (verde ≥80 / âmbar 60-79 / vermelho <60). Tolerante
+// a valores ausentes/fora de faixa — só renderiza com número válido.
+function AssertBadge({ valor, titulo }: { valor: any; titulo?: string }) {
+  const n = Number(valor);
+  if (!Number.isFinite(n)) return null;
+  const v = Math.max(0, Math.min(100, Math.round(n)));
+  const cls = v >= 80
+    ? "bg-emerald-400/15 text-emerald-200 border-emerald-400/40"
+    : v >= 60
+    ? "bg-amber-400/15 text-amber-200 border-amber-400/40"
+    : "bg-rose-400/15 text-rose-200 border-rose-400/40";
+  return (
+    <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-bold shrink-0 ${cls}`} title={titulo}>
+      <Gauge className="h-3 w-3" /> {v}%
+    </span>
+  );
+}
+
+// Linha de Balanço POR PAVIMENTO (LOB clássica): Y = pavimentos (base embaixo →
+// topo em cima), X = semanas. Cada atividade vira uma faixa DIAGONAL ligando
+// (pavInicio, semanaInicio) → (pavFim, semanaFim): a equipe "sobe" os pavimentos
+// ao longo do tempo. Linhas paralelas = fluxo saudável; cruzamentos = colisão.
+function LinhaBalancoPavimentoChart({ lob }: { lob: any }) {
+  if (!lob || typeof lob !== "object") return null;
+  const pavimentos = (Array.isArray(lob.pavimentos) ? lob.pavimentos : [])
+    .filter((p: any) => typeof p === "string" && p.trim().length > 0)
+    .map((p: string) => p.trim());
+  const ativs = (Array.isArray(lob.atividades) ? lob.atividades : [])
+    .filter((a: any) => a && typeof a === "object")
+    .map((a: any) => {
+      const pi = Math.round(Number(a.pavInicio) || 1);
+      const pf = Math.round(Number(a.pavFim) || pi);
+      const si = Math.max(1, Math.round(Number(a.semanaInicio) || 1));
+      const sf = Math.round(Number(a.semanaFim) || si);
+      return { ...a, pi, pf, si, sf: Math.max(si, sf) };
+    });
+  if (pavimentos.length === 0 || ativs.length === 0) return null;
+
+  // PAV_CAP alto (cobre torres reais sem distorcer a geometria); só limita o caso
+  // patológico. Atividades inteiramente ACIMA da janela visível são OMITIDAS (e
+  // não clampadas no topo) para não colapsarem várias na mesma linha.
+  const PAV_CAP = 60, WEEK_CAP = 40;
+  const nPav = Math.min(PAV_CAP, pavimentos.length);
+  const ativsVis = ativs.filter((a: any) => Math.min(a.pi, a.pf) <= nPav);
+  if (ativsVis.length === 0) return null;
+  const maxSem = ativsVis.reduce((m: number, a: any) => Math.max(m, a.sf), 1);
+  const desejado = Math.max(Number(lob.horizonteSemanas) || 0, maxSem, 1);
+  const truncadoSem = desejado > WEEK_CAP;
+  const weeks = Math.min(WEEK_CAP, desejado);
+  const truncadoPav = pavimentos.length > PAV_CAP;
+
+  const labelW = 120, colW = weeks > 18 ? 28 : 40, rowH = 26, headerH = 26, footerH = 26;
+  const width = labelW + weeks * colW + 12;
+  const height = headerH + nPav * rowH + footerH;
+  const stepLabel = weeks > 20 ? 4 : weeks > 12 ? 2 : 1;
+  // Y do índice de pavimento (1-based, base→topo): base (1) fica EMBAIXO.
+  const yPav = (idx: number) => headerH + (nPav - Math.max(1, Math.min(nPav, idx))) * rowH + rowH / 2;
+  const xSem = (s: number) => labelW + (Math.max(1, Math.min(weeks, s)) - 1) * colW;
+
+  return (
+    <div className="rounded-xl border border-sky-400/30 bg-slate-900/40 p-3.5">
+      <div className="flex items-center gap-1.5 mb-1 text-sky-300 text-xs font-semibold uppercase tracking-wide">
+        <Layers className="h-3.5 w-3.5" /> Linha de Balanço por pavimento {lob.unidade ? `(${lob.unidade})` : ""}
+      </div>
+      <p className="text-[11px] text-slate-400 mb-1 leading-relaxed">
+        Eixo vertical = pavimentos (base embaixo → topo em cima); eixo horizontal = semanas{lob.inicioRef ? ` (Semana 1 = ${lob.inicioRef})` : ""}. Cada linha diagonal é uma equipe subindo os pavimentos ao longo do tempo.
+      </p>
+      {lob.leitura && <p className="text-[11px] text-slate-300 mb-2 leading-relaxed"><span className="text-sky-300 font-medium">Como ler: </span>{lob.leitura}</p>}
+      {(truncadoSem || truncadoPav) && (
+        <p className="text-[11px] text-amber-300 mb-2 leading-relaxed inline-flex items-start gap-1">
+          <AlertTriangle className="h-3 w-3 mt-px shrink-0" />
+          <span>{truncadoPav ? `${pavimentos.length} pavimentos — mostrando ${nPav}. ` : ""}{truncadoSem ? `Horizonte de ${desejado} semanas — mostrando as primeiras ${weeks}.` : ""}</span>
+        </p>
+      )}
+      <div className="overflow-x-auto">
+        <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} className="min-w-full" role="img" aria-label="Linha de Balanço por pavimento">
+          {/* Gridlines de semana + cabeçalho */}
+          {Array.from({ length: weeks }, (_, i) => {
+            const w = i + 1;
+            const x = labelW + i * colW;
+            const showLabel = w === 1 || w % stepLabel === 0;
+            return (
+              <g key={`wk${w}`}>
+                <line x1={x} y1={headerH} x2={x} y2={height - footerH} stroke="#ffffff10" strokeWidth={1} />
+                {showLabel && <text x={x + colW / 2} y={headerH - 10} textAnchor="middle" fontSize={10} fill="#94a3b8">S{w}</text>}
+              </g>
+            );
+          })}
+          {/* Linhas de pavimento + rótulos */}
+          {Array.from({ length: nPav }, (_, r) => {
+            const idx = nPav - r; // r=0 é o topo
+            const y = headerH + r * rowH + rowH / 2;
+            const nome = pavimentos[idx - 1] ?? `Pav ${idx}`;
+            const nomeShort = nome.length > 16 ? nome.slice(0, 15) + "…" : nome;
+            return (
+              <g key={`pav${idx}`}>
+                <line x1={labelW} y1={y} x2={labelW + weeks * colW} y2={y} stroke="#ffffff0d" strokeWidth={1} />
+                <text x={6} y={y + 3} fontSize={10.5} fill="#cbd5e1" fontWeight={600}>{nomeShort}</text>
+                <title>{nome}</title>
+              </g>
+            );
+          })}
+          <line x1={labelW} y1={headerH} x2={labelW} y2={height - footerH} stroke="#ffffff33" strokeWidth={1} />
+
+          {/* Faixas diagonais das atividades (equipe subindo os pavimentos) */}
+          {ativsVis.map((a: any, i: number) => {
+            const cor = LOB_CORES[i % LOB_CORES.length];
+            const x1 = xSem(a.si), y1 = yPav(a.pi);
+            const x2 = xSem(a.sf) + colW, y2 = yPav(a.pf);
+            const midX = (x1 + x2) / 2, midY = (y1 + y2) / 2;
+            const labelTxt = String(a.atividade ?? "");
+            return (
+              <g key={`la${i}`}>
+                <line x1={x1} y1={y1} x2={x2} y2={y2} stroke={cor} strokeWidth={3} strokeLinecap="round" opacity={0.9} />
+                <circle cx={x1} cy={y1} r={3.5} fill={cor} />
+                <circle cx={x2} cy={y2} r={3.5} fill={cor} />
+                {Math.abs(x2 - x1) > 60 && <text x={midX} y={midY - 4} textAnchor="middle" fontSize={9} fill="#e2e8f0">{labelTxt.length > 14 ? labelTxt.slice(0, 13) + "…" : labelTxt}</text>}
+                <title>{`${labelTxt} — Pav ${a.pi}→${a.pf} · S${a.si}→S${a.sf}${a.ritmo ? ` · ${a.ritmo}` : ""}${a.equipe ? ` · ${a.equipe}` : ""}`}</title>
+              </g>
+            );
+          })}
+          <text x={labelW + (weeks * colW) / 2} y={height - 6} textAnchor="middle" fontSize={10} fill="#94a3b8">Semanas →</text>
+        </svg>
+      </div>
+      {/* Legenda por atividade + assertividade */}
+      <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2.5">
+        {ativsVis.map((a: any, i: number) => (
+          <span key={i} className="inline-flex items-center gap-1.5 text-[11px] text-slate-400">
+            <span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: LOB_CORES[i % LOB_CORES.length] }} />
+            <span className="text-slate-300">{a.atividade}</span>
+            {a.ritmo && <span>· {a.ritmo}</span>}
+            {a.equipe && <span>· {a.equipe}</span>}
+            <AssertBadge valor={a.assertividade} titulo="Assertividade da linha" />
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function PlanoAtaque({ plano }: { plano: any }) {
   if (!plano || typeof plano !== "object") return null;
   const manobras = Array.isArray(plano.manobras) ? plano.manobras : [];
@@ -1298,9 +1438,13 @@ function PlanoAtaque({ plano }: { plano: any }) {
   const guia = (Array.isArray(plano.guiaEstagiario) ? plano.guiaEstagiario : []).filter((x: any) => x && typeof x === "object");
   const lob = plano.linhaBalanco && typeof plano.linhaBalanco === "object" ? plano.linhaBalanco : null;
   const lobAtivs = (lob && Array.isArray(lob.atividades) ? lob.atividades : []).filter((x: any) => x && typeof x === "object");
+  const lobPav = plano.linhaBalancoPavimentos && typeof plano.linhaBalancoPavimentos === "object" ? plano.linhaBalancoPavimentos : null;
+  const lobPavAtivs = (lobPav && Array.isArray(lobPav.atividades) ? lobPav.atividades : []).filter((x: any) => x && typeof x === "object");
+  const realocacao = (Array.isArray(plano.realocacaoEquipes) ? plano.realocacaoEquipes : []).filter((x: any) => x && typeof x === "object");
+  const assertGlobal = plano.assertividadeGlobal && typeof plano.assertividadeGlobal === "object" ? plano.assertividadeGlobal : null;
   const temAlgo = plano.missao || plano.centroDeGravidade || manobras.length || frentes.length ||
     alocacao.length || processos.length || automacoes.length || naoObvios.length || plano.linhaBalancoPlano ||
-    tatico.length || guia.length || lobAtivs.length;
+    tatico.length || guia.length || lobAtivs.length || lobPavAtivs.length || realocacao.length || assertGlobal;
   if (!temAlgo) return null;
 
   const ver = VEREDITO_PRAZO_META[plano.vereditoPrazo];
@@ -1502,9 +1646,12 @@ function PlanoAtaque({ plano }: { plano: any }) {
                           {t.ritmo && <span className="inline-flex items-center gap-1 text-sky-300"><BarChart3 className="h-3 w-3" />{t.ritmo}</span>}
                         </div>
                       </div>
-                      <span className="inline-flex items-center gap-1 rounded-full bg-indigo-300 text-slate-900 px-2 py-0.5 text-[11px] font-bold shrink-0">
-                        <Users className="h-3 w-3" /> {total}
-                      </span>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <AssertBadge valor={t.assertividade} titulo={t.baseAssertividade || "Assertividade"} />
+                        <span className="inline-flex items-center gap-1 rounded-full bg-indigo-300 text-slate-900 px-2 py-0.5 text-[11px] font-bold">
+                          <Users className="h-3 w-3" /> {total}
+                        </span>
+                      </div>
                     </div>
 
                     {t.meta && <p className="text-xs text-slate-300 mt-2 leading-relaxed"><span className="text-emerald-300 font-medium">Meta: </span>{t.meta}</p>}
@@ -1529,8 +1676,99 @@ function PlanoAtaque({ plano }: { plano: any }) {
           </div>
         )}
 
+        {/* Linha de Balanço por pavimento — LOB dinâmica gerada pelo ERP */}
+        {lobPavAtivs.length > 0 && <LinhaBalancoPavimentoChart lob={lobPav} />}
+
         {/* Linha de Balanço — gráfico gerado pelo ERP */}
         {lobAtivs.length > 0 && <LinhaBalancoChart lob={lob} atividades={lobAtivs} />}
+
+        {/* Realocação de equipes — onde alocar a MDO, por quanto tempo, e depois realocar */}
+        {realocacao.length > 0 && (
+          <div className="rounded-xl border border-violet-400/30 bg-slate-900/40 p-3.5">
+            <div className="flex items-center gap-1.5 mb-1 text-violet-300 text-xs font-semibold uppercase tracking-wide">
+              <Route className="h-3.5 w-3.5" /> Realocação de equipes — fluxo de takt
+            </div>
+            <p className="text-[11px] text-slate-400 mb-3 leading-relaxed">
+              Cada equipe entra num pavimento, entrega a meta e sobe para o próximo. Siga a ordem dos movimentos para manter o ritmo sem ociosidade.
+            </p>
+            <div className="space-y-3">
+              {realocacao.map((eq: any, i: number) => {
+                const comp = (Array.isArray(eq.composicao) ? eq.composicao : []).filter((x: any) => x && typeof x === "object");
+                const total = eq.totalPessoas ?? comp.reduce((s: number, c: any) => s + (Number(c.qtd) || 0), 0);
+                const movs = (Array.isArray(eq.movimentos) ? eq.movimentos : []).filter((x: any) => x && typeof x === "object");
+                return (
+                  <div key={i} className="rounded-xl border border-white/10 bg-white/5 p-3.5">
+                    <div className="flex items-start justify-between gap-2 flex-wrap">
+                      <p className="text-sm font-semibold text-slate-100 leading-snug min-w-0">{eq.equipe}</p>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <AssertBadge valor={eq.assertividade} titulo={eq.baseEstatistica || "Assertividade da equipe"} />
+                        <span className="inline-flex items-center gap-1 rounded-full bg-violet-300 text-slate-900 px-2 py-0.5 text-[11px] font-bold">
+                          <Users className="h-3 w-3" /> {total}
+                        </span>
+                      </div>
+                    </div>
+                    {comp.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5 mt-2">
+                        {comp.map((c: any, j: number) => (
+                          <span key={j} className="inline-flex items-center gap-1 rounded-md bg-slate-700/70 px-2 py-0.5 text-[11px] text-slate-100">
+                            <span className="font-bold text-violet-200">{c.qtd}</span> {c.cargo}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                    {movs.length > 0 && (
+                      <ol className="mt-3 space-y-2">
+                        {movs.map((m: any, j: number) => (
+                          <li key={j} className="flex items-start gap-2.5">
+                            <span className="inline-flex items-center justify-center h-5 w-5 rounded-full bg-violet-300 text-slate-900 text-[10px] font-bold shrink-0 mt-0.5">{m.ordem ?? j + 1}</span>
+                            <div className="min-w-0">
+                              <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                                <span className="text-sm font-medium text-slate-100 inline-flex items-center gap-1"><MapPin className="h-3 w-3 text-violet-300" />{m.pavimento}</span>
+                                {m.janela && <span className="text-[11px] text-slate-400 inline-flex items-center gap-1"><CalendarClock className="h-3 w-3" />{m.janela}</span>}
+                                {m.duracao && <span className="text-[11px] text-sky-300 inline-flex items-center gap-1"><Clock className="h-3 w-3" />{m.duracao}</span>}
+                              </div>
+                              {m.atividade && <p className="text-xs text-slate-300 mt-0.5">{m.atividade}</p>}
+                              {m.meta && <p className="text-[11px] text-emerald-300 mt-0.5 flex items-start gap-1"><Target className="h-3 w-3 mt-px shrink-0" /><span>Entrega: {m.meta}</span></p>}
+                            </div>
+                          </li>
+                        ))}
+                      </ol>
+                    )}
+                    {eq.baseEstatistica && <p className="text-[11px] text-slate-400 mt-2.5 leading-relaxed"><span className="text-slate-300 font-medium">Base estatística: </span>{eq.baseEstatistica}</p>}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Assertividade global do plano — baseada em estatística */}
+        {assertGlobal && (Number.isFinite(Number(assertGlobal.percentual)) || assertGlobal.base) && (
+          <div className="rounded-xl border border-emerald-400/30 bg-emerald-400/10 p-3.5">
+            <div className="flex items-start justify-between gap-3 flex-wrap">
+              <div className="flex items-center gap-1.5 text-emerald-300 text-xs font-semibold uppercase tracking-wide">
+                <Gauge className="h-3.5 w-3.5" /> Assertividade do plano
+                {assertGlobal.classe && <span className="text-[10px] text-slate-400 normal-case font-normal">· confiança {assertGlobal.classe}</span>}
+              </div>
+              {Number.isFinite(Number(assertGlobal.percentual)) && (
+                <span className="text-2xl font-bold text-emerald-200 leading-none">{Math.max(0, Math.min(100, Math.round(Number(assertGlobal.percentual))))}%</span>
+              )}
+            </div>
+            {assertGlobal.base && <p className="text-xs text-slate-300 mt-2 leading-relaxed"><span className="text-emerald-300 font-medium">Base: </span>{assertGlobal.base}</p>}
+            {Array.isArray(assertGlobal.fatores) && assertGlobal.fatores.filter((f: any) => f && typeof f === "object").length > 0 && (
+              <div className="mt-2.5 space-y-1.5">
+                {assertGlobal.fatores.filter((f: any) => f && typeof f === "object").map((f: any, i: number) => (
+                  <div key={i} className="flex items-start gap-2 text-xs">
+                    {f.impacto === "negativo"
+                      ? <TrendingDown className="h-3.5 w-3.5 mt-px text-rose-300 shrink-0" />
+                      : <TrendingUp className="h-3.5 w-3.5 mt-px text-emerald-300 shrink-0" />}
+                    <span className="text-slate-200"><span className="font-medium">{f.fator}</span>{f.peso ? <span className="text-slate-400"> — {f.peso}</span> : null}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Novo plano de Linha de Balanço */}
         {plano.linhaBalancoPlano && (
