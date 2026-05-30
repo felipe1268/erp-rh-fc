@@ -1107,6 +1107,63 @@ export const horasExtrasRouter = router({
       return { ok: true };
     }),
 
+  // Rev. 2575 — Dar baixa em LOTE: zera o saldo total de cada funcionário
+  // selecionado (ex.: HE já paga na folha). Só UPDATE/INSERT — R-001/R-007/R-010.
+  debitarBancoLote: protectedProcedure
+    .input(z.object({
+      employeeIds: z.array(z.number()).min(1),
+      companyId: z.number(),
+      descricao: z.string().min(3),
+      data: z.string(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+
+      let processados = 0;
+      let totalMinutos = 0;
+      const ignorados: number[] = [];
+      const falhas: { employeeId: number; motivo: string }[] = [];
+      const criadoPor = ctx.user.name || "Sistema";
+
+      for (const employeeId of input.employeeIds) {
+        try {
+          // Item atômico: zera o saldo (UPDATE ... = 0 com guard "saldoMinutos > 0",
+          // captura o saldo anterior via CTE — sem race read-then-subtract) e grava
+          // o lançamento no MESMO bloco transacional. Saldo ≤ 0 → 0 linhas → ignorado.
+          const baixado = await db.transaction(async (tx: any) => {
+            const upd = ((await tx.execute(sql`
+              WITH prev AS (
+                SELECT "saldoMinutos" AS anterior FROM banco_horas_saldo
+                WHERE "employeeId" = ${employeeId} AND "companyId" = ${input.companyId}
+              )
+              UPDATE banco_horas_saldo
+              SET "saldoMinutos" = 0, "atualizadoEm" = NOW()
+              WHERE "employeeId" = ${employeeId} AND "companyId" = ${input.companyId}
+                AND "saldoMinutos" > 0
+              RETURNING (SELECT anterior FROM prev) AS "saldoAnterior"
+            `)) as any).rows || [];
+            if (upd.length === 0) return 0;
+            const saldo = Number(upd[0]?.saldoAnterior || 0);
+            await tx.execute(sql`
+              INSERT INTO banco_horas_lancamentos ("employeeId", "companyId", tipo, minutos, descricao, data, "criadoPor")
+              VALUES (${employeeId}, ${input.companyId}, 'debito', ${saldo},
+                ${input.descricao}, ${input.data}::date, ${criadoPor})
+            `);
+            return saldo;
+          });
+
+          if (baixado <= 0) { ignorados.push(employeeId); continue; }
+          processados++;
+          totalMinutos += baixado;
+        } catch (e: any) {
+          falhas.push({ employeeId, motivo: e?.message ? String(e.message).slice(0, 200) : "erro" });
+        }
+      }
+
+      return { ok: true, processados, totalMinutos, ignorados, falhas };
+    }),
+
   // Get expiry alerts (credits older than N months with saldo > 0)
   getAlertasExpiracao: protectedProcedure
     .input(z.object({ companyId: z.number(), mesesValidade: z.number().optional() }))

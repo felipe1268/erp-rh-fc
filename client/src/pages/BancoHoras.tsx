@@ -14,6 +14,8 @@ import {
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 
 function minsToHHMM(mins: number): string {
   const h = Math.floor(Math.abs(mins) / 60);
@@ -90,6 +92,27 @@ export default function BancoHoras() {
     onError: (err) => toast.error(err.message),
   });
 
+  // Rev. 2575 — seleção múltipla + dar baixa em lote
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [showBaixaLote, setShowBaixaLote] = useState(false);
+  const [baixaLoteDesc, setBaixaLoteDesc] = useState("Pagamento de horas extras na folha");
+  const [baixaLoteData, setBaixaLoteData] = useState(new Date().toISOString().slice(0, 10));
+
+  const debitarBancoLoteMut = trpc.horasExtras.debitarBancoLote.useMutation({
+    onSuccess: (res: any) => {
+      const ign = res?.ignorados?.length ? ` (${res.ignorados.length} sem saldo ignorado(s))` : "";
+      const fal = res?.falhas?.length ?? 0;
+      toast.success(`Baixa registrada para ${res?.processados ?? 0} funcionário(s)${ign}.`);
+      if (fal > 0) toast.error(`${fal} funcionário(s) falharam e não tiveram o saldo alterado.`);
+      setShowBaixaLote(false);
+      setSelectedIds(new Set());
+      saldoBanco.refetch();
+      lancamentosSaldos.refetch();
+      alertasExpiracao.refetch();
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
   const saldos = useMemo(() => (saldoBanco.data ?? []) as any[], [saldoBanco.data]);
   const alertas = useMemo(() => (alertasExpiracao.data ?? []) as any[], [alertasExpiracao.data]);
   const lancamentosSaldosList = useMemo(() => (lancamentosSaldos.data ?? []) as any[], [lancamentosSaldos.data]);
@@ -101,6 +124,22 @@ export default function BancoHoras() {
     for (const s of saldos) m.set(Number(s.employeeId), Number(s.saldoMinutos || 0));
     return m;
   }, [saldos]);
+
+  // Rev. 2575 — total de minutos dos selecionados (com saldo > 0)
+  const selecionadosComSaldo = useMemo(
+    () => Array.from(selectedIds).filter((id) => (saldoMap.get(id) || 0) > 0),
+    [selectedIds, saldoMap],
+  );
+  const totalSelecionadoMins = useMemo(
+    () => selecionadosComSaldo.reduce((acc, id) => acc + (saldoMap.get(id) || 0), 0),
+    [selecionadosComSaldo, saldoMap],
+  );
+  const toggleSelected = (id: number) =>
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
 
   const filteredSaldos = useMemo(() => {
     if (!searchTerm.trim()) return saldos;
@@ -278,6 +317,34 @@ export default function BancoHoras() {
               </div>
             </div>
 
+            {/* Rev. 2575 — barra de ação em lote (aparece com ≥1 selecionado) */}
+            {selectedIds.size > 0 && (
+              <div className="flex items-center gap-3 flex-wrap bg-orange-50 border border-orange-200 rounded-lg px-4 py-3 no-print">
+                <span className="text-sm font-medium text-orange-800">
+                  {selectedIds.size} selecionado(s)
+                  {totalSelecionadoMins > 0 && (
+                    <> · total a dar baixa: <strong className="text-orange-700">{minsToHHMM(totalSelecionadoMins)}</strong></>
+                  )}
+                </span>
+                <div className="ml-auto flex items-center gap-2">
+                  <Button size="sm" variant="ghost" className="h-8 text-xs" onClick={() => setSelectedIds(new Set())}>
+                    Limpar seleção
+                  </Button>
+                  <Button
+                    size="sm"
+                    className="h-8 text-xs bg-orange-600 hover:bg-orange-700"
+                    disabled={selecionadosComSaldo.length === 0}
+                    onClick={() => {
+                      setBaixaLoteData(new Date().toISOString().slice(0, 10));
+                      setShowBaixaLote(true);
+                    }}
+                  >
+                    <CreditCard className="h-4 w-4 mr-1.5" /> Dar baixa nos selecionados
+                  </Button>
+                </div>
+              </div>
+            )}
+
             {saldoBanco.isLoading ? (
               <div className="text-center py-8 text-muted-foreground">Carregando saldos...</div>
             ) : filteredSaldos.length > 0 ? (
@@ -287,6 +354,19 @@ export default function BancoHoras() {
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="border-b-2 border-gray-200 bg-gray-50/50">
+                          <th className="py-3 px-4 w-10 no-print" onClick={e => e.stopPropagation()}>
+                            <Checkbox
+                              aria-label="Selecionar todos"
+                              checked={filteredSaldos.length > 0 && filteredSaldos.every((s: any) => selectedIds.has(Number(s.employeeId)))}
+                              onCheckedChange={(c) => {
+                                if (c) {
+                                  setSelectedIds(new Set(filteredSaldos.map((s: any) => Number(s.employeeId))));
+                                } else {
+                                  setSelectedIds(new Set());
+                                }
+                              }}
+                            />
+                          </th>
                           <th className="text-left py-3 px-4 font-semibold">Funcionário</th>
                           <th className="text-left py-3 px-4 font-semibold">Cargo</th>
                           <th className="text-right py-3 px-4 font-semibold">Saldo</th>
@@ -303,6 +383,13 @@ export default function BancoHoras() {
                               className={`border-b border-gray-100 hover:bg-gray-50 cursor-pointer ${isExpiring ? "bg-amber-50/30" : ""} ${isOpen ? "bg-blue-50/50" : ""}`}
                               onClick={() => setSelectedEmpId(isOpen ? null : Number(s.employeeId))}
                             >
+                              <td className="py-3 px-4 w-10 no-print" onClick={e => e.stopPropagation()}>
+                                <Checkbox
+                                  aria-label={`Selecionar ${s.nomeCompleto}`}
+                                  checked={selectedIds.has(Number(s.employeeId))}
+                                  onCheckedChange={() => toggleSelected(Number(s.employeeId))}
+                                />
+                              </td>
                               <td className="py-3 px-4 font-medium">
                                 <div className="flex items-center gap-2">
                                   {isOpen ? <ChevronDown className="h-4 w-4 text-blue-500" /> : <ChevronRight className="h-4 w-4 text-gray-400" />}
@@ -446,6 +533,61 @@ export default function BancoHoras() {
                 </CardContent>
               </Card>
             )}
+
+            {/* Rev. 2575 — Dialog de confirmação da baixa em lote (zera o saldo) */}
+            <Dialog open={showBaixaLote} onOpenChange={(o) => { if (!o) setShowBaixaLote(false); }}>
+              <DialogContent className="max-w-lg">
+                <DialogHeader>
+                  <DialogTitle className="flex items-center gap-2 text-orange-700">
+                    <CreditCard className="h-5 w-5" /> Dar baixa no banco de horas
+                  </DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4 text-sm">
+                  <p className="text-muted-foreground">
+                    Esta ação <strong>zera o saldo</strong> de{" "}
+                    <strong className="text-orange-700">{selecionadosComSaldo.length} funcionário(s)</strong>{" "}
+                    selecionado(s), totalizando{" "}
+                    <strong className="text-orange-700">{minsToHHMM(totalSelecionadoMins)}</strong>. Use quando as horas
+                    já foram pagas na folha. Cada baixa fica registrada no histórico.
+                  </p>
+                  {selectedIds.size !== selecionadosComSaldo.length && (
+                    <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-2">
+                      {selectedIds.size - selecionadosComSaldo.length} selecionado(s) sem saldo serão ignorados.
+                    </p>
+                  )}
+                  <div className="flex flex-wrap items-end gap-4">
+                    <div>
+                      <label className="text-xs text-muted-foreground block mb-1">Data da baixa</label>
+                      <input type="date" value={baixaLoteData} onChange={e => setBaixaLoteData(e.target.value)}
+                        className="border rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300" />
+                    </div>
+                    <div className="flex-1 min-w-[220px]">
+                      <label className="text-xs text-muted-foreground block mb-1">Motivo</label>
+                      <input type="text" value={baixaLoteDesc} onChange={e => setBaixaLoteDesc(e.target.value)}
+                        className="border rounded px-3 py-1.5 text-sm w-full focus:outline-none focus:ring-2 focus:ring-orange-300"
+                        placeholder="Ex: Pagamento de horas extras na folha" />
+                    </div>
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setShowBaixaLote(false)}>Cancelar</Button>
+                  <Button
+                    className="bg-orange-600 hover:bg-orange-700"
+                    disabled={debitarBancoLoteMut.isPending || selecionadosComSaldo.length === 0 || baixaLoteDesc.trim().length < 3}
+                    onClick={() => debitarBancoLoteMut.mutate({
+                      employeeIds: selecionadosComSaldo,
+                      companyId,
+                      descricao: baixaLoteDesc,
+                      data: baixaLoteData,
+                    })}
+                  >
+                    {debitarBancoLoteMut.isPending
+                      ? <><RefreshCw className="h-4 w-4 mr-2 animate-spin" /> Processando...</>
+                      : `Dar baixa em ${selecionadosComSaldo.length}`}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
           </div>
         )}
 

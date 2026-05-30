@@ -1,6 +1,42 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2575 — **RH & DP · BANCO DE HORAS (`/banco-horas`, aba "Saldos") ·
+ * SELEÇÃO MÚLTIPLA DE FUNCIONÁRIOS + "DAR BAIXA NOS SELECIONADOS" (ZERA O SALDO
+ * EM LOTE) PARA HORAS JÁ PAGAS NA FOLHA.**
+ *
+ * MOTIVAÇÃO (pedido do usuário, screenshot da tela Banco de Horas com 62
+ * funcionários com saldo): "Quero múltipla seleção, e poder dar baixa em todos,
+ * pq todos estes foram pagos da última vez." Antes só existia o débito
+ * individual (botão "Debitar" por linha, abrindo o card de Folga
+ * Compensatória) — dar baixa em dezenas de saldos um a um era inviável.
+ *
+ * O QUE MUDOU:
+ * - SERVER (`server/routers/horasExtras.ts`): nova mutation
+ *   `debitarBancoLote({ employeeIds[], companyId, descricao, data })` que, para
+ *   cada funcionário, ZERA o saldo (debita o saldo cheio) gravando um lançamento
+ *   `tipo='debito'` no histórico (`banco_horas_lancamentos`). HARDENING (pós code
+ *   review): cada item roda em `db.transaction` (UPDATE+INSERT atômicos — nunca
+ *   zera o saldo sem gravar o histórico); o UPDATE seta `saldoMinutos = 0` com
+ *   guard `"saldoMinutos" > 0` e captura o saldo anterior via CTE `prev`/RETURNING
+ *   (sem o race read-then-subtract); 0 linhas afetadas (saldo ≤ 0) → ignorado;
+ *   `try/catch` por funcionário isola falhas parciais. Retorna
+ *   `{ processados, totalMinutos, ignorados[], falhas[] }`. Só UPDATE/INSERT —
+ *   respeita R-001/R-007/R-010 (zero ALTER/DROP/DELETE).
+ * - CLIENT (`client/src/pages/BancoHoras.tsx`): coluna de checkbox na tabela de
+ *   Saldos (com "selecionar todos" no cabeçalho, sobre os resultados filtrados);
+ *   barra de ação aparece com ≥1 selecionado mostrando contagem + total a dar
+ *   baixa; botão "Dar baixa nos selecionados" abre um Dialog de confirmação com
+ *   data + motivo (default "Pagamento de horas extras na folha"), aviso de
+ *   quantos selecionados sem saldo serão ignorados, e dispara a mutation em
+ *   lote. Clique no checkbox não dispara o expand de histórico da linha
+ *   (`stopPropagation`).
+ *
+ * Zero schema. Zero ALTER/DROP/DELETE. Arquivos:
+ * `server/routers/horasExtras.ts`, `client/src/pages/BancoHoras.tsx`.
+ *
+ * ---
+ *
  * Rev. 2574 — **RH & DP · CONTROLE DE FÉRIAS (`/ferias`) · A TABELA PRINCIPAL
  * "LISTA DE FÉRIAS" E OS CARDS DA ABA "FÉRIAS VENCIDAS" PASSAM A EXIBIR A FOTO
  * DO CADASTRO DE CADA COLABORADOR.**
