@@ -5889,6 +5889,24 @@ export const clientes = pgTable("clientes", {
   atualizadoEm:               timestamp("atualizado_em", { mode: "string" }).defaultNow().notNull(),
 });
 
+// Rev. 2606 — Cadastro reutilizável de Gerenciadoras (com logo) para agilizar
+// novas obras. Espelha o padrão de `clientes`: o usuário cadastra uma vez
+// (nome + logo + contatos) e reaproveita em qualquer obra futura, com o logo
+// preenchido automaticamente ao selecionar. 100% aditivo (CREATE TABLE).
+export const gerenciadoras = pgTable("gerenciadoras", {
+  id:           serial().primaryKey(),
+  companyId:    integer("company_id").notNull(),
+  nome:         varchar({ length: 255 }).notNull(),
+  logoUrl:      text("logo_url"),
+  cnpj:         varchar({ length: 18 }),
+  telefone:     varchar({ length: 20 }),
+  email:        varchar({ length: 255 }),
+  observacoes:  text(),
+  ativo:        boolean().default(true),
+  criadoEm:     timestamp("criado_em", { mode: "string" }).defaultNow().notNull(),
+  atualizadoEm: timestamp("atualizado_em", { mode: "string" }).defaultNow().notNull(),
+});
+
 export const employeeIntegrations = pgTable("employee_integrations", {
   id:             serial().primaryKey(),
   companyId:      integer("company_id").notNull(),

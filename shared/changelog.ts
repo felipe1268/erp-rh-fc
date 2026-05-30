@@ -1,6 +1,37 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2606 — **OBRAS · CADASTRO REUTILIZÁVEL DE GERENCIADORAS (COM LOGO) —
+ * O CAMPO "GERENCIADORA" DO FORM "NOVA OBRA" DEIXA DE SER TEXTO LIVRE E VIRA UM
+ * COMBOBOX QUE LÊ UM CADASTRO PERSISTIDO, PREENCHENDO NOME + LOGO
+ * AUTOMATICAMENTE AO SELECIONAR — IGUAL JÁ ACONTECE COM "CLIENTE".**
+ *
+ * PEDIDO (usuário): "quero poder cadastrar gerenciadores, com seus logo, para
+ * facilitar obras futuras". Hoje a gerenciadora era digitada manualmente (nome)
+ * e o logo reenviado a cada obra — sem reaproveitamento.
+ *
+ * SOLUÇÃO (espelha o padrão de `clientes`):
+ *  - SCHEMA (`drizzle/schema.ts`): nova tabela `gerenciadoras` (id, company_id,
+ *    nome, logo_url, cnpj, telefone, email, observacoes, ativo, criado_em,
+ *    atualizado_em). 100% ADITIVO (CREATE TABLE) — migration `0026_gerenciadoras.sql`
+ *    com `CREATE TABLE IF NOT EXISTS` + índice por company_id. ZERO ALTER/DROP/
+ *    DELETE (R-001/R-007/R-010). Tabela aplicada no Neon e journal atualizado.
+ *  - SERVER (`server/routers/gerenciadoras.ts` + registro em `server/routers.ts`):
+ *    router `gerenciadoras` com `list`/`criar`/`atualizar`/`excluir`, idêntico ao
+ *    de clientes.
+ *  - CLIENT (`client/src/pages/Obras.tsx`): o campo Gerenciadora vira combobox
+ *    com busca + dropdown (lista as gerenciadoras cadastradas com mini-logo);
+ *    ao selecionar, preenche `gerenciadoraNome` E `gerenciadoraLogoUrl`. Botão
+ *    "+ Cadastrar gerenciadora" abre mini-modal (nome obrigatório + upload de
+ *    logo base64 + CNPJ/telefone/e-mail opcionais); ao salvar, cria no cadastro,
+ *    recarrega a lista e já seleciona na obra. O upload de logo direto na obra
+ *    permanece como override manual.
+ *
+ * IMPACTO: gerenciadoras cadastradas uma vez ficam disponíveis para todas as
+ * obras futuras com logo automático. Compatível com obras existentes (o campo
+ * continua aceitando texto livre). Validado: esbuild server (exit 0) + workflow
+ * reiniciado.
+ *
  * Rev. 2605 — **PLANEJAMENTO · REFIS · O "PREVISTO ACUMULADO" DO RELATÓRIO
  * PASSA A LER A MESMA CURVA CAMINHO B DA BARRA "AVANÇO FÍSICO" DO TOPO — ANTES
  * RECALCULAVA O PV NO CLIENT E DIVERGIA (REFIS 3,13% vs TOPO 3,00% NO PROJETO

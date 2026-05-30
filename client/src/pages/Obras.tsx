@@ -104,6 +104,21 @@ export default function Obras() {
     onError: (e: any) => toast.error(`Erro ao cadastrar cliente: ${e.message}`),
   });
 
+  // Rev. 2606 — Cadastro reutilizável de gerenciadoras (nome + logo).
+  const gerenciadorasQ = trpc.gerenciadoras.list.useQuery({ companyId }, { enabled: !!companyId });
+  const gerenciadoras = gerenciadorasQ.data ?? [];
+  const criarGerencMut = trpc.gerenciadoras.criar.useMutation({
+    onSuccess: (nova: any) => {
+      gerenciadorasQ.refetch();
+      setForm(f => ({ ...f, gerenciadoraNome: nova.nome, gerenciadoraLogoUrl: nova.logoUrl || "" }));
+      setNovaGerencModal(false);
+      setNovaGerencForm({ nome: "", logoUrl: "", cnpj: "", telefone: "", email: "" });
+      setGerencOpen(false);
+      toast.success("Gerenciadora cadastrada e selecionada!");
+    },
+    onError: (e: any) => toast.error(`Erro ao cadastrar gerenciadora: ${e.message}`),
+  });
+
   const [saving, setSaving] = useState(false);
   // Rev. 2429 — Modal de aprovadores delegados de auditoria do estoque por obra.
   const [aprovadoresModal, setAprovadoresModal] = useState<{ open: boolean; obraId: number; obraNome: string }>({ open: false, obraId: 0, obraNome: "" });
@@ -281,6 +296,13 @@ export default function Obras() {
   const [novoClienteModal, setNovoClienteModal] = useState(false);
   const [novoClienteForm, setNovoClienteForm] = useState({ razaoSocial: "", nomeFantasia: "", telefone: "", email: "" });
 
+  // Rev. 2606 — Gerenciadora vira combobox reutilizável (igual Cliente).
+  const [gerencOpen, setGerencOpen] = useState(false);
+  const [gerencBusca, setGerencBusca] = useState("");
+  const gerencRef = useRef<HTMLDivElement>(null);
+  const [novaGerencModal, setNovaGerencModal] = useState(false);
+  const [novaGerencForm, setNovaGerencForm] = useState({ nome: "", logoUrl: "", cnpj: "", telefone: "", email: "" });
+
   const [responsavelOpen, setResponsavelOpen] = useState(false);
   const [responsavelBusca, setResponsavelBusca] = useState("");
   const responsavelRef = useRef<HTMLDivElement>(null);
@@ -297,6 +319,9 @@ export default function Obras() {
       if (responsavelRef.current && !responsavelRef.current.contains(e.target as Node)) {
         setResponsavelOpen(false);
       }
+      if (gerencRef.current && !gerencRef.current.contains(e.target as Node)) {
+        setGerencOpen(false);
+      }
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
@@ -309,6 +334,11 @@ export default function Obras() {
       (c.nomeFantasia || "").toLowerCase().includes(q)
     ).slice(0, 20);
   }, [clientes, clienteBusca]);
+
+  const gerenciadorasFiltradas = useMemo(() => {
+    const q = gerencBusca.toLowerCase();
+    return gerenciadoras.filter((g: any) => (g.nome || "").toLowerCase().includes(q)).slice(0, 20);
+  }, [gerenciadoras, gerencBusca]);
 
   const handleSave = async () => {
     if (saving) return;
@@ -758,17 +788,108 @@ export default function Obras() {
               </div>
             </div>
 
-            {/* ── GERENCIADORA ── */}
-            <div>
+            {/* ── GERENCIADORA ── (Rev. 2606: combobox reutilizável c/ logo) */}
+            <div ref={gerencRef}>
               <Label className="flex items-center gap-1.5 mb-1">
                 <Building className="h-3.5 w-3.5 text-amber-600" />
                 Gerenciadora <span className="text-xs text-slate-400 font-normal">(se houver)</span>
+                {!editingId && (
+                  <button
+                    type="button"
+                    className="ml-auto flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 font-medium"
+                    onClick={() => {
+                      setNovaGerencForm({ nome: gerencBusca || form.gerenciadoraNome || "", logoUrl: "", cnpj: "", telefone: "", email: "" });
+                      setGerencOpen(false);
+                      setNovaGerencModal(true);
+                    }}
+                  >
+                    <Plus className="h-3 w-3" />
+                    Cadastrar gerenciadora
+                  </button>
+                )}
               </Label>
-              <Input
-                value={form.gerenciadoraNome}
-                onChange={e => setForm(f => ({ ...f, gerenciadoraNome: e.target.value }))}
-                placeholder="Ex: Método Engenharia"
-              />
+              <div className="relative">
+                <Input
+                  value={gerencOpen ? gerencBusca : form.gerenciadoraNome}
+                  onChange={e => {
+                    setGerencBusca(e.target.value);
+                    // Ao digitar manualmente, o logo da gerenciadora selecionada
+                    // é descartado para não persistir par nome/logo inconsistente.
+                    setForm(f => ({ ...f, gerenciadoraNome: e.target.value, gerenciadoraLogoUrl: "" }));
+                    setGerencOpen(true);
+                  }}
+                  onFocus={() => { setGerencBusca(form.gerenciadoraNome); setGerencOpen(true); }}
+                  placeholder="Ex: Método Engenharia"
+                  className="pr-8"
+                />
+                <ChevronDown
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 cursor-pointer"
+                  onClick={() => { setGerencBusca(""); setGerencOpen(o => !o); }}
+                />
+                {form.gerenciadoraNome && !gerencOpen && (
+                  <button
+                    type="button"
+                    className="absolute right-7 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                    onClick={() => { setForm(f => ({ ...f, gerenciadoraNome: "", gerenciadoraLogoUrl: "" })); setGerencBusca(""); }}
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                )}
+                {gerencOpen && (
+                  <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-lg shadow-lg max-h-52 overflow-y-auto">
+                    {gerenciadorasFiltradas.length === 0 ? (
+                      <div className="px-3 py-4 text-center text-sm text-slate-400 flex flex-col items-center gap-2">
+                        <span>{gerenciadoras.length === 0 ? "Nenhuma gerenciadora cadastrada ainda." : "Nenhuma gerenciadora encontrada."}</span>
+                        <button
+                          type="button"
+                          className="flex items-center gap-1.5 text-xs font-medium text-blue-600 hover:text-blue-800 border border-blue-200 rounded-md px-3 py-1.5 hover:bg-blue-50"
+                          onClick={() => {
+                            setNovaGerencForm({ nome: gerencBusca, logoUrl: "", cnpj: "", telefone: "", email: "" });
+                            setGerencOpen(false);
+                            setNovaGerencModal(true);
+                          }}
+                        >
+                          <Plus className="h-3.5 w-3.5" />
+                          Cadastrar "{gerencBusca || "nova gerenciadora"}"
+                        </button>
+                      </div>
+                    ) : (
+                      <>
+                        {gerenciadorasFiltradas.map((g: any) => (
+                          <button
+                            key={g.id}
+                            type="button"
+                            className="w-full text-left px-3 py-2.5 hover:bg-blue-50 flex items-center gap-2.5 border-b border-slate-50 last:border-0"
+                            onClick={() => {
+                              setForm(f => ({ ...f, gerenciadoraNome: g.nome, gerenciadoraLogoUrl: g.logoUrl || "" }));
+                              setGerencOpen(false);
+                            }}
+                          >
+                            {g.logoUrl ? (
+                              <img src={g.logoUrl} alt="" className="h-7 w-7 object-contain rounded border border-slate-100 bg-white shrink-0" />
+                            ) : (
+                              <Building className="h-4 w-4 text-amber-400 shrink-0" />
+                            )}
+                            <p className="text-sm font-medium text-slate-800">{g.nome}</p>
+                          </button>
+                        ))}
+                        <button
+                          type="button"
+                          className="w-full text-left px-3 py-2 flex items-center gap-2 border-t border-slate-100 text-blue-600 hover:bg-blue-50 text-xs font-medium"
+                          onClick={() => {
+                            setNovaGerencForm({ nome: gerencBusca, logoUrl: "", cnpj: "", telefone: "", email: "" });
+                            setGerencOpen(false);
+                            setNovaGerencModal(true);
+                          }}
+                        >
+                          <Plus className="h-3.5 w-3.5" />
+                          Cadastrar nova gerenciadora
+                        </button>
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
               <div className="flex items-center gap-3 mt-2">
                 {form.gerenciadoraLogoUrl ? (
                   <div className="relative group">
@@ -1315,6 +1436,111 @@ export default function Obras() {
               className="bg-[#1B2A4A] hover:bg-[#243660] min-w-[120px]"
             >
               {criarClienteMut.isPending ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />Salvando...</> : "Salvar Cliente"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── MINI-MODAL: CADASTRO RÁPIDO DE GERENCIADORA (Rev. 2606) ──────── */}
+      <Dialog open={novaGerencModal} onOpenChange={setNovaGerencModal}>
+        <DialogContent style={{ background: '#ffffff', color: '#111827' }} className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Building className="h-5 w-5 text-amber-600" />
+              Cadastrar Nova Gerenciadora
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-1">
+            <div>
+              <Label className="text-xs font-medium">Nome <span className="text-red-500">*</span></Label>
+              <Input
+                value={novaGerencForm.nome}
+                onChange={e => setNovaGerencForm(f => ({ ...f, nome: e.target.value }))}
+                placeholder="Ex: Método Engenharia"
+                className="mt-1"
+                autoFocus
+              />
+            </div>
+            <div>
+              <Label className="text-xs font-medium mb-1 block">Logo</Label>
+              <div className="flex items-center gap-3">
+                {novaGerencForm.logoUrl ? (
+                  <div className="relative group">
+                    <img src={novaGerencForm.logoUrl} alt="Logo gerenciadora" className="h-16 w-auto max-w-[120px] object-contain rounded border border-slate-200 bg-white p-1" />
+                    <button type="button" className="absolute -top-1.5 -right-1.5 bg-red-500 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity" onClick={() => setNovaGerencForm(f => ({ ...f, logoUrl: "" }))}>
+                      <X className="h-3 w-3" />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="h-16 w-20 rounded border-2 border-dashed border-slate-200 flex items-center justify-center">
+                    <ImageIcon className="h-5 w-5 text-slate-300" />
+                  </div>
+                )}
+                <label className="cursor-pointer">
+                  <input type="file" accept="image/*" className="hidden" onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    if (file.size > 2 * 1024 * 1024) { toast.error("Imagem muito grande (máx. 2MB)"); return; }
+                    const reader = new FileReader();
+                    reader.onload = () => { setNovaGerencForm(f => ({ ...f, logoUrl: reader.result as string })); };
+                    reader.readAsDataURL(file);
+                  }} />
+                  <span className="inline-flex items-center gap-1.5 text-xs font-medium text-blue-600 hover:text-blue-800 border border-blue-200 rounded-md px-3 py-1.5 hover:bg-blue-50">
+                    <Upload className="h-3.5 w-3.5" />
+                    {novaGerencForm.logoUrl ? "Trocar Logo" : "Enviar Logo"}
+                  </span>
+                </label>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-xs font-medium">CNPJ</Label>
+                <Input
+                  value={novaGerencForm.cnpj}
+                  onChange={e => setNovaGerencForm(f => ({ ...f, cnpj: e.target.value }))}
+                  placeholder="00.000.000/0000-00"
+                  className="mt-1"
+                />
+              </div>
+              <div>
+                <Label className="text-xs font-medium">Telefone</Label>
+                <Input
+                  value={novaGerencForm.telefone}
+                  onChange={e => setNovaGerencForm(f => ({ ...f, telefone: e.target.value }))}
+                  placeholder="(00) 00000-0000"
+                  className="mt-1"
+                />
+              </div>
+            </div>
+            <div>
+              <Label className="text-xs font-medium">E-mail</Label>
+              <Input
+                value={novaGerencForm.email}
+                onChange={e => setNovaGerencForm(f => ({ ...f, email: e.target.value }))}
+                placeholder="email@exemplo.com"
+                className="mt-1"
+              />
+            </div>
+            <p className="text-xs text-slate-400">A gerenciadora ficará salva e disponível para reaproveitar em obras futuras, já selecionada nesta obra.</p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setNovaGerencModal(false)}>Cancelar</Button>
+            <Button
+              onClick={() => {
+                if (!novaGerencForm.nome.trim()) { toast.error("Informe o nome da gerenciadora."); return; }
+                criarGerencMut.mutate({
+                  companyId,
+                  nome: novaGerencForm.nome.trim(),
+                  logoUrl: novaGerencForm.logoUrl || undefined,
+                  cnpj: novaGerencForm.cnpj.trim() || undefined,
+                  telefone: novaGerencForm.telefone.trim() || undefined,
+                  email: novaGerencForm.email.trim() || undefined,
+                });
+              }}
+              disabled={criarGerencMut.isPending}
+              className="bg-[#1B2A4A] hover:bg-[#243660] min-w-[120px]"
+            >
+              {criarGerencMut.isPending ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />Salvando...</> : "Salvar Gerenciadora"}
             </Button>
           </DialogFooter>
         </DialogContent>

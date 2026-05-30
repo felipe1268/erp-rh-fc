@@ -117,6 +117,7 @@ import { auditoriaAlmoxarifadoRouter } from "./routers/auditoriaAlmoxarifado";
 import { equipamentosRouter } from "./routers/equipamentos";
 import { ferramentasTerceirosRouter } from "./routers/ferramentasTerceiros";
 import { clientesRouter } from "./routers/clientes";
+import { gerenciadorasRouter } from "./routers/gerenciadoras";
 import { integracoesRouter } from "./routers/integracoes";
 import { masControleRouter } from "./routers/masControle";
 import { moAlocacaoRouter } from "./routers/moAlocacao";
@@ -186,6 +187,7 @@ export const appRouter = router({
   equipamentos: equipamentosRouter,
   ferramentasTerceiros: ferramentasTerceirosRouter,
   clientes: clientesRouter,
+  gerenciadoras: gerenciadorasRouter,
   integracoes: integracoesRouter,
   masControle: masControleRouter,
   moAlocacao: moAlocacaoRouter,
