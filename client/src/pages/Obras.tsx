@@ -356,6 +356,21 @@ export default function Obras() {
     gerencLogoResolvedRef.current = true;
   }, [dialogOpen, gerenciadoras, form.gerenciadoraNome, form.gerenciadoraLogoUrl]);
 
+  // Rev. 2607 — Mesmo padrão para o CLIENTE: ao editar uma obra cujo cliente bate
+  // com o cadastro mas sem logo salvo na obra, resolve o logo do cadastro de clientes
+  // UMA VEZ por abertura. Cadastrar o logo do cliente uma vez = aparece em toda obra.
+  const clienteLogoResolvedRef = useRef(false);
+  useEffect(() => {
+    if (!dialogOpen) { clienteLogoResolvedRef.current = false; return; }
+    if (clienteLogoResolvedRef.current) return;
+    if (clientes.length === 0) return;
+    const nome = (form.cliente || "").trim().toLowerCase();
+    if (!nome || form.clienteLogoUrl) { clienteLogoResolvedRef.current = true; return; }
+    const match = clientes.find((c: any) => (c.razaoSocial || "").trim().toLowerCase() === nome || (c.nomeFantasia || "").trim().toLowerCase() === nome);
+    if (match?.logoUrl) setForm(f => (f.clienteLogoUrl ? f : { ...f, clienteLogoUrl: match.logoUrl }));
+    clienteLogoResolvedRef.current = true;
+  }, [dialogOpen, clientes, form.cliente, form.clienteLogoUrl]);
+
   const handleSave = async () => {
     if (saving) return;
     const nomeEfetivo = form.nome.trim() || form.numOrcamento.trim();
@@ -736,7 +751,7 @@ export default function Obras() {
                             type="button"
                             className="w-full text-left px-3 py-2.5 hover:bg-blue-50 flex items-start gap-2.5 border-b border-slate-50 last:border-0"
                             onClick={() => {
-                              setForm(f => ({ ...f, cliente: c.razaoSocial }));
+                              setForm(f => ({ ...f, cliente: c.razaoSocial, clienteLogoUrl: c.logoUrl || f.clienteLogoUrl || "" }));
                               setClienteOpen(false);
                             }}
                           >

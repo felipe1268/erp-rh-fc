@@ -1,6 +1,42 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2607 — **CLIENTES · CADASTRO DE LOGO NO PRÓPRIO CLIENTE (UMA VEZ SÓ) —
+ * O FORM "EDITAR/NOVO CLIENTE" GANHA UPLOAD DE LOGO; AO SELECIONAR/EDITAR UMA
+ * OBRA DAQUELE CLIENTE, O LOGO É PREENCHIDO AUTOMATICAMENTE — IGUAL JÁ ACONTECE
+ * COM A GERENCIADORA. CADASTRA UMA VEZ, APARECE EM TODOS OS LOCAIS.**
+ *
+ * PEDIDO (usuário): "quero poder colocar o logo no cadastro do cliente.. e todos
+ * locais que o logo estiver hoje. quero que garanta o mesmo local... isso vale
+ * para gerenciadora tbm... quero cadastrar o logo somente uma vez". Hoje o logo
+ * do cliente era reenviado a cada obra (campo `obras.cliente_logo_url`) — sem
+ * reaproveitamento. A gerenciadora já tinha cadastro reutilizável (Rev. 2606);
+ * faltava o cliente.
+ *
+ * SOLUÇÃO (espelha o padrão da gerenciadora, mantendo o campo denormalizado por
+ * obra para que TODOS os locais de exibição de hoje continuem lendo a mesma
+ * coluna `obras.cliente_logo_url` — zero mudança nos pontos de exibição):
+ *  - SCHEMA (`drizzle/schema.ts`): nova coluna `logo_url` (text, nullable) na
+ *    tabela `clientes`. 100% ADITIVA — aplicada via `syncSchema()` no startup
+ *    (`ALTER TABLE ... ADD COLUMN IF NOT EXISTS`, padrão já existente). ZERO
+ *    DROP/DELETE/ALTER destrutivo (R-001/R-007/R-010).
+ *  - SERVER (`server/routers/clientes.ts`): `criar`/`atualizar` aceitam `logoUrl`
+ *    (nullable optional); `criar` grava no insert, `atualizar` flui pelo spread.
+ *  - CLIENT (`client/src/pages/Clientes.tsx`): bloco "Logo do Cliente" com
+ *    preview + upload base64 (máx. 2MB) + remover, no form de cadastro/edição.
+ *    `logoUrl` entra no EMPTY_FORM, no `abrirEditar` e no payload.
+ *  - CLIENT (`client/src/pages/Obras.tsx`): ao SELECIONAR um cliente no combobox,
+ *    preenche `clienteLogoUrl` a partir de `c.logoUrl`; e um efeito one-shot por
+ *    abertura do diálogo resolve o `clienteLogoUrl` pelo nome do cliente quando a
+ *    obra (legada) não tem logo salvo — sem brigar com o botão remover (X) nem
+ *    com upload manual (override mantido). Mesmo padrão da gerenciadora (Rev. 2606).
+ *
+ * IMPACTO: logo cadastrado uma única vez no cliente aparece automaticamente em
+ * toda obra daquele cliente, nos mesmos locais de exibição de hoje (PrintHeader,
+ * Programação Semanal Lótus, Portal do Cliente etc., que já leem
+ * `obras.cliente_logo_url`). Compatível com obras existentes. Validado: esbuild
+ * server (exit 0) + workflow reiniciado.
+ *
  * Rev. 2606 — **OBRAS · CADASTRO REUTILIZÁVEL DE GERENCIADORAS (COM LOGO) —
  * O CAMPO "GERENCIADORA" DO FORM "NOVA OBRA" DEIXA DE SER TEXTO LIVRE E VIRA UM
  * COMBOBOX QUE LÊ UM CADASTRO PERSISTIDO, PREENCHENDO NOME + LOGO

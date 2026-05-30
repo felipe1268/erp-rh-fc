@@ -5863,6 +5863,7 @@ export const clientes = pgTable("clientes", {
   cpf:              varchar({ length: 14 }),
   razaoSocial:      varchar("razao_social", { length: 255 }).notNull(),
   nomeFantasia:     varchar("nome_fantasia", { length: 255 }),
+  logoUrl:          text("logo_url"),
   situacaoReceita:  varchar("situacao_receita", { length: 50 }),
   endereco:         varchar({ length: 255 }),
   numero:           varchar({ length: 20 }),

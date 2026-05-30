@@ -10,6 +10,7 @@ import { toast } from "sonner";
 import {
   Plus, Search, Pencil, Trash2, UserCheck, Building2, Phone, Mail,
   MapPin, Loader2, AlertCircle, CheckCircle2, CheckCircle, User, ShieldCheck,
+  Image as ImageIcon, Upload, X,
 } from "lucide-react";
 
 const DIAS_SEMANA = [
@@ -41,7 +42,7 @@ function formatCPF(v: string) {
 const EMPTY_FORM = {
   tipo: "PJ",
   cnpj: "", cpf: "",
-  razaoSocial: "", nomeFantasia: "", situacaoReceita: "",
+  razaoSocial: "", nomeFantasia: "", logoUrl: "", situacaoReceita: "",
   endereco: "", numero: "", complemento: "", bairro: "", cidade: "", estado: "", cep: "",
   telefone: "", email: "",
   contatoNome: "", contatoCelular: "", contatoEmail: "",
@@ -160,6 +161,7 @@ export default function Clientes() {
       cpf:                     c.cpf ? formatCPF(c.cpf) : "",
       razaoSocial:             c.razaoSocial ?? "",
       nomeFantasia:            c.nomeFantasia ?? "",
+      logoUrl:                 c.logoUrl ?? "",
       situacaoReceita:         c.situacaoReceita ?? "",
       endereco:                c.endereco ?? "",
       numero:                  c.numero ?? "",
@@ -479,6 +481,42 @@ export default function Clientes() {
                     className="mt-1"
                     placeholder="Como é conhecido"
                   />
+                </div>
+              </div>
+
+              {/* Logo do Cliente — cadastrado uma única vez, reaproveitado em todas as obras */}
+              <div>
+                <Label className="text-xs font-medium flex items-center gap-1.5">
+                  <ImageIcon className="h-3.5 w-3.5 text-purple-500" /> Logo do Cliente
+                  <span className="text-[10px] font-normal text-slate-400">(aparece automaticamente nas obras deste cliente)</span>
+                </Label>
+                <div className="flex items-center gap-3 mt-1.5">
+                  {form.logoUrl ? (
+                    <div className="relative group">
+                      <img src={form.logoUrl} alt="Logo cliente" className="h-16 w-auto max-w-[120px] object-contain rounded border border-slate-200 bg-white p-1" />
+                      <button type="button" className="absolute -top-1.5 -right-1.5 bg-red-500 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity" onClick={() => setForm(f => ({ ...f, logoUrl: "" }))}>
+                        <X className="h-3 w-3" />
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="h-16 w-20 rounded border-2 border-dashed border-slate-200 flex items-center justify-center">
+                      <ImageIcon className="h-5 w-5 text-slate-300" />
+                    </div>
+                  )}
+                  <label className="cursor-pointer">
+                    <input type="file" accept="image/*" className="hidden" onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      if (file.size > 2 * 1024 * 1024) { toast.error("Imagem muito grande (máx. 2MB)"); return; }
+                      const reader = new FileReader();
+                      reader.onload = () => { setForm(f => ({ ...f, logoUrl: reader.result as string })); };
+                      reader.readAsDataURL(file);
+                    }} />
+                    <span className="inline-flex items-center gap-1.5 text-xs font-medium text-blue-600 hover:text-blue-800 border border-blue-200 rounded-md px-3 py-1.5 hover:bg-blue-50">
+                      <Upload className="h-3.5 w-3.5" />
+                      {form.logoUrl ? "Trocar Logo" : "Enviar Logo"}
+                    </span>
+                  </label>
                 </div>
               </div>
 
