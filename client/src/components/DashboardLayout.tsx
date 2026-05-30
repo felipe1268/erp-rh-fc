@@ -1435,6 +1435,7 @@ function DashboardLayoutContent({
           { icon: Network,       label: "Diagrama de Rede",  path: `/planejamento/${planId}?tab=diagrama-rede`, tabId: "diagrama-rede" },
           { icon: Users,         label: "Custo RH",          path: `/planejamento/${planId}?tab=custo-rh`, tabId: "custo-rh" },
           { icon: HardHat,       label: "Efetivo",           path: `/planejamento/${planId}?tab=efetivo`, tabId: "efetivo" },
+          { icon: Sparkles,      label: "Efetivo × IA",      path: `/planejamento/${planId}?tab=efetivo-ia`, tabId: "efetivo-ia" },
           { icon: GitBranch,     label: "Revisões",          path: `/planejamento/${planId}?tab=revisoes`, tabId: "revisoes" },
           { icon: FileText,      label: "REFIS",             path: `/planejamento/${planId}?tab=refis`, tabId: "refis" },
           { icon: Brain,         label: "BIM 3D",            path: `/planejamento/${planId}?tab=bim-3d`, tabId: "bim-3d" },

@@ -42,9 +42,16 @@
  * IA: usa `ANTHROPIC_API_KEY` quando presente; com só `GOOGLE_API_KEY` o
  * `invokeLLM` cai automaticamente no Gemini.
  *
+ * SIDEBAR (`client/src/components/DashboardLayout.tsx`): a aba também foi
+ * adicionada ao menu lateral "Abas do Projeto" (entre "Efetivo" e "Revisões",
+ * ícone Sparkles, link `?tab=efetivo-ia`) — sem isso a aba aparecia só na barra
+ * de abas interna, não na barra de comando lateral. Sem gate de permissão
+ * (`efetivo-ia` fora do `TAB_PAGE_MAP`, igual ao `canViewTab`).
+ *
  * Zero schema. Zero ALTER/DROP/DELETE. Arquivos:
  * `server/routers/iaCronograma.ts`, `client/src/pages/planejamento/AnaliseEfetivoIA.tsx`,
- * `client/src/pages/planejamento/PlanejamentoDetalhe.tsx`.
+ * `client/src/pages/planejamento/PlanejamentoDetalhe.tsx`,
+ * `client/src/components/DashboardLayout.tsx`.
  *
  * ---
  *
