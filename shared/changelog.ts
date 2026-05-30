@@ -1,6 +1,47 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2603 — **PLANEJAMENTO · A CURVA DO PREVISTO (CAMINHO B) PASSA A USAR O
+ * MESMO MOTOR DE TEMPO ÚTIL DO MSP QUE O TOP BAR JÁ USA — ANTES CALCULAVA EM
+ * DIAS CORRIDOS + RAIZ POR MÉDIA PONDERADA, POR ISSO DIVERGIA DO MSP SEMANA A
+ * SEMANA (0,2,4,5,7 vs 1,3,4,6,8) E DO PRÓPRIO TOP BAR.**
+ *
+ * CONTEXTO/DECISÃO (usuário): o % PREVISTO do ERP não batia com o MS Project
+ * semana a semana. Após análise (projeto 35 REVTE-CIVIL R04, raiz UID=0, 6 XMLs
+ * BASE_LINE+SEM01..05), o usuário escolheu a Opção 1: o ERP MANTÉM a curva
+ * futura (projeção até o fim da obra no cadastro) MAS replicando a fórmula
+ * NATIVA do MSP — não "lendo a coluna Texto6/Texto10" (que só existe na semana
+ * do XML), e sim refazendo a conta do próprio Project. Confirmado nos dados:
+ * a coluna "% Concluída" (PercentComplete) é o REALIZADO (0 em todas as 115
+ * tarefas do BASE_LINE; 32 com avanço já na SEMANA_02) e continua sendo lida
+ * por semana (golden rule Rev. 2533+, sem mudança). "% PREVISTO" = Texto6.
+ *
+ * CAUSA-RAIZ (2): (1) `regenerarPrevistoSemanasCaminhoB` calculava a fração
+ * inline em DIAS CORRIDOS (`floor((semana − BL_Start)/(BL_Finish − BL_Start)
+ * × 100)` em milissegundos) enquanto o MSP usa TEMPO ÚTIL (ProjDateDiff sobre
+ * o calendário UID=6 "Padrão Guaratinguetá": Seg–Qui 9h, Sex 8h, sem sáb/dom,
+ * −12 feriados). (2) a RAIZ era média ponderada por `peso_financeiro` das
+ * folhas (curva S física, "travada em ~1%"), enquanto o MSP usa a fórmula
+ * sobre a baseline DA PRÓPRIA RAIZ (% do tempo útil decorrido). Ironia: o motor
+ * correto (`pctRaizMSP` / `fracaoDecorridaMs` de `shared/diasUteis`) JÁ existia
+ * e o top bar/`mspReadOnly` JÁ o usavam — só a curva do CAMINHO B não.
+ *
+ * FIX (SÓ SERVER — `server/routers/planejamento.ts`; ZERO CLIENT/SCHEMA/ALTER/
+ * DROP/DELETE): em `regenerarPrevistoSemanasCaminhoB` (1) carrega o calendário
+ * (`parseCalendarioJson(calendario_json)`); (2) RAIZ = `pctRaizMSP(semana,
+ * min(BL_Start), max(BL_Finish), cal)` (fórmula MSP sobre a baseline da raiz,
+ * tempo útil, SEM peso); (3) POR ATIVIDADE = `floor(fracaoDecorridaMs(BL_Start,
+ * semana, BL_Finish, cal) × 100)` (= Texto6 por linha, int). Sem calendário
+ * gravado → o próprio motor cai em dias corridos (backward compat 100%). A
+ * camada de exibição (`previstoCurva`/`mspReadOnly` no client) NÃO muda — só a
+ * FONTE dos números. Validação matemática (resolução em dias úteis): raiz do
+ * projeto 35 (BL 04/05/26→23/06/27), cutoffs quinta → 4/9/14/19/24 dias úteis
+ * sobre ~290 → 1,38/3,10/4,83/6,55/8,27% → floor 1,3,4,6,8 = bate exato com o
+ * MSP. Projeto 35 está com cronograma vazio (Rev. 2602) → curva é repopulada
+ * pelo self-heal de `getProjetoById` quando o usuário reimportar o cronograma.
+ *
+ * Validado: esbuild server transform (exit 0) + workflow reiniciado.
+ *
  * Rev. 2602 — **PLANEJAMENTO · AO EXCLUIR O CRONOGRAMA, O PREVISTO DAQUELA
  * REVISÃO É APAGADO JUNTO. ANTES A BARRA SUPERIOR "AVANÇO FÍSICO" CONTINUAVA
  * EXIBINDO O PREVISTO ANTIGO (EX.: 18,37%) MESMO COM 0 ATIVIDADES.**

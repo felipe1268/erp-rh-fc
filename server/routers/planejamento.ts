@@ -3,7 +3,7 @@ import { TRPCError } from "@trpc/server";
 import { router, protectedProcedure } from "../_core/trpc";
 import { getDb, createAuditLog } from "../db";
 import { importAtividadesCronogramaToFinancial } from "../services/financialIntegrationBridge";
-import { parseCalendarioJson, fracaoDecorridaMs } from "../../shared/diasUteis";
+import { parseCalendarioJson, fracaoDecorridaMs, pctRaizMSP } from "../../shared/diasUteis";
 // Rev. 1817 — Resolução automática do Responsável (FONTE ÚNICA).
 import { resolverResponsaveisBatch, truncarNomeEmpresa, type ResponsavelInfo } from "../_shared/responsavelAtividade";
 // Rev. 1820 — FONTE ÚNICA do recálculo de pesos (item 4 + item 10).
@@ -91,19 +91,26 @@ async function limparSnapshotMspDoProjeto(db: any, projetoId: number) {
 }
 
 /**
- * Rev. 2533 — Caminho B: expande o PREVISTO semana-a-semana aplicando a fórmula
- * nativa do MS Project `Int(((semana − BaselineStart) / (BaselineFinish −
- * BaselineStart)) * 100)` sobre cada folha do cronograma. O resultado é
- * matematicamente idêntico ao que o engenheiro veria se varresse a "Data do
- * Status" no MSP semana a semana — ou seja, a MESMA coluna `PercentComplete`
- * que o XML semanal traz, só que projetada da baseline em vez de lida direto.
+ * Rev. 2603 — Caminho B: expande o PREVISTO semana-a-semana REPLICANDO a fórmula
+ * NATIVA do MS Project em TEMPO ÚTIL (não mais dias corridos), usando o MESMO
+ * motor de calendário (`pctRaizMSP` / `fracaoDecorridaMs` de `shared/diasUteis`)
+ * que o top bar e o `mspReadOnly` já usam. Antes (Rev. 2533) o helper fazia a
+ * conta inline em dias CORRIDOS (ms) e a raiz por média ponderada de peso — por
+ * isso a curva divergia do MSP (0,2,4,5,7 vs 1,3,4,6,8) E do próprio top bar.
+ *
+ *  - RAIZ = `floor(pctRaizMSP(semana, min(BL_Start), max(BL_Finish), cal))` =
+ *    fórmula do MSP sobre a baseline DA PRÓPRIA RAIZ (% do tempo útil decorrido),
+ *    SEM ponderação por peso, INT (a coluna "% PREVISTO"/Texto6 do MSP é inteira).
+ *  - POR ATIVIDADE = `floor(fracaoDecorridaMs(BL_Start, semana, BL_Finish, cal)
+ *    × 100)` = coluna "% PREVISTO" (Texto6) de cada linha, int.
+ *  - Com calendário gravado → tempo útil (paridade MSP). Sem → dias corridos
+ *    (fallback do próprio motor; backward compat 100%).
  *
  * Grava o snapshot em `planejamento_projetos.previsto_semanas_json` como:
  *   { semanas: ["YYYY-MM-DD"...], raiz: [pct...],
  *     porAtividadeId: { "<id>": [pct...] }, diaCorteSemana, geradoEm }
  *
  * Janela: cutoff (default Quinta) de min(BL_Start) até max(BL_Finish), inclusivo.
- * Raiz: média ponderada por `peso_financeiro` das folhas que têm baseline válida.
  * Atividades sem baseline são puladas (snapshot vazio pra elas — UI mostra "—").
  */
 async function regenerarPrevistoSemanasCaminhoB(
@@ -114,9 +121,15 @@ async function regenerarPrevistoSemanasCaminhoB(
   const [proj] = await db.select({
     id: planejamentoProjetos.id,
     diaCorteSemana: planejamentoProjetos.diaCorteSemana,
+    calendarioJson: planejamentoProjetos.calendarioJson,
   }).from(planejamentoProjetos).where(eq(planejamentoProjetos.id, projetoId)).limit(1);
   if (!proj) return null;
   const diaCorte = proj.diaCorteSemana ?? 4;
+  // Rev. 2603 — calendário MSP (Seg–Qui 9h / Sex 8h, feriados) gravado no
+  // import. Alimenta o MESMO motor de tempo útil (`pctRaizMSP` /
+  // `fracaoDecorridaMs`) que o top bar já usa. Sem calendário → fallback
+  // dias corridos (backward compat).
+  const cal = parseCalendarioJson(proj.calendarioJson ?? null);
 
   // Rev. 2601 — Helpers de data DECLARADOS ANTES de `folhas` (eram definidos
   // depois → `folhas` chamava `toUtc` na zona morta temporal do `const` →
@@ -192,10 +205,20 @@ async function regenerarPrevistoSemanasCaminhoB(
   }
   if (semanas.length === 0) return { semanas: 0, folhas: folhas.length };
 
-  const pesos = folhas.map(a => parseFloat(a.pesoFinanceiro || "0") || 0);
-  const pesoTot = pesos.reduce((s, p) => s + p, 0);
+  // Rev. 2603 — RAIZ pela fórmula NATIVA do MSP sobre a baseline DA PRÓPRIA
+  // RAIZ (UID=0 = min(BL_Start)→max(BL_Finish)), em TEMPO ÚTIL, SEM ponderação
+  // por peso (`pctRaizMSP`). Antes era média ponderada por peso_financeiro
+  // (curva S física, "travada em ~1%") sobre dias CORRIDOS → divergia do MSP
+  // e do próprio top bar (que já usa `pctRaizMSP`). Agora curva = top bar = MSP.
+  // `floor` (como no por-atividade) porque a coluna "% PREVISTO" (Texto6) do MSP
+  // é INTEIRA: 1,38/4,83/6,55 → 1/4/6 (arredondar daria 1/5/7, divergindo).
+  const minStartIso = new Date(minStart).toISOString().slice(0, 10);
+  const maxFinishIso = new Date(maxFinish).toISOString().slice(0, 10);
   const porAtividadeId: Record<string, number[]> = {};
   const raiz: number[] = new Array(semanas.length).fill(0);
+  for (let j = 0; j < semanas.length; j++) {
+    raiz[j] = Math.floor(pctRaizMSP(semanas[j], minStartIso, maxFinishIso, cal));
+  }
 
   for (let i = 0; i < folhas.length; i++) {
     const a = folhas[i];
@@ -206,13 +229,14 @@ async function regenerarPrevistoSemanasCaminhoB(
     for (let j = 0; j < semanas.length; j++) {
       const w = toUtc(semanas[j], true);
       let pct: number;
+      // Rev. 2603 — % PREVISTO por atividade = floor(fração de TEMPO ÚTIL da
+      // baseline) = coluna "% PREVISTO" (Texto6) do MSP, int por linha.
       if (dur <= 0)      pct = w >= bf ? 100 : 0;
       else if (w <= bs)  pct = 0;
       else if (w >= bf)  pct = 100;
-      else               pct = Math.floor(((w - bs) / dur) * 100);
+      else               pct = Math.floor(fracaoDecorridaMs(bs, w, bf, cal) * 100);
       pct = Math.max(0, Math.min(100, pct));
       arr[j] = pct;
-      if (pesoTot > 0) raiz[j] += (pesos[i] * pct) / pesoTot;
     }
     porAtividadeId[String(a.id)] = arr;
   }
