@@ -1136,15 +1136,20 @@ Responda EXATAMENTE neste formato (seja conciso e direto):
   // (contratar / reduzir / manter) por cargo, indicadores, riscos e
   // recomendações. SOMENTE LEITURA — não grava nada (R-001/R-007/R-010).
   analisarEfetivo: protectedProcedure
-    .input(z.object({ projetoId: z.number(), companyId: z.number().optional() }))
+    .input(z.object({ projetoId: z.number(), companyId: z.number() }))
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new Error("Banco de dados indisponível.");
 
-      // Tenancy: companyId vem SEMPRE do usuário autenticado (ignora o input —
-      // evita IDOR cross-company). Mesmo padrão das demais procedures deste router.
-      const companyId = (ctx.user as any).companyId as number;
-      if (!companyId) throw new Error("Usuário sem empresa associada.");
+      // Tenancy/autorização (mesmo padrão de `planejamento.list`): aceita o
+      // companyId do input — Admin Master alterna empresa pela UI e seu
+      // `ctx.user.companyId` pode estar vazio — mas VALIDA o acesso: admin/
+      // admin_master livre; demais só a própria empresa (evita IDOR cross-company).
+      const companyId = input.companyId;
+      const isAdmin = ctx.user.role === "admin" || ctx.user.role === "admin_master";
+      if (!isAdmin && String((ctx.user as any).companyId ?? "") !== String(companyId)) {
+        throw new Error("Sem permissão para esta empresa.");
+      }
 
       // 1. Projeto + obra vinculada (escopado à empresa do usuário)
       const [projeto] = await db.select({

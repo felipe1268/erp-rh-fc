@@ -1224,7 +1224,7 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
           />
         )}
         {canViewTab(aba) && aba === "efetivo-ia" && (
-          <AnaliseEfetivoIA projetoId={projetoId} companyId={companyId} />
+          <AnaliseEfetivoIA projetoId={projetoId} companyId={proj?.companyId ?? companyId ?? 0} />
         )}
         {canViewTab(aba) && aba === "gantt" && (
           <GanttCronograma
