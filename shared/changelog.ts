@@ -1,6 +1,37 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2581 — **PLANEJAMENTO · ABA "EFETIVO × IA" · CORRIGE O ERRO "The string
+ * did not match the expected pattern" NO iPad/iOS SAFARI AO ABRIR A ABA (ERA O
+ * MESMO BUG RECORRENTE DE FORMATAÇÃO DE TIMESTAMP DO POSTGRES NO WEBKIT).**
+ *
+ * MOTIVAÇÃO (screenshot do usuário no iPad, obra REVTE-CIVIL): banner vermelho
+ * "The string did not match the expected pattern" na aba "Efetivo × IA". É a
+ * MESMA classe de bug já corrigida várias vezes no projeto: um TIMESTAMP do
+ * Postgres chega ao client via Drizzle/superjson como string crua
+ * "YYYY-MM-DD HH:MM:SS.fff" (com ESPAÇO, sem o 'T' do ISO). Passar essa string
+ * direto p/ `new Date(...).toLocaleString("pt-BR")` faz o iOS Safari 17+ lançar
+ * "RangeError: The string did not match the expected pattern", que sobe pela
+ * error boundary global e aparece como banner/toast de erro.
+ *
+ * CAUSA-RAIZ: a Rev. 2580 introduziu, em
+ * `client/src/pages/planejamento/AnaliseEfetivoIA.tsx`, a renderização do campo
+ * `criadoEm` (TIMESTAMP da nova tabela `planejamento_analises_efetivo`, lido por
+ * `listarAnalisesEfetivo`) no histórico via `new Date(a.criadoEm).toLocaleString`
+ * — exatamente o formato que o WebKit rejeita. Quando já havia análises salvas,
+ * o subtree do histórico montava e quebrava no render.
+ *
+ * FIX (SÓ CLIENT, ZERO SCHEMA, ZERO SERVER):
+ * - `AnaliseEfetivoIA.tsx` passa a usar o helper já existente `formatDateTime` de
+ *   `client/src/lib/dateUtils.ts` (que normaliza espaço→'T', trata "Invalid Date"
+ *   devolvendo "—" e formata no fuso de Brasília) nas 3 exibições de data:
+ *   `criadoEm` no histórico + `geradoEm` no diagnóstico e na simulação (estes 2
+ *   já vinham como ISO, mas ficam blindados contra qualquer formato).
+ * - Nenhuma mudança de servidor, schema ou contrato. Comportamento idêntico,
+ *   apenas robusto ao WebKit do iOS.
+ *
+ * Validado via esbuild (client). Detalhe: este arquivo.
+ *
  * Rev. 2580 — **PLANEJAMENTO · ABA "EFETIVO × IA" · (1) TODA ANÁLISE PASSA A
  * CITAR A REFERÊNCIA MAIS RENOMADA DO MUNDO NO ASSUNTO; (2) ANÁLISES FICAM
  * SALVAS PARA CONSULTA FUTURA (NOVA ABA "HISTÓRICO"); (3) GRÁFICOS COM OS KPIs

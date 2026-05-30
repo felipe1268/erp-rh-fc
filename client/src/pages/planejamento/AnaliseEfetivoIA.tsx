@@ -13,6 +13,7 @@ import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   Cell, PieChart, Pie,
 } from "recharts";
+import { formatDateTime } from "@/lib/dateUtils";
 
 type Props = {
   projetoId: number;
@@ -262,7 +263,7 @@ function DiagnosticoView({ result }: { result: any }) {
         {result.revisao != null && <span>Revisão {result.revisao}</span>}
         <span className="inline-flex items-center gap-1"><Users className="h-3.5 w-3.5" /> {result.efetivoResumo?.total ?? 0} alocados · {result.efetivoResumo?.ativos ?? 0} ativos</span>
         <span className="inline-flex items-center gap-1"><ClipboardList className="h-3.5 w-3.5" /> {result.atividadesResumo?.emAndamento ?? 0} em andamento · {result.atividadesResumo?.proximas ?? 0} próximas</span>
-        {result.geradoEm && <span>· gerado {new Date(result.geradoEm).toLocaleString("pt-BR")}</span>}
+        {result.geradoEm && <span>· gerado {formatDateTime(result.geradoEm)}</span>}
       </div>
 
       {result?.erroIa && (
@@ -582,7 +583,7 @@ function SimuladorView({ result }: { result: any }) {
           <span className="inline-flex items-center gap-1"><Building2 className="h-3.5 w-3.5" /> {result.obra}</span>
           {result.revisao != null && <span>Revisão {result.revisao}</span>}
           {result.cenario && <span className="inline-flex items-center gap-1"><Users className="h-3.5 w-3.5" /> {result.cenario.totalAtual} → {result.cenario.totalSimulado} ({result.cenario.deltaTotal > 0 ? "+" : ""}{result.cenario.deltaTotal})</span>}
-          {result.geradoEm && <span>· gerado {new Date(result.geradoEm).toLocaleString("pt-BR")}</span>}
+          {result.geradoEm && <span>· gerado {formatDateTime(result.geradoEm)}</span>}
         </div>
       )}
 
@@ -781,7 +782,7 @@ function Historico({ projetoId, companyId }: Props) {
                     </div>
                   </div>
                   <span className="inline-flex items-center gap-1 text-xs text-slate-400 shrink-0">
-                    <Clock className="h-3 w-3" /> {a.criadoEm ? new Date(a.criadoEm).toLocaleString("pt-BR") : "—"}
+                    <Clock className="h-3 w-3" /> {formatDateTime(a.criadoEm)}
                   </span>
                 </div>
               </button>
