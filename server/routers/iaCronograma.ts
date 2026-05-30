@@ -1829,6 +1829,80 @@ Regras: em "porCargo" inclua TODAS as funções do cenário usando os números d
       return row;
     }),
 
+  // ── Pergunte à IA — Q&A em linguagem natural sobre o efetivo × cronograma ──
+  // Legenda interativa da aba "Efetivo × IA": o engenheiro tira dúvidas e a IA
+  // responde DIDÁTICO usando SOMENTE os dados desta obra (efetivo + cronograma).
+  // SOMENTE LEITURA (reusa coletarEfetivoCronograma); não persiste nada.
+  perguntarEfetivo: protectedProcedure
+    .input(z.object({
+      projetoId: z.number(),
+      companyId: z.number(),
+      pergunta:  z.string().trim().min(2).max(800),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new Error("Banco de dados indisponível.");
+      const companyId = input.companyId;
+      const isAdmin = ctx.user.role === "admin" || ctx.user.role === "admin_master";
+      if (!isAdmin && String((ctx.user as any).companyId ?? "") !== String(companyId)) {
+        throw new Error("Sem permissão para esta empresa.");
+      }
+
+      const {
+        projeto, obra, revisao,
+        totalEfetivo, totalAtivos, totalIndisponiveis,
+        emAndamento, proximas, hoje,
+        efetivoTxt, emAndTxt, proxTxt,
+      } = await coletarEfetivoCronograma(db, input.projetoId, companyId);
+
+      const systemPrompt = `Você é JULINHO, engenheiro sênior de planejamento e gestão de mão de obra da FC Engenharia (construção civil pesada brasileira). O usuário está olhando a tela "Efetivo × Cronograma (IA)" e tem uma DÚVIDA. Responda de forma DIRETA, DIDÁTICA e curta (no máximo ~6 frases, ou uma lista curta), em português brasileiro, usando SOMENTE os dados do contexto desta obra (efetivo atual e cronograma). Se a pergunta pedir algo que não está nos dados, diga claramente que essa informação não está disponível nesta tela. NÃO invente números: cite apenas valores presentes no contexto. Quando fizer sentido, fundamente em literatura consagrada (PMBOK/PMI, TCPO, CII/overmanning, Lei de Brooks, Koskela/Ballard/Lean), mas sem encher de jargão. Não use markdown pesado; texto limpo.`;
+
+      const userPrompt = `# Contexto da obra
+**Obra:** ${obra?.nome ?? "—"} | **Projeto:** ${projeto.nome ?? "—"} (Revisão ${revisao.numero ?? "?"})
+**Data de referência:** ${hoje.toISOString().slice(0, 10)}
+
+## EFETIVO ATUAL ALOCADO (total: ${totalEfetivo} | ativos: ${totalAtivos} | indisponíveis: ${totalIndisponiveis})
+${efetivoTxt}
+
+## ATIVIDADES EM ANDAMENTO HOJE (${emAndamento.length})
+${emAndTxt}
+
+## ATIVIDADES DAS PRÓXIMAS 8 SEMANAS (${proximas.length})
+${proxTxt}
+
+---
+DÚVIDA DO USUÁRIO: ${input.pergunta}`;
+
+      let resposta = "";
+      let erroIa: string | null = null;
+      try {
+        const result = await invokeLLM({
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user",   content: userPrompt },
+          ],
+          maxTokens: 1000,
+        });
+        const content = result.choices?.[0]?.message?.content;
+        resposta = (typeof content === "string"
+          ? content
+          : Array.isArray(content) ? ((content[0] as any)?.text ?? "") : "").trim();
+      } catch (err: any) {
+        erroIa = err?.message?.includes("Nenhuma chave")
+          ? "Nenhuma chave de IA configurada. Configure ANTHROPIC_API_KEY ou GOOGLE_API_KEY nas secrets para usar o assistente."
+          : `Não foi possível responder agora: ${err?.message ?? "erro desconhecido"}.`;
+      }
+      if (!resposta && !erroIa) erroIa = "A IA não retornou resposta. Tente reformular a pergunta.";
+
+      return {
+        resposta,
+        erroIa,
+        obra: obra?.nome ?? "",
+        revisao: revisao.numero ?? null,
+        geradoEm: new Date().toISOString(),
+      };
+    }),
+
   // ── Programação Semanal — Alertas IA das próximas semanas ────────────────
   alertasSemana: protectedProcedure
     .input(z.object({

@@ -1,6 +1,54 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2582 — **PLANEJAMENTO · ABA "EFETIVO × IA" · REDESIGN MAIS DINÂMICO E
+ * MODERNO: (1) LEGENDA INTERATIVA + ASSISTENTE DE DÚVIDAS (Q&A COM A IA), (2)
+ * VÁRIOS GRÁFICOS ILUSTRATIVOS (PANORAMA DO EFETIVO) E (3) CARDS DE INSIGHT.**
+ *
+ * MOTIVAÇÃO (pedido do usuário): tornar a aba "Efetivo × IA" mais dinâmica e
+ * moderna, com uma LEGENDA onde o engenheiro tira dúvidas, VÁRIOS gráficos
+ * ilustrativos e CARDS com insights — em vez de só o diagnóstico textual + as
+ * 2 visualizações que já existiam (atual×sugerido e distribuição de ações).
+ *
+ * O QUE MUDOU:
+ *
+ * 1) "PERGUNTE À IA" (Q&A em linguagem natural) — NOVO endpoint SOMENTE LEITURA
+ *    `iaCronograma.perguntarEfetivo({projetoId, companyId, pergunta})`
+ *    (`server/routers/iaCronograma.ts`, logo após `getAnaliseEfetivo`). Reusa o
+ *    helper `coletarEfetivoCronograma` (efetivo agregado + atividades em
+ *    andamento e das próximas 8 semanas), aplica a MESMA validação de tenancy
+ *    dos demais (admin/admin_master livre; demais só a própria empresa, anti-
+ *    IDOR), e chama `invokeLLM` (maxTokens 1000) pedindo resposta DIDÁTICA e
+ *    curta, fundamentada SOMENTE nos dados da obra (sem inventar números). Não
+ *    persiste nada. No client, novo componente `PerguntarIA` (chat-like: balões
+ *    pergunta/resposta, chips de sugestão, input + botão enviar, auto-scroll,
+ *    estado "Pensando…"), renderizado no fim do `Diagnostico` — disponível mesmo
+ *    antes de gerar o diagnóstico.
+ *
+ * 2) LEGENDA INTERATIVA `LegendaAjuda` — bloco colapsável "Como ler esta
+ *    análise" explicando Atual×Sugerido, Δ (delta), Contratar/Reduzir/Manter,
+ *    Categoria (Direto/Indireto), Disponibilidade e KPIs.
+ *
+ * 3) "PANORAMA DO EFETIVO" `PanoramaEfetivo` — 3 donuts (composição por
+ *    categoria, disponibilidade ativos×indisponíveis, vínculo CLT×terceiros) via
+ *    `DonutCard` reutilizável (com legenda valor+%) + barra "Top funções por
+ *    efetivo". TUDO calculado no client a partir de `porCargoAtual` (sem IA),
+ *    então aparece sempre que houver efetivo — inclusive quando a IA falha.
+ *
+ * 4) CARDS DE INSIGHT `InsightsEfetivo`/`InsightCard` — função mais numerosa,
+ *    disponibilidade, funções distintas e, quando há diagnóstico da IA, maior
+ *    gargalo (Δ>0), maior folga (Δ<0) e resumo das ações (contratar/reduzir/
+ *    manter). Cores por tom (positivo/alerta/info/neutro).
+ *
+ * FIAÇÃO (`client/src/pages/planejamento/AnaliseEfetivoIA.tsx`): em
+ * `DiagnosticoView`, após o aviso `erroIa`, entram `LegendaAjuda` +
+ * `InsightsEfetivo` + `PanoramaEfetivo` (guardados por `porCargoAtual.length>0`,
+ * portanto válidos no caminho com e sem análise da IA). Datas continuam via
+ * `formatDateTime` iOS-safe (Rev. 2581).
+ *
+ * ZERO SCHEMA, ZERO ALTER/DROP/DELETE. Validado via esbuild isolado (server +
+ * client) — ambos exit 0.
+ *
  * Rev. 2581 — **PLANEJAMENTO · ABA "EFETIVO × IA" · CORRIGE O ERRO "The string
  * did not match the expected pattern" NO iPad/iOS SAFARI AO ABRIR A ABA (ERA O
  * MESMO BUG RECORRENTE DE FORMATAÇÃO DE TIMESTAMP DO POSTGRES NO WEBKIT).**

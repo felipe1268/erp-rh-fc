@@ -8,6 +8,7 @@ import {
   ClipboardList, RefreshCw, Building2, Database, GitCompareArrows, Brain, ListChecks,
   Plus, Calculator, BookOpen, CalendarClock, DollarSign, Activity, ShieldCheck, RotateCcw,
   Award, History, Clock, BarChart3, ArrowLeft,
+  HelpCircle, Send, ChevronDown, Layers, UserCheck, Briefcase, Trophy, Gauge,
 } from "lucide-react";
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
@@ -245,6 +246,8 @@ function Diagnostico({ projetoId, companyId }: Props) {
       )}
 
       {result && <DiagnosticoView result={result} />}
+
+      <PerguntarIA projetoId={projetoId} companyId={companyId} />
     </div>
   );
 }
@@ -271,6 +274,15 @@ function DiagnosticoView({ result }: { result: any }) {
           <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
           <span>{result.erroIa}</span>
         </div>
+      )}
+
+      <LegendaAjuda />
+
+      {Array.isArray(result?.porCargoAtual) && result.porCargoAtual.length > 0 && (
+        <>
+          <InsightsEfetivo result={result} />
+          <PanoramaEfetivo porCargoAtual={result.porCargoAtual} />
+        </>
       )}
 
       {analise && (
@@ -1007,6 +1019,348 @@ function RiscosRecomendacoes({ riscos, recomendacoes }: { riscos?: string[]; rec
           </ul>
         </div>
       )}
+    </div>
+  );
+}
+
+/* ── Legenda interativa: "Como ler esta análise" (colapsável) ───────────── */
+const LEGENDA_ITENS: { t: string; d: string }[] = [
+  { t: "Atual × Sugerido", d: "“Atual” é quem está alocado hoje; “Sugerido” é o que a IA recomenda para dar conta do cronograma." },
+  { t: "Δ (delta)", d: "Diferença Sugerido − Atual. Positivo (verde) = falta gente; negativo (âmbar) = há folga." },
+  { t: "Contratar / Reduzir / Manter", d: "Ação recomendada por função, considerando as frentes em andamento e das próximas 8 semanas." },
+  { t: "Categoria", d: "Direto = mão de obra de produção; Indireto = apoio (engenharia, encarregado, almoxarife, administrativo)." },
+  { t: "Disponibilidade", d: "Ativos x indisponíveis (férias, aviso, afastados). Indisponível não produz, mesmo alocado." },
+  { t: "Indicadores (KPIs)", d: "Cartões-resumo da saúde do efetivo. Verde = ok, âmbar = atenção, vermelho = crítico." },
+];
+
+function LegendaAjuda() {
+  const [aberto, setAberto] = useState(false);
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white">
+      <button
+        type="button"
+        onClick={() => setAberto((v) => !v)}
+        className="w-full flex items-center justify-between gap-2 px-4 py-3 text-left"
+      >
+        <span className="text-sm font-semibold text-slate-700 inline-flex items-center gap-2">
+          <HelpCircle className="h-4 w-4 text-blue-500" /> Como ler esta análise
+        </span>
+        <ChevronDown className={`h-4 w-4 text-slate-400 transition-transform ${aberto ? "rotate-180" : ""}`} />
+      </button>
+      {aberto && (
+        <div className="px-4 pb-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {LEGENDA_ITENS.map((it, i) => (
+            <div key={i} className="rounded-lg border border-slate-100 bg-slate-50/60 p-3">
+              <p className="text-xs font-semibold text-slate-700">{it.t}</p>
+              <p className="text-xs text-slate-500 mt-0.5 leading-snug">{it.d}</p>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ── "Pergunte à IA" — Q&A em linguagem natural sobre o efetivo × cronograma ─ */
+const SUGESTOES_QA = [
+  "Posso reduzir efetivo sem impactar o prazo?",
+  "Qual função é o maior gargalo agora?",
+  "O efetivo está adequado para as próximas semanas?",
+  "Onde devo contratar primeiro e por quê?",
+];
+
+function PerguntarIA({ projetoId, companyId }: Props) {
+  const [pergunta, setPergunta] = useState("");
+  const [chat, setChat] = useState<{ q: string; a: string; erro?: string | null }[]>([]);
+  const fimRef = useRef<HTMLDivElement | null>(null);
+
+  const mut = trpc.iaCronograma.perguntarEfetivo.useMutation({
+    onSuccess: (d: any, vars: any) =>
+      setChat((c) => [...c, { q: vars.pergunta, a: d.resposta, erro: d.erroIa }]),
+    onError: (e: any, vars: any) =>
+      setChat((c) => [...c, { q: vars.pergunta, a: "", erro: e?.message ?? "Erro ao responder." }]),
+  });
+
+  useEffect(() => {
+    fimRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }, [chat.length, mut.isPending]);
+
+  const enviar = (q?: string) => {
+    const p = (q ?? pergunta).trim();
+    if (!p || mut.isPending) return;
+    setPergunta("");
+    mut.mutate({ projetoId, companyId, pergunta: p });
+  };
+
+  return (
+    <div className="rounded-xl border border-blue-200 bg-gradient-to-br from-blue-50/70 to-white p-5">
+      <div className="flex items-start gap-3 mb-3">
+        <div className="rounded-lg bg-blue-600/10 p-2.5">
+          <HelpCircle className="h-5 w-5 text-blue-600" />
+        </div>
+        <div>
+          <h3 className="text-base font-semibold text-slate-800">Tire suas dúvidas com a IA</h3>
+          <p className="text-sm text-slate-500 mt-0.5">
+            Pergunte em linguagem natural sobre o efetivo e o cronograma desta obra — a IA responde com base nos dados reais.
+          </p>
+        </div>
+      </div>
+
+      {chat.length > 0 && (
+        <div className="space-y-3 mb-3 max-h-96 overflow-y-auto pr-1">
+          {chat.map((m, i) => (
+            <div key={i} className="space-y-2">
+              <div className="flex justify-end">
+                <div className="rounded-2xl rounded-br-sm bg-blue-600 text-white text-sm px-3.5 py-2 max-w-[85%] leading-snug">
+                  {m.q}
+                </div>
+              </div>
+              <div className="flex justify-start">
+                <div className={`rounded-2xl rounded-bl-sm border text-sm px-3.5 py-2 max-w-[90%] leading-relaxed whitespace-pre-wrap ${
+                  m.erro ? "border-amber-200 bg-amber-50 text-amber-800" : "border-slate-200 bg-white text-slate-700"
+                }`}>
+                  <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-blue-500 mb-1">
+                    <Sparkles className="h-3 w-3" /> JULINHO (IA)
+                  </span>
+                  <div>{m.erro ? m.erro : m.a}</div>
+                </div>
+              </div>
+            </div>
+          ))}
+          {mut.isPending && (
+            <div className="flex justify-start">
+              <div className="rounded-2xl rounded-bl-sm border border-slate-200 bg-white text-sm px-3.5 py-2 text-slate-400 inline-flex items-center gap-2">
+                <Loader2 className="h-3.5 w-3.5 animate-spin" /> Pensando…
+              </div>
+            </div>
+          )}
+          <div ref={fimRef} />
+        </div>
+      )}
+
+      {chat.length === 0 && (
+        <div className="flex flex-wrap gap-2 mb-3">
+          {SUGESTOES_QA.map((s, i) => (
+            <button
+              key={i}
+              type="button"
+              onClick={() => enviar(s)}
+              disabled={mut.isPending}
+              className="rounded-full border border-blue-200 bg-white px-3 py-1.5 text-xs text-blue-700 hover:bg-blue-50 disabled:opacity-50"
+            >
+              {s}
+            </button>
+          ))}
+        </div>
+      )}
+
+      <div className="flex items-center gap-2">
+        <Input
+          value={pergunta}
+          onChange={(e) => setPergunta(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); enviar(); } }}
+          placeholder="Ex.: dá pra remanejar serventes entre as frentes?"
+          disabled={mut.isPending}
+          className="flex-1"
+        />
+        <Button onClick={() => enviar()} disabled={mut.isPending || !pergunta.trim()} className="shrink-0">
+          {mut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+/* ── Donut reutilizável com legenda lateral (valor + %) ─────────────────── */
+function DonutCard({
+  titulo, Icon, segs,
+}: { titulo: string; Icon: React.ComponentType<{ className?: string }>; segs: { name: string; value: number; fill: string }[] }) {
+  const segsF = segs.filter((s) => s.value > 0);
+  const total = segsF.reduce((s, d) => s + d.value, 0);
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white p-4">
+      <div className="flex items-center gap-2 mb-2">
+        <Icon className="h-4 w-4 text-slate-500" />
+        <span className="text-sm font-semibold text-slate-700">{titulo}</span>
+      </div>
+      {total === 0 ? (
+        <div className="text-xs text-slate-400 text-center py-12">Sem dados</div>
+      ) : (
+        <>
+          <ResponsiveContainer width="100%" height={160}>
+            <PieChart>
+              <Pie data={segsF} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={66} innerRadius={40} paddingAngle={2}>
+                {segsF.map((d, i) => <Cell key={i} fill={d.fill} />)}
+              </Pie>
+              <Tooltip
+                contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #e2e8f0" }}
+                formatter={(v: any, n: any) => [`${v} (${total ? Math.round((Number(v) / total) * 100) : 0}%)`, n]}
+              />
+            </PieChart>
+          </ResponsiveContainer>
+          <div className="mt-1.5 space-y-1">
+            {segsF.map((s, i) => (
+              <div key={i} className="flex items-center justify-between text-xs">
+                <span className="inline-flex items-center gap-1.5 text-slate-600">
+                  <span className="h-2 w-2 rounded-full" style={{ background: s.fill }} /> {s.name}
+                </span>
+                <span className="font-semibold text-slate-700 tabular-nums">{s.value} · {Math.round((s.value / total) * 100)}%</span>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+/* ── Panorama do efetivo: donuts (categoria/disponibilidade/vínculo) + top funções
+ *    Calculado 100% no client a partir do efetivo bruto (sem IA). ──────────── */
+const CAT_COLORS: Record<string, string> = {
+  "Direto": "#3b82f6",
+  "Indireto (obra)": "#f59e0b",
+  "Indireto (escritório)": "#8b5cf6",
+  "—": "#cbd5e1",
+};
+
+function PanoramaEfetivo({ porCargoAtual }: { porCargoAtual: any[] }) {
+  const dados = Array.isArray(porCargoAtual) ? porCargoAtual : [];
+  const agg = useMemo(() => {
+    const sum = (f: (c: any) => number) => dados.reduce((s, c) => s + (Number(f(c)) || 0), 0);
+    const catAgg: Record<string, number> = {};
+    dados.forEach((c) => {
+      const k = c.categoria || "—";
+      catAgg[k] = (catAgg[k] || 0) + (Number(c.total) || 0);
+    });
+    const catSegs = Object.entries(catAgg)
+      .map(([name, value]) => ({ name, value, fill: CAT_COLORS[name] ?? "#94a3b8" }))
+      .sort((a, b) => b.value - a.value);
+    const topFuncoes = [...dados]
+      .sort((a, b) => (Number(b.total) || 0) - (Number(a.total) || 0))
+      .slice(0, 8)
+      .map((c) => ({ cargo: c.cargo, total: Number(c.total) || 0 }))
+      .filter((c) => c.total > 0);
+    return {
+      catSegs,
+      ativos: sum((c) => c.ativos),
+      indisp: sum((c) => c.indisponiveis),
+      clt: sum((c) => c.clt),
+      terc: sum((c) => c.terceiro),
+      topFuncoes,
+    };
+  }, [dados]);
+
+  if (dados.length === 0) return null;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-2">
+        <BarChart3 className="h-4 w-4 text-indigo-500" />
+        <span className="text-sm font-semibold text-slate-700">Panorama do efetivo</span>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <DonutCard titulo="Composição por categoria" Icon={Layers} segs={agg.catSegs} />
+        <DonutCard
+          titulo="Disponibilidade"
+          Icon={UserCheck}
+          segs={[
+            { name: "Ativos", value: agg.ativos, fill: "#10b981" },
+            { name: "Indisponíveis", value: agg.indisp, fill: "#f43f5e" },
+          ]}
+        />
+        <DonutCard
+          titulo="Vínculo"
+          Icon={Briefcase}
+          segs={[
+            { name: "CLT", value: agg.clt, fill: "#0ea5e9" },
+            { name: "Terceiros", value: agg.terc, fill: "#f59e0b" },
+          ]}
+        />
+      </div>
+      {agg.topFuncoes.length > 0 && (
+        <GraficoCard titulo="Top funções por efetivo (atual)">
+          <ResponsiveContainer width="100%" height={Math.max(180, agg.topFuncoes.length * 32)}>
+            <BarChart data={agg.topFuncoes} layout="vertical" margin={{ left: 8, right: 28, top: 4, bottom: 4 }}>
+              <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
+              <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11, fill: "#94a3b8" }} />
+              <YAxis type="category" dataKey="cargo" width={130} tick={{ fontSize: 11, fill: "#64748b" }} />
+              <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #e2e8f0" }} />
+              <Bar dataKey="total" name="Efetivo" fill="#6366f1" radius={[0, 3, 3, 0]} label={{ position: "right", fontSize: 11, fill: "#475569" }} />
+            </BarChart>
+          </ResponsiveContainer>
+        </GraficoCard>
+      )}
+    </div>
+  );
+}
+
+/* ── Cards de insight (derivados do efetivo + do diagnóstico da IA) ──────── */
+const TOM_INSIGHT: Record<string, { bg: string; border: string; iconBg: string; iconTxt: string }> = {
+  positivo: { bg: "bg-emerald-50/60", border: "border-emerald-200", iconBg: "bg-emerald-100", iconTxt: "text-emerald-600" },
+  alerta:   { bg: "bg-amber-50/60",   border: "border-amber-200",   iconBg: "bg-amber-100",   iconTxt: "text-amber-600" },
+  info:     { bg: "bg-blue-50/60",    border: "border-blue-200",    iconBg: "bg-blue-100",    iconTxt: "text-blue-600" },
+  neutro:   { bg: "bg-white",         border: "border-slate-200",   iconBg: "bg-slate-100",   iconTxt: "text-slate-500" },
+};
+
+function InsightCard({
+  Icon, tom, titulo, valor, sub,
+}: { Icon: React.ComponentType<{ className?: string }>; tom: keyof typeof TOM_INSIGHT; titulo: string; valor: string; sub?: string }) {
+  const t = TOM_INSIGHT[tom] ?? TOM_INSIGHT.neutro;
+  return (
+    <div className={`rounded-xl border p-4 ${t.border} ${t.bg}`}>
+      <div className="flex items-center gap-2 mb-1.5">
+        <div className={`rounded-lg p-1.5 ${t.iconBg}`}><Icon className={`h-4 w-4 ${t.iconTxt}`} /></div>
+        <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{titulo}</span>
+      </div>
+      <div className="text-base font-bold text-slate-800 leading-tight">{valor}</div>
+      {sub && <p className="text-xs text-slate-500 mt-1 leading-snug">{sub}</p>}
+    </div>
+  );
+}
+
+function InsightsEfetivo({ result }: { result: any }) {
+  const dados: any[] = Array.isArray(result?.porCargoAtual) ? result.porCargoAtual : [];
+  const analisePC: any[] = Array.isArray(result?.analise?.porCargo) ? result.analise.porCargo : [];
+  const resumo = result?.efetivoResumo ?? {};
+  if (dados.length === 0) return null;
+
+  const total = Number(resumo.total) || dados.reduce((s, c) => s + (Number(c.total) || 0), 0);
+  const indisp = Number(resumo.indisponiveis) || dados.reduce((s, c) => s + (Number(c.indisponiveis) || 0), 0);
+  const pctIndisp = total ? Math.round((indisp / total) * 100) : 0;
+  const maisNumerosa = [...dados].sort((a, b) => (Number(b.total) || 0) - (Number(a.total) || 0))[0];
+  const pctTop = total && maisNumerosa ? Math.round(((Number(maisNumerosa.total) || 0) / total) * 100) : 0;
+
+  const gargalo = [...analisePC].filter((c) => (Number(c.delta) || 0) > 0).sort((a, b) => (Number(b.delta) || 0) - (Number(a.delta) || 0))[0];
+  const folga = [...analisePC].filter((c) => (Number(c.delta) || 0) < 0).sort((a, b) => (Number(a.delta) || 0) - (Number(b.delta) || 0))[0];
+  const nContratar = analisePC.filter((c) => c.acao === "contratar").length;
+  const nReduzir = analisePC.filter((c) => c.acao === "reduzir").length;
+  const nManter = Math.max(0, analisePC.length - nContratar - nReduzir);
+
+  const cards: { Icon: any; tom: keyof typeof TOM_INSIGHT; titulo: string; valor: string; sub?: string }[] = [];
+  if (maisNumerosa) {
+    cards.push({ Icon: Trophy, tom: "info", titulo: "Função mais numerosa", valor: maisNumerosa.cargo, sub: `${maisNumerosa.total} pessoa(s) · ${pctTop}% do efetivo` });
+  }
+  cards.push({ Icon: Gauge, tom: pctIndisp >= 10 ? "alerta" : "positivo", titulo: "Disponibilidade", valor: `${100 - pctIndisp}% ativos`, sub: `${indisp} indisponível(is) de ${total} alocado(s)` });
+  cards.push({ Icon: Layers, tom: "neutro", titulo: "Funções distintas", valor: String(dados.length), sub: "categorias de mão de obra na obra" });
+  if (gargalo) {
+    cards.push({ Icon: TrendingUp, tom: "alerta", titulo: "Maior gargalo", valor: `${gargalo.cargo} +${gargalo.delta}`, sub: gargalo.justificativa || "Reforço recomendado para o cronograma" });
+  }
+  if (folga) {
+    cards.push({ Icon: TrendingDown, tom: "positivo", titulo: "Maior folga", valor: `${folga.cargo} ${folga.delta}`, sub: folga.justificativa || "Possível redução ou realocação" });
+  }
+  if (analisePC.length > 0) {
+    cards.push({ Icon: GitCompareArrows, tom: "neutro", titulo: "Ações sugeridas", valor: `${nContratar} contratar · ${nReduzir} reduzir`, sub: `${nManter} função(ões) a manter` });
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-2">
+        <Lightbulb className="h-4 w-4 text-amber-500" />
+        <span className="text-sm font-semibold text-slate-700">Insights rápidos</span>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        {cards.map((c, i) => <InsightCard key={i} {...c} />)}
+      </div>
     </div>
   );
 }
