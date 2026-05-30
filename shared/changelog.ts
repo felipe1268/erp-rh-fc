@@ -28,8 +28,15 @@
  *  - CLIENT (`client/src/pages/Obras.tsx`): ao SELECIONAR um cliente no combobox,
  *    preenche `clienteLogoUrl` a partir de `c.logoUrl`; e um efeito one-shot por
  *    abertura do diálogo resolve o `clienteLogoUrl` pelo nome do cliente quando a
- *    obra (legada) não tem logo salvo — sem brigar com o botão remover (X) nem
- *    com upload manual (override mantido). Mesmo padrão da gerenciadora (Rev. 2606).
+ *    obra (legada) não tem logo salvo. Mesmo padrão da gerenciadora (Rev. 2606).
+ *  - CLIENT (`client/src/pages/Obras.tsx`): os boxes "Logo do Cliente" e
+ *    "Logo da gerenciadora" no form da obra viram SOMENTE LEITURA — removidos os
+ *    botões de Enviar/Trocar/Remover. Agora apenas REPLICAM o logo cadastrado em
+ *    Clientes / na Gerenciadora (fonte única = o cadastro). Pedido do usuário:
+ *    "nesta tela que anteriormente inseríamos o logo, não precisa ter a opção de
+ *    inserir.. ela somente replica o logo cadastrado no cadastro do cliente e da
+ *    gerenciadora". O upload continua só nos cadastros (Clientes + mini-modal de
+ *    gerenciadora).
  *
  * IMPACTO: logo cadastrado uma única vez no cliente aparece automaticamente em
  * toda obra daquele cliente, nos mesmos locais de exibição de hoje (PrintHeader,

@@ -705,7 +705,7 @@ export default function Obras() {
                   value={clienteOpen ? clienteBusca : form.cliente}
                   onChange={e => {
                     setClienteBusca(e.target.value);
-                    setForm(f => ({ ...f, cliente: e.target.value }));
+                    setForm(f => ({ ...f, cliente: e.target.value, clienteLogoUrl: "" }));
                     setClienteOpen(true);
                   }}
                   onFocus={() => { setClienteBusca(form.cliente); setClienteOpen(true); }}
@@ -720,7 +720,7 @@ export default function Obras() {
                   <button
                     type="button"
                     className="absolute right-7 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-                    onClick={() => { setForm(f => ({ ...f, cliente: "" })); setClienteBusca(""); }}
+                    onClick={() => { setForm(f => ({ ...f, cliente: "", clienteLogoUrl: "" })); setClienteBusca(""); }}
                   >
                     <X className="h-3.5 w-3.5" />
                   </button>
@@ -751,7 +751,7 @@ export default function Obras() {
                             type="button"
                             className="w-full text-left px-3 py-2.5 hover:bg-blue-50 flex items-start gap-2.5 border-b border-slate-50 last:border-0"
                             onClick={() => {
-                              setForm(f => ({ ...f, cliente: c.razaoSocial, clienteLogoUrl: c.logoUrl || f.clienteLogoUrl || "" }));
+                              setForm(f => ({ ...f, cliente: c.razaoSocial, clienteLogoUrl: c.logoUrl || "" }));
                               setClienteOpen(false);
                             }}
                           >
@@ -783,7 +783,7 @@ export default function Obras() {
               </div>
             </div>
 
-            {/* ── LOGO DO CLIENTE ── */}
+            {/* ── LOGO DO CLIENTE (somente leitura — replica o cadastro do Cliente) ── */}
             <div>
               <Label className="flex items-center gap-1.5 mb-1">
                 <ImageIcon className="h-3.5 w-3.5 text-purple-500" />
@@ -791,31 +791,17 @@ export default function Obras() {
               </Label>
               <div className="flex items-center gap-3">
                 {form.clienteLogoUrl ? (
-                  <div className="relative group">
-                    <img src={form.clienteLogoUrl} alt="Logo cliente" className="h-16 w-auto max-w-[120px] object-contain rounded border border-slate-200 bg-white p-1" />
-                    <button type="button" className="absolute -top-1.5 -right-1.5 bg-red-500 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity" onClick={() => setForm(f => ({ ...f, clienteLogoUrl: "" }))}>
-                      <X className="h-3 w-3" />
-                    </button>
-                  </div>
+                  <img src={form.clienteLogoUrl} alt="Logo cliente" className="h-16 w-auto max-w-[120px] object-contain rounded border border-slate-200 bg-white p-1" />
                 ) : (
-                  <div className="h-16 w-20 rounded border-2 border-dashed border-slate-200 flex items-center justify-center">
+                  <div className="h-16 w-20 rounded border-2 border-dashed border-slate-200 flex flex-col items-center justify-center gap-0.5">
                     <ImageIcon className="h-5 w-5 text-slate-300" />
                   </div>
                 )}
-                <label className="cursor-pointer">
-                  <input type="file" accept="image/*" className="hidden" onChange={async (e) => {
-                    const file = e.target.files?.[0];
-                    if (!file) return;
-                    if (file.size > 2 * 1024 * 1024) { toast.error("Imagem muito grande (máx. 2MB)"); return; }
-                    const reader = new FileReader();
-                    reader.onload = () => { setForm(f => ({ ...f, clienteLogoUrl: reader.result as string })); };
-                    reader.readAsDataURL(file);
-                  }} />
-                  <span className="inline-flex items-center gap-1.5 text-xs font-medium text-blue-600 hover:text-blue-800 border border-blue-200 rounded-md px-3 py-1.5 hover:bg-blue-50">
-                    <Upload className="h-3.5 w-3.5" />
-                    {form.clienteLogoUrl ? "Trocar" : "Enviar"}
-                  </span>
-                </label>
+                <p className="text-[11px] text-slate-400 leading-tight max-w-[180px]">
+                  {form.clienteLogoUrl
+                    ? "Logo do cadastro do cliente."
+                    : "Cadastre o logo em Clientes — ele aparece aqui automaticamente."}
+                </p>
               </div>
             </div>
 
@@ -921,33 +907,20 @@ export default function Obras() {
                   </div>
                 )}
               </div>
+              {/* Logo da gerenciadora — somente leitura (replica o cadastro da Gerenciadora) */}
               <div className="flex items-center gap-3 mt-2">
                 {form.gerenciadoraLogoUrl ? (
-                  <div className="relative group">
-                    <img src={form.gerenciadoraLogoUrl} alt="Logo gerenciadora" className="h-16 w-auto max-w-[120px] object-contain rounded border border-slate-200 bg-white p-1" />
-                    <button type="button" className="absolute -top-1.5 -right-1.5 bg-red-500 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity" onClick={() => setForm(f => ({ ...f, gerenciadoraLogoUrl: "" }))}>
-                      <X className="h-3 w-3" />
-                    </button>
-                  </div>
+                  <img src={form.gerenciadoraLogoUrl} alt="Logo gerenciadora" className="h-16 w-auto max-w-[120px] object-contain rounded border border-slate-200 bg-white p-1" />
                 ) : (
                   <div className="h-16 w-20 rounded border-2 border-dashed border-slate-200 flex items-center justify-center">
                     <ImageIcon className="h-5 w-5 text-slate-300" />
                   </div>
                 )}
-                <label className="cursor-pointer">
-                  <input type="file" accept="image/*" className="hidden" onChange={async (e) => {
-                    const file = e.target.files?.[0];
-                    if (!file) return;
-                    if (file.size > 2 * 1024 * 1024) { toast.error("Imagem muito grande (máx. 2MB)"); return; }
-                    const reader = new FileReader();
-                    reader.onload = () => { setForm(f => ({ ...f, gerenciadoraLogoUrl: reader.result as string })); };
-                    reader.readAsDataURL(file);
-                  }} />
-                  <span className="inline-flex items-center gap-1.5 text-xs font-medium text-blue-600 hover:text-blue-800 border border-blue-200 rounded-md px-3 py-1.5 hover:bg-blue-50">
-                    <Upload className="h-3.5 w-3.5" />
-                    {form.gerenciadoraLogoUrl ? "Trocar Logo" : "Enviar Logo"}
-                  </span>
-                </label>
+                <p className="text-[11px] text-slate-400 leading-tight max-w-[180px]">
+                  {form.gerenciadoraLogoUrl
+                    ? "Logo do cadastro da gerenciadora."
+                    : "Cadastre o logo ao criar a gerenciadora — ele aparece aqui automaticamente."}
+                </p>
               </div>
             </div>
 
