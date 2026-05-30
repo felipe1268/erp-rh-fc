@@ -1,3 +1,1 @@
-- [Planejamento previsto curve revision coupling](planejamento-previsto-curva.md) — the previsto curve guard (client) and self-heal target (server) must both key off the SAME "revisão ativa" selection or the curve silently disables.
-- [Build validation quirk](build-validation.md) — `tsc` OOMs on this repo; validate edits with isolated `esbuild` per file. CRÍTICO: esbuild não executa código → não pega TDZ/runtime; reinicie o workflow + leia logs do servidor.
-- [PlanejamentoDetalhe component scope](planejamento-detalhe-component-scope.md) — sub-telas (AvancoSemanal/Refis/…) são funções irmãs, não aninhadas: NÃO compartilham escopo; passe memos compartilhados como prop (esbuild não pega o ReferenceError).
+- [Which DB the app uses](db-connection.md) — `executeSql` tool hits the Replit Postgres (`DATABASE_URL`/helium), but the app reads `NEON_DATABASE_URL`. To inspect REAL app data, query Neon.
