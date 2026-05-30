@@ -1443,7 +1443,7 @@ export default function Obras() {
 
       {/* ── MINI-MODAL: CADASTRO RÁPIDO DE GERENCIADORA (Rev. 2606) ──────── */}
       <Dialog open={novaGerencModal} onOpenChange={setNovaGerencModal}>
-        <DialogContent style={{ background: '#ffffff', color: '#111827' }} className="max-w-md">
+        <DialogContent style={{ background: '#ffffff', color: '#111827' }} className="max-w-md w-[calc(100vw-2rem)] overflow-x-hidden">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Building className="h-5 w-5 text-amber-600" />
@@ -1493,22 +1493,22 @@ export default function Obras() {
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <div>
+              <div className="min-w-0">
                 <Label className="text-xs font-medium">CNPJ</Label>
                 <Input
                   value={novaGerencForm.cnpj}
                   onChange={e => setNovaGerencForm(f => ({ ...f, cnpj: e.target.value }))}
                   placeholder="00.000.000/0000-00"
-                  className="mt-1"
+                  className="mt-1 w-full"
                 />
               </div>
-              <div>
+              <div className="min-w-0">
                 <Label className="text-xs font-medium">Telefone</Label>
                 <Input
                   value={novaGerencForm.telefone}
                   onChange={e => setNovaGerencForm(f => ({ ...f, telefone: e.target.value }))}
                   placeholder="(00) 00000-0000"
-                  className="mt-1"
+                  className="mt-1 w-full"
                 />
               </div>
             </div>
