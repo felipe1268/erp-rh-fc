@@ -1858,6 +1858,21 @@ Projete o impacto do CENÁRIO SIMULADO frente às atividades acima e retorne um 
     "cenariosNaoObvios": [ "string — insight/combinação que um engenheiro NÃO veria no dia a dia" ],
     "absorcaoFerias": [ { "funcionario": "string", "cargo": "string", "periodo": "1º" | "2º" | "3º", "datas": "string DD/MM/AAAA → DD/MM/AAAA", "inadiavel": boolean, "acao": "string — como absorver a ausência mantendo o prazo: 2º/3º período é inadiável (repor/antecipar/terceirizar/redistribuir); 1º período só remaneje se a função for imprescindível" } ],
     "linhaBalancoPlano": "string — o novo plano de ritmo: takt proposto, nº de frentes simultâneas e a nova sequência para manter o prazo com a equipe enxuta",
+    "planoTatico": [
+      { "atividade": "string — nome EXATO de uma atividade do cronograma (use as ATIVIDADES EM ANDAMENTO e das PRÓXIMAS SEMANAS listadas acima)", "frente": "string — frente/local físico (pavimento/bloco/eixo/trecho)", "periodo": "string — janela em datas BR (DD/MM/AAAA → DD/MM/AAAA)", "equipe": [ { "cargo": "string", "qtd": number } ], "totalPessoas": number, "meta": "string — o que precisa ficar pronto / quanto produzir no período", "ritmo": "string — takt/produção (ex.: '40 m²/dia', '1 pav/sem')", "comoFazer": "string — passo a passo SIMPLES e didático, em linguagem de canteiro, de como a equipe executa", "porQue": "string — por que alocar assim, em 1 frase clara", "checagem": "string — como o responsável confere no fim do dia/semana se está no ritmo" }
+    ],
+    "linhaBalanco": {
+      "unidade": "string — unidade repetitiva da obra (ex.: 'pavimento', 'bloco', 'trecho', 'eixo')",
+      "inicioRef": "string — data BR (DD/MM/AAAA) correspondente à Semana 1 do gráfico",
+      "horizonteSemanas": number,
+      "atividades": [
+        { "atividade": "string — atividade/serviço", "inicioSemana": number, "fimSemana": number, "ritmo": "string — ritmo de produção (ex.: '1 pav/sem')", "equipe": "string — resumo curto da equipe (ex.: '4 PED + 8 SERV')" }
+      ],
+      "leitura": "string — explicação DIDÁTICA de como ler este gráfico de Linha de Balanço para quem nunca viu"
+    },
+    "guiaEstagiario": [
+      { "passo": number, "titulo": "string curto", "oQueFazer": "string — instrução clara e direta", "comoConferir": "string — como saber que o passo deu certo" }
+    ],
     "kpisAcompanhamento": [ { "kpi": "string", "meta": "string", "frequencia": "string (ex.: 'semanal no lookahead')" } ],
     "condicoesDeVitoria": [ "string — condições objetivas para considerar a campanha vencida (prazo mantido)" ],
     "sePiorar": [ "string — plano de contingência se o cenário degradar (ponto de não retorno + gatilho de ação)" ]
@@ -1877,7 +1892,15 @@ Regras: em "porCargo" inclua TODAS as funções do cenário usando os números d
 
 PLANO DE ATAQUE (campo "planoAtaque", OBRIGATÓRIO): ${deltaTotal < 0 ? `ESTE CENÁRIO É UMA REDUÇÃO DE EFETIVO (Δ ${deltaTotal}). Trate como uma CAMPANHA a ser vencida com menos gente: monte um plano de ataque COMPLETO e AGRESSIVO para MANTER O PRAZO ORIGINAL mesmo com a equipe reduzida.` : `Mesmo neste cenário (Δ ${deltaTotal > 0 ? "+" : ""}${deltaTotal}), entregue um plano de ataque para EXECUTAR o efetivo da forma mais eficiente possível e proteger o prazo.`} Preencha TODOS os campos do "planoAtaque". Gere de 4 a 7 "manobras" SEQUENCIADAS por "ordem" e por "fase" (linha do tempo da campanha), cada uma com ação concreta, comoExecutar prático, impactoPrazo e o ajuste na Linha de Balanço. Identifique o "centroDeGravidade" (a função/frente-gargalo decisiva) e concentre o esforço nela (Teoria das Restrições + Sun Tzu). Em "processosConstrutivos" e "automacoes" proponha de 2 a 4 itens REAIS e aplicáveis a obra de construção civil pesada (pré-fabricação, kits, formas industrializadas, mecanização, drones/medição, apps de campo etc.). Em "cenariosNaoObvios" traga de 2 a 4 insights que um engenheiro NÃO veria na correria do dia a dia. "linhaBalancoPlano" deve descrever o novo takt, nº de frentes simultâneas e a nova sequência. Seja específico, quantitativo e executável no canteiro — nada genérico.
 
-MESA DE GUERRA — "alocacaoFrentes" (OBRIGATÓRIO e DETALHADO): este é o coração do plano — distribua FISICAMENTE as pessoas do CENÁRIO SIMULADO nas frentes de trabalho, como um comandante posicionando tropas no terreno. Gere de 3 a 6 frentes cobrindo as atividades em andamento e as das próximas semanas. Para CADA frente, monte a "equipe" listando função + quantidade + papel (o que cada função faz ali), respeitando as cuadrillas/relações de produção da TCPO (ex.: proporção pedreiro/servente) e SEM estourar o total de cada função no cenário simulado — a soma das quantidades de uma mesma função em todas as frentes NÃO pode exceder o efetivo simulado daquela função. Desconte quem está de FÉRIAS no período da frente. Calcule "totalPessoas" por frente, defina "ritmo" (takt/meta de produção), "duracao" (janela), "dependeDe" (sequenciamento entre frentes) e "risco". Seja DIDÁTICO: explique o porquê de cada alocação em linguagem clara para o engenheiro entender de bate-pronto. O conjunto das frentes deve formar um plano coerente que MANTÉM O PRAZO FINAL com a equipe disponível.`;
+MESA DE GUERRA — "alocacaoFrentes" (OBRIGATÓRIO e DETALHADO): este é o coração do plano — distribua FISICAMENTE as pessoas do CENÁRIO SIMULADO nas frentes de trabalho, como um comandante posicionando tropas no terreno. Gere de 3 a 6 frentes cobrindo as atividades em andamento e as das próximas semanas. Para CADA frente, monte a "equipe" listando função + quantidade + papel (o que cada função faz ali), respeitando as cuadrillas/relações de produção da TCPO (ex.: proporção pedreiro/servente) e SEM estourar o total de cada função no cenário simulado — a soma das quantidades de uma mesma função em todas as frentes NÃO pode exceder o efetivo simulado daquela função. Desconte quem está de FÉRIAS no período da frente. Calcule "totalPessoas" por frente, defina "ritmo" (takt/meta de produção), "duracao" (janela), "dependeDe" (sequenciamento entre frentes) e "risco". Seja DIDÁTICO: explique o porquê de cada alocação em linguagem clara para o engenheiro entender de bate-pronto. O conjunto das frentes deve formar um plano coerente que MANTÉM O PRAZO FINAL com a equipe disponível.
+
+PLANO TÁTICO POR ATIVIDADE — "planoTatico" (OBRIGATÓRIO): desça da frente para a ATIVIDADE do cronograma. Para as ATIVIDADES EM ANDAMENTO e das PRÓXIMAS SEMANAS listadas acima (use os NOMES EXATOS), aloque a equipe do CENÁRIO SIMULADO (cargo + qtd), respeitando as cuadrillas da TCPO e SEM estourar o efetivo de cada função quando atividades acontecem em paralelo. Em cada item informe período em datas BR, meta, ritmo/takt, um "comoFazer" PASSO A PASSO e SIMPLES (linguagem de canteiro, sem jargão) e uma "checagem" diária/semanal. Gere de 4 a 8 itens, do mais crítico/imediato para o mais distante.
+
+LINHA DE BALANÇO — "linhaBalanco" (OBRIGATÓRIO — o ERP vai DESENHAR o gráfico a partir destes dados): defina "unidade" repetitiva, "inicioRef" (data BR da Semana 1), "horizonteSemanas" (cobrindo o horizonte das atividades) e, em "atividades", para CADA serviço relevante o "inicioSemana"/"fimSemana" (inteiros 1-based dentro do horizonte), o "ritmo" e a "equipe" resumida. As janelas devem refletir o sequenciamento e o takt do plano (serviços em paralelo se sobrepõem no tempo; serviços dependentes começam depois). Em "leitura", explique o gráfico para um leigo.
+
+GUIA DO ESTAGIÁRIO — "guiaEstagiario" (OBRIGATÓRIO e DIDÁTICO): um roteiro NUMERADO de 5 a 8 passos tão claro que um ESTAGIÁRIO consiga conduzir a análise e tocar o plano sozinho — o que olhar, o que fazer, em que ordem, e como conferir se cada passo deu certo. Linguagem simples, direta, sem jargão.
+
+DIDÁTICA GERAL (obrigatória em TODA a resposta): escreva para ser fácil de entender — frases curtas, linguagem de obra, evite jargão; quando um termo técnico for inevitável, explique-o em poucas palavras. O objetivo é que qualquer pessoa da equipe, até um estagiário, leia e saiba exatamente o que fazer.`;
 
       let parsed: any = null;
       let erroIa: string | null = null;
@@ -1887,12 +1910,15 @@ MESA DE GUERRA — "alocacaoFrentes" (OBRIGATÓRIO e DETALHADO): este é o cora�
             { role: "system", content: systemPrompt },
             { role: "user",   content: userPrompt },
           ],
-          maxTokens: 8000,
+          // Rev. 2590 — o usuário pediu EXPLICITAMENTE a IA do Claude e "sem
+          // limite de informação" (a resposta vinha truncada — "atingiu o limite
+          // de tamanho da resposta"). Removido o caminho rápido (Gemini): agora
+          // usa Claude (claude-sonnet-4) com teto de tokens alto para o plano sair
+          // completo (plano tático por atividade + linha de balanço + guia). A
+          // simulação é PERSISTIDA mesmo se o cliente cair no timeout do iOS, e a
+          // tela restaura a última análise salva (Rev. 2588) — rede de proteção.
+          maxTokens: 16000,
           response_format: { type: "json_object" },
-          // Rev. 2585 — caminho rápido (Gemini Flash, thinking off): o plano de
-          // ataque (Rev. 2583) torna esta a chamada mais pesada da aba; no Claude
-          // não-streaming ela estourava o timeout do proxy/iOS ("trava em 95%").
-          fast: true,
         });
         const content = result.choices?.[0]?.message?.content;
         const raw = typeof content === "string"

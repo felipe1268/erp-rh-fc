@@ -1,6 +1,51 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2590 — **PLANEJAMENTO · ABA "EFETIVO × IA" · SIMULADOR DE MÃO DE OBRA:
+ * (1) VOLTA A USAR A IA DO CLAUDE; (2) SEM LIMITE DE INFORMAÇÃO (NÃO TRUNCA MAIS
+ * A RESPOSTA — "ATINGIU O LIMITE DE TAMANHO"); (3) O ERP AGORA DESENHA A LINHA DE
+ * BALANÇO (GRÁFICO) NA SIMULAÇÃO; (4) NOVO "PLANO TÁTICO" ALOCANDO A EQUIPE NAS
+ * ATIVIDADES DO CRONOGRAMA; (5) "GUIA PASSO A PASSO" DIDÁTICO PARA ATÉ UM
+ * ESTAGIÁRIO CONDUZIR A ANÁLISE E SEGUIR O PLANO.**
+ *
+ * MOTIVAÇÃO (pedido do usuário, screenshot da obra QIU 2 — FASE 4): a simulação
+ * vinha com o aviso "Resposta gerada de forma parcial (atingiu o limite de
+ * tamanho da resposta)". O usuário pediu: usar a IA do Claude; "não pode ter
+ * limite de informação / consulta ilimitada"; que o ERP GERE a Linha de Balanço
+ * (hoje só vinha como texto `linhaBalancoPlano`); que tudo seja DIDÁTICO e fácil;
+ * um PLANO TÁTICO alocando recurso NAS ATIVIDADES (não só nas frentes); e que até
+ * um estagiário consiga fazer a análise e seguir o plano.
+ *
+ * DIAGNÓSTICO: a Rev. 2585 havia colocado `fast: true` (Gemini 2.5 Flash) no
+ * `simularEfetivo` PORQUE o Claude não-streaming estourava o timeout do iPad
+ * ("trava em 95%"); o `maxTokens: 8000` então TRUNCAVA a resposta agora que o
+ * plano ficou maior (Rev. 2583/2588). O usuário priorizou Claude + resposta
+ * completa, então o trade-off de latência foi aceito — mitigado pela persistência
+ * (a simulação é salva mesmo se o cliente cair no timeout) e pela restauração da
+ * última análise salva (Rev. 2588).
+ *
+ * O QUE MUDOU (ADITIVO — ZERO SCHEMA, ZERO ALTER/DROP/DELETE):
+ *  - SERVER (`server/routers/iaCronograma.ts`, `simularEfetivo`):
+ *     (1) REMOVE `fast: true` → volta a usar Claude (`claude-sonnet-4`) como
+ *     primário (Gemini segue como fallback do `invokeLLM`).
+ *     (2) `maxTokens: 8000 → 16000` para o plano sair COMPLETO sem truncar.
+ *     (3) novos campos no JSON do `planoAtaque`: `planoTatico` (alocação por
+ *     ATIVIDADE do cronograma — equipe, período BR, meta, ritmo, comoFazer
+ *     passo a passo, porQue, checagem); `linhaBalanco` (dados numéricos p/ o ERP
+ *     desenhar o gráfico — unidade, inicioRef BR, horizonteSemanas, atividades
+ *     [inicioSemana/fimSemana/ritmo/equipe], leitura didática); `guiaEstagiario`
+ *     (roteiro numerado passo a passo). Instruções de prompt correspondentes +
+ *     reforço de DIDÁTICA geral. `brDatasDeep` continua normalizando as datas.
+ *  - CLIENT (`client/src/pages/planejamento/AnaliseEfetivoIA.tsx`, `PlanoAtaque`):
+ *     novo `LinhaBalancoChart` (SVG, sem dependências novas — eixo X = semanas,
+ *     cada atividade é uma faixa diagonal = "linha de produção", inclinação =
+ *     ritmo); nova seção "Plano tático — quem faz cada atividade"; "Guia passo a
+ *     passo" no topo do plano como porta de entrada didática. Tudo guardado por
+ *     checagem de array/objeto, então análises antigas seguem renderizando.
+ *
+ * VALIDAÇÃO: esbuild isolado server + client (tsc dá OOM neste projeto) — exit 0
+ * nos dois. Sem mudança de schema/migração.
+ *
  * Rev. 2589 — **PLANEJAMENTO · ABA "EFETIVO × IA" · (1) CORRIGE O "TIRE SUAS
  * DÚVIDAS COM A IA" QUE NÃO RESPONDIA NO iPad/SAFARI (TIMEOUT); (2) TODA
  * PERGUNTA DIGITADA PELO USUÁRIO PASSA A SER REGISTRADA E FICA VISÍVEL EM

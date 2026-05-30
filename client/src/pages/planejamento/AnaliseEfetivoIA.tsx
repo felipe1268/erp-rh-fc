@@ -10,7 +10,7 @@ import {
   Award, History, Clock, BarChart3, ArrowLeft,
   HelpCircle, Send, ChevronDown, Layers, UserCheck, Briefcase, Trophy, Gauge,
   Swords, Target, Flag, Zap, Wrench, Route, Siren, Crosshair, Umbrella,
-  MapPin, Archive,
+  MapPin, Archive, GraduationCap,
 } from "lucide-react";
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
@@ -1165,11 +1165,122 @@ const VEREDITO_PRAZO_META: Record<string, { label: string; cls: string; Icon: Re
   inviavel_sem_acao: { label: "Inviável sem ação",   cls: "bg-rose-500/15 text-rose-300 border-rose-400/30",         Icon: AlertTriangle },
 };
 
+// Gráfico de Linha de Balanço (LOB) gerado pelo ERP a partir dos dados da IA.
+// Eixo X = semanas; cada atividade é uma faixa diagonal (a "linha de produção")
+// do início ao fim da sua janela — quanto mais inclinada, mais rápido o ritmo.
+const LOB_CORES = ["#38bdf8", "#34d399", "#fbbf24", "#f472b6", "#a78bfa", "#fb923c", "#22d3ee", "#a3e635", "#f87171", "#c084fc"];
+function LinhaBalancoChart({ lob, atividades }: { lob: any; atividades: any[] }) {
+  const ativs = (atividades || [])
+    .filter((a: any) => a && typeof a === "object")
+    .map((a: any) => {
+      const ini = Math.max(1, Math.round(Number(a.inicioSemana) || 1));
+      const fimRaw = Math.round(Number(a.fimSemana) || ini);
+      return { ...a, ini, fim: Math.max(ini, fimRaw) };
+    });
+  if (ativs.length === 0) return null;
+
+  const WEEK_CAP = 40;
+  const maxFim = ativs.reduce((m, a) => Math.max(m, a.fim), 1);
+  const desejado = Math.max(Number(lob?.horizonteSemanas) || 0, maxFim, 1);
+  const truncado = desejado > WEEK_CAP;
+  const weeks = Math.min(WEEK_CAP, desejado);
+
+  const labelW = 132;
+  const colW = weeks > 18 ? 30 : 44;
+  const rowH = 40;
+  const headerH = 26;
+  const footerH = 24;
+  const width = labelW + weeks * colW + 12;
+  const height = headerH + ativs.length * rowH + footerH;
+  const stepLabel = weeks > 20 ? 4 : weeks > 12 ? 2 : 1;
+
+  return (
+    <div className="rounded-xl border border-sky-400/30 bg-slate-900/40 p-3.5">
+      <div className="flex items-center gap-1.5 mb-1 text-sky-300 text-xs font-semibold uppercase tracking-wide">
+        <BarChart3 className="h-3.5 w-3.5" /> Linha de Balanço {lob?.unidade ? `(${lob.unidade})` : ""}
+      </div>
+      <p className="text-[11px] text-slate-400 mb-1 leading-relaxed">
+        Cada faixa é uma atividade ao longo das semanas{lob?.inicioRef ? ` (Semana 1 = ${lob.inicioRef})` : ""}. A inclinação representa o ritmo de produção; faixas que se sobrepõem no tempo são frentes em paralelo.
+      </p>
+      {lob?.leitura && <p className="text-[11px] text-slate-300 mb-2.5 leading-relaxed"><span className="text-sky-300 font-medium">Como ler: </span>{lob.leitura}</p>}
+      {truncado && (
+        <p className="text-[11px] text-amber-300 mb-2.5 leading-relaxed inline-flex items-start gap-1">
+          <AlertTriangle className="h-3 w-3 mt-px shrink-0" />
+          <span>Horizonte de {desejado} semanas — o gráfico mostra as primeiras {weeks}. Veja o plano tático e o texto da Linha de Balanço para o restante.</span>
+        </p>
+      )}
+      <div className="overflow-x-auto">
+        <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} className="min-w-full" role="img" aria-label="Gráfico de Linha de Balanço">
+          {/* Gridlines de semana + cabeçalho */}
+          {Array.from({ length: weeks }, (_, i) => {
+            const w = i + 1;
+            const x = labelW + i * colW;
+            const showLabel = w === 1 || w % stepLabel === 0;
+            return (
+              <g key={`wk${w}`}>
+                <line x1={x} y1={headerH} x2={x} y2={height - footerH} stroke="#ffffff14" strokeWidth={1} />
+                {showLabel && <text x={x + colW / 2} y={headerH - 10} textAnchor="middle" fontSize={10} fill="#94a3b8">S{w}</text>}
+              </g>
+            );
+          })}
+          <line x1={labelW + weeks * colW} y1={headerH} x2={labelW + weeks * colW} y2={height - footerH} stroke="#ffffff14" strokeWidth={1} />
+          <line x1={labelW} y1={headerH} x2={labelW} y2={height - footerH} stroke="#ffffff33" strokeWidth={1} />
+
+          {/* Faixas das atividades */}
+          {ativs.map((a, i) => {
+            const cor = LOB_CORES[i % LOB_CORES.length];
+            const y0 = headerH + i * rowH;
+            const top = y0 + 7;
+            const bottom = y0 + rowH - 9;
+            const iniClamp = Math.min(a.ini, weeks);
+            const fimClamp = Math.min(a.fim, weeks);
+            const xStart = labelW + (iniClamp - 1) * colW;
+            const xEnd = labelW + fimClamp * colW;
+            const bandW = Math.max(colW * 0.6, xEnd - xStart);
+            const labelTxt = String(a.atividade ?? "");
+            const labelShort = labelTxt.length > 20 ? labelTxt.slice(0, 19) + "…" : labelTxt;
+            return (
+              <g key={`a${i}`}>
+                {/* faixa de fundo */}
+                <rect x={xStart} y={top} width={bandW} height={bottom - top} rx={5} fill={cor} fillOpacity={0.16} stroke={cor} strokeOpacity={0.5} strokeWidth={1} />
+                {/* linha de produção (diagonal) */}
+                <line x1={xStart + 2} y1={bottom} x2={xStart + bandW - 2} y2={top} stroke={cor} strokeWidth={2.5} strokeLinecap="round" />
+                <circle cx={xStart + 2} cy={bottom} r={3} fill={cor} />
+                <circle cx={xStart + bandW - 2} cy={top} r={3} fill={cor} />
+                {/* rótulo da atividade à esquerda */}
+                <text x={6} y={(top + bottom) / 2 + 3} fontSize={11} fill="#e2e8f0" fontWeight={600}>{labelShort}</text>
+                {/* ritmo/equipe sobre a faixa */}
+                {a.ritmo && bandW > 70 && (
+                  <text x={xStart + bandW / 2} y={(top + bottom) / 2 + 3} textAnchor="middle" fontSize={9.5} fill="#f1f5f9">{a.ritmo}</text>
+                )}
+                <title>{`${labelTxt} — S${a.ini} a S${a.fim}${a.ritmo ? ` · ${a.ritmo}` : ""}${a.equipe ? ` · ${a.equipe}` : ""}`}</title>
+              </g>
+            );
+          })}
+          <text x={labelW + (weeks * colW) / 2} y={height - 6} textAnchor="middle" fontSize={10} fill="#94a3b8">Semanas →</text>
+        </svg>
+      </div>
+      {/* Legenda equipe por atividade */}
+      <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2.5">
+        {ativs.map((a, i) => (
+          (a.ritmo || a.equipe) ? (
+            <span key={i} className="inline-flex items-center gap-1.5 text-[11px] text-slate-400">
+              <span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: LOB_CORES[i % LOB_CORES.length] }} />
+              <span className="text-slate-300">{a.atividade}</span>
+              {a.equipe && <span>· {a.equipe}</span>}
+            </span>
+          ) : null
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function PlanoAtaque({ plano }: { plano: any }) {
   if (!plano || typeof plano !== "object") return null;
   const manobras = Array.isArray(plano.manobras) ? plano.manobras : [];
   const frentes = Array.isArray(plano.frentesCriticas) ? plano.frentesCriticas : [];
-  const alocacao = Array.isArray(plano.alocacaoFrentes) ? plano.alocacaoFrentes : [];
+  const alocacao = (Array.isArray(plano.alocacaoFrentes) ? plano.alocacaoFrentes : []).filter((x: any) => x && typeof x === "object");
   const processos = Array.isArray(plano.processosConstrutivos) ? plano.processosConstrutivos : [];
   const automacoes = Array.isArray(plano.automacoes) ? plano.automacoes : [];
   const naoObvios = Array.isArray(plano.cenariosNaoObvios) ? plano.cenariosNaoObvios : [];
@@ -1177,8 +1288,13 @@ function PlanoAtaque({ plano }: { plano: any }) {
   const kpis = Array.isArray(plano.kpisAcompanhamento) ? plano.kpisAcompanhamento : [];
   const vitoria = Array.isArray(plano.condicoesDeVitoria) ? plano.condicoesDeVitoria : [];
   const sePiorar = Array.isArray(plano.sePiorar) ? plano.sePiorar : [];
+  const tatico = (Array.isArray(plano.planoTatico) ? plano.planoTatico : []).filter((x: any) => x && typeof x === "object");
+  const guia = (Array.isArray(plano.guiaEstagiario) ? plano.guiaEstagiario : []).filter((x: any) => x && typeof x === "object");
+  const lob = plano.linhaBalanco && typeof plano.linhaBalanco === "object" ? plano.linhaBalanco : null;
+  const lobAtivs = (lob && Array.isArray(lob.atividades) ? lob.atividades : []).filter((x: any) => x && typeof x === "object");
   const temAlgo = plano.missao || plano.centroDeGravidade || manobras.length || frentes.length ||
-    alocacao.length || processos.length || automacoes.length || naoObvios.length || plano.linhaBalancoPlano;
+    alocacao.length || processos.length || automacoes.length || naoObvios.length || plano.linhaBalancoPlano ||
+    tatico.length || guia.length || lobAtivs.length;
   if (!temAlgo) return null;
 
   const ver = VEREDITO_PRAZO_META[plano.vereditoPrazo];
@@ -1205,6 +1321,30 @@ function PlanoAtaque({ plano }: { plano: any }) {
       </div>
 
       <div className="p-5 space-y-5">
+        {/* Guia do estagiário — porta de entrada didática */}
+        {guia.length > 0 && (
+          <div className="rounded-xl border border-teal-400/30 bg-teal-400/10 p-3.5">
+            <div className="flex items-center gap-1.5 mb-1 text-teal-300 text-xs font-semibold uppercase tracking-wide">
+              <GraduationCap className="h-3.5 w-3.5" /> Guia passo a passo — até um estagiário consegue seguir
+            </div>
+            <p className="text-[11px] text-slate-400 mb-3 leading-relaxed">
+              Roteiro simples para conduzir a análise e tocar o plano. Siga na ordem e confira cada passo antes de ir para o próximo.
+            </p>
+            <ol className="space-y-2">
+              {guia.map((g: any, i: number) => (
+                <li key={i} className="flex items-start gap-2.5">
+                  <span className="inline-flex items-center justify-center h-6 w-6 rounded-full bg-teal-300 text-slate-900 text-xs font-bold shrink-0 mt-0.5">{g.passo ?? i + 1}</span>
+                  <div className="min-w-0">
+                    {g.titulo && <p className="text-sm font-semibold text-slate-100 leading-snug">{g.titulo}</p>}
+                    {g.oQueFazer && <p className="text-xs text-slate-300 mt-0.5 leading-relaxed">{g.oQueFazer}</p>}
+                    {g.comoConferir && <p className="text-[11px] text-teal-200 mt-1 flex items-start gap-1"><CheckCircle2 className="h-3 w-3 mt-px shrink-0" /><span>Como conferir: {g.comoConferir}</span></p>}
+                  </div>
+                </li>
+              ))}
+            </ol>
+          </div>
+        )}
+
         {/* Centro de gravidade + princípio guia */}
         {(plano.centroDeGravidade || plano.principioGuia) && (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -1256,7 +1396,7 @@ function PlanoAtaque({ plano }: { plano: any }) {
             </p>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
               {alocacao.map((fr: any, i: number) => {
-                const equipe = Array.isArray(fr.equipe) ? fr.equipe : [];
+                const equipe = (Array.isArray(fr.equipe) ? fr.equipe : []).filter((x: any) => x && typeof x === "object");
                 const total = fr.totalPessoas ?? equipe.reduce((s: number, e: any) => s + (Number(e.qtd) || 0), 0);
                 return (
                   <div key={i} className="rounded-xl border border-white/10 bg-white/5 p-3.5 flex flex-col">
@@ -1331,6 +1471,60 @@ function PlanoAtaque({ plano }: { plano: any }) {
             </ol>
           </div>
         )}
+
+        {/* PLANO TÁTICO — alocação por ATIVIDADE do cronograma */}
+        {tatico.length > 0 && (
+          <div className="rounded-xl border border-indigo-400/30 bg-slate-900/40 p-3.5">
+            <div className="flex items-center gap-1.5 mb-1 text-indigo-300 text-xs font-semibold uppercase tracking-wide">
+              <ClipboardList className="h-3.5 w-3.5" /> Plano tático — quem faz cada atividade
+            </div>
+            <p className="text-[11px] text-slate-400 mb-3 leading-relaxed">
+              Desce ao nível da atividade do cronograma: a equipe alocada, a meta, o ritmo, como fazer no canteiro e como conferir se está no rumo.
+            </p>
+            <div className="space-y-3">
+              {tatico.map((t: any, i: number) => {
+                const equipe = (Array.isArray(t.equipe) ? t.equipe : []).filter((x: any) => x && typeof x === "object");
+                const total = t.totalPessoas ?? equipe.reduce((s: number, e: any) => s + (Number(e.qtd) || 0), 0);
+                return (
+                  <div key={i} className="rounded-xl border border-white/10 bg-white/5 p-3.5">
+                    <div className="flex items-start justify-between gap-2 flex-wrap">
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-slate-100 leading-snug">{t.atividade}</p>
+                        <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-0.5 text-[11px] text-slate-400">
+                          {t.frente && <span className="inline-flex items-center gap-1"><MapPin className="h-3 w-3" />{t.frente}</span>}
+                          {t.periodo && <span className="inline-flex items-center gap-1"><CalendarClock className="h-3 w-3" />{t.periodo}</span>}
+                          {t.ritmo && <span className="inline-flex items-center gap-1 text-sky-300"><BarChart3 className="h-3 w-3" />{t.ritmo}</span>}
+                        </div>
+                      </div>
+                      <span className="inline-flex items-center gap-1 rounded-full bg-indigo-300 text-slate-900 px-2 py-0.5 text-[11px] font-bold shrink-0">
+                        <Users className="h-3 w-3" /> {total}
+                      </span>
+                    </div>
+
+                    {t.meta && <p className="text-xs text-slate-300 mt-2 leading-relaxed"><span className="text-emerald-300 font-medium">Meta: </span>{t.meta}</p>}
+
+                    {equipe.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5 mt-2">
+                        {equipe.map((e: any, j: number) => (
+                          <span key={j} className="inline-flex items-center gap-1 rounded-md bg-slate-700/70 px-2 py-0.5 text-[11px] text-slate-100">
+                            <span className="font-bold text-indigo-200">{e.qtd}</span> {e.cargo}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+
+                    {t.comoFazer && <p className="text-xs text-slate-300 mt-2.5 leading-relaxed"><span className="text-slate-100 font-medium">Como fazer: </span>{t.comoFazer}</p>}
+                    {t.porQue && <p className="text-[11px] text-slate-400 mt-1.5 leading-relaxed"><span className="text-slate-300 font-medium">Por quê: </span>{t.porQue}</p>}
+                    {t.checagem && <p className="text-[11px] text-emerald-300 mt-1.5 flex items-start gap-1"><CheckCircle2 className="h-3 w-3 mt-px shrink-0" /><span>Checagem: {t.checagem}</span></p>}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Linha de Balanço — gráfico gerado pelo ERP */}
+        {lobAtivs.length > 0 && <LinhaBalancoChart lob={lob} atividades={lobAtivs} />}
 
         {/* Novo plano de Linha de Balanço */}
         {plano.linhaBalancoPlano && (
