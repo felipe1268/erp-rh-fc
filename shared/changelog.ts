@@ -1,6 +1,48 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2585 — **PLANEJAMENTO · ABA "EFETIVO × IA" · CORRIGE A "TRAVA EM 95%" DO
+ * SIMULADOR DE MÃO DE OBRA NO iPad/iOS — A SIMULAÇÃO AGORA CONCLUI EM VEZ DE
+ * FICAR PENDURADA E CAIR EM ERRO.**
+ *
+ * MOTIVAÇÃO (screenshot do usuário, obra "HOTEL QIU 2 - 4 FASE", Rev. 0, 47
+ * alocados, ajustes SERVENTE -7 / PEDREIRO -2 / CONTROLADOR -1): ao tocar em
+ * "Simular previsão", a barra de progresso subia e CONGELAVA em 95% por muito
+ * tempo e, em seguida, caía no banner de erro amigável da Rev. 2584. Ou seja: a
+ * Rev. 2584 só TRADUZIU o sintoma; a falha de fundo (a requisição não retornava)
+ * continuava.
+ *
+ * CAUSA-RAIZ: o "plano de ataque" (Rev. 2583) tornou a `simularEfetivo` a chamada
+ * de IA mais pesada da aba — `maxTokens: 8000` de JSON denso. No `invokeLLM` o
+ * provider primário é o Claude Sonnet 4 NÃO-STREAMING, que leva tempo demais para
+ * gerar essa saída inteira; a conexão HTTP única estoura o timeout do proxy/iOS
+ * Safari ANTES de retornar → a Promise nunca resolve, a barra simulada satura em
+ * 95% e, no fim, a mutation rejeita (a tal DOMException crua/erro de rede). O
+ * fallback para Gemini no `invokeLLM` também era lento porque NÃO desligava o
+ * "extended thinking" do Gemini 2.5 (o próprio código já combate isso no
+ * `invokeGeminiVision` com `thinkingBudget=0` — padrão anti-"trava em 99%").
+ *
+ * O QUE MUDOU (ADITIVO — ZERO SCHEMA, ZERO ALTER/DROP/DELETE):
+ *  - SERVER (`server/_core/llm.ts`): novo caminho rápido `invokeGeminiFast` que
+ *    usa o endpoint NATIVO `generateContent` do Gemini 2.5 Flash com
+ *    `thinkingConfig.thinkingBudget = 0` (corta 30-90s de overhead de raciocínio)
+ *    e `responseMimeType: "application/json"` para JSON mode — retornando o MESMO
+ *    `InvokeResult` dos outros caminhos (uso transparente). `invokeLLM` ganha a
+ *    flag opcional `fast?: boolean`: quando `true` e houver `GOOGLE_API_KEY`,
+ *    tenta o caminho rápido PRIMEIRO; se falhar, cai para o fluxo padrão
+ *    (Claude → Gemini lento) — nenhuma regressão para os demais chamadores.
+ *  - SERVER (`server/routers/iaCronograma.ts`, `simularEfetivo`): a chamada do
+ *    simulador passa `fast: true`. Como a saída agora chega em segundos (não em
+ *    1-3 min), cabe folgada dentro do timeout do proxy/iOS → a simulação CONCLUI.
+ *  - CLIENT (`AnaliseEfetivoIA.tsx`, `useProgressoSimulado`): a barra não para
+ *    mais "dura" em 95% — após 95 segue um crawl bem lento até 99% enquanto a IA
+ *    finaliza, eliminando a sensação de congelamento. Em sucesso, salta para 100%.
+ *
+ * Escopo: aplicado SÓ ao Simulador (a chamada reportada). O Diagnóstico continua
+ * no fluxo padrão (já concluía na prática); se reclamarem do mesmo sintoma lá,
+ * basta replicar o `fast: true`. Validado via esbuild isolado (server + client,
+ * exit 0; `tsc` dá OOM neste monorepo). Reversível trivialmente.
+ *
  * Rev. 2584 — **PLANEJAMENTO · ABA "EFETIVO × IA" · CORRIGE O BANNER DE ERRO
  * CRÍPTICO "The string did not match the expected pattern." NO SIMULADOR DE MÃO
  * DE OBRA (E NO DIAGNÓSTICO/ASSISTENTE) NO iPad/iOS SAFARI — AGORA EXIBE UMA

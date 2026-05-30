@@ -1737,6 +1737,10 @@ PLANO DE ATAQUE (campo "planoAtaque", OBRIGATÓRIO): ${deltaTotal < 0 ? `ESTE CE
           ],
           maxTokens: 8000,
           response_format: { type: "json_object" },
+          // Rev. 2585 — caminho rápido (Gemini Flash, thinking off): o plano de
+          // ataque (Rev. 2583) torna esta a chamada mais pesada da aba; no Claude
+          // não-streaming ela estourava o timeout do proxy/iOS ("trava em 95%").
+          fast: true,
         });
         const content = result.choices?.[0]?.message?.content;
         const raw = typeof content === "string"

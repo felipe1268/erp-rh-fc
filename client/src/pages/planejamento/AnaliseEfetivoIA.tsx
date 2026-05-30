@@ -158,9 +158,11 @@ function useProgressoSimulado(isPending: boolean, isSuccess: boolean) {
       setProgresso(4);
       timerRef.current = setInterval(() => {
         setProgresso((p) => {
-          if (p >= 95) return 95;
-          const passo = p < 45 ? 3.2 : p < 70 ? 1.6 : p < 88 ? 0.9 : 0.4;
-          return Math.min(95, +(p + passo).toFixed(1));
+          // Rev. 2585 — não "trava" em 95%: após 95 segue um crawl bem lento até
+          // 99 enquanto a IA finaliza, evitando a sensação de barra congelada.
+          if (p >= 99) return 99;
+          const passo = p < 45 ? 3.2 : p < 70 ? 1.6 : p < 88 ? 0.9 : p < 95 ? 0.4 : 0.15;
+          return Math.min(99, +(p + passo).toFixed(2));
         });
       }, 180);
       return () => { if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; } };

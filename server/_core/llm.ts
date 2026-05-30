@@ -300,8 +300,30 @@ const assertApiKey = () => {
   }
 };
 
-export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
+export async function invokeLLM(
+  params: InvokeParams & { fast?: boolean }
+): Promise<InvokeResult> {
   assertApiKey();
+
+  // Rev. 2585 — CAMINHO RÁPIDO (combate "trava em 95%"): chamadas pesadas de
+  // geração (ex.: Simulador de Mão de Obra com `planoAtaque`, ~8000 tokens)
+  // levam tempo demais no Claude Sonnet não-streaming e estouram o timeout do
+  // proxy/iOS antes de retornar. Quando `fast: true`, geramos via Gemini 2.5
+  // Flash com `thinkingBudget=0` (mesmo padrão anti-"trava" do invokeGeminiVision),
+  // que responde MUITO mais rápido para saída estruturada longa. Claude continua
+  // como fallback se o caminho rápido falhar.
+  if (params.fast && process.env.GOOGLE_API_KEY) {
+    try {
+      return await invokeGeminiFast(params);
+    } catch (err: any) {
+      console.warn(
+        "[LLM] Caminho rápido (Gemini Flash) falhou (" +
+          String(err?.message ?? "").slice(0, 80) +
+          "). Caindo para o fluxo padrão..."
+      );
+      // segue para o fluxo padrão (Claude → Gemini lento)
+    }
+  }
 
   // Claude tem prioridade, fallback para Gemini
   if (isAnthropicAvailable()) {
@@ -401,6 +423,86 @@ async function invokeGemini(params: InvokeParams): Promise<InvokeResult> {
   }
 
   throw new Error("Falha ao invocar Gemini após múltiplas tentativas.");
+}
+
+// ── Caminho rápido: Gemini 2.5 Flash texto, thinking OFF (Rev. 2585) ─────────
+// Usa o endpoint NATIVO generateContent (que aceita thinkingConfig) com
+// thinkingBudget=0 para cortar o "extended thinking" do Gemini 2.5 (30-90s de
+// overhead em prompts longos) e responder rápido em geração estruturada longa.
+// Retorna o mesmo InvokeResult dos outros caminhos para uso transparente.
+async function invokeGeminiFast(params: InvokeParams): Promise<InvokeResult> {
+  const googleKey = process.env.GOOGLE_API_KEY;
+  if (!googleKey) throw new Error("Google API key não configurada");
+
+  const { messages, maxTokens, max_tokens, responseFormat, response_format } = params;
+
+  const flatten = (c: MessageContent | MessageContent[]): string =>
+    typeof c === "string"
+      ? c
+      : Array.isArray(c)
+        ? c.map((p) => (typeof p === "string" ? p : (p as TextContent).text ?? JSON.stringify(p))).join("\n")
+        : ((c as TextContent).text ?? JSON.stringify(c));
+
+  const systemMsg = messages.find((m) => m.role === "system");
+  const systemText = systemMsg ? flatten(systemMsg.content) : undefined;
+
+  const contents = messages
+    .filter((m) => m.role !== "system")
+    .map((m) => ({
+      role: m.role === "assistant" ? "model" : "user",
+      parts: [{ text: flatten(m.content) }],
+    }));
+
+  const fmt = responseFormat ?? response_format;
+  const wantsJson = !!fmt && (fmt as any).type !== "text";
+
+  const model = "gemini-2.5-flash";
+  const body: Record<string, unknown> = {
+    contents,
+    generationConfig: {
+      maxOutputTokens: maxTokens ?? max_tokens ?? 8000,
+      temperature: 0.4,
+      thinkingConfig: { thinkingBudget: 0 },
+      ...(wantsJson ? { responseMimeType: "application/json" } : {}),
+    },
+    ...(systemText ? { systemInstruction: { parts: [{ text: systemText }] } } : {}),
+  };
+
+  const MAX_RETRIES = 3;
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${googleKey}`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+      }
+    );
+
+    if (res.ok) {
+      const json: any = await res.json();
+      const text =
+        json?.candidates?.[0]?.content?.parts?.map((p: any) => p?.text || "").join("") || "";
+      return {
+        id: json?.responseId ?? "gem-fast-0",
+        created: Math.floor(Date.now() / 1000),
+        model: json?.modelVersion ?? model,
+        choices: [
+          { index: 0, message: { role: "assistant", content: text }, finish_reason: json?.candidates?.[0]?.finishReason ?? null },
+        ],
+      };
+    }
+
+    const errText = await res.text();
+    if (res.status === 429 && attempt < MAX_RETRIES) {
+      const waitMs = Math.min(1000 * Math.pow(2, attempt) + Math.random() * 500, 60000);
+      console.warn(`[Gemini Fast] 429 (tentativa ${attempt + 1}/${MAX_RETRIES + 1}). Aguardando ${Math.round(waitMs)}ms...`);
+      await new Promise((r) => setTimeout(r, waitMs));
+      continue;
+    }
+    throw new Error(`Gemini Fast falhou: ${res.status} – ${errText.slice(0, 300)}`);
+  }
+  throw new Error("Gemini Fast: máximo de tentativas excedido.");
 }
 
 // ── Exported helper: invoke Anthropic with raw base64 image ─────────────────
