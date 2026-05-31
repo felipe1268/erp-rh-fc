@@ -165,11 +165,22 @@ export default function PainelRH() {
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
-            <div className="flex items-center gap-2 mb-1">
+            <div className="flex flex-wrap items-center gap-2 mb-1">
               <div className="h-8 w-8 rounded-lg bg-blue-100 flex items-center justify-center">
                 <Users className="h-4 w-4 text-blue-600" />
               </div>
               <h1 className="text-2xl font-bold tracking-tight text-foreground">Painel RH & DP</h1>
+              {hasValidCompany && canSeeColaboradores && s && (
+                <button
+                  onClick={() => navigate("/colaboradores?status=Todos")}
+                  aria-label={`${(s?.totalFuncionarios ?? 0).toLocaleString("pt-BR")} pessoas cadastradas na empresa`}
+                  title="Total de pessoas cadastradas na empresa"
+                  className="inline-flex items-center gap-1.5 rounded-full bg-blue-50 border border-blue-200 px-3 py-1 text-sm font-semibold text-blue-700 hover:bg-blue-100 hover:border-blue-300 transition-colors cursor-pointer"
+                >
+                  <Users className="h-3.5 w-3.5" />
+                  {(s?.totalFuncionarios ?? 0).toLocaleString("pt-BR")} pessoas
+                </button>
+              )}
             </div>
             <p className="text-muted-foreground text-sm">
               Recursos Humanos e Departamento Pessoal

@@ -1,6 +1,31 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2635 — **PAINEL RH & DP · O CABEÇALHO GANHA UM SELO "X PESSOAS" COM O TOTAL
+ * DE COLABORADORES DA EMPRESA, AO LADO DO TÍTULO "PAINEL RH & DP" — VISÍVEL ASSIM
+ * QUE A TELA ABRE, SEPARADO DO CARD "TOTAL" DO QUADRO DE PESSOAL.**
+ *
+ * PEDIDO (usuário): "Coloca aqui ó a quantidade de pessoas. A empresa tbm... quero
+ * esta informação nesta tela tbm." (anexou print do Painel RH & DP; confirmou que
+ * quer a informação em OUTRO lugar da tela, pois o card "Total 307" já existe no
+ * Quadro de Pessoal).
+ *
+ * IMPLEMENTAÇÃO (SÓ CLIENT, ZERO BACKEND/SCHEMA; R-001/R-007/R-010):
+ *  - `client/src/pages/PainelRH.tsx` — no cabeçalho, ao lado do `<h1>Painel RH &
+ *    DP</h1>`, adicionado um SELO (pill) clicável mostrando
+ *    `{s?.totalFuncionarios} pessoas` com ícone `Users`, formatado em pt-BR
+ *    (`toLocaleString`). Reusa o MESMO campo `home.getData.stats.totalFuncionarios`
+ *    do card "Total" (paridade garantida).
+ *  - Clique navega para `/colaboradores?status=Todos` (mesmo destino do card Total),
+ *    mantendo o rastreio em 1 clique.
+ *  - Guardado por `hasValidCompany && canSeeColaboradores && s` (não aparece sem
+ *    empresa válida, sem permissão, ou durante o loading — evita "0 pessoas"
+ *    piscando). Container do título virou `flex-wrap` para acomodar o selo no mobile.
+ *
+ * VALIDAÇÃO: esbuild transform-check do `PainelRH.tsx` exit 0; HMR sem erros.
+ *
+ * ─────────────────────────────────────────────────────────────────────────────
+ *
  * Rev. 2634 — **RH & DP · "ANÁLISE DE EXPERIÊNCIA" VIRA TELA FULL-SCREEN ALTAMENTE
  * MODERNA E RESPONSIVA, COM INDICADORES CLICÁVEIS QUE SALTAM DIRETO PARA O DETALHE
  * (RASTREIO 1-CLIQUE).**
