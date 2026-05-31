@@ -22,6 +22,14 @@ export interface CalendarioMSProject {
   defaultStartTime?:  string;                 // "07:00:00"
   defaultFinishTime?: string;                 // "17:00:00"
   minutesPerDay?:     number;                 // 540 = 9h (não confundir com janela bruta)
+  // Rev. 2617 — Caminho B EXATO: intervalos de trabalho POR DIA DA SEMANA, em
+  // minutos a partir da meia-noite (frame UTC). Índice 0=dom .. 6=sáb; cada dia
+  // é uma lista de pares [fromMin, toMin] (ex.: seg-qui = [[420,720],[780,1020]]
+  // = 07-12 + 13-17; sex = [[420,720],[780,960]] = 07-12 + 13-16, almoço fora).
+  // Quando presente, habilita o cálculo de % PREVISTO minuto-a-minuto (paridade
+  // exata com a coluna "% Concluída"/PercentComplete do MSP). Ausente → fallback
+  // day-granular (comportamento histórico, projetos importados antes da Rev. 2617).
+  weekDayIntervals?:  number[][][];
   // Rev. 1646.4 — snapshot oficial do %PREVISTO calculado pelo MSP na raiz,
   // válido SÓ no StatusDate do XML. Quando o ERP mostra o projeto no cutoff
   // oficial (= statusDateSnapshot), usa previstoMspSnapshot direto — paridade
@@ -53,6 +61,7 @@ export function parseCalendarioJson(raw: unknown): CalendarioMSProject | null {
       defaultStartTime:   typeof obj.defaultStartTime  === "string" ? obj.defaultStartTime  : undefined,
       defaultFinishTime:  typeof obj.defaultFinishTime === "string" ? obj.defaultFinishTime : undefined,
       minutesPerDay:      typeof obj.minutesPerDay     === "number" ? obj.minutesPerDay     : undefined,
+      weekDayIntervals:   Array.isArray(obj.weekDayIntervals) && obj.weekDayIntervals.length === 7 ? obj.weekDayIntervals : undefined,
       previstoMspSnapshot:    typeof obj.previstoMspSnapshot    === "number" ? obj.previstoMspSnapshot    : undefined,
       statusDateSnapshot:     typeof obj.statusDateSnapshot     === "string" ? obj.statusDateSnapshot     : undefined,
       envelopeStartSnapshot:  typeof obj.envelopeStartSnapshot  === "string" ? obj.envelopeStartSnapshot  : undefined,
@@ -285,6 +294,103 @@ export function fracaoDecorridaMs(iniMs: number, refMs: number, fimMs: number, c
     return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`;
   };
   return fracaoDecorrida(toIsoLocal(iniMs), toIsoLocal(refMs), toIsoLocal(fimMs), cal);
+}
+
+// ── Rev. 2617 — Motor MINUTO-A-MINUTO (Caminho B EXATO) ─────────────────────
+// Conta os MINUTOS ÚTEIS entre dois timestamps (frame UTC) usando os intervalos
+// de trabalho POR DIA DA SEMANA (`weekDayIntervals`) + as exceções (feriados).
+// É a réplica fiel de `ActualDuration`/`ProjDateDiff` do MS Project em sua
+// menor unidade — daí a paridade EXATA com a coluna "% Concluída"
+// (PercentComplete) do Project. Retorna NaN quando o calendário não tem
+// `weekDayIntervals` (sinaliza ao chamador que deve cair no fallback day-granular).
+//
+// Cache (WeakMap) do índice de exceções por dia: as exceções anuais expandidas
+// somam centenas de entradas e este motor é chamado milhões de vezes ao gerar a
+// curva; sem o índice O(1) o cadastro de cronograma travaria.
+const _exIndexCache = new WeakMap<object, { map: Map<string, boolean>; ranges: Array<{ from: string; to: string; working: boolean }> }>();
+function getExIndex(cal: CalendarioMSProject) {
+  let idx = _exIndexCache.get(cal as object);
+  if (!idx) {
+    const map = new Map<string, boolean>();
+    const ranges: Array<{ from: string; to: string; working: boolean }> = [];
+    for (const ex of cal.exceptions || []) {
+      if (ex.from === ex.to) map.set(ex.from, ex.working);
+      else ranges.push(ex);
+    }
+    idx = { map, ranges };
+    _exIndexCache.set(cal as object, idx);
+  }
+  return idx;
+}
+
+const _MIN = 60000;
+const _DAY = 86400000;
+const _pad2 = (n: number) => String(n).padStart(2, "0");
+
+/**
+ * Minutos úteis em [iniMs, fimMs] segundo os intervalos por dia da semana +
+ * feriados do calendário. Frame UTC: `weekDayIntervals[dow]` é minutos a partir
+ * da meia-noite UTC e os timestamps são interpretados em UTC. Retorna NaN se o
+ * calendário não tiver `weekDayIntervals` (chamador usa fallback day-granular).
+ */
+export function minutosUteisEntre(iniMs: number, fimMs: number, cal: CalendarioMSProject | null): number {
+  if (!cal || !cal.weekDayIntervals) return NaN;
+  if (!Number.isFinite(iniMs) || !Number.isFinite(fimMs) || fimMs <= iniMs) return 0;
+  const { map, ranges } = getExIndex(cal);
+  let total = 0;
+  // Começa na meia-noite UTC do dia de início.
+  const d0 = new Date(iniMs);
+  let dayMs = Date.UTC(d0.getUTCFullYear(), d0.getUTCMonth(), d0.getUTCDate());
+  let guard = 0;
+  while (dayMs <= fimMs && guard < 40000) {
+    guard++;
+    const d = new Date(dayMs);
+    const dow = d.getUTCDay();
+    const iso = `${d.getUTCFullYear()}-${_pad2(d.getUTCMonth() + 1)}-${_pad2(d.getUTCDate())}`;
+    // Exceção tem prioridade sobre o padrão semanal.
+    let working: boolean;
+    if (map.has(iso)) {
+      working = map.get(iso)!;
+    } else {
+      working = (cal.weekDays?.[dow] === true);
+      if (ranges.length) {
+        for (const ex of ranges) { if (iso >= ex.from && iso <= ex.to) { working = ex.working; break; } }
+      }
+    }
+    if (working) {
+      let ivs = cal.weekDayIntervals[dow] || [];
+      // Exceção working=true num dia sem intervalos próprios → usa janela padrão.
+      if (ivs.length === 0 && map.get(iso) === true) {
+        const fm = Math.round(horaParaDecimal(cal.defaultStartTime, 8) * 60);
+        const tm = Math.round(horaParaDecimal(cal.defaultFinishTime, 17) * 60);
+        if (tm > fm) ivs = [[fm, tm]];
+      }
+      for (const iv of ivs) {
+        let fm = iv[0], tm = iv[1];
+        if (tm <= fm) tm += 1440; // ToTime "00:00" = meia-noite seguinte
+        const s = Math.max(dayMs + fm * _MIN, iniMs);
+        const e = Math.min(dayMs + tm * _MIN, fimMs);
+        if (e > s) total += (e - s) / _MIN;
+      }
+    }
+    dayMs += _DAY;
+  }
+  return total;
+}
+
+/**
+ * Fração [0,1] do trabalho de uma atividade decorrida até `refMs`, minuto-a-
+ * minuto: `minutosUteisEntre(ini, ref) / minutosUteisEntre(ini, fim)`. Retorna
+ * NaN se não houver precisão de minuto (chamador usa fallback day-granular).
+ */
+export function fracaoMinutos(iniMs: number, refMs: number, fimMs: number, cal: CalendarioMSProject | null): number {
+  const total = minutosUteisEntre(iniMs, fimMs, cal);
+  if (!Number.isFinite(total)) return NaN; // sem weekDayIntervals
+  if (total <= 0) return refMs >= fimMs ? 1 : 0;
+  if (refMs <= iniMs) return 0;
+  if (refMs >= fimMs) return 1;
+  const el = minutosUteisEntre(iniMs, refMs, cal);
+  return Math.max(0, Math.min(1, el / total));
 }
 
 // ── Rev. 1811/1812 — PREVISTO oficial: curva S por atividade ────────────────
