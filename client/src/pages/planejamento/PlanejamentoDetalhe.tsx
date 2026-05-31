@@ -7334,8 +7334,20 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
   // timeout, revisão inativa, etc.), a UI ficava muda — usuário clicava em
   // "Salvar Avanços" e nada acontecia visivelmente. Agora qualquer erro vira
   // toast vermelho com a mensagem real, e sucessos viram toast verde.
+  // Rev. 2649 — invalidar TAMBÉM as queries da Curva S ao mexer em avanços.
+  // Antes, salvar/limpar avanços só invalidava listarAvancos/getProjetoById,
+  // então a linha "Realizado" da Curva S de Trabalho/Financeira ficava com
+  // cache STALE (usuário apagava todos os avanços, cards zeravam, mas a curva
+  // verde continuava mostrando o dado antigo). Espelha o padrão já usado nas
+  // mutations de import/exclusão de revisão.
+  const invalidarCurvaS = () => {
+    utils.planejamento.getCurvaS.invalidate();
+    utils.planejamento.getCurvaSFinanceira.invalidate();
+    utils.planejamento.getCurvasTodasRevisoes.invalidate();
+  };
+
   const salvarMutation = trpc.planejamento.salvarAvanco.useMutation({
-    onSuccess: () => utils.planejamento.listarAvancos.invalidate(),
+    onSuccess: () => { utils.planejamento.listarAvancos.invalidate(); invalidarCurvaS(); },
     onError:   (e) => toast.error(`Erro ao salvar avanço: ${e.message}`),
   });
 
@@ -7343,6 +7355,7 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
     onSuccess: (data) => {
       utils.planejamento.listarAvancos.invalidate();
       utils.planejamento.listarSemanasComAvanco.invalidate();
+      invalidarCurvaS();
       toast.success(`${data?.total ?? 0} avanço(s) salvo(s) com sucesso.`);
     },
     onError: (e) => toast.error(`Erro ao salvar avanços: ${e.message}`),
@@ -7367,6 +7380,7 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
       // Rev. 2270 — server também zerou snapshot MSP; invalida getProjetoById
       // pra cards "REALIZADO ACUM." e barra topo re-renderizarem zerados.
       utils.planejamento.getProjetoById.invalidate({ id: projetoId });
+      invalidarCurvaS();
       setAvancoLocal({});
       setConfirmLimpar(false);
       toast.success("Avanços limpos (inclui snapshot MSP).");
@@ -7379,6 +7393,7 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
       utils.planejamento.listarAvancos.invalidate();
       utils.planejamento.listarSemanasComAvanco.invalidate();
       utils.planejamento.getProjetoById.invalidate({ id: projetoId });
+      invalidarCurvaS();
       setAvancoLocal({});
       setConfirmLimpar(false);
       toast.success("Avanços da semana limpos (inclui snapshot MSP).");

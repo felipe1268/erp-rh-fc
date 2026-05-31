@@ -1,6 +1,42 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2649 — **PLANEJAMENTO / CURVA S · A LINHA "REALIZADO" (VERDE) DA CURVA S DE
+ * TRABALHO/FINANCEIRA PARA DE EXIBIR DADO-FANTASMA APÓS APAGAR OS AVANÇOS — AO LIMPAR
+ * (OU SALVAR) AVANÇOS, A CURVA REGENERA NA HORA EM VEZ DE FICAR COM CACHE VELHO.**
+ *
+ * PEDIDO (usuário): "A linha realizado tá com bug... apaguei todos avanços mas os dados
+ * ainda continuam... arrume isso" (print da Curva S de Trabalho com o card "Realizado
+ * atual: 0.00%" no topo, MAS a linha verde ainda subindo a ~25% em S4 e caindo a ~20%
+ * em S5).
+ *
+ * DIAGNÓSTICO (consulta READ-ONLY ao Neon, projeto 39 "IGREJA SÃO GERALDO – POITA",
+ * revisão 58): TODAS as fontes de "realizado" que o servidor lê estavam zeradas após a
+ * exclusão — `planejamento_avancos` VAZIO, `realizado_msp_pct` das atividades todos 0, e
+ * o snapshot do `calendario_json` (`realizadoMspSnapshot`/`previstoMspSnapshot`/
+ * `statusDateSnapshot`) = undefined. Ou seja, `getCurvaS` JÁ retornava realizado vazio;
+ * os cards do topo (que invalidam `getProjetoById`) atualizaram para 0%. O que NÃO
+ * atualizou foi o GRÁFICO.
+ *
+ * CAUSA-RAIZ: as 4 mutations de avanço — `salvarAvanco`, `salvarAvancoLote`,
+ * `limparAvancos`, `limparAvancosSemana` — invalidavam `listarAvancos`,
+ * `listarSemanasComAvanco` e `getProjetoById`, mas NUNCA `getCurvaS` /
+ * `getCurvaSFinanceira` / `getCurvasTodasRevisoes`. Então, depois de limpar os avanços,
+ * a query da Curva S continuava servindo o resultado em cache (React Query) — a linha
+ * verde ficava congelada no dado antigo até um reload manual. As mutations de import/
+ * exclusão de REVISÃO já faziam essa invalidação; só o fluxo de avanços tinha esquecido.
+ *
+ * FIX (SÓ CLIENT/CACHE; R-001/R-007/R-010 — ZERO SCHEMA/SERVER):
+ *  - `client/src/pages/planejamento/PlanejamentoDetalhe.tsx`: helper `invalidarCurvaS()`
+ *    que invalida `getCurvaS` + `getCurvaSFinanceira` + `getCurvasTodasRevisoes`, chamado
+ *    no `onSuccess` das 4 mutations de avanço (salvar individual, salvar lote, limpar
+ *    tudo, limpar semana). Espelha o padrão já existente nas mutations de revisão.
+ *
+ * EFEITO: apagar (ou salvar) avanços re-busca a Curva S imediatamente — a linha verde
+ * some/atualiza junto com os cards, sem reload manual. Como o servidor já retornava
+ * realizado vazio, o gráfico passa a refletir a realidade (sem dado-fantasma). Validado
+ * (estático): `pnpm build` exit 0.
+ *
  * Rev. 2648 — **RH & DP / GERAL · A FOTO AMPLIADA (LIGHTBOX DO `PersonPhoto`) PARA DE
  * SER CORTADA AO ABRIR — CABEÇA E PÉS VOLTAM A APARECER INTEIROS. VALE EM TODA TELA
  * QUE TEM FOTO DE PESSOA (FÉRIAS, COLABORADORES, OBRA EFETIVO, SST, ETC.).**
