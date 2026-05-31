@@ -2215,6 +2215,10 @@ async function getDrillDown(companyId: number, filterType: string, filterValue: 
   if (!db) return [];
 
   let whereClause = and(companyWhere(employees, companyId, companyIds), sql`${employees.deletedAt} IS NULL`);
+  // Rev. 2627 — teto de linhas do drill. Por padrão 100; o snapshot "ativos no
+  // fim do ano" pode passar de 100 e PRECISA bater com o nº do card (paridade),
+  // então elevamos o teto pra esse caso (a empresa tem poucas centenas de pessoas).
+  let rowLimit = 100;
 
   // Rev. 2619 — filtros HISTÓRICOS (por mês) dependem das DATAS, não do status atual:
   // demissões/ativos-no-fim-do-mês/movimentação precisam INCLUIR Desligado/Lista_Negra
@@ -2364,6 +2368,7 @@ async function getDrillDown(companyId: number, filterType: string, filterValue: 
       // Rev. 2627 — filterValue = "2024" — quadro ativo ao FIM do ano (31/12):
       // admitido até 31/12 do ano E (sem demissão OU demitido só depois).
       // Mesma régua do headcount anual → o nº exibido casa com a lista.
+      if (!/^\d{4}$/.test(filterValue)) return [];
       const yr = parseInt(filterValue, 10);
       if (!yr || yr < 1900 || yr > 3000) return [];
       const fimAno = sql`make_date(${yr}, 12, 31)`;
@@ -2371,6 +2376,8 @@ async function getDrillDown(companyId: number, filterType: string, filterValue: 
         sql`"dataAdmissao" IS NOT NULL`,
         sql`"dataAdmissao"::date <= ${fimAno}`,
         sql`("dataDemissao" IS NULL OR "dataDemissao"::date > ${fimAno})`);
+      // Paridade card↔lista: sem teto de 100 (snapshot anual pode ser maior).
+      rowLimit = 100000;
       break;
     }
     default:
@@ -2390,7 +2397,7 @@ async function getDrillDown(companyId: number, filterType: string, filterValue: 
     sexo: employees.sexo,
     cidade: employees.cidade,
     tipoContrato: employees.tipoContrato,
-  }).from(employees).where(whereClause).orderBy(employees.nomeCompleto).limit(100);
+  }).from(employees).where(whereClause).orderBy(employees.nomeCompleto).limit(rowLimit);
 
   return results;
 }
