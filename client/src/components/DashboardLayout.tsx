@@ -120,11 +120,6 @@ const menuSectionsRHDP: MenuSection[] = [
     title: "Relatórios",
     items: [
       { icon: UserSearch, label: "Raio-X do Funcionário", path: "/relatorios/raio-x" },
-      { icon: Clock, label: "Relatório de Ponto", path: "/relatorios/ponto" },
-      { icon: Wallet, label: "Relatório de Folha", path: "/relatorios/folha" },
-      { icon: AlertTriangle, label: "Relatório de Divergências", path: "/relatorios/divergencias" },
-      { icon: Construction, label: "Custo por Obra", path: "/relatorios/custo-obra" },
-      { icon: Wrench, label: "Habilidades por Obra", path: "/relatorios/habilidades-obra" },
     ],
   },
   {

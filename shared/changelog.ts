@@ -1,6 +1,28 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2638 — **RH & DP · MENU "RELATÓRIOS" ENXUTO: REMOVIDOS OS RELATÓRIOS QUE NÃO
+ * FAZEM MAIS SENTIDO (PONTO, FOLHA, DIVERGÊNCIAS, CUSTO POR OBRA, HABILIDADES POR
+ * OBRA); FICA SÓ O "RAIO-X DO FUNCIONÁRIO".**
+ *
+ * PEDIDO (usuário): "elimine os demais relatorios, so deixa o RAIO x do funcionario..
+ * os demais não fazem mais sentido.."
+ *
+ * FIX (SÓ CLIENT, ZERO BACKEND/SCHEMA; R-001/R-007/R-010):
+ *  - `client/src/components/DashboardLayout.tsx` — na seção `Relatórios` do sidebar,
+ *    `items` reduzido a apenas `{ Raio-X do Funcionário → /relatorios/raio-x }`.
+ *    Removidos do MENU: Relatório de Ponto, Relatório de Folha, Relatório de
+ *    Divergências, Custo por Obra, Habilidades por Obra.
+ *
+ * ESCOPO/CONSERVADOR: removida só a VISIBILIDADE no menu. As rotas/páginas em
+ * `App.tsx` e mapeamentos de permissão (`shared/modules.ts`/`shared/modulePages.ts`)
+ * permanecem intactos para não quebrar links profundos existentes nem permissões;
+ * apenas deixam de ter ponto de entrada no menu lateral.
+ *
+ * VALIDAÇÃO: esbuild transform-check exit 0; HMR sem erros.
+ *
+ * ─────────────────────────────────────────────────────────────────────────────
+ *
  * Rev. 2637 — **DASHBOARD DE FUNCIONÁRIOS · O SELETOR "ANO DE ANÁLISE" PARAVA EM
  * 2020 (7 ANOS FIXOS); AGORA LISTA TODOS OS ANOS DESDE A FUNDAÇÃO DA EMPRESA
  * (2011), EM PARIDADE COM O GRÁFICO "TOTAL DE FUNCIONÁRIOS POR ANO".**
