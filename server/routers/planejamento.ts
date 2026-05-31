@@ -226,15 +226,17 @@ async function regenerarPrevistoSemanasCaminhoB(
   }
   if (semanas.length === 0) return { semanas: 0, folhas: folhas.length };
 
-  // Rev. 2617 — CAMINHO B (paridade EXATA com a coluna %Concluída do MSP):
-  // RAIZ = round(Σ minutos úteis DECORRIDOS ÷ Σ minutos úteis TOTAIS × 100),
-  // ponderado por minutos úteis de cada folha (= varrer a "Data do Status" do
-  // MSP semana a semana sobre a baseline). Com `weekDayIntervals` (XML completo)
-  // usa o motor minuto-a-minuto `minutosUteisEntre` — Sex mais curta pesa menos,
-  // por isso 20% e não 22% no PLN_816 R04. Sem intervalos (XML antigo) cai no
-  // day-granular ponderado por duração (ms), preservando backward compat.
-  // `round` (não `floor`) porque a coluna %Concluída do MSP é arredondada:
-  // PLN_816 R04 → 2/9/15/20 cravado (validado contra os XMLs reais).
+  // Rev. 2630 — PREVISTO recalculado EXATAMENTE como o MSP (sem ler Texto6):
+  // RAIZ = trunc(tempo útil DECORRIDO do vão da baseline do PROJETO INTEIRO
+  // (minStart→maxFinish) ÷ tempo útil TOTAL desse vão × 100). Reproduz a régua
+  // interna do MSP para a linha-resumo (UID=0), que aplica a fórmula sobre o
+  // PRÓPRIO vão da baseline do resumo — NÃO é média ponderada das folhas (que
+  // distorcia: dava 1/8/14/20/25 em vez do correto 3/6/10/14/18 no PLN_816 R04).
+  // POR ATIVIDADE = trunc(fração de tempo útil da baseline da atividade × 100).
+  // `Math.trunc` (não round) porque a fórmula do MSP usa `int()` (TRUNCA).
+  // Feriados/almoço/sexta-mais-curta entram via `minutosUteisEntre` (o motor lê
+  // `weekDayIntervals` + `exceptions` do calendário do XML). Sem intervalos (XML
+  // antigo) cai no day-granular por ms do mesmo vão, preservando backward compat.
   const unitsTotal = (bs: number, bf: number): number =>
     hasMin ? minutosUteisEntre(bs, bf, cal as any) : Math.max(0, bf - bs);
   const unitsElapsed = (bs: number, w: number, bf: number): number => {
@@ -247,16 +249,14 @@ async function regenerarPrevistoSemanasCaminhoB(
 
   const wMs = semanas.map(s => toUtc(s, true));
   const totaisLeaf = folhas.map(a => unitsTotal(a._bs, a._bf));
-  const sumTotal = totaisLeaf.reduce((s, v) => s + v, 0);
 
   const porAtividadeId: Record<string, number[]> = {};
   const raiz: number[] = new Array(semanas.length).fill(0);
+  // RAIZ = vão da baseline do PROJETO INTEIRO (minStart→maxFinish), igual ao MSP.
+  const raizTotal = unitsTotal(minStart, maxFinish);
   for (let j = 0; j < semanas.length; j++) {
-    let sumEl = 0;
-    for (let i = 0; i < folhas.length; i++) {
-      sumEl += unitsElapsed(folhas[i]._bs, wMs[j], folhas[i]._bf);
-    }
-    raiz[j] = sumTotal > 0 ? Math.round((sumEl / sumTotal) * 100) : 0;
+    const el = unitsElapsed(minStart, wMs[j], maxFinish);
+    raiz[j] = raizTotal > 0 ? Math.max(0, Math.min(100, Math.trunc((el / raizTotal) * 100))) : 0;
   }
 
   for (let i = 0; i < folhas.length; i++) {
@@ -264,11 +264,11 @@ async function regenerarPrevistoSemanasCaminhoB(
     const tot = totaisLeaf[i];
     const arr: number[] = new Array(semanas.length).fill(0);
     for (let j = 0; j < semanas.length; j++) {
-      // % PREVISTO por atividade = round(fração de TEMPO ÚTIL da baseline) =
-      // coluna %Concluída do MSP por linha (inteira, arredondada).
+      // % PREVISTO por atividade = trunc(fração de TEMPO ÚTIL da baseline da
+      // atividade × 100) = régua do MSP por linha (int(), TRUNCA — não round).
       let pct: number;
       if (tot <= 0) pct = wMs[j] >= a._bf ? 100 : 0;
-      else          pct = Math.round((unitsElapsed(a._bs, wMs[j], a._bf) / tot) * 100);
+      else          pct = Math.trunc((unitsElapsed(a._bs, wMs[j], a._bf) / tot) * 100);
       arr[j] = Math.max(0, Math.min(100, pct));
     }
     porAtividadeId[String(a.id)] = arr;

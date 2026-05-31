@@ -6,9 +6,18 @@ description: Why planejamento %PREVISTO must use baseline WITH TIME + minute-by-
 # %PREVISTO ↔ MSP "% Concluída" paridade EXATA
 
 Regra: o %PREVISTO da curva Caminho B é a fração de duração da baseline em TEMPO
-ÚTIL **minuto-a-minuto**, lida com a MESMA régua da "% Concluída" (`PercentComplete`)
-do MSP. RAIZ = `round(Σ min úteis decorridos ÷ Σ min úteis totais × 100)` ponderado
-por minutos úteis; por atividade = `round(elapsed/total × 100)`. `round`, não `floor`.
+ÚTIL **minuto-a-minuto** (motor `minutosUteisEntre` de `shared/diasUteis`, que já
+aplica feriados/almoço/sexta-curta lidos do calendário do XML).
+
+**RAIZ = vão da baseline do PROJETO INTEIRO, NÃO média ponderada das folhas.**
+`trunc(unitsElapsed(minStart, semana, maxFinish) ÷ unitsTotal(minStart, maxFinish)
+× 100)`, onde minStart/maxFinish = min/max das baselines das folhas. Reproduz a régua
+interna do MSP para a linha-resumo (UID=0), que mede o próprio vão do resumo, não o
+somatório das folhas. Por atividade = `trunc(elapsed/total × 100)`.
+
+**`Math.trunc`, NÃO `round`/`floor`** — o MSP usa `int()` (trunca). (Atenção: uma
+versão anterior desta nota dizia `round` ponderado pelas folhas — ESTAVA ERRADO,
+dava 1/8/14/20/25; o alvo real PLN_816 R04 nas 5 semanas é 3/6/10/14/18.)
 
 **Why:** duas armadilhas comprovadas contra os XMLs reais (PLN_816 R04, alvo
 2/9/15/20):

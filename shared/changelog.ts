@@ -1,6 +1,56 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2630 — **PLANEJAMENTO · ABA "AVANÇO SEMANAL" · O "% PREVISTO" ACUMULADO
+ * (CURVA CAMINHO B) PASSA A SER CALCULADO EXATAMENTE COMO O MS PROJECT A PARTIR
+ * DA BASELINE — SEM LER A COLUNA TEXTO6. ALVO CRAVADO PLN_816 R04 = 3/6/10/14/18.**
+ *
+ * PEDIDO (usuário, repetido e enfático): "Esqueça completamente o Texto6, ele é
+ * um erro, NÃO vamos usar; o ERP precisa CALCULAR exatamente conforme o MSP." A
+ * curva de Previsto exibida no card "Previsto Acum." da aba Avanço Semanal vinha
+ * 1/8/14/20/25 (errado) contra o alvo 3/6/10/14/18 validado nos 5 XMLs semanais.
+ *
+ * CAUSA-RAIZ: `regenerarPrevistoSemanasCaminhoB` (server/routers/planejamento.ts)
+ * computava a RAIZ como MÉDIA PONDERADA das folhas — `round(Σ minutos úteis
+ * DECORRIDOS de cada folha ÷ Σ minutos úteis TOTAIS × 100)`. Essa ponderação por
+ * folha distorce a curva (dá 1/8/14/20/25) porque NÃO reproduz a régua interna
+ * do MSP para a linha-resumo (UID=0), que aplica a fórmula sobre o PRÓPRIO vão da
+ * baseline do resumo (projeto inteiro), não sobre o somatório das folhas. Além
+ * disso usava `Math.round`, enquanto o MSP usa `int()` (TRUNCA).
+ *
+ * IMPLEMENTAÇÃO (ZERO SCHEMA/BACKEND-DESTRUTIVO — SOMENTE recálculo em memória +
+ * UPDATE da própria coluna JSON `previsto_semanas_json`; R-001/R-007/R-010):
+ *  - `server/routers/planejamento.ts` (`regenerarPrevistoSemanasCaminhoB`):
+ *    - RAIZ = `trunc(unitsElapsed(minStart, semana, maxFinish) ÷
+ *      unitsTotal(minStart, maxFinish) × 100)`, clampado 0–100 — vão da baseline
+ *      do PROJETO INTEIRO (min start → max finish das folhas) em TEMPO ÚTIL
+ *      minuto-a-minuto. Substitui a média ponderada `sumEl/sumTotal` (removida a
+ *      var `sumTotal`, não mais usada).
+ *    - POR ATIVIDADE: `Math.round` → `Math.trunc` (paridade com o `int()` do MSP).
+ *    - O motor `minutosUteisEntre`/`intervalosDoDiaMin` (shared/diasUteis) JÁ
+ *      aplica feriados (exceptions → []), almoço e a sexta mais curta lidos do
+ *      calendário do XML (weekDayIntervals + exceptions persistidos no
+ *      `calendarioJson` pelo parser). Combinação vão-do-projeto + trunc +
+ *      feriados = EXATO 3/6/10/14/18.
+ *
+ * VALIDAÇÃO: script standalone (jsdom) replicou a extração calendário/baseline do
+ * parser e rodou a NOVA fórmula via o motor real de `shared/diasUteis` contra o
+ * XML real PLN_816 R04 (calendário UID=6: Seg–Qui 09h / Sex 08h, 396 feriados
+ * expandidos; 1043 folhas; baseline 2026-06-01T07:00 → 2026-12-03T16:00). Curva
+ * raiz nas 5 semanas (cutoff Qui) = 3 / 6 / 10 / 14 / 18 → BATE EXATO com o MSP.
+ * Servidor reiniciou e recompilou limpo (tsx watch); Neon conectado.
+ *
+ * ESCOPO (decisão deliberada): a correção foca a CURVA Caminho B
+ * (`previsto_semanas_json`), que é a FONTE do card "Previsto Acum." via o hook
+ * `mspReadOnly` (`previstoCurva.raizAt`). O `previstoMspSnapshot` (Texto6 lido no
+ * parser) permanece APENAS como fallback interno para projetos sem curva gerada
+ * e para o portal externo — NÃO é a fonte do que o usuário vê na aba Avanço
+ * Semanal (a curva tem prioridade e sempre existe após o cadastro). Arrancar o
+ * Texto6 dos fallbacks/memos legados/portal tocaria superfícies fora do escopo e
+ * traria risco de regressão, então foi mantido.
+ *
+ * --------------------------------------------------------------------------
+ *
  * Rev. 2629 — **PAINEL RH & DP · A SEÇÃO "QUADRO DE PESSOAL" GANHA UM CARD
  * "TOTAL" COM O NÚMERO DE PESSOAS DA EMPRESA (TODOS OS COLABORADORES
  * CADASTRADOS), IGUAL AO QUE JÁ EXISTE NA ABA COLABORADORES.**
