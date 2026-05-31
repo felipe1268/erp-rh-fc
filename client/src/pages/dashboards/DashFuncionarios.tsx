@@ -64,6 +64,28 @@ const STATUS_COLORS: Record<string, string> = {
   "Licenca": SEMANTIC_COLORS.licenca, "Desligado": SEMANTIC_COLORS.desligado, "Recluso": SEMANTIC_COLORS.recluso, "Lista_Negra": SEMANTIC_COLORS.listaNegra,
 };
 
+// Rev. 2620 — avatar com foto do funcionário nos rankings (fallback: inicial do nome).
+function RankAvatar({ src, nome }: { src?: string | null; nome?: string }) {
+  const [err, setErr] = useState(false);
+  useEffect(() => { setErr(false); }, [src]);
+  if (src && !err) {
+    return (
+      <img
+        src={src}
+        alt={nome || ""}
+        loading="lazy"
+        onError={() => setErr(true)}
+        className="h-9 w-9 rounded-full object-cover shrink-0 border border-border bg-muted"
+      />
+    );
+  }
+  return (
+    <div className="h-9 w-9 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 text-xs font-bold shrink-0">
+      {nome?.charAt(0) || "?"}
+    </div>
+  );
+}
+
 export default function DashFuncionarios() {
   const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery } = useCompany();
   const companyId = Number(selectedCompanyId) || 0;
@@ -563,18 +585,31 @@ export default function DashFuncionarios() {
                 <p className="text-sm text-muted-foreground py-4 text-center">Nenhuma advertência registrada</p>
               ) : (
                 <div className="space-y-2">
-                  {data.rankingAdvertencias.map((r, i) => (
-                    <div key={i} className="flex items-center justify-between py-1.5 border-b border-border/50 last:border-0">
-                      <div className="flex items-center gap-2">
-                        <span className={`text-xs font-bold w-6 h-6 rounded-full flex items-center justify-center ${i < 3 ? "bg-red-100 text-red-700" : "bg-muted text-muted-foreground"}`}>{i + 1}</span>
-                        <div>
-                          <p className="text-sm font-medium truncate max-w-[180px]">{r.nome}</p>
-                          <p className="text-xs text-muted-foreground">{r.funcao}</p>
+                  {data.rankingAdvertencias.map((r, i) => {
+                    const inner = (
+                      <>
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className={`text-xs font-bold w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${i < 3 ? "bg-red-100 text-red-700" : "bg-muted text-muted-foreground"}`}>{i + 1}</span>
+                          <RankAvatar src={(r as any).fotoUrl} nome={r.nome} />
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium truncate max-w-[140px] sm:max-w-[180px]">{r.nome}</p>
+                            <p className="text-xs text-muted-foreground truncate max-w-[140px] sm:max-w-[180px]">{r.funcao}</p>
+                          </div>
                         </div>
+                        <span className="text-sm font-bold text-red-600 shrink-0">{r.total}</span>
+                      </>
+                    );
+                    const eid = (r as any).employeeId;
+                    return eid ? (
+                      <Link key={i} href={`/raio-x/${eid}`} className="flex items-center justify-between py-1.5 border-b border-border/50 last:border-0 hover:bg-muted/50 rounded-md px-1 -mx-1 transition-colors">
+                        {inner}
+                      </Link>
+                    ) : (
+                      <div key={i} className="flex items-center justify-between py-1.5 border-b border-border/50 last:border-0">
+                        {inner}
                       </div>
-                      <span className="text-sm font-bold text-red-600">{r.total}</span>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </CardContent>
@@ -593,21 +628,34 @@ export default function DashFuncionarios() {
                 <p className="text-sm text-muted-foreground py-4 text-center">Nenhum atestado registrado</p>
               ) : (
                 <div className="space-y-2">
-                  {data.rankingAtestados.map((r, i) => (
-                    <div key={i} className="flex items-center justify-between py-1.5 border-b border-border/50 last:border-0">
-                      <div className="flex items-center gap-2">
-                        <span className={`text-xs font-bold w-6 h-6 rounded-full flex items-center justify-center ${i < 3 ? "bg-orange-100 text-orange-700" : "bg-muted text-muted-foreground"}`}>{i + 1}</span>
-                        <div>
-                          <p className="text-sm font-medium truncate max-w-[180px]">{r.nome}</p>
-                          <p className="text-xs text-muted-foreground">{r.funcao}</p>
+                  {data.rankingAtestados.map((r, i) => {
+                    const inner = (
+                      <>
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className={`text-xs font-bold w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${i < 3 ? "bg-orange-100 text-orange-700" : "bg-muted text-muted-foreground"}`}>{i + 1}</span>
+                          <RankAvatar src={(r as any).fotoUrl} nome={r.nome} />
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium truncate max-w-[120px] sm:max-w-[160px]">{r.nome}</p>
+                            <p className="text-xs text-muted-foreground truncate max-w-[120px] sm:max-w-[160px]">{r.funcao}</p>
+                          </div>
                         </div>
+                        <div className="text-right shrink-0">
+                          <span className="text-sm font-bold text-orange-600">{r.totalAtestados} atestados</span>
+                          <p className="text-xs text-muted-foreground">{r.totalDias} dias afastado</p>
+                        </div>
+                      </>
+                    );
+                    const eid = (r as any).employeeId;
+                    return eid ? (
+                      <Link key={i} href={`/raio-x/${eid}`} className="flex items-center justify-between py-1.5 border-b border-border/50 last:border-0 hover:bg-muted/50 rounded-md px-1 -mx-1 transition-colors">
+                        {inner}
+                      </Link>
+                    ) : (
+                      <div key={i} className="flex items-center justify-between py-1.5 border-b border-border/50 last:border-0">
+                        {inner}
                       </div>
-                      <div className="text-right">
-                        <span className="text-sm font-bold text-orange-600">{r.totalAtestados} atestados</span>
-                        <p className="text-xs text-muted-foreground">{r.totalDias} dias afastado</p>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </CardContent>

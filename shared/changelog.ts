@@ -1,6 +1,31 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2620 — **DASHBOARD DE FUNCIONÁRIOS · OS RANKINGS "DE ADVERTÊNCIAS" E
+ * "DE ATESTADOS / FALTAS" PASSAM A EXIBIR A FOTO DO CADASTRO DE CADA
+ * FUNCIONÁRIO (FALLBACK = INICIAL DO NOME), COM A LINHA CLICÁVEL → RAIO-X.**
+ *
+ * PEDIDO (usuário): "quero as fotos aqui também, de cada funcionário" (sobre os
+ * cards "Ranking de Advertências" e "Ranking de Atestados / Faltas" do Dashboard
+ * de Funcionários, que antes mostravam só posição + nome + função).
+ *
+ * IMPLEMENTAÇÃO (ADITIVA — ZERO ALTER/DROP/DELETE; só SELECT; R-001/R-007/R-010):
+ *  - `server/routers/dashboards.ts` (`getDashFuncionarios`): as queries 18
+ *    (ranking advertências) e 19 (ranking atestados) ganham `employees.fotoUrl`
+ *    no SELECT e no `GROUP BY` (necessário porque já agregam por funcionário);
+ *    o retorno mapeado de `rankingAdvertencias`/`rankingAtestados` passa a
+ *    incluir `employeeId` + `fotoUrl` (`?? null`). Sem nova query.
+ *  - `client/src/pages/dashboards/DashFuncionarios.tsx`: novo componente local
+ *    `RankAvatar` (img redonda `h-9 w-9` com `onError`→fallback inicial, igual
+ *    padrão do `EmpAvatar`/`DrillDownModal`). As duas listas de ranking renderizam
+ *    o avatar entre o nº de posição e o nome; cada linha vira um `<Link>` pro
+ *    `/raio-x/${employeeId}` (hover destacado) quando há id, com fallback `<div>`
+ *    estático se faltar id. Truncamento responsivo de nome/função.
+ *
+ * VALIDADO: servidor reiniciado e recompilou limpo (tsx watch); sem erros de
+ * transform/compile nos logs (só os esperados "Please login" do preview não
+ * autenticado). Rota `/raio-x/:id` confirmada em `client/src/App.tsx`.
+ *
  * Rev. 2619 — **DASHBOARD DE FUNCIONÁRIOS · AS TELAS DE DETALHE DE CADA
  * INDICADOR (ADMISSÕES, DEMISSÕES, ATIVOS, SALDO, TURNOVER) PASSAM A LISTAR OS
  * FUNCIONÁRIOS PERTINENTES — COM NOME + FOTO DO CADASTRO — AO CLICAR NUM MÊS,

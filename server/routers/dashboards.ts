@@ -181,17 +181,17 @@ async function getDashFuncionarios(companyId: number, companyIds?: number[]) {
       .from(employees).where(and(activeWhere, sql`"dataAdmissao" IS NOT NULL`)).orderBy(desc(employees.dataAdmissao)).limit(1),
 
     // 18. Ranking advertências (top 10)
-    db.select({ employeeId: warnings.employeeId, nome: employees.nomeCompleto, funcao: employees.funcao, total: sql<number>`count(*)` })
+    db.select({ employeeId: warnings.employeeId, nome: employees.nomeCompleto, funcao: employees.funcao, fotoUrl: employees.fotoUrl, total: sql<number>`count(*)` })
       .from(warnings).innerJoin(employees, eq(warnings.employeeId, employees.id))
       .where(and(companyWhere(warnings, companyId, companyIds), isNull(warnings.deletedAt), isNull(employees.deletedAt), sql`${employees.status} NOT IN ('Desligado', 'Lista_Negra')`))
-      .groupBy(warnings.employeeId, employees.nomeCompleto, employees.funcao)
+      .groupBy(warnings.employeeId, employees.nomeCompleto, employees.funcao, employees.fotoUrl)
       .orderBy(sql`count(*) desc`).limit(10),
 
     // 19. Ranking atestados (top 10)
-    db.select({ employeeId: atestados.employeeId, nome: employees.nomeCompleto, funcao: employees.funcao, totalAtestados: sql<number>`count(*)`, totalDias: sql<number>`COALESCE(SUM("diasAfastamento"), 0)` })
+    db.select({ employeeId: atestados.employeeId, nome: employees.nomeCompleto, funcao: employees.funcao, fotoUrl: employees.fotoUrl, totalAtestados: sql<number>`count(*)`, totalDias: sql<number>`COALESCE(SUM("diasAfastamento"), 0)` })
       .from(atestados).innerJoin(employees, eq(atestados.employeeId, employees.id))
       .where(and(companyWhere(atestados, companyId, companyIds), isNull(atestados.deletedAt), isNull(employees.deletedAt), sql`${employees.status} NOT IN ('Desligado', 'Lista_Negra')`))
-      .groupBy(atestados.employeeId, employees.nomeCompleto, employees.funcao)
+      .groupBy(atestados.employeeId, employees.nomeCompleto, employees.funcao, employees.fotoUrl)
       .orderBy(sql`count(*) desc`).limit(10),
 
     // 20. Advertências por tipo
@@ -276,8 +276,8 @@ async function getDashFuncionarios(companyId: number, companyIds?: number[]) {
       maiorTempo: longestTenure ? { nome: longestTenure.nome, data: longestTenure.data, funcao: longestTenure.funcao } : null,
       menorTempo: shortestTenure ? { nome: shortestTenure.nome, data: shortestTenure.data, funcao: shortestTenure.funcao } : null,
     },
-    rankingAdvertencias: rankingAdvertencias.map(r => ({ nome: r.nome, funcao: r.funcao, total: Number(r.total) })),
-    rankingAtestados: rankingAtestados.map(r => ({ nome: r.nome, funcao: r.funcao, totalAtestados: Number(r.totalAtestados), totalDias: Number(r.totalDias) })),
+    rankingAdvertencias: rankingAdvertencias.map(r => ({ employeeId: r.employeeId, nome: r.nome, funcao: r.funcao, fotoUrl: r.fotoUrl ?? null, total: Number(r.total) })),
+    rankingAtestados: rankingAtestados.map(r => ({ employeeId: r.employeeId, nome: r.nome, funcao: r.funcao, fotoUrl: r.fotoUrl ?? null, totalAtestados: Number(r.totalAtestados), totalDias: Number(r.totalDias) })),
     advertenciasTipo: advertenciasTipo.map(r => ({ label: r.tipo, value: Number(r.count) })),
     funcaoAll: funcaoAll.map(r => ({ label: r.funcao || "Não informado", value: Number(r.count) })),
     funcaoStatusDist: funcaoStatusDist.map(r => ({ funcao: r.funcao || "Não informado", status: r.status || "Desconhecido", count: Number(r.count) })),
