@@ -10,6 +10,7 @@ import PrintHeader from "@/components/PrintHeader";
 import PlanejamentoPrintHeader from "@/components/PlanejamentoPrintHeader";
 import PrintActions from "@/components/PrintActions";
 import ImportarCronograma, { parseMSProjectXML, parseMSProjectXLSX, parseMSProjectFull, TarefaImportada } from "./ImportarCronograma";
+import AbaPrevistoManual from "./AbaPrevistoManual";
 import AnaliseEfetivoIA from "./AnaliseEfetivoIA";
 import DiagnosticoEapOrcCron from "@/components/planejamento/DiagnosticoEapOrcCron";
 import { parseCalendarioJson, fracaoDecorridaMs, pvPonderadoPorAtividade, pctRaizMSP } from "../../../../shared/diasUteis";
@@ -55,7 +56,7 @@ const n = (v: any) => parseFloat(v || "0") || 0;
 function fmt(v: number) { return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }); }
 function fPct(v: number) { return `${n(v).toFixed(2)}%`; }
 
-type Tab = "visao-geral" | "cronograma" | "gantt" | "curva-s" | "avanco" | "revisoes" | "refis" | "caminho-critico" | "compras" | "cronograma-financeiro" | "prev-medicao" | "prog-semanal" | "diagrama-rede" | "custo-rh" | "efetivo" | "efetivo-ia" | "bim-3d" | "avaliacao-cliente";
+type Tab = "visao-geral" | "cronograma" | "gantt" | "curva-s" | "avanco" | "previsto" | "revisoes" | "refis" | "caminho-critico" | "compras" | "cronograma-financeiro" | "prev-medicao" | "prog-semanal" | "diagrama-rede" | "custo-rh" | "efetivo" | "efetivo-ia" | "bim-3d" | "avaliacao-cliente";
 
 // ── Cálculo de desvio de prazo ────────────────────────────────────────────────
 function calcDesvio(dataTermino: string | null) {
@@ -209,6 +210,7 @@ const TAB_DEFS: { id: Tab; label: string; Icon: React.ComponentType<{ className?
   { id: "cronograma-financeiro",label: "Crono. Financeiro",  Icon: DollarSign },
   { id: "curva-s",              label: "Curva S",            Icon: TrendingUp },
   { id: "avanco",               label: "Avanço Semanal",     Icon: Activity },
+  { id: "previsto",             label: "Previsto",           Icon: TrendingUp },
   { id: "caminho-critico",      label: "Caminho Crítico",    Icon: AlertOctagon },
   { id: "prev-medicao",         label: "Prev. Medição",      Icon: ClipboardList },
   { id: "prog-semanal",         label: "Prog. Semanal",      Icon: CalendarClock },
@@ -1309,6 +1311,13 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
             usarPesoPorDuracao={usarPesoPorDuracao}
             dataCorteInfo={dataCorteInfo}
             previstoCurva={previstoCurva}
+          />
+        )}
+        {canViewTab(aba) && aba === "previsto" && (
+          <AbaPrevistoManual
+            projetoId={projetoId}
+            revisaoAtiva={revisaoAtiva}
+            companyId={proj?.companyId ?? companyId ?? 0}
           />
         )}
         {canViewTab(aba) && aba === "revisoes" && (

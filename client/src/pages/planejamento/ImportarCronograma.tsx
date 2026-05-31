@@ -482,6 +482,7 @@ export function parseMSProjectFull(text: string): {
   projetoStart:       string | null;
   projetoFinish:      string | null;
   previstoMspRaiz:    number | null;
+  realizadoMspRaiz:   number | null;
   integridade:        IntegridadeMSP;
 } {
   const doc  = new DOMParser().parseFromString(text, "text/xml");
@@ -615,7 +616,7 @@ export function parseMSProjectFull(text: string): {
       "Recomendamos cadastrá-los também no calendário do Project para o XML ficar 100% fiel."
     );
   }
-  return { tarefas, statusDate, statusDateIso, calendarioJson, projetoStart, projetoFinish, previstoMspRaiz, integridade };
+  return { tarefas, statusDate, statusDateIso, calendarioJson, projetoStart, projetoFinish, previstoMspRaiz, realizadoMspRaiz, integridade };
 }
 
 // ── Parser MS Project XML (compat — só tarefas) ──────────────────────────────

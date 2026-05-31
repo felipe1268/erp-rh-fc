@@ -765,6 +765,13 @@ Regras:
           console.log(`[SyncSchema+] Coluna numero_interno garantida em funcionarios_terceiros.`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA funcionarios_terceiros numero_interno:`, e?.message || e); }
 
+        // Rev. 2633 — Modo MANUAL do "% Previsto" no Planejamento.
+        try {
+          await db.execute(sql`ALTER TABLE oc_number_config ADD COLUMN IF NOT EXISTS previsto_fonte VARCHAR(10) DEFAULT 'motor'`);
+          await db.execute(sql`ALTER TABLE planejamento_projetos ADD COLUMN IF NOT EXISTS previsto_manual_json TEXT`);
+          console.log(`[SyncSchema+] Rev. 2633: previsto_fonte (oc_number_config) + previsto_manual_json (planejamento_projetos) garantidas (modo MANUAL do % Previsto).`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev. 2633 previsto manual:`, e?.message || e); }
+
         // Rev. 2017 — Documentos Trabalhistas (Ficha de EPI NR-06, OS de SST NR-01, Registro de Empregado CLT art. 41)
         try {
           await db.execute(sql`ALTER TABLE funcionarios_terceiros ADD COLUMN IF NOT EXISTS ficha_epi_url VARCHAR(500)`);

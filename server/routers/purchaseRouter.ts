@@ -1013,6 +1013,7 @@ export const purchaseRouter = router({
       prazoAprovacaoDias: z.number().optional(),
       diaPagamento: z.number().optional(),
       alertaReservasAtivo: z.boolean().optional(),
+      previstoFonte: z.enum(["motor", "manual"]).optional(),
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();

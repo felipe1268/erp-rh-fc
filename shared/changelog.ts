@@ -1,6 +1,58 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2633 — **PLANEJAMENTO · "% PREVISTO" GANHA MODO MANUAL: NOVA ABA "PREVISTO"
+ * ONDE O ENGENHEIRO SOBE 1 XML POR SEMANA E O ERP LÊ A COLUNA "% CONCLUÍDA"
+ * (PercentComplete) DA RAIZ E DE CADA ATIVIDADE COMO O VALOR PREVISTO — SEM
+ * NENHUM CÁLCULO PRÓPRIO. INTERRUPTOR GLOBAL MOTOR/MANUAL NOS CRITÉRIOS DO
+ * SISTEMA (POR EMPRESA). EM MODO MANUAL, O MOTOR (CAMINHO B) NÃO SOBRESCREVE A
+ * CURVA.**
+ *
+ * PEDIDO (usuário, aprovado): "Quero poder FORNECER o % Previsto em vez de o ERP
+ * calcular. Uma aba nova onde eu subo 1 XML por semana; o ERP lê a coluna %
+ * Concluída por atividade e da raiz. Profundidade raiz + por atividade. E um
+ * interruptor GLOBAL Manual/Motor na página de Critérios do Sistema."
+ *
+ * DECISÕES: (1) fonte manual = upload de XML por semana, lendo PercentComplete
+ * (% Concluída); (2) detalhe RAIZ + POR ATIVIDADE; (3) interruptor GLOBAL (por
+ * empresa) em Critérios → Configurações por Módulo → Planejamento.
+ *
+ * IMPLEMENTAÇÃO (ADITIVA; R-001/R-007/R-010 — só ADD COLUMN IF NOT EXISTS, zero
+ * ALTER/DROP/DELETE destrutivo):
+ *  - SCHEMA: `oc_number_config.previsto_fonte` varchar(10) default 'motor' +
+ *    `planejamento_projetos.previsto_manual_json` text (uploads crus por semana).
+ *    Guardas ADD COLUMN IF NOT EXISTS em `server/_core/index.ts` ([SyncSchema+]).
+ *  - TOGGLE GLOBAL: `server/routers/purchaseRouter.ts` (`salvarConfigOC` aceita
+ *    `previstoFonte`; `getConfigCompras` já devolve a row). Client: nova seção
+ *    `client/src/pages/configuracoes/PlanejamentoConfigSection.tsx` (select
+ *    Motor/Manual) renderizada em `client/src/pages/Configuracoes.tsx`.
+ *  - BUILDER + MUTATIONS: `server/routers/planejamento.ts` —
+ *    `regenerarPrevistoManual(db,projetoId,revisaoId)` monta o MESMO grid de
+ *    semanas do motor (cutoffs do diaCorte sobre o envelope da baseline; fallback
+ *    = datas dos uploads), lê `previsto_manual_json`, preenche raiz[]/
+ *    porAtividadeId{} em DEGRAU CUMULATIVO (carry-forward; antes do 1º upload=0) e
+ *    grava `previsto_semanas_json` com marcador `fonte:"manual"` (mesma forma do
+ *    motor → a tela continua lendo só a curva pelo hook `previstoCurva`).
+ *    Mutations `salvarPrevistoManualSemana` (resolve mspUid→atividadeId dentro da
+ *    revisão, atualiza o JSON cru, reconstrói a curva SE fonte=manual),
+ *    `limparPrevistoManualSemana` e query `getPrevistoManual`.
+ *  - GATE DO MOTOR: em `salvarAtividades` e no self-heal de leitura do getProjeto,
+ *    a curva passa a respeitar o interruptor — fonte=manual chama
+ *    `regenerarPrevistoManual` (preserva uploads) em vez do Caminho B. O self-heal
+ *    RECONCILIA: compara o marcador `fonte` da curva com a fonte global e
+ *    reconstrói (lazy, no próximo load) quando divergem — assim alternar o
+ *    interruptor "simplesmente funciona". Curvas antigas (sem marcador) contam
+ *    como "motor" → zero regressão. Uploads feitos com a empresa em "motor" são
+ *    guardados mas NÃO sobrescrevem a curva até o interruptor virar "manual".
+ *  - ABA "PREVISTO": `client/src/pages/planejamento/AbaPrevistoManual.tsx` (novo)
+ *    + tab em `PlanejamentoDetalhe.tsx` — zona de upload (reusa `parseMSProjectFull`,
+ *    que agora também expõe `realizadoMspRaiz` = % Concluída da raiz UID=0), lista
+ *    das semanas enviadas (% lido da raiz, data, arquivo, contagem, botão remover)
+ *    e banner do estado da fonte global.
+ *
+ * Detalhe operacional: o % de cada atividade é o PercentComplete ACUMULADO do XML
+ * daquela semana; entre semanas sem upload a curva mantém o último valor (degrau).
+ *
  * Rev. 2632 — **PLANEJAMENTO · IMPORTAÇÃO DE CRONOGRAMA · AUTO-COMPLETAR FERIADOS
  * MÓVEIS NACIONAIS (CARNAVAL, SEXTA-FEIRA SANTA, CORPUS CHRISTI): QUANDO ELES
  * FALTAM NO CALENDÁRIO DO XML, O ERP CALCULA AS DATAS A PARTIR DA PÁSCOA, INJETA

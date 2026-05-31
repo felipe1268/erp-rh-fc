@@ -5456,6 +5456,12 @@ export const planejamentoProjetos = pgTable("planejamento_projetos", {
   // de leitura direta. Garante paridade matemática MSP×ERP em ambos momentos.
   previstoSemanasJson:      text("previsto_semanas_json"),
   previstoSemanasGeradoEm:  timestamp("previsto_semanas_gerado_em"),
+  // Rev. 2633 — Modo MANUAL do "% Previsto": uploads crus por semana (1 XML por
+  // semana, lendo PercentComplete). JSON: { revisaoId, semanas: { "YYYY-MM-DD":
+  // { raiz, porAtividadeId: {"<id>": pct}, uploadedEm, arquivo } } }. O builder
+  // `regenerarPrevistoManual` consome isto e produz `previsto_semanas_json` na
+  // MESMA forma do motor — a tela continua lendo só a curva, sem saber a origem.
+  previstoManualJson:       text("previsto_manual_json"),
   criadoEm:               timestamp("criado_em").defaultNow(),
   atualizadoEm:           timestamp("atualizado_em").defaultNow(),
 });
@@ -7209,6 +7215,10 @@ export const ocNumberConfig = pgTable("oc_number_config", {
   prefixoOs: varchar("prefixo_os", { length: 20 }).default("OS"),
   proximoNumeroOs: integer("proximo_numero_os").default(1),
   alertaReservasAtivo: smallint("alerta_reservas_ativo").default(1),
+  // Rev. 2633 — Fonte global do "% Previsto" do Planejamento: "motor" (curva
+  // calculada pelo Caminho B na baseline) ou "manual" (curva alimentada por
+  // upload semanal de XML, lendo PercentComplete). Interruptor nos Critérios.
+  previstoFonte: varchar("previsto_fonte", { length: 10 }).default("motor"),
   updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow().notNull(),
 }, (t) => [index("idx_onc_company").on(t.companyId)]);
 

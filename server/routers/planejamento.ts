@@ -36,6 +36,7 @@ import {
   medicaoBoletimItens,
   smoAtividadesEap,
   terceiroContratoItens,
+  ocNumberConfig,
 } from "../../drizzle/schema";
 
 const n = (v: any) => parseFloat(v || "0") || 0;
@@ -290,6 +291,190 @@ async function regenerarPrevistoSemanasCaminhoB(
     .where(eq(planejamentoProjetos.id, projetoId));
 
   return { semanas: semanas.length, folhas: folhas.length };
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// Rev. 2633 — MODO MANUAL do "% Previsto".
+// Constrói a curva (`previsto_semanas_json`) a partir dos uploads semanais crus
+// (`previsto_manual_json`), reaproveitando o MESMO grid de semanas do motor
+// (cutoffs do diaCorte sobre o envelope da baseline). Cada upload guarda o %
+// ACUMULADO (PercentComplete) lido do XML daquela semana; entre uploads a curva
+// é um degrau (carry-forward). A tela continua lendo só `previsto_semanas_json`
+// pelo hook `previstoCurva` — não sabe (nem precisa) se a origem foi manual.
+// ════════════════════════════════════════════════════════════════════════════
+async function regenerarPrevistoManual(
+  db: any,
+  projetoId: number,
+  revisaoId: number,
+): Promise<{ semanas: number; uploads: number } | null> {
+  const [proj] = await db.select({
+    id: planejamentoProjetos.id,
+    diaCorteSemana: planejamentoProjetos.diaCorteSemana,
+    previstoManualJson: planejamentoProjetos.previstoManualJson,
+  }).from(planejamentoProjetos).where(eq(planejamentoProjetos.id, projetoId)).limit(1);
+  if (!proj) return null;
+  const diaCorte = proj.diaCorteSemana ?? 4;
+
+  let manual: any = null;
+  try { manual = proj.previstoManualJson ? JSON.parse(proj.previstoManualJson) : null; } catch { manual = null; }
+  const semObj: Record<string, any> = (manual && manual.revisaoId === revisaoId && manual.semanas) ? manual.semanas : {};
+  const datasUpload = Object.keys(semObj).filter(Boolean).sort();
+
+  // Sem nenhum upload p/ esta revisão → zera a curva (a tela cai no "—").
+  if (datasUpload.length === 0) {
+    await db.update(planejamentoProjetos)
+      .set({ previstoSemanasJson: null as any, previstoSemanasGeradoEm: null as any })
+      .where(eq(planejamentoProjetos.id, projetoId));
+    return { semanas: 0, uploads: 0 };
+  }
+
+  // Envelope p/ o grid de semanas: baseline das folhas (mesma régua do motor);
+  // fallback = intervalo das próprias datas de upload (quando não há baseline).
+  const ativs = await db.select({
+    isGrupo: planejamentoAtividades.isGrupo,
+    disabled: planejamentoAtividades.disabled,
+    baselineStart: planejamentoAtividades.baselineStart,
+    baselineFinish: planejamentoAtividades.baselineFinish,
+    baselineStartTs: planejamentoAtividades.baselineStartTs,
+    baselineFinishTs: planejamentoAtividades.baselineFinishTs,
+  }).from(planejamentoAtividades).where(eq(planejamentoAtividades.revisaoId, revisaoId));
+
+  const toMs = (v: any, endOfDay = false): number => {
+    if (!v) return NaN;
+    const m = String(v).match(/^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2})(?::(\d{2}))?)?/);
+    if (!m) return NaN;
+    const hasTime = m[4] != null;
+    return Date.UTC(
+      +m[1], +m[2] - 1, +m[3],
+      hasTime ? +m[4] : (endOfDay ? 23 : 0),
+      hasTime ? +m[5] : (endOfDay ? 59 : 0),
+      hasTime ? (m[6] ? +m[6] : 0) : (endOfDay ? 59 : 0),
+    );
+  };
+
+  let minStart = Number.POSITIVE_INFINITY;
+  let maxFinish = Number.NEGATIVE_INFINITY;
+  for (const a of ativs as any[]) {
+    if (a.isGrupo || a.disabled) continue;
+    const bsTs = toMs(a.baselineStartTs);
+    const bfTs = toMs(a.baselineFinishTs);
+    const bs = Number.isFinite(bsTs) ? bsTs : toMs(a.baselineStart);
+    const bf = Number.isFinite(bfTs) ? bfTs : toMs(a.baselineFinish, true);
+    if (Number.isFinite(bs) && bs < minStart) minStart = bs;
+    if (Number.isFinite(bf) && bf > maxFinish) maxFinish = bf;
+  }
+  if (!Number.isFinite(minStart) || !Number.isFinite(maxFinish)) {
+    minStart = toMs(datasUpload[0]);
+    maxFinish = toMs(datasUpload[datasUpload.length - 1], true);
+  }
+  if (!Number.isFinite(minStart) || !Number.isFinite(maxFinish)) {
+    return { semanas: 0, uploads: datasUpload.length };
+  }
+
+  const DAY = 86400000;
+  const minDate = new Date(minStart);
+  const dow = minDate.getUTCDay();
+  const delta = (diaCorte - dow + 7) % 7;
+  let cur = Date.UTC(minDate.getUTCFullYear(), minDate.getUTCMonth(), minDate.getUTCDate() + delta);
+  const semanas: string[] = [];
+  let guard = 0;
+  while (cur <= maxFinish + 7 * DAY && guard < 1000) {
+    semanas.push(new Date(cur).toISOString().slice(0, 10));
+    cur += 7 * DAY; guard++;
+  }
+  // Garante slot p/ uploads que caiam além do envelope da baseline.
+  for (const d of datasUpload) {
+    if (!semanas.includes(d) && d > (semanas[semanas.length - 1] ?? "")) semanas.push(d);
+  }
+  semanas.sort();
+  if (semanas.length === 0) return { semanas: 0, uploads: datasUpload.length };
+
+  // idx do degrau acumulado: maior cutoff <= alvo. Uploads ANTES do 1º cutoff
+  // do grid (data de status anterior ao início da baseline) ancoram no slot 0 —
+  // assim um upload válido nunca é descartado silenciosamente (achado code review).
+  const idxAt = (alvo: string): number => {
+    if (alvo < semanas[0]) return 0;
+    let idx = 0;
+    for (let i = 0; i < semanas.length; i++) { if (semanas[i] <= alvo) idx = i; else break; }
+    return idx;
+  };
+
+  const clamp = (x: number) => Math.max(0, Math.min(100, x));
+  const raiz: (number | null)[] = new Array(semanas.length).fill(null);
+  const perAtivRaw: Record<string, (number | null)[]> = {};
+  const ensure = (id: string) => (perAtivRaw[id] ??= new Array(semanas.length).fill(null));
+
+  for (const d of datasUpload) {
+    const slot = idxAt(d);
+    if (slot < 0) continue;
+    const up = semObj[d] || {};
+    if (up.raiz != null && Number.isFinite(+up.raiz)) raiz[slot] = clamp(+up.raiz);
+    const pa = up.porAtividadeId || {};
+    for (const id of Object.keys(pa)) {
+      const v = +pa[id];
+      if (Number.isFinite(v)) ensure(id)[slot] = clamp(v);
+    }
+  }
+
+  // Carry-forward (degrau cumulativo): antes do 1º upload = 0.
+  const fill = (arr: (number | null)[]): number[] => {
+    const out = new Array(arr.length).fill(0);
+    let prev = 0;
+    for (let j = 0; j < arr.length; j++) { if (arr[j] != null) prev = arr[j] as number; out[j] = prev; }
+    return out;
+  };
+  const raizF = fill(raiz);
+  const porAtividadeId: Record<string, number[]> = {};
+  for (const id of Object.keys(perAtivRaw)) porAtividadeId[id] = fill(perAtivRaw[id]);
+
+  const snap = {
+    semanas,
+    raiz: raizF.map(v => +v.toFixed(4)),
+    porAtividadeId,
+    diaCorteSemana: diaCorte,
+    geradoEm: new Date().toISOString(),
+    revisaoId,
+    fonte: "manual",
+  };
+  await db.update(planejamentoProjetos)
+    .set({ previstoSemanasJson: JSON.stringify(snap), previstoSemanasGeradoEm: new Date() })
+    .where(eq(planejamentoProjetos.id, projetoId));
+
+  return { semanas: semanas.length, uploads: datasUpload.length };
+}
+
+// Rev. 2633 — Fonte global do "% Previsto" da empresa dona do projeto
+// ("manual" | "motor"). Default "motor". Lê oc_number_config.previsto_fonte.
+async function getPrevistoFonteByProjeto(db: any, projetoId: number): Promise<"manual" | "motor"> {
+  try {
+    const [proj] = await db.select({ companyId: planejamentoProjetos.companyId })
+      .from(planejamentoProjetos).where(eq(planejamentoProjetos.id, projetoId)).limit(1);
+    if (!proj) return "motor";
+    const [cfg] = await db.select({ f: ocNumberConfig.previstoFonte })
+      .from(ocNumberConfig).where(eq(ocNumberConfig.companyId, proj.companyId)).limit(1);
+    return cfg?.f === "manual" ? "manual" : "motor";
+  } catch { return "motor"; }
+}
+
+// Rev. 2633 — Hardening multi-tenant das mutations do MODO MANUAL (mesma régua do
+// salvarAtividades, Rev. 1829): valida que a revisão pertence ao projeto e que o
+// projeto pertence à company do usuário (admin/admin_master atravessa). Bloqueia
+// IDOR por enumeração de projetoId/revisaoId.
+async function assertProjetoRevisaoScope(db: any, ctx: any, projetoId: number, revisaoId: number) {
+  const isAdmin = ctx?.user?.role === "admin" || ctx?.user?.role === "admin_master";
+  const [rev] = await db.select({ projetoId: planejamentoRevisoes.projetoId })
+    .from(planejamentoRevisoes).where(eq(planejamentoRevisoes.id, revisaoId)).limit(1);
+  if (!rev) throw new TRPCError({ code: "NOT_FOUND", message: "Revisão não encontrada." });
+  if (Number(rev.projetoId) !== Number(projetoId)) {
+    throw new TRPCError({ code: "FORBIDDEN", message: "Revisão não pertence ao projeto informado." });
+  }
+  if (!isAdmin) {
+    const [proj] = await db.select({ companyId: planejamentoProjetos.companyId })
+      .from(planejamentoProjetos).where(eq(planejamentoProjetos.id, projetoId)).limit(1);
+    if (!proj || String(proj.companyId) !== String((ctx?.user as any)?.companyId)) {
+      throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para este projeto." });
+    }
+  }
 }
 
 export const planejamentoRouter = router({
@@ -626,39 +811,165 @@ export const planejamentoRouter = router({
       // pula (a função gravaria null→null a cada leitura = write churn inútil).
       let previstoSemanasJson = (projeto as any).previstoSemanasJson ?? null;
       let previstoSemanasGeradoEm = (projeto as any).previstoSemanasGeradoEm ?? null;
-      if (!previstoSemanasJson) {
+      // Rev. 2633 — reconcilia a curva com o interruptor global (motor/manual).
+      // A curva guarda o marcador `fonte`; curvas antigas (sem marcador) contam
+      // como "motor". Se o marcador divergir da fonte global, reconstrói (lazy) —
+      // assim alternar o interruptor "simplesmente funciona" no próximo load.
+      let curvaFonte: string | null = null;
+      try { curvaFonte = previstoSemanasJson ? (JSON.parse(previstoSemanasJson)?.fonte ?? "motor") : null; } catch { curvaFonte = null; }
+      const fonteGlobal = await getPrevistoFonteByProjeto(db, input.id);
+      const precisaRebuild =
+        !previstoSemanasJson ||
+        (fonteGlobal === "manual" && curvaFonte !== "manual") ||
+        (fonteGlobal === "motor"  && curvaFonte === "manual");
+      if (precisaRebuild) {
         const revs = revisoes as any[];
         const aprovadas = revs.filter((r: any) => r.status === "aprovada");
         const alvo = aprovadas[aprovadas.length - 1] ?? revs[0];
         if (alvo?.id) {
           try {
-            const [cnt] = await db.select({ n: sql<number>`count(*)::int` })
-              .from(planejamentoAtividades)
-              .where(and(
-                eq(planejamentoAtividades.revisaoId, alvo.id),
-                isNotNull(planejamentoAtividades.baselineStart),
-                isNotNull(planejamentoAtividades.baselineFinish),
-              ));
-            const res = (cnt?.n ?? 0) > 0
-              ? await regenerarPrevistoSemanasCaminhoB(db, input.id, alvo.id)
-              : null;
-            if (res && res.semanas > 0) {
-              const [fresh] = await db.select({
-                j: planejamentoProjetos.previstoSemanasJson,
-                g: planejamentoProjetos.previstoSemanasGeradoEm,
-              }).from(planejamentoProjetos).where(eq(planejamentoProjetos.id, input.id)).limit(1);
-              if (fresh) {
-                previstoSemanasJson = fresh.j ?? null;
-                previstoSemanasGeradoEm = fresh.g ?? null;
+            let res: { semanas: number } | null = null;
+            if (fonteGlobal === "manual") {
+              res = await regenerarPrevistoManual(db, input.id, alvo.id);
+            } else {
+              const [cnt] = await db.select({ n: sql<number>`count(*)::int` })
+                .from(planejamentoAtividades)
+                .where(and(
+                  eq(planejamentoAtividades.revisaoId, alvo.id),
+                  isNotNull(planejamentoAtividades.baselineStart),
+                  isNotNull(planejamentoAtividades.baselineFinish),
+                ));
+              if ((cnt?.n ?? 0) > 0) {
+                res = await regenerarPrevistoSemanasCaminhoB(db, input.id, alvo.id);
+              } else {
+                // Motor não consegue reconstruir (zero folhas com baseline). Se a
+                // curva persistida ainda é "manual", ela está OBSOLETA (a fonte
+                // global virou motor) — limpa pra a tela cair no "—" em vez de
+                // mostrar uma curva manual fantasma (achado code review).
+                if (curvaFonte === "manual") {
+                  await db.update(planejamentoProjetos)
+                    .set({ previstoSemanasJson: null as any, previstoSemanasGeradoEm: null as any })
+                    .where(eq(planejamentoProjetos.id, input.id));
+                }
+                res = null;
               }
             }
+            // Relê o estado pós-rebuild (a curva pode ter sido gerada OU zerada).
+            const [fresh] = await db.select({
+              j: planejamentoProjetos.previstoSemanasJson,
+              g: planejamentoProjetos.previstoSemanasGeradoEm,
+            }).from(planejamentoProjetos).where(eq(planejamentoProjetos.id, input.id)).limit(1);
+            if (fresh) {
+              previstoSemanasJson = fresh.j ?? null;
+              previstoSemanasGeradoEm = fresh.g ?? null;
+            }
+            void res;
           } catch (e: any) {
-            console.error(`[Caminho B self-heal] projeto ${input.id}:`, e?.message || e);
+            console.error(`[Previsto self-heal] projeto ${input.id}:`, e?.message || e);
           }
         }
       }
 
       return { ...projeto, previstoSemanasJson, previstoSemanasGeradoEm, revisoes, orcamento, obra };
+    }),
+
+  // ── Rev. 2633 — MODO MANUAL do "% Previsto" ─────────────────────────────────
+  // Lista os uploads semanais já gravados (1 XML por semana).
+  getPrevistoManual: protectedProcedure
+    .input(z.object({ projetoId: z.number(), revisaoId: z.number() }))
+    .query(async ({ input, ctx }) => {
+      const db = await getDb();
+      await assertProjetoRevisaoScope(db, ctx, input.projetoId, input.revisaoId);
+      const [proj] = await db.select({ j: planejamentoProjetos.previstoManualJson })
+        .from(planejamentoProjetos).where(eq(planejamentoProjetos.id, input.projetoId)).limit(1);
+      let manual: any = null;
+      try { manual = proj?.j ? JSON.parse(proj.j) : null; } catch { manual = null; }
+      const sem = (manual && manual.revisaoId === input.revisaoId && manual.semanas) ? manual.semanas : {};
+      const semanas = Object.keys(sem).sort().map((d) => ({
+        statusDate: d,
+        raiz: sem[d]?.raiz ?? null,
+        atividades: sem[d]?.porAtividadeId ? Object.keys(sem[d].porAtividadeId).length : 0,
+        uploadedEm: sem[d]?.uploadedEm ?? null,
+        arquivo: sem[d]?.arquivo ?? null,
+      }));
+      return { revisaoId: input.revisaoId, semanas };
+    }),
+
+  // Grava (ou substitui) 1 upload semanal e reconstrói a curva.
+  salvarPrevistoManualSemana: protectedProcedure
+    .input(z.object({
+      projetoId:  z.number(),
+      revisaoId:  z.number(),
+      statusDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+      raizPct:    z.number().nullable().optional(),
+      itens:      z.array(z.object({ mspUid: z.string(), pct: z.number() })).default([]),
+      arquivo:    z.string().optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      await assertProjetoRevisaoScope(db, ctx, input.projetoId, input.revisaoId);
+      // Resolve mspUid → atividadeId (chave estável dentro da revisão).
+      const ativs = await db.select({ id: planejamentoAtividades.id, mspUid: planejamentoAtividades.mspUid })
+        .from(planejamentoAtividades).where(eq(planejamentoAtividades.revisaoId, input.revisaoId));
+      const uidToId = new Map<string, number>();
+      for (const a of ativs as any[]) if (a.mspUid) uidToId.set(String(a.mspUid), a.id);
+      const porAtividadeId: Record<string, number> = {};
+      let casados = 0;
+      for (const it of input.itens) {
+        const id = uidToId.get(String(it.mspUid));
+        if (id != null) { porAtividadeId[String(id)] = Math.max(0, Math.min(100, it.pct)); casados++; }
+      }
+      // Atualiza previsto_manual_json (reset se mudou a revisão).
+      const [proj] = await db.select({ j: planejamentoProjetos.previstoManualJson })
+        .from(planejamentoProjetos).where(eq(planejamentoProjetos.id, input.projetoId)).limit(1);
+      let manual: any = null;
+      try { manual = proj?.j ? JSON.parse(proj.j) : null; } catch { manual = null; }
+      if (!manual || manual.revisaoId !== input.revisaoId) manual = { revisaoId: input.revisaoId, semanas: {} };
+      if (!manual.semanas) manual.semanas = {};
+      manual.semanas[input.statusDate] = {
+        raiz: input.raizPct ?? null,
+        porAtividadeId,
+        uploadedEm: new Date().toISOString(),
+        arquivo: input.arquivo ?? null,
+      };
+      await db.update(planejamentoProjetos)
+        .set({ previstoManualJson: JSON.stringify(manual) })
+        .where(eq(planejamentoProjetos.id, input.projetoId));
+      // Só reconstrói a curva visível se a fonte global estiver em MANUAL — assim
+      // o upload não sobrescreve a curva do motor quando a empresa ainda está em
+      // modo "motor". Ao alternar p/ manual, o self-heal do getProjeto reconstrói.
+      const fonte = await getPrevistoFonteByProjeto(db, input.projetoId);
+      let semanasGeradas = 0;
+      if (fonte === "manual") {
+        const res = await regenerarPrevistoManual(db, input.projetoId, input.revisaoId);
+        semanasGeradas = res?.semanas ?? 0;
+      }
+      return { ok: true, aplicado: fonte === "manual", fonte, casados, total: input.itens.length, semanas: semanasGeradas };
+    }),
+
+  // Remove 1 upload semanal e reconstrói a curva.
+  limparPrevistoManualSemana: protectedProcedure
+    .input(z.object({ projetoId: z.number(), revisaoId: z.number(), statusDate: z.string() }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      await assertProjetoRevisaoScope(db, ctx, input.projetoId, input.revisaoId);
+      const [proj] = await db.select({ j: planejamentoProjetos.previstoManualJson })
+        .from(planejamentoProjetos).where(eq(planejamentoProjetos.id, input.projetoId)).limit(1);
+      let manual: any = null;
+      try { manual = proj?.j ? JSON.parse(proj.j) : null; } catch { manual = null; }
+      if (manual?.semanas && manual.revisaoId === input.revisaoId) {
+        delete manual.semanas[input.statusDate];
+        await db.update(planejamentoProjetos)
+          .set({ previstoManualJson: JSON.stringify(manual) })
+          .where(eq(planejamentoProjetos.id, input.projetoId));
+      }
+      const fonte = await getPrevistoFonteByProjeto(db, input.projetoId);
+      let semanasGeradas = 0;
+      if (fonte === "manual") {
+        const res = await regenerarPrevistoManual(db, input.projetoId, input.revisaoId);
+        semanasGeradas = res?.semanas ?? 0;
+      }
+      return { ok: true, aplicado: fonte === "manual", semanas: semanasGeradas };
     }),
 
   // ── Revisões ──────────────────────────────────────────────────────────────
@@ -1750,12 +2061,21 @@ export const planejamentoRouter = router({
       // salvar atividades+baselines. Falha silenciosa (snapshot é benefit-add;
       // ausência cai no comportamento legado de leitura de Texto6).
       try {
-        const res = await regenerarPrevistoSemanasCaminhoB(db, input.projetoId, input.revisaoId);
-        if (res) {
-          if (res.folhas > 0 && res.semanas === 0) {
-            console.error(`[Caminho B] ALERTA projeto ${input.projetoId} rev ${input.revisaoId}: ${res.folhas} folha(s) com baseline mas snapshot ficou vazio (semanas=0). Verifique formato das datas de baseline.`);
-          } else {
-            console.log(`[Caminho B] Projeto ${input.projetoId} rev ${input.revisaoId}: snapshot gerado (${res.semanas} semanas × ${res.folhas} folhas).`);
+        // Rev. 2633 — respeita o interruptor global. Em modo MANUAL o motor NÃO
+        // roda (sobrescreveria a curva manual); só reconstrói a curva a partir
+        // dos uploads semanais já gravados em previsto_manual_json.
+        const fonte = await getPrevistoFonteByProjeto(db, input.projetoId);
+        if (fonte === "manual") {
+          const resM = await regenerarPrevistoManual(db, input.projetoId, input.revisaoId);
+          console.log(`[Previsto MANUAL] Projeto ${input.projetoId} rev ${input.revisaoId}: curva reconstruída (${resM?.semanas ?? 0} semanas × ${resM?.uploads ?? 0} uploads).`);
+        } else {
+          const res = await regenerarPrevistoSemanasCaminhoB(db, input.projetoId, input.revisaoId);
+          if (res) {
+            if (res.folhas > 0 && res.semanas === 0) {
+              console.error(`[Caminho B] ALERTA projeto ${input.projetoId} rev ${input.revisaoId}: ${res.folhas} folha(s) com baseline mas snapshot ficou vazio (semanas=0). Verifique formato das datas de baseline.`);
+            } else {
+              console.log(`[Caminho B] Projeto ${input.projetoId} rev ${input.revisaoId}: snapshot gerado (${res.semanas} semanas × ${res.folhas} folhas).`);
+            }
           }
         }
       } catch (e: any) {
