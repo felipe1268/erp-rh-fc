@@ -1,6 +1,41 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2639 — **COLABORADORES · A FILEIRA DE FILTROS POR STATUS (TOTAL, NA EMPRESA,
+ * ATIVOS, CLT, PJ, FÉRIAS, AFASTADOS, LICENÇA, AVISO, DESLIGADOS, BLACKLIST,
+ * RECLUSOS) SUMIA INTEIRA DURANTE O CARREGAMENTO/REFETCH DO STATS; AGORA FICA
+ * SEMPRE VISÍVEL QUANDO HÁ EMPRESA SELECIONADA.**
+ *
+ * PEDIDO (usuário): "cade os filtros dos status que tinha aqui? não mandei retirar
+ * eles. quero de volta" (print da tela Colaboradores SEM a fileira de cards de
+ * status, capturado durante um reload de código/HMR).
+ *
+ * CAUSA-RAIZ: a fileira de cards clicáveis de status era renderizada apenas dentro
+ * de `{statsQ.data && (...)}`. O CLIQUE dos filtros (`setStatusFilter`) NÃO depende
+ * do stats — só os NÚMEROS dependem. Enquanto a query `employees.stats` estava
+ * carregando/refazendo (ex.: full reload disparado por falha de Fast Refresh em
+ * `DashboardLayout.tsx` → "MODULE_SECTIONS export is incompatible"), `statsQ.data`
+ * ficava `undefined` e a fileira INTEIRA desaparecia, dando a impressão de que os
+ * filtros tinham sido removidos.
+ *
+ * FIX (SÓ CLIENT, ZERO BACKEND/SCHEMA; R-001/R-007/R-010):
+ *  - `client/src/pages/Colaboradores.tsx` — o gate da fileira passa de
+ *    `{statsQ.data && (...)}` para `{hasValidSelection && (...)}` (mesma condição
+ *    que habilita as queries `employees.list`/`employees.stats`). Cada contador usa
+ *    acesso opcional com fallback `?? "—"` (e o derivado "Na Empresa"/"Blacklist"
+ *    cai pra "—" quando ainda não há `statsQ.data`). Resultado: os botões de filtro
+ *    continuam sempre clicáveis; só os números mostram "—" por instantes enquanto
+ *    o stats carrega, voltando ao valor assim que a query resolve.
+ *
+ * ESCOPO/CONSERVADOR: nenhuma mudança na lógica de filtragem (`displayEmployees`),
+ * no dropdown de status, no backend (`server/db.ts`/router `employees.stats`) ou no
+ * schema. Mudança puramente de robustez de renderização.
+ *
+ * VALIDAÇÃO: esbuild transform-check exit 0; workflow reiniciado sem erros novos
+ * (só o pré-existente `avisoPrevio.ferias.list companyId`, não relacionado).
+ *
+ * ─────────────────────────────────────────────────────────────────────────────
+ *
  * Rev. 2638 — **RH & DP · MENU "RELATÓRIOS" ENXUTO: REMOVIDOS OS RELATÓRIOS QUE NÃO
  * FAZEM MAIS SENTIDO (PONTO, FOLHA, DIVERGÊNCIAS, CUSTO POR OBRA, HABILIDADES POR
  * OBRA); FICA SÓ O "RAIO-X DO FUNCIONÁRIO".**

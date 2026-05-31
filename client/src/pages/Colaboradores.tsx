@@ -975,22 +975,27 @@ ${obs ? `<div class="box"><strong>Observações / Justificativa do Enquadramento
           </div>
         ) : null}
 
-        {statsQ.data && (
+        {/* Rev. 2639 — fileira de filtros por status SEMPRE visível quando há empresa
+            selecionada. Antes era gated por `statsQ.data` e sumia inteira durante o
+            carregamento/refetch do stats (ex.: reload de HMR), levando o usuário a achar
+            que os filtros foram removidos. Agora os contadores caem pra "—" enquanto o
+            stats carrega, mas os botões de filtro continuam clicáveis. */}
+        {hasValidSelection && (
           <div className="space-y-2 print:hidden">
             <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-9 gap-2.5">
               {[
-                { label: "Total", value: statsQ.data.total, icon: Users, color: "text-slate-700", bg: "bg-slate-50 border-slate-200", filter: "Todos" },
-                { label: "Na Empresa", value: statsQ.data.naEmpresa ?? (statsQ.data.total - statsQ.data.desligados - (statsQ.data.blacklist || 0)), icon: UsersRound, color: "text-teal-700", bg: "bg-teal-50 border-teal-200", filter: "NaEmpresa" },
-                { label: "Ativos", value: statsQ.data.ativos, icon: UserCheck, color: "text-green-700", bg: "bg-green-50 border-green-200", filter: "Ativo" },
-                { label: "CLT", value: statsQ.data.clt, icon: FileText, color: "text-sky-700", bg: "bg-sky-50 border-sky-200", filter: "CLT" },
-                { label: "PJ", value: statsQ.data.pj, icon: Building2, color: "text-indigo-700", bg: "bg-indigo-50 border-indigo-200", filter: "PJ" },
-                { label: "Férias", value: statsQ.data.ferias, icon: Palmtree, color: "text-blue-700", bg: "bg-blue-50 border-blue-200", filter: "Ferias" },
-                { label: "Afastados", value: statsQ.data.afastados, icon: HeartPulse, color: "text-amber-700", bg: "bg-amber-50 border-amber-200", filter: "Afastado" },
-                { label: "Licença", value: statsQ.data.licenca, icon: Clock, color: "text-purple-700", bg: "bg-purple-50 border-purple-200", filter: "Licenca" },
-                ...(canSeeAviso ? [{ label: "Aviso", value: (statsQ.data as any).aviso ?? 0, icon: AlertTriangle, color: "text-yellow-700", bg: "bg-yellow-50 border-yellow-300", filter: "Aviso" }] : []),
-                { label: "Desligados", value: statsQ.data.desligados, icon: UserX, color: "text-red-700", bg: "bg-red-50 border-red-200", filter: "Desligado" },
-                ...(isAdminMaster ? [{ label: "Blacklist", value: statsQ.data.blacklist || 0, icon: ShieldX, color: "text-red-800", bg: "bg-red-100 border-red-300", filter: "ListaNegra" }] : []),
-                { label: "Reclusos", value: statsQ.data.reclusos, icon: Ban, color: "text-gray-700", bg: "bg-gray-50 border-gray-200", filter: "Recluso" },
+                { label: "Total", value: statsQ.data?.total ?? "—", icon: Users, color: "text-slate-700", bg: "bg-slate-50 border-slate-200", filter: "Todos" },
+                { label: "Na Empresa", value: statsQ.data ? (statsQ.data.naEmpresa ?? (statsQ.data.total - statsQ.data.desligados - (statsQ.data.blacklist || 0))) : "—", icon: UsersRound, color: "text-teal-700", bg: "bg-teal-50 border-teal-200", filter: "NaEmpresa" },
+                { label: "Ativos", value: statsQ.data?.ativos ?? "—", icon: UserCheck, color: "text-green-700", bg: "bg-green-50 border-green-200", filter: "Ativo" },
+                { label: "CLT", value: statsQ.data?.clt ?? "—", icon: FileText, color: "text-sky-700", bg: "bg-sky-50 border-sky-200", filter: "CLT" },
+                { label: "PJ", value: statsQ.data?.pj ?? "—", icon: Building2, color: "text-indigo-700", bg: "bg-indigo-50 border-indigo-200", filter: "PJ" },
+                { label: "Férias", value: statsQ.data?.ferias ?? "—", icon: Palmtree, color: "text-blue-700", bg: "bg-blue-50 border-blue-200", filter: "Ferias" },
+                { label: "Afastados", value: statsQ.data?.afastados ?? "—", icon: HeartPulse, color: "text-amber-700", bg: "bg-amber-50 border-amber-200", filter: "Afastado" },
+                { label: "Licença", value: statsQ.data?.licenca ?? "—", icon: Clock, color: "text-purple-700", bg: "bg-purple-50 border-purple-200", filter: "Licenca" },
+                ...(canSeeAviso ? [{ label: "Aviso", value: (statsQ.data as any)?.aviso ?? "—", icon: AlertTriangle, color: "text-yellow-700", bg: "bg-yellow-50 border-yellow-300", filter: "Aviso" }] : []),
+                { label: "Desligados", value: statsQ.data?.desligados ?? "—", icon: UserX, color: "text-red-700", bg: "bg-red-50 border-red-200", filter: "Desligado" },
+                ...(isAdminMaster ? [{ label: "Blacklist", value: statsQ.data ? (statsQ.data.blacklist || 0) : "—", icon: ShieldX, color: "text-red-800", bg: "bg-red-100 border-red-300", filter: "ListaNegra" }] : []),
+                { label: "Reclusos", value: statsQ.data?.reclusos ?? "—", icon: Ban, color: "text-gray-700", bg: "bg-gray-50 border-gray-200", filter: "Recluso" },
               ].map(item => (
                 <button
                   key={item.label}
