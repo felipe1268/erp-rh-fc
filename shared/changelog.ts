@@ -1,6 +1,31 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2637 — **DASHBOARD DE FUNCIONÁRIOS · O SELETOR "ANO DE ANÁLISE" PARAVA EM
+ * 2020 (7 ANOS FIXOS); AGORA LISTA TODOS OS ANOS DESDE A FUNDAÇÃO DA EMPRESA
+ * (2011), EM PARIDADE COM O GRÁFICO "TOTAL DE FUNCIONÁRIOS POR ANO".**
+ *
+ * PEDIDO (usuário): "Porque o não tem os demais anos? Tá parando em 2020 mas temos
+ * informação desde 2011" (anexou prints: o dropdown ia só de 2026 a 2020, enquanto
+ * o gráfico "Total de Funcionários por Ano" mostra dados desde 2011).
+ *
+ * CAUSA-RAIZ: o array de opções do seletor era HARD-CODED em 7 anos —
+ * `Array.from({ length: 7 }, (_, i) => anoAtual - i)` (2026..2020) — independente
+ * de quando a empresa foi fundada. O gráfico anual usa outra fonte
+ * (`funcionariosHeadcountAnual`) que já varre desde o MIN(ano de admissão), por
+ * isso a divergência.
+ *
+ * FIX (SÓ CLIENT, ZERO BACKEND/SCHEMA; R-001/R-007/R-010):
+ *  - `client/src/pages/dashboards/DashFuncionarios.tsx` — `anosDisponiveis` deixa de
+ *    ser fixo e passa a reusar `headcountAnual.anos` (mesma fonte do gráfico "Total
+ *    por Ano", que vai desde a fundação). Set garante unicidade + inclusão do
+ *    `anoAtual`; fallback de 7 anos enquanto a query carrega; ordenação decrescente
+ *    (ano corrente no topo). Definição movida pra DEPOIS da query `headcountAnual`.
+ *
+ * VALIDAÇÃO: esbuild transform-check exit 0; HMR sem erros.
+ *
+ * ─────────────────────────────────────────────────────────────────────────────
+ *
  * Rev. 2636 — **RH & DP · "ANÁLISE DE EXPERIÊNCIA" (TELA FULL-SCREEN) DEIXA DE
  * FICAR TRANSPARENTE — FUNDO 100% OPACO. NÃO SE VÊ MAIS A PÁGINA/SIDEBAR ATRÁS.**
  *

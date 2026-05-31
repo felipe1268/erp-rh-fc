@@ -94,7 +94,6 @@ export default function DashFuncionarios() {
   const queryCompanyId = isConstrutoras ? (companyIds[0] || 0) : companyId;
   const anoAtual = new Date().getFullYear();
   const [anoAnalise, setAnoAnalise] = useState(anoAtual);
-  const anosDisponiveis = Array.from({ length: 7 }, (_, i) => anoAtual - i);
   const isAnoAtual = anoAnalise === anoAtual;
   const { data, isLoading, isError } = trpc.dashboards.funcionarios.useQuery({ companyId: queryCompanyId, ano: anoAnalise, ...(isConstrutoras ? { companyIds } : {}) }, { enabled: isConstrutoras ? companyIds.length > 0 : companyId > 0 });
   const { data: comparativo, isLoading: loadingComp } = trpc.dashboards.funcionariosComparativo.useQuery(
@@ -110,6 +109,14 @@ export default function DashFuncionarios() {
     { companyId: queryCompanyId, ...(isConstrutoras ? { companyIds } : {}) },
     { enabled: isConstrutoras ? companyIds.length > 0 : companyId > 0 }
   );
+  // Rev. 2637 — anos do seletor desde a fundação (reusa o headcount anual);
+  // fallback de 7 anos enquanto carrega. Garante que anoAtual sempre exista.
+  const anosDisponiveis = (() => {
+    const fromData = headcountAnual?.anos?.map(a => a.ano) ?? [];
+    const set = new Set<number>(fromData.length ? fromData : Array.from({ length: 7 }, (_, i) => anoAtual - i));
+    set.add(anoAtual);
+    return Array.from(set).sort((a, b) => b - a);
+  })();
 
   // Drill-down state
   const [drillDown, setDrillDown] = useState<{ open: boolean; title: string; filterType: string; filterValue: string }>({
