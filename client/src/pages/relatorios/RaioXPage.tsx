@@ -29,6 +29,7 @@ const STATUS_BADGE_COLORS: Record<string, string> = {
   "Afastado": "bg-amber-100 text-amber-700",
   "Ferias": "bg-blue-100 text-blue-700",
   "Licenca": "bg-purple-100 text-purple-700",
+  "Aviso": "bg-orange-100 text-orange-700",
   "Recluso": "bg-gray-200 text-gray-700",
   "Lista_Negra": "bg-red-200 text-red-800",
 };
@@ -90,16 +91,23 @@ export default function RaioXPage() {
     return list;
   }, [allEmployeesRaw, canSeeRestricted, isRhOrAdmin, canAccessObra]);
 
-  // IDs de funcionários com aviso prévio em andamento
+  // IDs de funcionários em Aviso Prévio.
+  // Rev. 2640 — UNIÃO de DUAS fontes (deduplicada) pra não "perder" ninguém:
+  //  1) STATUS DO CADASTRO: campo `status === "Aviso"` (EMPLOYEE_STATUS, label
+  //     "Aviso Prévio") — gerenciado na tela Colaboradores. ERA a fonte ignorada
+  //     aqui, fazendo a aba mostrar só os registros do módulo (ex.: 3) enquanto
+  //     o cadastro tinha muito mais.
+  //  2) MÓDULO AVISO PRÉVIO: registros `em_andamento` de `avisoPrevio.list`.
   const avisoPrevioEmployeeIds = useMemo(() => {
     const ids = new Set<number>();
+    (allEmployees as any[]).forEach((e: any) => {
+      if (e.status === "Aviso") ids.add(e.id);
+    });
     (avisosAtivos as any[]).forEach((a: any) => {
-      if (a.status === "em_andamento") {
-        ids.add(a.employeeId);
-      }
+      if (a.status === "em_andamento") ids.add(Number(a.employeeId));
     });
     return ids;
-  }, [avisosAtivos]);
+  }, [avisosAtivos, allEmployees]);
 
   // Contadores por status
   const statusCounts = useMemo(() => {
@@ -109,7 +117,9 @@ export default function RaioXPage() {
       const st = e.status || "Ativo";
       counts[st] = (counts[st] || 0) + 1;
     });
-    counts.AvisoPrevio = avisoPrevioEmployeeIds.size;
+    // Conta a partir da MESMA lista visível (paridade absoluta contador × cards),
+    // ignorando IDs órfãos do módulo que não existam em allEmployees.
+    counts.AvisoPrevio = (allEmployees as any[]).filter((e: any) => avisoPrevioEmployeeIds.has(e.id)).length;
     return counts;
   }, [allEmployees, avisoPrevioEmployeeIds]);
 
@@ -211,6 +221,7 @@ export default function RaioXPage() {
               const statusLabel = emp.status === "Ferias" ? "Férias" 
                 : emp.status === "Licenca" ? "Licença"
                 : emp.status === "Lista_Negra" ? "Blacklist"
+                : emp.status === "Aviso" ? "Aviso Prévio"
                 : emp.status || "Ativo";
               return (
                 <button

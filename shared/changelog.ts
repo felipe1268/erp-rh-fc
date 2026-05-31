@@ -1,6 +1,42 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2640 — **RAIO-X DO FUNCIONÁRIO · O FILTRO "AVISO PRÉVIO" PERDIA GENTE: MOSTRAVA
+ * SÓ OS REGISTROS DO MÓDULO AVISO PRÉVIO (`em_andamento`, EX.: 3) E IGNORAVA OS
+ * COLABORADORES MARCADOS COM STATUS "AVISO" NO CADASTRO. AGORA UNE AS DUAS FONTES
+ * (DEDUPLICADO) → CONTA, FILTRA E DESTACA TODO MUNDO EM AVISO PRÉVIO.**
+ *
+ * PEDIDO (usuário): "esta tudo bagunçado os status.. so motras 3 funcionarios de
+ * avisos e temos muito mais.. quero que analise novalemte isso e garanta que não
+ * ira se perder mais.."
+ *
+ * CAUSA-RAIZ: a aba "Aviso Prévio" do Raio-X derivava `avisoPrevioEmployeeIds`
+ * EXCLUSIVAMENTE de `avisoPrevio.avisoPrevio.list` (registros do MÓDULO com
+ * `status === "em_andamento"`). Mas a fonte canônica do RH é o CAMPO `status` do
+ * cadastro do colaborador = `"Aviso"` (EMPLOYEE_STATUS em `shared/modules.ts`, label
+ * "Aviso Prévio"), gerenciado na tela Colaboradores. As duas fontes não conversavam:
+ * quem estava com `status="Aviso"` no cadastro NÃO entrava na aba (nem havia botão
+ * "Aviso" em `STATUS_OPTIONS`), então a fileira só exibia os 3 do módulo. Prova
+ * aritmética do print: Ativos 106 + Desligados 162 + Afastados 4 + Férias 4 +
+ * Licença 0 + Reclusos 2 + Blacklist 22 = 300, e Todos = 307 → 7 colaboradores com
+ * `status="Aviso"` ficavam invisíveis em qualquer aba.
+ *
+ * FIX (SÓ CLIENT, ZERO BACKEND/SCHEMA; R-001/R-007/R-010):
+ *  - `client/src/pages/relatorios/RaioXPage.tsx` — `avisoPrevioEmployeeIds` passa a
+ *    ser a UNIÃO deduplicada de (1) colaboradores com `status === "Aviso"` do
+ *    cadastro + (2) registros `em_andamento` do módulo aviso prévio. Como `statusCounts`
+ *    (via `.size`), `statusFiltered` (via `.has`) e o destaque do card (`isEmAvisoPrevio`)
+ *    já dependem desse Set, os três passam a refletir todos automaticamente.
+ *  - Polimento de consistência: badge do status `"Aviso"` ganha cor laranja
+ *    (`STATUS_BADGE_COLORS`) e `statusLabel` mapeia `"Aviso"` → "Aviso Prévio".
+ *
+ * ESCOPO/CONSERVADOR: nenhuma mudança no backend, schema, ou na semântica dos demais
+ * status. Só reconcilia a fonte de "Aviso Prévio" no relatório Raio-X.
+ *
+ * VALIDAÇÃO: esbuild transform-check exit 0.
+ *
+ * ─────────────────────────────────────────────────────────────────────────────
+ *
  * Rev. 2639 — **COLABORADORES · A FILEIRA DE FILTROS POR STATUS (TOTAL, NA EMPRESA,
  * ATIVOS, CLT, PJ, FÉRIAS, AFASTADOS, LICENÇA, AVISO, DESLIGADOS, BLACKLIST,
  * RECLUSOS) SUMIA INTEIRA DURANTE O CARREGAMENTO/REFETCH DO STATS; AGORA FICA

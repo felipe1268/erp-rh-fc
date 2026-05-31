@@ -2,6 +2,7 @@
 - [MSP columns — % Concluída vs % Previsto](msp-analysis-columns.md) — for planejamento XML analysis, read % Concluída (`PercentComplete`, realizado), ignore % PREVISTO (`Texto6`).
 - [MSP %Previsto parity](msp-previsto-parity.md) — %PREVISTO must use baseline WITH TIME + minute-by-minute working-time engine (Fri shorter); date-only/day-granular diverge. Validate vs real XML.
 - [Sidebar menu visibility](sidebar-menu-visibility.md) — new menu item needs permission registration in `shared/modules.ts` + `sharedPaths` too, or non-master users won't see it; admin-master bypasses filters.
+- ["Aviso Prévio" tem 2 fontes](aviso-previo-two-sources.md) — contar/filtrar aviso prévio = UNIÃO de `employees.status==="Aviso"` + módulo `avisoPrevio` `em_andamento`; uma fonte só perde gente.
 - [Drizzle column → Neon self-heal guard](drizzle-schema-neon-sync.md) — adding a column to drizzle/schema.ts needs an explicit `ADD COLUMN IF NOT EXISTS` guard in `[SyncSchema+]`; otherwise `db.select()` lists break and render empty.
 - [% Previsto motor vs manual toggle](previsto-fonte-toggle.md) — curve JSON carries a `fonte` marker; getProjeto self-heal reconciles lazily vs the global company toggle. Any new writer must set the marker.
 - [No employee status history](no-status-history.md) — only CURRENT status is stored; for past-date snapshots derive active-at-D from admissão/demissão dates + férias from vacationPeriods; other sub-statuses fold into Ativo.
