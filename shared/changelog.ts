@@ -1,6 +1,54 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2631 — **PLANEJAMENTO · IMPORTAÇÃO DE CRONOGRAMA · ANÁLISE DE INTEGRIDADE
+ * PRÉ-UPLOAD: O ERP AGORA EXAMINA O XML DO MS PROJECT ANTES DE SUBIR E, SE FALTAR
+ * INFORMAÇÃO ESSENCIAL PRO "% PREVISTO" BATER COM O MSP, BLOQUEIA O ENVIO E
+ * EXPLICA EXATAMENTE O QUE FALTA. SE ESTIVER COMPLETO, MOSTRA UM SELO DE
+ * CONFIANÇA. AVISOS NÃO-BLOQUEANTES PARA PENDÊNCIAS MENORES.**
+ *
+ * PEDIDO (usuário): "Quero que faça uma análise no arquivo antes de fazer o
+ * upload. Se tiver faltando algo, deve gerar uma mensagem de alerta para o
+ * usuário falando o que está faltando e não deixar o arquivo ser upado — assim
+ * garantimos todas as informações." Até a Rev. 2630 o ERP detectava dados
+ * incompletos mas caía num fallback aproximado EM SILÊNCIO (sem travar nem
+ * avisar), o que poderia exibir uma curva de Previsto divergente do Project sem
+ * o engenheiro perceber.
+ *
+ * IMPLEMENTAÇÃO (ZERO BACKEND/SCHEMA — SÓ CLIENT, validação em memória no parse;
+ * R-001/R-007/R-010): `client/src/pages/planejamento/ImportarCronograma.tsx`:
+ *  - Novo `baselineReal: boolean` em `TarefaImportada`, marcado TRUE no parser
+ *    SÓ quando a `<Baseline Number=0>` traz Start E Finish válidos (não "NA"/
+ *    2049). Distingue baseline REAL do fallback (Start/Finish vigente), que antes
+ *    era indistinguível.
+ *  - Nova função pura exportada `analisarIntegridadeMSP(tarefas, cal, statusDate)`
+ *    → `{ bloqueios[], avisos[] }`. Chamada dentro de `parseMSProjectFull`, que
+ *    passa a devolver `integridade`.
+ *  - BLOQUEIOS (impedem o upload): (1) calendário SEM jornada de trabalho
+ *    (`weekDayIntervals` ausente) — sem ela o motor minuto-a-minuto não liga;
+ *    (2) NENHUMA atividade com Linha de Base real; (3) Linha de Base date-only
+ *    (sem hora) — o motor exige a hora (ex.: 07:00).
+ *  - AVISOS (não bloqueiam): baseline PARCIAL (algumas folhas sem baseline →
+ *    usam datas vigentes; a raiz continua correta pelo envelope), StatusDate
+ *    ausente, calendário sem feriados.
+ *  - `handleFile`: ao ler XML, se `integridade.bloqueios.length>0` → NÃO avança
+ *    pro preview, fica no passo "upload" e renderiza a caixa vermelha listando o
+ *    que falta. No preview (arquivo OK) mostra selo verde "% Previsto calculado
+ *    com dados completos do MS Project" + avisos âmbar quando houver.
+ *
+ * CALIBRAÇÃO CRÍTICA (evita falso bloqueio): o XML REAL e VÁLIDO PLN_816 R04
+ * (que produz o 3/6/10/14/18 EXATO da Rev. 2630) tem 62 de 1105 folhas SEM
+ * baseline própria — ainda assim a curva da RAIZ bate exato, porque a régua usa
+ * o ENVELOPE do projeto (min início → max término da baseline) e os extremos
+ * têm baseline. Por isso baseline PARCIAL é AVISO, não bloqueio; só bloqueia
+ * quando NÃO há baseline alguma, quando a baseline é date-only, ou quando o
+ * calendário não tem jornada. Verificado por script contra o XML real: o
+ * arquivo bom PASSA (1043 folhas com baseline+hora, jornada presente,
+ * StatusDate 02/07, feriados presentes) — só gera o aviso das 62 parciais.
+ *
+ * ESCOPO: nenhuma mudança no motor de cálculo (Rev. 2630 intacta) nem no
+ * servidor/schema. Apenas uma porta de qualidade ANTES do envio.
+ *
  * Rev. 2630 — **PLANEJAMENTO · ABA "AVANÇO SEMANAL" · O "% PREVISTO" ACUMULADO
  * (CURVA CAMINHO B) PASSA A SER CALCULADO EXATAMENTE COMO O MS PROJECT A PARTIR
  * DA BASELINE — SEM LER A COLUNA TEXTO6. ALVO CRAVADO PLN_816 R04 = 3/6/10/14/18.**

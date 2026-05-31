@@ -37,3 +37,23 @@ antigo (sem hora/sem intervalos) → fallback day-granular ponderado por duraç�
 (cadastro); avanço semanal não regenera (baseline imutável dentro da revisão).
 Validar mudanças rodando o motor REAL (`shared/diasUteis`) contra o XML real — não
 confiar só em esbuild.
+
+## Gate de integridade pré-upload do XML (porta de qualidade)
+
+Se for criar uma validação que BLOQUEIA o upload de um XML "incompleto", os
+critérios de bloqueio do CLIENT (`analisarIntegridadeMSP` em
+`ImportarCronograma.tsx`) precisam espelhar EXATAMENTE os gates reais do motor do
+server, senão dá selo verde falso e o server cai no fallback divergente:
+- **Jornada**: replicar a regra do `temIntervalosUteis` (TODO dia útil com ≥1
+  intervalo) — NÃO basta "algum dia tem intervalo".
+- **Hora da baseline**: exigir hora nos DOIS lados (Start E Finish). O parser lê
+  ts sem hora como 00:00, distorcendo envelope/fração; um lado date-only já diverge.
+- **Baseline parcial NÃO bloqueia** (é só aviso): a RAIZ usa o ENVELOPE do projeto
+  (min-início/max-término), então folhas sem baseline própria caem no fallback de
+  datas vigentes sem estragar a curva da raiz. **Comprovado:** o XML válido PLN_816
+  R04 (curva exata 3/6/10/14/18) tem 62/1105 folhas SEM baseline e mesmo assim bate.
+  Bloquear "qualquer folha sem baseline" = falso bloqueio do arquivo bom.
+
+**Why:** uma régua de validação mais frouxa OU mais rígida que o motor real engana
+o engenheiro — frouxa promete paridade que o server não entrega; rígida barra o
+arquivo que de fato produz a curva certa.

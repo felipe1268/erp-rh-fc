@@ -59,6 +59,11 @@ export interface TarefaImportada {
   // O server usa isto (não a versão date-only) p/ o motor minuto-a-minuto.
   baselineStartTs?:  string;
   baselineFinishTs?: string;
+  // Rev. 2631 — TRUE só quando uma Linha de Base 0 REAL foi encontrada no XML
+  // (tag <Baseline Number=0> com Start/Finish válidos, NÃO "NA"/2049). Quando
+  // false, baselineStart/Ts caíram no fallback (Start/Finish vigente) e o
+  // %Previsto NÃO bate com o MSP — usado pela validação pré-upload.
+  baselineReal?:     boolean;
 }
 
 // ── Utilitários de parse ──────────────────────────────────────────────────────
@@ -265,6 +270,125 @@ export function parseMSProjectStatusDateIso(doc: Document): string | null {
  *  próprio MSP (Texto11 / FieldID 188743997) na tarefa raiz. Quando o ERP
  *  exibe esse projeto no cutoff oficial (= StatusDate do XML), usa esse
  *  número diretamente — paridade exata, sem replicar `ProjDateDiff` interno. */
+// ── Validação de integridade pré-upload (Rev. 2631) ───────────────────────────
+// Analisa o XML ANTES de subir. Se faltar dado ESSENCIAL pro %Previsto bater
+// minuto-a-minuto com o MS Project, devolve "bloqueios" (impedem o upload).
+// "avisos" não bloqueiam, mas alertam o engenheiro. A régua é a mesma do motor
+// real (shared/diasUteis): precisa de Linha de Base 0 COM HORA em todas as
+// folhas + calendário com jornada de trabalho (weekDayIntervals). Sem isso o
+// server cai num fallback aproximado que diverge do Project.
+export interface IntegridadeMSP { bloqueios: string[]; avisos: string[] }
+function temHora(ts?: string): boolean {
+  if (!ts) return false;
+  const m = /T(\d{2}):(\d{2})(?::(\d{2}))?/.exec(ts);
+  if (!m) return false;
+  // date-only exportado como T00:00:00 não conta como "hora de trabalho".
+  return !(m[1] === "00" && m[2] === "00" && (m[3] ?? "00") === "00");
+}
+export function analisarIntegridadeMSP(
+  tarefas: TarefaImportada[],
+  cal: CalendarioImportado | null,
+  statusDate: string | null,
+): IntegridadeMSP {
+  const bloqueios: string[] = [];
+  const avisos: string[] = [];
+
+  // Folhas (atividades reais) — grupos/resumos não entram no cálculo de span.
+  const folhas = tarefas.filter(t => !t.isGrupo);
+  const totalFolhas = folhas.length;
+
+  // 1) Calendário com jornada de trabalho (weekDayIntervals). A régua é EXATAMENTE
+  //    a do gate do motor do server (`temIntervalosUteis` em shared/diasUteis):
+  //    NÃO basta "algum dia" ter intervalo — TODO dia útil (`weekDays[i]===true`)
+  //    precisa de ≥1 intervalo, senão o motor minuto-a-minuto subcontaria minutos
+  //    nesse dia e o server cairia no fallback day-granular (que diverge do MSP).
+  //    Replicar a regra aqui evita falso "selo verde" com XML de jornada parcial.
+  const temJornada = !!cal?.weekDayIntervals
+    && cal.weekDayIntervals.length === 7
+    && (() => {
+      let algum = false;
+      for (let i = 0; i < 7; i++) {
+        const tem = Array.isArray(cal.weekDayIntervals![i]) && cal.weekDayIntervals![i].length > 0;
+        if (cal.weekDays?.[i]) {
+          if (!tem) return false;
+          algum = true;
+        }
+      }
+      return algum;
+    })();
+  if (!temJornada) {
+    bloqueios.push(
+      "O calendário do MS Project veio SEM os horários de trabalho (jornada) completos " +
+      "— é preciso que TODO dia útil tenha horário definido. " +
+      "Sem a jornada completa, o cálculo do % Previsto não bate com o Project. " +
+      "Reexporte o XML incluindo o calendário base completo (Arquivo ▸ Salvar Como ▸ XML do Project, com o calendário do projeto)."
+    );
+  }
+
+  // 2) Linha de Base (Baseline 0). NÃO exigimos baseline em TODAS as folhas:
+  //    a régua da raiz (Rev. 2630) usa o ENVELOPE do projeto (min início / max
+  //    término da baseline) — algumas folhas sem baseline (que caem no fallback
+  //    de datas vigentes) não distorcem a curva da raiz, desde que exista uma
+  //    baseline real com hora cobrindo o projeto. Validado no PLN_816 R04:
+  //    62/1105 folhas sem baseline e a curva raiz ainda bate EXATO (3/6/10/14/18).
+  //    Por isso: SEM baseline nenhuma → BLOQUEIA; baseline date-only → BLOQUEIA;
+  //    baseline parcial (algumas folhas sem) → AVISO (não bloqueia).
+  const comBaselineReal = folhas.filter(t => t.baselineReal).length;
+  // Hora EXIGIDA nos DOIS lados (Start E Finish). O motor parseia ts sem hora como
+  // 00:00, o que distorce o envelope/fração; basta um lado date-only para divergir
+  // do MSP. `comHoraCompleta` = baseline real com hora em início E término.
+  const comHoraCompleta = folhas.filter(t => t.baselineReal && temHora(t.baselineStartTs) && temHora(t.baselineFinishTs)).length;
+  // baselines reais que têm hora só de um lado (ou nenhum) → date-only/mista.
+  const baselineDateOnly = folhas.filter(t => t.baselineReal && !(temHora(t.baselineStartTs) && temHora(t.baselineFinishTs)));
+  const semBaseline = folhas.filter(t => !t.baselineReal);
+  if (totalFolhas === 0) {
+    bloqueios.push("Nenhuma atividade (tarefa) foi encontrada no arquivo.");
+  } else if (comBaselineReal === 0) {
+    bloqueios.push(
+      "Nenhuma atividade tem Linha de Base (Baseline) salva no MS Project. " +
+      "Sem a Linha de Base não é possível calcular o % Previsto. " +
+      "Defina a Linha de Base (Projeto ▸ Definir Linha de Base ▸ Linha de Base) e reexporte o XML."
+    );
+  } else if (comHoraCompleta === 0) {
+    bloqueios.push(
+      "A Linha de Base do MS Project veio SEM hora (somente data) no início e/ou término. " +
+      "O cálculo minuto-a-minuto exige a hora dos DOIS lados (ex.: 07:00 → 16:00). " +
+      "Reexporte o XML preservando as horas da Linha de Base (verifique a jornada do calendário e salve a baseline novamente)."
+    );
+  } else if (baselineDateOnly.length > 0) {
+    const exemplos = baselineDateOnly.slice(0, 3).map(t => `"${(t.nome || "").slice(0, 32)}"`).join(", ");
+    avisos.push(
+      `${baselineDateOnly.length} de ${totalFolhas} atividades têm Linha de Base sem hora em um dos lados` +
+      (exemplos ? ` (ex.: ${exemplos})` : "") + " — essas datas serão lidas como 00:00 e podem divergir do MSP nessas atividades. " +
+      "O % Previsto da raiz continua correto se o início e o término do PROJETO tiverem hora."
+    );
+  }
+  if (totalFolhas > 0 && comBaselineReal > 0 && comHoraCompleta > 0 && semBaseline.length > 0) {
+    const exemplos = semBaseline.slice(0, 3).map(t => `"${(t.nome || "").slice(0, 32)}"`).join(", ");
+    avisos.push(
+      `${semBaseline.length} de ${totalFolhas} atividades estão sem Linha de Base própria` +
+      (exemplos ? ` (ex.: ${exemplos})` : "") + " — elas usarão as datas vigentes como aproximação. " +
+      "O % Previsto da raiz continua correto desde que o início e o término do projeto tenham Linha de Base."
+    );
+  }
+
+  // ── Avisos (não bloqueiam) ──
+  if (!statusDate) {
+    avisos.push(
+      "O arquivo não tem Data de Status (Status Date) definida. " +
+      "Para o Avanço Semanal cair na semana certa, defina a Data de Status no MS Project (Projeto ▸ Informações do Projeto ▸ Data de Status)."
+    );
+  }
+  if (!cal?.exceptions?.length) {
+    avisos.push(
+      "O calendário não tem feriados cadastrados (exceções). " +
+      "Confira se os feriados do período estão no calendário do Project — eles afetam o cálculo do % Previsto."
+    );
+  }
+
+  return { bloqueios, avisos };
+}
+
 export function parseMSProjectFull(text: string): {
   tarefas:            TarefaImportada[];
   statusDate:         string | null;
@@ -273,6 +397,7 @@ export function parseMSProjectFull(text: string): {
   projetoStart:       string | null;
   projetoFinish:      string | null;
   previstoMspRaiz:    number | null;
+  integridade:        IntegridadeMSP;
 } {
   const doc  = new DOMParser().parseFromString(text, "text/xml");
   const err  = doc.querySelector("parsererror");
@@ -380,7 +505,10 @@ export function parseMSProjectFull(text: string): {
     realizadoMspSnapshot:   realizadoMspRaiz,
   } : null;
   const calendarioJson = calComConfig ? JSON.stringify(calComConfig) : null;
-  return { tarefas, statusDate, statusDateIso, calendarioJson, projetoStart, projetoFinish, previstoMspRaiz };
+  // Rev. 2631 — analisa integridade ANTES de devolver (usa o `cal` cru, com
+  // weekDayIntervals/exceptions, e as folhas já parseadas com baselineReal).
+  const integridade = analisarIntegridadeMSP(tarefas, cal, statusDate);
+  return { tarefas, statusDate, statusDateIso, calendarioJson, projetoStart, projetoFinish, previstoMspRaiz, integridade };
 }
 
 // ── Parser MS Project XML (compat — só tarefas) ──────────────────────────────
@@ -507,6 +635,9 @@ function parseMSProjectTasksFromDoc(doc: Document): TarefaImportada[] {
     // no PLN_816 R04, com hora dá o correto 2/9/15/20.
     let baselineStartTs: string | undefined;
     let baselineFinishTs: string | undefined;
+    // Rev. 2631 — só é "baseline real" quando AMBOS Start e Finish da Baseline 0
+    // vêm válidos (não "NA"/2049). Senão é fallback (Start/Finish vigente).
+    let baselineReal = false;
     for (const child of Array.from(task.children)) {
       if (child.tagName !== "Baseline") continue;
       const num = child.querySelector("Number")?.textContent?.trim() ?? "";
@@ -514,8 +645,11 @@ function parseMSProjectTasksFromDoc(doc: Document): TarefaImportada[] {
       const bs = (child.querySelector("Start")?.textContent ?? "").trim();
       const bf = (child.querySelector("Finish")?.textContent ?? "").trim();
       // MSP usa "NA" ou data 2049-12-31 quando não há baseline salva.
-      if (bs && !bs.startsWith("2049") && bs !== "NA") { baselineStart = fmtDate(bs); baselineStartTs = bs; }
-      if (bf && !bf.startsWith("2049") && bf !== "NA") { baselineFinish = fmtDate(bf); baselineFinishTs = bf; }
+      const bsOk = !!bs && !bs.startsWith("2049") && bs !== "NA";
+      const bfOk = !!bf && !bf.startsWith("2049") && bf !== "NA";
+      if (bsOk) { baselineStart = fmtDate(bs); baselineStartTs = bs; }
+      if (bfOk) { baselineFinish = fmtDate(bf); baselineFinishTs = bf; }
+      baselineReal = bsOk && bfOk;
       break;
     }
     const startTs = (task.querySelector("Start")?.textContent ?? "").trim();
@@ -541,6 +675,7 @@ function parseMSProjectTasksFromDoc(doc: Document): TarefaImportada[] {
       previstoMsp, realizadoMsp,
       baselineStart, baselineFinish,
       baselineStartTs, baselineFinishTs,
+      baselineReal,
     });
   }
   return result;
@@ -778,6 +913,8 @@ export default function ImportarCronograma({ projetoId, revisaoAtiva, orcamentoI
   const [tarefas, setTarefas] = useState<TarefaImportada[]>([]);
   const [erro, setErro] = useState<string | null>(null);
   const [alertas, setAlertas] = useState<Problema[]>([]);
+  // Rev. 2631 — diagnóstico de integridade do XML (bloqueios + avisos).
+  const [integridade, setIntegridade] = useState<IntegridadeMSP | null>(null);
   const [carregando, setCarregando] = useState(false);
   const [arquivo, setArquivo] = useState<string>("");
   const [nivelMax, setNivelMax] = useState(5);
@@ -933,6 +1070,7 @@ export default function ImportarCronograma({ projetoId, revisaoAtiva, orcamentoI
     setTarefas([]);
     setErro(null);
     setAlertas([]);
+    setIntegridade(null);
     setArquivo("");
     setNivelMax(5);
     setPagina(1);
@@ -978,6 +1116,7 @@ export default function ImportarCronograma({ projetoId, revisaoAtiva, orcamentoI
   async function handleFile(file: File) {
     setCarregando(true);
     setErro(null);
+    setIntegridade(null);
     setArquivo(file.name);
     try {
       let parsed: TarefaImportada[];
@@ -987,6 +1126,16 @@ export default function ImportarCronograma({ projetoId, revisaoAtiva, orcamentoI
         const text = await file.text();
         // Rev. 1642 — captura também StatusDate + Calendars pra paridade MS Project.
         const full = parseMSProjectFull(text);
+        // Rev. 2631 — TRAVA pré-upload: se faltar dado essencial pro %Previsto
+        // bater com o MSP, NÃO deixa subir. Mostra o que falta e fica no passo
+        // "upload" pra reexportar o XML correto.
+        setIntegridade(full.integridade);
+        if (full.integridade.bloqueios.length > 0) {
+          setTarefas([]);
+          setMetadadosMSP(null);
+          setStep("upload");
+          return;   // `finally` desliga o "carregando"
+        }
         parsed = full.tarefas;
         setMetadadosMSP({ statusDate: full.statusDate, statusDateIso: full.statusDateIso, calendarioJson: full.calendarioJson, projetoStart: full.projetoStart, projetoFinish: full.projetoFinish });
       } else if (ext === "xlsx" || ext === "xls" || ext === "xlsm") {
@@ -1224,6 +1373,35 @@ export default function ImportarCronograma({ projetoId, revisaoAtiva, orcamentoI
                   {erro}
                 </div>
               )}
+
+              {/* Rev. 2631 — TRAVA: XML incompleto bloqueia o upload. */}
+              {integridade && integridade.bloqueios.length > 0 && (
+                <div className="rounded-lg border border-red-300 bg-red-50 p-3 space-y-2">
+                  <p className="text-sm font-semibold text-red-700 flex items-center gap-1.5">
+                    <AlertTriangle className="h-4 w-4 shrink-0" />
+                    Arquivo bloqueado — está faltando informação essencial
+                  </p>
+                  <p className="text-xs text-red-600">
+                    Para o <strong>% Previsto</strong> bater exatamente com o MS Project, o XML precisa estar completo. Corrija no Project, reexporte e tente de novo:
+                  </p>
+                  <ul className="space-y-1.5">
+                    {integridade.bloqueios.map((b, i) => (
+                      <li key={i} className="text-xs text-red-700 flex gap-1.5">
+                        <span className="shrink-0">•</span><span>{b}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  {integridade.avisos.length > 0 && (
+                    <div className="pt-1 border-t border-red-200 space-y-1">
+                      {integridade.avisos.map((a, i) => (
+                        <p key={i} className="text-[11px] text-amber-700 flex gap-1.5">
+                          <span className="shrink-0">⚠</span><span>{a}</span>
+                        </p>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
 
@@ -1270,6 +1448,30 @@ export default function ImportarCronograma({ projetoId, revisaoAtiva, orcamentoI
                 <div className="flex items-center gap-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
                   <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
                   Soma dos pesos financeiros: <strong>{totalPeso.toFixed(4)}%</strong> — deve totalizar 100% para Curva S financeira correta.
+                </div>
+              )}
+
+              {/* Rev. 2631 — Selo de confiança + avisos não-bloqueantes do XML */}
+              {integridade && (
+                <div className="space-y-2">
+                  {integridade.bloqueios.length === 0 && (
+                    <div className="flex items-center gap-2 text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2">
+                      <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
+                      <span>
+                        <strong>% Previsto pode ser calculado conforme o MS Project</strong> — Linha de Base com hora + calendário com jornada de trabalho presentes.
+                        {integridade.avisos.length > 0 && " Veja os avisos abaixo."}
+                      </span>
+                    </div>
+                  )}
+                  {integridade.avisos.length > 0 && (
+                    <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 space-y-1">
+                      {integridade.avisos.map((a, i) => (
+                        <p key={i} className="text-[11px] text-amber-700 flex gap-1.5">
+                          <AlertTriangle className="h-3.5 w-3.5 shrink-0" /><span>{a}</span>
+                        </p>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
 
