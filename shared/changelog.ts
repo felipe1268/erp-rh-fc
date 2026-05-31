@@ -1,6 +1,54 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2626 — **DASHBOARD DE FUNCIONÁRIOS · O SELETOR "ANO DE ANÁLISE" PASSA A
+ * FILTRAR TUDO: OS 4 CARDS DO TOPO (ATIVOS / DESLIGADOS / ADVERTÊNCIAS /
+ * ATESTADOS) E TODOS OS GRÁFICOS (STATUS, GÊNERO, CONTRATO, FUNÇÕES, SETORES,
+ * PIRÂMIDE ETÁRIA, TEMPO DE CASA, ETC.) REFLETEM A SITUAÇÃO DO ANO ESCOLHIDO.**
+ *
+ * PEDIDO (usuário): trocar o "Ano de análise" não mudava os cards/gráficos do
+ * topo — só as tabelas comparativas embaixo. Pediu explicitamente que o filtro
+ * de ano afetasse "TUDO no dashboard".
+ *
+ * SEMÂNTICA (snapshot do ano):
+ *  - **Ativos** = quadro ativo AO FIM do ano escolhido (ponto-no-tempo, por
+ *    datas de admissão/demissão). No ANO ATUAL mantém a régua de STATUS atual
+ *    (zero regressão na visão padrão — 123 Ativos continua 123).
+ *  - **Desligados / Advertências / Atestados** = ocorridos DURANTE o ano
+ *    (por `dataDemissao` / `dataOcorrencia` / `dataEmissao`).
+ *  - **Gráficos** (gênero, contrato, funções, setores, estado civil, cidade,
+ *    estado, pirâmide etária, tempo de casa) = quem estava ativo na data de
+ *    referência, com idade/tempo calculados NAQUELA data.
+ *  - **Admissões/Demissões mensais** = meses do ano de análise (calendário),
+ *    não mais janela rolante de 12 meses.
+ *
+ * LIMITAÇÃO HONESTA: o sistema só guarda o STATUS ATUAL de cada colaborador
+ * (não há histórico de status), então para anos PASSADOS o gráfico "Status"
+ * mostra apenas Ativo/Férias reconstruídos por datas (`vacationPeriods`) —
+ * sub-status como Afastado/Recluso não são recriáveis e ficam dobrados em Ativo.
+ *
+ * IMPLEMENTAÇÃO (ADITIVO — SOMENTE SELECT/LEITURA; ZERO ALTER/DROP/DELETE;
+ * R-001/R-007/R-010):
+ *  - `server/routers/dashboards.ts`: `getDashFuncionarios(companyId, companyIds?,
+ *    ano?)` reescrito year-aware. Calcula `refDate` (ano atual=hoje; passado=
+ *    `${ano}-12-31`), `yearStart`/`yearEndEvt` e `refDateLit` (`sql.raw` p/ casar
+ *    SELECT+GROUP BY nas CASEs de idade/tempo). `activeWhere` ramifica (status
+ *    atual no ano corrente × datas admissão/demissão no ano passado). Admissões/
+ *    demissões mensais e rankings advertências(`dataOcorrencia`)/atestados
+ *    (`dataEmissao`)/advertenciasTipo passam a usar a janela do ano. +3 queries
+ *    (23 ativosRef, 24 desligadosAno, 25 feriasAtRef). Retorno inclui `ano`.
+ *    `statusDistMerged` ramifica (atual=status real; passado=Ativo/Férias por
+ *    datas). Procedure `dashboards.funcionarios` aceita `ano` no input zod e o
+ *    inclui na `cacheKey`.
+ *  - `client/src/pages/dashboards/DashFuncionarios.tsx`: a query
+ *    `trpc.dashboards.funcionarios` agora passa `ano: anoAnalise` (causa-raiz do
+ *    bug). Os 4 KPIs ganham `sub` com o contexto do ano ("hoje"/"fim de AAAA" e
+ *    "em AAAA").
+ *
+ * VALIDADO: servidor reiniciado e recompilou limpo (tsx watch); Neon conectado.
+ *
+ * ---------------------------------------------------------------------------
+ *
  * Rev. 2625 — **DASHBOARD DE FUNCIONÁRIOS · A TABELA "CONTRATAÇÕES x
  * DESLIGAMENTOS — COMPARATIVO ANUAL" (ADMISSÕES E DEMISSÕES) FICA TOTALMENTE
  * RESPONSIVA NO CELULAR: EM VEZ DE UMA TABELA DE 9 COLUNAS COM ROLAGEM

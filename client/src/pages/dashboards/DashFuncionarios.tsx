@@ -91,10 +91,11 @@ export default function DashFuncionarios() {
   const companyId = Number(selectedCompanyId) || 0;
   const companyIds = getCompanyIdsForQuery();
   const queryCompanyId = isConstrutoras ? (companyIds[0] || 0) : companyId;
-  const { data, isLoading, isError } = trpc.dashboards.funcionarios.useQuery({ companyId: queryCompanyId, ...(isConstrutoras ? { companyIds } : {}) }, { enabled: isConstrutoras ? companyIds.length > 0 : companyId > 0 });
   const anoAtual = new Date().getFullYear();
   const [anoAnalise, setAnoAnalise] = useState(anoAtual);
   const anosDisponiveis = Array.from({ length: 7 }, (_, i) => anoAtual - i);
+  const isAnoAtual = anoAnalise === anoAtual;
+  const { data, isLoading, isError } = trpc.dashboards.funcionarios.useQuery({ companyId: queryCompanyId, ano: anoAnalise, ...(isConstrutoras ? { companyIds } : {}) }, { enabled: isConstrutoras ? companyIds.length > 0 : companyId > 0 });
   const { data: comparativo, isLoading: loadingComp } = trpc.dashboards.funcionariosComparativo.useQuery(
     { companyId: queryCompanyId, ano: anoAnalise, ...(isConstrutoras ? { companyIds } : {}) },
     { enabled: isConstrutoras ? companyIds.length > 0 : companyId > 0 }
@@ -110,8 +111,11 @@ export default function DashFuncionarios() {
   });
 
   const openDrillDown = useCallback((title: string, filterType: string, filterValue: string) => {
+    // Drill-down opera sobre os dados ATUAIS — só faz sentido no ano corrente.
+    // Em anos passados (snapshot) abrir a lista atual seria enganoso.
+    if (!isAnoAtual) return;
     setDrillDown({ open: true, title, filterType, filterValue });
-  }, []);
+  }, [isAnoAtual]);
 
   // Análise por função — combobox state
   const [selectedFuncao, setSelectedFuncao] = useState<string | null>(null);
@@ -193,10 +197,10 @@ export default function DashFuncionarios() {
 
         {/* KPIs */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <DashKpi label="Ativos" value={data.resumo.totalAtivos} icon={UserCheck} color="green" />
-          <DashKpi label="Desligados" value={data.resumo.totalDesligados ?? (data.resumo.totalGeral - data.resumo.totalAtivos)} icon={UserX} color="red" />
-          <DashKpi label="Advertências" value={data.rankingAdvertencias.reduce((s, r) => s + r.total, 0)} icon={AlertTriangle} color="orange" />
-          <DashKpi label="Atestados" value={data.rankingAtestados.reduce((s, r) => s + r.totalAtestados, 0)} icon={Calendar} color="blue" />
+          <DashKpi label="Ativos" value={data.resumo.totalAtivos} icon={UserCheck} color="green" sub={isAnoAtual ? "hoje" : `fim de ${anoAnalise}`} />
+          <DashKpi label="Desligados" value={data.resumo.totalDesligados ?? (data.resumo.totalGeral - data.resumo.totalAtivos)} icon={UserX} color="red" sub={`em ${anoAnalise}`} />
+          <DashKpi label="Advertências" value={data.rankingAdvertencias.reduce((s, r) => s + r.total, 0)} icon={AlertTriangle} color="orange" sub={`em ${anoAnalise}`} />
+          <DashKpi label="Atestados" value={data.rankingAtestados.reduce((s, r) => s + r.totalAtestados, 0)} icon={Calendar} color="blue" sub={`em ${anoAnalise}`} />
         </div>
 
         {/* Destaques */}
@@ -245,7 +249,7 @@ export default function DashFuncionarios() {
             // Gráfico de status mostra apenas ativos (Desligado já está no card KPI)
             const activeStatuses = data.statusDist.filter(s => s.label !== 'Desligado');
             return <DashChart
-              title="Status dos Funcionários Ativos"
+              title={isAnoAtual ? "Status dos Funcionários Ativos" : `Status dos Ativos — fim de ${anoAnalise}`}
               type="doughnut"
               labels={activeStatuses.map(s => s.label)}
               datasets={[{ data: activeStatuses.map(s => s.value), backgroundColor: activeStatuses.map(s => STATUS_COLORS[s.label] || SEMANTIC_COLORS.neutro) }]}
@@ -550,7 +554,7 @@ export default function DashFuncionarios() {
         {/* Turnover */}
         {sortedMonths.length > 0 && (
           <DashChart
-            title="Admissões x Demissões (últimos 12 meses)"
+            title={`Admissões x Demissões — ${anoAnalise}`}
             type="bar"
             labels={monthLabels}
             datasets={[

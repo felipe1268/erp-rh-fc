@@ -65,23 +65,39 @@ function companyWhere(table: any, companyId: number, companyIds?: number[]) {
 // ============================================================
 // 1. DASHBOARD FUNCIONÁRIOS (análise completa)
 // ============================================================
-async function getDashFuncionarios(companyId: number, companyIds?: number[]) {
+async function getDashFuncionarios(companyId: number, companyIds?: number[], ano?: number) {
   const db = await getDb();
   if (!db) return null;
 
-  const baseWhere = and(companyWhere(employees, companyId, companyIds), sql`${employees.deletedAt} IS NULL`);
-  const activeWhere = and(baseWhere, sql`${employees.status} NOT IN ('Desligado', 'Lista_Negra')`);
+  // Rev. 2626 — Dashboard year-aware (snapshot do "Ano de análise").
+  // Ano atual = mantém régua de status atual (zero regressão na visão padrão).
+  // Ano passado = snapshot ponto-no-tempo via datas de admissão/demissão (fim do ano).
+  const currentYear = new Date().getFullYear();
+  const refY = ano && ano > 0 ? ano : currentYear;
+  const isCurrentYear = refY === currentYear;
   const today = new Date().toISOString().split('T')[0];
+  const refDate = isCurrentYear ? today : `${refY}-12-31`;     // data de referência (ponto-no-tempo)
+  const yearStart = `${refY}-01-01`;                            // início do ano de análise
+  const yearEndEvt = isCurrentYear ? today : `${refY}-12-31`;   // fim da janela de eventos do ano
+  const refDateLit = sql.raw(`'${refDate}'::date`);            // literal (igual em SELECT e GROUP BY)
+
+  const baseWhere = and(companyWhere(employees, companyId, companyIds), sql`${employees.deletedAt} IS NULL`);
+  // "Ativo" = por status (ano atual) OU empregado na data de referência (ano passado)
+  const activeWhere = isCurrentYear
+    ? and(baseWhere, sql`${employees.status} NOT IN ('Desligado', 'Lista_Negra')`)
+    : and(baseWhere,
+        sql`${employees.dataAdmissao} IS NOT NULL AND ${employees.dataAdmissao}::date <= ${refDate}::date`,
+        sql`(${employees.dataDemissao} IS NULL OR ${employees.dataDemissao}::date > ${refDate}::date)`);
 
   // Executar todas as queries em paralelo para máxima performance
   let queryResults: any[];
   try {
     queryResults = await Promise.all([
-    // 1. Status distribution
+    // 1. Status distribution (usado só p/ ano atual)
     db.select({ status: employees.status, count: sql<number>`count(*)` })
       .from(employees).where(baseWhere).groupBy(employees.status),
 
-    // 2. Férias em gozo (cross-reference)
+    // 2. Férias em gozo (cross-reference — usado só p/ ano atual)
     db.select({ employeeId: vacationPeriods.employeeId })
       .from(vacationPeriods)
       .innerJoin(employees, eq(vacationPeriods.employeeId, employees.id))
@@ -123,54 +139,54 @@ async function getDashFuncionarios(companyId: number, companyIds?: number[]) {
       .groupBy(sql`INITCAP(LOWER(${employees.cidade}))`)
       .orderBy(sql`count(*) desc`).limit(10),
 
-    // 9. Pirâmide etária
+    // 9. Pirâmide etária (idade na data de referência)
     db.select({
       faixa: sql<string>`CASE 
-        WHEN EXTRACT(YEAR FROM AGE(CURRENT_DATE, "dataNascimento")) < 21 THEN '14-20'
-        WHEN EXTRACT(YEAR FROM AGE(CURRENT_DATE, "dataNascimento")) < 26 THEN '21-25'
-        WHEN EXTRACT(YEAR FROM AGE(CURRENT_DATE, "dataNascimento")) < 31 THEN '26-30'
-        WHEN EXTRACT(YEAR FROM AGE(CURRENT_DATE, "dataNascimento")) < 41 THEN '31-40'
-        WHEN EXTRACT(YEAR FROM AGE(CURRENT_DATE, "dataNascimento")) < 51 THEN '41-50'
-        WHEN EXTRACT(YEAR FROM AGE(CURRENT_DATE, "dataNascimento")) < 61 THEN '51-60'
+        WHEN EXTRACT(YEAR FROM AGE(${refDateLit}, "dataNascimento")) < 21 THEN '14-20'
+        WHEN EXTRACT(YEAR FROM AGE(${refDateLit}, "dataNascimento")) < 26 THEN '21-25'
+        WHEN EXTRACT(YEAR FROM AGE(${refDateLit}, "dataNascimento")) < 31 THEN '26-30'
+        WHEN EXTRACT(YEAR FROM AGE(${refDateLit}, "dataNascimento")) < 41 THEN '31-40'
+        WHEN EXTRACT(YEAR FROM AGE(${refDateLit}, "dataNascimento")) < 51 THEN '41-50'
+        WHEN EXTRACT(YEAR FROM AGE(${refDateLit}, "dataNascimento")) < 61 THEN '51-60'
         ELSE '61+' END`,
       sexo: employees.sexo,
       count: sql<number>`count(*)`,
     }).from(employees)
       .where(and(activeWhere, sql`"dataNascimento" IS NOT NULL`))
-      .groupBy(sql`CASE WHEN EXTRACT(YEAR FROM AGE(CURRENT_DATE, "dataNascimento")) < 21 THEN '14-20' WHEN EXTRACT(YEAR FROM AGE(CURRENT_DATE, "dataNascimento")) < 26 THEN '21-25' WHEN EXTRACT(YEAR FROM AGE(CURRENT_DATE, "dataNascimento")) < 31 THEN '26-30' WHEN EXTRACT(YEAR FROM AGE(CURRENT_DATE, "dataNascimento")) < 41 THEN '31-40' WHEN EXTRACT(YEAR FROM AGE(CURRENT_DATE, "dataNascimento")) < 51 THEN '41-50' WHEN EXTRACT(YEAR FROM AGE(CURRENT_DATE, "dataNascimento")) < 61 THEN '51-60' ELSE '61+' END`, employees.sexo),
+      .groupBy(sql`CASE WHEN EXTRACT(YEAR FROM AGE(${refDateLit}, "dataNascimento")) < 21 THEN '14-20' WHEN EXTRACT(YEAR FROM AGE(${refDateLit}, "dataNascimento")) < 26 THEN '21-25' WHEN EXTRACT(YEAR FROM AGE(${refDateLit}, "dataNascimento")) < 31 THEN '26-30' WHEN EXTRACT(YEAR FROM AGE(${refDateLit}, "dataNascimento")) < 41 THEN '31-40' WHEN EXTRACT(YEAR FROM AGE(${refDateLit}, "dataNascimento")) < 51 THEN '41-50' WHEN EXTRACT(YEAR FROM AGE(${refDateLit}, "dataNascimento")) < 61 THEN '51-60' ELSE '61+' END`, employees.sexo),
 
-    // 10. Tempo de empresa
+    // 10. Tempo de empresa (na data de referência)
     db.select({
       faixa: sql<string>`CASE 
-        WHEN (EXTRACT(YEAR FROM AGE(CURRENT_DATE, "dataAdmissao")) * 12 + EXTRACT(MONTH FROM AGE(CURRENT_DATE, "dataAdmissao"))) < 3 THEN '< 3 meses'
-        WHEN (EXTRACT(YEAR FROM AGE(CURRENT_DATE, "dataAdmissao")) * 12 + EXTRACT(MONTH FROM AGE(CURRENT_DATE, "dataAdmissao"))) < 6 THEN '3-6 meses'
-        WHEN (EXTRACT(YEAR FROM AGE(CURRENT_DATE, "dataAdmissao")) * 12 + EXTRACT(MONTH FROM AGE(CURRENT_DATE, "dataAdmissao"))) < 12 THEN '6-12 meses'
-        WHEN EXTRACT(YEAR FROM AGE(CURRENT_DATE, "dataAdmissao")) < 2 THEN '1-2 anos'
-        WHEN EXTRACT(YEAR FROM AGE(CURRENT_DATE, "dataAdmissao")) < 5 THEN '2-5 anos'
-        WHEN EXTRACT(YEAR FROM AGE(CURRENT_DATE, "dataAdmissao")) < 10 THEN '5-10 anos'
+        WHEN (EXTRACT(YEAR FROM AGE(${refDateLit}, "dataAdmissao")) * 12 + EXTRACT(MONTH FROM AGE(${refDateLit}, "dataAdmissao"))) < 3 THEN '< 3 meses'
+        WHEN (EXTRACT(YEAR FROM AGE(${refDateLit}, "dataAdmissao")) * 12 + EXTRACT(MONTH FROM AGE(${refDateLit}, "dataAdmissao"))) < 6 THEN '3-6 meses'
+        WHEN (EXTRACT(YEAR FROM AGE(${refDateLit}, "dataAdmissao")) * 12 + EXTRACT(MONTH FROM AGE(${refDateLit}, "dataAdmissao"))) < 12 THEN '6-12 meses'
+        WHEN EXTRACT(YEAR FROM AGE(${refDateLit}, "dataAdmissao")) < 2 THEN '1-2 anos'
+        WHEN EXTRACT(YEAR FROM AGE(${refDateLit}, "dataAdmissao")) < 5 THEN '2-5 anos'
+        WHEN EXTRACT(YEAR FROM AGE(${refDateLit}, "dataAdmissao")) < 10 THEN '5-10 anos'
         ELSE '10+ anos' END`,
       count: sql<number>`count(*)`,
     }).from(employees)
       .where(and(activeWhere, sql`"dataAdmissao" IS NOT NULL`))
-      .groupBy(sql`CASE WHEN (EXTRACT(YEAR FROM AGE(CURRENT_DATE, "dataAdmissao")) * 12 + EXTRACT(MONTH FROM AGE(CURRENT_DATE, "dataAdmissao"))) < 3 THEN '< 3 meses' WHEN (EXTRACT(YEAR FROM AGE(CURRENT_DATE, "dataAdmissao")) * 12 + EXTRACT(MONTH FROM AGE(CURRENT_DATE, "dataAdmissao"))) < 6 THEN '3-6 meses' WHEN (EXTRACT(YEAR FROM AGE(CURRENT_DATE, "dataAdmissao")) * 12 + EXTRACT(MONTH FROM AGE(CURRENT_DATE, "dataAdmissao"))) < 12 THEN '6-12 meses' WHEN EXTRACT(YEAR FROM AGE(CURRENT_DATE, "dataAdmissao")) < 2 THEN '1-2 anos' WHEN EXTRACT(YEAR FROM AGE(CURRENT_DATE, "dataAdmissao")) < 5 THEN '2-5 anos' WHEN EXTRACT(YEAR FROM AGE(CURRENT_DATE, "dataAdmissao")) < 10 THEN '5-10 anos' ELSE '10+ anos' END`),
+      .groupBy(sql`CASE WHEN (EXTRACT(YEAR FROM AGE(${refDateLit}, "dataAdmissao")) * 12 + EXTRACT(MONTH FROM AGE(${refDateLit}, "dataAdmissao"))) < 3 THEN '< 3 meses' WHEN (EXTRACT(YEAR FROM AGE(${refDateLit}, "dataAdmissao")) * 12 + EXTRACT(MONTH FROM AGE(${refDateLit}, "dataAdmissao"))) < 6 THEN '3-6 meses' WHEN (EXTRACT(YEAR FROM AGE(${refDateLit}, "dataAdmissao")) * 12 + EXTRACT(MONTH FROM AGE(${refDateLit}, "dataAdmissao"))) < 12 THEN '6-12 meses' WHEN EXTRACT(YEAR FROM AGE(${refDateLit}, "dataAdmissao")) < 2 THEN '1-2 anos' WHEN EXTRACT(YEAR FROM AGE(${refDateLit}, "dataAdmissao")) < 5 THEN '2-5 anos' WHEN EXTRACT(YEAR FROM AGE(${refDateLit}, "dataAdmissao")) < 10 THEN '5-10 anos' ELSE '10+ anos' END`),
 
     // 11. Por estado
     db.select({ estado: employees.estado, count: sql<number>`count(*)` })
       .from(employees).where(activeWhere).groupBy(employees.estado).orderBy(sql`count(*) desc`),
 
-    // 12. Admissões por mês (12m)
+    // 12. Admissões por mês (ano de análise)
     db.select({ mes: sql<string>`TO_CHAR("dataAdmissao", 'YYYY-MM')`, count: sql<number>`count(*)` })
       .from(employees)
-      .where(and(companyWhere(employees, companyId, companyIds), sql`"dataAdmissao" >= CURRENT_DATE - INTERVAL '12 months'`, sql`${employees.deletedAt} IS NULL`))
+      .where(and(companyWhere(employees, companyId, companyIds), sql`${employees.deletedAt} IS NULL`, sql`"dataAdmissao"::date BETWEEN ${yearStart}::date AND ${yearEndEvt}::date`))
       .groupBy(sql`TO_CHAR("dataAdmissao", 'YYYY-MM')`).orderBy(sql`TO_CHAR("dataAdmissao", 'YYYY-MM')`),
 
-    // 13. Demissões por mês (12m)
+    // 13. Demissões por mês (ano de análise)
     db.select({ mes: sql<string>`TO_CHAR("dataDemissao", 'YYYY-MM')`, count: sql<number>`count(*)` })
       .from(employees)
-      .where(and(companyWhere(employees, companyId, companyIds), sql`"dataDemissao" >= CURRENT_DATE - INTERVAL '12 months'`, sql`${employees.deletedAt} IS NULL`))
+      .where(and(companyWhere(employees, companyId, companyIds), sql`${employees.deletedAt} IS NULL`, sql`"dataDemissao"::date BETWEEN ${yearStart}::date AND ${yearEndEvt}::date`))
       .groupBy(sql`TO_CHAR("dataDemissao", 'YYYY-MM')`).orderBy(sql`TO_CHAR("dataDemissao", 'YYYY-MM')`),
 
-    // 14-17. Destaques
+    // 14-17. Destaques (entre ativos na data de referência)
     db.select({ nome: employees.nomeCompleto, data: employees.dataNascimento, funcao: employees.funcao })
       .from(employees).where(and(activeWhere, sql`"dataNascimento" IS NOT NULL`)).orderBy(employees.dataNascimento).limit(1),
     db.select({ nome: employees.nomeCompleto, data: employees.dataNascimento, funcao: employees.funcao })
@@ -180,32 +196,52 @@ async function getDashFuncionarios(companyId: number, companyIds?: number[]) {
     db.select({ nome: employees.nomeCompleto, data: employees.dataAdmissao, funcao: employees.funcao })
       .from(employees).where(and(activeWhere, sql`"dataAdmissao" IS NOT NULL`)).orderBy(desc(employees.dataAdmissao)).limit(1),
 
-    // 18. Ranking advertências (top 10)
+    // 18. Ranking advertências (top 10 — ocorridas no ano de análise)
     db.select({ employeeId: warnings.employeeId, nome: employees.nomeCompleto, funcao: employees.funcao, fotoUrl: employees.fotoUrl, total: sql<number>`count(*)` })
       .from(warnings).innerJoin(employees, eq(warnings.employeeId, employees.id))
-      .where(and(companyWhere(warnings, companyId, companyIds), isNull(warnings.deletedAt), isNull(employees.deletedAt), sql`${employees.status} NOT IN ('Desligado', 'Lista_Negra')`))
+      .where(and(companyWhere(warnings, companyId, companyIds), isNull(warnings.deletedAt), isNull(employees.deletedAt), sql`${warnings.dataOcorrencia}::date BETWEEN ${yearStart}::date AND ${yearEndEvt}::date`))
       .groupBy(warnings.employeeId, employees.nomeCompleto, employees.funcao, employees.fotoUrl)
       .orderBy(sql`count(*) desc`).limit(10),
 
-    // 19. Ranking atestados (top 10)
+    // 19. Ranking atestados (top 10 — emitidos no ano de análise)
     db.select({ employeeId: atestados.employeeId, nome: employees.nomeCompleto, funcao: employees.funcao, fotoUrl: employees.fotoUrl, totalAtestados: sql<number>`count(*)`, totalDias: sql<number>`COALESCE(SUM("diasAfastamento"), 0)` })
       .from(atestados).innerJoin(employees, eq(atestados.employeeId, employees.id))
-      .where(and(companyWhere(atestados, companyId, companyIds), isNull(atestados.deletedAt), isNull(employees.deletedAt), sql`${employees.status} NOT IN ('Desligado', 'Lista_Negra')`))
+      .where(and(companyWhere(atestados, companyId, companyIds), isNull(atestados.deletedAt), isNull(employees.deletedAt), sql`${atestados.dataEmissao}::date BETWEEN ${yearStart}::date AND ${yearEndEvt}::date`))
       .groupBy(atestados.employeeId, employees.nomeCompleto, employees.funcao, employees.fotoUrl)
       .orderBy(sql`count(*) desc`).limit(10),
 
-    // 20. Advertências por tipo
+    // 20. Advertências por tipo (ano de análise)
     db.select({ tipo: warnings.tipoAdvertencia, count: sql<number>`count(*)` })
-      .from(warnings).where(and(companyWhere(warnings, companyId, companyIds), isNull(warnings.deletedAt))).groupBy(warnings.tipoAdvertencia),
+      .from(warnings).where(and(companyWhere(warnings, companyId, companyIds), isNull(warnings.deletedAt), sql`${warnings.dataOcorrencia}::date BETWEEN ${yearStart}::date AND ${yearEndEvt}::date`)).groupBy(warnings.tipoAdvertencia),
 
-    // 21. Todas as funções (sem limite, para o seletor) — inclui todos os status
+    // 21. Todas as funções (sem limite, para o seletor) — ativos na data de referência
     db.select({ funcao: employees.funcao, count: sql<number>`count(*)` })
-      .from(employees).where(baseWhere).groupBy(employees.funcao)
+      .from(employees).where(activeWhere).groupBy(employees.funcao)
       .orderBy(sql`count(*) desc`),
 
-    // 22. Distribuição por função × status (para gráfico de análise) — inclui todos os status
+    // 22. Distribuição por função × status (para gráfico de análise) — ativos na data de referência
     db.select({ funcao: employees.funcao, status: employees.status, count: sql<number>`count(*)` })
-      .from(employees).where(baseWhere).groupBy(employees.funcao, employees.status),
+      .from(employees).where(activeWhere).groupBy(employees.funcao, employees.status),
+
+    // 23. Total de ativos na data de referência (usado p/ ano passado)
+    db.select({ c: sql<number>`count(*)` }).from(employees).where(activeWhere),
+
+    // 24. Total de desligados DURANTE o ano de análise
+    db.select({ c: sql<number>`count(*)` }).from(employees)
+      .where(and(baseWhere, sql`${employees.dataDemissao} IS NOT NULL`, sql`${employees.dataDemissao}::date BETWEEN ${yearStart}::date AND ${yearEndEvt}::date`)),
+
+    // 25. Férias em gozo na data de referência (reconstruído por datas — usado p/ ano passado)
+    db.select({ employeeId: vacationPeriods.employeeId })
+      .from(vacationPeriods)
+      .innerJoin(employees, eq(vacationPeriods.employeeId, employees.id))
+      .where(and(
+        companyWhere(vacationPeriods, companyId, companyIds),
+        isNull(vacationPeriods.deletedAt), isNull(employees.deletedAt),
+        sql`(${employees.tipoContrato} IS NULL OR ${employees.tipoContrato} NOT IN ('PJ','Socio'))`,
+        sql`${employees.dataAdmissao} IS NOT NULL AND ${employees.dataAdmissao}::date <= ${refDate}::date`,
+        sql`(${employees.dataDemissao} IS NULL OR ${employees.dataDemissao}::date > ${refDate}::date)`,
+        sql`${vacationPeriods.dataInicio} IS NOT NULL AND ${vacationPeriods.dataFim} IS NOT NULL AND ${vacationPeriods.dataInicio} <= ${refDate} AND ${vacationPeriods.dataFim} >= ${refDate}`,
+      )),
     ]);
   } catch (err: any) {
     console.error('[getDashFuncionarios] Erro nas queries:', err?.message || err);
@@ -219,31 +255,51 @@ async function getDashFuncionarios(companyId: number, companyIds?: number[]) {
     oldestArr, youngestArr, longestTenureArr, shortestTenureArr,
     rankingAdvertencias, rankingAtestados, advertenciasTipo,
     funcaoAll, funcaoStatusDist,
+    ativosRefArr, desligadosAnoArr, feriasAtRef,
   ] = queryResults;
 
   const [oldest] = oldestArr;
   const [youngest] = youngestArr;
   const [longestTenure] = longestTenureArr;
   const [shortestTenure] = shortestTenureArr;
-  const feriasExtraCount = new Set(feriasEmGozo.map((f: any) => f.employeeId)).size;
 
-  const totalDesligados = statusDist.filter(s => s.status === 'Desligado' || s.status === 'Lista_Negra').reduce((s, r) => s + Number(r.count), 0);
-  const totalAtivos = statusDist.filter(s => !['Desligado', 'Lista_Negra'].includes(s.status || '')).reduce((s, r) => s + Number(r.count), 0);
-  const totalGeral = statusDist.reduce((s, r) => s + Number(r.count), 0);
+  // Desligados = ocorridos DURANTE o ano de análise (ano atual ou passado)
+  const totalDesligados = Number(desligadosAnoArr?.[0]?.c) || 0;
 
-  const statusMergeObj: Record<string, number> = {};
-  for (const r of statusDist) {
-    const label = r.status === 'Lista_Negra' ? 'Desligado' : (r.status || 'Desconhecido');
-    statusMergeObj[label] = (statusMergeObj[label] || 0) + Number(r.count);
+  let totalAtivos: number;
+  let statusDistMerged: { label: string; value: number }[];
+
+  if (isCurrentYear) {
+    // Ano atual = régua de status atual (idêntico à visão padrão)
+    const feriasExtraCount = new Set(feriasEmGozo.map((f: any) => f.employeeId)).size;
+    totalAtivos = statusDist.filter(s => !['Desligado', 'Lista_Negra'].includes(s.status || '')).reduce((s, r) => s + Number(r.count), 0);
+    const statusMergeObj: Record<string, number> = {};
+    for (const r of statusDist) {
+      if (r.status === 'Desligado' || r.status === 'Lista_Negra') continue; // KPI próprio cuida disso
+      const label = r.status || 'Desconhecido';
+      statusMergeObj[label] = (statusMergeObj[label] || 0) + Number(r.count);
+    }
+    if (feriasExtraCount > 0) {
+      statusMergeObj['Ferias'] = (statusMergeObj['Ferias'] || 0) + feriasExtraCount;
+      statusMergeObj['Ativo'] = (statusMergeObj['Ativo'] || 0) - feriasExtraCount;
+    }
+    statusDistMerged = Object.entries(statusMergeObj).map(([label, value]) => ({ label, value }));
+  } else {
+    // Ano passado = snapshot ponto-no-tempo (Ativo/Férias reconstruídos por datas;
+    // sub-status como Afastado/Recluso não têm histórico → dobrados em Ativo).
+    totalAtivos = Number(ativosRefArr?.[0]?.c) || 0;
+    const feriasCount = new Set((feriasAtRef as any[]).map(f => f.employeeId)).size;
+    statusDistMerged = [
+      { label: 'Ativo', value: Math.max(0, totalAtivos - feriasCount) },
+      { label: 'Ferias', value: feriasCount },
+    ].filter(s => s.value > 0);
   }
-  if (feriasExtraCount > 0) {
-    statusMergeObj['Ferias'] = (statusMergeObj['Ferias'] || 0) + feriasExtraCount;
-    statusMergeObj['Ativo'] = (statusMergeObj['Ativo'] || 0) - feriasExtraCount;
-  }
-  const statusDistMerged = Object.entries(statusMergeObj).map(([label, value]) => ({ label, value }));
+
+  const totalGeral = totalAtivos + totalDesligados;
   const ordemCrescente = ['< 3 meses', '3-6 meses', '6-12 meses', '1-2 anos', '2-5 anos', '5-10 anos', '10+ anos'];
 
   return {
+    ano: refY,
     resumo: { totalGeral, totalAtivos: Number(totalAtivos), totalDesligados },
     statusDist: statusDistMerged,
     sexDist: sexDist.map(r => ({ label: r.sexo || "Não informado", value: Number(r.count) })),
@@ -280,7 +336,7 @@ async function getDashFuncionarios(companyId: number, companyIds?: number[]) {
     rankingAtestados: rankingAtestados.map(r => ({ employeeId: r.employeeId, nome: r.nome, funcao: r.funcao, fotoUrl: r.fotoUrl ?? null, totalAtestados: Number(r.totalAtestados), totalDias: Number(r.totalDias) })),
     advertenciasTipo: advertenciasTipo.map(r => ({ label: r.tipo, value: Number(r.count) })),
     funcaoAll: funcaoAll.map(r => ({ label: r.funcao || "Não informado", value: Number(r.count) })),
-    funcaoStatusDist: funcaoStatusDist.map(r => ({ funcao: r.funcao || "Não informado", status: r.status || "Desconhecido", count: Number(r.count) })),
+    funcaoStatusDist: funcaoStatusDist.map(r => ({ funcao: r.funcao || "Não informado", status: isCurrentYear ? (r.status || "Desconhecido") : "Ativo", count: Number(r.count) })),
   };
 }
 
@@ -4400,9 +4456,9 @@ async function getDashParceiros(
 }
 
 export const dashboardsRouter = router({
-  funcionarios: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() })).query(({ input }) => {
-    const cacheKey = `dash:func:${input.companyId}:${(input.companyIds ?? []).join(',')}`;
-    return memCache.getOrFetch(cacheKey, TTL.MEDIUM, () => getDashFuncionarios(input.companyId, input.companyIds));
+  funcionarios: protectedProcedure.input(z.object({ companyId: z.number(), ano: z.number().optional(), companyIds: z.array(z.number()).optional() })).query(({ input }) => {
+    const cacheKey = `dash:func:${input.companyId}:${input.ano ?? 'cur'}:${(input.companyIds ?? []).join(',')}`;
+    return memCache.getOrFetch(cacheKey, TTL.MEDIUM, () => getDashFuncionarios(input.companyId, input.companyIds, input.ano));
   }),
   drillDown: protectedProcedure.input(z.object({ companyId: z.number(), filterType: z.string(), filterValue: z.string(), companyIds: z.array(z.number()).optional() })).query(({ input }) => getDrillDown(input.companyId, input.filterType, input.filterValue, input.companyIds)),
   cartaoPonto: protectedProcedure.input(z.object({ companyId: z.number(), mesReferencia: z.string().optional(), companyIds: z.array(z.number()).optional() })).query(({ input }) => getDashCartaoPonto(input.companyId, input.mesReferencia, input.companyIds)),
