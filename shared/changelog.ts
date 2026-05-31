@@ -1,6 +1,47 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2613 — **RECRUTAMENTO/CURRÍCULOS · LAYOUT NOVO, MODERNO E MINIMALISTA
+ * (MAIS ESPAÇO EM BRANCO, FÁCIL UTILIZAÇÃO) — SÓ VISUAL, TODA A LÓGICA/HANDLERS/
+ * tRPC/DIALOGS PRESERVADOS.**
+ *
+ * PEDIDO (usuário): "QUERO UM LAYOUT NOVO.. moderno e fácil utilização".
+ * Escopo confirmado via pergunta: SÓ a tela de Recrutamento/Currículos
+ * (`client/src/pages/Curriculos.tsx`), estilo "Moderno e clean (bastante espaço
+ * em branco, minimalista)". Manter 100% da lógica — só mudar o visual.
+ *
+ * IMPLEMENTAÇÃO (SÓ CLIENT — `client/src/pages/Curriculos.tsx`; ZERO
+ * SERVER/SCHEMA/ALTER/DROP/DELETE — todos os onClick/handlers/mutations/estado
+ * preservados byte-a-byte):
+ *  - FUNDO: `bg-gradient-to-br from-slate-50 to-amber-50/30` → `bg-slate-50`
+ *    limpo, padding responsivo (`p-4 sm:p-6 lg:p-8`).
+ *  - HEADER: ícone Briefcase em caixa suave (`bg-amber-50 border-amber-100`,
+ *    sem gradiente/shadow pesado), título `font-semibold tracking-tight 3xl`,
+ *    subtítulo "Banco de talentos organizado por função". Botões "Upload com IA"
+ *    (roxo) + "Novo Currículo" (amber-600) MOVIDOS pro canto sup. direito do
+ *    header (rounded-xl, shadow-sm) e REMOVIDOS da toolbar (eram duplicados).
+ *  - SIDEBAR (Funções + Status): cards `rounded-2xl border-slate-200/70` sem
+ *    shadow pesado; labels uppercase tracking-wider slate-400; itens ativos
+ *    `bg-amber-50 text-amber-900`, hover `bg-slate-50`; contadores `tabular-nums`
+ *    discretos (sem pílula). Checkbox de função e botão "Mesclar" repaginados em
+ *    neutro/slate.
+ *  - BUSCA: virou input slim isolado (`h-12 rounded-xl` com ícone, sem card
+ *    ao redor) em vez de toolbar com card+botões.
+ *  - BARRA DE SELEÇÃO EM MASSA (bulk): branca com `border-amber-200`, botões
+ *    `rounded-lg` em neutro/vermelho suave.
+ *  - TABELA: container `rounded-2xl border-slate-200/70`; cabeçalho uppercase
+ *    tracking slate-400; linhas com mais respiro (`py-3.5`), bordas `slate-50`,
+ *    hover `slate-50/60`, seleção `amber-50/40`. NOVOS AVATARES por candidato
+ *    (círculo `bg-amber-100 text-amber-700` com a inicial do nome); nome
+ *    `slate-900` hover `amber-700`; função vira chip neutro `bg-slate-100`;
+ *    empty-state e loader repaginados; wrapper `overflow-x-auto` para mobile.
+ *  - MODAL "UPLOAD COM IA" (screenshot mostrava barra de rolagem horizontal):
+ *    `DialogContent` ganha `overflow-x-hidden` (+ `max-w-2xl`), ícone em caixa
+ *    roxa suave, caixa de instrução `purple-50/70`, lista de arquivos em
+ *    chips `bg-slate-50` com `truncate` (corrige o scroll lateral).
+ *
+ * Validado: esbuild client `Curriculos.tsx` (exit 0).
+ *
  * Rev. 2612 — **COLABORADORES · O CARD "NA EMPRESA" PASSA A SER CLICÁVEL E
  * FILTRA A LISTA (TODOS COM VÍNCULO = TOTAL − DESLIGADOS − BLACKLIST) — ANTES
  * NÃO ACONTECIA NADA AO CLICAR (ERA O ÚNICO CARD INERTE).**

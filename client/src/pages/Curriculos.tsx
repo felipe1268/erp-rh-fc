@@ -651,29 +651,52 @@ export default function Curriculos() {
     </FullScreenDialog>
 
     <div className={fichaAberta ? "hidden" : ""}>
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-amber-50/30 p-6">
+    <div className="min-h-screen bg-slate-50 p-4 sm:p-6 lg:p-8">
       <div className="max-w-7xl mx-auto">
-        <div className="flex items-center gap-3 mb-6">
-          <Button variant="ghost" size="sm" onClick={() => navigate("/painel/rh")}><ArrowLeft className="h-4 w-4 mr-1" /> Voltar</Button>
-          <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center shadow-lg">
-            <Briefcase className="h-6 w-6 text-white" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-bold text-slate-800">Currículos</h1>
-            <p className="text-sm text-slate-500">Banco de currículos organizado por função</p>
+        <div className="mb-8">
+          <Button variant="ghost" size="sm" onClick={() => navigate("/painel/rh")} className="text-slate-500 hover:text-slate-900 hover:bg-slate-100 -ml-2 mb-3 h-8">
+            <ArrowLeft className="h-4 w-4 mr-1.5" /> Voltar
+          </Button>
+          <div className="flex items-end justify-between gap-4 flex-wrap">
+            <div className="flex items-center gap-3">
+              <div className="h-11 w-11 rounded-2xl bg-amber-50 border border-amber-100 flex items-center justify-center">
+                <Briefcase className="h-5 w-5 text-amber-600" />
+              </div>
+              <div>
+                <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-slate-900">Currículos</h1>
+                <p className="text-sm text-slate-500 mt-0.5">Banco de talentos organizado por função</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button onClick={() => {
+                setIAFiles([]); setIAResults(null); setIAProgress(""); setIAPercent(0); setIACurrentFile(""); setShowIADialog(true);
+              }} variant="outline" className="h-10 rounded-xl border-slate-200 bg-white text-purple-700 hover:bg-purple-50 hover:border-purple-200 shadow-sm">
+                <Sparkles className="h-4 w-4 mr-1.5" /> Upload com IA
+              </Button>
+              <Button onClick={() => {
+                if (!funcoes.length) { toast.error("Crie uma função primeiro"); return; }
+                setEditingId(null);
+                setDialogFuncaoId(funcoesSelecionadas.length === 1 ? funcoesSelecionadas[0] : null);
+                setForm({ nomeCandidato: "", telefone: "", email: "", endereco: "", cidade: "", estado: "", dataNascimento: "", habilidades: "", escolaridade: "", cursoFormacao: "", observacoes: "" });
+                setPendingFile(null);
+                setShowCurDialog(true);
+              }} className="h-10 rounded-xl bg-amber-600 hover:bg-amber-700 shadow-sm"><UserPlus className="h-4 w-4 mr-1.5" /> Novo Currículo</Button>
+            </div>
           </div>
         </div>
 
-        <div className="grid grid-cols-12 gap-4">
-          <div className="col-span-12 md:col-span-3">
-            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-4">
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="font-semibold text-slate-700 text-sm">Funções</h3>
-                <Button size="sm" variant="outline" onClick={() => setShowFuncDialog(true)} className="h-7 text-xs"><FolderPlus className="h-3 w-3 mr-1" /> Nova</Button>
+        <div className="grid grid-cols-12 gap-4 lg:gap-6">
+          <div className="col-span-12 md:col-span-3 space-y-4">
+            <div className="bg-white rounded-2xl border border-slate-200/70 p-4">
+              <div className="flex items-center justify-between mb-3 px-1">
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-400">Funções</h3>
+                <button onClick={() => setShowFuncDialog(true)} className="inline-flex items-center gap-1 text-xs font-medium text-amber-700 hover:text-amber-800 transition">
+                  <FolderPlus className="h-3.5 w-3.5" /> Nova
+                </button>
               </div>
-              <div className="space-y-1">
+              <div className="space-y-0.5">
                 <button onClick={() => setFuncoesSelecionadas([])}
-                  className={`w-full text-left px-3 py-2 rounded-md text-sm transition ${funcoesSelecionadas.length === 0 ? "bg-amber-100 text-amber-900 font-semibold" : "hover:bg-slate-100 text-slate-700"}`}>
+                  className={`w-full text-left px-3 py-2 rounded-lg text-sm transition ${funcoesSelecionadas.length === 0 ? "bg-amber-50 text-amber-900 font-medium" : "hover:bg-slate-50 text-slate-600"}`}>
                   Todas as funções
                 </button>
                 {funcoes.map((f: any) => {
@@ -681,12 +704,12 @@ export default function Curriculos() {
                   return (
                     <div key={f.id} className="group flex items-center gap-1">
                       <button onClick={() => { setFuncoesSelecionadas(prev => checked ? prev.filter(id => id !== f.id) : [...prev, f.id]); setSelectedIds([]); }}
-                        className={`flex-1 text-left px-3 py-2 rounded-md text-sm transition flex items-center gap-2 ${checked ? "bg-amber-100 text-amber-900 font-semibold" : "hover:bg-slate-100 text-slate-700"}`}>
-                        <span className={`inline-flex items-center justify-center w-4 h-4 rounded border text-xs flex-shrink-0 ${checked ? "bg-amber-600 border-amber-600 text-white" : "border-slate-300"}`}>
+                        className={`flex-1 text-left px-3 py-2 rounded-lg text-sm transition flex items-center gap-2 ${checked ? "bg-amber-50 text-amber-900 font-medium" : "hover:bg-slate-50 text-slate-600"}`}>
+                        <span className={`inline-flex items-center justify-center w-4 h-4 rounded-[5px] border text-[10px] flex-shrink-0 transition ${checked ? "bg-amber-600 border-amber-600 text-white" : "border-slate-300"}`}>
                           {checked && "✓"}
                         </span>
-                        {f.nome}
-                        {contagens?.porFuncao?.[f.id] > 0 && <span className="text-xs bg-slate-100 text-slate-500 rounded-full px-1.5 py-0.5 min-w-[20px] text-center ml-auto">{contagens.porFuncao[f.id]}</span>}
+                        <span className="truncate">{f.nome}</span>
+                        {contagens?.porFuncao?.[f.id] > 0 && <span className="text-xs text-slate-400 ml-auto tabular-nums">{contagens.porFuncao[f.id]}</span>}
                       </button>
                       <button
                         title="Renomear função"
@@ -708,8 +731,8 @@ export default function Curriculos() {
                   );
                 })}
                 {funcoesSelecionadas.length > 1 && (
-                  <div className="pt-2 border-t mt-2 space-y-2">
-                    <p className="text-xs text-slate-500 px-3">{funcoesSelecionadas.length} funções selecionadas</p>
+                  <div className="pt-2 border-t border-slate-100 mt-2 space-y-2">
+                    <p className="text-xs text-slate-400 px-3">{funcoesSelecionadas.length} funções selecionadas</p>
                     {/* Rev. 1724 — mesclar funções selecionadas em uma só */}
                     <button
                       onClick={() => {
@@ -732,7 +755,7 @@ export default function Curriculos() {
                         mesclarFuncoesMut.mutate({ companyId, destinoId: destino.id, origemIds: origens });
                       }}
                       disabled={mesclarFuncoesMut.isPending}
-                      className="w-full text-left px-3 py-2 rounded-md text-xs bg-blue-50 hover:bg-blue-100 text-blue-700 font-medium border border-blue-200 disabled:opacity-50"
+                      className="w-full text-left px-3 py-2 rounded-lg text-xs bg-slate-50 hover:bg-slate-100 text-slate-700 font-medium border border-slate-200 disabled:opacity-50 transition"
                     >
                       {mesclarFuncoesMut.isPending ? "Mesclando..." : "🔗 Mesclar selecionadas"}
                     </button>
@@ -740,11 +763,11 @@ export default function Curriculos() {
                 )}
               </div>
             </div>
-            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 mt-4">
-              <h3 className="font-semibold text-slate-700 text-sm mb-3">Status</h3>
-              <div className="space-y-1">
+            <div className="bg-white rounded-2xl border border-slate-200/70 p-4">
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-3 px-1">Status</h3>
+              <div className="space-y-0.5">
                 {([
-                  { key: "todos" as StatusTab, label: "Todos", icon: <Briefcase className="h-3.5 w-3.5" />, color: "text-slate-600" },
+                  { key: "todos" as StatusTab, label: "Todos", icon: <Briefcase className="h-3.5 w-3.5" />, color: "text-slate-500" },
                   ...Object.entries(STATUS_CONFIG).map(([key, cfg]) => ({
                     key: key as StatusTab, label: cfg.label, icon: cfg.icon, color: cfg.color,
                   })),
@@ -752,10 +775,10 @@ export default function Curriculos() {
                   const count = contagens?.porStatus?.[tab.key] ?? 0;
                   return (
                     <button key={tab.key} onClick={() => { setStatusTab(tab.key); setSelectedIds([]); }}
-                      className={`w-full text-left px-3 py-1.5 rounded-md text-sm transition flex items-center gap-2 ${statusTab === tab.key ? "bg-amber-100 text-amber-900 font-semibold" : "hover:bg-slate-100 text-slate-700"}`}>
-                      <span className={statusTab === tab.key ? "text-amber-700" : tab.color}>{tab.icon}</span>
+                      className={`w-full text-left px-3 py-2 rounded-lg text-sm transition flex items-center gap-2.5 ${statusTab === tab.key ? "bg-amber-50 text-amber-900 font-medium" : "hover:bg-slate-50 text-slate-600"}`}>
+                      <span className={statusTab === tab.key ? "text-amber-600" : tab.color}>{tab.icon}</span>
                       <span className="flex-1">{tab.label}</span>
-                      {count > 0 && <span className={`text-xs rounded-full px-1.5 py-0.5 min-w-[20px] text-center ${statusTab === tab.key ? "bg-amber-200 text-amber-800" : "bg-slate-100 text-slate-500"}`}>{count}</span>}
+                      {count > 0 && <span className={`text-xs tabular-nums ${statusTab === tab.key ? "text-amber-600 font-semibold" : "text-slate-400"}`}>{count}</span>}
                     </button>
                   );
                 })}
@@ -763,55 +786,36 @@ export default function Curriculos() {
             </div>
           </div>
 
-          <div className="col-span-12 md:col-span-9">
-            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 mb-4">
-              <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center">
-                <div className="relative flex-1">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                  <Input className="pl-9" placeholder="Buscar por nome, telefone, cidade, habilidade..." value={search} onChange={e => setSearch(e.target.value)} />
-                </div>
-                <div className="flex gap-2">
-                  <Button onClick={() => {
-                    setIAFiles([]); setIAResults(null); setIAProgress(""); setIAPercent(0); setIACurrentFile(""); setShowIADialog(true);
-                  }} variant="outline" className="border-purple-300 text-purple-700 hover:bg-purple-50">
-                    <Sparkles className="h-4 w-4 mr-1" /> Upload com IA
-                  </Button>
-                  <Button onClick={() => {
-                    if (!funcoes.length) { toast.error("Crie uma função primeiro"); return; }
-                    setEditingId(null);
-                    setDialogFuncaoId(funcoesSelecionadas.length === 1 ? funcoesSelecionadas[0] : null);
-                    setForm({ nomeCandidato: "", telefone: "", email: "", endereco: "", cidade: "", estado: "", dataNascimento: "", habilidades: "", escolaridade: "", cursoFormacao: "", observacoes: "" });
-                    setPendingFile(null);
-                    setShowCurDialog(true);
-                  }} className="bg-amber-600 hover:bg-amber-700"><UserPlus className="h-4 w-4 mr-1" /> Novo Currículo</Button>
-                </div>
-              </div>
+          <div className="col-span-12 md:col-span-9 space-y-4">
+            <div className="relative">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+              <Input className="pl-11 h-12 rounded-xl border-slate-200/70 bg-white shadow-sm text-sm focus-visible:ring-amber-500/30" placeholder="Buscar por nome, telefone, cidade, habilidade..." value={search} onChange={e => setSearch(e.target.value)} />
             </div>
 
             {selectedIds.length > 0 && (
-              <div className="bg-blue-50 border border-blue-200 rounded-2xl p-3 mb-4 flex flex-wrap items-center gap-3">
-                <span className="text-sm font-medium text-blue-800">{selectedIds.length} selecionado(s)</span>
+              <div className="bg-white border border-amber-200 rounded-xl p-2.5 pl-4 flex flex-wrap items-center gap-3 shadow-sm">
+                <span className="text-sm font-medium text-slate-700">{selectedIds.length} selecionado(s)</span>
                 <div className="flex flex-wrap gap-2 ml-auto">
                   <Button size="sm" variant="outline" onClick={openStatusDialog} disabled={atualizarStatusMut.isPending}
-                    className="border-blue-300 text-blue-700 hover:bg-blue-50 h-8 text-xs">
+                    className="border-slate-200 text-slate-700 hover:bg-slate-50 h-8 text-xs rounded-lg">
                     <ArrowUpDown className="h-3.5 w-3.5 mr-1" /> Alterar Status
                   </Button>
                   <Button size="sm" variant="outline" onClick={handleBulkDelete} disabled={excluirVariosMut.isPending}
-                    className="border-red-400 text-red-700 hover:bg-red-100 h-8 text-xs">
+                    className="border-red-200 text-red-600 hover:bg-red-50 h-8 text-xs rounded-lg">
                     {excluirVariosMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : <Trash2 className="h-3.5 w-3.5 mr-1" />}
                     Excluir
                   </Button>
-                  <Button size="sm" variant="ghost" onClick={() => setSelectedIds([])} className="h-8 text-xs text-slate-500">Limpar</Button>
+                  <Button size="sm" variant="ghost" onClick={() => setSelectedIds([])} className="h-8 text-xs text-slate-400 hover:text-slate-700">Limpar</Button>
                 </div>
               </div>
             )}
 
-            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-              <div className="flex items-center justify-between px-4 py-2 border-b bg-slate-50/50">
-                <span className="text-xs text-slate-500">{filtrados.length} candidato(s)</span>
-                <div className="flex items-center gap-2">
-                  <ArrowUpDown className="h-3.5 w-3.5 text-slate-400" />
-                  <select className="text-xs border-0 bg-transparent text-slate-600 cursor-pointer focus:ring-0 pr-6"
+            <div className="bg-white rounded-2xl border border-slate-200/70 overflow-hidden shadow-sm">
+              <div className="flex items-center justify-between px-5 py-3 border-b border-slate-100">
+                <span className="text-sm font-medium text-slate-500">{filtrados.length} <span className="text-slate-400 font-normal">candidato(s)</span></span>
+                <div className="flex items-center gap-1.5 text-slate-400">
+                  <ArrowUpDown className="h-3.5 w-3.5" />
+                  <select className="text-xs border-0 bg-transparent text-slate-500 cursor-pointer focus:ring-0 pr-5 font-medium"
                     value={sortBy} onChange={e => setSortBy(e.target.value as SortBy)}>
                     <option value="recente">Mais recentes</option>
                     <option value="antigo">Mais antigos</option>
@@ -821,66 +825,74 @@ export default function Curriculos() {
                 </div>
               </div>
               {isLoading ? (
-                <div className="p-12 text-center text-slate-400"><Loader2 className="h-6 w-6 animate-spin mx-auto" /></div>
+                <div className="p-16 text-center text-slate-300"><Loader2 className="h-7 w-7 animate-spin mx-auto" /></div>
               ) : filtrados.length === 0 ? (
-                <div className="p-12 text-center">
-                  <Briefcase className="h-12 w-12 mx-auto text-slate-300 mb-3" />
-                  <p className="text-slate-500">
+                <div className="p-16 text-center">
+                  <div className="h-14 w-14 rounded-2xl bg-slate-50 flex items-center justify-center mx-auto mb-4">
+                    <Briefcase className="h-7 w-7 text-slate-300" />
+                  </div>
+                  <p className="text-sm text-slate-400">
                     {statusTab !== "ativo" && statusTab !== "todos" ? `Nenhum candidato com status "${STATUS_CONFIG[statusTab]?.label || statusTab}"` :
                      funcoesSelecionadas.length > 0 ? "Nenhum currículo para esta(s) função(ões)" : "Nenhum currículo cadastrado"}
                   </p>
                 </div>
               ) : (
+                <div className="overflow-x-auto">
                 <table className="w-full text-sm">
-                  <thead className="bg-slate-50 border-b">
-                    <tr>
-                      <th className="px-3 py-3 w-10">
+                  <thead>
+                    <tr className="border-b border-slate-100">
+                      <th className="px-4 py-3 w-10">
                         <input type="checkbox" className="rounded border-slate-300 accent-amber-600"
                           checked={filtrados.length > 0 && selectedIds.length === filtrados.length}
                           onChange={toggleSelectAll} />
                       </th>
-                      <th className="text-left px-4 py-3 font-semibold text-slate-600">Candidato</th>
-                      <th className="text-left px-4 py-3 font-semibold text-slate-600">Função</th>
-                      <th className="text-left px-4 py-3 font-semibold text-slate-600">Contato</th>
-                      <th className="text-left px-4 py-3 font-semibold text-slate-600">Status</th>
-                      <th className="text-left px-4 py-3 font-semibold text-slate-600 w-28">Currículo</th>
-                      <th className="text-right px-4 py-3 font-semibold text-slate-600 w-20">Ações</th>
+                      <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wider text-slate-400">Candidato</th>
+                      <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wider text-slate-400">Função</th>
+                      <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wider text-slate-400">Contato</th>
+                      <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wider text-slate-400">Status</th>
+                      <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wider text-slate-400 w-28">Currículo</th>
+                      <th className="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wider text-slate-400 w-20">Ações</th>
                     </tr>
                   </thead>
                   <tbody>
                     {filtrados.map((c: any) => (
-                      <tr key={c.id} className={`border-b hover:bg-slate-50 ${selectedIds.includes(c.id) ? "bg-blue-50/50" : ""} ${c.statusCandidato === "reprovado" ? "opacity-75" : ""}`}>
-                        <td className="px-3 py-3">
+                      <tr key={c.id} className={`border-b border-slate-50 last:border-0 transition hover:bg-slate-50/60 ${selectedIds.includes(c.id) ? "bg-amber-50/40" : ""} ${c.statusCandidato === "reprovado" ? "opacity-60" : ""}`}>
+                        <td className="px-4 py-3.5">
                           <input type="checkbox" className="rounded border-slate-300 accent-amber-600"
                             checked={selectedIds.includes(c.id)}
                             onChange={() => toggleSelect(c.id)} />
                         </td>
-                        <td className="px-4 py-3">
-                          <button onClick={() => setFichaAberta(c)} className="text-left group">
-                            <div className="font-medium text-blue-700 group-hover:text-blue-900 group-hover:underline cursor-pointer">
-                              {c.nomeCandidato || "(sem nome)"}
-                              {(() => { const idade = calcularIdade(c.dataNascimento); return idade !== null ? <span className="ml-2 text-xs font-normal text-slate-500 no-underline">{idade} anos</span> : null; })()}
-                            </div>
+                        <td className="px-4 py-3.5">
+                          <button onClick={() => setFichaAberta(c)} className="flex items-center gap-3 text-left group">
+                            <span className="h-9 w-9 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center text-sm font-semibold flex-shrink-0">
+                              {(c.nomeCandidato || "?")[0]?.toUpperCase()}
+                            </span>
+                            <span className="min-w-0">
+                              <span className="block font-medium text-slate-900 group-hover:text-amber-700 transition truncate">
+                                {c.nomeCandidato || "(sem nome)"}
+                                {(() => { const idade = calcularIdade(c.dataNascimento); return idade !== null ? <span className="ml-2 text-xs font-normal text-slate-400">{idade} anos</span> : null; })()}
+                              </span>
+                              {c.observacoes && <span className="block text-xs text-slate-400 truncate max-w-[220px]">{c.observacoes}</span>}
+                            </span>
                           </button>
-                          {c.observacoes && <div className="text-xs text-slate-500 line-clamp-1">{c.observacoes}</div>}
                         </td>
-                        <td className="px-4 py-3">
-                          <span className="inline-block px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-xs font-medium">{c.funcaoNome}</span>
+                        <td className="px-4 py-3.5">
+                          <span className="inline-block px-2.5 py-1 rounded-md bg-slate-100 text-slate-600 text-xs font-medium">{c.funcaoNome}</span>
                         </td>
-                        <td className="px-4 py-3 text-xs text-slate-600">
+                        <td className="px-4 py-3.5 text-xs text-slate-600">
                           {c.telefone && <div>{c.telefone}</div>}
-                          {c.email && <div className="text-slate-500">{c.email}</div>}
+                          {c.email && <div className="text-slate-400">{c.email}</div>}
                         </td>
-                        <td className="px-4 py-3">
+                        <td className="px-4 py-3.5">
                           {statusBadge(c.statusCandidato, c.motivoReprovacao)}
                         </td>
-                        <td className="px-4 py-3">
+                        <td className="px-4 py-3.5">
                           {c.documentoUrl ? (
-                            <a href={c.documentoUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline text-xs flex items-center gap-1">
+                            <a href={c.documentoUrl} target="_blank" rel="noopener noreferrer" className="text-amber-700 hover:text-amber-800 hover:underline text-xs flex items-center gap-1">
                               <FileText className="h-3 w-3" /> {c.fileName || "Ver"}
                             </a>
                           ) : (
-                            <label className="cursor-pointer inline-flex items-center gap-1 text-xs text-slate-500 hover:text-amber-600">
+                            <label className="cursor-pointer inline-flex items-center gap-1 text-xs text-slate-400 hover:text-amber-600 transition">
                               {uploadingId === c.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Upload className="h-3 w-3" />}
                               {uploadingId === c.id ? "Enviando..." : "Anexar"}
                               <input type="file" className="hidden" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" disabled={uploadingId === c.id}
@@ -888,12 +900,12 @@ export default function Curriculos() {
                             </label>
                           )}
                         </td>
-                        <td className="px-4 py-3 text-right">
+                        <td className="px-4 py-3.5 text-right">
                           <div className="flex items-center justify-end gap-1">
-                            <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-blue-600 hover:bg-blue-50" title="Editar" onClick={() => openEditDialog(c)}>
+                            <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-slate-400 hover:text-amber-700 hover:bg-amber-50" title="Editar" onClick={() => openEditDialog(c)}>
                               <Pencil className="h-3.5 w-3.5" />
                             </Button>
-                            <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-red-600 hover:bg-red-50" title="Excluir" onClick={() => { if (confirm(`Excluir currículo de ${c.nomeCandidato || "este candidato"}?`)) excluirMut.mutate({ id: c.id, companyId }); }}>
+                            <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-slate-400 hover:text-red-600 hover:bg-red-50" title="Excluir" onClick={() => { if (confirm(`Excluir currículo de ${c.nomeCandidato || "este candidato"}?`)) excluirMut.mutate({ id: c.id, companyId }); }}>
                               <Trash2 className="h-3.5 w-3.5" />
                             </Button>
                           </div>
@@ -902,6 +914,7 @@ export default function Curriculos() {
                     ))}
                   </tbody>
                 </table>
+                </div>
               )}
             </div>
           </div>
@@ -1184,10 +1197,12 @@ export default function Curriculos() {
         setShowIADialog(open);
         if (!open) { setIAResults(null); setIAFiles([]); setIAProgress(""); setIAPercent(0); setIACurrentFile(""); }
       }}>
-        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto overflow-x-hidden">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Sparkles className="h-5 w-5 text-purple-600" />
+              <span className="h-8 w-8 rounded-lg bg-purple-50 flex items-center justify-center">
+                <Sparkles className="h-4 w-4 text-purple-600" />
+              </span>
               Upload com IA
             </DialogTitle>
           </DialogHeader>
@@ -1196,22 +1211,22 @@ export default function Curriculos() {
             <div className="space-y-4 py-2">
               {!iaResults && (
                 <>
-                  <div className="bg-purple-50 border border-purple-200 rounded-xl p-4">
-                    <p className="text-sm text-purple-800">
+                  <div className="bg-purple-50/70 border border-purple-100 rounded-xl p-4">
+                    <p className="text-sm text-purple-800 leading-relaxed">
                       Selecione um ou mais currículos (PDF ou imagem). A IA vai ler cada arquivo, extrair os dados automaticamente, verificar duplicidades, ex-funcionários e lista negra.
                     </p>
                   </div>
                   <div>
-                    <Label>Selecionar Currículos (PDF/JPG/PNG) - Múltiplos</Label>
-                    <Input type="file" className="mt-1" accept=".pdf,.jpg,.jpeg,.png" multiple disabled={iaProcessing}
+                    <Label className="text-xs font-medium text-slate-500">Selecionar Currículos (PDF/JPG/PNG) — Múltiplos</Label>
+                    <Input type="file" className="mt-1.5" accept=".pdf,.jpg,.jpeg,.png" multiple disabled={iaProcessing}
                       onChange={e => setIAFiles(Array.from(e.target.files || []))} />
                     {iaFiles.length > 0 && (
-                      <div className="mt-2 space-y-1">
+                      <div className="mt-3 space-y-1.5">
                         {iaFiles.map((f, i) => (
-                          <div key={i} className="flex items-center gap-2 text-xs text-slate-600">
-                            <FileText className="h-3 w-3" />
-                            <span>{f.name}</span>
-                            <span className="text-slate-400">({(f.size / 1024).toFixed(0)} KB)</span>
+                          <div key={i} className="flex items-center gap-2 text-xs text-slate-600 bg-slate-50 rounded-lg px-3 py-2">
+                            <FileText className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                            <span className="truncate">{f.name}</span>
+                            <span className="text-slate-400 shrink-0 ml-auto">{(f.size / 1024).toFixed(0)} KB</span>
                           </div>
                         ))}
                       </div>
