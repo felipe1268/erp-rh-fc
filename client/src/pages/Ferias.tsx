@@ -572,7 +572,20 @@ export default function Ferias() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("todos");
   const [filtro2Periodo2026, setFiltro2Periodo2026] = useState(false);
-  const [sortBy, setSortBy] = useState<"alfa_asc" | "alfa_desc" | "venc_asc" | "venc_desc">("venc_asc");
+  const [sortBy, setSortBy] = useState<
+    | "alfa_asc" | "alfa_desc"
+    | "venc_asc" | "venc_desc"
+    | "inicio_asc" | "inicio_desc"
+    | "fim_asc" | "fim_desc"
+    | "pgto_asc" | "pgto_desc"
+    | "valor_asc" | "valor_desc"
+    | "dias_asc" | "dias_desc"
+  >("venc_asc");
+  // Rev. 2652 — filtros extras da Lista de Férias
+  const [cargoFilter, setCargoFilter] = useState("todos");
+  const [periodoFilter, setPeriodoFilter] = useState<"todos" | "1" | "2mais">("todos");
+  const [inicioDe, setInicioDe] = useState("");
+  const [inicioAte, setInicioAte] = useState("");
   const [tab, setTab] = useState("lista");
   const [anoCalendario, setAnoCalendario] = useState(new Date().getFullYear());
   const [showDialog, setShowDialog] = useState(false);
@@ -805,31 +818,76 @@ export default function Ferias() {
         const ano = a.periodoConcessivoFim ? parseInt(String(a.periodoConcessivoFim).slice(0, 4), 10) : null;
         if (ano !== 2026) return false;
       }
+      // Rev. 2652 — filtros extras
+      if (cargoFilter !== "todos") {
+        const c = a.employeeCargo || a.employeeFuncao || "";
+        if (c !== cargoFilter) return false;
+      }
+      if (periodoFilter !== "todos") {
+        const np = a.numeroPeriodo || 1;
+        if (periodoFilter === "1" && np !== 1) return false;
+        if (periodoFilter === "2mais" && np < 2) return false;
+      }
+      // Faixa de datas pelo Início do Gozo (datas ISO YYYY-MM-DD)
+      if (inicioDe || inicioAte) {
+        const di = a.dataInicio || "";
+        if (!di) return false;
+        if (inicioDe && di < inicioDe) return false;
+        if (inicioAte && di > inicioAte) return false;
+      }
       return true;
     });
-    // Rev. 1615 — Ordenação configurável: alfabética ou por vencimento do concessivo.
+    // Rev. 2652 — Ordenação configurável: nome, vencimento, início/fim do gozo,
+    // pagamento, valor total e dias. Datas ISO (YYYY-MM-DD) → localeCompare; vazios por último.
     const arr = [...base];
+    const cmpDate = (A: string, B: string, asc: boolean) => {
+      if (!A && !B) return 0; if (!A) return 1; if (!B) return -1;
+      return asc ? A.localeCompare(B) : B.localeCompare(A);
+    };
+    // cmpNum: valores ausentes (null/undefined/""/NaN) sempre por último (asc e desc).
+    const cmpNum = (a: any, b: any, asc: boolean) => {
+      const A = a === null || a === undefined || a === "" ? NaN : Number(a);
+      const B = b === null || b === undefined || b === "" ? NaN : Number(b);
+      const aNaN = Number.isNaN(A), bNaN = Number.isNaN(B);
+      if (aNaN && bNaN) return 0; if (aNaN) return 1; if (bNaN) return -1;
+      return asc ? A - B : B - A;
+    };
     arr.sort((a, b) => {
       switch (sortBy) {
         case "alfa_asc":
           return removeAccents(a.employeeName || "").localeCompare(removeAccents(b.employeeName || ""));
         case "alfa_desc":
           return removeAccents(b.employeeName || "").localeCompare(removeAccents(a.employeeName || ""));
-        case "venc_desc": {
-          const A = a.periodoConcessivoFim || ""; const B = b.periodoConcessivoFim || "";
-          if (!A && !B) return 0; if (!A) return 1; if (!B) return -1;
-          return B.localeCompare(A);
-        }
+        case "venc_desc": return cmpDate(a.periodoConcessivoFim || "", b.periodoConcessivoFim || "", false);
+        case "inicio_asc": return cmpDate(a.dataInicio || "", b.dataInicio || "", true);
+        case "inicio_desc": return cmpDate(a.dataInicio || "", b.dataInicio || "", false);
+        case "fim_asc": return cmpDate(a.dataFim || "", b.dataFim || "", true);
+        case "fim_desc": return cmpDate(a.dataFim || "", b.dataFim || "", false);
+        case "pgto_asc": return cmpDate(a.dataPagamento || "", b.dataPagamento || "", true);
+        case "pgto_desc": return cmpDate(a.dataPagamento || "", b.dataPagamento || "", false);
+        case "valor_asc": return cmpNum(a.valorTotal, b.valorTotal, true);
+        case "valor_desc": return cmpNum(a.valorTotal, b.valorTotal, false);
+        // diasGozo ausente → usa o mesmo fallback (30) que a tabela exibe (`f.diasGozo || 30`).
+        case "dias_asc": return cmpNum(a.diasGozo || 30, b.diasGozo || 30, true);
+        case "dias_desc": return cmpNum(a.diasGozo || 30, b.diasGozo || 30, false);
         case "venc_asc":
-        default: {
-          const A = a.periodoConcessivoFim || ""; const B = b.periodoConcessivoFim || "";
-          if (!A && !B) return 0; if (!A) return 1; if (!B) return -1;
-          return A.localeCompare(B);
-        }
+        default: return cmpDate(a.periodoConcessivoFim || "", b.periodoConcessivoFim || "", true);
       }
     });
     return arr;
-  }, [feriasList, search, filtro2Periodo2026, sortBy]);
+  }, [feriasList, search, filtro2Periodo2026, sortBy, cargoFilter, periodoFilter, inicioDe, inicioAte]);
+
+  // Rev. 2652 — lista de cargos distintos p/ o filtro (a partir da lista completa).
+  const cargosDisponiveis = useMemo(() => {
+    const set = new Set<string>();
+    for (const a of allFeriasList as any[]) {
+      const c = a.employeeCargo || a.employeeFuncao || "";
+      if (c) set.add(c);
+    }
+    return Array.from(set).sort((x, y) => removeAccents(x).localeCompare(removeAccents(y)));
+  }, [allFeriasList]);
+
+  const filtrosAtivos = cargoFilter !== "todos" || periodoFilter !== "todos" || !!inicioDe || !!inicioAte || !!search;
 
   // Stats — calculados a partir da lista COMPLETA (sem filtro) para não mudar ao clicar nos cards
   const stats = useMemo(() => {
@@ -1087,32 +1145,83 @@ export default function Ferias() {
 
           {/* ===== ABA: LISTA ===== */}
           <TabsContent value="lista">
-            <div className="flex flex-col sm:flex-row gap-3 mb-4">
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input placeholder="Buscar por nome ou CPF..." value={search} onChange={e => setSearch(e.target.value)} className="pl-10" />
+            <div className="flex flex-col gap-3 mb-4">
+              <div className="flex flex-col sm:flex-row gap-3">
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input placeholder="Buscar por nome ou CPF..." value={search} onChange={e => setSearch(e.target.value)} className="pl-10" />
+                </div>
+                <Select value={statusFilter} onValueChange={setStatusFilter}>
+                  <SelectTrigger className="w-full sm:w-48"><SelectValue placeholder="Status" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="todos">Todos</SelectItem>
+                    <SelectItem value="pendente">A Vencer</SelectItem>
+                    <SelectItem value="agendada">Agendada</SelectItem>
+                    <SelectItem value="em_gozo">Em Gozo</SelectItem>
+                    <SelectItem value="concluida">Concluída</SelectItem>
+                    <SelectItem value="vencida">Vencida</SelectItem>
+                  </SelectContent>
+                </Select>
+                {/* Rev. 2652 — Ordenação ampliada */}
+                <Select value={sortBy} onValueChange={(v) => setSortBy(v as any)}>
+                  <SelectTrigger className="w-full sm:w-64"><SelectValue placeholder="Ordenar por" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="alfa_asc">Nome — A → Z</SelectItem>
+                    <SelectItem value="alfa_desc">Nome — Z → A</SelectItem>
+                    <SelectItem value="venc_asc">Vencimento — vence primeiro</SelectItem>
+                    <SelectItem value="venc_desc">Vencimento — vence por último</SelectItem>
+                    <SelectItem value="inicio_asc">Início Gozo — mais cedo</SelectItem>
+                    <SelectItem value="inicio_desc">Início Gozo — mais tarde</SelectItem>
+                    <SelectItem value="fim_asc">Fim Gozo — mais cedo</SelectItem>
+                    <SelectItem value="fim_desc">Fim Gozo — mais tarde</SelectItem>
+                    <SelectItem value="pgto_asc">Pagamento — mais cedo</SelectItem>
+                    <SelectItem value="pgto_desc">Pagamento — mais tarde</SelectItem>
+                    <SelectItem value="valor_asc">Valor Total — menor</SelectItem>
+                    <SelectItem value="valor_desc">Valor Total — maior</SelectItem>
+                    <SelectItem value="dias_asc">Dias — menos</SelectItem>
+                    <SelectItem value="dias_desc">Dias — mais</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="w-full sm:w-48"><SelectValue placeholder="Status" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="todos">Todos</SelectItem>
-                  <SelectItem value="pendente">A Vencer</SelectItem>
-                  <SelectItem value="agendada">Agendada</SelectItem>
-                  <SelectItem value="em_gozo">Em Gozo</SelectItem>
-                  <SelectItem value="concluida">Concluída</SelectItem>
-                  <SelectItem value="vencida">Vencida</SelectItem>
-                </SelectContent>
-              </Select>
-              {/* Rev. 1615 — Ordenação */}
-              <Select value={sortBy} onValueChange={(v) => setSortBy(v as any)}>
-                <SelectTrigger className="w-full sm:w-64"><SelectValue placeholder="Ordenar por" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="venc_asc">Vencimento — vence primeiro</SelectItem>
-                  <SelectItem value="venc_desc">Vencimento — vence por último</SelectItem>
-                  <SelectItem value="alfa_asc">Alfabética — A → Z</SelectItem>
-                  <SelectItem value="alfa_desc">Alfabética — Z → A</SelectItem>
-                </SelectContent>
-              </Select>
+              {/* Rev. 2652 — Filtros extras: cargo, período aquisitivo e faixa de início do gozo */}
+              <div className="flex flex-col sm:flex-row flex-wrap gap-3 items-stretch sm:items-end">
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs text-muted-foreground px-1">Cargo</label>
+                  <Select value={cargoFilter} onValueChange={setCargoFilter}>
+                    <SelectTrigger className="w-full sm:w-56"><SelectValue placeholder="Cargo" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="todos">Todos os cargos</SelectItem>
+                      {cargosDisponiveis.map((c) => (
+                        <SelectItem key={c} value={c}>{c}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs text-muted-foreground px-1">Período</label>
+                  <Select value={periodoFilter} onValueChange={(v) => setPeriodoFilter(v as any)}>
+                    <SelectTrigger className="w-full sm:w-44"><SelectValue placeholder="Período" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="todos">Todos os períodos</SelectItem>
+                      <SelectItem value="1">1º período</SelectItem>
+                      <SelectItem value="2mais">2º período ou +</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs text-muted-foreground px-1">Início Gozo — de</label>
+                  <Input type="date" value={inicioDe} onChange={e => setInicioDe(e.target.value)} className="w-full sm:w-40" />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs text-muted-foreground px-1">Início Gozo — até</label>
+                  <Input type="date" value={inicioAte} onChange={e => setInicioAte(e.target.value)} className="w-full sm:w-40" />
+                </div>
+                {filtrosAtivos && (
+                  <Button variant="ghost" className="text-muted-foreground" onClick={() => { setSearch(""); setCargoFilter("todos"); setPeriodoFilter("todos"); setInicioDe(""); setInicioAte(""); }}>
+                    <X className="h-4 w-4 mr-1" /> Limpar filtros
+                  </Button>
+                )}
+              </div>
             </div>
 
             <Card>

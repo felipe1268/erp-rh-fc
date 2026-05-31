@@ -1,6 +1,32 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2652 — **FÉRIAS / LISTA DE FÉRIAS · A TELA GANHA ORDENAÇÃO AMPLIADA E NOVOS
+ * FILTROS — O USUÁRIO AGORA ORGANIZA POR NOME, VENCIMENTO, INÍCIO DO GOZO, FIM DO GOZO,
+ * PAGAMENTO, VALOR TOTAL E DIAS; E FILTRA POR CARGO, PERÍODO AQUISITIVO (1º / 2º+) E
+ * FAIXA DE DATA DE INÍCIO DO GOZO (DE/ATÉ), COM BOTÃO "LIMPAR FILTROS".**
+ *
+ * PEDIDO (usuário, print IMG_1471): "Quero poder organizar por nome, dará de início,
+ * fim todos os filtros que puder" (na aba "Lista de Férias" só havia busca por nome/CPF,
+ * filtro de Status e ordenação por Vencimento/Alfabética).
+ *
+ * FIX (SÓ CLIENT/UI; R-001/R-007/R-010 — ZERO SCHEMA/SERVER): `client/src/pages/Ferias.tsx`
+ *  - `sortBy` ampliado de 4 p/ 14 opções: Nome A→Z/Z→A, Vencimento (concessivo) ↑/↓,
+ *    Início Gozo (`dataInicio`) ↑/↓, Fim Gozo (`dataFim`) ↑/↓, Pagamento (`dataPagamento`)
+ *    ↑/↓, Valor Total (`valorTotal`) ↑/↓, Dias (`diasGozo`) ↑/↓. Helpers `cmpDate`
+ *    (datas ISO via localeCompare, vazios por último) e `cmpNum`.
+ *  - Novos filtros no `filtered` useMemo: `cargoFilter` (cargo/função), `periodoFilter`
+ *    (1º período / 2º ou +), e faixa `inicioDe`/`inicioAte` sobre `dataInicio`.
+ *  - UI: 2ª linha de controles com Select de Cargo (lista distinta de
+ *    `cargosDisponiveis` derivada da lista completa), Select de Período, dois `<input
+ *    type=date>` (Início Gozo de/até) e botão "Limpar filtros" (aparece só com
+ *    `filtrosAtivos`).
+ *
+ * ESCOPO: muda APENAS a aba "Lista de Férias" (sort + filtros client-side). Status segue
+ * filtrado no servidor (query existente). Sem alterações de schema/backend.
+ *
+ * Validado (estático): `pnpm build` exit 0.
+ *
  * Rev. 2651 — **PLANEJAMENTO / CURVA S DE TRABALHO · A LINHA AZUL (BASELINE/PREVISTO)
  * VOLTA A SER UMA CURVA S SUAVE E MONOTÔNICA ("SEGUE A LITERATURA") — ACABOU O DEGRAU
  * (QUEDA) QUE A Rev. 2650 INTRODUZIU NO PONTO DO STATUS. A AZUL AGORA LÊ A MESMA FONTE
