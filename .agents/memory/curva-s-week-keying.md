@@ -1,19 +1,26 @@
 ---
 name: Curva S week-keying & earned-value pitfalls
-description: Two recurring bugs in Planejamento Curva S — status-week anchoring of the MSP snapshot, and BCWS/BCWP must share a data-date.
+description: Planejamento Curva S pitfalls — blue baseline must read the whole previsto_semanas snapshot (not inject Texto10 at one point), and BCWS/BCWP must share a data-date.
 ---
 
-## Snapshot Texto10 must anchor to the STATUS WEEK, not an exact day
-The baseline curve (`gerarCurvaPlanejadaMSP` in `server/routers/planejamento.ts`) overlays
-the MSP %Previsto (Texto10) snapshot at the status point. The MSP `statusDate` in the XML
-falls on a working day (e.g. Thursday), but the curve iterates weeks by Monday and the
-per-week marker is the Sunday. Comparing `sunday === statusDate` therefore NEVER matches →
-the baseline silently falls back to the date-fraction value and sits ABOVE the realizado
-even when header says Previsto = Realizado.
-**Rule:** anchor to the week via `toMondayStr(statusDate)` and compare against the loop's
-Monday (`cur === statusMonday`). This mirrors how `curvaRealizada` already anchors the
-realizado snapshot. Any curve line that should pass through the snapshot at the status point
-must use the same week key, or it won't overlap.
+## Blue baseline = read `previsto_semanas.raiz` whole; DON'T inject Texto10 per-activity at one point
+The blue Baseline/Previsto line of the Work Curva S must BE the canonical `previsto_semanas`
+snapshot — the SAME source the header reads via `previstoCurva.raizAt(statusDate)` — read in
+full and re-keyed week-by-week, NOT the date-fraction curve with a single overridden point.
+**Why:** an earlier attempt (Rev. 2650) tried to make the blue line pass through the header's
+%Previsto by injecting the per-activity Texto10 snapshot into ONE week (the status week) inside
+`gerarCurvaPlanejadaMSP`, leaving every other week on the date-fraction source. Two sources on
+one line → the status-week point fell off the smooth trajectory = a non-monotonic dip/step
+("curva S não pode regredir"). The fix (Rev. 2651): in `getCurvaS`, helper
+`curvaPrevistoSnapshot` reads `previsto_semanas_json` (`semanas[]` cutoff=Thursday + `raiz[]`,
+already monotonic), re-keys each cutoff to its Monday via `toMondayStr` (aligns with the green
+realizado axis), prepends a zero point, and applies a defensive monotonic clamp.
+**How to apply:** any curve line that must agree with the header/cards %Previsto should read the
+ONE canonical snapshot (`previsto_semanas.raiz`) end-to-end, never mix it with a second
+per-point source. Gate it to the snapshot's owning revision (`revisaoId`; legacy snapshots
+without `revisaoId` only apply to the active `input.revisaoId`) and to duration mode
+(`usarPesoPorDuracao` — `raiz` is duration-weighted). `gerarCurvaPlanejadaMSP` is now ONLY the
+fallback by dates for projects lacking the snapshot.
 
 ## BCWS and BCWP must be measured at the SAME data-date
 The financial Curva S card (`PlanejamentoDetalhe.tsx`) showed BCWS = R$0 with a phantom

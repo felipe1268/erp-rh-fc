@@ -3359,6 +3359,7 @@ export const planejamentoRouter = router({
           calendarioJson: planejamentoProjetos.calendarioJson,
           dataInicio: planejamentoProjetos.dataInicio,
           dataTerminoContratual: planejamentoProjetos.dataTerminoContratual,
+          previstoSemanasJson: planejamentoProjetos.previstoSemanasJson,
         })
           .from(planejamentoProjetos)
           .where(eq(planejamentoProjetos.id, input.projetoId))
@@ -3491,36 +3492,28 @@ export const planejamentoRouter = router({
         const pontos: { semana: string; acumulado: number }[] = [{ semana: semZero, acumulado: 0 }];
         const semanasEnvelope = Math.ceil((maxFimMs - minIniMs) / (7 * 86_400_000)) + 8;
         const maxIters = Math.max(8, semanasEnvelope);
-        // Rev. 2650 — Snapshot Texto10 ancorado à SEMANA do StatusDate (Monday),
-        // não ao Sunday exato. O StatusDate do XML cai em dia útil (ex.: quinta),
-        // então `sunIso === statusDate` NUNCA casava e a curva baseline ignorava o
-        // snapshot MSP no ponto do status — ficava acima do Realizado mesmo com
-        // Previsto=Realizado (linha verde não sobrepunha a azul). Alinha ao mesmo
-        // critério da curvaRealizada, que ancora em toMondayStr(statusDate).
-        const statusMondayMSP = calMSP.statusDateSnapshot
-          ? toMondayStr(new Date(calMSP.statusDateSnapshot + "T12:00:00Z"))
-          : null;
+        // Rev. 2651 — FALLBACK por datas (forma de S por tempo útil). NÃO injeta
+        // mais o Texto10 por atividade numa única semana (revogada a Rev. 2650):
+        // aquilo usava uma fonte DISTINTA do header e criava um DEGRAU (queda)
+        // fora da curva — a linha azul deixava de ser monotônica ("não segue a
+        // literatura"). A linha azul agora PREFERE o snapshot `previsto_semanas`
+        // (mesma fonte do header, ver `curvaPrevistoSnapshot`); este helper só
+        // atende projetos SEM esse snapshot.
         let cur = startMonday;
         for (let i = 0; i < maxIters && cur <= endMonday; i++) {
           const sunMs = new Date(cur + "T12:00:00Z").getTime() + 6 * 86_400_000;
-          // Snapshot Texto10 ponderado na SEMANA que contém o StatusDate (paridade MSP).
-          const usarSnapshot = !!statusMondayMSP && cur === statusMondayMSP;
           let soma = 0;
           for (const f of folhasPrep) {
             let pct: number;
-            if (usarSnapshot && f.previstoMspPct != null) {
-              pct = Math.min(100, Math.max(0, f.previstoMspPct));
+            // Atividade pontual (marco/início/fim — ini==fim): 100% no dia que
+            // o cursor atinge ou ultrapassa a data, 0% antes. Cobrir ANTES do
+            // teste `refMs<=ini` pra evitar que marco fique zerado eternamente.
+            if (f.fimMs <= f.iniMs) {
+              pct = sunMs >= f.iniMs ? 100 : 0;
             } else {
-              // Atividade pontual (marco/início/fim — ini==fim): 100% no dia que
-              // o cursor atinge ou ultrapassa a data, 0% antes. Cobrir ANTES do
-              // teste `refMs<=ini` pra evitar que marco fique zerado eternamente.
-              if (f.fimMs <= f.iniMs) {
-                pct = sunMs >= f.iniMs ? 100 : 0;
-              } else {
-                const refMs = Math.min(sunMs, f.fimMs);
-                if (refMs <= f.iniMs) pct = 0;
-                else pct = Math.min(100, Math.max(0, fracaoDecorridaMs(f.iniMs, refMs, f.fimMs, calMSP) * 100));
-              }
+              const refMs = Math.min(sunMs, f.fimMs);
+              if (refMs <= f.iniMs) pct = 0;
+              else pct = Math.min(100, Math.max(0, fracaoDecorridaMs(f.iniMs, refMs, f.fimMs, calMSP) * 100));
             }
             soma += pct * (f.peso / pesoTotal);
           }
@@ -3536,11 +3529,64 @@ export const planejamentoRouter = router({
       }
       // Baseline: prefere helper MSP per-activity (forma de S + paridade card).
       // Fallback: algoritmo legado quando não há calMSP/snapshot.
-      const baselineMSP = gerarCurvaPlanejadaMSP(baseline);
-      const curvaBaseline = baselineMSP.length > 0 ? baselineMSP : gerarCurvaPlanejada(baseline);
+
+      // Rev. 2651 — A linha Baseline/Previsto (azul) LÊ o snapshot
+      // `previsto_semanas` (FONTE ÚNICA do "% Previsto" — a MESMA que o header lê
+      // via `previstoCurva.raizAt`), re-chaveando o dia-de-corte (Quinta, diaCorte)
+      // → segunda-feira da semana p/ alinhar com a curva Realizada (que usa Monday).
+      // GARANTE: (a) curva S monotônica/suave (sem o degrau da Rev. 2650); (b) a azul
+      // passa EXATAMENTE pelo "% Previsto" do header no ponto do status; (c) com
+      // Previsto=Realizado as linhas se sobrepõem. Só vale p/ a revisão DONA do
+      // snapshot (`revisaoId`); senão cai no fallback por datas.
+      let previstoSnap: any = null;
+      try {
+        const raw = (projRow[0] as any)?.previstoSemanasJson;
+        previstoSnap = raw ? JSON.parse(raw) : null;
+      } catch { previstoSnap = null; }
+      function curvaPrevistoSnapshot(targetRev: number): { semana: string; acumulado: number }[] | null {
+        // `raiz` é o rollup ponderado por DURAÇÃO (Texto10 do MSP). Só vale p/ a
+        // Curva S de Trabalho (duração); modo financeiro tem fonte/procedure própria.
+        if (!input.usarPesoPorDuracao) return null;
+        if (!previstoSnap) return null;
+        const semanasSnap: string[] = Array.isArray(previstoSnap.semanas) ? previstoSnap.semanas : [];
+        const raizSnap: number[] = Array.isArray(previstoSnap.raiz) ? previstoSnap.raiz : [];
+        if (semanasSnap.length === 0 || raizSnap.length !== semanasSnap.length) return null;
+        const revId = previstoSnap.revisaoId ?? null;
+        // Snapshot de outra revisão → rejeita. Snapshot legado SEM revisaoId só vale
+        // p/ a revisão ATIVA (input.revisaoId), p/ evitar reúso cross-revisão.
+        if (revId != null) {
+          if (revId !== targetRev) return null;
+        } else if (targetRev !== input.revisaoId) {
+          return null;
+        }
+        const pts: { semana: string; acumulado: number }[] = [];
+        let acumPrev = 0;
+        for (let i = 0; i < semanasSnap.length; i++) {
+          const semStr = semanasSnap[i];
+          const dt = new Date((semStr ?? "") + "T12:00:00Z");
+          if (!semStr || isNaN(dt.getTime())) continue; // pula semana malformada (sem throw)
+          const mon = toMondayStr(dt);
+          // `raiz` já é monotônica; clamp defensivo p/ nunca regredir (curva S não cai).
+          acumPrev = Math.max(acumPrev, Math.min(100, Math.max(0, Number(raizSnap[i]) || 0)));
+          pts.push({ semana: mon, acumulado: +acumPrev.toFixed(2) });
+        }
+        if (pts.length === 0) return null;
+        // Ponto-zero inicial (1 semana antes do 1º cutoff), espelhando as demais curvas.
+        if (pts[0].acumulado !== 0) {
+          const semZeroPrev = toMondayStr(new Date(new Date(pts[0].semana + "T12:00:00Z").getTime() - 7 * 86_400_000));
+          pts.unshift({ semana: semZeroPrev, acumulado: 0 });
+        }
+        return pts;
+      }
+
+      const baselineSnap = curvaPrevistoSnapshot(input.baselineId);
+      const baselineMSP = baselineSnap ? [] : gerarCurvaPlanejadaMSP(baseline);
+      const curvaBaseline = baselineSnap ?? (baselineMSP.length > 0 ? baselineMSP : gerarCurvaPlanejada(baseline));
       // "Revisão Atual" só aparece quando difere da baseline.
       const curvaPlanejada = input.baselineId !== input.revisaoId
         ? (() => {
+            const planSnap = curvaPrevistoSnapshot(input.revisaoId);
+            if (planSnap) return planSnap;
             const planMSP = gerarCurvaPlanejadaMSP(atividades);
             return planMSP.length > 0 ? planMSP : gerarCurvaPlanejada(atividades);
           })()

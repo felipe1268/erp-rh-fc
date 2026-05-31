@@ -1,6 +1,55 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2651 — **PLANEJAMENTO / CURVA S DE TRABALHO · A LINHA AZUL (BASELINE/PREVISTO)
+ * VOLTA A SER UMA CURVA S SUAVE E MONOTÔNICA ("SEGUE A LITERATURA") — ACABOU O DEGRAU
+ * (QUEDA) QUE A Rev. 2650 INTRODUZIU NO PONTO DO STATUS. A AZUL AGORA LÊ A MESMA FONTE
+ * DO HEADER (`previsto_semanas.raiz`), ENTÃO PASSA EXATAMENTE PELO "% PREVISTO" DO
+ * CABEÇALHO E, COM PREVISTO = REALIZADO, SE SOBREPÕE À VERDE.**
+ *
+ * PEDIDO (usuário, com print IMG_1470): "Está errado a curva s.. não faz sentido siga
+ * a literatura correta" (Curva S de Trabalho com a linha azul subindo, CAINDO perto de
+ * S2–S3 e depois disparando — uma curva S não pode regredir).
+ *
+ * DIAGNÓSTICO (Neon READ-ONLY, projeto 39 "IGREJA SÃO GERALDO – POITA", revisão 58):
+ * `previsto_semanas` = semanas [06-04, 06-11, 06-18, …] (cutoff=Quinta) com
+ * `raiz` = [2, 9, 15, 20, …] (monotônica). O header lê o "% Previsto" via
+ * `previstoCurva.raizAt(statusDate)` = `raiz` na semana do status (carry-forward) —
+ * NÃO o `gerarCurvaPlanejadaMSP`. A Rev. 2650, p/ casar a azul com o header, passou a
+ * injetar o Texto10 POR ATIVIDADE (`previstoMspPct`) em UMA única semana (a do status).
+ * Esse valor vem de OUTRA fonte que a curva por datas das semanas vizinhas → o ponto do
+ * status caía FORA da trajetória suave, criando um degrau/queda (curva não-monotônica).
+ *
+ * CAUSA-RAIZ: usar DUAS fontes diferentes na mesma linha (datas nas semanas comuns +
+ * snapshot por-atividade na semana do status). A fonte canônica do "% Previsto" — a que
+ * o header e os cards já leem — é o snapshot `previsto_semanas.raiz`, que JÁ é monotônico
+ * e cobre TODAS as semanas. A linha azul deveria simplesmente SER essa curva.
+ *
+ * FIX (R-001/R-007/R-010 — ZERO SCHEMA/ALTER/DELETE; SÓ LEITURA/CURVA):
+ *  - SERVER `server/routers/planejamento.ts` (`getCurvaS`): a linha Baseline/Previsto
+ *    (azul) passa a LER o snapshot `previsto_semanas_json` (novo helper
+ *    `curvaPrevistoSnapshot`), re-chaveando cada cutoff (Quinta) → segunda-feira da
+ *    MESMA semana via `toMondayStr`, p/ alinhar com a curva Realizada (que usa Monday).
+ *    Prepende ponto-zero inicial e aplica clamp monotônico defensivo. `projRow` agora
+ *    também seleciona `previstoSemanasJson`. Vale p/ a revisão DONA do snapshot
+ *    (`revisaoId`) e SÓ no modo duração (`usarPesoPorDuracao`); senão cai no fallback.
+ *  - SERVER `gerarCurvaPlanejadaMSP`: REVOGADA a injeção do Texto10 por-atividade na
+ *    semana do status (Rev. 2650) — removidas `statusMondayMSP`/`usarSnapshot`. Este
+ *    helper volta a ser SÓ o fallback por datas (forma de S por tempo útil) p/ projetos
+ *    sem `previsto_semanas`.
+ *
+ * EFEITO (validado via simulação sobre o Neon, projeto 39/rev 58): azul =
+ * [05-25=0, 06-01=2, 06-08=9, 06-15=15, 06-22=20, …] — monotônica, sem degrau; azul na
+ * semana do status (06-08) = 9 = realizado 9 = header 9 → linhas sobrepostas e "no prazo".
+ *
+ * RESSALVA: esta revisão REVOGA APENAS o mecanismo da CAUSA-RAIZ #1 da Rev. 2650 (a
+ * injeção do snapshot por-atividade na baseline). A CAUSA-RAIZ #2 da Rev. 2650 (card
+ * financeiro "PREVISTO (BCWS)" ancorado na última semana com Realizado) PERMANECE válida
+ * e intacta. Trabalho (% por duração) e Financeira (R$ por peso financeiro) seguem
+ * métricas distintas — pequenas diferenças são esperadas.
+ *
+ * Validado (estático): `pnpm build` exit 0.
+ *
  * Rev. 2650 — **PLANEJAMENTO / CURVA S · (1) NA CURVA S DE TRABALHO, A LINHA AZUL
  * (PREVISTO/BASELINE) VOLTA A PASSAR PELO MESMO % DO HEADER NO PONTO DO STATUS —
  * QUANDO PREVISTO = REALIZADO, AS LINHAS SE SOBREPÕEM. (2) NA CURVA S FINANCEIRA, O
