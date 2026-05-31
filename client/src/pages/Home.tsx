@@ -12,7 +12,7 @@ import {
   BarChart3, Landmark, Gavel, Cake, FileWarning, CalendarClock,
   ArrowUpRight, ArrowDownRight, TrendingUp, ShieldAlert, Activity,
   ChevronRight, HeartPulse, Briefcase, Scale, X, ExternalLink,
-  Printer, Plane, DollarSign, TreePalm, ClipboardCheck, UserPlus, Ban, RefreshCw, Award, HardHat
+  Printer, Plane, DollarSign, TreePalm, ClipboardCheck, UserPlus, Ban, RefreshCw, Award, HardHat, FileBarChart
 } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { nowBrasilia } from "@/lib/dateUtils";
@@ -22,6 +22,7 @@ import PrintFooterLGPD from "@/components/PrintFooterLGPD";
 import { usePermissions } from "@/contexts/PermissionsContext";
 import { useMenuVisibility } from "@/hooks/useMenuVisibility";
 import RaioXFuncionario from "@/components/RaioXFuncionario";
+import AnaliseExperiencia from "@/components/AnaliseExperiencia";
 
 const RISCO_COLORS: Record<string, string> = {
   baixo: "bg-green-100 text-green-700",
@@ -52,6 +53,7 @@ export default function Home() {
   const [alertasOpen, setAlertasOpen] = useState(false);
   const [anivEmpresaOpen, setAnivEmpresaOpen] = useState(false);
   const [raioXEmployeeId, setRaioXEmployeeId] = useState<number | null>(null);
+  const [analiseEmpId, setAnaliseEmpId] = useState<number | null>(null);
   const [expAction, setExpAction] = useState<{ type: 'prorrogar' | 'efetivar' | 'desligar'; emp: any } | null>(null);
   const [expMotivo, setExpMotivo] = useState('');
   const [expObs, setExpObs] = useState('');
@@ -258,6 +260,9 @@ export default function Home() {
                               <span className={`text-xs font-mono ${urgTextColors[exp.urgencia] || ''}`}>
                                 {exp.diasRestantes < 0 ? `Vencido há ${Math.abs(exp.diasRestantes)}d` : exp.diasRestantes === 0 ? 'VENCE HOJE' : `${exp.diasRestantes}d restantes`}
                               </span>
+                              <Button size="sm" variant="outline" className="h-7 text-xs gap-1 border-purple-300 text-purple-700 hover:bg-purple-50" onClick={() => setAnaliseEmpId(exp.id)}>
+                                <FileBarChart className="h-3 w-3" /> Análise
+                              </Button>
                               {exp.status === 'em_experiencia' && (
                                 <Button size="sm" variant="outline" className="h-7 text-xs gap-1 border-blue-300 text-blue-700 hover:bg-blue-50" onClick={() => { setExpAction({ type: 'prorrogar', emp: exp }); setExpObs(''); }}>
                                   <RefreshCw className="h-3 w-3" /> Prorrogar
@@ -837,6 +842,7 @@ export default function Home() {
       </div>
           <PrintFooterLGPD />
       <RaioXFuncionario employeeId={raioXEmployeeId} open={!!raioXEmployeeId} onClose={() => setRaioXEmployeeId(null)} />
+      <AnaliseExperiencia employeeId={analiseEmpId} companyId={companyId} open={!!analiseEmpId} onClose={() => setAnaliseEmpId(null)} />
     </DashboardLayout>
   );
 }

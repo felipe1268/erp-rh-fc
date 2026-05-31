@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import { EmpStatusBadge } from "@/components/EmpStatusBadge";
 import { PersonPhoto } from "@/components/PersonPhoto";
 import { CipaBadge } from "@/components/CipaBadge";
+import AnaliseExperiencia from "@/components/AnaliseExperiencia";
 import DashboardLayout from "@/components/DashboardLayout";
 import { usePermissions } from "@/contexts/PermissionsContext";
 import FullScreenDialog from "@/components/FullScreenDialog";
@@ -19,7 +20,7 @@ import {
   BarChart3, Landmark, Cake, FileWarning, CalendarClock,
   ArrowUpRight, ArrowDownRight, ShieldAlert, Activity,
   ChevronRight, HeartPulse, Briefcase, Scale, ExternalLink,
-  Printer, Plane, DollarSign, ClipboardCheck, UserPlus, Ban, RefreshCw,
+  Printer, Plane, DollarSign, ClipboardCheck, UserPlus, Ban, RefreshCw, FileBarChart,
   Bell, FileText, CheckCircle2, XCircle, User, Calendar, TrendingDown, Info,
   BarChart2, ArrowRight, TrendingUp, Minus, GitCompareArrows, Award, Trophy, Star,
   Maximize2, Save, X, ChevronLeft, MapPin
@@ -48,6 +49,7 @@ export default function PainelRH() {
   const canSeeAuditoria = isAdminMaster || user?.role === 'admin';
   const canEditExperiencia = isAdminMaster || !isSomenteVisualizacao;
   const [selectedAvisoId, setSelectedAvisoId] = useState<number | null>(null);
+  const [analiseEmpId, setAnaliseEmpId] = useState<number | null>(null);
   const [, navigate] = useLocation();
   const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery } = useCompany();
   const companyId = selectedCompanyId ? parseInt(selectedCompanyId, 10) || undefined : undefined;
@@ -271,6 +273,9 @@ export default function PainelRH() {
                               <span className={`text-xs font-mono ${urgTextColors[exp.urgencia] || ''}`}>
                                 {exp.diasRestantes < 0 ? `Vencido há ${Math.abs(exp.diasRestantes)}d` : exp.diasRestantes === 0 ? 'VENCE HOJE' : `${exp.diasRestantes}d restantes`}
                               </span>
+                              <Button size="sm" variant="outline" className="h-7 text-xs gap-1 border-purple-300 text-purple-700 hover:bg-purple-50" onClick={() => setAnaliseEmpId(exp.id)}>
+                                <FileBarChart className="h-3 w-3" /> Análise
+                              </Button>
                               {canEditExperiencia && (<>
                               {exp.status === 'em_experiencia' ? (
                                 <Button size="sm" variant="outline" className="h-7 text-xs gap-1 border-blue-300 text-blue-700 hover:bg-blue-50" onClick={() => { setExpAction({ type: 'prorrogar', emp: exp }); setExpObs(''); }}>
@@ -329,6 +334,8 @@ export default function PainelRH() {
                   ) : null}
                 </DialogContent>
               </Dialog>
+
+              <AnaliseExperiencia employeeId={analiseEmpId} companyId={queryCompanyId} open={!!analiseEmpId} onClose={() => setAnaliseEmpId(null)} />
 
               {/* Card de Avisos Prévios em Andamento */}
               {canSeeAvisoPrevio && (homeData?.avisosPrevios?.length ?? 0) > 0 && (() => {

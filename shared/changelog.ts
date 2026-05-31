@@ -1,6 +1,52 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2622 — **CONTRATOS DE EXPERIÊNCIA · NOVO BOTÃO "ANÁLISE" EM CADA
+ * COLABORADOR EM EXPERIÊNCIA QUE CRUZA TODAS AS OCORRÊNCIAS DO PERÍODO
+ * (ASSIDUIDADE/FALTAS, ATRASOS, ADVERTÊNCIAS, ATESTADOS, ACIDENTES E HISTÓRICO)
+ * E DEVOLVE UM VEREDITO SUGERIDO (SCORE 0–100) PRA SUBSIDIAR RH/DIRETORIA NA
+ * DECISÃO DE EFETIVAR/PRORROGAR/DESLIGAR.**
+ *
+ * PEDIDO (usuário): "Em cada novo funcionário que está em experiência, precisa
+ * ter um botão chamado de análise, onde o ERP cruze todas [as] informações dele
+ * no período de experiência, horário, advertência, comportamento... ou seja a
+ * ficha completa para dar subsídio ao RH e diretoria para [definir] se será
+ * renovado ou não... pense em algo que funcione e seja prático".
+ *
+ * IMPLEMENTAÇÃO (ADITIVA — SOMENTE LEITURA/SELECT; ZERO ALTER/DROP/DELETE,
+ * R-001/R-007/R-010; ZERO SCHEMA NOVO):
+ *  - **Backend** `server/routers.ts` (router `employees`): novo procedure
+ *    `analiseExperiencia` (query). Calcula a JANELA do contrato de experiência
+ *    com a MESMA régua do `home.getData` (início = `experienciaInicio` ||
+ *    `dataAdmissao`; fim1/fim2 por `experienciaTipo` 30_30/45_45; dia do início
+ *    conta como dia 1). Coleta em paralelo TODOS os registros do colaborador em
+ *    `warnings`, `time_records`, `atestados`, `accidents`, `employee_history` e
+ *    filtra em memória pela janela [início, hoje]. Agrega: assiduidade %
+ *    (mesma fórmula do Raio-X: diasTrab / (diasTrab+faltas)), faltas, atrasos
+ *    (registros com `atrasos` ≠ 0:00 + soma de minutos HH:MM), advertências por
+ *    tipo (Verbal/Escrita/Suspensao), atestados (qtd + dias afastamento),
+ *    acidentes e ocorrências do histórico. Score começa em 100 e penaliza só
+ *    disciplina/assiduidade (suspensão −25, escrita −15, verbal −8, falta −6,
+ *    atraso −2); atestados e acidentes são EXIBIDOS como informação mas NÃO
+ *    reduzem o score (ausência legalmente protegida). Bandas: ≥85 "Recomendado
+ *    Efetivar", 70–84 "Efetivar com Ressalvas", 50–69 "Avaliar Prorrogação",
+ *    <50 "Avaliar Desligamento". Retorna também os "motivos" do veredito.
+ *  - **Front** novo `client/src/components/AnaliseExperiencia.tsx`: `<Dialog>`
+ *    (max-w-3xl, scroll) com cabeçalho do colaborador (foto/fallback), card de
+ *    veredito com gauge SVG do score + recomendação colorida, lista de motivos
+ *    (✓/✗/ℹ), cards de período (início/fim1/fim2/assiduidade) e indicadores
+ *    (advertências/faltas/atrasos/atestados), e seções de detalhe (advertências,
+ *    faltas, atrasos, atestados, acidentes, histórico). Rodapé deixa explícito
+ *    que é SUGESTÃO automática e a decisão final é do RH/Diretoria.
+ *  - **Integração**: botão "Análise" (roxo, ícone `FileBarChart`) adicionado em
+ *    cada card de contrato de experiência em `client/src/pages/Home.tsx` e
+ *    `client/src/pages/PainelRH.tsx` (em PainelRH fica fora do gate
+ *    `canEditExperiencia`, pois é leitura/subsídio). Estado local `analiseEmpId`
+ *    controla o modal em ambas as telas.
+ *
+ * VALIDADO: servidor reiniciado e recompilou limpo (tsx watch), sem erros de
+ * transform/compile.
+ *
  * Rev. 2621 — **RAIO-X DO COLABORADOR · ABA "ACIDENTES" · CADA LINHA DA TABELA
  * DE ACIDENTES DE TRABALHO PASSA A SER CLICÁVEL E ABRE UM MODAL COM TODOS OS
  * DETALHES DO ACIDENTE (DESCRIÇÃO, CAT, AGENTE CAUSADOR, AÇÃO CORRETIVA,

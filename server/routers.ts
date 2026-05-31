@@ -971,6 +971,132 @@ export const appRouter = router({
       return { success: true };
     }),
 
+    // === ANÁLISE DE EXPERIÊNCIA (Rev. 2622) ===
+    // Cruza TODAS as ocorrências do colaborador DENTRO da janela do contrato de
+    // experiência (início → hoje) — assiduidade/faltas, atrasos, advertências,
+    // atestados, acidentes e histórico — e devolve um veredito SUGERIDO (score)
+    // pra subsidiar RH/Diretoria na decisão de efetivar/prorrogar/desligar.
+    // SOMENTE LEITURA (SELECT) — ZERO ALTER/DROP/DELETE (R-001/R-007/R-010).
+    analiseExperiencia: protectedProcedure.input(z.object({
+      employeeId: z.number(),
+      companyId: z.number(),
+    })).query(async ({ input }) => {
+      const emp = await getEmployeeById(input.employeeId, input.companyId);
+      if (!emp) throw new TRPCError({ code: 'NOT_FOUND', message: 'Colaborador não encontrado' });
+      const e: any = emp;
+      const db = (await getDb())!;
+      const { warnings, timeRecords, atestados, accidents, employeeHistory } = await import("../drizzle/schema");
+
+      // --- Janela do contrato de experiência (mesma régua do home.getData) ---
+      const tipo: string = e.experienciaTipo || '30_30';
+      const inicioRaw = e.experienciaInicio || e.dataAdmissao;
+      const inicio = inicioRaw ? String(inicioRaw).split('T')[0] : null;
+      if (!inicio) throw new TRPCError({ code: 'BAD_REQUEST', message: 'Colaborador sem data de início de experiência/admissão.' });
+      const dias1 = tipo === '30_30' ? 30 : 45;
+      const dias2 = tipo === '30_30' ? 60 : 90;
+      const dtInicio = new Date(inicio + 'T12:00:00');
+      const dtFim1 = new Date(dtInicio); dtFim1.setDate(dtFim1.getDate() + dias1 - 1);
+      const dtFim2 = new Date(dtInicio); dtFim2.setDate(dtFim2.getDate() + dias2 - 1);
+      const fim1 = dtFim1.toISOString().split('T')[0];
+      const fim2 = dtFim2.toISOString().split('T')[0];
+      const status: string = e.experienciaStatus || 'em_experiencia';
+      const isProrrogado = status === 'prorrogado';
+      const hoje = new Date(); hoje.setHours(12, 0, 0, 0);
+      const hojeStr = hoje.toISOString().split('T')[0];
+      const fimRelevante = isProrrogado ? dtFim2 : dtFim1;
+      const diasRestantes = Math.ceil((fimRelevante.getTime() - hoje.getTime()) / (1000 * 60 * 60 * 24));
+      const diasDecorridos = Math.max(0, Math.ceil((hoje.getTime() - dtInicio.getTime()) / (1000 * 60 * 60 * 24)) + 1);
+      // Filtra um registro pela janela [inicio, hoje]
+      const naJanela = (d: any) => { const s = d ? String(d).split('T')[0] : null; return !!s && s >= inicio && s <= hojeStr; };
+
+      // --- Coleta (todos os registros do colaborador, filtrados em memória) ---
+      const [advRows, pontoRows, atestRows, acidRows, histRows] = await Promise.all([
+        db.select().from(warnings).where(and(eq(warnings.employeeId, input.employeeId), eq(warnings.companyId, input.companyId), isNull(warnings.deletedAt))),
+        db.select().from(timeRecords).where(eq(timeRecords.employeeId, input.employeeId)),
+        db.select().from(atestados).where(and(eq(atestados.employeeId, input.employeeId), isNull(atestados.deletedAt))),
+        db.select().from(accidents).where(and(eq(accidents.employeeId, input.employeeId), isNull(accidents.deletedAt))),
+        db.select().from(employeeHistory).where(eq(employeeHistory.employeeId, input.employeeId)),
+      ]);
+
+      // --- Advertências na janela ---
+      const adv = advRows.filter((a: any) => naJanela(a.dataOcorrencia))
+        .sort((a: any, b: any) => String(b.dataOcorrencia).localeCompare(String(a.dataOcorrencia)));
+      const advVerbais = adv.filter((a: any) => a.tipoAdvertencia === 'Verbal').length;
+      const advEscritas = adv.filter((a: any) => a.tipoAdvertencia === 'Escrita').length;
+      const advSuspensoes = adv.filter((a: any) => a.tipoAdvertencia === 'Suspensao').length;
+      const advLista = adv.map((a: any) => ({ data: a.dataOcorrencia, tipo: a.tipoAdvertencia, motivo: a.motivo }));
+
+      // --- Ponto na janela: faltas, atrasos, assiduidade ---
+      const ponto = pontoRows.filter((p: any) => naJanela(p.data));
+      let diasTrabalhados = 0, faltas = 0;
+      ponto.forEach((p: any) => { (Number(p.faltas || 0) > 0) ? faltas++ : diasTrabalhados++; });
+      const totalDias = diasTrabalhados + faltas;
+      const assiduidadePerc = totalDias > 0 ? Math.round((diasTrabalhados / totalDias) * 1000) / 10 : 100;
+      const atrasosDet = ponto
+        .filter((p: any) => p.atrasos && p.atrasos !== '0:00' && p.atrasos !== '00:00')
+        .map((p: any) => ({ data: p.data, entrada1: p.entrada1, atraso: p.atrasos }))
+        .sort((a: any, b: any) => String(b.data).localeCompare(String(a.data)));
+      // Soma de minutos de atraso (HH:MM)
+      const minutosAtraso = atrasosDet.reduce((acc: number, a: any) => {
+        const parts = String(a.atraso).split(':'); const h = Number(parts[0] || 0); const m = Number(parts[1] || 0);
+        return acc + (Number.isFinite(h) ? h * 60 : 0) + (Number.isFinite(m) ? m : 0);
+      }, 0);
+      const faltasDet = ponto.filter((p: any) => Number(p.faltas || 0) > 0).map((p: any) => ({ data: p.data }))
+        .sort((a: any, b: any) => String(b.data).localeCompare(String(a.data)));
+
+      // --- Atestados na janela ---
+      const atest = atestRows.filter((a: any) => naJanela(a.dataEmissao))
+        .sort((a: any, b: any) => String(b.dataEmissao).localeCompare(String(a.dataEmissao)));
+      const atestDiasAfast = atest.reduce((acc: number, a: any) => acc + Number(a.diasAfastamento || 0), 0);
+      const atestLista = atest.map((a: any) => ({ data: a.dataEmissao, dias: Number(a.diasAfastamento || 0), cid: a.cid || null, tipo: a.tipo || null }));
+
+      // --- Acidentes na janela ---
+      const acid = acidRows.filter((a: any) => naJanela(a.dataAcidente))
+        .sort((a: any, b: any) => String(b.dataAcidente).localeCompare(String(a.dataAcidente)));
+      const acidLista = acid.map((a: any) => ({ data: a.dataAcidente, gravidade: a.gravidade, tipo: a.tipoAcidente, dias: Number(a.diasAfastamento || 0) }));
+
+      // --- Histórico/ocorrências na janela ---
+      const hist = histRows.filter((h: any) => naJanela(h.dataEvento))
+        .sort((a: any, b: any) => String(b.dataEvento).localeCompare(String(a.dataEvento)))
+        .map((h: any) => ({ data: h.dataEvento, tipo: h.tipo, descricao: h.descricao || '' }));
+
+      // --- Veredito (score sugerido) ---
+      // Base 100. Penaliza disciplina/assiduidade. Atestados/acidentes são
+      // informativos (NÃO penalizam — ausência legalmente protegida), só flag.
+      const motivos: { texto: string; tipo: 'negativo' | 'positivo' | 'alerta' }[] = [];
+      let score = 100;
+      if (advSuspensoes > 0) { score -= advSuspensoes * 25; motivos.push({ texto: `${advSuspensoes} suspensão(ões) disciplinar(es) no período`, tipo: 'negativo' }); }
+      if (advEscritas > 0) { score -= advEscritas * 15; motivos.push({ texto: `${advEscritas} advertência(s) por escrito no período`, tipo: 'negativo' }); }
+      if (advVerbais > 0) { score -= advVerbais * 8; motivos.push({ texto: `${advVerbais} advertência(s) verbal(is) no período`, tipo: 'negativo' }); }
+      if (faltas > 0) { score -= faltas * 6; motivos.push({ texto: `${faltas} falta(s) registrada(s) no período`, tipo: 'negativo' }); }
+      if (atrasosDet.length > 0) { score -= atrasosDet.length * 2; motivos.push({ texto: `${atrasosDet.length} atraso(s) (${Math.floor(minutosAtraso / 60)}h${String(minutosAtraso % 60).padStart(2, '0')} acumulados)`, tipo: 'negativo' }); }
+      if (atestDiasAfast >= 5) motivos.push({ texto: `${atest.length} atestado(s) somando ${atestDiasAfast} dia(s) de afastamento (não penaliza o score)`, tipo: 'alerta' });
+      else if (atest.length > 0) motivos.push({ texto: `${atest.length} atestado(s) no período (não penaliza o score)`, tipo: 'alerta' });
+      if (acid.length > 0) motivos.push({ texto: `${acid.length} acidente(s) de trabalho registrado(s) (não penaliza o score)`, tipo: 'alerta' });
+      if (advLista.length === 0 && faltas === 0 && atrasosDet.length === 0) motivos.push({ texto: 'Sem advertências, faltas ou atrasos no período de experiência', tipo: 'positivo' });
+      else if (assiduidadePerc >= 95 && advLista.length === 0) motivos.push({ texto: `Assiduidade excelente (${assiduidadePerc}%) e sem advertências`, tipo: 'positivo' });
+      score = Math.max(0, Math.min(100, Math.round(score)));
+
+      let nivel: 'efetivar' | 'atencao' | 'prorrogar' | 'desligar';
+      let label: string;
+      if (score >= 85) { nivel = 'efetivar'; label = 'Recomendado Efetivar'; }
+      else if (score >= 70) { nivel = 'atencao'; label = 'Efetivar com Ressalvas'; }
+      else if (score >= 50) { nivel = 'prorrogar'; label = 'Avaliar Prorrogação'; }
+      else { nivel = 'desligar'; label = 'Não Recomendado — Avaliar Desligamento'; }
+
+      return {
+        employee: { id: e.id, nome: e.nomeCompleto, funcao: e.funcao || null, fotoUrl: e.fotoUrl || null },
+        periodo: { tipo, inicio, fim1, fim2, status, diasRestantes, diasDecorridos, hoje: hojeStr },
+        assiduidade: { diasTrabalhados, faltas, percentual: assiduidadePerc, faltasDetalhe: faltasDet },
+        atrasos: { total: atrasosDet.length, minutos: minutosAtraso, detalhe: atrasosDet },
+        advertencias: { verbais: advVerbais, escritas: advEscritas, suspensoes: advSuspensoes, total: adv.length, lista: advLista },
+        atestados: { total: atest.length, diasAfastamento: atestDiasAfast, lista: atestLista },
+        acidentes: { total: acid.length, lista: acidLista },
+        ocorrencias: hist,
+        veredito: { score, nivel, label, motivos },
+      };
+    }),
+
     // Rev. 2125 — Aloca número sequencial NNN/AAAA do Contrato de Experiência
     // de forma ATÔMICA. Idempotente: se o employee já tem `numeroContratoExperiencia`
     // + `numeroContratoExperienciaAno`, retorna o existente (não consome counter).
