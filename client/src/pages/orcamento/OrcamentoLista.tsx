@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { DraggableCommandBar } from "@/components/DraggableCommandBar";
 import { Link, useLocation } from "wouter";
 import { useCompany } from "@/contexts/CompanyContext";
@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import {
   Calculator, Upload, Eye, Trash2, Pencil,
   FolderOpen, RefreshCw, Search, ChevronDown,
-  FileEdit, Clock, CheckCircle, Lock, Calendar,
+  FileEdit, Clock, CheckCircle, Lock, Calendar, Building2,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -83,6 +83,12 @@ export default function OrcamentoLista() {
     { enabled: !!companyId }
   );
 
+  const obraNomeById = useMemo(() => {
+    const m = new Map<string, string>();
+    (obras as any[]).forEach((o: any) => m.set(String(o.id), o.nome || o.codigo || ""));
+    return m;
+  }, [obras]);
+
   const deleteMutation = trpc.orcamento.excluir.useMutation({
     onSuccess: () => {
       toast.success("Orçamento excluído.");
@@ -148,7 +154,8 @@ export default function OrcamentoLista() {
       o.codigo?.toLowerCase().includes(q) ||
       o.cliente?.toLowerCase().includes(q) ||
       o.descricao?.toLowerCase().includes(q) ||
-      o.revisao?.toLowerCase().includes(q)
+      o.revisao?.toLowerCase().includes(q) ||
+      (o.obraId && obraNomeById.get(String(o.obraId))?.toLowerCase().includes(q))
     );
   });
 
@@ -257,6 +264,11 @@ export default function OrcamentoLista() {
                         </div>
                         <p className="text-xs text-muted-foreground mt-1 truncate">{orc.descricao || "—"}</p>
                         <div className="flex gap-3 mt-2 text-xs text-muted-foreground flex-wrap items-center">
+                          {orc.obraId && obraNomeById.get(String(orc.obraId)) && (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 font-medium">
+                              <Building2 className="h-3 w-3" /> {obraNomeById.get(String(orc.obraId))}
+                            </span>
+                          )}
                           {orc.cliente && <span>Cliente: {orc.cliente}</span>}
                           {orc.local   && <span>Local: {orc.local}</span>}
                           {bdi  && <span className="text-amber-600 font-medium">{bdi}</span>}

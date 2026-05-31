@@ -1,6 +1,27 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2614 — **ORÇAMENTOS · A LISTA PASSA A EXIBIR O NOME DA OBRA VINCULADA
+ * (CADASTRO) EM CADA CARD — ANTES SÓ MOSTRAVA CÓDIGO, DESCRIÇÃO, CLIENTE E
+ * LOCAL; A OBRA SELECIONADA NO CADASTRO NÃO APARECIA NA TELA.**
+ *
+ * PEDIDO (usuário, screenshot da tela Orçamentos): "QUERO QUE NA TELA, FIQUE O
+ * NOME DA OBRA, NO CADASTRO".
+ *
+ * CONTEXTO: cada orçamento já guarda `obraId` (campo "Obra vinculada" do form
+ * Editar), mas o card da lista não exibia o nome da obra. O cadastro de obras
+ * (`obras.list`) já era carregado na página (usado só no `<select>` do modal).
+ *
+ * IMPLEMENTAÇÃO (SÓ CLIENT — `client/src/pages/orcamento/OrcamentoLista.tsx`;
+ * ZERO SERVER/SCHEMA/ALTER/DROP/DELETE):
+ *  - Novo `useMemo` `obraNomeById` monta um Map `String(obra.id) → obra.nome`
+ *    (fallback `obra.codigo`) a partir do `obras.list` já carregado.
+ *  - O card ganha um chip azul (ícone `Building2`) com o nome da obra ANTES de
+ *    "Cliente"/"Local", renderizado só quando `orc.obraId` existe e há nome.
+ *  - A busca passa a casar também pelo nome da obra vinculada.
+ *
+ * Validado: esbuild client `OrcamentoLista.tsx` (exit 0).
+ *
  * Rev. 2613 — **RECRUTAMENTO/CURRÍCULOS · LAYOUT NOVO, MODERNO E MINIMALISTA
  * (MAIS ESPAÇO EM BRANCO, FÁCIL UTILIZAÇÃO) — SÓ VISUAL, TODA A LÓGICA/HANDLERS/
  * tRPC/DIALOGS PRESERVADOS.**
