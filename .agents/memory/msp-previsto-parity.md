@@ -58,6 +58,25 @@ server, senão dá selo verde falso e o server cai no fallback divergente:
 o engenheiro — frouxa promete paridade que o server não entrega; rígida barra o
 arquivo que de fato produz a curva certa.
 
+## DECISÃO DO USUÁRIO (31/05/2026): % Previsto correto = calendário CORRIGIDO, NÃO o Texto6 cru
+
+O usuário declarou (2x, enfático): **NUNCA validar % Previsto pela coluna "% Previsto"
+do MSP (Texto6) — ela sai ERRADA quando o calendário do XML está incompleto. A coluna
+confiável é "% Concluída" (`PercentComplete`).** Para PLN_816 R04 isso REVISA o "alvo
+cravado" anterior:
+- **3/6/10/14/18** = curva do MSP cru (= Texto6) com calendário SEM Corpus Christi → ERRADO (não usar).
+- **2/6/10/14/17** = curva com o calendário CORRIGIDO (Corpus Christi injetado pela Rev. 2632) → é o % Previsto correto que o usuário quer.
+- **2/9/15/20/26** = % Concluída (`PercentComplete` raiz UID=0) lida em cada upload semanal — coluna de validação.
+
+**NÃO REVERTER a Rev. 2632.** O auto-completar de feriados móveis é o comportamento
+desejado; o instinto de "espelhar o MSP cru (3/6/10/14/18)" está ERRADO segundo o dono.
+
+**How to apply:** o card "% Previsto" (mspReadOnly em PlanejamentoDetalhe.tsx) já lê a
+curva Caminho B (`previstoCurva.raizAt`) com prioridade; o Texto6 (`previstoMspSnapshot`)
+é só fallback desativado. A curva fica congelada em `previsto_semanas_json` e só
+regenera no `salvarAtividades` → **projeto importado ANTES da Rev. 2632 continua
+mostrando 3% até REIMPORTAR o cronograma.** A correção operacional é reimportar o XML.
+
 ## Calendário do XML pode FALTAR feriados móveis nacionais (ERP auto-completa)
 
 Quando ERP × MSP divergem no %Previsto e a CONTA é comprovadamente idêntica, suspeite
