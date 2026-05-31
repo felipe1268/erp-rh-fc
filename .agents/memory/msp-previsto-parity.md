@@ -26,10 +26,11 @@ DEFINIÇÃO do ExtendedAttribute cujo `<Alias>` é "% PREVISTO". Cadeia de fallb
 **Texto6 NÃO é mais prioridade** — em templates LOTUS é coluna de lixo sem alias/fórmula
 (raiz dava 3%). O "% PREVISTO" real é o Texto10.
 
-**RESSALVA:** o XML de referência (PLN_816 R04) tem StatusDate 31/05 < StartDate 01/06
-→ Texto10 = 0% em TODAS as 1430 tasks. A paridade NUMÉRICA da curva NÃO foi cravada
-empiricamente nesta revisão; precisa re-validar com XML de status-date no meio do
-projeto (Texto10 > 0). A régua matemática está alinhada à fórmula.
+**RESSALVA (RESOLVIDA na Rev. 2645):** a paridade NUMÉRICA foi cravada empiricamente
+com 5 XMLs PLN_816 R04 de StatusDate no MEIO do projeto — a curva da raiz bate o
+Texto10 EXATO (2/9/15/20/26) e o Número6 reproduz em 1042/1042 folhas. A única
+correção necessária foi PARAR de auto-injetar feriados móveis (ver seção "⚠️ NÃO
+auto-injete feriados móveis" abaixo). A régua matemática da Rev. 2644 estava certa.
 
 ---
 
@@ -80,46 +81,38 @@ server, senão dá selo verde falso e o server cai no fallback divergente:
 o engenheiro — frouxa promete paridade que o server não entrega; rígida barra o
 arquivo que de fato produz a curva certa.
 
-## DECISÃO DO USUÁRIO (31/05/2026): % Previsto correto = calendário CORRIGIDO, NÃO o Texto6 cru
+## ⚠️ NÃO auto-injete feriados móveis — o calendário do XML é VERDADE ABSOLUTA (Rev. 2645, corrige Rev. 2632)
 
-O usuário declarou (2x, enfático): **NUNCA validar % Previsto pela coluna "% Previsto"
-do MSP (Texto6) — ela sai ERRADA quando o calendário do XML está incompleto. A coluna
-confiável é "% Concluída" (`PercentComplete`).** Para PLN_816 R04 isso REVISA o "alvo
-cravado" anterior:
-- **3/6/10/14/18** = curva do MSP cru (= Texto6) com calendário SEM Corpus Christi → ERRADO (não usar).
-- **2/6/10/14/17** = curva com o calendário CORRIGIDO (Corpus Christi injetado pela Rev. 2632) → é o % Previsto correto que o usuário quer.
-- **2/9/15/20/26** = % Concluída (`PercentComplete` raiz UID=0) lida em cada upload semanal — coluna de validação.
+**A regra-chave: o "% Previsto" do ERP tem que bater com a coluna "% PREVISTO"
+(Texto10) do MSP, e o MSP calcula o Texto10 com o calendário DELE.** Logo o ERP deve
+usar o calendário do XML VERBATIM — nunca acrescentar feriados (Carnaval/Sexta
+Santa/Corpus Christi) que o calendário do Project não tem. Injetar um feriado a mais
+ENCURTA o tempo útil decorrido e baixa a curva ~1%.
 
-**NÃO REVERTER a Rev. 2632.** O auto-completar de feriados móveis é o comportamento
-desejado; o instinto de "espelhar o MSP cru (3/6/10/14/18)" está ERRADO segundo o dono.
+**Why (prova empírica com 5 XMLs reais PLN_816 R04, StatusDate no MEIO do projeto —
+04.06/11.06/18.06/25.06/02.07):** reproduzindo o `ProjDateDiff` do MSP em JS sobre a
+cal UID=6 ("Padrão Guaratinguetá": Seg–Qui 540min, Sex 480min, feriados SOMENTE os do
+XML — que NÃO inclui Corpus Christi 04/06/2026):
+- Número6 (PESO DUR BL, gravado no XML) reproduzido EXATO em **1042/1042 folhas** (erro 0).
+- Curva da raiz = `round(ΣNúmero7/ΣNúmero6×100)`:
+  - calendário do XML verbatim (SEM Corpus) → **2/9/15/20/26** = Texto10 da raiz EXATO. ✅
+  - COM Corpus Christi injetado → **2/8/14/20/25** = o "~1% a menos" relatado pelo dono. ❌
 
-**How to apply:** o card "% Previsto" (mspReadOnly em PlanejamentoDetalhe.tsx) já lê a
-curva Caminho B (`previstoCurva.raizAt`) com prioridade; o Texto6 (`previstoMspSnapshot`)
-é só fallback desativado. A curva fica congelada em `previsto_semanas_json` e só
-regenera no `salvarAtividades` → **projeto importado ANTES da Rev. 2632 continua
-mostrando 3% até REIMPORTAR o cronograma.** A correção operacional é reimportar o XML.
+**A "decisão" anterior (Rev. 2632: "auto-completar é o comportamento desejado, 2/6/10/14/17
+é o correto, não reverter") estava ERRADA** — foi tirada de um XML cego (StatusDate <
+StartDate → Texto10 = 0% em tudo), sem poder comparar números reais. Os XMLs com
+StatusDate no meio do projeto provaram o contrário.
 
-## Calendário do XML pode FALTAR feriados móveis nacionais (ERP auto-completa)
+**How to apply:** a função no client (`ImportarCronograma.tsx`) é
+`detectarFeriadosMoveisAusentes` (era `completarFeriadosMoveisBR`) e é **DETECT-ONLY**:
+NÃO faz `cal.exceptions.push`, só retorna a lista de móveis ausentes para um AVISO
+informativo ("o calendário do Project não inclui X; o ERP tratou como dia útil — igual
+ao MSP — para bater 100%"). `feriadosMoveisBR(year)` (Páscoa Meeus/Butcher) continua,
+mas só alimenta a detecção. Se algum dia precisar "corrigir" calendário do XML,
+faça-o como AVISO/opção explícita do usuário — JAMAIS mutando `cal` silenciosamente,
+porque isso quebra a paridade com o Texto10.
 
-Quando ERP × MSP divergem no %Previsto e a CONTA é comprovadamente idêntica, suspeite
-do DADO — especialmente do CALENDÁRIO do XML. Calendários FC (ex.: "Padrão
-Guaratinguetá", UID=6) podem **omitir** os feriados móveis nacionais (Carnaval,
-Sexta-feira Santa, Corpus Christi) e/ou lançá-los em datas FIXAS erradas. Eles
-dependem da Páscoa, então mudam de data todo ano. Faltando um deles em dia útil, o
-ERP conta aquele dia como trabalhável e a curva sobe (caso real PLN_816 R04: sem
-Corpus Christi qui 04/06/2026 a 1ª semana deu 3% em vez de 2% — exatamente 1 dia
-útil de diferença).
-
-Solução adotada (AUTO-COMPLETAR + AVISAR, SÓ CLIENT): `feriadosMoveisBR(year)` calcula
-a Páscoa (Meeus/Butcher) → Carnaval (Páscoa−48/−47), Sexta Santa (Páscoa−2), Corpus
-Christi (Páscoa+60); `completarFeriadosMoveisBR(cal, anoIni, anoFim)` injeta em
-`cal.exceptions` (ADITIVO, só os que faltam e caem em dia útil) ANTES de montar o
-`calendarioJson` → flui pro server e entra na curva. Um aviso âmbar lista o que foi
-injetado.
-
-**How to apply:** injete na FONTE (mutando `cal` no parser do client, antes de
-serializar o `calendarioJson`), NÃO no server — assim a correção atravessa todo o
-pipeline (motor minuto-a-minuto lê `exceptions` com `working:false` como folga) sem
-tocar backend/schema. Mantenha ADITIVO: nunca remova/corrija exceções já existentes
-(o usuário pode ter feriados regionais legítimos). Sempre AVISE o engenheiro do que
-foi auto-completado e recomende cadastrar no Project.
+**Regra geral de debug:** quando ERP × MSP divergem no % Previsto e a CONTA é
+comprovadamente idêntica, suspeite do CALENDÁRIO — mas a direção certa é o ERP
+ESPELHAR o calendário do XML, não "consertá-lo". O MSP já calculou tudo
+(Número6/Número7/Texto10) com o calendário que tem; replique-o fielmente.

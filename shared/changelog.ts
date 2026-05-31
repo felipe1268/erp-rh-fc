@@ -1,6 +1,50 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2645 — **PLANEJAMENTO · O "% PREVISTO" VOLTA A BATER 100% COM A COLUNA
+ * "% PREVISTO" (Texto10) DO MS PROJECT: O ERP PARA DE AUTO-INJETAR FERIADOS MÓVEIS
+ * (CARNAVAL/SEXTA-FEIRA SANTA/CORPUS CHRISTI) NO CALENDÁRIO IMPORTADO. O CALENDÁRIO
+ * DO XML PASSA A SER VERDADE ABSOLUTA — A INJEÇÃO ENCURTAVA A CURVA EM ~1%.**
+ *
+ * PEDIDO (usuário): "o % previsto gerado no upload do cronograma inicial está com
+ * ~1% de diferença vs a coluna % PREVISTO do MS Project". Enviou 5 XMLs reais
+ * (PLN_816 R04, StatusDate nas semanas 04.06/11.06/18.06/25.06/02.07), permitindo
+ * VALIDAÇÃO NUMÉRICA EMPÍRICA da curva (antes a Rev. 2632 fora validada contra um
+ * XML cujo StatusDate < início do projeto → Texto10 = 0% em tudo, uma referência cega).
+ *
+ * CAUSA-RAIZ (auto-injeção de feriados que o MSP não tem): a Rev. 2632 adicionou
+ * `completarFeriadosMoveisBR`, que calcula a Páscoa (Meeus/Butcher) e INJETA em
+ * `cal.exceptions` os feriados móveis (Carnaval, Sexta-feira Santa, Corpus Christi)
+ * quando faltam no XML. Isso flui pro `calendarioJson` → server → motor minuto-a-minuto
+ * da curva "% Previsto". PORÉM o MSP calcula Texto10/Número6/Número7 com o calendário
+ * DELE — o template "Padrão Guaratinguetá" (cal UID=6) da FC NÃO inclui Corpus Christi
+ * (qui 04/06/2026). Logo, ao injetar Corpus Christi, o ERP ENCURTAVA o tempo útil
+ * decorrido das tarefas em curso na 1ª semana → curva ~1% mais baixa.
+ *
+ * PROVA EMPÍRICA (reprodução do ProjDateDiff em JS sobre a cal UID=6 — Seg–Qui 540min,
+ * Sex 480min, feriados SOMENTE os do XML, SEM Corpus Christi):
+ *  - Número6 (PESO DUR BL) reproduzido EXATO em 1042/1042 folhas (erro zero).
+ *  - Curva da RAIZ (rollup `round(ΣNúmero7/ΣNúmero6×100)`) por semana:
+ *      SEM Corpus Christi (= XML verbatim): 2/9/15/20/26  → BATE o Texto10 da raiz EXATO.
+ *      COM Corpus Christi injetado:         2/8/14/20/25  → o "~1% a menos" relatado.
+ *
+ * FIX (ADITIVO/LEITURA; R-001/R-007/R-010 — ZERO ALTER/DROP/DELETE):
+ *  - `client/src/pages/planejamento/ImportarCronograma.tsx`: a função
+ *    `completarFeriadosMoveisBR` (mutava `cal.exceptions`) foi renomeada para
+ *    `detectarFeriadosMoveisAusentes` e tornada DETECT-ONLY — apenas devolve a lista
+ *    de feriados móveis ausentes, SEM `cal.exceptions.push`. O call site (em
+ *    `parseMSProjectFull`) não injeta mais nada; o `calendarioJson` enviado ao server
+ *    reflete EXATAMENTE o calendário do XML. O aviso de integridade foi reescrito:
+ *    em vez de "o ERP completou automaticamente N feriados", agora informa que o
+ *    calendário do Project não inclui tais feriados e que o ERP os tratou como DIAS
+ *    ÚTEIS (igual ao MSP) para a curva bater 100% — e que, se deveriam ser folga,
+ *    devem ser cadastrados no Project e o XML reimportado.
+ *
+ * IMPACTO: nenhuma mudança de schema, de cálculo no server, ou de leitura de tarefas.
+ * Só deixa de POLUIR o calendário importado com feriados que o MSP não usou. Projetos
+ * cujo XML JÁ traz os feriados móveis corretos continuam idênticos (a detecção pula
+ * datas já marcadas como folga). Validado (estático): esbuild client+server exit 0.
+ *
  * Rev. 2644 — **PLANEJAMENTO · NO CRONOGRAMA INICIAL, O "% PREVISTO" PASSA A SER A
  * RÉPLICA EXATA DA COLUNA "% PREVISTO" (Texto10) DO MS PROJECT — "VERDADE ABSOLUTA".
  * A RAIZ VIRA ROLLUP (SOMA DAS DURAÇÕES DAS FOLHAS, IGUAL AO MSP) E A RÉGUA DE

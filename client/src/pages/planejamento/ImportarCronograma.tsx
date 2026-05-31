@@ -262,14 +262,14 @@ export function parseMSProjectStatusDateIso(doc: Document): string | null {
   return m ? m[1] : null;
 }
 
-// ── Feriados móveis nacionais (Rev. 2632) ────────────────────────────────────
+// ── Feriados móveis nacionais (Rev. 2632 · revisado Rev. 2645) ───────────────
 // Carnaval, Sexta-feira Santa e Corpus Christi dependem da PÁSCOA (não têm data
-// fixa). Muitos calendários do MS Project trazem só feriados de data fixa e/ou
-// lançam os móveis em datas ERRADAS — quando isso acontece, o ERP conta esses
-// dias como úteis e o % Previsto diverge do MSP real. Caso PLN_816 R04: faltava
-// Corpus Christi (qui 04/06/2026 = Páscoa + 60d) → a 1ª semana dava 3% em vez de
-// 2% (1 dia útil a mais). Calculamos a Páscoa (algoritmo de Meeus/Butcher) e
-// completamos os móveis que faltam, AVISANDO o engenheiro.
+// fixa). Calculamos a Páscoa (algoritmo de Meeus/Butcher) e derivamos os móveis.
+// IMPORTANTE (Rev. 2645): esta lista serve APENAS para DETECTAR ausências no
+// calendário do XML e AVISAR o engenheiro — NÃO é mais injetada no cálculo. O
+// calendário do MS Project é verdade absoluta para o "% Previsto" (Texto10);
+// injetar móveis que o MSP não tem quebrava a paridade (caso PLN_816 R04: injetar
+// Corpus Christi 04/06/2026 baixava a curva da raiz de 2/9/15/20/26 p/ 2/8/14/20/25).
 function feriadosMoveisBR(year: number): Array<{ iso: string; nome: string }> {
   // Páscoa (algoritmo "Anonymous Gregorian" — Meeus/Jones/Butcher).
   const a = year % 19;
@@ -300,14 +300,17 @@ function feriadosMoveisBR(year: number): Array<{ iso: string; nome: string }> {
   ];
 }
 
-/** Rev. 2632 — completa os feriados móveis nacionais (dependentes da Páscoa)
- *  que FALTAM no calendário do XML, para cada ano do escopo do projeto. É
- *  ADITIVO: não remove nem corrige exceções existentes; só injeta as datas
- *  móveis ausentes que caem em dia útil do calendário. Devolve a lista do que
- *  foi injetado, para que o ERP AVISE o engenheiro. Mutar `cal.exceptions` aqui
- *  garante que o feriado entre no `calendarioJson` enviado ao server e, com isso,
- *  no motor minuto-a-minuto que gera a curva "% Previsto" (Caminho B). */
-export function completarFeriadosMoveisBR(
+/** Rev. 2645 — DETECTA (sem mutar) os feriados móveis nacionais (dependentes da
+ *  Páscoa) que NÃO constam no calendário do XML, por ano do escopo do projeto.
+ *  ANTES (Rev. 2632) o ERP INJETAVA essas datas em `cal.exceptions` — mas isso
+ *  QUEBRAVA a paridade com a coluna "% PREVISTO" (Texto10) do MS Project: o MSP
+ *  calcula Texto10/Número6/Número7 com o calendário DELE (que, no template LOTUS
+ *  da FC, NÃO inclui Corpus Christi etc.), então injetar o feriado encurtava a
+ *  curva em ~1% (validado empíricamente com os 5 XMLs reais PLN_816 R04: COM
+ *  Corpus Christi a raiz dava 2/8/14/20/25; SEM, bate o Texto10 exato 2/9/15/20/26).
+ *  Agora o calendário do XML é VERDADE ABSOLUTA: só REPORTAMOS as ausências como
+ *  informação, sem alterar o cálculo do % Previsto. */
+export function detectarFeriadosMoveisAusentes(
   cal: CalendarioImportado | null,
   anoInicio: number | null,
   anoFim: number | null,
@@ -331,20 +334,20 @@ export function completarFeriadosMoveisBR(
       guard++;
     }
   }
-  const injetados: Array<{ iso: string; nome: string }> = [];
+  const ausentes: Array<{ iso: string; nome: string }> = [];
   for (let y = y0; y <= y1; y++) {
     for (const fm of feriadosMoveisBR(y)) {
       if (jaFolga.has(fm.iso)) continue;
-      // Só injeta se a data cai em dia que o calendário considera ÚTIL — caso
+      // Só reporta se a data cai em dia que o calendário considera ÚTIL — caso
       // contrário (fim de semana já não-útil) seria inócuo e poluiria o aviso.
       const dow = new Date(fm.iso + "T00:00:00Z").getUTCDay();
       if (!cal.weekDays?.[dow]) continue;
-      cal.exceptions.push({ from: fm.iso, to: fm.iso, working: false });
-      jaFolga.add(fm.iso);
-      injetados.push(fm);
+      // Rev. 2645 — NÃO mutamos mais `cal.exceptions`: o calendário do XML é a
+      // verdade absoluta para o % Previsto. Apenas registramos a ausência.
+      ausentes.push(fm);
     }
   }
-  return injetados;
+  return ausentes;
 }
 
 /** Versão completa: tarefas + metadados (calendário + StatusDate).
@@ -590,16 +593,15 @@ export function parseMSProjectFull(text: string): {
   const defaultFinishTime = doc.querySelector("DefaultFinishTime")?.textContent?.trim() || null;
   const minutesPerDayStr  = doc.querySelector("MinutesPerDay")?.textContent?.trim();
   const minutesPerDay     = minutesPerDayStr ? parseInt(minutesPerDayStr, 10) : null;
-  // Rev. 2632 — AUTO-COMPLETAR: injeta no calendário os feriados móveis nacionais
-  // (Carnaval, Sexta-feira Santa, Corpus Christi) que faltam no XML, para os anos
-  // do escopo do projeto. Mutamos `cal` ANTES de montar o calComConfig/calendarioJson
-  // → o feriado flui pro server e entra na curva "% Previsto". O aviso é anexado
-  // à integridade mais abaixo. (Caso PLN_816 R04: sem Corpus Christi a 1ª semana
-  // dava 3% em vez de 2%.)
+  // Rev. 2645 — O calendário do XML é VERDADE ABSOLUTA para o "% Previsto".
+  // NÃO injetamos mais feriados móveis (a Rev. 2632 fazia isso e QUEBRAVA a
+  // paridade com o Texto10 do MSP — caso PLN_816 R04: injetar Corpus Christi
+  // 04/06 baixava a curva da raiz de 2/9/15/20/26 para 2/8/14/20/25, o ~1%
+  // relatado). Apenas DETECTAMOS as ausências para um aviso informativo.
   const anoIni = projetoStart ? parseInt(projetoStart.slice(0, 4), 10)
                : statusDate ? parseInt(statusDate.slice(0, 4), 10) : null;
   const anoFim = projetoFinish ? parseInt(projetoFinish.slice(0, 4), 10) : anoIni;
-  const feriadosInjetados = completarFeriadosMoveisBR(cal, anoIni, anoFim);
+  const feriadosMoveisAusentes = detectarFeriadosMoveisAusentes(cal, anoIni, anoFim);
   const calComConfig = cal ? {
     ...cal,
     defaultStartTime:  defaultStartTime  || "08:00:00",
@@ -621,16 +623,17 @@ export function parseMSProjectFull(text: string): {
   // Rev. 2631 — analisa integridade ANTES de devolver (usa o `cal` cru, com
   // weekDayIntervals/exceptions, e as folhas já parseadas com baselineReal).
   const integridade = analisarIntegridadeMSP(tarefas, cal, statusDate);
-  // Rev. 2632 — avisa o engenheiro quando o ERP completou feriados móveis que
-  // faltavam no calendário do XML (vai PRIMEIRO na lista de avisos, em âmbar).
-  if (feriadosInjetados.length) {
+  // Rev. 2645 — avisa o engenheiro quando o calendário do XML NÃO inclui feriados
+  // móveis nacionais (vai PRIMEIRO na lista de avisos, em âmbar). NÃO os injeta:
+  // o ERP replica EXATAMENTE o calendário do Project (= a coluna "% PREVISTO").
+  if (feriadosMoveisAusentes.length) {
     const fmtBR = (iso: string) => { const [y, mo, d] = iso.split("-"); return `${d}/${mo}/${y}`; };
     integridade.avisos.unshift(
-      `O ERP completou automaticamente ${feriadosInjetados.length} feriado(s) móvel(is) que faltava(m) no calendário do MS Project: ` +
-      feriadosInjetados.map(f => `${f.nome} (${fmtBR(f.iso)})`).join("; ") + ". " +
-      "Esses feriados (Carnaval, Sexta-feira Santa, Corpus Christi) dependem da Páscoa e afetam o cálculo do % Previsto — " +
-      "foram considerados aqui para que a curva bata com o MS Project. " +
-      "Recomendamos cadastrá-los também no calendário do Project para o XML ficar 100% fiel."
+      `O calendário do MS Project não inclui ${feriadosMoveisAusentes.length} feriado(s) móvel(is) nacional(is): ` +
+      feriadosMoveisAusentes.map(f => `${f.nome} (${fmtBR(f.iso)})`).join("; ") + ". " +
+      "O ERP segue o calendário do Project EXATAMENTE (verdade absoluta), então essas datas foram tratadas como DIAS ÚTEIS — igual ao MS Project, " +
+      "para que o \"% Previsto\" bata 100% com a coluna \"% PREVISTO\" (Texto10). " +
+      "Se elas deveriam ser folga, cadastre-as no calendário do Project e reimporte o XML."
     );
   }
   return { tarefas, statusDate, statusDateIso, calendarioJson, projetoStart, projetoFinish, previstoMspRaiz, realizadoMspRaiz, integridade };
