@@ -1,6 +1,36 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2643 — **ANÁLISE DE EXPERIÊNCIA · A SEÇÃO "ATESTADOS" PASSA A SER CLICÁVEL: AO
+ * CLICAR NUM ATESTADO QUE TENHA ANEXO, O ERP ABRE O DOCUMENTO (PDF/IMAGEM EM PREVIEW
+ * INTERNO; OUTROS FORMATOS EM NOVA ABA).**
+ *
+ * PEDIDO (usuário): "Quero poder clicar no atestado e ver os anexos." (print da tela
+ * full-screen "Análise de Experiência", seção "Atestados (2)" listando os atestados
+ * sem nenhuma ação para ver o documento).
+ *
+ * CAUSA-RAIZ (ausência de feature): a procedure `employees.analiseExperiencia`
+ * (`server/routers.ts`) montava `atestLista` SÓ com `data/dias/cid/tipo` — não
+ * expunha o `documentoUrl` da tabela `atestados` (que já existe no schema). Logo o
+ * componente `AnaliseExperiencia.tsx` não tinha de onde abrir o anexo, e as linhas
+ * eram puramente informativas.
+ *
+ * FIX (ADITIVO, SOMENTE SELECT/UI; R-001/R-007/R-010):
+ *  - `server/routers.ts` — `atestLista` ganha `documentoUrl: a.documentoUrl || null`.
+ *  - `client/src/components/AnaliseExperiencia.tsx` — quando o atestado tem
+ *    `documentoUrl`, a `<li>` vira clicável (cursor/hover, `role=button`, `tabIndex`,
+ *    Enter/Espaço) + ícone `Paperclip` azul; clique abre `DocumentPreviewDialog`
+ *    (reuso do mesmo viewer do Raio-X) se `canPreviewFile` (PDF/imagem), senão
+ *    `window.open` em nova aba. Atestado sem anexo continua não-clicável.
+ *
+ * ESCOPO/CONSERVADOR: zero schema/ALTER/DELETE; nenhuma mudança no cálculo de score,
+ * janela ou demais seções. Só ADIÇÃO do campo no retorno + interação na lista.
+ *
+ * VALIDAÇÃO: esbuild bundle-check client (AnaliseExperiencia) e server (routers) —
+ * ambos exit 0.
+ *
+ * ─────────────────────────────────────────────────────────────────────────────
+ *
  * Rev. 2642 — **PAINEL RH & DP · A SEÇÃO "QUADRO DE PESSOAL" GANHA O CARD "NA EMPRESA"
  * COM A QUANTIDADE DE PESSOAS QUE AINDA TÊM VÍNCULO HOJE (EXCLUI DESLIGADOS E
  * BLACKLIST), EM PARIDADE EXATA COM O BADGE "NA EMPRESA" DA TELA COLABORADORES.**

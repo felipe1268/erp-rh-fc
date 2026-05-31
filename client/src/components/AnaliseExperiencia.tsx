@@ -1,10 +1,11 @@
 import { trpc } from "@/lib/trpc";
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import {
   Dialog,
   DialogContent,
   DialogTitle,
 } from "@/components/ui/dialog";
+import DocumentPreviewDialog, { canPreviewFile } from "@/components/DocumentPreviewDialog";
 import { Badge } from "@/components/ui/badge";
 import {
   FileBarChart,
@@ -29,6 +30,7 @@ import {
   CalendarDays,
   ChevronRight,
   ShieldCheck,
+  Paperclip,
 } from "lucide-react";
 
 type Props = {
@@ -220,6 +222,7 @@ export default function AnaliseExperiencia({ employeeId, companyId, open, onClos
   );
 
   const scrollRef = useRef<HTMLDivElement>(null);
+  const [previewDoc, setPreviewDoc] = useState<{ url: string; name: string; title: string } | null>(null);
   const scrollTo = (id: string) => {
     const root = scrollRef.current;
     if (!root) return;
@@ -235,7 +238,7 @@ export default function AnaliseExperiencia({ employeeId, companyId, open, onClos
     totalDias > 0 ? Math.min(100, Math.round((data!.periodo.diasDecorridos / totalDias) * 100)) : 100;
 
   return (
-    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
+    <Dialog open={open} onOpenChange={(v) => { if (!v) { setPreviewDoc(null); onClose(); } }}>
       <DialogContent
         resizable={false}
         showCloseButton={false}
@@ -269,7 +272,7 @@ export default function AnaliseExperiencia({ employeeId, companyId, open, onClos
             )}
             <button
               type="button"
-              onClick={onClose}
+              onClick={() => { setPreviewDoc(null); onClose(); }}
               aria-label="Fechar"
               className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-white/80 transition-colors hover:bg-white/10 hover:text-white"
             >
@@ -710,16 +713,36 @@ export default function AnaliseExperiencia({ employeeId, companyId, open, onClos
 
                 {data.atestados.lista.length > 0 && (
                   <Section id="sec-atestados" icon={Stethoscope} title={`Atestados (${data.atestados.lista.length})`} color="text-amber-600">
-                    {data.atestados.lista.map((a, i) => (
-                      <li key={i} className="flex items-center justify-between gap-2 py-2 text-sm">
-                        <span>
-                          {a.tipo || "Atestado"}
-                          {a.cid ? <span className="ml-1 text-xs text-muted-foreground">CID {a.cid}</span> : null}
-                          {a.dias ? <span className="ml-1 text-xs">· {a.dias} dia(s)</span> : null}
-                        </span>
-                        <span className="font-mono text-xs text-muted-foreground">{fmtData(a.data)}</span>
-                      </li>
-                    ))}
+                    {data.atestados.lista.map((a, i) => {
+                      const docUrl = a.documentoUrl;
+                      const abrirAnexo = () => {
+                        if (!docUrl) return;
+                        if (canPreviewFile(docUrl)) {
+                          setPreviewDoc({ url: docUrl, name: docUrl.split("/").pop() || "arquivo", title: `Atestado - ${a.tipo || "Atestado"}` });
+                        } else {
+                          window.open(docUrl, "_blank", "noopener,noreferrer");
+                        }
+                      };
+                      return (
+                        <li
+                          key={i}
+                          className={`flex items-center justify-between gap-2 py-2 text-sm ${docUrl ? "cursor-pointer rounded-lg px-1 transition-colors hover:bg-muted/60" : ""}`}
+                          role={docUrl ? "button" : undefined}
+                          tabIndex={docUrl ? 0 : undefined}
+                          onClick={docUrl ? abrirAnexo : undefined}
+                          onKeyDown={docUrl ? (ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); abrirAnexo(); } } : undefined}
+                          title={docUrl ? "Clique para ver o anexo" : undefined}
+                        >
+                          <span className="flex items-center gap-1.5">
+                            {a.tipo || "Atestado"}
+                            {a.cid ? <span className="ml-1 text-xs text-muted-foreground">CID {a.cid}</span> : null}
+                            {a.dias ? <span className="ml-1 text-xs">· {a.dias} dia(s)</span> : null}
+                            {docUrl ? <Paperclip className="h-3.5 w-3.5 text-blue-600" /> : null}
+                          </span>
+                          <span className="font-mono text-xs text-muted-foreground">{fmtData(a.data)}</span>
+                        </li>
+                      );
+                    })}
                   </Section>
                 )}
 
@@ -769,6 +792,14 @@ export default function AnaliseExperiencia({ employeeId, companyId, open, onClos
           )}
         </div>
       </DialogContent>
+
+      <DocumentPreviewDialog
+        open={!!previewDoc}
+        onOpenChange={(o) => { if (!o) setPreviewDoc(null); }}
+        fileUrl={previewDoc?.url || null}
+        fileName={previewDoc?.name || null}
+        title={previewDoc?.title}
+      />
     </Dialog>
   );
 }

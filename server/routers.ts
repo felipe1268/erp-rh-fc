@@ -1097,7 +1097,7 @@ export const appRouter = router({
       const atest = atestRows.filter((a: any) => naJanela(a.dataEmissao))
         .sort((a: any, b: any) => String(b.dataEmissao).localeCompare(String(a.dataEmissao)));
       const atestDiasAfast = atest.reduce((acc: number, a: any) => acc + Number(a.diasAfastamento || 0), 0);
-      const atestLista = atest.map((a: any) => ({ data: a.dataEmissao, dias: Number(a.diasAfastamento || 0), cid: a.cid || null, tipo: a.tipo || null }));
+      const atestLista = atest.map((a: any) => ({ data: a.dataEmissao, dias: Number(a.diasAfastamento || 0), cid: a.cid || null, tipo: a.tipo || null, documentoUrl: a.documentoUrl || null }));
 
       // --- Acidentes na janela ---
       const acid = acidRows.filter((a: any) => naJanela(a.dataAcidente))
