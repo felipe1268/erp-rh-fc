@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback, useMemo } from "react";
+import { createPortal } from "react-dom";
 import { User, X, ZoomIn } from "lucide-react";
 
 /**
@@ -109,7 +110,7 @@ export function PersonPhoto({
         )}
       </Wrapper>
 
-      {open && hasPhoto && (
+      {open && hasPhoto && createPortal(
         <div
           className="fixed inset-0 z-[120] flex items-center justify-center bg-black/85 backdrop-blur-sm p-4 animate-in fade-in duration-150"
           onClick={close}
@@ -148,7 +149,8 @@ export function PersonPhoto({
               {caption && <div className="text-sm text-white/70 mt-0.5">{caption}</div>}
             </figcaption>
           </figure>
-        </div>
+        </div>,
+        document.body
       )}
     </>
   );

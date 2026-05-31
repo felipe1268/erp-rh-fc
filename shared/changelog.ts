@@ -1,6 +1,32 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2648 — **RH & DP / GERAL · A FOTO AMPLIADA (LIGHTBOX DO `PersonPhoto`) PARA DE
+ * SER CORTADA AO ABRIR — CABEÇA E PÉS VOLTAM A APARECER INTEIROS. VALE EM TODA TELA
+ * QUE TEM FOTO DE PESSOA (FÉRIAS, COLABORADORES, OBRA EFETIVO, SST, ETC.).**
+ *
+ * PEDIDO (usuário): "ajuste a foto, tá cortando quando aumenta e não pode" (prints da
+ * tela Controle de Férias → ao clicar no avatar, a foto ampliada aparecia cortada no
+ * topo/embaixo, com faixas escuras nas laterais, dentro da área da lista).
+ *
+ * CAUSA-RAIZ: o lightbox usava `position: fixed; inset-0` para cobrir a viewport, MAS
+ * era renderizado DENTRO da árvore da página. Quando QUALQUER ancestral tem `transform`,
+ * `filter`/`backdrop-filter`, `will-change` ou `contain` (ex.: wrappers com `animate-in`
+ * do tailwindcss-animate, blur de dialog), esse ancestral vira o "containing block" do
+ * elemento `fixed` → o overlay deixa de ser relativo à viewport e fica PRESO/RECORTADO
+ * na caixa do ancestral. Resultado: a foto centralizada (object-contain) era clipada no
+ * topo e na base (cabeça + pernas sumiam) e só ocupava a região da lista.
+ *
+ * FIX (SÓ CLIENT/UI; R-001/R-007/R-010 — ZERO SCHEMA/SERVER):
+ *  - `client/src/components/PersonPhoto.tsx`: o overlay do lightbox passa a ser
+ *    renderizado via `createPortal(..., document.body)` (react-dom). Assim o `fixed`
+ *    volta a ser relativo à VIEWPORT (escapa de qualquer ancestral com transform/
+ *    filter), cobrindo a tela inteira e exibindo a foto COMPLETA (object-contain, sem
+ *    corte). Comportamento idêntico em todas as telas que usam `PersonPhoto`.
+ *
+ * EFEITO: clicar em qualquer foto de pessoa abre a imagem ampliada inteira, centralizada
+ * sobre a tela toda, sem recorte. Validado (estático): `pnpm build` exit 0.
+ *
  * Rev. 2647 — **PLANEJAMENTO · O "% PREVISTO" PASSA A LER UMA ÚNICA COLUNA FIXA EM
  * TODOS OS PROJETOS (PRESENTES E FUTUROS): "% PREVISTO" = Texto10 (FieldID 188743750).
  * ACABARAM A DETECÇÃO POR ALIAS E AS RESERVAS Texto6/Texto11 — SE Texto10 FALTAR, O
