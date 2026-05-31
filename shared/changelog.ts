@@ -1,6 +1,58 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2632 — **PLANEJAMENTO · IMPORTAÇÃO DE CRONOGRAMA · AUTO-COMPLETAR FERIADOS
+ * MÓVEIS NACIONAIS (CARNAVAL, SEXTA-FEIRA SANTA, CORPUS CHRISTI): QUANDO ELES
+ * FALTAM NO CALENDÁRIO DO XML, O ERP CALCULA AS DATAS A PARTIR DA PÁSCOA, INJETA
+ * NO CÁLCULO DO "% PREVISTO" E AVISA O ENGENHEIRO QUE FEZ ISSO.**
+ *
+ * PEDIDO (usuário): "O ERP está calculando que a primeira semana o avanço previsto
+ * é 3% mas o correto seria 2%; fiz a simulação no MSP e deu 2%, não 3%. Se a conta
+ * está exatamente igual, o erro está em outro lugar — precisamos entender a
+ * divergência." Após o diagnóstico, o usuário escolheu a opção "AUTO-COMPLETAR +
+ * AVISAR".
+ *
+ * CAUSA-RAIZ (provada com scripts contra os XMLs reais): a CONTA do ERP é IDÊNTICA
+ * à do MSP — ambos reproduzem o campo Texto6 do arquivo (= 3%). A divergência NÃO
+ * estava na fórmula, estava no DADO: o calendário UID=6 ("Padrão Guaratinguetá")
+ * do XML NÃO contém Corpus Christi (quinta, 04/06/2026 = Páscoa 05/04/2026 + 60d).
+ * Pior: o bloco <Exceptions> lança "Carnaval" em 01/03 e "Sexta-feira Santa" em
+ * 15/04 — datas FIXAS ERRADAS (são feriados móveis). Sem Corpus Christi, o ERP
+ * conta 04/06 como dia útil → semana 1 = 2160 min úteis ÷ 68580 = 3,15% → 3%. Com
+ * Corpus Christi como folga → 1620 min ÷ 68040 = 2,36% → 2% (= simulação do MSP do
+ * usuário). A diferença é EXATAMENTE 1 dia útil (540 min). Prova numérica: SEM
+ * Corpus Christi a curva da raiz = 3/6/10/14/18; COM = 2/6/10/14/17.
+ *
+ * IMPLEMENTAÇÃO (ZERO BACKEND/SCHEMA — SÓ CLIENT, no parse em memória; R-001/
+ * R-007/R-010): `client/src/pages/planejamento/ImportarCronograma.tsx`:
+ *  - Nova função `feriadosMoveisBR(year)` — calcula a Páscoa (algoritmo Anonymous
+ *    Gregorian / Meeus-Jones-Butcher) e deriva Carnaval (segunda = Páscoa-48,
+ *    terça = Páscoa-47), Sexta-feira Santa (Páscoa-2) e Corpus Christi (Páscoa+60).
+ *  - Nova função exportada `completarFeriadosMoveisBR(cal, anoIni, anoFim)` —
+ *    ADITIVA (não remove nem corrige exceções existentes): para cada ano do escopo
+ *    do projeto, injeta em `cal.exceptions` (`{from,to,working:false}`) os móveis
+ *    que (a) não estão já marcados como folga e (b) caem em dia ÚTIL do calendário.
+ *    Devolve a lista do que injetou.
+ *  - `parseMSProjectFull`: chama a injeção LOGO APÓS conhecer projetoStart/Finish
+ *    (anos do escopo) e ANTES de montar o `calComConfig`/`calendarioJson` — assim o
+ *    feriado flui pro server e entra na curva "% Previsto" (Caminho B), que tem
+ *    PRIORIDADE sobre o snapshot Texto6 no card (`mspReadOnly`/`previstoCurva`).
+ *  - AVISO (âmbar, vai PRIMEIRO em `integridade.avisos`): "O ERP completou
+ *    automaticamente N feriado(s) móvel(is) que faltava(m)... (ex.: Corpus Christi
+ *    04/06/2026)... recomendamos cadastrá-los também no Project."
+ *
+ * POR QUE NA FONTE (CLIENT, no calendarioJson) E NÃO NO SERVER: o motor minuto-a-
+ * minuto (`minutosUteisEntre` em shared/diasUteis) já lê `cal.exceptions` com
+ * `working:false` como folga; injetar antes de serializar o calendarioJson faz a
+ * correção fluir SEM tocar no backend nem no schema. A curva é regerada no
+ * `salvarAtividades` a partir desse calendário.
+ *
+ * VALIDAÇÃO: `feriadosMoveisBR(2026)` → Corpus Christi 04/06, Carnaval 16-17/02,
+ * Sexta Santa 03/04 (conferido em node); script contra o XML real PLN_816 R04
+ * confirmou que COM Corpus Christi injetado a curva da raiz vira 2/6/10/14/17
+ * (semana 1 = 2% = simulação do usuário). esbuild transform limpo no arquivo
+ * editado. SÓ CLIENT — zero ALTER/DROP/DELETE.
+ *
  * Rev. 2631 — **PLANEJAMENTO · IMPORTAÇÃO DE CRONOGRAMA · ANÁLISE DE INTEGRIDADE
  * PRÉ-UPLOAD: O ERP AGORA EXAMINA O XML DO MS PROJECT ANTES DE SUBIR E, SE FALTAR
  * INFORMAÇÃO ESSENCIAL PRO "% PREVISTO" BATER COM O MSP, BLOQUEIA O ENVIO E

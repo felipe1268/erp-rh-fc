@@ -57,3 +57,28 @@ server, senão dá selo verde falso e o server cai no fallback divergente:
 **Why:** uma régua de validação mais frouxa OU mais rígida que o motor real engana
 o engenheiro — frouxa promete paridade que o server não entrega; rígida barra o
 arquivo que de fato produz a curva certa.
+
+## Calendário do XML pode FALTAR feriados móveis nacionais (ERP auto-completa)
+
+Quando ERP × MSP divergem no %Previsto e a CONTA é comprovadamente idêntica, suspeite
+do DADO — especialmente do CALENDÁRIO do XML. Calendários FC (ex.: "Padrão
+Guaratinguetá", UID=6) podem **omitir** os feriados móveis nacionais (Carnaval,
+Sexta-feira Santa, Corpus Christi) e/ou lançá-los em datas FIXAS erradas. Eles
+dependem da Páscoa, então mudam de data todo ano. Faltando um deles em dia útil, o
+ERP conta aquele dia como trabalhável e a curva sobe (caso real PLN_816 R04: sem
+Corpus Christi qui 04/06/2026 a 1ª semana deu 3% em vez de 2% — exatamente 1 dia
+útil de diferença).
+
+Solução adotada (AUTO-COMPLETAR + AVISAR, SÓ CLIENT): `feriadosMoveisBR(year)` calcula
+a Páscoa (Meeus/Butcher) → Carnaval (Páscoa−48/−47), Sexta Santa (Páscoa−2), Corpus
+Christi (Páscoa+60); `completarFeriadosMoveisBR(cal, anoIni, anoFim)` injeta em
+`cal.exceptions` (ADITIVO, só os que faltam e caem em dia útil) ANTES de montar o
+`calendarioJson` → flui pro server e entra na curva. Um aviso âmbar lista o que foi
+injetado.
+
+**How to apply:** injete na FONTE (mutando `cal` no parser do client, antes de
+serializar o `calendarioJson`), NÃO no server — assim a correção atravessa todo o
+pipeline (motor minuto-a-minuto lê `exceptions` com `working:false` como folga) sem
+tocar backend/schema. Mantenha ADITIVO: nunca remova/corrija exceções já existentes
+(o usuário pode ter feriados regionais legítimos). Sempre AVISE o engenheiro do que
+foi auto-completado e recomende cadastrar no Project.
