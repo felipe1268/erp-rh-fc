@@ -1044,6 +1044,55 @@ export const appRouter = router({
       const faltasDet = ponto.filter((p: any) => Number(p.faltas || 0) > 0).map((p: any) => ({ data: p.data }))
         .sort((a: any, b: any) => String(b.data).localeCompare(String(a.data)));
 
+      // --- Cobertura do cartão de ponto na janela (transparência: Rev. 2628) ---
+      // O cálculo de faltas/assiduidade SÓ enxerga o que existe em time_records.
+      // Se o mês ainda não foi fechado/importado, NÃO há linhas → faltas=0 e
+      // assiduidade cai no default 100%, o que NÃO significa presença real.
+      // Aqui expomos os dados brutos + quais meses do período estão sem cartão,
+      // pra o RH validar exatamente o que o ERP enxergou.
+      const mesesNaJanela: string[] = [];
+      {
+        const cur = new Date(inicio + 'T12:00:00'); cur.setDate(1);
+        const end = new Date(hojeStr + 'T12:00:00'); end.setDate(1);
+        let guard = 0;
+        while (cur <= end && guard < 240) {
+          mesesNaJanela.push(`${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, '0')}`);
+          cur.setMonth(cur.getMonth() + 1);
+          guard++;
+        }
+      }
+      const pontoDetalhe = ponto
+        .slice()
+        .sort((a: any, b: any) => String(a.data).localeCompare(String(b.data)))
+        .map((p: any) => ({
+          data: p.data,
+          entrada1: p.entrada1 || null,
+          saida1: p.saida1 || null,
+          entrada2: p.entrada2 || null,
+          saida2: p.saida2 || null,
+          horasTrabalhadas: p.horasTrabalhadas || null,
+          horasExtras: p.horasExtras || null,
+          faltas: p.faltas || null,
+          atrasos: p.atrasos || null,
+          justificativa: p.justificativa || null,
+          tipoDia: p.tipoDia || null,
+          fonte: p.fonte || null,
+        }));
+      const mesesComRegistro = Array.from(new Set(ponto.map((p: any) => String(p.data).slice(0, 7)))).sort() as string[];
+      const mesesSemRegistro = mesesNaJanela.filter((m) => !mesesComRegistro.includes(m));
+      const cartao = {
+        totalRegistros: ponto.length,
+        semCartao: ponto.length === 0,
+        diasTrabalhados,
+        diasComFalta: faltas,
+        primeiroRegistro: pontoDetalhe[0]?.data ?? null,
+        ultimoRegistro: pontoDetalhe.length ? pontoDetalhe[pontoDetalhe.length - 1].data : null,
+        mesesNaJanela,
+        mesesComRegistro,
+        mesesSemRegistro,
+        detalhe: pontoDetalhe,
+      };
+
       // --- Atestados na janela ---
       const atest = atestRows.filter((a: any) => naJanela(a.dataEmissao))
         .sort((a: any, b: any) => String(b.dataEmissao).localeCompare(String(a.dataEmissao)));
@@ -1073,8 +1122,16 @@ export const appRouter = router({
       if (atestDiasAfast >= 5) motivos.push({ texto: `${atest.length} atestado(s) somando ${atestDiasAfast} dia(s) de afastamento (não penaliza o score)`, tipo: 'alerta' });
       else if (atest.length > 0) motivos.push({ texto: `${atest.length} atestado(s) no período (não penaliza o score)`, tipo: 'alerta' });
       if (acid.length > 0) motivos.push({ texto: `${acid.length} acidente(s) de trabalho registrado(s) (não penaliza o score)`, tipo: 'alerta' });
-      if (advLista.length === 0 && faltas === 0 && atrasosDet.length === 0) motivos.push({ texto: 'Sem advertências, faltas ou atrasos no período de experiência', tipo: 'positivo' });
-      else if (assiduidadePerc >= 95 && advLista.length === 0) motivos.push({ texto: `Assiduidade excelente (${assiduidadePerc}%) e sem advertências`, tipo: 'positivo' });
+      // Transparência sobre o cartão de ponto: faltas/assiduidade só valem o que
+      // está importado. Sem cartão (ou com meses faltando) NÃO afirmamos presença.
+      if (cartao.semCartao) {
+        motivos.push({ texto: 'Sem cartão de ponto importado no período — faltas e assiduidade NÃO puderam ser verificadas (não significa ausência de faltas).', tipo: 'alerta' });
+      } else if (mesesSemRegistro.length > 0) {
+        motivos.push({ texto: `Cartão de ponto ausente em ${mesesSemRegistro.length} mês(es) do período (${mesesSemRegistro.join(', ')}) — assiduidade pode estar subestimada.`, tipo: 'alerta' });
+      }
+      if (cartao.totalRegistros > 0 && advLista.length === 0 && faltas === 0 && atrasosDet.length === 0) motivos.push({ texto: 'Sem advertências, faltas ou atrasos no período de experiência', tipo: 'positivo' });
+      else if (cartao.totalRegistros > 0 && assiduidadePerc >= 95 && advLista.length === 0) motivos.push({ texto: `Assiduidade excelente (${assiduidadePerc}%) e sem advertências`, tipo: 'positivo' });
+      else if (cartao.semCartao && advLista.length === 0) motivos.push({ texto: 'Sem advertências registradas no período.', tipo: 'positivo' });
       score = Math.max(0, Math.min(100, Math.round(score)));
 
       let nivel: 'efetivar' | 'atencao' | 'prorrogar' | 'desligar';
@@ -1087,7 +1144,8 @@ export const appRouter = router({
       return {
         employee: { id: e.id, nome: e.nomeCompleto, funcao: e.funcao || null, fotoUrl: e.fotoUrl || null },
         periodo: { tipo, inicio, fim1, fim2, status, diasRestantes, diasDecorridos, hoje: hojeStr },
-        assiduidade: { diasTrabalhados, faltas, percentual: assiduidadePerc, faltasDetalhe: faltasDet },
+        assiduidade: { diasTrabalhados, faltas, percentual: assiduidadePerc, faltasDetalhe: faltasDet, verificada: cartao.totalRegistros > 0 },
+        cartao,
         atrasos: { total: atrasosDet.length, minutos: minutosAtraso, detalhe: atrasosDet },
         advertencias: { verbais: advVerbais, escritas: advEscritas, suspensoes: advSuspensoes, total: adv.length, lista: advLista },
         atestados: { total: atest.length, diasAfastamento: atestDiasAfast, lista: atestLista },

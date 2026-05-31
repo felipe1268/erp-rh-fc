@@ -1,6 +1,46 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2628 — **ANÁLISE DE EXPERIÊNCIA · TRANSPARÊNCIA DO CARTÃO DE PONTO: O
+ * MODAL AGORA AVISA QUANDO O CARTÃO DE PONTO NÃO FOI IMPORTADO/FECHADO NO
+ * PERÍODO (EM VEZ DE MOSTRAR "0 FALTAS / 100%" ENGANOSO), EXPLICA O CRITÉRIO
+ * USADO E EXIBE OS DADOS BRUTOS DO CARTÃO QUE O ERP ANALISOU (TABELA NO
+ * DESKTOP / CARDS NO CELULAR), TUDO RESPONSIVO.**
+ *
+ * PEDIDO (usuário): "A análise está errada — o ERP fala '0 faltas / 100%
+ * assiduidade' para funcionário cujo cartão de ponto ainda nem foi fechado.
+ * Qual o critério? Quero clicar e VER os dados do cartão que ele analisou, numa
+ * tela responsiva pra validar tudo."
+ *
+ * CAUSA-RAIZ: em `employees.analiseExperiencia`, faltas/assiduidade só enxergam
+ * o que existe em `time_records`. Sem nenhuma linha (mês não fechado/importado),
+ * faltas=0 e a assiduidade cai no DEFAULT 100% — o que significa AUSÊNCIA DE
+ * DADOS, não presença real. O ERP afirmava isso sem ressalva.
+ *
+ * IMPLEMENTAÇÃO (ADITIVO — SOMENTE SELECT/LEITURA; ZERO ALTER/DROP/DELETE;
+ * R-001/R-007/R-010):
+ *  - `server/routers.ts` (`analiseExperiencia`): novo objeto `cartao` no retorno
+ *    { totalRegistros, semCartao, diasTrabalhados, diasComFalta, primeiro/último
+ *    registro, mesesNaJanela (loop mês a mês início→hoje), mesesComRegistro,
+ *    mesesSemRegistro, detalhe (todas as linhas de ponto da janela ordenadas
+ *    asc com entrada/saída, horas, faltas, atrasos, justificativa, tipoDia) };
+ *    `assiduidade.verificada = totalRegistros > 0`. Motivos do veredito ganham
+ *    alerta honesto quando `semCartao` ("faltas/assiduidade NÃO verificadas") ou
+ *    quando há meses sem registro; os motivos POSITIVOS de assiduidade/faltas só
+ *    disparam quando há cartão (totalRegistros > 0).
+ *  - `client/src/components/AnaliseExperiencia.tsx`: cards "Assiduidade" e
+ *    "Faltas" mostram "N/D" + tom de alerta + sub "sem cartão de ponto" quando
+ *    não verificado (deixa de exibir 100%/0 em verde); banner âmbar honesto
+ *    quando cartão ausente/incompleto (lista os meses); caixa azul explicando o
+ *    CRITÉRIO (o que conta como falta/atraso e a fórmula da assiduidade); NOVA
+ *    seção "Cartão de Ponto (dados analisados)" — tabela responsiva (sm+) /
+ *    cards no mobile com cada dia (datas com falta destacadas em vermelho) e
+ *    empty-state quando não há registro; novo helper `fmtMes`.
+ *
+ * VALIDADO: servidor reiniciado, recompilou limpo (tsx watch), Neon conectado.
+ *
+ * ----------------------------------------------------------------------------
+ *
  * Rev. 2627 — **DASHBOARD DE FUNCIONÁRIOS · NOVO PAINEL "TOTAL DE FUNCIONÁRIOS
  * POR ANO": MOSTRA O QUADRO ATIVO AO FIM DE CADA ANO DESDE A FUNDAÇÃO DA EMPRESA
  * (GRÁFICO DE BARRAS + CARDS POR ANO). CLICAR EM UM ANO ABRE A TELA COM A LISTA

@@ -21,6 +21,9 @@ import {
   TrendingUp,
   TrendingDown,
   Loader2,
+  AlertCircle,
+  CalendarX,
+  FileSpreadsheet,
 } from "lucide-react";
 
 type Props = {
@@ -36,6 +39,18 @@ const fmtData = (d?: string | null) => {
   const [y, m, dd] = s.split("-");
   if (!y || !m || !dd) return s;
   return `${dd}/${m}/${y}`;
+};
+
+const MESES_PT = [
+  "jan", "fev", "mar", "abr", "mai", "jun",
+  "jul", "ago", "set", "out", "nov", "dez",
+];
+const fmtMes = (ym?: string | null) => {
+  if (!ym) return "—";
+  const [y, m] = String(ym).split("-");
+  const idx = Number(m) - 1;
+  if (!y || idx < 0 || idx > 11) return String(ym);
+  return `${MESES_PT[idx]}/${y}`;
 };
 
 const NIVEL_STYLE: Record<
@@ -205,6 +220,48 @@ export default function AnaliseExperiencia({ employeeId, companyId, open, onClos
               </div>
             </div>
 
+            {/* Aviso honesto: cartão de ponto ausente/incompleto */}
+            {data.cartao.semCartao ? (
+              <div className="flex items-start gap-2.5 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-700 dark:bg-amber-950/30 dark:text-amber-300">
+                <AlertCircle className="mt-0.5 h-5 w-5 shrink-0" />
+                <div>
+                  <p className="font-semibold">Cartão de ponto não importado neste período</p>
+                  <p className="mt-0.5 text-[13px] leading-relaxed">
+                    O ERP só conta <strong>faltas</strong> e calcula <strong>assiduidade</strong> a
+                    partir do cartão de ponto (time records). Como nenhum dia foi importado/fechado
+                    para o período de experiência, <strong>"0 faltas" e "100%" não significam presença
+                    real</strong> — significam ausência de dados. Importe/feche o ponto dos meses{" "}
+                    {data.cartao.mesesNaJanela.map((m) => fmtMes(m)).join(", ")} para validar.
+                  </p>
+                </div>
+              </div>
+            ) : data.cartao.mesesSemRegistro.length > 0 ? (
+              <div className="flex items-start gap-2.5 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-700 dark:bg-amber-950/30 dark:text-amber-300">
+                <AlertCircle className="mt-0.5 h-5 w-5 shrink-0" />
+                <div>
+                  <p className="font-semibold">Cartão de ponto incompleto</p>
+                  <p className="mt-0.5 text-[13px] leading-relaxed">
+                    Sem registros de ponto em{" "}
+                    <strong>{data.cartao.mesesSemRegistro.map((m) => fmtMes(m)).join(", ")}</strong>.
+                    A assiduidade e o total de faltas podem estar <strong>subestimados</strong> até o
+                    fechamento desses meses.
+                  </p>
+                </div>
+              </div>
+            ) : null}
+
+            {/* Critério usado pelo ERP */}
+            <div className="flex items-start gap-2 rounded-lg border bg-blue-50/60 p-3 text-[12px] leading-relaxed text-blue-900 dark:bg-blue-950/20 dark:text-blue-200">
+              <Info className="mt-0.5 h-4 w-4 shrink-0 text-blue-600" />
+              <span>
+                <strong>Critério:</strong> uma <strong>falta</strong> é cada dia do cartão de ponto
+                com faltas {">"} 0; <strong>atraso</strong> é cada dia com entrada além do horário; a{" "}
+                <strong>assiduidade</strong> = dias trabalhados ÷ (dias trabalhados + faltas), apenas
+                sobre os dias que existem no cartão. Abra "Cartão de Ponto (dados analisados)" abaixo
+                para ver exatamente o que o ERP enxergou.
+              </span>
+            </div>
+
             {/* Motivos do veredito */}
             {data.veredito.motivos.length > 0 && (
               <div className="space-y-1.5 rounded-lg border bg-muted/30 p-3">
@@ -245,11 +302,19 @@ export default function AnaliseExperiencia({ employeeId, companyId, open, onClos
                 value={<span className="text-base">{fmtData(data.periodo.fim2)}</span>}
               />
               <StatCard
-                icon={data.assiduidade.percentual >= 90 ? TrendingUp : TrendingDown}
+                icon={data.assiduidade.verificada && data.assiduidade.percentual >= 90 ? TrendingUp : TrendingDown}
                 label="Assiduidade"
-                value={`${data.assiduidade.percentual}%`}
-                sub={`${data.assiduidade.diasTrabalhados} dias trab.`}
-                tone={data.assiduidade.percentual >= 90 ? "ok" : data.assiduidade.percentual >= 75 ? "warn" : "danger"}
+                value={data.assiduidade.verificada ? `${data.assiduidade.percentual}%` : "N/D"}
+                sub={data.assiduidade.verificada ? `${data.assiduidade.diasTrabalhados} dias trab.` : "sem cartão de ponto"}
+                tone={
+                  !data.assiduidade.verificada
+                    ? "warn"
+                    : data.assiduidade.percentual >= 90
+                      ? "ok"
+                      : data.assiduidade.percentual >= 75
+                        ? "warn"
+                        : "danger"
+                }
               />
             </div>
 
@@ -265,8 +330,15 @@ export default function AnaliseExperiencia({ employeeId, companyId, open, onClos
               <StatCard
                 icon={XCircle}
                 label="Faltas"
-                value={data.assiduidade.faltas}
-                tone={data.assiduidade.faltas > 0 ? "danger" : "ok"}
+                value={data.assiduidade.verificada ? data.assiduidade.faltas : "N/D"}
+                sub={data.assiduidade.verificada ? undefined : "sem cartão de ponto"}
+                tone={
+                  !data.assiduidade.verificada
+                    ? "warn"
+                    : data.assiduidade.faltas > 0
+                      ? "danger"
+                      : "ok"
+                }
               />
               <StatCard
                 icon={Clock}
@@ -282,6 +354,120 @@ export default function AnaliseExperiencia({ employeeId, companyId, open, onClos
                 sub={`${data.atestados.diasAfastamento} dia(s) afast.`}
                 tone={data.atestados.total > 0 ? "warn" : "ok"}
               />
+            </div>
+
+            {/* Cartão de Ponto — dados brutos analisados pelo ERP */}
+            <div className="rounded-lg border bg-card p-3">
+              <div className="flex flex-wrap items-center justify-between gap-2 text-sm font-semibold text-sky-700 dark:text-sky-400">
+                <span className="flex items-center gap-1.5">
+                  <FileSpreadsheet className="h-4 w-4" /> Cartão de Ponto (dados analisados)
+                </span>
+                <span className="text-[11px] font-normal text-muted-foreground">
+                  {data.cartao.totalRegistros} dia(s) ·{" "}
+                  {data.cartao.mesesComRegistro.length}/{data.cartao.mesesNaJanela.length} mês(es) com registro
+                </span>
+              </div>
+
+              {data.cartao.semCartao ? (
+                <div className="mt-3 flex flex-col items-center gap-1.5 rounded-md border border-dashed py-6 text-center">
+                  <CalendarX className="h-7 w-7 text-amber-500" />
+                  <p className="text-sm font-medium">Nenhum registro de ponto importado</p>
+                  <p className="max-w-md px-3 text-[12px] text-muted-foreground">
+                    Não há linhas de cartão de ponto para o período de experiência
+                    ({data.cartao.mesesNaJanela.map((m) => fmtMes(m)).join(", ")}). Por isso o ERP
+                    não pôde verificar faltas nem assiduidade.
+                  </p>
+                </div>
+              ) : (
+                <>
+                  {/* Tabela (sm+) */}
+                  <div className="mt-2 hidden overflow-x-auto sm:block">
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="border-b text-left text-[11px] uppercase tracking-wide text-muted-foreground">
+                          <th className="py-1.5 pr-2 font-medium">Data</th>
+                          <th className="py-1.5 pr-2 font-medium">Entrada/Saída</th>
+                          <th className="py-1.5 pr-2 font-medium">H. Trab.</th>
+                          <th className="py-1.5 pr-2 font-medium">Falta</th>
+                          <th className="py-1.5 pr-2 font-medium">Atraso</th>
+                          <th className="py-1.5 font-medium">Obs.</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {data.cartao.detalhe.map((p, i) => {
+                          const temFalta = Number(p.faltas || 0) > 0;
+                          const temAtraso = !!p.atrasos && p.atrasos !== "0:00" && p.atrasos !== "00:00";
+                          return (
+                            <tr
+                              key={i}
+                              className={`border-b last:border-0 ${temFalta ? "bg-red-50/60 dark:bg-red-950/20" : ""}`}
+                            >
+                              <td className="py-1.5 pr-2 font-mono">{fmtData(p.data)}</td>
+                              <td className="py-1.5 pr-2 font-mono text-muted-foreground">
+                                {[p.entrada1, p.saida1, p.entrada2, p.saida2].filter(Boolean).join(" · ") || "—"}
+                              </td>
+                              <td className="py-1.5 pr-2">{p.horasTrabalhadas || "—"}</td>
+                              <td className={`py-1.5 pr-2 ${temFalta ? "font-semibold text-red-600" : "text-muted-foreground"}`}>
+                                {temFalta ? p.faltas : "—"}
+                              </td>
+                              <td className={`py-1.5 pr-2 ${temAtraso ? "font-semibold text-orange-600" : "text-muted-foreground"}`}>
+                                {temAtraso ? p.atrasos : "—"}
+                              </td>
+                              <td className="py-1.5 text-muted-foreground">
+                                {p.justificativa || (p.tipoDia && p.tipoDia !== "normal" ? p.tipoDia : "—")}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Cards (mobile) */}
+                  <div className="mt-2 space-y-2 sm:hidden">
+                    {data.cartao.detalhe.map((p, i) => {
+                      const temFalta = Number(p.faltas || 0) > 0;
+                      const temAtraso = !!p.atrasos && p.atrasos !== "0:00" && p.atrasos !== "00:00";
+                      return (
+                        <div
+                          key={i}
+                          className={`rounded-md border p-2 text-xs ${temFalta ? "border-red-200 bg-red-50/60 dark:border-red-900 dark:bg-red-950/20" : ""}`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="font-mono font-semibold">{fmtData(p.data)}</span>
+                            <span className="flex gap-1.5">
+                              {temFalta && (
+                                <Badge variant="outline" className="text-[10px] text-red-700">
+                                  Falta
+                                </Badge>
+                              )}
+                              {temAtraso && (
+                                <Badge variant="outline" className="text-[10px] text-orange-700">
+                                  +{p.atrasos}
+                                </Badge>
+                              )}
+                            </span>
+                          </div>
+                          <div className="mt-1 font-mono text-[11px] text-muted-foreground">
+                            {[p.entrada1, p.saida1, p.entrada2, p.saida2].filter(Boolean).join(" · ") || "Sem batidas"}
+                          </div>
+                          <div className="mt-0.5 text-[11px] text-muted-foreground">
+                            H. trab.: {p.horasTrabalhadas || "—"}
+                            {p.justificativa ? ` · ${p.justificativa}` : ""}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
+
+              {!data.cartao.semCartao && data.cartao.mesesSemRegistro.length > 0 && (
+                <p className="mt-2 flex items-start gap-1.5 text-[11px] text-amber-700 dark:text-amber-400">
+                  <AlertCircle className="mt-0.5 h-3 w-3 shrink-0" />
+                  Meses do período sem nenhum registro: {data.cartao.mesesSemRegistro.map((m) => fmtMes(m)).join(", ")}.
+                </p>
+              )}
             </div>
 
             {/* Listas de detalhe */}
