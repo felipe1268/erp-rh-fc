@@ -1,6 +1,28 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2636 — **RH & DP · "ANÁLISE DE EXPERIÊNCIA" (TELA FULL-SCREEN) DEIXA DE
+ * FICAR TRANSPARENTE — FUNDO 100% OPACO. NÃO SE VÊ MAIS A PÁGINA/SIDEBAR ATRÁS.**
+ *
+ * PEDIDO (usuário): "melhore a tela, nao quero que fique transparente.. deixa ela
+ * full screen. mas nao quero nada transparente." (anexou print onde a sidebar e o
+ * Painel RH apareciam ATRÁS do modal de Análise de Experiência).
+ *
+ * CAUSA-RAIZ: na Rev. 2634 o `<DialogContent>` recebeu a classe `bg-muted/30`. Como
+ * o `cn()` do projeto usa `twMerge` (`client/src/lib/utils.ts`), essa classe
+ * SUBSTITUI o `bg-background` (opaco) do `DialogContent` base — resultando num fundo
+ * com 30% de opacidade. Como a tela é full-screen (`left-0 top-0 h-[100dvh]
+ * w-screen`), enxergava-se a página inteira (sidebar + cards) por baixo.
+ *
+ * FIX (SÓ CLIENT, 1 CLASSE; ZERO BACKEND/SCHEMA; R-001/R-007/R-010):
+ *  - `client/src/components/AnaliseExperiencia.tsx` — `bg-muted/30` → `bg-muted`
+ *    (cinza sólido OPACO). Header em gradiente já era opaco; corpo rolável herda o
+ *    fundo sólido. Nenhuma mudança de layout/bindings/props.
+ *
+ * VALIDAÇÃO: esbuild transform-check do componente exit 0; HMR sem erros.
+ *
+ * ─────────────────────────────────────────────────────────────────────────────
+ *
  * Rev. 2635 — **PAINEL RH & DP · O CABEÇALHO GANHA UM SELO "X PESSOAS" COM O TOTAL
  * DE COLABORADORES DA EMPRESA, AO LADO DO TÍTULO "PAINEL RH & DP" — VISÍVEL ASSIM
  * QUE A TELA ABRE, SEPARADO DO CARD "TOTAL" DO QUADRO DE PESSOAL.**

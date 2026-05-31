@@ -239,7 +239,7 @@ export default function AnaliseExperiencia({ employeeId, companyId, open, onClos
       <DialogContent
         resizable={false}
         showCloseButton={false}
-        className="left-0 top-0 h-[100dvh] max-h-none w-screen max-w-none translate-x-0 translate-y-0 gap-0 overflow-hidden rounded-none border-0 bg-muted/30 p-0 sm:p-0 grid-rows-[auto_1fr] data-[state=closed]:zoom-out-100 data-[state=open]:zoom-in-100"
+        className="left-0 top-0 h-[100dvh] max-h-none w-screen max-w-none translate-x-0 translate-y-0 gap-0 overflow-hidden rounded-none border-0 bg-muted p-0 sm:p-0 grid-rows-[auto_1fr] data-[state=closed]:zoom-out-100 data-[state=open]:zoom-in-100"
       >
         <DialogTitle className="sr-only">Análise de Experiência</DialogTitle>
 
