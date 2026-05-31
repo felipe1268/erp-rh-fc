@@ -703,6 +703,55 @@ async function getDashFuncionariosAnual(companyId: number, ano?: number, company
   return { anoRef: refY, anos };
 }
 
+// Rev. 2627 — Total de funcionários (headcount ativo ao FIM de cada ano) desde a
+// fundação da empresa (1º ano com admissão) até o ano corrente. SOMENTE SELECT
+// (R-001/R-007/R-010). "Ativo ao fim do ano" = ponto-no-tempo por datas:
+// admitido até 31/12 do ano E (sem demissão OU demitido só depois). Mesma régua do
+// drill `ativosAno`, garantindo paridade entre o número exibido e a lista clicável.
+async function getDashFuncionariosHeadcountAnual(companyId: number, companyIds?: number[]) {
+  const anoAtual = new Date().getFullYear();
+  const db = await getDb(); if (!db) return { anoAtual, anos: [] as Array<{ ano: number; ativos: number; admitidos: number; desligados: number }> };
+  const cl = _companyList(companyId, companyIds);
+  if (!cl) return { anoAtual, anos: [] };
+  const rows: any = await db.execute(sql`
+    WITH bounds AS (
+      SELECT COALESCE(MIN(EXTRACT(YEAR FROM e."dataAdmissao"::date))::int, ${anoAtual}) AS ymin
+      FROM employees e
+      WHERE e."companyId" IN (${cl}) AND e."deletedAt" IS NULL AND e."dataAdmissao" IS NOT NULL
+    ),
+    anos AS (
+      SELECT generate_series((SELECT ymin FROM bounds), ${anoAtual})::int AS ano
+    )
+    SELECT a.ano,
+      (SELECT COUNT(*) FROM employees e
+        WHERE e."companyId" IN (${cl}) AND e."deletedAt" IS NULL
+          AND e."dataAdmissao" IS NOT NULL
+          AND e."dataAdmissao"::date <= make_date(a.ano, 12, 31)
+          AND (e."dataDemissao" IS NULL OR e."dataDemissao"::date > make_date(a.ano, 12, 31))
+      )::int AS ativos,
+      (SELECT COUNT(*) FROM employees e
+        WHERE e."companyId" IN (${cl}) AND e."deletedAt" IS NULL
+          AND e."dataAdmissao" IS NOT NULL
+          AND EXTRACT(YEAR FROM e."dataAdmissao"::date) = a.ano
+      )::int AS admitidos,
+      (SELECT COUNT(*) FROM employees e
+        WHERE e."companyId" IN (${cl}) AND e."deletedAt" IS NULL
+          AND e."dataDemissao" IS NOT NULL
+          AND EXTRACT(YEAR FROM e."dataDemissao"::date) = a.ano
+      )::int AS desligados
+    FROM anos a
+    ORDER BY a.ano
+  `);
+  const arr = (rows.rows || rows) as any[];
+  const anos = arr.map(r => ({
+    ano: Number(r.ano),
+    ativos: Number(r.ativos) || 0,
+    admitidos: Number(r.admitidos) || 0,
+    desligados: Number(r.desligados) || 0,
+  }));
+  return { anoAtual, anos };
+}
+
 async function getDashAvisoPrevioComparativo(companyId: number, ano?: number, companyIds?: number[]) {
   const db = await getDb(); if (!db) return { ano: ano || new Date().getFullYear(), meses: [] };
   const { refY, meses } = _mesesAteRef(ano);
@@ -2170,7 +2219,7 @@ async function getDrillDown(companyId: number, filterType: string, filterValue: 
   // Rev. 2619 — filtros HISTÓRICOS (por mês) dependem das DATAS, não do status atual:
   // demissões/ativos-no-fim-do-mês/movimentação precisam INCLUIR Desligado/Lista_Negra
   // (quem foi demitido no mês hoje está Desligado). Só os snapshots atuais excluem.
-  const HISTORICOS_MES = ['admissaoMes', 'demissaoMes', 'ativosMes', 'movimentacaoMes'];
+  const HISTORICOS_MES = ['admissaoMes', 'demissaoMes', 'ativosMes', 'movimentacaoMes', 'ativosAno'];
   // Para drill-downs que não são por status nem históricos, excluir Desligado e Lista_Negra
   if (filterType !== 'status' && !HISTORICOS_MES.includes(filterType)) {
     whereClause = and(whereClause, sql`${employees.status} NOT IN ('Desligado', 'Lista_Negra')`);
@@ -2309,6 +2358,19 @@ async function getDrillDown(companyId: number, filterType: string, filterValue: 
       // Rev. 2619 — filterValue = "2025-03" — admitido OU demitido no mês (base do Saldo e do Turnover)
       whereClause = and(whereClause,
         sql`(TO_CHAR("dataAdmissao", 'YYYY-MM') = ${filterValue} OR TO_CHAR("dataDemissao", 'YYYY-MM') = ${filterValue})`);
+      break;
+    }
+    case 'ativosAno': {
+      // Rev. 2627 — filterValue = "2024" — quadro ativo ao FIM do ano (31/12):
+      // admitido até 31/12 do ano E (sem demissão OU demitido só depois).
+      // Mesma régua do headcount anual → o nº exibido casa com a lista.
+      const yr = parseInt(filterValue, 10);
+      if (!yr || yr < 1900 || yr > 3000) return [];
+      const fimAno = sql`make_date(${yr}, 12, 31)`;
+      whereClause = and(whereClause,
+        sql`"dataAdmissao" IS NOT NULL`,
+        sql`"dataAdmissao"::date <= ${fimAno}`,
+        sql`("dataDemissao" IS NULL OR "dataDemissao"::date > ${fimAno})`);
       break;
     }
     default:
@@ -4467,6 +4529,8 @@ export const dashboardsRouter = router({
   folhaPagamentoComparativo: protectedProcedure.input(z.object({ companyId: z.number(), mesReferencia: z.string().optional(), companyIds: z.array(z.number()).optional() })).query(({ input }) => getDashFolhaPagamentoComparativo(input.companyId, input.mesReferencia, input.companyIds)),
   funcionariosComparativo: protectedProcedure.input(z.object({ companyId: z.number(), ano: z.number().optional(), companyIds: z.array(z.number()).optional() })).query(({ input }) => getDashFuncionariosComparativo(input.companyId, input.ano, input.companyIds)),
   funcionariosAnual: protectedProcedure.input(z.object({ companyId: z.number(), ano: z.number().optional(), companyIds: z.array(z.number()).optional() })).query(({ input }) => getDashFuncionariosAnual(input.companyId, input.ano, input.companyIds)),
+  // Rev. 2627 — total de funcionários (headcount ativo ao fim de cada ano) desde a fundação.
+  funcionariosHeadcountAnual: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() })).query(({ input }) => getDashFuncionariosHeadcountAnual(input.companyId, input.companyIds)),
   // Rev. 2208 — sigilo Aviso Prévio: zera dashboard pra quem não tem verStatusAviso.
   avisoPrevioComparativo: protectedProcedure.input(z.object({ companyId: z.number(), ano: z.number().optional(), companyIds: z.array(z.number()).optional() })).query(async ({ input, ctx }) => {
     const canSee = await userCanSeeAvisoStatus(ctx.user.id, ctx.user.role);

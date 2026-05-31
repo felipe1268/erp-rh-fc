@@ -10,6 +10,7 @@ import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
 import TabelaComparativaAnual, { type LinhaInd } from "@/components/TabelaComparativaAnual";
 import ComparativoAnosFuncionarios from "@/components/ComparativoAnosFuncionarios";
+import HeadcountAnualFuncionarios from "@/components/HeadcountAnualFuncionarios";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Users as UsersIcon, UserPlus, UserMinus, RefreshCw, Scale } from "lucide-react";
 
@@ -104,6 +105,11 @@ export default function DashFuncionarios() {
     { companyId: queryCompanyId, ano: anoAnalise, ...(isConstrutoras ? { companyIds } : {}) },
     { enabled: isConstrutoras ? companyIds.length > 0 : companyId > 0 }
   );
+  // Rev. 2627 — headcount ativo ao fim de cada ano desde a fundação (independe do "Ano de análise").
+  const { data: headcountAnual, isLoading: loadingHeadcount } = trpc.dashboards.funcionariosHeadcountAnual.useQuery(
+    { companyId: queryCompanyId, ...(isConstrutoras ? { companyIds } : {}) },
+    { enabled: isConstrutoras ? companyIds.length > 0 : companyId > 0 }
+  );
 
   // Drill-down state
   const [drillDown, setDrillDown] = useState<{ open: boolean; title: string; filterType: string; filterValue: string }>({
@@ -116,6 +122,12 @@ export default function DashFuncionarios() {
     if (!isAnoAtual) return;
     setDrillDown({ open: true, title, filterType, filterValue });
   }, [isAnoAtual]);
+
+  // Rev. 2627 — drill do headcount anual: snapshot por DATAS, sempre válido
+  // (independe do "Ano de análise"). Lista o quadro ativo ao fim do ano clicado.
+  const openAnoDrill = useCallback((ano: number) => {
+    setDrillDown({ open: true, title: `Funcionários ativos ao fim de ${ano}`, filterType: "ativosAno", filterValue: String(ano) });
+  }, []);
 
   // Análise por função — combobox state
   const [selectedFuncao, setSelectedFuncao] = useState<string | null>(null);
@@ -666,6 +678,12 @@ export default function DashFuncionarios() {
           </Card>
         </div>
       </div>
+
+      <HeadcountAnualFuncionarios
+        data={headcountAnual}
+        isLoading={loadingHeadcount}
+        onSelectAno={openAnoDrill}
+      />
 
       <ComparativoAnosFuncionarios
         data={anual}

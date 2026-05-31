@@ -1,6 +1,44 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2627 — **DASHBOARD DE FUNCIONÁRIOS · NOVO PAINEL "TOTAL DE FUNCIONÁRIOS
+ * POR ANO": MOSTRA O QUADRO ATIVO AO FIM DE CADA ANO DESDE A FUNDAÇÃO DA EMPRESA
+ * (GRÁFICO DE BARRAS + CARDS POR ANO). CLICAR EM UM ANO ABRE A TELA COM A LISTA
+ * COMPLETA DE QUEM ESTAVA ATIVO NAQUELE ANO — COM NOME E FOTO DE CADA UM.**
+ *
+ * PEDIDO (usuário): "Quero o total de funcionários de cada ano desde quando a
+ * empresa foi aberta e, ao clicar na informação, aparecer a tela com todas as
+ * informações pertinentes para análise, com nome dos funcionários e fotos."
+ *
+ * SEMÂNTICA: "ativo ao fim do ano" = ponto-no-tempo por DATAS — admitido até
+ * 31/12 do ano E (sem demissão OU demitido só depois). O range de anos vai do
+ * 1º ano com admissão (MIN) até o ano corrente. O painel INDEPENDE do seletor
+ * "Ano de análise" (mostra a série histórica completa sempre).
+ *
+ * PARIDADE: o número exibido em cada ano usa EXATAMENTE a mesma régua do drill
+ * `ativosAno`, então a contagem do card casa com o tamanho da lista aberta.
+ *
+ * IMPLEMENTAÇÃO (ADITIVO — SOMENTE SELECT/LEITURA; ZERO ALTER/DROP/DELETE;
+ * R-001/R-007/R-010):
+ *  - `server/routers/dashboards.ts`: novo `getDashFuncionariosHeadcountAnual(
+ *    companyId, companyIds?)` (CTE `bounds` p/ MIN(ano admissão) + `generate_series`
+ *    de anos; por ano: ativos ao fim (datas), admitidos e desligados no ano);
+ *    nova procedure `dashboards.funcionariosHeadcountAnual`; novo case `ativosAno`
+ *    em `getDrillDown` (filterValue="AAAA", `make_date(ano,12,31)`, guard de ano
+ *    válido) + `ativosAno` adicionado a `HISTORICOS_MES` (inclui quem hoje está
+ *    Desligado mas estava ativo naquele ano).
+ *  - `client/src/components/HeadcountAnualFuncionarios.tsx` (NOVO): card com
+ *    `DashChart` de barras (ano corrente destacado) + grid responsivo de cards por
+ *    ano (delta vs. ano anterior, adm/desl do ano), tudo clicável.
+ *  - `client/src/pages/dashboards/DashFuncionarios.tsx`: query
+ *    `funcionariosHeadcountAnual` + handler `openAnoDrill` (não-gated, snapshot por
+ *    datas é válido em qualquer ano) → reusa o `DrillDownModal` (nome + foto +
+ *    função/setor/status/admissão + clique → Raio-X).
+ *
+ * VALIDADO: servidor reiniciado, recompilou limpo (tsx watch), Neon conectado.
+ *
+ * ----------------------------------------------------------------------------
+ *
  * Rev. 2626 — **DASHBOARD DE FUNCIONÁRIOS · O SELETOR "ANO DE ANÁLISE" PASSA A
  * FILTRAR TUDO: OS 4 CARDS DO TOPO (ATIVOS / DESLIGADOS / ADVERTÊNCIAS /
  * ATESTADOS) E TODOS OS GRÁFICOS (STATUS, GÊNERO, CONTRATO, FUNÇÕES, SETORES,
