@@ -1,6 +1,30 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2629 — **PAINEL RH & DP · A SEÇÃO "QUADRO DE PESSOAL" GANHA UM CARD
+ * "TOTAL" COM O NÚMERO DE PESSOAS DA EMPRESA (TODOS OS COLABORADORES
+ * CADASTRADOS), IGUAL AO QUE JÁ EXISTE NA ABA COLABORADORES.**
+ *
+ * PEDIDO (usuário, com screenshot do Painel RH no iPad): "Coloca nesta tela tbm
+ * o card com a informação de quantas pessoas tem na empresa, igual foi feito na
+ * aba Colaboradores."
+ *
+ * IMPLEMENTAÇÃO (SÓ CLIENT — ZERO BACKEND/SCHEMA; R-001/R-007/R-010):
+ *  - `client/src/pages/PainelRH.tsx`: na grade "Quadro de Pessoal" foi
+ *    adicionado, como PRIMEIRO card (mesma ordem da aba Colaboradores), um
+ *    `KpiCard title="Total"` (ícone `Users`, cor `blue`) lendo
+ *    `s.totalFuncionarios` — o MESMO campo de `home.getData.stats`
+ *    (`allEmps.length`) que alimenta a contagem total, garantindo paridade com a
+ *    aba Colaboradores (cujo card "Total" usa `employees.stats.total`). O card é
+ *    clicável e navega para `/colaboradores?status=Todos`.
+ *  - A grade passou de `lg:grid-cols-5` para `lg:grid-cols-6` para acomodar os 6
+ *    cards (Total, Ativos, Férias, Afastados, Licença, Desligados) em uma única
+ *    linha no desktop, mantendo `grid-cols-2`/`md:grid-cols-3` no mobile/tablet.
+ *
+ * VALIDADO: servidor reiniciou e recompilou limpo (tsx watch); Neon conectado.
+ *
+ * --------------------------------------------------------------------------
+ *
  * Rev. 2628 — **ANÁLISE DE EXPERIÊNCIA · TRANSPARÊNCIA DO CARTÃO DE PONTO: O
  * MODAL AGORA AVISA QUANDO O CARTÃO DE PONTO NÃO FOI IMPORTADO/FECHADO NO
  * PERÍODO (EM VEZ DE MOSTRAR "0 FALTAS / 100%" ENGANOSO), EXPLICA O CRITÉRIO
