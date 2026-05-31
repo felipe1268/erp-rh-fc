@@ -2473,10 +2473,44 @@ export const controleDocumentosRouter = router({
         })
         .filter(Boolean) as any[];
 
-      const treinsComStatus = treinRows.map((r: any) => {
-        const { status, diasRestantes } = calcularStatusASO(r.dataValidade!);
-        return { ...r, tipoDoc: "Treinamento" as const, descricao: r.nome + (r.norma ? ` (${r.norma})` : ""), status, diasRestantes };
-      });
+      // Treinamentos — DEDUP por (funcionário + norma/nome): só o registro de
+      // MAIOR validade aparece. Antes, TODO treinamento com validade era listado,
+      // então uma renovação (novo registro) NÃO escondia o antigo vencido — o ERP
+      // mostrava NR-18/NR-01 antigos como "Vencido" mesmo já renovados.
+      // A "norma" (ex.: NR-18) identifica o requisito; quando ausente, cai no nome.
+      // Trim ANTES do fallback: uma `norma` só com espaços ("   ") é truthy mas vazia
+      // após trim — sem isso ela mascararia o `nome` e colapsaria treinamentos
+      // distintos no mesmo grupo "—", escondendo registros legítimos.
+      const normaKeyDe = (r: any) => {
+        const normaTrim = (r.norma || "").trim();
+        const nomeTrim = (r.nome || "").trim();
+        return (normaTrim || nomeTrim || "—").toLowerCase();
+      };
+      const treinByEmpNorma = new Map<string, any[]>();
+      for (const r of treinRows) {
+        const key = `${r.employeeId}__${normaKeyDe(r)}`;
+        if (!treinByEmpNorma.has(key)) treinByEmpNorma.set(key, []);
+        treinByEmpNorma.get(key)!.push(r);
+      }
+      const latestTreinIds = new Set<number>();
+      for (const [, group] of treinByEmpNorma) {
+        // "Melhor" registro = MAIOR dataValidade (cobertura mais distante);
+        // empate → realização mais recente → id maior. Assim, se há renovação
+        // válida, ela é a escolhida e o antigo vencido some.
+        group.sort((a: any, b: any) =>
+          (b.dataValidade || "").localeCompare(a.dataValidade || "") ||
+          (b.dataRealizacao || "").localeCompare(a.dataRealizacao || "") ||
+          b.id - a.id
+        );
+        latestTreinIds.add(group[0].id);
+      }
+
+      const treinsComStatus = treinRows
+        .filter((r: any) => latestTreinIds.has(r.id))
+        .map((r: any) => {
+          const { status, diasRestantes } = calcularStatusASO(r.dataValidade!);
+          return { ...r, tipoDoc: "Treinamento" as const, descricao: r.nome + (r.norma ? ` (${r.norma})` : ""), status, diasRestantes };
+        });
 
       // Unificar e ordenar por urgência (vencidos primeiro, depois por dias restantes)
       const todos = [...asosComStatus, ...treinsComStatus].sort((a, b) => a.diasRestantes - b.diasRestantes);

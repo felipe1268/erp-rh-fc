@@ -1,6 +1,45 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2641 — **CONTROLE DE DOCUMENTOS · TREINAMENTOS RENOVADOS CONTINUAVAM APARECENDO
+ * COMO "VENCIDO": O PAINEL DE VALIDADE LISTAVA *TODO* REGISTRO DE TREINAMENTO COM
+ * VALIDADE, SEM DEDUP. AGORA SÓ O REGISTRO DE MAIOR VALIDADE POR (FUNCIONÁRIO + NORMA)
+ * APARECE → A RENOVAÇÃO ESCONDE O ANTIGO VENCIDO, IGUAL JÁ ACONTECIA COM OS ASOs.**
+ *
+ * PEDIDO (usuário): "o erp precisa verificar novamente os documentos vencidos, tem
+ * muitos documentos que não estão vencidos, alguns ja foram renovados mas o ERP não
+ * esta lendo que foi atualizado e mostra que ta vencido verifique isso e melhore esta
+ * logica." Print: lista de "Controle de Documentos" com vários "Vencido" — sobretudo
+ * Treinamentos NR-18/NR-01 antigos (2019/2021) e alguns ASOs.
+ *
+ * CAUSA-RAIZ: em `docs.painelValidade` (`server/routers/controleDocumentos.ts`), os
+ * **ASOs** já tinham deduplicação (mantém só o mais recente por `employeeId+tipo` e,
+ * se o mais novo é VENCIDO, ainda esconde quando existe um ASO mais novo válido). Já os
+ * **TREINAMENTOS** eram mapeados 1:1 a partir de `treinRows` — NENHUM agrupamento. Como
+ * a renovação de um treinamento cria um NOVO registro (não edita o antigo), o registro
+ * antigo (validade expirada) permanecia na lista para sempre, exibindo "Vencido" mesmo
+ * após a renovação. Por isso o painel mostrava NR-18/NR-01 de 2019/2021 como vencidos.
+ *
+ * FIX (SÓ BACKEND DE LEITURA, ZERO SCHEMA/ALTER/DELETE; R-001/R-007/R-010):
+ *  - `server/routers/controleDocumentos.ts` (`painelValidade`) — antes de montar
+ *    `treinsComStatus`, agrupa `treinRows` por `${employeeId}__${norma||nome}` (a norma,
+ *    ex.: NR-18, identifica o requisito; sem norma cai no nome do treinamento). Em cada
+ *    grupo escolhe o "melhor" registro = MAIOR `dataValidade` (cobertura mais distante);
+ *    empate → `dataRealizacao` mais recente → `id` maior. Só esse id entra em
+ *    `latestTreinIds`; `treinsComStatus` filtra por esse Set. Assim, havendo renovação
+ *    válida, ela é a escolhida e o antigo vencido some; se TODOS estão vencidos, ainda
+ *    aparece UM por requisito (o de maior validade) — não some o que é genuinamente
+ *    vencido.
+ *
+ * ESCOPO/CONSERVADOR: ASOs intactos (já tratados). Agrupamento por NORMA (não cruza
+ * NR-18 com NR-01 — requisitos distintos continuam independentes). Stats do painel
+ * (vencidos/aVencer) derivam de `todos`, então passam a refletir a lista deduplicada
+ * automaticamente. Sem mudança no schema, nas tabelas ou em outras telas.
+ *
+ * VALIDAÇÃO: esbuild bundle-check do router exit 0.
+ *
+ * ─────────────────────────────────────────────────────────────────────────────
+ *
  * Rev. 2640 — **RAIO-X DO FUNCIONÁRIO · O FILTRO "AVISO PRÉVIO" PERDIA GENTE: MOSTRAVA
  * SÓ OS REGISTROS DO MÓDULO AVISO PRÉVIO (`em_andamento`, EX.: 3) E IGNORAVA OS
  * COLABORADORES MARCADOS COM STATUS "AVISO" NO CADASTRO. AGORA UNE AS DUAS FONTES
