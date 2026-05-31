@@ -1,6 +1,44 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2623 — **DASHBOARD DE AVALIAÇÃO · MODAL "SCORE DETALHADO" (AVALIAÇÃO
+ * 360°, 6 DIMENSÕES) GANHA LAYOUT MAIS LIMPO E TOTALMENTE RESPONSIVO PARA
+ * iPad/CELULAR, COM OS DADOS PERTINENTES MAIS FÁCEIS DE LOCALIZAR.**
+ *
+ * PEDIDO (usuário, com screenshot do modal aberto em iPad): "Melhore o layout
+ * e deixa responsivo, [pra que seja] fácil localizar os dados pertinentes".
+ * No print os rótulos das dimensões apareciam cortados ("FREQUÊNC...",
+ * "CAPACITA..."), o hero não empilhava em telas estreitas e os "Dados Brutos"
+ * eram um parágrafo corrido difícil de escanear.
+ *
+ * IMPLEMENTAÇÃO (SÓ CLIENT — ZERO BACKEND/SCHEMA; o procedure de drill já
+ * devolve todos os campos): arquivo `client/src/pages/dashboards/
+ * DashAvaliacaoFuncionarios.tsx`.
+ *  - **Responsividade do modal**: `DialogContent` recebe `resizable={false}`
+ *    (o componente base, quando resizable, INJETA `style.width=min(512px,…)`
+ *    inline que vencia o `max-w-3xl` e prendia o modal em 512px) + largura
+ *    responsiva por classe (`w-[calc(100vw-1.5rem)] sm:w-full max-w-3xl`)
+ *    garantindo margem lateral no mobile e largura cheia (768px) no
+ *    tablet/desktop; header/corpo/footer com padding responsivo
+ *    (`px-4 sm:px-6`); corpo com `max-h-[80vh]` no mobile.
+ *  - **Hero** (score + classificação): passa a empilhar e centralizar no
+ *    mobile (`flex-col items-center text-center sm:flex-row sm:text-left`),
+ *    com a classificação e a "janela de avaliação" centralizadas em telas
+ *    estreitas (`justify-center sm:justify-start`).
+ *  - **6 Dimensões**: grid `grid-cols-2 sm:grid-cols-3` (3 colunas mais cedo);
+ *    `SubScoreCard` deixa de TRUNCAR o rótulo (removido `truncate`, ícone
+ *    `shrink-0`, `tracking-wide` + `leading-tight`) — "Frequência" e
+ *    "Capacitação" aparecem por inteiro.
+ *  - **Dados Brutos do Período**: novo helper `Stat` (número em destaque
+ *    bold/tabular + rótulo menor) substitui o parágrafo corrido; os números
+ *    ganham COR DE ALERTA quando > 0 (faltas/acidentes/graves/suspensões em
+ *    vermelho, atrasos/leves/vencidos em âmbar, treinamentos válidos em verde),
+ *    com `flex flex-wrap` para quebrar bem em telas estreitas; footer empilha
+ *    no mobile com botão "Fechar" full-width.
+ *
+ * VALIDADO: servidor reiniciado e recompilou limpo (tsx watch), sem erros de
+ * compile. Detalhe: este arquivo.
+ *
  * Rev. 2622 — **CONTRATOS DE EXPERIÊNCIA · NOVO BOTÃO "ANÁLISE" EM CADA
  * COLABORADOR EM EXPERIÊNCIA QUE CRUZA TODAS AS OCORRÊNCIAS DO PERÍODO
  * (ASSIDUIDADE/FALTAS, ATRASOS, ADVERTÊNCIAS, ATESTADOS, ACIDENTES E HISTÓRICO)

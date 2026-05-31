@@ -348,10 +348,10 @@ export default function DashAvaliacaoFuncionarios() {
             azul #1B2A4A no topo, score circle ampliado, sub-cards com
             gradientes por dimensão, dados brutos em tabela legível). */}
         <Dialog open={drillId != null} onOpenChange={(o) => !o && setDrillId(null)}>
-          <DialogContent className="max-w-3xl p-0 overflow-hidden gap-0 bg-white">
+          <DialogContent resizable={false} className="w-[calc(100vw-1.5rem)] sm:w-full max-w-3xl p-0 overflow-hidden gap-0 bg-white">
             <DialogHeader className="p-0 space-y-0">
               <div
-                className="px-6 py-4 text-white flex items-center gap-3"
+                className="px-4 sm:px-6 py-4 text-white flex items-center gap-3"
                 style={{ background: "linear-gradient(135deg, #1B2A4A 0%, #2E4373 100%)" }}
               >
                 <div className="h-10 w-10 rounded-lg bg-white/10 backdrop-blur flex items-center justify-center ring-1 ring-white/20">
@@ -379,10 +379,10 @@ export default function DashAvaliacaoFuncionarios() {
             )}
 
             {drillData && (
-              <div className="p-6 space-y-5 max-h-[75vh] overflow-y-auto">
+              <div className="p-4 sm:p-6 space-y-4 sm:space-y-5 max-h-[80vh] sm:max-h-[75vh] overflow-y-auto">
                 {/* Hero — score grande + classificação */}
                 <div
-                  className="relative overflow-hidden rounded-xl border border-slate-200 p-6"
+                  className="relative overflow-hidden rounded-xl border border-slate-200 p-4 sm:p-6"
                   style={{
                     background: `linear-gradient(135deg, ${COR_BG_CLASSIF[drillData.classificacao]}10 0%, #ffffff 60%)`,
                   }}
@@ -391,13 +391,13 @@ export default function DashAvaliacaoFuncionarios() {
                     className="absolute top-0 right-0 w-32 h-32 rounded-full opacity-10 -translate-y-12 translate-x-12"
                     style={{ background: COR_BG_CLASSIF[drillData.classificacao] }}
                   />
-                  <div className="relative flex items-center gap-6">
+                  <div className="relative flex flex-col items-center text-center sm:flex-row sm:text-left gap-4 sm:gap-6">
                     <ScoreCircle value={drillData.geral} size={120} />
                     <div className="flex-1 min-w-0">
                       <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-1">
                         Classificação Geral
                       </p>
-                      <div className="flex items-center gap-2 mb-3">
+                      <div className="flex items-center justify-center sm:justify-start gap-2 mb-3">
                         <span
                           className="inline-flex items-center px-3 py-1 rounded-full text-sm font-bold border-2"
                           style={{
@@ -409,7 +409,7 @@ export default function DashAvaliacaoFuncionarios() {
                           {drillData.classificacao}
                         </span>
                       </div>
-                      <div className="flex items-center gap-1.5 text-xs text-slate-500">
+                      <div className="flex items-center justify-center sm:justify-start gap-1.5 text-xs text-slate-500">
                         <Clock className="h-3.5 w-3.5" />
                         Janela de avaliação: últimos {periodoMeses} meses
                       </div>
@@ -422,7 +422,7 @@ export default function DashAvaliacaoFuncionarios() {
                   <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-2">
                     6 Dimensões Avaliadas
                   </p>
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 sm:gap-3">
                     <SubScoreCard color="blue"    icon={<Clock className="h-4 w-4" />}         label="Frequência"  value={drillData.sub.frequencia} />
                     <SubScoreCard color="rose"    icon={<Heart className="h-4 w-4" />}         label="Saúde"       value={drillData.sub.saude} />
                     <SubScoreCard color="violet"  icon={<Gavel className="h-4 w-4" />}         label="Disciplina"  value={drillData.sub.disciplina} />
@@ -453,30 +453,30 @@ export default function DashAvaliacaoFuncionarios() {
                   </p>
                   <div className="rounded-xl border border-slate-200 overflow-hidden divide-y divide-slate-100 text-sm">
                     <DadoBrutoRow color="blue" icon={<Clock className="h-3.5 w-3.5" />} label="Frequência">
-                      {drillData.inputs.frequencia.totalFaltasInjustificadas} falta(s) ·
-                      {' '}{drillData.inputs.frequencia.totalAtrasos} atraso(s) ·
-                      {' '}{drillData.inputs.frequencia.totalSaidasAntecipadas} saída(s) antecipada(s)
+                      <Stat n={drillData.inputs.frequencia.totalFaltasInjustificadas} label="falta(s)" tone={drillData.inputs.frequencia.totalFaltasInjustificadas > 0 ? 'text-rose-600' : 'text-slate-800'} />
+                      <Stat n={drillData.inputs.frequencia.totalAtrasos} label="atraso(s)" tone={drillData.inputs.frequencia.totalAtrasos > 0 ? 'text-amber-600' : 'text-slate-800'} />
+                      <Stat n={drillData.inputs.frequencia.totalSaidasAntecipadas} label="saída(s) antecipada(s)" tone={drillData.inputs.frequencia.totalSaidasAntecipadas > 0 ? 'text-amber-600' : 'text-slate-800'} />
                     </DadoBrutoRow>
                     <DadoBrutoRow color="rose" icon={<Heart className="h-3.5 w-3.5" />} label="Saúde">
-                      {drillData.inputs.saude.countAtestados} atestado(s) ({drillData.inputs.saude.diasAfastadoAtestado} dias) ·
-                      {' '}{drillData.inputs.saude.countAcidentes} acidente(s) ({drillData.inputs.saude.diasAfastadoAcidente} dias)
+                      <Stat n={drillData.inputs.saude.countAtestados} label={`atestado(s) · ${drillData.inputs.saude.diasAfastadoAtestado} dias`} />
+                      <Stat n={drillData.inputs.saude.countAcidentes} label={`acidente(s) · ${drillData.inputs.saude.diasAfastadoAcidente} dias`} tone={drillData.inputs.saude.countAcidentes > 0 ? 'text-rose-600' : 'text-slate-800'} />
                     </DadoBrutoRow>
                     <DadoBrutoRow color="violet" icon={<Gavel className="h-3.5 w-3.5" />} label="Disciplina">
-                      {drillData.inputs.disciplina.countAdvertenciasLeves} leve(s) ·
-                      {' '}{drillData.inputs.disciplina.countAdvertenciasGraves} grave(s) ·
-                      {' '}{drillData.inputs.disciplina.countSuspensoes} suspensão(ões)
+                      <Stat n={drillData.inputs.disciplina.countAdvertenciasLeves} label="leve(s)" tone={drillData.inputs.disciplina.countAdvertenciasLeves > 0 ? 'text-amber-600' : 'text-slate-800'} />
+                      <Stat n={drillData.inputs.disciplina.countAdvertenciasGraves} label="grave(s)" tone={drillData.inputs.disciplina.countAdvertenciasGraves > 0 ? 'text-rose-600' : 'text-slate-800'} />
+                      <Stat n={drillData.inputs.disciplina.countSuspensoes} label="suspensão(ões)" tone={drillData.inputs.disciplina.countSuspensoes > 0 ? 'text-rose-600' : 'text-slate-800'} />
                     </DadoBrutoRow>
                     <DadoBrutoRow color="emerald" icon={<ShieldCheck className="h-3.5 w-3.5" />} label="Segurança">
-                      {drillData.inputs.seguranca.countAcidentesGraves} grave(s) ·
-                      {' '}{drillData.inputs.seguranca.countAcidentesLeves} leve(s) ·
-                      {' '}{drillData.inputs.seguranca.countAcidentesQuase} quase-acidente(s)
-                      {' · '}DDS {drillData.inputs.seguranca.ddsPresentes}/{drillData.inputs.seguranca.ddsConvocados}
+                      <Stat n={drillData.inputs.seguranca.countAcidentesGraves} label="grave(s)" tone={drillData.inputs.seguranca.countAcidentesGraves > 0 ? 'text-rose-600' : 'text-slate-800'} />
+                      <Stat n={drillData.inputs.seguranca.countAcidentesLeves} label="leve(s)" tone={drillData.inputs.seguranca.countAcidentesLeves > 0 ? 'text-amber-600' : 'text-slate-800'} />
+                      <Stat n={drillData.inputs.seguranca.countAcidentesQuase} label="quase-acidente(s)" tone={drillData.inputs.seguranca.countAcidentesQuase > 0 ? 'text-amber-600' : 'text-slate-800'} />
+                      <Stat n={`${drillData.inputs.seguranca.ddsPresentes}/${drillData.inputs.seguranca.ddsConvocados}`} label="DDS" />
                     </DadoBrutoRow>
                     {drillData.inputs.capacitacao && (
                       <DadoBrutoRow color="amber" icon={<GraduationCap className="h-3.5 w-3.5" />} label="Capacitação">
-                        {drillData.inputs.capacitacao.countTreinamentosValidos} treinamento(s) válido(s) ·
-                        {' '}{drillData.inputs.capacitacao.countTreinamentosVencidos} vencido(s) ·
-                        {' '}{drillData.inputs.capacitacao.countTreinamentosRecentes} no período
+                        <Stat n={drillData.inputs.capacitacao.countTreinamentosValidos} label="treinamento(s) válido(s)" tone={drillData.inputs.capacitacao.countTreinamentosValidos > 0 ? 'text-emerald-600' : 'text-slate-800'} />
+                        <Stat n={drillData.inputs.capacitacao.countTreinamentosVencidos} label="vencido(s)" tone={drillData.inputs.capacitacao.countTreinamentosVencidos > 0 ? 'text-amber-600' : 'text-slate-800'} />
+                        <Stat n={drillData.inputs.capacitacao.countTreinamentosRecentes} label="no período" />
                       </DadoBrutoRow>
                     )}
                     {drillData.inputs.lealdade && (
@@ -489,7 +489,7 @@ export default function DashAvaliacaoFuncionarios() {
                             ? `${anos} ano${anos > 1 ? 's' : ''}${restoMeses > 0 ? ` e ${restoMeses} mês${restoMeses > 1 ? 'es' : ''}` : ''}`
                             : `${m} mês${m !== 1 ? 'es' : ''}`;
                           const adm = drillData.dataAdmissao ? new Date(drillData.dataAdmissao + 'T00:00:00').toLocaleDateString('pt-BR') : '—';
-                          return <>{txt} de casa · admitido em {adm}</>;
+                          return <Stat n={txt} label={`de casa · admitido em ${adm}`} />;
                         })()}
                       </DadoBrutoRow>
                     )}
@@ -499,13 +499,13 @@ export default function DashAvaliacaoFuncionarios() {
             )}
 
             {drillData && (
-              <div className="border-t border-slate-200 bg-slate-50 px-6 py-3 flex items-center justify-between">
-                <p className="text-[11px] text-slate-500">
+              <div className="border-t border-slate-200 bg-slate-50 px-4 sm:px-6 py-3 flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-between gap-2">
+                <p className="text-[11px] text-slate-500 text-center sm:text-left">
                   Decisão final é sempre humana · LGPD + CLT
                 </p>
                 <Button
                   onClick={() => setDrillId(null)}
-                  className="text-white hover:opacity-90"
+                  className="w-full sm:w-auto text-white hover:opacity-90"
                   style={{ background: "linear-gradient(135deg, #1B2A4A 0%, #2E4373 100%)" }}
                 >
                   Fechar
@@ -605,10 +605,10 @@ function SubScoreCard({ color, icon, label, value }: { color: keyof typeof SUBSC
   return (
     <div className={`relative overflow-hidden rounded-xl ring-1 ${c.ring} ${c.bg} p-3`}>
       <div className="flex items-center gap-2 mb-2">
-        <div className={`h-6 w-6 rounded-md ${c.icon} text-white flex items-center justify-center shadow-sm`}>
+        <div className={`h-6 w-6 shrink-0 rounded-md ${c.icon} text-white flex items-center justify-center shadow-sm`}>
           {icon}
         </div>
-        <p className="text-[10px] font-bold uppercase tracking-widest text-slate-600 truncate">{label}</p>
+        <p className="text-[10px] font-bold uppercase tracking-wide text-slate-600 leading-tight">{label}</p>
       </div>
       <p className={`text-2xl font-extrabold tabular-nums ${c.text}`}>
         {value}
@@ -630,8 +630,22 @@ function DadoBrutoRow({ color, icon, label, children }: { color: keyof typeof SU
       </div>
       <div className="min-w-0 flex-1">
         <p className={`text-[10px] font-bold uppercase tracking-widest ${c.text}`}>{label}</p>
-        <p className="text-sm text-slate-700 leading-snug">{children}</p>
+        <div className="mt-0.5 flex flex-wrap items-baseline gap-x-4 gap-y-1 text-sm text-slate-700 leading-snug">{children}</div>
       </div>
     </div>
+  );
+}
+
+/**
+ * Rev. 2623 — Mini-estatística para os "Dados Brutos": número em destaque
+ * (bold + cor de alerta quando > 0) seguido do rótulo, com flex-wrap para
+ * caber em telas estreitas (iPad/celular).
+ */
+function Stat({ n, label, tone = "text-slate-800" }: { n: React.ReactNode; label: string; tone?: string }) {
+  return (
+    <span className="inline-flex items-baseline gap-1">
+      <span className={`font-bold tabular-nums ${tone}`}>{n}</span>
+      <span className="text-xs text-slate-500">{label}</span>
+    </span>
   );
 }
