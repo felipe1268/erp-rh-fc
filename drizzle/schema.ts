@@ -5536,6 +5536,13 @@ export const planejamentoAtividades = pgTable("planejamento_atividades", {
   // (baseline implícita = plano corrente).
   baselineStart:        date("baseline_start"),
   baselineFinish:       date("baseline_finish"),
+  // Rev. 2617 — Caminho B (paridade EXATA %Concluída MSP): baseline COM HORA
+  // (timestamp ISO bruto do XML, ex.: "2026-06-01T07:00:00"). A coluna DATE
+  // acima perde a hora e produz divergência minuto-a-minuto (date-only dá
+  // 2/9/16/22 vs o correto 2/9/15/20 no PLN_816 R04). text() preserva o
+  // wall-clock pra o motor `minutosUteisEntre`. Fallback p/ baseline_start/finish.
+  baselineStartTs:      text("baseline_start_ts"),
+  baselineFinishTs:     text("baseline_finish_ts"),
   disabled:             boolean("disabled").default(false),
   // Rev. 1875 — Override granular de fim de semana trabalhado por atividade.
   // JSON array de datas ISO "YYYY-MM-DD" que devem ser tratadas como DIA ÚTIL

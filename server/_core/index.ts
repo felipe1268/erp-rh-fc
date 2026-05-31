@@ -784,9 +784,12 @@ Regras:
         try {
           await db.execute(sql`ALTER TABLE planejamento_atividades ADD COLUMN IF NOT EXISTS baseline_start DATE`);
           await db.execute(sql`ALTER TABLE planejamento_atividades ADD COLUMN IF NOT EXISTS baseline_finish DATE`);
+          // Rev. 2617 — baseline COM HORA (text ISO) p/ motor minuto-a-minuto.
+          await db.execute(sql`ALTER TABLE planejamento_atividades ADD COLUMN IF NOT EXISTS baseline_start_ts TEXT`);
+          await db.execute(sql`ALTER TABLE planejamento_atividades ADD COLUMN IF NOT EXISTS baseline_finish_ts TEXT`);
           await db.execute(sql`ALTER TABLE planejamento_projetos ADD COLUMN IF NOT EXISTS previsto_semanas_json TEXT`);
           await db.execute(sql`ALTER TABLE planejamento_projetos ADD COLUMN IF NOT EXISTS previsto_semanas_gerado_em TIMESTAMP`);
-          console.log(`[SyncSchema+] Caminho B (Rev. 2533) — colunas baseline_start/finish + previsto_semanas_json garantidas.`);
+          console.log(`[SyncSchema+] Caminho B (Rev. 2533/2617) — colunas baseline_start/finish(+_ts) + previsto_semanas_json garantidas.`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA Caminho B Rev. 2533:`, e?.message || e); }
 
         // Rev. 2607 — logo_url em clientes (cadastro de logo no próprio cliente,

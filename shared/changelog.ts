@@ -1,6 +1,59 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2617 — **PLANEJAMENTO · CAMINHO B · O % PREVISTO PASSA A TER PARIDADE
+ * EXATA (CRAVADA) COM A COLUNA "% CONCLUÍDA" DO MS PROJECT — NO PLN_816 R04
+ * A CURVA DA RAIZ BATE 2/9/15/20 (ANTES O ERP CALCULAVA 2/9/16/22, DIVERGINDO
+ * DUAS SEMANAS).**
+ *
+ * PEDIDO (usuário, APROVADO): o PREVISTO do Planejamento deve ser gerado a
+ * partir da MESMA coluna lida no avanço semanal — a "% Concluída"
+ * (`PercentComplete`) do MSP — com paridade matemática absoluta. Fluxo: (1) no
+ * cadastro do cronograma um ÚNICO arquivo baseline é importado e o ERP CALCULA
+ * a curva semana-a-semana; (2) toda semana o upload lê a "% Concluída" como
+ * REALIZADO. Mesma régua nos dois momentos = paridade exata MSP × ERP.
+ *
+ * CAUSA-RAIZ (por que divergia 16/22 em vez de 15/20): o gerador da Rev. 2603
+ * calculava a raiz pela fórmula `floor(pctRaizMSP(...))` (envelope min→max em
+ * tempo útil) e lia a baseline em DATE-ONLY (sem hora). Dois erros somados:
+ *  (a) DATE-ONLY perde a hora da baseline; o MSP calcula a fração de duração em
+ *      TEMPO ÚTIL com precisão de MINUTO (a baseline FC começa 07:00 e termina
+ *      em horários quebrados). Date-only dá 2/9/16/22; com hora dá 2/9/15/20
+ *      (provado contra os XMLs reais).
+ *  (b) o motor era DAY-GRANULAR (cada dia = 1 unidade). O calendário FC tem
+ *      Seg–Qui 540min e SEXTA 480min (mais curta); contando dia inteiro, as
+ *      semanas com sexta pesavam demais → 22% em vez de 20%.
+ *
+ * IMPLEMENTAÇÃO (ADITIVA — ZERO ALTER/DROP/DELETE; R-001/R-007/R-010):
+ *  - `shared/diasUteis.ts`: tipo `CalendarioMSProject` ganha
+ *    `weekDayIntervals?: number[][][]` (intervalos de trabalho por dia da
+ *    semana, em minutos); novas funções PURAS `minutosUteisEntre(iniMs,fimMs,
+ *    cal)` (motor minuto-a-minuto, wall-clock UTC, varre dia a dia clipando aos
+ *    intervalos) e `fracaoMinutos(...)` (fração 0..1, com fallback day-granular
+ *    quando o calendário não tem intervalos → backward compat 100%).
+ *  - `drizzle/schema.ts` + self-heal `[SyncSchema+]`: colunas ADITIVAS
+ *    `baseline_start_ts` / `baseline_finish_ts` (TEXT, timestamp ISO COM HORA);
+ *    `ADD COLUMN IF NOT EXISTS`. A coluna DATE legada continua como fallback.
+ *  - `ImportarCronograma.tsx`: o parser de calendário lê
+ *    `<WeekDays><WeekDay><WorkingTimes><WorkingTime><FromTime>/<ToTime>` →
+ *    `weekDayIntervals` (flui pro `calendarioJson` via spread); o parser de
+ *    tarefas captura o timestamp BRUTO (com hora) da `<Baseline Number=0>` →
+ *    `baselineStartTs/FinishTs`; ambos enviados no payload (substituir + mesclar).
+ *  - `server/routers/planejamento.ts` (`regenerarPrevistoSemanasCaminhoB`):
+ *    RAIZ = `round(Σ minutos úteis DECORRIDOS ÷ Σ minutos úteis TOTAIS × 100)`
+ *    ponderado por minutos úteis de cada folha (motor minuto-a-minuto quando há
+ *    `weekDayIntervals`; senão day-granular ponderado por duração). Por
+ *    atividade = `round(elapsed/total×100)`. `round` (não `floor`) porque a
+ *    coluna "% Concluída" do MSP é arredondada. Lê a baseline COM HORA
+ *    (`baselineStartTs/FinishTs`, fallback date-only). `salvarAtividades` e
+ *    `importarComModo` aceitam/gravam os novos campos (input zod + insert
+ *    Drizzle + UPDATE raw SQL `baseline_start_ts/finish_ts`).
+ *
+ * VALIDADO: motor REAL (`shared/diasUteis`) rodado contra
+ * `attached_assets/PLN_816_04_2026_R04_-_BL_*.xml` (1042 folhas) → raiz
+ * 2/9/15/20 CRAVADO. esbuild client+server+schema (exit 0); `tsc --noEmit` sem
+ * erros nos arquivos tocados. Calendário confirmado: Seg–Qui 540min, Sex 480min.
+ *
  * Rev. 2616 — **PLANEJAMENTO · MODAL "NOVO PROJETO DE PLANEJAMENTO" · O NOME
  * DA OBRA PASSA A APARECER POR INTEIRO NO DROPDOWN "SELECIONAR OBRA" — ANTES
  * NOMES LONGOS (EX.: "IGREJA SÃO GERALDO - POITA · SANTUARIO NACIONAL DE

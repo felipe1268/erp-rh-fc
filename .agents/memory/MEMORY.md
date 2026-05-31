@@ -1,4 +1,5 @@
 - [Which DB the app uses](db-connection.md) — `executeSql` tool hits the Replit Postgres (`DATABASE_URL`/helium), but the app reads `NEON_DATABASE_URL`. To inspect REAL app data, query Neon.
 - [MSP columns — % Concluída vs % Previsto](msp-analysis-columns.md) — for planejamento XML analysis, read % Concluída (`PercentComplete`, realizado), ignore % PREVISTO (`Texto6`).
+- [MSP %Previsto parity](msp-previsto-parity.md) — %PREVISTO must use baseline WITH TIME + minute-by-minute working-time engine (Fri shorter); date-only/day-granular diverge. Validate vs real XML.
 - [Sidebar menu visibility](sidebar-menu-visibility.md) — new menu item needs permission registration in `shared/modules.ts` + `sharedPaths` too, or non-master users won't see it; admin-master bypasses filters.
 - [Drizzle column → Neon self-heal guard](drizzle-schema-neon-sync.md) — adding a column to drizzle/schema.ts needs an explicit `ADD COLUMN IF NOT EXISTS` guard in `[SyncSchema+]`; otherwise `db.select()` lists break and render empty.

@@ -3,7 +3,7 @@ import { TRPCError } from "@trpc/server";
 import { router, protectedProcedure } from "../_core/trpc";
 import { getDb, createAuditLog } from "../db";
 import { importAtividadesCronogramaToFinancial } from "../services/financialIntegrationBridge";
-import { parseCalendarioJson, fracaoDecorridaMs, pctRaizMSP } from "../../shared/diasUteis";
+import { parseCalendarioJson, fracaoDecorridaMs, minutosUteisEntre, temIntervalosUteis } from "../../shared/diasUteis";
 // Rev. 1817 — Resolução automática do Responsável (FONTE ÚNICA).
 import { resolverResponsaveisBatch, truncarNomeEmpresa, type ResponsavelInfo } from "../_shared/responsavelAtividade";
 // Rev. 1820 — FONTE ÚNICA do recálculo de pesos (item 4 + item 10).
@@ -163,16 +163,37 @@ async function regenerarPrevistoSemanasCaminhoB(
     pesoFinanceiro: planejamentoAtividades.pesoFinanceiro,
     baselineStart: planejamentoAtividades.baselineStart,
     baselineFinish: planejamentoAtividades.baselineFinish,
+    // Rev. 2617 — baseline COM HORA (paridade minuto-a-minuto).
+    baselineStartTs: planejamentoAtividades.baselineStartTs,
+    baselineFinishTs: planejamentoAtividades.baselineFinishTs,
   }).from(planejamentoAtividades)
     .where(eq(planejamentoAtividades.revisaoId, revisaoId));
 
+  // Rev. 2617 — parse "wall-clock" determinístico (sem TZ) do timestamp ISO da
+  // baseline ("2026-06-01T07:00:00" → UTC ms). A HORA é essencial: date-only dá
+  // 2/9/16/22 no PLN_816 R04, com hora dá o correto 2/9/15/20.
+  const tsToMs = (v: any): number => {
+    if (!v) return NaN;
+    const m = String(v).match(/^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2})(?::(\d{2}))?)?/);
+    if (!m) return NaN;
+    return Date.UTC(+m[1], +m[2] - 1, +m[3], m[4] ? +m[4] : 0, m[5] ? +m[5] : 0, m[6] ? +m[6] : 0);
+  };
+  // Rev. 2617 — motor minuto-a-minuto só quando o calendário tem intervalos por
+  // dia (XML completo); senão cai no day-granular legado (backward compat).
+  const hasMin = temIntervalosUteis(cal as any);
+
   const folhas = (ativs as any[])
     .filter(a => !a.isGrupo && !a.disabled && a.baselineStart && a.baselineFinish)
-    .map(a => ({
-      ...a,
-      _bs: toUtc(a.baselineStart),
-      _bf: toUtc(a.baselineFinish, true),
-    }))
+    .map(a => {
+      const bsTs = tsToMs(a.baselineStartTs);
+      const bfTs = tsToMs(a.baselineFinishTs);
+      return {
+        ...a,
+        // Prefere o timestamp COM HORA; fallback p/ a coluna date-only (legado).
+        _bs: Number.isFinite(bsTs) ? bsTs : toUtc(a.baselineStart),
+        _bf: Number.isFinite(bfTs) ? bfTs : toUtc(a.baselineFinish, true),
+      };
+    })
     .filter(a => !isNaN(a._bs) && !isNaN(a._bf));
   if (folhas.length === 0) {
     await db.update(planejamentoProjetos)
@@ -205,38 +226,50 @@ async function regenerarPrevistoSemanasCaminhoB(
   }
   if (semanas.length === 0) return { semanas: 0, folhas: folhas.length };
 
-  // Rev. 2603 — RAIZ pela fórmula NATIVA do MSP sobre a baseline DA PRÓPRIA
-  // RAIZ (UID=0 = min(BL_Start)→max(BL_Finish)), em TEMPO ÚTIL, SEM ponderação
-  // por peso (`pctRaizMSP`). Antes era média ponderada por peso_financeiro
-  // (curva S física, "travada em ~1%") sobre dias CORRIDOS → divergia do MSP
-  // e do próprio top bar (que já usa `pctRaizMSP`). Agora curva = top bar = MSP.
-  // `floor` (como no por-atividade) porque a coluna "% PREVISTO" (Texto6) do MSP
-  // é INTEIRA: 1,38/4,83/6,55 → 1/4/6 (arredondar daria 1/5/7, divergindo).
-  const minStartIso = new Date(minStart).toISOString().slice(0, 10);
-  const maxFinishIso = new Date(maxFinish).toISOString().slice(0, 10);
+  // Rev. 2617 — CAMINHO B (paridade EXATA com a coluna %Concluída do MSP):
+  // RAIZ = round(Σ minutos úteis DECORRIDOS ÷ Σ minutos úteis TOTAIS × 100),
+  // ponderado por minutos úteis de cada folha (= varrer a "Data do Status" do
+  // MSP semana a semana sobre a baseline). Com `weekDayIntervals` (XML completo)
+  // usa o motor minuto-a-minuto `minutosUteisEntre` — Sex mais curta pesa menos,
+  // por isso 20% e não 22% no PLN_816 R04. Sem intervalos (XML antigo) cai no
+  // day-granular ponderado por duração (ms), preservando backward compat.
+  // `round` (não `floor`) porque a coluna %Concluída do MSP é arredondada:
+  // PLN_816 R04 → 2/9/15/20 cravado (validado contra os XMLs reais).
+  const unitsTotal = (bs: number, bf: number): number =>
+    hasMin ? minutosUteisEntre(bs, bf, cal as any) : Math.max(0, bf - bs);
+  const unitsElapsed = (bs: number, w: number, bf: number): number => {
+    if (w <= bs) return 0;
+    if (w >= bf) return unitsTotal(bs, bf);
+    return hasMin
+      ? minutosUteisEntre(bs, w, cal as any)
+      : fracaoDecorridaMs(bs, w, bf, cal) * Math.max(0, bf - bs);
+  };
+
+  const wMs = semanas.map(s => toUtc(s, true));
+  const totaisLeaf = folhas.map(a => unitsTotal(a._bs, a._bf));
+  const sumTotal = totaisLeaf.reduce((s, v) => s + v, 0);
+
   const porAtividadeId: Record<string, number[]> = {};
   const raiz: number[] = new Array(semanas.length).fill(0);
   for (let j = 0; j < semanas.length; j++) {
-    raiz[j] = Math.floor(pctRaizMSP(semanas[j], minStartIso, maxFinishIso, cal));
+    let sumEl = 0;
+    for (let i = 0; i < folhas.length; i++) {
+      sumEl += unitsElapsed(folhas[i]._bs, wMs[j], folhas[i]._bf);
+    }
+    raiz[j] = sumTotal > 0 ? Math.round((sumEl / sumTotal) * 100) : 0;
   }
 
   for (let i = 0; i < folhas.length; i++) {
     const a = folhas[i];
-    const bs = a._bs;
-    const bf = a._bf;
-    const dur = bf - bs;
+    const tot = totaisLeaf[i];
     const arr: number[] = new Array(semanas.length).fill(0);
     for (let j = 0; j < semanas.length; j++) {
-      const w = toUtc(semanas[j], true);
+      // % PREVISTO por atividade = round(fração de TEMPO ÚTIL da baseline) =
+      // coluna %Concluída do MSP por linha (inteira, arredondada).
       let pct: number;
-      // Rev. 2603 — % PREVISTO por atividade = floor(fração de TEMPO ÚTIL da
-      // baseline) = coluna "% PREVISTO" (Texto6) do MSP, int por linha.
-      if (dur <= 0)      pct = w >= bf ? 100 : 0;
-      else if (w <= bs)  pct = 0;
-      else if (w >= bf)  pct = 100;
-      else               pct = Math.floor(fracaoDecorridaMs(bs, w, bf, cal) * 100);
-      pct = Math.max(0, Math.min(100, pct));
-      arr[j] = pct;
+      if (tot <= 0) pct = wMs[j] >= a._bf ? 100 : 0;
+      else          pct = Math.round((unitsElapsed(a._bs, wMs[j], a._bf) / tot) * 100);
+      arr[j] = Math.max(0, Math.min(100, pct));
     }
     porAtividadeId[String(a.id)] = arr;
   }
@@ -1437,6 +1470,9 @@ export const planejamentoRouter = router({
         // Rev. 2533 — Caminho B: BaselineStart/Finish da Baseline 0 do MSP.
         baselineStart:       z.string().nullish(),
         baselineFinish:      z.string().nullish(),
+        // Rev. 2617 — baseline COM HORA (paridade minuto-a-minuto).
+        baselineStartTs:     z.string().nullish(),
+        baselineFinishTs:    z.string().nullish(),
       })),
     }))
     .mutation(async ({ input, ctx }) => {
@@ -1498,6 +1534,9 @@ export const planejamentoRouter = router({
           // Rev. 2533 — Caminho B: baseline lida do MSP (tag <Baseline Number=0>).
           baselineStart:       (a as any).baselineStart ?? null,
           baselineFinish:      (a as any).baselineFinish ?? null,
+          // Rev. 2617 — baseline COM HORA (paridade minuto-a-minuto).
+          baselineStartTs:     (a as any).baselineStartTs ?? null,
+          baselineFinishTs:    (a as any).baselineFinishTs ?? null,
         };
       });
 
@@ -1686,7 +1725,9 @@ export const planejamentoRouter = router({
                 ${cases("previsto_msp_pct", r => escNumNull(r.previstoMspPct))},
                 ${cases("realizado_msp_pct", r => escNumNull(r.realizadoMspPct))},
                 ${cases("baseline_start", r => r.baselineStart ? esc(r.baselineStart) : "NULL")},
-                ${cases("baseline_finish", r => r.baselineFinish ? esc(r.baselineFinish) : "NULL")}
+                ${cases("baseline_finish", r => r.baselineFinish ? esc(r.baselineFinish) : "NULL")},
+                ${cases("baseline_start_ts", r => r.baselineStartTs ? esc(r.baselineStartTs) : "NULL")},
+                ${cases("baseline_finish_ts", r => r.baselineFinishTs ? esc(r.baselineFinishTs) : "NULL")}
               WHERE id IN (${batchIds.join(",")})
                 AND revisao_id = ${input.revisaoId}
             `));
@@ -1889,6 +1930,9 @@ export const planejamentoRouter = router({
         // Rev. 2533 — Caminho B: baseline propagada também no mesclar.
         baselineStart:    z.string().nullish(),
         baselineFinish:   z.string().nullish(),
+        // Rev. 2617 — baseline COM HORA (paridade minuto-a-minuto).
+        baselineStartTs:  z.string().nullish(),
+        baselineFinishTs: z.string().nullish(),
       })),
     }))
     .mutation(async ({ input, ctx }) => {
@@ -1988,6 +2032,9 @@ export const planejamentoRouter = router({
                 // "Definir Linha de Base" de novo — preserva consistência).
                 baselineStart:  (a as any).baselineStart ?? null,
                 baselineFinish: (a as any).baselineFinish ?? null,
+                // Rev. 2617 — baseline COM HORA (paridade minuto-a-minuto).
+                baselineStartTs:  (a as any).baselineStartTs ?? null,
+                baselineFinishTs: (a as any).baselineFinishTs ?? null,
               }).where(eq(planejamentoAtividades.id, id));
               atualizados++;
             } else {
@@ -2023,6 +2070,9 @@ export const planejamentoRouter = router({
                 // Rev. 2533 — Caminho B: baseline em inserts via mesclar.
                 baselineStart:  (a as any).baselineStart ?? null,
                 baselineFinish: (a as any).baselineFinish ?? null,
+                // Rev. 2617 — baseline COM HORA (paridade minuto-a-minuto).
+                baselineStartTs:  (a as any).baselineStartTs ?? null,
+                baselineFinishTs: (a as any).baselineFinishTs ?? null,
               });
               inseridos++;
             }

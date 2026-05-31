@@ -18,6 +18,15 @@
 export interface CalendarioMSProject {
   weekDays: boolean[];                        // 7 elementos, índice = getDay() (0=dom)
   exceptions?: Array<{ from: string; to: string; working: boolean }>;
+  // Rev. 2617 — Caminho B (paridade EXATA com a coluna %Concluída do MSP):
+  // intervalos de trabalho POR DIA DA SEMANA, em MINUTOS desde a meia-noite.
+  // Índice = getUTCDay() (0=dom..6=sab), cada dia = lista de [fromMin,toMin].
+  // Ex.: Seg–Qui [[420,720],[780,1020]] (07-12,13-17 = 540min); Sex
+  // [[420,720],[780,960]] (07-12,13-16 = 480min). É o que permite o motor
+  // `minutosUteisEntre` reproduzir a aritmética interna do MSP minuto-a-minuto
+  // (Sex mais curta → semana com sexta pesa menos → 20% e não 22%). Ausente
+  // (XML antigo) → motor cai no day-granular (`fracaoDecorridaMs`).
+  weekDayIntervals?: number[][][];
   // Rev. 1644 — parâmetros raiz do XML MSP (regra de ouro: leitura plena).
   defaultStartTime?:  string;                 // "07:00:00"
   defaultFinishTime?: string;                 // "17:00:00"
@@ -50,6 +59,14 @@ export function parseCalendarioJson(raw: unknown): CalendarioMSProject | null {
     return {
       weekDays:           obj.weekDays.map((v: any) => !!v),
       exceptions:         Array.isArray(obj.exceptions) ? obj.exceptions : [],
+      // Rev. 2617 — intervalos minuto-a-minuto por dia da semana (Caminho B).
+      weekDayIntervals:   Array.isArray(obj.weekDayIntervals) && obj.weekDayIntervals.length === 7
+        ? obj.weekDayIntervals.map((dia: any) => Array.isArray(dia)
+            ? dia
+                .map((iv: any) => Array.isArray(iv) ? [Number(iv[0]) || 0, Number(iv[1]) || 0] : [0, 0])
+                .filter((iv: number[]) => iv[1] > iv[0])
+            : [])
+        : undefined,
       defaultStartTime:   typeof obj.defaultStartTime  === "string" ? obj.defaultStartTime  : undefined,
       defaultFinishTime:  typeof obj.defaultFinishTime === "string" ? obj.defaultFinishTime : undefined,
       minutesPerDay:      typeof obj.minutesPerDay     === "number" ? obj.minutesPerDay     : undefined,
@@ -285,6 +302,86 @@ export function fracaoDecorridaMs(iniMs: number, refMs: number, fimMs: number, c
     return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`;
   };
   return fracaoDecorrida(toIsoLocal(iniMs), toIsoLocal(refMs), toIsoLocal(fimMs), cal);
+}
+
+// ── Rev. 2617 — Motor MINUTO-A-MINUTO (paridade EXATA com %Concluída do MSP) ──
+// O MSP calcula % de duração em TEMPO ÚTIL com precisão de minuto: cada dia
+// contribui só com os intervalos de trabalho daquele dia da semana (com almoço
+// descontado e sexta mais curta). O motor day-granular (`fracaoDecorridaMs`)
+// conta dia inteiro como 1 unidade e por isso diverge nas semanas com sexta
+// (ex.: 22% em vez de 20% no PLN_816 R04). Estas funções reproduzem a
+// aritmética interna do MSP usando `weekDayIntervals` (minutos por dia da
+// semana). `iniMs/fimMs` são "wall clock" em UTC (parse determinístico, sem TZ).
+
+/** Intervalos de trabalho [fromMin,toMin] vigentes no dia `iso` (dow=getUTCDay). */
+function intervalosDoDiaMin(iso: string, dow: number, cal: CalendarioMSProject): number[][] {
+  if (cal.exceptions) {
+    for (const ex of cal.exceptions) {
+      if (ex.from && iso >= ex.from && iso <= (ex.to || ex.from)) {
+        // Exceção non-working → 0 min; working → usa o horário normal do dia
+        // da semana (os XMLs FC não trazem exceções working com horário próprio;
+        // se trouxessem, este fallback ainda dá um número razoável).
+        return ex.working ? (cal.weekDayIntervals?.[dow] ?? []) : [];
+      }
+    }
+  }
+  return cal.weekDayIntervals?.[dow] ?? [];
+}
+
+/**
+ * Gate do motor minuto-a-minuto: só vale quando o calendário tem `weekDayIntervals`
+ * para os 7 dias E TODO dia útil (`weekDays[i]===true`) tem ≥1 intervalo. Se um dia
+ * útil vier sem intervalos (XML parcial), o motor subcontaria minutos nesse dia →
+ * melhor cair no fallback day-granular. Exige ≥1 dia útil com intervalos.
+ */
+export function temIntervalosUteis(cal: CalendarioMSProject | null | undefined): boolean {
+  if (!cal || !cal.weekDayIntervals || cal.weekDayIntervals.length !== 7) return false;
+  let algum = false;
+  for (let i = 0; i < 7; i++) {
+    const tem = Array.isArray(cal.weekDayIntervals[i]) && cal.weekDayIntervals[i].length > 0;
+    if (cal.weekDays?.[i]) {
+      if (!tem) return false;   // dia útil sem intervalos → calendário incompleto
+      algum = true;
+    }
+  }
+  return algum;
+}
+
+/** Minutos ÚTEIS entre dois instantes (wall-clock UTC), via intervalos por dia. */
+export function minutosUteisEntre(iniMs: number, fimMs: number, cal: CalendarioMSProject): number {
+  if (!cal.weekDayIntervals || cal.weekDayIntervals.length !== 7) return 0;
+  if (!Number.isFinite(iniMs) || !Number.isFinite(fimMs) || fimMs <= iniMs) return 0;
+  const DAY = 86400000;
+  let dayStart = Math.floor(iniMs / DAY) * DAY;
+  const lastDay = Math.floor((fimMs - 1) / DAY) * DAY;
+  let total = 0;
+  let guard = 0;
+  while (dayStart <= lastDay && guard < 4000) {
+    const d = new Date(dayStart);
+    const iso = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`;
+    for (const iv of intervalosDoDiaMin(iso, d.getUTCDay(), cal)) {
+      const lo = Math.max(dayStart + iv[0] * 60000, iniMs);
+      const hi = Math.min(dayStart + iv[1] * 60000, fimMs);
+      if (hi > lo) total += (hi - lo) / 60000;
+    }
+    dayStart += DAY;
+    guard++;
+  }
+  return total;
+}
+
+/**
+ * Fração decorrida (0..1) em TEMPO ÚTIL minuto-a-minuto. Com `weekDayIntervals`
+ * usa o motor de minutos (paridade MSP); sem ele, cai no day-granular legado.
+ */
+export function fracaoMinutos(iniMs: number, refMs: number, fimMs: number, cal: CalendarioMSProject | null): number {
+  if (temIntervalosUteis(cal)) {
+    const total = minutosUteisEntre(iniMs, fimMs, cal);
+    if (total <= 0) return refMs >= fimMs ? 1 : 0;
+    const elapsed = minutosUteisEntre(iniMs, Math.min(refMs, fimMs), cal);
+    return Math.max(0, Math.min(1, elapsed / total));
+  }
+  return fracaoDecorridaMs(iniMs, refMs, fimMs, cal);
 }
 
 // ── Rev. 1811/1812 — PREVISTO oficial: curva S por atividade ────────────────

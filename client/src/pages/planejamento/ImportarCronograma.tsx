@@ -55,6 +55,10 @@ export interface TarefaImportada {
   // (atividades sem baseline salva no MSP), o ERP cai no Start/Finish vigente.
   baselineStart?:   string;
   baselineFinish?:  string;
+  // Rev. 2617 — baseline COM HORA (ISO bruto do XML, ex.: "2026-06-01T07:00:00").
+  // O server usa isto (não a versão date-only) p/ o motor minuto-a-minuto.
+  baselineStartTs?:  string;
+  baselineFinishTs?: string;
 }
 
 // ── Utilitários de parse ──────────────────────────────────────────────────────
@@ -137,6 +141,10 @@ function fmtBRLocal(iso: string): string {
 export interface CalendarioImportado {
   weekDays: boolean[];                                          // dom..sab → working?
   exceptions: Array<{ from: string; to: string; working: boolean }>;
+  // Rev. 2617 — Caminho B: intervalos de trabalho POR DIA DA SEMANA em MINUTOS
+  // (idx 0=dom..6=sab; cada dia = lista de [fromMin,toMin]). Permite ao motor
+  // do server reproduzir a aritmética minuto-a-minuto do MSP (Sex mais curta).
+  weekDayIntervals?: number[][][];
 }
 export function parseMSProjectCalendar(doc: Document): CalendarioImportado | null {
   const cals = Array.from(doc.querySelectorAll("Calendars > Calendar"));
@@ -156,6 +164,17 @@ export function parseMSProjectCalendar(doc: Document): CalendarioImportado | nul
 
   // MS Project usa DayType: 1=Domingo, 2=Segunda, ..., 7=Sábado; 0=Exceção (com TimePeriod).
   const weekDays = [false, false, false, false, false, false, false]; // dom..sab
+  // Rev. 2617 — intervalos de trabalho por dia (idx 0=dom..6=sab) em MINUTOS
+  // desde a meia-noite, lidos de <WorkingTimes><WorkingTime><FromTime>/<ToTime>.
+  const weekDayIntervals: number[][][] = [[], [], [], [], [], [], []];
+  const hhmmToMin = (s: string | null | undefined): number | null => {
+    const m = (s ?? "").trim().match(/^(\d{1,2}):(\d{2})/);
+    if (!m) return null;
+    let v = parseInt(m[1], 10) * 60 + parseInt(m[2], 10);
+    // MSP grava o fim do expediente noturno como "00:00:00" = fim do dia (1440).
+    if (v === 0 && (s ?? "").trim().startsWith("00:")) v = 1440;
+    return v;
+  };
   const exceptions: Array<{ from: string; to: string; working: boolean }> = [];
   const wds = Array.from(cal.querySelectorAll(":scope > WeekDays > WeekDay"));
   for (const wd of wds) {
@@ -164,6 +183,14 @@ export function parseMSProjectCalendar(doc: Document): CalendarioImportado | nul
     if (dayType >= 1 && dayType <= 7) {
       // 1=Dom → idx 0, 7=Sab → idx 6
       weekDays[dayType - 1] = working;
+      if (working) {
+        const wts = Array.from(wd.querySelectorAll(":scope > WorkingTimes > WorkingTime"));
+        for (const wt of wts) {
+          const f = hhmmToMin(wt.querySelector(":scope > FromTime")?.textContent);
+          const t = hhmmToMin(wt.querySelector(":scope > ToTime")?.textContent);
+          if (f != null && t != null && t > f) weekDayIntervals[dayType - 1].push([f, t]);
+        }
+      }
     } else if (dayType === 0) {
       const tp = wd.querySelector(":scope > TimePeriod");
       const from = tp?.querySelector(":scope > FromDate")?.textContent?.slice(0, 10) ?? "";
@@ -208,7 +235,10 @@ export function parseMSProjectCalendar(doc: Document): CalendarioImportado | nul
   }
   // Sanidade: se nada veio marcado como working, devolve null (calendário inválido).
   if (!weekDays.some(Boolean)) return null;
-  return { weekDays, exceptions };
+  // Rev. 2617 — só envia weekDayIntervals se algum dia tiver intervalo (XML
+  // completo); senão deixa undefined → server cai no motor day-granular legado.
+  const temIntervalos = weekDayIntervals.some(d => d.length > 0);
+  return { weekDays, exceptions, weekDayIntervals: temIntervalos ? weekDayIntervals : undefined };
 }
 export function parseMSProjectStatusDate(doc: Document): string | null {
   const raw = doc.querySelector("Project > StatusDate")?.textContent?.trim();
@@ -472,6 +502,11 @@ function parseMSProjectTasksFromDoc(doc: Document): TarefaImportada[] {
     // vigente (Project sem baseline = baseline implícita = plano corrente).
     let baselineStart: string | undefined;
     let baselineFinish: string | undefined;
+    // Rev. 2617 — também guardamos o timestamp BRUTO (com hora) da baseline.
+    // A hora é essencial pra paridade minuto-a-minuto: date-only dá 2/9/16/22
+    // no PLN_816 R04, com hora dá o correto 2/9/15/20.
+    let baselineStartTs: string | undefined;
+    let baselineFinishTs: string | undefined;
     for (const child of Array.from(task.children)) {
       if (child.tagName !== "Baseline") continue;
       const num = child.querySelector("Number")?.textContent?.trim() ?? "";
@@ -479,12 +514,16 @@ function parseMSProjectTasksFromDoc(doc: Document): TarefaImportada[] {
       const bs = (child.querySelector("Start")?.textContent ?? "").trim();
       const bf = (child.querySelector("Finish")?.textContent ?? "").trim();
       // MSP usa "NA" ou data 2049-12-31 quando não há baseline salva.
-      if (bs && !bs.startsWith("2049") && bs !== "NA") baselineStart = fmtDate(bs);
-      if (bf && !bf.startsWith("2049") && bf !== "NA") baselineFinish = fmtDate(bf);
+      if (bs && !bs.startsWith("2049") && bs !== "NA") { baselineStart = fmtDate(bs); baselineStartTs = bs; }
+      if (bf && !bf.startsWith("2049") && bf !== "NA") { baselineFinish = fmtDate(bf); baselineFinishTs = bf; }
       break;
     }
+    const startTs = (task.querySelector("Start")?.textContent ?? "").trim();
+    const finTs   = (task.querySelector("Finish")?.textContent ?? "").trim();
     if (!baselineStart && start) baselineStart = start;
     if (!baselineFinish && fin)  baselineFinish = fin;
+    if (!baselineStartTs && startTs) baselineStartTs = startTs;
+    if (!baselineFinishTs && finTs)  baselineFinishTs = finTs;
 
     // Pula a tarefa de nível 0 (cabeçalho do projeto)
     if (uid === "0" || name === "" || level === 0) continue;
@@ -501,6 +540,7 @@ function parseMSProjectTasksFromDoc(doc: Document): TarefaImportada[] {
       isGrupo: summ, isMarco, eapCodigo: wbs, pesoFin: 0, percentConcluido,
       previstoMsp, realizadoMsp,
       baselineStart, baselineFinish,
+      baselineStartTs, baselineFinishTs,
     });
   }
   return result;
@@ -1047,6 +1087,9 @@ export default function ImportarCronograma({ projetoId, revisaoAtiva, orcamentoI
       // Rev. 2533 — Caminho B: envia baseline pra expansão semanal no server.
       baselineStart:       t.baselineStart,
       baselineFinish:      t.baselineFinish,
+      // Rev. 2617 — baseline COM HORA (paridade minuto-a-minuto).
+      baselineStartTs:     t.baselineStartTs,
+      baselineFinishTs:    t.baselineFinishTs,
     }));
 
     iniciarProgresso(tarefas.length);
@@ -1089,6 +1132,9 @@ export default function ImportarCronograma({ projetoId, revisaoAtiva, orcamentoI
           // Rev. 2533 — Caminho B: baseline propagada também no mesclar
           baselineStart:    a.baselineStart,
           baselineFinish:   a.baselineFinish,
+          // Rev. 2617 — baseline COM HORA (paridade minuto-a-minuto).
+          baselineStartTs:  (a as any).baselineStartTs,
+          baselineFinishTs: (a as any).baselineFinishTs,
         })),
       }, {
         onSuccess: () => finalizarProgresso(true),
