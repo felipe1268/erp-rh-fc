@@ -1,6 +1,39 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2642 — **PAINEL RH & DP · A SEÇÃO "QUADRO DE PESSOAL" GANHA O CARD "NA EMPRESA"
+ * COM A QUANTIDADE DE PESSOAS QUE AINDA TÊM VÍNCULO HOJE (EXCLUI DESLIGADOS E
+ * BLACKLIST), EM PARIDADE EXATA COM O BADGE "NA EMPRESA" DA TELA COLABORADORES.**
+ *
+ * PEDIDO (usuário): "Ajuste a tela do painel principal do rh e coloque a quantidade
+ * de pessoas na empresa hoje... igual vc chamou de NA EMPRESA da tela de colaboradores"
+ * (prints: Colaboradores mostra "Na Empresa" = 123; o Quadro de Pessoal do Painel RH
+ * só tinha Total/Ativos/Férias/Afastados/Licença/Desligados).
+ *
+ * CAUSA-RAIZ (ausência de feature): o stats do `home.getData` (`server/routers/homeData.ts`)
+ * NÃO expunha `naEmpresa` — só `totalFuncionarios`, `ativos`, `ferias`, `afastados`,
+ * `licenca`, `desligados`. O conceito "Na Empresa" (vínculo ativo = total − desligados
+ * − blacklist) existia só em `getEmployeeStats` (server/db.ts) / `employees.stats`,
+ * consumido pela tela Colaboradores. O Painel RH usa outra query (home.getData), então
+ * não tinha de onde ler o número.
+ *
+ * FIX (ADITIVO, SOMENTE LEITURA/SELECT; R-001/R-007/R-010):
+ *  - `server/routers/homeData.ts` — `statsConsolidados` ganha `naEmpresa` = contagem de
+ *    `allEmps` com `status !== "Desligado"` && `status !== "Lista_Negra"` && `listaNegra`
+ *    não-truthy. MESMA régua canônica de `getEmployeeStats` (total − desligados −
+ *    blacklist) e do `isInativo` da tela Colaboradores → paridade exata (123).
+ *  - `client/src/pages/PainelRH.tsx` — no grid "Quadro de Pessoal" novo `KpiCard
+ *    title="Na Empresa"` (ícone `UsersRound` import novo, cor `teal`) logo após "Total",
+ *    lendo `s.naEmpresa` com fallback `total − desligados`. Clique → `/colaboradores?
+ *    status=NaEmpresa` (filtro já existente). Grade `lg:grid-cols-6` → `lg:grid-cols-7`.
+ *
+ * ESCOPO/CONSERVADOR: zero schema/ALTER/DELETE; nenhuma mudança nos demais cards ou na
+ * semântica do "Desligados". Só ADIÇÃO do campo no stats + 1 card no painel.
+ *
+ * VALIDAÇÃO: esbuild bundle-check client (PainelRH) e server (homeData) — ambos exit 0.
+ *
+ * ─────────────────────────────────────────────────────────────────────────────
+ *
  * Rev. 2641 — **CONTROLE DE DOCUMENTOS · TREINAMENTOS RENOVADOS CONTINUAVAM APARECENDO
  * COMO "VENCIDO": O PAINEL DE VALIDADE LISTAVA *TODO* REGISTRO DE TREINAMENTO COM
  * VALIDADE, SEM DEDUP. AGORA SÓ O REGISTRO DE MAIOR VALIDADE POR (FUNCIONÁRIO + NORMA)

@@ -699,8 +699,19 @@ export const homeDataRouter = router({
       // Ativos reais = ativos da tabela - os que estão de férias mas com status Ativo
       const ativosReais = ativos.filter(e => !empIdsComFeriasVP.has(e.id)).length;
 
+      // "Na Empresa" = vínculo ativo = todos que AINDA têm conexão com a empresa
+      // (exclui Desligados e Blacklist/listaNegra). Mesma régua canônica de
+      // getEmployeeStats (server/db.ts) e do badge "Na Empresa" da tela Colaboradores.
+      const naEmpresaCount = allEmps.filter(e =>
+        e.status !== "Desligado" &&
+        e.status !== "Lista_Negra" &&
+        (e as any).listaNegra !== 1 &&
+        (e as any).listaNegra !== true
+      ).length;
+
       const statsConsolidados = {
         totalFuncionarios: allEmps.length,
+        naEmpresa: naEmpresaCount,
         ativos: ativosReais,
         ferias: totalFeriasReal,
         afastados: allEmps.filter(e => e.status === "Afastado").length,
