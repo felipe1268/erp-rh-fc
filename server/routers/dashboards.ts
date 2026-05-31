@@ -2111,8 +2111,12 @@ async function getDrillDown(companyId: number, filterType: string, filterValue: 
 
   let whereClause = and(companyWhere(employees, companyId, companyIds), sql`${employees.deletedAt} IS NULL`);
 
-  // Para drill-downs que não são por status, excluir Desligado e Lista_Negra
-  if (filterType !== 'status') {
+  // Rev. 2619 — filtros HISTÓRICOS (por mês) dependem das DATAS, não do status atual:
+  // demissões/ativos-no-fim-do-mês/movimentação precisam INCLUIR Desligado/Lista_Negra
+  // (quem foi demitido no mês hoje está Desligado). Só os snapshots atuais excluem.
+  const HISTORICOS_MES = ['admissaoMes', 'demissaoMes', 'ativosMes', 'movimentacaoMes'];
+  // Para drill-downs que não são por status nem históricos, excluir Desligado e Lista_Negra
+  if (filterType !== 'status' && !HISTORICOS_MES.includes(filterType)) {
     whereClause = and(whereClause, sql`${employees.status} NOT IN ('Desligado', 'Lista_Negra')`);
   }
 
@@ -2234,6 +2238,21 @@ async function getDrillDown(companyId: number, filterType: string, filterValue: 
       // filterValue = "2025-03"
       // Rev. 1777 — colunas camelCase precisam de aspas duplas no Postgres
       whereClause = and(whereClause, sql`TO_CHAR("dataDemissao", 'YYYY-MM') = ${filterValue}`);
+      break;
+    }
+    case 'ativosMes': {
+      // Rev. 2619 — filterValue = "2025-03" — ativos no FIM do mês
+      // (admitido até o fim do mês E sem demissão ou demitido só depois). Mesma régra do comparativo mensal.
+      const fimMes = sql`(TO_DATE(${filterValue}, 'YYYY-MM') + interval '1 month - 1 day')::date`;
+      whereClause = and(whereClause,
+        sql`"dataAdmissao"::date <= ${fimMes}`,
+        sql`("dataDemissao" IS NULL OR "dataDemissao"::date > ${fimMes})`);
+      break;
+    }
+    case 'movimentacaoMes': {
+      // Rev. 2619 — filterValue = "2025-03" — admitido OU demitido no mês (base do Saldo e do Turnover)
+      whereClause = and(whereClause,
+        sql`(TO_CHAR("dataAdmissao", 'YYYY-MM') = ${filterValue} OR TO_CHAR("dataDemissao", 'YYYY-MM') = ${filterValue})`);
       break;
     }
     default:

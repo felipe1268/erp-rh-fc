@@ -34,6 +34,7 @@ interface DrillDownModalProps {
   title: string;
   filterType: string;
   filterValue: string;
+  zIndex?: number;
 }
 
 const STATUS_BADGE: Record<string, string> = {
@@ -46,7 +47,7 @@ const STATUS_BADGE: Record<string, string> = {
   Lista_Negra: "bg-black text-white",
 };
 
-export default function DrillDownModal({ open, onOpenChange, title, filterType, filterValue }: DrillDownModalProps) {
+export default function DrillDownModal({ open, onOpenChange, title, filterType, filterValue, zIndex }: DrillDownModalProps) {
   const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery } = useCompany();
   const companyId = Number(selectedCompanyId) || 0;
   const companyIds = getCompanyIdsForQuery();
@@ -69,6 +70,7 @@ export default function DrillDownModal({ open, onOpenChange, title, filterType, 
       onClose={() => onOpenChange(false)}
       title={title}
       icon={<Users className="h-5 w-5 text-white" />}
+      zIndex={zIndex}
     >
       <div className="w-full max-w-6xl mx-auto">
         {/* Header com contagem */}
@@ -101,7 +103,7 @@ export default function DrillDownModal({ open, onOpenChange, title, filterType, 
                   <th className="text-left py-3 px-4 font-semibold text-gray-600 text-xs uppercase tracking-wide">Setor</th>
                   <th className="text-left py-3 px-4 font-semibold text-gray-600 text-xs uppercase tracking-wide">Status</th>
                   <th className="text-left py-3 px-4 font-semibold text-gray-600 text-xs uppercase tracking-wide">Admissão</th>
-                  {filterType === "demissaoMes" && (
+                  {(filterType === "demissaoMes" || filterType === "movimentacaoMes") && (
                     <th className="text-left py-3 px-4 font-semibold text-gray-600 text-xs uppercase tracking-wide">Demissão</th>
                   )}
                 </tr>
@@ -129,7 +131,7 @@ export default function DrillDownModal({ open, onOpenChange, title, filterType, 
                       </Badge>
                     </td>
                     <td className="py-3 px-4 text-xs text-gray-500 font-mono">{formatDate(emp.dataAdmissao)}</td>
-                    {filterType === "demissaoMes" && (
+                    {(filterType === "demissaoMes" || filterType === "movimentacaoMes") && (
                       <td className="py-3 px-4 text-xs text-red-600 font-mono">{formatDate(emp.dataDemissao)}</td>
                     )}
                   </tr>

@@ -1,6 +1,48 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2619 — **DASHBOARD DE FUNCIONÁRIOS · AS TELAS DE DETALHE DE CADA
+ * INDICADOR (ADMISSÕES, DEMISSÕES, ATIVOS, SALDO, TURNOVER) PASSAM A LISTAR OS
+ * FUNCIONÁRIOS PERTINENTES — COM NOME + FOTO DO CADASTRO — AO CLICAR NUM MÊS,
+ * TUDO RESPONSIVO.**
+ *
+ * PEDIDO (usuário): "Em todas as telas [de detalhe dos indicadores] quero ver
+ * os nomes dos funcionários pertinentes, com a foto de cada funcionário (veja o
+ * cadastro), e tudo responsivo." Hoje o `IndicadorDetalheModal` só mostrava
+ * agregados (Mês atual / Média / Maior / Menor + gráfico + Detalhamento mensal +
+ * Insights) — sem dizer QUEM está por trás de cada número.
+ *
+ * IMPLEMENTAÇÃO (ADITIVA — ZERO ALTER/DROP/DELETE; só SELECT; R-001/R-007/R-010):
+ *  - REUSO da infra existente: a procedure `dashboards.drillDown`
+ *    (`getDrillDown` em `server/routers/dashboards.ts`) já retornava
+ *    `fotoUrl` + `nome` (=`nomeCompleto`) + função/setor/status/datas, e o
+ *    `DrillDownModal` já renderiza a lista responsiva com avatar (foto +
+ *    fallback inicial) que ao clicar navega pro Raio-X do colaborador.
+ *  - `server/routers/dashboards.ts` (`getDrillDown`): DOIS novos `filterType`
+ *    históricos — `ativosMes` (admitido até o fim do mês E não demitido até lá,
+ *    mesma régua do comparativo mensal) e `movimentacaoMes` (admitido OU demitido
+ *    no mês — base de Saldo e Turnover). Também CORRIGE bug latente: os filtros
+ *    históricos (`admissaoMes`/`demissaoMes`/`ativosMes`/`movimentacaoMes`) não
+ *    podem excluir `Desligado`/`Lista_Negra` (quem foi demitido no mês HOJE está
+ *    Desligado) — só os snapshots atuais excluem. `filterValue` = "YYYY-MM".
+ *  - `client/src/components/DrillDownModal.tsx`: novo prop opcional `zIndex`
+ *    (repassado ao `FullScreenDialog`) pra aparecer ACIMA do `Dialog` Radix do
+ *    `IndicadorDetalheModal`; coluna "Demissão" agora também aparece em
+ *    `movimentacaoMes`.
+ *  - `client/src/components/TabelaComparativaAnual.tsx`: tipo `LinhaInd` ganha
+ *    campo opt-in `drill?: { tipo: string }`. No `IndicadorDetalheModal`, quando
+ *    o indicador tem `drill`, cada card do "Detalhamento mensal" vira um
+ *    `<button>` (cursor/hover/ring + selo "ver"); clicar abre o `DrillDownModal`
+ *    (zIndex 60) com `filterType=ind.drill.tipo` e `filterValue=mês`. Outros
+ *    dashboards que reusam o componente NÃO mudam (drill é opt-in por indicador).
+ *  - `client/src/pages/dashboards/DashFuncionarios.tsx` (`FUNC_INDICADORES`):
+ *    mapeamento por indicador — ativos→`ativosMes`, admissoes→`admissaoMes`,
+ *    demissoes→`demissaoMes`, saldo→`movimentacaoMes`, turnover→`movimentacaoMes`.
+ *
+ * VALIDADO: servidor recompilou limpo (tsx watch) após edição do router; sem
+ * erros de transform/compile nos logs (só os esperados "Please login" do preview
+ * não autenticado).
+ *
  * Rev. 2618 — **DASHBOARD DE FUNCIONÁRIOS · SELETOR DE ANO DE ANÁLISE + NOVA
  * TABELA COMPARATIVA ANUAL DE CONTRATAÇÕES x DESLIGAMENTOS (TRIMESTRE,
  * SEMESTRE E ANOS ANTERIORES).**

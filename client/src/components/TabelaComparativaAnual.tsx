@@ -3,10 +3,11 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import DashChart from "@/components/DashChart";
+import DrillDownModal from "@/components/DrillDownModal";
 import {
   TrendingUp, TrendingDown, Minus, ChevronLeft, ChevronRight, X,
   AlertTriangle, CheckCircle2, Info, Sparkles, Lightbulb, BarChart3,
-  CalendarDays, Activity, Loader2,
+  CalendarDays, Activity, Loader2, Users,
 } from "lucide-react";
 
 const MESES_PT = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
@@ -26,6 +27,10 @@ export type LinhaInd = {
   alertaAbsoluto?: (v: number, ref?: any) => boolean;
   hint?: string;
   acoes?: string[];
+  // Rev. 2619 — opt-in: quando definido, cada mês do "Detalhamento mensal" vira clicável
+  // e abre a lista de funcionários (nome + foto) daquele mês via DrillDownModal.
+  // `tipo` = filterType da procedure dashboards.drillDown (admissaoMes | demissaoMes | ativosMes | movimentacaoMes).
+  drill?: { tipo: string };
 };
 
 function fmtMesCurto(m: string) {
@@ -133,6 +138,8 @@ function IndicadorDetalheModal({ open, onClose, indIdx, setIndIdx, linhas, meses
   indIdx: number; setIndIdx: (i: number) => void;
   linhas: Linha[]; meses: CompMes[];
 }) {
+  // Rev. 2619 — drill por mês: abre lista de funcionários (nome + foto) do mês clicado.
+  const [drill, setDrill] = useState<{ tipo: string; mes: string; titulo: string } | null>(null);
   const linha = linhas[indIdx];
   if (!linha) return null;
   const { ind, valores, atual, atencao } = linha;
@@ -228,6 +235,11 @@ function IndicadorDetalheModal({ open, onClose, indIdx, setIndIdx, linhas, meses
               <CardTitle className="text-sm flex items-center gap-2">
                 <CalendarDays className="h-4 w-4 text-slate-600" />
                 Detalhamento mensal
+                {ind.drill && (
+                  <span className="ml-auto inline-flex items-center gap-1 text-[10px] font-semibold text-blue-600">
+                    <Users className="h-3 w-3" /> clique num mês para ver os funcionários
+                  </span>
+                )}
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -237,10 +249,12 @@ function IndicadorDetalheModal({ open, onClose, indIdx, setIndIdx, linhas, meses
                   const d = (v != null && ant != null) ? pct(v, ant) : null;
                   const piorou = d != null && (ind.lowerIsBetter ? d > 0 : d < 0);
                   const isAtual = i === valores.length - 1;
-                  return (
-                    <div key={i} className={`rounded-lg border p-2.5 ${isAtual ? "border-blue-300 bg-blue-50/60" : "border-slate-200 bg-white"}`}>
+                  const mesKey = meses[i].mes;
+                  const canDrill = !!ind.drill && meses[i].resumo != null;
+                  const inner = (
+                    <>
                       <div className={`text-[10px] uppercase font-bold tracking-wide ${isAtual ? "text-blue-700" : "text-slate-500"}`}>
-                        {fmtMesCurto(meses[i].mes)} {isAtual && <span className="ml-1">·atual</span>}
+                        {fmtMesCurto(mesKey)} {isAtual && <span className="ml-1">·atual</span>}
                       </div>
                       <div className={`text-base font-bold tabular-nums mt-0.5 ${isAtual ? "text-blue-900" : "text-slate-800"}`}>
                         {v == null ? <span className="text-slate-300">—</span> : ind.format(v)}
@@ -251,6 +265,26 @@ function IndicadorDetalheModal({ open, onClose, indIdx, setIndIdx, linhas, meses
                           {d > 0 ? "+" : ""}{d.toFixed(1)}%
                         </div>
                       )}
+                      {canDrill && (
+                        <div className="text-[10px] font-medium text-blue-600 mt-1 inline-flex items-center gap-0.5">
+                          <Users className="h-3 w-3" /> ver
+                        </div>
+                      )}
+                    </>
+                  );
+                  return canDrill ? (
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={() => setDrill({ tipo: ind.drill!.tipo, mes: mesKey, titulo: `${ind.label} — ${fmtMesCurto(mesKey)}` })}
+                      className={`text-left rounded-lg border p-2.5 transition-shadow hover:shadow-md hover:border-blue-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${isAtual ? "border-blue-300 bg-blue-50/60" : "border-slate-200 bg-white"}`}
+                      aria-label={`Ver funcionários — ${ind.label} em ${fmtMesCurto(mesKey)}`}
+                    >
+                      {inner}
+                    </button>
+                  ) : (
+                    <div key={i} className={`rounded-lg border p-2.5 ${isAtual ? "border-blue-300 bg-blue-50/60" : "border-slate-200 bg-white"}`}>
+                      {inner}
                     </div>
                   );
                 })}
@@ -311,6 +345,18 @@ function IndicadorDetalheModal({ open, onClose, indIdx, setIndIdx, linhas, meses
             <span className="truncate max-w-[160px]">{linhas[(indIdx + 1) % linhas.length].ind.label}</span> <ChevronRight className="h-4 w-4 ml-1" />
           </Button>
         </div>
+
+        {/* Rev. 2619 — lista de funcionários (nome + foto) do mês clicado, por cima da análise */}
+        {drill && (
+          <DrillDownModal
+            open={!!drill}
+            onOpenChange={(o) => { if (!o) setDrill(null); }}
+            title={drill.titulo}
+            filterType={drill.tipo}
+            filterValue={drill.mes}
+            zIndex={60}
+          />
+        )}
       </DialogContent>
     </Dialog>
   );
