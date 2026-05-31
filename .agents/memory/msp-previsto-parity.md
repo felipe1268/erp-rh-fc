@@ -37,12 +37,16 @@ Régua no ERP (projeção p/ TODAS as semanas, motor minuto-a-minuto de `shared/
   das folhas, dividir por `raizTotal = Σ unitsTotal(folha)`.
 - **POR ATIVIDADE** = `round(unitsElapsed/total × 100)`.
 
-**FONTE = coluna pelo ALIAS, não por FieldID fixo.** No cliente
-(`ImportarCronograma.tsx`), `detectarFidPorAlias(doc,"% PREVISTO")` acha o FieldID pela
-DEFINIÇÃO do ExtendedAttribute cujo `<Alias>` é "% PREVISTO". Cadeia de fallback:
-`fidPrevisto → Texto10 (188743750) → Texto6 (188743746) → Texto11 (188743997)`.
-**Texto6 NÃO é mais prioridade** — em templates LOTUS é coluna de lixo sem alias/fórmula
-(raiz dava 3%). O "% PREVISTO" real é o Texto10.
+**FONTE = coluna FIXA Texto10, NÃO por alias (Rev. 2647, substitui Rev. 2644).** No
+cliente (`ImportarCronograma.tsx`) o "% PREVISTO" lê SEMPRE o MESMO FieldID
+`Texto10 (188743750)` via const `FID_PREVISTO_TEXTO10`, em TODOS os projetos (presentes
+e futuros). **ACABARAM a detecção por `<Alias>` (`detectarFidPorAlias` removida) e as
+reservas Texto6/Texto11.** Se Texto10 faltar no XML → valor `null` → tela mostra "—"
+(jamais lê outra coluna). Vale pra RAIZ (`parseMSProjectFull`) e ATIVIDADE
+(`parseMSProjectTasksFromDoc`).
+**Why:** o usuário quer DETERMINISMO total — a mesma coluna em todo lugar. A cadeia de
+fallback por alias permitia ler colunas diferentes entre projetos (em templates LOTUS o
+Texto6 é coluna de lixo sem alias/fórmula). Melhor mostrar "—" honesto do que chutar.
 
 **RESSALVA (RESOLVIDA na Rev. 2645):** a paridade NUMÉRICA foi cravada empiricamente
 com 5 XMLs PLN_816 R04 de StatusDate no MEIO do projeto — a curva da raiz bate o

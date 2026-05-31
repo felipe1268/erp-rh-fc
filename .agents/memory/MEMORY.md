@@ -1,5 +1,5 @@
 - [Which DB the app uses](db-connection.md) — `executeSql` tool hits the Replit Postgres (`DATABASE_URL`/helium), but the app reads `NEON_DATABASE_URL`. To inspect REAL app data, query Neon.
-- [MSP columns — % Concluída vs % Previsto](msp-analysis-columns.md) — for planejamento XML analysis, read % Concluída (`PercentComplete`, realizado), ignore % PREVISTO (`Texto6`).
+- [MSP columns — % Concluída vs % Previsto](msp-analysis-columns.md) — previsto = coluna FIXA Texto10 (188743750), sem alias/fallback (faltou → "—"); realizado = % Concluída (`PercentComplete`).
 - [MSP %Previsto parity](msp-previsto-parity.md) — %PREVISTO must use baseline WITH TIME + minute-by-minute working-time engine (Fri shorter); date-only/day-granular diverge. Validate vs real XML.
 - [Sidebar menu visibility](sidebar-menu-visibility.md) — new menu item needs permission registration in `shared/modules.ts` + `sharedPaths` too, or non-master users won't see it; admin-master bypasses filters.
 - ["Aviso Prévio" tem 2 fontes](aviso-previo-two-sources.md) — contar/filtrar aviso prévio = UNIÃO de `employees.status==="Aviso"` + módulo `avisoPrevio` `em_andamento`; uma fonte só perde gente.

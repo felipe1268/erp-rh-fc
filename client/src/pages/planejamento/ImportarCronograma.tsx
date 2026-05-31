@@ -354,10 +354,11 @@ export function detectarFeriadosMoveisAusentes(
  *  Rev. 1644 — incluímos no calendarioJson os parâmetros raiz do XML do MSP
  *  (`DefaultStartTime`, `DefaultFinishTime`, `MinutesPerDay`) usados pela
  *  fórmula `ProjDateDiff` — regra de ouro: leitura plena do MS Project.
- *  Rev. 1646.4 — incluímos também o snapshot do "%PREVISTO" calculado pelo
- *  próprio MSP (Texto11 / FieldID 188743997) na tarefa raiz. Quando o ERP
- *  exibe esse projeto no cutoff oficial (= StatusDate do XML), usa esse
- *  número diretamente — paridade exata, sem replicar `ProjDateDiff` interno. */
+ *  Rev. 2647 — incluímos também o snapshot do "% PREVISTO" calculado pelo
+ *  próprio MSP, lido SEMPRE da coluna FIXA Texto10 (FieldID 188743750) na
+ *  tarefa raiz (sem alias, sem fallback Texto6/Texto11). Quando o ERP exibe
+ *  esse projeto no cutoff oficial (= StatusDate do XML), usa esse número
+ *  diretamente — paridade exata, sem replicar `ProjDateDiff` interno. */
 // ── Validação de integridade pré-upload (Rev. 2631) ───────────────────────────
 // Analisa o XML ANTES de subir. Se faltar dado ESSENCIAL pro %Previsto bater
 // minuto-a-minuto com o MS Project, devolve "bloqueios" (impedem o upload).
@@ -477,20 +478,13 @@ export function analisarIntegridadeMSP(
   return { bloqueios, avisos };
 }
 
-// Rev. 2644 — Detecta o FieldID do campo customizado cujo Alias é o texto dado
-// (ex.: "% PREVISTO"), lendo as DEFINIÇÕES de ExtendedAttribute (que têm
-// <FieldName>/<Alias>; as ocorrências por tarefa têm só <Value>). Torna a
-// leitura do "% PREVISTO" robusta ao template: se o engenheiro usa Texto10
-// (LOTUS) ou Texto6, o ERP acha a coluna certa pelo rótulo, não por FieldID fixo.
-function detectarFidPorAlias(doc: Document, alias: string): string | null {
-  const alvo = alias.trim().toLowerCase();
-  for (const ea of Array.from(doc.querySelectorAll("ExtendedAttribute"))) {
-    if (!ea.querySelector("FieldName")) continue; // só definições têm FieldName
-    const al = ea.querySelector("Alias")?.textContent?.trim().toLowerCase() ?? "";
-    if (al === alvo) return ea.querySelector("FieldID")?.textContent?.trim() || null;
-  }
-  return null;
-}
+// Rev. 2647 — FieldID ÚNICO e FIXO da coluna "% PREVISTO" do MS Project.
+// Por decisão do dono (padronização): TODOS os projetos, presentes e futuros,
+// leem SEMPRE esta MESMA coluna (Texto10 = 188743750), validada como verdade
+// absoluta vs a coluna "% PREVISTO" da tela do Project. SEM detecção por alias
+// e SEM fallback para Texto6/Texto11 — se faltar Texto10, o valor fica null e a
+// tela mostra "—" (jamais "chuta" outra coluna, que dava número divergente).
+const FID_PREVISTO_TEXTO10 = "188743750";
 
 export function parseMSProjectFull(text: string): {
   tarefas:            TarefaImportada[];
@@ -521,15 +515,14 @@ export function parseMSProjectFull(text: string): {
   // REGRA DE OURO — Leitura de cronograma e avanço (Rev. 2427+).
   // VALE PRA TODAS AS OBRAS, presentes e futuras. NÃO ALTERAR sem aprovação.
   //
-  //   • % PREVISTO  = Texto6 (FieldID 188743746) puro, lido do XML do MS Project.
-  //                   É o "% PREVISTO" calculado pelo MSP via fórmula
-  //                   Int(((StatusDate − BL_Start)/(BL_Finish − BL_Start))*100)
-  //                   sobre as datas da BASELINE. Aparece na coluna
-  //                   "% PREVISTO" da tela do Project — paridade exata.
-  //                   Texto10 (188743750) e Texto11 (188743997) são versões
-  //                   alternativas com mais casas decimais usadas por
-  //                   templates LOTUS modernos (ex.: REVTE-CIVIL) — ficam
-  //                   como FALLBACK quando Texto6 não existe.
+  //   • % PREVISTO  = Texto10 (FieldID 188743750) puro, lido do XML do MS Project.
+  //                   FONTE ÚNICA E FIXA para TODOS os projetos (Rev. 2647). É o
+  //                   "% PREVISTO" calculado pelo MSP via fórmula
+  //                   Int(Num Dur(Prev)/PESO DUR(BL)*100 + 0.5) sobre a BASELINE.
+  //                   Aparece na coluna "% PREVISTO" da tela do Project — paridade
+  //                   exata. SEM detecção por alias e SEM fallback Texto6/Texto11:
+  //                   se Texto10 faltar, o valor fica vazio (tela mostra "—"),
+  //                   jamais lê outra coluna (Texto6 em templates LOTUS é lixo).
   //
   //   • % CONCLUÍDA = PercentComplete nativo do MSP. Aparece na coluna
   //                   "% concluída" da tela do Project — paridade exata.
@@ -561,17 +554,10 @@ export function parseMSProjectFull(text: string): {
         const num = parseFloat(limpo);
         if (Number.isFinite(num)) valorPorFid[fid] = num;
       }
-      // Rev. 2644 — VERDADE ABSOLUTA = coluna "% PREVISTO" (Texto10) do MSP.
-      // Acha o FieldID pelo Alias "% PREVISTO" (robusto ao template); se não
-      // houver alias, cai no fallback Texto10 → Texto6 → Texto11. (Antes a
-      // prioridade era Texto6, que neste template LOTUS é lixo sem alias/fórmula.)
-      const fidPrevisto = detectarFidPorAlias(doc, "% PREVISTO");
-      const previstoRaw =
-        (fidPrevisto != null ? valorPorFid[fidPrevisto] : undefined) ??
-        valorPorFid["188743750"] ??  // Texto10 — "% PREVISTO" (LOTUS)
-        valorPorFid["188743746"] ??  // Texto6  — fallback legado
-        valorPorFid["188743997"] ??  // Texto11 — fallback
-        null;
+      // Rev. 2647 — VERDADE ABSOLUTA = coluna "% PREVISTO" FIXA (Texto10) do MSP.
+      // TODOS os projetos leem SEMPRE este mesmo FieldID. SEM alias, SEM fallback
+      // Texto6/Texto11: se faltar Texto10, fica null → tela mostra "—".
+      const previstoRaw = valorPorFid[FID_PREVISTO_TEXTO10] ?? null;
       previstoMspRaiz = previstoRaw != null && Number.isFinite(previstoRaw)
         ? Math.min(100, Math.max(0, previstoRaw))
         : null;
@@ -668,8 +654,6 @@ function lerItemDaTask(task: Element): string {
 
 function parseMSProjectTasksFromDoc(doc: Document): TarefaImportada[] {
   const taskEls = Array.from(doc.querySelectorAll("Task"));
-  // Rev. 2644 — FieldID do "% PREVISTO" achado pelo Alias (uma vez por doc).
-  const fidPrevisto = detectarFidPorAlias(doc, "% PREVISTO");
 
   // First pass: build UID → CÓDIGO map so we can resolve predecessor UIDs.
   // Rev. 1822: chave é o código resolvido (Item → fallback WBS em folhas).
@@ -731,9 +715,9 @@ function parseMSProjectTasksFromDoc(doc: Document): TarefaImportada[] {
     const realizadoMsp: number | undefined =
       Number.isFinite(pctNum) ? Math.min(100, Math.max(0, pctNum)) : undefined;
 
-    // Rev. 2644 — VERDADE ABSOLUTA (atividade) = coluna "% PREVISTO" (Texto10).
-    // Coleta os ExtendedAttribute da tarefa e resolve pelo FieldID achado via
-    // Alias "% PREVISTO" (fidPrevisto), com fallback Texto10 → Texto6 → Texto11.
+    // Rev. 2647 — VERDADE ABSOLUTA (atividade) = coluna "% PREVISTO" FIXA (Texto10).
+    // Coleta os ExtendedAttribute da tarefa e lê SEMPRE o mesmo FieldID
+    // (FID_PREVISTO_TEXTO10). SEM alias, SEM fallback Texto6/Texto11: faltou → undefined.
     const previstoVals: Record<string, number> = {};
     for (const child of Array.from(task.children)) {
       if (child.tagName !== "ExtendedAttribute") continue;
@@ -745,11 +729,7 @@ function parseMSProjectTasksFromDoc(doc: Document): TarefaImportada[] {
       if (!Number.isFinite(num)) continue;
       previstoVals[fid] = Math.min(100, Math.max(0, num));
     }
-    const previstoMsp: number | undefined =
-      (fidPrevisto != null ? previstoVals[fidPrevisto] : undefined) ??
-      previstoVals["188743750"] ??  // Texto10
-      previstoVals["188743746"] ??  // Texto6
-      previstoVals["188743997"];    // Texto11
+    const previstoMsp: number | undefined = previstoVals[FID_PREVISTO_TEXTO10];
 
     // Rev. 2533 — Caminho B: lê BaselineStart/BaselineFinish da Baseline 0
     // (primária) salva no MSP. O MSP exporta como:

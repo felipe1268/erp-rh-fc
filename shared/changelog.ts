@@ -1,6 +1,40 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2647 — **PLANEJAMENTO · O "% PREVISTO" PASSA A LER UMA ÚNICA COLUNA FIXA EM
+ * TODOS OS PROJETOS (PRESENTES E FUTUROS): "% PREVISTO" = Texto10 (FieldID 188743750).
+ * ACABARAM A DETECÇÃO POR ALIAS E AS RESERVAS Texto6/Texto11 — SE Texto10 FALTAR, O
+ * VALOR FICA VAZIO ("—") EM VEZ DE CHUTAR OUTRA COLUNA.**
+ *
+ * PEDIDO (usuário, via escolha guiada): "quero que TODOS os projetos, presentes e
+ * futuros, leiam SEMPRE a mesma coluna do % Previsto" → opção 1: "Sempre a coluna
+ * % PREVISTO (Texto10 = 188743750); remover as reservas Texto6/Texto11; se faltar
+ * Texto10, mostra '—' em vez de chutar outra coluna".
+ *
+ * CONTEXTO: até a Rev. 2646 o parser do client achava o FieldID do "% PREVISTO" pelo
+ * `<Alias>` literal e, na falta, caía numa cadeia de fallback Texto10 → Texto6 →
+ * Texto11. Isso abria espaço pra ler colunas diferentes entre projetos (em templates
+ * LOTUS o Texto6 é coluna de lixo sem alias/fórmula). O usuário quer determinismo
+ * total: a MESMA coluna em todo lugar.
+ *
+ * FIX (LEITURA/CLIENT-ONLY; R-001/R-007/R-010 — ZERO SCHEMA/ALTER/DROP/DELETE):
+ *  - `client/src/pages/planejamento/ImportarCronograma.tsx`:
+ *    • Removida a função `detectarFidPorAlias` (não há mais uso).
+ *    • Nova constante `FID_PREVISTO_TEXTO10 = "188743750"` — fonte única e fixa.
+ *    • RAIZ (`parseMSProjectFull`): `previstoRaw = valorPorFid[FID_PREVISTO_TEXTO10]
+ *      ?? null` (sem alias, sem cadeia de fallback).
+ *    • ATIVIDADE (`parseMSProjectTasksFromDoc`): `previstoMsp =
+ *      previstoVals[FID_PREVISTO_TEXTO10]` (idem); removida a leitura do alias por doc.
+ *    • Comentário "REGRA DE OURO" do parser reescrito: % PREVISTO = Texto10 fixo,
+ *      sem alias, sem fallback; faltou → "—".
+ *
+ * EFEITO: paridade determinística — todo XML, de qualquer projeto, lê o "% PREVISTO"
+ * da mesma coluna Texto10. Templates antigos que só tinham o valor noutra coluna
+ * passam a exibir "—" (sinal honesto de "falta o Texto10"), em vez de mostrar um
+ * número de coluna divergente. Sem mudança de schema, server ou leitura de tarefas
+ * (apenas de qual FieldID o "% PREVISTO" sai). Validado (estático): `pnpm build`
+ * (esbuild client+server) exit 0.
+ *
  * Rev. 2646 — **PLANEJAMENTO · O FIX DA Rev. 2645 (PARAR DE INJETAR FERIADOS MÓVEIS)
  * PASSA A SE PROPAGAR AUTOMATICAMENTE A TODOS OS PROJETOS — ANTIGOS E NOVOS. A CURVA
  * "% PREVISTO" AGORA REGENERA EM TODO UPLOAD DO XML (INCLUSIVE O SEMANAL), NÃO MAIS

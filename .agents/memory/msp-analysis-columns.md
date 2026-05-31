@@ -5,18 +5,19 @@ description: Which MSP columns drive the ERP previsto vs realizado, and how to f
 
 # Planejamento — % PREVISTO (Texto10) e % Concluída (PercentComplete)
 
-## VERDADE ATUAL (Rev. 2644) — % PREVISTO = réplica do Texto10, achado por Alias
+## VERDADE ATUAL (Rev. 2647) — % PREVISTO = coluna FIXA Texto10; % Concluída = realizado
 
-Decisão do usuário: o "% PREVISTO" do cronograma inicial deve ser réplica EXATA da
-coluna **"% PREVISTO" (Texto10, FieldID 188743750)** do MSP — "verdade absoluta".
-- Acha-se a coluna pelo **Alias literal "% PREVISTO"** (`detectarFidPorAlias`), NÃO por
-  FieldID fixo — robusto ao template. Fallback: `Texto10 → Texto6 → Texto11`.
-- **Texto6 (188743746) NÃO é o "% PREVISTO" em todo template** — em templates LOTUS é
-  coluna de lixo SEM alias/fórmula (raiz dava 3%). Era prioridade até a Rev. 2643; isso
-  estava ERRADO. Sempre confiar no alias, não no FieldID.
-- Régua = rollup das folhas + round (ver `msp-previsto-parity.md`).
-- **% Concluída** = native `PercentComplete` — continua sendo o realizado (aba Avanço
-  Semanal), e a coluna que o usuário valida.
+Decisão do usuário (confirmada explicitamente 31/05/2026: "sempre ler o %previsto
+Texto10 para previsto e %Concluída para o realizado"):
+- **% PREVISTO = coluna FIXA Texto10 (FieldID 188743750)**, lida SEMPRE do MESMO
+  FieldID em TODOS os projetos (presentes e futuros), via const `FID_PREVISTO_TEXTO10`.
+  **ACABARAM a detecção por Alias (`detectarFidPorAlias` removida) e os fallbacks
+  Texto6/Texto11.** Se Texto10 faltar no XML → valor vazio → tela mostra "—" (jamais
+  chuta outra coluna). **Why:** determinismo total; o alias/fallback permitia ler
+  colunas diferentes entre projetos (Texto6 em templates LOTUS é lixo sem alias/fórmula).
+- **% Concluída = native `PercentComplete`** — o realizado (aba Avanço Semanal), a
+  coluna que o usuário valida.
+- Régua de projeção da curva = rollup das folhas + round (ver `msp-previsto-parity.md`).
 
 ## HISTÓRICO (OBSOLETO desde Rev. 2644 — "% PREVISTO = Texto6, ignorar")
 
