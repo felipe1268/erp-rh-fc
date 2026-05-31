@@ -3491,12 +3491,20 @@ export const planejamentoRouter = router({
         const pontos: { semana: string; acumulado: number }[] = [{ semana: semZero, acumulado: 0 }];
         const semanasEnvelope = Math.ceil((maxFimMs - minIniMs) / (7 * 86_400_000)) + 8;
         const maxIters = Math.max(8, semanasEnvelope);
+        // Rev. 2650 — Snapshot Texto10 ancorado à SEMANA do StatusDate (Monday),
+        // não ao Sunday exato. O StatusDate do XML cai em dia útil (ex.: quinta),
+        // então `sunIso === statusDate` NUNCA casava e a curva baseline ignorava o
+        // snapshot MSP no ponto do status — ficava acima do Realizado mesmo com
+        // Previsto=Realizado (linha verde não sobrepunha a azul). Alinha ao mesmo
+        // critério da curvaRealizada, que ancora em toMondayStr(statusDate).
+        const statusMondayMSP = calMSP.statusDateSnapshot
+          ? toMondayStr(new Date(calMSP.statusDateSnapshot + "T12:00:00Z"))
+          : null;
         let cur = startMonday;
         for (let i = 0; i < maxIters && cur <= endMonday; i++) {
           const sunMs = new Date(cur + "T12:00:00Z").getTime() + 6 * 86_400_000;
-          const sunIso = new Date(sunMs).toISOString().slice(0, 10);
-          // Snapshot Texto10 ponderado quando Sunday == StatusDate (paridade MSP).
-          const usarSnapshot = !!calMSP.statusDateSnapshot && sunIso === calMSP.statusDateSnapshot;
+          // Snapshot Texto10 ponderado na SEMANA que contém o StatusDate (paridade MSP).
+          const usarSnapshot = !!statusMondayMSP && cur === statusMondayMSP;
           let soma = 0;
           for (const f of folhasPrep) {
             let pct: number;

@@ -1,6 +1,60 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2650 — **PLANEJAMENTO / CURVA S · (1) NA CURVA S DE TRABALHO, A LINHA AZUL
+ * (PREVISTO/BASELINE) VOLTA A PASSAR PELO MESMO % DO HEADER NO PONTO DO STATUS —
+ * QUANDO PREVISTO = REALIZADO, AS LINHAS SE SOBREPÕEM. (2) NA CURVA S FINANCEIRA, O
+ * CARD "PREVISTO (BCWS)" DEIXA DE MOSTRAR R$ 0,00 (E O "DESVIO" FANTASMA DE +R$ TODO
+ * O BCWP "ADIANTADO") — BCWS E BCWP PASSAM A SER MEDIDOS NA MESMA SEMANA-BASE.**
+ *
+ * PEDIDO (usuário): "se a previsto está conforme o realizado =, a linha deveria estar
+ * alinhadas e sobrepostas... e veja o financeiro não está igual a curva s de trabalho
+ * pq?" (prints: Curva S de Trabalho com header Previsto=Realizado=9% "No prazo", mas a
+ * linha verde ABAIXO da azul; Curva S Financeira com "PREVISTO (BCWS) R$ 0,00" e
+ * "DESVIO +R$ 188.512,60 adiantado").
+ *
+ * DIAGNÓSTICO (Neon READ-ONLY, projeto 39 "IGREJA SÃO GERALDO – POITA", revisão 58):
+ * avanços em 06-01 e 06-08 (segunda); snapshot `previstoMspSnapshot`=9,
+ * `realizadoMspSnapshot`=9, `statusDateSnapshot`=2026-06-11 (QUINTA); CUTOFF=Qui.
+ * `previsto_semanas.raiz` vale exatamente 9% na semana 06-11. Ou seja, o header (9%) e a
+ * linha verde (9%, ancorada em toMondayStr(06-11)=06-08) estão certos — quem diverge é a
+ * linha AZUL do gráfico.
+ *
+ * CAUSA-RAIZ #1 (sobreposição): a linha azul é `curvaBaseline = gerarCurvaPlanejadaMSP
+ * (baseline)`, cujo trecho de paridade MSP só usava o snapshot Texto10 quando
+ * `sunIso === calMSP.statusDateSnapshot`. Mas `sunIso` é SEMPRE um domingo e o StatusDate
+ * cai em dia útil (quinta) → a condição NUNCA casava → a azul ignorava o snapshot e
+ * exibia a fração-por-datas (~12% na semana do status), ficando ACIMA do realizado (9%)
+ * mesmo com Previsto=Realizado. A curvaRealizada já ancorava o snapshot em
+ * toMondayStr(statusDate); a baseline não.
+ *
+ * CAUSA-RAIZ #2 (BCWS R$0): no card financeiro, `finPrevHoje` (BCWS) era medido em "hoje"
+ * (`lastPlanPoint = finFull.find(p => p.semana <= hoje2 && p.planejada != null)`). Como
+ * hoje (31/05) é ANTES do início da obra (01/06), não havia semana <= hoje com planejada
+ * → BCWS = R$0. Já o BCWP (`finRealHoje`) era medido na última semana COM avanço (06-08).
+ * Medições em datas-base diferentes → Desvio = BCWP − 0 = todo o BCWP "adiantado".
+ *
+ * FIX (R-001/R-007/R-010 — ZERO SCHEMA/ALTER/DELETE):
+ *  - SERVER `server/routers/planejamento.ts` (`gerarCurvaPlanejadaMSP`, usada por
+ *    curvaBaseline E curvaPlanejada): snapshot Texto10 agora ancorado à SEMANA do
+ *    StatusDate — nova const `statusMondayMSP = toMondayStr(statusDateSnapshot)` e
+ *    `usarSnapshot = cur === statusMondayMSP` (em vez de `sunIso === statusDate`).
+ *    Espelha o mesmo critério da curvaRealizada → a azul passa por 9% no ponto do status
+ *    e a verde sobrepõe. Sem statusDate, comportamento inalterado (date-fraction).
+ *  - CLIENT `client/src/pages/planejamento/PlanejamentoDetalhe.tsx` (card financeiro):
+ *    BCWS ancorado à última semana com Realizado — `finRefSemana = lastRealPoint?.semana
+ *    ?? hoje2` e `lastPlanPoint = finFull.find(p => p.semana <= finRefSemana && ...)`.
+ *    BCWS e BCWP na mesma data-date → Desvio = SV clássico (BCWP − BCWS) real. Sem
+ *    realizado, mantém o fallback em "hoje".
+ *
+ * EFEITO: (1) com Previsto=Realizado a verde sobrepõe a azul no ponto do status; (2) o
+ * card BCWS mostra o desembolso previsto real até a data-date e o Desvio fica coerente.
+ * RESSALVA (resposta ao "por que financeiro ≠ trabalho"): a Curva de Trabalho é em % por
+ * DURAÇÃO/snapshot MSP; a Financeira é em R$ por PESO FINANCEIRO com BCWP vindo dos
+ * avanços semanais — são métricas diferentes, então pequenas diferenças entre elas são
+ * esperadas (não é bug); o que era bug (BCWS R$0) foi corrigido. Validado (estático):
+ * `pnpm build` exit 0.
+ *
  * Rev. 2649 — **PLANEJAMENTO / CURVA S · A LINHA "REALIZADO" (VERDE) DA CURVA S DE
  * TRABALHO/FINANCEIRA PARA DE EXIBIR DADO-FANTASMA APÓS APAGAR OS AVANÇOS — AO LIMPAR
  * (OU SALVAR) AVANÇOS, A CURVA REGENERA NA HORA EM VEZ DE FICAR COM CACHE VELHO.**

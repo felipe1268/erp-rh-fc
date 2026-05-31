@@ -6140,8 +6140,16 @@ function CurvaS({ curvaData, curvaLoading, curvaFetching, proj, avancoAtual, fPc
         };
 
         const hoje2 = todayLocalISO();
-        const lastPlanPoint = [...finFull].reverse().find((p: any) => p.semana <= hoje2 && p.planejada != null);
+        // Rev. 2650 — BCWS e BCWP medidos na MESMA semana-base (data-date).
+        // Antes o BCWS (Previsto) era medido em "hoje"; se a obra ainda não
+        // começou em relação à data atual (ex.: hoje 31/05, obra inicia 01/06),
+        // não havia semana <= hoje com planejada → BCWS=R$0 e o Desvio virava o
+        // BCWP inteiro ("+R$… adiantado" fantasma). Agora ancora na última semana
+        // com Realizado (BCWP), espelhando o earned value clássico (SV = BCWP −
+        // BCWS na mesma data-date). Sem realizado, mantém o fallback em "hoje".
         const lastRealPoint = [...finFull].reverse().find((p: any) => p.realizada != null);
+        const finRefSemana  = lastRealPoint?.semana ?? hoje2;
+        const lastPlanPoint = [...finFull].reverse().find((p: any) => p.semana <= finRefSemana && p.planejada != null);
         const lastRecPoint  = [...finFull].reverse().find((p: any) => p.receita != null);
         const finPrevHoje   = lastPlanPoint?.planejada ?? 0;
         const finRealHoje   = lastRealPoint?.realizada ?? 0;
