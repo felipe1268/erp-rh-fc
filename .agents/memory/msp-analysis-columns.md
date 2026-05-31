@@ -1,14 +1,28 @@
 ---
-name: Planejamento previsto — duration-weighted % Concluída rollup
-description: How to reproduce MSP's % Concluída (PercentComplete) curve for the ERP previsto, from a single baseline file
+name: MSP planejamento columns — % PREVISTO (Texto10) vs % Concluída (PercentComplete)
+description: Which MSP columns drive the ERP previsto vs realizado, and how to find the right one by Alias
 ---
 
-# Planejamento — previsto E realizado da MESMA coluna % Concluída
+# Planejamento — % PREVISTO (Texto10) e % Concluída (PercentComplete)
 
-In the FC Engenharia planejamento XML (MS Project export):
+## VERDADE ATUAL (Rev. 2644) — % PREVISTO = réplica do Texto10, achado por Alias
 
-- **% Concluída** = native `PercentComplete`. The column the user trusts. Source of truth for BOTH previsto and realizado.
-- **% PREVISTO** = custom `Texto6` (FieldID 188743746, ProjDateDiff formula). **Ignore — not used in the intended design.**
+Decisão do usuário: o "% PREVISTO" do cronograma inicial deve ser réplica EXATA da
+coluna **"% PREVISTO" (Texto10, FieldID 188743750)** do MSP — "verdade absoluta".
+- Acha-se a coluna pelo **Alias literal "% PREVISTO"** (`detectarFidPorAlias`), NÃO por
+  FieldID fixo — robusto ao template. Fallback: `Texto10 → Texto6 → Texto11`.
+- **Texto6 (188743746) NÃO é o "% PREVISTO" em todo template** — em templates LOTUS é
+  coluna de lixo SEM alias/fórmula (raiz dava 3%). Era prioridade até a Rev. 2643; isso
+  estava ERRADO. Sempre confiar no alias, não no FieldID.
+- Régua = rollup das folhas + round (ver `msp-previsto-parity.md`).
+- **% Concluída** = native `PercentComplete` — continua sendo o realizado (aba Avanço
+  Semanal), e a coluna que o usuário valida.
+
+## HISTÓRICO (OBSOLETO desde Rev. 2644 — "% PREVISTO = Texto6, ignorar")
+
+Antes a nota dizia: "% Concluída = source of truth para previsto E realizado; % PREVISTO
+= Texto6, ignorar". Substituído: o previsto agora REPLICA o Texto10 (achado por alias),
+não deriva do PercentComplete.
 
 ## Intended ERP design (user-stated; supersedes the Caminho B "% PREVISTO = Texto6" rule)
 

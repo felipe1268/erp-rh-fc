@@ -3,21 +3,43 @@ name: MSP %Previsto parity (Caminho B)
 description: Why planejamento %PREVISTO must use baseline WITH TIME + minute-by-minute working-time engine to match MSP "% Concluída" exactly.
 ---
 
-# %PREVISTO ↔ MSP "% Concluída" paridade EXATA
+# %PREVISTO = réplica da coluna "% PREVISTO" (Texto10) do MSP
 
-Regra: o %PREVISTO da curva Caminho B é a fração de duração da baseline em TEMPO
-ÚTIL **minuto-a-minuto** (motor `minutosUteisEntre` de `shared/diasUteis`, que já
-aplica feriados/almoço/sexta-curta lidos do calendário do XML).
+## VERDADE ATUAL (Rev. 2644, 31/05/2026) — substitui as regras de raiz=vão + trunc abaixo
 
-**RAIZ = vão da baseline do PROJETO INTEIRO, NÃO média ponderada das folhas.**
-`trunc(unitsElapsed(minStart, semana, maxFinish) ÷ unitsTotal(minStart, maxFinish)
-× 100)`, onde minStart/maxFinish = min/max das baselines das folhas. Reproduz a régua
-interna do MSP para a linha-resumo (UID=0), que mede o próprio vão do resumo, não o
-somatório das folhas. Por atividade = `trunc(elapsed/total × 100)`.
+Decisão do usuário: o "% PREVISTO" do cronograma inicial deve ser a **réplica EXATA da
+coluna "% PREVISTO" (Texto10) do MS Project** — "verdade absoluta". O Texto10 é
+`Int(Num Dur(Prev)[188743983] ÷ PESO DUR(BL)[188743982] × 100 + 0.5)`:
+- **ROLLUP ponderado por DURAÇÃO das folhas** (NÃO o vão início→fim do projeto).
+- **ARREDONDA** (`+0.5` antes do `Int` = `round`, NÃO trunca).
 
-**`Math.trunc`, NÃO `round`/`floor`** — o MSP usa `int()` (trunca). (Atenção: uma
-versão anterior desta nota dizia `round` ponderado pelas folhas — ESTAVA ERRADO,
-dava 1/8/14/20/25; o alvo real PLN_816 R04 nas 5 semanas é 3/6/10/14/18.)
+Régua no ERP (projeção p/ TODAS as semanas, motor minuto-a-minuto de `shared/diasUteis`):
+- **RAIZ = ROLLUP** = `round(Σ minutos úteis DECORRIDOS das folhas ÷ Σ minutos úteis
+  TOTAIS das folhas × 100)`. Acumular `raizElapsed[j] += unitsElapsed(folha)` no loop
+  das folhas, dividir por `raizTotal = Σ unitsTotal(folha)`.
+- **POR ATIVIDADE** = `round(unitsElapsed/total × 100)`.
+
+**FONTE = coluna pelo ALIAS, não por FieldID fixo.** No cliente
+(`ImportarCronograma.tsx`), `detectarFidPorAlias(doc,"% PREVISTO")` acha o FieldID pela
+DEFINIÇÃO do ExtendedAttribute cujo `<Alias>` é "% PREVISTO". Cadeia de fallback:
+`fidPrevisto → Texto10 (188743750) → Texto6 (188743746) → Texto11 (188743997)`.
+**Texto6 NÃO é mais prioridade** — em templates LOTUS é coluna de lixo sem alias/fórmula
+(raiz dava 3%). O "% PREVISTO" real é o Texto10.
+
+**RESSALVA:** o XML de referência (PLN_816 R04) tem StatusDate 31/05 < StartDate 01/06
+→ Texto10 = 0% em TODAS as 1430 tasks. A paridade NUMÉRICA da curva NÃO foi cravada
+empiricamente nesta revisão; precisa re-validar com XML de status-date no meio do
+projeto (Texto10 > 0). A régua matemática está alinhada à fórmula.
+
+---
+
+## HISTÓRICO (Rev. 2617, OBSOLETO desde Rev. 2644 — raiz=vão + trunc estava ERRADO)
+
+Regra antiga: o %PREVISTO da curva Caminho B era a fração de duração da baseline em
+TEMPO ÚTIL **minuto-a-minuto**, com **RAIZ = vão da baseline do PROJETO INTEIRO**
+(`trunc(unitsElapsed(minStart,semana,maxFinish) ÷ unitsTotal(minStart,maxFinish) ×
+100)`) e **`Math.trunc`** (achava que o MSP usava `int()` puro). Isso divergia do
+Texto10, que é rollup das folhas + round (`+0.5`). Corrigido na Rev. 2644.
 
 **Why:** duas armadilhas comprovadas contra os XMLs reais (PLN_816 R04, alvo
 2/9/15/20):

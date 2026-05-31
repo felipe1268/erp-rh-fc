@@ -474,6 +474,21 @@ export function analisarIntegridadeMSP(
   return { bloqueios, avisos };
 }
 
+// Rev. 2644 — Detecta o FieldID do campo customizado cujo Alias é o texto dado
+// (ex.: "% PREVISTO"), lendo as DEFINIÇÕES de ExtendedAttribute (que têm
+// <FieldName>/<Alias>; as ocorrências por tarefa têm só <Value>). Torna a
+// leitura do "% PREVISTO" robusta ao template: se o engenheiro usa Texto10
+// (LOTUS) ou Texto6, o ERP acha a coluna certa pelo rótulo, não por FieldID fixo.
+function detectarFidPorAlias(doc: Document, alias: string): string | null {
+  const alvo = alias.trim().toLowerCase();
+  for (const ea of Array.from(doc.querySelectorAll("ExtendedAttribute"))) {
+    if (!ea.querySelector("FieldName")) continue; // só definições têm FieldName
+    const al = ea.querySelector("Alias")?.textContent?.trim().toLowerCase() ?? "";
+    if (al === alvo) return ea.querySelector("FieldID")?.textContent?.trim() || null;
+  }
+  return null;
+}
+
 export function parseMSProjectFull(text: string): {
   tarefas:            TarefaImportada[];
   statusDate:         string | null;
@@ -543,14 +558,16 @@ export function parseMSProjectFull(text: string): {
         const num = parseFloat(limpo);
         if (Number.isFinite(num)) valorPorFid[fid] = num;
       }
-      // Rev. 2427 — REGRA DE OURO: Texto6 (puro) é o "% PREVISTO" do MSP.
-      // Texto10/Texto11 ficam como fallback p/ templates LOTUS modernos que
-      // não exportam Texto6 (raro). Texto9 SAIU (era override manual sem
-      // alias/fórmula — fonte instável). Ver bloco de regra acima.
+      // Rev. 2644 — VERDADE ABSOLUTA = coluna "% PREVISTO" (Texto10) do MSP.
+      // Acha o FieldID pelo Alias "% PREVISTO" (robusto ao template); se não
+      // houver alias, cai no fallback Texto10 → Texto6 → Texto11. (Antes a
+      // prioridade era Texto6, que neste template LOTUS é lixo sem alias/fórmula.)
+      const fidPrevisto = detectarFidPorAlias(doc, "% PREVISTO");
       const previstoRaw =
-        valorPorFid["188743746"] ??  // Texto6  — % PREVISTO (REGRA DE OURO)
-        valorPorFid["188743750"] ??  // Texto10 — fallback (4 casas, LOTUS moderno)
-        valorPorFid["188743997"] ??  // Texto11 — fallback (templates customizados)
+        (fidPrevisto != null ? valorPorFid[fidPrevisto] : undefined) ??
+        valorPorFid["188743750"] ??  // Texto10 — "% PREVISTO" (LOTUS)
+        valorPorFid["188743746"] ??  // Texto6  — fallback legado
+        valorPorFid["188743997"] ??  // Texto11 — fallback
         null;
       previstoMspRaiz = previstoRaw != null && Number.isFinite(previstoRaw)
         ? Math.min(100, Math.max(0, previstoRaw))
@@ -648,6 +665,8 @@ function lerItemDaTask(task: Element): string {
 
 function parseMSProjectTasksFromDoc(doc: Document): TarefaImportada[] {
   const taskEls = Array.from(doc.querySelectorAll("Task"));
+  // Rev. 2644 — FieldID do "% PREVISTO" achado pelo Alias (uma vez por doc).
+  const fidPrevisto = detectarFidPorAlias(doc, "% PREVISTO");
 
   // First pass: build UID → CÓDIGO map so we can resolve predecessor UIDs.
   // Rev. 1822: chave é o código resolvido (Item → fallback WBS em folhas).
@@ -709,26 +728,25 @@ function parseMSProjectTasksFromDoc(doc: Document): TarefaImportada[] {
     const realizadoMsp: number | undefined =
       Number.isFinite(pctNum) ? Math.min(100, Math.max(0, pctNum)) : undefined;
 
-    // Rev. 2427 — REGRA DE OURO (atividade): % PREVISTO = Texto6 puro.
-    // Texto10/Texto11 ficam como fallback p/ templates LOTUS modernos que
-    // não exportam Texto6. Texto9 SAIU (override manual instável).
-    let previstoMsp: number | undefined;
-    let previstoMspT10: number | undefined; // Fallback — LOTUS moderno (4 casas)
-    let previstoMspT11: number | undefined; // Fallback — templates customizados
+    // Rev. 2644 — VERDADE ABSOLUTA (atividade) = coluna "% PREVISTO" (Texto10).
+    // Coleta os ExtendedAttribute da tarefa e resolve pelo FieldID achado via
+    // Alias "% PREVISTO" (fidPrevisto), com fallback Texto10 → Texto6 → Texto11.
+    const previstoVals: Record<string, number> = {};
     for (const child of Array.from(task.children)) {
       if (child.tagName !== "ExtendedAttribute") continue;
       const fid = child.querySelector("FieldID")?.textContent ?? "";
       const valRaw = (child.querySelector("Value")?.textContent ?? "").trim();
-      if (!valRaw) continue;
-      // Limpa "%" (Texto6 vem como " 4%") e vírgula BR → ponto.
+      if (!fid || !valRaw) continue;
+      // Limpa "%" (vem como " 4%") e vírgula BR → ponto.
       const num = parseFloat(valRaw.replace(/%/g, "").replace(",", ".").trim());
       if (!Number.isFinite(num)) continue;
-      if (fid === "188743746") previstoMsp    = Math.min(100, Math.max(0, num)); // Texto6  — REGRA DE OURO
-      else if (fid === "188743750") previstoMspT10 = Math.min(100, Math.max(0, num)); // Texto10 — fallback
-      else if (fid === "188743997") previstoMspT11 = Math.min(100, Math.max(0, num)); // Texto11 — fallback
+      previstoVals[fid] = Math.min(100, Math.max(0, num));
     }
-    if (previstoMsp === undefined && previstoMspT10 !== undefined) previstoMsp = previstoMspT10;
-    if (previstoMsp === undefined && previstoMspT11 !== undefined) previstoMsp = previstoMspT11;
+    const previstoMsp: number | undefined =
+      (fidPrevisto != null ? previstoVals[fidPrevisto] : undefined) ??
+      previstoVals["188743750"] ??  // Texto10
+      previstoVals["188743746"] ??  // Texto6
+      previstoVals["188743997"];    // Texto11
 
     // Rev. 2533 — Caminho B: lê BaselineStart/BaselineFinish da Baseline 0
     // (primária) salva no MSP. O MSP exporta como:

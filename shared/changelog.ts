@@ -1,6 +1,54 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2644 — **PLANEJAMENTO · NO CRONOGRAMA INICIAL, O "% PREVISTO" PASSA A SER A
+ * RÉPLICA EXATA DA COLUNA "% PREVISTO" (Texto10) DO MS PROJECT — "VERDADE ABSOLUTA".
+ * A RAIZ VIRA ROLLUP (SOMA DAS DURAÇÕES DAS FOLHAS, IGUAL AO MSP) E A RÉGUA DE
+ * ARREDONDAMENTO MUDA DE TRUNCAR (Int) PARA ARREDONDAR (round), ESPELHANDO A FÓRMULA
+ * `Int(x*100 + 0.5)` DO TEXTO10.**
+ *
+ * PEDIDO (usuário, via user_query): "ao subir XML como cronograma inicial, o % previsto
+ * tem que ser a réplica EXATA da coluna % PREVISTO do MS Project — verdade absoluta".
+ * Decisões confirmadas: (1) abandonar o cálculo via baseline-trunc e alinhar à fórmula
+ * do Texto10; (2) no PRIMEIRO upload, projetar o previsto para TODAS as semanas;
+ * (3) RAIZ = ROLLUP = soma das durações das folhas (igual MSP), NÃO o vão início→fim
+ * do projeto.
+ *
+ * CAUSA-RAIZ (régua divergente do MSP): o Caminho B (Rev. 2617) calculava a RAIZ como
+ * fração do VÃO da baseline do projeto inteiro (minStart→maxFinish) e usava `Math.trunc`
+ * tanto na raiz quanto por atividade. Já a coluna "% PREVISTO" (Texto10) do MSP é
+ * `Int(Num Dur(Prev)[188743983] ÷ PESO DUR(BL)[188743982] × 100 + 0.5)` — ou seja:
+ * (a) ROLLUP ponderado por DURAÇÃO das folhas (não o vão do projeto), e
+ * (b) ARREDONDAMENTO (`+0.5` antes do `Int` = round), não truncamento. Além disso, a
+ * leitura priorizava Texto6 (FieldID 188743746), que NESTE template LOTUS é uma coluna
+ * de lixo SEM alias nem fórmula (root dava 3%); o "% PREVISTO" real é o Texto10
+ * (188743750), identificável pelo Alias literal "% PREVISTO".
+ *
+ * FIX (ADITIVO/LEITURA; R-001/R-007/R-010 — ZERO ALTER/DROP/DELETE):
+ *  - `server/routers/planejamento.ts` (`regenerarPrevistoSemanasCaminhoB`): a RAIZ
+ *    deixa de ser `unitsTotal(minStart,maxFinish)` truncado e passa a ser o ROLLUP
+ *    `raizTotal = Σ totaisLeaf` com `raizElapsed[j] += unitsElapsed(folha)` acumulado
+ *    no loop das folhas → `raiz[j] = round(raizElapsed[j] / raizTotal × 100)`. Por
+ *    atividade, `Math.trunc` → `Math.round` (espelha o `+0.5` do Texto10).
+ *  - `client/src/pages/planejamento/ImportarCronograma.tsx`: novo helper
+ *    `detectarFidPorAlias(doc, "% PREVISTO")` que acha o FieldID pela DEFINIÇÃO de
+ *    ExtendedAttribute cujo `<Alias>` é "% PREVISTO" (robusto ao template). A cadeia de
+ *    leitura do previsto (raiz em `parseMSProjectFull` e por atividade em
+ *    `parseMSProjectTasksFromDoc`) passa a resolver `fidPrevisto → Texto10 → Texto6 →
+ *    Texto11` (antes a prioridade era Texto6).
+ *
+ * RESSALVA DE VALIDAÇÃO (importante): o XML de referência usado nesta revisão
+ * (`PLN_816_04_2026_R04_-_BL`) tem StatusDate 31/05 ANTERIOR ao StartDate 01/06, então a
+ * coluna Texto10 vale 0% em TODAS as 1430 tarefas — não dá pra cravar a curva numérica
+ * contra ele. A PARIDADE NUMÉRICA precisa ser re-validada com um XML cujo StatusDate
+ * caia NO MEIO do projeto (com Texto10 > 0). A régua matemática (rollup + round +
+ * fonte=alias) está alinhada à fórmula do Texto10; falta a conferência empírica.
+ *
+ * VALIDAÇÃO (estática): esbuild bundle-check client (ImportarCronograma) e server
+ * (planejamento) — ambos exit 0.
+ *
+ * ─────────────────────────────────────────────────────────────────────────────
+ *
  * Rev. 2643 — **ANÁLISE DE EXPERIÊNCIA · A SEÇÃO "ATESTADOS" PASSA A SER CLICÁVEL: AO
  * CLICAR NUM ATESTADO QUE TENHA ANEXO, O ERP ABRE O DOCUMENTO (PDF/IMAGEM EM PREVIEW
  * INTERNO; OUTROS FORMATOS EM NOVA ABA).**

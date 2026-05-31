@@ -227,14 +227,13 @@ async function regenerarPrevistoSemanasCaminhoB(
   }
   if (semanas.length === 0) return { semanas: 0, folhas: folhas.length };
 
-  // Rev. 2630 — PREVISTO recalculado EXATAMENTE como o MSP (sem ler Texto6):
-  // RAIZ = trunc(tempo útil DECORRIDO do vão da baseline do PROJETO INTEIRO
-  // (minStart→maxFinish) ÷ tempo útil TOTAL desse vão × 100). Reproduz a régua
-  // interna do MSP para a linha-resumo (UID=0), que aplica a fórmula sobre o
-  // PRÓPRIO vão da baseline do resumo — NÃO é média ponderada das folhas (que
-  // distorcia: dava 1/8/14/20/25 em vez do correto 3/6/10/14/18 no PLN_816 R04).
-  // POR ATIVIDADE = trunc(fração de tempo útil da baseline da atividade × 100).
-  // `Math.trunc` (não round) porque a fórmula do MSP usa `int()` (TRUNCA).
+  // Rev. 2644 — PREVISTO = réplica EXATA da coluna "% PREVISTO" (Texto10) do MSP:
+  //   Texto10 = Int(Num Dur (Prev) ÷ PESO DUR (BL) × 100 + 0.5)  → ARREDONDA.
+  // POR ATIVIDADE = round(tempo útil DECORRIDO da baseline ÷ tempo útil TOTAL).
+  // RAIZ = ROLLUP do MSP = round(Σ decorrido das folhas ÷ Σ total das folhas) —
+  // soma das durações das atividades-folha (Número6/Número7 fazem esse rollup no
+  // summary), NÃO o vão início→fim do projeto inteiro. (Decisão do usuário Rev.
+  // 2644: "verdade absoluta = Texto10". Antes: vão inteiro + Math.trunc.)
   // Feriados/almoço/sexta-mais-curta entram via `minutosUteisEntre` (o motor lê
   // `weekDayIntervals` + `exceptions` do calendário do XML). Sem intervalos (XML
   // antigo) cai no day-granular por ms do mesmo vão, preservando backward compat.
@@ -253,26 +252,32 @@ async function regenerarPrevistoSemanasCaminhoB(
 
   const porAtividadeId: Record<string, number[]> = {};
   const raiz: number[] = new Array(semanas.length).fill(0);
-  // RAIZ = vão da baseline do PROJETO INTEIRO (minStart→maxFinish), igual ao MSP.
-  const raizTotal = unitsTotal(minStart, maxFinish);
-  for (let j = 0; j < semanas.length; j++) {
-    const el = unitsElapsed(minStart, wMs[j], maxFinish);
-    raiz[j] = raizTotal > 0 ? Math.max(0, Math.min(100, Math.trunc((el / raizTotal) * 100))) : 0;
-  }
+  // RAIZ = ROLLUP MSP: Σ decorrido das folhas ÷ Σ total das folhas (arredondado).
+  const raizTotal = totaisLeaf.reduce((s, t) => s + t, 0);
+  const raizElapsed: number[] = new Array(semanas.length).fill(0);
 
   for (let i = 0; i < folhas.length; i++) {
     const a = folhas[i];
     const tot = totaisLeaf[i];
     const arr: number[] = new Array(semanas.length).fill(0);
     for (let j = 0; j < semanas.length; j++) {
-      // % PREVISTO por atividade = trunc(fração de TEMPO ÚTIL da baseline da
-      // atividade × 100) = régua do MSP por linha (int(), TRUNCA — não round).
+      const el = unitsElapsed(a._bs, wMs[j], a._bf);
+      raizElapsed[j] += el; // acumula p/ o rollup da raiz (soma das folhas)
+      // % PREVISTO por atividade = round(fração de TEMPO ÚTIL da baseline × 100).
+      // A fórmula do Texto10 é Int(x*100 + 0.5) = ARREDONDA (não trunca):
+      // Num Dur (Prev) ÷ PESO DUR (BL).
       let pct: number;
       if (tot <= 0) pct = wMs[j] >= a._bf ? 100 : 0;
-      else          pct = Math.trunc((unitsElapsed(a._bs, wMs[j], a._bf) / tot) * 100);
+      else          pct = Math.round((el / tot) * 100);
       arr[j] = Math.max(0, Math.min(100, pct));
     }
     porAtividadeId[String(a.id)] = arr;
+  }
+
+  for (let j = 0; j < semanas.length; j++) {
+    raiz[j] = raizTotal > 0
+      ? Math.max(0, Math.min(100, Math.round((raizElapsed[j] / raizTotal) * 100)))
+      : 0;
   }
 
   const snap = {
