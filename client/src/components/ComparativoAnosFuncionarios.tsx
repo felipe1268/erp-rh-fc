@@ -50,7 +50,49 @@ function TabelaMetric({
         <Icon className="h-4 w-4" />
         <span className="text-sm font-semibold">{titulo}</span>
       </div>
-      <div className="overflow-x-auto">
+
+      {/* Mobile (< sm): card por ano — sem rolagem horizontal, fácil de ler */}
+      <div className="sm:hidden divide-y divide-slate-100">
+        {linhas.map(l => {
+          const m = pegar(l);
+          const isRef = l.ano === anoRef;
+          const antTotal = totalById.has(l.ano - 1) ? totalById.get(l.ano - 1)! : null;
+          const vpct = varPct(m.total, antTotal);
+          return (
+            <div key={l.ano} className={`p-3 ${isRef ? "bg-blue-50/60" : ""}`}>
+              <div className="flex items-center justify-between gap-2 mb-2">
+                <div className="flex items-center gap-1.5">
+                  <span className={`text-base font-bold tabular-nums ${isRef ? "text-blue-800" : "text-slate-700"}`}>{l.ano}</span>
+                  {isRef && <span className="text-[9px] uppercase font-bold bg-blue-200 text-blue-800 rounded px-1 py-0.5">ref</span>}
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className={`text-lg font-bold tabular-nums ${isRef ? "text-blue-900" : "text-slate-900"}`}>{m.total}</span>
+                  <VarBadge pct={vpct} lowerIsBetter={lowerIsBetter} />
+                </div>
+              </div>
+              <div className="grid grid-cols-4 gap-1.5">
+                {([["T1", m.t1], ["T2", m.t2], ["T3", m.t3], ["T4", m.t4]] as [string, number][]).map(([lbl, val]) => (
+                  <div key={lbl} className="rounded-lg bg-slate-50 border border-slate-100 px-1.5 py-1.5 text-center">
+                    <div className="text-[10px] uppercase font-semibold text-slate-400 tracking-wide">{lbl}</div>
+                    <div className="text-sm font-semibold tabular-nums text-slate-700 mt-0.5">{val}</div>
+                  </div>
+                ))}
+              </div>
+              <div className="grid grid-cols-2 gap-1.5 mt-1.5">
+                {([["1º Sem", m.s1], ["2º Sem", m.s2]] as [string, number][]).map(([lbl, val]) => (
+                  <div key={lbl} className="rounded-lg bg-slate-50 border border-slate-100 px-1.5 py-1.5 text-center">
+                    <div className="text-[10px] uppercase font-semibold text-slate-400 tracking-wide">{lbl}</div>
+                    <div className="text-sm font-semibold tabular-nums text-slate-700 mt-0.5">{val}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Desktop / tablet (≥ sm): tabela completa */}
+      <div className="hidden sm:block overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="bg-slate-50 text-slate-500 text-[11px] uppercase tracking-wide">

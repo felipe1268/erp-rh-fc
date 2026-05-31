@@ -1,6 +1,32 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2625 — **DASHBOARD DE FUNCIONÁRIOS · A TABELA "CONTRATAÇÕES x
+ * DESLIGAMENTOS — COMPARATIVO ANUAL" (ADMISSÕES E DEMISSÕES) FICA TOTALMENTE
+ * RESPONSIVA NO CELULAR: EM VEZ DE UMA TABELA DE 9 COLUNAS COM ROLAGEM
+ * HORIZONTAL, CADA ANO VIRA UM CARD COM AS INFORMAÇÕES FÁCEIS DE LER.**
+ *
+ * PEDIDO (usuário, com screenshot do Dashboard de Funcionários no iPad):
+ * "Quero a tabela responsivos e fácil acesso as informações".
+ *
+ * IMPLEMENTAÇÃO (SÓ CLIENT — ZERO BACKEND/SCHEMA; R-001/R-007/R-010):
+ *  - `client/src/components/ComparativoAnosFuncionarios.tsx`: o helper interno
+ *    `TabelaMetric` (usado nas duas tabelas: Admissões e Demissões) ganha um
+ *    layout DUPLO. Abaixo de `sm` (celular) renderiza um CARD por ano —
+ *    cabeçalho com o ano (+ badge "ref" no ano de referência), o TOTAL em
+ *    destaque e o `VarBadge` (vs. ano anterior), seguido de um grid de mini-stats
+ *    `grid-cols-4` (T1–T4) e `grid-cols-2` (1º Sem/2º Sem) — sem nenhuma rolagem
+ *    horizontal. A partir de `sm` (tablet/desktop) mantém a tabela completa de
+ *    9 colunas existente, agora dentro de `hidden sm:block overflow-x-auto`.
+ *    Mesmos dados/cálculos (`varPct`, `VarBadge`, destaque do ano-ref) — apenas
+ *    apresentação responsiva. Nenhuma mudança de procedure/tRPC/schema.
+ *  - A tabela "Movimentação mês-a-mês" (`TabelaComparativaAnual.tsx`) já era
+ *    responsiva (cards no mobile + tabela no desktop) — sem alteração.
+ *
+ * VALIDADO: servidor reiniciado e recompilou limpo (tsx watch).
+ *
+ * ---------------------------------------------------------------------------
+ *
  * Rev. 2624 — **DASHBOARD DE AVALIAÇÃO · NOVO RANKING "FUNCIONÁRIOS EM
  * EXPERIÊNCIA" QUE LISTA TODOS OS COLABORADORES EM PERÍODO DE EXPERIÊNCIA
  * (MAIS URGENTES PRIMEIRO) E, EM CADA UM, UM BOTÃO "ANÁLISE" QUE ABRE A FICHA
