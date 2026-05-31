@@ -557,11 +557,12 @@ export default function PlanejamentoLista() {
                   <SelectTrigger className="w-full min-w-0 h-10 bg-white">
                     <SelectValue placeholder="— Selecione uma obra —" className="truncate" />
                   </SelectTrigger>
-                  <SelectContent className="max-w-[var(--radix-select-trigger-width)]">
+                  <SelectContent className="max-w-[min(28rem,var(--radix-select-content-available-width))]">
                     {obrasDisponiveis.map((o: any) => (
-                      <SelectItem key={o.id} value={String(o.id)}>
-                        <span className="truncate block max-w-full">
-                          {o.nome}{o.cliente ? ` · ${o.cliente}` : ""}
+                      <SelectItem key={o.id} value={String(o.id)} className="items-start">
+                        <span className="block min-w-0 whitespace-normal break-words leading-snug">
+                          <span className="font-medium">{o.nome}</span>
+                          {o.cliente ? <span className="text-muted-foreground"> · {o.cliente}</span> : null}
                         </span>
                       </SelectItem>
                     ))}

@@ -1,6 +1,34 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2616 — **PLANEJAMENTO · MODAL "NOVO PROJETO DE PLANEJAMENTO" · O NOME
+ * DA OBRA PASSA A APARECER POR INTEIRO NO DROPDOWN "SELECIONAR OBRA" — ANTES
+ * NOMES LONGOS (EX.: "IGREJA SÃO GERALDO - POITA · SANTUARIO NACIONAL DE
+ * NOSSA SENHORA…") ESTOURAVAM/ERAM CORTADOS NA BORDA DIREITA DO CAMPO.**
+ *
+ * PEDIDO (usuário, screenshot do modal Novo Projeto): "MELHORE A TELA, PARA
+ * QUE O NOME DA OBRA APAREÇA CORRETAMENTE".
+ *
+ * CAUSA-RAIZ: o `SelectItem` (shadcn) embrulha o texto num `<span>` flex
+ * (`*:[span]:last:flex items-center`). O span interno usava `truncate` mas,
+ * por ser um flex-item SEM `min-w-0`, não encolhia — então em vez de truncar
+ * com reticências o texto VAZAVA para fora da borda do dropdown.
+ *
+ * IMPLEMENTAÇÃO (SÓ CLIENT — `client/src/pages/planejamento/PlanejamentoLista.tsx`;
+ * ZERO SERVER/SCHEMA/ALTER/DROP/DELETE; toda a lógica/handlers/estado intactos):
+ *  - Span interno deixa de truncar e passa a QUEBRAR LINHA:
+ *    `block min-w-0 whitespace-normal break-words leading-snug` → o nome
+ *    completo aparece (em 1+ linhas) sem vazar.
+ *  - Nome em `font-medium` e cliente em `text-muted-foreground` (" · cliente")
+ *    para hierarquia visual.
+ *  - `SelectContent` ganha largura confortável
+ *    `max-w-[min(28rem,var(--radix-select-content-available-width))]` (cabe
+ *    nomes longos sem ultrapassar a viewport); `SelectItem` com `items-start`
+ *    pra alinhar o check ao topo quando o nome quebra em 2 linhas.
+ *  - O gatilho fechado (`SelectValue`) segue com `truncate` (1 linha + reticências).
+ *
+ * Validado: esbuild client `PlanejamentoLista.tsx` (exit 0).
+ *
  * Rev. 2615 — **ORÇAMENTO (DETALHE) · TELA MAIS MODERNA E SEM A BARRA DE
  * ROLAGEM HORIZONTAL — ANTES O CABEÇALHO COM OS 5 BOTÕES DE AÇÃO
  * (IMPRIMIR/PDF, ATUALIZAR PLANILHA, VINCULAR COMPOSIÇÕES, ATUALIZAR BASE,
