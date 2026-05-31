@@ -1170,8 +1170,8 @@ export default function Ferias() {
                     <SelectItem value="alfa_desc">Nome — Z → A</SelectItem>
                     <SelectItem value="venc_asc">Vencimento — vence primeiro</SelectItem>
                     <SelectItem value="venc_desc">Vencimento — vence por último</SelectItem>
-                    <SelectItem value="inicio_asc">Início Gozo — mais cedo</SelectItem>
-                    <SelectItem value="inicio_desc">Início Gozo — mais tarde</SelectItem>
+                    <SelectItem value="inicio_asc">Início Gozo — inicia primeiro</SelectItem>
+                    <SelectItem value="inicio_desc">Início Gozo — inicia por último</SelectItem>
                     <SelectItem value="fim_asc">Fim Gozo — mais cedo</SelectItem>
                     <SelectItem value="fim_desc">Fim Gozo — mais tarde</SelectItem>
                     <SelectItem value="pgto_asc">Pagamento — mais cedo</SelectItem>

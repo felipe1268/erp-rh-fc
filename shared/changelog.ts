@@ -1,6 +1,25 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2653 — **FÉRIAS / LISTA DE FÉRIAS · A ORDENAÇÃO POR "INÍCIO DO GOZO" GANHA
+ * RÓTULOS MAIS CLAROS — "INICIA PRIMEIRO" / "INICIA POR ÚLTIMO" — ESPELHANDO O PADRÃO
+ * DE "VENCIMENTO" ("VENCE PRIMEIRO/POR ÚLTIMO").**
+ *
+ * PEDIDO (usuário, print IMG_1472): "Quero um filtro de início do gozo tbm para
+ * organizar quem inicia primeiro e quem inicia por último". A capacidade já existia
+ * desde a Rev. 2652 (`inicio_asc`/`inicio_desc` + faixa de data Início Gozo de/até),
+ * mas o print do usuário era da versão PUBLICADA (ainda sem a Rev. 2652) e os rótulos
+ * diziam "mais cedo"/"mais tarde". Esta revisão alinha a nomenclatura ao vocabulário
+ * do usuário e ao padrão do "Vencimento".
+ *
+ * FIX (SÓ CLIENT/UI — RÓTULO; R-001/R-007/R-010 — ZERO SCHEMA/SERVER):
+ * `client/src/pages/Ferias.tsx` — no Select de ordenação, os itens `inicio_asc`/
+ * `inicio_desc` passam de "Início Gozo — mais cedo/mais tarde" para
+ * "Início Gozo — inicia primeiro/inicia por último". Lógica de ordenação e filtro
+ * de faixa (inicioDe/inicioAte) inalteradas.
+ *
+ * Validado (estático): `pnpm build` exit 0.
+ *
  * Rev. 2652 — **FÉRIAS / LISTA DE FÉRIAS · A TELA GANHA ORDENAÇÃO AMPLIADA E NOVOS
  * FILTROS — O USUÁRIO AGORA ORGANIZA POR NOME, VENCIMENTO, INÍCIO DO GOZO, FIM DO GOZO,
  * PAGAMENTO, VALOR TOTAL E DIAS; E FILTRA POR CARGO, PERÍODO AQUISITIVO (1º / 2º+) E
