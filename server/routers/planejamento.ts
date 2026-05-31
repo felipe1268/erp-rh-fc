@@ -3105,6 +3105,47 @@ export const planejamentoRouter = router({
       if (input.projetoFinish) patch.dataTerminoContratual = input.projetoFinish as any;
       await db.update(planejamentoProjetos).set(patch)
         .where(eq(planejamentoProjetos.id, input.projetoId));
+
+      // ── Rev. 2646 — PROPAGAÇÃO DO FIX DA Rev. 2645 A TODOS OS PROJETOS ──────
+      // O calendário recém-parseado do XML (já SEM auto-injeção de feriados
+      // móveis a partir da Rev. 2645) acabou de sobrescrever o `calendarioJson`.
+      // Mas a curva "% PREVISTO" (Caminho B) só era regenerada no
+      // `salvarAtividades` (cadastro/substituir) — então projetos ANTIGOS
+      // continuavam exibindo a curva ~1% baixa (Corpus Christi injetado) até um
+      // reimport MANUAL do cronograma inicial. Como `salvarMetadadosMSProject`
+      // roda em TODO upload (inclusive o SEMANAL), regeneramos o previsto AQUI:
+      // cada projeto antigo se AUTO-CURA no próximo envio do XML, com o
+      // calendário limpo. É UPDATE da coluna JSON via função do app (NÃO é
+      // ALTER/DROP/DELETE — R-001/R-007/R-010 OK) e idempotente (a baseline é
+      // imutável dentro da revisão → mesma curva a cada upload). Só dispara
+      // quando veio calendário novo (= é um import real, não chamada avulsa).
+      if (input.calendarioJson) {
+        try {
+          const revs = await db.select({
+            id: planejamentoRevisoes.id,
+            status: planejamentoRevisoes.status,
+          }).from(planejamentoRevisoes)
+            .where(eq(planejamentoRevisoes.projetoId, input.projetoId))
+            .orderBy(asc(planejamentoRevisoes.numero));
+          // ALVO = a MESMA revisão ativa do client (última aprovada → 1ª revisão),
+          // espelhando o self-heal de leitura (Rev. 2599) e o salvarAtividades.
+          const aprovadas = (revs as any[]).filter(r => r.status === "aprovada");
+          const alvo = aprovadas[aprovadas.length - 1] ?? (revs as any[])[0];
+          if (alvo?.id) {
+            const fonte = await getPrevistoFonteByProjeto(db, input.projetoId);
+            if (fonte === "manual") {
+              await regenerarPrevistoManual(db, input.projetoId, alvo.id);
+            } else {
+              await regenerarPrevistoSemanasCaminhoB(db, input.projetoId, alvo.id);
+            }
+            console.log(`[salvarMetadadosMSProject→regenerarPrevisto] projeto=${input.projetoId} rev=${alvo.id} fonte=${fonte} (Rev. 2646 auto-cura).`);
+          }
+        } catch (e: any) {
+          // Nunca quebra o save de metadados por causa da regeneração.
+          console.error(`[salvarMetadadosMSProject→regenerarPrevisto] projeto ${input.projetoId}:`, e?.message || e);
+        }
+      }
+
       return { success: true, gravou: { statusDate: input.statusDate, statusDateIso: input.statusDateIso, calendar: !!input.calendarioJson, projetoStart: input.projetoStart, projetoFinish: input.projetoFinish } };
     }),
 

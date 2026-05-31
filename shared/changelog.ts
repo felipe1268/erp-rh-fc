@@ -1,6 +1,50 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2646 — **PLANEJAMENTO · O FIX DA Rev. 2645 (PARAR DE INJETAR FERIADOS MÓVEIS)
+ * PASSA A SE PROPAGAR AUTOMATICAMENTE A TODOS OS PROJETOS — ANTIGOS E NOVOS. A CURVA
+ * "% PREVISTO" AGORA REGENERA EM TODO UPLOAD DO XML (INCLUSIVE O SEMANAL), NÃO MAIS
+ * SÓ NO CADASTRO/SUBSTITUIR. O CALENDÁRIO DO XML = VERDADE ABSOLUTA, EM TODA SEMANA.**
+ *
+ * PEDIDO (usuário): "deu certo; propaga isso para todos projetos antigos e novos —
+ * este será nosso padrão agora; grava na regra de ouro e apaga as regras que digam
+ * algo diferente". Validação prática: reimportando o cronograma inicial do projeto
+ * IGREJA SÃO GERALDO (PLN_816 R04), a semana 2 passou de 8% (errado) para 9% =
+ * Texto10 da raiz (UID=0) do XML semanal = PercentComplete 9% → variação 0%, equilibrado.
+ *
+ * CAUSA-RAIZ DO RESÍDUO (por que projetos antigos continuavam 1% baixos mesmo após a
+ * Rev. 2645): o fix da Rev. 2645 é no PARSER do client (deixou de injetar Corpus
+ * Christi & cia no `calendarioJson`). Mas a curva "% Previsto" (Caminho B) só era
+ * regenerada no `salvarAtividades` (cadastro/substituir). O upload SEMANAL roda
+ * `salvarMetadadosMSProject` (que regrava o `calendarioJson` limpo) + 
+ * `importarAvancosDoArquivo` (Realizado), mas NUNCA regenerava o previsto — então a
+ * curva ~1% baixa (calendário antigo com Corpus injetado) persistia no banco até um
+ * reimport MANUAL do cronograma inicial. A regra "Avanço semanal NÃO regenera
+ * (baseline imutável)" exatamente impedia a auto-cura.
+ *
+ * FIX (ADITIVO/LEITURA; R-001/R-007/R-010 — ZERO ALTER/DROP/DELETE):
+ *  - `server/routers/planejamento.ts` (`salvarMetadadosMSProject`): após regravar o
+ *    `calendarioJson` (que acontece em TODO upload, inclusive o semanal), passa a
+ *    REGENERAR o previsto. Resolve a revisão ativa (última aprovada → 1ª revisão,
+ *    espelhando o self-heal de leitura da Rev. 2599 e o `salvarAtividades`), respeita
+ *    a fonte global (`manual` → `regenerarPrevistoManual`; senão Caminho B/motor), e
+ *    grava a nova curva. Só dispara quando veio `calendarioJson` (= import real).
+ *    Idempotente: a baseline é imutável dentro da revisão, então re-rodar a cada
+ *    semana produz a MESMA curva. Em try/catch — nunca quebra o save de metadados.
+ *
+ * EFEITO ("propagação"): como o calendário limpo (pós-Rev. 2645) é regravado a cada
+ * upload e agora regenera o previsto, cada projeto ANTIGO se AUTO-CURA no PRÓXIMO
+ * envio do XML semanal, sem reimport manual. Projetos NOVOS já nascem corretos.
+ * RESSALVA: projetos DORMENTES (sem mais uploads) só se corrigem com um reimport do
+ * cronograma inicial (a auto-cura é disparada pelo upload).
+ *
+ * REGRA DE OURO ATUALIZADA + REGRA REVOGADA: a Regra de Ouro do Caminho B passa a
+ * dizer que o previsto regenera em TODO upload com o calendário do XML como verdade
+ * absoluta. A regra anterior "Snapshot regenerado SÓ no salvarAtividades / Avanço
+ * semanal NÃO regenera (baseline imutável dentro da revisão)" foi REMOVIDA do
+ * `replit.md` por contradizer este novo padrão. Validado (estático): esbuild
+ * client+server exit 0.
+ *
  * Rev. 2645 — **PLANEJAMENTO · O "% PREVISTO" VOLTA A BATER 100% COM A COLUNA
  * "% PREVISTO" (Texto10) DO MS PROJECT: O ERP PARA DE AUTO-INJETAR FERIADOS MÓVEIS
  * (CARNAVAL/SEXTA-FEIRA SANTA/CORPUS CHRISTI) NO CALENDÁRIO IMPORTADO. O CALENDÁRIO

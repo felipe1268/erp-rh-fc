@@ -5,6 +5,24 @@ description: Why planejamento %PREVISTO must use baseline WITH TIME + minute-by-
 
 # %PREVISTO = réplica da coluna "% PREVISTO" (Texto10) do MSP
 
+## ⚙️ PADRÃO ATUAL (Rev. 2646, 31/05/2026): o "% Previsto" REGENERA EM TODO UPLOAD do XML — REVOGA "regenera só no salvarAtividades"
+
+O snapshot da curva "% Previsto" passa a ser regenerado em TODO import do XML —
+inclusive o upload SEMANAL — e não mais só no `salvarAtividades` (cadastro/substituir).
+O gancho fica em `salvarMetadadosMSProject` (server): ele já regrava o `calendarioJson`
+em todo upload, então depois do `db.update` do patch ele resolve a revisão ativa
+(última aprovada → 1ª, igual ao self-heal de leitura) + respeita a fonte global
+(manual/motor) + regenera. Só dispara se veio `calendarioJson`; em try/catch (nunca
+quebra o save). É IDEMPOTENTE (baseline imutável dentro da revisão = mesma curva).
+
+**Why:** fixes no PARSER do client (ex.: Rev. 2645 parou de injetar feriados móveis)
+só corrigem o `calendarioJson` gravado — mas a CURVA persistida ficava velha até um
+reimport MANUAL do cronograma inicial, porque o avanço semanal não regenerava. Com
+isso, projetos ANTIGOS se AUTO-CURAM no próximo upload semanal; novos já nascem certos.
+**RESSALVA:** projetos dormentes (sem novos uploads) ainda exigem reimport manual.
+Esta regra REVOGA o trecho histórico abaixo "Snapshot é congelado no salvarAtividades;
+avanço semanal não regenera (baseline imutável)".
+
 ## VERDADE ATUAL (Rev. 2644, 31/05/2026) — substitui as regras de raiz=vão + trunc abaixo
 
 Decisão do usuário: o "% PREVISTO" do cronograma inicial deve ser a **réplica EXATA da
