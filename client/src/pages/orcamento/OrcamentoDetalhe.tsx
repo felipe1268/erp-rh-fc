@@ -561,10 +561,10 @@ function OrcamentoDetalheInner({ routeId }: { routeId: number }) {
 
   return (
     <DashboardLayout>
-      <div className="p-4">
+      <div className="p-4 md:p-6 max-w-full overflow-x-hidden">
 
         {/* ── Navegação rápida de abas no topo ── */}
-        <div className="flex gap-1 mb-4">
+        <div className="flex flex-wrap gap-1.5 mb-5">
           <button
             onClick={() => { setActivePage("orcamento"); setActiveTab("eap"); }}
             className={`px-5 py-2 text-sm font-bold rounded-md transition-all ${
@@ -614,13 +614,13 @@ function OrcamentoDetalheInner({ routeId }: { routeId: number }) {
         </div>
 
         {/* ── Cabeçalho ── */}
-        <div className="flex items-start justify-between mb-5">
-          <div>
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between mb-5">
+          <div className="min-w-0">
             <Button variant="ghost" size="sm" className="mb-2 -ml-2 text-muted-foreground"
               onClick={() => navigate("/orcamento/lista")}>
               <ArrowLeft className="h-4 w-4 mr-1" /> Lista
             </Button>
-            <h1 className="text-xl font-bold tracking-tight">{orc.codigo}</h1>
+            <h1 className="text-2xl font-bold tracking-tight">{orc.codigo}</h1>
             <div className="flex gap-3 mt-1 text-xs text-muted-foreground flex-wrap items-center">
               {orc.revisao && <span className="text-blue-600 font-mono font-medium">{orc.revisao}</span>}
               {orc.cliente && <span>Cliente: {orc.cliente}</span>}
@@ -634,7 +634,7 @@ function OrcamentoDetalheInner({ routeId }: { routeId: number }) {
             </div>
           </div>
           {/* Botões de ação */}
-          <div className="flex gap-2 shrink-0">
+          <div className="flex flex-wrap gap-2 lg:justify-end lg:shrink-0">
             <Button size="sm" variant="outline" className="gap-2"
               onClick={() => window.open(`/orcamento/${id}/print?v=${versao}&mp=${localMetaPerc.toFixed(4)}`, "_blank")}>
               <Printer className="h-4 w-4" /> Imprimir / PDF

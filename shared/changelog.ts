@@ -1,6 +1,38 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2615 — **ORÇAMENTO (DETALHE) · TELA MAIS MODERNA E SEM A BARRA DE
+ * ROLAGEM HORIZONTAL — ANTES O CABEÇALHO COM OS 5 BOTÕES DE AÇÃO
+ * (IMPRIMIR/PDF, ATUALIZAR PLANILHA, VINCULAR COMPOSIÇÕES, ATUALIZAR BASE,
+ * EXCLUIR) ESTOURAVA A LARGURA E FORÇAVA SCROLL HORIZONTAL NO IPAD/TELAS
+ * MENORES.**
+ *
+ * PEDIDO (usuário, screenshot da tela Orçamento › BDI): "QUERO A TELA TBM
+ * MAIS MODERNA E SEM PRE PRECISAR DA BARRA DE ROLAGEM".
+ *
+ * CAUSA-RAIZ: o cabeçalho era um `flex items-start justify-between` com a
+ * barra de botões em `flex gap-2 shrink-0` — como os botões não podiam
+ * encolher nem quebrar linha, a soma das larguras estourava o container e
+ * gerava a barra de rolagem horizontal no nível da página. (As tabelas
+ * largas da BDI já têm wrappers `overflow-x-auto` próprios e NÃO eram a
+ * causa.)
+ *
+ * IMPLEMENTAÇÃO (SÓ CLIENT — `client/src/pages/orcamento/OrcamentoDetalhe.tsx`;
+ * ZERO SERVER/SCHEMA/ALTER/DROP/DELETE; toda a lógica/handlers/mutations/
+ * estado intactos):
+ *  - Container externo ganha `md:p-6 max-w-full overflow-x-hidden` (mais
+ *    respiro + trava o scroll horizontal da página; as tabelas internas
+ *    seguem rolando no próprio `overflow-x-auto`).
+ *  - Cabeçalho passa a `flex flex-col gap-4 lg:flex-row lg:items-start
+ *    lg:justify-between` → em telas menores os botões descem para baixo do
+ *    título em vez de estourar a largura.
+ *  - Barra de botões passa de `flex gap-2 shrink-0` para `flex flex-wrap
+ *    gap-2 lg:justify-end lg:shrink-0` → quebra linha quando não couber.
+ *  - Polimento visual: nav de abas `flex-wrap gap-1.5`, título do código
+ *    `text-2xl`.
+ *
+ * Validado: esbuild client `OrcamentoDetalhe.tsx` (exit 0).
+ *
  * Rev. 2614 — **ORÇAMENTOS · A LISTA PASSA A EXIBIR O NOME DA OBRA VINCULADA
  * (CADASTRO) EM CADA CARD — ANTES SÓ MOSTRAVA CÓDIGO, DESCRIÇÃO, CLIENTE E
  * LOCAL; A OBRA SELECIONADA NO CADASTRO NÃO APARECIA NA TELA.**
