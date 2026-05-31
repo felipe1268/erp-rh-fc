@@ -1,6 +1,42 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2634 — **RH & DP · "ANÁLISE DE EXPERIÊNCIA" VIRA TELA FULL-SCREEN ALTAMENTE
+ * MODERNA E RESPONSIVA, COM INDICADORES CLICÁVEIS QUE SALTAM DIRETO PARA O DETALHE
+ * (RASTREIO 1-CLIQUE).**
+ *
+ * PEDIDO (usuário): "Quero tela full screen altamente moderna com todos os
+ * indicadores responsivos e de fácil rastreio das informações que ele mostrar."
+ * (anexou print do modal "Análise de Experiência" atual, estreito em max-w-3xl).
+ *
+ * IMPLEMENTAÇÃO (SÓ CLIENT, ZERO BACKEND/SCHEMA; R-001/R-007/R-010):
+ *  - `client/src/components/AnaliseExperiencia.tsx` reescrito mantendo EXATAMENTE
+ *    os mesmos bindings de dados (`employees.analiseExperiencia`) e a mesma
+ *    assinatura de props — nenhuma mudança de API/rota/tRPC.
+ *  - O `<DialogContent>` agora abre em FULL-SCREEN: `resizable={false}` +
+ *    `showCloseButton={false}` + override de classes (`left-0 top-0 h-[100dvh]
+ *    w-screen max-w-none translate-x-0 translate-y-0 rounded-none p-0`) com layout
+ *    em grid `grid-rows-[auto_1fr]` (header fixo + corpo rolável).
+ *  - HEADER fixo em gradiente institucional (#1B2A4A→#243860) com avatar/nome,
+ *    pill do veredito (score + recomendação) e botão fechar próprio (X).
+ *  - HERO: card grande do veredito (gauge 32→40, barra de progresso do período
+ *    decorrido/restante colorida pelo nível) + card lateral "Por que esta
+ *    recomendação" (motivos).
+ *  - KPIs: grade responsiva 2/3/6 colunas (Assiduidade, Faltas, Atrasos,
+ *    Advertências, Atestados, Acidentes) em cards `rounded-2xl` com tom de cor por
+ *    severidade. RASTREIO: cada KPI com detalhe é CLICÁVEL e faz `scrollIntoView`
+ *    suave até a seção correspondente (ids `sec-cartao`/`sec-faltas`/`sec-atrasos`/
+ *    `sec-advertencias`/`sec-atestados`/`sec-acidentes`) via ref do corpo rolável.
+ *  - Período (início/fim1/fim2), aviso honesto de cartão ausente/incompleto e o
+ *    bloco de critério preservados. Tabela do cartão de ponto ganha cabeçalho
+ *    fixo/zebra e bordas arredondadas; lista de detalhes vai para grid 2-col no
+ *    desktop. Mantido o fallback de cards no mobile (`sm:hidden`).
+ *  - `Section` aceita `id` + `scroll-mt-4` para ancorar o rastreio.
+ *
+ * VALIDADO: esbuild transform-check limpo do componente (exit 0). App é
+ * login-gated — verificação visual depende de login; bindings inalterados garantem
+ * paridade funcional com a versão anterior.
+ *
  * Rev. 2633 — **PLANEJAMENTO · "% PREVISTO" GANHA MODO MANUAL: NOVA ABA "PREVISTO"
  * ONDE O ENGENHEIRO SOBE 1 XML POR SEMANA E O ERP LÊ A COLUNA "% CONCLUÍDA"
  * (PercentComplete) DA RAIZ E DE CADA ATIVIDADE COMO O VALOR PREVISTO — SEM
