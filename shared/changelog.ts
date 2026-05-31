@@ -1,6 +1,46 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2624 — **DASHBOARD DE AVALIAÇÃO · NOVO RANKING "FUNCIONÁRIOS EM
+ * EXPERIÊNCIA" QUE LISTA TODOS OS COLABORADORES EM PERÍODO DE EXPERIÊNCIA
+ * (MAIS URGENTES PRIMEIRO) E, EM CADA UM, UM BOTÃO "ANÁLISE" QUE ABRE A FICHA
+ * TÉCNICA E DETALHADA DO CONTRATO (REUSA A ANÁLISE DA REV. 2622).**
+ *
+ * PEDIDO (usuário, com screenshot do dashboard de Avaliação Inteligente):
+ * "Crie um ranking de todos os funcionários em experiência para uma análise
+ * técnica e detalhada deles".
+ *
+ * IMPLEMENTAÇÃO (ADITIVO — SOMENTE SELECT/LEITURA; ZERO ALTER/DROP/DELETE;
+ * R-001/R-007/R-010):
+ *  - **Backend** `server/routers/avaliacaoFuncionarios.ts`: `carregarInputs`
+ *    passa a trazer no SELECT de `employees` os campos do contrato de
+ *    experiência (`experienciaTipo`/`experienciaStatus`/`experienciaInicio`/
+ *    `experienciaProrrogadoEm`). Novo helper `calcularExperiencia(emp)` (cálculo
+ *    em memória, ZERO SQL) usa a MESMA régua do `home.getData` /
+ *    `employees.analiseExperiencia`: em experiência = `experienciaTipo` setado
+ *    E status != `efetivado`/`desligado_experiencia`; calcula janela (30_30 →
+ *    30/60d, 45_45 → 45/90d, dia 1 = início, 2º período se prorrogado), dias
+ *    restantes, dias decorridos e urgência (vencido/urgente ≤7d/atenção ≤30d).
+ *    Usa `new Date()` (hora corrente) como referência de "hoje" — MESMA régua
+ *    do `home.getData` — p/ que diasRestantes/urgência/ordenação batam EXATO
+ *    com a lista de experiências do Home (fonte de verdade).
+ *    `montarLinhaScore` anexa `emExperiencia` (bool) + `experiencia` (objeto ou
+ *    null) a CADA linha do ranking — sem query extra (reusa os employees já
+ *    carregados). Nenhuma mudança nos demais retornos.
+ *  - **Frontend** `client/src/pages/dashboards/DashAvaliacaoFuncionarios.tsx`:
+ *    novo `useMemo` `emExperiencia` (filtra `r.emExperiencia` e ordena por dias
+ *    restantes — mais urgentes primeiro); nova Card "Funcionários em
+ *    Experiência" (tabela responsiva: #, funcionário+foto, função, período
+ *    [30+30/45+45/2º período + Nº dia], prazo com badge colorido por urgência,
+ *    score circle e botão roxo "Análise" com ícone `FileBarChart`). O botão
+ *    seta `analiseEmpId` e abre o `<AnaliseExperiencia>` (componente da Rev.
+ *    2622, reusado) que cruza assiduidade/faltas, atrasos, advertências,
+ *    atestados, acidentes e histórico do período → veredito sugerido
+ *    (efetivar/ressalvas/prorrogar/desligar). Empty-state quando não há
+ *    ninguém em experiência. Disclaimer "decisão sempre humana" no subtítulo.
+ *
+ * VALIDADO: servidor reiniciado e recompilou limpo (tsx watch).
+ *
  * Rev. 2623 — **DASHBOARD DE AVALIAÇÃO · MODAL "SCORE DETALHADO" (AVALIAÇÃO
  * 360°, 6 DIMENSÕES) GANHA LAYOUT MAIS LIMPO E TOTALMENTE RESPONSIVO PARA
  * iPad/CELULAR, COM OS DADOS PERTINENTES MAIS FÁCEIS DE LOCALIZAR.**

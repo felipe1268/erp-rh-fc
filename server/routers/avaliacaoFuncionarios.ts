@@ -70,6 +70,61 @@ function mesRefInicio(meses: number): string {
 }
 
 /**
+ * Rev. 2624 — Calcula a situação do contrato de experiência de um colaborador
+ * (MESMA régua do home.getData / employees.analiseExperiencia): em experiência
+ * = `experienciaTipo` setado E status != efetivado/desligado_experiencia.
+ * Devolve `null` quando o colaborador NÃO está em experiência.
+ * SOMENTE CÁLCULO EM MEMÓRIA — zero SQL (R-001/R-007/R-010).
+ */
+function calcularExperiencia(emp: any): {
+  status: string;
+  tipo: string;
+  inicio: string;
+  fim1: string;
+  fim2: string;
+  diasRestantes: number;
+  diasDecorridos: number;
+  urgencia: 'normal' | 'atencao' | 'urgente' | 'vencido';
+  prorrogadoEm: string | null;
+} | null {
+  const tipo: string | null = emp.experienciaTipo || null;
+  const status: string = emp.experienciaStatus || 'em_experiencia';
+  if (!tipo || status === 'efetivado' || status === 'desligado_experiencia') return null;
+  const inicioRaw = emp.experienciaInicio || emp.dataAdmissao;
+  if (!inicioRaw) return null;
+  const inicio = String(inicioRaw).split('T')[0];
+
+  const dias1 = tipo === '30_30' ? 30 : 45;
+  const dias2 = tipo === '30_30' ? 60 : 90;
+  const dtInicio = new Date(inicio + 'T12:00:00');
+  if (isNaN(dtInicio.getTime())) return null;
+  // CLT: dia do início conta como dia 1.
+  const dtFim1 = new Date(dtInicio); dtFim1.setDate(dtFim1.getDate() + dias1 - 1);
+  const dtFim2 = new Date(dtInicio); dtFim2.setDate(dtFim2.getDate() + dias2 - 1);
+  const fim1 = dtFim1.toISOString().split('T')[0];
+  const fim2 = dtFim2.toISOString().split('T')[0];
+
+  const isProrrogado = status === 'prorrogado';
+  // Rev. 2624 — MESMA referência de "hoje" do home.getData (hora corrente, sem
+  // normalizar p/ meio-dia) p/ que diasRestantes/urgência e a ordenação batam
+  // EXATAMENTE com a lista de experiências do Home (fonte de verdade).
+  const hoje = new Date();
+  const fimRelevante = isProrrogado ? dtFim2 : dtFim1;
+  const diasRestantes = Math.ceil((fimRelevante.getTime() - hoje.getTime()) / (1000 * 60 * 60 * 24));
+  const diasDecorridos = Math.max(0, Math.ceil((hoje.getTime() - dtInicio.getTime()) / (1000 * 60 * 60 * 24)) + 1);
+
+  let urgencia: 'normal' | 'atencao' | 'urgente' | 'vencido' = 'normal';
+  if (diasRestantes < 0) urgencia = 'vencido';
+  else if (diasRestantes <= 7) urgencia = 'urgente';
+  else if (diasRestantes <= 30) urgencia = 'atencao';
+
+  return {
+    status, tipo, inicio, fim1, fim2, diasRestantes, diasDecorridos, urgencia,
+    prorrogadoEm: emp.experienciaProrrogadoEm ? String(emp.experienciaProrrogadoEm).split('T')[0] : null,
+  };
+}
+
+/**
  * Carrega TODOS os inputs (4 categorias) para TODOS os employees ativos
  * de uma companyId em UMA passada de SQL por categoria.
  */
@@ -92,6 +147,13 @@ async function carregarInputs(companyId: number, obraId: number | null | undefin
     funcao: employees.funcao,
     dataAdmissao: employees.dataAdmissao,
     fotoUrl: employees.fotoUrl,
+    // Rev. 2624 — campos do contrato de experiência p/ destacar e analisar
+    // tecnicamente os colaboradores em período de experiência (mesma régua do
+    // home.getData: experienciaTipo setado + status != efetivado/desligado).
+    experienciaTipo: employees.experienciaTipo,
+    experienciaStatus: employees.experienciaStatus,
+    experienciaInicio: employees.experienciaInicio,
+    experienciaProrrogadoEm: employees.experienciaProrrogadoEm,
   }).from(employees).where(and(...empConds));
 
   if (emps.length === 0) return { emps: [], freqMap: new Map(), saudeMap: new Map(), discMap: new Map(), segMap: new Map(), capMap: new Map(), lealMap: new Map() };
@@ -293,6 +355,7 @@ function montarLinhaScore(
     lealdade: scoreLealdade(l),
   };
   const geral = scoreGeral(sub, pesos);
+  const experiencia = calcularExperiencia(emp); // Rev. 2624 — null quando NÃO em experiência
   return {
     employeeId: emp.id,
     nome: emp.nome,
@@ -302,6 +365,8 @@ function montarLinhaScore(
     sub,
     geral,
     classificacao: classificar(geral),
+    emExperiencia: experiencia != null, // Rev. 2624
+    experiencia, // Rev. 2624 — situação do contrato (ou null)
     inputs: { frequencia: f, saude: s, disciplina: d, seguranca: g, capacitacao: c, lealdade: l },
   };
 }

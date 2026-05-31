@@ -21,10 +21,13 @@ import { Button } from "@/components/ui/button";
 import {
   Trophy, AlertTriangle, Users, ClipboardCheck, Loader2, Info, ShieldCheck,
   Heart, Clock, Gavel, ChevronRight, Award, Search, GraduationCap, History,
+  FileBarChart, CalendarClock,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 // Rev. 2509 — foto do funcionário ao lado do nome (click amplia via PersonPhoto)
 import { PersonPhoto } from "@/components/PersonPhoto";
+// Rev. 2624 — análise técnica detalhada do contrato de experiência (Rev. 2622)
+import AnaliseExperiencia from "@/components/AnaliseExperiencia";
 
 const PERIODOS = [
   { label: "Últimos 3 meses", value: 3 },
@@ -82,6 +85,7 @@ export default function DashAvaliacaoFuncionarios() {
   const [periodoMeses, setPeriodoMeses] = useState(6);
   const [busca, setBusca] = useState("");
   const [drillId, setDrillId] = useState<number | null>(null);
+  const [analiseEmpId, setAnaliseEmpId] = useState<number | null>(null); // Rev. 2624
 
   const { data: resumo, isLoading: loadingResumo } = trpc.avaliacaoFuncionarios.getResumo.useQuery(
     { companyId, periodoMeses },
@@ -98,6 +102,15 @@ export default function DashAvaliacaoFuncionarios() {
 
   const top10 = useMemo(() => (ranking || []).slice(0, 10), [ranking]);
   const bottom10 = useMemo(() => [...(ranking || [])].sort((a, b) => a.geral - b.geral).slice(0, 10), [ranking]);
+  // Rev. 2624 — colaboradores em período de experiência, ordenados por dias
+  // restantes do contrato (mais urgentes primeiro) p/ análise técnica detalhada.
+  const emExperiencia = useMemo(
+    () =>
+      (ranking || [])
+        .filter((r: any) => r.emExperiencia && r.experiencia)
+        .sort((a: any, b: any) => a.experiencia.diasRestantes - b.experiencia.diasRestantes),
+    [ranking],
+  );
   const buscaFiltrada = useMemo(() => {
     if (!ranking) return [];
     const q = busca.trim().toLowerCase();
@@ -240,6 +253,101 @@ export default function DashAvaliacaoFuncionarios() {
               accent="red"
             />
           </div>
+        )}
+
+        {/* Rev. 2624 — Funcionários em Experiência: ranking dos colaboradores em
+            período de experiência (mais urgentes primeiro), cada linha abre a
+            ANÁLISE TÉCNICA E DETALHADA do contrato (cruza assiduidade, atrasos,
+            advertências, atestados, acidentes e histórico → veredito sugerido). */}
+        {!loading && ranking && (
+          <Card className="border-violet-200">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <CalendarClock className="h-4 w-4 text-violet-600" />
+                Funcionários em Experiência
+                <Badge variant="secondary" className="ml-1">{emExperiencia.length}</Badge>
+              </CardTitle>
+              <p className="text-xs text-slate-500 mt-1">
+                Clique em "Análise" para a ficha técnica completa do período (subsídio para efetivar, prorrogar ou desligar — decisão sempre humana).
+              </p>
+            </CardHeader>
+            <CardContent className="p-0">
+              {emExperiencia.length === 0 ? (
+                <p className="text-sm text-slate-500 px-4 sm:px-6 pb-4">Nenhum colaborador em período de experiência nesta empresa.</p>
+              ) : (
+                <div className="overflow-auto max-h-[480px]">
+                  <Table>
+                    <TableHeader className="sticky top-0 bg-white z-10">
+                      <TableRow>
+                        <TableHead className="w-10">#</TableHead>
+                        <TableHead>Funcionário</TableHead>
+                        <TableHead className="hidden sm:table-cell">Função</TableHead>
+                        <TableHead className="text-center whitespace-nowrap">Período</TableHead>
+                        <TableHead className="text-center">Prazo</TableHead>
+                        <TableHead className="text-center">Score</TableHead>
+                        <TableHead className="text-right pr-4">Análise</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {emExperiencia.map((r: any, i: number) => {
+                        const ex = r.experiencia;
+                        const venc = ex.urgencia === 'vencido';
+                        const urg = ex.urgencia === 'urgente';
+                        const aten = ex.urgencia === 'atencao';
+                        const prazoCor = venc
+                          ? "bg-red-100 text-red-800 border-red-300"
+                          : urg
+                          ? "bg-orange-100 text-orange-800 border-orange-300"
+                          : aten
+                          ? "bg-amber-100 text-amber-800 border-amber-300"
+                          : "bg-emerald-100 text-emerald-800 border-emerald-300";
+                        const prazoTxt = venc
+                          ? `Vencido há ${Math.abs(ex.diasRestantes)}d`
+                          : ex.diasRestantes === 0
+                          ? "Vence hoje"
+                          : `Faltam ${ex.diasRestantes}d`;
+                        return (
+                          <TableRow key={r.employeeId} className="hover:bg-violet-50/40">
+                            <TableCell className="text-slate-500 tabular-nums">{i + 1}</TableCell>
+                            <TableCell className="font-medium">
+                              <div className="flex items-center gap-2">
+                                <PersonPhoto src={r.fotoUrl} alt={r.nome} size="sm" caption={r.funcao || undefined} />
+                                <div className="min-w-0">
+                                  <p className="text-sm text-slate-900 truncate">{r.nome}</p>
+                                  <p className="text-xs text-slate-500 sm:hidden truncate">{r.funcao || '—'}</p>
+                                </div>
+                              </div>
+                            </TableCell>
+                            <TableCell className="hidden sm:table-cell text-slate-600 text-sm">{r.funcao || '—'}</TableCell>
+                            <TableCell className="text-center text-xs whitespace-nowrap">
+                              <Badge variant="outline" className="font-mono text-[10px]">
+                                {ex.status === 'prorrogado' ? '2º período' : ex.tipo === '45_45' ? '45+45' : '30+30'}
+                              </Badge>
+                              <p className="text-[11px] text-slate-500 mt-0.5 tabular-nums">{ex.diasDecorridos}º dia</p>
+                            </TableCell>
+                            <TableCell className="text-center">
+                              <Badge variant="outline" className={`${prazoCor} whitespace-nowrap text-[11px]`}>{prazoTxt}</Badge>
+                            </TableCell>
+                            <TableCell className="text-center"><ScoreCircle value={r.geral} size={40} /></TableCell>
+                            <TableCell className="text-right pr-4">
+                              <Button
+                                size="sm"
+                                onClick={() => setAnaliseEmpId(r.employeeId)}
+                                className="bg-violet-600 hover:bg-violet-700 text-white gap-1.5 h-8"
+                              >
+                                <FileBarChart className="h-3.5 w-3.5" />
+                                <span className="hidden sm:inline">Análise</span>
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
         )}
 
         {/* Busca livre */}
@@ -514,6 +622,15 @@ export default function DashAvaliacaoFuncionarios() {
             )}
           </DialogContent>
         </Dialog>
+
+        {/* Rev. 2624 — Modal de ANÁLISE TÉCNICA E DETALHADA do contrato de
+            experiência (reusa o componente da Rev. 2622). */}
+        <AnaliseExperiencia
+          employeeId={analiseEmpId}
+          companyId={companyId}
+          open={!!analiseEmpId}
+          onClose={() => setAnaliseEmpId(null)}
+        />
       </div>
     </DashboardLayout>
   );
