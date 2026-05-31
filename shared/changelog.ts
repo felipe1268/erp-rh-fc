@@ -1,6 +1,40 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2618 — **DASHBOARD DE FUNCIONÁRIOS · SELETOR DE ANO DE ANÁLISE + NOVA
+ * TABELA COMPARATIVA ANUAL DE CONTRATAÇÕES x DESLIGAMENTOS (TRIMESTRE,
+ * SEMESTRE E ANOS ANTERIORES).**
+ *
+ * PEDIDO (usuário): "Quero poder escolher o ano de análise e ter uma tabela
+ * comparativa dos anos anteriores… principalmente na tabela de contratações e
+ * demissão, para fazer uma análise anual comparada com o trimestre, semestre e
+ * anos anteriores."
+ *
+ * IMPLEMENTAÇÃO (ADITIVA — ZERO ALTER/DROP/DELETE; só SELECT; R-001/R-007/R-010):
+ *  - `client/src/pages/dashboards/DashFuncionarios.tsx`: novo state
+ *    `anoAnalise` (default = ano atual) + `<Select>` no cabeçalho ("Ano de
+ *    análise") listando os últimos 7 anos. O ano escolhido alimenta a query
+ *    mensal existente (`funcionariosComparativo`) E a nova query anual; o
+ *    título da tabela mês-a-mês passa a refletir o ano selecionado (antes
+ *    estava preso ao ano corrente via const `anoAtual`).
+ *  - NOVO procedure tRPC `dashboards.funcionariosAnual` +
+ *    `getDashFuncionariosAnual(companyId, ano?, companyIds?)` em
+ *    `server/routers/dashboards.ts`: uma única query (UNION ALL adm/dem) que
+ *    agrega `EXTRACT(YEAR/QUARTER FROM dataAdmissao|dataDemissao)` para o ano de
+ *    referência + 4 anos anteriores; monta por ano os totais T1–T4, 1º/2º
+ *    semestre, total anual. Respeita multi-empresa (`_companyList`) e
+ *    `deletedAt IS NULL`, mesma fonte de datas dos gráficos existentes.
+ *  - NOVO componente `client/src/components/ComparativoAnosFuncionarios.tsx`:
+ *    cards-resumo do ano de referência (Contratações / Desligamentos / Saldo,
+ *    cada um com variação % vs ano anterior) + duas tabelas (Admissões e
+ *    Demissões) com colunas Ano · T1 · T2 · T3 · T4 · 1º Sem · 2º Sem · Ano ·
+ *    var vs ano anterior. Cor da variação segue semântica: admissões
+ *    `lowerIsBetter=false`, demissões `lowerIsBetter=true`. Ano de referência
+ *    destacado (chip "ref"). A seção é inserida ANTES da tabela mês-a-mês.
+ *
+ * VALIDADO: esbuild client (DashFuncionarios + ComparativoAnosFuncionarios) e
+ * server (dashboards.ts) exit 0; servidor recompilou limpo (tsx watch).
+ *
  * Rev. 2617 — **PLANEJAMENTO · CAMINHO B · O % PREVISTO PASSA A TER PARIDADE
  * EXATA (CRAVADA) COM A COLUNA "% CONCLUÍDA" DO MS PROJECT — NO PLN_816 R04
  * A CURVA DA RAIZ BATE 2/9/15/20 (ANTES O ERP CALCULAVA 2/9/16/22, DIVERGINDO

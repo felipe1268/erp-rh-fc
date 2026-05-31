@@ -602,6 +602,51 @@ async function getDashFuncionariosComparativo(companyId: number, ano?: number, c
   };
 }
 
+// Comparativo ANUAL de admissões/demissões: por trimestre (T1-T4), semestre (S1/S2),
+// total do ano e variação vs ano anterior — para o ano de referência + 4 anos anteriores.
+async function getDashFuncionariosAnual(companyId: number, ano?: number, companyIds?: number[]) {
+  const refY = ano || new Date().getFullYear();
+  const anoMin = refY - 4;
+  const db = await getDb(); if (!db) return { anoRef: refY, anos: [] };
+  const cl = _companyList(companyId, companyIds);
+  if (!cl) return { anoRef: refY, anos: [] };
+  const rows: any = await db.execute(sql`
+    SELECT 'adm' AS tipo,
+      EXTRACT(YEAR FROM e."dataAdmissao"::date)::int AS ano,
+      EXTRACT(QUARTER FROM e."dataAdmissao"::date)::int AS tri,
+      COUNT(*)::int AS n
+    FROM employees e
+    WHERE e."companyId" IN (${cl}) AND e."deletedAt" IS NULL
+      AND e."dataAdmissao" IS NOT NULL
+      AND EXTRACT(YEAR FROM e."dataAdmissao"::date) BETWEEN ${anoMin} AND ${refY}
+    GROUP BY 2, 3
+    UNION ALL
+    SELECT 'dem' AS tipo,
+      EXTRACT(YEAR FROM e."dataDemissao"::date)::int AS ano,
+      EXTRACT(QUARTER FROM e."dataDemissao"::date)::int AS tri,
+      COUNT(*)::int AS n
+    FROM employees e
+    WHERE e."companyId" IN (${cl}) AND e."deletedAt" IS NULL
+      AND e."dataDemissao" IS NOT NULL
+      AND EXTRACT(YEAR FROM e."dataDemissao"::date) BETWEEN ${anoMin} AND ${refY}
+    GROUP BY 2, 3
+  `);
+  const arr = (rows.rows || rows) as any[];
+  const empty = () => ({ t1: 0, t2: 0, t3: 0, t4: 0, s1: 0, s2: 0, total: 0 });
+  const byYear = new Map<number, { ano: number; admissoes: ReturnType<typeof empty>; demissoes: ReturnType<typeof empty> }>();
+  for (let y = anoMin; y <= refY; y++) byYear.set(y, { ano: y, admissoes: empty(), demissoes: empty() });
+  arr.forEach(r => {
+    const y = Number(r.ano); const tri = Number(r.tri); const n = Number(r.n) || 0;
+    const rec = byYear.get(y); if (!rec || tri < 1 || tri > 4) return;
+    const tgt = r.tipo === 'adm' ? rec.admissoes : rec.demissoes;
+    (tgt as any)[`t${tri}`] += n;
+    tgt.total += n;
+    if (tri <= 2) tgt.s1 += n; else tgt.s2 += n;
+  });
+  const anos = Array.from(byYear.values()).sort((a, b) => a.ano - b.ano);
+  return { anoRef: refY, anos };
+}
+
 async function getDashAvisoPrevioComparativo(companyId: number, ano?: number, companyIds?: number[]) {
   const db = await getDb(); if (!db) return { ano: ano || new Date().getFullYear(), meses: [] };
   const { refY, meses } = _mesesAteRef(ano);
@@ -4346,6 +4391,7 @@ export const dashboardsRouter = router({
   horasExtrasComparativo: protectedProcedure.input(z.object({ companyId: z.number(), ano: z.number().optional(), companyIds: z.array(z.number()).optional() })).query(({ input }) => getDashHorasExtrasComparativo(input.companyId, input.ano, input.companyIds)),
   folhaPagamentoComparativo: protectedProcedure.input(z.object({ companyId: z.number(), mesReferencia: z.string().optional(), companyIds: z.array(z.number()).optional() })).query(({ input }) => getDashFolhaPagamentoComparativo(input.companyId, input.mesReferencia, input.companyIds)),
   funcionariosComparativo: protectedProcedure.input(z.object({ companyId: z.number(), ano: z.number().optional(), companyIds: z.array(z.number()).optional() })).query(({ input }) => getDashFuncionariosComparativo(input.companyId, input.ano, input.companyIds)),
+  funcionariosAnual: protectedProcedure.input(z.object({ companyId: z.number(), ano: z.number().optional(), companyIds: z.array(z.number()).optional() })).query(({ input }) => getDashFuncionariosAnual(input.companyId, input.ano, input.companyIds)),
   // Rev. 2208 — sigilo Aviso Prévio: zera dashboard pra quem não tem verStatusAviso.
   avisoPrevioComparativo: protectedProcedure.input(z.object({ companyId: z.number(), ano: z.number().optional(), companyIds: z.array(z.number()).optional() })).query(async ({ input, ctx }) => {
     const canSee = await userCanSeeAvisoStatus(ctx.user.id, ctx.user.role);

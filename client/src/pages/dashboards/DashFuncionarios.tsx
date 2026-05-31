@@ -9,6 +9,8 @@ import PrintFooterLGPD from "@/components/PrintFooterLGPD";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
 import TabelaComparativaAnual, { type LinhaInd } from "@/components/TabelaComparativaAnual";
+import ComparativoAnosFuncionarios from "@/components/ComparativoAnosFuncionarios";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Users as UsersIcon, UserPlus, UserMinus, RefreshCw, Scale } from "lucide-react";
 
 const FUNC_INDICADORES: LinhaInd[] = [
@@ -69,8 +71,14 @@ export default function DashFuncionarios() {
   const queryCompanyId = isConstrutoras ? (companyIds[0] || 0) : companyId;
   const { data, isLoading, isError } = trpc.dashboards.funcionarios.useQuery({ companyId: queryCompanyId, ...(isConstrutoras ? { companyIds } : {}) }, { enabled: isConstrutoras ? companyIds.length > 0 : companyId > 0 });
   const anoAtual = new Date().getFullYear();
+  const [anoAnalise, setAnoAnalise] = useState(anoAtual);
+  const anosDisponiveis = Array.from({ length: 7 }, (_, i) => anoAtual - i);
   const { data: comparativo, isLoading: loadingComp } = trpc.dashboards.funcionariosComparativo.useQuery(
-    { companyId: queryCompanyId, ano: anoAtual, ...(isConstrutoras ? { companyIds } : {}) },
+    { companyId: queryCompanyId, ano: anoAnalise, ...(isConstrutoras ? { companyIds } : {}) },
+    { enabled: isConstrutoras ? companyIds.length > 0 : companyId > 0 }
+  );
+  const { data: anual, isLoading: loadingAnual } = trpc.dashboards.funcionariosAnual.useQuery(
+    { companyId: queryCompanyId, ano: anoAnalise, ...(isConstrutoras ? { companyIds } : {}) },
     { enabled: isConstrutoras ? companyIds.length > 0 : companyId > 0 }
   );
 
@@ -144,7 +152,21 @@ export default function DashFuncionarios() {
             <h1 className="text-2xl font-bold tracking-tight">Dashboard de Funcionários</h1>
             <p className="text-muted-foreground text-sm mt-1">Análise completa do quadro de pessoal</p>
           </div>
-          <PrintActions title="Dashboard Funcionários" />
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex items-center gap-1.5">
+              <Calendar className="h-4 w-4 text-muted-foreground" />
+              <span className="text-sm text-muted-foreground hidden sm:inline">Ano de análise:</span>
+              <Select value={String(anoAnalise)} onValueChange={(v) => setAnoAnalise(Number(v))}>
+                <SelectTrigger className="w-[110px] h-9"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {anosDisponiveis.map(a => (
+                    <SelectItem key={a} value={String(a)}>{a}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <PrintActions title="Dashboard Funcionários" />
+          </div>
         </div>
 
         {/* KPIs */}
@@ -593,11 +615,17 @@ export default function DashFuncionarios() {
         </div>
       </div>
 
+      <ComparativoAnosFuncionarios
+        data={anual}
+        isLoading={loadingAnual}
+        anoRef={anoAnalise}
+      />
+
       <TabelaComparativaAnual
         meses={comparativo?.meses || []}
         indicadores={FUNC_INDICADORES}
         isLoading={loadingComp}
-        titulo={`Movimentação mês-a-mês — ${anoAtual}`}
+        titulo={`Movimentação mês-a-mês — ${anoAnalise}`}
         subtitulo="Headcount, admissões, demissões e turnover · clique em qualquer linha para análise aprofundada"
       />
 
