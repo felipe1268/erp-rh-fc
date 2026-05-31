@@ -1,21 +1,30 @@
 ---
-name: MSP columns — planejamento previsto/realizado both from % Concluída
-description: Intended ERP design for planejamento — same MSP column feeds both previsto and realizado
+name: Planejamento previsto — duration-weighted % Concluída rollup
+description: How to reproduce MSP's % Concluída (PercentComplete) curve for the ERP previsto, from a single baseline file
 ---
 
-# Planejamento — previsto E realizado saem da MESMA coluna % Concluída
+# Planejamento — previsto E realizado da MESMA coluna % Concluída
 
 In the FC Engenharia planejamento XML (MS Project export):
 
-- **% Concluída** = native field `PercentComplete`. Manually set by the planner. Source of truth.
-- **% PREVISTO** = custom field `Texto6` (FieldID 188743746, `ProjDateDiff` formula). **NOT used in the intended design — ignore it.**
+- **% Concluída** = native `PercentComplete`. The column the user trusts. Source of truth for BOTH previsto and realizado.
+- **% PREVISTO** = custom `Texto6` (FieldID 188743746, ProjDateDiff formula). **Ignore — not used in the intended design.**
 
-## Intended ERP design (user-stated, supersedes the Caminho B "% PREVISTO = Texto6" rule in replit.md)
+## Intended ERP design (user-stated; supersedes the Caminho B "% PREVISTO = Texto6" rule)
 
-- **No cadastro do cronograma:** ERP reads **% Concluída** and stores it as the **PREVISÃO de avanço** in a separate internal table ("avanços previsto"). The cadastro "modelos" are MSP files where the planner ran Atualizar Projeto so % Concluída = planned cumulative per StatusDate (e.g. 2/9/15/20 % for the 4 weeks).
-- **Na aba Avanço Semanal:** ERP reads the **same % Concluída** column (now = activities actually done in the week/period) and stores as **REALIZADO**.
-- **Mesma coluna nos dois momentos** = previsto e realizado comparáveis maçã-com-maçã. This is the WHOLE point.
+- **Cadastro do cronograma:** user uploads ONE baseline file. ERP GENERATES the weekly previsto curve and stores it in a separate internal "avanços previsto" table.
+- **Aba Avanço Semanal:** ERP reads the SAME % Concluída column (now = real progress) → realizado.
+- Same column both moments → previsto e realizado comparáveis.
 
-**Why the old divergence:** current ERP derives previsto from the Texto6 formula (3/6/10/14) but realizado from PercentComplete (2/9/15/20) → two different columns → never matched. Fix = previsto also from % Concluída.
+## VALIDATED algorithm to generate previsto from a single baseline file
 
-**Open question (confirm before building):** at cadastro, how does the weekly previsto curve arrive — multiple weekly files (one % Concluída per week, like the 4 modelos), or one file the ERP must distribute?
+For each weekly cutoff (Thursday 17:00) the root previsto = MSP's native summary `PercentComplete` rollup:
+
+1. Per leaf (Summary≠1, with Baseline Number=0 Start/Finish):
+   - `dur_i` = working minutes PDD(BLstart_i, BLfinish_i) over the project calendar (cal 6: Mon–Thu 540min, Fri 480min, holidays; no June holiday).
+   - `pct_i(week)` = clamp( PDD(BLstart_i, week_status_17h) / dur_i , 0, 1 ).
+2. Root = **round( Σ(dur_i × pct_i) / Σ(dur_i) × 100 )** — **DURATION-weighted, ROUNDED** (not floor, not work/cost-weighted).
+
+Reproduces MSP exactly: 04/06=2, 11/06=9, 18/06=15, 25/06=20 (project PLN_816 R04 baseline 01/06→03/12/2026).
+
+**Why it diverged before:** current `regenerarPrevistoSemanasCaminhoB` root = `floor(pctRaizMSP)` = pure calendar-time-elapsed over the WHOLE envelope (3/6/10/14), while realizado came from PercentComplete (2/9/15/20) → two different bases. Fix = root previsto via duration-weighted rounded rollup above. The per-activity piece (`fracaoDecorridaMs`) is already the right per-leaf fraction; only the ROOT rollup + rounding needs changing.
