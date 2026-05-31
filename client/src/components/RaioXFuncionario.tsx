@@ -238,6 +238,7 @@ export default function RaioXFuncionario({ employeeId, open, onClose }: RaioXPro
   // Estado do lightbox da foto do colaborador (declarado antes do useEffect
   // de ESC para evitar TDZ ao avaliar o array de dependências).
   const [fotoAmpliada, setFotoAmpliada] = useState(false);
+  const [acidenteDetalhe, setAcidenteDetalhe] = useState<any>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -250,11 +251,24 @@ export default function RaioXFuncionario({ employeeId, open, onClose }: RaioXPro
         setFotoAmpliada(false);
         return;
       }
+      // Se o modal de detalhe do acidente estiver aberto, ESC fecha somente
+      // ele (não o Raio-X inteiro).
+      if (acidenteDetalhe) {
+        e.stopPropagation();
+        setAcidenteDetalhe(null);
+        return;
+      }
       onClose();
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [open, onClose, fotoAmpliada]);
+  }, [open, onClose, fotoAmpliada, acidenteDetalhe]);
+
+  // Limpa o detalhe do acidente quando o Raio-X é fechado (evita reabrir com
+  // estado obsoleto, já que o componente pode não desmontar).
+  useEffect(() => {
+    if (!open) setAcidenteDetalhe(null);
+  }, [open]);
 
   const [isDownloadingZip, setIsDownloadingZip] = useState(false);
 
@@ -2138,7 +2152,15 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                       </tr></thead>
                       <tbody>
                         {acidentes.map((a: any) => (
-                          <tr key={a.id} className="border-b last:border-0 hover:bg-muted/30">
+                          <tr
+                            key={a.id}
+                            className="border-b last:border-0 hover:bg-red-50/60 cursor-pointer transition-colors"
+                            onClick={() => setAcidenteDetalhe(a)}
+                            role="button"
+                            tabIndex={0}
+                            onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setAcidenteDetalhe(a); } }}
+                            title="Ver detalhes do acidente"
+                          >
                             <td className="p-3 font-medium">{formatDate(a.dataAcidente)}</td>
                             <td className="p-3">{a.horaAcidente || "-"}</td>
                             <td className="p-3"><Badge variant="outline">{a.tipoAcidente?.replace(/_/g, " ")}</Badge></td>
@@ -2147,7 +2169,7 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                             <td className="p-3">{a.parteCorpoAtingida || "-"}</td>
                             <td className="p-3 text-center font-semibold">{a.diasAfastamento || 0}</td>
                             <td className="p-3">{a.catNumero || "-"}</td>
-                            <td className="p-3 max-w-[200px] truncate">{a.descricao || "-"}</td>
+                            <td className="p-3"><span className="inline-flex items-center gap-1.5 text-red-700"><span className="max-w-[180px] truncate">{a.descricao || "-"}</span><Eye className="h-3.5 w-3.5 shrink-0 opacity-60" /></span></td>
                           </tr>
                         ))}
                       </tbody>
@@ -4151,6 +4173,99 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
           </div>
         </div>
       )}
+
+      {/* ============ DETALHE DO ACIDENTE (clique na linha) ============ */}
+      <Dialog open={!!acidenteDetalhe} onOpenChange={(o) => { if (!o) setAcidenteDetalhe(null); }}>
+        <DialogContent className="max-w-2xl max-h-[88vh] overflow-y-auto">
+          {acidenteDetalhe && (() => {
+            const a = acidenteDetalhe;
+            const grave = a.gravidade === "Grave" || a.gravidade === "Fatal";
+            const Row = ({ label, value }: { label: string; value: React.ReactNode }) => (
+              <div className="flex flex-col gap-0.5">
+                <span className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium">{label}</span>
+                <span className="text-sm text-foreground break-words">{value ?? "-"}</span>
+              </div>
+            );
+            const Bloco = ({ label, value }: { label: string; value: React.ReactNode }) => (
+              <div className="flex flex-col gap-0.5">
+                <span className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium">{label}</span>
+                <p className="text-sm text-foreground whitespace-pre-wrap break-words">{value || "-"}</p>
+              </div>
+            );
+            return (
+              <>
+                <DialogHeader>
+                  <DialogTitle className="flex items-center gap-2 text-red-800">
+                    <AlertTriangle className="h-5 w-5" />
+                    Detalhes do Acidente de Trabalho
+                  </DialogTitle>
+                </DialogHeader>
+                <div className="space-y-5">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge variant="outline">{a.tipoAcidente?.replace(/_/g, " ") || "-"}</Badge>
+                    <Badge variant={grave ? "destructive" : "secondary"}>{a.gravidade || "-"}</Badge>
+                    {Number(a.diasAfastamento) > 0 && (
+                      <Badge variant="outline" className="border-amber-300 bg-amber-50 text-amber-800">
+                        {a.diasAfastamento} dia(s) de afastamento
+                      </Badge>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-3 rounded-lg border bg-muted/20 p-4">
+                    <Row label="Data" value={formatDate(a.dataAcidente)} />
+                    <Row label="Hora" value={a.horaAcidente} />
+                    <Row label="Dias Afast." value={a.diasAfastamento || 0} />
+                    <Row label="Local" value={a.localAcidente} />
+                    <Row label="Parte do Corpo" value={a.parteCorpoAtingida} />
+                    <Row label="Agente Causador" value={a.agenteCausador} />
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3 rounded-lg border p-4">
+                    <span className="col-span-full text-xs font-semibold uppercase tracking-wide text-red-900">CAT — Comunicação de Acidente</span>
+                    <Row label="Houve CAT?" value={a.houveCAT ? "Sim" : "Não"} />
+                    <Row label="Nº da CAT" value={a.catNumero} />
+                    <Row label="Data da CAT" value={a.catData ? formatDate(a.catData) : "-"} />
+                    {!a.houveCAT && a.motivoSemCAT && (
+                      <div className="col-span-full"><Bloco label="Motivo sem CAT" value={a.motivoSemCAT} /></div>
+                    )}
+                  </div>
+
+                  <Bloco label="Descrição do Acidente" value={a.descricao} />
+
+                  {(a.acaoCorretiva || a.responsavelAcao || a.prazoAcaoCorretiva || a.statusAcaoCorretiva) && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3 rounded-lg border p-4">
+                      <span className="col-span-full text-xs font-semibold uppercase tracking-wide text-emerald-900">Ação Corretiva</span>
+                      <Row label="Status" value={a.statusAcaoCorretiva} />
+                      <Row label="Responsável" value={a.responsavelAcao} />
+                      <Row label="Prazo" value={a.prazoAcaoCorretiva ? formatDate(a.prazoAcaoCorretiva) : "-"} />
+                      <div className="col-span-full"><Bloco label="Descrição da Ação" value={a.acaoCorretiva} /></div>
+                    </div>
+                  )}
+
+                  {a.testemunhas && <Bloco label="Testemunhas" value={a.testemunhas} />}
+
+                  {a.documentoUrl && (
+                    <div>
+                      <a
+                        href={a.documentoUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-2 text-sm font-medium text-blue-700 hover:underline"
+                      >
+                        <FileText className="h-4 w-4" /> Abrir documento anexado
+                        <ExternalLink className="h-3.5 w-3.5" />
+                      </a>
+                    </div>
+                  )}
+                </div>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setAcidenteDetalhe(null)}>Fechar</Button>
+                </DialogFooter>
+              </>
+            );
+          })()}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -1,6 +1,33 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2621 — **RAIO-X DO COLABORADOR · ABA "ACIDENTES" · CADA LINHA DA TABELA
+ * DE ACIDENTES DE TRABALHO PASSA A SER CLICÁVEL E ABRE UM MODAL COM TODOS OS
+ * DETALHES DO ACIDENTE (DESCRIÇÃO, CAT, AGENTE CAUSADOR, AÇÃO CORRETIVA,
+ * TESTEMUNHAS, ANEXO ETC.).**
+ *
+ * PEDIDO (usuário): "quero poder clicar e ver qual foi o acidente e analisar
+ * todos os detalhes" (sobre a aba Acidentes do Raio-X, que antes só mostrava a
+ * tabela-resumo com Data/Hora/Tipo/Gravidade/Local/Parte Corpo/Dias/CAT/Descrição
+ * truncada, sem como ver o registro completo).
+ *
+ * IMPLEMENTAÇÃO (SÓ CLIENT — ZERO BACKEND/SCHEMA; os dados já vinham completos):
+ *  - `client/src/components/RaioXFuncionario.tsx`: o backend `docs.raioX` já
+ *    retornava o registro inteiro de `accidents` (`db.select().from(accidents)`),
+ *    então nenhuma query/coluna nova foi necessária. Novo state local
+ *    `acidenteDetalhe`; cada `<tr>` da tabela da aba "Acidentes" vira clicável
+ *    (`onClick`/`onKeyDown` Enter|Espaço, `role=button`, `tabIndex`, hover
+ *    vermelho, ícone `Eye` na coluna Descrição) → abre um `<Dialog>` (max-w-2xl,
+ *    scroll) com TODOS os campos do acidente organizados em seções: cabeçalho
+ *    com badges (tipo, gravidade, dias de afastamento); bloco "Geral" (data,
+ *    hora, dias, local, parte do corpo, agente causador); bloco "CAT" (houve
+ *    CAT?, nº, data, motivo sem CAT quando aplicável); "Descrição do Acidente";
+ *    bloco "Ação Corretiva" condicional (status, responsável, prazo, descrição);
+ *    "Testemunhas"; e link para o documento anexado (`documentoUrl`) quando há.
+ *
+ * VALIDADO: servidor reiniciado e recompilou limpo (tsx watch), sem erros de
+ * transform/compile (só os esperados "Please login" do preview não autenticado).
+ *
  * Rev. 2620 — **DASHBOARD DE FUNCIONÁRIOS · OS RANKINGS "DE ADVERTÊNCIAS" E
  * "DE ATESTADOS / FALTAS" PASSAM A EXIBIR A FOTO DO CADASTRO DE CADA
  * FUNCIONÁRIO (FALLBACK = INICIAL DO NOME), COM A LINHA CLICÁVEL → RAIO-X.**
