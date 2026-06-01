@@ -1,6 +1,30 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2671 — **GESTÃO DE DOCUMENTOS (`/gestao-documentos`) · AGORA DÁ PARA EDITAR UM DOCUMENTO
+ * (INCLUSIVE O TÍTULO) DEPOIS DO UPLOAD, DIRETO PELA TELA DE DETALHE DO DOCUMENTO.**
+ *
+ * PEDIDO (usuário, print image_1780331296759): na tela de detalhe de um documento (ex.:
+ * "POITA-ARQ-000-PE-PL-GRAL-IMP-R02", com "Arquivo Atual", "Histórico Completo de Revisões" e
+ * "Nova Revisão"), não havia como editar o documento / corrigir o título depois de já ter feito o
+ * upload — só baixar e criar nova revisão. O usuário queria poder editar e colocar o título de cada um.
+ *
+ * CAUSA (SÓ CLIENT/UI): o modal de EDIÇÃO completo já existia (`openEditDoc` → modal "Editar Documento",
+ * com Título *, Disciplina, Tipo, Código, Emissão, Validade, Tags) e o endpoint server
+ * `gestaoDocumentos.updateDocumento` JÁ ACEITAVA `titulo` (e demais campos) — mas o modal de DETALHE do
+ * documento não tinha nenhum acesso a essa edição (só "Anexar arquivo" aparecia, e apenas quando NÃO
+ * havia arquivo). Quem já tinha feito upload ficava sem caminho pra editar.
+ *
+ * FIX (SÓ CLIENT/UI; ZERO SCHEMA; ZERO SERVER — reusa `openEditDoc` + `updateDocumento` existentes):
+ *   `client/src/pages/gestaodocumentos/index.tsx` — no cabeçalho do "Modal — Detalhe do Documento",
+ *   ao lado do título, adiciona botão "Editar" (ícone `Pencil`) que fecha o detalhe e abre o modal
+ *   "Editar Documento" já preenchido (`setShowDetailModal(false); openEditDoc(selectedDoc)`). O título
+ *   passa a ser editável por lá e gravado via `updateDocumento`. Cabeçalho reorganizado num flex
+ *   (título à esquerda c/ truncate, botão à direita) sem mexer no resto do modal.
+ *   Sem SQL crua/`ALTER`/`DROP` (R-001/R-007/R-010). esbuild `index.tsx` EXIT 0.
+ *
+ * ----------------------------------------------------------------------------------------------------
+ *
  * Rev. 2670 — **GESTÃO DE DOCUMENTOS (`/gestao-documentos` → tela "Projetos / Documentos Técnicos") ·
  * AGORA DÁ PARA APAGAR FICHEIROS (CARDS DE OBRA) EM LOTE, COM SELEÇÃO MÚLTIPLA.**
  *

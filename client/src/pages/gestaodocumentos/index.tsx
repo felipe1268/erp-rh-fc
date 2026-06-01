@@ -2903,11 +2903,25 @@ export default function GestaoDocumentos() {
       <Dialog open={showDetailModal} onOpenChange={setShowDetailModal}>
         <DialogContent resizable={false} className="w-[98vw] max-w-[98vw] h-[95vh] max-h-[95vh] bg-white border-gray-200 text-gray-900 overflow-hidden flex flex-col p-0">
           <DialogHeader className="px-8 pt-6 pb-4 border-b border-gray-100 shrink-0">
-            <DialogTitle className="flex items-center gap-3 text-xl">
-              <FileText className="w-6 h-6 text-blue-600" />
-              {selectedDoc?.descricao || selectedDoc?.titulo}
-            </DialogTitle>
-            <p className="text-xs font-mono text-gray-400 mt-1 ml-9">{selectedDoc?.titulo}</p>
+            <div className="flex items-start justify-between gap-4">
+              <div className="min-w-0">
+                <DialogTitle className="flex items-center gap-3 text-xl">
+                  <FileText className="w-6 h-6 text-blue-600 shrink-0" />
+                  <span className="truncate">{selectedDoc?.descricao || selectedDoc?.titulo}</span>
+                </DialogTitle>
+                <p className="text-xs font-mono text-gray-400 mt-1 ml-9">{selectedDoc?.titulo}</p>
+              </div>
+              {selectedDoc && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => { setShowDetailModal(false); openEditDoc(selectedDoc); }}
+                  className="shrink-0 mr-8 h-9 px-4 border-gray-300 text-gray-700 hover:bg-gray-50"
+                >
+                  <Pencil className="w-4 h-4 mr-2" /> Editar
+                </Button>
+              )}
+            </div>
           </DialogHeader>
           {selectedDoc && (
             <div className="flex-1 overflow-y-auto px-8 py-6">
