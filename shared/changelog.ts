@@ -1,6 +1,35 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2667 — **PAINEL RH (`/painel-rh`) · O BOTÃO "CONFIRMAR PRORROGAÇÃO" (E TAMBÉM EFETIVAR/DESLIGAR)
+ * DO CARD "CONTRATOS DE EXPERIÊNCIA" VOLTA A FUNCIONAR — ANTES O MODAL FICAVA TRAVADO, "NADA ACONTECIA".**
+ *
+ * PEDIDO (usuário, print image_1780312590347): no card "Contratos de Experiência" do Painel RH, ao
+ * abrir o modal "Prorrogar Experiência" e clicar em "Confirmar Prorrogação", nada acontecia — o modal
+ * não fechava e o contrato não era prorrogado.
+ *
+ * CAUSA-RAIZ: os 3 botões do modal (Prorrogar/Efetivar/Desligar) enviavam `companyId: companyId!` ao
+ * server. Esse `companyId` vem da empresa selecionada e é `undefined` no modo MULTI-EMPRESA
+ * (construtoras / grupo) — nesse modo a tela usa `companyIds[]`, não um `companyId` único. Com
+ * `companyId` undefined, a mutation tRPC falhava na validação `z.number()`. Como as mutations NÃO
+ * tinham handler `onError`, o erro era SILENCIOSO: o modal não fechava, nenhum toast aparecia → "nada
+ * acontecia". O item de experiência também não trazia o `companyId` do próprio funcionário, então não
+ * havia de onde tirar o valor correto.
+ *
+ * FIX (SERVER aditivo só LEITURA + CLIENT/UI; ZERO SCHEMA; R-001/R-007/R-010):
+ *   1) SERVER `server/routers/homeData.ts` — cada item de `experiencias` passa a carregar
+ *      `companyId: e.companyId` (o da empresa do PRÓPRIO funcionário), para as ações terem a empresa
+ *      certa mesmo no modo multi-empresa.
+ *   2) CLIENT `client/src/pages/PainelRH.tsx` — os 3 botões do modal passam a enviar
+ *      `companyId: (expAction.emp.companyId ?? companyId)!` (usa o companyId do funcionário; cai no da
+ *      empresa selecionada só como fallback no modo single-empresa).
+ *   3) CLIENT — as 3 mutations (`prorrogarExperiencia`/`efetivarExperiencia`/`desligarExperiencia`)
+ *      ganham `onError` com `toast.error(e.message)` e `onSuccess` com `toast.success(...)`, dando
+ *      feedback visível ao usuário (fim do "nada acontece"). Import `toast` de `sonner` adicionado.
+ *
+ * Nenhuma lógica de cálculo/regra de experiência foi alterada (server `prorrogarExperiencia` intacto).
+ * esbuild de `PainelRH.tsx` EXIT 0 (`pnpm build`/`tsc` completos estouram OOM no container).
+ *
  * Rev. 2666 — **FÉRIAS (`/ferias`) · O FILTRO DE STATUS PASSA A PERMITIR SELECIONAR VÁRIAS OPÇÕES
  * AO MESMO TEMPO (MULTI-SELEÇÃO / FILTRO PERSONALIZADO) E GANHA DUAS NOVAS OPÇÕES: "VENCIDA — 1º
  * PERÍODO" E "VENCIDA — 2º PERÍODO OU +".**

@@ -562,6 +562,7 @@ export const homeDataRouter = router({
 
           return {
             id: e.id,
+            companyId: e.companyId, // Rev. 2667 — necessário p/ as ações Prorrogar/Efetivar/Desligar (modo multi-empresa)
             nome: e.nomeCompleto,
             funcao: e.funcao,
             empStatus: e.status,

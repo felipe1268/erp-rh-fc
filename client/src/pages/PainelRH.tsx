@@ -15,6 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { trpc } from "@/lib/trpc";
+import { toast } from "sonner";
 import {
   Users, UserCheck, Palmtree, UserX, AlertTriangle, Clock,
   BarChart3, Landmark, Cake, FileWarning, CalendarClock,
@@ -62,13 +63,16 @@ export default function PainelRH() {
   const [expObs, setExpObs] = useState('');
   const utils = trpc.useUtils();
   const prorrogarMut = trpc.employees.prorrogarExperiencia.useMutation({
-    onSuccess: () => { utils.home.getData.invalidate(); setExpAction(null); setExpObs(''); },
+    onSuccess: () => { utils.home.getData.invalidate(); setExpAction(null); setExpObs(''); toast.success('Contrato de experiência prorrogado para o 2º período.'); },
+    onError: (e) => toast.error(e.message || 'Não foi possível prorrogar o contrato.'),
   });
   const efetivarMut = trpc.employees.efetivarExperiencia.useMutation({
-    onSuccess: () => { utils.home.getData.invalidate(); setExpAction(null); setExpObs(''); },
+    onSuccess: () => { utils.home.getData.invalidate(); setExpAction(null); setExpObs(''); toast.success('Colaborador efetivado com sucesso.'); },
+    onError: (e) => toast.error(e.message || 'Não foi possível efetivar o colaborador.'),
   });
   const desligarMut = trpc.employees.desligarExperiencia.useMutation({
-    onSuccess: () => { utils.home.getData.invalidate(); setExpAction(null); setExpMotivo(''); setExpObs(''); },
+    onSuccess: () => { utils.home.getData.invalidate(); setExpAction(null); setExpMotivo(''); setExpObs(''); toast.success('Colaborador desligado durante a experiência.'); },
+    onError: (e) => toast.error(e.message || 'Não foi possível desligar o colaborador.'),
   });
 
   const { data: homeData, isLoading } = trpc.home.getData.useQuery(
@@ -369,9 +373,9 @@ export default function PainelRH() {
                       </div>
                       <div className="flex justify-end gap-2">
                         <Button variant="outline" onClick={() => setExpAction(null)}>Cancelar</Button>
-                        {expAction.type === 'prorrogar' ? <Button className="bg-blue-600 hover:bg-blue-700 text-white" disabled={prorrogarMut.isPending} onClick={() => prorrogarMut.mutate({ employeeId: expAction.emp.id, companyId: companyId!, obs: expObs || undefined })}>{prorrogarMut.isPending ? 'Prorrogando...' : 'Confirmar Prorrogação'}</Button> : null}
-                        {expAction.type === 'efetivar' ? <Button className="bg-green-600 hover:bg-green-700 text-white" disabled={efetivarMut.isPending} onClick={() => efetivarMut.mutate({ employeeId: expAction.emp.id, companyId: companyId!, obs: expObs || undefined })}>{efetivarMut.isPending ? 'Efetivando...' : 'Confirmar Efetivação'}</Button> : null}
-                        {expAction.type === 'desligar' ? <Button variant="destructive" disabled={desligarMut.isPending || !expMotivo.trim()} onClick={() => desligarMut.mutate({ employeeId: expAction.emp.id, companyId: companyId!, motivo: expMotivo, obs: expObs || undefined })}>{desligarMut.isPending ? 'Desligando...' : 'Confirmar Desligamento'}</Button> : null}
+                        {expAction.type === 'prorrogar' ? <Button className="bg-blue-600 hover:bg-blue-700 text-white" disabled={prorrogarMut.isPending} onClick={() => prorrogarMut.mutate({ employeeId: expAction.emp.id, companyId: (expAction.emp.companyId ?? companyId)!, obs: expObs || undefined })}>{prorrogarMut.isPending ? 'Prorrogando...' : 'Confirmar Prorrogação'}</Button> : null}
+                        {expAction.type === 'efetivar' ? <Button className="bg-green-600 hover:bg-green-700 text-white" disabled={efetivarMut.isPending} onClick={() => efetivarMut.mutate({ employeeId: expAction.emp.id, companyId: (expAction.emp.companyId ?? companyId)!, obs: expObs || undefined })}>{efetivarMut.isPending ? 'Efetivando...' : 'Confirmar Efetivação'}</Button> : null}
+                        {expAction.type === 'desligar' ? <Button variant="destructive" disabled={desligarMut.isPending || !expMotivo.trim()} onClick={() => desligarMut.mutate({ employeeId: expAction.emp.id, companyId: (expAction.emp.companyId ?? companyId)!, motivo: expMotivo, obs: expObs || undefined })}>{desligarMut.isPending ? 'Desligando...' : 'Confirmar Desligamento'}</Button> : null}
                       </div>
                     </div>
                   ) : null}
