@@ -786,6 +786,17 @@ function TransferenciaEstoqueDialog({
   );
 }
 
+// Rev. 2669 — Wrapper do detalhe/mapa definido em ESCOPO DE MÓDULO (referência
+// estável). Antes era criado DENTRO do render de Cotacoes (componente inline novo
+// a cada render); como cada tecla digitada no grid de preços dispara setEditPrecos
+// → re-render → nova função Wrapper → React via novo "tipo" de componente e
+// DESMONTAVA/REMONTAVA toda a subárvore (incluindo o container `overflow-auto`),
+// resetando o scroll pro topo e perdendo o foco do input ("cursor sobe").
+const DetalheWrapper: React.FC<{ fullscreen: boolean; children: React.ReactNode }> = ({ fullscreen, children }) =>
+  fullscreen
+    ? <div className="fixed inset-0 z-50 bg-gray-50 overflow-auto">{children}</div>
+    : <DashboardLayout>{children}</DashboardLayout>;
+
 export default function Cotacoes() {
   const { selectedCompanyId } = useCompany();
   const companyId = parseInt(selectedCompanyId || "0");
@@ -3173,13 +3184,8 @@ export default function Cotacoes() {
     const gruposAgrupados = Object.values(agrupados).filter(g => g.qtdTotal > 0);
 
     const fullscreenMapa = abaAtiva === "mapa";
-    const Wrapper: React.FC<{ children: React.ReactNode }> = fullscreenMapa
-      ? ({ children }) => (
-          <div className="fixed inset-0 z-50 bg-gray-50 overflow-auto">{children}</div>
-        )
-      : ({ children }) => <DashboardLayout>{children}</DashboardLayout>;
     return (
-      <Wrapper>
+      <DetalheWrapper fullscreen={fullscreenMapa}>
         <div className={`${fullscreenMapa ? "px-3 py-3 space-y-3" : "p-6 space-y-5"} bg-gray-50 min-h-screen`}>
           {/* Breadcrumb */}
           <div className="flex items-center gap-3">
@@ -6532,7 +6538,7 @@ export default function Cotacoes() {
         })()}
       </DialogContent>
     </Dialog>
-      </Wrapper>
+      </DetalheWrapper>
     );
   }
 

@@ -1,6 +1,35 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2669 — **COTAÇÕES (`/compras/cotacoes` → aba "Mapa de Cotação") · AO CLICAR/DIGITAR NO CAMPO DE
+ * PREÇO (OU QTD) DE UM FORNECEDOR, A TELA PARA DE "SUBIR O CURSOR" / VOLTAR PRO TOPO A CADA TECLA — O
+ * FOCO E A POSIÇÃO DE SCROLL AGORA SÃO PRESERVADOS.**
+ *
+ * PEDIDO (usuário, vídeo WhatsApp_Video_2026-05-29_at_08.17.30): no mapa comparativo de uma cotação,
+ * ao clicar no campo "Preço Unit." de um fornecedor (modo edição) e começar a digitar, a página dava
+ * um "pulo" pro topo a cada caractere — o input perdia o foco e o scroll voltava pro cabeçalho
+ * (breadcrumb/stepper/Fornecedores Participantes), tornando o preenchimento praticamente inviável.
+ * (Frames do vídeo: editando preço "12" scrollado no grid → próximo frame de volta no topo da tela.)
+ *
+ * CAUSA-RAIZ (SÓ CLIENT/UI — regressão dos commits "fullscreen mode" do mapa): o detalhe da cotação
+ * era envolvido por um componente `Wrapper` DEFINIDO DENTRO DO RENDER de `Cotacoes`:
+ *   `const Wrapper = fullscreenMapa ? ({children}) => <div .../> : ({children}) => <DashboardLayout/>`
+ * Como `Wrapper` é uma função NOVA a cada render, o React enxerga um "tipo de componente" diferente em
+ * todo render e DESMONTA + REMONTA toda a subárvore abaixo dele. Cada tecla no grid dispara
+ * `setEditPrecos`/`setEditQtds` → re-render → novo `Wrapper` → remontagem total: o container
+ * `overflow-auto` (linha do `<div className="fixed inset-0 ... overflow-auto">`) é recriado do zero,
+ * resetando `scrollTop` pra 0 (scroll pro topo), e o `<input>` focado é removido do DOM (perda de foco).
+ *
+ * FIX (SÓ CLIENT/UI; ZERO SCHEMA; ZERO SERVER; R-001/R-007/R-010): `client/src/pages/compras/Cotacoes.tsx`
+ *   — extrai o wrapper para um componente de ESCOPO DE MÓDULO com referência ESTÁVEL:
+ *   `const DetalheWrapper = ({ fullscreen, children }) => fullscreen ? <div .../> : <DashboardLayout/>`.
+ *   No render, troca `<Wrapper>...</Wrapper>` por `<DetalheWrapper fullscreen={fullscreenMapa}>...`. Como
+ *   `DetalheWrapper` agora tem identidade estável entre renders e `fullscreenMapa` não muda durante a
+ *   digitação, o React reconcilia (em vez de remontar) — o container de scroll e o foco do input são
+ *   preservados. O toggle real de aba (fullscreen on↔off) ainda remonta a subárvore, o que é esperado.
+ *
+ * esbuild de `Cotacoes.tsx` EXIT 0 (`pnpm build`/`tsc` completos estouram OOM no container).
+ *
  * Rev. 2668 — **EQUIPAMENTOS (`/equipamentos`) · O CADASTRO DE FERRAMENTA/EQUIPAMENTO PRÓPRIO VOLTA A
  * FUNCIONAR — ANTES, A PARTIR DO 2º ITEM, DAVA O TOAST "NÃO FOI POSSÍVEL GERAR UM PATRIMÔNIO ÚNICO
  * APÓS 8 TENTATIVAS. TENTE NOVAMENTE."**
