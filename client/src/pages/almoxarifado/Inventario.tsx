@@ -1,11 +1,11 @@
 import DashboardLayout from "@/components/DashboardLayout";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
 import { toast } from "sonner";
 import {
   ClipboardList, Loader2, CheckCircle2, AlertTriangle,
-  Play, Package, ChevronRight, XCircle, Building2, HardHat,
+  Play, Package, ChevronRight, XCircle, Building2, HardHat, Search,
 } from "lucide-react";
 import {
   AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle,
@@ -198,6 +198,8 @@ export default function AlmoxarifadoInventario() {
   const [obraContexto, setObraContexto] = useState<number | null>(null);
   // Rev. 2432 — abre AlertDialog estilizado no lugar do window.confirm nativo.
   const [confirmCancelar, setConfirmCancelar] = useState(false);
+  // Rev. 2659 — campo de busca por nome/código do item.
+  const [busca, setBusca] = useState("");
 
   const { data: obrasAtivas = [] } = trpc.obras.listActive.useQuery(
     { companyId, companyIds: [companyId] }, { enabled: !!companyId }
@@ -251,8 +253,25 @@ export default function AlmoxarifadoInventario() {
   const divergentes = sessionItems.filter(i => i.status === "divergente").length;
   const total = sessionItems.length;
   const progresso = total > 0 ? Math.round((conferidos / total) * 100) : 0;
-  const pendentes = sessionItems.filter(i => i.status === "pendente");
-  const finalizados = sessionItems.filter(i => i.status !== "pendente");
+
+  // Rev. 2659 — busca por nome/código do item (igual ao Almoxarifado): filtra
+  // as listas exibidas sem mexer nos totais/progresso (que seguem a sessão inteira).
+  const norm = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  const matchBusca = (i: any) => {
+    const q = norm(busca.trim());
+    if (!q) return true;
+    const nome = norm(String(i.itemNome ?? ""));
+    const codigo = norm(String(i.itemCodigoInterno ?? ""));
+    return nome.includes(q) || codigo.includes(q);
+  };
+  const pendentes = useMemo(
+    () => sessionItems.filter(i => i.status === "pendente" && matchBusca(i)),
+    [sessionItems, busca],
+  );
+  const finalizados = useMemo(
+    () => sessionItems.filter(i => i.status !== "pendente" && matchBusca(i)),
+    [sessionItems, busca],
+  );
 
   const nomeContexto = obraContexto === null
     ? "Central"
@@ -442,6 +461,29 @@ export default function AlmoxarifadoInventario() {
               </div>
             )}
 
+            {/* Rev. 2659 — Busca por nome/código do item (igual ao Almoxarifado) */}
+            {total > 0 && (
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                <input
+                  type="text"
+                  value={busca}
+                  onChange={e => setBusca(e.target.value)}
+                  placeholder="Buscar item por nome ou código…"
+                  className="w-full h-11 pl-10 pr-10 text-sm border border-gray-200 rounded-xl bg-white text-gray-800 outline-none focus:border-emerald-400 focus:ring-1 focus:ring-emerald-200"
+                />
+                {busca && (
+                  <button
+                    onClick={() => setBusca("")}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                    aria-label="Limpar busca"
+                  >
+                    <XCircle className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+            )}
+
             {/* Itens pendentes */}
             {loadingItems ? (
               <div className="flex justify-center py-10">
@@ -489,6 +531,15 @@ export default function AlmoxarifadoInventario() {
                       />
                     ))}
                   </>
+                )}
+
+                {busca.trim() && pendentes.length === 0 && finalizados.length === 0 && (
+                  <div className="bg-white rounded-xl border border-dashed border-gray-300 p-8 text-center">
+                    <Search className="w-10 h-10 text-gray-300 mx-auto mb-2" />
+                    <p className="text-sm text-gray-500">
+                      Nenhum item encontrado para <span className="font-semibold text-gray-700">"{busca}"</span>.
+                    </p>
+                  </div>
                 )}
               </div>
             )}

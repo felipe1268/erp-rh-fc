@@ -1,6 +1,29 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2659 — **INVENTÁRIO SEMANAL (/almoxarifado/inventario) · A TELA GANHA UM CAMPO DE
+ * BUSCA (POR NOME OU CÓDIGO INTERNO DO ITEM) IGUAL AO DO ALMOXARIFADO.**
+ *
+ * PEDIDO (usuário, prints image_1780281012042 + image_1780281026822): no Inventário Semanal,
+ * incluir um campo de busca como o do Almoxarifado para localizar itens na lista (a sessão
+ * pode ter centenas de itens "Aguardando conferência").
+ *
+ * IMPLEMENTAÇÃO (SÓ CLIENT/UI; ZERO SCHEMA; ZERO SERVER; R-001/R-007/R-010):
+ * CLIENT (`client/src/pages/almoxarifado/Inventario.tsx`):
+ * - novo ícone `Search` (lucide) + `useMemo`; novo state `busca`.
+ * - novo `<input>` de busca (ícone de lupa à esquerda, botão limpar à direita) acima das
+ *   listas, visível só quando a sessão tem itens (`total > 0`); estilo emerald igual aos
+ *   demais campos da tela.
+ * - helper `norm` (lowercase + remove acentos) + `matchBusca` filtra por `itemNome` OU
+ *   `itemCodigoInterno` (campos já retornados por `warehouse.getInventorySessionItems`).
+ * - `pendentes`/`finalizados` viram `useMemo` que aplicam o filtro de busca; os TOTAIS e a
+ *   barra de PROGRESSO continuam contando a sessão INTEIRA (conferidos/total/divergentes não
+ *   são afetados pela busca — só o que é LISTADO).
+ * - empty-state "Nenhum item encontrado para …" quando a busca não casa com nada.
+ *
+ * VALIDADO (estático): esbuild de `Inventario.tsx` EXIT 0 (`pnpm build`/`tsc` completos
+ * estouram OOM no container — restrição conhecida).
+ *
  * Rev. 2658 — **CATEGORIAS (/financeiro/categorias) · CADA LINHA GANHA O BOTÃO EXCLUIR (🗑)
  * — ALÉM DO EDITAR (✏️) E INATIVAR/REATIVAR (⏻) QUE JÁ EXISTIAM.**
  *
