@@ -1,6 +1,38 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2666 — **FÉRIAS (`/ferias`) · O FILTRO DE STATUS PASSA A PERMITIR SELECIONAR VÁRIAS OPÇÕES
+ * AO MESMO TEMPO (MULTI-SELEÇÃO / FILTRO PERSONALIZADO) E GANHA DUAS NOVAS OPÇÕES: "VENCIDA — 1º
+ * PERÍODO" E "VENCIDA — 2º PERÍODO OU +".**
+ *
+ * PEDIDO (usuário, print image_1780303456957): na aba "Lista de Férias", o filtro de status era um
+ * dropdown de seleção ÚNICA (Todos / A Vencer / Agendada / Em Gozo / Concluída / Vencida). O usuário
+ * quer (1) um filtro específico para "vencidas de 1º período" e (2) poder marcar mais de uma opção
+ * de uma vez (filtro personalizado).
+ *
+ * CONTEXTO: o filtro de status antes era passado ao SERVER (`status: statusFilter`) na query
+ * `avisoPrevio.ferias.list`, suportando apenas UM valor. Como a tela já carregava a lista completa
+ * em paralelo (`allFeriasList`, sem filtro, usada pelos cards de stats), a filtragem foi movida
+ * 100% para o CLIENT, viabilizando OR entre múltiplos status sem tocar no backend.
+ *
+ * FIX (SÓ CLIENT/UI; ZERO SCHEMA; ZERO SERVER; R-001/R-007/R-010): `client/src/pages/Ferias.tsx`:
+ *   1) `statusFilter` deixou de ser `string` ("todos"/"vencida"/...) e virou `string[]` (vazio =
+ *      todos). A query `feriasList` NÃO envia mais `status` ao server (busca tudo; o `refetch` das
+ *      mutations segue intacto). A filtragem acontece no `useMemo` `filtered` via novo helper
+ *      `matchStatusFiltro(item, sel)` — item passa se casar com QUALQUER status marcado (OR).
+ *   2) Novas opções compostas no modelo `STATUS_OPCOES`: além de pendente/agendada/em_gozo/
+ *      concluida/vencida, agora "vencida_1" (= vencida E `numeroPeriodo` 1) e "vencida_2" (= vencida
+ *      E `numeroPeriodo` ≥ 2). `isFeriasVencida` espelha a mesma régua dos stats
+ *      (`status === "vencida" || vencida`, exceto concluida/cancelada).
+ *   3) O dropdown single-select foi trocado por um `Popover` com CHECKBOXES (multi-seleção): rótulo
+ *      do gatilho mostra "Todos os status" / o nome da única opção / "N status selecionados"; tem
+ *      linha "Todos" (limpa) e botão "Limpar". Imports add: `Popover*` + `Checkbox`.
+ *   4) Os cards-atalho de stats (Total/A Vencer/Agendada/Vencidas/Em Gozo/2º Período·2026) passaram
+ *      a setar/checar o array (`setStatusFilter([...])`, `statusFilter.length === 1 && [0] === ...`).
+ *      `filtrosAtivos` e o botão "Limpar filtros" agora consideram/zeram `statusFilter` também.
+ * Comportamento dos cálculos (stats, ordenação, demais filtros) inalterado. Validação: esbuild de
+ * `Ferias.tsx` EXIT 0 (`pnpm build`/`tsc` completos estouram OOM no container).
+ *
  * Rev. 2665 — **PAINEL RH (`/painel-rh`) · CARD "FÉRIAS — PERÍODO AQUISITIVO": A FRASE PARA DE
  * DAR A IMPRESSÃO DE "FÉRIAS VENCIDAS". O QUE ESTAVA ESCRITO COMO "3º PERÍODO AQUISITIVO · 1d
  * PARA VENCER" / "VENCIDO!" PASSA A DEIXAR CLARO QUE É O FUNCIONÁRIO COMPLETANDO MAIS UM ANO DE

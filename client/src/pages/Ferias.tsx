@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -563,6 +565,27 @@ function AlertCard({ icon: Icon, count, title, items, borderClass, numClass, nam
   );
 }
 
+// Rev. 2666 — Filtro de status MULTI-SELEÇÃO + opções "Vencida 1º/2º período".
+const STATUS_OPCOES: { value: string; label: string }[] = [
+  { value: "pendente", label: "A Vencer" },
+  { value: "agendada", label: "Agendada" },
+  { value: "em_gozo", label: "Em Gozo" },
+  { value: "concluida", label: "Concluída" },
+  { value: "vencida", label: "Vencida (todas)" },
+  { value: "vencida_1", label: "Vencida — 1º período" },
+  { value: "vencida_2", label: "Vencida — 2º período ou +" },
+];
+const isFeriasVencida = (a: any) =>
+  (a.status === "vencida" || a.vencida) && a.status !== "concluida" && a.status !== "cancelada";
+const matchStatusFiltro = (a: any, sel: string) => {
+  switch (sel) {
+    case "vencida": return isFeriasVencida(a);
+    case "vencida_1": return isFeriasVencida(a) && (a.numeroPeriodo || 1) === 1;
+    case "vencida_2": return isFeriasVencida(a) && (a.numeroPeriodo || 1) >= 2;
+    default: return a.status === sel;
+  }
+};
+
 export default function Ferias() {
   const { user } = useAuth();
   const isMaster = user?.role === 'admin_master';
@@ -570,7 +593,7 @@ export default function Ferias() {
   const companyId = selectedCompanyId ? parseInt(selectedCompanyId, 10) || 0 : 0;
   const companyIds = getCompanyIdsForQuery();
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState("todos");
+  const [statusFilter, setStatusFilter] = useState<string[]>([]);
   const [filtro2Periodo2026, setFiltro2Periodo2026] = useState(false);
   const [sortBy, setSortBy] = useState<
     | "alfa_asc" | "alfa_desc"
@@ -652,7 +675,7 @@ export default function Ferias() {
     { enabled: isConstrutoras ? companyIds.length > 0 : companyId > 0 }
   );
   const { data: feriasList = [], refetch } = trpc.avisoPrevio.ferias.list.useQuery(
-    { companyId, ...(statusFilter !== "todos" ? { status: statusFilter } : {}), ...(isConstrutoras ? { companyIds } : {}) },
+    { companyId, ...(isConstrutoras ? { companyIds } : {}) },
     { enabled: isConstrutoras ? companyIds.length > 0 : companyId > 0 }
   );
   const { data: alertas } = trpc.avisoPrevio.ferias.alertas.useQuery(
@@ -812,6 +835,10 @@ export default function Ferias() {
         const s = removeAccents(search);
         if (!(a.employeeName || "").toLowerCase().includes(s) && !(a.employeeCpf || "").includes(s)) return false;
       }
+      // Rev. 2666 — Filtro de status MULTI-SELEÇÃO (client-side). Vazio = todos.
+      // Item passa se casar com QUALQUER status marcado (OR), incluindo as
+      // opções compostas "Vencida 1º período" e "Vencida 2º período ou +".
+      if (statusFilter.length > 0 && !statusFilter.some((sel) => matchStatusFiltro(a, sel))) return false;
       // Rev. 1614 — Filtro especial: 2º período cujo concessivo está/expira em 2026
       if (filtro2Periodo2026) {
         if ((a.numeroPeriodo || 1) < 2) return false;
@@ -875,7 +902,7 @@ export default function Ferias() {
       }
     });
     return arr;
-  }, [feriasList, search, filtro2Periodo2026, sortBy, cargoFilter, periodoFilter, inicioDe, inicioAte]);
+  }, [feriasList, search, statusFilter, filtro2Periodo2026, sortBy, cargoFilter, periodoFilter, inicioDe, inicioAte]);
 
   // Rev. 2652 — lista de cargos distintos p/ o filtro (a partir da lista completa).
   const cargosDisponiveis = useMemo(() => {
@@ -887,7 +914,7 @@ export default function Ferias() {
     return Array.from(set).sort((x, y) => removeAccents(x).localeCompare(removeAccents(y)));
   }, [allFeriasList]);
 
-  const filtrosAtivos = cargoFilter !== "todos" || periodoFilter !== "todos" || !!inicioDe || !!inicioAte || !!search;
+  const filtrosAtivos = statusFilter.length > 0 || cargoFilter !== "todos" || periodoFilter !== "todos" || !!inicioDe || !!inicioAte || !!search;
 
   // Stats — calculados a partir da lista COMPLETA (sem filtro) para não mudar ao clicar nos cards
   const stats = useMemo(() => {
@@ -1035,13 +1062,13 @@ export default function Ferias() {
           }).length;
           return (
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4">
-          <Card className={`cursor-pointer hover:shadow-md transition-shadow ${statusFilter === "todos" && tab === "lista" && !filtro2Periodo2026 ? "ring-2 ring-primary shadow-md" : ""}`} onClick={() => { setStatusFilter("todos"); setFiltro2Periodo2026(false); setTab("lista"); }}>
+          <Card className={`cursor-pointer hover:shadow-md transition-shadow ${statusFilter.length === 0 && tab === "lista" && !filtro2Periodo2026 ? "ring-2 ring-primary shadow-md" : ""}`} onClick={() => { setStatusFilter([]); setFiltro2Periodo2026(false); setTab("lista"); }}>
             <CardContent className="p-4">
               <p className="text-xs text-muted-foreground uppercase">Total</p>
               <p className="text-2xl font-bold">{fmtNum(stats.total)}</p>
             </CardContent>
           </Card>
-          <Card className={`cursor-pointer hover:shadow-md transition-shadow border-l-4 border-l-amber-500 ${statusFilter === "pendente" && tab === "lista" && !filtro2Periodo2026 ? "ring-2 ring-amber-400 shadow-md" : ""}`} onClick={() => { setStatusFilter("pendente"); setFiltro2Periodo2026(false); setTab("lista"); }}>
+          <Card className={`cursor-pointer hover:shadow-md transition-shadow border-l-4 border-l-amber-500 ${statusFilter.length === 1 && statusFilter[0] === "pendente" && tab === "lista" && !filtro2Periodo2026 ? "ring-2 ring-amber-400 shadow-md" : ""}`} onClick={() => { setStatusFilter(["pendente"]); setFiltro2Periodo2026(false); setTab("lista"); }}>
             <CardContent className="p-4">
               <p className="text-xs text-muted-foreground uppercase">Férias a Vencer</p>
               <p className="text-2xl font-bold text-amber-600">{fmtNum(stats.pendentes)}</p>
@@ -1075,19 +1102,19 @@ export default function Ferias() {
               <p className="text-[10px] text-orange-600 mt-0.5 font-medium">Risco multa em dobro</p>
             </CardContent>
           </Card>
-          <Card className={`cursor-pointer hover:shadow-md transition-shadow border-l-4 border-l-blue-500 ${statusFilter === "agendada" && tab === "lista" && !filtro2Periodo2026 ? "ring-2 ring-blue-400 shadow-md" : ""}`} onClick={() => { setStatusFilter("agendada"); setFiltro2Periodo2026(false); setTab("lista"); }}>
+          <Card className={`cursor-pointer hover:shadow-md transition-shadow border-l-4 border-l-blue-500 ${statusFilter.length === 1 && statusFilter[0] === "agendada" && tab === "lista" && !filtro2Periodo2026 ? "ring-2 ring-blue-400 shadow-md" : ""}`} onClick={() => { setStatusFilter(["agendada"]); setFiltro2Periodo2026(false); setTab("lista"); }}>
             <CardContent className="p-4">
               <p className="text-xs text-muted-foreground uppercase">Agendadas</p>
               <p className="text-2xl font-bold text-blue-600">{fmtNum(stats.agendadas)}</p>
             </CardContent>
           </Card>
-          <Card className={`cursor-pointer hover:shadow-md transition-shadow border-l-4 border-l-red-500 ${statusFilter === "vencida" && tab === "lista" && !filtro2Periodo2026 ? "ring-2 ring-red-400 shadow-md" : ""}`} onClick={() => { setStatusFilter("vencida"); setFiltro2Periodo2026(false); setTab("lista"); }}>
+          <Card className={`cursor-pointer hover:shadow-md transition-shadow border-l-4 border-l-red-500 ${statusFilter.length === 1 && statusFilter[0] === "vencida" && tab === "lista" && !filtro2Periodo2026 ? "ring-2 ring-red-400 shadow-md" : ""}`} onClick={() => { setStatusFilter(["vencida"]); setFiltro2Periodo2026(false); setTab("lista"); }}>
             <CardContent className="p-4">
               <p className="text-xs text-muted-foreground uppercase">Vencidas</p>
               <p className="text-2xl font-bold text-red-600">{fmtNum(stats.vencidas)}</p>
             </CardContent>
           </Card>
-          <Card className={`cursor-pointer hover:shadow-md transition-shadow border-l-4 border-l-green-500 ${statusFilter === "em_gozo" && tab === "lista" && !filtro2Periodo2026 ? "ring-2 ring-green-400 shadow-md" : ""}`} onClick={() => { setStatusFilter("em_gozo"); setFiltro2Periodo2026(false); setTab("lista"); }}>
+          <Card className={`cursor-pointer hover:shadow-md transition-shadow border-l-4 border-l-green-500 ${statusFilter.length === 1 && statusFilter[0] === "em_gozo" && tab === "lista" && !filtro2Periodo2026 ? "ring-2 ring-green-400 shadow-md" : ""}`} onClick={() => { setStatusFilter(["em_gozo"]); setFiltro2Periodo2026(false); setTab("lista"); }}>
             <CardContent className="p-4">
               <p className="text-xs text-muted-foreground uppercase">Em Gozo</p>
               <p className="text-2xl font-bold text-green-600">{fmtNum(stats.emGozo)}</p>
@@ -1096,7 +1123,7 @@ export default function Ferias() {
           {/* Rev. 1614 — Card especial: 2º Período com concessivo no ano 2026 */}
           <Card
             className={`cursor-pointer hover:shadow-md transition-shadow border-l-4 border-l-rose-600 ${filtro2Periodo2026 ? "ring-2 ring-rose-400 shadow-md bg-rose-50/70" : (segundoPeriodo2026 > 0 ? "bg-rose-50/40" : "")}`}
-            onClick={() => { setStatusFilter("todos"); setFiltro2Periodo2026(true); setTab("lista"); }}
+            onClick={() => { setStatusFilter([]); setFiltro2Periodo2026(true); setTab("lista"); }}
             title="Funcionários no 2º período aquisitivo cujo prazo concessivo cai dentro do ano de 2026. Clique para filtrar a lista."
           >
             <CardContent className="p-4">
@@ -1151,17 +1178,48 @@ export default function Ferias() {
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input placeholder="Buscar por nome ou CPF..." value={search} onChange={e => setSearch(e.target.value)} className="pl-10" />
                 </div>
-                <Select value={statusFilter} onValueChange={setStatusFilter}>
-                  <SelectTrigger className="w-full sm:w-48"><SelectValue placeholder="Status" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="todos">Todos</SelectItem>
-                    <SelectItem value="pendente">A Vencer</SelectItem>
-                    <SelectItem value="agendada">Agendada</SelectItem>
-                    <SelectItem value="em_gozo">Em Gozo</SelectItem>
-                    <SelectItem value="concluida">Concluída</SelectItem>
-                    <SelectItem value="vencida">Vencida</SelectItem>
-                  </SelectContent>
-                </Select>
+                {/* Rev. 2666 — Filtro de status MULTI-SELEÇÃO (popover c/ checkboxes). */}
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" className="w-full sm:w-56 justify-between font-normal">
+                      <span className="truncate">
+                        {statusFilter.length === 0
+                          ? "Todos os status"
+                          : statusFilter.length === 1
+                            ? (STATUS_OPCOES.find((o) => o.value === statusFilter[0])?.label || "1 selecionado")
+                            : `${statusFilter.length} status selecionados`}
+                      </span>
+                      <ChevronDown className="h-4 w-4 opacity-50 shrink-0" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-64 p-2" align="start">
+                    <div className="flex items-center justify-between px-1 pb-2 mb-1 border-b">
+                      <span className="text-xs font-medium text-muted-foreground">Filtrar por status</span>
+                      {statusFilter.length > 0 && (
+                        <button type="button" className="text-xs text-primary hover:underline" onClick={() => setStatusFilter([])}>Limpar</button>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      className="flex items-center gap-2 w-full px-1 py-1.5 rounded hover:bg-muted text-sm text-left"
+                      onClick={() => setStatusFilter([])}
+                    >
+                      <Checkbox checked={statusFilter.length === 0} className="pointer-events-none" />
+                      <span>Todos</span>
+                    </button>
+                    {STATUS_OPCOES.map((o) => (
+                      <button
+                        key={o.value}
+                        type="button"
+                        className="flex items-center gap-2 w-full px-1 py-1.5 rounded hover:bg-muted text-sm text-left"
+                        onClick={() => setStatusFilter((prev) => prev.includes(o.value) ? prev.filter((v) => v !== o.value) : [...prev, o.value])}
+                      >
+                        <Checkbox checked={statusFilter.includes(o.value)} className="pointer-events-none" />
+                        <span>{o.label}</span>
+                      </button>
+                    ))}
+                  </PopoverContent>
+                </Popover>
                 {/* Rev. 2652 — Ordenação ampliada */}
                 <Select value={sortBy} onValueChange={(v) => setSortBy(v as any)}>
                   <SelectTrigger className="w-full sm:w-64"><SelectValue placeholder="Ordenar por" /></SelectTrigger>
@@ -1217,7 +1275,7 @@ export default function Ferias() {
                   <Input type="date" value={inicioAte} onChange={e => setInicioAte(e.target.value)} className="w-full sm:w-40" />
                 </div>
                 {filtrosAtivos && (
-                  <Button variant="ghost" className="text-muted-foreground" onClick={() => { setSearch(""); setCargoFilter("todos"); setPeriodoFilter("todos"); setInicioDe(""); setInicioAte(""); }}>
+                  <Button variant="ghost" className="text-muted-foreground" onClick={() => { setSearch(""); setStatusFilter([]); setCargoFilter("todos"); setPeriodoFilter("todos"); setInicioDe(""); setInicioAte(""); }}>
                     <X className="h-4 w-4 mr-1" /> Limpar filtros
                   </Button>
                 )}
