@@ -1,6 +1,34 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2678 — **CONTROLE DE DOCUMENTOS (`/controle-documentos`: ASOs, Treinamentos, Atestados, Advertências,
+ * Painel de Validade, cards/contagens) · FUNCIONÁRIOS DESLIGADOS (status Desligado/Lista_Negra/Inativo) DEIXAM
+ * DE ENTRAR NO CONTROLE DE DOCUMENTOS — TODAS AS LISTAS, CARDS E O PAINEL DE VALIDADE PASSAM A CONTAR/EXIBIR
+ * SOMENTE QUEM AINDA TEM VÍNCULO ATIVO.**
+ *
+ * PEDIDO (usuário, prints IMG_1481/1482/1483_1780357365074): "Não precisa controlar documentos de funcionários
+ * com status desligados; faça uma análise global e garanta que quem está nesse status não terá controle de
+ * documentos." DIAGNÓSTICO (análise global do router): a maioria dos indicadores de conformidade do módulo
+ * filtrava apenas `employees.deletedAt IS NULL` (funcionário não-excluído fisicamente) e NÃO o `status`, então
+ * desligados que continuavam no banco entravam nas LISTAS (ASOs/Atestados/Treinamentos/Advertências), nos CARDS
+ * de contagem do `resumo` (totais, ASOs Vencidos/A Vencer, Treinamentos Vencidos/A Vencer) e no PAINEL DE
+ * VALIDADE. Os cards "Sem ASO"/`listSemASO` já filtravam `status = 'Ativo'` (mais restrito), então ficaram
+ * intactos.
+ *
+ * FIX (SÓ SERVER; ZERO SCHEMA; ZERO CLIENT): `server/routers/controleDocumentos.ts` — nova factory
+ * `empNaoDesligado()` que devolve `sql\`employees.status NOT IN ('Desligado', 'Lista_Negra', 'Inativo')\``,
+ * espelhando a régua canônica de "vínculo encerrado" já usada em `server/db.ts`. Aplicada em TODAS as queries
+ * que listam/contam funcionários para fins documentais: `asos.list`, `atestados.list`, `treinamentos.list`,
+ * `advertencias.list`; os 4 totais do `resumo` (asoCount/treinamentoCount/atestadoCount/advertenciaCount),
+ * `treinVencidos`, `treinAVencer`; as duas queries SQL cruas `asosVencidos`/`asosAVencer` (literal
+ * `AND e.status NOT IN ('Desligado', 'Lista_Negra', 'Inativo')`); e os dois SELECTs do `painelValidade`
+ * (ASOs + Treinamentos). NÃO tocados de propósito: `semASO`/`listSemASO` (já `= 'Ativo'`), o mapeamento por
+ * nome do import em lote de ASOs (resolução de nomes, não exibição) e os lookups por ID do Raio-X/dossiê
+ * (visualizar o histórico de um desligado específico continua possível). Sem SQL crua destrutiva/`ALTER`/`DROP`
+ * (R-001/R-007/R-010). esbuild `controleDocumentos.ts` EXIT 0.
+ *
+ * ----------------------------------------------------------------------------------------------------
+ *
  * Rev. 2677 — **FUNÇÕES (`/funcoes` → "Nova Função") · O BOTÃO "GERAR COM IA" (DESCRIÇÃO + ORDEM DE SERVIÇO
  * NR-1) DEIXA DE DAR "TIMEOUT: A IA DEMOROU MAIS DE 90 SEGUNDOS" — A GERAÇÃO PASSA A USAR O CAMINHO RÁPIDO
  * (GEMINI 2.5 FLASH, thinkingBudget=0), QUE RESPONDE BEM ABAIXO DO LIMITE.**

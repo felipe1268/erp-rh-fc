@@ -12,6 +12,14 @@ import { sendEmail } from "../services/smtpService";
 
 const LIMITE_DIAS_INSS = 15;
 
+// Rev. 2678 — Funcionários DESLIGADOS não entram no Controle de Documentos.
+// Mesma régua de "vínculo encerrado" usada em server/db.ts: status Desligado,
+// Lista_Negra ou Inativo são excluídos de TODAS as listas, cards/contagens e do
+// Painel de Validade. Factory gera um SQL novo a cada uso (drizzle .where/and()).
+// Em SQL cru, escreva o literal `e.status NOT IN ('Desligado','Lista_Negra','Inativo')`.
+const empNaoDesligado = () =>
+  sql`${employees.status} NOT IN ('Desligado', 'Lista_Negra', 'Inativo')`;
+
 // Modelos de advertência padrão CLT
 const MODELOS_ADVERTENCIA = {
   Verbal: {
@@ -434,7 +442,7 @@ export const controleDocumentosRouter = router({
           })
           .from(asos)
           .innerJoin(employees, eq(asos.employeeId, employees.id))
-          .where(and(companyFilter(asos.companyId, input), isNull(employees.deletedAt), isNull(asos.deletedAt)))
+          .where(and(companyFilter(asos.companyId, input), isNull(employees.deletedAt), empNaoDesligado(), isNull(asos.deletedAt)))
           .orderBy(employees.nomeCompleto);
 
         const byEmployeeTipo = new Map<string, any[]>();
@@ -743,7 +751,7 @@ export const controleDocumentosRouter = router({
           })
           .from(atestados)
           .innerJoin(employees, eq(atestados.employeeId, employees.id))
-          .where(and(companyFilter(atestados.companyId, input), isNull(employees.deletedAt), isNull(atestados.deletedAt)))
+          .where(and(companyFilter(atestados.companyId, input), isNull(employees.deletedAt), empNaoDesligado(), isNull(atestados.deletedAt)))
           .orderBy(desc(atestados.dataEmissao));
         // Rev. 2478 — anexa flags CIPA (ativo + estabilidade pós-mandato).
         const { getCipaStatusByEmployeeIds, projectCipaFields } = await import("../_core/cipaStatus");
@@ -897,7 +905,7 @@ export const controleDocumentosRouter = router({
           })
           .from(trainings)
           .innerJoin(employees, eq(trainings.employeeId, employees.id))
-          .where(and(companyFilter(trainings.companyId, input), isNull(employees.deletedAt), isNull(trainings.deletedAt)))
+          .where(and(companyFilter(trainings.companyId, input), isNull(employees.deletedAt), empNaoDesligado(), isNull(trainings.deletedAt)))
           .orderBy(desc(trainings.dataRealizacao));
 
         // Rev. 2478 — flags CIPA por colaborador.
@@ -1045,7 +1053,7 @@ export const controleDocumentosRouter = router({
           })
           .from(warnings)
           .innerJoin(employees, eq(warnings.employeeId, employees.id))
-          .where(and(companyFilter(warnings.companyId, input), isNull(employees.deletedAt), isNull(warnings.deletedAt)))
+          .where(and(companyFilter(warnings.companyId, input), isNull(employees.deletedAt), empNaoDesligado(), isNull(warnings.deletedAt)))
           .orderBy(desc(warnings.dataOcorrencia));
         // Rev. 2478 — flags CIPA por colaborador.
         const { getCipaStatusByEmployeeIds, projectCipaFields } = await import("../_core/cipaStatus");
@@ -1196,25 +1204,25 @@ export const controleDocumentosRouter = router({
         .select({ count: sql<number>`COUNT(*)` })
         .from(asos)
         .innerJoin(employees, eq(asos.employeeId, employees.id))
-        .where(and(companyFilter(asos.companyId, input), isNull(employees.deletedAt), isNull(asos.deletedAt)));
+        .where(and(companyFilter(asos.companyId, input), isNull(employees.deletedAt), empNaoDesligado(), isNull(asos.deletedAt)));
 
       const [treinamentoCount] = await db
         .select({ count: sql<number>`COUNT(*)` })
         .from(trainings)
         .innerJoin(employees, eq(trainings.employeeId, employees.id))
-        .where(and(companyFilter(trainings.companyId, input), isNull(employees.deletedAt), isNull(trainings.deletedAt)));
+        .where(and(companyFilter(trainings.companyId, input), isNull(employees.deletedAt), empNaoDesligado(), isNull(trainings.deletedAt)));
 
       const [atestadoCount] = await db
         .select({ count: sql<number>`COUNT(*)` })
         .from(atestados)
         .innerJoin(employees, eq(atestados.employeeId, employees.id))
-        .where(and(companyFilter(atestados.companyId, input), isNull(employees.deletedAt), isNull(atestados.deletedAt)));
+        .where(and(companyFilter(atestados.companyId, input), isNull(employees.deletedAt), empNaoDesligado(), isNull(atestados.deletedAt)));
 
       const [advertenciaCount] = await db
         .select({ count: sql<number>`COUNT(*)` })
         .from(warnings)
         .innerJoin(employees, eq(warnings.employeeId, employees.id))
-        .where(and(companyFilter(warnings.companyId, input), isNull(employees.deletedAt), isNull(warnings.deletedAt)));
+        .where(and(companyFilter(warnings.companyId, input), isNull(employees.deletedAt), empNaoDesligado(), isNull(warnings.deletedAt)));
 
       const hoje = new Date().toISOString().split("T")[0];
       const companyIds = resolveCompanyIds(input);
@@ -1224,6 +1232,7 @@ export const controleDocumentosRouter = router({
         INNER JOIN employees e ON a."employeeId" = e.id
         WHERE a."companyId" IN (${companyIdsSql})
           AND e."deletedAt" IS NULL
+          AND e.status NOT IN ('Desligado', 'Lista_Negra', 'Inativo')
           AND a."deletedAt" IS NULL
           AND a."dataValidade" < ${hoje}
           AND NOT EXISTS (
@@ -1246,6 +1255,7 @@ export const controleDocumentosRouter = router({
         INNER JOIN employees e ON a."employeeId" = e.id
         WHERE a."companyId" IN (${companyIdsSql})
           AND e."deletedAt" IS NULL
+          AND e.status NOT IN ('Desligado', 'Lista_Negra', 'Inativo')
           AND a."deletedAt" IS NULL
           AND a."dataValidade" >= ${hoje}
           AND a."dataValidade" <= ${em30diasStr}
@@ -1264,7 +1274,7 @@ export const controleDocumentosRouter = router({
         .select({ count: sql<number>`COUNT(*)` })
         .from(trainings)
         .innerJoin(employees, eq(trainings.employeeId, employees.id))
-        .where(and(companyFilter(trainings.companyId, input), isNull(employees.deletedAt), isNull(trainings.deletedAt), sql`${trainings.dataValidade} IS NOT NULL AND ${trainings.dataValidade} < ${hoje}`));
+        .where(and(companyFilter(trainings.companyId, input), isNull(employees.deletedAt), empNaoDesligado(), isNull(trainings.deletedAt), sql`${trainings.dataValidade} IS NOT NULL AND ${trainings.dataValidade} < ${hoje}`));
 
       // Treinamentos a vencer em 30 dias
       const [treinAVencer] = await db
@@ -1274,6 +1284,7 @@ export const controleDocumentosRouter = router({
         .where(and(
           companyFilter(trainings.companyId, input),
           isNull(employees.deletedAt),
+          empNaoDesligado(),
           isNull(trainings.deletedAt),
           sql`${trainings.dataValidade} IS NOT NULL AND ${trainings.dataValidade} >= ${hoje} AND ${trainings.dataValidade} <= ${em30diasStr}`
         ));
@@ -2414,7 +2425,7 @@ export const controleDocumentosRouter = router({
         })
         .from(asos)
         .innerJoin(employees, eq(asos.employeeId, employees.id))
-        .where(and(companyFilter(asos.companyId, input), isNull(employees.deletedAt), isNull(asos.deletedAt)))
+        .where(and(companyFilter(asos.companyId, input), isNull(employees.deletedAt), empNaoDesligado(), isNull(asos.deletedAt)))
         .orderBy(asos.dataValidade);
 
       // Treinamentos com validade
@@ -2436,6 +2447,7 @@ export const controleDocumentosRouter = router({
         .where(and(
           companyFilter(trainings.companyId, input),
           isNull(employees.deletedAt),
+          empNaoDesligado(),
           isNull(trainings.deletedAt),
           sql`${trainings.dataValidade} IS NOT NULL`
         ))
