@@ -314,14 +314,9 @@ export default function FinanceiroContasAPagar() {
       toast({ title: "Lançamento já pago", description: "Estorne antes de editar.", variant: "destructive" });
       return;
     }
-    if (c.origemModulo && c.origemModulo !== "recorrente") {
-      toast({
-        title: "Vinculado a outro módulo",
-        description: `Este título vem de ${ORIGEM_LABELS[c.origemModulo] ?? c.origemModulo} — edite na origem.`,
-        variant: "destructive",
-      });
-      return;
-    }
+    // Rev. 2661 — títulos vinculados a outro módulo agora SÃO editáveis.
+    // Quando a origem é Compras (OC), o save espelha fornecedor/vencimento/forma/obs
+    // de volta na Ordem de Compra (ver banner informativo no modal).
     setEditForm({
       descricao: c.descricao ?? "",
       valorPrevisto: String(c.valorPrevisto ?? ""),
@@ -1635,6 +1630,11 @@ export default function FinanceiroContasAPagar() {
                         <KV label="Conciliação">{e.conciliado ? `✓ ${fmtDateBR(e.dataConciliacao)}` : "Não conciliado"}</KV>
                         <KV label="Criado por">{e.criadoPorNome ?? "—"}</KV>
                         {e.aprovadoPorNome && <KV label="Aprovado por">{e.aprovadoPorNome}</KV>}
+                        {e.editadoPorNome && (
+                          <KV label="Editado por" highlight>
+                            {e.editadoPorNome}{e.editadoEm ? ` · ${fmtDateBR(e.editadoEm)}` : ""}
+                          </KV>
+                        )}
                       </div>
 
                       {d.bancoEmpresa && (
@@ -2045,14 +2045,32 @@ export default function FinanceiroContasAPagar() {
 
         {/* Rev. 2657 — Modal EDITAR (lançamento manual) */}
         <Dialog open={!!showEdit} onOpenChange={(o) => { if (!o) setShowEdit(null); }}>
-          <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
+          <DialogContent className="max-w-none w-[100vw] h-[100dvh] sm:rounded-none flex flex-col p-0 gap-0">
+            <DialogHeader className="px-6 py-4 border-b border-slate-200 shrink-0">
               <DialogTitle className="flex items-center gap-2 text-blue-700">
                 <Pencil className="w-5 h-5" />Editar Lançamento
+                {showEdit?.origemModulo && showEdit.origemModulo !== "recorrente" && (
+                  <span className="text-xs font-medium text-slate-500">· vindo de {ORIGEM_LABELS[showEdit.origemModulo] ?? showEdit.origemModulo}</span>
+                )}
               </DialogTitle>
             </DialogHeader>
             {showEdit && (
-              <div className="space-y-3">
+              <div className="space-y-3 px-6 py-4 overflow-y-auto flex-1 max-w-2xl w-full mx-auto">
+                {showEdit.origemModulo && showEdit.origemModulo !== "recorrente" && (
+                  <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+                    {(showEdit.origemModulo === "compras" || showEdit.origemModulo === "compra_oc") ? (
+                      <>
+                        <p className="font-semibold mb-0.5">Título vinculado a uma Ordem de Compra</p>
+                        <p className="text-[12px] leading-snug">As alterações de <b>Fornecedor</b>, <b>Vencimento</b>, <b>Forma de Pagamento</b> e <b>Observações</b> também serão aplicadas na OC de origem. O <b>valor</b> da OC não é alterado (ele vem dos itens da OC).</p>
+                      </>
+                    ) : (
+                      <>
+                        <p className="font-semibold mb-0.5">Título vinculado a {ORIGEM_LABELS[showEdit.origemModulo] ?? showEdit.origemModulo}</p>
+                        <p className="text-[12px] leading-snug">As alterações são aplicadas neste título. A sincronização automática com a origem hoje cobre apenas Compras (OC).</p>
+                      </>
+                    )}
+                  </div>
+                )}
                 <div>
                   <Label className="text-xs text-slate-500">Descrição</Label>
                   <Input value={editForm.descricao} onChange={e => setEditForm(f => ({ ...f, descricao: e.target.value }))}
@@ -2121,7 +2139,7 @@ export default function FinanceiroContasAPagar() {
                 </div>
               </div>
             )}
-            <DialogFooter>
+            <DialogFooter className="px-6 py-4 border-t border-slate-200 shrink-0">
               <Button variant="outline" onClick={() => setShowEdit(null)}>Cancelar</Button>
               <Button className="bg-blue-600 hover:bg-blue-700 text-white" disabled={updateEntryMut.isPending} onClick={handleSaveEdit}>
                 {updateEntryMut.isPending ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <CheckCircle className="w-4 h-4 mr-1" />}

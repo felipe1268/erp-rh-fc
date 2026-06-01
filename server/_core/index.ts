@@ -2434,6 +2434,14 @@ Regras:
           console.log(`[SyncSchema+] Rev. 2657: colunas anexo_url/anexo_nome (financial_entries) garantidas.`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.2657 anexo título:`, e?.message || e); }
 
+        // ── Rev. 2661 — Edição de títulos vinculados + registro de quem editou ──
+        try {
+          await db.execute(sql`ALTER TABLE financial_entries ADD COLUMN IF NOT EXISTS editado_por_id INTEGER`);
+          await db.execute(sql`ALTER TABLE financial_entries ADD COLUMN IF NOT EXISTS editado_por_nome VARCHAR(255)`);
+          await db.execute(sql`ALTER TABLE financial_entries ADD COLUMN IF NOT EXISTS editado_em TIMESTAMP`);
+          console.log(`[SyncSchema+] Rev. 2661: colunas editado_por_id/editado_por_nome/editado_em (financial_entries) garantidas.`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.2661 editor título:`, e?.message || e); }
+
       } catch (e: any) { console.error(`[SyncSchema+] ERROR:`, e?.message || e); }
     }).catch(e => console.error("[SyncSchema] Falha ao iniciar:", e));
     // Garantir colunas críticas adicionadas recentemente que o SyncSchema possa ter ignorado

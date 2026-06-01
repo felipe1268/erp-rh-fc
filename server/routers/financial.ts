@@ -743,6 +743,7 @@ export const financialRouter = router({
               vehicle_id AS "vehicleId",
               fornecedor_nome AS "fornecedorNome",
               anexo_url AS "anexoUrl", anexo_nome AS "anexoNome",
+              editado_por_id AS "editadoPorId", editado_por_nome AS "editadoPorNome", editado_em AS "editadoEm",
               created_at AS "createdAt", updated_at AS "updatedAt",
               CASE WHEN data_vencimento < CURRENT_DATE AND status != 'pago' THEN CURRENT_DATE - data_vencimento ELSE 0 END AS "diasAtraso"
        FROM financial_entries
@@ -1566,12 +1567,13 @@ export const financialRouter = router({
     if (before.status === "cancelado") {
       throw new TRPCError({ code: "FORBIDDEN", message: "Lançamento cancelado não pode ser editado." });
     }
-    if (before.origem_modulo && before.origem_modulo !== "recorrente") {
-      throw new TRPCError({
-        code: "FORBIDDEN",
-        message: `Lançamento vinculado a outro módulo (${before.origem_modulo}#${before.origem_id ?? "?"}) — edite na origem.`,
-      });
-    }
+    // Rev. 2661 — REVOGA o bloqueio "edite na origem". Títulos vinculados a outro
+    // módulo passam a ser EDITÁVEIS aqui; quando a origem é Compras (OC), os campos
+    // de METADADO que existem na OC são espelhados de volta na compras_ordens
+    // (fornecedor, vencimento, forma de pagamento, observações). O VALOR/TOTAL da OC
+    // NÃO é sobrescrito — ele é derivado dos itens da OC (subtotal+frete+impostos−desconto),
+    // então alterá-lo direto criaria inconsistência com os itens; o valor financeiro
+    // do título pode legitimamente divergir do total da OC (medição parcial etc.).
     // Builder dinâmico de SET — só sobrescreve o que veio.
     const sets: string[] = [];
     const vals: any[] = [];
@@ -1588,19 +1590,64 @@ export const financialRouter = router({
     if (input.natureza !== undefined) push("natureza", input.natureza);
     if (input.tipo !== undefined) push("tipo", input.tipo);
     if (sets.length === 0) return { ok: true, changed: false };
+    // Rev. 2661 — registra QUEM editou e QUANDO no próprio título.
+    push("editado_por_id", ctx.user?.id ?? null);
+    push("editado_por_nome", ctx.user?.name ?? null);
+    sets.push(`editado_em = NOW()`);
     sets.push(`updated_at = NOW()`);
     vals.push(input.id, input.companyId);
-    await dbExecute(db,
-      `UPDATE financial_entries SET ${sets.join(", ")}
-       WHERE id = $${vals.length - 1} AND company_id = $${vals.length}`,
-      vals
-    );
+
+    // Rev. 2661 — Write-back para a Ordem de Compra de origem (somente Compras).
+    // ATÔMICO: a edição do título e o espelhamento na OC vivem na MESMA transação.
+    // Se a OC de origem não existir/não casar (origem_id obsoleto) OU o espelhamento
+    // falhar, a transação faz ROLLBACK e a edição inteira aborta — financeiro e OC
+    // JAMAIS divergem. Só espelha campos que existem na OC (fornecedor/vencimento/
+    // forma/obs); valor/total da OC vêm dos itens e NÃO são tocados aqui.
+    const ehOrigemCompras = (before.origem_modulo === "compras" || before.origem_modulo === "compra_oc") && !!before.origem_id;
+    const ocSets: string[] = [];
+    const ocVals: any[] = [];
+    const ocPush = (col: string, v: any) => { ocSets.push(`${col} = $${ocVals.length + 1}`); ocVals.push(v); };
+    if (ehOrigemCompras) {
+      if (input.fornecedorNome !== undefined) ocPush("fornecedor_nome", input.fornecedorNome?.trim() || null);
+      if (input.dataVencimento !== undefined) ocPush("data_vencimento", input.dataVencimento || null);
+      if (input.formaPagamento !== undefined) ocPush("forma_pagamento", input.formaPagamento || null);
+      if (input.observacoes !== undefined) ocPush("observacoes", input.observacoes || null);
+    }
+    const fazWriteBack = ehOrigemCompras && ocSets.length > 0;
+
+    let origemSync = "";
+    await db.transaction(async (tx: any) => {
+      await dbExecute(tx,
+        `UPDATE financial_entries SET ${sets.join(", ")}
+         WHERE id = $${vals.length - 1} AND company_id = $${vals.length}`,
+        vals
+      );
+      if (fazWriteBack) {
+        ocSets.push(`updated_at = NOW()`);
+        ocVals.push(before.origem_id, input.companyId);
+        const ocRes = await dbExecute(tx,
+          `UPDATE compras_ordens SET ${ocSets.join(", ")}
+           WHERE id = $${ocVals.length - 1} AND company_id = $${ocVals.length}
+           RETURNING id`,
+          ocVals
+        );
+        if (rows(ocRes).length !== 1) {
+          throw new TRPCError({
+            code: "CONFLICT",
+            message: `Não foi possível espelhar na Ordem de Compra de origem (OC#${before.origem_id} não encontrada). A edição foi cancelada para manter financeiro e Compras sincronizados.`,
+          });
+        }
+        origemSync = ` | espelhado na OC#${before.origem_id} (fornecedor/vencimento/forma/obs)`;
+      }
+    });
+
     const snap = `desc="${before.descricao ?? ""}" valor=${before.valor_previsto} venc=${before.data_vencimento ?? "-"} categ="${before.conta_nome ?? "-"}" fornec="${before.fornecedor_nome ?? "-"}"`;
+    const origemTxt = before.origem_modulo ? ` [origem=${before.origem_modulo}#${before.origem_id ?? "?"}]` : "";
     await createAuditLog({
       action: "financial_entry_updated",
       userId: ctx.user?.id,
       companyId: input.companyId,
-      details: `Entry ${input.id} EDITADO por ${ctx.user?.name ?? "?"} (id=${ctx.user?.id ?? "?"}) — snapshot antes: ${snap}`,
+      details: `Entry ${input.id} EDITADO por ${ctx.user?.name ?? "?"} (id=${ctx.user?.id ?? "?"})${origemTxt} — snapshot antes: ${snap}${origemSync}`,
     });
     return { ok: true, changed: true };
   }),

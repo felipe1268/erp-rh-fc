@@ -1,6 +1,56 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2661 — **CONTAS A PAGAR (/financeiro/contas-a-pagar) · TÍTULOS VINCULADOS A OUTRO
+ * MÓDULO PASSAM A SER EDITÁVEIS; A EDIÇÃO ABRE EM JANELA FULLSCREEN; AS ALTERAÇÕES
+ * RETORNAM À ORDEM DE COMPRA DE ORIGEM (COMPRAS); E FICA REGISTRADO QUAL USUÁRIO EDITOU.**
+ *
+ * PEDIDO (usuário, print image_1780281232856): poder EDITAR um título que veio de outro
+ * módulo (ex.: Compras lançou alguma informação errada na OC). Requisitos: (1) a alteração
+ * deve refletir TAMBÉM no lançamento de origem; (2) a tela de edição deve abrir numa segunda
+ * janela em FULLSCREEN; (3) deve ficar registrado qual usuário fez a edição. Em resposta às
+ * perguntas: write-back para a origem = SIM; módulo prioritário = Compras / Ordem de Compra.
+ *
+ * IMPLEMENTAÇÃO (SCHEMA ADITIVO + SERVER + CLIENT; R-001/R-007/R-010 — só ADD COLUMN IF NOT
+ * EXISTS, nenhum ALTER/DROP/DELETE destrutivo):
+ *
+ * SCHEMA (`drizzle/schema.ts` `financialEntries` + self-heal `[SyncSchema+]` em
+ * `server/_core/index.ts`): novas colunas `editado_por_id` (INTEGER), `editado_por_nome`
+ * (VARCHAR 255) e `editado_em` (TIMESTAMP) — registram quem/quando editou o título.
+ *
+ * SERVER (`server/routers/financial.ts`):
+ * - `updateEntry` — REVOGA o bloqueio `FORBIDDEN "edite na origem"` (que recusava qualquer
+ *   `origem_modulo` ≠ "recorrente"). Continuam bloqueados apenas pago/recebido (estorne antes)
+ *   e cancelado. Passa a gravar `editado_por_id`/`editado_por_nome` = `ctx.user` e
+ *   `editado_em = NOW()` a cada edição.
+ * - WRITE-BACK COMPRAS (ATÔMICO): quando `origem_modulo` é "compras"/"compra_oc" e há `origem_id`,
+ *   o save espelha na `compras_ordens` os campos de METADADO que existem na OC — `fornecedor_nome`,
+ *   `data_vencimento`, `forma_pagamento`, `observacoes`. O VALOR/TOTAL da OC NÃO é sobrescrito:
+ *   ele é derivado dos itens (subtotal+frete+impostos−desconto), então alterá-lo direto criaria
+ *   inconsistência com os itens; o valor financeiro do título pode legitimamente divergir do
+ *   total da OC (medição/entrega parcial). ATOMICIDADE (corrigido pós-architect review): o UPDATE
+ *   do título e o UPDATE da OC vivem na MESMA `db.transaction`; o UPDATE da OC usa `RETURNING id`
+ *   e exige `rowCount === 1` — se a OC de origem não existir/não casar (origem_id obsoleto) ou o
+ *   espelhamento falhar, a transação faz ROLLBACK e a edição INTEIRA aborta com `TRPCError CONFLICT`
+ *   (financeiro e Compras JAMAIS divergem; revoga o comportamento anterior de "falha só vira log").
+ *   O `createAuditLog` (pós-commit) inclui a origem e o resultado do espelhamento.
+ * - `getEntryDetalhe` — SELECT passa a retornar `editadoPorId`/`editadoPorNome`/`editadoEm`.
+ *
+ * CLIENT (`client/src/pages/financeiro/FinanceiroContasAPagar.tsx`):
+ * - `openEdit` — removido o `toast` "Vinculado a outro módulo — edite na origem"; títulos
+ *   vinculados abrem normalmente no editor (segue bloqueando só pago/recebido).
+ * - Modal de edição (`showEdit`) vira FULLSCREEN (`w-[100vw] h-[100dvh]`, header/footer fixos,
+ *   corpo rolável centralizado em `max-w-2xl`). Banner âmbar informa quando o título é vinculado:
+ *   para Compras explica que fornecedor/vencimento/forma/obs também vão para a OC e que o valor
+ *   da OC não muda; para outros módulos avisa que a sincronização automática hoje cobre só Compras.
+ * - Detalhe (drill-down) ganha a linha "Editado por {nome} · {data}".
+ *
+ * VALIDADO (estático): esbuild de `FinanceiroContasAPagar.tsx`, `server/routers/financial.ts`
+ * e `drizzle/schema.ts` EXIT 0 (`pnpm build`/`tsc` completos estouram OOM no container —
+ * restrição conhecida). RESSALVA: write-back validado por leitura de schema/colunas
+ * (`compras_ordens` tem fornecedor_nome/data_vencimento/forma_pagamento/observacoes); falta
+ * teste E2E com OC real.
+ *
  * Rev. 2660 — **CONTAS A PAGAR (/financeiro/contas-a-pagar) · O MODAL "REGISTRAR PAGAMENTO"
  * FICA MAIOR (max-w-lg → max-w-2xl) E DEIXA DE EXIGIR BARRA DE ROLAGEM.**
  *
