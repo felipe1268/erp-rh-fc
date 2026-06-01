@@ -1,6 +1,21 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2674 — **GESTÃO DE DOCUMENTOS (`/gestao-documentos` → lista de documentos de uma pasta) ·
+ * A COLUNA "REV." PASSA A MOSTRAR A REVISÃO SEMPRE COM 2 DÍGITOS (01, 02, 03…).**
+ *
+ * PEDIDO (usuário, print image_1780333266423): na coluna "Rev." os números apareciam com 1 dígito
+ * (2, 3, 4…); o usuário quer sempre 2 dígitos (01, 02, 03…) para padronizar a leitura.
+ *
+ * FIX (SÓ CLIENT/UI; ZERO SCHEMA; ZERO SERVER): `client/src/pages/gestaodocumentos/index.tsx` — na
+ * `TableCell` da coluna "Rev." do `filteredDocs.map`: se `parseRevision(titulo||codigo).rev >= 0`, exibe
+ * `String(rev).padStart(2, "0")` (ex.: 2 → "02", 10 → "10"); senão usa o fallback `doc.revisaoAtual`
+ * normalizado (`String(...).trim()`): vazio/whitespace → "—", numérico → pad de 2 dígitos, não-numérico
+ * (ex.: "R02") → valor cru. O cálculo/fonte da revisão é inalterado — apenas a FORMATAÇÃO de exibição.
+ * Sem SQL crua/`ALTER`/`DROP` (R-001/R-007/R-010). esbuild `index.tsx` EXIT 0.
+ *
+ * ----------------------------------------------------------------------------------------------------
+ *
  * Rev. 2673 — **GESTÃO DE DOCUMENTOS (`/gestao-documentos` → lista de documentos de uma pasta) ·
  * O LAYOUT DA COLUNA "TÍTULO / CÓDIGO" PASSA A MOSTRAR O TÍTULO DIGITADO PELO USUÁRIO EM DESTAQUE E O
  * NÚMERO/CÓDIGO DO ARQUIVO LOGO ABAIXO — ACABA A REDUNDÂNCIA "CÓDIGO + NOME .dwg" (REFINA A Rev. 2672).**

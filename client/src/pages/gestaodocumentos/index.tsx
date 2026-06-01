@@ -2354,7 +2354,11 @@ export default function GestaoDocumentos() {
                               </TableCell>
                               <TableCell className="text-center text-gray-700 text-sm font-medium">{(() => {
                                 const p = parseRevision(doc.titulo || doc.codigo || "");
-                                return p.rev >= 0 ? p.rev : (doc.revisaoAtual || "0");
+                                if (p.rev >= 0) return String(p.rev).padStart(2, "0");
+                                const raw = String(doc.revisaoAtual ?? "").trim();
+                                if (raw === "") return "—";
+                                const revNum = Number(raw);
+                                return Number.isFinite(revNum) ? String(revNum).padStart(2, "0") : raw;
                               })()}</TableCell>
                               <TableCell onClick={(e) => e.stopPropagation()}>
                                 <DropdownMenu>
