@@ -1,6 +1,49 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2662 — **CONTAS A PAGAR (/financeiro/contas-a-pagar) · A TABELA É REDISTRIBUÍDA PARA
+ * QUE OS VALORES (R$) E O STATUS VOLTEM A APARECER — ESTAVAM ESCONDIDOS À DIREITA, ATRÁS DA
+ * COLUNA FIXA "AÇÕES".**
+ *
+ * PEDIDO (usuário, print): na lista do Contas a Pagar os VALORES não aparecem ("estão
+ * escondidos") — "redistribua a tela para que eles apareçam".
+ *
+ * CAUSA-RAIZ (SÓ LAYOUT/UI): a tabela (`<table className="w-full">` dentro de um
+ * `overflow-x-auto`) tinha colunas largas demais para a largura útil da tela — a coluna
+ * "Descrição" usava `max-w-md` (até 448px) e a coluna "Ações" é `sticky right-0` com 5
+ * controles por linha (Visualizar + Editar + Anexar + Pagar[com texto] + Excluir ≈ 192px).
+ * A soma estourava a largura do container; como o overflow horizontal NÃO fica rolado por
+ * padrão, as colunas mais à direita do fluxo natural ("Valor" e "Status") ficavam fora da
+ * viewport / sobrepostas pela coluna fixa "Ações" ancorada à direita. Resultado: o usuário
+ * via "R$" cortado e o Status sumia.
+ *
+ * FIX (SÓ CLIENT/UI; ZERO SCHEMA; ZERO SERVER; R-001/R-007/R-010 — nada de ALTER/DROP/DELETE):
+ * `client/src/pages/financeiro/FinanceiroContasAPagar.tsx` — redistribuição de larguras para a
+ * tabela caber sem esconder Valor/Status (mesmas colunas, mesmos dados, mesmas mutations):
+ * - DESCRIÇÃO: `max-w-md` (448px) → `max-w-[190px]` nas linhas individuais E nas linhas-filhas
+ *   expandidas (o texto continua com `truncate` + `title`, então nada se perde — só passa a caber).
+ * - CATEGORIA: pill `max-w-[160px]` → `max-w-[110px]` (segue com `truncate` + `title`).
+ * - AÇÕES (linhas individuais): `gap-1` → `gap-0.5` e o botão "Pagar" `h-7 px-2`/`mr-1` →
+ *   `h-7 px-1.5`/`mr-0.5` (mais enxuto, mantém ícone + texto "Pagar").
+ * - AÇÕES (cabeçalho de grupo consolidado): botão de texto "Expandir/Recolher" vira botão-ícone
+ *   `ChevronRight` (rotaciona 90° quando expandido) com `title` — poupa largura nas linhas-grupo.
+ * - PADDING horizontal `px-3` → `px-2` nos cabeçalhos (Data/OC/Descrição/Categoria/Valor/Status)
+ *   e nas células correspondentes do corpo (Valor/Status individuais; Descrição filha), reduzindo
+ *   o footprint total da tabela.
+ *
+ * NENHUMA coluna foi removida, nenhuma informação foi perdida (descrições longas seguem no
+ * `title`/tooltip), e a coluna "Ações" continua fixa (sticky) à direita. O Valor já era colorido
+ * por status (vermelho=vencido, verde=pago) e a Data já mostra "Xd atraso" — então a coluna Status
+ * foi MANTIDA, apenas mais estreita.
+ *
+ * VALIDADO (estático): esbuild do arquivo EXIT 0 (`pnpm build`/`tsc` completos estouram OOM no
+ * container). Não dá pra screenshot autenticado facilmente (app exige login).
+ *
+ * ARQUIVOS: `client/src/pages/financeiro/FinanceiroContasAPagar.tsx`, `shared/version.ts`
+ * (→ Rev. 2662), `shared/changelog.ts`, `replit.md`.
+ *
+ * ----------------------------------------------------------------------------------------------
+ *
  * Rev. 2661 — **CONTAS A PAGAR (/financeiro/contas-a-pagar) · TÍTULOS VINCULADOS A OUTRO
  * MÓDULO PASSAM A SER EDITÁVEIS; A EDIÇÃO ABRE EM JANELA FULLSCREEN; AS ALTERAÇÕES
  * RETORNAM À ORDEM DE COMPRA DE ORIGEM (COMPRAS); E FICA REGISTRADO QUAL USUÁRIO EDITOU.**

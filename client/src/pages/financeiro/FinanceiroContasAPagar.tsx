@@ -1045,12 +1045,12 @@ export default function FinanceiroContasAPagar() {
                       <th className="px-2 py-2.5 text-center w-8">
                         <Checkbox checked={allVisibleSelected} onCheckedChange={toggleSelectAllVisible} aria-label="Selecionar todos" />
                       </th>
-                      <th className="px-3 py-2.5 text-left text-[11px] font-semibold text-gray-600 uppercase tracking-wide whitespace-nowrap"><span className="inline-flex items-center gap-1"><Calendar className="w-3 h-3" />Data</span></th>
-                      <th className="px-3 py-2.5 text-left text-[11px] font-semibold text-gray-600 uppercase tracking-wide whitespace-nowrap"><span className="inline-flex items-center gap-1"><Hash className="w-3 h-3" />Nº OC/OS</span></th>
-                      <th className="px-3 py-2.5 text-left text-[11px] font-semibold text-gray-600 uppercase tracking-wide">Descrição</th>
-                      <th className="px-3 py-2.5 text-left text-[11px] font-semibold text-gray-600 uppercase tracking-wide whitespace-nowrap"><span className="inline-flex items-center gap-1"><Tag className="w-3 h-3" />Categoria</span></th>
-                      <th className="px-3 py-2.5 text-right text-[11px] font-semibold text-gray-600 uppercase tracking-wide whitespace-nowrap">Valor</th>
-                      <th className="px-3 py-2.5 text-center text-[11px] font-semibold text-gray-600 uppercase tracking-wide whitespace-nowrap">Status</th>
+                      <th className="px-2 py-2.5 text-left text-[11px] font-semibold text-gray-600 uppercase tracking-wide whitespace-nowrap"><span className="inline-flex items-center gap-1"><Calendar className="w-3 h-3" />Data</span></th>
+                      <th className="px-2 py-2.5 text-left text-[11px] font-semibold text-gray-600 uppercase tracking-wide whitespace-nowrap"><span className="inline-flex items-center gap-1"><Hash className="w-3 h-3" />Nº OC/OS</span></th>
+                      <th className="px-2 py-2.5 text-left text-[11px] font-semibold text-gray-600 uppercase tracking-wide">Descrição</th>
+                      <th className="px-2 py-2.5 text-left text-[11px] font-semibold text-gray-600 uppercase tracking-wide whitespace-nowrap"><span className="inline-flex items-center gap-1"><Tag className="w-3 h-3" />Categoria</span></th>
+                      <th className="px-2 py-2.5 text-right text-[11px] font-semibold text-gray-600 uppercase tracking-wide whitespace-nowrap">Valor</th>
+                      <th className="px-2 py-2.5 text-center text-[11px] font-semibold text-gray-600 uppercase tracking-wide whitespace-nowrap">Status</th>
                       <th className="px-2 py-2.5 text-right text-[11px] font-semibold text-gray-600 uppercase tracking-wide w-[140px] sticky right-0 bg-gray-50 shadow-[-4px_0_6px_-4px_rgba(0,0,0,0.08)]">Ações</th>
                     </tr>
                   </thead>
@@ -1177,7 +1177,7 @@ export default function FinanceiroContasAPagar() {
                                       {gp.items.length}×
                                     </span>
                                   </td>
-                                  <td className="px-3 py-2.5">
+                                  <td className="px-2 py-2.5">
                                     <div className="flex items-center gap-1.5">
                                       <p className="text-sm font-bold text-slate-900">{gp.label}</p>
                                       <span className="text-xs text-slate-500">— {mesLabel}</span>
@@ -1188,16 +1188,16 @@ export default function FinanceiroContasAPagar() {
                                       {vencCount > 0 && <span className="text-red-600"> · {vencCount} vencido(s)</span>}
                                     </p>
                                   </td>
-                                  <td className="px-3 py-2.5">
+                                  <td className="px-2 py-2.5">
                                     <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium border self-start ${colorCls}`}>
                                       <Icon className="w-2.5 h-2.5" />
                                       {ORIGEM_LABELS[gp.origem] ?? gp.origem}
                                     </span>
                                   </td>
-                                  <td className="px-3 py-2.5 text-right whitespace-nowrap">
+                                  <td className="px-2 py-2.5 text-right whitespace-nowrap">
                                     <span className="text-sm font-bold tabular-nums text-slate-900">{formatBRL(gp.total)}</span>
                                   </td>
-                                  <td className="px-3 py-2.5 text-center">
+                                  <td className="px-2 py-2.5 text-center">
                                     {pagosCount === gp.items.length ? (
                                       <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-green-100 text-green-700 border border-green-200">
                                         <CheckCircle className="w-3 h-3" />Pago
@@ -1216,11 +1216,11 @@ export default function FinanceiroContasAPagar() {
                                       </span>
                                     )}
                                   </td>
-                                  <td className="px-3 py-2.5 text-right" onClick={(e) => e.stopPropagation()}>
+                                  <td className="px-2 py-2.5 text-right" onClick={(e) => e.stopPropagation()}>
                                     <div className="inline-flex items-center gap-1">
-                                      <Button size="sm" variant="outline" className="h-7 px-2 text-xs"
+                                      <Button size="sm" variant="outline" className="h-7 w-7 p-0" title={isExpanded ? "Recolher" : "Expandir"}
                                         onClick={() => toggleGroupExpand(gp.key)}>
-                                        {isExpanded ? "Recolher" : "Expandir"}
+                                        <ChevronRight className={`w-4 h-4 transition-transform ${isExpanded ? "rotate-90" : ""}`} />
                                       </Button>
                                       {pendIds.length > 0 && (
                                         <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white h-7 px-2.5 text-xs"
@@ -1252,7 +1252,7 @@ export default function FinanceiroContasAPagar() {
                                           <Checkbox checked={isSelected} onCheckedChange={() => toggleSelect(c.id)} />
                                         )}
                                       </td>
-                                      <td className="px-3 py-2 whitespace-nowrap pl-8">
+                                      <td className="px-2 py-2 whitespace-nowrap pl-6">
                                         <div className="flex items-center gap-2">
                                           <span className="text-indigo-300 text-xs">└─</span>
                                           <span className={`text-xs tabular-nums ${vencida ? "text-red-700" : c.status === "pago" ? "text-green-700" : "text-slate-600"}`}>
@@ -1260,21 +1260,21 @@ export default function FinanceiroContasAPagar() {
                                           </span>
                                         </div>
                                       </td>
-                                      <td className="px-3 py-2 whitespace-nowrap">
+                                      <td className="px-2 py-2 whitespace-nowrap">
                                         <span className="text-[11px] font-mono text-slate-500">#{c.id}</span>
                                       </td>
-                                      <td className="px-3 py-2 max-w-md">
+                                      <td className="px-2 py-2 max-w-[190px]">
                                         <p className="text-xs text-slate-700 truncate" title={desc}>{desc}</p>
                                       </td>
-                                      <td className="px-3 py-2">
+                                      <td className="px-2 py-2">
                                         <span className="text-[11px] text-slate-500">{categoriaFor(c)}</span>
                                       </td>
-                                      <td className="px-3 py-2 text-right whitespace-nowrap">
+                                      <td className="px-2 py-2 text-right whitespace-nowrap">
                                         <span className={`text-xs font-semibold tabular-nums ${vencida ? "text-red-700" : c.status === "pago" ? "text-green-700" : "text-slate-700"}`}>
                                           {formatBRL(Number(c.valorPrevisto ?? 0))}
                                         </span>
                                       </td>
-                                      <td className="px-3 py-2 text-center">
+                                      <td className="px-2 py-2 text-center">
                                         {c.status === "pago" ? (
                                           <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-green-100 text-green-700 border border-green-200">
                                             <CheckCircle className="w-2.5 h-2.5" />Pago
@@ -1352,7 +1352,7 @@ export default function FinanceiroContasAPagar() {
                                 </span>
                               </td>
                               {/* Descrição */}
-                              <td className="px-3 py-2.5 max-w-md">
+                              <td className="px-2 py-2.5 max-w-[190px]">
                                 <div className="flex items-center gap-1.5">
                                   <p className="text-sm font-medium text-slate-800 truncate" title={desc}>{desc}</p>
                                   {isDup && (
@@ -1373,13 +1373,13 @@ export default function FinanceiroContasAPagar() {
                                   (texto da categoria já carrega o nome). Ícone inline + texto
                                   poupam ~120px de largura → tabela cabe sem scroll. */}
                               <td className="px-2 py-2.5">
-                                <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] font-medium border max-w-[160px] ${colorCls}`} title={cat}>
+                                <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] font-medium border max-w-[110px] ${colorCls}`} title={cat}>
                                   <Icon className="w-3 h-3 shrink-0" />
                                   <span className="truncate">{cat}</span>
                                 </span>
                               </td>
                               {/* Valor */}
-                              <td className="px-3 py-2.5 text-right whitespace-nowrap">
+                              <td className="px-2 py-2.5 text-right whitespace-nowrap">
                                 <span className={`text-sm font-bold tabular-nums ${vencida ? "text-red-700" : c.status === "pago" ? "text-green-700" : "text-slate-800"}`}>
                                   {formatBRL(Number(c.valorPrevisto ?? 0))}
                                 </span>
@@ -1388,7 +1388,7 @@ export default function FinanceiroContasAPagar() {
                                 )}
                               </td>
                               {/* Status */}
-                              <td className="px-3 py-2.5 text-center">
+                              <td className="px-2 py-2.5 text-center">
                                 {c.status === "pago" ? (
                                   <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-green-100 text-green-700 border border-green-200">
                                     <CheckCircle className="w-3 h-3" />Pago
@@ -1405,7 +1405,7 @@ export default function FinanceiroContasAPagar() {
                               </td>
                               {/* Ações — sticky-right (Rev. 2227) + Estornar/Excluir (Rev. 2228) */}
                               <td className="px-2 py-2.5 text-right sticky right-0 bg-white group-hover:bg-slate-50 shadow-[-4px_0_6px_-4px_rgba(0,0,0,0.08)]" onClick={(e) => e.stopPropagation()}>
-                                <div className="inline-flex items-center gap-1">
+                                <div className="inline-flex items-center gap-0.5">
                                   <Button size="sm" variant="outline" className="h-7 w-7 p-0" title="Visualizar detalhes"
                                     onClick={() => setDetailEntryId(c.id)}>
                                     <Eye className="w-3.5 h-3.5" />
@@ -1431,9 +1431,9 @@ export default function FinanceiroContasAPagar() {
                                       <RotateCcw className="w-3.5 h-3.5" />
                                     </Button>
                                   ) : (
-                                    <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white h-7 px-2 text-xs"
+                                    <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white h-7 px-1.5 text-xs"
                                       onClick={() => setShowPay(c)}>
-                                      <CheckCircle className="w-3 h-3 mr-1" />Pagar
+                                      <CheckCircle className="w-3 h-3 mr-0.5" />Pagar
                                     </Button>
                                   )}
                                   {!proj && (
