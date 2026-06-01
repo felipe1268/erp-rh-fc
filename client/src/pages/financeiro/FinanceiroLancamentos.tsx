@@ -6,6 +6,8 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar as CalendarPicker } from "@/components/ui/calendar";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { trpc } from "@/lib/trpc";
@@ -17,7 +19,7 @@ import {
   Plus, Search, X, CheckCircle, AlertTriangle, TrendingUp, TrendingDown, Filter,
   Repeat, Pause, Play, Edit2, Calendar, Zap, ArrowUpRight, ArrowDownRight,
   Building2, CreditCard, FileText, ChevronDown, ChevronUp, RefreshCw,
-  ArrowLeftRight, Landmark, PlusCircle, Tag, Loader2, Pencil, Trash2,
+  ArrowLeftRight, Landmark, PlusCircle, Tag, Loader2, Pencil, Trash2, Eye,
 } from "lucide-react";
 
 function formatBRL(v: number) {
@@ -45,6 +47,16 @@ function getUltimoDiaMes() {
   const d = new Date();
   const last = new Date(d.getFullYear(), d.getMonth() + 1, 0);
   return `${last.getFullYear()}-${String(last.getMonth() + 1).padStart(2, "0")}-${String(last.getDate()).padStart(2, "0")}`;
+}
+
+// Rev. 2656 — conversão segura "YYYY-MM-DD" <-> Date (sem deslocamento de fuso).
+function strToDate(s: string | undefined): Date | undefined {
+  if (!s || !/^\d{4}-\d{2}-\d{2}$/.test(s)) return undefined;
+  const [y, m, d] = s.split("-").map(Number);
+  return new Date(y, m - 1, d);
+}
+function dateToStr(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -109,6 +121,9 @@ export default function FinanceiroLancamentos() {
   const [editEntryId, setEditEntryId] = useState<number | null>(null);
   const [showDelete, setShowDelete] = useState<{ id: number; desc: string } | null>(null);
   const [deleteMotivo, setDeleteMotivo] = useState("");
+  // Rev. 2656 — Visualizar (detalhe read-only) + calendário de período aberto.
+  const [viewId, setViewId] = useState<number | null>(null);
+  const [calOpen, setCalOpen] = useState(false);
   const [showObs, setShowObs] = useState(false);
   const [form, setForm] = useState({ ...INITIAL_FORM });
 
@@ -134,8 +149,27 @@ export default function FinanceiroLancamentos() {
     { enabled: !!companyId }
   );
 
+  // Rev. 2656 — detalhe read-only do lançamento (botão "Visualizar").
+  const detailQuery = (trpc as any).financial.getEntryDetalhe.useQuery(
+    { id: viewId ?? 0, companyId },
+    { enabled: !!viewId && !!companyId }
+  );
+
+  // Rev. 2656 — Lançamentos e Contas a Pagar/Receber leem a MESMA tabela
+  // (financial_entries). Ao editar/excluir aqui, invalidamos também as queries
+  // do Contas a Pagar/Receber para o "link" ser automático nos dois sentidos.
+  const utils = (trpc as any).useUtils();
+  function invalidarContas() {
+    try {
+      utils.financial.getContasAPagarByYear?.invalidate?.();
+      utils.financial.getContasAReceber?.invalidate?.();
+      utils.financial.getEntries?.invalidate?.();
+      utils.financial.getEntryDetalhe?.invalidate?.();
+    } catch { /* noop */ }
+  }
+
   const createEntryMut = (trpc as any).financial.createEntry.useMutation({
-    onSuccess: () => { toast({ title: "Lançamento criado!" }); setShowNew(false); resetForm(); refetch(); },
+    onSuccess: () => { toast({ title: "Lançamento criado!" }); setShowNew(false); resetForm(); refetch(); invalidarContas(); },
     onError: (e: any) => toast({ title: "Erro", description: e.message, variant: "destructive" }),
   });
 
@@ -164,7 +198,7 @@ export default function FinanceiroLancamentos() {
 
   // Rev. 2398 — edit + delete de lançamento manual.
   const updateEntryMut = (trpc as any).financial.updateEntry.useMutation({
-    onSuccess: () => { toast({ title: "Lançamento atualizado!" }); setShowNew(false); resetForm(); refetch(); },
+    onSuccess: () => { toast({ title: "Lançamento atualizado!" }); setShowNew(false); resetForm(); refetch(); invalidarContas(); },
     onError: (e: any) => toast({ title: "Erro ao atualizar", description: e.message, variant: "destructive" }),
   });
   const deleteEntryMut = (trpc as any).financial.deleteEntry.useMutation({
@@ -173,12 +207,13 @@ export default function FinanceiroLancamentos() {
       setShowDelete(null);
       setDeleteMotivo("");
       refetch();
+      invalidarContas();
     },
     onError: (e: any) => toast({ title: "Erro ao excluir", description: e.message, variant: "destructive" }),
   });
 
   const paidMut = (trpc as any).financial.updateEntryStatus.useMutation({
-    onSuccess: () => { toast({ title: "Status atualizado!" }); refetch(); },
+    onSuccess: () => { toast({ title: "Status atualizado!" }); refetch(); invalidarContas(); },
     onError: (e: any) => toast({ title: "Erro", description: e.message, variant: "destructive" }),
   });
 
@@ -553,24 +588,50 @@ export default function FinanceiroLancamentos() {
             <Card className="border-0 shadow-sm">
               <CardContent className="p-4">
                 <div className="flex flex-wrap gap-3 items-end">
-                  {/* Rev. 2399 — Período livre (calendário aberto, passado E futuro). */}
+                  {/* Rev. 2656 — Período por CALENDÁRIO ABERTO (range): seleciona "de … até …"
+                      em um calendário visual de 2 meses. Substitui os <input type=date>. */}
                   <div className="flex flex-col">
-                    <label className="text-[10px] font-medium text-gray-500 uppercase tracking-wide mb-1">De</label>
-                    <Input
-                      type="date"
-                      value={dataInicio}
-                      onChange={(e) => setDataInicio(e.target.value)}
-                      className="w-[150px] h-9"
-                    />
-                  </div>
-                  <div className="flex flex-col">
-                    <label className="text-[10px] font-medium text-gray-500 uppercase tracking-wide mb-1">Até</label>
-                    <Input
-                      type="date"
-                      value={dataFim}
-                      onChange={(e) => setDataFim(e.target.value)}
-                      className="w-[150px] h-9"
-                    />
+                    <label className="text-[10px] font-medium text-gray-500 uppercase tracking-wide mb-1">Período</label>
+                    <Popover open={calOpen} onOpenChange={setCalOpen}>
+                      <PopoverTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="h-9 justify-start text-left font-normal min-w-[230px]"
+                        >
+                          <Calendar className="w-4 h-4 mr-2 text-gray-500" />
+                          {dataInicio || dataFim ? (
+                            <span className="text-sm">
+                              {dataInicio ? fmtDateBR(dataInicio) : "…"} <span className="text-gray-400">até</span> {dataFim ? fmtDateBR(dataFim) : "…"}
+                            </span>
+                          ) : (
+                            <span className="text-sm text-gray-400">Selecionar período</span>
+                          )}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
+                        <CalendarPicker
+                          mode="range"
+                          numberOfMonths={2}
+                          defaultMonth={strToDate(dataInicio)}
+                          selected={{ from: strToDate(dataInicio), to: strToDate(dataFim) }}
+                          onSelect={(r: any) => {
+                            setDataInicio(r?.from ? dateToStr(r.from) : "");
+                            setDataFim(r?.to ? dateToStr(r.to) : "");
+                          }}
+                        />
+                        <div className="flex justify-end gap-2 border-t border-gray-100 p-2">
+                          <Button type="button" variant="ghost" size="sm" className="h-8 text-xs"
+                            onClick={() => { setDataInicio(""); setDataFim(""); }}>
+                            Limpar
+                          </Button>
+                          <Button type="button" size="sm" className="h-8 text-xs"
+                            onClick={() => setCalOpen(false)}>
+                            Aplicar
+                          </Button>
+                        </div>
+                      </PopoverContent>
+                    </Popover>
                   </div>
                   <div className="flex gap-1 items-center">
                     <Button type="button" variant="outline" size="sm" className="h-9 text-xs" onClick={setPeriodoMesAnterior}>
@@ -662,31 +723,45 @@ export default function FinanceiroLancamentos() {
                               <CheckCircle className="w-3 h-3 mr-1" />Receber
                             </Button>
                           )}
-                          {/* Rev. 2398 — Editar lançamento manual (bloqueado pra OC/folha/etc) */}
-                          {(!l.origemModulo || l.origemModulo === "recorrente") &&
-                           l.status !== "pago" && l.status !== "recebido" && l.status !== "cancelado" && (
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              className="text-blue-600 hover:text-blue-700 hover:bg-blue-50 h-7 w-7 p-0"
-                              title="Editar lançamento"
-                              onClick={() => openEditEntry(l)}
-                            >
-                              <Pencil className="w-3.5 h-3.5" />
-                            </Button>
-                          )}
-                          {/* Rev. 2398 — Excluir lançamento (não permite se pago) */}
-                          {l.status !== "pago" && l.status !== "recebido" && (
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              className="text-rose-600 hover:text-rose-700 hover:bg-rose-50 h-7 w-7 p-0"
-                              title="Excluir lançamento"
-                              onClick={() => { setDeleteMotivo(""); setShowDelete({ id: l.id, desc: l.descricao ?? l.contaNome ?? `#${l.id}` }); }}
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </Button>
-                          )}
+                          {/* Rev. 2656 — VISUALIZAR (detalhe read-only) — sempre disponível */}
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="text-gray-500 hover:text-gray-700 hover:bg-gray-100 h-7 w-7 p-0"
+                            title="Visualizar lançamento"
+                            onClick={() => setViewId(l.id)}
+                          >
+                            <Eye className="w-3.5 h-3.5" />
+                          </Button>
+                          {/* Rev. 2398/2656 — EDITAR. Sempre visível; openEditEntry exibe
+                              o motivo (origem/pago/cancelado) quando não for editável. */}
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="text-blue-600 hover:text-blue-700 hover:bg-blue-50 h-7 w-7 p-0"
+                            title="Editar lançamento"
+                            onClick={() => openEditEntry(l)}
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                          </Button>
+                          {/* Rev. 2398/2656 — EXCLUIR. Sempre visível; pago/recebido é
+                              bloqueado (use "Cancelar"/estorno) com aviso. */}
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="text-rose-600 hover:text-rose-700 hover:bg-rose-50 h-7 w-7 p-0"
+                            title="Excluir lançamento"
+                            onClick={() => {
+                              if (l.status === "pago" || l.status === "recebido") {
+                                toast({ title: "Lançamento já pago/recebido", description: "Use 'Cancelar' (estorno) em vez de excluir.", variant: "destructive" });
+                                return;
+                              }
+                              setDeleteMotivo("");
+                              setShowDelete({ id: l.id, desc: l.descricao ?? l.contaNome ?? `#${l.id}` });
+                            }}
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </Button>
                           {l.status !== "cancelado" && (
                             <Button size="sm" variant="ghost" className="text-gray-400 hover:text-gray-600 h-7 w-7 p-0"
                               title="Cancelar (estornar)"
@@ -1198,6 +1273,83 @@ export default function FinanceiroLancamentos() {
               >
                 {createAccountMut.isPending ? <><Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />Salvando...</> : <><PlusCircle className="w-3.5 h-3.5 mr-1.5" />Cadastrar</>}
               </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Rev. 2656 — Modal VISUALIZAR (detalhe read-only do lançamento). */}
+        <Dialog open={!!viewId} onOpenChange={(v) => { if (!v) setViewId(null); }}>
+          <DialogContent className="max-w-lg">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Eye className="w-4 h-4 text-gray-600" />
+                Detalhe do Lançamento
+                {detailQuery.data?.entry && (
+                  <span className="ml-auto text-xs font-normal text-gray-400 tabular-nums">#{detailQuery.data.entry.id}</span>
+                )}
+              </DialogTitle>
+            </DialogHeader>
+            {detailQuery.isLoading ? (
+              <div className="py-10 text-center text-gray-500 text-sm">Carregando…</div>
+            ) : detailQuery.error ? (
+              <div className="py-6 text-center text-red-600 text-sm">{(detailQuery.error as any)?.message ?? "Erro ao carregar."}</div>
+            ) : detailQuery.data?.entry ? (() => {
+              const e = detailQuery.data.entry;
+              return (
+                <div className="space-y-3">
+                  <div className={`rounded-lg p-4 ${e.tipo === "receita" ? "bg-green-50" : "bg-red-50"}`}>
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-gray-900">{e.descricao || e.contaNome || e.origemDescricao || "—"}</p>
+                        {e.fornecedorNome && <p className="text-xs text-gray-600 mt-0.5">{e.fornecedorNome}</p>}
+                        {e.obraNome && <p className="text-xs text-gray-500 mt-0.5">{e.obraNome}</p>}
+                      </div>
+                      <div className="text-right shrink-0">
+                        <p className={`text-lg font-bold ${e.tipo === "receita" ? "text-green-600" : "text-red-600"}`}>
+                          {formatBRL(Number(e.valorPrevisto ?? 0))}
+                        </p>
+                        <Badge className={`text-[10px] mt-1 ${STATUS_COLORS[e.status] ?? "bg-gray-100 text-gray-700"}`}>
+                          {STATUS_LABELS[e.status] ?? e.status}
+                        </Badge>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+                    <div><span className="text-gray-400 text-xs">Tipo</span><p className="font-medium capitalize">{e.tipo ?? "—"}</p></div>
+                    <div><span className="text-gray-400 text-xs">Natureza</span><p className="font-medium capitalize">{e.natureza ?? "—"}</p></div>
+                    <div><span className="text-gray-400 text-xs">Competência</span><p className="font-medium">{fmtDateBR(e.dataCompetencia)}</p></div>
+                    <div><span className="text-gray-400 text-xs">Vencimento</span><p className="font-medium">{fmtDateBR(e.dataVencimento)}</p></div>
+                    <div><span className="text-gray-400 text-xs">Categoria</span><p className="font-medium">{e.contaNome ?? "—"}</p></div>
+                    <div><span className="text-gray-400 text-xs">Forma de Pgto.</span><p className="font-medium">{e.formaPagamento ?? "—"}</p></div>
+                    {e.valorRealizado != null && (
+                      <div><span className="text-gray-400 text-xs">Valor Realizado</span><p className="font-medium">{formatBRL(Number(e.valorRealizado))}</p></div>
+                    )}
+                    {e.dataPagamento && (
+                      <div><span className="text-gray-400 text-xs">Data Pgto./Receb.</span><p className="font-medium">{fmtDateBR(e.dataPagamento)}</p></div>
+                    )}
+                    <div className="col-span-2">
+                      <span className="text-gray-400 text-xs">Origem</span>
+                      <p className="font-medium">{e.origemModulo ? originLabel(e.origemModulo) : "Lançamento manual"}{e.origemId ? ` #${e.origemId}` : ""}</p>
+                    </div>
+                    {e.observacoes && (
+                      <div className="col-span-2"><span className="text-gray-400 text-xs">Observações</span><p className="font-medium whitespace-pre-wrap">{e.observacoes}</p></div>
+                    )}
+                  </div>
+                </div>
+              );
+            })() : (
+              <div className="py-10 text-center text-gray-400 text-sm">Lançamento não encontrado.</div>
+            )}
+            <DialogFooter>
+              {detailQuery.data?.entry &&
+               (!detailQuery.data.entry.origemModulo || detailQuery.data.entry.origemModulo === "recorrente") &&
+               detailQuery.data.entry.status !== "pago" && detailQuery.data.entry.status !== "recebido" &&
+               detailQuery.data.entry.status !== "cancelado" && (
+                <Button variant="outline" onClick={() => { const ent = detailQuery.data.entry; setViewId(null); openEditEntry(ent); }}>
+                  <Pencil className="w-3.5 h-3.5 mr-1.5" />Editar
+                </Button>
+              )}
+              <Button onClick={() => setViewId(null)}>Fechar</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>

@@ -507,8 +507,28 @@ export const financialRouter = router({
     if (input.tipo) { conds.push(`e.tipo=$${i++}`); vals.push(input.tipo); }
     if (input.status) { conds.push(`e.status=$${i++}`); vals.push(input.status); }
     if (input.mesCompetencia) { conds.push(`TO_CHAR(e.data_competencia,'YYYY-MM')=$${i++}`); vals.push(input.mesCompetencia); }
-    if (input.dataInicio) { conds.push(`e.data_competencia>=$${i++}`); vals.push(input.dataInicio); }
-    if (input.dataFim) { conds.push(`e.data_competencia<=$${i++}`); vals.push(input.dataFim); }
+    // Rev. 2656 — o filtro de período passa a ser de SOBREPOSIÇÃO: o lançamento
+    // aparece se a competência OU o vencimento cai no intervalo (e, quando ambos
+    // são NULL, a data de criação). Antes filtrava só por `data_competencia`, então
+    // lançamentos com competência NULL ou com vencimento em outro mês apareciam no
+    // Contas a Pagar (que filtra por VENCIMENTO) mas SUMIAM da tela de Lançamentos.
+    // NB: `dbExecute` liga placeholders por ORDEM DE APARIÇÃO no texto (o nº de $N é
+    // cosmético) — por isso cada aparição empurra seu próprio valor em `vals`.
+    if (input.dataInicio || input.dataFim) {
+      const rangeFor = (col: string) => {
+        if (input.dataInicio && input.dataFim) { const c = `${col} BETWEEN $${i++} AND $${i++}`; vals.push(input.dataInicio, input.dataFim); return c; }
+        if (input.dataInicio) { const c = `${col}>=$${i++}`; vals.push(input.dataInicio); return c; }
+        const c = `${col}<=$${i++}`; vals.push(input.dataFim); return c;
+      };
+      const cCompetencia = rangeFor("e.data_competencia");
+      const cVencimento = rangeFor("e.data_vencimento");
+      const cCriacao = rangeFor("e.created_at::date");
+      conds.push(
+        `((e.data_competencia IS NOT NULL AND ${cCompetencia}) ` +
+        `OR (e.data_vencimento IS NOT NULL AND ${cVencimento}) ` +
+        `OR (e.data_competencia IS NULL AND e.data_vencimento IS NULL AND ${cCriacao}))`
+      );
+    }
     if (input.origemModulo) { conds.push(`e.origem_modulo=$${i++}`); vals.push(input.origemModulo); }
     vals.push(input.limit, input.offset);
     const res = await dbExecute(db, 
@@ -524,7 +544,7 @@ export const financialRouter = router({
               e.criado_por_nome AS "criadoPorNome", e.created_at AS "createdAt"
        FROM financial_entries e
        WHERE ${conds.join(" AND ")}
-       ORDER BY e.data_competencia DESC, e.created_at DESC
+       ORDER BY COALESCE(e.data_competencia, e.data_vencimento, e.created_at::date) DESC, e.created_at DESC
        LIMIT $${i++} OFFSET $${i}`,
       vals
     );

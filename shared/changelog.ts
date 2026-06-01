@@ -1,6 +1,60 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2656 — **LANÇAMENTOS (/financeiro/lancamentos) · (1) LANÇAMENTOS REALIZADOS QUE
+ * APARECEM NO CONTAS A PAGAR VOLTAM A APARECER NA TELA DE LANÇAMENTOS; (2) FILTRO DE
+ * PERÍODO VIRA UM CALENDÁRIO ABERTO (RANGE "DE … ATÉ …", 2 MESES); (3) CADA LINHA GANHA
+ * OS BOTÕES VISUALIZAR + EDITAR + EXCLUIR; (4) EDIÇÃO/EXCLUSÃO REFLETE AUTOMATICAMENTE NO
+ * CONTAS A PAGAR/RECEBER E VICE-VERSA (MESMA TABELA + INVALIDAÇÃO CRUZADA DE CACHE).**
+ *
+ * PEDIDO (usuário, print image_1780277786287): "Os lançamentos realizados estão aparecendo
+ * no Contas a Pagar, porém não aparecem na tela de lançamentos, corrija. Referente à DATA,
+ * deixe o calendário aberto para que eu possa selecionar o período (de xx/xx/xxxx até
+ * xx/xx/xxxx). Inclua os botões de EDITAR, VISUALIZAR e EXCLUIR. Ao editar o lançamento,
+ * o 'link' deve ser automático no Contas a Pagar/Receber e vice-versa."
+ *
+ * CAUSA-RAIZ #1: `financial.getEntries` (fonte da tela Lançamentos) filtrava o período
+ * SÓ por `data_competencia` (`e.data_competencia >= dataInicio AND <= dataFim`). Lançamentos
+ * com `data_competencia` NULL (condição de range exclui NULL no SQL) OU com competência em
+ * mês diferente do vencimento NUNCA apareciam — enquanto o Contas a Pagar
+ * (`getContasAPagarByYear`) filtra por `data_vencimento`. Daí a divergência: visível no
+ * Contas a Pagar, sumido em Lançamentos. (Obs.: uma primeira tentativa com
+ * `COALESCE(competencia, vencimento, criacao)` NÃO resolvia o 2º caso — o COALESCE escolhe
+ * a competência sempre que ela existe, então competência=maio + vencimento=junho continuava
+ * sumindo ao filtrar junho.)
+ *
+ * IMPLEMENTAÇÃO (SÓ CLIENT/UI + 1 ajuste de leitura no SERVER; R-001/R-007/R-010 — ZERO SCHEMA):
+ * SERVER (`server/routers/financial.ts` · `getEntries`): o filtro de período vira de
+ * SOBREPOSIÇÃO — o lançamento entra se a COMPETÊNCIA cai no intervalo OU o VENCIMENTO cai no
+ * intervalo OU (ambos NULL) a data de CRIAÇÃO cai no intervalo:
+ * `((data_competencia IS NOT NULL AND data_competencia BETWEEN ini AND fim) OR
+ *   (data_vencimento IS NOT NULL AND data_vencimento BETWEEN ini AND fim) OR
+ *   (data_competencia IS NULL AND data_vencimento IS NULL AND created_at::date BETWEEN ini AND fim))`,
+ * espelhando o Contas a Pagar (que filtra por vencimento). `ORDER BY` também passa a usar
+ * `COALESCE(competencia, vencimento, criacao) DESC` p/ as linhas recém-visíveis (competência
+ * NULL) ordenarem pela data efetiva em vez de irem pro topo (DESC default = NULLS FIRST).
+ * ATENÇÃO ao `dbExecute` (liga placeholders por ORDEM DE APARIÇÃO no texto — o nº de `$N` é
+ * cosmético): cada uma das 3 aparições do intervalo empurra os próprios valores em `vals`.
+ * CLIENT (`client/src/pages/financeiro/FinanceiroLancamentos.tsx`):
+ * - Período: os dois `<input type=date>` (De/Até) viram um CALENDÁRIO ABERTO (Popover +
+ *   `Calendar mode="range" numberOfMonths={2}`) com trigger "dd/mm/aaaa até dd/mm/aaaa" e
+ *   botões Limpar/Aplicar. Helpers `strToDate`/`dateToStr` convertem "YYYY-MM-DD" ↔ Date
+ *   sem deslocamento de fuso. Atalhos Mês anterior/atual/próximo/Ano todo preservados.
+ * - Botões por linha: NOVO VISUALIZAR (ícone Eye → modal read-only via
+ *   `financial.getEntryDetalhe`, mostrando tipo/natureza/competência/vencimento/categoria/
+ *   forma/valor realizado/data pgto/origem/observações, com atalho "Editar" quando aplicável);
+ *   EDITAR e EXCLUIR agora SEMPRE visíveis (antes ficavam escondidos por origem/status) —
+ *   `openEditEntry` e o handler de exclusão exibem o motivo (origem vinculada / pago-recebido /
+ *   cancelado) quando a ação não é permitida, em vez de simplesmente sumir o botão.
+ * - Link automático bidirecional: Lançamentos e Contas a Pagar/Receber leem a MESMA linha de
+ *   `financial_entries` (editar num lado já altera o outro). Reforço: `invalidarContas()`
+ *   (via `trpc.useUtils()`) invalida `getContasAPagarByYear` + `getContasAReceber` +
+ *   `getEntries` + `getEntryDetalhe` no onSuccess de create/update/delete/updateEntryStatus.
+ *
+ * VALIDADO (estático, convenção do projeto — `pnpm build`/`tsc` estouram OOM neste container):
+ * esbuild de `FinanceiroLancamentos.tsx` e `financial.ts` → EXIT 0; workflow reinicia limpo
+ * sem ReferenceError/erros de runtime nos logs.
+ *
  * Rev. 2655 — **CONTAS A PAGAR & CONTAS A RECEBER · A BAIXA/QUITAÇÃO GANHA CAMPOS
  * FINANCEIROS DETALHADOS (VALOR + JUROS − DESCONTOS + OUTROS ± → TOTAL), OBSERVAÇÕES,
  * ANEXO DE COMPROVANTE (PDF/WORD/FOTO) E, NO CONTAS A PAGAR, SUBFORMULÁRIO DE CHEQUE
