@@ -6696,6 +6696,8 @@ export const financialEntries = pgTable("financial_entries", {
   aprovadoPorNome: varchar("aprovado_por_nome", { length: 255 }),
   vehicleId: integer("vehicle_id"),
   fornecedorNome: varchar("fornecedor_nome", { length: 255 }),
+  anexoUrl: text("anexo_url"),
+  anexoNome: varchar("anexo_nome", { length: 255 }),
   createdAt: timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow().notNull(),
 }, (t) => [

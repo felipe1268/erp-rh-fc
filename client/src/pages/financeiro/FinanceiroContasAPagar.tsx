@@ -17,7 +17,7 @@ import {
   Users, Truck, Briefcase, Scale, Package, Receipt, Wallet,
   Download, Copy, TrendingDown, TrendingUp, Zap, Activity, X,
   Eye, ExternalLink, History, Building2, Paperclip, Hash as HashIcon, Info,
-  Trash2, RotateCcw,
+  Trash2, RotateCcw, Pencil, Loader2,
 } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -217,6 +217,16 @@ export default function FinanceiroContasAPagar() {
   const [bulkFormaPagamento, setBulkFormaPagamento] = useState("pix");
   // Rev. 1621 — modal de detalhes do título
   const [detailEntryId, setDetailEntryId] = useState<number | null>(null);
+  // Rev. 2657 — EDITAR (lançamento manual) + ANEXAR documento
+  const [showEdit, setShowEdit] = useState<any | null>(null);
+  const [editForm, setEditForm] = useState({
+    descricao: "", valorPrevisto: "", dataCompetencia: "", dataVencimento: "",
+    contaNome: "", obraNome: "", formaPagamento: "", fornecedorNome: "", observacoes: "",
+  });
+  const [showAnexo, setShowAnexo] = useState<any | null>(null);
+  const [anexoUrl, setAnexoUrl] = useState("");
+  const [anexoNome, setAnexoNome] = useState("");
+  const [uploadingAnexo, setUploadingAnexo] = useState(false);
   // Rev. 1625 — consolidação visual de RH/Benefícios/PJ/Frota/Terceiros
   const [consolidateMode, setConsolidateMode] = useState<boolean>(() => {
     if (typeof window === "undefined") return true;
@@ -251,6 +261,145 @@ export default function FinanceiroContasAPagar() {
     onSuccess: () => { toast({ title: "Pagamento registrado!" }); setShowPay(null); refetch(); },
     onError: (e: any) => toast({ title: "Erro", description: e.message, variant: "destructive" }),
   });
+
+  // Rev. 2657 — fornecedores e categorias para os datalists do modal EDITAR
+  const { data: fornecedoresList } = (trpc as any).compras.listarFornecedores.useQuery(
+    { companyId },
+    { enabled: !!companyId }
+  );
+  const fornecedoresOptions: { id: number; nome: string }[] = (() => {
+    const list: any[] = Array.isArray(fornecedoresList) ? fornecedoresList : [];
+    const seen = new Set<string>();
+    const out: { id: number; nome: string }[] = [];
+    for (const f of list) {
+      const nome = (f.razaoSocial ?? f.nomeFantasia ?? f.nome ?? "").trim();
+      const k = nome.toLowerCase();
+      if (!nome || seen.has(k)) continue;
+      seen.add(k);
+      out.push({ id: f.id, nome });
+    }
+    return out;
+  })();
+  const { data: accountsList } = (trpc as any).financial.getAccounts.useQuery(
+    { companyId },
+    { enabled: !!companyId }
+  );
+  const categoriasOptions: string[] = (() => {
+    const list: any[] = Array.isArray(accountsList) ? accountsList : [];
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const a of list) {
+      if (String(a.tipo) === "receita") continue;
+      const nome = String(a.nome ?? "").trim();
+      const k = nome.toLowerCase();
+      if (!nome || seen.has(k)) continue;
+      seen.add(k);
+      out.push(nome);
+    }
+    return out;
+  })();
+
+  // Rev. 2657 — EDITAR lançamento manual (origem nula/recorrente, não pago)
+  const updateEntryMut = (trpc as any).financial.updateEntry.useMutation({
+    onSuccess: () => {
+      toast({ title: "Lançamento atualizado!" });
+      setShowEdit(null);
+      refetch();
+      if (detailEntryId) detailQuery.refetch();
+    },
+    onError: (e: any) => toast({ title: "Erro ao editar", description: e.message, variant: "destructive" }),
+  });
+  function openEdit(c: any) {
+    if (c.status === "pago" || c.status === "recebido") {
+      toast({ title: "Lançamento já pago", description: "Estorne antes de editar.", variant: "destructive" });
+      return;
+    }
+    if (c.origemModulo && c.origemModulo !== "recorrente") {
+      toast({
+        title: "Vinculado a outro módulo",
+        description: `Este título vem de ${ORIGEM_LABELS[c.origemModulo] ?? c.origemModulo} — edite na origem.`,
+        variant: "destructive",
+      });
+      return;
+    }
+    setEditForm({
+      descricao: c.descricao ?? "",
+      valorPrevisto: String(c.valorPrevisto ?? ""),
+      dataCompetencia: (c.dataCompetencia ?? "").slice(0, 10),
+      dataVencimento: (c.dataVencimento ?? "").slice(0, 10),
+      contaNome: c.contaNome ?? "",
+      obraNome: c.obraNome ?? "",
+      formaPagamento: c.formaPagamento ?? "",
+      fornecedorNome: c.fornecedorNome ?? "",
+      observacoes: c.observacoes ?? "",
+    });
+    setShowEdit(c);
+  }
+  function handleSaveEdit() {
+    if (!showEdit) return;
+    if (!editForm.descricao.trim() || !editForm.valorPrevisto) {
+      toast({ title: "Preencha descrição e valor", variant: "destructive" });
+      return;
+    }
+    const valor = parseFloat(String(editForm.valorPrevisto).replace(",", "."));
+    if (!Number.isFinite(valor) || valor <= 0) {
+      toast({ title: "Valor inválido", variant: "destructive" });
+      return;
+    }
+    updateEntryMut.mutate({
+      id: showEdit.id,
+      companyId,
+      descricao: editForm.descricao.trim(),
+      valorPrevisto: valor,
+      dataCompetencia: editForm.dataCompetencia || undefined,
+      dataVencimento: editForm.dataVencimento || undefined,
+      contaNome: editForm.contaNome.trim() || undefined,
+      obraNome: editForm.obraNome.trim() || undefined,
+      formaPagamento: editForm.formaPagamento || undefined,
+      fornecedorNome: editForm.fornecedorNome.trim() || undefined,
+      observacoes: editForm.observacoes.trim() || undefined,
+    });
+  }
+
+  // Rev. 2657 — ANEXAR documento ao título (boleto/NF/foto)
+  const anexarMut = (trpc as any).financial.anexarDocumento.useMutation({
+    onSuccess: () => {
+      toast({ title: "Documento anexado!" });
+      setShowAnexo(null);
+      refetch();
+      if (detailEntryId) detailQuery.refetch();
+    },
+    onError: (e: any) => toast({ title: "Erro ao anexar", description: e.message, variant: "destructive" }),
+  });
+  function openAnexo(c: any) {
+    setAnexoUrl(c.anexoUrl ?? "");
+    setAnexoNome(c.anexoNome ?? "");
+    setShowAnexo(c);
+  }
+  const handleUploadAnexo = async (file: File) => {
+    setUploadingAnexo(true);
+    try {
+      const base64: string = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result).split(",")[1] ?? "");
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+      const res = await uploadCompMut.mutateAsync({ fileName: file.name, fileBase64: base64, contentType: file.type || "application/octet-stream" });
+      setAnexoUrl(res.url);
+      setAnexoNome(file.name);
+      toast({ title: "Upload concluído", description: "Clique em Salvar para vincular ao título." });
+    } catch (e: any) {
+      toast({ title: "Erro no upload", description: e?.message, variant: "destructive" });
+    } finally {
+      setUploadingAnexo(false);
+    }
+  };
+  function handleSaveAnexo() {
+    if (!showAnexo) return;
+    if (!anexoUrl) { toast({ title: "Selecione um arquivo", variant: "destructive" }); return; }
+    anexarMut.mutate({ id: showAnexo.id, companyId, anexoUrl, anexoNome: anexoNome || undefined });
+  }
 
   // Rev. 2540 — contas bancárias para o seletor da baixa
   const { data: bankAccounts } = (trpc as any).financial.getBankAccounts.useQuery(
@@ -1218,6 +1367,9 @@ export default function FinanceiroContasAPagar() {
                                     </span>
                                   )}
                                 </div>
+                                {c.fornecedorNome && (
+                                  <p className="text-[11px] text-indigo-600 truncate font-medium" title={c.fornecedorNome}>🏢 {c.fornecedorNome}</p>
+                                )}
                                 {c.obraNome && (
                                   <p className="text-[11px] text-slate-400 truncate" title={c.obraNome}>📍 {c.obraNome}</p>
                                 )}
@@ -1259,10 +1411,24 @@ export default function FinanceiroContasAPagar() {
                               {/* Ações — sticky-right (Rev. 2227) + Estornar/Excluir (Rev. 2228) */}
                               <td className="px-2 py-2.5 text-right sticky right-0 bg-white group-hover:bg-slate-50 shadow-[-4px_0_6px_-4px_rgba(0,0,0,0.08)]" onClick={(e) => e.stopPropagation()}>
                                 <div className="inline-flex items-center gap-1">
-                                  <Button size="sm" variant="outline" className="h-7 w-7 p-0" title="Ver detalhes"
+                                  <Button size="sm" variant="outline" className="h-7 w-7 p-0" title="Visualizar detalhes"
                                     onClick={() => setDetailEntryId(c.id)}>
                                     <Eye className="w-3.5 h-3.5" />
                                   </Button>
+                                  {!proj && (
+                                    <Button size="sm" variant="outline" className="h-7 w-7 p-0 border-blue-200 text-blue-600 hover:bg-blue-50 hover:text-blue-700"
+                                      title={c.origemModulo && c.origemModulo !== "recorrente" ? "Vinculado a outro módulo — edite na origem" : c.status === "pago" ? "Estorne antes de editar" : "Editar lançamento"}
+                                      onClick={() => openEdit(c)}>
+                                      <Pencil className="w-3.5 h-3.5" />
+                                    </Button>
+                                  )}
+                                  {!proj && (
+                                    <Button size="sm" variant="outline" className={`h-7 w-7 p-0 ${c.anexoUrl ? "border-emerald-300 text-emerald-700 hover:bg-emerald-50" : "border-slate-200 text-slate-600 hover:bg-slate-50"}`}
+                                      title={c.anexoUrl ? `Anexo: ${c.anexoNome ?? "documento"} (clique p/ trocar)` : "Anexar documento (boleto/NF/foto)"}
+                                      onClick={() => openAnexo(c)}>
+                                      <Paperclip className="w-3.5 h-3.5" />
+                                    </Button>
+                                  )}
                                   {c.status === "pago" ? (
                                     <Button size="sm" variant="outline" className="h-7 w-7 p-0 border-amber-300 text-amber-700 hover:bg-amber-50"
                                       title="Estornar pagamento (baixa errada)"
@@ -1465,6 +1631,7 @@ export default function FinanceiroContasAPagar() {
                         )}
                         {e.codigoBarras && <KV label="Cód. de Barras"><span className="font-mono text-[11px]">{e.codigoBarras}</span></KV>}
                         {e.chequeNumero && <KV label="Cheque">{e.chequeNumero} ({e.chequeBanco})</KV>}
+                        <KV label="Fornecedor / Cliente" highlight={!!e.fornecedorNome}>{e.fornecedorNome ?? "—"}</KV>
                         <KV label="Conciliação">{e.conciliado ? `✓ ${fmtDateBR(e.dataConciliacao)}` : "Não conciliado"}</KV>
                         <KV label="Criado por">{e.criadoPorNome ?? "—"}</KV>
                         {e.aprovadoPorNome && <KV label="Aprovado por">{e.aprovadoPorNome}</KV>}
@@ -1498,6 +1665,14 @@ export default function FinanceiroContasAPagar() {
                         <a href={e.comprovanteUrl} target="_blank" rel="noopener noreferrer"
                           className="inline-flex items-center gap-2 text-sm text-blue-700 hover:underline">
                           <Paperclip className="w-4 h-4" />Ver comprovante de pagamento
+                          <ExternalLink className="w-3 h-3" />
+                        </a>
+                      )}
+
+                      {e.anexoUrl && (
+                        <a href={e.anexoUrl} target="_blank" rel="noopener noreferrer"
+                          className="flex items-center gap-2 text-sm text-emerald-700 hover:underline">
+                          <Paperclip className="w-4 h-4" />Ver documento anexado{e.anexoNome ? ` — ${e.anexoNome}` : ""}
                           <ExternalLink className="w-3 h-3" />
                         </a>
                       )}
@@ -1863,6 +2038,134 @@ export default function FinanceiroContasAPagar() {
                   });
                 }}>
                 {bulkPayMut.isPending ? "Processando..." : `Confirmar ${selectedIds.size} pagamento(s)`}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Rev. 2657 — Modal EDITAR (lançamento manual) */}
+        <Dialog open={!!showEdit} onOpenChange={(o) => { if (!o) setShowEdit(null); }}>
+          <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-blue-700">
+                <Pencil className="w-5 h-5" />Editar Lançamento
+              </DialogTitle>
+            </DialogHeader>
+            {showEdit && (
+              <div className="space-y-3">
+                <div>
+                  <Label className="text-xs text-slate-500">Descrição</Label>
+                  <Input value={editForm.descricao} onChange={e => setEditForm(f => ({ ...f, descricao: e.target.value }))}
+                    placeholder="Descrição do lançamento" />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label className="text-xs text-slate-500">Valor (R$)</Label>
+                    <Input type="number" step="0.01" value={editForm.valorPrevisto}
+                      onChange={e => setEditForm(f => ({ ...f, valorPrevisto: e.target.value }))} placeholder="0,00" />
+                  </div>
+                  <div>
+                    <Label className="text-xs text-slate-500">Forma de Pagamento</Label>
+                    <Select value={editForm.formaPagamento || "none"} onValueChange={v => setEditForm(f => ({ ...f, formaPagamento: v === "none" ? "" : v }))}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">—</SelectItem>
+                        <SelectItem value="pix">PIX</SelectItem>
+                        <SelectItem value="ted">TED</SelectItem>
+                        <SelectItem value="boleto">Boleto</SelectItem>
+                        <SelectItem value="dinheiro">Dinheiro</SelectItem>
+                        <SelectItem value="cartao">Cartão</SelectItem>
+                        <SelectItem value="cheque">Cheque</SelectItem>
+                        <SelectItem value="transferencia">Transferência</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label className="text-xs text-slate-500">Competência</Label>
+                    <Input type="date" value={editForm.dataCompetencia}
+                      onChange={e => setEditForm(f => ({ ...f, dataCompetencia: e.target.value }))} />
+                  </div>
+                  <div>
+                    <Label className="text-xs text-slate-500">Vencimento</Label>
+                    <Input type="date" value={editForm.dataVencimento}
+                      onChange={e => setEditForm(f => ({ ...f, dataVencimento: e.target.value }))} />
+                  </div>
+                </div>
+                <div>
+                  <Label className="text-xs text-slate-500">Categoria / Conta</Label>
+                  <Input value={editForm.contaNome} onChange={e => setEditForm(f => ({ ...f, contaNome: e.target.value }))}
+                    list="cap-categorias-datalist" placeholder="Categoria contábil" />
+                  <datalist id="cap-categorias-datalist">
+                    {categoriasOptions.map(n => <option key={n} value={n} />)}
+                  </datalist>
+                </div>
+                <div>
+                  <Label className="text-xs text-slate-500">Fornecedor / Cliente</Label>
+                  <Input value={editForm.fornecedorNome} onChange={e => setEditForm(f => ({ ...f, fornecedorNome: e.target.value }))}
+                    list="cap-fornecedores-datalist" placeholder="Nome do fornecedor / cliente" />
+                  <datalist id="cap-fornecedores-datalist">
+                    {fornecedoresOptions.map(f => <option key={f.id} value={f.nome} />)}
+                  </datalist>
+                </div>
+                <div>
+                  <Label className="text-xs text-slate-500">Obra</Label>
+                  <Input value={editForm.obraNome} onChange={e => setEditForm(f => ({ ...f, obraNome: e.target.value }))}
+                    placeholder="Obra (opcional)" />
+                </div>
+                <div>
+                  <Label className="text-xs text-slate-500">Observações</Label>
+                  <Textarea value={editForm.observacoes} onChange={e => setEditForm(f => ({ ...f, observacoes: e.target.value }))}
+                    rows={2} placeholder="Observações (opcional)" />
+                </div>
+              </div>
+            )}
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShowEdit(null)}>Cancelar</Button>
+              <Button className="bg-blue-600 hover:bg-blue-700 text-white" disabled={updateEntryMut.isPending} onClick={handleSaveEdit}>
+                {updateEntryMut.isPending ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <CheckCircle className="w-4 h-4 mr-1" />}
+                Salvar
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Rev. 2657 — Modal ANEXAR documento (boleto/NF/foto) */}
+        <Dialog open={!!showAnexo} onOpenChange={(o) => { if (!o) setShowAnexo(null); }}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-emerald-700">
+                <Paperclip className="w-5 h-5" />Anexar Documento
+              </DialogTitle>
+            </DialogHeader>
+            {showAnexo && (
+              <div className="space-y-3">
+                <div className="rounded-lg bg-slate-50 border border-slate-200 p-3">
+                  <p className="text-sm font-medium text-slate-800">{showAnexo.descricao ?? showAnexo.contaNome ?? "—"}</p>
+                  <p className="text-xs text-slate-500">Boleto, nota fiscal, contrato, comprovante ou foto.</p>
+                </div>
+                <div>
+                  <Label className="text-xs text-slate-500">Arquivo (PDF / Word / imagem)</Label>
+                  <Input type="file" accept=".pdf,.doc,.docx,image/*" disabled={uploadingAnexo}
+                    onChange={e => { const f = e.target.files?.[0]; if (f) handleUploadAnexo(f); }} />
+                  {uploadingAnexo && (
+                    <p className="text-xs text-slate-500 mt-1 flex items-center gap-1"><Loader2 className="w-3 h-3 animate-spin" />Enviando...</p>
+                  )}
+                  {anexoUrl && !uploadingAnexo && (
+                    <a href={anexoUrl} target="_blank" rel="noopener noreferrer"
+                      className="text-xs text-emerald-700 hover:underline mt-1 inline-flex items-center gap-1">
+                      <Paperclip className="w-3 h-3" />{anexoNome || "documento"}<ExternalLink className="w-3 h-3" />
+                    </a>
+                  )}
+                </div>
+              </div>
+            )}
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShowAnexo(null)}>Cancelar</Button>
+              <Button className="bg-emerald-600 hover:bg-emerald-700 text-white" disabled={anexarMut.isPending || uploadingAnexo || !anexoUrl} onClick={handleSaveAnexo}>
+                {anexarMut.isPending ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <CheckCircle className="w-4 h-4 mr-1" />}
+                Salvar
               </Button>
             </DialogFooter>
           </DialogContent>

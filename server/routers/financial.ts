@@ -742,6 +742,7 @@ export const financialRouter = router({
               aprovado_por_id AS "aprovadoPorId", aprovado_por_nome AS "aprovadoPorNome",
               vehicle_id AS "vehicleId",
               fornecedor_nome AS "fornecedorNome",
+              anexo_url AS "anexoUrl", anexo_nome AS "anexoNome",
               created_at AS "createdAt", updated_at AS "updatedAt",
               CASE WHEN data_vencimento < CURRENT_DATE AND status != 'pago' THEN CURRENT_DATE - data_vencimento ELSE 0 END AS "diasAtraso"
        FROM financial_entries
@@ -1602,6 +1603,38 @@ export const financialRouter = router({
       details: `Entry ${input.id} EDITADO por ${ctx.user?.name ?? "?"} (id=${ctx.user?.id ?? "?"}) — snapshot antes: ${snap}`,
     });
     return { ok: true, changed: true };
+  }),
+
+  // Rev. 2657 — ANEXAR documento (boleto/NF/foto) a um título do Contas a Pagar.
+  // Grava anexo_url/anexo_nome (já feito o upload via uploadComprovante → storagePut).
+  // Diferente do comprovante_url (que é o comprovante DE PAGAMENTO, gravado na baixa):
+  // este é o documento de origem do título (boleto, nota fiscal, contrato etc.).
+  // Não bloqueia por status — pode-se anexar documento mesmo a título já pago.
+  anexarDocumento: protectedProcedure.input(z.object({
+    id: z.number(),
+    companyId: z.number(),
+    anexoUrl: z.string(),
+    anexoNome: z.string().optional(),
+  })).mutation(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    const exists: any = await dbExecute(db,
+      `SELECT id FROM financial_entries WHERE id=$1 AND company_id=$2`,
+      [input.id, input.companyId]
+    ).then((r: any) => (Array.isArray(r) ? r : r?.rows ?? []));
+    if (!exists[0]) throw new TRPCError({ code: "NOT_FOUND", message: "Lançamento não encontrado." });
+    await dbExecute(db,
+      `UPDATE financial_entries SET anexo_url = $1, anexo_nome = $2, updated_at = NOW()
+       WHERE id = $3 AND company_id = $4`,
+      [input.anexoUrl || null, input.anexoNome?.trim() || null, input.id, input.companyId]
+    );
+    await createAuditLog({
+      action: "financial_entry_anexo",
+      userId: ctx.user?.id,
+      companyId: input.companyId,
+      details: `Entry ${input.id} ANEXO por ${ctx.user?.name ?? "?"} (id=${ctx.user?.id ?? "?"}) — "${input.anexoNome ?? input.anexoUrl}"`,
+    });
+    return { ok: true };
   }),
 
   // NÃO permite excluir status='pago' (proteção financeira — usar cancelEntry
@@ -3381,6 +3414,7 @@ export const financialRouter = router({
               origem_modulo AS "origemModulo", origem_id AS "origemId",
               origem_descricao AS "origemDescricao",
               fornecedor_nome AS "fornecedorNome",
+              anexo_url AS "anexoUrl", anexo_nome AS "anexoNome",
               conta_bancaria_id AS "contaBancariaId",
               tipo,
               CASE WHEN data_vencimento < CURRENT_DATE AND status != 'pago' THEN CURRENT_DATE - data_vencimento ELSE 0 END AS "diasAtraso"

@@ -1,6 +1,45 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2657 — **CONTAS A PAGAR (/financeiro/contas-a-pagar) · (1) CADA LINHA GANHA OS
+ * BOTÕES EDITAR (✏️) E ANEXAR (📎) — ALÉM DO VISUALIZAR (👁) E EXCLUIR (🗑) QUE JÁ
+ * EXISTIAM; (2) O FORNECEDOR/CLIENTE PASSA A APARECER NA LISTA (LINHA DA DESCRIÇÃO) E NO
+ * DETALHE (ABA GERAL); (3) O DOCUMENTO ANEXADO (BOLETO/NF/FOTO) GANHA LINK NO DETALHE.**
+ *
+ * PEDIDO (usuário, prints image_1780278786477 + image_1780278898496): no Contas a Pagar,
+ * espelhar o que foi feito em Lançamentos — botões de EDITAR e ANEXAR documento por linha,
+ * e mostrar o nome do fornecedor/cliente (o servidor já retornava `fornecedorNome` mas a
+ * UI não exibia).
+ *
+ * IMPLEMENTAÇÃO (CLIENT/UI + SERVER aditivo; R-001/R-007/R-010 — SÓ ADD COLUMN IF NOT EXISTS):
+ * SCHEMA (`drizzle/schema.ts` · `financialEntries`): +`anexo_url` (text) +`anexo_nome`
+ * (varchar 255) — documento de ORIGEM do título (boleto/NF/contrato), distinto do
+ * `comprovante_url` (comprovante DE PAGAMENTO gravado na baixa). Self-heal `[SyncSchema+]`
+ * (`server/_core/index.ts`) com `ADD COLUMN IF NOT EXISTS` p/ ambas — Neon se auto-cura no
+ * boot (ver memória drizzle-schema-neon-sync).
+ * SERVER (`server/routers/financial.ts`):
+ * - `getContasAPagarByYear` e `getEntryDetalhe` passam a SELECT `anexo_url AS "anexoUrl",
+ *   anexo_nome AS "anexoNome"`.
+ * - `updateEntry` (já existia) edita lançamento manual via builder dinâmico de SET; BLOQUEIA
+ *   (FORBIDDEN) títulos pagos/recebidos/cancelados e os vinculados a outro módulo
+ *   (`origem_modulo` ≠ recorrente) — edite na origem. Grava audit log com snapshot do antes.
+ * - NOVO `anexarDocumento` — grava `anexo_url`/`anexo_nome` (upload já feito via
+ *   `uploadComprovante`→`storagePut`); NÃO bloqueia por status (pode anexar a título já pago).
+ * CLIENT (`client/src/pages/financeiro/FinanceiroContasAPagar.tsx`):
+ * - Linha da descrição mostra `🏢 fornecedorNome` (indigo) acima do `📍 obraNome`.
+ * - Bloco de ações ganha EDITAR (Pencil → `openEdit`) e ANEXAR (Paperclip → `openAnexo`),
+ *   ambos ocultos no modo projeção (`!proj`); o EDITAR fica com title explicativo quando o
+ *   título é de outro módulo / já pago (e `openEdit` faz toast + early-return nesses casos).
+ * - Aba GERAL do detalhe: KV "Fornecedor / Cliente" (sempre visível) + link "Ver documento
+ *   anexado" (emerald) quando há `anexoUrl`.
+ * - Modal EDITAR (descrição, valor, forma de pagamento, competência, vencimento, categoria,
+ *   fornecedor/cliente, obra, observações — com datalists de fornecedores
+ *   [`compras.listarFornecedores`] e categorias [`financial.getAccounts`, só despesa]).
+ * - Modal ANEXAR (`<input type=file>` PDF/Word/imagem → base64 → `uploadComprovante` →
+ *   Salvar chama `anexarDocumento`).
+ * VALIDADO (estático): esbuild dos 3 arquivos tocados EXIT 0 (`pnpm build`/`tsc` estouram OOM
+ * no container — restrição conhecida).
+ *
  * Rev. 2656 — **LANÇAMENTOS (/financeiro/lancamentos) · (1) LANÇAMENTOS REALIZADOS QUE
  * APARECEM NO CONTAS A PAGAR VOLTAM A APARECER NA TELA DE LANÇAMENTOS; (2) FILTRO DE
  * PERÍODO VIRA UM CALENDÁRIO ABERTO (RANGE "DE … ATÉ …", 2 MESES); (3) CADA LINHA GANHA

@@ -2427,6 +2427,13 @@ Regras:
           console.log(`[SyncSchema+] Rev. 2655: colunas juros/descontos/outros (financial_entries + financial_revenue) + cheque_tipo (financial_entries) garantidas.`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.2655 baixa detalhada:`, e?.message || e); }
 
+        // ── Rev. 2657 — Anexo de documento por título no Contas a Pagar (boleto/NF/foto) ──
+        try {
+          await db.execute(sql`ALTER TABLE financial_entries ADD COLUMN IF NOT EXISTS anexo_url TEXT`);
+          await db.execute(sql`ALTER TABLE financial_entries ADD COLUMN IF NOT EXISTS anexo_nome VARCHAR(255)`);
+          console.log(`[SyncSchema+] Rev. 2657: colunas anexo_url/anexo_nome (financial_entries) garantidas.`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.2657 anexo título:`, e?.message || e); }
+
       } catch (e: any) { console.error(`[SyncSchema+] ERROR:`, e?.message || e); }
     }).catch(e => console.error("[SyncSchema] Falha ao iniciar:", e));
     // Garantir colunas críticas adicionadas recentemente que o SyncSchema possa ter ignorado
