@@ -2293,8 +2293,9 @@ export default function GestaoDocumentos() {
                           const veioDoLote = !!doc.titulo && !!doc.codigo && normTxt(doc.titulo) === normTxt(doc.codigo)
                             && (!doc.arquivoNome || normTxt(arquivoStem) === normTxt(doc.codigo));
                           const tituloIsCode = veioDoLote && temDescricao;
-                          const tituloDestaque = (tituloIsCode ? (doc.descricao || "").trim() : doc.titulo) || doc.codigo || doc.arquivoNome || "—";
-                          const numeroArquivo = doc.codigo || doc.arquivoNome || "";
+                          const tituloDoc = (tituloIsCode ? (doc.descricao || "").trim() : doc.titulo) || "";
+                          const nomeArquivoDestaque = doc.codigo || doc.arquivoNome || tituloDoc || "—";
+                          const tituloAbaixo = tituloDoc && tituloDoc !== nomeArquivoDestaque ? tituloDoc : "";
                           const descricaoExtra = !tituloIsCode ? (doc.descricao || "").trim() : "";
                           return (
                             <TableRow key={doc.id} className={`border-gray-100 hover:bg-gray-50 cursor-pointer ${selectedDocIds.has(doc.id) ? "bg-blue-50" : ""} ${missingCounterpart ? "bg-red-50/50" : ""}`} onClick={() => { setSelectedDoc(doc); setShowDetailModal(true); }}>
@@ -2316,7 +2317,7 @@ export default function GestaoDocumentos() {
                                   {doc.arquivoUrl && <Paperclip className="w-3 h-3 text-blue-500 shrink-0 mt-1" />}
                                   <div className="min-w-0">
                                     <span className="flex items-center gap-1.5 flex-nowrap">
-                                      <span className="truncate text-sm font-semibold text-gray-900">{tituloDestaque}</span>
+                                      <span className="truncate text-sm font-semibold text-gray-900">{nomeArquivoDestaque}</span>
                                       {missingPdf && (
                                         <span className="shrink-0 inline-flex items-center gap-1 ml-1 px-2 py-0.5 bg-red-100 text-red-700 text-[10px] font-semibold rounded-full border border-red-300 whitespace-nowrap">
                                           <AlertTriangle className="w-3 h-3" />
@@ -2336,10 +2337,10 @@ export default function GestaoDocumentos() {
                                         </span>
                                       )}
                                     </span>
-                                    {numeroArquivo && numeroArquivo !== tituloDestaque && (
-                                      <p className="text-[11px] font-mono text-gray-500 truncate mt-0.5">{numeroArquivo}</p>
+                                    {tituloAbaixo && (
+                                      <p className="text-[11px] text-gray-600 truncate mt-0.5">{tituloAbaixo}</p>
                                     )}
-                                    {descricaoExtra && (
+                                    {descricaoExtra && descricaoExtra !== tituloAbaixo && (
                                       <p className="text-[11px] text-gray-400 truncate mt-0.5">{descricaoExtra}</p>
                                     )}
                                   </div>

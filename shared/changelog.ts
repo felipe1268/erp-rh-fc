@@ -1,6 +1,26 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2675 — **GESTÃO DE DOCUMENTOS (`/gestao-documentos` → lista de documentos de uma pasta) ·
+ * A COLUNA "TÍTULO / CÓDIGO" INVERTE A HIERARQUIA: O NOME/CÓDIGO DO ARQUIVO PASSA A APARECER EM DESTAQUE
+ * E O TÍTULO DIGITADO PELO USUÁRIO LOGO ABAIXO (INVERTE A Rev. 2673).**
+ *
+ * PEDIDO (usuário, print image_1780333925880): após a Rev. 2673 a célula mostrava o TÍTULO em destaque
+ * ("TOPOGRAFIA - POITA") e o CÓDIGO/NOME do arquivo logo abaixo ("POITA-ARQ-000-PE-PL-GRAL-IMP-R02"); o
+ * usuário achou melhor o contrário: "deixa o nome do arquivo em evidência e o título abaixo".
+ *
+ * FIX (SÓ CLIENT/UI; ZERO SCHEMA; ZERO SERVER): `client/src/pages/gestaodocumentos/index.tsx` — por linha
+ * do `filteredDocs.map` reaproveita a mesma heurística `veioDoLote`/`tituloIsCode` (trim+lowercase + stem)
+ * pra separar título real x código, mas troca os papéis na renderização:
+ *   - `tituloDoc` = (tituloIsCode ? descricao : titulo) (sem fallback p/ código);
+ *   - `nomeArquivoDestaque` = `codigo || arquivoNome || tituloDoc || "—"` (1ª linha, `font-semibold`);
+ *   - `tituloAbaixo` = `tituloDoc` quando não-vazio e `!== nomeArquivoDestaque` (2ª linha, `text-gray-600`);
+ *   - `descricaoExtra` (docs manuais) continua como 3ª linha (`text-gray-400`), só se `!== tituloAbaixo`.
+ * Badges (Sem PDF/DWG/rev-mismatch)/clipe/`docParsed`/busca inalterados. Só reordenação/estilo de exibição
+ * — fonte dos campos inalterada. Sem SQL crua/`ALTER`/`DROP` (R-001/R-007/R-010). esbuild `index.tsx` EXIT 0.
+ *
+ * ----------------------------------------------------------------------------------------------------
+ *
  * Rev. 2674 — **GESTÃO DE DOCUMENTOS (`/gestao-documentos` → lista de documentos de uma pasta) ·
  * A COLUNA "REV." PASSA A MOSTRAR A REVISÃO SEMPRE COM 2 DÍGITOS (01, 02, 03…).**
  *
