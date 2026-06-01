@@ -1,6 +1,23 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2660 — **CONTAS A PAGAR (/financeiro/contas-a-pagar) · O MODAL "REGISTRAR PAGAMENTO"
+ * FICA MAIOR (max-w-lg → max-w-2xl) E DEIXA DE EXIGIR BARRA DE ROLAGEM.**
+ *
+ * PEDIDO (usuário, print image_1780281165690): aumentar a tela do modal de pagamento para
+ * que não precise de barra de rolagem.
+ *
+ * IMPLEMENTAÇÃO (SÓ CLIENT/UI; ZERO SCHEMA; ZERO SERVER; R-001/R-007/R-010):
+ * CLIENT (`client/src/pages/financeiro/FinanceiroContasAPagar.tsx`, modal `showPay`):
+ * - `DialogContent` passa de `max-w-lg` para `max-w-2xl` (mais largo).
+ * - "Conta Bancária" e "Comprovante / Documento" — que eram duas linhas full-width
+ *   empilhadas — passam a dividir UMA linha (grid 2 colunas), reduzindo a altura total do
+ *   modal o suficiente para caber sem rolagem no caso comum (sem subformulário de cheque).
+ * - Nenhuma mudança de comportamento/estado: mesmos campos, mesmas mutations.
+ *
+ * VALIDADO (estático): esbuild de `FinanceiroContasAPagar.tsx` EXIT 0 (`pnpm build`/`tsc`
+ * completos estouram OOM no container — restrição conhecida).
+ *
  * Rev. 2659 — **INVENTÁRIO SEMANAL (/almoxarifado/inventario) · A TELA GANHA UM CAMPO DE
  * BUSCA (POR NOME OU CÓDIGO INTERNO DO ITEM) IGUAL AO DO ALMOXARIFADO.**
  *

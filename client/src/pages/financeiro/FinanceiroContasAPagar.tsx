@@ -2250,7 +2250,7 @@ export default function FinanceiroContasAPagar() {
 
         {/* Modal pagar */}
         <Dialog open={!!showPay} onOpenChange={() => setShowPay(null)}>
-          <DialogContent className="max-w-lg">
+          <DialogContent className="max-w-2xl">
             <DialogHeader><DialogTitle>Registrar Pagamento</DialogTitle></DialogHeader>
             {showPay && (
               <div className="space-y-3">
@@ -2301,22 +2301,38 @@ export default function FinanceiroContasAPagar() {
                   <span className="text-lg font-bold text-green-700">{formatBRL(totalPagar)}</span>
                 </div>
 
-                <div>
-                  <Label>Conta Bancária</Label>
-                  <Select
-                    value={contaBancariaId != null ? String(contaBancariaId) : "none"}
-                    onValueChange={v => setContaBancariaId(v === "none" ? null : Number(v))}
-                  >
-                    <SelectTrigger><SelectValue placeholder="Selecione a conta" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">— Não informar —</SelectItem>
-                      {(bankAccounts ?? []).filter((a: any) => a.ativo).map((a: any) => (
-                        <SelectItem key={a.id} value={String(a.id)}>
-                          {[a.descricao || a.banco, a.agencia ? `Ag ${a.agencia}` : null, a.conta ? `CC ${a.conta}` : null].filter(Boolean).join(" · ")}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                {/* Rev. 2660 — Conta Bancária + Comprovante lado a lado (reduz altura → sem rolagem) */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <Label>Conta Bancária</Label>
+                    <Select
+                      value={contaBancariaId != null ? String(contaBancariaId) : "none"}
+                      onValueChange={v => setContaBancariaId(v === "none" ? null : Number(v))}
+                    >
+                      <SelectTrigger><SelectValue placeholder="Selecione a conta" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">— Não informar —</SelectItem>
+                        {(bankAccounts ?? []).filter((a: any) => a.ativo).map((a: any) => (
+                          <SelectItem key={a.id} value={String(a.id)}>
+                            {[a.descricao || a.banco, a.agencia ? `Ag ${a.agencia}` : null, a.conta ? `CC ${a.conta}` : null].filter(Boolean).join(" · ")}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Rev. 2655 — Comprovante (PDF/Word/imagem) */}
+                  <div>
+                    <Label>Comprovante / Documento</Label>
+                    <Input type="file" accept=".pdf,.doc,.docx,image/*"
+                      onChange={e => { const f = e.target.files?.[0]; if (f) handleUploadComprovante(f); }} disabled={uploadingComp} />
+                    {uploadingComp && <p className="text-xs text-gray-500 mt-1">Enviando…</p>}
+                    {comprovanteUrl && !uploadingComp && (
+                      <p className="text-xs text-green-700 mt-1">
+                        Anexado: <a href={comprovanteUrl} target="_blank" rel="noreferrer" className="underline">{comprovanteNome || "ver arquivo"}</a>
+                      </p>
+                    )}
+                  </div>
                 </div>
 
                 {/* Rev. 2655 — Cheque: próprio/terceiros + dados do cheque */}
@@ -2385,19 +2401,6 @@ export default function FinanceiroContasAPagar() {
                     )}
                   </div>
                 )}
-
-                {/* Rev. 2655 — Comprovante (PDF/Word/imagem) */}
-                <div>
-                  <Label>Comprovante / Documento</Label>
-                  <Input type="file" accept=".pdf,.doc,.docx,image/*"
-                    onChange={e => { const f = e.target.files?.[0]; if (f) handleUploadComprovante(f); }} disabled={uploadingComp} />
-                  {uploadingComp && <p className="text-xs text-gray-500 mt-1">Enviando…</p>}
-                  {comprovanteUrl && !uploadingComp && (
-                    <p className="text-xs text-green-700 mt-1">
-                      Anexado: <a href={comprovanteUrl} target="_blank" rel="noreferrer" className="underline">{comprovanteNome || "ver arquivo"}</a>
-                    </p>
-                  )}
-                </div>
 
                 {/* Rev. 2655 — Observações */}
                 <div>
