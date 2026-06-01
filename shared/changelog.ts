@@ -1,6 +1,27 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2670 — **GESTÃO DE DOCUMENTOS (`/gestao-documentos` → tela "Projetos / Documentos Técnicos") ·
+ * AGORA DÁ PARA APAGAR FICHEIROS (CARDS DE OBRA) EM LOTE, COM SELEÇÃO MÚLTIPLA.**
+ *
+ * PEDIDO (usuário, print image_1780330434115): na lista de ficheiros (IGREJA SÃO GERALDO, VITRA,
+ * REVTE-CIVIL, etc.) não havia como excluir — só criar ("Novo Ficheiro") e abrir. O usuário queria
+ * a opção de apagar os ficheiros fazendo seleção múltipla.
+ *
+ * FIX (SÓ CLIENT/UI; ZERO SCHEMA; ZERO SERVER — reusa endpoint `deleteFicheiro` que JÁ EXISTIA):
+ *   `client/src/pages/gestaodocumentos/index.tsx` (view "obras") —
+ *   • Botão "Selecionar" no cabeçalho liga o MODO DE SELEÇÃO (`selectModeFicheiro`). Nesse modo, clicar
+ *     num card marca/desmarca (`selectedFicheiroIds: Set<number>`) em vez de abrir o ficheiro; o card
+ *     ganha ring/checkbox vermelho no canto e o subtítulo vira "N selecionado(s)".
+ *   • Botão "Excluir (N)" (vermelho) abre o `askConfirm` (modal in-app) e, ao confirmar, chama o
+ *     endpoint `gestaoDocumentos.deleteFicheiro` UMA VEZ POR ID, sequencialmente (respeita o controle
+ *     de acesso por obra do servidor — `userCanAccessObra`). Conta sucessos/erros, invalida
+ *     `listFicheiros`, sai do modo seleção e dá toast de resultado.
+ *   • Botão "Cancelar" sai do modo seleção sem apagar. "Selecionar" só aparece quando há ≥1 ficheiro.
+ * O endpoint `deleteFicheiro` (server `gestaodocumentos.ts`) é escopado por `companyId`+`id` com checagem
+ * de acesso — nenhuma SQL crua/`ALTER`/`DROP` (respeita R-001/R-007/R-010). esbuild `index.tsx` EXIT 0
+ * (`pnpm build`/`tsc` completos estouram OOM no container).
+ *
  * Rev. 2669 — **COTAÇÕES (`/compras/cotacoes` → aba "Mapa de Cotação") · AO CLICAR/DIGITAR NO CAMPO DE
  * PREÇO (OU QTD) DE UM FORNECEDOR, A TELA PARA DE "SUBIR O CURSOR" / VOLTAR PRO TOPO A CADA TECLA — O
  * FOCO E A POSIÇÃO DE SCROLL AGORA SÃO PRESERVADOS.**

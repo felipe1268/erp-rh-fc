@@ -256,6 +256,13 @@ export default function GestaoDocumentos() {
   const [editingArt, setEditingArt] = useState<any>(null);
   const [selectedDoc, setSelectedDoc] = useState<any>(null);
   const [selectedDocIds, setSelectedDocIds] = useState<Set<number>>(new Set());
+  // Rev. 2670 — seleção múltipla de FICHEIROS (cards de obra) para exclusão em
+  // lote na view "obras". selectModeFicheiro liga o modo de seleção (cards
+  // passam a marcar/desmarcar em vez de abrir); selectedFicheiroIds guarda os
+  // marcados; deletingFicheiros bloqueia o botão durante a exclusão sequencial.
+  const [selectModeFicheiro, setSelectModeFicheiro] = useState(false);
+  const [selectedFicheiroIds, setSelectedFicheiroIds] = useState<Set<number>>(new Set());
+  const [deletingFicheiros, setDeletingFicheiros] = useState(false);
   const [previewDoc, setPreviewDoc] = useState<any>(null);
   // Rev. 1884 (preview) — modo MARCAÇÃO usa o PdfViewer (react-pdf) com caneta/
   // marca-texto. Modo padrão usa <iframe> nativo do Safari/iPad (mais rápido,
@@ -403,6 +410,45 @@ export default function GestaoDocumentos() {
   const createDiscFicheiro = trpc.gestaoDocumentos.createDisciplinaFicheiro.useMutation({
     onError: (e) => toast.error(e.message),
   });
+
+  // Rev. 2670 — exclusão em LOTE de ficheiros (cards de obra). Reaproveita o
+  // endpoint deleteFicheiro (1 por id, sequencial pra respeitar o controle de
+  // acesso por obra). Sai do modo seleção e invalida a lista ao final.
+  const deleteFicheiro = trpc.gestaoDocumentos.deleteFicheiro.useMutation();
+  const handleBulkDeleteFicheiros = useCallback(() => {
+    const ids = Array.from(selectedFicheiroIds);
+    if (ids.length === 0) return;
+    askConfirm({
+      title: ids.length === 1 ? "Excluir ficheiro?" : `Excluir ${ids.length} ficheiros?`,
+      description:
+        "Os ficheiros selecionados serão removidos da lista. Esta ação não pode ser desfeita.",
+      confirmLabel: "Excluir",
+      destructive: true,
+      onConfirm: async () => {
+        setDeletingFicheiros(true);
+        let ok = 0;
+        const erros: string[] = [];
+        for (const id of ids) {
+          try {
+            await deleteFicheiro.mutateAsync({ id, companyId });
+            ok++;
+          } catch (e: any) {
+            erros.push(e?.message || "erro desconhecido");
+          }
+        }
+        try {
+          await utils.gestaoDocumentos.listFicheiros.invalidate();
+        } finally {
+          // Garante a saída do modo seleção/limpeza mesmo se a invalidação falhar.
+          setDeletingFicheiros(false);
+          setSelectedFicheiroIds(new Set());
+          setSelectModeFicheiro(false);
+        }
+        if (ok > 0) toast.success(ok === 1 ? "Ficheiro excluído" : `${ok} ficheiros excluídos`);
+        if (erros.length > 0) toast.error(`${erros.length} não puderam ser excluídos: ${erros[0]}`);
+      },
+    });
+  }, [selectedFicheiroIds, askConfirm, deleteFicheiro, companyId, utils]);
 
   const deletePasta = trpc.gestaoDocumentos.deletePasta.useMutation({
     onSuccess: () => {
@@ -1553,11 +1599,55 @@ export default function GestaoDocumentos() {
             <div className="flex items-center justify-between mb-4">
               <div>
                 <h1 className="text-xl font-bold text-gray-900">Projetos / Documentos Técnicos</h1>
-                <p className="text-sm text-gray-500">Ficheiros criados para suas obras</p>
+                <p className="text-sm text-gray-500">
+                  {selectModeFicheiro
+                    ? `${selectedFicheiroIds.size} selecionado(s)`
+                    : "Ficheiros criados para suas obras"}
+                </p>
               </div>
-              <Button onClick={() => { setFicheiroSearchTerm(""); setShowNewFicheiroModal(true); }} className="bg-blue-600 text-white hover:bg-blue-700" size="sm">
-                <Plus className="w-4 h-4 mr-1" /> Novo Ficheiro
-              </Button>
+              <div className="flex items-center gap-2">
+                {selectModeFicheiro ? (
+                  <>
+                    <Button
+                      onClick={() => { setSelectModeFicheiro(false); setSelectedFicheiroIds(new Set()); }}
+                      variant="outline"
+                      size="sm"
+                      disabled={deletingFicheiros}
+                    >
+                      Cancelar
+                    </Button>
+                    <Button
+                      onClick={handleBulkDeleteFicheiros}
+                      className="bg-red-600 text-white hover:bg-red-700"
+                      size="sm"
+                      disabled={selectedFicheiroIds.size === 0 || deletingFicheiros}
+                    >
+                      {deletingFicheiros ? (
+                        <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                      ) : (
+                        <Trash2 className="w-4 h-4 mr-1" />
+                      )}
+                      Excluir{selectedFicheiroIds.size > 0 ? ` (${selectedFicheiroIds.size})` : ""}
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    {(ficheiros.data || []).length > 0 && (
+                      <Button
+                        onClick={() => { setSelectModeFicheiro(true); setSelectedFicheiroIds(new Set()); }}
+                        variant="outline"
+                        size="sm"
+                        className="text-gray-700"
+                      >
+                        <Trash2 className="w-4 h-4 mr-1" /> Selecionar
+                      </Button>
+                    )}
+                    <Button onClick={() => { setFicheiroSearchTerm(""); setShowNewFicheiroModal(true); }} className="bg-blue-600 text-white hover:bg-blue-700" size="sm">
+                      <Plus className="w-4 h-4 mr-1" /> Novo Ficheiro
+                    </Button>
+                  </>
+                )}
+              </div>
             </div>
             {(() => {
               const ficheirosList = (ficheiros.data || []);
@@ -1578,10 +1668,20 @@ export default function GestaoDocumentos() {
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
                   {ficheirosList.map((fich: any) => {
                     const obra = obrasMap.get(fich.obraId);
+                    const checked = selectedFicheiroIds.has(fich.id);
                     return (
                       <button
                         key={fich.id}
                         onClick={() => {
+                          if (selectModeFicheiro) {
+                            setSelectedFicheiroIds((prev) => {
+                              const next = new Set(prev);
+                              if (next.has(fich.id)) next.delete(fich.id);
+                              else next.add(fich.id);
+                              return next;
+                            });
+                            return;
+                          }
                           setActiveFicheiroId(fich.id);
                           setSelectedObraId(fich.obraId);
                           setSelectedDiscId(null);
@@ -1590,8 +1690,21 @@ export default function GestaoDocumentos() {
                           setSearch("");
                           setViewMode("ficheiro");
                         }}
-                        className="text-left p-4 rounded-lg border border-blue-200 bg-blue-50/30 hover:border-blue-400 transition-all hover:shadow-md"
+                        className={`relative text-left p-4 rounded-lg border transition-all hover:shadow-md ${
+                          selectModeFicheiro && checked
+                            ? "border-red-400 bg-red-50/50 ring-2 ring-red-300"
+                            : "border-blue-200 bg-blue-50/30 hover:border-blue-400"
+                        }`}
                       >
+                        {selectModeFicheiro && (
+                          <span
+                            className={`absolute top-2 right-2 w-5 h-5 rounded-md border flex items-center justify-center ${
+                              checked ? "bg-red-600 border-red-600 text-white" : "bg-white border-gray-300"
+                            }`}
+                          >
+                            {checked && <CheckCircle className="w-3.5 h-3.5" />}
+                          </span>
+                        )}
                         <div className="flex items-center gap-3 mb-2">
                           <FolderOpen className="w-8 h-8 text-blue-500" />
                           <div className="flex-1 min-w-0">
