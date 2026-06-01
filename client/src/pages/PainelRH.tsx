@@ -249,6 +249,33 @@ export default function PainelRH() {
                     </div>
                   </CardHeader>
                   <CardContent>
+                    {(() => {
+                      const lembretes = homeData!.experiencias.filter((e: any) => e.diasRestantes >= 0 && e.diasRestantes <= 5);
+                      if (lembretes.length === 0) return null;
+                      return (
+                        <div className="mb-3 rounded-lg border-2 border-red-300 bg-red-50 p-3 animate-pulse">
+                          <div className="flex items-center gap-2 mb-1.5">
+                            <Bell className="h-4 w-4 text-red-600 shrink-0" />
+                            <span className="text-sm font-bold text-red-700">
+                              LEMBRETE — {lembretes.length} contrato{lembretes.length !== 1 ? 's' : ''} de experiência vencendo em até 5 dias
+                            </span>
+                          </div>
+                          <ul className="space-y-1">
+                            {lembretes.map((e: any) => {
+                              const isProrrog = e.status === 'prorrogado';
+                              const fimRel = isProrrog ? e.fim2 : e.fim1;
+                              return (
+                                <li key={`lemb-${e.id}`} className="text-xs text-red-800 flex items-center gap-1.5 flex-wrap">
+                                  <span className="font-semibold">{e.nome}</span>
+                                  <Badge className={`text-[10px] ${isProrrog ? 'bg-blue-100 text-blue-700' : 'bg-orange-100 text-orange-700'}`}>{isProrrog ? '2º período' : '1º período'}</Badge>
+                                  <span>vence {e.diasRestantes === 0 ? 'HOJE' : `em ${e.diasRestantes} dia${e.diasRestantes !== 1 ? 's' : ''}`} ({new Date(fimRel + 'T12:00:00').toLocaleDateString('pt-BR')})</span>
+                                </li>
+                              );
+                            })}
+                          </ul>
+                        </div>
+                      );
+                    })()}
                     <div className="space-y-2">
                       {homeData!.experiencias.map((exp: any) => {
                         const urgColors: Record<string, string> = { vencido: 'bg-red-100 border-red-300', urgente: 'bg-orange-100 border-orange-300', atencao: 'bg-yellow-50 border-yellow-200', normal: 'bg-white border-gray-200' };
@@ -277,8 +304,11 @@ export default function PainelRH() {
                                   {exp.status === 'prorrogado' ? '2º período' : '1º período'}
                                 </Badge>
                               </div>
-                              <div className="text-[10px] text-muted-foreground mt-0.5">
-                                {exp.tipo === '30_30' ? '30+30' : '45+45'} dias · Início: {new Date(exp.inicio + 'T12:00:00').toLocaleDateString('pt-BR')} · Fim 1º: {new Date(exp.fim1 + 'T12:00:00').toLocaleDateString('pt-BR')} · Fim 2º: {new Date(exp.fim2 + 'T12:00:00').toLocaleDateString('pt-BR')}
+                              <div className="text-[11px] text-muted-foreground mt-0.5 flex items-center gap-1 flex-wrap">
+                                <span>{exp.tipo === '30_30' ? '30+30' : '45+45'} dias · Início: {new Date(exp.inicio + 'T12:00:00').toLocaleDateString('pt-BR')} ·</span>
+                                <span className="inline-flex items-center gap-1">Fim 1º: <span className={`text-sm font-bold ${exp.status !== 'prorrogado' && exp.diasRestantes >= 0 && exp.diasRestantes <= 5 ? 'text-red-700' : 'text-gray-900'}`}>{new Date(exp.fim1 + 'T12:00:00').toLocaleDateString('pt-BR')}</span></span>
+                                <span className="text-muted-foreground/60">·</span>
+                                <span className="inline-flex items-center gap-1">Fim 2º: <span className={`text-sm font-bold ${exp.status === 'prorrogado' && exp.diasRestantes >= 0 && exp.diasRestantes <= 5 ? 'text-red-700' : 'text-gray-900'}`}>{new Date(exp.fim2 + 'T12:00:00').toLocaleDateString('pt-BR')}</span></span>
                               </div>
                               </div>
                             </div>

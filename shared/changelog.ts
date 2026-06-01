@@ -1,6 +1,43 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2663 — **PAINEL RH (/painel-rh) · CONTRATOS DE EXPERIÊNCIA: AS DATAS DE FIM (1º/2º
+ * PERÍODO) FICAM MAIORES E SURGE UM BANNER DE "LEMBRETE" PARA RH/USUÁRIO MASTER 5 DIAS ANTES
+ * DE QUALQUER CONTRATO VENCER (1º OU 2º PERÍODO).**
+ *
+ * PEDIDO (usuário, print image_1780282084751): no Painel RH, seção "Contratos de Experiência":
+ * (1) deixar as datas de vencimento (Fim 1º / Fim 2º) "um pouco maiores"; (2) mostrar um alerta
+ * para o RH e o usuário master de que um contrato está a vencer; (3) na tela deve aparecer um
+ * LEMBRETE 5 dias antes de qualquer contrato de experiência estiver para vencer — tanto o 1º
+ * quanto o 2º período.
+ *
+ * DADOS (já existentes no SERVER — ZERO mudança de backend/schema): `homeData.experiencias` já
+ * traz, por colaborador em experiência, `fim1`/`fim2` (datas calculadas pela regra CLT — Rev. 2500),
+ * `status` ('em_experiencia' | 'prorrogado'), e `diasRestantes` — que o backend (server/routers/
+ * homeData.ts) JÁ calcula contra o FIM RELEVANTE: `fim1` quando ainda no 1º período, `fim2` quando
+ * prorrogado. Logo o "5 dias antes" cobre automaticamente os dois períodos sem nenhum cálculo novo.
+ *
+ * FIX (SÓ CLIENT/UI; ZERO SCHEMA; ZERO SERVER; R-001/R-007/R-010 — nada de ALTER/DROP/DELETE):
+ * `client/src/pages/PainelRH.tsx`, dentro do card "Contratos de Experiência" (já gated por
+ * `canSeeExperiencia`, que cobre RH + admin master):
+ * - DATAS MAIORES: a sublinha de datas sai de `text-[10px]` para `text-[11px]` e os valores de
+ *   "Fim 1º"/"Fim 2º" passam a `text-sm font-bold text-gray-900`. O Fim do período RELEVANTE
+ *   (Fim 1º se 'em_experiencia'; Fim 2º se 'prorrogado') fica VERMELHO (`text-red-700`) quando
+ *   faltam ≤5 dias para vencer.
+ * - BANNER "LEMBRETE": no topo do `CardContent`, antes da lista, um IIFE filtra
+ *   `experiencias.filter(e => e.diasRestantes >= 0 && e.diasRestantes <= 5)`; havendo ao menos um,
+ *   renderiza um bloco vermelho pulsante (`border-red-300 bg-red-50 animate-pulse`) com ícone `Bell`
+ *   e o texto "LEMBRETE — N contrato(s) de experiência vencendo em até 5 dias", listando cada
+ *   colaborador com badge do período (1º/2º) e "vence HOJE / em Nd (DD/MM/AAAA)". Some sozinho
+ *   quando não há nenhum contrato no intervalo de 5 dias.
+ *
+ * Observação: o alerta cobre simultaneamente os pedidos (2) e (3) — é o aviso visível na tela para
+ * RH/master de que há contrato a vencer, disparando exatamente 5 dias antes. Os badges de cabeçalho
+ * ("N vencido(s)!", "N urgente(s)") e o painel global de alertas seguem inalterados.
+ *
+ * VALIDADO (estático): esbuild do arquivo EXIT 0 (`pnpm build`/`tsc` completos estouram OOM no
+ * container). App exige login → screenshot autenticado difícil; validação foi estática.
+ *
  * Rev. 2662 — **CONTAS A PAGAR (/financeiro/contas-a-pagar) · A TABELA É REDISTRIBUÍDA PARA
  * QUE OS VALORES (R$) E O STATUS VOLTEM A APARECER — ESTAVAM ESCONDIDOS À DIREITA, ATRÁS DA
  * COLUNA FIXA "AÇÕES".**
