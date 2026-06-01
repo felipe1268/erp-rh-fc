@@ -116,10 +116,15 @@ Gere dois textos em português brasileiro. IMPORTANTE: Use os dados REAIS da emp
 
 IMPORTANTE: Respeite rigorosamente todas as Regras de Ouro da empresa listadas acima. Nunca sugira procedimentos que contradigam essas regras. Use SEMPRE o nome real da empresa "${nomeEmpresa}" e a data real "${dataHoje}" nos textos.
 
-Responda EXATAMENTE no formato JSON abaixo:`;
+Responda EXATAMENTE no formato JSON abaixo, usando SOMENTE estas duas chaves (sem texto fora do JSON):
+{
+  "descricao": "texto completo da descrição da função",
+  "ordemServico": "texto completo da Ordem de Serviço NR-1"
+}`;
 
       console.log(`[GoldenRules] Gerando descrição para "${input.nomeFuncao}"...`);
       const llmPromise = invokeLLM({
+        fast: true,
         messages: [
           { role: "system", content: "Você é um especialista em RH e SST brasileiro. Responda sempre em JSON válido." },
           { role: "user", content: prompt },
@@ -216,9 +221,14 @@ Gere dois textos em português brasileiro. Use os dados REAIS da empresa (nome "
 
 2. ORDEM DE SERVIÇO (NR-1): Comece com "ORDEM DE SERVIÇO (NR-1) — ${fn.nome}${fn.cbo ? ` CBO: ${fn.cbo}` : ''}". Inclua: Empresa: ${nomeEmpresa}, CNPJ: ${cnpjEmpresa}, Data de Emissão: ${dataHoje}, Revisão: 00. Elabore conforme NR-1 com riscos, EPIs, procedimentos de emergência e NRs aplicáveis.
 
-Responda em JSON válido:`;
+Responda EXATAMENTE em JSON válido, usando SOMENTE estas duas chaves (sem texto fora do JSON):
+{
+  "descricao": "texto completo da descrição da função",
+  "ordemServico": "texto completo da Ordem de Serviço NR-1"
+}`;
 
           const response = await invokeLLM({
+            fast: true,
             messages: [
               { role: "system", content: "Você é um especialista em RH e SST brasileiro. Responda sempre em JSON válido." },
               { role: "user", content: prompt },

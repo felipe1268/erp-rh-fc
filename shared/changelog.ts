@@ -1,6 +1,30 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2677 — **FUNÇÕES (`/funcoes` → "Nova Função") · O BOTÃO "GERAR COM IA" (DESCRIÇÃO + ORDEM DE SERVIÇO
+ * NR-1) DEIXA DE DAR "TIMEOUT: A IA DEMOROU MAIS DE 90 SEGUNDOS" — A GERAÇÃO PASSA A USAR O CAMINHO RÁPIDO
+ * (GEMINI 2.5 FLASH, thinkingBudget=0), QUE RESPONDE BEM ABAIXO DO LIMITE.**
+ *
+ * PEDIDO (usuário, print IMG_1480_1780355420682): com "Nome = ELETRICISTA DE INSTALAÇÕES" e "CBO = 7156-15"
+ * preenchidos, ao clicar "Gerar com IA" na Descrição da Função a tela mostrava "Timeout: a IA demorou mais
+ * de 90 segundos para responder. Tente novamente." DIAGNÓSTICO: o endpoint `goldenRules.generateJobDescription`
+ * chamava `invokeLLM` SEM `fast: true`, caindo no Claude Sonnet NÃO-streaming gerando DOIS textos longos
+ * (descrição + OS NR-1, até 8192 tokens). Esse modo frequentemente passa de 90s e estoura o `Promise.race`
+ * interno de 90s do próprio endpoint. O caminho rápido (Gemini 2.5 Flash com `thinkingBudget=0`, criado na
+ * Rev. 2585 EXATAMENTE pra esse tipo de geração estruturada longa) já existia em `server/_core/llm.ts` mas
+ * não estava sendo usado aqui. Bônus: `invokeAnthropic` IGNORA o `response_format`, e o prompt terminava em
+ * "Responda EXATAMENTE no formato JSON abaixo:" SEM mostrar o schema → saída JSON frágil (chaves dependiam de
+ * o modelo adivinhar `descricao`/`ordemServico`).
+ *
+ * FIX (SÓ SERVER; ZERO SCHEMA; ZERO CLIENT): `server/routers/goldenRules.ts` — (1) `generateJobDescription`
+ * e `generateBatchJobDescriptions` passam `fast: true` ao `invokeLLM` (Gemini Flash primeiro, Claude/Gemini
+ * lento seguem como fallback no `invokeLLM`); (2) ambos os prompts agora explicitam o formato JSON exato
+ * `{ "descricao": ..., "ordemServico": ... }` no texto, tornando a saída robusta em QUALQUER provedor (o
+ * `response_format` json_schema foi mantido p/ os caminhos que o respeitam). `GOOGLE_API_KEY` presente →
+ * caminho rápido disponível. Sem SQL crua/`ALTER`/`DROP` (R-001/R-007/R-010). esbuild `goldenRules.ts` EXIT 0.
+ *
+ * ----------------------------------------------------------------------------------------------------
+ *
  * Rev. 2676 — **FUNÇÕES (`/funcoes` → "Nova Função", autocomplete da base CBO) · A BUSCA DA BASE CBO PASSA
  * A RANKEAR OS RESULTADOS (PREFIXO > INÍCIO DE PALAVRA > TRECHO > CÓDIGO) E A MOSTRAR ATÉ 40, ENTÃO
  * "ELETRICISTA" E DEMAIS PROFISSÕES OPERACIONAIS VOLTAM A APARECER.**
