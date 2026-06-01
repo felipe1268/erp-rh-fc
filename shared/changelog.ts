@@ -1,6 +1,36 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2673 — **GESTÃO DE DOCUMENTOS (`/gestao-documentos` → lista de documentos de uma pasta) ·
+ * O LAYOUT DA COLUNA "TÍTULO / CÓDIGO" PASSA A MOSTRAR O TÍTULO DIGITADO PELO USUÁRIO EM DESTAQUE E O
+ * NÚMERO/CÓDIGO DO ARQUIVO LOGO ABAIXO — ACABA A REDUNDÂNCIA "CÓDIGO + NOME .dwg" (REFINA A Rev. 2672).**
+ *
+ * PEDIDO (usuário, print image_1780332956204): após a Rev. 2672 a célula mostrava CÓDIGO em destaque
+ * ("POITA-ARQ-000-PE-PL-GRAL-IMP-R02"), o NOME DO ARQUIVO ".dwg" logo abaixo (quase idêntico = redundante)
+ * e a descrição em cinza. O usuário pediu: "o nome em destaque deve ser o título do arquivo; abaixo, o
+ * número do arquivo".
+ *
+ * CAUSA (semântica dos campos difere por fluxo de criação): no UPLOAD EM LOTE, o "título" que o usuário
+ * digita por arquivo é gravado em `descricao`, enquanto `titulo` e `codigo` recebem o NOME/CÓDIGO do
+ * arquivo (ambos = nome sem extensão); na CRIAÇÃO MANUAL, `titulo` é o título de verdade e `descricao` é
+ * uma descrição à parte. Por isso o destaque (que lia `doc.titulo`) mostrava o código nos docs importados.
+ *
+ * FIX (SÓ CLIENT/UI; ZERO SCHEMA; ZERO SERVER): `client/src/pages/gestaodocumentos/index.tsx` — por linha
+ * do `filteredDocs.map`, calcula uma heurística ROBUSTA de "veio do lote": `veioDoLote = normTxt(titulo) ===
+ * normTxt(codigo)` (com `normTxt` = trim+lowercase) E (`!arquivoNome` OU `normTxt(stem do arquivoNome) ===
+ * normTxt(codigo)`) — exige evidência de que o `titulo` é só o código/nome do arquivo. Daí: `tituloIsCode =
+ * veioDoLote && descricao não-vazia`; `tituloDestaque = tituloIsCode ? descricao : titulo` (com fallbacks
+ * codigo/arquivoNome/"—"); `numeroArquivo = codigo || arquivoNome`; `descricaoExtra = !tituloIsCode ?
+ * descricao : ""`. Render: 1ª linha `text-sm font-semibold text-gray-900` com `tituloDestaque`; 2ª linha
+ * (número) só quando `numeroArquivo !== tituloDestaque` (evita duplicar); 3ª linha = `descricaoExtra`
+ * (cinza, só em docs manuais). A normalização cobre variações de caixa/espaço em registros legacy; o stem
+ * do `arquivoNome` evita falso-positivo em doc MANUAL onde o usuário casou título=código com descrição.
+ * Badges "Sem PDF"/"Sem DWG"/mismatch, ícone de clipe, `docParsed` (parse de revisão por `doc.titulo`) e a
+ * busca (já indexa titulo+codigo+descricao+arquivoNome) inalterados.
+ * Sem SQL crua/`ALTER`/`DROP` (R-001/R-007/R-010). esbuild `index.tsx` EXIT 0.
+ *
+ * ----------------------------------------------------------------------------------------------------
+ *
  * Rev. 2672 — **GESTÃO DE DOCUMENTOS (`/gestao-documentos` → lista de documentos de uma pasta) ·
  * A COLUNA "TÍTULO / CÓDIGO" PASSA A MOSTRAR O TÍTULO (PREENCHIDO PELO USUÁRIO) EM DESTAQUE E O
  * NOME DO ARQUIVO LOGO ABAIXO, PARA FACILITAR A BUSCA.**
