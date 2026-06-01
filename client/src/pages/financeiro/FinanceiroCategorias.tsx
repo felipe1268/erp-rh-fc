@@ -26,7 +26,7 @@ import { useCompany } from "@/hooks/useCompany";
 import { useToast } from "@/hooks/use-toast";
 import {
   Plus, Tag, Search, Edit2, Power, ArrowUpRight, ArrowDownRight, Loader2,
-  Layers, PlusCircle, Eye, EyeOff,
+  Layers, PlusCircle, Eye, EyeOff, Trash2,
 } from "lucide-react";
 
 type Categoria = {
@@ -70,6 +70,7 @@ export default function FinanceiroCategorias() {
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState<FormState>({ ...INITIAL_FORM });
   const [confirmInactivate, setConfirmInactivate] = useState<Categoria | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<Categoria | null>(null);
 
   // Rev. 2157 — escopo='categoria' lista só categorias operacionais (AUTO-*),
   // sem misturar com as contas contábeis do Plano de Contas (que ficam em outra tela).
@@ -106,6 +107,18 @@ export default function FinanceiroCategorias() {
       refetch();
     },
     onError: (e: any) => toast({ title: "Erro ao atualizar", description: e.message, variant: "destructive" }),
+  });
+
+  // Rev. 2658 — EXCLUIR: usa `financial.deleteAccount` (soft-delete ativo=0 com guarda
+  // de integridade — bloqueia se houver lançamentos/contas-filhas vinculadas). R-007: sem
+  // DELETE físico em produção.
+  const deleteMut = (trpc as any).financial.deleteAccount.useMutation({
+    onSuccess: (res: any) => {
+      toast({ title: "Categoria excluída!", description: res?.nome ? `${res.codigo} — ${res.nome}` : undefined });
+      setConfirmDelete(null);
+      refetch();
+    },
+    onError: (e: any) => toast({ title: "Não foi possível excluir", description: e.message, variant: "destructive" }),
   });
 
   // Lista filtrada + dedup visual (case-insensitive por nome dentro do mesmo tipo).
@@ -180,6 +193,11 @@ export default function FinanceiroCategorias() {
       companyId,
       ativo: confirmInactivate.ativo === 1 ? false : true,
     });
+  }
+
+  function handleDelete() {
+    if (!confirmDelete) return;
+    deleteMut.mutate({ id: confirmDelete.id, companyId });
   }
 
   function ccLabel(id: number | null): string {
@@ -332,6 +350,15 @@ export default function FinanceiroCategorias() {
                       >
                         <Power className={`w-3.5 h-3.5 ${c.ativo === 1 ? "text-orange-500" : "text-green-600"}`} />
                       </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 w-8 p-0"
+                        onClick={() => setConfirmDelete(c)}
+                        title="Excluir"
+                      >
+                        <Trash2 className="w-3.5 h-3.5 text-red-500" />
+                      </Button>
                     </div>
                   </div>
                 ))}
@@ -470,6 +497,29 @@ export default function FinanceiroCategorias() {
                 className={confirmInactivate?.ativo === 1 ? "bg-orange-600 hover:bg-orange-700" : "bg-green-600 hover:bg-green-700"}
               >
                 {updateMut.isPending ? "Salvando..." : (confirmInactivate?.ativo === 1 ? "Inativar" : "Reativar")}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        {/* Confirmação excluir */}
+        <AlertDialog open={!!confirmDelete} onOpenChange={(v) => { if (!v) setConfirmDelete(null); }}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Excluir categoria?</AlertDialogTitle>
+              <AlertDialogDescription>
+                A categoria <strong>{confirmDelete?.nome}</strong> será excluída e deixará de aparecer na lista.
+                Só é possível excluir categorias sem lançamentos ou contas-filhas vinculadas — caso existam, a exclusão é bloqueada.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={deleteMut.isPending}>Cancelar</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleDelete}
+                disabled={deleteMut.isPending}
+                className="bg-red-600 hover:bg-red-700"
+              >
+                {deleteMut.isPending ? "Excluindo..." : "Excluir"}
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>

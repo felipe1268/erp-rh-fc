@@ -1,6 +1,31 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2658 — **CATEGORIAS (/financeiro/categorias) · CADA LINHA GANHA O BOTÃO EXCLUIR (🗑)
+ * — ALÉM DO EDITAR (✏️) E INATIVAR/REATIVAR (⏻) QUE JÁ EXISTIAM.**
+ *
+ * PEDIDO (usuário, print image_1780279537171): na tela de Categorias Financeiras, acrescentar
+ * um botão EXCLUIR por categoria.
+ *
+ * IMPLEMENTAÇÃO (SÓ CLIENT/UI — reusa rota existente; ZERO SCHEMA; R-001/R-007/R-010):
+ * SERVER: nenhuma alteração — a rota `financial.deleteAccount` JÁ EXISTIA. Ela faz
+ * SOFT-DELETE (UPDATE financial_accounts SET ativo=0), NÃO DELETE físico (respeita R-007),
+ * e tem GUARDA DE INTEGRIDADE: conta o nº de `financial_entries` (lançamentos) com
+ * `conta_id` e o nº de contas-filhas ativas (`conta_pai_id`); se houver qualquer um,
+ * lança BAD_REQUEST com a contagem e NÃO exclui. Grava audit log `financial_account_deleted`.
+ * CLIENT (`client/src/pages/financeiro/FinanceiroCategorias.tsx`):
+ * - novo ícone `Trash2` (lucide); novo state `confirmDelete`; nova mutation `deleteMut`
+ *   (= `financial.deleteAccount`) com toast de sucesso/erro + `refetch()`.
+ * - novo botão EXCLUIR (Trash2 vermelho, title "Excluir") na barra de ações de cada linha,
+ *   ao lado de Editar e Inativar/Reativar; abre AlertDialog de confirmação.
+ * - novo AlertDialog "Excluir categoria?" explicando que a exclusão é bloqueada se houver
+ *   lançamentos/contas-filhas vinculadas; botão vermelho "Excluir"/"Excluindo...".
+ * - O erro do servidor (categoria em uso) chega ao usuário via toast destructive — sem
+ *   exclusão silenciosa nem quebra de integridade.
+ *
+ * VALIDADO (estático): esbuild de `FinanceiroCategorias.tsx` EXIT 0 (`pnpm build`/`tsc`
+ * completos estouram OOM no container — restrição conhecida).
+ *
  * Rev. 2657 — **CONTAS A PAGAR (/financeiro/contas-a-pagar) · (1) CADA LINHA GANHA OS
  * BOTÕES EDITAR (✏️) E ANEXAR (📎) — ALÉM DO VISUALIZAR (👁) E EXCLUIR (🗑) QUE JÁ
  * EXISTIAM; (2) O FORNECEDOR/CLIENTE PASSA A APARECER NA LISTA (LINHA DA DESCRIÇÃO) E NO
