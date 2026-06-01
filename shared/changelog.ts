@@ -1,6 +1,43 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2665 — **PAINEL RH (`/painel-rh`) · CARD "FÉRIAS — PERÍODO AQUISITIVO": A FRASE PARA DE
+ * DAR A IMPRESSÃO DE "FÉRIAS VENCIDAS". O QUE ESTAVA ESCRITO COMO "3º PERÍODO AQUISITIVO · 1d
+ * PARA VENCER" / "VENCIDO!" PASSA A DEIXAR CLARO QUE É O FUNCIONÁRIO COMPLETANDO MAIS UM ANO DE
+ * EMPRESA E ABRINDO UM NOVO PERÍODO DE FÉRIAS — NÃO PENDÊNCIA/ATRASO.**
+ *
+ * PEDIDO (usuário, print image_1780282815146): a tela "Férias — Período Aquisitivo" mostrava, por
+ * ex., "MARCELO DE LIMA FELISBERTO · PEDREIRO II · 3º período aquisitivo" com badge "1d para
+ * vencer". O usuário entendeu (corretamente) que isso NÃO significa que o funcionário tem 3 férias
+ * vencidas, e sim que ele está completando 3 anos de empresa e o 3º período aquisitivo está prestes
+ * a ABRIR. Confirmamos a leitura no cálculo do servidor e ajustamos os rótulos para não confundir.
+ *
+ * CONTEXTO (origem do dado, ZERO backend): `server/routers/homeData.ts` (bloco "ALERTAS DE FÉRIAS")
+ * lista quem tem ≥11 meses de casa e está a ≤30 dias de FECHAR o ciclo anual. `periodoAquisitivo`
+ * = anos completos + 1 (qual ciclo está prestes a abrir) e `diasParaVencer` = dias até o aniversário
+ * de empresa (quando o novo período aquisitivo abre / direito de 30 dias é adquirido). NÃO é prazo
+ * concessivo expirando nem férias atrasadas. A correção é puramente de TEXTO/UI no cliente.
+ *
+ * FIX (SÓ CLIENT/UI; ZERO SCHEMA; ZERO SERVER; R-001/R-007/R-010): `client/src/pages/PainelRH.tsx`,
+ * em 5 pontos que renderizam o MESMO dado `feriasAlerta`:
+ *   1) Card expandido "Férias — Período Aquisitivo": a sublinha passou de
+ *      "{funcao} · {N}º período aquisitivo" → "{funcao} · vai abrir o {N}º período de férias
+ *      (completa {N} ano(s) de empresa)"; o badge passou de "{d}d para vencer" / "VENCIDO!" →
+ *      "abre em {d}d" / "abre hoje".
+ *   2) Card compacto do dashboard (coluna 2): o chip "{N}º período" virou "abre {N}º período" com
+ *      `title` explicativo; o contador "VENCIDO" → "abre hoje".
+ *   3) Sino de alertas (`alertasList`): título "Férias VENCIDAS/Vencendo" → "Novo período de
+ *      férias"; descrição "Já venceu!/Vence em Nd" → "Vai abrir o {N}º período aquisitivo (completa
+ *      {N} ano(s) de empresa). Abre hoje./Em N dias.". As cores/urgência (crítico/urgente/atenção)
+ *      e o link `/ferias` seguem iguais.
+ *   4) KPI card (grade do topo): título "Férias a Vencer" → "Períodos de Férias a Abrir"; o
+ *      `extra` do expand "Período vencido!/Vence em Nd" → "Abre hoje o {N}º período / Abre o {N}º
+ *      período em N dias".
+ *   5) Cabeçalho da seção "Férias - Período Aquisitivo": o badge "{n} pendente(s)" → "{n} a abrir".
+ * (4 e 5 acrescentados após review do architect, que apontou que o KPI e o badge ainda usavam
+ * linguagem de "vencido/pendente".) Nenhuma regra de cálculo foi tocada — só a redação.
+ * Validação: esbuild de `PainelRH.tsx` EXIT 0 (`pnpm build`/`tsc` completos estouram OOM).
+ *
  * Rev. 2664 — **CONTRATO DE EXPERIÊNCIA (gerado em /colaboradores) · O TÉRMINO IMPRESSO NO
  * CONTRATO PARA DE FICAR 1 DIA À FRENTE — PASSA A SEGUIR A REGRA CLT (O DIA DO INÍCIO CONTA
  * COMO DIA 1), IGUAL AO PAINEL RH. VALE PARA TODOS OS COLABORADORES EM EXPERIÊNCIA.**

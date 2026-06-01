@@ -112,7 +112,7 @@ export default function PainelRH() {
     });
     // Férias vencendo
     (homeData.feriasAlerta ?? []).forEach((f: any) => {
-      alertasList.push({ id: `ferias-${f.id}`, tipo: 'ferias', titulo: `Férias ${f.diasParaVencer <= 0 ? 'VENCIDAS' : 'Vencendo'}`, nome: f.nome, empStatus: f.status, descricao: `${f.periodoAquisitivo}º período aquisitivo. ${f.diasParaVencer <= 0 ? 'Já venceu!' : `Vence em ${f.diasParaVencer} dias`}`, urgencia: f.diasParaVencer <= 0 ? 'critico' : f.urgente ? 'urgente' : 'atencao', link: '/ferias', fotoUrl: f.fotoUrl });
+      alertasList.push({ id: `ferias-${f.id}`, tipo: 'ferias', titulo: `Novo período de férias`, nome: f.nome, empStatus: f.status, descricao: `Vai abrir o ${f.periodoAquisitivo}º período aquisitivo (completa ${f.periodoAquisitivo} ano(s) de empresa). ${f.diasParaVencer <= 0 ? 'Abre hoje.' : `Em ${f.diasParaVencer} dias.`}`, urgencia: f.diasParaVencer <= 0 ? 'critico' : f.urgente ? 'urgente' : 'atencao', link: '/ferias', fotoUrl: f.fotoUrl });
     });
     // Experiências vencidas/urgentes/atenção (até 30 dias)
     (homeData.experiencias ?? []).filter((e: any) => e.urgencia === 'vencido' || e.urgencia === 'urgente' || e.urgencia === 'atencao').forEach((e: any) => {
@@ -230,7 +230,7 @@ export default function PainelRH() {
                   {canSeeObras && <KpiCard title="Obras Ativas" value={s?.obrasAtivas ?? 0} icon={Landmark} color="teal" onClick={() => navigate("/obras")} />}
                   {canSeeDocumentos && <KpiCard title="ASOs Vencidos" value={s?.asosVencidos ?? 0} icon={FileWarning} color="red" onClick={() => navigate("/controle-documentos")} alert={!!s?.asosVencidos} onExpand={(s?.asosVencidos ?? 0) > 0 ? () => setKpiExpand({ title: "ASOs Vencidos", items: (homeData?.asosAlerta ?? []).filter((a: any) => a.vencido).map((a: any) => ({ nome: a.nome, funcao: a.funcao, status: a.status, extra: `Vencido há ${Math.abs(a.diasRestantes)} dia${Math.abs(a.diasRestantes) !== 1 ? 's' : ''}`, urgencia: 'critico' })) }) : undefined} />}
                   {canSeeDocumentos && <KpiCard title="ASOs Vencendo (60d)" value={s?.asosVencendo ?? 0} icon={HeartPulse} color="orange" onClick={() => navigate("/controle-documentos")} onExpand={(s?.asosVencendo ?? 0) > 0 ? () => setKpiExpand({ title: "ASOs Vencendo (60 dias)", items: (homeData?.asosAlerta ?? []).filter((a: any) => !a.vencido).map((a: any) => ({ nome: a.nome, funcao: a.funcao, status: a.status, extra: `Vence em ${a.diasRestantes} dia${a.diasRestantes !== 1 ? 's' : ''}`, urgencia: a.diasRestantes <= 15 ? 'urgente' : 'atencao' })) }) : undefined} />}
-                  {canSeeFerias && <KpiCard title="Férias a Vencer" value={s?.feriasAlerta ?? 0} icon={CalendarClock} color="yellow" onClick={() => navigate("/ferias")} onExpand={(s?.feriasAlerta ?? 0) > 0 ? () => setKpiExpand({ title: "Férias a Vencer", items: (homeData?.feriasAlerta ?? []).map((f: any) => ({ nome: f.nome, funcao: f.funcao, extra: f.diasParaVencer <= 0 ? 'Período vencido!' : `Vence em ${f.diasParaVencer} dias`, urgencia: f.diasParaVencer <= 0 ? 'critico' : f.urgente ? 'urgente' : 'atencao' })) }) : undefined} />}
+                  {canSeeFerias && <KpiCard title="Períodos de Férias a Abrir" value={s?.feriasAlerta ?? 0} icon={CalendarClock} color="yellow" onClick={() => navigate("/ferias")} onExpand={(s?.feriasAlerta ?? 0) > 0 ? () => setKpiExpand({ title: "Períodos de Férias a Abrir", items: (homeData?.feriasAlerta ?? []).map((f: any) => ({ nome: f.nome, funcao: f.funcao, extra: f.diasParaVencer <= 0 ? `Abre hoje o ${f.periodoAquisitivo}º período` : `Abre o ${f.periodoAquisitivo}º período em ${f.diasParaVencer} dias`, urgencia: f.diasParaVencer <= 0 ? 'critico' : f.urgente ? 'urgente' : 'atencao' })) }) : undefined} />}
                 </div>
               </div>
 
@@ -637,7 +637,7 @@ export default function PainelRH() {
                         <CardTitle className="text-sm flex items-center gap-2">
                           <CalendarClock className="h-4 w-4 text-amber-500" />
                           Férias - Período Aquisitivo
-                          {(s?.feriasAlerta ?? 0) > 0 ? <Badge className="bg-amber-100 text-amber-700 text-[10px]">{s!.feriasAlerta} pendente{s!.feriasAlerta !== 1 ? "s" : ""}</Badge> : null}
+                          {(s?.feriasAlerta ?? 0) > 0 ? <Badge className="bg-amber-100 text-amber-700 text-[10px]">{s!.feriasAlerta} a abrir</Badge> : null}
                         </CardTitle>
                         <button onClick={() => setCardExpand('ferias-periodo')} className="p-1 rounded hover:bg-accent/60 text-muted-foreground/40 hover:text-muted-foreground transition-colors" title="Expandir em tela cheia"><Maximize2 className="h-3.5 w-3.5" /></button>
                       </div>
@@ -652,12 +652,12 @@ export default function PainelRH() {
                               <div className="flex items-center gap-2 min-w-0 flex-1">
                                 <PersonPhoto src={f.fotoUrl} alt={f.nome} size="xs" />
                                 <div className="min-w-0">
-                                  <span className="font-medium truncate inline-flex items-center gap-1 flex-wrap">{f.nome}<CipaBadge ativo={f.cipaAtivo} estabilidade={f.cipaEstabilidade} fim={f.cipaFimEstabilidade} cargo={f.cipaCargo} /><span className="text-muted-foreground text-[10px]">{f.periodoAquisitivo}º período</span></span>
+                                  <span className="font-medium truncate inline-flex items-center gap-1 flex-wrap">{f.nome}<CipaBadge ativo={f.cipaAtivo} estabilidade={f.cipaEstabilidade} fim={f.cipaFimEstabilidade} cargo={f.cipaCargo} /><span className="text-muted-foreground text-[10px]" title={`Vai abrir o ${f.periodoAquisitivo}º período aquisitivo de férias (completa ${f.periodoAquisitivo} ano(s) de empresa)`}>abre {f.periodoAquisitivo}º período</span></span>
                                   {f.obra ? <span className="block text-[10px] text-blue-600 font-medium">📍 {f.obra}</span> : null}
                                 </div>
                               </div>
                               <span className={`font-mono text-[10px] shrink-0 ${f.urgente ? "text-red-600 font-bold" : "text-amber-600"}`}>
-                                {f.diasParaVencer <= 0 ? "VENCIDO" : `${f.diasParaVencer}d`}
+                                {f.diasParaVencer <= 0 ? "abre hoje" : `${f.diasParaVencer}d`}
                               </span>
                             </div>
                           ))}
@@ -1014,11 +1014,11 @@ export default function PainelRH() {
                   <PersonPhoto src={f.fotoUrl} alt={f.nome} size="md" />
                   <div className="flex-1 min-w-0">
                     <p className="font-semibold text-base inline-flex items-center gap-1.5 flex-wrap"><span className="truncate">{f.nome}</span><CipaBadge ativo={f.cipaAtivo} estabilidade={f.cipaEstabilidade} fim={f.cipaFimEstabilidade} cargo={f.cipaCargo} size="sm" /></p>
-                    <p className="text-sm text-muted-foreground">{f.funcao} · {f.periodoAquisitivo}º período aquisitivo</p>
+                    <p className="text-sm text-muted-foreground">{f.funcao} · vai abrir o {f.periodoAquisitivo}º período de férias (completa {f.periodoAquisitivo} ano{f.periodoAquisitivo > 1 ? 's' : ''} de empresa)</p>
                     {f.obra ? <p className="text-xs text-blue-600 font-medium truncate">📍 {f.obra}</p> : null}
                   </div>
                   <Badge className={`text-sm px-3 shrink-0 ${f.diasParaVencer <= 0 ? 'bg-red-100 text-red-700 border border-red-300' : f.urgente ? 'bg-amber-100 text-amber-700 border border-amber-300' : 'bg-yellow-100 text-yellow-700 border border-yellow-300'}`}>
-                    {f.diasParaVencer <= 0 ? 'VENCIDO!' : `${f.diasParaVencer}d para vencer`}
+                    {f.diasParaVencer <= 0 ? 'abre hoje' : `abre em ${f.diasParaVencer}d`}
                   </Badge>
                 </div>
               ))}
