@@ -1979,11 +1979,24 @@ ${obs ? `<div class="box"><strong>Observações / Justificativa do Enquadramento
                     const empCidade = esc(form.cidade || '');
                     const empEstado = esc(form.estado || '');
                     const inicio = (form as any).experienciaInicio || form.dataAdmissao || '';
-                    const fim1 = (form as any).experienciaFim1 || '';
-                    const fim2 = (form as any).experienciaFim2 || '';
                     const tipo = (form as any).experienciaTipo;
                     const dias1 = tipo === '30_30' ? 30 : 45;
                     const dias2 = tipo === '30_30' ? 60 : 90;
+                    // Rev. 2664 — o contrato RECALCULA o término pela regra CLT (o dia do início
+                    // conta como dia 1 → término = início + dias − 1), em vez de confiar nos valores
+                    // gravados em experienciaFim1/Fim2 (cadastros antigos foram salvos antes da
+                    // Rev. 2500, sem o −1, e ficaram 1 dia à frente). Mesma régua do Painel RH /
+                    // homeData. Vale p/ TODOS os colaboradores em experiência (ex.: Lilian 18/05 +
+                    // 45 dias = 01/07, e não 02/07). Sem `inicio`, cai no valor gravado (fallback).
+                    const calcFimExp = (base: string, dias: number, fallback: string) => {
+                      if (!base) return fallback || '';
+                      const d = new Date(base + 'T12:00:00');
+                      if (isNaN(d.getTime())) return fallback || ''; // data inválida → fallback (nunca quebra a geração)
+                      d.setDate(d.getDate() + dias - 1);
+                      return d.toISOString().split('T')[0];
+                    };
+                    const fim1 = calcFimExp(inicio, dias1, (form as any).experienciaFim1 || '');
+                    const fim2 = calcFimExp(inicio, dias2, (form as any).experienciaFim2 || '');
                     const fmtDate = (d: string) => d ? new Date(d + 'T12:00:00').toLocaleDateString('pt-BR') : '___/___/______';
                     // Rev. 2123 — jornadaDesc construída a partir DOS DADOS REAIS
                       // do cadastro (campos jornada_{dia}_entrada/saida/intervalo). Se

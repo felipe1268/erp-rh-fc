@@ -1,6 +1,39 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2664 — **CONTRATO DE EXPERIÊNCIA (gerado em /colaboradores) · O TÉRMINO IMPRESSO NO
+ * CONTRATO PARA DE FICAR 1 DIA À FRENTE — PASSA A SEGUIR A REGRA CLT (O DIA DO INÍCIO CONTA
+ * COMO DIA 1), IGUAL AO PAINEL RH. VALE PARA TODOS OS COLABORADORES EM EXPERIÊNCIA.**
+ *
+ * PEDIDO (usuário, prints image_1780282328149 + image_1780282409354): no Painel RH o
+ * vencimento da Lilian (admitida 18/05/2026, experiência de 45 dias) aparece CERTO — "Fim 1º:
+ * 01/07/2026". Mas no CONTRATO DE TRABALHO gerado a "CLÁUSULA 5ª — DO PRAZO" mostra término
+ * 02/07/2026 (1 dia à frente) e término final 16/08/2026 (deveria ser 15/08/2026). Corrigir
+ * em TODOS que estiverem em experiência, não só nela.
+ *
+ * CAUSA-RAIZ: o Painel RH / `homeData` RECALCULA `fim1`/`fim2` a partir do início aplicando a
+ * regra CLT (Rev. 2500: `fim = inicio + dias − 1`, pois o dia do início conta como dia 1). Já o
+ * gerador do contrato (`client/src/pages/Colaboradores.tsx`) lia os valores GRAVADOS no cadastro
+ * `experienciaFim1`/`experienciaFim2`. Cadastros criados ANTES da Rev. 2500 tiveram esses campos
+ * salvos SEM o `−1` (1 dia à frente) e nunca foram regravados → o contrato imprimia a data antiga
+ * errada, enquanto o painel (que recalcula) mostrava a certa. Como R-001/R-007/R-010 proíbem
+ * UPDATE em massa no banco, a correção é recalcular na geração do documento (não confiar no
+ * valor persistido).
+ *
+ * FIX (SÓ CLIENT/UI; ZERO SCHEMA; ZERO SERVER; R-001/R-007/R-010 — nada de ALTER/DROP/DELETE/
+ * UPDATE em massa): `client/src/pages/Colaboradores.tsx`, no bloco que monta o HTML do contrato
+ * de experiência — em vez de `fim1 = form.experienciaFim1` / `fim2 = form.experienciaFim2`, agora
+ * há um helper `calcFimExp(base, dias, fallback)` que faz `new Date(base).setDate(+dias − 1)` a
+ * partir do `inicio` (= `experienciaInicio || dataAdmissao`), exatamente a mesma régua do Painel
+ * RH. `fim1 = calcFimExp(inicio, dias1, experienciaFim1)` e `fim2 = calcFimExp(inicio, dias2,
+ * experienciaFim2)`; sem `inicio`, cai no valor gravado (fallback defensivo). Assim a Cláusula 5ª
+ * imprime término/término final corretos para QUALQUER colaborador, presente ou futuro, sem
+ * depender de o cadastro ter sido regravado pós-Rev. 2500.
+ *
+ * VALIDAÇÃO (exemplo do print): Lilian, início 18/05/2026, 45+45. fim1 = 18/05 + 44 = 01/07/2026
+ * (✓ bate com o painel); fim2 = 18/05 + 89 = 15/08/2026 (✓). Validado (estático): esbuild do
+ * arquivo EXIT 0 (`pnpm build`/`tsc` completos estouram OOM no container).
+ *
  * Rev. 2663 — **PAINEL RH (/painel-rh) · CONTRATOS DE EXPERIÊNCIA: AS DATAS DE FIM (1º/2º
  * PERÍODO) FICAM MAIORES E SURGE UM BANNER DE "LEMBRETE" PARA RH/USUÁRIO MASTER 5 DIAS ANTES
  * DE QUALQUER CONTRATO VENCER (1º OU 2º PERÍODO).**
