@@ -1,6 +1,38 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2668 — **EQUIPAMENTOS (`/equipamentos`) · O CADASTRO DE FERRAMENTA/EQUIPAMENTO PRÓPRIO VOLTA A
+ * FUNCIONAR — ANTES, A PARTIR DO 2º ITEM, DAVA O TOAST "NÃO FOI POSSÍVEL GERAR UM PATRIMÔNIO ÚNICO
+ * APÓS 8 TENTATIVAS. TENTE NOVAMENTE."**
+ *
+ * PEDIDO (usuário, print image_1780312988630): ao tentar cadastrar um novo equipamento próprio, o
+ * sistema recusava com o toast "Não foi possível gerar um patrimônio único após 8 tentativas. Tente
+ * novamente." O primeiro equipamento de uma empresa entrava normalmente; do segundo em diante,
+ * sempre falhava.
+ *
+ * CAUSA-RAIZ: o gerador `proximoCodigoPatrimonio` (server) calcula o próximo código EQP-NNNN com um
+ * `MAX(NULLIF(substring(codigo_patrimonio FROM '^EQP-(\d+)$'),'')::int)` filtrando
+ * `WHERE codigo_patrimonio ~ '^EQP-\d+$'`. O problema: esse SQL é montado dentro de um TEMPLATE
+ * LITERAL JS (`sql\`...\``). Em template literal, `\d` é um escape INVÁLIDO e é "cozido" para o
+ * caractere literal `d` — então a SQL que chegava no Postgres era `'^EQP-d+$'` (casa "EQP-ddd…",
+ * NUNCA dígitos). Resultado: o `~` não casava NENHUM código real (EQP-0001, EQP-0002…), o `MAX`
+ * voltava sempre 0, e o gerador produzia sempre `EQP-0001`. Como já existe um EQP-0001, todas as 8
+ * tentativas colidiam na unique `uq_equip_proprio_company_patrimonio` → o toast de falha. (Os demais
+ * geradores do ERP — compras `^OC-\\d{4}-\\d+$`, SC `^SC-\\d{4}-\\d+$` — já usavam barra DUPLA `\\d`,
+ * que coze corretamente para `\d`; só `equipamentos.ts` tinha a barra simples.)
+ *
+ * CONFIRMAÇÃO COM DADOS REAIS (Neon, read-only, company 60002): `count(*) FILTER (WHERE ~ '^EQP-d+$')`
+ * = 0 (regex quebrada) vs `count(*) FILTER (WHERE ~ '^EQP-[0-9]+$')` = 2 (códigos EQP-0001/EQP-0002).
+ * Amostra de códigos: '2', '1', 'EQP-0002', 'FC 14', 'EQP-0001'.
+ *
+ * FIX (SÓ SERVER, 1 query de LEITURA; ZERO SCHEMA; ZERO CLIENT; R-001/R-007/R-010):
+ *   SERVER `server/routers/equipamentos.ts` (`proximoCodigoPatrimonio`) — troca `\d` por `[0-9]` nas
+ *   duas ocorrências da regex (substring e `~`). `[0-9]` não tem barra invertida, logo sobrevive
+ *   intacto ao template literal e casa os dígitos de fato. Agora `MAX` enxerga EQP-0001/EQP-0002,
+ *   retorna 2, e gera EQP-0003 (único). Lógica de retry/unique/padding inalterada.
+ *
+ * esbuild de `equipamentos.ts` EXIT 0 (`pnpm build`/`tsc` completos estouram OOM no container).
+ *
  * Rev. 2667 — **PAINEL RH (`/painel-rh`) · O BOTÃO "CONFIRMAR PRORROGAÇÃO" (E TAMBÉM EFETIVAR/DESLIGAR)
  * DO CARD "CONTRATOS DE EXPERIÊNCIA" VOLTA A FUNCIONAR — ANTES O MODAL FICAVA TRAVADO, "NADA ACONTECIA".**
  *

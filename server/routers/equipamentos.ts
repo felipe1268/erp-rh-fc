@@ -53,11 +53,17 @@ export async function proximoCodigoPatrimonio(db: any, companyId: number): Promi
   // NÃO um array iterável. `const [row] = await db.execute(...)` quebrava com
   // "(intermediate value) is not iterable", impedindo o cadastro. Lê via
   // `.rows` (com fallback p/ drivers que devolvem array direto).
+  // Rev. 2668 — `[0-9]` em vez de `\d`: dentro de um template literal JS o `\d`
+  // é "cozido" para `d` (escape inválido → caractere literal), então a SQL
+  // chegava no Postgres como `'^EQP-d+$'` e NÃO casava nenhum código real
+  // (EQP-0001…), fazendo o MAX voltar 0 e o gerador repetir EQP-0001 a cada
+  // cadastro → colisão de unique 8x ("Não foi possível gerar um patrimônio
+  // único"). `[0-9]` não tem barra invertida e sobrevive ao template literal.
   const res: any = await db.execute(sql`
-    SELECT COALESCE(MAX(NULLIF(substring(codigo_patrimonio FROM '^EQP-(\d+)$'), '')::int), 0) AS max
+    SELECT COALESCE(MAX(NULLIF(substring(codigo_patrimonio FROM '^EQP-([0-9]+)$'), '')::int), 0) AS max
     FROM equipamentos_proprios
     WHERE company_id = ${companyId}
-      AND codigo_patrimonio ~ '^EQP-\d+$'
+      AND codigo_patrimonio ~ '^EQP-[0-9]+$'
   `);
   const row = (res?.rows ?? res ?? [])[0];
   const max = Number((row as any)?.max ?? 0) || 0;
