@@ -1,6 +1,26 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2672 — **GESTÃO DE DOCUMENTOS (`/gestao-documentos` → lista de documentos de uma pasta) ·
+ * A COLUNA "TÍTULO / CÓDIGO" PASSA A MOSTRAR O TÍTULO (PREENCHIDO PELO USUÁRIO) EM DESTAQUE E O
+ * NOME DO ARQUIVO LOGO ABAIXO, PARA FACILITAR A BUSCA.**
+ *
+ * PEDIDO (usuário, prints image_1780331772644 + image_1780331779987): na lista de documentos, a célula
+ * "Título / Código" mostrava só o `titulo` (em fonte mono pequena cinza, parecendo código) + a descrição.
+ * O usuário quer ver o TÍTULO que ele preenche (ex.: "2222") com destaque E o NOME DO ARQUIVO
+ * (ex.: "POITA-ARQ-000-PE-PL-GRAL-IMP-R02.dwg") logo abaixo, pra achar o documento mais fácil.
+ *
+ * FIX (SÓ CLIENT/UI; ZERO SCHEMA; ZERO SERVER): `client/src/pages/gestaodocumentos/index.tsx` — na
+ * `TableCell` da coluna "Título / Código": (a) o `doc.titulo` passa de `text-xs font-mono text-gray-600`
+ * para `text-sm font-medium text-gray-900` (vira título legível, não mais cara de código); (b) acrescenta
+ * uma nova linha com `doc.arquivoNome` em `text-[11px] font-mono text-gray-500 truncate` (só quando há
+ * arquivo); (c) a `descricao`, quando existe, fica em `text-gray-400` abaixo do nome do arquivo. Badges
+ * "Sem PDF"/"Sem DWG"/mismatch e o ícone de clipe inalterados. A busca já indexava `arquivoNome`
+ * (campo `fields`), então o nome do arquivo agora também fica visível, não só pesquisável.
+ * Sem SQL crua/`ALTER`/`DROP` (R-001/R-007/R-010). esbuild `index.tsx` EXIT 0.
+ *
+ * ----------------------------------------------------------------------------------------------------
+ *
  * Rev. 2671 — **GESTÃO DE DOCUMENTOS (`/gestao-documentos`) · AGORA DÁ PARA EDITAR UM DOCUMENTO
  * (INCLUSIVE O TÍTULO) DEPOIS DO UPLOAD, DIRETO PELA TELA DE DETALHE DO DOCUMENTO.**
  *

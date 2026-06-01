@@ -2307,7 +2307,7 @@ export default function GestaoDocumentos() {
                                   {doc.arquivoUrl && <Paperclip className="w-3 h-3 text-blue-500 shrink-0 mt-1" />}
                                   <div className="min-w-0">
                                     <span className="flex items-center gap-1.5 flex-nowrap">
-                                      <span className="truncate text-xs font-mono text-gray-600">{doc.titulo}</span>
+                                      <span className="truncate text-sm font-medium text-gray-900">{doc.titulo}</span>
                                       {missingPdf && (
                                         <span className="shrink-0 inline-flex items-center gap-1 ml-1 px-2 py-0.5 bg-red-100 text-red-700 text-[10px] font-semibold rounded-full border border-red-300 whitespace-nowrap">
                                           <AlertTriangle className="w-3 h-3" />
@@ -2327,8 +2327,11 @@ export default function GestaoDocumentos() {
                                         </span>
                                       )}
                                     </span>
+                                    {doc.arquivoNome && (
+                                      <p className="text-[11px] font-mono text-gray-500 truncate mt-0.5">{doc.arquivoNome}</p>
+                                    )}
                                     {doc.descricao && (
-                                      <p className="text-[11px] text-gray-500 truncate mt-0.5">{doc.descricao}</p>
+                                      <p className="text-[11px] text-gray-400 truncate mt-0.5">{doc.descricao}</p>
                                     )}
                                   </div>
                                 </div>
