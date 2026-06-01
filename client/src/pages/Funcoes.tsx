@@ -42,11 +42,24 @@ function CboAutocomplete({ value, onChange, onSelect }: { value: string; onChang
   const ref = useRef<HTMLDivElement>(null);
 
   const filtered = useMemo(() => {
-    const s = (search || value).toLowerCase().trim();
-    if (!s || s.length < 2) return [];
-    return cboList.filter(c =>
-      removeAccents(c.desc || '').includes(s) || c.cod.includes(s)
-    ).slice(0, 15);
+    const raw = (search || value).trim();
+    if (!raw || raw.length < 2) return [];
+    const s = removeAccents(raw);
+    const esc = s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const wordRe = new RegExp(`\\b${esc}`);
+    const scored: { item: CboItem; score: number }[] = [];
+    for (const c of cboList) {
+      const desc = removeAccents(c.desc || '');
+      const cod = (c.cod || '').toLowerCase();
+      let score = -1;
+      if (desc.startsWith(s)) score = 0;          // prefixo exato da descrição
+      else if (wordRe.test(desc)) score = 1;       // começo de uma palavra
+      else if (desc.includes(s)) score = 2;        // trecho no meio
+      else if (cod.includes(s)) score = 3;         // código
+      if (score >= 0) scored.push({ item: c, score });
+    }
+    scored.sort((a, b) => a.score - b.score || (a.item.desc || '').length - (b.item.desc || '').length);
+    return scored.slice(0, 40).map(x => x.item);
   }, [cboList, search, value]);
 
   useEffect(() => {

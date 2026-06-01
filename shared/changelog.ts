@@ -1,6 +1,28 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2676 — **FUNÇÕES (`/funcoes` → "Nova Função", autocomplete da base CBO) · A BUSCA DA BASE CBO PASSA
+ * A RANKEAR OS RESULTADOS (PREFIXO > INÍCIO DE PALAVRA > TRECHO > CÓDIGO) E A MOSTRAR ATÉ 40, ENTÃO
+ * "ELETRICISTA" E DEMAIS PROFISSÕES OPERACIONAIS VOLTAM A APARECER.**
+ *
+ * PEDIDO (usuário, print IMG_1479_1780354520842): ao digitar "Ele" o autocomplete só mostrava engenheiros
+ * (Engenheiro eletricista etc.) e o usuário concluiu que "não tem eletricista na base / faltam muitas
+ * profissões". DIAGNÓSTICO: a base `client/public/cbo.json` JÁ É a CBO 2002 praticamente completa (~2450
+ * ocupações), INCLUSIVE "Eletricista de instalações (edifícios)" 7156-10, "Eletricista de manutenção de
+ * linhas..." 7321-05 etc. O problema era SÓ A BUSCA: filtrava em ORDEM DE CÓDIGO e cortava em `slice(0,15)`,
+ * então ao digitar "ele" os matches de código baixo (telecomunicações/elétrica/eletrônico) ocupavam as 15
+ * vagas e os eletricistas (códigos 7xxx/9xxx) ficavam soterrados, parecendo ausentes.
+ *
+ * FIX (SÓ CLIENT/UI; ZERO SCHEMA; ZERO SERVER; ZERO mudança no `cbo.json`): `client/src/pages/Funcoes.tsx`
+ * — `CboAutocomplete.filtered` deixa de ser `filter+slice(15)` por ordem de código e passa a PONTUAR cada
+ * item: 0 = `removeAccents(desc)` começa com o termo; 1 = termo no começo de uma palavra (`\b`); 2 = trecho
+ * no meio; 3 = casa no código; ordena por score e depois por `desc.length` (mais curto/específico primeiro);
+ * `slice(0, 40)`. O termo agora também passa por `removeAccents` (busca robusta a acento) e o regex é
+ * escapado. Render/seleção/onChange inalterados. Sem SQL crua/`ALTER`/`DROP` (R-001/R-007/R-010).
+ * esbuild `Funcoes.tsx` EXIT 0; ranking validado contra o `cbo.json` real ("ele"/"eletricista" → eletricistas no topo).
+ *
+ * ----------------------------------------------------------------------------------------------------
+ *
  * Rev. 2675 — **GESTÃO DE DOCUMENTOS (`/gestao-documentos` → lista de documentos de uma pasta) ·
  * A COLUNA "TÍTULO / CÓDIGO" INVERTE A HIERARQUIA: O NOME/CÓDIGO DO ARQUIVO PASSA A APARECER EM DESTAQUE
  * E O TÍTULO DIGITADO PELO USUÁRIO LOGO ABAIXO (INVERTE A Rev. 2673).**
