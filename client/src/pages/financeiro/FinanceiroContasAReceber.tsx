@@ -1440,6 +1440,7 @@ function DarBaixaModal({ obra, mes, cell, companyId, isPending, onClose, onSave,
     ? cell.valorRecebido.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
     : cell.valor.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+  const { toast } = useToast();
   const [valorStr, setValorStr] = useState(initValor);
   const [data, setData] = useState(isEdit && cell.dataRecebimento ? cell.dataRecebimento.slice(0, 10) : hoje);
   const [forma, setForma] = useState("PIX");
@@ -1447,6 +1448,13 @@ function DarBaixaModal({ obra, mes, cell, companyId, isPending, onClose, onSave,
   const [contaBancariaId, setContaBancariaId] = useState<number | null>(cell.contaBancariaId ?? null);
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [step, setStep] = useState<"form" | "carry">("form");
+  // Rev. 2655 — juros/descontos/outros + comprovante
+  const [jurosStr, setJurosStr] = useState("");
+  const [descontosStr, setDescontosStr] = useState("");
+  const [outrosStr, setOutrosStr] = useState("");
+  const [comprovanteUrl, setComprovanteUrl] = useState("");
+  const [comprovanteNome, setComprovanteNome] = useState("");
+  const [uploadingComp, setUploadingComp] = useState(false);
 
   // Rev. 2540 — contas bancárias para o seletor da baixa
   const { data: bankAccounts } = (trpc as any).financial.getBankAccounts.useQuery(
@@ -1454,8 +1462,35 @@ function DarBaixaModal({ obra, mes, cell, companyId, isPending, onClose, onSave,
     { enabled: !!companyId }
   );
 
-  const valorNum = parseBRL(valorStr);
-  const valido = valorNum > 0 && data;
+  // Rev. 2655 — upload de comprovante (PDF/Word/imagem)
+  const uploadCompMut = (trpc as any).financial.uploadComprovante.useMutation();
+  const handleUploadComprovante = async (file: File) => {
+    setUploadingComp(true);
+    try {
+      const base64: string = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result).split(",")[1] ?? "");
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+      const res = await uploadCompMut.mutateAsync({ fileName: file.name, fileBase64: base64, contentType: file.type || "application/octet-stream" });
+      setComprovanteUrl(res.url);
+      setComprovanteNome(file.name);
+      toast({ title: "Comprovante anexado!" });
+    } catch (e: any) {
+      toast({ title: "Erro ao anexar", description: e?.message, variant: "destructive" });
+    } finally {
+      setUploadingComp(false);
+    }
+  };
+
+  const valorBase = parseBRL(valorStr);
+  const jurosNum = parseBRL(jurosStr);
+  const descontosNum = parseBRL(descontosStr);
+  const outrosNum = parseBRL(outrosStr);
+  // Rev. 2655 — total = valor + juros − descontos + outros (±) → vira valorRecebido
+  const valorNum = valorBase + jurosNum - descontosNum + outrosNum;
+  const valido = valorBase > 0 && data;
   const diferenca = cell.valor - valorNum;
   const isParcial = valorNum > 0 && diferenca > 0.01;
 
@@ -1475,6 +1510,10 @@ function DarBaixaModal({ obra, mes, cell, companyId, isPending, onClose, onSave,
       contaBancariaId,
       frId: cell.frId,
       observacoes: [obs, carryNote].filter(Boolean).join(" | ") || undefined,
+      juros: jurosNum || undefined,
+      descontos: descontosNum || undefined,
+      outros: outrosNum || undefined,
+      comprovanteUrl: comprovanteUrl || undefined,
     });
   }
 
@@ -1533,7 +1572,7 @@ function DarBaixaModal({ obra, mes, cell, companyId, isPending, onClose, onSave,
         {step === "form" && <div className="p-5 space-y-4">
           {/* Valor */}
           <div>
-            <Label className="text-xs text-gray-600 font-semibold mb-1 block">Valor recebido (R$)</Label>
+            <Label className="text-xs text-gray-600 font-semibold mb-1 block">Valor (R$)</Label>
             <Input
               value={valorStr}
               onChange={e => setValorStr(formatBRLInput(e.target.value))}
@@ -1566,6 +1605,26 @@ function DarBaixaModal({ obra, mes, cell, companyId, isPending, onClose, onSave,
             {valorNum > 0 && valorNum > cell.valor && (
               <p className="text-xs text-blue-600 mt-1">✓ Acima do previsto</p>
             )}
+          </div>
+
+          {/* Rev. 2655 — Juros / Descontos / Outros */}
+          <div className="grid grid-cols-3 gap-2">
+            <div>
+              <Label className="text-xs text-gray-600 font-semibold mb-1 block">Juros</Label>
+              <Input value={jurosStr} onChange={e => setJurosStr(formatBRLInput(e.target.value))} className="h-9 text-sm" placeholder="0,00" />
+            </div>
+            <div>
+              <Label className="text-xs text-gray-600 font-semibold mb-1 block">Descontos</Label>
+              <Input value={descontosStr} onChange={e => setDescontosStr(formatBRLInput(e.target.value))} className="h-9 text-sm" placeholder="0,00" />
+            </div>
+            <div>
+              <Label className="text-xs text-gray-600 font-semibold mb-1 block">Outros (±)</Label>
+              <Input value={outrosStr} onChange={e => setOutrosStr(formatBRLInput(e.target.value))} className="h-9 text-sm" placeholder="0,00" />
+            </div>
+          </div>
+          <div className="flex items-center justify-between bg-green-50 border border-green-200 rounded-lg px-3 py-2">
+            <span className="text-sm font-medium text-green-800">Total a receber</span>
+            <span className="text-lg font-bold text-green-700">{BRL(valorNum)}</span>
           </div>
 
           {/* Data */}
@@ -1615,13 +1674,26 @@ function DarBaixaModal({ obra, mes, cell, companyId, isPending, onClose, onSave,
             </Select>
           </div>
 
+          {/* Rev. 2655 — Comprovante (PDF/Word/imagem) */}
+          <div>
+            <Label className="text-xs text-gray-600 font-semibold mb-1 block">Comprovante / Documento</Label>
+            <Input type="file" accept=".pdf,.doc,.docx,image/*" className="h-9 text-sm"
+              onChange={e => { const f = e.target.files?.[0]; if (f) handleUploadComprovante(f); }} disabled={uploadingComp} />
+            {uploadingComp && <p className="text-xs text-gray-500 mt-1">Enviando…</p>}
+            {comprovanteUrl && !uploadingComp && (
+              <p className="text-xs text-green-700 mt-1">
+                Anexado: <a href={comprovanteUrl} target="_blank" rel="noreferrer" className="underline">{comprovanteNome || "ver arquivo"}</a>
+              </p>
+            )}
+          </div>
+
           {/* Observação (colapsável) */}
           <ObsField value={obs} onChange={setObs} />
 
           {/* Botão principal */}
           <Button
             className={`w-full h-11 text-sm font-bold text-white ${isEdit ? "bg-blue-600 hover:bg-blue-700" : "bg-green-600 hover:bg-green-700"}`}
-            disabled={!valido || isPending}
+            disabled={!valido || isPending || uploadingComp}
             onClick={handleConfirmClick}
           >
             {isPending ? "Salvando..." : isEdit ? "✓ Salvar Alterações" : isParcial ? "Continuar →" : "✓ Confirmar Recebimento"}

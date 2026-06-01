@@ -4,6 +4,7 @@ import { resolveCompanyIds } from "../companyHelper";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { sql } from "drizzle-orm";
+import { storagePut } from "../storage";
 import { seedPlanoDeConta, ensureTaxConfig } from "../services/financialSeedAccounts";
 import { runAllAutoImports } from "../services/financialAutoImport";
 import {
@@ -609,24 +610,86 @@ export const financialRouter = router({
     formaPagamento: z.string().optional(),
     comprovanteUrl: z.string().optional(),
     contaBancariaId: z.number().nullable().optional(),
+    juros: z.number().optional(),
+    descontos: z.number().optional(),
+    outros: z.number().optional(),
+    observacoes: z.string().optional(),
+    chequeTipo: z.string().optional(),
+    chequeNumero: z.string().optional(),
+    chequeBanco: z.string().optional(),
+    chequeAgencia: z.string().optional(),
+    chequeConta: z.string().optional(),
+    chequeTitular: z.string().optional(),
+    chequeDataEmissao: z.string().optional(),
+    chequeDataBomPara: z.string().optional(),
+    chequeUrl: z.string().optional(),
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     await dbExecute(db, 
+      // NOTA: dbExecute vincula params por ORDEM DE APARIÇÃO (ignora o número do $N).
+      // Por isso os placeholders são sequenciais e o array segue a mesma ordem.
       `UPDATE financial_entries
        SET status=$1, data_pagamento=COALESCE($2, data_pagamento),
            valor_realizado=COALESCE($3, valor_realizado),
            forma_pagamento=COALESCE($4, forma_pagamento),
            comprovante_url=COALESCE($5, comprovante_url),
            conta_bancaria_id=COALESCE($6, conta_bancaria_id),
+           juros=COALESCE($7, juros),
+           descontos=COALESCE($8, descontos),
+           outros=COALESCE($9, outros),
+           observacoes=COALESCE($10, observacoes),
+           cheque_tipo=COALESCE($11, cheque_tipo),
+           cheque_numero=COALESCE($12, cheque_numero),
+           cheque_banco=COALESCE($13, cheque_banco),
+           cheque_agencia=COALESCE($14, cheque_agencia),
+           cheque_conta=COALESCE($15, cheque_conta),
+           cheque_titular=COALESCE($16, cheque_titular),
+           cheque_data_emissao=COALESCE($17, cheque_data_emissao),
+           cheque_data_bom_para=COALESCE($18, cheque_data_bom_para),
+           cheque_url=COALESCE($19, cheque_url),
            updated_at=NOW()
-       WHERE id=$7 AND company_id=$8`,
+       WHERE id=$20 AND company_id=$21`,
       [input.status, input.dataPagamento ?? null, input.valorRealizado ?? null,
        input.formaPagamento ?? null, input.comprovanteUrl ?? null,
-       input.contaBancariaId ?? null, input.id, input.companyId]
+       input.contaBancariaId ?? null,
+       input.juros ?? null, input.descontos ?? null, input.outros ?? null,
+       input.observacoes ?? null, input.chequeTipo ?? null,
+       input.chequeNumero ?? null, input.chequeBanco ?? null, input.chequeAgencia ?? null,
+       input.chequeConta ?? null, input.chequeTitular ?? null,
+       input.chequeDataEmissao ?? null, input.chequeDataBomPara ?? null, input.chequeUrl ?? null,
+       input.id, input.companyId]
     );
     await createAuditLog({ action: "financial_entry_status_updated", userId: ctx.user?.id, companyId: input.companyId, details: `Entry ${input.id} → ${input.status}` });
     return { ok: true };
+  }),
+
+  // Rev. 2655 — Upload de comprovante/documento da baixa (PDF/Word/imagem)
+  uploadComprovante: protectedProcedure.input(z.object({
+    fileName: z.string(),
+    fileBase64: z.string(),
+    contentType: z.string(),
+  })).mutation(async ({ input }) => {
+    // Rev. 2655 — whitelist de tipos (PDF/Word/imagem estática) + limite de tamanho.
+    // Rejeita conteúdo ativo (SVG/HTML) e payloads grandes (DoS).
+    const ALLOWED = new Set([
+      "application/pdf",
+      "application/msword",
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "image/jpeg", "image/jpg", "image/png", "image/gif", "image/webp", "image/heic", "image/heif",
+    ]);
+    const ct = (input.contentType || "").toLowerCase().split(";")[0].trim();
+    if (!ALLOWED.has(ct)) {
+      throw new TRPCError({ code: "BAD_REQUEST", message: "Tipo de arquivo não permitido. Use PDF, Word ou imagem (JPG/PNG)." });
+    }
+    const buf = Buffer.from(input.fileBase64, "base64");
+    const MAX_BYTES = 15 * 1024 * 1024; // 15 MB
+    if (buf.length === 0) throw new TRPCError({ code: "BAD_REQUEST", message: "Arquivo vazio." });
+    if (buf.length > MAX_BYTES) throw new TRPCError({ code: "BAD_REQUEST", message: "Arquivo excede o limite de 15 MB." });
+    const safeName = input.fileName.replace(/[^\w.\-]+/g, "_");
+    const key = `financeiro/comprovantes/${Date.now()}-${safeName}`;
+    const { url } = await storagePut(key, buf, ct);
+    return { url };
   }),
 
   // Rev. 1621 — Detalhe completo de um título (Contas a Pagar drill-down)
@@ -1820,12 +1883,18 @@ export const financialRouter = router({
     contaBancariaId: z.number().nullable().optional(),
     frId:            z.number().nullable().optional(),  // se já existe financial_revenue
     observacoes:     z.string().optional(),
+    juros:           z.number().optional(),
+    descontos:       z.number().optional(),
+    outros:          z.number().optional(),
+    comprovanteUrl:  z.string().optional(),
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
     // Se já existe um financial_revenue para esta medição → apenas atualiza
     if (input.frId) {
+      // NOTA: dbExecute vincula params por ORDEM DE APARIÇÃO (ignora o número do $N).
+      // Placeholders sequenciais + array na mesma ordem.
       await dbExecute(db,
         `UPDATE financial_revenue
          SET status='recebido_total',
@@ -1833,10 +1902,18 @@ export const financialRouter = router({
              data_recebimento=$2,
              forma_pagamento=COALESCE($3, forma_pagamento),
              conta_bancaria_id=COALESCE($4, conta_bancaria_id),
+             juros=COALESCE($5, juros),
+             descontos=COALESCE($6, descontos),
+             outros=COALESCE($7, outros),
+             observacoes=COALESCE($8, observacoes),
+             comprovante_url=COALESCE($9, comprovante_url),
              updated_at=NOW()
-         WHERE id=$5 AND company_id=$6`,
+         WHERE id=$10 AND company_id=$11`,
         [input.valorRecebido, input.dataRecebimento, input.formaPagamento ?? null,
-         input.contaBancariaId ?? null, input.frId, input.companyId]
+         input.contaBancariaId ?? null,
+         input.juros ?? null, input.descontos ?? null, input.outros ?? null,
+         input.observacoes ?? null, input.comprovanteUrl ?? null,
+         input.frId, input.companyId]
       );
       await dbExecute(db,
         `UPDATE financial_entries
@@ -1879,13 +1956,17 @@ export const financialRouter = router({
       `INSERT INTO financial_revenue
        (company_id, obra_id, obra_nome, cliente_nome, valor_contrato,
         valor_medicao, valor_recebido, data_vencimento, data_recebimento,
-        forma_pagamento, status, observacoes, conta_bancaria_id, created_at, updated_at)
-       VALUES ($1,$2,$3,$4,NULL,$5,$6,$7::date,$8,$9,'recebido_total',$10,$11,NOW(),NOW())
+        forma_pagamento, status, observacoes, conta_bancaria_id,
+        juros, descontos, outros, comprovante_url, created_at, updated_at)
+       VALUES ($1,$2,$3,$4,NULL,$5,$6,$7::date,$8,$9,'recebido_total',$10,$11,
+               $12,$13,$14,$15,NOW(),NOW())
        RETURNING id`,
       [input.companyId, obraId, obraNome, input.clienteNome ?? null,
        input.valorPrevisto, input.valorRecebido, mesDate,
        input.dataRecebimento, input.formaPagamento ?? null, input.observacoes ?? null,
-       input.contaBancariaId ?? null]
+       input.contaBancariaId ?? null,
+       input.juros ?? null, input.descontos ?? null, input.outros ?? null,
+       input.comprovanteUrl ?? null]
     );
     const newFrId = rows(revRes)[0]?.id;
 

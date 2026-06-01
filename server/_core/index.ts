@@ -2415,6 +2415,18 @@ Regras:
           }
         } catch (e: any) { console.error(`[Backfill MSP %Previsto] FALHA Rev.2260:`, e?.message || e); }
 
+        // ── Rev. 2655 — Baixa/pagamento detalhado (juros/descontos/outros + cheque tipo) ──
+        try {
+          await db.execute(sql`ALTER TABLE financial_entries ADD COLUMN IF NOT EXISTS juros NUMERIC(15,2)`);
+          await db.execute(sql`ALTER TABLE financial_entries ADD COLUMN IF NOT EXISTS descontos NUMERIC(15,2)`);
+          await db.execute(sql`ALTER TABLE financial_entries ADD COLUMN IF NOT EXISTS outros NUMERIC(15,2)`);
+          await db.execute(sql`ALTER TABLE financial_entries ADD COLUMN IF NOT EXISTS cheque_tipo TEXT`);
+          await db.execute(sql`ALTER TABLE financial_revenue ADD COLUMN IF NOT EXISTS juros NUMERIC(15,2)`);
+          await db.execute(sql`ALTER TABLE financial_revenue ADD COLUMN IF NOT EXISTS descontos NUMERIC(15,2)`);
+          await db.execute(sql`ALTER TABLE financial_revenue ADD COLUMN IF NOT EXISTS outros NUMERIC(15,2)`);
+          console.log(`[SyncSchema+] Rev. 2655: colunas juros/descontos/outros (financial_entries + financial_revenue) + cheque_tipo (financial_entries) garantidas.`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.2655 baixa detalhada:`, e?.message || e); }
+
       } catch (e: any) { console.error(`[SyncSchema+] ERROR:`, e?.message || e); }
     }).catch(e => console.error("[SyncSchema] Falha ao iniciar:", e));
     // Garantir colunas críticas adicionadas recentemente que o SyncSchema possa ter ignorado

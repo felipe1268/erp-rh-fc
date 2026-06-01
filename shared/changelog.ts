@@ -1,6 +1,69 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2655 — **CONTAS A PAGAR & CONTAS A RECEBER · A BAIXA/QUITAÇÃO GANHA CAMPOS
+ * FINANCEIROS DETALHADOS (VALOR + JUROS − DESCONTOS + OUTROS ± → TOTAL), OBSERVAÇÕES,
+ * ANEXO DE COMPROVANTE (PDF/WORD/FOTO) E, NO CONTAS A PAGAR, SUBFORMULÁRIO DE CHEQUE
+ * (PRÓPRIO/TERCEIROS) QUE ABRE AUTOMATICAMENTE QUANDO A FORMA DE PAGAMENTO = CHEQUE.**
+ *
+ * PEDIDO (usuário): nos diálogos de baixa de Contas a Pagar ("Registrar Pagamento") e
+ * Contas a Receber ("Registrar Recebimento"), incluir: (1) Valor (puxado do lançamento)
+ * + Juros + Descontos + Outros (±) + Observações, com Total = valor + juros − descontos
+ * + outros virando o valor realizado/recebido; (2) anexar comprovante ou documento
+ * (PDF, Word ou foto); (3) CHEQUE: ao escolher "Cheque" na Forma de Pagamento, abrir
+ * seleção próprio/terceiros e os campos do cheque — se PRÓPRIO, mostrar "Nº do cheque".
+ *
+ * IMPLEMENTAÇÃO:
+ * SCHEMA (additivo; R-001/R-007/R-010 — só ADD COLUMN IF NOT EXISTS via self-heal):
+ * `drizzle/schema.ts` — `financial_entries` ganha `juros`/`descontos`/`outros`
+ * (numeric 15,2) + `cheque_tipo` (text); `financial_revenue` ganha
+ * `juros`/`descontos`/`outros`. As colunas `observacoes`, `comprovante_url` e
+ * `cheque_*` (numero/banco/agencia/conta/titular/data_emissao/data_bom_para/status/url)
+ * já existiam. Guards `[SyncSchema+]` em `server/_core/index.ts` garantem as colunas no Neon.
+ *
+ * SERVER (`server/routers/financial.ts`):
+ * - `updateEntryStatus` (Contas a Pagar) recebe juros/descontos/outros/observacoes +
+ *   chequeTipo + cheque_* (numero/banco/agencia/conta/titular/dataEmissao/dataBomPara/url)
+ *   e grava tudo via COALESCE; `valorRealizado` passa a ser o Total calculado no cliente.
+ * - `registrarRecebimento` (Contas a Receber) recebe juros/descontos/outros +
+ *   comprovanteUrl e grava nas duas rotas (UPDATE de fr existente e INSERT novo).
+ * - NOVO `financial.uploadComprovante` (base64→Buffer→`storagePut`) sob
+ *   `financeiro/comprovantes/...`, retornando `{ url }` (reusa o storage de parceiros).
+ *
+ * CLIENT:
+ * - `FinanceiroContasAPagar.tsx` (modal `showPay`): grid Valor/Juros/Descontos/Outros,
+ *   linha "Total a pagar", upload de comprovante (`<input type=file>` + FileReader→base64),
+ *   Observações (Textarea) e subform de cheque condicionado a `formaPagamento==="cheque"`
+ *   (Select próprio/terceiros; PRÓPRIO → Nº + bom para; TERCEIROS → nº/titular/banco/
+ *   agência/conta/emissão/bom para). `payMut.mutate` envia todos os campos.
+ * - `FinanceiroContasAReceber.tsx` (`DarBaixaModal`): "Valor recebido" vira "Valor"
+ *   (base) + Juros/Descontos/Outros, "Total a receber", upload de comprovante; o Total
+ *   alimenta `valorRecebido` e a lógica de parcial (`diferenca`). Cheque próprio/terceiros
+ *   fica restrito ao Contas a Pagar (cheque recebido é sempre de terceiros e
+ *   `financial_revenue` não tem colunas de cheque).
+ *
+ * Validado (estático): `pnpm build` exit 0.
+ *
+ * Rev. 2654 — **CONTAS A PAGAR · O MODAL "REGISTRAR PAGAMENTO" FICA MAIOR E DEIXA DE
+ * EXIGIR BARRA DE ROLAGEM — A LARGURA CRESCE (`max-w-sm`→`max-w-lg`) E OS CAMPOS
+ * "DATA DO PAGAMENTO" E "FORMA DE PAGAMENTO" PASSAM A FICAR LADO A LADO (GRID 2 COL),
+ * REDUZINDO A ALTURA TOTAL DO DIÁLOGO.**
+ *
+ * PEDIDO (usuário, print image_1780276364266): "deixe a tela maior, para que nao
+ * precise da barra de rolagem". O modal de pagamento (OC OC-... + Data/Forma/Conta
+ * Bancária) era estreito (`max-w-sm`) e, com os 3 campos empilhados, ultrapassava o
+ * `max-h-[92dvh]` do `DialogContent` em telas mais baixas → `overflow-y-auto` mostrava
+ * barra de rolagem.
+ *
+ * FIX (SÓ CLIENT/UI; R-001/R-007/R-010 — ZERO SCHEMA/SERVER):
+ * `client/src/pages/financeiro/FinanceiroContasAPagar.tsx` — no modal "Registrar
+ * Pagamento" (`showPay`): `DialogContent` de `max-w-sm`→`max-w-lg`; "Data do
+ * Pagamento" e "Forma de Pagamento" agrupados em `grid grid-cols-1 sm:grid-cols-2
+ * gap-3` (lado a lado a partir de `sm`); "Conta Bancária" segue full-width; espaçamento
+ * vertical `space-y-4`→`space-y-3`. Lógica de pagamento inalterada.
+ *
+ * Validado (estático): `pnpm build` exit 0.
+ *
  * Rev. 2653 — **FÉRIAS / LISTA DE FÉRIAS · A ORDENAÇÃO POR "INÍCIO DO GOZO" GANHA
  * RÓTULOS MAIS CLAROS — "INICIA PRIMEIRO" / "INICIA POR ÚLTIMO" — ESPELHANDO O PADRÃO
  * DE "VENCIMENTO" ("VENCE PRIMEIRO/POR ÚLTIMO").**

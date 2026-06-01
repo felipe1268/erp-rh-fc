@@ -193,6 +193,23 @@ export default function FinanceiroContasAPagar() {
   const [formaPagamento, setFormaPagamento] = useState("pix");
   // Rev. 2540 — conta bancária na baixa (puxa a do lançamento; permite alterar)
   const [contaBancariaId, setContaBancariaId] = useState<number | null>(null);
+  // Rev. 2655 — baixa detalhada: valor + juros − descontos + outros, observações, comprovante e cheque
+  const [valorPagar, setValorPagar] = useState("");
+  const [jurosPay, setJurosPay] = useState("");
+  const [descontosPay, setDescontosPay] = useState("");
+  const [outrosPay, setOutrosPay] = useState("");
+  const [obsPay, setObsPay] = useState("");
+  const [comprovanteUrl, setComprovanteUrl] = useState("");
+  const [comprovanteNome, setComprovanteNome] = useState("");
+  const [uploadingComp, setUploadingComp] = useState(false);
+  const [chequeTipo, setChequeTipo] = useState("");
+  const [chequeNumero, setChequeNumero] = useState("");
+  const [chequeBanco, setChequeBanco] = useState("");
+  const [chequeAgencia, setChequeAgencia] = useState("");
+  const [chequeConta, setChequeConta] = useState("");
+  const [chequeTitular, setChequeTitular] = useState("");
+  const [chequeDataEmissao, setChequeDataEmissao] = useState("");
+  const [chequeDataBomPara, setChequeDataBomPara] = useState("");
   // Rev. 1620 — seleção em lote (Onda 2)
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [showBulkPay, setShowBulkPay] = useState(false);
@@ -243,7 +260,51 @@ export default function FinanceiroContasAPagar() {
   // Sincroniza conta bancária do lançamento ao abrir o diálogo (permite alterar)
   useEffect(() => {
     setContaBancariaId(showPay?.contaBancariaId ?? null);
+    // Rev. 2655 — inicializa campos da baixa detalhada ao abrir
+    setValorPagar(showPay?.valorPrevisto != null ? String(showPay.valorPrevisto) : "");
+    setJurosPay("");
+    setDescontosPay("");
+    setOutrosPay("");
+    setObsPay("");
+    setComprovanteUrl("");
+    setComprovanteNome("");
+    setChequeTipo("");
+    setChequeNumero("");
+    setChequeBanco("");
+    setChequeAgencia("");
+    setChequeConta("");
+    setChequeTitular("");
+    setChequeDataEmissao("");
+    setChequeDataBomPara("");
   }, [showPay]);
+
+  // Rev. 2655 — total da baixa = valor + juros − descontos + outros (±)
+  const totalPagar = useMemo(() => {
+    const n = (s: string) => { const x = parseFloat(String(s).replace(",", ".")); return Number.isFinite(x) ? x : 0; };
+    return n(valorPagar) + n(jurosPay) - n(descontosPay) + n(outrosPay);
+  }, [valorPagar, jurosPay, descontosPay, outrosPay]);
+
+  // Rev. 2655 — upload de comprovante (PDF/Word/imagem)
+  const uploadCompMut = (trpc as any).financial.uploadComprovante.useMutation();
+  const handleUploadComprovante = async (file: File) => {
+    setUploadingComp(true);
+    try {
+      const base64: string = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result).split(",")[1] ?? "");
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+      const res = await uploadCompMut.mutateAsync({ fileName: file.name, fileBase64: base64, contentType: file.type || "application/octet-stream" });
+      setComprovanteUrl(res.url);
+      setComprovanteNome(file.name);
+      toast({ title: "Comprovante anexado!" });
+    } catch (e: any) {
+      toast({ title: "Erro ao anexar", description: e?.message, variant: "destructive" });
+    } finally {
+      setUploadingComp(false);
+    }
+  };
 
   // Rev. 1620 — limpar seleção ao mudar mês/ano para evitar pagar item de outro escopo
   useEffect(() => { setSelectedIds(new Set()); }, [mesSel, ano]);
@@ -1886,30 +1947,57 @@ export default function FinanceiroContasAPagar() {
 
         {/* Modal pagar */}
         <Dialog open={!!showPay} onOpenChange={() => setShowPay(null)}>
-          <DialogContent className="max-w-sm">
+          <DialogContent className="max-w-lg">
             <DialogHeader><DialogTitle>Registrar Pagamento</DialogTitle></DialogHeader>
             {showPay && (
-              <div className="space-y-4">
+              <div className="space-y-3">
                 <div className="bg-gray-50 rounded-lg p-3">
                   <p className="text-sm font-medium text-gray-800">{showPay.descricao ?? showPay.contaNome ?? "—"}</p>
                   {showPay.obraNome && <p className="text-xs text-gray-500">{showPay.obraNome}</p>}
                   <p className="text-lg font-bold text-orange-700 mt-1">{formatBRL(Number(showPay.valorPrevisto))}</p>
                 </div>
-                <div>
-                  <Label>Data do Pagamento</Label>
-                  <Input type="date" value={dataPagamento} onChange={e => setDataPagamento(e.target.value)} />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <Label>Data do Pagamento</Label>
+                    <Input type="date" value={dataPagamento} onChange={e => setDataPagamento(e.target.value)} />
+                  </div>
+                  <div>
+                    <Label>Forma de Pagamento</Label>
+                    <Select value={formaPagamento} onValueChange={setFormaPagamento}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {["pix","ted","boleto","cheque","dinheiro","cartao_credito","debito_automatico"].map(v => (
+                          <SelectItem key={v} value={v}>{v.replace(/_/g," ").toUpperCase()}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
-                <div>
-                  <Label>Forma de Pagamento</Label>
-                  <Select value={formaPagamento} onValueChange={setFormaPagamento}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {["pix","ted","boleto","cheque","dinheiro","cartao_credito","debito_automatico"].map(v => (
-                        <SelectItem key={v} value={v}>{v.replace(/_/g," ").toUpperCase()}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+
+                {/* Rev. 2655 — Valor + Juros − Descontos + Outros → Total */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <div>
+                    <Label>Valor</Label>
+                    <Input type="number" step="0.01" value={valorPagar} onChange={e => setValorPagar(e.target.value)} />
+                  </div>
+                  <div>
+                    <Label>Juros</Label>
+                    <Input type="number" step="0.01" placeholder="0,00" value={jurosPay} onChange={e => setJurosPay(e.target.value)} />
+                  </div>
+                  <div>
+                    <Label>Descontos</Label>
+                    <Input type="number" step="0.01" placeholder="0,00" value={descontosPay} onChange={e => setDescontosPay(e.target.value)} />
+                  </div>
+                  <div>
+                    <Label>Outros (±)</Label>
+                    <Input type="number" step="0.01" placeholder="0,00" value={outrosPay} onChange={e => setOutrosPay(e.target.value)} />
+                  </div>
                 </div>
+                <div className="flex items-center justify-between bg-green-50 border border-green-200 rounded-lg px-3 py-2">
+                  <span className="text-sm font-medium text-green-800">Total a pagar</span>
+                  <span className="text-lg font-bold text-green-700">{formatBRL(totalPagar)}</span>
+                </div>
+
                 <div>
                   <Label>Conta Bancária</Label>
                   <Select
@@ -1927,12 +2015,114 @@ export default function FinanceiroContasAPagar() {
                     </SelectContent>
                   </Select>
                 </div>
+
+                {/* Rev. 2655 — Cheque: próprio/terceiros + dados do cheque */}
+                {formaPagamento === "cheque" && (
+                  <div className="border border-blue-200 bg-blue-50/50 rounded-lg p-3 space-y-3">
+                    <div>
+                      <Label>Tipo de Cheque</Label>
+                      <Select value={chequeTipo || "none"} onValueChange={v => setChequeTipo(v === "none" ? "" : v)}>
+                        <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">— Selecione —</SelectItem>
+                          <SelectItem value="proprio">Próprio</SelectItem>
+                          <SelectItem value="terceiros">De terceiros</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    {chequeTipo === "proprio" && (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <Label>Nº do Cheque</Label>
+                          <Input value={chequeNumero} onChange={e => setChequeNumero(e.target.value)} placeholder="Ex.: 000123" />
+                        </div>
+                        <div>
+                          <Label>Bom para</Label>
+                          <Input type="date" value={chequeDataBomPara} onChange={e => setChequeDataBomPara(e.target.value)} />
+                        </div>
+                      </div>
+                    )}
+                    {chequeTipo === "terceiros" && (
+                      <div className="space-y-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div>
+                            <Label>Nº do Cheque</Label>
+                            <Input value={chequeNumero} onChange={e => setChequeNumero(e.target.value)} placeholder="Ex.: 000123" />
+                          </div>
+                          <div>
+                            <Label>Titular</Label>
+                            <Input value={chequeTitular} onChange={e => setChequeTitular(e.target.value)} placeholder="Nome do emitente" />
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                          <div>
+                            <Label>Banco</Label>
+                            <Input value={chequeBanco} onChange={e => setChequeBanco(e.target.value)} />
+                          </div>
+                          <div>
+                            <Label>Agência</Label>
+                            <Input value={chequeAgencia} onChange={e => setChequeAgencia(e.target.value)} />
+                          </div>
+                          <div>
+                            <Label>Conta</Label>
+                            <Input value={chequeConta} onChange={e => setChequeConta(e.target.value)} />
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div>
+                            <Label>Emissão</Label>
+                            <Input type="date" value={chequeDataEmissao} onChange={e => setChequeDataEmissao(e.target.value)} />
+                          </div>
+                          <div>
+                            <Label>Bom para</Label>
+                            <Input type="date" value={chequeDataBomPara} onChange={e => setChequeDataBomPara(e.target.value)} />
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Rev. 2655 — Comprovante (PDF/Word/imagem) */}
+                <div>
+                  <Label>Comprovante / Documento</Label>
+                  <Input type="file" accept=".pdf,.doc,.docx,image/*"
+                    onChange={e => { const f = e.target.files?.[0]; if (f) handleUploadComprovante(f); }} disabled={uploadingComp} />
+                  {uploadingComp && <p className="text-xs text-gray-500 mt-1">Enviando…</p>}
+                  {comprovanteUrl && !uploadingComp && (
+                    <p className="text-xs text-green-700 mt-1">
+                      Anexado: <a href={comprovanteUrl} target="_blank" rel="noreferrer" className="underline">{comprovanteNome || "ver arquivo"}</a>
+                    </p>
+                  )}
+                </div>
+
+                {/* Rev. 2655 — Observações */}
+                <div>
+                  <Label>Observações</Label>
+                  <Textarea rows={2} value={obsPay} onChange={e => setObsPay(e.target.value)} placeholder="Observações da baixa (opcional)" />
+                </div>
               </div>
             )}
             <DialogFooter>
               <Button variant="outline" onClick={() => setShowPay(null)}>Cancelar</Button>
-              <Button className="bg-green-600 hover:bg-green-700 text-white" disabled={payMut.isPending}
-                onClick={() => payMut.mutate({ id: showPay.id, companyId, status: "pago", dataPagamento, formaPagamento, contaBancariaId })}>
+              <Button className="bg-green-600 hover:bg-green-700 text-white" disabled={payMut.isPending || uploadingComp}
+                onClick={() => payMut.mutate({
+                  id: showPay.id, companyId, status: "pago", dataPagamento, formaPagamento, contaBancariaId,
+                  valorRealizado: totalPagar,
+                  juros: jurosPay ? Number(String(jurosPay).replace(",", ".")) : undefined,
+                  descontos: descontosPay ? Number(String(descontosPay).replace(",", ".")) : undefined,
+                  outros: outrosPay ? Number(String(outrosPay).replace(",", ".")) : undefined,
+                  observacoes: obsPay || undefined,
+                  comprovanteUrl: comprovanteUrl || undefined,
+                  chequeTipo: formaPagamento === "cheque" ? (chequeTipo || undefined) : undefined,
+                  chequeNumero: formaPagamento === "cheque" ? (chequeNumero || undefined) : undefined,
+                  chequeBanco: formaPagamento === "cheque" ? (chequeBanco || undefined) : undefined,
+                  chequeAgencia: formaPagamento === "cheque" ? (chequeAgencia || undefined) : undefined,
+                  chequeConta: formaPagamento === "cheque" ? (chequeConta || undefined) : undefined,
+                  chequeTitular: formaPagamento === "cheque" ? (chequeTitular || undefined) : undefined,
+                  chequeDataEmissao: formaPagamento === "cheque" ? (chequeDataEmissao || undefined) : undefined,
+                  chequeDataBomPara: formaPagamento === "cheque" ? (chequeDataBomPara || undefined) : undefined,
+                })}>
                 {payMut.isPending ? "Registrando..." : "Confirmar Pagamento"}
               </Button>
             </DialogFooter>
