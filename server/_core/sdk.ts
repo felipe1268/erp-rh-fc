@@ -20,6 +20,19 @@ import type {
 const isNonEmptyString = (value: unknown): value is string =>
   typeof value === "string" && value.length > 0;
 
+// Converte o `lastSignedIn` (string) para epoch ms tratando valores SEM timezone
+// como UTC. Gravamos sempre via `new Date().toISOString()` (UTC), mas a coluna é
+// `timestamp` sem timezone e o pg devolve "YYYY-MM-DD HH:MM:SS[.mmm]" (sem Z) — que
+// o JS interpretaria como hora LOCAL. Aqui: se já houver Z ou offset (+hh:mm), parseia
+// direto; senão troca o espaço por "T" e força "Z" (UTC). Retorna NaN se inválido.
+function parseLastSignedInUtc(ts: string | null | undefined): number {
+  if (!ts) return NaN;
+  const s = String(ts).trim();
+  if (!s) return NaN;
+  if (/(?:[zZ]|[+-]\d{2}:?\d{2})$/.test(s)) return Date.parse(s);
+  return Date.parse(s.replace(" ", "T") + "Z");
+}
+
 export type SessionPayload = {
   openId: string;
   appId: string;
@@ -290,10 +303,23 @@ class SDKServer {
       throw ForbiddenError("User not found");
     }
 
-    await db.upsertUser({
-      openId: user.openId,
-      lastSignedIn: signedInAt,
-    });
+    // Perf: o `lastSignedIn` era gravado em TODA requisição tRPC (um write no banco
+    // por chamada de API), virando latência fixa em tudo. Como o valor só serve para
+    // "último acesso", basta atualizá-lo no máximo a cada LAST_SIGNED_IN_THROTTLE_MS.
+    // Na esmagadora maioria das chamadas (várias por minuto) o write é PULADO.
+    // O valor gravado é UTC (`new Date().toISOString()`), mas a coluna é `timestamp`
+    // SEM timezone — o pg devolve "YYYY-MM-DD HH:MM:SS[.mmm]" (sem Z), que o JS
+    // interpretaria como hora LOCAL. `parseLastSignedInUtc` normaliza p/ UTC, então
+    // o cálculo dos 5 min fica determinístico independente do fuso do servidor.
+    const LAST_SIGNED_IN_THROTTLE_MS = 5 * 60 * 1000;
+    const lastTs = parseLastSignedInUtc(user.lastSignedIn as unknown as string | null | undefined);
+    const isStale = Number.isNaN(lastTs) || (Date.now() - lastTs) > LAST_SIGNED_IN_THROTTLE_MS;
+    if (isStale) {
+      void db.upsertUser({
+        openId: user.openId,
+        lastSignedIn: signedInAt,
+      }).catch((err) => console.error("[Auth] lastSignedIn update failed:", err));
+    }
 
     return user;
   }

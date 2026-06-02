@@ -1,6 +1,28 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2688 — **PERFORMANCE GLOBAL (toda chamada de API / carregamento de telas) · O ERP DEIXA DE GRAVAR NO
+ * BANCO O "ÚLTIMO ACESSO" (`lastSignedIn`) EM CADA REQUISIÇÃO — AGORA SÓ ATUALIZA NO MÁXIMO 1× A CADA 5 MIN
+ * POR USUÁRIO. ISSO REMOVE UM WRITE NO POSTGRES DO CAMINHO QUENTE DE **TODA** REQUISIÇÃO tRPC, REDUZINDO A
+ * LATÊNCIA-BASE DE TUDO QUE CARREGA INFORMAÇÃO.**
+ *
+ * PEDIDO (usuário): "o ERP está extremamente lento, como podemos acelerar isso... carregar as informações,
+ * diminuindo a latência". Investigação (2 explore subagents): o front já está bem configurado (lazy-load de
+ * ~100 rotas, `staleTime` 2min, sem `refetchOnWindowFocus`, `httpBatchLink`); o gargalo universal estava no
+ * SERVER — `sdk.authenticateRequest` rodava `db.upsertUser({ lastSignedIn })` em TODA requisição autenticada
+ * (além do `getUserByOpenId` de leitura). Ou seja, cada GET de dashboard/lista disparava 1 SELECT + 1 UPDATE
+ * no Neon só para carimbar o horário de acesso — latência fixa somada a tudo.
+ *
+ * FIX (SÓ SERVER, HOT PATH; ZERO SCHEMA/CLIENT — R-001/R-007/R-010):
+ *  - SERVER `server/_core/sdk.ts` (`authenticateRequest`): o `lastSignedIn` já vinha carregado no `user`
+ *    (`getUserByOpenId`). Agora só grava se `Date.now() - Date.parse(user.lastSignedIn) > 5min` (ou se o
+ *    valor for inválido/ausente). Quando grava, faz de forma NÃO-BLOQUEANTE (`void ... .catch(...)`) — o
+ *    carimbo de acesso não atrasa mais a resposta da requisição. Como o usuário faz várias chamadas por
+ *    minuto, o write é PULADO na esmagadora maioria delas. Comportamento funcional preservado (o "último
+ *    acesso" continua atualizando, só que com granularidade de 5 min). esbuild EXIT 0.
+ *
+ * ----------------------------------------------------------------------------------------------------
+ *
  * Rev. 2687 — **SST (`/sst/atestados-acidentes` → aba "Visão Geral") · OS CARDS "TOTAL ATESTADOS" E "DIAS
  * AFASTAMENTO (ATESTADO)" AGORA SÃO CLICÁVEIS E ABREM UM MODAL "DE ONDE VEM O NÚMERO?" QUE EXPLICA O CÁLCULO
  * E LISTA O DETALHAMENTO POR COLABORADOR (NOME, FUNÇÃO, QTD ATESTADOS, DIAS), COM BUSCA/FILTRO, EXPORT CSV E
