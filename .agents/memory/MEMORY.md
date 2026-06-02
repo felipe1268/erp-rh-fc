@@ -9,4 +9,5 @@
 - [% Previsto motor vs manual toggle](previsto-fonte-toggle.md) — curve JSON carries a `fonte` marker; getProjeto self-heal reconciles lazily vs the global company toggle. Any new writer must set the marker.
 - [Warehouse session IDOR guard](warehouse-session-idor.md) — getInventorySessionItems takes only sessionId; derive company/obra from the session row to authorize. Browse-reachable warehouse read endpoints must guard against IDOR.
 - [Company-access tenancy guard](company-access-guard.md) — per-company endpoints must use the `assertCompanyAccess` helper (admin free / links enforce / no-links allow), NOT the legacy strict `ctx.user.companyId` compare which blocks multi-company users.
+- [Frota null-obra visibility](frota-null-obra-visibility.md) — veículos obra_id NULL = admin-only (leitura e escrita); NÃO relaxar guard de updateVehicle (abre IDOR); falha silenciosa de mutation = falta onError no client, não bug de backend.
 - [No employee status history](no-status-history.md) — only CURRENT status is stored; for past-date snapshots derive active-at-D from admissão/demissão dates + férias from vacationPeriods; other sub-statuses fold into Ativo.

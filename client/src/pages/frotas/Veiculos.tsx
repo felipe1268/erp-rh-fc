@@ -44,9 +44,11 @@ export default function Veiculos() {
   );
   const createMut = trpc.frotas.createVehicle.useMutation({
     onSuccess: () => { vehicles.refetch(); setDialogOpen(false); toast.success("Veículo cadastrado"); },
+    onError: (e) => toast.error("Não foi possível salvar: " + e.message),
   });
   const updateMut = trpc.frotas.updateVehicle.useMutation({
     onSuccess: () => { vehicles.refetch(); setDialogOpen(false); toast.success("Veículo atualizado"); },
+    onError: (e) => toast.error("Não foi possível salvar: " + e.message),
   });
   const bulkStatusMut = trpc.frotas.updateVehicle.useMutation();
   const deleteMut = trpc.frotas.deleteVehicle.useMutation({

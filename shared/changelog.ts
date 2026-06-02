@@ -1,6 +1,37 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2701 — **FROTA · EDITAR VEÍCULO (`/frotas` → "Veículos" → abrir veículo → "Salvar") · "MARQUEI
+ * COMO VENDIDO E NÃO SALVA": O CLIQUE EM "SALVAR" FALHAVA EM SILÊNCIO — NÃO PERSISTIA E NÃO MOSTRAVA
+ * NENHUM ERRO. AGORA QUALQUER FALHA DE SALVAR/CRIAR VEÍCULO APARECE NUM TOAST DE ERRO COM A MENSAGEM
+ * REAL DO SERVIDOR, EM VEZ DO BOTÃO "NÃO FAZER NADA".**
+ *
+ * PEDIDO (usuário, print "Editar Veículo" com Status="Vendido", Tipo=Máquina, "Equipamento próprio FC
+ * Engenharia"): "Tô clicando que foi vendido e não tá salvando".
+ *
+ * CAUSA-RAIZ: no cliente (`client/src/pages/frotas/Veiculos.tsx`), `createMut`/`updateMut` NÃO tinham
+ * handler `onError` → quando a mutation `frotas.updateVehicle`/`createVehicle` rejeitava (qualquer
+ * motivo — permissão, validação, erro de banco), o erro era ENGOLIDO: o `onSuccess` (que fecha o diálogo
+ * + toast) não rodava e nada acontecia na tela. Da perspectiva do usuário, "clico em Salvar e não
+ * acontece nada".
+ *
+ * FIX (SÓ CLIENT/UI; ZERO SERVER/SCHEMA — R-001/R-007/R-010): `createMut` e `updateMut` ganharam
+ * `onError` com `toast.error("Não foi possível salvar: " + e.message)` — a falha real (antes silenciosa)
+ * agora é mostrada ao usuário, que pode agir/relatar a mensagem exata.
+ *
+ * POR QUE O SERVER NÃO FOI ALTERADO (decisão reforçada pelo code review / architect): uma primeira
+ * tentativa relaxou o guard de obra de `updateVehicle` (só validar quando `curObra != null`) supondo que
+ * veículos sem obra fossem bloqueados p/ quem os vê. ISSO ESTAVA ERRADO e foi REVERTIDO: pelo modelo de
+ * visibilidade, veículos com `obra_id NULL` (equipamentos próprios) só aparecem na `listVehicles` para
+ * ADMIN (`getEffectiveAllowedObraIds` → `null`), e ADMIN já passa em `userCanAccessObra(null)` (retorna
+ * `true`). Ou seja, o guard ATUAL já está alinhado à visibilidade ("edita quem vê") e não bloqueava
+ * nenhum visualizador legítimo; relaxá-lo abriria um IDOR (qualquer autenticado editando veículo sem obra
+ * por enumeração de id/companyId, sem checagem de empresa). O guard original permanece intacto.
+ *
+ * Descartadas na investigação: (a) erro de parse numérico no `MoneyInput` — ele emite string numérica
+ * limpa via `parseBRL`, OK; (b) validação "Cadastro incompleto" (Placa/RENAVAM/KM) NÃO bloqueia o
+ * "Salvar" base, só a consolidação. esbuild EXIT 0 (server+client).
+ *
  * Rev. 2700 — **PLANEJAMENTO · ANÁLISE DE EFETIVO × CRONOGRAMA (IA) (`/planejamento/:id` → aba
  * "Efetivo × IA" → "Gerar análise" / abas "Diagnóstico" / "Simulador" / "Histórico") · A FUNÇÃO AGORA
  * FICA LIBERADA PARA TODOS OS USUÁRIOS QUE TÊM O MÓDULO PLANEJAMENTO — NÃO MAIS "SÓ PARA O USUÁRIO
