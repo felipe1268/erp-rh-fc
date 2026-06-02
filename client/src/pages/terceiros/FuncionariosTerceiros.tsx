@@ -13,9 +13,312 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
-import { Users, Plus, Search, Edit, Trash2, Upload, FileText, CheckCircle, XCircle, Clock, ShieldCheck, Building2, HardHat, Camera, BadgeCheck, User as UserIcon, X, Heart, Award, BookOpen, ClipboardCheck, AlertTriangle, Calendar, Phone, Briefcase, Loader2 } from "lucide-react";
+import { Users, Plus, Search, Edit, Trash2, Upload, FileText, CheckCircle, XCircle, Clock, ShieldCheck, Building2, HardHat, Camera, BadgeCheck, User as UserIcon, X, Heart, Award, BookOpen, ClipboardCheck, AlertTriangle, Calendar, Phone, Briefcase, Loader2, Eye } from "lucide-react";
 import { PersonPhoto } from "@/components/PersonPhoto";
 import { FuncaoCombobox } from "@/components/FuncaoCombobox";
+
+// Rev. 2680 — Definição ÚNICA das seções/documentos exigidos pra funcionário
+// terceiro. Reaproveitada pela aba "Documentos" do editor E pelo Raio-X read-only
+// (RaioXTerceiroDialog), pra que as duas telas nunca saiam de sincronia.
+type SecaoDocTerceiro = { label: string; urlField: string; validadeField: string | null; obrigatorio: boolean; descricao?: string };
+type SecaoTerceiro = { key: string; titulo: string; descricao: string; icone: any; cor: string; bgCor: string; corBorda: string; docs: SecaoDocTerceiro[] };
+
+function getSecoesTerceiro(): SecaoTerceiro[] {
+  return [
+    {
+      key: "saude_ocupacional",
+      titulo: "Saúde Ocupacional",
+      descricao: "Atestado médico que comprova aptidão pra função",
+      icone: Heart,
+      cor: "text-rose-700",
+      bgCor: "bg-rose-50",
+      corBorda: "border-rose-200",
+      docs: [
+        { label: "ASO (Atestado de Saúde Ocupacional)", urlField: "asoUrl", validadeField: "asoValidade", obrigatorio: true, descricao: "Admissional, periódico ou de mudança de função" },
+      ],
+    },
+    {
+      key: "treinamentos_nr",
+      titulo: "Treinamentos NR",
+      descricao: "Normas Regulamentadoras conforme função e exposição a risco",
+      icone: BookOpen,
+      cor: "text-amber-700",
+      bgCor: "bg-amber-50",
+      corBorda: "border-amber-200",
+      docs: [
+        { label: "Treinamento NR genérico (NR-06 EPI, NR-18 Construção, etc.)", urlField: "treinamentoNrUrl", validadeField: "treinamentoNrValidade", obrigatorio: true },
+        { label: "NR-10 — Segurança em Eletricidade", urlField: "nr10DocUrl", validadeField: "nr10Validade", obrigatorio: false, descricao: "Obrigatório pra eletricistas e quem trabalha próximo a redes energizadas" },
+        { label: "NR-33 — Espaço Confinado", urlField: "nr33DocUrl", validadeField: "nr33Validade", obrigatorio: false, descricao: "Obrigatório pra tanques, silos, galerias, poços etc." },
+        { label: "NR-35 — Trabalho em Altura", urlField: "nr35DocUrl", validadeField: "nr35Validade", obrigatorio: false, descricao: "Obrigatório pra trabalhos acima de 2m do nível inferior" },
+      ],
+    },
+    {
+      key: "integracao_seguranca",
+      titulo: "Integração de Segurança",
+      descricao: "Integração admissional na Construtora E no Cliente final (ambas obrigatórias)",
+      icone: ClipboardCheck,
+      cor: "text-indigo-700",
+      bgCor: "bg-indigo-50",
+      corBorda: "border-indigo-200",
+      docs: [
+        { label: "Integração na Construtora (FC)", urlField: "integracaoDocUrl", validadeField: null, obrigatorio: true, descricao: "Ata/lista de presença da integração admissional realizada pela Construtora contratante" },
+        { label: "Integração no Cliente / Obra", urlField: "integracaoClienteDocUrl", validadeField: null, obrigatorio: true, descricao: "Ata/lista da integração realizada pelo Cliente final ou pela própria obra (regras locais, DDS específicos)" },
+      ],
+    },
+    {
+      key: "documentos_trabalhistas",
+      titulo: "Documentos Trabalhistas",
+      descricao: "Comprovantes legais que devem ficar disponíveis pra fiscalização do MTE",
+      icone: Briefcase,
+      cor: "text-emerald-700",
+      bgCor: "bg-emerald-50",
+      corBorda: "border-emerald-200",
+      docs: [
+        { label: "Ficha de EPI", urlField: "fichaEpiUrl", validadeField: null, obrigatorio: true, descricao: "Ficha de Entrega de EPI assinada pelo trabalhador (NR-06) — registra os EPIs recebidos, datas e devoluções" },
+        { label: "Ordem de Serviço (OS de SST)", urlField: "ordemServicoUrl", validadeField: null, obrigatorio: true, descricao: "OS exigida pela NR-01 — descreve a função, os riscos do ambiente, as medidas de prevenção e as obrigações do trabalhador" },
+        { label: "Registro de Funcionário", urlField: "registroFuncionarioUrl", validadeField: null, obrigatorio: true, descricao: "Ficha/livro de registro de empregado (CLT art. 41) — comprova o vínculo formal junto à empresa terceira" },
+      ],
+    },
+    {
+      key: "identificacao_qualificacao",
+      titulo: "Identificação e Qualificação",
+      descricao: "Foto pra crachá e certificados profissionais complementares",
+      icone: Award,
+      cor: "text-blue-700",
+      bgCor: "bg-blue-50",
+      corBorda: "border-blue-200",
+      docs: [
+        { label: "Foto 3x4", urlField: "fotoUrl", validadeField: null, obrigatorio: true, descricao: "Foto recente pra crachá de identificação" },
+        { label: "Certificados profissionais", urlField: "certificadosUrl", validadeField: null, obrigatorio: false, descricao: "Cursos técnicos, qualificações específicas etc." },
+      ],
+    },
+  ];
+}
+
+// Rev. 2680 — Raio-X READ-ONLY do funcionário terceiro. Abre num clique no card
+// (sem passar pelo "Editar") e mostra TODA a documentação consolidada: painel de
+// integração (% conformidade, vencidos, a vencer) + seções com links "Ver
+// documento" e validades. Não permite upload/edição (pra isso há o botão Editar).
+function RaioXTerceiroDialog({ func, empresaNome, onClose, onEdit }: { func: any; empresaNome: string; onClose: () => void; onEdit: () => void }) {
+  const secoes = getSecoesTerceiro();
+  const allExtras: any[] = Array.isArray(func.documentosExtras) ? func.documentosExtras : [];
+  const extrasByCategoria = (k: string) => allExtras.filter((d: any) => d.categoria === k);
+
+  const todosObrigatorios = secoes.flatMap(s => s.docs).filter(d => d.obrigatorio);
+  const obrigatoriosPreenchidos = todosObrigatorios.filter(d => !!func[d.urlField]);
+  const totalDocsFixos = secoes.flatMap(s => s.docs);
+  const fixosPreenchidos = totalDocsFixos.filter(d => !!func[d.urlField]);
+  const totalDocsCount = totalDocsFixos.length + allExtras.length;
+  const totalPreenchidosCount = fixosPreenchidos.length + allExtras.length;
+  const pctIntegracao = todosObrigatorios.length > 0 ? Math.round((obrigatoriosPreenchidos.length / todosObrigatorios.length) * 100) : 100;
+  const hoje = new Date().toISOString().slice(0, 10);
+  const vencidosFixos = totalDocsFixos.filter(d => d.validadeField && func[d.validadeField] && String(func[d.validadeField]).slice(0, 10) < hoje);
+  const vencidosExtras = allExtras.filter((d: any) => d.validade && String(d.validade).slice(0, 10) < hoje);
+  const vencidos = [
+    ...vencidosFixos.map(d => ({ label: d.label })),
+    ...vencidosExtras.map((d: any) => ({ label: d.label })),
+  ];
+  const proxVencimentoFixos = totalDocsFixos
+    .filter(d => d.validadeField && func[d.validadeField])
+    .map(d => ({ label: d.label, diasRest: Math.ceil((new Date(func[d.validadeField!]).getTime() - Date.now()) / 86400000) }))
+    .filter(d => d.diasRest >= 0 && d.diasRest <= 30);
+  const proxVencimentoExtras = allExtras
+    .filter((d: any) => d.validade)
+    .map((d: any) => ({ label: d.label, diasRest: Math.ceil((new Date(d.validade).getTime() - Date.now()) / 86400000) }))
+    .filter((d: any) => d.diasRest >= 0 && d.diasRest <= 30);
+  const proxVencimento = [...proxVencimentoFixos, ...proxVencimentoExtras].sort((a, b) => a.diasRest - b.diasRest);
+
+  const statusIntegracao = vencidos.length > 0
+    ? { label: "Documento Vencido", cor: "from-red-500 to-rose-600", borda: "border-red-300", icone: XCircle }
+    : pctIntegracao === 100
+      ? { label: "Integrado", cor: "from-emerald-500 to-green-600", borda: "border-emerald-300", icone: CheckCircle }
+      : pctIntegracao >= 50
+        ? { label: "Integração Parcial", cor: "from-amber-500 to-orange-500", borda: "border-amber-300", icone: Clock }
+        : { label: "Não Integrado", cor: "from-slate-400 to-slate-500", borda: "border-slate-300", icone: AlertTriangle };
+
+  return (
+    <FullScreenDialog open onClose={onClose} title="Raio-X do Funcionário" headerColor="bg-blue-600">
+      <div className="max-w-4xl lg:max-w-6xl mx-auto p-4 lg:px-6 space-y-5">
+        {/* Cabeçalho do funcionário */}
+        <div className="flex items-center gap-4 rounded-xl border bg-card p-4">
+          <PersonPhoto src={func.fotoUrl} alt={func.nome} size="lg" />
+          <div className="min-w-0">
+            <h3 className="font-bold text-lg leading-tight">{(func.nome || "").toUpperCase()}</h3>
+            <div className="text-sm text-muted-foreground flex flex-wrap gap-x-3 gap-y-1 mt-1">
+              {func.cpf && <span>CPF: {func.cpf}</span>}
+              {func.funcao && <span>{func.funcao}</span>}
+              {empresaNome && <span className="flex items-center gap-1"><Building2 className="h-3.5 w-3.5" />{empresaNome}</span>}
+              {func.obraNome && <span className="flex items-center gap-1"><HardHat className="h-3.5 w-3.5" />{func.obraNome}</span>}
+            </div>
+          </div>
+          <div className="ml-auto shrink-0">
+            <Button size="sm" variant="outline" onClick={onEdit}>
+              <Edit className="h-3.5 w-3.5 mr-1" /> Editar
+            </Button>
+          </div>
+        </div>
+
+        {/* Painel de Status de Integração */}
+        <div className={`rounded-xl border-2 ${statusIntegracao.borda} overflow-hidden shadow-sm`}>
+          <div className={`bg-gradient-to-r ${statusIntegracao.cor} px-4 py-3 text-white flex items-center justify-between gap-3 flex-wrap`}>
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="h-10 w-10 rounded-full bg-white/20 ring-2 ring-white/30 flex items-center justify-center shrink-0">
+                <statusIntegracao.icone className="h-5 w-5" />
+              </div>
+              <div className="min-w-0">
+                <div className="text-[11px] uppercase tracking-wider opacity-90 font-semibold">Status de Integração</div>
+                <div className="text-base font-bold truncate">{statusIntegracao.label}</div>
+              </div>
+            </div>
+            <div className="text-right shrink-0">
+              <div className="text-2xl font-extrabold leading-none tabular-nums">{pctIntegracao}%</div>
+              <div className="text-[11px] opacity-90">{obrigatoriosPreenchidos.length} de {todosObrigatorios.length} obrigatórios</div>
+            </div>
+          </div>
+          <div className="bg-white px-4 py-3">
+            <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden mb-3">
+              <div className={`h-full bg-gradient-to-r ${statusIntegracao.cor} transition-all`} style={{ width: `${pctIntegracao}%` }} />
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px]">
+              <div className="bg-slate-50 rounded p-2">
+                <div className="text-slate-500 uppercase font-semibold tracking-wider">Total docs</div>
+                <div className="text-slate-900 font-bold text-base">{totalPreenchidosCount}/{totalDocsCount}</div>
+              </div>
+              <div className="bg-emerald-50 rounded p-2">
+                <div className="text-emerald-600 uppercase font-semibold tracking-wider">Obrigatórios OK</div>
+                <div className="text-emerald-900 font-bold text-base">{obrigatoriosPreenchidos.length}/{todosObrigatorios.length}</div>
+              </div>
+              <div className={`rounded p-2 ${vencidos.length > 0 ? "bg-red-50" : "bg-slate-50"}`}>
+                <div className={`uppercase font-semibold tracking-wider ${vencidos.length > 0 ? "text-red-600" : "text-slate-500"}`}>Vencidos</div>
+                <div className={`font-bold text-base ${vencidos.length > 0 ? "text-red-900" : "text-slate-900"}`}>{vencidos.length}</div>
+              </div>
+              <div className={`rounded p-2 ${proxVencimento.length > 0 ? "bg-amber-50" : "bg-slate-50"}`}>
+                <div className={`uppercase font-semibold tracking-wider ${proxVencimento.length > 0 ? "text-amber-600" : "text-slate-500"}`}>Vencem ≤30d</div>
+                <div className={`font-bold text-base ${proxVencimento.length > 0 ? "text-amber-900" : "text-slate-900"}`}>{proxVencimento.length}</div>
+              </div>
+            </div>
+            {vencidos.length > 0 && (
+              <div className="mt-3 bg-red-50 border border-red-200 rounded p-2 text-xs text-red-800 flex items-start gap-2">
+                <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+                <div>
+                  <strong>Atenção:</strong> {vencidos.length === 1 ? "1 documento vencido" : `${vencidos.length} documentos vencidos`} — {vencidos.map(v => v.label).join(", ")}
+                </div>
+              </div>
+            )}
+            {proxVencimento.length > 0 && (
+              <div className="mt-2 bg-amber-50 border border-amber-200 rounded p-2 text-xs text-amber-800 flex items-start gap-2">
+                <Clock className="h-4 w-4 shrink-0 mt-0.5" />
+                <div>
+                  Próximos vencimentos: {proxVencimento.slice(0, 3).map(v => `${v.label} (em ${v.diasRest}d)`).join(" · ")}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Seções de Documentos (somente leitura) */}
+        {secoes.map((secao) => {
+          const extrasDaSecao = extrasByCategoria(secao.key);
+          const fixosOk = secao.docs.filter(d => !!func[d.urlField]).length;
+          return (
+            <div key={secao.key} className={`rounded-xl border ${secao.corBorda} overflow-hidden`}>
+              <div className={`${secao.bgCor} px-4 py-2.5 flex items-center gap-2 border-b ${secao.corBorda}`}>
+                <div className={`h-8 w-8 rounded-lg bg-white ring-1 ${secao.corBorda} flex items-center justify-center shrink-0`}>
+                  <secao.icone className={`h-4 w-4 ${secao.cor}`} />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <h4 className={`font-bold text-sm ${secao.cor}`}>{secao.titulo}</h4>
+                  <p className="text-[11px] text-slate-600 truncate">{secao.descricao}</p>
+                </div>
+                <div className="text-[11px] text-slate-500 shrink-0">
+                  {fixosOk + extrasDaSecao.length}/{secao.docs.length + extrasDaSecao.length}
+                </div>
+              </div>
+              <div className="divide-y bg-white">
+                {secao.docs.map((doc) => {
+                  const url = func[doc.urlField];
+                  const validade = doc.validadeField ? func[doc.validadeField] : null;
+                  const venceEm = validade ? Math.ceil((new Date(validade).getTime() - Date.now()) / 86400000) : null;
+                  const vencido = venceEm !== null && venceEm < 0;
+                  const proximoVenc = venceEm !== null && venceEm >= 0 && venceEm <= 30;
+                  return (
+                    <div key={doc.urlField} className="p-3">
+                      <div className="flex items-start justify-between flex-wrap gap-2">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            {url ? <CheckCircle className="h-4 w-4 text-emerald-600 shrink-0" /> : doc.obrigatorio ? <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0" /> : <Clock className="h-4 w-4 text-slate-400 shrink-0" />}
+                            <h5 className="font-medium text-sm">{doc.label}</h5>
+                            {doc.obrigatorio && <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-red-100 text-red-700 font-semibold">Obrigatório</span>}
+                            {vencido && <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-red-100 text-red-700 font-semibold">Vencido</span>}
+                            {proximoVenc && <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 font-semibold">Vence em {venceEm}d</span>}
+                          </div>
+                          {doc.descricao && <p className="text-[11px] text-muted-foreground mt-0.5 ml-6">{doc.descricao}</p>}
+                          <div className="ml-6 mt-1">
+                            {url ? (
+                              <a href={url} target="_blank" rel="noreferrer" className="text-xs text-blue-600 hover:underline inline-flex items-center gap-1">
+                                <FileText className="h-3 w-3" /> Ver documento
+                              </a>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">Nenhum documento</span>
+                            )}
+                          </div>
+                        </div>
+                        {doc.validadeField && validade && (
+                          <div className="text-right shrink-0">
+                            <div className="text-[10px] text-muted-foreground">Validade</div>
+                            <div className={`text-xs font-medium ${vencido ? "text-red-700" : proximoVenc ? "text-amber-700" : "text-slate-700"}`}>
+                              {new Date(validade).toLocaleDateString("pt-BR")}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+                {extrasDaSecao.map((doc: any) => {
+                  const venceEm = doc.validade ? Math.ceil((new Date(doc.validade).getTime() - Date.now()) / 86400000) : null;
+                  const vencido = venceEm !== null && venceEm < 0;
+                  const proximoVenc = venceEm !== null && venceEm >= 0 && venceEm <= 30;
+                  return (
+                    <div key={doc.id} className="p-3 bg-slate-50/30">
+                      <div className="flex items-start justify-between flex-wrap gap-2">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <FileText className="h-4 w-4 text-slate-500 shrink-0" />
+                            <h5 className="font-medium text-sm">{doc.label}</h5>
+                            <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-slate-200 text-slate-700 font-semibold">Avulso</span>
+                            {vencido && <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-red-100 text-red-700 font-semibold">Vencido</span>}
+                            {proximoVenc && <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 font-semibold">Vence em {venceEm}d</span>}
+                          </div>
+                          <div className="ml-6 mt-1">
+                            <a href={doc.url} target="_blank" rel="noreferrer" className="text-xs text-blue-600 hover:underline inline-flex items-center gap-1">
+                              <FileText className="h-3 w-3" /> Ver documento
+                            </a>
+                          </div>
+                        </div>
+                        {doc.validade && (
+                          <div className="text-right shrink-0">
+                            <div className="text-[10px] text-muted-foreground">Validade</div>
+                            <div className={`text-xs font-medium ${vencido ? "text-red-700" : proximoVenc ? "text-amber-700" : "text-slate-700"}`}>
+                              {new Date(doc.validade).toLocaleDateString("pt-BR")}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+                {secao.docs.every(d => !func[d.urlField]) && extrasDaSecao.length === 0 && (
+                  <div className="p-3 text-xs text-muted-foreground text-center">Nenhum documento nesta seção</div>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </FullScreenDialog>
+  );
+}
 
 export default function FuncionariosTerceiros() {
   const { user } = useAuth();
@@ -26,6 +329,7 @@ export default function FuncionariosTerceiros() {
   const [filterAptidao, setFilterAptidao] = useState<string>("all");
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [viewFunc, setViewFunc] = useState<any>(null);
   const [activeTab, setActiveTab] = useState<"dados" | "documentos" | "dds">("dados");
   // Rev. 2004 — Form de novo DDS
   const [ddsForm, setDdsForm] = useState<any>({ dataDds: new Date().toISOString().slice(0, 10) });
@@ -457,12 +761,21 @@ export default function FuncionariosTerceiros() {
                       size="lg"
                       caption={[func.cpf && `CPF: ${func.cpf}`, func.funcao, func.obraNome].filter(Boolean).join(" · ") || undefined}
                     />
-                    <div className="flex-1 min-w-0">
+                    {/* Rev. 2680 — bloco de identificação clicável: abre o Raio-X
+                        read-only (toda a documentação) sem passar pelo "Editar". */}
+                    <div
+                      className="flex-1 min-w-0 cursor-pointer group"
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => setViewFunc(func)}
+                      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setViewFunc(func); } }}
+                      title="Ver Raio-X completo (documentação)"
+                    >
                       <div className="flex items-center gap-2 flex-wrap">
                         {/* Rev. 2495 — Padronização: nome SEMPRE renderizado em
                             MAIÚSCULAS (cobre registros legados gravados antes
                             da normalização do backend). */}
-                        <h3 className="font-semibold text-foreground">{(func.nome || "").toUpperCase()}</h3>
+                        <h3 className="font-semibold text-foreground group-hover:text-blue-700 group-hover:underline">{(func.nome || "").toUpperCase()}</h3>
                         {func.numeroInterno && (
                           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-mono font-semibold bg-blue-50 text-blue-700 border border-blue-200" title="Número interno do funcionário">
                             <BadgeCheck className="h-3 w-3" />{func.numeroInterno}
@@ -479,6 +792,9 @@ export default function FuncionariosTerceiros() {
                     </div>
                   </div>
                   <div className="flex gap-2">
+                    <Button size="sm" variant="outline" className="text-blue-700 border-blue-300 hover:bg-blue-50" onClick={() => setViewFunc(func)}>
+                      <Eye className="h-3.5 w-3.5 mr-1" /> Raio-X
+                    </Button>
                     <Button size="sm" variant="outline" onClick={() => openEdit(func)}>
                       <Edit className="h-3.5 w-3.5 mr-1" /> Editar
                     </Button>
@@ -658,78 +974,8 @@ export default function FuncionariosTerceiros() {
             {activeTab === "documentos" && editingId && (() => {
               // Rev. 2002 — Lista completa de documentos exigidos pra funcionário terceiro
               // + Painel de Integração que calcula % de conformidade em tempo real
-              type Doc = { label: string; urlField: string; validadeField: string | null; obrigatorio: boolean; descricao?: string };
-              type Secao = { key: string; titulo: string; descricao: string; icone: any; cor: string; bgCor: string; corBorda: string; docs: Doc[] };
-              const secoes: Secao[] = [
-                {
-                  key: "saude_ocupacional",
-                  titulo: "Saúde Ocupacional",
-                  descricao: "Atestado médico que comprova aptidão pra função",
-                  icone: Heart,
-                  cor: "text-rose-700",
-                  bgCor: "bg-rose-50",
-                  corBorda: "border-rose-200",
-                  docs: [
-                    { label: "ASO (Atestado de Saúde Ocupacional)", urlField: "asoUrl", validadeField: "asoValidade", obrigatorio: true, descricao: "Admissional, periódico ou de mudança de função" },
-                  ],
-                },
-                {
-                  key: "treinamentos_nr",
-                  titulo: "Treinamentos NR",
-                  descricao: "Normas Regulamentadoras conforme função e exposição a risco",
-                  icone: BookOpen,
-                  cor: "text-amber-700",
-                  bgCor: "bg-amber-50",
-                  corBorda: "border-amber-200",
-                  docs: [
-                    { label: "Treinamento NR genérico (NR-06 EPI, NR-18 Construção, etc.)", urlField: "treinamentoNrUrl", validadeField: "treinamentoNrValidade", obrigatorio: true },
-                    { label: "NR-10 — Segurança em Eletricidade", urlField: "nr10DocUrl", validadeField: "nr10Validade", obrigatorio: false, descricao: "Obrigatório pra eletricistas e quem trabalha próximo a redes energizadas" },
-                    { label: "NR-33 — Espaço Confinado", urlField: "nr33DocUrl", validadeField: "nr33Validade", obrigatorio: false, descricao: "Obrigatório pra tanques, silos, galerias, poços etc." },
-                    { label: "NR-35 — Trabalho em Altura", urlField: "nr35DocUrl", validadeField: "nr35Validade", obrigatorio: false, descricao: "Obrigatório pra trabalhos acima de 2m do nível inferior" },
-                  ],
-                },
-                {
-                  key: "integracao_seguranca",
-                  titulo: "Integração de Segurança",
-                  descricao: "Integração admissional na Construtora E no Cliente final (ambas obrigatórias)",
-                  icone: ClipboardCheck,
-                  cor: "text-indigo-700",
-                  bgCor: "bg-indigo-50",
-                  corBorda: "border-indigo-200",
-                  docs: [
-                    { label: "Integração na Construtora (FC)", urlField: "integracaoDocUrl", validadeField: null, obrigatorio: true, descricao: "Ata/lista de presença da integração admissional realizada pela Construtora contratante" },
-                    { label: "Integração no Cliente / Obra", urlField: "integracaoClienteDocUrl", validadeField: null, obrigatorio: true, descricao: "Ata/lista da integração realizada pelo Cliente final ou pela própria obra (regras locais, DDS específicos)" },
-                  ],
-                },
-                {
-                  // Rev. 2017 — Documentos Trabalhistas obrigatórios por lei (NR-06, NR-01, CLT art. 41)
-                  key: "documentos_trabalhistas",
-                  titulo: "Documentos Trabalhistas",
-                  descricao: "Comprovantes legais que devem ficar disponíveis pra fiscalização do MTE",
-                  icone: Briefcase,
-                  cor: "text-emerald-700",
-                  bgCor: "bg-emerald-50",
-                  corBorda: "border-emerald-200",
-                  docs: [
-                    { label: "Ficha de EPI", urlField: "fichaEpiUrl", validadeField: null, obrigatorio: true, descricao: "Ficha de Entrega de EPI assinada pelo trabalhador (NR-06) — registra os EPIs recebidos, datas e devoluções" },
-                    { label: "Ordem de Serviço (OS de SST)", urlField: "ordemServicoUrl", validadeField: null, obrigatorio: true, descricao: "OS exigida pela NR-01 — descreve a função, os riscos do ambiente, as medidas de prevenção e as obrigações do trabalhador" },
-                    { label: "Registro de Funcionário", urlField: "registroFuncionarioUrl", validadeField: null, obrigatorio: true, descricao: "Ficha/livro de registro de empregado (CLT art. 41) — comprova o vínculo formal junto à empresa terceira" },
-                  ],
-                },
-                {
-                  key: "identificacao_qualificacao",
-                  titulo: "Identificação e Qualificação",
-                  descricao: "Foto pra crachá e certificados profissionais complementares",
-                  icone: Award,
-                  cor: "text-blue-700",
-                  bgCor: "bg-blue-50",
-                  corBorda: "border-blue-200",
-                  docs: [
-                    { label: "Foto 3x4", urlField: "fotoUrl", validadeField: null, obrigatorio: true, descricao: "Foto recente pra crachá de identificação" },
-                    { label: "Certificados profissionais", urlField: "certificadosUrl", validadeField: null, obrigatorio: false, descricao: "Cursos técnicos, qualificações específicas etc." },
-                  ],
-                },
-              ];
+              // Rev. 2680 — fonte ÚNICA via getSecoesTerceiro() (compartilhada com o Raio-X read-only).
+              const secoes = getSecoesTerceiro();
 
               // Rev. 2031 — Documentos avulsos por categoria (jsonb)
               const allExtras: any[] = Array.isArray(form.documentosExtras) ? form.documentosExtras : [];
@@ -1010,6 +1256,16 @@ export default function FuncionariosTerceiros() {
             </div>
           </div>
         </FullScreenDialog>
+      )}
+
+      {/* Rev. 2680 — Raio-X read-only (abre num clique no card/nome ou no botão "Raio-X") */}
+      {viewFunc && (
+        <RaioXTerceiroDialog
+          func={viewFunc}
+          empresaNome={getEmpresaNome(viewFunc.empresaTerceiraId)}
+          onClose={() => setViewFunc(null)}
+          onEdit={() => { const f = viewFunc; setViewFunc(null); openEdit(f); }}
+        />
       )}
 
       {/* Rev. 2031 — Modal "Adicionar documento" avulso */}

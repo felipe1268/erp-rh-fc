@@ -1,6 +1,34 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2680 — **FUNCIONÁRIOS TERCEIROS (`/funcionarios-terceiros`) · AGORA DÁ PRA CLICAR NO FUNCIONÁRIO
+ * (NOME/CARD OU BOTÃO "RAIO-X") E VER UM RAIO-X COMPLETO E READ-ONLY COM TODA A DOCUMENTAÇÃO — SEM PRECISAR
+ * ENTRAR NO "EDITAR".**
+ *
+ * PEDIDO (usuário, print IMG_1485): "Quero poder clicar no terceiro e ver o raio-x completo dele, com toda
+ * documentação que ele tiver, sem precisar clicar no editar.. como podemos fazer isso?". Contexto: até então,
+ * a única forma de ver os documentos de um terceiro era abrir "Editar" → aba "Documentos" (modal de edição
+ * com uploads/inputs). Não havia uma visão de consulta rápida.
+ *
+ * DIAGNÓSTICO: a procedure `terceiros.funcionarios.list` faz `db.select().from(funcionariosTerceiros)` (todas
+ * as colunas), então cada item da lista JÁ traz os campos de documentos (`asoUrl`, `treinamentoNrUrl`, etc.) e
+ * o jsonb `documentosExtras` — dá pra montar o Raio-X read-only no cliente sem nenhuma query/endpoint novo. A
+ * definição das seções/documentos exigidos vivia inline dentro da aba "Documentos" do editor.
+ *
+ * FIX (SÓ CLIENT/UI; ZERO SCHEMA/SERVER): `client/src/pages/terceiros/FuncionariosTerceiros.tsx` — (1) extraí a
+ * definição das seções pra um helper de módulo `getSecoesTerceiro()` (fonte ÚNICA), reaproveitado pela aba
+ * "Documentos" do editor E pelo novo Raio-X — assim as duas telas nunca saem de sincronia; (2) novo componente
+ * `RaioXTerceiroDialog` (FullScreenDialog read-only) que recebe o `func` da lista e renderiza cabeçalho do
+ * funcionário (foto/CPF/função/empresa/obra) + o MESMO painel de Status de Integração do editor (% conformidade,
+ * total docs, obrigatórios OK, vencidos, vencem ≤30d, alertas) + as seções com links "Ver documento" e validade
+ * em texto (badges Obrigatório/Vencido/Vence em Nd), SEM upload/editar/remover; (3) estado `viewFunc` + abertura
+ * por clique no bloco nome/identificação do card (role=button + tabIndex + Enter/Espaço, hover azul) e por um
+ * novo botão "Raio-X" (ícone Eye) ao lado de "Editar"; (4) botão "Editar" dentro do Raio-X faz a ponte pro modal
+ * de edição (`onEdit` → fecha o Raio-X e chama `openEdit`). Import add `Eye` (lucide). Sem SQL/`ALTER`/`DROP`
+ * (R-001/R-007/R-010). esbuild `FuncionariosTerceiros.tsx` EXIT 0.
+ *
+ * ----------------------------------------------------------------------------------------------------
+ *
  * Rev. 2679 — **CONTROLE DE DOCUMENTOS (`/controle-documentos` → aba "ASO") · A LISTA DE ASOs PASSA A SER
  * AGRUPADA POR FUNCIONÁRIO: O EXAME VIGENTE FICA EM DESTAQUE E OS ANTERIORES (SUBSTITUÍDOS) VIRAM UM
  * "HISTÓRICO" RECOLHÍVEL POR LINHA — EM VEZ DE REPETIR O MESMO FUNCIONÁRIO VÁRIAS VEZES NA TELA.**

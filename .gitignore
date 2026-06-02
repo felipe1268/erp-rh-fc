@@ -111,3 +111,6 @@ temp/
 
 # Force pnpm in deployment (npm lockfile bloats node_modules and overflows 8GiB image)
 package-lock.json
+
+# Runtime document uploads (ASO/atestados etc.) — PII, must NOT be versioned
+server/uploads/documentos/
