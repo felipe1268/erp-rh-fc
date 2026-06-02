@@ -51,12 +51,13 @@ export default function Manutencoes() {
   const [approveDialogOpen, setApproveDialogOpen] = useState(false);
   const [approveObs, setApproveObs] = useState("");
   const [osDialogOpen, setOsDialogOpen] = useState(false);
-  const [osFile, setOsFile] = useState<File | null>(null);
-  const [osPreview, setOsPreview] = useState<string | null>(null);
+  const [osFiles, setOsFiles] = useState<File[]>([]);
   const [osParsed, setOsParsed] = useState<any>(null);
   const [osSelectedItems, setOsSelectedItems] = useState<Record<number, boolean>>({});
   const [osSaving, setOsSaving] = useState(false);
   const [osProgress, setOsProgress] = useState(0);
+  const [osProcessing, setOsProcessing] = useState(false);
+  const [osCurrentFile, setOsCurrentFile] = useState<{ idx: number; total: number; name: string } | null>(null);
   const osProgressTimer = useRef<ReturnType<typeof setInterval> | null>(null);
   const osFileRef = useRef<HTMLInputElement>(null);
 
@@ -164,73 +165,86 @@ export default function Manutencoes() {
   }, [maintItemsQuery.data]);
 
   const handleOsFileChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const picked = Array.from(e.target.files || []);
+    if (picked.length === 0) return;
 
     const validTypes = ["image/jpeg", "image/png", "image/webp", "application/pdf"];
-    if (!validTypes.includes(file.type)) {
-      toast.error("Formato inválido. Envie JPG, PNG, WebP ou PDF.");
-      return;
+    const aceitos: File[] = [];
+    for (const file of picked) {
+      if (!validTypes.includes(file.type)) { toast.error(`${file.name}: formato inválido (use JPG, PNG, WebP ou PDF).`); continue; }
+      if (file.size > 10 * 1024 * 1024) { toast.error(`${file.name}: arquivo muito grande (máx 10MB).`); continue; }
+      aceitos.push(file);
     }
-    if (file.size > 10 * 1024 * 1024) {
-      toast.error("Arquivo muito grande (máx 10MB).");
-      return;
-    }
+    if (aceitos.length === 0) { e.target.value = ""; return; }
 
-    setOsFile(file);
+    setOsFiles(prev => {
+      const existentes = new Set(prev.map(f => `${f.name}__${f.size}`));
+      const novos = aceitos.filter(f => !existentes.has(`${f.name}__${f.size}`));
+      return [...prev, ...novos];
+    });
     setOsParsed(null);
     setOsSelectedItems({});
-
-    if (file.type.startsWith("image/")) {
-      const reader = new FileReader();
-      reader.onload = () => setOsPreview(reader.result as string);
-      reader.readAsDataURL(file);
-    } else {
-      setOsPreview(null);
-    }
+    e.target.value = "";
   }, []);
 
   function stopOsProgress() {
     if (osProgressTimer.current) { clearInterval(osProgressTimer.current); osProgressTimer.current = null; }
   }
 
+  function fileToBase64(file: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve((reader.result as string).split(",")[1]);
+      reader.onerror = () => reject(new Error("Erro ao ler o arquivo"));
+      reader.readAsDataURL(file);
+    });
+  }
+
   async function processOS() {
-    if (!osFile) return;
+    if (osFiles.length === 0) return;
+    const total = osFiles.length;
+    setOsProcessing(true);
+    setOsParsed(null);
+    setOsSelectedItems({});
     setOsProgress(0);
     stopOsProgress();
-    osProgressTimer.current = setInterval(() => {
-      setOsProgress(p => {
-        if (p >= 92) return p;
-        const inc = p < 40 ? 6 : p < 70 ? 3 : 1;
-        return Math.min(92, p + inc);
-      });
-    }, 450);
-    const reader = new FileReader();
-    reader.onload = async () => {
-      const dataUrl = reader.result as string;
-      const base64 = dataUrl.split(",")[1];
+
+    const allItems: any[] = [];
+    const fileErrors: { file: string; error: string }[] = [];
+
+    for (let i = 0; i < total; i++) {
+      const file = osFiles[i];
+      const base = Math.round((i / total) * 100);
+      const ceil = Math.round(((i + 1) / total) * 100);
+      setOsProgress(base);
+      setOsCurrentFile({ idx: i + 1, total, name: file.name });
+      stopOsProgress();
+      osProgressTimer.current = setInterval(() => {
+        setOsProgress(p => (p >= ceil - 1 ? p : Math.min(ceil - 1, p + 1)));
+      }, 300);
       try {
-        const result = await parseMut.mutateAsync({
-          companyId: cId,
-          base64,
-          mimeType: osFile.type,
-        });
+        const base64 = await fileToBase64(file);
+        const result = await parseMut.mutateAsync({ companyId: cId, base64, mimeType: file.type });
         stopOsProgress();
-        setOsProgress(100);
-        setOsParsed(result);
-        if (result.items?.length > 0) {
-          const sel: Record<number, boolean> = {};
-          result.items.forEach((_: any, i: number) => { sel[i] = true; });
-          setOsSelectedItems(sel);
+        if (result?.items?.length > 0) {
+          result.items.forEach((it: any) => allItems.push({ ...it, __file: file.name }));
         }
+        if (result?.error) fileErrors.push({ file: file.name, error: result.error });
+        else if (!result?.items?.length) fileErrors.push({ file: file.name, error: "Nenhum item encontrado na OS." });
       } catch (err: any) {
         stopOsProgress();
-        setOsProgress(0);
-        toast.error(err.message || "Erro ao processar OS");
+        fileErrors.push({ file: file.name, error: err?.message || "Erro ao processar" });
       }
-    };
-    reader.onerror = () => { stopOsProgress(); setOsProgress(0); toast.error("Erro ao ler o arquivo"); };
-    reader.readAsDataURL(osFile);
+    }
+
+    stopOsProgress();
+    setOsProgress(100);
+    setOsCurrentFile(null);
+    setOsProcessing(false);
+    setOsParsed({ items: allItems, fileErrors, confidence: "media" });
+    const sel: Record<number, boolean> = {};
+    allItems.forEach((_, i) => { sel[i] = true; });
+    setOsSelectedItems(sel);
   }
 
   useEffect(() => () => stopOsProgress(), []);
