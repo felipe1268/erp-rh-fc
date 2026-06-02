@@ -333,6 +333,17 @@ export async function applyReconciliation(
       SET conciliado=1, data_conciliacao=$1, extrato_banco_descricao=$2
       WHERE id=$3 AND company_id=$4 AND COALESCE(conciliado,0)=0
     `, [m.ofxLine.data, m.ofxLine.descricao, m.entryId, companyId]);
+    // Rev. 2693 — perna de transferência: concilia a perna irmã junto.
+    await exec(db, `
+      UPDATE financial_entries sib
+      SET conciliado=1, data_conciliacao=$1
+      FROM financial_entries cur
+      WHERE cur.id=$2 AND cur.company_id=$3
+        AND cur.tipo='transferencia' AND cur.transferencia_grupo_id IS NOT NULL
+        AND sib.transferencia_grupo_id = cur.transferencia_grupo_id
+        AND sib.company_id = cur.company_id AND sib.id <> cur.id
+        AND COALESCE(sib.conciliado,0)=0
+    `, [m.ofxLine.data, m.entryId, companyId]);
     aplicados++;
   }
   return { aplicados, saldoAtualizado: 0 };

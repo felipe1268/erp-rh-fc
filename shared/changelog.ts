@@ -1,6 +1,63 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2693 — **FINANCEIRO · NOVO LANÇAMENTO (`/financeiro/lancamentos` → "Novo Lançamento" → tipo
+ * "Transferência") · A ABA "TRANSFERÊNCIA" GANHOU UM FLUXO PRÓPRIO E ENXUTO PARA REGISTRAR
+ * TRANSFERÊNCIAS ENTRE CONTAS BANCÁRIAS, QUE LANÇA AS DUAS PERNAS (SAÍDA NA ORIGEM + ENTRADA NO
+ * DESTINO) DE UMA VEZ, JÁ MARCADAS COMO PAGAS, E CONCILIA AS DUAS PERNAS JUNTAS AUTOMATICAMENTE.**
+ *
+ * PEDIDO (usuário): refatorar "Transferências" no Financeiro para (1) ficar dentro do modal "Novo
+ * Lançamento", na aba Transferência; (2) valer só daqui pra frente; (3) conciliar as duas pernas
+ * automaticamente juntas. O formulário de transferência deve ter SÓ: Valor | Data | Conta Origem |
+ * Conta Destino | Tipo (forma: Pix/TED/...) | Observação — e NÃO gerar título em Contas a Pagar nem
+ * em Contas a Receber.
+ *
+ * COMPORTAMENTO: ao escolher tipo "Transferência" e informar Valor + Conta de Origem + Conta de
+ * Destino (distintas) + Data, o ERP grava DUAS linhas em `financial_entries`, ambas
+ * `tipo='transferencia'`, `status='pago'`, `conciliado=0`, `valor_realizado = valor`, ligadas por um
+ * `transferencia_grupo_id` (UUID) comum:
+ *  - perna de SAÍDA na conta de origem  → descrição "Transferência enviada → <destino>"
+ *  - perna de ENTRADA na conta de destino → descrição "Transferência recebida ← <origem>"
+ * Como `tipo='transferencia'` não é receita nem despesa, o movimento NÃO aparece em Contas a Pagar
+ * (que filtra `tipo='despesa'`), nem em Contas a Receber (que lê `financial_revenue`), nem entra em
+ * Fluxo de Caixa / DRE / KPIs (que somam só receita/despesa) — é movimento interno de líquido zero,
+ * coerente com a regra contábil de transferência entre contas próprias.
+ *
+ * CONCILIAÇÃO CASADA: ao conciliar QUALQUER uma das pernas — seja na conciliação manual
+ * (`conciliarLancamento`) ou na conciliação automática por extrato OFX em lote
+ * (`cfoPhase2.applyReconciliation`) — um UPDATE com self-join marca a perna IRMÃ (mesmo
+ * `transferencia_grupo_id`, `tipo='transferencia'`, ainda não conciliada) também como conciliada, na
+ * mesma data. Assim a transferência fica casada nas DUAS contas com uma única ação.
+ *
+ * FIX (1 COLUNA READ-ONLY NOVA VIA SELF-HEAL + SERVER + CLIENT; ZERO ALTER/DROP/DELETE — R-001/R-007/R-010):
+ *  - SCHEMA `drizzle/schema.ts` — nova coluna `transferenciaGrupoId` varchar(36) em `financialEntries`
+ *    (após `parcelaGrupoId`). Self-heal `server/_core/index.ts` com
+ *    `ALTER TABLE financial_entries ADD COLUMN IF NOT EXISTS transferencia_grupo_id VARCHAR(36)`.
+ *  - SERVER `server/routers/financial.ts` (`createEntry`) — novos inputs opcionais
+ *    `contaBancariaOrigemId`/`contaBancariaDestinoId`; quando `tipo='transferencia'` com origem+destino,
+ *    insere as 2 pernas ligadas pelo `transferencia_grupo_id` e retorna `{ id, idDestino }`.
+ *    (`conciliarLancamento`) — após conciliar a perna alvo, UPDATE self-join concilia a perna irmã.
+ *  - SERVER `server/services/cfoPhase2.ts` (`applyReconciliation`) — mesmo UPDATE self-join da perna
+ *    irmã dentro do loop de conciliação automática por OFX.
+ *  - CLIENT `client/src/pages/financeiro/FinanceiroLancamentos.tsx` — `INITIAL_FORM` ganha
+ *    `contaBancariaOrigemId`/`contaBancariaDestinoId`; query `financial.getBankAccounts`; ao escolher
+ *    "Transferência" o form mostra um bloco enxuto (Data, Conta de Origem, Conta de Destino, Tipo/forma,
+ *    Observação) e ESCONDE os blocos de despesa/receita (Descrição/Datas/Recorrência/Vinculação/
+ *    Pagamento) + o toggle Único/Recorrente; `handleSave` ganha um ramo de transferência no topo que
+ *    valida valor+origem+destino distintos e chama `createEntry` com `status:'pago'`.
+ *
+ * NOTA TÉCNICA: o helper `dbExecute` deste arquivo liga parâmetros pela ORDEM DE APARIÇÃO do `$N`
+ * (o número é cosmético); as queries novas usam placeholders sequenciais com array casado à ordem do
+ * texto. As pernas usam `globalThis.crypto.randomUUID()` (com fallback) para o `transferencia_grupo_id`.
+ *
+ * FIX ADICIONAL (mesma tela `/financeiro/lancamentos`) — `getEntries` quebrava com `DB: code=42601 |
+ * syntax error at end of input` porque a query de COUNT montava `... WHERE ${conds.slice(0, -0).join(...)}`
+ * e `slice(0, -0)` é `slice(0, 0)` (pois `-0 === 0`) → array VAZIO → `WHERE ` sem condição. Trocado por
+ * `conds.join(" AND ")` (mesmas condições do SELECT de dados; `vals.slice(0, -2)` segue dropando
+ * limit/offset). Sem isso a tela de Lançamentos (onde vive a aba Transferência) não carregava.
+ *
+ * esbuild server EXIT 0 · vite build EXIT 0.
+ *
  * Rev. 2692 — **FINANCEIRO · CONTAS A PAGAR (`/financeiro/contas-a-pagar` → aba "Pagos" → botão "Estornar"
  * → "Confirmar estorno") · CORRIGIDO O ERRO `DB: code=22P02 | msg=invalid input syntax for type integer:
  * "<nome do usuário>"` QUE IMPEDIA ESTORNAR (DESFAZER A BAIXA DE) UMA CONTA JÁ PAGA.**

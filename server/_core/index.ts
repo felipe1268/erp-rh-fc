@@ -2442,6 +2442,12 @@ Regras:
           console.log(`[SyncSchema+] Rev. 2661: colunas editado_por_id/editado_por_nome/editado_em (financial_entries) garantidas.`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.2661 editor título:`, e?.message || e); }
 
+        // ── Rev. 2693 — Transferência entre contas: liga as 2 pernas (saída+entrada) ──
+        try {
+          await db.execute(sql`ALTER TABLE financial_entries ADD COLUMN IF NOT EXISTS transferencia_grupo_id VARCHAR(36)`);
+          console.log(`[SyncSchema+] Rev. 2693: coluna transferencia_grupo_id (financial_entries) garantida.`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.2693 transferencia_grupo_id:`, e?.message || e); }
+
       } catch (e: any) { console.error(`[SyncSchema+] ERROR:`, e?.message || e); }
     }).catch(e => console.error("[SyncSchema] Falha ao iniciar:", e));
     // Garantir colunas críticas adicionadas recentemente que o SyncSchema possa ter ignorado

@@ -100,6 +100,9 @@ const INITIAL_FORM = {
   frequencia: "mensal",
   diaVencimento: "5",
   fornecedorNome: "",
+  // Rev. 2693 — Transferência entre contas (origem → destino)
+  contaBancariaOrigemId: "",
+  contaBancariaDestinoId: "",
 };
 
 export default function FinanceiroLancamentos() {
@@ -223,6 +226,11 @@ export default function FinanceiroLancamentos() {
     { enabled: !!companyId },
   );
   const { data: costCenters } = (trpc as any).financial.getCostCenters.useQuery(
+    { companyId },
+    { enabled: !!companyId },
+  );
+  // Rev. 2693 — Contas bancárias (origem/destino da transferência entre contas).
+  const { data: bankAccounts } = (trpc as any).financial.getBankAccounts.useQuery(
     { companyId },
     { enabled: !!companyId },
   );
@@ -394,6 +402,35 @@ export default function FinanceiroLancamentos() {
   }
 
   function handleSave() {
+    // Rev. 2693 — Transferência entre contas: fluxo enxuto (sem descrição/categoria).
+    if (form.tipo === "transferencia") {
+      if (!form.valorPrevisto || !form.contaBancariaOrigemId || !form.contaBancariaDestinoId) {
+        toast({ title: "Informe valor, conta de origem e conta de destino", variant: "destructive" });
+        return;
+      }
+      if (form.contaBancariaOrigemId === form.contaBancariaDestinoId) {
+        toast({ title: "A conta de origem e a de destino devem ser diferentes", variant: "destructive" });
+        return;
+      }
+      if (!form.dataCompetencia) {
+        toast({ title: "Informe a data da transferência", variant: "destructive" });
+        return;
+      }
+      createEntryMut.mutate({
+        companyId,
+        tipo: "transferencia",
+        natureza: "variavel",
+        valorPrevisto: parseFloat(form.valorPrevisto),
+        dataCompetencia: form.dataCompetencia,
+        dataPagamento: form.dataCompetencia,
+        formaPagamento: form.formaPagamento || undefined,
+        observacoes: form.observacoes || undefined,
+        contaBancariaOrigemId: Number(form.contaBancariaOrigemId),
+        contaBancariaDestinoId: Number(form.contaBancariaDestinoId),
+        status: "pago",
+      });
+      return;
+    }
     if (!form.valorPrevisto || !form.descricao) {
       toast({ title: "Preencha descrição e valor", variant: "destructive" });
       return;
@@ -883,7 +920,7 @@ export default function FinanceiroLancamentos() {
                   {editRecId ? "Editar Recorrência" : editEntryId ? "Editar Lançamento" : "Novo Lançamento"}
                 </h2>
                 {/* Toggle Único / Recorrente */}
-                {!editRecId && !editEntryId && (
+                {!editRecId && !editEntryId && form.tipo !== "transferencia" && (
                   <div className="flex rounded-full border border-gray-300 bg-white overflow-hidden text-xs">
                     <button type="button"
                       onClick={() => setForm(f => ({ ...f, modoRecorrente: false }))}
@@ -913,7 +950,7 @@ export default function FinanceiroLancamentos() {
                   { value: "transferencia", label: "Transferência", icon: ArrowLeftRight, color: "text-gray-600",   activeBg: "bg-gray-600",   activeTxt: "text-white" },
                 ].map(({ value, label, icon: Icon, color, activeBg, activeTxt }) => (
                   <button key={value} type="button"
-                    onClick={() => setForm(f => ({ ...f, tipo: value }))}
+                    onClick={() => setForm(f => ({ ...f, tipo: value, modoRecorrente: value === "transferencia" ? false : f.modoRecorrente }))}
                     className={`flex flex-col items-center gap-1 p-2 rounded-xl border-2 transition-all text-xs font-medium ${
                       form.tipo === value
                         ? `border-transparent ${activeBg} ${activeTxt}`
@@ -944,6 +981,91 @@ export default function FinanceiroLancamentos() {
                 </div>
               </div>
 
+              {/* Rev. 2693 — TRANSFERÊNCIA ENTRE CONTAS (fluxo enxuto) */}
+              {form.tipo === "transferencia" && (
+                <>
+                  <div className="rounded-lg bg-gray-50 border border-gray-200 px-3 py-2 flex items-start gap-2">
+                    <ArrowLeftRight className="w-4 h-4 text-gray-500 mt-0.5 shrink-0" />
+                    <p className="text-[11px] leading-snug text-gray-500">
+                      <span className="font-semibold text-gray-700">Transferência entre Contas.</span> Debita a conta de origem e credita a de destino. Aparece na conciliação das duas contas e <span className="font-medium">não</span> gera título em Contas a Pagar nem a Receber.
+                    </p>
+                  </div>
+
+                  {/* Data da transferência */}
+                  <div>
+                    <label className="text-xs font-medium text-gray-500 uppercase tracking-wide flex items-center gap-1">
+                      <Calendar className="w-3 h-3" />Data da transferência *
+                    </label>
+                    <Input type="date" value={form.dataCompetencia} onChange={e => setForm(f => ({ ...f, dataCompetencia: e.target.value }))} className="h-9 mt-1" />
+                  </div>
+
+                  {/* Origem / Destino */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <p className="text-[11px] text-gray-400 mb-1 flex items-center gap-1"><ArrowUpRight className="w-3 h-3 text-red-500" />Conta de Origem *</p>
+                      <Select value={form.contaBancariaOrigemId} onValueChange={v => setForm(f => ({ ...f, contaBancariaOrigemId: v }))}>
+                        <SelectTrigger className="h-9"><SelectValue placeholder="Selecione" /></SelectTrigger>
+                        <SelectContent>
+                          {(bankAccounts ?? []).map((b: any) => (
+                            <SelectItem key={b.id} value={String(b.id)}>
+                              {(b.descricao || b.banco)}{b.conta ? ` · ${b.agencia ?? ""}/${b.conta}` : ""}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <p className="text-[11px] text-gray-400 mb-1 flex items-center gap-1"><ArrowDownRight className="w-3 h-3 text-green-600" />Conta de Destino *</p>
+                      <Select value={form.contaBancariaDestinoId} onValueChange={v => setForm(f => ({ ...f, contaBancariaDestinoId: v }))}>
+                        <SelectTrigger className="h-9"><SelectValue placeholder="Selecione" /></SelectTrigger>
+                        <SelectContent>
+                          {(bankAccounts ?? []).map((b: any) => (
+                            <SelectItem key={b.id} value={String(b.id)}>
+                              {(b.descricao || b.banco)}{b.conta ? ` · ${b.agencia ?? ""}/${b.conta}` : ""}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  {(bankAccounts ?? []).length === 0 && (
+                    <p className="text-[10px] text-amber-600">
+                      Nenhuma conta bancária cadastrada. Cadastre em Financeiro → Conciliação / Contas.
+                    </p>
+                  )}
+
+                  {/* Tipo (forma) */}
+                  <div>
+                    <p className="text-[11px] text-gray-400 mb-1">Tipo</p>
+                    <Select value={form.formaPagamento || "none"} onValueChange={v => setForm(f => ({ ...f, formaPagamento: v === "none" ? "" : v }))}>
+                      <SelectTrigger className="h-9"><SelectValue placeholder="—" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">—</SelectItem>
+                        <SelectItem value="pix">PIX</SelectItem>
+                        <SelectItem value="ted">TED</SelectItem>
+                        <SelectItem value="doc">DOC</SelectItem>
+                        <SelectItem value="transferencia_interna">Transferência interna</SelectItem>
+                        <SelectItem value="cheque">Cheque</SelectItem>
+                        <SelectItem value="dinheiro">Dinheiro</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Observação */}
+                  <div>
+                    <p className="text-[11px] text-gray-400 mb-1">Observação</p>
+                    <Textarea
+                      value={form.observacoes}
+                      onChange={e => setForm(f => ({ ...f, observacoes: e.target.value }))}
+                      rows={2}
+                      placeholder="Observação (opcional)..."
+                    />
+                  </div>
+                </>
+              )}
+
+              {form.tipo !== "transferencia" && (
+              <>
               {/* Descrição */}
               <div>
                 <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Descrição *</label>
@@ -1175,6 +1297,8 @@ export default function FinanceiroLancamentos() {
                   />
                 )}
               </div>
+              </>
+              )}
             </div>
 
             {/* Footer */}

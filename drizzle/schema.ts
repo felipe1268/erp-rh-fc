@@ -6671,6 +6671,7 @@ export const financialEntries = pgTable("financial_entries", {
   parcelaNumero: integer("parcela_numero"),
   parcelaTotal: integer("parcela_total"),
   parcelaGrupoId: varchar("parcela_grupo_id", { length: 36 }),
+  transferenciaGrupoId: varchar("transferencia_grupo_id", { length: 36 }),
   formaPagamento: text("forma_pagamento"),
   comprovanteUrl: text("comprovante_url"),
   codigoBarras: varchar("codigo_barras", { length: 100 }),

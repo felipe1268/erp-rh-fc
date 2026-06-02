@@ -549,7 +549,7 @@ export const financialRouter = router({
       vals
     );
     const countRes = await dbExecute(db, 
-      `SELECT COUNT(*) AS total FROM financial_entries e WHERE ${conds.slice(0, -0).join(" AND ")}`,
+      `SELECT COUNT(*) AS total FROM financial_entries e WHERE ${conds.join(" AND ")}`,
       vals.slice(0, -2)
     );
     return {
@@ -573,6 +573,9 @@ export const financialRouter = router({
     dataPagamento: z.string().optional(),
     status: z.string().default("previsto"),
     contaBancariaId: z.number().optional(),
+    // Rev. 2693 — Transferência entre contas: origem (débito) + destino (crédito).
+    contaBancariaOrigemId: z.number().optional(),
+    contaBancariaDestinoId: z.number().optional(),
     formaPagamento: z.string().optional(),
     descricao: z.string().optional(),
     observacoes: z.string().optional(),
@@ -590,6 +593,78 @@ export const financialRouter = router({
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+    // ── Rev. 2693 — TRANSFERÊNCIA ENTRE CONTAS ─────────────────────────────────
+    // Quando origem+destino são informadas, gera DUAS pernas em financial_entries:
+    //   1) SAÍDA na conta de origem  · 2) ENTRADA na conta de destino
+    // Ambas tipo='transferencia', status='pago', conciliado=0 (aparecem na
+    // conciliação das DUAS contas). Ligadas por transferencia_grupo_id, pra que
+    // conciliar uma perna concilie a irmã automaticamente. NÃO gera Contas a Pagar
+    // (filtra tipo='despesa') nem Contas a Receber (lê financial_revenue), nem entra
+    // em fluxo/DRE/KPIs (que só somam receita/despesa). Movimento interno, líquido zero.
+    if (input.tipo === "transferencia") {
+      // CONTRATO: transferência SEMPRE exige origem+destino válidas e distintas.
+      // Sem isso é erro de cliente (não cai no INSERT genérico, que criaria 1 perna órfã).
+      const origemId = input.contaBancariaOrigemId;
+      const destinoId = input.contaBancariaDestinoId;
+      if (!origemId || !destinoId) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Transferência exige conta de origem e conta de destino." });
+      }
+      if (origemId === destinoId) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Conta de origem e destino devem ser diferentes." });
+      }
+      // Valida ownership/tenant: AS DUAS contas têm que existir e ser DESTA empresa.
+      const contasRes = await dbExecute(db,
+        `SELECT id, banco, apelido FROM company_bank_accounts WHERE "companyId"=$1 AND id IN ($2,$3)`,
+        [input.companyId, origemId, destinoId]
+      );
+      const contasArr = rows(contasRes) as any[];
+      if (contasArr.length !== 2) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Conta de origem ou destino inválida (não encontrada nesta empresa)." });
+      }
+      const contasMap: Record<number, string> = {};
+      for (const c of contasArr) {
+        contasMap[Number(c.id)] = String(c.apelido || c.banco || `Conta ${c.id}`);
+      }
+      const labelOrigem = contasMap[origemId] ?? `Conta ${origemId}`;
+      const labelDestino = contasMap[destinoId] ?? `Conta ${destinoId}`;
+      const grupoId = (globalThis as any).crypto?.randomUUID?.() ?? `tr-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      const data = input.dataPagamento || input.dataCompetencia;
+      const forma = input.formaPagamento ?? null;
+      const obs = input.observacoes ?? null;
+      const obsSuffix = obs ? ` · ${obs}` : "";
+      const descSaida = `Transferência enviada → ${labelDestino}${obsSuffix}`;
+      const descEntrada = `Transferência recebida ← ${labelOrigem}${obsSuffix}`;
+      // NOTA: dbExecute liga params por ORDEM DE APARIÇÃO do $N (o número é cosmético).
+      const insertLeg = async (tx: any, contaBancariaId: number, descricao: string) => {
+        const r = await dbExecute(tx,
+          `INSERT INTO financial_entries
+           (company_id, tipo, natureza, valor_previsto, valor_realizado,
+            data_competencia, data_pagamento, status, conta_bancaria_id, forma_pagamento,
+            descricao, observacoes, transferencia_grupo_id, conciliado,
+            criado_por_id, criado_por_nome, created_at, updated_at)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,NOW(),NOW())
+           RETURNING id`,
+          [
+            input.companyId, "transferencia", input.natureza,
+            input.valorPrevisto, input.valorPrevisto,
+            input.dataCompetencia, data, "pago", contaBancariaId, forma,
+            descricao, obs, grupoId, 0,
+            ctx.user?.id ?? null, ctx.user?.name ?? null,
+          ]
+        );
+        return rows(r)[0]?.id;
+      };
+      // ATOMICIDADE: as 2 pernas nascem juntas ou nenhuma (all-or-nothing).
+      let idSaida: any, idEntrada: any;
+      await db.transaction(async (tx: any) => {
+        idSaida = await insertLeg(tx, origemId, descSaida);
+        idEntrada = await insertLeg(tx, destinoId, descEntrada);
+      });
+      await createAuditLog({ action: "financial_transfer_created", userId: ctx.user?.id, companyId: input.companyId, details: `Transferência R$${input.valorPrevisto}: ${labelOrigem} → ${labelDestino}` });
+      return { id: idSaida, idDestino: idEntrada };
+    }
+
     const res = await dbExecute(db, 
       `INSERT INTO financial_entries
        (company_id, obra_id, obra_nome, conta_id, conta_nome, tipo, natureza,
@@ -2801,6 +2876,17 @@ export const financialRouter = router({
       `UPDATE financial_entries SET conciliado=1, data_conciliacao=CURRENT_DATE WHERE id=$1 AND company_id=$2`,
       [input.entryId, input.companyId]
     );
+    // Rev. 2693 — se for perna de transferência, concilia a perna irmã junto.
+    await dbExecute(db,
+      `UPDATE financial_entries sib SET conciliado=1, data_conciliacao=CURRENT_DATE
+       FROM financial_entries cur
+       WHERE cur.id=$1 AND cur.company_id=$2
+         AND cur.tipo='transferencia' AND cur.transferencia_grupo_id IS NOT NULL
+         AND sib.transferencia_grupo_id = cur.transferencia_grupo_id
+         AND sib.company_id = cur.company_id AND sib.id <> cur.id
+         AND COALESCE(sib.conciliado,0)=0`,
+      [input.entryId, input.companyId]
+    );
     return { ok: true };
   }),
 
@@ -3696,6 +3782,7 @@ export const financialRouter = router({
        WHERE company_id=$1
          AND EXTRACT(YEAR FROM data_competencia)=$2
          AND status NOT IN ('cancelado')
+         AND tipo <> 'transferencia'
          AND data_competencia IS NOT NULL
        GROUP BY mes, origem_modulo, tipo, categoria
        ORDER BY mes`,
