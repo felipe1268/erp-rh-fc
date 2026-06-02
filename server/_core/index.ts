@@ -2448,6 +2448,14 @@ Regras:
           console.log(`[SyncSchema+] Rev. 2693: coluna transferencia_grupo_id (financial_entries) garantida.`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.2693 transferencia_grupo_id:`, e?.message || e); }
 
+        // ── Rev. 2694 — Empréstimo de ferramentas/equipamentos: colunas de rastreio (Rev. 2256) que nunca ganharam self-heal ──
+        try {
+          await db.execute(sql`ALTER TABLE warehouse_loans ADD COLUMN IF NOT EXISTS foto_devolucao_url TEXT`);
+          await db.execute(sql`ALTER TABLE warehouse_loans ADD COLUMN IF NOT EXISTS equipamento_proprio_id INTEGER`);
+          await db.execute(sql`ALTER TABLE warehouse_loans ADD COLUMN IF NOT EXISTS equipamento_locado_id INTEGER`);
+          console.log(`[SyncSchema+] Rev. 2694: colunas foto_devolucao_url/equipamento_proprio_id/equipamento_locado_id (warehouse_loans) garantidas.`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.2694 warehouse_loans rastreio:`, e?.message || e); }
+
       } catch (e: any) { console.error(`[SyncSchema+] ERROR:`, e?.message || e); }
     }).catch(e => console.error("[SyncSchema] Falha ao iniciar:", e));
     // Garantir colunas críticas adicionadas recentemente que o SyncSchema possa ter ignorado

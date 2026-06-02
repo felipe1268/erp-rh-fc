@@ -1,6 +1,37 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2694 — **ALMOXARIFADO · EMPRÉSTIMO DE FERRAMENTAS/EQUIPAMENTOS (`/almoxarifado` → "Emprestar
+ * Ferramenta" → "CONFIRMAR EMPRÉSTIMO") · CORRIGIDO O ERRO `DB error: column "foto_devolucao_url" of
+ * relation "warehouse_loans" does not exist` QUE IMPEDIA REGISTRAR EMPRÉSTIMOS (E TAMBÉM QUEBRAVA A
+ * LISTA DE EMPRÉSTIMOS EM ABERTO) EM PRODUÇÃO.**
+ *
+ * PEDIDO (usuário, print do modal "Ferramentas — Empréstimo" com toast vermelho "Falha após 0 de 1
+ * ferramentas: Failed query: insert into warehouse_loans ..."): "está dando erro no empréstimo de
+ * ferramentas/Equipamentos no almoxarifado, corrija isso".
+ *
+ * CAUSA-RAIZ: as colunas de rastreio de equipamento da Rev. 2256 — `foto_devolucao_url`,
+ * `equipamento_proprio_id`, `equipamento_locado_id` — foram adicionadas ao `drizzle/schema.ts`
+ * (`warehouseLoans`) mas NUNCA ganharam um guard explícito `ADD COLUMN IF NOT EXISTS` no bloco
+ * `[SyncSchema+]`. O Drizzle ORM, no `db.insert(warehouseLoans).values({...})`, gera um INSERT que
+ * LISTA TODAS as colunas do schema (as não informadas entram como `default`), inclusive as 3 da Rev.
+ * 2256. Em DEV o sync genérico de schema já tinha criado as colunas, mas o banco Neon de PRODUÇÃO —
+ * onde só rodam os guards explícitos `[SyncSchema+]` — nunca as recebeu, então o INSERT (e o SELECT
+ * de `listOpenLoans`, que também lê `foto_devolucao_url`) falhava com 42703 (coluna inexistente).
+ *
+ * FIX (SÓ SELF-HEAL; ZERO ALTER/DROP/DELETE DESTRUTIVO — R-001/R-007/R-010):
+ *  - `server/_core/index.ts` — novo bloco `[SyncSchema+] Rev. 2694` com três
+ *    `ALTER TABLE warehouse_loans ADD COLUMN IF NOT EXISTS` (`foto_devolucao_url TEXT`,
+ *    `equipamento_proprio_id INTEGER`, `equipamento_locado_id INTEGER`). Idempotente; roda em todo
+ *    boot e cura o banco de produção no próximo deploy.
+ *  - Nenhuma mudança de schema lógico (as colunas já existiam no `drizzle/schema.ts` desde a Rev.
+ *    2256) nem de código de aplicação — só o guard de self-heal que faltava.
+ *
+ * AÇÃO NECESSÁRIA: como o conserto é uma migração de self-heal que roda no boot do servidor, é
+ * preciso PUBLICAR (deploy) para que as colunas sejam criadas no banco de produção.
+ *
+ * esbuild server EXIT 0.
+ *
  * Rev. 2693 — **FINANCEIRO · NOVO LANÇAMENTO (`/financeiro/lancamentos` → "Novo Lançamento" → tipo
  * "Transferência") · A ABA "TRANSFERÊNCIA" GANHOU UM FLUXO PRÓPRIO E ENXUTO PARA REGISTRAR
  * TRANSFERÊNCIAS ENTRE CONTAS BANCÁRIAS, QUE LANÇA AS DUAS PERNAS (SAÍDA NA ORIGEM + ENTRADA NO
