@@ -411,20 +411,8 @@ export default function Colaboradores() {
   });
 
   // Rev. 1878 — Termo de Isenção de Controle de Jornada (Art. 62 CLT).
-  // Permite anexar PDF/imagem do termo assinado pelo colaborador (prova
-  // documental do enquadramento — exigido pelo TST em fiscalizações).
-  const [uploadingTermoArt62, setUploadingTermoArt62] = useState(false);
-  const uploadTermoArt62Mut = trpc.employees.uploadTermoArt62.useMutation({
-    onSuccess: (data: any) => {
-      setUploadingTermoArt62(false);
-      utils.employees.list.invalidate();
-      if (editingId) utils.employees.getById.invalidate();
-      set("cargoConfiancaTermoUrl", data.url);
-      set("cargoConfiancaTermoAssinadoEm", new Date().toISOString());
-      toast.success("Termo de Isenção (Art. 62) anexado!");
-    },
-    onError: (e: any) => { setUploadingTermoArt62(false); toast.error("Erro ao enviar termo: " + e.message); },
-  });
+  // Rev. 2684 — Upload manual do termo removido: a assinatura é coletada
+  // ONLINE via FCSign. Mantemos só o removedor p/ termos anexados antigamente.
   const removerTermoArt62Mut = trpc.employees.removerTermoArt62.useMutation({
     onSuccess: () => {
       utils.employees.list.invalidate();
@@ -436,29 +424,6 @@ export default function Colaboradores() {
     },
     onError: (e: any) => toast.error("Erro ao remover termo: " + e.message),
   });
-  const handleTermoArt62Upload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !editingId) { toast.error("Salve o colaborador antes de anexar o termo."); return; }
-    if (file.size > 10 * 1024 * 1024) { toast.error("Arquivo muito grande. Máximo 10MB."); return; }
-    const okTypes = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png'];
-    if (!okTypes.includes(file.type)) { toast.error("Formato inválido. Aceita PDF, JPG ou PNG."); return; }
-    const cId = parseInt(String(form.companyId || selectedCompany || ""), 10);
-    if (!cId) { toast.error("Selecione a empresa do colaborador."); return; }
-    const reader = new FileReader();
-    reader.onload = () => {
-      const base64 = (reader.result as string).split(",")[1];
-      setUploadingTermoArt62(true);
-      uploadTermoArt62Mut.mutate({
-        employeeId: editingId,
-        companyId: cId,
-        fileBase64: base64,
-        mimeType: file.type as any,
-        fileName: file.name,
-      });
-    };
-    reader.readAsDataURL(file);
-    e.target.value = "";
-  };
   // Rev. 2682 — valida pré-requisitos do Termo de Isenção (Art. 62 CLT) antes
   // de gerar/enviar p/ assinatura. Espelha o padrão do Contrato de Experiência.
   const validarTermoArt62 = (): string[] => {
@@ -2717,16 +2682,19 @@ ${(() => {
                       ⚠️ <strong>Atenção legal:</strong> O TST exige PROVA de que o enquadramento é real (poderes efetivos de gestão p/ inciso II; condição anotada na CTPS p/ inciso I). Enquadramento incorreto pode gerar passivo trabalhista (horas extras retroativas até 5 anos).
                     </div>
 
-                    {/* Rev. 1878 — Termo formal de Isenção (Art. 62 CLT).
-                        Permite GERAR PDF/imprimir (texto adaptado ao inciso) e
-                        UPLOAD do termo assinado p/ arquivamento. A prova documental
+                    {/* Rev. 1878 / 2684 — Termo formal de Isenção (Art. 62 CLT).
+                        Permite GERAR PDF/imprimir (texto adaptado ao inciso) p/
+                        conferência; a assinatura é coletada ONLINE via FCSign
+                        (upload manual removido na Rev. 2684). A prova documental
                         é a defesa primária em fiscalização do TST/MPT. */}
                     <div className="bg-white border border-indigo-200 rounded-lg p-3 space-y-2">
                       <div className="flex items-center gap-2 text-xs font-semibold text-indigo-800">
                         <FileText className="h-4 w-4" /> Termo formal de Ciência e Anuência
                       </div>
+                      {/* Rev. 2684 — Upload manual do termo removido: a assinatura
+                          é coletada online via FCSign (não precisa de upload). */}
                       <p className="text-[11px] text-indigo-700/80">
-                        Gere o termo (com o texto correto para o inciso {form.cargoConfiancaInciso || "I/II/III"}), imprima ou salve como PDF, colha a assinatura do colaborador e faça o upload abaixo para deixar registrado no prontuário.
+                        Gere o termo (com o texto correto para o inciso {form.cargoConfiancaInciso || "I/II/III"}) para conferir o conteúdo e envie para <strong>assinatura digital (FCSign)</strong> abaixo — não é necessário fazer upload, a assinatura é coletada online.
                       </p>
                       <div className="flex flex-wrap items-center gap-2">
                         <Button type="button" variant="outline" size="sm"
@@ -2735,13 +2703,6 @@ ${(() => {
                           className="border-indigo-300 text-indigo-700 hover:bg-indigo-50">
                           <Printer className="h-4 w-4 mr-1.5" /> Gerar / Imprimir Termo
                         </Button>
-                        <label className={`inline-flex items-center gap-1.5 px-3 h-9 text-sm rounded-md border cursor-pointer transition-colors ${editingId ? "border-indigo-300 text-indigo-700 hover:bg-indigo-50" : "border-slate-200 text-slate-400 cursor-not-allowed"}`}>
-                          <Upload className="h-4 w-4" /> {uploadingTermoArt62 ? "Enviando…" : "Upload do Termo Assinado"}
-                          <input type="file" accept="application/pdf,image/jpeg,image/png" className="hidden" onChange={handleTermoArt62Upload} disabled={!editingId || uploadingTermoArt62} />
-                        </label>
-                        {!editingId && (
-                          <span className="text-[10px] text-amber-700">Salve o cadastro antes de anexar o termo.</span>
-                        )}
                       </div>
                       {/* Rev. 2682 — Assinatura online (FCSign) do Termo Art. 62,
                           mesmos meios/critérios do Contrato de Experiência. */}

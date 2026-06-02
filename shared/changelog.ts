@@ -1,6 +1,27 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2684 — **COLABORADORES (`/colaboradores` → ficha → "Isenção de Controle de Jornada (Art. 62 CLT)" →
+ * "Termo formal de Ciência e Anuência") · A OPÇÃO "UPLOAD DO TERMO ASSINADO" FOI REMOVIDA — O TERMO DE ISENÇÃO
+ * (ART. 62) AGORA É ASSINADO EXCLUSIVAMENTE ONLINE PELO FCSign, SEM NECESSIDADE DE ANEXAR PDF/IMAGEM
+ * MANUALMENTE. "GERAR / IMPRIMIR TERMO" (PARA CONFERÊNCIA) E O PAINEL DE ASSINATURA DIGITAL CONTINUAM.**
+ *
+ * PEDIDO (usuário, print IMG_1492): "Não precisa ter [a] opção de fazer upload pois será assinado
+ * digitalmente, veja como ajustar isso". Contexto: a seção mostrava lado a lado "Gerar / Imprimir Termo" e
+ * "Upload do Termo Assinado", além do painel FCSign (Rev. 2682). Com a assinatura coletada online, o upload
+ * manual virou redundante e confuso.
+ *
+ * FIX (SÓ CLIENT/UI; ZERO SCHEMA/SERVER): `client/src/pages/Colaboradores.tsx` — removido o `<label>`/`<input
+ * type=file>` "Upload do Termo Assinado" e a nota "Salve o cadastro antes de anexar o termo". O texto de ajuda
+ * foi reescrito: gerar/imprimir é só p/ CONFERÊNCIA e a assinatura é coletada ONLINE via FCSign. Removidos os
+ * helpers agora mortos: estado `uploadingTermoArt62`, mutation `uploadTermoArt62Mut` e handler
+ * `handleTermoArt62Upload`. MANTIDOS por backward-compat: o card de exibição do termo já anexado
+ * (`form.cargoConfiancaTermoUrl`, com Ver/data/remover) e a mutation `removerTermoArt62Mut`, p/ que termos
+ * enviados antes desta revisão continuem visíveis e removíveis. O endpoint `employees.uploadTermoArt62`
+ * permanece no server (não removido), apenas deixou de ser chamado pela UI. esbuild `Colaboradores.tsx` EXIT 0.
+ *
+ * ----------------------------------------------------------------------------------------------------
+ *
  * Rev. 2683 — **COLABORADORES (`/colaboradores` → ficha → aba "Documentos") · A SEÇÃO DE DOCUMENTOS FOI
  * REDESENHADA: (1) OS DOCUMENTOS QUE JÁ TÊM ASSINATURA DIGITAL (FCSign — Contrato de Experiência, Termo de
  * Isenção Art. 62 etc.) AGORA APARECEM NUM BLOCO PRÓPRIO "ASSINADOS DIGITALMENTE", READ-ONLY, COM BOTÃO "VER"
