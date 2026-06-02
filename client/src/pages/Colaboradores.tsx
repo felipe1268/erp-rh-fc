@@ -459,16 +459,40 @@ export default function Colaboradores() {
     reader.readAsDataURL(file);
     e.target.value = "";
   };
-  // Gera o Termo de Isenção (Art. 62 CLT) em nova aba, pronto p/ impressão/PDF.
+  // Rev. 2682 — valida pré-requisitos do Termo de Isenção (Art. 62 CLT) antes
+  // de gerar/enviar p/ assinatura. Espelha o padrão do Contrato de Experiência.
+  const validarTermoArt62 = (): string[] => {
+    const faltando: string[] = [];
+    const comp = companies?.find(c => String(c.id) === (form.companyId || selectedCompanyId || ""));
+    if (!comp) faltando.push("Empresa do colaborador");
+    if (!String(form.cargoConfiancaInciso || "").trim()) faltando.push("Inciso de enquadramento (I/II/III)");
+    if (!String(form.nomeCompleto || "").trim()) faltando.push("Nome completo");
+    if (!String(form.cpf || "").trim()) faltando.push("CPF");
+    if (!String(form.funcao || "").trim()) faltando.push("Função/cargo");
+    if (!String(form.salarioBase || "").trim()) faltando.push("Salário base");
+    if (!String(form.cargoConfiancaDesde || "").trim()) faltando.push("Data de enquadramento (desde)");
+    return faltando;
+  };
+
+  // Rev. 2682 — Gera o Termo de Isenção (Art. 62 CLT). Antes só gerava o HTML
+  // p/ impressão (nova aba). Agora `buildTermoArt62` retorna a string HTML e
+  // serve a DOIS consumidores:
+  //  - forFcsign=false → janela de impressão/PDF (comportamento original).
+  //  - forFcsign=true  → payload do FCSign (assinatura online), com placeholders
+  //    `<!--FCSIGN:SIG:{role}-->` ACIMA das linhas de assinatura (o servidor
+  //    estampa a <img> da assinatura ali via stampSignaturesOnSlots).
   // O texto se adapta ao inciso selecionado (I/II/III) — cada um tem fundamentação
   // legal diferente e o termo deve refletir isso para ter validade probatória.
-  const imprimirTermoArt62 = () => {
+  // IMPORTANTE: usa SOMENTE estilos inline no corpo (sem <style> com seletores
+  // globais tipo body{}/.clausula{}) — a página /assinar renderiza via
+  // dangerouslySetInnerHTML + DOMPurify (que PRESERVA <style>), então um <style>
+  // global VAZARIA na UI da tela de assinatura. (REGRA DE OURO Rev. 2106+.)
+  const buildTermoArt62 = (forFcsign: boolean): string | null => {
     const comp = companies?.find(c => String(c.id) === (form.companyId || selectedCompanyId || ""));
     const inciso = String(form.cargoConfiancaInciso || "").toUpperCase();
-    if (!inciso) { toast.error("Selecione o inciso de enquadramento antes de gerar o termo."); return; }
+    if (!inciso) { toast.error("Selecione o inciso de enquadramento antes de gerar o termo."); return null; }
     // Escape HTML em TODOS os campos dinâmicos — nome/função/endereço/razão
-    // social vêm de input livre e seriam vetores de XSS ao serem injetados via
-    // document.write na nova aba. Centralizado num helper local.
+    // social vêm de input livre e seriam vetores de XSS. Centralizado num helper local.
     const esc = (v: any) => String(v ?? "")
       .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
       .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
@@ -507,45 +531,35 @@ export default function Colaboradores() {
       : inciso === "II"
         ? `ocupa cargo de gestão, equiparado a cargo de confiança (gerente/diretor), com poderes de mando e gestão, percebendo gratificação de função não inferior a 40% (quarenta por cento) sobre o salário efetivo do cargo, conforme parágrafo único do Art. 62 da CLT${grat ? ` (gratificação fixada em ${grat}%)` : ""}` // grat já escapado
         : "presta serviços em regime de teletrabalho por produção ou tarefa, sem controle de jornada, nos termos do inciso III do Art. 62 da CLT, incluído pela Lei nº 14.442/2022";
-    const w = window.open("", "_blank");
-    if (!w) { toast.error("Popup bloqueado — libere e tente novamente."); return; }
-    w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Termo de Isenção de Controle de Jornada - ${empNome}</title>
-<style>
-@page{size:A4;margin:2cm}
-body{font-family:'Times New Roman',serif;font-size:12pt;line-height:1.6;color:#000;max-width:21cm;margin:0 auto;padding:2cm}
-h1{text-align:center;font-size:15pt;margin-bottom:4px;text-transform:uppercase}
-h2{text-align:center;font-size:12pt;margin-top:0;margin-bottom:24px;font-weight:normal;font-style:italic}
-.clausula{margin-top:14px;text-align:justify}
-.clausula-title{font-weight:bold;text-transform:uppercase;margin-bottom:4px;font-size:11pt}
-.assinaturas{margin-top:60px;display:flex;justify-content:space-between;gap:40px}
-.assinatura{text-align:center;flex:1}
-.assinatura .linha{border-top:1px solid #000;padding-top:4px;margin-top:60px;font-size:10pt}
-.header-info{text-align:center;margin-bottom:20px;font-size:10pt;color:#333}
-.destaque{font-weight:bold}
-.box{border:1px solid #999;padding:10px;margin-top:12px;background:#f6f6f6;font-size:10pt}
-@media print{body{padding:0}}
-</style></head><body>
-<h1>Termo de Ciência e Anuência</h1>
-<h2>Isenção de Controle de Jornada — Art. 62 da CLT — ${esc(tituloInciso)}</h2>
-<div class="header-info">${compRazaoOrEmpresa} — CNPJ: ${compCnpjPlain}</div>
 
-<div class="clausula">
-<p><span class="destaque">EMPREGADOR:</span> ${compRazao}, inscrita no CNPJ sob nº ${compCnpj}, com sede em ${compEndereco}, ${compCidade}/${compEstado}, doravante denominada simplesmente <strong>EMPREGADOR</strong>.</p>
+    // Slot de assinatura: 50px ACIMA da linha. No FCSign o servidor injeta a
+    // <img> da assinatura no placeholder; na impressão fica espaço em branco
+    // (assinatura manual). Mesmo markup em ambos os modos (comentário é inócuo).
+    const slot = (role: string) =>
+      `<div style="height:50px;display:flex;align-items:flex-end;justify-content:center;margin-bottom:-2px"><!--FCSIGN:SIG:${role}--></div>`;
+
+    const inner = `<div style="font-family:'Times New Roman',serif;font-size:11.5pt;line-height:1.6;color:#000;max-width:21cm;margin:0 auto">
+<h1 style="text-align:center;font-size:15pt;margin:0 0 4px;text-transform:uppercase">Termo de Ciência e Anuência</h1>
+<h2 style="text-align:center;font-size:12pt;margin:0 0 24px;font-weight:normal;font-style:italic">Isenção de Controle de Jornada — Art. 62 da CLT — ${esc(tituloInciso)}</h2>
+<div style="text-align:center;margin-bottom:20px;font-size:10pt;color:#333">${compRazaoOrEmpresa} — CNPJ: ${compCnpjPlain}</div>
+
+<div style="margin-top:14px;text-align:justify">
+<p><span style="font-weight:bold">EMPREGADOR:</span> ${compRazao}, inscrita no CNPJ sob nº ${compCnpj}, com sede em ${compEndereco}, ${compCidade}/${compEstado}, doravante denominada simplesmente <strong>EMPREGADOR</strong>.</p>
 </div>
 
-<div class="clausula">
-<p><span class="destaque">EMPREGADO(A):</span> ${empNome}, portador(a) do CPF nº ${empCpf}, RG nº ${empRg}, CTPS nº ${empCtps}, ocupante do cargo/função de <strong>${empFuncao}</strong>, residente em ${empEnderecoFmt}, doravante denominado(a) simplesmente <strong>EMPREGADO(A)</strong>.</p>
+<div style="margin-top:14px;text-align:justify">
+<p><span style="font-weight:bold">EMPREGADO(A):</span> ${empNome}, portador(a) do CPF nº ${empCpf}, RG nº ${empRg}, CTPS nº ${empCtps}, ocupante do cargo/função de <strong>${empFuncao}</strong>, residente em ${empEnderecoFmt}, doravante denominado(a) simplesmente <strong>EMPREGADO(A)</strong>.</p>
 </div>
 
-<p>As partes acima qualificadas, no exercício pleno de sua autonomia da vontade, declaram e ajustam o que se segue:</p>
+<p style="text-align:justify">As partes acima qualificadas, no exercício pleno de sua autonomia da vontade, declaram e ajustam o que se segue:</p>
 
-<div class="clausula">
-<p class="clausula-title">Cláusula 1ª — Do Enquadramento Legal</p>
+<div style="margin-top:14px;text-align:justify">
+<p style="font-weight:bold;text-transform:uppercase;margin-bottom:4px;font-size:11pt">Cláusula 1ª — Do Enquadramento Legal</p>
 <p>O(A) EMPREGADO(A) declara estar ciente e de pleno acordo que, a partir de <strong>${esc(fmt(desde))}</strong>, ${esc(fundamentoInciso)}, razão pela qual <strong>NÃO está sujeito(a) ao controle de jornada de trabalho</strong> previsto no Capítulo II do Título II da CLT.</p>
 </div>
 
-<div class="clausula">
-<p class="clausula-title">Cláusula 2ª — Dos Efeitos da Isenção</p>
+<div style="margin-top:14px;text-align:justify">
+<p style="font-weight:bold;text-transform:uppercase;margin-bottom:4px;font-size:11pt">Cláusula 2ª — Dos Efeitos da Isenção</p>
 <p>Em decorrência do enquadramento descrito na cláusula anterior, o(a) EMPREGADO(A) declara estar ciente de que <strong>NÃO faz jus</strong>, durante a vigência da presente condição, às seguintes parcelas/garantias relacionadas à jornada:</p>
 <p style="margin-left:1cm">a) horas extras (Art. 59 da CLT) e respectivos reflexos;<br>
 b) banco de horas e compensações de jornada;<br>
@@ -554,38 +568,51 @@ d) indenização do intervalo intrajornada suprimido (Art. 71, §4º da CLT);<br
 e) registro/marcação de ponto eletrônico ou manual (Art. 74 da CLT), salvo por liberalidade do EMPREGADOR para fins meramente gerenciais.</p>
 </div>
 
-<div class="clausula">
-<p class="clausula-title">Cláusula 3ª — Da Remuneração</p>
+<div style="margin-top:14px;text-align:justify">
+<p style="font-weight:bold;text-transform:uppercase;margin-bottom:4px;font-size:11pt">Cláusula 3ª — Da Remuneração</p>
 <p>O(A) EMPREGADO(A) perceberá a remuneração mensal de <strong>R$ ${empSalario}</strong>${inciso === "II" && grat ? `, acrescida da gratificação de função de <strong>${grat}%</strong> do salário efetivo, em estrita observância ao parágrafo único do Art. 62 da CLT` : ""}.</p>
 </div>
 
-<div class="clausula">
-<p class="clausula-title">Cláusula 4ª — Da Reversibilidade</p>
+<div style="margin-top:14px;text-align:justify">
+<p style="font-weight:bold;text-transform:uppercase;margin-bottom:4px;font-size:11pt">Cláusula 4ª — Da Reversibilidade</p>
 <p>Cessada a condição que ensejou o enquadramento no Art. 62 da CLT (transferência para função distinta, perda dos poderes de gestão, retorno ao controle de horário, etc.), o(a) EMPREGADO(A) voltará automaticamente ao regime ordinário de controle de jornada, com todos os direitos correlatos, mediante simples comunicação por escrito do EMPREGADOR e respectiva anotação na CTPS, quando cabível.</p>
 </div>
 
-<div class="clausula">
-<p class="clausula-title">Cláusula 5ª — Da Boa-Fé e Ciência Plena</p>
+<div style="margin-top:14px;text-align:justify">
+<p style="font-weight:bold;text-transform:uppercase;margin-bottom:4px;font-size:11pt">Cláusula 5ª — Da Boa-Fé e Ciência Plena</p>
 <p>O(A) EMPREGADO(A) declara que <strong>leu, compreendeu e está de pleno acordo</strong> com os termos do presente instrumento, que lhe foi devidamente explicado, tendo ciência dos efeitos jurídicos da isenção do controle de jornada, ora pactuada de forma livre e consciente.</p>
 </div>
 
-${obs ? `<div class="box"><strong>Observações / Justificativa do Enquadramento:</strong><br>${esc(obs).replace(/\n/g, "<br>")}</div>` : ""}
+${obs ? `<div style="border:1px solid #999;padding:10px;margin-top:12px;background:#f6f6f6;font-size:10pt"><strong>Observações / Justificativa do Enquadramento:</strong><br>${esc(obs).replace(/\n/g, "<br>")}</div>` : ""}
 
-<p style="margin-top:18px">E por estarem assim justos e acordados, firmam o presente <strong>Termo de Ciência e Anuência</strong> em 2 (duas) vias de igual teor e forma, na presença das testemunhas abaixo qualificadas.</p>
+<p style="margin-top:18px;text-align:justify">E por estarem assim justos e acordados, firmam o presente <strong>Termo de Ciência e Anuência</strong> em 2 (duas) vias de igual teor e forma, na presença das testemunhas abaixo qualificadas.</p>
 
 <p style="text-align:center;margin-top:24px">${compCidade}/${compEstado}, ${esc(hoje)}.</p>
 
-<div class="assinaturas">
-<div class="assinatura"><div class="linha">${compRazao}<br><small>CNPJ: ${compCnpj}</small></div></div>
-<div class="assinatura"><div class="linha">${empNome}<br><small>CPF: ${empCpf}</small></div></div>
+<div style="margin-top:60px;display:flex;justify-content:space-between;gap:40px">
+<div style="text-align:center;flex:1">${slot("empregador")}<div style="border-top:1px solid #000;padding-top:4px;font-size:10pt">${compRazao}<br><small>CNPJ: ${compCnpj}</small></div></div>
+<div style="text-align:center;flex:1">${slot("empregado")}<div style="border-top:1px solid #000;padding-top:4px;font-size:10pt">${empNome}<br><small>CPF: ${empCpf}</small></div></div>
 </div>
 
-<div class="assinaturas" style="margin-top:30px">
-<div class="assinatura"><div class="linha">Testemunha 1<br><small>Nome: _________________ CPF: _______________</small></div></div>
-<div class="assinatura"><div class="linha">Testemunha 2<br><small>Nome: _________________ CPF: _______________</small></div></div>
+<div style="margin-top:30px;display:flex;justify-content:space-between;gap:40px">
+<div style="text-align:center;flex:1">${slot("testemunha_1")}<div style="border-top:1px solid #000;padding-top:4px;font-size:10pt">Testemunha 1<br><small>Nome: _________________ CPF: _______________</small></div></div>
+<div style="text-align:center;flex:1">${slot("testemunha_2")}<div style="border-top:1px solid #000;padding-top:4px;font-size:10pt">Testemunha 2<br><small>Nome: _________________ CPF: _______________</small></div></div>
 </div>
+</div>`;
 
-</body></html>`);
+    // Impressão: doc completo com <style> SÓ de @page/print (escopo é a janela
+    // nova, não vaza). FCSign: doc com <body> (renderFinalHtml injeta o rodapé
+    // de auditoria antes de </body>) e SEM <style> global.
+    const printStyle = `<style>@page{size:A4;margin:2cm}body{padding:2cm;margin:0}@media print{body{padding:0}}</style>`;
+    return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Termo de Isenção de Controle de Jornada - ${empNome}</title>${forFcsign ? "" : printStyle}</head><body>${inner}</body></html>`;
+  };
+
+  const imprimirTermoArt62 = () => {
+    const html = buildTermoArt62(false);
+    if (!html) return;
+    const w = window.open("", "_blank");
+    if (!w) { toast.error("Popup bloqueado — libere e tente novamente."); return; }
+    w.document.write(html);
     w.document.close();
     setTimeout(() => w.print(), 500);
   };
@@ -2716,6 +2743,50 @@ ${(() => {
                           <span className="text-[10px] text-amber-700">Salve o cadastro antes de anexar o termo.</span>
                         )}
                       </div>
+                      {/* Rev. 2682 — Assinatura online (FCSign) do Termo Art. 62,
+                          mesmos meios/critérios do Contrato de Experiência. */}
+                      {(() => {
+                        const cId = parseInt(String(form.companyId || selectedCompanyId || ""), 10);
+                        if (!editingId || !cId) {
+                          return (
+                            <Button
+                              type="button" size="sm" disabled
+                              className="bg-gradient-to-r from-blue-700 to-indigo-700 text-white border-0 opacity-60"
+                            >
+                              <ShieldCheck className="h-4 w-4 mr-1" /> Enviar para Assinatura (FCSign)
+                            </Button>
+                          );
+                        }
+                        return (
+                          <FCSignContratoExperienciaPanel
+                            companyId={cId}
+                            employeeId={Number(editingId)}
+                            empNome={String(form.nomeCompleto || "Colaborador")}
+                            isAdminMaster={isAdminMaster}
+                            tipo="termo_art62"
+                            docLabel="Termo de Isenção (Art. 62)"
+                            onEnviar={() => {
+                              const faltando = validarTermoArt62();
+                              if (faltando.length > 0) {
+                                toast.error("Preencha antes de enviar: " + faltando.join(", "));
+                                return;
+                              }
+                              const html = buildTermoArt62(true);
+                              if (!html) return;
+                              setFcsignPayload({
+                                companyId: cId,
+                                employeeId: Number(editingId),
+                                tipo: "termo_art62",
+                                documentTitle: `Termo de Isenção Art. 62 - ${String(form.nomeCompleto || "Colaborador")}`,
+                                documentHtml: html,
+                                empregadoNome: String(form.nomeCompleto || "Colaborador"),
+                                empregadoCpf: formatCPF(String(form.cpf || "")) || undefined,
+                              });
+                              setFcsignOpen(true);
+                            }}
+                          />
+                        );
+                      })()}
                       {form.cargoConfiancaTermoUrl ? (
                         <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-200 rounded-md px-2.5 py-1.5 text-xs">
                           <FileText className="h-4 w-4 text-emerald-700 shrink-0" />

@@ -29,6 +29,13 @@ type Props = {
   empNome: string;
   isAdminMaster: boolean;
   onEnviar: () => void;
+  // Rev. 2682 — generalizado: além do Contrato de Experiência, o mesmo painel
+  // reativo serve qualquer documento FCSign por colaborador (ex.: Termo de
+  // Isenção Art. 62). `tipo` casa com `signatureSessions.tipo`; `docLabel` é o
+  // rótulo humano usado nos textos/nome do arquivo baixado. Defaults preservam
+  // o comportamento original (contrato_experiencia).
+  tipo?: string;
+  docLabel?: string;
 };
 
 // Rev. 2122 — Painel de status da assinatura FCSign do Contrato de Experiência.
@@ -38,9 +45,9 @@ type Props = {
 //    (com link de assinatura copiável) + admin_master pode cancelar.
 //  - Sessão completa → "✅ Documento assinado" + Visualizar + Baixar + admin_master
 //    pode "Apagar para nova emissão" (soft-delete via signatures.adminDelete).
-export default function FCSignContratoExperienciaPanel({ companyId, employeeId, empNome, isAdminMaster, onEnviar }: Props) {
+export default function FCSignContratoExperienciaPanel({ companyId, employeeId, empNome, isAdminMaster, onEnviar, tipo = "contrato_experiencia", docLabel = "Contrato de Experiência" }: Props) {
   const q = trpc.signatures.getForEmployeeTipo.useQuery(
-    { companyId, employeeId, tipo: "contrato_experiencia" },
+    { companyId, employeeId, tipo },
     { enabled: !!companyId && !!employeeId, staleTime: 30 * 1000 }
   );
   const adminDeleteMut = trpc.signatures.adminDelete.useMutation();
@@ -84,7 +91,7 @@ export default function FCSignContratoExperienciaPanel({ companyId, employeeId, 
   const handleAdminDelete = () => {
     if (!isAdminMaster) return;
     const msg = sess.status === "completo"
-      ? `Apagar este Contrato de Experiência assinado de ${empNome}? Isso vai liberar uma NOVA emissão. O documento atual será removido da RAIO-X (soft-delete).`
+      ? `Apagar este ${docLabel} assinado de ${empNome}? Isso vai liberar uma NOVA emissão. O documento atual será removido da RAIO-X (soft-delete).`
       : `Cancelar a sessão de assinatura em andamento de ${empNome}? Os links enviados deixarão de funcionar.`;
     if (!window.confirm(msg)) return;
     adminDeleteMut.mutate(
@@ -107,7 +114,7 @@ export default function FCSignContratoExperienciaPanel({ companyId, employeeId, 
           <div className="flex items-start gap-2">
             <CheckCircle2 className="h-5 w-5 text-emerald-600 dark:text-emerald-400 mt-0.5" />
             <div>
-              <div className="font-semibold text-sm text-emerald-800 dark:text-emerald-300">Contrato de Experiência assinado</div>
+              <div className="font-semibold text-sm text-emerald-800 dark:text-emerald-300">{docLabel} assinado</div>
               <div className="text-xs text-emerald-700 dark:text-emerald-400 mt-0.5">
                 Todas as partes assinaram. Documento arquivado na RAIO-X do colaborador.
                 {sess.completedAt && (
@@ -132,7 +139,7 @@ export default function FCSignContratoExperienciaPanel({ companyId, employeeId, 
                   onClick={() => {
                     const a = document.createElement("a");
                     a.href = sess.finalDocumentUrl!;
-                    a.download = `Contrato_Experiencia_${empNome.replace(/\s+/g, "_")}.html`;
+                    a.download = `${docLabel.replace(/\s+/g, "_")}_${empNome.replace(/\s+/g, "_")}.html`;
                     a.target = "_blank";
                     a.rel = "noopener";
                     document.body.appendChild(a); a.click(); a.remove();
