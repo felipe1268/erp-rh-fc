@@ -1602,9 +1602,9 @@ ${obs ? `<div style="border:1px solid #999;padding:10px;margin-top:12px;backgrou
               {editingId && (
                 <div className="mt-6">
                   <h4 className="text-sm font-semibold text-primary mb-3 flex items-center gap-2">
-                    <Upload className="w-4 h-4" /> Documentos Digitalizados
+                    <FileText className="w-4 h-4" /> Documentos
                   </h4>
-                  <DocumentUploadSection employeeId={editingId!} companyId={companyId || 0} />
+                  <DocumentUploadSection employeeId={editingId!} companyId={formCompanyIdNum || companyId || 0} />
                 </div>
               )}
 
@@ -3870,6 +3870,15 @@ function DocumentUploadSection({ employeeId, companyId }: { employeeId: number; 
     { enabled: employeeId > 0 }
   );
 
+  // Rev. 2683 — Documentos que JÁ TÊM assinatura digital (FCSign) não precisam
+  // de upload manual. Buscamos as sessões FCSign do colaborador e exibimos as
+  // CONCLUÍDAS num bloco próprio (read-only, com "Ver"); o slot de upload
+  // correspondente fica marcado como "Assinado digitalmente".
+  const { data: fcSessions } = trpc.signatures.listByEmployee.useQuery(
+    { companyId, employeeId },
+    { enabled: employeeId > 0 && companyId > 0 }
+  );
+
   const uploadMut = trpc.employeeDocuments.upload.useMutation({
     onSuccess: () => { toast.success('Documento enviado!'); refetch(); setUploading(false); },
     onError: (e: any) => { toast.error(e.message || 'Erro ao enviar'); setUploading(false); },
@@ -3910,40 +3919,188 @@ function DocumentUploadSection({ employeeId, companyId }: { employeeId: number; 
     inp.click();
   };
 
+  // Rótulo humano dos tipos FCSign + mapa FCSign→slot de upload coberto.
+  const FCSIGN_LABELS: Record<string, string> = {
+    contrato_experiencia: 'Contrato de Experiência',
+    termo_art62: 'Termo de Isenção de Jornada (Art. 62 CLT)',
+    termo_responsabilidade: 'Termo de Responsabilidade',
+    aviso_previo: 'Aviso Prévio',
+    advertencia: 'Advertência',
+  };
+  const fcsignLabel = (tipo: string, title?: string | null) => FCSIGN_LABELS[tipo] || title || 'Documento assinado';
+  // FCSign tipo → slot de upload que ele "cobre" (dispensa o upload manual).
+  const FCSIGN_COBRE_SLOT: Record<string, string> = { contrato_experiencia: 'contrato_trabalho' };
+
+  // Sessões FCSign concluídas (com documento final) — fonte da verdade.
+  const assinados = useMemo(
+    () => (fcSessions || []).filter((s: any) => s.status === 'completo' && s.finalDocumentUrl),
+    [fcSessions]
+  );
+  // Slots de upload cobertos por um FCSign concluído.
+  const slotsCobertos = useMemo(() => {
+    const m = new Map<string, any>();
+    for (const s of assinados) {
+      const slot = FCSIGN_COBRE_SLOT[s.tipo];
+      if (slot && !m.has(slot)) m.set(slot, s);
+    }
+    return m;
+  }, [assinados]);
+  // Uploads manuais agrupados por tipo.
+  const docsByTipo = useMemo(() => {
+    const m = new Map<string, any[]>();
+    for (const d of (docs || []) as any[]) {
+      const arr = m.get(d.tipo) || [];
+      arr.push(d);
+      m.set(d.tipo, arr);
+    }
+    return m;
+  }, [docs]);
+
+  const fmtDataBR = (v: any) => {
+    if (!v) return null;
+    try {
+      const safe = typeof v === 'string' ? v.replace(' ', 'T') : v;
+      const d = new Date(safe);
+      return isNaN(d.getTime()) ? null : d.toLocaleDateString('pt-BR');
+    } catch { return null; }
+  };
+
+  const totalEnviados = (docs || []).length;
+
   return (
-    <div className="space-y-3">
-      <div className="flex flex-wrap gap-2">
-        {TIPOS_DOC.map(tipo => (
-          <Button key={tipo.value} variant="outline" size="sm" className="text-xs h-7" onClick={() => handleUpload(tipo.value)} disabled={uploading}>
-            <Upload className="w-3 h-3 mr-1" /> {tipo.label}
-          </Button>
-        ))}
-      </div>
-      {uploading && <p className="text-xs text-blue-500 animate-pulse">Enviando documento(s)...</p>}
-      {docs && docs.length > 0 ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-          {docs.map((d: any) => (
-            <div key={d.id} className="flex items-center gap-2 p-2 border border-border rounded-md bg-muted/30">
-              <FileText className="w-4 h-4 text-primary shrink-0" />
-              <div className="flex-1 min-w-0">
-                <div className="text-xs font-medium truncate">{TIPOS_DOC.find(t => t.value === d.tipo)?.label || d.tipo}</div>
-                <div className="text-[10px] text-muted-foreground truncate">{d.nome}</div>
-                {d.dataValidade && (
-                  <div className={`text-[10px] ${new Date(d.dataValidade) < new Date() ? 'text-red-500 font-semibold' : 'text-muted-foreground'}`}>
-                    Val: {new Date(d.dataValidade + 'T12:00:00').toLocaleDateString('pt-BR')}
+    <div className="space-y-5">
+      {/* ── Bloco A: já assinados digitalmente (FCSign) — sem upload ── */}
+      {assinados.length > 0 && (
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50/60 dark:bg-emerald-950/20 dark:border-emerald-900 p-4">
+          <div className="flex items-center gap-2 mb-1">
+            <ShieldCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+            <span className="text-sm font-semibold text-emerald-800 dark:text-emerald-300">Assinados digitalmente (FCSign)</span>
+            <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-emerald-600 text-white">{assinados.length}</span>
+          </div>
+          <p className="text-[11px] text-emerald-700/80 dark:text-emerald-400/80 mb-3">
+            Estes documentos já possuem assinatura digital válida — não é necessário fazer upload.
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+            {assinados.map((s: any) => (
+              <div key={s.id} className="flex items-center gap-2 p-2.5 rounded-lg border border-emerald-200 dark:border-emerald-900 bg-white dark:bg-emerald-950/30">
+                <div className="shrink-0 w-8 h-8 rounded-md bg-emerald-100 dark:bg-emerald-900/50 flex items-center justify-center">
+                  <ShieldCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-xs font-semibold text-slate-800 dark:text-slate-100 truncate">{fcsignLabel(s.tipo, s.documentTitle)}</div>
+                  <div className="text-[10px] text-emerald-600 dark:text-emerald-400">
+                    Assinado{fmtDataBR(s.completedAt) ? ` em ${fmtDataBR(s.completedAt)}` : ''}
+                  </div>
+                </div>
+                <a
+                  href={s.finalDocumentUrl}
+                  target="_blank"
+                  rel="noopener"
+                  className="shrink-0 inline-flex items-center gap-1 text-xs font-medium text-emerald-700 dark:text-emerald-300 hover:underline"
+                >
+                  <Eye className="w-3.5 h-3.5" /> Ver
+                </a>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── Bloco B: upload manual — grid uniforme de slots por tipo ── */}
+      <div>
+        <div className="flex items-center justify-between gap-2 mb-3">
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">Documentos digitalizados</span>
+            {totalEnviados > 0 && (
+              <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-200">{totalEnviados} enviado{totalEnviados > 1 ? 's' : ''}</span>
+            )}
+          </div>
+          {uploading && <span className="text-xs text-blue-500 animate-pulse">Enviando documento(s)…</span>}
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+          {TIPOS_DOC.map(tipo => {
+            const enviados = docsByTipo.get(tipo.value) || [];
+            const coberto = slotsCobertos.get(tipo.value);
+            const temAlgo = enviados.length > 0 || !!coberto;
+
+            return (
+              <div
+                key={tipo.value}
+                className={`rounded-lg border p-2.5 transition-colors ${
+                  temAlgo
+                    ? 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900/40'
+                    : 'border-dashed border-slate-300 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-900/20 hover:border-blue-300 hover:bg-blue-50/40'
+                }`}
+              >
+                <div className="flex items-center justify-between gap-2 mb-1.5">
+                  <span className="text-xs font-semibold text-slate-700 dark:text-slate-200 truncate">{tipo.label}</span>
+                  {coberto ? (
+                    <span className="shrink-0 inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300">
+                      <ShieldCheck className="w-3 h-3" /> Assinado
+                    </span>
+                  ) : enviados.length > 0 ? (
+                    <span className="shrink-0 inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300">
+                      <Check className="w-3 h-3" /> {enviados.length}
+                    </span>
+                  ) : null}
+                </div>
+
+                {/* Coberto por assinatura digital */}
+                {coberto && (
+                  <a
+                    href={coberto.finalDocumentUrl}
+                    target="_blank"
+                    rel="noopener"
+                    className="inline-flex items-center gap-1 text-[11px] text-emerald-700 dark:text-emerald-300 hover:underline"
+                  >
+                    <Eye className="w-3 h-3" /> Ver assinatura digital
+                  </a>
+                )}
+
+                {/* Uploads manuais já enviados */}
+                {enviados.length > 0 && (
+                  <div className="space-y-1 mb-1.5">
+                    {enviados.map((d: any) => {
+                      const validade = fmtDataBR(d.dataValidade);
+                      const vencido = d.dataValidade ? new Date(d.dataValidade) < new Date() : false;
+                      return (
+                        <div key={d.id} className="flex items-center gap-1.5 text-[11px]">
+                          <FileText className="w-3 h-3 text-slate-400 shrink-0" />
+                          <span className="flex-1 min-w-0 truncate text-slate-600 dark:text-slate-300" title={d.nome}>{d.nome}</span>
+                          {validade && (
+                            <span className={vencido ? 'text-red-500 font-semibold' : 'text-muted-foreground'}>{validade}</span>
+                          )}
+                          <a href={d.fileUrl} target="_blank" rel="noopener" className="text-primary hover:underline shrink-0">Ver</a>
+                          <button
+                            type="button"
+                            className="shrink-0 text-destructive hover:opacity-70"
+                            onClick={() => { if (confirm('Excluir este documento?')) excluirMut.mutate({ id: d.id, companyId }); }}
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
+
+                {/* Ação de upload (some quando coberto por FCSign sem upload manual) */}
+                {!(coberto && enviados.length === 0) && (
+                  <button
+                    type="button"
+                    disabled={uploading}
+                    onClick={() => handleUpload(tipo.value)}
+                    className="w-full inline-flex items-center justify-center gap-1 text-[11px] font-medium text-slate-500 hover:text-blue-600 disabled:opacity-50 py-1 rounded-md hover:bg-blue-50/60 dark:hover:bg-blue-950/30 transition-colors"
+                  >
+                    {enviados.length > 0 ? <><Plus className="w-3 h-3" /> Adicionar mais</> : <><Upload className="w-3 h-3" /> Enviar</>}
+                  </button>
+                )}
               </div>
-              <a href={d.fileUrl} target="_blank" rel="noopener" className="text-xs text-primary hover:underline">Ver</a>
-              <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => { if (confirm('Excluir este documento?')) excluirMut.mutate({ id: d.id, companyId }); }}>
-                <Trash2 className="w-3 h-3 text-destructive" />
-              </Button>
-            </div>
-          ))}
+            );
+          })}
         </div>
-      ) : (
-        <p className="text-xs text-muted-foreground italic">Nenhum documento digitalizado enviado</p>
-      )}
+      </div>
     </div>
   );
 }

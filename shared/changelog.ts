@@ -1,6 +1,38 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2683 — **COLABORADORES (`/colaboradores` → ficha → aba "Documentos") · A SEÇÃO DE DOCUMENTOS FOI
+ * REDESENHADA: (1) OS DOCUMENTOS QUE JÁ TÊM ASSINATURA DIGITAL (FCSign — Contrato de Experiência, Termo de
+ * Isenção Art. 62 etc.) AGORA APARECEM NUM BLOCO PRÓPRIO "ASSINADOS DIGITALMENTE", READ-ONLY, COM BOTÃO "VER"
+ * — E NÃO PRECISAM MAIS DE UPLOAD MANUAL; (2) O UPLOAD MANUAL VIROU UM GRID UNIFORME DE "SLOTS" POR TIPO DE
+ * DOCUMENTO (EM VEZ DE UMA FILEIRA SOLTA DE BOTÕES), COM STATUS POR SLOT (ASSINADO / N ENVIADOS / PENDENTE),
+ * LISTA DE ARQUIVOS COM VALIDADE + VER + EXCLUIR, E AÇÃO "ENVIAR"/"ADICIONAR MAIS".**
+ *
+ * PEDIDO (usuário, print IMG_1489): "Refaça esta tela, de forma que não precisa fazer upload de documentos que
+ * hoje já temos assinatura digital e melhore o layout". Contexto: a aba "Documentos" mostrava uma fileira de 15
+ * botões de upload pequenos + uma lista plana dos enviados, e o "Contrato Trabalho" pedia upload manual mesmo
+ * quando o Contrato de Experiência já tinha sido assinado digitalmente pelo FCSign.
+ *
+ * DIAGNÓSTICO: o ERP já guarda as assinaturas digitais em `signature_sessions` (status `completo` +
+ * `finalDocumentUrl`), e existe a procedure `signatures.listByEmployee` (lista todas as sessões FCSign de um
+ * colaborador com signers). Bastava cruzar essas sessões concluídas com os slots de upload e redesenhar a UI.
+ *
+ * FIX (SÓ CLIENT/UI; ZERO SCHEMA/SERVER): `client/src/pages/Colaboradores.tsx` — `DocumentUploadSection`
+ * reescrito: passa a consultar `trpc.signatures.listByEmployee` (enabled só com `employeeId>0 && companyId>0`),
+ * deriva `assinados` (sessões `completo` com `finalDocumentUrl`) e `slotsCobertos` via mapa
+ * `FCSIGN_COBRE_SLOT` (`contrato_experiencia → contrato_trabalho`). Render em 2 blocos: (A) "Assinados
+ * digitalmente (FCSign)" — cards verdes read-only com rótulo humano (`FCSIGN_LABELS`), data de conclusão e
+ * "Ver" (abre `finalDocumentUrl`); (B) "Documentos digitalizados" — grid responsivo de slots por
+ * `TIPOS_DOC`, agrupando uploads por tipo (`docsByTipo`), com badge de status, lista de arquivos
+ * (validade/Ver/Excluir) e botão "Enviar"/"Adicionar mais"; o slot coberto por FCSign exibe selo "Assinado" +
+ * link pra assinatura digital e SUPRIME o botão de upload quando não há upload manual. O header da seção na
+ * aba passou de "Documentos Digitalizados" pra "Documentos" (subtítulos agora vivem dentro do componente).
+ * A chamada passa `companyId={formCompanyIdNum || companyId || 0}` (empresa real do colaborador, robusto em
+ * modo multi-empresa). Reusa `employeeDocuments.upload/excluir/listar`; nenhuma mudança de schema/endpoint.
+ * esbuild `Colaboradores.tsx` EXIT 0.
+ *
+ * ----------------------------------------------------------------------------------------------------
+ *
  * Rev. 2682 — **COLABORADORES (`/colaboradores` → ficha → "Isenção de Controle de Jornada (Art. 62 CLT)") ·
  * O "TERMO FORMAL DE CIÊNCIA E ANUÊNCIA" (TERMO DE ISENÇÃO ART. 62) AGORA PODE SER ASSINADO ONLINE PELO FCSIGN
  * — MESMOS MEIOS/CRITÉRIOS DO CONTRATO DE EXPERIÊNCIA (ENVIO COM ORDEM DE SIGNATÁRIOS, EMPREGADOR TRAVADO
