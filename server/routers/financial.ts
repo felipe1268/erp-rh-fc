@@ -1510,10 +1510,10 @@ export const financialRouter = router({
              valor_realizado=NULL,
              forma_pagamento=NULL,
              comprovante_url=NULL,
-             observacoes=CONCAT(COALESCE(observacoes,''), E'\n[ESTORNO ', TO_CHAR(NOW(),'DD/MM/YYYY HH24:MI'), ' por ', $3::text, ']: ', $4::text),
+             observacoes=CONCAT(COALESCE(observacoes,''), E'\n[ESTORNO ', TO_CHAR(NOW(),'DD/MM/YYYY HH24:MI'), ' por ', $1::text, ']: ', $2::text),
              updated_at=NOW()
-       WHERE id=$1 AND company_id=$2 AND status='pago'`,
-      [input.id, input.companyId, ctx.user?.name ?? "?", input.motivo]
+       WHERE id=$3 AND company_id=$4 AND status='pago'`,
+      [ctx.user?.name ?? "?", input.motivo, input.id, input.companyId]
     );
     await createAuditLog({
       action: "financial_entry_reversed",

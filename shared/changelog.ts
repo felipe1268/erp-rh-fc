@@ -1,6 +1,30 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2692 — **FINANCEIRO · CONTAS A PAGAR (`/financeiro/contas-a-pagar` → aba "Pagos" → botão "Estornar"
+ * → "Confirmar estorno") · CORRIGIDO O ERRO `DB: code=22P02 | msg=invalid input syntax for type integer:
+ * "<nome do usuário>"` QUE IMPEDIA ESTORNAR (DESFAZER A BAIXA DE) UMA CONTA JÁ PAGA.**
+ *
+ * PEDIDO (usuário, print do modal "Estornar Pagamento" com o toast vermelho): "Está dando esse erro quando
+ * vou estornar a conta baixada." Erro: `invalid input syntax for type integer: "Lilian Oliveira Veloso
+ * Amaral"` — o NOME do usuário logado estava sendo enviado para a coluna inteira `id` no WHERE.
+ *
+ * CAUSA-RAIZ: o helper `dbExecute(db, query, params)` deste arquivo NÃO respeita o NÚMERO do placeholder
+ * `$N` — ele faz `query.split(/\$\d+/g)` e liga os parâmetros pela ORDEM DE APARIÇÃO no texto (1º
+ * placeholder→params[0], 2º→params[1], ...). No UPDATE do estorno os placeholders apareciam na ordem
+ * `$3, $4, $1, $2` (porque `$3`/`$4` estão no CONCAT do `observacoes`, antes do `WHERE id=$1 AND
+ * company_id=$2`), mas o array era `[id, companyId, name, motivo]`. Resultado: o `WHERE id=` recebia
+ * `params[2]` = nome do usuário → Postgres recusava com 22P02.
+ *
+ * FIX (SÓ SERVER; ZERO SCHEMA — R-001/R-007/R-010):
+ *  - SERVER `server/routers/financial.ts` (`estornarPagamento`) — renumerei os placeholders para a ORDEM
+ *    DE APARIÇÃO (`$1`=nome, `$2`=motivo no CONCAT; `$3`=id, `$4`=companyId no WHERE) e reordenei o array
+ *    para `[ctx.user.name, input.motivo, input.id, input.companyId]`, casando com o comportamento
+ *    posicional-por-aparição do `dbExecute`. Nenhuma mudança de schema, client ou comportamento — só a
+ *    ligação dos parâmetros foi corrigida.
+ *
+ * esbuild server EXIT 0.
+ *
  * Rev. 2691 — **FROTA · VEÍCULOS (`/frotas/veiculos` → "Editar Veículo" / "Consolidar Cadastro" e o aviso
  * de "Cadastros Pendentes") · CORRIGIDO O ERRO "Failed query: ... column \"kmAtual\" does not exist" QUE
  * APARECIA AO SALVAR / CONSOLIDAR UM VEÍCULO E AO LISTAR OS CADASTROS PENDENTES.**
