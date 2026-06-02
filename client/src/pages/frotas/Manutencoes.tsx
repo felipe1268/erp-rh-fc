@@ -59,6 +59,7 @@ export default function Manutencoes() {
   const [osProcessing, setOsProcessing] = useState(false);
   const [osCurrentFile, setOsCurrentFile] = useState<{ idx: number; total: number; name: string } | null>(null);
   const osProgressTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+  const osRunRef = useRef(0);
   const osFileRef = useRef<HTMLInputElement>(null);
 
   type MaintItem = { categoria: string; nome: string; quantidade: number; valorUnitario: number; valorTotal: number };
@@ -200,9 +201,22 @@ export default function Manutencoes() {
     });
   }
 
+  function resetOsFlow() {
+    osRunRef.current++;
+    stopOsProgress();
+    setOsFiles([]);
+    setOsParsed(null);
+    setOsSelectedItems({});
+    setOsProgress(0);
+    setOsProcessing(false);
+    setOsCurrentFile(null);
+  }
+
   async function processOS() {
     if (osFiles.length === 0) return;
     const total = osFiles.length;
+    const runId = ++osRunRef.current;
+    const alive = () => osRunRef.current === runId;
     setOsProcessing(true);
     setOsParsed(null);
     setOsSelectedItems({});
@@ -213,6 +227,7 @@ export default function Manutencoes() {
     const fileErrors: { file: string; error: string }[] = [];
 
     for (let i = 0; i < total; i++) {
+      if (!alive()) return;
       const file = osFiles[i];
       const base = Math.round((i / total) * 100);
       const ceil = Math.round(((i + 1) / total) * 100);
@@ -226,6 +241,7 @@ export default function Manutencoes() {
         const base64 = await fileToBase64(file);
         const result = await parseMut.mutateAsync({ companyId: cId, base64, mimeType: file.type });
         stopOsProgress();
+        if (!alive()) return;
         if (result?.items?.length > 0) {
           result.items.forEach((it: any) => allItems.push({ ...it, __file: file.name }));
         }
@@ -233,11 +249,13 @@ export default function Manutencoes() {
         else if (!result?.items?.length) fileErrors.push({ file: file.name, error: "Nenhum item encontrado na OS." });
       } catch (err: any) {
         stopOsProgress();
+        if (!alive()) return;
         fileErrors.push({ file: file.name, error: err?.message || "Erro ao processar" });
       }
     }
 
     stopOsProgress();
+    if (!alive()) return;
     setOsProgress(100);
     setOsCurrentFile(null);
     setOsProcessing(false);
@@ -288,8 +306,7 @@ export default function Manutencoes() {
       monthSummary.refetch();
       if (failed === 0) {
         setOsDialogOpen(false);
-        setOsFile(null);
-        setOsPreview(null);
+        setOsFiles([]);
         setOsParsed(null);
         setOsSelectedItems({});
       }
@@ -425,7 +442,7 @@ export default function Manutencoes() {
             </div>
           </div>
           <div className="flex gap-2">
-            <Button size="sm" variant="outline" className="border-violet-300 text-violet-700 hover:bg-violet-50 dark:border-violet-700 dark:text-violet-300 dark:hover:bg-violet-950 rounded-lg" onClick={() => { setOsDialogOpen(true); setOsFile(null); setOsPreview(null); setOsParsed(null); setOsSelectedItems({}); }}>
+            <Button size="sm" variant="outline" className="border-violet-300 text-violet-700 hover:bg-violet-50 dark:border-violet-700 dark:text-violet-300 dark:hover:bg-violet-950 rounded-lg" onClick={() => { resetOsFlow(); setOsDialogOpen(true); }}>
               <ScanLine className="h-4 w-4 mr-1" /> Importar OS (IA)
             </Button>
             <Button size="sm" className="bg-orange-500 hover:bg-orange-600 text-white shadow-md rounded-lg" onClick={openNew}><Plus className="h-4 w-4 mr-1" /> Nova Manutenção</Button>
@@ -1017,7 +1034,7 @@ export default function Manutencoes() {
             </div>
           </DialogContent>
         </Dialog>
-        <Dialog open={osDialogOpen} onOpenChange={(o) => { if (!o) { stopOsProgress(); setOsProgress(0); } setOsDialogOpen(o); }}>
+        <Dialog open={osDialogOpen} onOpenChange={(o) => { if (!o) resetOsFlow(); setOsDialogOpen(o); }}>
           <DialogContent className="w-screen h-screen max-w-none max-h-none m-0 rounded-none overflow-y-auto p-0" resizable={false} showCloseButton={false}>
             <div className="sticky top-0 z-10 bg-background border-b px-6 py-4 flex items-center justify-between">
               <DialogTitle className="text-xl font-bold flex items-center gap-2">
@@ -1025,7 +1042,7 @@ export default function Manutencoes() {
                 Importar OS com IA
               </DialogTitle>
               <div className="flex gap-2">
-                <Button variant="outline" onClick={() => { stopOsProgress(); setOsProgress(0); setOsDialogOpen(false); }}>Fechar</Button>
+                <Button variant="outline" onClick={() => { resetOsFlow(); setOsDialogOpen(false); }}>Fechar</Button>
                 {osParsed?.items?.length > 0 && (
                   <Button
                     className="bg-violet-600 hover:bg-violet-700"
@@ -1040,54 +1057,72 @@ export default function Manutencoes() {
             </div>
 
             <div className="px-6 py-4 max-w-6xl mx-auto w-full">
-              {!osFile && (
+              <input
+                ref={osFileRef}
+                type="file"
+                multiple
+                accept="image/jpeg,image/png,image/webp,application/pdf"
+                className="hidden"
+                onChange={handleOsFileChange}
+              />
+
+              {osFiles.length === 0 && !osParsed && (
                 <div className="border-2 border-dashed border-violet-300 dark:border-violet-700 rounded-2xl p-12 text-center">
                   <ScanLine className="h-16 w-16 mx-auto text-violet-400 mb-4" />
-                  <h3 className="text-lg font-bold mb-2">Envie a foto ou PDF da Ordem de Serviço</h3>
+                  <h3 className="text-lg font-bold mb-2">Envie um ou vários PDFs/fotos de Ordens de Serviço</h3>
                   <p className="text-sm text-muted-foreground mb-6">
-                    A IA vai ler o documento, extrair automaticamente os dados (veículo, serviços, custos, fornecedor) e criar os lançamentos de manutenção.
+                    Pode enviar OSs de <strong>vários carros de uma vez</strong>. A IA vai ler cada documento, extrair os dados (veículo, serviços, custos, fornecedor) e juntar tudo numa lista para você conferir e cadastrar.
                   </p>
-                  <input
-                    ref={osFileRef}
-                    type="file"
-                    accept="image/jpeg,image/png,image/webp,application/pdf"
-                    className="hidden"
-                    onChange={handleOsFileChange}
-                  />
                   <Button size="lg" className="bg-violet-600 hover:bg-violet-700" onClick={() => osFileRef.current?.click()}>
-                    <Upload className="h-5 w-5 mr-2" /> Escolher Arquivo
+                    <Upload className="h-5 w-5 mr-2" /> Escolher Arquivos
                   </Button>
-                  <p className="text-xs text-muted-foreground mt-3">JPG, PNG, WebP ou PDF — máx. 10MB</p>
+                  <p className="text-xs text-muted-foreground mt-3">JPG, PNG, WebP ou PDF — máx. 10MB por arquivo</p>
                 </div>
               )}
 
-              {osFile && !osParsed && (
+              {osFiles.length > 0 && !osParsed && (
                 <div className="space-y-4">
-                  <div className="flex items-center gap-4 bg-violet-50 dark:bg-violet-950/50 border border-violet-200 dark:border-violet-800 rounded-xl p-4">
-                    <FileUp className="h-8 w-8 text-violet-500 shrink-0" />
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium truncate">{osFile.name}</p>
-                      <p className="text-xs text-muted-foreground">{(osFile.size / 1024).toFixed(0)} KB — {osFile.type}</p>
-                    </div>
-                    <Button variant="ghost" size="icon" onClick={() => { setOsFile(null); setOsPreview(null); }}>
-                      <X className="h-4 w-4" />
-                    </Button>
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-sm font-bold flex items-center gap-2">
+                      <FileUp className="h-4 w-4 text-violet-500" />
+                      {osFiles.length} arquivo(s) selecionado(s)
+                    </h3>
+                    {!osProcessing && (
+                      <Button variant="outline" size="sm" onClick={() => osFileRef.current?.click()}>
+                        <Plus className="h-4 w-4 mr-1" /> Adicionar mais
+                      </Button>
+                    )}
                   </div>
 
-                  {osPreview && (
-                    <div className="border rounded-xl overflow-hidden bg-muted/30 max-h-[400px] flex items-center justify-center">
-                      <img src={osPreview} alt="Preview da OS" className="max-h-[400px] object-contain" />
-                    </div>
-                  )}
+                  <div className="space-y-2">
+                    {osFiles.map((file, idx) => (
+                      <div key={`${file.name}-${file.size}-${idx}`} className="flex items-center gap-3 bg-violet-50 dark:bg-violet-950/50 border border-violet-200 dark:border-violet-800 rounded-xl p-3">
+                        <FileUp className="h-6 w-6 text-violet-500 shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium truncate text-sm">{file.name}</p>
+                          <p className="text-xs text-muted-foreground">{(file.size / 1024).toFixed(0)} KB — {file.type.replace("application/", "").replace("image/", "").toUpperCase()}</p>
+                        </div>
+                        {!osProcessing && (
+                          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setOsFiles(prev => prev.filter((_, i) => i !== idx))}>
+                            <X className="h-4 w-4" />
+                          </Button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
 
-                  {parseMut.isPending ? (
+                  {osProcessing ? (
                     <div className="w-full rounded-xl border border-violet-200 dark:border-violet-800 bg-violet-50 dark:bg-violet-950/40 p-4 space-y-2">
                       <div className="flex items-center justify-between text-sm font-medium text-violet-700 dark:text-violet-300">
-                        <span className="flex items-center gap-2">
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                          Analisando com IA... aguarde
+                        <span className="flex items-center gap-2 min-w-0">
+                          <Loader2 className="h-4 w-4 animate-spin shrink-0" />
+                          <span className="truncate">
+                            {osCurrentFile
+                              ? `Analisando ${osCurrentFile.idx} de ${osCurrentFile.total}: ${osCurrentFile.name}`
+                              : "Analisando com IA... aguarde"}
+                          </span>
                         </span>
-                        <span className="tabular-nums">{osProgress}%</span>
+                        <span className="tabular-nums shrink-0 ml-2">{osProgress}%</span>
                       </div>
                       <div
                         className="h-3 w-full rounded-full bg-violet-100 dark:bg-violet-900/60 overflow-hidden"
@@ -1109,7 +1144,7 @@ export default function Manutencoes() {
                       onClick={processOS}
                     >
                       <Sparkles className="h-5 w-5 mr-2" />
-                      Analisar com IA
+                      Analisar {osFiles.length} arquivo(s) com IA
                     </Button>
                   )}
                 </div>
@@ -1125,15 +1160,16 @@ export default function Manutencoes() {
                     </div>
                   )}
 
-                  {osParsed.rawText && (
-                    <div className="bg-muted/40 border rounded-xl p-4">
-                      <p className="text-xs font-semibold text-muted-foreground uppercase mb-1">Resumo Lido pela IA</p>
-                      <p className="text-sm">{osParsed.rawText}</p>
-                      {osParsed.confidence && (
-                        <Badge variant={osParsed.confidence === "alta" ? "default" : osParsed.confidence === "media" ? "secondary" : "destructive"} className="mt-2 text-[10px]">
-                          Confiança: {osParsed.confidence}
-                        </Badge>
-                      )}
+                  {osParsed.fileErrors?.length > 0 && (
+                    <div className="bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded-xl p-4">
+                      <p className="text-sm font-medium text-amber-700 dark:text-amber-300 flex items-center gap-2 mb-2">
+                        <AlertTriangle className="h-4 w-4" /> {osParsed.fileErrors.length} arquivo(s) sem itens importados
+                      </p>
+                      <ul className="text-xs text-amber-700/90 dark:text-amber-300/90 space-y-1 list-disc pl-5">
+                        {osParsed.fileErrors.map((fe: any, i: number) => (
+                          <li key={i}><strong>{fe.file}</strong>: {fe.error}</li>
+                        ))}
+                      </ul>
                     </div>
                   )}
 
@@ -1162,6 +1198,7 @@ export default function Manutencoes() {
                                   </Badge>
                                   <Badge variant={item.tipo === "preventiva" ? "outline" : "secondary"} className="text-[10px]">{item.tipo}</Badge>
                                   {!item.vehicleId && <Badge variant="destructive" className="text-[10px]">Veículo não encontrado</Badge>}
+                                  {item.__file && <Badge variant="outline" className="text-[10px] text-muted-foreground"><FileUp className="h-2.5 w-2.5 mr-1" />{item.__file}</Badge>}
                                 </div>
                                 <p className="text-sm font-medium">{item.descricao}</p>
                                 <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
@@ -1180,8 +1217,8 @@ export default function Manutencoes() {
                   )}
 
                   <div className="flex gap-2 pt-2">
-                    <Button variant="outline" onClick={() => { setOsFile(null); setOsPreview(null); setOsParsed(null); setOsSelectedItems({}); }}>
-                      <Upload className="h-4 w-4 mr-1" /> Enviar Outra OS
+                    <Button variant="outline" onClick={resetOsFlow}>
+                      <Upload className="h-4 w-4 mr-1" /> Enviar Outras OS
                     </Button>
                   </div>
                 </div>

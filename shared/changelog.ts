@@ -1,6 +1,31 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2695 — **FROTA · "IMPORTAR OS COM IA" (`/frotas/manutencoes` → botão "Importar OS (IA)") ·
+ * AGORA DÁ PRA ANEXAR VÁRIOS PDFs/FOTOS DE ORDENS DE SERVIÇO DE VÁRIOS CARROS DE UMA VEZ; A IA LÊ
+ * CADA ARQUIVO, EXTRAI OS DADOS (VEÍCULO, SERVIÇOS, CUSTOS, FORNECEDOR) E JUNTA TUDO NUMA ÚNICA
+ * LISTA PARA CONFERÊNCIA E CADASTRO EM LOTE.**
+ *
+ * PEDIDO (usuário): na tela "Importar OS com IA", poder anexar vários PDFs de vários carros de uma
+ * vez, ler com IA e cadastrar corretamente.
+ *
+ * SOLUÇÃO (SÓ CLIENT/UI; ZERO SCHEMA/SERVER — a procedure `frotas.parseMaintenanceOS` já lê 1 arquivo
+ * → vários itens, então bastou orquestrar o loop no cliente): `client/src/pages/frotas/Manutencoes.tsx`.
+ * O estado de arquivo único (`osFile`/`osPreview`) virou `osFiles: File[]`; adicionados `osProcessing`
+ * (boolean que dirige a barra de progresso, no lugar de `parseMut.isPending`) e `osCurrentFile`
+ * (`{idx,total,name}` p/ o label "Analisando X de N: nome"). `handleOsFileChange` aceita múltiplos
+ * arquivos (`<input multiple>`), valida cada um (tipo/10MB) e faz append com dedup por `name__size`.
+ * Novo helper `fileToBase64`. `processOS` agora itera os arquivos em sequência: a barra de progresso
+ * é fatiada por arquivo (base `i/total` → teto `(i+1)/total`), chama `parseMut` por arquivo, agrega
+ * todos os itens em `allItems` (cada item ganha `__file` = nome de origem) e coleta `fileErrors` dos
+ * arquivos sem itens/erro. O resultado vira `osParsed = { items, fileErrors, confidence }`. UI do modal:
+ * dropzone com cópia "vários PDFs/fotos" + botão "Escolher Arquivos"; lista de arquivos selecionados
+ * (remover individual + "Adicionar mais"); barra de progresso real com o label por arquivo; cada item
+ * exibe um badge com o arquivo de origem; bloco âmbar resume os arquivos sem itens. `saveOSItems`
+ * segue idêntico (cria 1 manutenção por item selecionado via `frotas.createMaintenance`). Resets
+ * (abrir modal / Fechar / Enviar Outras OS / onOpenChange / sucesso) trocados p/ `setOsFiles([])`.
+ * vite/tsc EXIT 0.
+ *
  * Rev. 2694 — **ALMOXARIFADO · EMPRÉSTIMO DE FERRAMENTAS/EQUIPAMENTOS (`/almoxarifado` → "Emprestar
  * Ferramenta" → "CONFIRMAR EMPRÉSTIMO") · CORRIGIDO O ERRO `DB error: column "foto_devolucao_url" of
  * relation "warehouse_loans" does not exist` QUE IMPEDIA REGISTRAR EMPRÉSTIMOS (E TAMBÉM QUEBRAVA A
