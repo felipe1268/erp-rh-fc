@@ -1,6 +1,29 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2685 — **COLABORADORES (`/colaboradores` → ficha → aba "Documentos" → "Documentos digitalizados") · O
+ * LAYOUT DESSE BLOCO FOI REFEITO P/ FICAR MAIS AMIGÁVEL: SAIU O GRID DE CAIXAS TRACEJADAS VAZIAS (Rev. 2683)
+ * E ENTROU UMA LISTA DE CARDS (2 COLUNAS) — CADA TIPO DE DOCUMENTO COM ÍCONE TEMÁTICO, RÓTULO LEGÍVEL, SELO DE
+ * STATUS CLARO (PENDENTE / N ARQUIVOS / ASSINADO) E UM BOTÃO DE AÇÃO DE VERDADE ("ENVIAR ARQUIVO" REALÇADO
+ * QUANDO PENDENTE, "ADICIONAR MAIS" QUANDO JÁ TEM).**
+ *
+ * PEDIDO (usuário, print IMG_1490): "Melhore este layout, não está amigável, não gostei desta forma". Contexto:
+ * a Rev. 2683 trocou a fileira de botões por um grid de 15 slots tracejados; com a ficha quase vazia, virava
+ * uma parede de caixas tracejadas sem vida e com um "Enviar" minúsculo — pouco convidativo.
+ *
+ * FIX (SÓ CLIENT/UI; ZERO SCHEMA/SERVER): `client/src/pages/Colaboradores.tsx` — bloco B do
+ * `DocumentUploadSection` reescrito: novo mapa `DOC_ICONS` (ícone por tipo: foto→Camera, diploma→GraduationCap,
+ * certificado→Award, atestado→HeartPulse, contrato/rescisão→FileText, default FileText). Cada tipo agora é um
+ * card horizontal `flex` (avatar de ícone colorido por estado + título + selo de status + lista de arquivos
+ * enviados com Ver/Excluir/validade + botão de ação). Estado derivado `assinado|enviado|pendente` controla cor
+ * do avatar e selo. Botão de upload: "Enviar arquivo" com fundo azul suave quando pendente, "Adicionar mais"
+ * discreto quando já há upload; segue suprimido quando o slot está coberto por FCSign e não há upload manual.
+ * Adicionada microcópia de ajuda ("Anexe uma foto ou PDF…"). Bloco A (assinados FCSign) inalterado; toda a
+ * lógica de dados (`docsByTipo`, `slotsCobertos`, `handleUpload`, `excluirMut`) intacta. Substituído também o
+ * tamanho de ícone não-padrão `w-4.5` por `w-[18px]`. esbuild `Colaboradores.tsx` EXIT 0.
+ *
+ * ----------------------------------------------------------------------------------------------------
+ *
  * Rev. 2684 — **COLABORADORES (`/colaboradores` → ficha → "Isenção de Controle de Jornada (Art. 62 CLT)" →
  * "Termo formal de Ciência e Anuência") · A OPÇÃO "UPLOAD DO TERMO ASSINADO" FOI REMOVIDA — O TERMO DE ISENÇÃO
  * (ART. 62) AGORA É ASSINADO EXCLUSIVAMENTE ONLINE PELO FCSign, SEM NECESSIDADE DE ANEXAR PDF/IMAGEM
