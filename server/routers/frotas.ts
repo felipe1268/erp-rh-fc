@@ -433,6 +433,51 @@ const CAMPOS_OBRIGATORIOS_CADASTRO = [
   { campo: "renavam", label: "RENAVAM" },
 ];
 
+// Rev. 2696 — Recupera os itens COMPLETOS de uma resposta de IA cujo JSON foi
+// truncado no meio (estouro do limite de tokens). Varre o array "items" contando
+// chaves balanceadas e respeitando strings/escapes, mantendo só os objetos que
+// fecharam, e remonta um JSON válido. Retorna null se nem o primeiro item fechou.
+function salvageTruncatedOS(text: string): any | null {
+  const itemsKey = text.indexOf('"items"');
+  if (itemsKey === -1) return null;
+  const arrStart = text.indexOf("[", itemsKey);
+  if (arrStart === -1) return null;
+
+  const completos: string[] = [];
+  let depth = 0;
+  let objStart = -1;
+  let inStr = false;
+  let esc = false;
+
+  for (let i = arrStart + 1; i < text.length; i++) {
+    const ch = text[i];
+    if (inStr) {
+      if (esc) { esc = false; }
+      else if (ch === "\\") { esc = true; }
+      else if (ch === '"') { inStr = false; }
+      continue;
+    }
+    if (ch === '"') { inStr = true; continue; }
+    if (ch === "{") { if (depth === 0) objStart = i; depth++; continue; }
+    if (ch === "}") {
+      depth--;
+      if (depth === 0 && objStart !== -1) { completos.push(text.slice(objStart, i + 1)); objStart = -1; }
+      continue;
+    }
+    if (ch === "]" && depth === 0) break;
+  }
+
+  if (completos.length === 0) return null;
+
+  const items: any[] = [];
+  for (const objStr of completos) {
+    try { items.push(JSON.parse(objStr)); } catch { /* objeto inválido isolado — ignora */ }
+  }
+  if (items.length === 0) return null;
+
+  return { success: true, items, rawText: "", confidence: "baixa" };
+}
+
 function checkVehicleRegistration(vehicle: any): { completo: boolean; camposFaltantes: string[] } {
   const camposFaltantes: string[] = [];
   for (const { campo, label } of CAMPOS_OBRIGATORIOS_CADASTRO) {
@@ -1052,14 +1097,27 @@ Sempre retorne JSON válido, sem markdown.`;
           base64: input.base64,
           mimeType: input.mimeType,
           systemPrompt,
-          maxTokens: 2048,
+          maxTokens: 8192,
         });
 
         let cleaned = result.trim();
         if (cleaned.startsWith("```")) {
           cleaned = cleaned.replace(/^```(?:json)?\s*/, "").replace(/```\s*$/, "");
         }
-        const rawParsed = JSON.parse(cleaned);
+
+        let rawParsed: any;
+        try {
+          rawParsed = JSON.parse(cleaned);
+        } catch {
+          // Resposta da IA truncada (estourou o limite de tokens no meio de um
+          // item) → recupera os objetos COMPLETOS do array "items" via varredura
+          // de chaves balanceada (respeitando strings/escapes) e monta um JSON
+          // válido com tudo que deu pra ler.
+          rawParsed = salvageTruncatedOS(cleaned);
+          if (!rawParsed) {
+            throw new Error("Não consegui ler a OS por completo (documento muito extenso ou ilegível). Tente enviar uma OS por vez ou com menos páginas.");
+          }
+        }
         const validated = osResultSchema.parse(rawParsed);
 
         const vehicleIds = new Set(veiculos.map((v: any) => v.id));

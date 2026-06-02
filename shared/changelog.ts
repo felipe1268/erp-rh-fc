@@ -1,6 +1,25 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2696 — **FROTA · "IMPORTAR OS COM IA" (`/frotas/manutencoes` → "Importar OS (IA)") ·
+ * CORRIGIDO O ERRO `Unterminated string in JSON at position NNNN` QUE QUEBRAVA A IMPORTAÇÃO QUANDO A
+ * OS ERA EXTENSA (MUITOS ITENS / DESCRIÇÕES LONGAS).**
+ *
+ * PEDIDO (usuário, print da tela com toast "Erro: Unterminated string in JSON at position 4816"):
+ * "está dando este erro quando faço importação".
+ *
+ * CAUSA-RAIZ: em `parseMaintenanceOS` (`server/routers/frotas.ts`) a chamada `invokeAnthropicVision`
+ * usava `maxTokens: 2048`. Em OSs longas o modelo estourava esse teto e a resposta vinha CORTADA no
+ * meio de uma string do JSON; o `JSON.parse(cleaned)` então falhava com "Unterminated string ...".
+ *
+ * FIX (SÓ SERVER; ZERO SCHEMA/CLIENT — R-001/R-007/R-010): `server/routers/frotas.ts` —
+ * (1) `maxTokens` de 2048 → 8192 (cabe muito mais item antes de truncar); (2) novo helper top-level
+ * `salvageTruncatedOS(text)` que, quando o `JSON.parse` falha, VARRE o array `"items"` contando chaves
+ * balanceadas e respeitando strings/escapes, mantém só os objetos que FECHARAM, faz `JSON.parse` de
+ * cada um e remonta um resultado válido (`confidence: "baixa"`) — assim uma OS truncada ainda importa
+ * os itens completos em vez de falhar inteira; (3) se nem o primeiro item fechou, devolve mensagem
+ * amigável ("documento muito extenso/ilegível, tente uma OS por vez"). esbuild EXIT 0. Detalhe acima.
+ *
  * Rev. 2695 — **FROTA · "IMPORTAR OS COM IA" (`/frotas/manutencoes` → botão "Importar OS (IA)") ·
  * AGORA DÁ PRA ANEXAR VÁRIOS PDFs/FOTOS DE ORDENS DE SERVIÇO DE VÁRIOS CARROS DE UMA VEZ; A IA LÊ
  * CADA ARQUIVO, EXTRAI OS DADOS (VEÍCULO, SERVIÇOS, CUSTOS, FORNECEDOR) E JUNTA TUDO NUMA ÚNICA
