@@ -1,7 +1,8 @@
 import { z } from "zod";
+import { TRPCError } from "@trpc/server";
 import { router, protectedProcedure } from "../_core/trpc";
 import { invokeLLM } from "../_core/llm";
-import { getDb, getObraFuncionarios } from "../db";
+import { getDb, getObraFuncionarios, getUserCompanyLinks } from "../db";
 import {
   iaCronogramaConhecimento,
   iaCronogramaChat,
@@ -20,6 +21,29 @@ import {
   vacationPeriods,
 } from "../../drizzle/schema";
 import { eq, and, or, ilike, desc, sql, isNull, inArray } from "drizzle-orm";
+
+// Rev. 2698 — Guard multi-tenant alinhado ao resto do ERP (espelha
+// `assertCompanyAccess` de ferramentasTerceiros/terceiros). ANTES estas funções
+// de IA comparavam `ctx.user.companyId === companyId`, o que BLOQUEAVA usuários
+// não-admin multi-empresa / sem "casa" definida que TÊM acesso ao módulo pelo
+// GRUPO (ex.: "Sem permissão para esta empresa" no Diagnóstico de Efetivo).
+// Nova regra (só restringe quando o master restringir):
+//  - admin / admin_master → libera (roles globais);
+//  - usuário COM vínculos em `user_companies` → enforça membership real;
+//  - usuário SEM vínculos explícitos → libera (acesso controlado por grupo/módulo).
+async function assertCompanyAccessIa(
+  ctx: { user: { id: number; role?: string | null } },
+  companyId: number,
+) {
+  if (!ctx.user?.id) throw new TRPCError({ code: "UNAUTHORIZED", message: "Sessão inválida." });
+  if (ctx.user.role === "admin" || ctx.user.role === "admin_master") return;
+  const links = await getUserCompanyLinks(ctx.user.id);
+  const allowedIds = (links as any[]).map((l: any) => l.companyId).filter((v: any) => typeof v === "number");
+  if (allowedIds.length === 0) return; // sem vínculos = acesso global por grupo/módulo
+  if (!new Set<number>(allowedIds).has(companyId)) {
+    throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta empresa." });
+  }
+}
 
 // ── WMO weather codes severity ────────────────────────────────────────────
 function wmoSeverity(code: number, chuva: number, probChuva: number, vento: number): { tipo: string; sev: string; msg: string } | null {
@@ -1681,10 +1705,7 @@ Responda EXATAMENTE neste formato (seja conciso e direto):
       // `ctx.user.companyId` pode estar vazio — mas VALIDA o acesso: admin/
       // admin_master livre; demais só a própria empresa (evita IDOR cross-company).
       const companyId = input.companyId;
-      const isAdmin = ctx.user.role === "admin" || ctx.user.role === "admin_master";
-      if (!isAdmin && String((ctx.user as any).companyId ?? "") !== String(companyId)) {
-        throw new Error("Sem permissão para esta empresa.");
-      }
+      await assertCompanyAccessIa(ctx, companyId);
 
       const {
         projeto, obra, revisao, porCargo,
@@ -1840,10 +1861,7 @@ Regras: inclua em "porCargo" TODAS as funções listadas no efetivo (mesmo as qu
       const db = await getDb();
       if (!db) throw new Error("Banco de dados indisponível.");
       const companyId = input.companyId;
-      const isAdmin = ctx.user.role === "admin" || ctx.user.role === "admin_master";
-      if (!isAdmin && String((ctx.user as any).companyId ?? "") !== String(companyId)) {
-        throw new Error("Sem permissão para esta empresa.");
-      }
+      await assertCompanyAccessIa(ctx, companyId);
       const {
         projeto, obra, revisao, porCargo,
         totalEfetivo, totalAtivos, totalIndisponiveis,
@@ -1873,10 +1891,7 @@ Regras: inclua em "porCargo" TODAS as funções listadas no efetivo (mesmo as qu
       const db = await getDb();
       if (!db) throw new Error("Banco de dados indisponível.");
       const companyId = input.companyId;
-      const isAdmin = ctx.user.role === "admin" || ctx.user.role === "admin_master";
-      if (!isAdmin && String((ctx.user as any).companyId ?? "") !== String(companyId)) {
-        throw new Error("Sem permissão para esta empresa.");
-      }
+      await assertCompanyAccessIa(ctx, companyId);
       const {
         projeto, obra, revisao, porCargo,
         totalEfetivo, totalAtivos, totalIndisponiveis,
@@ -2146,10 +2161,7 @@ DIDÁTICA GERAL (obrigatória em TODA a resposta): escreva para ser fácil de en
       const db = await getDb();
       if (!db) throw new Error("Banco de dados indisponível.");
       const companyId = input.companyId;
-      const isAdmin = ctx.user.role === "admin" || ctx.user.role === "admin_master";
-      if (!isAdmin && String((ctx.user as any).companyId ?? "") !== String(companyId)) {
-        throw new Error("Sem permissão para esta empresa.");
-      }
+      await assertCompanyAccessIa(ctx, companyId);
       try {
         const rows = await db
           .select({
@@ -2183,17 +2195,14 @@ DIDÁTICA GERAL (obrigatória em TODA a resposta): escreva para ser fácil de en
       const db = await getDb();
       if (!db) throw new Error("Banco de dados indisponível.");
       const companyId = input.companyId;
-      const isAdmin = ctx.user.role === "admin" || ctx.user.role === "admin_master";
-      // Só o admin_master cruza empresas; demais (inclusive admin) ficam presos à própria.
+      // Só o admin_master cruza empresas; demais ficam presos à empresa pedida
+      // (já validada por assertCompanyAccessIa — membership real por grupo/vínculo).
       const isAdminMaster = ctx.user.role === "admin_master";
-      if (!isAdmin && String((ctx.user as any).companyId ?? "") !== String(companyId)) {
-        throw new Error("Sem permissão para esta empresa.");
-      }
+      await assertCompanyAccessIa(ctx, companyId);
       // Anti-IDOR: filtra company NA QUERY (exceto admin_master), sem depender de
-      // checagem pós-leitura. Para não-admin_master, escopo = própria empresa.
-      const empresaEscopo = isAdminMaster
-        ? null
-        : (isAdmin ? companyId : (ctx.user as any).companyId);
+      // checagem pós-leitura. Rev. 2698 — escopo = companyId VALIDADO (antes usava
+      // `ctx.user.companyId`, que zerava a leitura p/ usuário multi-empresa).
+      const empresaEscopo = isAdminMaster ? null : companyId;
       const where = empresaEscopo == null
         ? eq(planejamentoAnalisesEfetivo.id, input.id)
         : and(
@@ -2223,10 +2232,7 @@ DIDÁTICA GERAL (obrigatória em TODA a resposta): escreva para ser fácil de en
       const db = await getDb();
       if (!db) throw new Error("Banco de dados indisponível.");
       const companyId = input.companyId;
-      const isAdmin = ctx.user.role === "admin" || ctx.user.role === "admin_master";
-      if (!isAdmin && String((ctx.user as any).companyId ?? "") !== String(companyId)) {
-        throw new Error("Sem permissão para esta empresa.");
-      }
+      await assertCompanyAccessIa(ctx, companyId);
       try {
         const [row] = await db
           .select()
@@ -2265,10 +2271,7 @@ DIDÁTICA GERAL (obrigatória em TODA a resposta): escreva para ser fácil de en
       const db = await getDb();
       if (!db) throw new Error("Banco de dados indisponível.");
       const companyId = input.companyId;
-      const isAdmin = ctx.user.role === "admin" || ctx.user.role === "admin_master";
-      if (!isAdmin && String((ctx.user as any).companyId ?? "") !== String(companyId)) {
-        throw new Error("Sem permissão para esta empresa.");
-      }
+      await assertCompanyAccessIa(ctx, companyId);
 
       const {
         projeto, obra, revisao,

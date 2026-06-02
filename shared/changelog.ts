@@ -1,6 +1,32 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2698 — **PLANEJAMENTO · ANÁLISE DE EFETIVO × CRONOGRAMA (IA) (`/planejamento/:id` → aba
+ * "Diagnóstico" / "Simulador" / "Histórico") · CORRIGIDO O ERRO "SEM PERMISSÃO PARA ESTA EMPRESA"
+ * QUE BLOQUEAVA USUÁRIOS NÃO-ADMIN (ex.: Engenheiro de Campo) DE GERAR/ABRIR A ANÁLISE DE EFETIVO
+ * MESMO TENDO ACESSO AO MÓDULO PELO GRUPO.**
+ *
+ * PEDIDO (usuário, print do Diagnóstico com "Sem permissão para esta empresa" + telas de Grupos de
+ * Acesso): "garanta que novas funções criadas levem em consideração se o usuário tem ou não acesso no
+ * grupo em que ele está; só restrinjam quando o usuário master restringir; preciso que garanta o
+ * controle de acessos dos usuários".
+ *
+ * CAUSA-RAIZ: as 7 procedures de IA de efetivo em `server/routers/iaCronograma.ts` (`analisarEfetivo`,
+ * `efetivoAtual`, `simularEfetivo`, `salvar/listar/get/excluir análise`) faziam um guard de tenancy
+ * RÍGIDO E LEGADO: `String(ctx.user.companyId ?? "") !== String(input.companyId)` → exigia que o
+ * usuário tivesse EXATAMENTE a "empresa-casa" igual à empresa visualizada. Usuários multi-empresa /
+ * sem `companyId` definido (cujo acesso vem do GRUPO via `user_companies` + permissões de módulo)
+ * tomavam "Sem permissão para esta empresa". Além disso `getAnaliseEfetivo` escopava a leitura por
+ * `ctx.user.companyId` (zerava p/ multi-empresa).
+ *
+ * FIX (SÓ SERVER; ZERO SCHEMA/CLIENT — R-001/R-007/R-010): `server/routers/iaCronograma.ts` — novo
+ * helper `assertCompanyAccessIa(ctx, companyId)` que ESPELHA o `assertCompanyAccess` já usado em
+ * `ferramentasTerceiros`/`terceiros` (alinhamento ao resto do ERP): (1) admin/admin_master → libera;
+ * (2) usuário COM vínculos em `user_companies` → enforça membership real; (3) usuário SEM vínculos →
+ * libera (acesso controlado por grupo/módulo) — ou seja, SÓ RESTRINGE QUANDO O MASTER RESTRINGIR.
+ * As 7 checagens rígidas foram trocadas pela chamada do helper; em `getAnaliseEfetivo` o
+ * `empresaEscopo` passou a usar o `companyId` JÁ VALIDADO (antes `ctx.user.companyId`). esbuild EXIT 0.
+ *
  * Rev. 2697 — **FINANCEIRO · PAINEL FINANCEIRO / DASHBOARD CFO (`/financeiro` → "Painel Financeiro") ·
  * CORRIGIDO O DASHBOARD QUE APARECIA TODO ZERADO ("SALDO CONSOLIDADO R$ 0,00", "NENHUMA CONTA
  * BANCÁRIA CADASTRADA", KPIs ZERADOS) MESMO HAVENDO 3 CONTAS BANCÁRIAS ATIVAS E LANÇAMENTOS.**
