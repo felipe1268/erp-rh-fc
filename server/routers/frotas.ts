@@ -453,7 +453,7 @@ async function getVehiclesWithPendingRegistration(db: any, companyId: number, ve
   const pendentes: any[] = [];
   for (const vid of vehicleIds) {
     const res = await db.execute(sql`
-      SELECT id, placa, modelo, marca, "anoFabricacao", renavam, "kmAtual", cadastro_consolidado
+      SELECT id, placa, modelo, marca, "anoFabricacao", renavam, km_atual AS "kmAtual", cadastro_consolidado
       FROM vehicles WHERE id = ${vid} AND "companyId" = ${companyId}
     `);
     const rows = (res as any).rows || res;
@@ -531,7 +531,7 @@ export const frotasRouter = router({
       if (!tablesReady) { await ensureFleetTables(); tablesReady = true; }
       const db = await getDb();
       const res = await db.execute(sql`
-        SELECT id, placa, modelo, marca, "anoFabricacao", renavam, "kmAtual", cadastro_consolidado
+        SELECT id, placa, modelo, marca, "anoFabricacao", renavam, km_atual AS "kmAtual", cadastro_consolidado
         FROM vehicles WHERE "companyId" = ${input.companyId} AND "statusVeiculo" = 'Ativo'
       `);
       const rows = (res as any).rows || res;
@@ -556,7 +556,7 @@ export const frotasRouter = router({
     .mutation(async ({ input }) => {
       const db = await getDb();
       const res = await db.execute(sql`
-        SELECT id, placa, modelo, marca, "anoFabricacao", renavam, "kmAtual"
+        SELECT id, placa, modelo, marca, "anoFabricacao", renavam, km_atual AS "kmAtual"
         FROM vehicles WHERE id = ${input.vehicleId} AND "companyId" = ${input.companyId}
       `);
       const v = ((res as any).rows || res)?.[0];

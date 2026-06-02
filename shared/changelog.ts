@@ -1,6 +1,29 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2691 — **FROTA · VEÍCULOS (`/frotas/veiculos` → "Editar Veículo" / "Consolidar Cadastro" e o aviso
+ * de "Cadastros Pendentes") · CORRIGIDO O ERRO "Failed query: ... column \"kmAtual\" does not exist" QUE
+ * APARECIA AO SALVAR / CONSOLIDAR UM VEÍCULO E AO LISTAR OS CADASTROS PENDENTES.**
+ *
+ * PEDIDO (usuário, print da tela "Editar Veículo" com o toast vermelho): "esta com erro na hora de salvar..
+ * ajuste isso". O erro era `Failed query: SELECT id, placa, modelo, marca, "anoFabricacao", renavam,
+ * "kmAtual" FROM vehicles WHERE id = $1 AND "companyId" = $2`.
+ *
+ * CAUSA-RAIZ: três queries SQL cruas de cadastro/consolidação de veículo selecionavam a coluna entre aspas
+ * como `"kmAtual"` (camelCase), mas a coluna física na tabela `vehicles` é `km_atual` (snake_case). Em
+ * Postgres, identificador entre aspas duplas é case-sensitive e literal — logo `"kmAtual"` não existe e a
+ * query estourava. (As demais colunas camelCase, ex.: `"anoFabricacao"`/`"companyId"`, REALMENTE existem
+ * com esse nome no schema; só `km_atual` é snake_case, por isso só ela quebrava.)
+ *
+ * FIX (SÓ SERVER; ZERO SCHEMA — R-001/R-007/R-010):
+ *  - SERVER `server/routers/frotas.ts` — nas 3 queries afetadas (`getVehiclesWithPendingRegistration`,
+ *    `getVehiclesPendingRegistration` e `consolidateVehicleRegistration`) troquei `"kmAtual"` por
+ *    `km_atual AS "kmAtual"`. O alias preserva a chave `kmAtual` no objeto retornado, então o consumidor
+ *    `checkVehicleRegistration` (que lê `vehicle.kmAtual`) continua funcionando sem nenhuma outra mudança.
+ *  - Nenhuma alteração de schema, client ou comportamento — apenas a referência de coluna foi corrigida.
+ *
+ * esbuild server EXIT 0.
+ *
  * Rev. 2690 — **FROTA · VEÍCULOS (`/frotas/veiculos`) · NOVO MODO "SELECIONAR" QUE PERMITE MARCAR VÁRIOS
  * VEÍCULOS DE UMA VEZ (CHECKBOX EM CADA CARD + "SELECIONAR TODOS") E ALTERAR O STATUS DE TODOS OS
  * SELECIONADOS EM LOTE (ATIVO / EM MANUTENÇÃO / INATIVO / VENDIDO) NUMA ÚNICA AÇÃO, EM VEZ DE ABRIR E
