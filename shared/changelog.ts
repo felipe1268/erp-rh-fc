@@ -1,6 +1,46 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2700 — **PLANEJAMENTO · ANÁLISE DE EFETIVO × CRONOGRAMA (IA) (`/planejamento/:id` → aba
+ * "Efetivo × IA" → "Gerar análise" / abas "Diagnóstico" / "Simulador" / "Histórico") · A FUNÇÃO AGORA
+ * FICA LIBERADA PARA TODOS OS USUÁRIOS QUE TÊM O MÓDULO PLANEJAMENTO — NÃO MAIS "SÓ PARA O USUÁRIO
+ * MASTER". CORRIGIDO O BLOQUEIO RESIDUAL "SEM ACESSO A ESTA EMPRESA" QUE AINDA ATINGIA ENGENHEIROS COM
+ * VÍNCULO A UMA EMPRESA DIFERENTE DA EMPRESA DO PROJETO.**
+ *
+ * PEDIDO (usuário, print da aba "Efetivo × IA" / "Análise de Efetivo × Cronograma (IA)"): "Reavalie o
+ * sistema, esta função não está liberada para todos usuários que estão com o módulo planejamento
+ * liberado... libere isso para todos usuários, e garanta que qualquer melhoria apareça para todos que
+ * tem permissão, não pode liberar apenas para o usuário master".
+ *
+ * CAUSA-RAIZ: a Rev. 2698 trocou o guard rígido legado (`ctx.user.companyId === companyId`) por
+ * `assertCompanyAccessIa` baseado em `user_companies` — admin livre; usuário SEM vínculo → libera
+ * (acesso global); usuário COM vínculo → enforça membership. Acontece que o ACESSO ao módulo Planejamento
+ * no ERP NÃO é gateado por `user_companies`: a própria PORTA DE ENTRADA da tela (`planejamento.getProjetoById`,
+ * que carrega o projeto, + `listarAtividades`/`listarAvancos`) são `protectedProcedure` SEM restrição de
+ * empresa, e a listagem (`listarProjetos`) usa GRUPO + alocação por obra (`allowed_obra_ids` /
+ * `obra_funcionarios`). Resultado: usuários SEM vínculo já tinham acesso global à IA, mas engenheiros
+ * COM vínculo a uma empresa diferente da do projeto (ex.: vínculo na "casa", projeto cadastrado em
+ * "FC ENGENHARIA PROJETO") batiam em `FORBIDDEN` "Sem acesso a esta empresa" → a função aparecia
+ * "liberada só para o master". A enforce de `user_companies` era inconsistente (bloqueava só uma fatia)
+ * e MAIS restritiva que a própria abertura do projeto.
+ *
+ * FIX (SÓ SERVER; ZERO SCHEMA/CLIENT — R-001/R-007/R-010): `server/routers/iaCronograma.ts` —
+ * `assertCompanyAccessIa` deixa de enforçar `user_companies` e passa a apenas validar a sessão (auth),
+ * alinhando-se à porta de entrada do módulo. As 7 procedures de efetivo (`analisarEfetivo`,
+ * `efetivoAtual`, `simularEfetivo`, `listarAnalisesEfetivo`, `getAnaliseEfetivo`, `ultimaAnaliseEfetivo`,
+ * `perguntarEfetivo`) continuam chamando o helper — agora todas liberam para qualquer sessão válida. A
+ * ISOLAÇÃO POR EMPRESA é mantida pelo filtro `(projetoId + companyId)` nas queries de dados
+ * (`coletarEfetivoCronograma` valida o projeto por `id+companyId`; as procedures de leitura/escrita
+ * escopam por `companyId`) → companyId que não casa com o projeto retorna vazio / "não encontrado",
+ * impedindo mistura de dados entre empresas. Import `getUserCompanyLinks` (sem mais uso) removido.
+ *
+ * HARDENING (mesma revisão, code review): como o guard não enforça mais membership, `getAnaliseEfetivo`
+ * (que filtrava SÓ por `(id, companyId)`) passou a EXIGIR `projetoId` no input e filtrar por
+ * `(id, projetoId, companyId)` — o `id` da análise é sequencial/adivinhável, então sem o `projetoId`
+ * dava pra abrir a análise salva de OUTRO projeto da mesma empresa chutando o id. Agora fica alinhado a
+ * `listarAnalisesEfetivo` / `ultimaAnaliseEfetivo` (que já escopam por projeto). Client
+ * (`client/.../AnaliseEfetivoIA.tsx` → `Historico`) passa `projetoId` na query. esbuild EXIT 0 (server+client).
+ *
  * Rev. 2699 — **FROTA · "IMPORTAR OS COM IA" (`/frotas/manutencoes` → "Importar OS (IA)" → tela de
  * revisão dos itens lidos) · AGORA, QUANDO A IA NÃO ACHA O VEÍCULO (BADGE "VEÍCULO NÃO ENCONTRADO"
  * PORQUE A PLACA FOI LIDA ERRADA, ex.: "EVM 9H23" EM VEZ DE "EVW9H23"), DÁ PRA ESCOLHER MANUALMENTE O

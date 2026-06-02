@@ -2,7 +2,7 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { router, protectedProcedure } from "../_core/trpc";
 import { invokeLLM } from "../_core/llm";
-import { getDb, getObraFuncionarios, getUserCompanyLinks } from "../db";
+import { getDb, getObraFuncionarios } from "../db";
 import {
   iaCronogramaConhecimento,
   iaCronogramaChat,
@@ -22,27 +22,32 @@ import {
 } from "../../drizzle/schema";
 import { eq, and, or, ilike, desc, sql, isNull, inArray } from "drizzle-orm";
 
-// Rev. 2698 — Guard multi-tenant alinhado ao resto do ERP (espelha
-// `assertCompanyAccess` de ferramentasTerceiros/terceiros). ANTES estas funções
-// de IA comparavam `ctx.user.companyId === companyId`, o que BLOQUEAVA usuários
-// não-admin multi-empresa / sem "casa" definida que TÊM acesso ao módulo pelo
-// GRUPO (ex.: "Sem permissão para esta empresa" no Diagnóstico de Efetivo).
-// Nova regra (só restringe quando o master restringir):
-//  - admin / admin_master → libera (roles globais);
-//  - usuário COM vínculos em `user_companies` → enforça membership real;
-//  - usuário SEM vínculos explícitos → libera (acesso controlado por grupo/módulo).
+// Rev. 2700 — Acesso à Análise de Efetivo (IA) ALINHADO À PORTA DE ENTRADA do
+// módulo Planejamento. A tela onde a função vive (`/planejamento/:id`) é aberta
+// por `getProjetoById` (e alimentada por `listarAtividades`, `listarAvancos`
+// etc.), procedures `protectedProcedure` que NÃO restringem por `user_companies`
+// — no ERP, o acesso ao módulo é gateado pelo GRUPO + alocação por obra (como
+// em `listarProjetos`), não pela "empresa-casa".
+//
+// O guard da Rev. 2698 ainda enforçava `user_companies`: usuários SEM vínculo já
+// tinham acesso GLOBAL por aqui, mas engenheiros COM vínculo a uma empresa
+// DIFERENTE da empresa do projeto (ex.: vínculo na "casa", projeto cadastrado em
+// "FC ENGENHARIA PROJETO") tomavam "Sem acesso a esta empresa" — deixando a
+// função "liberada só para o usuário master". A enforce era, portanto,
+// INCONSISTENTE (bloqueava só uma fatia dos usuários) e mais restritiva que a
+// própria abertura do projeto.
+//
+// Agora: qualquer SESSÃO VÁLIDA que chega à tela (gateada no client/sidebar como
+// o resto das `protectedProcedure` do módulo) pode rodar a análise. A isolação
+// por empresa é mantida pelo filtro `(projetoId + companyId)` nas queries de
+// dados (`coletarEfetivoCronograma` e as procedures de leitura/escrita de
+// análise), que retornam vazio / "não encontrado" quando o companyId não casa
+// com o projeto — impedindo mistura de dados entre empresas.
 async function assertCompanyAccessIa(
   ctx: { user: { id: number; role?: string | null } },
-  companyId: number,
+  _companyId: number,
 ) {
   if (!ctx.user?.id) throw new TRPCError({ code: "UNAUTHORIZED", message: "Sessão inválida." });
-  if (ctx.user.role === "admin" || ctx.user.role === "admin_master") return;
-  const links = await getUserCompanyLinks(ctx.user.id);
-  const allowedIds = (links as any[]).map((l: any) => l.companyId).filter((v: any) => typeof v === "number");
-  if (allowedIds.length === 0) return; // sem vínculos = acesso global por grupo/módulo
-  if (!new Set<number>(allowedIds).has(companyId)) {
-    throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta empresa." });
-  }
 }
 
 // ── WMO weather codes severity ────────────────────────────────────────────
@@ -2190,29 +2195,31 @@ DIDÁTICA GERAL (obrigatória em TODA a resposta): escreva para ser fácil de en
 
   // Detalhe de uma análise salva (reabre o resultado completo no histórico).
   getAnaliseEfetivo: protectedProcedure
-    .input(z.object({ id: z.number(), companyId: z.number() }))
+    // Rev. 2700 — `projetoId` agora é obrigatório no escopo: o `id` da análise é
+    // sequencial/adivinhável, então filtrar SÓ por `(id, companyId)` permitia
+    // abrir a análise de OUTRO projeto da mesma empresa chutando o id. Filtra
+    // por `(id, projetoId, companyId)`, alinhado a `listarAnalisesEfetivo` /
+    // `ultimaAnaliseEfetivo` (que já escopam por projeto).
+    .input(z.object({ id: z.number(), projetoId: z.number(), companyId: z.number() }))
     .query(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new Error("Banco de dados indisponível.");
       const companyId = input.companyId;
-      // Só o admin_master cruza empresas; demais ficam presos à empresa pedida
-      // (já validada por assertCompanyAccessIa — membership real por grupo/vínculo).
+      // Só o admin_master cruza empresas; demais ficam presos à empresa pedida.
       const isAdminMaster = ctx.user.role === "admin_master";
       await assertCompanyAccessIa(ctx, companyId);
-      // Anti-IDOR: filtra company NA QUERY (exceto admin_master), sem depender de
-      // checagem pós-leitura. Rev. 2698 — escopo = companyId VALIDADO (antes usava
-      // `ctx.user.companyId`, que zerava a leitura p/ usuário multi-empresa).
-      const empresaEscopo = isAdminMaster ? null : companyId;
-      const where = empresaEscopo == null
-        ? eq(planejamentoAnalisesEfetivo.id, input.id)
-        : and(
-            eq(planejamentoAnalisesEfetivo.id, input.id),
-            eq(planejamentoAnalisesEfetivo.companyId, Number(empresaEscopo)),
-          );
+      // Anti-IDOR: além do `id`, prende a leitura ao `projetoId` (sempre) e à
+      // empresa pedida (exceto admin_master), tudo NA QUERY, sem depender de
+      // checagem pós-leitura.
+      const conds = [
+        eq(planejamentoAnalisesEfetivo.id, input.id),
+        eq(planejamentoAnalisesEfetivo.projetoId, input.projetoId),
+      ];
+      if (!isAdminMaster) conds.push(eq(planejamentoAnalisesEfetivo.companyId, Number(companyId)));
       const [row] = await db
         .select()
         .from(planejamentoAnalisesEfetivo)
-        .where(where)
+        .where(and(...conds))
         .limit(1);
       if (!row) throw new Error("Análise não encontrada.");
       // Datas SEMPRE em BR — converte também análises ANTIGAS salvas em ISO.

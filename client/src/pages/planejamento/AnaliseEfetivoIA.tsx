@@ -791,7 +791,7 @@ function Historico({ projetoId, companyId }: Props) {
   const listaQ = trpc.iaCronograma.listarAnalisesEfetivo.useQuery({ projetoId, companyId });
   const [abertaId, setAbertaId] = useState<number | null>(null);
   const detalheQ = trpc.iaCronograma.getAnaliseEfetivo.useQuery(
-    { id: abertaId ?? 0, companyId },
+    { id: abertaId ?? 0, projetoId, companyId },
     { enabled: abertaId != null },
   );
 
