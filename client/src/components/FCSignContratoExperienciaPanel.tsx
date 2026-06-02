@@ -180,7 +180,7 @@ export default function FCSignContratoExperienciaPanel({ companyId, employeeId, 
               Aguardando assinaturas ({assinados}/{signers.length})
             </div>
             <div className="text-xs text-amber-700 dark:text-amber-400 mt-0.5">
-              Já existe uma sessão FCSign em andamento p/ este contrato. Não é possível reemitir enquanto ela estiver ativa.
+              Já existe uma sessão FCSign em andamento p/ este documento ({docLabel}). Não é possível reemitir enquanto ela estiver ativa.
               {sess.createdAt && (
                 <> · Criada em {fmtTs(sess.createdAt)}</>
               )}

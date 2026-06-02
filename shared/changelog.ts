@@ -1,6 +1,47 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2682 — **COLABORADORES (`/colaboradores` → ficha → "Isenção de Controle de Jornada (Art. 62 CLT)") ·
+ * O "TERMO FORMAL DE CIÊNCIA E ANUÊNCIA" (TERMO DE ISENÇÃO ART. 62) AGORA PODE SER ASSINADO ONLINE PELO FCSIGN
+ * — MESMOS MEIOS/CRITÉRIOS DO CONTRATO DE EXPERIÊNCIA (ENVIO COM ORDEM DE SIGNATÁRIOS, EMPREGADOR TRAVADO
+ * COMO FELIPE COSTA ALVES, TESTEMUNHAS OPCIONAIS, PAINEL REATIVO DE STATUS, VISUALIZAR/BAIXAR E "APAGAR P/
+ * NOVA EMISSÃO" PELO ADMIN MASTER). O BOTÃO "GERAR / IMPRIMIR TERMO" E O "UPLOAD DO TERMO ASSINADO" CONTINUAM
+ * EXATAMENTE COMO ESTAVAM.**
+ *
+ * PEDIDO (usuário, print IMG_1488): permitir assinar online (via FCSign) o "Termo de Isenção de Controle de
+ * Jornada (Art. 62 CLT)" / "Termo de Ciência e Anuência", seguindo os mesmos meios e critérios já usados no
+ * Contrato de Experiência. Antes só dava pra imprimir o termo, colher assinatura manual e fazer upload do PDF.
+ *
+ * DIAGNÓSTICO: o fluxo FCSign do Contrato de Experiência já é genérico no servidor — `signatures.create`
+ * aceita `tipo` como string livre (z.string max 50), o dedup bloqueia 1 sessão ativa por `employeeId+tipo`
+ * (exceto `termo_responsabilidade`), os roles válidos são `empregado/empregador/testemunha_1/testemunha_2`, e o
+ * `FCSignSendDialog` + `getForEmployeeTipo` + `adminDelete` são agnósticos ao tipo. Faltava: (1) gerar o HTML do
+ * termo Art. 62 como STRING (e não só `document.write` na janela de impressão), com placeholders
+ * `<!--FCSIGN:SIG:{role}-->` p/ o servidor estampar as assinaturas (`stampSignaturesOnSlots`); (2) generalizar
+ * o painel reativo que hoje é hardcoded p/ `contrato_experiencia`; (3) plugar tudo na seção do Art. 62.
+ *
+ * FIX (SÓ CLIENT/UI; ZERO SCHEMA/SERVER):
+ *  - `client/src/pages/Colaboradores.tsx` — `imprimirTermoArt62` refatorado: extraí `buildTermoArt62(forFcsign)`
+ *    (fonte única) que retorna a string HTML do termo e serve a DOIS consumidores: impressão (janela nova,
+ *    comportamento original) e FCSign (assinatura online). O corpo agora usa SOMENTE estilos INLINE (sem
+ *    `<style>` com seletores globais `body{}`/`.clausula{}`), porque a página `/assinar` renderiza via
+ *    `dangerouslySetInnerHTML` + DOMPurify (que PRESERVA `<style>`) — um `<style>` global VAZARIA na UI da tela
+ *    de assinatura (REGRA DE OURO Rev. 2106+). As linhas de assinatura ganharam slots de 50px com placeholders
+ *    `<!--FCSIGN:SIG:empregador/empregado/testemunha_1/testemunha_2-->`. Novo `validarTermoArt62()` (empresa,
+ *    inciso, nome, CPF, função, salário, data de enquadramento) espelha a validação consolidada do contrato.
+ *    O painel FCSign foi plugado na seção "Termo formal de Ciência e Anuência", montando o `fcsignPayload`
+ *    (tipo `termo_art62`) e reusando o `FCSignSendDialog` já existente.
+ *  - `client/src/components/FCSignContratoExperienciaPanel.tsx` — generalizado: novas props OPCIONAIS `tipo`
+ *    (default `"contrato_experiencia"`) e `docLabel` (default `"Contrato de Experiência"`), usadas na query
+ *    `getForEmployeeTipo`, nos textos ("{docLabel} assinado", confirmação de apagar) e no nome do arquivo
+ *    baixado. Defaults preservam 100% o comportamento original do contrato.
+ *
+ * RESSALVA: `employee_contracts` NÃO é tocado p/ o termo Art. 62 (aquele branch em `signatures.create` é
+ * exclusivo de `contrato_experiencia`). O termo assinado fica arquivado na RAIO-X via FCSign, como os demais
+ * documentos. esbuild `Colaboradores.tsx` + `FCSignContratoExperienciaPanel.tsx` EXIT 0.
+ *
+ * ----------------------------------------------------------------------------------------------------
+ *
  * Rev. 2681 — **COLABORADORES (`/colaboradores`) · O RAIO-X DO FUNCIONÁRIO (ABERTO AO CLICAR NO NOME/FOTO)
  * DEIXA DE QUEBRAR O LAYOUT EM TABLETS/iOS — A TELA AGORA ABRE EM FULLSCREEN DE VERDADE (COBRINDO TUDO),
  * COM BOTÃO DE FECHAR, SEM A LISTA "VAZANDO" POR BAIXO NEM O CONTEÚDO EMPURRADO PRO FIM DA PÁGINA.**
