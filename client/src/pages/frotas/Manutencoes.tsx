@@ -316,6 +316,20 @@ export default function Manutencoes() {
     setOsSaving(false);
   }
 
+  function setOsItemVehicle(idx: number, vehicleId: number, applyToSamePlaca = false) {
+    setOsParsed((prev: any) => {
+      if (!prev?.items) return prev;
+      const targetPlaca = prev.items[idx]?.vehiclePlaca;
+      const items = prev.items.map((it: any, i: number) => {
+        const hit = applyToSamePlaca
+          ? (i === idx || (it.vehiclePlaca && targetPlaca && it.vehiclePlaca === targetPlaca && !it.vehicleId))
+          : i === idx;
+        return hit ? { ...it, vehicleId, __manualVehicle: true } : it;
+      });
+      return { ...prev, items };
+    });
+  }
+
   function openNew() {
     setEditing(null);
     setEditingMaintId(null);
@@ -1182,6 +1196,9 @@ export default function Manutencoes() {
 
                       {osParsed.items.map((item: any, idx: number) => {
                         const veh = (vehicles.data || []).find((v: any) => v.id === item.vehicleId);
+                        const samePlacaUnmatched = (osParsed.items as any[]).filter((it: any, i: number) =>
+                          i !== idx && !it.vehicleId && it.vehiclePlaca && item.vehiclePlaca && it.vehiclePlaca === item.vehiclePlaca
+                        ).length;
                         return (
                           <div key={idx} className={`border rounded-xl p-4 transition-all ${osSelectedItems[idx] ? "border-violet-400 bg-violet-50/50 dark:bg-violet-950/30" : "border-muted opacity-60"}`}>
                             <div className="flex items-start gap-3">
@@ -1198,6 +1215,7 @@ export default function Manutencoes() {
                                   </Badge>
                                   <Badge variant={item.tipo === "preventiva" ? "outline" : "secondary"} className="text-[10px]">{item.tipo}</Badge>
                                   {!item.vehicleId && <Badge variant="destructive" className="text-[10px]">Veículo não encontrado</Badge>}
+                                  {item.vehicleId && item.__manualVehicle && <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 text-[10px]">Veículo corrigido</Badge>}
                                   {item.__file && <Badge variant="outline" className="text-[10px] text-muted-foreground"><FileUp className="h-2.5 w-2.5 mr-1" />{item.__file}</Badge>}
                                 </div>
                                 <p className="text-sm font-medium">{item.descricao}</p>
@@ -1208,6 +1226,36 @@ export default function Manutencoes() {
                                   <div><span className="text-muted-foreground">Fornecedor:</span> {item.fornecedor || "—"}</div>
                                 </div>
                                 {item.observacoes && <p className="text-xs text-muted-foreground">{item.observacoes}</p>}
+
+                                <div className={`mt-1 rounded-lg border p-2 space-y-2 ${!item.vehicleId ? "border-amber-300 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30" : "border-muted bg-muted/30"}`}>
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <span className={`text-[11px] font-medium flex items-center gap-1 ${!item.vehicleId ? "text-amber-800 dark:text-amber-300" : "text-muted-foreground"}`}>
+                                      {!item.vehicleId && <AlertTriangle className="h-3 w-3" />}
+                                      {!item.vehicleId
+                                        ? `Placa "${item.vehiclePlaca || "?"}" não encontrada — escolha o veículo:`
+                                        : "Veículo:"}
+                                    </span>
+                                    <Select value={item.vehicleId ? String(item.vehicleId) : ""} onValueChange={(v) => setOsItemVehicle(idx, parseInt(v))}>
+                                      <SelectTrigger className="h-8 w-[260px] text-xs"><SelectValue placeholder="Selecionar veículo..." /></SelectTrigger>
+                                      <SelectContent>
+                                        {(vehicles.data || []).map((v: any) => (
+                                          <SelectItem key={v.id} value={String(v.id)}>{v.placa || v.modelo}{v.marca ? ` — ${v.marca}` : ""}</SelectItem>
+                                        ))}
+                                      </SelectContent>
+                                    </Select>
+                                  </div>
+                                  {item.vehicleId && item.__manualVehicle && samePlacaUnmatched > 0 && (
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      size="sm"
+                                      className="h-7 text-[11px]"
+                                      onClick={() => setOsItemVehicle(idx, item.vehicleId, true)}
+                                    >
+                                      Aplicar a +{samePlacaUnmatched} {samePlacaUnmatched === 1 ? "item" : "itens"} com placa "{item.vehiclePlaca}"
+                                    </Button>
+                                  )}
+                                </div>
                               </div>
                             </div>
                           </div>

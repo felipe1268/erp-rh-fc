@@ -1,6 +1,34 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2699 — **FROTA · "IMPORTAR OS COM IA" (`/frotas/manutencoes` → "Importar OS (IA)" → tela de
+ * revisão dos itens lidos) · AGORA, QUANDO A IA NÃO ACHA O VEÍCULO (BADGE "VEÍCULO NÃO ENCONTRADO"
+ * PORQUE A PLACA FOI LIDA ERRADA, ex.: "EVM 9H23" EM VEZ DE "EVW9H23"), DÁ PRA ESCOLHER MANUALMENTE O
+ * VEÍCULO CORRETO NUM SELECT — E APLICAR O MESMO VEÍCULO DE UMA VEZ A TODOS OS ITENS QUE VIERAM COM A
+ * MESMA PLACA ERRADA.**
+ *
+ * PEDIDO (usuário, 2 prints da tela de revisão com vários itens "EVM 9H23" marcados "Veículo não
+ * encontrado"): "EVW9H23 corrigir a placa destes lançamentos, estava lançado errado... preciso que
+ * quando não achar os lançamentos preciso poder escolher o veículo".
+ *
+ * CAUSA-RAIZ (NÃO ERA BUG — FALTAVA RECURSO): o match veículo↔OS é feito no SERVER em
+ * `frotas.parseMaintenanceOS` (seta `vehicleId` só se a placa lida bate com um veículo cadastrado;
+ * senão `vehicleId=null` + guarda `vehiclePlaca` detectada). Na tela de revisão, itens sem `vehicleId`
+ * só mostravam a badge vermelha "Veículo não encontrado" e eram PULADOS no `saveOSItems` ("veículo não
+ * identificado — pulando"). Não havia como o usuário corrigir a placa/escolher o veículo → OS de placa
+ * mal-lida pela IA ficava impossível de importar.
+ *
+ * FIX (SÓ CLIENT/UI; ZERO SCHEMA/SERVER — `saveOSItems` já usa `item.vehicleId`): em
+ * `client/src/pages/frotas/Manutencoes.tsx`: (1) novo helper `setOsItemVehicle(idx, vehicleId,
+ * applyToSamePlaca?)` que grava o `vehicleId` escolhido no item do `osParsed` (+ flag
+ * `__manualVehicle`); com `applyToSamePlaca=true` aplica o MESMO veículo a TODOS os itens ainda sem
+ * veículo cuja `vehiclePlaca` detectada seja igual à do item alvo. (2) Cada card de item da revisão
+ * ganhou um bloco com `<Select>` de veículos (lista `vehicles.data`): destaque âmbar + texto 'Placa "X"
+ * não encontrada — escolha o veículo' quando `!vehicleId`; quando corrigido, badge verde "Veículo
+ * corrigido" e botão 'Aplicar a +N itens com placa "X"' (aparece só se há outros itens com a mesma
+ * placa errada). Após escolher, a badge da placa atualiza, "Veículo não encontrado" some e o item
+ * passa a ser importável normalmente. esbuild EXIT 0.
+ *
  * Rev. 2698 — **PLANEJAMENTO · ANÁLISE DE EFETIVO × CRONOGRAMA (IA) (`/planejamento/:id` → aba
  * "Diagnóstico" / "Simulador" / "Histórico") · CORRIGIDO O ERRO "SEM PERMISSÃO PARA ESTA EMPRESA"
  * QUE BLOQUEAVA USUÁRIOS NÃO-ADMIN (ex.: Engenheiro de Campo) DE GERAR/ABRIR A ANÁLISE DE EFETIVO
