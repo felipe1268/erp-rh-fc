@@ -17,9 +17,9 @@ import { nowBrasilia, todayBrasiliaLong } from "@/lib/dateUtils";
 import { removeAccents } from "@/lib/searchUtils";
 import {
   Search, FileText, AlertTriangle, ShieldAlert, GraduationCap, Stethoscope,
-  Plus, Upload, Download, Eye, Trash2, FileUp, ClipboardList, Calendar, Pencil, Printer, FileDown, CheckSquare, Square, X, Paperclip, Clock, Shield, ExternalLink, Filter, CheckCircle2, Zap, Info, PenTool, Building2, BookOpen, Users, MessageSquare, Loader2
+  Plus, Upload, Download, Eye, Trash2, FileUp, ClipboardList, Calendar, Pencil, Printer, FileDown, CheckSquare, Square, X, Paperclip, Clock, Shield, ExternalLink, Filter, CheckCircle2, Zap, Info, PenTool, Building2, BookOpen, Users, MessageSquare, Loader2, ChevronDown, ChevronRight
 } from "lucide-react";
-import { useState, useMemo, useEffect, useCallback, useRef } from "react";
+import { useState, useMemo, useEffect, useCallback, useRef, Fragment } from "react";
 import { toast } from "sonner";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -1825,6 +1825,12 @@ export default function ControleDocumentos() {
 
   // ============ FILTER ============
   const [statusFilter, setStatusFilter] = useState("todos");
+  const [expandedAsoEmps, setExpandedAsoEmps] = useState<Set<number>>(new Set());
+  const toggleAsoEmp = (empId: number) => setExpandedAsoEmps(prev => {
+    const next = new Set(prev);
+    next.has(empId) ? next.delete(empId) : next.add(empId);
+    return next;
+  });
   const [cardFilter, setCardFilter] = useState<string | null>(null);
   const [validadeForceTipo, setValidadeForceTipo] = useState<string | undefined>(undefined);
   const [validadeForceStatus, setValidadeForceStatus] = useState<string | undefined>(undefined);
@@ -1870,6 +1876,18 @@ export default function ControleDocumentos() {
     else if (statusFilter === "substituido") list = list.filter((a: any) => a.status === "SUBSTITUÍDO");
     return list;
   }, [asoList, search, statusFilter]);
+
+  // Agrupa os ASOs por funcionário (vigentes em destaque + histórico recolhível)
+  const groupedAso = useMemo(() => {
+    const map = new Map<number, { employeeId: number; nomeCompleto: string; atuais: any[]; historicos: any[] }>();
+    for (const a of filteredAso) {
+      const key = a.employeeId ?? -1;
+      if (!map.has(key)) map.set(key, { employeeId: key, nomeCompleto: a.nomeCompleto, atuais: [], historicos: [] });
+      const g = map.get(key)!;
+      (a.isHistorico ? g.historicos : g.atuais).push(a);
+    }
+    return Array.from(map.values());
+  }, [filteredAso]);
 
   const filteredNrRules = useMemo(() => {
     if (!nrSearch.trim()) return null;
@@ -2516,57 +2534,84 @@ export default function ControleDocumentos() {
                       </tr>
                     </thead>
                     <tbody>
-                      {filteredAso.length === 0 ? (
+                      {groupedAso.length === 0 ? (
                         <tr><td colSpan={11} className="py-8 text-center text-muted-foreground">Nenhum ASO cadastrado</td></tr>
-                      ) : filteredAso.map((a: any, idx: number) => (
-                        <tr key={a.id} className={`border-b last:border-0 hover:bg-muted/30 ${a.isHistorico ? "opacity-60" : ""}`}>
-                          <td className="py-2 text-muted-foreground">{idx + 1}</td>
-                          <td className="py-2">
-                            <div className="flex items-center gap-2.5">
-                              <PersonPhoto src={a.fotoUrl} alt={a.nomeCompleto} size="sm" />
-                              <div className="min-w-0">
-                                <div className="inline-flex items-center gap-1.5 flex-wrap"><span className="font-medium text-blue-700 cursor-pointer hover:underline truncate" onClick={() => setRaioXEmployeeId(a.employeeId)}>{a.nomeCompleto}</span><CipaBadge ativo={a.cipaAtivo} estabilidade={a.cipaEstabilidade} fim={a.cipaFimEstabilidade} cargo={a.cipaCargo} /></div>
-                                <div className="text-xs text-muted-foreground">{formatCPF(a.cpf)}</div>
+                      ) : groupedAso.map((g, gi) => {
+                        const principais = g.atuais.length > 0 ? g.atuais : g.historicos;
+                        const ocultos = g.atuais.length > 0 ? g.historicos : [];
+                        const expanded = expandedAsoEmps.has(g.employeeId);
+                        const renderAsoRow = (a: any, opts: { isHist?: boolean; toggle?: boolean; num?: number } = {}) => (
+                          <tr key={a.id} className={`border-b last:border-0 hover:bg-muted/30 ${opts.isHist ? "opacity-60 bg-muted/20" : ""}`}>
+                            <td className="py-2 text-muted-foreground">{opts.num ?? ""}</td>
+                            <td className="py-2">
+                              <div className="flex items-center gap-2.5">
+                                {opts.isHist ? (
+                                  <span className="w-8 shrink-0" />
+                                ) : (
+                                  <PersonPhoto src={a.fotoUrl} alt={a.nomeCompleto} size="sm" />
+                                )}
+                                <div className="min-w-0">
+                                  {opts.isHist ? (
+                                    <div className="text-xs text-muted-foreground italic flex items-center gap-1"><Clock className="h-3 w-3" /> Histórico</div>
+                                  ) : (
+                                    <>
+                                      <div className="inline-flex items-center gap-1.5 flex-wrap"><span className="font-medium text-blue-700 cursor-pointer hover:underline truncate" onClick={() => setRaioXEmployeeId(a.employeeId)}>{a.nomeCompleto}</span><CipaBadge ativo={a.cipaAtivo} estabilidade={a.cipaEstabilidade} fim={a.cipaFimEstabilidade} cargo={a.cipaCargo} /></div>
+                                      <div className="text-xs text-muted-foreground">{formatCPF(a.cpf)}</div>
+                                      {opts.toggle && ocultos.length > 0 && (
+                                        <button type="button" onClick={() => toggleAsoEmp(g.employeeId)} className="mt-1 inline-flex items-center gap-1 text-[11px] font-medium text-muted-foreground hover:text-blue-700">
+                                          {expanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+                                          {expanded ? "Ocultar histórico" : `Ver histórico (${ocultos.length})`}
+                                        </button>
+                                      )}
+                                    </>
+                                  )}
+                                </div>
                               </div>
-                            </div>
-                          </td>
-                          <td className="py-2">{formatTipoASO(a.tipo)}</td>
-                          <td className="py-2">{formatDate(a.dataExame)}</td>
-                          <td className="py-2">{a.validadeDias || 365} dias</td>
-                          <td className="py-2"><StatusBadge status={a.status} diasRestantes={a.diasRestantes} /></td>
-                          <td className="py-2">{formatDate(a.dataValidade)}</td>
-                          <td className="py-2">
-                            <span className={a.resultado === "Apto" ? "text-green-600 font-medium" : a.resultado === "Inapto" ? "text-red-600 font-medium" : "text-yellow-600 font-medium"}>
-                              {a.resultado === "Apto_Restricao" ? "Apto c/ Restrição" : a.resultado}
-                            </span>
-                          </td>
-                          <td className="py-2">
-                            {a.medico && <div className="text-xs">{a.medico}</div>}
-                            {a.crm && <div className="text-xs text-muted-foreground">CRM: {a.crm}</div>}
-                          </td>
-                          <td className="py-2 max-w-[200px]">
-                            <div className="text-xs text-muted-foreground truncate" title={a.examesRealizados}>{a.examesRealizados || "-"}</div>
-                          </td>
-                          <td className="py-2">
-                            <div className="flex gap-1">
-                              <Button size="icon" variant="ghost" className="h-7 w-7" title="Editar" onClick={() => openEditAso(a)}>
-                                <Pencil className="h-3.5 w-3.5" />
-                              </Button>
-                              <Button size="icon" variant="ghost" className="h-7 w-7" title="Anexar PDF" onClick={() => handleUploadDoc("aso", a.id, a)}>
-                                <FileUp className="h-3.5 w-3.5" />
-                              </Button>
-                              {a.documentoUrl && (
-                                <Button size="icon" variant="ghost" className="h-7 w-7" title="Ver documento" onClick={() => window.open(a.documentoUrl, "_blank")}>
-                                  <Eye className="h-3.5 w-3.5" />
+                            </td>
+                            <td className="py-2">{formatTipoASO(a.tipo)}</td>
+                            <td className="py-2">{formatDate(a.dataExame)}</td>
+                            <td className="py-2">{a.validadeDias || 365} dias</td>
+                            <td className="py-2"><StatusBadge status={a.status} diasRestantes={a.diasRestantes} /></td>
+                            <td className="py-2">{formatDate(a.dataValidade)}</td>
+                            <td className="py-2">
+                              <span className={a.resultado === "Apto" ? "text-green-600 font-medium" : a.resultado === "Inapto" ? "text-red-600 font-medium" : "text-yellow-600 font-medium"}>
+                                {a.resultado === "Apto_Restricao" ? "Apto c/ Restrição" : a.resultado}
+                              </span>
+                            </td>
+                            <td className="py-2">
+                              {a.medico && <div className="text-xs">{a.medico}</div>}
+                              {a.crm && <div className="text-xs text-muted-foreground">CRM: {a.crm}</div>}
+                            </td>
+                            <td className="py-2 max-w-[200px]">
+                              <div className="text-xs text-muted-foreground truncate" title={a.examesRealizados}>{a.examesRealizados || "-"}</div>
+                            </td>
+                            <td className="py-2">
+                              <div className="flex gap-1">
+                                <Button size="icon" variant="ghost" className="h-7 w-7" title="Editar" onClick={() => openEditAso(a)}>
+                                  <Pencil className="h-3.5 w-3.5" />
                                 </Button>
-                              )}
-                              <Button size="icon" variant="ghost" className="h-7 w-7 text-red-500" title="Excluir" onClick={() => { if (confirm("Excluir este ASO?")) deleteAso.mutate({ id: a.id }); }}>
-                                <Trash2 className="h-3.5 w-3.5" />
-                              </Button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
+                                <Button size="icon" variant="ghost" className="h-7 w-7" title="Anexar PDF" onClick={() => handleUploadDoc("aso", a.id, a)}>
+                                  <FileUp className="h-3.5 w-3.5" />
+                                </Button>
+                                {a.documentoUrl && (
+                                  <Button size="icon" variant="ghost" className="h-7 w-7" title="Ver documento" onClick={() => window.open(a.documentoUrl, "_blank")}>
+                                    <Eye className="h-3.5 w-3.5" />
+                                  </Button>
+                                )}
+                                <Button size="icon" variant="ghost" className="h-7 w-7 text-red-500" title="Excluir" onClick={() => { if (confirm("Excluir este ASO?")) deleteAso.mutate({ id: a.id }); }}>
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </Button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                        return (
+                          <Fragment key={g.employeeId}>
+                            {principais.map((a: any, i: number) => renderAsoRow(a, { num: i === 0 ? gi + 1 : undefined, toggle: i === principais.length - 1 }))}
+                            {expanded && ocultos.map((a: any) => renderAsoRow(a, { isHist: true }))}
+                          </Fragment>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>

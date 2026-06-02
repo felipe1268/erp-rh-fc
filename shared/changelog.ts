@@ -1,6 +1,30 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2679 — **CONTROLE DE DOCUMENTOS (`/controle-documentos` → aba "ASO") · A LISTA DE ASOs PASSA A SER
+ * AGRUPADA POR FUNCIONÁRIO: O EXAME VIGENTE FICA EM DESTAQUE E OS ANTERIORES (SUBSTITUÍDOS) VIRAM UM
+ * "HISTÓRICO" RECOLHÍVEL POR LINHA — EM VEZ DE REPETIR O MESMO FUNCIONÁRIO VÁRIAS VEZES NA TELA.**
+ *
+ * PEDIDO (usuário): "agrupa tudo no mesmo funcionário mas, com controle de histórico". Contexto: na Rev.
+ * anterior os ASOs substituídos já apareciam com `opacity-60`, mas como LINHAS soltas — o mesmo funcionário
+ * (ex.: AGOSTINHO) ocupava 4 linhas seguidas, poluindo a lista. DIAGNÓSTICO: a aba ASO renderizava
+ * `filteredAso.map(...)` 1 linha por registro, sem agrupar; cada ASO já vinha do server com `isHistorico`
+ * (true quando NÃO é o mais recente do seu tipo, calculado em `controleDocumentos.ts`).
+ *
+ * FIX (SÓ CLIENT/UI; ZERO SCHEMA/SERVER): `client/src/pages/ControleDocumentos.tsx` — (1) nova memo
+ * `groupedAso` que agrupa `filteredAso` por `employeeId` em `{ atuais, historicos }` (atuais = !isHistorico),
+ * preservando a ordem de aparição; (2) estado `expandedAsoEmps: Set<employeeId>` + `toggleAsoEmp` controlam,
+ * por funcionário, se o histórico está aberto; (3) o `tbody` agora itera `groupedAso`: renderiza as linhas
+ * "atuais" em destaque (foto + nome azul + CPF) e, na última linha atual, um botão "Ver histórico (N)" /
+ * "Ocultar histórico" (chevrons) quando há substituídos; (4) helper local `renderAsoRow(a, opts)` reaproveita
+ * o markup da linha — linhas de histórico vêm com `opacity-60 bg-muted/20`, sem foto/nome (rótulo "Histórico"
+ * com ícone de relógio) e numeração só na 1ª linha de cada grupo. Quando o filtro é "Substituídos" (grupo sem
+ * atuais), os históricos viram as linhas principais visíveis. Imports add: `ChevronDown`/`ChevronRight`
+ * (lucide) e `Fragment` (react). Sem SQL/`ALTER`/`DROP` (R-001/R-007/R-010). esbuild `ControleDocumentos.tsx`
+ * EXIT 0.
+ *
+ * ----------------------------------------------------------------------------------------------------
+ *
  * Rev. 2678 — **CONTROLE DE DOCUMENTOS (`/controle-documentos`: ASOs, Treinamentos, Atestados, Advertências,
  * Painel de Validade, cards/contagens) · FUNCIONÁRIOS DESLIGADOS (status Desligado/Lista_Negra/Inativo) DEIXAM
  * DE ENTRAR NO CONTROLE DE DOCUMENTOS — TODAS AS LISTAS, CARDS E O PAINEL DE VALIDADE PASSAM A CONTAR/EXIBIR
