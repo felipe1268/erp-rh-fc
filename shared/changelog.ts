@@ -1,6 +1,31 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2690 — **FROTA · VEÍCULOS (`/frotas/veiculos`) · NOVO MODO "SELECIONAR" QUE PERMITE MARCAR VÁRIOS
+ * VEÍCULOS DE UMA VEZ (CHECKBOX EM CADA CARD + "SELECIONAR TODOS") E ALTERAR O STATUS DE TODOS OS
+ * SELECIONADOS EM LOTE (ATIVO / EM MANUTENÇÃO / INATIVO / VENDIDO) NUMA ÚNICA AÇÃO, EM VEZ DE ABRIR E
+ * SALVAR VEÍCULO POR VEÍCULO.**
+ *
+ * PEDIDO (usuário, print da tela Veículos): "preciso ter múltipla seleção para poder alterar vários status
+ * de uma vez".
+ *
+ * FIX (SÓ CLIENT/UI; ZERO SCHEMA — REUSA O ENDPOINT EXISTENTE `frotas.updateVehicle` — R-001/R-007/R-010):
+ *  - CLIENT `client/src/pages/frotas/Veiculos.tsx`:
+ *    - Novo botão "Selecionar" no cabeçalho que entra/sai do `selectMode`. Estados: `selectMode`,
+ *      `selectedIds` (Set<number>), `bulkStatus`, `bulkSaving`.
+ *    - Em `selectMode`: cada card ganha um `Checkbox` e fica clicável inteiro (toggle da seleção, com
+ *      `ring` ciano de destaque). Botões de ação do card (editar/excluir/links CRLV/Seguro) usam
+ *      `stopPropagation` p/ não disparar a seleção. A foto deixa de ser clicável nesse modo.
+ *    - Barra de ações sticky aparece no topo: `Checkbox` "Selecionar todos" (sobre a lista filtrada),
+ *      contador "N selecionado(s)", `Select` de status e botão "Aplicar".
+ *    - "Aplicar" (`applyBulkStatus`): valida status + seleção, então itera os IDs chamando
+ *      `updateVehicle` (mutation dedicada `bulkStatusMut`, sem efeitos colaterais de dialog/toast por
+ *      chamada) com `{ id, companyId, statusVeiculo }`. O guard de obra por veículo do server é
+ *      respeitado em cada chamada. Ao fim: `refetch`, toast de sucesso (e de falhas, se houver), limpa
+ *      seleção e sai do modo.
+ *
+ * ----------------------------------------------------------------------------------------------------
+ *
  * Rev. 2689 — **FROTA · "IMPORTAR OS COM IA" (`/frotas/manutencoes` → botão "Importar OS com IA") · A BARRA
  * INDETERMINADA "ANALISANDO COM IA... AGUARDE" VIROU UMA BARRA DE PROGRESSO REAL DE 0% A 100%: ENQUANTO A IA
  * LÊ O PDF/IMAGEM DA ORDEM DE SERVIÇO, O % SOBE GRADUALMENTE E CRAVA 100% QUANDO O RESULTADO CHEGA, DANDO AO

@@ -10,7 +10,8 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
-import { Car, Plus, Search, Pencil, Trash2, DollarSign, FileDown, Image, Camera, Loader2, Sparkles, AlertTriangle, CheckCircle2 } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Car, Plus, Search, Pencil, Trash2, DollarSign, FileDown, Image, Camera, Loader2, Sparkles, AlertTriangle, CheckCircle2, ListChecks, X } from "lucide-react";
 import { useState, useRef } from "react";
 import { toast } from "sonner";
 import { MoneyInput } from "@/components/ui/money-input";
@@ -32,6 +33,10 @@ export default function Veiculos() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<any>(null);
   const [form, setForm] = useState<any>({});
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [bulkStatus, setBulkStatus] = useState("");
+  const [bulkSaving, setBulkSaving] = useState(false);
 
   const vehicles = trpc.frotas.listVehicles.useQuery(
     { companyId: cId, tipo: filterTipo !== "all" ? filterTipo : undefined, status: filterStatus !== "all" ? filterStatus : undefined },
@@ -43,6 +48,7 @@ export default function Veiculos() {
   const updateMut = trpc.frotas.updateVehicle.useMutation({
     onSuccess: () => { vehicles.refetch(); setDialogOpen(false); toast.success("Veículo atualizado"); },
   });
+  const bulkStatusMut = trpc.frotas.updateVehicle.useMutation();
   const deleteMut = trpc.frotas.deleteVehicle.useMutation({
     onSuccess: () => { vehicles.refetch(); toast.success("Veículo inativado"); },
   });
@@ -191,6 +197,57 @@ export default function Veiculos() {
     );
   });
 
+  function toggleSelectMode() {
+    setSelectMode((m) => {
+      const next = !m;
+      if (!next) { setSelectedIds(new Set()); setBulkStatus(""); }
+      return next;
+    });
+  }
+
+  function toggleSelected(id: number) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
+
+  const allVisibleSelected = list.length > 0 && list.every((v: any) => selectedIds.has(v.id));
+  const visibleSelectedCount = list.filter((v: any) => selectedIds.has(v.id)).length;
+
+  function toggleSelectAll() {
+    if (allVisibleSelected) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(list.map((v: any) => v.id)));
+    }
+  }
+
+  async function applyBulkStatus() {
+    if (!bulkStatus) { toast.error("Selecione o status a aplicar"); return; }
+    const ids = list.filter((v: any) => selectedIds.has(v.id)).map((v: any) => v.id);
+    if (ids.length === 0) { toast.error("Selecione ao menos um veículo"); return; }
+    setBulkSaving(true);
+    let ok = 0;
+    const erros: string[] = [];
+    for (const id of ids) {
+      try {
+        await bulkStatusMut.mutateAsync({ id, companyId: cId, statusVeiculo: bulkStatus });
+        ok++;
+      } catch (e: any) {
+        erros.push(e?.message || "erro");
+      }
+    }
+    setBulkSaving(false);
+    await vehicles.refetch();
+    if (ok > 0) toast.success(`${ok} veículo(s) atualizado(s) para "${bulkStatus}"`);
+    if (erros.length > 0) toast.error(`${erros.length} falha(s): ${erros[0]}`);
+    setSelectedIds(new Set());
+    setBulkStatus("");
+    setSelectMode(false);
+  }
+
   return (
     <DashboardLayout>
       <div className="p-2 space-y-3">
@@ -199,6 +256,14 @@ export default function Veiculos() {
             <Car className="h-6 w-6 text-cyan-600" /> Veículos
           </h1>
           <div className="flex gap-2">
+            <Button
+              variant={selectMode ? "default" : "outline"}
+              onClick={toggleSelectMode}
+              className={selectMode ? "" : "border-slate-300"}
+            >
+              {selectMode ? <X className="h-4 w-4 mr-1" /> : <ListChecks className="h-4 w-4 mr-1" />}
+              {selectMode ? "Sair da seleção" : "Selecionar"}
+            </Button>
             <Button
               variant="outline"
               onClick={() => autoFipeMut.mutate({ companyId: cId })}
@@ -232,6 +297,28 @@ export default function Veiculos() {
             </SelectContent>
           </Select>
         </div>
+
+        {selectMode && (
+          <div className="sticky top-0 z-20 flex flex-wrap items-center gap-3 rounded-lg border border-cyan-200 bg-cyan-50 dark:bg-cyan-950 dark:border-cyan-800 px-3 py-2">
+            <label className="flex items-center gap-2 text-sm font-medium cursor-pointer select-none">
+              <Checkbox checked={allVisibleSelected} onCheckedChange={toggleSelectAll} />
+              Selecionar todos
+            </label>
+            <span className="text-sm text-cyan-700 dark:text-cyan-300 font-semibold">{visibleSelectedCount} selecionado(s)</span>
+            <div className="flex-1" />
+            <span className="text-sm text-muted-foreground">Alterar status para:</span>
+            <Select value={bulkStatus} onValueChange={setBulkStatus}>
+              <SelectTrigger className="w-[180px] bg-background"><SelectValue placeholder="Escolher status..." /></SelectTrigger>
+              <SelectContent>
+                {STATUS.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <Button onClick={applyBulkStatus} disabled={bulkSaving || visibleSelectedCount === 0 || !bulkStatus}>
+              {bulkSaving ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <CheckCircle2 className="h-4 w-4 mr-1" />}
+              {bulkSaving ? "Aplicando..." : "Aplicar"}
+            </Button>
+          </div>
+        )}
 
         {!vehicles.isLoading && list.length > 0 && (() => {
           const totalFipe = list.reduce((s: number, v: any) => s + parseFloat(v.valor_fipe || "0"), 0);
@@ -283,12 +370,21 @@ export default function Veiculos() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
             {list.map((v: any) => (
-              <Card key={v.id} className="overflow-hidden hover:shadow-md transition-shadow">
+              <Card
+                key={v.id}
+                className={`overflow-hidden transition-shadow ${selectMode ? "cursor-pointer hover:shadow-md" : "hover:shadow-md"} ${selectMode && selectedIds.has(v.id) ? "ring-2 ring-cyan-500 border-cyan-400" : ""}`}
+                onClick={selectMode ? () => toggleSelected(v.id) : undefined}
+              >
                 <div className="flex">
+                  {selectMode && (
+                    <div className="flex items-center justify-center pl-3" onClick={(e) => e.stopPropagation()}>
+                      <Checkbox checked={selectedIds.has(v.id)} onCheckedChange={() => toggleSelected(v.id)} />
+                    </div>
+                  )}
                   <div
-                    className="w-32 h-32 flex-shrink-0 bg-muted flex items-center justify-center overflow-hidden relative group cursor-pointer"
-                    onClick={() => handlePhotoClick(v.id)}
-                    title="Clique para alterar a foto"
+                    className={`w-32 h-32 flex-shrink-0 bg-muted flex items-center justify-center overflow-hidden relative group ${selectMode ? "" : "cursor-pointer"}`}
+                    onClick={selectMode ? undefined : () => handlePhotoClick(v.id)}
+                    title={selectMode ? undefined : "Clique para alterar a foto"}
                   >
                     {v.foto_url ? (
                       <img src={v.foto_url} alt={v.modelo} className="w-full h-full object-cover" />
@@ -328,7 +424,7 @@ export default function Veiculos() {
                     <div className="mt-1 text-xs text-muted-foreground truncate">
                       {v.responsavel || v.motorista_nome || "Sem responsável"}
                     </div>
-                    <div className="mt-2 flex items-center gap-1 flex-wrap">
+                    <div className="mt-2 flex items-center gap-1 flex-wrap" onClick={selectMode ? (e) => e.stopPropagation() : undefined}>
                       {v.crlv_url && (
                         <a href={v.crlv_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-[10px] bg-blue-50 text-blue-700 border border-blue-200 rounded px-1.5 py-0.5 hover:bg-blue-100">
                           <FileDown className="h-3 w-3" /> CRLV
