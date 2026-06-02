@@ -1,6 +1,27 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2697 — **FINANCEIRO · PAINEL FINANCEIRO / DASHBOARD CFO (`/financeiro` → "Painel Financeiro") ·
+ * CORRIGIDO O DASHBOARD QUE APARECIA TODO ZERADO ("SALDO CONSOLIDADO R$ 0,00", "NENHUMA CONTA
+ * BANCÁRIA CADASTRADA", KPIs ZERADOS) MESMO HAVENDO 3 CONTAS BANCÁRIAS ATIVAS E LANÇAMENTOS.**
+ *
+ * PEDIDO (usuário, print do Painel Financeiro com "Nenhuma conta bancária cadastrada" + outro print da
+ * tela "Contas Bancárias" mostrando 3 contas ativas): "está mostrando que não tem contas cadastradas
+ * mas já tem cadastro sim, faça a verificação".
+ *
+ * CAUSA-RAIZ: em `getDashboardExecutivo` (`server/routers/financial.ts`) DUAS das ~13 queries do
+ * `Promise.all` (topDespesas e receitaPorObra) estavam com o placeholder `$1` FALTANDO logo após
+ * `AND TO_CHAR(data_competencia,'YYYY-MM')=` (sobrou `=` seguido de espaços + `GROUP BY`). O Postgres
+ * lançava erro de sintaxe (42601) → como TODAS as queries rodam num único `Promise.all`, UMA rejeição
+ * derrubava o endpoint inteiro → o cliente recebia erro, `data` ficava `undefined` e
+ * `bancos = data?.bancos ?? []` + `kpis ?? 0` zeravam o dashboard todo (não só os bancos). Por isso a
+ * página "Contas Bancárias" (router folha, query independente) listava as 3 contas normalmente, mas o
+ * Painel Financeiro não mostrava nada.
+ *
+ * FIX (SÓ SERVER; ZERO SCHEMA/CLIENT — R-001/R-007/R-010): `server/routers/financial.ts` — recolocado
+ * `$1` nas duas queries (`=$1`), restaurando a ligação posicional do `[mes]`. Validado contra o Neon
+ * real (companyId 60002): bancos=3, topDespesas e receitaPorObra executam sem erro. esbuild EXIT 0.
+ *
  * Rev. 2696 — **FROTA · "IMPORTAR OS COM IA" (`/frotas/manutencoes` → "Importar OS (IA)") ·
  * CORRIGIDO O ERRO `Unterminated string in JSON at position NNNN` QUE QUEBRAVA A IMPORTAÇÃO QUANDO A
  * OS ERA EXTENSA (MUITOS ITENS / DESCRIÇÕES LONGAS).**

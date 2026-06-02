@@ -2991,7 +2991,7 @@ export const financialRouter = router({
       dbExecute(db, `
         SELECT conta_nome AS "categoria", SUM(COALESCE(valor_realizado, valor_previsto)) AS total
         FROM financial_entries
-        WHERE company_id IN (${inlineIds(ids)}) AND tipo='despesa' AND status IN ('pago','recebido') AND TO_CHAR(data_competencia,'YYYY-MM')=        
+        WHERE company_id IN (${inlineIds(ids)}) AND tipo='despesa' AND status IN ('pago','recebido') AND TO_CHAR(data_competencia,'YYYY-MM')=$1
                 GROUP BY conta_nome ORDER BY total DESC LIMIT 8`, [mes]),
       dbExecute(db, `
         SELECT id, descricao, obra_nome AS "obraNome", valor_previsto AS "valor", data_vencimento AS "vencimento", tipo,
@@ -3004,7 +3004,7 @@ export const financialRouter = router({
                SUM(CASE WHEN tipo='receita' AND status IN ('recebido','pago') THEN COALESCE(valor_realizado, valor_previsto) ELSE 0 END) AS receita,
                SUM(CASE WHEN tipo='despesa' AND status IN ('pago','recebido') THEN COALESCE(valor_realizado, valor_previsto) ELSE 0 END) AS despesa
         FROM financial_entries
-        WHERE company_id IN (${inlineIds(ids)}) AND obra_id IS NOT NULL AND TO_CHAR(data_competencia,'YYYY-MM')=        
+        WHERE company_id IN (${inlineIds(ids)}) AND obra_id IS NOT NULL AND TO_CHAR(data_competencia,'YYYY-MM')=$1
                 GROUP BY obra_nome, obra_id ORDER BY receita DESC LIMIT 10`, [mes]),
     ]);
 
