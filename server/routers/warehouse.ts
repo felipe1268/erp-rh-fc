@@ -1059,9 +1059,34 @@ Retorne os até 5 melhores matches em ordem decrescente de similaridade. Se nenh
 
   getInventorySessionItems: protectedProcedure
     .input(z.object({ sessionId: z.number() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      // Rev. 2686 — GUARD DE ACESSO (antes inexistente: IDOR por `sessionId`).
+      // O detalhe é alcançável pelo novo Histórico de Inventário, então
+      // resolvemos a sessão e validamos tenant + obra ANTES de devolver itens.
+      // Mantém a assinatura {sessionId} (callers existentes não mudam): a
+      // company/obra vêm da própria sessão, espelhando historicoInventarioSemanal.
+      const [sess] = await db
+        .select({
+          companyId: warehouseInventorySessions.companyId,
+          obraId: warehouseInventorySessions.obraId,
+        })
+        .from(warehouseInventorySessions)
+        .where(eq(warehouseInventorySessions.id, input.sessionId))
+        .limit(1);
+      if (!sess) return [];
+      const allowedCompanies = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+      if (!allowedCompanies.map((c: any) => c.id).includes(sess.companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta empresa." });
+      }
+      if (sess.obraId != null) {
+        const allowed = await getEffectiveAllowedObraIds(ctx.user.id, ctx.user.role);
+        if (allowed !== null && !allowed.includes(sess.obraId)) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta obra." });
+        }
+      }
 
       // Rev. 2439 — LEFT JOIN com `almoxarifado_itens` pra trazer foto +
       // unidade pra cada card do Inventário Semanal (facilita aferição
@@ -1094,6 +1119,68 @@ Retorne os até 5 melhores matches em ordem decrescente de similaridade. Se nenh
         .where(eq(warehouseInventorySessionItems.sessionId, input.sessionId))
         .orderBy(warehouseInventorySessionItems.id);
       return rows;
+    }),
+
+  // Rev. 2686 — HISTÓRICO de inventário semanal (read-only). Diferente do
+  // getInventorySession (que só vê a semana atual): lista TODAS as sessões
+  // passadas da company (+ obra opcional) ordenadas da mais recente p/ a mais
+  // antiga, com o nome da obra resolvido. Detalhe por sessão = reuso de
+  // getInventorySessionItems. Guards de tenant + obra espelham baiaListar.
+  historicoInventarioSemanal: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      obraId: z.number().nullable().optional(),
+      limit: z.number().optional(),
+    }))
+    .query(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      // Tenant guard.
+      const allowedCompanies = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+      if (!allowedCompanies.map((c: any) => c.id).includes(input.companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta empresa." });
+      }
+
+      const conds: any[] = [eq(warehouseInventorySessions.companyId, input.companyId)];
+      if (input.obraId === null) {
+        conds.push(sql`${warehouseInventorySessions.obraId} IS NULL`);
+      } else if (input.obraId !== undefined) {
+        conds.push(eq(warehouseInventorySessions.obraId, input.obraId));
+      }
+
+      const rows = await db
+        .select()
+        .from(warehouseInventorySessions)
+        .where(and(...conds))
+        .orderBy(desc(warehouseInventorySessions.semanaRef), desc(warehouseInventorySessions.id))
+        .limit(input.limit ?? 200);
+
+      // Obra guard: usuários restritos só veem sessões de obras permitidas
+      // (sessões do almoxarifado central — obraId null — ficam sempre visíveis).
+      const allowed = await getEffectiveAllowedObraIds(ctx.user.id, ctx.user.role);
+      const filtered = allowed === null
+        ? rows
+        : rows.filter((r: any) => r.obraId == null || allowed.includes(r.obraId));
+
+      // Resolve nome da obra (1 query).
+      const obraIdsUnicos = Array.from(
+        new Set(filtered.map((r: any) => r.obraId).filter((x: any) => x != null))
+      ) as number[];
+      const mapObras = new Map<number, string>();
+      if (obraIdsUnicos.length > 0) {
+        const obrasRows = await db
+          .select({ id: obras.id, nome: obras.nome, codigo: obras.codigo })
+          .from(obras)
+          .where(inArray(obras.id, obraIdsUnicos));
+        for (const o of obrasRows) {
+          mapObras.set(o.id, o.codigo ? `${o.codigo} – ${o.nome}` : o.nome);
+        }
+      }
+
+      return filtered.map((r: any) => ({
+        ...r,
+        obraNome: r.obraId == null ? "Almoxarifado Central" : (mapObras.get(r.obraId) ?? "Obra"),
+      }));
     }),
 
   confirmInventoryItem: protectedProcedure

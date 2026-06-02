@@ -360,6 +360,8 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
       // devolvia false e o item sumia do menu p/ qq user em grupo, mesmo
       // tendo o módulo Almoxarifado liberado.
       { key: "almoxarifado-inventario-visual", label: "Inventário Visual (Baias)", route: "/almoxarifado/inventario-visual", icon: "Package" },
+      // Rev. 2686 — painel único read-only de análise do histórico (semanal + baias).
+      { key: "almoxarifado-historico-inventario", label: "Histórico de Inventário", route: "/almoxarifado/historico-inventario", icon: "BarChart3" },
       { key: "almoxarifado-ferr-terceiros",label: "Ferramentas de Terceiros", route: "/almoxarifado/ferramentas-terceiros", icon: "Wrench" },
       { key: "almoxarifado-categorias",    label: "Categorias",         route: "/almoxarifado/categorias",    icon: "Layers" },
       // Equipamentos (Rev. 2258) — plugado no Almoxarifado

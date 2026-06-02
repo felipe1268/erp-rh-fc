@@ -1,6 +1,39 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2686 — **ALMOXARIFADO (`/almoxarifado` → menu "Histórico de Inventário") · NOVO PAINEL ÚNICO READ-ONLY
+ * P/ ANALISAR O HISTÓRICO DO INVENTÁRIO: UMA ABA "INVENTÁRIO SEMANAL" (TODAS AS SESSÕES PASSADAS, SEMANA A
+ * SEMANA, COM DIVERGÊNCIAS EM DESTAQUE) E UMA ABA "BAIAS / GRANEL" (LEITURAS DE CADA BAIA AO LONGO DO TEMPO,
+ * COM CONSUMO/TENDÊNCIA CALCULADOS). ANTES NÃO HAVIA TELA NENHUMA P/ VER O PASSADO — SÓ A SEMANA CORRENTE.**
+ *
+ * PEDIDO (usuário): criar "um registro para analisar corretamente" o histórico do inventário semanal + das
+ * baias/insumos. Escolhas confirmadas: (1) "os dois juntos, num painel único"; (2) "um novo item no menu do
+ * Almoxarifado". Contexto: os dados JÁ existiam completos no banco (warehouse_inventory_sessions +
+ * almoxarifado_baia_leituras); faltava só a TELA. O `getInventorySession` só enxerga a semana corrente
+ * (`getSemanaRef`), então não dava p/ revisar contagens anteriores nem a evolução de consumo das baias.
+ *
+ * FIX (1 ENDPOINT READ-ONLY NOVO + 1 PÁGINA NOVA + WIRING; ZERO SCHEMA — R-001/R-007/R-010):
+ *  - SERVER `server/routers/warehouse.ts`: novo query `historicoInventarioSemanal({companyId, obraId?, limit?})`
+ *    — lista TODAS as sessões da company (+ obra opcional) ordenadas por `semanaRef`/`id` desc, resolvendo o
+ *    nome da obra (central = obraId null). Guards de tenant (`getCompaniesForUser`) + obra
+ *    (`getEffectiveAllowedObraIds`) espelhando `baiaListar`. Detalhe por sessão REUSA `getInventorySessionItems`;
+ *    as baias REUSAM `baiaListar` (lista + última/penúltima leitura → tendência) e `baiaLeiturasListar`
+ *    (timeline completa por baia) — NENHUM endpoint de baia novo.
+ *  - CLIENT `client/src/pages/almoxarifado/HistoricoInventario.tsx` (NOVO): seletor de contexto (Central/obra,
+ *    mesmo padrão do Inventário Semanal) + 2 abas. Aba Semanal: cards de sessão (semana, obra, almoxarife,
+ *    status, X/Y itens, nº de divergências, data) que expandem (lazy) p/ os itens — divergências separadas em
+ *    destaque (laranja, com a diferença sinalizada), depois conferidos e pendentes. Aba Baias: só faz sentido
+ *    por obra (baias têm obraId NOT NULL) → mostra CTA "selecione uma obra" no contexto Central; por obra,
+ *    cards de baia com volume/percentual da última leitura + tendência (↑/↓), expandindo (lazy) p/ a timeline
+ *    de leituras com consumo Δ calculado entre leituras consecutivas, autor, data/hora, observação e foto.
+ *  - WIRING: rota `/almoxarifado/historico-inventario` em `client/src/App.tsx` (lazy import + `<Route>` com
+ *    RouteGuard apontando p/ a própria rota); feature `almoxarifado-historico-inventario` em `shared/modules.ts`
+ *    (sob o módulo "almoxarifado", icon BarChart3) p/ liberar no menu de grupos; item na sidebar em
+ *    `client/src/components/DashboardLayout.tsx` (`menuSectionsAlmoxarifado`, icon BarChart3, logo após o
+ *    Inventário Visual). esbuild da página nova + warehouse.ts + modules.ts + DashboardLayout EXIT 0.
+ *
+ * ----------------------------------------------------------------------------------------------------
+ *
  * Rev. 2685 — **COLABORADORES (`/colaboradores` → ficha → aba "Documentos" → "Documentos digitalizados") · O
  * LAYOUT DESSE BLOCO FOI REFEITO P/ FICAR MAIS AMIGÁVEL: SAIU O GRID DE CAIXAS TRACEJADAS VAZIAS (Rev. 2683)
  * E ENTROU UMA LISTA DE CARDS (2 COLUNAS) — CADA TIPO DE DOCUMENTO COM ÍCONE TEMÁTICO, RÓTULO LEGÍVEL, SELO DE

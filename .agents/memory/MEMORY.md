@@ -7,4 +7,5 @@
 - [dbExecute binds by appearance, not $N](dbexecute-positional-binding.md) — financial.ts dbExecute assigns params left-to-right ignoring the $N number; order the array to match placeholder text order or UPDATEs silently corrupt.
 - [Curva S week-keying & earned-value](curva-s-week-keying.md) — MSP snapshot must anchor to status WEEK (toMondayStr), not exact day; BCWS/BCWP must share one data-date; work vs financial curves differ by design.
 - [% Previsto motor vs manual toggle](previsto-fonte-toggle.md) — curve JSON carries a `fonte` marker; getProjeto self-heal reconciles lazily vs the global company toggle. Any new writer must set the marker.
+- [Warehouse session IDOR guard](warehouse-session-idor.md) — getInventorySessionItems takes only sessionId; derive company/obra from the session row to authorize. Browse-reachable warehouse read endpoints must guard against IDOR.
 - [No employee status history](no-status-history.md) — only CURRENT status is stored; for past-date snapshots derive active-at-D from admissão/demissão dates + férias from vacationPeriods; other sub-statuses fold into Ativo.
