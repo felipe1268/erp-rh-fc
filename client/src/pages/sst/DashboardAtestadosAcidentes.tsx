@@ -14,6 +14,7 @@ import {
   TrendingUp, TrendingDown, Stethoscope, ShieldAlert, FileCheck2, Calendar, RefreshCw,
   BarChart3, ArrowDown, ArrowUp, Layers, MapPin, AlarmClock, DollarSign,
   CalendarClock, Repeat, CalendarDays, User as UserIcon, X as XIcon,
+  Search, Info, Download,
 } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -190,18 +191,32 @@ function TooltipPtBR({ active, payload, label, hideZeros = false, valueSuffix }:
 
 function KPI({
   icon: Icon, label, value, sub, color = "text-blue-600", bg = "bg-blue-50", border = "border-blue-200",
+  onClick, hint,
 }: {
   icon: any; label: string; value: string | number; sub?: string;
   color?: string; bg?: string; border?: string;
+  onClick?: () => void; hint?: string;
 }) {
+  const clickable = !!onClick;
   return (
-    <Card className={`${bg} ${border} border`}>
+    <Card
+      className={`${bg} ${border} border ${clickable ? "cursor-pointer hover:shadow-md hover:-translate-y-0.5 transition" : ""}`}
+      onClick={onClick}
+      role={clickable ? "button" : undefined}
+      tabIndex={clickable ? 0 : undefined}
+      onKeyDown={clickable ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick!(); } } : undefined}
+    >
       <CardContent className="p-4">
         <div className="flex items-start justify-between">
           <div className="flex-1 min-w-0">
             <p className="text-xs font-medium text-gray-600 uppercase tracking-wide truncate">{label}</p>
             <p className={`text-2xl font-bold ${color} mt-1`}>{value}</p>
             {sub && <p className="text-xs text-gray-500 mt-1">{sub}</p>}
+            {clickable && (
+              <p className={`text-[11px] ${color} mt-1.5 flex items-center gap-1 font-medium opacity-80`}>
+                <Search className="h-3 w-3" /> {hint || "Clique para ver o detalhamento"}
+              </p>
+            )}
           </div>
           <Icon className={`${color} h-8 w-8 flex-shrink-0`} />
         </div>
@@ -224,6 +239,9 @@ export default function DashboardAtestadosAcidentes() {
   const [indicadorDetalhe, setIndicadorDetalhe] = useState<{ titulo: string; descricao: string; lista: any[] } | null>(null);
   const [reincidenciaDetalhe, setReincidenciaDetalhe] = useState(false);
   const [diaSemanaDetalhe, setDiaSemanaDetalhe] = useState<{ tipo: "atestado" | "acidente"; diaIdx: number; dia: string } | null>(null);
+  // Rev. 2687 — Drill-down "de onde vem o número" dos cards Total Atestados / Dias Afastamento.
+  const [diasDetalhe, setDiasDetalhe] = useState(false);
+  const [diasFiltro, setDiasFiltro] = useState("");
   // Rev. 1976 — Modal de foto ampliada do funcionário (clique na miniatura)
   const [fotoZoom, setFotoZoom] = useState<{ url: string; nome: string } | null>(null);
   // Rev. 1977 — Toggle de séries da "Evolução Mensal" via click na legenda (Set de dataKeys ocultas)
@@ -519,9 +537,11 @@ export default function DashboardAtestadosAcidentes() {
             <TabsContent value="visaoGeral" className="space-y-4">
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 <KPI icon={FileCheck2} label="Total Atestados" value={fmtNum(d.atestados.total)}
-                  sub={`${fmtNum(d.atestados.colaboradoresAfetados)} colaboradores`} color="text-emerald-600" bg="bg-emerald-50" border="border-emerald-200" />
+                  sub={`${fmtNum(d.atestados.colaboradoresAfetados)} colaboradores`} color="text-emerald-600" bg="bg-emerald-50" border="border-emerald-200"
+                  onClick={() => { setDiasFiltro(""); setDiasDetalhe(true); }} hint="Ver por colaborador" />
                 <KPI icon={Clock} label="Dias Afastamento (Atestado)" value={fmtNum(d.atestados.totalDiasAfastamento)}
-                  sub={`Média ${fmtNum(d.atestados.mediaDiasAtestado, 1)} dias/atestado`} color="text-blue-600" bg="bg-blue-50" border="border-blue-200" />
+                  sub={`Média ${fmtNum(d.atestados.mediaDiasAtestado, 1)} dias/atestado`} color="text-blue-600" bg="bg-blue-50" border="border-blue-200"
+                  onClick={() => { setDiasFiltro(""); setDiasDetalhe(true); }} hint="De onde vem esse número?" />
                 <KPI icon={AlertTriangle} label="Total Acidentes" value={fmtNum(d.acidentes.total)}
                   sub={`${fmtNum(d.acidentes.colaboradoresAfetados)} colaboradores`} color="text-orange-600" bg="bg-orange-50" border="border-orange-200" />
                 <KPI icon={ShieldAlert} label="Dias Perdidos (Acidente)" value={fmtNum(d.acidentes.totalDiasAfastamento)}
@@ -1765,6 +1785,139 @@ export default function DashboardAtestadosAcidentes() {
                   </table>
                 </div>
               )}
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Rev. 2687 — Drill-down "de onde vem o número": Total Atestados / Dias Afastamento por colaborador */}
+        <Dialog open={diasDetalhe} onOpenChange={setDiasDetalhe}>
+          <DialogContent
+            resizable={false}
+            className="max-w-none w-screen h-screen sm:w-[98vw] sm:h-[96vh] p-0 overflow-hidden flex flex-col bg-white sm:rounded-xl border-0 sm:border"
+          >
+            <DialogHeader className="px-6 pt-5 pb-3 border-b">
+              <DialogTitle className="flex items-center gap-2 text-lg">
+                <Clock className="h-5 w-5 text-blue-600" />
+                Dias de Afastamento — De onde vem o número?
+              </DialogTitle>
+              <div className="text-xs text-gray-600 mt-2 bg-blue-50 border border-blue-100 rounded-md p-3 flex gap-2 items-start">
+                <Info className="h-4 w-4 text-blue-600 flex-shrink-0 mt-0.5" />
+                <span>
+                  O total de <b>{fmtNum(d?.atestados.totalDiasAfastamento ?? 0)} dias</b> é a <b>soma</b> do campo
+                  {" "}<b>"Dias de Afastamento"</b> gravado em cada atestado emitido no período
+                  {" "}<b>{dataInicio.split("-").reverse().join("/")}</b> a <b>{dataFim.split("-").reverse().join("/")}</b>
+                  {" "}({fmtNum(d?.atestados.total ?? 0)} atestados de {fmtNum(d?.atestados.colaboradoresAfetados ?? 0)} colaboradores).
+                  {" "}A tabela abaixo mostra o detalhamento por colaborador — clique num nome para ver os atestados dele.
+                </span>
+              </div>
+            </DialogHeader>
+            <div className="flex-1 overflow-auto px-6 py-4">
+              {(() => {
+                const lista = d?.atestados.todosFuncionarios ?? [];
+                const q = diasFiltro.trim().toLowerCase();
+                const filtrada = q
+                  ? lista.filter((f: any) =>
+                      (f.nome || "").toLowerCase().includes(q) ||
+                      (f.funcao || "").toLowerCase().includes(q) ||
+                      (f.codigoInterno || "").toLowerCase().includes(q) ||
+                      (f.matricula || "").toLowerCase().includes(q),
+                    )
+                  : lista;
+                const totDias = filtrada.reduce((s: number, f: any) => s + (f.dias || 0), 0);
+                const totQtd = filtrada.reduce((s: number, f: any) => s + (f.quantidade || 0), 0);
+                const exportCSV = () => {
+                  const head = ["#", "Funcionario", "Codigo", "Funcao", "Qtd Atestados", "Dias Afastamento"];
+                  const linhas = filtrada.map((f: any, i: number) => [
+                    i + 1,
+                    `"${(f.nome || "").replace(/"/g, '""')}"`,
+                    f.codigoInterno || f.matricula || f.employeeId,
+                    `"${(f.funcao || "").replace(/"/g, '""')}"`,
+                    f.quantidade || 0,
+                    f.dias || 0,
+                  ].join(";"));
+                  const csv = [head.join(";"), ...linhas, ["", "", "", "TOTAL", totQtd, totDias].join(";")].join("\n");
+                  const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement("a");
+                  a.href = url;
+                  a.download = `dias-afastamento_${dataInicio}_${dataFim}.csv`;
+                  a.click();
+                  URL.revokeObjectURL(url);
+                };
+                return (
+                  <>
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-2 mb-3">
+                      <div className="relative flex-1 max-w-md">
+                        <Search className="h-4 w-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                        <Input
+                          value={diasFiltro}
+                          onChange={(e) => setDiasFiltro(e.target.value)}
+                          placeholder="Filtrar por nome, função ou matrícula..."
+                          className="pl-9"
+                        />
+                      </div>
+                      <div className="text-xs text-gray-500 flex-1">
+                        {filtrada.length} colaborador(es){q ? ` (de ${lista.length})` : ""}
+                      </div>
+                      <Button variant="outline" size="sm" onClick={exportCSV} disabled={filtrada.length === 0}>
+                        <Download className="h-4 w-4 mr-1" /> CSV
+                      </Button>
+                    </div>
+
+                    {filtrada.length === 0 ? (
+                      <p className="text-sm text-gray-500 py-12 text-center">Nenhum colaborador encontrado.</p>
+                    ) : (
+                      <div className="border rounded-lg overflow-hidden">
+                        <table className="w-full text-sm">
+                          <thead className="bg-gray-50 text-gray-700 text-xs uppercase">
+                            <tr>
+                              <th className="px-3 py-2 text-left w-10">#</th>
+                              <th className="px-3 py-2 text-left">Funcionário</th>
+                              <th className="px-3 py-2 text-left">Função</th>
+                              <th className="px-3 py-2 text-right">Qtd Atestados</th>
+                              <th className="px-3 py-2 text-right text-blue-700">Dias Afastamento</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y">
+                            {filtrada.map((f: any, i: number) => (
+                              <tr
+                                key={f.employeeId}
+                                className="hover:bg-blue-50 cursor-pointer"
+                                onClick={() => { setDiasDetalhe(false); setSelectedEmployeeId(f.employeeId); }}
+                                title="Ver todos os atestados deste colaborador"
+                              >
+                                <td className="px-3 py-2 text-gray-500 align-top">{i + 1}</td>
+                                <td className="px-3 py-2 align-top">
+                                  <div className="flex items-start gap-2">
+                                    <EmployeeAvatar fotoUrl={(f as any).fotoUrl} nome={f.nome} onZoom={(url, nome) => setFotoZoom({ url, nome })} />
+                                    <div className="min-w-0 flex-1">
+                                      <span className="font-medium text-blue-700 hover:underline">{f.nome}</span>
+                                      {f.codigoInterno ? <span className="text-xs text-gray-400 ml-1">#{f.codigoInterno}</span> : (f.matricula ? <span className="text-xs text-gray-400 ml-1">#{f.matricula}</span> : null)}
+                                    </div>
+                                  </div>
+                                </td>
+                                <td className="px-3 py-2 text-gray-600">{f.funcao || "—"}</td>
+                                <td className="px-3 py-2 text-right font-semibold text-emerald-700">{f.quantidade}</td>
+                                <td className="px-3 py-2 text-right font-semibold text-blue-700">{f.dias}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                          <tfoot className="bg-gray-50 font-semibold text-sm">
+                            <tr className="border-t-2">
+                              <td colSpan={3} className="px-3 py-2 text-right text-gray-700">TOTAIS</td>
+                              <td className="px-3 py-2 text-right text-emerald-700">{fmtNum(totQtd)}</td>
+                              <td className="px-3 py-2 text-right text-blue-800">{fmtNum(totDias)}</td>
+                            </tr>
+                          </tfoot>
+                        </table>
+                      </div>
+                    )}
+                    <p className="text-[11px] text-gray-500 mt-3">
+                      Dica: clique em uma linha para abrir o detalhamento completo do colaborador (todos os atestados, datas e dias).
+                    </p>
+                  </>
+                );
+              })()}
             </div>
           </DialogContent>
         </Dialog>

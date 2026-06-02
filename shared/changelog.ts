@@ -1,6 +1,33 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2687 — **SST (`/sst/atestados-acidentes` → aba "Visão Geral") · OS CARDS "TOTAL ATESTADOS" E "DIAS
+ * AFASTAMENTO (ATESTADO)" AGORA SÃO CLICÁVEIS E ABREM UM MODAL "DE ONDE VEM O NÚMERO?" QUE EXPLICA O CÁLCULO
+ * E LISTA O DETALHAMENTO POR COLABORADOR (NOME, FUNÇÃO, QTD ATESTADOS, DIAS), COM BUSCA/FILTRO, EXPORT CSV E
+ * CLIQUE NA LINHA → RAIO-X DO COLABORADOR. ANTES O ENGENHEIRO VIA "209" SEM SABER COMO ERA CALCULADO NEM QUEM
+ * ESTAVA POR TRÁS.**
+ *
+ * PEDIDO (usuário, prints IMG_1496/1497/1498): "Tô com dúvida de como o ERP calcula os dias de afastamento,
+ * está tudo confuso e quando clicar quero ver de onde vêm as informações e filtrar quem são os funcionários."
+ * O número "DIAS AFASTAMENTO (ATESTADO)" é simplesmente a SOMA do campo `atestados.diasAfastamento` (inteiro,
+ * gravado em cada atestado) no período filtrado — NÃO é derivado de data início/fim. Faltava transparência e
+ * um drill-down a partir do próprio card (já existia o "Top 10 Funcionários" na aba Atestados, mas fatiado e
+ * em outra aba, sem reconciliar com o total).
+ *
+ * FIX (1 CAMPO READ-ONLY NOVO NO RETORNO + UI; ZERO SCHEMA — R-001/R-007/R-010):
+ *  - SERVER `server/routers/sstAnalytics.ts` (`atestadosAcidentes`): adicionado `atestados.todosFuncionarios`
+ *    — a MESMA agregação por colaborador do `topFuncionarios`, porém COMPLETA (não fatiada em 10) e ordenada
+ *    por dias desc. Σ `dias` = `totalDiasAfastamento` (reconcilia exatamente com o card). Nenhuma query nova.
+ *  - CLIENT `client/src/pages/sst/DashboardAtestadosAcidentes.tsx`: componente `KPI` ganhou props opcionais
+ *    `onClick`/`hint` (card vira botão acessível com cursor/hover e uma microcópia "De onde vem esse número?" /
+ *    "Ver por colaborador"). Os cards "Total Atestados" e "Dias Afastamento (Atestado)" da Visão Geral abrem o
+ *    novo modal (`diasDetalhe`): cabeçalho explicativo (fórmula + período + totais), busca por nome/função/
+ *    matrícula (`diasFiltro`), tabela por colaborador com TOTAIS no rodapé, export CSV e clique na linha →
+ *    `setSelectedEmployeeId` (reusa o `EmployeeDetailDialog` existente). Ícones add: Search/Info/Download.
+ *    esbuild de sstAnalytics.ts + DashboardAtestadosAcidentes.tsx EXIT 0.
+ *
+ * ----------------------------------------------------------------------------------------------------
+ *
  * Rev. 2686 — **ALMOXARIFADO (`/almoxarifado` → menu "Histórico de Inventário") · NOVO PAINEL ÚNICO READ-ONLY
  * P/ ANALISAR O HISTÓRICO DO INVENTÁRIO: UMA ABA "INVENTÁRIO SEMANAL" (TODAS AS SESSÕES PASSADAS, SEMANA A
  * SEMANA, COM DIVERGÊNCIAS EM DESTAQUE) E UMA ABA "BAIAS / GRANEL" (LEITURAS DE CADA BAIA AO LONGO DO TEMPO,

@@ -865,6 +865,11 @@ export const sstAnalyticsRouter = router({
           porMotivo,
           topCIDs,
           topFuncionarios: topFuncionariosAtestados,
+          // Rev. 2687 — lista COMPLETA por colaborador (não fatiada) para o
+          // drill-down "de onde vem o número" dos cards Total Atestados / Dias
+          // Afastamento. Σ dias = totalDiasAfastamento (reconcilia com o card).
+          todosFuncionarios: Array.from(funcMap.values())
+            .sort((a, b) => b.dias - a.dias || b.quantidade - a.quantidade),
         },
         acidentes: {
           total: totalAcidentes,
@@ -923,7 +928,10 @@ export const sstAnalyticsRouter = router({
         codigoInterno: employees.codigoInterno,
         funcao: employees.funcao,
         cargo: employees.cargo,
-      }).from(employees).where(eq(employees.id, input.employeeId));
+      }).from(employees).where(and(
+        eq(employees.id, input.employeeId),
+        companyFilter(employees.companyId, input),
+      ));
 
       const ats = await db.select({
         id: atestados.id,
