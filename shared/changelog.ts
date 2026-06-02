@@ -1,6 +1,32 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2681 — **COLABORADORES (`/colaboradores`) · O RAIO-X DO FUNCIONÁRIO (ABERTO AO CLICAR NO NOME/FOTO)
+ * DEIXA DE QUEBRAR O LAYOUT EM TABLETS/iOS — A TELA AGORA ABRE EM FULLSCREEN DE VERDADE (COBRINDO TUDO),
+ * COM BOTÃO DE FECHAR, SEM A LISTA "VAZANDO" POR BAIXO NEM O CONTEÚDO EMPURRADO PRO FIM DA PÁGINA.**
+ *
+ * PEDIDO (usuário, prints IMG_1486/IMG_1487, iPad Safari): "quando clicar no nome e abrir o raiox ele tá
+ * com bug.. deixa a tela full screen com botão de fechar de forma que não tenha erro ou bugs de layout".
+ * Sintoma: ao abrir o Raio-X o topo da tela ficava em branco e a lista de colaboradores aparecia empurrada
+ * pro rodapé, atrás do modal.
+ *
+ * DIAGNÓSTICO (causa-raiz): `RaioXFuncionario` é um overlay `position: fixed; inset-0`, renderizado inline
+ * dentro da árvore da página `/colaboradores`. A regra GLOBAL de responsividade de tabelas em
+ * `client/src/index.css` (Rev. 2177) — `*:not([class*="overflow-"]):has(> table) { overflow-x: auto }` —
+ * transforma QUALQUER pai direto de `<table>` num scroll-container. No iOS/iPad Safari há o bug conhecido de
+ * `position: fixed` ficar PRESO (comportando-se como `absolute`) quando tem um ancestral com `overflow`
+ * scrollável, em vez de ancorar no viewport. Resultado: o modal era confinado ao container scrollável da
+ * lista (tabela), e não cobria a tela inteira.
+ *
+ * FIX (SÓ CLIENT/UI; ZERO SCHEMA/SERVER): `client/src/components/RaioXFuncionario.tsx` — o overlay passa a
+ * ser renderizado via **React Portal para `document.body`** (`createPortal(<div fixed inset-0 .../>,
+ * document.body)`), escapando de TODOS os ancestrais (overflow/transform/stacking) e ancorando de fato no
+ * viewport. Nenhuma mudança de markup/estilo do conteúdo, dos botões de fechar (Voltar/seta) ou da lógica de
+ * scroll-lock/ESC/lightbox — todos seguem dentro do mesmo nó portado. Import add `createPortal` (react-dom).
+ * esbuild `RaioXFuncionario.tsx` EXIT 0.
+ *
+ * ----------------------------------------------------------------------------------------------------
+ *
  * Rev. 2680 — **FUNCIONÁRIOS TERCEIROS (`/funcionarios-terceiros`) · AGORA DÁ PRA CLICAR NO FUNCIONÁRIO
  * (NOME/CARD OU BOTÃO "RAIO-X") E VER UM RAIO-X COMPLETO E READ-ONLY COM TODA A DOCUMENTAÇÃO — SEM PRECISAR
  * ENTRAR NO "EDITAR".**

@@ -19,6 +19,7 @@ import {
   Lock,
 } from "lucide-react";
 import { useEffect, useState, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { useLocation } from "wouter";
 import DocumentPreviewDialog, { canPreviewFile } from "@/components/DocumentPreviewDialog";
 import { generateCertificadoIntegracaoSstPdf } from "@/lib/certificadoIntegracaoSstPdf";
@@ -807,7 +808,7 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
   };
 
   // ===================== FULL SCREEN OVERLAY =====================
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-50 bg-background flex flex-col" style={{ width: "100vw", height: "100dvh" }}>
       {/* HEADER */}
       <div className="shrink-0 bg-gradient-to-r from-blue-600 to-indigo-700 text-white px-3 sm:px-6 py-2 sm:py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between shadow-lg gap-1 sm:gap-0">
@@ -4266,7 +4267,8 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
           })()}
         </DialogContent>
       </Dialog>
-    </div>
+    </div>,
+    document.body
   );
 }
 
