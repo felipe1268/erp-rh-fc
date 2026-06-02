@@ -56,6 +56,8 @@ export default function Manutencoes() {
   const [osParsed, setOsParsed] = useState<any>(null);
   const [osSelectedItems, setOsSelectedItems] = useState<Record<number, boolean>>({});
   const [osSaving, setOsSaving] = useState(false);
+  const [osProgress, setOsProgress] = useState(0);
+  const osProgressTimer = useRef<ReturnType<typeof setInterval> | null>(null);
   const osFileRef = useRef<HTMLInputElement>(null);
 
   type MaintItem = { categoria: string; nome: string; quantidade: number; valorUnitario: number; valorTotal: number };
@@ -188,8 +190,21 @@ export default function Manutencoes() {
     }
   }, []);
 
+  function stopOsProgress() {
+    if (osProgressTimer.current) { clearInterval(osProgressTimer.current); osProgressTimer.current = null; }
+  }
+
   async function processOS() {
     if (!osFile) return;
+    setOsProgress(0);
+    stopOsProgress();
+    osProgressTimer.current = setInterval(() => {
+      setOsProgress(p => {
+        if (p >= 92) return p;
+        const inc = p < 40 ? 6 : p < 70 ? 3 : 1;
+        return Math.min(92, p + inc);
+      });
+    }, 450);
     const reader = new FileReader();
     reader.onload = async () => {
       const dataUrl = reader.result as string;
@@ -200,6 +215,8 @@ export default function Manutencoes() {
           base64,
           mimeType: osFile.type,
         });
+        stopOsProgress();
+        setOsProgress(100);
         setOsParsed(result);
         if (result.items?.length > 0) {
           const sel: Record<number, boolean> = {};
@@ -207,11 +224,16 @@ export default function Manutencoes() {
           setOsSelectedItems(sel);
         }
       } catch (err: any) {
+        stopOsProgress();
+        setOsProgress(0);
         toast.error(err.message || "Erro ao processar OS");
       }
     };
+    reader.onerror = () => { stopOsProgress(); setOsProgress(0); toast.error("Erro ao ler o arquivo"); };
     reader.readAsDataURL(osFile);
   }
+
+  useEffect(() => () => stopOsProgress(), []);
 
   async function saveOSItems() {
     if (!osParsed?.items?.length) return;
@@ -981,7 +1003,7 @@ export default function Manutencoes() {
             </div>
           </DialogContent>
         </Dialog>
-        <Dialog open={osDialogOpen} onOpenChange={setOsDialogOpen}>
+        <Dialog open={osDialogOpen} onOpenChange={(o) => { if (!o) { stopOsProgress(); setOsProgress(0); } setOsDialogOpen(o); }}>
           <DialogContent className="w-screen h-screen max-w-none max-h-none m-0 rounded-none overflow-y-auto p-0" resizable={false} showCloseButton={false}>
             <div className="sticky top-0 z-10 bg-background border-b px-6 py-4 flex items-center justify-between">
               <DialogTitle className="text-xl font-bold flex items-center gap-2">
@@ -989,7 +1011,7 @@ export default function Manutencoes() {
                 Importar OS com IA
               </DialogTitle>
               <div className="flex gap-2">
-                <Button variant="outline" onClick={() => setOsDialogOpen(false)}>Fechar</Button>
+                <Button variant="outline" onClick={() => { stopOsProgress(); setOsProgress(0); setOsDialogOpen(false); }}>Fechar</Button>
                 {osParsed?.items?.length > 0 && (
                   <Button
                     className="bg-violet-600 hover:bg-violet-700"
@@ -1044,24 +1066,38 @@ export default function Manutencoes() {
                     </div>
                   )}
 
-                  <Button
-                    size="lg"
-                    className="w-full bg-violet-600 hover:bg-violet-700"
-                    onClick={processOS}
-                    disabled={parseMut.isPending}
-                  >
-                    {parseMut.isPending ? (
-                      <>
-                        <Loader2 className="h-5 w-5 mr-2 animate-spin" />
-                        Analisando com IA... aguarde
-                      </>
-                    ) : (
-                      <>
-                        <Sparkles className="h-5 w-5 mr-2" />
-                        Analisar com IA
-                      </>
-                    )}
-                  </Button>
+                  {parseMut.isPending ? (
+                    <div className="w-full rounded-xl border border-violet-200 dark:border-violet-800 bg-violet-50 dark:bg-violet-950/40 p-4 space-y-2">
+                      <div className="flex items-center justify-between text-sm font-medium text-violet-700 dark:text-violet-300">
+                        <span className="flex items-center gap-2">
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          Analisando com IA... aguarde
+                        </span>
+                        <span className="tabular-nums">{osProgress}%</span>
+                      </div>
+                      <div
+                        className="h-3 w-full rounded-full bg-violet-100 dark:bg-violet-900/60 overflow-hidden"
+                        role="progressbar"
+                        aria-valuenow={osProgress}
+                        aria-valuemin={0}
+                        aria-valuemax={100}
+                      >
+                        <div
+                          className="h-full rounded-full bg-violet-600 transition-all duration-300 ease-out"
+                          style={{ width: `${osProgress}%` }}
+                        />
+                      </div>
+                    </div>
+                  ) : (
+                    <Button
+                      size="lg"
+                      className="w-full bg-violet-600 hover:bg-violet-700"
+                      onClick={processOS}
+                    >
+                      <Sparkles className="h-5 w-5 mr-2" />
+                      Analisar com IA
+                    </Button>
+                  )}
                 </div>
               )}
 

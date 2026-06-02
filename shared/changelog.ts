@@ -1,6 +1,31 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2689 — **FROTA · "IMPORTAR OS COM IA" (`/frotas/manutencoes` → botão "Importar OS com IA") · A BARRA
+ * INDETERMINADA "ANALISANDO COM IA... AGUARDE" VIROU UMA BARRA DE PROGRESSO REAL DE 0% A 100%: ENQUANTO A IA
+ * LÊ O PDF/IMAGEM DA ORDEM DE SERVIÇO, O % SOBE GRADUALMENTE E CRAVA 100% QUANDO O RESULTADO CHEGA, DANDO AO
+ * USUÁRIO FEEDBACK DO ANDAMENTO EM VEZ DE UM SPINNER SEM FIM.**
+ *
+ * PEDIDO (usuário, print do modal "Importar OS com IA" analisando DOBLO.pdf): "quero que considere um % de
+ * avanço de 0 a 100%". A análise é UMA única chamada de IA (`frotas.parseMaintenanceOS`) — não há progresso
+ * intermediário real vindo do servidor (resposta atômica). Portanto o avanço é uma ESTIMATIVA visual no
+ * cliente: um timer climba o % enquanto a chamada está pendente e o 100% só é cravado quando o resultado
+ * efetivamente retorna (nunca finge conclusão antes da hora).
+ *
+ * FIX (SÓ CLIENT/UI; ZERO SCHEMA/SERVER — R-001/R-007/R-010):
+ *  - CLIENT `client/src/pages/frotas/Manutencoes.tsx`:
+ *    - Novos estados `osProgress` (0–100) e `osProgressTimer` (ref do `setInterval`) + helper `stopOsProgress()`.
+ *    - `processOS()`: ao iniciar, zera o `osProgress` e dispara um `setInterval` (450ms) que incrementa o %
+ *      de forma desacelerada (6% até 40%, 3% até 70%, 1% até o teto de 92%) — segura perto do fim para não
+ *      "mentir" 100%. No sucesso: para o timer e crava `100%`. No erro (mutation OU `reader.onerror`): para o
+ *      timer e volta a `0%` + toast. `useEffect` de cleanup limpa o timer no unmount.
+ *    - UI (estado pendente do `parseMut`): o `<Button>` "Analisando com IA... aguarde" foi substituído por um
+ *      bloco com label + `{osProgress}%` (tabular-nums) e uma barra `role="progressbar"` (aria-valuenow/min/max)
+ *      cujo preenchimento `width: {osProgress}%` anima com `transition-all`. Fora do estado pendente, o botão
+ *      "Analisar com IA" continua igual. esbuild EXIT 0.
+ *
+ * ----------------------------------------------------------------------------------------------------
+ *
  * Rev. 2688 — **PERFORMANCE GLOBAL (toda chamada de API / carregamento de telas) · O ERP DEIXA DE GRAVAR NO
  * BANCO O "ÚLTIMO ACESSO" (`lastSignedIn`) EM CADA REQUISIÇÃO — AGORA SÓ ATUALIZA NO MÁXIMO 1× A CADA 5 MIN
  * POR USUÁRIO. ISSO REMOVE UM WRITE NO POSTGRES DO CAMINHO QUENTE DE **TODA** REQUISIÇÃO tRPC, REDUZINDO A
