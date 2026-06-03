@@ -1,6 +1,35 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2732 — **COMPRAS · NOVA SOLICITAÇÃO (SC) · VINCULAR UM MATERIAL A UMA ETAPA DA EAP NÃO PODE DUPLICAR A
+ * LINHA (item "fantasma": material + etapa, com a etapa caindo "S/ VERBA" na cotação).**
+ *
+ * BUG (relato, continuação da Rev. 2731): "ele puxa a etapa como duas vezes o item e está dando sem verba." Na
+ * cotação da SC-2026-0299 (COT-2026-0275, criada por Caio em 02/06) o item aparecia DUPLICADO: a linha do
+ * material "Madeirite Plastificado" (m², 435,6 — META do orçamento 77,35 × 435,6 = R$ 33.693,66; saldo −391,6 =
+ * 44 orçado − 435,6) E uma 2ª linha "[03.02.10] Proteção dos Escoramentos… em Madeirite 18Mm" (m², 435) marcada
+ * "S/ VERBA" (saldo −435). A SC tem APENAS 1 item real (id=7157, o material vinculado à etapa 59586); a 2ª linha
+ * era um item "fantasma" da própria etapa, gerado na montagem da SC e propagado para a cotação. (Dado Neon: a
+ * cotação COT-2026-0275 era a id=409, já EXCLUÍDA — gap na sequência; a SC voltou a "pendente" com 1 item limpo.)
+ *
+ * CAUSA-RAIZ (`client/src/pages/compras/Solicitacoes.tsx`, componente `ManualEapLink` → callback `onLinkMultiple`):
+ * ao vincular uma linha com descrição própria (um MATERIAL digitado) a uma etapa, o código fazia
+ * `novos.splice(idx + 1, 0, ...novosItens)` — MANTINHA a linha original E INSERIA a(s) nova(s) logo abaixo, ou
+ * seja, DUPLICAVA o item. Combinado com `manterItemUsuario` (Rev. 2731), a 1ª entrada nova preservava a descrição
+ * do material, mas a linha original ficava sobrando (e, em outros fluxos, a entrada virava a própria etapa) →
+ * material + etapa na cotação. O vínculo à EAP é apenas orçamentário ("Vinculado a:") e deve mexer SÓ na linha
+ * existente — o callback `onLink` (vínculo único) já estava correto (`{ ...x, orcamentoItemId, eapCodigo }` in place).
+ *
+ * SOLUÇÃO (SÓ CLIENT/UI; ZERO SERVER/SCHEMA — R-001/R-007/R-010): reescreve `onLinkMultiple` para vincular a 1ª
+ * etapa selecionada NA PRÓPRIA LINHA (in place, idêntico ao `onLink`: `{ ...it, orcamentoItemId: primeira.id,
+ * eapCodigo: primeira.eapCodigo }`, preservando TODOS os campos do item — descrição, unidade, quantidade, etc.;
+ * isso também torna o "keep unit" da Rev. 2731 automático/completo) e só as etapas ADICIONAIS (2ª, 3ª…) viram
+ * linhas novas (a própria etapa, com unidade da etapa). Linha vazia (sem descrição/sem vínculo): a 1ª etapa VIRA a
+ * própria etapa (comportamento anterior). Usa `novos.splice(idx, 1, linkedRow, ...novosResto)` — SUBSTITUI a linha
+ * atual em vez de mantê-la e inserir abaixo, eliminando a duplicação. Não altera registros já gravados (sem UPDATE).
+ *
+ * VALIDAÇÃO: esbuild server EXIT 0; parse esbuild do TSX EXIT 0; `vitest server/rescisao.test.ts` 41/41 verde.
+ *
  * Rev. 2731 — **COMPRAS · NOVA SOLICITAÇÃO (SC) · VÍNCULO MANUAL DE UM ITEM À ETAPA DA EAP NÃO PODE TROCAR A
  * UNIDADE DO ITEM PELA DA ETAPA.**
  *

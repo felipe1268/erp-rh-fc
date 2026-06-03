@@ -4649,30 +4649,37 @@ ${sc.observacoes ? `<div class="obs"><b>Observações da SC:</b><br>${esc(sc.obs
                               onLink={(eapItem: any) => setItens(p => p.map((x, i) => i === idx ? { ...x, orcamentoItemId: eapItem.id, eapCodigo: eapItem.eapCodigo } : x))}
                               onLinkMultiple={(eapList: any[]) => {
                                 if (!eapList.length) return;
+                                // Rev. 2732: vincular um MATERIAL digitado pelo usuário a uma etapa da EAP é
+                                // apenas um vínculo orçamentário ("Vinculado a:") — NÃO pode DUPLICAR a linha
+                                // (antes mantinha a linha original E inseria a nova logo abaixo, gerando o item
+                                // "fantasma": material + etapa, com a etapa caindo "S/ VERBA" na cotação) nem
+                                // trocar a unidade/descrição do item pela da etapa. A 1ª etapa selecionada
+                                // vincula NA PRÓPRIA linha (in place, idêntico ao onLink — preserva todos os
+                                // campos do item). Etapas ADICIONAIS viram linhas novas (a própria etapa).
+                                // Linha vazia (sem descrição/sem vínculo): a 1ª etapa VIRA a própria etapa.
                                 const isRowEmpty = !it.descricao.trim() && !it.orcamentoItemId;
-                                const novosItens: ItemForm[] = eapList.map((e: any) => {
-                                  // Rev. 2731: vincular um MATERIAL digitado pelo usuário a uma etapa da EAP é
-                                  // apenas um vínculo orçamentário ("Vinculado a:") — NÃO deve trocar a unidade
-                                  // do item pela da etapa. Ex.: "Madeirite Plastificado" comprado em "un" não pode
-                                  // virar "m²" só por estar vinculado à etapa medida em m². Apenas linhas SEM
-                                  // descrição própria (a linha VIRA a própria etapa) herdam a unidade da etapa.
-                                  const manterItemUsuario = !!it.descricao.trim() && eapList.indexOf(e) === 0;
-                                  return {
-                                    descricao: manterItemUsuario ? it.descricao : (e.descricao || ""),
-                                    unidade: manterItemUsuario ? (it.unidade || e.unidade || "un") : (e.unidade || it.unidade || "un"),
-                                    quantidade: it.quantidade || "1",
-                                    observacoes: "",
-                                    orcamentoItemId: e.id,
-                                    eapCodigo: e.eapCodigo,
-                                  };
-                                });
+                                const [primeira, ...resto] = eapList;
+                                const novosResto: ItemForm[] = resto.map((e: any) => ({
+                                  descricao: e.descricao || "",
+                                  unidade: e.unidade || "un",
+                                  quantidade: it.quantidade || "1",
+                                  observacoes: "",
+                                  orcamentoItemId: e.id,
+                                  eapCodigo: e.eapCodigo,
+                                }));
+                                const linkedRow: ItemForm = isRowEmpty
+                                  ? {
+                                      descricao: primeira.descricao || "",
+                                      unidade: primeira.unidade || "un",
+                                      quantidade: it.quantidade || "1",
+                                      observacoes: "",
+                                      orcamentoItemId: primeira.id,
+                                      eapCodigo: primeira.eapCodigo,
+                                    }
+                                  : { ...it, orcamentoItemId: primeira.id, eapCodigo: primeira.eapCodigo };
                                 setItens(prev => {
                                   const novos = [...prev];
-                                  if (isRowEmpty) {
-                                    novos.splice(idx, 1, ...novosItens);
-                                  } else {
-                                    novos.splice(idx + 1, 0, ...novosItens);
-                                  }
+                                  novos.splice(idx, 1, linkedRow, ...novosResto);
                                   return novos;
                                 });
                               }}
