@@ -4650,14 +4650,22 @@ ${sc.observacoes ? `<div class="obs"><b>Observações da SC:</b><br>${esc(sc.obs
                               onLinkMultiple={(eapList: any[]) => {
                                 if (!eapList.length) return;
                                 const isRowEmpty = !it.descricao.trim() && !it.orcamentoItemId;
-                                const novosItens: ItemForm[] = eapList.map((e: any) => ({
-                                  descricao: it.descricao.trim() && eapList.indexOf(e) === 0 ? it.descricao : (e.descricao || ""),
-                                  unidade: e.unidade || it.unidade || "un",
-                                  quantidade: it.quantidade || "1",
-                                  observacoes: "",
-                                  orcamentoItemId: e.id,
-                                  eapCodigo: e.eapCodigo,
-                                }));
+                                const novosItens: ItemForm[] = eapList.map((e: any) => {
+                                  // Rev. 2731: vincular um MATERIAL digitado pelo usuário a uma etapa da EAP é
+                                  // apenas um vínculo orçamentário ("Vinculado a:") — NÃO deve trocar a unidade
+                                  // do item pela da etapa. Ex.: "Madeirite Plastificado" comprado em "un" não pode
+                                  // virar "m²" só por estar vinculado à etapa medida em m². Apenas linhas SEM
+                                  // descrição própria (a linha VIRA a própria etapa) herdam a unidade da etapa.
+                                  const manterItemUsuario = !!it.descricao.trim() && eapList.indexOf(e) === 0;
+                                  return {
+                                    descricao: manterItemUsuario ? it.descricao : (e.descricao || ""),
+                                    unidade: manterItemUsuario ? (it.unidade || e.unidade || "un") : (e.unidade || it.unidade || "un"),
+                                    quantidade: it.quantidade || "1",
+                                    observacoes: "",
+                                    orcamentoItemId: e.id,
+                                    eapCodigo: e.eapCodigo,
+                                  };
+                                });
                                 setItens(prev => {
                                   const novos = [...prev];
                                   if (isRowEmpty) {

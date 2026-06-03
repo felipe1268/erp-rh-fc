@@ -1,6 +1,34 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2731 — **COMPRAS · NOVA SOLICITAÇÃO (SC) · VÍNCULO MANUAL DE UM ITEM À ETAPA DA EAP NÃO PODE TROCAR A
+ * UNIDADE DO ITEM PELA DA ETAPA.**
+ *
+ * BUG (relato): "Caio postou a solicitação e ela está puxando a etapa como um item." Na SC-2026-0299 o item
+ * "Madeirite Plastificado" (material comprado em UNIDADES) aparecia com unidade "m²" e Qtd 435,6 — exatamente a
+ * UNIDADE da etapa [03.02.10] "Proteção dos escoramentos… em madeirite 18mm". Caio precisou converter 180 chapas
+ * (1,10×2,20 = 2,42 m²/chapa → 435,6 m²) só porque a unidade do item virou m², e registrou "180 unidades…" na
+ * observação. Dado real (Neon): item id=7157 com `origem_eap=false`, `insumo_codigo=null`, `orcamento_item_id=59586`,
+ * `unidade="m²"`, `quantidade="435.600"`; a etapa 59586 tem `unidade="m²"`, `quantidade="44"` (logo a Qtd 435,6 foi
+ * digitada por Caio; o que veio da etapa foi a UNIDADE).
+ *
+ * CAUSA-RAIZ (`client/src/pages/compras/Solicitacoes.tsx`, componente `ManualEapLink` → callback `onLinkMultiple`):
+ * ao confirmar o vínculo de uma linha a uma ou mais etapas da EAP, cada item novo era montado com
+ * `unidade: e.unidade || it.unidade || "un"`, ou seja, SEMPRE preferindo a unidade da ETAPA — inclusive para a
+ * primeira linha, onde a descrição digitada pelo usuário é preservada (o item é um MATERIAL, não a etapa). O
+ * vínculo à EAP é apenas orçamentário ("Vinculado a:"), exibido no card via `parentEap`/`isChildInsumo`, e não
+ * deveria alterar a unidade/medida de compra do material. (O callback `onLink` de vínculo ÚNICO já estava correto:
+ * só grava `orcamentoItemId`/`eapCodigo`, sem mexer em unidade/quantidade.)
+ *
+ * SOLUÇÃO (SÓ CLIENT/UI; ZERO SERVER/SCHEMA — R-001/R-007/R-010): em `onLinkMultiple`, introduz
+ * `manterItemUsuario = !!it.descricao.trim() && eapList.indexOf(e) === 0` — quando a linha tem descrição própria e
+ * é a primeira do vínculo, o item PRESERVA a unidade digitada (`it.unidade || e.unidade || "un"`); as demais
+ * linhas (sem descrição própria → a linha VIRA a própria etapa) seguem herdando a unidade da etapa
+ * (`e.unidade || it.unidade || "un"`). Descrição e quantidade já eram preservadas e não mudam. Não altera o
+ * registro já gravado da SC-2026-0299 (sem UPDATE de dados; Caio pode reabrir e ajustar unidade/qtd manualmente).
+ *
+ * VALIDAÇÃO: esbuild server EXIT 0; parse esbuild do TSX EXIT 0; `vitest server/rescisao.test.ts` 41/41 verde.
+ *
  * Rev. 2730 — **PLANEJAMENTO · DETALHE DO PROJETO · PREV. MEDIÇÃO ("Previsão de Medição — Por Avanço Físico") ·
  * NENHUMA MEDIÇÃO PODE SER RECEBIDA ANTES DO RECEBIMENTO DO SINAL.**
  *
