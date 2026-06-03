@@ -630,6 +630,50 @@ img, video {
   /* Em paisagem, tabelas grandes podem usar fonte um pouco menor */
   body[data-print-orientation="landscape"] table { font-size: 9.5px !important; }
   body[data-print-orientation="landscape"] .print-area .grid { gap: 6px !important; }
+
+  /* ============================================================ */
+  /* FICHA DE ENTREGA DE EPI — documento único, 1 página          */
+  /* ------------------------------------------------------------ */
+  /* O container é marcado `.print-only`, então o CSS global já    */
+  /* esconde sidebar/header do DashboardLayout (acabou a página 1 */
+  /* em branco com "Controle de EPIs"). Aqui apenas comprimimos   */
+  /* os espaçamentos verticais e travamos as quebras pra a ficha  */
+  /* sair INTEIRA, como o documento de referência.                */
+  /* ============================================================ */
+  .epi-ficha-print {
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 auto !important;
+    padding: 0 !important;
+    border: 0 !important;
+    box-shadow: none !important;
+    font-size: 10px !important;
+    line-height: 1.35 !important;
+  }
+  /* Logo do cabeçalho um pouco menor pra ganhar espaço vertical */
+  .epi-ficha-print h2 + p,
+  .epi-ficha-print img { max-height: 52px !important; }
+  /* Comprime os espaçamentos verticais grandes da tela */
+  .epi-ficha-print .mb-6 { margin-bottom: 9px !important; }
+  .epi-ficha-print .mb-4 { margin-bottom: 7px !important; }
+  .epi-ficha-print .mb-3,
+  .epi-ficha-print .mb-2 { margin-bottom: 5px !important; }
+  .epi-ficha-print .mt-12,
+  .epi-ficha-print .mt-8 { margin-top: 16px !important; }
+  .epi-ficha-print .mt-6 { margin-top: 10px !important; }
+  .epi-ficha-print .pt-8 { padding-top: 8px !important; }
+  .epi-ficha-print .pt-4 { padding-top: 6px !important; }
+  /* Imagem da assinatura ocupa altura controlada */
+  .epi-ficha-print .h-16 { height: 44px !important; }
+  /* Nunca quebrar blocos críticos no meio da página */
+  .epi-ficha-print table,
+  .epi-ficha-print thead,
+  .epi-ficha-print tr,
+  .epi-ficha-print .border-2,
+  .epi-ficha-print .grid {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
 }
 
 /* Espaçamento na tela também (caso prose não esteja totalmente carregado) */

@@ -1664,7 +1664,7 @@ export default function Epis() {
           </div>
 
           {/* Printable Form */}
-          <div className="bg-white border rounded-lg p-8 max-w-3xl mx-auto print:border-0 print:shadow-none print:p-4">
+          <div className="epi-ficha-print print-only bg-white border rounded-lg p-8 max-w-3xl mx-auto print:border-0 print:shadow-none print:p-4 print:max-w-none">
             {/* Header - Logo centralizado no topo */}
             <div className="mb-6">
               {/* Logo + Nome da empresa centralizado */}

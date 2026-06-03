@@ -1,6 +1,36 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2738 — **RH · EPI · FICHA DE ENTREGA DE EPI · IMPRESSÃO (window.print): A FICHA AGORA SAI INTEIRA EM UMA
+ * PÁGINA LIMPA (acabou a página 1 em branco com só "Controle de EPIs" e o conteúdo espremido/cortado em 3 páginas).**
+ *
+ * PEDIDO (prints): "o layout para impressão das fichas de EPIs estão péssimos! (imagens 1 e 2) preciso que saia a
+ * impressão inteira como está na imagem 3". A imagem 1 mostrava a 1ª página praticamente vazia (apenas o cabeçalho
+ * "Controle de EPIs" do DashboardLayout); a imagem 2, o conteúdo da ficha quebrado/cortado ao longo de 3 páginas;
+ * a imagem 3, o documento de referência completo numa única folha.
+ *
+ * CAUSA: o botão "Imprimir" chama `window.print()` sobre a view HTML da ficha (`client/src/pages/Epis.tsx`,
+ * `viewMode === "ficha_epi"`), mas o container imprimível NÃO era marcado como `print-only`. Logo, o CSS global de
+ * impressão (`client/src/index.css`, bloco `@media print`) não escondia o "cromo" do DashboardLayout (cabeçalho do
+ * módulo) — que vazava como 1ª página em branco — e os espaçamentos generosos da tela (`p-8`, `mb-6`, `mt-12`)
+ * empurravam o conteúdo para 3 páginas, sem travas de quebra nos blocos (tabela, política, assinaturas).
+ *
+ * SOLUÇÃO (SÓ CLIENT/UI; ZERO SERVER; ZERO SCHEMA; ZERO ALTER/DROP/DELETE — R-001/R-007/R-010):
+ * (1) O container imprimível da ficha (`Epis.tsx`) ganhou as classes `print-only` (o seletor global
+ *     `body:has(.print-only) *:not(.print-only):not(.print-only *):not(:has(.print-only))` esconde TODO o resto —
+ *     sidebar, header "Controle de EPIs", botões — restando só a ficha) + `print:max-w-none` + uma classe âncora
+ *     `epi-ficha-print`.
+ * (2) Novo bloco escopado em `@media print` (`index.css`, `.epi-ficha-print`): zera borda/sombra/padding do card,
+ *     reduz a fonte (10px) e COMPRIME os espaçamentos verticais grandes (`mb-6`/`mb-4`/`mt-12`/`mt-8`/`pt-8`...),
+ *     limita a altura do logo/assinaturas e aplica `page-break-inside: avoid` nos blocos críticos (tabela, caixa de
+ *     política `.border-2`, grids de info/assinatura) — a ficha sai INTEIRA, sem quebra feia, como a imagem 3.
+ *
+ * NÃO MEXIDO: o gerador de PDF `generateFichaEpiPdf` (`client/src/lib/epiReceiptPdf.ts`, botão "Salvar PDF") já
+ * produzia o layout correto — o problema era exclusivo do caminho de impressão do navegador.
+ *
+ * VALIDAÇÃO: esbuild parse EXIT 0 (Epis.tsx); app rodando sem erros (workflow Start application) e console limpo.
+ * Arquivos: `client/src/pages/Epis.tsx`, `client/src/index.css`, `shared/version.ts`.
+ *
  * Rev. 2737 — **PJ · CONTRATOS · CLÁUSULA QUARTA (PRAZO E FORMA DE EXECUÇÃO): O PRAZO DE VALIDADE DEIXA DE SER
  * HARDCODED "1 (UM) ANO" E PASSA A SER DERIVADO DA VIGÊNCIA PREENCHIDA DO CONTRATO (dataInicio → dataFim).**
  *
