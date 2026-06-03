@@ -425,6 +425,17 @@ async function ensureFleetTables() {
       UNIQUE(company_id, placa, data)
     )
   `);
+  // Rev. 2718 — snapshot PERSISTIDO da Análise Inteligente (IA) de manutenção.
+  // Guarda 1 linha por empresa (último parecer gerado), pra a análise ficar
+  // FIXADA na tela até o usuário clicar em "Atualizar análise" de novo.
+  await db.execute(sql`
+    CREATE TABLE IF NOT EXISTS fleet_ai_analysis (
+      company_id INTEGER PRIMARY KEY,
+      payload JSONB NOT NULL,
+      gerado_em TIMESTAMPTZ DEFAULT NOW() NOT NULL,
+      updated_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
+    )
+  `);
 }
 let tablesReady = false;
 
@@ -4682,6 +4693,7 @@ IMPORTANTE:
                COUNT(CASE WHEN fm.tipo = 'preventiva' THEN 1 END)::int AS preventivas,
                COALESCE(SUM(fm.custo::numeric), 0) AS custo_total,
                COALESCE(SUM(CASE WHEN fm.data_manutencao >= (CURRENT_DATE - INTERVAL '12 months') THEN fm.custo::numeric ELSE 0 END), 0) AS custo_12m,
+               COALESCE(SUM(CASE WHEN fm.data_manutencao >= (CURRENT_DATE - INTERVAL '24 months') AND fm.data_manutencao < (CURRENT_DATE - INTERVAL '12 months') THEN fm.custo::numeric ELSE 0 END), 0) AS custo_prev_12m,
                MIN(fm.data_manutencao) AS primeira_os,
                MAX(fm.data_manutencao) AS ultima_os
         FROM fleet_maintenances fm
@@ -4691,6 +4703,34 @@ IMPORTANTE:
                  v."anoFabricacao", v.km_atual, v.valor_compra, v.valor_fipe, v."statusVeiculo"
         ORDER BY custo_total DESC
       `);
+
+      // 3) CONFIABILIDADE (MTBF) — intervalo MÉDIO entre manutenções CORRETIVAS
+      //    (falhas), em DIAS e em KM. MTBF curto = veículo "quebrando" com
+      //    frequência (literatura de manutenção centrada em confiabilidade/RCM).
+      const mtbfRes = await db.execute(sql`
+        WITH corr AS (
+          SELECT fm.vehicle_id AS vehicle_id,
+                 fm.data_manutencao AS data,
+                 fm.km_na_manutencao::numeric AS km,
+                 LAG(fm.data_manutencao) OVER (PARTITION BY fm.vehicle_id ORDER BY fm.data_manutencao, fm.id) AS prev_data,
+                 LAG(fm.km_na_manutencao::numeric) OVER (PARTITION BY fm.vehicle_id ORDER BY fm.data_manutencao, fm.id) AS prev_km
+          FROM fleet_maintenances fm
+          WHERE fm.company_id = ${companyId} AND fm.status != 'cancelada' AND fm.tipo = 'corretiva'
+        )
+        SELECT vehicle_id,
+               ROUND(AVG((data - prev_data)::int))::int AS mtbf_dias,
+               ROUND(AVG(NULLIF(km - prev_km, 0)))::numeric AS mtbf_km
+        FROM corr
+        WHERE prev_data IS NOT NULL
+        GROUP BY vehicle_id
+      `);
+      const mtbfByVehicle: Record<number, { dias: number | null; km: number | null }> = {};
+      for (const r of (((mtbfRes as any).rows) || [])) {
+        mtbfByVehicle[r.vehicle_id] = {
+          dias: r.mtbf_dias != null ? parseInt(r.mtbf_dias) : null,
+          km: r.mtbf_km != null ? Math.round(parseFloat(r.mtbf_km)) : null,
+        };
+      }
 
       const recorrencias = (((recorrRes as any).rows) || []).map((r: any) => ({
         vehicleId: r.vehicle_id, placa: r.placa, modelo: r.modelo, marca: r.marca,
@@ -4711,33 +4751,96 @@ IMPORTANTE:
         }
       }
 
+      const anoAtual = new Date().getFullYear();
       const veiculos = (((veicRes as any).rows) || []).map((r: any) => {
         const custoTotal = parseFloat(r.custo_total) || 0;
         const custo12m = parseFloat(r.custo_12m) || 0;
+        const custoPrev12m = parseFloat(r.custo_prev_12m) || 0;
         const valorFipe = r.valor_fipe != null ? parseFloat(r.valor_fipe) : null;
         const valorCompra = r.valor_compra != null ? parseFloat(r.valor_compra) : null;
         const osTotal = parseInt(r.os_total) || 0;
         const corretivas = parseInt(r.corretivas) || 0;
+        const preventivas = parseInt(r.preventivas) || 0;
         const pctCorretiva = osTotal > 0 ? Math.round((corretivas / osTotal) * 100) : 0;
         const baseValor = valorFipe ?? valorCompra ?? null;
         const custoSobreValorPct = baseValor && baseValor > 0 ? Math.round((custo12m / baseValor) * 100) : null;
+        const custoSobreValorTotalPct = baseValor && baseValor > 0 ? Math.round((custoTotal / baseValor) * 100) : null;
+        const kmAtual = r.km_atual != null ? parseFloat(r.km_atual) : null;
+        // Custo por KM (CPK) — indicador-rei de TCO operacional. Usa custo
+        // ACUMULADO ÷ km do odômetro (proxy do km rodado na vida do bem).
+        const custoPorKm = kmAtual && kmAtual > 0 ? Math.round((custoTotal / kmAtual) * 100) / 100 : null;
+        const custoMedioOs = osTotal > 0 ? Math.round(custoTotal / osTotal) : null;
+        // Tendência da curva de custo: 12m recentes vs 12m anteriores. Curva
+        // acelerando = sinal clássico de fim da VIDA ECONÔMICA do veículo.
+        const tendenciaCustoPct = custoPrev12m > 0 ? Math.round(((custo12m - custoPrev12m) / custoPrev12m) * 100) : null;
+        const anoNum = parseInt(String(r.ano ?? "")) || 0;
+        const idade = anoNum > 1980 ? Math.max(0, anoAtual - anoNum) : null;
+        const mtbf = mtbfByVehicle[r.vehicle_id] || { dias: null, km: null };
         return {
           vehicleId: r.vehicle_id, placa: r.placa, modelo: r.modelo, marca: r.marca, tipo: r.tipo,
-          ano: r.ano, status: r.status,
-          kmAtual: r.km_atual != null ? parseFloat(r.km_atual) : null,
-          valorFipe, valorCompra,
-          osTotal, corretivas, preventivas: parseInt(r.preventivas) || 0, pctCorretiva,
-          custoTotal, custo12m, custoSobreValorPct,
+          ano: r.ano, idade, status: r.status,
+          kmAtual,
+          valorFipe, valorCompra, baseValor,
+          osTotal, corretivas, preventivas, pctCorretiva,
+          custoTotal, custo12m, custoPrev12m, tendenciaCustoPct,
+          custoSobreValorPct, custoSobreValorTotalPct,
+          custoPorKm, custoMedioOs,
+          mtbfDias: mtbf.dias, mtbfKm: mtbf.km,
+          downtimeEventos: corretivas,
           pecasRecorrentes: recorrCount[r.vehicle_id] || 0,
           pecasRecorrentesCurtas: recorrCurta[r.vehicle_id] || 0,
           primeiraOs: r.primeira_os, ultimaOs: r.ultima_os,
         };
       });
 
+      // AGREGADO DA FROTA (KPIs globais). Custo/km médio = ponderado (Σcusto ÷
+      // Σkm) p/ não distorcer com veículos de km baixo. nVender/nObservar/nManter
+      // são preenchidos DEPOIS, a partir do parecer final (IA ou determinístico).
+      const sum = (f: (v: any) => number) => veiculos.reduce((a: number, v: any) => a + (f(v) || 0), 0);
+      const custoTotalFrota = sum((v) => v.custoTotal);
+      const custo12mFrota = sum((v) => v.custo12m);
+      const custoPrev12mFrota = sum((v) => v.custoPrev12m);
+      const kmFrota = sum((v) => v.kmAtual || 0);
+      const osTotalFrota = sum((v) => v.osTotal);
+      const corretivasFrota = sum((v) => v.corretivas);
+      const fleet: any = {
+        totalVeiculos: veiculos.length,
+        custoTotalFrota,
+        custo12mFrota,
+        custoPrev12mFrota,
+        tendenciaFrotaPct: custoPrev12mFrota > 0 ? Math.round(((custo12mFrota - custoPrev12mFrota) / custoPrev12mFrota) * 100) : null,
+        custoPorKmMedio: kmFrota > 0 ? Math.round((custoTotalFrota / kmFrota) * 100) / 100 : null,
+        pctCorretivaFrota: osTotalFrota > 0 ? Math.round((corretivasFrota / osTotalFrota) * 100) : 0,
+        osTotalFrota,
+        topOfensores: [...veiculos]
+          .sort((a: any, b: any) => b.custo12m - a.custo12m)
+          .slice(0, 5)
+          .map((v: any) => ({ placa: v.placa, modelo: v.modelo, custo12m: v.custo12m, custoSobreValorPct: v.custoSobreValorPct })),
+        nVender: 0, nObservar: 0, nManter: 0,
+      };
+
       const geradoEm = new Date().toISOString();
 
+      // Persiste o snapshot (1 linha por empresa) p/ a análise ficar FIXADA na
+      // tela até o próximo "Atualizar análise". Falha de gravação NÃO bloqueia
+      // a resposta (best-effort).
+      const persistSnapshot = async (payload: any) => {
+        try {
+          await db.execute(sql`
+            INSERT INTO fleet_ai_analysis (company_id, payload, gerado_em, updated_at)
+            VALUES (${companyId}, ${JSON.stringify(payload)}::jsonb, NOW(), NOW())
+            ON CONFLICT (company_id) DO UPDATE
+              SET payload = EXCLUDED.payload, gerado_em = NOW(), updated_at = NOW()
+          `);
+        } catch (e) {
+          console.error("[frotas] falha ao persistir snapshot da IA:", e);
+        }
+      };
+
       if (veiculos.length === 0) {
-        return { geradoEm, metrics: { recorrencias, veiculos }, ia: null, erro: "Sem manutenções registradas para análise." };
+        const out = { geradoEm, companyId: input.companyId, metrics: { recorrencias, veiculos, fleet }, ia: null, erro: "Sem manutenções registradas para análise." };
+        await persistSnapshot(out);
+        return out;
       }
 
       // Payload enxuto p/ a IA (limita p/ controlar tokens).
@@ -4746,26 +4849,40 @@ IMPORTANTE:
 
       const systemPrompt = [
         "Você é um consultor sênior de gestão de FROTA e manutenção, especialista em CUSTO TOTAL DE PROPRIEDADE (TCO) e na decisão de VENDER ou MANTER veículos/máquinas.",
-        "Você receberá FATOS já calculados (não invente nenhum número; use SOMENTE os fornecidos).",
-        "Princípios de análise de ALTO PADRÃO:",
-        "- PEÇA RECORRENTE com intervalo CURTO (mesma peça trocada de novo em poucos dias/km) é forte sinal de defeito crônico, serviço malfeito ou desgaste estrutural — 'ralo de dinheiro'.",
-        "- Alta proporção de CORRETIVAS (vs preventivas) indica frota apagando incêndio, não prevenindo.",
-        "- Custo de manutenção dos últimos 12 meses ALTO frente ao valor (FIPE/compra) do veículo derruba a viabilidade de manter.",
-        "- Veículo antigo + km alto + custo crescente + peças recorrentes => candidato a VENDER.",
+        "Fundamente o raciocínio nas MELHORES PRÁTICAS MUNDIAIS de gestão de frota:",
+        "- TCO (Total Cost of Ownership) e CUSTO POR KM (CPK) como métrica-rei de eficiência operacional.",
+        "- RCM / Manutenção Centrada em Confiabilidade: relação CORRETIVA × PREVENTIVA (alta corretiva = frota apagando incêndio).",
+        "- MTBF (Tempo Médio Entre Falhas): MTBF curto em dias/km = baixa confiabilidade.",
+        "- VIDA ECONÔMICA / política de REPOR-vs-REPARAR: o veículo deve ser substituído quando o custo anual de mantê-lo passa a superar o custo equivalente de renová-lo (curva de custo ascendente + manutenção alta frente ao valor do bem).",
+        "- PEÇA RECORRENTE com intervalo CURTO (mesma peça trocada de novo em poucos dias/km) = defeito crônico / serviço malfeito / desgaste estrutural ('ralo de dinheiro').",
+        "- TENDÊNCIA do custo (12m recentes vs 12m anteriores): curva acelerando reforça fim de vida econômica.",
+        "Você receberá FATOS já calculados (não invente nenhum número; use SOMENTE os fornecidos). Cite números reais dos fatos nas justificativas.",
         "Para cada veículo, classifique em VENDER, OBSERVAR ou MANTER e atribua um scoreRisco de 0 (saudável) a 100 (crítico).",
-        "Seja objetivo, técnico e em português do Brasil. Cite números reais dos fatos nas justificativas.",
+        "No resumoExecutivo, dê um panorama da FROTA inteira (TCO, CPK médio, % corretiva, candidatos a venda) e nas recomendacoesGerais traga ações concretas, priorizadas e fundamentadas nas práticas acima.",
+        "Seja objetivo, técnico e em português do Brasil.",
         "Responda APENAS com JSON válido (sem markdown, sem comentários) no formato exato:",
         '{ "resumoExecutivo": string, "veiculos": [ { "placa": string, "recomendacao": "VENDER"|"OBSERVAR"|"MANTER", "scoreRisco": number, "justificativa": string, "sinais": string[], "acao": string } ], "pecasCriticas": [ { "placa": string, "peca": string, "motivo": string } ], "recomendacoesGerais": string[] }',
         "Use SOMENTE placas presentes nos fatos. Ordene 'veiculos' do maior para o menor scoreRisco.",
       ].join("\n");
 
       const userPayload = "FATOS (JSON):\n" + JSON.stringify({
+        frota: {
+          totalVeiculos: fleet.totalVeiculos,
+          custoManutencaoTotal: fleet.custoTotalFrota,
+          custoManutencao12m: fleet.custo12mFrota,
+          tendenciaCusto12mPct: fleet.tendenciaFrotaPct,
+          custoPorKmMedio: fleet.custoPorKmMedio,
+          pctCorretiva: fleet.pctCorretivaFrota,
+        },
         veiculos: topVeic.map((v: any) => ({
-          placa: v.placa, modelo: v.modelo, marca: v.marca, tipo: v.tipo, ano: v.ano,
+          placa: v.placa, modelo: v.modelo, marca: v.marca, tipo: v.tipo, ano: v.ano, idadeAnos: v.idade,
           status: v.status, kmAtual: v.kmAtual, valorFipe: v.valorFipe, valorCompra: v.valorCompra,
           osTotal: v.osTotal, corretivas: v.corretivas, preventivas: v.preventivas, pctCorretiva: v.pctCorretiva,
-          custoManutencaoTotal: v.custoTotal, custoManutencao12m: v.custo12m,
-          custoManutencao12mSobreValorPct: v.custoSobreValorPct,
+          custoManutencaoTotal: v.custoTotal, custoManutencao12m: v.custo12m, custoManutencao12mAnterior: v.custoPrev12m,
+          tendenciaCusto12mPct: v.tendenciaCustoPct,
+          custoManutencao12mSobreValorPct: v.custoSobreValorPct, custoManutencaoTotalSobreValorPct: v.custoSobreValorTotalPct,
+          custoPorKm: v.custoPorKm, custoMedioPorOs: v.custoMedioOs,
+          mtbfDiasEntreCorretivas: v.mtbfDias, mtbfKmEntreCorretivas: v.mtbfKm,
           qtdPecasRecorrentes: v.pecasRecorrentes, qtdPecasRecorrentesIntervaloCurto: v.pecasRecorrentesCurtas,
         })),
         pecasRecorrentes: topRecorr.map((r: any) => ({
@@ -4786,31 +4903,42 @@ IMPORTANTE:
       // orçamento de tempo (timeout do proxy/iOS), devolvemos ESTE parecer
       // calculado no servidor — o usuário NUNCA mais vê o erro "The string did
       // not match the expected pattern." (DOMException de conexão abortada).
-      const anoAtualNum = new Date().getFullYear();
       const buildDeterministicIa = () => {
         const scored = veiculos.map((v: any) => {
           let score = 0;
           const sinais: string[] = [];
-          if (v.pctCorretiva >= 70) { score += 30; sinais.push(`${v.pctCorretiva}% das OS são corretivas (frota apagando incêndio)`); }
-          else if (v.pctCorretiva >= 40) { score += 18; sinais.push(`${v.pctCorretiva}% das OS são corretivas`); }
+          // 1) RCM — balanço corretiva × preventiva.
+          if (v.pctCorretiva >= 70) { score += 25; sinais.push(`${v.pctCorretiva}% das OS são corretivas (frota apagando incêndio, não prevenindo)`); }
+          else if (v.pctCorretiva >= 40) { score += 14; sinais.push(`${v.pctCorretiva}% das OS são corretivas (preventiva insuficiente)`); }
+          // 2) Manutenção 12m frente ao valor do bem (gatilho de substituição/TCO).
           if (v.custoSobreValorPct != null) {
-            if (v.custoSobreValorPct >= 50) { score += 35; sinais.push(`Manutenção (12m) = ${v.custoSobreValorPct}% do valor do veículo`); }
-            else if (v.custoSobreValorPct >= 25) { score += 20; sinais.push(`Manutenção (12m) = ${v.custoSobreValorPct}% do valor do veículo`); }
-            else if (v.custoSobreValorPct >= 12) { score += 8; }
+            if (v.custoSobreValorPct >= 50) { score += 28; sinais.push(`Manutenção (12m) consome ${v.custoSobreValorPct}% do valor do veículo`); }
+            else if (v.custoSobreValorPct >= 25) { score += 16; sinais.push(`Manutenção (12m) = ${v.custoSobreValorPct}% do valor do veículo`); }
+            else if (v.custoSobreValorPct >= 12) { score += 7; }
           }
-          if (v.pecasRecorrentesCurtas > 0) { score += Math.min(25, v.pecasRecorrentesCurtas * 12); sinais.push(`${v.pecasRecorrentesCurtas} peça(s) trocada(s) de novo em ≤180 dias (defeito crônico)`); }
-          else if (v.pecasRecorrentes > 0) { score += Math.min(10, v.pecasRecorrentes * 4); sinais.push(`${v.pecasRecorrentes} peça(s) recorrente(s) no histórico`); }
-          const anoNum = parseInt(String(v.ano ?? "")) || 0;
-          const idade = anoNum > 1980 ? (anoAtualNum - anoNum) : 0;
+          // 3) Defeito crônico — peças recorrentes em intervalo curto.
+          if (v.pecasRecorrentesCurtas > 0) { score += Math.min(20, v.pecasRecorrentesCurtas * 10); sinais.push(`${v.pecasRecorrentesCurtas} peça(s) trocada(s) de novo em ≤180 dias (defeito crônico)`); }
+          else if (v.pecasRecorrentes > 0) { score += Math.min(8, v.pecasRecorrentes * 3); sinais.push(`${v.pecasRecorrentes} peça(s) recorrente(s) no histórico`); }
+          // 4) Idade do bem.
+          const idade = typeof v.idade === "number" ? v.idade : 0;
           if (idade >= 12) { score += 10; sinais.push(`Veículo com ~${idade} anos`); }
           else if (idade >= 8) { score += 5; }
+          // 5) Vida econômica — curva de custo acelerando (tendência 12m vs 12m anterior).
+          if (v.tendenciaCustoPct != null && v.custoPrev12m > 0) {
+            if (v.tendenciaCustoPct >= 60) { score += 12; sinais.push(`Custo subiu ${v.tendenciaCustoPct}% vs os 12 meses anteriores (curva de custo acelerando)`); }
+            else if (v.tendenciaCustoPct >= 30) { score += 7; sinais.push(`Custo subiu ${v.tendenciaCustoPct}% vs os 12 meses anteriores`); }
+          }
+          // 6) Confiabilidade — MTBF curto (falhas corretivas frequentes).
+          if (v.mtbfDias != null && v.mtbfDias > 0 && v.mtbfDias < 60) { score += 8; sinais.push(`Falha corretiva a cada ~${v.mtbfDias} dias (MTBF curto / baixa confiabilidade)`); }
           score = Math.max(0, Math.min(100, Math.round(score)));
-          const recomendacao: "VENDER" | "OBSERVAR" | "MANTER" = score >= 65 ? "VENDER" : score >= 38 ? "OBSERVAR" : "MANTER";
+          const recomendacao: "VENDER" | "OBSERVAR" | "MANTER" = score >= 60 ? "VENDER" : score >= 35 ? "OBSERVAR" : "MANTER";
           const acao = recomendacao === "VENDER"
-            ? "Avaliar venda/substituição: o custo de manutenção tende a não compensar frente ao valor do bem."
+            ? (v.custoSobreValorPct != null && v.custoSobreValorPct >= 50
+                ? `Substituição recomendada (repor-vs-reparar): a manutenção dos últimos 12 meses já consome ${v.custoSobreValorPct}% do valor do bem — manter tende a não compensar.`
+                : "Substituição recomendada (repor-vs-reparar): o custo de mantê-lo tende a superar o de renová-lo.")
             : recomendacao === "OBSERVAR"
-              ? "Monitorar de perto, priorizar preventivas e investigar as peças recorrentes."
-              : "Manter operação seguindo o plano de manutenção preventiva.";
+              ? "Monitorar de perto, priorizar preventivas e investigar as peças/falhas recorrentes antes que virem substituição."
+              : "Manter operação seguindo o plano de manutenção preventiva; custo sob controle frente ao valor do bem.";
           const justificativa = sinais.length
             ? `Score ${score}/100 — ${sinais.join("; ")}.`
             : `Score ${score}/100 — sem sinais relevantes de risco no histórico.`;
@@ -4828,13 +4956,18 @@ IMPORTANTE:
 
         const nVender = scored.filter((s: any) => s.recomendacao === "VENDER").length;
         const nObs = scored.filter((s: any) => s.recomendacao === "OBSERVAR").length;
-        const resumoExecutivo = `Análise automática de ${scored.length} veículo(s): ${nVender} candidato(s) a VENDER, ${nObs} para OBSERVAR e ${scored.length - nVender - nObs} para MANTER. ${pecasCriticas.length} peça(s) com troca recorrente em intervalo curto (possível defeito crônico).`;
+        const cpkTxt = fleet.custoPorKmMedio != null ? `R$ ${fleet.custoPorKmMedio.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}/km` : "—";
+        const tendTxt = fleet.tendenciaFrotaPct != null ? `${fleet.tendenciaFrotaPct >= 0 ? "+" : ""}${fleet.tendenciaFrotaPct}% vs 12m anteriores` : "tendência indisponível";
+        const resumoExecutivo = `Frota de ${scored.length} veículo(s) com TCO acumulado de R$ ${Math.round(fleet.custoTotalFrota).toLocaleString("pt-BR")} (R$ ${Math.round(fleet.custo12mFrota).toLocaleString("pt-BR")} nos últimos 12 meses, ${tendTxt}). Custo por km médio: ${cpkTxt}; ${fleet.pctCorretivaFrota}% das OS são corretivas. Parecer: ${nVender} candidato(s) a VENDER, ${nObs} para OBSERVAR e ${scored.length - nVender - nObs} para MANTER; ${pecasCriticas.length} peça(s) com troca recorrente em intervalo curto (possível defeito crônico).`;
         const recomendacoesGerais = [
-          "Priorize manutenção PREVENTIVA nos veículos com alta proporção de corretivas.",
-          "Investigue as peças trocadas repetidamente em pouco tempo — podem indicar serviço malfeito ou defeito estrutural.",
+          fleet.pctCorretivaFrota >= 50
+            ? `RCM: ${fleet.pctCorretivaFrota}% das OS são corretivas — a frota está apagando incêndio. Estruture um plano de PREVENTIVA por km/tempo para inverter essa relação (meta de mercado: ≥70% preventiva).`
+            : "Mantenha a disciplina de manutenção PREVENTIVA por km/tempo, que sustenta o baixo índice de corretivas atual.",
+          "Investigue as peças trocadas repetidamente em pouco tempo — defeito crônico, serviço malfeito ou peça de baixa qualidade são as causas mais comuns ('ralo de dinheiro').",
+          "Acompanhe o CUSTO POR KM (CPK) por veículo: é a métrica-rei de TCO; veículos muito acima da média da frota merecem investigação ou substituição.",
           nVender > 0
-            ? "Reavalie a permanência dos veículos marcados como VENDER: o custo de manutenção pode superar o valor do bem."
-            : "Mantenha o acompanhamento mensal do custo por veículo.",
+            ? "Aplique a política REPOR-vs-REPARAR nos veículos marcados como VENDER: quando a manutenção anual supera o custo equivalente de renovar o ativo, a substituição é financeiramente superior."
+            : "Reavalie trimestralmente a vida econômica de cada veículo conforme a curva de custo evolui.",
         ];
         return { resumoExecutivo, veiculos: scored, pecasCriticas, recomendacoesGerais };
       };
@@ -4933,7 +5066,38 @@ IMPORTANTE:
         if (!erro) erro = "A IA não retornou um parecer utilizável; exibimos a análise automática baseada nos seus próprios dados.";
       }
 
-      return { geradoEm, metrics: { recorrencias, veiculos }, ia, erro };
+      // Conta a distribuição do parecer FINAL (IA ou determinístico) p/ a banda
+      // de KPIs da frota.
+      fleet.nVender = (ia.veiculos || []).filter((v: any) => v.recomendacao === "VENDER").length;
+      fleet.nObservar = (ia.veiculos || []).filter((v: any) => v.recomendacao === "OBSERVAR").length;
+      fleet.nManter = (ia.veiculos || []).filter((v: any) => v.recomendacao === "MANTER").length;
+
+      const out = { geradoEm, companyId: input.companyId, metrics: { recorrencias, veiculos, fleet }, ia, erro };
+      await persistSnapshot(out);
+      return out;
+    }),
+
+  // Rev. 2718 — leitura do ÚLTIMO snapshot PERSISTIDO da Análise Inteligente.
+  // A tela carrega isto no load (análise FIXADA); só muda quando o usuário
+  // clica em "Atualizar análise" (que roda a mutation acima e regrava).
+  getMaintenanceAIAnalysisLatest: protectedProcedure
+    .input(z.object({ companyId: z.number() }))
+    .query(async ({ ctx, input }) => {
+      if (ctx.user?.companyId !== undefined && String(ctx.user.companyId) !== String(input.companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para acessar dados desta empresa" });
+      }
+      if (!tablesReady) { await ensureFleetTables(); tablesReady = true; }
+      const db = await getDb();
+      const res = await db.execute(sql`
+        SELECT payload FROM fleet_ai_analysis WHERE company_id = ${input.companyId} LIMIT 1
+      `);
+      const row = (((res as any).rows) || [])[0];
+      if (!row || !row.payload) return null;
+      try {
+        return typeof row.payload === "string" ? JSON.parse(row.payload) : row.payload;
+      } catch {
+        return null;
+      }
     }),
 
   // Rev. 1881 — Dashboard dedicado de COMBUSTÍVEL. KPIs gerais, evolução

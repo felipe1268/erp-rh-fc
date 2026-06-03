@@ -1,6 +1,41 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2718 — **FROTA · DASHBOARD DE MANUTENÇÃO (`/frotas` → "Manutenções" → "Dashboard") · A "ANÁLISE
+ * INTELIGENTE (IA)" FOI REFEITA: (1) DIAGNÓSTICO MUITO MAIS DETALHADO/RESPONSIVO, FUNDAMENTADO EM
+ * LITERATURA DE GESTÃO DE FROTA (TCO, CUSTO/KM, MTBF, RCM CORRETIVA×PREVENTIVA, TENDÊNCIA DE CUSTO,
+ * VIDA ECONÔMICA/REPOR-VS-REPARAR); E (2) O RESULTADO AGORA É PERSISTIDO — FICA FIXADO NA TELA ATÉ O
+ * USUÁRIO CLICAR EM "ATUALIZAR ANÁLISE".**
+ *
+ * PEDIDO (usuário): a análise anterior era rasa (só cruzava peças recorrentes) e EFÊMERA (sumia ao sair
+ * da tela, pois era só uma mutation sem persistência). Queria uma análise "muito mais detalhada e
+ * responsiva", embasada nas melhores práticas mundiais de gestão de frota, e que ficasse SALVA.
+ *
+ * SOLUÇÃO (SCHEMA não-destrutivo + SERVER + CLIENT — R-001/R-007/R-010 OK; `CREATE TABLE IF NOT EXISTS`):
+ * - PERSISTÊNCIA (`server/routers/frotas.ts`): nova tabela `fleet_ai_analysis` (`company_id` PK, `payload`
+ *   JSONB, `gerado_em`, `updated_at`) criada em `ensureFleetTables` via `CREATE TABLE IF NOT EXISTS`.
+ *   Helper `persistSnapshot` faz upsert `ON CONFLICT (company_id)`. A mutation `getMaintenanceAIAnalysis`
+ *   grava o snapshot ANTES de retornar (inclusive no early-return sem-veículos). Nova query
+ *   `getMaintenanceAIAnalysisLatest({companyId})` lê o último snapshot (guarda de companyId; JSON.parse
+ *   se vier string).
+ * - MÉTRICAS RICAS (`server/routers/frotas.ts`): SQL estendido com `custo_prev_12m` (janela 24→12m p/
+ *   tendência). Nova query MTBF (gaps entre OS corretivas → dias + km). `veiculos[]` enriquecido com
+ *   `idade`, `custoPorKm` (CPK), `custoMedioOs`, `custoPrev12m`, `tendenciaCustoPct`, `mtbfDias`,
+ *   `mtbfKm`, `custoSobreValorTotalPct`. Novo agregado `fleet{}` (TCO total/12m, `custoPorKmMedio`
+ *   ponderado, `pctCorretivaFrota`, `tendenciaFrotaPct`, `topOfensores`, `osTotalFrota`,
+ *   `nVender/nObservar/nManter`). `buildDeterministicIa` reponderado (RCM, custo/valor, idade,
+ *   tendência, MTBF; limiares VENDER≥60 / OBSERVAR≥35) com veredito de vida econômica (repor-vs-reparar)
+ *   na `acao`. Prompt do LLM + payload enriquecidos com os novos fatos da frota.
+ * - UI (`client/src/pages/frotas/ManutencoesDashboard.tsx`): query `getMaintenanceAIAnalysisLatest`
+ *   carrega o snapshot no load (análise FIXADA); a mutation regrava e dá `refetch` (`ai = aiMut.data ??
+ *   aiQuery.data`); botão alterna "Gerar análise" / "Atualizar análise". Nova banda responsiva de KPIs
+ *   da frota (TCO 12m, CPK médio, % corretivas, tendência, nº de veículos, parecer V/O/M). Cards por
+ *   veículo ganharam tiles de CPK, tendência, MTBF (dias·km), idade e custo médio/OS. Nota metodológica
+ *   colapsável explicando TCO/CPK/MTBF/RCM/tendência/vida econômica. Estados de loading da query e do
+ *   parecer salvo.
+ *
+ * VALIDAÇÃO: esbuild server (`frotas.ts`) EXIT 0 + parse esbuild do TSX (`ManutencoesDashboard.tsx`) EXIT 0.
+ *
  * Rev. 2717 — **FROTA · VEÍCULOS (`/frotas` → "Veículos") · O CARD DO VEÍCULO NA TELA INICIAL (LISTA)
  * AGORA MOSTRA UM CHIP CLICÁVEL PARA CADA DOCUMENTO ANEXADO PELO NOVO SISTEMA (`documentos`, Rev. 2716),
  * DEIXANDO O HONDA HR-V (E QUALQUER VEÍCULO QUE USE O ANEXO NOVO) COM O MESMO LAYOUT DOS DEMAIS QUE JÁ

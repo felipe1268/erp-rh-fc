@@ -9,6 +9,7 @@ import {
   BarChart3, ChevronLeft, ChevronRight, AlertTriangle, CheckCircle,
   Package, Settings, Users, Gauge, ArrowUpDown, ArrowUp, ArrowDown,
   Sparkles, Brain, Loader2, RefreshCw, ShieldCheck, ShieldAlert, Repeat, Lightbulb,
+  BookOpen, ChevronDown, ChevronUp, Timer, Coins, GaugeCircle,
 } from "lucide-react";
 import { useState, useMemo, useEffect } from "react";
 import {
@@ -21,6 +22,10 @@ const MESES = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "O
 
 function fmt(v: number) { return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }); }
 function fmtNum(v: number, d = 0) { return v.toLocaleString("pt-BR", { minimumFractionDigits: d, maximumFractionDigits: d }); }
+function fmtCpk(v: number | null | undefined) {
+  if (v == null) return "—";
+  return `R$ ${v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
 
 export default function ManutencoesDashboard() {
   const { selectedCompanyId } = useCompany();
@@ -28,16 +33,36 @@ export default function ManutencoesDashboard() {
   const [ano, setAno] = useState(new Date().getFullYear());
   const [sortVeiculo, setSortVeiculo] = useState<{ col: string; dir: "asc" | "desc" }>({ col: "custoTotal", dir: "desc" });
   const [expandedVehicle, setExpandedVehicle] = useState<string | null>(null);
+  const [showMetodologia, setShowMetodologia] = useState(false);
 
   const dash = trpc.frotas.getMaintenanceDashboard.useQuery(
     { companyId: cId, ano },
     { enabled: cId > 0 },
   );
 
-  const aiMut = trpc.frotas.getMaintenanceAIAnalysis.useMutation();
-  const ai = aiMut.data;
+  // Rev. 2718 — análise PERSISTIDA: a query carrega o último snapshot no load
+  // (fica FIXADA na tela); a mutation recalcula + regrava e o refetch atualiza.
+  const aiQuery = trpc.frotas.getMaintenanceAIAnalysisLatest.useQuery(
+    { companyId: cId },
+    { enabled: cId > 0, refetchOnWindowFocus: false },
+  );
+  const aiMut = trpc.frotas.getMaintenanceAIAnalysis.useMutation({
+    onSuccess: () => { aiQuery.refetch(); },
+  });
+  // Ao trocar de empresa, descarta o resultado da mutation anterior (que era de
+  // OUTRA empresa) — senão `aiMut.data` antigo sobrescreveria o snapshot novo.
+  useEffect(() => { aiMut.reset(); }, [cId]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Fonte de verdade: o snapshot da PRÓPRIA empresa mais RECENTE. `aiQuery.data`
+  // é sempre da empresa atual; `aiMut.data` só vale se for da empresa atual.
+  const ai = useMemo(() => {
+    const mut = aiMut.data && (aiMut.data as any).companyId != null && (aiMut.data as any).companyId !== cId ? null : aiMut.data;
+    const cands = [aiQuery.data, mut].filter(Boolean) as any[];
+    if (cands.length === 0) return undefined;
+    return cands.sort((a, b) => new Date(b?.geradoEm || 0).getTime() - new Date(a?.geradoEm || 0).getTime())[0];
+  }, [aiQuery.data, aiMut.data, cId]);
   const aiMetrics = ai?.metrics;
   const aiParecer = ai?.ia as any;
+  const aiFleet = aiMetrics?.fleet as any;
 
   // Barra de progresso (0-100%) durante a análise da IA. A chamada é única (sem
   // eventos de progresso reais), então animamos até ~95% enquanto pendente e
@@ -233,7 +258,7 @@ export default function ManutencoesDashboard() {
                     <Sparkles className="h-4 w-4 text-violet-500" />
                   </CardTitle>
                   <p className="text-xs text-muted-foreground">
-                    Cruza peças que se repetem em pouco tempo e recomenda <span className="font-medium">vender</span> ou <span className="font-medium">manter</span> cada veículo
+                    Diagnóstico de frota por <span className="font-medium">TCO</span>, custo/km, confiabilidade (MTBF) e vida econômica — recomenda <span className="font-medium">vender</span>, <span className="font-medium">observar</span> ou <span className="font-medium">manter</span> cada veículo
                   </p>
                 </div>
               </div>
@@ -251,11 +276,17 @@ export default function ManutencoesDashboard() {
             </div>
           </CardHeader>
           <CardContent>
-            {!ai && !aiMut.isPending && (
+            {aiQuery.isLoading && !ai && !aiMut.isPending && (
+              <div className="flex items-center justify-center gap-2 py-8 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin text-violet-500" /> Carregando última análise…
+              </div>
+            )}
+
+            {!ai && !aiMut.isPending && !aiQuery.isLoading && (
               <div className="text-center py-8 px-4">
                 <Brain className="h-10 w-10 mx-auto text-violet-300 mb-3" />
                 <p className="text-sm text-muted-foreground max-w-xl mx-auto">
-                  Clique em <span className="font-semibold text-violet-700 dark:text-violet-300">"Gerar análise"</span> para identificar peças trocadas repetidamente em pouco tempo no mesmo veículo (sinal de problema crônico) e receber um parecer de IA, com score de risco, para decidir entre <span className="font-medium">vender ou manter</span>.
+                  Clique em <span className="font-semibold text-violet-700 dark:text-violet-300">"Gerar análise"</span> para um diagnóstico completo da frota — <span className="font-medium">TCO, custo por km (CPK), confiabilidade (MTBF), relação corretiva×preventiva e vida econômica</span> — com score de risco e parecer <span className="font-medium">vender / observar / manter</span> por veículo. A análise fica salva até você atualizá-la.
                 </p>
               </div>
             )}
@@ -292,6 +323,55 @@ export default function ManutencoesDashboard() {
                   <div className="flex items-start gap-2 text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-2.5">
                     <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
                     <span>{ai.erro}</span>
+                  </div>
+                )}
+
+                {/* Banda de KPIs da FROTA (TCO / CPK / RCM / tendência / parecer) */}
+                {aiFleet && aiFleet.totalVeiculos > 0 && (
+                  <div>
+                    <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-2 flex items-center gap-1.5">
+                      <GaugeCircle className="h-3.5 w-3.5 text-violet-500" /> Diagnóstico da frota
+                    </p>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-2.5">
+                      <div className="rounded-xl bg-white dark:bg-slate-800 border shadow-sm p-3">
+                        <p className="text-[10px] text-muted-foreground flex items-center gap-1"><Coins className="h-3 w-3" /> TCO 12 meses</p>
+                        <p className="text-base font-bold tabular-nums text-emerald-700 dark:text-emerald-400 leading-tight">{fmt(aiFleet.custo12mFrota || 0)}</p>
+                        <p className="text-[10px] text-muted-foreground">Acum.: {fmt(aiFleet.custoTotalFrota || 0)}</p>
+                      </div>
+                      <div className="rounded-xl bg-white dark:bg-slate-800 border shadow-sm p-3">
+                        <p className="text-[10px] text-muted-foreground flex items-center gap-1"><Gauge className="h-3 w-3" /> Custo / km médio</p>
+                        <p className="text-base font-bold tabular-nums leading-tight">{aiFleet.custoPorKmMedio != null ? `${fmtCpk(aiFleet.custoPorKmMedio)}/km` : "—"}</p>
+                        <p className="text-[10px] text-muted-foreground">métrica-rei de TCO</p>
+                      </div>
+                      <div className="rounded-xl bg-white dark:bg-slate-800 border shadow-sm p-3">
+                        <p className="text-[10px] text-muted-foreground flex items-center gap-1"><Wrench className="h-3 w-3" /> Corretivas</p>
+                        <p className={`text-base font-bold tabular-nums leading-tight ${aiFleet.pctCorretivaFrota >= 50 ? "text-red-600 dark:text-red-400" : ""}`}>{aiFleet.pctCorretivaFrota ?? 0}%</p>
+                        <p className="text-[10px] text-muted-foreground">das OS (RCM)</p>
+                      </div>
+                      <div className="rounded-xl bg-white dark:bg-slate-800 border shadow-sm p-3">
+                        <p className="text-[10px] text-muted-foreground flex items-center gap-1">
+                          {aiFleet.tendenciaFrotaPct != null && aiFleet.tendenciaFrotaPct >= 0 ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />} Tendência custo
+                        </p>
+                        <p className={`text-base font-bold tabular-nums leading-tight ${aiFleet.tendenciaFrotaPct != null && aiFleet.tendenciaFrotaPct > 0 ? "text-red-600 dark:text-red-400" : "text-emerald-700 dark:text-emerald-400"}`}>
+                          {aiFleet.tendenciaFrotaPct != null ? `${aiFleet.tendenciaFrotaPct >= 0 ? "+" : ""}${aiFleet.tendenciaFrotaPct}%` : "—"}
+                        </p>
+                        <p className="text-[10px] text-muted-foreground">vs 12m anteriores</p>
+                      </div>
+                      <div className="rounded-xl bg-white dark:bg-slate-800 border shadow-sm p-3">
+                        <p className="text-[10px] text-muted-foreground flex items-center gap-1"><Truck className="h-3 w-3" /> Veículos</p>
+                        <p className="text-base font-bold tabular-nums leading-tight">{aiFleet.totalVeiculos}</p>
+                        <p className="text-[10px] text-muted-foreground">{aiFleet.osTotalFrota ?? 0} OS no total</p>
+                      </div>
+                      <div className="rounded-xl bg-white dark:bg-slate-800 border shadow-sm p-3">
+                        <p className="text-[10px] text-muted-foreground flex items-center gap-1"><ShieldAlert className="h-3 w-3" /> Parecer</p>
+                        <p className="text-sm font-bold leading-tight flex items-center gap-1.5 flex-wrap">
+                          <span className="text-red-600">{aiFleet.nVender ?? 0}V</span>
+                          <span className="text-amber-600">{aiFleet.nObservar ?? 0}O</span>
+                          <span className="text-emerald-600">{aiFleet.nManter ?? 0}M</span>
+                        </p>
+                        <p className="text-[10px] text-muted-foreground">vender/observar/manter</p>
+                      </div>
+                    </div>
                   </div>
                 )}
 
@@ -340,23 +420,49 @@ export default function ManutencoesDashboard() {
                               </div>
                             )}
 
-                            <div className="grid grid-cols-2 gap-1.5 text-[10px]">
+                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 text-[10px]">
                               <div className="bg-slate-50 dark:bg-slate-900/40 rounded p-1.5">
                                 <p className="text-muted-foreground">Custo 12m</p>
                                 <p className="font-bold text-emerald-700 dark:text-emerald-400">{fmt(m.custo12m || 0)}</p>
                               </div>
                               <div className="bg-slate-50 dark:bg-slate-900/40 rounded p-1.5">
+                                <p className="text-muted-foreground flex items-center gap-0.5"><Gauge className="h-2.5 w-2.5" /> Custo/km</p>
+                                <p className="font-bold">{m.custoPorKm != null ? `${fmtCpk(m.custoPorKm)}/km` : "—"}</p>
+                              </div>
+                              <div className="bg-slate-50 dark:bg-slate-900/40 rounded p-1.5">
                                 <p className="text-muted-foreground">Corretivas</p>
-                                <p className="font-bold">{m.pctCorretiva ?? 0}%</p>
+                                <p className={`font-bold ${(m.pctCorretiva ?? 0) >= 50 ? "text-red-600 dark:text-red-400" : ""}`}>{m.pctCorretiva ?? 0}%</p>
+                              </div>
+                              <div className="bg-slate-50 dark:bg-slate-900/40 rounded p-1.5">
+                                <p className="text-muted-foreground flex items-center gap-0.5">
+                                  {m.tendenciaCustoPct != null && m.tendenciaCustoPct > 0 ? <TrendingUp className="h-2.5 w-2.5" /> : <TrendingDown className="h-2.5 w-2.5" />} Tendência
+                                </p>
+                                <p className={`font-bold ${m.tendenciaCustoPct != null && m.tendenciaCustoPct > 0 ? "text-red-600 dark:text-red-400" : "text-emerald-700 dark:text-emerald-400"}`}>{m.tendenciaCustoPct != null ? `${m.tendenciaCustoPct >= 0 ? "+" : ""}${m.tendenciaCustoPct}%` : "—"}</p>
+                              </div>
+                              <div className="bg-slate-50 dark:bg-slate-900/40 rounded p-1.5">
+                                <p className="text-muted-foreground flex items-center gap-0.5"><Timer className="h-2.5 w-2.5" /> MTBF</p>
+                                <p className="font-bold">{m.mtbfDias != null ? `${fmtNum(m.mtbfDias)}d` : "—"}{m.mtbfKm != null ? <span className="text-muted-foreground font-normal"> · {fmtNum(m.mtbfKm)}km</span> : null}</p>
+                              </div>
+                              <div className="bg-slate-50 dark:bg-slate-900/40 rounded p-1.5">
+                                <p className="text-muted-foreground">Custo/valor</p>
+                                <p className={`font-bold ${(m.custoSobreValorPct ?? 0) >= 50 ? "text-red-600 dark:text-red-400" : ""}`}>{m.custoSobreValorPct != null ? `${m.custoSobreValorPct}%` : "—"}</p>
                               </div>
                               <div className="bg-slate-50 dark:bg-slate-900/40 rounded p-1.5">
                                 <p className="text-muted-foreground">Peças recorrentes</p>
                                 <p className="font-bold">{m.pecasRecorrentes ?? 0}{(m.pecasRecorrentesCurtas ?? 0) > 0 ? <span className="text-red-600"> ({m.pecasRecorrentesCurtas} críticas)</span> : null}</p>
                               </div>
-                              <div className="bg-slate-50 dark:bg-slate-900/40 rounded p-1.5">
-                                <p className="text-muted-foreground">Custo/valor</p>
-                                <p className="font-bold">{m.custoSobreValorPct != null ? `${m.custoSobreValorPct}%` : "—"}</p>
-                              </div>
+                              {m.idade != null && (
+                                <div className="bg-slate-50 dark:bg-slate-900/40 rounded p-1.5">
+                                  <p className="text-muted-foreground">Idade</p>
+                                  <p className="font-bold">{m.idade} {m.idade === 1 ? "ano" : "anos"}</p>
+                                </div>
+                              )}
+                              {m.custoMedioOs != null && (
+                                <div className="bg-slate-50 dark:bg-slate-900/40 rounded p-1.5">
+                                  <p className="text-muted-foreground">Custo médio/OS</p>
+                                  <p className="font-bold">{fmt(m.custoMedioOs)}</p>
+                                </div>
+                              )}
                             </div>
 
                             {r.justificativa && (
@@ -454,9 +560,35 @@ export default function ManutencoesDashboard() {
                   </div>
                 )}
 
+                {/* Nota metodológica (literatura de gestão de frota) */}
+                <div className="rounded-xl border bg-slate-50/60 dark:bg-slate-900/30">
+                  <button
+                    type="button"
+                    onClick={() => setShowMetodologia((s) => !s)}
+                    className="w-full flex items-center justify-between gap-2 px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground"
+                  >
+                    <span className="flex items-center gap-1.5"><BookOpen className="h-3.5 w-3.5 text-violet-500" /> Como esta análise é calculada (metodologia)</span>
+                    {showMetodologia ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                  </button>
+                  {showMetodologia && (
+                    <div className="px-3 pb-3 text-[11px] leading-relaxed text-slate-600 dark:text-slate-300 space-y-1.5">
+                      <p>O diagnóstico cruza o histórico real de manutenções com indicadores consagrados na gestão de frotas:</p>
+                      <ul className="space-y-1 list-none">
+                        <li><span className="font-semibold text-slate-700 dark:text-slate-200">TCO (Total Cost of Ownership):</span> custo total acumulado e dos últimos 12 meses, base para comparar veículos.</li>
+                        <li><span className="font-semibold text-slate-700 dark:text-slate-200">Custo por km (CPK):</span> custo ÷ km rodado — a métrica-rei de eficiência de frota; normaliza veículos de uso desigual.</li>
+                        <li><span className="font-semibold text-slate-700 dark:text-slate-200">MTBF (Mean Time Between Failures):</span> intervalo médio entre corretivas (dias e km); MTBF curto = baixa confiabilidade.</li>
+                        <li><span className="font-semibold text-slate-700 dark:text-slate-200">RCM (corretiva × preventiva):</span> % de OS corretivas. Frota saudável é dominada por preventiva; muita corretiva = "apagando incêndio".</li>
+                        <li><span className="font-semibold text-slate-700 dark:text-slate-200">Tendência de custo:</span> custo dos últimos 12m vs os 12m anteriores — curva acelerando antecipa deterioração.</li>
+                        <li><span className="font-semibold text-slate-700 dark:text-slate-200">Vida econômica / repor-vs-reparar:</span> quando a manutenção anual consome fatia alta do valor do bem, substituir tende a compensar mais que reparar.</li>
+                      </ul>
+                      <p className="text-muted-foreground">O score de risco (0–100) pondera esses sinais; o parecer (vender / observar / manter) deriva dos limiares combinados. O texto interpretativo é gerado por IA sobre esses mesmos números; quando a IA está indisponível, um parecer determinístico equivalente é exibido.</p>
+                    </div>
+                  )}
+                </div>
+
                 {ai.geradoEm && (
                   <p className="text-[10px] text-muted-foreground text-right">
-                    Análise gerada em {new Date(ai.geradoEm).toLocaleString("pt-BR")}
+                    Análise gerada em {new Date(ai.geradoEm).toLocaleString("pt-BR")} · fica salva até você clicar em "Atualizar análise"
                   </p>
                 )}
               </div>
