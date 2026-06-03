@@ -1,7 +1,7 @@
 import { router, protectedProcedure } from "../_core/trpc";
 import { z } from "zod";
 import { getDb } from "../db";
-import { comunicadosInternos, comunicadoAssinaturas, employees } from "../../drizzle/schema";
+import { comunicadosInternos, comunicadoAssinaturas, employees, obraFuncionarios, obras } from "../../drizzle/schema";
 import { eq, and, sql, desc, isNull, asc, inArray, ne } from "drizzle-orm";
 import { storagePut } from "../storage";
 import { TRPCError } from "@trpc/server";
@@ -274,6 +274,34 @@ export const comunicadosInternosRouter = router({
           eq(comunicadoAssinaturas.comunicadoId, input.comunicadoId),
           eq(comunicadoAssinaturas.companyId, input.companyId),
         ));
+      // Obra ATUAL de cada funcionário = alocação ativa em obra_funcionarios (isActive=1)
+      // → nome em obras. (Mesma fonte usada no raio-X do colaborador.)
+      const ativoIdsParaObra = ativos.map(a => a.id);
+      const alocacoes = ativoIdsParaObra.length > 0
+        ? await db.select({
+            employeeId: obraFuncionarios.employeeId,
+            obraId: obraFuncionarios.obraId,
+            obraNome: obras.nome,
+          })
+            .from(obraFuncionarios)
+            // innerJoin com escopo de empresa NOS DOIS lados + obra não-excluída (tenancy)
+            .innerJoin(obras, and(
+              eq(obras.id, obraFuncionarios.obraId),
+              eq(obras.companyId, input.companyId),
+              isNull(obras.deletedAt),
+            ))
+            .where(and(
+              eq(obraFuncionarios.companyId, input.companyId),
+              eq(obraFuncionarios.isActive, 1),
+              inArray(obraFuncionarios.employeeId, ativoIdsParaObra),
+            ))
+            // determinismo da "obra atual": alocação mais recente vence
+            .orderBy(desc(obraFuncionarios.dataInicio), desc(obraFuncionarios.id))
+        : [];
+      const mapObra = new Map<number, { obraId: number; obraNome: string }>();
+      for (const a of alocacoes) {
+        if (!mapObra.has(a.employeeId)) mapObra.set(a.employeeId, { obraId: a.obraId, obraNome: a.obraNome });
+      }
       const mapAssin = new Map<number, any>(assinaturas.map(a => [a.employeeId, a]));
       // Conta APENAS assinaturas de funcionários atualmente ATIVOS (mantém KPI
       // consistente com a tabela exibida — assinaturas órfãs de desligados ficam
@@ -284,6 +312,8 @@ export const comunicadosInternosRouter = router({
         funcionarios: ativos.map(f => ({
           ...f,
           assinatura: mapAssin.get(f.id) || null,
+          obraId: mapObra.get(f.id)?.obraId ?? null,
+          obraNome: mapObra.get(f.id)?.obraNome ?? null,
         })),
         totalAtivos: ativos.length,
         totalAssinados: totalAssinadosAtivos,

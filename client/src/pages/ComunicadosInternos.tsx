@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import RichTextEditor, { stripHtml, sanitizeHtml, isHtmlContent } from "@/components/RichTextEditor";
-import { Megaphone, Plus, Trash2, Upload, FileText, Search, Loader2, ArrowLeft, Printer, Eye, ChevronLeft, Pencil, CheckCircle2, RotateCcw, Lock, X, Maximize2, Minimize2, ClipboardSignature, Eraser, MonitorSmartphone, Users, Signature } from "lucide-react";
+import { Megaphone, Plus, Trash2, Upload, FileText, Search, Loader2, ArrowLeft, Printer, Eye, ChevronLeft, Pencil, CheckCircle2, RotateCcw, Lock, X, Maximize2, Minimize2, ClipboardSignature, Eraser, MonitorSmartphone, Users, Signature, Building2, Filter } from "lucide-react";
 import { toast } from "sonner";
 import { useLocation } from "wouter";
 import { formatCPF } from "@/lib/formatters";
@@ -140,6 +140,9 @@ export default function ComunicadosInternos() {
   const [assinaturaMode, setAssinaturaMode] = useState<"imprimir" | "digital">("digital");
   const [signingFuncionario, setSigningFuncionario] = useState<{ id: number; nome: string; initial?: string | null } | null>(null);
   const [searchFunc, setSearchFunc] = useState("");
+  // Filtros da Lista para Assinatura: por obra + por status de assinatura.
+  const [filtroObra, setFiltroObra] = useState<string>("");
+  const [filtroAssinatura, setFiltroAssinatura] = useState<"todos" | "assinados" | "pendentes">("todos");
 
   const listaAssinaturaQuery = trpc.comunicadosInternos.listarFuncionariosParaAssinatura.useQuery(
     { comunicadoId: listaAssinaturaId || 0, companyId },
@@ -253,12 +256,27 @@ export default function ComunicadosInternos() {
     const cnpj = selectedCompany?.cnpj || "";
     const logoUrl = selectedCompany?.logoUrl;
     const q = searchFunc.toLowerCase().trim();
-    const filtradosFunc = q
-      ? funcionarios.filter((f: any) =>
+    const obrasDisponiveis: string[] = Array.from(
+      new Set(funcionarios.map((f: any) => f.obraNome).filter(Boolean) as string[])
+    ).sort((a, b) => a.localeCompare(b, "pt-BR"));
+    const temFuncSemObra = funcionarios.some((f: any) => !f.obraNome);
+    const temFiltro = !!q || !!filtroObra || filtroAssinatura !== "todos";
+    const filtradosFunc = funcionarios.filter((f: any) => {
+      if (q) {
+        const match =
           (f.nomeCompleto || "").toLowerCase().includes(q) ||
           (f.matricula || "").toLowerCase().includes(q) ||
-          (f.cargo || "").toLowerCase().includes(q))
-      : funcionarios;
+          (f.cargo || "").toLowerCase().includes(q);
+        if (!match) return false;
+      }
+      if (filtroObra) {
+        if (filtroObra === "__sem__") { if (f.obraNome) return false; }
+        else if (f.obraNome !== filtroObra) return false;
+      }
+      if (filtroAssinatura === "assinados" && !f.assinatura) return false;
+      if (filtroAssinatura === "pendentes" && f.assinatura) return false;
+      return true;
+    });
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 to-indigo-50/30 p-6">
         <style>{`
@@ -276,7 +294,7 @@ export default function ComunicadosInternos() {
         <div className="max-w-6xl mx-auto">
           {/* Toolbar topo (não imprime) */}
           <div className="flex items-center gap-3 mb-4 flex-wrap no-print">
-            <Button variant="ghost" size="sm" onClick={() => { setListaAssinaturaId(null); setSearchFunc(""); }}>
+            <Button variant="ghost" size="sm" onClick={() => { setListaAssinaturaId(null); setSearchFunc(""); setFiltroObra(""); setFiltroAssinatura("todos"); }}>
               <ChevronLeft className="h-4 w-4 mr-1" /> Voltar ao Comunicado
             </Button>
             <div className="h-9 w-9 rounded-lg bg-gradient-to-br from-indigo-600 to-blue-700 flex items-center justify-center shadow">
@@ -329,11 +347,48 @@ export default function ComunicadosInternos() {
             </div>
           </div>
 
-          {/* Busca (não imprime) */}
+          {/* Busca + filtros (não imprime) */}
           <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-3 mb-3 no-print">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-              <Input className="pl-9" placeholder="Buscar por nome, matrícula ou cargo..." value={searchFunc} onChange={(e) => setSearchFunc(e.target.value)} />
+            <div className="flex flex-col lg:flex-row gap-2 lg:items-center">
+              <div className="relative flex-1 min-w-[200px]">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                <Input className="pl-9" placeholder="Buscar por nome, matrícula ou cargo..." value={searchFunc} onChange={(e) => setSearchFunc(e.target.value)} />
+              </div>
+              <div className="relative">
+                <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
+                <select
+                  value={filtroObra}
+                  onChange={(e) => setFiltroObra(e.target.value)}
+                  className="h-9 w-full lg:w-56 pl-9 pr-7 rounded-md border border-slate-200 bg-white text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-200 appearance-none"
+                >
+                  <option value="">Todas as obras</option>
+                  {obrasDisponiveis.map((o) => (
+                    <option key={o} value={o}>{o}</option>
+                  ))}
+                  {temFuncSemObra && <option value="__sem__">Sem obra</option>}
+                </select>
+              </div>
+              <div className="relative">
+                <Filter className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
+                <select
+                  value={filtroAssinatura}
+                  onChange={(e) => setFiltroAssinatura(e.target.value as "todos" | "assinados" | "pendentes")}
+                  className="h-9 w-full lg:w-48 pl-9 pr-7 rounded-md border border-slate-200 bg-white text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-200 appearance-none"
+                >
+                  <option value="todos">Todos</option>
+                  <option value="assinados">Quem assinou</option>
+                  <option value="pendentes">Quem falta assinar</option>
+                </select>
+              </div>
+              {temFiltro && (
+                <Button variant="ghost" size="sm" className="text-slate-500 shrink-0"
+                  onClick={() => { setSearchFunc(""); setFiltroObra(""); setFiltroAssinatura("todos"); }}>
+                  <X className="h-4 w-4 mr-1" /> Limpar
+                </Button>
+              )}
+            </div>
+            <div className="mt-2 text-[11px] text-slate-500">
+              Exibindo <span className="font-semibold text-slate-700">{filtradosFunc.length}</span> de {funcionarios.length} colaborador(es).
             </div>
           </div>
 
@@ -375,7 +430,7 @@ export default function ComunicadosInternos() {
             ) : filtradosFunc.length === 0 ? (
               <div className="p-12 text-center">
                 <Users className="h-12 w-12 mx-auto text-slate-300 mb-3" />
-                <p className="text-slate-500">{q ? "Nenhum funcionário corresponde à busca" : "Nenhum funcionário ativo nesta empresa"}</p>
+                <p className="text-slate-500">{temFiltro ? "Nenhum funcionário corresponde aos filtros" : "Nenhum funcionário ativo nesta empresa"}</p>
               </div>
             ) : (
               <table className="w-full text-[11px] border-collapse">
@@ -400,6 +455,10 @@ export default function ComunicadosInternos() {
                         <td className="px-2 py-2 text-slate-700 font-mono align-top">{f.matricula || "-"}</td>
                         <td className="px-2 py-2 text-slate-800 font-medium align-top">
                           {f.nomeCompleto}
+                          <div className="text-[10px] font-semibold text-indigo-600 flex items-center gap-1">
+                            <Building2 className="h-2.5 w-2.5 shrink-0" />
+                            {f.obraNome || "Sem obra"}
+                          </div>
                           <div className="text-[9px] text-slate-400 print:hidden">CPF: {formatCPF(f.cpf)}</div>
                         </td>
                         <td className="px-2 py-2 text-slate-600 hidden sm:table-cell align-top">{f.cargo || f.funcao || "-"}</td>

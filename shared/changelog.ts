@@ -1,6 +1,38 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2735 — **RH · COMUNICADOS INTERNOS · LISTA PARA ASSINATURA: MOSTRA A OBRA ATUAL DE CADA COLABORADOR E
+ * ADICIONA FILTROS (POR OBRA + POR QUEM ASSINOU / QUEM FALTA ASSINAR).**
+ *
+ * PEDIDO (relato): na tela "Lista para Assinatura" de Comunicados Internos, mostrar o NOME DA OBRA embaixo de cada
+ * funcionário e oferecer filtros por obra, por quem já assinou e por quem falta assinar — pra facilitar conferir e
+ * coletar assinaturas obra-a-obra.
+ *
+ * CONTEXTO/DADOS: a obra ATUAL do colaborador NÃO vive em `employees` (não há coluna de obra). A fonte canônica é a
+ * alocação ativa em `obra_funcionarios` (`isActive=1`), com o nome em `obras.nome` — mesma fonte usada no raio-X do
+ * colaborador (`controleDocumentos.ts`). A procedure `comunicadosInternos.listarFuncionariosParaAssinatura` retornava
+ * só dados de `employees` + a assinatura (`comunicado_assinaturas`), sem nenhuma referência de obra; o client filtrava
+ * apenas por texto livre (nome/matrícula/cargo).
+ *
+ * SOLUÇÃO (SERVER + CLIENT/UI; ZERO SCHEMA; ZERO ALTER/DROP/DELETE — R-001/R-007/R-010): (1) SERVER
+ * (`listarFuncionariosParaAssinatura`): nova query lê as alocações ativas da empresa em `obra_funcionarios`
+ * (`isActive=1`) com `innerJoin` em `obras` ESCOPADO POR EMPRESA NOS DOIS LADOS (`obraFuncionarios.companyId` E
+ * `obras.companyId` = `input.companyId`, `obras.deletedAt IS NULL`) para evitar vazamento cross-tenant do nome da obra
+ * via linha órfã; restringe aos `employeeId` ativos (`inArray`) e ordena `dataInicio desc, id desc` p/ a obra atual ser
+ * determinística (alocação mais recente vence). Monta `Map<employeeId,{obraId,obraNome}>` e injeta `obraId`/`obraNome`
+ * (ou `null`) em cada funcionário do retorno — sem mexer nos KPIs nem na contagem de assinaturas. (2) CLIENT
+ * (`ComunicadosInternos.tsx`, sub-view Lista para Assinatura):
+ * (a) renderiza a obra (ícone `Building2` + nome, fallback "Sem obra") abaixo do nome de cada colaborador na tabela;
+ * (b) dois novos `<select>` nativos — "Todas as obras" (opções derivadas das obras presentes na lista + "Sem obra"
+ * quando houver colaborador sem alocação) e status "Todos / Quem assinou / Quem falta assinar" (usa `f.assinatura`
+ * não-nula = assinou); (c) a lógica de filtragem `filtradosFunc` combina busca textual + obra + status; (d) contador
+ * "Exibindo X de N", botão "Limpar" (aparece só com filtro ativo) e reset dos filtros ao "Voltar ao Comunicado";
+ * (e) empty-state passa a dizer "corresponde aos filtros". Filtros são UI-only (não imprimem); a obra entra na área
+ * imprimível abaixo do nome.
+ *
+ * VALIDAÇÃO: esbuild server (`server/_core/index.ts`) EXIT 0; parse TSX EXIT 0; `vitest run server/rescisao.test.ts`
+ * 41/41 verde.
+ *
  * Rev. 2734 — **RH · CONTROLE DE DOCUMENTOS · ADVERTÊNCIAS · LGPD/AUDITORIA: APÓS A ASSINATURA DO COLABORADOR O
  * DOCUMENTO FICA IMUTÁVEL (NÃO PODE MAIS SER EDITADO).**
  *
