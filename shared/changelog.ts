@@ -1,6 +1,30 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2729 — **PLANEJAMENTO · DETALHE DO PROJETO · REMOVIDA A ABA "PREVISTO" (tela "Previsto (Manual)" — upload
+ * manual de 1 XML do MS Project por semana).**
+ *
+ * PEDIDO DO USUÁRIO: "tire esta função, não precisamos mais." A aba "Previsto" abria a tela "Previsto (Manual)"
+ * que permitia subir XMLs por semana para alimentar manualmente o "% Previsto". A empresa usa o MOTOR
+ * (CAMINHO B) como fonte real do "% Previsto" (snapshot Texto10 regenerado em todo upload do XML); o próprio
+ * aviso da tela já dizia que a curva só usaria esses valores ao ativar Critérios do Sistema → Planejamento →
+ * Fonte do "% Previsto" → Manual. Logo a aba estava sem uso.
+ *
+ * SOLUÇÃO (SÓ CLIENT/UI; ZERO SERVER/SCHEMA — R-001/R-007/R-010):
+ * `client/src/pages/planejamento/PlanejamentoDetalhe.tsx` — removidos (1) o import de `AbaPrevistoManual`,
+ * (2) o id `"previsto"` do type `Tab`, (3) a entrada `{ id: "previsto", label: "Previsto", Icon: TrendingUp }`
+ * de `TAB_DEFS` (como `TAB_IDS`/`tabOrder` derivam de `TAB_DEFS`, a aba some de toda a navegação e qualquer
+ * ordem salva em localStorage é filtrada por `TAB_IDS.includes`), e (4) o bloco de render `aba === "previsto"`.
+ * Arquivo órfão `client/src/pages/planejamento/AbaPrevistoManual.tsx` APAGADO.
+ *
+ * NÃO TOCADO: os endpoints tRPC `planejamento.getPrevistoManual` / `salvarPrevistoManualSemana` /
+ * `limparPrevistoManualSemana` ficam no server (sem chamadores agora; remoção de server está fora do escopo do
+ * pedido e evita risco de regressão). NÃO mexe no motor "% Previsto" (CAMINHO B), nas barras Previsto×Realizado,
+ * na Curva S nem no snapshot Texto10.
+ *
+ * VALIDAÇÃO: Vite compila sem erro após a remoção (somente HMR de CSS nos logs); esbuild server EXIT 0;
+ * `vitest server/rescisao.test.ts` verde.
+ *
  * Rev. 2728 — **FINANCEIRO · LANÇAMENTOS / NOVO LANÇAMENTO → TRANSFERÊNCIA (modal de transferência interna,
  * selects "Conta de Origem" / "Conta de Destino") · CORRIGE O BUG EM QUE SELECIONAR UMA CONTA MARCAVA DUAS
  * AO MESMO TEMPO (ex.: clicava Santander e aparecia a Caixa junto, com DOIS checkmarks) + LAYOUT QUE CORTAVA
