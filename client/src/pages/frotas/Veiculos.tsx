@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Car, Plus, Search, Pencil, Trash2, DollarSign, FileDown, Image, Camera, Loader2, Sparkles, AlertTriangle, CheckCircle2, ListChecks, X } from "lucide-react";
+import { Car, Plus, Search, Pencil, Trash2, DollarSign, FileDown, Image, Camera, Loader2, Sparkles, AlertTriangle, CheckCircle2, ListChecks, X, FileText, User, StickyNote } from "lucide-react";
 import { useState, useRef } from "react";
 import { toast } from "sonner";
 import { MoneyInput } from "@/components/ui/money-input";
@@ -162,6 +162,7 @@ export default function Veiculos() {
       tipoVeiculo: v.tipoVeiculo, placa: v.placa, modelo: v.modelo, marca: v.marca,
       anoFabricacao: v.anoFabricacao, anoModelo: v.ano_modelo, renavam: v.renavam, chassi: v.chassi,
       cor: v.cor, kmAtual: v.km_atual, responsavel: v.responsavel,
+      motoristaPadrao: v.motorista_padrao, motoristaPadraoInicio: v.motorista_padrao_inicio,
       statusVeiculo: v.statusVeiculo, dataAquisicao: v.data_aquisicao,
       valorCompra: v.valor_compra, valorFipe: v.valor_fipe,
       fipeCodigoMarca: v.fipe_codigo_marca, fipeCodigoModelo: v.fipe_codigo_modelo,
@@ -426,6 +427,12 @@ export default function Veiculos() {
                     <div className="mt-1 text-xs text-muted-foreground truncate">
                       {v.responsavel || v.motorista_nome || "Sem responsável"}
                     </div>
+                    {(v.motorista_padrao || v.motorista_nome) && (
+                      <div className="mt-0.5 flex items-center gap-1 text-xs text-amber-700 truncate">
+                        <User className="h-3 w-3 shrink-0" />
+                        <span className="truncate">{v.motorista_padrao || v.motorista_nome}</span>
+                      </div>
+                    )}
                     <div className="mt-2 flex items-center gap-1 flex-wrap" onClick={selectMode ? (e) => e.stopPropagation() : undefined}>
                       {v.crlv_url && (
                         <a href={v.crlv_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-[10px] bg-blue-50 text-blue-700 border border-blue-200 rounded px-1.5 py-0.5 hover:bg-blue-100">
@@ -464,8 +471,8 @@ export default function Veiculos() {
               </div>
             </div>
 
-            <div className="px-8 py-4 w-full space-y-6">
-              <div className="flex flex-col md:flex-row gap-6">
+            <div className="px-6 md:px-8 py-6 w-full max-w-[1400px] mx-auto space-y-5">
+              <div className="rounded-xl border bg-card p-5 flex flex-col md:flex-row gap-6">
                 <div
                   className="w-full md:w-72 h-52 flex-shrink-0 bg-muted rounded-xl flex items-center justify-center overflow-hidden relative group cursor-pointer border-2 border-dashed border-muted-foreground/20 hover:border-primary/40 transition-colors"
                   onClick={handleDialogPhotoClick}
@@ -493,7 +500,7 @@ export default function Veiculos() {
                 </div>
 
                 <div className="flex-1 space-y-1">
-                  <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">Identificação</h3>
+                  <h3 className="flex items-center gap-1.5 text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3"><Car className="h-4 w-4 text-primary" />Identificação</h3>
                   <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-8 gap-x-4 gap-y-3">
                     <div>
                       <Label className="text-xs text-muted-foreground">Tipo *</Label>
@@ -537,8 +544,8 @@ export default function Veiculos() {
                 </div>
               </div>
 
-              <div className="border-t pt-4">
-                <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">Documentação</h3>
+              <div className="rounded-xl border bg-card p-5">
+                <h3 className="flex items-center gap-1.5 text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3"><FileText className="h-4 w-4 text-blue-600" />Documentação</h3>
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-x-4 gap-y-3">
                   <div>
                     <Label className="text-xs text-muted-foreground">RENAVAM</Label>
@@ -567,8 +574,23 @@ export default function Veiculos() {
                 </div>
               </div>
 
-              <div className="border-t pt-4">
-                <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">Financeiro</h3>
+              <div className="rounded-xl border bg-card p-5">
+                <h3 className="flex items-center gap-1.5 text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-1"><User className="h-4 w-4 text-amber-600" />Motorista / Condutor</h3>
+                <p className="text-xs text-muted-foreground mb-3">Indique o motorista que conduz este veículo — mesmo que não seja funcionário cadastrado. Usado para facilitar o controle e preencher o Diário de Obra automaticamente.</p>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-x-4 gap-y-3">
+                  <div className="md:col-span-2">
+                    <Label className="text-xs text-muted-foreground">Nome do motorista</Label>
+                    <Input className="h-9" placeholder="Ex.: João da Silva (terceiro / não funcionário)" value={form.motoristaPadrao || ""} onChange={e => setForm({ ...form, motoristaPadrao: e.target.value })} />
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Motorista desde</Label>
+                    <Input className="h-9" type="date" value={form.motoristaPadraoInicio || ""} onChange={e => setForm({ ...form, motoristaPadraoInicio: e.target.value })} />
+                  </div>
+                </div>
+              </div>
+
+              <div className="rounded-xl border bg-card p-5">
+                <h3 className="flex items-center gap-1.5 text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3"><DollarSign className="h-4 w-4 text-emerald-600" />Financeiro</h3>
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-x-4 gap-y-3">
                   <div>
                     <Label className="text-xs text-muted-foreground">Data Aquisição</Label>
@@ -585,7 +607,7 @@ export default function Veiculos() {
                 </div>
               </div>
 
-              <div className="border-t pt-4">
+              <div className="rounded-xl border bg-card p-5">
                 <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">
                   <DollarSign className="h-4 w-4 text-green-600 inline mr-1" />
                   Consulta FIPE
@@ -631,7 +653,7 @@ export default function Veiculos() {
               </div>
 
               {editing && (
-                <div className="border-t pt-4">
+                <div className="rounded-xl border bg-card p-5">
                   <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">
                     <CheckCircle2 className="h-4 w-4 text-cyan-600 inline mr-1" />
                     Validação de Cadastro
@@ -676,8 +698,8 @@ export default function Veiculos() {
                 </div>
               )}
 
-              <div className="border-t pt-4">
-                <Label className="text-xs text-muted-foreground">Observações</Label>
+              <div className="rounded-xl border bg-card p-5">
+                <h3 className="flex items-center gap-1.5 text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3"><StickyNote className="h-4 w-4 text-slate-500" />Observações</h3>
                 <Textarea className="mt-1" rows={3} value={form.observacoes || ""} onChange={e => setForm({ ...form, observacoes: e.target.value })} />
               </div>
             </div>

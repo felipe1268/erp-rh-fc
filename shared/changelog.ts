@@ -1,6 +1,26 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2703 — **FROTA · EDITAR/NOVO VEÍCULO (`/frotas` → "Veículos" → abrir/editar veículo) · GANHOU
+ * UM CAMPO PARA INDICAR O MOTORISTA/CONDUTOR — MESMO QUE NÃO SEJA FUNCIONÁRIO CADASTRADO — E O LAYOUT
+ * DO DIÁLOGO FOI MELHORADO (SEÇÕES EM PAINÉIS COM ÍCONES).**
+ *
+ * PEDIDO (usuário, print "Editar Veículo"): "Quero um layout melhor e uma forma de indicar o motorista
+ * aqui... mesmo que ele não seja funcionário, para facilitar o controle".
+ *
+ * SOLUÇÃO (SERVER + CLIENT; ZERO SCHEMA/ALTER — R-001/R-007/R-010): reaproveita as colunas JÁ existentes
+ * `motorista_padrao` / `motorista_padrao_inicio` (as mesmas usadas pelo Diário de Obra via
+ * `setMotoristaPadrao` p/ autopreencher o motorista). `server/routers/frotas.ts` — `createVehicle` e
+ * `updateVehicle` passam a aceitar e persistir `motoristaPadrao` + `motoristaPadraoInicio`; `updateVehicle`
+ * coage `motoristaPadraoInicio===""` → `null` (coluna DATE não aceita string vazia). `client/src/pages/
+ * frotas/Veiculos.tsx` — nova seção "Motorista / Condutor" (nome livre + "Motorista desde"), `openEdit`
+ * carrega os campos, card da lista exibe o motorista. Layout: as seções viraram painéis (`rounded-xl
+ * border bg-card p-5`) com ícones e o conteúdo ganhou container centralizado (`max-w-[1400px]`).
+ * REFINO (code review): se o motorista vier preenchido SEM "Motorista desde", o server assume HOJE
+ * (`new Date().toISOString().slice(0,10)`) em `createVehicle`/`updateVehicle` — assim o
+ * autopreenchimento do Diário de Obra (condição `dk.data >= motorista_padrao_inicio`) realmente
+ * dispara, em vez de o motorista ficar gravado sem efeito. esbuild EXIT 0 (server+client).
+ *
  * Rev. 2702 — **FROTA · VEÍCULOS (`/frotas` → "Veículos") · A TELA AGORA ABRE POR PADRÃO JÁ FILTRADA
  * PELO STATUS "ATIVO" (ANTES ABRIA EM "TODOS OS STATUS", MISTURANDO INATIVOS/VENDIDOS NA LISTA).**
  *

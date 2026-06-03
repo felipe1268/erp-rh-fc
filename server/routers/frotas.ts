@@ -636,6 +636,8 @@ export const frotasRouter = router({
       kmAtual: z.string().optional(),
       responsavel: z.string().optional(),
       motoristaId: z.number().optional(),
+      motoristaPadrao: z.string().optional(),
+      motoristaPadraoInicio: z.string().optional(),
       obraId: z.number().optional(),
       statusVeiculo: z.string().optional(),
       dataAquisicao: z.string().optional(),
@@ -671,6 +673,12 @@ export const frotasRouter = router({
         kmAtual: input.kmAtual || "0",
         responsavel: input.responsavel || null,
         motoristaId: input.motoristaId || null,
+        motoristaPadrao: input.motoristaPadrao || null,
+        // Se há motorista mas sem "desde", assume hoje p/ o autopreenchimento
+        // do Diário de Obra disparar (a condição usa dk.data >= inicio).
+        motoristaPadraoInicio: (input.motoristaPadrao && (input.motoristaPadrao || "").trim() !== "")
+          ? (input.motoristaPadraoInicio || new Date().toISOString().slice(0, 10))
+          : (input.motoristaPadraoInicio || null),
         obraId: input.obraId || null,
         statusVeiculo: input.statusVeiculo || "Ativo",
         dataAquisicao: input.dataAquisicao || null,
@@ -708,6 +716,8 @@ export const frotasRouter = router({
       kmAtual: z.string().optional(),
       responsavel: z.string().optional(),
       motoristaId: z.number().nullable().optional(),
+      motoristaPadrao: z.string().nullable().optional(),
+      motoristaPadraoInicio: z.string().nullable().optional(),
       obraId: z.number().nullable().optional(),
       statusVeiculo: z.string().optional(),
       dataAquisicao: z.string().nullable().optional(),
@@ -745,6 +755,17 @@ export const frotasRouter = router({
       }
       const { id, companyId, ...data } = input;
       const setFields: any = { ...data, updatedAt: new Date().toISOString() };
+      // Campos DATE não aceitam string vazia — coerção "" → null.
+      if (setFields.motoristaPadraoInicio === "") setFields.motoristaPadraoInicio = null;
+      // Se há motorista mas sem "desde", assume hoje p/ o autopreenchimento
+      // do Diário de Obra disparar (a condição usa dk.data >= inicio).
+      if (
+        setFields.motoristaPadrao !== undefined &&
+        (setFields.motoristaPadrao || "").trim() !== "" &&
+        !setFields.motoristaPadraoInicio
+      ) {
+        setFields.motoristaPadraoInicio = new Date().toISOString().slice(0, 10);
+      }
       await db.update(vehicles).set(setFields).where(and(eq(vehicles.id, id), eq(vehicles.companyId, companyId)));
       return { success: true };
     }),
