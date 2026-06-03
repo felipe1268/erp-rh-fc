@@ -286,10 +286,26 @@ export function calcularDataInicioAviso(ultimoDiaTrabalhado: string): string {
   return dt.toISOString().split("T")[0];
 }
 
-/** Calcula meses de férias proporcionais (desde início do período aquisitivo atual) */
+/** Calcula meses de férias proporcionais (desde início do período aquisitivo atual).
+ *
+ * CLT Art. 146 §único: a fração ≥ 15 dias (superior a 14) do mês aquisitivo
+ * corrente conta como mês INTEIRO de avo — a MESMA regra já aplicada ao 13º em
+ * `calcularMeses13o`. Antes desta correção a função só contava MESES COMPLETOS
+ * (`calcularMesesServico`), perdendo o último mês incompleto mesmo quando tinha
+ * ≥15 dias. Caso real (Myriélle, adm. 07/05/2024 → projeção 30/06/2026):
+ * 25 meses % 12 = 1 mês cheio + fração de 24 dias (07/06→30/06) ≥15 → 2/12
+ * (antes exibia 1/12, subdimensionando férias + 1/3). */
 export function calcularMesesFeriasProporcionais(dataAdmissao: string, dataDesligamento: string): number {
+  const admissao = new Date(dataAdmissao + 'T00:00:00');
+  const ref = new Date(dataDesligamento + 'T00:00:00');
   const mesesTotais = calcularMesesServico(dataAdmissao, dataDesligamento);
-  const mesesProporcionais = mesesTotais % 12;
+  let mesesProporcionais = mesesTotais % 12;
+  // Fração final = do início do mês aquisitivo corrente (admissão + mesesTotais)
+  // até a data de referência. ≥15 dias → soma 1 avo (regra dos 15 dias).
+  const inicioFracao = new Date(admissao.getFullYear(), admissao.getMonth() + mesesTotais, admissao.getDate());
+  const diasFracao = Math.floor((ref.getTime() - inicioFracao.getTime()) / 86400000) + 1;
+  if (diasFracao >= 15) mesesProporcionais++;
+  if (mesesProporcionais >= 12) return 12;
   return mesesProporcionais === 0 && mesesTotais > 0 ? 12 : mesesProporcionais;
 }
 
