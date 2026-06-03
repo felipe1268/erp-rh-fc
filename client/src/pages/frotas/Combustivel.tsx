@@ -50,6 +50,7 @@ export default function Combustivel() {
   const [previewData, setPreviewData] = useState<any>(null);
   const [reviewDialogOpen, setReviewDialogOpen] = useState(false);
   const [driverOverrides, setDriverOverrides] = useState<Record<string, string>>({});
+  const [confirmDlg, setConfirmDlg] = useState<{ msg: string; onOk: () => void } | null>(null);
   const [rejectedMatches, setRejectedMatches] = useState<Set<string>>(new Set());
   const [reviewSearch, setReviewSearch] = useState("");
   const [reviewTab, setReviewTab] = useState<"matched" | "unmatched">("matched");
@@ -562,9 +563,7 @@ export default function Combustivel() {
                         variant="ghost" size="sm"
                         className="mt-1 h-6 text-[10px] text-red-600 hover:text-red-700 hover:bg-red-50 px-2"
                         onClick={() => {
-                          if (confirm("Reverter consolidação e cancelar lançamento financeiro?")) {
-                            revertFuelMut.mutate({ companyId: cId, financialEntryId: fs.financialEntryId! });
-                          }
+                          setConfirmDlg({ msg: "Reverter consolidação e cancelar lançamento financeiro?", onOk: () => revertFuelMut.mutate({ companyId: cId, financialEntryId: fs.financialEntryId! }) });
                         }}
                         disabled={revertFuelMut.isPending}
                       >
@@ -787,7 +786,7 @@ export default function Combustivel() {
                     <td className="p-3 text-center">{(r.anexos?.length > 0) ? <button onClick={() => { const img = r.anexos.find((a: any) => a.contentType?.startsWith('image/')); if (img) setPreviewAnexo(img.url); else if (r.anexos[0]?.url) window.open(r.anexos[0].url, '_blank'); }} className="hover:scale-110 transition-transform" title={`${r.anexos.length} anexo(s) — clique para visualizar`}><Paperclip className="h-4 w-4 text-blue-500 inline" /></button> : ""}</td>
                     <td className="p-3 text-right whitespace-nowrap">
                       <Button variant="ghost" size="icon" onClick={() => openEdit(r)}><Pencil className="h-4 w-4" /></Button>
-                      <Button variant="ghost" size="icon" onClick={() => { if (confirm("Excluir?")) deleteMut.mutate({ id: r.id, companyId: cId }); }}>
+                      <Button variant="ghost" size="icon" onClick={() => { setConfirmDlg({ msg: "Excluir este abastecimento?", onOk: () => deleteMut.mutate({ id: r.id, companyId: cId }) }); }}>
                         <Trash2 className="h-4 w-4 text-red-500" />
                       </Button>
                     </td>
@@ -865,7 +864,7 @@ export default function Combustivel() {
                                 <Button type="button" variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => window.open(a.url, '_blank')} title="Abrir">
                                   <Eye className="w-3 h-3" />
                                 </Button>
-                                <Button type="button" variant="ghost" size="sm" className="h-6 w-6 p-0 text-red-500 hover:text-red-700" onClick={() => { if (confirm('Remover este anexo?')) removeAnexoMut.mutate({ companyId: cId, fuelRecordId: editing.id, key: a.key }); }} title="Remover">
+                                <Button type="button" variant="ghost" size="sm" className="h-6 w-6 p-0 text-red-500 hover:text-red-700" onClick={() => { setConfirmDlg({ msg: "Remover este anexo?", onOk: () => removeAnexoMut.mutate({ companyId: cId, fuelRecordId: editing.id, key: a.key }) }); }} title="Remover">
                                   <X className="w-3 h-3" />
                                 </Button>
                               </div>
@@ -1477,6 +1476,19 @@ export default function Combustivel() {
           <img src={previewAnexo} alt="Cupom Fiscal" className="max-w-[95vw] max-h-[95vh] object-contain" onClick={e => e.stopPropagation()} />
         </div>
       )}
+
+      <Dialog open={!!confirmDlg} onOpenChange={v => { if (!v) setConfirmDlg(null); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Confirmar</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-gray-700 whitespace-pre-line">{confirmDlg?.msg}</p>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" size="sm" onClick={() => setConfirmDlg(null)}>Cancelar</Button>
+            <Button size="sm" onClick={() => { confirmDlg?.onOk(); setConfirmDlg(null); }}>OK</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   );
 }

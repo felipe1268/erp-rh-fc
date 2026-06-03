@@ -1,6 +1,30 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2714 — **FROTA · COMBUSTÍVEL (`/frotas` → "Combustível") · SUBSTITUÍDOS OS ALERTAS NATIVOS DO
+ * NAVEGADOR (`window.confirm` — a caixa feia "...replit.dev diz" COM BOTÃO "BLOQUEAR CAIXAS DE
+ * DIÁLOGO") POR UM DIÁLOGO DE CONFIRMAÇÃO CUSTOMIZADO (shadcn/ui), IGUAL AO JÁ USADO EM MANUTENÇÕES.**
+ *
+ * PEDIDO (usuário, print IMG_1527): "Arrume estes mensagem não precisa aparecer o alerta" — ao clicar
+ * em "Reverter" (consolidação), aparecia o `confirm()` nativo do navegador com a URL do app e a opção
+ * "Bloquear caixas de diálogo" (que, se clicada, impediria futuras confirmações).
+ *
+ * SOLUÇÃO (SÓ CLIENT/UI; ZERO SERVER/SCHEMA — R-001/R-007/R-010): `client/src/pages/frotas/
+ * Combustivel.tsx`. Adicionado o estado `confirmDlg` (`{ msg, onOk } | null`) e um `<Dialog>` de
+ * confirmação no fim do componente (mesmo padrão do `Manutencoes.tsx`: título "Confirmar", mensagem com
+ * `whitespace-pre-line`, botões "Cancelar"/"OK"). Os 3 `window.confirm` da tela foram trocados por
+ * `setConfirmDlg({ msg, onOk })`: (1) "Reverter consolidação e cancelar lançamento financeiro?", (2)
+ * "Excluir este abastecimento?" (antes só "Excluir?"), (3) "Remover este anexo?". Imports `Dialog*`,
+ * `Button` e `useState` já existiam. Nenhuma mutation, dado ou query foi alterado — só a UI da
+ * confirmação.
+ *
+ * ARQUIVOS: `client/src/pages/frotas/Combustivel.tsx` (estado `confirmDlg`; `<Dialog>` de confirmação;
+ * 3 `confirm()` → `setConfirmDlg`).
+ *
+ * VALIDAÇÃO: esbuild do TSX (client) EXIT 0.
+ *
+ * ----------------------------------------------------------------------------------------------------
+ *
  * Rev. 2713 — **FROTA · DASHBOARD DE MANUTENÇÃO (`/frotas` → "Manutenções" → "Dashboard") · A "ANÁLISE
  * INTELIGENTE (IA)" GANHOU UMA BARRA DE PROGRESSO DE 0 A 100% ENQUANTO PROCESSA, PARA O USUÁRIO
  * ACOMPANHAR O ANDAMENTO.**
