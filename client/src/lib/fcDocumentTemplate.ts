@@ -82,7 +82,7 @@ export interface FcAssinaturaParte {
    * placeholder pela `<img>` da assinatura quando o signatário assina.
    * Sem este campo, a área de assinatura fica em branco (modo PDF/impressão).
    */
-  role?: "empregado" | "empregador" | "testemunha_1" | "testemunha_2";
+  role?: "empregado" | "empregador" | "contratado" | "contratante" | "testemunha_1" | "testemunha_2";
 }
 
 export interface FcAssinaturasBlock {

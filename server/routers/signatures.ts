@@ -81,6 +81,10 @@ function renderFinalHtml(
   const roleLabel: Record<string, string> = {
     empregado: "EMPREGADO(A)",
     empregador: "EMPREGADOR (FC Engenharia)",
+    // Rev. 2736 — contratos PJ: labels juridicamente corretos (sem vínculo
+    // empregatício). CONTRATADA = prestador PJ; CONTRATANTE = FC Engenharia.
+    contratado: "CONTRATADA (Prestador)",
+    contratante: "CONTRATANTE (FC Engenharia)",
     testemunha_1: "Testemunha 1",
     testemunha_2: "Testemunha 2",
   };
@@ -149,7 +153,7 @@ export const signaturesRouter = router({
       documentTitle: z.string().min(1).max(255),
       documentHtml: z.string().min(1),
       signers: z.array(z.object({
-        role: z.enum(["empregado", "empregador", "testemunha_1", "testemunha_2"]),
+        role: z.enum(["empregado", "empregador", "contratado", "contratante", "testemunha_1", "testemunha_2"]),
         nome: z.string().min(1).max(255),
         cpf: z.string().max(20).optional().nullable(),
         email: z.string().max(255).optional().nullable(),
@@ -164,6 +168,18 @@ export const signaturesRouter = router({
       if (Number(emp.companyId) !== Number(input.companyId)) {
         throw new TRPCError({ code: "FORBIDDEN", message: "Colaborador não pertence a esta empresa." });
       }
+      // Rev. 2736 — hardening de tenancy: além de garantir que o colaborador
+      // pertence à empresa informada, exige que o CHAMADOR tenha acesso a essa
+      // empresa (mesmo padrão de `listByTipo`/`getForEmployeeTipo`). Sem isto,
+      // um user autenticado de outro tenant poderia criar sessões FCSign (e
+      // gerar links de assinatura) para contratos de empresas alheias.
+      {
+        const allowed = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+        const allowedIds = (allowed as any[]).map(c => typeof c === 'number' ? c : c?.id).filter((v: any) => typeof v === 'number');
+        if (!allowedIds.includes(Number(input.companyId))) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta empresa." });
+        }
+      }
       // Hardening contra XSS armazenado: rejeita HTML com scripts/handlers (defense-in-depth)
       if (/<\s*script\b/i.test(input.documentHtml) || /\son\w+\s*=/i.test(input.documentHtml) || /javascript:/i.test(input.documentHtml)) {
         throw new TRPCError({ code: "BAD_REQUEST", message: "Documento contém conteúdo não permitido (script/handler/javascript:)." });
@@ -175,7 +191,12 @@ export const signaturesRouter = router({
       // Rev. 2137 — `termo_responsabilidade` é EXCEÇÃO: o mesmo colaborador
       // pode ter vários termos ativos (cada novo equipamento/veículo gera um
       // novo termo independente). Skip dedup só pra esse tipo.
-      if (input.tipo !== "termo_responsabilidade") {
+      // Rev. 2736 — `contrato_pj` também é EXCEÇÃO: o mesmo prestador
+      // (employeeId) pode ter VÁRIOS contratos PJ (renovações/aditivos geram
+      // novo contrato com `contratoAnteriorId`). A dedup por employeeId+tipo
+      // bloquearia falsamente o envio de um 2º contrato. A unicidade real é
+      // por contrato (id), validada na camada PJ.
+      if (input.tipo !== "termo_responsabilidade" && input.tipo !== "contrato_pj") {
         const [dup] = await db.select({ id: signatureSessions.id, status: signatureSessions.status })
           .from(signatureSessions)
           .where(and(
@@ -192,6 +213,31 @@ export const signaturesRouter = router({
             message: dup.status === "completo"
               ? "Já existe um documento deste tipo assinado pra este colaborador. Apague o anterior (admin master) pra emitir um novo."
               : "Já existe uma sessão FCSign em andamento pra este documento.",
+          });
+        }
+      } else if (input.tipo === "contrato_pj" && input.observacoes) {
+        // Rev. 2736 — a dedup por employeeId+tipo foi relaxada acima (1 prestador
+        // pode ter vários contratos PJ), mas a unicidade REAL é por CONTRATO.
+        // Guarda contract-scoped: bloqueia 2ª sessão NÃO-cancelada para o MESMO
+        // contrato (`observacoes='contrato_pj:{id}'`) — evita 2 cliques/abas
+        // gerando sessões concorrentes para o mesmo contrato, sem impedir o
+        // envio de OUTROS contratos do mesmo prestador.
+        const [dup] = await db.select({ id: signatureSessions.id, status: signatureSessions.status })
+          .from(signatureSessions)
+          .where(and(
+            eq(signatureSessions.companyId, input.companyId),
+            eq(signatureSessions.tipo, input.tipo),
+            eq(signatureSessions.observacoes, input.observacoes),
+            sql`${signatureSessions.status} <> 'cancelado'`,
+          ))
+          .orderBy(desc(signatureSessions.createdAt))
+          .limit(1);
+        if (dup) {
+          throw new TRPCError({
+            code: "CONFLICT",
+            message: dup.status === "completo"
+              ? "Este contrato PJ já foi assinado. Apague a sessão anterior (admin master) pra emitir um novo envio."
+              : "Já existe uma sessão FCSign em andamento pra este contrato PJ.",
           });
         }
       }

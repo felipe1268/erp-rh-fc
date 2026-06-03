@@ -13,6 +13,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import FullScreenDialog from "@/components/FullScreenDialog";
 import RaioXFuncionario from "@/components/RaioXFuncionario";
+import FCSignPJSendDialog from "@/components/FCSignPJSendDialog";
 import { formatCPF, formatMoeda, fmtNum, formatMoedaInput, parseMoedaBR } from "@/lib/formatters";
 import { removeAccents } from "@/lib/searchUtils";
 import {
@@ -68,6 +69,8 @@ export default function ModuloPJ() {
   const [editingContratoId, setEditingContratoId] = useState<number | null>(null);
   const [pagForm, setPagForm] = useState<any>({});
   const [raioXEmployeeId, setRaioXEmployeeId] = useState<number | null>(null);
+  const [signContratoId, setSignContratoId] = useState<number | null>(null);
+  const [showSignDialog, setShowSignDialog] = useState(false);
   const [uploadingAssinado, setUploadingAssinado] = useState(false);
   const [uploadingDoc, setUploadingDoc] = useState(false);
   const [detailTab, setDetailTab] = useState("info");
@@ -544,6 +547,11 @@ export default function ModuloPJ() {
                                 <Button size="icon" variant="ghost" className="h-7 w-7 text-purple-600" title="Visualizar / Imprimir Contrato" onClick={() => window.open(`/contrato-pj/${c.id}`, "_blank")}>
                                   <FileText className="h-3.5 w-3.5" />
                                 </Button>
+                                {c.status !== "encerrado" && c.status !== "cancelado" && (
+                                  <Button size="icon" variant="ghost" className="h-7 w-7 text-indigo-600" title="Enviar para assinatura digital (link FCSign)" onClick={() => { setSignContratoId(c.id); setShowSignDialog(true); }}>
+                                    <FileSignature className="h-3.5 w-3.5" />
+                                  </Button>
+                                )}
                                 {c.status === "pendente_assinatura" && (
                                   <Button size="sm" variant="ghost" className="h-7 text-xs text-green-600" onClick={() => { updateContrato.mutate({ id: c.id, status: "ativo" }); }}>
                                     Ativar
@@ -1165,6 +1173,15 @@ export default function ModuloPJ() {
       </div>
 
       <RaioXFuncionario employeeId={raioXEmployeeId} open={!!raioXEmployeeId} onClose={() => setRaioXEmployeeId(null)} />
+
+      {signContratoId != null && (
+        <FCSignPJSendDialog
+          open={showSignDialog}
+          onOpenChange={(v) => { setShowSignDialog(v); if (!v) setSignContratoId(null); }}
+          contratoId={signContratoId}
+          geradoPor={user?.name || undefined}
+        />
+      )}
           <PrintFooterLGPD />
     </DashboardLayout>
   );

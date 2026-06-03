@@ -10,6 +10,8 @@ import DOMPurify from "dompurify";
 const roleLabel: Record<string, string> = {
   empregado: "EMPREGADO(A)",
   empregador: "EMPREGADOR (FC Engenharia)",
+  contratado: "CONTRATADA (Prestador)",
+  contratante: "CONTRATANTE (FC Engenharia)",
   testemunha_1: "Testemunha 1",
   testemunha_2: "Testemunha 2",
 };

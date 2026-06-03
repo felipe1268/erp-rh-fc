@@ -1,6 +1,69 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2736 — **PJ · CONTRATOS · ASSINATURA DIGITAL COM LINK (FCSign): NOVO ENVIO DE CONTRATO DE PRESTAÇÃO DE
+ * SERVIÇOS PARA ASSINATURA POR LINK ÚNICO POR SIGNATÁRIO (CONTRATADA + CONTRATANTE + TESTEMUNHAS OPCIONAIS).**
+ *
+ * PEDIDO (relato): "nos contratos de PJ, habilite a assinatura digital com link" — mesma experiência do FCSign já
+ * usada em contratos de experiência/termos, mas para os contratos PJ do módulo PJ.
+ *
+ * CONTEXTO: o FCSign (`signatures.create`/`getByToken`/`sign` + página pública `/assinar/:token`) já existia, porém
+ * era 100% modelado para vínculo EMPREGATÍCIO: o enum de roles aceitava só `empregado`/`empregador`/`testemunha_*` e
+ * os rótulos diziam "EMPREGADO(A)"/"EMPREGADOR" — juridicamente ERRADOS num contrato PJ (implicariam vínculo, que é
+ * exatamente o que um contrato de prestação de serviços PJ deve evitar). Além disso, a tela PJ
+ * (`ModuloPJ.tsx`) só tinha "Visualizar/Imprimir" e "Ativar" (flip manual de status), sem coleta de assinatura
+ * digital. O contrato PJ tem `employeeId` notNull (o prestador é também um `employees`), o que permite reaproveitar a
+ * ACL do `signatures.create` (que valida `employeeId ∈ companyId`).
+ *
+ * SOLUÇÃO (SERVER + CLIENT/UI; ZERO SCHEMA; ZERO ALTER/DROP/DELETE — R-001/R-007/R-010):
+ * (1) SERVER (`server/routers/signatures.ts`): (a) o enum de `signers[].role` em `create` ganhou `contratado` e
+ *     `contratante`; (b) o `roleLabel` de `renderFinalHtml` ganhou os rótulos corretos
+ *     `contratado="CONTRATADA (Prestador)"` e `contratante="CONTRATANTE (FC Engenharia)"`, de modo que o HTML final
+ *     (com as imagens das assinaturas estampadas nos slots) saia juridicamente correto; (c) a guarda anti-duplicidade
+ *     (sessão NÃO-cancelada por `companyId+employeeId+tipo`) passou a EXCETUAR `tipo='contrato_pj'` (além de
+ *     `termo_responsabilidade`), porque o MESMO prestador (employeeId) pode ter VÁRIOS contratos PJ
+ *     (renovações/aditivos geram novo contrato com `contratoAnteriorId`) — a dedup por employeeId+tipo bloquearia
+ *     falsamente o envio de um 2º contrato. A unicidade real é por contrato (id), gravada em `observacoes`
+ *     (`contrato_pj:{id}`); (d) HARDENING DE TENANCY (pós code-review): o `create` agora exige que o CHAMADOR tenha
+ *     acesso à empresa via `getCompaniesForUser` (mesmo padrão de `listByTipo`/`getForEmployeeTipo`) — antes só
+ *     conferia que o colaborador pertencia à empresa, mas não que o user logado podia agir sobre ela (risco
+ *     cross-tenant herdado, agora fechado p/ TODOS os tipos, inclusive o fluxo de empregado); (e) DEDUP
+ *     CONTRACT-SCOPED p/ `contrato_pj`: como a dedup por employeeId+tipo foi relaxada, um novo guard bloqueia 2ª
+ *     sessão NÃO-cancelada para o MESMO contrato (`companyId+tipo+observacoes='contrato_pj:{id}'`), evitando sessões
+ *     concorrentes por duplo-clique sem impedir o envio de OUTROS contratos do mesmo prestador.
+ * (2) CLIENT · TEMPLATE (`client/src/lib/fcDocumentTemplate.ts`): o union `FcAssinaturaParte.role` ganhou
+ *     `contratado`/`contratante` (slots `<!--FCSIGN:SIG:contratado-->`/`contratante` no HTML de assinatura).
+ * (3) CLIENT · NOVA LIB (`client/src/lib/contratoPjDocument.ts`): `buildContratoPjSignHtml(contrato, modelo, ...)`
+ *     monta o HTML assinável a partir do modelo (`pj.modeloContrato`) + dados do `pj.contratos.getById`, replicando a
+ *     substituição de placeholders da `ContratoPJView.tsx` ([CONTRATANTE_*]/[CONTRATADA_*]/[VALOR_*]/[DATA_*] etc.,
+ *     com valor por extenso) e convertendo o texto do modelo em parágrafos/cláusulas HTML com inline-styles. Reusa
+ *     `buildFcDocument` (cabeçalho institucional FC — REGRA DE OURO — + bloco de assinaturas com slots
+ *     `contratado`/`contratante` + testemunhas). SEGURANÇA: todo valor interpolado é ESCAPADO (`esc`) antes de virar
+ *     HTML; as únicas tags inseridas no corpo são as nossas (`<p>/<h2>/<strong>`); zero `on*`/`<script>`/`javascript:`
+ *     (respeita o filtro XSS do `signatures.create`). As linhas de assinatura "_____" e legendas soltas do modelo são
+ *     filtradas (o bloco de assinaturas do `buildFcDocument` já provê as linhas com slots digitais).
+ * (4) CLIENT · NOVO DIALOG (`client/src/components/FCSignPJSendDialog.tsx`): full-screen, modelado no
+ *     `FCSignSendDialog`. Busca `getById` + `modeloContrato`, exibe a CONTRATADA (prestador, travado, 1ª assinatura),
+ *     a CONTRATANTE (FELIPE COSTA ALVES / CPF 362.506.888-54 — única assinatura autorizada da FC, travada, 2ª) e até
+ *     2 testemunhas opcionais; ao confirmar, chama `signatures.create` (tipo `contrato_pj`, `companyId`/`employeeId`
+ *     do contrato, `observacoes=contrato_pj:{id}`) e mostra a tela de sucesso com 1 link único por signatário
+ *     (copiar/abrir).
+ * (5) CLIENT · TELA PJ (`client/src/pages/ModuloPJ.tsx`): novo botão de ação (ícone `FileSignature`, "Enviar para
+ *     assinatura digital (link FCSign)") na coluna Ações de cada contrato (visível enquanto status ∉
+ *     {encerrado, cancelado}), que abre o dialog. A ativação do contrato segue MANUAL (botão "Ativar" preexistente).
+ * (6) CLIENT · PÁGINA PÚBLICA (`client/src/pages/AssinarDocumento.tsx`): `roleLabel` ganhou
+ *     `contratado`/`contratante` para o signatário ver o papel correto ao assinar.
+ *
+ * RESSALVAS: a ativação (status pendente_assinatura→ativo) permanece MANUAL — a `sign` pública não conhece o
+ * `contractId` (a sessão é por token/employeeId), então não há auto-flip; isso fica para uma evolução futura. (O risco
+ * de 2 sessões para o MESMO contrato por cliques repetidos foi fechado pelo guard contract-scoped do item (1.e); a
+ * leitura do contrato via `pj.contratos.getById` segue como `protectedProcedure` sem escopo de empresa próprio — gap
+ * PRÉ-EXISTENTE do módulo PJ, fora do escopo desta revisão.)
+ *
+ * VALIDAÇÃO: esbuild server (`server/_core/index.ts`) EXIT 0; parse TSX (FCSignPJSendDialog/contratoPjDocument/
+ * ModuloPJ/AssinarDocumento) EXIT 0; `vitest run server/rescisao.test.ts` 41/41 verde. (tsc full do projeto estoura
+ * heap no ambiente — limitação de memória, não erro de tipo.)
+ *
  * Rev. 2735 — **RH · COMUNICADOS INTERNOS · LISTA PARA ASSINATURA: MOSTRA A OBRA ATUAL DE CADA COLABORADOR E
  * ADICIONA FILTROS (POR OBRA + POR QUEM ASSINOU / QUEM FALTA ASSINAR).**
  *
