@@ -1,6 +1,28 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2705 — **FROTA · EDITAR/NOVO VEÍCULO (`/frotas` → "Veículos" → abrir/salvar) · CORRIGIDO O
+ * ERRO DE VALIDAÇÃO "Não foi possível salvar: invalid_type expected string, received null" (path
+ * placa/renavam/chassi) QUE BLOQUEAVA SALVAR VEÍCULOS SEM PLACA/RENAVAM/CHASSI — EX.: MÁQUINAS (JCB),
+ * INCLUSIVE AO MARCAR COMO "VENDIDO".**
+ *
+ * PEDIDO (usuário, print "Editar Veículo" de uma máquina JCB/3CX marcada como Vendido): toast vermelho
+ * "Não foi possível salvar: [...] expected string, path placa/renavam/chassi, received null".
+ *
+ * CAUSA-RAIZ (SERVER): em `server/routers/frotas.ts` os schemas zod de `createVehicle`/`updateVehicle`
+ * declaravam `placa`/`renavam`/`chassi` (e demais campos texto) como `z.string().optional()` — que aceita
+ * AUSENTE mas REJEITA `null`. O client (`Veiculos.tsx` `openEdit`) carrega esses campos DIRETO da linha do
+ * veículo, que no banco vem `null` p/ veículos sem placa (máquinas), e os reenviava no payload de salvar →
+ * o zod barrava com `invalid_type`. Os handlers JÁ coagem cada campo com `|| null` antes do INSERT/UPDATE,
+ * então aceitar `null` no schema é seguro.
+ *
+ * FIX (SÓ SERVER; ZERO SCHEMA DB/ALTER — R-001/R-007/R-010): `server/routers/frotas.ts` — os campos texto
+ * opcionais de `createVehicle` e `updateVehicle` passaram de `z.string().optional()` p/
+ * `z.string().nullable().optional()` (placa, marca, anoFabricacao, anoModelo, renavam, chassi, cor,
+ * kmAtual, responsavel, motoristaPadrao/Inicio, status, datas, FIPE, valores, fotos/urls, observações).
+ * `modelo`/`tipoVeiculo` (obrigatórios) e o `statusVeiculo` do update permanecem inalterados. pnpm build
+ * EXIT 0 (server+client).
+ *
  * Rev. 2704 — **FROTA · VEÍCULOS (`/frotas` → "Veículos") · LAYOUT MAIS VISUAL/INTUITIVO: CARDS DE
  * STATUS CLICÁVEIS NO TOPO (FILTRAM A LISTA) + CORES POR STATUS (ATIVO=VERDE, EM MANUTENÇÃO=AMARELO,
  * VENDIDO=VERMELHO, INATIVO=CINZA) NO BADGE E NUMA BORDA LATERAL DO CARD DO VEÍCULO.**
