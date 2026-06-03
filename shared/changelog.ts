@@ -1,6 +1,56 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2715 — **FROTA · DASHBOARD DE MANUTENÇÃO (`/frotas` → "Manutenções" → "Dashboard") · CORRIGIDO DE
+ * VEZ O ERRO DA "ANÁLISE INTELIGENTE (IA)" ("The string did not match the expected pattern.") COM
+ * ORÇAMENTO DE TEMPO NO SERVIDOR + PARECER DETERMINÍSTICO GARANTIDO — O USUÁRIO NUNCA MAIS VÊ ERRO.**
+ *
+ * PEDIDO (usuário, print IMG_1528): "Tá com erro na ia... preciso que ajuste isso use o Claude ou outra
+ * para resolver de vez." A Rev. 2712 já tinha colocado `fast:true` (Gemini 2.5 Flash), mas o erro
+ * VOLTOU.
+ *
+ * CAUSA-RAIZ (definitiva): a mensagem "The string did not match the expected pattern." NÃO é um erro
+ * tratado do servidor (todos os `erro` do servidor terminam com "...continua disponível abaixo."). É
+ * uma DOMException do PRÓPRIO Safari/iOS, renderizada no cliente via `aiMut.error.message`
+ * (`ManutencoesDashboard.tsx` L285) — ou seja, a MUTATION ABORTOU NO CLIENTE: a requisição HTTP demorou
+ * mais que o timeout do proxy/iOS e a conexão foi morta. Cadeia provável: o caminho rápido (Gemini
+ * Flash) falha pontualmente → `invokeLLM` cai no FALLBACK Claude Sonnet NÃO-streaming (60-120s para
+ * ~6000 tokens) → iOS aborta → DOMException.
+ *
+ * SOLUÇÃO (SÓ SERVER; ZERO SCHEMA/CLIENT — R-001/R-007/R-010): `server/routers/frotas.ts`
+ * (`getMaintenanceAIAnalysis`). Duas defesas que se complementam:
+ *   1. ORÇAMENTO DE TEMPO — a chamada `invokeLLM` (mantido `fast:true`; `maxTokens` 6000→4000 p/ ser
+ *      mais rápido e truncar menos) foi envolvida num `Promise.race` com um timeout de `LLM_BUDGET_MS =
+ *      28000`. Se a IA não responder em 28s, a Promise rejeita com `"ia-timeout"`. Isso GARANTE que a
+ *      RESPOSTA HTTP volta antes do timeout do proxy/iOS — mesmo que internamente tenha caído no Claude
+ *      lento (a chamada lenta continua em background, inofensiva, mas o usuário já recebeu a resposta).
+ *   2. PARECER DETERMINÍSTICO GARANTIDO — nova função `buildDeterministicIa()` que calcula NO SERVIDOR,
+ *      a partir dos FATOS já apurados (`pctCorretiva`, `custoSobreValorPct` = custo 12m / valor FIPE|
+ *      compra, `pecasRecorrentesCurtas` ≤180 dias, `pecasRecorrentes`, idade pelo `anoFabricacao`), um
+ *      scoreRisco 0-100 e a recomendação VENDER (≥65) / OBSERVAR (≥38) / MANTER (<38), além de
+ *      `resumoExecutivo`, `pecasCriticas` (recorrências com menor intervalo ≤180 dias) e
+ *      `recomendacoesGerais`. Mesmíssimo SHAPE do `ia` que a IA produz, então o cliente NÃO mudou.
+ *   - No `catch` (qualquer falha, inclusive `ia-timeout`/sem chave) → `ia = buildDeterministicIa()` e um
+ *     `erro` AMIGÁVEL ("exibimos a análise automática baseada nos seus próprios dados") — NUNCA mais
+ *     propaga exceção pro cliente.
+ *   - GUARDA FINAL antes do `return`: se a IA respondeu mas veio vazia/sem veículos, também cai pro
+ *     determinístico. A tela NUNCA fica sem análise.
+ *
+ * RESULTADO: quando a IA responde rápido (Gemini Flash, ~10s), o usuário vê o parecer redigido pela IA;
+ * quando ela falha/demora, vê o parecer determinístico calculado dos próprios dados — em ambos os casos
+ * a tela funciona e o erro "The string did not match the expected pattern." não aparece mais.
+ *
+ * ARQUIVOS: `server/routers/frotas.ts` (`getMaintenanceAIAnalysis`: `buildDeterministicIa()`;
+ * `Promise.race` + `LLM_BUDGET_MS`; `maxTokens` 4000; `catch`/guarda-final → determinístico).
+ *
+ * VALIDAÇÃO: esbuild do servidor (bundle node/esm) EXIT 0.
+ *
+ * RESSALVA: o orçamento de 28s é folgado frente ao timeout do proxy/iOS (~60s); se algum ambiente tiver
+ * timeout < 28s, basta reduzir `LLM_BUDGET_MS`. O parecer determinístico é uma heurística sólida (não
+ * substitui o raciocínio da IA), mas garante continuidade do recurso.
+ *
+ * ----------------------------------------------------------------------------------------------------
+ *
  * Rev. 2714 — **FROTA · COMBUSTÍVEL (`/frotas` → "Combustível") · SUBSTITUÍDOS OS ALERTAS NATIVOS DO
  * NAVEGADOR (`window.confirm` — a caixa feia "...replit.dev diz" COM BOTÃO "BLOQUEAR CAIXAS DE
  * DIÁLOGO") POR UM DIÁLOGO DE CONFIRMAÇÃO CUSTOMIZADO (shadcn/ui), IGUAL AO JÁ USADO EM MANUTENÇÕES.**

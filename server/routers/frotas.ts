@@ -4698,23 +4698,86 @@ IMPORTANTE:
         return t;
       };
 
+      // Rev. 2715 — PARECER DETERMINÍSTICO (fallback GARANTIDO). A IA é só uma
+      // CAMADA de redação por cima destes números. Se a IA falhar OU estourar o
+      // orçamento de tempo (timeout do proxy/iOS), devolvemos ESTE parecer
+      // calculado no servidor — o usuário NUNCA mais vê o erro "The string did
+      // not match the expected pattern." (DOMException de conexão abortada).
+      const anoAtualNum = new Date().getFullYear();
+      const buildDeterministicIa = () => {
+        const scored = veiculos.map((v: any) => {
+          let score = 0;
+          const sinais: string[] = [];
+          if (v.pctCorretiva >= 70) { score += 30; sinais.push(`${v.pctCorretiva}% das OS são corretivas (frota apagando incêndio)`); }
+          else if (v.pctCorretiva >= 40) { score += 18; sinais.push(`${v.pctCorretiva}% das OS são corretivas`); }
+          if (v.custoSobreValorPct != null) {
+            if (v.custoSobreValorPct >= 50) { score += 35; sinais.push(`Manutenção (12m) = ${v.custoSobreValorPct}% do valor do veículo`); }
+            else if (v.custoSobreValorPct >= 25) { score += 20; sinais.push(`Manutenção (12m) = ${v.custoSobreValorPct}% do valor do veículo`); }
+            else if (v.custoSobreValorPct >= 12) { score += 8; }
+          }
+          if (v.pecasRecorrentesCurtas > 0) { score += Math.min(25, v.pecasRecorrentesCurtas * 12); sinais.push(`${v.pecasRecorrentesCurtas} peça(s) trocada(s) de novo em ≤180 dias (defeito crônico)`); }
+          else if (v.pecasRecorrentes > 0) { score += Math.min(10, v.pecasRecorrentes * 4); sinais.push(`${v.pecasRecorrentes} peça(s) recorrente(s) no histórico`); }
+          const anoNum = parseInt(String(v.ano ?? "")) || 0;
+          const idade = anoNum > 1980 ? (anoAtualNum - anoNum) : 0;
+          if (idade >= 12) { score += 10; sinais.push(`Veículo com ~${idade} anos`); }
+          else if (idade >= 8) { score += 5; }
+          score = Math.max(0, Math.min(100, Math.round(score)));
+          const recomendacao: "VENDER" | "OBSERVAR" | "MANTER" = score >= 65 ? "VENDER" : score >= 38 ? "OBSERVAR" : "MANTER";
+          const acao = recomendacao === "VENDER"
+            ? "Avaliar venda/substituição: o custo de manutenção tende a não compensar frente ao valor do bem."
+            : recomendacao === "OBSERVAR"
+              ? "Monitorar de perto, priorizar preventivas e investigar as peças recorrentes."
+              : "Manter operação seguindo o plano de manutenção preventiva.";
+          const justificativa = sinais.length
+            ? `Score ${score}/100 — ${sinais.join("; ")}.`
+            : `Score ${score}/100 — sem sinais relevantes de risco no histórico.`;
+          return { placa: v.placa, recomendacao, scoreRisco: score, justificativa, sinais, acao };
+        }).sort((a: any, b: any) => b.scoreRisco - a.scoreRisco);
+
+        const pecasCriticas = recorrencias
+          .filter((r: any) => r.menorIntervaloDias != null && r.menorIntervaloDias <= 180)
+          .slice(0, 15)
+          .map((r: any) => ({
+            placa: r.placa,
+            peca: r.peca,
+            motivo: `Trocada ${r.trocas}× — menor intervalo de ${r.menorIntervaloDias} dia(s)${r.menorIntervaloKm != null ? ` / ${Math.round(r.menorIntervaloKm)} km` : ""}; custo total R$ ${Math.round(r.custoTotal).toLocaleString("pt-BR")}.`,
+          }));
+
+        const nVender = scored.filter((s: any) => s.recomendacao === "VENDER").length;
+        const nObs = scored.filter((s: any) => s.recomendacao === "OBSERVAR").length;
+        const resumoExecutivo = `Análise automática de ${scored.length} veículo(s): ${nVender} candidato(s) a VENDER, ${nObs} para OBSERVAR e ${scored.length - nVender - nObs} para MANTER. ${pecasCriticas.length} peça(s) com troca recorrente em intervalo curto (possível defeito crônico).`;
+        const recomendacoesGerais = [
+          "Priorize manutenção PREVENTIVA nos veículos com alta proporção de corretivas.",
+          "Investigue as peças trocadas repetidamente em pouco tempo — podem indicar serviço malfeito ou defeito estrutural.",
+          nVender > 0
+            ? "Reavalie a permanência dos veículos marcados como VENDER: o custo de manutenção pode superar o valor do bem."
+            : "Mantenha o acompanhamento mensal do custo por veículo.",
+        ];
+        return { resumoExecutivo, veiculos: scored, pecasCriticas, recomendacoesGerais };
+      };
+
       let ia: any = null;
       let erro: string | null = null;
       try {
-        const result = await invokeLLM({
-          messages: [
-            { role: "system", content: systemPrompt },
-            { role: "user", content: userPayload },
-          ],
-          maxTokens: 6000,
-          response_format: { type: "json_object" },
-          // Rev. 2712 — CAMINHO RÁPIDO (Gemini 2.5 Flash, thinking OFF). O parecer
-          // pede ~6000 tokens; no Claude Sonnet NÃO-streaming isso leva 60-120s e
-          // estoura o timeout do proxy/iOS — a conexão morre e o Safari lança a
-          // DOMException "The string did not match the expected pattern." que
-          // aparecia como erro da IA. O caminho rápido responde em poucos segundos.
-          fast: true,
-        });
+        // ORÇAMENTO DE TEMPO: corta a IA em 28s e cai pro determinístico — garante
+        // que a RESPOSTA HTTP volta ANTES do timeout do proxy/iOS (que gerava a
+        // DOMException "The string did not match the expected pattern." no Safari
+        // quando a chamada caía no fallback Claude NÃO-streaming de 60-120s).
+        // fast:true usa Gemini 2.5 Flash (thinking OFF). maxTokens menor = mais
+        // rápido e menos risco de truncar o JSON.
+        const LLM_BUDGET_MS = 28000;
+        const result = await Promise.race([
+          invokeLLM({
+            messages: [
+              { role: "system", content: systemPrompt },
+              { role: "user", content: userPayload },
+            ],
+            maxTokens: 4000,
+            response_format: { type: "json_object" },
+            fast: true,
+          }),
+          new Promise<never>((_, reject) => setTimeout(() => reject(new Error("ia-timeout")), LLM_BUDGET_MS)),
+        ]) as Awaited<ReturnType<typeof invokeLLM>>;
         const raw = result.choices?.[0]?.message?.content;
         const txt = typeof raw === "string" ? raw : Array.isArray(raw) ? raw.map((p: any) => (typeof p === "string" ? p : p?.text ?? "")).join("") : "";
         const parsed = JSON.parse(stripFences(txt));
@@ -4770,10 +4833,21 @@ IMPORTANTE:
             : [],
         };
       } catch (err: any) {
+        // NUNCA propaga o erro pro cliente: devolve o parecer DETERMINÍSTICO.
         const msg = String(err?.message ?? "");
-        erro = (msg.includes("não configurada") || msg.includes("not configured") || msg.includes("Nenhuma chave"))
-          ? "IA indisponível: nenhuma chave de IA configurada no projeto. A análise determinística (peças recorrentes) continua disponível abaixo."
-          : `Falha ao gerar o parecer da IA: ${msg.slice(0, 160) || "erro desconhecido"}. A análise determinística continua disponível abaixo.`;
+        ia = buildDeterministicIa();
+        erro = msg.includes("ia-timeout")
+          ? "A IA demorou demais para responder; exibimos a análise automática baseada nos seus próprios dados."
+          : (msg.includes("não configurada") || msg.includes("not configured") || msg.includes("Nenhuma chave"))
+            ? "IA indisponível (sem chave configurada); exibimos a análise automática baseada nos seus próprios dados."
+            : "Não foi possível obter o parecer da IA; exibimos a análise automática baseada nos seus próprios dados.";
+      }
+
+      // GUARDA FINAL: se a IA não trouxe um parecer utilizável (vazio/sem
+      // veículos), usa o determinístico — a tela NUNCA fica sem análise.
+      if (!ia || !Array.isArray(ia.veiculos) || ia.veiculos.length === 0) {
+        ia = buildDeterministicIa();
+        if (!erro) erro = "A IA não retornou um parecer utilizável; exibimos a análise automática baseada nos seus próprios dados.";
       }
 
       return { geradoEm, metrics: { recorrencias, veiculos }, ia, erro };
