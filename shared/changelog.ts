@@ -1,6 +1,27 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2704 — **FROTA · VEÍCULOS (`/frotas` → "Veículos") · LAYOUT MAIS VISUAL/INTUITIVO: CARDS DE
+ * STATUS CLICÁVEIS NO TOPO (FILTRAM A LISTA) + CORES POR STATUS (ATIVO=VERDE, EM MANUTENÇÃO=AMARELO,
+ * VENDIDO=VERMELHO, INATIVO=CINZA) NO BADGE E NUMA BORDA LATERAL DO CARD DO VEÍCULO.**
+ *
+ * PEDIDO (usuário, prints da lista de Veículos): "Quero um layout melhor, diferenciando o carro ativo,
+ * vendido, manutenção... vendido poderia ser vermelho, ativo verde, manutenção amarelo... quero algo
+ * intuitivo. Já coloque cards no topo para filtrar os status e ficar mais visual."
+ *
+ * SOLUÇÃO (SÓ CLIENT/UI; ZERO SERVER/SCHEMA — R-001/R-007/R-010): `client/src/pages/frotas/Veiculos.tsx`.
+ * (1) Const `STATUS_STYLES` + helper `statusStyle(s)` mapeiam cada status → classes Tailwind (card,
+ * cardActive, badge, border, dot). (2) O filtro de status saiu do server e virou CLIENT-SIDE: a query
+ * `listVehicles` não recebe mais `status`; `scoped` (busca aplicada) alimenta as contagens por status
+ * (`statusCounts`) e `list` = `scoped` filtrado por `filterStatus`. Assim os cards mostram o total de cada
+ * status independente do filtro ativo. (3) Linha de cards de status clicáveis no topo ("Todos" + os 4
+ * STATUS) — clicar seta `filterStatus`; o card ativo ganha `ring`. (4) O `<Select>` de status foi
+ * removido (redundante com os cards); busca + filtro de tipo permanecem. (5) O badge de status no card
+ * passou de `<Badge>` genérico p/ `<span>` colorido por status; o `<Card>` ganhou `border-l-4` na cor do
+ * status. (6) KPIs secundários Inventário/Com FIPE derivam de `scoped`; "Cadastro Incompleto" segue
+ * sendo a contagem GLOBAL da query dedicada `pendingReg` (comportamento pré-existente, intencionalmente
+ * não-contextual). Import `Badge` removido (sem uso). pnpm build EXIT 0 (server+client).
+ *
  * Rev. 2703 — **FROTA · EDITAR/NOVO VEÍCULO (`/frotas` → "Veículos" → abrir/editar veículo) · GANHOU
  * UM CAMPO PARA INDICAR O MOTORISTA/CONDUTOR — MESMO QUE NÃO SEJA FUNCIONÁRIO CADASTRADO — E O LAYOUT
  * DO DIÁLOGO FOI MELHORADO (SEÇÕES EM PAINÉIS COM ÍCONES).**

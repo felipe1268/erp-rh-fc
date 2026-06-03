@@ -4,7 +4,6 @@ import { useCompany } from "@/contexts/CompanyContext";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -18,6 +17,45 @@ import { MoneyInput } from "@/components/ui/money-input";
 
 const TIPOS = ["Carro", "SUV", "Caminhonete", "Caminhão", "Utilitário", "Van", "Moto", "Ônibus", "Máquina", "Outros"];
 const STATUS = ["Ativo", "Em Manutenção", "Inativo", "Vendido"];
+
+const STATUS_STYLES: Record<string, { label: string; card: string; cardActive: string; badge: string; border: string; dot: string }> = {
+  Ativo: {
+    label: "Ativos",
+    card: "bg-green-50 dark:bg-green-950/40 border-green-200 dark:border-green-900 hover:border-green-400",
+    cardActive: "ring-2 ring-green-500 border-green-400",
+    badge: "bg-green-100 text-green-700 border-green-300 dark:bg-green-900 dark:text-green-200",
+    border: "border-l-green-500",
+    dot: "bg-green-500",
+  },
+  "Em Manutenção": {
+    label: "Em Manutenção",
+    card: "bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-900 hover:border-amber-400",
+    cardActive: "ring-2 ring-amber-500 border-amber-400",
+    badge: "bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-900 dark:text-amber-200",
+    border: "border-l-amber-500",
+    dot: "bg-amber-500",
+  },
+  Vendido: {
+    label: "Vendidos",
+    card: "bg-red-50 dark:bg-red-950/40 border-red-200 dark:border-red-900 hover:border-red-400",
+    cardActive: "ring-2 ring-red-500 border-red-400",
+    badge: "bg-red-100 text-red-700 border-red-300 dark:bg-red-900 dark:text-red-200",
+    border: "border-l-red-500",
+    dot: "bg-red-500",
+  },
+  Inativo: {
+    label: "Inativos",
+    card: "bg-slate-50 dark:bg-slate-900/40 border-slate-200 dark:border-slate-800 hover:border-slate-400",
+    cardActive: "ring-2 ring-slate-400 border-slate-400",
+    badge: "bg-slate-100 text-slate-600 border-slate-300 dark:bg-slate-800 dark:text-slate-300",
+    border: "border-l-slate-400",
+    dot: "bg-slate-400",
+  },
+};
+
+function statusStyle(s: string) {
+  return STATUS_STYLES[s] || STATUS_STYLES.Inativo;
+}
 
 function fmt(v: any) {
   const n = parseFloat(v || "0");
@@ -39,7 +77,7 @@ export default function Veiculos() {
   const [bulkSaving, setBulkSaving] = useState(false);
 
   const vehicles = trpc.frotas.listVehicles.useQuery(
-    { companyId: cId, tipo: filterTipo !== "all" ? filterTipo : undefined, status: filterStatus !== "all" ? filterStatus : undefined },
+    { companyId: cId, tipo: filterTipo !== "all" ? filterTipo : undefined },
     { enabled: cId > 0 },
   );
   const createMut = trpc.frotas.createVehicle.useMutation({
@@ -189,7 +227,7 @@ export default function Veiculos() {
     }
   }
 
-  const list = (vehicles.data || []).filter((v: any) => {
+  const scoped = (vehicles.data || []).filter((v: any) => {
     if (!search) return true;
     const s = search.toLowerCase();
     return (
@@ -199,6 +237,13 @@ export default function Veiculos() {
       (v.responsavel || "").toLowerCase().includes(s)
     );
   });
+  const list = filterStatus === "all"
+    ? scoped
+    : scoped.filter((v: any) => (v.statusVeiculo || "") === filterStatus);
+  const statusCounts: Record<string, number> = STATUS.reduce((acc, s) => {
+    acc[s] = scoped.filter((v: any) => (v.statusVeiculo || "") === s).length;
+    return acc;
+  }, {} as Record<string, number>);
 
   function toggleSelectMode() {
     setSelectMode((m) => {
@@ -292,13 +337,6 @@ export default function Veiculos() {
               {TIPOS.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
             </SelectContent>
           </Select>
-          <Select value={filterStatus} onValueChange={setFilterStatus}>
-            <SelectTrigger className="w-[160px]"><SelectValue placeholder="Status" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todos os status</SelectItem>
-              {STATUS.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-            </SelectContent>
-          </Select>
         </div>
 
         {selectMode && (
@@ -323,46 +361,73 @@ export default function Veiculos() {
           </div>
         )}
 
-        {!vehicles.isLoading && list.length > 0 && (() => {
-          const totalFipe = list.reduce((s: number, v: any) => s + parseFloat(v.valor_fipe || "0"), 0);
-          const comFipe = list.filter((v: any) => parseFloat(v.valor_fipe || "0") > 0).length;
-          return (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              <Card className="bg-cyan-50 dark:bg-cyan-950 border-cyan-200">
-                <CardContent className="p-3 text-center">
-                  <p className="text-2xl font-bold text-cyan-700">{list.length}</p>
-                  <p className="text-xs text-cyan-600">Veículos na Frota</p>
-                </CardContent>
-              </Card>
-              <Card className="bg-green-50 dark:bg-green-950 border-green-200">
-                <CardContent className="p-3 text-center">
-                  <p className="text-lg font-bold text-green-700">{fmt(totalFipe)}</p>
-                  <p className="text-xs text-green-600">Valor do Inventário</p>
-                </CardContent>
-              </Card>
-              <Card className="bg-blue-50 dark:bg-blue-950 border-blue-200">
-                <CardContent className="p-3 text-center">
-                  <p className="text-2xl font-bold text-blue-700">{comFipe}</p>
-                  <p className="text-xs text-blue-600">Com Valor FIPE</p>
-                </CardContent>
-              </Card>
-              <Card className="bg-amber-50 dark:bg-amber-950 border-amber-200">
-                <CardContent className="p-3 text-center">
-                  <p className="text-2xl font-bold text-amber-700">{list.filter((v: any) => v.statusVeiculo === "Ativo").length}</p>
-                  <p className="text-xs text-amber-600">Ativos</p>
-                </CardContent>
-              </Card>
-              {(pendingReg.data || []).length > 0 && (
-                <Card className="bg-red-50 dark:bg-red-950 border-red-200">
-                  <CardContent className="p-3 text-center">
-                    <p className="text-2xl font-bold text-red-700">{(pendingReg.data || []).length}</p>
-                    <p className="text-xs text-red-600">Cadastro Incompleto</p>
-                  </CardContent>
-                </Card>
-              )}
+        {!vehicles.isLoading && (
+          <>
+            {/* Cards de status — clicáveis para filtrar (visual e intuitivo) */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
+              <button
+                type="button"
+                onClick={() => setFilterStatus("all")}
+                className={`rounded-xl border p-3 text-left transition-all ${filterStatus === "all" ? "ring-2 ring-cyan-500 border-cyan-400 bg-cyan-50 dark:bg-cyan-950/40" : "bg-card hover:border-cyan-300"}`}
+              >
+                <div className="flex items-center gap-2">
+                  <Car className="h-4 w-4 text-cyan-600" />
+                  <span className="text-xs font-medium text-muted-foreground">Todos</span>
+                </div>
+                <p className="text-2xl font-bold mt-1">{scoped.length}</p>
+              </button>
+              {STATUS.map((s) => {
+                const st = statusStyle(s);
+                const active = filterStatus === s;
+                return (
+                  <button
+                    key={s}
+                    type="button"
+                    onClick={() => setFilterStatus(s)}
+                    className={`rounded-xl border p-3 text-left transition-all ${st.card} ${active ? st.cardActive : ""}`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className={`h-2.5 w-2.5 rounded-full ${st.dot}`} />
+                      <span className="text-xs font-medium text-muted-foreground truncate">{st.label}</span>
+                    </div>
+                    <p className="text-2xl font-bold mt-1">{statusCounts[s] || 0}</p>
+                  </button>
+                );
+              })}
             </div>
-          );
-        })()}
+
+            {/* Linha secundária — inventário / FIPE / cadastro incompleto */}
+            {scoped.length > 0 && (() => {
+              const totalFipe = scoped.reduce((s: number, v: any) => s + parseFloat(v.valor_fipe || "0"), 0);
+              const comFipe = scoped.filter((v: any) => parseFloat(v.valor_fipe || "0") > 0).length;
+              const incompletos = (pendingReg.data || []).length;
+              return (
+                <div className={`grid grid-cols-2 ${incompletos > 0 ? "md:grid-cols-3" : "md:grid-cols-2"} gap-3`}>
+                  <Card className="bg-green-50 dark:bg-green-950 border-green-200">
+                    <CardContent className="p-3 text-center">
+                      <p className="text-lg font-bold text-green-700">{fmt(totalFipe)}</p>
+                      <p className="text-xs text-green-600">Valor do Inventário</p>
+                    </CardContent>
+                  </Card>
+                  <Card className="bg-blue-50 dark:bg-blue-950 border-blue-200">
+                    <CardContent className="p-3 text-center">
+                      <p className="text-2xl font-bold text-blue-700">{comFipe}</p>
+                      <p className="text-xs text-blue-600">Com Valor FIPE</p>
+                    </CardContent>
+                  </Card>
+                  {incompletos > 0 && (
+                    <Card className="bg-red-50 dark:bg-red-950 border-red-200">
+                      <CardContent className="p-3 text-center">
+                        <p className="text-2xl font-bold text-red-700">{incompletos}</p>
+                        <p className="text-xs text-red-600">Cadastro Incompleto</p>
+                      </CardContent>
+                    </Card>
+                  )}
+                </div>
+              );
+            })()}
+          </>
+        )}
 
         {vehicles.isLoading ? (
           <div className="flex justify-center py-12">
@@ -375,7 +440,7 @@ export default function Veiculos() {
             {list.map((v: any) => (
               <Card
                 key={v.id}
-                className={`overflow-hidden transition-shadow ${selectMode ? "cursor-pointer hover:shadow-md" : "hover:shadow-md"} ${selectMode && selectedIds.has(v.id) ? "ring-2 ring-cyan-500 border-cyan-400" : ""}`}
+                className={`overflow-hidden transition-shadow border-l-4 ${statusStyle(v.statusVeiculo).border} ${selectMode ? "cursor-pointer hover:shadow-md" : "hover:shadow-md"} ${selectMode && selectedIds.has(v.id) ? "ring-2 ring-cyan-500 border-cyan-400" : ""}`}
                 onClick={selectMode ? () => toggleSelected(v.id) : undefined}
               >
                 <div className="flex">
@@ -409,7 +474,7 @@ export default function Veiculos() {
                         <p className="font-semibold text-sm truncate">{v.modelo}</p>
                         <p className="text-xs text-muted-foreground">{v.marca} | {v.anoFabricacao}/{v.anoModelo || "—"} | {v.cor || "—"}</p>
                       </div>
-                      <Badge variant={v.statusVeiculo === "Ativo" ? "default" : "secondary"} className="text-[10px] shrink-0">{v.statusVeiculo}</Badge>
+                      <span className={`text-[10px] font-medium shrink-0 rounded-full border px-2 py-0.5 ${statusStyle(v.statusVeiculo).badge}`}>{v.statusVeiculo}</span>
                     </div>
                     {pendingIds.has(v.id) && (
                       <div className="flex items-center gap-1 mt-1">
