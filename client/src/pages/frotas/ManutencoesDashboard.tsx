@@ -410,8 +410,8 @@ export default function ManutencoesDashboard() {
                   <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-2 flex items-center gap-1.5">
                     <AlertTriangle className="h-3.5 w-3.5 text-red-500" /> Detalhe — peças que se repetem em pouco tempo
                   </p>
-                  {/* Tabela completa — só em telas grandes (lg+) */}
-                  <div className="hidden lg:block overflow-x-auto rounded-xl border bg-white dark:bg-slate-800">
+                  {/* Tabela completa — só em telas largas (xl+) */}
+                  <div className="hidden xl:block overflow-x-auto rounded-xl border bg-white dark:bg-slate-800">
                     <table className="w-full text-xs">
                       <thead className="bg-slate-100 dark:bg-slate-900/60">
                         <tr>
@@ -455,7 +455,7 @@ export default function ManutencoesDashboard() {
                   </div>
 
                   {/* Cards expansíveis — tablet/celular (toque para abrir os detalhes) */}
-                  <div className="lg:hidden space-y-2">
+                  <div className="xl:hidden space-y-2">
                     {(rec.data?.recorrencias || []).slice(0, 60).map((r: any, i: number) => {
                       const critico = r.menorIntervaloDias != null && r.menorIntervaloDias <= 180;
                       return (

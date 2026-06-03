@@ -1,6 +1,24 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2721 — **FROTA · DASHBOARD DE MANUTENÇÃO (`/frotas` → "Manutenções" → "Dashboard") · AJUSTE DO
+ * BREAKPOINT DA RESPONSIVIDADE DA TABELA "DETALHE — PEÇAS QUE SE REPETEM" (Rev. 2720): NO IPAD (1024px,
+ * landscape) AINDA APARECIA A TABELA ESPREMIDA EM VEZ DOS CARDS CLICÁVEIS.**
+ *
+ * PEDIDO/BUG (usuário, print do iPad ~1024px): "não tá responsivo, quando clico não dá pra ver de onde
+ * vem os dados". CAUSA-RAIZ: o corte da Rev. 2720 era `lg` (min-width 1024px) — exatamente a largura do
+ * iPad em landscape; com isso `hidden lg:block` mostrava a `<table>` (não clicável) e `lg:hidden`
+ * escondia os cards. Tablets ficavam no modo errado.
+ *
+ * SOLUÇÃO (SÓ CLIENT/UI; ZERO SERVER/SCHEMA — R-001/R-007/R-010 OK):
+ * - `client/src/pages/frotas/ManutencoesDashboard.tsx` — corte subido de `lg` (1024px) para `xl`
+ *   (1280px): a `<table>` completa agora é `hidden xl:block` e a lista de cards `<details>`/`<summary>`
+ *   é `xl:hidden`. Assim qualquer tela < 1280px (incluindo iPad em portrait E landscape, e celulares)
+ *   recebe os cards que abrem ao tocar; só desktops largos (≥1280px) veem a tabela completa. Nenhuma
+ *   outra mudança de conteúdo/dados.
+ *
+ * VALIDAÇÃO: esbuild parse do TSX EXIT 0.
+ *
  * Rev. 2720 — **FROTA · DASHBOARD DE MANUTENÇÃO (`/frotas` → "Manutenções" → "Dashboard") · A TABELA
  * "DETALHE — PEÇAS QUE SE REPETEM EM POUCO TEMPO" (Rev. 2719) AGORA É RESPONSIVA: EM TABLET/CELULAR
  * VIRA CARDS QUE ABREM OS DETALHES AO TOCAR (ANTES A TABELA LARGA FICAVA ESPREMIDA/CORTADA NO IPAD).**
