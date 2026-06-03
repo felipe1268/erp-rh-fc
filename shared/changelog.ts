@@ -1,6 +1,40 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2707 — **FROTA · DASHBOARD DE MANUTENÇÃO (`/frotas` → "Manutenções" → "Dashboard") · NOVA
+ * SEÇÃO "ANÁLISE INTELIGENTE (IA)" QUE CRUZA AS PEÇAS TROCADAS PROCURANDO PEÇAS QUE SE REPETEM EM
+ * POUCO TEMPO NO MESMO VEÍCULO (SINAL DE PROBLEMA CRÔNICO / RALO DE DINHEIRO) E GERA, COM IA, UM
+ * PARECER POR VEÍCULO — VENDER / OBSERVAR / MANTER — COM SCORE DE RISCO (0-100), JUSTIFICATIVA E
+ * SINAIS, ALÉM DE RESUMO EXECUTIVO E RECOMENDAÇÕES GERAIS PARA APOIAR A DECISÃO DE VENDER OU MANTER.**
+ *
+ * PEDIDO (usuário, prints IMG_1515/IMG_1516 do Dashboard de Manutenção): "análise detalhada das
+ * manutenções cruzando as peças trocadas com peças trocadas em pouco tempo (peças recorrentes = sinal
+ * de problema/ralo de dinheiro) + insights com IA, com os mais altos padrões de análise, para auxiliar
+ * na decisão de VENDER ou MANTER o veículo".
+ *
+ * SOLUÇÃO (SERVER + CLIENT; ZERO SCHEMA/ALTER — R-001/R-007/R-010). Princípio de ALTO PADRÃO: todos os
+ * NÚMEROS são calculados de forma DETERMINÍSTICA em SQL (verdade absoluta); a IA apenas INTERPRETA os
+ * fatos e nunca inventa valores. (1) SERVER `server/routers/frotas.ts` — novo endpoint
+ * `getMaintenanceAIAnalysis` (mutation). Query A (PEÇAS RECORRENTES, TODO o histórico, não só o ano):
+ * CTE `eventos` agrupa itens categoria='peca' por (veículo, nome normalizado LOWER/TRIM, data da OS);
+ * CTE `gaps` usa `LAG()` por (veículo, peça) p/ medir o intervalo em DIAS e em KM entre trocas
+ * consecutivas; agregação final exige `HAVING COUNT(*) >= 2` e expõe trocas, menor/médio intervalo de
+ * dias, menor intervalo de km e custo total. Query B (FINANCEIRO POR VEÍCULO): custo total e custo dos
+ * últimos 12 meses, % de corretivas, atributos do veículo (ano, km, valor de compra / FIPE, status) +
+ * derivados em JS (pctCorretiva, custo12m/valor, contagem de peças recorrentes e quantas com intervalo
+ * curto ≤180d). Os fatos viram payload JSON enviado ao `invokeLLM` (Claude via integração Anthropic
+ * instalada; fallback Gemini) com `response_format: json_object` e system prompt de consultor de TCO de
+ * frota; resposta parseada (strip de fences) em { resumoExecutivo, veiculos[], pecasCriticas[],
+ * recomendacoesGerais[] }. Falha da IA NÃO derruba a tela: retorna `erro` e a análise determinística
+ * (peças recorrentes) continua. (2) CLIENT `client/src/pages/frotas/ManutencoesDashboard.tsx` — card
+ * "Análise Inteligente (IA)" no topo (abaixo dos KPIs) com botão "Gerar/Atualizar análise" (mutation
+ * on-demand), estados loading/erro, resumo executivo, grade de cards de parecer por veículo (badge
+ * colorido Vender/Observar/Manter + barra de score + KPIs custo12m/corretivas/peças recorrentes/custo×valor
+ * + sinais + ação), TABELA de peças recorrentes com destaque VERMELHO para intervalo ≤180 dias, e
+ * recomendações gerais. Fallback determinístico (ordena por sinais de risco) quando a IA não retorna.
+ * VALIDAÇÃO: esbuild server (`server/_core/index.ts`) EXIT 0 + parse esbuild do TSX EXIT 0; app subiu
+ * limpo no Neon após restart. version.ts=2707.
+ *
  * Rev. 2706 — **FROTA · EDITAR/NOVO VEÍCULO (`/frotas` → "Veículos" → abrir/novo) · LAYOUT DO DIÁLOGO
  * REDESENHADO PARA FICAR MAIS MODERNO E DE PREENCHIMENTO MAIS FÁCIL: HEADER COM CHIP DE ÍCONE +
  * SUBTÍTULO, BOTÕES COM ÍCONES, CONTAINER MAIS ESTREITO/LEGÍVEL, SEÇÕES EM CARDS COM CHIP DE ÍCONE

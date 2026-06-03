@@ -8,6 +8,7 @@ import {
   Wrench, DollarSign, TrendingUp, TrendingDown, Truck, Activity,
   BarChart3, ChevronLeft, ChevronRight, AlertTriangle, CheckCircle,
   Package, Settings, Users, Gauge, ArrowUpDown, ArrowUp, ArrowDown,
+  Sparkles, Brain, Loader2, RefreshCw, ShieldCheck, ShieldAlert, Repeat, Lightbulb,
 } from "lucide-react";
 import { useState, useMemo } from "react";
 import {
@@ -32,6 +33,47 @@ export default function ManutencoesDashboard() {
     { companyId: cId, ano },
     { enabled: cId > 0 },
   );
+
+  const aiMut = trpc.frotas.getMaintenanceAIAnalysis.useMutation();
+  const ai = aiMut.data;
+  const aiMetrics = ai?.metrics;
+  const aiParecer = ai?.ia as any;
+
+  const recVeicByPlaca = useMemo(() => {
+    const map: Record<string, any> = {};
+    for (const v of aiMetrics?.veiculos || []) map[v.placa] = v;
+    return map;
+  }, [aiMetrics]);
+
+  const recCards = useMemo(() => {
+    const recs: any[] = aiParecer?.veiculos || [];
+    if (recs.length > 0) {
+      return recs.map((r: any) => ({ ...r, metric: recVeicByPlaca[r.placa] }));
+    }
+    // Fallback determinístico quando a IA não retornou parecer: ordena por sinais de risco
+    return (aiMetrics?.veiculos || [])
+      .map((v: any) => ({
+        placa: v.placa,
+        recomendacao: null,
+        scoreRisco: null,
+        justificativa: null,
+        sinais: [],
+        metric: v,
+      }))
+      .sort((a: any, b: any) => {
+        const sa = (a.metric?.pecasRecorrentesCurtas || 0) * 100 + (a.metric?.pctCorretiva || 0) + (a.metric?.custoSobreValorPct || 0);
+        const sb = (b.metric?.pecasRecorrentesCurtas || 0) * 100 + (b.metric?.pctCorretiva || 0) + (b.metric?.custoSobreValorPct || 0);
+        return sb - sa;
+      })
+      .slice(0, 12);
+  }, [aiParecer, aiMetrics, recVeicByPlaca]);
+
+  const recoStyle = (reco: string | null) => {
+    if (reco === "VENDER") return { badge: "bg-red-100 text-red-700 border-red-200", bar: "bg-red-500", border: "border-l-red-500", icon: ShieldAlert, label: "Vender" };
+    if (reco === "OBSERVAR") return { badge: "bg-amber-100 text-amber-700 border-amber-200", bar: "bg-amber-500", border: "border-l-amber-500", icon: AlertTriangle, label: "Observar" };
+    if (reco === "MANTER") return { badge: "bg-emerald-100 text-emerald-700 border-emerald-200", bar: "bg-emerald-500", border: "border-l-emerald-500", icon: ShieldCheck, label: "Manter" };
+    return { badge: "bg-slate-100 text-slate-600 border-slate-200", bar: "bg-slate-400", border: "border-l-slate-300", icon: Truck, label: "—" };
+  };
 
   const d = dash.data;
 
@@ -148,6 +190,239 @@ export default function ManutencoesDashboard() {
             </Card>
           ))}
         </div>
+
+        {/* Rev. 2707 — ANÁLISE INTELIGENTE (IA): peças recorrentes + parecer Vender/Manter/Observar */}
+        <Card className="border-violet-200 dark:border-violet-900/40 bg-gradient-to-br from-violet-50/60 to-indigo-50/40 dark:from-violet-950/20 dark:to-indigo-950/10">
+          <CardHeader className="pb-2">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-xl bg-gradient-to-br from-violet-500 to-indigo-600 text-white shadow-sm">
+                  <Brain className="h-5 w-5" />
+                </div>
+                <div>
+                  <CardTitle className="text-base flex items-center gap-2">
+                    Análise Inteligente (IA)
+                    <Sparkles className="h-4 w-4 text-violet-500" />
+                  </CardTitle>
+                  <p className="text-xs text-muted-foreground">
+                    Cruza peças que se repetem em pouco tempo e recomenda <span className="font-medium">vender</span> ou <span className="font-medium">manter</span> cada veículo
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => aiMut.mutate({ companyId: cId, ano })}
+                disabled={aiMut.isPending || cId <= 0}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-br from-violet-600 to-indigo-600 text-white text-sm font-semibold shadow-sm hover:from-violet-700 hover:to-indigo-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+              >
+                {aiMut.isPending
+                  ? <><Loader2 className="h-4 w-4 animate-spin" /> Analisando…</>
+                  : ai
+                    ? <><RefreshCw className="h-4 w-4" /> Atualizar análise</>
+                    : <><Sparkles className="h-4 w-4" /> Gerar análise</>}
+              </button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {!ai && !aiMut.isPending && (
+              <div className="text-center py-8 px-4">
+                <Brain className="h-10 w-10 mx-auto text-violet-300 mb-3" />
+                <p className="text-sm text-muted-foreground max-w-xl mx-auto">
+                  Clique em <span className="font-semibold text-violet-700 dark:text-violet-300">"Gerar análise"</span> para identificar peças trocadas repetidamente em pouco tempo no mesmo veículo (sinal de problema crônico) e receber um parecer de IA, com score de risco, para decidir entre <span className="font-medium">vender ou manter</span>.
+                </p>
+              </div>
+            )}
+
+            {aiMut.isPending && (
+              <div className="flex flex-col items-center justify-center py-10 gap-3">
+                <Loader2 className="h-8 w-8 animate-spin text-violet-500" />
+                <p className="text-sm text-muted-foreground">Cruzando o histórico de manutenções e consultando a IA…</p>
+              </div>
+            )}
+
+            {aiMut.isError && !aiMut.isPending && (
+              <div className="flex items-start gap-2 text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg p-3">
+                <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+                <span>Não foi possível concluir a análise: {(aiMut.error as any)?.message || "erro desconhecido"}.</span>
+              </div>
+            )}
+
+            {ai && !aiMut.isPending && (
+              <div className="space-y-5">
+                {ai.erro && (
+                  <div className="flex items-start gap-2 text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-2.5">
+                    <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+                    <span>{ai.erro}</span>
+                  </div>
+                )}
+
+                {aiParecer?.resumoExecutivo && (
+                  <div className="rounded-xl bg-white/70 dark:bg-slate-800/50 border border-violet-100 dark:border-violet-900/40 p-4">
+                    <p className="text-[11px] font-semibold uppercase tracking-wider text-violet-600 dark:text-violet-300 mb-1.5 flex items-center gap-1.5">
+                      <Lightbulb className="h-3.5 w-3.5" /> Resumo executivo
+                    </p>
+                    <p className="text-sm leading-relaxed text-slate-700 dark:text-slate-200">{aiParecer.resumoExecutivo}</p>
+                  </div>
+                )}
+
+                {/* Cards de recomendação por veículo */}
+                {recCards.length > 0 && (
+                  <div>
+                    <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">
+                      Parecer por veículo {aiParecer ? "" : "(ordenado por sinais de risco)"}
+                    </p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+                      {recCards.map((r: any, i: number) => {
+                        const st = recoStyle(r.recomendacao);
+                        const m = r.metric || {};
+                        const Ico = st.icon;
+                        const score = typeof r.scoreRisco === "number" ? Math.max(0, Math.min(100, r.scoreRisco)) : null;
+                        return (
+                          <div key={i} className={`rounded-xl bg-white dark:bg-slate-800 border border-l-4 ${st.border} shadow-sm p-3 flex flex-col gap-2`}>
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="flex flex-col">
+                                <span className="font-mono font-bold text-[#1e3a5f] dark:text-blue-300">{r.placa}</span>
+                                <span className="text-[10px] text-muted-foreground">{m.modelo || ""} {m.marca ? `· ${m.marca}` : ""}</span>
+                              </div>
+                              <Badge className={`text-[10px] border ${st.badge} gap-1`}>
+                                <Ico className="h-3 w-3" /> {st.label}
+                              </Badge>
+                            </div>
+
+                            {score != null && (
+                              <div>
+                                <div className="flex items-center justify-between text-[10px] text-muted-foreground mb-0.5">
+                                  <span>Score de risco</span>
+                                  <span className="font-bold tabular-nums">{score}/100</span>
+                                </div>
+                                <div className="h-1.5 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
+                                  <div className={`h-full rounded-full ${st.bar}`} style={{ width: `${score}%` }} />
+                                </div>
+                              </div>
+                            )}
+
+                            <div className="grid grid-cols-2 gap-1.5 text-[10px]">
+                              <div className="bg-slate-50 dark:bg-slate-900/40 rounded p-1.5">
+                                <p className="text-muted-foreground">Custo 12m</p>
+                                <p className="font-bold text-emerald-700 dark:text-emerald-400">{fmt(m.custo12m || 0)}</p>
+                              </div>
+                              <div className="bg-slate-50 dark:bg-slate-900/40 rounded p-1.5">
+                                <p className="text-muted-foreground">Corretivas</p>
+                                <p className="font-bold">{m.pctCorretiva ?? 0}%</p>
+                              </div>
+                              <div className="bg-slate-50 dark:bg-slate-900/40 rounded p-1.5">
+                                <p className="text-muted-foreground">Peças recorrentes</p>
+                                <p className="font-bold">{m.pecasRecorrentes ?? 0}{(m.pecasRecorrentesCurtas ?? 0) > 0 ? <span className="text-red-600"> ({m.pecasRecorrentesCurtas} críticas)</span> : null}</p>
+                              </div>
+                              <div className="bg-slate-50 dark:bg-slate-900/40 rounded p-1.5">
+                                <p className="text-muted-foreground">Custo/valor</p>
+                                <p className="font-bold">{m.custoSobreValorPct != null ? `${m.custoSobreValorPct}%` : "—"}</p>
+                              </div>
+                            </div>
+
+                            {r.justificativa && (
+                              <p className="text-xs text-slate-600 dark:text-slate-300 leading-snug">{r.justificativa}</p>
+                            )}
+                            {Array.isArray(r.sinais) && r.sinais.length > 0 && (
+                              <ul className="space-y-0.5">
+                                {r.sinais.slice(0, 4).map((s: string, si: number) => (
+                                  <li key={si} className="text-[11px] text-muted-foreground flex items-start gap-1.5">
+                                    <span className="text-violet-400 mt-0.5">•</span><span>{s}</span>
+                                  </li>
+                                ))}
+                              </ul>
+                            )}
+                            {r.acao && (
+                              <p className="text-[11px] font-medium text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/30 rounded px-2 py-1">
+                                → {r.acao}
+                              </p>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Peças recorrentes (determinístico) */}
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-2 flex items-center gap-1.5">
+                    <Repeat className="h-3.5 w-3.5 text-red-500" /> Peças que se repetem em pouco tempo
+                  </p>
+                  {(aiMetrics?.recorrencias?.length || 0) > 0 ? (
+                    <div className="overflow-x-auto rounded-xl border bg-white dark:bg-slate-800">
+                      <table className="w-full text-xs">
+                        <thead className="bg-slate-100 dark:bg-slate-900/60">
+                          <tr>
+                            <th className="p-2 text-left font-semibold">Veículo</th>
+                            <th className="p-2 text-left font-semibold">Peça</th>
+                            <th className="p-2 text-center font-semibold">Trocas</th>
+                            <th className="p-2 text-center font-semibold">Menor intervalo</th>
+                            <th className="p-2 text-center font-semibold">Intervalo médio</th>
+                            <th className="p-2 text-right font-semibold">Custo total</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(aiMetrics?.recorrencias || []).slice(0, 40).map((r: any, i: number) => {
+                            const critico = r.menorIntervaloDias != null && r.menorIntervaloDias <= 180;
+                            return (
+                              <tr key={i} className={`${i % 2 === 0 ? "" : "bg-slate-50/50 dark:bg-slate-900/20"} ${critico ? "bg-red-50/60 dark:bg-red-950/20" : ""}`}>
+                                <td className="p-2">
+                                  <span className="font-mono font-bold text-[#1e3a5f] dark:text-blue-300">{r.placa}</span>
+                                  <span className="block text-[10px] text-muted-foreground">{r.modelo}</span>
+                                </td>
+                                <td className="p-2 font-medium">{r.peca}</td>
+                                <td className="p-2 text-center font-bold">{r.trocas}×</td>
+                                <td className="p-2 text-center">
+                                  {r.menorIntervaloDias != null ? (
+                                    <span className={`inline-flex items-center gap-1 font-semibold ${critico ? "text-red-600" : "text-slate-600 dark:text-slate-300"}`}>
+                                      {critico && <AlertTriangle className="h-3 w-3" />}
+                                      {r.menorIntervaloDias} dias
+                                    </span>
+                                  ) : "—"}
+                                  {r.menorIntervaloKm != null && r.menorIntervaloKm > 0 && (
+                                    <span className="block text-[10px] text-muted-foreground">{fmtNum(r.menorIntervaloKm)} km</span>
+                                  )}
+                                </td>
+                                <td className="p-2 text-center text-muted-foreground">{r.intervaloMedioDias != null ? `${r.intervaloMedioDias} dias` : "—"}</td>
+                                <td className="p-2 text-right font-bold text-emerald-700 dark:text-emerald-400">{fmt(r.custoTotal)}</td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-muted-foreground py-3 text-center bg-white/60 dark:bg-slate-800/40 rounded-xl border">
+                      Nenhuma peça foi trocada mais de uma vez no mesmo veículo — sem recorrência detectada.
+                    </p>
+                  )}
+                </div>
+
+                {/* Recomendações gerais */}
+                {Array.isArray(aiParecer?.recomendacoesGerais) && aiParecer.recomendacoesGerais.length > 0 && (
+                  <div className="rounded-xl bg-white/70 dark:bg-slate-800/50 border border-violet-100 dark:border-violet-900/40 p-4">
+                    <p className="text-[11px] font-semibold uppercase tracking-wider text-violet-600 dark:text-violet-300 mb-2 flex items-center gap-1.5">
+                      <Lightbulb className="h-3.5 w-3.5" /> Recomendações gerais
+                    </p>
+                    <ul className="space-y-1.5">
+                      {aiParecer.recomendacoesGerais.map((s: string, i: number) => (
+                        <li key={i} className="text-sm text-slate-700 dark:text-slate-200 flex items-start gap-2">
+                          <CheckCircle className="h-4 w-4 text-emerald-500 mt-0.5 shrink-0" /><span>{s}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {ai.geradoEm && (
+                  <p className="text-[10px] text-muted-foreground text-right">
+                    Análise gerada em {new Date(ai.geradoEm).toLocaleString("pt-BR")}
+                  </p>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           <Card className="lg:col-span-2">

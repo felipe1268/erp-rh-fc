@@ -4501,6 +4501,251 @@ IMPORTANTE:
       };
     }),
 
+  // Rev. 2707 — ANÁLISE INTELIGENTE (IA) DE MANUTENÇÃO. Cruza PEÇAS
+  // RECORRENTES (mesma peça trocada >=2x no MESMO veículo, com o intervalo em
+  // DIAS e KM entre as trocas) — sinal de "ralo de dinheiro" — e gera, via LLM,
+  // um parecer estruturado VENDER / MANTER / OBSERVAR por veículo, com score de
+  // risco (0-100), sinais e justificativa. TODOS os números são computados em
+  // SQL (verdade determinística); a IA apenas INTERPRETA os fatos — nunca
+  // inventa valores. A análise de recorrência usa TODO o histórico (não só o
+  // ano selecionado), pois uma peça trocada em dez/ano-1 e jan/ano-0 é um
+  // repeat de intervalo curto.
+  getMaintenanceAIAnalysis: protectedProcedure
+    .input(z.object({ companyId: z.number(), ano: z.number().optional() }))
+    .mutation(async ({ ctx, input }) => {
+      if (ctx.user?.companyId !== undefined && String(ctx.user.companyId) !== String(input.companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para acessar dados desta empresa" });
+      }
+      if (!tablesReady) { await ensureFleetTables(); tablesReady = true; }
+      const db = await getDb();
+      const { companyId } = input;
+
+      // 1) PEÇAS RECORRENTES (todo o histórico): mesma peça (nome normalizado)
+      //    trocada >= 2x no mesmo veículo, com intervalo dias/km entre trocas.
+      const recorrRes = await db.execute(sql`
+        WITH eventos AS (
+          SELECT fm.vehicle_id AS vehicle_id,
+                 LOWER(TRIM(mi.nome)) AS nome_norm,
+                 MAX(mi.nome) AS nome,
+                 fm.data_manutencao AS data,
+                 fm.id AS os_id,
+                 MAX(fm.km_na_manutencao::numeric) AS km,
+                 SUM(mi.valor_total::numeric) AS valor
+          FROM fleet_maintenance_items mi
+          JOIN fleet_maintenances fm ON fm.id = mi.maintenance_id
+          WHERE fm.company_id = ${companyId} AND fm.status != 'cancelada'
+            AND mi.categoria = 'peca' AND COALESCE(TRIM(mi.nome), '') <> ''
+          GROUP BY fm.vehicle_id, LOWER(TRIM(mi.nome)), fm.data_manutencao, fm.id
+        ),
+        gaps AS (
+          SELECT e.*,
+            (e.data - LAG(e.data) OVER (PARTITION BY e.vehicle_id, e.nome_norm ORDER BY e.data, e.os_id))::int AS dias_anterior,
+            (e.km - LAG(e.km) OVER (PARTITION BY e.vehicle_id, e.nome_norm ORDER BY e.data, e.os_id))::numeric AS km_anterior
+          FROM eventos e
+        )
+        SELECT g.vehicle_id, v.placa, v.modelo, v.marca, g.nome_norm,
+               MAX(g.nome) AS nome,
+               COUNT(*)::int AS trocas,
+               MIN(g.data) AS primeira,
+               MAX(g.data) AS ultima,
+               MIN(g.dias_anterior) AS menor_intervalo_dias,
+               ROUND(AVG(g.dias_anterior))::int AS intervalo_medio_dias,
+               MIN(NULLIF(g.km_anterior, 0)) AS menor_intervalo_km,
+               SUM(g.valor)::numeric AS custo_total
+        FROM gaps g
+        JOIN vehicles v ON v.id = g.vehicle_id
+        GROUP BY g.vehicle_id, v.placa, v.modelo, v.marca, g.nome_norm
+        HAVING COUNT(*) >= 2
+        ORDER BY menor_intervalo_dias ASC NULLS LAST, trocas DESC, custo_total DESC
+        LIMIT 100
+      `);
+
+      // 2) FINANCEIRO POR VEÍCULO (todo o histórico + últimos 12 meses) +
+      //    atributos do veículo (ano, km, valor de compra / FIPE, status).
+      const veicRes = await db.execute(sql`
+        SELECT fm.vehicle_id, v.placa, v.modelo, v.marca, v."tipoVeiculo" AS tipo,
+               v."anoFabricacao" AS ano, v.km_atual::numeric AS km_atual,
+               v.valor_compra::numeric AS valor_compra, v.valor_fipe::numeric AS valor_fipe,
+               v."statusVeiculo" AS status,
+               COUNT(*)::int AS os_total,
+               COUNT(CASE WHEN fm.tipo = 'corretiva' THEN 1 END)::int AS corretivas,
+               COUNT(CASE WHEN fm.tipo = 'preventiva' THEN 1 END)::int AS preventivas,
+               COALESCE(SUM(fm.custo::numeric), 0) AS custo_total,
+               COALESCE(SUM(CASE WHEN fm.data_manutencao >= (CURRENT_DATE - INTERVAL '12 months') THEN fm.custo::numeric ELSE 0 END), 0) AS custo_12m,
+               MIN(fm.data_manutencao) AS primeira_os,
+               MAX(fm.data_manutencao) AS ultima_os
+        FROM fleet_maintenances fm
+        JOIN vehicles v ON v.id = fm.vehicle_id
+        WHERE fm.company_id = ${companyId} AND fm.status != 'cancelada'
+        GROUP BY fm.vehicle_id, v.placa, v.modelo, v.marca, v."tipoVeiculo",
+                 v."anoFabricacao", v.km_atual, v.valor_compra, v.valor_fipe, v."statusVeiculo"
+        ORDER BY custo_total DESC
+      `);
+
+      const recorrencias = (((recorrRes as any).rows) || []).map((r: any) => ({
+        vehicleId: r.vehicle_id, placa: r.placa, modelo: r.modelo, marca: r.marca,
+        peca: r.nome, trocas: parseInt(r.trocas) || 0,
+        primeira: r.primeira, ultima: r.ultima,
+        menorIntervaloDias: r.menor_intervalo_dias != null ? parseInt(r.menor_intervalo_dias) : null,
+        intervaloMedioDias: r.intervalo_medio_dias != null ? parseInt(r.intervalo_medio_dias) : null,
+        menorIntervaloKm: r.menor_intervalo_km != null ? parseFloat(r.menor_intervalo_km) : null,
+        custoTotal: parseFloat(r.custo_total) || 0,
+      }));
+
+      const recorrCount: Record<number, number> = {};
+      const recorrCurta: Record<number, number> = {}; // intervalos <= 180 dias
+      for (const r of recorrencias) {
+        recorrCount[r.vehicleId] = (recorrCount[r.vehicleId] || 0) + 1;
+        if (r.menorIntervaloDias != null && r.menorIntervaloDias <= 180) {
+          recorrCurta[r.vehicleId] = (recorrCurta[r.vehicleId] || 0) + 1;
+        }
+      }
+
+      const veiculos = (((veicRes as any).rows) || []).map((r: any) => {
+        const custoTotal = parseFloat(r.custo_total) || 0;
+        const custo12m = parseFloat(r.custo_12m) || 0;
+        const valorFipe = r.valor_fipe != null ? parseFloat(r.valor_fipe) : null;
+        const valorCompra = r.valor_compra != null ? parseFloat(r.valor_compra) : null;
+        const osTotal = parseInt(r.os_total) || 0;
+        const corretivas = parseInt(r.corretivas) || 0;
+        const pctCorretiva = osTotal > 0 ? Math.round((corretivas / osTotal) * 100) : 0;
+        const baseValor = valorFipe ?? valorCompra ?? null;
+        const custoSobreValorPct = baseValor && baseValor > 0 ? Math.round((custo12m / baseValor) * 100) : null;
+        return {
+          vehicleId: r.vehicle_id, placa: r.placa, modelo: r.modelo, marca: r.marca, tipo: r.tipo,
+          ano: r.ano, status: r.status,
+          kmAtual: r.km_atual != null ? parseFloat(r.km_atual) : null,
+          valorFipe, valorCompra,
+          osTotal, corretivas, preventivas: parseInt(r.preventivas) || 0, pctCorretiva,
+          custoTotal, custo12m, custoSobreValorPct,
+          pecasRecorrentes: recorrCount[r.vehicle_id] || 0,
+          pecasRecorrentesCurtas: recorrCurta[r.vehicle_id] || 0,
+          primeiraOs: r.primeira_os, ultimaOs: r.ultima_os,
+        };
+      });
+
+      const geradoEm = new Date().toISOString();
+
+      if (veiculos.length === 0) {
+        return { geradoEm, metrics: { recorrencias, veiculos }, ia: null, erro: "Sem manutenções registradas para análise." };
+      }
+
+      // Payload enxuto p/ a IA (limita p/ controlar tokens).
+      const topVeic = veiculos.slice(0, 25);
+      const topRecorr = recorrencias.slice(0, 60);
+
+      const systemPrompt = [
+        "Você é um consultor sênior de gestão de FROTA e manutenção, especialista em CUSTO TOTAL DE PROPRIEDADE (TCO) e na decisão de VENDER ou MANTER veículos/máquinas.",
+        "Você receberá FATOS já calculados (não invente nenhum número; use SOMENTE os fornecidos).",
+        "Princípios de análise de ALTO PADRÃO:",
+        "- PEÇA RECORRENTE com intervalo CURTO (mesma peça trocada de novo em poucos dias/km) é forte sinal de defeito crônico, serviço malfeito ou desgaste estrutural — 'ralo de dinheiro'.",
+        "- Alta proporção de CORRETIVAS (vs preventivas) indica frota apagando incêndio, não prevenindo.",
+        "- Custo de manutenção dos últimos 12 meses ALTO frente ao valor (FIPE/compra) do veículo derruba a viabilidade de manter.",
+        "- Veículo antigo + km alto + custo crescente + peças recorrentes => candidato a VENDER.",
+        "Para cada veículo, classifique em VENDER, OBSERVAR ou MANTER e atribua um scoreRisco de 0 (saudável) a 100 (crítico).",
+        "Seja objetivo, técnico e em português do Brasil. Cite números reais dos fatos nas justificativas.",
+        "Responda APENAS com JSON válido (sem markdown, sem comentários) no formato exato:",
+        '{ "resumoExecutivo": string, "veiculos": [ { "placa": string, "recomendacao": "VENDER"|"OBSERVAR"|"MANTER", "scoreRisco": number, "justificativa": string, "sinais": string[], "acao": string } ], "pecasCriticas": [ { "placa": string, "peca": string, "motivo": string } ], "recomendacoesGerais": string[] }',
+        "Use SOMENTE placas presentes nos fatos. Ordene 'veiculos' do maior para o menor scoreRisco.",
+      ].join("\n");
+
+      const userPayload = "FATOS (JSON):\n" + JSON.stringify({
+        veiculos: topVeic.map((v: any) => ({
+          placa: v.placa, modelo: v.modelo, marca: v.marca, tipo: v.tipo, ano: v.ano,
+          status: v.status, kmAtual: v.kmAtual, valorFipe: v.valorFipe, valorCompra: v.valorCompra,
+          osTotal: v.osTotal, corretivas: v.corretivas, preventivas: v.preventivas, pctCorretiva: v.pctCorretiva,
+          custoManutencaoTotal: v.custoTotal, custoManutencao12m: v.custo12m,
+          custoManutencao12mSobreValorPct: v.custoSobreValorPct,
+          qtdPecasRecorrentes: v.pecasRecorrentes, qtdPecasRecorrentesIntervaloCurto: v.pecasRecorrentesCurtas,
+        })),
+        pecasRecorrentes: topRecorr.map((r: any) => ({
+          placa: r.placa, peca: r.peca, trocas: r.trocas,
+          menorIntervaloDias: r.menorIntervaloDias, intervaloMedioDias: r.intervaloMedioDias,
+          menorIntervaloKm: r.menorIntervaloKm, custoTotal: r.custoTotal,
+        })),
+      });
+
+      const stripFences = (s: string) => {
+        let t = (s || "").trim();
+        if (t.startsWith("```")) t = t.replace(/^```[a-zA-Z]*\s*/, "").replace(/```\s*$/, "").trim();
+        return t;
+      };
+
+      let ia: any = null;
+      let erro: string | null = null;
+      try {
+        const result = await invokeLLM({
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: userPayload },
+          ],
+          maxTokens: 6000,
+          response_format: { type: "json_object" },
+        });
+        const raw = result.choices?.[0]?.message?.content;
+        const txt = typeof raw === "string" ? raw : Array.isArray(raw) ? raw.map((p: any) => (typeof p === "string" ? p : p?.text ?? "")).join("") : "";
+        const parsed = JSON.parse(stripFences(txt));
+
+        // SANITIZAÇÃO "facts-only": a IA só pode falar de placas que existem nos
+        // fatos determinísticos. Descarta entradas com placa inventada, normaliza
+        // o enum de recomendação e faz clamp do scoreRisco em 0..100.
+        const placasValidas = new Set<string>(
+          veiculos.map((v: any) => String(v.placa ?? "").trim().toUpperCase()).filter((p: string) => p !== "")
+        );
+        const normRec = (r: any): "VENDER" | "OBSERVAR" | "MANTER" => {
+          const u = String(r ?? "").trim().toUpperCase();
+          return u === "VENDER" || u === "OBSERVAR" || u === "MANTER" ? u : "OBSERVAR";
+        };
+        const clampScore = (n: any): number => {
+          const x = Number(n);
+          if (!Number.isFinite(x)) return 0;
+          return Math.max(0, Math.min(100, Math.round(x)));
+        };
+        const placaOk = (p: any) =>
+          placasValidas.size === 0 || placasValidas.has(String(p ?? "").trim().toUpperCase());
+
+        const veiculosIa = Array.isArray(parsed?.veiculos)
+          ? parsed.veiculos
+              .filter((v: any) => placaOk(v?.placa))
+              .map((v: any) => ({
+                placa: String(v?.placa ?? "").trim(),
+                recomendacao: normRec(v?.recomendacao),
+                scoreRisco: clampScore(v?.scoreRisco),
+                justificativa: String(v?.justificativa ?? ""),
+                sinais: Array.isArray(v?.sinais) ? v.sinais.map((s: any) => String(s)).slice(0, 12) : [],
+                acao: String(v?.acao ?? ""),
+              }))
+              .sort((a: any, b: any) => b.scoreRisco - a.scoreRisco)
+          : [];
+
+        const pecasCriticasIa = Array.isArray(parsed?.pecasCriticas)
+          ? parsed.pecasCriticas
+              .filter((p: any) => placaOk(p?.placa))
+              .map((p: any) => ({
+                placa: String(p?.placa ?? "").trim(),
+                peca: String(p?.peca ?? ""),
+                motivo: String(p?.motivo ?? ""),
+              }))
+          : [];
+
+        ia = {
+          resumoExecutivo: String(parsed?.resumoExecutivo ?? ""),
+          veiculos: veiculosIa,
+          pecasCriticas: pecasCriticasIa,
+          recomendacoesGerais: Array.isArray(parsed?.recomendacoesGerais)
+            ? parsed.recomendacoesGerais.map((s: any) => String(s)).slice(0, 20)
+            : [],
+        };
+      } catch (err: any) {
+        const msg = String(err?.message ?? "");
+        erro = (msg.includes("não configurada") || msg.includes("not configured") || msg.includes("Nenhuma chave"))
+          ? "IA indisponível: nenhuma chave de IA configurada no projeto. A análise determinística (peças recorrentes) continua disponível abaixo."
+          : `Falha ao gerar o parecer da IA: ${msg.slice(0, 160) || "erro desconhecido"}. A análise determinística continua disponível abaixo.`;
+      }
+
+      return { geradoEm, metrics: { recorrencias, veiculos }, ia, erro };
+    }),
+
   // Rev. 1881 — Dashboard dedicado de COMBUSTÍVEL. KPIs gerais, evolução
   // mensal (litros + R$), por veículo (com consumo km/L derivado de km_atual),
   // por motorista (ranking), por posto e por tipo de combustível.
