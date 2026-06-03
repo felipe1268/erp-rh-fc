@@ -525,7 +525,7 @@ export default function Veiculos() {
         <input type="file" accept="image/*" ref={dialogPhotoRef} className="hidden" onChange={handlePhotoChange} />
 
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-          <DialogContent className="w-screen h-screen max-w-none max-h-none m-0 rounded-none overflow-y-auto p-0 bg-muted/30" resizable={false} showCloseButton={false}>
+          <DialogContent className="w-screen h-screen max-w-none max-h-none m-0 rounded-none overflow-y-auto p-0 bg-white" resizable={false} showCloseButton={false}>
             <div className="sticky top-0 z-10 bg-background/95 backdrop-blur border-b px-4 md:px-6 py-3.5 flex items-center justify-between gap-3">
               <div className="flex items-center gap-3 min-w-0">
                 <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">

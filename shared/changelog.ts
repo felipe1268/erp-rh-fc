@@ -1,6 +1,20 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2708 — **FROTA · EDITAR/NOVO VEÍCULO (`/frotas` → "Veículos" → abrir/novo) · O DIÁLOGO EM TELA
+ * CHEIA DEIXOU DE TER FUNDO ACINZENTADO/TRANSLÚCIDO (`bg-muted/30`) E PASSOU A TER FUNDO BRANCO SÓLIDO,
+ * COMO O USUÁRIO PEDIU.**
+ *
+ * PEDIDO (usuário, print IMG_1517 do diálogo "Editar Veículo" do BYD Song Plus): "Não quero a tela
+ * transparente, quero ela full screen e fundo branco". O diálogo já era full screen (`w-screen
+ * h-screen`), mas o container usava `bg-muted/30` (cinza translúcido) deixando os cards "flutuando"
+ * sobre um fundo acinzentado.
+ *
+ * SOLUÇÃO (SÓ CLIENT/UI; ZERO SERVER/SCHEMA — R-001/R-007/R-010): `client/src/pages/frotas/Veiculos.tsx`
+ * — no `<DialogContent>` do Editar/Novo Veículo, a classe `bg-muted/30` virou `bg-white`. Nenhuma outra
+ * mudança (header, seções em cards, campos e handlers intactos). VALIDAÇÃO: parse esbuild do TSX EXIT 0.
+ * version.ts=2708.
+ *
  * Rev. 2707 — **FROTA · DASHBOARD DE MANUTENÇÃO (`/frotas` → "Manutenções" → "Dashboard") · NOVA
  * SEÇÃO "ANÁLISE INTELIGENTE (IA)" QUE CRUZA AS PEÇAS TROCADAS PROCURANDO PEÇAS QUE SE REPETEM EM
  * POUCO TEMPO NO MESMO VEÍCULO (SINAL DE PROBLEMA CRÔNICO / RALO DE DINHEIRO) E GERA, COM IA, UM
