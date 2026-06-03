@@ -525,83 +525,110 @@ export default function Veiculos() {
         <input type="file" accept="image/*" ref={dialogPhotoRef} className="hidden" onChange={handlePhotoChange} />
 
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-          <DialogContent className="w-screen h-screen max-w-none max-h-none m-0 rounded-none overflow-y-auto p-0" resizable={false} showCloseButton={false}>
-            <div className="sticky top-0 z-10 bg-background border-b px-6 py-4 flex items-center justify-between">
-              <DialogTitle className="text-xl font-bold">{editing ? "Editar Veículo" : "Novo Veículo"}</DialogTitle>
-              <div className="flex gap-2">
-                <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
+          <DialogContent className="w-screen h-screen max-w-none max-h-none m-0 rounded-none overflow-y-auto p-0 bg-muted/30" resizable={false} showCloseButton={false}>
+            <div className="sticky top-0 z-10 bg-background/95 backdrop-blur border-b px-4 md:px-6 py-3.5 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+                  <Car className="h-5 w-5 text-primary" />
+                </div>
+                <div className="min-w-0">
+                  <DialogTitle className="text-lg font-bold leading-tight truncate">{editing ? "Editar Veículo" : "Novo Veículo"}</DialogTitle>
+                  <p className="text-xs text-muted-foreground truncate">{editing ? "Atualize os dados do veículo" : "Preencha os dados para cadastrar"}</p>
+                </div>
+              </div>
+              <div className="flex gap-2 shrink-0">
+                <Button variant="outline" onClick={() => setDialogOpen(false)}><X className="h-4 w-4 mr-1" />Cancelar</Button>
                 <Button onClick={save} disabled={createMut.isPending || updateMut.isPending}>
-                  {(createMut.isPending || updateMut.isPending) ? "Salvando..." : "Salvar"}
+                  {(createMut.isPending || updateMut.isPending) ? <><Loader2 className="h-4 w-4 mr-1 animate-spin" />Salvando...</> : <><CheckCircle2 className="h-4 w-4 mr-1" />Salvar</>}
                 </Button>
               </div>
             </div>
 
-            <div className="px-6 md:px-8 py-6 w-full max-w-[1400px] mx-auto space-y-5">
-              <div className="rounded-xl border bg-card p-5 flex flex-col md:flex-row gap-6">
-                <div
-                  className="w-full md:w-72 h-52 flex-shrink-0 bg-muted rounded-xl flex items-center justify-center overflow-hidden relative group cursor-pointer border-2 border-dashed border-muted-foreground/20 hover:border-primary/40 transition-colors"
-                  onClick={handleDialogPhotoClick}
-                  title="Clique para alterar a foto"
-                >
-                  {form.fotoUrl ? (
-                    <img src={form.fotoUrl} alt="Foto do veículo" className="w-full h-full object-cover rounded-xl" />
-                  ) : (
-                    <div className="flex flex-col items-center gap-2 text-muted-foreground">
-                      <Camera className="h-8 w-8" />
-                      <span className="text-xs">Clique para adicionar foto</span>
-                    </div>
-                  )}
-                  <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity rounded-xl flex items-center justify-center">
-                    <div className="flex flex-col items-center gap-1 text-white">
-                      <Camera className="h-6 w-6" />
-                      <span className="text-xs font-medium">Alterar Foto</span>
-                    </div>
+            <div className="px-4 md:px-8 py-6 w-full max-w-[1080px] mx-auto space-y-5">
+              {/* Aviso de cadastro incompleto no TOPO — facilita o preenchimento */}
+              {editing && pendingIds.has(editing.id) && (
+                <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 flex items-start gap-3">
+                  <AlertTriangle className="h-5 w-5 text-amber-500 shrink-0 mt-0.5" />
+                  <div>
+                    <span className="font-semibold text-amber-800">Cadastro incompleto</span>
+                    <p className="text-sm text-amber-700">Campos faltantes: <strong>{(pendingMap.get(editing.id) || []).join(", ")}</strong></p>
+                    <p className="text-xs text-amber-600 mt-0.5">Preencha os campos abaixo e salve para poder consolidar o cadastro.</p>
                   </div>
-                  {uploadPhotoMut.isPending && editing && photoTargetId === editing.id && (
-                    <div className="absolute inset-0 bg-black/60 rounded-xl flex items-center justify-center">
-                      <div className="w-8 h-8 border-3 border-white border-t-transparent rounded-full animate-spin" />
-                    </div>
-                  )}
                 </div>
+              )}
 
-                <div className="flex-1 space-y-1">
-                  <h3 className="flex items-center gap-1.5 text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3"><Car className="h-4 w-4 text-primary" />Identificação</h3>
-                  <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-8 gap-x-4 gap-y-3">
+              {/* Identificação */}
+              <div className="rounded-2xl border bg-card shadow-sm p-5 md:p-6">
+                <div className="flex items-center gap-3 mb-5">
+                  <div className="h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0"><Car className="h-5 w-5 text-primary" /></div>
+                  <div>
+                    <h3 className="text-sm font-semibold text-foreground">Identificação</h3>
+                    <p className="text-xs text-muted-foreground">Dados principais do veículo</p>
+                  </div>
+                </div>
+                <div className="flex flex-col md:flex-row gap-6">
+                  <div
+                    className="w-full md:w-60 h-48 flex-shrink-0 bg-muted rounded-xl flex items-center justify-center overflow-hidden relative group cursor-pointer border-2 border-dashed border-muted-foreground/20 hover:border-primary/40 transition-colors"
+                    onClick={handleDialogPhotoClick}
+                    title="Clique para alterar a foto"
+                  >
+                    {form.fotoUrl ? (
+                      <img src={form.fotoUrl} alt="Foto do veículo" className="w-full h-full object-cover rounded-xl" />
+                    ) : (
+                      <div className="flex flex-col items-center gap-2 text-muted-foreground">
+                        <Camera className="h-8 w-8" />
+                        <span className="text-xs">Clique para adicionar foto</span>
+                      </div>
+                    )}
+                    <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity rounded-xl flex items-center justify-center">
+                      <div className="flex flex-col items-center gap-1 text-white">
+                        <Camera className="h-6 w-6" />
+                        <span className="text-xs font-medium">Alterar Foto</span>
+                      </div>
+                    </div>
+                    {uploadPhotoMut.isPending && editing && photoTargetId === editing.id && (
+                      <div className="absolute inset-0 bg-black/60 rounded-xl flex items-center justify-center">
+                        <div className="w-8 h-8 border-3 border-white border-t-transparent rounded-full animate-spin" />
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-4 gap-y-4">
                     <div>
-                      <Label className="text-xs text-muted-foreground">Tipo *</Label>
+                      <Label className="text-xs font-medium text-foreground/80 mb-1.5 block">Tipo <span className="text-red-500">*</span></Label>
                       <Select value={form.tipoVeiculo || ""} onValueChange={v => setForm({ ...form, tipoVeiculo: v })}>
-                        <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                        <SelectTrigger className="h-10"><SelectValue placeholder="Selecione..." /></SelectTrigger>
                         <SelectContent>{TIPOS.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
                       </Select>
                     </div>
                     <div>
-                      <Label className="text-xs text-muted-foreground">Placa</Label>
-                      <Input className="h-9 font-mono" value={form.placa || ""} onChange={e => setForm({ ...form, placa: e.target.value.toUpperCase() })} maxLength={10} />
+                      <Label className="text-xs font-medium text-foreground/80 mb-1.5 block">Modelo <span className="text-red-500">*</span></Label>
+                      <Input className="h-10" placeholder="Ex.: JCB 3CX" value={form.modelo || ""} onChange={e => setForm({ ...form, modelo: e.target.value })} />
                     </div>
                     <div>
-                      <Label className="text-xs text-muted-foreground">Modelo *</Label>
-                      <Input className="h-9" value={form.modelo || ""} onChange={e => setForm({ ...form, modelo: e.target.value })} />
+                      <Label className="text-xs font-medium text-foreground/80 mb-1.5 block">Marca</Label>
+                      <Input className="h-10" placeholder="Ex.: JCB" value={form.marca || ""} onChange={e => setForm({ ...form, marca: e.target.value })} />
                     </div>
                     <div>
-                      <Label className="text-xs text-muted-foreground">Marca</Label>
-                      <Input className="h-9" value={form.marca || ""} onChange={e => setForm({ ...form, marca: e.target.value })} />
+                      <Label className="text-xs font-medium text-foreground/80 mb-1.5 block">Placa</Label>
+                      <Input className="h-10 font-mono" placeholder="Sem placa? deixe vazio" value={form.placa || ""} onChange={e => setForm({ ...form, placa: e.target.value.toUpperCase() })} maxLength={10} />
                     </div>
                     <div>
-                      <Label className="text-xs text-muted-foreground">Ano Fab.</Label>
-                      <Input className="h-9" value={form.anoFabricacao || ""} onChange={e => setForm({ ...form, anoFabricacao: e.target.value })} maxLength={4} />
+                      <Label className="text-xs font-medium text-foreground/80 mb-1.5 block">Ano Fab.</Label>
+                      <Input className="h-10" placeholder="2024" value={form.anoFabricacao || ""} onChange={e => setForm({ ...form, anoFabricacao: e.target.value })} maxLength={4} />
                     </div>
                     <div>
-                      <Label className="text-xs text-muted-foreground">Ano Modelo</Label>
-                      <Input className="h-9" value={form.anoModelo || ""} onChange={e => setForm({ ...form, anoModelo: e.target.value })} maxLength={4} />
+                      <Label className="text-xs font-medium text-foreground/80 mb-1.5 block">Ano Modelo</Label>
+                      <Input className="h-10" placeholder="2024" value={form.anoModelo || ""} onChange={e => setForm({ ...form, anoModelo: e.target.value })} maxLength={4} />
                     </div>
                     <div>
-                      <Label className="text-xs text-muted-foreground">Cor</Label>
-                      <Input className="h-9" value={form.cor || ""} onChange={e => setForm({ ...form, cor: e.target.value })} />
+                      <Label className="text-xs font-medium text-foreground/80 mb-1.5 block">Cor</Label>
+                      <Input className="h-10" placeholder="Ex.: Amarela" value={form.cor || ""} onChange={e => setForm({ ...form, cor: e.target.value })} />
                     </div>
-                    <div>
-                      <Label className="text-xs text-muted-foreground">Status</Label>
+                    <div className="sm:col-span-2">
+                      <Label className="text-xs font-medium text-foreground/80 mb-1.5 block">Status</Label>
                       <Select value={form.statusVeiculo || "Ativo"} onValueChange={v => setForm({ ...form, statusVeiculo: v })}>
-                        <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                        <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
                         <SelectContent>{STATUS.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
                       </Select>
                     </div>
@@ -609,97 +636,121 @@ export default function Veiculos() {
                 </div>
               </div>
 
-              <div className="rounded-xl border bg-card p-5">
-                <h3 className="flex items-center gap-1.5 text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3"><FileText className="h-4 w-4 text-blue-600" />Documentação</h3>
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-x-4 gap-y-3">
+              {/* Documentação */}
+              <div className="rounded-2xl border bg-card shadow-sm p-5 md:p-6">
+                <div className="flex items-center gap-3 mb-5">
+                  <div className="h-9 w-9 rounded-lg bg-blue-500/10 flex items-center justify-center shrink-0"><FileText className="h-5 w-5 text-blue-600" /></div>
                   <div>
-                    <Label className="text-xs text-muted-foreground">RENAVAM</Label>
-                    <Input className="h-9 font-mono" value={form.renavam || ""} onChange={e => setForm({ ...form, renavam: e.target.value })} />
+                    <h3 className="text-sm font-semibold text-foreground">Documentação</h3>
+                    <p className="text-xs text-muted-foreground">RENAVAM, chassi, quilometragem e vencimentos</p>
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-4 gap-y-4">
+                  <div>
+                    <Label className="text-xs font-medium text-foreground/80 mb-1.5 block">RENAVAM</Label>
+                    <Input className="h-10 font-mono" placeholder="Não se aplica? deixe vazio" value={form.renavam || ""} onChange={e => setForm({ ...form, renavam: e.target.value })} />
                   </div>
                   <div>
-                    <Label className="text-xs text-muted-foreground">Chassi</Label>
-                    <Input className="h-9 font-mono text-xs" value={form.chassi || ""} onChange={e => setForm({ ...form, chassi: e.target.value })} />
+                    <Label className="text-xs font-medium text-foreground/80 mb-1.5 block">Chassi</Label>
+                    <Input className="h-10 font-mono text-xs" placeholder="Opcional" value={form.chassi || ""} onChange={e => setForm({ ...form, chassi: e.target.value })} />
                   </div>
                   <div>
-                    <Label className="text-xs text-muted-foreground">KM Atual</Label>
-                    <Input className="h-9" type="number" value={form.kmAtual || ""} onChange={e => setForm({ ...form, kmAtual: e.target.value })} />
+                    <Label className="text-xs font-medium text-foreground/80 mb-1.5 block">KM Atual</Label>
+                    <Input className="h-10" type="number" placeholder="0" value={form.kmAtual || ""} onChange={e => setForm({ ...form, kmAtual: e.target.value })} />
                   </div>
                   <div>
-                    <Label className="text-xs text-muted-foreground">Responsável</Label>
-                    <Input className="h-9" value={form.responsavel || ""} onChange={e => setForm({ ...form, responsavel: e.target.value })} />
+                    <Label className="text-xs font-medium text-foreground/80 mb-1.5 block">Responsável</Label>
+                    <Input className="h-10" value={form.responsavel || ""} onChange={e => setForm({ ...form, responsavel: e.target.value })} />
                   </div>
                   <div>
-                    <Label className="text-xs text-muted-foreground">Vencimento CRLV</Label>
-                    <Input className="h-9" type="date" value={form.crlvVencimento || ""} onChange={e => setForm({ ...form, crlvVencimento: e.target.value })} />
+                    <Label className="text-xs font-medium text-foreground/80 mb-1.5 block">Vencimento CRLV</Label>
+                    <Input className="h-10" type="date" value={form.crlvVencimento || ""} onChange={e => setForm({ ...form, crlvVencimento: e.target.value })} />
                   </div>
                   <div>
-                    <Label className="text-xs text-muted-foreground">Vencimento Seguro</Label>
-                    <Input className="h-9" type="date" value={form.seguroVencimento || ""} onChange={e => setForm({ ...form, seguroVencimento: e.target.value })} />
+                    <Label className="text-xs font-medium text-foreground/80 mb-1.5 block">Vencimento Seguro</Label>
+                    <Input className="h-10" type="date" value={form.seguroVencimento || ""} onChange={e => setForm({ ...form, seguroVencimento: e.target.value })} />
                   </div>
                 </div>
               </div>
 
-              <div className="rounded-xl border bg-card p-5">
-                <h3 className="flex items-center gap-1.5 text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-1"><User className="h-4 w-4 text-amber-600" />Motorista / Condutor</h3>
-                <p className="text-xs text-muted-foreground mb-3">Indique o motorista que conduz este veículo — mesmo que não seja funcionário cadastrado. Usado para facilitar o controle e preencher o Diário de Obra automaticamente.</p>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-x-4 gap-y-3">
+              {/* Motorista / Condutor */}
+              <div className="rounded-2xl border bg-card shadow-sm p-5 md:p-6">
+                <div className="flex items-center gap-3 mb-2">
+                  <div className="h-9 w-9 rounded-lg bg-amber-500/10 flex items-center justify-center shrink-0"><User className="h-5 w-5 text-amber-600" /></div>
+                  <div>
+                    <h3 className="text-sm font-semibold text-foreground">Motorista / Condutor</h3>
+                    <p className="text-xs text-muted-foreground">Mesmo que não seja funcionário cadastrado — autopreenche o Diário de Obra</p>
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-x-4 gap-y-4 mt-3">
                   <div className="md:col-span-2">
-                    <Label className="text-xs text-muted-foreground">Nome do motorista</Label>
-                    <Input className="h-9" placeholder="Ex.: João da Silva (terceiro / não funcionário)" value={form.motoristaPadrao || ""} onChange={e => setForm({ ...form, motoristaPadrao: e.target.value })} />
+                    <Label className="text-xs font-medium text-foreground/80 mb-1.5 block">Nome do motorista</Label>
+                    <Input className="h-10" placeholder="Ex.: João da Silva (terceiro / não funcionário)" value={form.motoristaPadrao || ""} onChange={e => setForm({ ...form, motoristaPadrao: e.target.value })} />
                   </div>
                   <div>
-                    <Label className="text-xs text-muted-foreground">Motorista desde</Label>
-                    <Input className="h-9" type="date" value={form.motoristaPadraoInicio || ""} onChange={e => setForm({ ...form, motoristaPadraoInicio: e.target.value })} />
-                  </div>
-                </div>
-              </div>
-
-              <div className="rounded-xl border bg-card p-5">
-                <h3 className="flex items-center gap-1.5 text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3"><DollarSign className="h-4 w-4 text-emerald-600" />Financeiro</h3>
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-x-4 gap-y-3">
-                  <div>
-                    <Label className="text-xs text-muted-foreground">Data Aquisição</Label>
-                    <Input className="h-9" type="date" value={form.dataAquisicao || ""} onChange={e => setForm({ ...form, dataAquisicao: e.target.value })} />
-                  </div>
-                  <div>
-                    <Label className="text-xs text-muted-foreground">Valor de Compra (R$)</Label>
-                    <MoneyInput className="h-9" value={form.valorCompra} onChange={v => setForm({ ...form, valorCompra: v })} />
-                  </div>
-                  <div>
-                    <Label className="text-xs text-muted-foreground">Depreciação (anos)</Label>
-                    <Input className="h-9" type="number" value={form.depreciacaoAnos || 5} onChange={e => setForm({ ...form, depreciacaoAnos: parseInt(e.target.value) || 5 })} />
+                    <Label className="text-xs font-medium text-foreground/80 mb-1.5 block">Motorista desde</Label>
+                    <Input className="h-10" type="date" value={form.motoristaPadraoInicio || ""} onChange={e => setForm({ ...form, motoristaPadraoInicio: e.target.value })} />
                   </div>
                 </div>
               </div>
 
-              <div className="rounded-xl border bg-card p-5">
-                <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">
-                  <DollarSign className="h-4 w-4 text-green-600 inline mr-1" />
-                  Consulta FIPE
-                </h3>
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-x-4 gap-y-3">
+              {/* Financeiro */}
+              <div className="rounded-2xl border bg-card shadow-sm p-5 md:p-6">
+                <div className="flex items-center gap-3 mb-5">
+                  <div className="h-9 w-9 rounded-lg bg-emerald-500/10 flex items-center justify-center shrink-0"><DollarSign className="h-5 w-5 text-emerald-600" /></div>
                   <div>
-                    <Label className="text-xs text-muted-foreground">Marca FIPE</Label>
+                    <h3 className="text-sm font-semibold text-foreground">Financeiro</h3>
+                    <p className="text-xs text-muted-foreground">Aquisição e depreciação</p>
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-x-4 gap-y-4">
+                  <div>
+                    <Label className="text-xs font-medium text-foreground/80 mb-1.5 block">Data Aquisição</Label>
+                    <Input className="h-10" type="date" value={form.dataAquisicao || ""} onChange={e => setForm({ ...form, dataAquisicao: e.target.value })} />
+                  </div>
+                  <div>
+                    <Label className="text-xs font-medium text-foreground/80 mb-1.5 block">Valor de Compra (R$)</Label>
+                    <MoneyInput className="h-10" value={form.valorCompra} onChange={v => setForm({ ...form, valorCompra: v })} />
+                  </div>
+                  <div>
+                    <Label className="text-xs font-medium text-foreground/80 mb-1.5 block">Depreciação (anos)</Label>
+                    <Input className="h-10" type="number" value={form.depreciacaoAnos || 5} onChange={e => setForm({ ...form, depreciacaoAnos: parseInt(e.target.value) || 5 })} />
+                  </div>
+                </div>
+              </div>
+
+              {/* Consulta FIPE */}
+              <div className="rounded-2xl border bg-card shadow-sm p-5 md:p-6">
+                <div className="flex items-center gap-3 mb-5">
+                  <div className="h-9 w-9 rounded-lg bg-green-500/10 flex items-center justify-center shrink-0"><DollarSign className="h-5 w-5 text-green-600" /></div>
+                  <div>
+                    <h3 className="text-sm font-semibold text-foreground">Consulta FIPE</h3>
+                    <p className="text-xs text-muted-foreground">Opcional — busca o valor de mercado</p>
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-x-4 gap-y-4">
+                  <div>
+                    <Label className="text-xs font-medium text-foreground/80 mb-1.5 block">Marca FIPE</Label>
                     <Select value={form.fipeCodigoMarca || ""} onValueChange={v => setForm({ ...form, fipeCodigoMarca: v, fipeCodigoModelo: "", fipeCodigoAno: "" })}>
-                      <SelectTrigger className="h-9"><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                      <SelectTrigger className="h-10"><SelectValue placeholder="Selecione..." /></SelectTrigger>
                       <SelectContent className="max-h-[300px]">
                         {(fipeMarcas.data || []).map((m: any) => <SelectItem key={m.codigo} value={String(m.codigo)}>{m.nome}</SelectItem>)}
                       </SelectContent>
                     </Select>
                   </div>
                   <div>
-                    <Label className="text-xs text-muted-foreground">Modelo FIPE</Label>
+                    <Label className="text-xs font-medium text-foreground/80 mb-1.5 block">Modelo FIPE</Label>
                     <Select value={form.fipeCodigoModelo || ""} onValueChange={v => setForm({ ...form, fipeCodigoModelo: v, fipeCodigoAno: "" })}>
-                      <SelectTrigger className="h-9"><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                      <SelectTrigger className="h-10"><SelectValue placeholder="Selecione..." /></SelectTrigger>
                       <SelectContent className="max-h-[300px]">
                         {(fipeModelos.data?.modelos || []).map((m: any) => <SelectItem key={m.codigo} value={String(m.codigo)}>{m.nome}</SelectItem>)}
                       </SelectContent>
                     </Select>
                   </div>
                   <div>
-                    <Label className="text-xs text-muted-foreground">Ano FIPE</Label>
+                    <Label className="text-xs font-medium text-foreground/80 mb-1.5 block">Ano FIPE</Label>
                     <Select value={form.fipeCodigoAno || ""} onValueChange={v => setForm({ ...form, fipeCodigoAno: v })}>
-                      <SelectTrigger className="h-9"><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                      <SelectTrigger className="h-10"><SelectValue placeholder="Selecione..." /></SelectTrigger>
                       <SelectContent>
                         {(fipeAnos.data || []).map((a: any) => <SelectItem key={a.codigo} value={a.codigo}>{a.nome}</SelectItem>)}
                       </SelectContent>
@@ -707,7 +758,7 @@ export default function Veiculos() {
                   </div>
                   {fipeValor.data && (
                     <div className="flex items-end">
-                      <div className="p-2 bg-green-50 rounded-lg border border-green-200 w-full">
+                      <div className="p-3 bg-green-50 rounded-lg border border-green-200 w-full">
                         <p className="text-xs text-muted-foreground">Valor FIPE</p>
                         <p className="text-green-700 font-bold">{fipeValor.data.Valor}</p>
                         <p className="text-[10px] text-muted-foreground">Ref: {fipeValor.data.MesReferencia}</p>
@@ -717,12 +768,22 @@ export default function Veiculos() {
                 </div>
               </div>
 
+              {/* Observações */}
+              <div className="rounded-2xl border bg-card shadow-sm p-5 md:p-6">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="h-9 w-9 rounded-lg bg-slate-500/10 flex items-center justify-center shrink-0"><StickyNote className="h-5 w-5 text-slate-500" /></div>
+                  <h3 className="text-sm font-semibold text-foreground">Observações</h3>
+                </div>
+                <Textarea rows={3} placeholder="Anotações sobre o veículo (opcional)" value={form.observacoes || ""} onChange={e => setForm({ ...form, observacoes: e.target.value })} />
+              </div>
+
+              {/* Validação / Consolidação de cadastro (somente edição) */}
               {editing && (
-                <div className="rounded-xl border bg-card p-5">
-                  <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">
-                    <CheckCircle2 className="h-4 w-4 text-cyan-600 inline mr-1" />
-                    Validação de Cadastro
-                  </h3>
+                <div className="rounded-2xl border bg-card shadow-sm p-5 md:p-6">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="h-9 w-9 rounded-lg bg-cyan-500/10 flex items-center justify-center shrink-0"><CheckCircle2 className="h-5 w-5 text-cyan-600" /></div>
+                    <h3 className="text-sm font-semibold text-foreground">Validação de Cadastro</h3>
+                  </div>
                   {pendingIds.has(editing.id) ? (
                     <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
                       <div className="flex items-center gap-2 mb-2">
@@ -735,7 +796,7 @@ export default function Veiculos() {
                       <p className="text-xs text-amber-600">Preencha os campos acima e salve para poder consolidar o cadastro.</p>
                     </div>
                   ) : (
-                    <div className="bg-green-50 border border-green-200 rounded-lg p-4 flex items-center justify-between">
+                    <div className="bg-green-50 border border-green-200 rounded-lg p-4 flex items-center justify-between gap-3 flex-wrap">
                       <div className="flex items-center gap-2">
                         <CheckCircle2 className="h-5 w-5 text-green-600" />
                         <div>
@@ -762,11 +823,6 @@ export default function Veiculos() {
                   )}
                 </div>
               )}
-
-              <div className="rounded-xl border bg-card p-5">
-                <h3 className="flex items-center gap-1.5 text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3"><StickyNote className="h-4 w-4 text-slate-500" />Observações</h3>
-                <Textarea className="mt-1" rows={3} value={form.observacoes || ""} onChange={e => setForm({ ...form, observacoes: e.target.value })} />
-              </div>
             </div>
           </DialogContent>
         </Dialog>

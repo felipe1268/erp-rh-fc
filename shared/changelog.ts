@@ -1,6 +1,31 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2706 — **FROTA · EDITAR/NOVO VEÍCULO (`/frotas` → "Veículos" → abrir/novo) · LAYOUT DO DIÁLOGO
+ * REDESENHADO PARA FICAR MAIS MODERNO E DE PREENCHIMENTO MAIS FÁCIL: HEADER COM CHIP DE ÍCONE +
+ * SUBTÍTULO, BOTÕES COM ÍCONES, CONTAINER MAIS ESTREITO/LEGÍVEL, SEÇÕES EM CARDS COM CHIP DE ÍCONE
+ * COLORIDO + SUBTÍTULO, INPUTS MAIORES (h-10) COM PLACEHOLDERS, CAMPOS OBRIGATÓRIOS COM ASTERISCO
+ * VERMELHO (TIPO* / MODELO*) E O AVISO DE "CADASTRO INCOMPLETO" MOVIDO PARA O TOPO.**
+ *
+ * PEDIDO (usuário, print IMG_1514 do diálogo "Editar Veículo" de uma máquina JCB): "Arrume o layout
+ * quero moderno e fácil cadastro". O diálogo antigo já era seccionado, mas usava grade muito densa
+ * (até 8 colunas espremidas na Identificação), labels minúsculas em maiúsculas, inputs h-9 e o aviso de
+ * campos faltantes ficava lá no fim — pouco intuitivo para quem cadastra.
+ *
+ * SOLUÇÃO (SÓ CLIENT/UI; ZERO SERVER/SCHEMA — R-001/R-007/R-010): `client/src/pages/frotas/Veiculos.tsx`
+ * — todo o bloco do `<Dialog>` de Editar/Novo Veículo foi reescrito mantendo TODOS os campos, handlers,
+ * refs e estado (handleDialogPhotoClick, uploadPhotoMut, consolidateRegMut, pendingIds/pendingMap,
+ * fipe*, MoneyInput): (1) header sticky com chip de ícone `Car` + subtítulo contextual e botões Cancelar
+ * (X) / Salvar (CheckCircle2 / Loader2); (2) container centralizado `max-w-[1080px]` sobre `bg-muted/30`
+ * (antes 1400px wide-spread); (3) aviso "Cadastro incompleto" duplicado no TOPO (logo após o header) p/
+ * o usuário ver de cara os campos faltantes; (4) cada seção virou card `rounded-2xl shadow-sm` com chip
+ * de ícone colorido (primary/azul/âmbar/esmeralda/verde/ciano/slate) + título em foreground + subtítulo;
+ * (5) inputs `h-10`, labels `font-medium` com placeholders úteis ("Sem placa? deixe vazio", "Ex.: JCB 3CX"
+ * etc.); (6) asterisco vermelho em Tipo* / Modelo*; (7) grades menos densas (`sm:grid-cols-2 lg:grid-cols-3 / 4`);
+ * (8) bloco "Validação de Cadastro" reordenado p/ o fim. Nenhum ícone novo (todos já importados de
+ * lucide-react). VALIDAÇÃO: `pnpm build` completo morre por contenção de memória com o workflow; parse via
+ * esbuild do arquivo alterado EXIT 0 (JSX/sintaxe ok). version.ts=2706.
+ *
  * Rev. 2705 — **FROTA · EDITAR/NOVO VEÍCULO (`/frotas` → "Veículos" → abrir/salvar) · CORRIGIDO O
  * ERRO DE VALIDAÇÃO "Não foi possível salvar: invalid_type expected string, received null" (path
  * placa/renavam/chassi) QUE BLOQUEAVA SALVAR VEÍCULOS SEM PLACA/RENAVAM/CHASSI — EX.: MÁQUINAS (JCB),
