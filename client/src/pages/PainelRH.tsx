@@ -1379,6 +1379,17 @@ function AvisoRescisaoDialog({ avisoId, onClose }: { avisoId: number | null; onC
     return 'Nenhuma';
   };
 
+  // Rótulo do aviso prévio indenizado: no aviso TRABALHADO só os dias proporcionais EXCEDENTES
+  // (diasExtrasAviso) são indenizados — os 30 dias-base foram trabalhados e pagos como salário
+  // normal. No INDENIZADO, todo o aviso (diasAvisoTotal) é indenizado. Antes o rótulo mostrava
+  // sempre diasAvisoTotal (ex.: "36 dias") mesmo quando o valor era só dos 6 dias excedentes.
+  const tipoAviso = String((aviso as any)?.tipo || '');
+  const avisoTrabalhado = tipoAviso.includes('trabalhado');
+  const diasAvisoIndenizadosLabel = (p: any) =>
+    avisoTrabalhado
+      ? `Aviso Prévio Indenizado — dias proporcionais (${p?.diasExtrasAviso ?? '?'} dias)`
+      : `Aviso Prévio Indenizado (${p?.diasAvisoTotal ?? p?.diasExtrasAviso ?? '?'} dias)`;
+
   // Build proventos rows
   const proventos: { label: string; value: string }[] = [];
   const descontos: { label: string; value: string }[] = [];
@@ -1400,7 +1411,7 @@ function AvisoRescisaoDialog({ avisoId, onClose }: { avisoId: number | null; onC
       proventos.push({ label: `13º Salário Proporcional (${previsao.meses13o || previsao.meses13 || '?'}/12 avos)${hasMedias13 ? ' ★' : ''}`, value: previsao.decimoTerceiroProporcional || previsao.decimoTerceiro });
     }
     if (parseFloat(previsao.avisoPrevioIndenizado || '0') > 0)
-      proventos.push({ label: `Aviso Prévio Indenizado (${previsao.diasAvisoTotal || previsao.diasExtrasAviso || '?'} dias)`, value: previsao.avisoPrevioIndenizado });
+      proventos.push({ label: diasAvisoIndenizadosLabel(previsao), value: previsao.avisoPrevioIndenizado });
     if (parseFloat(previsao.multaFGTS || '0') > 0)
       proventos.push({ label: 'Multa 40% FGTS', value: previsao.multaFGTS });
     if (parseFloat(previsao.vrProporcional || '0') > 0)
@@ -1446,7 +1457,7 @@ function AvisoRescisaoDialog({ avisoId, onClose }: { avisoId: number | null; onC
     if (num('vrProporcional') > 0)
       grupoA.push({ label: 'VR/VA Proporcional', value: previsao.vrProporcional });
     if (num('avisoPrevioIndenizado') > 0)
-      grupoB.push({ label: `Aviso Prévio Indenizado (${previsao.diasAvisoTotal || previsao.diasExtrasAviso || '?'} dias)`, value: previsao.avisoPrevioIndenizado });
+      grupoB.push({ label: diasAvisoIndenizadosLabel(previsao), value: previsao.avisoPrevioIndenizado });
     if (num('multaFGTS') > 0)
       grupoB.push({ label: 'Multa 40% FGTS', value: previsao.multaFGTS });
     if (fpProj > 0.005)
@@ -1460,8 +1471,10 @@ function AvisoRescisaoDialog({ avisoId, onClose }: { avisoId: number | null; onC
   const totalGrupoB = grupoB.reduce((s, r) => s + parseFloat(r.value || '0'), 0);
   const temProjecao = fpProj > 0.005 || d13Proj > 0.005;
 
-  // Helper to build proventos list from a previsao object (for comparativo)
-  const buildProventosFromPrevisao = (prev: any) => {
+  // Helper to build proventos list from a previsao object (for comparativo).
+  // `isTrabalhado` distingue o cenário simulado: no trabalhado só os dias proporcionais
+  // EXCEDENTES são indenizados; no indenizado, o aviso inteiro.
+  const buildProventosFromPrevisao = (prev: any, isTrabalhado = false) => {
     const items: { label: string; value: string }[] = [];
     if (parseFloat(prev.saldoSalario || '0') > 0)
       items.push({ label: `Saldo de Salário (${prev.diasTrabalhadosMes || '?'}d)`, value: prev.saldoSalario });
@@ -1474,7 +1487,7 @@ function AvisoRescisaoDialog({ avisoId, onClose }: { avisoId: number | null; onC
     if (parseFloat(prev.decimoTerceiroProporcional || '0') > 0)
       items.push({ label: `13º Prop. (${prev.meses13o}/12)`, value: prev.decimoTerceiroProporcional });
     if (parseFloat(prev.avisoPrevioIndenizado || '0') > 0)
-      items.push({ label: `Aviso Indenizado (${prev.diasAvisoTotal || prev.diasExtrasAviso || '?'}d)`, value: prev.avisoPrevioIndenizado });
+      items.push({ label: isTrabalhado ? `Aviso Prop. Indenizado (${prev.diasExtrasAviso ?? '?'}d)` : `Aviso Indenizado (${prev.diasAvisoTotal ?? prev.diasExtrasAviso ?? '?'}d)`, value: prev.avisoPrevioIndenizado });
     if (parseFloat(prev.multaFGTS || '0') > 0)
       items.push({ label: 'Multa 40% FGTS', value: prev.multaFGTS });
     if (parseFloat(prev.vrProporcional || '0') > 0)
@@ -1985,7 +1998,7 @@ function AvisoRescisaoDialog({ avisoId, onClose }: { avisoId: number | null; onC
                         </div>
                         <hr />
                         <div className="space-y-1">
-                          {buildProventosFromPrevisao(comparativo.trabalhado.previsao).map((item, i) => (
+                          {buildProventosFromPrevisao(comparativo.trabalhado.previsao, true).map((item, i) => (
                             <div key={i} className="flex justify-between text-[11px]">
                               <span className="text-muted-foreground">{item.label}</span>
                               <span className="font-medium text-green-700">R$ {fmt(item.value)}</span>

@@ -388,13 +388,21 @@ export function calcularRescisaoCompleta(params: {
   const decimoTerceiroProporcional = (baseFerias13 * meses13o) / 12;
 
   // 4b. SEPARAÇÃO GERENCIAL — incremento de férias/13º decorrente da PROJEÇÃO do aviso.
-  // Baseline = início do aviso (`dataDesligamento`), ou seja, o que já estava provisionado
-  // no momento da decisão de demitir. O que a projeção do aviso prévio adiciona (Súmula 371
-  // / OJ 82 TST projeta o término do contrato) é custo exclusivo da dispensa — no painel RH
-  // entra no "Grupo B" (custo adicional da demissão), não na provisão (Grupo A).
+  // O que a projeção do aviso prévio adiciona (Súmula 371 / OJ 82 TST projeta o término do
+  // contrato) é custo exclusivo da dispensa — no painel RH entra no "Grupo B" (custo adicional
+  // da demissão), não na provisão (Grupo A). O baseline ("o que já era competência") depende
+  // da MODALIDADE do aviso:
+  //   • INDENIZADO → baseline = INÍCIO do aviso (`dataDesligamento`). Nenhum dia é trabalhado;
+  //     TODO o período do aviso é projeção indenizada → vai pro Grupo B.
+  //   • TRABALHADO → baseline = FIM do aviso trabalhado (`dataFimAviso`). Os dias efetivamente
+  //     TRABALHADOS são competência REAL (Grupo A) e os avos ganhos nesse período NÃO são custo
+  //     da demissão; só a projeção dos dias proporcionais INDENIZADOS (do fim do aviso até a
+  //     projeção fim-de-mês) é custo adicional (Grupo B). Sem isso, avos ganhos trabalhando
+  //     eram indevidamente jogados no Grupo B (caso Myriélle: incremento caía p/ 0).
   // Usa a contagem CRUA de avos do período aquisitivo corrente (sem o atalho "ano completo →
   // 12/12" de `calcularMesesFeriasProporcionais`), pois aqui interessa quantos avos a JANELA
   // da projeção acrescentou, não o tratamento de período inteiro como proporcional.
+  const baselineProvisao = tipo.includes('trabalhado') ? dataFimAviso : dataDesligamento;
   const avosPeriodoCorrente = (adm: string, ref: string): number => {
     const m = calcularMesesServico(adm, ref);
     const a = new Date(adm + 'T00:00:00');
@@ -403,8 +411,8 @@ export function calcularRescisaoCompleta(params: {
     const dias = Math.floor((r.getTime() - ini.getTime()) / 86400000) + 1;
     return Math.min(12, Math.max(0, (m % 12) + (dias >= 15 ? 1 : 0)));
   };
-  const incAvosFerias = Math.max(0, avosPeriodoCorrente(dataAdmissao, dataProjecao) - avosPeriodoCorrente(dataAdmissao, dataDesligamento));
-  const incAvos13 = Math.max(0, meses13o - calcularMeses13o(dataAdmissao, dataDesligamento));
+  const incAvosFerias = Math.max(0, avosPeriodoCorrente(dataAdmissao, dataProjecao) - avosPeriodoCorrente(dataAdmissao, baselineProvisao));
+  const incAvos13 = Math.max(0, meses13o - calcularMeses13o(dataAdmissao, baselineProvisao));
   // Clamp ao valor exibido para garantir que o "Grupo A" (exibido − projeção) nunca fique negativo.
   const feriasProporcionalProjecao = Math.min(feriasProporcional, (baseFerias13 * incAvosFerias) / 12);
   const tercoConstitucionalProjecao = feriasProporcionalProjecao / 3;

@@ -1,6 +1,50 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2724 — **RH · RESCISÃO (Painel RH → funcionário em aviso → "Cálculos da Rescisão") · CORRIGE O
+ * TRATAMENTO DO AVISO PRÉVIO TRABALHADO: (1) RÓTULO DO "AVISO PRÉVIO INDENIZADO" PASSA A REFLETIR SÓ OS
+ * DIAS PROPORCIONAIS EXCEDENTES INDENIZADOS (ex.: 6) EM VEZ DO TOTAL DO AVISO (ex.: 36); (2) O INCREMENTO
+ * DA PROJEÇÃO (AVOS EXTRAS DE FÉRIAS/13º → GRUPO B) DEIXA DE INCLUIR OS DIAS EFETIVAMENTE TRABALHADOS, QUE
+ * SÃO COMPETÊNCIA REAL (GRUPO A).**
+ *
+ * PEDIDO/BUG (usuário, print da rescisão da Myriélle Fialho Borges Arcanjo): o aviso dela foi TRABALHADO
+ * (`empregador_trabalhado`), mas a tela mostrava "Aviso Prévio Indenizado (36 dias) R$ 332,31". O VALOR
+ * estava correto (R$ 332,31 ÷ R$ 55,38/dia = 6 dias = só os dias proporcionais EXCEDENTES, que são sempre
+ * indenizados mesmo no aviso trabalhado — Lei 12.506/2011), mas o RÓTULO "36 dias" estava enganoso. Além
+ * disso o usuário questionou se "não mudaríamos valores" no aviso trabalhado — e a separação Grupo A x B
+ * realmente mudava: o incremento da projeção estava jogando no Grupo B avos que foram ganhos TRABALHANDO.
+ *
+ * DIAGNÓSTICO (modelo de datas): no aviso TRABALHADO o empregado cumpre os 30 dias-base (competência real)
+ * e só os dias proporcionais excedentes (Lei 12.506) são INDENIZADOS e projetam o término (Súmula 371 / OJ
+ * 82 TST). Os TOTAIS de férias/13º NÃO mudam entre trabalhado e indenizado (mesma data de projeção fim-de-
+ * mês). O que muda é (a) o VALOR do aviso indenizado (trabalhado paga só os excedentes; indenizado paga o
+ * total) — isso já estava certo no server — e (b) a CLASSIFICAÇÃO A/B do incremento: o baseline "o que já
+ * era competência" deve ser o FIM do aviso trabalhado, não o início. Caso Myriélle: avos no fim do aviso
+ * (24/06) = 2 e na projeção (30/06) = 2 → incremento real da projeção = 0; as 2/12 de férias e 6/12 de 13º
+ * são 100% competência (Grupo A), e o Grupo B fica só com aviso (6 dias, R$ 332,31) + multa 40% FGTS.
+ *
+ * SOLUÇÃO (SERVER + CLIENT; ZERO SCHEMA — R-001/R-007/R-010 OK):
+ * - `server/utils/rescisaoCalc.ts` (`calcularRescisaoCompleta`) — o baseline do incremento passa a ser
+ *   ciente da MODALIDADE: `const baselineProvisao = tipo.includes('trabalhado') ? dataFimAviso :
+ *   dataDesligamento`. INDENIZADO segue usando o início do aviso (todo o período é projeção indenizada →
+ *   Grupo B); TRABALHADO usa o fim do aviso (os dias trabalhados são competência → Grupo A; só a projeção
+ *   dos dias proporcionais INDENIZADOS, do fim do aviso até a projeção fim-de-mês, é custo adicional). Tanto
+ *   `incAvosFerias` quanto `incAvos13` usam o mesmo `baselineProvisao`. Nenhum TOTAL muda — só a partição.
+ * - `client/src/pages/PainelRH.tsx` — novo helper `diasAvisoIndenizadosLabel(p)` (lê `aviso.tipo`): no aviso
+ *   trabalhado o rótulo vira "Aviso Prévio Indenizado — dias proporcionais (N dias)" usando `diasExtrasAviso`;
+ *   no indenizado mantém "Aviso Prévio Indenizado (N dias)" com `diasAvisoTotal`. Aplicado nos 2 locais do
+ *   render principal (lista de Proventos + Grupo B). O helper do comparativo `buildProventosFromPrevisao`
+ *   ganhou o parâmetro `isTrabalhado` (chamado `true` no cenário trabalhado, `false` no indenizado) para
+ *   rotular cada cenário com o nº de dias indenizados correto.
+ *
+ * VALIDAÇÃO: esbuild parse de `rescisaoCalc.ts` (server) + `PainelRH.tsx` (TSX) EXIT 0; `vitest
+ * server/rescisao.test.ts` 41/41 verde (nenhuma regressão nos cálculos-base).
+ *
+ * IMPACTO: rescisões com aviso TRABALHADO passam a (1) rotular o aviso indenizado com os dias proporcionais
+ * reais (não o total) e (2) classificar como "custo adicional da demissão" só a projeção dos dias
+ * indenizados — avos ganhos trabalhando voltam ao Grupo A (competência). Aviso INDENIZADO inalterado.
+ * Nenhum valor monetário total muda; é re-rotulagem + re-partição A/B.
+ *
  * Rev. 2723 — **RH · RESCISÃO (Painel RH → funcionário em aviso → "Cálculos da Rescisão" → aba "Detalhes da
  * Rescisão") · NOVO BLOCO "COMPOSIÇÃO DO CUSTO — PROVISIONADO x ADICIONAL DA DEMISSÃO": SEPARA AS VERBAS EM
  * 🟦 GRUPO A (JÁ ERA CUSTO DA EMPRESA / COMPETÊNCIA) x 🟥 GRUPO B (CUSTO ADICIONAL GERADO PELA DECISÃO DE
