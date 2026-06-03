@@ -8644,6 +8644,10 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt, hideFinanc
     const sinalTotal = Math.max(0, Math.min(sinalRaw, baseV));
     const hasSinalRow = sinalTotal > 0 && !!cfgDataInicioObra;
     const baseMedicoes = hasSinalRow ? baseV - sinalTotal : baseV;
+    // Rev. 2730: data de recebimento do SINAL. O sinal só é emitido após a assinatura do
+    // contrato (o cliente pode demorar até ~30 dias para enviá-lo) e a nota da medição do
+    // mês sai junto com a do sinal — logo NENHUMA medição pode ser recebida antes desta data.
+    const sinalDataRecebimento = hasSinalRow ? (cfgDataPrimeiroFat || cfgDataInicioObra) : null;
     let pctAcumAnterior = 0;
 
     // Range de meses vem de TODAS as atividades folha com datas (não apenas as que cruzam com orçamento)
@@ -8708,9 +8712,18 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt, hideFinanc
         const dow = dataRec.getDay();
         if (dow !== 0 && dow !== 6) restantes--;
       }
-      const dataRecebimentoPrev = `${dataRec.getFullYear()}-${String(dataRec.getMonth() + 1).padStart(2, "0")}-${String(dataRec.getDate()).padStart(2, "0")}`;
+      let dataRecebimentoPrev = `${dataRec.getFullYear()}-${String(dataRec.getMonth() + 1).padStart(2, "0")}-${String(dataRec.getDate()).padStart(2, "0")}`;
 
-      return { ...d, pct: pctAcum, pctMensal: 0, prevMedicao: +(cumVenda * escala).toFixed(2), medicaoBruta, retencao, descontoSinal, liquido, isSinalRow: false, dataRecebimentoPrev };
+      // Rev. 2730: trava o recebimento da medição em >= data do recebimento do sinal.
+      // Ex.: medição de junho concluída no fim do mês, mas o contrato (e o sinal) só sai
+      // em julho → a nota da medição só pode ser emitida/recebida junto com a do sinal.
+      let recebimentoTravadoSinal = false;
+      if (sinalDataRecebimento && dataRecebimentoPrev < sinalDataRecebimento) {
+        dataRecebimentoPrev = sinalDataRecebimento;
+        recebimentoTravadoSinal = true;
+      }
+
+      return { ...d, pct: pctAcum, pctMensal: 0, prevMedicao: +(cumVenda * escala).toFixed(2), medicaoBruta, retencao, descontoSinal, liquido, isSinalRow: false, dataRecebimentoPrev, recebimentoTravadoSinal };
     });
 
     // Linha sintética de Sinal/Mobilização
@@ -9913,7 +9926,11 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt, hideFinanc
                               <div className="text-[10px] text-violet-600">
                                 <p className="font-semibold">Prev:</p>
                                 <p>{new Date((r as any).dataRecebimentoPrev + "T12:00:00").toLocaleDateString("pt-BR")}</p>
-                                <p className="text-[9px] text-slate-400 mt-0.5">+{cfgPrazoRecDiasUteis}d.úteis</p>
+                                {(r as any).recebimentoTravadoSinal ? (
+                                  <p className="text-[9px] text-amber-500 mt-0.5" title="A medição só pode ser recebida junto ou após o recebimento do sinal (emitido após a assinatura do contrato).">aguarda sinal</p>
+                                ) : (
+                                  <p className="text-[9px] text-slate-400 mt-0.5">+{cfgPrazoRecDiasUteis}d.úteis</p>
+                                )}
                               </div>
                             ) : (
                               <span className="text-slate-300 text-[10px]">—</span>

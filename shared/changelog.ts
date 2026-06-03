@@ -1,6 +1,33 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2730 — **PLANEJAMENTO · DETALHE DO PROJETO · PREV. MEDIÇÃO ("Previsão de Medição — Por Avanço Físico") ·
+ * NENHUMA MEDIÇÃO PODE SER RECEBIDA ANTES DO RECEBIMENTO DO SINAL.**
+ *
+ * PEDIDO DO USUÁRIO: "as demais medições só podem acontecer junto ou após a data do recebimento do sinal. Às
+ * vezes o cliente demora até 30 dias para enviar o contrato, então o sinal só pode ser emitido após a assinatura
+ * do contrato; em alguns casos a medição é feita, mas precisa esperar o contrato sair para emitir a nota do sinal
+ * e da medição do mês. Por isso precisa ajustar a lógica da previsão da medição."
+ *
+ * CONTEXTO: a tela calcula, para cada competência mensal, a data prevista de RECEBIMENTO = dia de corte do mês
+ * + N dias úteis (`cfgPrazoRecDiasUteis`). A linha sintética de SINAL/Mobilização recebe na "Data Prev. Pagto do
+ * Sinal" (`cfgDataPrimeiroFat`) ou, na ausência, na "Data de Início do Projeto" (`cfgDataInicioObra`). Como o
+ * sinal só é emitido após a assinatura do contrato (que pode atrasar ~30 dias), uma medição de mês inicial podia
+ * ficar com data de recebimento ANTERIOR à do sinal — cenário impossível no faturamento real (a nota da medição
+ * sai junto com a do sinal).
+ *
+ * SOLUÇÃO (SÓ CLIENT/UI; ZERO SERVER/SCHEMA — R-001/R-007/R-010): `client/src/pages/planejamento/PlanejamentoDetalhe.tsx`,
+ * memo `previsoesMensais`. (1) Hoisteia `sinalDataRecebimento = hasSinalRow ? (cfgDataPrimeiroFat || cfgDataInicioObra) : null`
+ * antes do map de meses. (2) Para cada medição mensal, após computar `dataRecebimentoPrev` (corte + dias úteis),
+ * trava em `>= sinalDataRecebimento` (comparação de string ISO `YYYY-MM-DD`, cronológica); quando a data é
+ * empurrada, marca a flag `recebimentoTravadoSinal=true`. (3) Na coluna "Recebimento", a linha exibe "aguarda
+ * sinal" (âmbar, com tooltip) no lugar do "+Nd.úteis" quando a data foi travada. Não altera valores monetários,
+ * % de avanço, retenção, sinal nem a linha de liberação da retenção — apenas a DATA prevista de recebimento das
+ * medições que cairiam antes do sinal. Sem novas deps no useMemo (usa `cfgDataPrimeiroFat`/`cfgDataInicioObra`,
+ * já presentes).
+ *
+ * VALIDAÇÃO: Vite compila sem erro; esbuild server EXIT 0; `vitest server/rescisao.test.ts` 41/41 verde.
+ *
  * Rev. 2729 — **PLANEJAMENTO · DETALHE DO PROJETO · REMOVIDA A ABA "PREVISTO" (tela "Previsto (Manual)" — upload
  * manual de 1 XML do MS Project por semana).**
  *
