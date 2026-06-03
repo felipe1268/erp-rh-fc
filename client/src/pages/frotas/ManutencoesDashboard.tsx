@@ -10,7 +10,7 @@ import {
   Package, Settings, Users, Gauge, ArrowUpDown, ArrowUp, ArrowDown,
   Sparkles, Brain, Loader2, RefreshCw, ShieldCheck, ShieldAlert, Repeat, Lightbulb,
 } from "lucide-react";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, PieChart, Pie, Cell, ComposedChart, Line, Legend,
@@ -38,6 +38,26 @@ export default function ManutencoesDashboard() {
   const ai = aiMut.data;
   const aiMetrics = ai?.metrics;
   const aiParecer = ai?.ia as any;
+
+  // Barra de progresso (0-100%) durante a análise da IA. A chamada é única (sem
+  // eventos de progresso reais), então animamos até ~95% enquanto pendente e
+  // cravamos 100% ao concluir, para o usuário acompanhar o andamento.
+  const [aiProgress, setAiProgress] = useState(0);
+  useEffect(() => {
+    if (!aiMut.isPending) return;
+    setAiProgress(8);
+    const id = setInterval(() => {
+      setAiProgress((p) => {
+        if (p >= 95) return 95;
+        const inc = p < 45 ? 6 : p < 75 ? 3 : 1;
+        return Math.min(95, p + inc);
+      });
+    }, 450);
+    return () => clearInterval(id);
+  }, [aiMut.isPending]);
+  useEffect(() => {
+    if (!aiMut.isPending && (ai || aiMut.isError)) setAiProgress(100);
+  }, [aiMut.isPending, ai, aiMut.isError]);
 
   const recVeicByPlaca = useMemo(() => {
     const map: Record<string, any> = {};
@@ -223,7 +243,7 @@ export default function ManutencoesDashboard() {
                 className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-br from-violet-600 to-indigo-600 text-white text-sm font-semibold shadow-sm hover:from-violet-700 hover:to-indigo-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
               >
                 {aiMut.isPending
-                  ? <><Loader2 className="h-4 w-4 animate-spin" /> Analisando…</>
+                  ? <><Loader2 className="h-4 w-4 animate-spin" /> Analisando… {Math.round(aiProgress)}%</>
                   : ai
                     ? <><RefreshCw className="h-4 w-4" /> Atualizar análise</>
                     : <><Sparkles className="h-4 w-4" /> Gerar análise</>}
@@ -241,9 +261,21 @@ export default function ManutencoesDashboard() {
             )}
 
             {aiMut.isPending && (
-              <div className="flex flex-col items-center justify-center py-10 gap-3">
+              <div className="flex flex-col items-center justify-center py-10 gap-4">
                 <Loader2 className="h-8 w-8 animate-spin text-violet-500" />
                 <p className="text-sm text-muted-foreground">Cruzando o histórico de manutenções e consultando a IA…</p>
+                <div className="w-full max-w-md">
+                  <div className="mb-1.5 flex items-center justify-between">
+                    <span className="text-[11px] font-medium text-violet-700 dark:text-violet-300">Progresso da análise</span>
+                    <span className="text-sm font-bold tabular-nums text-violet-700 dark:text-violet-300">{Math.round(aiProgress)}%</span>
+                  </div>
+                  <div className="h-2.5 w-full overflow-hidden rounded-full bg-violet-100 dark:bg-violet-900/40">
+                    <div
+                      className="h-full rounded-full bg-gradient-to-r from-violet-500 to-indigo-600 transition-all duration-300 ease-out"
+                      style={{ width: `${aiProgress}%` }}
+                    />
+                  </div>
+                </div>
               </div>
             )}
 

@@ -1,6 +1,34 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2713 — **FROTA · DASHBOARD DE MANUTENÇÃO (`/frotas` → "Manutenções" → "Dashboard") · A "ANÁLISE
+ * INTELIGENTE (IA)" GANHOU UMA BARRA DE PROGRESSO DE 0 A 100% ENQUANTO PROCESSA, PARA O USUÁRIO
+ * ACOMPANHAR O ANDAMENTO.**
+ *
+ * PEDIDO (usuário, print IMG_1525): "Marca um percentual de 0 a 100% no avanço quero, acompanhar" — o
+ * card da IA ficava só com o spinner e o texto "Cruzando o histórico... e consultando a IA…", sem
+ * indicação de quanto falta.
+ *
+ * SOLUÇÃO (SÓ CLIENT/UI; ZERO SERVER/SCHEMA — R-001/R-007/R-010): `client/src/pages/frotas/
+ * ManutencoesDashboard.tsx`. Como `getMaintenanceAIAnalysis` é uma única chamada (mutation) que NÃO
+ * emite eventos de progresso reais, foi adicionado um progresso ANIMADO/ESTIMADO: estado `aiProgress`
+ * + `useEffect` que, enquanto `aiMut.isPending`, sobe de 8% até no máximo 95% num `setInterval` (passo
+ * que desacelera: +6 até 45%, +3 até 75%, +1 daí em diante) e crava 100% quando a análise conclui (ou
+ * erra). O bloco de loading mostra a barra (trilho `bg-violet-100` + preenchimento gradiente
+ * `from-violet-500 to-indigo-600` com `transition-all`) e o rótulo "Progresso da análise" com o "%"; o
+ * botão "Analisando…" também passa a exibir o "%". O interval é limpo no cleanup do efeito (sem leak).
+ * Nenhuma chamada, dado, query, gráfico ou tabela foi alterado.
+ *
+ * ARQUIVOS: `client/src/pages/frotas/ManutencoesDashboard.tsx` (import `useEffect`; estado/efeitos de
+ * `aiProgress`; barra no bloco `aiMut.isPending`; "%" no botão).
+ *
+ * VALIDAÇÃO: esbuild do TSX (client) EXIT 0.
+ *
+ * RESSALVA: o percentual é ESTIMATIVA visual de andamento (a chamada não reporta progresso real), então
+ * pode pausar em 95% até a IA responder e então pular para 100% — comportamento esperado.
+ *
+ * ----------------------------------------------------------------------------------------------------
+ *
  * Rev. 2712 — **FROTA · DASHBOARD DE MANUTENÇÃO (`/frotas` → "Manutenções" → "Dashboard") · (1)
  * CORRIGIDO O ERRO DA "ANÁLISE INTELIGENTE (IA)" ("Não foi possível concluir a análise: The string
  * did not match the expected pattern.") E (2) LAYOUT MODERNIZADO (HERO HEADER + KPIs).**
