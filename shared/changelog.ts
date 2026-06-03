@@ -1,6 +1,40 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2739 — **PLANEJAMENTO · PREVISÃO DE MEDIÇÃO (POR AVANÇO FÍSICO): A TABELA AGORA DEIXA EXPLÍCITO QUE "O QUE É
+ * PRODUZIDO NUM MÊS (COMPETÊNCIA) É RECEBIDO DEPOIS (mês seguinte)" — SEM PRECISAR ROLAR A TABELA PARA A DIREITA.**
+ *
+ * PEDIDO (relato + print no celular): "considerando isso o pagamento não será feito no primeiro mês de obra mas sim
+ * no próximo mês correto? ... o que produzimos no mês atual será pago no próximo mês em função da data de pagamento
+ * acordada com o cliente.. a tabela abaixo não mostra isso". O usuário escolheu a OPÇÃO 3 (de 3 oferecidas): melhorar
+ * o LAYOUT para deixar a relação produziu-em-X → recebe-em-Y fácil de entender.
+ *
+ * CONTEXTO: a relação JÁ EXISTIA no motor — a coluna "Recebimento" (`previsoesMensais`,
+ * `client/src/pages/planejamento/PlanejamentoDetalhe.tsx`) calcula a data prevista de entrada do dinheiro como
+ * `dia de corte (cfgDiaCorte) da competência + cfgPrazoRecDiasUteis dias úteis`, com a trava do sinal da Rev. 2730
+ * (recebimento nunca antes do sinal → `recebimentoTravadoSinal`). O problema era SÓ de APRESENTAÇÃO: "Recebimento" é
+ * a 9ª e última coluna da tabela e, no celular (print 768px), fica cortada fora da tela — o usuário não via que o
+ * recebimento caía no mês seguinte.
+ *
+ * SOLUÇÃO (SÓ CLIENT/UI; ZERO SERVER; ZERO SCHEMA; ZERO ALTER/DROP/DELETE — R-001/R-007/R-010; NÃO mexe em valores,
+ * %, retenção, sinal ou no cálculo da data — apenas exibição):
+ * (1) Na célula "Competência" (primeira coluna, SEMPRE visível sem rolar) de cada linha mensal normal, foi adicionado
+ *     um sub-rótulo compacto "→ recebe em mmm/aaaa" derivado de `dataRecebimentoPrev` (verde quando normal; âmbar +
+ *     "(aguarda sinal)" quando `recebimentoTravadoSinal`). Mês formatado via `toLocaleDateString("pt-BR",{month:"short"})`.
+ * (2) Cabeçalho da coluna passou a ser "Competência (produção)" para reforçar que aquela coluna é o mês de PRODUÇÃO,
+ *     não o de pagamento.
+ * (3) A legenda no rodapé da tabela ganhou uma linha explicando Competência (mês de produção/medição) × Recebimento
+ *     (entrada do dinheiro = corte no dia N + M dias úteis, normalmente no mês seguinte), citando dinamicamente
+ *     `cfgDiaCorte` e `cfgPrazoRecDiasUteis`.
+ *
+ * RESSALVA (PROIBIÇÃO DE CÁLCULO NO PLANEJAMENTO): a regra vale para os cards agregados de avanço (snapshot MSP). A
+ * tabela de Previsão de Medição é financeira/ERP (fora do XML) e já usa os useMemos legados — esta revisão apenas
+ * REUTILIZA o valor `dataRecebimentoPrev` já calculado, sem introduzir nenhum cálculo novo.
+ *
+ * VALIDAÇÃO: esbuild parse EXIT 0 (PlanejamentoDetalhe.tsx); `vitest server/rescisao.test.ts` 41/41 verde; app rodando
+ * sem erros (workflow Start application) e console limpo. Arquivos: `client/src/pages/planejamento/PlanejamentoDetalhe.tsx`,
+ * `shared/version.ts`.
+ *
  * Rev. 2738 — **RH · EPI · FICHA DE ENTREGA DE EPI · IMPRESSÃO (window.print): A FICHA AGORA SAI INTEIRA EM UMA
  * PÁGINA LIMPA (acabou a página 1 em branco com só "Controle de EPIs" e o conteúdo espremido/cortado em 3 páginas).**
  *

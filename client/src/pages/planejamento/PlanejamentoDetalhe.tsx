@@ -9768,7 +9768,7 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt, hideFinanc
                 <table className="w-full text-xs">
                   <thead>
                     <tr className="bg-slate-50 border-b border-slate-200 text-slate-600">
-                      <th className="py-2 px-3 text-left">Competência</th>
+                      <th className="py-2 px-3 text-left">Competência <span className="font-normal text-slate-400">(produção)</span></th>
                       <th className="py-2 px-3 text-right text-blue-700">% Acum.</th>
                       <th className="py-2 px-3 text-right">Medição Bruta</th>
                       <th className="py-2 px-3 text-right text-rose-700">− Ret. {cfgRetencaoPct}%</th>
@@ -9871,7 +9871,18 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt, hideFinanc
 
                       return (
                         <tr key={r.mes} className={`border-b border-slate-50 ${confirmado ? "!bg-emerald-50/60" : idx % 2 === 0 ? "bg-white" : "bg-slate-50/40"}`}>
-                          <td className="py-2 px-3 font-semibold text-slate-700 whitespace-nowrap">{r.nomeMes}</td>
+                          <td className="py-2 px-3 align-top">
+                            <span className="font-semibold text-slate-700 whitespace-nowrap">{r.nomeMes}</span>
+                            {temDados && (r as any).dataRecebimentoPrev && (() => {
+                              const _rd = new Date((r as any).dataRecebimentoPrev + "T12:00:00");
+                              const _lbl = `${_rd.toLocaleDateString("pt-BR", { month: "short" }).replace(".", "")}/${_rd.getFullYear()}`;
+                              return (
+                                <p className={`text-[9px] mt-0.5 leading-tight ${(r as any).recebimentoTravadoSinal ? "text-amber-600" : "text-emerald-600"}`}>
+                                  → recebe em {_lbl}{(r as any).recebimentoTravadoSinal ? " (aguarda sinal)" : ""}
+                                </p>
+                              );
+                            })()}
+                          </td>
                           <td className="py-2 px-3 text-right">
                             {temDados ? (
                               <div className="flex items-center justify-end gap-1.5">
@@ -9962,6 +9973,7 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt, hideFinanc
             </>
           )}
           <p className="text-[10px] text-slate-400 px-4 py-2 border-t border-slate-100">
+            * <strong className="text-slate-500">Competência</strong> = mês em que a obra é produzida/medida. O <strong className="text-emerald-600">recebimento</strong> (quando o dinheiro entra) cai depois: corte no dia {cfgDiaCorte || 30} + {cfgPrazoRecDiasUteis || 0} dia(s) úteis acordados — normalmente no mês seguinte (mostrado abaixo de cada competência e na coluna Recebimento).<br />
             * Medição Bruta = incremento mensal de avanço físico × saldo do contrato (após sinal) · Retenção ({cfgRetencaoPct}%) deduzida de cada medição e liberada no mês seguinte ao término.
           </p>
         </div>
