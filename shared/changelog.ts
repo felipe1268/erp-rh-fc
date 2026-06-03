@@ -1,6 +1,42 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2725 — **RH · RESCISÃO / HOME (Painel RH — card "Avisos Prévios em Andamento" x ficha "Cálculos da
+ * Rescisão") · CORRIGE A DIVERGÊNCIA DE VALORES: O CARD DA TELA INICIAL E O "TOTAL ESTIMADO DA RESCISÃO" DA
+ * FICHA MOSTRAVAM UM VALOR (PERSISTIDO/CONGELADO) DIFERENTE DO "SUBTOTAL PROVENTOS" (RECALCULADO AO VIVO).
+ * AGORA AS TRÊS SUPERFÍCIES USAM O MESMO RECÁLCULO EM TEMPO REAL.**
+ *
+ * PEDIDO/BUG (usuário, prints da Mariana Castilho de Lima): na tela inicial o card mostrava R$ 11.166,82,
+ * mas ao abrir a ficha de rescisão o "SUBTOTAL PROVENTOS" era R$ 19.391,67 (sem nenhum desconto) — valores
+ * "completamente diferentes". Causa-raiz: havia DUAS fontes de verdade. O `list` (página Aviso Prévio) e o
+ * `getById` JÁ recalculavam a previsão ao vivo (`calcularRescisaoCompleta`), de onde sai o SUBTOTAL PROVENTOS
+ * correto. Mas (a) o `getById` retornava `...row` com a COLUNA persistida `valorEstimadoTotal` intacta (nunca
+ * sobrescrita pelo recálculo) — alimentando o "TOTAL ESTIMADO DA RESCISÃO"; e (b) o `homeData` lia direto a
+ * mesma coluna persistida em `valorEstimado`/`saldoPendente`/"Desembolso pendente". Essa coluna só é
+ * regravada em create/update(recalcular)/recalcularTodos, então quando o salário/férias do funcionário mudam
+ * DEPOIS da criação do aviso (caso Mariana), ela fica defasada — daí o número velho menor.
+ *
+ * SOLUÇÃO (SÓ SERVER; ZERO SCHEMA — R-001/R-007/R-010 OK):
+ * - `server/routers/avisoPrevioFerias.ts` — (1) `diasFeriasNoMesDaSaida` passa a ser EXPORTADA p/ reuso;
+ *   (2) o `getById` agora inclui `valorEstimadoTotal: previsao.total` no objeto de retorno (DEPOIS dos
+ *   ajustes de Súmula 276 / FGTS real, que já mutam `previsao.total`), de modo que o "TOTAL ESTIMADO DA
+ *   RESCISÃO" passa a espelhar exatamente o SUBTOTAL PROVENTOS recalculado, em vez da coluna congelada.
+ * - `server/routers/homeData.ts` — importa `calcularRescisaoCompleta`/`parseBRL` (de `../utils/rescisaoCalc`)
+ *   e `diasFeriasNoMesDaSaida` (de `./avisoPrevioFerias`) e, antes de montar `avisosPrevios`, RECALCULA o
+ *   total de cada aviso ativo com a MESMA lógica do `list` (batch único de contagem de férias vencidas por
+ *   (employeeId, dataFim) + `diasTrabalhadosMes` descontando férias do mês da saída + `periodosVencidosOverride`).
+ *   O resultado vai p/ um `recomputedTotalMap` usado em `valorEstimado` e no `saldoPendente`/"Desembolso
+ *   pendente" (fallback p/ a coluna persistida se o recálculo falhar). Sem N+1 relevante: poucos avisos ativos.
+ *
+ * RESSALVA: o card da home usa o recálculo-BASE (igual ao `list`), sem os ajustes de Súmula 276/FGTS real que
+ * só o `getById` aplica — comportamento idêntico ao já existente na página Aviso Prévio. Para a Mariana (sem
+ * novo emprego / FGTS real) o card, o "TOTAL ESTIMADO" e o "SUBTOTAL PROVENTOS" convergem ao mesmo valor.
+ * Nenhuma coluna do banco é alterada (sem write-back): a correção é só de LEITURA/apresentação.
+ *
+ * VALIDAÇÃO: esbuild server (`server/_core/index.ts`) EXIT 0; `vitest server/rescisao.test.ts` 41/41 verde.
+ *
+ * ----------------------------------------------------------------------------------------------------------
+ *
  * Rev. 2724 — **RH · RESCISÃO (Painel RH → funcionário em aviso → "Cálculos da Rescisão") · CORRIGE O
  * TRATAMENTO DO AVISO PRÉVIO TRABALHADO: (1) RÓTULO DO "AVISO PRÉVIO INDENIZADO" PASSA A REFLETIR SÓ OS
  * DIAS PROPORCIONAIS EXCEDENTES INDENIZADOS (ex.: 6) EM VEZ DO TOTAL DO AVISO (ex.: 36); (2) O INCREMENTO

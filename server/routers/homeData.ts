@@ -5,6 +5,8 @@ import { employees, asos, warnings, processosTrabalhistas, obraSns, obras, vacat
 import { eq, and, sql, gte, lte, desc, inArray, isNull } from "drizzle-orm";
 import { resolveCompanyIds, companyFilter } from "../companyHelper";
 import { getCipaStatusByEmployeeIds, projectCipaFields } from "../_core/cipaStatus";
+import { calcularRescisaoCompleta, parseBRL } from "../utils/rescisaoCalc";
+import { diasFeriasNoMesDaSaida } from "./avisoPrevioFerias";
 
 // O driver pg retorna colunas date como objetos Date (não strings).
 // Drizzle's { mode: 'string' } não tem mapFromDriverValue, então passam como Date.
@@ -601,6 +603,63 @@ export const homeDataRouter = router({
           sql`${terminationNotices.deletedAt} IS NULL`,
         )) : [];
 
+      // Rev. 2725 — Recalcular o valor estimado da rescisão AO VIVO (mesma lógica do
+      // endpoint `list` e do `getById`), pois a coluna persistida `valorEstimadoTotal`
+      // fica defasada quando salário/férias do funcionário mudam depois da criação do
+      // aviso — o que fazia o card da home divergir do "TOTAL ESTIMADO" da ficha.
+      const recomputedTotalMap = new Map<number, number>();
+      if (avisosAtivos.length > 0) {
+        // Batch: contagem real de férias vencidas por (employeeId, dataFim)
+        const vpVencidasMap = new Map<string, number>();
+        try {
+          const pares = avisosAtivos
+            .filter(a => a.dataFim)
+            .map(a => sql`(${a.employeeId}, ${toDateStr(a.dataFim!)})`);
+          if (pares.length > 0) {
+            const vpCounts = ((await db.execute(sql`
+              SELECT p.emp_id, p.data_fim, COUNT(vp.*)::int AS total
+              FROM (VALUES ${sql.join(pares, sql`, `)}) AS p(emp_id, data_fim)
+              LEFT JOIN vacation_periods vp
+                ON vp."employeeId" = p.emp_id
+                AND vp.status NOT IN ('concluida', 'cancelada', 'em_gozo')
+                AND vp."periodoAquisitivoFim" IS NOT NULL
+                AND vp."periodoAquisitivoFim" < p.data_fim
+                AND (vp."dataPagamento" IS NULL OR vp."dataPagamento" > p.data_fim)
+                AND vp."deletedAt" IS NULL
+              GROUP BY p.emp_id, p.data_fim
+            `)) as any).rows || [];
+            for (const vc of vpCounts) vpVencidasMap.set(`${vc.emp_id}|${vc.data_fim}`, Number(vc.total));
+          }
+        } catch { /* fallback — usa valor armazenado */ }
+
+        for (const a of avisosAtivos) {
+          try {
+            const emp = allEmps.find(e => e.id === a.employeeId);
+            if (emp && a.dataFim) {
+              const dataFimStr = toDateStr(a.dataFim);
+              const dataAdmissao = emp.dataAdmissao || new Date().toISOString().split('T')[0];
+              const salarioBase = parseBRL(emp.salarioBase);
+              const dtFimAviso = new Date(dataFimStr + 'T00:00:00');
+              const diasFeriasMes = await diasFeriasNoMesDaSaida(db, a.employeeId, dataFimStr);
+              const diasTrabalhadosMes = Math.max(0, dtFimAviso.getDate() - diasFeriasMes);
+              const periodosVencidos = vpVencidasMap.get(`${a.employeeId}|${dataFimStr}`) ?? 0;
+              const previsao = calcularRescisaoCompleta({
+                salarioBase,
+                dataAdmissao,
+                dataDesligamento: toDateStr(a.dataInicio!),
+                dataFimAviso: dataFimStr,
+                tipo: a.tipo,
+                vrDiario: 0,
+                diasTrabalhadosMes,
+                periodosVencidosOverride: periodosVencidos,
+                descontarAvisoNaoCumprido: !!(a as any).descontarAvisoNaoCumprido,
+              });
+              recomputedTotalMap.set(a.id, parseFloat(previsao.total));
+            }
+          } catch { /* mantém valor armazenado para este aviso */ }
+        }
+      }
+
       const avisosPrevios = avisosAtivos.map(a => {
         const emp = allEmps.find(e => e.id === a.employeeId);
         const dataFimStr = toDateStr(a.dataFim!);
@@ -644,7 +703,7 @@ export const homeDataRouter = router({
         const baixaF = parseFloat(String((a as any).baixaFgtsValor ?? '0')) || 0;
         const baixaC = parseFloat(String((a as any).baixaComplementarValor ?? '0')) || 0;
         const valorPago = baixaR + baixaF + baixaC;
-        const valorEstimadoNum = parseFloat(String(a.valorEstimadoTotal ?? '0')) || 0;
+        const valorEstimadoNum = recomputedTotalMap.get(a.id) ?? (parseFloat(String(a.valorEstimadoTotal ?? '0')) || 0);
         const saldoPendente = Math.max(0, valorEstimadoNum - valorPago);
         return {
           id: a.id,
@@ -658,7 +717,7 @@ export const homeDataRouter = router({
           dataFim: dataFimStr,
           ultimoDiaTrabalhado: ultimoDiaTrabalhadoStr,
           diasRestantes,
-          valorEstimado: a.valorEstimadoTotal,
+          valorEstimado: (recomputedTotalMap.get(a.id) ?? (parseFloat(String(a.valorEstimadoTotal ?? '0')) || 0)).toFixed(2),
           valorPago: valorPago.toFixed(2),
           saldoPendente: saldoPendente.toFixed(2),
           baixaRescisaoValor: (a as any).baixaRescisaoValor || null,

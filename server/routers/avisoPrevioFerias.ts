@@ -166,7 +166,7 @@ function contarDomingos(ano: number, mes: number): number {
  * para descontar do "saldo de salário" da rescisão. Dias em férias são pagos
  * como férias/1-3, não como saldo de salário.
  */
-async function diasFeriasNoMesDaSaida(
+export async function diasFeriasNoMesDaSaida(
   db: any,
   employeeId: number,
   dataSaida: string, // YYYY-MM-DD
@@ -582,6 +582,11 @@ export const avisoPrevioFeriasRouter = router({
               employeeCtps: emp.ctps || '',
               employeeSerieCtps: emp.serieCtps || '',
               employeeDataAdmissao: emp.dataAdmissao || '',
+              // Rev. 2725 — O "TOTAL ESTIMADO DA RESCISÃO" deve refletir a previsão
+              // RECALCULADA ao vivo (igual ao SUBTOTAL PROVENTOS e ao endpoint `list`),
+              // e NÃO a coluna persistida `row.valorEstimadoTotal`, que fica defasada
+              // quando salário/férias mudam depois da criação do aviso.
+              valorEstimadoTotal: previsao.total,
               previsaoRescisao: JSON.stringify({ ...previsao, ...(descontosLegaisView || {}), dataAdmissao }),
               previsaoRescisaoComplementar: previsaoComplementarById ? JSON.stringify(previsaoComplementarById) : null,
             };
