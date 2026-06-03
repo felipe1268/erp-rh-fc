@@ -1,6 +1,40 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2719 — **FROTA · DASHBOARD DE MANUTENÇÃO (`/frotas` → "Manutenções" → "Dashboard") + LANÇAMENTO
+ * DE MANUTENÇÃO · (1) NOVO DASHBOARD DETERMINÍSTICO DE "PEÇAS RECORRENTES" (SEM IA, CARREGA DIRETO NO
+ * LOAD); E (2) ALERTA AUTOMÁTICO AO LANÇAR UMA PEÇA QUE JÁ FOI TROCADA NO MESMO VEÍCULO.**
+ *
+ * PEDIDO (usuário): além da análise IA (Rev. 2718, que depende de chamada ao LLM), queria visões
+ * RÁPIDAS e SEMPRE disponíveis sobre peças que se repetem (sem esperar IA), e um aviso na hora de lançar
+ * a manutenção quando aquela peça já tinha sido trocada naquele veículo (sinal de defeito crônico /
+ * retrabalho / custo recorrente).
+ *
+ * SOLUÇÃO (SERVER + 2 CLIENTS; ZERO SCHEMA — R-001/R-007/R-010 OK; só SELECT):
+ * - SERVER (`server/routers/frotas.ts`): 2 novas queries após `getMaintenanceDashboard`.
+ *   `getRecurringPartsDashboard({companyId, ano?})` — varre TODO o histórico de itens de manutenção
+ *   (categoria peça), normaliza o nome (LOWER/TRIM), agrupa por veículo+peça, conta trocas (≥2 =
+ *   recorrência), calcula menor intervalo (dias/km), intervalo médio (dias), custo acumulado, e devolve
+ *   agregados prontos: `kpi` (totalRecorrencias, criticas [menorIntervaloDias≤180], custo, veículos
+ *   afetados, peças distintas, total trocas), `topPorCusto`, `topPorFrequencia`, `porVeiculo`,
+ *   `pecasGlobais`, `distribuicaoIntervalo`. `getVehiclePartHistory({companyId, vehicleId})` — por peça
+ *   daquele veículo: trocas, última troca (data), últimoKm, menorIntervaloDias/Km, intervaloMedioDias,
+ *   custoTotal e `nomeNorm`. Ambas com guarda de empresa (FORBIDDEN).
+ * - DASHBOARD (`client/src/pages/frotas/ManutencoesDashboard.tsx`): query `getRecurringPartsDashboard`
+ *   (carrega no load, sem IA); derivados `recKpi/recTopCusto/recDist/recPorVeic/recPecasGlobais`; nova
+ *   seção "Peças Recorrentes" (banda de KPIs + BarChart top por custo + BarChart de distribuição de
+ *   intervalo + ranking por veículo + tabela de peças globais), posicionada ANTES do card de IA.
+ * - LANÇAMENTO (`client/src/pages/frotas/Manutencoes.tsx`): ao abrir o form com veículo selecionado,
+ *   query `getVehiclePartHistory`; helpers `fmtDateBR`/`daysSinceBR`; `matchPartHistory(nome)` (match
+ *   normalizado exato, depois `contains` ≥4 chars). Painel-resumo (chips) das peças recorrentes do
+ *   veículo no topo da seção "Peças e Serviços"; por item (categoria peça) com histórico, a célula do
+ *   nome fica colorida e uma linha de alerta (colSpan=6) mostra "já trocada Nx · última em DD/MM/AAAA
+ *   (X dias atrás) · km · menor intervalo · custo acumulado". VERMELHO quando crítico (menorIntervaloDias
+ *   ≤180 OU última troca ≤180 dias da data lançada); ÂMBAR caso contrário.
+ *
+ * VALIDAÇÃO: esbuild server (`frotas.ts`) EXIT 0 + parse esbuild dos TSX (`ManutencoesDashboard.tsx`,
+ * `Manutencoes.tsx`) EXIT 0.
+ *
  * Rev. 2718 — **FROTA · DASHBOARD DE MANUTENÇÃO (`/frotas` → "Manutenções" → "Dashboard") · A "ANÁLISE
  * INTELIGENTE (IA)" FOI REFEITA: (1) DIAGNÓSTICO MUITO MAIS DETALHADO/RESPONSIVO, FUNDAMENTADO EM
  * LITERATURA DE GESTÃO DE FROTA (TCO, CUSTO/KM, MTBF, RCM CORRETIVA×PREVENTIVA, TENDÊNCIA DE CUSTO,

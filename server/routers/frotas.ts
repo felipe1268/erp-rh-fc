@@ -4673,7 +4673,6 @@ IMPORTANTE:
         GROUP BY g.vehicle_id, v.placa, v.modelo, v.marca, g.nome_norm
         HAVING COUNT(*) >= 2
         ORDER BY menor_intervalo_dias ASC NULLS LAST, trocas DESC, custo_total DESC
-        LIMIT 300
       `);
 
       const recorrencias = (((recorrRes as any).rows) || []).map((r: any) => ({

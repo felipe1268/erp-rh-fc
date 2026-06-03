@@ -16,13 +16,37 @@ import {
   ChevronLeft, ChevronRight, Send, Undo2, DollarSign,
   CheckCircle2, Loader2, ScanLine, FileUp, Eye, X, Check,
   Sparkles, Upload, Lock, Paperclip, Download, File,
-  ShoppingCart, Link2, ExternalLink,
+  ShoppingCart, Link2, ExternalLink, Repeat,
 } from "lucide-react";
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useRef, useCallback, useEffect, useMemo, Fragment } from "react";
 import { toast } from "sonner";
 
 function fmt(v: any) {
   return parseFloat(v || "0").toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+}
+
+// Rev. 2719 — normalização robusta de nome de peça (lower + trim + sem acentos
+// + espaços colapsados) para o match do ALERTA de peça recorrente.
+function normPart(s: any) {
+  return String(s || "").trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ");
+}
+
+// Rev. 2719 — helpers de data para o ALERTA de peça recorrente no lançamento.
+function fmtDateBR(iso: any) {
+  if (!iso) return "—";
+  const s = String(iso).slice(0, 10);
+  const [y, m, d] = s.split("-");
+  if (!y || !m || !d) return s;
+  return `${d}/${m}/${y}`;
+}
+function daysSinceBR(fromIso: any, refIso?: string) {
+  const a = String(fromIso || "").slice(0, 10);
+  const b = (refIso && refIso.length >= 10 ? refIso : new Date().toISOString()).slice(0, 10);
+  if (!a) return null;
+  const da = new Date(a + "T00:00:00Z").getTime();
+  const db = new Date(b + "T00:00:00Z").getTime();
+  if (isNaN(da) || isNaN(db)) return null;
+  return Math.round((db - da) / 86400000);
 }
 
 const STATUS_MAP: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
@@ -69,6 +93,37 @@ export default function Manutencoes() {
   const [confirmDlg, setConfirmDlg] = useState<{ msg: string; onOk: () => void } | null>(null);
 
   const vehicles = trpc.frotas.listVehicles.useQuery({ companyId: cId }, { enabled: cId > 0 });
+
+  // Rev. 2719 — ALERTA DE PEÇA RECORRENTE. Ao abrir o formulário com um veículo
+  // selecionado, busca o histórico de peças já trocadas nele; ao digitar uma
+  // peça que já foi trocada, mostra um alerta rápido e assertivo na linha.
+  const partHist = trpc.frotas.getVehiclePartHistory.useQuery(
+    { companyId: cId, vehicleId: form.vehicleId || 0 },
+    { enabled: cId > 0 && dialogOpen && !!form.vehicleId },
+  );
+  const partHistByNorm = useMemo(() => {
+    const m: Record<string, any> = {};
+    for (const p of (partHist.data?.pecas || [])) m[normPart(p.nomeNorm)] = p;
+    return m;
+  }, [partHist.data]);
+  const recurringForVehicle = useMemo(
+    () => (partHist.data?.pecas || []).filter((p: any) => p.trocas >= 2),
+    [partHist.data],
+  );
+  function matchPartHistory(nome: string) {
+    const n = normPart(nome);
+    if (n.length < 3) return null;
+    if (partHistByNorm[n]) return partHistByNorm[n];
+    // Fallback por substring: só com termos >=4 chars DOS DOIS lados (evita
+    // falso-positivo quando o histórico tem termos curtos tipo "kit"/"jogo").
+    if (n.length >= 4) {
+      for (const p of (partHist.data?.pecas || [])) {
+        const pn = normPart(p.nomeNorm);
+        if (pn.length >= 4 && (pn.includes(n) || n.includes(pn))) return p;
+      }
+    }
+    return null;
+  }
   const manut = trpc.frotas.listMaintenances.useQuery(
     { companyId: cId, vehicleId: filterVehicle !== "all" ? parseInt(filterVehicle) : undefined },
     { enabled: cId > 0 },
@@ -865,6 +920,27 @@ export default function Manutencoes() {
                     <Plus className="h-3.5 w-3.5 mr-1" /> Adicionar Item
                   </Button>
                 </div>
+
+                {/* Rev. 2719 — PAINEL DE ALERTAS: peças recorrentes deste veículo */}
+                {form.vehicleId && recurringForVehicle.length > 0 && (
+                  <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50/70 dark:border-amber-900/50 dark:bg-amber-950/20 p-3">
+                    <p className="text-xs font-semibold text-amber-800 dark:text-amber-200 flex items-center gap-1.5 mb-2">
+                      <Repeat className="h-3.5 w-3.5" /> Atenção: este veículo já teve {recurringForVehicle.length} peça(s) com troca recorrente
+                    </p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {recurringForVehicle.slice(0, 10).map((p: any, i: number) => {
+                        const critico = p.menorIntervaloDias != null && p.menorIntervaloDias <= 180;
+                        return (
+                          <span key={i} className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${critico ? "bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-300" : "bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300"}`}>
+                            {critico && <AlertTriangle className="h-3 w-3" />}
+                            {p.peca} · {p.trocas}×{p.menorIntervaloDias != null ? ` · ${p.menorIntervaloDias}d` : ""}
+                          </span>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
                 {maintItems.length > 0 ? (
                   <div className="border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden">
                     <table className="w-full text-sm">
@@ -879,8 +955,13 @@ export default function Manutencoes() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                        {maintItems.map((item, idx) => (
-                          <tr key={idx} className="hover:bg-blue-50/40 dark:hover:bg-blue-950/20 transition-colors">
+                        {maintItems.map((item, idx) => {
+                          const hist = item.categoria === "peca" ? matchPartHistory(item.nome) : null;
+                          const histDias = hist ? daysSinceBR(hist.ultima, form.dataManutencao) : null;
+                          const histCritico = !!hist && ((hist.menorIntervaloDias != null && hist.menorIntervaloDias <= 180) || (histDias != null && histDias >= 0 && histDias <= 180));
+                          return (
+                          <Fragment key={idx}>
+                          <tr className="hover:bg-blue-50/40 dark:hover:bg-blue-950/20 transition-colors">
                             <td className="px-2 py-2">
                               <Select value={item.categoria} onValueChange={v => updateMaintItem(idx, "categoria", v)}>
                                 <SelectTrigger className="h-9 text-xs border-slate-200 dark:border-slate-700"><SelectValue /></SelectTrigger>
@@ -891,7 +972,7 @@ export default function Manutencoes() {
                               </Select>
                             </td>
                             <td className="px-2 py-2">
-                              <Input className="h-9 text-sm border-slate-200 dark:border-slate-700" placeholder="Ex: Retentor comando" value={item.nome} onChange={e => updateMaintItem(idx, "nome", e.target.value)} />
+                              <Input className={`h-9 text-sm ${hist ? (histCritico ? "border-red-300 dark:border-red-800 bg-red-50/40 dark:bg-red-950/20" : "border-amber-300 dark:border-amber-800 bg-amber-50/40 dark:bg-amber-950/20") : "border-slate-200 dark:border-slate-700"}`} placeholder="Ex: Retentor comando" value={item.nome} onChange={e => updateMaintItem(idx, "nome", e.target.value)} />
                             </td>
                             <td className="px-2 py-2">
                               <Input className="h-9 text-sm text-center border-slate-200 dark:border-slate-700" type="number" min="0.01" step="0.01" value={item.quantidade || ""} onChange={e => updateMaintItem(idx, "quantidade", parseFloat(e.target.value) || 0)} />
@@ -908,7 +989,28 @@ export default function Manutencoes() {
                               </Button>
                             </td>
                           </tr>
-                        ))}
+                          {hist && (
+                          <tr>
+                            <td colSpan={6} className="px-3 pb-2 pt-0">
+                              <div className={`flex items-start gap-2 rounded-lg border px-3 py-2 text-xs ${histCritico ? "border-red-200 bg-red-50 text-red-800 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-200" : "border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200"}`}>
+                                <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+                                <div className="space-y-0.5">
+                                  <p className="font-semibold">{histCritico ? "Peça recorrente — possível defeito crônico." : "Esta peça já foi trocada neste veículo."}</p>
+                                  <p>
+                                    Já trocada <b>{hist.trocas}×</b> · última em <b>{fmtDateBR(hist.ultima)}</b>
+                                    {histDias != null && <> (<b>{histDias}</b> dias atrás)</>}
+                                    {hist.ultimoKm != null && <> · <b>{hist.ultimoKm.toLocaleString("pt-BR")}</b> km</>}
+                                    {hist.menorIntervaloDias != null && <> · menor intervalo <b>{hist.menorIntervaloDias}</b> dias</>}
+                                    {" "}· custo acumulado <b>{fmt(hist.custoTotal)}</b>.
+                                  </p>
+                                </div>
+                              </div>
+                            </td>
+                          </tr>
+                          )}
+                          </Fragment>
+                          );
+                        })}
                       </tbody>
                       <tfoot className="bg-gradient-to-r from-emerald-50 to-green-50 dark:from-emerald-950/30 dark:to-green-950/30 border-t-2 border-emerald-200 dark:border-emerald-800">
                         <tr>

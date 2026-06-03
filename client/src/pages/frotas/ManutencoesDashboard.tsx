@@ -136,6 +136,13 @@ export default function ManutencoesDashboard() {
   const porFornecedor = d?.porFornecedor || [];
   const kpi = d?.kpi || { totalManutencoes: 0, preventivas: 0, corretivas: 0, custoTotal: 0, custoMedio: 0, veiculosAtendidos: 0, custoPecas: 0, custoServicos: 0 };
 
+  // Rev. 2719 — derivados do dashboard determinístico de peças recorrentes.
+  const recKpi = rec.data?.kpi || { totalRecorrencias: 0, criticas: 0, custoTotalRecorrencias: 0, veiculosAfetados: 0, pecasDistintas: 0, totalTrocas: 0 };
+  const recTopCusto = (rec.data?.topPorCusto || []) as any[];
+  const recDist = (rec.data?.distribuicaoIntervalo || []) as any[];
+  const recPorVeic = ((rec.data?.porVeiculo || []) as any[]).slice(0, 10);
+  const recPecasGlobais = (rec.data?.pecasGlobais || []) as any[];
+
   const evolucaoData = useMemo(() => {
     return Array.from({ length: 12 }, (_, i) => {
       const mesData = porMes.find((m: any) => m.mes === i + 1);
