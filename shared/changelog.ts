@@ -1,6 +1,36 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2727 — **RH · RAIO-X DO FUNCIONÁRIO / TIMELINE CRONOLÓGICA (`controleDocumentos.raioX`) · A MUDANÇA DE
+ * OBRA DO FUNCIONÁRIO AGORA FICA REGISTRADA NA TIMELINE (antes nunca aparecia).**
+ *
+ * PEDIDO DO USUÁRIO: "na timeline precisa garantir que quando o funcionário mudar de obra, fique registrado".
+ *
+ * CAUSA-RAIZ: a alocação/transferência/saída de obra é gravada na tabela `employee_site_history` (por
+ * `allocateEmployeeToObra` / `removeEmployeeFromObra` em `server/db.ts`), mas a Timeline Cronológica do Raio-X
+ * só agregava `employee_history` (Histórico Funcional) — TABELA DIFERENTE. Como nenhum fluxo de troca de obra
+ * escreve em `employee_history` (o tipo "Transferencia" do label existia mas ficava órfão), a mudança de obra
+ * NUNCA entrava na timeline.
+ *
+ * SOLUÇÃO (SÓ SERVER; ZERO SCHEMA — R-001/R-007/R-010 OK): `server/routers/controleDocumentos.ts` (`raioX`)
+ * passa a LER também `employee_site_history` como fonte da timeline (fonte canônica, sem duplicar dados em
+ * 2 tabelas e SEM perder histórico retroativo). Import de `employeeSiteHistory`; busca por employeeId; mapa
+ * id→nome das obras envolvidas (destino + `obraOrigemId`) via `inArray` em `obras`. Render:
+ *   • `transferencia` → "Mudança de Obra": "Transferido de {origem} para {destino}" (indigo, map-pin);
+ *   • `alocacao` → "Alocação em Obra": "Alocado na obra {destino}" (green, map-pin);
+ *   • `saida` AVULSA → "Saída de Obra": "Saiu da obra {obra}" (gray, map-pin).
+ * DEDUP: uma transferência grava DUAS linhas no mesmo dia (uma `saida` da origem + uma `transferencia` p/ o
+ * destino) — a `saida` cuja `dataFim` casa com a `dataInicio` de uma chegada (alocacao/transferencia) é
+ * suprimida, evitando evento redundante; só `saida` de remoção real (sem nova obra) aparece. O tipo
+ * `gestor_obra` (designação de gestor, não relocação do funcionário) é ignorado de propósito. Os novos
+ * eventos respeitam o filtro de eventos futuros (Rev. 2545) e o modal de detalhe genérico (refTipo
+ * "obra_historico" + meta). Front (`RaioXFuncionario.tsx`) já renderiza cor (`TIMELINE_COLORS` cobre
+ * indigo/green/gray) e ícone genérico — zero mudança no client necessária.
+ *
+ * VALIDAÇÃO: query direta no Neon (184 alocacao, 43 transferencia, 84 saida, 9 gestor_obra; amostra com
+ * obraOrigemId preenchido confirma origem→destino); esbuild server `server/_core/index.ts` EXIT 0; `npx
+ * vitest run server/rescisao.test.ts` 41/41 verde; architect review.
+ *
  * Rev. 2726 — **RH · RESCISÃO / HOME + AVISO PRÉVIO (card "Avisos Prévios em Andamento" x lista "Aviso
  * Prévio" x ficha "Cálculos da Rescisão") · CORRIGE EM DEFINITIVO A DIVERGÊNCIA DE VALORES (Rev. 2725 não
  * resolveu): O CARD/LISTA IGNORAVAM AS FÉRIAS VENCIDAS QUE A FICHA INCLUÍA — caso Mariana: card R$ 11.799,50

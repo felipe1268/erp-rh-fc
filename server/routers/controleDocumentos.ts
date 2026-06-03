@@ -2,7 +2,7 @@ import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getDb, userCanSeeAvisoStatus, userCanAccessEmployeeDossier } from "../db";
 import { TRPCError } from "@trpc/server";
-import { asos, atestados, trainings, warnings, employees, timeRecords, payroll, epiDeliveries, epis, vrBenefits, advances, obraHorasRateio, obras, documentTemplates, extraPayments, employeeHistory, accidents, processosTrabalhistas, processosAndamentos, jobFunctions, terminationNotices, vacationPeriods, cipaMeetings, cipaMembers, cipaElections, pjContracts, pjPayments, epiDiscountAlerts, customExams, obraFuncionarios, warehouseLoans, almoxarifadoDescontoFolha, almoxarifadoSaidasInsumo, heSolicitacaoConfirmacoes, heSolicitacoes, heSolicitacaoFuncionarios, pontoDescontos, notificationLogs, notificationRecipients, lancamentosParceiros, parceirosConveniados, ddsSessoes, ddsSessaoFuncionarios, signatureSessions, signatureSigners, equipamentoLocadoEventos, equipamentosLocados, users } from "../../drizzle/schema";
+import { asos, atestados, trainings, warnings, employees, timeRecords, payroll, epiDeliveries, epis, vrBenefits, advances, obraHorasRateio, obras, documentTemplates, extraPayments, employeeHistory, accidents, processosTrabalhistas, processosAndamentos, jobFunctions, terminationNotices, vacationPeriods, cipaMeetings, cipaMembers, cipaElections, pjContracts, pjPayments, epiDiscountAlerts, customExams, obraFuncionarios, employeeSiteHistory, warehouseLoans, almoxarifadoDescontoFolha, almoxarifadoSaidasInsumo, heSolicitacaoConfirmacoes, heSolicitacoes, heSolicitacaoFuncionarios, pontoDescontos, notificationLogs, notificationRecipients, lancamentosParceiros, parceirosConveniados, ddsSessoes, ddsSessaoFuncionarios, signatureSessions, signatureSigners, equipamentoLocadoEventos, equipamentosLocados, users } from "../../drizzle/schema";
 import { eq, and, desc, sql, ne, isNull, inArray, gte, lte } from "drizzle-orm";
 import { resolveCompanyIds, companyFilter } from "../companyHelper";
 import { storagePut } from "../storage";
@@ -1565,6 +1565,22 @@ export const controleDocumentosRouter = router({
         .where(eq(employeeHistory.employeeId, input.employeeId))
         .orderBy(desc(employeeHistory.dataEvento));
 
+      // HISTÓRICO DE OBRAS (alocação / transferência / saída) — fonte canônica
+      // `employee_site_history`, gravada por `allocateEmployeeToObra`/`removeEmployeeFromObra`.
+      // A timeline lia só `employee_history`, então a MUDANÇA DE OBRA nunca aparecia.
+      const empSiteHistorico = await db.select().from(employeeSiteHistory)
+        .where(eq(employeeSiteHistory.employeeId, input.employeeId))
+        .orderBy(desc(employeeSiteHistory.dataInicio), desc(employeeSiteHistory.id));
+      // Mapa id→nome das obras envolvidas (destino + origem), para rótulos legíveis.
+      const obraIdsHist = Array.from(new Set(
+        empSiteHistorico.flatMap(h => [h.obraId, h.obraOrigemId]).filter((x): x is number => typeof x === "number")
+      ));
+      const obraNomeMap = new Map<number, string>();
+      if (obraIdsHist.length > 0) {
+        const obrasHist = await db.select({ id: obras.id, nome: obras.nome }).from(obras).where(inArray(obras.id, obraIdsHist));
+        obrasHist.forEach(o => obraNomeMap.set(o.id, o.nome));
+      }
+
       // ACIDENTES DE TRABALHO
       const empAcidentes = await db.select().from(accidents)
         .where(eq(accidents.employeeId, input.employeeId))
@@ -1603,6 +1619,31 @@ export const controleDocumentosRouter = router({
         if (h.descricao) desc += ` — ${h.descricao}`;
         const corMap: Record<string, string> = { Promocao: "green", Mudanca_Salario: "blue", Mudanca_Funcao: "purple", Transferencia: "indigo", Afastamento: "amber", Retorno: "teal", Ferias: "cyan", Desligamento: "red" };
         timeline.push({ data: h.dataEvento, tipo: tipoLabel[h.tipo] || h.tipo, descricao: desc, cor: corMap[h.tipo] || "gray", icone: "history", refTipo: "historico", refId: h.id, meta: h });
+      });
+      // Histórico de obras (alocação / transferência / saída) — MUDANÇA DE OBRA na timeline.
+      // Dedup: a transferência grava DUAS linhas no mesmo dia (uma 'saida' da obra de origem
+      // + uma 'transferencia' p/ a obra destino). Mostramos só o lado de chegada; a 'saida'
+      // de mesma data é suprimida. 'saida' avulsa (remoção sem nova obra) é exibida.
+      // SÓ 'transferencia' entra no critério: a 'saida'-par só acompanha transferência
+      // (a 1ª alocação não gera saída), então incluir 'alocacao' poderia ocultar por engano
+      // uma saída avulsa que caia no mesmo dia de uma nova alocação por fluxo separado.
+      const datasTransferencia = new Set(
+        empSiteHistorico.filter(h => h.tipo === "transferencia").map(h => h.dataInicio)
+      );
+      empSiteHistorico.forEach(h => {
+        const obraDest = obraNomeMap.get(h.obraId) || `Obra #${h.obraId}`;
+        const obraOrig = h.obraOrigemId ? (obraNomeMap.get(h.obraOrigemId) || `Obra #${h.obraOrigemId}`) : null;
+        const motivo = h.motivoTransferencia ? ` — ${h.motivoTransferencia}` : "";
+        if (h.tipo === "transferencia") {
+          timeline.push({ data: h.dataInicio, tipo: "Mudança de Obra", descricao: `Transferido${obraOrig ? ` de ${obraOrig}` : ""} para ${obraDest}${motivo}`, cor: "indigo", icone: "map-pin", refTipo: "obra_historico", refId: h.id, meta: h });
+        } else if (h.tipo === "alocacao") {
+          timeline.push({ data: h.dataInicio, tipo: "Alocação em Obra", descricao: `Alocado na obra ${obraDest}${motivo}`, cor: "green", icone: "map-pin", refTipo: "obra_historico", refId: h.id, meta: h });
+        } else if (h.tipo === "saida") {
+          // Suprime a 'saida' que é o par de uma transferência do mesmo dia
+          const dataSaida = h.dataFim || h.dataInicio;
+          if (datasTransferencia.has(dataSaida)) return;
+          timeline.push({ data: dataSaida, tipo: "Saída de Obra", descricao: `Saiu da obra ${obraDest}${motivo}`, cor: "gray", icone: "map-pin", refTipo: "obra_historico", refId: h.id, meta: h });
+        }
       });
       // ASOs
       empAsos.forEach(a => timeline.push({ data: a.dataExame, tipo: "ASO", descricao: `${a.tipo || "Exame"} — ${a.resultado || "Pendente"}`, cor: "blue", icone: "stethoscope", refTipo: "aso", refId: a.id, meta: a }));
