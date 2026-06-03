@@ -299,14 +299,19 @@ export function calcularMesesFeriasProporcionais(dataAdmissao: string, dataDesli
   const admissao = new Date(dataAdmissao + 'T00:00:00');
   const ref = new Date(dataDesligamento + 'T00:00:00');
   const mesesTotais = calcularMesesServico(dataAdmissao, dataDesligamento);
-  let mesesProporcionais = mesesTotais % 12;
-  // Fração final = do início do mês aquisitivo corrente (admissão + mesesTotais)
-  // até a data de referência. ≥15 dias → soma 1 avo (regra dos 15 dias).
+  const mesesProporcionais = mesesTotais % 12;
+  // Período aquisitivo corrente JÁ COMPLETO (múltiplo exato de 12): este modelo de
+  // rescisão paga o último período inteiro como PROPORCIONAL (12/12) e só conta os
+  // anteriores como vencidas (`periodosVencidos = floor(meses/12) - 1`). A fração
+  // residual do período seguinte NÃO acrescenta avo aqui (cap em 12).
+  if (mesesProporcionais === 0 && mesesTotais > 0) return 12;
+  // Período corrente INCOMPLETO: aplica a regra dos 15 dias (CLT Art. 146 §único) —
+  // fração final (início do mês aquisitivo corrente = admissão + mesesTotais → data
+  // ref) ≥ 15 dias soma +1 avo, igual ao 13º (`calcularMeses13o`).
   const inicioFracao = new Date(admissao.getFullYear(), admissao.getMonth() + mesesTotais, admissao.getDate());
   const diasFracao = Math.floor((ref.getTime() - inicioFracao.getTime()) / 86400000) + 1;
-  if (diasFracao >= 15) mesesProporcionais++;
-  if (mesesProporcionais >= 12) return 12;
-  return mesesProporcionais === 0 && mesesTotais > 0 ? 12 : mesesProporcionais;
+  const comFracao = diasFracao >= 15 ? mesesProporcionais + 1 : mesesProporcionais;
+  return comFracao >= 12 ? 12 : comFracao;
 }
 
 /** Calcula períodos de férias vencidas matematicamente (estimativa — prefira consulta ao banco) */

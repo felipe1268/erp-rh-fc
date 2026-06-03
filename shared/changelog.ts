@@ -1,6 +1,46 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2722 — **RH · RESCISÃO (Painel RH → funcionário em aviso → "Cálculos da Rescisão") · CORREÇÃO DO
+ * CÁLCULO DE FÉRIAS PROPORCIONAIS: O ÚLTIMO MÊS AQUISITIVO INCOMPLETO COM ≥15 DIAS NÃO ESTAVA SENDO
+ * CONTADO (REGRA DOS 15 DIAS — CLT Art. 146 §único), SUBDIMENSIONANDO AS FÉRIAS + 1/3.**
+ *
+ * PEDIDO/BUG (usuário, prints da rescisão da Myriélle Fialho Borges Arcanjo): suspeita de que o cálculo
+ * dos funcionários estava errado. Análise confirmou: as "Férias Proporcionais" exibiam 1/12 (R$ 138,46)
+ * onde o correto é 2/12 (R$ 276,93), e o "1/3 Constitucional" proporcional 46,15 onde o correto é 92,31.
+ *
+ * CAUSA-RAIZ: `calcularMesesFeriasProporcionais` (server/utils/rescisaoCalc.ts) usava
+ * `calcularMesesServico`, que conta APENAS MESES COMPLETOS (decrementa o mês quando `ref.getDate() <
+ * admissao.getDate()`). Com isso o último mês aquisitivo incompleto era descartado mesmo quando tinha
+ * ≥15 dias. Já o 13º (`calcularMeses13o`) APLICAVA a regra dos 15 dias — daí a inconsistência: para a
+ * Myriélle (adm. 07/05/2024, projeção do aviso 30/06/2026) o 13º contava junho (24 dias ≥15 → 6/12)
+ * mas as férias proporcionais NÃO contavam a fração de 07/06→30/06 (24 dias) → exibia 1/12 em vez de 2/12.
+ *
+ * SOLUÇÃO (SÓ SERVER + TESTE; ZERO SCHEMA/CLIENT — R-001/R-007/R-010 OK):
+ * - `server/utils/rescisaoCalc.ts` — `calcularMesesFeriasProporcionais` reordenada em DOIS ramos:
+ *   (1) PERÍODO AQUISITIVO CORRENTE JÁ COMPLETO (`mesesTotais % 12 === 0` e `> 0`) → retorna 12 ANTES de
+ *   qualquer fração. Este modelo de rescisão paga o último período inteiro como PROPORCIONAL (12/12) e só
+ *   conta os anteriores como vencidas (`periodosVencidos = floor(meses/12) - 1`); a fração residual do
+ *   período SEGUINTE não acrescenta avo (cap 12). (2) PERÍODO CORRENTE INCOMPLETO → `mesesTotais % 12` +
+ *   regra dos 15 dias: mede a FRAÇÃO FINAL (início do mês aquisitivo corrente = admissão + mesesTotais →
+ *   data ref) e soma +1 avo quando `diasFracao >= 15` (mesma regra do 13º). Corrige AS DUAS funções de
+ *   rescisão (oficial + complemento) que compartilham a função; nenhum caller mudou.
+ *   NOTA: a 1ª tentativa media a fração ANTES do ramo do período-completo e regredia o caso de 1 ano exato
+ *   (IVAN: 12→1); a reordenação resolve isso preservando o caso real IVAN = 12/12.
+ * - `server/rescisao.test.ts` — cópia local da função alinhada e expectativas ajustadas aos valores
+ *   CLT-corretos: standalone ("2025-06-01","2025-12-15") 6→7; ("2025-03-17","2026-03-14") 11→12 (fração de
+ *   26 dias ≥15 = mês cheio); ("2025-03-17","2026-03-31") MANTÉM 12 (ano exato). CASO ANTONIO RENATO (real,
+ *   adm. 12/05/2025 → projeção 31/03/2026 = 10 meses + 20 dias): 10→11 — a "referência" de 10/12 encodava o
+ *   MESMO bug do Myriélle (fração ≥15 não contada); 1/3 recalculado (1722→1894,32). Suite: 41/41 verde.
+ *
+ * IMPACTO: toda rescisão cujo período aquisitivo corrente INCOMPLETO termine com fração ≥15 dias passa a
+ * pagar +1/12 de férias proporcionais + 1/3 (correto) — afeta Myriélle, ANTONIO e similares. Períodos
+ * exatos de 1+ ano (IVAN) seguem 12/12. Férias VENCIDAS (override do banco), saldo, 13º, aviso e multa
+ * FGTS permanecem inalterados.
+ *
+ * VALIDAÇÃO: esbuild parse de `server/utils/rescisaoCalc.ts` e `server/rescisao.test.ts` EXIT 0;
+ * `vitest server/rescisao.test.ts` 41/41 PASS.
+ *
  * Rev. 2721 — **FROTA · DASHBOARD DE MANUTENÇÃO (`/frotas` → "Manutenções" → "Dashboard") · AJUSTE DO
  * BREAKPOINT DA RESPONSIVIDADE DA TABELA "DETALHE — PEÇAS QUE SE REPETEM" (Rev. 2720): NO IPAD (1024px,
  * landscape) AINDA APARECIA A TABELA ESPREMIDA EM VEZ DOS CARDS CLICÁVEIS.**

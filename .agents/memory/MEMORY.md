@@ -12,3 +12,4 @@
 - [Frota null-obra visibility](frota-null-obra-visibility.md) — veículos obra_id NULL = admin-only (leitura e escrita); NÃO relaxar guard de updateVehicle (abre IDOR); falha silenciosa de mutation = falta onError no client, não bug de backend.
 - [No employee status history](no-status-history.md) — only CURRENT status is stored; for past-date snapshots derive active-at-D from admissão/demissão dates + férias from vacationPeriods; other sub-statuses fold into Ativo.
 - [AI output sanitization](ai-output-sanitization.md) — LLM output feeding a decision UI must be filtered server-side against the deterministic fact set (whitelist keys, clamp scores, enum-normalize); also frotas.ts per-company endpoints need an explicit IDOR guard.
+- [Rescisão férias model](rescisao-ferias-model.md) — proporcional×vencidas com `-1`: último período completo vira 12/12 proporcional; ano exato retorna 12 ANTES da fração; regra dos 15 dias só no período incompleto.

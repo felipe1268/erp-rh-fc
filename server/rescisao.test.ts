@@ -51,9 +51,17 @@ function calcularDiasExtrasAviso(anosServico: number): number {
 }
 
 function calcularMesesFeriasProporcionais(dataAdmissao: string, dataDesligamento: string): number {
+  const admissao = new Date(dataAdmissao + 'T00:00:00');
+  const ref = new Date(dataDesligamento + 'T00:00:00');
   const mesesTotais = calcularMesesServico(dataAdmissao, dataDesligamento);
   const mesesProporcionais = mesesTotais % 12;
-  return mesesProporcionais === 0 && mesesTotais > 0 ? 12 : mesesProporcionais;
+  // Período corrente já completo (múltiplo de 12): último período inteiro = 12/12.
+  if (mesesProporcionais === 0 && mesesTotais > 0) return 12;
+  // Período corrente incompleto: regra dos 15 dias (CLT Art. 146 §único).
+  const inicioFracao = new Date(admissao.getFullYear(), admissao.getMonth() + mesesTotais, admissao.getDate());
+  const diasFracao = Math.floor((ref.getTime() - inicioFracao.getTime()) / 86400000) + 1;
+  const comFracao = diasFracao >= 15 ? mesesProporcionais + 1 : mesesProporcionais;
+  return comFracao >= 12 ? 12 : comFracao;
 }
 
 function calcularFeriasVencidas(dataAdmissao: string, dataDesligamento: string): number {
@@ -254,14 +262,19 @@ describe("Cálculo de Rescisão CLT - Com Projeção de Tempo de Serviço", () =
       expect(parseFloat(resultado.saldoSalario)).toBeCloseTo(3305.16, -1);
     });
     
-    it('férias proporcionais: 10 meses (ref: R$ 5.166,67)', () => {
-      // Projeção 31/03: admissão 12/05/2025 → 31/03/2026 = 10 meses (31 < dia 12 → desconta)
-      expect(resultado.mesesFerias).toBe(10);
-      expect(parseFloat(resultado.feriasProporcional)).toBeCloseTo(5166.33, 0);
+    it('férias proporcionais: 11 meses (regra dos 15 dias — CLT Art. 146 §único)', () => {
+      // Projeção 31/03: admissão 12/05/2025 → 31/03/2026 = 10 meses completos +
+      // fração de 20 dias (12/03→31/03) ≥ 15 → 11/12. (A "referência" original de
+      // 10/12 encodava o MESMO bug corrigido no caso Myriélle: a fração ≥15 dias
+      // do mês aquisitivo corrente não era contada.)
+      expect(resultado.mesesFerias).toBe(11);
+      // 6199.60 * 11 / 12 = 5682.97
+      expect(parseFloat(resultado.feriasProporcional)).toBeCloseTo(5682.97, 0);
     });
     
-    it('1/3 constitucional (ref: R$ 1.722,22)', () => {
-      expect(parseFloat(resultado.tercoConstitucional)).toBeCloseTo(1722.11, 0);
+    it('1/3 constitucional sobre 11/12', () => {
+      // 5682.9667 / 3 = 1894.32
+      expect(parseFloat(resultado.tercoConstitucional)).toBeCloseTo(1894.32, 0);
     });
     
     it('13º proporcional: 3/12 (ref: R$ 1.550,00)', () => {
@@ -319,17 +332,19 @@ describe("Cálculo de Rescisão CLT - Com Projeção de Tempo de Serviço", () =
   // ============================================================
   
   describe("Projeção de tempo de serviço (CLT Art. 487 §1º)", () => {
-    it("deve projetar até último dia do mês para férias", () => {
-      // Admissão 17/03/2025, aviso termina 13/03/2026
-      // Projeção: 31/03/2026 → 12 meses completos
+    it("projeção 31/03 com 1 ano completo → último período inteiro = 12/12", () => {
+      // Admissão 17/03/2025, projeção 31/03/2026 = 12 meses exatos (múltiplo de 12).
+      // Neste modelo o último período aquisitivo completo é pago como PROPORCIONAL
+      // (12/12) e os anteriores como vencidas; a fração residual não soma avo.
       const meses = calcularMesesFeriasProporcionais('2025-03-17', '2026-03-31');
       expect(meses).toBe(12);
     });
     
-    it("sem projeção, férias ficam erradas (11 meses)", () => {
-      // Sem projeção: dataSaida 14/03 → 11 meses (dia 14 < dia 17)
+    it("regra dos 15 dias robustece o cálculo mesmo sem projeção", () => {
+      // Sem projeção: 17/03/2025→14/03/2026 = 11 meses completos + fração de 26 dias
+      // (17/02→14/03) ≥ 15 → conta como mês cheio → 12/12 (CLT Art. 146 §único).
       const meses = calcularMesesFeriasProporcionais('2025-03-17', '2026-03-14');
-      expect(meses).toBe(11); // ERRADO sem projeção
+      expect(meses).toBe(12);
     });
     
     it("deve projetar até último dia do mês para 13º", () => {
@@ -401,8 +416,9 @@ describe("Cálculo de Rescisão CLT - Com Projeção de Tempo de Serviço", () =
   // ============================================================
   
   describe("Cálculo de férias proporcionais e vencidas", () => {
-    it("deve calcular meses proporcionais no primeiro ano", () => {
-      expect(calcularMesesFeriasProporcionais("2025-06-01", "2025-12-15")).toBe(6);
+    it("deve calcular meses proporcionais no primeiro ano (regra dos 15 dias)", () => {
+      // 01/06→15/12: 6 meses cheios (jun–nov) + 15 dias de dez ≥15 → 7/12.
+      expect(calcularMesesFeriasProporcionais("2025-06-01", "2025-12-15")).toBe(7);
     });
     
     it("deve calcular 12 meses quando completa exatamente 1 ano", () => {
