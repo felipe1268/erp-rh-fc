@@ -3288,6 +3288,7 @@ export const vehicles = pgTable("vehicles", {
         dataAquisicao: date("data_aquisicao", { mode: 'string' }),
         valorCompra: numeric("valor_compra", { precision: 14, scale: 2 }),
         valorFipe: numeric("valor_fipe", { precision: 14, scale: 2 }),
+        valorVenda: numeric("valor_venda", { precision: 14, scale: 2 }),
         fipeCodigoMarca: varchar("fipe_codigo_marca", { length: 10 }),
         fipeCodigoModelo: varchar("fipe_codigo_modelo", { length: 10 }),
         fipeCodigoAno: varchar("fipe_codigo_ano", { length: 10 }),

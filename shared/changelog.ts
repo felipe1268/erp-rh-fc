@@ -1,6 +1,34 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2709 — **FROTA · EDITAR/NOVO VEÍCULO (`/frotas` → "Veículos") · QUANDO O STATUS É "VENDIDO" O
+ * VEÍCULO SAI DO "VALOR DO INVENTÁRIO" (KPI NO TOPO) E O CAMPO "VALOR DA VENDA" PASSA A SER
+ * OBRIGATÓRIO.**
+ *
+ * PEDIDO (usuário): "Se o veículo for vendido o valor do inventário deve mudar e se foi vendido precisa
+ * obrigatoriamente indicar o valor da venda".
+ *
+ * SOLUÇÃO (SCHEMA + SERVER + CLIENT; ADD COLUMN IF NOT EXISTS — não-destrutivo, R-001/R-007/R-010 OK):
+ *   - SCHEMA: nova coluna `vehicles.valor_venda NUMERIC(14,2)` em `drizzle/schema.ts` (`valorVenda`) +
+ *     self-heal `ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS valor_venda NUMERIC(14,2)` dentro de
+ *     `ensureFleetTables()` em `server/routers/frotas.ts` (mesmo padrão das demais colunas da frota).
+ *   - SERVER (`server/routers/frotas.ts`): `createVehicle`/`updateVehicle` ganharam `valorVenda` no zod
+ *     (`z.string().nullable().optional()`) e persistem o campo. VALIDAÇÃO: se `statusVeiculo === "Vendido"`
+ *     e não há valor de venda > 0 → `BAD_REQUEST "Veículo marcado como Vendido: informe o valor da venda."`.
+ *     No `updateVehicle` o status efetivo considera o input OU o já gravado, e o valor de venda aceito é o
+ *     novo (input) OU o já existente no banco (cobre o caso de marcar como vendido em massa só se já houver
+ *     valor gravado). Query de guard agora também lê `valor_venda` e `statusVeiculo` da linha atual.
+ *   - HARDENING (achado do architect): `createVehicle` NÃO tinha guard de tenancy (IDOR de escrita —
+ *     qualquer usuário autenticado podia inserir veículo em empresa/obra alheia). Adicionado guard de
+ *     empresa (padrão da casa `ctx.user.companyId` vs `input.companyId`) + `userCanAccessObra` quando
+ *     `obraId` é informado, espelhando o `updateVehicle`.
+ *   - CLIENT (`client/src/pages/frotas/Veiculos.tsx`): KPI "Valor do Inventário" exclui veículos
+ *     `statusVeiculo === "Vendido"` do somatório de FIPE (antes somava todos); `openEdit` carrega
+ *     `valorVenda`; `save()` bloqueia com toast se Vendido sem valor de venda; campo "Valor da Venda (R$)"
+ *     (MoneyInput, asterisco vermelho) aparece condicionalmente no diálogo quando o status é "Vendido".
+ *
+ * VALIDAÇÃO: parse esbuild do TSX EXIT 0; esbuild do server EXIT 0. version.ts=2709.
+ *
  * Rev. 2708 — **FROTA · EDITAR/NOVO VEÍCULO (`/frotas` → "Veículos" → abrir/novo) · O DIÁLOGO EM TELA
  * CHEIA DEIXOU DE TER FUNDO ACINZENTADO/TRANSLÚCIDO (`bg-muted/30`) E PASSOU A TER FUNDO BRANCO SÓLIDO,
  * COMO O USUÁRIO PEDIU.**

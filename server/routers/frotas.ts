@@ -29,6 +29,7 @@ async function ensureFleetTables() {
       ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS data_aquisicao DATE;
       ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS valor_compra NUMERIC(14,2);
       ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS valor_fipe NUMERIC(14,2);
+      ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS valor_venda NUMERIC(14,2);
       ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS fipe_codigo_marca VARCHAR(10);
       ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS fipe_codigo_modelo VARCHAR(10);
       ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS fipe_codigo_ano VARCHAR(10);
@@ -643,6 +644,7 @@ export const frotasRouter = router({
       dataAquisicao: z.string().nullable().optional(),
       valorCompra: z.string().nullable().optional(),
       valorFipe: z.string().nullable().optional(),
+      valorVenda: z.string().nullable().optional(),
       fipeCodigoMarca: z.string().nullable().optional(),
       fipeCodigoModelo: z.string().nullable().optional(),
       fipeCodigoAno: z.string().nullable().optional(),
@@ -656,9 +658,21 @@ export const frotasRouter = router({
       seguroVencimento: z.string().nullable().optional(),
       observacoes: z.string().nullable().optional(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       if (!tablesReady) { await ensureFleetTables(); tablesReady = true; }
       const db = await getDb();
+      // Guard de tenancy: impede criar veículo em empresa alheia (IDOR de escrita).
+      if (ctx.user?.companyId && String(ctx.user.companyId) !== String(input.companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para esta empresa" });
+      }
+      // Se uma obra foi informada, o usuário precisa ter acesso a ela.
+      if (input.obraId != null && !(await userCanAccessObra(ctx.user.id, ctx.user.role, input.obraId))) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso à obra destino" });
+      }
+      // Veículo VENDIDO exige o valor da venda.
+      if ((input.statusVeiculo || "") === "Vendido" && !(parseFloat(input.valorVenda || "0") > 0)) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Veículo marcado como Vendido: informe o valor da venda." });
+      }
       const [v] = await db.insert(vehicles).values({
         companyId: input.companyId,
         tipoVeiculo: input.tipoVeiculo,
@@ -684,6 +698,7 @@ export const frotasRouter = router({
         dataAquisicao: input.dataAquisicao || null,
         valorCompra: input.valorCompra || null,
         valorFipe: input.valorFipe || null,
+        valorVenda: input.valorVenda || null,
         fipeCodigoMarca: input.fipeCodigoMarca || null,
         fipeCodigoModelo: input.fipeCodigoModelo || null,
         fipeCodigoAno: input.fipeCodigoAno || null,
@@ -723,6 +738,7 @@ export const frotasRouter = router({
       dataAquisicao: z.string().nullable().optional(),
       valorCompra: z.string().nullable().optional(),
       valorFipe: z.string().nullable().optional(),
+      valorVenda: z.string().nullable().optional(),
       fipeCodigoMarca: z.string().nullable().optional(),
       fipeCodigoModelo: z.string().nullable().optional(),
       fipeCodigoAno: z.string().nullable().optional(),
@@ -741,10 +757,21 @@ export const frotasRouter = router({
       const db = await getDb();
       // Guard: precisa ter acesso à obra ATUAL do veículo e, se estiver
       // mudando, à obra DESTINO também (impede mover veículo para obra alheia).
-      const cur = await db.execute(sql`SELECT obra_id FROM vehicles WHERE id = ${input.id} AND "companyId" = ${input.companyId}`);
-      const curObra = ((cur as any).rows?.[0] || (cur as any)[0])?.obra_id ?? null;
+      const cur = await db.execute(sql`SELECT obra_id, valor_venda, "statusVeiculo" FROM vehicles WHERE id = ${input.id} AND "companyId" = ${input.companyId}`);
+      const curRow = (cur as any).rows?.[0] || (cur as any)[0];
+      const curObra = curRow?.obra_id ?? null;
       if (!(await userCanAccessObra(ctx.user.id, ctx.user.role, curObra))) {
         throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a este veículo" });
+      }
+      // Veículo VENDIDO exige o valor da venda (novo no input OU já gravado).
+      const statusFinal = input.statusVeiculo !== undefined ? input.statusVeiculo : (curRow?.statusVeiculo || "");
+      if (statusFinal === "Vendido") {
+        const vendaNovo = input.valorVenda !== undefined ? parseFloat(input.valorVenda || "0") : NaN;
+        const vendaAtual = parseFloat(curRow?.valor_venda || "0");
+        const temVenda = (Number.isFinite(vendaNovo) && vendaNovo > 0) || (input.valorVenda === undefined && vendaAtual > 0);
+        if (!temVenda) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Veículo marcado como Vendido: informe o valor da venda." });
+        }
       }
       // input.obraId === null significa "limpar obra"; userCanAccessObra
       // retorna false para null (exceto admin), então não-admin não pode limpar.

@@ -202,7 +202,7 @@ export default function Veiculos() {
       cor: v.cor, kmAtual: v.km_atual, responsavel: v.responsavel,
       motoristaPadrao: v.motorista_padrao, motoristaPadraoInicio: v.motorista_padrao_inicio,
       statusVeiculo: v.statusVeiculo, dataAquisicao: v.data_aquisicao,
-      valorCompra: v.valor_compra, valorFipe: v.valor_fipe,
+      valorCompra: v.valor_compra, valorFipe: v.valor_fipe, valorVenda: v.valor_venda,
       fipeCodigoMarca: v.fipe_codigo_marca, fipeCodigoModelo: v.fipe_codigo_modelo,
       fipeCodigoAno: v.fipe_codigo_ano, depreciacaoAnos: v.depreciacao_anos || 5,
       crlvVencimento: v.crlv_vencimento, seguroVencimento: v.seguro_vencimento,
@@ -214,6 +214,10 @@ export default function Veiculos() {
   function save() {
     if (!form.modelo || !form.tipoVeiculo) {
       toast.error("Preencha modelo e tipo");
+      return;
+    }
+    if ((form.statusVeiculo || "") === "Vendido" && !(parseFloat(form.valorVenda || "0") > 0)) {
+      toast.error("Veículo marcado como Vendido: informe o valor da venda.");
       return;
     }
     const fipeVal = fipeValor.data?.Valor
@@ -398,7 +402,7 @@ export default function Veiculos() {
 
             {/* Linha secundária — inventário / FIPE / cadastro incompleto */}
             {scoped.length > 0 && (() => {
-              const totalFipe = scoped.reduce((s: number, v: any) => s + parseFloat(v.valor_fipe || "0"), 0);
+              const totalFipe = scoped.reduce((s: number, v: any) => (v.statusVeiculo || "") === "Vendido" ? s : s + parseFloat(v.valor_fipe || "0"), 0);
               const comFipe = scoped.filter((v: any) => parseFloat(v.valor_fipe || "0") > 0).length;
               const incompletos = (pendingReg.data || []).length;
               return (
@@ -632,6 +636,15 @@ export default function Veiculos() {
                         <SelectContent>{STATUS.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
                       </Select>
                     </div>
+                    {(form.statusVeiculo || "") === "Vendido" && (
+                      <div className="sm:col-span-2">
+                        <Label className="text-xs font-medium text-foreground/80 mb-1.5 block">
+                          Valor da Venda (R$) <span className="text-red-500">*</span>
+                        </Label>
+                        <MoneyInput className="h-10" value={form.valorVenda} onChange={v => setForm({ ...form, valorVenda: v })} />
+                        <p className="text-[11px] text-muted-foreground mt-1">Obrigatório para veículos vendidos. O veículo sai do "Valor do Inventário".</p>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
