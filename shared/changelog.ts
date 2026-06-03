@@ -1,6 +1,39 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2716 — **FROTA · EDITAR VEÍCULO (`/frotas` → "Veículos" → abrir um veículo) · NOVA SEÇÃO DE
+ * UPLOAD DE DOCUMENTOS DO VEÍCULO (CRLV, COMPROVANTE DE COMPRA, LAUDO ETC.) DENTRO DA "DOCUMENTAÇÃO",
+ * IGUAL AO ANEXO QUE MANUTENÇÕES/COMBUSTÍVEL JÁ TÊM.**
+ *
+ * PEDIDO (usuário, print IMG_1529): "Onde eu faço o upload do documento igual os demais tem?" — na tela
+ * Editar Veículo só dava pra trocar a FOTO; não havia onde anexar um arquivo (ex.: o CRLV em PDF) do
+ * próprio veículo, embora as outras telas de Frotas (Seguros/Manutenções/Combustível) já tivessem upload.
+ *
+ * SOLUÇÃO (SCHEMA não-destrutivo + SERVER + CLIENT — R-001/R-007/R-010 OK; `ADD COLUMN IF NOT EXISTS`):
+ * - SCHEMA (`drizzle/schema.ts`): nova coluna `vehicles.documentos JSONB DEFAULT '[]'` (array de
+ *   `{ nome, url, key, contentType, tamanho, uploadedAt }`, mesmo SHAPE dos anexos de manutenção/combustível).
+ * - SELF-HEAL (`server/routers/frotas.ts` `ensureFleetTables`): `ALTER TABLE vehicles ADD COLUMN IF NOT
+ *   EXISTS documentos JSONB DEFAULT '[]'` (auto-cura em qualquer banco antigo).
+ * - SERVER (`server/routers/frotas.ts`): dois novos endpoints espelhando o padrão de
+ *   `uploadMaintenanceAttachment`/`removeMaintenanceAttachment`:
+ *     • `uploadVehicleDocument` (companyId, vehicleId, fileName, fileData base64) — valida extensão
+ *       (pdf/doc/docx/jpg/jpeg/png/webp/xls/xlsx/txt/csv), limite 10MB, mapeia contentType seguro,
+ *       guarda de empresa (`ctx.user.companyId`) + guarda de obra (`userCanAccessObra` pelo `obra_id` do
+ *       veículo), `storagePut` em `vehicles/{companyId}/{vehicleId}/docs/...`, anexa ao array JSONB e
+ *       devolve `documentos` atualizado.
+ *     • `removeVehicleDocument` (companyId, vehicleId, key) — mesmas guardas, remove do array e apaga o
+ *       registro em `uploaded_files` (best-effort).
+ * - CLIENT (`client/src/pages/frotas/Veiculos.tsx`): mutations `uploadVehicleDocument`/`removeVehicleDocument`
+ *   + input file oculto + handler `handleDocChange` (ArrayBuffer→base64, limite 10MB). Nova subseção
+ *   "Documentos anexados" no card Documentação: botão "Anexar" (desabilitado se for veículo NOVO ainda não
+ *   salvo, igual à foto), lista dos documentos com link de abrir/baixar, tamanho em MB e botão de remover
+ *   (com confirm). `openEdit` passou a carregar `documentos: v.documentos || []` no `form`.
+ *
+ * RESSALVA: o upload só funciona em veículo JÁ salvo (precisa do `vehicleId`), mesma limitação da foto —
+ * em "Novo Veículo" a seção mostra "Salve o veículo primeiro para poder anexar documentos."
+ *
+ * VALIDAÇÃO: esbuild server (`frotas.ts`) EXIT 0 + parse esbuild do TSX (`Veiculos.tsx`) EXIT 0.
+ *
  * Rev. 2715 — **FROTA · DASHBOARD DE MANUTENÇÃO (`/frotas` → "Manutenções" → "Dashboard") · CORRIGIDO DE
  * VEZ O ERRO DA "ANÁLISE INTELIGENTE (IA)" ("The string did not match the expected pattern.") COM
  * ORÇAMENTO DE TEMPO NO SERVIDOR + PARECER DETERMINÍSTICO GARANTIDO — O USUÁRIO NUNCA MAIS VÊ ERRO.**

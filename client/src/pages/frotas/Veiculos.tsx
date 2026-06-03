@@ -117,6 +117,41 @@ export default function Veiculos() {
   const dialogPhotoRef = useRef<HTMLInputElement>(null);
   const [photoTargetId, setPhotoTargetId] = useState<number | null>(null);
 
+  const docInputRef = useRef<HTMLInputElement>(null);
+  const uploadDocMut = trpc.frotas.uploadVehicleDocument.useMutation({
+    onSuccess: (data) => {
+      vehicles.refetch();
+      setForm((f: any) => ({ ...f, documentos: data.documentos }));
+      toast.success("Documento anexado");
+    },
+    onError: (err) => toast.error("Erro ao anexar documento: " + err.message),
+  });
+  const removeDocMut = trpc.frotas.removeVehicleDocument.useMutation({
+    onSuccess: (data) => {
+      vehicles.refetch();
+      setForm((f: any) => ({ ...f, documentos: data.documentos }));
+      toast.success("Documento removido");
+    },
+    onError: (err) => toast.error("Erro ao remover documento: " + err.message),
+  });
+
+  function handleDocChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file || !editing) return;
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error("Arquivo muito grande (máx. 10MB)");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const result = ev.target?.result as ArrayBuffer;
+      const base64 = btoa(new Uint8Array(result).reduce((d, b) => d + String.fromCharCode(b), ''));
+      uploadDocMut.mutate({ companyId: cId, vehicleId: editing.id, fileName: file.name, fileData: base64 });
+    };
+    reader.readAsArrayBuffer(file);
+  }
+
   function handlePhotoClick(vehicleId: number) {
     setPhotoTargetId(vehicleId);
     photoInputRef.current?.click();
@@ -206,7 +241,7 @@ export default function Veiculos() {
       fipeCodigoMarca: v.fipe_codigo_marca, fipeCodigoModelo: v.fipe_codigo_modelo,
       fipeCodigoAno: v.fipe_codigo_ano, depreciacaoAnos: v.depreciacao_anos || 5,
       crlvVencimento: v.crlv_vencimento, seguroVencimento: v.seguro_vencimento,
-      observacoes: v.observacoes, fotoUrl: v.foto_url,
+      observacoes: v.observacoes, fotoUrl: v.foto_url, documentos: v.documentos || [],
     });
     setDialogOpen(true);
   }
@@ -690,6 +725,67 @@ export default function Veiculos() {
                     <Label className="text-xs font-medium text-foreground/80 mb-1.5 block">Vencimento Seguro</Label>
                     <Input className="h-10" type="date" value={form.seguroVencimento || ""} onChange={e => setForm({ ...form, seguroVencimento: e.target.value })} />
                   </div>
+                </div>
+
+                {/* Anexos / Documentos do veículo */}
+                <div className="mt-5 pt-5 border-t">
+                  <div className="flex items-center justify-between mb-3 gap-2">
+                    <div>
+                      <Label className="text-xs font-semibold text-foreground/80 block">Documentos anexados</Label>
+                      <p className="text-[11px] text-muted-foreground">CRLV, comprovante de compra, laudo etc. (PDF, imagem, Word, Excel — máx. 10MB)</p>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-9 shrink-0"
+                      disabled={!editing || uploadDocMut.isPending}
+                      onClick={() => docInputRef.current?.click()}
+                    >
+                      {uploadDocMut.isPending ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <FileDown className="h-4 w-4 mr-1.5 rotate-180" />}
+                      Anexar
+                    </Button>
+                  </div>
+                  <input
+                    type="file"
+                    ref={docInputRef}
+                    className="hidden"
+                    accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.webp,.xls,.xlsx,.txt,.csv"
+                    onChange={handleDocChange}
+                  />
+                  {!editing ? (
+                    <p className="text-xs text-muted-foreground italic">Salve o veículo primeiro para poder anexar documentos.</p>
+                  ) : (form.documentos && form.documentos.length > 0) ? (
+                    <ul className="space-y-2">
+                      {form.documentos.map((doc: any) => (
+                        <li key={doc.key} className="flex items-center gap-2 rounded-lg border bg-muted/30 px-3 py-2">
+                          <FileText className="h-4 w-4 text-blue-600 shrink-0" />
+                          <a
+                            href={doc.url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-xs text-blue-700 hover:underline truncate flex-1 min-w-0"
+                            title={doc.nome}
+                          >
+                            {doc.nome}
+                          </a>
+                          <span className="text-[10px] text-muted-foreground shrink-0">{(doc.tamanho / 1024 / 1024).toFixed(2)} MB</span>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 shrink-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                            disabled={removeDocMut.isPending}
+                            onClick={() => { if (confirm(`Remover o documento "${doc.nome}"?`)) removeDocMut.mutate({ companyId: cId, vehicleId: editing.id, key: doc.key }); }}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="text-xs text-muted-foreground italic">Nenhum documento anexado ainda.</p>
+                  )}
                 </div>
               </div>
 

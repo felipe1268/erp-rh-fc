@@ -41,6 +41,7 @@ async function ensureFleetTables() {
       ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS crlv_vencimento DATE;
       ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS seguro_url TEXT;
       ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS seguro_vencimento DATE;
+      ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS documentos JSONB DEFAULT '[]';
       ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS cadastro_consolidado BOOLEAN DEFAULT FALSE;
       ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS cadastro_consolidado_em TIMESTAMP;
       ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS cadastro_consolidado_por VARCHAR(255);
@@ -838,6 +839,88 @@ export const frotasRouter = router({
       await db.update(vehicles).set({ fotoUrl, updatedAt: new Date().toISOString() } as any)
         .where(and(eq(vehicles.id, input.vehicleId), eq(vehicles.companyId, input.companyId)));
       return { fotoUrl };
+    }),
+
+  uploadVehicleDocument: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      vehicleId: z.number(),
+      fileName: z.string(),
+      fileData: z.string(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      if (ctx.user?.companyId && String(ctx.user.companyId) !== String(input.companyId)) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'Sem permissão para esta empresa' });
+      }
+      const ALLOWED_EXTENSIONS = ['.pdf', '.doc', '.docx', '.jpg', '.jpeg', '.png', '.webp', '.xls', '.xlsx', '.txt', '.csv'];
+      const ext = (input.fileName.match(/\.[^.]+$/) || [''])[0].toLowerCase();
+      if (!ALLOWED_EXTENSIONS.includes(ext)) {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: `Tipo de arquivo não permitido (${ext}). Use: ${ALLOWED_EXTENSIONS.join(', ')}` });
+      }
+      const buffer = Buffer.from(input.fileData, 'base64');
+      if (buffer.length > 10 * 1024 * 1024) {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'Arquivo muito grande (máximo 10MB)' });
+      }
+      const SAFE_CONTENT_TYPES: Record<string, string> = {
+        '.pdf': 'application/pdf', '.doc': 'application/msword',
+        '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp',
+        '.xls': 'application/vnd.ms-excel', '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        '.txt': 'text/plain', '.csv': 'text/csv',
+      };
+      const ct = SAFE_CONTENT_TYPES[ext] || 'application/octet-stream';
+
+      const db = await getDb();
+      const existing = await db.execute(sql`SELECT obra_id, documentos FROM vehicles WHERE id = ${input.vehicleId} AND "companyId" = ${input.companyId}`);
+      const rows = (existing as any).rows || existing || [];
+      if (rows.length === 0) throw new TRPCError({ code: 'NOT_FOUND', message: 'Veículo não encontrado' });
+      if (!(await userCanAccessObra(ctx.user.id, ctx.user.role, rows[0].obra_id))) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'Sem acesso a este veículo' });
+      }
+
+      const safeFileName = input.fileName.replace(/[^a-zA-Z0-9._-]/g, '_');
+      const storageKey = `vehicles/${input.companyId}/${input.vehicleId}/docs/${Date.now()}_${safeFileName}`;
+      const { url } = await storagePut(storageKey, buffer, ct);
+
+      const currentDocs = (rows[0].documentos || []) as any[];
+      const newDoc = { nome: input.fileName, url, key: storageKey, contentType: ct, tamanho: buffer.length, uploadedAt: new Date().toISOString() };
+      const updatedDocs = [...currentDocs, newDoc];
+
+      await db.execute(sql`UPDATE vehicles SET documentos = ${JSON.stringify(updatedDocs)}::jsonb, "updatedAt" = NOW() WHERE id = ${input.vehicleId} AND "companyId" = ${input.companyId}`);
+      return { success: true, documento: newDoc, documentos: updatedDocs };
+    }),
+
+  removeVehicleDocument: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      vehicleId: z.number(),
+      key: z.string(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      if (ctx.user?.companyId && String(ctx.user.companyId) !== String(input.companyId)) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'Sem permissão para esta empresa' });
+      }
+      const db = await getDb();
+      const existing = await db.execute(sql`SELECT obra_id, documentos FROM vehicles WHERE id = ${input.vehicleId} AND "companyId" = ${input.companyId}`);
+      const rows = (existing as any).rows || existing || [];
+      if (rows.length === 0) throw new TRPCError({ code: 'NOT_FOUND', message: 'Veículo não encontrado' });
+      if (!(await userCanAccessObra(ctx.user.id, ctx.user.role, rows[0].obra_id))) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'Sem acesso a este veículo' });
+      }
+
+      const currentDocs = (rows[0].documentos || []) as any[];
+      const removedDoc = currentDocs.find((d: any) => d.key === input.key);
+      const updatedDocs = currentDocs.filter((d: any) => d.key !== input.key);
+
+      await db.execute(sql`UPDATE vehicles SET documentos = ${JSON.stringify(updatedDocs)}::jsonb, "updatedAt" = NOW() WHERE id = ${input.vehicleId} AND "companyId" = ${input.companyId}`);
+
+      if (removedDoc?.key) {
+        try {
+          await db.execute(sql`DELETE FROM uploaded_files WHERE file_key = ${removedDoc.key}`);
+        } catch (_e) {}
+      }
+
+      return { success: true, documentos: updatedDocs };
     }),
 
   deleteVehicle: protectedProcedure

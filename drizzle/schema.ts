@@ -3300,6 +3300,7 @@ export const vehicles = pgTable("vehicles", {
         crlvVencimento: date("crlv_vencimento", { mode: 'string' }),
         seguroUrl: text("seguro_url"),
         seguroVencimento: date("seguro_vencimento", { mode: 'string' }),
+        documentos: jsonb("documentos").default([]),
         observacoes: text(),
         createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
         updatedAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
