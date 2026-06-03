@@ -1,6 +1,48 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2737 — **PJ · CONTRATOS · CLÁUSULA QUARTA (PRAZO E FORMA DE EXECUÇÃO): O PRAZO DE VALIDADE DEIXA DE SER
+ * HARDCODED "1 (UM) ANO" E PASSA A SER DERIVADO DA VIGÊNCIA PREENCHIDA DO CONTRATO (dataInicio → dataFim).**
+ *
+ * PEDIDO (relato + prints): "o contrato de pj está puxando o texto padrão de 1 ano, porém essa informação tem que
+ * vir do preenchimento da vigência do contrato, corrija isso". No print, o contrato PJ-2026-0131 (NILTON GOMES ROCHA)
+ * tinha Vigência "01/06/2026 — 30/11/2026" (6 meses), mas a Cláusula 4.1 dizia "validade de 1 (um) ano e terá início
+ * a partir do dia 01 de junho de 2026" — prazo divergente da vigência real.
+ *
+ * CONTEXTO: o modelo padrão do contrato PJ (`MODELO_CONTRATO_PJ` em `server/routers/pjContracts.ts`, retornado por
+ * `pj.modeloContrato` e renderizado em 3 caminhos: a tela `ContratoPJView.tsx` (Gerar/Imprimir), o `gerarTexto` do
+ * server e o HTML de assinatura do FCSign `client/src/lib/contratoPjDocument.ts`) tinha o literal "1 (um) ano" cravado
+ * na linha 4.1. Os 3 caminhos já substituíam placeholders (`[DATA_INICIO]`, `[DATA_FIM]`, `[VALOR_*]`, etc.), mas o
+ * PRAZO não era um placeholder — era texto fixo. O contrato tem `dataInicio`/`dataFim` (campos de Vigência, notNull no
+ * `create`), então a informação para derivar o prazo já existe.
+ *
+ * SOLUÇÃO (SERVER + CLIENT/UI; ZERO SCHEMA; ZERO ALTER/DROP/DELETE — R-001/R-007/R-010):
+ * (1) NOVO HELPER COMPARTILHADO (`shared/contratoPrazo.ts`): `calcularPrazoVigencia(dataInicio, dataFim)` e
+ *     `mesesDeVigencia(...)`. A contagem de meses é INCLUSIVA (do mês de início ao mês de fim, inclusive) — MESMA
+ *     semântica do motor de previsões mensais `gerarPrevisoesDoContrato` (a vigência cobre N meses de referência),
+ *     garantindo coerência com a folha PJ. Ex.: 01/06/2026 → 30/11/2026 = 6 → "6 (seis) meses"; 01/06/2026 →
+ *     31/05/2027 = 12 → "1 (um) ano"; 24 → "2 (dois) anos"; 1 → "1 (um) mês". Quando os meses são múltiplos de 12 e
+ *     ≥ 12, expressa em ANOS (mais natural juridicamente), senão em MESES. Inclui `numeroPorExtenso(n)` (0–999) para o
+ *     valor por extenso entre parênteses. Fallback "prazo determinado" quando faltam datas ou o range é inválido
+ *     (fim antes do início) — nunca quebra o documento. Pós code-review: a guarda de inversão passou ao nível de DIA
+ *     (ex.: 30/06 → 01/06 no MESMO mês agora cai no fallback, antes retornava "1 mês").
+ * (2) TEMPLATE (`MODELO_CONTRATO_PJ`, linha 4.1): "validade de 1 (um) ano" → "validade de [PRAZO_VIGENCIA]". Restante
+ *     da frase ("e terá início a partir do dia [DATA_INICIO]") preservado — mudança mínima e cirúrgica.
+ * (3) SUBSTITUIÇÃO DO PLACEHOLDER `[PRAZO_VIGENCIA]` nos 3 renderizadores: `gerarTexto` (server), `replacePlaceholders`
+ *     da `ContratoPJView.tsx` e da `contratoPjDocument.ts` (FCSign) — todos chamando `calcularPrazoVigencia` com a
+ *     vigência do próprio contrato, mantendo PARIDADE entre visualização/impressão e documento assinável.
+ *
+ * RESSALVA: o default PARALELO `MODELO_CONTRATO_PJ_DEFAULT` em `server/routers/controleDocumentos.ts` (retornado pelo
+ * editor de modelos `documentTemplates` p/ `tipo='contrato_pj'`) ainda contém "1 (um) ano". Foi DELIBERADAMENTE NÃO
+ * tocado: esse template não é o renderizado no contrato exibido/impresso/assinado (que usa `pj.modeloContrato` →
+ * `MODELO_CONTRATO_PJ`) e seu caminho de render NÃO substitui `[PRAZO_VIGENCIA]` — trocá-lo ali exibiria o placeholder
+ * cru. Se algum dia o editor de modelos passar a alimentar o contrato PJ, sincronizar os dois e adicionar o replace.
+ *
+ * VALIDAÇÃO: esbuild parse EXIT 0 (helper + router + view + lib); sanity do helper bate os casos esperados (6 meses,
+ * 1 ano, 2 anos, 1 mês, fallback); `vitest server/rescisao.test.ts` 41/41 verde. (tsc full estoura heap no ambiente —
+ * limitação de memória, não erro de tipo.) Arquivos: `shared/contratoPrazo.ts` (novo), `server/routers/pjContracts.ts`,
+ * `client/src/pages/ContratoPJView.tsx`, `client/src/lib/contratoPjDocument.ts`, `shared/version.ts`.
+ *
  * Rev. 2736 — **PJ · CONTRATOS · ASSINATURA DIGITAL COM LINK (FCSign): NOVO ENVIO DE CONTRATO DE PRESTAÇÃO DE
  * SERVIÇOS PARA ASSINATURA POR LINK ÚNICO POR SIGNATÁRIO (CONTRATADA + CONTRATANTE + TESTEMUNHAS OPCIONAIS).**
  *

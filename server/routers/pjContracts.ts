@@ -6,6 +6,7 @@ import { eq, and, sql, isNull, desc, asc, lte, gte, inArray } from "drizzle-orm"
 import { resolveCompanyIds, companyFilter } from "../companyHelper";
 import { TRPCError } from "@trpc/server";
 import { storagePut } from "../storage";
+import { calcularPrazoVigencia } from "../../shared/contratoPrazo";
 
 // ---------------------------------------------------------------------------
 // Helpers de geração de medições previstas (Folha PJ)
@@ -175,7 +176,7 @@ Parágrafo Único – A inobservância do disposto na presente cláusula, sujeit
 
 CLÁUSULA QUARTA: PRAZO E FORMA DE EXECUÇÃO
 
-4.1 O contrato tem validade de 1 (um) ano e terá início a partir do dia [DATA_INICIO], nas seguintes condições:
+4.1 O contrato tem validade de [PRAZO_VIGENCIA] e terá início a partir do dia [DATA_INICIO], nas seguintes condições:
 
 a) O presente contrato poderá ser rescindido pela CONTRATANTE, a qualquer momento, desde que haja comprovação de quebra de quaisquer cláusulas deste contrato por parte da CONTRATADA;
 
@@ -480,6 +481,7 @@ export const pjContractsRouter = router({
         texto = texto.replace(/\[PRESTADOR_CNPJ\]/g, contrato.cnpjPrestador || '');
         texto = texto.replace(/\[PRESTADOR_ENDERECO\]/g, emp.logradouro || '');
         texto = texto.replace(/\[OBJETO_CONTRATO\]/g, contrato.objetoContrato || '');
+        texto = texto.replace(/\[PRAZO_VIGENCIA\]/g, calcularPrazoVigencia(contrato.dataInicio, contrato.dataFim));
         texto = texto.replace(/\[DATA_INICIO\]/g, contrato.dataInicio || '');
         texto = texto.replace(/\[DATA_FIM\]/g, contrato.dataFim || '');
         texto = texto.replace(/\[VALOR_MENSAL\]/g, valorMensal.toLocaleString('pt-BR', { minimumFractionDigits: 2 }));

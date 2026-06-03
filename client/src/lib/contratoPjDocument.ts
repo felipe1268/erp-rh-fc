@@ -19,6 +19,7 @@
  * respeitando o filtro XSS do `signatures.create`.
  */
 import { buildFcDocument, type FcDocumentParams } from "./fcDocumentTemplate";
+import { calcularPrazoVigencia } from "@shared/contratoPrazo";
 
 function esc(v: unknown): string {
   if (v === null || v === undefined) return "";
@@ -183,6 +184,7 @@ function replacePlaceholders(text: string, c: ContratoPjForDoc): string {
     .replace(/\[PERCENTUAL_FECHAMENTO\]/g, String(percFechamento))
     .replace(/\[DIA_ADIANTAMENTO\]/g, String(diaAdiantamento))
     .replace(/\[DIA_FECHAMENTO\]/g, String(diaFechamento))
+    .replace(/\[PRAZO_VIGENCIA\]/g, calcularPrazoVigencia(c.dataInicio, c.dataFim))
     .replace(/\[DATA_INICIO\]/g, formatDateExtenso(c.dataInicio))
     .replace(/\[DATA_FIM\]/g, formatDate(c.dataFim))
     .replace(/\[DATA_ASSINATURA\]/g, dataAssinatura)

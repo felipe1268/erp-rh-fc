@@ -7,6 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { useCompany } from "@/contexts/CompanyContext";
 import PrintFooterLGPD from "@/components/PrintFooterLGPD";
 import { toast } from "sonner";
+import { calcularPrazoVigencia } from "@shared/contratoPrazo";
 
 function formatDate(d: string | null | undefined) {
   if (!d) return "___/___/______";
@@ -249,6 +250,7 @@ function ContratoPJViewInner({ routeContratoId }: { routeContratoId: number }) {
       .replace(/\[PERCENTUAL_FECHAMENTO\]/g, String(percFechamento))
       .replace(/\[DIA_ADIANTAMENTO\]/g, String(diaAdiantamento))
       .replace(/\[DIA_FECHAMENTO\]/g, String(diaFechamento))
+      .replace(/\[PRAZO_VIGENCIA\]/g, calcularPrazoVigencia(contrato.dataInicio, contrato.dataFim))
       .replace(/\[DATA_INICIO\]/g, formatDateExtenso(contrato.dataInicio))
       .replace(/\[DATA_FIM\]/g, formatDate(contrato.dataFim))
       .replace(/\[DATA_ASSINATURA\]/g, dataAssinatura)
