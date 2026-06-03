@@ -1,6 +1,35 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2726 — **RH · RESCISÃO / HOME + AVISO PRÉVIO (card "Avisos Prévios em Andamento" x lista "Aviso
+ * Prévio" x ficha "Cálculos da Rescisão") · CORRIGE EM DEFINITIVO A DIVERGÊNCIA DE VALORES (Rev. 2725 não
+ * resolveu): O CARD/LISTA IGNORAVAM AS FÉRIAS VENCIDAS QUE A FICHA INCLUÍA — caso Mariana: card R$ 11.799,50
+ * x SUBTOTAL PROVENTOS R$ 19.391,67, diferença EXATA de R$ 7.592,17 = "Férias Vencidas (1 período)".**
+ *
+ * PERGUNTA DO USUÁRIO: "por que a rescisão soma férias se a Mariana não tem vencidas?" RESPOSTA (regra CLT):
+ * ELA TEM SIM uma férias vencida na rescisão. O período aquisitivo 07/05/2025–06/05/2026 foi COMPLETADO (ela
+ * trabalhou os 12 meses cheios) e NÃO foi gozado nem pago. Na tela "Férias" ele aparece como "A Vencer"
+ * porque o prazo CONCESSIVO (limite p/ a empresa conceder, ~mai/2027) ainda não passou — mas isso é
+ * irrelevante na RESCISÃO: período aquisitivo completo e não gozado = férias INTEGRAIS devidas na saída
+ * (salário 5.694,13 + 1/3 = R$ 7.592,17). Logo a FICHA (19.391,67) está CORRETA; o CARD/LISTA (sem a vencida)
+ * estavam ERRADOS.
+ *
+ * CAUSA-RAIZ (confirmada com query direta no Neon): a contagem de férias vencidas tem 2 implementações. O
+ * `getById` (ficha) usa parâmetro tipado (`< ${dataFim}`) → o Postgres infere DATE → conta 1, certo. Mas o
+ * `list` (página Aviso Prévio) e o `homeData` (card/home) usam uma query EM LOTE com `(VALUES (...)) AS
+ * p(emp_id, data_fim)` — onde `data_fim` vem como TEXT — e comparam `vp."periodoAquisitivoFim" < p.data_fim`.
+ * Como `periodoAquisitivoFim`/`dataPagamento` são colunas DATE, o Postgres lança `operator does not exist:
+ * date < text`, a query INTEIRA falha, cai no `try/catch` e o mapa de contagens fica VAZIO → 0 vencidas p/
+ * TODO MUNDO. Por isso o card (mesmo recalculado ao vivo na Rev. 2725) somava proventos SEM a férias vencida.
+ *
+ * SOLUÇÃO (SÓ SERVER; ZERO SCHEMA — R-001/R-007/R-010 OK): cast explícito `p.data_fim::date` nas duas
+ * comparações de data da query em lote, em `server/routers/avisoPrevioFerias.ts` (`list`) e
+ * `server/routers/homeData.ts` (card/home). Com isso a query deixa de lançar, conta 1 vencida p/ a Mariana
+ * (chave do mapa `420109|2026-06-13` casa com a leitura), e o card/lista convergem p/ R$ 19.391,67 = SUBTOTAL
+ * PROVENTOS da ficha. Nenhuma alteração de lógica de cálculo (rescisaoCalc intacto) — apenas a contagem que
+ * antes falhava silenciosa agora funciona. Validação: query Neon (direto x batch corrigido = 1, chaves
+ * batem); esbuild server EXIT 0; `vitest server/rescisao.test.ts` verde.
+ *
  * Rev. 2725 — **RH · RESCISÃO / HOME (Painel RH — card "Avisos Prévios em Andamento" x ficha "Cálculos da
  * Rescisão") · CORRIGE A DIVERGÊNCIA DE VALORES: O CARD DA TELA INICIAL E O "TOTAL ESTIMADO DA RESCISÃO" DA
  * FICHA MOSTRAVAM UM VALOR (PERSISTIDO/CONGELADO) DIFERENTE DO "SUBTOTAL PROVENTOS" (RECALCULADO AO VIVO).

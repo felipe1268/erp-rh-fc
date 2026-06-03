@@ -623,8 +623,8 @@ export const homeDataRouter = router({
                 ON vp."employeeId" = p.emp_id
                 AND vp.status NOT IN ('concluida', 'cancelada', 'em_gozo')
                 AND vp."periodoAquisitivoFim" IS NOT NULL
-                AND vp."periodoAquisitivoFim" < p.data_fim
-                AND (vp."dataPagamento" IS NULL OR vp."dataPagamento" > p.data_fim)
+                AND vp."periodoAquisitivoFim" < p.data_fim::date
+                AND (vp."dataPagamento" IS NULL OR vp."dataPagamento" > p.data_fim::date)
                 AND vp."deletedAt" IS NULL
               GROUP BY p.emp_id, p.data_fim
             `)) as any).rows || [];
