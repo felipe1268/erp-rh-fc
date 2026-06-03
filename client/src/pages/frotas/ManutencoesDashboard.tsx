@@ -151,20 +151,26 @@ export default function ManutencoesDashboard() {
   return (
     <DashboardLayout>
       <div className="space-y-4 p-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-xl bg-gradient-to-br from-orange-500 to-amber-600 text-white">
-              <Wrench className="h-6 w-6" />
+        {/* Rev. 2712 — HERO header moderno: faixa gradiente escura com brilhos,
+            chip de ícone elevado e seletor de ano em vidro (glassmorphism). */}
+        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-[#1e293b] via-[#1e3a5f] to-[#0f172a] p-5 sm:p-6 shadow-lg">
+          <div className="pointer-events-none absolute -top-16 -right-10 h-56 w-56 rounded-full bg-orange-500/20 blur-3xl" />
+          <div className="pointer-events-none absolute -bottom-20 -left-10 h-56 w-56 rounded-full bg-violet-500/20 blur-3xl" />
+          <div className="relative flex flex-wrap items-center justify-between gap-4">
+            <div className="flex items-center gap-4">
+              <div className="rounded-2xl bg-gradient-to-br from-orange-500 to-amber-500 p-3 text-white shadow-lg shadow-orange-900/30 ring-1 ring-white/20">
+                <Wrench className="h-7 w-7" />
+              </div>
+              <div>
+                <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-white">Dashboard de Manutenção</h1>
+                <p className="text-sm text-slate-300/90">Peças, serviços e custos por veículo — com análise inteligente de frota</p>
+              </div>
             </div>
-            <div>
-              <h1 className="text-2xl font-bold text-[#1e3a5f] dark:text-blue-300">Dashboard de Manutenção</h1>
-              <p className="text-sm text-muted-foreground">Análise completa de peças, serviços e custos por veículo</p>
+            <div className="flex items-center gap-1 rounded-xl bg-white/10 px-2 py-1.5 ring-1 ring-white/15 backdrop-blur-md">
+              <button onClick={() => setAno(a => a - 1)} className="rounded-lg p-1.5 text-white/80 transition-colors hover:bg-white/10 hover:text-white"><ChevronLeft className="h-4 w-4" /></button>
+              <span className="min-w-[64px] text-center text-lg font-bold tabular-nums text-white">{ano}</span>
+              <button onClick={() => setAno(a => a + 1)} className="rounded-lg p-1.5 text-white/80 transition-colors hover:bg-white/10 hover:text-white"><ChevronRight className="h-4 w-4" /></button>
             </div>
-          </div>
-          <div className="flex items-center gap-2 bg-white dark:bg-slate-800 rounded-xl px-3 py-1.5 shadow-sm border">
-            <button onClick={() => setAno(a => a - 1)} className="hover:bg-slate-100 dark:hover:bg-slate-700 p-1 rounded"><ChevronLeft className="h-4 w-4" /></button>
-            <span className="font-bold text-lg tabular-nums min-w-[60px] text-center">{ano}</span>
-            <button onClick={() => setAno(a => a + 1)} className="hover:bg-slate-100 dark:hover:bg-slate-700 p-1 rounded"><ChevronRight className="h-4 w-4" /></button>
           </div>
         </div>
 
@@ -179,13 +185,15 @@ export default function ManutencoesDashboard() {
             { label: "Custo Médio", value: fmt(kpi.custoMedio), icon: Gauge, color: "from-cyan-500 to-teal-500" },
             { label: "Maior OS", value: fmt(kpi.custoMax), icon: TrendingUp, color: "from-amber-500 to-yellow-500" },
           ].map((k, i) => (
-            <Card key={i} className="relative overflow-hidden">
+            <Card key={i} className="group relative overflow-hidden border-slate-200/70 dark:border-slate-700/60 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md">
+              <div className={`absolute inset-x-0 top-0 h-1 bg-gradient-to-r ${k.color}`} />
               <CardContent className="p-3">
-                <div className={`absolute top-0 right-0 w-12 h-12 bg-gradient-to-br ${k.color} opacity-10 rounded-bl-3xl`} />
-                <k.icon className={`h-4 w-4 mb-1 bg-gradient-to-br ${k.color} bg-clip-text`} style={{ color: k.color.includes("emerald") ? "#10b981" : k.color.includes("blue") ? "#3b82f6" : k.color.includes("red") ? "#ef4444" : k.color.includes("violet") ? "#8b5cf6" : k.color.includes("pink") ? "#ec4899" : k.color.includes("cyan") ? "#06b6d4" : k.color.includes("amber") ? "#f59e0b" : "#f97316" }} />
-                <p className="text-[10px] text-muted-foreground uppercase tracking-wider">{k.label}</p>
-                <p className="text-lg font-bold tabular-nums">{k.value}</p>
-                {k.sub && <span className="text-[10px] text-muted-foreground">{k.sub}</span>}
+                <div className={`mb-2 inline-flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br ${k.color} text-white shadow-sm transition-transform duration-200 group-hover:scale-105`}>
+                  <k.icon className="h-4 w-4" />
+                </div>
+                <p className="truncate text-[10px] uppercase tracking-wider text-muted-foreground">{k.label}</p>
+                <p className="text-lg font-bold leading-tight tabular-nums">{k.value}</p>
+                {k.sub && <span className="text-[10px] font-medium text-muted-foreground">{k.sub}</span>}
               </CardContent>
             </Card>
           ))}

@@ -4708,6 +4708,12 @@ IMPORTANTE:
           ],
           maxTokens: 6000,
           response_format: { type: "json_object" },
+          // Rev. 2712 — CAMINHO RÁPIDO (Gemini 2.5 Flash, thinking OFF). O parecer
+          // pede ~6000 tokens; no Claude Sonnet NÃO-streaming isso leva 60-120s e
+          // estoura o timeout do proxy/iOS — a conexão morre e o Safari lança a
+          // DOMException "The string did not match the expected pattern." que
+          // aparecia como erro da IA. O caminho rápido responde em poucos segundos.
+          fast: true,
         });
         const raw = result.choices?.[0]?.message?.content;
         const txt = typeof raw === "string" ? raw : Array.isArray(raw) ? raw.map((p: any) => (typeof p === "string" ? p : p?.text ?? "")).join("") : "";

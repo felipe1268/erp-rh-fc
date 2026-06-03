@@ -1,6 +1,49 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2712 — **FROTA · DASHBOARD DE MANUTENÇÃO (`/frotas` → "Manutenções" → "Dashboard") · (1)
+ * CORRIGIDO O ERRO DA "ANÁLISE INTELIGENTE (IA)" ("Não foi possível concluir a análise: The string
+ * did not match the expected pattern.") E (2) LAYOUT MODERNIZADO (HERO HEADER + KPIs).**
+ *
+ * PEDIDO (usuário, prints IMG_1522/1523/1524): "Tá com erro, na ia... e quero um layout moderno e
+ * inovador".
+ *
+ * CAUSA-RAIZ DO ERRO DA IA: o endpoint `getMaintenanceAIAnalysis` (`server/routers/frotas.ts`) chamava
+ * `invokeLLM` SEM `fast: true`, ou seja, pelo caminho padrão (Claude Sonnet NÃO-streaming) pedindo
+ * ~6000 tokens de saída estruturada. Esse caminho leva 60-120s para retornar — exatamente o cenário do
+ * "trava em 95%" que a Rev. 2585 já havia mapeado. Antes de o servidor responder, o timeout do
+ * proxy/iOS encerra a conexão; no Safari o `fetch` abortado lança a DOMException "The string did not
+ * match the expected pattern.", que subia pelo tRPC e aparecia no card como erro da IA (`aiMut.isError`).
+ * Confirmado que a mensagem é uma DOMException do WebKit (Node/undici produz mensagens diferentes —
+ * "invalid header value" / "Failed to parse URL"), logo a origem é a conexão morrendo no cliente.
+ *
+ * SOLUÇÃO (1) — SÓ SERVER; ZERO SCHEMA/ALTER (R-001/R-007/R-010): adicionado `fast: true` na chamada
+ * `invokeLLM` de `getMaintenanceAIAnalysis`. Com isso a geração passa pelo `invokeGeminiFast` (Gemini
+ * 2.5 Flash com `thinkingBudget: 0`), que responde em poucos segundos e respeita o `response_format`
+ * json_object (`responseMimeType: application/json`). `GOOGLE_API_KEY` já está configurada. Como já
+ * havia fallback Claude no `invokeLLM` para quando o caminho rápido falha, a robustez é mantida. Toda a
+ * sanitização "facts-only" do parecer (placas válidas, enum de recomendação, clamp do score) segue
+ * intacta.
+ *
+ * SOLUÇÃO (2) — SÓ CLIENT/UI; ZERO SERVER/SCHEMA (`client/src/pages/frotas/ManutencoesDashboard.tsx`):
+ * (a) HERO HEADER — o cabeçalho virou uma faixa em gradiente escuro (`from-[#1e293b] via-[#1e3a5f]
+ * to-[#0f172a]`) com dois brilhos desfocados (laranja/violeta), chip de ícone elevado (ring + shadow) e
+ * seletor de ano em vidro (`bg-white/10 backdrop-blur-md`); (b) KPIs — os 8 cards trocaram o ícone
+ * "bg-clip-text" (hack com cor inline) por um chip de ícone em gradiente sólido branco, ganharam barra
+ * de acento no topo (`h-1 bg-gradient-to-r`) e micro-interação de hover (`-translate-y-0.5` +
+ * `hover:shadow-md` + `group-hover:scale-105` no chip). NENHUM dado, query, gráfico, tabela ou handler
+ * foi alterado — apenas a casca visual do topo.
+ *
+ * ARQUIVOS: `server/routers/frotas.ts` (`getMaintenanceAIAnalysis` + `fast: true`),
+ * `client/src/pages/frotas/ManutencoesDashboard.tsx` (hero header + KPIs).
+ *
+ * VALIDAÇÃO: esbuild do TSX (client) EXIT 0 + esbuild do server EXIT 0.
+ *
+ * RESSALVA: a paridade exata da resposta da IA entre Claude e Gemini Flash pode variar em estilo de
+ * texto, mas os números são determinísticos (vêm do SQL) e a IA só interpreta.
+ *
+ * ----------------------------------------------------------------------------------------------------
+ *
  * Rev. 2711 — **FROTA · VEÍCULOS (`/frotas` → "Veículos") · QUANDO O VEÍCULO ESTÁ COM STATUS "VENDIDO",
  * O CARD AGORA MOSTRA O VALOR DA VENDA EM DESTAQUE (BLOCO VERMELHO "VENDIDO POR R$ X").**
  *
