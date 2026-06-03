@@ -2660,7 +2660,7 @@ export const financialRouter = router({
     const res = await dbExecute(db, 
       `SELECT id, "companyId", banco, "codigoBanco", agencia, conta,
               "tipoConta" AS tipo, apelido AS descricao, ativo
-       FROM company_bank_accounts WHERE "companyId" IN (${inlineIds(ids)}) ORDER BY banco ASC`,
+       FROM company_bank_accounts WHERE "companyId" IN (${inlineIds(ids)}) AND "deletedAt" IS NULL AND ativo = 1 ORDER BY banco ASC`,
       []
     );
     return rows(res);

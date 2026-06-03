@@ -1,6 +1,50 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2728 — **FINANCEIRO · LANÇAMENTOS / NOVO LANÇAMENTO → TRANSFERÊNCIA (modal de transferência interna,
+ * selects "Conta de Origem" / "Conta de Destino") · CORRIGE O BUG EM QUE SELECIONAR UMA CONTA MARCAVA DUAS
+ * AO MESMO TEMPO (ex.: clicava Santander e aparecia a Caixa junto, com DOIS checkmarks) + LAYOUT QUE CORTAVA
+ * O NOME DA CONTA. INCLUI REPARO DE DADOS DE IDS DUPLICADOS EM PRODUÇÃO.**
+ *
+ * RELATO DO USUÁRIO: no modal de transferência, ao selecionar o Santander aparecia também a Caixa e as duas
+ * opções ficavam marcadas; além disso o layout quebrava e cortava o texto da conta bancária.
+ *
+ * CAUSA-RAIZ (confirmada por query direta no Neon): a tabela `company_bank_accounts` tem `id: serial()` SEM
+ * PRIMARY KEY / UNIQUE e a sequence `company_bank_accounts_id_seq` estava DESSINCRONIZADA (`last_value=2`
+ * enquanto já existia `id=3`). Resultado: todo INSERT novo reusava um id já existente. A empresa 60002 (única
+ * com contas; a tabela inteira só tinha 5 linhas) ficou com: `id=1` em DUAS linhas idênticas da Caixa
+ * 0306/1596-0 (ambas soft-deletadas no mesmo instante — o delete por `WHERE id=1` atingiu as duas, colateral
+ * do próprio bug); `id=2` COLIDINDO entre Caixa-Guaratinguetá (criada fev, 22 lançamentos) e Santander
+ * (criada no dia, 0 referências). Com value/key repetidos, o Radix Select marca os dois itens; e a mutation de
+ * transferência (`id IN (origem,destino)` exigindo exatamente 2 linhas) retornaria 3-4 linhas → transferência
+ * QUEBRAVA. Logo o reparo de DADOS era OBRIGATÓRIO (não havia solução só-frontend). Além disso `getBankAccounts`
+ * NÃO filtrava `deletedAt`/`ativo`, então contas excluídas continuavam no dropdown.
+ *
+ * SOLUÇÃO — DADOS (produção, SÓ via UPDATE + setval; ZERO ALTER/DROP/DELETE — R-001/R-007/R-010 OK), tudo em
+ * transação com verificação de rowCount=1 por update:
+ *   • Santander (0 referências em TODAS as tabelas — verificado): `id=2 → 4`.
+ *   • Cópia DUPLICADA da Caixa (criada 02/06, a que sobrou do delete): `id=1 → 5`, mantida soft-deletada.
+ *   • Caixa ORIGINAL (criada 22/02, 67 lançamentos em `id=1`): RESTAURADA (`deletedAt=NULL`) — estava sendo
+ *     usada como conta de ORIGEM da transferência no screenshot do usuário; a exclusão foi colateral do bug.
+ *   • `setval('company_bank_accounts_id_seq', 5)` (= max(id) global) → próximos INSERTs não colidem mais.
+ *   • Estado final (ids únicos entre as ativas): 1=Caixa, 2=Guaratinguetá, 3=Aparecida, 4=Santander,
+ *     5=cópia da Caixa (deletada). Validação: nenhum id ativo duplicado restante.
+ *
+ * SOLUÇÃO — CÓDIGO:
+ *   • BACKEND `server/routers/financial.ts` (`getBankAccounts`): query passa a filtrar
+ *     `AND "deletedAt" IS NULL AND ativo = 1` (alinha com a query irmã que já usava `ativo=1`), removendo
+ *     contas excluídas/inativas dos dropdowns (Lançamentos, Contas a Pagar, Contas a Receber, CFO Suite,
+ *     Conciliação — todos consumidores de `getBankAccounts`).
+ *   • FRONTEND `client/src/pages/financeiro/FinanceiroLancamentos.tsx` (selects de transferência): grid
+ *     `grid-cols-1 sm:grid-cols-2` (empilha em telas estreitas), `min-w-0` nas células e `w-full min-w-0` no
+ *     SelectTrigger (deixa truncar em vez de estourar), `SelectContent align="start"` (antes o default `center`
+ *     fazia o popover vazar p/ a esquerda e ser cortado pela borda do modal) com
+ *     `max-w-[min(22rem,calc(100vw-2rem))]`, e cada item embrulhado em `<span className="truncate">`.
+ *
+ * VALIDAÇÃO: queries Neon (antes/depois do reparo; 0 referências do Santander; sem ids ativos duplicados após
+ * o fix); esbuild server `server/_core/index.ts` EXIT 0; `npx vitest run server/rescisao.test.ts` verde;
+ * architect review.
+ *
  * Rev. 2727 — **RH · RAIO-X DO FUNCIONÁRIO / TIMELINE CRONOLÓGICA (`controleDocumentos.raioX`) · A MUDANÇA DE
  * OBRA DO FUNCIONÁRIO AGORA FICA REGISTRADA NA TIMELINE (antes nunca aparecia).**
  *

@@ -1000,28 +1000,28 @@ export default function FinanceiroLancamentos() {
                   </div>
 
                   {/* Origem / Destino */}
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="min-w-0">
                       <p className="text-[11px] text-gray-400 mb-1 flex items-center gap-1"><ArrowUpRight className="w-3 h-3 text-red-500" />Conta de Origem *</p>
                       <Select value={form.contaBancariaOrigemId} onValueChange={v => setForm(f => ({ ...f, contaBancariaOrigemId: v }))}>
-                        <SelectTrigger className="h-9"><SelectValue placeholder="Selecione" /></SelectTrigger>
-                        <SelectContent>
+                        <SelectTrigger className="h-9 w-full min-w-0"><SelectValue placeholder="Selecione" /></SelectTrigger>
+                        <SelectContent align="start" className="max-w-[min(22rem,calc(100vw-2rem))]">
                           {(bankAccounts ?? []).map((b: any) => (
                             <SelectItem key={b.id} value={String(b.id)}>
-                              {(b.descricao || b.banco)}{b.conta ? ` · ${b.agencia ?? ""}/${b.conta}` : ""}
+                              <span className="truncate">{(b.descricao || b.banco)}{b.conta ? ` · ${b.agencia ?? ""}/${b.conta}` : ""}</span>
                             </SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
                     </div>
-                    <div>
+                    <div className="min-w-0">
                       <p className="text-[11px] text-gray-400 mb-1 flex items-center gap-1"><ArrowDownRight className="w-3 h-3 text-green-600" />Conta de Destino *</p>
                       <Select value={form.contaBancariaDestinoId} onValueChange={v => setForm(f => ({ ...f, contaBancariaDestinoId: v }))}>
-                        <SelectTrigger className="h-9"><SelectValue placeholder="Selecione" /></SelectTrigger>
-                        <SelectContent>
+                        <SelectTrigger className="h-9 w-full min-w-0"><SelectValue placeholder="Selecione" /></SelectTrigger>
+                        <SelectContent align="start" className="max-w-[min(22rem,calc(100vw-2rem))]">
                           {(bankAccounts ?? []).map((b: any) => (
                             <SelectItem key={b.id} value={String(b.id)}>
-                              {(b.descricao || b.banco)}{b.conta ? ` · ${b.agencia ?? ""}/${b.conta}` : ""}
+                              <span className="truncate">{(b.descricao || b.banco)}{b.conta ? ` · ${b.agencia ?? ""}/${b.conta}` : ""}</span>
                             </SelectItem>
                           ))}
                         </SelectContent>
