@@ -4622,6 +4622,220 @@ IMPORTANTE:
       };
     }),
 
+  // Rev. 2719 — DASHBOARD DETERMINÍSTICO DE PEÇAS RECORRENTES (SEM IA).
+  // Mesma peça (nome normalizado) trocada >= 2x no MESMO veículo, com intervalo
+  // em DIAS e KM entre as trocas. Roda em SQL puro (verdade determinística) e
+  // carrega no load da tela — não depende da IA. Usa TODO o histórico (uma peça
+  // trocada em dez/ano-1 e jan/ano-0 é um repeat de intervalo curto), por isso
+  // NÃO filtra por ano. Devolve a lista + agregados prontos para os gráficos.
+  getRecurringPartsDashboard: protectedProcedure
+    .input(z.object({ companyId: z.number(), ano: z.number().optional() }))
+    .query(async ({ ctx, input }) => {
+      if (ctx.user?.companyId !== undefined && String(ctx.user.companyId) !== String(input.companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para acessar dados desta empresa" });
+      }
+      if (!tablesReady) { await ensureFleetTables(); tablesReady = true; }
+      const db = await getDb();
+      const { companyId } = input;
+
+      const recorrRes = await db.execute(sql`
+        WITH eventos AS (
+          SELECT fm.vehicle_id AS vehicle_id,
+                 LOWER(TRIM(mi.nome)) AS nome_norm,
+                 MAX(mi.nome) AS nome,
+                 fm.data_manutencao AS data,
+                 fm.id AS os_id,
+                 MAX(fm.km_na_manutencao::numeric) AS km,
+                 SUM(mi.valor_total::numeric) AS valor
+          FROM fleet_maintenance_items mi
+          JOIN fleet_maintenances fm ON fm.id = mi.maintenance_id
+          WHERE fm.company_id = ${companyId} AND fm.status != 'cancelada'
+            AND mi.categoria = 'peca' AND COALESCE(TRIM(mi.nome), '') <> ''
+          GROUP BY fm.vehicle_id, LOWER(TRIM(mi.nome)), fm.data_manutencao, fm.id
+        ),
+        gaps AS (
+          SELECT e.*,
+            (e.data - LAG(e.data) OVER (PARTITION BY e.vehicle_id, e.nome_norm ORDER BY e.data, e.os_id))::int AS dias_anterior,
+            (e.km - LAG(e.km) OVER (PARTITION BY e.vehicle_id, e.nome_norm ORDER BY e.data, e.os_id))::numeric AS km_anterior
+          FROM eventos e
+        )
+        SELECT g.vehicle_id, v.placa, v.modelo, v.marca, g.nome_norm,
+               MAX(g.nome) AS nome,
+               COUNT(*)::int AS trocas,
+               MIN(g.data) AS primeira,
+               MAX(g.data) AS ultima,
+               MIN(g.dias_anterior) AS menor_intervalo_dias,
+               ROUND(AVG(g.dias_anterior))::int AS intervalo_medio_dias,
+               MIN(NULLIF(g.km_anterior, 0)) AS menor_intervalo_km,
+               SUM(g.valor)::numeric AS custo_total
+        FROM gaps g
+        JOIN vehicles v ON v.id = g.vehicle_id
+        GROUP BY g.vehicle_id, v.placa, v.modelo, v.marca, g.nome_norm
+        HAVING COUNT(*) >= 2
+        ORDER BY menor_intervalo_dias ASC NULLS LAST, trocas DESC, custo_total DESC
+        LIMIT 300
+      `);
+
+      const recorrencias = (((recorrRes as any).rows) || []).map((r: any) => ({
+        vehicleId: r.vehicle_id, placa: r.placa, modelo: r.modelo, marca: r.marca,
+        peca: r.nome,
+        nomeNorm: r.nome_norm,
+        trocas: parseInt(r.trocas) || 0,
+        primeira: r.primeira, ultima: r.ultima,
+        menorIntervaloDias: r.menor_intervalo_dias != null ? parseInt(r.menor_intervalo_dias) : null,
+        intervaloMedioDias: r.intervalo_medio_dias != null ? parseInt(r.intervalo_medio_dias) : null,
+        menorIntervaloKm: r.menor_intervalo_km != null ? parseFloat(r.menor_intervalo_km) : null,
+        custoTotal: parseFloat(r.custo_total) || 0,
+      }));
+
+      // CRÍTICA = menor intervalo entre trocas <= 180 dias (defeito crônico).
+      const isCritica = (r: any) => r.menorIntervaloDias != null && r.menorIntervaloDias <= 180;
+
+      // KPIs
+      const veiculosAfetados = new Set(recorrencias.map((r: any) => r.vehicleId)).size;
+      const custoTotalRecorrencias = recorrencias.reduce((s: number, r: any) => s + (r.custoTotal || 0), 0);
+      const criticas = recorrencias.filter(isCritica).length;
+      const totalTrocas = recorrencias.reduce((s: number, r: any) => s + (r.trocas || 0), 0);
+
+      // Top peças (por custo e por frequência) — linha = placa · peça
+      const topPorCusto = [...recorrencias]
+        .sort((a, b) => b.custoTotal - a.custoTotal)
+        .slice(0, 10)
+        .map((r) => ({ label: `${r.placa} · ${r.peca}`, placa: r.placa, peca: r.peca, custo: r.custoTotal, trocas: r.trocas, critica: isCritica(r) }));
+      const topPorFrequencia = [...recorrencias]
+        .sort((a, b) => b.trocas - a.trocas || b.custoTotal - a.custoTotal)
+        .slice(0, 10)
+        .map((r) => ({ label: `${r.placa} · ${r.peca}`, placa: r.placa, peca: r.peca, custo: r.custoTotal, trocas: r.trocas, critica: isCritica(r) }));
+
+      // Ranking por VEÍCULO (quantas peças recorrentes, quantas críticas, custo)
+      const porVeicMap: Record<number, any> = {};
+      for (const r of recorrencias) {
+        const k = r.vehicleId;
+        if (!porVeicMap[k]) porVeicMap[k] = { vehicleId: k, placa: r.placa, modelo: r.modelo, marca: r.marca, qtd: 0, criticas: 0, custo: 0, trocas: 0 };
+        porVeicMap[k].qtd += 1;
+        porVeicMap[k].trocas += r.trocas || 0;
+        porVeicMap[k].custo += r.custoTotal || 0;
+        if (isCritica(r)) porVeicMap[k].criticas += 1;
+      }
+      const porVeiculo = Object.values(porVeicMap).sort((a: any, b: any) => b.custo - a.custo);
+
+      // Peças mais problemáticas GLOBAL (mesmo nome em vários veículos)
+      const porPecaMap: Record<string, any> = {};
+      for (const r of recorrencias) {
+        const k = r.nomeNorm;
+        if (!porPecaMap[k]) porPecaMap[k] = { peca: r.peca, veiculos: new Set<number>(), trocas: 0, custo: 0, criticas: 0, menorIntervaloDias: null as number | null };
+        porPecaMap[k].veiculos.add(r.vehicleId);
+        porPecaMap[k].trocas += r.trocas || 0;
+        porPecaMap[k].custo += r.custoTotal || 0;
+        if (isCritica(r)) porPecaMap[k].criticas += 1;
+        if (r.menorIntervaloDias != null && (porPecaMap[k].menorIntervaloDias == null || r.menorIntervaloDias < porPecaMap[k].menorIntervaloDias)) {
+          porPecaMap[k].menorIntervaloDias = r.menorIntervaloDias;
+        }
+      }
+      const pecasGlobais = Object.values(porPecaMap)
+        .map((p: any) => ({ peca: p.peca, veiculos: p.veiculos.size, trocas: p.trocas, custo: p.custo, criticas: p.criticas, menorIntervaloDias: p.menorIntervaloDias }))
+        .sort((a: any, b: any) => b.custo - a.custo)
+        .slice(0, 12);
+
+      // Distribuição do MENOR intervalo entre trocas (em dias)
+      const buckets = [
+        { faixa: "≤ 30 dias", min: 0, max: 30, qtd: 0 },
+        { faixa: "31–90 dias", min: 31, max: 90, qtd: 0 },
+        { faixa: "91–180 dias", min: 91, max: 180, qtd: 0 },
+        { faixa: "181–365 dias", min: 181, max: 365, qtd: 0 },
+        { faixa: "> 365 dias", min: 366, max: Infinity, qtd: 0 },
+      ];
+      for (const r of recorrencias) {
+        if (r.menorIntervaloDias == null) continue;
+        const b = buckets.find((b) => r.menorIntervaloDias >= b.min && r.menorIntervaloDias <= b.max);
+        if (b) b.qtd += 1;
+      }
+      const distribuicaoIntervalo = buckets.map((b) => ({ faixa: b.faixa, qtd: b.qtd }));
+
+      return {
+        recorrencias,
+        kpi: {
+          totalRecorrencias: recorrencias.length,
+          criticas,
+          custoTotalRecorrencias,
+          veiculosAfetados,
+          pecasDistintas: Object.keys(porPecaMap).length,
+          totalTrocas,
+        },
+        topPorCusto,
+        topPorFrequencia,
+        porVeiculo,
+        pecasGlobais,
+        distribuicaoIntervalo,
+      };
+    }),
+
+  // Rev. 2719 — HISTÓRICO DE PEÇAS DE UM VEÍCULO (para ALERTA ao lançar peça).
+  // Para CADA peça já trocada no veículo, devolve nº de trocas, última data/km,
+  // menor intervalo (dias/km), intervalo médio e custo. O cliente normaliza o
+  // nome digitado e cruza com este mapa para alertar "esta peça já foi trocada".
+  getVehiclePartHistory: protectedProcedure
+    .input(z.object({ companyId: z.number(), vehicleId: z.number() }))
+    .query(async ({ ctx, input }) => {
+      if (ctx.user?.companyId !== undefined && String(ctx.user.companyId) !== String(input.companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para acessar dados desta empresa" });
+      }
+      if (!tablesReady) { await ensureFleetTables(); tablesReady = true; }
+      const db = await getDb();
+      const { companyId, vehicleId } = input;
+
+      const res = await db.execute(sql`
+        WITH eventos AS (
+          SELECT LOWER(TRIM(mi.nome)) AS nome_norm,
+                 MAX(mi.nome) AS nome,
+                 fm.data_manutencao AS data,
+                 fm.id AS os_id,
+                 MAX(fm.km_na_manutencao::numeric) AS km,
+                 SUM(mi.valor_total::numeric) AS valor
+          FROM fleet_maintenance_items mi
+          JOIN fleet_maintenances fm ON fm.id = mi.maintenance_id
+          WHERE fm.company_id = ${companyId} AND fm.vehicle_id = ${vehicleId}
+            AND fm.status != 'cancelada' AND mi.categoria = 'peca'
+            AND COALESCE(TRIM(mi.nome), '') <> ''
+          GROUP BY LOWER(TRIM(mi.nome)), fm.data_manutencao, fm.id
+        ),
+        gaps AS (
+          SELECT e.*,
+            (e.data - LAG(e.data) OVER (PARTITION BY e.nome_norm ORDER BY e.data, e.os_id))::int AS dias_anterior,
+            (e.km - LAG(e.km) OVER (PARTITION BY e.nome_norm ORDER BY e.data, e.os_id))::numeric AS km_anterior
+          FROM eventos e
+        )
+        SELECT nome_norm,
+               MAX(nome) AS nome,
+               COUNT(*)::int AS trocas,
+               MIN(data) AS primeira,
+               MAX(data) AS ultima,
+               (ARRAY_AGG(km ORDER BY data DESC, os_id DESC))[1] AS ultimo_km,
+               MIN(dias_anterior) AS menor_intervalo_dias,
+               ROUND(AVG(dias_anterior))::int AS intervalo_medio_dias,
+               MIN(NULLIF(km_anterior, 0)) AS menor_intervalo_km,
+               SUM(valor)::numeric AS custo_total
+        FROM gaps
+        GROUP BY nome_norm
+        ORDER BY trocas DESC, ultima DESC
+      `);
+
+      const pecas = (((res as any).rows) || []).map((r: any) => ({
+        nomeNorm: r.nome_norm,
+        peca: r.nome,
+        trocas: parseInt(r.trocas) || 0,
+        primeira: r.primeira,
+        ultima: r.ultima,
+        ultimoKm: r.ultimo_km != null ? parseFloat(r.ultimo_km) : null,
+        menorIntervaloDias: r.menor_intervalo_dias != null ? parseInt(r.menor_intervalo_dias) : null,
+        intervaloMedioDias: r.intervalo_medio_dias != null ? parseInt(r.intervalo_medio_dias) : null,
+        menorIntervaloKm: r.menor_intervalo_km != null ? parseFloat(r.menor_intervalo_km) : null,
+        custoTotal: parseFloat(r.custo_total) || 0,
+      }));
+
+      return { pecas };
+    }),
+
   // Rev. 2707 — ANÁLISE INTELIGENTE (IA) DE MANUTENÇÃO. Cruza PEÇAS
   // RECORRENTES (mesma peça trocada >=2x no MESMO veículo, com o intervalo em
   // DIAS e KM entre as trocas) — sinal de "ralo de dinheiro" — e gera, via LLM,

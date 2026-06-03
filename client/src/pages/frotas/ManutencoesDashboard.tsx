@@ -40,6 +40,12 @@ export default function ManutencoesDashboard() {
     { enabled: cId > 0 },
   );
 
+  // Rev. 2719 — PEÇAS RECORRENTES DETERMINÍSTICAS (sem IA): carrega no load.
+  const rec = trpc.frotas.getRecurringPartsDashboard.useQuery(
+    { companyId: cId },
+    { enabled: cId > 0 },
+  );
+
   // Rev. 2718 — análise PERSISTIDA: a query carrega o último snapshot no load
   // (fica FIXADA na tela); a mutation recalcula + regrava e o refetch atualiza.
   const aiQuery = trpc.frotas.getMaintenanceAIAnalysisLatest.useQuery(
@@ -243,6 +249,210 @@ export default function ManutencoesDashboard() {
             </Card>
           ))}
         </div>
+
+        {/* Rev. 2719 — PEÇAS RECORRENTES (DETERMINÍSTICO, SEM IA). Carrega no
+            load; cruza o histórico real e mostra onde o dinheiro está vazando. */}
+        <Card className="border-red-200 dark:border-red-900/40 bg-gradient-to-br from-red-50/50 to-orange-50/30 dark:from-red-950/15 dark:to-orange-950/10">
+          <CardHeader className="pb-2">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-xl bg-gradient-to-br from-red-500 to-orange-500 text-white shadow-sm">
+                  <Repeat className="h-5 w-5" />
+                </div>
+                <div>
+                  <CardTitle className="text-base">Peças Recorrentes</CardTitle>
+                  <p className="text-xs text-muted-foreground">
+                    Mesma peça trocada <span className="font-medium">2× ou mais</span> no mesmo veículo — análise automática (sem IA), com base em <span className="font-medium">todo o histórico</span>
+                  </p>
+                </div>
+              </div>
+              <Badge variant="outline" className="border-red-200 text-red-700 dark:border-red-800 dark:text-red-300 bg-white/60 dark:bg-transparent">
+                <Activity className="h-3 w-3 mr-1" /> Atualiza sozinho
+              </Badge>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {rec.isLoading ? (
+              <div className="flex items-center justify-center gap-2 py-10 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin text-red-500" /> Cruzando o histórico de peças…
+              </div>
+            ) : (recKpi.totalRecorrencias || 0) === 0 ? (
+              <div className="text-center py-10 px-4">
+                <ShieldCheck className="h-10 w-10 mx-auto text-emerald-400 mb-3" />
+                <p className="text-sm text-muted-foreground max-w-lg mx-auto">
+                  Nenhuma peça foi trocada mais de uma vez no mesmo veículo — <span className="font-medium text-emerald-700 dark:text-emerald-400">sem recorrência detectada</span>.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-5">
+                {/* KPIs */}
+                <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-2.5">
+                  <div className="rounded-xl bg-white dark:bg-slate-800 border shadow-sm p-3">
+                    <p className="text-[10px] text-muted-foreground flex items-center gap-1"><Repeat className="h-3 w-3" /> Recorrências</p>
+                    <p className="text-lg font-bold tabular-nums leading-tight">{fmtNum(recKpi.totalRecorrencias)}</p>
+                    <p className="text-[10px] text-muted-foreground">peça × veículo</p>
+                  </div>
+                  <div className="rounded-xl bg-white dark:bg-slate-800 border shadow-sm p-3">
+                    <p className="text-[10px] text-muted-foreground flex items-center gap-1"><AlertTriangle className="h-3 w-3 text-red-500" /> Críticas</p>
+                    <p className="text-lg font-bold tabular-nums leading-tight text-red-600 dark:text-red-400">{fmtNum(recKpi.criticas)}</p>
+                    <p className="text-[10px] text-muted-foreground">intervalo ≤ 180 dias</p>
+                  </div>
+                  <div className="rounded-xl bg-white dark:bg-slate-800 border shadow-sm p-3">
+                    <p className="text-[10px] text-muted-foreground flex items-center gap-1"><Coins className="h-3 w-3" /> Custo recorrente</p>
+                    <p className="text-lg font-bold tabular-nums leading-tight text-emerald-700 dark:text-emerald-400">{fmt(recKpi.custoTotalRecorrencias)}</p>
+                    <p className="text-[10px] text-muted-foreground">{fmtNum(recKpi.totalTrocas)} trocas</p>
+                  </div>
+                  <div className="rounded-xl bg-white dark:bg-slate-800 border shadow-sm p-3">
+                    <p className="text-[10px] text-muted-foreground flex items-center gap-1"><Truck className="h-3 w-3" /> Veículos afetados</p>
+                    <p className="text-lg font-bold tabular-nums leading-tight">{fmtNum(recKpi.veiculosAfetados)}</p>
+                    <p className="text-[10px] text-muted-foreground">com recorrência</p>
+                  </div>
+                  <div className="rounded-xl bg-white dark:bg-slate-800 border shadow-sm p-3">
+                    <p className="text-[10px] text-muted-foreground flex items-center gap-1"><Package className="h-3 w-3" /> Peças distintas</p>
+                    <p className="text-lg font-bold tabular-nums leading-tight">{fmtNum(recKpi.pecasDistintas)}</p>
+                    <p className="text-[10px] text-muted-foreground">tipos de peça</p>
+                  </div>
+                </div>
+
+                {/* Gráficos: top por custo + distribuição de intervalo */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                  <div className="rounded-xl bg-white dark:bg-slate-800 border shadow-sm p-4">
+                    <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-2 flex items-center gap-1.5">
+                      <Coins className="h-3.5 w-3.5 text-emerald-500" /> Top peças por custo recorrente
+                    </p>
+                    <ResponsiveContainer width="100%" height={Math.max(180, recTopCusto.length * 34)}>
+                      <BarChart data={recTopCusto} layout="vertical" margin={{ left: 0, right: 12, top: 4, bottom: 4 }} barCategoryGap="22%">
+                        <CartesianGrid strokeDasharray="3 3" horizontal={false} className="stroke-slate-200 dark:stroke-slate-700" />
+                        <XAxis type="number" tickFormatter={(v) => fmt(v)} tick={{ fontSize: 10 }} />
+                        <YAxis type="category" dataKey="label" width={150} tick={{ fontSize: 10 }} />
+                        <Tooltip formatter={(v: any) => fmt(Number(v))} contentStyle={{ fontSize: 12, borderRadius: 8 }} />
+                        <Bar dataKey="custo" radius={[0, 4, 4, 0]}>
+                          {recTopCusto.map((e, i) => <Cell key={i} fill={e.critica ? "#ef4444" : "#10b981"} />)}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                  <div className="rounded-xl bg-white dark:bg-slate-800 border shadow-sm p-4">
+                    <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-2 flex items-center gap-1.5">
+                      <Timer className="h-3.5 w-3.5 text-orange-500" /> Distribuição do menor intervalo entre trocas
+                    </p>
+                    <ResponsiveContainer width="100%" height={Math.max(180, recDist.length * 38)}>
+                      <BarChart data={recDist} layout="vertical" margin={{ left: 0, right: 24, top: 4, bottom: 4 }} barCategoryGap="22%">
+                        <CartesianGrid strokeDasharray="3 3" horizontal={false} className="stroke-slate-200 dark:stroke-slate-700" />
+                        <XAxis type="number" allowDecimals={false} tick={{ fontSize: 10 }} />
+                        <YAxis type="category" dataKey="faixa" width={92} tick={{ fontSize: 10 }} />
+                        <Tooltip formatter={(v: any) => [`${v} peça(s)`, "Qtd"]} contentStyle={{ fontSize: 12, borderRadius: 8 }} />
+                        <Bar dataKey="qtd" radius={[0, 4, 4, 0]}>
+                          {recDist.map((_, i) => <Cell key={i} fill={i <= 2 ? ["#dc2626", "#f97316", "#f59e0b"][i] : "#94a3b8"} />)}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+
+                {/* Gráficos: ranking por veículo + peças problemáticas global */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                  <div className="rounded-xl bg-white dark:bg-slate-800 border shadow-sm p-4">
+                    <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-2 flex items-center gap-1.5">
+                      <Truck className="h-3.5 w-3.5 text-violet-500" /> Veículos com mais recorrência (por custo)
+                    </p>
+                    <ResponsiveContainer width="100%" height={Math.max(180, recPorVeic.length * 34)}>
+                      <BarChart data={recPorVeic} layout="vertical" margin={{ left: 0, right: 12, top: 4, bottom: 4 }} barCategoryGap="22%">
+                        <CartesianGrid strokeDasharray="3 3" horizontal={false} className="stroke-slate-200 dark:stroke-slate-700" />
+                        <XAxis type="number" tickFormatter={(v) => fmt(v)} tick={{ fontSize: 10 }} />
+                        <YAxis type="category" dataKey="placa" width={86} tick={{ fontSize: 10 }} />
+                        <Tooltip formatter={(v: any) => fmt(Number(v))} contentStyle={{ fontSize: 12, borderRadius: 8 }} />
+                        <Bar dataKey="custo" radius={[0, 4, 4, 0]} fill="#8b5cf6" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                  <div className="rounded-xl bg-white dark:bg-slate-800 border shadow-sm p-4">
+                    <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-2 flex items-center gap-1.5">
+                      <Package className="h-3.5 w-3.5 text-red-500" /> Peças mais problemáticas (toda a frota)
+                    </p>
+                    <div className="overflow-y-auto max-h-[280px] -mx-1">
+                      <table className="w-full text-xs">
+                        <thead className="bg-slate-100 dark:bg-slate-900/60 sticky top-0">
+                          <tr>
+                            <th className="p-2 text-left font-semibold">Peça</th>
+                            <th className="p-2 text-center font-semibold">Veíc.</th>
+                            <th className="p-2 text-center font-semibold">Trocas</th>
+                            <th className="p-2 text-right font-semibold">Custo</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {recPecasGlobais.map((p, i) => (
+                            <tr key={i} className={i % 2 === 0 ? "" : "bg-slate-50/50 dark:bg-slate-900/20"}>
+                              <td className="p-2 font-medium">
+                                {p.peca}
+                                {p.criticas > 0 && <AlertTriangle className="inline h-3 w-3 ml-1 text-red-500" />}
+                              </td>
+                              <td className="p-2 text-center">{p.veiculos}</td>
+                              <td className="p-2 text-center font-bold">{p.trocas}×</td>
+                              <td className="p-2 text-right font-bold text-emerald-700 dark:text-emerald-400">{fmt(p.custo)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Tabela detalhada */}
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-2 flex items-center gap-1.5">
+                    <AlertTriangle className="h-3.5 w-3.5 text-red-500" /> Detalhe — peças que se repetem em pouco tempo
+                  </p>
+                  <div className="overflow-x-auto rounded-xl border bg-white dark:bg-slate-800">
+                    <table className="w-full text-xs">
+                      <thead className="bg-slate-100 dark:bg-slate-900/60">
+                        <tr>
+                          <th className="p-2 text-left font-semibold">Veículo</th>
+                          <th className="p-2 text-left font-semibold">Peça</th>
+                          <th className="p-2 text-center font-semibold">Trocas</th>
+                          <th className="p-2 text-center font-semibold">Menor intervalo</th>
+                          <th className="p-2 text-center font-semibold">Intervalo médio</th>
+                          <th className="p-2 text-right font-semibold">Custo total</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(rec.data?.recorrencias || []).slice(0, 60).map((r: any, i: number) => {
+                          const critico = r.menorIntervaloDias != null && r.menorIntervaloDias <= 180;
+                          return (
+                            <tr key={i} className={`${i % 2 === 0 ? "" : "bg-slate-50/50 dark:bg-slate-900/20"} ${critico ? "bg-red-50/60 dark:bg-red-950/20" : ""}`}>
+                              <td className="p-2">
+                                <span className="font-mono font-bold text-[#1e3a5f] dark:text-blue-300">{r.placa}</span>
+                                <span className="block text-[10px] text-muted-foreground">{r.modelo}</span>
+                              </td>
+                              <td className="p-2 font-medium">{r.peca}</td>
+                              <td className="p-2 text-center font-bold">{r.trocas}×</td>
+                              <td className="p-2 text-center">
+                                {r.menorIntervaloDias != null ? (
+                                  <span className={`inline-flex items-center gap-1 font-semibold ${critico ? "text-red-600" : "text-slate-600 dark:text-slate-300"}`}>
+                                    {critico && <AlertTriangle className="h-3 w-3" />}
+                                    {r.menorIntervaloDias} dias
+                                  </span>
+                                ) : "—"}
+                                {r.menorIntervaloKm != null && r.menorIntervaloKm > 0 && (
+                                  <span className="block text-[10px] text-muted-foreground">{fmtNum(r.menorIntervaloKm)} km</span>
+                                )}
+                              </td>
+                              <td className="p-2 text-center text-muted-foreground">{r.intervaloMedioDias != null ? `${r.intervaloMedioDias} dias` : "—"}</td>
+                              <td className="p-2 text-right font-bold text-emerald-700 dark:text-emerald-400">{fmt(r.custoTotal)}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                  {(rec.data?.recorrencias?.length || 0) > 60 && (
+                    <p className="text-[10px] text-muted-foreground text-right mt-1">Mostrando as 60 mais críticas de {fmtNum(rec.data?.recorrencias?.length || 0)}.</p>
+                  )}
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
 
         {/* Rev. 2707 — ANÁLISE INTELIGENTE (IA): peças recorrentes + parecer Vender/Manter/Observar */}
         <Card className="border-violet-200 dark:border-violet-900/40 bg-gradient-to-br from-violet-50/60 to-indigo-50/40 dark:from-violet-950/20 dark:to-indigo-950/10">
