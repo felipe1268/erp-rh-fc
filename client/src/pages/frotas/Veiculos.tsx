@@ -29,7 +29,7 @@ export default function Veiculos() {
   const cId = parseInt(selectedCompanyId || "0");
   const [search, setSearch] = useState("");
   const [filterTipo, setFilterTipo] = useState("all");
-  const [filterStatus, setFilterStatus] = useState("all");
+  const [filterStatus, setFilterStatus] = useState("Ativo");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<any>(null);
   const [form, setForm] = useState<any>({});

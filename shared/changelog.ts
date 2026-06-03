@@ -1,6 +1,17 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2702 — **FROTA · VEÍCULOS (`/frotas` → "Veículos") · A TELA AGORA ABRE POR PADRÃO JÁ FILTRADA
+ * PELO STATUS "ATIVO" (ANTES ABRIA EM "TODOS OS STATUS", MISTURANDO INATIVOS/VENDIDOS NA LISTA).**
+ *
+ * PEDIDO (usuário, print da lista de Veículos com filtro "Todos os status"): "De padrão quero que
+ * sempre abra na tela com o status ativo".
+ *
+ * FIX (SÓ CLIENT/UI; ZERO SERVER/SCHEMA — R-001/R-007/R-010): `client/src/pages/frotas/Veiculos.tsx` —
+ * o estado inicial `filterStatus` mudou de `"all"` para `"Ativo"` (valor exato do array `STATUS`). O
+ * usuário continua livre p/ escolher "Todos os status" ou qualquer outro no `<Select>`; só o default da
+ * abertura mudou. esbuild EXIT 0 (client).
+ *
  * Rev. 2701 — **FROTA · EDITAR VEÍCULO (`/frotas` → "Veículos" → abrir veículo → "Salvar") · "MARQUEI
  * COMO VENDIDO E NÃO SALVA": O CLIQUE EM "SALVAR" FALHAVA EM SILÊNCIO — NÃO PERSISTIA E NÃO MOSTRAVA
  * NENHUM ERRO. AGORA QUALQUER FALHA DE SALVAR/CRIAR VEÍCULO APARECE NUM TOAST DE ERRO COM A MENSAGEM
