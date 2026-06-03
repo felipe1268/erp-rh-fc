@@ -1125,6 +1125,19 @@ export const controleDocumentosRouter = router({
       .mutation(async ({ input }) => {
         const db = (await getDb())!;
         const { id, ...rest } = input;
+        // Rev. 2734 — LGPD / Auditoria: após a assinatura do colaborador o documento é
+        // IMUTÁVEL (a versão assinada precisa coincidir exatamente com a ciência dada).
+        // Edição é bloqueada no servidor (autoritativo) — para corrigir, cancele e emita
+        // uma nova advertência.
+        const assinRows = ((await db.execute(
+          sql`SELECT assinatura_funcionario_url FROM warnings WHERE id = ${id}`
+        )) as any).rows || [];
+        if (assinRows[0]?.assinatura_funcionario_url) {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: "Documento já assinado pelo colaborador — não pode ser editado (LGPD/auditoria). Para corrigir, cancele e emita uma nova advertência.",
+          });
+        }
         const updateData: any = {};
         Object.entries(rest).forEach(([k, v]) => { if (v !== undefined) updateData[k] = v; });
         await db.update(warnings).set(updateData).where(eq(warnings.id, id));
@@ -1161,6 +1174,22 @@ export const controleDocumentosRouter = router({
       }))
       .mutation(async ({ input }) => {
         const db = (await getDb())!;
+        // Rev. 2734 — LGPD / Auditoria: a assinatura do colaborador é "once-only".
+        // Depois de gravada, o documento fica imutável; não pode ser re-assinada
+        // (re-assinar substituiria o artefato já assinado). Aplicador/testemunhas
+        // continuam livres (podem assinar após o colaborador). Checa ANTES do upload
+        // para não gerar arquivo órfão no storage.
+        if (input.tipoAssinante === "funcionario") {
+          const jaAssinRows = ((await db.execute(
+            sql`SELECT assinatura_funcionario_url FROM warnings WHERE id = ${input.advertenciaId}`
+          )) as any).rows || [];
+          if (jaAssinRows[0]?.assinatura_funcionario_url) {
+            throw new TRPCError({
+              code: "FORBIDDEN",
+              message: "Documento já assinado pelo colaborador — a assinatura não pode ser substituída (LGPD/auditoria). Para corrigir, cancele e emita uma nova advertência.",
+            });
+          }
+        }
         const base64Data = input.base64Png.replace(/^data:image\/png;base64,/, "");
         const buffer = Buffer.from(base64Data, "base64");
         const key = `documentos/advertencias/assinaturas/${input.advertenciaId}-${input.tipoAssinante}-${Date.now()}.png`;

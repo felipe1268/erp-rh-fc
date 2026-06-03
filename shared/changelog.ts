@@ -1,6 +1,42 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2734 — **RH · CONTROLE DE DOCUMENTOS · ADVERTÊNCIAS · LGPD/AUDITORIA: APÓS A ASSINATURA DO COLABORADOR O
+ * DOCUMENTO FICA IMUTÁVEL (NÃO PODE MAIS SER EDITADO).**
+ *
+ * PEDIDO (relato): "garanta a lei do LGPD e de auditoria, que após a assinatura dos funcionários o documento não
+ * poderá ser editado." Na tela "Editar Advertência" (e no ícone de lápis da lista de Advertências e Suspensões) era
+ * possível alterar motivo/descrição/testemunhas/etc. de uma advertência MESMO depois de o colaborador já ter assinado
+ * digitalmente — o que viola a integridade do documento assinado (a versão que o colaborador deu ciência precisa
+ * coincidir exatamente com o conteúdo armazenado; editar depois descaracteriza a assinatura e quebra a trilha de
+ * auditoria exigida pela LGPD/Lei 13.709/2018).
+ *
+ * CAUSA-RAIZ (`server/routers/controleDocumentos.ts`, `docs.advertencias.update`): a mutation de edição aplicava o
+ * `UPDATE` em `warnings` sem qualquer verificação de estado de assinatura. O sinal de "assinado pelo colaborador" já
+ * existe na coluna `warnings.assinatura_funcionario_url` (preenchida por `salvarAssinatura` quando o funcionário
+ * assina no pad de `AdvAssinaturas.tsx`), mas nada o consultava antes de permitir a edição. No client
+ * (`ControleDocumentos.tsx`) o lápis de "Editar" estava sempre habilitado.
+ *
+ * SOLUÇÃO (SERVER + CLIENT/UI; ZERO SCHEMA; ZERO ALTER/DROP/DELETE — R-001/R-007/R-010): (1) SERVER (autoritativo): a
+ * `update` lê `assinatura_funcionario_url` da advertência ANTES de aplicar; se não-nula, lança `TRPCError FORBIDDEN`
+ * com mensagem orientando a cancelar e emitir uma nova advertência. É a guarda real (não burlável pela UI). (2)
+ * SERVER · `salvarAssinatura`: a assinatura do COLABORADOR vira "once-only" — se `assinatura_funcionario_url` já existe,
+ * uma nova tentativa para `tipoAssinante==="funcionario"` lança `FORBIDDEN` ANTES do upload (evita arquivo órfão no
+ * storage e impede substituir o artefato já assinado). Aplicador e testemunhas continuam livres (podem assinar DEPOIS
+ * do colaborador). (3) CLIENT/UI: o botão de lápis fica `disabled` e vira um ícone de cadeado (`Lock`) quando
+ * `assinaturaFuncionarioUrl` está presente (campo já retornado pelo `list`), com `title` explicando o bloqueio; clique
+ * mostra toast. Adicionado `onError` ao mutation `updateAdv` para exibir a mensagem do servidor caso a guarda dispare.
+ * Trigger = assinatura do COLABORADOR (o dado-sujeito da LGPD), exatamente como pedido ("assinatura dos funcionários").
+ * Validação: esbuild server EXIT 0; parse TSX EXIT 0; `vitest server/rescisao.test.ts` 41/41 verde.
+ *
+ * RESSALVA: a EXCLUSÃO (soft-delete, `docs.advertencias.delete`) NÃO foi bloqueada — ela já grava trilha de auditoria
+ * (`deletedBy`/`deletedByUserId`/`deletedAt`) e o pedido foi especificamente sobre EDIÇÃO. Assinaturas do aplicador/
+ * testemunhas, isoladamente, não travam a edição (só a do colaborador), por aderência literal ao pedido.
+ * O `uploadDoc` (anexar PDF de apoio em `documentoUrl`) NÃO foi travado — anexar a cópia física/escaneada faz parte do
+ * fluxo e não altera o CONTEÚDO da advertência. Code review (architect) também apontou ausência de guarda de tenancy
+ * por `id` (company/escopo) nas mutations de advertência — risco PRÉ-EXISTENTE e fora do escopo deste pedido (que é só
+ * imutabilidade pós-assinatura); fica registrado para tratamento futuro.
+ *
  * Rev. 2733 — **RH · FOLHA DE PAGAMENTO · ALERTA "VALE CALCULADO MAS FORA DA FOLHA MENSAL" NÃO PODE LISTAR
  * FUNCIONÁRIO DESLIGADO QUE JÁ SAIU EM MÊS ANTERIOR (advance "stale" nunca recalculado).**
  *

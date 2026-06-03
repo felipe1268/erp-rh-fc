@@ -17,7 +17,7 @@ import { nowBrasilia, todayBrasiliaLong } from "@/lib/dateUtils";
 import { removeAccents } from "@/lib/searchUtils";
 import {
   Search, FileText, AlertTriangle, ShieldAlert, GraduationCap, Stethoscope,
-  Plus, Upload, Download, Eye, Trash2, FileUp, ClipboardList, Calendar, Pencil, Printer, FileDown, CheckSquare, Square, X, Paperclip, Clock, Shield, ExternalLink, Filter, CheckCircle2, Zap, Info, PenTool, Building2, BookOpen, Users, MessageSquare, Loader2, ChevronDown, ChevronRight
+  Plus, Upload, Download, Eye, Trash2, FileUp, ClipboardList, Calendar, Pencil, Printer, FileDown, CheckSquare, Square, X, Paperclip, Clock, Shield, ExternalLink, Filter, CheckCircle2, Zap, Info, PenTool, Building2, BookOpen, Users, MessageSquare, Loader2, ChevronDown, ChevronRight, Lock
 } from "lucide-react";
 import { useState, useMemo, useEffect, useCallback, useRef, Fragment } from "react";
 import { toast } from "sonner";
@@ -1730,7 +1730,7 @@ export default function ControleDocumentos() {
   const [lastCreatedAdvId, setLastCreatedAdvId] = useState<number | null>(null);
   const deleteAtestBatch = trpc.docs.atestadosDeleteBatch.useMutation({ onSuccess: (r: any) => { refetchAtest(); toast.success(`${r.deletados} atestado(s) excluído(s)!`); setSelectedAtestIds([]); } });
   const { user: authUser } = useAuth();
-  const updateAdv = trpc.docs.advertencias.update.useMutation({ onSuccess: () => { refetchAdv(); toast.success("Advertência atualizada!"); } });
+  const updateAdv = trpc.docs.advertencias.update.useMutation({ onSuccess: () => { refetchAdv(); toast.success("Advertência atualizada!"); }, onError: (e: any) => { toast.error(e?.message || "Não foi possível atualizar a advertência."); } });
   const deleteAdv = trpc.docs.advertencias.delete.useMutation({ onSuccess: () => { refetchAdv(); toast.success("Advertência excluída!"); } });
   const uploadAdvDoc = trpc.docs.advertencias.uploadDoc.useMutation({ onSuccess: () => { refetchAdv(); toast.success("Documento anexado!"); } });
 
@@ -3012,9 +3012,16 @@ export default function ControleDocumentos() {
                               }}>
                                 <Printer className="h-3.5 w-3.5" />
                               </Button>}
-                              <Button size="icon" variant="ghost" className="h-7 w-7" title="Editar" onClick={() => openEditAdv(a)}>
-                                <Pencil className="h-3.5 w-3.5" />
-                              </Button>
+                              {(() => {
+                                const assinado = !!(a as any).assinaturaFuncionarioUrl;
+                                return (
+                                  <Button size="icon" variant="ghost" className="h-7 w-7" disabled={assinado}
+                                    title={assinado ? "Documento assinado pelo colaborador — edição bloqueada (LGPD/auditoria). Para corrigir, cancele e emita uma nova advertência." : "Editar"}
+                                    onClick={() => { if (assinado) { toast.error("Documento assinado pelo colaborador — não pode ser editado (LGPD/auditoria)."); return; } openEditAdv(a); }}>
+                                    {assinado ? <Lock className="h-3.5 w-3.5 text-muted-foreground" /> : <Pencil className="h-3.5 w-3.5" />}
+                                  </Button>
+                                );
+                              })()}
                               <Button size="icon" variant="ghost" className="h-7 w-7" title="Anexar PDF" onClick={() => handleUploadDoc("adv", a.id)}>
                                 <FileUp className="h-3.5 w-3.5" />
                               </Button>
