@@ -1,6 +1,28 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2717 — **FROTA · VEÍCULOS (`/frotas` → "Veículos") · O CARD DO VEÍCULO NA TELA INICIAL (LISTA)
+ * AGORA MOSTRA UM CHIP CLICÁVEL PARA CADA DOCUMENTO ANEXADO PELO NOVO SISTEMA (`documentos`, Rev. 2716),
+ * DEIXANDO O HONDA HR-V (E QUALQUER VEÍCULO QUE USE O ANEXO NOVO) COM O MESMO LAYOUT DOS DEMAIS QUE JÁ
+ * EXIBIAM O CHIP "CRLV".**
+ *
+ * PEDIDO (usuário, prints IMG_1533 + IMG_1534): "Quero que o carro HR tenha o mesmo layout que os demais,
+ * com o documento [com acesso] na tela inicial, e todos os demais veículos que já têm documento cadastrado
+ * fique igual ao cadastro do Honda HR." Diagnóstico: o card da lista só mostrava chip de documento quando o
+ * veículo tinha `crlv_url`/`seguro_url` (sistema ANTIGO de arquivo único). O HR-V guarda o arquivo no campo
+ * NOVO `documentos` (JSONB, Rev. 2716) — o PDF aparecia só na tela de edição, mas NÃO havia chip no card da
+ * tela inicial. Resultado: o HR-V ficava "sem documento" na lista enquanto os demais mostravam "CRLV".
+ *
+ * SOLUÇÃO (SÓ CLIENT/UI; ZERO SERVER/SCHEMA — R-001/R-007/R-010): `client/src/pages/frotas/Veiculos.tsx` —
+ * na linha de chips do card (junto aos chips "CRLV"/"Seguro" legados), passa a iterar `v.documentos` e
+ * renderiza um chip azul por documento (ícone `FileText` + nome do arquivo truncado em `max-w-[140px]`,
+ * `title` com o nome completo, link `target="_blank"` para `doc.url`). Os chips antigos de `crlv_url`/
+ * `seguro_url` foram mantidos para retrocompatibilidade. Assim TODO veículo com documento (antigo OU novo)
+ * exibe acesso clicável ao arquivo direto da lista, com o mesmo visual. NÃO houve migração de dados
+ * (nenhum `crlv_url` foi convertido em `documentos`) — apenas unificação visual no card.
+ *
+ * VALIDAÇÃO: parse esbuild do TSX (`Veiculos.tsx`) EXIT 0.
+ *
  * Rev. 2716 — **FROTA · EDITAR VEÍCULO (`/frotas` → "Veículos" → abrir um veículo) · NOVA SEÇÃO DE
  * UPLOAD DE DOCUMENTOS DO VEÍCULO (CRLV, COMPROVANTE DE COMPRA, LAUDO ETC.) DENTRO DA "DOCUMENTAÇÃO",
  * IGUAL AO ANEXO QUE MANUTENÇÕES/COMBUSTÍVEL JÁ TÊM.**

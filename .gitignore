@@ -114,3 +114,5 @@ package-lock.json
 
 # Runtime document uploads (ASO/atestados etc.) — PII, must NOT be versioned
 server/uploads/documentos/
+# Vehicle documents (CRLV, comprovante de compra, laudo) — sensitive, must NOT be versioned
+server/uploads/vehicles/

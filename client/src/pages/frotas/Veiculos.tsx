@@ -555,6 +555,11 @@ export default function Veiculos() {
                           <FileDown className="h-3 w-3" /> Seguro
                         </a>
                       )}
+                      {Array.isArray(v.documentos) && v.documentos.filter((doc: any) => doc && typeof doc === "object" && doc.url).map((doc: any) => (
+                        <a key={doc.key || doc.url} href={doc.url} target="_blank" rel="noreferrer" title={doc.nome} className="inline-flex items-center gap-1 max-w-[140px] text-[10px] bg-blue-50 text-blue-700 border border-blue-200 rounded px-1.5 py-0.5 hover:bg-blue-100">
+                          <FileText className="h-3 w-3 shrink-0" /> <span className="truncate">{doc.nome || "Documento"}</span>
+                        </a>
+                      ))}
                       <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => openEdit(v)}><Pencil className="h-3 w-3" /></Button>
                       <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => { if (confirm("Inativar este veículo?")) deleteMut.mutate({ id: v.id, companyId: cId }); }}>
                         <Trash2 className="h-3 w-3 text-red-500" />
