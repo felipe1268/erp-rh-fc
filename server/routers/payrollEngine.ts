@@ -3740,6 +3740,24 @@ export const payrollEngineRouter = router({
         WHERE pa."companyId" IN (${sql.join(allCompanyIds.map(id => sql`${id}`), sql`,`)})
           AND pa."mesReferencia" = ${input.mesReferencia}
           AND pa.status = 'calculado'
+          -- Rev. 2733 — Não listar como "vale fora da folha" os DESLIGADOS que já
+          -- haviam saído ANTES da competência (advance stale de mês anterior que
+          -- nunca foi recalculado). Mantém os desligados-com-aviso cujo aviso
+          -- prévio (não indenizado, não cancelado) sobrepõe o mês — esses têm vale
+          -- proporcional legítimo e podem estar fora da folha. Espelha a regra de
+          -- elegibilidade do motor (calcularVales L2122/2128/2129).
+          AND NOT (
+            e.status IN ('Desligado', 'Lista_Negra')
+            AND NOT EXISTS (
+              SELECT 1 FROM termination_notices tn
+              WHERE tn."employeeId" = e.id
+                AND tn."deletedAt" IS NULL
+                AND tn.status NOT IN ('cancelado')
+                AND tn.tipo NOT LIKE '%indenizado%'
+                AND tn."dataFim" >= ${primeiroDiaMesAviso}::date
+                AND tn."dataInicio" <= ${ultimoDiaMesAviso}::date
+            )
+          )
       `)) as any).rows || [];
       const valeForaDaFolha = valeAdvRows
         .filter((r: any) => !empIdsNaFolha.has(Number(r.employeeId)))

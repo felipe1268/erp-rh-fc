@@ -1,6 +1,43 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2733 — **RH · FOLHA DE PAGAMENTO · ALERTA "VALE CALCULADO MAS FORA DA FOLHA MENSAL" NÃO PODE LISTAR
+ * FUNCIONÁRIO DESLIGADO QUE JÁ SAIU EM MÊS ANTERIOR (advance "stale" nunca recalculado).**
+ *
+ * BUG (relato): "no caso do eliseu ele foi desligado em março, mas ainda está na lista pq? este erro estava
+ * acontecendo o vale tbm.. não pode ter mais estes bugs." Na tela Folha de Pagamento (FC ENGENHARIA, competência
+ * maio/2026, pagamento previsto 05/06/2026) o alerta "5 funcionário(s) com vale calculado mas fora da folha mensal"
+ * incluía ELIZEU FRANCISCO DE SOUZA (Téc. Seg. Trabalho, R$ 1.400,00). Dado Neon: Elizeu (id=420160) está
+ * `status='Desligado'`, `dataDemissao=2026-03-31`, com aviso prévio `empregador_trabalhado` (status `concluido`,
+ * `dataInicio=2026-03-02`, `dataFim=2026-03-31`) — ou seja, SAIU no fim de março. Mesmo assim tinha um
+ * `payroll_advances` `status='calculado'` para 2026-05 (criado em 27/05), além dos de 2026-01/03/04. (O campo
+ * `dataDesligamentoEfetiva=2026-05-15` está inconsistente com a demissão real de 31/03 — por isso NÃO é usado como
+ * critério no fix.)
+ *
+ * CAUSA-RAIZ (`server/routers/payrollEngine.ts`, `simularPagamento`): o cálculo do bloco `valeForaDaFolha` lê TODOS
+ * os `payroll_advances` `status='calculado'` do mês e apenas remove os que estão na folha (`empIdsNaFolha`), SEM
+ * revalidar elegibilidade. Quando o motor de vale (`calcularVales`) recalcula um mês ele faz DELETE+reinsert e só
+ * reinsere elegíveis (Ativo + Desligado cujo aviso prévio NÃO indenizado sobrepõe o mês — L2122/2128/2129); então
+ * uma linha de mês NÃO recalculado depois de o RH corrigir/encerrar o aviso fica "stale". O motor não a recria, mas
+ * o alerta da folha a ressuscita porque lê o estado bruto. (O módulo Vale `valeAlimentacao.listLancamentos` já
+ * filtrava `status NOT IN ('Desligado','Lista_Negra')`, por isso a tela de Vale NÃO mostrava o Elizeu — só a folha.)
+ *
+ * SOLUÇÃO (SÓ SERVER; ZERO SCHEMA; ZERO ALTER/DROP/DELETE — R-001/R-007/R-010): a query de `valeForaDaFolha` passa a
+ * EXCLUIR advances de quem está `status IN ('Desligado','Lista_Negra')` E NÃO tem `termination_notices` válido (não
+ * `cancelado`, `tipo NOT LIKE '%indenizado%'`) cujo intervalo `[dataInicio, dataFim]` sobreponha a competência
+ * (`>= primeiroDiaMesAviso` / `<= ultimoDiaMesAviso`, vars já existentes no escopo). Isso espelha EXATAMENTE a regra
+ * de elegibilidade do motor: desligado-com-aviso-no-mês (vale proporcional legítimo) CONTINUA aparecendo se estiver
+ * fora da folha; desligado que saiu antes do mês (Elizeu) some. Fix self-healing por LEITURA — não apaga a linha
+ * stale (proibido DELETE em produção), apenas para de exibi-la. Validação no Neon: na competência 2026-05/empresa
+ * 60002, dos 89 advances `calculado` exatamente 1 é excluído (ELIZEU FRANCISCO DE SOUZA); os demais (incl. Aviso/
+ * Afastado, que NÃO são desligados) permanecem como aviso de conferência legítimo. Validação build: esbuild server
+ * EXIT 0; parse TSX EXIT 0; `vitest server/rescisao.test.ts` 41/41 verde.
+ *
+ * RESSALVA: os alertas "99 CLTs ativos no cadastro, mas 100 na folha" (GISLEI RODRIGO DE CARVALHO, desligado
+ * 2026-05-13 — saída NO MEIO de maio, logo legítimo na folha de maio) e os 4 restantes do "fora da folha"
+ * (Darcy/Mariana/Myriélle em `Aviso`; Francisco em `Afastado` — NÃO são desligados) ficam INTOCADOS: são conferências
+ * legítimas, fora do escopo da queixa (que era o desligado de mês anterior).
+ *
  * Rev. 2732 — **COMPRAS · NOVA SOLICITAÇÃO (SC) · VINCULAR UM MATERIAL A UMA ETAPA DA EAP NÃO PODE DUPLICAR A
  * LINHA (item "fantasma": material + etapa, com a etapa caindo "S/ VERBA" na cotação).**
  *
