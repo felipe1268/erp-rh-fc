@@ -1,6 +1,30 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2710 — **FROTA · EDITAR/NOVO VEÍCULO (`/frotas` → "Veículos" → abrir/novo) · CORRIGIDO O
+ * CABEÇALHO DO DIÁLOGO EM TELA CHEIA QUE FICAVA CORTADO ATRÁS DA BARRA DO NAVEGADOR NO MOBILE,
+ * DEIXANDO OS BOTÕES "CANCELAR"/"SALVAR" INACESSÍVEIS.**
+ *
+ * PEDIDO (usuário, print IMG_1520): "Arrume a tela, o botão de salvar tá sobreposto e não tem como
+ * clicar".
+ *
+ * CAUSA-RAIZ: o `<DialogContent>` era `h-screen` (100vh) centralizado verticalmente pelo CSS base do
+ * componente (`top-[50%]` + `translateY(-50%)`). No Safari mobile a `100vh` é MAIOR que a área visível
+ * (inclui a região atrás da barra de endereço), então, ao centralizar, o topo do diálogo — onde mora o
+ * cabeçalho sticky com "Cancelar"/"Salvar" — era empurrado para trás da barra do navegador, ficando
+ * inacessível.
+ *
+ * SOLUÇÃO (SÓ CLIENT/UI; ZERO SERVER/SCHEMA — R-001/R-007/R-010): `client/src/pages/frotas/Veiculos.tsx`
+ * — no `<DialogContent>` do Editar/Novo Veículo, sobrescritas as classes de posicionamento herdadas:
+ * `top-0 left-0 translate-x-0 translate-y-0` (ancora no TOPO da área visível em vez de centralizar) e
+ * `h-screen` virou `h-[100dvh]` (dynamic viewport height — respeita a barra do navegador no mobile).
+ * Com isso o cabeçalho sticky `top-0` passa a aparecer logo abaixo da barra de endereço e os botões
+ * ficam clicáveis. Nenhuma outra mudança (campos, seções, handlers e validações intactos).
+ *
+ * VALIDAÇÃO: parse esbuild do TSX EXIT 0.
+ *
+ * ----------------------------------------------------------------------------------------------------
+ *
  * Rev. 2709 — **FROTA · EDITAR/NOVO VEÍCULO (`/frotas` → "Veículos") · QUANDO O STATUS É "VENDIDO" O
  * VEÍCULO SAI DO "VALOR DO INVENTÁRIO" (KPI NO TOPO) E O CAMPO "VALOR DA VENDA" PASSA A SER
  * OBRIGATÓRIO.**
