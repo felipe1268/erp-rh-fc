@@ -410,7 +410,8 @@ export default function ManutencoesDashboard() {
                   <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-2 flex items-center gap-1.5">
                     <AlertTriangle className="h-3.5 w-3.5 text-red-500" /> Detalhe — peças que se repetem em pouco tempo
                   </p>
-                  <div className="overflow-x-auto rounded-xl border bg-white dark:bg-slate-800">
+                  {/* Tabela completa — só em telas grandes (lg+) */}
+                  <div className="hidden lg:block overflow-x-auto rounded-xl border bg-white dark:bg-slate-800">
                     <table className="w-full text-xs">
                       <thead className="bg-slate-100 dark:bg-slate-900/60">
                         <tr>
@@ -451,6 +452,50 @@ export default function ManutencoesDashboard() {
                         })}
                       </tbody>
                     </table>
+                  </div>
+
+                  {/* Cards expansíveis — tablet/celular (toque para abrir os detalhes) */}
+                  <div className="lg:hidden space-y-2">
+                    {(rec.data?.recorrencias || []).slice(0, 60).map((r: any, i: number) => {
+                      const critico = r.menorIntervaloDias != null && r.menorIntervaloDias <= 180;
+                      return (
+                        <details key={i} className={`group rounded-xl border ${critico ? "border-red-200 bg-red-50/60 dark:border-red-900/50 dark:bg-red-950/20" : "border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800"}`}>
+                          <summary className="flex items-center justify-between gap-3 p-3 cursor-pointer list-none [&::-webkit-details-marker]:hidden">
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-1.5">
+                                {critico && <AlertTriangle className="h-3.5 w-3.5 text-red-500 shrink-0" />}
+                                <span className="font-mono font-bold text-[#1e3a5f] dark:text-blue-300">{r.placa}</span>
+                                <span className="text-[10px] text-muted-foreground truncate">{r.modelo}</span>
+                              </div>
+                              <span className="block text-sm font-medium truncate mt-0.5">{r.peca}</span>
+                            </div>
+                            <div className="flex items-center gap-2 shrink-0">
+                              <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-bold ${critico ? "bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-300" : "bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-200"}`}>{r.trocas}×</span>
+                              <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180" />
+                            </div>
+                          </summary>
+                          <div className="grid grid-cols-3 max-[360px]:grid-cols-1 gap-2 border-t border-slate-200/70 dark:border-slate-700/70 px-3 py-2.5 text-xs">
+                            <div>
+                              <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Menor intervalo</p>
+                              {r.menorIntervaloDias != null ? (
+                                <p className={`font-semibold ${critico ? "text-red-600" : "text-slate-700 dark:text-slate-200"}`}>{r.menorIntervaloDias} dias</p>
+                              ) : <p className="text-muted-foreground">—</p>}
+                              {r.menorIntervaloKm != null && r.menorIntervaloKm > 0 && (
+                                <p className="text-[10px] text-muted-foreground">{fmtNum(r.menorIntervaloKm)} km</p>
+                              )}
+                            </div>
+                            <div>
+                              <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Intervalo médio</p>
+                              <p className="font-medium text-slate-700 dark:text-slate-200">{r.intervaloMedioDias != null ? `${r.intervaloMedioDias} dias` : "—"}</p>
+                            </div>
+                            <div className="text-right">
+                              <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Custo total</p>
+                              <p className="font-bold text-emerald-700 dark:text-emerald-400">{fmt(r.custoTotal)}</p>
+                            </div>
+                          </div>
+                        </details>
+                      );
+                    })}
                   </div>
                   {(rec.data?.recorrencias?.length || 0) > 60 && (
                     <p className="text-[10px] text-muted-foreground text-right mt-1">Mostrando as 60 mais críticas de {fmtNum(rec.data?.recorrencias?.length || 0)}.</p>

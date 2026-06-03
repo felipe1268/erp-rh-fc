@@ -1,6 +1,28 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2720 — **FROTA · DASHBOARD DE MANUTENÇÃO (`/frotas` → "Manutenções" → "Dashboard") · A TABELA
+ * "DETALHE — PEÇAS QUE SE REPETEM EM POUCO TEMPO" (Rev. 2719) AGORA É RESPONSIVA: EM TABLET/CELULAR
+ * VIRA CARDS QUE ABREM OS DETALHES AO TOCAR (ANTES A TABELA LARGA FICAVA ESPREMIDA/CORTADA NO IPAD).**
+ *
+ * PEDIDO (usuário, com print do iPad): a tabela detalhada de peças recorrentes ficava apertada em telas
+ * menores; queria algo "responsivo que quando ligar abre os dados das informações" — ou seja, um item
+ * compacto por linha que, ao tocar, expande e mostra os detalhes (menor intervalo, intervalo médio,
+ * custo total).
+ *
+ * SOLUÇÃO (SÓ CLIENT/UI; ZERO SERVER/SCHEMA — R-001/R-007/R-010 OK):
+ * - `client/src/pages/frotas/ManutencoesDashboard.tsx` — a tabela detalhada ganhou DOIS modos
+ *   alternados por breakpoint: (a) a `<table>` completa fica `hidden lg:block` (telas grandes, sem
+ *   mudança visual); (b) abaixo de `lg` renderiza uma lista `lg:hidden` de cards `<details>`/`<summary>`
+ *   NATIVOS (sem estado novo, acessível, toque-para-abrir). O `<summary>` mostra placa+modelo, nome da
+ *   peça (truncado) e um chip de "Nx" trocas + chevron que gira (`group-open:rotate-180`); ao abrir,
+ *   um grid de 3 colunas revela Menor intervalo (dias + km), Intervalo médio e Custo total. Registros
+ *   críticos (menorIntervaloDias ≤ 180) recebem borda/fundo vermelho e ícone de alerta em ambos os
+ *   modos. Marcador nativo do `<summary>` escondido (`[&::-webkit-details-marker]:hidden`). `ChevronDown`
+ *   já estava importado de lucide-react. Mesma fatia de dados (60 mais críticas) e mesmo rodapé.
+ *
+ * VALIDAÇÃO: esbuild parse do TSX EXIT 0.
+ *
  * Rev. 2719 — **FROTA · DASHBOARD DE MANUTENÇÃO (`/frotas` → "Manutenções" → "Dashboard") + LANÇAMENTO
  * DE MANUTENÇÃO · (1) NOVO DASHBOARD DETERMINÍSTICO DE "PEÇAS RECORRENTES" (SEM IA, CARREGA DIRETO NO
  * LOAD); E (2) ALERTA AUTOMÁTICO AO LANÇAR UMA PEÇA QUE JÁ FOI TROCADA NO MESMO VEÍCULO.**
