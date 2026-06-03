@@ -1417,6 +1417,49 @@ function AvisoRescisaoDialog({ avisoId, onClose }: { avisoId: number | null; onC
   const totalProventos = proventos.reduce((s, r) => s + parseFloat(r.value || '0'), 0);
   const totalDescontos = descontos.reduce((s, r) => s + parseFloat(r.value || '0'), 0);
 
+  // Composição gerencial do custo: 🟦 Grupo A (já provisionado / competência) x
+  // 🟥 Grupo B (custo ADICIONAL gerado pela decisão de demitir). A parte da projeção
+  // do aviso (avos extras de férias/13º — Súmula 371/OJ 82) vem pronta do server.
+  const num = (k: string) => parseFloat((previsao as any)?.[k] || '0');
+  // O incremento da projeção do aviso só é "custo adicional da demissão" quando a dispensa
+  // parte do EMPREGADOR (sem justa causa). Em pedido de demissão (empregado_*), as férias/13º
+  // ficam integralmente no Grupo A (provisão), sem destacar projeção no Grupo B.
+  const isDemissaoEmpregador = String((aviso as any)?.tipo || '').startsWith('empregador');
+  const fpProj = isDemissaoEmpregador ? num('feriasProporcionalProjecao') : 0;
+  const tcProj = isDemissaoEmpregador ? num('tercoConstitucionalProjecao') : 0;
+  const d13Proj = isDemissaoEmpregador ? num('decimoTerceiroProjecao') : 0;
+  const grupoA: { label: string; value: string }[] = [];
+  const grupoB: { label: string; value: string }[] = [];
+  if (previsao) {
+    if (num('saldoSalario') > 0)
+      grupoA.push({ label: `Saldo de Salário (${previsao.diasTrabalhadosMes || '?'} dias)`, value: previsao.saldoSalario });
+    if (num('feriasVencidas') > 0)
+      grupoA.push({ label: `Férias Vencidas${previsao.periodosVencidos ? ` (${previsao.periodosVencidos} per.)` : ''}`, value: previsao.feriasVencidas });
+    if (num('tercoFeriasVencidas') > 0)
+      grupoA.push({ label: '1/3 Constitucional (Férias Vencidas)', value: previsao.tercoFeriasVencidas });
+    if (num('feriasProporcional') - fpProj > 0.005)
+      grupoA.push({ label: 'Férias Proporcionais (provisionadas até a demissão)', value: (num('feriasProporcional') - fpProj).toFixed(2) });
+    if (num('tercoConstitucional') - tcProj > 0.005)
+      grupoA.push({ label: '1/3 Constitucional (Férias Proporcionais)', value: (num('tercoConstitucional') - tcProj).toFixed(2) });
+    if (num('decimoTerceiroProporcional') - d13Proj > 0.005)
+      grupoA.push({ label: '13º Salário Proporcional (provisionado até a demissão)', value: (num('decimoTerceiroProporcional') - d13Proj).toFixed(2) });
+    if (num('vrProporcional') > 0)
+      grupoA.push({ label: 'VR/VA Proporcional', value: previsao.vrProporcional });
+    if (num('avisoPrevioIndenizado') > 0)
+      grupoB.push({ label: `Aviso Prévio Indenizado (${previsao.diasAvisoTotal || previsao.diasExtrasAviso || '?'} dias)`, value: previsao.avisoPrevioIndenizado });
+    if (num('multaFGTS') > 0)
+      grupoB.push({ label: 'Multa 40% FGTS', value: previsao.multaFGTS });
+    if (fpProj > 0.005)
+      grupoB.push({ label: `Férias Prop. — incremento da projeção do aviso (+${previsao.incAvosFeriasProjecao || 0}/12 avos) ★`, value: fpProj.toFixed(2) });
+    if (tcProj > 0.005)
+      grupoB.push({ label: '1/3 Constitucional — incremento da projeção do aviso ★', value: tcProj.toFixed(2) });
+    if (d13Proj > 0.005)
+      grupoB.push({ label: `13º Prop. — incremento da projeção do aviso (+${previsao.incAvos13Projecao || 0}/12 avos) ★`, value: d13Proj.toFixed(2) });
+  }
+  const totalGrupoA = grupoA.reduce((s, r) => s + parseFloat(r.value || '0'), 0);
+  const totalGrupoB = grupoB.reduce((s, r) => s + parseFloat(r.value || '0'), 0);
+  const temProjecao = fpProj > 0.005 || d13Proj > 0.005;
+
   // Helper to build proventos list from a previsao object (for comparativo)
   const buildProventosFromPrevisao = (prev: any) => {
     const items: { label: string; value: string }[] = [];
@@ -1632,6 +1675,80 @@ function AvisoRescisaoDialog({ avisoId, onClose }: { avisoId: number | null; onC
                   )}
                 </div>
               </div>
+
+              {/* Composição do Custo — Já provisionado x Custo adicional da demissão */}
+              {previsao && (totalGrupoA > 0 || totalGrupoB > 0) && (
+                <div className="rounded-xl border-2 border-slate-200 p-4 sm:p-5 bg-slate-50/60">
+                  <h3 className="text-sm font-bold text-slate-700 uppercase tracking-wider mb-1 flex items-center gap-2">
+                    <Scale className="h-4 w-4" /> Composição do Custo — Provisionado x Adicional da Demissão
+                  </h3>
+                  <p className="text-[11px] text-slate-500 mb-4">
+                    Separa o que a empresa já vinha provisionando ao longo do contrato (competência) do que é gerado exclusivamente pela decisão de demitir sem justa causa. A soma dos dois grupos é igual ao subtotal de proventos.
+                  </p>
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    {/* 🟦 Grupo A — já era custo da empresa */}
+                    <div className="rounded-lg border border-blue-200 bg-blue-50/60 overflow-hidden">
+                      <div className="px-4 py-2 bg-blue-100/70 border-b border-blue-200">
+                        <p className="text-xs font-bold text-blue-800 uppercase flex items-center gap-1.5"><span>🟦</span> Já era custo da empresa</p>
+                        <p className="text-[10px] text-blue-600">Competência — provisionado mês a mês</p>
+                      </div>
+                      <table className="w-full text-sm">
+                        <tbody>
+                          {grupoA.map((row, i) => (
+                            <tr key={i} className="border-b border-blue-100 last:border-0">
+                              <td className="px-4 py-2 text-slate-700">{row.label}</td>
+                              <td className="px-4 py-2 text-right font-semibold text-blue-700 whitespace-nowrap">R$ {fmt(row.value)}</td>
+                            </tr>
+                          ))}
+                          <tr className="bg-blue-100/60 font-bold">
+                            <td className="px-4 py-2 text-blue-900">Subtotal Grupo A</td>
+                            <td className="px-4 py-2 text-right text-blue-900 whitespace-nowrap">R$ {fmt(totalGrupoA)}</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                    {/* 🟥 Grupo B — custo adicional da demissão */}
+                    <div className="rounded-lg border border-red-200 bg-red-50/60 overflow-hidden">
+                      <div className="px-4 py-2 bg-red-100/70 border-b border-red-200">
+                        <p className="text-xs font-bold text-red-800 uppercase flex items-center gap-1.5"><span>🟥</span> Custo adicional da demissão</p>
+                        <p className="text-[10px] text-red-600">Gerado pela dispensa sem justa causa</p>
+                      </div>
+                      {grupoB.length > 0 ? (
+                        <table className="w-full text-sm">
+                          <tbody>
+                            {grupoB.map((row, i) => (
+                              <tr key={i} className="border-b border-red-100 last:border-0">
+                                <td className="px-4 py-2 text-slate-700">{row.label}</td>
+                                <td className="px-4 py-2 text-right font-semibold text-red-700 whitespace-nowrap">R$ {fmt(row.value)}</td>
+                              </tr>
+                            ))}
+                            <tr className="bg-red-100/60 font-bold">
+                              <td className="px-4 py-2 text-red-900">Subtotal Grupo B</td>
+                              <td className="px-4 py-2 text-right text-red-900 whitespace-nowrap">R$ {fmt(totalGrupoB)}</td>
+                            </tr>
+                          </tbody>
+                        </table>
+                      ) : (
+                        <div className="px-4 py-6 text-center text-xs text-slate-400">Sem custo adicional (não houve dispensa sem justa causa).</div>
+                      )}
+                    </div>
+                  </div>
+                  {totalGrupoB > 0 && (
+                    <div className="mt-4 rounded-lg bg-gradient-to-r from-red-600 to-rose-600 text-white px-5 py-4 flex items-center justify-between shadow-sm">
+                      <div>
+                        <p className="text-xs font-medium uppercase tracking-wide opacity-90">Custo adicional desta demissão</p>
+                        <p className="text-[11px] opacity-80">{(totalGrupoA + totalGrupoB) > 0 ? `${((totalGrupoB / (totalGrupoA + totalGrupoB)) * 100).toFixed(0)}% do subtotal de proventos` : ''}</p>
+                      </div>
+                      <span className="text-2xl sm:text-3xl font-extrabold">R$ {fmt(totalGrupoB)}</span>
+                    </div>
+                  )}
+                  {temProjecao && (
+                    <p className="text-[10px] text-slate-400 mt-2 leading-relaxed">
+                      ★ <strong>Incremento da projeção do aviso:</strong> são os avos de férias/13º que só existem porque o aviso prévio projeta o término do contrato (Súmula 371 / OJ 82 TST). Por isso entram no custo da demissão, e não na provisão de competência.
+                    </p>
+                  )}
+                </div>
+              )}
 
               {/* Médias de Adicionais Habituais */}
               <div className="rounded-lg border border-violet-200 p-4 bg-violet-50/50">

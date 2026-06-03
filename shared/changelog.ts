@@ -1,6 +1,55 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2723 — **RH · RESCISÃO (Painel RH → funcionário em aviso → "Cálculos da Rescisão" → aba "Detalhes da
+ * Rescisão") · NOVO BLOCO "COMPOSIÇÃO DO CUSTO — PROVISIONADO x ADICIONAL DA DEMISSÃO": SEPARA AS VERBAS EM
+ * 🟦 GRUPO A (JÁ ERA CUSTO DA EMPRESA / COMPETÊNCIA) x 🟥 GRUPO B (CUSTO ADICIONAL GERADO PELA DECISÃO DE
+ * DEMITIR), COM O "INCREMENTO DA PROJEÇÃO DO AVISO" (AVOS EXTRAS DE FÉRIAS/13º) DESTACADO DENTRO DO GRUPO B.**
+ *
+ * PEDIDO (usuário, direção confirmada via user_query): na tela de cálculos da rescisão, deixar claro quanto da
+ * conta a empresa já vinha provisionando ao longo do contrato e quanto é custo EXCLUSIVO da demissão sem justa
+ * causa. Escolhas do usuário: (1) agrupamento exatamente como proposto; (2) modo PRECISO — destacar o
+ * "incremento da projeção do aviso" (avos extras de férias/13º) dentro do Grupo B; (3) apresentar como NOVO
+ * BLOCO na própria aba "Detalhes da Rescisão" (não substitui a tabela de proventos existente).
+ *
+ * MODELO DE DATAS (confirmado no router `avisoPrevioFerias.ts`): `dataDesligamento` = `row.dataInicio` = INÍCIO
+ * do aviso (momento da decisão de demitir, SEM projeção); `dataFimAviso` = fim do aviso; `dataProjecao` = último
+ * dia do mês de `dataFimAviso` (COM projeção). O baseline "sem projeção" do incremento é exatamente
+ * `dataDesligamento`. A projeção do aviso prévio (Súmula 371 / OJ 82 TST projeta o término do contrato para
+ * todos os efeitos) acrescenta avos de férias/13º que só existem por causa da dispensa → entram no Grupo B.
+ *
+ * SOLUÇÃO (SERVER + CLIENT; ZERO SCHEMA — R-001/R-007/R-010 OK):
+ * - `server/utils/rescisaoCalc.ts` (`calcularRescisaoCompleta`) — calcula o incremento da projeção e o expõe
+ *   no retorno: `incAvosFeriasProjecao`, `incAvos13Projecao` (avos) + `feriasProporcionalProjecao`,
+ *   `tercoConstitucionalProjecao`, `decimoTerceiroProjecao` (R$). O incremento de FÉRIAS usa uma contagem CRUA
+ *   de avos do período aquisitivo corrente (`avosPeriodoCorrente` = `mesesServico % 12` + regra dos 15 dias,
+ *   cap 12), SEM o atalho "ano completo → 12/12" de `calcularMesesFeriasProporcionais` — esse atalho faz a
+ *   subtração projetado−base regredir/ficar negativa quando o início do aviso cai EXATAMENTE no aniversário
+ *   (caso Myriélle: 24 meses cravados → a função oficial devolveria 12/12 e a subtração daria −10). Com a
+ *   contagem crua: base(início aviso) = 0 avos, projetado = 2 avos → incremento = 2/12 (correto: ela foi
+ *   demitida no aniversário, os 2/12 vieram 100% da projeção). O 13º usa `calcularMeses13o` direto (sem atalho).
+ *   Ambos os incrementos têm `Math.max(0, …)` e `Math.min(valorExibido, …)` para o Grupo A (exibido − projeção)
+ *   nunca ficar negativo. Nenhum total existente muda (apenas re-apresentação). Como `getById`/`calcular`
+ *   RECOMPUTAM via `calcularRescisaoCompleta`, os campos aparecem automaticamente em todos os registros.
+ * - `client/src/pages/PainelRH.tsx` (dialog "Cálculos da Rescisão") — monta `grupoA`/`grupoB` a partir do
+ *   `previsao` (lendo os campos novos do server) e renderiza o bloco com dois cards (🟦 azul "Já era custo da
+ *   empresa" / 🟥 vermelho "Custo adicional da demissão"), faixa-destaque com o total do Grupo B e seu % do
+ *   subtotal de proventos, e nota de rodapé explicando o ★ (incremento da projeção). Reconciliação:
+ *   totalGrupoA + totalGrupoB = subtotal de proventos (mesmas verbas, só reagrupadas). Bloco inserido entre o
+ *   grid de Proventos/Descontos e a seção "Médias de Adicionais Habituais".
+ *   GATING SEMÂNTICO (pós-architect review): o incremento da projeção só é classificado como "custo adicional
+ *   da demissão" (Grupo B) quando `aviso.tipo` começa com `empregador` (dispensa sem justa causa). Em PEDIDO DE
+ *   DEMISSÃO (`empregado_*`) — onde aviso indenizado e multa FGTS já são 0 — `isDemissaoEmpregador=false` zera
+ *   `fpProj`/`tcProj`/`d13Proj`, então as férias/13º ficam INTEGRALMENTE no Grupo A (provisão) e o Grupo B fica
+ *   vazio ("sem custo adicional"), evitando rotular projeção de avos como custo da empresa numa demissão a pedido.
+ *
+ * VALIDAÇÃO: esbuild parse de `rescisaoCalc.ts` (server) + `PainelRH.tsx` (TSX) EXIT 0; `vitest
+ * server/rescisao.test.ts` 41/41 verde (nenhuma regressão nos cálculos-base).
+ *
+ * IMPACTO: a tela de rescisão ganha visão gerencial do custo da demissão sem alterar nenhum valor calculado.
+ * Para empregador (trabalhado/indenizado) o Grupo B mostra aviso + multa 40% + incremento da projeção; para
+ * pedido de demissão o Grupo B fica vazio ("sem custo adicional").
+ *
  * Rev. 2722 — **RH · RESCISÃO (Painel RH → funcionário em aviso → "Cálculos da Rescisão") · CORREÇÃO DO
  * CÁLCULO DE FÉRIAS PROPORCIONAIS: O ÚLTIMO MÊS AQUISITIVO INCOMPLETO COM ≥15 DIAS NÃO ESTAVA SENDO
  * CONTADO (REGRA DOS 15 DIAS — CLT Art. 146 §único), SUBDIMENSIONANDO AS FÉRIAS + 1/3.**

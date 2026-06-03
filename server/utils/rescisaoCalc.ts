@@ -387,6 +387,29 @@ export function calcularRescisaoCompleta(params: {
   const meses13o = calcularMeses13o(dataAdmissao, dataFimAviso);
   const decimoTerceiroProporcional = (baseFerias13 * meses13o) / 12;
 
+  // 4b. SEPARAÇÃO GERENCIAL — incremento de férias/13º decorrente da PROJEÇÃO do aviso.
+  // Baseline = início do aviso (`dataDesligamento`), ou seja, o que já estava provisionado
+  // no momento da decisão de demitir. O que a projeção do aviso prévio adiciona (Súmula 371
+  // / OJ 82 TST projeta o término do contrato) é custo exclusivo da dispensa — no painel RH
+  // entra no "Grupo B" (custo adicional da demissão), não na provisão (Grupo A).
+  // Usa a contagem CRUA de avos do período aquisitivo corrente (sem o atalho "ano completo →
+  // 12/12" de `calcularMesesFeriasProporcionais`), pois aqui interessa quantos avos a JANELA
+  // da projeção acrescentou, não o tratamento de período inteiro como proporcional.
+  const avosPeriodoCorrente = (adm: string, ref: string): number => {
+    const m = calcularMesesServico(adm, ref);
+    const a = new Date(adm + 'T00:00:00');
+    const r = new Date(ref + 'T00:00:00');
+    const ini = new Date(a.getFullYear(), a.getMonth() + m, a.getDate());
+    const dias = Math.floor((r.getTime() - ini.getTime()) / 86400000) + 1;
+    return Math.min(12, Math.max(0, (m % 12) + (dias >= 15 ? 1 : 0)));
+  };
+  const incAvosFerias = Math.max(0, avosPeriodoCorrente(dataAdmissao, dataProjecao) - avosPeriodoCorrente(dataAdmissao, dataDesligamento));
+  const incAvos13 = Math.max(0, meses13o - calcularMeses13o(dataAdmissao, dataDesligamento));
+  // Clamp ao valor exibido para garantir que o "Grupo A" (exibido − projeção) nunca fique negativo.
+  const feriasProporcionalProjecao = Math.min(feriasProporcional, (baseFerias13 * incAvosFerias) / 12);
+  const tercoConstitucionalProjecao = feriasProporcionalProjecao / 3;
+  const decimoTerceiroProjecao = Math.min(decimoTerceiroProporcional, (baseFerias13 * incAvos13) / 12);
+
   // 5. Aviso prévio indenizado
   let avisoPrevioIndenizado = 0;
   if (tipo === 'empregador_indenizado') {
@@ -433,6 +456,11 @@ export function calcularRescisaoCompleta(params: {
     feriasVencidasTerco: feriasVencidasTerco.toFixed(2),
     periodosVencidos,
     decimoTerceiroProporcional: decimoTerceiroProporcional.toFixed(2),
+    incAvosFeriasProjecao: incAvosFerias,
+    incAvos13Projecao: incAvos13,
+    feriasProporcionalProjecao: feriasProporcionalProjecao.toFixed(2),
+    tercoConstitucionalProjecao: tercoConstitucionalProjecao.toFixed(2),
+    decimoTerceiroProjecao: decimoTerceiroProjecao.toFixed(2),
     avisoPrevioIndenizado: avisoPrevioIndenizado.toFixed(2),
     vrProporcional: vrProporcional.toFixed(2),
     vrDiario: vrDiario.toFixed(2),
