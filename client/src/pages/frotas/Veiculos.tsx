@@ -493,6 +493,13 @@ export default function Veiculos() {
                         <span className="text-xs font-semibold text-green-600">{fmt(v.valor_fipe)}</span>
                       )}
                     </div>
+                    {v.statusVeiculo === "Vendido" && v.valor_venda && parseFloat(v.valor_venda) > 0 && (
+                      <div className="mt-2 inline-flex items-center gap-1.5 rounded-md bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 px-2.5 py-1">
+                        <DollarSign className="h-4 w-4 text-red-600 shrink-0" />
+                        <span className="text-[10px] font-medium uppercase tracking-wide text-red-600">Vendido por</span>
+                        <span className="text-sm font-bold text-red-700 dark:text-red-400">{fmt(v.valor_venda)}</span>
+                      </div>
+                    )}
                     <div className="mt-1 text-xs text-muted-foreground truncate">
                       {v.responsavel || v.motorista_nome || "Sem responsável"}
                     </div>

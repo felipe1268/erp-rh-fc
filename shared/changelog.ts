@@ -1,6 +1,22 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2711 — **FROTA · VEÍCULOS (`/frotas` → "Veículos") · QUANDO O VEÍCULO ESTÁ COM STATUS "VENDIDO",
+ * O CARD AGORA MOSTRA O VALOR DA VENDA EM DESTAQUE (BLOCO VERMELHO "VENDIDO POR R$ X").**
+ *
+ * PEDIDO (usuário, print IMG_1521): "Quando for vendido quero que apareça o valor da venda em destaque".
+ *
+ * SOLUÇÃO (SÓ CLIENT/UI; ZERO SERVER/SCHEMA — R-001/R-007/R-010): `client/src/pages/frotas/Veiculos.tsx`
+ * — no card do veículo, logo abaixo da linha de placa/FIPE, foi adicionado um bloco condicional que só
+ * aparece quando `statusVeiculo === "Vendido"` E há `valor_venda > 0`: chip vermelho (`bg-red-50` +
+ * borda `red-200`) com ícone `DollarSign`, rótulo "VENDIDO POR" e o valor formatado (`fmt(valor_venda)`)
+ * em negrito vermelho. O campo `valor_venda` já vinha do servidor (introduzido na Rev. 2709). Nenhuma
+ * outra mudança no card (foto, status badge, KPIs, handlers intactos).
+ *
+ * VALIDAÇÃO: parse esbuild do TSX EXIT 0.
+ *
+ * ----------------------------------------------------------------------------------------------------
+ *
  * Rev. 2710 — **FROTA · EDITAR/NOVO VEÍCULO (`/frotas` → "Veículos" → abrir/novo) · CORRIGIDO O
  * CABEÇALHO DO DIÁLOGO EM TELA CHEIA QUE FICAVA CORTADO ATRÁS DA BARRA DO NAVEGADOR NO MOBILE,
  * DEIXANDO OS BOTÕES "CANCELAR"/"SALVAR" INACESSÍVEIS.**
